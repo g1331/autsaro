@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -62,12 +63,12 @@ class HostBoundaryTests(unittest.TestCase):
     def execute(cls, argv, stage):
         return OwnedProcess(ProcessSpec.seconds(argv, cls.directory, 60, cls.directory, stage)).wait()
 
-    def test_legacy_area_may_nest_and_enclose_strict_areas(self):
+    def test_driver_lock_and_areas_admit_sequential_use(self):
         result = self.execute([str(self.lock), "normal"], "normal")
         self.assertTrue(result.success, result.stdout.read_text())
 
     def test_entering_any_area_inside_a_strict_area_is_fatal(self):
-        for case in ("nest-strict", "nest-same", "nest-legacy"):
+        for case in ("nest-strict", "nest-same"):
             with self.subTest(case=case):
                 result = self.execute([str(self.lock), case], case)
                 output = result.stdout.read_text()
@@ -76,14 +77,18 @@ class HostBoundaryTests(unittest.TestCase):
 
     def test_void_lock_failures_select_fatal_policy_and_never_return(self):
         cases = ["once", "mutex-init"] if os.name == "nt" else ["once", "attr-init", "attr-type", "mutex-init", "attr-close", "lock", "unlock"]
-        # The driver lock and the CanIf state lock are separate instances of the helper.
-        for case, instance in ((case, instance) for case in cases for instance in ("fatal", "state")):
+        # The driver lock and a module area are separate instances of the helper.
+        for case, instance in ((case, instance) for case in cases for instance in ("fatal", "area")):
             with self.subTest(case=case, instance=instance):
                 result = self.execute([str(self.lock), case, instance], case + "-" + instance)
                 output = result.stdout.read_text()
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
+                # The area instance constructs every module area, so each count is per lock.
+                attrs, mutexes = map(int, re.search(r"attrs=(\d+) mutexes=(\d+)", output).groups())
+                locks = 1 if instance == "fatal" else attrs
                 if case in ("attr-type", "mutex-init") and os.name != "nt":
-                    self.assertIn("attrs=1", output)
+                    self.assertEqual((attrs, mutexes), (locks, 0), output)
                 if case == "attr-close":
-                    self.assertIn("attrs=1 mutexes=1", output)
+                    self.assertEqual((attrs, mutexes), (locks, locks), output)
+                    self.assertGreaterEqual(locks, 1, output)
