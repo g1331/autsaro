@@ -80,11 +80,11 @@ typedef struct {
     uint8 frame[CANTP_FRAME_BYTES];
 } CanTp_WorkType;
 /* The transmitting side of the channel. CanTp_Transmit sets every member but result and
- * frame; CanTp_Init and CanTp_Shutdown only reset state and advance generation. */
+ * frame; CanTp_Init and CanTp_Shutdown only reset state and advance generation. A call made
+ * outside the area for an earlier generation has a stale result. */
 typedef struct {
     CanTp_TxStateType state;        /**< Step of the transmission. */
-    uint32 generation;              /**< Advanced when a transmission ends or is reset; makes
-                                       results of calls made for an earlier one stale. */
+    uint32 generation;              /**< Advanced at each end or reset. */
     uint32 timer;                   /**< Remaining periods of N_As, N_Bs or N_Cs. */
     uint32 delay;                   /**< Remaining periods of STmin before the next CF. */
     uint32 separation;              /**< STmin of the last FC, in periods. */
@@ -99,13 +99,13 @@ typedef struct {
     uint8 frame[CANTP_FRAME_BYTES]; /**< Frame being built or sent. */
 } CanTp_TxType;
 /* The receiving side of the channel. Admitting an SF or FF sets every member but result
- * and frame; CanTp_Init and CanTp_Shutdown only reset state and advance generation. */
+ * and frame; CanTp_Init and CanTp_Shutdown only reset state and advance generation. A call
+ * made outside the area for an earlier generation has a stale result. */
 typedef struct {
     CanTp_RxStateType state;        /**< Step of the reception. */
-    uint32 generation;              /**< Advanced when a reception starts, ends or is reset; makes
-                                       results of calls made for an earlier one stale. */
+    uint32 generation;              /**< Advanced at each start, end or reset. */
     uint32 timer;                   /**< Remaining periods of N_Ar, N_Br or N_Cr. */
-    boolean due;                    /**< In CANTP_RX_BUFFER: ask PduR for buffer again now. */
+    boolean due;                    /**< BUFFER state: ask PduR for buffer again. */
     uint8 flow;                     /**< FS of the FC to send next: CTS, WAIT or OVFLW. */
     uint8 waits;                    /**< FC(WAIT) frames sent, at most wait_frame_max. */
     PduLengthType total;            /**< N-SDU length in bytes from the SF or FF. */
@@ -115,28 +115,27 @@ typedef struct {
     uint8 frame[CANTP_FRAME_BYTES]; /**< FC frame being built or sent. */
 } CanTp_RxType;
 
-/* Every variable below is read and written only inside CANTP_STATE. */
-static const CanTp_ConfigType *configuration CANTP_VAR_CLEARED; /**< Set by Init, NULL
-                                                                    after Shutdown. */
-static CanTp_TxType tx CANTP_VAR_CLEARED; /**< Transmission; Init resets it as above. */
-static CanTp_RxType rx CANTP_VAR_CLEARED; /**< Reception; Init resets it as above. */
-/* lower_generation and pending_lower_id describe the frame of lower_owner and mean nothing
- * while it is CANTP_LOWER_FREE. The Tx N-PDU in flight keeps its owner until its actual
+/* Every variable below is read and written only inside CANTP_STATE. CanTp_Init and
+ * CanTp_Shutdown set configuration (NULL after Shutdown) and reset tx and rx as above. */
+static const CanTp_ConfigType *configuration CANTP_VAR_CLEARED; /**< Configuration in use. */
+static CanTp_TxType tx CANTP_VAR_CLEARED;                       /**< Transmission. */
+static CanTp_RxType rx CANTP_VAR_CLEARED;                       /**< Reception. */
+/* The direction whose frame occupies the Tx N-PDU, its generation when the frame was claimed,
+ * and the N-PDU ID it was sent on; the last two mean nothing while the owner is free, and a
+ * confirmation for another ID is ignored. The frame in flight keeps its owner until its actual
  * confirmation (SWS_CanTp_00075), so CanTp_Init does not reset this group. */
-static CanTp_LowerType lower_owner CANTP_VAR_CLEARED; /**< Direction whose frame occupies
-                                                         the Tx N-PDU, or free. */
-static uint32 lower_generation CANTP_VAR_CLEARED;     /**< Generation of that direction when its
-                                                         frame was claimed. */
-static PduIdType pending_lower_id CANTP_VAR_CLEARED;  /**< Tx N-PDU ID that frame was sent on;
-                                                         confirmations of others are ignored. */
-/* The queue holds queue_count frames starting at queue_head, wrapping at CANTP_RX_QUEUE;
- * CanTp_Init empties it by clearing queue_count only. */
-static uint8 queued[CANTP_RX_QUEUE][CANTP_FRAME_BYTES] CANTP_VAR_CLEARED; /**< Received frames. */
-static uint8 queued_length[CANTP_RX_QUEUE] CANTP_VAR_CLEARED; /**< Byte count of each. */
+static CanTp_LowerType lower_owner CANTP_VAR_CLEARED; /**< Owner, or CANTP_LOWER_FREE. */
+static uint32 lower_generation CANTP_VAR_CLEARED;     /**< Owner's generation at the claim. */
+static PduIdType pending_lower_id CANTP_VAR_CLEARED;  /**< Tx N-PDU ID of the frame. */
+/* Received SF, FF and CF frames waiting for the runner: queue_count frames from queue_head,
+ * wrapping at CANTP_RX_QUEUE. CanTp_Init empties the queue by clearing queue_count only. */
+static uint8 queued[CANTP_RX_QUEUE][CANTP_FRAME_BYTES] CANTP_VAR_CLEARED; /**< Frame bytes. */
+static uint8 queued_length[CANTP_RX_QUEUE] CANTP_VAR_CLEARED;             /**< Frame lengths. */
 static uint8 queue_head CANTP_VAR_CLEARED;  /**< Slot of the oldest frame; Init keeps it. */
 static uint8 queue_count CANTP_VAR_CLEARED; /**< Frames waiting; Init clears it. */
-static boolean running CANTP_VAR_CLEARED;   /**< A context is making CanTp's calls; never reset,
-                                               so it outlives a reinitialization. */
+/* A context is making CanTp's calls to other modules; never reset, so a reinitialization
+ * cannot start a second runner beside it. */
+static boolean running CANTP_VAR_CLEARED; /**< A runner is active. */
 #define CANTP_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanTp_MemMap.h"
 
