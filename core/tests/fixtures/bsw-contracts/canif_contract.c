@@ -10,6 +10,7 @@
 #include "Ecu_Config.h"
 #include <assert.h>
 
+/* Input pointers are const (Verifies[CanIf]: SWS_BSW_00186). */
 /* Standard signatures over the imported Can types (Verifies: SWS_CANIF_00142), in order
  * (Verifies: SWS_CANIF_00001, 91002, 00005, 00003, 00229, 91001, 91003, 91004, 00008, 00009,
  * 00006, 00007, 00699, 00218). */
@@ -80,6 +81,7 @@ static void bus_off(uint8 id) {
     assert(id == 0u);
     ++bus_offs;
 }
+/* uint8 runtime errors reported to Det (Verifies[CanIf]: SWS_BSW_00219, 00222). */
 /* Runtime errors only (Verifies: SWS_CANIF_91007); module 60, instance 0, API 0x49
  * Transmit and 0x14 RxIndication. */
 static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
@@ -148,7 +150,8 @@ int main(void) {
     uninitialized();
     init(&canif);
     Can_Init(&can);
-    /* Verifies: SWS_CANIF_00864: Init leaves every channel OFFLINE (Verifies: SWS_CANIF_00085). */
+    /* Verifies: SWS_CANIF_00864: Init leaves every channel OFFLINE (Verifies: SWS_CANIF_00085)
+     * and the module initialized (Verifies[CanIf]: SWS_BSW_00071). */
     assert(get_pdu(0u, &pdu) == E_OK && pdu == CANIF_OFFLINE);
     /* Verifies: SWS_CANIF_00874: PDU mode requests need a STARTED controller. */
     assert(set_pdu(0u, CANIF_ONLINE) == E_NOT_OK);

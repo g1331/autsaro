@@ -300,14 +300,14 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
             const CanIf_TxPduConfigType *route = &configuration->transmit[i];
             if (route->pdu == TxPduId) {
                 if (pdu_mode == CANIF_OFFLINE) {
-                    errors[0] = 70u;
+                    errors[0] = CANIF_E_STOPPED;
                 } else if (pdu_mode != CANIF_ONLINE) {
                     /* TX_OFFLINE rejects without CANIF_E_STOPPED (SWS_CANIF_00382, 00489). */
                 } else if (PduInfoPtr->SduLength > 8u) {
-                    errors[0] = 62u;
-                    errors[1] = 90u;
+                    errors[0] = CANIF_E_DATA_LENGTH_MISMATCH;
+                    errors[1] = CANIF_E_TXPDU_LENGTH_EXCEEDED;
                 } else if (PduInfoPtr->SduLength > route->maximum_length) {
-                    errors[0] = 90u;
+                    errors[0] = CANIF_E_TXPDU_LENGTH_EXCEEDED;
                 } else if ((controller_mode == CAN_CS_STARTED) && (owed[i] == 0u) &&
                            (accepted[i] < (UINT32_MAX - 255u)) && (writing[i] < 255u)) {
                     /* Earlier results of this PDU are delivered before a new request. */
@@ -480,7 +480,7 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
     }
     SchM_Exit_CanIf_CANIF_STATE();
     if (invalid_length != 0u) {
-        (void)Det_ReportRuntimeError(60u, 0u, 20u, 61u);
+        (void)Det_ReportRuntimeError(60u, 0u, 20u, CANIF_E_INVALID_DATA_LENGTH);
     }
     if (deliver != 0u) {
         LSduR_CanIfRxIndication(id, PduInfoPtr);

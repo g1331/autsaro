@@ -1149,7 +1149,7 @@
     },
     {
       "path": "runtime/bsw/include/CanIf.h",
-      "sha256": "b09c7c23c361555dd7f1cc9d602107e0924e91e0a4ea64ef85ce0d17e2e20dc2",
+      "sha256": "12a2109edead3cebca472c16b3f98de0c57ac8c10d84323c437ae93a34e955f9",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1611,7 +1611,7 @@
     },
     {
       "path": "runtime/bsw/src/CanIf.c",
-      "sha256": "8bf65ef301b534de6c96962c76335e8d2bd672210676f2a7df9778c01661e866",
+      "sha256": "a304b71f70dfaeb3f2976a909191f9ff401c89d0b82528bdc5a7f786b659561b",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

@@ -1,5 +1,6 @@
 /** Independent native concurrency oracle: real driver and routed confirmations.
  * No standard-module substitutes, sleeps, timing scheduler or injected success.
+ * The CanIf area protects only module data (Verifies[CanIf]: SWS_BSW_00134).
  */
 #include "Com.h"
 #include "PduR.h"
