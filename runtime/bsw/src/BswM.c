@@ -6,15 +6,16 @@
 #include "SchM_BswM.h"
 #define BSWM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "BswM_MemMap.h"
-/* All BSWM_STATE. pending implies processing: an input received while an action runs
- * is postponed to that processor, never run recursively (SWS_BswM_00069). The port
- * takes its value just before arbitration (SWS_BswM_00281), so several postponed
- * inputs arbitrate once with the latest. Init and Deinit keep processing, so no
- * second processor overtakes an action in flight. Every input checks configuration and
- * Deinit clears pending, so pending also implies a configuration. */
-static const BswM_ConfigType *configuration BSWM_VAR_CLEARED; /**< NULL when uninitialized. */
-static ComM_ModeType pending_mode BSWM_VAR_CLEARED;           /**< Latest postponed input. */
-static boolean pending BSWM_VAR_CLEARED;    /**< pending_mode awaits arbitration. */
+/* All BSWM_STATE. Postponed inputs imply processing: an input received while an action
+ * runs is postponed to that processor, never run recursively, and each is arbitrated
+ * after it (SWS_BswM_00069). The port takes its value just before arbitration
+ * (SWS_BswM_00281), so every postponed input arbitrates the latest value. Init and
+ * Deinit keep processing, so no second processor overtakes an action in flight. Every
+ * input checks configuration and Deinit drops postponed inputs, so they also imply a
+ * configuration. */
+static const BswM_ConfigType *bswm_configuration BSWM_VAR_CLEARED; /**< NULL when uninitialized. */
+static ComM_ModeType port_mode BSWM_VAR_CLEARED;                   /**< Latest input. */
+static uint32 postponed BSWM_VAR_CLEARED;   /**< Inputs awaiting arbitration. */
 static boolean processing BSWM_VAR_CLEARED; /**< An arbitration is in flight. */
 #define BSWM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "BswM_MemMap.h"
@@ -24,16 +25,16 @@ BSWM_CODE void BswM_Init(const BswM_ConfigType *ConfigPtr)
 {
     if ((ConfigPtr != NULL_PTR) && (ConfigPtr->action != NULL_PTR)) {
         SchM_Enter_BswM_BSWM_STATE();
-        configuration = ConfigPtr;
-        pending = FALSE;
+        bswm_configuration = ConfigPtr;
+        postponed = 0u;
         SchM_Exit_BswM_BSWM_STATE();
     }
 }
 BSWM_CODE void BswM_Deinit(void)
 {
     SchM_Enter_BswM_BSWM_STATE();
-    configuration = NULL_PTR;
-    pending = FALSE;
+    bswm_configuration = NULL_PTR;
+    postponed = 0u;
     SchM_Exit_BswM_BSWM_STATE();
 }
 BSWM_CODE void BswM_MainFunction(void)
@@ -47,22 +48,22 @@ BSWM_CODE void BswM_MainFunction(void)
 static BSWM_CODE void BswM_Process(void)
 {
     boolean owner = TRUE;
-    while (owner == TRUE) {
+    while (owner) {
         BswM_ModeActionType action = NULL_PTR;
         NetworkHandleType network = 0u;
         ComM_ModeType mode = COMM_NO_COMMUNICATION;
         SchM_Enter_BswM_BSWM_STATE();
-        if (pending == TRUE) {
-            pending = FALSE;
-            action = configuration->action;
-            network = configuration->channel;
-            mode = pending_mode;
+        if (postponed > 0u) {
+            --postponed;
+            action = bswm_configuration->action;
+            network = bswm_configuration->channel;
+            mode = port_mode;
         } else {
             processing = FALSE;
             owner = FALSE;
         }
         SchM_Exit_BswM_BSWM_STATE();
-        if (owner == TRUE) {
+        if (owner) {
             /* The single-item action list ends either way; runtime failure
              * reporting (BswMReportFailRuntimeErrorId) is not selected. */
             (void)action(network, mode);
@@ -73,17 +74,17 @@ BSWM_CODE void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType Re
 {
     boolean owner = FALSE;
     SchM_Enter_BswM_BSWM_STATE();
-    if ((configuration != NULL_PTR) && (Network == configuration->channel) &&
+    if ((bswm_configuration != NULL_PTR) && (Network == bswm_configuration->channel) &&
         (RequestedMode <= COMM_FULL_COMMUNICATION)) {
-        pending_mode = RequestedMode;
-        pending = TRUE;
-        if (processing == FALSE) {
+        port_mode = RequestedMode;
+        ++postponed;
+        if (!processing) {
             processing = TRUE;
             owner = TRUE;
         }
     }
     SchM_Exit_BswM_BSWM_STATE();
-    if (owner == TRUE) {
+    if (owner) {
         BswM_Process();
     }
 }

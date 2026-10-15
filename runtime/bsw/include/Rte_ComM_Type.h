@@ -12,4 +12,23 @@ typedef uint16 ComM_UserHandleType;
 #define COMM_FULL_COMMUNICATION                     2u
 #define COMM_FULL_COMMUNICATION_WITH_WAKEUP_REQUEST 3u
 #define COMM_NOT_USED_USER_ID                       65535u
+/* ComM_InhibitionStatusType bit fields (SWS_ComM_00669), named per SWS_Rte_03995-03997. */
+#ifndef WakeupInhibitionActive_BflMask
+#define WakeupInhibitionActive_BflMask 1U
+#endif /* WakeupInhibitionActive_BflMask */
+#ifndef WakeupInhibitionActive_BflPn
+#define WakeupInhibitionActive_BflPn 0U
+#endif /* WakeupInhibitionActive_BflPn */
+#ifndef WakeupInhibitionActive_BflLn
+#define WakeupInhibitionActive_BflLn 1U
+#endif /* WakeupInhibitionActive_BflLn */
+#ifndef LimitedToNoCom_BflMask
+#define LimitedToNoCom_BflMask 2U
+#endif /* LimitedToNoCom_BflMask */
+#ifndef LimitedToNoCom_BflPn
+#define LimitedToNoCom_BflPn 1U
+#endif /* LimitedToNoCom_BflPn */
+#ifndef LimitedToNoCom_BflLn
+#define LimitedToNoCom_BflLn 1U
+#endif /* LimitedToNoCom_BflLn */
 #endif

@@ -9,13 +9,17 @@
 #include "Ecu_HostBusSM_MemMap.h"
 /* All CAN_HOST_AREA_BUSSM. Init keeps an in-flight publisher so that no second one
  * overtakes it. */
-static const Ecu_HostBusSM_ConfigType *configuration ECU_HOSTBUSSM_VAR_CLEARED; /**< Or NULL. */
+/** The configuration, or NULL when uninitialized. */
+static const Ecu_HostBusSM_ConfigType *bussm_configuration ECU_HOSTBUSSM_VAR_CLEARED;
 static ComM_ModeType requested_mode ECU_HOSTBUSSM_VAR_CLEARED; /**< Last accepted request. */
 static boolean transition_pending ECU_HOSTBUSSM_VAR_CLEARED;   /**< Controller transition. */
-static uint32 revision ECU_HOSTBUSSM_VAR_CLEARED;            /**< Transition events; never reset. */
-static ComM_ModeType publish_mode ECU_HOSTBUSSM_VAR_CLEARED; /**< Latest completed mode. */
-static boolean publish_due ECU_HOSTBUSSM_VAR_CLEARED;        /**< publish_mode is unsent. */
-static boolean publishing ECU_HOSTBUSSM_VAR_CLEARED;         /**< A publisher is running. */
+static uint32 revision ECU_HOSTBUSSM_VAR_CLEARED; /**< Transition events; never reset. */
+/* Completed modes awaiting Ecu_HostBusSM_Publish; Init keeps a running publisher. */
+static struct {
+    ComM_ModeType mode; /**< Latest completed mode. */
+    boolean due;        /**< mode is unsent. */
+    boolean running;    /**< A publisher is running. */
+} bussm_publication ECU_HOSTBUSSM_VAR_CLEARED;
 #define ECU_HOSTBUSSM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Ecu_HostBusSM_MemMap.h"
 #define ECU_HOSTBUSSM_START_SEC_CODE
@@ -29,29 +33,29 @@ static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(ComM_ModeType mode)
 {
     boolean owner = FALSE;
     Ecu_HostBusSM_Enter();
-    if (configuration != NULL_PTR) {
-        publish_mode = mode;
-        publish_due = TRUE;
-        if (publishing == FALSE) {
-            publishing = TRUE;
+    if (bussm_configuration != NULL_PTR) {
+        bussm_publication.mode = mode;
+        bussm_publication.due = TRUE;
+        if (!bussm_publication.running) {
+            bussm_publication.running = TRUE;
             owner = TRUE;
         }
     }
     Ecu_HostBusSM_Exit();
-    while (owner == TRUE) {
+    while (owner) {
         NetworkHandleType channel = 0u;
         ComM_ModeType next = COMM_NO_COMMUNICATION;
         Ecu_HostBusSM_Enter();
-        if ((configuration != NULL_PTR) && (publish_due == TRUE)) {
-            publish_due = FALSE;
-            channel = configuration->channel;
-            next = publish_mode;
+        if ((bussm_configuration != NULL_PTR) && bussm_publication.due) {
+            bussm_publication.due = FALSE;
+            channel = bussm_configuration->channel;
+            next = bussm_publication.mode;
         } else {
-            publishing = FALSE;
+            bussm_publication.running = FALSE;
             owner = FALSE;
         }
         Ecu_HostBusSM_Exit();
-        if (owner == TRUE) {
+        if (owner) {
             ComM_BusSM_ModeIndication(channel, next);
         }
     }
@@ -62,8 +66,9 @@ static ECU_HOSTBUSSM_CODE const Ecu_HostBusSM_ConfigType *Ecu_HostBusSM_Channel(
 {
     const Ecu_HostBusSM_ConfigType *config;
     Ecu_HostBusSM_Enter();
-    config = ((configuration != NULL_PTR) && (Channel == configuration->channel)) ? configuration
-                                                                                  : NULL_PTR;
+    config = ((bussm_configuration != NULL_PTR) && (Channel == bussm_configuration->channel))
+                 ? bussm_configuration
+                 : NULL_PTR;
     Ecu_HostBusSM_Exit();
     return config;
 }
@@ -76,7 +81,7 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *Confi
     }
     if (known == E_OK) {
         Ecu_HostBusSM_Enter();
-        configuration = ConfigPtr;
+        bussm_configuration = ConfigPtr;
         requested_mode = COMM_NO_COMMUNICATION;
         transition_pending = FALSE;
         Ecu_HostBusSM_Exit();
@@ -85,7 +90,7 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *Confi
 ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_DeInit(void)
 {
     Ecu_HostBusSM_Enter();
-    configuration = NULL_PTR;
+    bussm_configuration = NULL_PTR;
     transition_pending = FALSE;
     Ecu_HostBusSM_Exit();
 }
@@ -105,7 +110,7 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleT
         pending = transition_pending;
         Ecu_HostBusSM_Exit();
         if ((controller_result == E_OK) && (pdu_result == E_OK)) {
-            if ((controller != CAN_CS_STARTED) || (pdu == CANIF_OFFLINE) || (pending == TRUE)) {
+            if ((controller != CAN_CS_STARTED) || (pdu == CANIF_OFFLINE) || pending) {
                 *ComMode = COMM_NO_COMMUNICATION;
             } else if (pdu == CANIF_TX_OFFLINE) {
                 *ComMode = COMM_SILENT_COMMUNICATION;
@@ -182,13 +187,12 @@ Ecu_HostBusSM_Request(const Ecu_HostBusSM_ConfigType *config,
     boolean repeated;
     Ecu_HostBusSM_Enter();
     pending = transition_pending;
-    repeated = (transition_pending == TRUE) && (requested_mode == ComMode);
+    repeated = transition_pending && (requested_mode == ComMode);
     Ecu_HostBusSM_Exit();
-    if (repeated == TRUE) {
+    if (repeated) {
         result = E_OK; /* Accepted transition still awaits the actual driver poll. */
     } else if (((ComMode == COMM_NO_COMMUNICATION) && (controller != CAN_CS_STARTED)) ||
-               ((ComMode != COMM_NO_COMMUNICATION) && (controller == CAN_CS_STARTED) &&
-                (pending == FALSE))) {
+               ((ComMode != COMM_NO_COMMUNICATION) && (controller == CAN_CS_STARTED) && !pending)) {
         result = Ecu_HostBusSM_ApplyMode(config->channel, ComMode);
         if (result == E_OK) {
             Ecu_HostBusSM_Enter();
@@ -226,8 +230,8 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerModeIndication(
     const Ecu_HostBusSM_ConfigType *config = NULL_PTR;
     ComM_ModeType requested = COMM_NO_COMMUNICATION;
     Ecu_HostBusSM_Enter();
-    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller)) {
-        config = configuration;
+    if ((bussm_configuration != NULL_PTR) && (ControllerId == bussm_configuration->controller)) {
+        config = bussm_configuration;
         transition_pending = FALSE;
         ++revision;
         requested = requested_mode;
@@ -251,8 +255,8 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId)
     Can_ControllerStateType actual = CAN_CS_UNINIT;
     Std_ReturnType result = E_NOT_OK;
     Ecu_HostBusSM_Enter();
-    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller)) {
-        config = configuration;
+    if ((bussm_configuration != NULL_PTR) && (ControllerId == bussm_configuration->controller)) {
+        config = bussm_configuration;
     }
     Ecu_HostBusSM_Exit();
     if (config != NULL_PTR) {

@@ -10,6 +10,7 @@
 #define COMM_E_MODE_LIMITATION       2u /**< Request refused by mode inhibition. */
 #define COMM_E_MULTIPLE_PNC_ASSIGNED 3u /**< User belongs to more than one PNC. */
 #define COMM_E_NO_PNC_ASSIGNED       4u /**< User belongs to no PNC. */
+#define COMM_E_LEARNING_ACTIVE       5u /**< PNC learning phase is active. */
 /** SWS_ComM_00668: initialization status reported by ComM_GetStatus. */
 typedef enum {
     COMM_UNINIT = 0, /**< Not initialized, or deinitialized. */

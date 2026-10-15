@@ -128,7 +128,7 @@ static void window(void (*contend)(void))
 #endif
 }
 
-/* Two inputs during the action: arbitration takes the latest port value once. */
+/* Two inputs during the action: each arbitrates the port value taken just before it. */
 static void indicate_while_acting(void)
 {
     BswM_ComM_CurrentMode(7u, COMM_NO_COMMUNICATION);
@@ -160,8 +160,8 @@ int main(void)
 #endif
     BswM_Init(&configuration);
     window(indicate_while_acting);
-    assert(action_count == 2u && actions[0] == COMM_FULL_COMMUNICATION &&
-           actions[1] == COMM_SILENT_COMMUNICATION);
+    assert(action_count == 3u && actions[0] == COMM_FULL_COMMUNICATION &&
+           actions[1] == COMM_SILENT_COMMUNICATION && actions[2] == COMM_SILENT_COMMUNICATION);
     window(deinitialize_while_acting);
     assert(action_count == 1u && actions[0] == COMM_FULL_COMMUNICATION);
     BswM_ComM_CurrentMode(7u, COMM_NO_COMMUNICATION);

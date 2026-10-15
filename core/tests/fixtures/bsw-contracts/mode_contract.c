@@ -163,7 +163,10 @@ int main(void) {
     assert(sizeof(BswM_ModeType) == 2u && sizeof(BswM_UserType) == 2u);
     assert(sizeof(ComM_InhibitionStatusType) == 1u);
     assert(COMM_E_MODE_LIMITATION == 2u && COMM_E_MULTIPLE_PNC_ASSIGNED == 3u &&
-           COMM_E_NO_PNC_ASSIGNED == 4u);
+           COMM_E_NO_PNC_ASSIGNED == 4u && COMM_E_LEARNING_ACTIVE == 5u);
+    assert(WakeupInhibitionActive_BflMask == 1u && WakeupInhibitionActive_BflPn == 0u &&
+           WakeupInhibitionActive_BflLn == 1u && LimitedToNoCom_BflMask == 2u &&
+           LimitedToNoCom_BflPn == 1u && LimitedToNoCom_BflLn == 1u);
     assert(inhibition_status(7u, &inhibition) == E_NOT_OK && inhibition == 0xa5u);
     assert(classification(3u) == E_NOT_OK);
     assert(pnc_current(17u, &value) == E_NOT_OK && value == 99u);

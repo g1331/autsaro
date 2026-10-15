@@ -1121,7 +1121,7 @@
     },
     {
       "path": "runtime/bsw/include/BswM_ComM.h",
-      "sha256": "58531a91dd09192c5036410ae94effff79fda4bb1115b17d47624e4eda6ce766",
+      "sha256": "7641c779a5ec1c00e84b8ac8a9af26b5e8e8c7cdb96151d15fdbf5d557db0624",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1219,7 +1219,7 @@
     },
     {
       "path": "runtime/bsw/include/ComM.h",
-      "sha256": "a6a645fe0c5b8c757ad9379b03ad192adddfda7703f843d7148e4953b5e86799",
+      "sha256": "22fac982c068303b79dbfb031044d1aa4918cfbb8c113df6745bf3103274d36d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1541,7 +1541,7 @@
     },
     {
       "path": "runtime/bsw/include/Rte_ComM_Type.h",
-      "sha256": "2d57b55307b4392f80f392b39e222aac87076c3e69660160a6de070d61ef5366",
+      "sha256": "77a7d3b23bbe92b7bf4efda2e1749a7df033f38b9dec65b2d3bd774197229d64",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1597,7 +1597,7 @@
     },
     {
       "path": "runtime/bsw/src/BswM.c",
-      "sha256": "a933dc8c3793af8804ad62c577a018a1abd856009f33aa3b45bbf08aed3fc746",
+      "sha256": "bb58c73c5ca74c1c626458e21d420013af135dc37e384f97349e948ec76327a3",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1653,7 +1653,7 @@
     },
     {
       "path": "runtime/bsw/src/ComM.c",
-      "sha256": "e450423c865b42396b0008538043eeb8e458d43c5c0aad637f70392612c45043",
+      "sha256": "96cc9f90cb149fa02f388c0d5d3774beb2ca36126a0f27c9b977c403b94a5ac2",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1709,7 +1709,7 @@
     },
     {
       "path": "runtime/host/src/Ecu_HostBusSM.c",
-      "sha256": "d6a6e4f2a7ba42a17bcba1ed015f911a56fc657fc80992d884bcbb4c01740ddf",
+      "sha256": "4507754966fa6f5b4a6c7c6de6db2b1d174b505e644b13cee8287ad4c70bc76d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
