@@ -61,7 +61,7 @@ uv run --locked python -m autosar_tooling requirements SWS_CANInterface
 | [类型](types.md) | StandardTypes、PlatformTypes、CommunicationStackTypes |
 | [MemMap](memmap.md) | 内存段映射 |
 | [RTE 与 SchM](rte.md) | RTE 契约、映射、生命周期与 SchM |
-| [OS](os.md) | AUTOSAR OS 与 OSEK/VDX OS 2.2.3 |
+| [OS](os/README.md) | AUTOSAR OS 与 OSEK/VDX OS 2.2.3 |
 | [COM](com.md)、[PduR](pdur.md)、[LSduR](lsdur.md) | 信号与 PDU 路由 |
 | [CanIf](canif.md)、[Can](can.md)、[CanTp](cantp.md) | CAN 接口、驱动与传输层 |
 | [Dcm](dcm/README.md) | 诊断通信 |
