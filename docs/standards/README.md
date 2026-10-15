@@ -64,7 +64,7 @@ uv run --locked python -m autosar_tooling requirements SWS_CANInterface
 | [OS](os.md) | AUTOSAR OS 与 OSEK/VDX OS 2.2.3 |
 | [COM](com.md)、[PduR](pdur.md)、[LSduR](lsdur.md) | 信号与 PDU 路由 |
 | [CanIf](canif.md)、[Can](can.md)、[CanTp](cantp.md) | CAN 接口、驱动与传输层 |
-| [Dcm](dcm.md) | 诊断通信 |
+| [Dcm](dcm/README.md) | 诊断通信 |
 | [ComM](comm.md)、[CanSM](cansm.md)、[BswM](bswm.md) | 通信与模式管理 |
 | [Det](det.md) | 开发错误跟踪 |
 | [多组件剖面](multi-component-profile.md) | 主线剖面的首批支持配置与拒绝边界 |

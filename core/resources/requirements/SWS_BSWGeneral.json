@@ -158,6 +158,7 @@
     "CanIf",
     "CanTp",
     "Com",
+    "Dcm",
     "LSduR",
     "PduR"
   ]
