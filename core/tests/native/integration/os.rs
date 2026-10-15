@@ -54,9 +54,10 @@ fn run(binary: &Path, arguments: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-/// SWS_Os_00393 conversion macros and the ECUC counter constants, checked by
+/// Conversion macros and the ECUC counter constants, checked by
 /// the independent literal oracle `ecu_counter_time.c` and by header mutants
 /// that the oracle must reject (exit 1: scale, 2: double evaluation, 3: constant).
+/// Verifies: SWS_Os_00393
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
@@ -234,9 +235,11 @@ fn standard_status_build() {
     );
 }
 
-/// RES_SCHEDULER (SWS_Os_00801): with OsUseResScheduler TRUE the generated
-/// resource has ceiling of the task, task access only and GetResource returns
-/// E_OK; FALSE configures no resource and GetResource is E_OS_ID.
+/// RES_SCHEDULER: with OsUseResScheduler TRUE the generated virtual resource
+/// has the ceiling of the task, task access only and GetResource returns E_OK,
+/// also when a configured RES_SCHEDULER is present and ignored; FALSE
+/// configures no resource and GetResource is E_OS_ID.
+/// Verifies: SWS_Os_00850, SWS_Os_00851
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]

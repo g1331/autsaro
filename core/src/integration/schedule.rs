@@ -575,14 +575,7 @@ pub(super) fn inspect_events(
                 .filter(|index| definition_is(graph, *index, "OsScheduleTableExpiryPoint"))
                 .collect();
             if sync.len() != 1
-                || value(graph, sync[0], "OsScheduleTblSyncStrategy", false) != Some("NONE")
                 || points != vec![alarm]
-                || graph
-                    .descendants(alarm, "ECUC-CONTAINER-VALUE")
-                    .into_iter()
-                    .filter(|index| definition_is(graph, *index, "OsScheduleTableTaskActivation"))
-                    .count()
-                    != 0
                 || !matches!(
                     value(graph, table, "OsScheduleTableRepeating", false),
                     Some("true" | "1")
@@ -590,8 +583,6 @@ pub(super) fn inspect_events(
                 || value(graph, table, "OsScheduleTableDuration", false)
                     .and_then(|value| value.parse::<u32>().ok())
                     != Some(period)
-                || value(graph, autostart, "OsScheduleTableAutostartType", false)
-                    != Some("RELATIVE")
                 || expiry_offset.is_none_or(|offset| offset >= period)
                 || table_start.is_none_or(|start| {
                     start == 0
@@ -609,10 +600,9 @@ pub(super) fn inspect_events(
                     ),
                 ));
             }
-        } else if value(graph, autostart, "OsAlarmAutostartType", false) != Some("RELATIVE")
-            || value(graph, autostart, "OsAlarmAlarmTime", false)
-                .and_then(|value| value.parse::<u32>().ok())
-                != Some(period)
+        } else if value(graph, autostart, "OsAlarmAlarmTime", false)
+            .and_then(|value| value.parse::<u32>().ok())
+            != Some(period)
             || value(graph, autostart, "OsAlarmCycleTime", false)
                 .and_then(|value| value.parse::<u32>().ok())
                 != Some(period)
@@ -747,21 +737,51 @@ pub(super) fn inspect_events(
         .iter()
         .filter_map(|entity| entity.schedule_table.as_deref())
         .collect();
-    let declared_tables: BTreeSet<_> = graph
+    if let Some(unbound) = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()
-        .filter(|index| definition_is(graph, *index, "OsScheduleTable"))
-        .map(|index| graph.elements[index].object.as_str())
-        .collect();
-    if mapped_tables != declared_tables {
+        .find(|index| {
+            definition_is(graph, *index, "OsScheduleTable")
+                && !mapped_tables.contains(graph.elements[*index].object.as_str())
+        })
+    {
         return Err(reject(
             graph,
-            behavior,
+            unbound,
             "SCHEDULE_TABLE_UNBOUND",
             crate::product_message!(
                 "backend.integration.schedule.reference_ecu_tables_require_periodic_rte_groups"
             ),
         ));
+    }
+    // The generated OS contains only these objects; anything else would be dropped silently.
+    let mapped_alarms: BTreeSet<_> = entities
+        .iter()
+        .filter(|entity| entity.schedule_table.is_none())
+        .map(|entity| entity.alarm.as_str())
+        .collect();
+    for (kind, used) in [
+        ("OsAlarm", &mapped_alarms),
+        ("OsEvent", &task_events),
+        ("OsAppMode", &modes),
+    ] {
+        if let Some(unused) = graph
+            .of_kind("ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .find(|index| {
+                definition_is(graph, *index, kind)
+                    && !used.contains(graph.elements[*index].object.as_str())
+            })
+        {
+            return Err(reject(
+                graph,
+                unused,
+                "OS_OBJECT_UNUSED",
+                crate::product_message!(
+                    "backend.integration.schedule.unused_os_object_unsupported"
+                ),
+            ));
+        }
     }
     let configured_symbol = |kind: &str, prefix: &str| {
         graph

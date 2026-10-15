@@ -35,7 +35,7 @@ OsAlarmAlarmTime OsAlarmAutostartType OsAlarmCycleTime OsCounterMaxAllowedValue 
 OsScheduleTableDuration OsScheduleTableRepeating OsScheduleTableAutostartType OsScheduleTableStartValue OsScheduleTblExpPointOffset OsScheduleTblSyncStrategy
 OsCounterTicksPerBase OsCounterType OsSecondsPerTick OsEventMask OsErrorHook OsPostTaskHook
 OsPreTaskHook OsProtectionHook OsShutdownHook OsStartupHook OsScalabilityClass OsStatus
-OsUseGetServiceId OsUseParameterAccess OsUseResScheduler OsTaskActivation OsTaskPriority OsTaskSchedule
+OsLockTrustedFunctionCall OsStackMonitoring OsUseArti OsUseGetServiceId OsUseParameterAccess OsUseResScheduler OsTaskActivation OsTaskPriority OsTaskSchedule
 PduRConfigurationId PduRDestPduHandleId PduRTransmissionConfirmation PduRSourcePduHandleId PduRSrcPduUpTxConf
 RteBswPositionInTask RtePositionInTask RteEventIsMappedToTask RteBswEventIsMappedToTask";
 
@@ -415,6 +415,9 @@ fn inspect_with_catalog(
             &[
                 "OsStatus",
                 "OsScalabilityClass",
+                "OsLockTrustedFunctionCall",
+                "OsStackMonitoring",
+                "OsUseArti",
                 "OsUseGetServiceId",
                 "OsUseParameterAccess",
                 "OsUseResScheduler",
@@ -574,6 +577,9 @@ fn inspect_with_catalog(
         ("ComTransferProperty", "PENDING"),
         ("ComRxDataTimeoutAction", "NONE"),
         ("OsScalabilityClass", "SC1"),
+        ("OsAlarmAutostartType", "RELATIVE"),
+        ("OsScheduleTableAutostartType", "RELATIVE"),
+        ("OsScheduleTblSyncStrategy", "NONE"),
         ("DcmDspSessionForBoot", "DCM_NO_BOOT"),
         ("DcmDspDataScalingInfoSize", "0"),
         ("DcmDspMaxDidToRead", "2"),
@@ -594,6 +600,9 @@ fn inspect_with_catalog(
         ("OsProtectionHook", false),
         ("OsShutdownHook", true),
         ("OsStartupHook", true),
+        // The runtime always monitors task stacks and always emits ARTI hooks.
+        ("OsStackMonitoring", true),
+        ("OsUseArti", true),
         ("OsUseGetServiceId", true),
         ("OsUseParameterAccess", true),
     ];

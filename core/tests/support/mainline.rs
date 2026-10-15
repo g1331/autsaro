@@ -388,6 +388,8 @@ pub(crate) fn equivalent_schedule_triggers(tables: bool) -> Vec<InputSource> {
     if !tables {
         return sources;
     }
+    // Process moves to its own table below; its alarm would stay unused.
+    change(&mut sources, "ecuc.arxml", &second_alarm, "");
     let table_source = InputSource::new(
         "tables.arxml",
         std::fs::read(

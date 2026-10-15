@@ -1020,9 +1020,10 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
     a.enumeration(os, "OsScalabilityClass", "SC1 SC2 SC3 SC4", 0)?;
     a.booleans(
         os,
-        "OsUseGetServiceId OsUseParameterAccess OsUseResScheduler",
+        "OsLockTrustedFunctionCall OsStackMonitoring OsUseArti OsUseGetServiceId OsUseParameterAccess OsUseResScheduler",
         1,
     )?;
+    a.default(os, "OsLockTrustedFunctionCall", "true");
     let hooks = "Os/OsOS/OsHooks";
     a.container(hooks, 1, Some(1))?;
     a.booleans(
@@ -1098,9 +1099,6 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
     let expiry = "Os/OsScheduleTable/OsScheduleTableExpiryPoint";
     a.container(expiry, 1, None)?;
     a.integers(expiry, "OsScheduleTblExpPointOffset", "0", U64, 1)?;
-    let event = "Os/OsScheduleTable/OsScheduleTableExpiryPoint/OsScheduleTableTaskActivation";
-    a.container(event, 0, None)?;
-    a.reference(event, "OsScheduleTableActivateTaskRef", task, 1, Some(1))?;
     let event = "Os/OsScheduleTable/OsScheduleTableExpiryPoint/OsScheduleTableEventSetting";
     a.container(event, 0, None)?;
     a.reference(event, "OsScheduleTableSetEventTaskRef", task, 1, Some(1))?;
