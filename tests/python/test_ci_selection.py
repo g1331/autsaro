@@ -1,8 +1,14 @@
-"""Keep the required CI's ui/-only selection safe: the jobs it skips must never read ui/."""
+"""Keep required CI's documentation-only and ui/-only selection safe."""
 
+import os
 import re
+import runpy
 import subprocess
+import tempfile
+import textwrap
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from autosar_tooling.config import ROOT
 
@@ -34,6 +40,44 @@ def jobs() -> dict[str, dict[str, object]]:
 
 
 class CiSelectionTests(unittest.TestCase):
+    def test_codex_hooks_use_lightweight_checks_without_hiding_code_changes(self):
+        script = textwrap.dedent(
+            WORKFLOW.read_text(encoding="utf-8")
+            .split("        run: |\n", 1)[1]
+            .split("\n  ui:", 1)[0]
+        )
+        cases = (
+            ([".codex/hooks.json"], False, False),
+            (
+                [".codex/hooks.json", ".agents/skills/example/SKILL.md", "README.md"],
+                False,
+                False,
+            ),
+            ([".codex/hooks.json", "ui/src/App.tsx"], True, False),
+            ([".codex/hooks.json", "runtime/bsw/src/Can.c"], True, True),
+            ([".codex-extra/hooks.json"], True, True),
+        )
+        for paths, code, native in cases:
+            with self.subTest(paths=paths), tempfile.TemporaryDirectory() as directory:
+                script_path = Path(directory) / "detect.py"
+                script_path.write_text(script, encoding="utf-8")
+                output = Path(directory) / "outputs"
+                environment = {
+                    "PULL_REQUEST": "184",
+                    "GITHUB_REPOSITORY": "example/repo",
+                    "GITHUB_OUTPUT": str(output),
+                }
+                listing = subprocess.CompletedProcess([], 0, stdout="\n".join(paths))
+                with (
+                    mock.patch.dict(os.environ, environment),
+                    mock.patch.object(subprocess, "run", return_value=listing),
+                ):
+                    runpy.run_path(str(script_path))
+                self.assertEqual(
+                    output.read_text(encoding="utf-8"),
+                    f"code={str(code).lower()}\nnative={str(native).lower()}\n",
+                )
+
     def test_skipped_jobs_match_the_required_gate(self):
         workflow = jobs()
         skipped = {name for name, job in workflow.items() if "outputs.native" in job["if"]}
