@@ -36,7 +36,8 @@ const EcuPolicyConfig Ecu_Policy = {
     .tx_confirmation = ECU_TX_SYNCHRONOUS,
 #endif
 };
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     assert(id == 0x708u && length == 8u && count < 128u);
 #if defined(CAN_DIAGNOSTIC_QUEUED)
     output_tokens[count] = Can_HostTransmitToken();
@@ -46,7 +47,8 @@ static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     ++count;
     return ECU_OK;
 }
-static Std_ReturnType read_did(uint8 *data) {
+static Std_ReturnType read_did(uint8 *data)
+{
     data[0] = 0x12u;
     data[1] = 0x34u;
     data[2] = 0x56u;
@@ -56,7 +58,8 @@ static Std_ReturnType read_did(uint8 *data) {
 }
 static unsigned rx_timeouts;
 static unsigned tx_timeouts;
-static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
+static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code)
+{
     assert(instance == 0u);
     /* SWS_CanTp_00229: MainFunction timeouts report CANTP_E_RX_COM/CANTP_E_TX_COM. */
     if ((module == 35u) && (api == 0x06u) && ((code == 0xc0u) || (code == 0xd0u))) {
@@ -73,7 +76,8 @@ static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code
     ++reports;
     return E_OK;
 }
-static void mode(NetworkHandleType channel, ComM_ModeType value) {
+static void mode(NetworkHandleType channel, ComM_ModeType value)
+{
     if (value == COMM_FULL_COMMUNICATION) {
         Dcm_ComM_FullComModeEntered(channel);
     } else if (value == COMM_SILENT_COMMUNICATION) {
@@ -84,8 +88,14 @@ static void mode(NetworkHandleType channel, ComM_ModeType value) {
 }
 static const Det_ErrorHookType hooks[] = {error};
 static const Det_ConfigType det = {NULL_PTR, 0u, hooks, 1u};
-static const PduR_TpRouteType tp_routes[] = {{71u, 17u, 72u, 18u, Dcm_StartOfReception,
-                                              Dcm_CopyRxData, Dcm_TpRxIndication, Dcm_CopyTxData,
+static const PduR_TpRouteType tp_routes[] = {{71u,
+                                              17u,
+                                              72u,
+                                              18u,
+                                              Dcm_StartOfReception,
+                                              Dcm_CopyRxData,
+                                              Dcm_TpRxIndication,
+                                              Dcm_CopyTxData,
                                               Dcm_TpTxConfirmation}};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_DCM, 81u, PDUR_LO_CANTP, 12u, CanTp_Transmit, NULL_PTR, NULL_PTR}};
@@ -116,22 +126,26 @@ static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
 static const Dcm_ConfigType dcm = {
     17u, 18u, 7u, 0x1234u, read_did, 50u, 50u, 5000u, 20u, 256u, 81u, publish_authentication, 0u};
-static const CanTp_ConfigType tp = {11u, 12u, 31u, 41u, 256u, 5u, 5u, 5u,
-                                    5u,  5u,  5u,  1u,  2u, 0u,   71u, 72u};
-static void receive(const uint8 bytes[8]) {
+static const CanTp_ConfigType tp = {
+    11u, 12u, 31u, 41u, 256u, 5u, 5u, 5u, 5u, 5u, 5u, 1u, 2u, 0u, 71u, 72u};
+static void receive(const uint8 bytes[8])
+{
     assert(Can_Inject(0x700u, 8u, bytes, 0u) == ECU_OK);
     Can_MainFunction_Read();
 }
 static void flush(void) { assert(Can_HostFlush() == ECU_OK); }
-static void tick(void) {
+static void tick(void)
+{
     CanTp_MainFunction();
     Dcm_MainFunction();
 }
-static void request_read(void) {
+static void request_read(void)
+{
     const uint8 bytes[8] = {3u, 0x22u, 0x12u, 0x34u, 0u, 0u, 0u, 0u};
     receive(bytes);
 }
-static void start(void) {
+static void start(void)
+{
     Det_Init(&det);
     PduR_Init(&pdur);
     LSduR_Init(&ls);
@@ -148,12 +162,13 @@ static void start(void) {
     assert(ComM_RequestComMode(43u, COMM_FULL_COMMUNICATION) == E_OK);
     Can_MainFunction_Wakeup();
 }
-int main(void) {
+int main(void)
+{
     BufReq_ReturnType (*start_rx)(PduIdType, const PduInfoType *, PduLengthType, PduLengthType *) =
         Dcm_StartOfReception;
     BufReq_ReturnType (*copy_rx)(PduIdType, const PduInfoType *, PduLengthType *) = Dcm_CopyRxData;
-    BufReq_ReturnType (*copy_tx)(PduIdType, const PduInfoType *, const RetryInfoType *,
-                                 PduLengthType *) = Dcm_CopyTxData;
+    BufReq_ReturnType (*copy_tx)(
+        PduIdType, const PduInfoType *, const RetryInfoType *, PduLengthType *) = Dcm_CopyTxData;
     void (*rx_done)(PduIdType, Std_ReturnType) = Dcm_TpRxIndication;
     void (*tx_done)(PduIdType, Std_ReturnType) = Dcm_TpTxConfirmation;
     Std_ReturnType (*transmit)(PduIdType, const PduInfoType *) = CanTp_Transmit;
