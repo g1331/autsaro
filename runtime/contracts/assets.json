@@ -967,7 +967,7 @@
     },
     {
       "path": "tools/python/src/ecu_tools/process.py",
-      "sha256": "4dceb9559cf11aa4976cba4efb48b0e54f7c62df3014805a2be195eb9f2d3aac",
+      "sha256": "164acf802914372dd18bddffb6042f470e44b8eb3db9433815ee9fba3a582ec4",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

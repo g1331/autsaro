@@ -481,8 +481,11 @@ class BoundedProcessTests(unittest.TestCase):
             spec, _ = self._spec(Path(name), "fail")
             with self.assertRaisesRegex(OwnershipError, "exit_code=7") as failure:
                 run_bounded(spec)
-            stderr = Path(str(failure.exception).split("stderr=")[-1])
+            message = str(failure.exception)
+            stderr = Path(message.splitlines()[0].split("stderr=")[-1])
             self.assertIn("probe failure on stderr", stderr.read_text(encoding="utf-8"))
+            # The message also carries the output, since scratch logs may be gone.
+            self.assertIn("probe failure on stderr", message)
 
     @unittest.skipIf(os.name == "nt", "POSIX supervisor owns independent root scopes")
     def test_explicit_owner_ignores_unrelated_inherited_scope(self) -> None:

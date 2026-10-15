@@ -225,6 +225,16 @@ def run_bounded(
         raise OwnershipError(
             f"{spec.stage}: argv={list(spec.argv)!r} deadline_ns={spec.deadline_ns} "
             f"status={result.status} exit_code={result.exit_code} "
-            f"stdout={result.stdout} stderr={result.stderr}"
+            f"stdout={result.stdout} stderr={result.stderr}\n"
+            f"stdout:\n{_tail(result.stdout)}\nstderr:\n{_tail(result.stderr)}"
         )
     return result
+
+
+def _tail(path: Path, limit: int = 8 * 1024) -> str:
+    """The end of a captured log; the path alone is often gone before anyone reads it."""
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        return f"<unreadable: {error}>"
+    return data[-limit:].decode("utf-8", errors="replace")

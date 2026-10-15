@@ -130,6 +130,21 @@ impl ProcessResult {
     pub fn success(&self) -> bool {
         self.status == ProcessStatus::Exited && self.exit_code == Some(0)
     }
+
+    /// The end of both captured streams. The logs usually live in a scratch
+    /// directory that is gone by the time anyone reads a bare path.
+    pub fn output_tail(&self) -> String {
+        fn tail(path: &std::path::Path) -> String {
+            const LIMIT: usize = 8 * 1024;
+            let bytes = std::fs::read(path).unwrap_or_default();
+            String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(LIMIT)..]).into_owned()
+        }
+        format!(
+            "stdout:\n{}\nstderr:\n{}",
+            tail(&self.stdout),
+            tail(&self.stderr)
+        )
+    }
 }
 
 /// A root owner may launch independent sibling or nested scopes.
@@ -179,7 +194,7 @@ impl ProcessOwner {
         let result = self.spawn(spec, None)?.wait()?;
         if !result.success() {
             return Err(
-                crate::product_message!("backend.execution.command_failed", "status" => format!("{:?}", result.status), "exitCode" => format!("{:?}", result.exit_code), "scope" => &result.scope, "pid" => result.pid, "stdout" => result.stdout.display(), "stderr" => result.stderr.display()),
+                crate::product_message!("backend.execution.command_failed", "status" => format!("{:?}", result.status), "exitCode" => format!("{:?}", result.exit_code), "scope" => &result.scope, "pid" => result.pid, "stdout" => result.stdout.display(), "stderr" => result.stderr.display(), "output" => result.output_tail()),
             );
         }
         Ok(result)
