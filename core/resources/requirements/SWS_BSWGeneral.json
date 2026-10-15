@@ -154,6 +154,8 @@
   },
   "elsewhere": [],
   "modules": [
+    "Can",
+    "CanIf",
     "Com",
     "LSduR",
     "PduR"
