@@ -42,40 +42,69 @@
 #define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"
 
-static CanMode can_controller_mode CAN_VAR_CLEARED;
-static uint8 bus_off CAN_VAR_CLEARED;
-static uint8 busoff_notification_pending CAN_VAR_CLEARED;
-static Can_TxSinkType tx_sink CAN_VAR_CLEARED;
-static uint8 can_initialized CAN_VAR_CLEARED;
-static uint64 driver_lifetime CAN_VAR_CLEARED;
-static uint8 tx_pending CAN_VAR_CLEARED;
-static uint8 tx_in_flight CAN_VAR_CLEARED;
-static uint8 tx_cancelled CAN_VAR_CLEARED;
-static uint32 tx_id CAN_VAR_CLEARED;
-static uint8 tx_length CAN_VAR_CLEARED;
-static uint8 tx_payload[8] CAN_VAR_CLEARED;
-static PduIdType tx_handle CAN_VAR_CLEARED;
-static uint8 tx_confirmation_pending CAN_VAR_CLEARED;
-static PduIdType tx_confirmation_handle CAN_VAR_CLEARED;
-static uint8 tx_confirming CAN_VAR_CLEARED;
+/* Every variable in this section is read and written only inside CAN_STATE. "Init resets"
+ * means Can_Init and Can_DeInit both reset it; the others keep their value across both. */
+static uint8 can_initialized CAN_VAR_CLEARED;  /**< 1 from a successful Can_Init to Can_DeInit. */
+static uint64 driver_lifetime CAN_VAR_CLEARED; /**< Successful Can_Init count; never reset. A
+                                                * context back from a callback in another lifetime
+                                                * drops its result. */
+static Can_TxSinkType tx_sink CAN_VAR_CLEARED; /**< Synchronous output from the Init config;
+                                                * NULL after Can_DeInit. */
+static CanMode can_controller_mode CAN_VAR_CLEARED; /**< Controller state; Init: STOPPED. */
+static uint8 bus_off CAN_VAR_CLEARED; /**< 1 after a host bus-off until STARTED or a host mode
+                                       * change; Init resets. */
+static uint8 busoff_notification_pending CAN_VAR_CLEARED; /**< Bus-off not yet given to CanIf;
+                                                           * Init resets. */
+
+/* Transmit slot, one L-PDU at a time. Can_Write sets tx_pending; the flush clears it and sets
+ * tx_in_flight while the host output runs outside the area; a successful synchronous output,
+ * or a queued completion, sets tx_confirmation_pending; Can_ConfirmTx clears it and sets
+ * tx_confirming while CanIf_TxConfirmation runs. Can_Write returns CAN_BUSY while any of the
+ * four is set. Synchronous outputs keep exactly one set at a time. A queued output frees the
+ * slot when the flush returns, so the next frame's tx_pending or tx_in_flight can coexist with
+ * the previous frame's tx_confirmation_pending or tx_confirming. A stop (STOPPED, bus-off or a
+ * host SLEEP) and Can_DeInit clear tx_pending and tx_confirmation_pending and set tx_cancelled;
+ * Can_Init clears the two flags only. tx_in_flight and tx_confirming are cleared only by the
+ * context that set them, so they outlive a reinitialization. */
+static uint8 tx_pending CAN_VAR_CLEARED;              /**< Frame admitted, not yet output. */
+static uint8 tx_in_flight CAN_VAR_CLEARED;            /**< Host output running; not reset. */
+static uint8 tx_cancelled CAN_VAR_CLEARED;            /**< The running output yields no
+                                                       * confirmation; cleared when the next
+                                                       * output starts. */
+static uint8 tx_confirmation_pending CAN_VAR_CLEARED; /**< Confirmation not yet given to
+                                                       * CanIf. */
+static uint8 tx_confirming CAN_VAR_CLEARED;           /**< CanIf_TxConfirmation running; not
+                                                       * reset. */
+static uint32 tx_id CAN_VAR_CLEARED;        /**< Admitted standard ID, valid with tx_pending. */
+static uint8 tx_length CAN_VAR_CLEARED;     /**< Admitted length, 0 to 8 bytes. */
+static uint8 tx_payload[8] CAN_VAR_CLEARED; /**< Admitted payload; tx_length bytes valid. */
+static PduIdType tx_handle CAN_VAR_CLEARED; /**< Admitted swPduHandle. */
+static PduIdType tx_confirmation_handle CAN_VAR_CLEARED; /**< swPduHandle to confirm, valid with
+                                                          * tx_confirmation_pending. */
 #if CAN_HOST_QUEUED_COMPLETION == 1
 /* Lifetime tokens are never reset by Init: old physical outputs must not
  * complete a new same-handle request after cancellation or reinitialization. */
-static uint64 host_tx_sequence CAN_VAR_CLEARED;
-static uint64 host_tx_cancelled_through CAN_VAR_CLEARED;
-static uint64 host_tx_completed_through CAN_VAR_CLEARED;
+static uint64 host_tx_sequence CAN_VAR_CLEARED;          /**< Token of the last admitted frame. */
+static uint64 host_tx_cancelled_through CAN_VAR_CLEARED; /**< Tokens up to here never complete. */
+static uint64 host_tx_completed_through CAN_VAR_CLEARED; /**< Tokens up to here have completed. */
 #endif
-static uint32 interrupt_disable_count CAN_VAR_CLEARED;
-static uint8 mode_notification_pending CAN_VAR_CLEARED;
-/* Indication kind in delivery to CanIf; never reset, so it outlives a reinitialization. */
-static uint8 indication_processing[2] CAN_VAR_CLEARED;
-static Can_ControllerStateType pending_controller_mode CAN_VAR_CLEARED;
-static uint8 rx_pending CAN_VAR_CLEARED;
-static uint8 rx_processing CAN_VAR_CLEARED;
-static uint32 rx_id CAN_VAR_CLEARED;
-static uint8 rx_length CAN_VAR_CLEARED;
-static uint8 rx_payload[8] CAN_VAR_CLEARED;
-static uint8 rx_overrun_pending CAN_VAR_CLEARED;
+
+static uint32 interrupt_disable_count CAN_VAR_CLEARED;  /**< Nesting of
+                                                         * Can_DisableControllerInterrupts; Init
+                                                         * resets. */
+static uint8 mode_notification_pending CAN_VAR_CLEARED; /**< pending_controller_mode not yet given
+                                                         * to CanIf; Init resets. */
+static Can_ControllerStateType pending_controller_mode CAN_VAR_CLEARED; /**< Mode to indicate. */
+static uint8 indication_processing[2] CAN_VAR_CLEARED; /**< Per CAN_INDICATION_* kind, 1 while
+                                                        * it is delivered to CanIf; never reset,
+                                                        * so it outlives a reinitialization. */
+
+static uint8 rx_pending CAN_VAR_CLEARED;    /**< Frame in the shadow buffer; Init resets. */
+static uint8 rx_processing CAN_VAR_CLEARED; /**< CanIf_RxIndication running; not reset. */
+static uint32 rx_id CAN_VAR_CLEARED;        /**< Received standard ID, valid with rx_pending. */
+static uint8 rx_length CAN_VAR_CLEARED;     /**< Received length, 0 to 8 bytes. */
+static uint8 rx_payload[8] CAN_VAR_CLEARED; /**< Received payload; rx_length bytes valid. */
+static uint8 rx_overrun_pending CAN_VAR_CLEARED; /**< CAN_E_DATALOST to report; Init resets. */
 
 #define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"
