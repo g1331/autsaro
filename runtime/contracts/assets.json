@@ -1947,7 +1947,7 @@
     },
     {
       "path": "runtime/bsw/src/Can.c",
-      "sha256": "9c489c1a121684a514a63e3d29efb7296f082a50ceafaafa4db11a76f6ba6d98",
+      "sha256": "235ead269923c95449d27d0080743090d06e5b63bfb2512d800c6bad12e4bf93",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
