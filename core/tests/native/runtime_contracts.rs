@@ -632,9 +632,16 @@ fn dcm_generated_mode_switch_publishes_from_a_non_owner_context() {
     for (path, bytes) in mainline_generated_headers(&scratch.0) {
         std::fs::write(scratch.0.join(Path::new(&path).file_name().unwrap()), bytes).unwrap();
     }
+    // Resolve the SchM consumer's quoted include beside the generated type header.
+    std::fs::copy(
+        root.join("runtime/bsw/include/SchM_Dcm.h"),
+        scratch.0.join("SchM_Dcm.h"),
+    )
+    .unwrap();
     std::fs::write(scratch.0.join("Ecu_Target.h"), "#include \"Std_Types.h\"\nint Ecu_TargetIsOwner(void);\nStd_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);\n").unwrap();
     let harness = scratch.0.join("mode-context.c");
-    std::fs::write(&harness, r#"#include "Dcm.h"
+    std::fs::write(&harness, r#"#include "Rte_Dcm_Type.h"
+#include "Dcm.h"
 #include "SchM_Dcm.h"
 #include "Dcm_ComM.h"
 #include "PduR_Dcm.h"
@@ -670,14 +677,12 @@ int main(void) {
     let binary = tooling::native_binary(&scratch.0, "mode-context");
     let mut compiler = tooling::c_compiler();
     if cfg!(target_os = "linux") {
-        compiler.args(["-pthread", "-D_POSIX_C_SOURCE=200809L"]);
+        compiler.arg("-pthread");
     }
     let output = compiler
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
         .arg(&scratch.0)
-        .arg("-include")
-        .arg(scratch.0.join("Rte_Dcm_Type.h"))
         .args([
             "-Iruntime/bsw/include",
             "-Iruntime/bsw/src",
