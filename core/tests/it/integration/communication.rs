@@ -479,6 +479,8 @@ fn communication_types_and_polling_periods_are_source_derived() {
 #[test]
 fn communication_rejects_truncation_and_unbound_polling_in_both_entries() {
     for (owner, field, new_value, code) in [
+        // The polled main functions run at their configured periods
+        // (Verifies: ECUC_Can_00484／00355／00376).
         (
             "Polling",
             "CanMainFunctionPeriod",
@@ -515,8 +517,9 @@ fn communication_rejects_truncation_and_unbound_polling_in_both_entries() {
             "true",
             "CAN_FEATURE_UNSUPPORTED",
         ),
-        // One HOH numbering area from zero (Verifies: SWS_CANIF_00115, ECUC_Can_00326) and
-        // controller IDs from zero (Verifies: SWS_CANIF_00653／00433, ECUC_CanIf_00647).
+        // One HOH numbering area from zero (Verifies: SWS_CANIF_00115) (Verifies: ECUC_Can_00326)
+        // and controller IDs from zero (Verifies: SWS_CANIF_00653／00433, ECUC_CanIf_00647)
+        // (Verifies: ECUC_Can_00316).
         ("Transmit", "CanObjectId", "0", "CAN_HARDWARE_HANDLES"),
         ("Transmit", "CanObjectId", "17", "CAN_HARDWARE_HANDLES"),
         ("Receive", "CanObjectId", "17", "CAN_HARDWARE_HANDLES"),
@@ -573,6 +576,7 @@ fn communication_rejects_truncation_and_unbound_polling_in_both_entries() {
         "/Configuration/Can/General/Polling</VALUE-REF>",
         "/Configuration/Can/General</VALUE-REF>",
     );
+    // Verifies: ECUC_Can_00438
     rejects_in_both(&sources, "CAN_POLLING_REFERENCE");
 }
 

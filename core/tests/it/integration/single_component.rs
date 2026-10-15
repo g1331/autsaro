@@ -1651,6 +1651,323 @@ fn canif_definitions_outside_the_selection_are_refused_at_their_source() {
     }
 }
 
+/// Every Can driver parameter outside its selected value is refused at the Can
+/// container that holds it.
+/// Containers (Verifies: ECUC_Can_00489／00497／00343／00354／00387／00324)
+#[test]
+fn can_parameters_outside_the_selection_are_refused_at_their_source() {
+    let general = "/Configuration/Can/General";
+    let controller = "/Configuration/Can/Config/Controller";
+    let receive = "/Configuration/Can/Config/Receive";
+    let unsupported = "TARGET_PARAMETER_UNSUPPORTED";
+    let feature = "CAN_FEATURE_UNSUPPORTED";
+    for (owner, definition, value, code, object) in [
+        // Unselected optional services (Verifies: ECUC_Can_00064／00106／00496／00498／00095).
+        // Rejects: ECUC_Can_00064
+        ("General", "CanDevErrorDetect", "true", feature, general),
+        // Rejects: ECUC_Can_00106
+        ("General", "CanVersionInfoApi", "true", feature, general),
+        // Rejects: ECUC_Can_00496
+        (
+            "General",
+            "CanEnableSecurityEventReporting",
+            "true",
+            unsupported,
+            general,
+        ),
+        // Rejects: ECUC_Can_00498
+        (
+            "General",
+            "CanGlobalTimeSupport",
+            "true",
+            unsupported,
+            general,
+        ),
+        // Rejects: ECUC_Can_00095
+        (
+            "General",
+            "CanMultiplexedTransmission",
+            "true",
+            unsupported,
+            general,
+        ),
+        // One driver instance (Verifies: ECUC_Can_00320).
+        // Rejects: ECUC_Can_00320
+        ("General", "CanIndex", "1", unsupported, general),
+        // An active polled controller without wakeup or partial networking
+        // (Verifies: ECUC_Can_00315／00330／00529／00314／00317／00318／00319).
+        // Rejects: ECUC_Can_00315
+        (
+            "Controller",
+            "CanControllerActivation",
+            "false",
+            unsupported,
+            controller,
+        ),
+        // Rejects: ECUC_Can_00330
+        (
+            "Controller",
+            "CanWakeupSupport",
+            "true",
+            unsupported,
+            controller,
+        ),
+        // Rejects: ECUC_Can_00529
+        (
+            "Controller",
+            "CanHwPnSupport",
+            "true",
+            unsupported,
+            controller,
+        ),
+        // Rejects: ECUC_Can_00314
+        (
+            "Controller",
+            "CanBusoffProcessing",
+            "INTERRUPT",
+            "CAN_PROCESSING",
+            controller,
+        ),
+        // Rejects: ECUC_Can_00317
+        (
+            "Controller",
+            "CanRxProcessing",
+            "INTERRUPT",
+            "CAN_PROCESSING",
+            controller,
+        ),
+        // Rejects: ECUC_Can_00318
+        (
+            "Controller",
+            "CanTxProcessing",
+            "MIXED",
+            "CAN_PROCESSING",
+            controller,
+        ),
+        // Rejects: ECUC_Can_00319
+        (
+            "Controller",
+            "CanWakeupProcessing",
+            "INTERRUPT",
+            "CAN_PROCESSING",
+            controller,
+        ),
+        // One BasicCAN standard-identifier object per direction
+        // (Verifies: ECUC_Can_00323／00065／00467).
+        // Rejects: ECUC_Can_00323
+        ("Receive", "CanHandleType", "FULL", unsupported, receive),
+        // Rejects: ECUC_Can_00065
+        ("Receive", "CanIdType", "EXTENDED", unsupported, receive),
+        // Rejects: ECUC_Can_00467
+        ("Receive", "CanHwObjectCount", "2", unsupported, receive),
+    ] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, definition, value);
+        rejected_at(&sources, code, "ecuc.arxml", object);
+    }
+}
+
+/// Containers, parameters and references of unselected Can driver features are
+/// refused at their source: undefined ones before generation, defined ones by the
+/// target.
+#[test]
+fn can_definitions_outside_the_selection_are_refused_at_their_source() {
+    let owners = [
+        ("Config", "/CanConfigSet", "/Configuration/Can/Config"),
+        (
+            "Controller",
+            "/CanConfigSet/CanController",
+            "/Configuration/Can/Config/Controller",
+        ),
+        (
+            "Baudrate",
+            "/CanConfigSet/CanController/CanControllerBaudrateConfig",
+            "/Configuration/Can/Config/Controller/Baudrate",
+        ),
+        (
+            "Receive",
+            "/CanConfigSet/CanHardwareObject",
+            "/Configuration/Can/Config/Receive",
+        ),
+        (
+            "Transmit",
+            "/CanConfigSet/CanHardwareObject",
+            "/Configuration/Can/Config/Transmit",
+        ),
+        ("General", "/CanGeneral", "/Configuration/Can/General"),
+    ];
+    let unknown = ("REFERENCE_UNRESOLVED", "DEFINITION_UNKNOWN");
+    let unsupported = (
+        "TARGET_PARAMETER_UNSUPPORTED",
+        "TARGET_PARAMETER_UNSUPPORTED",
+    );
+    // Unselected features (Verifies: ECUC_Can_00482／00434／00357／00491／00431／00524／
+    // 00492／00359／00530／00001／00499／00473／00512／00490／00485／00468／00002／00526／
+    // 00495／00486); partition mappings are refused (Verifies: SWS_Can_00507).
+    // (owner, definition, "" for a container or "KIND:value", codes)
+    for (owner, name, value, codes) in [
+        // Rejects: ECUC_Can_00482
+        ("General", "CanSetBaudrateApi", "BOOLEAN:false", unknown),
+        // Rejects: ECUC_Can_00434
+        (
+            "General",
+            "CanLPduReceiveCalloutFunction",
+            "FUNCTION-NAME:Can_Callout",
+            unknown,
+        ),
+        // Rejects: ECUC_Can_00357
+        (
+            "General",
+            "CanMainFunctionWakeupPeriod",
+            "FLOAT:0.001",
+            unknown,
+        ),
+        // Rejects: ECUC_Can_00491
+        ("General", "CanEcucPartitionRef", "REFERENCE:", unknown),
+        // Rejects: ECUC_Can_00431
+        ("General", "CanOsCounterRef", "REFERENCE:", unknown),
+        // Rejects: ECUC_Can_00524
+        ("General", "CanXLGeneral", "", unknown),
+        // Rejects: ECUC_Can_00492
+        (
+            "Controller",
+            "CanControllerEcucPartitionRef",
+            "REFERENCE:",
+            unknown,
+        ),
+        // Rejects: ECUC_Can_00359
+        ("Controller", "CanWakeupSourceRef", "REFERENCE:", unknown),
+        // Rejects: ECUC_Can_00530
+        ("Controller", "CanPartialNetwork", "", unknown),
+        // Rejects: ECUC_Can_00001
+        ("Controller", "CanTTController", "", unknown),
+        // Rejects: ECUC_Can_00499
+        ("Controller", "CanXLController", "", unknown),
+        // Rejects: ECUC_Can_00473
+        ("Baudrate", "CanControllerFdBaudrateConfig", "", unknown),
+        // Rejects: ECUC_Can_00512
+        ("Baudrate", "CanXLBaudrateConfig", "", unknown),
+        // Rejects: ECUC_Can_00490
+        (
+            "Receive",
+            "CanHardwareObjectUsesPolling",
+            "BOOLEAN:true",
+            unknown,
+        ),
+        // Rejects: ECUC_Can_00485
+        ("Transmit", "CanFdPaddingValue", "INTEGER:0", unknown),
+        // Rejects: ECUC_Can_00468
+        ("Receive", "CanHwFilter", "", unknown),
+        // Rejects: ECUC_Can_00002
+        ("Transmit", "CanTTHardwareObjectTrigger", "", unknown),
+        // Rejects: ECUC_Can_00526
+        ("Config", "CanXLHardwareObject", "", unknown),
+        // Rejects: ECUC_Can_00495
+        (
+            "Transmit",
+            "CanObjectPayloadLength",
+            "ENUMERATION:CAN_OBJECT_PL_8",
+            unsupported,
+        ),
+        // Rejects: ECUC_Can_00486
+        (
+            "Transmit",
+            "CanTriggerTransmitEnable",
+            "BOOLEAN:true",
+            ("CAN_FEATURE_UNSUPPORTED", "CAN_FEATURE_UNSUPPORTED"),
+        ),
+    ] {
+        let (_, path, object) = owners.iter().find(|row| row.0 == owner).unwrap();
+        let path = format!("/AUTOSAR/EcucDefs/Can{path}");
+        let definition = format!("{path}/{name}");
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", owner)
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF") && child.text() == Some(path.as_str())
+                    })
+            },
+            // The owner's own parameters and references precede its sub-containers.
+            |text| {
+                match value.split_once(':') {
+                Some(("REFERENCE", _)) => text.replacen(
+                    "<REFERENCE-VALUES>",
+                    &format!(
+                        "<REFERENCE-VALUES><ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">{definition}</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{object}</VALUE-REF></ECUC-REFERENCE-VALUE>"
+                    ),
+                    1,
+                ),
+                Some((kind, value)) => {
+                    let element = match kind {
+                        "INTEGER" | "FLOAT" | "BOOLEAN" => "NUMERICAL",
+                        _ => "TEXTUAL",
+                    };
+                    let dest = match kind {
+                        "FUNCTION-NAME" => "ECUC-FUNCTION-NAME-DEF".to_owned(),
+                        _ => format!("ECUC-{kind}-PARAM-DEF"),
+                    };
+                    text.replacen(
+                        "<PARAMETER-VALUES>",
+                        &format!(
+                            "<PARAMETER-VALUES><ECUC-{element}-PARAM-VALUE><DEFINITION-REF DEST=\"{dest}\">{definition}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-{element}-PARAM-VALUE>"
+                        ),
+                        1,
+                    )
+                }
+                None => {
+                    let close = "</ECUC-CONTAINER-VALUE>";
+                    let body = text.trim_end().strip_suffix(close).unwrap();
+                    let container = format!(
+                        "<ECUC-CONTAINER-VALUE><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}</DEFINITION-REF></ECUC-CONTAINER-VALUE>"
+                    );
+                    match body.trim_end().strip_suffix("</SUB-CONTAINERS>") {
+                        Some(inner) => format!("{inner}{container}</SUB-CONTAINERS>{close}"),
+                        None => format!("{body}<SUB-CONTAINERS>{container}</SUB-CONTAINERS>{close}"),
+                    }
+                }
+            }
+            },
+        );
+        let object = if value.is_empty() {
+            format!("{object}/{name}")
+        } else {
+            (*object).to_owned()
+        };
+        rejected_with(&sources, codes, "ecuc.arxml", &object);
+    }
+}
+
+/// The driver has one read/write polling period; a second one is refused, so
+/// Can_MainFunction_Read and Can_MainFunction_Write keep their names.
+#[test]
+fn second_can_read_write_period_is_refused() {
+    let mut sources = single_component_sources();
+    // Verifies: ECUC_Can_00437
+    // Rejects: ECUC_Can_00437
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "Polling"),
+        |text| {
+            let copy = text.replacen(
+                "<SHORT-NAME>Polling</SHORT-NAME>",
+                "<SHORT-NAME>PollingSecond</SHORT-NAME>",
+                1,
+            );
+            format!("{text}{copy}")
+        },
+    );
+    rejected_at(
+        &sources,
+        "COMMUNICATION_CONFIGURATION",
+        "ecuc.arxml",
+        "/Configuration/Can/General/Polling",
+    );
+}
+
 /// The selected controller has one HRH and one HTH; a second one is refused.
 #[test]
 fn second_canif_hardware_object_is_refused() {
@@ -1689,8 +2006,9 @@ fn second_canif_hardware_object_is_refused() {
 /// link-time or post-build variant is refused (link-time CanIf: SWS_CANIF_00378).
 #[test]
 fn link_time_and_post_build_variants_are_refused_at_the_module() {
-    // Rejects: ECUC_CanIf_00244, ECUC_PduR_00293, ECUC_Com_00540
+    // Rejects: ECUC_CanIf_00244, ECUC_PduR_00293, ECUC_Com_00540, ECUC_Can_00489
     for (module, variant) in [
+        ("Can", "VARIANT-POST-BUILD"),
         ("CanIf", "VARIANT-LINK-TIME"),
         ("CanIf", "VARIANT-POST-BUILD"),
         ("PduR", "VARIANT-POST-BUILD"),

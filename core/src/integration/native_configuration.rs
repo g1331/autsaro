@@ -6,7 +6,7 @@ use crate::project_model::{TypedValue, ValueKind};
 // not add a runtime implementation to the controlled virtual ECU target.
 const DESCRIPTOR_PARAMETERS: &str = "
 CanControllerBaseAddress CanControllerBaudRateConfigID CanControllerPropSeg
-CanControllerSeg1 CanControllerSeg2 CanControllerSyncJumpWidth CanIndex
+CanControllerSeg1 CanControllerSeg2 CanControllerSyncJumpWidth
 CanMainFunctionModePeriod CanTimeoutDuration CanIfInitCfgSet
 PduIdTypeEnum PduLengthTypeEnum DcmDspDataDefaultEndianness";
 
@@ -98,6 +98,8 @@ pub(super) fn descriptor_only(
             });
             cores.next().is_some() && cores.next().is_none()
         }
+        // The single driver instance has ID 0 (ECUC_Can_00320).
+        "CanIndex" => lexeme.parse::<u8>() == Ok(0),
         "CanIfPrivateDataLengthCheck" => matches!(lexeme.trim(), "true" | "1"),
         // The runtime implements the linear filter and a uint16 Can_HwHandleType
         // (ECUC_CanIf_00619／00742).
