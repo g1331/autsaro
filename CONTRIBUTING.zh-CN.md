@@ -44,7 +44,7 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 对使用者或集成者可见的改动在 `CHANGELOG.md` 的 `Unreleased` 下加一条：交付的 C 接口与 ABI、配置接受或拒绝、生成物、工具与界面行为；重构、测试、CI 和文档不记。每项一行，写清效果，末尾附 PR 号（如 `(#166)`），细节放 PR。条目按 `Breaking`、`Added`、`Changed`、`Fixed` 分组，破坏性或契约变化写明集成者要做的修改。发版时把 `Unreleased` 改为带日期的版本标题。CHANGELOG 只维护英文。
 
-真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。任务与进度用 GitHub Issues 和 Milestones 跟踪；方向见 [docs/roadmap/](docs/roadmap/README.md)，设计约束见 [docs/architecture/](docs/architecture/README.md)。
+真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。任务与进度用 GitHub Issues 和 Milestones 跟踪；新建 Issue 或开始实现前先搜索已有 Issue（含已关闭）和进行中的 PR，已有覆盖的在原处补充，避免重复工作；方向见 [docs/roadmap/](docs/roadmap/README.md)，设计约束见 [docs/architecture/](docs/architecture/README.md)。
 
 ## 界面文案与语言
 
