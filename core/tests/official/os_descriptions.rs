@@ -25,10 +25,20 @@ fn official_descriptions() {
             .output()
             .unwrap()
     };
+    // Every emitted ArtiHardware/ArtiOs container, parameter and reference of the
+    // four variants, checked against the official MOD multiplicities and targets.
+    // Verifies: ECUC_Arti_00055, 00056, 00057, 00058, 00059, 00060, 00061, 00062, 00063, 00068,
+    // 00069, 00071, 00072, 00073, 00074, 00075, 00079, 00080, 00081, 00086, 00087, 00088,
+    // 00089, 00090, 00091, 00092, 00093, 00096, 00099, 00100, 00101, 00102, 00103, 00104,
+    // 00105, 00106, 00107, 00108, 00109, 00111, 00113, 00114, 00115, 00117, 00118, 00119,
+    // 00120, 00122, 00124, 00125, 00136, 00137, 00139, 00140, 00141, 00144, 00145, 00146,
+    // 00147, 00148, 00150, 00151, 00154, 00155, 00156, 00157, 00174, 00182, 00184, 00185,
+    // 00187, 00188, 00189, 00190, 00192, 00193
     for (label, os, sources) in [
         ("alarms", "Os", single_component_sources()),
         ("renamed", "OsAlt", renamed_os_variant()),
         ("tables", "Os", schedule_table_variant()),
+        ("scheduler", "Os", scheduler_variant("true", false)),
     ] {
         let directory = scratch.0.join(label);
         std::fs::create_dir(&directory).unwrap();
