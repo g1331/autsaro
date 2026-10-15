@@ -52,13 +52,13 @@ ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 res
 
 ## CAN 驱动边界
 
-标准调用方使用 `#include "standard/Can.h"`；主机输出、状态注入和接收注入显式使用 `Can_Host.h`。`Can_CfgTypes.h` 的单 sink 配置是本目标的硬件专用配置，标准允许目标自定布局。Id 保持 32 位、HOH 保持 16 位，PDU 句柄／长度使用 `ComStack_Types.h`，接纳零长度 PDU。`Can_Init`、`Can_SetControllerMode`、`Can_GetControllerMode` 和 `Can_Write` 具有 R24-11 的公开签名；一个发送槽占用时 `Can_Write` 立即返回 `CAN_BUSY`。当前已交付标准服务视图、标准 Rx 回调、清理／取消、runtime error 与受控主机段映射；尚缺已分配 vendor 身份、完整 MISRA 人工评估和第三方／硬件互操作证据，不声明完整标准 Can Driver。虚拟控制器不模拟位级仲裁、电气错误计数器和真实中断。
+标准调用方使用 `#include "Can.h"`；主机输出、状态注入和接收注入显式使用 `Can_Host.h`。`Can_CfgTypes.h` 的单 sink 配置是本目标的硬件专用配置，标准允许目标自定布局。Id 保持 32 位、HOH 保持 16 位，PDU 句柄／长度使用 `ComStack_Types.h`。`Can.h` 的服务都具有 R24-11 的公开签名并使用 AUTOSAR 类型；`CanSetBaudrateApi` 不提供，因此没有 `Can_SetBaudrate`。`Can_Write` 接纳 0–8 字节，不解析 CAN FD 标志位（控制器没有 FD 配置），一个发送槽占用时立即返回 `CAN_BUSY`。控制器状态机按规范图：STARTED 只能从 STOPPED 进入，STOPPED 可从任何已初始化状态进入（含自环），SLEEP 是逻辑睡眠。`SWS_CANDriver` 的条目已逐条处置（见 [Can](../docs/standards/can.md)）；尚缺已分配 vendor 身份、完整 MISRA 人工评估和硬件互操作证据，控制器硬件义务由 R10 目标验收（#170），不声明完整标准 Can Driver。虚拟控制器不模拟位级仲裁、电气错误计数器和真实中断。
 
 `Can.c` 的 CODE 和 VAR_CLEARED_UNSPECIFIED 通过 `Can_MemMap.h` 显式映射至受控 GCC PE/ELF 的 `.text`／`.bss`，由链接器及进程装载器提供代码和清零存储；BSWMD 记录对应标记及头文件。重复 include 必须带单一合法 marker，禁止嵌套和错配。该映射不定义 MCU linker 布局。
 
-`Can.c` 唯一管理发送、接收快照和生命周期，`Can_Host.c` 只转发主机操作；CanIf 与直接 mode／诊断依赖共享递归 admission 锁；该锁先于 driver 锁获取，覆盖回调快照、分发、取消及消费者初始化。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后调用 Read）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
+`Can.c` 唯一管理发送、接收快照和生命周期，`Can_Host.c` 只转发主机操作；CanIf 与直接 mode／诊断依赖共享递归 admission 锁；该锁先于 driver 锁获取，覆盖回调快照、分发、取消及消费者初始化。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后执行同一接收处理）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
 
-`CAN_VERSION_INFO_API` 默认 OFF；配置启用或直接定义为非零时拒绝生成／编译。`CAN_MODULE_ID` 为 80，软件版本与项目 `0.1.0` 一致。项目尚无已分配的 AUTOSAR vendor ID，也无经过确认的 R24-11 数字发布宏映射，因此不编造这两项 published identity；取得并核对后才能实现适用的 GetVersionInfo 和外部版本交叉检查。这个缺口由现有质量规格承接，退出条件是正式身份、版本依据和双目标兼容测试成立。
+`CanVersionInfoApi` 缺失（`MULTIPLICITY`）或为 true（`CAN_FEATURE_UNSUPPORTED`）时在生成前拒绝，`Can.h` 不声明 `Can_GetVersionInfo`，也不提供版本信息开关宏。`CAN_MODULE_ID` 为 80，软件版本与项目 `0.1.0` 一致。项目尚无已分配的 AUTOSAR vendor ID，也无经过确认的 R24-11 数字发布宏映射，因此不编造这两项 published identity；取得并核对后才能实现适用的 GetVersionInfo 和外部版本交叉检查。这个缺口由现有质量规格承接，退出条件是正式身份、版本依据和双目标兼容测试成立。
 
 ## 许可证
 

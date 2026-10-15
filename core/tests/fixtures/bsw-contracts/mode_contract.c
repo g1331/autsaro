@@ -10,7 +10,7 @@
 #include "BswM_ComM.h"
 #include "SchM_BswM.h"
 #include "Ecu_HostBusSM.h"
-#include "standard/Can.h"
+#include "Can.h"
 #include "Can_Host.h"
 #include "SchM_Can.h"
 #include "Com.h"
@@ -180,8 +180,6 @@ int main(void) {
     assert(tx_counter(7u, &counter) == E_NOT_OK && counter == 0xa5u);
     assert(rx_counter(9u, NULL_PTR) == E_NOT_OK);
     assert(tx_counter(9u, NULL_PTR) == E_NOT_OK);
-    assert(Can_SetBaudrate(0u, 0u) == E_NOT_OK);
-    assert(Can_SetBaudrate(7u, 0u) == E_OK);
     assert(Can_GetControllerMode(0u, &controller_state) == E_NOT_OK &&
            controller_state == CAN_CS_SLEEP);
     assert(Can_GetControllerMode(7u, &controller_state) == E_OK &&

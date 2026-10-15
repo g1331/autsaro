@@ -126,7 +126,7 @@ pub(super) fn files(
             "Can_DeInit",
             "void",
             vec![],
-            "runtime/bsw/include/standard/Can.h",
+            "runtime/bsw/include/Can.h",
             "runtime/bsw/src/Can.c",
         ),
         (
@@ -191,7 +191,7 @@ pub(super) fn files(
             ("Hth", "Can_HwHandleType", "IN"),
             ("PduInfo", "const Can_PduType *", "IN"),
         ],
-        "runtime/bsw/include/standard/Can.h",
+        "runtime/bsw/include/Can.h",
     );
     imported(
         "Can",
@@ -201,7 +201,7 @@ pub(super) fn files(
             ("Controller", "uint8", "IN"),
             ("Transition", "Can_ControllerStateType", "IN"),
         ],
-        "runtime/bsw/include/standard/Can.h",
+        "runtime/bsw/include/Can.h",
     );
     imported(
         "Can",
@@ -211,7 +211,7 @@ pub(super) fn files(
             ("Controller", "uint8", "IN"),
             ("Value", "Can_ControllerStateType *", "OUT"),
         ],
-        "runtime/bsw/include/standard/Can.h",
+        "runtime/bsw/include/Can.h",
     );
     imported(
         "Can",
@@ -221,21 +221,21 @@ pub(super) fn files(
             ("Controller", "uint8", "IN"),
             ("Value", "Can_ErrorStateType *", "OUT"),
         ],
-        "runtime/bsw/include/standard/Can.h",
+        "runtime/bsw/include/Can.h",
     );
     imported(
         "Can",
         "Can_GetControllerRxErrorCounter",
         "Std_ReturnType",
         &[("Controller", "uint8", "IN"), ("Value", "uint8 *", "OUT")],
-        "runtime/bsw/include/standard/Can.h",
+        "runtime/bsw/include/Can.h",
     );
     imported(
         "Can",
         "Can_GetControllerTxErrorCounter",
         "Std_ReturnType",
         &[("Controller", "uint8", "IN"), ("Value", "uint8 *", "OUT")],
-        "runtime/bsw/include/standard/Can.h",
+        "runtime/bsw/include/Can.h",
     );
     imported(
         "CanIf",
@@ -780,7 +780,7 @@ pub(super) fn files(
                     (module == "Can"
                         && matches!(
                             p.as_str(),
-                            "bsw/include/standard/Can.h"
+                            "bsw/include/Can.h"
                                 | "bsw/include/Can_CfgTypes.h"
                                 | "integration/include/Can_Host.h"
                                 | "bsw/include/Can_GeneralTypes.h"

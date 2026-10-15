@@ -1754,6 +1754,7 @@ fn canif_header_declares_only_standard_services() {
     assert_eq!(
         includes,
         [
+            "#include \"Std_Types.h\"",
             "#include \"ComStack_Types.h\"",
             "#include \"Can_GeneralTypes.h\""
         ]

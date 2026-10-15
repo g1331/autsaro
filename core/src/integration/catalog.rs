@@ -67,7 +67,7 @@ pub(super) fn bsw_catalog(
         "Can",
         "void",
         &[("Config", "const Can_ConfigType *", "IN")],
-        "runtime/bsw/include/standard/Can.h",
+        "runtime/bsw/include/Can.h",
         "runtime/bsw/src/Can.c",
     );
     // SchM_Can.h is RTE-generated (SWS_Rte_07501), delivered under generated/.

@@ -8,7 +8,7 @@
 - `runtime/`：交付的 C99 运行时；`tools/python/src/`：开发工具与离线 ECU 工具；`tests/`：Python 与桌面测试。
 - `scripts/`：官方资料收集；`docs/development/` 与 `docs/maintainers/`：开发与发行说明。
 
-采用 npm、Cargo、uv 和正常测试运行器，不新增代理专用编排、报告或状态系统。格式按修改范围检查，不全仓重排。自动 GUI 验收使用隔离入口，不占用用户桌面。
+采用 npm、Cargo、uv 和正常测试运行器，不新增代理专用编排、报告或状态系统。格式按修改范围检查，不全仓重排：推送前运行必需检查的 `quality --scope all --base <目标分支>`，它按配置的格式化工具检查全部改动行，测试夹具与 Rust 测试也在内。自动 GUI 验收使用隔离入口，不占用用户桌面。
 
 修改 C、头文件或生成 C 的 Rust 模板前读取 [C 编码规范](docs/development/c-coding-standard.md)与 [misra-c2012](.agents/skills/misra-c2012/SKILL.md)；clang-tidy 按规范从 `quality --c-samples` 运行，新结果不能靠加基线条目通过，修好的条目从基线删除。相关改动按[测试说明](docs/development/testing/generated-c.md)对实际生成的受影响 profile 运行 `c-check`；区分分析完整性、源码诊断与人工规范评估，不能用 CI 链路通过替代源码合规结论。本机缺少固定版本 Cppcheck 时按测试说明从官方标签构建后在本地运行，不把 `c-check` 留给 CI；现存诊断清零前，按“规则＋文件＋源码行”与基线的同一检查对比受影响样本，新代码不增加诊断。申请偏离前核对适用的 amendment／TC 与实际调用路径；不能把旧 checker 的规则编号直接当作当前规范依据。交付摘要使用 `python -m autosar_tooling assets check|update`；明确审阅 ABI 与第三方身份，不用摘要更新吸收契约变化。更新交付资源摘要前，核对 `.gitattributes` 要求的固定换行字节；避免把本机编辑器产生、重新检出后会变化的字节写进受信摘要。
 

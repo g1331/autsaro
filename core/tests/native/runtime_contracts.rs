@@ -202,26 +202,17 @@ fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
 
 fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let inventory = autosar_config_core::resources::AssetInventory::from_directory(root).unwrap();
     // Materialize each family's delivery closure; no repository header fallback.
     let include = scratch.join("include");
     let sources = scratch.join("src");
     std::fs::create_dir(&include).unwrap();
     std::fs::create_dir(&sources).unwrap();
-    let asset = inventory.get("runtime/bsw/include/standard/Can.h").unwrap();
-    std::fs::create_dir(include.join("standard")).unwrap();
-    std::fs::write(include.join("standard/Can.h"), asset.bytes).unwrap();
-    assert_eq!(
-        std::fs::read(include.join("standard/Can.h")).unwrap(),
-        std::fs::read(root.join(asset.relative_path)).unwrap()
-    );
     for (path, bytes) in mainline_generated_headers(scratch) {
         std::fs::write(scratch.join(path.trim_start_matches("generated/")), bytes).unwrap();
     }
     for family in ["runtime/bsw/include", "runtime/host/include"] {
         for entry in std::fs::read_dir(root.join(family)).unwrap() {
             let entry = entry.unwrap();
-            // standard/Can.h was materialized above from the asset inventory.
             if entry.file_type().unwrap().is_file() {
                 std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
             }
@@ -262,7 +253,6 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
             "-DCAN_RX_POLLING=1",
             "-DCAN_TX_POLLING=1",
             "-DCAN_BUSOFF_POLLING=1",
-            "-DCAN_ZERO_LENGTH_SUPPORTED=1",
         ]);
     }
     if fixture == "can_callback_lifetime.c" {
@@ -287,6 +277,22 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         command.args([
             "-Wl,--wrap=SchM_Exit_PduR_PDUR_STATE",
             "-Wl,--wrap=SchM_Exit_LSduR_LSDUR_STATE",
+        ]);
+    }
+    if fixture == "can_contract.c" {
+        // Distinct driver and CanIf controller IDs; CanIf callbacks only record.
+        command.args([
+            "-DCAN_CONTROLLER_ID=3u",
+            "-DCAN_CANIF_CONTROLLER_ID=5u",
+            "-DCAN_RX_HOH=0u",
+            "-DCAN_TX_HOH=1u",
+            "-DCAN_RX_POLLING=1",
+            "-DCAN_TX_POLLING=1",
+            "-DCAN_BUSOFF_POLLING=1",
+            "-Wl,--wrap=CanIf_ControllerModeIndication",
+            "-Wl,--wrap=CanIf_ControllerBusOff",
+            "-Wl,--wrap=CanIf_TxConfirmation",
+            "-Wl,--wrap=CanIf_RxIndication",
         ]);
     }
     if fixture == "mode_contract.c" {
@@ -474,6 +480,19 @@ fn diagnostic_transport_owns_buffers_and_obeys_real_mode_and_confirmation() {
 fn configured_can_polling_and_zero_dlc_preserve_real_admission_and_callbacks() {
     let scratch = Scratch::new();
     let executable = chain_consumer(&scratch.0, "can_polling_contract.c", &[]);
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert!(
+        output.stdout.is_empty() && output.stderr.is_empty(),
+        "{:?}",
+        output
+    );
+}
+
+#[test]
+fn can_driver_follows_its_standard_contract() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "can_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(

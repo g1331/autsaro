@@ -140,7 +140,6 @@ pub(super) fn files(
     )?;
     let profile = c_layout::defines(&[
         ("CAN_HOST_QUEUED_COMPLETION", "1".to_owned()),
-        ("CAN_ZERO_LENGTH_SUPPORTED", "1".to_owned()),
         ("CAN_RX_POLLING", "1".to_owned()),
         ("CAN_TX_POLLING", "1".to_owned()),
         ("CAN_BUSOFF_POLLING", "1".to_owned()),
@@ -168,10 +167,10 @@ pub(super) fn files(
         "src/Ecu_Execution.h",
         header(
             "ECU_EXECUTION_H",
-            "#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\nEcuStatus Ecu_ExecutionTransmit(\n    CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\nuint64_t Ecu_ExecutionNow(void);",
+            "#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\nEcuStatus Ecu_ExecutionTransmit(\n    Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\nuint64_t Ecu_ExecutionNow(void);",
         ),
     )?;
-    outputs.emit(ECU, "src/Ecu_Execution.c", "#include \"Ecu_Execution.h\"\n#include \"Ecu_Target.h\"\nEcuStatus Ecu_ExecutionTransmit(\n    CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8])\n{\n    (void)sink;\n    return Ecu_TargetEnqueueTransmit(handle, id, dlc, data);\n}\nuint64_t Ecu_ExecutionNow(void) { return Ecu_TargetNow(); }\n")?;
+    outputs.emit(ECU, "src/Ecu_Execution.c", "#include \"Ecu_Execution.h\"\n#include \"Ecu_Target.h\"\nEcuStatus Ecu_ExecutionTransmit(\n    Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8])\n{\n    (void)sink;\n    return Ecu_TargetEnqueueTransmit(handle, id, dlc, data);\n}\nuint64_t Ecu_ExecutionNow(void) { return Ecu_TargetNow(); }\n")?;
     for (module, area) in [
         ("CanIf", "CANIF"),
         ("ComM", "COMM"),

@@ -73,12 +73,12 @@ void CanIf_RxIndication(const Can_HwType *mailbox, const PduInfoType *info) {{ (
 Std_ReturnType Det_ReportRuntimeError(uint16_t module, uint8_t instance, uint8_t api, uint8_t error) {{
     (void)module; (void)instance; (void)api; (void)error; return E_OK;
 }}
-EcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t length, const uint8_t data[8]) {{
+EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t length, const uint8_t data[8]) {{
     (void)sink; (void)handle; (void)id; (void)length; (void)data; return ECU_OK;
 }}
 int main(void) {{
-    size_t i;
-    assert(can_controller_mode == 0 && bus_off == 0u && can_initialized == 0u && tx_sink == NULL);
+    uint8 i;
+    assert(can_controller_mode == 0 && bus_off == 0u && can_initialized == 0u && tx_sink == NULL_PTR);
     assert(driver_lifetime == 0u && tx_pending == 0u && tx_in_flight == 0u && tx_cancelled == 0u);
     assert(tx_id == 0u && tx_length == 0u && tx_handle == 0u);
     assert(tx_confirmation_pending == 0u && tx_confirmation_handle == 0u && tx_confirming == 0u);
