@@ -40,7 +40,7 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 修改交付资源后运行 `uv run --locked python -m autosar_tooling assets check`。确认自有源码差异后可显式执行 `assets update`；BSW ABI 和第三方身份不能随来源摘要自动接受，见[资源维护](docs/maintainers/assets.md)。
 
-提交前检查整个 diff，包括新增文件与生成内容。提交信息采用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/)：`<type>(<scope>): <description>`，type 为 `feat`、`fix`、`docs`、`test`、`refactor`、`perf`、`build`、`ci` 或 `chore`，scope 写受影响的模块或区域（如 `dcm`），破坏性变更加 `!` 并附 `BREAKING CHANGE:` 脚注。标题说明实际改动；PR 说明问题、改动、验证和未运行范围。合并前自审整个 diff；涉及 AUTOSAR 规范的结论按条目原文复核，不凭记忆或现有代码判断，高风险改动另做一次与 CI 并行的独立审查。必需检查通过即可合并，Extended 检查不阻塞合并；但 master 最近一次 Extended 失败时，先修复或开 Issue 暂停不稳定的套件，再继续合并。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
+提交前检查整个 diff，包括新增文件与生成内容。提交信息采用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/)：`<type>(<scope>): <description>`，type 为 `feat`、`fix`、`docs`、`test`、`refactor`、`perf`、`build`、`ci` 或 `chore`，scope 写受影响的模块或区域（如 `dcm`），破坏性变更加 `!` 并附 `BREAKING CHANGE:` 脚注。标题说明实际改动；PR 说明问题、改动、验证和未运行范围。合并前自审整个 diff；涉及 AUTOSAR 规范的结论按条目原文复核，不凭记忆或现有代码判断，高风险改动另做一次与 CI 并行的独立审查。必需检查通过即可合并：自审后用 `gh pr merge --auto --merge` 开启自动合并，`CI required` 通过后自动合并并删除分支；Extended 检查不阻塞合并；但 master 最近一次 Extended 失败时，先修复或开 Issue 暂停不稳定的套件，再继续合并。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
 
 对使用者或集成者可见的改动在 `CHANGELOG.md` 的 `Unreleased` 下加一条：交付的 C 接口与 ABI、配置接受或拒绝、生成物、工具与界面行为；重构、测试、CI 和文档不记。每项一行，写清效果，末尾附 PR 号（如 `(#166)`），细节放 PR。条目按 `Breaking`、`Added`、`Changed`、`Fixed` 分组，破坏性或契约变化写明集成者要做的修改。发版时把 `Unreleased` 改为带日期的版本标题。CHANGELOG 只维护英文。
 
