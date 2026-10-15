@@ -40,7 +40,7 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 修改交付资源后运行 `uv run --locked python -m autosar_tooling assets check`。确认自有源码差异后可显式执行 `assets update`；BSW ABI 和第三方身份不能随来源摘要自动接受，见[资源维护](docs/maintainers/assets.md)。
 
-提交前检查整个 diff，包括新增文件与生成内容。标题说明实际改动；PR 说明问题、改动、验证和未运行范围。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
+提交前检查整个 diff，包括新增文件与生成内容。标题说明实际改动；PR 说明问题、改动、验证和未运行范围。必需检查通过即可合并，Extended 检查不阻塞合并；但 master 最近一次 Extended 失败时，先修复或开 Issue 暂停不稳定的套件，再继续合并。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
 
 真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。任务与进度用 GitHub Issues 和 Milestones 跟踪；方向见 [docs/roadmap/](docs/roadmap/README.md)，设计约束见 [docs/architecture/](docs/architecture/README.md)。
 
