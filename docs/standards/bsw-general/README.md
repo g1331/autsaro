@@ -1,6 +1,6 @@
 # BSW General
 
-本篇属于[标准与规范基线](../README.md)：条款处置的标记与核算方法见 [README §5](../README.md#5-条款处置与核算)。`SWS_BSWGeneral` 的义务对每个 BSW 模块成立，按模块分篇处置，标记带模块限定。LSduR、PduR、Com、Can 与 CanIf 已逐条处置；其余模块下表列出的条款表示已定位并用于设计或验收，不表示已逐条核完。
+本篇属于[标准与规范基线](../README.md)：条款处置的标记与核算方法见 [README §5](../README.md#5-条款处置与核算)。`SWS_BSWGeneral` 的义务对每个 BSW 模块成立，按模块分篇处置，标记带模块限定。LSduR、PduR、Com、Can、CanIf 与 CanTp 已逐条处置；其余模块下表列出的条款表示已定位并用于设计或验收，不表示已逐条核完。
 
 文档：`AUTOSAR_CP_SWS_BSWGeneral.pdf`（`4709480090ff9a612d908e8bd46edd502e2e4fa332f7a3bf93801f17cc91872b`）。
 
@@ -16,6 +16,7 @@
 | [Com](com.md) | 全部 150 条，标记带 `[Com]` |
 | [Can](can.md) | 全部 150 条，标记带 `[Can]` |
 | [CanIf](canif.md) | 全部 150 条，标记带 `[CanIf]` |
+| [CanTp](cantp.md) | 全部 150 条，标记带 `[CanTp]` |
 
 ## 已知差距
 

@@ -389,20 +389,11 @@ fn single_component_meets_independent_protocol_and_timing_vectors() {
         } else {
             Vec::new()
         };
-        // A CF sent by CanTp_MainFunction occupies the only Tx hardware object
-        // (CanHwObjectCount 1, CanIfBufferSize 0) when Com transmits in the
-        // same tick; CanIf refuses 0x321 and Com does not retry it
-        // (ComRetryFailedTransmitRequests is not configured).
-        let blocked = if name == "nbs-on-deadline" {
-            Some(210)
-        } else {
-            None
-        };
-        let mut expected_periodic = periodic(&receives, end);
-        expected_periodic.retain(|(at, _)| Some(*at) != blocked);
+        // The first CF leaves when its FC is received, before Com's periodic frame of
+        // the same tick needs the only Tx hardware object (CanHwObjectCount 1).
         assert_eq!(
             frames(&output, TRANSMIT),
-            expected_periodic,
+            periodic(&receives, end),
             "periodic {name}: {output}"
         );
     }
@@ -516,16 +507,18 @@ fn single_component_meets_independent_protocol_and_timing_vectors() {
         "{output}"
     );
     assert!(!output.contains("COMMIT_ERROR "), "{output}");
-    // A reserved STmin (0xF0) is handled as 0x7F (127 ms), not as an abort.
+    // A reserved STmin (0xF0) is not an abort; the first CF follows the FC at once
+    // (the 127 ms separation of later CFs is checked by the CanTp contract).
     let output = run(
         binary,
         &directory("flow-reserved-stmin"),
         script(&[seed, tx, (11, &[(REQUEST, "3000F00000000000")]), (200, &[])]).as_bytes(),
     );
-    let responses = frames(&output, RESPONSE);
-    assert_eq!(responses.len(), 2, "{output}");
-    assert_eq!(responses[1].1, "2178123412345678", "{output}");
-    assert!((12..=11 + 127).contains(&responses[1].0), "{output}");
+    assert_eq!(
+        frames(&output, RESPONSE),
+        owned(&[(10, "100D621234123456"), (11, "2178123412345678")]),
+        "{output}"
+    );
     assert!(!output.contains("COMMIT_ERROR "), "{output}");
     // A wrong sequence number aborts the reception without a response.
     let output = run(

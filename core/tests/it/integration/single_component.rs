@@ -2007,6 +2007,7 @@ fn second_canif_hardware_object_is_refused() {
 #[test]
 fn link_time_and_post_build_variants_are_refused_at_the_module() {
     // Rejects: ECUC_CanIf_00244, ECUC_PduR_00293, ECUC_Com_00540, ECUC_Can_00489
+    // Rejects: ECUC_CanTp_00306
     for (module, variant) in [
         ("Can", "VARIANT-POST-BUILD"),
         ("CanIf", "VARIANT-LINK-TIME"),
@@ -2014,6 +2015,7 @@ fn link_time_and_post_build_variants_are_refused_at_the_module() {
         ("PduR", "VARIANT-POST-BUILD"),
         ("Com", "VARIANT-LINK-TIME"),
         ("Com", "VARIANT-POST-BUILD"),
+        ("CanTp", "VARIANT-POST-BUILD"),
     ] {
         let mut sources = single_component_sources();
         xml_edit(
@@ -2378,6 +2380,76 @@ fn com_parameters_outside_the_selection_are_refused_at_their_source() {
 
 /// Containers and parameters of unselected Com features have no definition in the
 /// selected catalog, or are refused where the selected profile cannot honour them.
+/// Adds `name` below the ECUC container `owner` whose definition is `path`: a parameter
+/// for a "KIND:value" `value`, otherwise a sub-container holding `content`.
+fn add_to_container(
+    sources: &mut [InputSource],
+    owner: &str,
+    path: &str,
+    name: &str,
+    value: &str,
+    content: &str,
+) {
+    let definition = format!("{path}/{name}");
+    xml_edit(
+        sources,
+        "ecuc.arxml",
+        // Short names such as RxValue recur in CanIf and PduR; match the definition too.
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", owner)
+                && node
+                    .children()
+                    .any(|child| child.has_tag_name("DEFINITION-REF") && child.text() == Some(path))
+        },
+        |text| {
+            let close = "</ECUC-CONTAINER-VALUE>";
+            let body = text.trim_end().strip_suffix(close).unwrap();
+            match value.split_once(':') {
+                Some((kind, value)) => {
+                    let element = match kind {
+                        "INTEGER" | "FLOAT" | "BOOLEAN" => "NUMERICAL",
+                        _ => "TEXTUAL",
+                    };
+                    let dest = match kind {
+                        "FUNCTION-NAME" => "ECUC-FUNCTION-NAME-DEF".to_owned(),
+                        _ => format!("ECUC-{kind}-PARAM-DEF"),
+                    };
+                    let parameter = format!(
+                        "<ECUC-{element}-PARAM-VALUE><DEFINITION-REF DEST=\"{dest}\">{definition}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-{element}-PARAM-VALUE>"
+                    );
+                    // The owner's own parameters precede its sub-containers.
+                    let at = text.find("</DEFINITION-REF>").unwrap() + "</DEFINITION-REF>".len();
+                    if text[at..].trim_start().starts_with("<PARAMETER-VALUES>") {
+                        text.replacen(
+                            "<PARAMETER-VALUES>",
+                            &format!("<PARAMETER-VALUES>{parameter}"),
+                            1,
+                        )
+                    } else {
+                        format!(
+                            "{}<PARAMETER-VALUES>{parameter}</PARAMETER-VALUES>{}",
+                            &text[..at],
+                            &text[at..]
+                        )
+                    }
+                }
+                None => {
+                    let container = format!(
+                        "<ECUC-CONTAINER-VALUE><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}</DEFINITION-REF>{content}</ECUC-CONTAINER-VALUE>"
+                    );
+                    // The owner's own sub-containers close last.
+                    match body.trim_end().strip_suffix("</SUB-CONTAINERS>") {
+                        Some(inner) => format!("{inner}{container}</SUB-CONTAINERS>{close}"),
+                        None => {
+                            format!("{body}<SUB-CONTAINERS>{container}</SUB-CONTAINERS>{close}")
+                        }
+                    }
+                }
+            }
+        },
+    );
+}
+
 #[test]
 fn com_features_outside_the_selection_are_refused_at_their_source() {
     let com = "/AUTOSAR/EcucDefs/Com";
@@ -2598,74 +2670,16 @@ fn com_features_outside_the_selection_are_refused_at_their_source() {
         ("Callbacks", "ComUserSignalGroup", "", unknown),
     ] {
         let (_, path, object) = owners.iter().find(|row| row.0 == owner).unwrap();
-        let definition = format!("{path}/{name}");
+        // ComTxModeFalse is complete with the mode the runtime assumes when absent.
+        let content = if name == "ComTxModeFalse" {
+            format!(
+                "<SUB-CONTAINERS><ECUC-CONTAINER-VALUE><SHORT-NAME>None</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{path}/{name}/ComTxMode</DEFINITION-REF><PARAMETER-VALUES><ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-ENUMERATION-PARAM-DEF\">{path}/{name}/ComTxMode/ComTxModeMode</DEFINITION-REF><VALUE>NONE</VALUE></ECUC-TEXTUAL-PARAM-VALUE></PARAMETER-VALUES></ECUC-CONTAINER-VALUE></SUB-CONTAINERS>"
+            )
+        } else {
+            String::new()
+        };
         let mut sources = single_component_sources();
-        xml_edit(
-            &mut sources,
-            "ecuc.arxml",
-            // Short names such as RxValue recur in CanIf and PduR; match the definition too.
-            |node| {
-                named(node, "ECUC-CONTAINER-VALUE", owner)
-                    && node.children().any(|child| {
-                        child.has_tag_name("DEFINITION-REF") && child.text() == Some(path.as_str())
-                    })
-            },
-            |text| {
-                let close = "</ECUC-CONTAINER-VALUE>";
-                let body = text.trim_end().strip_suffix(close).unwrap();
-                match value.split_once(':') {
-                    Some((kind, value)) => {
-                        let element = match kind {
-                            "INTEGER" | "FLOAT" | "BOOLEAN" => "NUMERICAL",
-                            _ => "TEXTUAL",
-                        };
-                        let dest = match kind {
-                            "FUNCTION-NAME" => "ECUC-FUNCTION-NAME-DEF".to_owned(),
-                            _ => format!("ECUC-{kind}-PARAM-DEF"),
-                        };
-                        let parameter = format!(
-                            "<ECUC-{element}-PARAM-VALUE><DEFINITION-REF DEST=\"{dest}\">{definition}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-{element}-PARAM-VALUE>"
-                        );
-                        // The owner's own parameters precede its sub-containers.
-                        let at =
-                            text.find("</DEFINITION-REF>").unwrap() + "</DEFINITION-REF>".len();
-                        if text[at..].trim_start().starts_with("<PARAMETER-VALUES>") {
-                            text.replacen(
-                                "<PARAMETER-VALUES>",
-                                &format!("<PARAMETER-VALUES>{parameter}"),
-                                1,
-                            )
-                        } else {
-                            format!(
-                                "{}<PARAMETER-VALUES>{parameter}</PARAMETER-VALUES>{}",
-                                &text[..at],
-                                &text[at..]
-                            )
-                        }
-                    }
-                    None => {
-                        // ComTxModeFalse is complete with the mode the runtime assumes when absent.
-                        let content = if name == "ComTxModeFalse" {
-                            format!(
-                                "<SUB-CONTAINERS><ECUC-CONTAINER-VALUE><SHORT-NAME>None</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}/ComTxMode</DEFINITION-REF><PARAMETER-VALUES><ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-ENUMERATION-PARAM-DEF\">{definition}/ComTxMode/ComTxModeMode</DEFINITION-REF><VALUE>NONE</VALUE></ECUC-TEXTUAL-PARAM-VALUE></PARAMETER-VALUES></ECUC-CONTAINER-VALUE></SUB-CONTAINERS>"
-                            )
-                        } else {
-                            String::new()
-                        };
-                        let container = format!(
-                            "<ECUC-CONTAINER-VALUE><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{definition}</DEFINITION-REF>{content}</ECUC-CONTAINER-VALUE>"
-                        );
-                        // The owner's own sub-containers close last.
-                        match body.trim_end().strip_suffix("</SUB-CONTAINERS>") {
-                            Some(inner) => format!("{inner}{container}</SUB-CONTAINERS>{close}"),
-                            None => {
-                                format!("{body}<SUB-CONTAINERS>{container}</SUB-CONTAINERS>{close}")
-                            }
-                        }
-                    }
-                }
-            },
-        );
+        add_to_container(&mut sources, owner, path, name, value, &content);
         let object = if name == "ComTxModeFalse" {
             // A second transmission mode is refused at the I-PDU that selects between them.
             "/Configuration/Com/Config/TxValuePdu".to_owned()
@@ -2675,6 +2689,217 @@ fn com_features_outside_the_selection_are_refused_at_their_source() {
             (*object).to_owned()
         };
         rejected_with(&sources, codes, "ecuc.arxml", &object);
+    }
+}
+
+/// CanTp parameters and containers outside the selected physical, padded Classical CAN
+/// channel are refused where they are declared.
+#[test]
+fn cantp_features_outside_the_selection_are_refused_at_their_source() {
+    let cantp = "/AUTOSAR/EcucDefs/CanTp";
+    let owners = [
+        (
+            "General",
+            format!("{cantp}/CanTpGeneral"),
+            "/Configuration/CanTp/General",
+        ),
+        (
+            "Config",
+            format!("{cantp}/CanTpConfig"),
+            "/Configuration/CanTp/Config",
+        ),
+        (
+            "DiagRequest",
+            format!("{cantp}/CanTpConfig/CanTpChannel/CanTpRxNSdu"),
+            "/Configuration/CanTp/Config/PhysicalChannel/DiagRequest",
+        ),
+        (
+            "DiagResponse",
+            format!("{cantp}/CanTpConfig/CanTpChannel/CanTpTxNSdu"),
+            "/Configuration/CanTp/Config/PhysicalChannel/DiagResponse",
+        ),
+    ];
+    let unknown = ("REFERENCE_UNRESOLVED", "DEFINITION_UNKNOWN");
+    let unsupported = ("SERVICE_UNSUPPORTED", "SERVICE_UNSUPPORTED");
+    let disabled = (
+        "TARGET_PARAMETER_UNSUPPORTED",
+        "TARGET_PARAMETER_UNSUPPORTED",
+    );
+    // (owner, definition below the owner's, "" for a container or "KIND:value", codes)
+    for (owner, name, value, codes) in [
+        // Rejects: ECUC_CanTp_00302
+        ("General", "CanTpDynIdSupport", "BOOLEAN:false", unknown),
+        // Rejects: ECUC_CanTp_00305
+        (
+            "General",
+            "CanTpFlexibleDataRateSupport",
+            "BOOLEAN:false",
+            unknown,
+        ),
+        // Rejects: ECUC_CanTp_00303
+        (
+            "General",
+            "CanTpGenericConnectionSupport",
+            "BOOLEAN:false",
+            unknown,
+        ),
+        // Rejects: ECUC_CanTp_00307
+        ("General", "CanTpDemEventParameterRefs", "", unknown),
+        // Rejects: ECUC_CanTp_00319
+        ("General", "CanTpEnableSecurityEventRefs", "", unknown),
+        // Rejects: ECUC_CanTp_00304
+        ("Config", "CanTpMaxChannelCnt", "INTEGER:1", unknown),
+        // Rejects: ECUC_CanTp_00139
+        ("DiagRequest", "CanTpNTa", "", unknown),
+        // Rejects: ECUC_CanTp_00253
+        ("DiagRequest", "CanTpNSa", "", unknown),
+        // Rejects: ECUC_CanTp_00284
+        ("DiagResponse", "CanTpNAe", "", unknown),
+    ] {
+        let (_, path, object) = owners.iter().find(|row| row.0 == owner).unwrap();
+        let mut sources = single_component_sources();
+        add_to_container(&mut sources, owner, path, name, value, "");
+        let object = if value.is_empty() {
+            format!("{object}/{name}")
+        } else {
+            (*object).to_owned()
+        };
+        rejected_with(&sources, codes, "ecuc.arxml", &object);
+    }
+    // (owner, parameter, value outside the selection, codes)
+    for (owner, name, value, codes) in [
+        // Rejects: ECUC_CanTp_00299
+        ("General", "CanTpChangeParameterApi", "true", disabled),
+        // Rejects: ECUC_CanTp_00239
+        ("General", "CanTpDevErrorDetect", "true", disabled),
+        // Rejects: ECUC_CanTp_00318
+        (
+            "General",
+            "CanTpEnableSecurityEventReporting",
+            "true",
+            disabled,
+        ),
+        // Rejects: ECUC_CanTp_00300
+        ("General", "CanTpReadParameterApi", "true", disabled),
+        // Rejects: ECUC_CanTp_00283
+        ("General", "CanTpVersionInfoApi", "true", disabled),
+        // Rejects: ECUC_CanTp_00298
+        ("General", "CanTpPaddingByte", "255", unsupported),
+        // Rejects: ECUC_CanTp_00281
+        (
+            "DiagRequest",
+            "CanTpRxAddressingFormat",
+            "CANTP_EXTENDED",
+            unsupported,
+        ),
+        // Rejects: ECUC_CanTp_00249
+        (
+            "DiagRequest",
+            "CanTpRxPaddingActivation",
+            "CANTP_OFF",
+            unsupported,
+        ),
+        // Rejects: ECUC_CanTp_00250
+        (
+            "DiagRequest",
+            "CanTpRxTaType",
+            "CANTP_FUNCTIONAL",
+            unsupported,
+        ),
+        // Rejects: ECUC_CanTp_00276
+        ("DiagRequest", "CanTpBs", "1", unsupported),
+        // Rejects: ECUC_CanTp_00252
+        ("DiagRequest", "CanTpSTmin", "0.001", unsupported),
+        // Rejects: ECUC_CanTp_00251
+        ("DiagRequest", "CanTpRxWftMax", "1", unsupported),
+        // Rejects: ECUC_CanTp_00262
+        (
+            "DiagResponse",
+            "CanTpTxAddressingFormat",
+            "CANTP_MIXED",
+            unsupported,
+        ),
+        // Rejects: ECUC_CanTp_00269
+        (
+            "DiagResponse",
+            "CanTpTxPaddingActivation",
+            "CANTP_OFF",
+            unsupported,
+        ),
+        // Rejects: ECUC_CanTp_00270
+        (
+            "DiagResponse",
+            "CanTpTxTaType",
+            "CANTP_FUNCTIONAL",
+            unsupported,
+        ),
+        // Rejects: ECUC_CanTp_00282
+        ("DiagResponse", "CanTpTc", "true", unsupported),
+    ] {
+        let (_, _, object) = owners.iter().find(|row| row.0 == owner).unwrap();
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, name, value);
+        let unchanged = single_component_sources();
+        assert_ne!(
+            text(&sources, "ecuc.arxml"),
+            text(&unchanged, "ecuc.arxml"),
+            "{name}"
+        );
+        rejected_with(&sources, codes, "ecuc.arxml", object);
+    }
+}
+
+/// A CanTp timer of one main-function period could expire at the call right after it starts.
+#[test]
+fn cantp_timer_shorter_than_two_periods_is_refused() {
+    for (owner, name) in [("DiagRequest", "CanTpNar"), ("DiagResponse", "CanTpNcs")] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, name, "0.001");
+        let unchanged = single_component_sources();
+        assert_ne!(
+            text(&sources, "ecuc.arxml"),
+            text(&unchanged, "ecuc.arxml"),
+            "{name}"
+        );
+        let object = format!("/Configuration/CanTp/Config/PhysicalChannel/{owner}");
+        rejected_at(&sources, "DIAGNOSTIC_TIMING", "ecuc.arxml", &object);
+    }
+}
+
+/// The selected channel carries one connection per direction; a second N-SDU is refused.
+#[test]
+fn second_cantp_connection_is_refused() {
+    // Rejects: ECUC_CanTp_00137, ECUC_CanTp_00138
+    for (name, definition) in [
+        ("DiagRequest", "/CanTpRxNSdu"),
+        ("DiagResponse", "/CanTpTxNSdu"),
+    ] {
+        let mut sources = single_component_sources();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", name)
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF")
+                            && child.text().is_some_and(|text| text.ends_with(definition))
+                    })
+            },
+            |text| {
+                let copy = text.replacen(
+                    &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+                    &format!("<SHORT-NAME>{name}Second</SHORT-NAME>"),
+                    1,
+                );
+                format!("{text}{copy}")
+            },
+        );
+        rejected_at(
+            &sources,
+            "DIAGNOSTIC_NOT_UNIQUE",
+            "ecuc.arxml",
+            &format!("/Configuration/CanTp/Config/PhysicalChannel/{name}Second"),
+        );
     }
 }
 

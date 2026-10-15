@@ -439,7 +439,7 @@ pub(super) fn files(
             "CanTp",
             "static const CanTp_ConfigType tp_config",
             &values(&format!(
-                "{}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {period}u, 0u, 0u, {}u, {}u",
+                "{}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {period}u, 0u, 0u, {}u, {}u",
                 tp.receive_nsdu,
                 tp.transmit_nsdu,
                 tp.receive_npdu,
@@ -447,6 +447,7 @@ pub(super) fn files(
                 tp.buffer_bytes,
                 ticks(tp.n_as_ms)?,
                 ticks(tp.n_ar_ms)?,
+                ticks(tp.n_br_ms)?,
                 ticks(tp.n_bs_ms)?,
                 ticks(tp.n_cr_ms)?,
                 ticks(tp.n_cs_ms)?,

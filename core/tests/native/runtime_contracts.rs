@@ -95,10 +95,11 @@ fn det_reports_concurrently_without_changing_callout_results() {
     );
 }
 
-/// Builds a Com consumer with the delivered host areas; `flags` add linker wraps.
-fn com_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
+/// Builds a consumer of one delivered module (`runtime/bsw/src/<module>.c`) with the
+/// delivered host areas; `flags` add linker wraps.
+fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let executable = tooling::native_binary(scratch, "com-consumer");
+    let executable = tooling::native_binary(scratch, "strict-consumer");
     let mut command = tooling::c_compiler();
     if cfg!(target_os = "linux") {
         command.arg("-pthread");
@@ -118,7 +119,7 @@ fn com_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
         .arg(root.join("core/tests/fixtures/bsw-contracts"))
         .arg(root.join("runtime/host/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/host/src/Can_HostLock.c"))
-        .arg(root.join("runtime/bsw/src/Com.c"))
+        .arg(root.join(format!("runtime/bsw/src/{module}.c")))
         .arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture))
         .arg("-o")
         .arg(&executable)
@@ -135,7 +136,7 @@ fn com_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
 #[test]
 fn com_standard_consumer_executes_group_and_reception_monitoring() {
     let scratch = Scratch::new();
-    let executable = com_consumer(&scratch.0, "com_contract.c", &[]);
+    let executable = strict_consumer(&scratch.0, "Com", "com_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
     assert!(
@@ -149,8 +150,9 @@ fn com_standard_consumer_executes_group_and_reception_monitoring() {
 #[test]
 fn com_notifications_and_transmissions_complete_once_while_another_waits_outside_the_area() {
     let scratch = Scratch::new();
-    let executable = com_consumer(
+    let executable = strict_consumer(
         &scratch.0,
+        "Com",
         "com_parallel.c",
         &["-Wl,--wrap=SchM_Exit_Com_COM_STATE"],
     );
@@ -539,33 +541,35 @@ fn can_callbacks_leave_driver_area_and_late_events_converge() {
 }
 
 #[test]
-fn cantp_n_as_timeout_aborts_once_and_ignores_late_confirmation() {
+fn cantp_standard_consumer_executes_full_duplex_transport_outside_its_area() {
     let scratch = Scratch::new();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let executable = tooling::native_binary(&scratch.0, "cantp-consumer");
-    let output = tooling::c_compiler()
-        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
-        .arg("-I")
-        .arg(root.join("runtime/bsw/include"))
-        .arg("-I")
-        .arg(root.join("runtime/host/include"))
-        .arg("-I")
-        .arg(root.join("runtime/bsw/src"))
-        .arg("-I")
-        .arg(root.join("runtime/host/src"))
-        .arg("-I")
-        .arg(root.join("core/tests/fixtures/bsw-contracts"))
-        .arg(root.join("runtime/bsw/src/CanTp.c"))
-        .arg(root.join("core/tests/fixtures/bsw-contracts/cantp_n_as_contract.c"))
-        .arg("-o")
-        .arg(&executable)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let executable = strict_consumer(&scratch.0, "CanTp", "cantp_contract.c", &[]);
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
+    assert!(
+        output.stdout.is_empty() && output.stderr.is_empty(),
+        "{:?}",
+        output
+    );
+}
+
+/// CanTp leaves CANTP_STATE before PduR and LSduR, and discards overtaken results (ADR 0018).
+#[test]
+fn cantp_events_complete_once_while_another_context_waits_outside_the_area() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(
+        &scratch.0,
+        "CanTp",
+        "cantp_parallel.c",
+        &["-Wl,--wrap=SchM_Exit_CanTp_CANTP_STATE"],
+    );
+    let logs = scratch.0.join("execution");
+    std::fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let result = run_owned(executable, &scratch.0, logs);
+    assert!(result.success(), "{result:?}");
 }

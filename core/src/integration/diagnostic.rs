@@ -92,9 +92,10 @@ fn one(graph: &Graph, context: usize, kind: &str) -> Result<usize, Vec<PlanDiagn
     if found.len() == 1 {
         Ok(found[0])
     } else {
+        // A duplicate is reported where it is declared; a missing object at its user.
         Err(reject(
             graph,
-            context,
+            found.get(1).copied().unwrap_or(context),
             "DIAGNOSTIC_NOT_UNIQUE",
             crate::product_message!(
                 "backend.integration.diagnostic.diagnostic_transport_object_missing_or_duplicate"
@@ -131,6 +132,25 @@ fn timer(graph: &Graph, context: usize, parameter: &str) -> Result<u32, Vec<Plan
                 ),
             )
         })
+}
+
+/// A CanTp timer counts main-function periods and may expire at the call right after it
+/// starts, so it lasts at least two periods of the fixed 1 ms main function.
+fn transport_timer(
+    graph: &Graph,
+    context: usize,
+    parameter: &str,
+) -> Result<u32, Vec<PlanDiagnostic>> {
+    let value = timer(graph, context, parameter)?;
+    if value < 2 {
+        return Err(reject(
+            graph,
+            context,
+            "DIAGNOSTIC_TIMING",
+            crate::product_message!("backend.integration.diagnostic.transport_timer_two_periods"),
+        ));
+    }
+    Ok(value)
 }
 
 fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<PlanDiagnostic>> {
@@ -696,16 +716,21 @@ pub(super) fn inspect_transport(
     let rx_transport = one(graph, context, "CanTpRxNSdu")?;
     let tx_transport = one(graph, context, "CanTpTxNSdu")?;
     let general = one(graph, context, "CanTpGeneral")?;
-    if value(graph, general, "CanTpPaddingByte", false) != Some("0")
-        || !matches!(
-            value(graph, tx_transport, "CanTpTc", false),
-            Some("false" | "0")
-        )
-        || !matches!(
-            value(graph, protocol, "DcmSendRespPendOnRestart", false),
-            Some("false" | "0")
-        )
-        || value(graph, protocol, "DcmTimStrP2ServerAdjust", false) != Some("0")
+    // Each selection is refused at the container that holds it.
+    if value(graph, general, "CanTpPaddingByte", false) != Some("0") {
+        return Err(reject(
+            graph,
+            general,
+            "SERVICE_UNSUPPORTED",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_transport_behavior_unsupported"
+            ),
+        ));
+    }
+    if !matches!(
+        value(graph, protocol, "DcmSendRespPendOnRestart", false),
+        Some("false" | "0")
+    ) || value(graph, protocol, "DcmTimStrP2ServerAdjust", false) != Some("0")
         || value(graph, protocol, "DcmTimStrP2StarServerAdjust", false) != Some("0")
     {
         return Err(reject(
@@ -717,26 +742,42 @@ pub(super) fn inspect_transport(
             ),
         ));
     }
-    if reference(graph, rx_transport, "CanTpRxNSduRef")? != rx_sdu
-        || reference(graph, tx_transport, "CanTpTxNSduRef")? != tx_sdu
-        || value(graph, rx_transport, "CanTpRxAddressingFormat", false) != Some("CANTP_STANDARD")
-        || value(graph, tx_transport, "CanTpTxAddressingFormat", false) != Some("CANTP_STANDARD")
-        || value(graph, rx_transport, "CanTpRxTaType", false) != Some("CANTP_PHYSICAL")
-        || value(graph, tx_transport, "CanTpTxTaType", false) != Some("CANTP_PHYSICAL")
-        || value(graph, rx_transport, "CanTpRxPaddingActivation", false) != Some("CANTP_ON")
-        || value(graph, tx_transport, "CanTpTxPaddingActivation", false) != Some("CANTP_ON")
-        || value(graph, rx_transport, "CanTpBs", false) != Some("0")
-        || value(graph, rx_transport, "CanTpSTmin", false) != Some("0")
-        || value(graph, rx_transport, "CanTpRxWftMax", false) != Some("0")
+    for (transport, sdu, direction) in [(rx_transport, rx_sdu, "Rx"), (tx_transport, tx_sdu, "Tx")]
     {
-        return Err(reject(
-            graph,
-            rx_transport,
-            "SERVICE_UNSUPPORTED",
-            crate::product_message!(
-                "backend.integration.diagnostic.diagnostic_transport_sdu_profile_required"
-            ),
-        ));
+        if reference(graph, transport, &format!("CanTp{direction}NSduRef"))? != sdu
+            || value(
+                graph,
+                transport,
+                &format!("CanTp{direction}AddressingFormat"),
+                false,
+            ) != Some("CANTP_STANDARD")
+            || value(graph, transport, &format!("CanTp{direction}TaType"), false)
+                != Some("CANTP_PHYSICAL")
+            || value(
+                graph,
+                transport,
+                &format!("CanTp{direction}PaddingActivation"),
+                false,
+            ) != Some("CANTP_ON")
+            || (direction == "Rx"
+                && (value(graph, transport, "CanTpBs", false) != Some("0")
+                    || value(graph, transport, "CanTpSTmin", false) != Some("0")
+                    || value(graph, transport, "CanTpRxWftMax", false) != Some("0")))
+            || (direction == "Tx"
+                && !matches!(
+                    value(graph, transport, "CanTpTc", false),
+                    Some("false" | "0")
+                ))
+        {
+            return Err(reject(
+                graph,
+                transport,
+                "SERVICE_UNSUPPORTED",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_transport_sdu_profile_required"
+                ),
+            ));
+        }
     }
     let rx_npdu_cfg = one(graph, rx_transport, "CanTpRxNPdu")?;
     let tx_npdu_cfg = one(graph, tx_transport, "CanTpTxNPdu")?;
@@ -810,12 +851,12 @@ pub(super) fn inspect_transport(
         p2_ms,
         p2_star_ms,
         s3_ms: 5000,
-        n_ar_ms: timer(graph, rx_transport, "CanTpNar")?,
-        n_br_ms: timer(graph, rx_transport, "CanTpNbr")?,
-        n_cr_ms: timer(graph, rx_transport, "CanTpNcr")?,
-        n_as_ms: timer(graph, tx_transport, "CanTpNas")?,
-        n_bs_ms: timer(graph, tx_transport, "CanTpNbs")?,
-        n_cs_ms: timer(graph, tx_transport, "CanTpNcs")?,
+        n_ar_ms: transport_timer(graph, rx_transport, "CanTpNar")?,
+        n_br_ms: transport_timer(graph, rx_transport, "CanTpNbr")?,
+        n_cr_ms: transport_timer(graph, rx_transport, "CanTpNcr")?,
+        n_as_ms: transport_timer(graph, tx_transport, "CanTpNas")?,
+        n_bs_ms: transport_timer(graph, tx_transport, "CanTpNbs")?,
+        n_cs_ms: transport_timer(graph, tx_transport, "CanTpNcs")?,
         buffer_bytes: 64,
         receive_nsdu: identifier(graph, rx_transport, "CanTpRxNSduId")?,
         transmit_nsdu: identifier(graph, tx_transport, "CanTpTxNSduId")?,
@@ -829,16 +870,20 @@ pub(super) fn inspect_transport(
             .filter(|index| definition_is(graph, *index, "DcmDsp"))
             .find_map(|dsp| value(graph, dsp, "DcmDspMaxDidToRead", false))
             .map(|limit| {
-                limit.parse::<u16>().ok().filter(|limit| *limit > 0).ok_or_else(|| {
-                    reject(
-                        graph,
-                        context,
-                        "TARGET_PARAMETER_UNSUPPORTED",
-                        crate::product_message!(
+                limit
+                    .parse::<u16>()
+                    .ok()
+                    .filter(|limit| *limit > 0)
+                    .ok_or_else(|| {
+                        reject(
+                            graph,
+                            context,
+                            "TARGET_PARAMETER_UNSUPPORTED",
+                            crate::product_message!(
                             "backend.integration.configuration.fixed_target_policy_value_mismatch"
                         ),
-                    )
-                })
+                        )
+                    })
             })
             .transpose()?,
     })

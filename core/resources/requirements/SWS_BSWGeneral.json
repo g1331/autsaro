@@ -156,6 +156,7 @@
   "modules": [
     "Can",
     "CanIf",
+    "CanTp",
     "Com",
     "LSduR",
     "PduR"
