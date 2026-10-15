@@ -13,43 +13,39 @@
  * it starts, or CanTp_Init ignores the configuration.
  */
 typedef struct {
-    /** Rx N-SDU ID accepted by CanTp_CancelReceive (CanTpRxNSduId, ECUC_CanTp_00301). */
-    PduIdType receive;
-    /** Tx N-SDU ID accepted by CanTp_Transmit (CanTpTxNSduId, ECUC_CanTp_00268). */
-    PduIdType transmit;
-    /** Rx N-PDU ID of data and FC frames (CanTpRxNPduId, ECUC_CanTp_00258). */
-    PduIdType lower_receive;
-    /** Tx N-PDU ID passed to LSduR and confirmed (CanTpTxNPduConfirmationPduId,
-     * ECUC_CanTp_00286). */
-    PduIdType lower_transmit;
-    /** Largest N-SDU in bytes, 8 to 256; the Dcm buffer size (DcmDslBufferSize). */
-    uint16 maximum_length;
-    /** N_As in main-function periods (CanTpNas, ECUC_CanTp_00263). */
-    uint32 n_as;
-    /** N_Ar in main-function periods (CanTpNar, ECUC_CanTp_00277). */
-    uint32 n_ar;
-    /** N_Br in main-function periods (CanTpNbr, ECUC_CanTp_00245). */
-    uint32 n_br;
-    /** N_Bs in main-function periods (CanTpNbs, ECUC_CanTp_00264). */
-    uint32 n_bs;
-    /** N_Cr in main-function periods (CanTpNcr, ECUC_CanTp_00279). */
-    uint32 n_cr;
-    /** N_Cs in main-function periods (CanTpNcs, ECUC_CanTp_00265). */
-    uint32 n_cs;
-    /** Main-function period in ms, used to convert a received STmin into periods
-     * (CanTpMainFunctionPeriod, ECUC_CanTp_00240). */
-    uint16 main_period_ms;
-    /** FC(WAIT) frames sent after N_Br expiries before the reception is aborted; 0 aborts
-     * at the first expiry (CanTpRxWftMax, ECUC_CanTp_00251). */
-    uint8 wait_frame_max;
-    /** Byte that fills unused frame bytes (CanTpPaddingByte, ECUC_CanTp_00298). */
-    uint8 padding;
-    /** PduR callback ID of the Rx N-SDU, from its canonical Pdu reference; a namespace
-     * separate from receive. */
-    PduIdType upper_receive;
-    /** PduR callback ID of the Tx N-SDU, from its canonical Pdu reference; a namespace
-     * separate from transmit. */
-    PduIdType upper_transmit;
+    PduIdType receive;        /**< Rx N-SDU ID accepted by CanTp_CancelReceive (CanTpRxNSduId,
+                                 ECUC_CanTp_00301). */
+    PduIdType transmit;       /**< Tx N-SDU ID accepted by CanTp_Transmit and
+                                 CanTp_CancelTransmit (CanTpTxNSduId, ECUC_CanTp_00268). */
+    PduIdType lower_receive;  /**< Rx N-PDU ID of request data frames and response FC frames
+                                 (CanTpRxNPduId, ECUC_CanTp_00258). */
+    PduIdType lower_transmit; /**< Tx N-PDU ID passed to LSduR and confirmed by it
+                                 (CanTpTxNPduConfirmationPduId, ECUC_CanTp_00286). */
+    uint16 maximum_length;    /**< Largest N-SDU CanTp_Transmit accepts, in bytes, 8 to
+                                 256 (the Dcm buffer size, DcmDslBufferSize). */
+    uint32 n_as;              /**< N_As in main-function periods, at least 2 (CanTpNas,
+                                 ECUC_CanTp_00263). */
+    uint32 n_ar;              /**< N_Ar in main-function periods, at least 2 (CanTpNar,
+                                 ECUC_CanTp_00277). */
+    uint32 n_br;              /**< N_Br in main-function periods, at least 2 (CanTpNbr,
+                                 ECUC_CanTp_00245). */
+    uint32 n_bs;              /**< N_Bs in main-function periods, at least 2 (CanTpNbs,
+                                 ECUC_CanTp_00264). */
+    uint32 n_cr;              /**< N_Cr in main-function periods, at least 2 (CanTpNcr,
+                                 ECUC_CanTp_00279). */
+    uint32 n_cs;              /**< N_Cs in main-function periods, at least 2 (CanTpNcs,
+                                 ECUC_CanTp_00265). */
+    uint16 main_period_ms;    /**< Main-function period in ms, nonzero; converts a received
+                                 STmin into periods (CanTpMainFunctionPeriod, ECUC_CanTp_00240). */
+    uint8 wait_frame_max;     /**< FC(WAIT) frames sent after N_Br expiries before the
+                                 reception is aborted; 0 aborts at the first expiry
+                                 (CanTpRxWftMax, ECUC_CanTp_00251). */
+    uint8 padding;            /**< Byte that fills unused frame bytes (CanTpPaddingByte,
+                                 ECUC_CanTp_00298). */
+    PduIdType upper_receive;  /**< PduR callback ID of the Rx N-SDU, from its canonical Pdu
+                                 reference; a namespace separate from receive. */
+    PduIdType upper_transmit; /**< PduR callback ID of the Tx N-SDU, from its canonical Pdu
+                                 reference; a namespace separate from transmit. */
 } CanTp_ConfigType;
 /** Start the module with a generated configuration and drop all connections without
  * notification (SWS_CanTp_00208, 00273).

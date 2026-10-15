@@ -79,50 +79,64 @@ typedef struct {
     PduLengthType length;
     uint8 frame[CANTP_FRAME_BYTES];
 } CanTp_WorkType;
+/* The transmitting side of the channel. CanTp_Transmit sets every member but result and
+ * frame; CanTp_Init and CanTp_Shutdown only reset state and advance generation. */
 typedef struct {
-    CanTp_TxStateType state;
-    uint32 generation;
-    uint32 timer;
-    uint32 delay;
-    uint32 separation;
-    boolean due;
-    PduLengthType total;
-    PduLengthType position;
-    PduLengthType payload;
-    uint8 sequence;
-    uint8 block_size;
-    uint8 block_sent;
-    Std_ReturnType result;
-    uint8 frame[CANTP_FRAME_BYTES];
+    CanTp_TxStateType state;        /**< Step of the transmission. */
+    uint32 generation;              /**< Advanced when a transmission ends or is reset; makes
+                                       results of calls made for an earlier one stale. */
+    uint32 timer;                   /**< Remaining periods of N_As, N_Bs or N_Cs. */
+    uint32 delay;                   /**< Remaining periods of STmin before the next CF. */
+    uint32 separation;              /**< STmin of the last FC, in periods. */
+    boolean due;                    /**< The next SF, FF or CF may be copied now. */
+    PduLengthType total;            /**< N-SDU length in bytes. */
+    PduLengthType position;         /**< Bytes already sent. */
+    PduLengthType payload;          /**< Data bytes in the frame being sent. */
+    uint8 sequence;                 /**< SN of the next CF, 0 to 15. */
+    uint8 block_size;               /**< BS of the last FC; 0 means no further FC. */
+    uint8 block_sent;               /**< CFs sent in the current block. */
+    Std_ReturnType result;          /**< Result owed to PduR in CANTP_TX_DONE. */
+    uint8 frame[CANTP_FRAME_BYTES]; /**< Frame being built or sent. */
 } CanTp_TxType;
+/* The receiving side of the channel. Admitting an SF or FF sets every member but result
+ * and frame; CanTp_Init and CanTp_Shutdown only reset state and advance generation. */
 typedef struct {
-    CanTp_RxStateType state;
-    uint32 generation;
-    uint32 timer;
-    boolean due;
-    uint8 flow;
-    uint8 waits;
-    PduLengthType total;
-    PduLengthType position;
-    uint8 sequence;
-    Std_ReturnType result;
-    uint8 frame[CANTP_FRAME_BYTES];
+    CanTp_RxStateType state;        /**< Step of the reception. */
+    uint32 generation;              /**< Advanced when a reception starts, ends or is reset; makes
+                                       results of calls made for an earlier one stale. */
+    uint32 timer;                   /**< Remaining periods of N_Ar, N_Br or N_Cr. */
+    boolean due;                    /**< In CANTP_RX_BUFFER: ask PduR for buffer again now. */
+    uint8 flow;                     /**< FS of the FC to send next: CTS, WAIT or OVFLW. */
+    uint8 waits;                    /**< FC(WAIT) frames sent, at most wait_frame_max. */
+    PduLengthType total;            /**< N-SDU length in bytes from the SF or FF. */
+    PduLengthType position;         /**< Bytes already copied to PduR. */
+    uint8 sequence;                 /**< SN expected in the next CF, 0 to 15. */
+    Std_ReturnType result;          /**< Result owed to PduR in CANTP_RX_DONE. */
+    uint8 frame[CANTP_FRAME_BYTES]; /**< FC frame being built or sent. */
 } CanTp_RxType;
 
-static const CanTp_ConfigType *configuration CANTP_VAR_CLEARED;
-static CanTp_TxType tx CANTP_VAR_CLEARED;
-static CanTp_RxType rx CANTP_VAR_CLEARED;
-/* The Tx N-PDU in flight keeps its owner until its actual confirmation (SWS_CanTp_00075);
- * Init and Shutdown do not reset it. */
-static CanTp_LowerType lower_owner CANTP_VAR_CLEARED;
-static uint32 lower_generation CANTP_VAR_CLEARED;
-static PduIdType pending_lower_id CANTP_VAR_CLEARED;
-static uint8 queued[CANTP_RX_QUEUE][CANTP_FRAME_BYTES] CANTP_VAR_CLEARED;
-static uint8 queued_length[CANTP_RX_QUEUE] CANTP_VAR_CLEARED;
-static uint8 queue_head CANTP_VAR_CLEARED;
-static uint8 queue_count CANTP_VAR_CLEARED;
-/* A context is making CanTp's calls; never reset, so it outlives a reinitialization. */
-static boolean running CANTP_VAR_CLEARED;
+/* Every variable below is read and written only inside CANTP_STATE. */
+static const CanTp_ConfigType *configuration CANTP_VAR_CLEARED; /**< Set by Init, NULL
+                                                                    after Shutdown. */
+static CanTp_TxType tx CANTP_VAR_CLEARED; /**< Transmission; Init resets it as above. */
+static CanTp_RxType rx CANTP_VAR_CLEARED; /**< Reception; Init resets it as above. */
+/* lower_generation and pending_lower_id describe the frame of lower_owner and mean nothing
+ * while it is CANTP_LOWER_FREE. The Tx N-PDU in flight keeps its owner until its actual
+ * confirmation (SWS_CanTp_00075), so CanTp_Init does not reset this group. */
+static CanTp_LowerType lower_owner CANTP_VAR_CLEARED; /**< Direction whose frame occupies
+                                                         the Tx N-PDU, or free. */
+static uint32 lower_generation CANTP_VAR_CLEARED;     /**< Generation of that direction when its
+                                                         frame was claimed. */
+static PduIdType pending_lower_id CANTP_VAR_CLEARED;  /**< Tx N-PDU ID that frame was sent on;
+                                                         confirmations of others are ignored. */
+/* The queue holds queue_count frames starting at queue_head, wrapping at CANTP_RX_QUEUE;
+ * CanTp_Init empties it by clearing queue_count only. */
+static uint8 queued[CANTP_RX_QUEUE][CANTP_FRAME_BYTES] CANTP_VAR_CLEARED; /**< Received frames. */
+static uint8 queued_length[CANTP_RX_QUEUE] CANTP_VAR_CLEARED; /**< Byte count of each. */
+static uint8 queue_head CANTP_VAR_CLEARED;  /**< Slot of the oldest frame; Init keeps it. */
+static uint8 queue_count CANTP_VAR_CLEARED; /**< Frames waiting; Init clears it. */
+static boolean running CANTP_VAR_CLEARED;   /**< A context is making CanTp's calls; never reset,
+                                               so it outlives a reinitialization. */
 #define CANTP_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanTp_MemMap.h"
 
