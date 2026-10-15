@@ -215,7 +215,7 @@ impl ValidatedIntegrationPlan {
                     } else if symbol.definition_owner.starts_with("application/") {
                         "E_OK with a valid value, including a replacement value on application failure (SWS_Dcm_00686).".to_owned()
                     } else {
-                        "Planned E_OK or an RTE infrastructure error for the synchronous client."
+                        "Planned E_OK; RTE_E_COM_STOPPED before RTE start; E_NOT_OK (1) outside the owner context or for a NULL argument."
                             .to_owned()
                     };
                     docs.push_str(&c_layout::comment(

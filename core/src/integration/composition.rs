@@ -194,16 +194,21 @@ impl CompositionContract {
             .map(|argument| argument.native_type.clone())
             .ok_or_else(|| PlanDiagnostic::plan_premise(&diagnostic.client_port))?;
         let mut parameter = native;
-        let mut declarations = String::from(
-            "/** Selected UINT8_N data (SWS_Dcm_91051, SWS_Dcm_91063, SWS_Dcm_01121). */\n",
-        );
+        let mut typedefs = String::new();
         for alias in dcm_data_type_names(&diagnostic.data) {
             // Rte_Type.h already declares source array types, all checked as uint8[4].
             if !self.array_types.values().any(|native| native == &alias) {
-                declarations.push_str(&format!("typedef {parameter} {alias};\n"));
+                typedefs.push_str(&format!("typedef {parameter} {alias};\n"));
                 parameter = alias;
             }
         }
+        let declarations = if typedefs.is_empty() {
+            typedefs
+        } else {
+            format!(
+                "/** Selected UINT8_N data (SWS_Dcm_91051, SWS_Dcm_91063, SWS_Dcm_01121). */\n{typedefs}"
+            )
+        };
         Ok((declarations, parameter))
     }
 

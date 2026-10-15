@@ -104,7 +104,7 @@ pub(super) fn files(
         (
             "include/SchM_Dcm.h",
             format!(
-                "/** Publish the selected connection authentication mode.\n * @param[in] mode 0 for deauthenticated, 1 for authenticated.\n * @return SCHM_E_OK in the ECU owner context; SCHM_E_LIMIT otherwise.\n * Preconditions: initialized ECU; otherwise SCHM_E_LIMIT.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant; the Dcm publisher orders updates.\n * Ownership: no pointer is retained.\n */\n{}\n/** Read the selected connection authentication mode.\n * @return Current mode, or its transition value outside the ECU owner context.\n * Preconditions: initialized ECU.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant.\n * Ownership: None.\n */\n{}\n",
+                "/** Publish the selected connection authentication mode.\n * @param[in] mode 0 for deauthenticated, 1 for authenticated.\n * @return SCHM_E_OK after publishing the immediate mode.\n * Preconditions: initialized ECU.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant; the Dcm publisher orders updates.\n * Ownership: no pointer is retained.\n */\n{}\n/** Read the selected connection authentication mode.\n * @return Current mode.\n * Preconditions: initialized ECU.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant.\n * Ownership: None.\n */\n{}\n",
                 c_layout::signature(
                     "Std_ReturnType",
                     &format!("SchM_Switch_Dcm_{authentication_group}"),

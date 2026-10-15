@@ -508,9 +508,8 @@ pub(super) fn inspect_transport(
         .into_iter()
         .filter(|index| definition_is(graph, *index, "DemGeneral"))
     {
-        if value(graph, general, "DemOBDSupport", false)
-            .is_some_and(|support| support != "DEM_OBD_NO_OBD_SUPPORT")
-        {
+        // Fail closed: an absent or repeated value is not a declared no-OBD ECU.
+        if value(graph, general, "DemOBDSupport", false) != Some("DEM_OBD_NO_OBD_SUPPORT") {
             return Err(reject(
                 graph,
                 general,

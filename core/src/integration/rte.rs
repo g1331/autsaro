@@ -281,13 +281,14 @@ pub(super) fn files(
                 .iter()
                 .find(|operation| operation.runnable == runnable.path)
                 .ok_or_else(|| PlanDiagnostic::plan_premise(&runnable.path))?;
-            let (_, datatype) = diagnostic_types
-                .as_ref()
-                .ok_or_else(|| PlanDiagnostic::plan_premise(&runnable.path))?;
+            if diagnostic_types.is_none() {
+                return Err(PlanDiagnostic::plan_premise(&runnable.path));
+            }
+            // Same parameter type names as the component header declaration (MISRA 8.3).
             let arguments = operation
                 .arguments
                 .iter()
-                .map(|argument| c_layout::parameter(datatype, &argument.name))
+                .map(|argument| c_layout::parameter(&argument.native_type, &argument.name))
                 .collect::<Vec<_>>();
             let head = function(scope, &runnable.symbol, &arguments);
             let call = c_layout::call(

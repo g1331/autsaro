@@ -808,4 +808,26 @@ fn dcm_refuses_obd_relevant_dem_declarations_at_their_source() {
             "/Configuration/Dem/General",
         );
     }
+    // An absent value is not a declared no-OBD ECU either.
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.has_tag_name("ECUC-TEXTUAL-PARAM-VALUE")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child.text() == Some("/AUTOSAR/EcucDefs/Dem/DemGeneral/DemOBDSupport")
+                })
+        },
+        |_| String::new(),
+    );
+    let issues = build(&sources).err().expect("absent DemOBDSupport refused");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "SERVICE_UNSUPPORTED"
+                && issue.object.as_deref() == Some("/Configuration/Dem/General")),
+        "{issues:?}"
+    );
 }

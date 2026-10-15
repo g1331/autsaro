@@ -781,22 +781,45 @@ fn dcm_read_data_declares_the_standard_error_and_status_return() {
             "{code}"
         );
     }
-    for change_code in [None, Some("2")] {
+    let reference = r#"<POSSIBLE-ERROR-REF DEST="APPLICATION-ERROR">/Types/DataServices_ApplicationValue/E_NOT_OK</POSSIBLE-ERROR-REF>"#;
+    let scalar_end = "</OPERATIONS>\n        </CLIENT-SERVER-INTERFACE>\n      </ELEMENTS>";
+    let scalar_error = "</OPERATIONS>\n          <POSSIBLE-ERRORS>\n            <APPLICATION-ERROR>\n              <SHORT-NAME>E_NOT_OK</SHORT-NAME>\n              <ERROR-CODE>1</ERROR-CODE>\n            </APPLICATION-ERROR>\n          </POSSIBLE-ERRORS>\n        </CLIENT-SERVER-INTERFACE>\n      </ELEMENTS>";
+    // Each condition of the standard contract is refused on its own: no reference, another
+    // code, another error name, a second reference, and an E_NOT_OK owned by another interface.
+    let variants: Vec<Vec<(String, String)>> = vec![
+        vec![],
+        vec![(
+            "<ERROR-CODE>1</ERROR-CODE>".into(),
+            "<ERROR-CODE>2</ERROR-CODE>".into(),
+        )],
+        vec![
+            (
+                "<SHORT-NAME>E_NOT_OK</SHORT-NAME>".into(),
+                "<SHORT-NAME>E_FAILED</SHORT-NAME>".into(),
+            ),
+            (reference.into(), reference.replace("E_NOT_OK", "E_FAILED")),
+        ],
+        vec![(reference.into(), format!("{reference}{reference}"))],
+        vec![
+            (scalar_end.into(), scalar_error.into()),
+            (
+                reference.into(),
+                reference.replace("DataServices_ApplicationValue", "ScalarService"),
+            ),
+        ],
+    ];
+    for (index, edits) in variants.iter().enumerate() {
         let mut bad = sources.clone();
-        if let Some(code) = change_code {
-            change(
-                &mut bad,
-                "types.arxml",
-                "<ERROR-CODE>1</ERROR-CODE>",
-                &format!("<ERROR-CODE>{code}</ERROR-CODE>"),
-            );
-        } else {
+        if edits.is_empty() {
             xml_edit(
                 &mut bad,
                 "types.arxml",
                 |node| node.has_tag_name("POSSIBLE-ERROR-REFS"),
                 |_| String::new(),
             );
+        }
+        for (before, after) in edits {
+            change(&mut bad, "types.arxml", before, after);
         }
         let object = "/Types/DataServices_ApplicationValue/ReadData";
         let issues = build(&bad)
@@ -807,7 +830,7 @@ fn dcm_read_data_declares_the_standard_error_and_status_return() {
                 .iter()
                 .any(|issue| issue.code == "APPLICATION_ERROR_UNSUPPORTED"
                     && issue.object.as_deref() == Some(object)),
-            "{issues:?}"
+            "{index}: {issues:?}"
         );
         let validation = normal_validation(&bad);
         assert!(
@@ -816,8 +839,29 @@ fn dcm_read_data_declares_the_standard_error_and_status_return() {
                 .iter()
                 .any(|issue| issue.code == "APPLICATION_ERROR_UNSUPPORTED"
                     && issue.path.as_deref() == Some(object)),
-            "{:?}",
+            "{index}: {:?}",
             validation.diagnostics
         );
     }
+    // An ordinary C/S operation keeps its void server and cannot declare application errors.
+    let mut ordinary = sources.clone();
+    change(
+        &mut ordinary,
+        "types.arxml",
+        &format!("</ARGUMENTS>\n            </CLIENT-SERVER-OPERATION>\n          {scalar_end}"),
+        &format!(
+            "</ARGUMENTS>\n              <POSSIBLE-ERROR-REFS>{}</POSSIBLE-ERROR-REFS>\n            </CLIENT-SERVER-OPERATION>\n          {scalar_error}",
+            reference.replace("DataServices_ApplicationValue", "ScalarService")
+        ),
+    );
+    let issues = build(&ordinary)
+        .err()
+        .expect("ordinary application error refused");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "APPLICATION_ERROR_UNSUPPORTED"
+                && issue.object.as_deref() == Some("/Types/ScalarService/Transform")),
+        "{issues:?}"
+    );
 }
