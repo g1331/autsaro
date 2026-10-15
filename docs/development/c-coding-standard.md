@@ -6,9 +6,10 @@
 
 | 约束 | 依据 | 要点 |
 | --- | --- | --- |
-| MISRA C:2012 修订基线 | [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)、[misra-c2012 指导](../../.agents/skills/misra-c2012/SKILL.md) | C99；已批准的偏离记录在对应模块篇（目前有 [PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7，[Com](../standards/com.md#misra-偏离) 的 Rule 8.7 与 2.5）；`c-check` 的用法见[生成 C 的静态检查](testing/generated-c.md) |
+| MISRA C:2012 修订基线 | [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)、[misra-c2012 指导](../../.agents/skills/misra-c2012/SKILL.md) | C99；偏离见下文 [MISRA 偏离注释](#misra-偏离注释)；`c-check` 的用法见[生成 C 的静态检查](testing/generated-c.md) |
 | BSW 命名 | SWS BSWGeneral R24-11 | API `<Mip>_<Sn>`（`SRS_BSW_00310`）；主函数 `<Mip>_MainFunction[<Sd>]`（`SWS_BSW_00153`）；类型 `<Ma>_<Tn>Type`，平台基本类型除外（`SWS_BSW_00146`）；宏、枚举字面值与状态值 `<MIP>_<SN>`，全大写，`E_OK`／`E_NOT_OK` 除外（`SWS_BSW_00124`）；错误值 `<MIP>_E_<EN>`（`SWS_BSW_00125`）；全局变量 `<Mip>_<Vn>`（`SWS_BSW_00130`），只读的加 `const`（`SWS_BSW_00131`） |
 | BSW 文件 | SWS BSWGeneral R24-11 | 文件名 `<Mip>[_<Ie>]*.*`（`SWS_BSW_00103`）；区分大小写，且不能只靠大小写区分（`SWS_BSW_00170`／`00171`）；实现源包含 `<Mip>_MemMap.h`（`SWS_BSW_00006`）；只引入需要的头、只导出其他模块需要的内容（`SWS_BSW_00104`／`00105`）；全局变量定义在实现源中（`SWS_BSW_00129`） |
+| 数据类型 | `SWS_BSW_00120`、MISRA Dir 4.6 | BSW 模块（`runtime/bsw`）不用 C 原生类型（`int`、`unsigned`、`char` 等），用 `Platform_Types.h` 的 AUTOSAR 类型（`uint8`、`sint16`、`boolean` 等），经 `Std_Types.h` 引入；`Platform_Types.h` 自身的定义除外。OS 的标准接口随 #50 整改；主机适配（`runtime/host`、`runtime/ecu` 及 OS 主机后端）对接平台 API 时按其签名 |
 | 编译开关 | `SWS_BSW_00123` | 与定义值比较（`#if (X == STD_ON)`），不用 `#ifdef` 判断开关 |
 | 独占区 | [ADR 0018](../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md) | 模块只进入自己的区；持区期间不调用其他模块、回调或平台 API；区不嵌套 |
 | 格式 | `.clang-format`，规则见 [#129](https://github.com/g1331/autsaro/issues/129#issuecomment-6160383270) | 生成 C 由 emitter 直接写成同一排版（[ADR 0014](../adr/0014-emitter-rules.md)） |
@@ -59,6 +60,12 @@
 - 调用上下文：任务、回调、中断，以及是否允许在独占区内调用。
 - 可重入性：同一实例与不同实例能否并发调用。
 - 所有权：指针参数由谁持有、是否在返回后保留、输出参数何时写入。
+
+公开头中的类型、枚举与宏按语义来源注释：
+
+- 实现自定义的类型（如 `<Mip>_ConfigType`，其内容由实现决定）及项目自有枚举：类型前说明用途；成员写明单位、取值范围、特殊值（如 0 的含义）及对应的 ECUC 参数。例如 CanTp 的 `n_as` 是主函数周期数而不是毫秒，只能从这里得知。
+- SWS 定义的类型、枚举值与常量：只注明条款编号（如 `/* SWS_CANIF_00137 */`），不复述规范含义。
+- `.c` 内部的类型不强制，按下节在有不变式或约束时说明。
 
 ### 注释
 

@@ -82,7 +82,7 @@ flowchart LR
 | [0005](../adr/0005-controlled-host-targets.md) | 受控主机目标 Windows／Linux 与证据边界 | 已接受 |
 | [0006](../adr/0006-builtin-rules-without-official-archives.md) | 内置规则与产品模块定义，日常使用不需官方档案 | 已接受 |
 | [0007](../adr/0007-live-and-sealed-application-source.md) | 用户应用源 live／sealed 所有权 | 已接受 |
-| [0008](../adr/0008-misra-baseline-and-no-deviation.md) | MISRA C:2012 修订基线与无偏离政策 | 已接受 |
+| [0008](../adr/0008-misra-baseline-and-no-deviation.md) | MISRA C:2012 修订基线与偏离审批 | 已接受 |
 | [0009](../adr/0009-standard-private-and-host-interface-separation.md) | 标准公共面、模块私有状态与主机适配分离 | 已接受 |
 | [0010](../adr/0010-single-generation-mainline.md) | 单一生成主线 | 已接受，实施中 |
 | [0011](../adr/0011-no-backward-compatibility-before-stable.md) | 稳定版本前不保留向后兼容 | 已接受，实施中 |
