@@ -38,37 +38,37 @@ C/S 表内的写入、条件检查、缩放及异步操作逐项受配置约束�
 | ReadData 异步／FNC proxy | 不适用（配置：ECUC_Dcm_00713）：SWS_Dcm_91005–91006、91090–91091 |
 | PID DataServices port | 不适用（配置：ECUC_Dcm_00626）：SWS_Dcm_01035 |
 | S/R DataServices port | 不适用（配置：ECUC_Dcm_00713）：SWS_Dcm_01031、01310–01311 |
-| Imported types | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00333 |
-| Dcm_ConfigType | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00982 |
-| Dcm_GetSecurityLevel | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00338 |
-| Dcm_GetSesCtrlType | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00339 |
-| Dcm_StartOfReception | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00094 |
-| Dcm_CopyRxData | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00556 |
-| Dcm_TpRxIndication | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00093 |
-| Dcm_CopyTxData | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00092 |
-| Dcm_TpTxConfirmation | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00351 |
-| Dcm_ComM_NoComModeEntered | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00356 |
-| Dcm_ComM_SilentComModeEntered | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00358 |
-| Dcm_ComM_FullComModeEntered | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00360 |
-| Dcm_MainFunction | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00053 |
-| Mandatory interfaces | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91001 |
-| Optional interfaces | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91002 |
-| Dcm_SecLevelType | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00977 |
-| Dcm_SesCtrlType | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00978 |
-| DCMServices | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_00698、01030 |
-| Dcm_DiagnosticSessionControlModeSwitchInterface | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91020、91033 |
-| Dcm_EcuResetModeSwitchInterface | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91022、91034 |
-| Dcm_ModeRapidPowerShutDownModeSwitchInterface | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91024、91035 |
-| Dcm_ControlDTCSettingModeSwitchInterface | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91028、91037 |
-| Dcm_SecurityAccessModeSwitchInterface | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91032、91039 |
-| Dcm_AuthenticationStateMSI | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91075 |
-| DcmDiagnosticSessionControl | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91019 |
-| DcmEcuReset | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91021 |
-| DcmModeRapidPowerShutDown | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91023 |
-| DcmControlDTCSetting | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91027 |
-| DcmSecurityAccess | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91031 |
-| DcmAuthenticationState | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91067 |
-| Dcm_AuthenticationStateModeSwitchInterface | 已核对（Dcm.c、Dcm.h、Rte_Dcm_Type.h 与 ecu_config／artifacts 生成样本；详见概览与服务篇）：SWS_Dcm_91074 |
+| Imported types | 已核对（源码：Dcm.h 引入 Std_Types.h／ComStack_Types.h，Dcm.c 不使用所列未选功能的类型）：SWS_Dcm_00333 |
+| Dcm_ConfigType | 已核对（Dcm.h 声明 Dcm_ConfigType，生成的 dcm_config 经 Dcm_Init 传入）：SWS_Dcm_00982 |
+| Dcm_GetSecurityLevel | 已核对（恒回 E_OK；dcm_contract.c main 断言 Init 前出参保持、Init 后为 0）：SWS_Dcm_00338 |
+| Dcm_GetSesCtrlType | 已核对（恒回 E_OK；dcm_contract.c main／sessions_and_keepalive 断言会话值）：SWS_Dcm_00339 |
+| Dcm_StartOfReception | 已核对（dcm_contract.c admission_and_copy：OK／E_NOT_OK／E_OVFL 与失败时出参保持）：SWS_Dcm_00094 |
+| Dcm_CopyRxData | 已核对（dcm_contract.c admission_and_copy：SduLength 0 查询余量，失败时出参保持）：SWS_Dcm_00556 |
+| Dcm_TpRxIndication | 已核对（dcm_contract.c admission_and_copy：E_NOT_OK 丢弃，E_OK 发布请求）：SWS_Dcm_00093 |
+| Dcm_CopyTxData | 已核对（diagnostic_contract.c：CONFPENDING／DATACONF／DATARETRY 与 E_BUSY）：SWS_Dcm_00092 |
+| Dcm_TpTxConfirmation | 已核对（dcm_contract.c sessions_and_keepalive：E_OK 提交会话，E_NOT_OK 丢弃）：SWS_Dcm_00351 |
+| Dcm_ComM_NoComModeEntered | 已核对（dcm_contract.c gates_and_reentrancy：NoCom 拒收，未配置通道被忽略）：SWS_Dcm_00356 |
+| Dcm_ComM_SilentComModeEntered | 已核对（dcm_contract.c gates_and_reentrancy：Silent 可收不发）：SWS_Dcm_00358 |
+| Dcm_ComM_FullComModeEntered | 已核对（dcm_contract.c gates_and_reentrancy：Full 放行发送）：SWS_Dcm_00360 |
+| Dcm_MainFunction | 已核对（SchM_Dcm.h 声明，生成的 Ecu_RuntimeConfig.c 按配置周期调用）：SWS_Dcm_00053 |
+| Mandatory interfaces | 已核对（源码：Dcm.c 调用 ComM_DCM_ActiveDiagnostic／InactiveDiagnostic 与 PduR_DcmTransmit）：SWS_Dcm_91001 |
+| Optional interfaces | 已核对（源码：Dcm.c 不调用任何可选接口，它们只服务于未选功能）：SWS_Dcm_91002 |
+| Dcm_SecLevelType | 已核对（Rte_Dcm_Type.h：uint8，DCM_SEC_LEV_LOCKED 为 0）：SWS_Dcm_00977 |
+| Dcm_SesCtrlType | 已核对（Rte_Dcm_Type.h：uint8，DCM_*_SESSION 取值 1–4）：SWS_Dcm_00978 |
+| DCMServices | 差距 #187：SWS_Dcm_00698、01030 |
+| Dcm_DiagnosticSessionControlModeSwitchInterface | 已核对（composition.rs 校验接口与 P-port；diagnostics.rs dcm_service_mode_source_requires_the_fixed_standard_contract 变异拒绝）：SWS_Dcm_91020、91033 |
+| Dcm_EcuResetModeSwitchInterface | 已核对（源码：composition.rs 按 DCM_MODES 逐项校验接口与 P-port，计划要求六个端口齐全）：SWS_Dcm_91022、91034 |
+| Dcm_ModeRapidPowerShutDownModeSwitchInterface | 已核对（源码：composition.rs 按 DCM_MODES 逐项校验接口与 P-port）：SWS_Dcm_91024、91035 |
+| Dcm_ControlDTCSettingModeSwitchInterface | 已核对（源码：composition.rs 按 DCM_MODES 逐项校验接口与 P-port）：SWS_Dcm_91028、91037 |
+| Dcm_SecurityAccessModeSwitchInterface | 已核对（composition.rs 校验接口与 P-port；diagnostics.rs 删除端口得 SERVICE_TYPE_CONFLICT）：SWS_Dcm_91032、91039 |
+| Dcm_AuthenticationStateMSI | 已核对（diagnostics.rs：端口名随连接名生成并经 SchM 符号核对）：SWS_Dcm_91075 |
+| DcmDiagnosticSessionControl | 已核对（Rte_Dcm_Type.h：模式 0–3、转换值 255、初始 DEFAULT；diagnostics.rs 变异拒绝）：SWS_Dcm_91019 |
+| DcmEcuReset | 已核对（Rte_Dcm_Type.h：七个模式 0–6，转换值 255）：SWS_Dcm_91021 |
+| DcmModeRapidPowerShutDown | 已核对（Rte_Dcm_Type.h：模式 0–1，转换值 255）：SWS_Dcm_91023 |
+| DcmControlDTCSetting | 已核对（Rte_Dcm_Type.h：模式 0–1，转换值 255）：SWS_Dcm_91027 |
+| DcmSecurityAccess | 已核对（Rte_Dcm_Type.h：仅 DCM_SEC_LEV_LOCKED，其余模式随 SecurityRow 增加）：SWS_Dcm_91031 |
+| DcmAuthenticationState | 已核对（Rte_Dcm_Type.h：每连接两态与转换值 255；diagnostics.rs 变异拒绝）：SWS_Dcm_91067 |
+| Dcm_AuthenticationStateModeSwitchInterface | 已核对（composition.rs 按连接名生成接口；diagnostics.rs 校验）：SWS_Dcm_91074 |
 | 周期／RoE status | 不适用（配置：ECUC_Dcm_00735）：SWS_Dcm_00976 |
 | CommunicationControl 类型 | 不适用（配置：ECUC_Dcm_00900）：SWS_Dcm_00981 |
 | ReadMemory 类型 | 不适用（配置：ECUC_Dcm_00735）：SWS_Dcm_00985 |
