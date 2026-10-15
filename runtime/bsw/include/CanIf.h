@@ -5,10 +5,10 @@
 #include "ComStack_Types.h"
 #include "Can_GeneralTypes.h"
 /* Runtime errors reported to Det (SWS_CANIF_91007). */
-#define CANIF_E_INVALID_DATA_LENGTH   61u
-#define CANIF_E_DATA_LENGTH_MISMATCH  62u
-#define CANIF_E_STOPPED               70u
-#define CANIF_E_TXPDU_LENGTH_EXCEEDED 90u
+#define CANIF_E_INVALID_DATA_LENGTH   61u /**< Received DLC fails the data length check. */
+#define CANIF_E_DATA_LENGTH_MISMATCH  62u /**< Transmit length exceeds the CAN frame. */
+#define CANIF_E_STOPPED               70u /**< Transmit requested on an offline PDU channel. */
+#define CANIF_E_TXPDU_LENGTH_EXCEEDED 90u /**< Transmit length exceeds the configured PDU. */
 typedef enum {
     CANIF_OFFLINE = 0,
     CANIF_TX_OFFLINE = 1,

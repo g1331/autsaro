@@ -1149,7 +1149,7 @@
     },
     {
       "path": "runtime/bsw/include/CanIf.h",
-      "sha256": "12a2109edead3cebca472c16b3f98de0c57ac8c10d84323c437ae93a34e955f9",
+      "sha256": "dc01316d3529af4492bbe1bcb8abb1685e8ce7033959ab118613af717dadb0fd",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1821,7 +1821,7 @@
     },
     {
       "path": "runtime/bsw/include/Can_GeneralTypes.h",
-      "sha256": "eaf0dcd6455b86a165b9c9d5833b8a71741214f996b021622741e2d229ed3214",
+      "sha256": "8d3d318ffee76e036ee20ca9e269a3916d07d53387df68748447314161c94215",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1933,7 +1933,7 @@
     },
     {
       "path": "runtime/bsw/include/Can.h",
-      "sha256": "bf9d7cb2ed706d45687179448a8de63dab3d6ecb9cd72475340e07838bc7fca0",
+      "sha256": "9c84dba473ae820651c4db5b7b6c3b43f5f82ed534b60cd8bf9ee8a24b843e59",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

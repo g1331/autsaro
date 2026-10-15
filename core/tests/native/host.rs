@@ -219,10 +219,6 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
         ),
         ("#include \"Can.h\"\n#include \"Can_Host.h\"\n", true),
         ("#include \"Can_Host.h\"\n#include \"Can.h\"\n", true),
-        (
-            "#define CAN_VERSION_INFO_API 1\n#include \"Can.h\"\n",
-            false,
-        ),
     ]
     .into_iter()
     .enumerate()

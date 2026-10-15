@@ -49,5 +49,5 @@
 
 ## 已知差距
 
-- **Can published information**：项目尚无已分配的 AUTOSAR vendor ID，也无经核对的 R24-11 数字发布宏映射；`CAN_VERSION_INFO_API` 默认关闭，启用即拒绝。取得正式身份后才能实现 GetVersionInfo 与外部版本交叉检查（#59，见 [runtime/README.md](../../runtime/README.md)）。
+- **Can published information**：项目尚无已分配的 AUTOSAR vendor ID，也无经核对的 R24-11 数字发布宏映射；`CanVersionInfoApi` 只接受 false，`Can.h` 不声明 `Can_GetVersionInfo`。取得正式身份后才能实现 GetVersionInfo 与外部版本交叉检查（#59，见 [runtime/README.md](../../runtime/README.md)）。
 - **控制器硬件**：寄存器初始化、硬件睡眠、有界等待与超时、错误计数器和位时序只能在真实控制器上验证，由 #170 交给 R10。

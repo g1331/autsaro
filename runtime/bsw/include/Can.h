@@ -5,18 +5,12 @@
 #include "Can_CfgTypes.h"
 #include "Std_Types.h"
 
-/* Software identity follows core/Cargo.toml; assigned vendor identity is absent. */
+/* Published information (SWS_BSW_00059): the software version follows core/Cargo.toml; the
+ * vendor ID and AUTOSAR release macros are absent until an identity is assigned (#59). */
 #define CAN_MODULE_ID        80u
 #define CAN_SW_MAJOR_VERSION 0u
 #define CAN_SW_MINOR_VERSION 1u
 #define CAN_SW_PATCH_VERSION 0u
-
-#ifndef CAN_VERSION_INFO_API
-#define CAN_VERSION_INFO_API STD_OFF
-#endif
-#if CAN_VERSION_INFO_API != STD_OFF
-#error "Can_GetVersionInfo is unsupported: no assigned vendor identity"
-#endif
 
 #define CAN_START_SEC_CODE
 #include "Can_MemMap.h"

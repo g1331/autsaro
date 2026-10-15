@@ -41,9 +41,9 @@ typedef enum {
     CAN_ERRORSTATE_BUSOFF = 2   /**< Controller does not participate on the bus. */
 } Can_ErrorStateType;
 
-/** SWS_Can_00039 */
+/** SWS_Can_00039: Can_Write found the transmit object occupied. */
 #define CAN_BUSY 0x02u
-/** SWS_Can_91020 */
+/** SWS_Can_91020: an already received frame was overwritten before CanIf took it. */
 #define CAN_E_DATALOST 0x01u
 
 #endif

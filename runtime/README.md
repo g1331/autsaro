@@ -58,7 +58,7 @@ ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 res
 
 `Can.c` 唯一管理发送、接收快照和生命周期，`Can_Host.c` 只转发主机操作；CanIf 与直接 mode／诊断依赖共享递归 admission 锁；该锁先于 driver 锁获取，覆盖回调快照、分发、取消及消费者初始化。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后执行同一接收处理）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
 
-`CAN_VERSION_INFO_API` 默认 OFF；配置启用或直接定义为非零时拒绝生成／编译。`CAN_MODULE_ID` 为 80，软件版本与项目 `0.1.0` 一致。项目尚无已分配的 AUTOSAR vendor ID，也无经过确认的 R24-11 数字发布宏映射，因此不编造这两项 published identity；取得并核对后才能实现适用的 GetVersionInfo 和外部版本交叉检查。这个缺口由现有质量规格承接，退出条件是正式身份、版本依据和双目标兼容测试成立。
+`CanVersionInfoApi` 缺失（`MULTIPLICITY`）或为 true（`CAN_FEATURE_UNSUPPORTED`）时在生成前拒绝，`Can.h` 不声明 `Can_GetVersionInfo`，也不提供版本信息开关宏。`CAN_MODULE_ID` 为 80，软件版本与项目 `0.1.0` 一致。项目尚无已分配的 AUTOSAR vendor ID，也无经过确认的 R24-11 数字发布宏映射，因此不编造这两项 published identity；取得并核对后才能实现适用的 GetVersionInfo 和外部版本交叉检查。这个缺口由现有质量规格承接，退出条件是正式身份、版本依据和双目标兼容测试成立。
 
 ## 许可证
 
