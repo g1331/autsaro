@@ -1,7 +1,5 @@
 # Changelog
 
-[简体中文](CHANGELOG.zh-CN.md) · **English**
-
 ## Unreleased
 
 - The host OS no longer hangs or reports a false error when shutdown races a running task. A task that requested shutdown could be stopped by a task switch after it published the closing state but before it woke the shutdown controller, which then never ran and the process hung until its deadline; the controller is now woken first. A service such as `WaitEvent` that had already started when another context requested shutdown returned `E_OS_CALLEVEL`; it now stops the calling task or ISR the same way a service called after the request does. Native OS command failures in the test suites report the harness's stdout and stderr instead of log paths that are deleted with the workspace. Public interfaces and generated configuration are unchanged.
