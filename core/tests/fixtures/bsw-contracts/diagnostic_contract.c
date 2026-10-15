@@ -116,8 +116,8 @@ static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
 static const Dcm_ConfigType dcm = {
     17u, 18u, 7u, 0x1234u, read_did, 50u, 50u, 5000u, 20u, 256u, 81u, publish_authentication, 0u};
-static const CanTp_ConfigType tp = {11u, 12u, 31u, 41u, 256u, 5u,  5u, 5u,
-                                    5u,  5u,  1u,  2u,  0u,   71u, 72u};
+static const CanTp_ConfigType tp = {11u, 12u, 31u, 41u, 256u, 5u, 5u, 5u,
+                                    5u,  5u,  5u,  1u,  2u, 0u,   71u, 72u};
 static void receive(const uint8 bytes[8]) {
     assert(Can_Inject(0x700u, 8u, bytes, 0u) == ECU_OK);
     Can_MainFunction_Read();
@@ -310,12 +310,15 @@ int main(void) {
     for (i = 0u; i < 5u; ++i) {
         CanTp_MainFunction();
     }
-    assert(transmit(12u, &info) == E_NOT_OK); /* N-PDU quarantined until real late confirmation. */
     tx_done(18u, E_OK);
-    flush();
-    assert(count == 3u);
+    /* The next response is accepted but its frame waits for the N-PDU's real late
+     * confirmation (SWS_CanTp_00075). */
     request_read();
     Dcm_MainFunction();
+    assert(count == 2u);
+    flush();
+    assert(count == 3u);
+    tick();
     flush();
     assert(count == 4u);
     /* Segmented request, complete reservation, FC then a CF. */
@@ -486,7 +489,8 @@ int main(void) {
         Dcm_MainFunction();
         flush();
     }
-    /* Peer STmin may exceed N_Cs: separation is respected before the copy timer. */
+    /* Peer STmin may exceed N_Cs: the first CF follows the FC at once, and STmin separates
+     * the next CF before the copy timer runs. */
     {
         const uint8 bytes[8] = {7u, 0x22u, 0x12u, 0x34u, 0x12u, 0x34u, 0x12u, 0x34u};
         const uint8 fc[8] = {0x30u, 0u, 10u, 0u, 0u, 0u, 0u, 0u};
@@ -502,15 +506,17 @@ int main(void) {
             receive(wt); /* Every incoming WAIT restarts N_Bs, independent of sent WFTmax2. */
         }
         receive(fc);
+        flush();
+        assert(output[count - 1u][0] == 0x21u);
         saved = count;
-        for (i = 0u; i < 9u; ++i) {
+        for (i = 0u; i < 10u; ++i) {
             CanTp_MainFunction();
             flush();
             assert(count == saved);
         }
         CanTp_MainFunction();
         flush();
-        assert(count == saved + 1u && output[count - 1u][0] == 0x21u);
+        assert(count == saved + 1u && output[count - 1u][0] == 0x22u);
         CanTp_Shutdown();
         Dcm_Init(&dcm);
         assert(authentication_mode == 0u);
@@ -697,7 +703,7 @@ int main(void) {
                 assert(count == saved); /* Outstanding FC owns the lower mailbox. */
                 flush(); /* Old real FC confirmation releases quarantine, never new Rx state. */
                 assert(count == saved + 1u && output[count - 1u][0] == 0x30u);
-                Dcm_MainFunction();
+                tick(); /* The accepted response waited for the N-PDU and goes now. */
             }
             flush();
             assert(output[count - 1u][0] == 7u && output[count - 1u][1] == 0x62u);

@@ -10,7 +10,6 @@
 #include "SchM_Can.h"
 #include "SchM_CanIf.h"
 #include "SchM_Dcm.h"
-#include "SchM_CanTp.h"
 #include "SchM_ComM.h"
 #include "SchM_BswM.h"
 #include "Ecu_HostBusSM.h"
@@ -272,7 +271,7 @@ static void cancel(void) {
         if (operation == 6u)
             SchM_Enter_Dcm_DCM_STATE();
         else if (operation == 7u)
-            SchM_Enter_CanTp_CANTP_STATE();
+            ; /* CanTp's area is strict (ADR 0018): a holder never calls CanIf. */
         else if (operation == 8u)
             SchM_Enter_ComM_COMM_STATE();
         else
@@ -281,7 +280,7 @@ static void cancel(void) {
         if (operation == 6u)
             SchM_Exit_Dcm_DCM_STATE();
         else if (operation == 7u)
-            SchM_Exit_CanTp_CANTP_STATE();
+            ;
         else if (operation == 8u)
             SchM_Exit_ComM_COMM_STATE();
         else
