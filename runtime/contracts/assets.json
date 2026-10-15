@@ -1107,7 +1107,7 @@
     },
     {
       "path": "runtime/bsw/include/BswM.h",
-      "sha256": "b58a0bfc687ea22dd57a76b07cba2ba07912c54dd1107fb1e0fe3e62fdb1ff90",
+      "sha256": "a8af1a09bd5d53dbf4a6f7ad2c6983af1eae79a57ade6a6bd5755325a55084fe",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1219,7 +1219,7 @@
     },
     {
       "path": "runtime/bsw/include/ComM.h",
-      "sha256": "22fac982c068303b79dbfb031044d1aa4918cfbb8c113df6745bf3103274d36d",
+      "sha256": "13556f724b1151f2f1ae9b8a33454db41b0823004bce9a822f68f32549ebb8e1",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1541,7 +1541,7 @@
     },
     {
       "path": "runtime/bsw/include/Rte_ComM_Type.h",
-      "sha256": "77a7d3b23bbe92b7bf4efda2e1749a7df033f38b9dec65b2d3bd774197229d64",
+      "sha256": "a0ed8e87ab0cc16c74a906a949d939055d1116a6c3bba7180fcb3c5670a24928",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1597,7 +1597,7 @@
     },
     {
       "path": "runtime/bsw/src/BswM.c",
-      "sha256": "bb58c73c5ca74c1c626458e21d420013af135dc37e384f97349e948ec76327a3",
+      "sha256": "733a72b3b762b075eaef796380e946ee999169b074724003a05b05c3cb6c1aba",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1653,7 +1653,7 @@
     },
     {
       "path": "runtime/bsw/src/ComM.c",
-      "sha256": "96cc9f90cb149fa02f388c0d5d3774beb2ca36126a0f27c9b977c403b94a5ac2",
+      "sha256": "adf6016520209e6dd0c1acf931929f1476e04447ea0b2ba4f78e2605a92b81d3",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

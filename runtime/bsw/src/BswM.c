@@ -37,6 +37,8 @@ BSWM_CODE void BswM_Deinit(void)
     postponed = 0u;
     SchM_Exit_BswM_BSWM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: standard main function (SWS_BswM_00053) that the selected
+ * all-IMMEDIATE profile does not schedule; see the BswM deviation record. */
 BSWM_CODE void BswM_MainFunction(void)
 {
     /* SWS_BswM_00075 evaluates rules with DEFERRED inputs here. The selected

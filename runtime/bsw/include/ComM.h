@@ -7,6 +7,8 @@
 #include "ComStack_Types.h"
 #include "Rte_ComM_Type.h"
 /** SWS_ComM_91027: Std_ReturnType extension of ComM. */
+/* MR12 RULE 2.5 VIOLATION: standard return codes (SWS_ComM_91027) that the selected profile
+ * never returns, except COMM_E_NO_PNC_ASSIGNED; see the ComM deviation record. */
 #define COMM_E_MODE_LIMITATION       2u /**< Request refused by mode inhibition. */
 #define COMM_E_MULTIPLE_PNC_ASSIGNED 3u /**< User belongs to more than one PNC. */
 #define COMM_E_NO_PNC_ASSIGNED       4u /**< User belongs to no PNC. */
@@ -22,7 +24,9 @@ typedef uint8 ComM_StateType;
 #define COMM_NO_COM_REQUEST_PENDING     1u /**< NO, waiting for CommunicationAllowed. */
 #define COMM_FULL_COM_NETWORK_REQUESTED 2u /**< FULL, requested or minimum duration running. */
 #define COMM_FULL_COM_READY_SLEEP       3u /**< FULL without demand; NM NONE stays here. */
-#define COMM_SILENT_COM                 4u /**< SILENT; unused by NM NONE. */
+/* MR12 RULE 2.5 VIOLATION: standard state (SWS_ComM_00674) that NM NONE never enters; see
+ * the ComM deviation record. */
+#define COMM_SILENT_COM 4u /**< SILENT; unused by NM NONE. */
 /** <Bus>SM_RequestComMode of the configured CDD bus state manager (SWS_ComM_00828). */
 typedef Std_ReturnType (*ComM_BusRequestType)(NetworkHandleType Channel, ComM_ModeType ComMode);
 /** <Bus>SM_GetCurrentComMode of the configured CDD bus state manager (SWS_ComM_00828). */

@@ -215,6 +215,8 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
         ComM_IssueBus();
     }
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00147) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE void ComM_DeInit(void)
 {
     const ComM_ConfigType *config = NULL_PTR;
@@ -237,6 +239,8 @@ COMM_CODE void ComM_DeInit(void)
         SchM_Exit_ComM_COMM_STATE();
     }
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00242) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -248,6 +252,8 @@ COMM_CODE Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status)
     }
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00619) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
                                                   ComM_InhibitionStatusType *Status)
 {
@@ -262,6 +268,8 @@ COMM_CODE Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00552) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusType Status)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -290,6 +298,8 @@ COMM_CODE Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_Mode
     ComM_IssueBus();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00079) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -303,6 +313,8 @@ COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00083) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -317,6 +329,8 @@ COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_M
     }
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_91002) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -331,6 +345,8 @@ COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User, Com
     SchM_Exit_ComM_COMM_STATE();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00085) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -353,6 +369,8 @@ COMM_CODE void ComM_CommunicationAllowed(NetworkHandleType Channel, boolean Allo
     SchM_Exit_ComM_COMM_STATE();
     ComM_IssueBus();
 }
+/* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00275) that no
+ * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE void ComM_EcuM_WakeUpIndication(NetworkHandleType Channel)
 {
     SchM_Enter_ComM_COMM_STATE();

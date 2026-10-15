@@ -5,8 +5,12 @@
 #define BSWM_H
 #include "ComM.h"
 /** SWS_BswM_00214: mode requested by a BswM user. */
+/* MR12 RULE 2.3 VIOLATION: standard type (SWS_BswM_00214) without the generic request that
+ * uses it; see the BswM deviation record. */
 typedef uint16 BswM_ModeType;
 /** SWS_BswM_00216: identity of a BswM user. */
+/* MR12 RULE 2.3 VIOLATION: standard type (SWS_BswM_00216) without the generic request that
+ * uses it; see the BswM deviation record. */
 typedef uint16 BswM_UserType;
 /** Generated action list of the three ComM rules: one user callout per indicated mode.
  * Returns E_NOT_OK for another channel or mode, otherwise the callout's result.

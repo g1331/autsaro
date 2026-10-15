@@ -174,7 +174,8 @@ int main(void) {
     bswm_main();
     assert(actions == 0u);
     assert(COMM_NO_COMMUNICATION == 0u && COMM_SILENT_COMMUNICATION == 1u &&
-           COMM_FULL_COMMUNICATION == 2u && COMM_NOT_USED_USER_ID == 65535u);
+           COMM_FULL_COMMUNICATION == 2u && COMM_FULL_COMMUNICATION_WITH_WAKEUP_REQUEST == 3u &&
+           COMM_SILENT_COM == 4u && COMM_NOT_USED_USER_ID == 65535u);
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_NOT_OK);
     assert(ComM_GetCurrentComMode(17u, &value) == E_NOT_OK && value == 99u);
@@ -429,6 +430,9 @@ int main(void) {
     bswm_main();
     assert(actions == saved);
     init(&comm);
+    assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
+    init(&comm); /* A restart enters NO and clears every user request (SWS_ComM_00582). */
+    assert(ComM_GetRequestedComMode(17u, &value) == E_OK && value == COMM_NO_COMMUNICATION);
     wake_up(99u);
     assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
     current(COMM_NO_COMMUNICATION);
