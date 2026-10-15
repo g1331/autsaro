@@ -13,32 +13,32 @@ typedef uint16 Can_HwHandleType;
 
 /** SWS_CAN_00496 */
 typedef struct {
-    Can_IdType CanId;
-    Can_HwHandleType Hoh;
-    uint8 ControllerId;
+    Can_IdType CanId;     /**< Received CAN identifier. */
+    Can_HwHandleType Hoh; /**< Receive hardware object handle. */
+    uint8 ControllerId;   /**< Abstract CanIf controller identifier. */
 } Can_HwType;
 
 /** SWS_Can_00415 */
 typedef struct {
-    PduIdType swPduHandle;
-    uint8 length;
-    Can_IdType id;
-    uint8 *sdu;
+    PduIdType swPduHandle; /**< Software PDU handle for confirmation routing. */
+    uint8 length;          /**< Number of valid payload bytes. */
+    Can_IdType id;         /**< Encoded CAN identifier. */
+    uint8 *sdu;            /**< Caller-owned payload buffer. */
 } Can_PduType;
 
 /** SWS_Can_91013 */
 typedef enum {
-    CAN_CS_UNINIT = 0x00,
-    CAN_CS_STARTED = 0x01,
-    CAN_CS_STOPPED = 0x02,
-    CAN_CS_SLEEP = 0x03
+    CAN_CS_UNINIT = 0x00,  /**< Driver is not initialized. */
+    CAN_CS_STARTED = 0x01, /**< Controller accepts frame traffic. */
+    CAN_CS_STOPPED = 0x02, /**< Controller is stopped. */
+    CAN_CS_SLEEP = 0x03    /**< Logical sleep state of this host controller. */
 } Can_ControllerStateType;
 
 /** SWS_Can_91003; the virtual controller never reports CAN_ERRORSTATE_PASSIVE. */
 typedef enum {
-    CAN_ERRORSTATE_ACTIVE = 0,
-    CAN_ERRORSTATE_PASSIVE = 1,
-    CAN_ERRORSTATE_BUSOFF = 2
+    CAN_ERRORSTATE_ACTIVE = 0,  /**< Controller can communicate normally. */
+    CAN_ERRORSTATE_PASSIVE = 1, /**< Controller does not send active error frames. */
+    CAN_ERRORSTATE_BUSOFF = 2   /**< Controller does not participate on the bus. */
 } Can_ErrorStateType;
 
 /** SWS_Can_00039 */

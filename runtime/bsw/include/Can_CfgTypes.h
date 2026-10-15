@@ -13,9 +13,8 @@ typedef EcuStatus (*Can_TxSinkType)(uint32 id, uint8 dlc, const uint8 data[8]);
 
 /** @brief Implementation-specific Can_Init data for the host target (SWS_Can_00413). */
 typedef struct {
-    /** Synchronous host sink for each accepted frame; NULL selects the linked queued adapter.
-     * Set by the generated host configuration, not by an ECUC parameter. */
-    Can_TxSinkType sink;
+    Can_TxSinkType sink; /**< Synchronous sink for each frame; NULL selects the linked queued
+                          * adapter. Set by the generated host configuration, no ECUC parameter. */
 } Can_ConfigType;
 
 #endif
