@@ -44,6 +44,8 @@ Review the entire diff before submitting, including new files and generated cont
 
 Add a `CHANGELOG.md` entry under `Unreleased` for every change visible to users or integrators: delivered C interfaces and ABI, configuration acceptance or rejection, generated output, tool and interface behavior. Refactoring, tests, CI and documentation get no entry. Write one line per change that states the effect and ends with the PR number, such as `(#166)`; details belong in the PR. Group entries under `Breaking`, `Added`, `Changed` and `Fixed`; a breaking or contract change states what integrators must change. At release, `Unreleased` becomes the version heading with its date. The changelog is maintained in English only.
 
+Use a dedicated branch for each Issue. A separate worktree is optional when the main checkout is available; use separate worktrees to isolate Issues developed in parallel.
+
 Use an isolated environment for real GUI acceptance without occupying a developer's active desktop. Work is tracked in GitHub Issues and Milestones; before opening an Issue or starting work, search existing Issues (including closed ones) and open PRs, and extend what already covers it instead of duplicating work; when a change also completes part of another Issue, comment there with the PR, and close it with `Closes #N` once it is fully done; see [docs/roadmap/](docs/roadmap/README.md) for direction and [docs/architecture/](docs/architecture/README.md) for design constraints.
 
 ## Interface text and languages
