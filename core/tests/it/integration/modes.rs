@@ -10,10 +10,8 @@ fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     assert_eq!(mode.main_symbol, "ComM_MainFunction_Host");
     assert_eq!((mode.period_ms, mode.minimum_full_ms), (1, 5));
     assert_eq!(mode.users.len(), 1);
-    assert_eq!(mode.ecu_group_classification, 3);
     assert_eq!(mode.users[0].handle, 0);
     assert_eq!(mode.include, "Ecu_HostBusSM.h");
-    assert_eq!(mode.initial_mode, 0);
     assert_eq!(
         mode.rules.iter().map(|rule| rule.mode).collect::<Vec<_>>(),
         [0, 1, 2]
@@ -51,7 +49,6 @@ fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     assert_eq!(mode.main_symbol, "ComM_MainFunction_Vehicle");
     assert_eq!(mode.channel_handle, 7);
     assert_eq!(mode.users[0].handle, 19);
-    assert_eq!(mode.ecu_group_classification, 1);
     assert!(normal_validation(&sources).diagnostics.is_empty());
 }
 

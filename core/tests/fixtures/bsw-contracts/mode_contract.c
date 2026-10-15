@@ -1,5 +1,7 @@
 /** Independent fixed R24-11 mode/demand oracle with actual CAN/COM chain.
- * Observers/configured user callouts never replace standard module functions.
+ * Observers/configured user callouts never replace standard module functions. The
+ * Dcm notifications ComM is configured with are observers here; ComM reaches BswM
+ * directly, so each actual mode reaches both exactly once.
  */
 #include "ComM.h"
 #include "ComM_BswM.h"
@@ -43,13 +45,20 @@ static void receive(CbkHandleIdType handle) {
     ++receptions;
 }
 static void timeout(CbkHandleIdType handle) { assert(handle == 17u); }
-static void indication(NetworkHandleType Channel, ComM_ModeType ComMode) {
+static ComM_ModeType last_action = 99u;
+/* Dcm_ComM_<Mode>ComModeEntered observers: BswM already arbitrated the same mode. */
+static void indication(uint8 NetworkId, ComM_ModeType ComMode)
+{
     ComM_ModeType actual = 99u;
-    assert(Channel == 7u && ComMode <= 2u);
-    assert(Ecu_HostBusSM_GetCurrentComMode(Channel, &actual) == E_OK && actual == ComMode);
+    assert(NetworkId == 7u && last_action == ComMode && action_depth == 0u);
+    assert(Ecu_HostBusSM_GetCurrentComMode(NetworkId, &actual) == E_OK && actual == ComMode);
     ++indications[ComMode];
 }
+static void no_entered(uint8 NetworkId) { indication(NetworkId, COMM_NO_COMMUNICATION); }
+static void silent_entered(uint8 NetworkId) { indication(NetworkId, COMM_SILENT_COMMUNICATION); }
+static void full_entered(uint8 NetworkId) { indication(NetworkId, COMM_FULL_COMMUNICATION); }
 static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode) {
+    last_action = Mode;
     ++action_depth;
     assert(action_depth == 1u); /* IMMEDIATE reentrant input is postponed, not recursive. */
     ++actions;
@@ -98,11 +107,17 @@ static const CanIf_ConfigType canif = {canif_rx,
                                        17u};
 static const Can_ConfigType can = {sink};
 static const ComM_UserHandleType users[] = {17u, 43u};
-static const ComM_ConfigType comm = {
-    7u,         users, 2u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode,
-    indication, 3u};
+static const ComM_ConfigType comm = {7u,
+                                     users,
+                                     2u,
+                                     3u,
+                                     Ecu_HostBusSM_RequestComMode,
+                                     Ecu_HostBusSM_GetCurrentComMode,
+                                     no_entered,
+                                     silent_entered,
+                                     full_entered};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 9u};
-static const BswM_ConfigType bswm = {7u, COMM_NO_COMMUNICATION, action};
+static const BswM_ConfigType bswm = {7u, action};
 static void current(ComM_ModeType expected) {
     ComM_ModeType value = 99u;
     assert(ComM_GetCurrentComMode(17u, &value) == E_OK && value == expected);
@@ -321,11 +336,16 @@ int main(void) {
     assert(indications[0] == saved); /* No completion before real polling. */
     assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
     Can_MainFunction_Wakeup();
+    assert(indications[0] == saved + 1u && last_action == COMM_NO_COMMUNICATION);
+    /* The actual NO reaches BswM and Dcm, but NM NONE has no bus-driven channel
+     * transition (Figure 7.7): READY_SLEEP stays, and no FULL is re-requested. */
     for (i = 0u; i < 10u; ++i) {
-        assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+        assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
         current(COMM_NO_COMMUNICATION);
         buffer();
     }
+    ComM_DeInit(); /* Not in NO mode (SWS_ComM_00794). */
+    assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
     /* Failed FULL direction action cannot start stopped driver or fabricate FULL. */
     bswm_mode(7u, COMM_FULL_COMMUNICATION);
     assert(action_result == E_NOT_OK);
@@ -336,8 +356,11 @@ int main(void) {
     assert(Can_Inject(0x123u, 4u, bytes, 0u) == ECU_OK && receptions == 2u);
     /* SILENT keeps the channel TX_OFFLINE: no CANIF_E_STOPPED (Verifies: SWS_CANIF_00382). */
     assert(CanIf_Transmit(51u, &info) == E_NOT_OK && errors == 0u);
+    assert(indications[1] == 1u && last_action == COMM_SILENT_COMMUNICATION);
+    /* READY_SLEEP -> NETWORK_REQUESTED stays in FULL: no new bus request. */
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
-    current(COMM_FULL_COMMUNICATION);
+    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+    current(COMM_SILENT_COMMUNICATION);
     saved = actions;
     bswm_mode(99u, COMM_NO_COMMUNICATION);
     bswm_mode(7u, 3u);
@@ -387,6 +410,10 @@ int main(void) {
     assert(request(17u, COMM_NO_COMMUNICATION) == E_OK);
     assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
     Can_MainFunction_Wakeup();
+    current(COMM_NO_COMMUNICATION);
+    ComM_DeInit(); /* Actual NO, but the channel is still in FULL. */
+    assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
+    init(&comm); /* Only a restart returns NM NONE to NO. */
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_NOT_OK);
@@ -453,6 +480,7 @@ int main(void) {
     assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
     assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
     Can_MainFunction_Mode();
+    init(&comm);
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
     Ecu_HostBusSM_DeInit();

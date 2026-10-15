@@ -291,7 +291,7 @@ pub(super) fn files(
             component.header.trim_start_matches("include/")
         ));
     }
-    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\nstatic Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId,\n                                            uint8_t InstanceId,\n                                            uint8_t ApiId,\n                                            uint8_t ErrorId);\nstatic void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType mode);\n");
+    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\nstatic Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId,\n                                            uint8_t InstanceId,\n                                            uint8_t ApiId,\n                                            uint8_t ErrorId);\n");
     config_data(
         &mut config,
         "Ecu",
@@ -613,21 +613,22 @@ pub(super) fn files(
         "ComM",
         "static const ComM_ConfigType comm_config",
         &values(&format!(
-            "{}u, users, {}u, {}u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, Ecu_ComModeChanged, {}u",
+            "{}u, users, {}u, {}u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, {}",
             mode.channel_handle,
             mode.users.len(),
             periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
-            mode.ecu_group_classification
+            if transport.is_some() {
+                "Dcm_ComM_NoComModeEntered, Dcm_ComM_SilentComModeEntered, Dcm_ComM_FullComModeEntered"
+            } else {
+                "NULL_PTR, NULL_PTR, NULL_PTR"
+            }
         )),
     );
     config_data(
         &mut config,
         "BswM",
         "static const BswM_ConfigType bswm_config",
-        &values(&format!(
-            "{}u, {}u, Ecu_BswMAction",
-            mode.channel_handle, mode.initial_mode
-        )),
+        &values(&format!("{}u, Ecu_BswMAction", mode.channel_handle)),
     );
     for (symbol, scope, body) in [
         (&com.receive_main.symbol, "Com", "Ecu_ComMainFunctionRx();"),
@@ -653,11 +654,6 @@ pub(super) fn files(
         &values("NULL_PTR, 0u, det_runtime_callouts, 1u"),
     );
     config.push_str("#define RTE_Ecu_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\n");
-    config.push_str("static RTE_Ecu_CODE void Ecu_ComModeChanged(NetworkHandleType channel, ComM_ModeType current)\n{\n    BswM_ComM_CurrentMode(channel, current);\n");
-    if transport.is_some() {
-        config.push_str("    if (current == COMM_FULL_COMMUNICATION) {\n        Dcm_ComM_FullComModeEntered(channel);\n    } else if (current == COMM_SILENT_COMMUNICATION) {\n        Dcm_ComM_SilentComModeEntered(channel);\n    } else {\n        Dcm_ComM_NoComModeEntered(channel);\n    }\n");
-    }
-    config.push_str("}\n");
     // ECUC_BswM_00843: parameters are fixed by the configured complete call.
     config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,\n                                                  ComM_ModeType requested)\n{\n");
     config.push_str(&format!(

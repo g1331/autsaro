@@ -116,6 +116,9 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
         command.arg("-I").arg(scratch);
         command.arg(root.join("runtime/host/src/SchM_Diagnostic_Host.c"));
     }
+    if matches!(module, "ComM" | "BswM") {
+        command.arg(root.join("runtime/host/src/SchM_Mode_Host.c"));
+    }
     let output = command
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .args(flags)
@@ -177,6 +180,41 @@ fn com_notifications_and_transmissions_complete_once_while_another_waits_outside
     }
     let result = run_owned(executable, &scratch.0, logs);
     assert!(result.success(), "{result:?}");
+}
+
+/// Runs a strict consumer's window oracle under the owned-execution harness.
+fn run_window(module: &str, fixture: &str, wrap: &str) {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(&scratch.0, module, fixture, &[wrap]);
+    let logs = scratch.0.join("execution");
+    std::fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let result = run_owned(executable, &scratch.0, logs);
+    assert!(result.success(), "{result:?}");
+}
+
+/// ComM leaves COMM_STATE before the bus state manager, BswM and Dcm (ADR 0018).
+#[test]
+fn comm_bus_requests_and_mode_publications_stay_ordered_while_another_waits_outside_the_area() {
+    run_window(
+        "ComM",
+        "comm_parallel.c",
+        "-Wl,--wrap=SchM_Exit_ComM_COMM_STATE",
+    );
+}
+
+/// BswM runs its action outside BSWM_STATE and postpones concurrent input (ADR 0018).
+#[test]
+fn bswm_actions_run_once_in_order_while_another_waits_outside_the_area() {
+    run_window(
+        "BswM",
+        "bswm_parallel.c",
+        "-Wl,--wrap=SchM_Exit_BswM_BSWM_STATE",
+    );
 }
 
 /// Headers a delivered mainline ECU generates for its BSW (`Ecu_Config.h`,
@@ -458,6 +496,29 @@ fn routing_keeps_direction_and_module_identity_for_equal_handles() {
 fn routing_requests_complete_once_while_another_waits_outside_the_area() {
     let scratch = Scratch::new();
     let executable = chain_consumer(&scratch.0, "routing_parallel.c", &[]);
+    let logs = scratch.0.join("execution");
+    std::fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let result = run_owned(executable, &scratch.0, logs);
+    assert!(result.success(), "{result:?}");
+}
+
+/// The host bus state manager calls CanIf and ComM outside its own area (ADR 0018).
+#[test]
+fn bus_state_manager_registers_transitions_and_publishes_in_order_outside_its_area() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(
+        &scratch.0,
+        "bussm_parallel.c",
+        &[
+            "-Wl,--wrap=Can_HostAreaExit",
+            "-Wl,--wrap=CanIf_SetControllerMode",
+        ],
+    );
     let logs = scratch.0.join("execution");
     std::fs::create_dir(&logs).unwrap();
     #[cfg(unix)]
