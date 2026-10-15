@@ -16,11 +16,11 @@ typedef char states_are_standard[((CAN_CS_UNINIT == 0) && (CAN_CS_STARTED == 1) 
                                   (CAN_CS_STOPPED == 2) && (CAN_CS_SLEEP == 3))
                                      ? 1
                                      : -1];
-typedef char error_states_are_standard[((CAN_ERRORSTATE_ACTIVE == 0) &&
-                                        (CAN_ERRORSTATE_PASSIVE == 1) &&
-                                        (CAN_ERRORSTATE_BUSOFF == 2))
-                                           ? 1
-                                           : -1];
+typedef char
+    error_states_are_standard[((CAN_ERRORSTATE_ACTIVE == 0) && (CAN_ERRORSTATE_PASSIVE == 1) &&
+                               (CAN_ERRORSTATE_BUSOFF == 2))
+                                  ? 1
+                                  : -1];
 typedef char codes_are_standard[((CAN_BUSY == 2u) && (CAN_E_DATALOST == 1u)) ? 1 : -1];
 static unsigned frames;
 static uint32 frame_id;
@@ -39,59 +39,70 @@ static uint8 received_length;
 static uint8 received[8];
 static unsigned lost;
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     uint8 i;
     frame_id = id;
     frame_length = length;
-    for (i = 0u; i < 8u; ++i)
+    for (i = 0u; i < 8u; ++i) {
         frame_data[i] = data[i];
+    }
     ++frames;
     return ECU_OK;
 }
 /* Verifies: SWS_Can_00234 */
 void __wrap_CanIf_ControllerModeIndication(uint8 ControllerId,
-                                           Can_ControllerStateType ControllerMode) {
+                                           Can_ControllerStateType ControllerMode)
+{
     mode_controller = ControllerId;
     last_mode = ControllerMode;
     ++modes;
 }
-void __wrap_CanIf_ControllerBusOff(uint8 ControllerId) {
+void __wrap_CanIf_ControllerBusOff(uint8 ControllerId)
+{
     Can_ControllerStateType actual = CAN_CS_STARTED;
     /* STOPPED is reached before the indication (SWS_Can_00020). */
     assert(Can_GetControllerMode(3u, &actual) == E_OK && actual == CAN_CS_STOPPED);
     busoff_controller = ControllerId;
     ++busoffs;
 }
-void __wrap_CanIf_TxConfirmation(PduIdType CanTxPduId) {
+void __wrap_CanIf_TxConfirmation(PduIdType CanTxPduId)
+{
     confirmed = CanTxPduId;
     ++confirmations;
 }
-void __wrap_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr) {
+void __wrap_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr)
+{
     uint8 i;
     assert(Mailbox != NULL_PTR && PduInfoPtr != NULL_PTR && PduInfoPtr->MetaDataPtr == NULL_PTR);
     mailbox = *Mailbox;
     received_length = (uint8)PduInfoPtr->SduLength;
-    for (i = 0u; i < received_length; ++i)
+    for (i = 0u; i < received_length; ++i) {
         received[i] = PduInfoPtr->SduDataPtr[i];
+    }
     ++receptions;
 }
-static Std_ReturnType report_runtime(uint16 module, uint8 instance, uint8 api, uint8 error) {
+static Std_ReturnType report_runtime(uint16 module, uint8 instance, uint8 api, uint8 error)
+{
     assert(module == CAN_MODULE_ID && instance == 0u && api == 0x08u && error == CAN_E_DATALOST);
     ++lost;
     return E_OK;
 }
 static const Can_ConfigType can = {sink};
-static Can_ControllerStateType mode_of(void) {
+static Can_ControllerStateType mode_of(void)
+{
     Can_ControllerStateType state = CAN_CS_UNINIT;
     assert(Can_GetControllerMode(3u, &state) == E_OK);
     return state;
 }
-static void polled_mode(Can_ControllerStateType expected) {
+static void polled_mode(Can_ControllerStateType expected)
+{
     const unsigned before = modes;
     Can_MainFunction_Mode();
     assert(modes == before + 1u && mode_controller == 5u && last_mode == expected);
 }
-int main(void) {
+int main(void)
+{
     /* Standard signatures (Verifies: SWS_Can_00223, SWS_Can_91002, SWS_Can_00230); input
      * pointers are const (Verifies[Can]: SWS_BSW_00186). */
     void (*init)(const Can_ConfigType *) = Can_Init;
@@ -109,8 +120,10 @@ int main(void) {
     Std_ReturnType (*write)(Can_HwHandleType, const Can_PduType *) = Can_Write;
     /* Verifies: SWS_Can_00225, SWS_Can_00226, SWS_Can_00227, SWS_Can_00228 */
     /* Verifies: SWS_Can_00368 */
-    void (*main_functions[])(void) = {Can_MainFunction_Write, Can_MainFunction_Read,
-                                      Can_MainFunction_BusOff, Can_MainFunction_Wakeup,
+    void (*main_functions[])(void) = {Can_MainFunction_Write,
+                                      Can_MainFunction_Read,
+                                      Can_MainFunction_BusOff,
+                                      Can_MainFunction_Wakeup,
                                       Can_MainFunction_Mode};
     static const Det_ErrorHookType callouts[] = {report_runtime};
     static const Det_ConfigType det = {NULL_PTR, 0u, callouts, 1u};
@@ -128,8 +141,9 @@ int main(void) {
     /* Scheduled functions of the uninitialized driver return without action
      * (Verifies[Can]: SWS_BSW_00037). */
     assert(Can_Inject(0x321u, 1u, incoming, 0u) == ECU_ERR_CONTROLLER);
-    for (i = 0u; i < 5u; ++i)
+    for (i = 0u; i < 5u; ++i) {
         main_functions[i]();
+    }
     assert(modes == 0u && busoffs == 0u && confirmations == 0u && receptions == 0u && lost == 0u);
     assert(set_mode(3u, CAN_CS_STARTED) == E_NOT_OK);
     assert(write(1u, &pdu) == E_NOT_OK);
@@ -188,8 +202,9 @@ int main(void) {
     pdu.swPduHandle = 19u;
     assert(write(1u, &pdu) == CAN_BUSY);
     assert(Can_HostFlush() == ECU_OK && frames == 1u && frame_id == 0x123u && frame_length == 8u);
-    for (i = 0u; i < 8u; ++i)
+    for (i = 0u; i < 8u; ++i) {
         assert(frame_data[i] == (uint8)(i + 1u));
+    }
     /* Verifies: SWS_Can_00276, SWS_Can_00016, SWS_Can_00031 */
     assert(confirmations == 0u);
     Can_MainFunction_Write();
@@ -209,8 +224,9 @@ int main(void) {
     Can_MainFunction_Read();
     assert(receptions == 1u && mailbox.CanId == 0x321u && mailbox.Hoh == 0u);
     assert(mailbox.ControllerId == 5u && received_length == 8u);
-    for (i = 0u; i < 8u; ++i)
+    for (i = 0u; i < 8u; ++i) {
         assert(received[i] == incoming[i]);
+    }
     Can_MainFunction_Read();
     assert(receptions == 1u);
     /* An overrun of an accepted frame is a uint8 runtime error reported to Det
