@@ -6,9 +6,10 @@
 
 | 约束 | 依据 | 要点 |
 | --- | --- | --- |
-| MISRA C:2012 修订基线 | [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)、[misra-c2012 指导](../../.agents/skills/misra-c2012/SKILL.md) | C99；已批准的偏离记录在对应模块篇（目前有 [PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7，[Com](../standards/com.md#misra-偏离) 的 Rule 8.7 与 2.5）；`c-check` 的用法见[生成 C 的静态检查](testing/generated-c.md) |
+| MISRA C:2012 修订基线 | [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)、[misra-c2012 指导](../../.agents/skills/misra-c2012/SKILL.md) | C99；偏离见下文 [MISRA 偏离注释](#misra-偏离注释)；`c-check` 的用法见[生成 C 的静态检查](testing/generated-c.md) |
 | BSW 命名 | SWS BSWGeneral R24-11 | API `<Mip>_<Sn>`（`SRS_BSW_00310`）；主函数 `<Mip>_MainFunction[<Sd>]`（`SWS_BSW_00153`）；类型 `<Ma>_<Tn>Type`，平台基本类型除外（`SWS_BSW_00146`）；宏、枚举字面值与状态值 `<MIP>_<SN>`，全大写，`E_OK`／`E_NOT_OK` 除外（`SWS_BSW_00124`）；错误值 `<MIP>_E_<EN>`（`SWS_BSW_00125`）；全局变量 `<Mip>_<Vn>`（`SWS_BSW_00130`），只读的加 `const`（`SWS_BSW_00131`） |
 | BSW 文件 | SWS BSWGeneral R24-11 | 文件名 `<Mip>[_<Ie>]*.*`（`SWS_BSW_00103`）；区分大小写，且不能只靠大小写区分（`SWS_BSW_00170`／`00171`）；实现源包含 `<Mip>_MemMap.h`（`SWS_BSW_00006`）；只引入需要的头、只导出其他模块需要的内容（`SWS_BSW_00104`／`00105`）；全局变量定义在实现源中（`SWS_BSW_00129`） |
+| 数据类型 | `SWS_BSW_00120`、MISRA Dir 4.6 | 不用 C 原生类型（`int`、`unsigned`、`char` 等），用 `Platform_Types.h` 的 AUTOSAR 类型（`uint8`、`sint16`、`boolean` 等），经 `Std_Types.h` 引入；`Platform_Types.h` 自身的定义除外 |
 | 编译开关 | `SWS_BSW_00123` | 与定义值比较（`#if (X == STD_ON)`），不用 `#ifdef` 判断开关 |
 | 独占区 | [ADR 0018](../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md) | 模块只进入自己的区；持区期间不调用其他模块、回调或平台 API；区不嵌套 |
 | 格式 | `.clang-format`，规则见 [#129](https://github.com/g1331/autsaro/issues/129#issuecomment-6160383270) | 生成 C 由 emitter 直接写成同一排版（[ADR 0014](../adr/0014-emitter-rules.md)） |
