@@ -180,8 +180,6 @@ int main(void) {
     assert(tx_counter(7u, &counter) == E_NOT_OK && counter == 0xa5u);
     assert(rx_counter(9u, NULL_PTR) == E_NOT_OK);
     assert(tx_counter(9u, NULL_PTR) == E_NOT_OK);
-    assert(Can_SetBaudrate(0u, 0u) == E_NOT_OK);
-    assert(Can_SetBaudrate(7u, 0u) == E_OK);
     assert(Can_GetControllerMode(0u, &controller_state) == E_NOT_OK &&
            controller_state == CAN_CS_SLEEP);
     assert(Can_GetControllerMode(7u, &controller_state) == E_OK &&

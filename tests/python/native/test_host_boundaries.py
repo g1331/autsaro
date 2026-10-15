@@ -30,7 +30,7 @@ class HostBoundaryTests(unittest.TestCase):
             "extern const EcuPolicyConfig Ecu_Policy;\n#endif\n", encoding="utf-8")
         (generated / "Ecu_Execution.h").write_text(
             '#ifndef ECU_EXECUTION_H\n#define ECU_EXECUTION_H\n#include "Ecu_Config.h"\n#include "Can_Host.h"\n'
-            "EcuStatus Ecu_ExecutionTransmit(CanTxSink sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\n"
+            "EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\n"
             "uint64_t Ecu_ExecutionNow(void);\n#endif\n", encoding="utf-8")
         cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic", "-D_XOPEN_SOURCE=700",
                      "-I" + str(ROOT / "runtime/bsw/src"), "-I" + str(ROOT / "runtime/bsw/include"),

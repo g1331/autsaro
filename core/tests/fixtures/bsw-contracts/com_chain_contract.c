@@ -228,7 +228,8 @@ int main(void) {
     Can_SetMode(CAN_BUS_OFF);
     assert(bus_offs == 1u && failures == 2u);
     assert(CanIf_GetControllerMode(0u, &state) == E_OK && state == CAN_CS_STOPPED);
-    assert(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_NOT_OK);
+    /* The driver state machine loops STOPPED to STOPPED; nothing is left to cancel. */
+    assert(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_OK);
     assert(failures == 2u);
     Can_SetMode(CAN_BUS_OFF);
     CanIf_TxConfirmation(51u);

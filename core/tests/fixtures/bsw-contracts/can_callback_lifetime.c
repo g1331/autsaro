@@ -1,7 +1,8 @@
 /** Deterministic window oracle (ADR 0018); real driver, CanIf, routing and SchM.
  * The dispatcher stops between two modules: after the driver left its area and before
  * CanIf, after the driver returned to CanIf, or around CanIf's Can_Write. A contender
- * then completes without touching any held lock, and every request keeps one result. */
+ * then completes without touching any held lock, and every request keeps one result.
+ * The Can area protects only module data (Verifies[Can]: SWS_BSW_00134). */
 #include "Can.h"
 #include "Can_Host.h"
 #include "CanIf.h"
