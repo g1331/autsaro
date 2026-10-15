@@ -52,7 +52,7 @@ ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 res
 
 ## CAN 驱动边界
 
-标准调用方使用 `#include "standard/Can.h"`；主机输出、状态注入和接收注入显式使用 `Can_Host.h`。`Can_CfgTypes.h` 的单 sink 配置是本目标的硬件专用配置，标准允许目标自定布局。Id 保持 32 位、HOH 保持 16 位，PDU 句柄／长度使用 `ComStack_Types.h`，接纳零长度 PDU。`Can_Init`、`Can_SetControllerMode`、`Can_GetControllerMode` 和 `Can_Write` 具有 R24-11 的公开签名；一个发送槽占用时 `Can_Write` 立即返回 `CAN_BUSY`。当前已交付标准服务视图、标准 Rx 回调、清理／取消、runtime error 与受控主机段映射；尚缺已分配 vendor 身份、完整 MISRA 人工评估和第三方／硬件互操作证据，不声明完整标准 Can Driver。虚拟控制器不模拟位级仲裁、电气错误计数器和真实中断。
+标准调用方使用 `#include "Can.h"`；主机输出、状态注入和接收注入显式使用 `Can_Host.h`。`Can_CfgTypes.h` 的单 sink 配置是本目标的硬件专用配置，标准允许目标自定布局。Id 保持 32 位、HOH 保持 16 位，PDU 句柄／长度使用 `ComStack_Types.h`，接纳零长度 PDU。`Can_Init`、`Can_SetControllerMode`、`Can_GetControllerMode` 和 `Can_Write` 具有 R24-11 的公开签名；一个发送槽占用时 `Can_Write` 立即返回 `CAN_BUSY`。当前已交付标准服务视图、标准 Rx 回调、清理／取消、runtime error 与受控主机段映射；尚缺已分配 vendor 身份、完整 MISRA 人工评估和第三方／硬件互操作证据，不声明完整标准 Can Driver。虚拟控制器不模拟位级仲裁、电气错误计数器和真实中断。
 
 `Can.c` 的 CODE 和 VAR_CLEARED_UNSPECIFIED 通过 `Can_MemMap.h` 显式映射至受控 GCC PE/ELF 的 `.text`／`.bss`，由链接器及进程装载器提供代码和清零存储；BSWMD 记录对应标记及头文件。重复 include 必须带单一合法 marker，禁止嵌套和错配。该映射不定义 MCU linker 布局。
 

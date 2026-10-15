@@ -1,7 +1,7 @@
 /** @file Explicit host injection and output adapter; no driver storage. */
 #ifndef CAN_HOST_H
 #define CAN_HOST_H
-#include "standard/Can.h"
+#include "Can.h"
 /** @brief State of the host virtual CAN controller. */
 typedef enum {
     CAN_STOPPED = 0, /**< Controller is stopped. */

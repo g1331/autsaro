@@ -8,7 +8,7 @@
 #include "LSduR.h"
 #include "LSduR_PduR.h"
 #include "CanIf.h"
-#include "standard/Can.h"
+#include "Can.h"
 #include "Can_Host.h"
 #include "SchM_Can.h"
 #include "Det.h"

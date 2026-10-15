@@ -202,26 +202,17 @@ fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
 
 fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let inventory = autosar_config_core::resources::AssetInventory::from_directory(root).unwrap();
     // Materialize each family's delivery closure; no repository header fallback.
     let include = scratch.join("include");
     let sources = scratch.join("src");
     std::fs::create_dir(&include).unwrap();
     std::fs::create_dir(&sources).unwrap();
-    let asset = inventory.get("runtime/bsw/include/standard/Can.h").unwrap();
-    std::fs::create_dir(include.join("standard")).unwrap();
-    std::fs::write(include.join("standard/Can.h"), asset.bytes).unwrap();
-    assert_eq!(
-        std::fs::read(include.join("standard/Can.h")).unwrap(),
-        std::fs::read(root.join(asset.relative_path)).unwrap()
-    );
     for (path, bytes) in mainline_generated_headers(scratch) {
         std::fs::write(scratch.join(path.trim_start_matches("generated/")), bytes).unwrap();
     }
     for family in ["runtime/bsw/include", "runtime/host/include"] {
         for entry in std::fs::read_dir(root.join(family)).unwrap() {
             let entry = entry.unwrap();
-            // standard/Can.h was materialized above from the asset inventory.
             if entry.file_type().unwrap().is_file() {
                 std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
             }

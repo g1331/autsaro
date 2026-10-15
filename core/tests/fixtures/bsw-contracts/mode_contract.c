@@ -10,7 +10,7 @@
 #include "BswM_ComM.h"
 #include "SchM_BswM.h"
 #include "Ecu_HostBusSM.h"
-#include "standard/Can.h"
+#include "Can.h"
 #include "Can_Host.h"
 #include "SchM_Can.h"
 #include "Com.h"

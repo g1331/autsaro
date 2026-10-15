@@ -901,7 +901,7 @@ mod include_name_tests {
         let unique = files(&[
             "bsw/include/Com.h",
             "bsw/src/Com_Internal.h",
-            "bsw/include/standard/Can.h",
+            "bsw/include/Can.h",
             "kernel/include/list.h",
         ]);
         assert!(super::unique_include_names(unique.iter(), &paths).is_ok());

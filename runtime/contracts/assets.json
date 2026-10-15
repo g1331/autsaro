@@ -1611,7 +1611,7 @@
     },
     {
       "path": "runtime/bsw/src/CanIf.c",
-      "sha256": "a8ec4f204822c240e40a5272e922a81e320cb48b4be91ba0c1f9c9252c8e5e8a",
+      "sha256": "8bf65ef301b534de6c96962c76335e8d2bd672210676f2a7df9778c01661e866",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1835,7 +1835,7 @@
     },
     {
       "path": "runtime/host/include/Can_Host.h",
-      "sha256": "0b0e9bbfe4673a47ccf9f0c3dca52b43e598102be0ea667c73b946dba17e0fb6",
+      "sha256": "2457f0f749644eb84f65807588d5fcd372005690427df277bcb10a3b1e3309e9",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1932,7 +1932,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/bsw/include/standard/Can.h",
+      "path": "runtime/bsw/include/Can.h",
       "sha256": "0c9268490fdf8e47fd400d7d3075884e05d9a62d454ee5416befc6081ab76ec4",
       "license": "Apache-2.0",
       "targets": [

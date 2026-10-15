@@ -12,7 +12,7 @@
 #include "LSduR_CanTp.h"
 #include "LSduR_CanIf.h"
 #include "CanIf.h"
-#include "standard/Can.h"
+#include "Can.h"
 #include "Can_Host.h"
 #include "SchM_Can.h"
 #include "Det.h"

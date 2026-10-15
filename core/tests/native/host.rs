@@ -201,32 +201,26 @@ typedef char ConfigLayout[(sizeof(Can_ConfigType) == sizeof(ExpectedConfig) &&
 void (*initialize)(const Can_ConfigType *) = Can_Init;
 Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
 "#;
-    // Mainline consumers reach the standard view only as "standard/Can.h".
+    // The standard Can.h does not expose the host interfaces of Can_Host.h.
     for (index, (includes, allowed)) in [
-        ("#include \"standard/Can.h\"\n", true),
-        ("#include \"standard/Can.h\"\nCanMode leaked;\n", false),
+        ("#include \"Can.h\"\n", true),
+        ("#include \"Can.h\"\nCanMode leaked;\n", false),
         (
-            "#include \"standard/Can.h\"\nvoid (*leaked)(CanMode) = Can_SetMode;\n",
+            "#include \"Can.h\"\nvoid (*leaked)(CanMode) = Can_SetMode;\n",
             false,
         ),
         (
-            "#include \"standard/Can.h\"\nvoid *leaked = (void *)&Can_HostFlush;\n",
+            "#include \"Can.h\"\nvoid *leaked = (void *)&Can_HostFlush;\n",
             false,
         ),
         (
-            "#include \"standard/Can.h\"\nvoid *leaked = (void *)&Can_InternalInject;\n",
+            "#include \"Can.h\"\nvoid *leaked = (void *)&Can_InternalInject;\n",
             false,
         ),
+        ("#include \"Can.h\"\n#include \"Can_Host.h\"\n", true),
+        ("#include \"Can_Host.h\"\n#include \"Can.h\"\n", true),
         (
-            "#include \"standard/Can.h\"\n#include \"Can_Host.h\"\n",
-            true,
-        ),
-        (
-            "#include \"Can_Host.h\"\n#include \"standard/Can.h\"\n",
-            true,
-        ),
-        (
-            "#define CAN_VERSION_INFO_API 1\n#include \"standard/Can.h\"\n",
+            "#define CAN_VERSION_INFO_API 1\n#include \"Can.h\"\n",
             false,
         ),
     ]

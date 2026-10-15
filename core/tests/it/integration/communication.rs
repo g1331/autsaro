@@ -465,7 +465,7 @@ fn communication_types_and_polling_periods_are_source_derived() {
             .contains("extern const CanIf_ConfigType CanIf_Config;")
     );
     for name in [
-        "bsw/include/standard/Can.h",
+        "bsw/include/Can.h",
         "integration/include/Can_Host.h",
         "integration/src/Can_Host.c",
         "bsw/src/Can_Internal.h",
