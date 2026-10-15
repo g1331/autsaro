@@ -17,6 +17,9 @@
 #define DCM_SID_TESTER      0x3eu
 #define DCM_NEGATIVE        0x7fu
 #define DCM_POSITIVE_READ   0x62u
+#define DCM_POSITIVE_DSC    0x50u
+#define DCM_POSITIVE_TP     0x7eu
+#define DCM_DID_DATA_LENGTH 4u
 #define DCM_NRC_SERVICE     0x11u
 #define DCM_NRC_SUBFUNCTION 0x12u
 #define DCM_NRC_FORMAT      0x13u
@@ -97,10 +100,6 @@ static boolean lower_pending DCM_VAR_CLEARED; /**< Reserved TP identity; Init cl
 static uint32 dcm_lower_generation
     DCM_VAR_CLEARED;                             /**< Reserved request identity; Init preserves. */
 static PduIdType lower_transmit DCM_VAR_CLEARED; /**< Reserved confirmation ID; Init preserves. */
-static uint8 tester[2] DCM_VAR_CLEARED;       /**< Concurrent TesterPresent bytes; Init retires. */
-static uint8 tester_received DCM_VAR_CLEARED; /**< Concurrent Rx cursor; Init resets. */
-static boolean tester_receiving
-    DCM_VAR_CLEARED; /**< Separate keep-alive reservation; Init clears. */
 /* Publication revisions are monotonic. One publisher drains the latest state;
  * a callback may change it, but may not recursively flush it out of order. */
 static boolean dcm_publishing DCM_VAR_CLEARED;  /**< Publication owner; Init preserves. */
@@ -246,8 +245,6 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
         received = 0u;
         copied = 0u;
         confirmed = 0u;
-        tester_receiving = FALSE;
-        tester_received = 0u;
         if (sending == FALSE) {
             lower_pending = FALSE;
         }
@@ -310,7 +307,7 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
         ((info == NULL_PTR) ||
          ((info->MetaDataPtr == NULL_PTR) && (info->SduLength <= TpSduLength) &&
           ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))))) {
-        if ((state == DCM_IDLE) && (tester_receiving == FALSE)) {
+        if (state == DCM_IDLE) {
             if (TpSduLength > dcm_configuration->buffer_length) {
                 result = BUFREQ_E_OVFL;
             } else {
@@ -322,14 +319,9 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
                 *bufferSizePtr = dcm_configuration->buffer_length;
                 result = BUFREQ_OK;
             }
-        } else if ((state != DCM_RECEIVING) && (session != DCM_DEFAULT_SESSION) &&
-                   (TpSduLength == 2u) && (tester_receiving == FALSE)) {
-            tester_receiving = TRUE;
-            tester_received = 0u;
-            *bufferSizePtr = 2u;
-            result = BUFREQ_OK;
         } else {
-            /* Busy requests cannot replace the current connection's buffers. */
+            /* SWS_Dcm_00241/01678: a busy physical connection declines further requests;
+             * concurrent TesterPresent is functional-only and that addressing is refused. */
         }
     }
     SchM_Exit_Dcm_DCM_STATE();
@@ -344,15 +336,7 @@ DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
     if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->receive) &&
         (communication != DCM_NO_COM) && (info != NULL_PTR) && (bufferSizePtr != NULL_PTR) &&
         ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))) {
-        if ((tester_receiving == TRUE) && (info->SduLength <= (2u - tester_received))) {
-            PduLengthType i;
-            for (i = 0u; i < info->SduLength; ++i) {
-                tester[tester_received + i] = info->SduDataPtr[i];
-            }
-            tester_received += (uint8)info->SduLength;
-            *bufferSizePtr = (PduLengthType)2u - tester_received;
-            result = BUFREQ_OK;
-        } else if ((state == DCM_RECEIVING) && (info->SduLength <= (request_length - received))) {
+        if ((state == DCM_RECEIVING) && (info->SduLength <= (request_length - received))) {
             PduLengthType i;
             for (i = 0u; i < info->SduLength; ++i) {
                 request[received + i] = info->SduDataPtr[i];
@@ -371,16 +355,7 @@ DCM_CODE void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result)
 {
     SchM_Enter_Dcm_DCM_STATE();
     if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->receive)) {
-        if (tester_receiving == TRUE) {
-            if ((result == E_OK) && (tester_received == 2u) && (tester[0] == DCM_SID_TESTER) &&
-                (tester[1] == DCM_SPRMIB) && (communication != DCM_NO_COM)) {
-                s3_remaining = dcm_configuration->s3_ticks;
-                if (active_enabled == TRUE) {
-                    ++pending_active;
-                }
-            }
-            tester_receiving = FALSE;
-        } else if (state == DCM_RECEIVING) {
+        if (state == DCM_RECEIVING) {
             if ((result == E_OK) && (received == request_length) && (communication != DCM_NO_COM)) {
                 state = DCM_REQUEST;
                 dcm_diagnostic = TRUE;
@@ -427,7 +402,7 @@ static DCM_CODE void Dcm_ReadAvailability(Dcm_WorkType *work, uint16 did, Dcm_Ms
     const Dcm_MsgLenType distance = (Dcm_MsgLenType)work->configuration->did - did;
     const Dcm_MsgLenType bit = (distance > DCM_OBD_BLOCK) ? (DCM_OBD_BLOCK - 1u) : (distance - 1u);
     PduLengthType i;
-    for (i = 0u; i < 4u; ++i) {
+    for (i = 0u; i < DCM_DID_DATA_LENGTH; ++i) {
         work->message.resData[offset + 2u + i] = 0u;
     }
     work->message.resData[offset + 2u + (bit / 8u)] = (uint8)(0x80u >> (bit % 8u));
@@ -494,7 +469,7 @@ static DCM_CODE void Dcm_SessionRequest(Dcm_WorkType *work)
         Dcm_Negative(work, DCM_NRC_FORMAT);
     } else {
         work->pending_session = work->message.reqData[0];
-        work->response[0] = 0x50u;
+        work->response[0] = DCM_POSITIVE_DSC;
         work->message.resData[0] = work->message.reqData[0];
         work->message.resData[1] = (uint8)(work->configuration->p2_ms / 256u);
         work->message.resData[2] = (uint8)(work->configuration->p2_ms % 256u);
@@ -523,7 +498,7 @@ static DCM_CODE void Dcm_Process(Dcm_WorkType *work)
         } else if (work->message.reqDataLen != 1u) {
             Dcm_Negative(work, DCM_NRC_FORMAT);
         } else {
-            work->response[0] = 0x7eu;
+            work->response[0] = DCM_POSITIVE_TP;
             work->message.resData[0] = 0u;
             work->message.resDataLen = 1u;
         }
@@ -619,21 +594,8 @@ static DCM_CODE void Dcm_TransmitResponse(void)
         send = TRUE;
     }
     SchM_Exit_Dcm_DCM_STATE();
-    if (send == TRUE) {
-        /* Revoke reservations before admission. After this commit a mode callback
-         * closes future admissions; the committed call owns its TP identity.
-         * This is the send operation's linearization point, outside consumers. */
-        SchM_Enter_Dcm_DCM_STATE();
-        if ((communication != DCM_FULL_COM) || (dcm_generation != expected)) {
-            lower_pending = FALSE;
-            sending = FALSE;
-            if ((dcm_generation == expected) && (state == DCM_TRANSMITTING)) {
-                state = DCM_RESPONSE;
-            }
-            send = FALSE;
-        }
-        SchM_Exit_Dcm_DCM_STATE();
-    }
+    /* The admission is committed above: a later mode change or Init only affects the next
+     * admission, and this call keeps its reserved TP identity until it is confirmed. */
     if (send == TRUE) {
         const Std_ReturnType result = PduR_DcmTransmit(id, &info);
         SchM_Enter_Dcm_DCM_STATE();
@@ -656,8 +618,7 @@ DCM_CODE void Dcm_MainFunction(void)
         (dcm_publishing == FALSE)) {
         dcm_actors.executing = TRUE;
         owner = TRUE;
-        if ((session != DCM_DEFAULT_SESSION) && (state == DCM_IDLE) &&
-            (tester_receiving == FALSE) && (s3_remaining > 0u)) {
+        if ((session != DCM_DEFAULT_SESSION) && (state == DCM_IDLE) && (s3_remaining > 0u)) {
             --s3_remaining;
             if (s3_remaining == 0u) {
                 Dcm_SetSession(DCM_DEFAULT_SESSION);

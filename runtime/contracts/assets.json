@@ -1317,7 +1317,7 @@
     },
     {
       "path": "runtime/bsw/include/Dcm.h",
-      "sha256": "10c4b2761fa730c83f955c91e748f5377d9ff07a31911f4ffdae4993e4010893",
+      "sha256": "fa77a504563b4bc7c201e57c8f99f8cdce42a7a971a569f559af9fb16e3a365d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1583,7 +1583,7 @@
     },
     {
       "path": "runtime/bsw/include/SchM_Dcm.h",
-      "sha256": "4b3c1096af72982905b2153acd70223a06a6de3e3dd322e24087070bd9cd2c44",
+      "sha256": "f21cf36abbcef46b3807e3f2025d7cda4acae36e15676b6f9b3a5a0574c03792",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1695,7 +1695,7 @@
     },
     {
       "path": "runtime/bsw/src/Dcm.c",
-      "sha256": "16f4467e62d7955416a79076252ca58fde20b868a5a9e2a842ca4f18b57616b5",
+      "sha256": "7a1a49b37c7bee48746a5b8094d9c1d572c4159628e4252466f4d5fe855535f8",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

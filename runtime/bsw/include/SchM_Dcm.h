@@ -25,7 +25,8 @@ void SchM_Exit_Dcm_DCM_STATE(void);
  * @return None.
  * Preconditions: initialized; otherwise no action.
  * Context: scheduled ECU task; not inside an exclusive area.
- * Reentrancy: not reentrant; calls while the executor is active return without work.
+ * Reentrancy: not reentrant. A call that overlaps the active executor or a mode
+ * publication returns without work and does not advance the P2/S3 timers.
  * Ownership: application callbacks use call-local buffers, never live Rx/Tx storage.
  */
 void Dcm_MainFunction(void);

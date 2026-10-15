@@ -255,8 +255,8 @@ int main(void)
 
     start();
     receive(FALSE);
-    /* The sixth exit commits the PduR admission before the external call. */
-    window(6u, MAIN, restart_while_sending);
+    /* The fifth exit commits the PduR admission before the external call. */
+    window(5u, MAIN, restart_while_sending);
     assert(reads == 1u && sent_count == 1u && rejected_copies == 1u);
     Dcm_MainFunction();
     assert(reads == 2u && sent_count == 1u);
@@ -275,24 +275,26 @@ int main(void)
     Dcm_SesCtrlType session = 0u;
     assert(Dcm_GetSesCtrlType(&session) == E_OK && session == 3u && published_mode == 2u);
 
-    /* A mode notification revokes a reserved, not yet committed lower admission.
+    /* A mode notification ordered after the committed admission closes only later
+     * admissions; the committed call keeps its TP identity until confirmation.
      * Verifies: SWS_Dcm_00148, SWS_Dcm_00152, SWS_Dcm_00153
      */
     start();
     receive(FALSE);
     window(5u, MAIN, close_no_com);
-    assert(sent_count == 0u);
-    Dcm_ComM_FullComModeEntered(CHANNEL);
-    Dcm_MainFunction();
     assert(sent_count == 1u);
     Dcm_TpTxConfirmation(TX, E_OK);
     start();
     receive(FALSE);
     window(5u, MAIN, close_silent_com);
-    assert(sent_count == 0u);
-    Dcm_ComM_FullComModeEntered(CHANNEL);
+    assert(sent_count == 1u);
+    Dcm_TpTxConfirmation(TX, E_OK);
+    receive(FALSE);
     Dcm_MainFunction();
     assert(sent_count == 1u);
+    Dcm_ComM_FullComModeEntered(CHANNEL);
+    Dcm_MainFunction();
+    assert(sent_count == 2u);
     Dcm_TpTxConfirmation(TX, E_OK);
     /* Verifies: SWS_Dcm_01376, SWS_Dcm_01377
      * Keep every request notification; Main cannot overtake its publisher.

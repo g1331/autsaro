@@ -12,7 +12,7 @@
  * Verifies: SWS_Dcm_00235, SWS_Dcm_00237, SWS_Dcm_00238, SWS_Dcm_00240
  * Verifies: SWS_Dcm_00307, SWS_Dcm_00311, SWS_Dcm_00085, SWS_Dcm_01335
  * Verifies: SWS_Dcm_00438, SWS_Dcm_00433, SWS_Dcm_00434, SWS_Dcm_00437
- * Verifies: SWS_Dcm_00251, SWS_Dcm_01558, SWS_Dcm_01667
+ * Verifies: SWS_Dcm_00251, SWS_Dcm_01558
  * Verifies: SWS_Dcm_01062, SWS_Dcm_01068, SWS_Dcm_01069, SWS_Dcm_01070
  * Verifies: SWS_Dcm_01071, SWS_Dcm_01142, SWS_Dcm_00148, SWS_Dcm_00151
  * Verifies: SWS_Dcm_00152, SWS_Dcm_00153, SWS_Dcm_00156, SWS_Dcm_00157
@@ -287,7 +287,12 @@ static void sessions_and_keepalive(void)
     assert(Dcm_GetSesCtrlType(&session) == E_OK && session == 3u && published_mode == 2u);
     exchange(read, sizeof(read));
     const unsigned before = transmissions;
-    receive(tester, sizeof(tester));
+    /* Verifies: SWS_Dcm_01677, SWS_Dcm_01678
+     * A busy connection declines a keep-alive or any other request without a response. */
+    PduLengthType declined = 999u;
+    assert(Dcm_StartOfReception(RX, NULL_PTR, sizeof(tester), &declined) == BUFREQ_E_NOT_OK);
+    assert(Dcm_StartOfReception(RX, NULL_PTR, sizeof(read), &declined) == BUFREQ_E_NOT_OK);
+    assert(declined == 999u);
     Dcm_MainFunction();
     assert(transmissions == before);
     uint8 bytes[4] = {0u};

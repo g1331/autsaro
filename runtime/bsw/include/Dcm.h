@@ -119,14 +119,14 @@ Std_ReturnType Dcm_SetActiveDiagnostic(boolean active);
  * @param[in] info Optional first payload information; NULL is allowed. Metadata must be
  * NULL, length cannot exceed TpSduLength, and nonempty payload requires a data pointer.
  * The payload bytes are supplied by CopyRxData.
- * @param[in] TpSduLength Positive total size; a busy non-default connection accepts only
- * a separate two-byte candidate for concurrent TesterPresent, never a second service.
+ * @param[in] TpSduLength Positive total size. A busy connection declines every further
+ * request without a response (SWS_Dcm_00241, SWS_Dcm_01678).
  * @param[out] bufferSizePtr Non-NULL; receives the reserved capacity on success.
  * @return BUFREQ_OK when reserved, BUFREQ_E_OVFL when idle capacity is insufficient,
  * BUFREQ_E_NOT_OK for invalid input, NoCom, an unknown ID or an occupied reservation.
  * Preconditions: initialized; otherwise BUFREQ_E_NOT_OK, with output unchanged.
  * Context: TP callback, including interrupt; not inside an exclusive area.
- * Reentrancy: reentrant; at most one reservation of each kind succeeds.
+ * Reentrancy: reentrant; at most one reservation succeeds.
  * Ownership: info is not retained; output changes only on success.
  */
 BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
@@ -151,7 +151,6 @@ BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
 /** Complete the reserved Rx message (SWS_Dcm_00093).
  * @param[in] id The configured Dcm Rx ID; other IDs are ignored.
  * @param[in] result E_OK publishes a complete request; any other value discards it.
- * A concurrent candidate is consumed only when it is the exact 3E 80 keep-alive.
  * @return None.
  * Preconditions: initialized and receiving; otherwise no action.
  * Context: TP callback, including interrupt; not inside an exclusive area.
