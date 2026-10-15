@@ -352,6 +352,29 @@ static void gates_and_reentrancy(void)
     expect(expected, sizeof(expected));
     assert(transmissions == before + 1u && inactive > 0u);
 }
+/* One TP lifetime per admitted response: a confirmation for another ID leaves it
+ * reserved, and Init retires an accepted lifetime whose old TP is quiesced. */
+static void lower_lifetime(void)
+{
+    const uint8 request[] = {0x3eu, 0x00u};
+    const uint8 positive[] = {0x7eu, 0x00u};
+    PduLengthType available = 999u;
+    start();
+    synchronous = FALSE;
+    const unsigned before = transmissions;
+    exchange(request, sizeof(request));
+    Dcm_TpTxConfirmation(TX + 1u, E_OK);
+    assert(Dcm_StartOfReception(RX, NULL_PTR, sizeof(request), &available) == BUFREQ_E_NOT_OK);
+    Dcm_TpTxConfirmation(TX, E_OK);
+    exchange(request, sizeof(request));
+    assert(transmissions == before + 2u);
+    start();
+    exchange(request, sizeof(request));
+    assert(transmissions == before + 3u);
+    expect(positive, sizeof(positive));
+    Dcm_TpTxConfirmation(TX, E_OK);
+    synchronous = TRUE;
+}
 /* Verifies: SWS_Dcm_01197, SWS_Dcm_01379, SWS_Dcm_01380
  * Verifies: SWS_Dcm_01387, SWS_Dcm_01389, SWS_Dcm_01385
  */
@@ -449,5 +472,6 @@ int main(void)
     sessions_and_keepalive();
     gates_and_reentrancy();
     obd_data_and_availability();
+    lower_lifetime();
     return 0;
 }

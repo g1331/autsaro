@@ -47,6 +47,7 @@ static unsigned operation;
 static unsigned reads;
 static unsigned sent_count;
 static unsigned rejected_copies;
+static boolean confirm_in_call;
 static unsigned mode_depth;
 static unsigned active_calls;
 static uint8 published_mode;
@@ -96,6 +97,9 @@ Std_ReturnType PduR_DcmTransmit(PduIdType id, const PduInfoType *info)
     } else {
         assert(available == 999u);
         ++rejected_copies;
+    }
+    if (confirm_in_call) {
+        Dcm_TpTxConfirmation(TX, E_OK);
     }
     return E_OK;
 }
@@ -263,6 +267,18 @@ int main(void)
     Dcm_TpTxConfirmation(TX, E_OK); /* Retires only the old lower identity. */
     Dcm_MainFunction();
     assert(sent_count == 2u && rejected_copies == 1u && sent[3] == 0x52u);
+    Dcm_TpTxConfirmation(TX, E_OK);
+
+    /* Init cannot retire a call on the stack: its confirmation may arrive before
+     * PduR_DcmTransmit returns, and then frees the identity for the next request. */
+    start();
+    receive(FALSE);
+    confirm_in_call = TRUE;
+    window(5u, MAIN, restart_while_sending);
+    confirm_in_call = FALSE;
+    assert(reads == 1u && sent_count == 1u && rejected_copies == 1u);
+    Dcm_MainFunction();
+    assert(reads == 2u && sent_count == 2u && sent[3] == 0x52u);
     Dcm_TpTxConfirmation(TX, E_OK);
 
     start();

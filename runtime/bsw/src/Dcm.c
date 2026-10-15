@@ -92,13 +92,18 @@ static boolean session_change_cancelled
 static uint32 s3_remaining DCM_VAR_CLEARED;   /**< Idle session ticks; Init resets. */
 static uint16 p2_remaining DCM_VAR_CLEARED;   /**< FullCom wait ticks; Init resets. */
 static uint32 dcm_generation DCM_VAR_CLEARED; /**< Request identity; Init and Rx advance. */
-/* lower_pending owns the callback identity. A concurrent Init cannot recycle a
- * PduR admission still on the stack; stale CopyTxData then fails until its final
- * confirmation. Outside that window Init requires a quiesced old TP lifetime. */
-static boolean sending DCM_VAR_CLEARED;       /**< PduR admission on the stack; Init preserves. */
-static boolean lower_pending DCM_VAR_CLEARED; /**< Reserved TP identity; Init clears if quiesced. */
-static uint32 dcm_lower_generation
-    DCM_VAR_CLEARED;                             /**< Reserved request identity; Init preserves. */
+/* The TP lifetime of the one admitted response. Only the Main executor admits, and
+ * only from DCM_LOWER_IDLE, so DCM_TRANSMITTING implies CALLING or AWAITING: Init
+ * moves the request out of DCM_TRANSMITTING and no new request can return to it
+ * before this lifetime ends. Init cannot recycle a call still on the stack; it
+ * retires only AWAITING and requires that old TP lifetime to be quiesced. */
+typedef enum {
+    DCM_LOWER_IDLE,    /**< No reserved TP identity. */
+    DCM_LOWER_CALLING, /**< PduR_DcmTransmit is on the stack. */
+    DCM_LOWER_SETTLED, /**< Confirmed before PduR_DcmTransmit returned. */
+    DCM_LOWER_AWAITING /**< Accepted; TpTxConfirmation is still due. */
+} Dcm_LowerType;
+static Dcm_LowerType lower DCM_VAR_CLEARED;      /**< Reserved TP lifetime; see above. */
 static PduIdType lower_transmit DCM_VAR_CLEARED; /**< Reserved confirmation ID; Init preserves. */
 /* Publication revisions are monotonic. One publisher drains the latest state;
  * a callback may change it, but may not recursively flush it out of order. */
@@ -245,8 +250,8 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
         received = 0u;
         copied = 0u;
         confirmed = 0u;
-        if (sending == FALSE) {
-            lower_pending = FALSE;
+        if (lower == DCM_LOWER_AWAITING) {
+            lower = DCM_LOWER_IDLE;
         }
     }
     SchM_Exit_Dcm_DCM_STATE();
@@ -578,17 +583,13 @@ static DCM_CODE void Dcm_ProcessRequest(void)
 static DCM_CODE void Dcm_TransmitResponse(void)
 {
     boolean send = FALSE;
-    uint32 expected = 0u;
     PduIdType id = 0u;
     PduInfoType info = {NULL_PTR, NULL_PTR, 0u};
     SchM_Enter_Dcm_DCM_STATE();
-    if ((state == DCM_RESPONSE) && (communication == DCM_FULL_COM) && (lower_pending == FALSE)) {
+    if ((state == DCM_RESPONSE) && (communication == DCM_FULL_COM) && (lower == DCM_LOWER_IDLE)) {
         state = DCM_TRANSMITTING;
-        lower_pending = TRUE;
-        sending = TRUE;
-        dcm_lower_generation = dcm_generation;
+        lower = DCM_LOWER_CALLING;
         lower_transmit = dcm_configuration->transmit;
-        expected = dcm_generation;
         id = dcm_configuration->router_transmit;
         info.SduLength = response_length;
         send = TRUE;
@@ -599,10 +600,13 @@ static DCM_CODE void Dcm_TransmitResponse(void)
     if (send == TRUE) {
         const Std_ReturnType result = PduR_DcmTransmit(id, &info);
         SchM_Enter_Dcm_DCM_STATE();
-        sending = FALSE;
-        if ((lower_pending == TRUE) && (dcm_lower_generation == expected) && (result != E_OK)) {
-            lower_pending = FALSE;
-            if ((dcm_generation == expected) && (state == DCM_TRANSMITTING)) {
+        if (lower == DCM_LOWER_SETTLED) {
+            lower = DCM_LOWER_IDLE;
+        } else if (result == E_OK) {
+            lower = DCM_LOWER_AWAITING;
+        } else {
+            lower = DCM_LOWER_IDLE;
+            if (state == DCM_TRANSMITTING) {
                 /* SWS_Dcm_00118: neither a refusal nor an error confirmation is retried. */
                 Dcm_Release();
             }
@@ -650,9 +654,7 @@ DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
     BufReq_ReturnType result = BUFREQ_E_NOT_OK;
     SchM_Enter_Dcm_DCM_STATE();
     if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->transmit) &&
-        (state == DCM_TRANSMITTING) && (lower_pending == TRUE) &&
-        (dcm_lower_generation == dcm_generation) && (info != NULL_PTR) &&
-        (availableDataPtr != NULL_PTR) &&
+        (state == DCM_TRANSMITTING) && (info != NULL_PTR) && (availableDataPtr != NULL_PTR) &&
         ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))) {
         PduLengthType position = copied;
         PduLengthType acknowledged = confirmed;
@@ -695,9 +697,9 @@ DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
 DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result)
 {
     SchM_Enter_Dcm_DCM_STATE();
-    if ((lower_pending == TRUE) && (id == lower_transmit)) {
-        lower_pending = FALSE;
-        if ((dcm_generation == dcm_lower_generation) && (state == DCM_TRANSMITTING)) {
+    if (((lower == DCM_LOWER_CALLING) || (lower == DCM_LOWER_AWAITING)) && (id == lower_transmit)) {
+        lower = (lower == DCM_LOWER_CALLING) ? DCM_LOWER_SETTLED : DCM_LOWER_IDLE;
+        if (state == DCM_TRANSMITTING) {
             if ((result == E_OK) && (pending_session != 0u)) {
                 Dcm_SetSession(pending_session);
             }
