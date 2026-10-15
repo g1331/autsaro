@@ -42,6 +42,8 @@ After modifying delivery assets, run `uv run --locked python -m autosar_tooling 
 
 Review the entire diff before submitting, including new files and generated content. Use a title that describes the actual change. Explain the problem, changes, verification, and untested scope in the PR. Review the whole diff yourself before merging; check every AUTOSAR conclusion against the original requirement text rather than memory or existing code, and give high-risk changes one independent review that runs alongside CI. A PR may merge once the required checks pass; Extended checks do not block merging, but when the latest Extended run on master has failed, fix it or open an Issue that pauses the unstable suite before merging more. Include actual screenshots for interface changes. Do not commit official downloads, personal configuration, or temporary test artifacts. Limit conclusions from host tests to host capabilities.
 
+Add a `CHANGELOG.md` entry under `Unreleased` for every change visible to users or integrators: delivered C interfaces and ABI, configuration acceptance or rejection, generated output, tool and interface behavior. Refactoring, tests, CI and documentation get no entry. Write one line per change that states the effect and ends with the PR number, such as `(#166)`; details belong in the PR. Group entries under `Breaking`, `Added`, `Changed` and `Fixed`; a breaking or contract change states what integrators must change. At release, `Unreleased` becomes the version heading with its date. The changelog is maintained in English only.
+
 Use an isolated environment for real GUI acceptance without occupying a developer's active desktop. Work is tracked in GitHub Issues and Milestones; see [docs/roadmap/](docs/roadmap/README.md) for direction and [docs/architecture/](docs/architecture/README.md) for design constraints.
 
 ## Interface text and languages
@@ -52,7 +54,7 @@ Controllers and IPC retain message keys and parameters; translate at display tim
 
 Windows MSI installers are built separately with `zh-CN` and `en-US` interfaces. The English WiX resource, `src-tauri/wix/locales/en-US.wxl`, uses code page 936 to accommodate the existing Chinese product identity. Do not restore the default code page 1252: characters in the brand name and installation path would prevent the English MSI from linking. Installer language is independent of the application's saved language preference.
 
-Reader-facing root documents use English as the default, with Chinese versions named using the `.zh-CN.md` suffix. When editing bilingual documents, keep features, commands, limitations, and links aligned in both versions. Internal specifications and technical documents in subdirectories retain their existing language.
+Reader-facing root documents use English as the default, with Chinese versions named using the `.zh-CN.md` suffix. When editing bilingual documents, keep features, commands, limitations, and links aligned in both versions. `CHANGELOG.md` is English only. Internal specifications and technical documents in subdirectories retain their existing language.
 
 ## Documentation layout
 

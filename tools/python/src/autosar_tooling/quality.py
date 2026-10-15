@@ -35,7 +35,7 @@ PLAN_NUMBER_EXEMPT = ("docs/adr/", "docs/roadmap/", "third_party/", ".agents/ski
 # exempt, AGENTS.md stays one file by merging entries, and vendored content keeps its bytes.
 DOCUMENT_LIMIT = 20 * 1024
 DOCUMENT_SIZE_EXEMPT = (
-    "CHANGELOG.md", "CHANGELOG.zh-CN.md", "AGENTS.md", "docs/adr/", "docs/project/archive/",
+    "CHANGELOG.md", "AGENTS.md", "docs/adr/", "docs/project/archive/",
     "third_party/", ".agents/skills/impeccable/",
 )
 # One LLVM release provides both; PyPI publishes them as separate projects, sometimes days apart.

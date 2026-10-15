@@ -42,6 +42,8 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 提交前检查整个 diff，包括新增文件与生成内容。标题说明实际改动；PR 说明问题、改动、验证和未运行范围。合并前自审整个 diff；涉及 AUTOSAR 规范的结论按条目原文复核，不凭记忆或现有代码判断，高风险改动另做一次与 CI 并行的独立审查。必需检查通过即可合并，Extended 检查不阻塞合并；但 master 最近一次 Extended 失败时，先修复或开 Issue 暂停不稳定的套件，再继续合并。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
 
+对使用者或集成者可见的改动在 `CHANGELOG.md` 的 `Unreleased` 下加一条：交付的 C 接口与 ABI、配置接受或拒绝、生成物、工具与界面行为；重构、测试、CI 和文档不记。每项一行，写清效果，末尾附 PR 号（如 `(#166)`），细节放 PR。条目按 `Breaking`、`Added`、`Changed`、`Fixed` 分组，破坏性或契约变化写明集成者要做的修改。发版时把 `Unreleased` 改为带日期的版本标题。CHANGELOG 只维护英文。
+
 真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。任务与进度用 GitHub Issues 和 Milestones 跟踪；方向见 [docs/roadmap/](docs/roadmap/README.md)，设计约束见 [docs/architecture/](docs/architecture/README.md)。
 
 ## 界面文案与语言
@@ -52,7 +54,7 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 Windows MSI 分别构建 `zh-CN` 与 `en-US` 安装界面。英文 WiX 资源 `src-tauri/wix/locales/en-US.wxl` 使用代码页 936，容纳既有中文产品身份；不能恢复默认代码页 1252，否则英文 MSI 会因品牌与安装路径字符无法编码而链接失败。安装包语言与应用保存的语言偏好独立。
 
-根目录面向读者的文档以英文为默认入口，中文版使用 `.zh-CN.md` 后缀。修改双语文档时同步两版的功能、命令、限制和链接；内部规格和子目录技术文档保持各自原有语言。
+根目录面向读者的文档以英文为默认入口，中文版使用 `.zh-CN.md` 后缀。修改双语文档时同步两版的功能、命令、限制和链接；`CHANGELOG.md` 只维护英文；内部规格和子目录技术文档保持各自原有语言。
 
 ## 文档组织
 
