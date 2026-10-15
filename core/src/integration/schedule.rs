@@ -737,16 +737,17 @@ pub(super) fn inspect_events(
         .iter()
         .filter_map(|entity| entity.schedule_table.as_deref())
         .collect();
-    let declared_tables: BTreeSet<_> = graph
+    if let Some(unbound) = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()
-        .filter(|index| definition_is(graph, *index, "OsScheduleTable"))
-        .map(|index| graph.elements[index].object.as_str())
-        .collect();
-    if mapped_tables != declared_tables {
+        .find(|index| {
+            definition_is(graph, *index, "OsScheduleTable")
+                && !mapped_tables.contains(graph.elements[*index].object.as_str())
+        })
+    {
         return Err(reject(
             graph,
-            behavior,
+            unbound,
             "SCHEDULE_TABLE_UNBOUND",
             crate::product_message!(
                 "backend.integration.schedule.reference_ecu_tables_require_periodic_rte_groups"

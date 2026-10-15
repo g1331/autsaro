@@ -351,12 +351,6 @@ fn schedule_table_rejections() {
             "PERIOD_SCHEDULE_TABLE_CONFLICT",
         ),
         (
-            "wrong-strategy",
-            "OsScheduleTblSyncStrategy</DEFINITION-REF><VALUE>NONE</VALUE>",
-            "OsScheduleTblSyncStrategy</DEFINITION-REF><VALUE>IMPLICIT</VALUE>",
-            "TARGET_PARAMETER_UNSUPPORTED",
-        ),
-        (
             "wrong-first-offset",
             "OsScheduleTblExpPointOffset</DEFINITION-REF><VALUE>0</VALUE>",
             "OsScheduleTblExpPointOffset</DEFINITION-REF><VALUE>1</VALUE>",

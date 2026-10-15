@@ -269,6 +269,14 @@ fn os_policy_values_outside_the_profile_are_rejected() {
             "TARGET_PARAMETER_UNSUPPORTED",
             "/Configuration/Os/Table_Work/Sync",
         ),
+        (
+            true,
+            "Sync",
+            "OsScheduleTblSyncStrategy",
+            "IMPLICIT",
+            "TARGET_PARAMETER_UNSUPPORTED",
+            "/Configuration/Os/Table_Work/Sync",
+        ),
     ] {
         let mut sources = if tables {
             schedule_table_variant()
@@ -363,5 +371,10 @@ fn unused_os_objects_are_rejected() {
     }
     let mut sources = schedule_table_variant();
     copy(&mut sources, "Table_Work", "Table_Spare");
-    rejects_in_both(&sources, "SCHEDULE_TABLE_UNBOUND");
+    rejected_at(
+        &sources,
+        "SCHEDULE_TABLE_UNBOUND",
+        "ecuc.arxml",
+        "/Configuration/Os/Table_Spare",
+    );
 }
