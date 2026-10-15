@@ -233,10 +233,22 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           import os, subprocess, sys
+          from pathlib import Path
           slow = ['integration::sealed_projects', 'integration::single_component', 'integration::protocol']
           filters = {'all': [], 'slow': slow, 'rest': [arg for name in slow for arg in ('--skip', name)]}[os.environ['SHARD']]
+          # Failing tests and the ECU verifier retain their scenes under the temporary root.
+          scratch = Path(os.environ['RUNNER_TEMP']) / 'native-scratch'
+          scratch.mkdir()
+          env = dict(os.environ, TMP=str(scratch), TEMP=str(scratch), TMPDIR=str(scratch))
           sys.exit(subprocess.run(['cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests',
-              '--lib', '--test', 'native', '--no-fail-fast', '--', *filters]).returncode)
+              '--lib', '--test', 'native', '--no-fail-fast', '--', *filters], env=env).returncode)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: native-scratch-${{ matrix.os }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/native-scratch
+          if-no-files-found: ignore
+          retention-days: 14
   native-os:
     needs: changes
     if: needs.changes.outputs.native == 'true'
