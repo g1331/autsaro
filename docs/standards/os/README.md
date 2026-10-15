@@ -8,11 +8,11 @@
 
 单核 SC1，固定一个后端（FreeRTOS 内核加本项目的 OS 适配层）。ECU 只有一个所属任务、一个软件计数器（1 ms／tick）、一个应用模式；周期触发来自 RELATIVE 自动启动的闹钟或重复、不同步的调度表，动作只有对所属任务的 SetEvent；资源只有可选的虚拟 RES_SCHEDULER。Error／Pre／Post／Startup／Shutdown hook、栈检测与 ARTI 始终启用。
 
-OS-Application、ISR 配置、IOC、多核、spinlock、时间／内存保护、外设区域、调度表同步、ActivateTask／callback／IncrementCounter 闹钟动作和显式资源都在生成前于源对象位置拒绝；生成的 OS 只包含调度实际使用的对象，未使用的 OsAlarm、OsEvent、OsAppMode 或调度表同样拒绝，不会静默丢弃。
+OS-Application、IOC、多核、spinlock、时间／内存保护、ProtectionHook、外设区域与调度表同步不属于 SC1，在生成前于源对象位置拒绝，相应条款按配置不适用。ISR 配置、显式资源、ActivateTask／callback／IncrementCounter 闹钟动作、绝对起点和超出参考形态的 Task／Counter 取值属于 SC1 能力，当前生成器同样在源位置拒绝，但这是待 [#190](https://github.com/g1331/autsaro/issues/190) 实现或记为差距的缺口，不算不适用。生成的 OS 只包含调度实际使用的对象，未使用的 OsAlarm、OsEvent、OsAppMode 或调度表同样拒绝，不会静默丢弃。
 
 ## 处置与证据
 
-- [ECUC 配置与生成](configuration.md)：`ECUC_Os_` 条目、OS 生成章节与固定策略。
+- [ECUC 配置与生成](configuration.md)：OsOS、hook 与 SC1 以外能力的 `ECUC_Os_` 条目、OS 生成章节与固定策略。
 - [SC1 以外的能力](extensions.md)：多核、OS-Application、保护、IOC、外设、调度表同步等由配置拒绝证明不适用的条目。
 - [ARTI](arti.md)：ARTI 描述文件、hook 宏与 `ECUC_Arti_` 条目。
 
