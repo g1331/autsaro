@@ -6,10 +6,10 @@
  * Verifies: SWS_CanTp_00166、00080、00081、00318、00353、00339、00082、00222、00341、00223
  * Verifies: SWS_CanTp_00311、00224、00269、00312、00313、00271、00314、00084、00277、00064
  * Verifies: SWS_CanTp_00067、00342、00225、00167、00086、00272、00087、00184、00280、00089
- * Verifies: SWS_CanTp_00310、00309、00317、00315、00316、00090、00343、00096、00122、00123
+ * Verifies: SWS_CanTp_00310、00309、00317、00315、00316、00090、00343、00096、00123
  * Verifies: SWS_CanTp_00124、00248、00116、00059、00344、00345、00346、00347、00348、00349
  * Verifies: SWS_CanTp_00351、00057、00229、00352、00231、00232、00354、00204、00205、00206
- * Verifies: SWS_CanTp_00298、00299、00256、00255、00261、00262、00263、00164、00235、00236
+ * Verifies: SWS_CanTp_00298、00299、00261、00262、00263、00164
  * Verifies: SWS_CanTp_00008、00199、00213、00208、00211、00212、00246、00257、00214、00215
  * Verifies: SWS_CanTp_00216、00209
  */
@@ -515,6 +515,14 @@ static void reception_admission(void)
     receive8(0x02u, 0x51u, 0x52u, 0u);
     assert(rx_done == 6u && rx_result == E_OK && received_length == 2u);
     assert(rx_done == 6u && det_count == 0u);
+
+    /* Unknown N-PDU types are ignored, idle or receiving (SWS_CanTp_00057). */
+    receive8(0x45u, 1u, 2u, 3u);
+    receive_first();
+    receive8(0xf0u, 1u, 2u, 3u);
+    receive_data(0x21u, 0u, 7u, 8u);
+    receive_data(0x22u, 0u, 14u, 8u);
+    assert(rx_done == 7u && rx_result == E_OK && received_length == 20u && det_count == 0u);
 }
 static void buffer_waits(void)
 {
@@ -549,6 +557,68 @@ static void buffer_waits(void)
     ticks(1u);
     assert(rx_done == 2u && rx_result == E_NOT_OK && sent_count == 3u);
     expect_det(MAIN, E_RX_COM);
+}
+/* The shortest timers, two main-function periods, and WFTmax 0 as generated: an action
+ * left to the main function by a confirmation is made in time, and N_Br expiry asks for
+ * buffer once more before it decides (SWS_CanTp_00341). A one-period timer is refused. */
+static void shortest_timers(void)
+{
+    CanTp_ConfigType quick = config;
+    quick.n_as = 2u;
+    quick.n_ar = 2u;
+    quick.n_br = 2u;
+    quick.n_cs = 2u;
+    quick.wait_frame_max = 0u;
+    start();
+    CanTp_Init(&quick);
+    /* The CF after a confirmation waits for the main function, within N_Cs. */
+    assert(transmit(20u) == E_OK);
+    confirm(E_OK);
+    receive8(0x30u, 0u, 0u, 0u);
+    expect_frame(1u, 0x21u, 7u, 7u, 1u);
+    confirm(E_OK);
+    assert(sent_count == 2u);
+    ticks(1u);
+    expect_frame(2u, 0x22u, 14u, 7u, 1u);
+    confirm(E_OK);
+    assert(tx_done == 1u && tx_result == E_OK && det_count == 0u);
+
+    /* An FC that waited for the Tx N-PDU is sent within N_Ar. */
+    assert(transmit(5u) == E_OK);
+    receive_data(0x10u, 20u, 1u, 8u);
+    assert(sent_count == 4u);
+    confirm(E_OK);
+    assert(tx_done == 2u);
+    ticks(1u);
+    expect_flow(4u, 0u);
+    confirm(E_OK);
+    receive_data(0x21u, 0u, 7u, 8u);
+    receive_data(0x22u, 0u, 14u, 8u);
+    assert(rx_done == 1u && rx_result == E_OK && det_count == 0u);
+
+    /* At N_Br expiry the last answer decides: enough buffer gives FC(CTS). */
+    capacity = 6u;
+    receive_data(0x10u, 20u, 1u, 8u);
+    ticks(1u);
+    assert(sent_count == 5u && polls == 1u);
+    buffer_size = 14u;
+    ticks(1u);
+    assert(polls == 2u);
+    expect_flow(5u, 0u);
+    confirm(E_OK);
+    receive_data(0x21u, 0u, 7u, 8u);
+    receive_data(0x22u, 0u, 14u, 8u);
+    assert(rx_done == 2u && rx_result == E_OK);
+    /* Otherwise the reception ends without FC(WAIT). */
+    receive_data(0x10u, 20u, 1u, 8u);
+    ticks(2u);
+    assert(rx_done == 3u && rx_result == E_NOT_OK && sent_count == 6u);
+    expect_det(MAIN, E_RX_COM);
+
+    CanTp_Shutdown();
+    quick.n_cs = 1u;
+    CanTp_Init(&quick);
+    assert(transmit(5u) == E_NOT_OK && sent_count == 6u);
 }
 static void full_duplex(void)
 {
@@ -672,6 +742,7 @@ int main(void)
     segmented_reception();
     reception_admission();
     buffer_waits();
+    shortest_timers();
     full_duplex();
     cancellation();
     stop_and_restart();

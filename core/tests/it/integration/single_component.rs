@@ -2849,6 +2849,23 @@ fn cantp_features_outside_the_selection_are_refused_at_their_source() {
     }
 }
 
+/// A CanTp timer of one main-function period could expire at the call right after it starts.
+#[test]
+fn cantp_timer_shorter_than_two_periods_is_refused() {
+    for (owner, name) in [("DiagRequest", "CanTpNar"), ("DiagResponse", "CanTpNcs")] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, name, "0.001");
+        let unchanged = single_component_sources();
+        assert_ne!(
+            text(&sources, "ecuc.arxml"),
+            text(&unchanged, "ecuc.arxml"),
+            "{name}"
+        );
+        let object = format!("/Configuration/CanTp/Config/PhysicalChannel/{owner}");
+        rejected_at(&sources, "DIAGNOSTIC_TIMING", "ecuc.arxml", &object);
+    }
+}
+
 /// The selected channel carries one connection per direction; a second N-SDU is refused.
 #[test]
 fn second_cantp_connection_is_refused() {

@@ -37,7 +37,8 @@
 #define CANTP_FS_OVFLW     2u
 #define CANTP_STMIN_MAX_MS 0x7fu
 /* SF, FF and CF waiting while another context makes calls; full means dropped. */
-#define CANTP_RX_QUEUE 4u
+#define CANTP_RX_QUEUE  4u
+#define CANTP_TIMER_MIN 2u
 
 typedef enum {
     CANTP_TX_IDLE,
@@ -299,23 +300,18 @@ static CANTP_CODE uint8 CanTp_RxTick(void)
         if (rx.timer > 0u) {
             --rx.timer;
         }
-        if ((rx.timer == 0u) && (rx.state == CANTP_RX_BUFFER) &&
-            (rx.waits < configuration->wait_frame_max)) {
-            ++rx.waits; /* N_Br expired: suspend with FC(WAIT) (SWS_CanTp_00341). */
-            rx.flow = CANTP_FS_WAIT;
-            rx.state = CANTP_RX_FLOW_SEND;
-            rx.timer = configuration->n_ar;
+        if (rx.state == CANTP_RX_BUFFER) {
+            /* Ask the upper layer for buffer again; at N_Br expiry this last answer decides
+             * (SWS_CanTp_00222, 00341). */
+            rx.due = TRUE;
         } else if (rx.timer == 0u) {
-            /* N_Ar, N_Br after WFTmax FC(WAIT), or N_Cr (SWS_CanTp_00223, 00311, 00313). */
-            if ((rx.state != CANTP_RX_DATA) && (rx.state != CANTP_RX_BUFFER) &&
-                (rx.flow == CANTP_FS_OVFLW)) {
+            /* N_Ar or N_Cr (SWS_CanTp_00223, 00311, 00313). */
+            if ((rx.state != CANTP_RX_DATA) && (rx.flow == CANTP_FS_OVFLW)) {
                 CanTp_RxDrop();
             } else {
                 CanTp_RxFinish(E_NOT_OK);
             }
             error = CANTP_E_RX_COM;
-        } else if (rx.state == CANTP_RX_BUFFER) {
-            rx.due = TRUE; /* Ask the upper layer for buffer again (SWS_CanTp_00222). */
         } else {
             /* Waiting for the N-PDU, its confirmation or a CF. */
         }
@@ -386,8 +382,8 @@ static CANTP_CODE void CanTp_TakeFrame(CanTp_WorkType *work)
     queue_head = (uint8)((queue_head + 1u) % CANTP_RX_QUEUE);
     --queue_count;
 }
-/* Chooses the next call: owed notifications first, then frames in arrival order; frames
- * for the Tx N-PDU only when `send` allows them. */
+/* Chooses the next call: owed notifications first, then received frames in arrival order;
+ * a Tx copy or a frame to send on the Tx N-PDU only when `send` allows it. */
 static CANTP_CODE void CanTp_Next(CanTp_WorkType *work, boolean send)
 {
     work->kind = CANTP_WORK_NONE;
@@ -471,10 +467,12 @@ static CANTP_CODE void CanTp_Refused(const CanTp_WorkType *work)
     }
     SchM_Exit_CanTp_CANTP_STATE();
 }
-static CANTP_CODE void CanTp_Polled(const CanTp_WorkType *work,
-                                    BufReq_ReturnType result,
-                                    PduLengthType available)
+/* Returns the error of an N_Br expiry after WFTmax FC(WAIT) (SWS_CanTp_00341). */
+static CANTP_CODE uint8 CanTp_Polled(const CanTp_WorkType *work,
+                                     BufReq_ReturnType result,
+                                     PduLengthType available)
 {
+    uint8 error = 0u;
     SchM_Enter_CanTp_CANTP_STATE();
     if ((work->generation == rx.generation) && (rx.state == CANTP_RX_BUFFER)) {
         if (result != BUFREQ_OK) {
@@ -483,11 +481,20 @@ static CANTP_CODE void CanTp_Polled(const CanTp_WorkType *work,
             rx.flow = CANTP_FS_CTS; /* SWS_CanTp_00224 */
             rx.state = CANTP_RX_FLOW_SEND;
             rx.timer = configuration->n_ar;
-        } else {
+        } else if (rx.timer > 0u) {
             /* Keep asking until N_Br expires. */
+        } else if (rx.waits < configuration->wait_frame_max) {
+            ++rx.waits; /* Suspend with FC(WAIT). */
+            rx.flow = CANTP_FS_WAIT;
+            rx.state = CANTP_RX_FLOW_SEND;
+            rx.timer = configuration->n_ar;
+        } else {
+            CanTp_RxFinish(E_NOT_OK);
+            error = CANTP_E_RX_COM;
         }
     }
     SchM_Exit_CanTp_CANTP_STATE();
+    return error;
 }
 /* Copies the rest of an admitted SF or FF; returns the error. */
 static CANTP_CODE uint8 CanTp_AdmitData(const CanTp_WorkType *work, const PduInfoType *payload)
@@ -658,7 +665,7 @@ static CANTP_CODE void CanTp_Perform(CanTp_WorkType *work)
         PduLengthType available = 0u;
         const PduInfoType query = {NULL_PTR, NULL_PTR, 0u};
         const BufReq_ReturnType result = PduR_CanTpCopyRxData(work->id, &query, &available);
-        CanTp_Polled(work, result, available);
+        CanTp_Report(CANTP_SID_MAIN, CanTp_Polled(work, result, available));
     }
 }
 /* Makes the calls owed so far unless another context is making them (ADR 0018); that
@@ -687,10 +694,13 @@ static CANTP_CODE void CanTp_Run(boolean send)
 CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr)
 {
     SchM_Enter_CanTp_CANTP_STATE();
+    /* A timer of one period could expire at the very next call, before an action left to
+     * the main function by a confirmation is made. */
     if ((CfgPtr != NULL_PTR) && (CfgPtr->maximum_length > CANTP_SF_MAX) &&
-        (CfgPtr->maximum_length <= 256u) && (CfgPtr->n_as > 0u) && (CfgPtr->n_ar > 0u) &&
-        (CfgPtr->n_bs > 0u) && (CfgPtr->n_br > 0u) && (CfgPtr->n_cr > 0u) && (CfgPtr->n_cs > 0u) &&
-        (CfgPtr->main_period_ms > 0u)) {
+        (CfgPtr->maximum_length <= 256u) && (CfgPtr->n_as >= CANTP_TIMER_MIN) &&
+        (CfgPtr->n_ar >= CANTP_TIMER_MIN) && (CfgPtr->n_bs >= CANTP_TIMER_MIN) &&
+        (CfgPtr->n_br >= CANTP_TIMER_MIN) && (CfgPtr->n_cr >= CANTP_TIMER_MIN) &&
+        (CfgPtr->n_cs >= CANTP_TIMER_MIN) && (CfgPtr->main_period_ms > 0u)) {
         configuration = CfgPtr;
         CanTp_Reset(); /* All connections are lost without notification (SWS_CanTp_00273). */
     }

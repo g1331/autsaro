@@ -1177,7 +1177,7 @@
     },
     {
       "path": "runtime/bsw/include/CanTp.h",
-      "sha256": "728bc1476fb46726ce20615e6d6b9cb4d473a7e32071aa014eb9b18c0bd4361f",
+      "sha256": "aaff72a918f6deca80a40560b08ccd36b873e482509d4584fce3e0edb39bb682",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1625,7 +1625,7 @@
     },
     {
       "path": "runtime/bsw/src/CanTp.c",
-      "sha256": "c489cfc27ae0c84040992395ca8389554ad3ab90021298a58733be5c73c42a05",
+      "sha256": "2dfee52f64d0ac63b5bbb448f37c1bc884428d3bf21014ec0d6212c61c5ab981",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

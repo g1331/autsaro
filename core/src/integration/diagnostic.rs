@@ -134,6 +134,25 @@ fn timer(graph: &Graph, context: usize, parameter: &str) -> Result<u32, Vec<Plan
         })
 }
 
+/// A CanTp timer counts main-function periods and may expire at the call right after it
+/// starts, so it lasts at least two periods of the fixed 1 ms main function.
+fn transport_timer(
+    graph: &Graph,
+    context: usize,
+    parameter: &str,
+) -> Result<u32, Vec<PlanDiagnostic>> {
+    let value = timer(graph, context, parameter)?;
+    if value < 2 {
+        return Err(reject(
+            graph,
+            context,
+            "DIAGNOSTIC_TIMING",
+            crate::product_message!("backend.integration.diagnostic.transport_timer_two_periods"),
+        ));
+    }
+    Ok(value)
+}
+
 fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<PlanDiagnostic>> {
     let prefix = if receive { "CanIfRxPdu" } else { "CanIfTxPdu" };
     let found: Vec<_> = graph
@@ -832,12 +851,12 @@ pub(super) fn inspect_transport(
         p2_ms,
         p2_star_ms,
         s3_ms: 5000,
-        n_ar_ms: timer(graph, rx_transport, "CanTpNar")?,
-        n_br_ms: timer(graph, rx_transport, "CanTpNbr")?,
-        n_cr_ms: timer(graph, rx_transport, "CanTpNcr")?,
-        n_as_ms: timer(graph, tx_transport, "CanTpNas")?,
-        n_bs_ms: timer(graph, tx_transport, "CanTpNbs")?,
-        n_cs_ms: timer(graph, tx_transport, "CanTpNcs")?,
+        n_ar_ms: transport_timer(graph, rx_transport, "CanTpNar")?,
+        n_br_ms: transport_timer(graph, rx_transport, "CanTpNbr")?,
+        n_cr_ms: transport_timer(graph, rx_transport, "CanTpNcr")?,
+        n_as_ms: transport_timer(graph, tx_transport, "CanTpNas")?,
+        n_bs_ms: transport_timer(graph, tx_transport, "CanTpNbs")?,
+        n_cs_ms: transport_timer(graph, tx_transport, "CanTpNcs")?,
         buffer_bytes: 64,
         receive_nsdu: identifier(graph, rx_transport, "CanTpRxNSduId")?,
         transmit_nsdu: identifier(graph, tx_transport, "CanTpTxNSduId")?,

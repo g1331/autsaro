@@ -9,7 +9,8 @@
 #include "ComStack_Types.h"
 /** Implementation-defined configuration of the one channel (SWS_CanTp_00340), generated
  * as the read-only tp_config. Timer members count CanTp_MainFunction calls, not
- * milliseconds; each must be nonzero or CanTp_Init ignores the configuration.
+ * milliseconds; each must be at least 2, since a timer may expire at the call right after
+ * it starts, or CanTp_Init ignores the configuration.
  */
 typedef struct {
     /** Rx N-SDU ID accepted by CanTp_CancelReceive (CanTpRxNSduId, ECUC_CanTp_00301). */
@@ -52,8 +53,9 @@ typedef struct {
 } CanTp_ConfigType;
 /** Start the module with a generated configuration and drop all connections without
  * notification (SWS_CanTp_00208, 00273).
- * @param[in] CfgPtr Generated configuration with 8 to 256 bytes per N-SDU and nonzero timers;
- * any other pointer, including NULL, is ignored and the state is unchanged.
+ * @param[in] CfgPtr Generated configuration with 8 to 256 bytes per N-SDU, timers of at
+ * least 2 periods and a nonzero period; any other pointer, including NULL, is ignored and
+ * the state is unchanged.
  * @return None.
  * Preconditions: None; a repeated call restarts the module.
  * Context: startup task; not inside an exclusive area.
@@ -94,9 +96,10 @@ Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
 Std_ReturnType CanTp_CancelTransmit(PduIdType TxPduId);
 /** Abort the reception of an N-SDU and notify PduR with E_NOT_OK (SWS_CanTp_00257, 00263).
  * @param[in] RxPduId The configured Rx N-SDU.
- * @return E_OK when the reception was aborted. E_NOT_OK for an unknown ID, when no
- * segmented reception is in progress (CANTP_E_OPER_NOT_SUPPORTED is reported), while the
- * last CF is awaited (SWS_CanTp_00262), or after FC(OVFLW).
+ * @return E_OK when the reception was aborted. E_NOT_OK for an unknown ID, while an SF or
+ * FF is being admitted, or while the last CF is awaited (SWS_CanTp_00262); E_NOT_OK with
+ * CANTP_E_OPER_NOT_SUPPORTED when no cancellable reception exists (none, refused with
+ * FC(OVFLW), or ended with its notification still owed).
  * Preconditions: CanTp initialized; otherwise E_NOT_OK.
  * Context: task or upper-layer callback; not inside an exclusive area.
  * Reentrancy: reentrant; at most one concurrent call aborts a given reception.
@@ -109,7 +112,8 @@ Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId);
  * are ignored.
  * @return None.
  * Preconditions: CanTp initialized; otherwise the frame is ignored.
- * Context: lower-layer callback or task; not inside an exclusive area.
+ * Context: lower-layer callback, also in interrupt context (SWS_CanTp_00235); not inside
+ * an exclusive area.
  * Reentrancy: reentrant; frames are processed in arrival order, and a frame beyond four
  * still unprocessed is dropped with CANTP_E_COM.
  * Ownership: the frame is copied before return and not kept.
@@ -120,8 +124,8 @@ void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
  * @param[in] result E_OK when sent; otherwise the connection that sent it is aborted.
  * @return None.
  * Preconditions: None; a confirmation without a frame in flight is ignored.
- * Context: lower-layer callback or task; not inside an exclusive area. The next frame on
- * the N-PDU waits for CanTp_MainFunction.
+ * Context: lower-layer callback, also in interrupt context (SWS_CanTp_00236); not inside
+ * an exclusive area. The next frame on the N-PDU waits for CanTp_MainFunction.
  * Reentrancy: reentrant.
  * Ownership: None.
  */
