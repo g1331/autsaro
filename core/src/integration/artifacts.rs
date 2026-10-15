@@ -895,17 +895,15 @@ pub(super) fn files(
                 )
             };
             let managed = match name.as_str() {
-                "Dcm_Init" => format!(
+                "Dcm_Init"
+                | "Dcm_ResetToDefaultSession"
+                | "Dcm_MainFunction"
+                | "Dcm_TpRxIndication"
+                | "Dcm_TpTxConfirmation" => format!(
                     "<MANAGED-MODE-GROUPS>{}{}</MANAGED-MODE-GROUPS>",
                     mode_group("DcmDiagnosticSessionControl"),
                     mode_group(&plan.ecu_composition()?.authentication_modes()?.group)
                 ),
-                "Dcm_ResetToDefaultSession" | "Dcm_MainFunction" | "Dcm_TpTxConfirmation" => {
-                    format!(
-                        "<MANAGED-MODE-GROUPS>{}</MANAGED-MODE-GROUPS>",
-                        mode_group("DcmDiagnosticSessionControl")
-                    )
-                }
                 _ => String::new(),
             };
             let scheduler_prefix = if module == "Dcm" {

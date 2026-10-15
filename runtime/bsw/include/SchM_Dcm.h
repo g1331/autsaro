@@ -1,14 +1,50 @@
 /** @file Dcm exclusive area, main function and diagnostic session mode switch. */
-/** Selected Dcm scheduler and actual diagnostic-session mode producer. */
 #ifndef SCHM_DCM_H
 #define SCHM_DCM_H
 #include "Rte_Dcm_Type.h"
+/** Selected immediate BSW Scheduler mode-switch results. */
 #define SCHM_E_OK    0u
 #define SCHM_E_LIMIT 130u
+/** Enter the Dcm state area (SWS_Rte_07250).
+ * @return None.
+ * Preconditions: no exclusive area is held by this context.
+ * Context: task or callback, including interrupt.
+ * Reentrancy: not reentrant within one context; concurrent contexts serialize.
+ * Ownership: this context holds the area until its matching Exit.
+ */
 void SchM_Enter_Dcm_DCM_STATE(void);
+/** Leave the Dcm state area (SWS_Rte_07251).
+ * @return None.
+ * Preconditions: this context holds DCM_STATE.
+ * Context: the same context as the matching Enter.
+ * Reentrancy: not reentrant within one context.
+ * Ownership: releases this context's area.
+ */
 void SchM_Exit_Dcm_DCM_STATE(void);
+/** Process one configured main period (SWS_Dcm_00053).
+ * @return None.
+ * Preconditions: initialized; otherwise no action.
+ * Context: scheduled ECU task; not inside an exclusive area.
+ * Reentrancy: not reentrant; calls while the executor is active return without work.
+ * Ownership: application callbacks use call-local buffers, never live Rx/Tx storage.
+ */
 void Dcm_MainFunction(void);
+/** Publish the session mode through the selected immediate SchM interface.
+ * @param[in] mode Configured session mode, distinct from the UDS session ID.
+ * @return SCHM_E_OK after publishing the immediate mode.
+ * Preconditions: initialized ECU.
+ * Context: ECU task or callback; not inside an exclusive area.
+ * Reentrancy: reentrant; the Dcm publisher orders updates.
+ * Ownership: None.
+ */
 Std_ReturnType SchM_Switch_Dcm_DcmDiagnosticSessionControl(
     Rte_ModeType_DcmDiagnosticSessionControl mode);
+/** Read the selected session mode.
+ * @return Current mode.
+ * Preconditions: initialized ECU.
+ * Context: ECU task or callback; not inside an exclusive area.
+ * Reentrancy: reentrant.
+ * Ownership: None.
+ */
 Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void);
 #endif

@@ -146,6 +146,9 @@ impl ValidatedIntegrationPlan {
                             argument.name
                         ));
                     }
+                    if symbol.return_type != "void" {
+                        source.push_str("    return E_OK;\n");
+                    }
                     source.push_str("}\n");
                     continue;
                 }
@@ -160,6 +163,9 @@ impl ValidatedIntegrationPlan {
                             source.push_str(&format!("    {}[{index}] = 0u;\n", argument.name));
                         }
                     }
+                }
+                if symbol.return_type != "void" {
+                    source.push_str("    return E_OK;\n");
                 }
                 source.push_str("}\n");
             }

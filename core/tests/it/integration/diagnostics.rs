@@ -373,6 +373,63 @@ fn internal_active_session_did_cannot_be_replaced_by_application_source() {
 }
 
 #[test]
+fn obd_availability_identifiers_are_reserved_but_data_identifiers_use_the_uds_bridge() {
+    // Verifies: SWS_Dcm_01197, SWS_Dcm_01379, SWS_Dcm_01387
+    for base in [0xf400u16, 0xf800] {
+        for offset in (0..=0xe0).step_by(0x20) {
+            let mut sources = inputs();
+            parameter(
+                &mut sources,
+                "ApplicationDid",
+                "DcmDspDidIdentifier",
+                &(base + offset).to_string(),
+            );
+            service_identifier_refused_at(&sources);
+        }
+        let mut sources = inputs();
+        parameter(
+            &mut sources,
+            "ApplicationDid",
+            "DcmDspDidIdentifier",
+            &(base + 0x21).to_string(),
+        );
+        assert_eq!(
+            build(&sources)
+                .unwrap()
+                .description()
+                .diagnostic
+                .as_ref()
+                .unwrap()
+                .did,
+            base + 0x21
+        );
+        assert!(normal_validation(&sources).diagnostics.is_empty());
+    }
+}
+
+fn service_identifier_refused_at(sources: &[InputSource]) {
+    let object = "/Configuration/Dcm/Config/Dsp/ApplicationDid";
+    let issues = build(sources).err().expect("availability DID refused");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "DIAGNOSTIC_IDENTIFIER"
+                && issue.object.as_deref() == Some(object)),
+        "{issues:?}"
+    );
+    let validation = normal_validation(sources);
+    assert!(
+        validation
+            .diagnostics
+            .iter()
+            .any(|issue| issue.code == "DIAGNOSTIC_IDENTIFIER"
+                && issue.path.as_deref() == Some(object)),
+        "{:?}",
+        validation.diagnostics
+    );
+}
+
+#[test]
 fn selected_dcm_subfunction_availability_matches_actual_service_dispatch() {
     for (service, available) in [
         ("SessionControl", "false"),
@@ -394,9 +451,14 @@ fn dcm_service_table_offers_exactly_session_read_and_tester_present() {
         "ECUC-CONTAINER-VALUE",
         "TesterPresent",
     );
-    // SecurityAccess (0x27) and RoutineControl (0x31) have no mainline handler,
-    // so an added service is refused at its own container instead of generated.
-    for (name, id) in [("SecurityAccess", "39"), ("RoutineControl", "49")] {
+    // Rejects: ECUC_Dcm_00735
+    // Every unselected UDS/OBD service is refused at its own source container.
+    for id in [
+        0x01u8, 0x02, 0x03, 0x04, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x11, 0x14, 0x19, 0x23, 0x24, 0x27,
+        0x28, 0x29, 0x2a, 0x2c, 0x2e, 0x2f, 0x31, 0x34, 0x35, 0x36, 0x37, 0x38, 0x3d, 0x83, 0x84,
+        0x85, 0x86, 0x87,
+    ] {
+        let name = format!("Unselected{id:02X}");
         let added = tester
             .replacen(
                 "<SHORT-NAME>TesterPresent</SHORT-NAME>",
@@ -662,4 +724,100 @@ fn destination_only_diagnostic_routes_and_explicit_lsdu_policy_cannot_be_ignored
         },
     );
     rejects_in_both(&source, "MODULE_UNSUPPORTED");
+}
+
+#[test]
+fn dcm_read_data_declares_the_standard_error_and_status_return() {
+    // Verifies: SWS_Dcm_00686, SWS_Dcm_00793
+    // Verifies: SWS_Rte_08913, SWS_Rte_02575, SWS_Rte_02576, SWS_Rte_01103
+    let sources = inputs();
+    let plan = build(&sources).unwrap();
+    let symbol = plan
+        .description()
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol == "Ingress_ReadData")
+        .unwrap();
+    assert_eq!(symbol.return_type, "Std_ReturnType");
+    let files = prepared_pipeline_files(&plan);
+    let header = files
+        .iter()
+        .find(|(path, _)| path == "generated/include/Rte_Ingress.h")
+        .unwrap();
+    let header = std::str::from_utf8(&header.1).unwrap();
+    assert!(header.contains("RTE_E_DataServices_ApplicationValue_E_NOT_OK 1U"));
+    assert!(header.contains("Std_ReturnType Ingress_ReadData("));
+    // An unchanged standard data declaration remains valid if the source array is renamed.
+    let mut renamed = sources.clone();
+    replace_all(
+        &mut renamed,
+        "Dcm_DataElement_ApplicationValueType",
+        "ReadValueBytes",
+    );
+    let files = prepared_pipeline_files(&build(&renamed).unwrap());
+    let header = &files
+        .iter()
+        .find(|(path, _)| path == "generated/include/Rte_Dcm_Type.h")
+        .unwrap()
+        .1;
+    let header = std::str::from_utf8(header).unwrap();
+    assert!(header.contains("typedef ReadValueBytes Dcm_DataElement_ApplicationValueType;"));
+    assert!(header.contains("Dcm_DataElement_ApplicationValue_ArrayType"));
+    assert!(header.contains("Dcm_DataArrayTypeUint8_ApplicationValueType"));
+    for code in ["+1", "01", "0x01", "0X1", "0b01", "0B1", " 1 "] {
+        let mut equivalent = sources.clone();
+        change(
+            &mut equivalent,
+            "types.arxml",
+            "<ERROR-CODE>1</ERROR-CODE>",
+            &format!("<ERROR-CODE>{code}</ERROR-CODE>"),
+        );
+        assert!(build(&equivalent).is_ok(), "{code}");
+        assert!(
+            !normal_validation(&equivalent)
+                .diagnostics
+                .iter()
+                .any(|issue| matches!(issue.severity, autosar_config_core::model::Severity::Error)),
+            "{code}"
+        );
+    }
+    for change_code in [None, Some("2")] {
+        let mut bad = sources.clone();
+        if let Some(code) = change_code {
+            change(
+                &mut bad,
+                "types.arxml",
+                "<ERROR-CODE>1</ERROR-CODE>",
+                &format!("<ERROR-CODE>{code}</ERROR-CODE>"),
+            );
+        } else {
+            xml_edit(
+                &mut bad,
+                "types.arxml",
+                |node| node.has_tag_name("POSSIBLE-ERROR-REFS"),
+                |_| String::new(),
+            );
+        }
+        let object = "/Types/DataServices_ApplicationValue/ReadData";
+        let issues = build(&bad)
+            .err()
+            .expect("invalid standard error contract refused");
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == "APPLICATION_ERROR_UNSUPPORTED"
+                    && issue.object.as_deref() == Some(object)),
+            "{issues:?}"
+        );
+        let validation = normal_validation(&bad);
+        assert!(
+            validation
+                .diagnostics
+                .iter()
+                .any(|issue| issue.code == "APPLICATION_ERROR_UNSUPPORTED"
+                    && issue.path.as_deref() == Some(object)),
+            "{:?}",
+            validation.diagnostics
+        );
+    }
 }

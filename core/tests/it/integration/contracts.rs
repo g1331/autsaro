@@ -278,6 +278,10 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
         .clone();
     for name in [
         "Ecu_TargetIsOwner",
+        "Dcm_MsgContextType",
+        "Dcm_MsgLenType",
+        "Dcm_DataArrayTypeUint8_ApplicationValueType",
+        "RTE_E_DataServices_ApplicationValue_E_NOT_OK",
         "Process_Transform",
         "DcmService_ReadData",
         &bridge,
@@ -1759,4 +1763,53 @@ fn canif_header_declares_only_standard_services() {
             "#include \"Can_GeneralTypes.h\""
         ]
     );
+}
+
+#[test]
+fn dcm_entities_declare_both_modes_for_every_possible_publisher() {
+    // Verifies: SWS_Dcm_00806, SWS_Dcm_01478
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    let bytes = &files
+        .iter()
+        .find(|(path, _)| path == "generated/descriptions/Host_Implementation.arxml")
+        .unwrap()
+        .1;
+    let document = roxmltree::Document::parse(std::str::from_utf8(bytes).unwrap()).unwrap();
+    let publishers = [
+        "Dcm_InitEntity",
+        "Dcm_ResetToDefaultSessionEntity",
+        "Dcm_MainFunctionEntity",
+        "Dcm_TpRxIndicationEntity",
+        "Dcm_TpTxConfirmationEntity",
+    ];
+    for name in publishers {
+        let entity = document
+            .descendants()
+            .find(|node| {
+                matches!(
+                    node.tag_name().name(),
+                    "BSW-CALLED-ENTITY" | "BSW-SCHEDULABLE-ENTITY"
+                ) && node
+                    .children()
+                    .any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some(name))
+            })
+            .unwrap_or_else(|| panic!("missing {name}"));
+        let groups: Vec<_> = entity
+            .descendants()
+            .filter(|node| node.has_tag_name("MODE-DECLARATION-GROUP-PROTOTYPE-REF"))
+            .map(|node| node.text().unwrap())
+            .collect();
+        assert_eq!(groups.len(), 2, "{name}: {groups:?}");
+        assert!(
+            groups.contains(&"/AUTOSAR_Dcm/Dcm/DcmDiagnosticSessionControl"),
+            "{name}"
+        );
+        assert!(
+            groups
+                .iter()
+                .any(|group| group.starts_with("/AUTOSAR_Dcm/Dcm/DcmAuthenticationState_")),
+            "{name}"
+        );
+    }
 }

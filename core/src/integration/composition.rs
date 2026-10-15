@@ -89,6 +89,7 @@ pub struct Operation {
     pub port: String,
     pub interface: String,
     pub operation: String,
+    pub application_error: Option<String>,
     pub read: bool,
     pub api_symbol: String,
     pub implementation_symbol: String,
@@ -169,7 +170,43 @@ pub struct CompositionContract {
     pub dcm_modes: Vec<DcmModeDefinition>,
 }
 
+pub(super) fn dcm_data_type_names(data: &str) -> [String; 3] {
+    let data = c_name(super::short_name(data));
+    [
+        format!("Dcm_DataElement_{data}Type"),
+        format!("Dcm_DataElement_{data}_ArrayType"),
+        format!("Dcm_DataArrayTypeUint8_{data}Type"),
+    ]
+}
+
 impl CompositionContract {
+    /// Standard names for the implemented four-byte synchronous Dcm data interface.
+    pub(super) fn diagnostic_types(
+        &self,
+        diagnostic: &super::diagnostic::DiagnosticContract,
+    ) -> Result<(String, String), Vec<PlanDiagnostic>> {
+        let native = self
+            .components
+            .iter()
+            .flat_map(|component| &component.operations)
+            .find(|operation| operation.port == diagnostic.client_port)
+            .and_then(|operation| operation.arguments.first())
+            .map(|argument| argument.native_type.clone())
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&diagnostic.client_port))?;
+        let mut parameter = native;
+        let mut declarations = String::from(
+            "/** Selected UINT8_N data (SWS_Dcm_91051, SWS_Dcm_91063, SWS_Dcm_01121). */\n",
+        );
+        for alias in dcm_data_type_names(&diagnostic.data) {
+            // Rte_Type.h already declares source array types, all checked as uint8[4].
+            if !self.array_types.values().any(|native| native == &alias) {
+                declarations.push_str(&format!("typedef {parameter} {alias};\n"));
+                parameter = alias;
+            }
+        }
+        Ok((declarations, parameter))
+    }
+
     /// The Dcm authentication state mode group every planned composition declares.
     pub(super) fn authentication_modes(&self) -> Result<&DcmModeDefinition, Vec<PlanDiagnostic>> {
         self.dcm_modes
@@ -297,12 +334,71 @@ fn native_type(
     Ok((native, path(graph, datatype)))
 }
 
+// The selected Dcm ReadData C/S operation includes E_NOT_OK even though its
+// application server must always supply valid data (SWS_Dcm_00686).
+fn application_error(
+    graph: &Graph,
+    interface: usize,
+    operation: usize,
+) -> Result<Option<String>, Vec<PlanDiagnostic>> {
+    let interface_name = name(graph, interface);
+    let dcm_read = name(graph, operation) == "ReadData"
+        && interface_name.starts_with("DataServices_")
+        && (graph.text(interface, "SERVICE-KIND") == Some("DIAGNOSTIC-COMMUNICATION-MANAGER")
+            || graph
+                .of_kind("ECUC-CONTAINER-VALUE")
+                .into_iter()
+                .any(|index| {
+                    graph.text(index, "DEFINITION-REF")
+                        == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData")
+                        && interface_name == format!("DataServices_{}", name(graph, index))
+                }));
+    let errors = graph.descendants(operation, "POSSIBLE-ERROR-REF");
+    if !dcm_read && errors.is_empty() {
+        return Ok(None);
+    }
+    if dcm_read && errors.len() == 1 {
+        let error = graph.objects.get(&graph.elements[errors[0]].text).copied();
+        if error.is_some_and(|error| {
+            graph.within(error, interface)
+                && graph.elements[error].tag == "APPLICATION-ERROR"
+                && name(graph, error) == "E_NOT_OK"
+                && graph.text(error, "ERROR-CODE").is_some_and(|code| {
+                    let code = code.trim();
+                    let (digits, radix) = if let Some(hex) =
+                        code.strip_prefix("0x").or_else(|| code.strip_prefix("0X"))
+                    {
+                        (hex, 16)
+                    } else if let Some(binary) =
+                        code.strip_prefix("0b").or_else(|| code.strip_prefix("0B"))
+                    {
+                        (binary, 2)
+                    } else {
+                        (code, 10)
+                    };
+                    u8::from_str_radix(digits, radix) == Ok(1)
+                })
+        }) {
+            return Ok(Some(format!("RTE_E_{}_E_NOT_OK", c_name(&interface_name))));
+        }
+    }
+    Err(fail(graph, operation, "APPLICATION_ERROR_UNSUPPORTED"))
+}
+
 fn dcm_mode_definitions(
     graph: &Graph,
     context: usize,
 ) -> Result<Vec<DcmModeDefinition>, Vec<PlanDiagnostic>> {
-    let connections: Vec<_> = graph.of_kind("ECUC-CONTAINER-VALUE").into_iter().filter(|index| graph.text(*index, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection")).collect();
-    let connection = one(graph, context, connections, "DIAGNOSTIC_REFERENCE")?;
+    let mut connections: Vec<_> = graph.of_kind("ECUC-CONTAINER-VALUE").into_iter().filter(|index| graph.text(*index, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection")).collect();
+    connections.sort_unstable();
+    // A second declaration in source order is the unsupported connection, not a BSW entry.
+    let connection_context = connections.get(1).copied().unwrap_or(context);
+    let connection = one(
+        graph,
+        connection_context,
+        connections,
+        "DIAGNOSTIC_REFERENCE",
+    )?;
     let suffix = name(graph, connection);
     let mut definitions = DCM_MODES.to_vec();
     definitions.push(DcmModeDefinition {
@@ -767,12 +863,10 @@ fn inspect_with_transport(
                     }
                 }
                 for operation in interface_operations {
-                    if !graph
-                        .descendants(operation, "POSSIBLE-ERROR-REF")
-                        .is_empty()
-                        || graph
-                            .text(operation, "NO-RETURN-VALUE-PROVIDED")
-                            .is_some_and(|value| !matches!(value, "false" | "0"))
+                    let application_error = application_error(graph, interface, operation)?;
+                    if graph
+                        .text(operation, "NO-RETURN-VALUE-PROVIDED")
+                        .is_some_and(|value| !matches!(value, "false" | "0"))
                     {
                         return Err(fail(graph, operation, "APPLICATION_ERROR_UNSUPPORTED"));
                     }
@@ -888,6 +982,7 @@ fn inspect_with_transport(
                         port: path(graph, port),
                         interface: path(graph, interface),
                         operation: path(graph, operation),
+                        application_error,
                         read,
                         api_symbol: api.clone(),
                         implementation_symbol: format!(
@@ -1574,6 +1669,8 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
         "INCLUDE/STD_TYPES.H".to_owned(),
     ]);
     let mut names: BTreeSet<String> = "RTE_H RTE_TYPE_H RTE_COM_H Rte_COMCbk Rte_COMCbkRxTOut CbkHandleIdType STD_TYPES_H NULL_PTR uint8 uint16 uint32 uint64 sint8 sint16 sint32 sint64 EcuStatus boolean Std_ReturnType Std_VersionInfoType TRUE FALSE E_OK E_NOT_OK RTE_E_COM_STOPPED RTE_E_NEVER_RECEIVED RTE_E_MAX_AGE_EXCEEDED intptr_t uintptr_t intmax_t uintmax_t INTMAX_MIN INTMAX_MAX UINTMAX_MAX INTPTR_MIN INTPTR_MAX UINTPTR_MAX PTRDIFF_MIN PTRDIFF_MAX SIZE_MAX SIG_ATOMIC_MIN SIG_ATOMIC_MAX WCHAR_MIN WCHAR_MAX WINT_MIN WINT_MAX INTMAX_C UINTMAX_C".split_whitespace().map(str::to_owned).collect();
+    names.extend("DCM_INITIAL DCM_PENDING DCM_CANCEL DCM_FORCE_RCRRP_OK DCM_RES_POS_OK DCM_RES_POS_NOT_OK DCM_RES_NEG_OK DCM_RES_NEG_NOT_OK DCM_OBD_ON_CAN DCM_OBD_ON_FLEXRAY DCM_OBD_ON_IP DCM_UDS_ON_CAN DCM_UDS_ON_FLEXRAY DCM_UDS_ON_IP DCM_ROE_ON_CAN DCM_ROE_ON_FLEXRAY DCM_ROE_ON_IP DCM_PERIODICTRANS_ON_CAN DCM_PERIODICTRANS_ON_FLEXRAY DCM_PERIODICTRANS_ON_IP DCM_NO_ACTIVE_PROTOCOL DCM_UDS_ON_LIN DCM_SUPPLIER_1 DCM_SUPPLIER_2 DCM_SUPPLIER_3 DCM_SUPPLIER_4 DCM_SUPPLIER_5 DCM_SUPPLIER_6 DCM_SUPPLIER_7 DCM_SUPPLIER_8 DCM_SUPPLIER_9 DCM_SUPPLIER_10 DCM_SUPPLIER_11 DCM_SUPPLIER_12 DCM_SUPPLIER_13 DCM_SUPPLIER_14 DCM_SUPPLIER_15 DCM_POS_RESP DCM_E_GENERALREJECT DCM_E_SERVICENOTSUPPORTED DCM_E_SUBFUNCTIONNOTSUPPORTED DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT DCM_E_RESPONSETOOLONG DCM_E_BUSYREPEATREQUEST DCM_E_CONDITIONSNOTCORRECT DCM_E_REQUESTSEQUENCEERROR DCM_E_NORESPONSEFROMSUBNETCOMPONENT DCM_E_FAILUREPREVENTSEXECUTIONOFREQUESTEDACTION DCM_E_REQUESTOUTOFRANGE DCM_E_SECURITYACCESSDENIED DCM_E_INVALIDKEY DCM_E_EXCEEDNUMBEROFATTEMPTS DCM_E_REQUIREDTIMEDELAYNOTEXPIRED DCM_E_UPLOADDOWNLOADNOTACCEPTED DCM_E_TRANSFERDATASUSPENDED DCM_E_GENERALPROGRAMMINGFAILURE DCM_E_WRONGBLOCKSEQUENCECOUNTER DCM_E_SUBFUNCTIONNOTSUPPORTEDINACTIVESESSION DCM_E_SERVICENOTSUPPORTEDINACTIVESESSION DCM_E_RPMTOOHIGH DCM_E_RPMTOOLOW DCM_E_ENGINEISRUNNING DCM_E_ENGINEISNOTRUNNING DCM_E_ENGINERUNTIMETOOLOW DCM_E_TEMPERATURETOOHIGH DCM_E_TEMPERATURETOOLOW DCM_E_VEHICLESPEEDTOOHIGH DCM_E_VEHICLESPEEDTOOLOW DCM_E_THROTTLE_PEDALTOOHIGH DCM_E_THROTTLE_PEDALTOOLOW DCM_E_TRANSMISSIONRANGENOTINNEUTRAL DCM_E_TRANSMISSIONRANGENOTINGEAR DCM_E_BRAKESWITCH_NOTCLOSED DCM_E_SHIFTERLEVERNOTINPARK DCM_E_TORQUECONVERTERCLUTCHLOCKED DCM_E_VOLTAGETOOHIGH DCM_E_VOLTAGETOOLOW DCM_E_VMSCNC_0 DCM_E_VMSCNC_1 DCM_E_VMSCNC_2 DCM_E_VMSCNC_3 DCM_E_VMSCNC_4 DCM_E_VMSCNC_5 DCM_E_VMSCNC_6 DCM_E_VMSCNC_7 DCM_E_VMSCNC_8 DCM_E_VMSCNC_9 DCM_E_VMSCNC_A DCM_E_VMSCNC_B DCM_E_VMSCNC_C DCM_E_VMSCNC_D DCM_E_VMSCNC_E DCM_SEC_LEV_LOCKED DCM_DEFAULT_SESSION DCM_PROGRAMMING_SESSION DCM_EXTENDED_DIAGNOSTIC_SESSION DCM_SAFETY_SYSTEM_DIAGNOSTIC_SESSION".split_whitespace().map(str::to_owned));
+    names.extend("Dcm_OpStatusType Dcm_ConfirmationStatusType Dcm_ProtocolType Dcm_NegativeResponseCodeType Dcm_ConfigType Dcm_MsgItemType Dcm_MsgType Dcm_MsgLenType Dcm_MsgAddInfoType Dcm_IdContextType Dcm_MsgContextType Dcm_ReadDidType Ecu_DcmAuthenticationModeType".split_whitespace().map(str::to_owned));
     names.extend("RTE_CORE RTE_MAIN_H RTE_E_OK RTE_E_LIMIT Rte_Start Rte_Stop SchM_ConfigType SchM_Init SchM_Start SchM_StartTiming SchM_Deinit RTE_CODE RTE_VAR_CLEARED Rte_MemMap_HeaderCheck rte_started rte_allocated SchM_Switch_Dcm_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl Dcm_SecLevelType Dcm_SesCtrlType Rte_ModeType_DcmDiagnosticSessionControl Dcm_GetSecurityLevel Dcm_GetSesCtrlType Dcm_ResetToDefaultSession Can_HostTransmitToken Can_HostCompleteTransmit CanIf_GetControllerRxErrorCounter CanIf_GetControllerTxErrorCounter CanTp_CancelReceive CanTp_CancelTransmit Com_TriggerIPDUSend ComM_GetInhibitionStatus ComM_SetECUGroupClassification ComM_GetCurrentPNCComMode ComM_EcuM_WakeUpIndication".split_whitespace().map(str::to_owned));
     names.extend("COM_H COMSTACK_TYPES_H COMSTACK_CFG_H ECU_TARGET_H ECU_HOST_BATCH_H ECU_STATUS_H AUTOSAR_OS_TARGET_H AUTOSAR_OS_H AUTOSAR_OS_TIME_H STD_HIGH STD_LOW STD_ACTIVE STD_IDLE STD_ON STD_OFF COM_SERVICE_NOT_AVAILABLE COM_BUSY COM_UNINIT COM_INIT ECU_TARGET_UNPREPARED ECU_TARGET_INITIALIZING ECU_TARGET_READY ECU_TARGET_FAILED ECU_TARGET_CLOSED ECU_TARGET_OUTPUT_CAPACITY ECU_BATCH_CAPACITY ECU_BATCH_MAX_SPAN ECU_BATCH_LINE_CAPACITY ECU_BATCH_WATCHDOG_MS ECU_BATCH_BEGIN ECU_BATCH_RX ECU_BATCH_COMMIT RTE_MEMMAP_ACTIVE RTE_MEMMAP_HEADER_CHECK Ecu_TargetIsOwner Ecu_TargetCheckLifecycleContext Com_SendSignal Com_ReceiveSignal PduIdType PduLengthType PduInfoType BufReq_ReturnType TpDataStateType RetryInfoType NetworkHandleType Com_StatusType Com_SignalIdType Com_IpduGroupIdType Com_PduConfigType Com_NotificationType Com_TransmitType Com_ConfigType OS_MAX_TASKS OS_MAX_PRIORITY OS_MAX_ACTIVATIONS OS_BASIC_TASK OS_EXTENDED_TASK OS_MAX_RESOURCES OS_MAX_INTERNAL_RESOURCES OS_MAX_INTERRUPTS OS_MAX_ISR_PRIORITY OS_SCHEDULE_FULL OS_SCHEDULE_NON".split_whitespace().map(str::to_owned));
     for index in 0..plan
@@ -1628,6 +1725,35 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             || !names.insert(native.clone())
         {
             return Err(fail(graph, graph.index(path)?, "CONTRACT_NAME_COLLISION"));
+        }
+    }
+    let errors: BTreeSet<_> = plan
+        .components
+        .iter()
+        .flat_map(|component| &component.operations)
+        .filter_map(|operation| operation.application_error.as_ref())
+        .collect();
+    for error in errors {
+        if !names.insert(error.clone()) {
+            return Err(fail(
+                graph,
+                graph.index(&plan.composition)?,
+                "CONTRACT_NAME_COLLISION",
+            ));
+        }
+    }
+    for data in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| {
+            graph.text(*index, "DEFINITION-REF")
+                == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData")
+        })
+    {
+        for alias in dcm_data_type_names(&graph.elements[data].object) {
+            if !plan.array_types.values().any(|native| native == &alias) && !names.insert(alias) {
+                return Err(fail(graph, data, "CONTRACT_NAME_COLLISION"));
+            }
         }
     }
     for component in &plan.components {
@@ -1757,7 +1883,9 @@ pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
             });
             symbols.push(SymbolContract {
                 symbol: runnable.symbol.clone(),
-                return_type: if runnable.event.is_none() {
+                return_type: if runnable.event.is_none()
+                    || operation.is_some_and(|operation| operation.application_error.is_some())
+                {
                     "Std_ReturnType"
                 } else {
                     "void"

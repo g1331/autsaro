@@ -90,6 +90,14 @@ pub(super) fn files(
     let mut source = String::from(
         "/** @file Generated RTE for the checked single-owner component graph. */\n#define RTE_CORE\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"Com.h\"\n#include \"Ecu_Target.h\"\n",
     );
+    let diagnostic_types = description
+        .diagnostic
+        .as_ref()
+        .map(|diagnostic| composition.diagnostic_types(diagnostic))
+        .transpose()?;
+    if diagnostic_types.is_some() {
+        source.push_str("#include \"Rte_Dcm_Type.h\"\n");
+    }
     for component in &composition.components {
         source.push_str(&format!(
             "#include \"{}\"\n",
@@ -245,13 +253,23 @@ pub(super) fn files(
                         .any(|name| name == &argument.native_type)
                 {
                     source.push_str(&format!(
-                        "    if ({} == NULL_PTR) {{\n        return E_NOT_OK;\n    }}\n",
-                        argument.name
+                        "    if ({} == NULL_PTR) {{\n        return {};\n    }}\n",
+                        argument.name,
+                        operation.application_error.as_deref().unwrap_or("E_NOT_OK")
                     ));
                 }
             }
-            let call = c_layout::call("    ", &runnable.symbol, &names(&operation.arguments), ";");
-            source.push_str(&format!("{call}\n    return E_OK;\n}}\n"));
+            let callee = if server.application_error.is_some() {
+                format!("return {}", runnable.symbol)
+            } else {
+                runnable.symbol.clone()
+            };
+            let call = c_layout::call("    ", &callee, &names(&operation.arguments), ";");
+            source.push_str(&format!("{call}\n"));
+            if server.application_error.is_none() {
+                source.push_str("    return E_OK;\n");
+            }
+            source.push_str("}\n");
         }
         for runnable in component
             .runnables
@@ -263,7 +281,15 @@ pub(super) fn files(
                 .iter()
                 .find(|operation| operation.runnable == runnable.path)
                 .ok_or_else(|| PlanDiagnostic::plan_premise(&runnable.path))?;
-            let head = function(scope, &runnable.symbol, &parameters(&operation.arguments));
+            let (_, datatype) = diagnostic_types
+                .as_ref()
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&runnable.path))?;
+            let arguments = operation
+                .arguments
+                .iter()
+                .map(|argument| c_layout::parameter(datatype, &argument.name))
+                .collect::<Vec<_>>();
+            let head = function(scope, &runnable.symbol, &arguments);
             let call = c_layout::call(
                 "    ",
                 &format!("return {}", operation.implementation_symbol),

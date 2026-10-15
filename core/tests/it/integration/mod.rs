@@ -3,6 +3,7 @@ use super::*;
 
 mod communication;
 mod contracts;
+mod diagnostic_configuration;
 mod diagnostics;
 mod handoff;
 mod modes;

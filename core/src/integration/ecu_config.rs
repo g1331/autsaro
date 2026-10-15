@@ -56,6 +56,11 @@ pub(super) fn files(
     let composition = description.ecu_composition()?;
     let com = description.ecu_com()?;
     let authentication_group = composition.authentication_modes()?.group.as_ref();
+    let diagnostic_types = description
+        .diagnostic
+        .as_ref()
+        .map(|diagnostic| composition.diagnostic_types(diagnostic))
+        .transpose()?;
     let communication = description.ecu_communication()?;
     let can = &communication.can;
     let mode = description.ecu_mode()?;
@@ -79,7 +84,10 @@ pub(super) fn files(
         (
             "include/Rte_Dcm_Type.h",
             format!(
-                "typedef uint8 Rte_ModeType_{authentication_group};\n{}",
+                "{}/** Connection authentication mode (SWS_Dcm_91067). */\ntypedef uint8 Rte_ModeType_{authentication_group};\n/** Deauthenticated, authenticated and transition values (SWS_Dcm_91067). */\n{}",
+                diagnostic_types
+                    .as_ref()
+                    .map_or("", |types| types.0.as_str()),
                 c_layout::defines(&[
                     (
                         format!("RTE_MODE_{authentication_group}_DCM_DEAUTHENTICATED"),
@@ -96,7 +104,7 @@ pub(super) fn files(
         (
             "include/SchM_Dcm.h",
             format!(
-                "{}\n{}\n",
+                "/** Publish the selected connection authentication mode.\n * @param[in] mode 0 for deauthenticated, 1 for authenticated.\n * @return SCHM_E_OK in the ECU owner context; SCHM_E_LIMIT otherwise.\n * Preconditions: initialized ECU; otherwise SCHM_E_LIMIT.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant; the Dcm publisher orders updates.\n * Ownership: no pointer is retained.\n */\n{}\n/** Read the selected connection authentication mode.\n * @return Current mode, or its transition value outside the ECU owner context.\n * Preconditions: initialized ECU.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant.\n * Ownership: None.\n */\n{}\n",
                 c_layout::signature(
                     "Std_ReturnType",
                     &format!("SchM_Switch_Dcm_{authentication_group}"),
@@ -114,10 +122,17 @@ pub(super) fn files(
             ),
         ),
     ] {
+        let mut edits = vec![super::outputs::Edit::BeforeGuardEnd(&addition)];
+        if path == "include/Rte_Dcm_Type.h" && diagnostic_types.is_some() {
+            edits.push(super::outputs::Edit::Once(
+                "\"Std_Types.h\"",
+                "\"Std_Types.h\"\n#include \"Rte_Type.h\"",
+            ));
+        }
         let text = super::outputs::render(
             outputs.template(super::outputs::DCM_MODES, path)?,
             path,
-            &[super::outputs::Edit::BeforeGuardEnd(&addition)],
+            &edits,
         )?;
         outputs.emit_rendered(super::outputs::DCM_MODES, path, text)?;
     }
@@ -847,7 +862,7 @@ fn lifecycle(partition: u16, mode_scope: &str, authentication_group: &str) -> St
             "",
             true,
         );
-        modes.push_str(&format!("{switch}\n{{\n    if (Ecu_TargetIsOwner() == 0) {{\n        return SCHM_E_LIMIT;\n    }}\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    {variable} = mode;\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return SCHM_E_OK;\n}}\n{mode}\n{{\n    Rte_ModeType_{group} mode;\n    if (Ecu_TargetIsOwner() == 0) {{\n        return RTE_TRANSITION_{group};\n    }}\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    mode = {variable};\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return mode;\n}}\n"));
+        modes.push_str(&format!("{switch}\n{{\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    {variable} = mode;\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return SCHM_E_OK;\n}}\n{mode}\n{{\n    Rte_ModeType_{group} mode;\n    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);\n    mode = {variable};\n    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);\n    return mode;\n}}\n"));
     }
     modes.push_str(&format!(
         "#define RTE_{mode_scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"

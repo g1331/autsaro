@@ -268,19 +268,19 @@ static void cancel(void) {
     } else if (operation == 10u) {
         Det_Init(NULL_PTR);
     } else if ((operation >= 6u) && (operation <= 9u)) {
-        if (operation == 6u)
+        if (operation == 6u) {
+            /* Dcm now owns a strict area too: leave it before calling CanIf. */
             SchM_Enter_Dcm_DCM_STATE();
-        else if (operation == 7u)
+            SchM_Exit_Dcm_DCM_STATE();
+        } else if (operation == 7u)
             ; /* CanTp's area is strict (ADR 0018): a holder never calls CanIf. */
         else if (operation == 8u)
             SchM_Enter_ComM_COMM_STATE();
         else
             SchM_Enter_BswM_BSWM_STATE();
         assert(CanIf_GetControllerMode(0u, &actual) == E_OK);
-        if (operation == 6u)
-            SchM_Exit_Dcm_DCM_STATE();
-        else if (operation == 7u)
-            ;
+        if ((operation == 6u) || (operation == 7u))
+            ; /* Both migrated callers have left their own area. */
         else if (operation == 8u)
             SchM_Exit_ComM_COMM_STATE();
         else
