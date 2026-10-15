@@ -807,6 +807,9 @@ fn builtin_unselected_variants_do_not_become_false_duplicate_errors() {
     .map(|name| field(&catalog, &format!("{hooks}/{name}"), "false"))
     .collect();
     let os_fields = field(&catalog, &format!("{os}/OsStatus"), "EXTENDED")
+        + &field(&catalog, &format!("{os}/OsLockTrustedFunctionCall"), "true")
+        + &field(&catalog, &format!("{os}/OsStackMonitoring"), "true")
+        + &field(&catalog, &format!("{os}/OsUseArti"), "true")
         + &field(&catalog, &format!("{os}/OsUseGetServiceId"), "false")
         + &field(&catalog, &format!("{os}/OsUseParameterAccess"), "false")
         + &field(&catalog, &format!("{os}/OsUseResScheduler"), "false");

@@ -8,6 +8,7 @@ mod diagnostics;
 mod handoff;
 mod modes;
 mod os;
+mod os_configuration;
 mod scheduling;
 mod single_component;
 mod validation;

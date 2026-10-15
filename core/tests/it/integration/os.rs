@@ -13,9 +13,10 @@ fn codes(sources: &[InputSource]) -> Vec<String> {
         .collect()
 }
 
-/// SWS_Os_00370 timing report and the counter profile accepted by the selected
-/// controlled-time target: one logical millisecond per tick (ECUC
-/// OsSecondsPerTick 0.001), base 1, minimum cycle 1.
+/// The generator's report of OS-internal timers and the counter profile
+/// accepted by the selected controlled-time target: one logical millisecond
+/// per tick (ECUC OsSecondsPerTick 0.001), base 1, minimum cycle 1.
+/// Verifies: SWS_Os_00370
 #[test]
 fn counter_timing_report_and_profile() {
     for (renamed, maximum) in [(false, 65535u32), (true, 65535), (false, 4095)] {
@@ -127,7 +128,8 @@ fn scheduler_configuration_rejections() {
         build(&scheduler_variant(value, resource))
             .unwrap_or_else(|issues| panic!("{value}: {issues:?}"));
     }
-    // An explicit RES_SCHEDULER needs OsUseResScheduler TRUE (SWS_Os_00801).
+    // With OsUseResScheduler FALSE an explicit RES_SCHEDULER is an ordinary
+    // resource (SWS_Os_00854), which the selected profile does not accept.
     assert_rejected(&scheduler_variant("0", true), "OS_RESOURCE_PROFILE");
     // XSD boolean literals are case-sensitive; other integers are outside it.
     let mut upper = single_component_sources();
@@ -178,6 +180,9 @@ fn scheduler_configuration_rejections() {
         "OsScalabilityClass",
         "OsUseGetServiceId",
         "OsUseParameterAccess",
+        "OsLockTrustedFunctionCall",
+        "OsStackMonitoring",
+        "OsUseArti",
         "OsStartupHook",
         "OsErrorHook",
     ] {
@@ -349,7 +354,7 @@ fn schedule_table_rejections() {
             "wrong-strategy",
             "OsScheduleTblSyncStrategy</DEFINITION-REF><VALUE>NONE</VALUE>",
             "OsScheduleTblSyncStrategy</DEFINITION-REF><VALUE>IMPLICIT</VALUE>",
-            "PERIOD_SCHEDULE_TABLE_CONFLICT",
+            "TARGET_PARAMETER_UNSUPPORTED",
         ),
         (
             "wrong-first-offset",

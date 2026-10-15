@@ -106,7 +106,7 @@ pub(crate) fn counter_variant(renamed: bool, maximum: u32) -> Vec<InputSource> {
 
 pub(crate) const RES_SCHEDULER: &str = "<ECUC-CONTAINER-VALUE><SHORT-NAME>RES_SCHEDULER</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">/AUTOSAR/EcucDefs/Os/OsResource</DEFINITION-REF><PARAMETER-VALUES><ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST=\"ECUC-ENUMERATION-PARAM-DEF\">/AUTOSAR/EcucDefs/Os/OsResource/OsResourceProperty</DEFINITION-REF><VALUE>STANDARD</VALUE></ECUC-TEXTUAL-PARAM-VALUE></PARAMETER-VALUES></ECUC-CONTAINER-VALUE>";
 
-/// OsUseResScheduler (ECUC_Os_00040) with an optional explicit RES_SCHEDULER
+/// OsUseResScheduler (ECUC_Os_00049) with an optional explicit RES_SCHEDULER
 /// OsResource in the selected OS module.
 pub(crate) fn scheduler_variant(value: &str, resource: bool) -> Vec<InputSource> {
     let mut sources = single_component_sources();
