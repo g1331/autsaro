@@ -78,8 +78,8 @@ int test_process(void) {
                 r#"#include "Rte_Ingress.h"
 static uint32 tx_value, local_value;
 void Ingress_Periodic(void) {}
-void Ingress_ReadData(Dcm_DataElement_ApplicationValueType Data) { Data[0]=1U; Data[1]=2U; Data[2]=3U; Data[3]=4U; }
-void (*const byte_server)(uint8 *) = Ingress_ReadData;
+Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType Data) { Data[0]=1U; Data[1]=2U; Data[2]=3U; Data[3]=4U; return E_OK; }
+Std_ReturnType (*const byte_server)(uint8 *) = Ingress_ReadData;
 Std_ReturnType Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(uint32 *data) { *data=11U; return E_OK; }
 Std_ReturnType Rte_Application_Pipeline_IngressInstance_Write_TxValue_Value(uint32 data) { tx_value=data; return E_OK; }
 Std_ReturnType Rte_Application_Pipeline_IngressInstance_Write_Value_Value(uint32 data) { local_value=data; return E_OK; }
@@ -87,7 +87,7 @@ int test_ingress(void);
 int test_ingress(void) {
     uint32 value=0U;
     uint8 bytes[4]={0U,0U,0U,0U};
-    byte_server(bytes);
+    if (byte_server(bytes) != E_OK) { return 1; }
     return Rte_Read_RxValue_Value(&value)==E_OK && value==11U && Rte_Write_TxValue_Value(21U)==E_OK && Rte_Write_Value_Value(31U)==E_OK && tx_value==21U && local_value==31U && bytes[0]==1U && bytes[3]==4U ? 0 : 1;
 }
 "#,
@@ -407,9 +407,9 @@ int main(void) {
     uint32 state = 17u;
     Dcm_DataElement_ApplicationValueType data = {1u, 2u, 3u, 4u};
     void (*scalar_server)(uint32, uint32 *, uint32 *) = &Process_Transform;
-    void (*array_server)(Dcm_DataElement_ApplicationValueType) = &Ingress_ReadData;
+    Std_ReturnType (*array_server)(Dcm_DataElement_ApplicationValueType) = &Ingress_ReadData;
     scalar_server(23u, &output, &state);
-    array_server(data);
+    assert(array_server(data) == E_OK);
     assert(output == 0u);
     assert(state == 17u);
     assert((data[0] == 0u) && (data[1] == 0u) && (data[2] == 0u) && (data[3] == 0u));

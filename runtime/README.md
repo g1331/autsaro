@@ -46,6 +46,8 @@ CMake 不核对固定工具链身份和目标段，也不运行 `verify`；这�
 | SID dispatch | `10/3e/22`；其余返回 unsupported-service NRC |
 | P2/P2* | 来自验证后的 Dcm 会话参数；固定参考为 50/5000 ms |
 
+ReadData 应用服务返回 `Std_ReturnType`，提供四个有效或替代字节并返回 `E_OK`；标准 C/S 接口声明 `E_NOT_OK=1`，保留 RTE 基础设施失败的返回语义，普通无 application error 的 C/S 服务仍返回 void。应用 DID 不可使用 F186，或 F400–F4E0／F800–F8E0 中每隔 0x20 的 availability 标识。后者由 Dcm 按已配置 DID 生成支持位图，不调用应用。
+
 ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 response-too-long NRC。const Rx/Tx 表明确区分 CanIf 下层句柄和 Com/CanTp 上层句柄，来自 canonical PDU 计划。配置重初始化不会将 Tx-only 帧当成 Rx 路由。
 
 发送、时钟和诊断 admission/pending/process 由链接选中的 adapter 实现；queued 请求 ring 与 owner 操作属于 ECU adapter，不进入公共 Dcm 接口。`Os_IntegrationOnWaiting` 在原持锁 quiescence 点、完成收据发布前通知 ECU adapter；无 ECU consumer 的独立 OS harness 使用无观察者 adapter，不发布伪造的 ECU 收据。私有 `OS_*_TESTS`/`ECU_TARGET_TESTS` 仅用于对应测试构建，生产 HostBatch 拒绝混合控制源。
@@ -56,7 +58,7 @@ ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 res
 
 `Can.c` 的 CODE 和 VAR_CLEARED_UNSPECIFIED 通过 `Can_MemMap.h` 显式映射至受控 GCC PE/ELF 的 `.text`／`.bss`，由链接器及进程装载器提供代码和清零存储；BSWMD 记录对应标记及头文件。重复 include 必须带单一合法 marker，禁止嵌套和错配。该映射不定义 MCU linker 布局。
 
-`Can.c` 唯一管理发送、接收快照和生命周期，`Can_Host.c` 只转发主机操作；CanIf 与直接 mode／诊断依赖共享递归 admission 锁；该锁先于 driver 锁获取，覆盖回调快照、分发、取消及消费者初始化。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后执行同一接收处理）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
+`Can.c` 唯一管理发送、接收快照和生命周期，`Can_Host.c` 只转发主机操作；CanIf、CanTp 与 Dcm 使用各自独占区，ComM／BswM 仍在迁移中的共享区域上（ADR 0018）。Dcm 在区外调用 PduR、ComM 与应用；单飞执行／发布协议保护回调、模式顺序与重启身份。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后执行同一接收处理）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
 
 `CanVersionInfoApi` 缺失（`MULTIPLICITY`）或为 true（`CAN_FEATURE_UNSUPPORTED`）时在生成前拒绝，`Can.h` 不声明 `Can_GetVersionInfo`，也不提供版本信息开关宏。`CAN_MODULE_ID` 为 80，软件版本与项目 `0.1.0` 一致。项目尚无已分配的 AUTOSAR vendor ID，也无经过确认的 R24-11 数字发布宏映射，因此不编造这两项 published identity；取得并核对后才能实现适用的 GetVersionInfo 和外部版本交叉检查。这个缺口由现有质量规格承接，退出条件是正式身份、版本依据和双目标兼容测试成立。
 

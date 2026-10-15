@@ -26,7 +26,12 @@ impl Scratch {
 }
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        // A failing test keeps its scene; CI uploads the scratch root on failure.
+        if std::thread::panicking() {
+            eprintln!("scratch retained at {}", self.0.display());
+        } else {
+            let _ = fs::remove_dir_all(&self.0);
+        }
     }
 }
 pub(crate) fn archive() -> PathBuf {

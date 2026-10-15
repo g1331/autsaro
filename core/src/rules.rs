@@ -474,6 +474,7 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
         "TARGET-DATA-PROTOTYPE-REF" | "DATA-ELEMENT-REF" => dest == "VARIABLE-DATA-PROTOTYPE",
         "TARGET-P-PORT-REF" | "CONTEXT-P-PORT-REF" => dest == "P-PORT-PROTOTYPE",
         "TARGET-R-PORT-REF" | "CONTEXT-R-PORT-REF" => dest == "R-PORT-PROTOTYPE",
+        "POSSIBLE-ERROR-REF" => dest == "APPLICATION-ERROR",
         "OPERATION-REF" | "TARGET-PROVIDED-OPERATION-REF" | "TARGET-REQUIRED-OPERATION-REF" => {
             dest == "CLIENT-SERVER-OPERATION"
         }

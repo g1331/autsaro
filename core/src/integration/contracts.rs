@@ -150,6 +150,14 @@ impl ValidatedIntegrationPlan {
         ];
         for component in &composition.components {
             let mut body = String::from("#include \"Rte.h\"\n\n");
+            let errors: std::collections::BTreeSet<_> = component
+                .operations
+                .iter()
+                .filter_map(|operation| operation.application_error.as_ref())
+                .collect();
+            for error in errors {
+                body.push_str(&c_layout::defines(&[(error.clone(), "1U")]));
+            }
             for symbol in description
                 .symbols
                 .iter()
@@ -204,8 +212,10 @@ impl ValidatedIntegrationPlan {
                             "Planned E_OK on publication; independent of CAN availability."
                                 .to_owned()
                         }
+                    } else if symbol.definition_owner.starts_with("application/") {
+                        "E_OK with a valid value, including a replacement value on application failure (SWS_Dcm_00686).".to_owned()
                     } else {
-                        "Planned E_OK or an RTE infrastructure error for the synchronous client."
+                        "Planned E_OK; RTE_E_COM_STOPPED before RTE start; E_NOT_OK (1) outside the owner context or for a NULL argument."
                             .to_owned()
                     };
                     docs.push_str(&c_layout::comment(

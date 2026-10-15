@@ -264,12 +264,17 @@ fn mainline_enforces_fixed_os_class_and_did_read_limit() {
 
 /// The defect is rejected by plan construction and by normal definition
 /// validation at the same source file and object.
-fn rejected_at(sources: &[InputSource], code: &str, file: &str, object: &str) {
+pub(super) fn rejected_at(sources: &[InputSource], code: &str, file: &str, object: &str) {
     rejected_with(sources, (code, code), file, object);
 }
 
 /// As `rejected_at`, with distinct plan and normal-validation codes.
-fn rejected_with(sources: &[InputSource], (plan, normal): (&str, &str), file: &str, object: &str) {
+pub(super) fn rejected_with(
+    sources: &[InputSource],
+    (plan, normal): (&str, &str),
+    file: &str,
+    object: &str,
+) {
     let issues = build(sources)
         .err()
         .unwrap_or_else(|| panic!("{plan} accepted"));
@@ -2007,7 +2012,7 @@ fn second_canif_hardware_object_is_refused() {
 #[test]
 fn link_time_and_post_build_variants_are_refused_at_the_module() {
     // Rejects: ECUC_CanIf_00244, ECUC_PduR_00293, ECUC_Com_00540, ECUC_Can_00489
-    // Rejects: ECUC_CanTp_00306
+    // Rejects: ECUC_CanTp_00306, ECUC_Dcm_01082
     for (module, variant) in [
         ("Can", "VARIANT-POST-BUILD"),
         ("CanIf", "VARIANT-LINK-TIME"),
@@ -2016,6 +2021,8 @@ fn link_time_and_post_build_variants_are_refused_at_the_module() {
         ("Com", "VARIANT-LINK-TIME"),
         ("Com", "VARIANT-POST-BUILD"),
         ("CanTp", "VARIANT-POST-BUILD"),
+        ("Dcm", "VARIANT-LINK-TIME"),
+        ("Dcm", "VARIANT-POST-BUILD"),
     ] {
         let mut sources = single_component_sources();
         xml_edit(
@@ -2382,7 +2389,7 @@ fn com_parameters_outside_the_selection_are_refused_at_their_source() {
 /// selected catalog, or are refused where the selected profile cannot honour them.
 /// Adds `name` below the ECUC container `owner` whose definition is `path`: a parameter
 /// for a "KIND:value" `value`, otherwise a sub-container holding `content`.
-fn add_to_container(
+pub(super) fn add_to_container(
     sources: &mut [InputSource],
     owner: &str,
     path: &str,
@@ -2405,6 +2412,27 @@ fn add_to_container(
             let close = "</ECUC-CONTAINER-VALUE>";
             let body = text.trim_end().strip_suffix(close).unwrap();
             match value.split_once(':') {
+                Some(("REFERENCE", target)) => {
+                    let reference = format!(
+                        "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">{definition}</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">{target}</VALUE-REF></ECUC-REFERENCE-VALUE>"
+                    );
+                    if text.contains("<REFERENCE-VALUES>") {
+                        text.replacen(
+                            "<REFERENCE-VALUES>",
+                            &format!("<REFERENCE-VALUES>{reference}"),
+                            1,
+                        )
+                    } else {
+                        let at = text
+                            .find("<SUB-CONTAINERS>")
+                            .unwrap_or_else(|| text.rfind(close).unwrap());
+                        format!(
+                            "{}<REFERENCE-VALUES>{reference}</REFERENCE-VALUES>{}",
+                            &text[..at],
+                            &text[at..]
+                        )
+                    }
+                }
                 Some((kind, value)) => {
                     let element = match kind {
                         "INTEGER" | "FLOAT" | "BOOLEAN" => "NUMERICAL",

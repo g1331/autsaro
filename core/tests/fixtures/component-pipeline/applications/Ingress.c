@@ -49,9 +49,11 @@ void Ingress_Periodic(void) {
         (void)Rte_Write_Value_Value(value);
     }
 }
-void Ingress_ReadData(Dcm_DataElement_ApplicationValueType Data) {
+Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType Data)
+{
     Data[0] = (uint8)(committed >> 24u);
     Data[1] = (uint8)(committed >> 16u);
     Data[2] = (uint8)(committed >> 8u);
     Data[3] = (uint8)committed;
+    return E_OK;
 }

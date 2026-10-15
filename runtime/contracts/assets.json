@@ -967,7 +967,7 @@
     },
     {
       "path": "tools/python/src/ecu_tools/process.py",
-      "sha256": "4dceb9559cf11aa4976cba4efb48b0e54f7c62df3014805a2be195eb9f2d3aac",
+      "sha256": "164acf802914372dd18bddffb6042f470e44b8eb3db9433815ee9fba3a582ec4",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1317,7 +1317,7 @@
     },
     {
       "path": "runtime/bsw/include/Dcm.h",
-      "sha256": "0326c21e9973b31243eccc716487cbfe20ba086459412551446b7cd0cdf14fe1",
+      "sha256": "fa77a504563b4bc7c201e57c8f99f8cdce42a7a971a569f559af9fb16e3a365d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1331,7 +1331,7 @@
     },
     {
       "path": "runtime/bsw/include/Dcm_ComM.h",
-      "sha256": "fe3d4cbfc5cb45583e01f9b059f503ae73d708e39007ab1fcd16943f09ba7ab2",
+      "sha256": "95324d003f8a31f964598288c60b0331b4a411f3445bdeb0e2f0b126c88e0e76",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1555,7 +1555,7 @@
     },
     {
       "path": "runtime/bsw/include/Rte_Dcm_Type.h",
-      "sha256": "c7abab8d54b3fbdb962caeeff2cd29c8be0b007d9092e7c4902759f527669e6c",
+      "sha256": "79e3e9be148e70898ca119da5f228fc9280ce08632b695fca2dcab5aff34e6d3",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1583,7 +1583,7 @@
     },
     {
       "path": "runtime/bsw/include/SchM_Dcm.h",
-      "sha256": "11383d625ef5ff8bbf513f50ff4f707c277870cd67630778c416685088d677f9",
+      "sha256": "f21cf36abbcef46b3807e3f2025d7cda4acae36e15676b6f9b3a5a0574c03792",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1695,7 +1695,7 @@
     },
     {
       "path": "runtime/bsw/src/Dcm.c",
-      "sha256": "efe4792f2673564b754864955feb6e36985db5ae58bd6f77c29b5dd3744ae60a",
+      "sha256": "163328547d3cbcabc53a2c55ce31d5d07c8e44ccc823364ab3292457cdda6873",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1765,7 +1765,7 @@
     },
     {
       "path": "runtime/host/src/SchM_Diagnostic_Host.c",
-      "sha256": "0e35bedd96f269c21492201ead58396757f1b76fb705e33c457bcaf33a9f7a50",
+      "sha256": "6dcb4b58578f34569e90cc75d4ac103202c416fb19e310bbb7d008afe5d29960",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1961,7 +1961,7 @@
     },
     {
       "path": "runtime/host/src/Can_HostLock.h",
-      "sha256": "3d2e100b4530cb9ee3e0a7083c8a15f4ef1c39a7b277a69329b0a2b018fbd4ac",
+      "sha256": "5f7668be49fb8c46dafa07172d0e1db33361fd615b8bf8d2b8953e412a4729f7",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

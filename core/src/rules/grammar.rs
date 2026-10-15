@@ -251,13 +251,19 @@ pub const STRUCTURES: &[(&str, &str)] = &[
     ),
     (
         "CLIENT-SERVER-INTERFACE",
-        "SHORT-NAME LONG-NAME? DESC? CATEGORY? ADMIN-DATA? IS-SERVICE? SERVICE-KIND? OPERATIONS?",
+        "SHORT-NAME LONG-NAME? DESC? CATEGORY? ADMIN-DATA? IS-SERVICE? SERVICE-KIND? OPERATIONS? POSSIBLE-ERRORS?",
     ),
     ("OPERATIONS", "CLIENT-SERVER-OPERATION+"),
     (
         "CLIENT-SERVER-OPERATION",
-        "SHORT-NAME LONG-NAME? DESC? CATEGORY? ADMIN-DATA? ARGUMENTS?",
+        "SHORT-NAME LONG-NAME? DESC? CATEGORY? ADMIN-DATA? ARGUMENTS? POSSIBLE-ERROR-REFS?",
     ),
+    ("POSSIBLE-ERRORS", "APPLICATION-ERROR+"),
+    (
+        "APPLICATION-ERROR",
+        "SHORT-NAME LONG-NAME? DESC? CATEGORY? ADMIN-DATA? ERROR-CODE?",
+    ),
+    ("POSSIBLE-ERROR-REFS", "POSSIBLE-ERROR-REF+"),
     ("ARGUMENTS", "ARGUMENT-DATA-PROTOTYPE|SW-SERVICE-ARG+"),
     (
         "ARGUMENT-DATA-PROTOTYPE",
@@ -452,6 +458,7 @@ pub const OPEN_CHOICES: &[&str] = &[
 
 // XML lexical types, separate from ECUC definition constraints/ranges.
 pub const SCALARS: &[(&str, &str)] = &[
+    ("ERROR-CODE", "integer"),
     ("SHORT-NAME", "identifier"),
     ("SYMBOL", "symbol"),
     ("SHORT-LABEL", "identifier"),
@@ -536,6 +543,7 @@ pub const SCALARS: &[(&str, &str)] = &[
 ];
 
 pub const REFERENCES: &[&str] = &[
+    "POSSIBLE-ERROR-REF",
     "DEFINITION-REF",
     "VALUE-REF",
     "CONTEXT-ELEMENT-REF",

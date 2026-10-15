@@ -40,9 +40,11 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 修改交付资源后运行 `uv run --locked python -m autosar_tooling assets check`。确认自有源码差异后可显式执行 `assets update`；BSW ABI 和第三方身份不能随来源摘要自动接受，见[资源维护](docs/maintainers/assets.md)。
 
-提交前检查整个 diff，包括新增文件与生成内容。标题说明实际改动；PR 说明问题、改动、验证和未运行范围。合并前自审整个 diff；涉及 AUTOSAR 规范的结论按条目原文复核，不凭记忆或现有代码判断，高风险改动另做一次与 CI 并行的独立审查。必需检查通过即可合并，Extended 检查不阻塞合并；但 master 最近一次 Extended 失败时，先修复或开 Issue 暂停不稳定的套件，再继续合并。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
+提交前检查整个 diff，包括新增文件与生成内容。提交信息采用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/)：`<type>(<scope>): <description>`，type 为 `feat`、`fix`、`docs`、`test`、`refactor`、`perf`、`build`、`ci` 或 `chore`，scope 写受影响的模块或区域（如 `dcm`），破坏性变更加 `!` 并附 `BREAKING CHANGE:` 脚注。标题说明实际改动；PR 说明问题、改动、验证和未运行范围。合并前自审整个 diff；涉及 AUTOSAR 规范的结论按条目原文复核，不凭记忆或现有代码判断，高风险改动另做一次与 CI 并行的独立审查。必需检查通过即可合并，Extended 检查不阻塞合并；但 master 最近一次 Extended 失败时，先修复或开 Issue 暂停不稳定的套件，再继续合并。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
 
 对使用者或集成者可见的改动在 `CHANGELOG.md` 的 `Unreleased` 下加一条：交付的 C 接口与 ABI、配置接受或拒绝、生成物、工具与界面行为；重构、测试、CI 和文档不记。每项一行，写清效果，末尾附 PR 号（如 `(#166)`），细节放 PR。条目按 `Breaking`、`Added`、`Changed`、`Fixed` 分组，破坏性或契约变化写明集成者要做的修改。发版时把 `Unreleased` 改为带日期的版本标题。CHANGELOG 只维护英文。
+
+每个 Issue 使用独立分支。主目录可用时可直接在其中推进，独立工作树是可选方式；并行推进的 Issue 使用独立工作树隔离。
 
 真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。任务与进度用 GitHub Issues 和 Milestones 跟踪；新建 Issue 或开始实现前先搜索已有 Issue（含已关闭）和进行中的 PR，已有覆盖的在原处补充，避免重复工作；顺带完成了其他 Issue 的内容时，在该 Issue 留言并注明 PR，全部完成的用 `Closes #N` 关闭；方向见 [docs/roadmap/](docs/roadmap/README.md)，设计约束见 [docs/architecture/](docs/architecture/README.md)。
 

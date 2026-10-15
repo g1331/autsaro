@@ -104,6 +104,18 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
     if cfg!(target_os = "linux") {
         command.arg("-pthread");
     }
+    if module == "Dcm" {
+        for (path, bytes) in mainline_generated_headers(scratch) {
+            if matches!(
+                path.as_str(),
+                "generated/include/Rte_Dcm_Type.h" | "generated/include/Rte_Type.h"
+            ) {
+                std::fs::write(scratch.join(Path::new(&path).file_name().unwrap()), bytes).unwrap();
+            }
+        }
+        command.arg("-I").arg(scratch);
+        command.arg(root.join("runtime/host/src/SchM_Diagnostic_Host.c"));
+    }
     let output = command
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .args(flags)
@@ -188,7 +200,12 @@ fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
     .unwrap();
     [
         "generated/include/Ecu_Config.h",
+        "generated/include/Rte_Dcm_Type.h",
+        "generated/include/Rte_Type.h",
         "generated/src/Ecu_Execution.h",
+        "generated/include/Rte_Main.h",
+        "generated/include/Rte_MemMap.h",
+        "generated/src/SchM.c",
     ]
     .into_iter()
     .map(|path| {
@@ -572,4 +589,124 @@ fn cantp_events_complete_once_while_another_context_waits_outside_the_area() {
     }
     let result = run_owned(executable, &scratch.0, logs);
     assert!(result.success(), "{result:?}");
+}
+
+#[test]
+fn dcm_standard_consumer_executes_sessions_keepalive_and_response_failures() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(&scratch.0, "Dcm", "dcm_contract.c", &[]);
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        output.stdout.is_empty() && output.stderr.is_empty(),
+        "{output:?}"
+    );
+}
+
+#[test]
+fn dcm_application_calls_and_publications_survive_concurrent_restarts() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(
+        &scratch.0,
+        "Dcm",
+        "dcm_parallel.c",
+        &["-Wl,--wrap=SchM_Exit_Dcm_DCM_STATE"],
+    );
+    let logs = scratch.0.join("execution");
+    std::fs::create_dir(&logs).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let result = run_owned(executable, &scratch.0, logs);
+    assert!(result.success(), "{result:?}");
+}
+
+/// The actual generated immediate SchM switch must work outside the ECU owner.
+/// Verifies: SWS_Dcm_00520, SWS_Dcm_01062, SWS_Dcm_00311
+#[test]
+fn dcm_generated_mode_switch_publishes_from_a_non_owner_context() {
+    let scratch = Scratch::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    for (path, bytes) in mainline_generated_headers(&scratch.0) {
+        std::fs::write(scratch.0.join(Path::new(&path).file_name().unwrap()), bytes).unwrap();
+    }
+    // Resolve the SchM consumer's quoted include beside the generated type header.
+    std::fs::copy(
+        root.join("runtime/bsw/include/SchM_Dcm.h"),
+        scratch.0.join("SchM_Dcm.h"),
+    )
+    .unwrap();
+    std::fs::write(scratch.0.join("Ecu_Target.h"), "#include \"Std_Types.h\"\nint Ecu_TargetIsOwner(void);\nStd_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);\n").unwrap();
+    let harness = scratch.0.join("mode-context.c");
+    std::fs::write(&harness, r#"#include "Rte_Dcm_Type.h"
+#include "Dcm.h"
+#include "SchM_Dcm.h"
+#include "Dcm_ComM.h"
+#include "PduR_Dcm.h"
+#include "ComM_Dcm.h"
+#include <assert.h>
+int Ecu_TargetIsOwner(void) { return 0; }
+Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting) { (void)starting; return E_OK; }
+void ComM_DCM_ActiveDiagnostic(NetworkHandleType channel) { (void)channel; }
+void ComM_DCM_InactiveDiagnostic(NetworkHandleType channel) { (void)channel; }
+Std_ReturnType PduR_DcmTransmit(PduIdType id, const PduInfoType *info) { (void)id; (void)info; assert(0); return E_NOT_OK; }
+static void authentication(uint8 value) { assert(value == 0u); }
+int main(void) {
+    const Dcm_ConfigType config = {17u, 19u, 7u, 0u, NULL_PTR, 4u, 50u, 5000u, 5u, 64u, 41u, authentication, 0u};
+    uint8 bytes[2] = {0x10u, 0x83u};
+    PduInfoType info = {bytes, NULL_PTR, 2u};
+    PduLengthType available;
+    Dcm_SesCtrlType session;
+    Dcm_Init(&config);
+    assert(SchM_Mode_Dcm_DcmDiagnosticSessionControl() == 0u);
+    Dcm_ComM_FullComModeEntered(7u);
+    assert(Dcm_StartOfReception(17u, &info, 2u, &available) == BUFREQ_OK);
+    assert(Dcm_CopyRxData(17u, &info, &available) == BUFREQ_OK);
+    Dcm_TpRxIndication(17u, E_OK);
+    Dcm_MainFunction();
+    assert(Dcm_GetSesCtrlType(&session) == E_OK && session == 3u);
+    assert(SchM_Mode_Dcm_DcmDiagnosticSessionControl() == 2u);
+    assert(Dcm_ResetToDefaultSession() == E_OK);
+    assert(Dcm_GetSesCtrlType(&session) == E_OK && session == 1u);
+    assert(SchM_Mode_Dcm_DcmDiagnosticSessionControl() == 0u);
+    return 0;
+}
+"#).unwrap();
+    let binary = tooling::native_binary(&scratch.0, "mode-context");
+    let mut compiler = tooling::c_compiler();
+    if cfg!(target_os = "linux") {
+        compiler.arg("-pthread");
+    }
+    let output = compiler
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg("-I")
+        .arg(&scratch.0)
+        .args([
+            "-Iruntime/bsw/include",
+            "-Iruntime/bsw/src",
+            "-Iruntime/host/include",
+            "-Iruntime/host/src",
+            "-Icore/tests/fixtures/bsw-contracts",
+        ])
+        .current_dir(root)
+        .args([
+            "runtime/bsw/src/Dcm.c",
+            "runtime/host/src/Can_HostLock.c",
+            "runtime/host/src/SchM_Diagnostic_Host.c",
+        ])
+        .arg(scratch.0.join("SchM.c"))
+        .arg(harness)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = Command::new(binary).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
 }

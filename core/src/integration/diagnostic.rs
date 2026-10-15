@@ -84,11 +84,12 @@ fn reject(
 }
 
 fn one(graph: &Graph, context: usize, kind: &str) -> Result<usize, Vec<PlanDiagnostic>> {
-    let found: Vec<_> = graph
+    let mut found: Vec<_> = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()
         .filter(|index| definition_is(graph, *index, kind))
         .collect();
+    found.sort_unstable();
     if found.len() == 1 {
         Ok(found[0])
     } else {
@@ -376,7 +377,7 @@ pub(super) fn inspect_service(
                 crate::product_message!("backend.integration.diagnostic.did_identifier_invalid"),
             )
         })?;
-    if did_id == 0xf186 {
+    if did_id == 0xf186 || (matches!(did_id & 0xff00, 0xf400 | 0xf800) && did_id % 0x20 == 0) {
         return Err(reject(
             graph,
             did,
@@ -499,6 +500,26 @@ pub(super) fn inspect_transport(
     graph: &Graph,
     context: usize,
 ) -> Result<DiagnosticTransportContract, Vec<PlanDiagnostic>> {
+    // SWS_Dcm_00482/01197 and the Dem interfaces in SWS_Dcm_91002 are
+    // interpreted together for this no-OBD ECU. Do not silently admit an
+    // OBD-relevant Dem declaration while generating only the UDS data path.
+    for general in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "DemGeneral"))
+    {
+        // Fail closed: an absent or repeated value is not a declared no-OBD ECU.
+        if value(graph, general, "DemOBDSupport", false) != Some("DEM_OBD_NO_OBD_SUPPORT") {
+            return Err(reject(
+                graph,
+                general,
+                "SERVICE_UNSUPPORTED",
+                crate::product_message!(
+                    "backend.integration.diagnostic.obd_relevant_ecu_unsupported"
+                ),
+            ));
+        }
+    }
     let mut sessions = BTreeSet::new();
     let mut timing = None;
     for session in graph
