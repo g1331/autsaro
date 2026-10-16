@@ -106,8 +106,9 @@ export async function createBuiltinInputs(scratch) {
   // Missing required siblings intentionally create pre-existing definition
   // witnesses. Repairing independent fields must not turn target failure into a
   // global source-save gate or silently synthesize these missing values.
-  // Valid R24-11 syntax outside the bounded editable standard vocabulary.
-  const unknown = '<SW-ADDR-METHOD><SHORT-NAME>PreservedType</SHORT-NAME></SW-ADDR-METHOD>';
+  // Standalone documentation is outside the bounded SWC/ECUC editing vocabulary.
+  // The required core definition test guards this shared R24-11 fixture.
+  const unknown = await readFile(new URL('../fixtures/unknown.arxml', import.meta.url), 'utf8');
   const members = {
     'os.arxml': os,
     'com.arxml': com,
@@ -118,7 +119,7 @@ export async function createBuiltinInputs(scratch) {
   const sources = [];
   for (const [name, elements] of Object.entries(members)) {
     const source = path.join(directory, name);
-    await writeFile(source, document(elements));
+    await writeFile(source, name === 'unknown.arxml' ? elements : document(elements));
     sources.push(source);
   }
   const safety = {};

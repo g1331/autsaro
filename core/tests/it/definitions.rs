@@ -364,6 +364,25 @@ fn builtin_reference_rejects_right_dest_with_wrong_container_definition() {
 }
 
 #[test]
+fn desktop_unknown_fixture_stays_outside_builtin_editing_vocabulary() {
+    let xml = include_str!("../../../tests/desktop/fixtures/unknown.arxml");
+    let document = roxmltree::Document::parse(xml).unwrap();
+    let object = document
+        .descendants()
+        .find(|node| {
+            node.children().any(|child| {
+                child.has_tag_name("SHORT-NAME") && child.text() == Some("PreservedType")
+            })
+        })
+        .unwrap();
+    let catalog = DefinitionCatalog::builtin().unwrap();
+    assert!(
+        catalog.get(object.tag_name().name()).is_none(),
+        "Desktop unknown-input coverage needs an object outside the editable vocabulary"
+    );
+}
+
+#[test]
 fn builtin_unknown_and_instance_reference_semantics_are_unsupported_not_passed() {
     let catalog = DefinitionCatalog::builtin().unwrap();
     let unknown = container("/Vendor/Unaccepted/Settings", "Settings", "", "");
