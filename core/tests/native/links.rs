@@ -86,7 +86,11 @@ fn project_and_source_links_are_refused_at_the_link() {
         .err()
         .unwrap(),
         "backend.arxml.project.link_not_accepted",
-        member.display(),
+        // The opened project root is canonical (verbatim on Windows).
+        fs::canonicalize(&root)
+            .unwrap()
+            .join("ingress.arxml")
+            .display(),
     );
     let source = inputs()
         .into_iter()
@@ -103,6 +107,12 @@ fn application_member_link_refuses_initialization_reopen_and_generation() {
     let mut workspace = live_pipeline_workspace(&root, &inputs());
     let preview = workspace.preview_application_initialization().unwrap();
     let source = root.join(&preview.files[1].path);
+    // Refusals name the member under the canonical (verbatim on Windows) project root.
+    let reported = fs::canonicalize(&root).unwrap().join(
+        Path::new(&preview.files[1].path)
+            .iter()
+            .collect::<std::path::PathBuf>(),
+    );
     fs::create_dir_all(source.parent().unwrap()).unwrap();
     let external = scratch.0.join("external.c");
     let bytes = b"/* external user source */\n";
@@ -114,7 +124,7 @@ fn application_member_link_refuses_initialization_reopen_and_generation() {
             .err()
             .unwrap(),
         "backend.arxml.project.link_not_accepted",
-        source.display(),
+        reported.display(),
     );
     assert_eq!(fs::read(&external).unwrap(), bytes);
     assert!(
@@ -139,13 +149,13 @@ fn application_member_link_refuses_initialization_reopen_and_generation() {
             .err()
             .unwrap(),
         "backend.arxml.project.link_not_accepted",
-        source.display(),
+        reported.display(),
     );
     let output = scratch.0.join("sealed");
     refused(
         prepared.generate(&output).err().unwrap(),
         "backend.delivery.linked_path_refused",
-        source.display(),
+        reported.display(),
     );
     assert!(!output.exists());
     assert_eq!(fs::read(&external).unwrap(), bytes);
