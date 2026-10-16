@@ -146,7 +146,7 @@ export function IntegrationDelivery({
               </div>
               <span className="stage-pill" data-stage={name}>
                 <Icon size={iconSize.inline} aria-hidden="true" />
-                {label}
+                <span>{label}</span>
               </span>
             </li>
           );

@@ -797,7 +797,7 @@ tbody tr:not([aria-selected='true']):hover {
   table-layout: fixed;
 }
 .object-table .col-select {
-  width: 52px;
+  width: 72px;
 }
 .object-table .col-name {
   width: 26%;
@@ -806,7 +806,7 @@ tbody tr:not([aria-selected='true']):hover {
   width: 24%;
 }
 .object-table .col-access {
-  width: 84px;
+  width: 120px;
 }
 .object-table th,
 .object-table td {
@@ -1537,6 +1537,14 @@ label.checkbox-field > input[type='checkbox'] {
 }
 .stage-number {
   display: none;
+}
+.stage-pill {
+  max-width: 100%;
+  white-space: nowrap;
+}
+.stage-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .stage-copy small {
   display: block;
