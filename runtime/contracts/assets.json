@@ -1219,7 +1219,7 @@
     },
     {
       "path": "runtime/bsw/include/ComM.h",
-      "sha256": "a6ca25e3a125595051da175edad6cc51501fbf202f0011eedf24b4d4f2e33d7e",
+      "sha256": "f6c31a632e8435e53c1a7dc09396d2d2f867091bf0ac0c311da017cd091041cb",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

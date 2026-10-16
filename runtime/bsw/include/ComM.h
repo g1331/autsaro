@@ -7,12 +7,16 @@
 #include "ComStack_Types.h"
 #include "Rte_ComM_Type.h"
 /** SWS_ComM_91027: Std_ReturnType extension of ComM. */
-/* MR12 RULE 2.5 VIOLATION: standard return codes (SWS_ComM_91027) that the selected profile
- * never returns, except COMM_E_NO_PNC_ASSIGNED; see the ComM deviation record. */
-#define COMM_E_MODE_LIMITATION       2u /**< Request refused by mode inhibition. */
+/* MR12 RULE 2.5 VIOLATION: standard return code (SWS_ComM_91027) without mode limitation in
+ * the selected profile; see the ComM deviation record. */
+#define COMM_E_MODE_LIMITATION 2u /**< Request refused by mode inhibition. */
+/* MR12 RULE 2.5 VIOLATION: standard return code (SWS_ComM_91027) without PNCs in the
+ * selected profile; see the ComM deviation record. */
 #define COMM_E_MULTIPLE_PNC_ASSIGNED 3u /**< User belongs to more than one PNC. */
 #define COMM_E_NO_PNC_ASSIGNED       4u /**< User belongs to no PNC. */
-#define COMM_E_LEARNING_ACTIVE       5u /**< PNC learning phase is active. */
+/* MR12 RULE 2.5 VIOLATION: standard return code (SWS_ComM_91027) without PNC learning in the
+ * selected profile; see the ComM deviation record. */
+#define COMM_E_LEARNING_ACTIVE 5u /**< PNC learning phase is active. */
 /** SWS_ComM_00668: initialization status reported by ComM_GetStatus. */
 typedef enum {
     COMM_UNINIT = 0, /**< Not initialized, or deinitialized. */
