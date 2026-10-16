@@ -218,6 +218,10 @@ impl Workspace {
     pub fn view(&self) -> WorkspaceView {
         WorkspaceView {
             integration_candidate: self.snapshot.integration_candidate,
+            application_initialized: self
+                .project
+                .as_ref()
+                .is_some_and(|project| !project.manifest.application_inputs.is_empty()),
             name: self.display_name(),
             files: self
                 .files

@@ -49,6 +49,9 @@ pub struct FileView {
 pub struct WorkspaceView {
     #[serde(default)]
     pub integration_candidate: bool,
+    /// Delivery compiles user application sources; a project without them is rejected.
+    #[serde(default)]
+    pub application_initialized: bool,
     pub name: String,
     pub files: Vec<FileView>,
     pub issues: Vec<Issue>,
