@@ -241,8 +241,11 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     def compiler_unit(item):
         index, name = item
         unit_modes = {}
-        run([compiler, *flags, *("-I" + path for path in includes),
-                          "-fsyntax-only", str(root / name)], output, f"compiler-unit-{index}", 60)
+        try:
+            run([compiler, *flags, *("-I" + path for path in includes),
+                "-fsyntax-only", str(root / name)], output, f"compiler-unit-{index}", 60)
+        except RuntimeError as error:
+            raise RuntimeError(f"Compiler validation failed for {name}: {error}") from error
         _, definitions, _ = run([compiler, *flags, *("-I" + path for path in includes),
                                     "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60)
         function_macros = ["-D" + line[8:].replace(" ", "=", 1)

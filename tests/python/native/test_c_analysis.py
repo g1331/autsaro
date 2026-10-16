@@ -81,6 +81,22 @@ class ActualCAnalysisTests(unittest.TestCase):
             self.assertIn("compiler-unit-0", summary["error"])
             self.assertNotIn("comparison", summary)
 
+    def test_compiler_failure_names_relative_source_even_with_windows_raw_paths(self):
+        original = c_check.run
+        def windows_failure(argv, directory, stage, timeout=c_check.TIMEOUT):
+            if stage.startswith("compiler-unit-"):
+                raise RuntimeError(r"compiler-unit-0: argv=C:\project\bsw\src\main.c exit_code=1 stderr: compiler failure")
+            return original(argv, directory, stage, timeout)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, "int main(void) { return 0; }\n")
+            target = json.loads((project / "target.json").read_text())["target"]
+            with patch.object(c_check, "run", side_effect=windows_failure):
+                self.assertEqual(c_check.check(project, target, root / "analysis"), 1)
+            error = json.loads((root / "analysis/summary.json").read_text())["error"]
+            for evidence in ("Compiler validation failed for bsw/src/main.c", "compiler-unit-0", "exit_code=1", "compiler failure"):
+                self.assertIn(evidence, error)
+
     def test_clean_main_passes(self):
         self.assertTrue(self.analyze("int main(void) { return 0; }\n")["passed"])
 
