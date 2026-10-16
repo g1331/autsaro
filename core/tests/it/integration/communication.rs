@@ -641,7 +641,9 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
     )
     .unwrap();
     assert!(source.contains("RTE_Ingress_START_SEC_CODE"));
-    assert!(source.contains("RTE_Observe_START_SEC_VAR_CLEARED_UNSPECIFIED"));
+    assert!(source.contains("RTE_Observe_START_SEC_VAR_INIT_UNSPECIFIED"));
+    assert!(source.contains("RTE_Ingress_START_SEC_VAR_CLEARED_UNSPECIFIED"));
+    assert!(!source.contains("RTE_Observe_START_SEC_VAR_CLEARED_UNSPECIFIED"));
     assert!(source.contains("RTE_OwnerPartition_START_SEC_CALLOUT_CODE"));
     let mut sources = inputs();
     parameter(&mut sources, "OwnerPartition", "EcucPartitionId", "1");

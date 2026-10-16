@@ -847,8 +847,23 @@ fn lifecycle(partition: u16, mode_scope: &str, authentication_group: &str) -> St
         "#include \"Rte_Main.h\"\n#include \"Ecu_Target.h\"\n#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic boolean initialized RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean started RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean timing RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean allocated RTE_Rte_VAR_CLEARED_UNSPECIFIED;\n#define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nconst SchM_ConfigType Ecu_SchMConfig RTE_Rte_CONFIG_DATA_PREBUILD_UNSPECIFIED = {{{partition}u}};\n#define RTE_Rte_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_Rte_CODE void SchM_Init(const SchM_ConfigType *ConfigPtr)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) || (allocated == TRUE) ||\n        (ConfigPtr == NULL_PTR) || (ConfigPtr->partition != {partition}u)) {{\n        return;\n    }}\n    allocated = TRUE;\n    initialized = TRUE;\n}}\nRTE_Rte_CODE void SchM_Start(void)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (initialized == TRUE)) {{\n        started = TRUE;\n    }}\n}}\nRTE_Rte_CODE void SchM_StartTiming(void)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (started == TRUE)) {{\n        timing = TRUE;\n    }}\n}}\nRTE_Rte_CODE void SchM_Deinit(void)\n{{\n    if (Ecu_TargetCheckLifecycleContext(FALSE) == E_OK) {{\n        timing = FALSE;\n        started = FALSE;\n        initialized = FALSE;\n    }}\n}}\nRTE_Rte_CODE boolean Ecu_SchMReady(void) {{ return started; }}\nRTE_Rte_CODE boolean Ecu_SchMTimingActive(void) {{ return timing; }}\n#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
     );
     let mut modes = format!(
-        "\n#include \"SchM_Dcm.h\"\n#include \"Can_HostLock.h\"\n#define RTE_{mode_scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic Rte_ModeType_DcmDiagnosticSessionControl diagnostic_session_mode RTE_{mode_scope}_VAR_CLEARED_UNSPECIFIED;\nstatic Rte_ModeType_{authentication_group} authentication_mode RTE_{mode_scope}_VAR_CLEARED_UNSPECIFIED;\n#define RTE_{mode_scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_{mode_scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+        "\n#include \"SchM_Dcm.h\"\n#include \"Can_HostLock.h\"\n#define RTE_{mode_scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n"
     );
+    for (group, variable) in [
+        ("DcmDiagnosticSessionControl", "diagnostic_session_mode"),
+        (authentication_group, "authentication_mode"),
+    ] {
+        let declaration = format!("static Rte_ModeType_{group} {variable}");
+        let attribute = format!("RTE_{mode_scope}_VAR_CLEARED_UNSPECIFIED;");
+        if declaration.len() + attribute.len() < 100 {
+            modes.push_str(&format!("{declaration} {attribute}\n"));
+        } else {
+            modes.push_str(&format!("{declaration}\n    {attribute}\n"));
+        }
+    }
+    modes.push_str(&format!(
+        "#define RTE_{mode_scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_{mode_scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+    ));
     for (group, variable) in [
         (authentication_group, "authentication_mode"),
         ("DcmDiagnosticSessionControl", "diagnostic_session_mode"),
