@@ -778,15 +778,15 @@ fn private_rte_memory_sections_have_real_consumers_and_only_used_aliases() {
         }
         let source = std::str::from_utf8(bytes).unwrap();
         for (index, line) in source.lines().enumerate() {
-            if let Some(keyword) = line.strip_prefix("#define RTE_") {
-                if keyword.contains("_START_SEC_") {
-                    used.insert(keyword.to_owned());
-                    let next = source.lines().nth(index + 2).unwrap();
-                    assert!(
-                        !next.starts_with("#define RTE_"),
-                        "empty section in {path}: {keyword}"
-                    );
-                }
+            if let Some(keyword) = line.strip_prefix("#define RTE_")
+                && keyword.contains("_START_SEC_")
+            {
+                used.insert(keyword.to_owned());
+                let next = source.lines().nth(index + 2).unwrap();
+                assert!(
+                    !next.starts_with("#define RTE_"),
+                    "empty section in {path}: {keyword}"
+                );
             }
         }
     }

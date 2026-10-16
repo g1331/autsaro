@@ -81,14 +81,12 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
             .collect();
         let call = c_layout::call("    ", &format!("return {symbol}"), &arguments, ";");
         clients.push_str(&format!("/** @brief Counter-bound {operation}; native tick and error semantics. */\n{head}\n{{\n{call}\n}}\n"));
-        for (name, parameters, callee, first) in [(&symbol, &served, operation, "CounterID")] {
-            let head = c_layout::signature("RTE_Rte_CODE StatusType", name, parameters, "", true);
-            let arguments: Vec<String> = std::iter::once(first.to_owned())
-                .chain(forwarded.iter().cloned())
-                .collect();
-            let call = c_layout::call("    ", &format!("return {callee}"), &arguments, ";");
-            source.push_str(&format!("{head}\n{{\n{call}\n}}\n"));
-        }
+        let head = c_layout::signature("RTE_Rte_CODE StatusType", &symbol, &served, "", true);
+        let arguments: Vec<String> = std::iter::once("CounterID".to_owned())
+            .chain(forwarded.iter().cloned())
+            .collect();
+        let call = c_layout::call("    ", &format!("return {operation}"), &arguments, ";");
+        source.push_str(&format!("{head}\n{{\n{call}\n}}\n"));
     }
     source.push_str("#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n");
     let mut errors = String::new();
