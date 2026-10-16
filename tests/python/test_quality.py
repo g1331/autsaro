@@ -128,6 +128,7 @@ class QualityTests(unittest.TestCase):
         limit = quality.DOCUMENT_LIMIT
         files = {
             "docs/large.md": b"x" * (limit + 1),
+            "AGENTS.md": b"x" * (limit + 1),
             "docs/limit.md": b"x" * limit,
             # CRLF line ends of a Windows checkout do not count.
             "docs/crlf.md": b"x\r\n" * (limit // 2),
@@ -142,8 +143,9 @@ class QualityTests(unittest.TestCase):
                 (root / name).write_bytes(content)
             with patch.object(quality, "ROOT", root):
                 errors = quality.document_size_errors([Path(name) for name in files])
-        self.assertEqual(len(errors), 1)
+        self.assertEqual(len(errors), 2, errors)
         self.assertTrue(errors[0].startswith(f"docs/large.md: {limit + 1} bytes exceeds"), errors)
+        self.assertTrue(errors[1].startswith("AGENTS.md: "), errors)
 
     def test_runtime_c_files_open_with_the_file_description(self):
         files = {

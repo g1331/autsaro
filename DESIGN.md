@@ -270,6 +270,10 @@ Object tables use compact text, surface table headers, and fine row separators. 
 - **Do** use the established hierarchy of body, compact, and monospaced text, and retain visible keyboard focus.
 - **Do** collapse side panels in compact windows and allow object tables to scroll horizontally within their own containers.
 - **Do** convey semantics through object tags, icons, and text together; keep primary actions sparse and their context clear.
+- **Do** build menus, settings, side panels, the status bar, and themes as one consistent system, centered on object names and the main task; do not assemble scattered demo controls.
+- **Do** use icons with tooltips and accessible names for window controls, and keep short text labels on business actions.
+- **Do** write in-app help as instructions users can follow, never as repository paths or development document names.
+- **Do** check interfaces with real data, long names, narrow windows, and every relevant theme, not only an ideal screenshot.
 
 ### Don't:
 

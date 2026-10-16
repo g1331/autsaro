@@ -6,7 +6,7 @@
 uv run --locked python -m autosar_tooling fetch-official
 ```
 
-已存在的文件只校验、不覆盖，哈希不一致即失败；新下载的文件哈希不一致时丢弃。`www.autosar.org` 在 TLS 握手中不发送中间证书，命令从证书 AIA 地址取得 Starfield Secure Certificate Authority - G2，校验固定指纹后与系统信任库一起使用，不关闭证书校验。站点更换证书后指纹校验会失败，需审阅新证书链后再更新 `autosar_tooling/official.py` 中的固定值。
+已存在的文件只校验、不覆盖，哈希不一致即失败；新下载的文件哈希不一致时丢弃。`www.autosar.org` 在 TLS 握手中不发送中间证书（Windows 的 Schannel curl 同样不会自动补全），命令从证书 AIA 地址取得 Starfield Secure Certificate Authority - G2，校验固定指纹后与系统信任库一起使用，不关闭证书校验。站点更换证书后指纹校验会失败，需审阅新证书链后再更新 `autosar_tooling/official.py` 中的固定值。
 
 CI 中的 `Official archive comparison`（`acceptance.yml`）在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` runner 上运行 `fetch-official`、`cargo test --locked -p autosar-config-core --features official-oracles --test official --no-fail-fast` 和条款处置核算（见[标准基线 §5](../../standards/README.md#5-条款处置与核算)）：`core/resources/requirements/` 中已提交清单的文档从档案做完整检查，并核对清单与档案一致；其余被引用的文档只检查失效引用，列表在工作流的 `Requirement dispositions` 步骤中。档案按 `official.json` 的哈希存入本仓库的 Actions 缓存，不作为 artifact 上传，日志只记录路径和哈希。触发方式：
 
@@ -14,6 +14,10 @@ CI 中的 `Official archive comparison`（`acceptance.yml`）在 GitHub 托管�
 - 由 [`Extended checks`](README.md#ci) 调用：修改 `core/src/definitions*`、`core/src/schema.rs`、`core/src/rules*`、`core/resources/official.json`、`core/resources/requirements/`、`core/tests/official/`、`docs/standards/`、下载或核算入口或该工作流的 PR 与 master 推送，以及带 `full-ci` 标签的 PR。
 
 档案按哈希固定，不会自行变化，因此不设定时运行。未登记文档的测试编号引用变化只在上述路径改动时检查，模块整改 PR 应在本地运行核算。
+
+修改 `core/tests/fixtures/echo-application` 等登记了字节摘要的夹具时，同步其 `manifest.json`，并在本地运行 `official` 套件。官方样例只在内置规则覆盖范围内断言，用能证伪的具体诊断（如跨文件 `UNRESOLVED_REF`）证明目标性质，不以“无 Error”代替。
+
+站点长期不可用（停服、证书或访问限制）时的备用来源：维护者的私有仓库 `g1331/autsaro-official-specs` 按版本 Release（如 `R24-11`）保存同一批官方文件及官方清单，`specs.py verify|restore` 校验与还原；只读凭据已登记为本仓库的 Actions secret `OFFICIAL_SPECS_TOKEN`。目前没有接入工作流；需要切换时改 `acceptance.yml` 的下载步骤，哈希仍按 `official.json` 校验。
 
 它不属于 `CI required`：外部站点不可用不阻塞合并，PR 上的失败需要自行查看。已整改模块的处置由必需检查保护：`quality` 任务运行 `uv run --locked python -m autosar_tooling requirements`，按提交的清单完整核算，不需要档案，只改 `docs/standards/` 的 PR 也会运行；`verify --scope all` 包含同一检查。清单过期由本工作流发现。下载、证书或哈希失败时，`Download and verify official archives` 步骤失败并标注 `Official archives unavailable`，测试不会运行；测试失败标注 `Official comparison failed`，核算失败标注 `Requirement dispositions failed`。
 
