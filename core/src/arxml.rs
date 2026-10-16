@@ -36,7 +36,6 @@ struct SourceFile {
 
 #[derive(Clone)]
 pub struct Workspace {
-    name: String,
     files: Vec<SourceFile>,
     issues: Vec<Issue>,
     integration_input_root: Option<PathBuf>,
@@ -118,8 +117,15 @@ fn load_sources_with(
             ));
         }
         for ancestor in selected.ancestors() {
-            let metadata = fs::symlink_metadata(ancestor)
-                .map_err(|e| format!("{}: {e}", ancestor.display()))?;
+            let metadata = fs::symlink_metadata(ancestor).map_err(|e| {
+                crate::message::LocalizedText::messages([
+                    crate::product_message!(
+                        "backend.arxml.source_unreadable",
+                        "path" => path.display()
+                    ),
+                    format!("{}: {e}", ancestor.display()).into(),
+                ])
+            })?;
             #[cfg(windows)]
             let linked = {
                 use std::os::windows::fs::MetadataExt;
@@ -182,20 +188,7 @@ fn load_sources_with(
         });
     }
     sources.sort_by(|a, b| a.path.cmp(&b.path));
-    let name = sources
-        .iter()
-        .filter_map(|s| Document::parse(&s.text).ok())
-        .flat_map(|d| {
-            d.root_element()
-                .descendants()
-                .filter(|n| n.is_element() && n.tag_name().name() == "AR-PACKAGE")
-                .filter_map(|n| child_text(n, "SHORT-NAME"))
-                .collect::<Vec<_>>()
-        })
-        .next()
-        .unwrap_or_else(|| "ImportedEcu".into());
     let mut workspace = Workspace {
-        name,
         files: sources,
         issues: Vec::new(),
         integration_input_root: None,
@@ -225,7 +218,7 @@ impl Workspace {
     pub fn view(&self) -> WorkspaceView {
         WorkspaceView {
             integration_candidate: self.snapshot.integration_candidate,
-            name: self.name.clone(),
+            name: self.display_name(),
             files: self
                 .files
                 .iter()
@@ -412,23 +405,28 @@ impl Workspace {
 
     pub(super) fn refresh(&mut self) -> Result<(), crate::message::LocalizedText> {
         self.rebuild_snapshot()?;
-        self.issues = self
-            .snapshot
-            .validation
-            .iter()
-            .flat_map(|scope| &scope.diagnostics)
-            .map(|issue| Issue {
-                severity: issue.severity.clone(),
-                code: issue.code.clone(),
-                message: issue.message.clone(),
-                file: issue.file.clone(),
-                path: issue.path.clone(),
-            })
-            .collect();
+        // Automatic diagnostics live in the projection; `issues` only carries
+        // findings of the explicit validation pass.
+        self.issues.clear();
         Ok(())
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    /// The ECU-INSTANCE short name carries the name chosen at project creation;
+    /// without exactly one instance the first source file identifies the input.
+    pub(super) fn display_name(&self) -> String {
+        let mut instances = self
+            .snapshot
+            .objects
+            .iter()
+            .filter(|object| object.view.kind == "ECU-INSTANCE");
+        match (instances.next(), instances.next()) {
+            (Some(instance), None) => instance.view.short_name.clone(),
+            _ => self
+                .files
+                .first()
+                .and_then(|file| file.path.file_name())
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        }
     }
 }

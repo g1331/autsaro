@@ -1082,7 +1082,7 @@ fn builtin_save_as_preserves_original_sources_and_rejects_name_collisions() {
     let before = fs::read(&source).unwrap();
     let direct = Workspace::open(vec![source.clone()]).unwrap();
     let preview = direct
-        .preview_save_as_project(&scratch.0.join("Portable"), "Portable")
+        .preview_save_as_project(&scratch.0.join("Portable"))
         .unwrap();
     assert!(!scratch.0.join("Portable").exists());
     let portable = direct.save_as_project_previewed(&preview).unwrap();
@@ -1104,11 +1104,52 @@ fn builtin_save_as_preserves_original_sources_and_rejects_name_collisions() {
     let collision = Workspace::open(vec![source.clone(), other]).unwrap();
     assert!(
         collision
-            .preview_save_as_project(&scratch.0.join("Collision"), "Collision")
+            .preview_save_as_project(&scratch.0.join("Collision"))
             .is_err()
     );
     assert!(!scratch.0.join("Collision").exists());
     assert_eq!(fs::read(&source).unwrap(), before);
+}
+
+#[test]
+fn builtin_workspace_name_is_the_created_ecu_instance_and_issues_do_not_repeat_projection() {
+    let scratch = Scratch::new();
+    let name = "Powertrain_Central_Gateway_ECU_Variant_Long_Name_2026";
+    let created = signals(&scratch.0.join("Named"), name);
+    assert_eq!(created.view().name, name);
+    let reopened = Workspace::open_project_manifest(
+        &scratch.0.join("Named/workbench-project.json"),
+        &scratch.0.join("cache"),
+    )
+    .unwrap();
+    assert_eq!(reopened.view().name, name);
+    let copy = reopened
+        .preview_save_as_project(&scratch.0.join("Copy"))
+        .unwrap();
+    assert_eq!(copy.name, name);
+    assert_eq!(
+        reopened
+            .save_as_project_previewed(&copy)
+            .unwrap()
+            .view()
+            .name,
+        name
+    );
+
+    // A direct input without exactly one ECU-INSTANCE is identified by its first file.
+    let mut direct = Workspace::open(vec![scratch.0.join("Named/ecuc.arxml")]).unwrap();
+    assert_eq!(direct.view().name, "ecuc.arxml");
+    let view = direct.validate().unwrap();
+    let automatic = projection(&direct).diagnostics;
+    assert!(!automatic.is_empty() && !view.issues.is_empty());
+    for issue in &view.issues {
+        assert!(
+            !automatic
+                .iter()
+                .any(|diagnostic| diagnostic.code == issue.code && diagnostic.path == issue.path),
+            "explicit validation repeats an automatic diagnostic: {issue:?}"
+        );
+    }
 }
 
 #[test]
