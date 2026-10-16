@@ -7,7 +7,7 @@ pub(crate) mod reopen;
 pub(crate) mod tools;
 
 pub use ownership::{FileOwner, OwnershipEntry, OwnershipLedger};
-pub use reopen::{NativeHandoff, open_handoff};
+pub use reopen::{NativeHandoff, open_handoff, require_current_format};
 
 use crate::Workspace;
 use crate::arxml::{ProjectInput, ProjectManifest};

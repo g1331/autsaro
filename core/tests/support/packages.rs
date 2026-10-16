@@ -19,7 +19,6 @@ pub(crate) fn copy_package(source: &Path, destination: &Path) {
     }
 }
 
-#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 pub(crate) fn package_tree(root: &Path) -> BTreeMap<String, Option<Vec<u8>>> {
     fn visit(root: &Path, directory: &Path, entries: &mut BTreeMap<String, Option<Vec<u8>>>) {
         for entry in fs::read_dir(directory).unwrap() {

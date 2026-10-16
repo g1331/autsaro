@@ -125,8 +125,8 @@ fn application_slots(
             .ok_or_else(|| crate::product_message!("backend.delivery.mapped_input_missing"))?,
     )
     .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-    if manifest.format_version != 1
-        || manifest.declared_release != "R24-11"
+    // The manifest format version is checked once, when the reconstructed project opens.
+    if manifest.declared_release != "R24-11"
         || manifest.accepted_extension_definitions
             != metadata.resource_identities.required_extension_definitions
         || manifest.profile_hint != metadata.profile_id
