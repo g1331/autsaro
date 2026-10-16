@@ -1,6 +1,10 @@
 /** @file Selected R24-11 immediate UINT32 COM interface and immutable configuration. */
 #ifndef COM_H
 #define COM_H
+/** Fixed AUTOSAR CP R24-11 interface release (4.10.0). */
+#define COM_AR_RELEASE_MAJOR_VERSION    4U
+#define COM_AR_RELEASE_MINOR_VERSION    10U
+#define COM_AR_RELEASE_REVISION_VERSION 0U
 #include "Std_Types.h"
 #include "ComStack_Types.h"
 

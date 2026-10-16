@@ -1,6 +1,10 @@
 /** @file Standard BSW statuses for the controlled multi-component stack. */
 #ifndef STD_TYPES_H
 #define STD_TYPES_H
+/** Fixed AUTOSAR CP R24-11 interface release (4.10.0). */
+#define STD_TYPES_AR_RELEASE_MAJOR_VERSION    4U
+#define STD_TYPES_AR_RELEASE_MINOR_VERSION    10U
+#define STD_TYPES_AR_RELEASE_REVISION_VERSION 0U
 #include "Platform_Types.h"
 
 typedef uint8 Std_ReturnType;

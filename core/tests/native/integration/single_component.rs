@@ -153,18 +153,25 @@ fn contract_headers_refuse_mismatched_consumers() {
             std::time::Duration::from_secs(60),
         )
     };
-    // The matching consumer compiles, so each refusal below is the mismatch.
-    std::fs::write(
-        directory.join("matching.c"),
-        "#include \"Rte_Ingress.h\"\n#include \"Rte_DcmService.h\"\nint test(void);\nint test(void) { uint32 data=0U; uint8 bytes[4]={0U,0U,0U,0U}; return (Rte_Read_RxValue_Value(&data)==E_OK && Rte_Write_TxValue_Value(data)==E_OK && Rte_Call_DataServices_ApplicationValue_ReadData(bytes)==E_OK) ? 0 : 1; }\n",
-    )
-    .unwrap();
-    let output = compile("matching.c");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    // Each SWC translation unit includes its own application header.
+    for (name, source) in [
+        (
+            "matching-sr.c",
+            "#include \"Rte_Ingress.h\"\nint test(void);\nint test(void) { uint32 data=0U; return (Rte_Read_RxValue_Value(&data)==E_OK && Rte_Write_TxValue_Value(data)==E_OK) ? 0 : 1; }\n",
+        ),
+        (
+            "matching-cs.c",
+            "#include \"Rte_DcmService.h\"\nint test(void);\nint test(void) { uint8 bytes[4]={0U,0U,0U,0U}; return Rte_Call_DataServices_ApplicationValue_ReadData(bytes)==E_OK ? 0 : 1; }\n",
+        ),
+    ] {
+        std::fs::write(directory.join(name), source).unwrap();
+        let output = compile(name);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
     for (name, source, expected) in [
         (
             "private-valid.c",

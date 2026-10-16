@@ -1,10 +1,12 @@
 /** @file Dcm exclusive area, main function and diagnostic session mode switch. */
 #ifndef SCHM_DCM_H
 #define SCHM_DCM_H
+#include "SchM_Dcm_Type.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "Rte_Dcm_Type.h"
-/** Selected immediate BSW Scheduler mode-switch results. */
-#define SCHM_E_OK    0u
-#define SCHM_E_LIMIT 130u
+#include "Rte.h"
 /** Enter the Dcm state area (SWS_Rte_07250).
  * @return None.
  * Preconditions: no exclusive area is held by this context.
@@ -29,7 +31,11 @@ void SchM_Exit_Dcm_DCM_STATE(void);
  * publication returns without work and does not advance the P2/S3 timers.
  * Ownership: application callbacks use call-local buffers, never live Rx/Tx storage.
  */
+#define DCM_START_SEC_CODE
+#include "Dcm_MemMap.h"
 void Dcm_MainFunction(void);
+#define DCM_STOP_SEC_CODE
+#include "Dcm_MemMap.h"
 /** Publish the session mode through the selected immediate SchM interface.
  * @param[in] mode Configured session mode, distinct from the UDS session ID.
  * @return SCHM_E_OK after publishing the immediate mode.
@@ -48,4 +54,7 @@ Std_ReturnType SchM_Switch_Dcm_DcmDiagnosticSessionControl(
  * Ownership: None.
  */
 Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void);
+#ifdef __cplusplus
+}
+#endif
 #endif

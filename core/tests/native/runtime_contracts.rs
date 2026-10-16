@@ -361,10 +361,15 @@ fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
         "generated/include/Ecu_Config.h",
         "generated/include/Rte_Dcm_Type.h",
         "generated/include/Rte_Type.h",
+        "generated/include/Rte.h",
+        "generated/include/Rte_Cfg.h",
+        "generated/include/SchM_Can_Type.h",
+        "generated/include/SchM_BswM_Type.h",
+        "generated/include/SchM_Dcm_Type.h",
         "generated/src/Ecu_Execution.h",
         "generated/include/Rte_Main.h",
         "generated/include/Rte_MemMap.h",
-        "generated/src/SchM.c",
+        "generated/src/SchM_Main.c",
     ]
     .into_iter()
     .map(|path| {
@@ -879,7 +884,7 @@ int main(void) {
             "runtime/host/src/Can_HostLock.c",
             "runtime/host/src/SchM_Diagnostic_Host.c",
         ])
-        .arg(scratch.0.join("SchM.c"))
+        .arg(scratch.0.join("SchM_Main.c"))
         .arg(harness)
         .arg("-o")
         .arg(&binary)

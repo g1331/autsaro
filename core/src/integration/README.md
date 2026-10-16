@@ -70,3 +70,18 @@ Use `contracts.preview(output)` and then
 the reviewed bytes with the existing generator's output protection and backup.
 The contract contains declarations only. Application compilation checks these
 interfaces; ECU/RTE linking and runtime behavior are verified separately.
+
+## RTE shared contract and generation
+
+`rte_types` owns standard RTE/SchM statuses and accepted input type declarations.
+`rte_configuration` resolves source generator policy and configuration revisions.
+`rte_memory` provides the same receiver allocation table to `rte` and the BSWMD
+emitter; `memmap` owns the RTE/configuration section table and SWC mappings.
+`contracts` renders the same public headers for the contract kit and ECU project,
+including communication widths from `can_runtime`. Neither phase reparses inputs
+or patches rendered text. Application entry definitions remain in caller-owned
+slots; generated SWC headers use their own MemMap and RTE buffers use RTE scopes.
+
+Concrete APIs follow `Rte_Read/Write/Call_<component type>_<extension>`; application
+short names map to those functions. See [the profile](../../../docs/standards/multi-component-profile.md)
+for required ECUC input, the strict-unconnected option and source revision metadata.

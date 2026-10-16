@@ -1,4 +1,4 @@
-/** 生成的 SchM 生命周期：只有生命周期阶段为测试适配，SchM.c 为真实 producer。
+/** 生成的 SchM 生命周期：只有生命周期阶段为测试适配，SchM_Main.c 为真实 producer。
  * Init 每进程只接受一次且须为本分区配置；Start 须在 Init 之后，StartTiming 须在
  * Start 之后；Deinit 只在关闭阶段生效，之后不再启动计时实体，也不能重新初始化。
  * Verifies: SWS_Rte_07574、07586、07270、04546、04549、07274

@@ -1,6 +1,10 @@
 /** @file Controlled x64 platform types for the standard multi-component stack. */
 #ifndef PLATFORM_TYPES_H
 #define PLATFORM_TYPES_H
+/** Fixed AUTOSAR CP R24-11 interface release (4.10.0). */
+#define PLATFORM_AR_RELEASE_MAJOR_VERSION    4U
+#define PLATFORM_AR_RELEASE_MINOR_VERSION    10U
+#define PLATFORM_AR_RELEASE_REVISION_VERSION 0U
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -22,7 +26,11 @@
 #define FALSE false
 #endif
 
+#ifdef __cplusplus
+typedef bool boolean;
+#else
 typedef _Bool boolean;
+#endif
 typedef int8_t sint8;
 typedef int16_t sint16;
 typedef int32_t sint32;

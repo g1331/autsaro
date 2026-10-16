@@ -1,6 +1,10 @@
 /** @file Public AUTOSAR OS API for the single-core target, with OSEK compatibility macros. */
 #ifndef AUTOSAR_OS_H
 #define AUTOSAR_OS_H
+/** Fixed AUTOSAR CP R24-11 interface release (4.10.0). */
+#define OS_AR_RELEASE_MAJOR_VERSION    4U
+#define OS_AR_RELEASE_MINOR_VERSION    10U
+#define OS_AR_RELEASE_REVISION_VERSION 0U
 #include "Os_Types.h"
 #include "Rte_Os_Type.h"
 /* OSEK source compatibility only (R24-11 section 7.1.2.1). The unused tag

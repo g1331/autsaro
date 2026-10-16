@@ -16,6 +16,7 @@ pub struct DataPort {
     pub api_symbol: String,
     pub runnable: String,
     pub initial_value: u32,
+    pub handle_never_received: bool,
     pub alive_timeout_ms: Option<u32>,
 }
 

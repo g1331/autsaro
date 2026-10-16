@@ -29,6 +29,7 @@ mod ecu_config;
 pub(crate) mod editor;
 mod graph;
 pub(crate) mod handoff;
+mod memmap;
 mod mode;
 mod native_configuration;
 mod os_service;
@@ -36,6 +37,9 @@ mod outputs;
 mod plan;
 mod routing;
 mod rte;
+mod rte_configuration;
+mod rte_memory;
+mod rte_types;
 mod schedule;
 mod signals;
 
@@ -57,6 +61,8 @@ pub use mode::{ModeRule, ModeRuntimeContract, ModeUser};
 pub use outputs::INTEGRATION_PATH;
 pub use plan::{HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan_native};
 pub use routing::PduRoute;
+pub use rte_configuration::RteGenerationContract;
+pub use rte_types::RteDataType;
 pub use schedule::{ScheduleContract, ScheduledEntity};
 pub use signals::SignalChannel;
 

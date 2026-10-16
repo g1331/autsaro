@@ -8,6 +8,23 @@ fn header(name: &str, body: &str) -> String {
         "/** @file Generated from the selected source contract. */\n#ifndef {name}\n#define {name}\n{body}\n#endif\n"
     )
 }
+/// Module interlink headers share the standard type import and C++ linkage.
+fn schm_header(module: &str, body: &str) -> String {
+    header(
+        &format!("SCHM_{}_H", module.to_uppercase()),
+        &format!(
+            "#include \"SchM_{module}_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\n{body}\n#ifdef __cplusplus\n}}\n#endif\n"
+        ),
+    )
+}
+
+fn code_prototypes(module: &str, declarations: &str) -> String {
+    let prefix = module.to_uppercase();
+    format!(
+        "\n#define {prefix}_START_SEC_CODE\n#include \"{module}_MemMap.h\"\n{declarations}\n#define {prefix}_STOP_SEC_CODE\n#include \"{module}_MemMap.h\"\n"
+    )
+}
+
 fn failure() -> Vec<PlanDiagnostic> {
     vec![PlanDiagnostic::dependency(
         "ECU_SOURCE_CLOSURE",
@@ -25,7 +42,7 @@ fn config_data(output: &mut String, scope: &str, declaration: &str, items: &[Ite
         &format!("RTE_{scope}_CONFIG_DATA_PREBUILD_UNSPECIFIED"),
         items,
     );
-    output.push_str(&format!("#define RTE_{scope}_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Ecu_MemMap.h\"\n{definition}\n#define RTE_{scope}_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Ecu_MemMap.h\"\n"));
+    output.push_str(&format!("#define RTE_{scope}_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n{definition}\n#define RTE_{scope}_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n"));
 }
 
 /// The items of a comma-separated list of plain values.
@@ -56,86 +73,60 @@ pub(super) fn files(
     let composition = description.ecu_composition()?;
     let com = description.ecu_com()?;
     let authentication_group = composition.authentication_modes()?.group.as_ref();
-    let diagnostic_types = description
-        .diagnostic
-        .as_ref()
-        .map(|diagnostic| composition.diagnostic_types(diagnostic))
-        .transpose()?;
     let communication = description.ecu_communication()?;
     let can = &communication.can;
     let mode = description.ecu_mode()?;
     let mut outputs = super::outputs::EcuOutputs::new(target)?;
     // The contract provenance is package metadata; its headers are generated C.
-    outputs.emit_all(
-        "contracts",
-        plan.contract_headers(composition, true)?
-            .into_iter()
-            .map(|(path, bytes)| match path.as_str() {
-                "contract.json" => ("meta/contract.json".into(), bytes),
-                _ => (path, bytes),
-            }),
-    )?;
+    for (path, bytes) in plan.contract_headers(composition)? {
+        let producer = if path.ends_with("_MemMap.h") {
+            super::outputs::MEMMAP
+        } else {
+            "contracts"
+        };
+        let path = if path == "contract.json" {
+            "meta/contract.json".into()
+        } else {
+            path
+        };
+        outputs.emit(producer, path, bytes)?;
+    }
     outputs.emit_all(super::outputs::RTE, super::rte::files(plan)?)?;
     outputs.emit_verbatim(super::outputs::RTE)?;
     outputs.emit_verbatim(super::outputs::MEMMAP)?;
     // The selected authentication group's mode type and SchM declarations
     // complete the trusted Dcm headers.
-    for (path, addition) in [
-        (
-            "include/Rte_Dcm_Type.h",
-            format!(
-                "{}/** Connection authentication mode (SWS_Dcm_91067). */\ntypedef uint8 Rte_ModeType_{authentication_group};\n/** Deauthenticated, authenticated and transition values (SWS_Dcm_91067). */\n{}",
-                diagnostic_types
-                    .as_ref()
-                    .map_or("", |types| types.0.as_str()),
-                c_layout::defines(&[
-                    (
-                        format!("RTE_MODE_{authentication_group}_DCM_DEAUTHENTICATED"),
-                        "0u"
-                    ),
-                    (
-                        format!("RTE_MODE_{authentication_group}_DCM_AUTHENTICATED"),
-                        "1u"
-                    ),
-                    (format!("RTE_TRANSITION_{authentication_group}"), "255u"),
-                ])
+    let text = plan.dcm_type_header(composition)?;
+    outputs.emit_rendered(super::outputs::DCM_MODES, "include/Rte_Dcm_Type.h", text)?;
+    let (path, addition) = (
+        "include/SchM_Dcm.h",
+        format!(
+            "/** Publish the selected connection authentication mode.\n * @param[in] mode 0 for deauthenticated, 1 for authenticated.\n * @return SCHM_E_OK after publishing the immediate mode.\n * Preconditions: initialized ECU.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant; the Dcm publisher orders updates.\n * Ownership: no pointer is retained.\n */\n{}\n/** Read the selected connection authentication mode.\n * @return Current mode.\n * Preconditions: initialized ECU.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant.\n * Ownership: None.\n */\n{}\n",
+            c_layout::signature(
+                "Std_ReturnType",
+                &format!("SchM_Switch_Dcm_{authentication_group}"),
+                &[format!("Rte_ModeType_{authentication_group} mode")],
+                ";",
+                false,
             ),
+            c_layout::signature(
+                &format!("Rte_ModeType_{authentication_group}"),
+                &format!("SchM_Mode_Dcm_{authentication_group}"),
+                &["void".to_owned()],
+                ";",
+                false,
+            )
         ),
-        (
-            "include/SchM_Dcm.h",
-            format!(
-                "/** Publish the selected connection authentication mode.\n * @param[in] mode 0 for deauthenticated, 1 for authenticated.\n * @return SCHM_E_OK after publishing the immediate mode.\n * Preconditions: initialized ECU.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant; the Dcm publisher orders updates.\n * Ownership: no pointer is retained.\n */\n{}\n/** Read the selected connection authentication mode.\n * @return Current mode.\n * Preconditions: initialized ECU.\n * Context: ECU task or callback; not inside an exclusive area.\n * Reentrancy: reentrant.\n * Ownership: None.\n */\n{}\n",
-                c_layout::signature(
-                    "Std_ReturnType",
-                    &format!("SchM_Switch_Dcm_{authentication_group}"),
-                    &[format!("Rte_ModeType_{authentication_group} mode")],
-                    ";",
-                    false,
-                ),
-                c_layout::signature(
-                    &format!("Rte_ModeType_{authentication_group}"),
-                    &format!("SchM_Mode_Dcm_{authentication_group}"),
-                    &["void".to_owned()],
-                    ";",
-                    false,
-                )
-            ),
-        ),
-    ] {
-        let mut edits = vec![super::outputs::Edit::BeforeGuardEnd(&addition)];
-        if path == "include/Rte_Dcm_Type.h" && diagnostic_types.is_some() {
-            edits.push(super::outputs::Edit::Once(
-                "\"Std_Types.h\"",
-                "\"Std_Types.h\"\n#include \"Rte_Type.h\"",
-            ));
-        }
-        let text = super::outputs::render(
-            outputs.template(super::outputs::DCM_MODES, path)?,
-            path,
-            &edits,
-        )?;
-        outputs.emit_rendered(super::outputs::DCM_MODES, path, text)?;
-    }
+    );
+    let addition = format!(
+        "#ifdef __cplusplus\nextern \"C\" {{\n#endif\n{addition}#ifdef __cplusplus\n}}\n#endif\n"
+    );
+    let text = super::outputs::render(
+        outputs.template(super::outputs::DCM_MODES, path)?,
+        path,
+        &[super::outputs::Edit::BeforeGuardEnd(&addition)],
+    )?;
+    outputs.emit_rendered(super::outputs::DCM_MODES, path, text)?;
     let os = super::ecu::configure_os(description, &mut outputs)?;
     let os_config = super::ecu::os_configuration(
         description,
@@ -153,30 +144,24 @@ pub(super) fn files(
             "#include \"Std_Types.h\"\ntypedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;\ntypedef struct {\n    EcuTxConfirmation tx_confirmation;\n} EcuPolicyConfig;\nextern const EcuPolicyConfig Ecu_Policy;",
         ),
     )?;
-    let profile = c_layout::defines(&[
-        ("CAN_HOST_QUEUED_COMPLETION", "1".to_owned()),
-        ("CAN_RX_POLLING", "1".to_owned()),
-        ("CAN_TX_POLLING", "1".to_owned()),
-        ("CAN_BUSOFF_POLLING", "1".to_owned()),
-        ("CAN_CONTROLLER_ID", format!("{}u", can.controller_id)),
-        (
-            "CAN_CANIF_CONTROLLER_ID",
-            format!("{}u", can.can_if_controller_id),
-        ),
-        ("CAN_TX_HOH", format!("{}u", can.transmit_handle)),
-        ("CAN_RX_HOH", format!("{}u", can.receive_handle)),
-    ]);
+    outputs.emit_all(ECU, super::can_runtime::type_headers(communication))?;
+    let symbols: Vec<_> = description
+        .handles
+        .iter()
+        .filter(|handle| handle.domain == "com_signal")
+        .map(|handle| {
+            (
+                super::com::symbolic_name(&handle.path),
+                format!("{}U", handle.handle),
+            )
+        })
+        .collect();
     outputs.emit(
         ECU,
-        "include/Ecu_ProfileConfig.h",
-        header("ECU_PROFILE_CONFIG_H", profile.trim_end()),
+        "include/Com_Cfg.h",
+        header("COM_CFG_H", &c_layout::defines(&symbols)),
     )?;
-    let integer = |kind: super::CommunicationIntegerType| match kind {
-        super::CommunicationIntegerType::Uint8 => "uint8",
-        super::CommunicationIntegerType::Uint16 => "uint16",
-        super::CommunicationIntegerType::Uint32 => "uint32",
-    };
-    outputs.emit(ECU, "include/ComStack_Cfg.h", format!("/** @file EcuC-selected communication widths. */\n#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include \"Platform_Types.h\"\n#include \"Ecu_ProfileConfig.h\"\ntypedef {} PduIdType;\ntypedef {} PduLengthType;\n#endif\n", integer(communication.pdu_id_type), integer(communication.pdu_length_type)))?;
+
     outputs.emit(
         ECU,
         "src/Ecu_Execution.h",
@@ -195,15 +180,15 @@ pub(super) fn files(
         ("LSduR", "LSDUR"),
     ] {
         let main = match module {
-            "CanTp" => "\nvoid CanTp_MainFunction(void);".to_owned(),
-            "ComM" => format!("\nvoid {}(void);", mode.main_symbol),
+            "CanTp" => code_prototypes(module, "void CanTp_MainFunction(void);"),
+            "ComM" => code_prototypes(module, &format!("void {}(void);", mode.main_symbol)),
             _ => String::new(),
         };
         outputs.emit(
             ECU,
             format!("include/SchM_{module}.h"),
-            header(
-                &format!("SCHM_{}_H", module.to_uppercase()),
+            schm_header(
+                module,
                 &format!(
                     "void SchM_Enter_{module}_{area}_STATE(void);\nvoid SchM_Exit_{module}_{area}_STATE(void);{main}"
                 ),
@@ -213,14 +198,39 @@ pub(super) fn files(
     outputs.emit(
         ECU,
         "include/SchM_Com.h",
-        header(
-            "SCHM_COM_H",
+        schm_header(
+            "Com",
             &format!(
-                "void SchM_Enter_Com_COM_STATE(void);\nvoid SchM_Exit_Com_COM_STATE(void);\nvoid {}(void);\nvoid {}(void);",
-                com.receive_main.symbol, com.transmit_main.symbol
+                "void SchM_Enter_Com_COM_STATE(void);\nvoid SchM_Exit_Com_COM_STATE(void);{}",
+                code_prototypes(
+                    "Com",
+                    &format!(
+                        "void {}(void);\nvoid {}(void);",
+                        com.receive_main.symbol, com.transmit_main.symbol
+                    )
+                )
             ),
         ),
     )?;
+    for module in [
+        "Can", "CanIf", "CanTp", "Com", "ComM", "BswM", "Dcm", "Det", "PduR", "LSduR",
+    ] {
+        outputs.emit(
+            ECU,
+            format!("include/SchM_{module}_Type.h"),
+            header(
+                &format!("SCHM_{}_TYPE_H", module.to_uppercase()),
+                &format!(
+                    "#include \"Rte_Type.h\"\n{}",
+                    if module == "Dcm" {
+                        "#include \"Rte_Dcm_Type.h\"\n"
+                    } else {
+                        ""
+                    }
+                ),
+            ),
+        )?;
+    }
     let app = description
         .schedule
         .entities
@@ -637,7 +647,7 @@ pub(super) fn files(
     ] {
         let function =
             c_layout::short_function(&format!("RTE_{scope}_CODE void {symbol}(void)"), body);
-        config.push_str(&format!("#define RTE_{scope}_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\n{function}\n#define RTE_{scope}_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n"));
+        config.push_str(&format!("#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n{function}\n#define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"));
     }
     // SWS_CanTp_00229 timeouts reach the HostBatch receipt through the
     // standard runtime callout (DetReportRuntimeErrorCallout), not a CanTp hook.
@@ -653,7 +663,7 @@ pub(super) fn files(
         "static const Det_ConfigType det_config",
         &values("NULL_PTR, 0u, det_runtime_callouts, 1u"),
     );
-    config.push_str("#define RTE_Ecu_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\n");
+    config.push_str("#define RTE_Ecu_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n");
     // ECUC_BswM_00843: parameters are fixed by the configured complete call.
     config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,\n                                                  ComM_ModeType requested)\n{\n");
     config.push_str(&format!(
@@ -778,42 +788,15 @@ pub(super) fn files(
         ));
     }
     config.push_str("    return 1;\n}\n");
-    config.push_str("#define RTE_Ecu_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n");
+    config.push_str("#define RTE_Ecu_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n");
     if description.diagnostic_transport.is_some() {
         let function = c_layout::short_function(
             "static RTE_Dcm_CODE void Ecu_DcmAuthenticationMode(uint8 state)",
             &format!("(void)SchM_Switch_Dcm_{authentication_group}(state);"),
         );
-        config.push_str(&format!("#define RTE_Dcm_START_SEC_CODE\n#include \"Ecu_MemMap.h\"\n{function}\n#define RTE_Dcm_STOP_SEC_CODE\n#include \"Ecu_MemMap.h\"\n"));
+        config.push_str(&format!("#define RTE_Dcm_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n{function}\n#define RTE_Dcm_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"));
     }
     outputs.emit(ECU, "src/Ecu_RuntimeConfig.c", config)?;
-    let config_scopes: Vec<_> = [
-        "Can",
-        "CanIf",
-        "Com",
-        "CanTp",
-        "Dcm",
-        "PduR",
-        "LSduR",
-        "ComM",
-        "BswM",
-        "Det",
-        "Ecu_HostBusSM",
-        "Ecu",
-    ]
-    .into_iter()
-    .flat_map(|scope| {
-        [
-            (scope.into(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"),
-            (scope.into(), "CODE"),
-        ]
-    })
-    .collect();
-    outputs.emit(
-        ECU,
-        "include/Ecu_MemMap.h",
-        super::rte::memory_map(&config_scopes, None),
-    )?;
     let mode_scope = composition
         .components
         .iter()
@@ -822,7 +805,7 @@ pub(super) fn files(
         .unwrap_or("Dcm");
     outputs.emit(
         ECU,
-        "src/SchM.c",
+        "src/SchM_Main.c",
         lifecycle(communication.partition.id, mode_scope, authentication_group),
     )?;
     // Only assets delivered byte-for-byte are original sources; templates an

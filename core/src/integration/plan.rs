@@ -418,7 +418,11 @@ pub(super) fn inspect_composition(
     ] {
         let paths: BTreeSet<String> = paths.into_iter().collect();
         for (handle, path) in paths.into_iter().enumerate() {
-            let native = format!("{}_{}", domain, c_name(path.trim_start_matches('/')));
+            let native = if domain == "com_signal" {
+                super::com::symbolic_name(&path)
+            } else {
+                format!("{}_{}", domain, c_name(path.trim_start_matches('/')))
+            };
             if !names.insert(native.clone()) {
                 return Err(vec![graph.diagnostic(
                     graph.index(&path)?,

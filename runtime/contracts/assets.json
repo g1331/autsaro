@@ -203,7 +203,7 @@
     },
     {
       "path": "runtime/os/include/Os.h",
-      "sha256": "6e9ac95e61f9012d7a500244e7b644c031bf455b2d53759b40c15fffb54df068",
+      "sha256": "ddc40b7cd7cf9d2227bbd1e7d8aecb22e2ed684a868cf3f0ba4a5493419cff0d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1205,7 +1205,7 @@
     },
     {
       "path": "runtime/bsw/include/Com.h",
-      "sha256": "d7f7566c97f995c8a36d7a598db057f0f789f10525040b250b985cdf5abfd59e",
+      "sha256": "602acd6de4e2973d83366bbb6712d3953b4d79f17925df90e9c75ec5c59c3762",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1289,7 +1289,7 @@
     },
     {
       "path": "runtime/bsw/include/ComStack_Types.h",
-      "sha256": "9572da63d7bd0a6bfbdecfec641641a959abb27da33f8df379ec98c183d0ac1a",
+      "sha256": "47f57c3587877e233ab514f4abf61aaa469392dc2172294620f836ade15b8656",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1569,7 +1569,7 @@
     },
     {
       "path": "runtime/bsw/include/SchM_BswM.h",
-      "sha256": "ca20479c7e657dd7119445098265987446ce7c503a102ae55b74a7aed6dc90f0",
+      "sha256": "f97e03b10e6caf3b8ab7c07dac7f30f6c8a66df9e0d42d7687a5221e47efc093",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1583,7 +1583,7 @@
     },
     {
       "path": "runtime/bsw/include/SchM_Dcm.h",
-      "sha256": "f21cf36abbcef46b3807e3f2025d7cda4acae36e15676b6f9b3a5a0574c03792",
+      "sha256": "7f6eb5d8f32bcd0d9f37d06cf9bd7d10a1648df1a54378d66b15d3f1643a0894",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1891,7 +1891,7 @@
     },
     {
       "path": "runtime/bsw/include/Platform_Types.h",
-      "sha256": "1c3cff8e6b99ba5925fcbd02dfddd86e1a6ced7612ed8323736ac423a39a3f60",
+      "sha256": "84fd23800563708bbd69332df2be715d437b4b5fab12ba092ed34dd20e51e053",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1905,7 +1905,7 @@
     },
     {
       "path": "runtime/bsw/include/SchM_Can.h",
-      "sha256": "53a87126c2d948fcde30f318b6a1fc8259b703a481a25e0fc525c9c2583fa550",
+      "sha256": "17b12018a32b7f568e5c7dfe56c0cd16e7ef3286fcb840df51ada5568bda978b",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1919,7 +1919,7 @@
     },
     {
       "path": "runtime/bsw/include/Std_Types.h",
-      "sha256": "7674c8581f25679353c6de5c3f73112893438c90ae307df5a81a16dbfbe28582",
+      "sha256": "e0966f7985fb44f0095eb3ea302c4bde0760024e4869bd86b4df37ea6b9f82e5",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

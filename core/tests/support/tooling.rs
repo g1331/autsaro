@@ -244,7 +244,9 @@ pub(crate) fn run_public_command(
         use std::os::unix::process::ExitStatusExt;
         assert!(
             exit_code >= 0,
-            "Native test command terminated by signal: {exit_code}"
+            "{name} terminated by signal: {exit_code}; {}{}",
+            String::from_utf8_lossy(&stdout),
+            String::from_utf8_lossy(&stderr),
         );
         std::process::ExitStatus::from_raw(exit_code << 8)
     };

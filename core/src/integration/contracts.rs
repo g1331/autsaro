@@ -42,7 +42,7 @@ impl ComponentContractFiles {
 
 fn header(guard: &str, body: &str) -> Vec<u8> {
     format!(
-        "/** @file\n * @brief Generated W2 component contract; runtime implementation is separate.\n */\n#ifndef {guard}\n#define {guard}\n\n{body}\n#endif\n"
+        "/** @file\n * @brief Generated component contract; runtime implementation is separate.\n */\n#ifndef {guard}\n#define {guard}\n\n{body}\n#endif\n"
     )
     .into_bytes()
 }
@@ -102,54 +102,131 @@ impl ValidatedIntegrationPlan {
     ) -> Result<ComponentContractFiles, Vec<PlanDiagnostic>> {
         let mut files = Vec::new();
         // The same platform and standard types the delivered ECU compiles with.
-        for name in ["Platform_Types.h", "Std_Types.h"] {
+        for name in ["Platform_Types.h", "Std_Types.h", "ComStack_Types.h"] {
             let asset = super::outputs::trusted_asset(&format!("runtime/bsw/include/{name}"))?;
             files.push((format!("include/{name}"), asset.bytes.to_vec()));
         }
-        files.extend(self.contract_headers(composition, false)?);
-        files.push(("README.md".into(), b"# Component contracts\n\nInclude the generated header for your component in each application translation unit. Standard component API macros select unique implementation symbols. Shared application types are declared in Rte_Type.h. Synchronous servers with no application errors return void; their RTE clients return Std_ReturnType. OUT and INOUT arguments require non-NULL writable caller-owned storage, and fixed byte arrays require four bytes.\n\nThis delivery contains component-level declarations and selected relationships from the validated source-derived plan, not the complete ECU plan. contract.json records component, endpoint, type, selected mapping/schedule, symbol ownership and validation-source identities. Runtime implementation and OS execution are separate stages. Planned local Read returns each receiver's explicit initial value until publication and E_OK; local Write returns E_OK. Planned network Read retains initial/last values and reports E_OK, RTE_E_NEVER_RECEIVED or RTE_E_MAX_AGE_EXCEEDED; network Read/Write map COM_SERVICE_NOT_AVAILABLE to RTE_E_COM_STOPPED. Planned synchronous Call returns E_OK or an RTE infrastructure error. No runtime behavior is implemented here, and the network timeout/COM deadline-monitoring runtime scope remains pending. Keep user sources outside this generated directory.\n".to_vec()));
+        files.extend(super::can_runtime::type_headers(
+            self.description().ecu_communication()?,
+        ));
+        files.extend(self.contract_headers(composition)?);
+        files.push((
+            "include/Rte_Dcm_Type.h".into(),
+            self.dcm_type_header(composition)?.into_bytes(),
+        ));
+        files.push(("README.md".into(), b"# Component contracts\n\nInclude the generated header for your component in each application translation unit. Standard component API macros select unique implementation symbols. Shared application types are declared in Rte_Type.h. Synchronous servers with no application errors return void; their RTE clients return Std_ReturnType. OUT and INOUT arguments require non-NULL writable caller-owned storage, and fixed byte arrays require four bytes.\n\nThis delivery contains component-level declarations and selected relationships from the validated source-derived plan, not the complete ECU plan. contract.json records component, endpoint, type, selected mapping/schedule, symbol ownership and validation-source identities. Runtime implementation and OS execution are separate stages. Local Read retains each receiver's initial value until publication; handleNeverReceived selects whether it reports RTE_E_NEVER_RECEIVED before that publication. Unconnected Read returns its initial value and RTE_E_UNCONNECTED; unconnected Write discards and succeeds; unconnected Call preserves OUT/INOUT and returns RTE_E_UNCONNECTED. Network Read retains initial/last values and reports reception/age status; COM_SERVICE_NOT_AVAILABLE maps to RTE_E_COM_STOPPED. This contract kit contains declarations; generate the ECU project to obtain these runtime implementations. Keep user sources outside this generated directory.\n".to_vec()));
         Ok(ComponentContractFiles {
             files: generator::output::seal_files(files),
         })
     }
 
+    /// The same trusted Dcm type producer is imported by both delivery stages.
+    pub(super) fn dcm_type_header(
+        &self,
+        composition: &super::composition::CompositionContract,
+    ) -> Result<String, Vec<PlanDiagnostic>> {
+        let group = &composition.authentication_modes()?.group;
+        let declarations = self
+            .description()
+            .diagnostic
+            .as_ref()
+            .map(|diagnostic| composition.diagnostic_types(diagnostic))
+            .transpose()?
+            .map_or(String::new(), |types| types.0);
+        let addition = format!(
+            "{declarations}typedef uint8 Rte_ModeType_{group};\n{}",
+            c_layout::defines(&[
+                (format!("RTE_MODE_{group}_DCM_DEAUTHENTICATED"), "0u"),
+                (format!("RTE_MODE_{group}_DCM_AUTHENTICATED"), "1u"),
+                (format!("RTE_TRANSITION_{group}"), "255u"),
+            ])
+        );
+        let asset = super::outputs::trusted_asset("runtime/bsw/include/Rte_Dcm_Type.h")?;
+        super::outputs::render(
+            &String::from_utf8_lossy(asset.bytes),
+            "include/Rte_Dcm_Type.h",
+            &[
+                super::outputs::Edit::Once(
+                    "\"Std_Types.h\"",
+                    "\"Std_Types.h\"\n#include \"Rte_Type.h\"",
+                ),
+                super::outputs::Edit::BeforeGuardEnd(&addition),
+            ],
+        )
+    }
+
     /// Component headers, shared RTE types and provenance. The ECU variant of
-    /// `Rte.h` also declares the RTE lifecycle and infrastructure statuses.
+    /// shares the same public interface as the standalone contract.
     pub(super) fn contract_headers(
         &self,
         composition: &super::composition::CompositionContract,
-        ecu: bool,
     ) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         let description = self.description();
-        let mut types = String::from("#include \"Std_Types.h\"\n");
-        for datatype in composition.array_types.values() {
-            types.push_str(&format!("typedef uint8 {datatype}[4];\n"));
+        let mut types = String::from("#include \"Rte.h\"\n");
+        for datatype in &composition.types {
+            if datatype.symbol == datatype.native_type && datatype.array_length.is_none() {
+                continue;
+            }
+            let suffix = datatype
+                .array_length
+                .map(|length| format!("[{length}]"))
+                .unwrap_or_default();
+            types.push_str(&format!(
+                "typedef {} {}{suffix};\n",
+                datatype.native_type, datatype.symbol
+            ));
         }
-        let lifecycle = if ecu {
-            format!(
-                "#include \"Rte_Main.h\"\n{}",
-                c_layout::defines(&[("RTE_E_OK", "0U"), ("RTE_E_LIMIT", "130U")])
-            )
-        } else {
-            String::new()
-        };
-        let statuses = c_layout::defines(&[
-            ("RTE_E_COM_STOPPED", "128U"),
-            ("RTE_E_NEVER_RECEIVED", "133U"),
-            ("RTE_E_MAX_AGE_EXCEEDED", "64U"),
-        ]);
+        types.push_str("#include \"Rte_Dcm_Type.h\"\n");
         let mut files = vec![
+            (
+                "include/Rte_Cfg.h".into(),
+                header("RTE_CFG_H", "#include \"Std_Types.h\"\n"),
+            ),
             ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
             (
                 "include/Rte.h".into(),
-                header(
-                    "RTE_H",
-                    &format!("#include \"Rte_Type.h\"\n{lifecycle}\n{statuses}"),
-                ),
+                header("RTE_H", &super::rte_types::standard()),
+            ),
+            (
+                "include/Rte_Main.h".into(),
+                super::rte::MAIN_HEADER.to_vec(),
+            ),
+            (
+                "include/Rte_DataHandleType.h".into(),
+                header("RTE_DATA_HANDLE_TYPE_H", "#include \"Rte_Type.h\"\n"),
             ),
         ];
         for component in &composition.components {
-            let mut body = String::from("#include \"Rte.h\"\n\n");
+            let scope = super::short_name(&component.component);
+            let mut body = format!(
+                "#include \"Rte_{scope}_Type.h\"\n#include \"Rte_DataHandleType.h\"\n\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\n\nstruct Rte_CDS_{scope} {{\n    uint8 Rte_Dummy; /**< Empty CDS for the source, single-instance component. */\n}};\ntypedef struct Rte_CDS_{scope} Rte_CDS_{scope};\n#ifndef RTE_CORE\ntypedef const Rte_CDS_{scope} *Rte_Instance;\n#endif\nextern const Rte_CDS_{scope} Rte_Instance_{scope};\nextern const Rte_CDS_{scope} *const Rte_Inst_{scope};\n\n"
+            );
+            let init_values: Vec<_> = component
+                .data_ports
+                .iter()
+                .map(|port| {
+                    (
+                        format!("Rte_InitValue_{}_{}", port.name, port.element_name),
+                        format!("{}UL", port.initial_value),
+                    )
+                })
+                .collect();
+            body.push_str("#ifndef RTE_CORE\n");
+            body.push_str(&c_layout::defines(&init_values));
+            body.push('\n');
+            let runnables: Vec<_> = component
+                .runnables
+                .iter()
+                .map(|runnable| {
+                    (
+                        format!("RTE_RUNNABLE_{}", super::short_name(&runnable.path)),
+                        runnable.symbol.clone(),
+                    )
+                })
+                .collect();
+            body.push_str(&c_layout::defines(&runnables));
+            body.push('\n');
+            body.push_str("#endif\n");
             let errors: std::collections::BTreeSet<_> = component
                 .operations
                 .iter()
@@ -200,75 +277,116 @@ impl ValidatedIntegrationPlan {
                                 && endpoint.endpoint.port == port.path
                         });
                         if network && port.read {
-                            "Planned E_OK, RTE_E_NEVER_RECEIVED or RTE_E_MAX_AGE_EXCEEDED with configured initial/last value; COM_SERVICE_NOT_AVAILABLE maps to RTE_E_COM_STOPPED. Network timeout runtime scope is pending.".to_owned()
+                            "E_OK, configured RTE_E_NEVER_RECEIVED or RTE_E_MAX_AGE_EXCEEDED with initial/last value; COM_SERVICE_NOT_AVAILABLE maps to RTE_E_COM_STOPPED.".to_owned()
                         } else if network {
-                            "Planned E_OK for buffer update; COM_SERVICE_NOT_AVAILABLE maps to RTE_E_COM_STOPPED; lower transmission failure is separate.".to_owned()
+                            "E_OK for buffer update; COM_SERVICE_NOT_AVAILABLE maps to RTE_E_COM_STOPPED; lower transmission failure is separate.".to_owned()
                         } else if port.read {
                             format!(
-                                "Planned E_OK; this receiver reads its explicit initial value {} until the first publication, then the producer's last value.",
+                                "This receiver reads initial value {} until publication, then the producer's last value; handleNeverReceived selects the initial status.",
                                 port.initial_value
                             )
                         } else {
-                            "Planned E_OK on publication; independent of CAN availability."
+                            "E_OK on publication, or when an unconnected port discards the value."
                                 .to_owned()
                         }
                     } else if symbol.definition_owner.starts_with("application/") {
                         "E_OK with a valid value, including a replacement value on application failure (SWS_Dcm_00686).".to_owned()
                     } else {
-                        "Planned E_OK; RTE_E_COM_STOPPED before RTE start; E_NOT_OK (1) outside the owner context or for a NULL argument."
+                        "E_OK for a completed call; RTE_E_UNCONNECTED preserves OUT/INOUT without calling a server. Connected APIs reject calls before start, outside the owner or with NULL storage."
                             .to_owned()
                     };
-                    docs.push_str(&c_layout::comment(
-                        " * ",
-                        &format!("@return {status} Declaration only; runtime behavior is not implemented here."),
+                    docs.push_str(&c_layout::comment(" * ", &format!("@return {status}")));
+                }
+                let runnable = component
+                    .runnables
+                    .iter()
+                    .any(|runnable| runnable.symbol == symbol.symbol);
+                let scope = super::short_name(&component.component);
+                if !runnable {
+                    body.push_str(&api_visibility(component, symbol));
+                }
+                if runnable {
+                    body.push_str(&format!(
+                        "#define {scope}_START_SEC_CODE\n#include \"{scope}_MemMap.h\"\n"
                     ));
                 }
+                let parameters = if runnable && symbol.definition_owner.starts_with("application/")
+                {
+                    symbol
+                        .arguments
+                        .iter()
+                        .map(|argument| argument.native_type.trim().to_owned())
+                        .collect::<Vec<_>>()
+                } else {
+                    parameters
+                };
+                let parameters = if parameters.is_empty() {
+                    vec!["void".into()]
+                } else {
+                    parameters
+                };
                 declaration(
                     &mut body,
                     "Component contract in the configured single-owner task.",
                     &c_layout::signature(
-                        &symbol.return_type,
+                        &if runnable {
+                            format!("{scope}_CODE {}", symbol.return_type)
+                        } else {
+                            symbol.return_type.clone()
+                        },
                         &symbol.symbol,
                         &parameters,
                         ";",
-                        false,
+                        runnable,
                     ),
                     &docs,
                 );
+                if runnable {
+                    body.push_str(&format!(
+                        "#define {scope}_STOP_SEC_CODE\n#include \"{scope}_MemMap.h\"\n\n"
+                    ));
+                }
+                if !runnable {
+                    let alias = component
+                        .data_ports
+                        .iter()
+                        .find(|port| {
+                            super::composition::data_symbol(component, port) == symbol.symbol
+                        })
+                        .map(|port| port.api_symbol.as_str())
+                        .or_else(|| {
+                            component
+                                .operations
+                                .iter()
+                                .find(|operation| {
+                                    operation.read
+                                        && operation.implementation_symbol == symbol.symbol
+                                })
+                                .map(|operation| operation.api_symbol.as_str())
+                        });
+                    if let Some(alias) = alias {
+                        body.push_str(&format!(
+                            "#ifndef RTE_CORE\n{}#endif\n",
+                            c_layout::defines(&[(alias, symbol.symbol.as_str())])
+                        ));
+                    }
+                    body.push_str("#endif\n");
+                }
             }
-            let mut macros: Vec<(String, String)> = component
-                .data_ports
-                .iter()
-                .map(|port| {
-                    (
-                        port.api_symbol.clone(),
-                        super::composition::data_symbol(component, port),
-                    )
-                })
-                .collect();
-            macros.extend(
-                component
-                    .operations
-                    .iter()
-                    .filter(|operation| operation.read)
-                    .map(|operation| {
-                        (
-                            operation.api_symbol.clone(),
-                            operation.implementation_symbol.clone(),
-                        )
-                    }),
-            );
-            body.push_str(&format!(
-                "#if !defined(RTE_CORE)\n{}#endif\n",
-                c_layout::defines(&macros)
-            ));
             let name = component
                 .header
                 .trim_start_matches("include/Rte_")
                 .trim_end_matches(".h");
+            body.push_str("#ifdef __cplusplus\n}\n#endif\n");
+            let guard = format!("RTE_{}_H", name.to_uppercase());
+            let application_header = format!(
+                "/** @file Application contract for {name}. */\n#ifndef {guard}\n#ifndef RTE_CORE\n#ifdef RTE_APPLICATION_HEADER_FILE\n#error Multiple application header files included.\n#endif\n#define RTE_APPLICATION_HEADER_FILE\n#endif\n#define {guard}\n{body}\n#endif\n"
+            );
+            files.push((component.header.clone(), application_header.into_bytes()));
+            files.push((format!("include/Rte_{name}_Type.h"), header(&format!("RTE_{name}_TYPE_H"), "#include \"Rte_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n#ifdef __cplusplus\n}\n#endif\n")));
             files.push((
-                component.header.clone(),
-                header(&format!("RTE_{}_H", name.to_uppercase()), &body),
+                format!("include/{name}_MemMap.h"),
+                super::memmap::component(name).into_bytes(),
             ));
         }
         let provenance = serde_json::json!({ "format": "autosar-component-contract-v2", "profile": description.profile,
@@ -283,4 +401,44 @@ impl ValidatedIntegrationPlan {
         files.push(("contract.json".into(), bytes));
         Ok(files)
     }
+}
+
+fn api_visibility(
+    component: &super::composition::Component,
+    symbol: &super::SymbolContract,
+) -> String {
+    let selectors: Vec<_> = component
+        .runnables
+        .iter()
+        .map(|runnable| {
+            format!(
+                "defined(RTE_RUNNABLEAPI_{})",
+                super::short_name(&runnable.path)
+            )
+        })
+        .collect();
+    let mut conditions = vec![
+        "defined(RTE_CORE)".to_owned(),
+        format!(
+            "({})",
+            selectors
+                .iter()
+                .map(|selector| format!("!{selector}"))
+                .collect::<Vec<_>>()
+                .join(" && ")
+        ),
+    ];
+    conditions.extend(
+        component
+            .runnables
+            .iter()
+            .filter(|runnable| symbol.consumers.contains(&runnable.path))
+            .map(|runnable| {
+                format!(
+                    "defined(RTE_RUNNABLEAPI_{})",
+                    super::short_name(&runnable.path)
+                )
+            }),
+    );
+    c_layout::condition("if", &conditions)
 }

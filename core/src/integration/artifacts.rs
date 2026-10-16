@@ -17,6 +17,7 @@ fn exclusive_area(module: &str) -> Option<&'static str> {
         "Det" => Some("DET_STATE"),
         "LSduR" => Some("LSDUR_STATE"),
         "PduR" => Some("PDUR_STATE"),
+        "Rte" => Some("SCHM_MODE"),
         _ => None,
     }
 }
@@ -658,7 +659,7 @@ pub(super) fn files(
     ] {
         let mut symbol = rte_symbol(name, result, &arguments);
         symbol.declaration_owner = "include/SchM_Dcm.h".into();
-        symbol.definition_owner = "src/SchM.c".into();
+        symbol.definition_owner = "src/SchM_Main.c".into();
         rte.push(symbol);
     }
     let authentication = plan.ecu_composition()?.authentication_modes()?;
@@ -674,7 +675,7 @@ pub(super) fn files(
     ] {
         let mut symbol = rte_symbol(&name, result, &args);
         symbol.declaration_owner = "include/SchM_Dcm.h".into();
-        symbol.definition_owner = "src/SchM.c".into();
+        symbol.definition_owner = "src/SchM_Main.c".into();
         rte.push(symbol);
     }
 
@@ -726,6 +727,16 @@ pub(super) fn files(
     let mut elements = String::new();
     for (native, i) in &types {
         // Base types retain their C object size; array parameters decay only in the signature.
+        let underlying =
+            plan.composition
+                .as_ref()
+                .and_then(|composition| {
+                    composition.types.iter().find(|datatype| {
+                        datatype.symbol == *native && datatype.array_length.is_none()
+                    })
+                })
+                .map(|datatype| datatype.native_type.as_str())
+                .unwrap_or(native);
         let bits = if native.contains('*') || matches!(native.as_str(), "size_t" | "uint64_t") {
             64
         } else if matches!(
@@ -763,17 +774,19 @@ pub(super) fn files(
             "Com_SignalIdType" | "CbkHandleIdType" | "uint16_t" | "Can_HwHandleType"
         ) {
             16
-        } else if matches!(
-            native.as_str(),
-            "EcuStatus"
-                | "uint32"
-                | "uint32_t"
-                | "CounterType"
-                | "TickType"
-                | "Can_ControllerStateType"
-                | "CanIf_PduModeType"
-                | "BufReq_ReturnType"
-        ) {
+        } else if underlying == "uint32"
+            || matches!(
+                native.as_str(),
+                "EcuStatus"
+                    | "uint32"
+                    | "uint32_t"
+                    | "CounterType"
+                    | "TickType"
+                    | "Can_ControllerStateType"
+                    | "CanIf_PduModeType"
+                    | "BufReq_ReturnType"
+            )
+        {
             32
         } else if plan
             .composition
@@ -790,7 +803,7 @@ pub(super) fn files(
         elements.push_str(&format!("<SW-BASE-TYPE><SHORT-NAME>Native{i}</SHORT-NAME><CATEGORY>FIXED_LENGTH</CATEGORY><BASE-TYPE-SIZE>{bits}</BASE-TYPE-SIZE><BASE-TYPE-ENCODING>NONE</BASE-TYPE-ENCODING><NATIVE-DECLARATION>{}</NATIVE-DECLARATION></SW-BASE-TYPE>", super::xml_text(native)));
     }
     let mut docs = String::from(
-        "# Generated host module implementation\n\nThis is the selected single-core C99 host profile. The native target is recorded in target.json. The R24-11 BSW/RTE description locates delivered code and selected actual contracts; it does not certify a complete standard module API or MISRA compliance. Unassigned vendor identity is 0. Host implementation version follows this workbench; Arti uses its actual 1.0.0 version API. Source paths are relative to this project. Engineering-object SHORT-LABEL is the filename; DOMAIN maps directory components with dots (os.src means os/src).\n\n| Module | Delivered code and headers |\n| --- | --- |\n",
+        "# Generated host module implementation\n\nThis is the selected single-core C99 host profile. The native target is recorded in target.json. The R24-11 BSW/RTE description locates delivered code and selected actual contracts; it does not certify a complete standard module API or MISRA compliance. Unassigned vendor identity is 0. RTE implementation version follows the latest configuration revision (0.0.0 without a usable revision); other host implementation versions follow this workbench and Arti uses its actual 1.0.0 version API. Source paths are relative to this project. Engineering-object SHORT-LABEL is the filename; DOMAIN maps directory components with dots (os.src means os/src).\n\n| Module | Delivered code and headers |\n| --- | --- |\n",
     );
     let modules: &[&str] = &[
         "Can",
@@ -808,6 +821,7 @@ pub(super) fn files(
         "Arti",
         "Rte",
     ];
+    let composition = plan.ecu_composition()?;
     let mut selected_packages = String::new();
     let mut private_entries = String::new();
     for &module in modules {
@@ -832,14 +846,26 @@ pub(super) fn files(
                 } else if module == "Arti" {
                     os && matches!(name, "Arti.c" | "Arti.h")
                 } else if module == "Rte" {
-                    (generated && name.starts_with("Rte") && name != "Rte_Os_Type.h")
+                    (generated && (name.starts_with("Rte") || name.starts_with("SchM_")))
+                        || (generated
+                            && composition.components.iter().any(|component| {
+                                name == format!(
+                                    "{}_MemMap.h",
+                                    super::short_name(&component.component)
+                                )
+                            }))
                         || matches!(
                             name,
-                            "SchM.c"
+                            "Ecu_Config.c"
+                                | "Ecu_Config.h"
+                                | "Ecu_TargetConfig.h"
+                                | "Ecu_ProfileConfig.h"
+                                | "ComStack_Cfg.h"
+                                | "SchM_Main.c"
                                 | "SchM_Diagnostic_Host.c"
                                 | "SchM_Host.c"
                                 | "Ecu_RuntimeConfig.c"
-                                | "Ecu_MemMap.h"
+                                | "Rte_MemMap.h"
                         )
                 } else {
                     (module == "Can"
@@ -858,7 +884,7 @@ pub(super) fn files(
                         || *name == format!("{module}.c")
                         || *name == format!("{module}_PBcfg.c")
                         || *name == format!("{module}_Cfg.h")
-                        || (matches!(module, "CanIf" | "LSduR" | "PduR") && name == "Ecu_MemMap.h")
+                        || (matches!(module, "CanIf" | "LSduR" | "PduR") && name == "Rte_MemMap.h")
                         || *name == format!("{module}.h")
                         || *name == format!("SchM_{module}.h")
                         || (matches!(module, "Com" | "ComM") && name == "Ecu_RuntimeConfig.c")
@@ -953,7 +979,13 @@ pub(super) fn files(
                 module_entries.push_str(&entry_xml);
             }
             refs.push_str(&format!(r#"<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST="BSW-MODULE-ENTRY">{entry_path}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>"#));
-            let area = exclusive_area(module).filter(|_| !non_entering.contains(name));
+            let area = exclusive_area(module).filter(|_| {
+                if module == "Rte" {
+                    name.starts_with("SchM_Switch_Dcm_") || name.starts_with("SchM_Mode_Dcm_")
+                } else {
+                    !non_entering.contains(name)
+                }
+            });
             let can_enter = area.map(|area| format!("<CAN-ENTERS><EXCLUSIVE-AREA-REF-CONDITIONAL><EXCLUSIVE-AREA-REF DEST=\"EXCLUSIVE-AREA\">/{package}/{module}/HostBehavior/{area}</EXCLUSIVE-AREA-REF></EXCLUSIVE-AREA-REF-CONDITIONAL></CAN-ENTERS>")).unwrap_or_default();
             let mode_group = |group: &str| {
                 format!(
@@ -1080,9 +1112,33 @@ pub(super) fn files(
                 _ => vec![],
             });
         }
+        // The RTE SWS names the old implementedEntry dependency role. The fixed
+        // R24-11 XSD still declares requiredEntry/expectedCallback for this relation.
+        let entry_reference = |owner: &str, name: &str| {
+            format!(
+                "<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST=\"BSW-MODULE-ENTRY\">/AUTOSAR_{owner}/BswModuleEntrys/{name}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>"
+            )
+        };
+        let dependency = |owner: &str,
+                          name: &str,
+                          role: &str,
+                          entry_owner: &str|
+         -> Result<String, Vec<PlanDiagnostic>> {
+            let id = super::catalog::module_id(owner).ok_or_else(|| {
+                PlanDiagnostic::plan_premise(&format!("/AUTOSAR_{owner}/{owner}"))
+            })?;
+            Ok(format!(
+                "<BSW-MODULE-DEPENDENCY><SHORT-NAME>{name}Dependency</SHORT-NAME><TARGET-MODULE-ID>{id}</TARGET-MODULE-ID><TARGET-MODULE-REFS><BSW-MODULE-DESCRIPTION-REF-CONDITIONAL><BSW-MODULE-DESCRIPTION-REF DEST=\"BSW-MODULE-DESCRIPTION\">/AUTOSAR_{owner}/{owner}</BSW-MODULE-DESCRIPTION-REF></BSW-MODULE-DESCRIPTION-REF-CONDITIONAL></TARGET-MODULE-REFS><{role}>{}</{role}></BSW-MODULE-DEPENDENCY>",
+                entry_reference(entry_owner, name)
+            ))
+        };
         let mut owners = BTreeSet::new();
         for (owner, name) in imported_entries {
-            owners.insert(owner);
+            if module == "Rte" {
+                dependencies.push_str(&dependency(owner, name, "REQUIRED-ENTRYS", owner)?);
+            } else {
+                owners.insert(owner);
+            }
             let entry_ref = { format!("/AUTOSAR_{owner}/BswModuleEntrys/{name}") };
             expected.push_str(&format!("<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST=\"BSW-MODULE-ENTRY\">{entry_ref}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>"));
         }
@@ -1099,6 +1155,22 @@ pub(super) fn files(
             })?;
             let owner_ref = { format!("/AUTOSAR_{owner}/{owner}") };
             dependencies.push_str(&format!("<BSW-MODULE-DEPENDENCY><SHORT-NAME>{owner}Dependency</SHORT-NAME><TARGET-MODULE-ID>{id}</TARGET-MODULE-ID><TARGET-MODULE-REFS><BSW-MODULE-DESCRIPTION-REF-CONDITIONAL><BSW-MODULE-DESCRIPTION-REF DEST=\"BSW-MODULE-DESCRIPTION\">{owner_ref}</BSW-MODULE-DESCRIPTION-REF></BSW-MODULE-DESCRIPTION-REF-CONDITIONAL></TARGET-MODULE-REFS></BSW-MODULE-DEPENDENCY>"));
+        }
+        if module == "Rte" {
+            for name in ["Rte_COMCbk", "Rte_COMCbkRxTOut"] {
+                dependencies.push_str(&dependency("Com", name, "EXPECTED-CALLBACKS", "Rte")?);
+            }
+            if plan.diagnostic_transport.is_some() {
+                for name in [
+                    "SchM_Switch_Dcm_DcmDiagnosticSessionControl".to_owned(),
+                    format!(
+                        "SchM_Switch_Dcm_{}",
+                        plan.ecu_composition()?.authentication_modes()?.group
+                    ),
+                ] {
+                    dependencies.push_str(&dependency("Dcm", &name, "EXPECTED-CALLBACKS", "Rte")?);
+                }
+            }
         }
         if !dependencies.is_empty() {
             dependencies =
@@ -1133,7 +1205,17 @@ pub(super) fn files(
         } else {
             ""
         };
-        elements.push_str(&format!("<BSW-MODULE-DESCRIPTION><SHORT-NAME>{module}</SHORT-NAME><CATEGORY>BSW_MODULE</CATEGORY>{expected}<IMPLEMENTED-ENTRYS>{refs}</IMPLEMENTED-ENTRYS>{module_id}{dependencies}{provided}<INTERNAL-BEHAVIORS><BSW-INTERNAL-BEHAVIOR><SHORT-NAME>HostBehavior</SHORT-NAME>{mode_types}{areas}<ENTITYS>{entities}</ENTITYS><EVENTS>{events}</EVENTS>{prefixes}</BSW-INTERNAL-BEHAVIOR></INTERNAL-BEHAVIORS></BSW-MODULE-DESCRIPTION>"));
+        let super::rte_memory::Description {
+            constants,
+            variables,
+            types: rte_types,
+        } = if module == "Rte" {
+            super::rte_memory::description(plan)?
+        } else {
+            super::rte_memory::Description::default()
+        };
+        elements.push_str(&format!("<BSW-MODULE-DESCRIPTION><SHORT-NAME>{module}</SHORT-NAME><CATEGORY>BSW_MODULE</CATEGORY>{expected}<IMPLEMENTED-ENTRYS>{refs}</IMPLEMENTED-ENTRYS>{module_id}{dependencies}{provided}<INTERNAL-BEHAVIORS><BSW-INTERNAL-BEHAVIOR><SHORT-NAME>HostBehavior</SHORT-NAME>{constants}{mode_types}{areas}{variables}<ENTITYS>{entities}</ENTITYS><EVENTS>{events}</EVENTS>{prefixes}</BSW-INTERNAL-BEHAVIOR></INTERNAL-BEHAVIORS></BSW-MODULE-DESCRIPTION>"));
+        elements.push_str(&rte_types);
         if module == "Dcm" {
             let mode_native = types["Rte_ModeType_DcmDiagnosticSessionControl"];
             let mut maps = String::new();
@@ -1168,45 +1250,7 @@ pub(super) fn files(
                 "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>Can_CODE</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>CODE</SYMBOL></MEMORY-SECTION><MEMORY-SECTION><SHORT-NAME>Can_VAR_CLEARED_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>VAR_CLEARED_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>CAN</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/CanHostImplementation/generated_include_Can_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if module == "Rte" {
-            let composition = plan.ecu_composition()?;
-            let mut scopes = BTreeSet::from([
-                ("Rte".to_string(), "CODE"),
-                ("Rte".to_string(), "VAR_CLEARED_UNSPECIFIED"),
-                ("Rte".to_string(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"),
-                ("Ecu".to_string(), "CODE"),
-                ("Ecu".to_string(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"),
-                ("Com".to_string(), "CODE"),
-                ("ComM".to_string(), "CODE"),
-            ]);
-            for component in &composition.components {
-                let scope = super::short_name(&component.component).to_string();
-                scopes.insert((scope.clone(), "CODE"));
-                if component.data_ports.iter().any(|port| port.read)
-                    || component.diagnostic_session_port.is_some()
-                {
-                    scopes.insert((scope, "VAR_CLEARED_UNSPECIFIED"));
-                }
-            }
-            if !composition
-                .components
-                .iter()
-                .any(|component| component.diagnostic_session_port.is_some())
-            {
-                scopes.insert(("Dcm".into(), "CODE"));
-                scopes.insert(("Dcm".into(), "VAR_CLEARED_UNSPECIFIED"));
-            }
-            scopes.insert((
-                super::short_name(&plan.ecu_communication()?.partition.path).into(),
-                "CALLOUT_CODE",
-            ));
-            for scope in ["Can", "CanIf", "Com", "ComM", "BswM", "Ecu_HostBusSM"] {
-                scopes.insert((scope.into(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"));
-            }
-            if plan.diagnostic_transport.is_some() {
-                for scope in ["CanTp", "Dcm"] {
-                    scopes.insert((scope.into(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"));
-                }
-            }
+            let scopes: BTreeSet<_> = super::memmap::rte_sections(plan)?.into_iter().collect();
             let mut sections = String::new();
             let mut prefixes = String::new();
             for scope in scopes
@@ -1214,24 +1258,7 @@ pub(super) fn files(
                 .map(|(scope, _)| scope)
                 .collect::<BTreeSet<_>>()
             {
-                let header = if matches!(
-                    scope.as_str(),
-                    "Ecu"
-                        | "Can"
-                        | "CanIf"
-                        | "Com"
-                        | "CanTp"
-                        | "Dcm"
-                        | "PduR"
-                        | "LSduR"
-                        | "ComM"
-                        | "BswM"
-                        | "Ecu_HostBusSM"
-                ) {
-                    "generated/include/Ecu_MemMap.h"
-                } else {
-                    "generated/include/Rte_MemMap.h"
-                };
+                let header = "generated/include/Rte_MemMap.h";
                 prefixes.push_str(&format!("<SECTION-NAME-PREFIX><SHORT-NAME>RTE_{scope}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/RteHostImplementation/{}</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX>", c_name(header)));
             }
             for (scope, segment) in scopes {
@@ -1242,19 +1269,41 @@ pub(super) fn files(
             )
         } else if matches!(module, "LSduR" | "PduR") {
             format!(
-                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/RTE_{module}</PREFIX-REF><SYMBOL>CONFIG_DATA_PREBUILD_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>RTE_{module}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/generated_include_Ecu_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
+                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/RTE_{module}</PREFIX-REF><SYMBOL>CONFIG_DATA_PREBUILD_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>RTE_{module}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/generated_include_Rte_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if module == "Os" || module == "Rte" {
             "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>CODE</SHORT-NAME><SYMBOL>CODE</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS></RESOURCE-CONSUMPTION>".to_string()
         } else {
             String::new()
         };
-        let version = if module == "Arti" {
+        let version = if module == "Rte" {
+            &composition.generation.software_version
+        } else if module == "Arti" {
             "1.0.0"
         } else {
             env!("CARGO_PKG_VERSION")
         };
-        elements.push_str(&format!(r#"<BSW-IMPLEMENTATION><SHORT-NAME>{module}HostImplementation</SHORT-NAME><CODE-DESCRIPTORS><CODE><SHORT-NAME>DeliveredCode</SHORT-NAME><ARTIFACT-DESCRIPTORS>{artifacts}</ARTIFACT-DESCRIPTORS></CODE></CODE-DESCRIPTORS>{generated}<PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>{resource}<SW-VERSION>{}</SW-VERSION><USED-CODE-GENERATOR>Autosar host ECU generator</USED-CODE-GENERATOR><VENDOR-ID>0</VENDOR-ID><AR-RELEASE-VERSION>4.10.0</AR-RELEASE-VERSION><BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/{package}/{module}/HostBehavior</BEHAVIOR-REF></BSW-IMPLEMENTATION>"#, version));
+        let revision = if module == "Rte" {
+            composition
+                .generation
+                .revision_suffix
+                .as_ref()
+                .map(|suffix| {
+                    format!(
+                        "<DESC><L-2 L=\"EN\">Configuration revision suffix: {}</L-2></DESC>",
+                        super::xml_text(suffix)
+                    )
+                })
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+        let mc_support = if module == "Rte" {
+            "<MC-SUPPORT><EMULATION-SUPPORTS><MC-SW-EMULATION-METHOD-SUPPORT><CATEGORY>NONE</CATEGORY></MC-SW-EMULATION-METHOD-SUPPORT></EMULATION-SUPPORTS></MC-SUPPORT>"
+        } else {
+            ""
+        };
+        elements.push_str(&format!(r#"<BSW-IMPLEMENTATION><SHORT-NAME>{module}HostImplementation</SHORT-NAME>{revision}<CODE-DESCRIPTORS><CODE><SHORT-NAME>DeliveredCode</SHORT-NAME><ARTIFACT-DESCRIPTORS>{artifacts}</ARTIFACT-DESCRIPTORS></CODE></CODE-DESCRIPTORS>{generated}{mc_support}<PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>{resource}<SW-VERSION>{}</SW-VERSION><USED-CODE-GENERATOR>Autosar host ECU generator</USED-CODE-GENERATOR><VENDOR-ID>0</VENDOR-ID><AR-RELEASE-VERSION>4.10.0</AR-RELEASE-VERSION><BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/{package}/{module}/HostBehavior</BEHAVIOR-REF></BSW-IMPLEMENTATION>"#, version));
         let body = elements.split_off(module_start);
         let entry_package = if module_entries.is_empty() {
             String::new()

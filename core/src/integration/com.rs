@@ -327,3 +327,11 @@ pub(super) fn inspect(
         receptions,
     }))
 }
+
+/// ECUC symbolic name of the selected ComSignal (TPS_ECUC_02108).
+pub(super) fn symbolic_name(path: &str) -> String {
+    format!(
+        "ComConf_ComSignal_{}",
+        super::component::c_name(super::short_name(path))
+    )
+}
