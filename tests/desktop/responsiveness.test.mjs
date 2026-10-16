@@ -34,7 +34,7 @@ check('expanded-input-responsiveness-and-cancel', async () => {
   const responseStart = performance.now();
   await key('4', { alt: true });
   await until(
-    `Boolean(document.querySelector('[role=tabpanel][aria-label="构建"]'))`,
+    `Boolean(document.querySelector('[role=region][aria-label="构建"]'))`,
     'tool remains responsive during parse',
     5000,
   );
@@ -71,7 +71,7 @@ check('expanded-input-responsiveness-and-cancel', async () => {
     await evaluate(`document.querySelector('.tool-rail [aria-label="构建 Alt+4"]').focus()`);
     await key('4', { alt: true });
     await until(
-      `Boolean(document.querySelector('[role=tabpanel][aria-label="构建"]'))`,
+      `Boolean(document.querySelector('[role=region][aria-label="构建"]'))`,
       'expanded filtering is responsive',
       5000,
     );

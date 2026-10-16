@@ -46,7 +46,7 @@ export function WindowControls({ onClose, onError }: Props) {
     <div className="window-controls" role="group" aria-label={t('editor.window.actions')}>
       <button
         type="button"
-        className="window-control"
+        className="ghost-button window-control"
         aria-label={t('editor.window.minimize')}
         title={t('editor.window.minimize')}
         onClick={() => void getCurrentWindow().minimize().catch(onError)}
@@ -55,7 +55,7 @@ export function WindowControls({ onClose, onError }: Props) {
       </button>
       <button
         type="button"
-        className="window-control"
+        className="ghost-button window-control"
         aria-label={maximizeLabel}
         title={maximizeLabel}
         onClick={() => void getCurrentWindow().toggleMaximize().catch(onError)}
@@ -68,7 +68,7 @@ export function WindowControls({ onClose, onError }: Props) {
       </button>
       <button
         type="button"
-        className="window-control window-close"
+        className="ghost-button window-control window-close"
         aria-label={t('editor.window.close')}
         title={t('editor.window.close')}
         onClick={() => void onClose().catch(onError)}

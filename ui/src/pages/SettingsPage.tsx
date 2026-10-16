@@ -5,6 +5,7 @@ import type { ExecutionTools } from '../types';
 import type { Appearance } from '../workbench/projectTypes';
 import type { Workbench } from '../workbench/useWorkbench';
 import { CopyText, Dialog } from '../workbench/Dialog';
+import { Tabs, tabPanelProps } from '../workbench/Tabs';
 
 const toolLabels: { key: keyof ExecutionTools; label: string }[] = [
   { key: 'compiler', label: 'shell.settings.compiler' },
@@ -89,26 +90,19 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
       }
     >
       <div className="settings-layout">
-        <nav aria-label={t('shell.settings.categories')}>
-          {(
-            [
-              ['appearance', 'shell.settings.appearance'],
-              ['definitions', 'shell.settings.definitions'],
-              ['tools', 'shell.settings.tools'],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              aria-current={category === key ? 'page' : undefined}
-              className={category === key ? 'selected' : ''}
-              onClick={() => setCategory(key)}
-            >
-              {t(label)}
-            </button>
-          ))}
-        </nav>
-        <div className="settings-content">
+        <Tabs
+          id="settings"
+          orientation="vertical"
+          label={t('shell.settings.categories')}
+          selected={category}
+          onSelect={setCategory}
+          items={[
+            { key: 'appearance', label: t('shell.settings.appearance') },
+            { key: 'definitions', label: t('shell.settings.definitions') },
+            { key: 'tools', label: t('shell.settings.tools') },
+          ]}
+        />
+        <div className="settings-content" {...tabPanelProps('settings', category)}>
           {c.capabilities?.settingsError ? (
             <p className="error-text" role="alert">
               {text(c.capabilities.settingsError)}
@@ -232,6 +226,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                 />
                 <button
                   type="button"
+                  className="danger-button"
                   disabled={locked}
                   onClick={() => void c.removeDefinitionCatalog(identity.catalogId)}
                 >

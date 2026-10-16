@@ -5,8 +5,11 @@ colors:
   shell: '#f3f3f3'
   canvas: '#ffffff'
   surface: '#fafafa'
+  overlay: '#ffffff'
   hover: '#e9e9e9'
+  active: '#dedede'
   line: '#dddddd'
+  border-strong: '#8a8a8a'
   text-primary: '#252525'
   text-secondary: '#626262'
   text-muted: '#6b6b6b'
@@ -24,11 +27,14 @@ colors:
   error-bg: '#fceeed'
   warning-bg: '#fff5dd'
   success-bg: '#eaf5ed'
-  dark-shell: '#1b1b1b'
-  dark-canvas: '#232323'
-  dark-surface: '#202020'
-  dark-hover: '#303030'
+  dark-shell: '#181818'
+  dark-canvas: '#262626'
+  dark-surface: '#1e1e1e'
+  dark-overlay: '#2c2c2c'
+  dark-hover: '#353535'
+  dark-active: '#404040'
   dark-line: '#3d3d3d'
+  dark-border-strong: '#767676'
   dark-text-primary: '#ededed'
   dark-text-secondary: '#b4b4b4'
   dark-text-muted: '#a1a1a1'
@@ -48,34 +54,34 @@ colors:
   dark-success-bg: '#25352b'
 typography:
   headline:
-    fontFamily: "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: &ui "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', system-ui, 'PingFang SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif"
     fontSize: '24px'
     fontWeight: 600
     letterSpacing: '-0.025em'
   title:
-    fontFamily: "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: *ui
     fontSize: '19px'
     fontWeight: 600
     letterSpacing: '-0.015em'
   section:
-    fontFamily: "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: *ui
     fontSize: '14px'
     fontWeight: 600
   body:
-    fontFamily: "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: *ui
     fontSize: '13px'
     fontWeight: 400
   compact:
-    fontFamily: "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: *ui
     fontSize: '12px'
     fontWeight: 400
   hint:
-    fontFamily: "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: *ui
     fontSize: '12px'
     fontWeight: 400
     lineHeight: 1.6
   label:
-    fontFamily: "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif"
+    fontFamily: *ui
     fontSize: '11px'
     fontWeight: 400
     lineHeight: '20px'
@@ -109,11 +115,24 @@ components:
     textColor: '{colors.text-primary}'
     rounded: '{rounded.control}'
     padding: '5px 10px'
+  button-icon:
+    textColor: '{colors.text-primary}'
+    rounded: '{rounded.control}'
+    size: '28px'
+  button-danger:
+    backgroundColor: '{colors.canvas}'
+    textColor: '{colors.error}'
+    rounded: '{rounded.control}'
+    padding: '5px 10px'
   input:
     backgroundColor: '{colors.canvas}'
     textColor: '{colors.text-primary}'
     rounded: '{rounded.control}'
     padding: '7px 9px'
+  checkbox:
+    backgroundColor: '{colors.canvas}'
+    rounded: '{rounded.tag}'
+    size: '16px'
   role-tag:
     backgroundColor: '{colors.shell}'
     textColor: '{colors.text-secondary}'
@@ -123,7 +142,7 @@ components:
   tree-selected:
     backgroundColor: '{colors.selection}'
     textColor: '{colors.selection-text}'
-    padding: '4px 6px'
+    padding: '4px 8px'
     typography: '{typography.compact}'
   inspector:
     backgroundColor: '{colors.surface}'
@@ -138,8 +157,13 @@ components:
     backgroundColor: '{colors.canvas}'
     textColor: '{colors.text-primary}'
     padding: '7px 13px'
+  menu:
+    backgroundColor: '{colors.overlay}'
+    textColor: '{colors.text-primary}'
+    rounded: '{rounded.menu}'
+    padding: '5px'
   dialog:
-    backgroundColor: '{colors.canvas}'
+    backgroundColor: '{colors.overlay}'
     textColor: '{colors.text-primary}'
     rounded: '{rounded.dialog}'
 ---
@@ -172,17 +196,17 @@ The light theme uses paper white and light gray; the dark theme uses graphite su
 ### Primary
 
 - **Primary-action coral**: `primary` / `primary-text` are used for primary buttons and active-tab indicator lines, connecting to the A graphic through restrained solid colors. Do not spread the icon's gradient across controls; this color does not represent success or failure.
-- **Selection blue background**: `selection` / `selection-text` are used for tree focus, selected rows, and pressed toolbar buttons; `blue` also serves links, focus outlines, and the CAN object role.
+- **Selection blue background**: `selection` / `selection-text` mark selected nodes, rows, list items, and pressed toggles; `blue` also serves links, focus outlines, checked checkboxes, and the communication role.
 
 ### Secondary
 
-- **Object roles**: Blue `blue` represents CAN, teal `teal` represents system / basic-software contexts, purple `purple` represents application objects, and gold `gold` represents diagnostics. Apply these colors to small icons and tags; body text remains neutral.
+- **Object roles**: Assigned by category, read from the ECUC module or the element kind: `blue` communication (Com, PduR, CanIf, CanTp, Can, CanSM, ComM, Nm; frames, PDUs, signals), `gold` diagnostics (Dcm, Dem, FiM), `purple` application (component types, prototypes, ports, interfaces, data types), `teal` every other BSW or system module (Os, EcuM, BswM, Rte, NvM…). Packages stay neutral. Color only tree icons and role tags; body text stays neutral.
 - **Result semantics**: Pair `success`, `warning`, and `error` with `success-bg`, `warning-bg`, and `error-bg`, respectively. Use them for notices, issues, and difference rows; do not interchange their meanings with object colors.
 
 ### Neutral
 
-- `shell` is the outer shell, `canvas` is the main editing surface, `surface` is used for the project tree, inspector, and table headers, and `hover` provides control hover feedback.
-- `text-primary` indicates primary task content, `text-secondary` indicates paths and explanations, and `text-muted` indicates low-emphasis metadata; `line` is used for fine separators and input boundaries.
+- `shell` is the outer shell, `canvas` the main editing surface, `surface` the project tree, inspector, and table headers, and `overlay` menus and dialogs. Dark layers get lighter from shell to surface to canvas to overlay. `hover` is hover feedback for controls and rows, `active` pressed feedback.
+- `text-primary` indicates primary task content, `text-secondary` paths and explanations, and `text-muted` low-emphasis metadata. `line` is for separators and the boundaries of buttons, panels, menus, and dialogs; `border-strong` bounds inputs, selects, checkboxes, and scrollbar thumbs, at 3:1 or more against every background in both themes (WCAG 1.4.11).
 
 **The Role Before Decoration Rule.** Object colors, selection colors, and status colors each serve their own purpose. The same object retains the same role in the tree, table, and inspector; status must not be conveyed by color alone.
 
@@ -194,17 +218,18 @@ The current PNG graphic is `logo-workbench.png`, and the original-color A is `lo
 
 ## Typography
 
-**Body Font:** Native Windows UI fonts, with Microsoft YaHei as the Chinese fallback and sans-serif as the final fallback.
+**Body Font:** The host UI font: Segoe UI and Microsoft YaHei on Windows, otherwise `system-ui` with PingFang SC, Noto Sans CJK SC, or Source Han Sans SC for Chinese, then sans-serif.
 **Label/Mono Font:** UI labels use the body font; engineering identifiers and source code use Cascadia Code, Consolas, Courier New, and monospace.
+**Weights:** 400 and 600; `strong` is 600. `font-synthesis: weight` emboldens fallback faces without a bold (WenQuanYi Zen Hei on Linux), so Chinese never renders lighter than adjacent Latin; no synthetic italics. Emphasize whole phrases, not only their Latin words.
 
 ### Hierarchy
 
 - **Headline**: Start-page heading; see the tokens for weight and tight letter spacing.
-- **Title**: Editor-area heading; compact windows and dialogs actually use an 18px variant, rather than enlarging it into a display heading.
-- **Section**: Section heading; inspector object names actually use a 15px variant.
+- **Title**: Editor-area heading; dialog titles use an 18px variant.
+- **Section**: Section headings, also inside dialogs and help; inspector object names use 15px.
 - **Body**: Default control and task text.
 - **Compact / Hint**: Trees, tables, and field explanations; Hint line height supports continuous explanatory text.
-- **Label**: Small role tags and status metadata.
+- **Label**: Role tags, counts, and status metadata; 11px is the smallest size.
 - **Code**: Monospaced identifiers; numbers use tabular-nums, and logs and previews may use increased line height as needed for readability.
 
 No globally fixed line height is defined. Do not invent a uniform type scale or display-font tokens; the stable reference for body size is `typography.body.fontSize`.
@@ -213,11 +238,13 @@ No globally fixed line height is defined. Do not invent a uniform type scale or 
 
 ## Layout
 
-Use a vertical shell and a horizontal engineering area, not a centered marketing-content container. The left tool rail is 42px wide, the project tree is 250px wide, and the inspector is 290px wide. The center fills the remaining space flexibly and allows independent scrolling. The menu is 34px high, the editor tab strip has a minimum height of 39px, and tree nodes have a minimum height of 30px. Panel padding references `spacing.panel`, control spacing references `spacing.gap`, and editor and dialog padding reference their respective tokens.
+Use a vertical shell and a horizontal engineering area, not a centered marketing-content container. The left tool rail is 42px wide, the project tree is 250px wide, and the inspector is 290px wide. The center fills the remaining space flexibly and allows independent scrolling. Panel padding references `spacing.panel`, control spacing references `spacing.gap`, and editor and dialog padding reference their respective tokens.
 
-Under the maximum-width 1250px rule, the project tree / inspector shrink to 220 / 260px, and editor padding shrinks to panel padding. At a maximum width of 1079px, the inspector becomes a 300px-wide overlay panel. At a maximum width of 700px, the project tree also becomes an overlay panel, tables retain a minimum width of 560px and scroll horizontally within their containers, and forms and settings switch to a single column. Compact windows are not a claim of mobile-product capability.
+Fixed heights: menu bar 34px, context toolbar 38px, the first header row of every column (tree header, editor tabs, inspector tabs) 39px, tree sub-tabs 34px, bottom tool tabs 32px, status bar 27px, tree nodes at least 30px. Dialog padding: header 16px 24px, body 20px 24px, footer 12px 24px. Dialog widths, capped at 96vw: confirmation 480px, form 720px, preview 1100px.
 
-Table-header padding is 9px 10px, and table-row padding is 11px 10px; both become 9px 8px in compact windows. Density supports comparison and navigation; do not turn each data item into a separate card.
+The window's minimum is 1080×720, so the only compact range is 1080–1250px: tree / inspector shrink to 220 / 260px, editor padding to panel padding, and table headers and cells to 9px 8px. Tables keep a 560px minimum width and scroll inside their containers; narrow windows collapse the inspector and tree from the tool rail instead of overlaying them. Below 1080px (browser review only) the layout is not adapted; this is not a mobile-product claim.
+
+Table-header padding is 9px 10px, and table-row padding is 11px 10px. Density supports comparison and navigation; do not turn each data item into a separate card.
 
 ## Elevation & Depth
 
@@ -227,20 +254,20 @@ Table-header padding is 9px 10px, and table-row padding is 11px 10px; both becom
 
 - **Menu overlay** (`0 8px 24px rgb(0 0 0 / 0.14)`): Temporary menus.
 - **Modal dialog** (`0 20px 70px rgb(0 0 0 / 0.25)`): Differences and settings; the backdrop is `rgb(0 0 0 / 0.28)`.
-- **Overlay inspector** (`-10px 0 24px rgb(0 0 0 / 0.08)`): Right-side overlay in narrow windows.
-- **Overlay project tree** (`10px 0 24px rgb(0 0 0 / 0.1)`): Left-side overlay in compact windows.
+
+Menus and dialogs also carry a 1px `line` border on `overlay` in both themes, because shadows vanish on dark backgrounds.
 
 The active editor tab's `inset 0 -2px` primary-color indicator line denotes state, not a raised container. The only recorded motion is the completed buttons' 140ms ease-out background / text transition. Enable it only when reduced motion is not requested; do not treat panel-animation intentions from the design-direction draft as implemented rules.
 
 ## Shapes
 
-Inputs and buttons use subtle rounding, tags are more compact, and menus and dialogs use their own container radii; `rounded` defines the values. Structural tabs remain square, and workspace areas join through 1px neutral boundaries. Icons use inline stroke SVG, typically 17px with a 1.6 stroke and round caps; do not substitute character glyphs for icons. The application identity icon independently follows its SVG geometry and does not inherit control corner radii.
+Inputs and buttons use subtle rounding, tags and checkboxes are more compact, and menus and dialogs use their own container radii; `rounded` defines the values. Structural tabs remain square, and workspace areas join through 1px neutral boundaries. Icons are inline stroke SVG, 1.6 stroke, round caps, at 19px on the tool rail, 16px in toolbars and buttons, and 14px inline (tree, tab close, fields); window caption glyphs follow the platform. Do not substitute character glyphs for icons. The application identity icon independently follows its SVG geometry and does not inherit control corner radii.
 
 ## Components
 
 ### Buttons
 
-Restrained and scannable. Primary buttons use the primary-action color and its corresponding contrasting text color, with weight 600. Secondary buttons use the canvas background and a fine boundary; ghost buttons have a transparent background. Hover uses hover; primary buttons retain the primary color with brightness(0.93). Disabled text uses muted with opacity 0.65; disabled primary buttons use hover as their background. Keyboard focus uses a 2px blue outline with a 2px offset.
+Restrained and scannable. Primary buttons use the primary-action color and its contrasting text, weight 600. Secondary buttons use canvas and a `line` boundary. Ghost buttons are transparent, for menus, tab strips, and inline actions; icon buttons are 28px square ghosts with a 16px icon, an accessible name, and a tooltip. Danger buttons, for destructive or discarding confirmations, use `error` text and border on canvas and `error-bg` on hover. Hover uses hover and `:active` uses active; primary buttons keep their color with brightness(0.93) on hover and 0.86 pressed. Pressed toggles (`aria-pressed`) use selection colors, unaffected by hover. Disabled text uses muted with opacity 0.65; disabled primary buttons use hover as background. Keyboard focus is a 2px blue outline offset 2px, or -2px inside clipping containers (scrolling trees and lists, tab strips, menus, the status bar) so the ring stays whole.
 
 ### Chips
 
@@ -252,15 +279,15 @@ Fixed engineering panels use surface, fine boundaries, and panel padding; the ce
 
 ### Inputs / Fields
 
-Use a canvas background, a fine neutral boundary, and control corner radius; see the input token for padding. The caret uses primary, and placeholder text uses muted; disabled inputs use a shell background and secondary text. Focus uses the same outline as buttons. Error contexts use semantic notices with text; do not invent input-error borders that are not present.
+Use a canvas background, a `border-strong` boundary, and control corner radius; see the input token for padding. Selects drop the native look, match the input, and draw a text-secondary chevron. Checkboxes are drawn at 16px with tag radius and a `border-strong` boundary; checked is a `blue` fill with a canvas check. The caret uses primary, and placeholder text uses muted; disabled inputs use a shell background and secondary text.
 
 ### Navigation
 
-Unified menus, the tool rail, and tabs retain engineering density. Selected tree nodes use selection and selection-text; indentation conveys hierarchy. Active editor tabs use a canvas background, primary text, and a bottom primary-color indicator line; bottom tool tabs use a primary-color border at the top. The two positions are deliberately distinct; do not convert them into oversized navigation cards.
+Unified menus, the tool rail, and tabs retain engineering density. Menus group items with separators; the focused or hovered item and the open menu's title use hover, and a disabled reason shared within a group appears once at its end. Selected tree nodes, table rows, and list items use selection colors plus a 2px selection-text bar on the leading edge, never background alone; a pressed tool-rail button shows the bar at the rail edge. Indentation conveys hierarchy. In every tab strip the active tab is text-primary and the rest text-secondary; editor and panel tabs mark the active tab with a bottom primary line, editor tabs also with canvas. Bottom tool-window buttons are toggles with a top primary line when open. Tabs follow the keyboard tab pattern: one tab stop, arrows, Home, End. Do not convert them into oversized navigation cards.
 
 ### Object Table & Inspector
 
-Object tables use compact text, surface table headers, and fine row separators. Selected rows use selection, hover uses surface, and selection takes precedence over hover. The inspector uses the same object colors and panel padding rather than establishing a separate palette.
+Object tables use compact text, surface headers, and fine row separators. Selected rows use selection, hover uses hover; selection wins. The inspector uses the same object colors and panel padding rather than establishing a separate palette.
 
 ## Do's and Don'ts
 

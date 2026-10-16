@@ -56,18 +56,10 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
           <p role="status">{busy ? t('shell.integration.busy') : text(notice)}</p>
         </div>
         <div className="section-actions">
-          <button
-            className="outline-button small"
-            onClick={inspect}
-            disabled={busy || locked || !native || changed}
-          >
+          <button onClick={inspect} disabled={busy || locked || !native || changed}>
             {t('shell.integration.inspect')}
           </button>
-          <button
-            className="outline-button small"
-            onClick={reopen}
-            disabled={busy || locked || !native}
-          >
+          <button onClick={reopen} disabled={busy || locked || !native}>
             {t('shell.integration.reopen')}
           </button>
         </div>
@@ -192,21 +184,19 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
               )}
               <div className="section-actions">
                 <button
-                  className="primary-button compact"
+                  className="primary-button"
                   onClick={apply}
                   disabled={busy || locked || !changed}
                 >
                   {t('shell.integration.apply')}
                 </button>
                 <button
-                  className="outline-button small"
                   onClick={() => restoreIntegrationDraft()}
                   disabled={busy || locked || !changed}
                 >
                   {t('shell.integration.restore')}
                 </button>
                 <button
-                  className="outline-button small"
                   onClick={showPreview}
                   disabled={busy || locked || changed || !workspace.dirty}
                 >
@@ -227,11 +217,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
           </p>
           <div className="section-actions">
             {preview.files.map((file) => (
-              <button
-                className="outline-button small"
-                key={file.path}
-                onClick={() => setSelectedFile(file.path)}
-              >
+              <button key={file.path} onClick={() => setSelectedFile(file.path)}>
                 {file.path.split(/[\\/]/).pop()} ·{' '}
                 {file.changed ? t('shell.integration.changed') : t('shell.integration.unchanged')}
               </button>
@@ -256,11 +242,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
               )}
             </>
           )}
-          <button
-            className="primary-button compact"
-            onClick={save}
-            disabled={busy || locked || changed}
-          >
+          <button className="primary-button" onClick={save} disabled={busy || locked || changed}>
             {t('shell.integration.confirmSave')}
           </button>
         </div>

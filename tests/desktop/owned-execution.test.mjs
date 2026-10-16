@@ -109,7 +109,7 @@ check('owned-cancel-and-late-reply-fence', async () => {
   );
   await key('4', { alt: true });
   await until(
-    `Boolean(document.querySelector('[role=tabpanel][aria-label="构建"]'))`,
+    `Boolean(document.querySelector('[role=region][aria-label="构建"]'))`,
     'non-destructive tools remain available during real owned execution',
   );
   await click('取消', "document.querySelector('.context-toolbar')");
