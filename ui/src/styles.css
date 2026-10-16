@@ -119,10 +119,10 @@ button {
   justify-content: center;
   gap: 6px;
 }
-button:not(:disabled):hover {
+button:not(:disabled):not([aria-disabled='true']):hover {
   background: var(--hover);
 }
-button:not(:disabled):active {
+button:not(:disabled):not([aria-disabled='true']):active {
   background: var(--active);
 }
 .ghost-button,
@@ -141,17 +141,19 @@ button:not(:disabled):active {
   color: var(--error);
   border-color: var(--error);
 }
-.danger-button:not(:disabled):hover {
+.danger-button:not(:disabled):not([aria-disabled='true']):hover {
   background: var(--error-bg);
 }
 /* Pressed toggles keep their state colours under hover and press. */
 button[aria-pressed='true'],
-button[aria-pressed='true']:not(:disabled):hover,
-button[aria-pressed='true']:not(:disabled):active {
+button[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):hover,
+button[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):active {
   background: var(--selection);
   color: var(--selection-text);
 }
-button:disabled {
+/* Unavailable commands stay focusable (aria-disabled) so their reason can be read. */
+button:disabled,
+button[aria-disabled='true'] {
   cursor: not-allowed;
   color: var(--muted);
   opacity: 0.65;
@@ -306,15 +308,16 @@ svg {
   border-color: var(--primary);
   font-weight: 600;
 }
-.primary-button:not(:disabled):hover,
-.primary-button:not(:disabled):active {
+.primary-button:not(:disabled):not([aria-disabled='true']):hover,
+.primary-button:not(:disabled):not([aria-disabled='true']):active {
   background: var(--primary);
   filter: brightness(0.93);
 }
-.primary-button:not(:disabled):active {
+.primary-button:not(:disabled):not([aria-disabled='true']):active {
   filter: brightness(0.86);
 }
-.primary-button:disabled {
+.primary-button:disabled,
+.primary-button[aria-disabled='true'] {
   background: var(--hover);
   border-color: var(--line);
 }
@@ -331,7 +334,7 @@ svg {
 .tree-row[aria-selected='true']:hover,
 tr[aria-selected='true'],
 nav > button[aria-current='true'],
-nav > button[aria-current='true']:not(:disabled):hover,
+nav > button[aria-current='true']:not(:disabled):not([aria-disabled='true']):hover,
 .settings-layout [role='tab'][aria-selected='true'] {
   background: var(--selection);
   color: var(--selection-text);
@@ -361,15 +364,17 @@ tr[aria-selected='true'] > td:first-child {
   background: var(--shell);
   border-bottom: 1px solid var(--line);
 }
-.menubar > nav {
+.menubar-menus {
   display: flex;
+  align-items: center;
   height: 100%;
 }
-.menubar nav button {
+.menubar-menus > button {
   height: 30px;
   padding: 4px 9px;
 }
-.menubar nav button[aria-expanded='true'] {
+.menubar-menus > button[data-state='open'],
+.menubar-menus > button[data-highlighted] {
   background: var(--hover);
 }
 .titlebar-drag-region {
@@ -405,20 +410,14 @@ tr[aria-selected='true'] > td:first-child {
 .window-control:focus-visible {
   outline-offset: -3px;
 }
-.window-close:not(:disabled):hover,
-.window-close:not(:disabled):active {
+.window-close:not(:disabled):not([aria-disabled='true']):hover,
+.window-close:not(:disabled):not([aria-disabled='true']):active {
   color: #ffffff;
   background: #c42b1c;
 }
-.menu-root {
-  position: relative;
-}
 .menu-popup {
-  position: absolute;
-  top: 33px;
-  left: 0;
   width: 286px;
-  max-height: 75vh;
+  max-height: var(--radix-menubar-content-available-height, 75vh);
   overflow: auto;
   z-index: 20;
   background: var(--overlay);
@@ -427,16 +426,28 @@ tr[aria-selected='true'] > td:first-child {
   border-radius: 6px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
 }
-.menu-popup button {
-  width: 100%;
-  height: auto;
-  min-height: 30px;
+.menu-item {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  text-align: left;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 10px;
   border-radius: 3px;
+  cursor: default;
+  outline: none;
 }
-.menu-popup button:focus-visible {
+.menu-item[data-highlighted] {
   background: var(--hover);
+}
+.menu-item:focus-visible {
+  outline: 2px solid var(--blue);
+}
+.menu-item[aria-disabled='true'] {
+  color: var(--muted);
+}
+.menu-item[aria-disabled='true'] > * {
+  opacity: 0.65;
 }
 .menu-popup small {
   display: block;
@@ -444,10 +455,62 @@ tr[aria-selected='true'] > td:first-child {
   color: var(--muted);
   white-space: normal;
 }
-.menu-popup hr {
+.menu-popup [role='separator'] {
   margin: 4px 6px;
-  border: 0;
   border-top: 1px solid var(--line);
+}
+.tooltip {
+  z-index: 40;
+  max-width: 320px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--overlay);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+/* A reason beside its action group, with the command that resolves it. */
+.command-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -4px 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.command-reasons li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+.command-reasons svg {
+  flex: none;
+}
+.command-reasons button {
+  min-height: 24px;
+  padding: 2px 6px;
+  color: var(--blue);
+}
+.toolbar-reasons,
+.batch-bar .command-reasons {
+  margin: 0;
+}
+.toolbar-reasons {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.toolbar-reasons li {
+  flex-wrap: nowrap;
+}
+.toolbar-reasons span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .context-toolbar {
   min-height: 38px;
@@ -1068,7 +1131,7 @@ tbody tr:not([aria-selected='true']):hover {
   color: var(--secondary);
 }
 .tool-tabs > button[aria-pressed='true'],
-.tool-tabs > button[aria-pressed='true']:not(:disabled):hover {
+.tool-tabs > button[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):hover {
   color: var(--text);
   background: var(--canvas);
   box-shadow: inset 0 2px var(--primary);
