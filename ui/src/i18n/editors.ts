@@ -52,6 +52,11 @@ export const editorResources: {
   en: Record<string, string>;
 } = {
   'zh-CN': {
+    'editor.tools.automaticChecks': '自动检查（打开和编辑时运行）',
+    'editor.objects.outOfRange': '超出允许范围 {{minimum}}–{{maximum}}，预览时会被拒绝。',
+    'editor.dialog.copied': '已复制',
+    'editor.dialog.dismiss': '关闭提示',
+    'editor.dialog.details': '详情',
     'editor.category.dependency': '依赖',
     'editor.category.input': '输入',
     'editor.category.tool': '工具',
@@ -158,14 +163,14 @@ export const editorResources: {
     'editor.source.retained': '当前工程保持；只有真实预览确认或导入成功才替换。',
     'editor.source.saveAs': '保存为成员工程',
     'editor.source.saveAsHelp':
-      '从当前工程预览复制原始源集合与明确接纳的定义身份；原目录不被覆盖。',
+      '复制当前工程的原始源集合与明确接纳的定义身份，工程名沿用 {{name}}；原目录不被覆盖。',
     'editor.source.workbench': 'Classic CAN 配置工作台',
     'editor.status.done': '完成',
     'editor.status.failed': '失败',
     'editor.status.not_run': '未执行',
     'editor.status.passed': '通过',
-    'editor.status.pending': '待执行',
-    'editor.status.running': '执行中',
+    'editor.status.pending': '尚未执行',
+    'editor.status.running': '正在执行',
     'editor.status.stale': '已失效',
     'editor.status.unsupported': '不支持',
     'editor.structure.cancelValue': '明确取消字段值',
@@ -251,6 +256,12 @@ export const editorResources: {
     'editor.window.restore': '还原窗口',
   },
   en: {
+    'editor.tools.automaticChecks': 'Automatic checks (run on open and edit)',
+    'editor.objects.outOfRange':
+      'Outside the allowed range {{minimum}}–{{maximum}}; the preview will reject it.',
+    'editor.dialog.copied': 'Copied',
+    'editor.dialog.dismiss': 'Dismiss',
+    'editor.dialog.details': 'Details',
     'editor.category.dependency': 'Dependency',
     'editor.category.input': 'Input',
     'editor.category.tool': 'Tool',
@@ -366,13 +377,13 @@ export const editorResources: {
       'The current project is retained; it is replaced only after an actual preview is confirmed or an import succeeds.',
     'editor.source.saveAs': 'Save as member project',
     'editor.source.saveAsHelp':
-      'Preview copying the original source set and explicitly accepted definition identities from the current project; the original directory is not overwritten.',
+      "Copies the current project's original sources and explicitly accepted definition identities; the project keeps the name {{name}}. The original directory is not overwritten.",
     'editor.source.workbench': 'Classic CAN configuration workbench',
     'editor.status.done': 'Done',
     'editor.status.failed': 'Failed',
     'editor.status.not_run': 'Not run',
     'editor.status.passed': 'Passed',
-    'editor.status.pending': 'Pending',
+    'editor.status.pending': 'Not run',
     'editor.status.running': 'Running',
     'editor.status.stale': 'Stale',
     'editor.status.unsupported': 'Unsupported',

@@ -272,7 +272,6 @@ check('extension-isolation-and-default-preservation', async () => {
   const directory = path.join(scratch, 'projects', 'ExtensionConsumers');
   const portable = await invoke('preview_save_as_project', {
     directory,
-    name: 'ExtensionConsumers',
   });
   await invoke('save_as_project_previewed', { preview: portable });
   await unchanged(originalBytes);

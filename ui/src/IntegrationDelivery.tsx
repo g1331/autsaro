@@ -1,7 +1,11 @@
+import { CircleCheck, CircleDashed, CircleX, History, LoaderCircle } from 'lucide-react';
 import { CopyText, OwnedLog } from './workbench/Dialog';
 import { useLocale } from './i18n';
+import type { StageState } from './workbench/forms';
+import { fileStatusLabel, targetLabel } from './workbench/labels';
 import { displayPath } from './pathDisplay';
 import type { BuildTarget } from './types';
+import { iconSize } from './workbench/icons';
 import type { Workbench } from './workbench/useWorkbench';
 
 export function IntegrationDelivery({
@@ -43,37 +47,70 @@ export function IntegrationDelivery({
     disabled ||
     !controller.capabilities?.nativeExecution ||
     Boolean(controller.capabilities.toolError);
-  const notice = controller.notice?.text ?? t('shell.delivery.directoryHint');
   const handoff = controller.generationKind === 'handoff';
   const file = preview?.files.find((item) => item.path === selected);
-  const labels = {
+  const labels: Record<StageState, string> = {
     pending: t('shell.stage.pending'),
     running: t('shell.stage.running'),
     done: t('shell.stage.done'),
     failed: t('shell.stage.failed'),
     stale: t('shell.stage.stale'),
   };
-  const stages = [
-    [t('shell.stage.save'), sourceReady ? t('shell.stage.saved') : t('shell.stage.unsavedDraft')],
+  const icons = {
+    pending: CircleDashed,
+    running: LoaderCircle,
+    done: CircleCheck,
+    failed: CircleX,
+    stale: History,
+  };
+  const downstream = (state: StageState): StageState => (sourceReady ? state : 'stale');
+  const stages: [string, StageState, string][] = [
+    [
+      t('shell.stage.save'),
+      sourceReady ? 'done' : 'pending',
+      sourceReady ? t('shell.stage.saved') : t('shell.stage.unsavedDraft'),
+    ],
     [
       t('shell.stage.validate'),
+      downstream(controller.stages.validate.state),
       sourceReady ? labels[controller.stages.validate.state] : t('shell.stage.revalidate'),
     ],
-    [
-      t('shell.stage.generate'),
-      sourceReady ? labels[controller.stages.generate.state] : t('shell.stage.stale'),
-    ],
-    [
-      t('shell.stage.build'),
-      sourceReady ? labels[controller.stages.build.state] : t('shell.stage.stale'),
-    ],
-    [
-      t('shell.stage.host'),
-      sourceReady ? labels[controller.stages.virtual.state] : t('shell.stage.stale'),
-    ],
-    [t('shell.stage.sc1'), t('shell.stage.projectUnverified')],
-    [t('shell.stage.hardware'), t('shell.stage.unverified')],
+    ...(
+      [
+        ['shell.stage.generate', controller.stages.generate.state],
+        ['shell.stage.build', controller.stages.build.state],
+        ['shell.stage.host', controller.stages.virtual.state],
+      ] as const
+    ).map(([name, state]): [string, StageState, string] => [
+      t(name),
+      downstream(state),
+      labels[downstream(state)],
+    ]),
+    [t('shell.stage.sc1'), 'pending', t('shell.stage.projectUnverified')],
+    [t('shell.stage.hardware'), 'pending', t('shell.stage.unverified')],
   ];
+  // The latest result of this page's own steps; never a hint left over from before.
+  const failed = (['virtual', 'build', 'generate'] as const).find(
+    (key) => controller.stages[key].state === 'failed',
+  );
+  const guidance = busy
+    ? t('shell.busy', { operation: text(controller.busy) })
+    : failed
+      ? t('shell.delivery.failedStage', { detail: text(controller.stages[failed].detail) })
+      : verified
+        ? verified.passed
+          ? t('shell.delivery.verified')
+          : t('shell.delivery.verifyFailed')
+        : built
+          ? t('shell.delivery.built', { path: displayPath(built.binaryPath) })
+          : generated
+            ? t('shell.delivery.generated', {
+                count: generated.files.length,
+                directory: displayPath(generated.outputDirectory),
+              })
+            : preview
+              ? t('shell.delivery.previewed', { count: preview.files.length })
+              : t('shell.delivery.directoryHint');
   return (
     <div className="workflow-page delivery-view" hidden={!active} data-testid="ecu-delivery">
       <div className="section-header">
@@ -116,17 +153,21 @@ export function IntegrationDelivery({
         ) : null}
       </section>
       <ol className="stage-list">
-        {stages.map(([name, state], index) => (
-          <li className="stage" key={name}>
-            <span className="stage-number">{index + 1}</span>
-            <div className="stage-copy">
-              <strong>{name}</strong>
-            </div>
-            <span className="stage-pill" data-stage={name}>
-              {state}
-            </span>
-          </li>
-        ))}
+        {stages.map(([name, state, label], index) => {
+          const Icon = icons[state];
+          return (
+            <li className={`stage ${state}`} key={name}>
+              <span className="stage-number">{index + 1}</span>
+              <div className="stage-copy">
+                <strong>{name}</strong>
+              </div>
+              <span className="stage-pill" data-stage={name}>
+                <Icon size={iconSize.inline} aria-hidden="true" />
+                {label}
+              </span>
+            </li>
+          );
+        })}
       </ol>
       <div className="form-fields ecu-delivery-fields">
         <label>
@@ -137,8 +178,11 @@ export function IntegrationDelivery({
             disabled={busy || locked}
             onChange={(event) => void controller.changeTarget(event.target.value as BuildTarget)}
           >
-            <option value="windows-x64-controlled-v1">Windows x64 controlled v1</option>
-            <option value="linux-x64-controlled-v1">Linux x64 controlled v1</option>
+            {(['windows-x64-controlled-v1', 'linux-x64-controlled-v1'] as const).map((value) => (
+              <option key={value} value={value}>
+                {targetLabel(value)}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -234,9 +278,15 @@ export function IntegrationDelivery({
           {t('shell.delivery.reimport')}
         </button>
       </div>
-      <p role="status" className="page-guidance">
-        {busy ? t('shell.delivery.busy') : text(notice)}
-      </p>
+      <div className={`page-guidance${failed ? ' error' : ''}`}>
+        <span role="status">{guidance}</span>
+        {!busy && !failed && (built || generated) ? (
+          <CopyText
+            text={displayPath(built ? built.binaryPath : generated!.outputDirectory)}
+            label={built ? t('editor.tools.copyBinary') : t('editor.tools.copyOutput')}
+          />
+        ) : null}
+      </div>
       {preview && (
         <div className="generation-preview">
           <label>
@@ -248,7 +298,7 @@ export function IntegrationDelivery({
             >
               {preview.files.map((item) => (
                 <option key={item.path} value={item.path}>
-                  {item.status} · {item.path}
+                  {fileStatusLabel(item.status)} · {item.path}
                 </option>
               ))}
             </select>

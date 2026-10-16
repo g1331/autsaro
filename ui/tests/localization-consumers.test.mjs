@@ -125,7 +125,7 @@ async function openConsumer(
       React.createElement(ToolWindows, { controller }),
       controller.notice
         ? React.createElement(OwnedLog, {
-            text: controller.notice.text,
+            text: controller.notice.detail ?? controller.notice.text,
             label: message('controller.integration.inspect'),
           })
         : null,
@@ -374,7 +374,8 @@ test('Problems renders serialized cardinality child names, bounds and actual cou
         await act(async () => {
           fireEvent.click(
             Array.from(rows[index].querySelectorAll('button')).find(
-              (button) => button.textContent === translate('editor.common.copyDetails'),
+              (button) =>
+                button.getAttribute('aria-label') === translate('editor.common.copyDetails'),
             ),
           );
         });
@@ -436,4 +437,41 @@ test('real application controller transfers complete composition preview and rev
   expect(initialization[1].preview).toEqual(expected);
   expect(initialization[1].preview).toBe(preview);
   expect(preview).toEqual(expected);
+});
+
+test('the problem count is the number of listed problems, each listed once', async () => {
+  previewLanguage('en');
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const diagnostic = {
+    scope: 'schema',
+    severity: 'error',
+    code: 'DUPLICATE',
+    message: 'Repeated diagnostic',
+    remedy: null,
+    file: null,
+    path: '/Package/A',
+    sourceId: null,
+    objectId: null,
+    fieldId: null,
+  };
+  const other = { ...diagnostic, code: 'OTHER', path: '/Package/B' };
+  const { view, current } = await openConsumer(null, {
+    ...baseProjection,
+    diagnostics: [diagnostic, { ...diagnostic }, other],
+  });
+  act(() => current().setToolWindow('problems'));
+  const rows = view.container.querySelectorAll('.problem-list > li');
+  expect(rows).toHaveLength(2);
+  expect(current().problemCount).toBe(2);
+  expect(current().errorCount).toBe(2);
+  const badge = Array.from(view.container.querySelectorAll('button small')).map(
+    (node) => node.textContent,
+  );
+  expect(badge).toContain('2');
 });

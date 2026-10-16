@@ -1,8 +1,59 @@
-import { composedMessage, message, ProductError } from '../i18n';
+import { composedMessage, isMessage, message, ProductError } from '../i18n';
+import type { Text } from '../i18n';
 import type { IntegrationInspection, WorkspaceView } from '../types';
 import { errorText } from './forms';
-import type { ChangeOutcome, ChangePreview, ChangeSet, ConfigurationChange } from './projectTypes';
+import type { Notice } from './forms';
+import type {
+  ChangeOutcome,
+  ChangePreview,
+  ChangeSet,
+  ConfigurationChange,
+  FieldDescriptor,
+} from './projectTypes';
 import type { WorkbenchSession } from './session';
+
+/** Display name of a field, as its inspector label shows it. */
+export function fieldName(field: Pick<FieldDescriptor, 'definitionId'>): string {
+  return field.definitionId.split('#').pop()?.split('/').pop() ?? field.definitionId;
+}
+
+/**
+ * The backend prefixes a rejected value with the change context naming its field.
+ * Returns the field and the reason without that context, or null for other errors.
+ */
+export function fieldRejection(
+  error: unknown,
+  fields: readonly FieldDescriptor[],
+): { field: FieldDescriptor; message: Text } | null {
+  if (!Array.isArray(error) || error.length < 2) return null;
+  const [context, ...reason] = error;
+  if (!isMessage(context) || context.key !== 'backend.arxml.changes.field_change_context')
+    return null;
+  let reference: unknown;
+  try {
+    reference = JSON.parse(String(context.params.field));
+  } catch {
+    return null;
+  }
+  const fieldId =
+    typeof reference === 'object' && reference !== null && 'fieldId' in reference
+      ? reference.fieldId
+      : null;
+  const field = fields.find((item) => item.fieldId === fieldId);
+  if (!field) return null;
+  const detail = errorText(reason.length === 1 ? reason[0] : reason);
+  return {
+    field,
+    message:
+      field.minimum !== null || field.maximum !== null
+        ? composedMessage(
+            'workflow.error.fieldRange',
+            { reason: detail },
+            { minimum: field.minimum ?? '−∞', maximum: field.maximum ?? '+∞' },
+          )
+        : detail,
+  };
+}
 
 interface Dependencies {
   invalidateAfterEdit: () => void;
@@ -17,6 +68,32 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
   const setNotice = session.field('notice');
   const setIntegrationNotice = session.field('integrationNotice');
 
+  function rejection(
+    key: string,
+    error: unknown,
+  ): { notice: Notice; fieldErrors: Record<string, Text> } {
+    const detail = errorText(error);
+    const field = fieldRejection(error, stateRef.current.projection?.fields ?? []);
+    if (!field)
+      return {
+        notice: { tone: 'error', text: composedMessage(key, { error: detail }), detail },
+        fieldErrors: {},
+      };
+    return {
+      notice: {
+        tone: 'error',
+        text: composedMessage(
+          'workflow.error.batchFieldRejected',
+          { error: field.message },
+          { field: fieldName(field.field) },
+        ),
+        detail,
+        fieldId: field.field.fieldId,
+      },
+      fieldErrors: { [field.field.fieldId]: field.message },
+    };
+  }
+
   function stageChange(change: ConfigurationChange) {
     const changes = stateRef.current.changes;
     const index = changes.findIndex((item) => item.changeId === change.changeId);
@@ -28,7 +105,25 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
   }
 
   function replaceDrafts(changes: ConfigurationChange[]) {
-    patchState({ changes, changePreview: null, preparedChangeSet: null });
+    // A rejection belongs to the value that caused it; editing that field retracts it.
+    const previous = stateRef.current.changes;
+    const edited = [
+      ...previous.filter((change) => !changes.includes(change)),
+      ...changes.filter((change) => !previous.includes(change)),
+    ].flatMap((change) =>
+      'field' in change && change.field.kind === 'existing' ? [change.field.fieldId] : [],
+    );
+    const fieldErrors = Object.fromEntries(
+      Object.entries(stateRef.current.fieldErrors).filter(([fieldId]) => !edited.includes(fieldId)),
+    );
+    const notice = stateRef.current.notice;
+    patchState({
+      changes,
+      changePreview: null,
+      preparedChangeSet: null,
+      fieldErrors,
+      ...(notice?.fieldId && edited.includes(notice.fieldId) ? { notice: null } : {}),
+    });
     changeConfirmation.current?.(false);
     changeConfirmation.current = null;
   }
@@ -57,7 +152,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       changes: current.changes,
     };
     running.current = true;
-    setBusy(message('workflow.action.previewBatch'));
+    patchState({ busy: message('workflow.action.previewBatch'), notice: null, fieldErrors: {} });
     const generation = epoch.current;
     try {
       const preview = await call<ChangePreview>('prepare_configuration_change', { changeSet });
@@ -67,10 +162,10 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       patchState({ changePreview: preview, preparedChangeSet: changeSet });
     } catch (error) {
       if (generation !== epoch.current) return;
-      patchState({ changePreview: null, preparedChangeSet: null });
-      setNotice({
-        tone: 'error',
-        text: composedMessage('workflow.error.batchPreview', { error: errorText(error) }),
+      patchState({
+        changePreview: null,
+        preparedChangeSet: null,
+        ...rejection('workflow.error.batchPreview', error),
       });
     } finally {
       if (generation === epoch.current) {
@@ -85,7 +180,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
     const { changePreview, preparedChangeSet } = before;
     if (!changePreview || !preparedChangeSet || running.current) return false;
     running.current = true;
-    setBusy(message('workflow.action.applyBatch'));
+    patchState({ busy: message('workflow.action.applyBatch'), notice: null, fieldErrors: {} });
     const generation = epoch.current;
     const fingerprintBefore = capabilitiesRef.current?.fingerprint;
     try {
@@ -181,15 +276,20 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
           });
         }
       }
+      if (!stateRef.current.notice)
+        setNotice({
+          tone: 'success',
+          text: message('workflow.batch.applied', { count: preparedChangeSet.changes.length }),
+        });
       changeConfirmation.current?.(true);
       changeConfirmation.current = null;
       return true;
     } catch (error) {
       if (generation !== epoch.current) return false;
-      patchState({ changePreview: null, preparedChangeSet: null });
-      setNotice({
-        tone: 'error',
-        text: composedMessage('workflow.error.batchRejected', { error: errorText(error) }),
+      patchState({
+        changePreview: null,
+        preparedChangeSet: null,
+        ...rejection('workflow.error.batchRejected', error),
       });
       changeConfirmation.current?.(false);
       changeConfirmation.current = null;

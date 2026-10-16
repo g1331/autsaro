@@ -199,7 +199,6 @@ pub(crate) async fn preview_save_as_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
     directory: String,
-    name: String,
 ) -> Result<Reply<ProjectCreationPreview>, autosar_config_core::LocalizedText> {
     background(state, move |state| {
         let operation = state.begin(
@@ -210,7 +209,7 @@ pub(crate) async fn preview_save_as_project(
         let preview = operation
             .snapshot
             .workspace()?
-            .preview_save_as_project(Path::new(&directory), &name)?;
+            .preview_save_as_project(Path::new(&directory))?;
         operation.commit(|_| Ok(preview))
     })
     .await

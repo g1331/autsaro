@@ -436,16 +436,6 @@ fn from_preview(
         });
     }
     files.sort_by(|left, right| left.path.cmp(&right.path));
-    let name = files
-        .iter()
-        .filter_map(|file| Document::parse(&file.text).ok())
-        .find_map(|document| {
-            document
-                .descendants()
-                .find(|node| node.is_element() && node.tag_name().name() == "AR-PACKAGE")
-                .and_then(|node| child_text(node, "SHORT-NAME"))
-        })
-        .unwrap_or_else(|| "ImportedEcu".into());
     let application_bytes = manifest
         .application_inputs
         .iter()
@@ -463,7 +453,6 @@ fn from_preview(
         })
         .collect::<Result<_, _>>()?;
     let mut workspace = Workspace {
-        name,
         files,
         issues: Vec::new(),
         integration_input_root: Some(root.clone()),
@@ -751,13 +740,7 @@ impl Workspace {
     pub fn preview_save_as_project(
         &self,
         directory: &Path,
-        name: &str,
     ) -> Result<ProjectCreationPreview, crate::message::LocalizedText> {
-        if !valid_name(name) {
-            return Err(crate::product_message!(
-                "backend.arxml.project.invalid_project_name"
-            ));
-        }
         self.ensure_sources_current()?;
         self.check_configuration_transition(self)?;
         let directory = destination(directory)?;
@@ -836,7 +819,8 @@ impl Workspace {
             revision: String::new(),
             template_id: "save-as-project".into(),
             directory: directory.display().to_string(),
-            name: name.into(),
+            // The copy keeps the configuration and therefore its name.
+            name: self.display_name(),
             files,
             accepted_extension_definitions: accepted,
         };
@@ -848,8 +832,7 @@ impl Workspace {
         &self,
         preview: &ProjectCreationPreview,
     ) -> Result<Self, crate::message::LocalizedText> {
-        let expected =
-            self.preview_save_as_project(Path::new(&preview.directory), &preview.name)?;
+        let expected = self.preview_save_as_project(Path::new(&preview.directory))?;
         if *preview != expected {
             return Err(crate::product_message!(
                 "backend.arxml.project.save_as_preview_stale"

@@ -1,5 +1,6 @@
 export const controllerResources: Record<'zh-CN' | 'en', Record<string, string>> = {
   'zh-CN': {
+    'controller.settings.toolsRejected': '执行工具未保存：所标字段的路径无效。',
     'controller.app.title': 'Classic CAN 配置工作台',
     'controller.error.windowTitle': '更新窗口标题失败：{{error}}',
     'controller.field.applicationPeriod': '应用周期',
@@ -45,6 +46,7 @@ export const controllerResources: Record<'zh-CN' | 'en', Record<string, string>>
     'controller.settings.languageSaved': '语言已保存；工程输入保持。',
   },
   en: {
+    'controller.settings.toolsRejected': 'Execution tools not saved: the marked path is invalid.',
     'controller.app.title': 'Classic CAN Configuration Workbench',
     'controller.error.windowTitle': 'Could not update the window title: {{error}}',
     'controller.field.applicationPeriod': 'Application period',

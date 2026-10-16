@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { ExecutionTools } from '../types';
 import type { Appearance } from '../workbench/projectTypes';
 import type { Workbench } from '../workbench/useWorkbench';
-import { CopyText, Dialog } from '../workbench/Dialog';
+import { CopyText, Dialog, NoticeBanner } from '../workbench/Dialog';
 import { Tabs, tabPanelProps } from '../workbench/Tabs';
 
 const toolLabels: { key: keyof ExecutionTools; label: string }[] = [
@@ -42,7 +42,8 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
         python: '',
       },
     );
-    c.setSettingsNotice('');
+    c.setSettingsNotice(null);
+    c.setToolErrors({});
     c.setSettingsOpen(false);
   }
   const identity = c.projection?.ruleSetIdentity ?? c.capabilities?.ruleSetIdentity;
@@ -52,7 +53,9 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
       onClose={close}
       footer={
         <>
-          <span role="status">{text(c.settingsNotice)}</span>
+          <div className="settings-result">
+            {c.settingsNotice ? <NoticeBanner notice={c.settingsNotice} /> : null}
+          </div>
           <button type="button" onClick={close} disabled={Boolean(c.busy) || c.languageSaving}>
             {t('shell.settings.close')}
           </button>
@@ -274,7 +277,10 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
             <h3>{t('shell.settings.savedTools')}</h3>
             <p>{t('shell.settings.toolsHelp')}</p>
             {c.capabilities?.toolError ? (
-              <p className="error-text">{text(c.capabilities.toolError)}</p>
+              // Missing tools only limit build and host verification; this is guidance, not a failure.
+              <p className="notice info">
+                {t('shell.settings.toolMissing', { detail: text(c.capabilities.toolError) })}
+              </p>
             ) : null}
             <div className="form-fields">
               {toolLabels.map(({ key, label }) => (
@@ -285,22 +291,32 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                       aria-label={t('shell.settings.savedToolPath', { tool: t(label) })}
                       value={displayPath(c.toolDraft[key])}
                       disabled={locked}
-                      onChange={(event) =>
-                        c.setToolDraft({ ...c.toolDraft, [key]: event.target.value })
-                      }
+                      aria-invalid={Boolean(c.toolErrors[key])}
+                      aria-describedby={c.toolErrors[key] ? `tool-error-${key}` : undefined}
+                      onChange={(event) => {
+                        c.setToolDraft({ ...c.toolDraft, [key]: event.target.value });
+                        if (c.toolErrors[key])
+                          c.setToolErrors({ ...c.toolErrors, [key]: undefined });
+                      }}
                     />
                     <button
                       type="button"
                       disabled={locked}
                       onClick={() =>
-                        void c.chooseBinary((path) =>
-                          c.setToolDraft((previous) => ({ ...previous, [key]: path })),
-                        )
+                        void c.chooseBinary((path) => {
+                          c.setToolDraft((previous) => ({ ...previous, [key]: path }));
+                          c.setToolErrors((previous) => ({ ...previous, [key]: undefined }));
+                        })
                       }
                     >
                       {t('shell.settings.browse')}
                     </button>
                   </div>
+                  {c.toolErrors[key] ? (
+                    <p id={`tool-error-${key}`} className="field-error">
+                      {text(c.toolErrors[key])}
+                    </p>
+                  ) : null}
                 </label>
               ))}
             </div>

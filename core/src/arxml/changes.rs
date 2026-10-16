@@ -1351,10 +1351,6 @@ impl Candidate {
         for (file, edits) in self.workspace.files.iter_mut().zip(&mut patches) {
             apply_patches(&mut file.text, edits)?;
         }
-        if owner.view.kind == "AR-PACKAGE" && owner.view.path == format!("/{}", self.workspace.name)
-        {
-            self.workspace.name = short_name.into();
-        }
         self.workspace.refresh()?;
         self.selection = Some(id.into());
         Ok(())

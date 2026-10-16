@@ -3,6 +3,8 @@ import { displayPath } from '../pathDisplay';
 import { useState } from 'react';
 import type { Workbench } from './useWorkbench';
 import { CopyText, Dialog, TextSnapshot } from './Dialog';
+import { editorScopeKeys } from '../i18n/editors';
+import { fileStatusLabel, ownerLabel, targetLabel } from './labels';
 
 export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
@@ -12,6 +14,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const project = c.guard.kind === 'project';
     return (
       <Dialog
+        notice={c.notice}
         title={text(c.guard.title)}
         onClose={() => void c.resolveGuard('cancel')}
         footer={
@@ -57,6 +60,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
   if (c.changePreview)
     return (
       <Dialog
+        notice={c.notice}
         title={t('workflow.batch.title')}
         onClose={() => {
           if (!c.busy) c.cancelChangePreview();
@@ -123,7 +127,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             key={`${issue.code}-${index}`}
             className={issue.severity === 'error' ? 'error-text' : 'field-help'}
           >
-            {issue.scope} · {issue.code} · {text(issue.message)} · {text(issue.remedy)}
+            {t(editorScopeKeys[issue.scope])} · {issue.code} · {text(issue.message)} ·{' '}
+            {text(issue.remedy)}
           </p>
         ))}
       </Dialog>
@@ -137,6 +142,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     };
     return (
       <Dialog
+        notice={c.notice}
         title={t('workflow.application.title')}
         onClose={close}
         footer={
@@ -242,14 +248,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             </section>
           </div>
         </details>
-        {c.notice?.tone === 'error' ? (
-          <>
-            <p role="alert" className="error-text">
-              {text(c.notice.text).slice(0, 2000)}
-            </p>
-            <CopyText text={text(c.notice.text)} label={t('workflow.application.copyError')} />
-          </>
-        ) : null}
       </Dialog>
     );
   }
@@ -258,6 +256,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const selected = preview.files.find((file) => file.path === projectFile) ?? preview.files[0];
     return (
       <Dialog
+        notice={c.notice}
         title={
           c.projectPreviewKind === 'create'
             ? t('workflow.project.createTitle')
@@ -290,7 +289,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
         }
       >
         <p className="mono path-text">
-          {displayPath(preview.directory)} · {preview.name} · {preview.templateId}
+          {preview.name} · {displayPath(preview.directory)}
         </p>
         <p>{t('workflow.project.previewExplanation')}</p>
         <div className="preview-layout">
@@ -340,6 +339,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const close = () => c.cancelSavePreview();
     return (
       <Dialog
+        notice={c.notice}
         title={t('workflow.save.title')}
         onClose={close}
         footer={
@@ -438,6 +438,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     };
     return (
       <Dialog
+        notice={c.notice}
         title={
           c.generationKind === 'handoff'
             ? t('workflow.generation.handoffTitle')
@@ -449,7 +450,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             <span>
               {t('workflow.generation.fileCount', {
                 count: preview.files.length,
-                target: c.buildTarget,
+                target: targetLabel(c.buildTarget),
               })}
             </span>
             <button type="button" disabled={Boolean(c.busy)} onClick={close}>
@@ -482,7 +483,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               >
                 {item.path}
                 <small>
-                  {item.status} · {item.owner ?? t('workflow.generation.ownerUnavailable')}
+                  {fileStatusLabel(item.status)} ·{' '}
+                  {item.owner ? ownerLabel(item.owner) : t('workflow.generation.ownerUnavailable')}
                 </small>
               </button>
             ))}
@@ -493,7 +495,11 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 <h3 className="mono path-text">{file.path}</h3>
                 <dl>
                   <dt>{t('workflow.generation.owner')}</dt>
-                  <dd>{file.owner ?? t('workflow.generation.backendUnavailable')}</dd>
+                  <dd>
+                    {file.owner
+                      ? ownerLabel(file.owner)
+                      : t('workflow.generation.backendUnavailable')}
+                  </dd>
                   <dt>{t('workflow.generation.producer')}</dt>
                   <dd className="mono path-text">
                     {file.producerId ?? t('workflow.generation.backendUnavailable')}
@@ -554,6 +560,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     };
     return (
       <Dialog
+        notice={c.notice}
         title={t('workflow.handoff.title')}
         onClose={close}
         footer={
@@ -610,14 +617,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
           </label>
         </div>
         <p className="field-help">{t('workflow.handoff.sourceHelp')}</p>
-        {c.notice?.tone === 'error' ? (
-          <>
-            <p role="alert" className="error-text">
-              {text(c.notice.text).slice(0, 2000)}
-            </p>
-            <CopyText text={text(c.notice.text)} label={t('workflow.handoff.copyError')} />
-          </>
-        ) : null}
       </Dialog>
     );
   }

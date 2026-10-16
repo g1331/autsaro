@@ -318,6 +318,8 @@ test('diagnostic file paths are displayed cleanly while logical identities and c
       validation: [],
       diagnostics,
     },
+    diagnostics,
+    problemCount: diagnostics.length,
     issues: [],
     integrationIssues: [],
   };

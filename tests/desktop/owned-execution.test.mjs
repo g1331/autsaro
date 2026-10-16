@@ -99,7 +99,7 @@ check('declared-consumer-tools-and-real-owned-failure', async () => {
 check('owned-cancel-and-late-reply-fence', async () => {
   const before = await projection();
   const bytes = await sourceBytes(before);
-  const completedOwnedLogs = `[...document.querySelectorAll('.tool-content details')].filter(node => node.querySelector('summary')?.textContent === 'verification_owned_failure · 失败' && node.querySelector('pre')?.textContent.includes('Owned failure detail ')).length`;
+  const completedOwnedLogs = `[...document.querySelectorAll('.tool-content details')].filter(node => node.querySelector('summary')?.textContent === '受管失败验证 · 失败' && node.querySelector('.path-text')?.textContent === 'verification_owned_failure' && node.querySelector('pre')?.textContent.includes('Owned failure detail ')).length`;
   const completed = await evaluate(completedOwnedLogs);
   assert.equal(completed, 1, 'The previous genuine exit-23 result is the completion baseline');
   await menu('验证：受管取消');

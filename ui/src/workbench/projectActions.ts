@@ -615,14 +615,15 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
           (projection) => {
             patchState({ projection });
             invalidateAfterEdit();
-            setSettingsNotice(message('workflow.definitions.accepted'));
+            setSettingsNotice({ tone: 'success', text: message('workflow.definitions.accepted') });
           },
         ),
       );
     } catch (error) {
-      setSettingsNotice(
-        composedMessage('workflow.error.importDefinitions', { error: errorText(error) }),
-      );
+      setSettingsNotice({
+        tone: 'error',
+        text: composedMessage('workflow.error.importDefinitions', { error: errorText(error) }),
+      });
     }
   }
 
@@ -635,7 +636,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         (projection) => {
           patchState({ projection });
           invalidateAfterEdit();
-          setSettingsNotice(message('workflow.definitions.changed'));
+          setSettingsNotice({ tone: 'success', text: message('workflow.definitions.changed') });
         },
       ),
     );
@@ -663,8 +664,8 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   async function previewSaveAs() {
     await guardContext(message('workflow.action.saveAs'), async () => {
       const current = stateRef.current;
-      if (!current.projectDirectory || !current.projectName.trim()) {
-        setNotice({ tone: 'error', text: message('workflow.project.requireNameDirectory') });
+      if (!current.projectDirectory) {
+        setNotice({ tone: 'error', text: message('workflow.project.requireDirectory') });
         return;
       }
       await run(
@@ -672,7 +673,6 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         () =>
           call<ProjectCreationPreview>('preview_save_as_project', {
             directory: current.projectDirectory,
-            name: current.projectName,
           }),
         (projectPreview) => patchState({ projectPreview, projectPreviewKind: 'save-as' }),
       );
@@ -704,6 +704,15 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         );
         patchState({ projectPreview: null });
         applyProject(view);
+        setNotice({
+          tone: 'success',
+          text: message(
+            current.projectPreviewKind === 'create'
+              ? 'workflow.project.created'
+              : 'workflow.project.savedAs',
+            { name: view.name, directory: preview.directory },
+          ),
+        });
         if (manifest)
           field('memberProjectPath')(
             /^(?:[A-Za-z]:[\\/]|[\\/])/.test(manifest.path)

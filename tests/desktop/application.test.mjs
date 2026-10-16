@@ -143,7 +143,6 @@ check('live-application-initialization-and-immutable-snapshot', async () => {
   const copiedRoot = path.join(scratch, 'projects', 'CopiedLiveApplication');
   const saveAs = await invoke('preview_save_as_project', {
     directory: copiedRoot,
-    name: 'CopiedLiveApplication',
   });
   assert.deepEqual(await readFile(live), Buffer.from(userCode));
   await invoke('save_as_project_previewed', { preview: saveAs });

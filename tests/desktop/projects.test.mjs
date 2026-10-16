@@ -36,7 +36,6 @@ check('member-portability-and-save-as', async () => {
   const saveAsDirectory = path.join(scratch, 'projects', 'CopiedGateway');
   const preview = await invoke('preview_save_as_project', {
     directory: saveAsDirectory,
-    name: 'CopiedGateway',
   });
   await assert.rejects(access(saveAsDirectory), { code: 'ENOENT' });
   await invoke('save_as_project_previewed', { preview });

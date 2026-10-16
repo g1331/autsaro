@@ -86,6 +86,7 @@ test('tool windows mount active content and retain source navigation when switch
       ],
     },
     issues: [],
+    problemCount: 1,
     readSource: vi.fn(),
     guardContext: (_title, action) => action(),
     setTreeVisible: vi.fn(),
@@ -95,6 +96,7 @@ test('tool windows mount active content and retain source navigation when switch
     setObjectFilter: vi.fn(),
     setToolWindow: vi.fn(),
   };
+  controller.diagnostics = controller.projection.diagnostics;
   const view = render(createElement(ToolWindows, { controller }));
   expect(view.queryByText('Source diagnostic')).toBeNull();
   view.rerender(
