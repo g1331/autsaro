@@ -1,6 +1,10 @@
 /** @file BswM exclusive area and main function for the selected all-IMMEDIATE configuration. */
 #ifndef SCHM_BSWM_H
 #define SCHM_BSWM_H
+#include "SchM_BswM_Type.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 /** Run deferred arbitration (SWS_BswM_00053); no DEFERRED input is selected.
  * @return None.
  * Preconditions: None.
@@ -8,7 +12,11 @@
  * Reentrancy: reentrant; it has no effect.
  * Ownership: None.
  */
+#define BSWM_START_SEC_CODE
+#include "BswM_MemMap.h"
 void BswM_MainFunction(void);
+#define BSWM_STOP_SEC_CODE
+#include "BswM_MemMap.h"
 /** Enter the BswM state area (SWS_Rte_07250).
  * @return None.
  * Preconditions: no exclusive area is held by this context.
@@ -25,4 +33,7 @@ void SchM_Enter_BswM_BSWM_STATE(void);
  * Ownership: releases this context's area.
  */
 void SchM_Exit_BswM_BSWM_STATE(void);
+#ifdef __cplusplus
+}
+#endif
 #endif

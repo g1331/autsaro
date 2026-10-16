@@ -238,6 +238,7 @@ pub(super) fn populate(
     diagnostic(&mut a)?;
     error_tracing(&mut a)?;
     operating_system(&mut a)?;
+    rte(&mut a)?;
     persistence(&mut a)?;
     defaults(&mut a);
     Ok(())
@@ -1069,6 +1070,13 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
     )?;
     let task = "Os/OsTask";
     a.container(task, 0, None)?;
+    a.foreign(
+        task,
+        "OsMemoryMappingCodeLocationRef",
+        "SW-ADDR-METHOD",
+        0,
+        Some(1),
+    )?;
     a.integers(task, "OsTaskActivation", "1", U32, 1)?;
     a.integers(task, "OsTaskPriority", "0", U32, 1)?;
     a.enumeration(task, "OsTaskSchedule", "FULL NON", 1)?;
@@ -1267,6 +1275,65 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
         0,
         Some(1),
     )?;
+    Ok(())
+}
+
+fn rte(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> {
+    let generation = "Rte/RteGeneration";
+    a.container(generation, 1, Some(1))?;
+    a.booleans(generation, "RteDevErrorDetect RteDevErrorDetectUninit RteInExclusiveAreaCheckEnabled RteMeasurementSupport RteValueRangeCheckEnabled RteVfbTraceAnonymousClientEnabled RteVfbTraceEnabled", 1)?;
+    a.integers(generation, "RteCodeVendorId", "0", U16, 1)?;
+    a.integers(generation, "RteToolChainSignificantCharacters", "0", U16, 0)?;
+    for (name, literals, default) in [
+        (
+            "RteBypassSupport",
+            "COMPONENT_WRAPPER EXTENDED_BUFFER_ACCESS NONE",
+            "NONE",
+        ),
+        (
+            "RteCalibrationSupport",
+            "DOUBLE_POINTERED INITIALIZED_RAM NONE SINGLE_POINTERED",
+            "NONE",
+        ),
+        (
+            "RteGenerationMode",
+            "COMPATIBILITY_MODE VENDOR_MODE",
+            "COMPATIBILITY_MODE",
+        ),
+        ("RteOptimizationMode", "MEMORY RUNTIME", "RUNTIME"),
+    ] {
+        a.enumeration(generation, name, literals, 1)?;
+        a.default(generation, name, default);
+    }
+    for name in "RteDevErrorDetect RteDevErrorDetectUninit RteMeasurementSupport RteValueRangeCheckEnabled RteVfbTraceAnonymousClientEnabled RteVfbTraceEnabled".split_whitespace() {
+        a.default(generation, name, "false");
+    }
+    a.default(generation, "RteInExclusiveAreaCheckEnabled", "true");
+    a.default(generation, "RteToolChainSignificantCharacters", "31");
+    let bsw = "Rte/RteBswGeneral";
+    a.container(bsw, 1, Some(1))?;
+    a.booleans(bsw, "RteSchMVersionInfoApi", 1)?;
+    a.default(bsw, "RteSchMVersionInfoApi", "false");
+    let initialization = "Rte/RteInitializationBehavior";
+    a.container(initialization, 1, None)?;
+    a.enumeration(
+        initialization,
+        "RteInitializationStrategy",
+        "RTE_INITIALIZATION_STRATEGY_AT_DATA_DECLARATION RTE_INITIALIZATION_STRATEGY_NONE",
+        1,
+    )?;
+    a.field(
+        initialization,
+        "RteSectionInitializationPolicy",
+        ValueKind::String,
+        1,
+    )?;
+    a.0.entries_mut()
+        .get_mut(&format!(
+            "{ROOT}{initialization}/RteSectionInitializationPolicy"
+        ))
+        .unwrap()
+        .upper_multiplicity = None;
     Ok(())
 }
 

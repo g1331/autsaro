@@ -73,12 +73,11 @@ def inspect(project, probe):
         "Rte_Read_RxValue_Value", "Rte_Write_TxValue_Value", "Rte_Call_ApplicationValue_ReadData",
         "DcmService_ReadData", "Com_SendSignal", "Com_ReceiveSignal",
         "Ecu_TargetInitializeRte", "Ecu_TargetReadDid", "OsService_SystemCounter_GetCounterValue",
-        "OsService_SystemCounter_GetElapsedValue", "Rte_Call_OsService_GetCounterValue",
-        "Rte_Call_OsService_GetElapsedValue",
+        "OsService_SystemCounter_GetElapsedValue",
     }
     rte_refs = objects["/HostArtifacts/Rte"].findall("a:IMPLEMENTED-ENTRYS/a:BSW-MODULE-ENTRY-REF-CONDITIONAL/a:BSW-MODULE-ENTRY-REF", NS)
     assert {n.text.rsplit("/", 1)[-1] for n in rte_refs} == expected_rte, "actual RTE entries"
-    assert len(entries) == 35, "selected 23 BSW and 12 RTE contracts"
+    assert len(entries) == 33, "selected 23 BSW and 10 RTE contracts"
     expected_bsw = {
         "Can": {"Can_Init", "Can_DeInit", "Can_MainFunction_Wakeup", "Can_MainFunction_Read", "Can_MainFunction_Write"},
         "Det": {"Det_ReportRuntimeError"},

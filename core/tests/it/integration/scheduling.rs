@@ -81,20 +81,15 @@ fn shared_os_event_accepts_distinct_equivalent_alarm_and_table_triggers() {
 
 #[test]
 fn network_freshness_and_runnable_execution_constraints_are_explicit() {
-    for (before, after) in [
-        (
-            "<HANDLE-NEVER-RECEIVED>true</HANDLE-NEVER-RECEIVED>",
-            "<HANDLE-NEVER-RECEIVED>false</HANDLE-NEVER-RECEIVED>",
-        ),
-        (
-            "<HANDLE-TIMEOUT-TYPE>NONE</HANDLE-TIMEOUT-TYPE>",
-            "<HANDLE-TIMEOUT-TYPE>REPLACE</HANDLE-TIMEOUT-TYPE>",
-        ),
-    ] {
-        let mut sources = inputs();
-        change(&mut sources, "ingress.arxml", before, after);
-        rejects_in_both(&sources, "NETWORK_FRESHNESS_UNSUPPORTED");
-    }
+    let mut sources = inputs();
+    change(
+        &mut sources,
+        "ingress.arxml",
+        "<HANDLE-TIMEOUT-TYPE>NONE</HANDLE-TIMEOUT-TYPE>",
+        "<HANDLE-TIMEOUT-TYPE>REPLACE</HANDLE-TIMEOUT-TYPE>",
+    );
+    rejects_in_both(&sources, "NETWORK_FRESHNESS_UNSUPPORTED");
+
     let mut sources = inputs();
     change(
         &mut sources,

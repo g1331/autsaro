@@ -144,12 +144,6 @@ fn malformed_composition_contracts_are_rejected_at_real_source_objects() {
         ),
         (
             "process.arxml",
-            "<HANDLE-NEVER-RECEIVED>false</HANDLE-NEVER-RECEIVED>",
-            "<HANDLE-NEVER-RECEIVED>true</HANDLE-NEVER-RECEIVED>",
-            "local freshness",
-        ),
-        (
-            "process.arxml",
             "<VALUE>7</VALUE>",
             "<VALUE>-1</VALUE>",
             "initial value",
@@ -288,9 +282,14 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
         "RTE_INGRESS_H",
         "NULL_PTR",
         "RTE_Process_CODE",
+        "RTE_CODE",
         "RTE_MEMMAP_ACTIVE",
         "RTE_Process_CODE_ACTIVE",
-        "RTE_MEMMAP_HEADER_CHECK",
+        "Process_CODE",
+        "Process_MEMMAP_ACTIVE",
+        "Process_START_SEC_CODE",
+        "RTE_Process_VAR_INIT_UNSPECIFIED",
+        "RTE_E_UNCONNECTED",
         "COM_H",
         "ECU_TARGET_H",
         "COM_SERVICE_NOT_AVAILABLE",
@@ -311,7 +310,12 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
             if reverse {
                 sources.reverse();
             }
-            rejects_in_both(&sources, "CONTRACT_NAME_COLLISION");
+            super::single_component::rejected_at(
+                &sources,
+                "CONTRACT_NAME_COLLISION",
+                "types.arxml",
+                "/Types/ScalarService/Transform",
+            );
             if name == "Ecu_TargetIsOwner" && !reverse {
                 assert_rejected_sources_preserved(&sources);
             }
@@ -352,12 +356,6 @@ fn missing_and_duplicate_relations_are_rejected_before_emission() {
             "ecuc.arxml",
             "ECUC-CONTAINER-VALUE",
             Some("ReadApplicationValue"),
-            false,
-        ),
-        (
-            "composition.arxml",
-            "ASSEMBLY-SW-CONNECTOR",
-            Some("IngressProcess"),
             false,
         ),
         (
@@ -1062,14 +1060,14 @@ fn serialized_symbol_consumers_include_all_runnable_accesses_and_client_callers(
     .unwrap();
     for (symbol, expected) in [
         (
-            "Rte_Application_Pipeline_ProcessInstance_Read_Value_Value",
+            "Rte_Read_Process_Value_Value",
             vec![
                 "/Application/Process/Behavior/Periodic",
                 "/Application/Process/Behavior/ServerTransform",
             ],
         ),
         (
-            "Rte_Application_Pipeline_ObserveInstance_Call_ResultService_Transform",
+            "Rte_Call_Observe_ResultService_Transform",
             vec![
                 "/Application/Observe/Behavior/ExtraPeriodic",
                 "/Application/Observe/Behavior/Periodic",
@@ -1197,7 +1195,12 @@ fn shared_rte_lifecycle_os_target_kernel_and_c_runtime_producers_cannot_be_shado
             "<SYMBOL>Ingress_Periodic</SYMBOL>",
             &format!("<SYMBOL>{symbol}</SYMBOL>"),
         );
-        rejects_in_both(&sources, "SYMBOL_PRODUCER_DUPLICATE");
+        super::single_component::rejected_at(
+            &sources,
+            "SYMBOL_PRODUCER_DUPLICATE",
+            "ingress.arxml",
+            "/Application/Ingress/Behavior/Periodic",
+        );
     }
 }
 

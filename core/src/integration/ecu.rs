@@ -85,10 +85,10 @@ impl ValidatedIntegrationPlan {
                 component.header.trim_start_matches("include/")
             );
             if reference.is_some() {
-                source.push_str(&format!("#define RTE_{scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n/* Last value committed from the receive port; the DID reports it. */\nstatic uint32 committed RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n#define RTE_{scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n"));
+                source.push_str(&format!("#define {scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"{scope}_MemMap.h\"\n/* Last value committed from the receive port; the DID reports it. */\nstatic uint32 committed {scope}_VAR_CLEARED_UNSPECIFIED;\n#define {scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"{scope}_MemMap.h\"\n"));
             }
             source.push_str(&format!(
-                "#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+                "#define {scope}_START_SEC_CODE\n#include \"{scope}_MemMap.h\"\n"
             ));
             for symbol in self
                 .description()
@@ -105,7 +105,7 @@ impl ValidatedIntegrationPlan {
                     parameters.push("void".into());
                 }
                 let head = c_layout::signature(
-                    &format!("RTE_{scope}_CODE {}", symbol.return_type),
+                    &format!("{scope}_CODE {}", symbol.return_type),
                     &symbol.symbol,
                     &parameters,
                     "",
@@ -170,7 +170,7 @@ impl ValidatedIntegrationPlan {
                 source.push_str("}\n");
             }
             source.push_str(&format!(
-                "#define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+                "#define {scope}_STOP_SEC_CODE\n#include \"{scope}_MemMap.h\"\n"
             ));
             files.push((source_path.clone(), source.into_bytes()));
         }

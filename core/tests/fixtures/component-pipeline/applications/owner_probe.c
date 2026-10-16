@@ -26,20 +26,23 @@ static uint64_t observed_epoch;
 static uint64_t observed_receptions;
 static uint32 observed_value;
 static Std_ReturnType observed_status;
-static void require_at(int condition, unsigned line) {
+static void require_at(int condition, unsigned line)
+{
     if (condition == 0) {
         (void)fprintf(stderr, "owner expectation failed at line %u\n", line);
         Os_HostExit(93u);
     }
 }
 #define require(condition) require_at((condition), __LINE__)
-static void lock_snapshot(void) {
+static void lock_snapshot(void)
+{
     while (Os_HostAtomicCompareExchange(&snapshot_lock, 1, 0) != 0) {
         Os_HostSleepMs(1u);
     }
 }
 static void unlock_snapshot(void) { (void)Os_HostAtomicExchange(&snapshot_lock, 0); }
-int Ecu_TargetTestFailStage(unsigned stage) {
+int Ecu_TargetTestFailStage(unsigned stage)
+{
     uint32 value = 0u;
     if ((late_transport != 0u) && (stage == 10u)) {
         PduLengthType available = 99u;
@@ -68,41 +71,35 @@ int Ecu_TargetTestFailStage(unsigned stage) {
     }
     if ((stage == 9u) && (Ecu_TargetNow() == 1u) && (epoch_zero == 0u)) {
         uint32 com_value = 99u;
-        require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value) ==
-                RTE_E_NEVER_RECEIVED);
+        require(Rte_Read_Ingress_RxValue_Value(&value) == RTE_E_NEVER_RECEIVED);
         require(value == 7u);
         require(Com_ReceiveSignal(0u, &com_value) == E_OK);
         require(com_value == 0u);
         Com_IpduGroupStop(0u);
-        require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value) ==
-                RTE_E_COM_STOPPED);
+        require(Rte_Read_Ingress_RxValue_Value(&value) == RTE_E_COM_STOPPED);
         require(value == 7u);
         Com_IpduGroupStart(0u, FALSE);
-        require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value) ==
-                RTE_E_NEVER_RECEIVED);
+        require(Rte_Read_Ingress_RxValue_Value(&value) == RTE_E_NEVER_RECEIVED);
         require(value == 7u);
         Com_IpduGroupStop(0u);
         Com_IpduGroupStart(0u, TRUE);
-        require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value) ==
-                RTE_E_NEVER_RECEIVED);
+        require(Rte_Read_Ingress_RxValue_Value(&value) == RTE_E_NEVER_RECEIVED);
         require(value == 7u);
-        require(Rte_Application_Pipeline_ProcessInstance_Read_Value_Value(&value) == E_OK);
+        require(Rte_Read_Process_Value_Value(&value) == E_OK);
         require(value == 7u);
-        require(Rte_Application_Pipeline_ObserveInstance_Read_Value_Value(&value) == E_OK);
+        require(Rte_Read_Observe_Value_Value(&value) == E_OK);
         require(value == 9u);
-        require(Rte_Application_Pipeline_IngressInstance_Write_Value_Value(42u) == E_OK);
-        require(Rte_Application_Pipeline_ProcessInstance_Read_Value_Value(&value) == E_OK);
+        require(Rte_Write_Ingress_Value_Value(42u) == E_OK);
+        require(Rte_Read_Process_Value_Value(&value) == E_OK);
         require(value == 42u);
-        require(Rte_Application_Pipeline_ObserveInstance_Read_Value_Value(&value) == E_OK);
+        require(Rte_Read_Observe_Value_Value(&value) == E_OK);
         require(value == 42u);
         {
             uint32 result = 99u;
             uint32 state = 98u;
-            require(Rte_Application_Pipeline_ObserveInstance_Call_ResultService_Transform(
-                        42u, NULL_PTR, &state) == E_NOT_OK);
+            require(Rte_Call_Observe_ResultService_Transform(42u, NULL_PTR, &state) == E_NOT_OK);
             require(state == 98u);
-            require(Rte_Application_Pipeline_ObserveInstance_Call_ResultService_Transform(
-                        42u, &result, NULL_PTR) == E_NOT_OK);
+            require(Rte_Call_Observe_ResultService_Transform(42u, &result, NULL_PTR) == E_NOT_OK);
             require(result == 99u);
         }
     }
@@ -126,21 +123,21 @@ int Ecu_TargetTestFailStage(unsigned stage) {
             Com_IpduGroupStart(0u, TRUE);
             require(Com_ReceiveSignal(0u, &com_value) == E_OK);
             require(com_value == 0u);
-            require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value) == E_OK);
+            require(Rte_Read_Ingress_RxValue_Value(&value) == E_OK);
             require(value == 0u);
         }
         if (epoch == 76u) {
             require(CanIf_SetControllerMode(0u, CAN_CS_STOPPED) == E_OK);
             Can_MainFunction_Mode();
-            require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value) == E_OK);
+            require(Rte_Read_Ingress_RxValue_Value(&value) == E_OK);
             require(value == 45u);
-            require(Rte_Application_Pipeline_IngressInstance_Write_TxValue_Value(77u) == E_OK);
+            require(Rte_Write_Ingress_TxValue_Value(77u) == E_OK);
             /* Started I-PDU: triggered; the stopped controller rejects it below COM. */
             require(Com_TriggerIPDUSend(1u) == E_OK);
-            require(Rte_Application_Pipeline_IngressInstance_Write_Value_Value(99u) == E_OK);
-            require(Rte_Application_Pipeline_ProcessInstance_Read_Value_Value(&value) == E_OK);
+            require(Rte_Write_Ingress_Value_Value(99u) == E_OK);
+            require(Rte_Read_Process_Value_Value(&value) == E_OK);
             require(value == 99u);
-            require(Rte_Application_Pipeline_ObserveInstance_Read_Value_Value(&value) == E_OK);
+            require(Rte_Read_Observe_Value_Value(&value) == E_OK);
             require(value == 99u);
             require(CanIf_SetControllerMode(0u, CAN_CS_STARTED) == E_OK);
             Can_MainFunction_Mode();
@@ -148,11 +145,9 @@ int Ecu_TargetTestFailStage(unsigned stage) {
         if (epoch == 110u) {
             Com_DeInit();
             value = 99u;
-            require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value) ==
-                    RTE_E_COM_STOPPED);
+            require(Rte_Read_Ingress_RxValue_Value(&value) == RTE_E_COM_STOPPED);
             require(value == 45u);
-            require(Rte_Application_Pipeline_IngressInstance_Write_TxValue_Value(77u) ==
-                    RTE_E_COM_STOPPED);
+            require(Rte_Write_Ingress_TxValue_Value(77u) == RTE_E_COM_STOPPED);
         }
     }
     if ((stage == 10u) || (stage == 11u)) {
@@ -172,7 +167,7 @@ int Ecu_TargetTestFailStage(unsigned stage) {
         }
     }
     if ((stage == 10u) || (stage == 11u)) {
-        Std_ReturnType status = Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&value);
+        Std_ReturnType status = Rte_Read_Ingress_RxValue_Value(&value);
         lock_snapshot();
         if (stage == 11u) {
             ++observed_receptions;
@@ -186,7 +181,8 @@ int Ecu_TargetTestFailStage(unsigned stage) {
 }
 void Ecu_TargetTestRetire(unsigned stage) { (void)stage; }
 void Ecu_TargetTestShutdown(StatusType reason) { require(reason == E_OK); }
-static void drain(void) {
+static void drain(void)
+{
     Ecu_OutputRecord output;
     StatusType status = Ecu_TargetTakeOutput(&output);
     if (status == E_OK) {
@@ -197,7 +193,8 @@ static void drain(void) {
         require(status == E_OS_NOFUNC);
     }
 }
-static void report(const char *phase) {
+static void report(const char *phase)
+{
     uint64_t stamp;
     uint32 value;
     Std_ReturnType status;
@@ -209,8 +206,11 @@ static void report(const char *phase) {
     require(printf("OBS %s %llu %u %u\n", phase, (unsigned long long)stamp, status, value) >= 0);
     require(fflush(stdout) == 0);
 }
-static void receive_result(uint64_t stamp, uint32 value, uint32 expected_value,
-                           Std_ReturnType expected_status) {
+static void receive_result(uint64_t stamp,
+                           uint32 value,
+                           uint32 expected_value,
+                           Std_ReturnType expected_status)
+{
     const uint8 data[8] = {(uint8)value,
                            (uint8)(value >> 8u),
                            (uint8)(value >> 16u),
@@ -241,7 +241,8 @@ static void receive_result(uint64_t stamp, uint32 value, uint32 expected_value,
     report("rx");
 }
 static void receive(uint64_t stamp, uint32 value) { receive_result(stamp, value, value, E_OK); }
-static void diagnostic_request(uint64_t stamp) {
+static void diagnostic_request(uint64_t stamp)
+{
     const uint8 request[8] = {3u, 0x22u, 0x12u, 0x34u, 0u, 0u, 0u, 0u};
     uint64_t ticket;
     uint64_t previous;
@@ -259,7 +260,8 @@ static void diagnostic_request(uint64_t stamp) {
         Os_HostSleepMs(1u);
     }
 }
-static void take_response(Ecu_OutputRecord *output, uint64_t stamp) {
+static void take_response(Ecu_OutputRecord *output, uint64_t stamp)
+{
     const uint8 expected[8] = {7u, 0x62u, 0x12u, 0x34u, 0u, 0u, 0u, 0u};
     const uint64_t started = Os_HostMonotonicMs();
     StatusType status;
@@ -272,7 +274,8 @@ static void take_response(Ecu_OutputRecord *output, uint64_t stamp) {
     require(output->epoch == stamp && output->can_id == 1800u && output->dlc == 8u);
     require(memcmp(output->data, expected, sizeof(expected)) == 0);
 }
-static void complete_response(const Ecu_OutputRecord *output) {
+static void complete_response(const Ecu_OutputRecord *output)
+{
     unsigned i;
     require(printf("LATE %llu 1800 ", (unsigned long long)output->epoch) >= 0);
     for (i = 0u; i < 8u; ++i) {
@@ -282,7 +285,8 @@ static void complete_response(const Ecu_OutputRecord *output) {
     require(fflush(stdout) == 0);
     require(Ecu_TargetConfirmOutput(output->ticket, output->pdu) == E_OK);
 }
-static void wait_tick(uint64_t ticket) {
+static void wait_tick(uint64_t ticket)
+{
     Os_TickCompletion completion;
     const uint64_t started = Os_HostMonotonicMs();
     while (Os_TargetTickCompletion(ticket, &completion) != E_OK) {
@@ -290,7 +294,8 @@ static void wait_tick(uint64_t ticket) {
         Os_HostSleepMs(1u);
     }
 }
-static Os_HostThreadResult control(void *argument) {
+static Os_HostThreadResult control(void *argument)
+{
     uint64_t step;
     uint64_t started = Os_HostMonotonicMs();
     uint32 sentinel = 99u;
@@ -299,7 +304,7 @@ static Os_HostThreadResult control(void *argument) {
         require((Os_HostMonotonicMs() - started) < 5000u);
         Os_HostSleepMs(1u);
     }
-    require(Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(&sentinel) == E_NOT_OK);
+    require(Rte_Read_Ingress_RxValue_Value(&sentinel) == E_NOT_OK);
     require(sentinel == 99u);
     require(Rte_Start() == RTE_E_LIMIT);
     require(Rte_Stop() == RTE_E_LIMIT);
@@ -383,7 +388,8 @@ static Os_HostThreadResult control(void *argument) {
     ShutdownOS(E_OK);
     return 0u;
 }
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     Os_HostHandle thread;
     if ((argc != 2) || ((strcmp(argv[1], "before") != 0) && (strcmp(argv[1], "after") != 0) &&
                         (strcmp(argv[1], "canonical") != 0) && (strcmp(argv[1], "controls") != 0) &&

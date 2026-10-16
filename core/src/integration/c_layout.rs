@@ -172,6 +172,32 @@ fn lines(indent: &str, items: &[Item]) -> String {
     text
 }
 
+/// A preprocessor disjunction; long conditions retain explicit continuation lines.
+pub(super) fn condition(directive: &str, clauses: &[String]) -> String {
+    let line = format!("#{directive} {}", clauses.join(" || "));
+    if fits(&line) {
+        return format!("{line}\n");
+    }
+    let mut output = String::new();
+    let mut line = format!("#{directive} ");
+    for clause in clauses {
+        if line.ends_with(' ') {
+            line.push_str(clause);
+        } else if line.len() + 4 + clause.len() <= COLUMNS {
+            line.push_str(&format!(" || {clause}"));
+        } else {
+            output.push_str(&format!(
+                "{:<width$}\\\n",
+                format!("{line} ||"),
+                width = COLUMNS - 1
+            ));
+            line = format!("    {clause}");
+        }
+    }
+    output.push_str(&format!("{line}\n"));
+    output
+}
+
 /// Consecutive `#define name value` lines, each ending with a newline. Values
 /// align in runs (`AlignConsecutiveMacros: Consecutive`); a definition too long
 /// for one line continues after a backslash and ends the run, as does a run

@@ -90,7 +90,7 @@ fn single_application_component_rejections_locate_source_objects() {
         "/Application/Ingress/Behavior/Periodic",
     );
 
-    // Unconnected ports stay rejected until #51 settles their RTE semantics.
+    // Removing the sole transport receiver leaves an unused COM Rx group.
     let mut unconnected = single_component_sources();
     xml_edit(
         &mut unconnected,
@@ -105,9 +105,9 @@ fn single_application_component_rejections_locate_source_objects() {
     );
     rejected(
         &unconnected,
-        "ENDPOINT_BINDING",
-        "ingress.arxml",
-        "/Application/Ingress/RxValue",
+        "COM_RX_GROUP",
+        "ecuc.arxml",
+        "/Configuration/Com/Config/RxGroup",
     );
 
     // Only the Dcm service component remains: nothing owns a periodic schedule.

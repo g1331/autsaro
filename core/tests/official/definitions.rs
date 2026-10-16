@@ -300,7 +300,7 @@ impl<'a, 'input> Xsd<'a, 'input> {
                 )
             ),
             ValueKind::FunctionName => type_name == Some("C-IDENTIFIER"),
-            ValueKind::String => false,
+            ValueKind::String => type_name == Some("NMTOKEN-STRING"),
         }
     }
 }

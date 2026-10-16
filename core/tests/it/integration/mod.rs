@@ -10,6 +10,7 @@ mod handoff;
 mod modes;
 mod os;
 mod os_configuration;
+mod rte;
 mod scheduling;
 mod single_component;
 mod validation;

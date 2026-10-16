@@ -8,6 +8,18 @@ fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatu
     for renamed in [false, true] {
         let mut inputs = pipeline_operation_inputs();
         if renamed {
+            replace_all(&mut inputs, "/Types/uint32", "/Types/ValueType");
+            xml_edit(
+                &mut inputs,
+                "types.arxml",
+                |node| named(node, "IMPLEMENTATION-DATA-TYPE", "uint32"),
+                |text| {
+                    text.replace(
+                        "<SHORT-NAME>uint32</SHORT-NAME>",
+                        "<SHORT-NAME>ValueType</SHORT-NAME>",
+                    )
+                },
+            );
             for (before, after) in [
                 ("/Application/Process", "/Application/Compute"),
                 ("/ProcessInstance", "/ComputeInstance"),
@@ -60,8 +72,8 @@ void (*const empty_server)(void) = Process_Ping;
 void Process_Periodic(void) {}
 void Process_Transform(uint32 Input, uint32 *Output, uint32 *State) { *Output=Input; *State+=Input; }
 void (*const scalar_server)(uint32, uint32 *, uint32 *) = Process_Transform;
-Std_ReturnType Rte_Application_Pipeline_ProcessInstance_Read_Value_Value(uint32 *data) { *data=7U; return E_OK; }
-Std_ReturnType Rte_Application_Pipeline_ProcessInstance_Write_Result_Value(uint32 data) { written=data; return E_OK; }
+Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data) { *data=7U; return E_OK; }
+Std_ReturnType Rte_Write_Process_Result_Value(uint32 data) { written=data; return E_OK; }
 int test_process(void);
 int test_process(void) {
     uint32 value=0U, result=0U, state=1U;
@@ -80,9 +92,9 @@ static uint32 tx_value, local_value;
 void Ingress_Periodic(void) {}
 Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType Data) { Data[0]=1U; Data[1]=2U; Data[2]=3U; Data[3]=4U; return E_OK; }
 Std_ReturnType (*const byte_server)(uint8 *) = Ingress_ReadData;
-Std_ReturnType Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(uint32 *data) { *data=11U; return E_OK; }
-Std_ReturnType Rte_Application_Pipeline_IngressInstance_Write_TxValue_Value(uint32 data) { tx_value=data; return E_OK; }
-Std_ReturnType Rte_Application_Pipeline_IngressInstance_Write_Value_Value(uint32 data) { local_value=data; return E_OK; }
+Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data) { *data=11U; return E_OK; }
+Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data) { tx_value=data; return E_OK; }
+Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data) { local_value=data; return E_OK; }
 int test_ingress(void);
 int test_ingress(void) {
     uint32 value=0U;
@@ -96,11 +108,11 @@ int test_ingress(void) {
                 "observe.c",
                 r#"#include "Rte_Observe.h"
 void Observe_Periodic(void) {}
-Std_ReturnType Rte_Application_Pipeline_ObserveInstance_Call_ResultService_Ping(void) { return E_OK; }
+Std_ReturnType Rte_Call_Observe_ResultService_Ping(void) { return E_OK; }
 Std_ReturnType (*const empty_client)(void) = Rte_Call_ResultService_Ping;
-Std_ReturnType Rte_Application_Pipeline_ObserveInstance_Read_Value_Value(uint32 *data) { *data=9U; return E_OK; }
-Std_ReturnType Rte_Application_Pipeline_ObserveInstance_Read_Result_Value(uint32 *data) { *data=19U; return E_OK; }
-Std_ReturnType Rte_Application_Pipeline_ObserveInstance_Call_ResultService_Transform(uint32 Input, uint32 *Output, uint32 *State) { *Output=Input; *State+=Input; return E_OK; }
+Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data) { *data=9U; return E_OK; }
+Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data) { *data=19U; return E_OK; }
+Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input, uint32 *Output, uint32 *State) { *Output=Input; *State+=Input; return E_OK; }
 Std_ReturnType (*const scalar_client)(uint32,uint32 *,uint32 *) = Rte_Call_ResultService_Transform;
 int test_observe(void);
 int test_observe(void) {
@@ -112,7 +124,7 @@ int test_observe(void) {
             (
                 "dcm.c",
                 r#"#include "Rte_DcmService.h"
-Std_ReturnType Rte_Application_Pipeline_DcmService_Call_DataServices_ApplicationValue_ReadData(Dcm_DataElement_ApplicationValueType Data) { Data[0]=1U; Data[1]=2U; Data[2]=3U; Data[3]=4U; return E_OK; }
+Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(Dcm_DataElement_ApplicationValueType Data) { Data[0]=1U; Data[1]=2U; Data[2]=3U; Data[3]=4U; return E_OK; }
 Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data) { return Rte_Call_DataServices_ApplicationValue_ReadData(Data); }
 Std_ReturnType (*const byte_client)(uint8 *)=Rte_Call_DataServices_ApplicationValue_ReadData;
 Std_ReturnType (*const dcm_bridge)(uint8 *)=DcmService_ReadData;
@@ -148,8 +160,8 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
                     bytes = bytes
                         .replace("Rte_Read_Value_Value", "Rte_Read_InputValue_Value")
                         .replace(
-                            "ComputeInstance_Read_Value_Value",
-                            "ComputeInstance_Read_InputValue_Value",
+                            "Rte_Read_Compute_Value_Value",
+                            "Rte_Read_Compute_InputValue_Value",
                         );
                 }
             }
@@ -286,9 +298,39 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         let sections = String::from_utf8_lossy(&output.stdout);
         assert!(sections.contains(".rte_code"), "{sections}");
         assert!(
-            sections.contains(".bss.rte.Observe.VAR_CLEARED_UNSPECIFIED"),
+            sections.contains(".data.rte.Observe.VAR_INIT_UNSPECIFIED")
+                && sections.contains(".bss.rte.Ingress.VAR_CLEARED_UNSPECIFIED"),
             "{sections}"
         );
+        let nm = std::env::var_os("AUTOSAR_NM").expect("Set AUTOSAR_NM to the controlled nm");
+        let output = tooling::run_public_command(
+            std::process::Command::new(nm)
+                .current_dir(&directory)
+                .arg(if cfg!(windows) {
+                    "--target=pe-x86-64"
+                } else {
+                    "--target=elf64-x86-64"
+                })
+                .args(["-g", "--defined-only", "Rte.o"]),
+            &directory,
+            "rte-public-symbols",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(output.status.success(), "{output:?}");
+        let symbols: Vec<_> = std::str::from_utf8(&output.stdout)
+            .unwrap()
+            .lines()
+            .filter_map(|line| line.split_whitespace().last())
+            .collect();
+        for component in [
+            "Ingress",
+            if renamed { "Compute" } else { "Process" },
+            "Observe",
+            "DcmService",
+        ] {
+            assert!(symbols.contains(&format!("Rte_Inst_{component}").as_str()));
+            assert!(!symbols.contains(&format!("Rte_Instance_{component}").as_str()));
+        }
         std::fs::remove_dir_all(directory).unwrap();
     }
 }
@@ -376,8 +418,11 @@ fn generated_schm_lifecycle_refuses_misordered_repeated_and_foreign_calls() {
             "-Iintegration/src",
             "-Ios/include",
         ])
-        // The Dcm mode switches in SchM.c enter the delivered host area.
-        .args(["generated/src/SchM.c", "integration/src/Can_HostLock.c"])
+        // The Dcm mode switches in SchM_Main.c enter the delivered host area.
+        .args([
+            "generated/src/SchM_Main.c",
+            "integration/src/Can_HostLock.c",
+        ])
         .arg(root.join("core/tests/fixtures/bsw-contracts/schm_contract.c"));
     if cfg!(target_os = "linux") {
         compiler.arg("-pthread");
@@ -492,5 +537,281 @@ int main(void) {
                 .unwrap()
                 .success()
         );
+    }
+}
+
+#[test]
+fn generated_rte_unconnected_and_first_publication_preserve_values_and_outputs() {
+    for (unconnected, never_received) in [(false, true), (true, true), (false, false)] {
+        let mut sources = inputs();
+        for file in ["process.arxml", "observe.arxml"]
+            .into_iter()
+            .filter(|_| never_received)
+        {
+            change(
+                &mut sources,
+                file,
+                "<HANDLE-NEVER-RECEIVED>false</HANDLE-NEVER-RECEIVED>",
+                "<HANDLE-NEVER-RECEIVED>true</HANDLE-NEVER-RECEIVED>",
+            );
+        }
+        if !never_received {
+            change(
+                &mut sources,
+                "ingress.arxml",
+                "<HANDLE-NEVER-RECEIVED>true</HANDLE-NEVER-RECEIVED>",
+                "<HANDLE-NEVER-RECEIVED>false</HANDLE-NEVER-RECEIVED>",
+            );
+        }
+        if unconnected {
+            for connector in ["IngressProcess", "IngressObserve", "Scalar"] {
+                xml_edit(
+                    &mut sources,
+                    "composition.arxml",
+                    |node| named(node, "ASSEMBLY-SW-CONNECTOR", connector),
+                    |_| String::new(),
+                );
+            }
+        }
+        let plan = build(&sources).unwrap();
+        let scratch = Scratch::new();
+        for (path, bytes) in prepared_pipeline_files(&plan) {
+            let path = scratch.0.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let executable = tooling::native_binary(&scratch.0, "rte-consumer");
+        let cpp = scratch.0.join("callback.cpp");
+        std::fs::write(&cpp, "#include \"Rte_Com.h\"\nvoid callback_linkage(void);\nvoid callback_linkage(void) { void (*volatile received)(CbkHandleIdType) = Rte_COMCbk; void (*volatile expired)(CbkHandleIdType) = Rte_COMCbkRxTOut; (void)received; (void)expired; }\n").unwrap();
+        let object = scratch.0.join("callback.o");
+        let output = tooling::run_public_command(
+            tooling::c_compiler()
+                .current_dir(&scratch.0)
+                .args([
+                    "-x",
+                    "c++",
+                    "-std=c++11",
+                    "-Wall",
+                    "-Wextra",
+                    "-Werror",
+                    "-pedantic",
+                    "-Igenerated/include",
+                    "-Ibsw/include",
+                    "-c",
+                ])
+                .arg(&cpp)
+                .arg("-o")
+                .arg(&object),
+            &scratch.0,
+            "cpp-callback-compile",
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{output:?}");
+        let mut compiler = tooling::c_compiler();
+        compiler
+            .current_dir(&scratch.0)
+            .args([
+                "-std=c99",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                "-Igenerated/include",
+                "-Ibsw/include",
+                "-Iintegration/include",
+                "-Ios/include",
+            ])
+            .arg("generated/src/Rte.c")
+            .arg(root.join("core/tests/fixtures/bsw-contracts/rte_contract.c"));
+        if unconnected {
+            compiler.arg("-DUNCONNECTED_PORTS");
+        }
+        if !never_received {
+            compiler.arg("-DHANDLE_NEVER_DISABLED");
+        }
+        compiler.arg(&object).arg("-o").arg(&executable);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            "rte-consumer-compile",
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{output:?}");
+        let output = tooling::run_public_command(
+            &mut std::process::Command::new(executable),
+            &scratch.0,
+            "rte-consumer-run",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(output.status.success(), "{output:?}");
+    }
+}
+
+#[test]
+fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases() {
+    // Verifies: SWS_Rte_01005, SWS_Rte_01006, SWS_Rte_02751, SWS_Rte_05078
+    // Verifies: SWS_Rte_06713, SWS_Rte_07120, SWS_Rte_07124, SWS_Rte_07194
+    // Verifies: SWS_Rte_07692, SWS_MemMap_00027, SWS_MemMap_00029
+    let plan = build(&inputs()).unwrap();
+    let scratch = Scratch::new();
+    for (path, bytes) in prepared_pipeline_files(&plan) {
+        let path = scratch.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    let check = |label: &str, source: &str, cpp: bool, accepted: bool, diagnostic: &str| {
+        let path = scratch.0.join(format!("{label}.c"));
+        std::fs::write(&path, source).unwrap();
+        let mut compiler = tooling::c_compiler();
+        compiler
+            .current_dir(&scratch.0)
+            .args([
+                "-x",
+                if cpp { "c++" } else { "c" },
+                if cpp { "-std=c++11" } else { "-std=c99" },
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                "-fsyntax-only",
+                "-Igenerated/include",
+                "-Ibsw/include",
+                "-Iintegration/include",
+                "-Ios/include",
+            ])
+            .arg(&path);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            label,
+            std::time::Duration::from_secs(60),
+        );
+        assert_eq!(
+            output.status.success(),
+            accepted,
+            "{label}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if !accepted {
+            assert!(
+                String::from_utf8_lossy(&output.stderr).contains(diagnostic),
+                "{label}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    };
+    for cpp in [false, true] {
+        check(
+            if cpp { "cpp-contract" } else { "c-contract" },
+            "#define RTE_RUNNABLEAPI_Periodic\n#include \"Rte_Ingress.h\"\n#ifndef Rte_Read_RxValue_Value\n#error Missing runnable read\n#endif\n#if Rte_InitValue_RxValue_Value != 0UL\n#error Wrong initial value\n#endif\nvoid (*entry)(void) = RTE_RUNNABLE_Periodic;\nRte_Instance instance(void);\nRte_Instance instance(void) { return Rte_Inst_Ingress; }\n",
+            cpp,
+            true,
+            "",
+        );
+    }
+    for cpp in [false, true] {
+        check(
+            if cpp {
+                "cpp-data-handle-types"
+            } else {
+                "c-data-handle-types"
+            },
+            "#include \"Rte_DataHandleType.h\"\nDcm_DataElement_ApplicationValueType data;\n",
+            cpp,
+            true,
+            "",
+        );
+        check(
+            if cpp {
+                "cpp-mode-types"
+            } else {
+                "c-mode-types"
+            },
+            "#include \"SchM_Dcm_Type.h\"\nRte_ModeType_DcmDiagnosticSessionControl session = RTE_MODE_DcmDiagnosticSessionControl_DCM_DEFAULT_SESSION;\nRte_ModeType_DcmAuthenticationState_Physical authentication = RTE_MODE_DcmAuthenticationState_Physical_DCM_DEAUTHENTICATED;\n#if RTE_TRANSITION_DcmDiagnosticSessionControl != 255u\n#error Wrong transition\n#endif\n",
+            cpp,
+            true,
+            "",
+        );
+    }
+    check(
+        "cpp-module-interlinks",
+        "#include \"SchM_Can.h\"\n#include \"SchM_CanIf.h\"\n#include \"SchM_CanTp.h\"\n#include \"SchM_Com.h\"\n#include \"SchM_ComM.h\"\n#include \"SchM_BswM.h\"\n#include \"SchM_Dcm.h\"\n#include \"SchM_Det.h\"\n#include \"SchM_PduR.h\"\n#include \"SchM_LSduR.h\"\n#if defined(COM_START_SEC_CODE) || defined(COM_STOP_SEC_CODE) || defined(Com_START_SEC_CODE) || defined(Com_STOP_SEC_CODE) || defined(DCM_START_SEC_CODE) || defined(DCM_STOP_SEC_CODE) || defined(Dcm_START_SEC_CODE) || defined(Dcm_STOP_SEC_CODE)\n#error Unconsumed module section marker\n#endif\n",
+        true,
+        true,
+        "",
+    );
+    check(
+        "multiple-app-headers",
+        "#include \"Rte_Ingress.h\"\n#include \"Rte_Process.h\"\n",
+        false,
+        false,
+        "Multiple application header",
+    );
+    check(
+        "private-cds-object",
+        "#include \"Rte_Ingress.h\"\nconst Rte_CDS_Ingress *storage = &Rte_Instance_Ingress;\n",
+        false,
+        false,
+        "Rte_Instance_Ingress",
+    );
+    check(
+        "unselected-runnable-api",
+        "#define RTE_RUNNABLEAPI_ServerReadData\n#include \"Rte_Ingress.h\"\nStd_ReturnType (*hidden)(uint32 *) = Rte_Read_Ingress_RxValue_Value;\n",
+        false,
+        false,
+        "Rte_Read_Ingress_RxValue_Value",
+    );
+    for (label, source, error) in [
+        (
+            "unknown-swc-section",
+            "#define Ingress_START_SEC_UNKNOWN\n#include \"Ingress_MemMap.h\"\n",
+            "Unknown SWC memory section",
+        ),
+        (
+            "unmatched-swc-section",
+            "#define Ingress_STOP_SEC_CODE\n#include \"Ingress_MemMap.h\"\n",
+            "Unmatched SWC memory section",
+        ),
+        (
+            "nested-swc-section",
+            "#define Ingress_START_SEC_CODE\n#include \"Ingress_MemMap.h\"\n#define Ingress_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Ingress_MemMap.h\"\n",
+            "Nested SWC memory section",
+        ),
+        (
+            "unknown-rte-section",
+            "#define RTE_Ingress_START_SEC_UNKNOWN\n#include \"Rte_MemMap.h\"\n",
+            "Unknown RTE memory section",
+        ),
+    ] {
+        check(label, source, false, false, error);
+    }
+    for (header, prefix) in [
+        ("bsw/include/Com.h", "COM"),
+        ("os/include/Os.h", "OS"),
+        ("bsw/include/Std_Types.h", "STD_TYPES"),
+        ("bsw/include/Platform_Types.h", "PLATFORM"),
+        ("bsw/include/ComStack_Types.h", "COMSTACKTYPE"),
+    ] {
+        let path = scratch.0.join(header);
+        let original = std::fs::read_to_string(&path).unwrap();
+        let token = original
+            .lines()
+            .find(|line| {
+                line.split_whitespace().nth(1)
+                    == Some(&format!("{prefix}_AR_RELEASE_MINOR_VERSION"))
+            })
+            .unwrap()
+            .to_owned();
+        assert!(original.contains(&token));
+        std::fs::write(&path, original.replace(&token, &token.replace("10U", "9U"))).unwrap();
+        check(
+            &format!("wrong-release-{prefix}"),
+            "#include \"generated/src/Rte.c\"\n",
+            false,
+            false,
+            "Incompatible",
+        );
+        std::fs::write(path, original).unwrap();
     }
 }

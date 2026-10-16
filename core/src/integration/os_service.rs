@@ -19,8 +19,9 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
     let mut events = String::new();
     let mut runnables = String::new();
     let mut header = String::from(
-        "/** @file Generated synchronous Counter service bindings.\n * Values are OS ticks, as specified by SWS_Os_00560, despite the type name.\n */\n#ifndef AUTOSAR_GENERATED_RTE_OS_H\n#define AUTOSAR_GENERATED_RTE_OS_H\n#include \"Os.h\"\n#include \"Rte_Os_Type.h\"\n",
+        "/** @file Generated synchronous Counter service bindings.\n * Values are OS ticks, as specified by SWS_Os_00560, despite the type name.\n */\n#ifndef AUTOSAR_GENERATED_RTE_OS_H\n#define AUTOSAR_GENERATED_RTE_OS_H\n#include \"Os.h\"\n#include \"Rte_Os_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n",
     );
+    let mut clients = String::new();
     let mut source = String::from(
         "#include \"Rte_Os.h\"\n#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n",
     );
@@ -68,19 +69,24 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
         let forwarded: Vec<String> = forwarded.split(", ").map(str::to_owned).collect();
         let declaration = c_layout::signature("StatusType", &symbol, &served, ";", false);
         header.push_str(&format!("/** @brief Synchronous {operation}; preserves native errors and output semantics.\n * @param CounterID Port-defined Counter handle for the server.\n * @param Value Counter ticks; OUT for GetCounterValue, INOUT for GetElapsedValue.\n{elapsed_doc} * @return Native OS service result.\n */\n{declaration}\n"));
-        let declaration = c_layout::signature("StatusType", &port, &parameters, ";", false);
-        header.push_str(&format!("/** @brief Call the selected OsService port; values are ticks.\n * @param Value Caller-owned tick value; not retained.\n{elapsed_doc} * @return Native OS service result.\n */\n{declaration}\n"));
-        for (name, parameters, callee, first) in [
-            (&symbol, &served, operation, "CounterID"),
-            (&port, &parameters, symbol.as_str(), counter_symbol),
-        ] {
-            let head = c_layout::signature("RTE_CODE StatusType", name, parameters, "", true);
-            let arguments: Vec<String> = std::iter::once(first.to_owned())
-                .chain(forwarded.iter().cloned())
-                .collect();
-            let call = c_layout::call("    ", &format!("return {callee}"), &arguments, ";");
-            source.push_str(&format!("{head}\n{{\n{call}\n}}\n"));
-        }
+        let head = c_layout::signature(
+            "static inline RTE_Rte_CODE StatusType",
+            &port,
+            &parameters,
+            "",
+            true,
+        );
+        let arguments: Vec<String> = std::iter::once(counter_symbol.to_owned())
+            .chain(forwarded.iter().cloned())
+            .collect();
+        let call = c_layout::call("    ", &format!("return {symbol}"), &arguments, ";");
+        clients.push_str(&format!("/** @brief Counter-bound {operation}; native tick and error semantics. */\n{head}\n{{\n{call}\n}}\n"));
+        let head = c_layout::signature("RTE_Rte_CODE StatusType", &symbol, &served, "", true);
+        let arguments: Vec<String> = std::iter::once("CounterID".to_owned())
+            .chain(forwarded.iter().cloned())
+            .collect();
+        let call = c_layout::call("    ", &format!("return {operation}"), &arguments, ";");
+        source.push_str(&format!("{head}\n{{\n{call}\n}}\n"));
     }
     source.push_str("#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n");
     let mut errors = String::new();
@@ -96,7 +102,7 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>OsServices</SHORT-NAME><ELEMENTS>{elements}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>\n"
     );
-    header.push_str("#endif\n");
+    header.push_str(&format!("#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n{clients}#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n#ifdef __cplusplus\n}}\n#endif\n#endif\n"));
     BTreeMap::from([
         (
             "generated/descriptions/Os_Service.arxml".into(),

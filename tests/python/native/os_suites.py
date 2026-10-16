@@ -1792,18 +1792,22 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
     source = directory / "Rte_OsService.c"
     original = (project / "generated/src/Rte_OsService.c").read_text(encoding="utf-8")
     source.write_text(original, encoding="utf-8")
+    header = target / "include/Rte_Os.h"
+    original_header = header.read_text(encoding="utf-8")
     defines = (f"SERVICE_GET=OsService_{counter}_GetCounterValue",
                f"SERVICE_ELAPSED=OsService_{counter}_GetElapsedValue")
-    for name, text, exit_code in [
-        ("actual", original, 0),
-        ("wrong-binding", original.replace(f"OS_COUNTER_ID_{counter},", "UINT32_MAX,"), 7),
+    for name, text, client, exit_code in [
+        ("actual", original, original_header, 0),
+        ("wrong-binding", original,
+         original_header.replace(f"OS_COUNTER_ID_{counter},", "UINT32_MAX,"), 7),
         ("wrong-units", original.replace("return GetCounterValue(CounterID, Value);",
              "StatusType result = GetCounterValue(CounterID, Value);\n"
-             "    if (result == E_OK) { *Value *= UINT64_C(1000); }\n    return result;"), 7),
+             "    if (result == E_OK) { *Value *= UINT64_C(1000); }\n    return result;"), original_header, 7),
     ]:
         if name != "actual":
-            require(text != original, "service mutation did not apply")
+            require(text != original or client != original_header, "service mutation did not apply")
         source.write_text(text, encoding="utf-8")
+        header.write_text(client, encoding="utf-8")
         stage = directory / name
         stage.mkdir()
         binary, _ = build(stage, "counter_service.c", defines, target, (source,))
@@ -1811,15 +1815,16 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
         require(result["exit"] == exit_code and not result["stderr"], result)
         if name == "actual":
             require("counter_service ticks=0 wrap=2 errors=7 reason=0" in result["stdout"], result)
-    for name, mutant, expected in [
-        ("disconnected", original.replace("StatusType Rte_Call_OsService_GetCounterValue(",
-                                          "StatusType Disconnected_GetCounterValue("),
+    for name, mutant, client, expected in [
+        ("disconnected", original,
+         re.sub(r"\bRte_Call_OsService_GetCounterValue\b", "Disconnected_GetCounterValue", original_header),
          "Rte_Call_OsService_GetCounterValue"),
         ("wrong-signature", original.replace("TimeInMicrosecondsType *Value", "uint32_t *Value"),
-         "conflicting types"),
+         original_header, "conflicting types"),
     ]:
-        require(mutant != original, "service signature mutation did not apply")
+        require(mutant != original or client != original_header, "service signature mutation did not apply")
         source.write_text(mutant, encoding="utf-8")
+        header.write_text(client, encoding="utf-8")
         stage = directory / name
         stage.mkdir()
         try:

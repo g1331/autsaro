@@ -654,7 +654,7 @@ fn authentication_mode_source_follows_actual_connection_and_rejects_invalid_stan
             "SchM_Switch_Dcm_DcmAuthenticationState_Link",
         ),
         (
-            "generated/src/SchM.c",
+            "generated/src/SchM_Main.c",
             "SchM_Mode_Dcm_DcmAuthenticationState_Link",
         ),
         (

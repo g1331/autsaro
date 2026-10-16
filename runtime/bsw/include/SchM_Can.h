@@ -3,6 +3,10 @@
  */
 #ifndef SCHM_CAN_H
 #define SCHM_CAN_H
+#include "SchM_Can_Type.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define CAN_START_SEC_CODE
 #include "Can_MemMap.h"
@@ -28,4 +32,7 @@ CAN_CODE void Can_MainFunction_Mode(void);
 /** @brief Enter/leave the driver's exclusive area (module data only, never nested). */
 void SchM_Enter_Can_CAN_STATE(void);
 void SchM_Exit_Can_CAN_STATE(void);
+#ifdef __cplusplus
+}
+#endif
 #endif

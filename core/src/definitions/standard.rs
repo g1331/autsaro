@@ -10,7 +10,8 @@ pub(crate) fn parent_kind(kind: &str) -> Option<&'static str> {
         | "CLIENT-SERVER-INTERFACE"
         | "APPLICATION-PRIMITIVE-DATA-TYPE"
         | "IMPLEMENTATION-DATA-TYPE"
-        | "DATA-TYPE-MAPPING-SET" => Some("AR-PACKAGE"),
+        | "DATA-TYPE-MAPPING-SET"
+        | "SW-ADDR-METHOD" => Some("AR-PACKAGE"),
         "SW-COMPONENT-PROTOTYPE" | "ASSEMBLY-SW-CONNECTOR" => Some("COMPOSITION-SW-COMPONENT-TYPE"),
         "SWC-INTERNAL-BEHAVIOR" => Some("APPLICATION-SW-COMPONENT-TYPE"),
         "RUNNABLE-ENTITY" | "TIMING-EVENT" | "OPERATION-INVOKED-EVENT" => {
@@ -30,7 +31,8 @@ pub(crate) fn child_group(kind: &str) -> Option<&'static str> {
         | "CLIENT-SERVER-INTERFACE"
         | "APPLICATION-PRIMITIVE-DATA-TYPE"
         | "IMPLEMENTATION-DATA-TYPE"
-        | "DATA-TYPE-MAPPING-SET" => Some("ELEMENTS"),
+        | "DATA-TYPE-MAPPING-SET"
+        | "SW-ADDR-METHOD" => Some("ELEMENTS"),
         "SW-COMPONENT-PROTOTYPE" => Some("COMPONENTS"),
         "ASSEMBLY-SW-CONNECTOR" => Some("CONNECTORS"),
         "SWC-INTERNAL-BEHAVIOR" => Some("INTERNAL-BEHAVIORS"),
@@ -54,6 +56,7 @@ pub(crate) fn populate(
         "ASSEMBLY-SW-CONNECTOR",
         "P-PORT-PROTOTYPE",
         "R-PORT-PROTOTYPE",
+        "SW-ADDR-METHOD",
         "SWC-INTERNAL-BEHAVIOR",
         "RUNNABLE-ENTITY",
         "TIMING-EVENT",
@@ -143,6 +146,18 @@ pub(crate) fn populate(
             "CLIENT-SERVER-OPERATION",
         ),
         ("RUNNABLE-ENTITY", "SYMBOL", ValueKind::FunctionName, ""),
+        (
+            "IMPLEMENTATION-DATA-TYPE",
+            "TYPE-EMITTER",
+            ValueKind::String,
+            "",
+        ),
+        (
+            "R-PORT-PROTOTYPE",
+            "MAY-BE-UNCONNECTED",
+            ValueKind::Boolean,
+            "",
+        ),
         (
             "RUNNABLE-ENTITY",
             "CAN-BE-INVOKED-CONCURRENTLY",
@@ -237,6 +252,7 @@ pub(crate) fn populate(
         catalog.insert(entry, Vec::new())?;
     }
     for (owner, tag, literals) in [
+        ("SW-ADDR-METHOD", "SECTION-TYPE", "CODE"),
         ("APPLICATION-PRIMITIVE-DATA-TYPE", "CATEGORY", "VALUE"),
         ("IMPLEMENTATION-DATA-TYPE", "CATEGORY", "VALUE ARRAY"),
         ("ARGUMENT-DATA-PROTOTYPE", "DIRECTION", "IN OUT INOUT"),

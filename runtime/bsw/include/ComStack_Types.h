@@ -1,6 +1,10 @@
 /** @file R24-11 common communication types; widths come from ECU configuration. */
 #ifndef COMSTACK_TYPES_H
 #define COMSTACK_TYPES_H
+/** Fixed AUTOSAR CP R24-11 interface release (4.10.0). */
+#define COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION    4U
+#define COMSTACKTYPE_AR_RELEASE_MINOR_VERSION    10U
+#define COMSTACKTYPE_AR_RELEASE_REVISION_VERSION 0U
 #include "Std_Types.h"
 #include "ComStack_Cfg.h"
 

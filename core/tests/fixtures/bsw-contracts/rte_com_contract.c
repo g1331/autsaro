@@ -37,15 +37,9 @@ Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting)
 #define SECOND_HANDLE  61u
 #define UNKNOWN_HANDLE 59u
 
-static Std_ReturnType read_first(uint32 *value)
-{
-    return Rte_Application_Pipeline_IngressInstance_Read_RxValue_Value(value);
-}
+static Std_ReturnType read_first(uint32 *value) { return Rte_Read_Ingress_RxValue_Value(value); }
 
-static Std_ReturnType read_second(uint32 *value)
-{
-    return Rte_Application_Pipeline_IngressInstance_Read_RxSecond_Value(value);
-}
+static Std_ReturnType read_second(uint32 *value) { return Rte_Read_Ingress_RxSecond_Value(value); }
 
 /* 读取两个接收者并核对各自的状态与值。 */
 static void expect(Std_ReturnType first_status,

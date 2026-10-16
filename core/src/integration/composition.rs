@@ -163,10 +163,12 @@ pub struct CompositionContract {
     pub system: String,
     pub composition: String,
     pub ecu: String,
+    pub generation: super::rte_configuration::RteGenerationContract,
     pub components: Vec<Component>,
     pub connections: Vec<Connection>,
     pub network_endpoints: Vec<NetworkEndpoint>,
     pub array_types: BTreeMap<String, String>,
+    pub types: Vec<super::rte_types::RteDataType>,
     pub dcm_modes: Vec<DcmModeDefinition>,
 }
 
@@ -180,6 +182,15 @@ pub(super) fn dcm_data_type_names(data: &str) -> [String; 3] {
 }
 
 impl CompositionContract {
+    pub(super) fn data_connected(&self, endpoint: &Endpoint) -> bool {
+        self.network_endpoints
+            .iter()
+            .any(|network| &network.endpoint == endpoint)
+            || self.connections.iter().any(|connection| {
+                !connection.service
+                    && (&connection.provider == endpoint || &connection.requester == endpoint)
+            })
+    }
     /// Standard names for the implemented four-byte synchronous Dcm data interface.
     pub(super) fn diagnostic_types(
         &self,
@@ -272,6 +283,12 @@ pub(super) fn zero_seconds(value: &str) -> bool {
 }
 
 fn unsigned_encoding(graph: &Graph, implementation: usize) -> Result<(), Vec<PlanDiagnostic>> {
+    if graph
+        .text(implementation, "TYPE-EMITTER")
+        .is_some_and(|emitter| emitter != "RTE")
+    {
+        return Err(fail(graph, implementation, "TYPE_CONFLICT"));
+    }
     let base = reference_descendant(graph, implementation, "BASE-TYPE-REF")?;
     if graph.text(base, "BASE-TYPE-ENCODING") != Some("NONE")
         || graph.text(base, "CATEGORY") != Some("FIXED_LENGTH")
@@ -295,7 +312,7 @@ fn native_type(
         let mapped = implementation(graph, argument, behavior, datatype)?;
         unsigned_encoding(graph, mapped)?;
         return Ok((
-            "uint32".into(),
+            c_name(&name(graph, mapped)),
             format!("{}:{}", path(graph, datatype), path(graph, mapped)),
         ));
     }
@@ -307,8 +324,14 @@ fn native_type(
         if graph.text(base, "NATIVE-DECLARATION") == Some("uint32")
             && graph.text(base, "BASE-TYPE-SIZE") == Some("32")
         {
-            return Ok(("uint32".into(), path(graph, datatype)));
+            return Ok((c_name(&name(graph, datatype)), path(graph, datatype)));
         }
+    }
+    if graph
+        .text(datatype, "TYPE-EMITTER")
+        .is_some_and(|emitter| emitter != "RTE")
+    {
+        return Err(fail(graph, datatype, "TYPE_CONFLICT"));
     }
     if graph.elements[datatype].tag != "IMPLEMENTATION-DATA-TYPE"
         || graph.text(datatype, "CATEGORY") != Some("ARRAY")
@@ -390,7 +413,7 @@ fn application_error(
     Err(fail(graph, operation, "APPLICATION_ERROR_UNSUPPORTED"))
 }
 
-fn dcm_mode_definitions(
+pub(super) fn dcm_mode_definitions(
     graph: &Graph,
     context: usize,
 ) -> Result<Vec<DcmModeDefinition>, Vec<PlanDiagnostic>> {
@@ -478,6 +501,7 @@ fn inspect_with_transport(
     graph: &Graph,
     include_transport: bool,
 ) -> Result<CompositionContract, Vec<PlanDiagnostic>> {
+    let generation = super::rte_configuration::inspect(graph)?;
     let context = *graph
         .objects
         .values()
@@ -818,7 +842,7 @@ fn inspect_with_transport(
                     element_name: name(graph, element),
                     application_type: path(graph, application),
                     implementation_type: path(graph, implementation),
-                    c_type: "uint32".into(),
+                    c_type: c_name(&name(graph, implementation)),
                     read,
                     api_symbol: format!(
                         "Rte_{}_{}_{}",
@@ -828,6 +852,11 @@ fn inspect_with_transport(
                     ),
                     runnable,
                     initial_value,
+                    handle_never_received: read
+                        && matches!(
+                            graph.text(specification, "HANDLE-NEVER-RECEIVED"),
+                            Some("true" | "1")
+                        ),
                     alive_timeout_ms: if read {
                         let value = graph
                             .text(specification, "ALIVE-TIMEOUT")
@@ -908,7 +937,9 @@ fn inspect_with_transport(
                             native_type(graph, argument, behavior, &mut arrays)?;
                         arguments.push(ContractArgument {
                             name: c_name(&name(graph, argument)),
-                            native_type: if native == "uint32" && direction != "IN" {
+                            native_type: if !arrays.values().any(|array| array == &native)
+                                && direction != "IN"
+                            {
                                 format!("{native} *")
                             } else {
                                 native
@@ -991,9 +1022,9 @@ fn inspect_with_transport(
                         read,
                         api_symbol: api.clone(),
                         implementation_symbol: format!(
-                            "Rte_{}_{}",
-                            c_name(graph.elements[instance].object.trim_start_matches('/')),
-                            api.trim_start_matches("Rte_")
+                            "Rte_Call_{}_{}",
+                            c_name(&name(graph, component)),
+                            api.trim_start_matches("Rte_Call_")
                         ),
                         arguments,
                         argument_types,
@@ -1378,11 +1409,19 @@ fn inspect_with_transport(
             let local = connections.iter().any(|connection| {
                 connection.provider == endpoint || connection.requester == endpoint
             });
-            if mappings.len() > 1
-                || (!mappings.is_empty() && local)
-                || (mappings.is_empty() && !local)
-            {
+            if mappings.len() > 1 || (!mappings.is_empty() && local) {
                 return Err(fail(graph, graph.index(&port.path)?, "ENDPOINT_BINDING"));
+            }
+            if mappings.is_empty()
+                && !local
+                && port.read
+                && generation.strict_unconnected_r_port_check
+                && !matches!(
+                    graph.text(graph.index(&port.path)?, "MAY-BE-UNCONNECTED"),
+                    Some("true" | "1")
+                )
+            {
+                return Err(fail(graph, graph.index(&port.path)?, "UNCONNECTED_R_PORT"));
             }
             if mappings.is_empty() {
                 let context = graph.index(&port.path)?;
@@ -1393,11 +1432,9 @@ fn inspect_with_transport(
                         graph.descendants(context, "NONQUEUED-RECEIVER-COM-SPEC"),
                         "TYPE_CONFLICT",
                     )?;
-                    if !matches!(
-                        graph.text(spec, "HANDLE-NEVER-RECEIVED"),
-                        Some("false" | "0")
-                    ) || !graph.text(spec, "ALIVE-TIMEOUT").is_some_and(zero_seconds)
-                        || graph.text(spec, "HANDLE-TIMEOUT-TYPE") != Some("NONE")
+                    if local
+                        && (!graph.text(spec, "ALIVE-TIMEOUT").is_some_and(zero_seconds)
+                            || graph.text(spec, "HANDLE-TIMEOUT-TYPE") != Some("NONE"))
                     {
                         return Err(fail(graph, spec, "LOCAL_FRESHNESS_UNSUPPORTED"));
                     }
@@ -1411,11 +1448,7 @@ fn inspect_with_transport(
                         graph.descendants(context, "NONQUEUED-RECEIVER-COM-SPEC"),
                         "TYPE_CONFLICT",
                     )?;
-                    if !matches!(
-                        graph.text(spec, "HANDLE-NEVER-RECEIVED"),
-                        Some("true" | "1")
-                    ) || graph.text(spec, "HANDLE-TIMEOUT-TYPE") != Some("NONE")
-                    {
+                    if graph.text(spec, "HANDLE-TIMEOUT-TYPE") != Some("NONE") {
                         return Err(fail(graph, spec, "NETWORK_FRESHNESS_UNSUPPORTED"));
                     }
                 }
@@ -1459,18 +1492,24 @@ fn inspect_with_transport(
             .iter()
             .filter(|operation| operation.read)
         {
-            if !connections.iter().any(|connection| {
-                connection.requester
-                    == (Endpoint {
-                        instance: component.instance.clone(),
-                        port: operation.port.clone(),
-                        member: operation.operation.clone(),
-                    })
-            }) {
+            if generation.strict_unconnected_r_port_check
+                && !connections.iter().any(|connection| {
+                    connection.requester
+                        == (Endpoint {
+                            instance: component.instance.clone(),
+                            port: operation.port.clone(),
+                            member: operation.operation.clone(),
+                        })
+                })
+                && !matches!(
+                    graph.text(graph.index(&operation.port)?, "MAY-BE-UNCONNECTED"),
+                    Some("true" | "1")
+                )
+            {
                 return Err(fail(
                     graph,
                     graph.index(&operation.port)?,
-                    "SERVICE_CLIENT_MISSING",
+                    "UNCONNECTED_R_PORT",
                 ));
             }
         }
@@ -1514,6 +1553,11 @@ fn inspect_with_transport(
             .any(|endpoint| endpoint.channel != path(graph, channel))
         {
             return Err(fail(graph, channel, "SIGNAL_MAPPING"));
+        }
+    }
+    for component in graph.of_kind("APPLICATION-SW-COMPONENT-TYPE") {
+        if !types.contains(&component) {
+            return Err(fail(graph, component, "UNINSTANTIATED_COMPONENT"));
         }
     }
     // Traverse actual runnable call edges, including every synchronous call point.
@@ -1569,10 +1613,12 @@ fn inspect_with_transport(
         system: path(graph, system),
         composition: path(graph, composition),
         ecu: path(graph, ecu),
+        generation,
         components,
         connections,
         network_endpoints,
         array_types: arrays,
+        types: super::rte_types::inspect(graph)?,
         dcm_modes,
     };
     check_names(graph, &plan)?;
@@ -1581,9 +1627,11 @@ fn inspect_with_transport(
 
 pub(super) fn data_symbol(component: &Component, port: &DataPort) -> String {
     format!(
-        "Rte_{}_{}",
-        c_name(component.instance.trim_start_matches('/')),
-        port.api_symbol.trim_start_matches("Rte_")
+        "Rte_{}_{}_{}_{}",
+        if port.read { "Read" } else { "Write" },
+        c_name(super::short_name(&component.component)),
+        c_name(&port.name),
+        c_name(&port.element_name),
     )
 }
 
@@ -1648,6 +1696,8 @@ pub(super) fn reserved_memory_scope(name: &str) -> bool {
     matches!(
         name,
         "Rte"
+            | "Os"
+            | "Det"
             | "Ecu"
             | "Can"
             | "CanIf"
@@ -1666,6 +1716,8 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
     let mut filenames = BTreeSet::from([
         "INCLUDE/RTE.H".to_owned(),
         "INCLUDE/RTE_TYPE.H".to_owned(),
+        "INCLUDE/RTE_DATAHANDLETYPE.H".to_owned(),
+        "INCLUDE/RTE_CFG.H".to_owned(),
         "INCLUDE/RTE_COM.H".to_owned(),
         "INCLUDE/RTE_MAIN.H".to_owned(),
         "INCLUDE/RTE_MEMMAP.H".to_owned(),
@@ -1674,10 +1726,11 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
         "INCLUDE/STD_TYPES.H".to_owned(),
     ]);
     let mut names: BTreeSet<String> = "RTE_H RTE_TYPE_H RTE_COM_H Rte_COMCbk Rte_COMCbkRxTOut CbkHandleIdType STD_TYPES_H NULL_PTR uint8 uint16 uint32 uint64 sint8 sint16 sint32 sint64 EcuStatus boolean Std_ReturnType Std_VersionInfoType TRUE FALSE E_OK E_NOT_OK RTE_E_COM_STOPPED RTE_E_NEVER_RECEIVED RTE_E_MAX_AGE_EXCEEDED intptr_t uintptr_t intmax_t uintmax_t INTMAX_MIN INTMAX_MAX UINTMAX_MAX INTPTR_MIN INTPTR_MAX UINTPTR_MAX PTRDIFF_MIN PTRDIFF_MAX SIZE_MAX SIG_ATOMIC_MIN SIG_ATOMIC_MAX WCHAR_MIN WCHAR_MAX WINT_MIN WINT_MAX INTMAX_C UINTMAX_C".split_whitespace().map(str::to_owned).collect();
+    names.extend("float32 float64 VoidPtr ConstVoidPtr sint8_least sint16_least sint32_least uint8_least uint16_least uint32_least PLATFORM_TYPES_H CPU_TYPE_8 CPU_TYPE_16 CPU_TYPE_32 CPU_TYPE_64 CPU_TYPE MSB_FIRST LSB_FIRST CPU_BIT_ORDER HIGH_BYTE_FIRST LOW_BYTE_FIRST CPU_BYTE_ORDER PLATFORM_AR_RELEASE_MAJOR_VERSION PLATFORM_AR_RELEASE_MINOR_VERSION PLATFORM_AR_RELEASE_REVISION_VERSION STD_TYPES_AR_RELEASE_MAJOR_VERSION STD_TYPES_AR_RELEASE_MINOR_VERSION STD_TYPES_AR_RELEASE_REVISION_VERSION COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION COMSTACKTYPE_AR_RELEASE_MINOR_VERSION COMSTACKTYPE_AR_RELEASE_REVISION_VERSION".split_whitespace().map(str::to_owned));
     names.extend("DCM_INITIAL DCM_PENDING DCM_CANCEL DCM_FORCE_RCRRP_OK DCM_RES_POS_OK DCM_RES_POS_NOT_OK DCM_RES_NEG_OK DCM_RES_NEG_NOT_OK DCM_OBD_ON_CAN DCM_OBD_ON_FLEXRAY DCM_OBD_ON_IP DCM_UDS_ON_CAN DCM_UDS_ON_FLEXRAY DCM_UDS_ON_IP DCM_ROE_ON_CAN DCM_ROE_ON_FLEXRAY DCM_ROE_ON_IP DCM_PERIODICTRANS_ON_CAN DCM_PERIODICTRANS_ON_FLEXRAY DCM_PERIODICTRANS_ON_IP DCM_NO_ACTIVE_PROTOCOL DCM_UDS_ON_LIN DCM_SUPPLIER_1 DCM_SUPPLIER_2 DCM_SUPPLIER_3 DCM_SUPPLIER_4 DCM_SUPPLIER_5 DCM_SUPPLIER_6 DCM_SUPPLIER_7 DCM_SUPPLIER_8 DCM_SUPPLIER_9 DCM_SUPPLIER_10 DCM_SUPPLIER_11 DCM_SUPPLIER_12 DCM_SUPPLIER_13 DCM_SUPPLIER_14 DCM_SUPPLIER_15 DCM_POS_RESP DCM_E_GENERALREJECT DCM_E_SERVICENOTSUPPORTED DCM_E_SUBFUNCTIONNOTSUPPORTED DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT DCM_E_RESPONSETOOLONG DCM_E_BUSYREPEATREQUEST DCM_E_CONDITIONSNOTCORRECT DCM_E_REQUESTSEQUENCEERROR DCM_E_NORESPONSEFROMSUBNETCOMPONENT DCM_E_FAILUREPREVENTSEXECUTIONOFREQUESTEDACTION DCM_E_REQUESTOUTOFRANGE DCM_E_SECURITYACCESSDENIED DCM_E_INVALIDKEY DCM_E_EXCEEDNUMBEROFATTEMPTS DCM_E_REQUIREDTIMEDELAYNOTEXPIRED DCM_E_UPLOADDOWNLOADNOTACCEPTED DCM_E_TRANSFERDATASUSPENDED DCM_E_GENERALPROGRAMMINGFAILURE DCM_E_WRONGBLOCKSEQUENCECOUNTER DCM_E_SUBFUNCTIONNOTSUPPORTEDINACTIVESESSION DCM_E_SERVICENOTSUPPORTEDINACTIVESESSION DCM_E_RPMTOOHIGH DCM_E_RPMTOOLOW DCM_E_ENGINEISRUNNING DCM_E_ENGINEISNOTRUNNING DCM_E_ENGINERUNTIMETOOLOW DCM_E_TEMPERATURETOOHIGH DCM_E_TEMPERATURETOOLOW DCM_E_VEHICLESPEEDTOOHIGH DCM_E_VEHICLESPEEDTOOLOW DCM_E_THROTTLE_PEDALTOOHIGH DCM_E_THROTTLE_PEDALTOOLOW DCM_E_TRANSMISSIONRANGENOTINNEUTRAL DCM_E_TRANSMISSIONRANGENOTINGEAR DCM_E_BRAKESWITCH_NOTCLOSED DCM_E_SHIFTERLEVERNOTINPARK DCM_E_TORQUECONVERTERCLUTCHLOCKED DCM_E_VOLTAGETOOHIGH DCM_E_VOLTAGETOOLOW DCM_E_VMSCNC_0 DCM_E_VMSCNC_1 DCM_E_VMSCNC_2 DCM_E_VMSCNC_3 DCM_E_VMSCNC_4 DCM_E_VMSCNC_5 DCM_E_VMSCNC_6 DCM_E_VMSCNC_7 DCM_E_VMSCNC_8 DCM_E_VMSCNC_9 DCM_E_VMSCNC_A DCM_E_VMSCNC_B DCM_E_VMSCNC_C DCM_E_VMSCNC_D DCM_E_VMSCNC_E DCM_SEC_LEV_LOCKED DCM_DEFAULT_SESSION DCM_PROGRAMMING_SESSION DCM_EXTENDED_DIAGNOSTIC_SESSION DCM_SAFETY_SYSTEM_DIAGNOSTIC_SESSION".split_whitespace().map(str::to_owned));
     names.extend("Dcm_OpStatusType Dcm_ConfirmationStatusType Dcm_ProtocolType Dcm_NegativeResponseCodeType Dcm_ConfigType Dcm_MsgItemType Dcm_MsgType Dcm_MsgLenType Dcm_MsgAddInfoType Dcm_IdContextType Dcm_MsgContextType Dcm_ReadDidType Ecu_DcmAuthenticationModeType".split_whitespace().map(str::to_owned));
-    names.extend("RTE_CORE RTE_MAIN_H RTE_E_OK RTE_E_LIMIT Rte_Start Rte_Stop SchM_ConfigType SchM_Init SchM_Start SchM_StartTiming SchM_Deinit RTE_CODE RTE_VAR_CLEARED Rte_MemMap_HeaderCheck rte_started rte_allocated SchM_Switch_Dcm_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl Dcm_SecLevelType Dcm_SesCtrlType Rte_ModeType_DcmDiagnosticSessionControl Dcm_GetSecurityLevel Dcm_GetSesCtrlType Dcm_ResetToDefaultSession Can_HostTransmitToken Can_HostCompleteTransmit CanIf_GetControllerRxErrorCounter CanIf_GetControllerTxErrorCounter CanTp_CancelReceive CanTp_CancelTransmit Com_TriggerIPDUSend ComM_GetInhibitionStatus ComM_SetECUGroupClassification ComM_GetCurrentPNCComMode ComM_EcuM_WakeUpIndication".split_whitespace().map(str::to_owned));
-    names.extend("COM_H COMSTACK_TYPES_H COMSTACK_CFG_H ECU_TARGET_H ECU_HOST_BATCH_H ECU_STATUS_H AUTOSAR_OS_TARGET_H AUTOSAR_OS_H AUTOSAR_OS_TIME_H STD_HIGH STD_LOW STD_ACTIVE STD_IDLE STD_ON STD_OFF COM_SERVICE_NOT_AVAILABLE COM_BUSY COM_UNINIT COM_INIT ECU_TARGET_UNPREPARED ECU_TARGET_INITIALIZING ECU_TARGET_READY ECU_TARGET_FAILED ECU_TARGET_CLOSED ECU_TARGET_OUTPUT_CAPACITY ECU_BATCH_CAPACITY ECU_BATCH_MAX_SPAN ECU_BATCH_LINE_CAPACITY ECU_BATCH_WATCHDOG_MS ECU_BATCH_BEGIN ECU_BATCH_RX ECU_BATCH_COMMIT RTE_MEMMAP_ACTIVE RTE_MEMMAP_HEADER_CHECK Ecu_TargetIsOwner Ecu_TargetCheckLifecycleContext Com_SendSignal Com_ReceiveSignal PduIdType PduLengthType PduInfoType BufReq_ReturnType TpDataStateType RetryInfoType NetworkHandleType Com_StatusType Com_SignalIdType Com_IpduGroupIdType Com_PduConfigType Com_NotificationType Com_TransmitType Com_ConfigType OS_MAX_TASKS OS_MAX_PRIORITY OS_MAX_ACTIVATIONS OS_BASIC_TASK OS_EXTENDED_TASK OS_MAX_RESOURCES OS_MAX_INTERNAL_RESOURCES OS_MAX_INTERRUPTS OS_MAX_ISR_PRIORITY OS_SCHEDULE_FULL OS_SCHEDULE_NON".split_whitespace().map(str::to_owned));
+    names.extend("RTE_CORE RTE_MAIN_H RTE_CFG_H RTE_E_OK RTE_E_LIMIT Rte_Start Rte_Stop SchM_ConfigType SchM_Init SchM_Start SchM_StartTiming SchM_Deinit RTE_CODE SCHM_LIFECYCLE_UNALLOCATED SCHM_LIFECYCLE_INITIALIZED SCHM_LIFECYCLE_STARTED SCHM_LIFECYCLE_TIMING SCHM_LIFECYCLE_RETIRED schm_lifecycle RTE_E_UNCONNECTED rte_started rte_allocated SchM_Switch_Dcm_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl Dcm_SecLevelType Dcm_SesCtrlType Rte_ModeType_DcmDiagnosticSessionControl Dcm_GetSecurityLevel Dcm_GetSesCtrlType Dcm_ResetToDefaultSession Can_HostTransmitToken Can_HostCompleteTransmit CanIf_GetControllerRxErrorCounter CanIf_GetControllerTxErrorCounter CanTp_CancelReceive CanTp_CancelTransmit Com_TriggerIPDUSend ComM_GetInhibitionStatus ComM_SetECUGroupClassification ComM_GetCurrentPNCComMode ComM_EcuM_WakeUpIndication".split_whitespace().map(str::to_owned));
+    names.extend("COM_H COMSTACK_TYPES_H COMSTACK_CFG_H ECU_TARGET_H ECU_HOST_BATCH_H ECU_STATUS_H AUTOSAR_OS_TARGET_H AUTOSAR_OS_H AUTOSAR_OS_TIME_H STD_HIGH STD_LOW STD_ACTIVE STD_IDLE STD_ON STD_OFF COM_SERVICE_NOT_AVAILABLE COM_BUSY COM_UNINIT COM_INIT ECU_TARGET_UNPREPARED ECU_TARGET_INITIALIZING ECU_TARGET_READY ECU_TARGET_FAILED ECU_TARGET_CLOSED ECU_TARGET_OUTPUT_CAPACITY ECU_BATCH_CAPACITY ECU_BATCH_MAX_SPAN ECU_BATCH_LINE_CAPACITY ECU_BATCH_WATCHDOG_MS ECU_BATCH_BEGIN ECU_BATCH_RX ECU_BATCH_COMMIT RTE_MEMMAP_ACTIVE Ecu_TargetIsOwner Ecu_TargetCheckLifecycleContext Com_SendSignal Com_ReceiveSignal PduIdType PduLengthType PduInfoType BufReq_ReturnType TpDataStateType RetryInfoType NetworkHandleType Com_StatusType Com_SignalIdType Com_IpduGroupIdType Com_PduConfigType Com_NotificationType Com_TransmitType Com_ConfigType OS_MAX_TASKS OS_MAX_PRIORITY OS_MAX_ACTIVATIONS OS_BASIC_TASK OS_EXTENDED_TASK OS_MAX_RESOURCES OS_MAX_INTERNAL_RESOURCES OS_MAX_INTERRUPTS OS_MAX_ISR_PRIORITY OS_SCHEDULE_FULL OS_SCHEDULE_NON".split_whitespace().map(str::to_owned));
     for index in 0..plan
         .components
         .iter()
@@ -1711,25 +1764,108 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
         names.insert(format!("INT{width}_C"));
         names.insert(format!("UINT{width}_C"));
     }
+    for module in ["COM", "OS"] {
+        for field in ["MAJOR", "MINOR", "REVISION"] {
+            names.insert(format!("{module}_AR_RELEASE_{field}_VERSION"));
+        }
+    }
+    names.insert("COM_CFG_H".into());
+    for signal in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| {
+            graph
+                .text(*index, "DEFINITION-REF")
+                .is_some_and(|definition| definition.ends_with("/ComSignal"))
+        })
+    {
+        if !names.insert(super::com::symbolic_name(&graph.elements[signal].object)) {
+            return Err(fail(graph, signal, "CONTRACT_NAME_COLLISION"));
+        }
+    }
     for component in &plan.components {
         let type_name = component
             .header
             .trim_start_matches("include/Rte_")
             .trim_end_matches(".h");
-        names.insert(format!("RTE_{type_name}_CODE"));
-        names.insert(format!("RTE_{type_name}_CODE_ACTIVE"));
-        if component.data_ports.iter().any(|port| port.read)
-            || component.diagnostic_session_port.is_some()
-        {
-            names.insert(format!("RTE_{type_name}_VAR_CLEARED_UNSPECIFIED"));
+        names.insert(format!("{type_name}_MEMMAP_ACTIVE"));
+        for segment in ["CODE", "VAR_CLEARED_UNSPECIFIED"] {
+            for suffix in ["", "_ACTIVE"] {
+                names.insert(format!("{type_name}_{segment}{suffix}"));
+            }
+            for direction in ["START", "STOP"] {
+                names.insert(format!("{type_name}_{direction}_SEC_{segment}"));
+            }
+        }
+        for segment in [
+            "CODE",
+            "VAR_CLEARED_UNSPECIFIED",
+            "VAR_INIT_UNSPECIFIED",
+            "CONST_UNSPECIFIED",
+        ] {
+            names.insert(format!("RTE_{type_name}_{segment}"));
+            names.insert(format!("RTE_{type_name}_{segment}_ACTIVE"));
+            for direction in ["START", "STOP"] {
+                names.insert(format!("RTE_{type_name}_{direction}_SEC_{segment}"));
+            }
         }
     }
-    for (path, native) in &plan.array_types {
-        if super::contracts::reserved_identifier(native)
-            || runtime_namespace(native)
-            || !names.insert(native.clone())
+    names.extend(
+        super::rte_types::STATUSES
+            .iter()
+            .map(|(name, _)| (*name).to_owned()),
+    );
+    names.extend(
+        [
+            "RTE_APPLICATION_HEADER_FILE",
+            "RTE_DATA_HANDLE_TYPE_H",
+            "SCHM_CAN_TYPE_H",
+            "SCHM_CANIF_TYPE_H",
+            "SCHM_CANTP_TYPE_H",
+            "SCHM_COM_TYPE_H",
+            "SCHM_COMM_TYPE_H",
+            "SCHM_BSWM_TYPE_H",
+            "SCHM_DCM_TYPE_H",
+            "SCHM_DET_TYPE_H",
+            "SCHM_PDUR_TYPE_H",
+            "SCHM_LSDUR_TYPE_H",
+            "Rte_Instance",
+            "Rte_IsInfrastructureError",
+            "Rte_HasOverlayedError",
+            "Rte_ApplicationError",
+        ]
+        .into_iter()
+        .map(str::to_owned),
+    );
+    for component in &plan.components {
+        let scope = super::short_name(&component.component);
+        for prefix in ["Rte_CDS", "Rte_Instance", "Rte_Inst"] {
+            names.insert(format!("{prefix}_{scope}"));
+        }
+        names.insert(format!("RTE_{scope}_TYPE_H"));
+        for runnable in &component.runnables {
+            names.insert(format!(
+                "RTE_RUNNABLE_{}",
+                super::short_name(&runnable.path)
+            ));
+        }
+        for port in &component.data_ports {
+            names.insert(format!("Rte_InitValue_{}_{}", port.name, port.element_name));
+        }
+    }
+    for datatype in plan.types.iter().filter(|datatype| {
+        datatype.array_length.is_some() || datatype.symbol != datatype.native_type
+    }) {
+        if c_name(&datatype.symbol) != datatype.symbol
+            || super::contracts::reserved_identifier(&datatype.symbol)
+            || runtime_namespace(&datatype.symbol)
+            || !names.insert(datatype.symbol.clone())
         {
-            return Err(fail(graph, graph.index(path)?, "CONTRACT_NAME_COLLISION"));
+            return Err(fail(
+                graph,
+                graph.index(&datatype.path)?,
+                "CONTRACT_NAME_COLLISION",
+            ));
         }
     }
     let errors: BTreeSet<_> = plan
@@ -1771,6 +1907,8 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
         if super::contracts::reserved_identifier(type_name)
             || reserved_memory_scope(type_name)
             || !filenames.insert(component.header.to_uppercase())
+            || !filenames.insert(format!("INCLUDE/RTE_{}_TYPE.H", type_name.to_uppercase()))
+            || !filenames.insert(format!("INCLUDE/{}_MEMMAP.H", type_name.to_uppercase()))
             || !names.insert(guard.clone())
         {
             return Err(fail(graph, index, "CONTRACT_NAME_COLLISION"));
@@ -1855,7 +1993,11 @@ pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
                 return_type: "Std_ReturnType".into(),
                 arguments: vec![ContractArgument {
                     name: "data".into(),
-                    native_type: if port.read { "uint32 *" } else { "uint32" }.into(),
+                    native_type: if port.read {
+                        format!("{} *", port.c_type)
+                    } else {
+                        port.c_type.clone()
+                    },
                     direction: if port.read { "OUT" } else { "IN" }.into(),
                 }],
                 declaration_owner: component.header.clone(),

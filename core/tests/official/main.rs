@@ -15,5 +15,6 @@ use support::{
 mod definitions;
 mod os_descriptions;
 mod reference_inputs;
+mod rte_descriptions;
 mod rules;
 mod schema;

@@ -86,6 +86,30 @@ pub(super) fn descriptor_only(
         return matches!(lexeme.trim(), "false" | "0");
     }
     match name {
+        "RteSchMVersionInfoApi"
+        | "RteDevErrorDetect"
+        | "RteDevErrorDetectUninit"
+        | "RteInExclusiveAreaCheckEnabled"
+        | "RteMeasurementSupport"
+        | "RteValueRangeCheckEnabled"
+        | "RteVfbTraceAnonymousClientEnabled"
+        | "RteVfbTraceEnabled" => matches!(lexeme.trim(), "false" | "0"),
+        "RteBypassSupport" | "RteCalibrationSupport" => lexeme == "NONE",
+        "RteGenerationMode" => lexeme == "COMPATIBILITY_MODE",
+        "RteOptimizationMode" => lexeme == "RUNTIME",
+        "RteCodeVendorId" => lexeme.parse::<u16>() == Ok(0),
+        "RteInitializationStrategy" => {
+            let Some(container) = graph.ancestor(index, "ECUC-CONTAINER-VALUE") else {
+                return false;
+            };
+            match super::schedule::value(graph, container, "RteSectionInitializationPolicy", false)
+            {
+                Some("INIT") => lexeme == "RTE_INITIALIZATION_STRATEGY_AT_DATA_DECLARATION",
+                Some("CLEARED") => lexeme == "RTE_INITIALIZATION_STRATEGY_NONE",
+                _ => false,
+            }
+        }
+        "RteSectionInitializationPolicy" => matches!(lexeme, "INIT" | "CLEARED"),
         // The existing controlled virtual ECU contract has one core, ID 0.
         // Physical core numbering is metadata, not a multicore runtime capability.
         "EcucCoreId" => {
