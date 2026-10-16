@@ -13,5 +13,6 @@ mod c_analysis;
 mod delivery;
 mod host;
 mod integration;
+mod links;
 mod runtime_contracts;
 mod sanitizers;
