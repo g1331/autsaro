@@ -85,7 +85,8 @@ jobs:
       fail-fast: false
       matrix:
         # Oldest and newest on Linux, newest on Windows; extended.yml runs the rest of the
-        # matrix after merging. native-delivery runs the shipped ecu-tool on 3.11–3.14.
+        # matrix after merging. native-delivery runs all samples on receiver 3.11 only;
+        # these Python jobs cover newer ecu_tools interpreters, Extended the full receiver matrix.
         include:
           - os: ubuntu-24.04
             python: '3.12'
@@ -574,23 +575,20 @@ jobs:
       # The generated CMake build (uv-locked CMake and Ninja) compiles the target.json closure.
       - name: CMake build matches the sealed ECU build
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_cmake_build.py
-      # Every supported receiver interpreter runs the moved package; a failing version does not hide the others.
-      - name: Moved packages build and run with receiver Python 3.11–3.14
+      # Oldest supported receiver runs every sample; Extended covers the full interpreter matrix.
+      - name: All moved samples build and run with receiver Python 3.11
         shell: python
         run: |
           import os, subprocess, sys
-          failed = []
-          for version in ('3.11', '3.12', '3.13', '3.14'):
-              subprocess.run(['uv', 'python', 'install', '--no-bin', version], check=True)
-              receiver = subprocess.check_output(['uv', 'python', 'find', '--no-project', '--managed-python', version], text=True).strip()
-              print(f'::group::Receiver Python {version}: {receiver}', flush=True)
-              result = subprocess.run(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
-                  env={**os.environ, 'AUTOSAR_RECEIVER_PYTHON': receiver})
-              print('::endgroup::', flush=True)
-              if result.returncode:
-                  print(f'::error title=Receiver Python {version}::The moved packages did not build and run with {receiver}', flush=True)
-                  failed.append(version)
-          sys.exit('Receiver Python failed: ' + ', '.join(failed) if failed else 0)
+          subprocess.run(['uv', 'python', 'install', '--no-bin', '3.11'], check=True)
+          receiver = subprocess.check_output(['uv', 'python', 'find', '--no-project', '--managed-python', '3.11'], text=True).strip()
+          print(f'Receiver Python 3.11: {receiver}', flush=True)
+          result = subprocess.run(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
+              env={**os.environ, 'AUTOSAR_RECEIVER_PYTHON': receiver,
+                   'AUTOSAR_RECEIVER_SAMPLES': 'standard-ecu user-application component-pipeline no-diagnostic'})
+          if result.returncode:
+              print(f'::error title=Receiver Python 3.11::The moved packages did not build and run with {receiver}', flush=True)
+          sys.exit(result.returncode)
 
   c-analysis-samples:
     needs: c-analysis-prepare

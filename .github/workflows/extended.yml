@@ -1,7 +1,7 @@
 name: Extended checks
 # Checks outside the required pull request layer (checks.yml), selected by the
 # changed paths: the rest of the Python and UI matrices, Desktop acceptance and
-# the official archive comparison. Runs after every push to master; a pull
+# the official archive comparison and the full offline receiver matrix. Runs after every push to master; a pull
 # request runs Desktop acceptance and the official comparison for their paths,
 # and everything once it carries the full-ci label. Not part of the required checks.
 on:
@@ -29,6 +29,7 @@ jobs:
       ui: ${{ steps.select.outputs.ui }}
       desktop: ${{ steps.select.outputs.desktop }}
       official: ${{ steps.select.outputs.official }}
+      receiver: ${{ steps.select.outputs.receiver }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,12 +56,14 @@ jobs:
               return any(path.startswith(prefixes) for path in files)
           # A manual run, the full-ci label, an unknown baseline or a change to this workflow selects everything.
           if files is None or '.github/workflows/extended.yml' in files:
-              selected = dict.fromkeys(['python', 'ui', 'desktop', 'official'], True)
+              selected = dict.fromkeys(['python', 'ui', 'desktop', 'official', 'receiver'], True)
           else:
               # Pull requests already run Linux and Windows; the other interpreters and macOS differ only in these sources.
               push = event != 'pull_request'
               selected = {
                   'python': push and touched('tools/', 'tests/python/', 'scripts/', 'pyproject.toml', 'uv.lock', '.python-version', '.github/workflows/checks.yml'),
+                  'receiver': push and touched('core/', 'runtime/', 'tools/', 'tests/python/', 'Cargo.toml', 'Cargo.lock',
+                      'rust-toolchain.toml', 'pyproject.toml', 'uv.lock', '.python-version', '.github/actions/', '.github/workflows/checks.yml'),
                   'ui': push and touched('ui/', '.node-version', '.github/workflows/checks.yml'),
                   'desktop': touched('ui/', 'src-tauri/', 'tests/desktop/', '.github/workflows/desktop.yml')
                       or push and touched('core/', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.node-version', '.github/actions/'),
@@ -106,6 +109,66 @@ jobs:
       - run: uv run --locked ruff check tools tests/python scripts
       - run: uv run --locked python -B -m unittest discover -s tests/python
       - run: uv build --out-dir build/python
+  receiver:
+    needs: changes
+    if: needs.changes.outputs.receiver == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/core-build-dependencies
+        with:
+          linux-packages: build-essential
+      - uses: ./.github/actions/native-analysis-compiler
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: receiver-cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+      - name: Select native contract tools
+        shell: python
+        run: |
+          import os, shutil, subprocess
+          from pathlib import Path
+          tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_NM': 'nm', 'AUTOSAR_GIT': 'git'}
+          # The project environment's interpreter, as used by the development tooling.
+          python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
+              check=True, capture_output=True, text=True).stdout.strip()
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for variable, name in tools.items():
+                  output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
+              output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
+      - name: Generate complete receiver samples
+        run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
+      - name: All moved samples build and run with receiver Python 3.11–3.14
+        shell: python
+        run: |
+          import os, subprocess, sys
+          failed = []
+          for version in ('3.11', '3.12', '3.13', '3.14'):
+              subprocess.run(['uv', 'python', 'install', '--no-bin', version], check=True)
+              receiver = subprocess.check_output(['uv', 'python', 'find', '--no-project', '--managed-python', version], text=True).strip()
+              print(f'::group::Receiver Python {version}: {receiver}', flush=True)
+              result = subprocess.run(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
+                  env={**os.environ, 'AUTOSAR_RECEIVER_PYTHON': receiver, 'AUTOSAR_RECEIVER_SAMPLES': 'standard-ecu user-application component-pipeline no-diagnostic'})
+              print('::endgroup::', flush=True)
+              if result.returncode:
+                  print(f'::error title=Receiver Python {version}::The moved packages did not build and run with {receiver}', flush=True)
+                  failed.append(version)
+          sys.exit('Receiver Python failed: ' + ', '.join(failed) if failed else 0)
+
   ui:
     needs: changes
     if: needs.changes.outputs.ui == 'true'
@@ -135,7 +198,7 @@ jobs:
     uses: ./.github/workflows/acceptance.yml
   result:
     name: Extended checks result
-    needs: [changes, python, ui, desktop, official]
+    needs: [changes, python, ui, desktop, official, receiver]
     if: ${{ always() && needs.changes.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
