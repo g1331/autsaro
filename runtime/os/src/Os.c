@@ -3,6 +3,109 @@
 #include "Os_Backend.h"
 const Os_TargetConfig *Os_Config;
 static volatile Os_Atomic32 start_called;
+size_t Os_ResourceIndex(const Os_TargetConfig *config, ResourceType id)
+{
+    size_t index = 0u;
+    while ((index < config->resource_count) && (config->resources[index].id != id)) {
+        ++index;
+    }
+    return index;
+}
+size_t Os_ResourceRoot(const Os_TargetConfig *config, size_t index)
+{
+    size_t steps = 0u;
+    while ((index < config->resource_count) && (config->resources[index].linked != 0u) &&
+           (steps < config->resource_count)) {
+        index = Os_ResourceIndex(config, config->resources[index].link);
+        ++steps;
+    }
+    return ((index < config->resource_count) && (config->resources[index].linked == 0u))
+               ? index
+               : config->resource_count;
+}
+/* Highest Task or ISR priority among the accessors of every member of the
+ * LINKED group rooted at `root`, and the Tasks among them. Every ISR level is
+ * above every Task level on this target. */
+static StatusType group_access(const Os_TargetConfig *config,
+                               size_t root,
+                               uint32_t *tasks,
+                               uint8_t *highest)
+{
+    uint32_t isrs = 0u;
+    size_t i;
+    *tasks = 0u;
+    *highest = 0u;
+    for (i = 0u; i < config->resource_count; ++i) {
+        if (Os_ResourceRoot(config, i) == root) {
+            *tasks |= config->resources[i].task_access;
+            isrs |= config->resources[i].isr_access;
+        }
+    }
+    for (i = 0u; (isrs == 0u) && (i < config->task_count); ++i) {
+        if (((*tasks & (1u << config->tasks[i].id)) != 0u) &&
+            (config->tasks[i].priority > *highest)) {
+            *highest = config->tasks[i].priority;
+        }
+    }
+    for (i = 2u; i < OS_MAX_INTERRUPTS; ++i) {
+        if ((isrs & ((uint32_t)1u << i)) != 0u) {
+            const uint8_t priority = (config->interrupts == NULL)
+                                         ? OS_MAX_ISR_PRIORITY
+                                         : config->interrupts->priorities[i];
+            if (priority == 0u) {
+                return E_OS_VALUE;
+            }
+            if (priority > *highest) {
+                *highest = priority;
+            }
+        }
+    }
+    return E_OK;
+}
+static StatusType validate_resource(const Os_TargetConfig *config,
+                                    size_t index,
+                                    uint8_t highest_task)
+{
+    const Os_ResourceConfig *resource = &config->resources[index];
+    const size_t root = Os_ResourceRoot(config, index);
+    uint32_t task_mask = 0u;
+    uint32_t group_tasks = 0u;
+    uint8_t highest_access = 0u;
+    size_t j;
+    for (j = 0u; j < config->task_count; ++j) {
+        task_mask |= 1u << config->tasks[j].id;
+    }
+    if ((resource->id >= OS_MAX_RESOURCES) || (resource->ceiling == 0u) ||
+        (resource->ceiling > ((resource->isr_access != 0u) ? 31u : OS_MAX_PRIORITY)) ||
+        ((resource->isr_access & 3u) != 0u) || (root == config->resource_count) ||
+        (config->resources[root].ceiling != resource->ceiling) ||
+        ((config->resources[root].isr_access == 0u) != (resource->isr_access == 0u)) ||
+        ((resource->task_access == 0u) && (resource->isr_access == 0u)) ||
+        (((uint32_t)resource->task_access & ~task_mask) != 0u) ||
+        ((resource->isr_access & config->category1_isrs) != 0u) ||
+        (group_access(config, root, &group_tasks, &highest_access) != E_OK) ||
+        (resource->ceiling < highest_access)) {
+        return E_OS_VALUE;
+    }
+    if ((config->use_res_scheduler != 0u) && (resource->id == RES_SCHEDULER) &&
+        ((resource->linked != 0u) || (resource->task_access != task_mask) ||
+         (resource->isr_access != 0u) || (resource->ceiling != highest_task))) {
+        return E_OS_VALUE;
+    }
+    for (j = 0u; j < config->task_count; ++j) {
+        const Os_TaskConfig *task = &config->tasks[j];
+        if ((resource->isr_access == 0u) && ((group_tasks & (1u << task->id)) == 0u) &&
+            (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
+            return E_OS_VALUE;
+        }
+    }
+    for (j = 0u; j < index; ++j) {
+        if (resource->id == config->resources[j].id) {
+            return E_OS_ID;
+        }
+    }
+    return E_OK;
+}
 StatusType Os_TargetPrepare(const Os_TargetConfig *config)
 {
     size_t i, j;
@@ -125,63 +228,9 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config)
         }
     }
     for (i = 0u; i < config->resource_count; ++i) {
-        const Os_ResourceConfig *resource = &config->resources[i];
-        uint32_t task_mask = 0u;
-        uint8_t highest_access = 0u;
-        if ((resource->id >= OS_MAX_RESOURCES) || (resource->ceiling == 0u) ||
-            (resource->ceiling > ((resource->isr_access != 0u) ? 31u : OS_MAX_PRIORITY)) ||
-            ((resource->isr_access & 3u) != 0u)) {
-            return E_OS_VALUE;
-        }
-        for (j = 0u; j < config->task_count; ++j) {
-            task_mask |= 1u << config->tasks[j].id;
-            if (((resource->task_access & (1u << config->tasks[j].id)) != 0u) &&
-                (config->tasks[j].priority > highest_access)) {
-                highest_access = config->tasks[j].priority;
-            }
-        }
-        if (resource->isr_access != 0u) {
-            /* Every ISR level is above every Task level on this target. */
-            highest_access = 0u;
-        }
-        for (j = 2u; j < OS_MAX_INTERRUPTS; ++j) {
-            if ((resource->isr_access & ((uint32_t)1u << j)) != 0u) {
-                const uint8_t priority = (config->interrupts == NULL)
-                                             ? OS_MAX_ISR_PRIORITY
-                                             : config->interrupts->priorities[j];
-                if (priority == 0u) {
-                    return E_OS_VALUE;
-                }
-                if (priority > highest_access) {
-                    highest_access = priority;
-                }
-            }
-        }
-        if (((resource->task_access == 0u) && (resource->isr_access == 0u)) ||
-            (((uint32_t)resource->task_access & ~task_mask) != 0u) ||
-            ((resource->isr_access & config->category1_isrs) != 0u)) {
-            return E_OS_VALUE;
-        }
-        if ((resource->id == RES_SCHEDULER) &&
-            ((resource->task_access != task_mask) || (resource->isr_access != 0u) ||
-             (resource->ceiling != highest_task))) {
-            return E_OS_VALUE;
-        }
-        if (resource->ceiling < highest_access) {
-            return E_OS_VALUE;
-        }
-        for (j = 0u; j < config->task_count; ++j) {
-            const Os_TaskConfig *task = &config->tasks[j];
-            if ((resource->isr_access == 0u) &&
-                ((resource->task_access & (1u << task->id)) == 0u) &&
-                (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
-                return E_OS_VALUE;
-            }
-        }
-        for (j = 0u; j < i; ++j) {
-            if (resource->id == config->resources[j].id) {
-                return E_OS_ID;
-            }
+        const StatusType status = validate_resource(config, i, highest_task);
+        if (status != E_OK) {
+            return status;
         }
     }
     {
@@ -220,6 +269,13 @@ boolean Os_Implementation_isOsStarted(void)
         return FALSE;
     }
     return InterlockedCompareExchange(&start_called, 0, 0) != 0 ? TRUE : FALSE;
+}
+CoreIdType Os_Implementation_GetCoreID(void)
+{
+    /* Available in every context and before StartOS (Table 7.3, SWS_Os_00625);
+     * the answer has no side effect to ignore while interrupts are disabled. */
+    Os_StackCheck();
+    return OS_CORE_ID_0;
 }
 StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
 {

@@ -10,6 +10,9 @@ typedef TaskType *TaskRefType;
 typedef uint8_t TaskStateType;
 typedef TaskStateType *TaskStateRefType;
 typedef uint8_t AppModeType;
+/** OSEK OS 2.2.3 13.7.3 default application mode, always valid for StartOS;
+ * the generated configuration requires the OsAppMode of this name (ECUC_Os_00022). */
+#define OSDEFAULTAPPMODE ((AppModeType)1u)
 /* Public R24-11 constants; this selected target has one logical core. Their
  * declarations do not enable multicore startup or mode inheritance. */
 #define DONOTCARE          UINT8_MAX

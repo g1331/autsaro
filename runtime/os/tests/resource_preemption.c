@@ -294,6 +294,25 @@ static void task_a(void)
         Os_TargetTrace('r');
         check(ReleaseResource(RES_SCHEDULER) == E_OK);
         check(h_entries == 1u);
+    } else if (strcmp(scenario, "scheduler-ordinary") == 0) {
+        /* Without OsUseResScheduler a configured RES_SCHEDULER is an ordinary
+         * resource: its ceiling, not the scheduler lock, holds back H. */
+        check(GetResource(RES_SCHEDULER) == E_OK);
+        check_priority(2u, 1u, 0u);
+        check(ActivateTask(2u) == E_OK);
+        check(h_entries == 1u);
+        check(ReleaseResource(RES_SCHEDULER) == E_OK);
+    } else if (strcmp(scenario, "linked") == 0) {
+        /* Resource 6 is LINKED to RES_SCHEDULER: one resource under two names. */
+        check(GetResource(6u) == E_OK);
+        check_priority(5u, 1u, 0u);
+        check((info(0u).resources[0] == RES_SCHEDULER) &&
+              (GetResource(RES_SCHEDULER) == E_OS_ACCESS));
+        check(ActivateTask(2u) == E_OK);
+        check(h_entries == 0u);
+        Os_TargetTrace('r');
+        check(ReleaseResource(6u) == E_OK);
+        check((h_entries == 1u) && (ReleaseResource(RES_SCHEDULER) == E_OS_NOFUNC));
     } else if (strcmp(scenario, "masked-isr") == 0) {
         check(GetResource(4u) == E_OK);
         check_priority(31u, 1u, 0u);
@@ -378,16 +397,17 @@ int main(int argc, char **argv)
                              {3u, "D", task_d, 5u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {4u, "E", task_e, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
                              {5u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_ResourceConfig resources[] = {{0u, 3u, 5u, 0u},
-                                     {1u, 4u, 5u, 0u},
-                                     {2u, 4u, 5u, 0u},
-                                     {3u, 2u, 2u, 0u},
-                                     {4u, 31u, 1u, 0x80000000u},
-                                     {5u, 31u, 0u, 0x80000000u},
-                                     {RES_SCHEDULER, 5u, 63u, 0u}};
+    Os_ResourceConfig resources[] = {{0u, 3u, 5u, 0u, 0u, 0u},
+                                     {1u, 4u, 5u, 0u, 0u, 0u},
+                                     {2u, 4u, 5u, 0u, 0u, 0u},
+                                     {3u, 2u, 2u, 0u, 0u, 0u},
+                                     {4u, 31u, 1u, 0x80000000u, 0u, 0u},
+                                     {5u, 31u, 0u, 0x80000000u, 0u, 0u},
+                                     {RES_SCHEDULER, 5u, 63u, 0u, 0u, 0u},
+                                     {6u, 5u, 1u, 0u, 1u, RES_SCHEDULER}};
     Os_InternalResourceConfig internal[] = {{1u, 3u}, {2u, 5u}};
     Os_TargetConfig config = {
-        tasks, 6u, 262144u, resources, 7u, internal, 2u, 0u, 0u, 0u, NULL, NULL, NULL};
+        tasks, 6u, 262144u, resources, 7u, internal, 2u, 0u, 0u, 0u, NULL, NULL, NULL, 0u};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "non";
     if ((strcmp(scenario, "non") == 0) || (strcmp(scenario, "oracle-non") == 0)) {
@@ -442,9 +462,26 @@ int main(int argc, char **argv)
     }
     if (strcmp(scenario, "scheduler-unconfigured") == 0) {
         config.resource_count = 6u;
+    } else if (strncmp(scenario, "linked", 6u) == 0) {
+        config.resource_count = 8u;
+        config.use_res_scheduler = 1u;
+        if (strcmp(scenario, "linked-ceiling") == 0) {
+            resources[7].ceiling = 4u;
+        } else if (strcmp(scenario, "linked-cycle") == 0) {
+            resources[7].link = 6u;
+        }
+    } else if (strncmp(scenario, "scheduler-", 10u) == 0) {
+        /* Task A alone uses RES_SCHEDULER, at A's own priority. */
+        resources[6].task_access = 1u;
+        resources[6].ceiling = 2u;
+        config.use_res_scheduler = (strcmp(scenario, "scheduler-reserved") == 0) ? 1u : 0u;
+    } else {
+        config.use_res_scheduler = 1u;
     }
     prepared = Os_TargetPrepare(&config);
     if ((strcmp(scenario, "bad-schedule") == 0) || (strcmp(scenario, "non-internal-low") == 0) ||
+        (strcmp(scenario, "linked-ceiling") == 0) || (strcmp(scenario, "linked-cycle") == 0) ||
+        (strcmp(scenario, "scheduler-reserved") == 0) ||
         ((strncmp(scenario, "internal-", 9u) == 0) && (strcmp(scenario, "internal-preempt") != 0) &&
          (strcmp(scenario, "internal-resource") != 0))) {
         const StatusType expected = ((strcmp(scenario, "internal-duplicate") == 0) ||

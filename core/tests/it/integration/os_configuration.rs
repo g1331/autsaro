@@ -11,7 +11,7 @@ fn add_os_container(sources: &mut [InputSource], name: &str, definition: &str, c
     xml_edit(
         sources,
         "ecuc.arxml",
-        |node| named(node, "ECUC-CONTAINER-VALUE", "DefaultMode"),
+        |node| named(node, "ECUC-CONTAINER-VALUE", "OSDEFAULTAPPMODE"),
         |text| {
             format!(
                 "<ECUC-CONTAINER-VALUE><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">{OS}/{definition}</DEFINITION-REF>{content}</ECUC-CONTAINER-VALUE>{text}"
@@ -73,7 +73,7 @@ fn unselected_os_features_have_no_definition() {
             "OsTask",
             "/Configuration/Os/Task_Ecu",
             "OsTaskResourceRef",
-            "REFERENCE:/Configuration/Os/DefaultMode",
+            "REFERENCE:/Configuration/Os/OSDEFAULTAPPMODE",
         ),
         // Rejects: ECUC_Os_01019
         (
@@ -335,6 +335,203 @@ fn explicit_resources_and_table_task_activation_are_rejected() {
     );
 }
 
+/// Appends a copy of the OS container `original` named `copy`.
+fn copy_os_container(sources: &mut [InputSource], original: &str, copy: &str) {
+    xml_edit(
+        sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", original),
+        |text| {
+            let renamed = text.replacen(
+                &format!("<SHORT-NAME>{original}</SHORT-NAME>"),
+                &format!("<SHORT-NAME>{copy}</SHORT-NAME>"),
+                1,
+            );
+            format!("{text}{renamed}")
+        },
+    );
+}
+
+/// The generator accepts the single-task SC1 shape of the reference ECU: one
+/// Extended, fully preemptive task with one activation, three events and one
+/// application mode; one 1 ms software counter; autostarted cyclic SetEvent
+/// alarms or repeating one-point schedule tables. Other values of these
+/// parameters are refused at the owning container.
+#[test]
+fn sc1_shapes_outside_the_reference_ecu_are_rejected() {
+    const TASK: &str = "/Configuration/Os/Task_Ecu";
+    const COUNTER: &str = "/Configuration/Os/SystemCounter";
+    for (owner, name, value, code, object) in [
+        // Rejects: ECUC_Os_00074
+        ("Task_Ecu", "OsTaskActivation", "2", "TASK_PROFILE", TASK),
+        // Rejects: ECUC_Os_00075
+        ("Task_Ecu", "OsTaskPriority", "0", "TASK_PROFILE", TASK),
+        ("Task_Ecu", "OsTaskPriority", "31", "TASK_PROFILE", TASK),
+        // Rejects: ECUC_Os_00076
+        ("Task_Ecu", "OsTaskSchedule", "NON", "TASK_PROFILE", TASK),
+        // Rejects: ECUC_Os_00028
+        (
+            "SystemCounter",
+            "OsCounterMinCycle",
+            "2",
+            "COUNTER_PROFILE",
+            COUNTER,
+        ),
+        // Rejects: ECUC_Os_00029
+        (
+            "SystemCounter",
+            "OsCounterTicksPerBase",
+            "2",
+            "COUNTER_PROFILE",
+            COUNTER,
+        ),
+        // Rejects: ECUC_Os_00030
+        (
+            "SystemCounter",
+            "OsSecondsPerTick",
+            "0.01",
+            "COUNTER_PROFILE",
+            COUNTER,
+        ),
+    ] {
+        let mut sources = single_component_sources();
+        parameter(&mut sources, owner, name, value);
+        rejected_at(&sources, code, "ecuc.arxml", object);
+    }
+    // The alarm period is the period of the RTE events mapped to it; a cycle
+    // that differs is refused at the mapped event.
+    // Rejects: ECUC_Os_00012
+    let mut sources = single_component_sources();
+    parameter(&mut sources, "Alarm_Work", "OsAlarmCycleTime", "2");
+    rejected_at(
+        &sources,
+        "PERIOD_ALARM_CONFLICT",
+        "bsw.arxml",
+        "/AUTOSAR_Can/Can/Behavior/Can_MainFunction_BusOff_1ms",
+    );
+    // Rejects: ECUC_Os_00073
+    let mut sources = single_component_sources();
+    copy_os_container(&mut sources, "Task_Ecu", "Task_Spare");
+    rejected_at(
+        &sources,
+        "SCHEDULE_NOT_UNIQUE",
+        "ecuc.arxml",
+        "/Configuration/Os/Task_Spare",
+    );
+    // Rejects: ECUC_Os_00026
+    let mut sources = single_component_sources();
+    copy_os_container(&mut sources, "SystemCounter", "SpareCounter");
+    rejected_at(
+        &sources,
+        "SCHEDULE_NOT_UNIQUE",
+        "ecuc.arxml",
+        "/Configuration/Os/SpareCounter",
+    );
+    // Rejects: ECUC_Os_00078
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            node.has_tag_name("ECUC-REFERENCE-VALUE")
+                && node.descendants().any(|child| {
+                    child.has_tag_name("VALUE-REF")
+                        && child.text() == Some("/Configuration/Os/Ev_IO")
+                })
+        },
+        |_| String::new(),
+    );
+    rejected_at(&sources, "TASK_PROFILE", "ecuc.arxml", TASK);
+    // Rejects: ECUC_Os_00081
+    let mut sources = single_component_sources();
+    copy_os_container(&mut sources, "OSDEFAULTAPPMODE", "ServiceMode");
+    add_to_container(
+        &mut sources,
+        "Autostart",
+        &format!("{OS}/OsTask/OsTaskAutostart"),
+        "OsTaskAppModeRef",
+        "REFERENCE:/Configuration/Os/ServiceMode",
+        "",
+    );
+    rejected_at(
+        &sources,
+        "TASK_PROFILE",
+        "ecuc.arxml",
+        "/Configuration/Os/Task_Ecu/Autostart",
+    );
+    // Rejects: ECUC_Os_00003
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "Autostart")
+                && node
+                    .ancestors()
+                    .any(|ancestor| named(ancestor, "ECUC-CONTAINER-VALUE", "Alarm_Work"))
+        },
+        |_| String::new(),
+    );
+    rejected_at(
+        &sources,
+        "PERIOD_ALARM_CONFLICT",
+        "ecuc.arxml",
+        "/Configuration/Os/Alarm_Work",
+    );
+    // Rejects: ECUC_Os_00144
+    let mut sources = schedule_table_variant();
+    parameter(
+        &mut sources,
+        "Table_Work",
+        "OsScheduleTableRepeating",
+        "false",
+    );
+    rejected_at(
+        &sources,
+        "PERIOD_SCHEDULE_TABLE_CONFLICT",
+        "ecuc.arxml",
+        "/Configuration/Os/Table_Work",
+    );
+    // Rejects: ECUC_Os_00143
+    let mut sources = schedule_table_variant();
+    copy_os_container(&mut sources, "Point", "SecondPoint");
+    rejected_at(
+        &sources,
+        "PERIOD_SCHEDULE_TABLE_CONFLICT",
+        "ecuc.arxml",
+        "/Configuration/Os/Table_Work",
+    );
+    // Rejects: ECUC_Os_00059
+    let mut sources = schedule_table_variant();
+    copy_os_container(&mut sources, "SetEvent", "SecondSetEvent");
+    rejected_at(
+        &sources,
+        "PERIOD_ALARM_CONFLICT",
+        "ecuc.arxml",
+        "/Configuration/Os/Table_Work/Point",
+    );
+}
+
+/// The single application mode is the mandatory OSDEFAULTAPPMODE that the
+/// generated ECU passes to StartOS; a mode under any other name is refused.
+// Verifies: ECUC_Os_00022
+#[test]
+fn default_application_mode_is_required() {
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| node.has_tag_name("AUTOSAR"),
+        |text| text.replace("OSDEFAULTAPPMODE", "NormalMode"),
+    );
+    rejected_at(
+        &sources,
+        "OS_DEFAULT_APP_MODE_REQUIRED",
+        "ecuc.arxml",
+        "/Configuration/Os/NormalMode",
+    );
+}
+
 /// The generated OS holds only the scheduled alarms and tables, the owner
 /// task's events and its autostart mode; any other object is refused at its
 /// source rather than silently dropped.
@@ -358,7 +555,7 @@ fn unused_os_objects_are_rejected() {
     for (original, extra) in [
         ("Alarm_Work", "Alarm_Spare"),
         ("Ev_Work", "Ev_Spare"),
-        ("DefaultMode", "ServiceMode"),
+        ("OSDEFAULTAPPMODE", "ServiceMode"),
     ] {
         let mut sources = single_component_sources();
         copy(&mut sources, original, extra);

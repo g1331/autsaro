@@ -95,6 +95,38 @@ fn status_guard_and_rejections() {
     }
 }
 
+/// OsUseGetServiceId and OsUseParameterAccess select whether the delivered
+/// `Os_Cfg.h` provides the ErrorHook access macros.
+// Verifies: SWS_Os_00439
+#[test]
+fn error_hook_access_switches_follow_the_configuration() {
+    for (service_id, parameter_access) in [("false", "true"), ("true", "false")] {
+        let mut sources = single_component_sources();
+        parameter(
+            &mut sources,
+            "OperatingSystem",
+            "OsUseGetServiceId",
+            service_id,
+        );
+        parameter(
+            &mut sources,
+            "OperatingSystem",
+            "OsUseParameterAccess",
+            parameter_access,
+        );
+        let scratch = Scratch::new();
+        let (_, files) = project(&sources, &scratch.0, BuildTarget::LinuxX64ControlledV1);
+        let header = file(&files, "generated/include/Os_Cfg.h");
+        for (name, value) in [
+            ("OS_USE_GET_SERVICE_ID", service_id),
+            ("OS_USE_PARAMETER_ACCESS", parameter_access),
+        ] {
+            let define = format!("#define {name} {}", u8::from(value == "true"));
+            assert!(header.contains(&define), "{define}\n{header}");
+        }
+    }
+}
+
 fn os_parameter(node: roxmltree::Node<'_, '_>, definition: &str) -> bool {
     (node.has_tag_name("ECUC-NUMERICAL-PARAM-VALUE")
         || node.has_tag_name("ECUC-TEXTUAL-PARAM-VALUE"))
@@ -235,6 +267,7 @@ fn assert_rejected(sources: &[InputSource], code: &str) {
 /// OPERATING-SYSTEM; GetCounterValue/GetElapsedValue with
 /// TimeInMicrosecondsType arguments and the E_OS_ID/E_OS_VALUE errors of
 /// SWS_Os_00377/SWS_Os_00381/SWS_Os_00391).
+// Verifies: SWS_Os_00560, 91027
 #[test]
 fn counter_service_description() {
     for counter in ["SystemCounter", "AuxClock"] {

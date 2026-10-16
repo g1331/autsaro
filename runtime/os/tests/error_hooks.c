@@ -375,7 +375,7 @@ int main(int argc, char **argv)
         {0u, "owner", owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
         {1u, "basic", basic, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
-    const Os_ResourceConfig resource = {0u, 10u, 1u, 0u};
+    const Os_ResourceConfig resource = {0u, 10u, 1u, 0u, 0u, 0u};
     const Os_CounterConfig counters[2] = {{0u, 15u, 1u, 1u, 1u}, {1u, 15u, 1u, 1u, 0u}};
     const Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_ACTIVATE, 0u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
     const Os_ExpiryAction action = {OS_ALARM_ACTIVATE, 1u, 0u};
@@ -388,7 +388,7 @@ int main(int argc, char **argv)
     Os_TimeConfig time = {
         counters, 2u, &alarm, 1u, 0u, 0u, UINT32_C(0x80000000), &ErrorHook, tables, 2u};
     Os_TargetConfig target = {
-        tasks, 2u, 262144u, &resource, 1u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL};
+        tasks, 2u, 262144u, &resource, 1u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL, 0u};
     if (argc == 2 && strcmp(argv[1], "unconfigured") == 0) {
         target.hooks = NULL;
         time.error_hook = NULL;

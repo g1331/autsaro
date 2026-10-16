@@ -402,18 +402,29 @@ pub(super) fn configure_os(
         super::os_service::files(&counter_name, &counter_symbol),
     )?;
     outputs.emit(super::outputs::OS, "include/Os_Counter.h", counter_header)?;
-    let extended_status = plan
-        .configuration
-        .iter()
-        .find_map(|record| {
+    let os_value = |parameter: &str| {
+        plan.configuration.iter().find_map(|record| {
             record.parameters.iter().find_map(|(name, values)| {
-                name.ends_with("/OsStatus")
+                name.ends_with(parameter)
                     .then(|| values.first().map(String::as_str))
                     .flatten()
             })
         })
-        .unwrap_or("EXTENDED")
-        == "EXTENDED";
+    };
+    let extended_status = os_value("/OsStatus").unwrap_or("EXTENDED") == "EXTENDED";
+    // SWS_Os_00439: the OIL-like switches select the OSError macros of the ErrorHook.
+    let error_access = |macro_name: &str, parameter: &str| {
+        let value = u8::from(matches!(os_value(parameter), Some("true" | "1")));
+        (
+            format!("#ifndef {macro_name}\n#define {macro_name} 1\n#endif"),
+            format!(
+                "#if defined({macro_name}) && ({macro_name} != {value})\n#error {} differs from the validated plan\n#endif\n#ifndef {macro_name}\n#define {macro_name} {value}\n#endif",
+                &parameter[1..]
+            ),
+        )
+    };
+    let service_id = error_access("OS_USE_GET_SERVICE_ID", "/OsUseGetServiceId");
+    let parameter_access = error_access("OS_USE_PARAMETER_ACCESS", "/OsUseParameterAccess");
     let status = if extended_status {
         "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif"
     } else {
@@ -445,6 +456,8 @@ pub(super) fn configure_os(
                 "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
                 status,
             ),
+            super::outputs::Edit::Once(&service_id.0, &service_id.1),
+            super::outputs::Edit::Once(&parameter_access.0, &parameter_access.1),
             super::outputs::Edit::BeforeGuardEnd(&format!(
                 "#include \"Os_Counter.h\"\n#define {task_symbol} 0u\n"
             )),
@@ -602,6 +615,7 @@ pub(super) fn os_configuration(
             .to_owned(),
         ),
         ("RESOURCE_COUNT", usize::from(use_res_scheduler).to_string()),
+        ("USE_RES_SCHEDULER", u8::from(use_res_scheduler).to_string()),
         ("COUNTER_MAX", plan.schedule.counter_maximum.to_string()),
         ("COUNTER_SYMBOL", counter_symbol.to_owned()),
         (

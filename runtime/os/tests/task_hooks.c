@@ -28,6 +28,9 @@ static void task_hook(char code)
 {
     TaskType id = INVALID_TASK;
     TaskStateType state = 99u;
+#ifdef TASK_HOOK_OBSERVER
+    TASK_HOOK_OBSERVER();
+#endif
     TickType value = UINT64_MAX;
     Os_ActivationInfo info;
     check(GetTaskID(&id) == E_OK && id < 3u);
@@ -149,7 +152,8 @@ int main(int argc, char **argv)
                                     0u,
                                     NULL,
                                     configured ? &hooks : NULL,
-                                    NULL};
+                                    NULL,
+                                    0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

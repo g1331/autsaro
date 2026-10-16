@@ -61,18 +61,16 @@ static int permitted(unsigned operation)
     }
     return allowed;
 }
-static void change(unsigned operation, OSServiceIdType service)
+/* SWS_Os_00367: these services return no StatusType, so a refused call
+ * (wrong context, or a saturated nesting counter) is ignored without ErrorHook. */
+static void change(unsigned operation)
 {
     InterruptState *state = owner_state();
-    StatusType status = E_OK;
-    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
     const int running =
         Os_BackendStarted() != 0 && InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
     Os_StackCheck();
     Os_BackendGuardService();
-    if (permitted(operation) == 0) {
-        status = E_OS_CALLEVEL;
-    } else {
+    if (permitted(operation) != 0) {
         if (running != 0) {
             taskENTER_CRITICAL();
         }
@@ -98,9 +96,7 @@ static void change(unsigned operation, OSServiceIdType service)
                 }
                 break;
             case 3u:
-                if (state->all_depth == UINT32_MAX) {
-                    status = E_OS_LIMIT;
-                } else {
+                if (state->all_depth != UINT32_MAX) {
                     if (state->all_depth == 0u) {
                         InterlockedIncrement(&all_owners);
                     }
@@ -115,34 +111,26 @@ static void change(unsigned operation, OSServiceIdType service)
                     }
                 }
                 break;
-            case 5u:
-                if (state->os_depth == UINT32_MAX) {
-                    status = E_OS_LIMIT;
-                } else {
+            default:
+                if (state->os_depth != UINT32_MAX) {
                     if (state->os_depth == 0u) {
                         InterlockedIncrement(&os_owners);
                     }
                     ++state->os_depth;
                 }
                 break;
-            default:
-                status = E_OS_ID;
-                break;
         }
         if (running != 0) {
             taskEXIT_CRITICAL();
         }
     }
-    if (Os_HookContext() != OS_HOOK_ERROR) {
-        (void)Os_ErrorResult(service, status, &arguments);
-    }
 }
-void Os_Implementation_EnableAllInterrupts(void) { change(0u, OSServiceId_EnableAllInterrupts); }
-void Os_Implementation_DisableAllInterrupts(void) { change(1u, OSServiceId_DisableAllInterrupts); }
-void Os_Implementation_ResumeAllInterrupts(void) { change(2u, OSServiceId_ResumeAllInterrupts); }
-void Os_Implementation_SuspendAllInterrupts(void) { change(3u, OSServiceId_SuspendAllInterrupts); }
-void Os_Implementation_ResumeOSInterrupts(void) { change(4u, OSServiceId_ResumeOSInterrupts); }
-void Os_Implementation_SuspendOSInterrupts(void) { change(5u, OSServiceId_SuspendOSInterrupts); }
+void Os_Implementation_EnableAllInterrupts(void) { change(0u); }
+void Os_Implementation_DisableAllInterrupts(void) { change(1u); }
+void Os_Implementation_ResumeAllInterrupts(void) { change(2u); }
+void Os_Implementation_SuspendAllInterrupts(void) { change(3u); }
+void Os_Implementation_ResumeOSInterrupts(void) { change(4u); }
+void Os_Implementation_SuspendOSInterrupts(void) { change(5u); }
 void Os_InterruptRestoreOwner(void)
 {
     InterruptState *state = owner_state();

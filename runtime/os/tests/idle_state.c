@@ -155,7 +155,8 @@ int main(int argc, char **argv)
                                     0u,
                                     NULL,
                                     strcmp(scenario, "unconfigured") == 0 ? NULL : &hooks,
-                                    NULL};
+                                    NULL,
+                                    0u};
     check(Os_TargetPrepare(&target) == E_OK && isOsStarted() == FALSE);
     StartOS(1u);
     return 99;

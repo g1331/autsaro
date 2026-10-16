@@ -1346,15 +1346,14 @@ StatusType Os_BackendResource(ResourceType id, int acquire)
         }
         task = OS_MAX_TASKS + current_interrupt;
     }
-    for (resource = 0u; resource < Os_Config->resource_count; ++resource) {
-        if (Os_Config->resources[resource].id == id) {
-            break;
-        }
-    }
+    resource = Os_ResourceIndex(Os_Config, id);
     if (resource == Os_Config->resource_count) {
         return E_OS_ID;
     }
+    /* Access is granted per configured name; a LINKED name locks and owns its
+     * group root, whose ceiling and ISR sharing it repeats (Os_TargetPrepare). */
     config = &Os_Config->resources[resource];
+    resource = Os_ResourceRoot(Os_Config, resource);
     taskENTER_CRITICAL();
     Os_BackendGuardService();
     depth = resource_depth[task];

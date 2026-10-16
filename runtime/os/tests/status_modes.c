@@ -23,10 +23,11 @@ static void check(bool condition)
 }
 void ErrorHook(StatusType error)
 {
-    static const StatusType statuses[] = {4u, 4u, 5u, 5u, 7u, 7u, 3u, 9u};
-    static const OSServiceIdType services[] = {130u, 132u, 141u, 144u, 142u, 143u, 130u, 130u};
+    static const StatusType statuses[] = {4u, 4u, 5u, 5u, 7u, 7u, 8u, 3u, 9u};
+    static const OSServiceIdType services[] = {
+        130u, 132u, 141u, 144u, 142u, 143u, 142u, 130u, 130u};
     TaskType caller = INVALID_TASK;
-    check(errors < 8u);
+    check(errors < 9u);
     check(error == statuses[errors] && OSErrorGetServiceId() == services[errors]);
     check(GetTaskID(&caller) == E_OK && caller == 0u && GetISRID() == INVALID_ISR);
     switch (errors) {
@@ -50,6 +51,10 @@ void ErrorHook(StatusType error)
             check(OSError_SetAbsAlarm_AlarmID() == 0u && OSError_SetAbsAlarm_Start() == 2u &&
                   OSError_SetAbsAlarm_Cycle() == 0u);
             break;
+        case 6u:
+            check(OSError_SetRelAlarm_AlarmID() == 0u && OSError_SetRelAlarm_Increment() == 0u &&
+                  OSError_SetRelAlarm_Cycle() == 0u);
+            break;
         default:
             check(OSError_ActivateTask_TaskID() == 99u);
             break;
@@ -70,7 +75,7 @@ void ShutdownHook(StatusType error)
 TASK(Peer)
 {
     TaskType caller = INVALID_TASK;
-    check(GetTaskID(&caller) == E_OK && caller == 1u && errors == 8u);
+    check(GetTaskID(&caller) == E_OK && caller == 1u && errors == 9u);
     ++peers;
     ShutdownOS(E_OK);
 }
@@ -85,9 +90,11 @@ TASK(Owner)
     check(SetRelAlarm(0u, 1u, 0u) == 7u && errors == 5u);
     check(SetAbsAlarm(0u, 2u, 0u) == 7u && errors == 6u);
     check(CancelAlarm(0u) == E_OK);
-    check(ActivateTask(99u) == 3u && errors == 7u);
+    /* A zero increment is refused in both status modes (SWS_Os_00304). */
+    check(SetRelAlarm(0u, 0u, 0u) == 8u && errors == 7u);
+    check(ActivateTask(99u) == 3u && errors == 8u);
     DisableAllInterrupts();
-    check(ActivateTask(99u) == 9u && errors == 8u && peers == 0u);
+    check(ActivateTask(99u) == 9u && errors == 9u && peers == 0u);
     EnableAllInterrupts();
     check(TerminateTask() == E_OK);
     check(false);
@@ -103,7 +110,7 @@ int main(void)
     const Os_TimeConfig time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
     const Os_HookConfig hooks = {ErrorHook, NULL, NULL};
     const Os_TargetConfig target = {
-        tasks, 2u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL};
+        tasks, 2u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL, 0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

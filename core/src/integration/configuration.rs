@@ -603,8 +603,6 @@ fn inspect_with_catalog(
         // The runtime always monitors task stacks and always emits ARTI hooks.
         ("OsStackMonitoring", true),
         ("OsUseArti", true),
-        ("OsUseGetServiceId", true),
-        ("OsUseParameterAccess", true),
     ];
     for record in &records {
         let index = graph.index(&record.path)?;

@@ -164,6 +164,19 @@ static void owner(void)
         check(observation_count == 1u);
         inc(0u, 4u);
         state(0u, SCHEDULETABLE_STOPPED);
+    } else if (strcmp(scenario, "absolute-ahead") == 0) {
+        inc(0u, 14u);
+        check(StartScheduleTableAbs(0u, 2u) == E_OK);
+        state(0u, SCHEDULETABLE_RUNNING);
+        inc(0u, 4u);
+        check(observation_count == 0u);
+        inc(0u, 1u);
+        check(observation_count == 1u);
+        inc(0u, 3u);
+        check(observation_count == 2u);
+        state(0u, SCHEDULETABLE_RUNNING);
+        inc(0u, 1u);
+        state(0u, SCHEDULETABLE_STOPPED);
     } else if (strcmp(scenario, "relative-zero") == 0) {
         check(StartScheduleTableRel(0u, 1u) == E_OK);
         inc(0u, 1u);
@@ -255,6 +268,16 @@ static void owner(void)
         counter(0u, 0u);
         counter(1u, 0u);
         counter(7u, 0u);
+    } else if (strcmp(scenario, "alarm-autostart-mode2") == 0) {
+        counter(3u, 0u);
+        inc(2u, 3u);
+        counter(3u, 3u);
+        counter(4u, 0u);
+    } else if (strcmp(scenario, "alarm-autostart-absolute") == 0) {
+        inc(2u, 15u);
+        counter(3u, 0u);
+        inc(2u, 1u);
+        counter(3u, 1u);
     } else if (strcmp(scenario, "action-error") == 0) {
         check(StartScheduleTableRel(0u, 1u) == E_OK);
         inc(0u, 6u);
@@ -337,7 +360,7 @@ int main(int argc, char **argv)
         {3u, 0u, 5u, points, 2u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u}};
     Os_TimeConfig time = {counters, 8u, alarms, 2u, 0u, 0u, 4u, action_error, tables, 4u};
     Os_TargetConfig config = {
-        tasks, 4u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL};
+        tasks, 4u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL, 0u};
     StatusType status;
     scenario = (argc == 2) ? argv[1] : "capacity";
     for (unsigned i = 0u; i < 9u; ++i) {
@@ -368,6 +391,17 @@ int main(int argc, char **argv)
         tables[0].autostart_modes = 2u;
         tasks[0].autostart_modes = 3u;
         tasks[2].autostart_modes = 3u;
+    }
+    if (strcmp(scenario, "alarm-autostart-mode2") == 0) {
+        alarms[0].autostart_modes = 2u;
+        alarms[1].autostart_modes = 1u;
+        tasks[0].autostart_modes = 3u;
+        tasks[2].autostart_modes = 3u;
+    }
+    if (strcmp(scenario, "alarm-autostart-absolute") == 0) {
+        alarms[0].autostart_modes = 1u;
+        alarms[0].absolute = 1u;
+        alarms[0].start = 0u;
     }
     if (strcmp(scenario, "autostart-absolute") == 0) {
         tables[0].autostart_modes = 1u;
@@ -458,6 +492,15 @@ int main(int argc, char **argv)
     if (strcmp(scenario, "bad-mincycle") == 0) {
         counters[0].minimum_cycle = 2u;
     }
+    if (strcmp(scenario, "bad-adjacent-min") == 0) {
+        counters[0].minimum_cycle = 3u;
+        points[0].offset = 3u;
+        points[1].offset = 5u;
+    }
+    if (strcmp(scenario, "bad-adjacent-max") == 0) {
+        points[1].offset = 17u;
+        tables[0].duration = 17u;
+    }
     status = Os_TargetPrepare(&config);
     if (strncmp(scenario, "bad-", 4u) == 0) {
         printf("timing_prepare case=%s status=%u ready=%d\n",
@@ -473,6 +516,6 @@ int main(int argc, char **argv)
         vPortSetInterruptHandler((strcmp(scenario, "category1") == 0) ? 31u : 30u,
                                  service_interrupt);
     }
-    StartOS((strcmp(scenario, "autostart-mode2") == 0) ? 2u : 1u);
+    StartOS(strstr(scenario, "autostart-mode2") != NULL ? 2u : 1u);
     return 97;
 }

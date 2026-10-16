@@ -65,6 +65,32 @@ int main(void)
         (INVALID_OSAPPLICATION != UINT32_MAX)) {
         return 1;
     }
+    /* SWS_Os_00779 and 00787 name distinct values; INVALID_SPINLOCK is 0 (SWS_Os_00791);
+     * OSDEFAULTAPPMODE is a valid StartOS mode (OSEK 13.7.3), not DONOTCARE. */
+    {
+        const ObjectTypeType objects[] = {OBJECT_TASK,
+                                          OBJECT_ISR,
+                                          OBJECT_ALARM,
+                                          OBJECT_RESOURCE,
+                                          OBJECT_COUNTER,
+                                          OBJECT_SCHEDULETABLE};
+        const ProtectionReturnType reactions[] = {PRO_IGNORE,
+                                                  PRO_TERMINATETASKISR,
+                                                  PRO_TERMINATEAPPL,
+                                                  PRO_SHUTDOWN,
+                                                  PRO_PREVENT_ARRIVAL_RATE};
+        for (size_t i = 0u; i < 6u; ++i) {
+            for (size_t j = i + 1u; j < 6u; ++j) {
+                if ((objects[i] == objects[j]) || ((j < 5u) && (reactions[i] == reactions[j]))) {
+                    return 3;
+                }
+            }
+        }
+        if ((INVALID_SPINLOCK != 0u) || (OSDEFAULTAPPMODE == DONOTCARE) ||
+            (OSDEFAULTAPPMODE == 0u)) {
+            return 3;
+        }
+    }
     /* The selected host AccessType representation uses read/write/execute/stack
      * bits 1/2/4/8. All predicates must be independent, including zero access. */
     for (AccessType bits = 0u; bits < 16u; ++bits) {

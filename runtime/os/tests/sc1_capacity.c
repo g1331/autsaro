@@ -165,7 +165,7 @@ int main(int argc, char **argv)
     Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_ACTIVATE, 1u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
     Os_TimeConfig time = {counters, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
     Os_TargetConfig target = {
-        tasks, 0u, 262144u, resources, 0u, internal, 2u, 0u, 0u, 0u, &time, NULL, NULL};
+        tasks, 0u, 262144u, resources, 0u, internal, 2u, 0u, 0u, 0u, &time, NULL, NULL, 1u};
     StatusType expected = E_OK;
     scenario = (argc == 2) ? argv[1] : "bcc1";
     extended = strncmp(scenario, "ecc", 3u) == 0;
@@ -203,6 +203,8 @@ int main(int argc, char **argv)
             (Os_ResourceConfig){scheduler ? RES_SCHEDULER : (ResourceType)i,
                                 scheduler ? highest_priority : 1u,
                                 scheduler ? (uint16_t)((UINT32_C(1) << task_count) - 1u) : 1u,
+                                0u,
+                                0u,
                                 0u};
     }
     if (strcmp(scenario, "bad-manual-owner") == 0) {

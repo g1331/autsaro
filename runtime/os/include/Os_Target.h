@@ -32,6 +32,11 @@ typedef struct {
     uint8_t ceiling;
     uint16_t task_access;
     uint32_t isr_access;
+    /* OsResourceProperty LINKED: nonzero makes this resource another name for
+     * `link` (itself possibly LINKED). The group shares one owner and the root's
+     * ceiling and ISR sharing; the ceiling covers the accessors of every member. */
+    uint8_t linked;
+    ResourceType link;
 } Os_ResourceConfig;
 typedef struct {
     uint8_t id;
@@ -78,6 +83,10 @@ typedef struct {
     const Os_HookConfig *hooks;
     /* NULL selects a flat, nonpreempting application ISR configuration. */
     const Os_IsrConfig *interrupts;
+    /* OsUseResScheduler: nonzero reserves RES_SCHEDULER for the scheduler lock
+     * (STANDARD, all Tasks, highest Task ceiling); zero lets a configured
+     * RES_SCHEDULER behave as any other resource (SWS_Os_00854). */
+    uint8_t use_res_scheduler;
 } Os_TargetConfig;
 /** Prepare one process-local target before StartOS.
  * @param config Static configuration retained for the lifetime of the process.

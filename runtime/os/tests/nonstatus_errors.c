@@ -141,7 +141,8 @@ int main(int argc, char **argv)
                                     0u,
                                     strcmp(scenario, "alarm") == 0 ? &time : NULL,
                                     &hooks,
-                                    NULL};
+                                    NULL,
+                                    0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

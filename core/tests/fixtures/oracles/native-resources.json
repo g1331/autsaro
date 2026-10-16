@@ -108,6 +108,18 @@
     "stderr": ""
   },
   {
+    "scenario": "scheduler-ordinary",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=5 rejected=0 error=0\nSTACK role=D tid=3390027 low=124140835692544 high=124140835954688 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140835943144 observations=1 buffer_low=0 buffer_high=0 context=linux-x86_64-ucontext valid=0\nSTACK role=C tid=3390026 low=124140835954688 high=124140836216832 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140836205352 observations=2 buffer_low=0 buffer_high=0 context=linux-x86_64-ucontext valid=0\nSTACK role=T tid=3390028 low=124140835430400 high=124140835692544 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140835679952 observations=28 buffer_low=107684066604576 buffer_high=107684066608672 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390029 low=124140835168256 high=124140835430400 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140835418480 observations=2 buffer_low=107684066608672 buffer_high=107684066612768 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390030 low=124140832686080 high=124140832948224 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140832935664 observations=6 buffer_low=107684066612768 buffer_high=107684066616864 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390031 low=124140832423936 high=124140832686080 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140832674160 observations=2 buffer_low=107684066616864 buffer_high=107684066620960 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390032 low=124140832161792 high=124140832423936 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140832412016 observations=2 buffer_low=107684066620960 buffer_high=107684066625056 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390034 low=124140831899648 high=124140832161792 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140832149880 observations=6 buffer_low=107684066625056 buffer_high=107684066629152 context=linux-x86_64-ucontext valid=1\nSTACK role=B tid=3390035 low=124140831637504 high=124140831899648 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140831887616 observations=5 buffer_low=107684066670112 buffer_high=107684066674208 context=linux-x86_64-ucontext valid=1\nSTACK role=I tid=3390037 low=124140831375360 high=124140831637504 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140831625584 observations=2 buffer_low=107684066674208 buffer_high=107684066678304 context=linux-x86_64-ucontext valid=1\nSTACK role=S tid=3390038 low=124140831113216 high=124140831375360 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=124140831361608 observations=57 buffer_low=0 buffer_high=0 context=linux-x86_64-ucontext valid=0\nlifecycle=Closed state=Ready reason=0 trace=ISRAHaMZ threads=10 events=30 mutexes=1 resource_calls=41 hidden=2 controllers=2 heap=posix static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
+    "scenario": "linked",
+    "exit": 0,
+    "stdout": "resources h=1 b=0 irq=0 observer=5 rejected=0 error=0\nSTACK role=D tid=3390059 low=128812205768704 high=128812206030848 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812206019304 observations=1 buffer_low=0 buffer_high=0 context=linux-x86_64-ucontext valid=0\nSTACK role=C tid=3390058 low=128812206030848 high=128812206292992 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812206281512 observations=2 buffer_low=0 buffer_high=0 context=linux-x86_64-ucontext valid=0\nSTACK role=T tid=3390060 low=128812203114496 high=128812203376640 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812203364048 observations=34 buffer_low=93923683575328 buffer_high=93923683579424 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390062 low=128812202852352 high=128812203114496 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812203102576 observations=2 buffer_low=93923683579424 buffer_high=93923683583520 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390063 low=128812202590208 high=128812202852352 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812202839792 observations=6 buffer_low=93923683583520 buffer_high=93923683587616 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390064 low=128812202328064 high=128812202590208 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812202578288 observations=2 buffer_low=93923683587616 buffer_high=93923683591712 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390065 low=128812202065920 high=128812202328064 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812202316144 observations=2 buffer_low=93923683591712 buffer_high=93923683595808 context=linux-x86_64-ucontext valid=1\nSTACK role=T tid=3390066 low=128812201803776 high=128812202065920 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812202054008 observations=6 buffer_low=93923683595808 buffer_high=93923683599904 context=linux-x86_64-ucontext valid=1\nSTACK role=B tid=3390068 low=128812201541632 high=128812201803776 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812201791744 observations=5 buffer_low=93923683640864 buffer_high=93923683644960 context=linux-x86_64-ucontext valid=1\nSTACK role=I tid=3390069 low=128812201279488 high=128812201541632 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812201529712 observations=2 buffer_low=93923683644960 buffer_high=93923683649056 context=linux-x86_64-ucontext valid=1\nSTACK role=S tid=3390071 low=128812201017344 high=128812201279488 reserve=262144 commit=258048 guard=4096 altstack=65536 sp=128812201265736 observations=57 buffer_low=0 buffer_high=0 context=linux-x86_64-ucontext valid=0\nlifecycle=Closed state=Ready reason=0 trace=ISRArHaMZ threads=10 events=30 mutexes=1 resource_calls=41 hidden=2 controllers=2 heap=posix static=freertos input_closed=1 tick_closed=1 time_signal_failed=0 trace_dropped=0",
+    "stderr": ""
+  },
+  {
     "scenario": "bad-schedule",
     "exit": 0,
     "stdout": "prepare=8",
@@ -151,6 +163,24 @@
   },
   {
     "scenario": "non-internal-low",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "scheduler-reserved",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "linked-ceiling",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
+  },
+  {
+    "scenario": "linked-cycle",
     "exit": 0,
     "stdout": "prepare=8",
     "stderr": ""

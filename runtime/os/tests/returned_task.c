@@ -146,7 +146,7 @@ int main(int argc, char **argv)
         {2u, "monitor", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
     const Os_ResourceConfig external[3] = {
-        {0u, 3u, 3u, 0u}, {1u, 3u, 3u, 0u}, {RES_SCHEDULER, 3u, 7u, 0u}};
+        {0u, 3u, 3u, 0u, 0u, 0u}, {1u, 3u, 3u, 0u, 0u, 0u}, {RES_SCHEDULER, 3u, 7u, 0u, 0u, 0u}};
     const Os_HookConfig hooks = {&ErrorHook, &PreTaskHook, &PostTaskHook};
     const Os_TargetConfig target = {tasks,
                                     3u,
@@ -160,7 +160,8 @@ int main(int argc, char **argv)
                                     0u,
                                     NULL,
                                     configured ? &hooks : NULL,
-                                    NULL};
+                                    NULL,
+                                    0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

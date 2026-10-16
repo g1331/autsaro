@@ -131,17 +131,27 @@ fn container(graph: &Graph, kind: &str, context: usize) -> Result<usize, Vec<Pla
         .filter(|index| definition_is(graph, *index, kind))
         .collect();
     if found.len() == 1 {
-        Ok(found[0])
-    } else {
-        Err(reject(
-            graph,
-            context,
-            "SCHEDULE_NOT_UNIQUE",
-            crate::product_message!(
-                "backend.integration.schedule.ecuc_scheduling_object_missing_or_duplicate"
-            ),
-        ))
+        return Ok(found[0]);
     }
+    // Duplicates are each named; a missing container at the requester.
+    let objects = if found.is_empty() {
+        vec![context]
+    } else {
+        found
+    };
+    Err(objects
+        .into_iter()
+        .flat_map(|index| {
+            reject(
+                graph,
+                index,
+                "SCHEDULE_NOT_UNIQUE",
+                crate::product_message!(
+                    "backend.integration.schedule.ecuc_scheduling_object_missing_or_duplicate"
+                ),
+            )
+        })
+        .collect())
 }
 
 fn reference(graph: &Graph, mapping: usize, name: &str) -> Result<usize, Vec<PlanDiagnostic>> {
@@ -250,6 +260,20 @@ pub(super) fn inspect_events(
             crate::product_message!(
                 "backend.integration.schedule.owner_task_autostart_application_mode_required"
             ),
+        ));
+    }
+    // ECUC_Os_00022: an OsAppMode called OSDEFAULTAPPMODE must always be there; it is
+    // the single generated mode, StartOS(OSDEFAULTAPPMODE).
+    if let Some(index) = modes
+        .iter()
+        .filter_map(|path| graph.objects.get(*path).copied())
+        .find(|index| graph.text(*index, "SHORT-NAME") != Some("OSDEFAULTAPPMODE"))
+    {
+        return Err(reject(
+            graph,
+            index,
+            "OS_DEFAULT_APP_MODE_REQUIRED",
+            crate::product_message!("backend.integration.schedule.default_app_mode_required"),
         ));
     }
     if task_events.len() != 3 {
@@ -574,15 +598,26 @@ pub(super) fn inspect_events(
                 .into_iter()
                 .filter(|index| definition_is(graph, *index, "OsScheduleTableExpiryPoint"))
                 .collect();
+            // The table itself: one unsynchronized repeating expiry point.
             if sync.len() != 1
                 || points != vec![alarm]
                 || !matches!(
                     value(graph, table, "OsScheduleTableRepeating", false),
                     Some("true" | "1")
                 )
-                || value(graph, table, "OsScheduleTableDuration", false)
-                    .and_then(|value| value.parse::<u32>().ok())
-                    != Some(period)
+            {
+                return Err(reject(
+                    graph,
+                    table,
+                    "PERIOD_SCHEDULE_TABLE_CONFLICT",
+                    crate::product_message!(
+                        "backend.integration.schedule.periodic_rte_group_expiry_point_configuration_required"
+                    ),
+                ));
+            }
+            if value(graph, table, "OsScheduleTableDuration", false)
+                .and_then(|value| value.parse::<u32>().ok())
+                != Some(period)
                 || expiry_offset.is_none_or(|offset| offset >= period)
                 || table_start.is_none_or(|start| {
                     start == 0

@@ -380,6 +380,10 @@ def require(condition: bool, observation: dict) -> None:
         raise AssertionError(observation)
 
 
+# Verifies: SWS_Os_00002, 00006, 00007, 00009, 00191, 00194, 00227, 00275, 00276, 00277, 00278,
+# 00279, 00280, 00281, 00282, 00283, 00284, 00289, 00291, 00293, 00309, 00321, 00324, 00330,
+# 00332, 00347, 00348, 00349, 00350, 00351, 00353, 00358, 00401, 00403, 00407, 00408, 00410,
+# 00411, 00412, 00414, 00427, 00428, 00442, 00443, 00444, 00453, 00529, 00566, 00669, 00670
 def check_sc1_timing(binary: Path) -> list[dict]:
     paired = [("A", 0, 2), ("E", 0, 4), ("A", 0, 7), ("E", 0, 9)]
     cases = {
@@ -387,6 +391,7 @@ def check_sc1_timing(binary: Path) -> list[dict]:
         "eight-tables": [("A", i, 2) for i in range(8)],
         "wrap": [],
         "absolute": [("A", 0, 15), ("E", 0, 1)],
+        "absolute-ahead": [("A", 0, 3), ("E", 0, 5)],
         "relative-max": [("A", 0, 15), ("E", 0, 1)],
         "relative-zero": [("A", 0, 1)],
         "same-point": [("E", 0, 1)],
@@ -400,6 +405,8 @@ def check_sc1_timing(binary: Path) -> list[dict]:
         "autostart-mode2": paired[:2],
         "autostart-absolute": [("A", 0, 1), ("E", 0, 3)],
         "counter-chain": [],
+        "alarm-autostart-mode2": [],
+        "alarm-autostart-absolute": [],
         "action-error": [("E", 0, 4)],
         "rejects": paired,
         "category1": [],
@@ -426,7 +433,7 @@ def check_sc1_timing(binary: Path) -> list[dict]:
         "cycle", "counter-count", "table-count", "null-tables", "duplicate-id", "counter",
         "zero-points", "many-points", "null-points", "duplicate-offset", "duration",
         "empty-action", "null-action", "many-actions", "task", "event", "repeat-final",
-        "sync", "autostart", "mincycle",
+        "sync", "autostart", "mincycle", "adjacent-min", "adjacent-max",
     ]:
         result = execute(binary, "bad-" + name)
         status = 3 if name in {"duplicate-id", "counter", "task", "event"} else 8
@@ -437,6 +444,8 @@ def check_sc1_timing(binary: Path) -> list[dict]:
     return records
 
 
+# Verifies: SWS_Os_00285, 00286, 00304, 00376, 00377, 00381, 00382, 00383, 00391, 00392, 00399,
+# 00460, 00566
 def check_time(binary: Path) -> list[dict]:
     records = []
     for case, ticks, work, app, rejected, expected in [
@@ -636,6 +645,7 @@ def check_events(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00566
 def check_activation(binary: Path) -> list[dict]:
     import re
 
@@ -767,6 +777,7 @@ def check_finish(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00801, 00854, 00855
 def check_resources(binary: Path) -> list[dict]:
     observations = []
     for scenario, trace, counts in [
@@ -788,6 +799,8 @@ def check_resources(binary: Path) -> list[dict]:
         ("access", "ISRAaBMZ", (0, 1, 0, 2)),
         ("scheduler", "ISRAJrHaMZ", (1, 0, 1, 4)),
         ("scheduler-unconfigured", "ISRAaMZ", (0, 0, 0, 0)),
+        ("scheduler-ordinary", "ISRAHaMZ", (1, 0, 0, 0)),
+        ("linked", "ISRArHaMZ", (1, 0, 0, 0)),
     ]:
         result = execute(binary, scenario)
         summary = re.search(
@@ -818,6 +831,9 @@ def check_resources(binary: Path) -> list[dict]:
         ("internal-low", 8),
         ("internal-high", 8),
         ("non-internal-low", 8),
+        ("scheduler-reserved", 8),
+        ("linked-ceiling", 8),
+        ("linked-cycle", 8),
     ]:
         result = execute(binary, scenario)
         require(result["exit"] == 0 and result["stdout"] == f"prepare={code}", result)
@@ -825,6 +841,7 @@ def check_resources(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00424, 00668
 def check_lifecycle(binary: Path) -> list[dict]:
     observations = []
     for scenario, trace in [
@@ -887,6 +904,7 @@ def check_lifecycle(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00067, 00068
 def check_stack(binary: Path) -> list[dict]:
     observations = []
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
@@ -1046,6 +1064,8 @@ def check_stack(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00092, 00093, 00239, 00299, 00368, 00808, 00809, 00810, 00812, 00813, 91019,
+# 91020, 91021
 def check_interrupt_pairing(binary: Path) -> list[dict]:
     service_ids = [128,129,130,131,132,133,134,135,136,137,138,139,
                    15,16,17,140,141,142,143,144,7,8,9,10,14,29]
@@ -1069,7 +1089,7 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
         "source-clear": (1, 1, 1, "OC"),
         "source-enable-clear": (1, 1, 1, "OC"),
         "source-global": (1, 1, 1, "OC"),
-        "source-invalid": (1, 1, 7, "CO"),
+        "source-invalid": (1, 1, 10, "CO"),
         "source-hook-reject": (1, 1, 3, "CO"),
         "source-isr": (1, 1, 0, "OQC"),
         "source-outside-isr": (1, 1, 3, "ODEC"),
@@ -1089,7 +1109,7 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
                     f"isr_task={task} errors={errors} trace={trace} reason={reason}")
         error_expected = ([(9,service,"T") for service in service_ids]
                           if scenario.startswith("services-") else
-                          [(3,service,"T") for service in [48,49,50,48,48,48,48]]
+                          [(3,service,"T") for service in [48,49,50,48,48,48,48,49,50,50]]
                           if scenario == "source-invalid" else
                           [(2,service,"B") for service in [48,49,50]]
                           if scenario == "source-hook-reject" else
@@ -1110,6 +1130,7 @@ def check_interrupt_pairing(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00088, 00264, 00367, 00625, 00674, 00675, 91034
 def check_calling_context(binary: Path) -> list[dict]:
     ids = [128,129,130,131,132,133,134,135,136,137,138,139,
            15,16,17,140,141,142,143,144,7,8,9,10,14,48,49,50,29]
@@ -1148,6 +1169,7 @@ def check_calling_context(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00770, 00771
 def check_idle_state(binary: Path) -> list[dict]:
     observations = []
     cases = {
@@ -1178,6 +1200,7 @@ def check_idle_state(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00304, 00763
 def check_status_modes(directory: Path) -> list[dict]:
     invalid = run_native([compiler(), "-std=c99", "-E", "-x", "c", "-", "-DOS_STATUS_EXTENDED=2",
      "-I", str(TARGET / "include")],
@@ -1194,7 +1217,7 @@ def check_status_modes(directory: Path) -> list[dict]:
             (f"OS_STATUS_EXTENDED={mode}", f"EXPECTED_STATUS_EXTENDED={mode}"),
         )
         result = execute(binary, "")
-        expected = f"status_modes extended={mode} errors=8 peers=1 preserved=1 reason=0"
+        expected = f"status_modes extended={mode} errors=9 peers=1 preserved=1 reason=0"
         require(result["exit"] == 0 and not result["stderr"], result)
         require(expected in result["stdout"], result)
         require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
@@ -1235,6 +1258,7 @@ def check_entry_bodies(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00263, 00809, 00810, 00814
 def check_source_repetition(binary: Path) -> list[dict]:
     cases = {
         "default-enable": [(5,49,6,0,255)],
@@ -1305,6 +1329,7 @@ def check_counter_types(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00263, 00511, 00515, 00812, 00813
 def check_nested_interrupts(binary: Path) -> list[dict]:
     # Literal expected ordering is independent of source IDs and the native
     # dispatch implementation. All entries execute actual installed callbacks.
@@ -1354,6 +1379,7 @@ def check_nested_interrupts(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00369
 def check_isr_cleanup(binary: Path) -> list[dict]:
     cases = {
         "single": (1, 6, 6, "AIRPHB"),
@@ -1380,6 +1406,7 @@ def check_isr_cleanup(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00052, 00069, 00070
 def check_returned_task(binary: Path) -> list[dict]:
     observations = []
     cases = {
@@ -1404,6 +1431,7 @@ def check_returned_task(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00843
 def check_arti(binary: Path) -> list[dict]:
     scenarios = ["transitions", "internal", "unconfigured", "self-chain", "queued", "shutdown", "noop-yield", "wait-satisfied", "buffer"]
     observations = []
@@ -1478,6 +1506,7 @@ def check_arti_native(directory: Path) -> None:
     print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; two compiled faults rejected")
 
 
+# Verifies: SWS_Os_00071
 def check_task_hooks(binary: Path) -> list[dict]:
     transitions = "p0Aq0p1Hq1p0Bq0p2Lq2p0Cq0p1Jq1p2Mq2p0D"
     expected_traces = {
@@ -1531,6 +1560,7 @@ def check_error_hooks(binary: Path, service_access: int = 1, parameter_access: i
     return observations
 
 
+# Verifies: SWS_Os_00241
 def check_capacity(binary: Path) -> list[dict]:
     # Figure 3-3 minima are independent of the producer's configuration arrays.
     cases = {
@@ -1589,6 +1619,8 @@ def check_capacity(binary: Path) -> list[dict]:
     return observations
 
 
+# Verifies: SWS_Os_00772, 00773, 00774, 00775, 00776, 00777, 00778, 00779, 00780, 00781, 00782,
+# 00786, 00787, 00788, 00789, 00790, 00791, 00792, 00793, 00794, 91000, 91002, 91007
 def check_public_types(directory: Path) -> None:
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
     binary = directory / ("public_types" if linux else "public_types.exe")
@@ -1617,6 +1649,7 @@ def check_public_types(directory: Path) -> None:
                 {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
 
 
+# Verifies: SWS_Os_91025
 def check_public_compatibility(directory: Path) -> None:
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
     binary = directory / ("public_compatibility" if linux else "public_compatibility.exe")
@@ -1929,6 +1962,7 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
                 ))
                 observations += check_error_hooks(variant, service_access, parameter_access)
         if suite == "sc1-timing":
+            # Verifies: SWS_Os_00384, 00531
             clock_dir = Path(temporary) / "host-timer"
             clock_dir.mkdir()
             clock, _ = build(clock_dir, "controlled_time.c")

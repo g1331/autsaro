@@ -171,6 +171,23 @@ void Os_ArtiService(OSServiceIdType service, uint32_t parameter, int returning)
                            parameter);
             }
             break;
+        case OSServiceId_GetCoreID:
+            if (returning != 0) {
+                ARTI_TRACE(SPRVSR,
+                           AR_CP_OS_SERVICECALLS,
+                           Os,
+                           0u,
+                           OsServiceCall_GetCoreID_Return,
+                           parameter);
+            } else {
+                ARTI_TRACE(SPRVSR,
+                           AR_CP_OS_SERVICECALLS,
+                           Os,
+                           0u,
+                           OsServiceCall_GetCoreID_Start,
+                           parameter);
+            }
+            break;
         case OSServiceId_DisableInterruptSource:
             if (returning != 0) {
                 ARTI_TRACE(SPRVSR,

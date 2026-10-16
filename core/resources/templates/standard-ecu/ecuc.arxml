@@ -12,7 +12,7 @@
           <POST-BUILD-VARIANT-USED>false</POST-BUILD-VARIANT-USED>
           <CONTAINERS>
             <ECUC-CONTAINER-VALUE>
-              <SHORT-NAME>DefaultMode</SHORT-NAME>
+              <SHORT-NAME>OSDEFAULTAPPMODE</SHORT-NAME>
               <DEFINITION-REF DEST="ECUC-PARAM-CONF-CONTAINER-DEF">/AUTOSAR/EcucDefs/Os/OsAppMode</DEFINITION-REF>
             </ECUC-CONTAINER-VALUE>
             <ECUC-CONTAINER-VALUE>
@@ -123,7 +123,7 @@
                   <REFERENCE-VALUES>
                     <ECUC-REFERENCE-VALUE>
                       <DEFINITION-REF DEST="ECUC-REFERENCE-DEF">/AUTOSAR/EcucDefs/Os/OsTask/OsTaskAutostart/OsTaskAppModeRef</DEFINITION-REF>
-                      <VALUE-REF DEST="ECUC-CONTAINER-VALUE">/Configuration/Os/DefaultMode</VALUE-REF>
+                      <VALUE-REF DEST="ECUC-CONTAINER-VALUE">/Configuration/Os/OSDEFAULTAPPMODE</VALUE-REF>
                     </ECUC-REFERENCE-VALUE>
                   </REFERENCE-VALUES>
                 </ECUC-CONTAINER-VALUE>
@@ -215,7 +215,7 @@
                   <REFERENCE-VALUES>
                     <ECUC-REFERENCE-VALUE>
                       <DEFINITION-REF DEST="ECUC-REFERENCE-DEF">/AUTOSAR/EcucDefs/Os/OsAlarm/OsAlarmAutostart/OsAlarmAppModeRef</DEFINITION-REF>
-                      <VALUE-REF DEST="ECUC-CONTAINER-VALUE">/Configuration/Os/DefaultMode</VALUE-REF>
+                      <VALUE-REF DEST="ECUC-CONTAINER-VALUE">/Configuration/Os/OSDEFAULTAPPMODE</VALUE-REF>
                     </ECUC-REFERENCE-VALUE>
                   </REFERENCE-VALUES>
                 </ECUC-CONTAINER-VALUE>
@@ -271,7 +271,7 @@
                   <REFERENCE-VALUES>
                     <ECUC-REFERENCE-VALUE>
                       <DEFINITION-REF DEST="ECUC-REFERENCE-DEF">/AUTOSAR/EcucDefs/Os/OsAlarm/OsAlarmAutostart/OsAlarmAppModeRef</DEFINITION-REF>
-                      <VALUE-REF DEST="ECUC-CONTAINER-VALUE">/Configuration/Os/DefaultMode</VALUE-REF>
+                      <VALUE-REF DEST="ECUC-CONTAINER-VALUE">/Configuration/Os/OSDEFAULTAPPMODE</VALUE-REF>
                     </ECUC-REFERENCE-VALUE>
                   </REFERENCE-VALUES>
                 </ECUC-CONTAINER-VALUE>

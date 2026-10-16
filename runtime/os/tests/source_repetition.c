@@ -160,7 +160,7 @@ int main(int argc, char **argv)
         0u, "owner", owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u};
     const Os_HookConfig hooks = {configured ? &ErrorHook : NULL, NULL, NULL};
     const Os_TargetConfig target = {
-        &task, 1u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, &hooks, NULL};
+        &task, 1u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, &hooks, NULL, 0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

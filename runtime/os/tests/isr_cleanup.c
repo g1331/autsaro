@@ -138,13 +138,13 @@ int main(int argc, char **argv)
         {1u, "helper", helper, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
     const Os_ResourceConfig resources[7] = {
-        {0u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u)},
-        {1u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u)},
-        {2u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u)},
-        {3u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u)},
-        {4u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u)},
-        {5u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u)},
-        {6u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u)},
+        {0u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
+        {1u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
+        {2u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
+        {3u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
+        {4u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
+        {5u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
+        {6u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
     };
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
     const Os_TargetConfig target = {tasks,
@@ -159,7 +159,8 @@ int main(int argc, char **argv)
                                     0u,
                                     NULL,
                                     strncmp(scenario, "unconfigured", 12u) == 0 ? NULL : &hooks,
-                                    NULL};
+                                    NULL,
+                                    0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

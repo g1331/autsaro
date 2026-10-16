@@ -36,6 +36,14 @@ StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
  * @note The draft API can be used before startup in an initialized C environment.
  */
 boolean isOsStarted(void);
+/** @brief Read the logical CoreID of the calling core (SWS_Os_00674, 00675).
+ * @return OS_CORE_ID_0, the EcucCoreId of the only core of this target.
+ * Preconditions: none; callable before StartOS (SWS_Os_00625) and with interrupts disabled.
+ * Context: any Task, ISR, Hook or Alarm callback, and initialized C code before StartOS.
+ * Reentrancy: reentrant.
+ * Ownership: none.
+ */
+CoreIdType GetCoreID(void);
 #include "Os_Hooks.h"
 /** Restore the caller's non-nested DisableAllInterrupts state; unmatched call has no effect. */
 void EnableAllInterrupts(void);
