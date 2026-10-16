@@ -697,19 +697,20 @@ pub(super) fn files(
             ("ElapsedValue", "TimeInMicrosecondsType *", "OUT"),
         ],
     ));
-    rte.push(rte_symbol(
-        "Rte_Call_OsService_GetCounterValue",
-        "StatusType",
-        &[("Value", "TimeInMicrosecondsType *", "OUT")],
-    ));
-    rte.push(rte_symbol(
-        "Rte_Call_OsService_GetElapsedValue",
-        "StatusType",
-        &[
-            ("Value", "TimeInMicrosecondsType *", "INOUT"),
-            ("ElapsedValue", "TimeInMicrosecondsType *", "OUT"),
-        ],
-    ));
+    // Counter-bound client conveniences are header-local inline functions;
+    // only the actual external service servers are linkable BSW module entries.
+    for symbol in rte.iter_mut() {
+        if symbol.symbol.starts_with("OsService_") {
+            symbol.declaration_owner = "include/Rte_Os.h".into();
+            symbol.definition_owner = "src/Rte_OsService.c".into();
+        } else if matches!(
+            symbol.symbol.as_str(),
+            "SchM_Init" | "SchM_Start" | "SchM_StartTiming" | "SchM_Deinit"
+        ) {
+            symbol.declaration_owner = "include/Rte_Main.h".into();
+            symbol.definition_owner = "src/SchM_Main.c".into();
+        }
+    }
     let natives: BTreeSet<_> = entries
         .values()
         .flatten()

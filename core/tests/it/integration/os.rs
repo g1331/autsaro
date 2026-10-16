@@ -343,7 +343,7 @@ fn counter_service_description() {
             assert_eq!(matches, 1, "unresolved or ambiguous reference: {path}");
         }
     }
-    // The generated service producers own these external names (os_service.rs);
+    // The generated service and inline client producers own these names (os_service.rs);
     // a runnable or component may not shadow them.
     for symbol in [
         "OsService_SystemCounter_GetCounterValue",
