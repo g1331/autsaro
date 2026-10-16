@@ -126,7 +126,7 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
     'shell.integration.inspect': '检查计划',
     'shell.integration.reopen': '重开来源',
     'shell.integration.required':
-      '必需输入：ECU Extract、应用与类型、服务使用端、所选 BSW 描述/实现及 ECUC 配置值。 有效无关内容按原字节保留；内置支持范围不要求用户注册官方 XSD 或 MOD。',
+      '必需输入：ECU Extract、应用与类型、服务使用端、所选 BSW 描述/实现及 ECUC 配置值。有效无关内容按原字节保留；内置支持范围不要求用户注册官方 XSD 或 MOD。',
     'shell.integration.blockers': '阻断原因与补救',
     'shell.integration.roles': '来源角色',
     'shell.integration.source': '来源',
@@ -305,10 +305,10 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
       '打开“源码交付”，选择目标和独立输出目录，先预览再确认生成。生成完成不等于编译或运行验证通过。',
     'shell.help.layoutTitle': '面板布局：',
     'shell.help.layout':
-      '拖动工程树与检查器的内侧边缘调整宽度，拖动底部工具窗口的上边缘调整高度。 方向键微调，Shift＋方向键加大步幅；双击或 Enter 恢复默认。尺寸在当前运行期间保留。',
+      '拖动工程树与检查器的内侧边缘调整宽度，拖动底部工具窗口的上边缘调整高度。方向键微调，Shift＋方向键加大步幅；双击或 Enter 恢复默认。尺寸在当前运行期间保留。',
     'shell.help.dependencies': '工具依赖',
     'shell.help.dependencyText':
-      '普通配置编辑、保存和源码准备不需要编译器。构建或主机验证前，在“设置”的执行工具中配置所选目标需要的工具； 工具未就绪时仍可继续编辑配置。',
+      '普通配置编辑、保存和源码准备不需要编译器。构建或主机验证前，在“设置”的执行工具中配置所选目标需要的工具；工具未就绪时仍可继续编辑配置。',
     'shell.help.support': '支持范围',
     'shell.help.coverage':
       'R24-11 原生结构、定义与目标生成分别报告覆盖；不声明完整官方 XSD、SWS 或实机认证。',

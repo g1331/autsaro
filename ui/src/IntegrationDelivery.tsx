@@ -5,6 +5,7 @@ import type { StageState } from './workbench/forms';
 import { fileStatusLabel, targetLabel } from './workbench/labels';
 import { displayPath } from './pathDisplay';
 import type { BuildTarget } from './types';
+import { iconSize } from './workbench/icons';
 import type { Workbench } from './workbench/useWorkbench';
 
 export function IntegrationDelivery({
@@ -161,7 +162,7 @@ export function IntegrationDelivery({
                 <strong>{name}</strong>
               </div>
               <span className="stage-pill" data-stage={name}>
-                <Icon size={12} aria-hidden="true" />
+                <Icon size={iconSize.inline} aria-hidden="true" />
                 {label}
               </span>
             </li>
@@ -194,7 +195,6 @@ export function IntegrationDelivery({
           />
         </label>
         <button
-          className="outline-button small"
           type="button"
           disabled={busy || locked || !native}
           onClick={() =>
@@ -227,7 +227,6 @@ export function IntegrationDelivery({
           />
         </label>
         <button
-          className="outline-button small"
           type="button"
           disabled={busy || locked || !native}
           onClick={() => void chooseDirectory(changeBuildDirectory)}
@@ -236,16 +235,10 @@ export function IntegrationDelivery({
         </button>
       </div>
       <div className="section-actions">
-        <button
-          className="outline-button small"
-          type="button"
-          disabled={disabled || !output.trim()}
-          onClick={controller.previewEcu}
-        >
+        <button type="button" disabled={disabled || !output.trim()} onClick={controller.previewEcu}>
           {t('shell.delivery.preview')}
         </button>
         <button
-          className="outline-button small"
           type="button"
           disabled={executionDisabled}
           title={executionReason}
@@ -253,28 +246,17 @@ export function IntegrationDelivery({
         >
           {t('shell.command.preflight')}
         </button>
-        <button
-          className="outline-button small"
-          type="button"
-          disabled={disabled || !preview}
-          onClick={controller.generateEcu}
-        >
+        <button type="button" disabled={disabled || !preview} onClick={controller.generateEcu}>
           {t('shell.delivery.generate')}
         </button>
         <button
-          className="outline-button small"
           type="button"
           disabled={executionDisabled || !generated || !buildDirectory.trim()}
           onClick={controller.buildEcu}
         >
           {t('shell.delivery.build')}
         </button>
-        <button
-          className="outline-button small"
-          type="button"
-          disabled={executionDisabled || !built}
-          onClick={controller.verifyEcu}
-        >
+        <button type="button" disabled={executionDisabled || !built} onClick={controller.verifyEcu}>
           {t('shell.delivery.verify')}
         </button>
       </div>
@@ -289,7 +271,6 @@ export function IntegrationDelivery({
           />
         </label>
         <button
-          className="outline-button small"
           type="button"
           disabled={disabled || !importDirectory.trim()}
           onClick={() => onImport(importDirectory)}

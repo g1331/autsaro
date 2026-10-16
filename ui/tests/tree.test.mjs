@@ -111,5 +111,5 @@ test('tool windows mount active content and retain source navigation when switch
     }),
   );
   expect(view.queryByText('Source diagnostic')).toBeNull();
-  expect(view.getByRole('tabpanel', { name: localize(toolLabels.build) })).toBeTruthy();
+  expect(view.getByRole('region', { name: localize(toolLabels.build) })).toBeTruthy();
 });

@@ -15,6 +15,7 @@ import { CopyText, OwnedLog } from './Dialog';
 import { PanelResizeHandle } from './PanelResizeHandle';
 import { distinct } from './forms';
 import { commandLabel } from './labels';
+import { iconSize } from './icons';
 
 export const toolLabels: Record<ToolWindow, Message> = {
   problems: message('editor.tools.tab.problems'),
@@ -71,17 +72,17 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
     <section className="bottom-tools" aria-label={t('editor.tools.heading')}>
       {c.toolWindow ? <PanelResizeHandle kind="tools" /> : null}
       {c.toolWindow ? (
-        <div className="tool-content" role="tabpanel" aria-label={text(toolLabels[c.toolWindow])}>
+        <div className="tool-content" role="region" aria-label={text(toolLabels[c.toolWindow])}>
           <header>
             <strong>{text(toolLabels[c.toolWindow])}</strong>
             <button
               type="button"
-              className="panel-icon-button"
+              className="icon-button"
               aria-label={t('editor.tools.collapse')}
               title={t('editor.tools.collapse')}
               onClick={() => c.setToolWindow(null)}
             >
-              <ChevronDown size={16} aria-hidden="true" />
+              <ChevronDown size={iconSize.control} aria-hidden="true" />
             </button>
           </header>
           {c.toolWindow === 'problems' ? (
@@ -310,6 +311,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
           <button
             key={key}
             type="button"
+            className="ghost-button"
             aria-pressed={c.toolWindow === key}
             onClick={() => c.setToolWindow(c.toolWindow === key ? null : key)}
           >

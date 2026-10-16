@@ -15,6 +15,7 @@ import {
   Save,
   Search,
   Settings,
+  Square,
   X,
 } from 'lucide-react';
 import { useWorkbench } from './workbench/useWorkbench';
@@ -35,8 +36,12 @@ import { ToolWindows } from './workbench/ToolWindows';
 import { WindowControls } from './workbench/WindowControls';
 import { PanelResizeHandle } from './workbench/PanelResizeHandle';
 import { SourceEntry } from './workbench/SourceEntry';
+import { Tabs, tabPanelProps } from './workbench/Tabs';
+import { iconSize } from './workbench/icons';
 import { labelFromPath } from './workbench/forms';
 import { profileLabel, targetLabel, workspaceTitle } from './workbench/labels';
+import { menuRows } from './workbench/menu';
+import type { Command } from './workbench/menu';
 import type { DocumentTab } from './workbench/projectTypes';
 
 const documentLabels = {
@@ -46,15 +51,6 @@ const documentLabels = {
   source: 'shell.document.source',
   'project-entry': 'shell.document.project-entry',
 };
-type Command = {
-  id: string;
-  label: string;
-  menu?: 'file' | 'edit' | 'view' | 'tools' | 'help';
-  shortcut?: string;
-  reason: string;
-  run: () => void | Promise<unknown>;
-};
-
 export default function App() {
   const { t, text } = useLocale();
   const c = useWorkbench();
@@ -141,6 +137,7 @@ export default function App() {
   const commands: Command[] = [
     {
       id: 'new',
+      group: 'open',
       label: t('shell.command.new'),
       menu: 'file',
       reason: text(c.actionReason('create')),
@@ -148,6 +145,7 @@ export default function App() {
     },
     {
       id: 'open',
+      group: 'open',
       label: t('shell.command.open'),
       menu: 'file',
       shortcut: 'Ctrl+O',
@@ -156,6 +154,7 @@ export default function App() {
     },
     {
       id: 'member',
+      group: 'open',
       label: t('shell.command.member'),
       menu: 'file',
       reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
@@ -163,6 +162,7 @@ export default function App() {
     },
     {
       id: 'ecu-package',
+      group: 'open',
       label: t('shell.command.ecuPackage'),
       menu: 'file',
       reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
@@ -170,6 +170,7 @@ export default function App() {
     },
     {
       id: 'save',
+      group: 'save',
       label: t('shell.command.save'),
       menu: 'file',
       shortcut: 'Ctrl+S',
@@ -178,6 +179,7 @@ export default function App() {
     },
     {
       id: 'save-as',
+      group: 'save',
       label: t('shell.command.saveAs'),
       menu: 'file',
       reason: workspaceReason || text(c.actionReason('save')),
@@ -185,6 +187,7 @@ export default function App() {
     },
     {
       id: 'close',
+      group: 'close',
       label: t('shell.command.close'),
       menu: 'file',
       reason: !c.workspace ? t('shell.reason.noProject') : text(c.actionReason('open')),
@@ -192,6 +195,7 @@ export default function App() {
     },
     {
       id: 'settings',
+      group: 'settings',
       label: t('shell.command.settings'),
       menu: 'file',
       reason: '',
@@ -213,6 +217,7 @@ export default function App() {
     },
     {
       id: 'tree',
+      group: 'panels',
       label: t('shell.command.tree'),
       menu: 'view',
       shortcut: 'Alt+1',
@@ -221,6 +226,7 @@ export default function App() {
     },
     {
       id: 'inspector',
+      group: 'panels',
       label: t('shell.command.inspector'),
       menu: 'view',
       reason: '',
@@ -228,6 +234,7 @@ export default function App() {
     },
     {
       id: 'objects',
+      group: 'documents',
       label: t('shell.document.configuration'),
       menu: 'view',
       reason: workspaceReason,
@@ -235,6 +242,7 @@ export default function App() {
     },
     {
       id: 'standard',
+      group: 'documents',
       label: t('shell.document.integration'),
       menu: 'view',
       reason: workspaceReason,
@@ -242,6 +250,7 @@ export default function App() {
     },
     {
       id: 'delivery',
+      group: 'documents',
       label: t('shell.document.delivery'),
       menu: 'view',
       reason: workspaceReason,
@@ -249,6 +258,7 @@ export default function App() {
     },
     {
       id: 'validate',
+      group: 'run',
       label: c.workspace?.integrationCandidate
         ? t('shell.command.inspect')
         : t('shell.command.validate'),
@@ -261,6 +271,7 @@ export default function App() {
     },
     {
       id: 'preview',
+      group: 'run',
       label: t('shell.command.preview'),
       menu: 'tools',
       reason:
@@ -273,6 +284,7 @@ export default function App() {
     },
     {
       id: 'preflight',
+      group: 'run',
       label: t('shell.command.preflight'),
       menu: 'tools',
       reason:
@@ -283,6 +295,7 @@ export default function App() {
     },
     {
       id: 'initialize-application',
+      group: 'run',
       label: t('shell.command.initialize'),
       menu: 'tools',
       reason:
@@ -292,30 +305,34 @@ export default function App() {
       run: c.previewApplicationInitialization,
     },
     {
+      id: 'problems',
+      group: 'tool-windows',
+      label: t('shell.command.problems'),
+      menu: 'view',
+      reason: '',
+      run: () => c.setToolWindow('problems'),
+    },
+    {
       id: 'build',
+      group: 'tool-windows',
       label: t('shell.command.build'),
-      menu: 'tools',
+      menu: 'view',
       shortcut: 'Alt+4',
       reason: '',
       run: () => c.setToolWindow('build'),
     },
     {
       id: 'host',
+      group: 'tool-windows',
       label: t('shell.command.host'),
-      menu: 'tools',
+      menu: 'view',
       shortcut: 'Alt+9',
       reason: '',
       run: () => c.setToolWindow('host'),
     },
     {
-      id: 'problems',
-      label: t('shell.command.problems'),
-      menu: 'tools',
-      reason: '',
-      run: () => c.setToolWindow('problems'),
-    },
-    {
       id: 'cancel',
+      group: 'cancel',
       label: t('shell.command.cancel'),
       menu: 'tools',
       reason: !c.busy ? t('shell.reason.idle') : '',
@@ -432,6 +449,7 @@ export default function App() {
   }, [menu]);
   const activeDocument = c.activeDocument;
   const source = c.projection?.sources.find((item) => item.sourceId === activeDocument.sourceId);
+  const tabKey = (tab: DocumentTab) => `${tab.kind}-${tab.sourceId ?? ''}`;
   const tabLabel = (tab: DocumentTab) =>
     tab.kind === 'source'
       ? labelFromPath(
@@ -448,6 +466,7 @@ export default function App() {
             <div className="menu-root" key={label}>
               <button
                 type="button"
+                className="ghost-button"
                 aria-expanded={menu === label}
                 aria-haspopup="menu"
                 onClick={() => setMenu(menu === label ? null : label)}
@@ -488,22 +507,10 @@ export default function App() {
                     }
                   }}
                 >
-                  {commands
-                    .filter((command) => command.menu === label)
-                    .map((command) => (
-                      <div key={command.id}>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          disabled={Boolean(command.reason)}
-                          onClick={() => dispatchCommand(command.id)}
-                        >
-                          <span>{command.label}</span>
-                          <kbd>{command.shortcut}</kbd>
-                        </button>
-                        {command.reason ? <small>{command.reason}</small> : null}
-                      </div>
-                    ))}
+                  {menuRows(
+                    commands.filter((command) => command.menu === label),
+                    dispatchCommand,
+                  )}
                 </div>
               ) : null}
             </div>
@@ -512,16 +519,6 @@ export default function App() {
         <div className="titlebar-drag-region" data-tauri-drag-region>
           <span className="app-title">{t('shell.app.title')}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setQuery('');
-            setPalette(true);
-          }}
-          aria-label={t('shell.app.commandShortcut')}
-        >
-          <Search size={16} aria-hidden="true" />
-        </button>
         {c.native ? (
           <WindowControls
             onClose={requestExit}
@@ -553,7 +550,7 @@ export default function App() {
               onClick={() => dispatchCommand('save')}
               disabled={Boolean(workspaceReason)}
             >
-              <Save size={15} aria-hidden="true" />
+              <Save size={iconSize.control} aria-hidden="true" />
               {t('shell.command.save')}
             </button>
             <button
@@ -561,11 +558,11 @@ export default function App() {
               onClick={() => dispatchCommand('validate')}
               disabled={Boolean(workspaceReason)}
             >
-              <ListChecks size={15} aria-hidden="true" />
+              <ListChecks size={iconSize.control} aria-hidden="true" />
               {t('shell.app.validate')}
             </button>
             <button type="button" onClick={() => dispatchCommand('delivery')}>
-              <Code2 size={15} aria-hidden="true" />
+              <Code2 size={iconSize.control} aria-hidden="true" />
               {t('shell.document.delivery')}
             </button>
           </>
@@ -576,16 +573,32 @@ export default function App() {
             <span className="busy-indicator" aria-hidden="true" />
             <span role="status">{t('shell.busy', { operation: text(c.busy) })}</span>
             <button type="button" onClick={() => dispatchCommand('cancel')}>
+              <Square size={iconSize.control} aria-hidden="true" />
               {t('shell.app.cancel')}
             </button>
           </>
         ) : null}
         <button
           type="button"
+          className="toolbar-search"
+          aria-label={t('shell.app.commandShortcut')}
+          onClick={() => {
+            setQuery('');
+            setPalette(true);
+          }}
+        >
+          <Search size={iconSize.control} aria-hidden="true" />
+          {t('shell.app.searchPlaceholder')}
+          <kbd>Ctrl+K</kbd>
+        </button>
+        <button
+          type="button"
+          className="icon-button"
           aria-label={t('shell.settings.title')}
+          title={t('shell.settings.title')}
           onClick={() => dispatchCommand('settings')}
         >
-          <Settings size={16} aria-hidden="true" />
+          <Settings size={iconSize.control} aria-hidden="true" />
         </button>
       </div>
       <main className="workspace-frame">
@@ -594,49 +607,54 @@ export default function App() {
             <>
               <button
                 type="button"
+                className="ghost-button"
                 aria-label={t('shell.app.treeShortcut')}
                 title={t('shell.app.treeShortcut')}
                 aria-pressed={c.treeVisible}
                 onClick={() => dispatchCommand('tree')}
               >
-                <FolderTree size={19} />
+                <FolderTree size={iconSize.rail} aria-hidden="true" />
               </button>
               <button
                 type="button"
+                className="ghost-button"
                 aria-label={t('shell.app.problems')}
                 title={t('shell.app.problems')}
                 aria-pressed={c.toolWindow === 'problems'}
                 onClick={() => dispatchCommand('problems')}
               >
-                <CircleAlert size={19} />
+                <CircleAlert size={iconSize.rail} aria-hidden="true" />
               </button>
               <button
                 type="button"
+                className="ghost-button"
                 aria-label={t('shell.app.buildShortcut')}
                 title={t('shell.app.buildShortcut')}
                 aria-pressed={c.toolWindow === 'build'}
                 onClick={() => dispatchCommand('build')}
               >
-                <Hammer size={19} />
+                <Hammer size={iconSize.rail} aria-hidden="true" />
               </button>
               <button
                 type="button"
+                className="ghost-button"
                 aria-label={t('shell.app.hostShortcut')}
                 title={t('shell.app.hostShortcut')}
                 aria-pressed={c.toolWindow === 'host'}
                 onClick={() => dispatchCommand('host')}
               >
-                <MonitorPlay size={19} />
+                <MonitorPlay size={iconSize.rail} aria-hidden="true" />
               </button>
               <span />
               <button
                 type="button"
+                className="ghost-button"
                 aria-label={t('shell.command.inspector')}
                 title={t('shell.command.inspector')}
                 aria-pressed={c.inspectorVisible}
                 onClick={() => dispatchCommand('inspector')}
               >
-                <PanelRight size={19} />
+                <PanelRight size={iconSize.rail} aria-hidden="true" />
               </button>
             </>
           ) : null}
@@ -645,51 +663,40 @@ export default function App() {
         <section className="central-workspace">
           {c.workspace ? (
             <>
-              <div className="document-tabs" role="tablist" aria-label={t('shell.app.documents')}>
-                {c.tabs.map((tab) => (
-                  <div
-                    key={`${tab.kind}-${tab.sourceId ?? ''}`}
-                    className={
-                      activeDocument.kind === tab.kind && activeDocument.sourceId === tab.sourceId
-                        ? 'active'
-                        : ''
-                    }
-                  >
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={
-                        activeDocument.kind === tab.kind && activeDocument.sourceId === tab.sourceId
-                      }
-                      onClick={() =>
-                        tab.kind === 'source' && tab.sourceId
-                          ? void c.readSource(tab.sourceId)
-                          : c.openDocument(tab)
-                      }
-                    >
-                      {tabLabel(tab)}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={t('shell.app.closeTab', { tab: tabLabel(tab) })}
-                      onClick={() => void c.closeDocument(tab)}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
+              <div className="document-tabs">
+                {/* Activation reads sources and runs draft guards, so arrows only move focus. */}
+                <Tabs
+                  id="documents"
+                  manual
+                  label={t('shell.app.documents')}
+                  selected={tabKey(activeDocument)}
+                  onSelect={(key) => {
+                    const tab = c.tabs.find((item) => tabKey(item) === key);
+                    if (!tab) return;
+                    if (tab.kind === 'source' && tab.sourceId) void c.readSource(tab.sourceId);
+                    else c.openDocument(tab);
+                  }}
+                  items={c.tabs.map((tab) => ({
+                    key: tabKey(tab),
+                    label: tabLabel(tab),
+                    onClose: () => void c.closeDocument(tab),
+                    closeLabel: t('shell.app.closeTab', { tab: tabLabel(tab) }),
+                    closeIcon: <X size={iconSize.inline} aria-hidden="true" />,
+                  }))}
+                />
                 <button
                   type="button"
+                  className="icon-button"
                   aria-label={t('shell.app.openConfiguration')}
+                  title={t('shell.app.openConfiguration')}
                   onClick={() => c.openDocument({ kind: 'configuration' })}
                 >
-                  <Plus size={14} />
+                  <Plus size={iconSize.control} aria-hidden="true" />
                 </button>
               </div>
               <div
                 className="document-content"
-                role="tabpanel"
-                aria-label={tabLabel(activeDocument)}
+                {...tabPanelProps('documents', tabKey(activeDocument))}
               >
                 {activeDocument.kind === 'project-entry' ? (
                   <SourceEntry controller={c} logo={logo} />
@@ -748,29 +755,28 @@ export default function App() {
         {c.workspace ? (
           <aside className="inspector-pane" hidden={!c.inspectorVisible}>
             <PanelResizeHandle kind="inspector" />
-            <div className="panel-tabs" role="tablist" aria-label={t('shell.app.inspectorViews')}>
-              {(['properties', 'references'] as const).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={c.inspectorTab === key}
-                  onClick={() => c.setInspectorTab(key)}
-                >
-                  {key === 'properties' ? t('shell.app.properties') : t('shell.app.references')}
-                </button>
-              ))}
+            <div className="panel-tabs">
+              <Tabs
+                id="inspector"
+                label={t('shell.app.inspectorViews')}
+                selected={c.inspectorTab}
+                onSelect={c.setInspectorTab}
+                items={[
+                  { key: 'properties', label: t('shell.app.properties') },
+                  { key: 'references', label: t('shell.app.references') },
+                ]}
+              />
               <button
                 type="button"
-                className="panel-icon-button"
+                className="icon-button"
                 aria-label={t('shell.app.collapseInspector')}
                 title={t('shell.app.collapseInspector')}
                 onClick={() => c.setInspectorVisible(false)}
               >
-                <ChevronRight size={16} aria-hidden="true" />
+                <ChevronRight size={iconSize.control} aria-hidden="true" />
               </button>
             </div>
-            <div className="inspector-scroll">
+            <div className="inspector-scroll" {...tabPanelProps('inspector', c.inspectorTab)}>
               <ObjectInspector controller={c} />
             </div>
           </aside>
@@ -793,7 +799,11 @@ export default function App() {
         </span>
         <span className="toolbar-spacer" />
         {c.workspace ? (
-          <button type="button" onClick={() => c.setToolWindow(c.busy ? 'log' : 'problems')}>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => c.setToolWindow(c.busy ? 'log' : 'problems')}
+          >
             {c.busy
               ? t('shell.busy', { operation: text(c.busy) })
               : c.stages.validate.state === 'pending'
@@ -813,7 +823,7 @@ export default function App() {
       {palette ? (
         <Dialog title={t('shell.app.commandSearch')} onClose={() => setPalette(false)}>
           <label className="search-field">
-            <Search size={16} />
+            <Search size={iconSize.control} aria-hidden="true" />
             <input
               autoFocus
               data-initial-focus
@@ -827,7 +837,12 @@ export default function App() {
             {commands
               .filter((command) => !command.reason && command.label.includes(query))
               .map((command) => (
-                <button key={command.id} type="button" onClick={() => dispatchCommand(command.id)}>
+                <button
+                  key={command.id}
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => dispatchCommand(command.id)}
+                >
                   {command.label}
                   <kbd>{command.shortcut}</kbd>
                 </button>

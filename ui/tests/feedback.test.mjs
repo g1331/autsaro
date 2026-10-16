@@ -329,7 +329,7 @@ test('the settings page marks the rejected tool and clears the mark when the pat
     setToolErrors,
   };
   const view = render(React.createElement(SettingsPage, { controller }));
-  fireEvent.click(view.getByRole('button', { name: translate('shell.settings.tools') }));
+  fireEvent.click(view.getByRole('tab', { name: translate('shell.settings.tools') }));
   const input = view.container.querySelector('[aria-invalid="true"]');
   expect(input).not.toBeNull();
   const error = view.container.querySelector(`#${input.getAttribute('aria-describedby')}`);

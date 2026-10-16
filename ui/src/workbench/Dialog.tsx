@@ -3,6 +3,7 @@ import type { Text } from '../i18n';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Check, CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
+import { iconSize } from './icons';
 import type { Notice } from './forms';
 
 const noticeIcons = {
@@ -25,7 +26,7 @@ export function NoticeBanner({
   const detail = notice.detail === undefined ? '' : text(notice.detail);
   return (
     <div className={`notice ${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>
-      <Icon size={15} aria-hidden="true" />
+      <Icon size={iconSize.control} aria-hidden="true" />
       <div className="notice-body">
         <span>{text(notice.text).slice(0, 3000)}</span>
         {detail && detail !== text(notice.text) ? (
@@ -41,12 +42,12 @@ export function NoticeBanner({
       {onDismiss ? (
         <button
           type="button"
-          className="panel-icon-button"
+          className="icon-button"
           aria-label={t('editor.dialog.dismiss')}
           title={t('editor.dialog.dismiss')}
           onClick={onDismiss}
         >
-          <X size={14} aria-hidden="true" />
+          <X size={iconSize.inline} aria-hidden="true" />
         </button>
       ) : null}
     </div>
@@ -193,7 +194,7 @@ export function CopyText({
             .catch(() => setResult(message('editor.dialog.copyFailed')));
         }}
       >
-        {copied ? <Check size={13} aria-hidden="true" /> : null}
+        {copied ? <Check size={iconSize.inline} aria-hidden="true" /> : null}
         {renderText(copied ? result : label)}
       </button>
       <span role="status" className={result && !copied ? 'error-text' : 'visually-hidden'}>

@@ -16,13 +16,25 @@
         "role": "neutral",
         "displayName": "surface"
       },
+      "overlay": {
+        "role": "neutral",
+        "displayName": "overlay"
+      },
       "hover": {
         "role": "neutral",
         "displayName": "hover"
       },
+      "active": {
+        "role": "neutral",
+        "displayName": "active"
+      },
       "line": {
         "role": "neutral",
         "displayName": "line"
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "border-strong"
       },
       "text-primary": {
         "role": "neutral",
@@ -201,16 +213,6 @@
         "name": "dialog",
         "value": "0 20px 70px rgb(0 0 0 / 0.25)",
         "purpose": "差异与设置对话框。"
-      },
-      {
-        "name": "inspector-overlay",
-        "value": "-10px 0 24px rgb(0 0 0 / 0.08)",
-        "purpose": "窄窗右侧覆盖。"
-      },
-      {
-        "name": "tree-overlay",
-        "value": "10px 0 24px rgb(0 0 0 / 0.1)",
-        "purpose": "小窗左侧覆盖。"
       }
     ],
     "motion": [
@@ -224,14 +226,6 @@
       {
         "name": "compact-desktop-max",
         "value": "1250px"
-      },
-      {
-        "name": "inspector-overlay-max",
-        "value": "1079px"
-      },
-      {
-        "name": "small-window-max",
-        "value": "700px"
       }
     ]
   },

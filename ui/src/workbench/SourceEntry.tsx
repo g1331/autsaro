@@ -3,6 +3,7 @@ import { displayPath } from '../pathDisplay';
 import { FolderOpen } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
 import { NoticeBanner } from './Dialog';
+import { iconSize } from './icons';
 
 export function SourceEntry({ controller: c, logo }: { controller: Workbench; logo: string }) {
   const { t, text } = useLocale();
@@ -24,14 +25,16 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
         <nav aria-label={t('editor.source.heading')}>
           <button
             type="button"
-            className={c.source === 'empty' ? 'selected' : ''}
+            className="ghost-button"
+            aria-current={c.source === 'empty' ? 'true' : undefined}
             onClick={() => c.openProjectEntry('empty')}
           >
             {t('editor.source.new')}
           </button>
           <button
             type="button"
-            className={c.source === 'import' ? 'selected' : ''}
+            className="ghost-button"
+            aria-current={c.source === 'import' ? 'true' : undefined}
             onClick={() => c.openProjectEntry('import')}
           >
             {t('editor.source.import')}
@@ -39,7 +42,8 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
           {c.workspace ? (
             <button
               type="button"
-              className={saveAs ? 'selected' : ''}
+              className="ghost-button"
+              aria-current={saveAs ? 'true' : undefined}
               onClick={() => c.openProjectEntry('save-as')}
             >
               {t('editor.source.saveAs')}
@@ -47,12 +51,18 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
           ) : null}
           <button
             type="button"
+            className="ghost-button"
             onClick={() => void c.openMemberProject()}
             disabled={Boolean(openReason)}
           >
             {t('editor.source.open')}
           </button>
-          <button type="button" onClick={c.importHandoff} disabled={Boolean(openReason)}>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={c.importHandoff}
+            disabled={Boolean(openReason)}
+          >
             {t('editor.source.importHandoff')}
           </button>
         </nav>
@@ -85,7 +95,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                     onClick={() => void c.chooseDirectory(c.setProjectDirectory)}
                     disabled={!c.native || Boolean(c.busy)}
                   >
-                    <FolderOpen size={15} />
+                    <FolderOpen size={iconSize.control} aria-hidden="true" />
                     {t('editor.common.select')}
                   </button>
                 </div>

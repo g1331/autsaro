@@ -7,6 +7,8 @@ import type { Workbench } from './useWorkbench';
 import type { FieldDescriptor, ValueState } from './projectTypes';
 import { StructureEditor } from './StructureEditor';
 import { CopyText } from './Dialog';
+import { iconSize } from './icons';
+import { objectRoleClass } from './objectRole';
 
 export function ObjectEditor({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
@@ -44,7 +46,7 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
         <span>{t('editor.objects.selectedCount', { count: c.objectSelection.length })}</span>
       </div>
       <label className="search-field">
-        <Search size={15} aria-hidden="true" />
+        <Search size={iconSize.inline} aria-hidden="true" />
         <input
           aria-label={t('editor.objects.searchLabel')}
           value={c.objectFilter}
@@ -75,7 +77,6 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
               <tr
                 key={object.objectId}
                 data-object-row={object.objectId}
-                className={c.objectSelection.includes(object.objectId) ? 'selected-row' : ''}
                 aria-selected={c.objectSelection.includes(object.objectId)}
               >
                 <td>
@@ -408,7 +409,7 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
           <h2 tabIndex={-1} data-object-title={object.objectId}>
             {object.shortName}
           </h2>
-          <span className="role-tag">
+          <span className={['role-tag', objectRoleClass(object)].filter(Boolean).join(' ')}>
             {object.kind} ·{' '}
             {object.writable ? t('editor.common.configurable') : t('editor.common.readonly')}
           </span>

@@ -22,7 +22,11 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             <button type="button" onClick={() => void c.resolveGuard('cancel')}>
               {project ? t('workflow.guard.cancelReplacement') : t('workflow.guard.stay')}
             </button>
-            <button type="button" onClick={() => void c.resolveGuard('discard')}>
+            <button
+              type="button"
+              className="danger-button"
+              onClick={() => void c.resolveGuard('discard')}
+            >
               {project ? t('workflow.guard.discardContinue') : t('workflow.guard.discardDrafts')}
             </button>
             <button
@@ -195,7 +199,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               <button
                 key={file.path}
                 type="button"
-                className={selected?.path === file.path ? 'selected' : ''}
+                className="ghost-button"
+                aria-current={selected?.path === file.path ? 'true' : undefined}
                 onClick={() => setApplicationFile(file.path)}
               >
                 {file.path}
@@ -293,7 +298,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               <button
                 key={file.path}
                 type="button"
-                className={selected?.path === file.path ? 'selected' : ''}
+                className="ghost-button"
+                aria-current={selected?.path === file.path ? 'true' : undefined}
                 onClick={() => setProjectFile(file.path)}
               >
                 {file.path}
@@ -367,7 +373,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               <button
                 type="button"
                 key={file.path}
-                className={selected?.path === file.path ? 'selected' : ''}
+                className="ghost-button"
+                aria-current={selected?.path === file.path ? 'true' : undefined}
                 onClick={() =>
                   standard ? c.setIntegrationPreviewPath(file.path) : c.setPreviewPath(file.path)
                 }
@@ -470,7 +477,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               <button
                 type="button"
                 key={item.path}
-                className={file?.path === item.path ? 'selected' : ''}
+                className="ghost-button"
+                aria-current={file?.path === item.path ? 'true' : undefined}
                 onClick={() => c.setGenerationPreviewPath(item.path)}
               >
                 {item.path}

@@ -24,6 +24,7 @@ const {
   save,
   create,
   awaitProjectSurfaceReady,
+  awaitStandardInspectionReady,
   sourceSurface,
   exportSource,
   packageBytes,
@@ -132,7 +133,7 @@ check('v2-relocation-snapshot-import-and-refusals', async () => {
     'actual v2 source reconstruction published',
   );
   // Inspecting the reconstructed seven sources takes minutes in a debug build.
-  await awaitProjectSurfaceReady(300000);
+  await awaitStandardInspectionReady(300000);
   const imported = await projection();
   assert.notEqual(imported.workspaceEpoch, previous.workspaceEpoch);
   assert.equal(imported.sources.length, 7);
