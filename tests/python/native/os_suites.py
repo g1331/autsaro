@@ -801,6 +801,7 @@ def check_resources(binary: Path) -> list[dict]:
         ("scheduler-unconfigured", "ISRAaMZ", (0, 0, 0, 0)),
         ("scheduler-ordinary", "ISRAHaMZ", (1, 0, 0, 0)),
         ("linked", "ISRArHaMZ", (1, 0, 0, 0)),
+        ("linked-access", "ISRAaMZ", (0, 0, 0, 0)),
     ]:
         result = execute(binary, scenario)
         summary = re.search(
@@ -835,6 +836,7 @@ def check_resources(binary: Path) -> list[dict]:
         ("linked-ceiling", 8),
         ("linked-cycle", 8),
         ("linked-isr", 8),
+        ("linked-high-accessor", 8),
     ]:
         result = execute(binary, scenario)
         require(result["exit"] == 0 and result["stdout"] == f"prepare={code}", result)
@@ -905,7 +907,7 @@ def check_lifecycle(binary: Path) -> list[dict]:
     return observations
 
 
-# Verifies: SWS_Os_00067, 00068
+# Verifies: SWS_Os_00067, 00068, 00107
 def check_stack(binary: Path) -> list[dict]:
     observations = []
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"

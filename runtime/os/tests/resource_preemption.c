@@ -313,6 +313,12 @@ static void task_a(void)
         Os_TargetTrace('r');
         check(ReleaseResource(6u) == E_OK);
         check((h_entries == 1u) && (ReleaseResource(RES_SCHEDULER) == E_OS_NOFUNC));
+    } else if (strcmp(scenario, "linked-access") == 0) {
+        /* A may lock resource 3 only through its LINKED name 6. */
+        check(GetResource(3u) == E_OS_ACCESS);
+        check(GetResource(6u) == E_OK);
+        check(info(0u).resources[0] == 3u);
+        check(ReleaseResource(6u) == E_OK);
     } else if (strcmp(scenario, "masked-isr") == 0) {
         check(GetResource(4u) == E_OK);
         check_priority(31u, 1u, 0u);
@@ -479,6 +485,16 @@ int main(int argc, char **argv)
             isr_levels.priorities[31] = 3u;
             config.interrupts = &isr_levels;
             resources[7].isr_access = 0x80000000u;
+        } else if (strcmp(scenario, "linked-access") == 0) {
+            resources[7].ceiling = 2u;
+            resources[7].task_access = 1u;
+            resources[7].link = 3u;
+        } else if (strcmp(scenario, "linked-high-accessor") == 0) {
+            /* D (priority 5) uses resource 0 only through name 6: the group
+             * ceiling 3 is too low although the root's own accessors fit. */
+            resources[7].ceiling = 3u;
+            resources[7].task_access = 8u;
+            resources[7].link = 0u;
         }
     } else if (strncmp(scenario, "scheduler-", 10u) == 0) {
         /* Task A alone uses RES_SCHEDULER, at A's own priority. */
@@ -490,7 +506,8 @@ int main(int argc, char **argv)
     }
     prepared = Os_TargetPrepare(&config);
     if ((strcmp(scenario, "bad-schedule") == 0) || (strcmp(scenario, "non-internal-low") == 0) ||
-        (strncmp(scenario, "linked-", 7u) == 0) || (strcmp(scenario, "scheduler-reserved") == 0) ||
+        ((strncmp(scenario, "linked-", 7u) == 0) && (strcmp(scenario, "linked-access") != 0)) ||
+        (strcmp(scenario, "scheduler-reserved") == 0) ||
         ((strncmp(scenario, "internal-", 9u) == 0) && (strcmp(scenario, "internal-preempt") != 0) &&
          (strcmp(scenario, "internal-resource") != 0))) {
         const StatusType expected = ((strcmp(scenario, "internal-duplicate") == 0) ||
