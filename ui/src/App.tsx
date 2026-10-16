@@ -15,7 +15,6 @@ import {
   Save,
   Search,
   Settings,
-  Square,
   X,
 } from 'lucide-react';
 import { useWorkbench } from './workbench/useWorkbench';
@@ -573,7 +572,6 @@ export default function App() {
             <span className="busy-indicator" aria-hidden="true" />
             <span role="status">{t('shell.busy', { operation: text(c.busy) })}</span>
             <button type="button" onClick={() => dispatchCommand('cancel')}>
-              <Square size={iconSize.control} aria-hidden="true" />
               {t('shell.app.cancel')}
             </button>
           </>
