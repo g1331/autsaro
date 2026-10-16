@@ -236,9 +236,36 @@ fn builtin_late_source_edit_refuses_staged_commit_and_preserves_output() {
     let mut changed = input.bytes.clone();
     changed.extend_from_slice(b"\n<!-- external source edit -->\n");
     fs::write(&input.disk_path, &changed).unwrap();
-    assert!(staged.commit().is_err());
+    let error = staged.commit().unwrap_err();
+    assert_eq!(
+        serde_json::to_value(&error).unwrap(),
+        serde_json::json!({
+            "key": "backend.delivery.source_changed",
+            "params": {"path": input.disk_path.display().to_string()},
+        })
+    );
     assert_eq!(payload(&output), original);
     assert_eq!(fs::read(&input.disk_path).unwrap(), changed);
+}
+
+#[test]
+fn output_replaced_after_staging_refuses_confirmation_and_keeps_the_newer_output() {
+    use crate::support::os_variants::{counter_variant, prepared};
+    use autosar_config_core::target::BuildTarget;
+    let scratch = Scratch::new();
+    let target = BuildTarget::LinuxX64ControlledV1;
+    let output = scratch.0.join("package");
+    let first = || prepared(&counter_variant(false, 65535), &scratch.0, target);
+    let preview = first().preview(&output).unwrap();
+    let staged = first().stage_previewed(&output, &preview.revision).unwrap();
+    // A valid generation of another configuration lands between staging and confirmation.
+    prepared(&counter_variant(false, 4095), &scratch.0, target)
+        .generate(&output)
+        .unwrap();
+    let newer = payload(&output);
+    let error = staged.commit().unwrap_err();
+    assert_eq!(message_key(&error), "backend.generation.confirmation_stale");
+    assert_eq!(payload(&output), newer);
 }
 
 #[test]
@@ -412,9 +439,18 @@ fn builtin_handoff_rejects_unknown_owner_and_ownership_version_without_publishin
         } else {
             "owner-receiver"
         });
-        assert!(
+        let error =
             delivery::open_handoff(&output, &receiver, &DefinitionCatalog::builtin().unwrap())
-                .is_err()
+                .err()
+                .unwrap();
+        let evidence = serde_json::to_string(&error).unwrap();
+        assert!(
+            evidence.contains(if version {
+                "backend.delivery.ownership_identity_invalid"
+            } else {
+                "unknown variant `unrecognized-authority`"
+            }),
+            "{evidence}"
         );
         assert!(!receiver.exists());
         assert_eq!(payload(&output), corrupted);

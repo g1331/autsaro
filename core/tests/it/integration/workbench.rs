@@ -1107,3 +1107,72 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         .unwrap();
     assert!(errors.iter().any(|issue| issue.code == "EDIT_RANGE"));
 }
+
+#[test]
+fn multi_component_save_reopen_and_relocation_keep_source_and_user_bytes() {
+    use autosar_config_core::{Workspace, integration::IntegrationEdit};
+    let scratch = Scratch::new();
+    let root = scratch.0.join("live");
+    let mut workspace = initialized_pipeline_workspace(&root);
+    let before = workspace.generation_snapshot().unwrap();
+    assert_eq!(before.applications.len(), 3);
+    workspace
+        .edit_integration(IntegrationEdit {
+            application_period_ms: Some(20),
+            ..IntegrationEdit::default()
+        })
+        .unwrap_or_else(|issues| panic!("{issues:?}"));
+    let preview = workspace.preview_integration_save().unwrap();
+    let edited: Vec<_> = preview
+        .files
+        .iter()
+        .filter(|file| file.changed)
+        .map(|file| Path::new(&file.path).to_path_buf())
+        .collect();
+    assert!(!edited.is_empty());
+    workspace
+        .save_integration_previewed(&preview.revision)
+        .unwrap();
+    let saved = workspace.generation_snapshot().unwrap();
+    // Only the edited ARXML members change; the manifest and user sources keep their bytes.
+    assert_eq!(saved.manifest_bytes, before.manifest_bytes);
+    for (after, original) in saved
+        .inputs
+        .iter()
+        .chain(&saved.applications)
+        .zip(before.inputs.iter().chain(&before.applications))
+    {
+        assert_eq!(after.logical_path, original.logical_path);
+        assert_eq!(after.bytes, std::fs::read(&after.disk_path).unwrap());
+        assert_eq!(
+            after.bytes != original.bytes,
+            edited.contains(&after.disk_path),
+            "{}",
+            after.logical_path
+        );
+    }
+    let integration = serde_json::to_vec(&workspace.inspect_integration()).unwrap();
+    let moved = scratch.0.join("moved");
+    std::fs::rename(&root, &moved).unwrap();
+    let reopened = Workspace::open_project_manifest(
+        &moved.join("workbench-project.json"),
+        &scratch.0.join("cache"),
+    )
+    .unwrap();
+    let snapshot = reopened.generation_snapshot().unwrap();
+    assert_eq!(snapshot.manifest_bytes, saved.manifest_bytes);
+    for (actual, expected) in snapshot
+        .inputs
+        .iter()
+        .chain(&snapshot.applications)
+        .zip(saved.inputs.iter().chain(&saved.applications))
+    {
+        assert_eq!(actual.logical_path, expected.logical_path);
+        assert_eq!(actual.bytes, expected.bytes);
+        assert!(actual.disk_path.starts_with(&moved));
+    }
+    assert_eq!(
+        serde_json::to_vec(&reopened.inspect_integration()).unwrap(),
+        integration
+    );
+}
