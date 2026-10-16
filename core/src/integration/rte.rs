@@ -109,8 +109,9 @@ pub(super) fn files(
     for component in &composition.components {
         let scope = super::short_name(&component.component);
         section(&mut source, scope, "CONST_UNSPECIFIED", true);
+        // SWS_Rte_03712 keeps the CDS object private; 03793 exposes its handle.
         source.push_str(&c_layout::initializer(
-            &format!("const Rte_CDS_{scope} Rte_Instance_{scope}"),
+            &format!("static const Rte_CDS_{scope} Rte_Instance_{scope}"),
             &format!("RTE_{scope}_CONST_UNSPECIFIED"),
             &[c_layout::Item::Value("0u".into())],
         ));

@@ -77,10 +77,10 @@ int main(void)
     uint32 state = 92u;
     uint32 network = 99u;
     assert(Rte_Start() == RTE_E_OK);
-    assert(Rte_Inst_Ingress == &Rte_Instance_Ingress);
-    assert(Rte_Inst_Process == &Rte_Instance_Process);
-    assert(Rte_Inst_Observe == &Rte_Instance_Observe);
-    assert(Rte_Inst_DcmService == &Rte_Instance_DcmService);
+    assert(Rte_Inst_Ingress != NULL_PTR);
+    assert(Rte_Inst_Process != NULL_PTR);
+    assert(Rte_Inst_Observe != NULL_PTR);
+    assert(Rte_Inst_DcmService != NULL_PTR);
     assert(Rte_Inst_Process->Rte_Dummy == 0u);
 #ifdef UNCONNECTED_PORTS
     expect(RTE_E_UNCONNECTED, 7u, 9u);

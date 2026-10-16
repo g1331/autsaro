@@ -302,6 +302,35 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
                 && sections.contains(".bss.rte.Ingress.VAR_CLEARED_UNSPECIFIED"),
             "{sections}"
         );
+        let nm = std::env::var_os("AUTOSAR_NM").expect("Set AUTOSAR_NM to the controlled nm");
+        let output = tooling::run_public_command(
+            std::process::Command::new(nm)
+                .current_dir(&directory)
+                .arg(if cfg!(windows) {
+                    "--target=pe-x86-64"
+                } else {
+                    "--target=elf64-x86-64"
+                })
+                .args(["-g", "--defined-only", "Rte.o"]),
+            &directory,
+            "rte-public-symbols",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(output.status.success(), "{output:?}");
+        let symbols: Vec<_> = std::str::from_utf8(&output.stdout)
+            .unwrap()
+            .lines()
+            .filter_map(|line| line.split_whitespace().last())
+            .collect();
+        for component in [
+            "Ingress",
+            if renamed { "Compute" } else { "Process" },
+            "Observe",
+            "DcmService",
+        ] {
+            assert!(symbols.contains(&format!("Rte_Inst_{component}").as_str()));
+            assert!(!symbols.contains(&format!("Rte_Instance_{component}").as_str()));
+        }
         std::fs::remove_dir_all(directory).unwrap();
     }
 }
@@ -718,6 +747,13 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
         false,
         false,
         "Multiple application header",
+    );
+    check(
+        "private-cds-object",
+        "#include \"Rte_Ingress.h\"\nconst Rte_CDS_Ingress *storage = &Rte_Instance_Ingress;\n",
+        false,
+        false,
+        "Rte_Instance_Ingress",
     );
     check(
         "unselected-runnable-api",

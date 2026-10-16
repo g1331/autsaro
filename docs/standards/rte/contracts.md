@@ -114,3 +114,5 @@ Rte_Init/StartTiming 只在配置 InitializationRunnableBatch 时生成；当前
 Rte_Instance 的标准短名在不同组件的独立 Application Header 中重复定义，会触发跨翻译单元的 5.6 唯一名字诊断；它们不会在同一应用翻译单元混用。该名字由接口契约要求，不能通过随意改名消除诊断。
 
 已核对（源码：RTE-owned Rte.c/Rte_*.h 的文件名；Ecu_* 配置与目标胶水是集成依赖而非 RTE 模块文件）：SWS_Rte_07139。
+
+CDS 本体按 SWS_Rte_03711/03712/03715 保留私有 const 存储，不在应用头导出存储对象；应用通过 SWS_Rte_03793 的公开 Rte_Inst_<component> 访问。原生符号表与拒绝编译消费者核对该链接边界，避免把非必需的外部对象归为 8.7 标准冲突。

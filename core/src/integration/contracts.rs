@@ -199,7 +199,7 @@ impl ValidatedIntegrationPlan {
         for component in &composition.components {
             let scope = super::short_name(&component.component);
             let mut body = format!(
-                "#include \"Rte_{scope}_Type.h\"\n#include \"Rte_DataHandleType.h\"\n\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\n\nstruct Rte_CDS_{scope} {{\n    uint8 Rte_Dummy; /**< Empty CDS for the source, single-instance component. */\n}};\ntypedef struct Rte_CDS_{scope} Rte_CDS_{scope};\n#ifndef RTE_CORE\ntypedef const Rte_CDS_{scope} *Rte_Instance;\n#endif\nextern const Rte_CDS_{scope} Rte_Instance_{scope};\nextern const Rte_CDS_{scope} *const Rte_Inst_{scope};\n\n"
+                "#include \"Rte_{scope}_Type.h\"\n#include \"Rte_DataHandleType.h\"\n\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\n\nstruct Rte_CDS_{scope} {{\n    uint8 Rte_Dummy; /**< Empty CDS for the source, single-instance component. */\n}};\ntypedef struct Rte_CDS_{scope} Rte_CDS_{scope};\n#ifndef RTE_CORE\ntypedef const Rte_CDS_{scope} *Rte_Instance;\n#endif\nextern const Rte_CDS_{scope} *const Rte_Inst_{scope};\n\n"
             );
             let init_values: Vec<_> = component
                 .data_ports
