@@ -78,7 +78,7 @@ class ActualCAnalysisTests(unittest.TestCase):
                 if line.endswith("  bsw/src/main.c") else line for line in lines) + "\n")
             self.assertEqual(c_check.check(project, target, root / "changed", baseline), 1)
             summary = json.loads((root / "changed/summary.json").read_text())
-            self.assertIn("Compiler validation failed", summary["error"])
+            self.assertIn("compiler-unit-0", summary["error"])
             self.assertNotIn("comparison", summary)
 
     def test_clean_main_passes(self):
@@ -109,7 +109,7 @@ class ActualCAnalysisTests(unittest.TestCase):
                 self.assertEqual(c_check.check(project, target, root / "analysis"), 1)
                 summary = json.loads((root / "analysis/summary.json").read_text())
                 self.assertFalse(summary["passed"])
-                self.assertIn("Compiler validation failed", summary["error"])
+                self.assertIn("compiler-unit-0", summary["error"])
 
     def test_host_adapter_and_application_are_not_classified_as_bsw(self):
         for name in ("integration/src/adapter.c", "app/Application/Application.c"):
@@ -192,7 +192,9 @@ class ActualCAnalysisTests(unittest.TestCase):
                 self.assertEqual(code, 0 if summary["passed"] else 1)
                 if invalid:
                     self.assertFalse(summary["passed"])
-                    self.assertIn("Compiler validation failed for bsw/src/helper.c", summary["error"])
+                    self.assertIn("bsw/src/helper.c", summary["error"])
+                    self.assertIn("compiler-unit-", summary["error"])
+                    self.assertIn("exit_code=1", summary["error"])
                 else:
                     self.assertIsNone(summary["error"])
                     self.assertEqual(summary["scope"]["compilerWorkers"], 4)

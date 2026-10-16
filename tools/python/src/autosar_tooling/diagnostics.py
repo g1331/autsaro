@@ -40,7 +40,7 @@ def version_check(name: str, args: list[str], *, major: int | None = None, minim
     output = (result.stdout or result.stderr).strip()
     match = re.search(r"(?<!\d)(\d+)\.(\d+)\.(\d+)\b", output)
     if result.returncode or not match:
-        return Check(name, "error", output)
+        return Check(name, "error", f"{name}: argv={command!r} exit_code={result.returncode}\n{result.stdout}\n{result.stderr}")
     version = tuple(map(int, match.groups()))
     compatible = (major is None or version[0] == major) and (minimum is None or version >= minimum)
     return Check(name, "ready" if compatible else "blocked", output)

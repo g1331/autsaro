@@ -17,6 +17,8 @@ import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from ecu_tools.process import ProcessSpec, run_bounded
+
 from autosar_tooling.config import ROOT
 
 SOURCE_SUFFIXES = {".c", ".h", ".rs", ".ts", ".tsx", ".css", ".py", ".mjs"}
@@ -44,19 +46,33 @@ PAIRED_TOOLS = ("clang-format", "clang-tidy")
 
 
 def _capture(
-    command: list[str], *, input_text: str | None = None
+    command: list[str], *, input_text: str | None = None, timeout: int = 60
 ) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
-        command, cwd=ROOT,
-        input=input_text.encode("utf-8") if input_text is not None else None,
-        capture_output=True, timeout=60, check=False,
-    )
+    try:
+        result = subprocess.run(
+            command, cwd=ROOT,
+            input=input_text.encode("utf-8") if input_text is not None else None,
+            capture_output=True, timeout=timeout, check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            f"quality: argv={command!r} cwd={ROOT} status=timeout exit_code=None\n"
+            f"stdout:\n{(error.stdout or b'')[-8192:].decode('utf-8', errors='replace')}\n"
+            f"stderr:\n{(error.stderr or b'')[-8192:].decode('utf-8', errors='replace')}"
+        ) from error
+    if result.returncode:
+        result.stderr = (
+            f"quality: argv={command!r} cwd={ROOT} status=exited exit_code={result.returncode}\n"
+            f"stdout:\n{result.stdout[-8192:].decode('utf-8', errors='replace')}\n"
+            f"stderr:\n{result.stderr[-8192:].decode('utf-8', errors='replace')}"
+        ).encode()
+    return result
 
 
 def run(
-    command: list[str], *, input_text: str | None = None
+    command: list[str], *, input_text: str | None = None, timeout: int = 60
 ) -> subprocess.CompletedProcess[str]:
-    result = _capture(command, input_text=input_text)
+    result = _capture(command, input_text=input_text, timeout=timeout)
     return subprocess.CompletedProcess(
         result.args,
         result.returncode,
@@ -387,18 +403,19 @@ def clang_tidy_project(project: Path, tidy: str) -> collections.Counter[ClangTid
         # The build applies the pinned kernel patches first; its headers declare port hooks.
         kernel = scratch / "kernel"
         shutil.copytree(project / "kernel", kernel)
+        git = shutil.which("git")
+        if git is None:
+            raise RuntimeError(f"{project.name}: kernel patch requires Git on PATH")
         for patch in target["kernelPatches"]:
-            applied = subprocess.run(
+            run_bounded(ProcessSpec.seconds(
                 [
-                    "git", "apply", "--ignore-space-change",
+                    git, "apply", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]),
                     str(project / patch["path"].removeprefix("runtime/")),
                 ],
-                cwd=kernel, env=kernel_patch_environment(kernel),
-                capture_output=True, text=True, check=False,
-            )
-            if applied.returncode:
-                raise RuntimeError(f"{project.name}: kernel patch failed: {applied.stderr.strip()}")
+                kernel, 30, scratch, f"{project.name}: kernel-patch",
+                env=kernel_patch_environment(kernel),
+            ))
         includes = []
         for name in target["includePaths"]:
             root = kernel / name.removeprefix("kernel/") if name.startswith("kernel/") else project / name
@@ -418,9 +435,9 @@ def clang_tidy_project(project: Path, tidy: str) -> collections.Counter[ClangTid
         (scratch / "compile_commands.json").write_text(json.dumps(database), encoding="utf-8")
 
         def analyze(name: str) -> subprocess.CompletedProcess[str]:
-            return subprocess.run(
+            return run(
                 [tidy, "--quiet", f"--config-file={CLANG_TIDY_CONFIG}", "-p", str(scratch), str(project / name)],
-                capture_output=True, text=True, timeout=600, check=False,
+                timeout=600,
             )
 
         with ThreadPoolExecutor(max_workers=os.cpu_count() or 2) as pool:
@@ -428,7 +445,7 @@ def clang_tidy_project(project: Path, tidy: str) -> collections.Counter[ClangTid
         for name, result in zip(units, results):
             matches = [CLANG_TIDY_LINE.match(line) for line in result.stdout.splitlines()]
             if result.returncode or any(match and match[4] == "error" for match in matches):
-                raise RuntimeError(f"{project.name}: clang-tidy could not analyze {name}:\n{result.stdout}{result.stderr}")
+                raise RuntimeError(f"{project.name}: clang-tidy could not analyze {name}: argv={result.args!r} exit_code={result.returncode}\n{result.stdout}{result.stderr}")
             for match in filter(None, matches):
                 try:
                     relative = Path(match[1]).resolve().relative_to(project).as_posix()

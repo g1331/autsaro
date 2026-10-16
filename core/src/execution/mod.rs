@@ -191,10 +191,12 @@ impl ProcessOwner {
     }
 
     pub fn run(&self, spec: ProcessSpec) -> Result<ProcessResult, LocalizedText> {
+        let command = format!("{:?}", spec.argv);
+        let cwd = spec.cwd.display().to_string();
         let result = self.spawn(spec, None)?.wait()?;
         if !result.success() {
             return Err(
-                crate::product_message!("backend.execution.command_failed", "status" => format!("{:?}", result.status), "exitCode" => format!("{:?}", result.exit_code), "scope" => &result.scope, "pid" => result.pid, "stdout" => result.stdout.display(), "stderr" => result.stderr.display(), "output" => result.output_tail()),
+                crate::product_message!("backend.execution.command_failed", "command" => command, "cwd" => cwd, "status" => format!("{:?}", result.status), "exitCode" => format!("{:?}", result.exit_code), "scope" => &result.scope, "pid" => result.pid, "stdout" => result.stdout.display(), "stderr" => result.stderr.display(), "output" => result.output_tail()),
             );
         }
         Ok(result)

@@ -10,6 +10,21 @@ from autosar_tooling import quality
 
 
 class QualityTests(unittest.TestCase):
+    def test_command_failure_keeps_stage_command_raw_exit_and_both_streams(self):
+        with patch.object(quality.subprocess, "run", return_value=subprocess.CompletedProcess(
+            ["git"], 23, b"producer stdout", b"producer stderr",
+        )):
+            result = quality.run(["git", "diff", "missing"])
+        self.assertEqual(result.returncode, 23)
+        for text in ("quality:", "argv=['git', 'diff', 'missing']", "exit_code=23", "producer stdout", "producer stderr"):
+            self.assertIn(text, result.stderr)
+        with patch.object(quality.subprocess, "run", side_effect=subprocess.TimeoutExpired(
+            ["git"], 60, output=b"before hang", stderr=b"hung producer",
+        )), self.assertRaises(RuntimeError) as failure:
+            quality.run(["git", "diff"])
+        for text in ("quality:", "argv=", "status=timeout", "exit_code=None", "before hang", "hung producer"):
+            self.assertIn(text, str(failure.exception))
+
     def test_clang_format_and_clang_tidy_must_share_one_version(self):
         def lock(**versions):
             body = "".join(f'[[package]]\nname = "{name}"\nversion = "{version}"\n\n' for name, version in versions.items())

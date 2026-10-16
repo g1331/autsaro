@@ -27,7 +27,7 @@ from ecu_tools.build import (
     target_entry,
     tool_argument,
 )
-from ecu_tools.process import OwnedProcess, ProcessSpec
+from ecu_tools.process import ProcessSpec, run_bounded
 
 from autosar_tooling.config import ROOT
 
@@ -43,13 +43,12 @@ TIMEOUT = 600
 
 def run(argv: list[str], directory: Path, stage: str, timeout: int = TIMEOUT) -> tuple[int, str, str]:
     """Keep raw subprocess output and reclaim owned processes on timeout."""
-    result = OwnedProcess(ProcessSpec.seconds(argv, directory, timeout, directory, stage)).wait()
+    result = run_bounded(ProcessSpec.seconds(argv, directory, timeout, directory, stage),
+                         allowed_exit_codes=(0, 1) if stage == "cppcheck" else (0,))
     stdout = result.stdout.read_text(encoding="utf-8", errors="replace")
     stderr = result.stderr.read_text(encoding="utf-8", errors="replace")
     (directory / f"{stage}.stdout.log").write_text(stdout, encoding="utf-8")
     (directory / f"{stage}.stderr.log").write_text(stderr, encoding="utf-8")
-    if result.status != "exited":
-        raise RuntimeError(f"{stage}: {result.status}; logs retained in {directory}")
     return result.exit_code or 0, stdout, stderr
 
 
@@ -71,8 +70,8 @@ def tool_identity(directory: Path) -> tuple[Path, Path, dict]:
     if not found or not Path(found).is_file():
         raise ValueError("Cppcheck is missing; install the pinned 2.21.0 release")
     executable = Path(found).resolve()
-    code, stdout, stderr = run([str(executable), "--version"], directory, "version", 30)
-    if code or stdout.strip() != f"Cppcheck {CPPCHECK_VERSION}":
+    _, stdout, stderr = run([str(executable), "--version"], directory, "version", 30)
+    if stdout.strip() != f"Cppcheck {CPPCHECK_VERSION}":
         raise ValueError(f"Cppcheck version mismatch: {stdout.strip()} {stderr.strip()}")
     addons = addon_directory(executable)
     hashes = {name: digest(addons / name) for name in ADDON_HASHES}
@@ -149,20 +148,16 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     if not compiler or not Path(compiler).is_file():
         raise ValueError("GCC is required to discover the target's system headers")
     compiler = str(Path(compiler).resolve())
-    code, machine, _ = run([compiler, "-dumpmachine"], output, "compiler-target", 30)
-    if code or machine.strip() != target["abi"]:
+    _, machine, _ = run([compiler, "-dumpmachine"], output, "compiler-target", 30)
+    if machine.strip() != target["abi"]:
         raise ValueError("Diagnostic compiler ABI differs from the sealed target")
-    code, compiler_version, _ = run([compiler, "--version"], output, "compiler-version", 30)
-    if code:
-        raise ValueError("Cannot identify diagnostic compiler")
+    _, compiler_version, _ = run([compiler, "--version"], output, "compiler-version", 30)
     empty = output / "headers.c"
     empty.write_text("", encoding="utf-8")
-    code, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], output, "compiler-headers", 30)
-    if code:
-        raise ValueError("Cannot discover compiler include search paths")
+    _, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], output, "compiler-headers", 30)
     system_includes = compiler_include_paths(header_log, output)
-    code, macros, _ = run([compiler, *flags, "-dM", "-E", "-x", "c", str(empty)], output, "compiler-macros", 30)
-    if code or "#define __GNUC__ " not in macros:
+    _, macros, _ = run([compiler, *flags, "-dM", "-E", "-x", "c", str(empty)], output, "compiler-macros", 30)
+    if "#define __GNUC__ " not in macros:
         raise ValueError("Cannot discover compiler predefined macros")
     predefines = output / "compiler-predefines.h"
     predefines.write_text(macros, encoding="utf-8")
@@ -189,10 +184,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
             argv = [str(Path(git).resolve()), "apply", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]), str(root / patch_path)]
             # Apply only inside the copied kernel, never the authoritative source.
-            result = OwnedProcess(ProcessSpec.seconds(argv, root / "kernel", 30, output, f"patch-{index}",
-                                  env=kernel_patch_environment(root / "kernel"))).wait()
-            if not result.success:
-                raise ValueError(f"Kernel patch {index} failed; raw logs retained")
+            run_bounded(ProcessSpec.seconds(argv, root / "kernel", 30, output, f"patch-{index}",
+                                  env=kernel_patch_environment(root / "kernel")))
             require_kernel_patch_applied(root / patch_path, before)
         patched_lines = kernel_patched_lines(project, root, touched)
         sources.extend("kernel/" + name for name in kernel_sources)
@@ -234,9 +227,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                               "typedef char AutsaroMutexValue[(PTHREAD_MUTEX_RECURSIVE == 1) ? 1 : -1];\n"
                               "int (*AutsaroSignalPrototype)(void) = &__libc_current_sigrtmin;\n"
                               "long (*AutsaroStackPrototype)(int) = &__sysconf;\n", encoding="utf-8")
-        code, _, _ = run([compiler, *flags, *("-I" + path for path in includes), "-fsyntax-only", str(validation)], output, "platform-model-check", 30)
-        if code:
-            raise ValueError("Linux library analysis model differs from the actual compiler headers")
+        run([compiler, *flags, *("-I" + path for path in includes), "-fsyntax-only", str(validation)], output, "platform-model-check", 30)
     per_unit_macros = {}
     stdio_modes = {}
     mode_names = {"_IOFBF", "_IOLBF", "_IONBF"} if "setvbuf" in identifiers else set()
@@ -250,14 +241,10 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     def compiler_unit(item):
         index, name = item
         unit_modes = {}
-        code, _, _ = run([compiler, *flags, *("-I" + path for path in includes),
+        run([compiler, *flags, *("-I" + path for path in includes),
                           "-fsyntax-only", str(root / name)], output, f"compiler-unit-{index}", 60)
-        if code:
-            raise ValueError(f"Compiler validation failed for {name}; logs retained")
-        code, definitions, _ = run([compiler, *flags, *("-I" + path for path in includes),
+        _, definitions, _ = run([compiler, *flags, *("-I" + path for path in includes),
                                     "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60)
-        if code:
-            raise ValueError(f"Compiler preprocessing failed for {name}")
         function_macros = ["-D" + line[8:].replace(" ", "=", 1)
                            for line in definitions.splitlines() if line.startswith("#define ")
                            and line[8:].split("(", 1)[0] in function_macro_names]
@@ -268,10 +255,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         probe = output / f"macro-probe-{index}.c"
         probe.write_text('#include "' + tool_argument(root / name) + '"\n' +
                          "".join(f"AUTSAR_VALUE_{macro} {macro}\n" for macro in candidates), encoding="utf-8")
-        code, expanded, _ = run([compiler, *flags, *("-I" + path for path in includes),
+        _, expanded, _ = run([compiler, *flags, *("-I" + path for path in includes),
                                 "-E", "-P", str(probe)], output, f"compiler-values-{index}", 60)
-        if code:
-            raise ValueError(f"Compiler macro expansion failed for {name}")
         unit_macros = function_macros
         for line in expanded.splitlines():
             if not line.startswith("AUTSAR_VALUE_"):
