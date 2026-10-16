@@ -70,65 +70,30 @@ pub(super) async fn open_handoff_project(
             OperationKind::Open,
         )?;
         let root = Path::new(&directory);
-        // Retired layouts kept handoff.json at the package root; their formats are refused below.
-        let metadata_path = [
-            autosar_config_core::generator::delivery::HANDOFF_PATH,
-            "handoff.json",
-        ]
-        .map(|path| root.join(path))
-        .into_iter()
-        .find(|path| path.exists())
-        .unwrap_or_else(|| root.join(autosar_config_core::generator::delivery::HANDOFF_PATH));
-        let file = std::fs::symlink_metadata(&metadata_path).map_err(|error| error.to_string())?;
-        if !file.is_file() || file.file_type().is_symlink() || file.len() > 50 * 1024 * 1024 {
-            return Err(autosar_config_core::product_message!(
-                "backend.project.handoff_metadata_invalid"
-            ));
-        }
-        let metadata: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(&metadata_path).map_err(|error| error.to_string())?,
-        )
-        .map_err(|error| error.to_string())?;
-        match metadata["format"].as_str() {
-            Some(autosar_config_core::generator::delivery::FORMAT) => {
-                let destination = new_workspace_directory.as_deref().ok_or(
-                    autosar_config_core::product_message!(
-                        "backend.project.handoff_destination_required"
-                    ),
-                )?;
-                let builtin = autosar_config_core::definitions::DefinitionCatalog::builtin()?;
-                let catalog = operation
-                    .snapshot
-                    .workspace
-                    .as_deref()
-                    .map_or(&builtin, Workspace::definition_catalog);
-                operation.commit(|session| {
-                    let imported = autosar_config_core::generator::delivery::open_handoff(
-                        root,
-                        Path::new(destination),
-                        catalog,
-                    )?;
-                    let view = imported.workspace.view();
-                    session.invalidate()?;
-                    session.workspace = Some(Arc::new(imported.workspace));
-                    Ok(view)
-                })
-            }
-            // Historical single-component, host-chain and earlier workbench handoffs are
-            // retired; their inputs/ ARXML sources can still be imported into a new project.
-            Some(
-                format @ ("autosar-ecu-handoff-v1"
-                | "autosar-host-handoff-v1"
-                | "autosar-workbench-handoff-v2"
-                | "autosar-workbench-handoff-v3"),
-            ) => Err(autosar_config_core::product_message!(
-                "backend.project.retired_handoff_format",
-                "format" => format
-            )),
-            _ => Err(autosar_config_core::product_message!(
-                "backend.project.handoff_format_unsupported"
-            )),
-        }
+        autosar_config_core::generator::delivery::require_current_format(root)?;
+        let destination =
+            new_workspace_directory
+                .as_deref()
+                .ok_or(autosar_config_core::product_message!(
+                    "backend.project.handoff_destination_required"
+                ))?;
+        let builtin = autosar_config_core::definitions::DefinitionCatalog::builtin()?;
+        let catalog = operation
+            .snapshot
+            .workspace
+            .as_deref()
+            .map_or(&builtin, Workspace::definition_catalog);
+        operation.commit(|session| {
+            let imported = autosar_config_core::generator::delivery::open_handoff(
+                root,
+                Path::new(destination),
+                catalog,
+            )?;
+            let view = imported.workspace.view();
+            session.invalidate()?;
+            session.workspace = Some(Arc::new(imported.workspace));
+            Ok(view)
+        })
     })
     .await
 }
