@@ -65,7 +65,7 @@ jobs:
           STALE_ONLY: >-
             TR_Methodology TPS_SystemTemplate TPS_SoftwareComponentTemplate TPS_BSWModuleDescriptionTemplate
             TPS_ECUConfiguration SWS_StandardTypes SWS_PlatformTypes SWS_CommunicationStackTypes
-            SWS_MemoryMapping SWS_RTE SWS_OS
+            SWS_MemoryMapping SWS_RTE
             SWS_CANStateManager
         run: |
           status=0

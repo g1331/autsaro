@@ -162,6 +162,7 @@
     "ComM",
     "Dcm",
     "LSduR",
+    "Os",
     "PduR"
   ]
 }
