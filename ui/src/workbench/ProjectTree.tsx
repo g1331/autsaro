@@ -17,6 +17,9 @@ import type { KeyboardEvent } from 'react';
 import type { Workbench } from './useWorkbench';
 import { labelFromPath } from './forms';
 import { PanelResizeHandle } from './PanelResizeHandle';
+import { Tabs, tabPanelProps } from './Tabs';
+import { iconSize } from './icons';
+import { objectRoleClass } from './objectRole';
 
 const objectIcons = new Map<string, LucideIcon>([
   ['AR-PACKAGE', FolderTree],
@@ -137,7 +140,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                 title={`${object.shortName}\n${object.kind}\n${object.path}`}
                 aria-expanded={model.hasChildren.has(object.objectId) ? expanded : undefined}
                 data-object-id={object.objectId}
-                className={`tree-row${selected ? ' selected' : ''}`}
+                className="tree-row"
                 style={{ paddingLeft: `${depth * 12}px` }}
                 onClick={(event) =>
                   void actions.current.selectObject(object.objectId, event.ctrlKey || event.metaKey)
@@ -155,6 +158,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                 {model.hasChildren.has(object.objectId) ? (
                   <button
                     type="button"
+                    className="ghost-button"
                     tabIndex={-1}
                     aria-label={t(
                       expanded ? 'editor.tree.collapseObject' : 'editor.tree.expandObject',
@@ -171,12 +175,20 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
                       });
                     }}
                   >
-                    {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                    {expanded ? (
+                      <ChevronDown size={iconSize.inline} aria-hidden="true" />
+                    ) : (
+                      <ChevronRight size={iconSize.inline} aria-hidden="true" />
+                    )}
                   </button>
                 ) : (
                   <span className="tree-spacer" />
                 )}
-                <Icon size={14} aria-hidden="true" />
+                <Icon
+                  size={iconSize.inline}
+                  aria-hidden="true"
+                  className={objectRoleClass(object)}
+                />
                 <span className="tree-name">{object.shortName}</span>
               </div>
             );
@@ -243,72 +255,73 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
         <strong>{c.workspace?.name ?? t('editor.tree.project')}</strong>
         <button
           type="button"
-          className="panel-icon-button"
+          className="icon-button"
           aria-label={t('editor.tree.collapse')}
           title={t('editor.tree.collapse')}
           onClick={() => c.setTreeVisible(false)}
         >
-          <ChevronLeft size={16} aria-hidden="true" />
+          <ChevronLeft size={iconSize.control} aria-hidden="true" />
         </button>
       </header>
-      <div className="panel-tabs" role="tablist" aria-label={t('editor.tree.views')}>
-        {(['objects', 'files'] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            role="tab"
-            aria-selected={c.treeMode === mode}
-            onClick={() => c.setTreeMode(mode)}
-          >
-            {mode === 'objects' ? t('editor.tree.objects') : t('editor.tree.files')}
-          </button>
-        ))}
-      </div>
-      <label className="search-field">
-        <Search size={14} aria-hidden="true" />
-        <input
-          aria-label={t('editor.tree.search')}
-          value={c.treeFilter}
-          onChange={(event) => c.setTreeFilter(event.target.value)}
-          placeholder={t('editor.tree.placeholder')}
+      <div className="panel-tabs">
+        <Tabs
+          id="tree"
+          label={t('editor.tree.views')}
+          selected={c.treeMode}
+          onSelect={c.setTreeMode}
+          items={[
+            { key: 'objects', label: t('editor.tree.objects') },
+            { key: 'files', label: t('editor.tree.files') },
+          ]}
         />
-      </label>
-      <div
-        className="tree-content"
-        role="tree"
-        aria-label={
-          c.treeMode === 'objects' ? t('editor.objects.heading') : t('editor.tree.sourceFiles')
-        }
-        aria-multiselectable
-        onKeyDown={keyboard}
-      >
-        {c.treeMode === 'objects'
-          ? objectRows
-          : sources.map((source, index) => (
-              <button
-                key={source.sourceId}
-                type="button"
-                role="treeitem"
-                tabIndex={
-                  c.activeSourceId === source.sourceId || (!activeSourceInRows && index === 0)
-                    ? 0
-                    : -1
-                }
-                aria-level={1}
-                aria-selected={c.activeSourceId === source.sourceId}
-                className={`tree-row${c.activeSourceId === source.sourceId ? ' selected' : ''}`}
-                onClick={() => void c.readSource(source.sourceId)}
-              >
-                <FileCode2 size={14} aria-hidden="true" />
-                <span className="tree-name" title={displayPath(source.path)}>
-                  {labelFromPath(source.path)}
-                </span>
-                <small>
-                  {source.readonly ? t('editor.common.readonly') : t('editor.tree.source')}
-                </small>
-              </button>
-            ))}
-        {!c.projection ? <p className="empty-state">{t('editor.tree.loading')}</p> : null}
+      </div>
+      <div className="tree-panel" {...tabPanelProps('tree', c.treeMode)}>
+        <label className="search-field">
+          <Search size={iconSize.inline} aria-hidden="true" />
+          <input
+            aria-label={t('editor.tree.search')}
+            value={c.treeFilter}
+            onChange={(event) => c.setTreeFilter(event.target.value)}
+            placeholder={t('editor.tree.placeholder')}
+          />
+        </label>
+        <div
+          className="tree-content"
+          role="tree"
+          aria-label={
+            c.treeMode === 'objects' ? t('editor.objects.heading') : t('editor.tree.sourceFiles')
+          }
+          aria-multiselectable
+          onKeyDown={keyboard}
+        >
+          {c.treeMode === 'objects'
+            ? objectRows
+            : sources.map((source, index) => (
+                <button
+                  key={source.sourceId}
+                  type="button"
+                  role="treeitem"
+                  tabIndex={
+                    c.activeSourceId === source.sourceId || (!activeSourceInRows && index === 0)
+                      ? 0
+                      : -1
+                  }
+                  aria-level={1}
+                  aria-selected={c.activeSourceId === source.sourceId}
+                  className="tree-row ghost-button"
+                  onClick={() => void c.readSource(source.sourceId)}
+                >
+                  <FileCode2 size={iconSize.inline} aria-hidden="true" />
+                  <span className="tree-name" title={displayPath(source.path)}>
+                    {labelFromPath(source.path)}
+                  </span>
+                  <small>
+                    {source.readonly ? t('editor.common.readonly') : t('editor.tree.source')}
+                  </small>
+                </button>
+              ))}
+          {!c.projection ? <p className="empty-state">{t('editor.tree.loading')}</p> : null}
+        </div>
       </div>
       {c.activeObjectId && c.treeMode === 'objects' && !activeInRows ? (
         <p className="filter-retained">

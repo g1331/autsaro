@@ -144,12 +144,12 @@ check('themes-settings-layout-and-keyboard', async () => {
   }
   await key('4', { alt: true });
   await until(
-    `Boolean(document.querySelector('[role=tabpanel][aria-label="构建"]'))`,
+    `Boolean(document.querySelector('[role=region][aria-label="构建"]'))`,
     'Alt+4 opens build',
   );
   await key('9', { alt: true });
   await until(
-    `Boolean(document.querySelector('[role=tabpanel][aria-label="主机验证"]'))`,
+    `Boolean(document.querySelector('[role=region][aria-label="主机验证"]'))`,
     'Alt+9 opens host',
   );
   await input(label('搜索对象表名称、路径、定义、值'), 'does-not-match');
