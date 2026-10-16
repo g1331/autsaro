@@ -175,13 +175,13 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), crate::Lo
     })?;
     let actual = integrity_record(dir, names)?;
     if recorded != actual {
-        // Name the first file whose bytes differ from its record; a damaged or
-        // extended record itself is reported as the integrity record.
-        let path = recorded
+        // Name the first file without its exact record entry; when every file
+        // has one, the record itself was extended or reordered.
+        let entries: std::collections::HashSet<_> = recorded.lines().collect();
+        let path = actual
             .lines()
-            .zip(actual.lines())
-            .find(|(recorded, actual)| recorded != actual)
-            .and_then(|(_, actual)| actual.split_once("  "))
+            .find(|line| !entries.contains(line))
+            .and_then(|line| line.split_once("  "))
             .map_or(FILE_HASHES, |(_, name)| name);
         return Err(crate::product_message!("backend.generation.output_modified", "path" => path));
     }
