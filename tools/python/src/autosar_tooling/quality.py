@@ -445,7 +445,7 @@ def clang_tidy_project(project: Path, tidy: str) -> collections.Counter[ClangTid
         for name, result in zip(units, results):
             matches = [CLANG_TIDY_LINE.match(line) for line in result.stdout.splitlines()]
             if result.returncode or any(match and match[4] == "error" for match in matches):
-                raise RuntimeError(f"{project.name}: clang-tidy could not analyze {name}: argv={result.args!r} exit_code={result.returncode}\n{result.stdout}{result.stderr}")
+                raise RuntimeError(f"{project.name}: clang-tidy could not analyze {name}:\n{result.stdout}{result.stderr}")
             for match in filter(None, matches):
                 try:
                     relative = Path(match[1]).resolve().relative_to(project).as_posix()

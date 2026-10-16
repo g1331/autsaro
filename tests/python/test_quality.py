@@ -1,5 +1,6 @@
 """Protect the incremental format gate from hiding changed-line violations."""
 
+import json
 import subprocess
 import tempfile
 import unittest
@@ -24,6 +25,26 @@ class QualityTests(unittest.TestCase):
             quality.run(["git", "diff"])
         for text in ("quality:", "argv=", "status=timeout", "exit_code=None", "before hang", "hung producer"):
             self.assertIn(text, str(failure.exception))
+
+    def test_clang_tidy_failure_prints_command_and_exit_once(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "sample"
+            (project / "kernel").mkdir(parents=True)
+            (project / "meta").mkdir()
+            (project / "target.json").write_text(json.dumps({
+                "target": "linux-test", "kernelPatches": [], "includePaths": ["."],
+                "sources": ["unit.c"], "entries": {}, "compilerFlags": ["-std=c99"],
+            }))
+            (project / "meta/integration.json").write_text('{"originalBswSources":{}}')
+            with patch.object(quality.subprocess, "run", return_value=subprocess.CompletedProcess(
+                ["clang-tidy"], 23, b"producer stdout", b"producer stderr",
+            )), self.assertRaises(RuntimeError) as failure:
+                quality.clang_tidy_project(project, "clang-tidy")
+            message = str(failure.exception)
+            self.assertIn("sample: clang-tidy could not analyze unit.c", message)
+            self.assertEqual(message.count("argv="), 1)
+            self.assertEqual(message.count("exit_code=23"), 1)
+            self.assertIn("producer stderr", message)
 
     def test_clang_format_and_clang_tidy_must_share_one_version(self):
         def lock(**versions):
