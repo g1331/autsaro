@@ -19,6 +19,7 @@ typedef enum {
 } Os_HookPhase;
 #define OSServiceId_Unknown                  ((OSServiceIdType)0u)
 #define OSServiceId_GetISRID                 ((OSServiceIdType)0x01u)
+#define OSServiceId_GetCoreID                ((OSServiceIdType)0x16u)
 #define OSServiceId_ControlIdle              ((OSServiceIdType)0x1du)
 #define OSServiceId_isOsStarted              ((OSServiceIdType)0x36u)
 #define OSServiceId_DisableInterruptSource   ((OSServiceIdType)0x30u)

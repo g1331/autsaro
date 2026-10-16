@@ -306,13 +306,13 @@ int main(int argc, char **argv)
     };
     Os_IsrConfig interrupts = {.priorities = {[4u] = 15u, [6u] = 9u, [20u] = 3u}};
     Os_ResourceConfig resources[3] = {
-        {0u, 3u, 1u, UINT32_C(1) << 20u},
-        {1u, 9u, 0u, UINT32_C(1) << 6u},
-        {2u, 15u, 0u, UINT32_C(1) << 4u},
+        {0u, 3u, 1u, UINT32_C(1) << 20u, 0u, 0u},
+        {1u, 9u, 0u, UINT32_C(1) << 6u, 0u, 0u},
+        {2u, 15u, 0u, UINT32_C(1) << 4u, 0u, 0u},
     };
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
     Os_TargetConfig target = {
-        tasks, 2u, 262144u, resources, 3u, NULL, 0u, 0u, 0u, 0u, NULL, &hooks, &interrupts};
+        tasks, 2u, 262144u, resources, 3u, NULL, 0u, 0u, 0u, 0u, NULL, &hooks, &interrupts, 0u};
     if (is("equal") || is("lower")) {
         interrupts.priorities[6u] = is("equal") ? 3u : 2u;
     } else if (is("priority-order")) {

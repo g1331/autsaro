@@ -101,6 +101,6 @@ int main(int argc, char **argv)
     if (Os_HostClose(thread) == 0) {
         return 95;
     }
-    StartOS(1u);
+    StartOS(OSDEFAULTAPPMODE);
     return 94;
 }

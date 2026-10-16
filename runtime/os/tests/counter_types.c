@@ -100,7 +100,8 @@ int main(int argc, char **argv)
                                     0u,
                                     &time,
                                     strcmp(scenario, "configured") == 0 ? &hooks : NULL,
-                                    NULL};
+                                    NULL,
+                                    0u};
     const char *suffix = strchr(scenario, '-');
     if (suffix != NULL) {
         uint32_t identifier;

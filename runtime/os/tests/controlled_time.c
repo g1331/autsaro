@@ -627,7 +627,7 @@ int main(int argc, char **argv)
                                {1u, 0u, OS_ALARM_EVENT, 0u, 2u, NULL, 1u, 0u, 10u, 10u, 0u}};
     Os_TimeConfig time = {counters, 1u, alarms, 2u, 0u, 0u, 4u, NULL, NULL, 0u};
     Os_TargetConfig config = {
-        tasks, 3u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL};
+        tasks, 3u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL, 0u};
     scenario = (argc == 2) ? argv[1] : "thousand";
     steps = (strcmp(scenario, "thousand") == 0) ? 1000u : 1u;
     if (strncmp(scenario, "hardware-", 9u) == 0) {

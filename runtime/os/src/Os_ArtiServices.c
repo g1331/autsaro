@@ -54,6 +54,21 @@ boolean isOsStarted(void)
     return result;
 }
 
+CoreIdType GetCoreID(void)
+{
+    const int trace = Os_ArtiServiceEnter();
+    if (trace != 0) {
+        Os_ArtiService(OSServiceId_GetCoreID, (uint32_t)0u, 0);
+    }
+    const CoreIdType result = Os_Implementation_GetCoreID();
+    if (trace != 0) {
+        Arti_CaptureServiceStatus((uint32_t)E_OK);
+        Os_ArtiService(OSServiceId_GetCoreID, (uint32_t)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
+
 StatusType GetTaskID(TaskRefType TaskID)
 {
     const int trace = Os_ArtiServiceEnter();

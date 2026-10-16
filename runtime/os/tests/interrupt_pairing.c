@@ -64,6 +64,7 @@ void ErrorHook(StatusType error)
         check(OSError_StartOS_Mode() == 2u);
     } else if (service == OSServiceId_EnableInterruptSource) {
         check(OSError_EnableInterruptSource_ISRID() == 99u ||
+              OSError_EnableInterruptSource_ISRID() == 4u ||
               OSError_EnableInterruptSource_ISRID() == 6u);
         check(OSError_EnableInterruptSource_ClearPending() == TRUE);
     } else if (service == OSServiceId_DisableInterruptSource) {
@@ -76,6 +77,8 @@ void ErrorHook(StatusType error)
               OSError_DisableInterruptSource_ISRID() == 7u);
     } else if (service == OSServiceId_ClearPendingInterrupt) {
         check(OSError_ClearPendingInterrupt_ISRID() == 99u ||
+              OSError_ClearPendingInterrupt_ISRID() == 1u ||
+              OSError_ClearPendingInterrupt_ISRID() == 4u ||
               OSError_ClearPendingInterrupt_ISRID() == 7u);
     } else if (service == OSServiceId_ControlIdle) {
         check(OSError_ControlIdle_CoreID() == UINT16_MAX &&
@@ -297,7 +300,10 @@ static void owner(void)
             check(DisableInterruptSource(0u) == E_OS_ID);
             check(DisableInterruptSource(4u) == E_OS_ID);
             check(DisableInterruptSource(7u) == E_OS_ID);
-            check(errors == 7u);
+            check(EnableInterruptSource(4u, TRUE) == E_OS_ID);
+            check(ClearPendingInterrupt(4u) == E_OS_ID);
+            check(ClearPendingInterrupt(1u) == E_OS_ID);
+            check(errors == 10u);
             pend();
         } else if (strcmp(scenario, "source-hook-reject") == 0) {
             pend();
@@ -413,7 +419,7 @@ int main(int argc, char **argv)
     };
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
     const Os_TargetConfig target = {
-        tasks, 2u, 262144u, NULL, 0u, NULL, 0u, UINT32_C(1) << 4u, 0u, 0u, NULL, &hooks, NULL};
+        tasks, 2u, 262144u, NULL, 0u, NULL, 0u, UINT32_C(1) << 4u, 0u, 0u, NULL, &hooks, NULL, 0u};
     check(Os_TargetPrepare(&target) == E_OK);
     /* All four services operate before startup, including unmatched restores. */
     DisableAllInterrupts();

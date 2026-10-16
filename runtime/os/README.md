@@ -10,9 +10,9 @@ Disable／Enable、嵌套All／OS配对按调用者保存和恢复状态。Cat1�
 
 TASK、ISR和ALARMCALLBACK用于标准入口声明／定义；TASK与ISR分别用OS_TASK_ENTRY／OS_ISR_ENTRY绑定实际配置。CounterType和FreeRTOS TickType均为uint32；Rte_Os_Type.h的TimeInMicrosecondsType为uint64。所选生成Counter提供对应常量及单位转换宏；转换参数只求值一次，合法范围0..UINT32_MAX，整数秒向下截断。
 
-时间由controlled_logical_ms逐毫秒请求／确认推进；软件Counter与内核tick分别保持模数，宿主看门狗不推进汽车时间。实际Waiting及输入／tick／输出确认决定提交完成。GetISRID读取真实ISR帧；单核ControlIdle支持IDLE_NO_HALT且省略CoreID检查。isOsStarted 按 R24-11 的 DRAFT 定义记录是否进入过 StartOS，Ready 状态另行判断。
+时间由controlled_logical_ms逐毫秒请求／确认推进；软件Counter与内核tick分别保持模数，宿主看门狗不推进汽车时间。实际Waiting及输入／tick／输出确认决定提交完成。GetISRID读取真实ISR帧；GetCoreID在任何上下文及StartOS之前返回OS_CORE_ID_0；单核ControlIdle支持IDLE_NO_HALT且省略CoreID检查。isOsStarted 按 R24-11 的 DRAFT 定义记录是否进入过 StartOS，Ready 状态另行判断。
 
-生成输入须在唯一OsOS中明确声明OsUseResScheduler及受支持状态／类／错误参数开关，OsHooks直接归属该OsOS。参考值false保持无虚拟scheduler资源；true生成全部本核Task可访问、无ISR访问、天花板为最高Task优先级的RES_SCHEDULER。启用时同名显式OsResource按SWS_Os_00850被忽略，虚拟实例取代其配置；生成剖面不接受其他未映射的显式资源。原生Os_TargetConfig仍支持已验证的Task／ISR资源及四一致性类容量。
+生成输入须在唯一OsOS中明确声明OsUseResScheduler及受支持状态／类／错误参数开关，OsHooks直接归属该OsOS。参考值false保持无虚拟scheduler资源；true生成全部本核Task可访问、无ISR访问、天花板为最高Task优先级的RES_SCHEDULER。启用时同名显式OsResource按SWS_Os_00850被忽略，虚拟实例取代其配置；生成剖面不接受其他未映射的显式资源。原生Os_TargetConfig仍支持已验证的Task／ISR资源及四一致性类容量：`use_res_scheduler`为0时名为RES_SCHEDULER的配置资源与普通资源相同（SWS_Os_00854）；`linked`资源按`link`解析到同一根资源，须与根资源天花板和ISR访问一致，不得成环（SWS_Os_00855）。生成的ErrorHook访问宏`OS_USE_GET_SERVICE_ID`／`OS_USE_PARAMETER_ACCESS`按OsUseGetServiceId／OsUseParameterAccess取值，生成的ECU以`StartOS(OSDEFAULTAPPMODE)`启动。
 
 Windows物理栈由实际线程、保护页和保证区验证。Linux OS 使用每个 Task／唯一 S dispatcher／双控制线程／宿主 actor 的独立 mmap+pthreads 栈，低端 PROT_NONE guard 与预留 sigaltstack；Task 栈和 FreeRTOS 的 512-word 元数据缓冲分开。普通停车使用 SIGRTMIN 的代际确认与 futex，仅在 port critical／宿主锁持有期间屏蔽；独立 SIGRTMIN+1 无锁故障停止。S 独占 ISR、受控 tick 与唯一内核任务选择器；host producer 只发布边沿，不能执行 ISR。仅注册地址保护页内的 SIGSEGV/SIGBUS 才归类栈故障，损坏 actor 停在 altstack，健康 C/D 停止其他 actor 并报告；未知故障或双控制失败非零 fail-closed，不在信号 handler 中调用 Hook／stdio。两目标均不推定 MCU 电气层或硬实时性。
 

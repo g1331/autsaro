@@ -1,23 +1,30 @@
 /** @file ARTI trace of task transitions, hook events and event-buffer bounds. */
 #include <limits.h>
 #include "Os_Arti.h"
-#define PreTaskHook  OriginalPreTaskHook
-#define PostTaskHook OriginalPostTaskHook
-#define main         transition_main
+static void observed_hook(void);
+#define TASK_HOOK_OBSERVER observed_hook
+#define main               transition_main
 #include "task_hooks.c"
 #undef main
-#undef PostTaskHook
-#undef PreTaskHook
 
+static bool stack_published[3];
 static void observed_hook(void)
 {
     TaskType id = INVALID_TASK;
     Os_ActivationInfo actual;
     check(GetTaskID(&id) == E_OK && id < 3u);
+    check(GetCoreID() == OS_CORE_ID_0);
     check(Os_TargetInspectActivation(id, &actual) == E_OK);
     check(Os_ArtiTasks[id].state == actual.state && actual.state == RUNNING);
     check(Os_ArtiTasks[id].priority == actual.effective_priority);
     check(Os_ArtiTasks[id].activations == actual.count);
+    if (Os_ArtiTaskStacks[id] == NULL) {
+        /* A task thread publishes its stack when it first runs, after its first PreTaskHook. */
+        check(!stack_published[id]);
+        stack_published[id] = true;
+        return;
+    }
+    stack_published[id] = true;
     check(Os_ArtiTaskStacks[id] != NULL && Os_ArtiTaskStacks[id]->role == 'T');
     check(Os_ArtiTaskStacks[id]->sp >= Os_ArtiTaskStacks[id]->reserve_low);
     check(Os_ArtiTaskStacks[id]->sp < Os_ArtiTaskStacks[id]->high);
@@ -37,16 +44,6 @@ static void observed_hook(void)
     }
 #endif
 }
-void PreTaskHook(void)
-{
-    observed_hook();
-    OriginalPreTaskHook();
-}
-void PostTaskHook(void)
-{
-    observed_hook();
-    OriginalPostTaskHook();
-}
 
 static void arti_check(int accepted)
 {
@@ -62,6 +59,7 @@ void Os_ArtiTestShutdownObserved(void)
     unsigned pre_start = 0u, pre_return = 0u, post_start = 0u, post_return = 0u;
     unsigned startup_start = 0u, startup_return = 0u, shutdown_start = 0u, shutdown_return = 0u;
     unsigned rejected_getters = 0u;
+    unsigned core_start = 0u, core_return = 0u;
     const char *expected = "A0A2S0A1P0S1T1S0W0S2R0P2S0T0A1S1T1S2A0P2S0";
     if (strcmp(scenario, "self-chain") == 0 || strcmp(scenario, "queued") == 0) {
         expected = "A0A2S0T0A0S0T0S2";
@@ -122,6 +120,15 @@ void Os_ArtiTestShutdownObserved(void)
                            event->service_status == 2u);
                 ++rejected_getters;
             }
+            if (strcmp(event->event, "OsServiceCall_GetCoreID_Start") == 0) {
+                arti_check(event->event_parameter == 0u);
+                ++core_start;
+            } else if (strcmp(event->event, "OsServiceCall_GetCoreID_Return") == 0) {
+                arti_check(event->event_parameter == OS_CORE_ID_0 && core_return < core_start);
+                ++core_return;
+            } else {
+                /* Other application service calls are checked by their own vectors. */
+            }
             arti_check(strcmp(event->event, "OsServiceCall_StartOS_Return") != 0);
             arti_check(strcmp(event->event, "OsServiceCall_ShutdownOS_Return") != 0);
             arti_check(strcmp(event->event, "OsServiceCall_TerminateTask_Return") != 0);
@@ -144,8 +151,10 @@ void Os_ArtiTestShutdownObserved(void)
         }
         arti_check(pre_start == pre_expected && post_start == post_expected);
         arti_check(rejected_getters == pre_start + post_start);
+        arti_check(core_start == pre_start + post_start && core_return == core_start);
     } else {
         arti_check(pre_start == 0u && post_start == 0u && rejected_getters == 0u);
+        arti_check(core_start == 0u && core_return == 0u);
     }
     printf("arti scenario=%s transitions=%s hooks=%u rejected_getters=%u dropped=0\n",
            scenario,

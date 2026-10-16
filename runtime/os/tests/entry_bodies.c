@@ -162,7 +162,7 @@ int main(int argc, char **argv)
          OS_SCHEDULE_FULL,
          0u},
     };
-    const Os_ResourceConfig resource = {0u, 2u, 3u, UINT32_C(1) << 5u};
+    const Os_ResourceConfig resource = {0u, 2u, 3u, UINT32_C(1) << 5u, 0u, 0u};
     const Os_CounterConfig counter = {0u, 15u, 1u, 1u, 1u};
     const Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_CALLBACK, 0u, 0u, AlarmBody, 0u, 0u, 0u, 0u, 0u};
     const Os_TimeConfig time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
@@ -171,7 +171,7 @@ int main(int argc, char **argv)
                                               [6u] = OS_ISR_ENTRY(ChildISR)};
     Os_IsrConfig interrupts = {.priorities = {[5u] = 1u, [6u] = 2u}, .entries = entries};
     Os_TargetConfig target = {
-        tasks, 2u, 262144u, &resource, 1u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, &interrupts};
+        tasks, 2u, 262144u, &resource, 1u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, &interrupts, 0u};
     if (is("invalid-priority")) {
         interrupts.priorities[5u] = 0u;
     } else if (is("invalid-kernel")) {

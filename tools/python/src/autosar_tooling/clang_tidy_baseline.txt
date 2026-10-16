@@ -23,7 +23,6 @@ readability-function-size runtime/os/src/Os_Backend.c StatusType Os_BackendResou
 readability-function-size runtime/os/src/Os_Backend.c static DWORD WINAPI control(void *argument)
 readability-function-size runtime/os/src/Os_Backend.c static StatusType complete_activation(TaskType id, int chain, int returned)
 readability-function-size runtime/os/src/Os_Backend.c void Os_BackendStart(AppModeType mode)
-readability-function-size runtime/os/src/Os_Interrupt.c static void change(unsigned operation, OSServiceIdType service)
 readability-function-size runtime/os/src/Os_Time.c StatusType Os_TimeValidate(const Os_TargetConfig *target)
 readability-function-size runtime/os/src/host/linux/Os_HostLinux.c HANDLE Os_HostCreateActor(SIZE_T stack,
 readability-identifier-naming runtime/bsw/include/Platform_Types.h typedef const void *ConstVoidPtr;

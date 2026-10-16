@@ -26,6 +26,7 @@ static void mask_pairs(void)
     check(GetTaskID(&unchanged) == 9u && unchanged == 42u);
     check(GetActiveApplicationMode() == 0u && GetISRID() == INVALID_ISR);
     check(ControlIdle(UINT16_MAX, IDLE_NO_HALT) == 9u && isOsStarted() == FALSE);
+    check(GetCoreID() == OS_CORE_ID_0);
     ShutdownOS(8u);
     StartOS(2u);
     EnableAllInterrupts();
@@ -38,6 +39,21 @@ static void mask_pairs(void)
     check(Os_InterruptAllows(4u) != 0 && Os_InterruptAllows(5u) == 0);
     ResumeOSInterrupts();
     check(Os_InterruptDisabled() == 0 && Os_InterruptAllows(5u) != 0);
+}
+/* Outside any Task or ISR the six void services are refused without ErrorHook
+ * (SWS_Os_00367) and leave every mask unchanged. */
+static void refused_mask_pairs(void)
+{
+    const unsigned before = errors;
+    DisableAllInterrupts();
+    SuspendAllInterrupts();
+    SuspendOSInterrupts();
+    check(Os_InterruptDisabled() == 0 && Os_InterruptAllows(4u) != 0 &&
+          Os_InterruptAllows(5u) != 0);
+    ResumeOSInterrupts();
+    ResumeAllInterrupts();
+    EnableAllInterrupts();
+    check(errors == before);
 }
 static void probe_calls(void)
 {
@@ -53,6 +69,8 @@ static void probe_calls(void)
     probed = true;
     if (strcmp(scenario, "outside-isr") != 0) {
         mask_pairs();
+    } else {
+        refused_mask_pairs();
     }
     statuses[0] = GetTaskID(&task);
     statuses[1] = GetTaskState(99u, &state);
@@ -83,7 +101,7 @@ static void probe_calls(void)
     statuses[26] = EnableInterruptSource(99u, TRUE);
     statuses[27] = ClearPendingInterrupt(99u);
     statuses[28] = ControlIdle(UINT16_MAX, IDLE_NO_HALT);
-    check(isOsStarted() == TRUE);
+    check(isOsStarted() == TRUE && GetCoreID() == OS_CORE_ID_0);
     check(task == (queries ? 0u : 42u) && state == 42u && event == 42u);
     check(value == UINT64_MAX && elapsed == UINT64_MAX && table == 42u);
     check(base.maxallowedvalue == 61u && base.ticksperbase == 62u && base.mincycle == 63u);
@@ -198,8 +216,10 @@ int main(int argc, char **argv)
                                     0u,
                                     strcmp(scenario, "alarm-callback") == 0 ? &time : NULL,
                                     &hooks,
-                                    NULL};
+                                    NULL,
+                                    0u};
     check(Os_TargetPrepare(&target) == E_OK);
+    check(GetCoreID() == OS_CORE_ID_0);
     StartOS(1u);
     return 99;
 }

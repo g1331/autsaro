@@ -65,4 +65,5 @@ const Os_TargetConfig Ecu_OsConfig = {
     .time = &time_config,
     .hooks = &hooks,
     .interrupts = &interrupts,
+    .use_res_scheduler = @USE_RES_SCHEDULER@u,
 };

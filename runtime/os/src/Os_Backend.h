@@ -140,6 +140,12 @@ void Os_StackTestTriggerBackupFault(void);
 ISRType Os_Implementation_GetISRID(void);
 StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
 boolean Os_Implementation_isOsStarted(void);
+CoreIdType Os_Implementation_GetCoreID(void);
+/* Index of the configured resource `id`, or resource_count when absent. */
+size_t Os_ResourceIndex(const Os_TargetConfig *config, ResourceType id);
+/* Index of the STANDARD resource that the LINKED chain from `index` names, or
+ * resource_count for a missing or cyclic link. */
+size_t Os_ResourceRoot(const Os_TargetConfig *config, size_t index);
 StatusType Os_Implementation_GetTaskID(TaskRefType TaskID);
 StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State);
 StatusType Os_Implementation_ActivateTask(TaskType TaskID);

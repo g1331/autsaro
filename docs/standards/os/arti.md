@@ -6,7 +6,7 @@
 
 ## SWS_OS 中的 ARTI 条款
 
-每个服务调用进出事件（`SWS_Os_00843`）依赖 SC1 服务集合（含 GetCoreID）的处置，随 [#190](https://github.com/g1331/autsaro/issues/190) 核对。
+应用上下文中的每个服务调用都产生 AR_CP_OS_SERVICECALLS 的进出事件，包括 GetCoreID；原生 `arti_consumer` 核对 hook 中各服务调用的事件与参数（`SWS_Os_00843` 由 `check_arti` 的 `Verifies:` 处置）。
 
 | 对象 | 处置 |
 | --- | --- |

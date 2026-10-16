@@ -36,13 +36,14 @@ int main(int argc, char **argv) {
         return 98;
     }
     expected_enabled = (strcmp(argv[1], "true") == 0) ? 1u : 0u;
-    if (Ecu_OsConfig.resource_count != expected_enabled) {
+    if (Ecu_OsConfig.resource_count != expected_enabled ||
+        Ecu_OsConfig.use_res_scheduler != expected_enabled) {
         return 97;
     }
     if (expected_enabled != 0u) {
         const Os_ResourceConfig *resource = Ecu_OsConfig.resources;
         if (resource == NULL || resource->id != RES_SCHEDULER || resource->ceiling != 1u ||
-            resource->task_access != 1u || resource->isr_access != 0u) {
+            resource->task_access != 1u || resource->isr_access != 0u || resource->linked != 0u) {
             return 96;
         }
         for (unsigned i = 0u; i < 3u; ++i) {
