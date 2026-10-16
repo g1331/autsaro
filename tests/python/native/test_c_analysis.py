@@ -31,7 +31,7 @@ class ActualCAnalysisTests(unittest.TestCase):
             path = project / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
-        (project / "meta").mkdir()
+        (project / "meta").mkdir(exist_ok=True)
         (project / "meta/files.list").write_text("\n".join(sorted(files)) + "\n", encoding="utf-8")
         (project / "meta/files.sha256").write_text("".join(f"{hashlib.sha256((project / name).read_bytes()).hexdigest()}  {name}\n" for name in [*sorted(files), "meta/files.list"]), encoding="utf-8")
         return project
@@ -55,6 +55,31 @@ class ActualCAnalysisTests(unittest.TestCase):
             after = {path.relative_to(project).as_posix(): path.read_bytes() for path in project.rglob("*") if path.is_file()}
             self.assertEqual(before, after)
             return summary
+
+    def test_baseline_comparison_runs_the_local_analyzer_and_preserves_source_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, "int main(void) { return 0; }\n",
+                                   extra_files={"meta/integration.json": '{"plan":{}}'})
+            target = json.loads((project / "target.json").read_text())["target"]
+            baseline = root / "baseline/sources"
+            self.assertEqual(c_check.check(project, target, baseline), 0)
+            self.assertEqual(c_check.check(project, target, root / "same", baseline), 0)
+            summary = json.loads((root / "same/summary.json").read_text())
+            self.assertEqual(summary["comparison"], {"new": [], "removed": []})
+            # Mutation: returning the baseline result without analyzing modified sources
+            # would hide this compiler failure. Update the source seal, not the expectation.
+            source = project / "bsw/src/main.c"
+            source.write_text("invalid C tokens;\n")
+            inventory = project / "meta/files.sha256"
+            lines = inventory.read_text().splitlines()
+            inventory.write_text("\n".join(
+                f"{hashlib.sha256(source.read_bytes()).hexdigest()}  bsw/src/main.c"
+                if line.endswith("  bsw/src/main.c") else line for line in lines) + "\n")
+            self.assertEqual(c_check.check(project, target, root / "changed", baseline), 1)
+            summary = json.loads((root / "changed/summary.json").read_text())
+            self.assertIn("Compiler validation failed", summary["error"])
+            self.assertNotIn("comparison", summary)
 
     def test_clean_main_passes(self):
         self.assertTrue(self.analyze("int main(void) { return 0; }\n")["passed"])

@@ -416,7 +416,7 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
     return code, passed, diagnostics, command
 
 
-def check(project: Path, target_id: str, output: Path) -> int:
+def check(project: Path, target_id: str, output: Path, baseline: Path | None = None) -> int:
     refuse_links(project)
     project = project.resolve(strict=True)
     refuse_links(output)
@@ -471,6 +471,13 @@ def check(project: Path, target_id: str, output: Path) -> int:
         if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:
             raise ValueError("Source seal changed during analysis")
         summary["passed"] = all_passed
+        if baseline is not None:
+            from autosar_tooling.c_comparison import compare
+            summary["comparison"] = compare(summary, project, output, baseline)
+            for kind, rows in summary["comparison"].items():
+                print(f"C baseline {kind}: {sum(row['count'] for row in rows)} occurrences")
+                for row in rows:
+                    print(f"  {row['rule']} {row['file']} x{row['count']}: {row['source']}")
         print(f"C analysis {target_id}: {len(sources)} units, {len(diagnostics)} diagnostics; passed={summary['passed']}")
         return 0 if summary["passed"] else 1
     except (ValueError, RuntimeError, OSError, ET.ParseError, KeyError, ImportError) as error:
