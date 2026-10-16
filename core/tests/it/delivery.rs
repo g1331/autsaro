@@ -1032,3 +1032,37 @@ fn assert_retired_package(output: &Path, receiver: &Path, profile: &str) {
     assert!(!receiver.exists());
     assert_eq!(payload(output), before);
 }
+
+#[test]
+fn runtime_source_inventory_has_no_manual_digests_and_delivery_has_computed_digests() {
+    use autosar_config_core::resources::AssetInventory;
+    use sha2::{Digest, Sha256};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let inventory = AssetInventory::from_directory(root).unwrap();
+    let source: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("runtime/contracts/assets.json")).unwrap())
+            .unwrap();
+    let delivered: serde_json::Value = serde_json::from_slice(
+        inventory
+            .get("runtime/contracts/assets.json")
+            .unwrap()
+            .bytes,
+    )
+    .unwrap();
+    let source_rows = source["assets"].as_array().unwrap();
+    let delivered_rows = delivered["assets"].as_array().unwrap();
+    assert_eq!(source_rows.len(), delivered_rows.len());
+    for (source, delivered) in source_rows.iter().zip(delivered_rows) {
+        assert!(source.get("sha256").is_none());
+        let path = source["path"].as_str().unwrap();
+        let bytes = fs::read(root.join(path)).unwrap();
+        let expected = format!("{:x}", Sha256::digest(&bytes));
+        assert_eq!(delivered["sha256"], expected, "{path}");
+        let asset = inventory.get(path).unwrap();
+        assert_eq!(asset.sha256, expected, "{path}");
+        assert_eq!(asset.bytes, bytes, "{path}");
+        let mut metadata = delivered.clone();
+        metadata.as_object_mut().unwrap().remove("sha256");
+        assert_eq!(&metadata, source, "{path}");
+    }
+}

@@ -127,6 +127,10 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/core-build-dependencies
       - run: cargo test --locked -p autosar-config-core
+      - name: Runtime build identities and dependency pinning
+        env:
+          PYTHONPATH: tools/python/src
+        run: python3 -B -m unittest discover -s tests/python/native -p test_asset_build.py
       # Lint every feature, including the native and official test binaries that only manual
       # acceptance runs. core/clippy.toml and module attributes add the generation rules.
       - run: cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
