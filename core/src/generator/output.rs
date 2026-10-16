@@ -173,10 +173,17 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), crate::Lo
     let recorded = fs::read_to_string(dir.join(FILE_HASHES)).map_err(|_| {
         crate::product_message!("backend.generation.output_integrity_missing", "path" => dir.display())
     })?;
-    if recorded != integrity_record(dir, names)? {
-        return Err(crate::product_message!(
-            "backend.generation.output_modified"
-        ));
+    let actual = integrity_record(dir, names)?;
+    if recorded != actual {
+        // Name the first file without its exact record entry; when every file
+        // has one, the record itself was extended or reordered.
+        let entries: std::collections::HashSet<_> = recorded.lines().collect();
+        let path = actual
+            .lines()
+            .find(|line| !entries.contains(line))
+            .and_then(|line| line.split_once("  "))
+            .map_or(FILE_HASHES, |(_, name)| name);
+        return Err(crate::product_message!("backend.generation.output_modified", "path" => path));
     }
     Ok(())
 }

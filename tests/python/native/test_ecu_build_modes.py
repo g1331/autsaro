@@ -1,9 +1,11 @@
 """Exercise fault isolation through the sealed package's real build CLI."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -160,3 +162,86 @@ class EcuBuildModeTests(unittest.TestCase):
                                 self.assertIn("READY HostBatchV1" if mode == "host-batch"
                                               else "ecu_probe completed=20", observed)
             self.assertEqual((project / "meta/files.sha256").read_bytes(), seal)
+
+    def test_integrity_refusals_name_the_entry_and_keep_the_previous_build(self):
+        samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
+        if not samples:
+            self.fail("Generate c_analysis samples and set AUTOSAR_C_ANALYSIS_SAMPLES first")
+        env = dict(os.environ)
+        for variable, tool in [("AUTOSAR_CC", "gcc"), ("AUTOSAR_OBJDUMP", "objdump"), ("AUTOSAR_GIT", "git")]:
+            requested = env.get(variable) or shutil.which(tool)
+            if not requested:
+                self.fail(f"Native build requires {variable} or {tool} on PATH")
+            env[variable] = str(Path(requested).resolve(strict=True))
+
+        def tree(root):
+            return {path.relative_to(root).as_posix(): None if path.is_dir() else path.read_bytes()
+                    for path in root.rglob("*")}
+
+        with tempfile.TemporaryDirectory(prefix="autosar-integrity-") as temporary:
+            directory = Path(temporary).resolve(strict=True)
+            package = directory / "package"
+            shutil.copytree(Path(samples) / "standard-ecu", package)
+
+            def build(output, stage):
+                return OwnedProcess(ProcessSpec.seconds(
+                    [sys.executable, "-I", "-S", str(package / "tools/ecu-tool.py"), "build",
+                     "--project", str(package), "--output", str(output), "--mode", "host-batch"],
+                    directory, 180, directory, stage, env=env)).wait()
+
+            previous = directory / "previous"
+            built = build(previous, "previous")
+            self.assertTrue(built.success, built.stdout.read_text() + built.stderr.read_text())
+            kept = tree(previous)
+            source = package / "bsw/src/Com.c"
+            original = source.read_bytes()
+            external = directory / "external-bsw"
+
+            # Each case restores the package even when its assertions fail.
+            @contextlib.contextmanager
+            def tampered():
+                source.write_bytes(original + b"\n")
+                try:
+                    yield "Source identity mismatch: bsw/src/Com.c"
+                finally:
+                    source.write_bytes(original)
+
+            @contextlib.contextmanager
+            def extra():
+                (package / "bsw/src/Extra.c").write_bytes(b"")
+                try:
+                    yield "Unlisted source file: bsw/src/Extra.c"
+                finally:
+                    (package / "bsw/src/Extra.c").unlink()
+
+            @contextlib.contextmanager
+            def linked():
+                # A directory symbolic link on POSIX, an NTFS junction on Windows.
+                (package / "bsw").rename(external)
+                try:
+                    if os.name == "nt":
+                        subprocess.run(["cmd", "/C", "mklink", "/J", str(package / "bsw"), str(external)],
+                                       check=True, capture_output=True)
+                    else:
+                        (package / "bsw").symlink_to(external, target_is_directory=True)
+                    yield "Source links/reparse points are refused: bsw"
+                finally:
+                    if os.name == "nt" and (package / "bsw").exists():
+                        (package / "bsw").rmdir()
+                    elif (package / "bsw").is_symlink():
+                        (package / "bsw").unlink()
+                    external.rename(package / "bsw")
+
+            before = tree(package)
+            for case in (tampered, extra, linked):
+                with self.subTest(case=case.__name__):
+                    with case() as expected:
+                        output = directory / case.__name__
+                        failed = build(output, case.__name__)
+                        observed = failed.stdout.read_text() + failed.stderr.read_text()
+                        self.assertEqual(failed.status, "exited", observed)
+                        self.assertNotEqual(failed.exit_code, 0, observed)
+                        self.assertIn(expected, observed)
+                        self.assertFalse(output.exists())
+                        self.assertEqual(tree(previous), kept)
+                    self.assertEqual(tree(package), before)
