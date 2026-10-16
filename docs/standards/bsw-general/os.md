@@ -7,16 +7,16 @@ OS 是 SC1、单核的 AUTOSAR OS，内核采用固定版本的 FreeRTOS 并打�
 | 分组 | 依据与处置 |
 | --- | --- |
 | 文件与前缀 | 模块缩写与实现前缀为 Os；实现与头文件为 `Os.c`、`Os_*.c`、`Os.h`、`Os_*.h`，RTE 类型头为 `Rte_Os_Type.h`；主机后端为 `host/linux/Os_HostLinux.c` 等；没有仅大小写不同的文件名。`Os.h` 只导出 SWS_OS 的服务、类型与 hook 声明，集成接口在 `Os_Target.h`、`Os_Time.h`、`Os_Mailbox.h` 与 `Os_IntegrationHooks.h`。 已核对（源码）[Os]：SWS_BSW_00101–00105、00170、00171 |
-| 实现源 | 各 `Os_*.c` 经 `Os_Target.h` 或私有头 `Os_Backend.h` 包含 `Os.h`，从而包含 `Os_MemMap.h`；内部声明在 `src/` 下的私有头；OS 不使用 SchM、不向 Dem 报告；调用的 hook 与集成钩子都在 OS 自己的头中声明。外部链接的变量都定义在实现源中并以 `Os_` 开头，只读的描述表带 `const`。 已核对（源码）[Os]：SWS_BSW_00004–00008、00010、00060、00129–00131 |
+| 实现源 | 各 `Os_*.c` 直接或经 `Os_Target.h`、私有头 `Os_Backend.h` 间接包含实现头 `Os.h`，`Os_MemMap.h` 只由 `Os.h` 在声明区段包含；内部声明在 `src/` 下的私有头；OS 不使用 SchM、不向 Dem 报告；调用的 hook 与集成钩子都在 OS 自己的头中声明。外部链接的变量都定义在实现源中并以 `Os_` 开头，只读的描述表带 `const`。 已核对（源码）[Os]：SWS_BSW_00004、00005、00007、00008、00010、00060、00129–00131 |
 | 中断 | OS 依赖处理器，不是平台无关模块。Category 2 ISR 由 `ISR()` 声明，经 `Os_Interrupt.c` 与 `Os_Vector.c` 中的向量表分派（与其余实现分开），Category 1 由 `Os_TargetConfig.category1_isrs` 选择；从 ISR 到 Task 的转换由 OS 服务完成。主机端口没有硬件中断入口，也就没有 interrupt frame；分派只做有界的优先级与状态更新，应用 ISR 体由集成方提供。主机进程不访问硬件寄存器。 已核对（源码）[Os]：SWS_BSW_00016–00019、00021、00043、00065、00068、00119、00137、00167、00179、00181、00182、00188 |
 | 配置源 | 只有 pre-compile 配置：生成的 `Ecu_Config.c` 定义只读 `Ecu_OsConfig`，经 `Os_TargetPrepare(const Os_TargetConfig *)` 传入；`Os_Cfg.h` 与 `Os_Counter.h` 给出预编译开关与对象 ID；没有 link-time／post-build 配置文件。 已核对（生成样本）[Os]：SWS_BSW_00013–00015、00056、00057、00063、00117、00158、00160、00184 |
 | 实现头 | `Os.h` 自包含，经 `Os_Types.h` 引入 `Std_Types.h`，声明全部 API 服务；OS 没有主函数；除按段多次包含的 `Os_MemMap.h` 外，每个头都有唯一的 include guard。 已核对（源码）[Os]：SWS_BSW_00020、00024、00048、00110、00210、00249 |
 | AUTOSAR 服务 | OS 提供 SERVICE-KIND 为 OPERATING-SYSTEM 的计数器服务：`Os.h` 包含 Application Types Header `Rte_Os_Type.h`；生成的 `Rte_OsService.c` 使用 RTE 接口并包含 `Rte_Os.h`，服务端口与接口由 `os_service.rs` 生成的服务组件描述；OS 不提供经 RTE 路由的回调。 已核对（源码与生成样本）[Os]：SWS_BSW_00023、00025、00040、00180 |
 | RTE 与应用接口 | OS 源码没有 `Rte_` 调用，OS 头不包含 `Rte_Os.h` 或应用头。 已核对（源码）[Os]：SWS_BSW_00069、00218 |
 | Hook | OS 没有 BSW 意义上的 callout；ErrorHook、StartupHook 等是 SWS_OS 规定的 hook 例程，声明在 `Os.h`／`Os_Hooks.h`，按 SWS_Os_00815 由 `OS_START_SEC_CODE`／`OS_STOP_SEC_CODE` 包裹（memory-mapping suite 验证）。 已核对（原文与源码）[Os]：SWS_BSW_00135、00136、00254 |
-| 编码与命名 | 枚举值与宏除 SWS_OS／OSEK 规定的标准名（`TASK`、`SUSPENDED`、`OSServiceId_*` 等）外以 `OS_` 开头且全大写，错误值为标准的 `E_OS_*`；`boolean` 只赋值、返回 TRUE／FALSE 并与之比较；编译器关键字只经宏出现：`Os_MemMap.h` 的 `OS_CODE`、`OS_THREAD_LOCAL` 与私有头 `Os_Vector.h` 的 `OS_VECTOR_TABLE_SECTION`；Linux 与 Windows 的栈探测是两种平台实现，不是重复代码。 已核对（源码）[Os]：SWS_BSW_00121、00124、00125、00127、00142 |
-| 类型与开关的残留 | 非主机代码的整数已改用 AUTOSAR 类型；字符数据的 `char`、计数用的 `size_t`、预编译开关取 0／1 与按定义判断，以及配置结构缺少 `Type` 后缀，见 #203。 差距 #203[Os]：SWS_BSW_00120、00123、00029、00146 |
-| 标准类型 | 标准接口用到的 `CounterType`、`TimeInMicrosecondsType` 按 SWS_Os_00786／00794 经 `Rte_Os_Type.h` 提供；输入指针（如 `Os_TargetPrepare` 的配置）带 `const`，其余指针参数是输出或输入输出。 已核对（公开头）[Os]：SWS_BSW_00147、00186 |
+| 编码与命名 | 枚举值与宏除 SWS_OS／OSEK 规定的标准名（`TASK`、`SUSPENDED`、`OSServiceId_*` 等）外以 `OS_` 开头且全大写，错误值为标准的 `E_OS_*`；`boolean` 只赋值、返回 TRUE／FALSE 并与之比较；Linux 与 Windows 的栈探测是两种平台实现，不是重复代码。 已核对（源码）[Os]：SWS_BSW_00124、00125、00127、00142 |
+| 类型、关键字与开关的残留 | 非主机代码的整数已改用 AUTOSAR 类型，`Os.c` 等模块源经 `Os_MemMap.h` 的 `OS_CODE`、`OS_THREAD_LOCAL` 与私有头 `Os_Vector.h` 的 `OS_VECTOR_TABLE_SECTION` 使用编译器关键字；仍有字符数据的 `char`、计数用的 `size_t`、预编译开关取 0／1 与按定义判断、配置结构缺少 `Type` 后缀，`Os_Stack.c`、主机后端与 ARTI 绑定 `Arti.c` 直接使用 `__thread`／`__asm__`，`CounterType` 等标准接口类型定义在 `Os_Types.h` 而不只在 RTE 类型头中，模块源也不直接包含 `Os_MemMap.h`，见 #203。 差距 #203[Os]：SWS_BSW_00006、00120、00121、00123、00029、00146、00147 |
+| 指针参数 | 输入指针（如 `Os_TargetPrepare` 的配置）带 `const`，其余指针参数是输出或输入输出。 已核对（公开头）[Os]：SWS_BSW_00186 |
 | C99 与调度依赖 | 公开头由独立的 C99 消费者编译（public-types suite）；OS 不调用任何主函数；SWS_BSW_00257 的表约束 OS 服务的使用者，OS 是这些服务的提供者。 已核对（构建与源码）[Os]：SWS_BSW_00133、00138、00234、00257 |
 | 独占区 | OS 不声明也不进入 SchM 独占区，内核数据由端口自己的互斥协议保护。 已核对（源码）[Os]：SWS_BSW_00134 |
 | 主函数 | OS 没有调度函数。 已核对（源码）[Os]：SWS_BSW_00037、00153、00154、00156 |

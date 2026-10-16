@@ -8,7 +8,9 @@ import unittest
 from pathlib import Path
 
 from ecu_tools.build import (
-    kernel_patch_environment, kernel_patch_targets, require_kernel_patch_applied,
+    kernel_patch_environment,
+    kernel_patch_targets,
+    require_kernel_patch_applied,
 )
 
 

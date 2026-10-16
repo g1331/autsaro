@@ -23,7 +23,9 @@ from pathlib import Path
 
 from autosar_tooling.config import ROOT
 from ecu_tools.build import (
-    kernel_patch_environment, kernel_patch_targets, require_kernel_patch_applied,
+    kernel_patch_environment,
+    kernel_patch_targets,
+    require_kernel_patch_applied,
 )
 from ecu_tools.owner import Owner, OwnershipError
 from ecu_tools.process import OwnedProcess, ProcessSpec

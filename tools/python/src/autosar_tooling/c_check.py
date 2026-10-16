@@ -334,8 +334,8 @@ def kernel_patched_lines(project: Path, root: Path, touched: set[Path]) -> dict[
     lines = {}
     for path in sorted(touched):
         name = path.relative_to(root).as_posix()
-        upstream = (project / name).read_text(encoding="utf-8").splitlines()
-        patched = path.read_text(encoding="utf-8").splitlines()
+        upstream = (project / name).read_text(encoding="utf-8").split("\n")  # as Cppcheck counts lines
+        patched = path.read_text(encoding="utf-8").split("\n")
         matcher = difflib.SequenceMatcher(None, upstream, patched, autojunk=False)
         lines[name] = [line + 1 for tag, _, _, start, end in matcher.get_opcodes()
                        if tag in ("replace", "insert") for line in range(start, end)]
