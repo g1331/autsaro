@@ -184,5 +184,11 @@
     "exit": 0,
     "stdout": "prepare=8",
     "stderr": ""
+  },
+  {
+    "scenario": "linked-isr",
+    "exit": 0,
+    "stdout": "prepare=8",
+    "stderr": ""
   }
 ]

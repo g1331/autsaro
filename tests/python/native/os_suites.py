@@ -834,6 +834,7 @@ def check_resources(binary: Path) -> list[dict]:
         ("scheduler-reserved", 8),
         ("linked-ceiling", 8),
         ("linked-cycle", 8),
+        ("linked-isr", 8),
     ]:
         result = execute(binary, scenario)
         require(result["exit"] == 0 and result["stdout"] == f"prepare={code}", result)

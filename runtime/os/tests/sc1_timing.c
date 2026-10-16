@@ -498,8 +498,10 @@ int main(int argc, char **argv)
         points[1].offset = 5u;
     }
     if (strcmp(scenario, "bad-adjacent-max") == 0) {
+        /* Only table 0 uses the 16-tick gap; its final delay stays legal. */
+        time.schedule_table_count = 1u;
         points[1].offset = 17u;
-        tables[0].duration = 17u;
+        tables[0].duration = 18u;
     }
     status = Os_TargetPrepare(&config);
     if (strncmp(scenario, "bad-", 4u) == 0) {

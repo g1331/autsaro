@@ -406,6 +406,7 @@ int main(int argc, char **argv)
                                      {RES_SCHEDULER, 5u, 63u, 0u, 0u, 0u},
                                      {6u, 5u, 1u, 0u, 1u, RES_SCHEDULER}};
     Os_InternalResourceConfig internal[] = {{1u, 3u}, {2u, 5u}};
+    Os_IsrConfig isr_levels = {{0u}, NULL};
     Os_TargetConfig config = {
         tasks, 6u, 262144u, resources, 7u, internal, 2u, 0u, 0u, 0u, NULL, NULL, NULL, 0u};
     StatusType prepared;
@@ -466,9 +467,18 @@ int main(int argc, char **argv)
         config.resource_count = 8u;
         config.use_res_scheduler = 1u;
         if (strcmp(scenario, "linked-ceiling") == 0) {
-            resources[7].ceiling = 4u;
+            /* Above every accessor, but not the ceiling of its root. */
+            resources[7].ceiling = 6u;
         } else if (strcmp(scenario, "linked-cycle") == 0) {
+            /* Otherwise valid: the same accessors and ceiling as RES_SCHEDULER. */
+            resources[7].task_access = 63u;
             resources[7].link = 6u;
+        } else if (strcmp(scenario, "linked-isr") == 0) {
+            /* ISR level 3 does not exceed the shared ceiling, but ISR and Task
+             * ceilings are on different scales, so the group must agree. */
+            isr_levels.priorities[31] = 3u;
+            config.interrupts = &isr_levels;
+            resources[7].isr_access = 0x80000000u;
         }
     } else if (strncmp(scenario, "scheduler-", 10u) == 0) {
         /* Task A alone uses RES_SCHEDULER, at A's own priority. */
@@ -480,8 +490,7 @@ int main(int argc, char **argv)
     }
     prepared = Os_TargetPrepare(&config);
     if ((strcmp(scenario, "bad-schedule") == 0) || (strcmp(scenario, "non-internal-low") == 0) ||
-        (strcmp(scenario, "linked-ceiling") == 0) || (strcmp(scenario, "linked-cycle") == 0) ||
-        (strcmp(scenario, "scheduler-reserved") == 0) ||
+        (strncmp(scenario, "linked-", 7u) == 0) || (strcmp(scenario, "scheduler-reserved") == 0) ||
         ((strncmp(scenario, "internal-", 9u) == 0) && (strcmp(scenario, "internal-preempt") != 0) &&
          (strcmp(scenario, "internal-resource") != 0))) {
         const StatusType expected = ((strcmp(scenario, "internal-duplicate") == 0) ||
