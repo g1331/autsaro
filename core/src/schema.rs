@@ -107,15 +107,16 @@ fn unpack_schema(archive: &Path) -> Result<PrivateSchemaDirectory, crate::Locali
         let member = zip
             .by_index(index)
             .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
-        if !ALLOWED.contains(&member.name())
+        let name = member
+            .name()
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+        if !ALLOWED.contains(&name.as_ref())
             || member.is_dir()
             || member
                 .unix_mode()
                 .is_some_and(|mode| mode & 0o170000 == 0o120000)
         {
-            return Err(
-                crate::product_message!("backend.schema.archive_member", "path" => member.name()),
-            );
+            return Err(crate::product_message!("backend.schema.archive_member", "path" => name));
         }
     }
     let target = PrivateSchemaDirectory::create()?;
