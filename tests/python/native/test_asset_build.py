@@ -43,7 +43,7 @@ class AssetBuildTests(unittest.TestCase):
                     original = path.read_bytes()
                     path.write_bytes(original + b"\nchanged dependency\n")
                     try:
-                        result = subprocess.run(command, cwd=root, env=env,
+                        result = subprocess.run(["cargo", "check", "--locked", "-p", "autosar-config-core"], cwd=root, env=env,
                                                 capture_output=True, text=True, check=False)
                         output = result.stdout + result.stderr
                         self.assertNotEqual(result.returncode, 0, output)

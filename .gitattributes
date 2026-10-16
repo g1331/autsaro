@@ -5,6 +5,8 @@
 # A unified patch uses a single space as the empty context-line marker.
 /runtime/os/** text eol=lf
 /runtime/ecu/** text eol=lf
+# The build-generated delivery inventory preserves this manifest formatting.
+/runtime/contracts/** text eol=lf
 /runtime/os/patches/** -text whitespace=-blank-at-eol
 # Test fixtures are byte-exact inputs (raw-byte manifests, text patches); keep LF on every checkout.
 /core/tests/fixtures/** text eol=lf
