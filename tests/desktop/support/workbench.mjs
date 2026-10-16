@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { launch } from './driver.mjs';
 import { createBuiltinInputs } from './inputs.mjs';
+import { standardInspectionReady } from './readiness.mjs';
 
 export const explicit = (kind, lexeme) => ({
   state: 'explicit',
@@ -416,11 +417,7 @@ export async function openWorkbench(name) {
     assert.deepEqual(saved.applicationInputs, []);
     // The new project starts its automatic standard inspection; later
     // operations would otherwise make that inspection stale.
-    await until(
-      `Boolean(document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]:not(:disabled)'))`,
-      'automatic standard inspection of the new project',
-    );
-    await awaitProjectSurfaceReady();
+    await awaitStandardInspectionReady();
     const view = await projection();
     assert.equal(view.projectPath, manifest);
     return { directory, manifest, view };
@@ -436,6 +433,14 @@ export async function openWorkbench(name) {
       'actual project automatic inspection backend operation completed',
       timeout,
     );
+  }
+  async function awaitStandardInspectionReady(timeout) {
+    await until(
+      `(${standardInspectionReady.toString()})(document)`,
+      'automatic standard inspection result published and editor ready',
+      timeout,
+    );
+    await awaitProjectSurfaceReady(timeout);
   }
   async function openMember(manifest) {
     let view;
@@ -700,6 +705,7 @@ export async function openWorkbench(name) {
     fieldBy,
     create,
     awaitProjectSurfaceReady,
+    awaitStandardInspectionReady,
     openMember,
     selectObject,
     sourceSurface,
