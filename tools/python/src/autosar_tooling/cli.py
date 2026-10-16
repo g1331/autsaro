@@ -70,7 +70,14 @@ def main() -> int:
         "--module",
         help="Module abbreviation, such as CanIf, to account SWS_BSWGeneral for; with --update, register the module for the required check",
     )
+    coverage = commands.add_parser(
+        "coverage", help="Draw the architecture diagrams with each delivered module's requirement accounting"
+    )
+    coverage.add_argument("--output", type=Path, required=True, help="Directory for architecture.svg and architecture-full.svg")
     args = parser.parse_args()
+    if args.command == "coverage":
+        from autosar_tooling.coverage import generate
+        return generate(args.output)
     if args.command == "c-check":
         from autosar_tooling.c_check import check
         return check(args.project, args.target, args.output_directory)

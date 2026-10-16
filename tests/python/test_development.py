@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -14,10 +16,12 @@ import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree
 
 from autosar_tooling import (
     assets,
     config,
+    coverage,
     diagnostics,
     official,
     quality,
@@ -356,6 +360,47 @@ class RequirementTests(unittest.TestCase):
                 self.assertEqual(requirements.check("SWS_Demo", root), 1)
             self.assertIn("no single AUTOSAR_CP_SWS_Unknown.arxml", errors.getvalue())
             self.assertIn("fetch-official", errors.getvalue())
+
+
+class CoverageTests(unittest.TestCase):
+    def test_table_lists_each_archive_document_once(self):
+        official = {module.document for module in coverage.TABLE}
+        coverage.check_table(official)
+        for documents, problem in (
+            (official - {"CANInterface"}, "unknown ['CANInterface']"),
+            (official | {"NewModule"}, "missing ['NewModule']"),
+        ):
+            with self.assertRaisesRegex(requirements.RequirementError, re.escape(problem)):
+                coverage.check_table(documents)
+        with patch.object(coverage, "TABLE", [*coverage.TABLE, coverage.m("Again", "CANInterface")]):
+            with self.assertRaisesRegex(requirements.RequirementError, re.escape("duplicated ['CANInterface']")):
+                coverage.check_table(official)
+
+    def test_tally_counts_verified_gaps_and_unreviewed_items(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            RequirementTests.repository(
+                self, root, "已核对（头文件比对）：`SWS_DEMO_CONSTR_00001`；差距 #7：`ECUC_Demo_00010`\n", "// Verifies: SWS_DEMO_00005, 00007\n"
+            )
+            archive = root / "official/spec.zip"
+            self.assertEqual(coverage.documents(archive), {"Demo", "DemoTT"})
+            self.assertEqual(coverage.tally(archive, root, "Demo"), coverage.Tally(total=8, verified=3, gap=1, open=4))
+
+    def test_ring_segments_follow_the_counts_in_order(self):
+        tallies = {module.document: coverage.Tally(200, 50, 10, 20) for module in coverage.TABLE if module.status == coverage.DELIVERED}
+        canvas = coverage.Canvas(100, 100, tallies)
+        canvas.ring(50, 50, "CANInterface", 10)
+        circumference = 2 * math.pi * 10
+        arcs = [(float(length), float(offset)) for length, offset in re.findall(r'stroke-dasharray="([\d.]+) [\d.]+" stroke-dashoffset="(-?[\d.]+)"', canvas.svg())]
+        expected = [(circumference / 4, 0.0), (circumference / 20, -circumference / 4), (circumference / 10, -circumference * 0.3)]
+        for (length, offset), (want_length, want_offset) in zip(arcs, expected, strict=True):
+            self.assertAlmostEqual(length, want_length, delta=0.1)
+            self.assertAlmostEqual(offset, want_offset, delta=0.1)
+        self.assertIn(">25<", canvas.svg())
+        for render in (coverage.focused, coverage.full):
+            svg = render(tallies)
+            ElementTree.fromstring(svg)
+            self.assertIn("Delivered: 11 of 123 BSW modules", svg)
 
 
 class DiagnosticTests(unittest.TestCase):

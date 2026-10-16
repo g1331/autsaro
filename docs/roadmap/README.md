@@ -23,6 +23,14 @@ Autsaro 交付自有 AUTOSAR Classic 基础软件栈，以及配置、校验和�
 - 其他 AUTOSAR 版次（R25-11 仅作后续升级参考）、Adaptive Platform、学习层。
 - 主机行为、内部已审支持、实机支持与公开发布是四种不同声明，不能互相推定。
 
+<a id="module-map"></a>
+
+### 模块全景
+
+[![R24-11 CP 全部 SWS 的模块图](https://g1331.github.io/autsaro/architecture-full.svg)](https://g1331.github.io/autsaro/architecture-full.svg)
+
+图中列出 R24-11 CP 的全部 130 份 SWS：已交付的模块用环显示条款核对比例，尚未提供的模块标出承接它的阶段（见[长期候选目录](candidates.md)），“—”表示不在路线图上。master 上处置来源改动后，`Architecture diagrams` 工作流用 `python -m autosar_tooling coverage` 重新生成并发布；模块与阶段的对应表在 `tools/python/src/autosar_tooling/coverage.py`，改变路线阶段或交付新模块时同步修改。
+
 ## 近期顺序
 
 **Epic 9 新基线 → R11 → R7 → R8 → R9（按需）→ Epic 10 验收 → R10 首个 MCU。**

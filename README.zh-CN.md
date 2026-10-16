@@ -50,6 +50,12 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
 | 主机诊断 | 有限 DoCAN：会话控制（0x10）、TesterPresent（0x3E）和 ReadDataByIdentifier（0x22，每次请求最多两个 DID） |
 | 源码交付 | BSW、OS、RTE／应用接口、配置、目标依赖与离线构建工具 |
 
+### AUTOSAR 模块覆盖
+
+<a href="https://g1331.github.io/autsaro/architecture.svg"><img src="https://g1331.github.io/autsaro/architecture.svg" width="980" alt="AUTOSAR 分层视图：已交付的 CAN 协议栈，每个模块的环显示其 R24-11 条款的已核对比例，另标出主机替代实现与尚未提供的模块"></a>
+
+每个环覆盖该模块 R24-11 SWS 的全部条目：已核对、已知差距、尚未核对，其余为所支持配置以外的条目。该图在 master 每次相关改动后由条款核算生成，不代表符合性结论。[完整模块图](docs/roadmap/README.md#module-map)列出全部 130 份 SWS，并为尚未提供的模块标出承接的路线阶段。
+
 诊断行为与限制详见[运行时支持范围](runtime/README.md)。未支持的配置会保留为只读，或限制相关操作。保存和生成各有独立的检查条件。
 
 当前运行目标为受控 Windows／Linux 主机环境，不提供真实 MCU、硬实时、功能安全或官方符合性认证。macOS 原生构建与 IPC 尚未验证，不提供本机虚拟 ECU。工作台可对已构建的 ECU 执行固定的主机验证，但暂不能交互式运行（[#65](https://github.com/g1331/autsaro/issues/65)）。
