@@ -20,7 +20,7 @@ update 显式更新自有来源摘要、交付资产及构建工具清单，输�
 
 .gitattributes 固定实际交付字节；部分历史运行时使用 CRLF，其余交付工具和补丁使用 LF。不要全仓归一化行尾，也不要为消除环境错误直接改锁定哈希。
 
-新增交付文件时同时核对 Git 属性、清单和干净 checkout。assets check 应在新 checkout 中通过；编辑器保存后出现 mismatch，先检查行尾，再检查实际源码修改。
+用脚本改写 `.gitattributes` 规定 `eol=crlf` 的文件（如 `runtime/bsw/src/Can.c`）时按字节保留 CRLF，更新摘要前用 `git ls-files --eol` 核对。新增交付文件时同时核对 Git 属性、清单和干净 checkout。assets check 应在新 checkout 中通过；编辑器保存后出现 mismatch，先检查行尾，再检查实际源码修改。
 
 ## 上游及工具链升级
 
