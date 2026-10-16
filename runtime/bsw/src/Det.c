@@ -6,22 +6,22 @@
 
 #define DET_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Det_MemMap.h"
-static const Det_ConfigType *configuration DET_VAR_CLEARED;
-static boolean initialized DET_VAR_CLEARED;
+static const Det_ConfigType *configuration DET_VAR_CLEARED; /**< DET_STATE; reset by Init. */
+static boolean initialized DET_VAR_CLEARED; /**< DET_STATE; Init publishes configuration first. */
 #define DET_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Det_MemMap.h"
 
 #define DET_START_SEC_CODE
 #include "Det_MemMap.h"
-static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16_t count)
+static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16 count)
 {
     boolean valid = TRUE;
-    uint16_t index;
+    uint16 index;
     if ((count != 0u) && (hooks == NULL)) {
         valid = FALSE;
     } else {
         for (index = 0u; index < count; ++index) {
-            if (hooks[index] == NULL) {
+            if (hooks[index] == NULL_PTR) {
                 valid = FALSE;
             }
         }
@@ -33,13 +33,13 @@ DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr)
 {
     SchM_Enter_Det_DET_STATE();
     initialized = FALSE;
-    configuration = NULL;
+    configuration = NULL_PTR;
     SchM_Exit_Det_DET_STATE();
-    if (ConfigPtr != NULL) {
+    if (ConfigPtr != NULL_PTR) {
         if ((Det_ValidHooks(ConfigPtr->error_hooks, ConfigPtr->error_hook_count) == FALSE) ||
             (Det_ValidHooks(ConfigPtr->runtime_callouts, ConfigPtr->runtime_callout_count) ==
              FALSE)) {
-            Ecu_DetHalt();
+            Det_HostHalt();
         }
     }
     SchM_Enter_Det_DET_STATE();
@@ -53,20 +53,20 @@ DET_CODE void Det_Start(void)
     /* SWS_Det_00025 permits no action when startup storage is not selected. */
 }
 
-DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16_t ModuleId,
-                                               uint8_t InstanceId,
-                                               uint8_t ApiId,
-                                               uint8_t ErrorId)
+DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId,
+                                               uint8 InstanceId,
+                                               uint8 ApiId,
+                                               uint8 ErrorId)
 {
-    const Det_ConfigType *config = NULL;
+    const Det_ConfigType *config = NULL_PTR;
     SchM_Enter_Det_DET_STATE();
     if (initialized == TRUE) {
         config = configuration;
     }
     SchM_Exit_Det_DET_STATE();
     /* Callouts are caller code: they run outside the area, and may report again. */
-    if (config != NULL) {
-        uint16_t index;
+    if (config != NULL_PTR) {
+        uint16 index;
         for (index = 0u; index < config->runtime_callout_count; ++index) {
             (void)config->runtime_callouts[index](ModuleId, InstanceId, ApiId, ErrorId);
         }
@@ -74,24 +74,24 @@ DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16_t ModuleId,
     return E_OK;
 }
 
-DET_CODE Std_ReturnType Det_ReportError(uint16_t ModuleId,
-                                        uint8_t InstanceId,
-                                        uint8_t ApiId,
-                                        uint8_t ErrorId)
+DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId,
+                                        uint8 InstanceId,
+                                        uint8 ApiId,
+                                        uint8 ErrorId)
 {
-    const Det_ConfigType *config = NULL;
+    const Det_ConfigType *config = NULL_PTR;
     SchM_Enter_Det_DET_STATE();
     if (initialized == TRUE) {
         config = configuration;
     }
     SchM_Exit_Det_DET_STATE();
-    if ((config != NULL) && (Ecu_DetEnterDevelopmentReport() == TRUE)) {
-        uint16_t index;
+    if ((config != NULL_PTR) && (Det_HostEnterDevelopmentReport() == TRUE)) {
+        uint16 index;
         for (index = 0u; index < config->error_hook_count; ++index) {
             (void)config->error_hooks[index](ModuleId, InstanceId, ApiId, ErrorId);
         }
     }
-    Ecu_DetHalt();
+    Det_HostHalt();
     /* The host halt never returns. Retain the standard signature without a
      * fabricated return status even if an invalid adapter were linked.
      */

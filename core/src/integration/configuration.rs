@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 // Explicit input grammar for the selected target. These are standard ECUC
 // parameter identifiers, not reference names, IDs or expected test results.
 const SUPPORTED_PARAMETERS: &str = "
+DetVersionInfoApi DetForwardToDlt DetReportRuntimeErrorCallout DetErrorHook DetModuleId DetInstanceId
 CanBusoffProcessing CanControllerActivation CanControllerBaudRate CanControllerId
 CanHwPnSupport CanRxProcessing CanTxProcessing CanWakeupProcessing CanWakeupSupport
 CanHandleType CanHwObjectCount CanIdType CanObjectId CanObjectType
@@ -43,7 +44,7 @@ const RUNTIME_PARAMETERS: &str = "EcucPartitionId ComIPduSignalProcessing ComMin
 const RUNTIME_REFERENCES: &str = "EcucPartitionCoreRef EcucPartitionSoftwareComponentInstanceRef RteComUserEcucPartitionRef ComMainRxPartitionRef ComMainTxPartitionRef ComIPduGroupRef ComIPduMainFunctionRef ComUserCallbackRef ComUserSystemTemplateSystemSignalRef CanMainFunctionRWPeriodRef ComMUserChannel BswMComMChannelRef BswMConditionMode BswMArgumentRef BswMRuleExpressionRef BswMRuleTrueActionList BswMActionListItemRef DcmDslProtocolComMChannelRef";
 
 const MODULES: &[&str] = &[
-    "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte",
+    "Can", "CanIf", "CanTp", "Com", "Dcm", "EcuC", "Os", "PduR", "Rte", "Det",
 ];
 
 const SUPPORTED_REFERENCES: &str = "
@@ -302,6 +303,66 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
     Ok(())
 }
 
+// The controlled ECU keeps the timeout-receipt callout; arbitrary application
+// hooks and VFB services need their own source and RTE bindings before selection.
+fn det(graph: &Graph, module: usize) -> Result<(), Vec<PlanDiagnostic>> {
+    let invalid = |index| {
+        reject(
+            graph,
+            index,
+            "DET_CONFIGURATION",
+            crate::product_message!("backend.integration.composition.contract_invalid", "code" => "DET_CONFIGURATION"),
+        )
+    };
+    let mut general = None;
+    let mut notification = None;
+    let mut config_set = None;
+    for container in graph.of_kind("ECUC-CONTAINER-VALUE") {
+        if !graph.within(container, module) {
+            continue;
+        }
+        let owner = graph.elements[container]
+            .parent
+            .and_then(|parent| graph.elements[parent].parent);
+        if owner != Some(module) {
+            return Err(invalid(container));
+        }
+        match graph.text(container, "DEFINITION-REF") {
+            Some("/AUTOSAR/EcucDefs/Det/DetGeneral") if general.is_none() => {
+                general = Some(container);
+            }
+            Some("/AUTOSAR/EcucDefs/Det/DetNotification") if notification.is_none() => {
+                notification = Some(container);
+            }
+            Some("/AUTOSAR/EcucDefs/Det/DetConfigSet") if config_set.is_none() => {
+                config_set = Some(container);
+            }
+            _ => return Err(invalid(container)),
+        }
+    }
+    let general = general.ok_or_else(|| invalid(module))?;
+    if !matches!(
+        value(graph, general, "DetVersionInfoApi", false),
+        Some("false" | "0")
+    ) {
+        return Err(invalid(general));
+    }
+    if !matches!(
+        value(graph, general, "DetForwardToDlt", false),
+        None | Some("false" | "0")
+    ) {
+        return Err(invalid(general));
+    }
+    let notification = notification.ok_or_else(|| invalid(module))?;
+    if values(graph, notification, "DetReportRuntimeErrorCallout", false)
+        != ["Ecu_DetRuntimeCallout"]
+        || !values(graph, notification, "DetErrorHook", false).is_empty()
+    {
+        return Err(invalid(notification));
+    }
+    Ok(())
+}
+
 pub(super) fn inspect_native(
     graph: &Graph,
     catalog: &crate::definitions::DefinitionCatalog,
@@ -351,6 +412,9 @@ fn inspect_with_catalog(
                     "backend.integration.configuration.module_configuration_value_set_required"
                 ),
             ));
+        }
+        if *module == "Det" {
+            det(graph, found[0])?;
         }
         selected.push(found[0]);
     }

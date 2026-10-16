@@ -62,6 +62,12 @@ ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 res
 
 `CanVersionInfoApi` 缺失（`MULTIPLICITY`）或为 true（`CAN_FEATURE_UNSUPPORTED`）时在生成前拒绝，`Can.h` 不声明 `Can_GetVersionInfo`，也不提供版本信息开关宏。`CAN_MODULE_ID` 为 80，软件版本与项目 `0.1.0` 一致。项目尚无已分配的 AUTOSAR vendor ID，也无经过确认的 R24-11 数字发布宏映射，因此不编造这两项 published identity；取得并核对后才能实现适用的 GetVersionInfo 和外部版本交叉检查。这个缺口由现有质量规格承接，退出条件是正式身份、版本依据和双目标兼容测试成立。
 
+## 错误报告
+
+生成工程须包含显式 Det ECUC 配置：`DetGeneral/DetVersionInfoApi=false`，`DetForwardToDlt` 省略或为 false，`DetNotification/DetReportRuntimeErrorCallout=Ecu_DetRuntimeCallout`。内置模板已提供这些值。其他 hooks、版本 API、DLT 与非空 `DetConfigSet/DetModule` 在生成前拒绝；已有工程须补齐配置后重新生成。
+
+BSW 通过 `Det_ReportRuntimeError` 报告运行时错误，配置通知按顺序执行，返回值始终为 `E_OK`；尚未初始化时不通知。开发错误通过 `Det_ReportError` 通知后停止，受控主机终止 ECU 进程。两个报告入口都在模块独占区外执行通知，标准头不包含主机故障控制。已选 callout 的声明在 `generated/include/Det_Externals.h`，定义在 `generated/src/Det_Callouts.c`；CanTp 超时仍由主机收据返回。配置、接口与验证边界见 [Det 标准说明](../docs/standards/det.md)。
+
 ## 许可证
 
 项目原创运行时、工具及生成模板采用 [Apache-2.0](../LICENSE)。交付工程附带 LICENSE/NOTICE，FreeRTOS 保留独立 MIT 声明，用户配置与应用代码由其权利人决定许可。详见 [许可说明](../docs/maintainers/licensing.md)。

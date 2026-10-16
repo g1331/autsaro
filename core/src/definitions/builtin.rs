@@ -236,9 +236,37 @@ pub(super) fn populate(
     communication(&mut a)?;
     mode_management(&mut a)?;
     diagnostic(&mut a)?;
+    error_tracing(&mut a)?;
     operating_system(&mut a)?;
     persistence(&mut a)?;
     defaults(&mut a);
+    Ok(())
+}
+
+fn error_tracing(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> {
+    a.container("Det", 0, Some(1))?;
+    let general = "Det/DetGeneral";
+    a.container(general, 1, Some(1))?;
+    a.booleans(general, "DetVersionInfoApi", 1)?;
+    a.default(general, "DetVersionInfoApi", "false");
+    a.booleans(general, "DetForwardToDlt", 0)?;
+    let notification = "Det/DetNotification";
+    a.container(notification, 0, Some(1))?;
+    for name in ["DetErrorHook", "DetReportRuntimeErrorCallout"] {
+        a.field(notification, name, ValueKind::FunctionName, 0)?;
+        a.0.entries_mut()
+            .get_mut(&format!("{ROOT}{notification}/{name}"))
+            .unwrap()
+            .upper_multiplicity = None;
+    }
+    a.container("Det/DetConfigSet", 0, Some(1))?;
+    let module = "Det/DetConfigSet/DetModule";
+    a.container(module, 0, None)?;
+    a.integers(module, "DetModuleId", "4096", "65535", 1)?;
+    let instance = "Det/DetConfigSet/DetModule/DetModuleInstance";
+    a.container(instance, 1, None)?;
+    a.integers(instance, "DetInstanceId", "0", "255", 1)?;
+    a.default(instance, "DetInstanceId", "0");
     Ok(())
 }
 

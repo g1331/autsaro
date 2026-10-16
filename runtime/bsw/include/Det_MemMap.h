@@ -4,7 +4,8 @@
  */
 #if defined(DET_START_SEC_VAR_CLEARED_UNSPECIFIED)
 #undef DET_START_SEC_VAR_CLEARED_UNSPECIFIED
-#if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE)
+#if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE) ||                           \
+    defined(DET_MEMMAP_CALLOUT_ACTIVE)
 #error "Nested Det memory section"
 #endif
 #define DET_MEMMAP_VAR_ACTIVE
@@ -18,7 +19,8 @@
 #undef DET_VAR_CLEARED
 #elif defined(DET_START_SEC_CODE)
 #undef DET_START_SEC_CODE
-#if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE)
+#if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE) ||                           \
+    defined(DET_MEMMAP_CALLOUT_ACTIVE)
 #error "Nested Det memory section"
 #endif
 #define DET_MEMMAP_CODE_ACTIVE
@@ -30,6 +32,21 @@
 #endif
 #undef DET_MEMMAP_CODE_ACTIVE
 #undef DET_CODE
+#elif defined(DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE)
+#undef DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE
+#if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE) ||                           \
+    defined(DET_MEMMAP_CALLOUT_ACTIVE)
+#error "Nested Det memory section"
+#endif
+#define DET_MEMMAP_CALLOUT_ACTIVE
+#define DET_CALLOUT_CODE __attribute__((section(".text.det.Ecu_DetRuntimeCallout")))
+#elif defined(DET_STOP_SEC_ECU_DETRUNTIMECALLOUT_CODE)
+#undef DET_STOP_SEC_ECU_DETRUNTIMECALLOUT_CODE
+#ifndef DET_MEMMAP_CALLOUT_ACTIVE
+#error "Unmatched Det callout section"
+#endif
+#undef DET_MEMMAP_CALLOUT_ACTIVE
+#undef DET_CALLOUT_CODE
 #else
 #ifndef DET_MEMMAP_HEADER_CHECK
 #define DET_MEMMAP_HEADER_CHECK

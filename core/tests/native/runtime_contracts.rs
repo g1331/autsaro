@@ -54,6 +54,9 @@ fn det_standard_consumer_executes_runtime_and_halt_contracts() {
         ),
         ("recursive-development", "development-first\n", true),
         ("invalid-config", "", true),
+        ("invalid-runtime-config", "", true),
+        ("invalid-hook-entry", "", true),
+        ("development-without-hooks", "", true),
     ] {
         let output = Command::new(&executable)
             .arg(mode)
@@ -93,6 +96,124 @@ fn det_reports_concurrently_without_changing_callout_results() {
         "{:?}",
         output
     );
+}
+
+#[test]
+fn det_generated_callout_preserves_timeout_identity_and_its_own_section() {
+    let scratch = Scratch::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    let target: serde_json::Value = serde_json::from_slice(
+        &files
+            .iter()
+            .find(|(path, _)| path == "target.json")
+            .unwrap()
+            .1,
+    )
+    .unwrap();
+    for (path, bytes) in &files {
+        if path.ends_with(".h") || path == "generated/src/Det_Callouts.c" {
+            let destination = scratch.0.join(path);
+            std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+            std::fs::write(destination, bytes).unwrap();
+        }
+    }
+    let compile = || {
+        let mut command = tooling::c_compiler();
+        command.current_dir(&scratch.0).args([
+            "-std=c99",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+        ]);
+        for include in target["includePaths"].as_array().unwrap() {
+            command.arg("-I").arg(include.as_str().unwrap());
+        }
+        if cfg!(target_os = "linux") {
+            command.arg("-pthread");
+        }
+        command
+    };
+    let executable = tooling::native_binary(&scratch.0, "det-callout");
+    let output = compile()
+        .arg("generated/src/Det_Callouts.c")
+        .arg(root.join("runtime/bsw/src/Det.c"))
+        .arg(root.join("runtime/host/src/Det_Host.c"))
+        .arg(root.join("runtime/host/src/Can_HostLock.c"))
+        .arg(root.join("runtime/host/src/SchM_CanIf_Host.c"))
+        .arg(root.join("core/tests/fixtures/bsw-contracts/det_callout.c"))
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let object = scratch.0.join("det-callout.o");
+    let output = compile()
+        .args(["-c", "generated/src/Det_Callouts.c", "-o"])
+        .arg(&object)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let output = Command::new(tooling::execution_settings().objdump)
+        .arg("-t")
+        .arg(&object)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .any(|line| line.contains(".text.det.Ecu_DetRuntimeCallout")
+                && line.ends_with("Ecu_DetRuntimeCallout")),
+        "{:?}",
+        output
+    );
+    for (markers, expected) in [
+        (
+            &[
+                "DET_START_SEC_CODE",
+                "DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE",
+            ][..],
+            "Nested Det memory section",
+        ),
+        (
+            &[
+                "DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE",
+                "DET_START_SEC_CODE",
+            ][..],
+            "Nested Det memory section",
+        ),
+        (
+            &["DET_STOP_SEC_ECU_DETRUNTIMECALLOUT_CODE"][..],
+            "Unmatched Det callout section",
+        ),
+    ] {
+        let invalid = scratch.0.join("invalid-map.c");
+        std::fs::write(
+            &invalid,
+            markers
+                .iter()
+                .map(|marker| format!("#define {marker}\n#include \"Det_MemMap.h\"\n"))
+                .collect::<String>(),
+        )
+        .unwrap();
+        let output = compile()
+            .arg("-c")
+            .arg(&invalid)
+            .arg("-o")
+            .arg(&object)
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "accepted {markers:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected),
+            "{:?}",
+            output
+        );
+    }
 }
 
 /// Builds a consumer of one delivered module (`runtime/bsw/src/<module>.c`) with the

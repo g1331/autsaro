@@ -283,7 +283,7 @@ pub(super) fn files(
         ),
     )?;
     let mut config = String::from(
-        "/** @file Source-derived immutable communication configurations and owner dispatch. */\n#define RTE_CORE\n#include \"Ecu_TargetConfig.h\"\n#include \"Ecu_Target.h\"\n#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\n#include \"CanIf.h\"\n#include \"Det.h\"\n#include \"CanTp.h\"\n#include \"Com.h\"\n#include \"Com_Internal.h\"\n#include \"ComM.h\"\n#include \"ComM_BswM.h\"\n#include \"ComM_Internal.h\"\n#include \"BswM.h\"\n#include \"BswM_ComM.h\"\n#include \"Ecu_HostBusSM.h\"\n#include \"Dcm.h\"\n#include \"Dcm_ComM.h\"\n#include \"PduR.h\"\n#include \"PduR_Com.h\"\n#include \"PduR_CanIf.h\"\n#include \"LSduR.h\"\n#include \"LSduR_PduR.h\"\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"SchM_Can.h\"\n#include \"SchM_CanTp.h\"\n#include \"SchM_Com.h\"\n#include \"SchM_ComM.h\"\n#include \"SchM_Dcm.h\"\n",
+        "/** @file Source-derived immutable communication configurations and owner dispatch. */\n#define RTE_CORE\n#include \"Ecu_TargetConfig.h\"\n#include \"Ecu_Target.h\"\n#include \"Ecu_Config.h\"\n#include \"Can_Host.h\"\n#include \"CanIf.h\"\n#include \"Det.h\"\n#include \"Det_Externals.h\"\n#include \"CanTp.h\"\n#include \"Com.h\"\n#include \"Com_Internal.h\"\n#include \"ComM.h\"\n#include \"ComM_BswM.h\"\n#include \"ComM_Internal.h\"\n#include \"BswM.h\"\n#include \"BswM_ComM.h\"\n#include \"Ecu_HostBusSM.h\"\n#include \"Dcm.h\"\n#include \"Dcm_ComM.h\"\n#include \"PduR.h\"\n#include \"PduR_Com.h\"\n#include \"PduR_CanIf.h\"\n#include \"LSduR.h\"\n#include \"LSduR_PduR.h\"\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"SchM_Can.h\"\n#include \"SchM_CanTp.h\"\n#include \"SchM_Com.h\"\n#include \"SchM_ComM.h\"\n#include \"SchM_Dcm.h\"\n",
     );
     for component in &composition.components {
         config.push_str(&format!(
@@ -291,7 +291,7 @@ pub(super) fn files(
             component.header.trim_start_matches("include/")
         ));
     }
-    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\nstatic Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId,\n                                            uint8_t InstanceId,\n                                            uint8_t ApiId,\n                                            uint8_t ErrorId);\n");
+    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\n");
     config_data(
         &mut config,
         "Ecu",
@@ -667,7 +667,33 @@ pub(super) fn files(
         ));
     }
     config.push_str("        default:\n            return E_NOT_OK;\n    }\n    return E_OK;\n}\n");
-    config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_DetRuntimeCallout(uint16_t ModuleId,\n                                                         uint8_t InstanceId,\n                                                         uint8_t ApiId,\n                                                         uint8_t ErrorId)\n{\n    (void)InstanceId;\n    if ((ModuleId == 35u) && (ApiId == 0x06u) && ((ErrorId == 0xc0u) || (ErrorId == 0xd0u))) {\n        Ecu_TargetReportTransportTimeout();\n    }\n    return E_OK;\n}\n");
+    let callout_signature = |end| {
+        c_layout::signature(
+            "DET_CALLOUT_CODE Std_ReturnType",
+            "Ecu_DetRuntimeCallout",
+            &[
+                "uint16 ModuleId".into(),
+                "uint8 InstanceId".into(),
+                "uint8 ApiId".into(),
+                "uint8 ErrorId".into(),
+            ],
+            end,
+            true,
+        )
+    };
+    outputs.emit(
+        ECU,
+        "include/Det_Externals.h",
+        header(
+            "DET_EXTERNALS_H",
+            &format!("#include \"Std_Types.h\"\n#define DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE\n#include \"Det_MemMap.h\"\n/** Forward the selected CanTp timeout to the ECU receipt.\n * @param[in] ModuleId Reporting module, 0..65535.\n * @param[in] InstanceId Reporting instance, 0..255.\n * @param[in] ApiId Reporting API, 0..255.\n * @param[in] ErrorId Runtime error, 0..255.\n * @return E_OK; other reports have no receipt side effect.\n * Preconditions: Selected CanTp timeouts are reported by the ECU owner.\n * Context: Called by Det outside DET_STATE.\n * Reentrancy: Filtering is stateless; receipt publication uses the ECU owner.\n * Ownership: No parameter is retained.\n */\n{}\n#define DET_STOP_SEC_ECU_DETRUNTIMECALLOUT_CODE\n#include \"Det_MemMap.h\"", callout_signature(";")),
+        ),
+    )?;
+    outputs.emit(
+        ECU,
+        "src/Det_Callouts.c",
+        format!("/** @file Configured Det runtime notification for controlled ECU receipts. */\n#include \"Det_Externals.h\"\n#include \"Ecu_Target.h\"\n#define DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE\n#include \"Det_MemMap.h\"\n{}\n{{\n    (void)InstanceId;\n    if ((ModuleId == 35u) && (ApiId == 0x06u) && ((ErrorId == 0xc0u) || (ErrorId == 0xd0u))) {{\n        Ecu_TargetReportTransportTimeout();\n    }}\n    return E_OK;\n}}\n#define DET_STOP_SEC_ECU_DETRUNTIMECALLOUT_CODE\n#include \"Det_MemMap.h\"\n", callout_signature("")),
+    )?;
     // Eight initialization stages; a test build can fail before each one, and
     // retirement undoes only the stages that began, newest first.
     let stage = |number: u8| {
