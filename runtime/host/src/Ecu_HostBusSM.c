@@ -14,11 +14,10 @@ static const Ecu_HostBusSM_ConfigType *bussm_configuration ECU_HOSTBUSSM_VAR_CLE
 static ComM_ModeType requested_mode ECU_HOSTBUSSM_VAR_CLEARED; /**< Last accepted request. */
 static boolean transition_pending ECU_HOSTBUSSM_VAR_CLEARED;   /**< Controller transition. */
 static uint32 revision ECU_HOSTBUSSM_VAR_CLEARED; /**< Transition events; never reset. */
-/* Completed modes awaiting Ecu_HostBusSM_Publish; Init keeps a running publisher. */
+/* Completions awaiting Ecu_HostBusSM_Publish; Init keeps a running publisher. */
 static struct {
-    ComM_ModeType mode; /**< Latest completed mode. */
-    boolean due;        /**< mode is unsent. */
-    boolean running;    /**< A publisher is running. */
+    boolean due;     /**< A completion is unpublished. */
+    boolean running; /**< A publisher is running. */
 } bussm_publication ECU_HOSTBUSSM_VAR_CLEARED;
 #define ECU_HOSTBUSSM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Ecu_HostBusSM_MemMap.h"
@@ -26,15 +25,15 @@ static struct {
 #include "Ecu_HostBusSM_MemMap.h"
 static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Enter(void) { Can_HostAreaEnter(CAN_HOST_AREA_BUSSM); }
 static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Exit(void) { Can_HostAreaExit(CAN_HOST_AREA_BUSSM); }
-/* Publish completed modes in order; a concurrent or reentrant completion is published
- * by the running publisher, and only the latest of several. Repeated factual
+/* Publish the actual mode after a completion; a concurrent or reentrant completion is
+ * published by the running publisher. Each round reads the actual mode, so a completion
+ * that raced a later one cannot leave ComM with a stale mode. Repeated factual
  * publication lets a restarted ComM obtain the actual mode; ComM filters repeats. */
-static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(ComM_ModeType mode)
+static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(void)
 {
     boolean owner = FALSE;
     Ecu_HostBusSM_Enter();
     if (bussm_configuration != NULL_PTR) {
-        bussm_publication.mode = mode;
         bussm_publication.due = TRUE;
         if (!bussm_publication.running) {
             bussm_publication.running = TRUE;
@@ -49,13 +48,13 @@ static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(ComM_ModeType mode)
         if ((bussm_configuration != NULL_PTR) && bussm_publication.due) {
             bussm_publication.due = FALSE;
             channel = bussm_configuration->channel;
-            next = bussm_publication.mode;
         } else {
             bussm_publication.running = FALSE;
             owner = FALSE;
         }
         Ecu_HostBusSM_Exit();
-        if (owner) {
+        /* An unreadable controller publishes nothing; its next completion does. */
+        if (owner && (Ecu_HostBusSM_GetCurrentComMode(channel, &next) == E_OK)) {
             ComM_BusSM_ModeIndication(channel, next);
         }
     }
@@ -198,7 +197,7 @@ Ecu_HostBusSM_Request(const Ecu_HostBusSM_ConfigType *config,
             Ecu_HostBusSM_Enter();
             requested_mode = ComMode;
             Ecu_HostBusSM_Exit();
-            Ecu_HostBusSM_Publish(ComMode);
+            Ecu_HostBusSM_Publish();
         }
     } else {
         result = Ecu_HostBusSM_Transition(config, ComMode);
@@ -240,10 +239,10 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerModeIndication(
     if (config != NULL_PTR) {
         if (ControllerMode == CAN_CS_STARTED) {
             if (Ecu_HostBusSM_ApplyMode(config->channel, requested) == E_OK) {
-                Ecu_HostBusSM_Publish(requested);
+                Ecu_HostBusSM_Publish();
             }
         } else if ((ControllerMode == CAN_CS_STOPPED) || (ControllerMode == CAN_CS_SLEEP)) {
-            Ecu_HostBusSM_Publish(COMM_NO_COMMUNICATION);
+            Ecu_HostBusSM_Publish();
         } else {
             /* No completed communication mode for UNINIT. */
         }
@@ -268,7 +267,7 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId)
             transition_pending = FALSE;
             ++revision;
             Ecu_HostBusSM_Exit();
-            Ecu_HostBusSM_Publish(COMM_NO_COMMUNICATION);
+            Ecu_HostBusSM_Publish();
         } else if (actual == CAN_CS_STARTED) {
             ComM_ModeType requested;
             Ecu_HostBusSM_Enter();

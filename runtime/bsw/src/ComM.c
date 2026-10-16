@@ -207,9 +207,12 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
         diagnostic = FALSE;
         wakeup_pending = FALSE;
         minimum_remaining = 0u;
-        /* The default NO is not notified (SWS_ComM_00313). */
+        /* The default NO is not notified (SWS_ComM_00313); a publisher still in flight
+         * follows its mode with NO, so BswM and Dcm do not keep the previous one. */
         indicated = COMM_NO_COMMUNICATION;
-        comm_published = COMM_NO_COMMUNICATION;
+        if (!comm_publishing) {
+            comm_published = COMM_NO_COMMUNICATION;
+        }
         ComM_ClaimBus(COMM_NO_COMMUNICATION);
         SchM_Exit_ComM_COMM_STATE();
         ComM_IssueBus();
@@ -336,10 +339,9 @@ COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User, Com
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
     if ((ComM_User(User) < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
-        /* PncSupport=false gives every configured static user zero PNCs.
-         * The API and service Possible Errors put this in the return status;
-         * the output mode remains untouched on this refusal.
-         */
+        /* PncSupport=false gives every configured static user zero PNCs. SWS_ComM_01023
+         * hands the code out as ComMode and SWS_ComM_91002 lists it as return value. */
+        *ComMode = COMM_E_NO_PNC_ASSIGNED;
         result = COMM_E_NO_PNC_ASSIGNED;
     }
     SchM_Exit_ComM_COMM_STATE();

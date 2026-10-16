@@ -517,6 +517,7 @@ fn bus_state_manager_registers_transitions_and_publishes_in_order_outside_its_ar
         &[
             "-Wl,--wrap=Can_HostAreaExit",
             "-Wl,--wrap=CanIf_SetControllerMode",
+            "-Wl,--wrap=CanIf_SetPduMode",
         ],
     );
     let logs = scratch.0.join("execution");

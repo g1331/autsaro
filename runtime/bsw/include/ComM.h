@@ -133,7 +133,7 @@ Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM_ModeType 
 Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_ModeType *ComMode);
 /** PNC support is disabled, so no user has a PNC (SWS_ComM_91002).
  * @param[in] User Configured user handle.
- * @param[out] ComMode Not written.
+ * @param[out] ComMode COMM_E_NO_PNC_ASSIGNED for a configured user, otherwise not written.
  * @return COMM_E_NO_PNC_ASSIGNED for a configured user; E_NOT_OK before Init, for an
  * unknown user or a NULL pointer.
  * Preconditions: initialized; otherwise E_NOT_OK.

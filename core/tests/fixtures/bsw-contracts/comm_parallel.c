@@ -224,6 +224,12 @@ static void deinitialize_while_publishing(void)
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
 }
+/* A restart during a publication: BswM and Dcm learn NO after the previous lifetime's FULL. */
+static void restart_while_publishing(void)
+{
+    ComM_Init(&configuration);
+    assert(notify_count == 0u);
+}
 /* A restart and DeInit during a bus call: the restart's NO is not issued after DeInit. */
 static void deinitialize_while_requesting(void)
 {
@@ -279,6 +285,11 @@ int main(void)
     assert(notify_count == 2u && notified[0] == COMM_FULL_COMMUNICATION &&
            notified[1] == DCM + COMM_FULL_COMMUNICATION);
     ComM_Init(&configuration);
+    notify_count = 0u;
+    window(2u, INDICATE, restart_while_publishing);
+    assert(notify_count == 4u && notified[0] == COMM_FULL_COMMUNICATION &&
+           notified[1] == DCM + COMM_FULL_COMMUNICATION && notified[2] == COMM_NO_COMMUNICATION &&
+           notified[3] == DCM + COMM_NO_COMMUNICATION);
     ComM_CommunicationAllowed(7u, TRUE);
     before = request_count;
     window(2u, REQUEST, deinitialize_while_requesting);

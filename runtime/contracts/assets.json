@@ -1219,7 +1219,7 @@
     },
     {
       "path": "runtime/bsw/include/ComM.h",
-      "sha256": "13556f724b1151f2f1ae9b8a33454db41b0823004bce9a822f68f32549ebb8e1",
+      "sha256": "a6ca25e3a125595051da175edad6cc51501fbf202f0011eedf24b4d4f2e33d7e",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1653,7 +1653,7 @@
     },
     {
       "path": "runtime/bsw/src/ComM.c",
-      "sha256": "adf6016520209e6dd0c1acf931929f1476e04447ea0b2ba4f78e2605a92b81d3",
+      "sha256": "5ad67b8ca3b147ae8d06e888203d7d8b5eb2fdc91739e0b6f0dbd465edfdff87",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -1709,7 +1709,7 @@
     },
     {
       "path": "runtime/host/src/Ecu_HostBusSM.c",
-      "sha256": "4507754966fa6f5b4a6c7c6de6db2b1d174b505e644b13cee8287ad4c70bc76d",
+      "sha256": "3b2ab1448827f19ee8629702d2db89560402c999e241ccfff37f3b4f31dc0127",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

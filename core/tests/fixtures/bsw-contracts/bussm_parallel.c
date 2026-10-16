@@ -3,7 +3,9 @@
  * its area: before CanIf is asked for a controller transition, or before a completed
  * mode reaches ComM. The contender (main) completes provider calls meanwhile: none waits,
  * a repeated request finds the transition already registered, and completed modes reach
- * ComM in order. CanIf and ComM enter strict areas, which abort if the provider held one.
+ * ComM in order. A third window stops a request after CanIf applied its mode and before
+ * publication: ComM receives the actual mode, not the applied one. CanIf and ComM enter strict
+ * areas, which abort if the provider held one.
  */
 #include "Ecu_HostBusSM.h"
 #include "ComM.h"
@@ -38,8 +40,10 @@ static int dispatch_thread(void) { return pthread_equal(pthread_self(), dispatch
 #endif
 
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
-/* Number of the dispatcher's provider-area exit to stop after; zero when disarmed. */
+/* Number of the dispatcher's provider-area exits, or CanIf_SetPduMode returns, to stop
+ * after; zero when disarmed. */
 static unsigned armed;
+static unsigned pdu_armed;
 static unsigned paused;
 static unsigned released;
 static ComM_ModeType dispatched;
@@ -108,14 +112,12 @@ Std_ReturnType __wrap_CanIf_SetControllerMode(uint8 ControllerId,
     ++transitions;
     return __real_CanIf_SetControllerMode(ControllerId, ControllerMode);
 }
-void __real_Can_HostAreaExit(Can_HostAreaType area);
-void __wrap_Can_HostAreaExit(Can_HostAreaType area)
+static void stop_after(unsigned *counter)
 {
-    __real_Can_HostAreaExit(area);
     lock();
-    if ((area == CAN_HOST_AREA_BUSSM) && (armed != 0u) && dispatch_thread()) {
-        --armed;
-        if (armed == 0u) {
+    if ((*counter != 0u) && dispatch_thread()) {
+        --*counter;
+        if (*counter == 0u) {
             paused = 1u;
             wake();
             while (released == 0u) {
@@ -124,6 +126,21 @@ void __wrap_Can_HostAreaExit(Can_HostAreaType area)
         }
     }
     unlock();
+}
+void __real_Can_HostAreaExit(Can_HostAreaType area);
+void __wrap_Can_HostAreaExit(Can_HostAreaType area)
+{
+    __real_Can_HostAreaExit(area);
+    if (area == CAN_HOST_AREA_BUSSM) {
+        stop_after(&armed);
+    }
+}
+Std_ReturnType __real_CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest);
+Std_ReturnType __wrap_CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest)
+{
+    const Std_ReturnType result = __real_CanIf_SetPduMode(ControllerId, PduModeRequest);
+    stop_after(&pdu_armed);
+    return result;
 }
 
 #if defined(_WIN32)
@@ -142,8 +159,9 @@ static void *run(void *argument)
 }
 #endif
 
-/* Stops the dispatcher's request after its `exits`-th exit; `contend` completes meanwhile. */
-static void window(unsigned exits, ComM_ModeType mode, void (*contend)(void))
+/* Stops the dispatcher's request after `count` events of `counter`; `contend` completes
+ * meanwhile. */
+static void window(unsigned *counter, unsigned count, ComM_ModeType mode, void (*contend)(void))
 {
 #if defined(_WIN32)
     HANDLE thread;
@@ -151,7 +169,7 @@ static void window(unsigned exits, ComM_ModeType mode, void (*contend)(void))
     pthread_t thread;
 #endif
     lock();
-    armed = exits;
+    *counter = count;
     paused = 0u;
     released = 0u;
     dispatched = mode;
@@ -188,11 +206,18 @@ static void repeat_before_transition(void)
     assert(Ecu_HostBusSM_RequestComMode(0u, COMM_FULL_COMMUNICATION) == E_OK);
     assert(transitions == 0u);
 }
-/* The dispatcher took SILENT for ComM: FULL completes and is published after it. */
+/* The dispatcher read SILENT for ComM: FULL completes and is published after it. */
 static void complete_while_publishing(void)
 {
     assert(Ecu_HostBusSM_RequestComMode(0u, COMM_FULL_COMMUNICATION) == E_OK);
     assert(publish_count == 0u);
+}
+/* The dispatcher applied SILENT, unpublished: the stop completes and is published first. */
+static void stop_before_publication(void)
+{
+    assert(Ecu_HostBusSM_RequestComMode(0u, COMM_NO_COMMUNICATION) == E_OK);
+    Can_MainFunction_Mode();
+    assert(publish_count == 1u && published[0] == COMM_NO_COMMUNICATION);
 }
 
 int main(void)
@@ -208,19 +233,25 @@ int main(void)
     ComM_Init(&comm); /* NO on a stopped controller completes without a transition. */
     assert(transitions == 0u && publish_count == 0u);
     /* Exits: channel lookup, pending check, registration. */
-    window(3u, COMM_FULL_COMMUNICATION, repeat_before_transition);
+    window(&armed, 3u, COMM_FULL_COMMUNICATION, repeat_before_transition);
     assert(transitions == 1u);
     Can_MainFunction_Mode();
     assert(Ecu_HostBusSM_GetCurrentComMode(0u, &mode) == E_OK && mode == COMM_FULL_COMMUNICATION);
     assert(publish_count == 1u && published[0] == COMM_FULL_COMMUNICATION);
     publish_count = 0u;
     /* Exits: channel lookup, pending check, ApplyMode's lookup, request record, publisher
-     * claim, publication taken. */
-    window(6u, COMM_SILENT_COMMUNICATION, complete_while_publishing);
+     * claim, publication taken, and the actual mode read's lookup and pending check. */
+    window(&armed, 8u, COMM_SILENT_COMMUNICATION, complete_while_publishing);
     assert(publish_count == 2u && published[0] == COMM_SILENT_COMMUNICATION &&
            published[1] == COMM_FULL_COMMUNICATION);
     assert(Ecu_HostBusSM_GetCurrentComMode(0u, &mode) == E_OK && mode == COMM_FULL_COMMUNICATION);
     assert(transitions == 1u);
+    publish_count = 0u;
+    /* A stale SILENT would follow NO and leave ComM SILENT on a stopped controller. */
+    window(&pdu_armed, 1u, COMM_SILENT_COMMUNICATION, stop_before_publication);
+    assert(publish_count == 1u && published[0] == COMM_NO_COMMUNICATION);
+    assert(Ecu_HostBusSM_GetCurrentComMode(0u, &mode) == E_OK && mode == COMM_NO_COMMUNICATION);
+    assert(transitions == 2u);
     Ecu_HostBusSM_DeInit();
     Can_DeInit();
     CanIf_DeInit();

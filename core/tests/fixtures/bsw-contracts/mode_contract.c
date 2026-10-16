@@ -231,8 +231,10 @@ int main(void) {
     assert(inhibition_status(7u, NULL_PTR) == E_NOT_OK);
     assert(classification(0u) == E_OK && classification(3u) == E_OK);
     assert(inhibition_status(7u, &inhibition) == E_OK && inhibition == 0u);
-    assert(pnc_current(17u, &value) == 4u && value == 99u);
-    assert(pnc_current(43u, &value) == COMM_E_NO_PNC_ASSIGNED && value == 99u);
+    assert(pnc_current(17u, &value) == 4u && value == 4u);
+    value = 99u;
+    assert(pnc_current(43u, &value) == COMM_E_NO_PNC_ASSIGNED && value == COMM_E_NO_PNC_ASSIGNED);
+    value = 99u;
     assert(pnc_current(99u, &value) == E_NOT_OK && value == 99u);
     assert(pnc_current(17u, NULL_PTR) == E_NOT_OK);
     assert(request(65535u, COMM_FULL_COMMUNICATION) == E_NOT_OK);
@@ -418,6 +420,20 @@ int main(void) {
     ComM_DeInit(); /* Actual NO, but the channel is still in FULL. */
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
     init(&comm); /* Only a restart returns NM NONE to NO. */
+    /* NO_COM_NO_PENDING_REQUEST alone does not end ComM: the actual mode must be NO. */
+    assert(bus_request(7u, COMM_FULL_COMMUNICATION) == E_OK);
+    Can_MainFunction_Wakeup();
+    current(COMM_FULL_COMMUNICATION);
+    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    ComM_DeInit();
+    assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
+    assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
+    Can_MainFunction_Wakeup();
+    current(COMM_NO_COMMUNICATION);
+    Ecu_HostBusSM_DeInit();
+    ComM_DeInit(); /* An unreadable actual mode is not NO. */
+    assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
+    Ecu_HostBusSM_Init(&cdd);
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_NOT_OK);
