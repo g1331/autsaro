@@ -27,6 +27,13 @@ PIPELINE_OUTPUT = [
 ]
 
 
+def receiver_samples() -> tuple[str, ...]:
+    selected = tuple(os.environ.get("AUTOSAR_RECEIVER_SAMPLES", " ".join(SAMPLES)).split())
+    if not selected or set(selected) - set(SAMPLES):
+        raise ValueError(f"AUTOSAR_RECEIVER_SAMPLES must select from {SAMPLES}; got {selected}")
+    return selected
+
+
 def receiver_environment(source: dict[str, str], receiver: str) -> dict[str, str]:
     """Only the pinned tools, the receiver interpreter and the system directories."""
     tools = {name: str(Path(source[name]).resolve(strict=True))
@@ -48,6 +55,7 @@ def receiver_environment(source: dict[str, str], receiver: str) -> dict[str, str
 
 class OfflineDeliveryTests(unittest.TestCase):
     def test_moved_packages_build_and_run_with_receiver_python_and_pinned_tools_only(self):
+        selected = receiver_samples()
         samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
         if not samples:
             self.fail(
@@ -63,7 +71,7 @@ class OfflineDeliveryTests(unittest.TestCase):
         suffix = ".exe" if os.name == "nt" else ""
         with tempfile.TemporaryDirectory(prefix="autosar-handoff-receiver-") as temporary:
             root = Path(temporary).resolve()
-            for sample in SAMPLES:
+            for sample in selected:
                 with self.subTest(sample=sample):
                     moved = root / sample / "package"
                     moved.parent.mkdir()

@@ -85,7 +85,8 @@ jobs:
       fail-fast: false
       matrix:
         # Oldest and newest on Linux, newest on Windows; extended.yml runs the rest of the
-        # matrix after merging. native-delivery runs the shipped ecu-tool on 3.11–3.14.
+        # matrix after merging. native-delivery runs all samples on receiver 3.11,
+        # standard-ecu on 3.12–3.14; Extended runs all samples on every receiver.
         include:
           - os: ubuntu-24.04
             python: '3.12'
@@ -575,7 +576,7 @@ jobs:
       - name: CMake build matches the sealed ECU build
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_cmake_build.py
       # Every supported receiver interpreter runs the moved package; a failing version does not hide the others.
-      - name: Moved packages build and run with receiver Python 3.11–3.14
+      - name: "Receiver Python: all samples on 3.11, standard-ecu on 3.12–3.14"
         shell: python
         run: |
           import os, subprocess, sys
@@ -585,7 +586,8 @@ jobs:
               receiver = subprocess.check_output(['uv', 'python', 'find', '--no-project', '--managed-python', version], text=True).strip()
               print(f'::group::Receiver Python {version}: {receiver}', flush=True)
               result = subprocess.run(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
-                  env={**os.environ, 'AUTOSAR_RECEIVER_PYTHON': receiver})
+                  env={**os.environ, 'AUTOSAR_RECEIVER_PYTHON': receiver,
+                       'AUTOSAR_RECEIVER_SAMPLES': 'standard-ecu user-application component-pipeline no-diagnostic' if version == '3.11' else 'standard-ecu'})
               print('::endgroup::', flush=True)
               if result.returncode:
                   print(f'::error title=Receiver Python {version}::The moved packages did not build and run with {receiver}', flush=True)
