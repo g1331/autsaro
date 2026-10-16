@@ -65,7 +65,7 @@ check('live-application-initialization-and-immutable-snapshot', async () => {
   assert.deepEqual(await readFile(live), occupied);
   assert.deepEqual(await readFile(manifestPath), manifestBytes);
   await unlink(live);
-  const initializationCommand = '预览初始化用户应用…';
+  const initializationCommand = '初始化用户应用…';
   await menu(initializationCommand);
   await until(
     `Boolean([...document.querySelectorAll('[role=dialog]')].find(node=>node.textContent.includes(${json(SLOT)})))`,
@@ -73,7 +73,7 @@ check('live-application-initialization-and-immutable-snapshot', async () => {
   );
   assert.deepEqual(await readFile(manifestPath), manifestBytes);
   await assert.rejects(access(live), { code: 'ENOENT' });
-  await click('确认创建用户应用与成员记录', "document.querySelector('[role=dialog]')");
+  await click('确认初始化', "document.querySelector('[role=dialog]')");
   await until(
     `!document.querySelector('[role=dialog]')`,
     'actual application initialization confirmation',

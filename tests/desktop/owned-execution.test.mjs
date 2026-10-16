@@ -47,10 +47,10 @@ check('declared-consumer-tools-and-real-owned-failure', async () => {
   await click('设置');
   await click('执行工具', "document.querySelector('[role=dialog]')");
   for (const [name, field] of [
-    ['compiler', '编译器保存路径'],
-    ['objdump', 'Objdump保存路径'],
-    ['git', 'Git保存路径'],
-    ['python', 'Python 解释器保存路径'],
+    ['compiler', '编译器'],
+    ['objdump', 'Objdump'],
+    ['git', 'Git'],
+    ['python', 'Python 解释器'],
   ]) {
     await input(label(field), tools[name]);
   }
@@ -74,7 +74,7 @@ check('declared-consumer-tools-and-real-owned-failure', async () => {
   assert.equal(directories.length, 1);
   const actualNotice = await evaluate(`document.querySelector('.notice[role=alert]').textContent`);
   assert(
-    actualNotice.includes(' · Exited · 退出码 23 · 后代进程已回收：false'),
+    actualNotice.includes(' · Exited · 退出码 23 · 子进程已回收：false'),
     'The childless probe must retain its actual Exited/23 result without claiming descendant reclamation',
   );
   const actual = await capturedLogs(path.join(temporary, directories[0]));
@@ -99,7 +99,7 @@ check('declared-consumer-tools-and-real-owned-failure', async () => {
 check('owned-cancel-and-late-reply-fence', async () => {
   const before = await projection();
   const bytes = await sourceBytes(before);
-  const completedOwnedLogs = `[...document.querySelectorAll('.tool-content details')].filter(node => node.querySelector('summary')?.textContent === '受管失败验证 · 失败' && node.querySelector('.path-text')?.textContent === 'verification_owned_failure' && node.querySelector('pre')?.textContent.includes('Owned failure detail ')).length`;
+  const completedOwnedLogs = `[...document.querySelectorAll('.tool-content details')].filter(node => node.querySelector('summary')?.textContent === '受管失败验证 · 失败' && node.querySelector('pre')?.textContent.includes('Owned failure detail ')).length`;
   const completed = await evaluate(completedOwnedLogs);
   assert.equal(completed, 1, 'The previous genuine exit-23 result is the completion baseline');
   await menu('验证：受管取消');
@@ -112,7 +112,7 @@ check('owned-cancel-and-late-reply-fence', async () => {
     `Boolean(document.querySelector('[role=region][aria-label="构建"]'))`,
     'non-destructive tools remain available during real owned execution',
   );
-  await click('取消', "document.querySelector('.context-toolbar')");
+  await click('取消操作', "document.querySelector('.context-toolbar')");
   await until(
     `(async()=>!(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
     'actual owned process closure acknowledged',

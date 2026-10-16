@@ -13,6 +13,7 @@ const {
   click,
   input,
   label,
+  field,
   menu,
   memorySample,
   importAuthoredInputs,
@@ -24,8 +25,8 @@ check('expanded-input-responsiveness-and-cancel', async () => {
   const before = await projection();
   await memorySample('before-expanded-input');
   await menu('导入 ARXML…');
-  await input(label('ARXML 来源路径'), authored.large);
-  await click('导入并进入工程');
+  await input(field('ARXML 路径（每行一份）'), authored.large);
+  await click('导入');
   await until(
     `(async()=>Boolean((await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation))()`,
     'real pending parse observed',
@@ -38,7 +39,7 @@ check('expanded-input-responsiveness-and-cancel', async () => {
     'tool remains responsive during parse',
     5000,
   );
-  await click('取消', "document.querySelector('.context-toolbar')");
+  await click('取消操作', "document.querySelector('.context-toolbar')");
   await until(
     `(async()=>!(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
     'actual cancel closure',
@@ -53,8 +54,8 @@ check('expanded-input-responsiveness-and-cancel', async () => {
   // Complete a separate real open of the expanded input, then compare the
   // same frozen native snapshot across repeated filter/expansion actions.
   await menu('导入 ARXML…');
-  await input(label('ARXML 来源路径'), authored.large);
-  await click('导入并进入工程');
+  await input(field('ARXML 路径（每行一份）'), authored.large);
+  await click('导入');
   await until(
     `!document.querySelector('.start-page') && Boolean(document.querySelector('.document-tabs'))`,
     'expanded input published',

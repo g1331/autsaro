@@ -178,16 +178,27 @@ export async function openWorkbench(name) {
     })()`);
     await pointer(point.x, point.y);
   }
-  async function input(selector, value) {
+  async function input(target, value) {
+    const description = typeof target === 'string' ? target : target.field;
     await evaluate(`(() => {
-      const node = document.querySelector(${json(selector)});
-      if (!node || node.disabled || node.readOnly || !node.getClientRects().length) throw new Error('Actual input not editable: ' + ${json(selector)});
+      const node = ${typeof target === 'string' ? `document.querySelector(${json(target)})` : target.expression};
+      if (!node || node.disabled || node.readOnly || !node.getClientRects().length) throw new Error('Actual input not editable: ' + ${json(description)});
       node.focus();
       if (node.tagName === 'SELECT') { node.value = ${json(value)}; node.dispatchEvent(new Event('change', {bubbles: true})); }
       else { Object.getOwnPropertyDescriptor(node.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set.call(node, ${json(value)}); node.dispatchEvent(new Event('input', {bubbles: true})); }
     })()`);
   }
   const label = (name) => `[aria-label=${json(name)}]`;
+  /** A form control named by its visible <label> text (or the label's leading words), as users find it. */
+  const field = (name) => ({
+    field: name,
+    expression: `[...document.querySelectorAll('label')].find((node) => {
+      const copy = node.cloneNode(true);
+      copy.querySelectorAll('input,select,textarea,button,option').forEach((child) => child.remove());
+      const text = copy.textContent.replace(/\\s+/g, ' ').trim();
+      return text === ${json(name)} || text.startsWith(${json(name + ' ')});
+    })?.querySelector('input,select,textarea')`,
+  });
   async function menu(command) {
     await key('k', { ctrl: true });
     await until(
@@ -219,13 +230,13 @@ export async function openWorkbench(name) {
     );
     await evaluate('window.__BUILTIN_NATIVE_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke');
     await until(
-      `Boolean([...document.querySelectorAll('.start-page button')].find(node => node.textContent.trim() === '打开成员工程…' && !node.disabled))`,
+      `Boolean([...document.querySelectorAll('.start-page button')].find(node => node.textContent.trim() === '打开工程…' && !node.disabled))`,
       'native capabilities restored',
     );
     if (manifest) return openMember(manifest);
     await menu('导入 ARXML…');
-    await input(label('ARXML 来源路径'), sources.join('\n'));
-    await click('导入并进入工程');
+    await input(field('ARXML 路径（每行一份）'), sources.join('\n'));
+    await click('导入');
     await until(
       `Boolean(document.querySelector('.document-tabs')) && !document.querySelector('[role=dialog]')`,
       'public source reimport',
@@ -264,7 +275,7 @@ export async function openWorkbench(name) {
     await ipcLog.writeFile(json({ memory: sample }) + '\n');
     return sample;
   }
-  async function clipboard(expected, scope, action = '复制完整日志') {
+  async function clipboard(expected, scope, action = '复制日志') {
     const text = expected.replaceAll('\r\n', '\n');
     await click(action, scope);
     const deadline = Date.now() + 60000;
@@ -384,14 +395,14 @@ export async function openWorkbench(name) {
   }
   async function create(name) {
     await menu('新建工程…');
-    await until(`Boolean(document.querySelector(${json(label('工程名称'))}))`, 'new project entry');
-    await input(label('工程名称'), name);
+    await until(`Boolean(${field('工程名称').expression})`, 'new project entry');
+    await input(field('工程名称'), name);
     const directory = path.join(scratch, 'projects', name);
     await mkdir(directory);
     await choose(
       'directory',
       directory,
-      () => click('选择', "document.querySelector('.start-page')"),
+      () => click('选择…', "document.querySelector('.start-page')"),
       async () => {
         await until(
           `document.querySelector(${json(label('新工程目录'))})?.value === ${json(directory)}`,
@@ -406,7 +417,7 @@ export async function openWorkbench(name) {
       'original template preview',
     );
     assert.deepEqual(await readdir(directory), [], 'Template preview must not create source files');
-    await click('确认创建工程');
+    await click('确认创建');
     await until(
       `Boolean(document.querySelector('.document-tabs')) && !document.querySelector('[role=dialog]')`,
       'created workbench',
@@ -424,7 +435,7 @@ export async function openWorkbench(name) {
   }
   async function awaitProjectSurfaceReady(timeout) {
     await until(
-      `!document.querySelector('[role=status]')?.textContent.startsWith('正在') && (!document.querySelector('[aria-label="标准输入工作区"]') || !document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]') || Boolean(document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]:not(:disabled)')))`,
+      `!document.querySelector('[role=status]')?.textContent.startsWith('正在') && (!document.querySelector('[aria-label="标准输入工作区"]') || !document.querySelector('[aria-label="标准输入工作区"] .integration-fields label:first-child input') || Boolean(document.querySelector('[aria-label="标准输入工作区"] .integration-fields label:first-child input:not(:disabled)')))`,
       'actual opened project and automatic inspection operation completed',
       timeout,
     );
@@ -447,7 +458,7 @@ export async function openWorkbench(name) {
     await choose(
       'file',
       manifest,
-      () => menu('打开成员工程…'),
+      () => menu('打开工程…'),
       async () => {
         await until(
           `!document.querySelector('[role=dialog]') && Boolean(document.querySelector('.document-tabs'))`,
@@ -534,7 +545,7 @@ export async function openWorkbench(name) {
         `document.querySelector('.document-tabs [role=tab][aria-selected=true]')?.textContent === ${json(path.basename(source.path))} && document.querySelector('[aria-label="完整源原文"]')?.textContent === ${json(actual.slice(0, 40000))}`,
         'closed active source restores actual fallback bytes and tab header',
       );
-      await clipboard(actual, 'document', '复制完整原文');
+      await clipboard(actual, "document.querySelector('.text-snapshot')", '复制');
       await screenshot('source-fallback-raw-A.png');
     }
     await click(
@@ -638,8 +649,8 @@ export async function openWorkbench(name) {
   async function importAuthoredInputs() {
     const authored = await createBuiltinInputs(scratch);
     await menu('导入 ARXML…');
-    await input(label('ARXML 来源路径'), authored.sources.join('\n'));
-    await click('导入并进入工程');
+    await input(field('ARXML 路径（每行一份）'), authored.sources.join('\n'));
+    await click('导入');
     await until(
       `Boolean(document.querySelector('.document-tabs')) && !document.querySelector('[role=dialog]')`,
       'authored multi-module import',
@@ -688,6 +699,7 @@ export async function openWorkbench(name) {
     click,
     input,
     label,
+    field,
     menu,
     choose,
     refreshSurface,

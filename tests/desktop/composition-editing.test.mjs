@@ -53,11 +53,11 @@ check('composition-shared-editing-and-source-protection', async () => {
   await screenshot('composition-long-name-narrow-draft.png');
   await click('预览更改');
   await until(
-    `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
+    `Boolean(document.querySelector('[aria-label="确认应用更改"]'))`,
     'composition field batch preview',
   );
   await until(
-    `[...document.querySelectorAll('[role=dialog] button')].some(node => node.textContent.trim() === '确认应用全部变化' && !node.disabled)`,
+    `[...document.querySelectorAll('[role=dialog] button')].some(node => node.textContent.trim() === '应用更改' && !node.disabled)`,
     'composition preview ready for keyboard cancel',
   );
   await until(
@@ -72,10 +72,10 @@ check('composition-shared-editing-and-source-protection', async () => {
   );
   await click('预览更改');
   await until(
-    `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
+    `Boolean(document.querySelector('[aria-label="确认应用更改"]'))`,
     'composition field preview again',
   );
-  await click('确认应用全部变化', "document.querySelector('[role=dialog]')");
+  await click('应用更改', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'composition batch applied');
   await until(
     `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
@@ -144,10 +144,10 @@ check('composition-shared-editing-and-source-protection', async () => {
   await input(`[data-field-id=${json(port.fieldId)}]`, `${portTarget.targetId}:${portTarget.dest}`);
   await click('预览更改');
   await until(
-    `Boolean(document.querySelector('[aria-label="确认原子应用批次"]'))`,
+    `Boolean(document.querySelector('[aria-label="确认应用更改"]'))`,
     'composition paired endpoint preview',
   );
-  await click('确认应用全部变化', "document.querySelector('[role=dialog]')");
+  await click('应用更改', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'composition paired endpoint applied');
   await until(
     `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
@@ -157,12 +157,12 @@ check('composition-shared-editing-and-source-protection', async () => {
   await refreshSurface(pipeline.manifest);
   const initialization = await invoke('preview_application_initialization');
   assert.equal(initialization.slots.length, 3);
-  await menu('预览初始化用户应用…');
+  await menu('初始化用户应用…');
   await until(
     `Boolean(document.querySelector('[role=dialog]'))`,
     'composition all source slots preview',
   );
-  await click('确认创建用户应用与成员记录', "document.querySelector('[role=dialog]')");
+  await click('确认初始化', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'composition create-only initialization');
   await until(
     `(async () => !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
