@@ -306,10 +306,9 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
                     "rte_value_0",
                     "rte_value_0_received",
                     "rte_value_0_expired",
-                    "initialized",
-                    "started",
-                    "timing",
-                    "allocated",
+                    "schm_lifecycle",
+                    "schm_started",
+                    "schm_timing",
                     "diagnostic_session_mode",
                     "authentication_mode",
                 ][..],
@@ -747,7 +746,7 @@ fn input_types_have_consistent_trusted_emitters_and_required_initial_values() {
 }
 
 #[test]
-fn private_rte_memory_sections_have_real_consumers_and_no_generic_aliases() {
+fn private_rte_memory_sections_have_real_consumers_and_only_used_aliases() {
     let files = prepared_pipeline_files(&build(&inputs()).unwrap());
     let mapping = files
         .iter()
@@ -755,7 +754,6 @@ fn private_rte_memory_sections_have_real_consumers_and_no_generic_aliases() {
         .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
         .unwrap();
     for alias in [
-        "RTE_CODE",
         "RTE_CONST",
         "RTE_VAR_INIT",
         "RTE_VAR_CLEARED",
@@ -764,9 +762,20 @@ fn private_rte_memory_sections_have_real_consumers_and_no_generic_aliases() {
         assert!(!mapping.contains(&format!("#define {alias} ")), "{alias}");
         assert!(!mapping.contains(&format!("#undef {alias}\n")), "{alias}");
     }
+    assert_eq!(mapping.matches("#define RTE_CODE ").count(), 1);
+    assert_eq!(mapping.matches("#undef RTE_CODE\n").count(), 1);
+    let modes = files
+        .iter()
+        .find(|(path, _)| path == "generated/src/SchM_Main.c")
+        .unwrap();
+    assert!(
+        std::str::from_utf8(&modes.1)
+            .unwrap()
+            .contains("RTE_CODE Std_ReturnType")
+    );
     let mut used = std::collections::BTreeSet::new();
     for (path, bytes) in &files {
-        if !path.ends_with(".c") {
+        if !path.ends_with(".c") && !path.ends_with(".h") {
             continue;
         }
         let source = std::str::from_utf8(bytes).unwrap();

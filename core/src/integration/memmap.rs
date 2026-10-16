@@ -2,6 +2,16 @@
 use super::c_layout;
 use super::{PlanDescription, PlanDiagnostic};
 
+/// The same selected Dcm mode owner supplies its storage, code and placement alias.
+pub(super) fn dcm_scope(composition: &super::composition::CompositionContract) -> &str {
+    composition
+        .components
+        .iter()
+        .find(|component| component.diagnostic_session_port.is_some())
+        .map(|component| super::short_name(&component.component))
+        .unwrap_or("Dcm")
+}
+
 /// RTE allocations shared by source generation and BSWMD memory descriptions.
 pub(super) fn rte_sections(
     plan: &PlanDescription,
@@ -35,12 +45,7 @@ pub(super) fn rte_sections(
             sections.push((scope.into(), "VAR_CLEARED_UNSPECIFIED"));
         }
     }
-    let mode_scope = composition
-        .components
-        .iter()
-        .find(|component| component.diagnostic_session_port.is_some())
-        .map(|component| super::short_name(&component.component))
-        .unwrap_or("Dcm");
+    let mode_scope = dcm_scope(composition);
     sections.push((mode_scope.into(), "CODE"));
     sections.push((mode_scope.into(), "VAR_CLEARED_UNSPECIFIED"));
     sections.push((
@@ -80,7 +85,11 @@ pub(super) fn rte_sections(
 
 /// `code_section` places every code segment in one executable section while
 /// keeping the source-scoped AUTOSAR keywords; `None` keeps per-scope sections.
-pub(super) fn rte(scopes: &[(String, &str)], code_section: Option<&str>) -> String {
+pub(super) fn rte(
+    scopes: &[(String, &str)],
+    code_section: Option<&str>,
+    mode_scope: &str,
+) -> String {
     let mut mapping =
         String::from("/** @file Source-derived RTE scopes; controlled x64 section placement. */\n");
     for (index, (scope, segment)) in scopes.iter().enumerate() {
@@ -108,11 +117,21 @@ pub(super) fn rte(scopes: &[(String, &str)], code_section: Option<&str>) -> Stri
             Some(section) if class == "CODE" => section.to_owned(),
             _ => format!(".{section_name}.rte.{scope}.{segment}"),
         };
-        let macros = c_layout::defines(&[(
+        let mut entries = vec![(
             format!("RTE_{scope}_{segment}"),
             format!("__attribute__((section(\"{placement}\")))"),
-        )]);
+        )];
+        // Existing SchM mode functions consume this short placement keyword.
+        // Other scopes and memory classes have no consumer for a generic alias.
+        let mode_alias = scope == mode_scope && *segment == "CODE";
+        if mode_alias {
+            entries.push(("RTE_CODE".into(), format!("RTE_{scope}_{segment}")));
+        }
+        let macros = c_layout::defines(&entries);
         mapping.push_str(&format!("#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n{macros}#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n", if index == 0 { "if" } else { "elif" }));
+        if mode_alias {
+            mapping.push_str("#undef RTE_CODE\n");
+        }
     }
     mapping.push_str("#else\n#error \"Unknown RTE memory section\"\n#endif\n");
     mapping

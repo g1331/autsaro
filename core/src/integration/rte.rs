@@ -367,7 +367,7 @@ pub(super) fn files(
     section(&mut source, partition, "CALLOUT_CODE", false);
     Ok(BTreeMap::from([
         // The delivered targets place all RTE code in their executable RTE section.
-        ("include/Rte_MemMap.h".into(), super::memmap::rte(&scopes, Some(".rte_code")).into_bytes()),
+        ("include/Rte_MemMap.h".into(), super::memmap::rte(&scopes, Some(".rte_code"), super::memmap::dcm_scope(composition)).into_bytes()),
         ("src/Rte.c".into(), source.into_bytes()),
         ("include/Rte_Com.h".into(), b"/** @file Handle-bearing COM reception and timeout notifications. */\n#ifndef RTE_COM_H\n#define RTE_COM_H\n#include \"Rte_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nvoid Rte_COMCbk(CbkHandleIdType handle);\nvoid Rte_COMCbkRxTOut(CbkHandleIdType handle);\n#ifdef __cplusplus\n}\n#endif\n#endif\n".to_vec()),
     ]))

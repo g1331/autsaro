@@ -797,12 +797,7 @@ pub(super) fn files(
         config.push_str(&format!("#define RTE_Dcm_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n{function}\n#define RTE_Dcm_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"));
     }
     outputs.emit(ECU, "src/Ecu_RuntimeConfig.c", config)?;
-    let mode_scope = composition
-        .components
-        .iter()
-        .find(|component| component.diagnostic_session_port.is_some())
-        .map(|component| super::short_name(&component.component))
-        .unwrap_or("Dcm");
+    let mode_scope = super::memmap::dcm_scope(composition);
     outputs.emit(
         ECU,
         "src/SchM_Main.c",
@@ -844,7 +839,7 @@ pub(super) fn files(
 /// SchM lifecycle and the Dcm mode switches over the selected mode scope.
 fn lifecycle(partition: u16, mode_scope: &str, authentication_group: &str) -> String {
     let lifecycle = format!(
-        "#include \"Rte_Main.h\"\n#include \"Ecu_Target.h\"\n#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nstatic boolean initialized RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean started RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean timing RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean allocated RTE_Rte_VAR_CLEARED_UNSPECIFIED;\n#define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nconst SchM_ConfigType Ecu_SchMConfig RTE_Rte_CONFIG_DATA_PREBUILD_UNSPECIFIED = {{{partition}u}};\n#define RTE_Rte_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_Rte_CODE void SchM_Init(const SchM_ConfigType *ConfigPtr)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) || (allocated == TRUE) ||\n        (ConfigPtr == NULL_PTR) || (ConfigPtr->partition != {partition}u)) {{\n        return;\n    }}\n    allocated = TRUE;\n    initialized = TRUE;\n}}\nRTE_Rte_CODE void SchM_Start(void)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (initialized == TRUE)) {{\n        started = TRUE;\n    }}\n}}\nRTE_Rte_CODE void SchM_StartTiming(void)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (started == TRUE)) {{\n        timing = TRUE;\n    }}\n}}\nRTE_Rte_CODE void SchM_Deinit(void)\n{{\n    if (Ecu_TargetCheckLifecycleContext(FALSE) == E_OK) {{\n        timing = FALSE;\n        started = FALSE;\n        initialized = FALSE;\n    }}\n}}\nRTE_Rte_CODE boolean Ecu_SchMReady(void) {{ return started; }}\nRTE_Rte_CODE boolean Ecu_SchMTimingActive(void) {{ return timing; }}\n#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+        "#include \"Rte_Main.h\"\n#include \"Ecu_Target.h\"\n#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define SCHM_LIFECYCLE_UNALLOCATED 0U\n#define SCHM_LIFECYCLE_INITIALIZED 1U\n#define SCHM_LIFECYCLE_RETIRED     2U\nstatic uint8 schm_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean schm_started RTE_Rte_VAR_CLEARED_UNSPECIFIED;\nstatic boolean schm_timing RTE_Rte_VAR_CLEARED_UNSPECIFIED;\n#define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\nconst SchM_ConfigType Ecu_SchMConfig RTE_Rte_CONFIG_DATA_PREBUILD_UNSPECIFIED = {{{partition}u}};\n#define RTE_Rte_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_Rte_CODE void SchM_Init(const SchM_ConfigType *ConfigPtr)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) ||\n        (schm_lifecycle != SCHM_LIFECYCLE_UNALLOCATED) || (ConfigPtr == NULL_PTR) ||\n        (ConfigPtr->partition != {partition}u)) {{\n        return;\n    }}\n    schm_lifecycle = SCHM_LIFECYCLE_INITIALIZED;\n}}\nRTE_Rte_CODE void SchM_Start(void)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) &&\n        (schm_lifecycle == SCHM_LIFECYCLE_INITIALIZED)) {{\n        schm_started = (boolean)TRUE;\n    }}\n}}\nRTE_Rte_CODE void SchM_StartTiming(void)\n{{\n    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) && (schm_started == (boolean)TRUE)) {{\n        schm_timing = (boolean)TRUE;\n    }}\n}}\nRTE_Rte_CODE void SchM_Deinit(void)\n{{\n    if (Ecu_TargetCheckLifecycleContext(FALSE) == E_OK) {{\n        schm_timing = (boolean)FALSE;\n        schm_started = (boolean)FALSE;\n        if (schm_lifecycle == SCHM_LIFECYCLE_INITIALIZED) {{\n            schm_lifecycle = SCHM_LIFECYCLE_RETIRED;\n        }}\n    }}\n}}\nRTE_Rte_CODE boolean Ecu_SchMReady(void) {{ return schm_started; }}\nRTE_Rte_CODE boolean Ecu_SchMTimingActive(void) {{ return schm_timing; }}\n#define RTE_Rte_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
     );
     let mut modes = format!(
         "\n#include \"SchM_Dcm.h\"\n#include \"Can_HostLock.h\"\n#define RTE_{mode_scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n"
@@ -869,14 +864,14 @@ fn lifecycle(partition: u16, mode_scope: &str, authentication_group: &str) -> St
         ("DcmDiagnosticSessionControl", "diagnostic_session_mode"),
     ] {
         let switch = c_layout::signature(
-            &format!("RTE_{mode_scope}_CODE Std_ReturnType"),
+            "RTE_CODE Std_ReturnType",
             &format!("SchM_Switch_Dcm_{group}"),
             &[format!("Rte_ModeType_{group} mode")],
             "",
             true,
         );
         let mode = c_layout::signature(
-            &format!("RTE_{mode_scope}_CODE Rte_ModeType_{group}"),
+            &format!("RTE_CODE Rte_ModeType_{group}"),
             &format!("SchM_Mode_Dcm_{group}"),
             &["void".to_owned()],
             "",

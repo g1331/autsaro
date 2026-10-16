@@ -24,6 +24,11 @@ int main(void)
     SchM_Init(&Ecu_SchMConfig);
     SchM_Start();
     assert(Ecu_SchMReady() == FALSE);
+    /* Shutdown before the first valid Init must not consume the allocation. */
+    phase = 2;
+    SchM_Deinit();
+    SchM_Deinit();
+    assert((Ecu_SchMReady() == FALSE) && (Ecu_SchMTimingActive() == FALSE));
     phase = 1;
     /* Order: Start needs Init, StartTiming needs Start. */
     SchM_StartTiming();

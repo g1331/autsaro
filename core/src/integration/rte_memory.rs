@@ -64,19 +64,14 @@ pub(super) fn description(
             "<{tag}><SHORT-NAME>{name}</SHORT-NAME><TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/AUTOSAR_Rte/{datatype}</TYPE-TREF></{tag}>"
         )
     };
-    for name in [
-        "rte_started",
-        "rte_allocated",
-        "initialized",
-        "started",
-        "timing",
-        "allocated",
+    for (name, datatype) in [
+        ("rte_started", "RteMemory_boolean"),
+        ("rte_allocated", "RteMemory_boolean"),
+        ("schm_lifecycle", "RteMemory_uint8"),
+        ("schm_started", "RteMemory_boolean"),
+        ("schm_timing", "RteMemory_boolean"),
     ] {
-        variables.push_str(&object(
-            "VARIABLE-DATA-PROTOTYPE",
-            name,
-            "RteMemory_boolean",
-        ));
+        variables.push_str(&object("VARIABLE-DATA-PROTOTYPE", name, datatype));
     }
     for receiver in receivers(composition) {
         scalars.insert(receiver.native_type.clone());

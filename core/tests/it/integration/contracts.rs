@@ -282,6 +282,7 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
         "RTE_INGRESS_H",
         "NULL_PTR",
         "RTE_Process_CODE",
+        "RTE_CODE",
         "RTE_MEMMAP_ACTIVE",
         "RTE_Process_CODE_ACTIVE",
         "Process_CODE",
