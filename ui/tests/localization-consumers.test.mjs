@@ -126,7 +126,7 @@ async function openConsumer(
       controller.notice
         ? React.createElement(OwnedLog, {
             text: controller.notice.detail ?? controller.notice.text,
-            label: message('controller.integration.inspect'),
+            label: message('activity.validate'),
           })
         : null,
     );
@@ -170,8 +170,8 @@ test.each(['zh-CN', 'en'])(
     for (const component of components) {
       expect(view.getByText(`${component.component} · ${component.instance}`)).toBeTruthy();
     }
-    expect(view.queryByLabelText(translate('shell.integration.periodA11y'))).toBeNull();
-    expect(view.queryByRole('button', { name: translate('shell.integration.apply') })).toBeNull();
+    expect(view.queryByLabelText(translate('shell.integration.period'))).toBeNull();
+    expect(view.queryByRole('button', { name: translate('action.apply') })).toBeNull();
     act(() => current().restoreIntegrationDraft());
     expect(current().integrationInspection).toBe(inspection);
     expect(current().integrationPeriod).toBe('');
@@ -227,7 +227,7 @@ test.each(['zh-CN', 'en'])(
     };
     const { view, current } = await openConsumer(undefined, baseProjection, inspection);
     expect(current().integrationPeriod).toBe('10');
-    const period = view.getByLabelText(translate('shell.integration.periodA11y'));
+    const period = view.getByLabelText(translate('shell.integration.period'));
     expect(period.value).toBe('10');
     fireEvent.change(period, { target: { value: '20' } });
     expect(current().integrationUnapplied).toBe(true);
@@ -373,9 +373,10 @@ test('Problems renders serialized cardinality child names, bounds and actual cou
         expect(rows[index].textContent).not.toMatch(/{{|}}|\[object Object\]/);
         await act(async () => {
           fireEvent.click(
-            Array.from(rows[index].querySelectorAll('button')).find(
-              (button) =>
-                button.getAttribute('aria-label') === translate('editor.common.copyDetails'),
+            Array.from(rows[index].querySelectorAll('button')).find((button) =>
+              [translate('action.copyDetails'), translate('editor.dialog.copied')].includes(
+                button.textContent,
+              ),
             ),
           );
         });

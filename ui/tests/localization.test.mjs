@@ -74,7 +74,7 @@ test('product failures remain descriptors and retranslate; raw evidence never ch
   }
   const raw = 'external.exe: 原始证据 <raw> C:\\用户\\test.arxml';
   const combined = composedMessage('controller.operation.failed', {
-    label: message('controller.integration.inspect'),
+    label: message('activity.validate'),
     error: errorText([failure, raw]),
   });
   previewLanguage('zh-CN');
@@ -99,7 +99,7 @@ test('recursive wire aggregates render and retranslate in a log consumer and rec
   expect(errorText(recoverable.error)).toEqual(recoverable.error);
   previewLanguage('zh-CN');
   const view = render(
-    React.createElement(OwnedLog, { text: log, label: message('controller.integration.inspect') }),
+    React.createElement(OwnedLog, { text: log, label: message('activity.validate') }),
   );
   const element = view.container.querySelector('pre');
   const chinese = element.textContent;
@@ -139,7 +139,7 @@ test('browser language settings preview, cancel and save preserve controller dra
   expect(i18n.language).toBe('en');
   expect(result.current.projectName).toBe('用户对象_Example');
   expect(result.current.savedLanguage).toBe('system');
-  const close = settings.getByRole('button', { name: /^(关闭|Close)$/ });
+  const close = settings.getAllByRole('button', { name: /^(关闭|Close)$/ }).at(-1);
   act(() => fireEvent.click(close));
   expect(result.current.languageDraft).toBe(result.current.savedLanguage);
   act(() => {

@@ -49,7 +49,7 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
     patchState({ settingsNotice: null, toolErrors: {} });
     const generation = epoch.current;
     running.current = true;
-    setBusy(message('controller.settings.saveTools'));
+    setBusy(message('activity.saveTools'));
     try {
       await call<void>('configure_execution_tools', { tools: stateRef.current.toolDraft });
       setGenerated(null);
@@ -93,7 +93,7 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
     if (running.current) return;
     const generation = epoch.current;
     running.current = true;
-    setBusy(message('controller.settings.saveAppearance'));
+    setBusy(message('activity.saveAppearance'));
     try {
       await call<void>('configure_appearance', { appearance: stateRef.current.appearanceDraft });
       setSettingsNotice({ tone: 'success', text: message('controller.settings.appearanceSaved') });

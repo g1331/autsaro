@@ -117,14 +117,14 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
           onClick={() => void c.prepareChanges()}
           disabled={!c.changes.length || Boolean(c.busy)}
         >
-          {t('editor.objects.previewBatch')}
+          {t('action.previewChanges')}
         </button>
         <button
           type="button"
           onClick={() => c.discardChanges()}
           disabled={!c.changes.length || Boolean(c.busy)}
         >
-          {t('editor.objects.restoreBatch')}
+          {t('action.revert')}
         </button>
       </div>
       {c.changes.length ? (
@@ -414,7 +414,7 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
             {object.writable ? t('editor.common.configurable') : t('editor.common.readonly')}
           </span>
           <p className="mono path-text">{object.path}</p>
-          <CopyText text={object.path} label={t('editor.objects.copyPath')} />
+          <CopyText text={object.path} label={t('action.copyPath')} />
           <p className="mono path-text">
             {displayPath(
               c.projection?.sources.find((source) => source.sourceId === object.sourceId)?.path ??
@@ -462,7 +462,7 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
                   onClick={() => void c.prepareChanges()}
                   disabled={!c.changes.length || Boolean(c.busy)}
                 >
-                  {t('editor.objects.preview')}
+                  {t('action.previewChanges')}
                 </button>
                 {object.writable && !c.actionReason('prepare-change') ? (
                   <button

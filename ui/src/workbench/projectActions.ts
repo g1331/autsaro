@@ -134,7 +134,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
 
   async function confirmAction(prompt: Text): Promise<boolean> {
     if (busy || integrationProcessing) return false;
-    setBusy(message('workflow.action.confirm'));
+    setBusy(message('activity.confirm'));
     try {
       return await requestConfirmation(prompt);
     } catch (error) {
@@ -159,7 +159,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       integrationPeriod: '',
       integrationPreview: null,
       integrationPreviewPath: '',
-      integrationNotice: message('workflow.integration.unchecked'),
+      integrationNotice: message('controller.integration.notInspected'),
       ecuOutputDirectory: '',
       ecuImportDirectory: '',
       generationKind: view.integrationCandidate ? 'handoff' : 'project',
@@ -198,7 +198,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
 
   async function startProject(nextSource: 'empty' | 'import' = 'empty') {
     if (integrationProcessing) return;
-    await replaceProject(message('workflow.action.switchProject'), async () => {
+    await replaceProject(message('activity.switchProject'), async () => {
       try {
         await call<void>('close_project');
         invalidateOperation();
@@ -223,7 +223,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         integrationPeriod: '',
         integrationPreview: null,
         integrationPreviewPath: '',
-        integrationNotice: message('workflow.integration.unchecked'),
+        integrationNotice: message('controller.integration.notInspected'),
         ecuOutputDirectory: '',
         ecuImportDirectory: '',
         buildDirectory: '',
@@ -248,14 +248,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   function createProject() {
-    void replaceProject(message('workflow.action.newProject'), async () => {
+    void replaceProject(message('activity.newProject'), async () => {
       const current = stateRef.current;
       if (!current.projectDirectory || !current.projectName.trim()) {
         setNotice({ tone: 'error', text: message('workflow.project.requireNameDirectory') });
         return;
       }
       await run(
-        { kind: 'action', label: message('workflow.action.previewNewProject') },
+        { kind: 'action', label: message('activity.previewNewProject') },
         () =>
           call<ProjectCreationPreview>('preview_project_creation', {
             directory: current.projectDirectory,
@@ -272,9 +272,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       setNotice({ tone: 'error', text: message('workflow.project.requireArxml') });
       return;
     }
-    void replaceProject(message('workflow.action.importArxml'), () =>
+    void replaceProject(message('activity.importArxml'), () =>
       run(
-        { kind: 'action', label: message('workflow.action.importProject') },
+        { kind: 'action', label: message('activity.importArxml') },
         () => call<WorkspaceView>('open_project', { paths: importPaths }),
         applyProject,
       ),
@@ -308,10 +308,10 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     const directory = current.ecuImportDirectory;
     const newWorkspaceDirectory = current.handoffImportDestination;
     if (!directory || !newWorkspaceDirectory) return;
-    await replaceProject(message('workflow.action.replaceWithHandoff'), async () => {
+    await replaceProject(message('activity.replaceWithHandoff'), async () => {
       field('handoffImportOpen')(false);
       await run(
-        { kind: 'handoffImport', label: message('workflow.action.importHandoff') },
+        { kind: 'handoffImport', label: message('activity.importHandoff') },
         () => call<WorkspaceView>('open_handoff_project', { directory, newWorkspaceDirectory }),
         (view) => {
           field('handoffImportDestination')('');
@@ -322,9 +322,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function previewApplicationInitialization() {
-    await guardContext(message('workflow.action.initializeApplication'), () =>
+    await guardContext(message('activity.initializeApplication'), () =>
       run(
-        { kind: 'action', label: message('workflow.action.previewApplication') },
+        { kind: 'action', label: message('activity.previewApplication') },
         () => call<ApplicationInitializationPreview>('preview_application_initialization'),
         (applicationPreview) => field('applicationPreview')(applicationPreview),
       ),
@@ -335,7 +335,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     const preview = stateRef.current.applicationPreview;
     if (!preview) return;
     await run(
-      { kind: 'action', label: message('workflow.action.initializeApplication') },
+      { kind: 'action', label: message('activity.initializeApplication') },
       () => call<ApplicationInitializationOutcome>('initialize_application_previewed', { preview }),
       (outcome) => {
         patchState({
@@ -368,7 +368,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function closeDocument(tab: DocumentTab) {
-    await guardContext(message('workflow.action.closeDocument'), async () => {
+    await guardContext(message('activity.closeDocument'), async () => {
       const current = stateRef.current;
       const tabs = current.tabs.filter(
         (other) => other.kind !== tab.kind || other.sourceId !== tab.sourceId,
@@ -439,7 +439,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     if (!current.workspace || running.current) return false;
     const generation = epoch.current;
     running.current = true;
-    setBusy(message('workflow.action.applyDrafts'));
+    setBusy(message('activity.apply'));
     let view = current.workspace;
     let applied = false;
     try {
@@ -519,7 +519,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
 
   async function requestSave() {
     if (hasDrafts()) {
-      await guardContext(message('workflow.action.previewSave'), requestSave);
+      await guardContext(message('activity.previewSave'), requestSave);
       return;
     }
     if (stateRef.current.workspace?.integrationCandidate) previewIntegrationSave();
@@ -562,14 +562,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       openDocument({ kind: 'configuration' });
     };
     if (multiple) select();
-    else await guardContext(message('workflow.action.chooseConfiguration'), select);
+    else await guardContext(message('activity.chooseConfiguration'), select);
   }
 
   async function readSource(sourceId: string) {
     if (!native || running.current) return;
     const generation = epoch.current;
     running.current = true;
-    setBusy(message('workflow.action.readSource'));
+    setBusy(message('activity.readSource'));
     patchState({ activeSourceId: sourceId, sourceText: null, treeMode: 'files' });
     openDocument({ kind: 'source', sourceId });
     try {
@@ -608,9 +608,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       if (typeof catalogPath !== 'string') return;
       if (!(await confirmAction(message('workflow.confirm.acceptCatalog', { path: catalogPath }))))
         return;
-      await guardContext(message('workflow.action.acceptDefinitions'), () =>
+      await guardContext(message('activity.acceptDefinitions'), () =>
         run(
-          { kind: 'action', label: message('workflow.action.acceptDefinitions') },
+          { kind: 'action', label: message('activity.acceptDefinitions') },
           () => call<ProjectProjection>('import_definition_catalog', { catalogPath }),
           (projection) => {
             patchState({ projection });
@@ -629,9 +629,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
 
   async function removeDefinitionCatalog(catalogId: string) {
     if (!(await confirmAction(message('workflow.confirm.removeCatalog', { catalogId })))) return;
-    await guardContext(message('workflow.action.removeDefinitions'), () =>
+    await guardContext(message('activity.removeDefinitions'), () =>
       run(
-        { kind: 'action', label: message('workflow.action.removeDefinitions') },
+        { kind: 'action', label: message('activity.removeDefinitions') },
         () => call<ProjectProjection>('remove_definition_catalog', { catalogId }),
         (projection) => {
           patchState({ projection });
@@ -643,7 +643,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function openMemberProject() {
-    await replaceProject(message('workflow.action.openMemberProject'), async () => {
+    await replaceProject(message('activity.openProject'), async () => {
       const path = await open({
         multiple: false,
         filters: [{ name: translate('workflow.dialog.projectFilter'), extensions: ['json'] }],
@@ -651,7 +651,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       });
       if (typeof path !== 'string') return;
       await run(
-        { kind: 'action', label: message('workflow.action.openMemberProject') },
+        { kind: 'action', label: message('activity.openProject') },
         () => call<WorkspaceView>('open_member_project', { path }),
         (view) => {
           applyProject(view);
@@ -662,14 +662,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function previewSaveAs() {
-    await guardContext(message('workflow.action.saveAs'), async () => {
+    await guardContext(message('activity.saveAs'), async () => {
       const current = stateRef.current;
       if (!current.projectDirectory) {
         setNotice({ tone: 'error', text: message('workflow.project.requireDirectory') });
         return;
       }
       await run(
-        { kind: 'action', label: message('workflow.action.previewSaveAs') },
+        { kind: 'action', label: message('activity.previewSaveAs') },
         () =>
           call<ProjectCreationPreview>('preview_save_as_project', {
             directory: current.projectDirectory,
@@ -688,8 +688,8 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         kind: 'action',
         label:
           current.projectPreviewKind === 'create'
-            ? message('workflow.action.createProject')
-            : message('workflow.action.saveAs'),
+            ? message('activity.createProject')
+            : message('activity.saveAs'),
       },
       () =>
         call<WorkspaceView>(

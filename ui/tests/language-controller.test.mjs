@@ -162,15 +162,16 @@ test.each(['success', 'failure'])(
       target: { value: 'en' },
     });
     expect(i18n.language).toBe('en');
-    fireEvent.click(view.getByRole('button', { name: translate('shell.settings.saveLanguage') }));
-    const close = view.getByRole('button', { name: translate('shell.settings.close') });
+    fireEvent.click(view.getByRole('button', { name: translate('action.saveLanguage') }));
+    // The footer Close; the header Close shares its label.
+    const close = view.getAllByRole('button', { name: translate('action.close') }).at(-1);
     expect(close.disabled).toBe(true);
     expect(
       view.getByRole('combobox', { name: translate('shell.settings.language') }).disabled,
     ).toBe(true);
-    expect(
-      view.getByRole('button', { name: translate('shell.settings.saveLanguage') }).disabled,
-    ).toBe(true);
+    expect(view.getByRole('button', { name: translate('action.saveLanguage') }).disabled).toBe(
+      true,
+    );
     fireEvent.click(close);
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(current.settingsOpen).toBe(true);

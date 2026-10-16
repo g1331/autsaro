@@ -21,7 +21,7 @@ test('native cancellation is awaited and never falls through to browser confirma
   const prompt = message('workflow.confirm.removeCatalog', { catalogId: 'extension' });
   expect(await requestConfirmation(prompt)).toBe(false);
   expect(platform.confirm).toHaveBeenCalledWith(localize(prompt), {
-    title: translate('workflow.action.confirm'),
+    title: translate('activity.confirm'),
     kind: 'warning',
   });
   expect(browserConfirm).not.toHaveBeenCalled();

@@ -99,7 +99,7 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [notice, setNotice]);
   const requestExit = async () => {
-    await c.replaceProject(message('shell.command.exit'), () => getCurrentWindow().destroy());
+    await c.replaceProject(message('activity.exit'), () => getCurrentWindow().destroy());
   };
   const exitRequested = useEffectEvent(requestExit);
   useEffect(() => {
@@ -137,7 +137,7 @@ export default function App() {
     {
       id: 'new',
       group: 'open',
-      label: t('shell.command.new'),
+      label: t('action.newProject'),
       menu: 'file',
       reason: text(c.actionReason('create')),
       run: () => c.openProjectEntry('empty'),
@@ -145,7 +145,7 @@ export default function App() {
     {
       id: 'open',
       group: 'open',
-      label: t('shell.command.open'),
+      label: t('action.importArxml'),
       menu: 'file',
       shortcut: 'Ctrl+O',
       reason: text(c.actionReason('open')),
@@ -154,7 +154,7 @@ export default function App() {
     {
       id: 'member',
       group: 'open',
-      label: t('shell.command.member'),
+      label: t('action.openProject'),
       menu: 'file',
       reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
       run: c.openMemberProject,
@@ -162,7 +162,7 @@ export default function App() {
     {
       id: 'ecu-package',
       group: 'open',
-      label: t('shell.command.ecuPackage'),
+      label: t('action.importHandoff'),
       menu: 'file',
       reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
       run: c.importHandoff,
@@ -170,7 +170,7 @@ export default function App() {
     {
       id: 'save',
       group: 'save',
-      label: t('shell.command.save'),
+      label: t('action.previewSave'),
       menu: 'file',
       shortcut: 'Ctrl+S',
       reason: workspaceReason,
@@ -179,7 +179,7 @@ export default function App() {
     {
       id: 'save-as',
       group: 'save',
-      label: t('shell.command.saveAs'),
+      label: t('action.saveAs'),
       menu: 'file',
       reason: workspaceReason || text(c.actionReason('save')),
       run: () => c.openProjectEntry('save-as'),
@@ -187,7 +187,7 @@ export default function App() {
     {
       id: 'close',
       group: 'close',
-      label: t('shell.command.close'),
+      label: t('action.closeProject'),
       menu: 'file',
       reason: !c.workspace ? t('shell.reason.noProject') : text(c.actionReason('open')),
       run: () => c.startProject(),
@@ -195,23 +195,23 @@ export default function App() {
     {
       id: 'settings',
       group: 'settings',
-      label: t('shell.command.settings'),
+      label: t('action.settings'),
       menu: 'file',
       reason: '',
       run: () => c.setSettingsOpen(true),
     },
     {
       id: 'apply',
-      label: t('shell.command.apply'),
+      label: t('action.apply'),
       menu: 'edit',
       reason: workspaceReason || (!c.unapplied ? t('shell.reason.noChanges') : ''),
       run: c.applyCurrentDrafts,
     },
     {
       id: 'restore',
-      label: t('shell.command.restore'),
+      label: t('action.revert'),
       menu: 'edit',
-      reason: workspaceReason || (!c.unapplied ? t('shell.reason.noDrafts') : ''),
+      reason: workspaceReason || (!c.unapplied ? t('shell.reason.noChanges') : ''),
       run: c.restoreAllDrafts,
     },
     {
@@ -258,20 +258,18 @@ export default function App() {
     {
       id: 'validate',
       group: 'run',
-      label: c.workspace?.integrationCandidate
-        ? t('shell.command.inspect')
-        : t('shell.command.validate'),
+      label: t('action.validate'),
       menu: 'tools',
       reason: workspaceReason,
       run: () =>
-        c.guardContext(message('shell.command.validate'), () =>
+        c.guardContext(message('activity.validate'), () =>
           c.workspace?.integrationCandidate ? c.inspectIntegration() : c.validateProject(),
         ),
     },
     {
       id: 'preview',
       group: 'run',
-      label: t('shell.command.preview'),
+      label: t('action.previewSource'),
       menu: 'tools',
       reason:
         sourceReason || (!c.workspace?.integrationCandidate ? t('shell.reason.standard') : ''),
@@ -284,7 +282,7 @@ export default function App() {
     {
       id: 'preflight',
       group: 'run',
-      label: t('shell.command.preflight'),
+      label: t('action.preflight'),
       menu: 'tools',
       reason:
         sourceReason ||
@@ -295,7 +293,7 @@ export default function App() {
     {
       id: 'initialize-application',
       group: 'run',
-      label: t('shell.command.initialize'),
+      label: t('action.initializeApplication'),
       menu: 'tools',
       reason:
         sourceReason ||
@@ -332,7 +330,7 @@ export default function App() {
     {
       id: 'cancel',
       group: 'cancel',
-      label: t('shell.command.cancel'),
+      label: t('action.cancelOperation'),
       menu: 'tools',
       reason: !c.busy ? t('shell.reason.idle') : '',
       run: c.cancelOperation,
@@ -459,7 +457,13 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="menubar" data-tauri-drag-region>
-        <img src={logo} width="27" height="27" alt={t('shell.app.title')} data-tauri-drag-region />
+        <img
+          src={logo}
+          width="27"
+          height="27"
+          alt={t('controller.app.title')}
+          data-tauri-drag-region
+        />
         <nav aria-label={t('shell.app.menu')}>
           {(['file', 'edit', 'view', 'tools', 'help'] as const).map((label) => (
             <div className="menu-root" key={label}>
@@ -516,7 +520,7 @@ export default function App() {
           ))}
         </nav>
         <div className="titlebar-drag-region" data-tauri-drag-region>
-          <span className="app-title">{t('shell.app.title')}</span>
+          <span className="app-title">{t('controller.app.title')}</span>
         </div>
         {c.native ? (
           <WindowControls
@@ -550,7 +554,7 @@ export default function App() {
               disabled={Boolean(workspaceReason)}
             >
               <Save size={iconSize.control} aria-hidden="true" />
-              {t('shell.command.save')}
+              {t('action.previewSave')}
             </button>
             <button
               type="button"
@@ -558,7 +562,7 @@ export default function App() {
               disabled={Boolean(workspaceReason)}
             >
               <ListChecks size={iconSize.control} aria-hidden="true" />
-              {t('shell.app.validate')}
+              {t('action.validate')}
             </button>
             <button type="button" onClick={() => dispatchCommand('delivery')}>
               <Code2 size={iconSize.control} aria-hidden="true" />
@@ -572,14 +576,13 @@ export default function App() {
             <span className="busy-indicator" aria-hidden="true" />
             <span role="status">{t('shell.busy', { operation: text(c.busy) })}</span>
             <button type="button" onClick={() => dispatchCommand('cancel')}>
-              {t('shell.app.cancel')}
+              {t('action.cancelOperation')}
             </button>
           </>
         ) : null}
         <button
           type="button"
           className="toolbar-search"
-          aria-label={t('shell.app.commandShortcut')}
           onClick={() => {
             setQuery('');
             setPalette(true);
@@ -709,10 +712,7 @@ export default function App() {
                     <h2>{labelFromPath(source?.path ?? '')}</h2>
                     <p className="mono path-text">{displayPath(source?.path ?? '')}</p>
                     {source ? (
-                      <CopyText
-                        text={displayPath(source.path)}
-                        label={t('shell.app.copySourcePath')}
-                      />
+                      <CopyText text={displayPath(source.path)} label={t('action.copyPath')} />
                     ) : null}
                     <p>
                       {t('shell.app.readonlySource')} ·{' '}
@@ -722,7 +722,6 @@ export default function App() {
                     </p>
                     {source && c.activeSourceId === source.sourceId && c.sourceText !== null ? (
                       <>
-                        <CopyText text={c.sourceText} label={t('shell.app.copySource')} />
                         <TextSnapshot
                           key={source?.sourceId}
                           text={c.sourceText}
@@ -878,6 +877,9 @@ export default function App() {
           <h3>{t('shell.help.support')}</h3>
           <p>{t('shell.help.coverage')}</p>
           <p>{t('shell.help.can')}</p>
+          <p>{t('shell.help.inputs')}</p>
+          <p>{t('shell.help.extensions')}</p>
+          <p>{t('shell.help.application')}</p>
           <p>{t('shell.help.preflight')}</p>
         </Dialog>
       ) : null}

@@ -128,7 +128,7 @@ export function IntegrationDelivery({
           disabled={disabled || Boolean(controller.actionReason('edit'))}
           onClick={() => void controller.previewApplicationInitialization()}
         >
-          {t('shell.command.initialize')}
+          {t('action.initializeApplication')}
         </button>
         {controller.actionReason('edit') ? (
           <p className="field-help">{text(controller.actionReason('edit'))}</p>
@@ -145,7 +145,7 @@ export function IntegrationDelivery({
               {controller.applicationRecoveryFiles.map((path) => (
                 <li key={path} className="mono path-text">
                   {displayPath(path)}
-                  <CopyText text={displayPath(path)} label={t('shell.delivery.copyRecovery')} />
+                  <CopyText text={displayPath(path)} label={t('action.copyPath')} />
                 </li>
               ))}
             </ul>
@@ -173,7 +173,6 @@ export function IntegrationDelivery({
         <label>
           {t('shell.delivery.target')}
           <select
-            aria-label={t('shell.delivery.target')}
             value={target}
             disabled={busy || locked}
             onChange={(event) => void controller.changeTarget(event.target.value as BuildTarget)}
@@ -188,7 +187,6 @@ export function IntegrationDelivery({
         <label>
           {t('shell.delivery.output')}
           <input
-            aria-label={t('shell.delivery.output')}
             value={displayPath(output)}
             disabled={busy || locked}
             onChange={(e) => changeOutput(e.target.value)}
@@ -203,7 +201,7 @@ export function IntegrationDelivery({
             })
           }
         >
-          {t('shell.delivery.chooseOutput')}
+          {t('action.browse')}
         </button>
         <label>
           <input
@@ -220,7 +218,6 @@ export function IntegrationDelivery({
         <label>
           {t('shell.delivery.buildDirectory')}
           <input
-            aria-label={t('shell.delivery.buildInput')}
             value={displayPath(buildDirectory)}
             disabled={busy || locked}
             onChange={(e) => changeBuildDirectory(e.target.value)}
@@ -231,12 +228,12 @@ export function IntegrationDelivery({
           disabled={busy || locked || !native}
           onClick={() => void chooseDirectory(changeBuildDirectory)}
         >
-          {t('shell.delivery.chooseBuildDirectory')}
+          {t('action.browse')}
         </button>
       </div>
       <div className="section-actions">
         <button type="button" disabled={disabled || !output.trim()} onClick={controller.previewEcu}>
-          {t('shell.delivery.preview')}
+          {t('action.previewSource')}
         </button>
         <button
           type="button"
@@ -244,27 +241,26 @@ export function IntegrationDelivery({
           title={executionReason}
           onClick={controller.preflightEcu}
         >
-          {t('shell.command.preflight')}
+          {t('action.preflight')}
         </button>
         <button type="button" disabled={disabled || !preview} onClick={controller.generateEcu}>
-          {t('shell.delivery.generate')}
+          {t('action.confirmGenerate')}
         </button>
         <button
           type="button"
           disabled={executionDisabled || !generated || !buildDirectory.trim()}
           onClick={controller.buildEcu}
         >
-          {t('shell.delivery.build')}
+          {t('action.build')}
         </button>
         <button type="button" disabled={executionDisabled || !built} onClick={controller.verifyEcu}>
-          {t('shell.delivery.verify')}
+          {t('action.verifyHost')}
         </button>
       </div>
       <div className="form-fields ecu-delivery-fields">
         <label>
           {t('shell.delivery.importDirectory')}
           <input
-            aria-label={t('shell.delivery.importDirectory')}
             value={displayPath(importDirectory)}
             disabled={busy || locked}
             onChange={(e) => setImportDirectory(e.target.value)}
@@ -275,7 +271,7 @@ export function IntegrationDelivery({
           disabled={disabled || !importDirectory.trim()}
           onClick={() => onImport(importDirectory)}
         >
-          {t('shell.delivery.reimport')}
+          {t('action.importHandoff')}
         </button>
       </div>
       <div className={`page-guidance${failed ? ' error' : ''}`}>
@@ -283,7 +279,7 @@ export function IntegrationDelivery({
         {!busy && !failed && (built || generated) ? (
           <CopyText
             text={displayPath(built ? built.binaryPath : generated!.outputDirectory)}
-            label={built ? t('editor.tools.copyBinary') : t('editor.tools.copyOutput')}
+            label={t('action.copyPath')}
           />
         ) : null}
       </div>
@@ -291,11 +287,7 @@ export function IntegrationDelivery({
         <div className="generation-preview">
           <label>
             {t('shell.delivery.files')}
-            <select
-              aria-label={t('shell.delivery.previewFile')}
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-            >
+            <select value={selected} onChange={(e) => setSelected(e.target.value)}>
               {preview.files.map((item) => (
                 <option key={item.path} value={item.path}>
                   {fileStatusLabel(item.status)} · {item.path}

@@ -39,7 +39,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
   );
   const integrationProblems = distinct(c.integrationIssues);
   async function locate(issue: ConfigurationDiagnostic) {
-    await c.guardContext(message('editor.tools.locateIssue'), async () => {
+    await c.guardContext(message('activity.locate'), async () => {
       const objectId =
         issue.objectId ?? (issue.fieldId ? targets.fields.get(issue.fieldId) : undefined);
       c.setTreeVisible(true);
@@ -126,14 +126,14 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                       <p>{text(issue.remedy)}</p>
                       {resolvable ? (
                         <button type="button" onClick={() => void locate(issue)}>
-                          {t('editor.tools.locateSource')}
+                          {t('action.locate')}
                         </button>
                       ) : (
                         <span>{t('editor.tools.unqualifiedTarget')}</span>
                       )}
                       <CopyText
                         text={JSON.stringify(issue, null, 2)}
-                        label={t('editor.common.copyDetails')}
+                        label={t('action.copyDetails')}
                       />
                     </li>
                   );
@@ -149,7 +149,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                     </span>
                     <CopyText
                       text={JSON.stringify(issue, null, 2)}
-                      label={t('editor.common.copyDetails')}
+                      label={t('action.copyDetails')}
                     />
                   </li>
                 ))}
@@ -165,7 +165,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                       <p>{text(issue.remedy)}</p>
                       {object ? (
                         <button type="button" onClick={() => void c.selectObject(object.objectId)}>
-                          {t('editor.common.locateObject')}
+                          {t('action.locate')}
                         </button>
                       ) : source ? (
                         <button type="button" onClick={() => void c.readSource(source.sourceId)}>
@@ -174,7 +174,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                       ) : null}
                       <CopyText
                         text={JSON.stringify(issue, null, 2)}
-                        label={t('editor.common.copyDetails')}
+                        label={t('action.copyDetails')}
                       />
                     </li>
                   );
@@ -196,7 +196,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   <p className="mono path-text">{displayPath(c.generated.outputDirectory)}</p>
                   <CopyText
                     text={displayPath(c.generated.outputDirectory)}
-                    label={t('editor.tools.copyOutput')}
+                    label={t('action.copyPath')}
                   />
                   <ul>
                     {c.generated.files.map((file) => (
@@ -223,7 +223,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   disabled={c.executionDisabled || c.unapplied || Boolean(c.workspace?.dirty)}
                   onClick={c.preflightEcu}
                 >
-                  {t('editor.tools.preflight')}
+                  {t('action.preflight')}
                 </button>
               ) : null}
               <button
@@ -231,7 +231,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                 disabled={c.executionDisabled || !c.generated || !c.buildDirectory.trim()}
                 onClick={c.buildEcu}
               >
-                {t('editor.tools.build')}
+                {t('action.build')}
               </button>
               <p className="field-help">{text(c.executionReason)}</p>
               {c.preflight ? (
@@ -245,11 +245,8 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
               {c.built ? (
                 <>
                   <p className="mono path-text">{displayPath(c.built.binaryPath)}</p>
-                  <CopyText
-                    text={displayPath(c.built.binaryPath)}
-                    label={t('editor.tools.copyBinary')}
-                  />
-                  <OwnedLog text={c.built.log} label={t('editor.tools.buildLog')} />
+                  <CopyText text={displayPath(c.built.binaryPath)} label={t('action.copyPath')} />
+                  <OwnedLog text={c.built.log} label={t('shell.delivery.buildLog')} />
                 </>
               ) : null}
             </div>
@@ -264,7 +261,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                 disabled={c.executionDisabled || !c.built}
                 onClick={c.verifyEcu}
               >
-                {t('editor.tools.verify')}
+                {t('action.verifyHost')}
               </button>
               <p>{text(c.executionReason)}</p>
               {c.virtualResult ? (
@@ -290,7 +287,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                     )
                     .join('\n\n')
                 }
-                label={t('editor.tools.copySession')}
+                label={t('action.copyLog')}
               />
               <p className="field-help">{t('editor.tools.sessionHelp')}</p>
               {c.operationLog.slice(-100).map((entry, index) => (
@@ -298,8 +295,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   <summary>
                     {commandLabel(entry.command)} · {t(editorStatusKeys[entry.outcome])}
                   </summary>
-                  <p className="mono path-text">{entry.command}</p>
-                  <OwnedLog text={entry.detail} label={t('editor.tools.replyDetails')} />
+                  <OwnedLog text={entry.detail} label={t('editor.dialog.details')} />
                 </details>
               ))}
             </div>

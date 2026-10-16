@@ -29,10 +29,14 @@ export function distinct<T>(items: readonly T[]): T[] {
 
 /** Backend composite replies lead with their summary; the rest is detail. */
 export function headline(error: unknown): Text {
-  if (!Array.isArray(error) || error.length < 2) return errorText(error);
-  const summary = errorText(error[0]);
+  if (!Array.isArray(error)) return errorText(error);
+  // Leading `*_context` messages only identify the change or object; they belong in the detail.
+  const start = error.findIndex((item) => !(isMessage(item) && item.key.endsWith('_context')));
+  const reply = start > 0 ? error.slice(start) : error;
+  if (reply.length < 2) return errorText(reply);
+  const summary = errorText(reply[0]);
   // A context prefix such as "Initialization failed:" needs its first reason to read as a sentence.
-  return /[:：]\s*$/.test(localize(summary)) ? [summary, errorText(error[1])] : summary;
+  return /[:：]\s*$/.test(localize(summary)) ? [summary, errorText(reply[1])] : summary;
 }
 
 /** Period shared by the application timing events; null when no event is planned. */

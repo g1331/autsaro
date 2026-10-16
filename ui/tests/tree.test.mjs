@@ -103,7 +103,7 @@ test('tool windows mount active content and retain source navigation when switch
     createElement(ToolWindows, { controller: { ...controller, toolWindow: 'problems' } }),
   );
   expect(view.getByText('Source diagnostic')).toBeTruthy();
-  fireEvent.click(view.getByRole('button', { name: translate('editor.tools.locateSource') }));
+  fireEvent.click(view.getByRole('button', { name: translate('action.locate') }));
   expect(controller.readSource).toHaveBeenCalledWith('source');
   view.rerender(
     createElement(ToolWindows, {

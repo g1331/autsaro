@@ -23,21 +23,25 @@ export function NoticeBanner({
 }) {
   const { t, text } = useLocale();
   const Icon = noticeIcons[notice.tone];
-  const detail = notice.detail === undefined ? '' : text(notice.detail);
+  const full = text(notice.text);
+  // Error codes such as STALE_DELIVERY stay in the copyable detail, not in the sentence.
+  const headline = full.replace(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+[:：]\s*/g, '');
+  const detail =
+    notice.detail === undefined ? (headline === full ? '' : full) : text(notice.detail);
   return (
     <div className={`notice ${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>
       <Icon size={iconSize.control} aria-hidden="true" />
       <div className="notice-body">
-        <span>{text(notice.text).slice(0, 3000)}</span>
-        {detail && detail !== text(notice.text) ? (
+        <span>{headline.slice(0, 3000)}</span>
+        {detail && detail !== headline ? (
           <details>
             <summary>{t('editor.dialog.details')}</summary>
             <pre>{detail.slice(0, 12000)}</pre>
           </details>
         ) : null}
       </div>
-      {detail || text(notice.text).length > 3000 ? (
-        <CopyText text={detail || text(notice.text)} label={t('editor.common.copyDetails')} />
+      {detail || full.length > 3000 ? (
+        <CopyText text={detail || full} label={t('action.copyDetails')} />
       ) : null}
       {onDismiss ? (
         <button
@@ -151,12 +155,8 @@ export function Dialog({
       >
         <header>
           <h2>{text(title)}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('editor.dialog.closeLabel', { title: text(title) })}
-          >
-            {t('editor.dialog.close')}
+          <button type="button" onClick={onClose}>
+            {t('action.close')}
           </button>
         </header>
         <div className="dialog-body">{children}</div>
@@ -169,7 +169,7 @@ export function Dialog({
 
 export function CopyText({
   text,
-  label = message('editor.dialog.copy'),
+  label = message('action.copy'),
 }: {
   text: string | (() => string);
   label?: Text;
@@ -186,7 +186,6 @@ export function CopyText({
     <>
       <button
         type="button"
-        aria-label={renderText(label)}
         onClick={() => {
           void navigator.clipboard
             .writeText(typeof text === 'function' ? text() : text)
@@ -210,7 +209,7 @@ export function OwnedLog({ text, label }: { text: Text; label: Text }) {
     <section className="owned-log">
       <div className="log-header">
         <strong>{renderText(label)}</strong>
-        <CopyText text={content} label={t('editor.dialog.copyLog')} />
+        <CopyText text={content} label={t('action.copyLog')} />
       </div>
       {content.length > 12000 ? <p className="field-help">{t('editor.dialog.logTail')}</p> : null}
       <pre aria-label={renderText(label)}>{content.slice(-12000)}</pre>
@@ -226,7 +225,7 @@ export function TextSnapshot({ text, label }: { text: string; label: Text }) {
   return (
     <section className="text-snapshot">
       <div className="log-header">
-        <CopyText text={text} label={t('editor.dialog.copyLabel', { label: renderText(label) })} />
+        <CopyText text={text} />
         {text.length > pageSize ? (
           <div>
             <button

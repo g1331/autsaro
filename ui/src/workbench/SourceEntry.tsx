@@ -18,7 +18,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
     <div className="start-page">
       <header>
         <img src={logo} width="76" height="76" alt="" />
-        <h1>{c.workspace ? t('editor.source.heading') : t('editor.source.workbench')}</h1>
+        <h1>{c.workspace ? t('editor.source.heading') : t('controller.app.title')}</h1>
         <p>{c.workspace ? t('editor.source.retained') : t('editor.source.intro')}</p>
       </header>
       <div className="start-layout">
@@ -29,7 +29,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
             aria-current={c.source === 'empty' ? 'true' : undefined}
             onClick={() => c.openProjectEntry('empty')}
           >
-            {t('editor.source.new')}
+            {t('action.newProject')}
           </button>
           <button
             type="button"
@@ -37,7 +37,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
             aria-current={c.source === 'import' ? 'true' : undefined}
             onClick={() => c.openProjectEntry('import')}
           >
-            {t('editor.source.import')}
+            {t('action.importArxml')}
           </button>
           {c.workspace ? (
             <button
@@ -46,7 +46,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
               aria-current={saveAs ? 'true' : undefined}
               onClick={() => c.openProjectEntry('save-as')}
             >
-              {t('editor.source.saveAs')}
+              {t('action.saveAs')}
             </button>
           ) : null}
           <button
@@ -55,7 +55,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
             onClick={() => void c.openMemberProject()}
             disabled={Boolean(openReason)}
           >
-            {t('editor.source.open')}
+            {t('action.openProject')}
           </button>
           <button
             type="button"
@@ -63,7 +63,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
             onClick={c.importHandoff}
             disabled={Boolean(openReason)}
           >
-            {t('editor.source.importHandoff')}
+            {t('action.importHandoff')}
           </button>
         </nav>
         <section>
@@ -75,7 +75,6 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 <label>
                   {t('editor.source.name')}
                   <input
-                    aria-label={t('editor.source.name')}
                     value={c.projectName}
                     onChange={(event) => c.setProjectName(event.target.value)}
                     autoComplete="off"
@@ -83,7 +82,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 </label>
               )}
               <label>
-                {t('editor.source.emptyDirectory')}
+                {t('editor.source.directory')}
                 <div className="path-picker">
                   <input
                     value={displayPath(c.projectDirectory)}
@@ -96,7 +95,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                     disabled={!c.native || Boolean(c.busy)}
                   >
                     <FolderOpen size={iconSize.control} aria-hidden="true" />
-                    {t('editor.common.select')}
+                    {t('action.browse')}
                   </button>
                 </div>
               </label>
@@ -124,12 +123,11 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 onClick={() => void c.chooseFiles()}
                 disabled={Boolean(openReason)}
               >
-                {t('editor.source.chooseFiles')}
+                {t('action.chooseArxml')}
               </button>
               <label>
                 {t('editor.source.pathLines')}
                 <textarea
-                  aria-label={t('editor.source.paths')}
                   value={c.importPathText
                     .split(/(\r?\n)/)
                     .map(displayPath)
@@ -153,7 +151,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 disabled={Boolean(openReason) || !c.importPaths.length}
                 onClick={c.importProject}
               >
-                {t('editor.source.enter')}
+                {t('action.import')}
               </button>
               {openReason ? <p className="field-help">{text(openReason)}</p> : null}
               {notice}

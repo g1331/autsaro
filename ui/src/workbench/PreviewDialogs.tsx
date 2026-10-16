@@ -20,21 +20,21 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
         footer={
           <>
             <button type="button" onClick={() => void c.resolveGuard('cancel')}>
-              {project ? t('workflow.guard.cancelReplacement') : t('workflow.guard.stay')}
+              {project ? t('action.cancel') : t('action.cancel')}
             </button>
             <button
               type="button"
               className="danger-button"
               onClick={() => void c.resolveGuard('discard')}
             >
-              {project ? t('workflow.guard.discardContinue') : t('workflow.guard.discardDrafts')}
+              {project ? t('action.discardContinue') : t('action.discardContinue')}
             </button>
             <button
               type="button"
               className="primary-button"
               onClick={() => void c.resolveGuard('apply')}
             >
-              {project ? t('workflow.guard.saveFirst') : t('workflow.guard.applyContinue')}
+              {project ? t('action.saveContinue') : t('action.applyContinue')}
             </button>
           </>
         }
@@ -73,7 +73,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               disabled={Boolean(c.busy)}
               onClick={() => c.cancelChangePreview()}
             >
-              {t('workflow.batch.cancel')}
+              {t('action.cancel')}
             </button>
             <button
               type="button"
@@ -81,7 +81,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               disabled={Boolean(c.busy) || !c.preparedChangeSet}
               onClick={() => void c.applyChanges()}
             >
-              {t('workflow.batch.apply')}
+              {t('action.apply')}
             </button>
           </>
         }
@@ -149,7 +149,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
           <>
             <span>{t('workflow.application.seedCount', { count: preview.files.length })}</span>
             <button type="button" disabled={Boolean(c.busy)} onClick={close}>
-              {t('workflow.application.cancel')}
+              {t('action.cancel')}
             </button>
             <button
               type="button"
@@ -157,7 +157,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               disabled={Boolean(c.busy)}
               onClick={() => void c.initializeApplicationPreviewed()}
             >
-              {t('workflow.application.confirm')}
+              {t('action.confirmInitialize')}
             </button>
           </>
         }
@@ -189,10 +189,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             <dd className="mono path-text">{slot.entrySymbols.join('\n')}</dd>
           </dl>
         ))}
-        <CopyText
-          text={JSON.stringify(preview.slots, null, 2)}
-          label={t('workflow.application.copySlot')}
-        />
+        <CopyText text={JSON.stringify(preview.slots, null, 2)} label={t('action.copy')} />
         <div className="preview-layout">
           <nav aria-label={t('workflow.application.seedFiles')}>
             {preview.files.map((file) => (
@@ -211,7 +208,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             {selected ? (
               <>
                 <h3 className="mono path-text">{selected.path}</h3>
-                <CopyText text={selected.contents} label={t('workflow.application.copySeed')} />
                 <TextSnapshot
                   key={selected.path}
                   text={selected.contents}
@@ -226,10 +222,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
           <div className="preview-compare">
             <section>
               <h3>{t('workflow.application.before')}</h3>
-              <CopyText
-                text={preview.manifestBefore}
-                label={t('workflow.application.copyManifestBefore')}
-              />
               <TextSnapshot
                 text={preview.manifestBefore}
                 label={t('workflow.application.manifestBefore')}
@@ -237,10 +229,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             </section>
             <section>
               <h3>{t('workflow.application.manifestAfter')}</h3>
-              <CopyText
-                text={preview.manifestAfter}
-                label={t('workflow.application.copyManifestAfter')}
-              />
               <TextSnapshot
                 text={preview.manifestAfter}
                 label={t('workflow.application.manifestAfter')}
@@ -273,7 +261,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               disabled={Boolean(c.busy)}
               onClick={() => c.setProjectPreview(null)}
             >
-              {t('workflow.common.cancel')}
+              {t('action.cancel')}
             </button>
             <button
               type="button"
@@ -282,8 +270,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               onClick={() => void c.confirmProjectPreview()}
             >
               {c.projectPreviewKind === 'create'
-                ? t('workflow.project.confirmCreate')
-                : t('workflow.project.confirmSaveAs')}
+                ? t('action.confirmCreate')
+                : t('action.confirmSave')}
             </button>
           </>
         }
@@ -310,7 +298,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             {selected ? (
               <>
                 <h3>{selected.path}</h3>
-                <CopyText text={selected.contents} label={t('workflow.project.copyFile')} />
                 <TextSnapshot
                   key={selected.path}
                   text={selected.contents}
@@ -350,7 +337,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               })}
             </span>
             <button type="button" onClick={close} disabled={Boolean(c.busy)}>
-              {t('workflow.common.cancel')}
+              {t('action.cancel')}
             </button>
             <button
               type="button"
@@ -361,7 +348,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 (!save.files.some((file) => file.changed) && !c.savingForReplacement)
               }
             >
-              {t('workflow.save.confirm')}
+              {t('action.confirmSave')}
             </button>
           </>
         }
@@ -395,7 +382,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                     <h3>{t('workflow.save.original')}</h3>
                     {selected.before !== null ? (
                       <>
-                        <CopyText text={selected.before} label={t('workflow.save.copyOriginal')} />
                         <TextSnapshot
                           key={selected.path + ':before'}
                           text={selected.before}
@@ -410,7 +396,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                     <h3>{t('workflow.save.proposed')}</h3>
                     {selected.after !== null ? (
                       <>
-                        <CopyText text={selected.after} label={t('workflow.save.copyProposed')} />
                         <TextSnapshot
                           key={selected.path + ':after'}
                           text={selected.after}
@@ -454,7 +439,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               })}
             </span>
             <button type="button" disabled={Boolean(c.busy)} onClick={close}>
-              {t('workflow.common.cancel')}
+              {t('action.cancel')}
             </button>
             <button
               type="button"
@@ -463,8 +448,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               onClick={() => void c.generateEcu()}
             >
               {c.generationKind === 'handoff'
-                ? t('workflow.generation.confirmExport')
-                : t('workflow.generation.confirm')}
+                ? t('action.confirmExport')
+                : t('action.confirmGenerate')}
             </button>
           </>
         }
@@ -516,7 +501,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                     <h3>{t('workflow.generation.before')}</h3>
                     {file.before !== null ? (
                       <>
-                        <CopyText text={file.before} label={t('workflow.generation.copyBefore')} />
                         <TextSnapshot
                           key={file.path + ':before'}
                           text={file.before}
@@ -531,7 +515,6 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                     <h3>{t('workflow.generation.after')}</h3>
                     {file.after !== null ? (
                       <>
-                        <CopyText text={file.after} label={t('workflow.generation.copyAfter')} />
                         <TextSnapshot
                           key={file.path + ':after'}
                           text={file.after}
@@ -566,7 +549,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
         footer={
           <>
             <button type="button" disabled={Boolean(c.busy)} onClick={close}>
-              {t('workflow.handoff.cancel')}
+              {t('action.cancel')}
             </button>
             <button
               type="button"
@@ -574,7 +557,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
               disabled={Boolean(c.busy) || !c.ecuImportDirectory || !c.handoffImportDestination}
               onClick={() => void c.confirmHandoffImport()}
             >
-              {t('workflow.handoff.confirm')}
+              {t('action.import')}
             </button>
           </>
         }
@@ -594,15 +577,15 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 disabled={Boolean(c.busy)}
                 onClick={() => void c.chooseDirectory(c.setEcuImportDirectory)}
               >
-                {t('workflow.handoff.choosePackage')}
+                {t('action.browse')}
               </button>
             </div>
           </label>
           <label>
-            {t('workflow.handoff.destination')}
+            {t('editor.source.directory')}
             <div className="path-picker">
               <input
-                aria-label={t('workflow.handoff.destination')}
+                aria-label={t('editor.source.directory')}
                 value={c.handoffImportDestination}
                 readOnly
               />
@@ -611,7 +594,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
                 disabled={Boolean(c.busy)}
                 onClick={() => void c.chooseDirectory(c.setHandoffImportDestination)}
               >
-                {t('workflow.handoff.chooseDestination')}
+                {t('action.browse')}
               </button>
             </div>
           </label>

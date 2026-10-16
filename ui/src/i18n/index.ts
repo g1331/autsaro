@@ -5,6 +5,7 @@ import { shellResources } from './shell';
 import { editorResources } from './editors';
 import { workflowResources } from './workflow';
 import { controllerResources } from './controller';
+import { actionResources } from './actions';
 import { displayPath } from '../pathDisplay';
 
 export type LanguagePreference = 'system' | 'zh-CN' | 'en';
@@ -82,6 +83,7 @@ export const resources = Object.fromEntries(
         ...editorResources[language],
         ...workflowResources[language],
         ...controllerResources[language],
+        ...actionResources[language],
       },
     },
   ]),
