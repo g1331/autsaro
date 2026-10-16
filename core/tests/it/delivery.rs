@@ -131,18 +131,47 @@ fn regeneration_changes_only_generated_directories() {
         "os/src/Os.c",
         "kernel/tasks.c",
         "tools/ecu-tool.py",
+        "meta/files.sha256",
     ] {
         let file = output.join(path);
         let original = fs::read(&file).unwrap();
         fs::write(&file, [original.as_slice(), b"\n"].concat()).unwrap();
-        assert!(
-            prepared(&sources, &scratch.0, target)
-                .preview(&output)
-                .is_err(),
+        let error = prepared(&sources, &scratch.0, target)
+            .preview(&output)
+            .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error).unwrap(),
+            serde_json::json!({
+                "key": "backend.generation.output_modified",
+                "params": {"path": path},
+            }),
             "{path}"
         );
         fs::write(&file, original).unwrap();
     }
+    // An entry inserted into the record blames the record, not the next file.
+    let record = output.join("meta/files.sha256");
+    let original = fs::read(&record).unwrap();
+    fs::write(
+        &record,
+        [
+            format!("{}  bsw/src/Com.c\n", "0".repeat(64)).as_bytes(),
+            &original,
+        ]
+        .concat(),
+    )
+    .unwrap();
+    let error = prepared(&sources, &scratch.0, target)
+        .preview(&output)
+        .unwrap_err();
+    assert_eq!(
+        serde_json::to_value(error).unwrap(),
+        serde_json::json!({
+            "key": "backend.generation.output_modified",
+            "params": {"path": "meta/files.sha256"},
+        })
+    );
+    fs::write(&record, original).unwrap();
     assert!(
         prepared(&sources, &scratch.0, target)
             .preview(&output)
@@ -832,6 +861,33 @@ fn generation_refusal_serializes_stable_key_and_verbatim_owner_path() {
     );
     assert_eq!(payload(&output), original);
     assert_eq!(fs::read(output.join(owner_name)).unwrap(), b"owner bytes");
+}
+
+#[test]
+fn unlisted_output_directory_refuses_preview_and_generation_by_path() {
+    let scratch = Scratch::new();
+    let workspace = signals(&scratch.0.join("Live"));
+    let output = scratch.0.join("package");
+    prepare(&workspace, true).generate(&output).unwrap();
+    let original = payload(&output);
+    // An empty directory at the top level and one beside generated files.
+    for name in ["用户目录", "bsw/notes"] {
+        fs::create_dir(output.join(name)).unwrap();
+        for error in [
+            prepare(&workspace, true).preview(&output).unwrap_err(),
+            prepare(&workspace, true).generate(&output).unwrap_err(),
+        ] {
+            assert_eq!(
+                serde_json::to_value(error).unwrap(),
+                serde_json::json!({
+                    "key": "backend.generation.output_user_directory_refused",
+                    "params": {"path": name},
+                })
+            );
+        }
+        assert_eq!(payload(&output), original);
+        fs::remove_dir(output.join(name)).unwrap();
+    }
 }
 
 #[test]
