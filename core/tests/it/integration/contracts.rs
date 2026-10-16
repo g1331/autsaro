@@ -309,7 +309,12 @@ fn service_argument_names_cannot_shadow_selected_runtime_and_component_producers
             if reverse {
                 sources.reverse();
             }
-            rejects_in_both(&sources, "CONTRACT_NAME_COLLISION");
+            super::single_component::rejected_at(
+                &sources,
+                "CONTRACT_NAME_COLLISION",
+                "types.arxml",
+                "/Types/ScalarService/Transform",
+            );
             if name == "Ecu_TargetIsOwner" && !reverse {
                 assert_rejected_sources_preserved(&sources);
             }
@@ -1189,7 +1194,12 @@ fn shared_rte_lifecycle_os_target_kernel_and_c_runtime_producers_cannot_be_shado
             "<SYMBOL>Ingress_Periodic</SYMBOL>",
             &format!("<SYMBOL>{symbol}</SYMBOL>"),
         );
-        rejects_in_both(&sources, "SYMBOL_PRODUCER_DUPLICATE");
+        super::single_component::rejected_at(
+            &sources,
+            "SYMBOL_PRODUCER_DUPLICATE",
+            "ingress.arxml",
+            "/Application/Ingress/Behavior/Periodic",
+        );
     }
 }
 
