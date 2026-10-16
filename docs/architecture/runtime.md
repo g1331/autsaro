@@ -43,7 +43,7 @@ flowchart LR
 | COM | 信号值、Rx group／DM、计时、生命周期 |
 | Dcm | 会话、request／response buffer、诊断 admission |
 | ComM／BswM／Det | 通道请求与当前模式；mode 输入与规则处理；runtime 报告 |
-| RTE | 本地 last／init／published 状态、应用快照的发布 |
+| RTE | 接收端初值／last／received／expired 状态、应用快照的发布 |
 | OS／backend | 任务与汽车对象状态、调度、真实栈 |
 | ECU 执行适配 | 批次 admission、epoch、ticket、输出队列、收据 |
 | 用户应用 | 自身算法状态（live 源由用户拥有） |
