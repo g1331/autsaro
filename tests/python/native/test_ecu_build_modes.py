@@ -1,6 +1,7 @@
 """Exercise fault isolation through the sealed package's real build CLI."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -196,43 +197,51 @@ class EcuBuildModeTests(unittest.TestCase):
             original = source.read_bytes()
             external = directory / "external-bsw"
 
+            # Each case restores the package even when its assertions fail.
+            @contextlib.contextmanager
             def tampered():
                 source.write_bytes(original + b"\n")
-                yield "Source identity mismatch: bsw/src/Com.c"
-                source.write_bytes(original)
+                try:
+                    yield "Source identity mismatch: bsw/src/Com.c"
+                finally:
+                    source.write_bytes(original)
 
+            @contextlib.contextmanager
             def extra():
                 (package / "bsw/src/Extra.c").write_bytes(b"")
-                yield "Unlisted source file: bsw/src/Extra.c"
-                (package / "bsw/src/Extra.c").unlink()
+                try:
+                    yield "Unlisted source file: bsw/src/Extra.c"
+                finally:
+                    (package / "bsw/src/Extra.c").unlink()
 
+            @contextlib.contextmanager
             def linked():
                 # A directory symbolic link on POSIX, an NTFS junction on Windows.
                 (package / "bsw").rename(external)
-                if os.name == "nt":
-                    subprocess.run(["cmd", "/C", "mklink", "/J", str(package / "bsw"), str(external)],
-                                   check=True, capture_output=True)
-                else:
-                    (package / "bsw").symlink_to(external, target_is_directory=True)
-                yield "Source links/reparse points are refused: bsw"
-                if os.name == "nt":
-                    (package / "bsw").rmdir()
-                else:
-                    (package / "bsw").unlink()
-                external.rename(package / "bsw")
+                try:
+                    if os.name == "nt":
+                        subprocess.run(["cmd", "/C", "mklink", "/J", str(package / "bsw"), str(external)],
+                                       check=True, capture_output=True)
+                    else:
+                        (package / "bsw").symlink_to(external, target_is_directory=True)
+                    yield "Source links/reparse points are refused: bsw"
+                finally:
+                    if os.name == "nt" and (package / "bsw").exists():
+                        (package / "bsw").rmdir()
+                    elif (package / "bsw").is_symlink():
+                        (package / "bsw").unlink()
+                    external.rename(package / "bsw")
 
             before = tree(package)
             for case in (tampered, extra, linked):
                 with self.subTest(case=case.__name__):
-                    change = case()
-                    expected = next(change)
-                    output = directory / case.__name__
-                    failed = build(output, case.__name__)
-                    observed = failed.stdout.read_text() + failed.stderr.read_text()
-                    self.assertEqual(failed.status, "exited", observed)
-                    self.assertNotEqual(failed.exit_code, 0, observed)
-                    self.assertIn(expected, observed)
-                    self.assertFalse(output.exists())
-                    self.assertEqual(tree(previous), kept)
-                    next(change, None)
+                    with case() as expected:
+                        output = directory / case.__name__
+                        failed = build(output, case.__name__)
+                        observed = failed.stdout.read_text() + failed.stderr.read_text()
+                        self.assertEqual(failed.status, "exited", observed)
+                        self.assertNotEqual(failed.exit_code, 0, observed)
+                        self.assertIn(expected, observed)
+                        self.assertFalse(output.exists())
+                        self.assertEqual(tree(previous), kept)
                     self.assertEqual(tree(package), before)
