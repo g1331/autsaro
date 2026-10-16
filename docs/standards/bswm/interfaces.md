@@ -6,7 +6,7 @@
 
 | 对象／条件 | 处置 |
 | --- | --- |
-| 初始化、反初始化与调用顺序 | 已核对（BswM_Init／BswM_Deinit 位于 BswM.h；仅使用 SchM_Enter／Exit_BswM_BSWM_STATE，Ecu_StackBootstrap 在 SchM_Start 之后调用；bswm_parallel.c 的 deinitialize_while_acting、restart_while_acting）：SWS_BswM_00002、00043、00044、00118–00120 |
+| 初始化、反初始化与调用顺序 | 已核对（BswM_Init／BswM_Deinit 位于 BswM.h；Init 重置配置与推迟输入，processing 有意留给在途动作结算，port_mode 在每次输入时先写入再仲裁，首次输入前不被读取；仅使用 SchM_Enter／Exit_BswM_BSWM_STATE，Ecu_StackBootstrap 在 SchM_Start 之后调用；bswm_parallel.c 的 deinitialize_while_acting、restart_while_acting）：SWS_BswM_00002、00043、00044、00118–00120 |
 | BswM_ComM_CurrentMode | 已核对（BswM.h／BswM_ComM.h 中的标准签名；仅接受 BswMComMChannelRef 引用的通道及 NO／SILENT／FULL；mode_contract.c 的 bswm 函数指针签名检查）：SWS_BswM_00047、00283 |
 | BswM_MainFunction | 已核对（SchM_BswM.h 声明标准签名，函数体为空：所选配置没有 DEFERRED 输入；mode_contract.c 断言 All-IMMEDIATE 主函数不重复任何动作）：SWS_BswM_00053 |
 | 类型与导入类型 | 已核对（BswM.h：BswM_ModeType／BswM_UserType 为 uint16，mode_contract.c 断言尺寸；BswM_ConfigType 为结构；实现只使用 ComM.h 与 Std_Types 的 NetworkHandleType、ComM_ModeType、Std_ReturnType）：SWS_BswM_00001、00041、00042、00213–00216、00237 |

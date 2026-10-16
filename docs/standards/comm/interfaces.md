@@ -12,7 +12,7 @@ ComM 提供的 C API 与回调按标准签名实现；`ComM_GetCurrentPNCComMode
 | ComM_RequestComMode | 已核对（签名与 E_OK／E_NOT_OK 返回按标准；仅接受 NO 与 FULL，未知用户、SILENT、WITH_WAKEUP 均 E_NOT_OK，COMM_E_MODE_LIMITATION 因限制关闭而不出现；mode_contract.c）：SWS_ComM_00110 |
 | ComM_GetRequestedComMode／GetCurrentComMode／GetMaxComMode | 已核对（ComM.c 同名函数；GetMaxComMode 在无抑制、无限制时恒为 FULL，单通道故最低模式即该值；未知用户与空指针 E_NOT_OK 且出参保持；mode_contract.c）：SWS_ComM_00079–00083、00085、00374 |
 | ComM_GetInhibitionStatus 与 ComM_SetECUGroupClassification | 已核对（GetInhibitionStatus 对配置通道恒写 0，未知通道、空指针与 Init 前 E_NOT_OK；SetECUGroupClassification Init 后 E_OK 但无行为依赖于它［抑制功能均被拒绝］；mode_contract.c 的 inhibition_status／classification 断言）：SWS_ComM_00552、00619 |
-| ComM_GetCurrentPNCComMode | 已核对（PNC 关闭，已配置用户返回 COMM_E_NO_PNC_ASSIGNED［作为返回值，出参不写］，未知用户、空指针与 Init 前 E_NOT_OK；mode_contract.c 的 pnc_current 断言）：SWS_ComM_01023、91002 |
+| ComM_GetCurrentPNCComMode | 已核对（PNC 关闭，已配置用户返回 COMM_E_NO_PNC_ASSIGNED 并把同一值写入出参 ComMode：01023 要求把它作为 ComMode 交出，91002 把它列为返回值，两种读法都满足；未知用户、空指针与 Init 前 E_NOT_OK；mode_contract.c 的 pnc_current 断言）：SWS_ComM_01023、91002 |
 | 回调：CommunicationAllowed、EcuM 唤醒、Dcm 诊断 | 已核对（ComM_BswM.h、ComM_EcuM.h、ComM_Dcm.h 声明并由 ComM.c 实现，其他通道与 Init 前被忽略；mode_contract.c 与 diagnostic_contract.c［真实 Dcm 调用］）：SWS_ComM_00275、00871–00874 |
 | 回调函数预编译实现 | 已核对（回调均为 ComM.c 中的普通函数，没有后构建分支）：SWS_ComM_00620 |
 | 调度函数 ComM_MainFunction_<Channel> | 已核对（core 以通道 ShortName 生成 ComM_MainFunction_<Channel>，由 Ecu_RuntimeConfig.c 调用 ComM_RunChannel，Init 前不执行；modes.rs 的 mode_configuration_preserves_channel_users_rules_and_static_callouts 断言符号名）：SWS_ComM_00429、00818 |

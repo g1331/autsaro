@@ -17,14 +17,14 @@ NM NONE 的通道状态机只有 NO（NO_PENDING_REQUEST／REQUEST_PENDING）与
 | Dcm 活动诊断视为 FULL 请求 | 已核对（ComM_DCM_ActiveDiagnostic 置 diagnostic 并参与 ComM_Demand；diagnostic_contract.c 中真实 Dcm 经 ComM_DCM_ActiveDiagnostic／ComM_DCM_InactiveDiagnostic 保持与释放通信）：SWS_ComM_00866 |
 | 进入 NO／FULL 时向总线状态机请求 | 已核对（ComM_ClaimBus／ComM_IssueBus 在独占区外按序调用 comm_config.request［Ecu_HostBusSM_RequestComMode］：Init 与进入 NO 请求 NO，进入 FULL 请求 FULL，被拒绝的目标由主函数重发；comm_parallel.c 的 comm_bus_requests_and_mode_publications_stay_ordered_while_another_waits_outside_the_area）：SWS_ComM_00069、00073、00402、00845–00846、00957–00958 |
 | 实际模式查询 | 已核对（ComM_GetCurrentComMode 经 comm_config.current［Ecu_HostBusSM_GetCurrentComMode］取实际模式；唯一通道，用户的最低模式即该通道模式；mode_contract.c 的 current()）：SWS_ComM_00084、00176、00963 |
-| 模式传播给 BswM 与 Dcm | 已核对（ComM_BusSM_ModeIndication 经 ComM_Publish 调用 BswM_ComM_CurrentMode 与已配置的 Dcm_ComM_*ModeEntered，Init 后的默认 NO 不通知，重复模式被过滤、并发时只发布最新值；mode_contract.c 的 indications／actions 断言与 bussm_parallel.c）：SWS_ComM_00266、00313、00861、00976 |
+| 模式传播给 BswM 与 Dcm | 已核对（ComM_BusSM_ModeIndication 经 ComM_Publish 调用 BswM_ComM_CurrentMode 与已配置的 Dcm_ComM_*ModeEntered，Init 后的默认 NO 不通知，重复模式被过滤、并发时只发布最新值；通道主状态按总线状态机报告的实际模式［SWS_ComM_00675］指示，总线拒绝 FULL 时 BswM 不会收到 FULL；mode_contract.c 的 indications／actions 断言与 bussm_parallel.c）：SWS_ComM_00266、00313、00861、00976 |
 | 内部状态机对用户不可见 | 已核对（公开头只含 ComM_StateType 类型，ComM_RunChannel 位于私有 ComM_Internal.h，用户 API 只返回请求值或总线实际模式）：SWS_ComM_00191 |
 | 被动唤醒不被抑制 | 已核对（ComM_EcuM_WakeUpIndication 与 ComM_BusSM_ModeIndication 没有任何抑制分支；ComMWakeupInhibitionEnabled 为 false）：SWS_ComM_00066 |
 | 不调用 Nm | 已核对（ComM.c 不包含 Nm.h、不调用任何 Nm_*；mode.rs 只接纳 ComMNmVariant 为 NONE）：SWS_ComM_00602、00667 |
 | FULL 变体的 Nm 请求、释放与启动 | 不适用（配置：ECUC_ComM_00568）：SWS_ComM_00133、00288、00665、00869–00870、00888、00902–00903、01016 |
 | LIGHT 变体的 NmLightTimeout 与受管通道 | 不适用（配置：ECUC_ComM_00568）：SWS_ComM_00610、00891–00892、01095–01096 |
 | SLAVE／PASSIVE 变体的 READY_SLEEP 与 BusSleep | 不适用（配置：ECUC_ComM_00568）：SWS_ComM_00915、01017–01018 |
-| SILENT 状态及其 Nm 回调转换 | 不适用（配置：ECUC_ComM_00568）：SWS_ComM_00071、00295–00296、00583、00637、00826、00877–00878、00894 |
+| SILENT 状态及其转换（只有 NM FULL 经 Prepare Bus-Sleep 进入 SILENT；NONE 通道没有进入 SILENT 的转换，00878 虽列出 NONE，其前提状态不可达） | 不适用（配置：ECUC_ComM_00568）：SWS_ComM_00071、00295–00296、00583、00637、00826、00877–00878、00894 |
 | Nm 启停同步 | 不适用（配置：ECUC_ComM_00568）：SWS_ComM_00261、00599 |
 | COMM_BUS_TYPE_INTERNAL 与其他总线前缀 | 不适用（配置：ECUC_ComM_00567）：SWS_ComM_00664、00671、00962 |
 | OA TC10 唤醒／睡眠请求（仅 Ethernet） | 不适用（配置：ECUC_ComM_00567）：SWS_ComM_01056–01057 |

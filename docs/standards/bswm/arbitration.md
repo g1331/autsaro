@@ -12,7 +12,7 @@
 | 条件执行与首次评估 | 已核对（三条规则 BSWM_CONDITION、BswMRuleInitState=BSWM_FALSE、无 false 列表；BswM_Init 不评估规则，首次指示命中的规则执行其 true 列表，未命中的规则无动作；mode_contract.c 的 NO／SILENT／FULL 序列）：SWS_BswM_00066、00115 |
 | 表达式只引用当前输入 | 已核对（mode.rs 的 BswMArgumentRef 只接受 BswMModeCondition，BswMConditionType 只接受 BSWM_EQUALS 且引用同一 BswMModeRequestPort；Ecu_BswMAction 不保存上次结果）：SWS_BswM_00117 |
 | BSWM_AND 求值 | 已核对（mode.rs 只接受 BSWM_AND 或省略运算符，单个 BswMModeCondition 参数；Ecu_BswMAction 的 switch 对匹配模式执行，其余规则为 false 且无 false 列表）：SWS_BswM_00245 |
-| 初始模式值 | 已核对（mode.rs 要求 BswMModeInitValue 存在且 BswMBswModeInitValue 为 COMM_NO_COMMUNICATION，与 ComM_Init 后的 NO 一致；唯一输入仅在指示时仲裁，首次更新前不评估规则；BswMCompuScaleModeValue 不在内置 metadata 中）：SWS_BswM_00203 |
+| 初始模式值 | 已核对（mode.rs 要求 BswMModeInitValue 存在且 BswMBswModeInitValue 为 COMM_NO_COMMUNICATION，与 ComM_Init 后的 NO 一致；唯一输入仅在指示时仲裁，首次更新前不评估规则，因此初值不需要另行写入 port_mode；BswMCompuScaleModeValue 不在内置 metadata 中）：SWS_BswM_00203 |
 | DEFERRED 仲裁与主函数处理 | 不适用（配置：ECUC_BswM_00822）：SWS_BswM_00014、00060、00061、00068、00075、00282 |
 | 事件请求端口与事件条件 | 不适用（配置：ECUC_BswM_00815）：SWS_BswM_00252、00253、00256 |
 | 事件请求端口与 ClearEventRequest | 不适用（配置：ECUC_BswM_01052）：SWS_BswM_00193、00251、00254、00255、00257–00259、00278、00284、00285 |
