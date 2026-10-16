@@ -65,7 +65,7 @@ tools/python/src/  tests/python/  tests/desktop/
 
 ```
 <工程>/
-  bsw/{include,src}/        静态 BSW 公共头、实现与私有头，只读，受资源摘要约束
+  bsw/{include,src}/        静态 BSW 公共头、实现与私有头，只读，按构建时计算的资源身份校验
   integration/{include,src}/ 主机适配与 ECU 执行 adapter、两个 main
   os/  kernel/              静态 OS 适配、补丁与固定第三方内核（kernel/compat/ 为上游别名头，不在 include 路径中）
   generated/{include,src}/  全部配置生成物：*_Cfg.h、*_PBcfg.c、Rte*、SchM_*、*_MemMap.h、Os_Cfg.h、Ecu 配置；每次生成整体重写

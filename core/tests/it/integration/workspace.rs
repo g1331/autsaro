@@ -282,19 +282,19 @@ fn tampered_trusted_runtime_asset_is_refused_by_identity() {
     use autosar_config_core::resources::AssetInventory;
     let scratch = Scratch::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let tampered = "runtime/bsw/src/Can.c";
-    let destination = scratch.0.join(tampered);
-    std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
-    let mut bytes = std::fs::read(root.join(tampered)).unwrap();
-    std::fs::write(&destination, &bytes).unwrap();
-    AssetInventory::verify_directory_asset(&scratch.0, tampered).unwrap();
-    bytes[0] ^= 1;
-    std::fs::write(&destination, &bytes).unwrap();
-    let error = AssetInventory::verify_directory_asset(&scratch.0, tampered).unwrap_err();
-    assert_eq!(
-        serde_json::to_value(&error).unwrap()["key"],
-        "backend.resources.identity_differs"
-    );
+    for tampered in ["runtime/bsw/src/Can.c", "runtime/contracts/assets.json"] {
+        let destination = scratch.0.join(tampered);
+        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        let mut bytes = std::fs::read(root.join(tampered)).unwrap();
+        std::fs::write(&destination, &bytes).unwrap();
+        AssetInventory::verify_directory_asset(&scratch.0, tampered).unwrap();
+        bytes[0] ^= 1;
+        std::fs::write(&destination, &bytes).unwrap();
+        let error = AssetInventory::verify_directory_asset(&scratch.0, tampered).unwrap_err();
+        let wire = serde_json::to_value(&error).unwrap();
+        assert_eq!(wire["key"], "backend.resources.identity_differs");
+        assert_eq!(wire["params"]["path"], tampered);
+    }
 }
 
 #[test]

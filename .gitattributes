@@ -5,6 +5,8 @@
 # A unified patch uses a single space as the empty context-line marker.
 /runtime/os/** text eol=lf
 /runtime/ecu/** text eol=lf
+# The build-generated delivery inventory preserves this manifest formatting.
+/runtime/contracts/** text eol=lf
 /runtime/os/patches/** -text whitespace=-blank-at-eol
 # Test fixtures are byte-exact inputs (raw-byte manifests, text patches); keep LF on every checkout.
 /core/tests/fixtures/** text eol=lf
@@ -22,7 +24,7 @@
 # Mainline BSW sources and host adapters keep reproducible LF bytes.
 /runtime/bsw/** text eol=lf
 /runtime/host/** text eol=lf
-# These BSW and host adapter files keep the fixed CRLF bytes recorded in the asset inventory.
+# These BSW and host adapter files keep reproducible CRLF checkout bytes.
 /runtime/bsw/include/Can_GeneralTypes.h text eol=crlf
 /runtime/bsw/include/SchM_Can.h text eol=crlf
 /runtime/bsw/src/Can.c text eol=crlf

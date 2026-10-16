@@ -1,4 +1,4 @@
-"""Explicit maintenance of project-owned digests; upstream identities stay fixed."""
+"""Validate runtime asset metadata and maintain the independent seal-guard identity."""
 
 from __future__ import annotations
 
@@ -39,30 +39,29 @@ def maintain(*, update: bool = False, root: Path = ROOT) -> int:
                 raise ValueError(
                     f"Modified upstream source: {relative}; restore it or use the reviewed upstream upgrade procedure"
                 )
+        for relative, expected in upstream.get("patches", {}).items():
+            if digest(root, relative) != expected:
+                raise ValueError(f"Modified controlled patch: {relative}; use the reviewed upstream upgrade procedure")
     documents = {}
     changes = []
     inventory_path = root / "runtime/contracts/assets.json"
     inventory = json.loads(inventory_path.read_text())
-    updated = copy.deepcopy(inventory)
+    if inventory.get("format") != "autosar-asset-inventory-v2":
+        raise ValueError("Invalid asset inventory format")
     seen = set()
-    for item in updated["assets"]:
+    for item in inventory["assets"]:
+        if set(item) != {"path", "license", "targets", "profiles", "role", "responsibility"}:
+            raise ValueError(f"Invalid asset fields: {item.get('path')}")
         if item["path"] in seen:
             raise ValueError(f"Duplicate asset: {item['path']}")
         seen.add(item["path"])
-        actual = digest(root, item["path"])
-        if actual != item["sha256"]:
-            if item["license"] != "Apache-2.0" or item["path"].startswith(
-                "third_party/"
-            ) or item["path"].startswith("runtime/os/patches/") or item["path"] in {
-                "runtime/os/toolchain.json", "runtime/os/toolchain-linux.json",
-            }:
-                raise ValueError(
-                    f"Refusing to update controlled dependency identity: {item['path']}"
-                )
-            changes.append(item["path"])
-            item["sha256"] = actual
-    if updated != inventory:
-        documents[inventory_path] = updated
+        digest(root, item["path"])
+        if (item["license"] != "Apache-2.0" or not item["responsibility"]
+                or item["role"] not in {"bsw", "host", "os", "patch", "target", "delivery"}
+                or not item["targets"] or not set(item["targets"]) <= {
+                    "windows-x64-controlled-v1", "linux-x64-controlled-v1"}
+                or item["profiles"] != ["ecu"]):
+            raise ValueError(f"Invalid asset metadata: {item['path']}")
     tool_path = root / "tools/python/src/ecu_tools/build-tool-inventory.json"
     tools = json.loads(tool_path.read_text())
     updated_tools = copy.deepcopy(tools)
@@ -90,3 +89,28 @@ def maintain(*, update: bool = False, root: Path = ROOT) -> int:
         f"Asset inventories {'updated' if documents and update else 'consistent'}; {len(changes)} changes"
     )
     return 0
+
+
+def check_line_endings(root: Path = ROOT) -> None:
+    """Check fixed checkout bytes, including CRLF exceptions, through Git attributes."""
+    import subprocess
+
+    paths = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=root, check=True, capture_output=True,
+    ).stdout
+    attributes = subprocess.run(
+        ["git", "check-attr", "-z", "--stdin", "text", "eol"], input=paths,
+        cwd=root, check=True, capture_output=True,
+    ).stdout.split(b"\0")
+    for index in range(0, len(attributes) - 1, 6):
+        name, _, text, _, _, value = attributes[index:index + 6]
+        if text == b"unset" or value not in (b"lf", b"crlf"):
+            continue
+        relative = name.decode("utf-8")
+        contents = (root / relative).read_bytes()
+        invalid = b"\r" in contents if value == b"lf" else (
+            b"\n" in contents.replace(b"\r\n", b"")
+            or b"\r" in contents.replace(b"\r\n", b"")
+        )
+        if invalid:
+            raise ValueError(f"Line endings violate eol={value.decode()}: {relative}")

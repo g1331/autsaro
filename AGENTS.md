@@ -53,7 +53,7 @@
 
 - clang-tidy 按 C 编码规范从 `quality --c-samples` 运行，新结果不能靠加基线条目通过，修好的条目从基线删除。相关改动对实际生成的受影响 profile 运行 `c-check`；本机缺少固定版本 Cppcheck 时按测试说明从官方标签构建后在本地运行，不把 `c-check` 留给 CI。区分分析完整性、源码诊断与人工规范评估，不能用 CI 链路通过替代源码合规结论。现存诊断清零前，按“规则＋文件＋源码行”与基线的同一检查对比受影响样本，新代码不增加诊断。申请偏离前核对适用的 amendment／TC 与实际调用路径（见[标准基线 §3](docs/standards/README.md#3-预期从标准独立定义)）。
 - 当已核实的 AUTOSAR 必需契约与 MISRA 规则或工具诊断无法同时满足时，优先满足 AUTOSAR 规范：Issue 范围内由实现者依据逐行证据决定保留，不停下等待确认；PR 逐条列出新增诊断（规则＋文件＋源码行，条目多时放折叠块或 PR 评论）及要求该行的条款编号与必要性，对不上必需条款的不算冲突，改代码消除；源码诊断裁决 Issue（当前为 #58）只写结论与链接。不为消除诊断删除标准义务，不把保留的诊断写成 MISRA 偏离获批或符合性结论。
-- 交付摘要使用 `python -m autosar_tooling assets check|update`；明确审阅 ABI 与第三方身份，不用摘要更新吸收契约变化。更新摘要前核对 `.gitattributes` 要求的固定换行字节。
+- 运行时资产摘要由构建计算；使用 `python -m autosar_tooling assets check` 核对清单与文件，`assets update` 只更新独立 seal guard 身份。ABI 与第三方身份单独审阅；交付字节须符合 `.gitattributes` 固定换行，由资产测试核查，见[资产清单维护](docs/maintainers/assets.md)。
 
 ## 工程推进与判断
 

@@ -97,7 +97,11 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.0).expect("fixture outputs closed");
+        if std::thread::panicking() {
+            eprintln!("scratch retained at {}", self.0.display());
+        } else {
+            std::fs::remove_dir_all(&self.0).expect("fixture outputs closed");
+        }
     }
 }
 
@@ -302,7 +306,12 @@ fn cancel_and_nested_scopes_close_without_stale_members() {
         std::thread::sleep(Duration::from_millis(10));
     }
     let result = process.cancel().unwrap();
-    assert_eq!(result.status, ProcessStatus::Cancelled);
+    assert_eq!(
+        result.status,
+        ProcessStatus::Cancelled,
+        "{result:?}\n{}",
+        result.output_tail()
+    );
     assert_descendants_gone(&fixture, 3);
     assert!(sibling.wait().unwrap().success());
     assert_descendants_gone(&sibling_fixture, 3);

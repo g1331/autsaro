@@ -140,6 +140,10 @@ fn main() {
     let common: &[&str] = &["windows-x64-controlled-v1", "linux-x64-controlled-v1"];
     let windows: &[&str] = &["windows-x64-controlled-v1"];
     let linux: &[&str] = &["linux-x64-controlled-v1"];
+    let inventory_path = root.join("runtime/contracts/assets.json");
+    let source_inventory = fs::read(&inventory_path).expect("asset inventory");
+    let mut delivered_inventory =
+        String::from_utf8(source_inventory.clone()).expect("UTF-8 inventory");
     let manifest = read_manifest(root, "runtime/contracts/assets.json");
     assert_eq!(manifest["format"], "autosar-asset-inventory-v2");
     let mut rows = BTreeMap::new();
@@ -157,10 +161,33 @@ fn main() {
             .iter()
             .map(|value| value.as_str().expect("profile name"))
             .collect();
+        assert!(
+            entry.get("sha256").is_none(),
+            "runtime digests are computed at build time"
+        );
+        let hash = format!(
+            "{:x}",
+            Sha256::digest(fs::read(root.join(&path)).expect("asset bytes"))
+        );
+        // Preserve the delivered v2 manifest's existing field order and formatting.
+        let anchor = format!(
+            "      \"path\": {},\n",
+            serde_json::to_string(&path).expect("asset path JSON")
+        );
+        assert_eq!(
+            delivered_inventory.matches(&anchor).count(),
+            1,
+            "unique formatted asset path: {path}"
+        );
+        delivered_inventory = delivered_inventory.replacen(
+            &anchor,
+            &format!("{anchor}      \"sha256\": \"{hash}\",\n"),
+            1,
+        );
         add(
             &mut rows,
             path,
-            entry["sha256"].as_str().expect("asset SHA-256").into(),
+            hash,
             entry["license"].as_str().expect("asset license"),
             entry["role"].as_str().expect("asset role"),
             entry["responsibility"].as_str().expect("asset owner"),
@@ -200,7 +227,10 @@ fn main() {
         );
     }
     let own_manifest = "runtime/contracts/assets.json";
-    let own_bytes = fs::read(root.join(own_manifest)).expect("asset inventory");
+    let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"));
+    let delivered_path = out.join("delivered_assets.json");
+    fs::write(&delivered_path, delivered_inventory.as_bytes()).expect("delivered asset inventory");
+    let own_bytes = delivered_inventory.as_bytes();
     add(
         &mut rows,
         own_manifest.into(),
@@ -219,6 +249,24 @@ fn main() {
         assert_eq!(kernel["tag"], "V11.3.1");
         assert_eq!(kernel["commit"], "054e14f3397023aa83813a65aa065fc4597d481b");
         assert_eq!(kernel["license"], "MIT");
+        if manifest_path == "third_party/freertos/source-manifest.json" {
+            let patches = kernel["patches"]
+                .as_object()
+                .expect("controlled patch identities");
+            assert_eq!(
+                patches.len(),
+                rows.values().filter(|row| row.role == "patch").count()
+            );
+            for (path, expected) in patches {
+                let patch = rows.get(path).expect("listed controlled patch");
+                assert_eq!(patch.role, "patch");
+                assert_eq!(
+                    Some(patch.expected.as_str()),
+                    expected.as_str(),
+                    "controlled patch digest differs: {path}"
+                );
+            }
+        }
         for (file, hash) in kernel["files"].as_object().expect("kernel source map") {
             let path = format!("third_party/freertos/{file}");
             let applicable = if file.starts_with("portable/MSVC-MingW/") {
@@ -246,7 +294,11 @@ fn main() {
             }
         }
     }
-    let mut output = String::from("pub static EMBEDDED_ASSETS: &[AssetEntry] = &[\n");
+    let mut output = format!(
+        "const SOURCE_INVENTORY_SHA256: &str = {:?};\n",
+        format!("{:x}", Sha256::digest(&source_inventory))
+    );
+    output.push_str("pub static EMBEDDED_ASSETS: &[AssetEntry] = &[\n");
     for item in rows.values() {
         let path = root.join(&item.path);
         let metadata = fs::symlink_metadata(&path).expect("asset file");
@@ -255,7 +307,12 @@ fn main() {
             "asset is not a regular file: {}",
             item.path
         );
-        let contents = fs::read(&path).expect("asset bytes");
+        let embedded_path = if item.path == own_manifest {
+            &delivered_path
+        } else {
+            &path
+        };
+        let contents = fs::read(embedded_path).expect("asset bytes");
         assert_eq!(
             format!("{:x}", Sha256::digest(&contents)),
             item.expected,
@@ -268,7 +325,7 @@ fn main() {
             item.path, item.expected, item.license, item.role, item.responsibility,
             item.targets.iter().map(|id| format!("{id:?}")).collect::<Vec<_>>().join(", "),
             item.profiles.iter().map(|name| format!("{name:?}")).collect::<Vec<_>>().join(", "),
-            path.to_str().expect("UTF-8 asset path"),
+            embedded_path.to_str().expect("UTF-8 asset path"),
         ));
     }
     output.push_str("];\n");

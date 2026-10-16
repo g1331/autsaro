@@ -40,7 +40,7 @@ uv run --locked python -m autosar_tooling quality --merge-base origin/master
 
 ## 资源与提交
 
-修改交付资源后运行 `uv run --locked python -m autosar_tooling assets check`。确认自有源码差异后可显式执行 `assets update`；BSW ABI 和第三方身份不能随来源摘要自动接受，见[资源维护](docs/maintainers/assets.md)。
+修改交付资源后运行 `uv run --locked python -m autosar_tooling assets check`。运行时摘要由构建计算；`assets update` 只更新独立 seal guard 清单。BSW ABI 与第三方身份单独审阅；资产测试核对固定检出换行，见[资源维护](docs/maintainers/assets.md)。
 
 提交前检查整个 diff，包括新增文件与生成内容。提交信息采用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/)：`<type>(<scope>): <description>`，type 为 `feat`、`fix`、`docs`、`test`、`refactor`、`perf`、`build`、`ci` 或 `chore`，scope 写受影响的模块或区域（如 `dcm`），破坏性变更加 `!` 并附 `BREAKING CHANGE:` 脚注。按可独立验证的阶段提交，仓库规则与流程文档的修改单独提交。标题说明实际改动；PR 说明问题、改动、验证和未运行范围，并把 Issue 的每条验收标准及移交事项对应到证据位置（测试、样本或文档），未完成的写原因和承接的 Issue；完整证据放在 PR，Issue 只写结论与链接。合并前自审整个 diff；涉及 AUTOSAR 规范的结论按条目原文复核，不凭记忆或现有代码判断，高风险改动另做一次与 CI 并行的独立审查。必需检查失败时立即查看处理，不等其余作业结束。必需检查通过即可合并：自审后用 `gh pr merge --auto --merge` 开启自动合并，`CI required` 通过后自动合并并删除分支；Extended 检查不阻塞合并；master 最近一次已完成的 Extended 运行失败时，先判断与本 PR 是否相关：无关的确认已有 Issue 跟踪（不稳定套件开 Issue 暂停）后照常合并，由引入失败的 PR 修复或回滚；相关或无法判断的先查明再合并。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
 

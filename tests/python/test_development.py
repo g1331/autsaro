@@ -462,8 +462,6 @@ class AssetTests(unittest.TestCase):
                     assets.digest(root, name)
 
     def test_no_change_update_is_idempotent_and_does_not_write(self):
-        import hashlib
-
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for folder in (
@@ -483,13 +481,12 @@ class AssetTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
-                        "assets": [
-                            {
-                                "path": "owned",
-                                "license": "Apache-2.0",
-                                "sha256": hashlib.sha256(b"original").hexdigest(),
-                            }
-                        ]
+                        "format": "autosar-asset-inventory-v2",
+                        "assets": [{
+                            "path": "owned", "license": "Apache-2.0",
+                            "targets": ["linux-x64-controlled-v1"], "profiles": ["ecu"],
+                            "role": "bsw", "responsibility": "workbench",
+                        }]
                     }
                 )
             )
@@ -498,7 +495,7 @@ class AssetTests(unittest.TestCase):
                 self.assertEqual(assets.maintain(update=True, root=root), 0)
                 self.assertEqual(manifest.read_bytes(), before)
                 source.write_bytes(b"reviewed change")
-                self.assertEqual(assets.maintain(root=root), 1)
+                self.assertEqual(assets.maintain(root=root), 0)
                 self.assertEqual(manifest.read_bytes(), before)
                 self.assertEqual(assets.maintain(update=True, root=root), 0)
                 self.assertEqual(assets.maintain(root=root), 0)
@@ -516,3 +513,40 @@ class AssetTests(unittest.TestCase):
             self.assertEqual(
                 json.loads((kernel / "source-manifest.json").read_text()), manifest
             )
+
+    def test_controlled_patch_cannot_be_accepted_by_asset_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            kernel = root / "third_party/freertos"
+            kernel.mkdir(parents=True)
+            relative = "runtime/os/patches/policy.patch"
+            patch_file = root / relative
+            patch_file.parent.mkdir(parents=True)
+            patch_file.write_bytes(b"changed patch")
+            manifest = {"files": {}, "patches": {relative: "0" * 64}}
+            (kernel / "source-manifest.json").write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, re.escape(relative)):
+                assets.maintain(update=True, root=root)
+            self.assertEqual(json.loads((kernel / "source-manifest.json").read_text()), manifest)
+
+
+class AssetLineEndingTests(unittest.TestCase):
+    def test_checkout_obeys_fixed_line_endings(self):
+        assets.check_line_endings()
+
+    def test_each_line_ending_violation_names_the_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+            (root / ".gitattributes").write_text("*.c text eol=crlf\n*.py text eol=lf\n")
+            for name, good, bad in (("runtime.c", b"a\r\n", b"a\n"),
+                                    ("tool.py", b"a\n", b"a\r\n")):
+                with self.subTest(name=name):
+                    path = root / name
+                    path.write_bytes(good)
+                    subprocess.run(["git", "add", name], cwd=root, check=True)
+                    assets.check_line_endings(root)
+                    path.write_bytes(bad)
+                    with self.assertRaisesRegex(ValueError, re.escape(name)):
+                        assets.check_line_endings(root)
+                    path.write_bytes(good)

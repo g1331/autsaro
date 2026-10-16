@@ -90,7 +90,13 @@ fn check_entry(root: &Path, entry: &AssetEntry) -> Result<(), crate::message::Lo
         }
         digest.update(&chunk[..count]);
     }
-    if format!("{:x}", digest.finalize()) != entry.sha256 {
+    // The source inventory omits digests; packages receive its generated v2 form.
+    let expected = if entry.relative_path == "runtime/contracts/assets.json" {
+        SOURCE_INVENTORY_SHA256
+    } else {
+        entry.sha256
+    };
+    if format!("{:x}", digest.finalize()) != expected {
         return Err(
             crate::product_message!("backend.resources.identity_differs", "path" => entry.relative_path),
         );

@@ -315,6 +315,32 @@ class BoundedProcessTests(unittest.TestCase):
                 if owner is not None:
                     owner.close()
 
+    @unittest.skipUnless(sys.platform == "linux", "Linux proc child snapshot")
+    def test_disappearing_sibling_is_not_an_unconfirmed_escape(self) -> None:
+        from ecu_tools.owner import _escaped_child
+
+        record = Path("/proc/owner/task/thread/children")
+        for stage in ("stat", "environ"):
+            with self.subTest(stage=stage):
+                def read_child(path, missing=stage):
+                    if path.name == missing:
+                        raise FileNotFoundError("sibling exited after the child snapshot")
+                    return b"123 (sibling) R 1 999"
+
+                with patch.object(Path, "glob", return_value=[record]), patch.object(
+                    Path, "read_text", return_value="123"
+                ), patch("ecu_tools.owner.os.getpgid", return_value=999), patch.object(
+                    Path, "read_bytes", read_child
+                ):
+                    self.assertFalse(_escaped_child("closing", 456, {123}))
+
+        with patch.object(Path, "glob", return_value=[record]), patch.object(
+            Path, "read_text", return_value="123"
+        ), patch("ecu_tools.owner.os.getpgid", return_value=999), patch.object(
+            Path, "read_bytes", side_effect=PermissionError("unobservable child")
+        ):
+            self.assertTrue(_escaped_child("closing", 456, {123}))
+
     @unittest.skipUnless(sys.platform == "linux", "Linux adopted-child ownership")
     def test_sibling_zombie_is_reaped_without_changing_root_exit_codes(self) -> None:
         with tempfile.TemporaryDirectory() as name, Owner.start() as owner:

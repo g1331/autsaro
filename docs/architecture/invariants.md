@@ -26,7 +26,7 @@
 12. **create-only 初始化。** 初始化只创建尚不存在的 live 成员，并与 manifest 接纳同一事务；目标已存在不覆盖，失败不留下部分成员。
 13. **预览确认失效。** 预览绑定全部 ARXML、manifest、live C、规则与定义身份；任一变化使旧确认失效，必须重读、重预览。生成改变使已有 build／run 结果失效，旧结果不冒充新配置的验证。
 14. **完整性拒绝。** 封存 payload、所有权台账和应用快照全部进入 `meta/files.list`／`meta/files.sha256` 闭包；台账不记录自身和 seal 元数据，避免自摘要循环。构建与离线验证消费同一不可变 seal；版本、owner、producer 或路径未知、篡改、额外文件、链接或 reparse point 一律拒绝。交接元数据不写源机器绝对路径，不打包密钥、运行状态或官方规范。
-15. **ABI 与第三方身份单独审阅。** 资产摘要（`python -m autosar_tooling assets check|update`）只证明字节来源；公开签名、布局、句柄语义、wire 或交付格式变化须审阅并写入 CHANGELOG，不能用摘要更新吸收契约变化。更新摘要前核对 `.gitattributes` 规定的固定换行。
+15. **ABI 与第三方身份单独审阅。** 运行时资产摘要由构建计算，安装资源按构建时身份检查；`assets check` 核对清单与文件，`assets update` 只维护独立 seal guard 身份。公开签名、布局、句柄语义、wire 或交付格式变化须审阅并写入 CHANGELOG，不能用摘要计算代替契约审阅。资产测试核对 `.gitattributes` 规定的固定换行。
 
 ## 工作台状态
 

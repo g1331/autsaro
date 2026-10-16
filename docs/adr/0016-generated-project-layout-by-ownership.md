@@ -7,7 +7,7 @@
 ## 决策
 
 1. 交付包按所有权分目录，标准文件名不变：
-   - `bsw/{include,src}/`：静态 BSW，只读，受资源摘要约束；
+   - `bsw/{include,src}/`：静态 BSW，只读，按构建时计算的资源身份校验；
    - `os/`、`kernel/`：静态 OS 适配与固定第三方内核；
    - `generated/{include,src}/`：全部配置生成物（`*_Cfg.h`、`*_PBcfg.c`、`Rte*`、`SchM_*`、`*_MemMap.h`、Ecu 配置），每次生成整体重写；
    - `generated/templates/`：SWC 骨架，不参与编译；

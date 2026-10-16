@@ -990,14 +990,19 @@ fn source_preparation_is_target_complete_without_native_tools() {
                 .find(|file| file.path == path)
                 .unwrap_or_else(|| panic!("{path} is not delivered"))
         };
-        // Recorded original sources are exactly the delivered bytes.
+        // Sources retain their bytes; the inventory has a build-generated delivery form.
         let integration: serde_json::Value =
             serde_json::from_slice(&delivered("meta/integration.json").bytes).unwrap();
         let originals = integration["originalBswSources"].as_object().unwrap();
         for (original, path) in originals {
+            let expected = if original == "runtime/contracts/assets.json" {
+                inventory.get(original).unwrap().bytes.to_vec()
+            } else {
+                std::fs::read(root.join(original)).unwrap()
+            };
             assert_eq!(
                 delivered(path.as_str().unwrap()).bytes.as_ref(),
-                std::fs::read(root.join(original)).unwrap(),
+                expected,
                 "{original}"
             );
         }

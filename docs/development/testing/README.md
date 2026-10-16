@@ -69,7 +69,7 @@ CI 分两层：
 
 - 本地复核 Clippy 时按 CI 与 `verify` 的每条命令及其 feature 组合分别运行；`--workspace --all-features` 会打开 `native-webdriver` 等 feature，使 `cfg(not(feature = ..))` 分支不受检查，不能代替默认 feature 的检查。
 - 按 feature 汇总多个测试二进制的结果时加 `--no-fail-fast`，否则 Cargo 在第一个失败的二进制后停止，后续套件既未运行也不报失败。
-- 变异确认改动交付运行时源码时，`core/build.rs` 会因资产摘要不符而让构建失败，按退出码判断会把“未编译”误读为变异存活或被杀死：每次变异后更新摘要，恢复源码后再更新回去并 `assets check`，以测试结果行判定，并核对失败来自被测断言。原生套件缺少 `AUTOSAR_CC` 等工具变量时以 `executable_environment` 失败，这不算杀死；同一工作区先后构建两个变体时，先构建的测试二进制内嵌的摘要与后改的 `assets.json` 不符，`runtime_contracts::` 会报 `identity_differs`，变体应在各自的检出中构建和运行。
+- 变异确认改动一方运行时源码时，无需更新资产摘要；每次构建从实际字节计算身份。以测试结果行和被测断言判断变异，不把编译失败当作杀死。第三方 source manifest 仍固定内核／端口身份，不能为变异自动更新。同一工作区先后构建两个变体时，旧二进制仍绑定旧来源身份；`runtime_contracts::` 检查当前资源目录会报告 `identity_differs`，变体应在各自检出中构建和运行。原生套件缺少 `AUTOSAR_CC` 等工具变量时以 `executable_environment` 失败，这不算杀死。
 - OS suites 从 `autosar_tooling.config.ROOT`（可编辑安装所在检出）取运行时源码，在副本中变异时须让 `PYTHONPATH` 指向副本的 `tools/python/src`，否则测的仍是原检出；用 `-k NativeSuiteTests.test_<suite>` 选套件并确认实际运行了测试。
 - 用短名选择 ARXML 容器做变异时同时匹配 `DEFINITION-REF`：`RxValue` 等短名在 CanIf、Com 等模块重复，选错对象会使拒绝测试因输入未变而失效。
 - 生成器的模板编辑和测试变异按文本锚定运行时或生成 C 时，锚点不能依赖空白与换行：标识符用 `Edit::Token` 按完整 token 替换，`Edit::Every` 只要命中一处就不报错，会静默漏掉换行后的其余位置。

@@ -91,7 +91,8 @@ def _escaped_child(scope: str, pgid: int, registered_roots: set[int]) -> bool:
                     continue
             if marker in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"):
                 return True
-        except ProcessLookupError:
+        except (ProcessLookupError, FileNotFoundError):
+            # A sibling can exit between the child snapshot and its proc reads.
             continue
         except OSError:
             return True
