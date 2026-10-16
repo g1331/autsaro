@@ -54,8 +54,8 @@ test('both offline catalogs contain every key and identical interpolation contra
 });
 
 test('count-bearing product messages select plural forms in the current language', () => {
-  const item = message('shell.integration.changedFiles', { count: 1 });
-  const items = message('shell.integration.changedFiles', { count: 2 });
+  const item = message('workflow.guard.unapplied', { count: 1 });
+  const items = message('workflow.guard.unapplied', { count: 2 });
   previewLanguage('en');
   expect(localize(item)).toContain('1');
   expect(localize(items)).toContain('2');
@@ -132,14 +132,14 @@ test('browser language settings preview, cancel and save preserve controller dra
     result.current.setProjectName('用户对象_Example');
   });
   const settings = render(React.createElement(SettingsPage, { controller: result.current }));
-  const select = settings.container.querySelector('select[name="language"]');
+  const select = settings.baseElement.querySelector('select[name="language"]');
   expect(select).not.toBeNull();
   act(() => fireEvent.change(select, { target: { value: 'en' } }));
   settings.rerender(React.createElement(SettingsPage, { controller: result.current }));
   expect(i18n.language).toBe('en');
   expect(result.current.projectName).toBe('用户对象_Example');
   expect(result.current.savedLanguage).toBe('system');
-  const close = settings.getByRole('button', { name: /^(关闭|Close)$/ });
+  const close = settings.getByRole('button', { name: /^(取消|Cancel)$/ });
   act(() => fireEvent.click(close));
   expect(result.current.languageDraft).toBe(result.current.savedLanguage);
   act(() => {

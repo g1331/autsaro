@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { access, mkdir, readFile, writeFile, rename, cp } from 'node:fs/promises';
 import path from 'node:path';
-import { openWorkbench, existing, sha256, json, applicationPeriod } from './support/workbench.mjs';
+import {
+  applicationPeriod,
+  dialogNamed,
+  existing,
+  json,
+  openWorkbench,
+  sha256,
+} from './support/workbench.mjs';
 
 const {
   check,
@@ -50,10 +57,7 @@ check('seven-source-standard-variant', async () => {
   await until(`document.body.innerText.includes('尚未保存')`, 'real standard variant apply');
   await unchanged(savedBytes);
   await click('预览保存');
-  await until(
-    `Boolean(document.querySelector('[aria-label="确认保存源配置"]'))`,
-    'standard source preview',
-  );
+  await until(`Boolean(${dialogNamed('确认保存源配置')})`, 'standard source preview');
   await unchanged(savedBytes);
   await click('确认保存', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'confirmed standard save');
@@ -82,6 +86,28 @@ check('seven-source-standard-variant', async () => {
   await click('确认创建用户应用与成员记录', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'application initialization confirmed');
   await awaitProjectSurfaceReady();
+  // The delivery page previews; the preview dialog is the only confirmation (no native dialog).
+  const pageOutput = path.join(scratch, 'deliveries', 'GatewayReference-page');
+  await click('源码交付', "document.querySelector('.context-toolbar')");
+  await input(label('ECU 输出目录'), pageOutput);
+  await click('预览 ECU 交付');
+  const handoff = await evaluate(
+    `document.querySelector('[data-testid=ecu-delivery] input[type=checkbox]').checked`,
+  );
+  const generation = dialogNamed(handoff ? '确认导出可重建交接包' : '确认生成独立源码');
+  await until(`Boolean(${generation})`, 'generation preview dialog');
+  const summary = await evaluate(`${generation}.querySelector('footer').textContent`);
+  assert(
+    summary.includes(`个文件将写入 ${pageOutput}`),
+    `Write summary names the target: ${summary}`,
+  );
+  await assert.rejects(access(pageOutput), { code: 'ENOENT' });
+  await click(handoff ? '确认导出' : '确认生成', generation);
+  await until(
+    `!document.querySelector('[role=dialog]') && !document.querySelector('[role=status]')?.textContent.startsWith('正在')`,
+    'generation confirmed once from the dialog',
+  );
+  await access(path.join(pageOutput, 'meta/files.list'));
   gatewayDelivery = await exportSource('GatewayReference-source');
 });
 check('v2-relocation-snapshot-import-and-refusals', async () => {
@@ -105,11 +131,11 @@ check('v2-relocation-snapshot-import-and-refusals', async () => {
     },
     async () => {
       await until(
-        `document.querySelector('[role=dialog][aria-label="导入封存交付包"] [aria-label="交付包目录"]')?.value === ${json(relocated)}`,
+        `${dialogNamed('导入封存交付包')}?.querySelector('[aria-label="交付包目录"]')?.value === ${json(relocated)}`,
         'actual v2 import destination dialog',
       );
       return evaluate(
-        `document.querySelector('[role=dialog][aria-label="导入封存交付包"] [aria-label="交付包目录"]').value`,
+        `${dialogNamed('导入封存交付包')}.querySelector('[aria-label="交付包目录"]').value`,
       );
     },
   );

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { openWorkbench } from './support/workbench.mjs';
+import { dialogNamed, openWorkbench } from './support/workbench.mjs';
 
 const { check, initialCapabilities, evaluate, capabilities, scratch } =
   await openWorkbench('startup');
@@ -38,8 +38,5 @@ check('packaged-builtin-boundary', async () => {
   assert.equal(caps.ruleError, null);
   assert(caps.ruleSetIdentity?.sha256 && caps.ruleCoverage.length > 0);
   assert(caps.toolError, 'Execution tools must not leak into the configuration process');
-  assert(
-    !(await evaluate(`Boolean(document.querySelector('[aria-label="设置"][role=dialog]'))`)),
-    'No resource setup gate',
-  );
+  assert(!(await evaluate(`Boolean(${dialogNamed('设置')})`)), 'No resource setup gate');
 });

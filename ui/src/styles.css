@@ -793,6 +793,38 @@ tbody tr:not([aria-selected='true']):hover {
   overflow-wrap: anywhere;
   white-space: normal;
 }
+.object-table {
+  table-layout: fixed;
+}
+.object-table .col-select {
+  width: 52px;
+}
+.object-table .col-name {
+  width: 26%;
+}
+.object-table .col-type {
+  width: 24%;
+}
+.object-table .col-access {
+  width: 84px;
+}
+.object-table th,
+.object-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.object-table .table-link {
+  display: block;
+  max-width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.object-table input[type='checkbox'] {
+  vertical-align: middle;
+}
 .batch-bar {
   position: sticky;
   bottom: 0;
@@ -806,7 +838,14 @@ tbody tr:not([aria-selected='true']):hover {
   margin-top: 14px;
 }
 .batch-bar > span {
-  margin-right: auto;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+/* The buttons wrap as one group, aligned right. */
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 .inspector-pane {
   position: relative;
@@ -888,6 +927,14 @@ tbody tr:not([aria-selected='true']):hover {
 .property-list dd {
   margin: 4px 0 0;
 }
+.copy-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.copy-value > span {
+  min-width: 0;
+}
 .form-fields {
   display: grid;
   gap: 16px;
@@ -896,11 +943,32 @@ tbody tr:not([aria-selected='true']):hover {
   color: var(--secondary);
   font-size: 11px;
 }
-.integration-fields,
-.ecu-delivery-fields {
+.integration-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+/* Wide windows must not stretch path fields across the screen; tables stay full width. */
+.delivery-view {
+  max-width: 960px;
+}
+.delivery-step {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.delivery-step > h3 {
+  margin-top: 0;
+}
+.delivery-step .section-actions {
+  margin-bottom: 0;
+}
+label.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+label.checkbox-field > input[type='checkbox'] {
+  margin: 0;
 }
 .path-picker {
   display: flex;
@@ -1020,8 +1088,13 @@ tbody tr:not([aria-selected='true']):hover {
   overflow: auto;
   padding: 36px 32px;
 }
+.start-page > * {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
 .start-page > header {
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 .start-page > header > img {
   display: block;
@@ -1030,23 +1103,19 @@ tbody tr:not([aria-selected='true']):hover {
 .start-page > header > p {
   color: var(--secondary);
 }
-.start-layout {
-  display: grid;
-  grid-template-columns: 235px minmax(0, 480px);
-  gap: 28px;
-}
-.start-layout > nav {
+.start-actions {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  align-items: stretch;
-}
-.start-layout > nav > button {
-  justify-content: flex-start;
-  padding: 9px 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
 }
 .start-layout > section {
-  min-width: 0;
+  max-width: 480px;
+}
+/* Buttons keep their natural width inside the stacked form grid. */
+.start-layout .form-fields > button {
+  justify-self: start;
 }
 .bottom-tools {
   position: relative;
@@ -1138,33 +1207,75 @@ tbody tr:not([aria-selected='true']):hover {
 .validation-scopes {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 4px 12px;
   font-size: 12px;
 }
+.validation-scopes > p {
+  margin: 0;
+}
+.validation-scopes summary {
+  display: inline-flex;
+  align-items: center;
+  list-style: none;
+  padding: 4px 0;
+}
+.validation-scopes summary::-webkit-details-marker {
+  display: none;
+}
+.validation-scopes summary > svg {
+  margin: 0 4px 0 0;
+}
+.validation-scopes details[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.validation-scopes details[open] {
+  flex-basis: 100%;
+}
+.validation-scopes details > p {
+  margin: 2px 0 2px 18px;
+}
+/* One row per problem: message beside its label, actions on the right; not cards. */
 .problem-list {
   list-style: none;
-  margin: 8px 0;
+  margin: 6px 0;
   padding: 0;
 }
 .problem-list > li {
-  padding: 8px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 5px 0;
   border-bottom: 1px solid var(--line);
-}
-.problem-list > li > strong {
-  font-size: 11px;
-}
-.problem-list > li.error > strong {
-  color: var(--error);
-}
-.problem-list > li.warning > strong {
-  color: var(--warning);
-}
-.problem-list > li p {
-  margin: 4px 0;
   font-size: 12px;
 }
-.problem-list > li button {
-  margin: 5px 6px 0 0;
+.problem-main > p {
+  margin: 0;
+  line-height: 1.5;
+}
+.problem-main strong {
+  font-size: 11px;
+}
+.problem-list > li.error strong {
+  color: var(--error);
+}
+.problem-list > li.warning strong {
+  color: var(--warning);
+}
+.problem-meta {
+  display: block;
+  line-height: 1.5;
+}
+.problem-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.problem-actions button {
+  font-size: 11px;
+  padding: 2px 6px;
+  min-height: 24px;
 }
 .owned-log pre {
   max-height: 300px;
@@ -1204,7 +1315,7 @@ tbody tr:not([aria-selected='true']):hover {
   padding: 24px;
 }
 .workbench-dialog {
-  width: min(1100px, 96vw);
+  width: min(720px, 96vw);
   max-height: 90dvh;
   display: flex;
   flex-direction: column;
@@ -1213,6 +1324,19 @@ tbody tr:not([aria-selected='true']):hover {
   border-radius: 9px;
   box-shadow: 0 20px 70px rgb(0 0 0 / 0.25);
   overflow: hidden;
+}
+.workbench-dialog.confirm {
+  width: min(480px, 96vw);
+}
+.workbench-dialog.preview {
+  width: min(1100px, 96vw);
+}
+/* Categories differ in length; a fixed height keeps the dialog from jumping. */
+.workbench-dialog.settings-dialog {
+  height: min(640px, 90dvh);
+}
+.settings-dialog > .dialog-body {
+  flex: 1;
 }
 .workbench-dialog > header {
   display: flex;
@@ -1225,6 +1349,21 @@ tbody tr:not([aria-selected='true']):hover {
 .workbench-dialog > header h2 {
   margin: 0;
   font-size: 18px;
+}
+.dialog-busy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 24px;
+  font-size: 12px;
+  color: var(--secondary);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.dialog-busy > span:not(.busy-indicator) {
+  flex: 1;
+  min-width: 0;
 }
 .dialog-body {
   padding: 20px 24px;
@@ -1311,30 +1450,90 @@ tbody tr:not([aria-selected='true']):hover {
   font-size: 12px;
   margin-top: 4px;
 }
-.command-results {
+/* The palette stays near the top, so filtering never moves the input. */
+.palette-backdrop {
+  align-items: flex-start;
+  padding-top: 20vh;
+}
+.workbench-dialog.command-palette {
+  width: min(560px, 96vw);
+  max-height: 60vh;
+}
+.command-palette [cmdk-root] {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-top: 12px;
+  min-height: 0;
 }
-.command-results button {
+.command-palette .search-field {
+  margin: 10px;
+}
+.command-palette .search-field input {
+  padding: 8px 0;
+  font-size: 13px;
+}
+.command-results {
+  overflow: auto;
+  padding: 0 5px 5px;
+  border-top: 1px solid var(--line);
+}
+.command-results [cmdk-list-sizer] {
+  padding-top: 5px;
+}
+.command-results [cmdk-item] {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  text-align: left;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
 }
+.command-results [cmdk-item][data-selected='true'] {
+  background: var(--hover);
+}
+.command-results .empty-state {
+  padding: 14px 10px;
+}
+.source-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+.source-heading > h2 {
+  margin: 0;
+}
+.source-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--secondary);
+}
+/* An aligned grid: long English stage names would otherwise wrap into ragged rows. */
 .stage-list {
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 12px 0 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 16px;
+  margin: 12px 0 8px;
 }
 .stage {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
   font-size: 12px;
+}
+.stage-copy {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .stage-number {
   display: none;

@@ -1,6 +1,7 @@
 import { isMessage, message, useLocale } from '../i18n';
 import type { Text } from '../i18n';
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { AlertDialog, Dialog as RadixDialog } from 'radix-ui';
 import type { ReactNode } from 'react';
 import { Check, CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
 import { iconSize } from './icons';
@@ -59,7 +60,7 @@ export function rememberDialogOpener() {
   if (
     !(active instanceof HTMLElement) ||
     active === document.body ||
-    active.closest('[role="dialog"]')
+    active.closest('[role="dialog"], [role="alertdialog"]')
   )
     return;
   const opener = active.closest('.menu-root')?.querySelector<HTMLElement>('button') ?? active;
@@ -69,12 +70,41 @@ export function rememberDialogOpener() {
   opener.setAttribute('data-dialog-opener', 'true');
 }
 
+/** Where focus returns on close; a menu item that opened the dialog is gone by then. */
+function dialogOpener() {
+  const active = document.activeElement;
+  return active instanceof HTMLElement &&
+    active !== document.body &&
+    !active.closest('[role="dialog"], [role="alertdialog"]')
+    ? active
+    : (document.querySelector<HTMLElement>('[data-dialog-opener]') ??
+        document.querySelector<HTMLElement>('.menubar button'));
+}
+
+/** Radix `onCloseAutoFocus`: back to the opener, unless a following dialog already took focus. */
+export function useFocusReturn() {
+  const [opener] = useState(dialogOpener);
+  return (event: Event) => {
+    event.preventDefault();
+    if (document.activeElement?.closest('[role="dialog"], [role="alertdialog"]')) return;
+    if (opener?.isConnected) opener.focus();
+  };
+}
+
+/** DESIGN.md Layout: confirmation 480, form 720, preview 1100. */
+export type DialogSize = 'confirm' | 'form' | 'preview';
+
 export function Dialog({
   title,
   children,
   onClose,
   footer,
   notice,
+  size = 'form',
+  alert = false,
+  busy,
+  onCancelBusy,
+  className,
 }: {
   title: Text;
   children: ReactNode;
@@ -82,88 +112,81 @@ export function Dialog({
   footer?: ReactNode;
   /** Results of actions taken inside the dialog; the page notice is behind the backdrop. */
   notice?: Notice;
+  size?: DialogSize;
+  /** A decision that interrupts the task (draft guards): Radix AlertDialog semantics. */
+  alert?: boolean;
+  /** The running operation; closing waits for it, and the dialog says so. */
+  busy?: Text | null;
+  onCancelBusy?: () => void;
+  className?: string;
 }) {
   const { t, text } = useLocale();
-  const dialog = useRef<HTMLElement>(null);
-  const close = useEffectEvent(onClose);
-  useEffect(() => {
-    const active = document.activeElement;
-    const opener =
-      active instanceof HTMLElement && active !== document.body && !dialog.current?.contains(active)
-        ? active
-        : (document.querySelector<HTMLElement>('[data-dialog-opener]') ??
-          document.querySelector<HTMLElement>('.menubar button'));
-    const node = dialog.current;
-    const focusable = () =>
-      Array.from(
-        node?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"], summary',
-        ) ?? [],
-      ).filter((item) => item.getClientRects().length > 0);
-    (node?.querySelector<HTMLElement>('[data-initial-focus]') ?? focusable()[0] ?? node)?.focus();
-    function trap(event: KeyboardEvent) {
-      // A disabled focused control can leave focus on body in the native view.
-      // The top modal still owns Escape and keeps Tab within its own controls.
-      if (Array.from(document.querySelectorAll('[role="dialog"]')).at(-1) !== node) return;
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        close();
-      }
-      if (event.key !== 'Tab') return;
-      const items = focusable();
-      if (!items.length) {
-        event.preventDefault();
-        node?.focus();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!node?.contains(document.activeElement)) {
-        event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-      } else if (
-        event.shiftKey &&
-        (document.activeElement === first || document.activeElement === node)
-      ) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener('keydown', trap);
-    return () => {
-      document.removeEventListener('keydown', trap);
-      if (opener?.isConnected) opener.focus();
-    };
-  }, []);
+  const returnFocus = useFocusReturn();
+  const busyId = useId();
+  const Primitive = alert ? AlertDialog : RadixDialog;
+  const blocked = Boolean(busy);
+  const body = <div className="dialog-body">{children}</div>;
   return (
-    <div className="modal-backdrop">
-      <section
-        ref={dialog}
-        className="workbench-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={text(title)}
-        tabIndex={-1}
-      >
-        <header>
-          <h2>{text(title)}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('editor.dialog.closeLabel', { title: text(title) })}
+    <Primitive.Root
+      open
+      onOpenChange={(open) => {
+        if (!open && !blocked) onClose();
+      }}
+    >
+      <Primitive.Portal>
+        <Primitive.Overlay className="modal-backdrop">
+          <Primitive.Content
+            className={['workbench-dialog', size, className].filter(Boolean).join(' ')}
+            onOpenAutoFocus={(event) => {
+              const initial = (event.currentTarget as HTMLElement).querySelector<HTMLElement>(
+                '[data-initial-focus]',
+              );
+              if (!initial) return;
+              event.preventDefault();
+              initial.focus();
+            }}
+            onCloseAutoFocus={returnFocus}
+            {...(alert
+              ? {}
+              : {
+                  // Only alert dialogs carry a description element.
+                  'aria-describedby': undefined,
+                  // Drafts and previews must not vanish on a stray click outside.
+                  onInteractOutside: (event: Event) => event.preventDefault(),
+                })}
           >
-            {t('editor.dialog.close')}
-          </button>
-        </header>
-        <div className="dialog-body">{children}</div>
-        {notice ? <NoticeBanner notice={notice} /> : null}
-        {footer ? <footer>{footer}</footer> : null}
-      </section>
-    </div>
+            <header>
+              <Primitive.Title>{text(title)}</Primitive.Title>
+              <button
+                type="button"
+                className="icon-button"
+                disabled={blocked}
+                aria-describedby={blocked ? busyId : undefined}
+                aria-label={t('editor.dialog.closeLabel', { title: text(title) })}
+                title={t('editor.dialog.closeLabel', { title: text(title) })}
+                onClick={onClose}
+              >
+                <X size={iconSize.control} aria-hidden="true" />
+              </button>
+            </header>
+            {alert ? <AlertDialog.Description asChild>{body}</AlertDialog.Description> : body}
+            {notice ? <NoticeBanner notice={notice} /> : null}
+            {blocked ? (
+              <p className="dialog-busy" id={busyId} role="status">
+                <span className="busy-indicator" aria-hidden="true" />
+                <span>{t('editor.dialog.closeBlocked', { operation: text(busy ?? '') })}</span>
+                {onCancelBusy ? (
+                  <button type="button" onClick={onCancelBusy}>
+                    {t('shell.command.cancel')}
+                  </button>
+                ) : null}
+              </p>
+            ) : null}
+            {footer ? <footer>{footer}</footer> : null}
+          </Primitive.Content>
+        </Primitive.Overlay>
+      </Primitive.Portal>
+    </Primitive.Root>
   );
 }
 

@@ -158,12 +158,13 @@ test.each(['success', 'failure'])(
     });
     const stages = current.stages;
     const generation = current.operationGeneration;
+    fireEvent.click(view.getByRole('tab', { name: translate('shell.settings.language') }));
     fireEvent.change(view.getByRole('combobox', { name: translate('shell.settings.language') }), {
       target: { value: 'en' },
     });
     expect(i18n.language).toBe('en');
     fireEvent.click(view.getByRole('button', { name: translate('shell.settings.saveLanguage') }));
-    const close = view.getByRole('button', { name: translate('shell.settings.close') });
+    const close = view.getByRole('button', { name: translate('workflow.common.cancel') });
     expect(close.disabled).toBe(true);
     expect(
       view.getByRole('combobox', { name: translate('shell.settings.language') }).disabled,

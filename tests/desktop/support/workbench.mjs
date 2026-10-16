@@ -16,6 +16,12 @@ export const explicit = (kind, lexeme) => ({
 export const existing = (objectId) => ({ kind: 'existing', objectId });
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const json = JSON.stringify;
+/**
+ * Page expression for the open dialog with this accessible name. Radix portals
+ * dialogs to the body and names them through aria-labelledby (ADR 0019).
+ */
+export const dialogNamed = (name) =>
+  `[...document.querySelectorAll('[role=dialog],[role=alertdialog]')].find(node => (document.getElementById(node.getAttribute('aria-labelledby'))?.textContent ?? node.getAttribute('aria-label'))?.trim() === ${JSON.stringify(name)})`;
 // Independent identities of the built-in standard ECU template on the mainline.
 export const SLOT = 'singlecore-ecu-v1:/Application/ReferenceComposition/EchoApplicationInstance';
 export const applicationPeriod = (description) =>
@@ -195,7 +201,14 @@ export async function openWorkbench(name) {
       'command search',
     );
     await input(label('搜索当前可用命令'), command);
-    await click(command, "document.querySelector('[role=dialog]')");
+    // Palette rows are cmdk options, not buttons.
+    const option = `[...document.querySelectorAll('[role=dialog] [role=option]')].filter(${visible}).find(node => node.firstChild?.textContent.trim() === ${json(command)} && node.getAttribute('aria-disabled') !== 'true')`;
+    await until(`Boolean(${option})`, `actual command ready: ${command}`);
+    const point = await evaluate(`(() => {
+      const box = ${option}.getBoundingClientRect();
+      return {x:box.x+box.width/2,y:box.y+box.height/2};
+    })()`);
+    await pointer(point.x, point.y);
   }
   async function choose(kind, selected, action, observeSelected) {
     await action();
@@ -401,10 +414,7 @@ export async function openWorkbench(name) {
       },
     );
     await click('预览工程文件');
-    await until(
-      `Boolean(document.querySelector('[aria-label="确认新建工程"]'))`,
-      'original template preview',
-    );
+    await until(`Boolean(${dialogNamed('确认新建工程')})`, 'original template preview');
     assert.deepEqual(await readdir(directory), [], 'Template preview must not create source files');
     await click('确认创建工程');
     await until(

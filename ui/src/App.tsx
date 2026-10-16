@@ -31,6 +31,7 @@ import {
   rememberDialogOpener,
   TextSnapshot,
 } from './workbench/Dialog';
+import { CommandPalette } from './workbench/CommandPalette';
 import { ToolWindows } from './workbench/ToolWindows';
 import { WindowControls } from './workbench/WindowControls';
 import { PanelResizeHandle } from './workbench/PanelResizeHandle';
@@ -55,7 +56,6 @@ export default function App() {
   const c = useWorkbench();
   const [menu, setMenu] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
-  const [query, setQuery] = useState('');
   const [help, setHelp] = useState(false);
   const [systemDark, setSystemDark] = useState(
     () => window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -410,7 +410,7 @@ export default function App() {
       const key = event.key.toLocaleLowerCase();
       if (key === 'k') {
         event.preventDefault();
-        setQuery('');
+        rememberDialogOpener();
         setPalette(true);
       } else if (key === 's' || key === 'o') {
         event.preventDefault();
@@ -581,7 +581,7 @@ export default function App() {
           className="toolbar-search"
           aria-label={t('shell.app.commandShortcut')}
           onClick={() => {
-            setQuery('');
+            rememberDialogOpener();
             setPalette(true);
           }}
         >
@@ -819,34 +819,11 @@ export default function App() {
       <SettingsPage controller={c} />
       <PreviewDialogs controller={c} />
       {palette ? (
-        <Dialog title={t('shell.app.commandSearch')} onClose={() => setPalette(false)}>
-          <label className="search-field">
-            <Search size={iconSize.control} aria-hidden="true" />
-            <input
-              autoFocus
-              data-initial-focus
-              value={query}
-              aria-label={t('shell.app.searchAvailable')}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('shell.app.searchPlaceholder')}
-            />
-          </label>
-          <div className="command-results">
-            {commands
-              .filter((command) => !command.reason && command.label.includes(query))
-              .map((command) => (
-                <button
-                  key={command.id}
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => dispatchCommand(command.id)}
-                >
-                  {command.label}
-                  <kbd>{command.shortcut}</kbd>
-                </button>
-              ))}
-          </div>
-        </Dialog>
+        <CommandPalette
+          commands={commands.filter((command) => !command.reason)}
+          onRun={dispatchCommand}
+          onClose={() => setPalette(false)}
+        />
       ) : null}
       {help ? (
         <Dialog title={t('shell.command.help')} onClose={() => setHelp(false)}>
