@@ -217,11 +217,13 @@ class OwnedProcess:
 
 
 def run_bounded(
-    spec: ProcessSpec, *, owner: Owner | None = None, parent: str | None = None
+    spec: ProcessSpec, *, owner: Owner | None = None, parent: str | None = None,
+    allowed_exit_codes: tuple[int, ...] = (0,),
 ) -> ProcessResult:
+    """Keep expected diagnostic exits explicit; deadlines and tree cleanup always apply."""
     process = OwnedProcess(spec, owner=owner, parent=parent)
     result = process.wait()
-    if not result.success:
+    if result.status != "exited" or result.exit_code not in allowed_exit_codes:
         raise OwnershipError(
             f"{spec.stage}: argv={list(spec.argv)!r} deadline_ns={spec.deadline_ns} "
             f"status={result.status} exit_code={result.exit_code} "

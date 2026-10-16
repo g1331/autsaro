@@ -159,5 +159,6 @@ def verify(scope: str, base: str | None = None) -> int:
             print(f"{name}: {error}", file=sys.stderr)
             return 1
         if result.returncode:
+            print(f"{name}: argv={argv!r} exit_code={result.returncode}", file=sys.stderr)
             return result.returncode if result.returncode > 0 else 1
     return 0

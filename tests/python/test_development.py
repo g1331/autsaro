@@ -13,7 +13,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 from xml.etree import ElementTree
@@ -406,6 +406,15 @@ class CoverageTests(unittest.TestCase):
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_version_failure_names_producer_command_and_raw_exit(self):
+        with patch.object(diagnostics.shutil, "which", return_value="/tools/node"), patch.object(
+            diagnostics.subprocess, "run", return_value=subprocess.CompletedProcess([], 19, "producer stdout", "producer stderr"),
+        ):
+            result = diagnostics.version_check("Node", ["node", "--version"], major=24)
+        self.assertEqual(result.status, "error")
+        for text in ("Node", "/tools/node", "--version", "exit_code=19", "producer stdout", "producer stderr"):
+            self.assertIn(text, result.detail)
+
     def test_supported_patches_do_not_require_a_specific_node_version(self):
         for version in ("24.0.0", "24.20.0"):
             with patch.object(diagnostics.shutil, "which", return_value="/tools/node"), patch.object(diagnostics.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "v" + version, "")):
@@ -446,8 +455,11 @@ class VerificationTests(unittest.TestCase):
                     patch.object(verify, "environment", return_value={}),
                     patch.object(verify.subprocess, "run", side_effect=run),
                     redirect_stdout(io.StringIO()),
+                    redirect_stderr(io.StringIO()) as errors,
                 ):
                     self.assertEqual(verify.verify(scope), 7)
+                self.assertIn("exit_code=7", errors.getvalue())
+                self.assertIn("desktop", errors.getvalue())
                 self.assertEqual(calls[-1], expected)
                 self.assertEqual(calls.count(expected), 1)
                 self.assertNotIn(["cargo", "build", "--locked", "-p", "autosar-config-desktop"], calls)

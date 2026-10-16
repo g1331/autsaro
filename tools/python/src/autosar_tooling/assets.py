@@ -5,7 +5,11 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import shutil
+import tempfile
 from pathlib import Path, PurePosixPath
+
+from ecu_tools.process import ProcessSpec, run_bounded
 
 from autosar_tooling.config import ROOT
 
@@ -93,15 +97,20 @@ def maintain(*, update: bool = False, root: Path = ROOT) -> int:
 
 def check_line_endings(root: Path = ROOT) -> None:
     """Check fixed checkout bytes, including CRLF exceptions, through Git attributes."""
-    import subprocess
-
-    paths = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=root, check=True, capture_output=True,
-    ).stdout
-    attributes = subprocess.run(
-        ["git", "check-attr", "-z", "--stdin", "text", "eol"], input=paths,
-        cwd=root, check=True, capture_output=True,
-    ).stdout.split(b"\0")
+    git = shutil.which("git")
+    if git is None:
+        raise ValueError("Asset line endings require Git on PATH")
+    with tempfile.TemporaryDirectory() as temporary:
+        logs = Path(temporary)
+        paths = run_bounded(ProcessSpec.seconds(
+            [git, "ls-files", "-z"], root, 30, logs, "assets: tracked-files",
+        )).stdout.read_bytes()
+        input_file = logs / "paths.bin"
+        input_file.write_bytes(paths)
+        attributes = run_bounded(ProcessSpec.seconds(
+            [git, "check-attr", "-z", "--stdin", "text", "eol"], root, 30,
+            logs, "assets: line-ending-attributes", stdin_file=input_file,
+        )).stdout.read_bytes().split(b"\0")
     for index in range(0, len(attributes) - 1, 6):
         name, _, text, _, _, value = attributes[index:index + 6]
         if text == b"unset" or value not in (b"lf", b"crlf"):

@@ -52,10 +52,12 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - 主机侧逐 tick 握手（如 HostBatch 等待 tick 完成与输出确认）不能依赖短超时轮询推进：FreeRTOS Windows 端口补丁移除了 `timeBeginPeriod`，Windows 上 1 ms 定时等待约 15.6 ms 才返回，Linux 宿主层则按 1 ms 轮询，问题只在 Windows 负载下表现为 watchdog 超时。对端有待处理工作时显式唤醒，并按单批墙钟预算核对。
 - 宿主线程不得忙等：FreeRTOS 空闲 hook 每轮让出主机 CPU（`idle_state` 的 `host-yield` 场景），否则每个 ECU 进程占满一个 CPU，并在部分机型上拖慢跨线程交接。
 - Windows 托管 runner 混用 AMD EPYC 9V45／9V74／7763 与 Intel Xeon 8370C／8573C，只在一种机型出现的时序失败（#61：9V45 上另一 vCPU 忙等时，跨线程唤醒有约 2 ms 停顿）要按 CPU 型号记录，在同一 runner 上配对比较变体；筛选机型用读取型号后立即结束的小矩阵，不用大矩阵随机抽样占用共享 runner。
-- 子进程失败消息须带 stdout／stderr 的内容，不能只给随 scratch 目录删除的日志路径：共用执行入口（`ProcessOwner::run`、`ecu_tools.process.run_bounded`）与测试的 `tooling::wait_success` 已默认附带输出末尾，新的失败路径沿用它们，不另写只报路径的错误。排查 CI 失败先下载 `native-scratch-*`／`os-suites-*` 现场，不靠猜测重跑。
+- 子进程失败消息须带 stdout／stderr 的内容，不能只给随 scratch 目录删除的日志路径：共用执行入口（`ProcessOwner::run`、`ecu_tools.process.run_bounded`）与测试的 `tooling::wait_success` 已默认附带输出末尾，新的失败路径沿用它们，不另写只报路径的错误。 调整共用执行入口时，保留各调用方的相对源对象与失败解释，并覆盖同一原因涉及的其他调用点；阶段名或宿主绝对路径不能替代这层上下文。排查 CI 失败先下载 `native-scratch-*`／`os-suites-*` 现场，不靠猜测重跑。
 - 新增测试后无关用例在 CI 上稳定失败时，按完成时间比较失败与基线运行中重叠的测试，不当作偶发重跑；改变线程交接时机的修复可能暴露依赖原时序的竞态，以超过 CPU 数的并发重复运行受影响用例，比较修复前后的失败率，相互依赖的修复一起合入。
 - 间歇超时先区分挂起与接近期限：Linux 上并发重复到复现，超时时用 `gdb -p` 抓全部线程栈再结束进程，失败检查不带位置时先让它记录源码行。不能未经实测就放宽期限，也不用重试或固定延时掩盖竞态。
 - 长时间原生验收启动前，核对后续消费者阶段所需的全部外层工具路径，保持应用配置阶段的工具隔离；不能把缺失前置条件留到末尾才发现。含大响应时，将完整事件逐条写入既有证据文件，避免在内存保留全部历史 snapshot；保留原有 payload、场景与断言，并分别核查驱动和产品进程的内存，不能用证据写入优化掩盖产品内存问题。
+
+开发工具的 Git 文件／属性查询与 clang-tidy 的内核补丁应用使用同一个 `ecu_tools.process.run_bounded`，期限为 30 秒；失败包含阶段／样本、命令、原始 exit 与 stdout／stderr 末尾。c-check 的工具探测／补丁为 30 秒、单 TU 编译为 60 秒、分析为 600 秒；只有 Cppcheck 的正常诊断退出码 1 被作为分析结果保留，挂起和其他异常退出仍失败。对应挂起回归可用 `uv run --locked python -B -m unittest discover -s tests/python/process -p test_feedback.py` 单独运行。
 
 ## Windows 进程
 

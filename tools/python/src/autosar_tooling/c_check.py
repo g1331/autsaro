@@ -27,7 +27,7 @@ from ecu_tools.build import (
     target_entry,
     tool_argument,
 )
-from ecu_tools.process import OwnedProcess, ProcessSpec
+from ecu_tools.process import ProcessSpec, run_bounded
 
 from autosar_tooling.config import ROOT
 
@@ -41,15 +41,21 @@ ADDON_HASHES = {
 TIMEOUT = 600
 
 
-def run(argv: list[str], directory: Path, stage: str, timeout: int = TIMEOUT) -> tuple[int, str, str]:
+def run(argv: list[str], directory: Path, stage: str, timeout: int = TIMEOUT, *,
+        context: str | None = None, cwd: Path | None = None,
+        env: dict[str, str] | None = None) -> tuple[int, str, str]:
     """Keep raw subprocess output and reclaim owned processes on timeout."""
-    result = OwnedProcess(ProcessSpec.seconds(argv, directory, timeout, directory, stage)).wait()
+    try:
+        result = run_bounded(ProcessSpec.seconds(argv, cwd or directory, timeout, directory, stage, env=env),
+                             allowed_exit_codes=(0, 1) if stage == "cppcheck" else (0,))
+    except (RuntimeError, OSError) as error:
+        if context is None:
+            raise
+        raise RuntimeError(f"{context}: {error}") from error
     stdout = result.stdout.read_text(encoding="utf-8", errors="replace")
     stderr = result.stderr.read_text(encoding="utf-8", errors="replace")
     (directory / f"{stage}.stdout.log").write_text(stdout, encoding="utf-8")
     (directory / f"{stage}.stderr.log").write_text(stderr, encoding="utf-8")
-    if result.status != "exited":
-        raise RuntimeError(f"{stage}: {result.status}; logs retained in {directory}")
     return result.exit_code or 0, stdout, stderr
 
 
@@ -71,8 +77,8 @@ def tool_identity(directory: Path) -> tuple[Path, Path, dict]:
     if not found or not Path(found).is_file():
         raise ValueError("Cppcheck is missing; install the pinned 2.21.0 release")
     executable = Path(found).resolve()
-    code, stdout, stderr = run([str(executable), "--version"], directory, "version", 30)
-    if code or stdout.strip() != f"Cppcheck {CPPCHECK_VERSION}":
+    _, stdout, stderr = run([str(executable), "--version"], directory, "version", 30)
+    if stdout.strip() != f"Cppcheck {CPPCHECK_VERSION}":
         raise ValueError(f"Cppcheck version mismatch: {stdout.strip()} {stderr.strip()}")
     addons = addon_directory(executable)
     hashes = {name: digest(addons / name) for name in ADDON_HASHES}
@@ -149,20 +155,20 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     if not compiler or not Path(compiler).is_file():
         raise ValueError("GCC is required to discover the target's system headers")
     compiler = str(Path(compiler).resolve())
-    code, machine, _ = run([compiler, "-dumpmachine"], output, "compiler-target", 30)
-    if code or machine.strip() != target["abi"]:
+    _, machine, _ = run([compiler, "-dumpmachine"], output, "compiler-target", 30,
+                context="Cannot identify diagnostic compiler target")
+    if machine.strip() != target["abi"]:
         raise ValueError("Diagnostic compiler ABI differs from the sealed target")
-    code, compiler_version, _ = run([compiler, "--version"], output, "compiler-version", 30)
-    if code:
-        raise ValueError("Cannot identify diagnostic compiler")
+    _, compiler_version, _ = run([compiler, "--version"], output, "compiler-version", 30,
+                context="Cannot identify diagnostic compiler")
     empty = output / "headers.c"
     empty.write_text("", encoding="utf-8")
-    code, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], output, "compiler-headers", 30)
-    if code:
-        raise ValueError("Cannot discover compiler include search paths")
+    _, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], output, "compiler-headers", 30,
+                context="Cannot discover compiler include search paths")
     system_includes = compiler_include_paths(header_log, output)
-    code, macros, _ = run([compiler, *flags, "-dM", "-E", "-x", "c", str(empty)], output, "compiler-macros", 30)
-    if code or "#define __GNUC__ " not in macros:
+    _, macros, _ = run([compiler, *flags, "-dM", "-E", "-x", "c", str(empty)], output, "compiler-macros", 30,
+                context="Cannot discover compiler predefined macros")
+    if "#define __GNUC__ " not in macros:
         raise ValueError("Cannot discover compiler predefined macros")
     predefines = output / "compiler-predefines.h"
     predefines.write_text(macros, encoding="utf-8")
@@ -189,10 +195,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
             argv = [str(Path(git).resolve()), "apply", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]), str(root / patch_path)]
             # Apply only inside the copied kernel, never the authoritative source.
-            result = OwnedProcess(ProcessSpec.seconds(argv, root / "kernel", 30, output, f"patch-{index}",
-                                  env=kernel_patch_environment(root / "kernel"))).wait()
-            if not result.success:
-                raise ValueError(f"Kernel patch {index} failed; raw logs retained")
+            run(argv, output, f"patch-{index}", 30, context=f"Kernel patch {index} failed",
+                cwd=root / "kernel", env=kernel_patch_environment(root / "kernel"))
             require_kernel_patch_applied(root / patch_path, before)
         patched_lines = kernel_patched_lines(project, root, touched)
         sources.extend("kernel/" + name for name in kernel_sources)
@@ -234,9 +238,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                               "typedef char AutsaroMutexValue[(PTHREAD_MUTEX_RECURSIVE == 1) ? 1 : -1];\n"
                               "int (*AutsaroSignalPrototype)(void) = &__libc_current_sigrtmin;\n"
                               "long (*AutsaroStackPrototype)(int) = &__sysconf;\n", encoding="utf-8")
-        code, _, _ = run([compiler, *flags, *("-I" + path for path in includes), "-fsyntax-only", str(validation)], output, "platform-model-check", 30)
-        if code:
-            raise ValueError("Linux library analysis model differs from the actual compiler headers")
+        run([compiler, *flags, *("-I" + path for path in includes), "-fsyntax-only", str(validation)], output, "platform-model-check", 30,
+                context="Linux library analysis model differs from the actual compiler headers")
     per_unit_macros = {}
     stdio_modes = {}
     mode_names = {"_IOFBF", "_IOLBF", "_IONBF"} if "setvbuf" in identifiers else set()
@@ -250,14 +253,12 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     def compiler_unit(item):
         index, name = item
         unit_modes = {}
-        code, _, _ = run([compiler, *flags, *("-I" + path for path in includes),
-                          "-fsyntax-only", str(root / name)], output, f"compiler-unit-{index}", 60)
-        if code:
-            raise ValueError(f"Compiler validation failed for {name}; logs retained")
-        code, definitions, _ = run([compiler, *flags, *("-I" + path for path in includes),
-                                    "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60)
-        if code:
-            raise ValueError(f"Compiler preprocessing failed for {name}")
+        run([compiler, *flags, *("-I" + path for path in includes),
+            "-fsyntax-only", str(root / name)], output, f"compiler-unit-{index}", 60,
+            context=f"Compiler validation failed for {name}")
+        _, definitions, _ = run([compiler, *flags, *("-I" + path for path in includes),
+                                    "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60,
+                                    context=f"Compiler preprocessing failed for {name}")
         function_macros = ["-D" + line[8:].replace(" ", "=", 1)
                            for line in definitions.splitlines() if line.startswith("#define ")
                            and line[8:].split("(", 1)[0] in function_macro_names]
@@ -268,10 +269,9 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         probe = output / f"macro-probe-{index}.c"
         probe.write_text('#include "' + tool_argument(root / name) + '"\n' +
                          "".join(f"AUTSAR_VALUE_{macro} {macro}\n" for macro in candidates), encoding="utf-8")
-        code, expanded, _ = run([compiler, *flags, *("-I" + path for path in includes),
-                                "-E", "-P", str(probe)], output, f"compiler-values-{index}", 60)
-        if code:
-            raise ValueError(f"Compiler macro expansion failed for {name}")
+        _, expanded, _ = run([compiler, *flags, *("-I" + path for path in includes),
+                                "-E", "-P", str(probe)], output, f"compiler-values-{index}", 60,
+                                context=f"Compiler macro expansion failed for {name}")
         unit_macros = function_macros
         for line in expanded.splitlines():
             if not line.startswith("AUTSAR_VALUE_"):
@@ -416,7 +416,7 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
     return code, passed, diagnostics, command
 
 
-def check(project: Path, target_id: str, output: Path) -> int:
+def check(project: Path, target_id: str, output: Path, baseline: Path | None = None) -> int:
     refuse_links(project)
     project = project.resolve(strict=True)
     refuse_links(output)
@@ -471,6 +471,13 @@ def check(project: Path, target_id: str, output: Path) -> int:
         if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:
             raise ValueError("Source seal changed during analysis")
         summary["passed"] = all_passed
+        if baseline is not None:
+            from autosar_tooling.c_comparison import compare
+            summary["comparison"] = compare(summary, project, output, baseline)
+            for kind, rows in summary["comparison"].items():
+                print(f"C baseline {kind}: {sum(row['count'] for row in rows)} occurrences")
+                for row in rows:
+                    print(f"  {row['rule']} {row['file']} x{row['count']}: {row['source']}")
         print(f"C analysis {target_id}: {len(sources)} units, {len(diagnostics)} diagnostics; passed={summary['passed']}")
         return 0 if summary["passed"] else 1
     except (ValueError, RuntimeError, OSError, ET.ParseError, KeyError, ImportError) as error:
