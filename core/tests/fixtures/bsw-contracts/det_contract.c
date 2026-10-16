@@ -16,12 +16,14 @@ static boolean nested;
 static boolean recurse_development;
 static boolean reinitialize_runtime;
 
-static void record(unsigned value) {
+static void record(unsigned value)
+{
     assert(event_count < 16u);
     events[event_count] = value;
     ++event_count;
 }
-static Std_ReturnType first(uint16 module, uint8 instance, uint8 api, uint8 error) {
+static Std_ReturnType first(uint16 module, uint8 instance, uint8 api, uint8 error)
+{
     assert(module == 60u);
     assert(instance == 2u);
     assert(api == 5u);
@@ -37,7 +39,8 @@ static Std_ReturnType first(uint16 module, uint8 instance, uint8 api, uint8 erro
     }
     return E_NOT_OK;
 }
-static Std_ReturnType second(uint16 module, uint8 instance, uint8 api, uint8 error) {
+static Std_ReturnType second(uint16 module, uint8 instance, uint8 api, uint8 error)
+{
     assert(module == 60u);
     assert(instance == 2u);
     assert(api == 5u);
@@ -45,7 +48,8 @@ static Std_ReturnType second(uint16 module, uint8 instance, uint8 api, uint8 err
     record(2u);
     return E_OK;
 }
-static Std_ReturnType development_first(uint16 module, uint8 instance, uint8 api, uint8 error) {
+static Std_ReturnType development_first(uint16 module, uint8 instance, uint8 api, uint8 error)
+{
     assert(module == 60u);
     assert(instance == 2u);
     assert(api == 5u);
@@ -57,7 +61,8 @@ static Std_ReturnType development_first(uint16 module, uint8 instance, uint8 api
     }
     return E_NOT_OK;
 }
-static Std_ReturnType development_second(uint16 module, uint8 instance, uint8 api, uint8 error) {
+static Std_ReturnType development_second(uint16 module, uint8 instance, uint8 api, uint8 error)
+{
     assert(module == 60u);
     assert(instance == 2u);
     assert(api == 5u);
@@ -70,7 +75,8 @@ static const Det_ErrorHookType runtime_hooks[] = {first, second};
 static const Det_ErrorHookType development_hooks[] = {development_first, development_second};
 static const Det_ConfigType config = {development_hooks, 2u, runtime_hooks, 2u};
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
 #if defined(_WIN32)
     /* Observe this process's real abort before the CRT starts WER or a dialog. */
     (void)_set_error_mode(_OUT_TO_STDERR);
@@ -78,9 +84,10 @@ int main(int argc, char **argv) {
         return 88;
     }
 #endif
-    /* These expectations come from SWS_Det_00008/00009/00010/01001,
-     * 00014/00018/00024/00026/00208/00501/00503, independent of inventory.
-     */
+    /* Verifies: SWS_Det_00008, SWS_Det_00009, SWS_Det_00010, SWS_Det_01001 */
+    /* Verifies: SWS_Det_00014, SWS_Det_00018, SWS_Det_00019, SWS_Det_00020 */
+    /* Verifies: SWS_Det_00024, SWS_Det_00025, SWS_Det_00026, SWS_Det_00035 */
+    /* Verifies: SWS_Det_00207, SWS_Det_00208, SWS_Det_00501, SWS_Det_00503 */
     void (*initialize)(const Det_ConfigType *) = Det_Init;
     void (*start)(void) = Det_Start;
     Std_ReturnType (*runtime_report)(uint16, uint8, uint8, uint8) = Det_ReportRuntimeError;
@@ -102,6 +109,22 @@ int main(int argc, char **argv) {
         const Det_ConfigType invalid = {NULL, 1u, NULL, 0u};
         initialize(&invalid);
         return 91;
+    }
+    if (strcmp(argv[1], "invalid-runtime-config") == 0) {
+        const Det_ConfigType invalid = {NULL, 0u, NULL, 1u};
+        initialize(&invalid);
+        return 91;
+    }
+    if (strcmp(argv[1], "invalid-hook-entry") == 0) {
+        const Det_ErrorHookType invalid_hooks[] = {NULL_PTR};
+        const Det_ConfigType invalid = {invalid_hooks, 1u, NULL, 0u};
+        initialize(&invalid);
+        return 91;
+    }
+    if (strcmp(argv[1], "development-without-hooks") == 0) {
+        initialize(NULL_PTR);
+        (void)development_report(60u, 2u, 5u, 7u);
+        return 92;
     }
     initialize(&config);
     if (strcmp(argv[1], "development") == 0) {

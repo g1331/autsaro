@@ -6,11 +6,11 @@
  * Each reporting thread has its own recursion boundary; independent threads
  * may report concurrently. Development reporting never returns to clear it.
  */
-static __thread boolean reporting_development;
+static __thread boolean reporting_development; /**< Per-thread recursion boundary; never reset. */
 
 #define DET_START_SEC_CODE
 #include "Det_MemMap.h"
-DET_CODE boolean Ecu_DetEnterDevelopmentReport(void)
+DET_CODE boolean Det_HostEnterDevelopmentReport(void)
 {
     boolean entered = FALSE;
     if (reporting_development == FALSE) {
@@ -19,7 +19,7 @@ DET_CODE boolean Ecu_DetEnterDevelopmentReport(void)
     }
     return entered;
 }
-DET_CODE void Ecu_DetHalt(void)
+DET_CODE void Det_HostHalt(void)
 {
     /* R24-11 requires stopping execution, including an uninitialized report.
      * The controlled host aborts the ECU process instead of hanging its owner.

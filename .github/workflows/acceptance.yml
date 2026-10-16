@@ -61,7 +61,6 @@ jobs:
           # A completed module rework commits its catalog to core/resources/requirements and leaves
           # STALE_ONLY. Each catalog is checked completely and compared with the archive here; the
           # required checks account the same catalogs without the archive.
-          # SWS_DefaultErrorTracer is added after #46 corrects its stale citation in docs/standards/det.md.
           STALE_ONLY: >-
             TR_Methodology TPS_SystemTemplate TPS_SoftwareComponentTemplate TPS_BSWModuleDescriptionTemplate
             TPS_ECUConfiguration SWS_StandardTypes SWS_PlatformTypes SWS_CommunicationStackTypes

@@ -1,5 +1,6 @@
 /** Real concurrent reporting with caller-owned, reentrant runtime callouts. */
 #include "Det.h"
+#include "SchM_Det.h"
 #include <assert.h>
 #include <stddef.h>
 #if defined(_WIN32)
@@ -11,18 +12,24 @@
 #endif
 
 static __thread unsigned notifications;
-static Std_ReturnType observe(uint16 module, uint8 instance, uint8 api, uint8 error) {
+static Std_ReturnType observe(uint16 module, uint8 instance, uint8 api, uint8 error)
+{
     assert(module == 60u && instance == 2u && api == 5u && error == 7u);
+    /* A configured caller may enter Det's area: the report has released it. */
+    SchM_Enter_Det_DET_STATE();
     ++notifications;
+    SchM_Exit_Det_DET_STATE();
     return E_NOT_OK;
 }
 static const Det_ErrorHookType hooks[] = {observe};
 static const Det_ConfigType configuration = {NULL_PTR, 0u, hooks, 1u};
 
 #if defined(_WIN32)
-static DWORD WINAPI report(LPVOID result) {
+static DWORD WINAPI report(LPVOID result)
+{
 #else
-static void *report(void *result) {
+static void *report(void *result)
+{
 #endif
     unsigned index;
     unsigned *count = result;
@@ -37,7 +44,10 @@ static void *report(void *result) {
 #endif
 }
 
-int main(void) {
+/* Verifies: SWS_Det_00039 */
+/* Verifies[Det]: SWS_BSW_00134 */
+int main(void)
+{
     unsigned first = 0u;
     unsigned second = 0u;
 #if defined(_WIN32)
