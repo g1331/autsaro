@@ -133,7 +133,7 @@
     },
     {
       "path": "runtime/ecu/src/ecu_probe.c",
-      "sha256": "6444baf428ece22d3e85fab5cd90c461ae97d06ed0b299ec9375a7cce7b8032c",
+      "sha256": "54849a6407aa12198ccc416ed3ef4b51169ee3d4a2446f6227f4e8034785579d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

@@ -21,6 +21,70 @@ fn exclusive_area(module: &str) -> Option<&'static str> {
     }
 }
 
+/// Functions defined in the delivered module source that do not enter its area,
+/// directly or through a helper of the same file. ADR 0018 attaches `canEnter`
+/// only to entries that enter; generated wrappers keep it.
+fn non_entering_functions(module: &str) -> BTreeSet<String> {
+    let Some(asset) =
+        crate::resources::AssetInventory::embedded().get(&format!("runtime/bsw/src/{module}.c"))
+    else {
+        return BTreeSet::new();
+    };
+    // `lines` also drops the CR of CRLF sources.
+    let source = String::from_utf8_lossy(asset.bytes);
+    // clang-format puts the braces of every function definition at column 0,
+    // or keeps a short definition on its one line.
+    let name = |head: &str| {
+        let signature = head.split('(').next().unwrap_or("");
+        let mut words = signature.rsplit(|c: char| !(c.is_alphanumeric() || c == '_'));
+        words.next().unwrap_or("").to_owned()
+    };
+    let mut bodies = Vec::new();
+    let mut head = "";
+    let mut body: Option<(String, String)> = None;
+    for line in source.lines() {
+        match (&mut body, line) {
+            (None, "{") => body = Some((name(head), String::new())),
+            (None, _) if line.contains('(') && line.contains(") {") && line.ends_with('}') => {
+                bodies.push((name(line), line.to_owned()));
+            }
+            (None, _) if !line.starts_with(char::is_whitespace) => head = line,
+            (Some(_), "}") => bodies.extend(body.take()),
+            (Some((_, text)), _) => {
+                text.push_str(line);
+                text.push('\n');
+            }
+            (None, _) => {}
+        }
+    }
+    let calls = |text: &str, callee: &str| {
+        text.match_indices(&format!("{callee}("))
+            .any(|(at, _)| !text[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_'))
+    };
+    let mut entering: BTreeSet<String> = bodies
+        .iter()
+        .filter(|(_, text)| text.contains(&format!("SchM_Enter_{module}_")))
+        .map(|(name, _)| name.clone())
+        .collect();
+    loop {
+        let reached: Vec<String> = bodies
+            .iter()
+            .filter(|(name, text)| {
+                !entering.contains(name) && entering.iter().any(|callee| calls(text, callee))
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        if reached.is_empty() {
+            return bodies
+                .into_iter()
+                .map(|(name, _)| name)
+                .filter(|name| !entering.contains(name))
+                .collect();
+        }
+        entering.extend(reached);
+    }
+}
+
 #[allow(
     clippy::disallowed_methods,
     reason = "DOMAIN writes path separators as dots; no rendered text is patched"
@@ -808,6 +872,7 @@ pub(super) fn files(
             ));
         }
         let contracts = entries.get(module).map(Vec::as_slice).unwrap_or(&[]);
+        let non_entering = non_entering_functions(module);
         let mut refs = String::new();
         let mut entities = String::new();
         let mut events = String::new();
@@ -888,7 +953,7 @@ pub(super) fn files(
                 module_entries.push_str(&entry_xml);
             }
             refs.push_str(&format!(r#"<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST="BSW-MODULE-ENTRY">{entry_path}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>"#));
-            let area = exclusive_area(module);
+            let area = exclusive_area(module).filter(|_| !non_entering.contains(name));
             let can_enter = area.map(|area| format!("<CAN-ENTERS><EXCLUSIVE-AREA-REF-CONDITIONAL><EXCLUSIVE-AREA-REF DEST=\"EXCLUSIVE-AREA\">/{package}/{module}/HostBehavior/{area}</EXCLUSIVE-AREA-REF></EXCLUSIVE-AREA-REF-CONDITIONAL></CAN-ENTERS>")).unwrap_or_default();
             let mode_group = |group: &str| {
                 format!(

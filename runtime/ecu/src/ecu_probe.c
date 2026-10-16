@@ -2,6 +2,7 @@
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
 #include "Os_Host.h"
+#include "Rte_Main.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -22,10 +23,11 @@ void Ecu_TargetTestRetire(unsigned stage)
 }
 void Ecu_TargetTestShutdown(StatusType reason)
 {
-    if (printf("ecu_shutdown reason=%u state=%u fail_stage=%u\n",
+    if (printf("ecu_shutdown reason=%u state=%u fail_stage=%u schm_timing=%u\n",
                reason,
                Ecu_TargetState(),
-               failure_stage) < 0) {
+               failure_stage,
+               (unsigned)Ecu_SchMTimingActive()) < 0) {
         Os_HostExit(93u);
     }
 }

@@ -1712,6 +1712,38 @@ fn prepared_bsw_entries_describe_actual_call_mechanisms_and_implementation_polic
             assert_eq!(field("CALL-TYPE"), "SCHEDULED");
         }
     }
+    // ADR 0018: `canEnter` only on entries that enter their module's area, so an
+    // entity using SchM_Enter_/SchM_Exit_ always declares it (SWS_Rte_CONSTR_09046,
+    // 09048) and the counters that only report E_NOT_OK declare none.
+    let can_enter = |entry: &str| {
+        let entity = document
+            .descendants()
+            .find(|node| {
+                node.has_tag_name("IMPLEMENTED-ENTRY-REF")
+                    && node
+                        .text()
+                        .is_some_and(|path| path.ends_with(&format!("/{entry}")))
+            })
+            .and_then(|node| node.parent())
+            .unwrap();
+        entity
+            .children()
+            .any(|child| child.has_tag_name("CAN-ENTERS"))
+    };
+    for entry in [
+        "Can_Write",
+        "Can_MainFunction_Mode",
+        "CanIf_Transmit",
+        "Com_MainFunctionRx_Rx",
+    ] {
+        assert!(can_enter(entry), "{entry}");
+    }
+    for entry in [
+        "Can_GetControllerRxErrorCounter",
+        "Can_GetControllerTxErrorCounter",
+    ] {
+        assert!(!can_enter(entry), "{entry}");
+    }
 }
 
 /// CanIf.h declares only the CanIf services and callbacks of the selected
