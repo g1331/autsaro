@@ -1003,7 +1003,7 @@ pub(crate) fn native_delivery_target() -> autosar_config_core::target::BuildTarg
 
 /// Handoff forgeries with the refusal reasons of the workbench importer and
 /// of the delivered `ecu-tool.py`.
-pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 7] = [
+pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 9] = [
     (
         "application",
         "mapped_snapshot_changed",
@@ -1037,8 +1037,20 @@ pub(crate) const HANDOFF_FORGERIES: [(&str, &str, &str); 7] = [
     // A package sealed in the retired workbench handoff format.
     (
         "format",
-        "native_identity_unsupported",
+        "retired_handoff_format",
         "Native input/resource identity differs",
+    ),
+    // An ownership ledger of an earlier format version.
+    (
+        "ledger-version",
+        "ownership_identity_invalid",
+        "Unknown ownership format version",
+    ),
+    // A member manifest of an earlier format version whose policy digest is forged too.
+    (
+        "manifest-version",
+        "format_version_unsupported",
+        "Unknown native member manifest version",
     ),
 ];
 
@@ -1073,6 +1085,29 @@ pub(crate) fn forged_handoff(
         "producer" => row["producerId"] = "unrecognized-producer".into(),
         "snapshot-path" => row["snapshotOf"] = "../outside.c".into(),
         "payload-path" => row["path"] = "../outside.c".into(),
+        "ledger-version" => ledger["formatVersion"] = 2.into(),
+        "manifest-version" => {
+            use sha2::Digest;
+            let path = package.join("inputs/workbench-project.json");
+            let mut manifest: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            manifest["formatVersion"] = 2.into();
+            let bytes = serde_json::to_vec_pretty(&manifest).unwrap();
+            std::fs::write(&path, &bytes).unwrap();
+            let policy_path = package.join("meta/seal-policy.json");
+            let mut policy: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&policy_path).unwrap()).unwrap();
+            policy["payload"]["inputs/workbench-project.json"] =
+                format!("{:x}", sha2::Sha256::digest(&bytes)).into();
+            std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+            let manifest_row = ledger["files"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|row| row["path"] == "inputs/workbench-project.json")
+                .unwrap();
+            manifest_row["sha256"] = format!("{:x}", sha2::Sha256::digest(&bytes)).into();
+        }
         "identity" | "format" => {
             let mut target: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(package.join("target.json")).unwrap())

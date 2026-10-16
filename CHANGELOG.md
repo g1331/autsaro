@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed:** Retired handoff formats (`autosar-workbench-handoff-v3`/`-v2`, `autosar-host-handoff-v1`, `autosar-ecu-handoff-v1`) are recognised by the core importer itself, so every caller of `open_handoff` refuses them with `backend.project.retired_handoff_format` and its format before reading anything else; a package without handoff metadata reports `backend.delivery.explicit_handoff_required` instead of a missing-file error. A project manifest of another `formatVersion` is refused with `backend.arxml.project.format_version_unsupported` naming the version, both when a project opens and when a package is imported; the remaining release and input-set refusal is `backend.arxml.project.manifest_release_or_inputs_invalid`. Accepted projects and packages, delivered bytes and the ABI are unchanged (#223).
+
 - **Added:** `c-check --baseline` compares complete local analysis with matching CI artifacts by rule, file and source text, retaining new and removed occurrence counts and refusing incompatible identities (#219).
 - **Fixed:** Development Git queries and kernel patch application have 30-second deadlines; analysis and development-tool failures retain command, stage, raw exit status and output tails (#219).
 
