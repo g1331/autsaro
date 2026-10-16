@@ -8,7 +8,7 @@
 
 ## CI 工作流
 
-所有工作流都在 GitHub 托管 runner 上运行，仓库不使用自托管 runner。基础 checks 工作流包含离线接收兼容性：c-analysis 准备任务在 Linux 与 Windows 上分别用 Python 3.11–3.14 接收者解释器运行移动后的生成包（见[测试说明](../development/testing/native.md)）。网络隔离下的安装与离线验收目前没有自动入口。
+所有工作流都在 GitHub 托管 runner 上运行，仓库不使用自托管 runner。基础 checks 工作流包含离线接收兼容性：`native-delivery` 在 Linux 与 Windows 上用 Python 3.11 运行全部四个移动后的生成包，3.12–3.14 运行 `standard-ecu`；Extended 在两平台运行完整版本与样本矩阵（见[测试说明](../development/testing/native.md)）。网络隔离下的安装与离线验收目前没有自动入口。
 
 官方对照工作流 acceptance 运行时从 autosar.org 下载官方档案并按 `core/resources/official.json` 的哈希校验，不属于必需检查；触发方式与失败的查看方法见[测试说明](../development/testing/official.md)。维护者需关注定时运行的失败通知。站点更换 TLS 证书链时，下载入口固定的中间证书指纹会失效：审阅新证书链后更新指纹，不能关闭证书校验。官方档案不能提交进仓库、作为 artifact 上传或输出到日志。
 
