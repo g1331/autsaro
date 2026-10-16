@@ -29,8 +29,10 @@ cargo test --locked -p autosar-config-core
 cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
-uv run --locked python -m autosar_tooling quality --base <baseline-commit>
+uv run --locked python -m autosar_tooling quality --merge-base origin/master
 ```
+
+Run `uv run --locked pre-commit install --allow-missing-config` once; the last `quality` command above then runs before every push and stops a push that fails it. CI still runs the same check. `--allow-missing-config` lets older branches without the configuration, including worktrees that share the same `.git/hooks`, push as before.
 
 Default Cargo tests do not require official resources or controlled native tools. See the [testing guide](docs/development/testing/README.md) for real-process tests, official comparisons, and desktop acceptance. Check formatting on changed lines rather than reformatting historical code wholesale. Runtime C already follows `.clang-format`; run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once so `git blame` skips the bulk reformat. Emitters write generated C in the same layout, and a required check verifies the generated samples.
 
@@ -44,7 +46,7 @@ Review the entire diff before submitting, including new files and generated cont
 
 Add a `CHANGELOG.md` entry under `Unreleased` for every change visible to users or integrators: delivered C interfaces and ABI, configuration acceptance or rejection, generated output, tool and interface behavior. Refactoring, tests, CI and documentation get no entry. Write one line per change that states the effect and ends with the PR number, such as `(#166)`; details belong in the PR. Group entries under `Breaking`, `Added`, `Changed` and `Fixed`; a breaking or contract change states what integrators must change. At release, `Unreleased` becomes the version heading with its date. The changelog is maintained in English only.
 
-Use a dedicated branch for each Issue. A separate worktree is optional when the main checkout is available; use separate worktrees to isolate Issues developed in parallel.
+Use a dedicated branch for each Issue, and when you start, create it with `gh issue develop <N> --base master --name <branch>` so it is linked to the Issue and others can see the work is in progress. A separate worktree is optional when the main checkout is available; use separate worktrees to isolate Issues developed in parallel.
 
 Use an isolated environment for real GUI acceptance without occupying a developer's active desktop. Work is tracked in GitHub Issues and Milestones; before opening an Issue or starting work, search existing Issues (including closed ones) and open PRs, and extend what already covers it instead of duplicating work; when a change also completes part of another Issue, comment there with the PR, and close it with `Closes #N` once it is fully done; see [docs/roadmap/](docs/roadmap/README.md) for direction and [docs/architecture/](docs/architecture/README.md) for design constraints.
 

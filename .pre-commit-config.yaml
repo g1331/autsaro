@@ -1,0 +1,13 @@
+# Runs the required changed-line quality check before each push; the uv-pinned
+# formatters stay the only versions, so no hook mirrors are used.
+default_install_hook_types: [pre-push]
+repos:
+  - repo: local
+    hooks:
+      - id: quality
+        name: quality (changed lines since master)
+        entry: uv run --locked python -m autosar_tooling quality --scope all --merge-base origin/master
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

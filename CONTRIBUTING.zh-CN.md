@@ -29,8 +29,10 @@ cargo test --locked -p autosar-config-core
 cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
-uv run --locked python -m autosar_tooling quality --base <基准提交>
+uv run --locked python -m autosar_tooling quality --merge-base origin/master
 ```
+
+执行一次 `uv run --locked pre-commit install --allow-missing-config`，之后每次推送前自动运行上面最后一条 `quality`，未通过时阻止推送；它不替代 CI 的同一检查。`--allow-missing-config` 让尚无该配置的旧分支（共用同一 `.git/hooks` 的工作树也在内）照常推送。
 
 默认 Cargo 测试不要求官方资源或受控原生工具。真实进程、官方对照和桌面验收见[测试说明](docs/development/testing/README.md)。格式检查针对修改行，不整体重排历史代码。运行时 C 已整体符合 `.clang-format`；执行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，`git blame` 即跳过那次全量重排。生成的 C 由 emitter 直接写成同一排版，必需检查核对生成样本。
 
@@ -44,7 +46,7 @@ uv run --locked python -m autosar_tooling quality --base <基准提交>
 
 对使用者或集成者可见的改动在 `CHANGELOG.md` 的 `Unreleased` 下加一条：交付的 C 接口与 ABI、配置接受或拒绝、生成物、工具与界面行为；重构、测试、CI 和文档不记。每项一行，写清效果，末尾附 PR 号（如 `(#166)`），细节放 PR。条目按 `Breaking`、`Added`、`Changed`、`Fixed` 分组，破坏性或契约变化写明集成者要做的修改。发版时把 `Unreleased` 改为带日期的版本标题。CHANGELOG 只维护英文。
 
-每个 Issue 使用独立分支。主目录可用时可直接在其中推进，独立工作树是可选方式；并行推进的 Issue 使用独立工作树隔离。
+每个 Issue 使用独立分支，开工时用 `gh issue develop <N> --base master --name <分支>` 创建并关联到 Issue，让他人看到它正在推进。主目录可用时可直接在其中推进，独立工作树是可选方式；并行推进的 Issue 使用独立工作树隔离。
 
 真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。任务与进度用 GitHub Issues 和 Milestones 跟踪；新建 Issue 或开始实现前先搜索已有 Issue（含已关闭）和进行中的 PR，已有覆盖的在原处补充，避免重复工作；顺带完成了其他 Issue 的内容时，在该 Issue 留言并注明 PR，全部完成的用 `Closes #N` 关闭；方向见 [docs/roadmap/](docs/roadmap/README.md)，设计约束见 [docs/architecture/](docs/architecture/README.md)。
 
