@@ -33,7 +33,9 @@ def main() -> int:
     quality = commands.add_parser(
         "quality", help="Check source hygiene and incremental formatting"
     )
-    quality.add_argument("--base")
+    baseline = quality.add_mutually_exclusive_group()
+    baseline.add_argument("--base")
+    baseline.add_argument("--merge-base")
     quality.add_argument("--all-format", action="store_true")
     quality.add_argument(
         "--scope",
@@ -111,8 +113,8 @@ def main() -> int:
         from autosar_tooling.quality import main as check_quality
 
         options = (["--base", args.base] if args.base else []) + (
-            ["--all-format"] if args.all_format else []
-        )
+            ["--merge-base", args.merge_base] if args.merge_base else []
+        ) + (["--all-format"] if args.all_format else [])
         if args.c_samples:
             options += ["--c-samples", str(args.c_samples)]
         return check_quality([*options, "--scope", args.scope])

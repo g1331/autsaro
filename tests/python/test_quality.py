@@ -40,6 +40,23 @@ class QualityTests(unittest.TestCase):
             with patch.object(quality, 'ROOT', root):
                 self.assertEqual(quality.changed_lines(path, baseline, set()), {1, 2})
 
+    def test_merge_base_compares_from_the_fork_not_the_advanced_branch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@t']
+            subprocess.run(['git', 'init', '--quiet', '-b', 'trunk', str(root)], check=True)
+            subprocess.run([*git, 'commit', '--quiet', '--allow-empty', '-m', 'fork'], cwd=root, check=True)
+            fork = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
+            subprocess.run(['git', 'switch', '--quiet', '-c', 'topic'], cwd=root, check=True)
+            subprocess.run([*git, 'commit', '--quiet', '--allow-empty', '-m', 'topic'], cwd=root, check=True)
+            subprocess.run(['git', 'switch', '--quiet', 'trunk'], cwd=root, check=True)
+            subprocess.run([*git, 'commit', '--quiet', '--allow-empty', '-m', 'advanced'], cwd=root, check=True)
+            subprocess.run(['git', 'switch', '--quiet', 'topic'], cwd=root, check=True)
+            with patch.object(quality, 'ROOT', root), patch.object(quality, 'check', return_value=[]) as check:
+                self.assertEqual(quality.main(['--merge-base', 'trunk']), 0)
+                self.assertEqual(check.call_args.args[0], fork)
+                self.assertEqual(quality.main(['--merge-base', 'missing']), 2)
+
     def test_renamed_file_counts_only_its_edited_lines(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -29,8 +29,10 @@ cargo test --locked -p autosar-config-core
 cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
-uv run --locked python -m autosar_tooling quality --base <baseline-commit>
+uv run --locked python -m autosar_tooling quality --merge-base origin/master
 ```
+
+Run `uv run --locked pre-commit install --allow-missing-config` once; the last `quality` command above then runs before every push and stops a push that fails it. CI still runs the same check. `--allow-missing-config` lets older branches without the configuration, including worktrees that share the same `.git/hooks`, push as before.
 
 Default Cargo tests do not require official resources or controlled native tools. See the [testing guide](docs/development/testing/README.md) for real-process tests, official comparisons, and desktop acceptance. Check formatting on changed lines rather than reformatting historical code wholesale. Runtime C already follows `.clang-format`; run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once so `git blame` skips the bulk reformat. Emitters write generated C in the same layout, and a required check verifies the generated samples.
 

@@ -553,9 +553,15 @@ def check(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    baseline = parser.add_mutually_exclusive_group()
+    baseline.add_argument(
         "--base",
         help="Compare source lines against this commit (default: HEAD for pending edits)",
+    )
+    baseline.add_argument(
+        "--merge-base",
+        metavar="BRANCH",
+        help="Compare against the commit where HEAD forked from BRANCH, as a pull request into it does",
     )
     parser.add_argument(
         "--all-format",
@@ -574,7 +580,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     arguments = parser.parse_args(argv)
     base = arguments.base or "HEAD"
-    revision = run(["git", "rev-parse", "--verify", f"{base}^{{tree}}"])
+    if arguments.merge_base:
+        fork = run(["git", "merge-base", "HEAD", arguments.merge_base])
+        if fork.returncode:
+            print(
+                f"No merge base with {arguments.merge_base}: {fork.stderr.strip()}",
+                file=sys.stderr,
+            )
+            return 2
+        base = fork.stdout.strip()
+    revision =run(["git", "rev-parse", "--verify", f"{base}^{{tree}}"])
     if revision.returncode:
         print(
             f"Invalid format baseline {base}: {revision.stderr.strip()}",
