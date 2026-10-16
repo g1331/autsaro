@@ -61,71 +61,92 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
         </p>
       ) : null}
       <div className="table-wrap">
-        <table>
+        {/* Fixed columns keep rows to one line; full paths and reasons stay in titles and the inspector. */}
+        <table className="object-table">
           <caption>{t('editor.objects.caption')}</caption>
+          <colgroup>
+            <col className="col-select" />
+            <col className="col-name" />
+            <col className="col-type" />
+            <col />
+            <col className="col-access" />
+          </colgroup>
           <thead>
             <tr>
               <th scope="col">{t('editor.common.select')}</th>
               <th scope="col">{t('editor.common.name')}</th>
               <th scope="col">{t('editor.common.type')}</th>
-              <th scope="col">{t('editor.objects.definitionPath')}</th>
+              <th scope="col">{t('editor.objects.definition')}</th>
               <th scope="col">{t('editor.common.access')}</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((object) => (
-              <tr
-                key={object.objectId}
-                data-object-row={object.objectId}
-                aria-selected={c.objectSelection.includes(object.objectId)}
-              >
-                <td>
-                  <input
-                    type="checkbox"
-                    aria-label={t('editor.objects.batchSelect', { path: object.path })}
-                    checked={c.objectSelection.includes(object.objectId)}
-                    onChange={() => void c.selectObject(object.objectId, true)}
-                  />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    className="table-link"
-                    onClick={() => void c.selectObject(object.objectId)}
+            {rows.map((object) => {
+              // Non-ECUC elements report their kind as the definition; the type column shows it.
+              const definition =
+                object.definitionId && object.definitionId !== object.kind
+                  ? object.definitionId
+                  : null;
+              const access = object.writable
+                ? t('editor.common.configurable')
+                : t('editor.common.readonly');
+              return (
+                <tr
+                  key={object.objectId}
+                  data-object-row={object.objectId}
+                  aria-selected={c.objectSelection.includes(object.objectId)}
+                >
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={t('editor.objects.batchSelect', { path: object.path })}
+                      checked={c.objectSelection.includes(object.objectId)}
+                      onChange={() => void c.selectObject(object.objectId, true)}
+                    />
+                  </td>
+                  <td title={object.path}>
+                    <button
+                      type="button"
+                      className="table-link"
+                      onClick={() => void c.selectObject(object.objectId)}
+                    >
+                      {object.shortName}
+                    </button>
+                  </td>
+                  <td title={object.kind}>{object.kind}</td>
+                  <td
+                    className="mono"
+                    title={`${definition ?? t('editor.objects.noDefinition')}\n${object.path}`}
                   >
-                    {object.shortName}
-                  </button>
-                </td>
-                <td>{object.kind}</td>
-                <td className="mono">
-                  <span>{object.definitionId ?? t('editor.objects.noDefinition')}</span>
-                  <small className="path-text">{object.path}</small>
-                </td>
-                <td>
-                  {object.writable ? t('editor.common.configurable') : t('editor.common.readonly')}
-                  <small>{text(object.reason ?? '')}</small>
-                </td>
-              </tr>
-            ))}
+                    {definition ?? '—'}
+                  </td>
+                  <td title={object.reason ? `${access} · ${text(object.reason)}` : access}>
+                    {access}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
       <div className="batch-bar">
         <span>{t('editor.objects.pendingCount', { count: c.changes.length })}</span>
-        <button
-          type="button"
-          onClick={() => void c.prepareChanges()}
-          disabled={!c.changes.length || Boolean(c.busy)}
-        >
-          {t('editor.objects.previewBatch')}
-        </button>
-        <button
-          type="button"
-          onClick={() => c.discardChanges()}
-          disabled={!c.changes.length || Boolean(c.busy)}
-        >
-          {t('editor.objects.restoreBatch')}
-        </button>
+        <div className="batch-actions">
+          <button
+            type="button"
+            onClick={() => void c.prepareChanges()}
+            disabled={!c.changes.length || Boolean(c.busy)}
+          >
+            {t('editor.objects.previewBatch')}
+          </button>
+          <button
+            type="button"
+            onClick={() => c.discardChanges()}
+            disabled={!c.changes.length || Boolean(c.busy)}
+          >
+            {t('editor.objects.restoreBatch')}
+          </button>
+        </div>
       </div>
       {c.changes.length ? (
         <details>

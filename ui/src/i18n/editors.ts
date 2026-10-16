@@ -93,7 +93,7 @@ export const editorResources: {
     'editor.objects.clearFilter': '清空筛选',
     'editor.objects.copyPath': '复制对象路径',
     'editor.objects.default': '默认 {{value}} · {{origin}}',
-    'editor.objects.definitionPath': '定义 / 路径',
+    'editor.objects.definition': '定义',
     'editor.objects.empty': '选择真实配置对象以检查属性、定义和引用。',
     'editor.objects.emptyExplicit': '显式空值',
     'editor.objects.explicit': '显式值',
@@ -301,7 +301,7 @@ export const editorResources: {
     'editor.objects.clearFilter': 'Clear filter',
     'editor.objects.copyPath': 'Copy object path',
     'editor.objects.default': 'Default {{value}} · {{origin}}',
-    'editor.objects.definitionPath': 'Definition / path',
+    'editor.objects.definition': 'Definition',
     'editor.objects.empty':
       'Select an actual configuration object to inspect properties, definitions, and references.',
     'editor.objects.emptyExplicit': 'Explicit empty value',

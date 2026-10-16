@@ -7,7 +7,7 @@ import {
   editorStatusKeys,
 } from '../i18n/editors';
 import type { Message } from '../i18n';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo } from 'react';
 import type { Workbench } from './useWorkbench';
 import type { ConfigurationDiagnostic, ToolWindow } from './projectTypes';
@@ -92,6 +92,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                 {c.projection?.validation.map((scope) => (
                   <details key={scope.scope}>
                     <summary>
+                      <ChevronRight size={iconSize.inline} aria-hidden="true" />
                       {t(editorScopeKeys[scope.scope])} · {t(editorStatusKeys[scope.status])}
                     </summary>
                     {scope.coverage.map((coverage) => (
@@ -115,42 +116,52 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   );
                   return (
                     <li key={`${issue.code}-${issue.fieldId}-${index}`} className={issue.severity}>
-                      <strong>
-                        {t(editorSeverityKeys[issue.severity])} · {t(editorScopeKeys[issue.scope])}{' '}
-                        · {issue.code}
-                      </strong>
-                      <p>{text(issue.message)}</p>
-                      <span className="mono path-text">
-                        {displayPath(issue.path ?? issue.file ?? '')}
-                      </span>
-                      <p>{text(issue.remedy)}</p>
-                      {resolvable ? (
-                        <button type="button" onClick={() => void locate(issue)}>
-                          {t('editor.tools.locateSource')}
-                        </button>
-                      ) : (
-                        <span>{t('editor.tools.unqualifiedTarget')}</span>
-                      )}
-                      <CopyText
-                        text={JSON.stringify(issue, null, 2)}
-                        label={t('editor.common.copyDetails')}
-                      />
+                      <div className="problem-main">
+                        <p>
+                          <strong>
+                            {t(editorSeverityKeys[issue.severity])} ·{' '}
+                            {t(editorScopeKeys[issue.scope])} · {issue.code}
+                          </strong>{' '}
+                          {text(issue.message)}
+                        </p>
+                        <ProblemMeta
+                          path={displayPath(issue.path ?? issue.file ?? '')}
+                          remedy={text(issue.remedy)}
+                        />
+                      </div>
+                      <div className="problem-actions">
+                        {resolvable ? (
+                          <button type="button" onClick={() => void locate(issue)}>
+                            {t('editor.tools.locateSource')}
+                          </button>
+                        ) : (
+                          <small>{t('editor.tools.unqualifiedTarget')}</small>
+                        )}
+                        <CopyText
+                          text={JSON.stringify(issue, null, 2)}
+                          label={t('editor.common.copyDetails')}
+                        />
+                      </div>
                     </li>
                   );
                 })}
                 {c.issues.map((issue, index) => (
                   <li key={`workspace-${issue.code}-${index}`} className={issue.severity}>
-                    <strong>
-                      {t(editorSeverityKeys[issue.severity])} · {issue.code}
-                    </strong>
-                    <p>{text(issue.message)}</p>
-                    <span className="mono path-text">
-                      {displayPath(issue.path ?? issue.file ?? '')}
-                    </span>
-                    <CopyText
-                      text={JSON.stringify(issue, null, 2)}
-                      label={t('editor.common.copyDetails')}
-                    />
+                    <div className="problem-main">
+                      <p>
+                        <strong>
+                          {t(editorSeverityKeys[issue.severity])} · {issue.code}
+                        </strong>{' '}
+                        {text(issue.message)}
+                      </p>
+                      <ProblemMeta path={displayPath(issue.path ?? issue.file ?? '')} />
+                    </div>
+                    <div className="problem-actions">
+                      <CopyText
+                        text={JSON.stringify(issue, null, 2)}
+                        label={t('editor.common.copyDetails')}
+                      />
+                    </div>
                   </li>
                 ))}
                 {integrationProblems.map((issue, index) => {
@@ -158,24 +169,33 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   const source = issue.file ? targets.sourcesByPath.get(issue.file) : undefined;
                   return (
                     <li key={`standard-${issue.code}-${index}`} className="error">
-                      <strong>
-                        {issue.code} · {t(editorCategoryKeys[issue.category])}
-                      </strong>
-                      <p>{text(issue.message)}</p>
-                      <p>{text(issue.remedy)}</p>
-                      {object ? (
-                        <button type="button" onClick={() => void c.selectObject(object.objectId)}>
-                          {t('editor.common.locateObject')}
-                        </button>
-                      ) : source ? (
-                        <button type="button" onClick={() => void c.readSource(source.sourceId)}>
-                          {t('editor.common.viewSource')}
-                        </button>
-                      ) : null}
-                      <CopyText
-                        text={JSON.stringify(issue, null, 2)}
-                        label={t('editor.common.copyDetails')}
-                      />
+                      <div className="problem-main">
+                        <p>
+                          <strong>
+                            {issue.code} · {t(editorCategoryKeys[issue.category])}
+                          </strong>{' '}
+                          {text(issue.message)}
+                        </p>
+                        <ProblemMeta remedy={text(issue.remedy)} />
+                      </div>
+                      <div className="problem-actions">
+                        {object ? (
+                          <button
+                            type="button"
+                            onClick={() => void c.selectObject(object.objectId)}
+                          >
+                            {t('editor.common.locateObject')}
+                          </button>
+                        ) : source ? (
+                          <button type="button" onClick={() => void c.readSource(source.sourceId)}>
+                            {t('editor.common.viewSource')}
+                          </button>
+                        ) : null}
+                        <CopyText
+                          text={JSON.stringify(issue, null, 2)}
+                          label={t('editor.common.copyDetails')}
+                        />
+                      </div>
                     </li>
                   );
                 })}
@@ -322,4 +342,15 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
       </nav>
     </section>
   );
+}
+
+/** The secondary line of a problem row: where it is and what to do. */
+function ProblemMeta({ path = '', remedy = '' }: { path?: string; remedy?: string }) {
+  return path || remedy ? (
+    <small className="problem-meta">
+      {path ? <span className="mono path-text">{path}</span> : null}
+      {path && remedy ? ' · ' : null}
+      {remedy}
+    </small>
+  ) : null;
 }

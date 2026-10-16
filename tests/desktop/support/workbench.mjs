@@ -544,7 +544,7 @@ export async function openWorkbench(name) {
         `document.querySelector('.document-tabs [role=tab][aria-selected=true]')?.textContent === ${json(path.basename(source.path))} && document.querySelector('[aria-label="完整源原文"]')?.textContent === ${json(actual.slice(0, 40000))}`,
         'closed active source restores actual fallback bytes and tab header',
       );
-      await clipboard(actual, 'document', '复制完整原文');
+      await clipboard(actual, 'document', '复制完整源原文');
       await screenshot('source-fallback-raw-A.png');
     }
     await click(

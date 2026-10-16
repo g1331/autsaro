@@ -22,19 +22,18 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
         <p>{c.workspace ? t('editor.source.retained') : t('editor.source.intro')}</p>
       </header>
       <div className="start-layout">
-        <nav aria-label={t('editor.source.heading')}>
+        {/* Toggles pick the form below; the "…" actions open a system chooser at once. */}
+        <div className="start-actions" role="toolbar" aria-label={t('editor.source.heading')}>
           <button
             type="button"
-            className="ghost-button"
-            aria-current={c.source === 'empty' ? 'true' : undefined}
+            aria-pressed={c.source === 'empty'}
             onClick={() => c.openProjectEntry('empty')}
           >
             {t('editor.source.new')}
           </button>
           <button
             type="button"
-            className="ghost-button"
-            aria-current={c.source === 'import' ? 'true' : undefined}
+            aria-pressed={c.source === 'import'}
             onClick={() => c.openProjectEntry('import')}
           >
             {t('editor.source.import')}
@@ -42,30 +41,24 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
           {c.workspace ? (
             <button
               type="button"
-              className="ghost-button"
-              aria-current={saveAs ? 'true' : undefined}
+              aria-pressed={saveAs}
               onClick={() => c.openProjectEntry('save-as')}
             >
               {t('editor.source.saveAs')}
             </button>
           ) : null}
+          <span className="toolbar-separator" />
           <button
             type="button"
-            className="ghost-button"
             onClick={() => void c.openMemberProject()}
             disabled={Boolean(openReason)}
           >
             {t('editor.source.open')}
           </button>
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={c.importHandoff}
-            disabled={Boolean(openReason)}
-          >
+          <button type="button" onClick={c.importHandoff} disabled={Boolean(openReason)}>
             {t('editor.source.importHandoff')}
           </button>
-        </nav>
+        </div>
         <section>
           {c.source !== 'import' ? (
             <div className="form-fields">

@@ -706,29 +706,30 @@ export default function App() {
                 ) : null}
                 {activeDocument.kind === 'source' ? (
                   <div className="source-document">
-                    <h2>{labelFromPath(source?.path ?? '')}</h2>
-                    <p className="mono path-text">{displayPath(source?.path ?? '')}</p>
-                    {source ? (
-                      <CopyText
-                        text={displayPath(source.path)}
-                        label={t('shell.app.copySourcePath')}
-                      />
-                    ) : null}
-                    <p>
-                      {t('shell.app.readonlySource')} ·{' '}
+                    <header className="source-heading">
+                      <h2>{labelFromPath(source?.path ?? '')}</h2>
+                      <span className="mono source-path" title={displayPath(source?.path ?? '')}>
+                        {displayPath(source?.path ?? '')}
+                      </span>
+                      {source ? (
+                        <CopyText
+                          text={displayPath(source.path)}
+                          label={t('shell.app.copySourcePath')}
+                        />
+                      ) : null}
+                      <span className="role-tag">{t('editor.common.readonly')}</span>
+                    </header>
+                    <p className="field-help">
                       {source?.readonly
                         ? t('shell.app.sourceReadonly')
                         : t('shell.app.sourceTransaction')}
                     </p>
                     {source && c.activeSourceId === source.sourceId && c.sourceText !== null ? (
-                      <>
-                        <CopyText text={c.sourceText} label={t('shell.app.copySource')} />
-                        <TextSnapshot
-                          key={source?.sourceId}
-                          text={c.sourceText}
-                          label={t('shell.app.fullSource')}
-                        />
-                      </>
+                      <TextSnapshot
+                        key={source?.sourceId}
+                        text={c.sourceText}
+                        label={t('shell.app.fullSource')}
+                      />
                     ) : (
                       <p>{t('shell.app.noSource')}</p>
                     )}
