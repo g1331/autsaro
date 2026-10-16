@@ -75,11 +75,9 @@ class EcuBuildModeTests(unittest.TestCase):
                         failures = [("missing-" + key, {**env, key: ""}, "Missing") for key in tools]
                         failures.append(("wrong-gcc", {**env, "AUTOSAR_CC": wrong_tools["AUTOSAR_CC"]},
                                          "Compiler identity differs"))
-                        # Only Linux declares an objdump digest; Windows only queries its version.
-                        if os.name != "nt":
-                            failures.append(("wrong-objdump", {**env, "AUTOSAR_OBJDUMP":
-                                                               wrong_tools["AUTOSAR_OBJDUMP"]},
-                                             "objdump identity differs"))
+                        failures.append(("wrong-objdump", {**env, "AUTOSAR_OBJDUMP":
+                                                           wrong_tools["AUTOSAR_OBJDUMP"]},
+                                         "objdump identity differs"))
                         for label, run_env, expected in failures:
                             with self.subTest(failure=label):
                                 failed_output = directory / sample / label

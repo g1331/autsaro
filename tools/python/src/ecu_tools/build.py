@@ -151,7 +151,7 @@ def pinned_tools(target: dict, logs: Path) -> tuple[Path, Path, Path]:
     if (version.partition(" ")[2] != lock["identity"].partition(" ")[2]
             or machine != lock["target"] or digest(cc) != lock["executable_sha256"]):
         raise ValueError(f"Compiler identity differs from the fixed target: {version}; {machine}")
-    if lock.get("objdump_sha256") and digest(objdump) != lock["objdump_sha256"]:
+    if digest(objdump) != lock["objdump_sha256"]:
         raise ValueError("Native objdump identity differs from the fixed target")
     query([str(objdump), "--version"], logs, "objdump-version", timeout=30)
     query([str(git), "--version"], logs, "git-version", timeout=30)

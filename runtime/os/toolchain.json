@@ -2,6 +2,8 @@
   "identity": "gcc.exe (Rev5, Built by MSYS2 project) 16.1.0",
   "target": "x86_64-w64-mingw32",
   "executable_sha256": "d38d4dd6bea387499487881383e644ab7c193ac8f8364dc4252d6e6cc09700e2",
+  "objdump_sha256": "c56162ea2a35f001accedce647456d296a768f457f7f1803668f8b72f6f473a8",
+  "nm_sha256": "58fb9e40d5878710cc797043835b5c17594aa03b2d87735139dd772c46bc0db4",
   "external_tool": true,
   "redistributed": false
 }

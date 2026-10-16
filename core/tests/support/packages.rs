@@ -55,8 +55,8 @@ pub(crate) fn assert_offline_build_readme(root: &Path, windows: bool) {
         "No checkout, uv, Rust or Node is required",
         "target.json.toolchain",
         "GCC version, target triple and executable SHA-256 must all match",
-        "only when objdump_sha256 is recorded",
-        "both platforms query objdump --version",
+        "the objdump executable must match objdump_sha256",
+        "objdump --version is also queried",
         "Git has no pinned version or digest",
         "Example paths only",
         "do not guarantee the required identities",
@@ -89,7 +89,6 @@ pub(crate) fn assert_offline_build_readme(root: &Path, windows: bool) {
             "$env:AUTOSAR_CC = 'C:\\msys64\\mingw64\\bin\\gcc.exe'",
             "$env:AUTOSAR_OBJDUMP",
             "$env:AUTOSAR_GIT",
-            "does not record an objdump digest",
         ] {
             assert!(text.contains(expected), "missing {expected}");
         }
@@ -98,7 +97,10 @@ pub(crate) fn assert_offline_build_readme(root: &Path, windows: bool) {
             "gcc.exe (Rev5, Built by MSYS2 project) 16.1.0"
         );
         assert_eq!(lock["target"], "x86_64-w64-mingw32");
-        assert!(lock.get("objdump_sha256").is_none());
+        assert_eq!(
+            lock["objdump_sha256"],
+            "c56162ea2a35f001accedce647456d296a768f457f7f1803668f8b72f6f473a8"
+        );
     } else {
         for expected in [
             "Linux x64",
@@ -106,7 +108,6 @@ pub(crate) fn assert_offline_build_readme(root: &Path, windows: bool) {
             "export AUTOSAR_CC='/usr/bin/gcc-13'",
             "export AUTOSAR_OBJDUMP",
             "export AUTOSAR_GIT",
-            "objdump digest must match",
         ] {
             assert!(text.contains(expected), "missing {expected}");
         }
