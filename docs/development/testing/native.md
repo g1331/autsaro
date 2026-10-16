@@ -57,6 +57,8 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - 间歇超时先区分挂起与接近期限：Linux 上并发重复到复现，超时时用 `gdb -p` 抓全部线程栈再结束进程，失败检查不带位置时先让它记录源码行。不能未经实测就放宽期限，也不用重试或固定延时掩盖竞态。
 - 长时间原生验收启动前，核对后续消费者阶段所需的全部外层工具路径，保持应用配置阶段的工具隔离；不能把缺失前置条件留到末尾才发现。含大响应时，将完整事件逐条写入既有证据文件，避免在内存保留全部历史 snapshot；保留原有 payload、场景与断言，并分别核查驱动和产品进程的内存，不能用证据写入优化掩盖产品内存问题。
 
+开发工具的 Git 文件／属性查询与 clang-tidy 的内核补丁应用使用同一个 `ecu_tools.process.run_bounded`，期限为 30 秒；失败包含阶段／样本、命令、原始 exit 与 stdout／stderr 末尾。c-check 的工具探测／补丁为 30 秒、单 TU 编译为 60 秒、分析为 600 秒；只有 Cppcheck 的正常诊断退出码 1 被作为分析结果保留，挂起和其他异常退出仍失败。对应挂起回归可用 `uv run --locked python -B -m unittest discover -s tests/python/process -p test_feedback.py` 单独运行。
+
 ## Windows 进程
 
 受管 supervisor 启动以期限内的认证就绪响应为准，不能将 socket 文件出现当作已开始监听。Windows 上 Job 活动计数归零与进程对象进入已退出状态之间可能有窗口，关闭后的 PID 也会很快被复用：检查进程已关闭时按创建时间排除复用的 PID，并有界等待真实退出事件，不用零超时探测 PID 存活；Windows 的父 PID 在父进程退出后不更新，按父 PID 归属进程树时要求子进程创建时间不早于父进程。
