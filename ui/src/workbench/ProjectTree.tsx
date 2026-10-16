@@ -17,6 +17,7 @@ import type { KeyboardEvent } from 'react';
 import type { Workbench } from './useWorkbench';
 import { labelFromPath } from './forms';
 import { PanelResizeHandle } from './PanelResizeHandle';
+import { workspaceTitle } from './labels';
 
 const objectIcons = new Map<string, LucideIcon>([
   ['AR-PACKAGE', FolderTree],
@@ -240,7 +241,9 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
     <aside className="project-tree" aria-label={t('editor.tree.heading')} hidden={!c.treeVisible}>
       <PanelResizeHandle kind="tree" />
       <header>
-        <strong>{c.workspace?.name ?? t('editor.tree.project')}</strong>
+        <strong className="workspace-name" title={c.workspace ? workspaceTitle(c) : undefined}>
+          {c.workspace ? workspaceTitle(c) : t('editor.tree.project')}
+        </strong>
         <button
           type="button"
           className="panel-icon-button"

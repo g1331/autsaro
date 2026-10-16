@@ -2,12 +2,17 @@ import { useLocale } from '../i18n';
 import { displayPath } from '../pathDisplay';
 import { FolderOpen } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
+import { NoticeBanner } from './Dialog';
 
 export function SourceEntry({ controller: c, logo }: { controller: Workbench; logo: string }) {
   const { t, text } = useLocale();
   const openReason = c.actionReason('open');
   const createReason = c.actionReason('create');
   const saveAs = c.source === 'save-as';
+  // The start page is in front: its own operations report here, next to the button.
+  const notice = c.notice ? (
+    <NoticeBanner notice={c.notice} onDismiss={() => c.setNotice(null)} />
+  ) : null;
   return (
     <div className="start-page">
       <header>
@@ -54,16 +59,19 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
         <section>
           {c.source !== 'import' ? (
             <div className="form-fields">
-              <label>
-                {t('editor.source.name')}
-                <input
-                  aria-label={t('editor.source.name')}
-                  value={c.projectName}
-                  onChange={(event) => c.setProjectName(event.target.value)}
-                  autoComplete="off"
-                />
-              </label>
-              {saveAs ? <p>{t('editor.source.saveAsHelp')}</p> : null}
+              {saveAs ? (
+                <p>{t('editor.source.saveAsHelp', { name: c.workspace?.name ?? '' })}</p>
+              ) : (
+                <label>
+                  {t('editor.source.name')}
+                  <input
+                    aria-label={t('editor.source.name')}
+                    value={c.projectName}
+                    onChange={(event) => c.setProjectName(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+              )}
               <label>
                 {t('editor.source.emptyDirectory')}
                 <div className="path-picker">
@@ -97,6 +105,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
               ) : createReason ? (
                 <p className="field-help">{text(createReason)}</p>
               ) : null}
+              {notice}
             </div>
           ) : (
             <div className="form-fields">
@@ -137,6 +146,7 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
                 {t('editor.source.enter')}
               </button>
               {openReason ? <p className="field-help">{text(openReason)}</p> : null}
+              {notice}
             </div>
           )}
         </section>

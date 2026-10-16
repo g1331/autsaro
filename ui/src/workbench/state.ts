@@ -55,7 +55,10 @@ export type WorkbenchState = {
   capabilities: WorkbenchCapabilities | null;
   settingsOpen: boolean;
   toolDraft: ExecutionTools;
-  settingsNotice: Text;
+  settingsNotice: Notice;
+  /** Rejections attached to the inspector field that caused them, by fieldId. */
+  fieldErrors: Record<string, Text>;
+  toolErrors: Partial<Record<keyof ExecutionTools, Text>>;
   operationGeneration: number;
   integrationInspection: IntegrationInspection | null;
   integrationIssues: PlanDiagnostic[];
@@ -137,7 +140,9 @@ export function initialState(): WorkbenchState {
     capabilities: null,
     settingsOpen: false,
     toolDraft: { compiler: '', objdump: '', git: '', python: '' },
-    settingsNotice: '',
+    settingsNotice: null,
+    fieldErrors: {},
+    toolErrors: {},
     operationGeneration: 0,
     integrationInspection: null,
     integrationIssues: [],

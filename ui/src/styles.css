@@ -760,6 +760,79 @@ tbody tr:not(.selected-row):hover {
 .notice.info {
   background: var(--surface);
 }
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.notice > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.notice-body {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.notice-body pre {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  user-select: text;
+}
+.notice.success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.notice.warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.settings-result {
+  flex: 1;
+  min-width: 0;
+}
+.settings-result .notice {
+  border-top: 0;
+}
+.field-error {
+  color: var(--error);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.field-error:empty {
+  display: none;
+}
+.page-guidance.error {
+  color: var(--error);
+  background: var(--error-bg);
+}
+.workspace-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.busy-indicator,
+.stage.running .stage-pill svg {
+  flex: none;
+}
+.busy-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+}
 .error-text {
   color: var(--error);
 }
@@ -1127,6 +1200,17 @@ details + details {
     transition:
       color 140ms ease-out,
       background-color 140ms ease-out;
+  }
+}
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-reduced-motion='true']) .busy-indicator,
+  :root:not([data-reduced-motion='true']) .stage.running .stage-pill svg {
+    animation: busy-spin 0.9s linear infinite;
   }
 }
 @media (prefers-reduced-motion: reduce) {

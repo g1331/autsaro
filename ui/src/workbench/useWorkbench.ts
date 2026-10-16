@@ -31,13 +31,20 @@ import type { PreviewDelta, Stage, StageState } from './forms';
 import {
   applicationPeriodDraft,
   applicationPeriodMs,
+  distinct,
   errorText,
+  headline,
   intInRange,
   previewDelta,
 } from './forms';
 import type { WorkbenchOperation } from './operation';
 import { createProjectActions } from './projectActions';
-import type { ConfigurationChange, DocumentTab, ProjectProjection } from './projectTypes';
+import type {
+  ConfigurationChange,
+  ConfigurationDiagnostic,
+  DocumentTab,
+  ProjectProjection,
+} from './projectTypes';
 import type { WorkbenchSession } from './session';
 import { createSettingsActions } from './settingsActions';
 import type { WorkbenchState } from './state';
@@ -83,6 +90,7 @@ export interface Workbench
         | 'settingsOpen'
         | 'toolDraft'
         | 'settingsNotice'
+        | 'toolErrors'
         | 'integrationIds'
         | 'integrationPeriod'
         | 'integrationPreview'
@@ -94,7 +102,10 @@ export interface Workbench
   executionDisabled: boolean;
   executionReason: Text;
   unapplied: boolean;
+  /** Automatic diagnostics, explicit validation findings and standard-input findings, each listed once. */
+  diagnostics: ConfigurationDiagnostic[];
   issues: Issue[];
+  problemCount: number;
   errorCount: number;
   previewFile: SavePreview['files'][number] | undefined;
   delta: PreviewDelta | null;
@@ -440,9 +451,18 @@ export function useWorkbench(): Workbench {
 
   const unapplied = integrationUnapplied || state.changes.length > 0;
 
-  const issues = [...(workspace?.issues ?? []), ...operationIssues];
+  const diagnostics = distinct(state.projection?.diagnostics ?? []);
 
-  const errorCount = issues.filter((issue) => issue.severity === 'error').length;
+  const issues = distinct([...(workspace?.issues ?? []), ...operationIssues]);
+
+  const integrationProblems = distinct(state.integrationIssues);
+
+  const problemCount = diagnostics.length + issues.length + integrationProblems.length;
+
+  const errorCount =
+    diagnostics.filter((issue) => issue.severity === 'error').length +
+    issues.filter((issue) => issue.severity === 'error').length +
+    integrationProblems.length;
 
   function acceptView(view: WorkspaceView) {
     setSavePreview(null);
@@ -504,10 +524,11 @@ export function useWorkbench(): Workbench {
       const text = errorText(error);
       setNotice({
         tone: 'error',
-        text: composedMessage('controller.operation.failed', { label, error: text }),
+        text: composedMessage('controller.operation.failed', { label, error: headline(error) }),
+        detail: text,
       });
       if (operation.kind === 'handoffImport') field('handoffImportOpen')(true);
-      if (stateRef.current.settingsOpen) setSettingsNotice(text);
+      if (stateRef.current.settingsOpen) setSettingsNotice({ tone: 'error', text });
       if (
         workspace?.integrationCandidate &&
         Array.isArray(error) &&
@@ -613,6 +634,14 @@ export function useWorkbench(): Workbench {
               ? 'controller.integration.validated'
               : 'controller.integration.failed',
           ),
+        );
+        // Standard inputs are validated by this inspection; every surface reads this stage.
+        markStage(
+          'validate',
+          report.description ? 'done' : 'failed',
+          report.description
+            ? message('workflow.stage.integrationValidated')
+            : message('workflow.stage.blockingErrors', { count: report.diagnostics.length }),
         );
       },
     );
@@ -929,7 +958,9 @@ export function useWorkbench(): Workbench {
     previewPath,
     setPreviewPath,
     unapplied,
+    diagnostics,
     issues,
+    problemCount,
     errorCount,
     chooseDirectory,
     chooseBinary,
@@ -951,6 +982,7 @@ export function useWorkbench(): Workbench {
     setSettingsOpen,
     setToolDraft,
     setSettingsNotice,
+    setToolErrors: field('toolErrors'),
     configureTools,
     changeTarget,
     cancelOperation,

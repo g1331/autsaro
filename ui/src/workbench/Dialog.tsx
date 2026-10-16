@@ -1,7 +1,57 @@
-import { message, useLocale } from '../i18n';
+import { isMessage, message, useLocale } from '../i18n';
 import type { Text } from '../i18n';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Check, CircleAlert, CircleCheck, Info, TriangleAlert, X } from 'lucide-react';
+import type { Notice } from './forms';
+
+const noticeIcons = {
+  error: CircleAlert,
+  warning: TriangleAlert,
+  info: Info,
+  success: CircleCheck,
+};
+
+/** One presentation for operation results: sentence, optional copyable detail. */
+export function NoticeBanner({
+  notice,
+  onDismiss,
+}: {
+  notice: NonNullable<Notice>;
+  onDismiss?: () => void;
+}) {
+  const { t, text } = useLocale();
+  const Icon = noticeIcons[notice.tone];
+  const detail = notice.detail === undefined ? '' : text(notice.detail);
+  return (
+    <div className={`notice ${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>
+      <Icon size={15} aria-hidden="true" />
+      <div className="notice-body">
+        <span>{text(notice.text).slice(0, 3000)}</span>
+        {detail && detail !== text(notice.text) ? (
+          <details>
+            <summary>{t('editor.dialog.details')}</summary>
+            <pre>{detail.slice(0, 12000)}</pre>
+          </details>
+        ) : null}
+      </div>
+      {detail || text(notice.text).length > 3000 ? (
+        <CopyText text={detail || text(notice.text)} label={t('editor.common.copyDetails')} />
+      ) : null}
+      {onDismiss ? (
+        <button
+          type="button"
+          className="panel-icon-button"
+          aria-label={t('editor.dialog.dismiss')}
+          title={t('editor.dialog.dismiss')}
+          onClick={onDismiss}
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 export function rememberDialogOpener() {
   const active = document.activeElement;
@@ -23,11 +73,14 @@ export function Dialog({
   children,
   onClose,
   footer,
+  notice,
 }: {
   title: Text;
   children: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
+  /** Results of actions taken inside the dialog; the page notice is behind the backdrop. */
+  notice?: Notice;
 }) {
   const { t, text } = useLocale();
   const dialog = useRef<HTMLElement>(null);
@@ -106,6 +159,7 @@ export function Dialog({
           </button>
         </header>
         <div className="dialog-body">{children}</div>
+        {notice ? <NoticeBanner notice={notice} /> : null}
         {footer ? <footer>{footer}</footer> : null}
       </section>
     </div>
@@ -120,25 +174,31 @@ export function CopyText({
   label?: Text;
 }) {
   const { text: renderText } = useLocale();
-  const [error, setError] = useState<Text>('');
+  const [result, setResult] = useState<Text>('');
+  useEffect(() => {
+    if (!result) return;
+    const timer = window.setTimeout(() => setResult(''), 2000);
+    return () => window.clearTimeout(timer);
+  }, [result]);
+  const copied = isMessage(result) && result.key === 'editor.dialog.copied';
   return (
     <>
       <button
         type="button"
+        aria-label={renderText(label)}
         onClick={() => {
           void navigator.clipboard
             .writeText(typeof text === 'function' ? text() : text)
-            .then(() => setError(''))
-            .catch(() => setError(message('editor.dialog.copyFailed')));
+            .then(() => setResult(message('editor.dialog.copied')))
+            .catch(() => setResult(message('editor.dialog.copyFailed')));
         }}
       >
-        {renderText(label)}
+        {copied ? <Check size={13} aria-hidden="true" /> : null}
+        {renderText(copied ? result : label)}
       </button>
-      {error ? (
-        <span role="status" className="error-text">
-          {renderText(error)}
-        </span>
-      ) : null}
+      <span role="status" className={result && !copied ? 'error-text' : 'visually-hidden'}>
+        {renderText(result)}
+      </span>
     </>
   );
 }

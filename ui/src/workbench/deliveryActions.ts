@@ -12,6 +12,8 @@ import type {
   WorkspaceView,
 } from '../types';
 import type { Stage, StageState } from './forms';
+import { distinct } from './forms';
+import type { ProjectProjection } from './projectTypes';
 import type { WorkbenchOperation } from './operation';
 import type { WorkbenchSession } from './session';
 import { stageDefaults } from './useDelivery';
@@ -68,6 +70,10 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
       { kind: 'savePreview', label: message('workflow.action.previewSave') },
       () => call<SavePreview>('preview_save_project'),
       (preview) => {
+        if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
+          setNotice({ tone: 'info', text: message('workflow.save.noChanges') });
+          return;
+        }
         setSavePreview(preview);
         setPreviewPath(
           preview.files.find((file) => file.changed)?.path ?? preview.files[0]?.path ?? '',
@@ -98,6 +104,12 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
             ...stageDefaults,
             save: { state: 'done', detail: message('workflow.stage.configurationSaved') },
           });
+          setNotice({
+            tone: 'success',
+            text: message('workflow.save.saved', {
+              count: savePreview.files.filter((file) => file.changed).length,
+            }),
+          });
           setGenerated(null);
           setBuilt(null);
           setVirtualResult(null);
@@ -111,11 +123,19 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   function validateProject() {
     void run(
       { kind: 'action', label: message('workflow.action.validate') },
-      () => call<WorkspaceView>('validate_project'),
-      (view) => {
+      async () => {
+        const view = await call<WorkspaceView>('validate_project');
+        // Automatic diagnostics are only in the projection; count both sources.
+        const projection = await call<ProjectProjection>('project_projection');
+        return { view, projection };
+      },
+      ({ view, projection }) => {
         acceptView(view);
+        patchState({ projection });
         setOperationIssues([]);
-        const count = view.issues.filter((issue) => issue.severity === 'error').length;
+        const found = [...distinct(projection.diagnostics), ...distinct(view.issues)];
+        const count = found.filter((issue) => issue.severity === 'error').length;
+        const warnings = found.filter((issue) => issue.severity === 'warning').length;
         markStage(
           'validate',
           count ? 'failed' : 'done',
@@ -128,7 +148,11 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
           markStage('build', 'stale', message('workflow.stage.validationBlocked'));
           markStage('virtual', 'stale', message('workflow.stage.validationBlocked'));
         }
-        field('toolWindow')('problems');
+        setNotice({
+          tone: count ? 'error' : warnings ? 'warning' : 'success',
+          text: message('workflow.validation.summary', { errors: count, warnings }),
+        });
+        if (count || warnings) field('toolWindow')('problems');
       },
       'validate',
     );
@@ -139,6 +163,11 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
       { kind: 'savePreview', label: message('workflow.action.previewIntegrationSave') },
       () => call<SavePreview>('preview_integration_save'),
       (preview) => {
+        if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
+          patchState({ integrationIssues: [] });
+          setNotice({ tone: 'info', text: message('workflow.save.noChanges') });
+          return;
+        }
         patchState({
           integrationPreview: preview,
           integrationIssues: [],
@@ -176,6 +205,13 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
           integrationNotice: result.error ?? message('workflow.integration.savedNotGenerated'),
         });
         if (result.error) setNotice({ tone: 'error', text: result.error });
+        else if (!result.workspace.dirty)
+          setNotice({
+            tone: 'success',
+            text: message('workflow.save.saved', {
+              count: preview.files.filter((file) => file.changed).length,
+            }),
+          });
         void continueReplacement(result.workspace, result.error);
       },
       'save',
@@ -231,10 +267,6 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
         setGenerationPreview(preview);
         setGenerationPreviewPath(preview.files[0]?.path ?? '');
         markStage('validate', 'done', message('workflow.stage.integrationValidated'));
-        setNotice({
-          tone: 'info',
-          text: message('workflow.generation.sourcePreview', { count: preview.files.length }),
-        });
       },
     );
   }

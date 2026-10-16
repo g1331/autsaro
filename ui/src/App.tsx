@@ -15,7 +15,6 @@ import {
   Save,
   Search,
   Settings,
-  Square,
   X,
 } from 'lucide-react';
 import { useWorkbench } from './workbench/useWorkbench';
@@ -25,12 +24,19 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ProjectTree } from './workbench/ProjectTree';
 import { ObjectEditor, ObjectInspector } from './workbench/ObjectEditor';
 import { PreviewDialogs } from './workbench/PreviewDialogs';
-import { CopyText, Dialog, rememberDialogOpener, TextSnapshot } from './workbench/Dialog';
+import {
+  CopyText,
+  Dialog,
+  NoticeBanner,
+  rememberDialogOpener,
+  TextSnapshot,
+} from './workbench/Dialog';
 import { ToolWindows } from './workbench/ToolWindows';
 import { WindowControls } from './workbench/WindowControls';
 import { PanelResizeHandle } from './workbench/PanelResizeHandle';
 import { SourceEntry } from './workbench/SourceEntry';
 import { labelFromPath } from './workbench/forms';
+import { profileLabel, targetLabel, workspaceTitle } from './workbench/labels';
 import type { DocumentTab } from './workbench/projectTypes';
 
 const documentLabels = {
@@ -86,6 +92,17 @@ export default function App() {
       ?.setAttribute('content', effectiveTheme === 'dark' ? '#1b1b1b' : '#f3f3f3');
     document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.setAttribute('href', logo);
   }, [effectiveTheme, logo]);
+  const notice = c.notice;
+  const setNotice = c.setNotice;
+  useEffect(() => {
+    if (notice?.tone !== 'success') return;
+    // Success needs no action; errors and warnings stay until dismissed or superseded.
+    const timer = window.setTimeout(
+      () => setNotice((current) => (current === notice ? null : current)),
+      6000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [notice, setNotice]);
   const requestExit = async () => {
     await c.replaceProject(message('shell.command.exit'), () => getCurrentWindow().destroy());
   };
@@ -341,20 +358,21 @@ export default function App() {
     setPalette(false);
     void command.run();
   };
+  // Preview dialogs show the current notice inside themselves (see PreviewDialogs).
+  const previewOpen = Boolean(
+    c.guard ||
+    c.changePreview ||
+    c.savePreview ||
+    c.integrationPreview ||
+    c.generationPreview ||
+    c.projectPreview ||
+    c.applicationPreview ||
+    c.handoffImportOpen,
+  );
+  const startSurface = !c.workspace || c.activeDocument.kind === 'project-entry';
   const shortcut = useEffectEvent((event: KeyboardEvent) => {
     if (event.isComposing || event.defaultPrevented) return;
-    const modal =
-      c.settingsOpen ||
-      c.guard ||
-      c.changePreview ||
-      c.savePreview ||
-      c.integrationPreview ||
-      c.generationPreview ||
-      c.projectPreview ||
-      c.applicationPreview ||
-      c.handoffImportOpen ||
-      palette ||
-      help;
+    const modal = c.settingsOpen || previewOpen || palette || help;
     if (event.key === 'Escape') {
       if (modal) return;
       if (menu) {
@@ -517,13 +535,18 @@ export default function App() {
         ) : null}
       </header>
       <div className="context-toolbar">
-        <strong>{c.workspace?.name ?? t('shell.app.noProject')}</strong>
+        <strong className="workspace-name" title={c.workspace ? workspaceTitle(c) : undefined}>
+          {c.workspace ? workspaceTitle(c) : t('shell.app.noProject')}
+        </strong>
         <span className="toolbar-separator" />
         {c.workspace ? (
           <>
             <span>
-              {c.projection?.profile ??
-                (c.workspace.integrationCandidate ? t('shell.app.standardEcu') : null)}
+              {c.projection
+                ? profileLabel(c.projection.profile)
+                : c.workspace.integrationCandidate
+                  ? t('shell.app.standardEcu')
+                  : null}
             </span>
             <button
               type="button"
@@ -550,9 +573,9 @@ export default function App() {
         <span className="toolbar-spacer" />
         {c.busy ? (
           <>
+            <span className="busy-indicator" aria-hidden="true" />
             <span role="status">{t('shell.busy', { operation: text(c.busy) })}</span>
             <button type="button" onClick={() => dispatchCommand('cancel')}>
-              <Square size={13} aria-hidden="true" />
               {t('shell.app.cancel')}
             </button>
           </>
@@ -567,52 +590,56 @@ export default function App() {
       </div>
       <main className="workspace-frame">
         <nav className="tool-rail" aria-label={t('shell.app.rail')}>
-          <button
-            type="button"
-            aria-label={t('shell.app.treeShortcut')}
-            title={t('shell.app.treeShortcut')}
-            aria-pressed={c.treeVisible}
-            onClick={() => dispatchCommand('tree')}
-          >
-            <FolderTree size={19} />
-          </button>
-          <button
-            type="button"
-            aria-label={t('shell.app.problems')}
-            title={t('shell.app.problems')}
-            aria-pressed={c.toolWindow === 'problems'}
-            onClick={() => dispatchCommand('problems')}
-          >
-            <CircleAlert size={19} />
-          </button>
-          <button
-            type="button"
-            aria-label={t('shell.app.buildShortcut')}
-            title={t('shell.app.buildShortcut')}
-            aria-pressed={c.toolWindow === 'build'}
-            onClick={() => dispatchCommand('build')}
-          >
-            <Hammer size={19} />
-          </button>
-          <button
-            type="button"
-            aria-label={t('shell.app.hostShortcut')}
-            title={t('shell.app.hostShortcut')}
-            aria-pressed={c.toolWindow === 'host'}
-            onClick={() => dispatchCommand('host')}
-          >
-            <MonitorPlay size={19} />
-          </button>
-          <span />
-          <button
-            type="button"
-            aria-label={t('shell.command.inspector')}
-            title={t('shell.command.inspector')}
-            aria-pressed={c.inspectorVisible}
-            onClick={() => dispatchCommand('inspector')}
-          >
-            <PanelRight size={19} />
-          </button>
+          {c.workspace ? (
+            <>
+              <button
+                type="button"
+                aria-label={t('shell.app.treeShortcut')}
+                title={t('shell.app.treeShortcut')}
+                aria-pressed={c.treeVisible}
+                onClick={() => dispatchCommand('tree')}
+              >
+                <FolderTree size={19} />
+              </button>
+              <button
+                type="button"
+                aria-label={t('shell.app.problems')}
+                title={t('shell.app.problems')}
+                aria-pressed={c.toolWindow === 'problems'}
+                onClick={() => dispatchCommand('problems')}
+              >
+                <CircleAlert size={19} />
+              </button>
+              <button
+                type="button"
+                aria-label={t('shell.app.buildShortcut')}
+                title={t('shell.app.buildShortcut')}
+                aria-pressed={c.toolWindow === 'build'}
+                onClick={() => dispatchCommand('build')}
+              >
+                <Hammer size={19} />
+              </button>
+              <button
+                type="button"
+                aria-label={t('shell.app.hostShortcut')}
+                title={t('shell.app.hostShortcut')}
+                aria-pressed={c.toolWindow === 'host'}
+                onClick={() => dispatchCommand('host')}
+              >
+                <MonitorPlay size={19} />
+              </button>
+              <span />
+              <button
+                type="button"
+                aria-label={t('shell.command.inspector')}
+                title={t('shell.command.inspector')}
+                aria-pressed={c.inspectorVisible}
+                onClick={() => dispatchCommand('inspector')}
+              >
+                <PanelRight size={19} />
+              </button>
+            </>
+          ) : null}
         </nav>
         {c.workspace ? <ProjectTree controller={c} /> : null}
         <section className="central-workspace">
@@ -707,16 +734,8 @@ export default function App() {
           ) : (
             <SourceEntry controller={c} logo={logo} />
           )}
-          {c.notice ? (
-            <div
-              className={`notice ${c.notice.tone}`}
-              role={c.notice.tone === 'error' ? 'alert' : 'status'}
-            >
-              <span>{text(c.notice.text).slice(0, 3000)}</span>
-              {text(c.notice.text).length > 3000 ? (
-                <CopyText text={text(c.notice.text)} label={t('shell.app.copyDetails')} />
-              ) : null}
-            </div>
+          {c.notice && !previewOpen && !c.settingsOpen && !startSurface ? (
+            <NoticeBanner notice={c.notice} onDismiss={() => c.setNotice(null)} />
           ) : null}
           {!c.native ? <p className="notice info">{t('shell.app.browser')}</p> : null}
           {c.capabilities?.ruleError ? (
@@ -724,7 +743,7 @@ export default function App() {
               {t('shell.app.ruleError', { error: text(c.capabilities.ruleError) })}
             </p>
           ) : null}
-          <ToolWindows controller={c} />
+          {c.workspace ? <ToolWindows controller={c} /> : null}
         </section>
         {c.workspace ? (
           <aside className="inspector-pane" hidden={!c.inspectorVisible}>
@@ -773,11 +792,17 @@ export default function App() {
                 : t('shell.app.noProject')}
         </span>
         <span className="toolbar-spacer" />
-        <button type="button" onClick={() => c.setToolWindow(c.busy ? 'log' : 'problems')}>
-          {c.busy ? t('shell.busy', { operation: text(c.busy) }) : text(c.stages.validate.detail)}
-        </button>
+        {c.workspace ? (
+          <button type="button" onClick={() => c.setToolWindow(c.busy ? 'log' : 'problems')}>
+            {c.busy
+              ? t('shell.busy', { operation: text(c.busy) })
+              : c.stages.validate.state === 'pending'
+                ? t('shell.app.autoCheck', { count: c.errorCount })
+                : text(c.stages.validate.detail)}
+          </button>
+        ) : null}
         <span>
-          {c.buildTarget} ·{' '}
+          {targetLabel(c.buildTarget)} ·{' '}
           {c.capabilities?.nativeExecution
             ? t('shell.app.nativeExecution')
             : t('shell.app.noNativeExecution')}

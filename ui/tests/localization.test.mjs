@@ -197,7 +197,7 @@ test('failed browser persistence retains saved preference and all project/result
   await actions.configureLanguage();
   expect(current.stateRef.current.savedLanguage).toBe('zh-CN');
   expect(localStorage.getItem('autsaro.language')).toBe('zh-CN');
-  expect(current.stateRef.current.settingsNotice).not.toBe('');
+  expect(current.stateRef.current.settingsNotice).toMatchObject({ tone: 'error' });
   for (const key of [
     'workspace',
     'draft',

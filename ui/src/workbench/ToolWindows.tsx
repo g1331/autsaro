@@ -13,6 +13,8 @@ import type { Workbench } from './useWorkbench';
 import type { ConfigurationDiagnostic, ToolWindow } from './projectTypes';
 import { CopyText, OwnedLog } from './Dialog';
 import { PanelResizeHandle } from './PanelResizeHandle';
+import { distinct } from './forms';
+import { commandLabel } from './labels';
 
 export const toolLabels: Record<ToolWindow, Message> = {
   problems: message('editor.tools.tab.problems'),
@@ -34,6 +36,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
     }),
     [c.projection],
   );
+  const integrationProblems = distinct(c.integrationIssues);
   async function locate(issue: ConfigurationDiagnostic) {
     await c.guardContext(message('editor.tools.locateIssue'), async () => {
       const objectId =
@@ -84,6 +87,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
           {c.toolWindow === 'problems' ? (
             <div>
               <div className="validation-scopes">
+                <p className="field-help">{t('editor.tools.automaticChecks')}</p>
                 {c.projection?.validation.map((scope) => (
                   <details key={scope.scope}>
                     <summary>
@@ -102,7 +106,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                 ))}
               </div>
               <ul className="problem-list">
-                {c.projection?.diagnostics.map((issue, index) => {
+                {c.diagnostics.map((issue, index) => {
                   const resolvable = Boolean(
                     (issue.objectId && targets.objects.has(issue.objectId)) ||
                     (issue.fieldId && targets.fields.has(issue.fieldId)) ||
@@ -148,7 +152,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                     />
                   </li>
                 ))}
-                {c.integrationIssues.map((issue, index) => {
+                {integrationProblems.map((issue, index) => {
                   const object = issue.object ? targets.objectsByPath.get(issue.object) : undefined;
                   const source = issue.file ? targets.sourcesByPath.get(issue.file) : undefined;
                   return (
@@ -175,16 +179,14 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   );
                 })}
               </ul>
-              {!c.projection?.diagnostics.length &&
-              !c.issues.length &&
-              !c.integrationIssues.length ? (
+              {!c.problemCount ? (
                 <p className="empty-state">{t('editor.tools.noProblems')}</p>
               ) : null}
             </div>
           ) : null}
           {c.toolWindow === 'generation' ? (
             <div>
-              <p>
+              <p role="status">
                 {t(editorStatusKeys[c.stages.generate.state])} ·{' '}
                 {displayPath(text(c.stages.generate.detail))}
               </p>
@@ -210,7 +212,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
           ) : null}
           {c.toolWindow === 'build' ? (
             <div>
-              <p>
+              <p role="status">
                 {t(editorStatusKeys[c.stages.build.state])} ·{' '}
                 {displayPath(text(c.stages.build.detail))}
               </p>
@@ -253,6 +255,9 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
           ) : null}
           {c.toolWindow === 'host' ? (
             <div>
+              <p role="status">
+                {t(editorStatusKeys[c.stages.virtual.state])} · {text(c.stages.virtual.detail)}
+              </p>
               <button
                 type="button"
                 disabled={c.executionDisabled || !c.built}
@@ -280,7 +285,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   c.operationLog
                     .map(
                       (entry) =>
-                        `${entry.command} · ${t(editorStatusKeys[entry.outcome])}\n${text(entry.detail)}`,
+                        `${commandLabel(entry.command)} (${entry.command}) · ${t(editorStatusKeys[entry.outcome])}\n${text(entry.detail)}`,
                     )
                     .join('\n\n')
                 }
@@ -290,8 +295,9 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
               {c.operationLog.slice(-100).map((entry, index) => (
                 <details key={`${entry.command}-${index}`}>
                   <summary>
-                    {entry.command} · {t(editorStatusKeys[entry.outcome])}
+                    {commandLabel(entry.command)} · {t(editorStatusKeys[entry.outcome])}
                   </summary>
+                  <p className="mono path-text">{entry.command}</p>
                   <OwnedLog text={entry.detail} label={t('editor.tools.replyDetails')} />
                 </details>
               ))}
@@ -308,13 +314,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
             onClick={() => c.setToolWindow(c.toolWindow === key ? null : key)}
           >
             {text(toolLabels[key])}
-            {key === 'problems' ? (
-              <small>
-                {(c.projection?.diagnostics.length ?? 0) +
-                  c.issues.length +
-                  c.integrationIssues.length}
-              </small>
-            ) : null}
+            {key === 'problems' ? <small>{c.problemCount}</small> : null}
           </button>
         ))}
       </nav>

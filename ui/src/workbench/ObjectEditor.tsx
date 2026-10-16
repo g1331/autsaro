@@ -169,6 +169,12 @@ export function DescriptorField({
       (issue) => issue.fieldId === field.fieldId && issue.severity === 'error',
     ) ?? [];
   const description = `field-description-${field.fieldId}`;
+  const errorId = `field-error-${field.fieldId}`;
+  const rejection = c.fieldErrors[field.fieldId];
+  // Immediate hint only; the backend still validates on preview.
+  const outOfRange = field.kind === 'integer' && explicit && outsideRange(lexeme, field);
+  const invalid = errors.length > 0 || Boolean(rejection) || outOfRange;
+  const describedBy = invalid ? `${description} ${errorId}` : description;
   const stageValue = (next: ValueState) =>
     c.stageChange({
       op: 'set-value',
@@ -216,8 +222,8 @@ export function DescriptorField({
                 ? `${currentReference.target.objectId}:${currentReference.dest}`
                 : ''
             }
-            aria-invalid={errors.length > 0}
-            aria-describedby={description}
+            aria-invalid={invalid}
+            aria-describedby={describedBy}
             disabled={blocked}
             onChange={(event) => {
               const candidate = candidates.find(
@@ -274,8 +280,8 @@ export function DescriptorField({
               id={`field-${field.fieldId}`}
               data-field-id={field.fieldId}
               value={lexeme}
-              aria-invalid={errors.length > 0}
-              aria-describedby={description}
+              aria-invalid={invalid}
+              aria-describedby={describedBy}
               disabled={blocked}
               onChange={(event) =>
                 stageValue({
@@ -298,8 +304,8 @@ export function DescriptorField({
               id={`field-${field.fieldId}`}
               data-field-id={field.fieldId}
               value={lexeme}
-              aria-invalid={errors.length > 0}
-              aria-describedby={description}
+              aria-invalid={invalid}
+              aria-describedby={describedBy}
               disabled={blocked}
               onChange={(event) =>
                 stageValue({
@@ -353,12 +359,25 @@ export function DescriptorField({
             })}
           </span>
         ) : null}
-        {errors.map((error, index) => (
-          <p className="error-text" key={`${error.code}-${index}`}>
-            {error.code} · {text(error.message)}
-          </p>
-        ))}
       </div>
+      {invalid ? (
+        <div id={errorId} className="field-error">
+          {rejection ? <p>{text(rejection)}</p> : null}
+          {!rejection && outOfRange ? (
+            <p>
+              {t('editor.objects.outOfRange', {
+                minimum: field.minimum ?? '−∞',
+                maximum: field.maximum ?? '+∞',
+              })}
+            </p>
+          ) : null}
+          {errors.map((error, index) => (
+            <p key={`${error.code}-${index}`}>
+              {error.code} · {text(error.message)}
+            </p>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -494,4 +513,18 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
       )}
     </div>
   );
+}
+
+/** Integer lexemes can exceed Number precision; compare as BigInt. */
+function outsideRange(lexeme: string, field: FieldDescriptor): boolean {
+  if (!/^[+-]?\d+$/.test(lexeme.trim())) return false;
+  const value = BigInt(lexeme.trim());
+  try {
+    return (
+      (field.minimum !== null && value < BigInt(field.minimum)) ||
+      (field.maximum !== null && value > BigInt(field.maximum))
+    );
+  } catch {
+    return false;
+  }
 }

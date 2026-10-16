@@ -123,7 +123,10 @@ test('rejected desktop language persistence retains saved preference and preview
   expect(result.current.languageDraft).toBe('en');
   expect(result.current.generationPreview).toBe(before.generationPreview);
   expect(result.current.operationGeneration).toBe(before.operationGeneration);
-  expect(result.current.settingsNotice).toEqual(message('controller.error.capabilitiesNotReady'));
+  expect(result.current.settingsNotice).toEqual({
+    tone: 'error',
+    text: message('controller.error.capabilitiesNotReady'),
+  });
   act(() => result.current.setLanguageDraft(result.current.savedLanguage));
   expect(result.current.languageDraft).toBe('zh-CN');
 });
@@ -189,10 +192,13 @@ test.each(['success', 'failure'])(
     expect(current.projectName).toBe('RetainedDraft');
     expect(current.stages).toBe(stages);
     expect(current.operationGeneration).toBe(generation);
-    expect(view.getByRole('status').textContent).not.toBe('');
     if (outcome === 'failure')
-      expect(view.getByRole('status').textContent).toBe(
+      expect(view.getByRole('alert').textContent).toBe(
         translate('controller.error.capabilitiesNotReady'),
+      );
+    else
+      expect(view.getByRole('status').textContent).toBe(
+        translate('controller.settings.languageSaved'),
       );
     // Disabled focused controls may leave native focus on the document body.
     fireEvent.keyDown(document.body, { key: 'Escape' });

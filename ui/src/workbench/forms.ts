@@ -1,5 +1,5 @@
 import type { Text } from '../i18n';
-import { composedMessage, isMessage, ProductError } from '../i18n';
+import { composedMessage, isMessage, localize, ProductError } from '../i18n';
 import type { IntegrationInspection } from '../types';
 
 export type Stage = 'save' | 'validate' | 'generate' | 'build' | 'virtual';
@@ -8,7 +8,32 @@ export type StageState = 'pending' | 'running' | 'done' | 'failed' | 'stale';
 
 export type StageRecord = { state: StageState; detail: Text };
 
-export type Notice = { tone: 'error' | 'info'; text: Text } | null;
+export type NoticeTone = 'error' | 'warning' | 'info' | 'success';
+
+/**
+ * `text` is the sentence shown to the user; `detail` keeps the original backend
+ * reply for copying. `fieldId` ties a rejection to the field that caused it.
+ */
+export type Notice = { tone: NoticeTone; text: Text; detail?: Text; fieldId?: string } | null;
+
+/** Drops exact repeats so counts always match the rendered list. */
+export function distinct<T>(items: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = JSON.stringify(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Backend composite replies lead with their summary; the rest is detail. */
+export function headline(error: unknown): Text {
+  if (!Array.isArray(error) || error.length < 2) return errorText(error);
+  const summary = errorText(error[0]);
+  // A context prefix such as "Initialization failed:" needs its first reason to read as a sentence.
+  return /[:：]\s*$/.test(localize(summary)) ? [summary, errorText(error[1])] : summary;
+}
 
 /** Period shared by the application timing events; null when no event is planned. */
 export function applicationPeriodMs(

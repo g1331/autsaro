@@ -53,7 +53,9 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
         <div>
           <p className="eyebrow">{t('shell.integration.eyebrow')}</p>
           <h2>{t('shell.document.integration')}</h2>
-          <p role="status">{busy ? t('shell.integration.busy') : text(notice)}</p>
+          <p role="status">
+            {busy ? t('shell.busy', { operation: text(controller.busy) }) : text(notice)}
+          </p>
         </div>
         <div className="section-actions">
           <button
