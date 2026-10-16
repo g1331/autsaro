@@ -29,8 +29,10 @@ cargo test --locked -p autosar-config-core
 cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
-uv run --locked python -m autosar_tooling quality --base <基准提交>
+uv run --locked python -m autosar_tooling quality --merge-base origin/master
 ```
+
+执行一次 `uv run --locked pre-commit install --allow-missing-config`，之后每次推送前自动运行上面最后一条 `quality`，未通过时阻止推送；它不替代 CI 的同一检查。`--allow-missing-config` 让尚无该配置的旧分支（共用同一 `.git/hooks` 的工作树也在内）照常推送。
 
 默认 Cargo 测试不要求官方资源或受控原生工具。真实进程、官方对照和桌面验收见[测试说明](docs/development/testing/README.md)。格式检查针对修改行，不整体重排历史代码。运行时 C 已整体符合 `.clang-format`；执行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，`git blame` 即跳过那次全量重排。生成的 C 由 emitter 直接写成同一排版，必需检查核对生成样本。
 
