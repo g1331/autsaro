@@ -108,7 +108,10 @@ export async function createBuiltinInputs(scratch) {
   // global source-save gate or silently synthesize these missing values.
   // Standalone documentation is outside the bounded SWC/ECUC editing vocabulary.
   // The required core definition test guards this shared R24-11 fixture.
-  const unknown = await readFile(new URL('../fixtures/unknown.arxml', import.meta.url), 'utf8');
+  const unknown = await readFile(
+    new URL('../../../core/tests/fixtures/desktop/unknown.arxml', import.meta.url),
+    'utf8',
+  );
   const members = {
     'os.arxml': os,
     'com.arxml': com,

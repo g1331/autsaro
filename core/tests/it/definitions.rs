@@ -365,7 +365,7 @@ fn builtin_reference_rejects_right_dest_with_wrong_container_definition() {
 
 #[test]
 fn desktop_unknown_fixture_stays_outside_builtin_editing_vocabulary() {
-    let xml = include_str!("../../../tests/desktop/fixtures/unknown.arxml");
+    let xml = include_str!("../fixtures/desktop/unknown.arxml");
     let document = roxmltree::Document::parse(xml).unwrap();
     let object = document
         .descendants()
