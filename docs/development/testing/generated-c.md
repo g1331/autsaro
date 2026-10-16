@@ -49,3 +49,18 @@ CI 每个平台先验证检查器、生成四类完整样本并发布本轮工�
 - 重组生成代码后按 ADR 0014 比较主线样本时，在改动前后分别用 `AUTOSAR_C_ANALYSIS_SAMPLES` 生成全部样本逐文件比较。规则集身份与 `integration.json` 的生成器摘要按 core 实现源码字节计算，任何源码改动都会改变各元数据文件和 `tools/ecu-tool.py` 中的哈希：元数据把 64 位十六进制哈希归一化后比较，生成的 C、头文件与 README 必须原样相同，其余差异逐项归因。
 - 交付包新增不参与编译的 C 文件（如组件骨架）时，核对 `c-check` 的补充单元：它把封存清单中构建闭包之外的 `.c` 并入每个程序分析，与应用重复的定义会在应用源上产生 8.6 等跨单元误报。不属于任何程序的文件应明确排除并加用例，再按“规则＋文件＋行”与基线比较。
 - 对复制源码应用带文件选择的 Git 补丁时，隔离外层仓库发现，并验证预期文件实际改变；零退出码不证明选中补丁已应用。
+
+## 与 master CI 基线比较
+
+每次仍完整运行本地分析。可用已完成的 master `Development checks` 工件省去在本机重算未修改基线的那次扫描；先用 `gh run list --branch master --workflow checks.yml` 选择对应提交的成功运行，再下载**完整**分析工件，例如 Linux 标准 ECU：
+
+```bash
+gh run download <run-id> --name c-analysis-linux-x64-controlled-v1-standard-ecu --dir build/c-baseline
+uv run --locked python -m autosar_tooling c-check --target linux-x64-controlled-v1 --project build/c-analysis-samples/standard-ecu --output-directory build/c-analysis-results/standard-ecu --baseline build/c-baseline/standard-ecu
+```
+
+其他样本按同样方式下载 `c-analysis-<target>-<group>`，各次下载和分析使用新的目录。工件保留 14 天。`c-analysis-summaries-*` 只有摘要，没有诊断对应的源码文本，不能单独用于比较。
+
+`--baseline` 指向含 `summary.json` 和 `project/` 的样本目录。完整本地扫描后，入口核对 Cppcheck 版本、源码 revision 与三个 addon 摘要、checker coverage、目标、样本的完整 `target.json` 与生成计划和全部 TU／程序范围，以及基线源清单摘要。不同主机编译的 Cppcheck 二进制 SHA-256 可不同，版本和 addon 必须一致。任何身份不同、工件缺失或分析不完整都明确拒绝：在对应基线检出，用相同配置和工具通过正常 c-check 命令本地计算基线。配置本身改变时也需重新确定可比较的同配置基线，不能强行接受不相符的 CI 样本。
+
+比较按每个诊断位置的“规则＋相对文件＋源码行文本”及程序出现次数计数，源码移动不算新增；新增和移除分别输出，不能用净差抵消，完整条目保存在现有 `summary.json` 的 `comparison.new`／`removed`。本地扫描与基线比较各自保留事实：零新增不改变 `passed=false`，现存违规仍返回非零；身份拒绝也返回非零。它不是扫描通过缓存，不减少样本、规则或比较粒度。严格源码门的启用与实际阻断证据由 [#55](https://github.com/g1331/autsaro/issues/55) 承接。

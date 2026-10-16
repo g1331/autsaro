@@ -47,6 +47,7 @@ def main() -> int:
     c_check.add_argument("--target", choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"), required=True)
     c_check.add_argument("--project", type=Path, required=True)
     c_check.add_argument("--output-directory", type=Path, required=True)
+    c_check.add_argument("--baseline", type=Path, help="Full matching c-analysis artifact sample directory")
     asset = commands.add_parser("assets", help="Check assets or update the seal-guard digest")
     asset.add_argument("action", choices=("check", "update"))
     commands.add_parser(
@@ -82,7 +83,7 @@ def main() -> int:
         return generate(args.output)
     if args.command == "c-check":
         from autosar_tooling.c_check import check
-        return check(args.project, args.target, args.output_directory)
+        return check(args.project, args.target, args.output_directory, args.baseline)
     if args.command == "assets":
         from autosar_tooling.assets import maintain
         return maintain(update=args.action == "update")

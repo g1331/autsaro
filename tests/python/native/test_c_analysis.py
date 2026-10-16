@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from autosar_tooling import c_check
+from ecu_tools.owner import OwnershipError
 
 
 class ActualCAnalysisTests(unittest.TestCase):
@@ -31,7 +32,7 @@ class ActualCAnalysisTests(unittest.TestCase):
             path = project / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
-        (project / "meta").mkdir()
+        (project / "meta").mkdir(exist_ok=True)
         (project / "meta/files.list").write_text("\n".join(sorted(files)) + "\n", encoding="utf-8")
         (project / "meta/files.sha256").write_text("".join(f"{hashlib.sha256((project / name).read_bytes()).hexdigest()}  {name}\n" for name in [*sorted(files), "meta/files.list"]), encoding="utf-8")
         return project
@@ -55,6 +56,75 @@ class ActualCAnalysisTests(unittest.TestCase):
             after = {path.relative_to(project).as_posix(): path.read_bytes() for path in project.rglob("*") if path.is_file()}
             self.assertEqual(before, after)
             return summary
+
+    def test_baseline_comparison_runs_the_local_analyzer_and_preserves_source_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, "int main(void) { return 0; }\n",
+                                   extra_files={"meta/integration.json": '{"plan":{}}'})
+            target = json.loads((project / "target.json").read_text())["target"]
+            baseline = root / "baseline/sources"
+            self.assertEqual(c_check.check(project, target, baseline), 0)
+            self.assertEqual(c_check.check(project, target, root / "same", baseline), 0)
+            summary = json.loads((root / "same/summary.json").read_text())
+            self.assertEqual(summary["comparison"], {"new": [], "removed": []})
+            # Mutation: returning the baseline result without analyzing modified sources
+            # would hide this compiler failure. Update the source seal, not the expectation.
+            source = project / "bsw/src/main.c"
+            source.write_text("invalid C tokens;\n")
+            inventory = project / "meta/files.sha256"
+            lines = inventory.read_text().splitlines()
+            inventory.write_text("\n".join(
+                f"{hashlib.sha256(source.read_bytes()).hexdigest()}  bsw/src/main.c"
+                if line.endswith("  bsw/src/main.c") else line for line in lines) + "\n")
+            self.assertEqual(c_check.check(project, target, root / "changed", baseline), 1)
+            summary = json.loads((root / "changed/summary.json").read_text())
+            self.assertIn("compiler-unit-0", summary["error"])
+            self.assertNotIn("comparison", summary)
+
+    def test_prepare_failures_keep_context_and_raw_windows_evidence(self):
+        stages = [
+            ("compiler-target", "Cannot identify diagnostic compiler target"),
+            ("compiler-version", "Cannot identify diagnostic compiler"),
+            ("compiler-headers", "Cannot discover compiler include search paths"),
+            ("compiler-macros", "Cannot discover compiler predefined macros"),
+            ("compiler-unit-0", "Compiler validation failed for bsw/src/main.c"),
+            ("compiler-defines-0", "Compiler preprocessing failed for bsw/src/main.c"),
+            ("compiler-values-0", "Compiler macro expansion failed for bsw/src/main.c"),
+            ("patch-0", "Kernel patch 0 failed"),
+        ]
+        if platform.system() == "Linux":
+            stages.append(("platform-model-check", "Linux library analysis model differs from the actual compiler headers"))
+        original = c_check.run_bounded
+        for stage, explanation in stages:
+            def windows_failure(spec, stage=stage, **kwargs):
+                if spec.stage == stage:
+                    raise OwnershipError(
+                        spec.stage + r": argv=C:\project\bsw\src\main.c exit_code=1"
+                        + "\nstdout:\nproducer stdout\nstderr:\nproducer stderr"
+                    )
+                return original(spec, **kwargs)
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = ("#define _GNU_SOURCE 1\n#include <signal.h>\nint main(void) { return SIGRTMIN; }\n"
+                          if stage == "platform-model-check" else "int main(void) { return 0; }\n")
+                extras = {"kernel/unit.c": "before\n", "patch.diff": "+++ b/unit.c\n"} if stage == "patch-0" else None
+                project = self.project(root, source, extra_files=extras)
+                target = json.loads((project / "target.json").read_text())
+                if stage == "patch-0":
+                    target.update(profile="ecu", kernelSources=["unit.c"],
+                                  kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}])
+                    (project / "target.json").write_text(json.dumps(target))
+                    seal = project / "meta/files.sha256"
+                    seal.write_text("\n".join(
+                        hashlib.sha256((project / "target.json").read_bytes()).hexdigest() + "  target.json"
+                        if row.endswith("  target.json") else row for row in seal.read_text().splitlines()) + "\n")
+                with patch.object(c_check, "run_bounded", side_effect=windows_failure):
+                    self.assertEqual(c_check.check(project, target["target"], root / "analysis"), 1)
+                error = json.loads((root / "analysis/summary.json").read_text())["error"]
+                for evidence in (explanation, stage, r"C:\project\bsw\src\main.c", "exit_code=1",
+                                 "stdout:\nproducer stdout", "stderr:\nproducer stderr"):
+                    self.assertIn(evidence, error)
 
     def test_clean_main_passes(self):
         self.assertTrue(self.analyze("int main(void) { return 0; }\n")["passed"])
@@ -84,7 +154,7 @@ class ActualCAnalysisTests(unittest.TestCase):
                 self.assertEqual(c_check.check(project, target, root / "analysis"), 1)
                 summary = json.loads((root / "analysis/summary.json").read_text())
                 self.assertFalse(summary["passed"])
-                self.assertIn("Compiler validation failed", summary["error"])
+                self.assertIn("compiler-unit-0", summary["error"])
 
     def test_host_adapter_and_application_are_not_classified_as_bsw(self):
         for name in ("integration/src/adapter.c", "app/Application/Application.c"):
@@ -167,7 +237,9 @@ class ActualCAnalysisTests(unittest.TestCase):
                 self.assertEqual(code, 0 if summary["passed"] else 1)
                 if invalid:
                     self.assertFalse(summary["passed"])
-                    self.assertIn("Compiler validation failed for bsw/src/helper.c", summary["error"])
+                    self.assertIn("bsw/src/helper.c", summary["error"])
+                    self.assertIn("compiler-unit-", summary["error"])
+                    self.assertIn("exit_code=1", summary["error"])
                 else:
                     self.assertIsNone(summary["error"])
                     self.assertEqual(summary["scope"]["compilerWorkers"], 4)

@@ -175,6 +175,25 @@ fn normal_and_nonzero_preserve_logs_and_exit_code() {
     let result = run_bounded(fixture.spec("fail", Duration::from_secs(8))).unwrap_err();
     assert!(result.to_string().contains("exit_code=Some(7)"), "{result}");
     assert!(result.to_string().contains("stderr.log"), "{result}");
+    assert!(result.to_string().contains("probe.py"), "{result}");
+    assert!(result.to_string().contains("command=["), "{result}");
+    let cwd = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("tools/python/src");
+    assert!(
+        result
+            .to_string()
+            .contains(&format!("cwd={}", cwd.display())),
+        "{result}"
+    );
+    assert!(result.to_string().contains("fail"), "{result}");
+    assert!(
+        result
+            .to_string()
+            .contains(&fixture.0.display().to_string()),
+        "{result}"
+    );
     // The failure carries the captured output, not only paths to scratch logs.
     assert!(
         result.to_string().contains("probe failure on stderr"),
