@@ -127,7 +127,7 @@ R10 实机集成前，对由 R11、R7、R8、所需 R9 及必要存储／健康�
 
 ## 规划方式
 
-- 近期阶段（Epic 9 剩余工作、下一项 R）用 GitHub Milestone 表示，具体工作用 Issue 跟踪；Issue 写明依据的规范条款、独立预期和验证命令。
+- 近期阶段（Epic 9 剩余工作、下一项 R）用 GitHub Milestone 表示，Milestone 只为已承诺的阶段建立，长期候选只写在本文；具体工作用 Issue 跟踪；Issue 写明依据的规范条款、独立预期和验证命令。
 - 长期候选只在[长期候选目录](candidates.md)保持成果级定义；不为未确定的接口、容量、参数和目标创建占位 Issue，也不估算工期或承诺日期。
 - 改变路线顺序、产品契约或支持边界的决定写入 [docs/adr/](../adr/)，并在本文更新。
 - 已完成阶段的历史证据保留在 Git 历史和已合并 PR 中，不在本文复述。2026-10 之前的产品简述、PRD、Epic／Story 规格与回顾保存在归档标签 `planning-archive-2026-10` 的 `_bmad-output/` 下，可用 `git show planning-archive-2026-10:<路径>` 或在 GitHub 上按该标签浏览。

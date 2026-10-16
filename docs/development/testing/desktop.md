@@ -21,3 +21,9 @@ node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
 关闭会话后，测试断言应用进程树已全部退出，残留时列出 pid、名称和命令行；按 Ctrl-C 或取消 CI 也会结束私有 display 与 driver 进程组。
 
 `desktop.yml` 在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` 上构建验证版并运行全部场景，结果目录作为工件保留 14 天。它由 [`Extended checks`](README.md#ci) 调用：改动 `ui/`、`src-tauri/` 或 `tests/desktop/` 的 PR，以及改动这些目录、`core/` 或 Cargo 依赖的 master 推送；PR 加 `full-ci` 标签时也运行。手动运行 `desktop.yml` 可在 `scenarios` 中填写以空格分隔的场景文件或 glob，只运行受影响的场景，默认全部。它目前不在必需检查中。这些场景验证开发构建的界面与 IPC，不提供安装包、无源码 checkout 或断网环境的验收证据。
+
+## 编写场景
+
+- 原生交互按真实异步操作边界同步：对话框出现后等待其可操作且获得焦点，再测试键盘；保存配置后同时核对界面控件解除忙态，不能把 capability 值已更新当作界面动作已完成；对话框关闭后等待后台事务完成，再发起后续 IPC。不能用弱化并发拒绝或固定延时掩盖操作竞态。
+- 场景按 IPC 错误的消息 key 判断后端错误，不匹配界面翻译文本。
+- Windows 上 msedgedriver 的参数只能经上述 WebView2 API 转交，不要另设 `WEBVIEW2_USER_DATA_FOLDER`。改写应用的 `USERPROFILE` 时须提供 `Desktop`，否则 Shell 会在原生选择框之外再弹出“位置不可用”；场景遇到选择框以外的原生对话框应失败并报告其文字，不能静默关闭。

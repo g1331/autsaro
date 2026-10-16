@@ -33,3 +33,30 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - 经 `ecu-tool` 封存构建的 ECU（`integration::protocol`、`sealed_projects` 等）不插桩：交付工具只接受 `target.json` 锁定的编译选项，并核对段布局。只列出直接编译程序的模块，避免重复运行未插桩的构建；HostBatch 集成路径的检测器覆盖见 [#140](https://github.com/g1331/autsaro/issues/140)。
 
 必需 CI 的 `native-sanitizers` 任务在 Linux 上按 `thread` 与 `address,undefined` 各用一个 runner 运行上述命令；与 `native`、`native-os` 并行。
+
+## 平台与路径
+
+- 公共开发与交付流程不绑定本机 Windows 路径、代理会话或隐藏环境；源码、条件编译和公共命令按真实能力或平台命名。解析工具输出的相对路径或 Windows 无盘符根路径时，使用工具实际执行目录；涉及临时目录的检查覆盖跨盘情形，不沿用调用方的工作盘。
+- 修改测试共用的临时目录或路径辅助时，确认 Windows 上的 native 套件通过：MinGW 编译器不接受 `\\?\` 规范化路径，需要比较工作区报告路径的测试应自行规范化（桌面场景按界面显示形式比较、预览原样回传，按文件名而非 `/` 后缀筛选文件）。
+- 修改文件保存的发布原语时，同时核对回滚、清理和遗留恢复资料：在移动原文件前验证原语可用性，避免“读取确认后删除”的竞态；不能将 POSIX 的目标类型限制推定为 Windows 保证，按锁定工具链在实际平台验证文件／目录替换。硬链接遗留会共享正式文件内容，须明确恢复语义，并用真实多文件事务验证失败后的字节与基线。
+- 原生 CI 使用交付目标锁定的工具链，不用滚动仓库最新版替代或放宽身份校验。测试以短期限调用 `nm` 等 binutils 时显式指定 BFD 目标（如 `--target=elf64-x86-64`）：Ubuntu 的 `/usr/lib/bfd-plugins` 带 LLVMgold，格式探测会加载 libLLVM，runner 上首次冷加载可超过数秒；外部工具超时先确认它实际加载的内容，不直接归为并行负载。
+
+## 运行时配置结构与源文件迁移
+
+- 给运行时配置结构（如 `Os_TargetConfig`、`Os_ResourceConfig`）加字段时放在末尾，并更新全部位置式初始化：`runtime/*/tests/*.c`、生成器按位置输出的 `c_layout::initializer` 与模板。这些单元以 `-Werror=missing-field-initializers` 编译，生成工程只在 `--features native-tests` 的原生套件中编译，`it` 通过不能证明。测试用 `#define` 给 hook 改名再包含另一个 harness 时，宏也会改写被包含文件里对该 hook 的取址；改由 harness 提供显式观察点。
+- 在 runtime 目录之间迁移 C 源文件或头文件时，从生成样本按每个实际 main 用 `gcc -MM` 列出编译闭包，并与 `integration.json`、ownership ledger 和交付字节逐项核对。GCC 的引号 include 优先查找同目录，迁移使不同目录出现同名头文件时，其解析结果可能改变：交付工程是扁平 include，仓库内按目录拼路径的夹具、工具和 `quality` 检查则不同，要逐个复核；也要检查按目录 glob 的检查是否悄悄漏掉了迁出的文件。原生测试的生成头文件通过实际消费者包含，不用全局 `-include` 注入宿主适配编译单元，避免改变 Windows 系统类型与平台特性宏的包含顺序。
+- 改动交付文件布局（如头文件移入子目录）、原生 fixture 或其共用辅助，重排运行时源码或改变 emitter 排版时，推送前在本地以 `--features native-tests` 运行受影响原生套件，并运行 OS suites、`test_host_boundaries.py` 和带改名变体（如 `OsAlt`）的原生套件。修改 OS 或 BSW 运行时 C 后，推送前也按[检测器构建](#检测器构建)运行受影响套件：插桩改变寄存器分配，`setjmp` 所在函数的 `-Wclobbered` 等告警只在该构建中出现。
+
+## 主机时序与间歇失败
+
+- 主机侧逐 tick 握手（如 HostBatch 等待 tick 完成与输出确认）不能依赖短超时轮询推进：FreeRTOS Windows 端口补丁移除了 `timeBeginPeriod`，Windows 上 1 ms 定时等待约 15.6 ms 才返回，Linux 宿主层则按 1 ms 轮询，问题只在 Windows 负载下表现为 watchdog 超时。对端有待处理工作时显式唤醒，并按单批墙钟预算核对。
+- 宿主线程不得忙等：FreeRTOS 空闲 hook 每轮让出主机 CPU（`idle_state` 的 `host-yield` 场景），否则每个 ECU 进程占满一个 CPU，并在部分机型上拖慢跨线程交接。
+- Windows 托管 runner 混用 AMD EPYC 9V45／9V74／7763 与 Intel Xeon 8370C／8573C，只在一种机型出现的时序失败（#61：9V45 上另一 vCPU 忙等时，跨线程唤醒有约 2 ms 停顿）要按 CPU 型号记录，在同一 runner 上配对比较变体；筛选机型用读取型号后立即结束的小矩阵，不用大矩阵随机抽样占用共享 runner。
+- 子进程失败消息须带 stdout／stderr 的内容，不能只给随 scratch 目录删除的日志路径：共用执行入口（`ProcessOwner::run`、`ecu_tools.process.run_bounded`）与测试的 `tooling::wait_success` 已默认附带输出末尾，新的失败路径沿用它们，不另写只报路径的错误。排查 CI 失败先下载 `native-scratch-*`／`os-suites-*` 现场，不靠猜测重跑。
+- 新增测试后无关用例在 CI 上稳定失败时，按完成时间比较失败与基线运行中重叠的测试，不当作偶发重跑；改变线程交接时机的修复可能暴露依赖原时序的竞态，以超过 CPU 数的并发重复运行受影响用例，比较修复前后的失败率，相互依赖的修复一起合入。
+- 间歇超时先区分挂起与接近期限：Linux 上并发重复到复现，超时时用 `gdb -p` 抓全部线程栈再结束进程，失败检查不带位置时先让它记录源码行。不能未经实测就放宽期限，也不用重试或固定延时掩盖竞态。
+- 长时间原生验收启动前，核对后续消费者阶段所需的全部外层工具路径，保持应用配置阶段的工具隔离；不能把缺失前置条件留到末尾才发现。含大响应时，将完整事件逐条写入既有证据文件，避免在内存保留全部历史 snapshot；保留原有 payload、场景与断言，并分别核查驱动和产品进程的内存，不能用证据写入优化掩盖产品内存问题。
+
+## Windows 进程
+
+受管 supervisor 启动以期限内的认证就绪响应为准，不能将 socket 文件出现当作已开始监听。Windows 上 Job 活动计数归零与进程对象进入已退出状态之间可能有窗口，关闭后的 PID 也会很快被复用：检查进程已关闭时按创建时间排除复用的 PID，并有界等待真实退出事件，不用零超时探测 PID 存活；Windows 的父 PID 在父进程退出后不更新，按父 PID 归属进程树时要求子进程创建时间不早于父进程。

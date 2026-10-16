@@ -32,10 +32,11 @@ RETIRED_IDENTITIES = ("epic4-win64-sr-cs-v1", "epic4-single-application-v1")
 PLAN_NUMBER_EXEMPT = ("docs/adr/", "docs/roadmap/", "third_party/", ".agents/skills/impeccable/")
 # CONTRIBUTING "Documentation layout": a document beyond about 20 KB is split into a directory
 # with a README.md index. Changelogs, single-decision ADRs and traceability archives are
-# exempt, AGENTS.md stays one file by merging entries, and vendored content keeps its bytes.
+# exempt, and vendored content keeps its bytes. AGENTS.md is held to the same limit: some agents
+# load only a bounded amount of project instructions and silently drop the rest.
 DOCUMENT_LIMIT = 20 * 1024
 DOCUMENT_SIZE_EXEMPT = (
-    "CHANGELOG.md", "AGENTS.md", "docs/adr/", "docs/project/archive/",
+    "CHANGELOG.md", "docs/adr/", "docs/project/archive/",
     "third_party/", ".agents/skills/impeccable/",
 )
 # One LLVM release provides both; PyPI publishes them as separate projects, sometimes days apart.
