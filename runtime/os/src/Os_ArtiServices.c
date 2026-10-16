@@ -46,9 +46,8 @@ boolean isOsStarted(void)
         Arti_CaptureServiceStatus((uint32)Os_ArtiAccessStatus());
     }
     if (trace != 0) {
-        Os_ArtiService(OSServiceId_isOsStarted,
-                       Os_ArtiAccessValid() ? ((result == TRUE) ? 1u : 0u) : UINT32_MAX,
-                       1);
+        const uint32 started = result ? 1u : 0u;
+        Os_ArtiService(OSServiceId_isOsStarted, Os_ArtiAccessValid() ? started : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
     return result;

@@ -597,7 +597,7 @@
     },
     {
       "path": "runtime/os/src/Os_ArtiServices.c",
-      "sha256": "0af2d3ce38e5ed4e0b5df71806f2ed76aa11279e81155f450388b50ca4d595df",
+      "sha256": "bd362608f6ba116c0946c2e5e165983577997184717fe950d28305a2da5820de",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
