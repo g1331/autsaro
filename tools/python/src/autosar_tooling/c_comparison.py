@@ -57,8 +57,6 @@ def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
             raise ValueError("Checker coverage differs")
         if digest(old_root / FILE_HASHES) != previous["sourceSealSha256"]:
             raise ValueError("Baseline source seal identity differs")
-        if project.name != baseline.name:
-            raise ValueError(f"Sample identity differs: {project.name} != {baseline.name}")
         # Source bytes may change; the selected target/configuration/link closure may not.
         if _read(project / "target.json") != _read(old_root / "target.json"):
             raise ValueError("Target/sample configuration differs")

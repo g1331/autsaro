@@ -84,7 +84,7 @@ class CComparisonTests(unittest.TestCase):
                     compare(current, project, output, baseline)
 
     def test_missing_sources_changed_configuration_or_sample_and_bad_seal_refuse(self):
-        for name in ("source", "seal", "target", "plan", "sample"):
+        for name in ("source", "seal", "target", "plan"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 current, project, output, baseline = self.fixture(Path(temporary))
                 if name == "source":
@@ -95,10 +95,15 @@ class CComparisonTests(unittest.TestCase):
                     (project / "target.json").write_text('{}')
                 elif name == "plan":
                     (project / "meta/integration.json").write_text('{"plan":{}}')
-                else:
-                    project = project.rename(project.with_name("other-sample"))
                 with self.assertRaisesRegex(ValueError, "C baseline refused:"):
                     compare(current, project, output, baseline)
+
+    def test_sample_identity_uses_configuration_rather_than_result_directory_name(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.fixture(Path(temporary))
+            baseline = baseline.rename(baseline.with_name("downloaded-analysis"))
+            project = project.rename(project.with_name("local-project"))
+            self.assertEqual(compare(current, project, output, baseline), {"new": [], "removed": []})
 
     def test_different_binary_build_is_allowed_and_passed_false_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
