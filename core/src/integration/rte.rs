@@ -146,17 +146,22 @@ pub(super) fn files(
                 source.push('\n');
             }
             section(&mut source, scope, "VAR_INIT_UNSPECIFIED", false);
-            section(&mut source, scope, "VAR_CLEARED_UNSPECIFIED", true);
-            for receiver in receivers.iter().filter(|receiver| receiver.scope == scope) {
-                let name = &receiver.name;
-                if receiver.received {
-                    source.push_str(&format!("/* Owner-only reception status; starts FALSE and publication sets TRUE. */\nstatic boolean {name}_received RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n"));
+            if receivers
+                .iter()
+                .any(|receiver| receiver.scope == scope && (receiver.received || receiver.expired))
+            {
+                section(&mut source, scope, "VAR_CLEARED_UNSPECIFIED", true);
+                for receiver in receivers.iter().filter(|receiver| receiver.scope == scope) {
+                    let name = &receiver.name;
+                    if receiver.received {
+                        source.push_str(&format!("/* Owner-only reception status; starts FALSE and publication sets TRUE. */\nstatic boolean {name}_received RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n"));
+                    }
+                    if receiver.expired {
+                        source.push_str(&format!("/* Owner-only timeout status; a successful reception clears it. */\nstatic boolean {name}_expired RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n"));
+                    }
                 }
-                if receiver.expired {
-                    source.push_str(&format!("/* Owner-only timeout status; a successful reception clears it. */\nstatic boolean {name}_expired RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n"));
-                }
+                section(&mut source, scope, "VAR_CLEARED_UNSPECIFIED", false);
             }
-            section(&mut source, scope, "VAR_CLEARED_UNSPECIFIED", false);
         }
     }
     source.push_str("#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_Rte_CODE Std_ReturnType Rte_Start(void)\n{\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) {\n        return RTE_E_LIMIT;\n    }\n    if (rte_allocated == TRUE) {\n        return RTE_E_LIMIT;\n    }\n");
@@ -164,6 +169,9 @@ pub(super) fn files(
     section(&mut source, "Rte", "CODE", false);
     for component in &composition.components {
         let scope = super::short_name(&component.component);
+        if !scopes.contains(&(scope.to_owned(), "CODE")) {
+            continue;
+        }
         section(&mut source, scope, "CODE", true);
         for port in &component.data_ports {
             let endpoint = Endpoint {

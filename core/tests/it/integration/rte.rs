@@ -743,3 +743,50 @@ fn input_types_have_consistent_trusted_emitters_and_required_initial_values() {
         "/Application/Unused",
     );
 }
+
+#[test]
+fn private_rte_memory_sections_have_real_consumers_and_no_generic_aliases() {
+    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    let mapping = files
+        .iter()
+        .find(|(path, _)| path == "generated/include/Rte_MemMap.h")
+        .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
+        .unwrap();
+    for alias in [
+        "RTE_CODE",
+        "RTE_CONST",
+        "RTE_VAR_INIT",
+        "RTE_VAR_CLEARED",
+        "RTE_CONFIG_DATA_PREBUILD",
+    ] {
+        assert!(!mapping.contains(&format!("#define {alias} ")), "{alias}");
+        assert!(!mapping.contains(&format!("#undef {alias}\n")), "{alias}");
+    }
+    let mut used = std::collections::BTreeSet::new();
+    for (path, bytes) in &files {
+        if !path.ends_with(".c") {
+            continue;
+        }
+        let source = std::str::from_utf8(bytes).unwrap();
+        for (index, line) in source.lines().enumerate() {
+            if let Some(keyword) = line.strip_prefix("#define RTE_") {
+                if keyword.contains("_START_SEC_") {
+                    used.insert(keyword.to_owned());
+                    let next = source.lines().nth(index + 2).unwrap();
+                    assert!(
+                        !next.starts_with("#define RTE_"),
+                        "empty section in {path}: {keyword}"
+                    );
+                }
+            }
+        }
+    }
+    let described: std::collections::BTreeSet<_> = mapping
+        .lines()
+        .filter_map(|line| line.split("defined(RTE_").nth(1))
+        .filter_map(|line| line.strip_suffix(')'))
+        .filter(|keyword| keyword.contains("_START_SEC_"))
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(described, used);
+}

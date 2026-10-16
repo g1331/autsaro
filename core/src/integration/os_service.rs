@@ -74,7 +74,7 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
             (&symbol, &served, operation, "CounterID"),
             (&port, &parameters, symbol.as_str(), counter_symbol),
         ] {
-            let head = c_layout::signature("RTE_CODE StatusType", name, parameters, "", true);
+            let head = c_layout::signature("RTE_Rte_CODE StatusType", name, parameters, "", true);
             let arguments: Vec<String> = std::iter::once(first.to_owned())
                 .chain(forwarded.iter().cloned())
                 .collect();

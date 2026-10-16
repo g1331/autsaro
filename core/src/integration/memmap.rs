@@ -12,35 +12,48 @@ pub(super) fn rte_sections(
         ("Rte".into(), "VAR_CLEARED_UNSPECIFIED"),
         ("Rte".into(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"),
     ];
+    let receivers = super::rte_memory::receivers(composition);
     for component in &composition.components {
         let scope = super::short_name(&component.component);
-        sections.push((scope.into(), "CODE"));
+        if !component.data_ports.is_empty()
+            || component.operations.iter().any(|operation| operation.read)
+            || component
+                .runnables
+                .iter()
+                .any(|runnable| runnable.event.is_none())
+        {
+            sections.push((scope.into(), "CODE"));
+        }
         sections.push((scope.into(), "CONST_UNSPECIFIED"));
-        sections.push((scope.into(), "VAR_CLEARED_UNSPECIFIED"));
-        if component.data_ports.iter().any(|port| port.read) {
+        if receivers.iter().any(|receiver| receiver.scope == scope) {
             sections.push((scope.into(), "VAR_INIT_UNSPECIFIED"));
         }
+        if receivers
+            .iter()
+            .any(|receiver| receiver.scope == scope && (receiver.received || receiver.expired))
+        {
+            sections.push((scope.into(), "VAR_CLEARED_UNSPECIFIED"));
+        }
     }
-    if !composition
+    let mode_scope = composition
         .components
         .iter()
-        .any(|component| component.diagnostic_session_port.is_some())
-    {
-        sections.push(("Dcm".into(), "CODE"));
-        sections.push(("Dcm".into(), "VAR_CLEARED_UNSPECIFIED"));
-    }
+        .find(|component| component.diagnostic_session_port.is_some())
+        .map(|component| super::short_name(&component.component))
+        .unwrap_or("Dcm");
+    sections.push((mode_scope.into(), "CODE"));
+    sections.push((mode_scope.into(), "VAR_CLEARED_UNSPECIFIED"));
     sections.push((
         plan.ecu_communication()?.partition.name.clone(),
         "CALLOUT_CODE",
     ));
     // Integration configuration and RTE/SchM share RTE_<module> scopes. One header
-    // owns every scope so a prefix has one unambiguous BSWMD artifact.
+    // owns every scope so a prefix has one unambiguous BSWMD artifact. Only the
+    // allocations emitted for this configuration belong to its private table.
     for scope in [
         "Can",
         "CanIf",
         "Com",
-        "CanTp",
-        "Dcm",
         "PduR",
         "LSduR",
         "ComM",
@@ -50,7 +63,15 @@ pub(super) fn rte_sections(
         "Ecu",
     ] {
         sections.push((scope.into(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"));
+    }
+    for scope in ["Com", "ComM", "Ecu"] {
         sections.push((scope.into(), "CODE"));
+    }
+    if plan.diagnostic_transport.is_some() {
+        for scope in ["CanTp", "Dcm"] {
+            sections.push((scope.into(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"));
+        }
+        sections.push(("Dcm".into(), "CODE"));
     }
     sections.sort();
     sections.dedup();
@@ -87,14 +108,11 @@ pub(super) fn rte(scopes: &[(String, &str)], code_section: Option<&str>) -> Stri
             Some(section) if class == "CODE" => section.to_owned(),
             _ => format!(".{section_name}.rte.{scope}.{segment}"),
         };
-        let macros = c_layout::defines(&[
-            (
-                format!("RTE_{scope}_{segment}"),
-                format!("__attribute__((section(\"{placement}\")))"),
-            ),
-            (format!("RTE_{class}"), format!("RTE_{scope}_{segment}")),
-        ]);
-        mapping.push_str(&format!("#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n{macros}#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n#undef RTE_{class}\n", if index == 0 { "if" } else { "elif" }));
+        let macros = c_layout::defines(&[(
+            format!("RTE_{scope}_{segment}"),
+            format!("__attribute__((section(\"{placement}\")))"),
+        )]);
+        mapping.push_str(&format!("#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n{macros}#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n", if index == 0 { "if" } else { "elif" }));
     }
     mapping.push_str("#else\n#error \"Unknown RTE memory section\"\n#endif\n");
     mapping
