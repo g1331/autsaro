@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Added:** `c-check --baseline` compares complete local analysis with matching CI artifacts by rule, file and source text, retaining new and removed occurrence counts and refusing incompatible identities (#219).
+- **Fixed:** Development Git queries and kernel patch application have 30-second deadlines; analysis and development-tool failures retain command, stage, raw exit status and output tails (#219).
+
 - POSIX process cleanup treats a sibling disappearing during /proc inspection as exited, while unobservable live children still prevent confirmed cleanup. Native process tests retain their logs on failure.
 
 - Runtime asset SHA-256 values are computed at build time rather than maintained in the source inventory. Delivered meta/assets.json retains its v2 bytes for unchanged runtime sources; installed-resource verification and fixed FreeRTOS source identities remain enforced. The rule-set identity and dependent seal metadata change because their inventory includes the modified build script. The 15 controlled patch digests move to the FreeRTOS source manifest to preserve ADR 0004 pinning; that provenance file changes, while patch bytes, kernel/port identities, C ABI and licenses stay unchanged. assets update now maintains only the independent seal-guard inventory.
