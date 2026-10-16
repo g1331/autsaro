@@ -372,9 +372,11 @@ class CoverageTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(requirements.RequirementError, re.escape(problem)):
                 coverage.check_table(documents)
-        with patch.object(coverage, "TABLE", [*coverage.TABLE, coverage.m("Again", "CANInterface")]):
-            with self.assertRaisesRegex(requirements.RequirementError, re.escape("duplicated ['CANInterface']")):
-                coverage.check_table(official)
+        with (
+            patch.object(coverage, "TABLE", [*coverage.TABLE, coverage.m("Again", "CANInterface")]),
+            self.assertRaisesRegex(requirements.RequirementError, re.escape("duplicated ['CANInterface']")),
+        ):
+            coverage.check_table(official)
 
     def test_tally_counts_verified_gaps_and_unreviewed_items(self):
         with tempfile.TemporaryDirectory() as directory:
