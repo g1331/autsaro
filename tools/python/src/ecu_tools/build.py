@@ -214,6 +214,23 @@ def kernel_patch_environment(kernel: Path) -> dict[str, str]:
     return {**os.environ, "GIT_CEILING_DIRECTORIES": str(kernel.resolve(strict=True).parent)}
 
 
+def kernel_patch_targets(kernel: Path, patch: Path, includes: list[str] | tuple[str, ...]) -> dict[Path, bytes]:
+    """Current bytes of the kernel files a patch changes, limited to the selected includes."""
+    names = [line.removeprefix("+++ b/").split("\t")[0]
+             for line in patch.read_text(encoding="utf-8").splitlines() if line.startswith("+++ b/")]
+    names = [name for name in names if not includes or name in includes]
+    if not names:
+        raise ValueError(f"Kernel patch selects no file: {patch.name}")
+    return {kernel / name: (kernel / name).read_bytes() for name in names}
+
+
+def require_kernel_patch_applied(patch: Path, before: dict[Path, bytes]) -> None:
+    """A successful git apply is not proof: every selected file must actually change."""
+    unchanged = [path.name for path, data in before.items() if path.read_bytes() == data]
+    if unchanged:
+        raise RuntimeError(f"Kernel patch {patch.name} left {', '.join(unchanged)} unchanged")
+
+
 def build(project: Path, output: Path, mode: str, control_source: Path | None = None) -> Path:
     names, target = sealed_sources(project)
     project = project.resolve(strict=True)
@@ -248,6 +265,7 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
         if relative not in names:
             raise ValueError(f"Pinned patch is missing: {relative}")
         patch_flags = ["--include=" + name for name in patch["includes"]]
+        before = kernel_patch_targets(kernel, project / relative, patch["includes"])
         for checked in (True, False):
             argv = [str(git), "apply", "--ignore-space-change", *patch_flags,
                     *(["--check"] if checked else []), tool_argument(project / relative)]
@@ -255,6 +273,7 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
                                   env=kernel_patch_environment(kernel))).wait()
             if not result.success:
                 raise RuntimeError(f"Kernel patch failed: {relative}; logs={logs}")
+        require_kernel_patch_applied(project / relative, before)
     sources = [tool_argument(project / name) for name in source_map]
     kernel_sources = target.get("kernelSources")
     if not kernel_sources or any(not safe_relative(name) or not (kernel / name).is_file() for name in kernel_sources):

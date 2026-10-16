@@ -83,6 +83,20 @@ class CAnalysisTests(unittest.TestCase):
             self.assertEqual(errors[0]["locations"][0]["file"], "src/Can.c")
             self.assertFalse(errors[0]["adopted"])
             self.assertTrue(errors[1]["adopted"])
+            # The same kernel line changed by a pinned patch is project code.
+            errors = c_check.parse_diagnostics(xml, root, {"kernel/tasks.c": [1]})
+            self.assertFalse(errors[1]["adopted"])
+            self.assertTrue(errors[1]["patched"])
+            self.assertFalse(errors[0]["patched"])
+
+    def test_patched_kernel_lines_are_the_added_and_changed_lines(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve(strict=True)
+            for side, text in (("project", "a\nb\nc\n"), ("root", "a\nB\nc\nd\n")):
+                (base / side / "kernel").mkdir(parents=True)
+                (base / side / "kernel/tasks.c").write_text(text)
+            lines = c_check.kernel_patched_lines(base / "project", base / "root", {base / "root/kernel/tasks.c"})
+            self.assertEqual(lines, {"kernel/tasks.c": [2, 4]})
         for xml in ("", "<results/>", "<wrong><errors/></wrong>"):
             with self.subTest(xml=xml), self.assertRaises((ValueError, c_check.ET.ParseError)):
                 c_check.parse_diagnostics(xml, Path.cwd())

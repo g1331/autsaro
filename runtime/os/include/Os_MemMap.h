@@ -1,6 +1,6 @@
-/** @file Repeated-include memory mapping for the fixed Win64 OS code target.
+/** @file Repeated-include memory mapping for the OS code of the controlled x64 host targets.
  * OS_START_SEC_CODE and OS_STOP_SEC_CODE surround OS entry declarations.
- * OS_CODE binds their definitions to a readable, executable PE code section.
+ * OS_CODE binds their definitions to the read-only executable .os_code section (PE or ELF).
  * The header intentionally has no include guard.
  */
 #ifndef OS_MEMMAP_ATTRIBUTES_DEFINED

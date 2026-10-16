@@ -287,7 +287,7 @@
     },
     {
       "path": "runtime/os/include/Os_MemMap.h",
-      "sha256": "4e5f81f0096dd5c0c94d09aaca9a4734f2f7dfc7415bda0b5bef490d9addc847",
+      "sha256": "16c4535b7f81758173134f9c958a27d337c7cb1c9f0b82a0670eb4ef275d023d",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -764,7 +764,7 @@
     },
     {
       "path": "runtime/os/src/Os_Vector.h",
-      "sha256": "58e8663611d1d5856d008f95518f6558a93bb33e681a4bbcdf5ee5103fcae7e2",
+      "sha256": "38cda971aa859406673293650eb3bf6e091dbeb35de91564371120b4c3fd652f",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -911,7 +911,7 @@
     },
     {
       "path": "tools/python/src/ecu_tools/build.py",
-      "sha256": "51acfa321c801f37b8c06b1346997c450262efa9f9b64c7e8f95ddc5e722059d",
+      "sha256": "68e590286dc14e8ce8a904e780b15338684239e0a3381f6a1868f2003e370282",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

@@ -22,7 +22,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from autosar_tooling.config import ROOT
-from ecu_tools.build import kernel_patch_environment
+from ecu_tools.build import (
+    kernel_patch_environment, kernel_patch_targets, require_kernel_patch_applied,
+)
 from ecu_tools.owner import Owner, OwnershipError
 from ecu_tools.process import OwnedProcess, ProcessSpec
 
@@ -247,27 +249,33 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         ):
             patch = target / "patches" / name
             selection = [f"--include={path}" for path in includes]
+            before = kernel_patch_targets(copied, patch, includes)
             for check in (True, False):
                 run_native(
                     ["git", "apply", "--ignore-space-change", *selection,
                      *(["--check"] if check else []), str(patch)],
                     cwd=copied, check=True, env=kernel_patch_environment(copied),
                 )
+            require_kernel_patch_applied(patch, before)
         for patch in sorted((target / "patches/linux").glob("*.patch")):
+            before = kernel_patch_targets(copied, patch, ())
             for check in (True, False):
                 run_native(
                     ["git", "apply", "--ignore-space-change",
                      *(["--check"] if check else []), str(patch)],
                     cwd=copied, check=True, env=kernel_patch_environment(copied),
                 )
+            require_kernel_patch_applied(patch, before)
     else:
         for patch in sorted((target / "patches").glob("*.patch")):
+            before = kernel_patch_targets(copied, patch, ())
             for check in (True, False):
                 run_native(
                     ["git", "apply", "--ignore-space-change",
                      *(["--check"] if check else []), str(patch)],
                     cwd=copied, check=True, env=kernel_patch_environment(copied),
                 )
+            require_kernel_patch_applied(patch, before)
     binary = directory / ("os_harness" if linux else "os_harness.exe")
     native_sources = (
         [
@@ -1697,6 +1705,8 @@ def check_public_compatibility(directory: Path) -> None:
                                                 "baseline_symbols": signatures[1]})
 
 
+# The table lives in its own relocatable section (.os_vec), checked in the linked image.
+# Verifies: SWS_Os_00336
 def check_vector_mutations(directory: Path) -> None:
     positive = directory / "positive"
     positive.mkdir()
@@ -1818,6 +1828,8 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
             raise AssertionError(f"{name} Counter client linked successfully")
 
 
+# Task, ISR, alarm callback and hook declarations sit inside OS_START/STOP_SEC_CODE.
+# Verifies: SWS_Os_00815
 def check_memory_mapping(directory: Path) -> None:
     cc = compiler()
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"

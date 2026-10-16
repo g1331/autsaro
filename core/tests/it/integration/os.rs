@@ -463,3 +463,34 @@ fn public_headers_are_delivered_unchanged() {
         );
     }
 }
+
+/// Every generated Task (and ISR) body is wrapped in the OS code section markers,
+/// so `Os_MemMap.h` places it with the OS entries.
+// Verifies: SWS_Os_00815
+#[test]
+fn generated_task_entries_are_wrapped_in_os_memory_mapping() {
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    let config = files
+        .iter()
+        .find(|(path, _)| path == "generated/src/Ecu_Config.c")
+        .map(|(_, bytes)| String::from_utf8(bytes.clone()).unwrap())
+        .unwrap();
+    let lines: Vec<_> = config.lines().collect();
+    let entries: Vec<_> = (0..lines.len())
+        .filter(|at| lines[*at].starts_with("TASK(") || lines[*at].starts_with("ISR("))
+        .collect();
+    assert!(!entries.is_empty(), "{config}");
+    for at in entries {
+        assert_eq!(
+            lines[at - 2..at],
+            ["#define OS_START_SEC_CODE", "#include \"Os_MemMap.h\""],
+            "{config}"
+        );
+        assert_eq!(
+            lines[at + 1..at + 3],
+            ["#define OS_STOP_SEC_CODE", "#include \"Os_MemMap.h\""],
+            "{config}"
+        );
+    }
+}

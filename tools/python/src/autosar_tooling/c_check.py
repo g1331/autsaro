@@ -1,6 +1,7 @@
 """Analyze a sealed generated C project without modifying its source package."""
 from __future__ import annotations
 
+import difflib
 import importlib.util
 import json
 import os
@@ -17,7 +18,9 @@ from ecu_tools.build import (
     TARGETS,
     digest,
     kernel_patch_environment,
+    kernel_patch_targets,
     refuse_links,
+    require_kernel_patch_applied,
     safe_relative,
     sealed_sources,
     target_configuration,
@@ -167,6 +170,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     shutil.copytree(project, root)
     sealed_sources(root)
     sources = list(sources)
+    patched_lines = {}
     if target.get("profile") == "ecu":
         kernel_sources = target.get("kernelSources")
         if (not isinstance(kernel_sources, list) or not kernel_sources
@@ -175,10 +179,13 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         git = shutil.which("git")
         if not git:
             raise ValueError("Git is required to prepare the reviewed kernel patches")
+        touched = set()
         for index, patch in enumerate(target["kernelPatches"]):
             patch_path = patch["path"].removeprefix("runtime/")
             if patch_path not in names:
                 raise ValueError("Pinned kernel patch is outside the sealed inventory")
+            before = kernel_patch_targets(root / "kernel", root / patch_path, patch["includes"])
+            touched.update(before)
             argv = [str(Path(git).resolve()), "apply", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]), str(root / patch_path)]
             # Apply only inside the copied kernel, never the authoritative source.
@@ -186,6 +193,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                   env=kernel_patch_environment(root / "kernel"))).wait()
             if not result.success:
                 raise ValueError(f"Kernel patch {index} failed; raw logs retained")
+            require_kernel_patch_applied(root / patch_path, before)
+        patched_lines = kernel_patched_lines(project, root, touched)
         sources.extend("kernel/" + name for name in kernel_sources)
         sources.extend(target_entry(names, target, mode) for mode in ("host-batch", "probe"))
     elif target.get("profile") != "host":  # plain sealed C project, used by analyzer fixtures; deliveries are always "ecu"
@@ -316,10 +325,24 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                    "platformLibrary": {"path": str(library_model), "sha256": digest(library_model), "stdioModes": stdio_modes} if library_model else None,
                                    "translationUnits": sources, "supplemental": supplemental,
                                    "adoptedSources": [name for name in sources if name.startswith("kernel/")],
-                                   "patchedKernel": target.get("kernelPatches", [])}
+                                   "patchedKernel": target.get("kernelPatches", []),
+                                   "patchedLines": patched_lines}
 
 
-def parse_diagnostics(xml: str, root: Path) -> list[dict]:
+def kernel_patched_lines(project: Path, root: Path, touched: set[Path]) -> dict[str, list[int]]:
+    """Lines of the patched kernel copy that the pinned patches added or changed."""
+    lines = {}
+    for path in sorted(touched):
+        name = path.relative_to(root).as_posix()
+        upstream = (project / name).read_text(encoding="utf-8").splitlines()
+        patched = path.read_text(encoding="utf-8").splitlines()
+        matcher = difflib.SequenceMatcher(None, upstream, patched, autojunk=False)
+        lines[name] = [line + 1 for tag, _, _, start, end in matcher.get_opcodes()
+                       if tag in ("replace", "insert") for line in range(start, end)]
+    return lines
+
+
+def parse_diagnostics(xml: str, root: Path, patched_lines: dict[str, list[int]] | None = None) -> list[dict]:
     tree = ET.fromstring(xml)
     if tree.tag != "results" or tree.find("errors") is None:
         raise ValueError("Cppcheck did not produce a complete XML result")
@@ -332,9 +355,13 @@ def parse_diagnostics(xml: str, root: Path) -> list[dict]:
             if path.is_absolute() and path.is_relative_to(root):
                 file = path.relative_to(root).as_posix()
             locations.append({"file": file, "line": location.get("line"), "column": location.get("column")})
+        # A diagnostic on a line a pinned patch added or changed is project code, not adopted.
+        patched = any(row["line"] is not None and int(row["line"]) in (patched_lines or {}).get(row["file"], ())
+                      for row in locations)
         diagnostics.append({"id": error.get("id"), "severity": error.get("severity"),
-                            "message": error.get("msg"), "locations": locations,
-                            "adopted": bool(locations) and all(row["file"].startswith("kernel/") for row in locations)})
+                            "message": error.get("msg"), "locations": locations, "patched": patched,
+                            "adopted": bool(locations) and not patched
+                            and all(row["file"].startswith("kernel/") for row in locations)})
     return diagnostics
 
 
@@ -365,7 +392,7 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
     command = argv
     code, _, stderr = run(argv, output, "cppcheck")
     (output / "diagnostics.xml").write_text(stderr, encoding="utf-8")
-    diagnostics = parse_diagnostics(stderr, root)
+    diagnostics = parse_diagnostics(stderr, root, scope.get("patchedLines"))
     passed = code == 0 and not any(row["id"] != "checkersReport" for row in diagnostics)
     inventory = (output / "cache/files.txt").read_text(encoding="utf-8").splitlines()
     parsed = {Path(line.split(":::" , 1)[-1]).resolve() for line in inventory}
