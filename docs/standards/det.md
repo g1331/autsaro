@@ -12,6 +12,8 @@ Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把�
 
 生成器要求显式 Det 模块及 `DetGeneral/DetVersionInfoApi=false`，`DetForwardToDlt` 可省略或为 false。`DetNotification/DetReportRuntimeErrorCallout` 必须恰为 `Ecu_DetRuntimeCallout`，该 callout 把 CanTp 的发送／接收超时送入 HostBatch 收据；其他模块、API 或错误不会改变收据。它在 `generated/include/Det_Externals.h` 声明，在 `generated/src/Det_Callouts.c` 定义，使用独立的 `DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE` 段。
 
+当前静态交付的 `Det_MemMap.h` 固定了这个 callout 的段标记与 `.text.det.Ecu_DetRuntimeCallout`，只适用于上述唯一通知选择。以后放开集成方 callout 或开发 hook 前，须按实际配置生成 MemMap，使原型段标记与函数名称一致、每个 callout 有独立段；依据 R24-11 BSW General §7.1.13 的 00135／00136，影响和退出条件由 [#206](https://github.com/g1331/autsaro/issues/206) 跟踪。该扩展未排期，不改变当前配置下的条款处置。
+
 目标限制在计划层表达，内置 ECUC 定义保留官方类型、多重性、默认值与数值范围。当前拒绝启用 DLT、版本 API、其他 runtime callout 和开发 hook；C 层标准消费者仍可用 `Det_ConfigType` 验证任意有界、不可变的 hook 列表。可选 `DetConfigSet` 可为空，非空 `DetModule` 在生成前拒绝；因此当前没有经 VFB 连接的 SWC Det 服务，也不丢弃其 ModuleId／InstanceId。
 
 ## 接口与报告义务
