@@ -176,7 +176,6 @@ impl ValidatedIntegrationPlan {
                 datatype.native_type, datatype.symbol
             ));
         }
-        types.push_str("#include \"Rte_Dcm_Type.h\"\n");
         let mut files = vec![
             (
                 "include/Rte_Cfg.h".into(),
@@ -383,7 +382,7 @@ impl ValidatedIntegrationPlan {
                 "/** @file Application contract for {name}. */\n#ifndef {guard}\n#ifndef RTE_CORE\n#ifdef RTE_APPLICATION_HEADER_FILE\n#error Multiple application header files included.\n#endif\n#define RTE_APPLICATION_HEADER_FILE\n#endif\n#define {guard}\n{body}\n#endif\n"
             );
             files.push((component.header.clone(), application_header.into_bytes()));
-            files.push((format!("include/Rte_{name}_Type.h"), header(&format!("RTE_{name}_TYPE_H"), "#include \"Rte_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n#ifdef __cplusplus\n}\n#endif\n")));
+            files.push((format!("include/Rte_{name}_Type.h"), header(&format!("RTE_{name}_TYPE_H"), "#include \"Rte_Type.h\"\n#include \"Rte_Dcm_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n#ifdef __cplusplus\n}\n#endif\n")));
             files.push((
                 format!("include/{name}_MemMap.h"),
                 super::memmap::component(name).into_bytes(),
