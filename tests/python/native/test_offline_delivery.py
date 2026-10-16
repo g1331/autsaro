@@ -34,7 +34,9 @@ def receiver_environment(source: dict[str, str], receiver: str) -> dict[str, str
     if os.name == "nt":
         system = Path(os.environ["SYSTEMROOT"])
         directories = [system / "System32", system]
-        kept = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP")
+        # System variables every Windows session has; CPython 3.11 reads the
+        # machine architecture from PROCESSOR_ARCHITECTURE.
+        kept = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "PROCESSOR_ARCHITECTURE")
     else:
         directories = [Path(entry) for entry in os.defpath.split(os.pathsep) if entry]
         kept = ("TMPDIR", "LANG")
