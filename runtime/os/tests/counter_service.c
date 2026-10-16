@@ -93,7 +93,7 @@ int main(void)
         .counters = &counter, .counter_count = 1u, .system_counter = 0u, .owner = INVALID_TASK};
     const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
     const Os_TargetConfig target = {
-        &task, 1u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL};
+        &task, 1u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL, 0u};
     check(OSMAXALLOWEDVALUE == 15u);
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);

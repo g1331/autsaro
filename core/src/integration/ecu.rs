@@ -590,6 +590,8 @@ pub(super) fn os_configuration(
                 Item::Value(format!("{}u", plan.schedule.task_priority)),
                 Item::Value("UINT16_C(1)".into()),
                 Item::Value("UINT32_C(0)".into()),
+                Item::Value("0u".into()),
+                Item::Value("0u".into()),
             ],
         ));
     }

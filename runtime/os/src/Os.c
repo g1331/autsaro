@@ -13,14 +13,15 @@ size_t Os_ResourceIndex(const Os_TargetConfig *config, ResourceType id)
 }
 size_t Os_ResourceRoot(const Os_TargetConfig *config, size_t index)
 {
+    size_t root = index;
     size_t steps = 0u;
-    while ((index < config->resource_count) && (config->resources[index].linked != 0u) &&
+    while ((root < config->resource_count) && (config->resources[root].linked != 0u) &&
            (steps < config->resource_count)) {
-        index = Os_ResourceIndex(config, config->resources[index].link);
+        root = Os_ResourceIndex(config, config->resources[root].link);
         ++steps;
     }
-    return ((index < config->resource_count) && (config->resources[index].linked == 0u))
-               ? index
+    return ((root < config->resource_count) && (config->resources[root].linked == 0u))
+               ? root
                : config->resource_count;
 }
 /* Highest Task or ISR priority among the accessors of every member of the
