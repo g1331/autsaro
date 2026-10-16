@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- POSIX process cleanup treats a sibling disappearing during /proc inspection as exited, while unobservable live children still prevent confirmed cleanup. Native process tests retain their logs on failure.
+
 - Runtime asset SHA-256 values are computed at build time rather than maintained in the source inventory. Delivered meta/assets.json retains its v2 bytes for unchanged runtime sources; installed-resource verification and fixed FreeRTOS source identities remain enforced. The rule-set identity and dependent seal metadata change because their inventory includes the modified build script. The 15 controlled patch digests move to the FreeRTOS source manifest to preserve ADR 0004 pinning; that provenance file changes, while patch bytes, kernel/port identities, C ABI and licenses stay unchanged. assets update now maintains only the independent seal-guard inventory.
 
 - **Breaking:** RTE concrete API symbols follow `Rte_Read/Write/Call_<component type>_<extension>` (SWS_Rte_03837), replacing instance-path prefixes. Short application APIs and argument ABI stay the same; applications that name concrete symbols must rebuild against the new headers. Contract and ECU phases share the complete type/status producer, standard component type/data-handle/configuration headers, private const CDS storage with public single-instance handles, runnable/initial-value macros and C/C++ declarations. Use Rte_Inst_<component> to access the CDS; the storage object is not exported. Runnable role prototypes without explicit role arguments omit parameter names as required by SWS_Rte_06705.
