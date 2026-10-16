@@ -52,29 +52,38 @@ class CiSelectionTests(unittest.TestCase):
                     module["receiver_samples"]()
 
     def test_receiver_versions_keep_running_after_failure_and_select_expected_samples(self):
-        for filename, full in (("checks.yml", False), ("extended.yml", True)):
+        for filename in ("checks.yml", "extended.yml"):
+            extended = filename == "extended.yml"
             text = (ROOT / ".github/workflows" / filename).read_text(encoding="utf-8")
             # Read the complete run block, ending at the next YAML job/step.
             lines = text.splitlines()
-            start = next(i for i, line in enumerate(lines) if "for version in ('3.11'" in line)
-            end = next(i for i in range(start, len(lines)) if "sys.exit('Receiver Python failed:" in lines[i])
-            script = "import os, subprocess, sys\nfailed = []\n" + textwrap.dedent("\n".join(lines[start:end + 1]))
+            if extended:
+                start = next(i for i, line in enumerate(lines) if "for version in ('3.11'" in line)
+                end = next(i for i in range(start, len(lines)) if "sys.exit('Receiver Python failed:" in lines[i])
+                script = "import os, subprocess, sys\nfailed = []\n" + textwrap.dedent("\n".join(lines[start:end + 1]))
+            else:
+                block = text.split("      - name: All moved samples build and run with receiver Python 3.11\n", 1)[1]
+                script = textwrap.dedent(block.split("        run: |\n", 1)[1].split("\n  c-analysis-samples:", 1)[0])
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "receiver.py"
                 path.write_text(script, encoding="utf-8")
                 with (
-                    mock.patch.object(subprocess, "check_output", side_effect=["3.11", "3.12", "3.13", "3.14"]),
+                    mock.patch.object(subprocess, "check_output", side_effect=["3.11", "3.12", "3.13", "3.14"] if extended else ["3.11"]),
                     mock.patch.object(subprocess, "run") as run,
+                    mock.patch("builtins.print") as output,
                 ):
-                    run.side_effect = lambda argv, **kwargs: subprocess.CompletedProcess(
-                        argv, int(kwargs.get("env", {}).get("AUTOSAR_RECEIVER_PYTHON") == "3.12")
+                    run.side_effect = lambda argv, extended=extended, **kwargs: subprocess.CompletedProcess(
+                        argv, int(kwargs.get("env", {}).get("AUTOSAR_RECEIVER_PYTHON") == ("3.12" if extended else "3.11"))
                     )
-                    with self.assertRaisesRegex(SystemExit, "Receiver Python failed: 3.12"):
+                    with self.assertRaisesRegex(SystemExit, "Receiver Python failed: 3.12" if extended else "1"):
                         runpy.run_path(str(path))
+                if not extended:
+                    self.assertEqual(run.call_args_list[0].args[0], ["uv", "python", "install", "--no-bin", "3.11"])
+                    self.assertTrue(any("::error title=Receiver Python 3.11::" in str(call) for call in output.call_args_list))
                 receivers = [call.kwargs["env"] for call in run.call_args_list if "env" in call.kwargs]
-                self.assertEqual([env["AUTOSAR_RECEIVER_PYTHON"] for env in receivers], ["3.11", "3.12", "3.13", "3.14"])
-                for index, env in enumerate(receivers):
-                    expected = ["standard-ecu", "user-application", "component-pipeline", "no-diagnostic"] if full or index == 0 else ["standard-ecu"]
+                self.assertEqual([env["AUTOSAR_RECEIVER_PYTHON"] for env in receivers], ["3.11", "3.12", "3.13", "3.14"] if extended else ["3.11"])
+                for env in receivers:
+                    expected = ["standard-ecu", "user-application", "component-pipeline", "no-diagnostic"]
                     self.assertEqual(env["AUTOSAR_RECEIVER_SAMPLES"].split(), expected)
 
     def test_codex_hooks_use_lightweight_checks_without_hiding_code_changes(self):
