@@ -11,7 +11,7 @@ clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if
 clang-analyzer-security.ArrayBound runtime/os/src/Os_Time.c TickType current = values[counter];
 clang-analyzer-unix.BlockInCriticalSection runtime/os/src/host/linux/Os_HostLinux.c read(handle->fd, &value, sizeof(value)) == sizeof(value)) {
 readability-function-size generated/src/Ecu_RuntimeConfig.c RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)
-readability-function-size generated/src/Os_Arti.c void Os_ArtiService(OSServiceIdType service, uint32_t parameter, int returning)
+readability-function-size generated/src/Os_Arti.c void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 readability-function-size runtime/bsw/src/Can.c CAN_CODE void Can_InternalSetMode(CanMode mode)
 readability-function-size runtime/bsw/src/CanIf.c CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
 readability-function-size runtime/ecu/src/Ecu_HostBatch.c StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
@@ -19,9 +19,9 @@ readability-function-size runtime/ecu/src/Ecu_HostBridge.c StatusType Ecu_HostBa
 readability-function-size runtime/ecu/src/Ecu_Target.c static void consume(const Ecu_Input *input)
 readability-function-size runtime/ecu/src/Ecu_Target.c void Ecu_TargetTask(void)
 readability-function-size runtime/os/src/Os.c StatusType Os_TargetPrepare(const Os_TargetConfig *config)
-readability-function-size runtime/os/src/Os_Backend.c StatusType Os_BackendResource(ResourceType id, int acquire)
+readability-function-size runtime/os/src/Os_Backend.c StatusType Os_BackendResource(ResourceType id, sint32 acquire)
 readability-function-size runtime/os/src/Os_Backend.c static DWORD WINAPI control(void *argument)
-readability-function-size runtime/os/src/Os_Backend.c static StatusType complete_activation(TaskType id, int chain, int returned)
+readability-function-size runtime/os/src/Os_Backend.c static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned)
 readability-function-size runtime/os/src/Os_Backend.c void Os_BackendStart(AppModeType mode)
 readability-function-size runtime/os/src/Os_Time.c StatusType Os_TimeValidate(const Os_TargetConfig *target)
 readability-function-size runtime/os/src/host/linux/Os_HostLinux.c HANDLE Os_HostCreateActor(SIZE_T stack,
@@ -161,6 +161,6 @@ readability-identifier-naming runtime/os/src/Os_Time.c static StatusType impleme
 readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
 readability-identifier-naming runtime/os/src/Os_Time.c typedef Os_ArtiAlarmState AlarmState;
 readability-identifier-naming runtime/os/src/Os_Time.c } CounterWork;
-readability-identifier-naming runtime/os/src/Os_Vector.h typedef uint32_t (*Os_InterruptHandler)(void);
+readability-identifier-naming runtime/os/src/Os_Vector.h typedef uint32 (*Os_InterruptHandler)(void);
 readability-identifier-naming runtime/os/src/host/linux/Os_HostLinux.c } Os_HostKind;
 readability-identifier-naming runtime/os/src/host/linux/Os_HostLinux.h typedef char Os_HostLongMustBe32Bits[(sizeof(LONG) == 4u) ? 1 : -1];

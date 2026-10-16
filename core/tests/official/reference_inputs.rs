@@ -29,10 +29,11 @@ fn official_r24_sample_imports_as_one_split_package_without_rewriting_sources() 
     let mut originals = Vec::new();
     for index in 0..zip.len() {
         let mut member = zip.by_index(index).unwrap();
-        if !member.name().starts_with(prefix) || !member.name().ends_with(".arxml") {
+        let name = member.name().unwrap().into_owned();
+        if !name.starts_with(prefix) || !name.ends_with(".arxml") {
             continue;
         }
-        let path = temp.0.join(Path::new(member.name()).file_name().unwrap());
+        let path = temp.0.join(Path::new(&name).file_name().unwrap());
         let mut content = Vec::new();
         member.read_to_end(&mut content).unwrap();
         fs::write(&path, &content).unwrap();

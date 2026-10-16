@@ -2,6 +2,7 @@
 #ifndef AUTOSAR_OS_H
 #define AUTOSAR_OS_H
 #include "Os_Types.h"
+#include "Rte_Os_Type.h"
 /* OSEK source compatibility only (R24-11 section 7.1.2.1). The unused tag
  * deliberately consumes a legacy file-scope semicolon in strict C99. It has
  * no object, function, configuration or argument-evaluation effect. R2.4

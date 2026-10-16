@@ -3,12 +3,12 @@
 #include <string.h>
 
 static Os_InputRecord records[OS_INPUT_CAPACITY];
-static uint64_t last_ticket;
+static uint64 last_ticket;
 static volatile Os_Atomic32 published;
 /* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
 static volatile Os_Atomic32 admission;
 
-static uint32_t input_interrupt(void)
+static uint32 input_interrupt(void)
 {
     if (Os_TargetReady() != 0) {
         Os_ArtiInternalEnter();
@@ -29,7 +29,7 @@ void Os_MailboxInstall(void)
         vPortSetInterruptHandler(OS_INPUT_INTERRUPT, input_interrupt);
     }
 }
-int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void))
+sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
 {
     return Os_BackendHandlerAllowed(interrupt, handler) &&
            ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
@@ -37,11 +37,11 @@ int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void))
 }
 void Os_MailboxClose(void) { InterlockedOr(&admission, 2); }
 #ifdef OS_EVENT_TESTS
-void Os_TestInputLastTicket(uint64_t ticket) { last_ticket = ticket; }
+void Os_TestInputLastTicket(uint64 ticket) { last_ticket = ticket; }
 #endif
-StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *ticket)
+StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket)
 {
-    static unsigned write_index;
+    static uint32 write_index;
     StatusType context;
     Os_InputRecord *record;
     if (Os_BridgeActorAllowed() == 0) {
@@ -83,7 +83,7 @@ StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *tic
     }
     return E_OK;
 }
-int Os_BridgeActorAllowed(void)
+sint32 Os_BridgeActorAllowed(void)
 {
     const Os_NativeStack *actor = Os_StackCurrent();
 #ifdef __linux__
@@ -104,14 +104,14 @@ StatusType Os_BridgeContext(void)
     owner = InterlockedCompareExchange(&producer, thread, 0);
     return ((owner == 0) || (owner == thread)) ? E_OK : E_OS_ACCESS;
 }
-int Os_MailboxQuiescent(void)
+sint32 Os_MailboxQuiescent(void)
 {
     return ((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) &&
            (InterlockedCompareExchange(&published, 0, 0) == 0);
 }
 static StatusType input_context(void)
 {
-    int owner;
+    sint32 owner;
     Os_BackendGuardService();
     if ((Os_BackendReady() == 0) || (Os_Config->input_event == 0u)) {
         return E_OS_STATE;
@@ -121,7 +121,7 @@ static StatusType input_context(void)
 }
 StatusType Os_TargetTakeInput(Os_InputRecord *record)
 {
-    static unsigned read_index;
+    static uint32 read_index;
     StatusType status;
     if (record == NULL) {
         return E_OS_ILLEGAL_ADDRESS;
@@ -138,7 +138,7 @@ StatusType Os_TargetTakeInput(Os_InputRecord *record)
     InterlockedDecrement(&published);
     return E_OK;
 }
-StatusType Os_TargetInputCount(unsigned *count)
+StatusType Os_TargetInputCount(uint32 *count)
 {
     StatusType status;
     if (count == NULL) {
@@ -146,7 +146,7 @@ StatusType Os_TargetInputCount(unsigned *count)
     }
     status = input_context();
     if (status == E_OK) {
-        *count = (unsigned)InterlockedCompareExchange(&published, 0, 0);
+        *count = (uint32)InterlockedCompareExchange(&published, 0, 0);
     }
     return status;
 }

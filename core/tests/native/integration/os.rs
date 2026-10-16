@@ -616,6 +616,8 @@ fn counter_service_native() {
 /// `ShutdownOS(E_OS_STATE)` before any output, and retirement undoes only the
 /// stages that began, newest first (#76). Det (2) and the routing tables (5)
 /// have no deinitialization service; stage 7 is the diagnostic transport.
+/// Retirement ends with `SchM_Deinit`, so no timing event survives shutdown.
+// Verifies: SWS_Rte_07586
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn bootstrap_stage_failure_closes_without_output_and_retires_started_stages() {
@@ -653,14 +655,16 @@ fn bootstrap_stage_failure_closes_without_output_and_retires_started_stages() {
             assert!(output.status.success(), "{name}: {stdout}");
             assert!(stdout.contains("ecu_probe completed=20"), "{stdout}");
             assert!(
-                stdout.contains("ecu_shutdown reason=0 state=4 fail_stage=0"),
+                stdout.contains("ecu_shutdown reason=0 state=4 fail_stage=0 schm_timing=0"),
                 "{stdout}"
             );
             assert_eq!(lines, retired(9), "{stdout}");
         } else {
             assert_eq!(output.status.code(), Some(7), "{name}: {stdout}");
             assert!(
-                stdout.contains(&format!("ecu_shutdown reason=7 state=3 fail_stage={stage}")),
+                stdout.contains(&format!(
+                    "ecu_shutdown reason=7 state=3 fail_stage={stage} schm_timing=0"
+                )),
                 "{stdout}"
             );
             assert!(!stdout.contains("ecu_output"), "{stdout}");

@@ -4,12 +4,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "Std_Types.h"
-typedef uint8_t StatusType;
-typedef uint8_t TaskType;
+typedef uint8 StatusType;
+typedef uint8 TaskType;
 typedef TaskType *TaskRefType;
-typedef uint8_t TaskStateType;
+typedef uint8 TaskStateType;
 typedef TaskStateType *TaskStateRefType;
-typedef uint8_t AppModeType;
+typedef uint8 AppModeType;
 /** OSEK OS 2.2.3 13.7.3 default application mode, always valid for StartOS;
  * the generated configuration requires the OsAppMode of this name (ECUC_Os_00022). */
 #define OSDEFAULTAPPMODE ((AppModeType)1u)
@@ -17,31 +17,31 @@ typedef uint8_t AppModeType;
  * declarations do not enable multicore startup or mode inheritance. */
 #define DONOTCARE          UINT8_MAX
 #define TotalNumberOfCores 1u
-typedef uint8_t ResourceType;
-typedef uint32_t EventMaskType;
+typedef uint8 ResourceType;
+typedef uint32 EventMaskType;
 typedef EventMaskType *EventMaskRefType;
 /* Shared with Rte_Os_Type.h; never narrow an external Counter identifier. */
-typedef uint32_t CounterType;
-typedef uint8_t AlarmType;
+typedef uint32 CounterType;
+typedef uint8 AlarmType;
 /* R24-11 public type definitions remain available independently of whether
  * their conditional runtime services are selected in this SC1 configuration. */
-typedef uint32_t ApplicationType;
+typedef uint32 ApplicationType;
 #define INVALID_OSAPPLICATION UINT32_MAX
-typedef uint8_t ApplicationStateType;
+typedef uint8 ApplicationStateType;
 typedef ApplicationStateType *ApplicationStateRefType;
 #define APPLICATION_ACCESSIBLE 0u
 #define APPLICATION_TERMINATED 1u
-typedef uint32_t TrustedFunctionIndexType;
+typedef uint32 TrustedFunctionIndexType;
 typedef void *TrustedFunctionParameterRefType;
-typedef uint32_t AccessType;
+typedef uint32 AccessType;
 #define OSMEMORY_IS_READABLE(access)   (((access) & UINT32_C(1)) != 0u)
 #define OSMEMORY_IS_WRITEABLE(access)  (((access) & UINT32_C(2)) != 0u)
 #define OSMEMORY_IS_EXECUTABLE(access) (((access) & UINT32_C(4)) != 0u)
 #define OSMEMORY_IS_STACKSPACE(access) (((access) & UINT32_C(8)) != 0u)
-typedef uint8_t ObjectAccessType;
+typedef uint8 ObjectAccessType;
 #define ACCESS    1u
 #define NO_ACCESS 0u
-typedef uint8_t ObjectTypeType;
+typedef uint8 ObjectTypeType;
 #define OBJECT_TASK          0u
 #define OBJECT_ISR           1u
 #define OBJECT_ALARM         2u
@@ -50,30 +50,30 @@ typedef uint8_t ObjectTypeType;
 #define OBJECT_SCHEDULETABLE 5u
 typedef void *MemoryStartAddressType;
 typedef size_t MemorySizeType;
-typedef uint8_t ISRType;
+typedef uint8 ISRType;
 #define INVALID_ISR  UINT8_MAX
 #define INVALID_TASK UINT8_MAX
-typedef uint8_t ProtectionReturnType;
+typedef uint8 ProtectionReturnType;
 #define PRO_IGNORE               0u
 #define PRO_TERMINATETASKISR     1u
 #define PRO_TERMINATEAPPL        2u
 #define PRO_SHUTDOWN             3u
 #define PRO_PREVENT_ARRIVAL_RATE 4u
-typedef uint8_t RestartType;
+typedef uint8 RestartType;
 #define OS_OSAPPLICATION_RESTART 1u
-typedef uint64_t PhysicalTimeType;
-typedef uint16_t CoreIdType;
+typedef uint64 PhysicalTimeType;
+typedef uint16 CoreIdType;
 #define OS_CORE_ID_0      0u
 #define OS_CORE_ID_MASTER OS_CORE_ID_0
-typedef uint16_t SpinlockIdType;
+typedef uint16 SpinlockIdType;
 #define INVALID_SPINLOCK 0u
 typedef enum { TRYTOGETSPINLOCK_NOSUCCESS = 0, TRYTOGETSPINLOCK_SUCCESS = 1 } TryToGetSpinlockType;
-typedef uint8_t IdleModeType;
+typedef uint8 IdleModeType;
 #define IDLE_NO_HALT 0u
-typedef uint16_t AreaIdType;
-typedef uint8_t OSServiceIdType;
-typedef uint8_t ScheduleTableType;
-typedef uint8_t ScheduleTableStatusType;
+typedef uint16 AreaIdType;
+typedef uint8 OSServiceIdType;
+typedef uint8 ScheduleTableType;
+typedef uint8 ScheduleTableStatusType;
 typedef ScheduleTableStatusType *ScheduleTableStatusRefType;
 #define SCHEDULETABLE_STOPPED                 0u
 #define SCHEDULETABLE_NEXT                    1u
@@ -81,7 +81,7 @@ typedef ScheduleTableStatusType *ScheduleTableStatusRefType;
 #define SCHEDULETABLE_RUNNING                 3u
 #define SCHEDULETABLE_RUNNING_AND_SYNCHRONOUS 4u
 /* Automotive Counter values are independent of FreeRTOS's 32-bit tick ABI. */
-typedef uint64_t TickType;
+typedef uint64 TickType;
 typedef TickType *TickRefType;
 typedef struct {
     TickType maxallowedvalue;

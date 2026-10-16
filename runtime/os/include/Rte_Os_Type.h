@@ -6,6 +6,6 @@
 #define AUTOSAR_RTE_OS_TYPE_H
 #include "Os_Types.h"
 
-typedef uint64_t TimeInMicrosecondsType;
+typedef uint64 TimeInMicrosecondsType;
 
 #endif

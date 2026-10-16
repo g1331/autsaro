@@ -161,3 +161,34 @@ fn template_rejects_nonzero_execution_constraints_and_keeps_exact_zero() {
         assert!(normal_validation(&zero).diagnostics.is_empty());
     }
 }
+
+/// The BSW Scheduler activates only BswTimingEvents: background events and BSW
+/// client-server through SchM are refused at the source event, so no entity can
+/// run before SchM_Init or after SchM_Deinit through them.
+#[test]
+fn bsw_background_and_operation_invoked_events_are_refused_at_their_source() {
+    for (kind, name) in [
+        ("BSW-BACKGROUND-EVENT", "Background"),
+        ("BSW-OPERATION-INVOKED-EVENT", "Invoked"),
+    ] {
+        let mut sources = inputs();
+        let anchor = "<BSW-TIMING-EVENT>\n                  <SHORT-NAME>Can_MainFunction_Wakeup_1ms</SHORT-NAME>";
+        change(
+            &mut sources,
+            "bsw.arxml",
+            anchor,
+            &format!(
+                "<{kind}><SHORT-NAME>{name}</SHORT-NAME><STARTS-ON-EVENT-REF DEST=\"BSW-SCHEDULABLE-ENTITY\">/AUTOSAR_Can/Can/Behavior/Can_MainFunction_Wakeup_Entity</STARTS-ON-EVENT-REF></{kind}>{anchor}"
+            ),
+        );
+        let issues = build(&sources)
+            .err()
+            .unwrap_or_else(|| panic!("{kind} accepted"));
+        assert!(
+            issues.iter().any(|issue| issue.code == "NATIVE_UNSUPPORTED"
+                && issue.file.as_deref() == Some("bsw.arxml")
+                && issue.object.as_deref() == Some(&format!("/AUTOSAR_Can/Can/Behavior/{name}"))),
+            "{kind}: {issues:?}"
+        );
+    }
+}

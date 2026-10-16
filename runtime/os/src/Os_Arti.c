@@ -2,11 +2,11 @@
 #include "Os_Arti.h"
 #include <assert.h>
 
-static __thread unsigned internal_depth;
-static __thread unsigned service_depth;
-static __thread StatusType access_status;
+static OS_THREAD_LOCAL uint32 internal_depth;
+static OS_THREAD_LOCAL uint32 service_depth;
+static OS_THREAD_LOCAL StatusType access_status;
 void Os_ArtiAccessResult(StatusType status) { access_status = status; }
-int Os_ArtiAccessValid(void) { return access_status == E_OK; }
+sint32 Os_ArtiAccessValid(void) { return access_status == E_OK; }
 StatusType Os_ArtiAccessStatus(void) { return access_status; }
 Os_ArtiCaller Os_ArtiCallerSave(void)
 {
@@ -30,9 +30,9 @@ void Os_ArtiInternalLeave(void)
     assert(internal_depth != 0u);
     --internal_depth;
 }
-int Os_ArtiServiceEnter(void)
+sint32 Os_ArtiServiceEnter(void)
 {
-    const int application = (internal_depth == 0u) && (service_depth == 0u);
+    const sint32 application = (internal_depth == 0u) && (service_depth == 0u);
     ++service_depth;
     access_status = E_OK;
     return application;
@@ -47,44 +47,44 @@ void Os_ArtiTask(Os_ArtiTaskEvent event, TaskType task)
 {
     switch (event) {
         case OS_ARTI_TASK_ACTIVATE:
-            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Activate, (uint32_t)task);
+            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Activate, (uint32)task);
             break;
         case OS_ARTI_TASK_START:
-            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Start, (uint32_t)task);
+            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Start, (uint32)task);
             break;
         case OS_ARTI_TASK_PREEMPT:
-            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Preempt, (uint32_t)task);
+            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Preempt, (uint32)task);
             break;
         case OS_ARTI_TASK_WAIT:
-            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Wait, (uint32_t)task);
+            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Wait, (uint32)task);
             break;
         case OS_ARTI_TASK_RELEASE:
-            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Release, (uint32_t)task);
+            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Release, (uint32)task);
             break;
         case OS_ARTI_TASK_TERMINATE:
-            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Terminate, (uint32_t)task);
+            ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Terminate, (uint32)task);
             break;
         default:
             assert(0);
             break;
     }
 }
-void Os_ArtiIsr(ISRType isr, int returning)
+void Os_ArtiIsr(ISRType isr, sint32 returning)
 {
     if (returning != 0) {
-        ARTI_TRACE(NOSUSP, AR_CP_OS_CAT2ISR, Os, 0u, OsCat2Isr_Stop, (uint32_t)isr);
+        ARTI_TRACE(NOSUSP, AR_CP_OS_CAT2ISR, Os, 0u, OsCat2Isr_Stop, (uint32)isr);
     } else {
-        ARTI_TRACE(NOSUSP, AR_CP_OS_CAT2ISR, Os, 0u, OsCat2Isr_Start, (uint32_t)isr);
+        ARTI_TRACE(NOSUSP, AR_CP_OS_CAT2ISR, Os, 0u, OsCat2Isr_Start, (uint32)isr);
     }
 }
-void Os_ArtiHook(Os_HookPhase hook, StatusType error, int returning)
+void Os_ArtiHook(Os_HookPhase hook, StatusType error, sint32 returning)
 {
     switch (hook) {
         case OS_HOOK_ERROR:
             if (returning != 0) {
                 ARTI_TRACE(SPRVSR, AR_CP_OS_HOOK, Os, 0u, OsHook_ErrorHook_Return, 0u);
             } else {
-                ARTI_TRACE(SPRVSR, AR_CP_OS_HOOK, Os, 0u, OsHook_ErrorHook_Start, (uint32_t)error);
+                ARTI_TRACE(SPRVSR, AR_CP_OS_HOOK, Os, 0u, OsHook_ErrorHook_Start, (uint32)error);
             }
             break;
         case OS_HOOK_PRE:
@@ -112,8 +112,7 @@ void Os_ArtiHook(Os_HookPhase hook, StatusType error, int returning)
             if (returning != 0) {
                 ARTI_TRACE(SPRVSR, AR_CP_OS_HOOK, Os, 0u, OsHook_ShutdownHook_Return, 0u);
             } else {
-                ARTI_TRACE(
-                    SPRVSR, AR_CP_OS_HOOK, Os, 0u, OsHook_ShutdownHook_Start, (uint32_t)error);
+                ARTI_TRACE(SPRVSR, AR_CP_OS_HOOK, Os, 0u, OsHook_ShutdownHook_Start, (uint32)error);
             }
             break;
         default:
@@ -121,7 +120,7 @@ void Os_ArtiHook(Os_HookPhase hook, StatusType error, int returning)
             break;
     }
 }
-void Os_ArtiService(OSServiceIdType service, uint32_t parameter, int returning)
+void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 {
     switch (service) {
         case OSServiceId_GetISRID:
@@ -798,7 +797,7 @@ void Os_ArtiService(OSServiceIdType service, uint32_t parameter, int returning)
 void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address)
 {
     const uintptr_t native_address = (uintptr_t)address;
-    const uint32_t token = (uint32_t)native_address;
+    const uint32 token = (uint32)native_address;
     Arti_CaptureAddress(native_address);
     ARTI_TRACE(SPRVSR, AR_CP_OS_SERVICECALLS, Os, 0u, OsServiceCall_GetAlarmBase_Return, token);
 }

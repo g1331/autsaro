@@ -4,13 +4,13 @@
 /* The fixed GCC/Win64 target uses the same native PE TLS ABI as Os_Stack.c.
  * Each actor keeps its own callback phase and typed snapshot; a failed call
  * from inside ErrorHook never recursively enters or overwrites that snapshot. */
-static __thread Os_HookPhase phase;
-static __thread OSServiceIdType service_id;
-static __thread Os_ErrorParameters parameters;
-static __thread unsigned hook_depth;
-static __thread int error_active;
+static OS_THREAD_LOCAL Os_HookPhase phase;
+static OS_THREAD_LOCAL OSServiceIdType service_id;
+static OS_THREAD_LOCAL Os_ErrorParameters parameters;
+static OS_THREAD_LOCAL uint32 hook_depth;
+static OS_THREAD_LOCAL sint32 error_active;
 static const Os_ErrorParameters empty_parameters = {.service_TerminateTask = {0u}};
-int Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
+sint32 Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
 
 void Os_ErrorContextSave(Os_ErrorContext *context)
 {
@@ -31,11 +31,11 @@ void Os_ErrorContextRestore(const Os_ErrorContext *context)
 }
 
 Os_HookPhase Os_HookContext(void) { return phase; }
-int Os_HookQueryContext(void)
+sint32 Os_HookQueryContext(void)
 {
     return (phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST);
 }
-int Os_HookServiceAllowed(OSServiceIdType service)
+sint32 Os_HookServiceAllowed(OSServiceIdType service)
 {
     if (phase == OS_HOOK_NONE) {
         return 1;
@@ -57,7 +57,7 @@ int Os_HookServiceAllowed(OSServiceIdType service)
     }
     return 0;
 }
-int Os_ErrorHookConfigured(void)
+sint32 Os_ErrorHookConfigured(void)
 {
     return (Os_Config != NULL) && (Os_Config->hooks != NULL) && (Os_Config->hooks->error != NULL);
 }
@@ -65,7 +65,7 @@ StatusType Os_ServiceAccessStatus(OSServiceIdType service)
 {
     StatusType result = E_OK;
     const Os_NativeStack *stack = Os_StackCurrent();
-    const unsigned interrupt = Os_BackendCurrentInterrupt();
+    const uint32 interrupt = Os_BackendCurrentInterrupt();
     if (Os_InterruptDisabled() != 0) {
         result = E_OS_DISABLEDINT;
     } else if (service == OSServiceId_isOsStarted) {
@@ -98,7 +98,7 @@ StatusType Os_ErrorResult(OSServiceIdType service,
         (Os_StackCurrent() != NULL) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
         const Os_HookPhase previous = phase;
         const Os_NativeStack *stack = Os_StackCurrent();
-        const int isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
+        const sint32 isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
         /* The native ISR dispatcher already owns the interrupt mutex. Do not
          * introduce an extra kernel critical level around an ISR ErrorHook.
          * The Hook gate excludes Cat2; higher priority Cat1 may interrupt it. */

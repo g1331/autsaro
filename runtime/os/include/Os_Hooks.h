@@ -93,7 +93,7 @@ typedef union {
         TaskType TaskID;
     } service_ActivateTask;
     struct {
-        uint8_t reserved;
+        uint8 reserved;
     } service_TerminateTask;
     struct {
         TaskType TaskID;
@@ -105,7 +105,7 @@ typedef union {
         ResourceType ResID;
     } service_ReleaseResource;
     struct {
-        uint8_t reserved;
+        uint8 reserved;
     } service_Schedule;
     struct {
         EventMaskType Mask;

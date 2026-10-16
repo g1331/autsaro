@@ -3,37 +3,37 @@
 #include <limits.h>
 
 typedef struct {
-    uint32_t all_depth;
-    uint32_t os_depth;
-    uint8_t disabled;
+    uint32 all_depth;
+    uint32 os_depth;
+    uint8 disabled;
 } InterruptState;
 /* One cell per physical Task/boot actor, and separate logical ISR cells on
  * the native ISR thread. This preserves ownership across interrupted actors. */
-static __thread InterruptState states[33u * ((unsigned)OS_HOOK_ALARM + 1u)];
+static OS_THREAD_LOCAL InterruptState states[33u * ((uint32)OS_HOOK_ALARM + 1u)];
 static volatile Os_Atomic32 all_owners;
 static volatile Os_Atomic32 os_owners;
 
 static InterruptState *owner_state(void)
 {
     const Os_NativeStack *stack = Os_StackCurrent();
-    const unsigned interrupt = Os_BackendCurrentInterrupt();
+    const uint32 interrupt = Os_BackendCurrentInterrupt();
     const Os_HookPhase phase = Os_HookContext();
-    unsigned index = (stack != NULL && stack->role == 'S' && interrupt < 32u) ? interrupt : 32u;
+    uint32 index = (stack != NULL && stack->role == 'S' && interrupt < 32u) ? interrupt : 32u;
     if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
         /* Each Hook has its own mask ownership, including its logical ISR.
          * Queries in ErrorHook do not inherit the failed caller's mask. */
-        index += 33u * (unsigned)phase;
+        index += 33u * (uint32)phase;
     }
     return &states[index];
 }
-int Os_InterruptDisabled(void)
+sint32 Os_InterruptDisabled(void)
 {
     const InterruptState *state = owner_state();
     return state->disabled != 0u || state->all_depth != 0u || state->os_depth != 0u;
 }
-int Os_InterruptAllows(unsigned interrupt)
+sint32 Os_InterruptAllows(uint32 interrupt)
 {
-    int allowed = 0;
+    sint32 allowed = 0;
     if ((interrupt < 32u) && (InterlockedCompareExchange(&all_owners, 0, 0) == 0)) {
         allowed = (InterlockedCompareExchange(&os_owners, 0, 0) == 0) ||
                   ((Os_Config != NULL) &&
@@ -41,12 +41,12 @@ int Os_InterruptAllows(unsigned interrupt)
     }
     return allowed;
 }
-static int permitted(unsigned operation)
+static sint32 permitted(uint32 operation)
 {
     const Os_HookPhase phase = Os_HookContext();
     const Os_NativeStack *stack = Os_StackCurrent();
-    const unsigned group = operation / 2u;
-    int allowed = 0;
+    const uint32 group = operation / 2u;
+    sint32 allowed = 0;
     if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
         /* R24-11 Table 7.1 permits all six primitives from every supported
          * global Hook and Alarm callback, extending the older OSEK table. */
@@ -63,10 +63,10 @@ static int permitted(unsigned operation)
 }
 /* SWS_Os_00367: these services return no StatusType, so a refused call
  * (wrong context, or a saturated nesting counter) is ignored without ErrorHook. */
-static void change(unsigned operation)
+static void change(uint32 operation)
 {
     InterruptState *state = owner_state();
-    const int running =
+    const sint32 running =
         Os_BackendStarted() != 0 && InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -149,11 +149,11 @@ void Os_InterruptRestoreOwner(void)
     state->all_depth = 0u;
     state->os_depth = 0u;
 }
-static StatusType source_control(ISRType interrupt, unsigned operation, boolean clear)
+static StatusType source_control(ISRType interrupt, uint32 operation, boolean clear)
 {
     StatusType result = E_OK;
     const Os_NativeStack *stack = Os_StackCurrent();
-    const unsigned current = Os_BackendCurrentInterrupt();
+    const uint32 current = Os_BackendCurrentInterrupt();
     Os_StackCheck();
     Os_BackendGuardService();
     /* Source operations are interrupt services, so application All/OS masks
@@ -169,7 +169,7 @@ static StatusType source_control(ISRType interrupt, unsigned operation, boolean 
     } else {
         taskENTER_CRITICAL();
         Os_BackendGuardService();
-        const int source_result = Os_PortInterruptSourceControl(interrupt, operation, clear);
+        const sint32 source_result = Os_PortInterruptSourceControl(interrupt, operation, clear);
         if (source_result == 0) {
             result = E_OS_ID;
         } else if (source_result == 2) {

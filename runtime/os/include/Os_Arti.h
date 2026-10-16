@@ -14,15 +14,15 @@ typedef enum {
 } Os_ArtiTaskEvent;
 typedef struct {
     TaskStateType state;
-    uint8_t priority;
-    unsigned activations;
+    uint8 priority;
+    uint32 activations;
     EventMaskType events;
     EventMaskType wait_mask;
 } Os_ArtiTaskState;
 typedef struct {
     TickType remaining;
     TickType cycle;
-    uint8_t active;
+    uint8 active;
 } Os_ArtiAlarmState;
 typedef struct {
     ScheduleTableStatusType status;
@@ -43,28 +43,28 @@ extern const size_t Os_ArtiNativeContextSize;
 extern const Os_ArtiAlarmState *const Os_ArtiAlarms;
 extern const Os_ArtiScheduleState *const Os_ArtiScheduleTables;
 extern const TickType *const Os_ArtiCounters;
-extern const unsigned *const Os_ArtiResourceOwners;
+extern const uint32 *const Os_ArtiResourceOwners;
 extern const AppModeType *const Os_ArtiAppMode;
 #ifdef _WIN32
 extern const volatile long *const Os_ArtiOsReady;
 #else
-extern const volatile int32_t *const Os_ArtiOsReady;
+extern const volatile sint32 *const Os_ArtiOsReady;
 #endif
-extern const unsigned *const Os_ArtiCurrentIsr;
+extern const uint32 *const Os_ArtiCurrentIsr;
 /** @brief Emit a captured task transition while the native OS mutex is owned. */
 void Os_ArtiTask(Os_ArtiTaskEvent event, TaskType task);
 /** @brief Emit paired configured Category 2 ISR events under the dispatcher mutex. */
-void Os_ArtiIsr(ISRType isr, int returning);
+void Os_ArtiIsr(ISRType isr, sint32 returning);
 /** @brief Emit a standard Hook event; AlarmCallback is not a standard OS Hook. */
-void Os_ArtiHook(Os_HookPhase hook, StatusType error, int returning);
+void Os_ArtiHook(Os_HookPhase hook, StatusType error, sint32 returning);
 /** @brief Emit an application service event with an already captured payload. */
-void Os_ArtiService(OSServiceIdType service, uint32_t parameter, int returning);
+void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning);
 /** @brief Preserve the complete native pointer alongside its standard uint32 token. */
 void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address);
 /** @brief Caller classification scopes; save/restore when entering logical actors. */
 typedef struct {
-    unsigned internal_depth;
-    unsigned service_depth;
+    uint32 internal_depth;
+    uint32 service_depth;
     StatusType access_status;
     Arti_AddressCapture address;
 } Os_ArtiCaller;
@@ -72,9 +72,9 @@ Os_ArtiCaller Os_ArtiCallerSave(void);
 void Os_ArtiCallerRestore(Os_ArtiCaller caller);
 void Os_ArtiInternalEnter(void);
 void Os_ArtiInternalLeave(void);
-int Os_ArtiServiceEnter(void);
+sint32 Os_ArtiServiceEnter(void);
 void Os_ArtiServiceLeave(void);
 void Os_ArtiAccessResult(StatusType status);
-int Os_ArtiAccessValid(void);
+sint32 Os_ArtiAccessValid(void);
 StatusType Os_ArtiAccessStatus(void);
 #endif
