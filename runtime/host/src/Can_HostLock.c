@@ -13,28 +13,23 @@
 /* Every unrecoverable lock state stops here: a void caller must not continue. */
 static void Can_Fatal(void) { abort(); }
 /* SchM exclusive-area accounting (ADR 0018). A strict area (driver, Det, ...) protects
- * module data only: a thread must hold no other area while it is inside one, and must
- * not enter another area from within it. The legacy shared state area may still
- * enclose strict areas (not the reverse) until its last user is migrated. */
+ * module data only: a thread holding one must not enter another area. */
 static __thread unsigned strict_held;
-static void Can_NoteEnter(int strict)
+static void Can_NoteEnter(void)
 {
     if (strict_held != 0u) {
         Can_Fatal();
     }
-    if (strict != 0) {
-        ++strict_held;
-    }
+    ++strict_held;
 }
-static void Can_NoteExit(int strict)
+static void Can_NoteExit(void)
 {
-    if ((strict != 0) && (strict_held != 0u)) {
+    if (strict_held != 0u) {
         --strict_held;
     }
 }
 #if defined(_WIN32)
 static CRITICAL_SECTION can_lock;
-static CRITICAL_SECTION state_lock;
 static CRITICAL_SECTION area_locks[CAN_HOST_AREA_COUNT];
 static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *context)
 {
@@ -42,13 +37,6 @@ static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *conte
     (void)parameter;
     (void)context;
     return InitializeCriticalSectionEx(&can_lock, 0u, 0u);
-}
-static BOOL CALLBACK Can_InitStateLock(PINIT_ONCE once, PVOID parameter, PVOID *context)
-{
-    (void)once;
-    (void)parameter;
-    (void)context;
-    return InitializeCriticalSectionEx(&state_lock, 0u, 0u);
 }
 static BOOL CALLBACK Can_InitAreas(PINIT_ONCE once, PVOID parameter, PVOID *context)
 {
@@ -72,13 +60,13 @@ static void Can_EnterRecursive(PINIT_ONCE once, PINIT_ONCE_FN init, LPCRITICAL_S
 void Can_Lock(void)
 {
     static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
-    Can_NoteEnter(1);
+    Can_NoteEnter();
     Can_EnterRecursive(&can_lock_once, Can_InitLock, &can_lock);
 }
 void Can_Unlock(void)
 {
     LeaveCriticalSection(&can_lock);
-    Can_NoteExit(1);
+    Can_NoteExit();
 }
 void Can_HostAreaEnter(Can_HostAreaType area)
 {
@@ -86,7 +74,7 @@ void Can_HostAreaEnter(Can_HostAreaType area)
     if (area >= CAN_HOST_AREA_COUNT) {
         Can_Fatal();
     }
-    Can_NoteEnter(1);
+    Can_NoteEnter();
     Can_EnterRecursive(&area_once, Can_InitAreas, &area_locks[area]);
 }
 void Can_HostAreaExit(Can_HostAreaType area)
@@ -95,22 +83,14 @@ void Can_HostAreaExit(Can_HostAreaType area)
         Can_Fatal();
     }
     LeaveCriticalSection(&area_locks[area]);
-    Can_NoteExit(1);
+    Can_NoteExit();
 }
-void Can_HostStateLock(void)
-{
-    static INIT_ONCE state_lock_once = INIT_ONCE_STATIC_INIT;
-    Can_NoteEnter(0);
-    Can_EnterRecursive(&state_lock_once, Can_InitStateLock, &state_lock);
-}
-void Can_HostStateUnlock(void) { LeaveCriticalSection(&state_lock); }
 #else
 typedef struct {
     pthread_mutex_t mutex;
     int ready;
 } Can_RecursiveLock;
 static Can_RecursiveLock can_lock;
-static Can_RecursiveLock state_lock;
 static Can_RecursiveLock area_locks[CAN_HOST_AREA_COUNT];
 static void Can_InitRecursive(Can_RecursiveLock *lock)
 {
@@ -136,7 +116,6 @@ static void Can_InitRecursive(Can_RecursiveLock *lock)
     lock->ready = (result == 0) ? 1 : 0;
 }
 static void Can_InitLock(void) { Can_InitRecursive(&can_lock); }
-static void Can_InitStateLock(void) { Can_InitRecursive(&state_lock); }
 static void Can_InitAreas(void)
 {
     size_t area;
@@ -161,13 +140,13 @@ static void Can_LeaveRecursive(Can_RecursiveLock *lock)
 void Can_Lock(void)
 {
     static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
-    Can_NoteEnter(1);
+    Can_NoteEnter();
     Can_EnterRecursive(&can_lock_once, Can_InitLock, &can_lock);
 }
 void Can_Unlock(void)
 {
     Can_LeaveRecursive(&can_lock);
-    Can_NoteExit(1);
+    Can_NoteExit();
 }
 void Can_HostAreaEnter(Can_HostAreaType area)
 {
@@ -175,7 +154,7 @@ void Can_HostAreaEnter(Can_HostAreaType area)
     if (area >= CAN_HOST_AREA_COUNT) {
         Can_Fatal();
     }
-    Can_NoteEnter(1);
+    Can_NoteEnter();
     Can_EnterRecursive(&area_once, Can_InitAreas, &area_locks[area]);
 }
 void Can_HostAreaExit(Can_HostAreaType area)
@@ -184,13 +163,6 @@ void Can_HostAreaExit(Can_HostAreaType area)
         Can_Fatal();
     }
     Can_LeaveRecursive(&area_locks[area]);
-    Can_NoteExit(1);
+    Can_NoteExit();
 }
-void Can_HostStateLock(void)
-{
-    static pthread_once_t state_lock_once = PTHREAD_ONCE_INIT;
-    Can_NoteEnter(0);
-    Can_EnterRecursive(&state_lock_once, Can_InitStateLock, &state_lock);
-}
-void Can_HostStateUnlock(void) { Can_LeaveRecursive(&state_lock); }
 #endif

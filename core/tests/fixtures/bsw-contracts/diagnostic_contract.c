@@ -76,16 +76,6 @@ static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code
     ++reports;
     return E_OK;
 }
-static void mode(NetworkHandleType channel, ComM_ModeType value)
-{
-    if (value == COMM_FULL_COMMUNICATION) {
-        Dcm_ComM_FullComModeEntered(channel);
-    } else if (value == COMM_SILENT_COMMUNICATION) {
-        Dcm_ComM_SilentComModeEntered(channel);
-    } else {
-        Dcm_ComM_NoComModeEntered(channel);
-    }
-}
 static const Det_ErrorHookType hooks[] = {error};
 static const Det_ConfigType det = {NULL_PTR, 0u, hooks, 1u};
 static const PduR_TpRouteType tp_routes[] = {{71u,
@@ -118,10 +108,17 @@ static const CanIf_ConfigType canif = {canif_rx,
                                        0u};
 static const Can_ConfigType can = {sink};
 static const ComM_UserHandleType users[] = {43u};
-static const ComM_ConfigType comm = {
-    7u, users, 1u, 3u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, mode, 3u};
+static const ComM_ConfigType comm = {7u,
+                                     users,
+                                     1u,
+                                     3u,
+                                     Ecu_HostBusSM_RequestComMode,
+                                     Ecu_HostBusSM_GetCurrentComMode,
+                                     Dcm_ComM_NoComModeEntered,
+                                     Dcm_ComM_SilentComModeEntered,
+                                     Dcm_ComM_FullComModeEntered};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
-static const BswM_ConfigType bswm = {7u, COMM_NO_COMMUNICATION, Ecu_HostBusSM_ApplyMode};
+static const BswM_ConfigType bswm = {7u, Ecu_HostBusSM_ApplyMode};
 static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
 static const Dcm_ConfigType dcm = {

@@ -55,4 +55,4 @@
 
 ## 状态
 
-已接受（2026-10-14），实施中（[#121](https://github.com/g1331/autsaro/issues/121)：基础设施、Can 驱动与 CanIf 接缝、Det 的区；LSduR／PduR、Com、CanTp、Dcm、ComM／BswM 的迁移并入 #41、#42、#43、#44、#45 各模块 Issue）。
+已接受（2026-10-14），已实施（[#121](https://github.com/g1331/autsaro/issues/121)：基础设施、Can 驱动与 CanIf 接缝、Det 的区；LSduR／PduR、Com、CanTp、Dcm、ComM／BswM 的迁移并入 #41、#42、#43、#44、#45 各模块 Issue，旧共享锁随 #45 删除）。

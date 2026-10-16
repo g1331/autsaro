@@ -87,15 +87,11 @@ int main(int argc, char **argv) {
         Can_Init(&config);
         Can_Lock();
         Can_Unlock();
-        /* The legacy shared area may recurse and enclose strict areas until it is retired. */
-        Can_HostStateLock();
-        Can_HostStateLock();
-        Can_Lock();
-        Can_Unlock();
+        /* Areas may be used one after another, each released before the next. */
         Can_HostAreaEnter(CAN_HOST_AREA_DET);
         Can_HostAreaExit(CAN_HOST_AREA_DET);
-        Can_HostStateUnlock();
-        Can_HostStateUnlock();
+        Can_HostAreaEnter(CAN_HOST_AREA_COMM);
+        Can_HostAreaExit(CAN_HOST_AREA_COMM);
         return 0;
     }
     /* A strict area (driver, Det) admits no other area, including itself. */
@@ -109,21 +105,16 @@ int main(int argc, char **argv) {
         Can_HostAreaEnter(CAN_HOST_AREA_DET);
         return 6;
     }
-    if (strcmp(argv[1], "nest-legacy") == 0) {
-        Can_Lock();
-        Can_HostStateLock();
-        return 6;
-    }
     if (strcmp(argv[1], "lock") == 0 || strcmp(argv[1], "unlock") == 0) {
         Can_Init(&config);
         (void)Can_SetControllerMode(0u, CAN_CS_STARTED);
     }
     failure = argv[1];
     if (argc == 3) {
-        /* "state" drives the CanIf state-lock instance instead of the driver lock. */
-        if (strcmp(argv[2], "state") == 0) {
-            Can_HostStateLock();
-            Can_HostStateUnlock();
+        /* "area" drives a module area instance instead of the driver lock. */
+        if (strcmp(argv[2], "area") == 0) {
+            Can_HostAreaEnter(CAN_HOST_AREA_COMM);
+            Can_HostAreaExit(CAN_HOST_AREA_COMM);
         } else {
             Can_Lock();
             Can_Unlock();

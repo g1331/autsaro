@@ -154,10 +154,12 @@
   },
   "elsewhere": [],
   "modules": [
+    "BswM",
     "Can",
     "CanIf",
     "CanTp",
     "Com",
+    "ComM",
     "Dcm",
     "LSduR",
     "PduR"

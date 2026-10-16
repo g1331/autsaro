@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// here when its code stops using another module's area.
 fn exclusive_area(module: &str) -> Option<&'static str> {
     match module {
+        "BswM" => Some("BSWM_STATE"),
         "Can" => Some("CAN_STATE"),
         "CanIf" => Some("CANIF_STATE"),
         "CanTp" => Some("CANTP_STATE"),

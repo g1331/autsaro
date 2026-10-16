@@ -1,39 +1,44 @@
-/** @file BswM with one IMMEDIATE ComM mode input and a single action, run in caller context. */
+/** @file BswM with one IMMEDIATE ComM mode input and a single action, run in caller context.
+ * BSWM_STATE protects module data only (ADR 0018); the action runs outside it.
+ */
 #include "BswM.h"
 #include "BswM_ComM.h"
 #include "SchM_BswM.h"
 #define BSWM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "BswM_MemMap.h"
-static const BswM_ConfigType *configuration BSWM_VAR_CLEARED;
-static ComM_ModeType input_mode BSWM_VAR_CLEARED;
-static ComM_ModeType pending_mode BSWM_VAR_CLEARED;
-static boolean processing BSWM_VAR_CLEARED;
-static boolean pending BSWM_VAR_CLEARED;
+/* All BSWM_STATE. Postponed inputs imply processing: an input received while an action
+ * runs is postponed to that processor, never run recursively, and each is arbitrated
+ * after it (SWS_BswM_00069). The port takes its value just before arbitration
+ * (SWS_BswM_00281), so every postponed input arbitrates the latest value. Init and
+ * Deinit keep processing, so no second processor overtakes an action in flight. Every
+ * input checks configuration and Deinit drops postponed inputs, so they also imply a
+ * configuration. */
+static const BswM_ConfigType *bswm_configuration BSWM_VAR_CLEARED; /**< NULL when uninitialized. */
+static ComM_ModeType port_mode BSWM_VAR_CLEARED;                   /**< Latest input. */
+static uint32 postponed BSWM_VAR_CLEARED;   /**< Inputs awaiting arbitration. */
+static boolean processing BSWM_VAR_CLEARED; /**< An arbitration is in flight. */
 #define BSWM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "BswM_MemMap.h"
 #define BSWM_START_SEC_CODE
 #include "BswM_MemMap.h"
 BSWM_CODE void BswM_Init(const BswM_ConfigType *ConfigPtr)
 {
-    SchM_Enter_BswM_BSWM_STATE();
-    if ((ConfigPtr != NULL_PTR) && (ConfigPtr->initial_mode <= COMM_FULL_COMMUNICATION) &&
-        (ConfigPtr->action != NULL_PTR)) {
-        configuration = ConfigPtr;
-        input_mode = ConfigPtr->initial_mode;
-        processing = FALSE;
-        pending = FALSE;
-        pending_mode = COMM_NO_COMMUNICATION;
+    if ((ConfigPtr != NULL_PTR) && (ConfigPtr->action != NULL_PTR)) {
+        SchM_Enter_BswM_BSWM_STATE();
+        bswm_configuration = ConfigPtr;
+        postponed = 0u;
+        SchM_Exit_BswM_BSWM_STATE();
     }
-    SchM_Exit_BswM_BSWM_STATE();
 }
 BSWM_CODE void BswM_Deinit(void)
 {
     SchM_Enter_BswM_BSWM_STATE();
-    configuration = NULL_PTR;
-    processing = FALSE;
-    pending = FALSE;
+    bswm_configuration = NULL_PTR;
+    postponed = 0u;
     SchM_Exit_BswM_BSWM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: standard main function (SWS_BswM_00053) that the selected
+ * all-IMMEDIATE profile does not schedule; see the BswM deviation record. */
 BSWM_CODE void BswM_MainFunction(void)
 {
     /* SWS_BswM_00075 evaluates rules with DEFERRED inputs here. The selected
@@ -41,31 +46,49 @@ BSWM_CODE void BswM_MainFunction(void)
      * callbacks. There is no deferred work and no added periodic arbitration.
      */
 }
+/* Called by the claimed processor only; arbitrates postponed inputs until none is left. */
+static BSWM_CODE void BswM_Process(void)
+{
+    boolean owner = TRUE;
+    while (owner) {
+        BswM_ModeActionType action = NULL_PTR;
+        NetworkHandleType network = 0u;
+        ComM_ModeType mode = COMM_NO_COMMUNICATION;
+        SchM_Enter_BswM_BSWM_STATE();
+        if (postponed > 0u) {
+            --postponed;
+            action = bswm_configuration->action;
+            network = bswm_configuration->channel;
+            mode = port_mode;
+        } else {
+            processing = FALSE;
+            owner = FALSE;
+        }
+        SchM_Exit_BswM_BSWM_STATE();
+        if (owner) {
+            /* The single-item action list ends either way; runtime failure
+             * reporting (BswMReportFailRuntimeErrorId) is not selected. */
+            (void)action(network, mode);
+        }
+    }
+}
 BSWM_CODE void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType RequestedMode)
 {
+    boolean owner = FALSE;
     SchM_Enter_BswM_BSWM_STATE();
-    if ((configuration != NULL_PTR) && (Network == configuration->channel) &&
+    if ((bswm_configuration != NULL_PTR) && (Network == bswm_configuration->channel) &&
         (RequestedMode <= COMM_FULL_COMMUNICATION)) {
-        pending_mode = RequestedMode;
-        pending = TRUE;
-        if (processing == FALSE) {
+        port_mode = RequestedMode;
+        ++postponed;
+        if (!processing) {
             processing = TRUE;
-            while ((pending == TRUE) && (configuration != NULL_PTR)) {
-                Std_ReturnType result;
-                pending = FALSE;
-                /* Update immediately before arbitration, including postponed requests. */
-                input_mode = pending_mode;
-                result = configuration->action(Network, input_mode);
-                if (result != E_OK) {
-                    /* Single-action list stops here. Optional configured failure
-                     * runtime reporting is not selected; lower state stays factual.
-                     */
-                }
-            }
-            processing = FALSE;
+            owner = TRUE;
         }
     }
     SchM_Exit_BswM_BSWM_STATE();
+    if (owner) {
+        BswM_Process();
+    }
 }
 #define BSWM_STOP_SEC_CODE
 #include "BswM_MemMap.h"
