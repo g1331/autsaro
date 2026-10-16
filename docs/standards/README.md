@@ -48,6 +48,8 @@ uv run --locked python -m autosar_tooling requirements SWS_CANInterface
 
 参数为文档名（`AUTOSAR_CP_<文档名>.pdf`）。命令输出各类别的条目数，并列出未处置条目（标注 draft／obsolete）、缺少拒绝测试的配置条件与失效引用。失效引用指带有该文档的前缀、但 R24-11 中没有的编号；未加标记的编号也会检查。三者任一非空即失败；`--stale-only` 只检查失效引用。模块整改完成后，运行 `requirements --update <文档>` 把该文档的编号清单写入 `core/resources/requirements/` 并提交，必需检查随后按清单核算（不带文档参数的 `requirements`，不需要档案）。`SWS_BSWGeneral` 按模块核算：`requirements SWS_BSWGeneral --module <模块缩写>`，整改完成后用 `requirements --update SWS_BSWGeneral --module <模块缩写>` 把模块登记到该文档的清单。一个标记后可列多个完整编号，用 `、`、`,`、`／` 或空格分隔，编号可加反引号；同前缀的后续编号可用 `／`、`,` 续写，或用 `–` 表示范围，如 `不适用（<理由>）：SWS_<Mod>_00001／00003、SWS_<Mod>_00907–00910`（示例中的 `<Mod>` 不构成引用）。
 
+`python -m autosar_tooling coverage --output <目录>` 用同一核算为每个已交付模块计数，生成 README 与[路线图](../roadmap/README.md#module-map)中的架构图（`architecture.svg`、`architecture-full.svg`）；它要求模块表与档案中的 SWS 文档逐份一致。master 上由 `Architecture diagrams` 工作流生成并发布到 GitHub Pages，结果不提交。
+
 尚未按此整改的行沿用原核定记录：模块上下文中的简写（如“Dcm 00806”“RTE 05088”）指该模块 SWS 的同号条款，不计入处置，其中的完整编号也只是定位记录，整改时改为带标记的完整编号；`ECUC_*`、`CONSTR`／`constr_*`、`TPS_*` 等前缀保持原样。SHA-256 为 2026-10-09 实际取得、与 CP 官方清单匹配的文件身份。
 
 ## 6. 模块义务索引

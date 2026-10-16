@@ -52,6 +52,12 @@ The screenshots show the Chinese interface.
 | Host diagnostics | Bounded DoCAN with session control (0x10), TesterPresent (0x3E), and ReadDataByIdentifier (0x22, at most two DIDs per request) |
 | Source delivery | BSW, OS, RTE/application interfaces, configuration, target dependencies, and offline build tools |
 
+### AUTOSAR module coverage
+
+<a href="https://g1331.github.io/autsaro/architecture.svg"><img src="https://g1331.github.io/autsaro/architecture.svg" width="980" alt="AUTOSAR layered view: the delivered CAN stack with a ring per module showing the verified share of its R24-11 requirements, host substitutes, and modules not provided yet"></a>
+
+Each ring spans every item of the module's R24-11 SWS: verified, known gaps, not yet reviewed, and the rest outside the supported configuration. The diagram is drawn from the requirement accounting after each change on master; it is not a conformance claim. The [full module map](docs/roadmap/README.md#module-map) covers all 130 SWS documents and the roadmap stage for each module not provided yet.
+
 See the [runtime support scope](runtime/README.md) for diagnostic behavior and limits. Unsupported configuration is retained as read-only or limits the corresponding operations. Saving and generation have separate checks.
 
 Current execution targets are controlled Windows/Linux host environments. Real MCU operation, hard real-time guarantees, functional safety, and official conformance certification are not provided. Native macOS builds and IPC have not been verified; a native virtual ECU is not provided on macOS. The workbench verifies a built ECU with fixed host checks but cannot yet run it interactively ([#65](https://github.com/g1331/autsaro/issues/65)).
