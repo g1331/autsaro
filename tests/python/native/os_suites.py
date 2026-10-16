@@ -185,11 +185,10 @@ def compiler(target: str | None = None) -> str:
         != pinned["executable_sha256"]
     ):
         raise ValueError(f"native OS toolchain identity mismatch: {pinned['identity']}")
-    if target == "linux-x64-controlled-v1":
-        for name, field in (("objdump", "objdump_sha256"), ("nm", "nm_sha256")):
-            native_tool = executable.parent / name
-            if hashlib.sha256(native_tool.read_bytes()).hexdigest() != pinned[field]:
-                raise ValueError(f"native OS binutils identity mismatch: {name}")
+    for name, field in (("objdump", "objdump_sha256"), ("nm", "nm_sha256")):
+        native_tool = executable.parent / (name + executable.suffix)
+        if hashlib.sha256(native_tool.read_bytes()).hexdigest() != pinned[field]:
+            raise ValueError(f"native OS binutils identity mismatch: {name}")
     return cc
 
 

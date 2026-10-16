@@ -316,9 +316,7 @@ def native(
         )
     ]
     if require_explicit:
-        variables = ["AUTOSAR_CC", "AUTOSAR_OBJDUMP", "AUTOSAR_GIT", "AUTOSAR_PYTHON"]
-        if system == "Linux":
-            variables.append("AUTOSAR_NM")
+        variables = ["AUTOSAR_CC", "AUTOSAR_OBJDUMP", "AUTOSAR_NM", "AUTOSAR_GIT", "AUTOSAR_PYTHON"]
         for variable in variables:
             value = os.environ.get(variable)
             checks.append(
@@ -379,8 +377,6 @@ def native(
     else:
         checks.append(False)
     for name in ("objdump", "nm"):
-        if name == "nm" and system == "Windows":
-            continue
         variable = f"AUTOSAR_{name.upper()}"
         executable = _native_path(name, variable)
         if executable:
@@ -392,11 +388,9 @@ def native(
                     f"{executable}; {version[0].splitlines()[0] if version and version[0].splitlines() else 'identity unavailable'}",
                 )
             )
-            expected_hash = pinned.get(f"{name}_sha256")
-            if expected_hash:
-                checks.append(
-                    _native_digest(f"{name} bytes", executable, expected_hash)
-                )
+            checks.append(
+                _native_digest(f"{name} bytes", executable, pinned[f"{name}_sha256"])
+            )
         else:
             checks.append(False)
     if include_archives:
