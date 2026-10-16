@@ -56,7 +56,7 @@ ComIPduSignalRef ComPduIdRef ComSystemTemplateSystemSignalRef
 DcmDslProtocolRxBufferRef DcmDslProtocolRxPduRef DcmDslProtocolSIDTable
 DcmDslProtocolTxBufferRef DcmDslProtocolTxPduRef DcmDspDataInfoRef DcmDspDidDataRef
 DcmDspDidInfoRef DcmDspDidReadSessionRef OsAlarmAppModeRef OsAlarmCounterRef
-OsAlarmSetEventRef OsAlarmSetEventTaskRef OsTaskAppModeRef OsTaskEventRef
+OsAlarmSetEventRef OsAlarmSetEventTaskRef OsTaskAppModeRef OsTaskEventRef OsMemoryMappingCodeLocationRef
 PduRDestPduRRef PduRDestPduRef PduRSrcPduRRef PduRSrcPduRef RteBswEventRef
 RteBswImplementationRef RteBswMappedToTaskRef RteBswUsedOsAlarmRef RteBswUsedOsEventRef
 RteEventRef RteMappedToTaskRef RteSoftwareComponentInstanceRef RteUsedOsAlarmRef RteUsedOsEventRef
@@ -416,6 +416,45 @@ fn inspect_with_catalog(
         if *module == "Det" {
             det(graph, found[0])?;
         }
+        if *module == "Rte" {
+            let mut policies = BTreeSet::new();
+            for initialization in graph
+                .descendants(found[0], "ECUC-CONTAINER-VALUE")
+                .into_iter()
+                .filter(|index| definition_is(graph, *index, "RteInitializationBehavior"))
+            {
+                if let Some(policy) = value(
+                    graph,
+                    initialization,
+                    "RteSectionInitializationPolicy",
+                    false,
+                ) && !policies.insert(policy)
+                {
+                    return Err(reject(
+                        graph,
+                        initialization,
+                        "RTE_INITIALIZATION_POLICY",
+                        crate::product_message!(
+                            "backend.integration.configuration.explicit_parameter_implementation_unsupported"
+                        ),
+                    ));
+                }
+            }
+            if policies
+                .iter()
+                .all(|policy| matches!(*policy, "INIT" | "CLEARED"))
+                && policies != BTreeSet::from(["INIT", "CLEARED"])
+            {
+                return Err(reject(
+                    graph,
+                    found[0],
+                    "RTE_INITIALIZATION_POLICY",
+                    crate::product_message!(
+                        "backend.integration.configuration.explicit_parameter_implementation_unsupported"
+                    ),
+                ));
+            }
+        }
         selected.push(found[0]);
     }
     for name in ["ComM", "BswM"] {
@@ -452,6 +491,26 @@ fn inspect_with_catalog(
         ));
     }
     let os = one(graph, context, "OsOS")?;
+    for task in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "OsTask"))
+    {
+        let method = reference(graph, task, "OsMemoryMappingCodeLocationRef")?;
+        if graph.elements[method].tag != "SW-ADDR-METHOD"
+            || graph.text(method, "SHORT-NAME") != Some("CODE")
+            || graph.text(method, "SECTION-TYPE") != Some("CODE")
+        {
+            return Err(reject(
+                graph,
+                task,
+                "RTE_OS_MEMORY_METHOD",
+                crate::product_message!(
+                    "backend.integration.configuration.explicit_parameter_implementation_unsupported"
+                ),
+            ));
+        }
+    }
     let hooks = one(graph, os, "OsHooks")?;
     let os_module = MODULES
         .iter()

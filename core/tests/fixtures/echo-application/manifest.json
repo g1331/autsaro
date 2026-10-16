@@ -123,7 +123,7 @@
     {
       "path": "positive/ecuc.arxml",
       "role": "selected ECUC configuration values",
-      "sha256": "33c676279e62ef65561d37158f1fff138f23b573d3570ebbc00b32c7b7cbd4c3"
+      "sha256": "08445a40e9c151da3b3c8e8f1bd7b3d782df6bbacae9f5435fc8f22c5a0335d3"
     },
     {
       "path": "positive/extract.arxml",
