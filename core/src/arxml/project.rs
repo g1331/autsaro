@@ -233,12 +233,15 @@ pub(super) fn validate_manifest(
             "profile" => profile
         ));
     }
-    if manifest.format_version != 1
-        || manifest.declared_release != "R24-11"
-        || manifest.inputs.is_empty()
-    {
+    if manifest.format_version != 1 {
         return Err(crate::product_message!(
-            "backend.arxml.project.manifest_version_release_or_inputs_invalid"
+            "backend.arxml.project.format_version_unsupported",
+            "version" => manifest.format_version
+        ));
+    }
+    if manifest.declared_release != "R24-11" || manifest.inputs.is_empty() {
+        return Err(crate::product_message!(
+            "backend.arxml.project.manifest_release_or_inputs_invalid"
         ));
     }
     let mut paths = BTreeSet::new();

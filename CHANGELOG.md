@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed:** Retired handoff formats (`autosar-workbench-handoff-v3`/`-v2`, `autosar-host-handoff-v1`, `autosar-ecu-handoff-v1`) are recognised by the core importer itself, so every caller of `open_handoff` refuses them with `backend.project.retired_handoff_format` and its format before reading anything else; a package without handoff metadata reports `backend.delivery.explicit_handoff_required` instead of a missing-file error. A project manifest of another `formatVersion` is refused with `backend.arxml.project.format_version_unsupported` naming the version, both when a project opens and when a package is imported; the remaining release and input-set refusal is `backend.arxml.project.manifest_release_or_inputs_invalid`. Accepted projects and packages, delivered bytes and the ABI are unchanged (#223).
+
 - POSIX process cleanup treats a sibling disappearing during /proc inspection as exited, while unobservable live children still prevent confirmed cleanup. Native process tests retain their logs on failure.
 
 - Runtime asset SHA-256 values are computed at build time rather than maintained in the source inventory. Delivered meta/assets.json retains its v2 bytes for unchanged runtime sources; installed-resource verification and fixed FreeRTOS source identities remain enforced. The rule-set identity and dependent seal metadata change because their inventory includes the modified build script. The 15 controlled patch digests move to the FreeRTOS source manifest to preserve ADR 0004 pinning; that provenance file changes, while patch bytes, kernel/port identities, C ABI and licenses stay unchanged. assets update now maintains only the independent seal-guard inventory.

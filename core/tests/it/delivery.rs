@@ -1,7 +1,7 @@
 //! Generated deliveries and handoff packages: refusals, ownership and preserved user bytes.
 use super::*;
 use crate::support::generated_packages::*;
-use crate::support::packages::{payload, reseal};
+use crate::support::packages::{package_tree, payload, reseal};
 use autosar_config_core::Workspace;
 use autosar_config_core::definitions::DefinitionCatalog;
 use autosar_config_core::generator::delivery;
@@ -968,6 +968,23 @@ fn retired_project_identities_are_refused_without_loading_or_rewriting() {
         assert_eq!(message.params["profile"], profile);
         assert_eq!(fs::read(&manifest_path).unwrap(), bytes);
     }
+    for version in [0, 2] {
+        let mut value = current_value.clone();
+        value["formatVersion"] = version.into();
+        let bytes = serde_json::to_vec_pretty(&value).unwrap();
+        fs::write(&manifest_path, &bytes).unwrap();
+        let error = Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache"))
+            .err()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&error).unwrap(),
+            serde_json::json!({
+                "key": "backend.arxml.project.format_version_unsupported",
+                "params": {"version": version.to_string()},
+            })
+        );
+        assert_eq!(fs::read(&manifest_path).unwrap(), bytes);
+    }
     fs::write(&manifest_path, &current).unwrap();
     Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache")).unwrap();
 }
@@ -1017,6 +1034,72 @@ fn retired_delivery_profiles_are_refused_before_import() {
     .unwrap();
     reseal(&output);
     assert_retired_package(&output, &scratch.0.join("HostReceiver"), "host-can-v1");
+}
+
+#[test]
+fn retired_and_unknown_handoff_formats_are_refused_by_identity_without_rewriting() {
+    let scratch = Scratch::new();
+    let workspace = signals(&scratch.0.join("Live"));
+    let refuse = |package: &Path, receiver: &Path| {
+        let before = package_tree(package);
+        let error =
+            delivery::open_handoff(package, receiver, &DefinitionCatalog::builtin().unwrap())
+                .err()
+                .unwrap();
+        assert_eq!(
+            delivery::require_current_format(package).unwrap_err(),
+            error
+        );
+        assert!(!receiver.exists());
+        assert_eq!(package_tree(package), before);
+        error
+    };
+    // Current-layout packages declaring an earlier workbench format, and the
+    // retired root-level handoff.json layout of the host and single-component chains.
+    for (format, root_layout) in [
+        ("autosar-workbench-handoff-v2", false),
+        ("autosar-workbench-handoff-v3", false),
+        ("autosar-host-handoff-v1", true),
+        ("autosar-ecu-handoff-v1", true),
+    ] {
+        let package = scratch.0.join(format);
+        if root_layout {
+            fs::create_dir(&package).unwrap();
+            fs::write(package.join("files.list"), b"handoff.json\n").unwrap();
+            fs::write(
+                package.join("handoff.json"),
+                serde_json::to_vec(&serde_json::json!({"format": format})).unwrap(),
+            )
+            .unwrap();
+        } else {
+            prepare(&workspace, true).generate(&package).unwrap();
+            let path = package.join("meta/handoff.json");
+            let mut metadata: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            metadata["format"] = format.into();
+            fs::write(&path, serde_json::to_vec_pretty(&metadata).unwrap()).unwrap();
+        }
+        let error = refuse(&package, &scratch.0.join(format!("{format}-receiver")));
+        assert_eq!(
+            serde_json::to_value(&error).unwrap(),
+            serde_json::json!({
+                "key": "backend.project.retired_handoff_format",
+                "params": {"format": format},
+            })
+        );
+    }
+    let package = scratch.0.join("unknown");
+    prepare(&workspace, true).generate(&package).unwrap();
+    let path = package.join("meta/handoff.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    metadata["format"] = "autosar-workbench-handoff-v99".into();
+    fs::write(&path, serde_json::to_vec_pretty(&metadata).unwrap()).unwrap();
+    let error = refuse(&package, &scratch.0.join("unknown-receiver"));
+    assert_eq!(
+        message_key(&error),
+        "backend.project.handoff_format_unsupported"
+    );
 }
 
 fn assert_retired_package(output: &Path, receiver: &Path, profile: &str) {
