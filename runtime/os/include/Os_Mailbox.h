@@ -6,9 +6,9 @@
 #define OS_INPUT_PAYLOAD   32u
 #define OS_INPUT_INTERRUPT 30u
 typedef struct {
-    uint64_t ticket;
-    uint8_t length;
-    uint8_t data[OS_INPUT_PAYLOAD];
+    uint64 ticket;
+    uint8 length;
+    uint8 data[OS_INPUT_PAYLOAD];
 } Os_InputRecord;
 /** Copy one input record from the single native bridge producer.
  * @param data Caller-owned bytes, copied before acceptance; never retained.
@@ -18,7 +18,7 @@ typedef struct {
  * E_OS_CALLEVEL (Task/ISR), E_OS_STATE (not ready/closed/disabled),
  * E_OS_VALUE or E_OS_ILLEGAL_ADDRESS. No old record is discarded.
  */
-StatusType Os_TargetPostInput(const uint8_t *data, uint8_t length, uint64_t *ticket);
+StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket);
 /** Consume the oldest complete input on the configured owner Task.
  * @param record Output copy; unchanged when no record or on rejection.
  * @return E_OK, E_OS_NOFUNC (empty), E_OS_ACCESS (other Task),
@@ -29,5 +29,5 @@ StatusType Os_TargetTakeInput(Os_InputRecord *record);
  * @param count Output count, unchanged on rejection.
  * @return E_OK, E_OS_ACCESS, E_OS_CALLEVEL, E_OS_STATE or E_OS_ILLEGAL_ADDRESS.
  */
-StatusType Os_TargetInputCount(unsigned *count);
+StatusType Os_TargetInputCount(uint32 *count);
 #endif

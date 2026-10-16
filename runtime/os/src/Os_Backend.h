@@ -19,18 +19,18 @@ typedef struct {
 } Os_ErrorContext;
 void Os_ErrorContextSave(Os_ErrorContext *context);
 void Os_ErrorContextRestore(const Os_ErrorContext *context);
-int Os_HookBlocksCategory2(void);
-unsigned Os_BackendInterruptPriority(unsigned interrupt);
-int Os_BackendInterruptMaySchedule(unsigned interrupt);
+sint32 Os_HookBlocksCategory2(void);
+uint32 Os_BackendInterruptPriority(uint32 interrupt);
+sint32 Os_BackendInterruptMaySchedule(uint32 interrupt);
 void Os_BackendRequestIsrReschedule(void);
 void Os_PortDispatchNested(void);
-void Os_PortPostInterrupt(uint32_t interrupt);
-int Os_BackendInputOwner(void);
-int Os_BackendTaskOwner(TaskType id);
-int Os_BackendServiceContext(void);
+void Os_PortPostInterrupt(uint32 interrupt);
+sint32 Os_BackendInputOwner(void);
+sint32 Os_BackendTaskOwner(TaskType id);
+sint32 Os_BackendServiceContext(void);
 StatusType Os_BridgeContext(void);
-int Os_BridgeActorAllowed(void);
-int Os_MailboxQuiescent(void);
+sint32 Os_BridgeActorAllowed(void);
+sint32 Os_MailboxQuiescent(void);
 StatusType Os_TimeValidate(const Os_TargetConfig *target);
 void Os_TimeInit(AppModeType mode);
 void Os_TimeAutostart(AppModeType mode);
@@ -40,10 +40,10 @@ void Os_ScheduleIncrement(CounterType counter);
 TickType Os_TimeCounterValue(CounterType counter);
 void Os_TimeReportAction(StatusType status);
 void Os_TimeClose(void);
-int Os_TimeSignalFailed(void);
+sint32 Os_TimeSignalFailed(void);
 void Os_TimeTick(void);
 void vApplicationTickHook(void);
-int Os_TimeBeginTick(void);
+sint32 Os_TimeBeginTick(void);
 #ifdef OS_IDLE_TESTS
 void Os_TestIdleObserved(void);
 #endif
@@ -51,7 +51,7 @@ void Os_TestIdleObserved(void);
 void Os_ArtiTestShutdownObserved(void);
 #endif
 #ifdef OS_TIME_TESTS
-void Os_TimeTestSeed(uint64_t epoch, uint32_t kernel_tick, TickType value);
+void Os_TimeTestSeed(uint64 epoch, uint32 kernel_tick, TickType value);
 void Os_TimeTestCloseEvent(void);
 void Os_TimeTestBeforePending(void);
 void Os_TimeTestMasked(void);
@@ -60,12 +60,12 @@ void Os_TimeTestBeforeReady(void);
 void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 void Os_MailboxInstall(void);
 void Os_MailboxClose(void);
-int Os_MailboxHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void));
-int Os_BackendHandlerAllowed(uint32_t interrupt, uint32_t (*handler)(void));
+sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(void));
+sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(void));
 #ifdef OS_EVENT_TESTS
 void Os_TestObserve(void);
 void Os_TestInputNotified(void);
-void Os_TestInputLastTicket(uint64_t ticket);
+void Os_TestInputLastTicket(uint64 ticket);
 #endif
 void Os_BackendStart(AppModeType mode);
 void Os_BackendShutdown(StatusType error);
@@ -75,20 +75,20 @@ void Os_BackendSignalStackFault(char role);
 void Os_BackendSetDispatcher(void);
 #endif
 void Os_BackendGuardService(void);
-int Os_BackendReady(void);
+sint32 Os_BackendReady(void);
 Os_HookPhase Os_HookContext(void);
-int Os_HookServiceAllowed(OSServiceIdType service);
+sint32 Os_HookServiceAllowed(OSServiceIdType service);
 StatusType Os_ServiceAccessStatus(OSServiceIdType service);
-unsigned Os_BackendCurrentInterrupt(void);
-int Os_BackendStarted(void);
-int Os_InterruptAllows(unsigned interrupt);
-int Os_PortInterruptSourceEnabled(uint32_t interrupt);
+uint32 Os_BackendCurrentInterrupt(void);
+sint32 Os_BackendStarted(void);
+sint32 Os_InterruptAllows(uint32 interrupt);
+sint32 Os_PortInterruptSourceEnabled(uint32 interrupt);
 /* Native mutex held: 0 invalid, 1 applied, 2 duplicate pair with no side effect. */
-int Os_PortInterruptSourceControl(uint32_t interrupt, unsigned operation, boolean clear);
-int Os_InterruptDisabled(void);
+sint32 Os_PortInterruptSourceControl(uint32 interrupt, uint32 operation, boolean clear);
+sint32 Os_InterruptDisabled(void);
 void Os_InterruptRestoreOwner(void);
-int Os_HookQueryContext(void);
-int Os_ErrorHookConfigured(void);
+sint32 Os_HookQueryContext(void);
+sint32 Os_ErrorHookConfigured(void);
 StatusType Os_ErrorResult(OSServiceIdType service,
                           StatusType status,
                           const Os_ErrorParameters *arguments);
@@ -107,19 +107,19 @@ StatusType Os_BackendActivate(TaskType id);
 StatusType Os_BackendFinish(void);
 void Os_BackendMissingEnd(void);
 StatusType Os_BackendChain(TaskType id);
-StatusType Os_BackendResource(ResourceType id, int acquire);
+StatusType Os_BackendResource(ResourceType id, sint32 acquire);
 StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output);
 StatusType Os_BackendSchedule(void);
 StatusType Os_BackendWait(EventMaskType mask);
 StatusType Os_BackendClear(EventMaskType mask);
-int Os_BackendInterruptEnabled(unsigned interrupt);
-void Os_BackendInterruptEnter(unsigned interrupt);
+sint32 Os_BackendInterruptEnabled(uint32 interrupt);
+void Os_BackendInterruptEnter(uint32 interrupt);
 void Os_BackendInterruptLeave(void);
 StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info);
 void Os_BackendOnSwitch(void);
 void Os_BackendBeforeSelect(void *current, void *next);
-int Os_BackendTakeIsrReschedule(void);
-void Os_BackendAssert(const char *file, int line);
+sint32 Os_BackendTakeIsrReschedule(void);
+void Os_BackendAssert(const char *file, sint32 line);
 HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name);
 HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name);
 HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,

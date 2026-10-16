@@ -1738,7 +1738,7 @@ def check_vector_mutations(directory: Path) -> None:
             result = execute(mutant, "normal")
             require(result["exit"] == 7 and not result["stderr"], result)
         else:
-            path = target / "src/Os_Vector.c"
+            path = target / "src/Os_Vector.h"
             text = path.read_text(encoding="utf-8")
             attribute = '__attribute__((section(".os_vec"), aligned(8)))'
             require(text.count(attribute) == 1, "vector section mutation did not apply")
@@ -1853,11 +1853,12 @@ def check_memory_mapping(directory: Path) -> None:
         ("conflicting", [], "Conflicting OS memory mapping markers"),
         ("unsupported", ["OS_START_SEC_OTHER"], "Unsupported or missing OS memory mapping marker"),
         ("attribute-override", [], "OS_CODE override is unsupported"),
+        ("thread-local-override", [], "OS_THREAD_LOCAL override is unsupported"),
     ]:
         if name == "conflicting":
             text = '#include "Os.h"\n#define OS_START_SEC_CODE\n#define OS_STOP_SEC_CODE\n#include "Os_MemMap.h"\n'
-        elif name == "attribute-override":
-            text = '#define OS_CODE\n#include "Os.h"\n'
+        elif name.endswith("-override"):
+            text = f'#define {"OS_CODE" if name == "attribute-override" else "OS_THREAD_LOCAL"}\n#include "Os.h"\n'
         else:
             text = '#include "Os.h"\n' + ''.join(
                 f'#define {marker}\n#include "Os_MemMap.h"\n' for marker in markers)
@@ -1885,7 +1886,7 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
     with retained_workspace(output_directory) as temporary, native_session(temporary, suite):
         if suite == "memory-mapping":
             check_memory_mapping(Path(temporary))
-            print("memory-mapping PASS: 10 linked entries; 6 rejected compile/link cases")
+            print("memory-mapping PASS: 10 linked entries; 7 rejected compile/link cases")
             return
         if suite == "vector-section":
             check_vector_mutations(Path(temporary))

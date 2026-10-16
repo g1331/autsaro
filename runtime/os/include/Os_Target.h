@@ -19,7 +19,7 @@ typedef void (*Os_IsrEntry)(void);
 typedef struct {
     /* Higher values preempt lower values. Zero leaves an application source
      * unconfigured. Kernel yield/tick entries are reserved and must be zero. */
-    uint8_t priorities[OS_MAX_INTERRUPTS];
+    uint8 priorities[OS_MAX_INTERRUPTS];
     /* Optional array of exactly OS_MAX_INTERRUPTS static Category 2 bodies.
      * Use OS_ISR_ENTRY(name). NULL retains manual native handler binding.
      * Slots 0/1, Category 1 and the configured input mailbox must be NULL. */
@@ -29,54 +29,54 @@ typedef struct {
     ResourceType id;
     /* Task priority for Task-only resources; ISR priority when isr_access is
      * nonzero. An ISR-shared resource also excludes all Task preemption. */
-    uint8_t ceiling;
-    uint16_t task_access;
-    uint32_t isr_access;
+    uint8 ceiling;
+    uint16 task_access;
+    uint32 isr_access;
     /* OsResourceProperty LINKED: nonzero makes this resource another name for
      * `link` (itself possibly LINKED). The group shares one owner and the root's
      * ceiling and ISR sharing; the ceiling covers the accessors of every member. */
-    uint8_t linked;
+    uint8 linked;
     ResourceType link;
 } Os_ResourceConfig;
 typedef struct {
-    uint8_t id;
-    uint8_t ceiling;
+    uint8 id;
+    uint8 ceiling;
 } Os_InternalResourceConfig;
 typedef struct {
     TaskType id;
     const char *name;
     void (*entry)(void);
-    uint8_t priority;
-    uint8_t autostart_modes;
-    uint8_t kind;
-    uint8_t activation_limit;
-    uint8_t schedule;
-    uint8_t internal_resource;
+    uint8 priority;
+    uint8 autostart_modes;
+    uint8 kind;
+    uint8 activation_limit;
+    uint8 schedule;
+    uint8 internal_resource;
 } Os_TaskConfig;
 typedef struct {
     TaskStateType state;
-    unsigned count;
+    uint32 count;
     /* Live FIFO order stamps; atomic rebasing preserves order, not lifetime IDs. */
-    uint64_t requests[OS_MAX_ACTIVATIONS];
-    uint64_t kernel_sequence;
+    uint64 requests[OS_MAX_ACTIVATIONS];
+    uint64 kernel_sequence;
     EventMaskType events;
-    uint8_t effective_priority;
-    unsigned resource_count;
+    uint8 effective_priority;
+    uint32 resource_count;
     ResourceType resources[OS_MAX_RESOURCES];
-    uint8_t internal_held;
-    uint8_t internal_ceiling;
-    uint8_t waiting;
+    uint8 internal_held;
+    uint8 internal_ceiling;
+    uint8 waiting;
     EventMaskType wait_mask;
 } Os_ActivationInfo;
 typedef struct {
     const Os_TaskConfig *tasks;
     size_t task_count;
-    uint32_t host_stack_reserve;
+    uint32 host_stack_reserve;
     const Os_ResourceConfig *resources;
     size_t resource_count;
     const Os_InternalResourceConfig *internal_resources;
     size_t internal_resource_count;
-    uint32_t category1_isrs;
+    uint32 category1_isrs;
     TaskType input_task;
     EventMaskType input_event;
     const Os_TimeConfig *time;
@@ -86,7 +86,7 @@ typedef struct {
     /* OsUseResScheduler: nonzero reserves RES_SCHEDULER for the scheduler lock
      * (STANDARD, all Tasks, highest Task ceiling); zero lets a configured
      * RES_SCHEDULER behave as any other resource (SWS_Os_00854). */
-    uint8_t use_res_scheduler;
+    uint8 use_res_scheduler;
 } Os_TargetConfig;
 /** Prepare one process-local target before StartOS.
  * @param config Static configuration retained for the lifetime of the process.
@@ -102,7 +102,7 @@ void Os_TargetTrace(char marker);
 /** Whether target services may accept input/tick (Ready and not closing).
  * @return Nonzero only after successful StartupHook.
  */
-int Os_TargetReady(void);
+sint32 Os_TargetReady(void);
 /** Inspect a stable request/state snapshot in Task or Category 2 ISR context.
  * @param id Configured Task identifier.
  * @param info Caller-owned output; unchanged on rejection.
@@ -111,15 +111,15 @@ int Os_TargetReady(void);
 StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info);
 #ifdef OS_ACTIVATION_TESTS
 void Os_TestObserve(void);
-void Os_TargetTestSequence(uint64_t sequence);
+void Os_TargetTestSequence(uint64 sequence);
 void Os_TestBeforeActivationLock(void);
-void Os_TestAtActivationAdmission(unsigned point);
+void Os_TestAtActivationAdmission(uint32 point);
 void Os_TestBeforeClose(void);
-unsigned Os_TargetTestPending(TaskType id);
+uint32 Os_TargetTestPending(TaskType id);
 #endif
 #ifdef OS_FINISH_TESTS
 void Os_TestObserve(void);
-void Os_TestFinishBoundary(unsigned point);
+void Os_TestFinishBoundary(uint32 point);
 #endif
 #ifdef OS_RESOURCE_TESTS
 void Os_TestObserve(void);

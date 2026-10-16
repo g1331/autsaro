@@ -28,7 +28,7 @@ static const Os_CounterConfig *counter_config(const Os_TimeConfig *time, Counter
     }
     return result;
 }
-static int valid_action(const Os_TargetConfig *target, const Os_ExpiryAction *action)
+static sint32 valid_action(const Os_TargetConfig *target, const Os_ExpiryAction *action)
 {
     for (size_t i = 0u; i < target->task_count; ++i) {
         const Os_TaskConfig *task = &target->tasks[i];
@@ -139,10 +139,10 @@ static void expiry(const Os_ExpiryPoint *point)
     Os_ArtiInternalEnter();
     /* All activations precede all event settings; declaration order is not
      * permitted to set an event on a still-suspended destination Task. */
-    for (unsigned pass = 0u; pass < 2u; ++pass) {
+    for (uint32 pass = 0u; pass < 2u; ++pass) {
         for (size_t i = 0u; i < point->action_count; ++i) {
             const Os_ExpiryAction *action = &point->actions[i];
-            if ((unsigned)action->action == pass) {
+            if ((uint32)action->action == pass) {
                 StatusType status = (pass == OS_ALARM_ACTIVATE)
                                         ? ActivateTask(action->task)
                                         : SetEvent(action->task, action->event);
@@ -155,7 +155,7 @@ static void expiry(const Os_ExpiryPoint *point)
 static void process(size_t initial)
 {
     size_t index = initial;
-    unsigned transitions = 0u;
+    uint32 transitions = 0u;
     while ((tables[index].status == SCHEDULETABLE_RUNNING) && (tables[index].remaining == 0u)) {
         const Os_ScheduleTableConfig *table = &Os_Config->time->schedule_tables[index];
         ScheduleState *state = &tables[index];
@@ -188,7 +188,7 @@ static void process(size_t initial)
 void Os_ScheduleIncrement(CounterType counter)
 {
     const Os_TimeConfig *time = Os_Config->time;
-    uint8_t running[OS_MAX_SCHEDULE_TABLES] = {0};
+    uint8 running[OS_MAX_SCHEDULE_TABLES] = {0};
     for (size_t i = 0u; i < time->schedule_table_count; ++i) {
         running[i] = ((time->schedule_tables[i].counter == counter) &&
                       (tables[i].status == SCHEDULETABLE_RUNNING))
@@ -209,7 +209,7 @@ static StatusType context(void)
     Os_BackendGuardService();
     return (Os_BackendServiceContext() != 0) ? E_OK : E_OS_CALLEVEL;
 }
-static StatusType start_table(ScheduleTableType id, TickType value, int absolute)
+static StatusType start_table(ScheduleTableType id, TickType value, sint32 absolute)
 {
     size_t index;
     const Os_ScheduleTableConfig *table;
