@@ -173,10 +173,17 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), crate::Lo
     let recorded = fs::read_to_string(dir.join(FILE_HASHES)).map_err(|_| {
         crate::product_message!("backend.generation.output_integrity_missing", "path" => dir.display())
     })?;
-    if recorded != integrity_record(dir, names)? {
-        return Err(crate::product_message!(
-            "backend.generation.output_modified"
-        ));
+    let actual = integrity_record(dir, names)?;
+    if recorded != actual {
+        // Name the first file whose bytes differ from its record; a damaged or
+        // extended record itself is reported as the integrity record.
+        let path = recorded
+            .lines()
+            .zip(actual.lines())
+            .find(|(recorded, actual)| recorded != actual)
+            .and_then(|(_, actual)| actual.split_once("  "))
+            .map_or(FILE_HASHES, |(_, name)| name);
+        return Err(crate::product_message!("backend.generation.output_modified", "path" => path));
     }
     Ok(())
 }

@@ -131,14 +131,20 @@ fn regeneration_changes_only_generated_directories() {
         "os/src/Os.c",
         "kernel/tasks.c",
         "tools/ecu-tool.py",
+        "meta/files.sha256",
     ] {
         let file = output.join(path);
         let original = fs::read(&file).unwrap();
         fs::write(&file, [original.as_slice(), b"\n"].concat()).unwrap();
-        assert!(
-            prepared(&sources, &scratch.0, target)
-                .preview(&output)
-                .is_err(),
+        let error = prepared(&sources, &scratch.0, target)
+            .preview(&output)
+            .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(error).unwrap(),
+            serde_json::json!({
+                "key": "backend.generation.output_modified",
+                "params": {"path": path},
+            }),
             "{path}"
         );
         fs::write(&file, original).unwrap();
