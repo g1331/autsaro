@@ -68,8 +68,6 @@ pub(super) fn description(
         ("rte_started", "RteMemory_boolean"),
         ("rte_allocated", "RteMemory_boolean"),
         ("schm_lifecycle", "RteMemory_uint8"),
-        ("schm_started", "RteMemory_boolean"),
-        ("schm_timing", "RteMemory_boolean"),
     ] {
         variables.push_str(&object("VARIABLE-DATA-PROTOTYPE", name, datatype));
     }

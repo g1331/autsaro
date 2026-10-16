@@ -45,6 +45,11 @@ int main(void)
     assert((Ecu_SchMReady() == TRUE) && (Ecu_SchMTimingActive() == FALSE));
     SchM_StartTiming();
     assert(Ecu_SchMTimingActive() == TRUE);
+    /* Repeated startup calls preserve the active timing phase. */
+    SchM_Init(&Ecu_SchMConfig);
+    SchM_Start();
+    SchM_StartTiming();
+    assert((Ecu_SchMReady() == TRUE) && (Ecu_SchMTimingActive() == TRUE));
     /* Deinit is a shutdown service only. */
     SchM_Deinit();
     assert(Ecu_SchMTimingActive() == TRUE);
