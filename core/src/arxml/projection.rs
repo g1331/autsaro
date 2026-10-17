@@ -97,18 +97,12 @@ pub(super) fn simple_text_range(
     Ok(start..end)
 }
 
-fn unsafe_object(node: Node<'_, '_>) -> bool {
+fn unsafe_object(
+    node: Node<'_, '_>,
+    unsafe_parents: &std::collections::HashSet<roxmltree::NodeId>,
+) -> bool {
     node.ancestors()
-        .filter(|node| node.is_element())
-        .any(|ancestor| {
-            ancestor.children().any(|child| {
-                child.is_element()
-                    && matches!(
-                        child.tag_name().name(),
-                        "VARIATION-POINT" | "SW-SYSCOND" | "INSTANCE-REF"
-                    )
-            })
-        })
+        .any(|ancestor| unsafe_parents.contains(&ancestor.id()))
         || node.descendants().any(|child| {
             child.is_element()
                 && (matches!(child.tag_name().name(), "VARIATION-POINT")
@@ -348,14 +342,29 @@ impl Workspace {
                     && node.tag_name().name() == "SYSTEM"
                     && child_text(node, "CATEGORY").as_deref() == Some("ECU_EXTRACT")
             });
+            // Ancestors such as ELEMENTS can have thousands of siblings. Index
+            // their immutable facts once instead of rescanning them per object.
+            let short_names =
+                crate::xml_paths::NamedPaths::new(&document, |node| child_text(node, "SHORT-NAME"));
+            let unsafe_parents: std::collections::HashSet<_> = document
+                .descendants()
+                .filter(|node| {
+                    node.is_element()
+                        && matches!(
+                            node.tag_name().name(),
+                            "VARIATION-POINT" | "SW-SYSCOND" | "INSTANCE-REF"
+                        )
+                })
+                .filter_map(|node| node.parent_element().map(|parent| parent.id()))
+                .collect();
             let mut node_objects = std::collections::HashMap::new();
             let mut object_ordinals = BTreeMap::new();
             for node in document.descendants().filter(|node| {
                 node.is_element()
                     && node.tag_name().namespace() == Some(NS)
-                    && child_text(*node, "SHORT-NAME").is_some()
+                    && short_names.name(*node).is_some()
             }) {
-                let path = path_of(node);
+                let path = short_names.path(node);
                 let kind = node.tag_name().name().to_owned();
                 let short_name_node = node
                     .children()
@@ -375,7 +384,7 @@ impl Workspace {
                             .is_some_and(|edition| edition != "4.10.0")
                     });
                 let unsafe_semantics = unsupported_edition
-                    || unsafe_object(node)
+                    || unsafe_object(node, &unsafe_parents)
                     || simple_text_range(short_name_node).is_err();
                 let writable = !unsafe_semantics
                     && (kind == "AR-PACKAGE" || descriptor.is_some_and(|item| item.writable));

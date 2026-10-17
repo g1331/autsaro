@@ -293,24 +293,8 @@ fn literal<'a>(node: Node<'a, '_>) -> Cow<'a, str> {
     Cow::Owned(joined)
 }
 
-fn xml_path(node: Node<'_, '_>) -> String {
-    // Use the same AUTOSAR named-object locator as the Workspace projection.
-    // Unnamed fields locate their owner; ruleId identifies the violated XML field.
-    let mut parts = Vec::new();
-    for ancestor in node.ancestors().filter(Node::is_element) {
-        if let Some(name) = ancestor
-            .children()
-            .find(|child| child.has_tag_name((NS, "SHORT-NAME")))
-            .map(literal)
-        {
-            parts.push(name);
-        }
-    }
-    parts.reverse();
-    format!("/{}", parts.join("/"))
-}
-
 fn diagnostic(
+    names: &crate::xml_paths::NamedPaths,
     file: &Path,
     node: Node<'_, '_>,
     rule_id: String,
@@ -318,7 +302,7 @@ fn diagnostic(
     counterexample: crate::LocalizedText,
     unsupported: bool,
 ) -> ConfigurationDiagnostic {
-    let path = xml_path(node);
+    let path = names.path(node);
     ConfigurationDiagnostic {
         scope: ValidationScope::Schema,
         rule_id: rule_id.clone(),
@@ -637,6 +621,11 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                 crate::product_message!("backend.rules.schema_release_missing", "path" => file.display()),
             );
         }
+        let names = crate::xml_paths::NamedPaths::new(&doc, |node| {
+            node.children()
+                .find(|child| child.has_tag_name((NS, "SHORT-NAME")))
+                .map(|child| literal(child).into_owned())
+        });
         let mut skip_end = 0;
         for node in doc.descendants().filter(Node::is_element) {
             if node.range().start < skip_end {
@@ -654,6 +643,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                     node.tag_name().namespace().unwrap_or("")
                 ));
                 diagnostics.push(diagnostic(
+                    &names,
                     file,
                     node,
                     "native.unsupported".into(),
@@ -680,6 +670,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                     let subject = format!("{name}/@{}", attribute.name());
                     unknown.insert(subject.clone());
                     diagnostics.push(diagnostic(
+                        &names,
                         file,
                         node,
                         "native.unsupported".into(),
@@ -691,6 +682,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
             }
             if matches!(name, "SD" | "SDG") && node.attribute("GID").is_none() {
                 diagnostics.push(diagnostic(
+                    &names,
                     file,
                     node,
                     format!(
@@ -714,6 +706,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                 for child in node.children() {
                     if child.is_text() && !child.text().unwrap_or("").trim().is_empty() {
                         diagnostics.push(diagnostic(
+                            &names,
                             file,
                             node,
                             rule_id.clone(),
@@ -741,6 +734,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                             .unwrap_or("");
                         if !context_accepts(name, owner, child_name) {
                             diagnostics.push(diagnostic(
+                                &names,
                                 file,
                                 child,
                                 rule_id.clone(),
@@ -751,6 +745,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                         }
                         if index < previous {
                             diagnostics.push(diagnostic(
+                                &names,
                                 file,
                                 child,
                                 rule_id.clone(),
@@ -765,6 +760,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                         || grammar::REFERENCES.contains(&child_name)
                     {
                         diagnostics.push(diagnostic(
+                            &names,
                             file,
                             child,
                             rule_id.clone(),
@@ -785,6 +781,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                         };
                     if count < group.min || count > group.max {
                         diagnostics.push(diagnostic(
+                            &names,
                             file,
                             node,
                             rule_id.clone(),
@@ -819,6 +816,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                 {
                     unknown.insert("VALUE/expression".into());
                     diagnostics.push(diagnostic(
+                        &names,
                         file,
                         node,
                         "native.unsupported".into(),
@@ -832,6 +830,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                 let rule_id = format!("native.type.{name}");
                 if node.children().any(|child| child.is_element()) {
                     diagnostics.push(diagnostic(
+                        &names,
                         file,
                         node,
                         rule_id.clone(),
@@ -843,6 +842,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                 if let Some(kind) = scalar {
                     if !scalar_valid(value, kind) {
                         diagnostics.push(diagnostic(
+                            &names,
                             file,
                             node,
                             rule_id,
@@ -860,6 +860,7 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                             .is_some_and(|dest| destination_allowed(node, dest))
                     {
                         diagnostics.push(diagnostic(
+                            &names,
                             file,
                             node,
                             rule_id,

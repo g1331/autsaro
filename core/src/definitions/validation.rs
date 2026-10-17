@@ -261,14 +261,22 @@ pub(super) fn documents(
         coverage: Vec::new(),
         diagnostics: Vec::new(),
     };
+    let named_paths: Vec<_> = documents
+        .iter()
+        .map(|document| {
+            crate::xml_paths::NamedPaths::new(document, |node| {
+                text(node, "SHORT-NAME").map(|name| name.into_owned())
+            })
+        })
+        .collect();
     let mut objects = BTreeMap::new();
-    for (document, (file, _)) in documents.iter().zip(files) {
+    for ((document, (file, _)), names) in documents.iter().zip(files).zip(&named_paths) {
         for node in document
             .descendants()
             .filter(|n| n.is_element() && n.tag_name().namespace() == Some(NS))
         {
-            if text(node, "SHORT-NAME").is_some() && node.tag_name().name() != "AR-PACKAGE" {
-                let path = object(node);
+            if names.name(node).is_some() && node.tag_name().name() != "AR-PACKAGE" {
+                let path = names.path(node);
                 if objects.insert(path.clone(), node).is_some() {
                     result.diagnostics.push(diagnostic(
                         Some(file.display().to_string()),
@@ -304,7 +312,7 @@ pub(super) fn documents(
             let definition_text = super::xml_text_trimmed(def_ref);
             let id = definition_text.as_ref();
             let file = Some(file.display().to_string());
-            let path = Some(object(node));
+            let path = Some(named_paths[source_index].path(node));
             let mut issue = |code: &str,
                              severity,
                              message: crate::message::LocalizedText,
