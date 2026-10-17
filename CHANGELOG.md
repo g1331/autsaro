@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed:** clang-tidy baseline comparison keeps existing code diagnostics stable when required trailing Doxygen comments are added, while retaining code, literal and occurrence-count checks (#289).
+
 - **Fixed:** Rejection notices, range hints and the missing-tool notice insert backend messages without their sentence-final mark, so each composed text ends in exactly one mark and a bracketed range follows the reason instead of a stray period (#286).
 
 - **Fixed:** Rejected parameter cells show definition bounds only for definition range violations; Counter period errors retain their backend reason alone (#282).
