@@ -1,8 +1,8 @@
 /** @file OS startup, shutdown and target validation; Task, resource and event service entries. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
-const Os_TargetConfig *Os_Config;
-static volatile Os_Atomic32 start_called;
+const Os_TargetConfig *Os_Config; /**< Startup-only retained graph; no Init replacement/reset. */
+static volatile Os_Atomic32 start_called; /**< Atomic StartOS-entry latch; no Init reset. */
 size_t Os_ResourceIndex(const Os_TargetConfig *config, ResourceType id)
 {
     size_t index = 0u;

@@ -8,8 +8,9 @@
 #else
 #include <unistd.h>
 #endif
-static unsigned startup_failure;
-static unsigned both_ready;
+static unsigned
+    startup_failure; /**< Main-owned startup failure selection before StartOS; no Init reset. */
+static unsigned both_ready; /**< Startup readiness observations; fixture-owned, no Init reset. */
 void StartupHook(void)
 {
     Os_TargetTrace('S');

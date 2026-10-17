@@ -2,7 +2,7 @@
 #include "Os.h"
 #include <stdio.h>
 
-static unsigned calls;
+static unsigned calls; /**< Mapped function call count; fixture-owned, no Init reset. */
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 TASK(FirstTask) { ++calls; }

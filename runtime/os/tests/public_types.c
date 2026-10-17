@@ -1,15 +1,16 @@
 /** @file Os.h public types and access macros meet the independent R24-11 constraints. */
-#ifdef OS_PUBLIC_TYPES_HOST_BEFORE
+#include "Std_Types.h"
+#if defined(OS_PUBLIC_TYPES_HOST_BEFORE) && (OS_PUBLIC_TYPES_HOST_BEFORE == STD_ON)
 #include "Os_Host.h"
 #endif
-#ifdef OS_PUBLIC_RTE_BEFORE
+#if defined(OS_PUBLIC_RTE_BEFORE) && (OS_PUBLIC_RTE_BEFORE == STD_ON)
 #include "Rte_Os_Type.h"
 #endif
 #include "Os.h"
-#ifndef OS_PUBLIC_RTE_BEFORE
+#if !defined(OS_PUBLIC_RTE_BEFORE) || !(OS_PUBLIC_RTE_BEFORE == STD_ON)
 #include "Rte_Os_Type.h"
 #endif
-#ifdef OS_PUBLIC_TYPES_HOST_AFTER
+#if defined(OS_PUBLIC_TYPES_HOST_AFTER) && (OS_PUBLIC_TYPES_HOST_AFTER == STD_ON)
 #include "Os_Host.h"
 #endif
 #include <stdio.h>

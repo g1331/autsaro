@@ -14,23 +14,31 @@ typedef struct {
     EventMaskType final_events;
     TickType counter;
 } Observation;
-static Observation observations[32];
-static unsigned observation_count;
-static unsigned entries[16];
-static unsigned initial_active;
-static unsigned acquired_resources;
-static unsigned queued;
-static unsigned modes;
-static size_t task_count;
-static size_t resource_count;
-static uint8_t highest_priority;
-static bool extended;
-static bool multiplicity;
-static bool nonpreemptive;
-static AppModeType selected_mode = 1u;
-static Os_TaskConfig tasks[16];
-static Os_ResourceConfig resources[8];
-static const char *scenario;
+static Observation
+    observations[32]; /**< Recorded scheduling observations; fixture-owned, no Init reset. */
+static unsigned
+    observation_count;       /**< Used scheduling observations; fixture-owned, no Init reset. */
+static unsigned entries[16]; /**< Entries observations; fixture-owned, no Init reset. */
+static unsigned
+    initial_active; /**< Observed initially active Tasks; fixture-owned, no Init reset. */
+static unsigned
+    acquired_resources;   /**< Observed resource acquisitions; fixture-owned, no Init reset. */
+static unsigned queued;   /**< Observed queued activations; fixture-owned, no Init reset. */
+static unsigned modes;    /**< Main-owned modes selection before StartOS; no Init reset. */
+static size_t task_count; /**< Main-owned task count selection before StartOS; no Init reset. */
+static size_t
+    resource_count; /**< Main-owned resource count selection before StartOS; no Init reset. */
+static uint8_t
+    highest_priority; /**< Main-owned highest priority selection before StartOS; no Init reset. */
+static bool extended; /**< Main-owned extended selection before StartOS; no Init reset. */
+static bool multiplicity;  /**< Main-owned multiplicity selection before StartOS; no Init reset. */
+static bool nonpreemptive; /**< Main-owned nonpreemptive selection before StartOS; no Init reset. */
+static AppModeType selected_mode =
+    1u; /**< Main-owned selected mode selection before StartOS; no Init reset. */
+static Os_TaskConfig tasks[16]; /**< Main-owned tasks selection before StartOS; no Init reset. */
+static Os_ResourceConfig
+    resources[8];            /**< Main-owned resources selection before StartOS; no Init reset. */
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 
 static void check(bool condition)
 {

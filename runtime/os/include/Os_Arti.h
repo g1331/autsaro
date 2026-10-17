@@ -4,32 +4,36 @@
 #include "Arti.h"
 #include "Os_Target.h"
 #include "Os_Hooks.h"
+/** Task transition selectors mapped to standard ARTI task events by Os_ArtiTask. */
 typedef enum {
-    OS_ARTI_TASK_ACTIVATE,
-    OS_ARTI_TASK_START,
-    OS_ARTI_TASK_PREEMPT,
-    OS_ARTI_TASK_WAIT,
-    OS_ARTI_TASK_RELEASE,
-    OS_ARTI_TASK_TERMINATE
+    OS_ARTI_TASK_ACTIVATE, /**< Activation admitted. */
+    OS_ARTI_TASK_START,    /**< Task begins/resumes running. */
+    OS_ARTI_TASK_PREEMPT,  /**< Task preempted by another Task. */
+    OS_ARTI_TASK_WAIT,     /**< Task enters event wait. */
+    OS_ARTI_TASK_RELEASE,  /**< Waiting Task becomes ready. */
+    OS_ARTI_TASK_TERMINATE /**< Current Task activation completes. */
 } Os_ArtiTaskEvent;
+/** Debugger/tool Task observation; refreshed under the OS mutex and never used to schedule. */
 typedef struct {
-    TaskStateType state;
-    uint8 priority;
-    uint32 activations;
-    EventMaskType events;
-    EventMaskType wait_mask;
+    TaskStateType state;     /**< Current observed Task state. */
+    uint8 priority;          /**< Current effective Task priority after ceiling adjustments. */
+    uint32 activations;      /**< Number of admitted current/pending activations. */
+    EventMaskType events;    /**< Stored Extended Task event bits. */
+    EventMaskType wait_mask; /**< Current WaitEvent predicate; zero when none. */
 } Os_ArtiTaskState;
+/** Authoritative Alarm remaining ticks, cycle and activation state exposed read-only to tools. */
 typedef struct {
-    TickType remaining;
-    TickType cycle;
-    uint8 active;
+    TickType remaining; /**< Counter ticks remaining before the active Alarm expires. */
+    TickType cycle;     /**< Repeat interval in Counter ticks; zero means one-shot. */
+    uint8 active;       /**< Nonzero while the Alarm is active. */
 } Os_ArtiAlarmState;
+/** Authoritative ScheduleTable state and expiry/successor positions exposed read-only to tools. */
 typedef struct {
-    ScheduleTableStatusType status;
-    size_t point;
-    TickType remaining;
-    size_t next;
-    size_t previous;
+    ScheduleTableStatusType status; /**< Current SCHEDULETABLE_* state. */
+    size_t point;                   /**< Index of the next expiry point. */
+    TickType remaining;             /**< Counter ticks until the next point/final delay. */
+    size_t next;     /**< Successor table index; OS_MAX_SCHEDULE_TABLES means none. */
+    size_t previous; /**< Predecessor table index; OS_MAX_SCHEDULE_TABLES means none. */
 } Os_ArtiScheduleState;
 /* Task observations are refreshed from native kernel state while its mutex is
  * owned. None of these cells is consulted by scheduling or public OS services.
@@ -51,30 +55,152 @@ extern const volatile long *const Os_ArtiOsReady;
 extern const volatile sint32 *const Os_ArtiOsReady;
 #endif
 extern const uint32 *const Os_ArtiCurrentIsr;
-/** @brief Emit a captured task transition while the native OS mutex is owned. */
+/** @brief Emit a captured task transition while the native OS mutex is owned.
+ * @param[in] event Task transition selector; must be a defined Os_ArtiTaskEvent.
+ * @param[in] task Configured Task identifier.
+ * @par Return
+ * None.
+ * Preconditions: ARTI initialized before actors; captured arguments describe the current OS
+ * transition. Context: serialized OS transition/service path under its existing native critical
+ * boundary; outside BSW areas. Reentrancy: single-core transition sites serialize metadata; tool
+ * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
+ * addresses are recorded without retaining their pointed-to storage.
+ */
 void Os_ArtiTask(Os_ArtiTaskEvent event, TaskType task);
-/** @brief Emit paired configured Category 2 ISR events under the dispatcher mutex. */
+/** @brief Emit paired configured Category 2 ISR events under the dispatcher mutex.
+ * @param[in] isr Configured Category 2 ISR identifier.
+ * @param[in] returning Zero for entry, nonzero for return.
+ * @par Return
+ * None.
+ * Preconditions: ARTI initialized before actors; captured arguments describe the current OS
+ * transition. Context: serialized OS transition/service path under its existing native critical
+ * boundary; outside BSW areas. Reentrancy: single-core transition sites serialize metadata; tool
+ * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
+ * addresses are recorded without retaining their pointed-to storage.
+ */
 void Os_ArtiIsr(ISRType isr, sint32 returning);
-/** @brief Emit a standard Hook event; AlarmCallback is not a standard OS Hook. */
+/** @brief Emit a standard Hook event; AlarmCallback is not a standard OS Hook.
+ * @param[in] hook Current global hook phase; NONE/AlarmCallback emit no standard hook event.
+ * @param[in] error Captured ErrorHook/ShutdownHook status; ignored by other hook phases.
+ * @param[in] returning Zero for entry, nonzero for return.
+ * @par Return
+ * None.
+ * Preconditions: ARTI initialized before actors; captured arguments describe the current OS
+ * transition. Context: serialized OS transition/service path under its existing native critical
+ * boundary; outside BSW areas. Reentrancy: single-core transition sites serialize metadata; tool
+ * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
+ * addresses are recorded without retaining their pointed-to storage.
+ */
 void Os_ArtiHook(Os_HookPhase hook, StatusType error, sint32 returning);
-/** @brief Emit an application service event with an already captured payload. */
+/** @brief Emit an application service event with an already captured payload.
+ * @param[in] service Captured OS service identifier.
+ * @param[in] parameter Already captured scalar service event payload.
+ * @param[in] returning Zero for entry, nonzero for return.
+ * @par Return
+ * None.
+ * Preconditions: ARTI initialized before actors; captured arguments describe the current OS
+ * transition. Context: serialized OS transition/service path under its existing native critical
+ * boundary; outside BSW areas. Reentrancy: single-core transition sites serialize metadata; tool
+ * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
+ * addresses are recorded without retaining their pointed-to storage.
+ */
 void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning);
-/** @brief Preserve the complete native pointer alongside its standard uint32 token. */
+/** @brief Preserve the complete native pointer alongside its standard uint32 token.
+ * @param[in] address Native AlarmBase result address, captured as bits without dereferencing.
+ * @par Return
+ * None.
+ * Preconditions: ARTI initialized before actors; captured arguments describe the current OS
+ * transition. Context: serialized OS transition/service path under its existing native critical
+ * boundary; outside BSW areas. Reentrancy: single-core transition sites serialize metadata; tool
+ * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
+ * addresses are recorded without retaining their pointed-to storage.
+ */
 void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address);
 /** @brief Caller classification scopes; save/restore when entering logical actors. */
+/** Complete suspended logical caller classification and capture, for balanced save/restore. */
 typedef struct {
-    uint32 internal_depth;
-    uint32 service_depth;
-    StatusType access_status;
-    Arti_AddressCapture address;
+    uint32 internal_depth;       /**< Nested internal-origin scopes to restore. */
+    uint32 service_depth;        /**< Nested service scopes to restore. */
+    StatusType access_status;    /**< Suspended caller access-guard result. */
+    Arti_AddressCapture address; /**< Suspended caller lossless address/status capture. */
 } Os_ArtiCaller;
+/** Save and reset the current logical caller classification and capture.
+ * @return Complete previous classification/capture for matching restore.
+ * Preconditions: initialized actor TLS; logical caller scopes are nested.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 Os_ArtiCaller Os_ArtiCallerSave(void);
+/** Restore classification and capture of a suspended logical caller.
+ * @param[in] caller Snapshot returned by the matching Os_ArtiCallerSave.
+ * @par Return
+ * None.
+ * Preconditions: matching saved caller snapshot.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 void Os_ArtiCallerRestore(Os_ArtiCaller caller);
+/** Enter one internal service-origin scope.
+ * @par Return
+ * None.
+ * Preconditions: internal nesting depth remains below UINT32_MAX.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 void Os_ArtiInternalEnter(void);
+/** Leave the matching internal service-origin scope.
+ * @par Return
+ * None.
+ * Preconditions: an unmatched leave asserts; internal depth must be nonzero.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 void Os_ArtiInternalLeave(void);
+/** Enter a service scope and reset its captured access result.
+ * @return Nonzero only for an outermost application-origin service call.
+ * Preconditions: service nesting depth remains below UINT32_MAX.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 sint32 Os_ArtiServiceEnter(void);
+/** Leave the matching service scope.
+ * @par Return
+ * None.
+ * Preconditions: an unmatched leave asserts; service depth must be nonzero.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 void Os_ArtiServiceLeave(void);
+/** Capture the current service access result.
+ * @param[in] status Result of the service access/context guard.
+ * @par Return
+ * None.
+ * Preconditions: current logical caller classification is established.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 void Os_ArtiAccessResult(StatusType status);
+/** Test whether the last captured service access was accepted.
+ * @return Nonzero for E_OK; zero for a refused access.
+ * Preconditions: current logical service access result has been captured.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 sint32 Os_ArtiAccessValid(void);
+/** Read the last captured service access result.
+ * @return Current logical caller access status.
+ * Preconditions: current logical service access result has been captured.
+ * Context: current native OS actor, including its existing critical section; no blocking or BSW
+ * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
+ * Ownership: copies scalar/capture state; no application object pointer is retained.
+ */
 StatusType Os_ArtiAccessStatus(void);
 #endif

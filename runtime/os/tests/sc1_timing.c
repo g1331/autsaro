@@ -9,15 +9,19 @@ typedef struct {
     CounterType counter;
     TickType value;
 } Observation;
-static Observation observations[256];
-static unsigned observation_count;
-static unsigned checks;
-static unsigned rejected;
-static unsigned errors;
-static StatusType last_error;
-static const char *scenario;
-static CounterType observed_counter;
-static volatile LONG interrupt_done;
+static Observation
+    observations[256]; /**< Recorded scheduling observations; fixture-owned, no Init reset. */
+static unsigned
+    observation_count;        /**< Used scheduling observations; fixture-owned, no Init reset. */
+static unsigned checks;       /**< Executed assertions; fixture-owned, no Init reset. */
+static unsigned rejected;     /**< Rejected service observations; fixture-owned, no Init reset. */
+static unsigned errors;       /**< Observed checks/errors; fixture-owned, no Init reset. */
+static StatusType last_error; /**< Latest ErrorHook result; fixture-owned, no Init reset. */
+static const char *scenario;  /**< Main-owned scenario selection before StartOS; no Init reset. */
+static CounterType
+    observed_counter; /**< Selected Counter observation; fixture-owned, no Init reset. */
+static volatile LONG
+    interrupt_done; /**< Atomic native/OS handoff interrupt done; fixture-owned, no Init reset. */
 static void check(bool condition)
 {
     ++checks;

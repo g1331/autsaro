@@ -6,12 +6,13 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static TaskHandle_t observed[7];
-static unsigned entries[7];
-static unsigned observations;
-static unsigned rejected;
-static bool chain_committed;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static TaskHandle_t observed[7]; /**< Observed Task handles; fixture-owned, no Init reset. */
+static unsigned entries[7];      /**< Entries observations; fixture-owned, no Init reset. */
+static unsigned
+    observations;            /**< Recorded scheduling observations; fixture-owned, no Init reset. */
+static unsigned rejected;    /**< Rejected service observations; fixture-owned, no Init reset. */
+static bool chain_committed; /**< Observed successful chain commit; fixture-owned, no Init reset. */
 static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b)
 {
     unsigned i;

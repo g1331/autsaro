@@ -8,19 +8,22 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static const Os_TaskConfig *configuration;
-static unsigned a_entries;
-static unsigned b_entries;
-static unsigned e_entries;
-static unsigned h_entries;
-static unsigned expected_a;
-static unsigned expected_b;
-static unsigned expected_e;
-static unsigned observations;
-static TaskHandle_t observer_handles[6];
-static unsigned rejected;
-static bool preempt;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static const Os_TaskConfig
+    *configuration;        /**< Main-owned configuration selection before StartOS; no Init reset. */
+static unsigned a_entries; /**< A entries observations; fixture-owned, no Init reset. */
+static unsigned b_entries; /**< B entries observations; fixture-owned, no Init reset. */
+static unsigned e_entries; /**< E entries observations; fixture-owned, no Init reset. */
+static unsigned h_entries; /**< H entries observations; fixture-owned, no Init reset. */
+static unsigned expected_a; /**< Caller-owned expected a for synchronous checks; no Init reset. */
+static unsigned expected_b; /**< Caller-owned expected b for synchronous checks; no Init reset. */
+static unsigned expected_e; /**< Caller-owned expected e for synchronous checks; no Init reset. */
+static unsigned
+    observations; /**< Recorded scheduling observations; fixture-owned, no Init reset. */
+static TaskHandle_t
+    observer_handles[6];  /**< Observed Task handles; fixture-owned, no Init reset. */
+static unsigned rejected; /**< Rejected service observations; fixture-owned, no Init reset. */
+static bool preempt;      /**< Main-owned preempt selection before StartOS; no Init reset. */
 void Os_TestBeforeActivationLock(void)
 {
     static bool closing_injected;

@@ -5,13 +5,14 @@
 #include <stdio.h>
 #include <string.h>
 
-static char trace[128];
-static unsigned length;
-static unsigned owner_entries;
-static unsigned helper_entries;
-static const char *scenario;
-static bool configured = true;
-static bool internal;
+static char trace[128];         /**< Execution-order bytes; fixture-owned, no Init reset. */
+static unsigned length;         /**< Used execution-order bytes; fixture-owned, no Init reset. */
+static unsigned owner_entries;  /**< Owner entries observations; fixture-owned, no Init reset. */
+static unsigned helper_entries; /**< Helper entries observations; fixture-owned, no Init reset. */
+static const char *scenario;    /**< Main-owned scenario selection before StartOS; no Init reset. */
+static bool configured =
+    true;             /**< Main-owned configured selection before StartOS; no Init reset. */
+static bool internal; /**< Main-owned internal selection before StartOS; no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {
@@ -28,7 +29,7 @@ static void task_hook(char code)
 {
     TaskType id = INVALID_TASK;
     TaskStateType state = 99u;
-#ifdef TASK_HOOK_OBSERVER
+#if defined(TASK_HOOK_OBSERVER) && (TASK_HOOK_OBSERVER == STD_ON)
     TASK_HOOK_OBSERVER();
 #endif
     TickType value = UINT64_MAX;

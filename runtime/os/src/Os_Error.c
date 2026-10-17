@@ -4,12 +4,17 @@
 /* The fixed GCC/Win64 target uses the same native PE TLS ABI as Os_Stack.c.
  * Each actor keeps its own callback phase and typed snapshot; a failed call
  * from inside ErrorHook never recursively enters or overwrites that snapshot. */
-static OS_THREAD_LOCAL Os_HookPhase phase;
-static OS_THREAD_LOCAL OSServiceIdType service_id;
-static OS_THREAD_LOCAL Os_ErrorParameters parameters;
-static OS_THREAD_LOCAL uint32 hook_depth;
-static OS_THREAD_LOCAL sint32 error_active;
-static const Os_ErrorParameters empty_parameters = {.service_TerminateTask = {0u}};
+static OS_THREAD_LOCAL Os_HookPhase
+    phase; /**< Actor TLS hook phase; context save/restore, no Init reset. */
+static OS_THREAD_LOCAL OSServiceIdType
+    service_id; /**< Actor TLS failed-service identity; no Init reset. */
+static OS_THREAD_LOCAL Os_ErrorParameters
+    parameters;                           /**< Actor TLS ErrorHook snapshot; no Init reset. */
+static OS_THREAD_LOCAL uint32 hook_depth; /**< Actor TLS hook nesting count; no Init reset. */
+static OS_THREAD_LOCAL sint32
+    error_active; /**< Actor TLS ErrorHook recursion guard; no Init reset. */
+static const Os_ErrorParameters empty_parameters = {
+    .service_TerminateTask = {0u}}; /**< C-initialized immutable empty snapshot; no Init writes. */
 sint32 Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
 
 void Os_ErrorContextSave(Os_ErrorContext *context)

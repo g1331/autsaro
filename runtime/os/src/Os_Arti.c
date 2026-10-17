@@ -2,9 +2,12 @@
 #include "Os_Arti.h"
 #include <assert.h>
 
-static OS_THREAD_LOCAL uint32 internal_depth;
-static OS_THREAD_LOCAL uint32 service_depth;
-static OS_THREAD_LOCAL StatusType access_status;
+static OS_THREAD_LOCAL uint32
+    internal_depth; /**< Actor TLS origin depth; CallerSave resets, not Init. */
+static OS_THREAD_LOCAL uint32
+    service_depth; /**< Actor TLS service depth; CallerSave resets, not Init. */
+static OS_THREAD_LOCAL StatusType
+    access_status; /**< Actor TLS access result; CallerSave resets, not Init. */
 void Os_ArtiAccessResult(StatusType status) { access_status = status; }
 sint32 Os_ArtiAccessValid(void) { return access_status == E_OK; }
 StatusType Os_ArtiAccessStatus(void) { return access_status; }

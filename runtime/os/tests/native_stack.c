@@ -7,9 +7,10 @@
 #include <unistd.h>
 #endif
 
-static const char *scenario;
-static volatile unsigned checksum;
-static unsigned hook_entries;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static volatile unsigned
+    checksum; /**< Actor-owned stack-probe checksum; fixture-owned, no Init reset. */
+static unsigned hook_entries; /**< Hook entries observations; fixture-owned, no Init reset. */
 HANDLE Os_StackTestBackupThread(void);
 HANDLE Os_StackTestTaskThread(unsigned index);
 void Os_StackTestFailOperation(unsigned operation);

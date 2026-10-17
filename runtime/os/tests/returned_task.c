@@ -5,18 +5,18 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static bool configured;
-static bool resources;
-static bool internal;
-static bool queued;
-static unsigned entries;
-static unsigned errors;
-static unsigned helpers;
-static StatusType last_error;
-static OSServiceIdType last_service;
-static char trace[128];
-static unsigned length;
+static const char *scenario;  /**< Main-owned scenario selection before StartOS; no Init reset. */
+static bool configured;       /**< Main-owned configured selection before StartOS; no Init reset. */
+static bool resources;        /**< Main-owned resources selection before StartOS; no Init reset. */
+static bool internal;         /**< Main-owned internal selection before StartOS; no Init reset. */
+static bool queued;           /**< Main-owned queued selection before StartOS; no Init reset. */
+static unsigned entries;      /**< Entries observations; fixture-owned, no Init reset. */
+static unsigned errors;       /**< Observed checks/errors; fixture-owned, no Init reset. */
+static unsigned helpers;      /**< Helpers observations; fixture-owned, no Init reset. */
+static StatusType last_error; /**< Latest ErrorHook result; fixture-owned, no Init reset. */
+static OSServiceIdType last_service; /**< Latest ErrorHook service; fixture-owned, no Init reset. */
+static char trace[128];              /**< Execution-order bytes; fixture-owned, no Init reset. */
+static unsigned length; /**< Used execution-order bytes; fixture-owned, no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

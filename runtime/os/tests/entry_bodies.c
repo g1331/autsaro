@@ -15,14 +15,14 @@ ISR(ParentISR);
 ISR(ChildISR);
 ALARMCALLBACK(AlarmBody);
 
-static const char *scenario;
-static unsigned parents;
-static unsigned children;
-static unsigned workers;
-static unsigned alarms;
-static unsigned errors;
-static char trace[32];
-static unsigned length;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static unsigned parents;     /**< Parents observations; fixture-owned, no Init reset. */
+static unsigned children;    /**< Children observations; fixture-owned, no Init reset. */
+static unsigned workers;     /**< Workers observations; fixture-owned, no Init reset. */
+static unsigned alarms;      /**< Alarms observations; fixture-owned, no Init reset. */
+static unsigned errors;      /**< Observed checks/errors; fixture-owned, no Init reset. */
+static char trace[32];       /**< Execution-order bytes; fixture-owned, no Init reset. */
+static unsigned length;      /**< Used execution-order bytes; fixture-owned, no Init reset. */
 static bool is(const char *name) { return strcmp(scenario, name) == 0; }
 static void check(bool condition)
 {

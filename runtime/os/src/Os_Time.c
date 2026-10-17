@@ -2,21 +2,25 @@
 #include "Os_Backend.h"
 #include "Os_IntegrationHooks.h"
 
-static TickType values[OS_MAX_COUNTERS];
-const TickType *const Os_ArtiCounters = values;
+static TickType values[OS_MAX_COUNTERS]; /**< Port-locked Counter ticks; TimeInit does not reset. */
+const TickType *const Os_ArtiCounters =
+    values; /**< Fixed Counter ticks tool view; C init only, never reset. */
 typedef Os_ArtiAlarmState AlarmState;
-static AlarmState alarms[OS_MAX_ALARMS];
-const Os_ArtiAlarmState *const Os_ArtiAlarms = alarms;
-static volatile Os_Atomic32 tick_state;
-static uint64 requested_epoch;
-static uint64 confirmed_epoch;
-static uint64 action_count;
-static uint64 error_count;
-static Os_TickCompletion completion;
-static HANDLE completion_event;
+static AlarmState alarms[OS_MAX_ALARMS]; /**< Port-locked Alarm state; TimeInit does not reset. */
+const Os_ArtiAlarmState *const Os_ArtiAlarms =
+    alarms; /**< Fixed Alarm state tool view; C init only, never reset. */
+static volatile Os_Atomic32
+    tick_state;                /**< Atomic handshake/close state; TimeInit does not reset. */
+static uint64 requested_epoch; /**< Producer-owned epoch, tick_state ordered; no Init reset. */
+static uint64 confirmed_epoch; /**< Owner-Task epoch, tick_state ordered; no Init reset. */
+static uint64 action_count;    /**< Port-locked action total; TimeInit does not reset. */
+static uint64 error_count;     /**< Port-locked action-error total; TimeInit does not reset. */
+static Os_TickCompletion
+    completion;                 /**< Owner-Task snapshot, tick_state published; no Init reset. */
+static HANDLE completion_event; /**< Manual event created by TimeInit; then fixed. */
 /* Auto-reset: one early native wake per notification, never a completion. */
-static HANDLE attention_event;
-static volatile Os_Atomic32 signal_failed;
+static HANDLE attention_event;             /**< Auto-reset event created by TimeInit; then fixed. */
+static volatile Os_Atomic32 signal_failed; /**< Atomic host-signal failure latch; no Init reset. */
 #define TIME_CLOSED     256L
 #define TIME_RESERVED   1L
 #define TIME_PENDING    2L
@@ -585,7 +589,7 @@ StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket)
         return E_OS_STATE;
     }
     requested_epoch = epoch;
-#ifdef OS_TIME_TESTS
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
     Os_TimeTestBeforePending();
 #endif
     if (InterlockedCompareExchange(&tick_state, TIME_PENDING, TIME_RESERVED) != TIME_RESERVED) {
@@ -731,7 +735,7 @@ StatusType Os_TargetCompleteTick(uint64 ticket)
 void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
 {
     const Os_TimeConfig *config = Os_Config->time;
-#ifdef OS_TIME_TESTS
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
     Os_TimeTestOnWaiting();
 #endif
     Os_IntegrationOnWaiting(id, pending, predicate);
@@ -756,7 +760,7 @@ void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicat
         }
     }
 }
-#ifdef OS_TIME_TESTS
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
 void Os_TimeTestCloseEvent(void)
 {
     configASSERT(completion_event != NULL);

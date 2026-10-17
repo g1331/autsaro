@@ -6,16 +6,21 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static TaskHandle_t observed[6];
-static unsigned observations;
-static unsigned rejected;
-static unsigned h_entries;
-static unsigned b_entries;
-static volatile LONG irq_entries;
-static volatile LONG task_progress;
-static volatile LONG task_started;
-static volatile LONG irq_finished;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static TaskHandle_t observed[6]; /**< Observed Task handles; fixture-owned, no Init reset. */
+static unsigned
+    observations;          /**< Recorded scheduling observations; fixture-owned, no Init reset. */
+static unsigned rejected;  /**< Rejected service observations; fixture-owned, no Init reset. */
+static unsigned h_entries; /**< H entries observations; fixture-owned, no Init reset. */
+static unsigned b_entries; /**< B entries observations; fixture-owned, no Init reset. */
+static volatile LONG
+    irq_entries; /**< Atomic native/OS handoff irq entries; fixture-owned, no Init reset. */
+static volatile LONG
+    task_progress; /**< Atomic native/OS handoff task progress; fixture-owned, no Init reset. */
+static volatile LONG
+    task_started; /**< Atomic native/OS handoff task started; fixture-owned, no Init reset. */
+static volatile LONG
+    irq_finished; /**< Atomic native/OS handoff irq finished; fixture-owned, no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

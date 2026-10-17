@@ -11,9 +11,10 @@
 #error The selected status mode differs from the independent input
 #endif
 
-static unsigned errors;
-static unsigned peers;
-static TickType remaining = UINT64_MAX;
+static unsigned errors; /**< Observed checks/errors; fixture-owned, no Init reset. */
+static unsigned peers;  /**< Peers observations; fixture-owned, no Init reset. */
+static TickType remaining =
+    UINT64_MAX; /**< Alarm remaining-ticks sentinel; fixture-owned, no Init reset. */
 void StartupHook(void) {}
 static void check(bool condition)
 {

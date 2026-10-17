@@ -50,12 +50,15 @@ struct Os_HostHandle {
     CONTEXT captured;
 };
 
-static struct Os_HostHandle handles[OS_HOST_HANDLES];
-static struct Os_HostHandle process_handle = {.reserved = 1, .kind = OS_HOST_PROCESS};
-static HANDLE dispatcher;
-static __thread HANDLE current_thread;
-static __thread sigset_t held_masks[32];
-static __thread unsigned held_depth;
+static struct Os_HostHandle handles[OS_HOST_HANDLES]; /**< Atomically reserved slots, per-handle
+                                                         synchronization; no Init reset. */
+static struct Os_HostHandle process_handle = {
+    .reserved = 1,
+    .kind = OS_HOST_PROCESS}; /**< C-initialized immutable process pseudo-handle; no Init writes. */
+static HANDLE dispatcher;     /**< Atomic dispatcher-handle publication; no Init reset. */
+static __thread HANDLE current_thread;   /**< Native actor TLS handle; no Init reset. */
+static __thread sigset_t held_masks[32]; /**< Actor TLS prior signal masks; no Init reset. */
+static __thread unsigned held_depth;     /**< Actor TLS signal-mask nesting depth; no Init reset. */
 
 static int futex_wait(volatile int32_t *cell, int32_t expected)
 {

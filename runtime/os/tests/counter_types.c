@@ -6,11 +6,13 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static unsigned checks, errors;
-static uint32_t expected_id;
-static TickRefType expected_value, expected_elapsed;
-static TickType final_value, other_value;
+static const char *scenario;    /**< Main-owned scenario selection before StartOS; no Init reset. */
+static unsigned checks, errors; /**< Observed checks/errors; fixture-owned, no Init reset. */
+static uint32_t expected_id; /**< Caller-owned expected id for synchronous checks; no Init reset. */
+static TickRefType expected_value,
+    expected_elapsed; /**< Caller-owned expected elapsed for synchronous checks; no Init reset. */
+static TickType final_value,
+    other_value; /**< Queried Counter-ticks outputs; fixture-owned, no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

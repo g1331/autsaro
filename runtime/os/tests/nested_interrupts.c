@@ -5,16 +5,20 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static char trace[128];
-static unsigned length;
-static unsigned children, grandchildren, helpers, errors, depth, maximum;
-static unsigned error_isrs[8];
-static StatusType error_codes[8];
-static OSServiceIdType error_services[8];
-static DWORD isr_thread;
-static uintptr_t stack_marks[32];
-static TaskStateType parent_state = 77u;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static char trace[128];      /**< Execution-order bytes; fixture-owned, no Init reset. */
+static unsigned length;      /**< Used execution-order bytes; fixture-owned, no Init reset. */
+static unsigned children, grandchildren, helpers, errors, depth,
+    maximum; /**< Nested ISR counts and maximum depth; fixture-owned, no Init reset. */
+static unsigned error_isrs[8];    /**< Error isrs observations; fixture-owned, no Init reset. */
+static StatusType error_codes[8]; /**< Error codes observations; fixture-owned, no Init reset. */
+static OSServiceIdType
+    error_services[8];   /**< Error services observations; fixture-owned, no Init reset. */
+static DWORD isr_thread; /**< Observed native ISR thread identity; fixture-owned, no Init reset. */
+static uintptr_t
+    stack_marks[32]; /**< Observed ISR stack addresses; fixture-owned, no Init reset. */
+static TaskStateType parent_state =
+    77u; /**< Task-state output sentinel; fixture-owned, no Init reset. */
 static bool is(const char *name) { return strcmp(scenario, name) == 0; }
 static void check(bool condition)
 {

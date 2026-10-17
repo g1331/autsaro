@@ -4,19 +4,24 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static TaskHandle_t observed[4];
-static unsigned checks;
-static unsigned rejects;
-static unsigned consumed;
-static unsigned entries;
-static uint64_t consumed_ticket;
-static volatile LONG request;
-static volatile LONG completed;
-static volatile LONG notified;
-static volatile LONG waiting_seen;
-static volatile LONG bridge_rejected;
-static bool mailbox;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static TaskHandle_t observed[4]; /**< Observed Task handles; fixture-owned, no Init reset. */
+static unsigned checks;          /**< Executed assertions; fixture-owned, no Init reset. */
+static unsigned rejects;  /**< Rejected service observations; fixture-owned, no Init reset. */
+static unsigned consumed; /**< Consumed observations; fixture-owned, no Init reset. */
+static unsigned entries;  /**< Entries observations; fixture-owned, no Init reset. */
+static uint64_t consumed_ticket; /**< Consumed ticket observations; fixture-owned, no Init reset. */
+static volatile LONG
+    request; /**< Atomic native/OS handoff request; fixture-owned, no Init reset. */
+static volatile LONG
+    completed; /**< Atomic native/OS handoff completed; fixture-owned, no Init reset. */
+static volatile LONG
+    notified; /**< Atomic native/OS handoff notified; fixture-owned, no Init reset. */
+static volatile LONG
+    waiting_seen; /**< Atomic native/OS handoff waiting seen; fixture-owned, no Init reset. */
+static volatile LONG
+    bridge_rejected; /**< Atomic native/OS handoff bridge rejected; fixture-owned, no Init reset. */
+static bool mailbox; /**< Main-owned mailbox selection before StartOS; no Init reset. */
 static void check(bool condition)
 {
     ++checks;

@@ -4,27 +4,34 @@
 #include "Os_Stack.h"
 #include <stdio.h>
 
-static Os_NativeStack stacks[OS_NATIVE_STACKS];
-const Os_NativeStack *const Os_ArtiStacks = stacks;
-static CONTEXT saved_contexts[OS_NATIVE_STACKS];
-const size_t Os_ArtiNativeContextSize = sizeof(CONTEXT);
+static Os_NativeStack stacks[OS_NATIVE_STACKS]; /**< Actor/stopped-observer records, atomic
+                                                   allocation; no Init reset. */
+const Os_NativeStack *const Os_ArtiStacks =
+    stacks; /**< Fixed native stacks tool view; C init only, never reset. */
+static CONTEXT
+    saved_contexts[OS_NATIVE_STACKS]; /**< Observer-owned stopped contexts; no Init reset. */
+const size_t Os_ArtiNativeContextSize =
+    sizeof(CONTEXT); /**< Fixed native context size tool view; C init only, never reset. */
 const void *Os_StackSavedContext(const Os_NativeStack *stack)
 {
     /* The caller supplies a record obtained from this module's own array. */
     return &saved_contexts[stack - stacks];
 }
-static volatile Os_Atomic32 stack_count;
-#ifdef OS_HOST_FAILURE_TESTS
-static char invalid_guarantee_role;
+static volatile Os_Atomic32 stack_count; /**< Atomic native record reservations; no Init reset. */
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
+static char invalid_guarantee_role; /**< Startup-only test fault role; no Init reset. */
 #endif
-static __thread Os_NativeStack *current_stack;
-Os_StackFault Os_Fault;
-static volatile Os_Atomic32 fault_claimed, fault_count;
-static HANDLE fault_output;
-static HANDLE fault_error;
-static char fatal_text[256];
-static volatile Os_Atomic32 fatal_claimed;
-static Os_StackFault fault_records[OS_NATIVE_STACKS];
+static __thread Os_NativeStack *current_stack; /**< Owning actor TLS stack record; no Init reset. */
+Os_StackFault Os_Fault; /**< First-fault winner snapshot, atomic publication; no Init reset. */
+static volatile Os_Atomic32 fault_claimed,
+    fault_count;             /**< Atomic fault claim/count state; no Init reset. */
+static HANDLE fault_output;  /**< Startup-only stdout handle for fatal writes; no Init reset. */
+static HANDLE fault_error;   /**< Startup-only stderr handle for fatal writes; no Init reset. */
+static char fatal_text[256]; /**< Fatal-path winner owns this buffer; no Init reset. */
+static volatile Os_Atomic32
+    fatal_claimed; /**< Atomic terminal-report winner latch; no Init reset. */
+static Os_StackFault fault_records[OS_NATIVE_STACKS]; /**< Per-actor fault slots, atomic
+                                                         publication; no Init reset. */
 int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
 LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 const Os_NativeStack *Os_StackCurrent(void) { return current_stack; }
@@ -87,7 +94,7 @@ void Os_StackInit(void)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     fault_output = GetStdHandle(STD_OUTPUT_HANDLE);
     fault_error = GetStdHandle(STD_ERROR_HANDLE);
-#ifdef OS_HOST_FAILURE_TESTS
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
     char injected[2] = {0};
     if (GetEnvironmentVariableA("AUTOSAR_OS_BAD_GUARANTEE", injected, sizeof(injected)) == 1u) {
         invalid_guarantee_role = injected[0];
@@ -109,7 +116,7 @@ int Os_StackRegister(char role)
     ULONG guarantee = 16384u;
     LONG index = InterlockedIncrement(&stack_count) - 1;
     Os_NativeStack *record;
-#ifdef OS_HOST_FAILURE_TESTS
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
     if (invalid_guarantee_role == role) {
         guarantee = 0xffffffffu; /* Actual API rejection: larger than the reserved stack. */
     }
