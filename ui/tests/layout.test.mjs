@@ -42,11 +42,7 @@ test('delivery steps keep each path beside its chooser, one primary each, and no
       active: true,
     }),
   );
-  for (const field of [
-    'shell.delivery.output',
-    'shell.delivery.buildDirectory',
-    'shell.delivery.importDirectory',
-  ]) {
+  for (const field of ['shell.delivery.output', 'shell.delivery.buildDirectory']) {
     const input = view.getByRole('textbox', { name: translate(field) });
     const button = within(input.parentElement).getByRole('button', {
       name: translate('action.browse'),
@@ -55,7 +51,16 @@ test('delivery steps keep each path beside its chooser, one primary each, and no
     expect(input.parentElement.className).toBe('path-picker');
   }
   const steps = view.container.querySelectorAll('.delivery-step');
-  expect(steps.length).toBeGreaterThan(3);
+  // Generate, build and host verification; handoff import is in the File menu and user
+  // application initialization on the component node (ADR 0020 D7).
+  expect(steps).toHaveLength(3);
+  expect(
+    view.queryByRole('button', { name: translate('action.initializeApplication') }),
+  ).toBeNull();
+  expect(view.queryByRole('button', { name: translate('action.importHandoff') })).toBeNull();
+  // Steps this product does not perform are one note, not stages.
+  expect(view.container.querySelectorAll('.stage-list > li')).toHaveLength(5);
+  expect(view.getByText(translate('shell.delivery.outsideProduct'))).toBeTruthy();
   for (const step of steps)
     expect(step.querySelectorAll('.primary-button').length).toBeLessThanOrEqual(1);
   // The preview exists, but generation is confirmed only inside its dialog.

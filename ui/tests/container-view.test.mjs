@@ -350,6 +350,41 @@ test('the tree context menu offers allowed children, rename and removal', async 
   expect(busy.stageChange).not.toHaveBeenCalled();
 });
 
+test('an atomic component node starts user application initialization from its menu', async () => {
+  const component = {
+    ...object('swc', null, 'EchoApplication', null, 'APPLICATION-SW-COMPONENT-TYPE'),
+    writable: false,
+  };
+  const c = controller({
+    setTreeRevealId: vi.fn(),
+    workspace: { dirty: false, integrationCandidate: true },
+    previewApplicationInitialization: vi.fn(),
+  });
+  c.projection = { ...c.projection, objects: [...c.projection.objects, component] };
+  const view = render(createElement(ProjectTree, { controller: withCommands(c) }));
+  fireEvent.contextMenu(view.getByRole('treeitem', { name: 'EchoApplication' }));
+  const menu = within(await view.findByRole('menu'));
+  // A read-only component offers only the initialization, not rename or removal.
+  expect(menu.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+    translate('action.initializeApplication'),
+  ]);
+  fireEvent.click(menu.getByRole('menuitem'));
+  expect(c.previewApplicationInitialization).toHaveBeenCalled();
+  cleanup();
+  // Without integration slots the item explains why it cannot run.
+  const blocked = render(
+    createElement(ProjectTree, {
+      controller: withCommands({ ...c, workspace: { dirty: false, integrationCandidate: false } }),
+    }),
+  );
+  fireEvent.contextMenu(blocked.getByRole('treeitem', { name: 'EchoApplication' }));
+  const item = within(await blocked.findByRole('menu')).getByRole('menuitem');
+  expect(item.getAttribute('aria-disabled')).toBe('true');
+  expect(document.getElementById(item.getAttribute('aria-describedby')).textContent).toBe(
+    translate('shell.reason.noSlots'),
+  );
+});
+
 test('the tree menu reads availability when it opens, not when the rows were memoized', async () => {
   const c = controller({ setTreeRevealId: vi.fn() });
   const view = render(createElement(ProjectTree, { controller: c }));

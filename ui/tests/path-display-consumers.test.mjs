@@ -417,9 +417,6 @@ test('real ECU preview and confirmation retain raw directories and revision acro
   expect(view.getByLabelText(translate('shell.delivery.buildDirectory')).value).toBe(
     String.raw`C:\工作目录\build`,
   );
-  expect(view.getByLabelText(translate('shell.delivery.importDirectory')).value).toBe(
-    String.raw`\\server\share\backup`,
-  );
   expect(current().ecuOutputDirectory).toBe(String.raw`\\?\C:\工作目录\output`);
   expect(current().buildDirectory).toBe(String.raw`\\?\C:\工作目录\build`);
   expect(current().ecuImportDirectory).toBe(String.raw`\\?\UNC\server\share\backup`);

@@ -30,7 +30,6 @@ export function IntegrationDelivery({
     native,
     ecuOutputDirectory: output,
     buildDirectory,
-    ecuImportDirectory: importDirectory,
     buildTarget: target,
     generationPreview: preview,
     generated,
@@ -38,9 +37,7 @@ export function IntegrationDelivery({
     virtualResult: verified,
     changeEcuOutput: changeOutput,
     changeEcuBuildDirectory: changeBuildDirectory,
-    setEcuImportDirectory: setImportDirectory,
     chooseDirectory,
-    importHandoffDirectory: onImport,
   } = controller;
   if (!workspace) return null;
   const busy = Boolean(controller.busy);
@@ -84,8 +81,6 @@ export function IntegrationDelivery({
       downstream(state),
       labels[downstream(state)],
     ]),
-    [t('shell.stage.sc1'), 'pending', t('shell.stage.projectUnverified')],
-    [t('shell.stage.hardware'), 'pending', t('shell.stage.unverified')],
   ];
   // The latest result of this page's own steps; never a hint left over from before.
   const failed = (['virtual', 'build', 'generate'] as const).find(
@@ -141,29 +136,30 @@ export function IntegrationDelivery({
           );
         })}
       </ol>
-      <section className="delivery-step">
-        <h3>{t('shell.delivery.liveSource')}</h3>
-        <p className="field-help">{t('shell.delivery.liveDescription')}</p>
-        <CommandActions actions={[{ command: command('initialize-application') }]} />
-        {controller.applicationWarnings.map((warning, index) => (
-          <p key={index} className="notice info">
-            {text(warning)}
-          </p>
-        ))}
-        {controller.applicationRecoveryFiles.length ? (
-          <>
-            <p className="error-text">{t('shell.delivery.recoveryWarning')}</p>
-            <ul>
-              {controller.applicationRecoveryFiles.map((path) => (
-                <li key={path} className="mono path-text">
-                  {displayPath(path)}
-                  <CopyText text={displayPath(path)} label={t('action.copyPath')} />
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-      </section>
+      <p className="field-help">{t('shell.delivery.outsideProduct')}</p>
+      {controller.applicationWarnings.length || controller.applicationRecoveryFiles.length ? (
+        <section className="delivery-step">
+          <h3>{t('shell.delivery.liveSource')}</h3>
+          {controller.applicationWarnings.map((warning, index) => (
+            <p key={index} className="notice info">
+              {text(warning)}
+            </p>
+          ))}
+          {controller.applicationRecoveryFiles.length ? (
+            <>
+              <p className="error-text">{t('shell.delivery.recoveryWarning')}</p>
+              <ul>
+                {controller.applicationRecoveryFiles.map((path) => (
+                  <li key={path} className="mono path-text">
+                    {displayPath(path)}
+                    <CopyText text={displayPath(path)} label={t('action.copyPath')} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </section>
+      ) : null}
       <section className="delivery-step">
         <h3>{t('shell.stage.generate')}</h3>
         <div className="form-fields">
@@ -249,31 +245,6 @@ export function IntegrationDelivery({
             {
               command: command('verify-ecu'),
               className: 'primary-button',
-            },
-          ]}
-        />
-      </section>
-      <section className="delivery-step">
-        <h3>{t('workflow.handoff.title')}</h3>
-        <div className="form-fields">
-          <label>
-            {t('shell.delivery.importDirectory')}
-            <div className="path-picker">
-              <input
-                aria-label={t('shell.delivery.importDirectory')}
-                value={displayPath(importDirectory)}
-                disabled={busy}
-                onChange={(e) => setImportDirectory(e.target.value)}
-              />
-              {choose(setImportDirectory)}
-            </div>
-          </label>
-        </div>
-        <CommandActions
-          actions={[
-            {
-              command: command('ecu-package'),
-              run: () => onImport(importDirectory),
             },
           ]}
         />
