@@ -56,7 +56,8 @@ typedef struct {
  * Clears requests, Allowed and diagnostic demand, then requests NO from the bus
  * state manager without notifying the default mode (SWS_ComM_00313).
  * @param[in] ConfigPtr Valid configuration; an invalid one leaves ComM unchanged.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: None.
  * Context: startup task; not inside an exclusive area.
  * Reentrancy: not reentrant. A restart may overtake a call in flight; that call's
@@ -66,7 +67,8 @@ typedef struct {
 void ComM_Init(const ComM_ConfigType *ConfigPtr);
 /** Deinitialize while the channel is in COMM_NO_COM_NO_PENDING_REQUEST and the bus
  * state manager reports actual NO (SWS_ComM_00794); otherwise no action.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: None; before Init no action is taken.
  * Context: shutdown task; not inside an exclusive area.
  * Reentrancy: not reentrant.
@@ -160,7 +162,8 @@ Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeType *ComMo
  * does not follow it: NM NONE has no bus-driven transition (SWS_ComM Figure 7.7).
  * @param[in] Channel Configured channel.
  * @param[in] ComMode NO, SILENT or FULL; other values are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized; otherwise no action.
  * Context: bus state manager callback; not inside an exclusive area.
  * Reentrancy: reentrant. One caller at a time publishes; a reentrant or concurrent

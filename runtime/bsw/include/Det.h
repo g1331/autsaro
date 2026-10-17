@@ -23,7 +23,8 @@ typedef struct {
 
 /** Reset and select the reporting configuration (SWS_Det_00008/00020).
  * @param[in] ConfigPtr Caller-owned immutable configuration; NULL selects no hooks.
- * @return None; an inconsistent hook list halts the controlled ECU.
+ * @par Return
+ * None. An inconsistent hook list halts the controlled ECU.
  * Preconditions: Other Init calls are serialized; prior configurations outlive their reports.
  * Context: Lifecycle task, outside every exclusive area.
  * Reentrancy: Non-reentrant.
@@ -31,7 +32,8 @@ typedef struct {
  */
 void Det_Init(const Det_ConfigType *ConfigPtr);
 /** Start reporting; no startup-dependent storage is selected (SWS_Det_00025).
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: Init completed; this selection performs no additional action.
  * Context: Lifecycle task, outside every exclusive area.
  * Reentrancy: Non-reentrant.

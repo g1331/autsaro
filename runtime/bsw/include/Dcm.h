@@ -68,7 +68,8 @@ typedef struct {
  * @param[in] ConfigPtr Immutable selected configuration; NULL or an invalid configuration
  * leaves the module unchanged. Buffers must hold 7..256 bytes, timers must be positive,
  * did must differ from F186, and authentication_mode must not be NULL.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: the old transport lifetime is quiesced before restarting an accepted
  * transmission; stop/reinitialize CanTp so it cannot later confirm an old response.
  * Context: startup task; not inside an exclusive area.
@@ -151,7 +152,8 @@ BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
 /** Complete the reserved Rx message (SWS_Dcm_00093).
  * @param[in] id The configured Dcm Rx ID; other IDs are ignored.
  * @param[in] result E_OK publishes a complete request; any other value discards it.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized and receiving; otherwise no action.
  * Context: TP callback, including interrupt; not inside an exclusive area.
  * Reentrancy: reentrant; application ReadData runs only from Dcm_MainFunction.
@@ -178,7 +180,8 @@ BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
 /** Complete the outstanding TP transmission exactly once (SWS_Dcm_00351).
  * @param[in] id The reserved Dcm confirmation ID; other IDs are ignored.
  * @param[in] result E_OK commits an uncancelled session change; other values discard it.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: outstanding TP request; otherwise no action.
  * Context: TP callback, including interrupt; not inside an exclusive area.
  * Reentrancy: reentrant; stale admission results cannot change a successor request.

@@ -39,7 +39,8 @@ typedef struct {
  * @param[in] CfgPtr Generated configuration with 8 to 256 bytes per N-SDU, timers of at
  * least 2 periods and a nonzero period; any other pointer, including NULL, is ignored and
  * the state is unchanged.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: None; a repeated call restarts the module.
  * Context: startup task; not inside an exclusive area.
  * Reentrancy: not reentrant.
@@ -47,7 +48,8 @@ typedef struct {
  */
 void CanTp_Init(const CanTp_ConfigType *CfgPtr);
 /** Stop the module and drop all connections without notification (SWS_CanTp_00200).
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: None; later calls behave as before CanTp_Init.
  * Context: shutdown task; not inside an exclusive area.
  * Reentrancy: not reentrant.
@@ -93,7 +95,8 @@ Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId);
  * @param[in] RxPduId The configured Rx N-PDU; other IDs are ignored.
  * @param[in] PduInfoPtr Lower-layer-owned frame of 1 to 8 bytes without metadata; others
  * are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: CanTp initialized; otherwise the frame is ignored.
  * Context: lower-layer callback, also in interrupt context (SWS_CanTp_00235); not inside
  * an exclusive area.
@@ -105,7 +108,8 @@ void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
 /** Confirm transmission of the N-PDU last passed to LSduR_CanTpTransmit (SWS_CanTp_00215).
  * @param[in] TxPduId The configured Tx N-PDU; other IDs are ignored.
  * @param[in] result E_OK when sent; otherwise the connection that sent it is aborted.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: None; a confirmation without a frame in flight is ignored.
  * Context: lower-layer callback, also in interrupt context (SWS_CanTp_00236); not inside
  * an exclusive area. The next frame on the N-PDU waits for CanTp_MainFunction.
