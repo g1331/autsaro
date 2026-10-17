@@ -138,6 +138,7 @@ async function renderWorkbench(integrationCandidate = false, initialized = integ
       opened = true;
       return reply(workspace);
     }
+    if (command === 'open_member_project') return reply(workspace);
     if (command === 'project_projection') return reply(projection);
     if (command === 'validate_project') return reply(workspace);
     if (command === 'inspect_integration')
@@ -729,4 +730,27 @@ test('opening a standard ECU project lands on the configuration view with standa
   await importSources(consumer);
   expect(consumer.current().activeDocument).toEqual({ kind: 'configuration' });
   expect(consumer.current().tabs).toEqual([{ kind: 'configuration' }, { kind: 'integration' }]);
+  // Reopening the sources from the standard input page keeps that page in view.
+  await waitFor(() => expect(consumer.current().integrationInspection).not.toBeNull());
+  await waitFor(() => expect(consumer.current().busy).toBeNull());
+  const opens = () =>
+    native.invoke.mock.calls.filter(([command]) => command === 'open_member_project');
+  const before = opens().length;
+  act(() => consumer.current().openDocument({ kind: 'integration' }));
+  await act(async () => {
+    await consumer.current().reopenIntegration();
+  });
+  await waitFor(() => expect(consumer.current().busy).toBeNull());
+  expect(opens()).toHaveLength(before + 1);
+  expect(consumer.current().activeDocument).toEqual({ kind: 'integration' });
+  await waitFor(() => expect(consumer.current().integrationInspection).not.toBeNull());
+  await waitFor(() => expect(consumer.current().busy).toBeNull());
+  // Reopening from configuration stays on configuration.
+  act(() => consumer.current().openDocument({ kind: 'configuration' }));
+  await act(async () => {
+    await consumer.current().reopenIntegration();
+  });
+  await waitFor(() => expect(consumer.current().busy).toBeNull());
+  expect(opens()).toHaveLength(before + 2);
+  expect(consumer.current().activeDocument).toEqual({ kind: 'configuration' });
 });

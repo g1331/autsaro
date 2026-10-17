@@ -440,6 +440,20 @@ export async function openWorkbench(name) {
     const saved = JSON.parse(await readFile(manifest, 'utf8'));
     assert.deepEqual(saved.acceptedExtensionDefinitions, []);
     assert.deepEqual(saved.applicationInputs, []);
+    // A new project lands on configuration with the object tree grouped by category.
+    await until(
+      `[...document.querySelectorAll('.document-tabs [role=tab][aria-selected=true]')].some(node => node.textContent.trim() === '配置对象')`,
+      'configuration landing',
+    );
+    await until(
+      `Boolean(document.querySelector('[role=treeitem][aria-level="1"]'))`,
+      'grouped object tree',
+    );
+    const groups = await evaluate(
+      `[...document.querySelectorAll('[role=treeitem][aria-level="1"]')].map(node => node.getAttribute('aria-label'))`,
+    );
+    assert.equal(groups[0], 'BSW 模块', groups.join(', '));
+    assert(!groups.includes('Application') && !groups.includes('Configuration'), groups.join(', '));
     // The new project starts its automatic standard inspection; later
     // operations would otherwise make that inspection stale.
     await awaitStandardInspectionReady();
@@ -460,6 +474,9 @@ export async function openWorkbench(name) {
     );
   }
   async function awaitStandardInspectionReady(timeout) {
+    // Projects open on configuration; the standard input editor is one tab away.
+    if (!(await evaluate(`Boolean(document.querySelector('[aria-label="标准输入工作区"]'))`)))
+      await click('标准输入', "document.querySelector('.document-tabs')");
     await until(
       `(${standardInspectionReady.toString()})(document)`,
       'automatic standard inspection result published and editor ready',

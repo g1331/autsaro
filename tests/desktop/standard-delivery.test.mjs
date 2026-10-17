@@ -45,22 +45,12 @@ check('seven-source-standard-variant', async () => {
   const view = await projection();
   assert.equal(view.sources.length, 7);
   const savedBytes = await sourceBytes(view);
-  // Opening lands on configuration: the object tree groups modules instead of listing packages.
-  await until(
-    `[...document.querySelectorAll('[role=tab][aria-selected=true]')].some(node => node.textContent.trim() === '配置对象')`,
-    'configuration landing',
-  );
-  const tree = await evaluate(
-    `[...document.querySelectorAll('[role=treeitem][aria-level="1"]')].map(node => node.getAttribute('aria-label'))`,
-  );
-  assert.deepEqual(tree.slice(0, 1), ['BSW 模块']);
-  assert(!tree.includes('Application') && !tree.includes('Configuration'), tree.join(', '));
-  // This is the existing bounded standard editor, not a new private grammar.
-  await menu('标准输入');
   await until(
     `Boolean(document.querySelector('[aria-label="标准输入工作区"] .integration-fields label:first-child input:not(:disabled)'))`,
     'automatic standard inspection editor ready',
   );
+  // This is the existing bounded standard editor, not a new private grammar.
+  await menu('标准输入');
   await input(field('接收 CAN ID'), '1104');
   await input(field('发送 CAN ID'), '1105');
   await input(field('应用 / Com 发送 / 对应 Alarm 周期（ms）'), '20');

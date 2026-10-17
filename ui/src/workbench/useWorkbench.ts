@@ -699,7 +699,7 @@ export function useWorkbench(): Workbench {
                 paths: workspace.files.map((file) => file.path),
               }),
         (view) => {
-          applyProject(view);
+          applyProject(view, true);
           field('memberProjectPath')(path);
         },
       ),

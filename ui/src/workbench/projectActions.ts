@@ -148,7 +148,12 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     }
   }
 
-  function applyProject(view: WorkspaceView) {
+  /** Opening lands on configuration; reopening the same project keeps the standard input in view. */
+  function applyProject(view: WorkspaceView, reopened = false) {
+    const keepIntegration =
+      reopened &&
+      view.integrationCandidate &&
+      stateRef.current.activeDocument.kind === 'integration';
     setIntegrationUnapplied(false);
     invalidateOperation();
     setIntegrationProcessing(false);
@@ -177,8 +182,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       tabs: view.integrationCandidate
         ? [{ kind: 'configuration' }, { kind: 'integration' }]
         : [{ kind: 'configuration' }],
-      // Opening a project lands on configuration; the standard input stays one tab away (ADR 0020).
-      activeDocument: { kind: 'configuration' },
+      activeDocument: { kind: keepIntegration ? 'integration' : 'configuration' },
       preflight: null,
       memberProjectPath: null,
     });
