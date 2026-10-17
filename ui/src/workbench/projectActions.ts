@@ -175,9 +175,10 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       changePreview: null,
       preparedChangeSet: null,
       tabs: view.integrationCandidate
-        ? [{ kind: 'integration' }, { kind: 'configuration' }]
+        ? [{ kind: 'configuration' }, { kind: 'integration' }]
         : [{ kind: 'configuration' }],
-      activeDocument: { kind: view.integrationCandidate ? 'integration' : 'configuration' },
+      // Opening a project lands on configuration; the standard input stays one tab away (ADR 0020).
+      activeDocument: { kind: 'configuration' },
       preflight: null,
       memberProjectPath: null,
     });

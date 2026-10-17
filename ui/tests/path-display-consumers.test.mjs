@@ -723,3 +723,10 @@ test('confirming application initialization makes ECU delivery available without
   expect(current().workspace.applicationInitialized).toBe(true);
   expect(preview().reason).toBe('');
 });
+
+test('opening a standard ECU project lands on the configuration view with standard input one tab away', async () => {
+  const consumer = await renderWorkbench(true);
+  await importSources(consumer);
+  expect(consumer.current().activeDocument).toEqual({ kind: 'configuration' });
+  expect(consumer.current().tabs).toEqual([{ kind: 'configuration' }, { kind: 'integration' }]);
+});
