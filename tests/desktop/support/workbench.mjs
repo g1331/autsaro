@@ -780,7 +780,6 @@ export async function openWorkbench(name, options) {
     await evaluate(`window.__BUILTIN_NATIVE_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke`);
     await resize(1480, 920);
   } catch (error) {
-    await captureFailure().catch(() => undefined);
     await shutdown();
     throw error;
   }
