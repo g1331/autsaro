@@ -6,6 +6,7 @@ import { ProjectTree } from '../src/workbench/ProjectTree';
 import { ToolWindows, toolLabels } from '../src/workbench/ToolWindows';
 import { localize, previewLanguage, translate } from '../src/i18n';
 import { initialState } from '../src/workbench/state';
+import { withCommands } from './support/commands.mjs';
 
 afterEach(() => {
   cleanup();
@@ -97,17 +98,19 @@ test('tool windows mount active content and retain source navigation when switch
     setToolWindow: vi.fn(),
   };
   controller.diagnostics = controller.projection.diagnostics;
-  const view = render(createElement(ToolWindows, { controller }));
+  const view = render(createElement(ToolWindows, { controller: withCommands(controller) }));
   expect(view.queryByText('Source diagnostic')).toBeNull();
   view.rerender(
-    createElement(ToolWindows, { controller: { ...controller, toolWindow: 'problems' } }),
+    createElement(ToolWindows, {
+      controller: withCommands({ ...controller, toolWindow: 'problems' }),
+    }),
   );
   expect(view.getByText('Source diagnostic')).toBeTruthy();
   fireEvent.click(view.getByRole('button', { name: translate('action.locate') }));
   expect(controller.readSource).toHaveBeenCalledWith('source');
   view.rerender(
     createElement(ToolWindows, {
-      controller: { ...controller, toolWindow: 'build', busy: 'Running' },
+      controller: withCommands({ ...controller, toolWindow: 'build', busy: 'Running' }),
     }),
   );
   expect(view.queryByText('Source diagnostic')).toBeNull();

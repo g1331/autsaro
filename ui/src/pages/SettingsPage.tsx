@@ -1,11 +1,13 @@
 import { useLocale } from '../i18n';
 import { displayPath } from '../pathDisplay';
-import { useState } from 'react';
+import { useId } from 'react';
 import type { ExecutionTools } from '../types';
 import type { Appearance } from '../workbench/projectTypes';
 import type { Workbench } from '../workbench/useWorkbench';
 import { CopyText, Dialog, NoticeBanner } from '../workbench/Dialog';
 import { Tabs, tabPanelProps } from '../workbench/Tabs';
+import { CommandButton, CommandReasons } from '../workbench/CommandActions';
+import { commandById } from '../workbench/commands';
 
 const toolLabels: { key: keyof ExecutionTools; label: string }[] = [
   { key: 'compiler', label: 'shell.settings.compiler' },
@@ -16,7 +18,10 @@ const toolLabels: { key: keyof ExecutionTools; label: string }[] = [
 
 export function SettingsPage({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
-  const [category, setCategory] = useState<'appearance' | 'definitions' | 'tools'>('appearance');
+  const category = c.settingsCategory;
+  const setCategory = c.setSettingsCategory;
+  const reasonsId = useId();
+  const acceptDefinitions = commandById(c, 'accept-definitions');
   if (
     !c.settingsOpen ||
     c.guard ||
@@ -209,13 +214,8 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
             </details>
             <h3>{t('shell.settings.extensions')}</h3>
             <p>{t('shell.settings.extensionHelp')}</p>
-            <button
-              type="button"
-              disabled={locked || !c.workspace}
-              onClick={() => void c.importDefinitionCatalog()}
-            >
-              {t('action.acceptDefinitions')}
-            </button>
+            <CommandButton command={acceptDefinitions} reasonId={`${reasonsId}-0`} />
+            <CommandReasons commands={[acceptDefinitions]} id={reasonsId} />
             {(c.projection?.acceptedExtensionDefinitions ?? []).map((identity) => (
               <section className="catalog-row" key={identity.catalogId}>
                 <strong>{identity.catalogId}</strong>

@@ -48,6 +48,17 @@ afterEach(() => {
 });
 
 const languages = ['zh-CN', 'en'];
+
+/** Opens a menubar menu the way a keyboard user does (Radix opens on ↓). */
+function openMenu(view, menu) {
+  const trigger = within(view.getByRole('menubar')).getByRole('menuitem', {
+    name: translate(`shell.menu.${menu}`),
+  });
+  act(() => trigger.focus());
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  return within(view.getByRole('menu'));
+}
+
 const catalogs = {
   ui: Object.fromEntries(languages.map((language) => [language, resources[language].translation])),
   backend: backendCatalog,
@@ -288,13 +299,12 @@ test.each(languages)(
     );
     const menuItems = [];
     for (const menu of ['file', 'edit', 'view', 'tools', 'help']) {
-      fireEvent.click(view.getByRole('button', { name: translate(`shell.menu.${menu}`) }));
       menuItems.push(
-        ...within(view.getByRole('menu'))
+        ...openMenu(view, menu)
           .getAllByRole('menuitem')
           .map((item) => item.firstChild.textContent),
       );
-      fireEvent.click(view.getByRole('button', { name: translate(`shell.menu.${menu}`) }));
+      fireEvent.keyDown(view.getByRole('menu'), { key: 'Escape' });
     }
     for (const button of toolbar)
       if (!button.querySelector('kbd') && button.textContent)
@@ -323,8 +333,11 @@ test.each(languages)(
       .map((button) => button.firstChild?.textContent)
       .filter(Boolean);
     expect(commands).toContain(translate('action.previewSave'));
-    for (const command of commands)
-      if (command !== translate('action.close')) expect(menuItems).toContain(command);
+    // Commands without a menu entry (page-only actions) still read their action label.
+    const actionLabels = Object.entries(actionResources[language])
+      .filter(([key]) => key.startsWith('action.'))
+      .map(([, label]) => label);
+    for (const command of commands) expect([...menuItems, ...actionLabels]).toContain(command);
     expectLabelsMatchNames(palette, 'palette');
     fireEvent.keyDown(palette, { key: 'Escape' });
 
@@ -340,8 +353,11 @@ test.each(languages)(
       within(settings).getAllByRole('button', { name: translate('action.close') })[0],
     );
 
-    fireEvent.click(view.getByRole('button', { name: translate('shell.menu.view') }));
-    fireEvent.click(view.getByRole('menuitem', { name: translate('shell.document.integration') }));
+    fireEvent.click(
+      openMenu(view, 'view').getByRole('menuitem', {
+        name: translate('shell.document.integration'),
+      }),
+    );
     await waitFor(() => expect(view.getByDisplayValue('10')));
     expectLabelsMatchNames(view.container, 'standard inputs');
     // Each CAN ID field is named by its own port, and the period keeps its unit.
@@ -354,8 +370,9 @@ test.each(languages)(
       '10',
     );
 
-    fireEvent.click(view.getByRole('button', { name: translate('shell.menu.view') }));
-    fireEvent.click(view.getByRole('menuitem', { name: translate('shell.document.delivery') }));
+    fireEvent.click(
+      openMenu(view, 'view').getByRole('menuitem', { name: translate('shell.document.delivery') }),
+    );
     expectLabelsMatchNames(view.container, 'source delivery');
     for (const key of ['shell.delivery.output', 'shell.delivery.buildDirectory'])
       expect(view.getByRole('textbox', { name: translate(key) })).toBeTruthy();

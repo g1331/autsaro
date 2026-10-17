@@ -1,5 +1,7 @@
 import { CircleCheck, CircleDashed, CircleX, History, LoaderCircle } from 'lucide-react';
 import { CopyText, OwnedLog } from './workbench/Dialog';
+import { CommandActions } from './workbench/CommandActions';
+import { commandById } from './workbench/commands';
 import { useLocale } from './i18n';
 import type { StageState } from './workbench/forms';
 import { fileStatusLabel, targetLabel } from './workbench/labels';
@@ -39,14 +41,7 @@ export function IntegrationDelivery({
   const busy = Boolean(controller.busy);
   const locked = busy;
   const sourceReady = !workspace.dirty && !controller.projection?.dirty && !controller.unapplied;
-  const disabled = !native || busy || !sourceReady || Boolean(controller.capabilities?.ruleError);
-  const executionReason = controller.capabilities?.nativeExecution
-    ? text(controller.capabilities.toolError ?? '')
-    : t('shell.delivery.noExecution');
-  const executionDisabled =
-    disabled ||
-    !controller.capabilities?.nativeExecution ||
-    Boolean(controller.capabilities.toolError);
+  const command = (id: string) => commandById(controller, id);
   const handoff = controller.generationKind === 'handoff';
   const file = preview?.files.find((item) => item.path === selected);
   const labels: Record<StageState, string> = {
@@ -123,16 +118,7 @@ export function IntegrationDelivery({
       <section className="document-page">
         <h3>{t('shell.delivery.liveSource')}</h3>
         <p>{t('shell.delivery.liveDescription')}</p>
-        <button
-          type="button"
-          disabled={disabled || Boolean(controller.actionReason('edit'))}
-          onClick={() => void controller.previewApplicationInitialization()}
-        >
-          {t('action.initializeApplication')}
-        </button>
-        {controller.actionReason('edit') ? (
-          <p className="field-help">{text(controller.actionReason('edit'))}</p>
-        ) : null}
+        <CommandActions actions={[{ command: command('initialize-application') }]} />
         {controller.applicationWarnings.map((warning, index) => (
           <p key={index} className="notice info">
             {text(warning)}
@@ -231,32 +217,15 @@ export function IntegrationDelivery({
           {t('action.browse')}
         </button>
       </div>
-      <div className="section-actions">
-        <button type="button" disabled={disabled || !output.trim()} onClick={controller.previewEcu}>
-          {t('action.previewSource')}
-        </button>
-        <button
-          type="button"
-          disabled={executionDisabled}
-          title={executionReason}
-          onClick={controller.preflightEcu}
-        >
-          {t('action.preflight')}
-        </button>
-        <button type="button" disabled={disabled || !preview} onClick={controller.generateEcu}>
-          {t('action.confirmGenerate')}
-        </button>
-        <button
-          type="button"
-          disabled={executionDisabled || !generated || !buildDirectory.trim()}
-          onClick={controller.buildEcu}
-        >
-          {t('action.build')}
-        </button>
-        <button type="button" disabled={executionDisabled || !built} onClick={controller.verifyEcu}>
-          {t('action.verifyHost')}
-        </button>
-      </div>
+      <CommandActions
+        actions={[
+          { command: command('preview') },
+          { command: command('preflight') },
+          { command: command('generate') },
+          { command: command('build-ecu') },
+          { command: command('verify-ecu') },
+        ]}
+      />
       <div className="form-fields ecu-delivery-fields">
         <label>
           {t('shell.delivery.importDirectory')}
@@ -266,14 +235,15 @@ export function IntegrationDelivery({
             onChange={(e) => setImportDirectory(e.target.value)}
           />
         </label>
-        <button
-          type="button"
-          disabled={disabled || !importDirectory.trim()}
-          onClick={() => onImport(importDirectory)}
-        >
-          {t('action.importHandoff')}
-        </button>
       </div>
+      <CommandActions
+        actions={[
+          {
+            command: command('ecu-package'),
+            run: () => onImport(importDirectory),
+          },
+        ]}
+      />
       <div className={`page-guidance${failed ? ' error' : ''}`}>
         <span role="status">{guidance}</span>
         {!busy && !failed && (built || generated) ? (

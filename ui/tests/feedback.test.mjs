@@ -12,6 +12,7 @@ import { SettingsPage } from '../src/pages/SettingsPage';
 import { headline } from '../src/workbench/forms';
 import { workspaceTitle } from '../src/workbench/labels';
 import { initialState } from '../src/workbench/state';
+import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));
 
@@ -319,6 +320,7 @@ test('the settings page marks the rejected tool and clears the mark when the pat
   const controller = {
     ...initialState(),
     settingsOpen: true,
+    settingsCategory: 'tools',
     native: true,
     capabilities: { environmentOverrides: [], executionTools: null, toolError: null },
     toolDraft: { compiler: '/missing/gcc', objdump: '', git: '', python: '' },
@@ -328,8 +330,7 @@ test('the settings page marks the rejected tool and clears the mark when the pat
     setToolDraft: vi.fn(),
     setToolErrors,
   };
-  const view = render(React.createElement(SettingsPage, { controller }));
-  fireEvent.click(view.getByRole('tab', { name: translate('shell.settings.tools') }));
+  const view = render(React.createElement(SettingsPage, { controller: withCommands(controller) }));
   const input = view.container.querySelector('[aria-invalid="true"]');
   expect(input).not.toBeNull();
   const error = view.container.querySelector(`#${input.getAttribute('aria-describedby')}`);
@@ -424,7 +425,9 @@ test('the delivery page reports the latest result of generate, build and host ve
   };
   const guidance = (view) =>
     view.container.querySelector('.page-guidance [role="status"]').textContent;
-  const view = render(React.createElement(IntegrationDelivery, { controller: base, active: true }));
+  const view = render(
+    React.createElement(IntegrationDelivery, { controller: withCommands(base), active: true }),
+  );
   expect(guidance(view)).toBe(translate('shell.delivery.directoryHint'));
   const generated = { outputDirectory: '/out', files: [{}, {}] };
   const steps = [
@@ -444,7 +447,10 @@ test('the delivery page reports the latest result of generate, build and host ve
   ];
   for (const [state, expected] of steps) {
     view.rerender(
-      React.createElement(IntegrationDelivery, { controller: { ...base, ...state }, active: true }),
+      React.createElement(IntegrationDelivery, {
+        controller: withCommands({ ...base, ...state }),
+        active: true,
+      }),
     );
     expect(guidance(view)).toBe(expected);
   }
@@ -453,7 +459,9 @@ test('the delivery page reports the latest result of generate, build and host ve
     generated,
     stages: { ...base.stages, build: { state: 'failed', detail: 'cc: not found' } },
   };
-  view.rerender(React.createElement(IntegrationDelivery, { controller: failed, active: true }));
+  view.rerender(
+    React.createElement(IntegrationDelivery, { controller: withCommands(failed), active: true }),
+  );
   expect(view.container.querySelector('.page-guidance.error').textContent).toContain(
     'cc: not found',
   );

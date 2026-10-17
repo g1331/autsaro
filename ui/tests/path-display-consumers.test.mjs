@@ -9,6 +9,7 @@ import { PreviewDialogs } from '../src/workbench/PreviewDialogs';
 import { SourceEntry } from '../src/workbench/SourceEntry';
 import { ToolWindows } from '../src/workbench/ToolWindows';
 import { useWorkbench } from '../src/workbench/useWorkbench';
+import { withCommands } from './support/commands.mjs';
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -97,6 +98,7 @@ async function renderWorkbench(integrationCandidate = false) {
   let opened = false;
   const workspace = {
     integrationCandidate,
+    applicationInitialized: integrationCandidate,
     name: 'PathProject',
     dirty: false,
     files: [],
@@ -194,9 +196,10 @@ function buildController() {
     native: false,
     disabled: false,
     buildTarget: 'windows-x64-controlled-v1',
-    executionDisabled: true,
     executionReason: '',
     buildDirectory: rawBuild,
+    ecuOutputDirectory: '',
+    changes: [],
     stages: {
       save: { state: 'done', detail: '' },
       validate: { state: 'done', detail: '' },
@@ -239,7 +242,7 @@ test('ToolWindows copies displayed output and binary paths but preserves the com
   previewLanguage('en');
   const clipboard = captureClipboard();
   const controller = { ...buildController(), toolWindow: 'generation' };
-  const view = render(React.createElement(ToolWindows, { controller }));
+  const view = render(React.createElement(ToolWindows, { controller: withCommands(controller) }));
   expect(view.container.querySelector('.path-text').textContent).toBe(
     String.raw`C:\工作目录\output`,
   );
@@ -255,7 +258,9 @@ test('ToolWindows copies displayed output and binary paths but preserves the com
   expect(clipboard).toHaveBeenLastCalledWith(String.raw`C:\工作目录\output`);
 
   view.rerender(
-    React.createElement(ToolWindows, { controller: { ...controller, toolWindow: 'build' } }),
+    React.createElement(ToolWindows, {
+      controller: withCommands({ ...controller, toolWindow: 'build' }),
+    }),
   );
   expect(view.container.querySelector('.path-text').textContent).toBe(
     String.raw`C:\工作目录\build\ecu.exe`,

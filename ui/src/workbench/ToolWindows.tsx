@@ -16,6 +16,9 @@ import { PanelResizeHandle } from './PanelResizeHandle';
 import { distinct } from './forms';
 import { commandLabel } from './labels';
 import { iconSize } from './icons';
+import { CommandActions } from './CommandActions';
+import { commandById } from './commands';
+import { Tooltip } from './Tooltip';
 
 export const toolLabels: Record<ToolWindow, Message> = {
   problems: message('editor.tools.tab.problems'),
@@ -75,15 +78,16 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
         <div className="tool-content" role="region" aria-label={text(toolLabels[c.toolWindow])}>
           <header>
             <strong>{text(toolLabels[c.toolWindow])}</strong>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={t('editor.tools.collapse')}
-              title={t('editor.tools.collapse')}
-              onClick={() => c.setToolWindow(null)}
-            >
-              <ChevronDown size={iconSize.control} aria-hidden="true" />
-            </button>
+            <Tooltip label={t('editor.tools.collapse')}>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={t('editor.tools.collapse')}
+                onClick={() => c.setToolWindow(null)}
+              >
+                <ChevronDown size={iconSize.control} aria-hidden="true" />
+              </button>
+            </Tooltip>
           </header>
           {c.toolWindow === 'problems' ? (
             <div>
@@ -217,23 +221,14 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                 {t(editorStatusKeys[c.stages.build.state])} ·{' '}
                 {displayPath(text(c.stages.build.detail))}
               </p>
-              {c.workspace?.integrationCandidate ? (
-                <button
-                  type="button"
-                  disabled={c.executionDisabled || c.unapplied || Boolean(c.workspace?.dirty)}
-                  onClick={c.preflightEcu}
-                >
-                  {t('action.preflight')}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                disabled={c.executionDisabled || !c.generated || !c.buildDirectory.trim()}
-                onClick={c.buildEcu}
-              >
-                {t('action.build')}
-              </button>
-              <p className="field-help">{text(c.executionReason)}</p>
+              <CommandActions
+                actions={[
+                  ...(c.workspace?.integrationCandidate
+                    ? [{ command: commandById(c, 'preflight') }]
+                    : []),
+                  { command: commandById(c, 'build-ecu') },
+                ]}
+              />
               {c.preflight ? (
                 <OwnedLog
                   text={c.preflight.logs.map(text).join('\n')}
@@ -256,14 +251,7 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
               <p role="status">
                 {t(editorStatusKeys[c.stages.virtual.state])} · {text(c.stages.virtual.detail)}
               </p>
-              <button
-                type="button"
-                disabled={c.executionDisabled || !c.built}
-                onClick={c.verifyEcu}
-              >
-                {t('action.verifyHost')}
-              </button>
-              <p>{text(c.executionReason)}</p>
+              <CommandActions actions={[{ command: commandById(c, 'verify-ecu') }]} />
               {c.virtualResult ? (
                 <OwnedLog
                   text={c.virtualResult.log}
