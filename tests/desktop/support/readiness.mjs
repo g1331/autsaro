@@ -7,3 +7,16 @@ export function standardInspectionReady(document) {
     ),
   );
 }
+
+// Closing the confirmation starts a transaction; it does not publish its reply.
+export function catalogResultReady(settings, count) {
+  const accept = [...(settings?.querySelectorAll('button') ?? [])].find(
+    (button) => button.textContent.trim() === '接纳扩展定义…',
+  );
+  return Boolean(
+    settings?.querySelectorAll('.catalog-row').length === count &&
+    accept &&
+    !accept.disabled &&
+    accept.getAttribute('aria-disabled') !== 'true',
+  );
+}
