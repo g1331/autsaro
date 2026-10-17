@@ -7,10 +7,12 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleX,
   FileCode2,
   FolderTree,
   Search,
   Settings2,
+  TriangleAlert,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
@@ -21,6 +23,8 @@ import { workspaceTitle } from './labels';
 import { Tabs, tabPanelProps } from './Tabs';
 import { iconSize } from './icons';
 import { objectRoleClass } from './objectRole';
+import { groupedObjectTree, moduleLabel, objectMarks } from './projectGroups';
+import type { ObjectGroup, TreeNode } from './projectGroups';
 import { Tooltip } from './Tooltip';
 
 const objectIcons = new Map<string, LucideIcon>([
@@ -32,17 +36,26 @@ const objectIcons = new Map<string, LucideIcon>([
   ['APPLICATION-PRIMITIVE-DATA-TYPE', Braces],
 ]);
 
+const groupLabelKeys: Record<ObjectGroup, string> = {
+  modules: 'editor.tree.group.modules',
+  application: 'editor.tree.group.application',
+  communication: 'editor.tree.group.communication',
+  types: 'editor.tree.group.types',
+  bsw: 'editor.tree.group.bsw',
+  other: 'editor.tree.group.other',
+};
+
 export function ProjectTree({ controller: c }: { controller: Workbench }) {
   const { t, language } = useLocale();
   const actions = useRef(c);
   useLayoutEffect(() => {
     actions.current = c;
   }, [c]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(['group:bsw']));
   const index = useMemo(() => {
     const projection = c.projection;
-    const objects = new Map((projection?.objects ?? []).map((object) => [object.objectId, object]));
-    const children = new Map<string | null, NonNullable<typeof projection>['objects']>();
+    const objects = projection?.objects ?? [];
+    const tree = groupedObjectTree(objects);
     const fieldText = new Map<string, string[]>();
     for (const field of projection?.fields ?? []) {
       const values = fieldText.get(field.objectId) ?? [];
@@ -56,11 +69,9 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
       fieldText.set(field.objectId, values);
     }
     const searchText = new Map<string, string>();
-    for (const object of projection?.objects ?? []) {
-      const parent = object.parentId && objects.has(object.parentId) ? object.parentId : null;
-      const list = children.get(parent) ?? [];
-      list.push(object);
-      children.set(parent, list);
+    const paths = new Map<string, string>();
+    for (const object of objects) {
+      paths.set(object.objectId, object.path);
       searchText.set(
         object.objectId,
         [
@@ -73,141 +84,173 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
           .toLocaleLowerCase(),
       );
     }
-    return {
-      objects,
-      children,
-      searchText,
-      hasChildren: new Set([...children.keys()].filter((key): key is string => key !== null)),
-    };
+    const parents = new Map<string, string>();
+    const link = (node: TreeNode) =>
+      node.children.forEach((child) => {
+        parents.set(child.key, node.key);
+        link(child);
+      });
+    tree.forEach(link);
+    return { tree, searchText, paths, parents };
   }, [c.projection]);
+  const marks = useMemo(
+    () =>
+      objectMarks(index.tree, {
+        objects: c.projection?.objects ?? [],
+        fields: c.projection?.fields ?? [],
+        diagnostics: c.projection?.diagnostics ?? [],
+        integrationIssues: c.integrationIssues,
+        saved: c.savedValues,
+        changes: c.changes,
+      }),
+    [index, c.projection, c.integrationIssues, c.savedValues, c.changes],
+  );
   const model = useMemo(() => {
     const query = c.treeFilter.trim().toLocaleLowerCase();
-    const visible = new Set<string>();
     const revealed = new Set<string>();
-    let ancestor = c.treeRevealId ? index.objects.get(c.treeRevealId)?.parentId : null;
+    let ancestor = c.treeRevealId ? index.parents.get(c.treeRevealId) : undefined;
     while (ancestor && !revealed.has(ancestor)) {
       revealed.add(ancestor);
-      ancestor = index.objects.get(ancestor)?.parentId;
+      ancestor = index.parents.get(ancestor);
     }
-    for (const object of index.objects.values()) {
-      if (!query || index.searchText.get(object.objectId)?.includes(query)) {
-        visible.add(object.objectId);
-        let parent = object.parentId;
-        while (parent && !visible.has(parent)) {
-          visible.add(parent);
-          parent = index.objects.get(parent)?.parentId ?? null;
-        }
-      }
-    }
-    const rows: {
-      object: NonNullable<Workbench['projection']>['objects'][number];
-      depth: number;
-    }[] = [];
-    const visit = (parent: string | null, depth: number) => {
-      for (const object of index.children.get(parent) ?? []) {
-        if (!visible.has(object.objectId)) continue;
-        rows.push({ object, depth });
-        if (query || !collapsed.has(object.objectId) || revealed.has(object.objectId))
-          visit(object.objectId, depth + 1);
+    const rows: { node: TreeNode; depth: number; parent: string | null; expanded: boolean }[] = [];
+    // A node is visible when it or a descendant matches the filter.
+    const matches = (node: TreeNode): boolean =>
+      node.children.some(matches) ||
+      (node.type === 'object' &&
+        (!query || Boolean(index.searchText.get(node.key)?.includes(query))));
+    const visit = (nodes: TreeNode[], depth: number, parent: string | null) => {
+      for (const node of nodes) {
+        if (!matches(node)) continue;
+        const expanded = Boolean(query) || !collapsed.has(node.key) || revealed.has(node.key);
+        rows.push({ node, depth, parent, expanded });
+        if (expanded) visit(node.children, depth + 1, node.key);
       }
     };
-    visit(null, 1);
-    return { rows, revealed, hasChildren: index.hasChildren };
+    visit(index.tree, 1, null);
+    return { rows };
   }, [index, c.treeFilter, c.treeRevealId, collapsed]);
-  const activeInRows = model.rows.some((row) => row.object.objectId === c.activeObjectId);
-  const objectRows = useMemo(
-    () =>
-      c.treeMode === 'objects'
-        ? model.rows.map(({ object, depth }) => {
-            const expanded =
-              Boolean(c.treeFilter) ||
-              !collapsed.has(object.objectId) ||
-              model.revealed.has(object.objectId);
-            const selected = c.objectSelection.includes(object.objectId);
-            const Icon = objectIcons.get(object.kind) ?? FileCode2;
-            return (
-              <div
-                key={object.objectId}
-                role="treeitem"
-                tabIndex={
-                  c.activeObjectId === object.objectId ||
-                  (!activeInRows && model.rows[0]?.object.objectId === object.objectId)
-                    ? 0
-                    : -1
-                }
-                aria-level={depth}
-                aria-selected={selected}
-                aria-label={object.shortName}
-                aria-description={object.kind}
-                title={`${object.shortName}\n${object.kind}\n${object.path}`}
-                aria-expanded={model.hasChildren.has(object.objectId) ? expanded : undefined}
-                data-object-id={object.objectId}
-                className="tree-row"
-                style={{ paddingLeft: `${depth * 12}px` }}
-                onClick={(event) =>
-                  void actions.current.selectObject(object.objectId, event.ctrlKey || event.metaKey)
-                }
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    void actions.current.selectObject(
-                      object.objectId,
-                      event.ctrlKey || event.metaKey,
-                    );
-                  }
-                }}
-              >
-                {model.hasChildren.has(object.objectId) ? (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    tabIndex={-1}
-                    aria-label={t(
-                      expanded ? 'editor.tree.collapseObject' : 'editor.tree.expandObject',
-                      { name: object.shortName, lng: language },
-                    )}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      actions.current.setTreeRevealId(null);
-                      setCollapsed((previous) => {
-                        const next = new Set(previous);
-                        if (expanded) next.add(object.objectId);
-                        else next.delete(object.objectId);
-                        return next;
-                      });
-                    }}
-                  >
-                    {expanded ? (
-                      <ChevronDown size={iconSize.inline} aria-hidden="true" />
-                    ) : (
-                      <ChevronRight size={iconSize.inline} aria-hidden="true" />
-                    )}
-                  </button>
-                ) : (
-                  <span className="tree-spacer" />
-                )}
-                <Icon
-                  size={iconSize.inline}
-                  aria-hidden="true"
-                  className={objectRoleClass(object)}
-                />
-                <span className="tree-name">{object.shortName}</span>
-              </div>
-            );
-          })
-        : null,
-    [
-      model,
-      collapsed,
-      c.treeMode,
-      c.treeFilter,
-      c.objectSelection,
-      c.activeObjectId,
-      activeInRows,
-      language,
-      t,
-    ],
-  );
+  const activeInRows = model.rows.some((row) => row.node.key === c.activeObjectId);
+  const objectRows = useMemo(() => {
+    if (c.treeMode !== 'objects') return null;
+    const toggle = (key: string, expanded: boolean) => {
+      actions.current.setTreeRevealId(null);
+      setCollapsed((previous) => {
+        const next = new Set(previous);
+        if (expanded) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+    };
+    return model.rows.map(({ node, depth, parent, expanded }, position) => {
+      const name =
+        node.type === 'group'
+          ? t(groupLabelKeys[node.group], { lng: language })
+          : moduleLabel(node.object);
+      const mark = marks.get(node.key);
+      const markText = [
+        mark?.errors ? t('editor.tree.errors', { count: mark.errors, lng: language }) : '',
+        mark?.warnings ? t('editor.tree.warnings', { count: mark.warnings, lng: language }) : '',
+        mark?.modified ? t('editor.tree.modified', { lng: language }) : '',
+        mark?.unapplied ? t('editor.tree.unapplied', { lng: language }) : '',
+      ].filter(Boolean);
+      const object = node.type === 'object' ? node.object : null;
+      const path = object ? index.paths.get(object.objectId) : undefined;
+      const Icon = object ? (objectIcons.get(object.kind) ?? FileCode2) : null;
+      const select = (multiple: boolean) =>
+        object
+          ? void actions.current.selectObject(object.objectId, multiple)
+          : toggle(node.key, expanded);
+      return (
+        <div
+          key={node.key}
+          role="treeitem"
+          tabIndex={c.activeObjectId === node.key || (!activeInRows && position === 0) ? 0 : -1}
+          aria-level={depth}
+          aria-selected={object ? c.objectSelection.includes(object.objectId) : undefined}
+          aria-label={name}
+          aria-description={[object?.kind, ...markText].filter(Boolean).join(' · ') || undefined}
+          title={
+            object
+              ? [name !== object.shortName ? object.shortName : '', object.kind, path, ...markText]
+                  .filter(Boolean)
+                  .join('\n')
+              : undefined
+          }
+          aria-expanded={node.children.length ? expanded : undefined}
+          data-tree-key={node.key}
+          data-parent-key={parent ?? undefined}
+          data-object-id={object?.objectId}
+          className={node.type === 'group' ? 'tree-row tree-group' : 'tree-row'}
+          style={{ paddingLeft: `${depth * 12}px` }}
+          onClick={(event) => select(event.ctrlKey || event.metaKey)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              select(event.ctrlKey || event.metaKey);
+            }
+          }}
+        >
+          {node.children.length ? (
+            <button
+              type="button"
+              className="ghost-button"
+              tabIndex={-1}
+              aria-label={t(expanded ? 'editor.tree.collapseObject' : 'editor.tree.expandObject', {
+                name,
+                lng: language,
+              })}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggle(node.key, expanded);
+              }}
+            >
+              {expanded ? (
+                <ChevronDown size={iconSize.inline} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={iconSize.inline} aria-hidden="true" />
+              )}
+            </button>
+          ) : (
+            <span className="tree-spacer" />
+          )}
+          {Icon && object ? (
+            <Icon size={iconSize.inline} aria-hidden="true" className={objectRoleClass(object)} />
+          ) : null}
+          <span className="tree-name">{name}</span>
+          {node.type === 'group' ? <small>{node.children.length}</small> : null}
+          {markText.length ? (
+            <small className="tree-marks" aria-hidden="true">
+              {mark?.errors ? (
+                <span className="tree-mark-error">
+                  <CircleX size={iconSize.inline} />
+                  {mark.errors}
+                </span>
+              ) : null}
+              {mark?.warnings ? (
+                <span className="tree-mark-warning">
+                  <TriangleAlert size={iconSize.inline} />
+                  {mark.warnings}
+                </span>
+              ) : null}
+              {mark?.unapplied ? <span className="tree-mark-unapplied">◆</span> : null}
+              {mark?.modified ? <span className="tree-mark-modified">●</span> : null}
+            </small>
+          ) : null}
+        </div>
+      );
+    });
+  }, [
+    model,
+    marks,
+    index,
+    c.treeMode,
+    c.objectSelection,
+    c.activeObjectId,
+    activeInRows,
+    language,
+    t,
+  ]);
   const sources =
     c.projection?.sources.filter(
       (source) =>
@@ -233,7 +276,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
       rows[next]?.focus();
     } else if (active && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
       event.preventDefault();
-      const id = active.dataset.objectId;
+      const id = active.dataset.treeKey;
       if (!id) return;
       c.setTreeRevealId(null);
       setCollapsed((previous) => {
@@ -244,10 +287,8 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
       });
       if (event.key === 'ArrowRight' && active.getAttribute('aria-expanded') === 'true')
         rows[index + 1]?.focus();
-      if (event.key === 'ArrowLeft' && active.getAttribute('aria-expanded') !== 'true') {
-        const parent = c.projection?.objects.find((object) => object.objectId === id)?.parentId;
-        rows.find((row) => row.dataset.objectId === parent)?.focus();
-      }
+      if (event.key === 'ArrowLeft' && active.getAttribute('aria-expanded') !== 'true')
+        rows.find((row) => row.dataset.treeKey === active.dataset.parentKey)?.focus();
     }
   }
   return (

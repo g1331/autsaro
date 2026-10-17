@@ -31,7 +31,7 @@ test('execution updates reuse tree rows, keep current actions, and still apply f
     definitionId: 'defs',
     get kind() {
       readKind();
-      return 'AR-PACKAGE';
+      return 'APPLICATION-SW-COMPONENT-TYPE';
     },
   };
   const controller = {

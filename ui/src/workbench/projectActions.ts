@@ -149,7 +149,12 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     decide?.(accepted);
   }
 
-  function applyProject(view: WorkspaceView) {
+  /** Opening lands on configuration; reopening the same project keeps the standard input in view. */
+  function applyProject(view: WorkspaceView, reopened = false) {
+    const keepIntegration =
+      reopened &&
+      view.integrationCandidate &&
+      stateRef.current.activeDocument.kind === 'integration';
     setIntegrationUnapplied(false);
     invalidateOperation();
     setIntegrationProcessing(false);
@@ -176,9 +181,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       changePreview: null,
       preparedChangeSet: null,
       tabs: view.integrationCandidate
-        ? [{ kind: 'integration' }, { kind: 'configuration' }]
+        ? [{ kind: 'configuration' }, { kind: 'integration' }]
         : [{ kind: 'configuration' }],
-      activeDocument: { kind: view.integrationCandidate ? 'integration' : 'configuration' },
+      activeDocument: { kind: keepIntegration ? 'integration' : 'configuration' },
       preflight: null,
       memberProjectPath: null,
     });
