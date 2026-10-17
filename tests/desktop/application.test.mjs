@@ -170,4 +170,14 @@ check('live-application-initialization-and-immutable-snapshot', async () => {
   await unchanged(immutable);
   assert.deepEqual(await readFile(live), Buffer.from(userCode));
   await refreshSurface(path.join(importedRoot, 'workbench-project.json'));
+  const navigationProbes = (await readFile(path.join(scratch, 'webdriver.jsonl'), 'utf8'))
+    .trim()
+    .split('\n')
+    .map(JSON.parse)
+    .filter((request) => request.script?.startsWith('performance.timeOrigin !=='));
+  assert(navigationProbes.length >= 4, 'Startup and all three public reloads were observed');
+  assert(
+    navigationProbes.every((request) => request.route === '/session/execute/sync'),
+    'Public reload readiness must preserve the driver navigation boundary',
+  );
 });

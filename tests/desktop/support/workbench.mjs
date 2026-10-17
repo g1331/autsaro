@@ -293,6 +293,8 @@ export async function openWorkbench(name, options) {
     await until(
       `performance.timeOrigin !== ${previousBoot} && Boolean(window.__TAURI_INTERNALS__ && document.querySelector('.start-page'))`,
       'public application reload',
+      60000,
+      session.evaluateReadiness,
     );
     await evaluate('window.__BUILTIN_NATIVE_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke');
     await until(
