@@ -3,7 +3,16 @@
 // private Xvfb display and D-Bus; Windows relies on a dedicated runner or VM.
 import assert from 'node:assert/strict';
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, readdir, readlink, writeFile } from 'node:fs/promises';
+import {
+  access,
+  appendFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  readlink,
+  writeFile,
+} from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -55,12 +64,23 @@ async function tool(name) {
   throw new Error(`Required desktop test tool is missing from PATH: ${name}`);
 }
 
-async function freePort() {
-  const server = createServer();
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  await new Promise((resolve) => server.close(resolve));
-  return port;
+// Keep both sockets bound until both numbers are selected, so a session cannot
+// accidentally give tauri-driver and its native driver the same port.
+async function driverPorts() {
+  const servers = [];
+  try {
+    for (let index = 0; index < 2; index += 1) {
+      const server = createServer();
+      servers.push(server);
+      await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+      });
+    }
+    return servers.map((server) => server.address().port);
+  } finally {
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
+  }
 }
 
 async function until(probe, description, timeout = 30000) {
@@ -426,10 +446,12 @@ throw "Native chooser stayed open after accepting the selection: $(Shown)"
 `;
 
 class WebDriver {
-  constructor(base) {
+  constructor(base, log) {
     this.base = base;
+    this.log = log;
   }
   async request(method, route, body) {
+    const started = performance.now();
     const response = await fetch(`${this.base}${route}`, {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -437,6 +459,16 @@ class WebDriver {
       signal: AbortSignal.timeout(300000),
     });
     const result = await response.json();
+    await appendFile(
+      this.log,
+      JSON.stringify({
+        at: Date.now(),
+        durationMs: performance.now() - started,
+        method,
+        route: route.replace(/session\/[^/]+/, 'session'),
+        script: body?.args?.[0]?.slice(0, 240),
+      }) + '\n',
+    );
     if (!response.ok || result.value?.error)
       throw new Error(`WebDriver ${method} ${route}: ${JSON.stringify(result)}`);
     return result.value;
@@ -469,6 +501,7 @@ export async function launch(name) {
     'app-path',
     'config',
     'data',
+    'cache',
     'projects',
     'deliveries',
   ])
@@ -498,6 +531,7 @@ export async function launch(name) {
     LOCALAPPDATA: path.join(scratch, 'app-local'),
     XDG_CONFIG_HOME: path.join(scratch, 'config'),
     XDG_DATA_HOME: path.join(scratch, 'data'),
+    XDG_CACHE_HOME: path.join(scratch, 'cache'),
     HOME: path.join(scratch, 'app-home'),
     USERPROFILE: path.join(scratch, 'app-home'),
     TEMP: path.join(scratch, 'app-temp'),
@@ -534,14 +568,14 @@ export async function launch(name) {
     } else {
       nativeDriver = await tool('msedgedriver');
     }
-    const port = await freePort();
+    const [port, nativePort] = await driverPorts();
     driverProcess = spawn(
       await tool('tauri-driver'),
       [
         '--port',
         String(port),
         '--native-port',
-        String(await freePort()),
+        String(nativePort),
         '--native-driver',
         nativeDriver,
       ],
@@ -564,9 +598,25 @@ export async function launch(name) {
       for (const child of children) child.kill('SIGKILL');
     };
     process.once('exit', abandon);
+    await writeFile(
+      path.join(scratch, 'session.json'),
+      JSON.stringify(
+        {
+          driverPid: driverProcess.pid,
+          port,
+          nativePort,
+          display: environment.DISPLAY,
+          config: environment.AUTOSAR_CONFIG_DIR,
+          data: environment.XDG_DATA_HOME,
+          cache: environment.XDG_CACHE_HOME,
+        },
+        null,
+        2,
+      ),
+    );
     let driverLog = '';
     driverProcess.stderr.on('data', (chunk) => (driverLog += chunk));
-    client = new WebDriver(`http://127.0.0.1:${port}`);
+    client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
     await until(async () => {
       try {
         return (await fetch(`${client.base}/status`)).ok;
