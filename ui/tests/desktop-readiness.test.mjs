@@ -38,6 +38,16 @@ test('DOM evidence awaits async predicates without treating a Promise as ready',
   );
 });
 
+test('synchronous query evidence is captured before a queued UI state change', async () => {
+  document.body.innerHTML = '<span id="operation-status">Inspecting</span>';
+  const sample = await sampleDomQuery(`(() => {
+    queueMicrotask(() => { document.querySelector('#operation-status').textContent = 'Done'; });
+    return false;
+  })()`);
+  expect(sample.uiOperation).toBe('Inspecting');
+  expect(document.querySelector('#operation-status').textContent).toBe('Done');
+});
+
 test.each([
   ['before the automatic inspection starts, with an idle backend', '', false],
   [
