@@ -97,6 +97,20 @@ class KernelPatchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, re.escape(f"Links/reparse points are refused: {kernel / 'task.h'}")):
                 require_kernel_identity(kernel, {"task.h": identity})
 
+    def test_dangling_kernel_directory_link_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="autosar-kernel-patch-") as temporary:
+            root = Path(temporary).resolve(strict=True)
+            kernel = root / "kernel"
+            kernel.mkdir()
+            (kernel / "task.h").write_bytes(b"header")
+            external = root / "external"
+            external.mkdir()
+            link = kernel / "unused"
+            link_directory(link, external)
+            external.rmdir()
+            with self.assertRaisesRegex(ValueError, "^" + re.escape(f"Links/reparse points are refused: {link}") + "$"):
+                require_kernel_identity(kernel, {"task.h": hashlib.sha256(b"header").hexdigest()})
+
     def test_identity_closure_and_records_are_required(self):
         with tempfile.TemporaryDirectory(prefix="autosar-kernel-patch-") as temporary:
             kernel = Path(temporary)

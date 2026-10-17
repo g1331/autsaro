@@ -34,9 +34,13 @@ def refuse_links(path: Path, root: Path | None = None) -> None:
     entry = path.absolute()
     entry.relative_to(root)
     while True:
-        if entry.is_symlink() or (
-                entry.exists() and getattr(entry.lstat(), "st_file_attributes", 0) & 0x400):
-            raise ValueError(f"Links/reparse points are refused: {entry}")
+        try:
+            metadata = entry.lstat()
+        except FileNotFoundError:
+            pass  # Build output may not exist yet.
+        else:
+            if stat.S_ISLNK(metadata.st_mode) or getattr(metadata, "st_file_attributes", 0) & 0x400:
+                raise ValueError(f"Links/reparse points are refused: {entry}")
         if entry == root:
             break
         entry = entry.parent
