@@ -890,12 +890,12 @@ export async function launch(name, { delayOperations = false } = {}) {
     },
     // Close the session, end the driver tree and prove nothing survived.
     async close() {
-      await writeFile(
-        path.join(scratch, 'host-end.json'),
-        JSON.stringify(await hostEvidence(), null, 2),
-      );
       const tree = await processTree(driverProcess.pid);
       try {
+        await writeFile(
+          path.join(scratch, 'host-end.json'),
+          JSON.stringify(await hostEvidence(), null, 2),
+        );
         await client.request('DELETE', route(''));
       } finally {
         if (platform === 'linux') {
