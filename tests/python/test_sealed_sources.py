@@ -44,7 +44,7 @@ class SealedSourceTests(unittest.TestCase):
         (self.project / "bsw/src").mkdir(parents=True)
         (self.project / SOURCE).write_bytes(b"/* sealed */\n")
         (self.project / "target.json").write_text(json.dumps(
-            {"format": "autosar-build-target-v2", "target": "linux-x64-controlled-v1"}), encoding="utf-8")
+            {"format": "autosar-build-target-v3", "target": "linux-x64-controlled-v1"}), encoding="utf-8")
         self.names = [SOURCE, "target.json"]
         seal(self.project, self.names)
         self.assertEqual(sealed_sources(self.project)[0], self.names)
@@ -52,6 +52,13 @@ class SealedSourceTests(unittest.TestCase):
     def refused(self, message: str) -> None:
         with self.assertRaisesRegex(ValueError, "^" + re.escape(message) + "$"):
             sealed_sources(self.project)
+
+    def test_retired_build_manifest_is_refused(self):
+        target = self.project / "target.json"
+        target.write_text(json.dumps({"format": "autosar-build-target-v2", "target": "linux-x64-controlled-v1"}),
+                          encoding="utf-8")
+        seal(self.project, self.names)
+        self.refused("Unsupported build target format or identity")
 
     def test_tampered_bytes_name_the_file(self):
         with (self.project / SOURCE).open("ab") as output:

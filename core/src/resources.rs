@@ -18,6 +18,7 @@ pub struct AssetEntry {
 }
 
 include!(concat!(env!("OUT_DIR"), "/asset_index.rs"));
+const KERNEL_DIGESTS: &str = include_str!(concat!(env!("OUT_DIR"), "/kernel-digests.json"));
 
 #[derive(Clone, Copy)]
 pub struct AssetInventory {
@@ -25,6 +26,23 @@ pub struct AssetInventory {
 }
 
 impl AssetInventory {
+    pub(crate) fn kernel_digests(
+        self,
+        target: BuildTarget,
+    ) -> Result<std::collections::BTreeMap<String, String>, crate::LocalizedText> {
+        let mut targets: std::collections::BTreeMap<
+            String,
+            std::collections::BTreeMap<String, String>,
+        > = serde_json::from_str(KERNEL_DIGESTS)
+            .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
+        targets.remove(target.spec().id).ok_or_else(|| {
+            crate::LocalizedText::from(format!(
+                "Missing built kernel identity: {}",
+                target.spec().id
+            ))
+        })
+    }
+
     pub const fn embedded() -> Self {
         Self {
             entries: EMBEDDED_ASSETS,

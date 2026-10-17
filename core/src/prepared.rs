@@ -360,11 +360,7 @@ pub(crate) fn deliver_path(asset: &AssetEntry) -> Result<String, crate::Localize
         }
         return Ok(format!("tools/{path}"));
     }
-    if let Some(path) = path.strip_prefix("third_party/freertos/") {
-        if path == "include/StackMacros.h" {
-            // Upstream's legacy alias; the kernel includes only stack_macros.h.
-            return Ok("kernel/compat/include/StackMacros.h".into());
-        }
+    if let Some(path) = crate::target_spec::kernel_path(path) {
         return Ok(format!("kernel/{path}"));
     }
     if let Some(path) = path.strip_prefix("tools/python/src/ecu_tools/") {
@@ -419,7 +415,7 @@ impl NativePreparation {
     }
 }
 
-pub(crate) const TARGET_FORMAT: &str = "autosar-build-target-v2";
+pub(crate) const TARGET_FORMAT: &str = "autosar-build-target-v3";
 /// Directories whose C files are the package's translation units.
 const SOURCE_ROOTS: [&str; 5] = [
     "bsw/src/",
@@ -471,6 +467,7 @@ fn cmake_lists(
     compiler_flags: &[&str],
     kernel_sources: &[&str],
     spec: &crate::target::TargetSpec,
+    kernel_digests: &BTreeMap<String, String>,
 ) -> String {
     let quoted = |items: &mut dyn Iterator<Item = String>| {
         items
@@ -513,6 +510,14 @@ fn cmake_lists(
                     .map(|path| format!("${{AUTSARO_KERNEL}}/{path}")),
             ),
     );
+    let kernel_names = kernel_digests
+        .keys()
+        .map(|name| format!("\"{name}\""))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let hashes = kernel_digests.iter().map(|(name, hash)| {
+        format!("file(SHA256 \"${{AUTSARO_KERNEL}}/{name}\" actual)\nif(NOT actual STREQUAL \"{}\")\n  message(FATAL_ERROR \"Kernel identity mismatch: kernel/{name}\")\nendif()\n", hash)
+    }).collect::<String>();
     let flags = compiler_flags.join(" ");
     let libraries = spec.link_libraries.join(" ");
     let executables: String = ENTRIES
@@ -555,6 +560,13 @@ function(autsaro_patch patch)
   endforeach()
 endfunction()
 {patches}
+file(GLOB_RECURSE actual_files LIST_DIRECTORIES false RELATIVE "${{AUTSARO_KERNEL}}" "${{AUTSARO_KERNEL}}/*")
+list(SORT actual_files)
+set(expected_files {kernel_names})
+if(NOT actual_files STREQUAL expected_files)
+  message(FATAL_ERROR "Kernel file closure mismatch: ${{actual_files}}; expected ${{expected_files}}")
+endif()
+{hashes}
 set(AUTSARO_FLAGS {flags})
 add_compile_options(${{AUTSARO_FLAGS}})
 add_link_options(${{AUTSARO_FLAGS}})
@@ -593,6 +605,7 @@ fn finish<'a>(
             serde_json::json!({ "path": path, "includes": includes })
         })
         .collect();
+    let kernel_digests = AssetInventory::embedded().kernel_digests(target)?;
     let linux = target == BuildTarget::LinuxX64ControlledV1;
     let sources: Vec<_> = files
         .keys()
@@ -633,6 +646,7 @@ fn finish<'a>(
         "toolchain": toolchain,
         "nativePort": spec.native_port,
         "kernelPatches": patches,
+        "kernelSha256": kernel_digests,
         "linkLibraries": spec.link_libraries,
         "binaryName": spec.binary_name,
         "objectFormat": spec.object_format,
@@ -658,6 +672,7 @@ fn finish<'a>(
         &compiler_flags,
         &kernel_sources,
         &spec,
+        &kernel_digests,
     );
     insert(&mut files, "target.json".into(), Cow::Owned(metadata), None)?;
     insert(
