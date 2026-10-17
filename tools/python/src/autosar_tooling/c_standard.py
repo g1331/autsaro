@@ -18,7 +18,7 @@ BASELINE = Path(__file__).with_name("c_standard_baseline.txt")
 Key = tuple[str, str, str]
 TOKEN = re.compile(
     r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|'
-    r'^[ \t]*\#[^\n]*(?:\\\n[^\n]*)*|[A-Za-z_]\w*|\d[\w.]*|[^\s]',
+    r'^[ \t]*\#(?:\\\n|[^\n])*|[A-Za-z_]\w*|\d[\w.]*|[^\s]',
     re.DOTALL | re.MULTILINE,
 )
 IDENTIFIER = re.compile(r"[A-Za-z_]\w*\Z")
@@ -201,11 +201,12 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
         word = token.text
         if word == "{" and parens == 0:
             words = [t.text for t in statement]
-            aggregate = ("initializer" if "=" in words else "enum" if "enum" in words
+            aggregate = ("linkage" if words == ["extern", '"C"']
+                         else "initializer" if "=" in words else "enum" if "enum" in words
                          else "record" if set(words) & {"struct", "union"} else "body")
-            if not stack and aggregate == "initializer":
+            if (not stack or stack == ["linkage"]) and aggregate == "initializer":
                 initializer_declaration = statement
-            if (not stack and aggregate != "body" and public and "typedef" in words
+            if ((not stack or stack == ["linkage"]) and aggregate != "body" and public and "typedef" in words
                 and not adjacent(source, tokens, statement[0].start)):
                 add("typedef-comment", statement[0])
             stack.append(aggregate)
@@ -217,7 +218,7 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
                 add("member-comment", statement[0])
             stack_kind = stack.pop() if stack else "body"
             statement = (initializer_declaration if not stack and stack_kind == "initializer"
-                         else [token] if not stack and stack_kind != "body" else [])
+                         else [token] if not stack and stack_kind not in {"body", "linkage"} else [])
             continue
         if stack and "body" in stack:
             continue
@@ -230,7 +231,7 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
         if word != ";" or parens:
             continue
         words = [t.text for t in statement]
-        if stack:
+        if stack and stack[-1] in {"record", "enum"}:
             if public and not trailing(source, token.end):
                 add("member-comment", statement[0])
         elif words[0] != "}":
@@ -307,12 +308,13 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
         source = path.read_text(encoding="utf-8")
         tokens = lex(source)
         for index, token in enumerate(tokens):
-            if not is_comment(token):
+            if not is_comment(token) and not token.text.lstrip().startswith("#"):
                 continue
             for match in DEVIATION.finditer(token.text):
                 line_start = source.rfind("\n", 0, token.start) + 1
                 preceding = [t for t in tokens[:index] if t.start >= line_start and not is_comment(t)]
-                following = preceding or [t for t in tokens[index + 1:] if not is_comment(t)]
+                following = ([token] if token.text.lstrip().startswith("#") else preceding
+                             or [t for t in tokens[index + 1:] if not is_comment(t)])
                 declaration = []
                 for item in following:
                     declaration.append(item)

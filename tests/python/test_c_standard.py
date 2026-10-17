@@ -40,6 +40,14 @@ class CStandardTests(unittest.TestCase):
         self.assertIn("api-contract", self.rules(CONTRACT + "#define OTHER 1\n" + DECLARATION))
         self.assertIn("api-contract", self.rules(CONTRACT + "/* unrelated */\n" + DECLARATION))
 
+    def test_cpp_linkage_does_not_hide_public_functions(self):
+        self.assertEqual(self.rules('#ifdef __cplusplus\nextern "C" {\n#endif\nvoid Run(void);\n#ifdef __cplusplus\n}\n#endif'), ["api-contract"])
+
+    def test_continued_directive_does_not_become_a_declaration(self):
+        source = "#if defined(A) || " + "\\" + "\n defined(B)\n#endif\nvoid Run(void);"
+        self.assertIn("api-contract", self.rules(source))
+        self.assertNotIn("typedef-comment", self.rules(source))
+
     def test_void_still_requires_return_and_four_fields(self):
         source = CONTRACT.replace(" * @param[in] id Object index, borrowed for this call.\n", "").replace(" * @param[out] value Caller-owned result; written on success.\n", "")
         self.assertEqual(self.rules(source + "void Stop(void);"), [])

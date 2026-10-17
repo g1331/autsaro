@@ -94,7 +94,7 @@ class ClangBuildTests(unittest.TestCase):
         sources = [*target["sources"], *target["entries"].values()]
         units = [name for name in sources if not name.startswith(FOREIGN)]
 
-        def build(job: tuple[int, str, tuple[str, ...]]) -> tuple[str | None, collections.Counter]:
+        def build(job: tuple[int, str, tuple[str, ...]]) -> tuple[str | None, collections.Counter, str]:
             index, name, mode = job
             argv = [
                 clang,
@@ -112,7 +112,7 @@ class ClangBuildTests(unittest.TestCase):
                 f"{name} {' '.join(mode)}\n{result.stderr}"
                 if result.returncode
                 else None
-            ), documentation_findings(result.stderr, project, foreign_roots=(kernel,))
+            ), documentation_findings(result.stderr, project, foreign_roots=(kernel,)), result.stderr
 
         jobs = [
             (index, name, mode)
@@ -123,9 +123,11 @@ class ClangBuildTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=os.cpu_count() or 2) as pool:
             results = list(pool.map(build, jobs))
         documentation = collections.Counter()
-        for _, findings in results:
+        for _, findings, output in results:
+            if findings - documentation:
+                print(output, end="")
             documentation |= findings
-        return [failure for failure, _ in results if failure], documentation
+        return [failure for failure, _, _ in results if failure], documentation
 
 
 if __name__ == "__main__":

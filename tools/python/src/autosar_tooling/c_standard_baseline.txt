@@ -1,9 +1,42 @@
 # Existing C coding standard findings: rule, repository file, source line text.
+api-context emitted/generated/include/Rte_DcmService.h DcmService_CODE Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data);
+api-context emitted/generated/include/Rte_DcmService.h Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(
+api-context emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
+api-context emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
+api-context emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Read_EchoApplication_RxValue_Value(uint32 *data);
+api-context emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Write_EchoApplication_TxValue_Value(uint32 data);
+api-context emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
+api-context emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
+api-context emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data);
+api-context emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data);
+api-context emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data);
+api-context emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
+api-context emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
+api-context emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data);
+api-context emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
+api-context emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
+api-context emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-context emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
+api-context emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
+api-context emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
+api-context emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Write_Process_Result_Value(uint32 data);
+api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-context emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-context runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
 api-context runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
 api-context runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
 api-context runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
 api-context runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
+api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-context runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-context runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-context runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-context runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -45,6 +78,7 @@ api-context runtime/os/include/Os.h StatusType CancelAlarm(AlarmType AlarmID);
 api-context runtime/os/include/Os.h StatusType ChainTask(TaskType TaskID);
 api-context runtime/os/include/Os.h StatusType ClearEvent(EventMaskType Mask);
 api-context runtime/os/include/Os.h StatusType ClearPendingInterrupt(ISRType ISRID);
+api-context runtime/os/include/Os.h StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
 api-context runtime/os/include/Os.h StatusType DisableInterruptSource(ISRType ISRID);
 api-context runtime/os/include/Os.h StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
 api-context runtime/os/include/Os.h StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
@@ -118,6 +152,37 @@ api-contract emitted/generated/include/Ecu_TargetConfig.h int Ecu_TargetTestFail
 api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_StackRetire(uint8 reached);
 api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_TargetTestRetire(unsigned stage);
 api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_TargetTestShutdown(StatusType reason);
+api-contract emitted/generated/include/Rte_Com.h void Rte_COMCbk(CbkHandleIdType handle);
+api-contract emitted/generated/include/Rte_Com.h void Rte_COMCbkRxTOut(CbkHandleIdType handle);
+api-contract emitted/generated/include/Rte_Main.h Std_ReturnType Rte_Start(void);
+api-contract emitted/generated/include/Rte_Main.h Std_ReturnType Rte_Stop(void);
+api-contract emitted/generated/include/Rte_Main.h boolean Ecu_SchMReady(void);
+api-contract emitted/generated/include/Rte_Main.h boolean Ecu_SchMTimingActive(void);
+api-contract emitted/generated/include/Rte_Main.h void SchM_Deinit(void);
+api-contract emitted/generated/include/Rte_Main.h void SchM_Init(const SchM_ConfigType *ConfigPtr);
+api-contract emitted/generated/include/Rte_Main.h void SchM_Start(void);
+api-contract emitted/generated/include/Rte_Main.h void SchM_StartTiming(void);
+api-contract emitted/generated/include/SchM_BswM.h void BswM_MainFunction(void);
+api-contract emitted/generated/include/SchM_Can.h void SchM_Exit_Can_CAN_STATE(void);
+api-contract emitted/generated/include/SchM_CanIf.h void SchM_Enter_CanIf_CANIF_STATE(void);
+api-contract emitted/generated/include/SchM_CanIf.h void SchM_Exit_CanIf_CANIF_STATE(void);
+api-contract emitted/generated/include/SchM_CanTp.h void CanTp_MainFunction(void);
+api-contract emitted/generated/include/SchM_CanTp.h void SchM_Enter_CanTp_CANTP_STATE(void);
+api-contract emitted/generated/include/SchM_CanTp.h void SchM_Exit_CanTp_CANTP_STATE(void);
+api-contract emitted/generated/include/SchM_Com.h void Com_MainFunctionRx_Rx(void);
+api-contract emitted/generated/include/SchM_Com.h void Com_MainFunctionTx_Tx(void);
+api-contract emitted/generated/include/SchM_Com.h void SchM_Enter_Com_COM_STATE(void);
+api-contract emitted/generated/include/SchM_Com.h void SchM_Exit_Com_COM_STATE(void);
+api-contract emitted/generated/include/SchM_ComM.h void ComM_MainFunction_Host(void);
+api-contract emitted/generated/include/SchM_ComM.h void SchM_Enter_ComM_COMM_STATE(void);
+api-contract emitted/generated/include/SchM_ComM.h void SchM_Exit_ComM_COMM_STATE(void);
+api-contract emitted/generated/include/SchM_Dcm.h void Dcm_MainFunction(void);
+api-contract emitted/generated/include/SchM_Det.h void SchM_Enter_Det_DET_STATE(void);
+api-contract emitted/generated/include/SchM_Det.h void SchM_Exit_Det_DET_STATE(void);
+api-contract emitted/generated/include/SchM_LSduR.h void SchM_Enter_LSduR_LSDUR_STATE(void);
+api-contract emitted/generated/include/SchM_LSduR.h void SchM_Exit_LSduR_LSDUR_STATE(void);
+api-contract emitted/generated/include/SchM_PduR.h void SchM_Enter_PduR_PDUR_STATE(void);
+api-contract emitted/generated/include/SchM_PduR.h void SchM_Exit_PduR_PDUR_STATE(void);
 api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerMode(uint8 ControllerId,
 api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId, uint8 *TxErrorCounterPtr);
 api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType *PduModePtr);
@@ -163,14 +228,13 @@ api-contract runtime/bsw/include/PduR_CanTp.h void PduR_CanTpRxIndication(PduIdT
 api-contract runtime/bsw/include/PduR_CanTp.h void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result);
 api-contract runtime/bsw/include/PduR_Com.h Std_ReturnType PduR_ComTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
 api-contract runtime/bsw/include/PduR_Dcm.h Std_ReturnType PduR_DcmTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
+api-contract runtime/bsw/include/SchM_BswM.h void BswM_MainFunction(void);
+api-contract runtime/bsw/include/SchM_Can.h void SchM_Exit_Can_CAN_STATE(void);
+api-contract runtime/bsw/include/SchM_Dcm.h void Dcm_MainFunction(void);
 api-contract runtime/os/include/Arti.h Arti_AddressCapture Arti_SaveAddressCapture(void);
 api-contract runtime/os/include/Arti.h void Arti_RestoreAddressCapture(Arti_AddressCapture capture);
-api-contract runtime/os/include/Os.h OS_CODE void Os_IsrEntry_##identifier(void);                                                   \
-api-contract runtime/os/include/Os.h OS_CODE void Os_TaskEntry_##identifier(void);                                                  \
-api-contract runtime/os/include/Os.h OS_CODE void Os_TaskEntry_##identifier(void);                                                  \
 api-contract runtime/os/include/Os.h OS_CODE void ShutdownHook(StatusType Error);
 api-contract runtime/os/include/Os.h OS_CODE void StartupHook(void);
-api-contract runtime/os/include/Os.h OS_CODE void identifier(void);                                                                 \
 api-contract runtime/os/include/Os.h StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
 api-contract runtime/os/include/Os_Arti.h Os_ArtiCaller Os_ArtiCallerSave(void);
 api-contract runtime/os/include/Os_Arti.h StatusType Os_ArtiAccessStatus(void);
@@ -181,7 +245,7 @@ api-contract runtime/os/include/Os_Arti.h void Os_ArtiCallerRestore(Os_ArtiCalle
 api-contract runtime/os/include/Os_Arti.h void Os_ArtiInternalEnter(void);
 api-contract runtime/os/include/Os_Arti.h void Os_ArtiInternalLeave(void);
 api-contract runtime/os/include/Os_Arti.h void Os_ArtiServiceLeave(void);
-api-contract runtime/os/include/Os_Hooks.h (Os_ErrorParametersCurrent()->service_EnableInterruptSource.ISRID)
+api-contract runtime/os/include/Os_Hooks.h OS_CODE void ErrorHook(StatusType Error);
 api-contract runtime/os/include/Os_Hooks.h OS_CODE void PostTaskHook(void);
 api-contract runtime/os/include/Os_Hooks.h OS_CODE void PreTaskHook(void);
 api-contract runtime/os/include/Os_Target.h uint32 Os_TargetTestPending(TaskType id);
@@ -193,11 +257,44 @@ api-contract runtime/os/include/Os_Target.h void Os_TestFinishBoundary(uint32 po
 api-contract runtime/os/include/Os_Target.h void Os_TestObserve(void);
 api-contract runtime/os/include/Os_Target.h void Os_TestObserve(void);
 api-contract runtime/os/include/Os_Target.h void Os_TestObserve(void);
+api-ownership emitted/generated/include/Rte_DcmService.h DcmService_CODE Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data);
+api-ownership emitted/generated/include/Rte_DcmService.h Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(
+api-ownership emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
+api-ownership emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
+api-ownership emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Read_EchoApplication_RxValue_Value(uint32 *data);
+api-ownership emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Write_EchoApplication_TxValue_Value(uint32 data);
+api-ownership emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
+api-ownership emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
+api-ownership emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data);
+api-ownership emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data);
+api-ownership emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data);
+api-ownership emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
+api-ownership emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
+api-ownership emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data);
+api-ownership emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
+api-ownership emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
+api-ownership emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-ownership emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
+api-ownership emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
+api-ownership emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
+api-ownership emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Write_Process_Result_Value(uint32 data);
+api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-ownership emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-ownership runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
 api-ownership runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
 api-ownership runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
 api-ownership runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
 api-ownership runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
+api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-ownership runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-ownership runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-ownership runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-ownership runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -239,6 +336,7 @@ api-ownership runtime/os/include/Os.h StatusType CancelAlarm(AlarmType AlarmID);
 api-ownership runtime/os/include/Os.h StatusType ChainTask(TaskType TaskID);
 api-ownership runtime/os/include/Os.h StatusType ClearEvent(EventMaskType Mask);
 api-ownership runtime/os/include/Os.h StatusType ClearPendingInterrupt(ISRType ISRID);
+api-ownership runtime/os/include/Os.h StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
 api-ownership runtime/os/include/Os.h StatusType DisableInterruptSource(ISRType ISRID);
 api-ownership runtime/os/include/Os.h StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
 api-ownership runtime/os/include/Os.h StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
@@ -305,6 +403,12 @@ api-ownership runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(uint6
 api-ownership runtime/os/include/Os_Time.h StatusType Os_TargetNotifyNative(void);
 api-ownership runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-ownership runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
+api-parameters emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
+api-parameters emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
+api-parameters emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
+api-parameters emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
+api-parameters emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-parameters emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
 api-parameters runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
 api-parameters runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
 api-parameters runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
@@ -333,6 +437,7 @@ api-parameters runtime/os/include/Os.h StatusType CancelAlarm(AlarmType AlarmID)
 api-parameters runtime/os/include/Os.h StatusType ChainTask(TaskType TaskID);
 api-parameters runtime/os/include/Os.h StatusType ClearEvent(EventMaskType Mask);
 api-parameters runtime/os/include/Os.h StatusType ClearPendingInterrupt(ISRType ISRID);
+api-parameters runtime/os/include/Os.h StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
 api-parameters runtime/os/include/Os.h StatusType DisableInterruptSource(ISRType ISRID);
 api-parameters runtime/os/include/Os.h StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
 api-parameters runtime/os/include/Os.h StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
@@ -380,11 +485,44 @@ api-parameters runtime/os/include/Os_Time.h StatusType Os_TargetCompleteTick(uin
 api-parameters runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch);
 api-parameters runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-parameters runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
+api-preconditions emitted/generated/include/Rte_DcmService.h DcmService_CODE Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data);
+api-preconditions emitted/generated/include/Rte_DcmService.h Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(
+api-preconditions emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
+api-preconditions emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
+api-preconditions emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Read_EchoApplication_RxValue_Value(uint32 *data);
+api-preconditions emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Write_EchoApplication_TxValue_Value(uint32 data);
+api-preconditions emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
+api-preconditions emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
+api-preconditions emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data);
+api-preconditions emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data);
+api-preconditions emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data);
+api-preconditions emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
+api-preconditions emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
+api-preconditions emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data);
+api-preconditions emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
+api-preconditions emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
+api-preconditions emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-preconditions emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
+api-preconditions emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
+api-preconditions emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
+api-preconditions emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Write_Process_Result_Value(uint32 data);
+api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-preconditions emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-preconditions runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
 api-preconditions runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
 api-preconditions runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
 api-preconditions runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
 api-preconditions runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
+api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-preconditions runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-preconditions runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-preconditions runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-preconditions runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -426,6 +564,7 @@ api-preconditions runtime/os/include/Os.h StatusType CancelAlarm(AlarmType Alarm
 api-preconditions runtime/os/include/Os.h StatusType ChainTask(TaskType TaskID);
 api-preconditions runtime/os/include/Os.h StatusType ClearEvent(EventMaskType Mask);
 api-preconditions runtime/os/include/Os.h StatusType ClearPendingInterrupt(ISRType ISRID);
+api-preconditions runtime/os/include/Os.h StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
 api-preconditions runtime/os/include/Os.h StatusType DisableInterruptSource(ISRType ISRID);
 api-preconditions runtime/os/include/Os.h StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
 api-preconditions runtime/os/include/Os.h StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
@@ -492,11 +631,44 @@ api-preconditions runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(u
 api-preconditions runtime/os/include/Os_Time.h StatusType Os_TargetNotifyNative(void);
 api-preconditions runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-preconditions runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
+api-reentrancy emitted/generated/include/Rte_DcmService.h DcmService_CODE Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data);
+api-reentrancy emitted/generated/include/Rte_DcmService.h Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(
+api-reentrancy emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
+api-reentrancy emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
+api-reentrancy emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Read_EchoApplication_RxValue_Value(uint32 *data);
+api-reentrancy emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Write_EchoApplication_TxValue_Value(uint32 data);
+api-reentrancy emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
+api-reentrancy emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
+api-reentrancy emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data);
+api-reentrancy emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data);
+api-reentrancy emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data);
+api-reentrancy emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
+api-reentrancy emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
+api-reentrancy emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data);
+api-reentrancy emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
+api-reentrancy emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
+api-reentrancy emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-reentrancy emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
+api-reentrancy emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
+api-reentrancy emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
+api-reentrancy emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Write_Process_Result_Value(uint32 data);
+api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-reentrancy emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-reentrancy runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
 api-reentrancy runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
 api-reentrancy runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
 api-reentrancy runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
 api-reentrancy runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
+api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-reentrancy runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-reentrancy runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-reentrancy runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-reentrancy runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -538,6 +710,7 @@ api-reentrancy runtime/os/include/Os.h StatusType CancelAlarm(AlarmType AlarmID)
 api-reentrancy runtime/os/include/Os.h StatusType ChainTask(TaskType TaskID);
 api-reentrancy runtime/os/include/Os.h StatusType ClearEvent(EventMaskType Mask);
 api-reentrancy runtime/os/include/Os.h StatusType ClearPendingInterrupt(ISRType ISRID);
+api-reentrancy runtime/os/include/Os.h StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
 api-reentrancy runtime/os/include/Os.h StatusType DisableInterruptSource(ISRType ISRID);
 api-reentrancy runtime/os/include/Os.h StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
 api-reentrancy runtime/os/include/Os.h StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
@@ -604,11 +777,28 @@ api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(uint
 api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetNotifyNative(void);
 api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
+api-return emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
+api-return emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
+api-return emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
+api-return emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
+api-return emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
+api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-return emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-return runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
 api-return runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
 api-return runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
 api-return runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
 api-return runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
+api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
+api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
+api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
+api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
+api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
+api-return runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-return runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
 api-return runtime/ecu/include/Ecu_Target.h Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
 api-return runtime/ecu/include/Ecu_Target.h void Ecu_TargetAbortNative(StatusType reason);
@@ -798,6 +988,7 @@ config-switch runtime/os/include/Os_Hooks.h #if OS_USE_PARAMETER_ACCESS
 config-switch runtime/os/include/Os_Target.h #ifdef OS_ACTIVATION_TESTS
 config-switch runtime/os/include/Os_Target.h #ifdef OS_FINISH_TESTS
 config-switch runtime/os/include/Os_Target.h #ifdef OS_RESOURCE_TESTS
+config-switch runtime/os/src/Os_Backend.c #if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS) ||      \
 config-switch runtime/os/src/Os_Backend.c #if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS) ||      \
 config-switch runtime/os/src/Os_Backend.c #if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS) ||      \
 config-switch runtime/os/src/Os_Backend.c #if defined(OS_ACTIVATION_TESTS) || defined(OS_FINISH_TESTS) || defined(OS_RESOURCE_TESTS) ||      \
@@ -1438,6 +1629,7 @@ macro-comment runtime/os/include/Os_Types.h #define WAITING                    1
 member-comment emitted/generated/include/Ecu_Config.h EcuTxConfirmation tx_confirmation;
 member-comment emitted/generated/include/Ecu_Config.h typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;
 member-comment emitted/generated/include/Ecu_Config.h typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;
+member-comment emitted/generated/include/Rte_Main.h uint16 partition;
 member-comment runtime/bsw/include/CanIf.h CANIF_OFFLINE = 0,
 member-comment runtime/bsw/include/CanIf.h CANIF_ONLINE = 3
 member-comment runtime/bsw/include/CanIf.h CANIF_TX_OFFLINE = 1,
@@ -1800,6 +1992,12 @@ member-comment runtime/os/include/Os_Types.h TickType mincycle;
 member-comment runtime/os/include/Os_Types.h TickType ticksperbase;
 member-comment runtime/os/include/Os_Types.h typedef enum { TRYTOGETSPINLOCK_NOSUCCESS = 0, TRYTOGETSPINLOCK_SUCCESS = 1 } TryToGetSpinlockType;
 member-comment runtime/os/include/Os_Types.h typedef enum { TRYTOGETSPINLOCK_NOSUCCESS = 0, TRYTOGETSPINLOCK_SUCCESS = 1 } TryToGetSpinlockType;
+state-comment emitted/generated/include/Rte_DcmService.h };
+state-comment emitted/generated/include/Rte_EchoApplication.h };
+state-comment emitted/generated/include/Rte_Ingress.h };
+state-comment emitted/generated/include/Rte_Main.h } SchM_ConfigType;
+state-comment emitted/generated/include/Rte_Observe.h };
+state-comment emitted/generated/include/Rte_Process.h };
 state-comment runtime/bsw/src/CanIf.c static CanIf_PduModeType pdu_mode CANIF_VAR_CLEARED;
 state-comment runtime/bsw/src/CanIf.c static Can_ControllerStateType controller_mode CANIF_VAR_CLEARED;
 state-comment runtime/bsw/src/CanIf.c static const CanIf_ConfigType *configuration CANIF_VAR_CLEARED;
@@ -2210,15 +2408,25 @@ state-comment runtime/os/tests/task_hooks.c static unsigned length;
 state-comment runtime/os/tests/task_hooks.c static unsigned owner_entries;
 typedef-comment emitted/generated/include/ComStack_Cfg.h typedef uint16 PduIdType;
 typedef-comment emitted/generated/include/ComStack_Cfg.h typedef uint16 PduLengthType;
-typedef-comment emitted/generated/include/Det_MemMap.h defined(DET_MEMMAP_CALLOUT_ACTIVE)
 typedef-comment emitted/generated/include/Ecu_Config.h typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;
 typedef-comment emitted/generated/include/Ecu_Config.h typedef struct {
 typedef-comment emitted/generated/include/Rte_ComM_Type.h typedef uint16 ComM_UserHandleType;
 typedef-comment emitted/generated/include/Rte_ComM_Type.h typedef uint8 ComM_InhibitionStatusType;
 typedef-comment emitted/generated/include/Rte_ComM_Type.h typedef uint8 ComM_ModeType;
+typedef-comment emitted/generated/include/Rte_DcmService.h typedef const Rte_CDS_DcmService *Rte_Instance;
+typedef-comment emitted/generated/include/Rte_DcmService.h typedef struct Rte_CDS_DcmService Rte_CDS_DcmService;
 typedef-comment emitted/generated/include/Rte_Dcm_Type.h typedef Dcm_DataElement_ApplicationValue_ArrayType Dcm_DataArrayTypeUint8_ApplicationValueType;
 typedef-comment emitted/generated/include/Rte_Dcm_Type.h typedef uint8 Rte_ModeType_DcmAuthenticationState_Physical;
+typedef-comment emitted/generated/include/Rte_EchoApplication.h typedef const Rte_CDS_EchoApplication *Rte_Instance;
+typedef-comment emitted/generated/include/Rte_EchoApplication.h typedef struct Rte_CDS_EchoApplication Rte_CDS_EchoApplication;
+typedef-comment emitted/generated/include/Rte_Ingress.h typedef const Rte_CDS_Ingress *Rte_Instance;
+typedef-comment emitted/generated/include/Rte_Ingress.h typedef struct Rte_CDS_Ingress Rte_CDS_Ingress;
+typedef-comment emitted/generated/include/Rte_Main.h typedef struct {
+typedef-comment emitted/generated/include/Rte_Observe.h typedef const Rte_CDS_Observe *Rte_Instance;
+typedef-comment emitted/generated/include/Rte_Observe.h typedef struct Rte_CDS_Observe Rte_CDS_Observe;
 typedef-comment emitted/generated/include/Rte_Os_Type.h typedef uint64 TimeInMicrosecondsType;
+typedef-comment emitted/generated/include/Rte_Process.h typedef const Rte_CDS_Process *Rte_Instance;
+typedef-comment emitted/generated/include/Rte_Process.h typedef struct Rte_CDS_Process Rte_CDS_Process;
 typedef-comment emitted/generated/include/Rte_Type.h typedef uint8 Dcm_DataElement_ApplicationValueType[4];
 typedef-comment runtime/bsw/include/CanIf.h typedef enum {
 typedef-comment runtime/bsw/include/CanIf.h typedef struct {
@@ -2237,7 +2445,6 @@ typedef-comment runtime/bsw/include/ComStack_Types.h typedef enum { TP_DATACONF 
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef struct {
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef struct {
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef uint8 NetworkHandleType;
-typedef-comment runtime/bsw/include/Det_MemMap.h defined(DET_MEMMAP_CALLOUT_ACTIVE)
 typedef-comment runtime/bsw/include/LSduR.h typedef Std_ReturnType (*LSduR_TriggerType)(PduIdType id, PduInfoType *info);
 typedef-comment runtime/bsw/include/LSduR.h typedef enum { LSDUR_UNINIT = 0, LSDUR_ONLINE = 1 } LSduR_StateType;
 typedef-comment runtime/bsw/include/LSduR.h typedef enum { LSDUR_UP_PDUR = 0, LSDUR_UP_CANTP = 1 } LSduR_UpperType;
