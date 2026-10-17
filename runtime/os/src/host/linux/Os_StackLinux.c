@@ -22,7 +22,7 @@ const size_t Os_ArtiNativeContextSize = sizeof(CONTEXT);
 static union {
     long double alignment;
     unsigned char bytes[OS_ALTSTACK_BYTES];
-} altstacks[OS_NATIVE_STACKS];
+} altstacks[OS_NATIVE_STACKS]; /**< Actor-owned alternate signal stacks; no Init reset. */
 static volatile Os_Atomic32 stack_count;
 static volatile Os_Atomic32 fault_claimed;
 static volatile Os_Atomic32 fault_count;

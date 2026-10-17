@@ -170,17 +170,19 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
             definition_guards.add(first.start)
         # A value-range or explicit-override diagnostic validates a definition;
         # it does not enable a feature through the symbol's presence.
-        if (re.match(r"\s*#\s*if\b", first.text) and re.match(r"\s*#\s*error\b", second.text)
+        if (re.match(r"\s*#\s*(?:if|ifndef)\b", first.text) and re.match(r"\s*#\s*error\b", second.text)
             and re.fullmatch(r"\s*#\s*endif\s*", third.text)
             and not re.sub(r"/\*.*?\*/|//[^\n]*", "", source[first.end:second.start] + source[second.end:third.start], flags=re.DOTALL).strip()):
             identifiers = set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", first.text)) - {"STD_ON", "STD_OFF"}
-            if identifiers and all(
+            required = re.fullmatch(r"\s*#\s*ifndef\s+\w+\s*", first.text)
+            consistency = re.fullmatch(r"\s*#\s*if\s+\(?\s*[A-Z][A-Z0-9_]+\s*!=\s*[A-Z][A-Z0-9_]+\s*\)?\s*", first.text)
+            if required or consistency or (identifiers and all(
                 (re.search(rf"{symbol}\s*!=\s*(?:0|STD_OFF)\b", first.text)
                  and re.search(rf"{symbol}\s*!=\s*(?:1|STD_ON)\b", first.text))
                 or (re.search(rf"defined\s*\(\s*{symbol}\s*\)", first.text)
                     and re.search(rf"{symbol}\s*!=\s*(?:[01]|STD_ON|STD_OFF)\b", first.text))
                 for symbol in identifiers
-            ):
+            )):
                 validation_guards.add(first.start)
     switches = set(known_switches)
     for token in directives:
@@ -254,6 +256,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
     statement: list[Token] = []
     parens = 0
     initializer_declaration: list[Token] = []
+    aggregate_declaration: list[Token] = []
     for token in code:
         word = token.text
         if word == "{" and parens == 0:
@@ -263,6 +266,8 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
                          else "record" if set(words) & {"struct", "union"} else "body")
             if (not stack or stack == ["linkage"]) and aggregate == "initializer":
                 initializer_declaration = statement
+            if (not stack or stack == ["linkage"]) and aggregate in {"record", "enum"}:
+                aggregate_declaration = statement
             if ((not stack or stack == ["linkage"]) and aggregate != "body" and public and "typedef" in words
                 and not comment_body(adjacent(source, tokens, statement[0].start))):
                 add("typedef-comment", statement[0])
@@ -280,7 +285,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
                 add("member-comment", statement[0])
             stack_kind = stack.pop() if stack else "body"
             statement = (initializer_declaration if (not stack or stack == ["linkage"]) and stack_kind == "initializer"
-                         else [token] if (not stack or stack == ["linkage"]) and stack_kind not in {"body", "linkage"} else [])
+                         else [*aggregate_declaration, token] if (not stack or stack == ["linkage"]) and stack_kind in {"record", "enum"} else [])
             continue
         if stack and "body" in stack:
             continue
@@ -296,16 +301,19 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
         if stack and stack[-1] in {"record", "enum"}:
             if public and not trailing(source, token.end):
                 add("member-comment", statement[0])
-        elif words[0] != "}":
+        else:
             comment = adjacent(source, tokens, statement[0].start)
             if "typedef" in words:
-                if public and not comment_body(comment):
+                if public and "}" not in words and not comment_body(comment):
                     add("typedef-comment", statement[0])
             elif declaration := function(statement):
                 if public:
                     for rule in contract_rules(comment, declaration[1], returns_void=void_function(statement, declaration[0])):
                         add(rule, statement[0])
-            elif "extern" not in words and not trailing(source, token.end):
+            elif ("extern" not in words
+                  and not (words[0] in {"struct", "union", "enum"} and len(words) == 3)
+                  and not ("}" in words and words[-2] == "}")
+                  and not trailing(source, token.end)):
                 add("state-comment", statement[0])
         statement = []
     return result

@@ -698,7 +698,6 @@ config-switch runtime/os/tests/public_types.c #ifdef OS_PUBLIC_RTE_BEFORE
 config-switch runtime/os/tests/public_types.c #ifdef OS_PUBLIC_TYPES_HOST_AFTER
 config-switch runtime/os/tests/public_types.c #ifdef OS_PUBLIC_TYPES_HOST_BEFORE
 config-switch runtime/os/tests/public_types.c #ifndef OS_PUBLIC_RTE_BEFORE
-config-switch runtime/os/tests/status_modes.c #ifndef EXPECTED_STATUS_EXTENDED
 config-switch runtime/os/tests/task_hooks.c #ifdef TASK_HOOK_OBSERVER
 macro-api-contract runtime/os/include/Arti.h #define ARTI_TRACE(context, class_name, instance, instance_parameter, event, event_parameter)      \
 macro-api-contract runtime/os/include/Os.h #define ALARMCALLBACK(identifier)                                                                  \
@@ -1256,7 +1255,6 @@ state-comment runtime/host/src/Can_HostLock.c static Can_RecursiveLock area_lock
 state-comment runtime/host/src/Can_HostLock.c static Can_RecursiveLock can_lock;
 state-comment runtime/host/src/Can_HostLock.c static __thread unsigned strict_held;
 state-comment runtime/host/src/Ecu_HostBusSM.c static const Ecu_HostBusSM_ConfigType *bussm_configuration ECU_HOSTBUSSM_VAR_CLEARED;
-state-comment runtime/os/include/Os_Arti.h struct Os_NativeStack;
 state-comment runtime/os/src/Arti.c Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
 state-comment runtime/os/src/Arti.c static __thread Arti_AddressCapture captured_address;
 state-comment runtime/os/src/Arti.c volatile ArtiAtomic32 Arti_DevelopmentError;
