@@ -85,11 +85,13 @@ void Os_ArtiIsr(ISRType isr, sint32 returning);
  * @param[in] returning Zero for entry, nonzero for return.
  * @par Return
  * None.
- * Preconditions: ARTI initialized before actors; captured arguments describe the current OS
- * transition. Context: serialized OS transition/service path under its existing native critical
- * boundary; outside BSW areas. Reentrancy: single-core transition sites serialize metadata; tool
- * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
- * addresses are recorded without retaining their pointed-to storage.
+ * Preconditions: ARTI initialized before actors; arguments are already captured for the current
+ * logical caller. Context: current hook actor under its existing OS synchronization. ShutdownHook
+ * runs on the close controller without acquiring the ordinary port mutex; outside BSW areas.
+ * Reentrancy: reentrant across native actors; logical caller scopes preserve TLS side data, and
+ * atomic slot reservation/publication protects the tool buffer. Ownership: event payloads are
+ * copied; native addresses are recorded as bits without retaining or dereferencing pointed-to
+ * storage.
  */
 void Os_ArtiHook(Os_HookPhase hook, StatusType error, sint32 returning);
 /** @brief Emit an application service event with an already captured payload.
@@ -98,22 +100,25 @@ void Os_ArtiHook(Os_HookPhase hook, StatusType error, sint32 returning);
  * @param[in] returning Zero for entry, nonzero for return.
  * @par Return
  * None.
- * Preconditions: ARTI initialized before actors; captured arguments describe the current OS
- * transition. Context: serialized OS transition/service path under its existing native critical
- * boundary; outside BSW areas. Reentrancy: single-core transition sites serialize metadata; tool
- * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
- * addresses are recorded without retaining their pointed-to storage.
+ * Preconditions: ARTI initialized before actors; arguments are already captured for the current
+ * logical caller. Context: service wrapper entry/return on its Task, ISR, Hook or initialized-C
+ * caller, including refused calls; no native critical section is required, outside BSW areas.
+ * Reentrancy: reentrant across native actors; logical caller scopes preserve TLS side data, and
+ * atomic slot reservation/publication protects the tool buffer. Ownership: event payloads are
+ * copied; native addresses are recorded as bits without retaining or dereferencing pointed-to
+ * storage.
  */
 void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning);
 /** @brief Preserve the complete native pointer alongside its standard uint32 token.
  * @param[in] address Native AlarmBase result address, captured as bits without dereferencing.
  * @par Return
  * None.
- * Preconditions: ARTI initialized before actors; captured arguments describe the current OS
- * transition. Context: serialized OS transition/service path under its existing native critical
- * boundary; outside BSW areas. Reentrancy: single-core transition sites serialize metadata; tool
- * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
- * addresses are recorded without retaining their pointed-to storage.
+ * Preconditions: ARTI initialized before actors; arguments are already captured for the current
+ * logical caller. Context: successful GetAlarmBase wrapper return after the implementation has
+ * returned; no native critical section is guaranteed, outside BSW areas. Reentrancy: reentrant
+ * across native actors; logical caller scopes preserve TLS side data, and atomic slot
+ * reservation/publication protects the tool buffer. Ownership: event payloads are copied; native
+ * addresses are recorded as bits without retaining or dereferencing pointed-to storage.
  */
 void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address);
 /** @brief Caller classification scopes; save/restore when entering logical actors. */
