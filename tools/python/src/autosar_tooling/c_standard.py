@@ -279,8 +279,8 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
                 and not trailing(source, statement[-1].end)):
                 add("member-comment", statement[0])
             stack_kind = stack.pop() if stack else "body"
-            statement = (initializer_declaration if not stack and stack_kind == "initializer"
-                         else [token] if not stack and stack_kind not in {"body", "linkage"} else [])
+            statement = (initializer_declaration if (not stack or stack == ["linkage"]) and stack_kind == "initializer"
+                         else [token] if (not stack or stack == ["linkage"]) and stack_kind not in {"body", "linkage"} else [])
             continue
         if stack and "body" in stack:
             continue
