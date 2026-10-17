@@ -2,12 +2,20 @@
 // through the real WebView, native dialogs and the unchanged Tauri IPC transport.
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { access, mkdir, readFile, writeFile, readdir, open as openFile } from 'node:fs/promises';
+import {
+  access,
+  appendFile,
+  mkdir,
+  readFile,
+  writeFile,
+  readdir,
+  open as openFile,
+} from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { launch } from './driver.mjs';
 import { createBuiltinInputs } from './inputs.mjs';
-import { standardInspectionReady } from './readiness.mjs';
+import { sampleDomQuery, standardInspectionReady } from './readiness.mjs';
 
 export const explicit = (kind, lexeme) => ({
   state: 'explicit',
@@ -49,6 +57,8 @@ export async function openWorkbench(name, options) {
   const { evaluate, screenshot, resize, key, pointer, media, scratch, platform } = session;
   const ipcLog = await openFile(path.join(scratch, 'ipc.jsonl'), 'w');
   let failed = false;
+  let lastQuery;
+  let failureEvidence;
   let closing;
   const shutdown = () =>
     (closing ??= (async () => {
@@ -86,6 +96,7 @@ export async function openWorkbench(name, options) {
         await screenshot(`${title.replaceAll(/[^a-z0-9-]/gi, '-')}.png`);
       } catch (error) {
         failed = true;
+        await captureFailure().catch(() => undefined);
         throw error;
       }
     });
@@ -94,9 +105,22 @@ export async function openWorkbench(name, options) {
   async function until(expression, description, timeout = 60000) {
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
-      if (await evaluate(expression)) return;
+      const startedAt = Date.now();
+      lastQuery = { expression, description, deadline, startedAt, pending: true };
+      const sample = await evaluate(`(${sampleDomQuery.toString()})(${json(expression)})`);
+      lastQuery = {
+        expression,
+        description,
+        deadline,
+        startedAt,
+        receivedAt: Date.now(),
+        ...sample,
+      };
+      await appendFile(path.join(scratch, 'dom-queries.jsonl'), json(lastQuery) + '\n');
+      if (sample.value) return;
       await new Promise((resolve) => setTimeout(resolve, 75));
     }
+    await captureFailure();
     const mediaState = description.includes('reduced-motion')
       ? await evaluate(`({ reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
           controls: [...document.querySelectorAll('[aria-label="设置"]')].map(node => ({
@@ -106,6 +130,31 @@ export async function openWorkbench(name, options) {
     throw new Error(
       `Native surface timeout (${description}): ${expression}${mediaState ? `; observed=${JSON.stringify(mediaState)}` : ''}`,
     );
+  }
+  function captureFailure() {
+    return (failureEvidence ??= (async () => {
+      await writeFile(path.join(scratch, 'failure-query.json'), json(lastQuery ?? null, null, 2));
+      await Promise.allSettled([
+        session.failureProcesses(),
+        capabilities().then((value) =>
+          writeFile(
+            path.join(scratch, 'failure-capabilities.json'),
+            json({ at: Date.now(), value }, null, 2),
+          ),
+        ),
+      ]).then(async (results) => {
+        await writeFile(
+          path.join(scratch, 'failure-capture.json'),
+          json(
+            results.map((result) =>
+              result.status === 'rejected' ? String(result.reason) : result.status,
+            ),
+            null,
+            2,
+          ),
+        );
+      });
+    })());
   }
   async function capabilities() {
     return evaluate("window.__TAURI_INTERNALS__.invoke('workbench_capabilities')");
@@ -731,6 +780,7 @@ export async function openWorkbench(name, options) {
     await evaluate(`window.__BUILTIN_NATIVE_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke`);
     await resize(1480, 920);
   } catch (error) {
+    await captureFailure().catch(() => undefined);
     await shutdown();
     throw error;
   }

@@ -202,6 +202,19 @@ async function processes() {
   return listed;
 }
 
+async function hostEvidence() {
+  const listed = await processes();
+  return {
+    at: Date.now(),
+    uptime: platform === 'linux' ? (await run('uptime', [])).stdout.trim() : os.uptime(),
+    cpus: os.availableParallelism(),
+    freeMemory: os.freemem(),
+    desktopProcesses: listed.filter((item) =>
+      /tauri-driver|WebKit|autosar-config|Xvfb|msedge|cargo|rustc/i.test(item.name),
+    ),
+  };
+}
+
 // Processes below the driver: native WebDriver, application and WebView.
 export async function processTree(root) {
   return descendants(await processes(), root);
@@ -512,6 +525,10 @@ export async function launch(name, { delayOperations = false } = {}) {
   const results = process.env.AUTOSAR_DESKTOP_RESULTS ?? os.tmpdir();
   await mkdir(results, { recursive: true });
   const scratch = await mkdtemp(path.join(path.resolve(results), `${name}-`));
+  await writeFile(
+    path.join(scratch, 'host-start.json'),
+    JSON.stringify(await hostEvidence(), null, 2),
+  );
   for (const directory of [
     'app-config',
     'app-local',
@@ -812,8 +829,71 @@ export async function launch(name, { delayOperations = false } = {}) {
     async memory() {
       return processTree(driverProcess.pid);
     },
+    async failureProcesses() {
+      const at = Date.now();
+      await writeFile(
+        path.join(scratch, 'host-failure.json'),
+        JSON.stringify(await hostEvidence(), null, 2),
+      );
+      const tree = await processTree(driverProcess.pid);
+      await writeFile(
+        path.join(scratch, 'failure-processes.json'),
+        JSON.stringify({ at, tree }, null, 2),
+      );
+      if (platform !== 'linux') return;
+      for (const item of tree) {
+        const threads = [];
+        try {
+          for (const tid of await readdir(`/proc/${item.pid}/task`)) {
+            const thread = { tid };
+            for (const field of ['status', 'stat', 'wchan', 'stack']) {
+              thread[field] = await readFile(
+                `/proc/${item.pid}/task/${tid}/${field}`,
+                'utf8',
+              ).catch((error) => String(error));
+            }
+            threads.push(thread);
+          }
+        } catch (error) {
+          threads.push({ error: String(error) });
+        }
+        await writeFile(
+          path.join(scratch, `failure-threads-${item.pid}.json`),
+          JSON.stringify({ at: Date.now(), threads }, null, 2),
+        );
+      }
+      for (const item of tree.filter((item) => /autosar-config|WebKitWeb/.test(item.name))) {
+        const stack = await run(
+          'gdb',
+          [
+            '--batch',
+            '-nx',
+            '-p',
+            String(item.pid),
+            '-ex',
+            'set pagination off',
+            '-ex',
+            'thread apply all bt',
+            '-ex',
+            'detach',
+          ],
+          { timeout: 20000, maxBuffer: 16 * 1024 * 1024 },
+        ).catch((error) => ({
+          stdout: error.stdout ?? '',
+          stderr: String(error) + '\n' + (error.stderr ?? ''),
+        }));
+        await writeFile(
+          path.join(scratch, `failure-backtrace-${item.pid}.txt`),
+          `${stack.stdout}\n${stack.stderr}`,
+        );
+      }
+    },
     // Close the session, end the driver tree and prove nothing survived.
     async close() {
+      await writeFile(
+        path.join(scratch, 'host-end.json'),
+        JSON.stringify(await hostEvidence(), null, 2),
+      );
       const tree = await processTree(driverProcess.pid);
       try {
         await client.request('DELETE', route(''));

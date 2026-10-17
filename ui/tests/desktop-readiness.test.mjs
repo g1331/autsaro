@@ -2,10 +2,41 @@
 import { afterEach, expect, test } from 'vitest';
 import {
   catalogResultReady,
+  sampleDomQuery,
   standardInspectionReady,
 } from '../../tests/desktop/support/readiness.mjs';
 
 afterEach(() => document.body.replaceChildren());
+
+test('DOM query evidence preserves the result and same-turn operation state', async () => {
+  document.body.innerHTML =
+    '<span id="operation-status" role="status">Inspecting</span><div class="integration-fields"><label>Receive<input disabled value="1104"></label></div>';
+  const serialized = new Function(
+    'expression',
+    `return (${sampleDomQuery.toString()})(expression)`,
+  );
+  const before = Date.now();
+  const sample = await serialized(
+    'document.querySelector(".integration-fields input:not(:disabled)")',
+  );
+  expect(sample).toMatchObject({
+    value: false,
+    uiOperation: 'Inspecting',
+    statuses: ['Inspecting'],
+    editors: [{ label: 'Receive', disabled: true, value: '1104' }],
+  });
+  expect(sample.at).toBeGreaterThanOrEqual(before);
+  expect(sample.at).toBeLessThanOrEqual(Date.now());
+  expect((await serialized('document.querySelector("input")')).value).toBe(true);
+});
+
+test('DOM evidence awaits async predicates without treating a Promise as ready', async () => {
+  expect((await sampleDomQuery('Promise.resolve(false)')).value).toBe(false);
+  expect((await sampleDomQuery('Promise.resolve(true)')).value).toBe(true);
+  await expect(sampleDomQuery('Promise.reject(new Error("query failed"))')).rejects.toThrow(
+    'query failed',
+  );
+});
 
 test.each([
   ['before the automatic inspection starts, with an idle backend', '', false],
