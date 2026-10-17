@@ -90,7 +90,7 @@ export function useLocate(c: Workbench) {
             ).find((element) => element.dataset.objectTitle === target.objectId);
             const focus = field ?? title;
             focus?.scrollIntoView({ block: 'nearest' });
-            focus?.focus();
+            focus?.focus({ preventScroll: true });
           });
         });
       } else if (target.sourceId) await c.readSource(target.sourceId);
@@ -332,7 +332,6 @@ export function ProblemsTable({ controller: c }: { controller: Workbench }) {
                     <td title={row.remedy ? `${row.message}\n${row.remedy}` : row.message}>
                       <span className="mono secondary">{row.code}</span>{' '}
                       <span className="problem-message">{row.message}</span>
-                      {row.remedy ? <small>{row.remedy}</small> : null}
                     </td>
                     <td className="mono" title={row.file}>
                       {row.file}

@@ -21,6 +21,8 @@ const {
 const json = JSON.stringify;
 const details = `document.querySelector('#rejection-details')`;
 const toolsHandle = `document.querySelector('.panel-resize-tools')`;
+// Moving focus must not scroll the fixed window frame out of view.
+const frameInPlace = `document.querySelector('[role=menubar]').getBoundingClientRect().top >= 0`;
 
 check('rejected-change-summary-details-and-locate', async () => {
   const source = path.join(scratch, 'rejected.arxml');
@@ -47,6 +49,7 @@ check('rejected-change-summary-details-and-locate', async () => {
 
   await click('查看详情', summary);
   await until(`document.activeElement === ${details}`, 'rejection details focused');
+  assert(await evaluate(frameInPlace), 'Focusing the details keeps the window frame in place');
   const fields = await evaluate(`(() => {
     const item = ${details}.querySelector('.rejection-item');
     return Object.fromEntries([...item.querySelectorAll('dt')].map(term => [term.textContent, term.nextElementSibling.textContent]));
@@ -78,6 +81,7 @@ check('rejected-change-summary-details-and-locate', async () => {
     'container heading focused',
   );
   assert.equal(await evaluate(`Boolean(document.querySelector('[role=dialog]'))`), false);
+  assert(await evaluate(frameInPlace), 'Locating keeps the window frame in place');
   assert.equal(
     await evaluate(
       `document.querySelector('[aria-label=${json('配置视图')}] [aria-selected=true]')?.textContent`,

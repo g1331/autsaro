@@ -470,7 +470,10 @@ export default function App() {
                   ? () => {
                       c.setToolWindow('problems');
                       requestAnimationFrame(() =>
-                        document.getElementById('rejection-details')?.focus(),
+                        // preventScroll: focusing would also scroll the fixed shell.
+                        document
+                          .getElementById('rejection-details')
+                          ?.focus({ preventScroll: true }),
                       );
                     }
                   : undefined

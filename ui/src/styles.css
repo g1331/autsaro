@@ -1317,12 +1317,18 @@ label.checkbox-field > input[type='checkbox'] {
 .problem-filters > button[aria-pressed='false'] {
   opacity: 0.55;
 }
+.problem-filters > select {
+  width: auto;
+}
 .problem-filters > input {
+  width: auto;
   flex: 1 1 18ch;
   max-width: 320px;
 }
 .problems-table {
   table-layout: fixed;
+  /* One line per problem: narrow tool windows scroll sideways instead of wrapping. */
+  min-width: 880px;
 }
 .problems-table th,
 .problems-table td {
@@ -1332,9 +1338,6 @@ label.checkbox-field > input[type='checkbox'] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.problems-table td small {
-  white-space: normal;
 }
 .problems-table .col-severity {
   width: 84px;
@@ -1396,6 +1399,18 @@ td.severity-info > svg,
   border-top: 1px solid var(--line);
   margin-top: 6px;
   padding-top: 6px;
+}
+.rejection-item .property-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 16px;
+  margin: 6px 0;
+}
+.rejection-item .property-list > div {
+  display: contents;
+}
+.rejection-item .property-list dd {
+  margin: 0;
 }
 .rejection-item dd small {
   display: block;
