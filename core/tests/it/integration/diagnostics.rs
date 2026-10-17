@@ -260,7 +260,7 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
         validation
             .diagnostics
             .iter()
-            .any(|issue| issue.code == "MULTIPLICITY"
+            .any(|issue| issue.code == "MULTIPLICITY_LOWER"
                 && issue.witness.as_ref().is_some_and(|witness| format!(
                     "{:?}",
                     witness.constraint
@@ -295,7 +295,7 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
         normal_validation(&composition)
             .diagnostics
             .iter()
-            .any(|issue| issue.code == "MULTIPLICITY")
+            .any(|issue| issue.code == "MULTIPLICITY_LOWER")
     );
     assert!(build(&composition).is_err());
     let source = historical
@@ -318,7 +318,7 @@ fn required_dcm_channel_reference_is_strict_for_every_builtin_project() {
         validation
             .diagnostics
             .iter()
-            .any(|issue| issue.code == "MULTIPLICITY"
+            .any(|issue| issue.code == "MULTIPLICITY_LOWER"
                 && issue.witness.as_ref().is_some_and(|witness| format!(
                     "{:?}",
                     witness.constraint

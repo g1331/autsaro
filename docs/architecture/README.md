@@ -95,3 +95,4 @@ flowchart LR
 | [0018](../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md) | 独占区按模块划分，持区期间不调用其他模块 | 已接受 |
 | [0019](../adr/0019-workbench-interactive-primitives.md) | 工作台交互组件采用 Radix Primitives，外观由自有 token 决定 | 已接受，实施中 |
 | [0020](../adr/0020-module-container-editing-model.md) | 配置编辑采用“模块 → 容器”树、容器参数视图与单字段直接应用 | 已接受 |
+| [0021](../adr/0021-incomplete-configuration-editing.md) | 自动补齐必需结构，允许不完整配置应用与保存 | 已接受 |

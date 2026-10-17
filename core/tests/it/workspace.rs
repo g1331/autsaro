@@ -453,7 +453,7 @@ fn builtin_rename_updates_real_incoming_edges_without_rewriting_unrelated_source
 }
 
 #[test]
-fn builtin_create_requires_complete_batch_and_deleted_ids_are_never_reused() {
+fn builtin_create_allows_incomplete_batch_and_deleted_ids_are_never_reused() {
     let scratch = Scratch::new();
     let mut workspace = signals(&scratch.0.join("Structure"), "Structure");
     let view = projection(&workspace);
@@ -476,7 +476,7 @@ fn builtin_create_requires_complete_batch_and_deleted_ids_are_never_reused() {
     };
     let incomplete = batch(&workspace, vec![create.clone()]);
     let original_fingerprint = workspace.input_fingerprint().unwrap();
-    assert!(workspace.prepare_change(&incomplete).is_err());
+    assert!(workspace.prepare_change(&incomplete).is_ok());
     assert_eq!(workspace.input_fingerprint().unwrap(), original_fingerprint);
     let length = ConfigurationChange::SetValue {
         change_id: "length".into(),
@@ -823,7 +823,7 @@ fn author_extension(directory: &Path) -> std::path::PathBuf {
 <AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd">
 <AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Vendor</SHORT-NAME><ELEMENTS>
 <ECUC-MODULE-DEF><SHORT-NAME>Custom</SHORT-NAME><CONTAINERS>
-<ECUC-PARAM-CONF-CONTAINER-DEF><SHORT-NAME>Config</SHORT-NAME><LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY><UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY><PARAMETERS>
+<ECUC-PARAM-CONF-CONTAINER-DEF><SHORT-NAME>Config</SHORT-NAME><LOWER-MULTIPLICITY>0</LOWER-MULTIPLICITY><UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY><PARAMETERS>
 <ECUC-INTEGER-PARAM-DEF><SHORT-NAME>Counter</SHORT-NAME><LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY><MIN>0</MIN><MAX>18446744073709551615</MAX></ECUC-INTEGER-PARAM-DEF>
 <ECUC-FLOAT-PARAM-DEF><SHORT-NAME>Ratio</SHORT-NAME><MIN>0</MIN><MAX>100</MAX></ECUC-FLOAT-PARAM-DEF>
 <ECUC-BOOLEAN-PARAM-DEF><SHORT-NAME>Enabled</SHORT-NAME><DEFAULT-VALUE>false</DEFAULT-VALUE></ECUC-BOOLEAN-PARAM-DEF>
@@ -1977,4 +1977,517 @@ fn projection_indexes_wide_siblings_without_changing_paths_or_safety_boundaries(
         fs::read_to_string(source).unwrap().matches("Item_").count(),
         512
     );
+}
+
+#[test]
+fn catalog_wide_creation_completes_mandatory_container_subtrees() {
+    use autosar_config_core::definitions::DefinitionCatalog;
+    let catalog = DefinitionCatalog::builtin().unwrap();
+    let scratch = Scratch::new();
+    let mut checked = 0;
+    for definition in catalog
+        .definitions()
+        .filter(|d| d.writable && d.kind.is_none() && d.definition_id.starts_with('/'))
+    {
+        // Import only the ancestor chain, so each creation is tested independently,
+        // including optional containers which a module creation does not instantiate.
+        let mut ancestors = Vec::new();
+        let mut parent = definition.definition_id.rsplit_once('/').map(|(id, _)| id);
+        while let Some(item) = parent.and_then(|id| catalog.get(id)) {
+            ancestors.push(item);
+            parent = item.definition_id.rsplit_once('/').map(|(id, _)| id);
+        }
+        let mut xml = String::new();
+        for ancestor in &ancestors {
+            let (tag, group) = if ancestor.element_kind == "ECUC-MODULE-DEF" {
+                ("ECUC-MODULE-CONFIGURATION-VALUES", "CONTAINERS")
+            } else {
+                ("ECUC-CONTAINER-VALUE", "SUB-CONTAINERS")
+            };
+            let name = ancestor.definition_id.rsplit('/').next().unwrap();
+            xml = format!(
+                "<{tag}><SHORT-NAME>{name}</SHORT-NAME><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF><{group}>{xml}</{group}></{tag}>",
+                ancestor.element_kind, ancestor.definition_id
+            );
+        }
+        let file = scratch.0.join("catalog.arxml");
+        fs::write(&file, crate::support::definition_sources::document(&xml).replace("<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\">", "<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\">")).unwrap();
+        let mut workspace = Workspace::open(vec![file.clone()]).unwrap();
+        let view = projection(&workspace);
+        let parent = view
+            .objects
+            .iter()
+            .find(|o| {
+                if let Some(ancestor) = ancestors.first() {
+                    o.definition_id.as_deref() == Some(&ancestor.definition_id)
+                } else {
+                    o.kind == "AR-PACKAGE"
+                }
+            })
+            .unwrap();
+        assert!(
+            parent.writable,
+            "{}: {:?}, {:?}",
+            definition.definition_id, parent, view.diagnostics
+        );
+        let path = format!("{}/New", parent.path);
+        let changes = batch(
+            &workspace,
+            vec![ConfigurationChange::CreateInstance {
+                change_id: "create".into(),
+                parent: ObjectRef::Existing {
+                    object_id: parent.object_id.clone(),
+                },
+                source_id: parent.source_id.clone(),
+                definition_id: definition.definition_id.clone(),
+                short_name: "New".into(),
+            }],
+        );
+        let preview = workspace
+            .prepare_change(&changes)
+            .unwrap_or_else(|e| panic!("{}: {e}", definition.definition_id));
+        let outcome = workspace
+            .apply_change(&changes, &preview.change_revision)
+            .unwrap();
+        let view = outcome.projection;
+        for object in view
+            .objects
+            .iter()
+            .filter(|o| o.path == path || o.path.starts_with(&format!("{path}/")))
+        {
+            let owner_definition = catalog
+                .get(object.definition_id.as_deref().unwrap())
+                .unwrap();
+            for child in catalog
+                .children(&owner_definition.definition_id)
+                .into_iter()
+                .filter(|d| d.writable && d.kind.is_none())
+            {
+                let count = view
+                    .objects
+                    .iter()
+                    .filter(|o| {
+                        o.parent_id.as_deref() == Some(&object.object_id)
+                            && o.definition_id.as_deref() == Some(&child.definition_id)
+                    })
+                    .count();
+                assert!(
+                    count >= child.lower_multiplicity as usize,
+                    "{} missing {}",
+                    object.path,
+                    child.definition_id
+                );
+            }
+            for field in view.fields.iter().filter(|f| {
+                f.object_id == object.object_id
+                    && f.definition.lower_multiplicity > 0
+                    && f.definition.default_value.is_some()
+            }) {
+                assert_eq!(
+                    field.current,
+                    ValueState::Explicit {
+                        value: field.definition.default_value.clone().unwrap()
+                    },
+                    "{}",
+                    field.definition.definition_id
+                );
+            }
+        }
+        if definition.definition_id == "/AUTOSAR/EcucDefs/CanTp" {
+            let channel = view
+                .objects
+                .iter()
+                .find(|o| o.path == format!("{path}/CanTpConfig/CanTpChannel"))
+                .expect("CanTp mandatory grandchild");
+            assert_eq!(
+                channel.definition_id.as_deref(),
+                Some("/AUTOSAR/EcucDefs/CanTp/CanTpConfig/CanTpChannel")
+            );
+        }
+        checked += 1;
+    }
+    assert!(
+        checked > 100,
+        "catalog traversal unexpectedly narrowed: {checked}"
+    );
+}
+
+#[test]
+fn incomplete_creation_save_reopen_repair_and_plan_recovery() {
+    let scratch = Scratch::new();
+    let directory = scratch.0.join("Incomplete");
+    let mut workspace = signals(&directory, "Incomplete");
+    let initialization = workspace.preview_application_initialization().unwrap();
+    workspace
+        .initialize_application_previewed(&initialization)
+        .unwrap();
+    let view = projection(&workspace);
+    let parent = view
+        .objects
+        .iter()
+        .find(|o| {
+            o.definition_id.as_deref()
+                == Some("/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection")
+        })
+        .unwrap();
+    let changes = batch(
+        &workspace,
+        vec![ConfigurationChange::CreateInstance {
+            change_id: "create".into(),
+            parent: ObjectRef::Existing {
+                object_id: parent.object_id.clone(),
+            },
+            source_id: parent.source_id.clone(),
+            definition_id: format!("{}/Pdu", parent.definition_id.as_ref().unwrap()),
+            short_name: "IncompletePdu".into(),
+        }],
+    );
+    let preview = workspace.prepare_change(&changes).unwrap();
+    let result = workspace
+        .apply_change(&changes, &preview.change_revision)
+        .unwrap();
+    let id = &result.created_ids[0].object_id;
+    let issue = result
+        .projection
+        .diagnostics
+        .iter()
+        .find(|d| d.code == "MULTIPLICITY_LOWER" && d.object_id.as_ref() == Some(id))
+        .unwrap();
+    assert!(matches!(
+        issue.severity,
+        autosar_config_core::model::Severity::Error
+    ));
+    assert_eq!(
+        issue.message.to_string(),
+        format!(
+            "{}/IncompletePdu is missing required PduLength entries (at least 1, currently 0)",
+            parent.path
+        )
+    );
+    assert!(
+        issue
+            .witness
+            .as_ref()
+            .unwrap()
+            .constraint
+            .to_string()
+            .contains("PduLength")
+    );
+    let preview = workspace.preview_save().unwrap();
+    workspace.save_previewed(&preview.revision).unwrap();
+    let mut reopened = Workspace::open_project_manifest(
+        &directory.join("workbench-project.json"),
+        &scratch.0.join("cache"),
+    )
+    .unwrap();
+    let view = projection(&reopened);
+    let issue = view
+        .diagnostics
+        .iter()
+        .find(|d| d.code == "MULTIPLICITY_LOWER" && d.path == issue.path)
+        .unwrap();
+    assert!(issue.object_id.is_some());
+    for errors in [
+        reopened.integration_plan().err().unwrap(),
+        reopened.saved_integration_plan().err().unwrap(),
+    ] {
+        assert!(
+            errors
+                .iter()
+                .any(|d| d.code == "MULTIPLICITY_LOWER" && d.object == issue.path),
+            "{errors:?}"
+        );
+    }
+    let field = view
+        .fields
+        .iter()
+        .find(|f| {
+            Some(&f.object_id) == issue.object_id.as_ref()
+                && f.definition.definition_id.ends_with("/PduLength")
+        })
+        .unwrap();
+    let bad = batch(&reopened, vec![value_change(field, "bad", "-1")]);
+    assert!(reopened.prepare_change(&bad).is_err());
+    let changes = batch(&reopened, vec![value_change(field, "repair", "4")]);
+    let preview = reopened.prepare_change(&changes).unwrap();
+    let result = reopened
+        .apply_change(&changes, &preview.change_revision)
+        .unwrap();
+    assert!(
+        !result
+            .projection
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "MULTIPLICITY_LOWER" && d.path == issue.path)
+    );
+    reopened.save().unwrap();
+    let plan = reopened.saved_integration_plan().unwrap();
+    let output = scratch.0.join("Generated");
+    autosar_config_core::prepared::prepare_ecu_project_for_workspace(
+        &reopened,
+        &plan,
+        tooling::native_target(),
+        false,
+    )
+    .unwrap()
+    .generate(&output)
+    .unwrap();
+    assert!(output.join("CMakeLists.txt").is_file());
+}
+
+#[test]
+fn accepted_extension_creation_recurses_and_writes_repeated_defaults() {
+    use sha2::{Digest, Sha256};
+    let scratch = Scratch::new();
+    let path = author_extension(&scratch.0.join("extension"));
+    let source = path.parent().unwrap().join("custom.arxml");
+    let text = fs::read_to_string(&source).unwrap()
+        .replace("<SHORT-NAME>Config</SHORT-NAME><LOWER-MULTIPLICITY>0</LOWER-MULTIPLICITY>", "<SHORT-NAME>Config</SHORT-NAME><LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>")
+        .replace("<SHORT-NAME>Counter</SHORT-NAME><LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY>", "<SHORT-NAME>Counter</SHORT-NAME><LOWER-MULTIPLICITY>2</LOWER-MULTIPLICITY><UPPER-MULTIPLICITY>2</UPPER-MULTIPLICITY><DEFAULT-VALUE>42</DEFAULT-VALUE>")
+        .replace("</PARAMETERS></ECUC-PARAM-CONF-CONTAINER-DEF>", "</PARAMETERS><SUB-CONTAINERS><ECUC-PARAM-CONF-CONTAINER-DEF><SHORT-NAME>Nested</SHORT-NAME><LOWER-MULTIPLICITY>2</LOWER-MULTIPLICITY><UPPER-MULTIPLICITY>2</UPPER-MULTIPLICITY></ECUC-PARAM-CONF-CONTAINER-DEF><ECUC-PARAM-CONF-CONTAINER-DEF><SHORT-NAME>Nested_1</SHORT-NAME><LOWER-MULTIPLICITY>1</LOWER-MULTIPLICITY><UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY></ECUC-PARAM-CONF-CONTAINER-DEF></SUB-CONTAINERS></ECUC-PARAM-CONF-CONTAINER-DEF>");
+    fs::write(&source, &text).unwrap();
+    let mut inventory: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    inventory["files"][0]["sha256"] = format!("{:x}", Sha256::digest(text.as_bytes())).into();
+    fs::write(&path, serde_json::to_vec(&inventory).unwrap()).unwrap();
+    let mut workspace = signals(&scratch.0.join("Extension"), "Extension");
+    workspace
+        .accept_definition_catalog(&path, &scratch.0.join("cache"))
+        .unwrap();
+    let view = projection(&workspace);
+    let parent = view
+        .objects
+        .iter()
+        .find(|o| o.kind == "AR-PACKAGE")
+        .unwrap();
+    let changes = batch(
+        &workspace,
+        vec![ConfigurationChange::CreateInstance {
+            change_id: "create".into(),
+            parent: ObjectRef::Existing {
+                object_id: parent.object_id.clone(),
+            },
+            source_id: parent.source_id.clone(),
+            definition_id: "/Vendor/Custom".into(),
+            short_name: "Custom".into(),
+        }],
+    );
+    let preview = workspace.prepare_change(&changes).unwrap();
+    assert!(
+        preview
+            .impacts
+            .iter()
+            .any(|i| serde_json::to_string(i).unwrap().contains("Nested_2"))
+    );
+    let result = workspace
+        .apply_change(&changes, &preview.change_revision)
+        .unwrap();
+    let config = result
+        .projection
+        .objects
+        .iter()
+        .find(|o| o.definition_id.as_deref() == Some("/Vendor/Custom/Config"))
+        .unwrap();
+    let names: Vec<_> = result
+        .projection
+        .objects
+        .iter()
+        .filter(|o| o.parent_id.as_ref() == Some(&config.object_id))
+        .map(|o| o.short_name.as_str())
+        .collect();
+    assert_eq!(names, ["Nested", "Nested_2", "Nested_1"]);
+    let counters: Vec<_> = result
+        .projection
+        .fields
+        .iter()
+        .filter(|f| {
+            f.object_id == config.object_id && f.definition.definition_id.ends_with("/Counter")
+        })
+        .collect();
+    assert_eq!(counters.len(), 2);
+    for field in counters {
+        assert_eq!(
+            field.current,
+            ValueState::Explicit {
+                value: TypedValue {
+                    kind: ValueKind::Integer,
+                    lexeme: "42".into()
+                }
+            }
+        );
+    }
+    assert!(
+        !result
+            .projection
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "MULTIPLICITY_LOWER"
+                && d.path.as_ref().is_some_and(|p| p.contains("/Custom")))
+    );
+
+    let module = result
+        .projection
+        .objects
+        .iter()
+        .find(|o| o.definition_id.as_deref() == Some("/Vendor/Custom"))
+        .unwrap();
+    let mut edits = vec![
+        ConfigurationChange::RemoveInstance {
+            change_id: "remove".into(),
+            object: ObjectRef::Existing {
+                object_id: config.object_id.clone(),
+            },
+            expected_short_name: config.short_name.clone(),
+        },
+        ConfigurationChange::CreateInstance {
+            change_id: "replacement".into(),
+            parent: ObjectRef::Existing {
+                object_id: module.object_id.clone(),
+            },
+            source_id: module.source_id.clone(),
+            definition_id: "/Vendor/Custom/Config".into(),
+            short_name: "Replacement".into(),
+        },
+    ];
+    for (entry, value) in [("first", "42"), ("second", "43")] {
+        edits.push(ConfigurationChange::SetValue {
+            change_id: entry.into(),
+            field: FieldRef::New {
+                object: ObjectRef::Created {
+                    change_id: "replacement".into(),
+                },
+                definition_id: "/Vendor/Custom/Config/Counter".into(),
+                entry_key: entry.into(),
+            },
+            expected: ValueState::Absent,
+            value: ValueState::Explicit {
+                value: TypedValue {
+                    kind: ValueKind::Integer,
+                    lexeme: value.into(),
+                },
+            },
+        });
+    }
+    let changes = batch(&workspace, edits);
+    let preview = workspace.prepare_change(&changes).unwrap();
+    let result = workspace
+        .apply_change(&changes, &preview.change_revision)
+        .unwrap();
+    assert_eq!(result.created_fields.len(), 2);
+    let values: Vec<_> = result
+        .projection
+        .fields
+        .iter()
+        .filter(|f| f.definition.definition_id == "/Vendor/Custom/Config/Counter")
+        .map(|f| match &f.current {
+            ValueState::Explicit { value } => value.lexeme.as_str(),
+            _ => panic!("seeded default missing"),
+        })
+        .collect();
+    assert_eq!(values, ["42", "43"]);
+    let config = result
+        .projection
+        .objects
+        .iter()
+        .find(|o| o.definition_id.as_deref() == Some("/Vendor/Custom/Config"))
+        .unwrap();
+    let changes = batch(
+        &workspace,
+        vec![
+            ConfigurationChange::RemoveInstance {
+                change_id: "remove".into(),
+                object: ObjectRef::Existing {
+                    object_id: config.object_id.clone(),
+                },
+                expected_short_name: config.short_name.clone(),
+            },
+            ConfigurationChange::CreateInstance {
+                change_id: "replacement".into(),
+                parent: ObjectRef::Existing {
+                    object_id: module.object_id.clone(),
+                },
+                source_id: module.source_id.clone(),
+                definition_id: "/Vendor/Custom/Config".into(),
+                short_name: "Cleared".into(),
+            },
+            ConfigurationChange::SetValue {
+                change_id: "clear".into(),
+                field: FieldRef::New {
+                    object: ObjectRef::Created {
+                        change_id: "replacement".into(),
+                    },
+                    definition_id: "/Vendor/Custom/Config/Counter".into(),
+                    entry_key: "clear".into(),
+                },
+                expected: ValueState::Absent,
+                value: ValueState::Absent,
+            },
+        ],
+    );
+    let preview = workspace.prepare_change(&changes).unwrap();
+    let result = workspace
+        .apply_change(&changes, &preview.change_revision)
+        .unwrap();
+    assert!(result.created_fields.is_empty());
+    let issue = result
+        .projection
+        .diagnostics
+        .iter()
+        .find(|d| {
+            d.code == "MULTIPLICITY_LOWER"
+                && d.path.as_ref().is_some_and(|p| p.ends_with("/Cleared"))
+        })
+        .unwrap();
+    assert!(
+        issue
+            .message
+            .to_string()
+            .contains("at least 2, currently 1")
+    );
+}
+
+#[test]
+fn creation_rejects_module_and_container_upper_bounds_atomically() {
+    let scratch = Scratch::new();
+    let mut workspace = signals(&scratch.0.join("Upper"), "Upper");
+    let view = projection(&workspace);
+    let module = view
+        .objects
+        .iter()
+        .find(|o| o.definition_id.as_deref() == Some("/AUTOSAR/EcucDefs/CanIf"))
+        .unwrap();
+    let container = view
+        .objects
+        .iter()
+        .find(|o| o.definition_id.as_deref() == Some("/AUTOSAR/EcucDefs/CanIf/CanIfPublicCfg"))
+        .unwrap();
+    for (item, code) in [(module, "MODULE_MULTIPLICITY"), (container, "MULTIPLICITY")] {
+        let parent = view
+            .objects
+            .iter()
+            .find(|o| Some(&o.object_id) == item.parent_id.as_ref())
+            .unwrap();
+        let changes = batch(
+            &workspace,
+            vec![ConfigurationChange::CreateInstance {
+                change_id: "duplicate".into(),
+                parent: ObjectRef::Existing {
+                    object_id: parent.object_id.clone(),
+                },
+                source_id: parent.source_id.clone(),
+                definition_id: item.definition_id.clone().unwrap(),
+                short_name: "Duplicate".into(),
+            }],
+        );
+        let before = workspace.input_fingerprint().unwrap();
+        let error = workspace.prepare_change(&changes).unwrap_err();
+        assert!(error.to_string().contains(code), "{error}");
+        assert!(error.to_string().contains(&parent.path), "{error}");
+        assert_eq!(workspace.input_fingerprint().unwrap(), before);
+        assert_eq!(
+            serde_json::to_value(projection(&workspace)).unwrap(),
+            serde_json::to_value(&view).unwrap()
+        );
+    }
+    workspace.save().unwrap();
 }

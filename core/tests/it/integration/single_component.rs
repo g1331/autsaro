@@ -2954,7 +2954,7 @@ fn pdur_mandatory_general_and_configuration_id_are_required_and_generated() {
     );
     rejected_at(
         &sources,
-        "MULTIPLICITY",
+        "MULTIPLICITY_LOWER",
         "ecuc.arxml",
         "/Configuration/PduR",
     );
@@ -2973,7 +2973,7 @@ fn pdur_mandatory_general_and_configuration_id_are_required_and_generated() {
     );
     rejected_with(
         &sources,
-        ("NATIVE_SCHEMA", "MULTIPLICITY"),
+        ("NATIVE_SCHEMA", "MULTIPLICITY_LOWER"),
         "ecuc.arxml",
         "/Configuration/PduR/Routes",
     );
