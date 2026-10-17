@@ -209,7 +209,7 @@ impl CompositionContract {
         for alias in dcm_data_type_names(&diagnostic.data) {
             // Rte_Type.h already declares source array types, all checked as uint8[4].
             if !self.array_types.values().any(|native| native == &alias) {
-                typedefs.push_str(&format!("typedef {parameter} {alias};\n"));
+                typedefs.push_str(&format!("/** Alias of the selected four-byte synchronous diagnostic data element. */\ntypedef {parameter} {alias};\n"));
                 parameter = alias;
             }
         }

@@ -379,29 +379,32 @@ pub(super) fn inspect(
 pub(super) fn type_headers(communication: &CommunicationRuntimeContract) -> Vec<(String, Vec<u8>)> {
     let can = &communication.can;
     let mut files = Vec::new();
-    let profile = super::c_layout::defines(&[
-        ("CAN_HOST_QUEUED_COMPLETION", "1".to_owned()),
-        ("CAN_RX_POLLING", "1".to_owned()),
-        ("CAN_TX_POLLING", "1".to_owned()),
-        ("CAN_BUSOFF_POLLING", "1".to_owned()),
-        ("CAN_CONTROLLER_ID", format!("{}u", can.controller_id)),
-        (
-            "CAN_CANIF_CONTROLLER_ID",
-            format!("{}u", can.can_if_controller_id),
-        ),
-        ("CAN_TX_HOH", format!("{}u", can.transmit_handle)),
-        ("CAN_RX_HOH", format!("{}u", can.receive_handle)),
-    ]);
+    let profile = super::c_layout::commented_defines(
+        &[
+            ("CAN_HOST_QUEUED_COMPLETION", "STD_ON".to_owned()),
+            ("CAN_RX_POLLING", "STD_ON".to_owned()),
+            ("CAN_TX_POLLING", "STD_ON".to_owned()),
+            ("CAN_BUSOFF_POLLING", "STD_ON".to_owned()),
+            ("CAN_CONTROLLER_ID", format!("{}u", can.controller_id)),
+            (
+                "CAN_CANIF_CONTROLLER_ID",
+                format!("{}u", can.can_if_controller_id),
+            ),
+            ("CAN_TX_HOH", format!("{}u", can.transmit_handle)),
+            ("CAN_RX_HOH", format!("{}u", can.receive_handle)),
+        ],
+        "Generated CAN selection.",
+    );
     files.push((
         "include/Ecu_ProfileConfig.h",
-        format!("/** @file Generated communication selection. */\n#ifndef ECU_PROFILE_CONFIG_H\n#define ECU_PROFILE_CONFIG_H\n{profile}#endif\n"),
+        format!("/** @file Generated communication selection. */\n#ifndef ECU_PROFILE_CONFIG_H\n#define ECU_PROFILE_CONFIG_H\n#include \"Std_Types.h\"\n/** ECUC CanRxProcessing, CanTxProcessing and CanBusoffProcessing select POLLING.\n * The generated host target owns queued completion and the controller/HOH handles.\n */\n{profile}#endif\n"),
     ));
     let integer = |kind: super::CommunicationIntegerType| match kind {
         super::CommunicationIntegerType::Uint8 => "uint8",
         super::CommunicationIntegerType::Uint16 => "uint16",
         super::CommunicationIntegerType::Uint32 => "uint32",
     };
-    files.push(("include/ComStack_Cfg.h", format!("/** @file EcuC-selected communication widths. */\n#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include \"Platform_Types.h\"\n#include \"Ecu_ProfileConfig.h\"\ntypedef {} PduIdType;\ntypedef {} PduLengthType;\n#endif\n", integer(communication.pdu_id_type), integer(communication.pdu_length_type))));
+    files.push(("include/ComStack_Cfg.h", format!("/** @file EcuC-selected communication widths. */\n#ifndef COMSTACK_CFG_H\n#define COMSTACK_CFG_H\n#include \"Platform_Types.h\"\n#include \"Ecu_ProfileConfig.h\"\n/** PDU handle width selected by EcuC PduIdTypeEnum. */\ntypedef {} PduIdType;\n/** PDU byte-count width selected by EcuC PduLengthTypeEnum. */\ntypedef {} PduLengthType;\n#endif\n", integer(communication.pdu_id_type), integer(communication.pdu_length_type))));
     files
         .into_iter()
         .map(|(path, text)| (path.into(), text.into_bytes()))

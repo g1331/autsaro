@@ -227,6 +227,70 @@ pub(super) fn defines<N: AsRef<str>, V: AsRef<str>>(entries: &[(N, V)]) -> Strin
     text
 }
 
+/// Constants sharing a short purpose, with aligned Doxygen trailing comments.
+pub(super) fn commented_defines<N: AsRef<str>, V: AsRef<str>>(
+    entries: &[(N, V)],
+    purpose: &str,
+) -> String {
+    let tail = format!(" /**< {purpose} */");
+    let mut output = String::new();
+    let mut run: Vec<(&str, &str)> = Vec::new();
+    let flush = |output: &mut String, run: &mut Vec<(&str, &str)>| {
+        let width = run.iter().map(|(_, value)| value.len()).max().unwrap_or(0);
+        let documented: Vec<_> = run
+            .drain(..)
+            .map(|(name, value)| (name, format!("{value:<width$}{tail}")))
+            .collect();
+        output.push_str(&defines(&documented));
+    };
+    for (name, value) in entries {
+        let (name, value) = (name.as_ref(), value.as_ref());
+        let width = run
+            .iter()
+            .map(|(name, _)| name.len())
+            .max()
+            .unwrap_or(0)
+            .max(name.len());
+        let room = run
+            .iter()
+            .map(|(_, value)| value.len())
+            .max()
+            .unwrap_or(0)
+            .max(value.len());
+        if "#define ".len() + width + 1 + room + tail.len() >= COLUMNS {
+            flush(&mut output, &mut run);
+        }
+        let line = format!("#define {name} {value}{tail}");
+        if line.len() == COLUMNS {
+            if !output.is_empty() && !output.ends_with("\n\n") {
+                output.push('\n');
+            }
+            // At this boundary clang-format's stable form keeps both the
+            // replacement and the comment terminator on continuation lines.
+            output.push_str(&format!(
+                "{:<width$}\\\n{:<width$}\\\n{}*/\n\n",
+                format!("#define {name}"),
+                format!("    {value}{}", tail.trim_end_matches("*/")),
+                " ".repeat(value.len() + 6),
+                width = COLUMNS - 1
+            ));
+        } else if line.len() > COLUMNS {
+            if !output.is_empty() && !output.ends_with("\n\n") {
+                output.push('\n');
+            }
+            output.push_str(&format!(
+                "{:<width$}\\\n    {value}{tail}\n\n",
+                format!("#define {name}"),
+                width = COLUMNS - 1
+            ));
+        } else {
+            run.push((name, value));
+        }
+    }
+    flush(&mut output, &mut run);
+    output
+}
+
 fn flush(text: &mut String, run: &mut Vec<(&str, &str)>) {
     let width = run.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
     for (name, value) in run.drain(..) {
@@ -258,6 +322,20 @@ mod tests {
 
     fn strings(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| (*item).to_owned()).collect()
+    }
+
+    #[test]
+    fn trailing_comment_at_column_limit_keeps_clang_continuation() {
+        assert_eq!(
+            commented_defines(
+                &[(
+                    "Rte_Call_ResultService_Transform",
+                    "Rte_Call_Observe_ResultService_Transform"
+                )],
+                "API alias."
+            ),
+            "#define Rte_Call_ResultService_Transform                                                           \\\n    Rte_Call_Observe_ResultService_Transform /**< API alias.                                       \\\n                                              */\n\n"
+        );
     }
 
     #[test]

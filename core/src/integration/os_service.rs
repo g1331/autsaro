@@ -68,7 +68,13 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
             .collect();
         let forwarded: Vec<String> = forwarded.split(", ").map(str::to_owned).collect();
         let declaration = c_layout::signature("StatusType", &symbol, &served, ";", false);
-        header.push_str(&format!("/** @brief Synchronous {operation}; preserves native errors and output semantics.\n * @param CounterID Port-defined Counter handle for the server.\n * @param Value Counter ticks; OUT for GetCounterValue, INOUT for GetElapsedValue.\n{elapsed_doc} * @return Native OS service result.\n */\n{declaration}\n"));
+        let direction = if operation == "GetElapsedValue" {
+            "in,out"
+        } else {
+            "out"
+        };
+        let conditions = " * Preconditions: OS initialized; CounterID and non-NULL output storage valid.\n * Context: task or ISR2, outside exclusive areas, subject to OS call-level checks.\n * Reentrancy: reentrant; counter state is serialized by the OS.\n * Ownership: caller retains pointers; rejected calls preserve outputs.\n";
+        header.push_str(&format!("/** Synchronous {operation}; preserve native OS errors and output semantics.\n * @param[in] CounterID Port-defined Counter handle for the server.\n * @param[{direction}] Value Counter ticks; updated only on success.\n{elapsed_doc} * @return Native OS result, including E_OS_ID and E_OS_VALUE for invalid elapsed input.\n{conditions} */\n{declaration}\n"));
         let head = c_layout::signature(
             "static inline RTE_Rte_CODE StatusType",
             &port,
@@ -80,7 +86,7 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
             .chain(forwarded.iter().cloned())
             .collect();
         let call = c_layout::call("    ", &format!("return {symbol}"), &arguments, ";");
-        clients.push_str(&format!("/** @brief Counter-bound {operation}; native tick and error semantics. */\n{head}\n{{\n{call}\n}}\n"));
+        clients.push_str(&format!("/** Counter-bound {operation}; native tick and error semantics.\n * @param[{direction}] Value Counter ticks; updated only on success.\n{elapsed_doc} * @return Native OS service result; rejected calls preserve output storage.\n{conditions} */\n{head}\n{{\n{call}\n}}\n"));
         let head = c_layout::signature("RTE_Rte_CODE StatusType", &symbol, &served, "", true);
         let arguments: Vec<String> = std::iter::once("CounterID".to_owned())
             .chain(forwarded.iter().cloned())

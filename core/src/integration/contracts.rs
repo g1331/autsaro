@@ -49,7 +49,16 @@ fn header(guard: &str, body: &str) -> Vec<u8> {
 
 fn declaration(output: &mut String, brief: &str, prototype: &str, parameters: &str) {
     output.push_str(&format!("/** @brief {brief}\n"));
-    output.push_str(parameters);
+    for line in parameters.lines() {
+        let line = line.trim_start().trim_start_matches('*').trim_start();
+        if ["Preconditions:", "Context:", "Reentrancy:", "Ownership:"]
+            .iter()
+            .any(|field| line.starts_with(field))
+        {
+            output.push_str(" *\n");
+        }
+        output.push_str(&c_layout::comment(" * ", line));
+    }
     output.push_str(" */\n");
     output.push_str(&format!("{prototype}\n\n"));
 }
@@ -134,7 +143,7 @@ impl ValidatedIntegrationPlan {
             .transpose()?
             .map_or(String::new(), |types| types.0);
         let addition = format!(
-            "{declarations}typedef uint8 Rte_ModeType_{group};\n{}",
+            "{declarations}/** Authentication mode for the selected Dcm connection (SWS_Dcm_91067). */\ntypedef uint8 Rte_ModeType_{group};\n/** Connection authentication modes and transition sentinel (SWS_Dcm_91067). */\n{}",
             c_layout::defines(&[
                 (format!("RTE_MODE_{group}_DCM_DEAUTHENTICATED"), "0u"),
                 (format!("RTE_MODE_{group}_DCM_AUTHENTICATED"), "1u"),
@@ -172,7 +181,7 @@ impl ValidatedIntegrationPlan {
                 .map(|length| format!("[{length}]"))
                 .unwrap_or_default();
             types.push_str(&format!(
-                "typedef {} {}{suffix};\n",
+                "/** Application type selected by the source implementation-data-type. */\ntypedef {} {}{suffix};\n",
                 datatype.native_type, datatype.symbol
             ));
         }
@@ -198,7 +207,7 @@ impl ValidatedIntegrationPlan {
         for component in &composition.components {
             let scope = super::short_name(&component.component);
             let mut body = format!(
-                "#include \"Rte_{scope}_Type.h\"\n#include \"Rte_DataHandleType.h\"\n\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\n\nstruct Rte_CDS_{scope} {{\n    uint8 Rte_Dummy; /**< Empty CDS for the source, single-instance component. */\n}};\ntypedef struct Rte_CDS_{scope} Rte_CDS_{scope};\n#ifndef RTE_CORE\ntypedef const Rte_CDS_{scope} *Rte_Instance;\n#endif\nextern const Rte_CDS_{scope} *const Rte_Inst_{scope};\n\n"
+                "#include \"Rte_{scope}_Type.h\"\n#include \"Rte_DataHandleType.h\"\n\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\n\nstruct Rte_CDS_{scope} {{\n    uint8 Rte_Dummy; /**< Empty CDS for the source, single-instance component. */\n}};\n/** Component data structure for the selected single instance. */\ntypedef struct Rte_CDS_{scope} Rte_CDS_{scope};\n#ifndef RTE_CORE\n/** Borrowed component instance; immutable for the ECU lifetime. */\ntypedef const Rte_CDS_{scope} *Rte_Instance;\n#endif\nextern const Rte_CDS_{scope} *const Rte_Inst_{scope};\n\n"
             );
             let init_values: Vec<_> = component
                 .data_ports
@@ -211,7 +220,10 @@ impl ValidatedIntegrationPlan {
                 })
                 .collect();
             body.push_str("#ifndef RTE_CORE\n");
-            body.push_str(&c_layout::defines(&init_values));
+            body.push_str(&c_layout::commented_defines(
+                &init_values,
+                "Initial data element value.",
+            ));
             body.push('\n');
             let runnables: Vec<_> = component
                 .runnables
@@ -223,7 +235,10 @@ impl ValidatedIntegrationPlan {
                     )
                 })
                 .collect();
-            body.push_str(&c_layout::defines(&runnables));
+            body.push_str(&c_layout::commented_defines(
+                &runnables,
+                "Runnable symbol alias.",
+            ));
             body.push('\n');
             body.push_str("#endif\n");
             let errors: std::collections::BTreeSet<_> = component
@@ -231,14 +246,20 @@ impl ValidatedIntegrationPlan {
                 .iter()
                 .filter_map(|operation| operation.application_error.as_ref())
                 .collect();
-            for error in errors {
-                body.push_str(&c_layout::defines(&[(error.clone(), "1U")]));
-            }
+            let errors: Vec<_> = errors.iter().map(|error| (error.as_str(), "1U")).collect();
+            body.push_str(&c_layout::commented_defines(
+                &errors,
+                "Selected application error.",
+            ));
             for symbol in description
                 .symbols
                 .iter()
                 .filter(|symbol| symbol.declaration_owner == component.header)
             {
+                let port = component
+                    .data_ports
+                    .iter()
+                    .find(|port| super::composition::data_symbol(component, port) == symbol.symbol);
                 let parameters = if symbol.arguments.is_empty() {
                     vec!["void".into()]
                 } else {
@@ -248,28 +269,38 @@ impl ValidatedIntegrationPlan {
                         .map(|argument| c_layout::parameter(&argument.native_type, &argument.name))
                         .collect()
                 };
+                let runnable = component
+                    .runnables
+                    .iter()
+                    .any(|runnable| runnable.symbol == symbol.symbol);
+                let unnamed = runnable && symbol.definition_owner.starts_with("application/");
                 let mut docs = String::new();
-                for argument in &symbol.arguments {
+                if unnamed && !symbol.arguments.is_empty() {
+                    docs.push_str(" * @par Parameters\n");
+                }
+                for (index, argument) in symbol.arguments.iter().enumerate() {
+                    let direction = if argument.direction == "INOUT" {
+                        "in,out".to_owned()
+                    } else {
+                        argument.direction.to_lowercase()
+                    };
                     docs.push_str(&format!(
-                        " * @param[{}] {} {}\n",
-                        argument.direction.to_lowercase(),
-                        argument.name,
-                        if argument.native_type.contains('*')
-                            || composition
-                                .array_types
-                                .values()
-                                .any(|native| native == &argument.native_type)
-                        {
-                            "Non-NULL caller-owned storage; not retained."
+                        " * {} {}\n",
+                        if unnamed {
+                            format!("{}. [{}]", index + 1, direction)
+                        } else {
+                            format!("@param[{}] {}", direction, argument.name)
+                        },
+                        if composition.array_types.values().any(|native| native == &argument.native_type) {
+                            "Non-NULL caller-owned four-byte UINT8 array; borrowed for this call."
+                        } else if argument.native_type.contains('*') {
+                            "Non-NULL caller storage for one referenced value; borrowed for this call."
                         } else {
                             "Input value."
                         }
                     ));
                 }
                 if symbol.return_type != "void" {
-                    let port = component.data_ports.iter().find(|port| {
-                        super::composition::data_symbol(component, port) == symbol.symbol
-                    });
                     let status = if let Some(port) = port {
                         let network = composition.network_endpoints.iter().any(|endpoint| {
                             endpoint.endpoint.instance == component.instance
@@ -281,7 +312,7 @@ impl ValidatedIntegrationPlan {
                             "E_OK for buffer update; COM_SERVICE_NOT_AVAILABLE maps to RTE_E_COM_STOPPED; lower transmission failure is separate.".to_owned()
                         } else if port.read {
                             format!(
-                                "This receiver reads initial value {} until publication, then the producer's last value; handleNeverReceived selects the initial status.",
+                                "E_OK with initial value {} until publication, then the last published value. Configured RTE_E_NEVER_RECEIVED marks no publication; an unconnected Read returns its initial value and RTE_E_UNCONNECTED.",
                                 port.initial_value
                             )
                         } else {
@@ -289,17 +320,28 @@ impl ValidatedIntegrationPlan {
                                 .to_owned()
                         }
                     } else if symbol.definition_owner.starts_with("application/") {
-                        "E_OK with a valid value, including a replacement value on application failure (SWS_Dcm_00686).".to_owned()
+                        if description.diagnostic.as_ref().is_some_and(|diagnostic| {
+                            symbol.consumers.contains(&diagnostic.client_port)
+                        }) {
+                            "E_OK with valid data, including replacement data on application failure (SWS_Dcm_00686).".to_owned()
+                        } else {
+                            "E_OK on success, or the configured application error on rejection."
+                                .to_owned()
+                        }
                     } else {
-                        "E_OK for a completed call; RTE_E_UNCONNECTED preserves OUT/INOUT without calling a server. Connected APIs reject calls before start, outside the owner or with NULL storage."
-                            .to_owned()
+                        "Connected calls propagate the server status, or E_OK for a void server. RTE_E_UNCONNECTED preserves OUT/INOUT without a server call. RTE_E_COM_STOPPED before start; E_NOT_OK outside the owner, or the configured application error for NULL storage.".to_owned()
                     };
                     docs.push_str(&c_layout::comment(" * ", &format!("@return {status}")));
                 }
-                let runnable = component
-                    .runnables
-                    .iter()
-                    .any(|runnable| runnable.symbol == symbol.symbol);
+                if symbol.return_type == "void" {
+                    docs.push_str(" * @par Return\n * None.\n");
+                }
+                if unnamed {
+                    docs.push_str(" * Preconditions: called by the configured RTE activation or synchronous server dispatch with valid argument storage; the application implements this role.\n");
+                } else {
+                    docs.push_str(" * Preconditions: ECU initialized; RTE data APIs and connected calls require a started RTE and the owner task. Guard rejection preserves outputs; stopped RTE returns RTE_E_COM_STOPPED, invalid context/storage returns E_NOT_OK or the configured application error.\n");
+                }
+                docs.push_str(" * Context: configured component task, outside exclusive areas.\n * Reentrancy: not reentrant for the same single-instance component.\n * Ownership: pointer storage is borrowed for this call; no pointer is retained.\n");
                 let scope = super::short_name(&component.component);
                 if !runnable {
                     body.push_str(&api_visibility(component, symbol));
@@ -326,7 +368,17 @@ impl ValidatedIntegrationPlan {
                 };
                 declaration(
                     &mut body,
-                    "Component contract in the configured single-owner task.",
+                    if let Some(port) = port {
+                        if port.read {
+                            "Read this receiver's current value and reception status."
+                        } else {
+                            "Publish the selected sender value."
+                        }
+                    } else if runnable {
+                        "Execute the configured component runnable or synchronous server role."
+                    } else {
+                        "Call the selected synchronous component server."
+                    },
                     &c_layout::signature(
                         &if runnable {
                             format!("{scope}_CODE {}", symbol.return_type)
@@ -366,7 +418,10 @@ impl ValidatedIntegrationPlan {
                     if let Some(alias) = alias {
                         body.push_str(&format!(
                             "#ifndef RTE_CORE\n{}#endif\n",
-                            c_layout::defines(&[(alias, symbol.symbol.as_str())])
+                            c_layout::commented_defines(
+                                &[(alias, symbol.symbol.as_str())],
+                                "API alias."
+                            )
                         ));
                     }
                     body.push_str("#endif\n");
@@ -379,7 +434,7 @@ impl ValidatedIntegrationPlan {
             body.push_str("#ifdef __cplusplus\n}\n#endif\n");
             let guard = format!("RTE_{}_H", name.to_uppercase());
             let application_header = format!(
-                "/** @file Application contract for {name}. */\n#ifndef {guard}\n#ifndef RTE_CORE\n#ifdef RTE_APPLICATION_HEADER_FILE\n#error Multiple application header files included.\n#endif\n#define RTE_APPLICATION_HEADER_FILE\n#endif\n#define {guard}\n{body}\n#endif\n"
+                "/** @file Application contract for {name}. */\n#ifndef {guard}\n#ifndef RTE_CORE\n#ifdef RTE_APPLICATION_HEADER_FILE\n#error Multiple application header files included.\n#endif\n/** Application-header singleton marker (SWS_Rte_01006). */\n#define RTE_APPLICATION_HEADER_FILE\n#endif\n#define {guard}\n{body}\n#endif\n"
             );
             files.push((component.header.clone(), application_header.into_bytes()));
             files.push((format!("include/Rte_{name}_Type.h"), header(&format!("RTE_{name}_TYPE_H"), "#include \"Rte_Type.h\"\n#include \"Rte_Dcm_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n#ifdef __cplusplus\n}\n#endif\n")));

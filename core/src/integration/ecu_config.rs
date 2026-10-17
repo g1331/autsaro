@@ -18,6 +18,56 @@ fn schm_header(module: &str, body: &str) -> String {
     )
 }
 
+/// Public void declarations use the same four contract fields as runtime headers.
+fn void_prototype(symbol: &str, purpose: &str, conditions: [&str; 4]) -> String {
+    let mut text = format!("/** {purpose}\n * @par Return\n * None.\n");
+    for (field, value) in ["Preconditions", "Context", "Reentrancy", "Ownership"]
+        .iter()
+        .zip(conditions)
+    {
+        text.push_str(&c_layout::comment(" * ", &format!("{field}: {value}")));
+    }
+    text.push_str(&format!(" */\nvoid {symbol}(void);\n"));
+    text
+}
+
+fn area_prototypes(module: &str, area: &str) -> String {
+    let enter = void_prototype(
+        &format!("SchM_Enter_{module}_{area}_STATE"),
+        &format!("Enter {area}_STATE (SWS_Rte_07250); this module's area nests with none."),
+        [
+            "Target lock provider available; no exclusive area is held by this context.",
+            "task or callback, including interrupt context.",
+            "not reentrant within one context; concurrent contexts serialize.",
+            "this context holds the area until the matching Exit.",
+        ],
+    );
+    let exit = void_prototype(
+        &format!("SchM_Exit_{module}_{area}_STATE"),
+        &format!("Leave {area}_STATE (SWS_Rte_07253)."),
+        [
+            "this context holds the matching area.",
+            "the same context as the matching Enter.",
+            "not reentrant within one context.",
+            "releases this context's area.",
+        ],
+    );
+    format!("{enter}{exit}")
+}
+
+fn main_prototype(symbol: &str, purpose: &str) -> String {
+    void_prototype(
+        symbol,
+        purpose,
+        [
+            "module initialized; otherwise no scheduled work.",
+            "scheduled ECU owner task, outside exclusive areas.",
+            "not reentrant for the same module instance.",
+            "callbacks borrow call-local storage and execute outside the module area.",
+        ],
+    )
+}
+
 fn code_prototypes(module: &str, declarations: &str) -> String {
     let prefix = module.to_uppercase();
     format!(
@@ -141,7 +191,7 @@ pub(super) fn files(
         "include/Ecu_Config.h",
         header(
             "ECU_CONFIG_H",
-            "#include \"Std_Types.h\"\ntypedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;\ntypedef struct {\n    EcuTxConfirmation tx_confirmation;\n} EcuPolicyConfig;\nextern const EcuPolicyConfig Ecu_Policy;",
+            "#include \"Std_Types.h\"\n/** Host transmission completion policy selected by the target. */\ntypedef enum {\n    ECU_TX_SYNCHRONOUS = 0, /**< Complete in the lower transmit call. */\n    ECU_TX_QUEUED = 1       /**< Complete through the queued host polling path. */\n} EcuTxConfirmation;\n/** Immutable generated target policy. */\ntypedef struct {\n    EcuTxConfirmation tx_confirmation; /**< Completion path; fixed for this ECU lifetime. */\n} EcuPolicyConfig;\nextern const EcuPolicyConfig Ecu_Policy;",
         ),
     )?;
     outputs.emit_all(ECU, super::can_runtime::type_headers(communication))?;
@@ -159,7 +209,10 @@ pub(super) fn files(
     outputs.emit(
         ECU,
         "include/Com_Cfg.h",
-        header("COM_CFG_H", &c_layout::defines(&symbols)),
+        header(
+            "COM_CFG_H",
+            &c_layout::commented_defines(&symbols, "Generated signal handle."),
+        ),
     )?;
 
     outputs.emit(
@@ -180,19 +233,26 @@ pub(super) fn files(
         ("LSduR", "LSDUR"),
     ] {
         let main = match module {
-            "CanTp" => code_prototypes(module, "void CanTp_MainFunction(void);"),
-            "ComM" => code_prototypes(module, &format!("void {}(void);", mode.main_symbol)),
+            "CanTp" => code_prototypes(
+                module,
+                &main_prototype(
+                    "CanTp_MainFunction",
+                    "Advance transport timers and pending segmented transfers.",
+                ),
+            ),
+            "ComM" => code_prototypes(
+                module,
+                &main_prototype(
+                    &mode.main_symbol,
+                    "Advance the selected channel hold timer and retry pending bus-mode requests.",
+                ),
+            ),
             _ => String::new(),
         };
         outputs.emit(
             ECU,
             format!("include/SchM_{module}.h"),
-            schm_header(
-                module,
-                &format!(
-                    "void SchM_Enter_{module}_{area}_STATE(void);\nvoid SchM_Exit_{module}_{area}_STATE(void);{main}"
-                ),
-            ),
+            schm_header(module, &format!("{}{main}", area_prototypes(module, area))),
         )?;
     }
     outputs.emit(
@@ -201,13 +261,11 @@ pub(super) fn files(
         schm_header(
             "Com",
             &format!(
-                "void SchM_Enter_Com_COM_STATE(void);\nvoid SchM_Exit_Com_COM_STATE(void);{}",
+                "{}{}",
+                area_prototypes("Com", "COM"),
                 code_prototypes(
                     "Com",
-                    &format!(
-                        "void {}(void);\nvoid {}(void);",
-                        com.receive_main.symbol, com.transmit_main.symbol
-                    )
+                    &format!("{}{}", main_prototype(&com.receive_main.symbol, "Advance Rx deadlines and publish pending reception/timeout notifications."), main_prototype(&com.transmit_main.symbol, "Snapshot each enabled periodic Tx PDU and request its transmission once."))
                 )
             ),
         ),
@@ -256,8 +314,8 @@ pub(super) fn files(
         header(
             "ECU_TARGET_CONFIG_H",
             &format!(
-                "#include \"Ecu_ProfileConfig.h\"\n#include \"Os_Target.h\"\n{}extern const Os_TargetConfig Ecu_OsConfig;\n/* Records in *reached each initialization stage (1 through 8) as it begins. */\nStd_ReturnType Ecu_StackBootstrap(uint8 *reached);\nStd_ReturnType Ecu_StackRunCycle(EventMaskType events);\n/* Retires the stages that began, newest first. */\nvoid Ecu_StackRetire(uint8 reached);\nint Ecu_StackFrameShape(uint32 id, uint8 dlc);\n#ifdef ECU_TARGET_TESTS\nint Ecu_TargetTestFailStage(unsigned stage);\nvoid Ecu_TargetTestRetire(unsigned stage);\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif",
-                c_layout::defines(&[
+                "#include \"Ecu_ProfileConfig.h\"\n#include \"Os_Target.h\"\n{}extern const Os_TargetConfig Ecu_OsConfig;\n/** Initialize the generated communication stack in dependency order.\n * @param[out] reached Non-NULL stage ledger; set to zero, then 1..8 as each stage begins.\n * @return E_OK when all stages and timing start; E_NOT_OK leaves the last begun stage for\n * retirement.\n *\n * Preconditions: Trusted startup context; NULL or invalid lifecycle context preserves the ledger.\n *\n * Context: StartupHook, outside exclusive areas.\n *\n * Reentrancy: not reentrant.\n *\n * Ownership: No pointer is retained.\n */\nStd_ReturnType Ecu_StackBootstrap(uint8 *reached);\n/** Dispatch the configured owner events and flush outgoing frames.\n * @param[in] events Owner event mask; configured work, application and I/O bits select dispatch.\n * @return E_OK after successful dispatch/flush; E_NOT_OK for invalid context or lower failure.\n *\n * Preconditions: Owner task and active SchM timing; otherwise no dispatch.\n *\n * Context: ECU owner task, outside exclusive areas.\n *\n * Reentrancy: not reentrant.\n *\n * Ownership: No pointer is retained.\n */\nStd_ReturnType Ecu_StackRunCycle(EventMaskType events);\n/** Retire supported begun stages, newest first; Det and routing tables have no DeInit.\n * @param[in] reached Last stage begun by Bootstrap, 0..8; zero retires none.\n * @par Return\n * None.\n *\n * Preconditions: Trusted shutdown context after owner dispatch has stopped.\n *\n * Context: ShutdownHook, outside exclusive areas.\n *\n * Reentrancy: not reentrant.\n *\n * Ownership: No pointer is retained.\n */\nvoid Ecu_StackRetire(uint8 reached);\n/** Validate a host frame against the generated CAN routes.\n * @param[in] id 11-bit CAN identifier, 0..0x7ff.\n * @param[in] dlc Classical CAN payload length, 0..8 bytes.\n * @return Nonzero for allowed Rx shapes or unknown IDs; zero for invalid ranges, Tx IDs or wrong\n * known Rx lengths.\n *\n * Preconditions: None.\n *\n * Context: Any context, including inside exclusive areas.\n *\n * Reentrancy: reentrant; configuration is immutable.\n *\n * Ownership: No pointer is retained.\n */\nint Ecu_StackFrameShape(uint32 id, uint8 dlc);\n#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)\n/** Test provider: select a bootstrap failure at this stage.\n * @param[in] stage Initialization stage, 1..8.\n * @return Nonzero injects failure; zero continues initialization.\n *\n * Preconditions: Test build only; provider linked by the test application.\n *\n * Context: StartupHook.\n *\n * Reentrancy: not reentrant.\n *\n * Ownership: No pointer is retained.\n */\nint Ecu_TargetTestFailStage(unsigned stage);\n/** Test provider: observe retirement of one stage.\n * @param[in] stage Initialization stage being retired, 1..8.\n * @par Return\n * None.\n *\n * Preconditions: Test build only; provider linked by the test application.\n *\n * Context: ShutdownHook.\n *\n * Reentrancy: not reentrant.\n *\n * Ownership: No pointer is retained.\n */\nvoid Ecu_TargetTestRetire(unsigned stage);\n/** Test provider: observe OS shutdown.\n * @param[in] reason OS shutdown status.\n * @par Return\n * None.\n *\n * Preconditions: Test build only; provider linked by the test application.\n *\n * Context: ShutdownHook.\n *\n * Reentrancy: not reentrant.\n *\n * Ownership: No pointer is retained.\n */\nvoid Ecu_TargetTestShutdown(StatusType reason);\n#endif",
+                c_layout::commented_defines(&[
                     ("ECU_TARGET_TASK", "0u".to_owned()),
                     (
                         "ECU_MAX_PDU_PAYLOAD",
@@ -288,7 +346,7 @@ pub(super) fn files(
                         format!("{}u", description.event_mask(&app.os_event)?),
                     ),
                     ("ECU_TARGET_EVENT_IO", format!("{}u", io.mask)),
-                ]),
+                ], "Validated target handle or limit."),
             ),
         ),
     )?;
@@ -708,7 +766,7 @@ pub(super) fn files(
     // retirement undoes only the stages that began, newest first.
     let stage = |number: u8| {
         format!(
-            "#ifdef ECU_TARGET_TESTS\n    if (Ecu_TargetTestFailStage({number}u) != 0) {{\n        return E_NOT_OK;\n    }}\n#endif\n    *reached = {number}u;\n"
+            "#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)\n    if (Ecu_TargetTestFailStage({number}u) != 0) {{\n        return E_NOT_OK;\n    }}\n#endif\n    *reached = {number}u;\n"
         )
     };
     config.push_str("RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)\n{\n    Can_ControllerStateType actual;\n    if ((reached == NULL_PTR) || (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK)) {\n        return E_NOT_OK;\n    }\n    *reached = 0u;\n");
@@ -770,7 +828,7 @@ pub(super) fn files(
     retired.push((3, format!("(void)Can_SetControllerMode({}u, CAN_CS_STOPPED);\n        Can_MainFunction_Mode();\n        Can_MainFunction_BusOff();\n        Can_DeInit();\n", can.controller_id)));
     retired.push((1, "SchM_Deinit();\n".to_owned()));
     for (number, body) in retired {
-        config.push_str(&format!("    if (reached >= {number}u) {{\n#ifdef ECU_TARGET_TESTS\n        Ecu_TargetTestRetire({number}u);\n#endif\n        {body}    }}\n"));
+        config.push_str(&format!("    if (reached >= {number}u) {{\n#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)\n        Ecu_TargetTestRetire({number}u);\n#endif\n        {body}    }}\n"));
     }
     config.push_str("}\n");
     config.push_str("RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc)\n{\n    if ((id > 0x7ffu) || (dlc > 8u)) {\n        return 0;\n    }\n");

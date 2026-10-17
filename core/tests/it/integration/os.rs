@@ -76,8 +76,8 @@ fn counter_timing_report_and_profile() {
 #[test]
 fn status_guard_and_rejections() {
     for (status, define) in [
-        ("STANDARD", "#define OS_STATUS_EXTENDED 0"),
-        ("EXTENDED", "#define OS_STATUS_EXTENDED 1"),
+        ("STANDARD", "#define OS_STATUS_EXTENDED STD_OFF"),
+        ("EXTENDED", "#define OS_STATUS_EXTENDED STD_ON"),
     ] {
         let mut sources = single_component_sources();
         parameter(&mut sources, "OperatingSystem", "OsStatus", status);
@@ -121,7 +121,10 @@ fn error_hook_access_switches_follow_the_configuration() {
             ("OS_USE_GET_SERVICE_ID", service_id),
             ("OS_USE_PARAMETER_ACCESS", parameter_access),
         ] {
-            let define = format!("#define {name} {}", u8::from(value == "true"));
+            let define = format!(
+                "#define {name} {}",
+                if value == "true" { "STD_ON" } else { "STD_OFF" }
+            );
             assert!(header.contains(&define), "{define}\n{header}");
         }
     }
