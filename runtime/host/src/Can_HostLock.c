@@ -14,7 +14,8 @@
 static void Can_Fatal(void) { abort(); }
 /* SchM exclusive-area accounting (ADR 0018). A strict area (driver, Det, ...) protects
  * module data only: a thread holding one must not enter another area. */
-static __thread unsigned strict_held;
+static __thread unsigned
+    strict_held; /**< Actor-local strict-area depth; initially zero; no Init reset. */
 static void Can_NoteEnter(void)
 {
     if (strict_held != 0u) {
@@ -29,8 +30,9 @@ static void Can_NoteExit(void)
     }
 }
 #if defined(_WIN32)
-static CRITICAL_SECTION can_lock;
-static CRITICAL_SECTION area_locks[CAN_HOST_AREA_COUNT];
+static CRITICAL_SECTION can_lock; /**< Process lock, once-initialized; no ECU Init reset. */
+static CRITICAL_SECTION
+    area_locks[CAN_HOST_AREA_COUNT]; /**< Once-initialized area mutexes; no ECU Init reset. */
 static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *context)
 {
     (void)once;
@@ -90,8 +92,10 @@ typedef struct {
     pthread_mutex_t mutex;
     int ready;
 } Can_RecursiveLock;
-static Can_RecursiveLock can_lock;
-static Can_RecursiveLock area_locks[CAN_HOST_AREA_COUNT];
+static Can_RecursiveLock
+    can_lock; /**< Process lock, pthread_once-initialized; no ECU Init reset. */
+static Can_RecursiveLock
+    area_locks[CAN_HOST_AREA_COUNT]; /**< Once-initialized area mutexes; no ECU Init reset. */
 static void Can_InitRecursive(Can_RecursiveLock *lock)
 {
     pthread_mutexattr_t attributes;

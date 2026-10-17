@@ -1,141 +1,4 @@
 # Existing C coding standard findings: rule, repository file, source line text.
-api-context runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
-api-context runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
-api-context runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
-api-context runtime/ecu/include/Ecu_HostBridge.h StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context);
-api-context runtime/ecu/include/Ecu_Target.h EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8]);
-api-context runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result);
-api-context runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
-api-context runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostBatch(uint64_t at,
-api-context runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostFrame(
-api-context runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPrepare(void);
-api-context runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record);
-api-context runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record);
-api-context runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count);
-api-context runtime/ecu/include/Ecu_Target.h Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
-api-context runtime/ecu/include/Ecu_Target.h int Ecu_TargetIsOwner(void);
-api-context runtime/ecu/include/Ecu_Target.h uint64_t Ecu_TargetNow(void);
-api-context runtime/ecu/include/Ecu_Target.h uint8_t Ecu_TargetState(void);
-api-context runtime/ecu/include/Ecu_Target.h void Ecu_TargetAbortNative(StatusType reason);
-api-context runtime/ecu/include/Ecu_Target.h void Ecu_TargetAssertOwner(void);
-api-context runtime/ecu/include/Ecu_Target.h void Ecu_TargetReportTransportTimeout(void);
-api-context runtime/ecu/include/Ecu_Target.h void Ecu_TargetTask(void);
-api-context runtime/host/include/Can_Host.h CAN_CODE CanMode Can_GetMode(void);
-api-context runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_HostFlush(void);
-api-context runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms);
-api-context runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_TransmitPdu(PduIdType pdu_id,
-api-context runtime/host/include/Can_Host.h CAN_CODE Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t token);
-api-context runtime/host/include/Can_Host.h CAN_CODE uint64_t Can_HostTransmitToken(void);
-api-context runtime/host/include/Can_Host.h CAN_CODE void Can_SetMode(CanMode mode);
-api-context runtime/host/include/Ecu_Status.h const char *Ecu_StatusName(EcuStatus status);
-api-ownership runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
-api-ownership runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
-api-ownership runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
-api-ownership runtime/ecu/include/Ecu_HostBridge.h StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context);
-api-ownership runtime/ecu/include/Ecu_Target.h EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8]);
-api-ownership runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result);
-api-ownership runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
-api-ownership runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostBatch(uint64_t at,
-api-ownership runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostFrame(
-api-ownership runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPrepare(void);
-api-ownership runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record);
-api-ownership runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record);
-api-ownership runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count);
-api-ownership runtime/ecu/include/Ecu_Target.h Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
-api-ownership runtime/ecu/include/Ecu_Target.h int Ecu_TargetIsOwner(void);
-api-ownership runtime/ecu/include/Ecu_Target.h uint64_t Ecu_TargetNow(void);
-api-ownership runtime/ecu/include/Ecu_Target.h uint8_t Ecu_TargetState(void);
-api-ownership runtime/ecu/include/Ecu_Target.h void Ecu_TargetAbortNative(StatusType reason);
-api-ownership runtime/ecu/include/Ecu_Target.h void Ecu_TargetAssertOwner(void);
-api-ownership runtime/ecu/include/Ecu_Target.h void Ecu_TargetReportTransportTimeout(void);
-api-ownership runtime/ecu/include/Ecu_Target.h void Ecu_TargetTask(void);
-api-ownership runtime/host/include/Can_Host.h CAN_CODE CanMode Can_GetMode(void);
-api-ownership runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_HostFlush(void);
-api-ownership runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms);
-api-ownership runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_TransmitPdu(PduIdType pdu_id,
-api-ownership runtime/host/include/Can_Host.h CAN_CODE Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t token);
-api-ownership runtime/host/include/Can_Host.h CAN_CODE uint64_t Can_HostTransmitToken(void);
-api-ownership runtime/host/include/Can_Host.h CAN_CODE void Can_SetMode(CanMode mode);
-api-ownership runtime/host/include/Ecu_Status.h const char *Ecu_StatusName(EcuStatus status);
-api-parameters runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
-api-parameters runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
-api-parameters runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
-api-parameters runtime/ecu/include/Ecu_HostBridge.h StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context);
-api-parameters runtime/ecu/include/Ecu_Target.h EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8]);
-api-parameters runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result);
-api-parameters runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
-api-parameters runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostBatch(uint64_t at,
-api-parameters runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostFrame(
-api-parameters runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record);
-api-parameters runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record);
-api-parameters runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count);
-api-parameters runtime/ecu/include/Ecu_Target.h Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
-api-parameters runtime/ecu/include/Ecu_Target.h void Ecu_TargetAbortNative(StatusType reason);
-api-preconditions runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
-api-preconditions runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
-api-preconditions runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
-api-preconditions runtime/ecu/include/Ecu_HostBridge.h StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context);
-api-preconditions runtime/ecu/include/Ecu_Target.h EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8]);
-api-preconditions runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result);
-api-preconditions runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
-api-preconditions runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostBatch(uint64_t at,
-api-preconditions runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostFrame(
-api-preconditions runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPrepare(void);
-api-preconditions runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record);
-api-preconditions runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record);
-api-preconditions runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count);
-api-preconditions runtime/ecu/include/Ecu_Target.h Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
-api-preconditions runtime/ecu/include/Ecu_Target.h int Ecu_TargetIsOwner(void);
-api-preconditions runtime/ecu/include/Ecu_Target.h uint64_t Ecu_TargetNow(void);
-api-preconditions runtime/ecu/include/Ecu_Target.h uint8_t Ecu_TargetState(void);
-api-preconditions runtime/ecu/include/Ecu_Target.h void Ecu_TargetAbortNative(StatusType reason);
-api-preconditions runtime/ecu/include/Ecu_Target.h void Ecu_TargetAssertOwner(void);
-api-preconditions runtime/ecu/include/Ecu_Target.h void Ecu_TargetReportTransportTimeout(void);
-api-preconditions runtime/ecu/include/Ecu_Target.h void Ecu_TargetTask(void);
-api-preconditions runtime/host/include/Can_Host.h CAN_CODE CanMode Can_GetMode(void);
-api-preconditions runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_HostFlush(void);
-api-preconditions runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms);
-api-preconditions runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_TransmitPdu(PduIdType pdu_id,
-api-preconditions runtime/host/include/Can_Host.h CAN_CODE Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t token);
-api-preconditions runtime/host/include/Can_Host.h CAN_CODE uint64_t Can_HostTransmitToken(void);
-api-preconditions runtime/host/include/Can_Host.h CAN_CODE void Can_SetMode(CanMode mode);
-api-preconditions runtime/host/include/Ecu_Status.h const char *Ecu_StatusName(EcuStatus status);
-api-reentrancy runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
-api-reentrancy runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
-api-reentrancy runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
-api-reentrancy runtime/ecu/include/Ecu_HostBridge.h StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context);
-api-reentrancy runtime/ecu/include/Ecu_Target.h EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8]);
-api-reentrancy runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result);
-api-reentrancy runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
-api-reentrancy runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostBatch(uint64_t at,
-api-reentrancy runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPostFrame(
-api-reentrancy runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetPrepare(void);
-api-reentrancy runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record);
-api-reentrancy runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record);
-api-reentrancy runtime/ecu/include/Ecu_Target.h StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count);
-api-reentrancy runtime/ecu/include/Ecu_Target.h Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
-api-reentrancy runtime/ecu/include/Ecu_Target.h int Ecu_TargetIsOwner(void);
-api-reentrancy runtime/ecu/include/Ecu_Target.h uint64_t Ecu_TargetNow(void);
-api-reentrancy runtime/ecu/include/Ecu_Target.h uint8_t Ecu_TargetState(void);
-api-reentrancy runtime/ecu/include/Ecu_Target.h void Ecu_TargetAbortNative(StatusType reason);
-api-reentrancy runtime/ecu/include/Ecu_Target.h void Ecu_TargetAssertOwner(void);
-api-reentrancy runtime/ecu/include/Ecu_Target.h void Ecu_TargetReportTransportTimeout(void);
-api-reentrancy runtime/ecu/include/Ecu_Target.h void Ecu_TargetTask(void);
-api-reentrancy runtime/host/include/Can_Host.h CAN_CODE CanMode Can_GetMode(void);
-api-reentrancy runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_HostFlush(void);
-api-reentrancy runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms);
-api-reentrancy runtime/host/include/Can_Host.h CAN_CODE EcuStatus Can_TransmitPdu(PduIdType pdu_id,
-api-reentrancy runtime/host/include/Can_Host.h CAN_CODE Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t token);
-api-reentrancy runtime/host/include/Can_Host.h CAN_CODE uint64_t Can_HostTransmitToken(void);
-api-reentrancy runtime/host/include/Can_Host.h CAN_CODE void Can_SetMode(CanMode mode);
-api-reentrancy runtime/host/include/Ecu_Status.h const char *Ecu_StatusName(EcuStatus status);
-api-return runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
-api-return runtime/ecu/include/Ecu_Target.h Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
-api-return runtime/ecu/include/Ecu_Target.h void Ecu_TargetAbortNative(StatusType reason);
-api-return runtime/ecu/include/Ecu_Target.h void Ecu_TargetAssertOwner(void);
-api-return runtime/ecu/include/Ecu_Target.h void Ecu_TargetReportTransportTimeout(void);
-api-return runtime/ecu/include/Ecu_Target.h void Ecu_TargetTask(void);
-api-return runtime/host/include/Can_Host.h CAN_CODE void Can_SetMode(CanMode mode);
 clang-documentation runtime/bsw/include/BswM.h * @return None.
 clang-documentation runtime/bsw/include/BswM.h * @return None.
 clang-documentation runtime/bsw/include/BswM_ComM.h * @return None.
@@ -162,11 +25,6 @@ clang-documentation runtime/bsw/include/Dcm_ComM.h * @return None.
 clang-documentation runtime/bsw/include/Dcm_ComM.h * @return None.
 clang-documentation runtime/bsw/include/Det.h * @return None.
 clang-documentation runtime/bsw/include/Det.h * @return None; an inconsistent hook list halts the controlled ECU.
-clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
-clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
-clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
-clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
-clang-documentation runtime/host/src/Det_Host.h * @return Never returns.
 config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
 config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
 config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
@@ -187,15 +45,6 @@ config-switch runtime/bsw/src/Can.c #if CAN_RX_POLLING == 1
 config-switch runtime/bsw/src/Can.c #if CAN_RX_POLLING == 1
 config-switch runtime/bsw/src/Can.c #if CAN_RX_POLLING == 1
 config-switch runtime/bsw/src/Can.c #if CAN_TX_POLLING == 0
-config-switch runtime/ecu/src/Ecu_Target.c #if defined(ECU_TARGET_TESTS)
-config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/ecu/src/ecu_probe.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/ecu/src/ecu_probe.c #ifdef ECU_TARGET_TESTS
 macro-comment runtime/bsw/include/ComStack_Types.h #define COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION    4U
 macro-comment runtime/bsw/include/ComStack_Types.h #define COMSTACKTYPE_AR_RELEASE_MINOR_VERSION    10U
 macro-comment runtime/bsw/include/ComStack_Types.h #define COMSTACKTYPE_AR_RELEASE_REVISION_VERSION 0U
@@ -227,16 +76,6 @@ macro-comment runtime/bsw/include/Std_Types.h #define STD_ON     0x01u
 macro-comment runtime/bsw/include/Std_Types.h #define STD_TYPES_AR_RELEASE_MAJOR_VERSION    4U
 macro-comment runtime/bsw/include/Std_Types.h #define STD_TYPES_AR_RELEASE_MINOR_VERSION    10U
 macro-comment runtime/bsw/include/Std_Types.h #define STD_TYPES_AR_RELEASE_REVISION_VERSION 0U
-macro-comment runtime/ecu/include/Ecu_HostBatch.h #define ECU_BATCH_CAPACITY      256u
-macro-comment runtime/ecu/include/Ecu_HostBatch.h #define ECU_BATCH_LINE_CAPACITY 128u
-macro-comment runtime/ecu/include/Ecu_HostBatch.h #define ECU_BATCH_MAX_SPAN      UINT64_C(1000)
-macro-comment runtime/ecu/include/Ecu_HostBridge.h #define ECU_BATCH_WATCHDOG_MS 5000u
-macro-comment runtime/ecu/include/Ecu_Target.h #define ECU_TARGET_CLOSED          4u
-macro-comment runtime/ecu/include/Ecu_Target.h #define ECU_TARGET_FAILED          3u
-macro-comment runtime/ecu/include/Ecu_Target.h #define ECU_TARGET_INITIALIZING    1u
-macro-comment runtime/ecu/include/Ecu_Target.h #define ECU_TARGET_OUTPUT_CAPACITY 256u
-macro-comment runtime/ecu/include/Ecu_Target.h #define ECU_TARGET_READY           2u
-macro-comment runtime/ecu/include/Ecu_Target.h #define ECU_TARGET_UNPREPARED      0u
 member-comment runtime/bsw/include/ComStack_Types.h BUFREQ_E_BUSY = 2,
 member-comment runtime/bsw/include/ComStack_Types.h BUFREQ_E_NOT_OK = 1,
 member-comment runtime/bsw/include/ComStack_Types.h BUFREQ_E_OVFL = 3
@@ -254,74 +93,6 @@ member-comment runtime/bsw/include/Std_Types.h uint16 vendorID;
 member-comment runtime/bsw/include/Std_Types.h uint8 sw_major_version;
 member-comment runtime/bsw/include/Std_Types.h uint8 sw_minor_version;
 member-comment runtime/bsw/include/Std_Types.h uint8 sw_patch_version;
-member-comment runtime/ecu/include/Ecu_HostBatch.h EcuStatus input_status;
-member-comment runtime/ecu/include/Ecu_HostBatch.h EcuStatus transport_status;
-member-comment runtime/ecu/include/Ecu_HostBatch.h Ecu_BatchFrame frames[ECU_BATCH_CAPACITY];
-member-comment runtime/ecu/include/Ecu_HostBatch.h typedef enum { ECU_BATCH_BEGIN, ECU_BATCH_RX, ECU_BATCH_COMMIT } Ecu_BatchCommand;
-member-comment runtime/ecu/include/Ecu_HostBatch.h typedef enum { ECU_BATCH_BEGIN, ECU_BATCH_RX, ECU_BATCH_COMMIT } Ecu_BatchCommand;
-member-comment runtime/ecu/include/Ecu_HostBatch.h typedef enum { ECU_BATCH_BEGIN, ECU_BATCH_RX, ECU_BATCH_COMMIT } Ecu_BatchCommand;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint16_t count;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint16_t transport_count;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint32_t id;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint64_t batch_id;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint64_t completed_epoch;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint64_t epoch;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint64_t first_input_sequence;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint64_t sequence;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint64_t transport_epoch;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint8_t data[8];
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint8_t dlc;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint8_t executing;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint8_t input_sequences_reserved;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint8_t open;
-member-comment runtime/ecu/include/Ecu_HostBatch.h uint8_t rejected;
-member-comment runtime/ecu/include/Ecu_Target.h EcuStatus input_status;
-member-comment runtime/ecu/include/Ecu_Target.h EcuStatus status;
-member-comment runtime/ecu/include/Ecu_Target.h PduIdType pdu;
-member-comment runtime/ecu/include/Ecu_Target.h uint16_t input_count;
-member-comment runtime/ecu/include/Ecu_Target.h uint32_t can_id;
-member-comment runtime/ecu/include/Ecu_Target.h uint64_t epoch;
-member-comment runtime/ecu/include/Ecu_Target.h uint64_t epoch;
-member-comment runtime/ecu/include/Ecu_Target.h uint64_t epoch;
-member-comment runtime/ecu/include/Ecu_Target.h uint64_t ticket;
-member-comment runtime/ecu/include/Ecu_Target.h uint64_t ticket;
-member-comment runtime/ecu/include/Ecu_Target.h uint8_t data[8];
-member-comment runtime/ecu/include/Ecu_Target.h uint8_t dlc;
-state-comment runtime/ecu/src/Ecu_Target.c static Ecu_BatchCompletion batch_completion;
-state-comment runtime/ecu/src/Ecu_Target.c static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY];
-state-comment runtime/ecu/src/Ecu_Target.c static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];
-state-comment runtime/ecu/src/Ecu_Target.c static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY];
-state-comment runtime/ecu/src/Ecu_Target.c static Os_HostThreadId initialization_thread;
-state-comment runtime/ecu/src/Ecu_Target.c static Os_HostThreadId native_thread;
-state-comment runtime/ecu/src/Ecu_Target.c static uint16_t batch_count;
-state-comment runtime/ecu/src/Ecu_Target.c static uint64_t batch_epoch;
-state-comment runtime/ecu/src/Ecu_Target.c static uint64_t epoch;
-state-comment runtime/ecu/src/Ecu_Target.c static uint64_t native_batch_ticket;
-state-comment runtime/ecu/src/Ecu_Target.c static uint64_t native_input_epoch;
-state-comment runtime/ecu/src/Ecu_Target.c static uint64_t next_output_ticket;
-state-comment runtime/ecu/src/Ecu_Target.c static uint64_t processed_epoch;
-state-comment runtime/ecu/src/Ecu_Target.c static uint64_t processed_tick;
-state-comment runtime/ecu/src/Ecu_Target.c static uint8 bootstrap_reached;
-state-comment runtime/ecu/src/Ecu_Target.c static uint8_t batch_needs_tick;
-state-comment runtime/ecu/src/Ecu_Target.c static unsigned output_confirm;
-state-comment runtime/ecu/src/Ecu_Target.c static unsigned output_deferred;
-state-comment runtime/ecu/src/Ecu_Target.c static unsigned output_pending;
-state-comment runtime/ecu/src/Ecu_Target.c static unsigned output_read;
-state-comment runtime/ecu/src/Ecu_Target.c static unsigned output_retire;
-state-comment runtime/ecu/src/Ecu_Target.c static unsigned output_write;
-state-comment runtime/ecu/src/Ecu_Target.c static unsigned protocol_read;
-state-comment runtime/ecu/src/Ecu_Target.c static unsigned protocol_write;
-state-comment runtime/ecu/src/Ecu_Target.c static volatile Os_Atomic32 batch_state;
-state-comment runtime/ecu/src/Ecu_Target.c static volatile Os_Atomic32 lifecycle;
-state-comment runtime/ecu/src/Ecu_Target.c static volatile Os_Atomic32 native_owner;
-state-comment runtime/ecu/src/ecu_host_batch.c static Ecu_HostBatch batch;
-state-comment runtime/ecu/src/ecu_probe.c static unsigned failure_stage;
-state-comment runtime/host/src/Can_HostLock.c static CRITICAL_SECTION area_locks[CAN_HOST_AREA_COUNT];
-state-comment runtime/host/src/Can_HostLock.c static CRITICAL_SECTION can_lock;
-state-comment runtime/host/src/Can_HostLock.c static Can_RecursiveLock area_locks[CAN_HOST_AREA_COUNT];
-state-comment runtime/host/src/Can_HostLock.c static Can_RecursiveLock can_lock;
-state-comment runtime/host/src/Can_HostLock.c static __thread unsigned strict_held;
-state-comment runtime/host/src/Ecu_HostBusSM.c static const Ecu_HostBusSM_ConfigType *bussm_configuration ECU_HOSTBUSSM_VAR_CLEARED;
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef enum {
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef enum { TP_DATACONF = 0, TP_DATARETRY = 1, TP_CONFPENDING = 2 } TpDataStateType;
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef struct {
@@ -349,5 +120,3 @@ typedef-comment runtime/bsw/include/Platform_Types.h typedef uint_least8_t uint8
 typedef-comment runtime/bsw/include/Platform_Types.h typedef void *VoidPtr;
 typedef-comment runtime/bsw/include/Std_Types.h typedef struct {
 typedef-comment runtime/bsw/include/Std_Types.h typedef uint8 Std_ReturnType;
-typedef-comment runtime/ecu/include/Ecu_HostBatch.h typedef enum { ECU_BATCH_BEGIN, ECU_BATCH_RX, ECU_BATCH_COMMIT } Ecu_BatchCommand;
-typedef-comment runtime/ecu/include/Ecu_HostBatch.h typedef struct {

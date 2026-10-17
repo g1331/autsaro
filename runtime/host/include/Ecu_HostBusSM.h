@@ -14,7 +14,8 @@ typedef struct {
 } Ecu_HostBusSM_ConfigType;
 /** Start the provider in requested NO.
  * @param[in] ConfigPtr Configuration whose controller CanIf knows; otherwise no action.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: CanIf initialized.
  * Context: startup task; not inside an exclusive area.
  * Reentrancy: not reentrant. A restart keeps a publication in flight.
@@ -22,7 +23,8 @@ typedef struct {
  */
 void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *ConfigPtr);
 /** Stop the provider; later requests and events have no effect.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: None.
  * Context: shutdown task; not inside an exclusive area.
  * Reentrancy: not reentrant.
@@ -68,7 +70,8 @@ Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel, ComM_ModeType 
  * the requested directions on STARTED and indicates the completed mode to ComM.
  * @param[in] ControllerId Configured controller; others are ignored.
  * @param[in] ControllerMode Indicated controller state.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized; otherwise no action.
  * Context: CanIf callback; not inside an exclusive area.
  * Reentrancy: reentrant; completed modes reach ComM in order, the latest of several.
@@ -79,7 +82,8 @@ void Ecu_HostBusSM_ControllerModeIndication(uint8 ControllerId,
 /** CanIf bus-off indication (CanIfDispatchUserCtrlBusOffName): indicates NO for a stopped
  * controller; a late one after a restart restores the requested directions.
  * @param[in] ControllerId Configured controller; others are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized; otherwise no action.
  * Context: CanIf callback; not inside an exclusive area.
  * Reentrancy: reentrant.

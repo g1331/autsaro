@@ -11,7 +11,9 @@
  */
 boolean Det_HostEnterDevelopmentReport(void);
 /** Abort the controlled host ECU after development reporting.
- * @return Never returns.
+ * @par Return
+ * None.
+ * This function never returns.
  * Preconditions: All reporting callouts and exclusive areas have finished.
  * Context: Controlled host thread.
  * Reentrancy: Concurrent calls terminate the same process.

@@ -12,8 +12,9 @@ static void require(int condition)
         ShutdownOS(E_OS_STATE);
     }
 }
-#ifdef ECU_TARGET_TESTS
-static unsigned failure_stage;
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
+static unsigned
+    failure_stage; /**< Main initializes before OS startup; hooks only read; no Init reset. */
 int Ecu_TargetTestFailStage(unsigned stage) { return stage == failure_stage; }
 void Ecu_TargetTestRetire(unsigned stage)
 {
@@ -76,7 +77,7 @@ static Os_HostThreadResult control(void *argument)
 int main(int argc, char **argv)
 {
     Os_HostHandle thread;
-#ifdef ECU_TARGET_TESTS
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
     if (argc == 2) {
         char *end;
         unsigned long value = strtoul(argv[1], &end, 10);

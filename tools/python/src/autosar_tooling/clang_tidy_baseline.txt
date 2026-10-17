@@ -27,7 +27,7 @@ readability-function-size runtime/os/src/Os_Time.c StatusType Os_TimeValidate(co
 readability-function-size runtime/os/src/host/linux/Os_HostLinux.c HANDLE Os_HostCreateActor(SIZE_T stack,
 readability-identifier-naming runtime/bsw/include/Platform_Types.h typedef const void *ConstVoidPtr;
 readability-identifier-naming runtime/bsw/include/Platform_Types.h typedef void *VoidPtr;
-readability-identifier-naming runtime/ecu/include/Ecu_HostBatch.h typedef enum { ECU_BATCH_BEGIN, ECU_BATCH_RX, ECU_BATCH_COMMIT } Ecu_BatchCommand;
+readability-identifier-naming runtime/ecu/include/Ecu_HostBatch.h } Ecu_BatchCommand;
 readability-identifier-naming runtime/ecu/include/Ecu_HostBatch.h } Ecu_BatchFrame;
 readability-identifier-naming runtime/ecu/include/Ecu_HostBatch.h } Ecu_HostBatch;
 readability-identifier-naming runtime/ecu/include/Ecu_HostBridge.h typedef int (*Ecu_HostSink)(const Ecu_OutputRecord *output,
