@@ -241,7 +241,7 @@ fn builtin_default_is_metadata_not_a_synthesized_explicit_entry() {
         .validate_documents(&[(Path::new("can.arxml"), &xml)])
         .unwrap();
     assert!(result.diagnostics.iter().any(|issue| {
-        issue.code == "MULTIPLICITY"
+        issue.code == "MULTIPLICITY_LOWER"
             && matches!(
                 &issue.witness.as_ref().unwrap().constraint,
                 autosar_config_core::LocalizedText::Raw(metadata) if metadata.contains("CanDevErrorDetect")
@@ -264,7 +264,7 @@ fn builtin_default_is_metadata_not_a_synthesized_explicit_entry() {
             .any(|issue| issue.code == "VALUE_RANGE")
     );
     assert!(!result.diagnostics.iter().any(|issue| {
-        issue.code == "MULTIPLICITY"
+        issue.code == "MULTIPLICITY_LOWER"
             && matches!(
                 &issue.witness.as_ref().unwrap().constraint,
                 autosar_config_core::LocalizedText::Raw(metadata) if metadata.contains("CanDevErrorDetect")

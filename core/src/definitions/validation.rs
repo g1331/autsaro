@@ -787,14 +787,26 @@ pub(super) fn documents(
                     if count < child.lower_multiplicity
                         || child.upper_multiplicity.is_some_and(|max| count > max)
                     {
-                        // A declared default is display metadata, never a synthesized
-                        // explicit entry and never a waiver for required cardinality.
                         issue(
-                            "MULTIPLICITY",
+                            if count < child.lower_multiplicity {
+                                "MULTIPLICITY_LOWER"
+                            } else {
+                                "MULTIPLICITY"
+                            },
                             Severity::Error,
-                            crate::product_message!(
-                                "backend.definitions.validation.invalid_entry_cardinality"
-                            ),
+                            if count < child.lower_multiplicity {
+                                crate::product_message!(
+                                    "backend.definitions.validation.missing_required_entries",
+                                    "object" => object(node),
+                                    "definition" => child.definition_id.rsplit('/').next().unwrap_or(&child.definition_id),
+                                    "minimum" => child.lower_multiplicity,
+                                    "actual" => count
+                                )
+                            } else {
+                                crate::product_message!(
+                                    "backend.definitions.validation.invalid_entry_cardinality"
+                                )
+                            },
                             serde_json::to_string(child)
                                 .map_err(|error| error.to_string())?
                                 .into(),
@@ -808,11 +820,25 @@ pub(super) fn documents(
                     let count: u32 = counts.values().sum();
                     if count != 1 {
                         issue(
-                            "CHOICE_CARDINALITY",
+                            if count == 0 {
+                                "MULTIPLICITY_LOWER"
+                            } else {
+                                "CHOICE_CARDINALITY"
+                            },
                             Severity::Error,
-                            crate::product_message!(
-                                "backend.definitions.validation.choice_cardinality"
-                            ),
+                            if count == 0 {
+                                crate::product_message!(
+                                    "backend.definitions.validation.missing_required_entries",
+                                    "object" => object(node),
+                                    "definition" => definition.definition_id.rsplit('/').next().unwrap_or(&definition.definition_id),
+                                    "minimum" => 1,
+                                    "actual" => count
+                                )
+                            } else {
+                                crate::product_message!(
+                                    "backend.definitions.validation.choice_cardinality"
+                                )
+                            },
                             "1".into(),
                             count.to_string().into(),
                         );
