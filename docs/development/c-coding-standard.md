@@ -56,6 +56,26 @@
 ```
 
 - 参数方向：`@param[in]`、`@param[out]`、`@param[in,out]` 按 SWS 接口表的 Parameters (in)／(out)／(inout) 标注，非标准接口按实际读写标注；无参数时省略 `@param`。
+- `void` 函数用 `@par Return` 单独起一段，下一行写 `None.`；不使用会触发 clang `-Wdocumentation` 的 `@return`。非 `void` 函数继续用 `@return` 说明结果。
+- AUTOSAR 要求无名参数时保留签名：`SWS_Rte_06703` 规定存在 `RunnableEntityArgument.symbol` 时的参数名，`SWS_Rte_06705` 规定既无该对象又无 BSW 映射时生成无名 role 参数。无名参数用 `@par Parameters` 段，按声明顺序逐项写 `1. [in] …`、`2. [out] …` 或 `3. [in,out] …`；编号从 1 开始，数量、顺序与方向逐项由同一检查器校验。有名参数仍用 `@param`，不以增加参数名规避规范。
+
+```c
+/** Run the selected server operation.
+ * @par Parameters
+ * 1. [in] Input value.
+ * 2. [out] Non-NULL caller-owned result storage; borrowed until return.
+ * @par Return
+ * None.
+ * Preconditions: ECU initialized and the component's owner task active.
+ * Context: component task, outside exclusive areas.
+ * Reentrancy: not reentrant for the same component.
+ * Ownership: no pointer is retained.
+ */
+void Server_Run(uint8, uint32 *);
+```
+
+规范规定的签名和语义优先于工具的默认注释写法；遇到冲突时核对条款，在本篇记录可校验的等价注释形式，并由检查器适配。例行选择由实现者在 PR 写明依据与验证，不改变签名或降低诊断要求。
+
 - 前置条件：调用前必须成立的状态，以及不成立时的结果。
 - 调用上下文：任务、回调、中断，以及是否允许在独占区内调用。
 - 可重入性：同一实例与不同实例能否并发调用。
