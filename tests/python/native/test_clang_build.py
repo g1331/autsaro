@@ -112,7 +112,7 @@ class ClangBuildTests(unittest.TestCase):
                 f"{name} {' '.join(mode)}\n{result.stderr}"
                 if result.returncode
                 else None
-            ), documentation_findings(result.stderr, project)
+            ), documentation_findings(result.stderr, project, foreign_roots=(kernel,))
 
         jobs = [
             (index, name, mode)

@@ -69,6 +69,9 @@ class CStandardTests(unittest.TestCase):
         self.assertEqual(self.rules("#ifndef TEST_H\n#define TEST_H\n#endif\n"), [])
         self.assertEqual(self.rules("#ifdef TEST_START_SEC_CODE\n#define TEST_CODE\n#endif\n", "runtime/bsw/include/Test_MemMap.h"), [])
 
+    def test_memmap_file_does_not_exempt_functional_switches(self):
+        self.assertIn("config-switch", self.rules("#ifdef TEST_API\n#endif", "runtime/bsw/include/Test_MemMap.h"))
+
     def test_switch_requires_value_comparison(self):
         self.assertIn("config-switch", self.rules("#define TEST_API STD_ON\n#ifdef TEST_API\n#endif"))
         self.assertNotIn("config-switch", self.rules("#define TEST_API STD_ON\n#if (TEST_API == STD_ON)\n#endif"))
@@ -81,6 +84,19 @@ class CStandardTests(unittest.TestCase):
             self.assertEqual(c_standard.baseline_errors(collections.Counter({key: 1}), path), [])
             self.assertIn("new C standard", c_standard.baseline_errors(collections.Counter({key: 2}), path)[0])
             self.assertIn("fixed finding", c_standard.baseline_errors(collections.Counter(), path)[0])
+
+    def test_documentation_counts_columns_but_not_repeat_inclusions(self):
+        import json
+
+        with tempfile.TemporaryDirectory(prefix="171-") as temporary:
+            project = Path(temporary)
+            (project / "meta").mkdir()
+            (project / "meta/integration.json").write_text(json.dumps({"originalBswSources": {}}), encoding="utf-8")
+            header = project / "Test.h"
+            header.write_text("/** @param a Bad; @param b Bad. */", encoding="utf-8")
+            first = f"{header}:1:5: warning: parameter missing [-Wdocumentation]\n"
+            second = f"{header}:1:19: warning: parameter missing [-Wdocumentation]\n"
+            self.assertEqual(sum(c_standard.documentation_findings(first + first + second, project).values()), 2)
 
     def test_generated_headers_use_runtime_rules_and_skip_copies(self):
         import json
@@ -112,6 +128,9 @@ class CStandardTests(unittest.TestCase):
             source.write_text("void Test_Run(void) {} /* MR12 RULE 8.7 VIOLATION: required API. */", encoding="utf-8")
             self.assertEqual(c_standard.deviation_findings(root), {})
             approved = document.read_text()
+            document.write_text(approved + approved, encoding="utf-8")
+            self.assertIn("deviation-duplicate", {key[0] for key in c_standard.deviation_findings(root)})
+            document.write_text(approved, encoding="utf-8")
             document.write_text(approved.replace("Approved by maintainer", "Pending"), encoding="utf-8")
             self.assertEqual({key[0] for key in c_standard.deviation_findings(root)}, {"deviation-unrecorded"})
             document.write_text(approved, encoding="utf-8")

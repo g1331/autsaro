@@ -144,9 +144,12 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
         directive = re.match(r"\s*#\s*(\w+)\s*(.*)", token.text, re.DOTALL)
         if directive:
             command, body = directive.groups()
-            if command in {"ifdef", "ifndef", "if", "elif"} and not name.endswith("_MemMap.h"):
+            if command in {"ifdef", "ifndef", "if", "elif"}:
                 identifiers = set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", body)) - {"STD_ON", "STD_OFF", guard}
                 for switch in sorted(identifiers):
+                    if (re.search(r"_(?:START_SEC_|STOP_SEC_|MEMMAP(?:_|$))", switch)
+                        or (name.endswith("_MemMap.h") and switch.endswith(("_CODE", "_THREAD_LOCAL")))):
+                        continue
                     if (
                         command in {"ifdef", "ifndef"}
                         or switch in switches
@@ -322,6 +325,11 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                 key = (match[1], match[2], name, symbol)
                 comments[key] += 1
                 source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())
+    for entries, positions in ((records, locations), (comments, source_locations)):
+        for key, count in entries.items():
+            if count > 1:
+                name, line = positions[key]
+                result[("deviation-duplicate", name, line)] += count - 1
     for key, count in (comments - records).items():
         name, line = source_locations[key]
         result[("deviation-unrecorded", name, line)] += count
@@ -351,23 +359,25 @@ def generated_findings(samples: Path) -> collections.Counter[Key]:
     return result
 
 
-def documentation_findings(output: str, project: Path) -> collections.Counter[Key]:
+def documentation_findings(output: str, project: Path, *, foreign_roots: tuple[Path, ...] = ()) -> collections.Counter[Key]:
     integration = json.loads((project / "meta/integration.json").read_text(encoding="utf-8"))
     origins = {copy: source for source, copy in integration["originalBswSources"].items()}
     result: collections.Counter[Key] = collections.Counter()
     seen = set()
-    for match in re.finditer(r"^(.+?):(\d+):\d+: warning: .*?\[(-Wdocumentation[^]]*)\]$", output, re.MULTILINE):
+    for match in re.finditer(r"^(.+?):(\d+):(\d+): warning: .*?\[(-Wdocumentation[^]]*)\]$", output, re.MULTILINE):
         path = Path(match[1]).resolve()
+        if any(path.is_relative_to(root.resolve()) for root in foreign_roots):
+            continue
         if not path.is_relative_to(project.resolve()):
             raise RuntimeError(f"Documentation diagnostic outside generated project: {match[0]}")
         relative = path.relative_to(project.resolve()).as_posix()
         if relative.startswith(("kernel/", "app/")):
             continue
-        position = (relative, int(match[2]), match[3])
+        position = (relative, int(match[2]), int(match[3]), match[4])
         if position in seen:
             continue
         seen.add(position)
         line = path.read_text(encoding="utf-8").splitlines()[int(match[2]) - 1].strip()
         name = origins.get(relative, "emitted/" + relative)
-        result[("clang-documentation" + match[3].removeprefix("-Wdocumentation"), name, line)] += 1
+        result[("clang-documentation" + match[4].removeprefix("-Wdocumentation"), name, line)] += 1
     return result

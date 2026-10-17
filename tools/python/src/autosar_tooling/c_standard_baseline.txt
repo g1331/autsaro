@@ -856,9 +856,6 @@ config-switch runtime/os/tests/error_hooks.c #if OS_USE_GET_SERVICE_ID
 config-switch runtime/os/tests/error_hooks.c #if OS_USE_PARAMETER_ACCESS
 config-switch runtime/os/tests/error_hooks.c #if OS_USE_PARAMETER_ACCESS
 config-switch runtime/os/tests/error_hooks.c #if OS_USE_PARAMETER_ACCESS
-config-switch runtime/os/tests/memory_mapping.c #if defined(OS_MEMMAP_CODE_ACTIVE) || defined(OS_START_SEC_CODE) || defined(OS_STOP_SEC_CODE)
-config-switch runtime/os/tests/memory_mapping.c #if defined(OS_MEMMAP_CODE_ACTIVE) || defined(OS_START_SEC_CODE) || defined(OS_STOP_SEC_CODE)
-config-switch runtime/os/tests/memory_mapping.c #if defined(OS_MEMMAP_CODE_ACTIVE) || defined(OS_START_SEC_CODE) || defined(OS_STOP_SEC_CODE)
 config-switch runtime/os/tests/public_compatibility.c #ifdef OS_PUBLIC_RTE_BEFORE
 config-switch runtime/os/tests/public_compatibility.c #ifdef OS_PUBLIC_TYPES_HOST_AFTER
 config-switch runtime/os/tests/public_compatibility.c #ifdef OS_PUBLIC_TYPES_HOST_BEFORE
