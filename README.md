@@ -17,7 +17,7 @@ Everyday configuration and source generation work offline without official XSD/M
 
 <h3><img src="docs/images/icon-configuration.svg" width="22" alt=""> Configuration editing and reference inspection</h3>
 
-The project tree, frame and signal tables, and property inspector share one workspace. Select an object to inspect parameters and references, and edit CAN IDs, signal layouts, and transmission periods.
+The project tree groups objects by module, with error, warning and modified marks on each node. Selecting a container opens it in the container view: its sub-containers by definition with multiplicity and missing entries, and a parameter table where you edit a value and apply it with Enter, or collect several changes for one batch preview. The inspector describes the focused parameter; tree nodes and sub-container rows have context menus for adding allowed children, renaming and removing. Frame and signal tables edit CAN IDs, signal layouts, and transmission periods.
 
 <a href="docs/images/workbench-configuration.png"><img src="docs/images/workbench-configuration.png" width="980" alt="CAN configuration workspace: project tree on the left, frame and signal tables in the center, and property and reference inspectors on the right"></a>
 
@@ -34,7 +34,7 @@ Multi-component applications use the same tree and inspector to edit event perio
     </td>
     <td width="50%" valign="top">
       <h3><img src="docs/images/icon-validation.svg" width="22" alt=""> Validation and issue navigation</h3>
-      <p>Structure, definition, and generation constraints are reported separately. Navigate from an issue to the relevant configuration object.</p>
+      <p>Structure, definition, and generation findings share one problems table that you can sort and filter by severity, module, and text. Locating a problem focuses its parameter cell, and a rejected change lists severity, code, message, object path, and source file.</p>
       <a href="docs/images/workbench-validation.png"><img src="docs/images/workbench-validation.png" width="480" alt="Problems tool window showing validation scopes, a multiplicity error, and navigation to the actual source"></a>
     </td>
   </tr>
