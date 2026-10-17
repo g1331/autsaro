@@ -1,44 +1,4 @@
 # Existing C coding standard findings: rule, repository file, source line text.
-api-context emitted/generated/include/Rte_DcmService.h DcmService_CODE Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data);
-api-context emitted/generated/include/Rte_DcmService.h Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(
-api-context emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
-api-context emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
-api-context emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Read_EchoApplication_RxValue_Value(uint32 *data);
-api-context emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Write_EchoApplication_TxValue_Value(uint32 data);
-api-context emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
-api-context emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
-api-context emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data);
-api-context emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data);
-api-context emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data);
-api-context emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
-api-context emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
-api-context emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data);
-api-context emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
-api-context emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
-api-context emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
-api-context emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
-api-context emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
-api-context emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
-api-context emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
-api-context emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
-api-context emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Write_Process_Result_Value(uint32 data);
-api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-context emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-context emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
-api-context runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
-api-context runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
-api-context runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
-api-context runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
-api-context runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
-api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-context runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-context runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-context runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-context runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-context runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -147,96 +107,6 @@ api-context runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(uint64 
 api-context runtime/os/include/Os_Time.h StatusType Os_TargetNotifyNative(void);
 api-context runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-context runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
-api-contract emitted/generated/include/Ecu_TargetConfig.h Std_ReturnType Ecu_StackBootstrap(uint8 *reached);
-api-contract emitted/generated/include/Ecu_TargetConfig.h Std_ReturnType Ecu_StackRunCycle(EventMaskType events);
-api-contract emitted/generated/include/Ecu_TargetConfig.h int Ecu_StackFrameShape(uint32 id, uint8 dlc);
-api-contract emitted/generated/include/Ecu_TargetConfig.h int Ecu_TargetTestFailStage(unsigned stage);
-api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_StackRetire(uint8 reached);
-api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_TargetTestRetire(unsigned stage);
-api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_TargetTestShutdown(StatusType reason);
-api-contract emitted/generated/include/Os_Counter.h static inline PhysicalTimeType Os_TicksToMs_SystemCounter(TickType ticks)
-api-contract emitted/generated/include/Os_Counter.h static inline PhysicalTimeType Os_TicksToNs_SystemCounter(TickType ticks)
-api-contract emitted/generated/include/Os_Counter.h static inline PhysicalTimeType Os_TicksToSec_SystemCounter(TickType ticks)
-api-contract emitted/generated/include/Os_Counter.h static inline PhysicalTimeType Os_TicksToUs_SystemCounter(TickType ticks)
-api-contract emitted/generated/include/Rte_Com.h void Rte_COMCbk(CbkHandleIdType handle);
-api-contract emitted/generated/include/Rte_Com.h void Rte_COMCbkRxTOut(CbkHandleIdType handle);
-api-contract emitted/generated/include/Rte_Main.h Std_ReturnType Rte_Start(void);
-api-contract emitted/generated/include/Rte_Main.h Std_ReturnType Rte_Stop(void);
-api-contract emitted/generated/include/Rte_Main.h boolean Ecu_SchMReady(void);
-api-contract emitted/generated/include/Rte_Main.h boolean Ecu_SchMTimingActive(void);
-api-contract emitted/generated/include/Rte_Main.h void SchM_Deinit(void);
-api-contract emitted/generated/include/Rte_Main.h void SchM_Init(const SchM_ConfigType *ConfigPtr);
-api-contract emitted/generated/include/Rte_Main.h void SchM_Start(void);
-api-contract emitted/generated/include/Rte_Main.h void SchM_StartTiming(void);
-api-contract emitted/generated/include/SchM_BswM.h void BswM_MainFunction(void);
-api-contract emitted/generated/include/SchM_Can.h void SchM_Exit_Can_CAN_STATE(void);
-api-contract emitted/generated/include/SchM_CanIf.h void SchM_Enter_CanIf_CANIF_STATE(void);
-api-contract emitted/generated/include/SchM_CanIf.h void SchM_Exit_CanIf_CANIF_STATE(void);
-api-contract emitted/generated/include/SchM_CanTp.h void CanTp_MainFunction(void);
-api-contract emitted/generated/include/SchM_CanTp.h void SchM_Enter_CanTp_CANTP_STATE(void);
-api-contract emitted/generated/include/SchM_CanTp.h void SchM_Exit_CanTp_CANTP_STATE(void);
-api-contract emitted/generated/include/SchM_Com.h void Com_MainFunctionRx_Rx(void);
-api-contract emitted/generated/include/SchM_Com.h void Com_MainFunctionTx_Tx(void);
-api-contract emitted/generated/include/SchM_Com.h void SchM_Enter_Com_COM_STATE(void);
-api-contract emitted/generated/include/SchM_Com.h void SchM_Exit_Com_COM_STATE(void);
-api-contract emitted/generated/include/SchM_ComM.h void ComM_MainFunction_Host(void);
-api-contract emitted/generated/include/SchM_ComM.h void SchM_Enter_ComM_COMM_STATE(void);
-api-contract emitted/generated/include/SchM_ComM.h void SchM_Exit_ComM_COMM_STATE(void);
-api-contract emitted/generated/include/SchM_Dcm.h void Dcm_MainFunction(void);
-api-contract emitted/generated/include/SchM_Det.h void SchM_Enter_Det_DET_STATE(void);
-api-contract emitted/generated/include/SchM_Det.h void SchM_Exit_Det_DET_STATE(void);
-api-contract emitted/generated/include/SchM_LSduR.h void SchM_Enter_LSduR_LSDUR_STATE(void);
-api-contract emitted/generated/include/SchM_LSduR.h void SchM_Exit_LSduR_LSDUR_STATE(void);
-api-contract emitted/generated/include/SchM_PduR.h void SchM_Enter_PduR_PDUR_STATE(void);
-api-contract emitted/generated/include/SchM_PduR.h void SchM_Exit_PduR_PDUR_STATE(void);
-api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerMode(uint8 ControllerId,
-api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId, uint8 *TxErrorCounterPtr);
-api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType *PduModePtr);
-api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_SetControllerMode(uint8 ControllerId, Can_ControllerStateType ControllerMode);
-api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest);
-api-contract runtime/bsw/include/CanIf.h Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/CanIf.h void CanIf_ControllerBusOff(uint8 ControllerId);
-api-contract runtime/bsw/include/CanIf.h void CanIf_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateType ControllerMode);
-api-contract runtime/bsw/include/CanIf.h void CanIf_DeInit(void);
-api-contract runtime/bsw/include/CanIf.h void CanIf_Init(const CanIf_ConfigType *ConfigPtr);
-api-contract runtime/bsw/include/CanIf.h void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/CanIf.h void CanIf_TxConfirmation(PduIdType CanTxPduId);
-api-contract runtime/bsw/include/Com.h Com_StatusType Com_GetStatus(void);
-api-contract runtime/bsw/include/Com.h Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/Com.h uint8 Com_InvalidateSignal(Com_SignalIdType SignalId);
-api-contract runtime/bsw/include/Com.h uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr);
-api-contract runtime/bsw/include/Com.h uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);
-api-contract runtime/bsw/include/Com.h void Com_DeInit(void);
-api-contract runtime/bsw/include/Com.h void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId);
-api-contract runtime/bsw/include/Com.h void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId);
-api-contract runtime/bsw/include/Com.h void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initialize);
-api-contract runtime/bsw/include/Com.h void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId);
-api-contract runtime/bsw/include/Com.h void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/Com.h void Com_TxConfirmation(PduIdType TxPduId, Std_ReturnType result);
-api-contract runtime/bsw/include/LSduR.h LSduR_PBConfigIdType LSduR_GetConfigurationId(void);
-api-contract runtime/bsw/include/LSduR.h void LSduR_Init(const LSduR_PBConfigType *ConfigPtr);
-api-contract runtime/bsw/include/LSduR_CanIf.h Std_ReturnType LSduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/LSduR_CanIf.h void LSduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/LSduR_CanIf.h void LSduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result);
-api-contract runtime/bsw/include/LSduR_CanTp.h Std_ReturnType LSduR_CanTpTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/LSduR_PduR.h Std_ReturnType LSduR_PduRTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/PduR.h PduR_PBConfigIdType PduR_GetConfigurationId(void);
-api-contract runtime/bsw/include/PduR.h void PduR_DisableRouting(PduR_RoutingPathGroupIdType id, boolean initialize);
-api-contract runtime/bsw/include/PduR.h void PduR_EnableRouting(PduR_RoutingPathGroupIdType id);
-api-contract runtime/bsw/include/PduR.h void PduR_Init(const PduR_PBConfigType *ConfigPtr);
-api-contract runtime/bsw/include/PduR_CanIf.h Std_ReturnType PduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/PduR_CanIf.h void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/PduR_CanIf.h void PduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result);
-api-contract runtime/bsw/include/PduR_CanTp.h BufReq_ReturnType PduR_CanTpCopyRxData(PduIdType id,
-api-contract runtime/bsw/include/PduR_CanTp.h BufReq_ReturnType PduR_CanTpCopyTxData(PduIdType id,
-api-contract runtime/bsw/include/PduR_CanTp.h BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
-api-contract runtime/bsw/include/PduR_CanTp.h void PduR_CanTpRxIndication(PduIdType id, Std_ReturnType result);
-api-contract runtime/bsw/include/PduR_CanTp.h void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result);
-api-contract runtime/bsw/include/PduR_Com.h Std_ReturnType PduR_ComTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/PduR_Dcm.h Std_ReturnType PduR_DcmTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
-api-contract runtime/bsw/include/SchM_BswM.h void BswM_MainFunction(void);
-api-contract runtime/bsw/include/SchM_Can.h void SchM_Exit_Can_CAN_STATE(void);
-api-contract runtime/bsw/include/SchM_Dcm.h void Dcm_MainFunction(void);
 api-contract runtime/os/include/Arti.h Arti_AddressCapture Arti_SaveAddressCapture(void);
 api-contract runtime/os/include/Arti.h void Arti_RestoreAddressCapture(Arti_AddressCapture capture);
 api-contract runtime/os/include/Os.h OS_CODE void ShutdownHook(StatusType Error);
@@ -263,46 +133,6 @@ api-contract runtime/os/include/Os_Target.h void Os_TestFinishBoundary(uint32 po
 api-contract runtime/os/include/Os_Target.h void Os_TestObserve(void);
 api-contract runtime/os/include/Os_Target.h void Os_TestObserve(void);
 api-contract runtime/os/include/Os_Target.h void Os_TestObserve(void);
-api-ownership emitted/generated/include/Rte_DcmService.h DcmService_CODE Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data);
-api-ownership emitted/generated/include/Rte_DcmService.h Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(
-api-ownership emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
-api-ownership emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
-api-ownership emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Read_EchoApplication_RxValue_Value(uint32 *data);
-api-ownership emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Write_EchoApplication_TxValue_Value(uint32 data);
-api-ownership emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
-api-ownership emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
-api-ownership emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data);
-api-ownership emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data);
-api-ownership emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data);
-api-ownership emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
-api-ownership emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
-api-ownership emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data);
-api-ownership emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
-api-ownership emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
-api-ownership emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
-api-ownership emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
-api-ownership emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
-api-ownership emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
-api-ownership emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
-api-ownership emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
-api-ownership emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Write_Process_Result_Value(uint32 data);
-api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-ownership emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-ownership emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
-api-ownership runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
-api-ownership runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
-api-ownership runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
-api-ownership runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
-api-ownership runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
-api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-ownership runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-ownership runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-ownership runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-ownership runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-ownership runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -411,19 +241,6 @@ api-ownership runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(uint6
 api-ownership runtime/os/include/Os_Time.h StatusType Os_TargetNotifyNative(void);
 api-ownership runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-ownership runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
-api-parameters emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
-api-parameters emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
-api-parameters emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
-api-parameters emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
-api-parameters emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
-api-parameters emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
-api-parameters emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
-api-parameters emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
-api-parameters runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
-api-parameters runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
-api-parameters runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
-api-parameters runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
-api-parameters runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
 api-parameters runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-parameters runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-parameters runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -495,46 +312,6 @@ api-parameters runtime/os/include/Os_Time.h StatusType Os_TargetCompleteTick(uin
 api-parameters runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch);
 api-parameters runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-parameters runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
-api-preconditions emitted/generated/include/Rte_DcmService.h DcmService_CODE Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data);
-api-preconditions emitted/generated/include/Rte_DcmService.h Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(
-api-preconditions emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
-api-preconditions emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
-api-preconditions emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Read_EchoApplication_RxValue_Value(uint32 *data);
-api-preconditions emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Write_EchoApplication_TxValue_Value(uint32 data);
-api-preconditions emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
-api-preconditions emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
-api-preconditions emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data);
-api-preconditions emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data);
-api-preconditions emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data);
-api-preconditions emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
-api-preconditions emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
-api-preconditions emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data);
-api-preconditions emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
-api-preconditions emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
-api-preconditions emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
-api-preconditions emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
-api-preconditions emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
-api-preconditions emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
-api-preconditions emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
-api-preconditions emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
-api-preconditions emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Write_Process_Result_Value(uint32 data);
-api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-preconditions emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-preconditions emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
-api-preconditions runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
-api-preconditions runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
-api-preconditions runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
-api-preconditions runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
-api-preconditions runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
-api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-preconditions runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-preconditions runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-preconditions runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-preconditions runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-preconditions runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -643,46 +420,6 @@ api-preconditions runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(u
 api-preconditions runtime/os/include/Os_Time.h StatusType Os_TargetNotifyNative(void);
 api-preconditions runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-preconditions runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
-api-reentrancy emitted/generated/include/Rte_DcmService.h DcmService_CODE Std_ReturnType DcmService_ReadData(Dcm_DataElement_ApplicationValueType Data);
-api-reentrancy emitted/generated/include/Rte_DcmService.h Std_ReturnType Rte_Call_DcmService_DataServices_ApplicationValue_ReadData(
-api-reentrancy emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE Std_ReturnType EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);
-api-reentrancy emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
-api-reentrancy emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Read_EchoApplication_RxValue_Value(uint32 *data);
-api-reentrancy emitted/generated/include/Rte_EchoApplication.h Std_ReturnType Rte_Write_EchoApplication_TxValue_Value(uint32 data);
-api-reentrancy emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);
-api-reentrancy emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
-api-reentrancy emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Read_Ingress_RxValue_Value(uint32 *data);
-api-reentrancy emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_TxValue_Value(uint32 data);
-api-reentrancy emitted/generated/include/Rte_Ingress.h Std_ReturnType Rte_Write_Ingress_Value_Value(uint32 data);
-api-reentrancy emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
-api-reentrancy emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
-api-reentrancy emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Result_Value(uint32 *data);
-api-reentrancy emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
-api-reentrancy emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
-api-reentrancy emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
-api-reentrancy emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
-api-reentrancy emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
-api-reentrancy emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
-api-reentrancy emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
-api-reentrancy emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
-api-reentrancy emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Write_Process_Result_Value(uint32 data);
-api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-reentrancy emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-reentrancy emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
-api-reentrancy runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
-api-reentrancy runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
-api-reentrancy runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
-api-reentrancy runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
-api-reentrancy runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
-api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-reentrancy runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-reentrancy runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-reentrancy runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch);
 api-reentrancy runtime/ecu/include/Ecu_HostBatch.h StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 api-reentrancy runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
@@ -791,30 +528,6 @@ api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetCurrentTick(uint
 api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetNotifyNative(void);
 api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
 api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
-api-return emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
-api-return emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
-api-return emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
-api-return emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
-api-return emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
-api-return emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
-api-return emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
-api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-return emitted/generated/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
-api-return runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
-api-return runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
-api-return runtime/bsw/include/Com.h Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
-api-return runtime/bsw/include/Com.h void Com_Init(const Com_ConfigType *config);
-api-return runtime/bsw/include/Com.h void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
-api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
-api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Mode(void);
-api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Read(void);
-api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Wakeup(void);
-api-return runtime/bsw/include/SchM_Can.h CAN_CODE void Can_MainFunction_Write(void);
-api-return runtime/bsw/include/SchM_Can.h void SchM_Enter_Can_CAN_STATE(void);
 api-return runtime/ecu/include/Ecu_HostBatch.h void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
 api-return runtime/ecu/include/Ecu_Target.h Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);
 api-return runtime/ecu/include/Ecu_Target.h void Ecu_TargetAbortNative(StatusType reason);
@@ -858,53 +571,6 @@ api-return runtime/os/include/Os_Host.h void Os_HostSleepMs(uint32_t millisecond
 api-return runtime/os/include/Os_IntegrationHooks.h sint32 Os_IntegrationTimingAuthorized(void);
 api-return runtime/os/include/Os_IntegrationHooks.h void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 api-return runtime/os/include/Os_Target.h void Os_TargetTrace(char marker);
-bsw-native-type emitted/generated/include/BswM_MemMap.h typedef unsigned char BswM_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/BswM_MemMap.h typedef unsigned char BswM_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/CanIf_MemMap.h typedef unsigned char CanIf_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/CanIf_MemMap.h typedef unsigned char CanIf_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/CanTp_MemMap.h typedef unsigned char CanTp_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/CanTp_MemMap.h typedef unsigned char CanTp_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/ComM_MemMap.h typedef unsigned char ComM_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/ComM_MemMap.h typedef unsigned char ComM_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/Com_MemMap.h typedef unsigned char Com_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/Com_MemMap.h typedef unsigned char Com_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/Dcm_MemMap.h typedef unsigned char Dcm_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/Dcm_MemMap.h typedef unsigned char Dcm_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/Det_MemMap.h typedef unsigned char Det_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/Det_MemMap.h typedef unsigned char Det_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/LSduR_MemMap.h typedef unsigned char LSduR_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/LSduR_MemMap.h typedef unsigned char LSduR_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/PduR_MemMap.h typedef unsigned char PduR_MemMap_HeaderCheck;
-bsw-native-type emitted/generated/include/PduR_MemMap.h typedef unsigned char PduR_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/BswM_MemMap.h typedef unsigned char BswM_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/BswM_MemMap.h typedef unsigned char BswM_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/CanIf_MemMap.h typedef unsigned char CanIf_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/CanIf_MemMap.h typedef unsigned char CanIf_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/CanTp_MemMap.h typedef unsigned char CanTp_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/CanTp_MemMap.h typedef unsigned char CanTp_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/ComM_MemMap.h typedef unsigned char ComM_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/ComM_MemMap.h typedef unsigned char ComM_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/Com_MemMap.h typedef unsigned char Com_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/Com_MemMap.h typedef unsigned char Com_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/Dcm_MemMap.h typedef unsigned char Dcm_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/Dcm_MemMap.h typedef unsigned char Dcm_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/Det_MemMap.h typedef unsigned char Det_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/Det_MemMap.h typedef unsigned char Det_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/LSduR_MemMap.h typedef unsigned char LSduR_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/LSduR_MemMap.h typedef unsigned char LSduR_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/PduR_MemMap.h typedef unsigned char PduR_MemMap_HeaderCheck;
-bsw-native-type runtime/bsw/include/PduR_MemMap.h typedef unsigned char PduR_MemMap_HeaderCheck;
-clang-documentation emitted/generated/include/Rte_EchoApplication.h * @param[out] Data Non-NULL caller-owned storage; not retained.
-clang-documentation emitted/generated/include/Rte_Ingress.h * @param[out] Data Non-NULL caller-owned storage; not retained.
-clang-documentation emitted/generated/include/Rte_Observe.h * @param[inout] State Non-NULL caller-owned storage; not retained.
-clang-documentation emitted/generated/include/Rte_Process.h * @param[in] Input Input value.
-clang-documentation emitted/generated/include/Rte_Process.h * @param[inout] State Non-NULL caller-owned storage; not retained.
-clang-documentation emitted/generated/include/Rte_Process.h * @param[inout] State Non-NULL caller-owned storage; not retained.
-clang-documentation emitted/generated/include/Rte_Process.h * @param[out] Output Non-NULL caller-owned storage; not retained.
-clang-documentation emitted/generated/include/SchM_BswM.h * @return None.
-clang-documentation emitted/generated/include/SchM_BswM.h * @return None.
-clang-documentation emitted/generated/include/SchM_Dcm.h * @return None.
-clang-documentation emitted/generated/include/SchM_Dcm.h * @return None.
 clang-documentation runtime/bsw/include/BswM.h * @return None.
 clang-documentation runtime/bsw/include/BswM.h * @return None.
 clang-documentation runtime/bsw/include/BswM_ComM.h * @return None.
@@ -936,7 +602,6 @@ clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
 clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
 clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
 clang-documentation runtime/host/src/Det_Host.h * @return Never returns.
-config-switch emitted/generated/include/Ecu_TargetConfig.h #ifdef ECU_TARGET_TESTS
 config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
 config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
 config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
@@ -1035,13 +700,6 @@ config-switch runtime/os/tests/public_types.c #ifdef OS_PUBLIC_TYPES_HOST_BEFORE
 config-switch runtime/os/tests/public_types.c #ifndef OS_PUBLIC_RTE_BEFORE
 config-switch runtime/os/tests/status_modes.c #ifndef EXPECTED_STATUS_EXTENDED
 config-switch runtime/os/tests/task_hooks.c #ifdef TASK_HOOK_OBSERVER
-macro-api-context emitted/generated/include/Rte.h #define Rte_ApplicationError(status) ((status) & 63U)
-macro-api-context emitted/generated/include/Rte.h #define Rte_HasOverlayedError(status) (((status) & 64U) != 0U)
-macro-api-context emitted/generated/include/Rte.h #define Rte_IsInfrastructureError(status) (((status) & 128U) != 0U)
-macro-api-contract emitted/generated/include/Os_Counter.h #define OS_TICKS2MS_SystemCounter(ticks)              (Os_TicksToMs_SystemCounter((ticks)))
-macro-api-contract emitted/generated/include/Os_Counter.h #define OS_TICKS2NS_SystemCounter(ticks)              (Os_TicksToNs_SystemCounter((ticks)))
-macro-api-contract emitted/generated/include/Os_Counter.h #define OS_TICKS2SEC_SystemCounter(ticks)             (Os_TicksToSec_SystemCounter((ticks)))
-macro-api-contract emitted/generated/include/Os_Counter.h #define OS_TICKS2US_SystemCounter(ticks)              (Os_TicksToUs_SystemCounter((ticks)))
 macro-api-contract runtime/os/include/Arti.h #define ARTI_TRACE(context, class_name, instance, instance_parameter, event, event_parameter)      \
 macro-api-contract runtime/os/include/Os.h #define ALARMCALLBACK(identifier)                                                                  \
 macro-api-contract runtime/os/include/Os.h #define DeclareAlarm(identifier)    struct Os_DeclarationCompatibility
@@ -1104,208 +762,6 @@ macro-api-contract runtime/os/include/Os_Types.h #define OSMEMORY_IS_EXECUTABLE(
 macro-api-contract runtime/os/include/Os_Types.h #define OSMEMORY_IS_READABLE(access)   (((access) & UINT32_C(1)) != 0u)
 macro-api-contract runtime/os/include/Os_Types.h #define OSMEMORY_IS_STACKSPACE(access) (((access) & UINT32_C(8)) != 0u)
 macro-api-contract runtime/os/include/Os_Types.h #define OSMEMORY_IS_WRITEABLE(access)  (((access) & UINT32_C(2)) != 0u)
-macro-api-ownership emitted/generated/include/Rte.h #define Rte_ApplicationError(status) ((status) & 63U)
-macro-api-ownership emitted/generated/include/Rte.h #define Rte_HasOverlayedError(status) (((status) & 64U) != 0U)
-macro-api-ownership emitted/generated/include/Rte.h #define Rte_IsInfrastructureError(status) (((status) & 128U) != 0U)
-macro-api-parameters emitted/generated/include/Rte.h #define Rte_ApplicationError(status) ((status) & 63U)
-macro-api-parameters emitted/generated/include/Rte.h #define Rte_HasOverlayedError(status) (((status) & 64U) != 0U)
-macro-api-parameters emitted/generated/include/Rte.h #define Rte_IsInfrastructureError(status) (((status) & 128U) != 0U)
-macro-api-preconditions emitted/generated/include/Rte.h #define Rte_ApplicationError(status) ((status) & 63U)
-macro-api-preconditions emitted/generated/include/Rte.h #define Rte_HasOverlayedError(status) (((status) & 64U) != 0U)
-macro-api-preconditions emitted/generated/include/Rte.h #define Rte_IsInfrastructureError(status) (((status) & 128U) != 0U)
-macro-api-reentrancy emitted/generated/include/Rte.h #define Rte_ApplicationError(status) ((status) & 63U)
-macro-api-reentrancy emitted/generated/include/Rte.h #define Rte_HasOverlayedError(status) (((status) & 64U) != 0U)
-macro-api-reentrancy emitted/generated/include/Rte.h #define Rte_IsInfrastructureError(status) (((status) & 128U) != 0U)
-macro-api-return emitted/generated/include/Rte.h #define Rte_ApplicationError(status) ((status) & 63U)
-macro-api-return emitted/generated/include/Rte.h #define Rte_HasOverlayedError(status) (((status) & 64U) != 0U)
-macro-api-return emitted/generated/include/Rte.h #define Rte_IsInfrastructureError(status) (((status) & 128U) != 0U)
-macro-comment emitted/generated/include/Com_Cfg.h #define ComConf_ComSignal_RxValue 0U
-macro-comment emitted/generated/include/Com_Cfg.h #define ComConf_ComSignal_TxValue 1U
-macro-comment emitted/generated/include/Ecu_ProfileConfig.h #define CAN_BUSOFF_POLLING         1
-macro-comment emitted/generated/include/Ecu_ProfileConfig.h #define CAN_CANIF_CONTROLLER_ID    0u
-macro-comment emitted/generated/include/Ecu_ProfileConfig.h #define CAN_CONTROLLER_ID          0u
-macro-comment emitted/generated/include/Ecu_ProfileConfig.h #define CAN_HOST_QUEUED_COMPLETION 1
-macro-comment emitted/generated/include/Ecu_ProfileConfig.h #define CAN_RX_HOH                 0u
-macro-comment emitted/generated/include/Ecu_ProfileConfig.h #define CAN_RX_POLLING             1
-macro-comment emitted/generated/include/Ecu_ProfileConfig.h #define CAN_TX_HOH                 1u
-macro-comment emitted/generated/include/Ecu_ProfileConfig.h #define CAN_TX_POLLING             1
-macro-comment emitted/generated/include/Ecu_TargetConfig.h #define ECU_MAX_PDU_PAYLOAD             4u
-macro-comment emitted/generated/include/Ecu_TargetConfig.h #define ECU_MAX_PDU_PAYLOAD             64u
-macro-comment emitted/generated/include/Ecu_TargetConfig.h #define ECU_TARGET_DIAGNOSTIC_RX_CAN_ID 1792u
-macro-comment emitted/generated/include/Ecu_TargetConfig.h #define ECU_TARGET_DIAGNOSTIC_RX_CAN_ID 4294967295u
-macro-comment emitted/generated/include/Ecu_TargetConfig.h #define ECU_TARGET_EVENT_APP            2u
-macro-comment emitted/generated/include/Ecu_TargetConfig.h #define ECU_TARGET_EVENT_IO             4u
-macro-comment emitted/generated/include/Ecu_TargetConfig.h #define ECU_TARGET_EVENT_WORK           1u
-macro-comment emitted/generated/include/Ecu_TargetConfig.h #define ECU_TARGET_TASK                 0u
-macro-comment emitted/generated/include/Os_Cfg.h #define OS_STATUS_EXTENDED 1
-macro-comment emitted/generated/include/Os_Cfg.h #define OS_TASK_ID_Task_Ecu 0u
-macro-comment emitted/generated/include/Os_Cfg.h #define OS_USE_GET_SERVICE_ID 1
-macro-comment emitted/generated/include/Os_Cfg.h #define OS_USE_PARAMETER_ACCESS 1
-macro-comment emitted/generated/include/Os_Counter.h #define OSMAXALLOWEDVALUE                             OSMAXALLOWEDVALUE_SystemCounter
-macro-comment emitted/generated/include/Os_Counter.h #define OSMAXALLOWEDVALUE_OS_COUNTER_ID_SystemCounter OSMAXALLOWEDVALUE_SystemCounter
-macro-comment emitted/generated/include/Os_Counter.h #define OSMAXALLOWEDVALUE_SystemCounter               UINT64_C(65535)
-macro-comment emitted/generated/include/Os_Counter.h #define OSMINCYCLE                                    OSMINCYCLE_SystemCounter
-macro-comment emitted/generated/include/Os_Counter.h #define OSMINCYCLE_OS_COUNTER_ID_SystemCounter        OSMINCYCLE_SystemCounter
-macro-comment emitted/generated/include/Os_Counter.h #define OSMINCYCLE_SystemCounter                      UINT64_C(1)
-macro-comment emitted/generated/include/Os_Counter.h #define OSTICKDURATION                                UINT64_C(1000000)
-macro-comment emitted/generated/include/Os_Counter.h #define OSTICKSPERBASE                                OSTICKSPERBASE_SystemCounter
-macro-comment emitted/generated/include/Os_Counter.h #define OSTICKSPERBASE_OS_COUNTER_ID_SystemCounter    OSTICKSPERBASE_SystemCounter
-macro-comment emitted/generated/include/Os_Counter.h #define OSTICKSPERBASE_SystemCounter                  UINT64_C(1)
-macro-comment emitted/generated/include/Os_Counter.h #define OS_COUNTER_ID_SystemCounter                   0u
-macro-comment emitted/generated/include/Rte_ComM_Type.h #define COMM_FULL_COMMUNICATION   2u
-macro-comment emitted/generated/include/Rte_ComM_Type.h #define COMM_NO_COMMUNICATION     0u
-macro-comment emitted/generated/include/Rte_ComM_Type.h #define COMM_SILENT_COMMUNICATION 1u
-macro-comment emitted/generated/include/Rte_DcmService.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_DcmService.h #define RTE_E_DataServices_ApplicationValue_E_NOT_OK 1U
-macro-comment emitted/generated/include/Rte_DcmService.h #define RTE_RUNNABLE_DcmReadData DcmService_ReadData
-macro-comment emitted/generated/include/Rte_DcmService.h #define Rte_Call_DataServices_ApplicationValue_ReadData                                            \
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_CANCEL         0x02u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_BRAKESWITCH_NOTCLOSED                     0x8Fu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_BUSYREPEATREQUEST                         0x21u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_CONDITIONSNOTCORRECT                      0x22u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_ENGINEISNOTRUNNING                        0x84u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_ENGINEISRUNNING                           0x83u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_ENGINERUNTIMETOOLOW                       0x85u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_EXCEEDNUMBEROFATTEMPTS                    0x36u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_FAILUREPREVENTSEXECUTIONOFREQUESTEDACTION 0x26u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_GENERALPROGRAMMINGFAILURE                 0x72u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_GENERALREJECT                             0x10u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT     0x13u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_INVALIDKEY                                0x35u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_NORESPONSEFROMSUBNETCOMPONENT             0x25u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_REQUESTOUTOFRANGE                         0x31u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_REQUESTSEQUENCEERROR                      0x24u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_REQUIREDTIMEDELAYNOTEXPIRED               0x37u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_RESPONSETOOLONG                           0x14u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_RPMTOOHIGH                                0x81u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_RPMTOOLOW                                 0x82u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_SECURITYACCESSDENIED                      0x33u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_SERVICENOTSUPPORTED                       0x11u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_SERVICENOTSUPPORTEDINACTIVESESSION        0x7Fu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_SHIFTERLEVERNOTINPARK                     0x90u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_SUBFUNCTIONNOTSUPPORTED                   0x12u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_SUBFUNCTIONNOTSUPPORTEDINACTIVESESSION    0x7Eu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_TEMPERATURETOOHIGH                        0x86u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_TEMPERATURETOOLOW                         0x87u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_THROTTLE_PEDALTOOHIGH                     0x8Au
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_THROTTLE_PEDALTOOLOW                      0x8Bu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_TORQUECONVERTERCLUTCHLOCKED               0x91u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_TRANSFERDATASUSPENDED                     0x71u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_TRANSMISSIONRANGENOTINGEAR                0x8Du
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_TRANSMISSIONRANGENOTINNEUTRAL             0x8Cu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_UPLOADDOWNLOADNOTACCEPTED                 0x70u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VEHICLESPEEDTOOHIGH                       0x88u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VEHICLESPEEDTOOLOW                        0x89u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_0                                  0xF0u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_1                                  0xF1u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_2                                  0xF2u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_3                                  0xF3u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_4                                  0xF4u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_5                                  0xF5u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_6                                  0xF6u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_7                                  0xF7u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_8                                  0xF8u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_9                                  0xF9u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_A                                  0xFAu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_B                                  0xFBu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_C                                  0xFCu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_D                                  0xFDu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_E                                  0xFEu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VOLTAGETOOHIGH                            0x92u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_VOLTAGETOOLOW                             0x93u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_E_WRONGBLOCKSEQUENCECOUNTER                 0x73u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_FORCE_RCRRP_OK 0x03u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_INITIAL        0x00u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_NO_ACTIVE_PROTOCOL       0x0Cu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_OBD_ON_CAN               0x00u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_OBD_ON_FLEXRAY           0x01u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_OBD_ON_IP                0x02u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_PENDING        0x01u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_PERIODICTRANS_ON_CAN     0x09u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_PERIODICTRANS_ON_FLEXRAY 0x0Au
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_PERIODICTRANS_ON_IP      0x0Bu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_POS_RESP                                    0x00u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_RES_NEG_NOT_OK 0x03u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_RES_NEG_OK     0x02u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_RES_POS_NOT_OK 0x01u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_RES_POS_OK     0x00u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_ROE_ON_CAN               0x06u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_ROE_ON_FLEXRAY           0x07u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_ROE_ON_IP                0x08u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_1               0xF0u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_10              0xF9u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_11              0xFAu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_12              0xFBu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_13              0xFCu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_14              0xFDu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_15              0xFEu
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_2               0xF1u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_3               0xF2u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_4               0xF3u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_5               0xF4u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_6               0xF5u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_7               0xF6u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_8               0xF7u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_9               0xF8u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_UDS_ON_CAN               0x03u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_UDS_ON_FLEXRAY           0x04u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_UDS_ON_IP                0x05u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define DCM_UDS_ON_LIN               0x0Du
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmAuthenticationState_Physical_DCM_AUTHENTICATED   1u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmAuthenticationState_Physical_DCM_DEAUTHENTICATED 0u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmControlDTCSetting_DCM_DISABLEDTCSETTING 1u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmControlDTCSetting_DCM_ENABLEDTCSETTING  0u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_EXECUTE                     6u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_HARD                        1u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_JUMPTOBOOTLOADER            4u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_JUMPTOSYSSUPPLIERBOOTLOADER 5u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_KEYONOFF                    2u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_NONE                        0u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_SOFT                        3u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmModeRapidPowerShutDown_DCM_DISABLE_RAPIDPOWERSHUTDOWN 1u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmModeRapidPowerShutDown_DCM_ENABLE_RAPIDPOWERSHUTDOWN  0u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_MODE_DcmSecurityAccess_DCM_SEC_LEV_LOCKED 0u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmAuthenticationState_Physical               255u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmControlDTCSetting                 255u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmEcuReset                           255u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmModeRapidPowerShutDown                          255u
-macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmSecurityAccess              255u
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_E_DataServices_ApplicationValue_E_NOT_OK 1U
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_RUNNABLE_Periodic       EchoApplication_Periodic
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_RUNNABLE_ServerReadData EchoApplication_ReadData
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define Rte_InitValue_RxValue_Value 0UL
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define Rte_InitValue_TxValue_Value 0UL
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define Rte_Read_RxValue_Value Rte_Read_EchoApplication_RxValue_Value
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define Rte_Write_TxValue_Value Rte_Write_EchoApplication_TxValue_Value
-macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_E_DataServices_ApplicationValue_E_NOT_OK 1U
-macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_RUNNABLE_Periodic       Ingress_Periodic
-macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_RUNNABLE_ServerReadData Ingress_ReadData
-macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_InitValue_RxValue_Value 0UL
-macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_InitValue_TxValue_Value 0UL
-macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_InitValue_Value_Value   1UL
-macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_Read_RxValue_Value Rte_Read_Ingress_RxValue_Value
-macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_Write_TxValue_Value Rte_Write_Ingress_TxValue_Value
-macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_Write_Value_Value Rte_Write_Ingress_Value_Value
-macro-comment emitted/generated/include/Rte_Observe.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_Observe.h #define RTE_RUNNABLE_Periodic Observe_Periodic
-macro-comment emitted/generated/include/Rte_Observe.h #define Rte_Call_ResultService_Transform Rte_Call_Observe_ResultService_Transform
-macro-comment emitted/generated/include/Rte_Observe.h #define Rte_InitValue_Result_Value 11UL
-macro-comment emitted/generated/include/Rte_Observe.h #define Rte_InitValue_Value_Value  9UL
-macro-comment emitted/generated/include/Rte_Observe.h #define Rte_Read_Result_Value Rte_Read_Observe_Result_Value
-macro-comment emitted/generated/include/Rte_Observe.h #define Rte_Read_Value_Value Rte_Read_Observe_Value_Value
-macro-comment emitted/generated/include/Rte_Process.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_Process.h #define RTE_RUNNABLE_Periodic        Process_Periodic
-macro-comment emitted/generated/include/Rte_Process.h #define RTE_RUNNABLE_ServerTransform Process_Transform
-macro-comment emitted/generated/include/Rte_Process.h #define Rte_InitValue_Result_Value 2UL
-macro-comment emitted/generated/include/Rte_Process.h #define Rte_InitValue_Value_Value  7UL
-macro-comment emitted/generated/include/Rte_Process.h #define Rte_Read_Value_Value Rte_Read_Process_Value_Value
-macro-comment emitted/generated/include/Rte_Process.h #define Rte_Write_Result_Value Rte_Write_Process_Result_Value
-macro-comment runtime/bsw/include/Com.h #define COM_AR_RELEASE_MAJOR_VERSION    4U
-macro-comment runtime/bsw/include/Com.h #define COM_AR_RELEASE_MINOR_VERSION    10U
-macro-comment runtime/bsw/include/Com.h #define COM_AR_RELEASE_REVISION_VERSION 0U
-macro-comment runtime/bsw/include/Com.h #define COM_SERVICE_NOT_AVAILABLE 0x80u
 macro-comment runtime/bsw/include/ComStack_Types.h #define COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION    4U
 macro-comment runtime/bsw/include/ComStack_Types.h #define COMSTACKTYPE_AR_RELEASE_MINOR_VERSION    10U
 macro-comment runtime/bsw/include/ComStack_Types.h #define COMSTACKTYPE_AR_RELEASE_REVISION_VERSION 0U
@@ -1325,117 +781,6 @@ macro-comment runtime/bsw/include/Platform_Types.h #define PLATFORM_AR_RELEASE_M
 macro-comment runtime/bsw/include/Platform_Types.h #define PLATFORM_AR_RELEASE_MINOR_VERSION    10U
 macro-comment runtime/bsw/include/Platform_Types.h #define PLATFORM_AR_RELEASE_REVISION_VERSION 0U
 macro-comment runtime/bsw/include/Platform_Types.h #define TRUE true
-macro-comment runtime/bsw/include/Rte_ComM_Type.h #define COMM_FULL_COMMUNICATION   2u
-macro-comment runtime/bsw/include/Rte_ComM_Type.h #define COMM_NO_COMMUNICATION     0u
-macro-comment runtime/bsw/include/Rte_ComM_Type.h #define COMM_SILENT_COMMUNICATION 1u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_CANCEL         0x02u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_BRAKESWITCH_NOTCLOSED                     0x8Fu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_BUSYREPEATREQUEST                         0x21u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_CONDITIONSNOTCORRECT                      0x22u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_ENGINEISNOTRUNNING                        0x84u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_ENGINEISRUNNING                           0x83u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_ENGINERUNTIMETOOLOW                       0x85u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_EXCEEDNUMBEROFATTEMPTS                    0x36u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_FAILUREPREVENTSEXECUTIONOFREQUESTEDACTION 0x26u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_GENERALPROGRAMMINGFAILURE                 0x72u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_GENERALREJECT                             0x10u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT     0x13u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_INVALIDKEY                                0x35u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_NORESPONSEFROMSUBNETCOMPONENT             0x25u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_REQUESTOUTOFRANGE                         0x31u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_REQUESTSEQUENCEERROR                      0x24u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_REQUIREDTIMEDELAYNOTEXPIRED               0x37u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_RESPONSETOOLONG                           0x14u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_RPMTOOHIGH                                0x81u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_RPMTOOLOW                                 0x82u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_SECURITYACCESSDENIED                      0x33u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_SERVICENOTSUPPORTED                       0x11u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_SERVICENOTSUPPORTEDINACTIVESESSION        0x7Fu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_SHIFTERLEVERNOTINPARK                     0x90u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_SUBFUNCTIONNOTSUPPORTED                   0x12u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_SUBFUNCTIONNOTSUPPORTEDINACTIVESESSION    0x7Eu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_TEMPERATURETOOHIGH                        0x86u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_TEMPERATURETOOLOW                         0x87u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_THROTTLE_PEDALTOOHIGH                     0x8Au
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_THROTTLE_PEDALTOOLOW                      0x8Bu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_TORQUECONVERTERCLUTCHLOCKED               0x91u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_TRANSFERDATASUSPENDED                     0x71u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_TRANSMISSIONRANGENOTINGEAR                0x8Du
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_TRANSMISSIONRANGENOTINNEUTRAL             0x8Cu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_UPLOADDOWNLOADNOTACCEPTED                 0x70u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VEHICLESPEEDTOOHIGH                       0x88u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VEHICLESPEEDTOOLOW                        0x89u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_0                                  0xF0u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_1                                  0xF1u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_2                                  0xF2u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_3                                  0xF3u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_4                                  0xF4u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_5                                  0xF5u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_6                                  0xF6u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_7                                  0xF7u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_8                                  0xF8u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_9                                  0xF9u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_A                                  0xFAu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_B                                  0xFBu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_C                                  0xFCu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_D                                  0xFDu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VMSCNC_E                                  0xFEu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VOLTAGETOOHIGH                            0x92u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_VOLTAGETOOLOW                             0x93u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_E_WRONGBLOCKSEQUENCECOUNTER                 0x73u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_FORCE_RCRRP_OK 0x03u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_INITIAL        0x00u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_NO_ACTIVE_PROTOCOL       0x0Cu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_OBD_ON_CAN               0x00u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_OBD_ON_FLEXRAY           0x01u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_OBD_ON_IP                0x02u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_PENDING        0x01u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_PERIODICTRANS_ON_CAN     0x09u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_PERIODICTRANS_ON_FLEXRAY 0x0Au
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_PERIODICTRANS_ON_IP      0x0Bu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_POS_RESP                                    0x00u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_RES_NEG_NOT_OK 0x03u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_RES_NEG_OK     0x02u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_RES_POS_NOT_OK 0x01u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_RES_POS_OK     0x00u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_ROE_ON_CAN               0x06u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_ROE_ON_FLEXRAY           0x07u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_ROE_ON_IP                0x08u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_1               0xF0u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_10              0xF9u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_11              0xFAu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_12              0xFBu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_13              0xFCu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_14              0xFDu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_15              0xFEu
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_2               0xF1u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_3               0xF2u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_4               0xF3u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_5               0xF4u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_6               0xF5u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_7               0xF6u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_8               0xF7u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_SUPPLIER_9               0xF8u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_UDS_ON_CAN               0x03u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_UDS_ON_FLEXRAY           0x04u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_UDS_ON_IP                0x05u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define DCM_UDS_ON_LIN               0x0Du
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmControlDTCSetting_DCM_DISABLEDTCSETTING 1u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmControlDTCSetting_DCM_ENABLEDTCSETTING  0u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_EXECUTE                     6u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_HARD                        1u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_JUMPTOBOOTLOADER            4u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_JUMPTOSYSSUPPLIERBOOTLOADER 5u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_KEYONOFF                    2u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_NONE                        0u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmEcuReset_DCM_SOFT                        3u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmModeRapidPowerShutDown_DCM_DISABLE_RAPIDPOWERSHUTDOWN 1u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmModeRapidPowerShutDown_DCM_ENABLE_RAPIDPOWERSHUTDOWN  0u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_MODE_DcmSecurityAccess_DCM_SEC_LEV_LOCKED 0u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmControlDTCSetting                 255u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmEcuReset                           255u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmModeRapidPowerShutDown                          255u
-macro-comment runtime/bsw/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmSecurityAccess              255u
 macro-comment runtime/bsw/include/Std_Types.h #define E_NOT_OK   0x01u
 macro-comment runtime/bsw/include/Std_Types.h #define E_OK       0x00u
 macro-comment runtime/bsw/include/Std_Types.h #define NULL_PTR   ((void *)0)
@@ -1597,44 +942,6 @@ macro-comment runtime/os/include/Os_Types.h #define SCHEDULETABLE_WAITING       
 macro-comment runtime/os/include/Os_Types.h #define SUSPENDED                  3u
 macro-comment runtime/os/include/Os_Types.h #define TotalNumberOfCores 1u
 macro-comment runtime/os/include/Os_Types.h #define WAITING                    1u
-member-comment emitted/generated/include/Ecu_Config.h EcuTxConfirmation tx_confirmation;
-member-comment emitted/generated/include/Ecu_Config.h typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;
-member-comment emitted/generated/include/Ecu_Config.h typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;
-member-comment emitted/generated/include/Rte_Main.h uint16 partition;
-member-comment runtime/bsw/include/CanIf.h CANIF_OFFLINE = 0,
-member-comment runtime/bsw/include/CanIf.h CANIF_ONLINE = 3
-member-comment runtime/bsw/include/CanIf.h CANIF_TX_OFFLINE = 1,
-member-comment runtime/bsw/include/CanIf.h CANIF_TX_OFFLINE_ACTIVE = 2,
-member-comment runtime/bsw/include/CanIf.h CanIf_BusOffNotificationType bus_off;
-member-comment runtime/bsw/include/CanIf.h CanIf_ModeNotificationType controller_mode;
-member-comment runtime/bsw/include/CanIf.h Can_HwHandleType receive_hoh;
-member-comment runtime/bsw/include/CanIf.h Can_HwHandleType transmit_hoh;
-member-comment runtime/bsw/include/CanIf.h Can_IdType can_id;
-member-comment runtime/bsw/include/CanIf.h Can_IdType can_id;
-member-comment runtime/bsw/include/CanIf.h PduIdType pdu;
-member-comment runtime/bsw/include/CanIf.h PduIdType pdu;
-member-comment runtime/bsw/include/CanIf.h const CanIf_RxPduConfigType *receive;
-member-comment runtime/bsw/include/CanIf.h const CanIf_TxPduConfigType *transmit;
-member-comment runtime/bsw/include/CanIf.h uint16 receive_count;
-member-comment runtime/bsw/include/CanIf.h uint16 transmit_count;
-member-comment runtime/bsw/include/CanIf.h uint8 controller;
-member-comment runtime/bsw/include/CanIf.h uint8 driver_controller;
-member-comment runtime/bsw/include/CanIf.h uint8 maximum_length;
-member-comment runtime/bsw/include/CanIf.h uint8 minimum_length;
-member-comment runtime/bsw/include/Com.h CbkHandleIdType callback_handle;
-member-comment runtime/bsw/include/Com.h Com_IpduGroupIdType receive_group;
-member-comment runtime/bsw/include/Com.h Com_NotificationType receive_notification;
-member-comment runtime/bsw/include/Com.h Com_NotificationType timeout_notification;
-member-comment runtime/bsw/include/Com.h Com_SignalIdType signal;
-member-comment runtime/bsw/include/Com.h Com_TransmitType transmit;
-member-comment runtime/bsw/include/Com.h PduIdType pdu;
-member-comment runtime/bsw/include/Com.h boolean receive;
-member-comment runtime/bsw/include/Com.h const Com_PduConfigType *pdus;
-member-comment runtime/bsw/include/Com.h typedef enum { COM_UNINIT = 0, COM_INIT = 1 } Com_StatusType;
-member-comment runtime/bsw/include/Com.h typedef enum { COM_UNINIT = 0, COM_INIT = 1 } Com_StatusType;
-member-comment runtime/bsw/include/Com.h uint16 pdu_count;
-member-comment runtime/bsw/include/Com.h uint32 initial_value;
-member-comment runtime/bsw/include/Com.h uint32 timeout_ticks;
 member-comment runtime/bsw/include/ComStack_Types.h BUFREQ_E_BUSY = 2,
 member-comment runtime/bsw/include/ComStack_Types.h BUFREQ_E_NOT_OK = 1,
 member-comment runtime/bsw/include/ComStack_Types.h BUFREQ_E_OVFL = 3
@@ -1647,55 +954,6 @@ member-comment runtime/bsw/include/ComStack_Types.h typedef enum { TP_DATACONF =
 member-comment runtime/bsw/include/ComStack_Types.h typedef enum { TP_DATACONF = 0, TP_DATARETRY = 1, TP_CONFPENDING = 2 } TpDataStateType;
 member-comment runtime/bsw/include/ComStack_Types.h uint8 *MetaDataPtr;
 member-comment runtime/bsw/include/ComStack_Types.h uint8 *SduDataPtr;
-member-comment runtime/bsw/include/LSduR.h LSduR_ConfirmationType confirmation;
-member-comment runtime/bsw/include/LSduR.h LSduR_PBConfigIdType id;
-member-comment runtime/bsw/include/LSduR.h LSduR_RxType indication;
-member-comment runtime/bsw/include/LSduR.h LSduR_TriggerType trigger;
-member-comment runtime/bsw/include/LSduR.h LSduR_UpperType module;
-member-comment runtime/bsw/include/LSduR.h PduIdType lower;
-member-comment runtime/bsw/include/LSduR.h PduIdType lower;
-member-comment runtime/bsw/include/LSduR.h PduIdType upper;
-member-comment runtime/bsw/include/LSduR.h PduIdType upper;
-member-comment runtime/bsw/include/LSduR.h const LSduR_RxRouteType *receive;
-member-comment runtime/bsw/include/LSduR.h const LSduR_TxRouteType *transmit;
-member-comment runtime/bsw/include/LSduR.h typedef enum { LSDUR_UNINIT = 0, LSDUR_ONLINE = 1 } LSduR_StateType;
-member-comment runtime/bsw/include/LSduR.h typedef enum { LSDUR_UNINIT = 0, LSDUR_ONLINE = 1 } LSduR_StateType;
-member-comment runtime/bsw/include/LSduR.h typedef enum { LSDUR_UP_PDUR = 0, LSDUR_UP_CANTP = 1 } LSduR_UpperType;
-member-comment runtime/bsw/include/LSduR.h typedef enum { LSDUR_UP_PDUR = 0, LSDUR_UP_CANTP = 1 } LSduR_UpperType;
-member-comment runtime/bsw/include/LSduR.h uint16 receive_count;
-member-comment runtime/bsw/include/LSduR.h uint16 transmit_count;
-member-comment runtime/bsw/include/PduR.h PduIdType lower;
-member-comment runtime/bsw/include/PduR.h PduIdType lower;
-member-comment runtime/bsw/include/PduR.h PduIdType lower_rx;
-member-comment runtime/bsw/include/PduR.h PduIdType lower_tx;
-member-comment runtime/bsw/include/PduR.h PduIdType upper;
-member-comment runtime/bsw/include/PduR.h PduIdType upper;
-member-comment runtime/bsw/include/PduR.h PduIdType upper_rx;
-member-comment runtime/bsw/include/PduR.h PduIdType upper_tx;
-member-comment runtime/bsw/include/PduR.h PduR_ConfirmationType confirmation;
-member-comment runtime/bsw/include/PduR.h PduR_ConfirmationType confirmation;
-member-comment runtime/bsw/include/PduR.h PduR_ConfirmationType receive;
-member-comment runtime/bsw/include/PduR.h PduR_CopyRxType copy_rx;
-member-comment runtime/bsw/include/PduR.h PduR_CopyTxType copy_tx;
-member-comment runtime/bsw/include/PduR.h PduR_LowerType lower_module;
-member-comment runtime/bsw/include/PduR.h PduR_PBConfigIdType id;
-member-comment runtime/bsw/include/PduR.h PduR_ReceiveType indication;
-member-comment runtime/bsw/include/PduR.h PduR_StartType start;
-member-comment runtime/bsw/include/PduR.h PduR_TransmitType transmit;
-member-comment runtime/bsw/include/PduR.h PduR_TriggerType trigger;
-member-comment runtime/bsw/include/PduR.h PduR_UpperType module;
-member-comment runtime/bsw/include/PduR.h const PduR_RxRouteType *receive;
-member-comment runtime/bsw/include/PduR.h const PduR_TpRouteType *transport;
-member-comment runtime/bsw/include/PduR.h const PduR_TxRouteType *transmit;
-member-comment runtime/bsw/include/PduR.h typedef enum { PDUR_LO_LSDUR = 0, PDUR_LO_CANTP = 1 } PduR_LowerType;
-member-comment runtime/bsw/include/PduR.h typedef enum { PDUR_LO_LSDUR = 0, PDUR_LO_CANTP = 1 } PduR_LowerType;
-member-comment runtime/bsw/include/PduR.h typedef enum { PDUR_UNINIT = 0, PDUR_ONLINE = 1 } PduR_StateType;
-member-comment runtime/bsw/include/PduR.h typedef enum { PDUR_UNINIT = 0, PDUR_ONLINE = 1 } PduR_StateType;
-member-comment runtime/bsw/include/PduR.h typedef enum { PDUR_UP_COM = 0, PDUR_UP_DCM = 1 } PduR_UpperType;
-member-comment runtime/bsw/include/PduR.h typedef enum { PDUR_UP_COM = 0, PDUR_UP_DCM = 1 } PduR_UpperType;
-member-comment runtime/bsw/include/PduR.h uint16 receive_count;
-member-comment runtime/bsw/include/PduR.h uint16 transmit_count;
-member-comment runtime/bsw/include/PduR.h uint16 transport_count;
 member-comment runtime/bsw/include/Std_Types.h uint16 moduleID;
 member-comment runtime/bsw/include/Std_Types.h uint16 vendorID;
 member-comment runtime/bsw/include/Std_Types.h uint8 sw_major_version;
@@ -1963,36 +1221,6 @@ member-comment runtime/os/include/Os_Types.h TickType mincycle;
 member-comment runtime/os/include/Os_Types.h TickType ticksperbase;
 member-comment runtime/os/include/Os_Types.h typedef enum { TRYTOGETSPINLOCK_NOSUCCESS = 0, TRYTOGETSPINLOCK_SUCCESS = 1 } TryToGetSpinlockType;
 member-comment runtime/os/include/Os_Types.h typedef enum { TRYTOGETSPINLOCK_NOSUCCESS = 0, TRYTOGETSPINLOCK_SUCCESS = 1 } TryToGetSpinlockType;
-state-comment emitted/generated/include/Rte_DcmService.h };
-state-comment emitted/generated/include/Rte_EchoApplication.h };
-state-comment emitted/generated/include/Rte_Ingress.h };
-state-comment emitted/generated/include/Rte_Main.h } SchM_ConfigType;
-state-comment emitted/generated/include/Rte_Observe.h };
-state-comment emitted/generated/include/Rte_Process.h };
-state-comment runtime/bsw/src/CanIf.c static CanIf_PduModeType pdu_mode CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static Can_ControllerStateType controller_mode CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static const CanIf_ConfigType *configuration CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static uint32 accepted[32] CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static uint32 generation CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static uint32 mode_writes CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static uint32 owed[32] CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static uint32 stops CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static uint8 early[32] CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/CanIf.c static uint8 writing[32] CANIF_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static boolean monitoring COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static boolean publishing COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static boolean receive_started COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static boolean reception_before_main COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static boolean reloaded_before_main[COM_MAX_PDUS] COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static boolean timeout_last[COM_MAX_PDUS] COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static boolean timeout_owed[COM_MAX_PDUS] COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static boolean tx_mode_false[COM_MAX_PDUS] COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static const Com_ConfigType *configuration COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static uint32 receptions_owed[COM_MAX_PDUS] COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static uint32 remaining[COM_MAX_PDUS] COM_VAR_CLEARED;
-state-comment runtime/bsw/src/Com.c static uint32 values[COM_MAX_PDUS] COM_VAR_CLEARED;
-state-comment runtime/bsw/src/LSduR.c static const LSduR_PBConfigType *configuration LSDUR_VAR_CLEARED;
-state-comment runtime/bsw/src/PduR.c static const PduR_PBConfigType *configuration PDUR_VAR_CLEARED;
 state-comment runtime/ecu/src/Ecu_Target.c static Ecu_BatchCompletion batch_completion;
 state-comment runtime/ecu/src/Ecu_Target.c static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY];
 state-comment runtime/ecu/src/Ecu_Target.c static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];
@@ -2377,69 +1605,11 @@ state-comment runtime/os/tests/task_hooks.c static const char *scenario;
 state-comment runtime/os/tests/task_hooks.c static unsigned helper_entries;
 state-comment runtime/os/tests/task_hooks.c static unsigned length;
 state-comment runtime/os/tests/task_hooks.c static unsigned owner_entries;
-typedef-comment emitted/generated/include/ComStack_Cfg.h typedef uint16 PduIdType;
-typedef-comment emitted/generated/include/ComStack_Cfg.h typedef uint16 PduLengthType;
-typedef-comment emitted/generated/include/Ecu_Config.h typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;
-typedef-comment emitted/generated/include/Ecu_Config.h typedef struct {
-typedef-comment emitted/generated/include/Rte_ComM_Type.h typedef uint16 ComM_UserHandleType;
-typedef-comment emitted/generated/include/Rte_ComM_Type.h typedef uint8 ComM_InhibitionStatusType;
-typedef-comment emitted/generated/include/Rte_ComM_Type.h typedef uint8 ComM_ModeType;
-typedef-comment emitted/generated/include/Rte_DcmService.h typedef const Rte_CDS_DcmService *Rte_Instance;
-typedef-comment emitted/generated/include/Rte_DcmService.h typedef struct Rte_CDS_DcmService Rte_CDS_DcmService;
-typedef-comment emitted/generated/include/Rte_Dcm_Type.h typedef Dcm_DataElement_ApplicationValue_ArrayType Dcm_DataArrayTypeUint8_ApplicationValueType;
-typedef-comment emitted/generated/include/Rte_Dcm_Type.h typedef uint8 Rte_ModeType_DcmAuthenticationState_Physical;
-typedef-comment emitted/generated/include/Rte_EchoApplication.h typedef const Rte_CDS_EchoApplication *Rte_Instance;
-typedef-comment emitted/generated/include/Rte_EchoApplication.h typedef struct Rte_CDS_EchoApplication Rte_CDS_EchoApplication;
-typedef-comment emitted/generated/include/Rte_Ingress.h typedef const Rte_CDS_Ingress *Rte_Instance;
-typedef-comment emitted/generated/include/Rte_Ingress.h typedef struct Rte_CDS_Ingress Rte_CDS_Ingress;
-typedef-comment emitted/generated/include/Rte_Main.h typedef struct {
-typedef-comment emitted/generated/include/Rte_Observe.h typedef const Rte_CDS_Observe *Rte_Instance;
-typedef-comment emitted/generated/include/Rte_Observe.h typedef struct Rte_CDS_Observe Rte_CDS_Observe;
-typedef-comment emitted/generated/include/Rte_Os_Type.h typedef uint64 TimeInMicrosecondsType;
-typedef-comment emitted/generated/include/Rte_Process.h typedef const Rte_CDS_Process *Rte_Instance;
-typedef-comment emitted/generated/include/Rte_Process.h typedef struct Rte_CDS_Process Rte_CDS_Process;
-typedef-comment emitted/generated/include/Rte_Type.h typedef uint8 Dcm_DataElement_ApplicationValueType[4];
-typedef-comment runtime/bsw/include/CanIf.h typedef enum {
-typedef-comment runtime/bsw/include/CanIf.h typedef struct {
-typedef-comment runtime/bsw/include/CanIf.h typedef struct {
-typedef-comment runtime/bsw/include/CanIf.h typedef struct {
-typedef-comment runtime/bsw/include/CanIf.h typedef void (*CanIf_BusOffNotificationType)(uint8 controller);
-typedef-comment runtime/bsw/include/CanIf.h typedef void (*CanIf_ModeNotificationType)(uint8 controller, Can_ControllerStateType mode);
-typedef-comment runtime/bsw/include/Com.h typedef Std_ReturnType (*Com_TransmitType)(PduIdType id, const PduInfoType *info);
-typedef-comment runtime/bsw/include/Com.h typedef enum { COM_UNINIT = 0, COM_INIT = 1 } Com_StatusType;
-typedef-comment runtime/bsw/include/Com.h typedef struct {
-typedef-comment runtime/bsw/include/Com.h typedef uint16 Com_IpduGroupIdType;
-typedef-comment runtime/bsw/include/Com.h typedef uint16 Com_SignalIdType;
-typedef-comment runtime/bsw/include/Com.h typedef void (*Com_NotificationType)(CbkHandleIdType handle);
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef enum {
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef enum { TP_DATACONF = 0, TP_DATARETRY = 1, TP_CONFPENDING = 2 } TpDataStateType;
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef struct {
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef struct {
 typedef-comment runtime/bsw/include/ComStack_Types.h typedef uint8 NetworkHandleType;
-typedef-comment runtime/bsw/include/LSduR.h typedef Std_ReturnType (*LSduR_TriggerType)(PduIdType id, PduInfoType *info);
-typedef-comment runtime/bsw/include/LSduR.h typedef enum { LSDUR_UNINIT = 0, LSDUR_ONLINE = 1 } LSduR_StateType;
-typedef-comment runtime/bsw/include/LSduR.h typedef enum { LSDUR_UP_PDUR = 0, LSDUR_UP_CANTP = 1 } LSduR_UpperType;
-typedef-comment runtime/bsw/include/LSduR.h typedef struct {
-typedef-comment runtime/bsw/include/LSduR.h typedef struct {
-typedef-comment runtime/bsw/include/LSduR.h typedef struct {
-typedef-comment runtime/bsw/include/LSduR.h typedef uint16 LSduR_PBConfigIdType;
-typedef-comment runtime/bsw/include/LSduR.h typedef void (*LSduR_ConfirmationType)(PduIdType id, Std_ReturnType result);
-typedef-comment runtime/bsw/include/LSduR.h typedef void (*LSduR_RxType)(PduIdType id, const PduInfoType *info);
-typedef-comment runtime/bsw/include/PduR.h typedef BufReq_ReturnType (*PduR_CopyRxType)(PduIdType id,
-typedef-comment runtime/bsw/include/PduR.h typedef BufReq_ReturnType (*PduR_CopyTxType)(PduIdType id,
-typedef-comment runtime/bsw/include/PduR.h typedef BufReq_ReturnType (*PduR_StartType)(PduIdType id,
-typedef-comment runtime/bsw/include/PduR.h typedef Std_ReturnType (*PduR_TransmitType)(PduIdType id, const PduInfoType *info);
-typedef-comment runtime/bsw/include/PduR.h typedef Std_ReturnType (*PduR_TriggerType)(PduIdType id, PduInfoType *info);
-typedef-comment runtime/bsw/include/PduR.h typedef enum { PDUR_UNINIT = 0, PDUR_ONLINE = 1 } PduR_StateType;
-typedef-comment runtime/bsw/include/PduR.h typedef enum { PDUR_UP_COM = 0, PDUR_UP_DCM = 1 } PduR_UpperType;
-typedef-comment runtime/bsw/include/PduR.h typedef struct {
-typedef-comment runtime/bsw/include/PduR.h typedef struct {
-typedef-comment runtime/bsw/include/PduR.h typedef struct {
-typedef-comment runtime/bsw/include/PduR.h typedef struct {
-typedef-comment runtime/bsw/include/PduR.h typedef uint16 PduR_PBConfigIdType;
-typedef-comment runtime/bsw/include/PduR.h typedef uint16 PduR_RoutingPathGroupIdType;
-typedef-comment runtime/bsw/include/PduR.h typedef void (*PduR_ConfirmationType)(PduIdType id, Std_ReturnType result);
-typedef-comment runtime/bsw/include/PduR.h typedef void (*PduR_ReceiveType)(PduIdType id, const PduInfoType *info);
 typedef-comment runtime/bsw/include/Platform_Types.h typedef _Bool boolean;
 typedef-comment runtime/bsw/include/Platform_Types.h typedef bool boolean;
 typedef-comment runtime/bsw/include/Platform_Types.h typedef const void *ConstVoidPtr;
@@ -2460,9 +1630,6 @@ typedef-comment runtime/bsw/include/Platform_Types.h typedef uint_least16_t uint
 typedef-comment runtime/bsw/include/Platform_Types.h typedef uint_least32_t uint32_least;
 typedef-comment runtime/bsw/include/Platform_Types.h typedef uint_least8_t uint8_least;
 typedef-comment runtime/bsw/include/Platform_Types.h typedef void *VoidPtr;
-typedef-comment runtime/bsw/include/Rte_ComM_Type.h typedef uint16 ComM_UserHandleType;
-typedef-comment runtime/bsw/include/Rte_ComM_Type.h typedef uint8 ComM_InhibitionStatusType;
-typedef-comment runtime/bsw/include/Rte_ComM_Type.h typedef uint8 ComM_ModeType;
 typedef-comment runtime/bsw/include/Std_Types.h typedef struct {
 typedef-comment runtime/bsw/include/Std_Types.h typedef uint8 Std_ReturnType;
 typedef-comment runtime/ecu/include/Ecu_HostBatch.h typedef enum { ECU_BATCH_BEGIN, ECU_BATCH_RX, ECU_BATCH_COMMIT } Ecu_BatchCommand;
@@ -2537,4 +1704,3 @@ typedef-comment runtime/os/include/Os_Types.h typedef uint8 TaskStateType;
 typedef-comment runtime/os/include/Os_Types.h typedef uint8 TaskType;
 typedef-comment runtime/os/include/Os_Types.h typedef void *MemoryStartAddressType;
 typedef-comment runtime/os/include/Os_Types.h typedef void *TrustedFunctionParameterRefType;
-typedef-comment runtime/os/include/Rte_Os_Type.h typedef uint64 TimeInMicrosecondsType;

@@ -33,7 +33,8 @@
 #else
 #ifndef DCM_MEMMAP_HEADER_CHECK
 #define DCM_MEMMAP_HEADER_CHECK
-/** Allows the normal standalone public-header compiler check. */
-typedef unsigned char Dcm_MemMap_HeaderCheck;
+#include "Std_Types.h"
+/** No-marker header smoke-test token; not an ECU interface type. */
+typedef uint8 Dcm_MemMap_HeaderCheck;
 #endif
 #endif

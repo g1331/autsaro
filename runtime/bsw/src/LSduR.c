@@ -8,7 +8,10 @@
 #include "Det.h"
 #define LSDUR_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "LSduR_MemMap.h"
-static const LSduR_PBConfigType *configuration LSDUR_VAR_CLEARED;
+/* LSDUR_STATE protects pointer publication and reads. The accepted objects are immutable. Init
+ * publishes only while NULL and never resets the published pointer. */
+static const LSduR_PBConfigType *configuration
+    LSDUR_VAR_CLEARED; /**< First accepted route set; Init never replaces it. */
 #define LSDUR_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "LSduR_MemMap.h"
 #define LSDUR_START_SEC_CODE

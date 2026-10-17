@@ -110,13 +110,19 @@ fn counter_header_oracles() {
         );
         let header_path = project.join("generated/include/Os_Counter.h");
         let header = std::fs::read_to_string(&header_path).unwrap();
-        // Macro values are aligned, so a mutant replaces the whole definition.
+        // Replace the entire logical directive, including wrapped values/comments.
         let redefine = |macro_name: &str, value: &str| {
             let mut text = String::new();
+            let mut replacing = false;
             for line in header.lines() {
+                if replacing {
+                    replacing = line.trim_end().ends_with('\\');
+                    continue;
+                }
                 let mut words = line.split_whitespace();
                 if words.next() == Some("#define") && words.next() == Some(macro_name) {
                     text.push_str(&format!("#define {macro_name} {value}\n"));
+                    replacing = line.trim_end().ends_with('\\');
                 } else {
                     text.push_str(&format!("{line}\n"));
                 }

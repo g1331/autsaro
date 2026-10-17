@@ -73,6 +73,10 @@ class CStandardTests(unittest.TestCase):
     def test_cpp_linkage_does_not_hide_public_functions(self):
         self.assertEqual(self.rules('#ifdef __cplusplus\nextern "C" {\n#endif\nvoid Run(void);\n#ifdef __cplusplus\n}\n#endif'), ["api-contract"])
 
+    def test_aggregate_closing_declarations_inside_cpp_linkage(self):
+        source = 'extern "C" {\n/** Record. */\ntypedef struct { uint8 id; /**< Handle. */ } RecordType;\nstruct Value { uint8 id; /**< Handle. */ };\n}'
+        self.assertEqual(self.rules(source), [])
+
     def test_continued_directive_does_not_become_a_declaration(self):
         source = "#if defined(A) || " + "\\" + "\n defined(B)\n#endif\nvoid Run(void);"
         self.assertIn("api-contract", self.rules(source))
@@ -137,6 +141,7 @@ class CStandardTests(unittest.TestCase):
         self.assertIn("config-switch", self.rules("#define TEST_API STD_OFF\n#ifdef TEST_API\n#error Unsupported\n#endif"))
 
     def test_switch_requires_value_comparison(self):
+        self.assertNotIn("config-switch", self.rules("#if defined(TEST_API) && (TEST_API == STD_ON)\n#endif"))
         self.assertIn("config-switch", self.rules("#define TEST_API STD_ON\n#ifdef TEST_API\n#endif"))
         self.assertNotIn("config-switch", self.rules("#define TEST_API STD_ON\n#if (TEST_API == STD_ON)\n#endif"))
 

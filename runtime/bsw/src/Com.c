@@ -14,25 +14,36 @@
 #define COM_MAX_OWED  0xffffffffu
 #define COM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Com_MemMap.h"
-static const Com_ConfigType *configuration COM_VAR_CLEARED;
-static uint32 values[COM_MAX_PDUS] COM_VAR_CLEARED;
-static uint32 remaining[COM_MAX_PDUS] COM_VAR_CLEARED;
-static boolean reloaded_before_main[COM_MAX_PDUS] COM_VAR_CLEARED;
+/* COM_STATE protects every object below. Init and DeInit reset all flags and arrays except
+ * publishing, which is cleared only by the context returning from its callback. Init then copies
+ * the configured signal initial values. */
+static const Com_ConfigType *configuration
+    COM_VAR_CLEARED; /**< Published configuration; DeInit clears. */
+static uint32
+    values[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Native UINT32 signal values; Init reloads. */
+static uint32 remaining[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Rx-main periods left; Init resets. */
+static boolean reloaded_before_main[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Reloaded in this Rx tick;
+                                                                      Init resets. */
 /* Notifications owed per Rx PDU: every reception is acknowledged (SWS_Com_00883), repeated
  * timeouts coalesce, and the event recorded last is also delivered last, so a stale timeout
  * never follows a fresh reception. */
-static uint32 receptions_owed[COM_MAX_PDUS] COM_VAR_CLEARED;
-static boolean timeout_owed[COM_MAX_PDUS] COM_VAR_CLEARED;
-static boolean timeout_last[COM_MAX_PDUS] COM_VAR_CLEARED;
-static boolean receive_started COM_VAR_CLEARED;
+static uint32
+    receptions_owed[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Pending Rx notifications; Init resets. */
+static boolean
+    timeout_owed[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Pending timeout notification; Init resets. */
+static boolean
+    timeout_last[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Timeout follows receptions; Init resets. */
+static boolean receive_started COM_VAR_CLEARED; /**< Rx group is started; Init resets. */
 /* Tx mode FALSE selects the absent ComTxModeFalse, i.e. NONE (ECUC_Com_00496); Init
  * evaluates the TMS of the filterless PDUs to TRUE again (SWS_Com_00677, 00877). */
-static boolean tx_mode_false[COM_MAX_PDUS] COM_VAR_CLEARED;
+static boolean tx_mode_false[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Tx mode NONE instead of PERIODIC;
+                                                               Init resets. */
 /* Reception DM of the Rx group; independent of start and stop (SWS_Com_00772). */
-static boolean monitoring COM_VAR_CLEARED;
-static boolean reception_before_main COM_VAR_CLEARED;
+static boolean monitoring COM_VAR_CLEARED; /**< Rx deadline monitoring enabled; Init resets. */
+static boolean reception_before_main
+    COM_VAR_CLEARED; /**< Receive precedes this main tick; Init resets. */
 /* A context is delivering a notification; never reset, so it outlives a reinitialization. */
-static boolean publishing COM_VAR_CLEARED;
+static boolean publishing COM_VAR_CLEARED; /**< Callback in flight; Init preserves. */
 #define COM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Com_MemMap.h"
 
