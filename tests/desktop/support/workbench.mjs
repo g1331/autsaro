@@ -493,7 +493,7 @@ export async function openWorkbench(name) {
       node.focus(); node.click();
     })()`);
     await until(
-      `document.querySelector('[data-object-title]')?.dataset.objectTitle === ${json(objectId)} || Boolean(document.querySelector('[role=dialog]'))`,
+      `document.querySelector('[data-object-title]')?.dataset.objectTitle === ${json(objectId)} || Boolean(document.querySelector('[role=dialog],[role=alertdialog]'))`,
       'object focus',
     );
   }
