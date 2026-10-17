@@ -59,8 +59,8 @@ GROUPS: list[tuple[str, list[Module]]] = [
         m("J1939Dcm", "SAEJ1939DiagnosticCommunicationManager", "R16")]),
     ("Memory", [
         m("NvM", "NVRAMManager", "R7"), m("BulkNvM", "BulkNvDataManager", "R18"),
-        m("MemIf", "MemoryAbstractionInterface", "R18"), m("MemAcc", "MemoryAccess", "R18"),
-        m("Fee", "FlashEEPROMEmulation", "R18"), m("Ea", "EEPROMAbstraction", "R18")]),
+        m("MemIf", "MemoryAbstractionInterface", "R7/R18"), m("MemAcc", "MemoryAccess", "R18"),
+        m("Fee", "FlashEEPROMEmulation", "R7/R18"), m("Ea", "EEPROMAbstraction", "R18")]),
     ("Communication", [
         d("Com", "COM"), d("PduR", "PDURouter"), d("LSduR", "LSduRouter"), d("ComM", "COMManager"),
         m("Nm", "NetworkManagementInterface", "R8"), m("IpduM", "IPDUMultiplexer", "R17"),
@@ -70,12 +70,12 @@ GROUPS: list[tuple[str, list[Module]]] = [
     ("CAN", [
         d("CanIf", "CANInterface"), d("CanTp", "CANTransportLayer"),
         m("CanSM", "CANStateManager", "R8", SUBSTITUTE), m("CanNm", "CANNetworkManagement", "R8"),
-        m("CanTrcv", "CANTransceiverDriver", "R10"), m("CanXLTrcv", "CANXLTransceiverDriver", "R11"),
+        m("CanTrcv", "CANTransceiverDriver", "R8"), m("CanXLTrcv", "CANXLTransceiverDriver", "R11"),
         m("CanTSyn", "TimeSyncOverCAN", "R21"), m("J1939Tp", "SAEJ1939TransportLayer", "R16"),
         m("J1939Nm", "SAEJ1939NetworkManagement", "R16"), m("J1939Rm", "SAEJ1939RequestManager", "R16"),
         m("J1939FSP", "SAEJ1939FunctionalSafetyCommProtocol", "R16"), m("TtcanIf", "TTCANInterface", "—")]),
     ("LIN", [
-        m("LinIf", "LINInterface", "R14"), m("LinSM", "LINStateManager", "R14"),
+        m("LinIf", "LINInterface", "R9/R14"), m("LinSM", "LINStateManager", "R9/R14"),
         m("LinTrcv", "LINTransceiverDriver", "R14")]),
     ("FlexRay", [
         m("FrIf", "FlexRayInterface", "R15"), m("FrSM", "FlexRayStateManager", "R15"),
@@ -102,7 +102,7 @@ GROUPS: list[tuple[str, list[Module]]] = [
         m("CnV2xSec", "ChineseV2XSecurity", "R27"), m("ISO15118", "ISO15118Charging", "R26")]),
     ("I/O", [m("IoHwAb", "IOHardwareAbstraction", "R9")]),
     ("Libraries", [
-        m("Crc", "CRCLibrary", "—"), m("E2E", "E2ELibrary", "R13"), m("Bfx", "BFXLibrary", "—"),
+        m("Crc", "CRCLibrary", "R7"), m("E2E", "E2ELibrary", "R13"), m("Bfx", "BFXLibrary", "—"),
         m("Efx", "EFXLibrary", "—"), m("Ifl", "IFLLibrary", "—"), m("Ifx", "IFXLibrary", "—"),
         m("Mfl", "MFLLibrary", "—"), m("Mfx", "MFXLibrary", "—"), m("Msfl", "MSFLibrary", "—"),
         m("McLib", "BSWMulticoreLibrary", "R29")]),
@@ -111,11 +111,11 @@ MCAL = [
     d("Can", "CANDriver"), m("CanXL", "CANXLDriver", "R11"), m("Ttcan", "TTCANDriver", "—"),
     m("Lin", "LINDriver", "R14"), m("Fr", "FlexRayDriver", "R15"), m("Eth", "EthernetDriver", "R12"),
     m("WEth", "WirelessEthernetDriver", "R28"), m("CV2x", "CellularV2XDriver", "R27"),
-    m("Crypto", "CryptoDriver", "R19"), m("Mcu", "MCUDriver", "R10"), m("Port", "PortDriver", "R9"),
+    m("Crypto", "CryptoDriver", "R19"), m("Mcu", "MCUDriver", "R9"), m("Port", "PortDriver", "R9"),
     m("Dio", "DIODriver", "R9"), m("Adc", "ADCDriver", "R9"), m("Gpt", "GPTDriver", "R9"),
     m("Pwm", "PWMDriver", "R9"), m("Icu", "ICUDriver", "R9"), m("Ocu", "OCUDriver", "R9"),
     m("Spi", "SPIHandlerDriver", "R9"), m("I2c", "I2CDriver", "R9"), m("Wdg", "WatchdogDriver", "R20"),
-    m("Fls", "FlashDriver", "R18"), m("Eep", "EEPROMDriver", "R18"), m("Mem", "MemoryDriver", "R18"),
+    m("Fls", "FlashDriver", "R7/R18"), m("Eep", "EEPROMDriver", "R18"), m("Mem", "MemoryDriver", "R18"),
     m("CorTst", "CoreTest", "R20"), m("FlsTst", "FlashTest", "R20"), m("RamTst", "RAMTest", "R20"),
 ]
 # The project code that stands in for a standard module on the host targets.

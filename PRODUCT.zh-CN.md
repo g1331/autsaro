@@ -58,7 +58,7 @@ Vector MICROSAR Classic＋DaVinci Configurator、EB tresos AutoCore＋Studio 是
 ### 已确认方向与待决边界
 
 - 统一 Configurator 采用内置规则，范围见[架构](docs/architecture/README.md)与[交互规格](docs/design/ux-baseline/EXPERIENCE/README.md)。单核多组件应用——由真实 OS 调度多个 SWC、逐组件保护用户源码、在工作区编辑并独立交接——在[架构](docs/architecture/README.md)所述范围内支持。推进顺序见[路线图](docs/roadmap/README.md)，任务状态见 GitHub Milestones，本文不重复。
-- 第一条完整参考产品链是通用 CAN＋诊断 ECU。完整交付须包含所声明配置需要的应用接口、OS、生命周期／网络管理与故障恢复；常开 CAN 的中间增量不能替代完整参考 ECU。
+- 优先扩大[主机功能与工程能力](docs/roadmap/reference-ecu.md)，以已定义的功能广度为最低基线，发展[运行、仿真与可视化](docs/roadmap/host-simulation.md)，真实 MCU 接入可后移（[ADR 0022](docs/adr/0022-reference-ecu-before-mcu.md)）。首条通用 CAN＋诊断产品链包含配置工具、OS／RTE、通信、存储、生命周期、驱动软件接口与模型；最小示例不代替功能覆盖，硬件日期不反向缩减范围。此为规划目标，按路线图逐阶段交付。
 - 长期逐阶段扩大所选 Classic 版次的有效模块与目标覆盖，不要求每个 ECU 启用全部模块，不用历史 story 数量计算未经定义的完成率。
 - 首个 MCU 板卡、驱动及许可、工具链、具体诊断／网络管理剖面、输入覆盖与迁移规则仍按对应产品规划决定。当前没有真实 MCU 验证，不预先宣布硬件支持。
 - 主机运行、实机运行、第三方互操作、完整规范义务、MISRA、硬实时、功能安全及官方符合性认证分别取证，不互相外推。
