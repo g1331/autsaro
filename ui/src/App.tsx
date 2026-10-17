@@ -31,6 +31,7 @@ import {
   rememberDialogOpener,
   TextSnapshot,
 } from './workbench/Dialog';
+import { CommandPalette } from './workbench/CommandPalette';
 import { ToolWindows } from './workbench/ToolWindows';
 import { WindowControls } from './workbench/WindowControls';
 import { PanelResizeHandle } from './workbench/PanelResizeHandle';
@@ -59,7 +60,6 @@ export default function App() {
   const { t, text } = useLocale();
   const c = useWorkbench();
   const [palette, setPalette] = useState(false);
-  const [query, setQuery] = useState('');
   const [help, setHelp] = useState(false);
   const [systemDark, setSystemDark] = useState(
     () => window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -178,7 +178,7 @@ export default function App() {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
       if (event.code === 'KeyK') {
         event.preventDefault();
-        setQuery('');
+        rememberDialogOpener();
         setPalette(true);
       } else if (event.code === 'KeyS' || event.code === 'KeyO') {
         event.preventDefault();
@@ -289,7 +289,7 @@ export default function App() {
           className="toolbar-search"
           aria-label={t('shell.app.commandShortcut')}
           onClick={() => {
-            setQuery('');
+            rememberDialogOpener();
             setPalette(true);
           }}
         >
@@ -421,29 +421,30 @@ export default function App() {
                 ) : null}
                 {activeDocument.kind === 'source' ? (
                   <div className="source-document">
-                    <h2>{labelFromPath(source?.path ?? '')}</h2>
-                    <p className="mono path-text">{displayPath(source?.path ?? '')}</p>
-                    {source ? (
-                      <CopyText
-                        text={displayPath(source.path)}
-                        label={t('shell.app.copySourcePath')}
-                      />
-                    ) : null}
-                    <p>
-                      {t('shell.app.readonlySource')} ·{' '}
+                    <header className="source-heading">
+                      <h2>{labelFromPath(source?.path ?? '')}</h2>
+                      <span className="mono source-path" title={displayPath(source?.path ?? '')}>
+                        {displayPath(source?.path ?? '')}
+                      </span>
+                      {source ? (
+                        <CopyText
+                          text={displayPath(source.path)}
+                          label={t('shell.app.copySourcePath')}
+                        />
+                      ) : null}
+                      <span className="role-tag">{t('editor.common.readonly')}</span>
+                    </header>
+                    <p className="field-help">
                       {source?.readonly
                         ? t('shell.app.sourceReadonly')
                         : t('shell.app.sourceTransaction')}
                     </p>
                     {source && c.activeSourceId === source.sourceId && c.sourceText !== null ? (
-                      <>
-                        <CopyText text={c.sourceText} label={t('shell.app.copySource')} />
-                        <TextSnapshot
-                          key={source?.sourceId}
-                          text={c.sourceText}
-                          label={t('shell.app.fullSource')}
-                        />
-                      </>
+                      <TextSnapshot
+                        key={source?.sourceId}
+                        text={c.sourceText}
+                        label={t('shell.app.fullSource')}
+                      />
                     ) : (
                       <p>{t('shell.app.noSource')}</p>
                     )}
@@ -535,34 +536,11 @@ export default function App() {
       <SettingsPage controller={c} />
       <PreviewDialogs controller={c} />
       {palette ? (
-        <Dialog title={t('shell.app.commandSearch')} onClose={() => setPalette(false)}>
-          <label className="search-field">
-            <Search size={iconSize.control} aria-hidden="true" />
-            <input
-              autoFocus
-              data-initial-focus
-              value={query}
-              aria-label={t('shell.app.searchAvailable')}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('shell.app.searchPlaceholder')}
-            />
-          </label>
-          <div className="command-results">
-            {commands
-              .filter((entry) => !entry.reason && text(entry.label).includes(query))
-              .map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => dispatchCommand(entry.id)}
-                >
-                  {text(entry.label)}
-                  <kbd>{entry.shortcut}</kbd>
-                </button>
-              ))}
-          </div>
-        </Dialog>
+        <CommandPalette
+          commands={commands}
+          onRun={dispatchCommand}
+          onClose={() => setPalette(false)}
+        />
       ) : null}
       {help ? (
         <Dialog title={t('shell.command.help')} onClose={() => setHelp(false)}>

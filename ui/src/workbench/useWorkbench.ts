@@ -140,7 +140,7 @@ export interface Workbench
   reopenIntegration(): Promise<void>;
   restoreIntegrationDraft(): void;
   previewEcu(): void;
-  generateEcu(): Promise<void>;
+  generateEcu(): void;
   preflightEcu(): void;
   buildEcu(): void;
   verifyEcu(): void;
@@ -848,7 +848,6 @@ export function useWorkbench(): Workbench {
     continueReplacement,
     unapplied,
     acceptIntegration,
-    confirmAction,
   });
 
   const resumeReplacement = useEffectEvent(async () => {

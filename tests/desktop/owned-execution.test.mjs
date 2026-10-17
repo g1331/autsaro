@@ -59,7 +59,7 @@ check('declared-consumer-tools-and-real-owned-failure', async () => {
     `(async()=>!(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).toolError)()`,
     'declared independent tools accepted',
   );
-  await click('关闭', "document.querySelector('[role=dialog]')");
+  await click('取消', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'actual execution settings closed');
   const temporary = path.join(scratch, 'app-temp');
   const before = new Set(await readdir(temporary));

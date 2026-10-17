@@ -1,4 +1,4 @@
-import { useLocale } from '../i18n';
+import { message, useLocale } from '../i18n';
 import { displayPath } from '../pathDisplay';
 import { useId } from 'react';
 import type { ExecutionTools } from '../types';
@@ -36,7 +36,6 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
     return null;
   const locked = Boolean(c.busy) || c.languageSaving || !c.native;
   function close() {
-    if (c.busy || c.languageSaving) return;
     c.setAppearanceDraft(c.capabilities?.appearance ?? 'system');
     c.setLanguageDraft(c.savedLanguage);
     c.setToolDraft(
@@ -55,6 +54,9 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
   return (
     <Dialog
       title={t('shell.settings.title')}
+      className="settings-dialog"
+      busy={c.busy ?? (c.languageSaving ? message('shell.settings.saveLanguage') : null)}
+      onCancelBusy={c.busy ? c.cancelOperation : undefined}
       onClose={close}
       footer={
         <>
@@ -62,28 +64,28 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
             {c.settingsNotice ? <NoticeBanner notice={c.settingsNotice} /> : null}
           </div>
           <button type="button" onClick={close} disabled={Boolean(c.busy) || c.languageSaving}>
-            {t('shell.settings.close')}
+            {t('workflow.common.cancel')}
           </button>
+          {/* One primary per category: saving commits only the visible category. */}
           {category === 'appearance' ? (
-            <>
-              <button
-                className="primary-button"
-                type="button"
-                disabled={locked}
-                onClick={() => void c.configureAppearance()}
-              >
-                {t('shell.settings.saveAppearance')}
-              </button>
-              <button
-                className="primary-button"
-                type="button"
-                disabled={Boolean(c.busy) || c.languageSaving}
-                aria-busy={c.languageSaving}
-                onClick={() => void c.configureLanguage()}
-              >
-                {t('shell.settings.saveLanguage')}
-              </button>
-            </>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={locked}
+              onClick={() => void c.configureAppearance()}
+            >
+              {t('shell.settings.saveAppearance')}
+            </button>
+          ) : category === 'language' ? (
+            <button
+              className="primary-button"
+              type="button"
+              disabled={Boolean(c.busy) || c.languageSaving}
+              aria-busy={c.languageSaving}
+              onClick={() => void c.configureLanguage()}
+            >
+              {t('shell.settings.saveLanguage')}
+            </button>
           ) : category === 'tools' ? (
             <button
               className="primary-button"
@@ -106,6 +108,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
           onSelect={setCategory}
           items={[
             { key: 'appearance', label: t('shell.settings.appearance') },
+            { key: 'language', label: t('shell.settings.language') },
             { key: 'definitions', label: t('shell.settings.definitions') },
             { key: 'tools', label: t('shell.settings.tools') },
           ]}
@@ -122,34 +125,40 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
           <section hidden={category !== 'appearance'}>
             <h3>{t('shell.settings.appearance')}</h3>
             <p>{t('shell.settings.previewHelp')}</p>
-            <label>
-              {t('shell.settings.theme')}
-              <select
-                aria-label={t('shell.settings.theme')}
-                value={c.appearanceDraft}
-                onChange={(event) => c.setAppearanceDraft(event.target.value as Appearance)}
-              >
-                <option value="light">{t('shell.settings.light')}</option>
-                <option value="dark">{t('shell.settings.dark')}</option>
-                <option value="system">{t('shell.settings.system')}</option>
-              </select>
-            </label>
-            <label>
-              {t('shell.settings.language')}
-              <select
-                name="language"
-                aria-label={t('shell.settings.language')}
-                value={c.languageDraft}
-                disabled={Boolean(c.busy) || c.languageSaving}
-                onChange={(event) =>
-                  c.setLanguageDraft(event.target.value as typeof c.languageDraft)
-                }
-              >
-                <option value="system">{t('shell.settings.system')}</option>
-                <option value="zh-CN">{t('shell.settings.chinese')}</option>
-                <option value="en">{t('shell.settings.english')}</option>
-              </select>
-            </label>
+            <div className="form-fields">
+              <label>
+                {t('shell.settings.theme')}
+                <select
+                  aria-label={t('shell.settings.theme')}
+                  value={c.appearanceDraft}
+                  onChange={(event) => c.setAppearanceDraft(event.target.value as Appearance)}
+                >
+                  <option value="light">{t('shell.settings.light')}</option>
+                  <option value="dark">{t('shell.settings.dark')}</option>
+                  <option value="system">{t('shell.settings.system')}</option>
+                </select>
+              </label>
+            </div>
+          </section>
+          <section hidden={category !== 'language'}>
+            <div className="form-fields">
+              <label>
+                {t('shell.settings.language')}
+                <select
+                  name="language"
+                  aria-label={t('shell.settings.language')}
+                  value={c.languageDraft}
+                  disabled={Boolean(c.busy) || c.languageSaving}
+                  onChange={(event) =>
+                    c.setLanguageDraft(event.target.value as typeof c.languageDraft)
+                  }
+                >
+                  <option value="system">{t('shell.settings.system')}</option>
+                  <option value="zh-CN">{t('shell.settings.chinese')}</option>
+                  <option value="en">{t('shell.settings.english')}</option>
+                </select>
+              </label>
+            </div>
           </section>
           <section hidden={category !== 'definitions'}>
             <h3>{t('shell.settings.rules')}</h3>
@@ -171,8 +180,8 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                 </div>
                 <div>
                   <dt>{t('shell.settings.sha')}</dt>
-                  <dd className="mono path-text">
-                    {identity.sha256}
+                  <dd className="mono path-text copy-value">
+                    <span>{identity.sha256}</span>
                     <CopyText text={identity.sha256} />
                   </dd>
                 </div>
@@ -323,7 +332,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
               ))}
             </div>
             <h3>{t('shell.settings.effectiveTools')}</h3>
-            <dl>
+            <dl className="property-list">
               {toolLabels.map(({ key, label }) => (
                 <div key={key}>
                   <dt>{t(label)}</dt>

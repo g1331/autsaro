@@ -224,14 +224,6 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
       },
     },
     {
-      id: 'generate',
-      group: 'delivery',
-      label: message('shell.delivery.generate'),
-      menu: 'tools',
-      reason: deliveryReason || (!c.generationPreview ? message('shell.reason.previewFirst') : ''),
-      run: c.generateEcu,
-    },
-    {
       id: 'preflight',
       group: 'native',
       label: message('shell.command.preflight'),

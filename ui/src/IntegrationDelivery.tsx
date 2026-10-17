@@ -1,10 +1,17 @@
-import { CircleCheck, CircleDashed, CircleX, History, LoaderCircle } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  FolderOpen,
+  History,
+  LoaderCircle,
+} from 'lucide-react';
 import { CopyText, OwnedLog } from './workbench/Dialog';
 import { CommandActions } from './workbench/CommandActions';
 import { commandById } from './workbench/commands';
 import { useLocale } from './i18n';
 import type { StageState } from './workbench/forms';
-import { fileStatusLabel, targetLabel } from './workbench/labels';
+import { targetLabel } from './workbench/labels';
 import { displayPath } from './pathDisplay';
 import type { BuildTarget } from './types';
 import { iconSize } from './workbench/icons';
@@ -26,24 +33,20 @@ export function IntegrationDelivery({
     ecuImportDirectory: importDirectory,
     buildTarget: target,
     generationPreview: preview,
-    generationPreviewPath: selected,
     generated,
     built,
     virtualResult: verified,
     changeEcuOutput: changeOutput,
     changeEcuBuildDirectory: changeBuildDirectory,
     setEcuImportDirectory: setImportDirectory,
-    setGenerationPreviewPath: setSelected,
     chooseDirectory,
     importHandoffDirectory: onImport,
   } = controller;
   if (!workspace) return null;
   const busy = Boolean(controller.busy);
-  const locked = busy;
   const sourceReady = !workspace.dirty && !controller.projection?.dirty && !controller.unapplied;
   const command = (id: string) => commandById(controller, id);
   const handoff = controller.generationKind === 'handoff';
-  const file = preview?.files.find((item) => item.path === selected);
   const labels: Record<StageState, string> = {
     pending: t('shell.stage.pending'),
     running: t('shell.stage.running'),
@@ -106,6 +109,17 @@ export function IntegrationDelivery({
             : preview
               ? t('shell.delivery.previewed', { count: preview.files.length })
               : t('shell.delivery.directoryHint');
+  const choose = (label: string, onChoose: (path: string) => void) => (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={busy || !native}
+      onClick={() => void chooseDirectory(onChoose)}
+    >
+      <FolderOpen size={iconSize.control} aria-hidden="true" />
+      {t('editor.common.select')}
+    </button>
+  );
   return (
     <div className="workflow-page delivery-view" hidden={!active} data-testid="ecu-delivery">
       <div className="section-header">
@@ -115,9 +129,26 @@ export function IntegrationDelivery({
           <p>{t('shell.delivery.description')}</p>
         </div>
       </div>
-      <section className="document-page">
+      <ol className="stage-list">
+        {stages.map(([name, state, label], index) => {
+          const Icon = icons[state];
+          return (
+            <li className={`stage ${state}`} key={name} title={`${name} · ${label}`}>
+              <span className="stage-number">{index + 1}</span>
+              <div className="stage-copy">
+                <strong>{name}</strong>
+              </div>
+              <span className="stage-pill" data-stage={name}>
+                <Icon size={iconSize.inline} aria-hidden="true" />
+                <span>{label}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <section className="delivery-step">
         <h3>{t('shell.delivery.liveSource')}</h3>
-        <p>{t('shell.delivery.liveDescription')}</p>
+        <p className="field-help">{t('shell.delivery.liveDescription')}</p>
         <CommandActions
           actions={[
             { command: command('initialize-application'), label: t('shell.command.initialize') },
@@ -142,117 +173,125 @@ export function IntegrationDelivery({
           </>
         ) : null}
       </section>
-      <ol className="stage-list">
-        {stages.map(([name, state, label], index) => {
-          const Icon = icons[state];
-          return (
-            <li className={`stage ${state}`} key={name}>
-              <span className="stage-number">{index + 1}</span>
-              <div className="stage-copy">
-                <strong>{name}</strong>
-              </div>
-              <span className="stage-pill" data-stage={name}>
-                <Icon size={iconSize.inline} aria-hidden="true" />
-                {label}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      <div className="form-fields ecu-delivery-fields">
-        <label>
-          {t('shell.delivery.target')}
-          <select
-            aria-label={t('shell.delivery.target')}
-            value={target}
-            disabled={busy || locked}
-            onChange={(event) => void controller.changeTarget(event.target.value as BuildTarget)}
-          >
-            {(['windows-x64-controlled-v1', 'linux-x64-controlled-v1'] as const).map((value) => (
-              <option key={value} value={value}>
-                {targetLabel(value)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t('shell.delivery.output')}
-          <input
-            aria-label={t('shell.delivery.output')}
-            value={displayPath(output)}
-            disabled={busy || locked}
-            onChange={(e) => changeOutput(e.target.value)}
-          />
-        </label>
-        <button
-          type="button"
-          disabled={busy || locked || !native}
-          onClick={() =>
-            void chooseDirectory((path) => {
-              changeOutput(path);
-            })
-          }
-        >
-          {t('shell.delivery.chooseOutput')}
-        </button>
-        <label>
-          <input
-            type="checkbox"
-            checked={handoff}
-            disabled={busy || locked}
-            onChange={(e) => {
-              controller.setGenerationKind(e.target.checked ? 'handoff' : 'project');
-              changeOutput(output);
-            }}
-          />
-          {t('shell.delivery.metadata')}
-        </label>
-        <label>
-          {t('shell.delivery.buildDirectory')}
-          <input
-            aria-label={t('shell.delivery.buildInput')}
-            value={displayPath(buildDirectory)}
-            disabled={busy || locked}
-            onChange={(e) => changeBuildDirectory(e.target.value)}
-          />
-        </label>
-        <button
-          type="button"
-          disabled={busy || locked || !native}
-          onClick={() => void chooseDirectory(changeBuildDirectory)}
-        >
-          {t('shell.delivery.chooseBuildDirectory')}
-        </button>
-      </div>
-      <CommandActions
-        actions={[
-          { command: command('preview'), label: t('shell.delivery.preview') },
-          { command: command('preflight'), label: t('shell.command.preflight') },
-          { command: command('generate'), label: t('shell.delivery.generate') },
-          { command: command('build-ecu'), label: t('shell.delivery.build') },
-          { command: command('verify-ecu'), label: t('shell.delivery.verify') },
-        ]}
-      />
-      <div className="form-fields ecu-delivery-fields">
-        <label>
-          {t('shell.delivery.importDirectory')}
-          <input
-            aria-label={t('shell.delivery.importDirectory')}
-            value={displayPath(importDirectory)}
-            disabled={busy || locked}
-            onChange={(e) => setImportDirectory(e.target.value)}
-          />
-        </label>
-      </div>
-      <CommandActions
-        actions={[
-          {
-            command: command('ecu-package'),
-            label: t('shell.delivery.reimport'),
-            run: () => onImport(importDirectory),
-          },
-        ]}
-      />
+      <section className="delivery-step">
+        <h3>{t('shell.stage.generate')}</h3>
+        <div className="form-fields">
+          <label>
+            {t('shell.delivery.target')}
+            <select
+              aria-label={t('shell.delivery.target')}
+              value={target}
+              disabled={busy}
+              onChange={(event) => void controller.changeTarget(event.target.value as BuildTarget)}
+            >
+              {(['windows-x64-controlled-v1', 'linux-x64-controlled-v1'] as const).map((value) => (
+                <option key={value} value={value}>
+                  {targetLabel(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {t('shell.delivery.output')}
+            <div className="path-picker">
+              <input
+                aria-label={t('shell.delivery.output')}
+                value={displayPath(output)}
+                disabled={busy}
+                onChange={(e) => changeOutput(e.target.value)}
+              />
+              {choose(t('shell.delivery.chooseOutput'), changeOutput)}
+            </div>
+          </label>
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={handoff}
+              disabled={busy}
+              onChange={(e) => {
+                controller.setGenerationKind(e.target.checked ? 'handoff' : 'project');
+                changeOutput(output);
+              }}
+            />
+            {t('shell.delivery.metadata')}
+          </label>
+        </div>
+        {/* Generation itself is confirmed in the preview dialog, once. */}
+        <CommandActions
+          actions={[
+            {
+              command: command('preview'),
+              label: t('shell.delivery.preview'),
+              className: 'primary-button',
+            },
+            { command: command('preflight'), label: t('shell.command.preflight') },
+          ]}
+        />
+      </section>
+      <section className="delivery-step">
+        <h3>{t('shell.stage.build')}</h3>
+        <div className="form-fields">
+          <label>
+            {t('shell.delivery.buildDirectory')}
+            <div className="path-picker">
+              <input
+                aria-label={t('shell.delivery.buildInput')}
+                value={displayPath(buildDirectory)}
+                disabled={busy}
+                onChange={(e) => changeBuildDirectory(e.target.value)}
+              />
+              {choose(t('shell.delivery.chooseBuildDirectory'), changeBuildDirectory)}
+            </div>
+          </label>
+        </div>
+        <CommandActions
+          actions={[
+            {
+              command: command('build-ecu'),
+              label: t('shell.delivery.build'),
+              className: 'primary-button',
+            },
+          ]}
+        />
+      </section>
+      <section className="delivery-step">
+        <h3>{t('shell.stage.host')}</h3>
+        <CommandActions
+          actions={[
+            {
+              command: command('verify-ecu'),
+              label: t('shell.delivery.verify'),
+              className: 'primary-button',
+            },
+          ]}
+        />
+      </section>
+      <section className="delivery-step">
+        <h3>{t('shell.delivery.reimport')}</h3>
+        <div className="form-fields">
+          <label>
+            {t('shell.delivery.importDirectory')}
+            <div className="path-picker">
+              <input
+                aria-label={t('shell.delivery.importDirectory')}
+                value={displayPath(importDirectory)}
+                disabled={busy}
+                onChange={(e) => setImportDirectory(e.target.value)}
+              />
+              {choose(t('shell.delivery.chooseImportDirectory'), setImportDirectory)}
+            </div>
+          </label>
+        </div>
+        <CommandActions
+          actions={[
+            {
+              command: command('ecu-package'),
+              label: t('shell.delivery.reimport'),
+              run: () => onImport(importDirectory),
+            },
+          ]}
+        />
+      </section>
       <div className={`page-guidance${failed ? ' error' : ''}`}>
         <span role="status">{guidance}</span>
         {!busy && !failed && (built || generated) ? (
@@ -262,27 +301,6 @@ export function IntegrationDelivery({
           />
         ) : null}
       </div>
-      {preview && (
-        <div className="generation-preview">
-          <label>
-            {t('shell.delivery.files')}
-            <select
-              aria-label={t('shell.delivery.previewFile')}
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-            >
-              {preview.files.map((item) => (
-                <option key={item.path} value={item.path}>
-                  {fileStatusLabel(item.status)} · {item.path}
-                </option>
-              ))}
-            </select>
-          </label>
-          <pre aria-label={t('shell.delivery.filePreview')}>
-            {file?.after ?? t('shell.delivery.binaryHidden')}
-          </pre>
-        </div>
-      )}
       {built && <OwnedLog text={built.log} label={t('shell.delivery.buildLog')} />}
       {verified && <OwnedLog text={verified.log} label={t('shell.delivery.behaviorLog')} />}
     </div>

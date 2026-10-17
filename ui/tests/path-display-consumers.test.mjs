@@ -94,11 +94,12 @@ function captureClipboard() {
   return writeText;
 }
 
-async function renderWorkbench(integrationCandidate = false) {
+async function renderWorkbench(integrationCandidate = false, initialized = integrationCandidate) {
   let opened = false;
+  let initializedNow = false;
   const workspace = {
     integrationCandidate,
-    applicationInitialized: integrationCandidate,
+    applicationInitialized: initialized,
     name: 'PathProject',
     dirty: false,
     files: [],
@@ -147,6 +148,21 @@ async function renderWorkbench(integrationCandidate = false) {
       });
     if (command === 'preview_ecu_project') return reply(generationPreview);
     if (command === 'generate_ecu_project') return reply(generated);
+    if (command === 'preview_application_initialization')
+      return reply({
+        revision: 'application',
+        slots: [],
+        files: [],
+        manifestBefore: '{}',
+        manifestAfter: '{}',
+      });
+    if (command === 'initialize_application_previewed') {
+      initializedNow = true;
+      return reply({ projection, warnings: [], retainedRecoveryFiles: [] });
+    }
+    // A fresh view: the controller must store it, not see a mutated earlier one.
+    if (command === 'workspace_view')
+      return reply({ ...workspace, applicationInitialized: initialized || initializedNow });
     throw new Error(`Unexpected command: ${command}`);
   });
   let controller;
@@ -447,6 +463,10 @@ test('real ECU preview and confirmation retain raw directories and revision acro
   expect(current().generationPreview.revision).toBe('sealed-output-revision');
   act(() => current().setLanguageDraft('en'));
   dialog = within(view.getByRole('dialog'));
+  // The dialog is the single confirmation: it names the count and directory, and the page
+  // behind it keeps no second rendering of the preview.
+  expect(dialog.getByText(/^1 file will be written to C:\\工作目录\\output · /)).toBeTruthy();
+  expect(view.getAllByLabelText(translate('workflow.generation.snapshotAfter'))).toHaveLength(1);
   await act(async () => {
     fireEvent.click(
       dialog.getByRole('button', { name: translate('workflow.generation.confirmExport') }),
@@ -456,10 +476,7 @@ test('real ECU preview and confirmation retain raw directories and revision acro
     expect(current().generated).toBe(generated);
     expect(current().busy).toBeNull();
   });
-  expect(native.confirm).toHaveBeenCalledWith(String.raw`Write 1 file to C:\工作目录\output?`, {
-    title: translate('workflow.action.confirm'),
-    kind: 'warning',
-  });
+  expect(native.confirm).not.toHaveBeenCalled();
   expect(native.invoke).toHaveBeenCalledWith('generate_ecu_project', {
     outputDirectory: String.raw`\\?\C:\工作目录\output`,
     handoff: true,
@@ -485,12 +502,12 @@ test.each([
   [
     'zh-CN',
     String.raw`初始化绝不会覆盖已有路径：C:\工作目录\Application.arxml`,
-    String.raw`确认将 1 个文件写入 C:\工作目录\output？`,
+    String.raw`已另存为成员工程：C:\工作目录\output`,
   ],
   [
     'en',
     String.raw`Initialization never overwrites an existing path: C:\工作目录\Application.arxml`,
-    String.raw`Write 1 file to C:\工作目录\output?`,
+    String.raw`Saved as a member project in C:\工作目录\output`,
   ],
 ])(
   '%s product messages format path parameters without mutating descriptors or raw log copies',
@@ -498,12 +515,12 @@ test.each([
     previewLanguage(language);
     const clipboard = captureClipboard();
     const pathParams = Object.freeze({ path: rawSource });
-    const directoryParams = Object.freeze({ count: 1, directory: rawOutput });
+    const directoryParams = Object.freeze({ directory: rawOutput });
     const pathMessage = message(
       'backend.arxml.application.initialization_existing_path',
       pathParams,
     );
-    const confirmMessage = message('workflow.confirm.generateFiles', directoryParams);
+    const confirmMessage = message('workflow.project.savedAs', directoryParams);
     const view = render(
       React.createElement(
         React.Fragment,
@@ -524,10 +541,7 @@ test.each([
     expect(pathMessage.params).toBe(pathParams);
     expect(pathMessage.params).toEqual({ path: String.raw`\\?\C:\工作目录\Application.arxml` });
     expect(confirmMessage.params).toBe(directoryParams);
-    expect(confirmMessage.params).toEqual({
-      count: 1,
-      directory: String.raw`\\?\C:\工作目录\output`,
-    });
+    expect(confirmMessage.params).toEqual({ directory: String.raw`\\?\C:\工作目录\output` });
     const rawSection = view.getByLabelText('Compiler evidence').closest('.owned-log');
     await act(async () => {
       fireEvent.click(
@@ -609,7 +623,7 @@ test('application preview formats source files but preserves component identitie
     React.createElement(PreviewDialogs, { controller: { applicationPreview: preview } }),
   );
   expect(
-    Array.from(view.container.querySelectorAll('dl .path-text'), (node) => node.textContent),
+    Array.from(view.baseElement.querySelectorAll('dl .path-text'), (node) => node.textContent),
   ).toEqual([
     'application',
     '/Package/Component/Port',
@@ -699,3 +713,23 @@ test.each(['zh-CN', 'en'])(
     expect(preview.revision).toBe('complete-application-revision');
   },
 );
+
+test('confirming application initialization makes ECU delivery available without reopening', async () => {
+  previewLanguage('en');
+  const consumer = await renderWorkbench(true, false);
+  await importSources(consumer);
+  const { current } = consumer;
+  const preview = () => current().commands.find((command) => command.id === 'preview');
+  expect(localize(preview().reason)).toBe(
+    translate('backend.prepared.application_initialization_required'),
+  );
+  await act(async () => {
+    await current().previewApplicationInitialization();
+  });
+  await act(async () => {
+    await current().initializeApplicationPreviewed();
+  });
+  await waitFor(() => expect(current().busy).toBeNull());
+  expect(current().workspace.applicationInitialized).toBe(true);
+  expect(preview().reason).toBe('');
+});
