@@ -187,7 +187,7 @@ components:
 - 语义色区分对象类别、选择与结果，不铺满工作区。
 - 原生系统字体服务中文任务与工程标识符。
 
-视觉取值来自 [完成原型](docs/design/ux-baseline/mockups/index.html) 的主题变量与复用组件，不采纳现有生产 UI 的样式；交互、状态与任务契约见 [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE/README.md)，本文不重复功能规格。
+视觉取值来自 [完成原型](docs/design/ux-baseline/mockups/index.html) 的主题变量与复用组件，不采纳现有生产 UI 的样式；交互、状态与任务契约见 [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE/README.md)，本文不重复功能规格。可独立阅读的部分（如 [Components](docs/design/components.zh-CN.md)）见 [docs/design](docs/design/README.zh-CN.md) 索引。
 
 ## Colors
 
@@ -212,9 +212,7 @@ components:
 
 ### Identity
 
-身份资产与 UI 语义色分离。用户偏好 A（1＞3＞2），但要求它与工作台更协调；绿色适配已被明确否决。当前保留 A 的形体，以浅桃红、珊瑚与深莓红形成受控亮暗，不采用近似 JetBrains Toolbox 的橙粉紫转色。JetBrains／VS Code 只校准层次与质感，不提供可复制的品牌配色；主行动使用同一珊瑚色系的可读实色，布局、中性壳层及对象／结果角色保持独立。当前透明珊瑚材质版已由用户暂时定稿，后续变更回到本规格；正式资产在实施时替换。
-
-当前 PNG 图形为 `logo-workbench.png`，原色 A 为 `logo-coral.png`；两者均为真实 RGBA 透明图形，图形外围、车窗及灯位留白透出实际背景，不带白色承载底。浅色用石墨灯位，深色用对应 `-dark.png` 的暖白灯位；仅灯位 RGB 改变，车身色层、轮廓与 alpha 一致。有效主题变化时同步图形，不重置未应用的输入。桌面通用母图 `logo-app.png` 使用中性灯色，ICO／ICNS 不声称随系统主题自动切换。保留生成形体，未声称已有可编辑矢量品牌母版。浅深背景与 16、32、64、128 CSS px 用于比较整体轮廓，较大尺寸看色层；颜色不代表额外产品能力。实际原型与图标评审见 [A 与界面对照](docs/design/ux-baseline/mockups/logo.html)，默认展示渐变适配，`?logo=coral` 保留平面原色对照。正式图标尚未替换，不使用 AUTOSAR 官方商标。
+身份资产与 UI 语义色分离。A 图形、浅深变体与资产规则见 [Identity](docs/design/identity.zh-CN.md)。
 
 ## Typography
 
@@ -265,29 +263,7 @@ components:
 
 ## Components
 
-### Buttons
-
-克制、可扫描。主按钮用主行动色与对应反色文字，权重 600。次按钮为画布底与 `line` 边界。幽灵按钮透明，用于菜单、标签条和行内操作；图标按钮是 28px 见方的幽灵按钮，带 16px 图标、无障碍名称和提示。危险按钮用于破坏性或放弃类确认：画布底、`error` 文字与边框，悬停用 `error-bg`。悬停使用 hover，`:active` 使用 active；主按钮保持主色，悬停 brightness(0.93)，按下 0.86。按下的切换按钮（`aria-pressed`）使用选择色，不被悬停覆盖。禁用文字使用 muted、透明度 0.65；主按钮禁用底为 hover。不可用的命令仍可聚焦；所在动作组下方逐条列出原因，能解决的附幽灵按钮操作。键盘焦点为 2px blue 轮廓、偏移 2px；在会裁切的容器内（滚动的树和列表、标签条、菜单、状态栏）偏移为 -2px，保证焦点环完整。
-
-### Chips
-
-角色标签采用 shell 底、tag 圆角与小字号；类别只改变文字色。标签不是主按钮，也不将对象类别误写成验证结果。
-
-### Cards / Containers
-
-固定工程面板采用 surface、细边界与面板内距，中心编辑器用 canvas；不是装饰卡片。临时菜单和模态层才使用 Elevation 的阴影与对应圆角。
-
-### Inputs / Fields
-
-画布底、`border-strong` 边界与 control 圆角；内距见 input token。下拉框去掉原生外观，与输入框一致，并绘制 text-secondary 色的箭头。复选框自绘，16px、tag 圆角、`border-strong` 边界；勾选时为 `blue` 填充与画布色勾。插入符使用 primary，占位文字用 muted；禁用输入用 shell 底与 secondary 文字。焦点沿用按钮轮廓，错误上下文使用带文字的语义提示，不编造未出现的输入错误边框。
-
-### Navigation
-
-统一菜单、工具轨与标签保持工程密度。菜单以分隔线分组；聚焦或悬停的菜单项与已展开菜单的标题使用 hover，同组共有的禁用原因只在组末显示一次。选中的树节点、表格行和列表项使用选择色，并在起始边加 2px selection-text 竖条，不只依赖背景；按下的工具轨按钮在工具轨边缘显示同样的竖条。层级以缩进表达。所有标签条中活动标签为 text-primary，其余为 text-secondary；编辑标签和面板标签以底部主色标线标示活动项，编辑标签另用画布底。底部工具窗口按钮是切换按钮，打开时顶部有主色标线。标签遵循键盘标签模式：一个 Tab 停靠点、方向键、Home、End。不转换成大号导航卡片。
-
-### Object Table & Inspector
-
-对象表采用紧凑字号、surface 表头和逐行细分隔，选中行用 selection，悬停用 hover，选中优先于悬停。检查器采用同一对象色和 panel 内距，不另建配色世界。
+按钮、标签、容器、输入、导航以及配置编辑器（树、表格、检查器）的规则见 [Components](docs/design/components.zh-CN.md)，只使用上文的 token。
 
 ## Do's and Don'ts
 

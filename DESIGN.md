@@ -187,7 +187,7 @@ On 2026-10-03, the user confirmed that this iteration of the interface and the t
 - Semantic colors distinguish object categories, selection, and results without filling the workspace.
 - Native system fonts support Chinese-language tasks and engineering identifiers.
 
-Visual values come from the theme variables and reusable components of the [completed prototype](docs/design/ux-baseline/mockups/index.html), not from the existing production UI's styling. Interaction, state, and task contracts are documented in [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE/README.md); this document does not repeat the functional specifications.
+Visual values come from the theme variables and reusable components of the [completed prototype](docs/design/ux-baseline/mockups/index.html), not from the existing production UI's styling. Interaction, state, and task contracts are documented in [EXPERIENCE](docs/design/ux-baseline/EXPERIENCE/README.md); this document does not repeat the functional specifications. Documents that can be read on their own, such as [Components](docs/design/components.md), are indexed in [docs/design](docs/design/README.md).
 
 ## Colors
 
@@ -212,9 +212,7 @@ The light theme uses paper white and light gray; the dark theme uses graphite su
 
 ### Identity
 
-Identity assets are separate from UI semantic colors. The user prefers A (1＞3＞2), but requires it to harmonize better with the workbench; a green adaptation was explicitly rejected. Retain A's current form, using light peach pink, coral, and dark berry red for controlled light and dark tones, rather than an orange-pink-purple transition resembling JetBrains Toolbox. JetBrains / VS Code serve only to calibrate hierarchy and texture, not as sources of brand palettes to copy. Primary actions use readable solid colors from the same coral family; layout, the neutral shell, and object / result roles remain independent. The current transparent coral-material version has been provisionally finalized by the user; subsequent changes must return to this specification, and production assets will be replaced during implementation.
-
-The current PNG graphic is `logo-workbench.png`, and the original-color A is `logo-coral.png`. Both are genuine RGBA transparent graphics: the areas outside the graphic, windows, and light cutouts reveal the actual background, with no white backing. The light theme uses graphite lights; the dark theme uses warm-white lights in the corresponding `-dark.png` file. Only the lights' RGB values change; the body color layers, contours, and alpha remain identical. Synchronize the graphic when the effective theme changes without resetting unapplied input. The general-purpose desktop master image `logo-app.png` uses neutral light colors; ICO / ICNS assets are not claimed to switch automatically with the system theme. Retain the generated form; there is no claim that an editable vector brand master already exists. Light and dark backgrounds and sizes of 16, 32, 64, and 128 CSS px are used to compare the overall silhouette; larger sizes are used to inspect color layers. Colors do not represent additional product capabilities. See [A and interface comparison](docs/design/ux-baseline/mockups/logo.html) for the actual prototype and icon review. The gradient adaptation is shown by default; `?logo=coral` preserves the flat original-color comparison. The production icon has not yet been replaced, and the official AUTOSAR trademark is not used.
+Identity assets are separate from UI semantic colors. The A mark, its light and dark variants and the asset rules are in [Identity](docs/design/identity.md).
 
 ## Typography
 
@@ -265,29 +263,7 @@ Inputs and buttons use subtle rounding, tags and checkboxes are more compact, an
 
 ## Components
 
-### Buttons
-
-Restrained and scannable. Primary buttons use the primary-action color and its contrasting text, weight 600. Secondary buttons use canvas and a `line` boundary. Ghost buttons are transparent, for menus, tab strips, and inline actions; icon buttons are 28px square ghosts with a 16px icon, an accessible name, and a tooltip. Danger buttons, for destructive or discarding confirmations, use `error` text and border on canvas and `error-bg` on hover. Hover uses hover and `:active` uses active; primary buttons keep their color with brightness(0.93) on hover and 0.86 pressed. Pressed toggles (`aria-pressed`) use selection colors, unaffected by hover. Disabled text uses muted with opacity 0.65; disabled primary buttons use hover as background. Unavailable commands stay focusable; their group lists each reason below it, with any fix as a ghost action. Keyboard focus is a 2px blue outline offset 2px, or -2px inside clipping containers (scrolling trees and lists, tab strips, menus, the status bar) so the ring stays whole.
-
-### Chips
-
-Role tags use a shell background, tag corner radius, and small text; categories change only the text color. Tags are not primary buttons, and object categories must not be mislabeled as validation results.
-
-### Cards / Containers
-
-Fixed engineering panels use surface, fine boundaries, and panel padding; the central editor uses canvas. These are not decorative cards. Only temporary menus and modal layers use the shadows defined under Elevation and their corresponding corner radii.
-
-### Inputs / Fields
-
-Use a canvas background, a `border-strong` boundary, and control corner radius; see the input token for padding. Selects drop the native look, match the input, and draw a text-secondary chevron. Checkboxes are drawn at 16px with tag radius and a `border-strong` boundary; checked is a `blue` fill with a canvas check. The caret uses primary, and placeholder text uses muted; disabled inputs use a shell background and secondary text.
-
-### Navigation
-
-Unified menus, the tool rail, and tabs retain engineering density. Menus group items with separators; the focused or hovered item and the open menu's title use hover, and a disabled reason shared within a group appears once at its end. Selected tree nodes, table rows, and list items use selection colors plus a 2px selection-text bar on the leading edge, never background alone; a pressed tool-rail button shows the bar at the rail edge. Indentation conveys hierarchy. In every tab strip the active tab is text-primary and the rest text-secondary; editor and panel tabs mark the active tab with a bottom primary line, editor tabs also with canvas. Bottom tool-window buttons are toggles with a top primary line when open. Tabs follow the keyboard tab pattern: one tab stop, arrows, Home, End. Do not convert them into oversized navigation cards.
-
-### Object Table & Inspector
-
-Object tables use compact text, surface headers, and fine row separators. Selected rows use selection, hover uses hover; selection wins. The inspector uses the same object colors and panel padding rather than establishing a separate palette.
+Buttons, chips, containers, inputs, navigation and the configuration editor (tree, tables, inspector) are specified in [Components](docs/design/components.md). They consume only the tokens above.
 
 ## Do's and Don'ts
 
