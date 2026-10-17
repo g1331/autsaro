@@ -104,7 +104,7 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [notice, setNotice]);
   const requestExit = async () => {
-    await c.replaceProject(message('shell.command.exit'), () => getCurrentWindow().destroy());
+    await c.replaceProject(message('activity.exit'), () => getCurrentWindow().destroy());
   };
   const exitRequested = useEffectEvent(requestExit);
   useEffect(() => {
@@ -213,10 +213,16 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="menubar" data-tauri-drag-region>
-        <img src={logo} width="27" height="27" alt={t('shell.app.title')} data-tauri-drag-region />
+        <img
+          src={logo}
+          width="27"
+          height="27"
+          alt={t('controller.app.title')}
+          data-tauri-drag-region
+        />
         <WorkbenchMenubar label={t('shell.app.menu')} commands={commands} run={dispatchCommand} />
         <div className="titlebar-drag-region" data-tauri-drag-region>
-          <span className="app-title">{t('shell.app.title')}</span>
+          <span className="app-title">{t('controller.app.title')}</span>
         </div>
         {c.native ? (
           <WindowControls
@@ -246,11 +252,11 @@ export default function App() {
             </span>
             {(
               [
-                ['save', Save, t('shell.command.save')],
-                ['validate', ListChecks, t('shell.app.validate')],
-                ['delivery', Code2, t('shell.document.delivery')],
+                ['save', Save],
+                ['validate', ListChecks],
+                ['delivery', Code2],
               ] as const
-            ).map(([id, Icon, label]) => (
+            ).map(([id, Icon]) => (
               <CommandButton
                 key={id}
                 command={command(id)}
@@ -262,7 +268,7 @@ export default function App() {
                 }
               >
                 <Icon size={iconSize.control} aria-hidden="true" />
-                {label}
+                {text(command(id).label)}
               </CommandButton>
             ))}
             <CommandReasons
@@ -280,14 +286,13 @@ export default function App() {
               {busyStatus}
             </span>
             <button type="button" onClick={() => dispatchCommand('cancel')}>
-              {t('shell.app.cancel')}
+              {t('action.cancelOperation')}
             </button>
           </>
         ) : null}
         <button
           type="button"
           className="toolbar-search"
-          aria-label={t('shell.app.commandShortcut')}
           onClick={() => {
             rememberDialogOpener();
             setPalette(true);
@@ -427,10 +432,7 @@ export default function App() {
                         {displayPath(source?.path ?? '')}
                       </span>
                       {source ? (
-                        <CopyText
-                          text={displayPath(source.path)}
-                          label={t('shell.app.copySourcePath')}
-                        />
+                        <CopyText text={displayPath(source.path)} label={t('action.copyPath')} />
                       ) : null}
                       <span className="role-tag">{t('editor.common.readonly')}</span>
                     </header>
@@ -572,6 +574,9 @@ export default function App() {
           <h3>{t('shell.help.support')}</h3>
           <p>{t('shell.help.coverage')}</p>
           <p>{t('shell.help.can')}</p>
+          <p>{t('shell.help.inputs')}</p>
+          <p>{t('shell.help.extensions')}</p>
+          <p>{t('shell.help.application')}</p>
           <p>{t('shell.help.preflight')}</p>
         </Dialog>
       ) : null}

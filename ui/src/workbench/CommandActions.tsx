@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import type { ComponentProps, ReactNode } from 'react';
+import type { ComponentProps } from 'react';
 import { Info } from 'lucide-react';
 import { useLocale } from '../i18n';
 import type { Command } from './commands';
@@ -15,14 +15,17 @@ type CommandButtonProps = Omit<ComponentProps<'button'>, 'onClick' | 'disabled'>
 
 /**
  * An unavailable command stays focusable (`aria-disabled`) so keyboard and screen-reader
- * users reach the reason it is described by; a click does nothing.
+ * users reach the reason it is described by; a click does nothing. Without children the
+ * button shows `command.label`, so every entry names the action the same way.
  */
 export function CommandButton({
   command,
   run = command.run,
   reasonId,
+  children,
   ...props
 }: CommandButtonProps) {
+  const { text } = useLocale();
   const unavailable = Boolean(command.reason);
   return (
     <button
@@ -33,7 +36,9 @@ export function CommandButton({
       onClick={() => {
         if (!unavailable) void run();
       }}
-    />
+    >
+      {children ?? text(command.label)}
+    </button>
   );
 }
 
@@ -91,7 +96,7 @@ export function CommandActions({
   actions,
   className = 'section-actions',
 }: {
-  actions: { command: Command; label: ReactNode; run?: () => unknown; className?: string }[];
+  actions: { command: Command; run?: () => unknown; className?: string }[];
   className?: string;
 }) {
   const { text } = useLocale();
@@ -101,16 +106,14 @@ export function CommandActions({
   return (
     <>
       <div className={className}>
-        {actions.map(({ command, label, run, className: buttonClass }) => (
+        {actions.map(({ command, run, className: buttonClass }) => (
           <CommandButton
             key={command.id}
             command={command}
             run={run}
             className={buttonClass}
             reasonId={reasonId(command)}
-          >
-            {label}
-          </CommandButton>
+          />
         ))}
       </div>
       <CommandReasons commands={commands} id={id} />

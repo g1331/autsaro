@@ -54,7 +54,7 @@ test('dialog close is blocked while busy, says why and offers cancel', () => {
   const onCancelBusy = vi.fn();
   const props = { title: 'Preview', onClose, onCancelBusy };
   const view = render(
-    React.createElement(Dialog, { ...props, busy: message('workflow.action.save') }, 'Body'),
+    React.createElement(Dialog, { ...props, busy: message('activity.save') }, 'Body'),
   );
   const close = view.getByRole('button', {
     name: translate('editor.dialog.closeLabel', { title: 'Preview' }),
@@ -62,11 +62,13 @@ test('dialog close is blocked while busy, says why and offers cancel', () => {
   expect(close.disabled).toBe(true);
   const reason = document.getElementById(close.getAttribute('aria-describedby'));
   expect(reason.textContent).toContain(
-    translate('editor.dialog.closeBlocked', { operation: translate('workflow.action.save') }),
+    translate('editor.dialog.closeBlocked', { operation: translate('activity.save') }),
   );
   fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
   expect(onClose).not.toHaveBeenCalled();
-  fireEvent.click(within(reason).getByRole('button', { name: translate('shell.command.cancel') }));
+  fireEvent.click(
+    within(reason).getByRole('button', { name: translate('action.cancelOperation') }),
+  );
   expect(onCancelBusy).toHaveBeenCalled();
   view.rerender(React.createElement(Dialog, { ...props, busy: null }, 'Body'));
   expect(close.disabled).toBe(false);

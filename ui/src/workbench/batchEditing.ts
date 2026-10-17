@@ -1,7 +1,7 @@
 import { composedMessage, isMessage, message, ProductError } from '../i18n';
 import type { Text } from '../i18n';
 import type { IntegrationInspection, WorkspaceView } from '../types';
-import { errorText } from './forms';
+import { errorText, headline } from './forms';
 import type { Notice } from './forms';
 import type {
   ChangeOutcome,
@@ -76,7 +76,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
     const field = fieldRejection(error, stateRef.current.projection?.fields ?? []);
     if (!field)
       return {
-        notice: { tone: 'error', text: composedMessage(key, { error: detail }), detail },
+        notice: { tone: 'error', text: composedMessage(key, { error: headline(error) }), detail },
         fieldErrors: {},
       };
     return {
@@ -152,7 +152,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       changes: current.changes,
     };
     running.current = true;
-    patchState({ busy: message('workflow.action.previewBatch'), notice: null, fieldErrors: {} });
+    patchState({ busy: message('activity.previewChanges'), notice: null, fieldErrors: {} });
     const generation = epoch.current;
     try {
       const preview = await call<ChangePreview>('prepare_configuration_change', { changeSet });
@@ -180,7 +180,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
     const { changePreview, preparedChangeSet } = before;
     if (!changePreview || !preparedChangeSet || running.current) return false;
     running.current = true;
-    patchState({ busy: message('workflow.action.applyBatch'), notice: null, fieldErrors: {} });
+    patchState({ busy: message('activity.apply'), notice: null, fieldErrors: {} });
     const generation = epoch.current;
     const fingerprintBefore = capabilitiesRef.current?.fingerprint;
     try {
@@ -262,7 +262,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
           setIntegrationNotice(
             report.description
               ? message('workflow.integration.recheckedUnsaved')
-              : message('workflow.integration.failed'),
+              : message('controller.integration.failed'),
           );
         } catch (error) {
           if (generation !== epoch.current) return false;
@@ -289,7 +289,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       patchState({
         changePreview: null,
         preparedChangeSet: null,
-        ...rejection('workflow.error.batchRejected', error),
+        ...rejection('workflow.error.draftsRejected', error),
       });
       changeConfirmation.current?.(false);
       changeConfirmation.current = null;

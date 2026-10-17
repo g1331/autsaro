@@ -7,6 +7,6 @@ import type { Text } from './i18n';
 export async function requestConfirmation(prompt: Text): Promise<boolean> {
   const rendered = localize(prompt);
   if (isTauri())
-    return confirm(rendered, { title: translate('workflow.action.confirm'), kind: 'warning' });
+    return confirm(rendered, { title: translate('activity.confirm'), kind: 'warning' });
   return window.confirm(rendered);
 }

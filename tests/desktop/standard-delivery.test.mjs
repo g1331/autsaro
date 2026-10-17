@@ -20,6 +20,7 @@ const {
   click,
   input,
   label,
+  field,
   menu,
   choose,
   refreshSurface,
@@ -45,25 +46,25 @@ check('seven-source-standard-variant', async () => {
   assert.equal(view.sources.length, 7);
   const savedBytes = await sourceBytes(view);
   await until(
-    `Boolean(document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]:not(:disabled)'))`,
+    `Boolean(document.querySelector('[aria-label="标准输入工作区"] .integration-fields label:first-child input:not(:disabled)'))`,
     'automatic standard inspection editor ready',
   );
   // This is the existing bounded standard editor, not a new private grammar.
   await menu('标准输入');
-  await input(label('接收 CAN ID'), '1104');
-  await input(label('发送 CAN ID'), '1105');
-  await input(label('应用周期'), '20');
-  await click('应用并校验修改');
+  await input(field('接收 CAN ID'), '1104');
+  await input(field('发送 CAN ID'), '1105');
+  await input(field('应用 / Com 发送 / 对应 Alarm 周期（ms）'), '20');
+  await click('应用更改', 'document.querySelector(\'[aria-label="标准输入工作区"]\')');
   await until(`document.body.innerText.includes('尚未保存')`, 'real standard variant apply');
   await unchanged(savedBytes);
   await click('预览保存');
-  await until(`Boolean(${dialogNamed('确认保存源配置')})`, 'standard source preview');
+  await until(`Boolean(${dialogNamed('保存配置')})`, 'standard source preview');
   await unchanged(savedBytes);
   await click('确认保存', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'confirmed standard save');
-  await click('重开来源');
+  await click('重新读取来源');
   await until(
-    `Boolean(document.querySelector('[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]:not(:disabled)'))`,
+    `Boolean(document.querySelector('[aria-label="标准输入工作区"] .integration-fields label:first-child input:not(:disabled)'))`,
     'standard reopen operation completed',
   );
   const actual = await invoke('inspect_integration');
@@ -78,23 +79,23 @@ check('seven-source-standard-variant', async () => {
     assert.deepEqual(await readFile(source.path), source.bytes);
   await sourceSurface(await projection());
   // Mainline deliveries compile the project's own user application.
-  await menu('预览初始化用户应用…');
+  await menu('初始化用户应用…');
   await until(
     `Boolean(document.querySelector('[role=dialog]'))`,
     'application initialization preview',
   );
-  await click('确认创建用户应用与成员记录', "document.querySelector('[role=dialog]')");
+  await click('确认初始化', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'application initialization confirmed');
   await awaitProjectSurfaceReady();
   // The delivery page previews; the preview dialog is the only confirmation (no native dialog).
   const pageOutput = path.join(scratch, 'deliveries', 'GatewayReference-page');
   await click('源码交付', "document.querySelector('.context-toolbar')");
-  await input(label('ECU 输出目录'), pageOutput);
-  await click('预览 ECU 交付');
+  await input(label('源码输出目录'), pageOutput);
+  await click('预览源码');
   const handoff = await evaluate(
     `document.querySelector('[data-testid=ecu-delivery] input[type=checkbox]').checked`,
   );
-  const generation = dialogNamed(handoff ? '确认导出可重建交接包' : '确认生成独立源码');
+  const generation = dialogNamed(handoff ? '导出 ECU 交接包' : '生成源码');
   await until(`Boolean(${generation})`, 'generation preview dialog');
   const summary = await evaluate(`${generation}.querySelector('footer').textContent`);
   assert(
@@ -127,33 +128,35 @@ check('v2-relocation-snapshot-import-and-refusals', async () => {
     relocated,
     async () => {
       await menu('导入 ECU 交接包…');
-      await click('选择交付包', "document.querySelector('[role=dialog]')");
+      await click('选择…', "document.querySelector('[role=dialog]')");
     },
     async () => {
       await until(
-        `${dialogNamed('导入封存交付包')}?.querySelector('[aria-label="交付包目录"]')?.value === ${json(relocated)}`,
+        `${dialogNamed('导入 ECU 交接包')}?.querySelector('[aria-label="交接包目录"]')?.value === ${json(relocated)}`,
         'actual v2 import destination dialog',
       );
       return evaluate(
-        `${dialogNamed('导入封存交付包')}.querySelector('[aria-label="交付包目录"]').value`,
+        `${dialogNamed('导入 ECU 交接包')}.querySelector('[aria-label="交接包目录"]').value`,
       );
     },
   );
   await choose(
     'directory',
     destination,
-    () => click('选择新空目录', "document.querySelector('[role=dialog]')"),
+    () =>
+      click(
+        '选择…',
+        `[...document.querySelectorAll('[role=dialog] label')].find((node) => node.textContent.startsWith('新工程目录'))`,
+      ),
     async () => {
       await until(
-        `document.querySelector('[role=dialog] [aria-label="新的空 live 工作目录"]')?.value === ${json(destination)}`,
+        `document.querySelector('[role=dialog] [aria-label="新工程目录"]')?.value === ${json(destination)}`,
         'actual v2 import destination selection',
       );
-      return evaluate(
-        `document.querySelector('[role=dialog] [aria-label="新的空 live 工作目录"]').value`,
-      );
+      return evaluate(`document.querySelector('[role=dialog] [aria-label="新工程目录"]').value`);
     },
   );
-  await click('核验并导入交付包', "document.querySelector('[role=dialog]')");
+  await click('导入', "document.querySelector('[role=dialog]')");
   await until(
     `!document.querySelector('[role=dialog]') && Boolean(document.querySelector('.document-tabs'))`,
     'actual v2 source reconstruction published',

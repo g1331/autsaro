@@ -54,7 +54,7 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
         </div>
         <div className="section-actions">
           <button onClick={inspect} disabled={busy || locked || !native || changed}>
-            {t('shell.integration.inspect')}
+            {t('action.validate')}
           </button>
           <button onClick={reopen} disabled={busy || locked || !native}>
             {t('shell.integration.reopen')}
@@ -132,11 +132,6 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                       · {signal.port}
                     </span>
                     <input
-                      aria-label={
-                        signal.receive
-                          ? t('shell.integration.receiveId')
-                          : t('shell.integration.transmitId')
-                      }
                       value={ids[signal.port] ?? ''}
                       onChange={(event) => {
                         const next = { ...ids, [signal.port]: event.target.value };
@@ -155,7 +150,6 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                 <label className="field">
                   <span>{t('shell.integration.period')}</span>
                   <input
-                    aria-label={t('shell.integration.periodA11y')}
                     value={period}
                     onChange={(event) => {
                       setPeriod(event.target.value);
@@ -185,19 +179,19 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
                   onClick={apply}
                   disabled={busy || locked || !changed}
                 >
-                  {t('shell.integration.apply')}
+                  {t('action.apply')}
                 </button>
                 <button
                   onClick={() => restoreIntegrationDraft()}
                   disabled={busy || locked || !changed}
                 >
-                  {t('shell.integration.restore')}
+                  {t('action.revert')}
                 </button>
                 <button
                   onClick={showPreview}
                   disabled={busy || locked || changed || !workspace.dirty}
                 >
-                  {t('shell.command.save')}
+                  {t('action.previewSave')}
                 </button>
               </div>
             </div>

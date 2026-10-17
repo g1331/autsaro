@@ -43,7 +43,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'new',
       group: 'open',
-      label: message('shell.command.new'),
+      label: message('action.newProject'),
       menu: 'file',
       reason: c.actionReason('create'),
       run: () => c.openProjectEntry('empty'),
@@ -51,7 +51,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'open',
       group: 'open',
-      label: message('shell.command.open'),
+      label: message('action.importArxml'),
       menu: 'file',
       shortcut: 'Ctrl+O',
       reason: c.actionReason('open'),
@@ -60,7 +60,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'member',
       group: 'open',
-      label: message('shell.command.member'),
+      label: message('action.openProject'),
       menu: 'file',
       reason: c.actionReason('open'),
       run: c.openMemberProject,
@@ -68,7 +68,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'ecu-package',
       group: 'open',
-      label: message('shell.command.ecuPackage'),
+      label: message('action.importHandoff'),
       menu: 'file',
       reason: c.actionReason('open'),
       run: c.importHandoff,
@@ -76,7 +76,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'save',
       group: 'save',
-      label: message('shell.command.save'),
+      label: message('action.previewSave'),
       menu: 'file',
       shortcut: 'Ctrl+S',
       reason: workspaceReason,
@@ -85,7 +85,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'save-as',
       group: 'save',
-      label: message('shell.command.saveAs'),
+      label: message('action.saveAs'),
       menu: 'file',
       reason: workspaceReason || c.actionReason('save'),
       run: () => c.openProjectEntry('save-as'),
@@ -93,7 +93,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'close',
       group: 'close',
-      label: message('shell.command.close'),
+      label: message('action.closeProject'),
       menu: 'file',
       reason: !c.workspace ? message('shell.reason.noProject') : c.actionReason('open'),
       run: () => c.startProject(),
@@ -101,23 +101,23 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'settings',
       group: 'settings',
-      label: message('shell.command.settings'),
+      label: message('action.settings'),
       menu: 'file',
       reason: '',
       run: () => c.setSettingsOpen(true),
     },
     {
       id: 'apply',
-      label: message('shell.command.apply'),
+      label: message('action.apply'),
       menu: 'edit',
       reason: workspaceReason || (!c.unapplied ? message('shell.reason.noChanges') : ''),
       run: c.applyCurrentDrafts,
     },
     {
       id: 'restore',
-      label: message('shell.command.restore'),
+      label: message('action.revert'),
       menu: 'edit',
-      reason: workspaceReason || (!c.unapplied ? message('shell.reason.noDrafts') : ''),
+      reason: workspaceReason || (!c.unapplied ? message('shell.reason.noChanges') : ''),
       run: c.restoreAllDrafts,
     },
     {
@@ -190,20 +190,18 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'validate',
       group: 'check',
-      label: c.workspace?.integrationCandidate
-        ? message('shell.command.inspect')
-        : message('shell.command.validate'),
+      label: message('action.validate'),
       menu: 'tools',
       reason: workspaceReason,
       run: () =>
-        c.guardContext(message('shell.command.validate'), () =>
+        c.guardContext(message('activity.validate'), () =>
           c.workspace?.integrationCandidate ? c.inspectIntegration() : c.validateProject(),
         ),
     },
     {
       id: 'initialize-application',
       group: 'check',
-      label: message('shell.command.initialize'),
+      label: message('action.initializeApplication'),
       menu: 'tools',
       reason:
         sourceReason ||
@@ -214,7 +212,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'preview',
       group: 'delivery',
-      label: message('shell.command.preview'),
+      label: message('action.previewSource'),
       menu: 'tools',
       reason: deliveryReason,
       run: () => {
@@ -226,7 +224,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'preflight',
       group: 'native',
-      label: message('shell.command.preflight'),
+      label: message('action.preflight'),
       menu: 'tools',
       reason: deliveryReason || toolReason,
       run: c.preflightEcu,
@@ -234,7 +232,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'build-ecu',
       group: 'native',
-      label: message('shell.delivery.build'),
+      label: message('action.build'),
       menu: 'tools',
       reason:
         sourceReason ||
@@ -248,7 +246,7 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'verify-ecu',
       group: 'native',
-      label: message('shell.delivery.verify'),
+      label: message('action.verifyHost'),
       menu: 'tools',
       reason:
         sourceReason ||
@@ -259,32 +257,32 @@ export function workbenchCommands(c: Omit<Workbench, 'commands'>): Command[] {
     {
       id: 'cancel',
       group: 'cancel',
-      label: message('shell.command.cancel'),
+      label: message('action.cancelOperation'),
       menu: 'tools',
       reason: !c.busy ? message('shell.reason.idle') : '',
       run: c.cancelOperation,
     },
     {
       id: 'preview-changes',
-      label: message('editor.objects.previewBatch'),
+      label: message('action.previewChanges'),
       reason: workspaceReason || (!c.changes.length ? message('shell.reason.noChanges') : ''),
       run: c.prepareChanges,
     },
     {
       id: 'discard-changes',
-      label: message('editor.objects.restoreBatch'),
-      reason: workspaceReason || (!c.changes.length ? message('shell.reason.noDrafts') : ''),
+      label: message('action.revert'),
+      reason: workspaceReason || (!c.changes.length ? message('shell.reason.noChanges') : ''),
       run: () => c.discardChanges(),
     },
     {
       id: 'accept-definitions',
-      label: message('shell.settings.acceptCatalog'),
+      label: message('action.acceptDefinitions'),
       reason: workspaceReason,
       run: c.importDefinitionCatalog,
     },
     {
       id: 'execution-tools',
-      label: message('shell.command.executionTools'),
+      label: message('action.executionTools'),
       reason: '',
       run: () => {
         c.setSettingsCategory('tools');

@@ -11,6 +11,7 @@ import { iconSize } from './icons';
 import { CommandActions, CommandButton, CommandReasons } from './CommandActions';
 import { commandById } from './commands';
 import { objectRoleClass } from './objectRole';
+import { profileLabel } from './labels';
 
 export function ObjectEditor({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
@@ -42,7 +43,7 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
         <div>
           <h2>{t('editor.objects.heading')}</h2>
           <span>
-            {c.projection?.profile} · {c.projection?.release}
+            {c.projection ? profileLabel(c.projection.profile) : null} · {c.projection?.release}
           </span>
         </div>
         <span>{t('editor.objects.selectedCount', { count: c.objectSelection.length })}</span>
@@ -136,8 +137,8 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
         <CommandActions
           className="batch-actions"
           actions={[
-            { command: commandById(c, 'preview-changes'), label: t('editor.objects.previewBatch') },
-            { command: commandById(c, 'discard-changes'), label: t('editor.objects.restoreBatch') },
+            { command: commandById(c, 'preview-changes') },
+            { command: commandById(c, 'discard-changes') },
           ]}
         />
       </div>
@@ -430,7 +431,7 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
             {object.writable ? t('editor.common.configurable') : t('editor.common.readonly')}
           </span>
           <p className="mono path-text">{object.path}</p>
-          <CopyText text={object.path} label={t('editor.objects.copyPath')} />
+          <CopyText text={object.path} label={t('action.copyPath')} />
           <p className="mono path-text">
             {displayPath(
               c.projection?.sources.find((source) => source.sourceId === object.sourceId)?.path ??
@@ -473,9 +474,7 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
                 <p className="empty-state">{t('editor.objects.noFields')}</p>
               ) : null}
               <div className="inspector-actions">
-                <CommandButton command={previewChanges} reasonId={`${reasonsId}-0`}>
-                  {t('editor.objects.preview')}
-                </CommandButton>
+                <CommandButton command={previewChanges} reasonId={`${reasonsId}-0`} />
                 {object.writable && !c.actionReason('prepare-change') ? (
                   <button
                     type="button"

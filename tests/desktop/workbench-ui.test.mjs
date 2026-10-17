@@ -100,7 +100,7 @@ check('themes-settings-layout-and-keyboard', async () => {
     }
     await click('执行工具', "document.querySelector('[role=dialog]')");
     const caps = await capabilities();
-    await input(label('编译器保存路径'), path.join(scratch, 'must-not-be-saved'));
+    await input(label('编译器'), path.join(scratch, 'must-not-be-saved'));
     await click('外观', "document.querySelector('[role=dialog]')");
     await input(label('主题'), 'light');
     await click('保存外观', "document.querySelector('[role=dialog]')");
@@ -162,7 +162,7 @@ check('themes-settings-layout-and-keyboard', async () => {
   await selectObject(second.objectId);
   // Draft guards are alert dialogs (Radix AlertDialog).
   await until(`Boolean(document.querySelector('[role=alertdialog]'))`, 'context draft guard');
-  await click('留在原处', "document.querySelector('[role=alertdialog]')");
+  await click('取消', "document.querySelector('[role=alertdialog]')");
   assert.equal(
     await evaluate(`document.querySelector(${json(draftSelector)}).value`),
     '18446744073709551614',
@@ -186,7 +186,7 @@ check('themes-settings-layout-and-keyboard', async () => {
     `Boolean(document.querySelector('[role=alertdialog]'))`,
     'retained invalid draft guard',
   );
-  await click('放弃草稿并继续', "document.querySelector('[role=alertdialog]')");
+  await click('放弃并继续', "document.querySelector('[role=alertdialog]')");
   await until(
     `document.querySelector('[data-object-title]')?.dataset.objectTitle === ${json(second.objectId)}`,
     'explicit draft discard',

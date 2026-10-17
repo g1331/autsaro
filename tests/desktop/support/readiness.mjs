@@ -3,7 +3,7 @@
 export function standardInspectionReady(document) {
   return Boolean(
     document.querySelector(
-      '[aria-label="标准输入工作区"] input[aria-label="接收 CAN ID"]:not(:disabled)',
+      '[aria-label="标准输入工作区"] .integration-fields label:first-child input:not(:disabled)',
     ),
   );
 }

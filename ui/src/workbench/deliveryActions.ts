@@ -59,7 +59,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
 
   function saveProject() {
     void run(
-      { kind: 'savePreview', label: message('workflow.action.previewSave') },
+      { kind: 'savePreview', label: message('activity.previewSave') },
       () => call<SavePreview>('preview_save_project'),
       (preview) => {
         if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
@@ -81,7 +81,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     )
       return;
     void run(
-      { kind: 'action', label: message('workflow.action.save') },
+      { kind: 'action', label: message('activity.save') },
       () => call<SaveOutcome>('save_project', { revision: savePreview.revision }),
       (result) => {
         acceptView(result.workspace);
@@ -94,7 +94,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
         } else {
           setStages({
             ...stageDefaults,
-            save: { state: 'done', detail: message('workflow.stage.configurationSaved') },
+            save: { state: 'done', detail: message('workflow.stage.projectSaved') },
           });
           setNotice({
             tone: 'success',
@@ -114,7 +114,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
 
   function validateProject() {
     void run(
-      { kind: 'action', label: message('workflow.action.validate') },
+      { kind: 'action', label: message('activity.validate') },
       async () => {
         const view = await call<WorkspaceView>('validate_project');
         // Automatic diagnostics are only in the projection; count both sources.
@@ -152,7 +152,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
 
   function previewIntegrationSave() {
     void run(
-      { kind: 'savePreview', label: message('workflow.action.previewIntegrationSave') },
+      { kind: 'savePreview', label: message('activity.previewSave') },
       () => call<SavePreview>('preview_integration_save'),
       (preview) => {
         if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
@@ -174,7 +174,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     const preview = state.integrationPreview;
     if (!preview) return;
     void run(
-      { kind: 'action', label: message('workflow.action.saveIntegration') },
+      { kind: 'action', label: message('activity.save') },
       () => call<SaveOutcome>('save_integration', { revision: preview.revision }),
       (result) => {
         acceptView(result.workspace);
@@ -244,7 +244,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     )
       return;
     void run(
-      { kind: 'action', label: message('workflow.action.previewEcu') },
+      { kind: 'action', label: message('activity.previewSource') },
       async () => {
         const inspection = await call<IntegrationInspection>('inspect_integration');
         if (!inspection.description) throw inspection.diagnostics;
@@ -267,7 +267,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     // The preview dialog is the only confirmation; it names the files and directory.
     if (!generationPreview) return;
     void run(
-      { kind: 'action', label: message('workflow.action.generateEcu') },
+      { kind: 'action', label: message('activity.generate') },
       () =>
         call<GenerateResult>('generate_ecu_project', {
           outputDirectory: generationPreview.outputDirectory,
@@ -295,7 +295,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   function preflightEcu() {
     if (workspace?.dirty || state.projection?.dirty || unapplied) return;
     void run(
-      { kind: 'action', label: message('workflow.action.preflight') },
+      { kind: 'action', label: message('activity.preflight') },
       () => call<PreflightReport>('preflight_ecu', { handoff: generationKind === 'handoff' }),
       (report) => {
         field('preflight')(report);
@@ -323,7 +323,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   function buildEcu() {
     if (!generated || stages.generate.state !== 'done' || !buildDirectory.trim()) return;
     void run(
-      { kind: 'action', label: message('workflow.action.buildEcu') },
+      { kind: 'action', label: message('activity.build') },
       () => {
         setBuilt(null);
         setVirtualResult(null);
@@ -346,7 +346,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   function verifyEcu() {
     if (!generated || !built || stages.build.state !== 'done') return;
     void run(
-      { kind: 'action', label: message('workflow.action.verifyEcu') },
+      { kind: 'action', label: message('activity.verifyHost') },
       () => {
         setVirtualResult(null);
         return call<VirtualResult>('verify_ecu', { outputDirectory: generated.outputDirectory });

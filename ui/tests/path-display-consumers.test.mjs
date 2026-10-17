@@ -186,7 +186,7 @@ async function renderWorkbench(integrationCandidate = false, initialized = integ
 async function chooseSources({ view, current }) {
   native.open.mockResolvedValueOnce([rawSource, rawUncSource]);
   await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('editor.source.chooseFiles') }));
+    fireEvent.click(view.getByRole('button', { name: translate('action.chooseArxml') }));
   });
   await waitFor(() => expect(current().importPaths).toEqual([rawSource, rawUncSource]));
 }
@@ -194,7 +194,7 @@ async function chooseSources({ view, current }) {
 async function importSources(consumer) {
   await chooseSources(consumer);
   await act(async () => {
-    fireEvent.click(consumer.view.getByRole('button', { name: translate('editor.source.enter') }));
+    fireEvent.click(consumer.view.getByRole('button', { name: translate('action.import') }));
   });
   await waitFor(() => {
     expect(consumer.current().workspace).not.toBeNull();
@@ -269,7 +269,7 @@ test('ToolWindows copies displayed output and binary paths but preserves the com
     '\\\\?\\',
   );
   await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('editor.tools.copyOutput') }));
+    fireEvent.click(view.getByRole('button', { name: translate('action.copyPath') }));
   });
   expect(clipboard).toHaveBeenLastCalledWith(String.raw`C:\工作目录\output`);
 
@@ -288,12 +288,12 @@ test('ToolWindows copies displayed output and binary paths but preserves the com
     '\\\\?\\',
   );
   await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('editor.tools.copyBinary') }));
+    fireEvent.click(view.getByRole('button', { name: translate('action.copyPath') }));
   });
   expect(clipboard).toHaveBeenLastCalledWith(String.raw`C:\工作目录\build\ecu.exe`);
   expect(view.container.querySelector('.owned-log pre').textContent).toBe(rawLog);
   await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('editor.dialog.copyLog') }));
+    fireEvent.click(view.getByRole('button', { name: translate('action.copyLog') }));
   });
   expect(clipboard).toHaveBeenLastCalledWith(rawLog);
   expect(controller.generated.outputDirectory).toBe(String.raw`\\?\C:\工作目录\output`);
@@ -350,9 +350,7 @@ test('diagnostic file paths are displayed cleanly while logical identities and c
   ).toEqual([String.raw`\\server\share\System.arxml`, '/Package/Component/Port']);
   const rows = view.container.querySelectorAll('.problem-list > li');
   await act(async () => {
-    fireEvent.click(
-      within(rows[0]).getByRole('button', { name: translate('editor.common.copyDetails') }),
-    );
+    fireEvent.click(within(rows[0]).getByRole('button', { name: translate('action.copyDetails') }));
   });
   expect(JSON.parse(clipboard.mock.calls.at(-1)[0])).toEqual(diagnostics[0]);
   expect(JSON.parse(clipboard.mock.calls.at(-1)[0]).file).toBe(
@@ -375,7 +373,7 @@ test.each(['\n', '\r\n'])(
     await chooseSources(consumer);
     const rawText = [rawSource, rawUncSource].join(lineEnding);
     act(() => consumer.current().setImportPathText(rawText));
-    expect(consumer.view.getByLabelText(translate('editor.source.paths')).value).toBe(
+    expect(consumer.view.getByLabelText(translate('editor.source.pathLines')).value).toBe(
       'C:\\工作目录\\Application.arxml\n\\\\server\\share\\System.arxml',
     );
     expect(consumer.current().importPathText).toBe(rawText);
@@ -384,9 +382,7 @@ test.each(['\n', '\r\n'])(
       String.raw`\\?\UNC\server\share\System.arxml`,
     ]);
     await act(async () => {
-      fireEvent.click(
-        consumer.view.getByRole('button', { name: translate('editor.source.enter') }),
-      );
+      fireEvent.click(consumer.view.getByRole('button', { name: translate('action.import') }));
     });
     await waitFor(() => expect(consumer.current().workspace).not.toBeNull());
     expect(native.invoke).toHaveBeenCalledWith('open_project', {
@@ -406,19 +402,18 @@ test('real ECU preview and confirmation retain raw directories and revision acro
   const clipboard = captureClipboard();
   native.open.mockResolvedValueOnce(rawOutput);
   await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('shell.delivery.chooseOutput') }));
+    // Output and build directory pickers share one label; each follows its own field.
+    fireEvent.click(view.getAllByRole('button', { name: translate('action.browse') })[0]);
   });
   native.open.mockResolvedValueOnce(rawBuild);
   await act(async () => {
-    fireEvent.click(
-      view.getByRole('button', { name: translate('shell.delivery.chooseBuildDirectory') }),
-    );
+    fireEvent.click(view.getAllByRole('button', { name: translate('action.browse') })[1]);
   });
   act(() => current().setEcuImportDirectory(rawBackup));
   expect(view.getByLabelText(translate('shell.delivery.output')).value).toBe(
     String.raw`C:\工作目录\output`,
   );
-  expect(view.getByLabelText(translate('shell.delivery.buildInput')).value).toBe(
+  expect(view.getByLabelText(translate('shell.delivery.buildDirectory')).value).toBe(
     String.raw`C:\工作目录\build`,
   );
   expect(view.getByLabelText(translate('shell.delivery.importDirectory')).value).toBe(
@@ -429,7 +424,7 @@ test('real ECU preview and confirmation retain raw directories and revision acro
   expect(current().ecuImportDirectory).toBe(String.raw`\\?\UNC\server\share\backup`);
 
   await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('shell.delivery.preview') }));
+    fireEvent.click(view.getByRole('button', { name: translate('action.previewSource') }));
   });
   await waitFor(() => {
     expect(current().generationPreview).toBe(generationPreview);
@@ -448,9 +443,7 @@ test('real ECU preview and confirmation retain raw directories and revision acro
     rawLog,
   );
   await act(async () => {
-    fireEvent.click(
-      dialog.getByRole('button', { name: translate('workflow.generation.copyAfter') }),
-    );
+    fireEvent.click(dialog.getByRole('button', { name: translate('action.copy') }));
   });
   expect(clipboard).toHaveBeenLastCalledWith(rawLog);
   act(() => current().setLanguageDraft('zh-CN'));
@@ -468,9 +461,7 @@ test('real ECU preview and confirmation retain raw directories and revision acro
   expect(dialog.getByText(/^1 file will be written to C:\\工作目录\\output · /)).toBeTruthy();
   expect(view.getAllByLabelText(translate('workflow.generation.snapshotAfter'))).toHaveLength(1);
   await act(async () => {
-    fireEvent.click(
-      dialog.getByRole('button', { name: translate('workflow.generation.confirmExport') }),
-    );
+    fireEvent.click(dialog.getByRole('button', { name: translate('action.confirmExport') }));
   });
   await waitFor(() => {
     expect(current().generated).toBe(generated);
@@ -492,7 +483,7 @@ test('real ECU preview and confirmation retain raw directories and revision acro
   });
   expect(current().ecuOutputDirectory).toBe(String.raw`D:\用户选择\output`);
   expect(current().generated).toBeNull();
-  fireEvent.change(view.getByLabelText(translate('shell.delivery.buildInput')), {
+  fireEvent.change(view.getByLabelText(translate('shell.delivery.buildDirectory')), {
     target: { value: String.raw`D:\用户选择\build` },
   });
   expect(current().buildDirectory).toBe(String.raw`D:\用户选择\build`);
@@ -502,12 +493,12 @@ test.each([
   [
     'zh-CN',
     String.raw`初始化绝不会覆盖已有路径：C:\工作目录\Application.arxml`,
-    String.raw`已另存为成员工程：C:\工作目录\output`,
+    String.raw`已另存为工程：C:\工作目录\output`,
   ],
   [
     'en',
     String.raw`Initialization never overwrites an existing path: C:\工作目录\Application.arxml`,
-    String.raw`Saved as a member project in C:\工作目录\output`,
+    String.raw`Saved as a project in C:\工作目录\output`,
   ],
 ])(
   '%s product messages format path parameters without mutating descriptors or raw log copies',
@@ -545,7 +536,7 @@ test.each([
     const rawSection = view.getByLabelText('Compiler evidence').closest('.owned-log');
     await act(async () => {
       fireEvent.click(
-        within(rawSection).getByRole('button', { name: translate('editor.dialog.copyLog') }),
+        within(rawSection).getByRole('button', { name: translate('action.copyLog') }),
       );
     });
     expect(clipboard).toHaveBeenLastCalledWith(String.raw`compiler: \\?\C:\目录\file.c`);
@@ -594,7 +585,7 @@ test('the readonly project directory displays the picked path without changing c
   act(() => current().openProjectEntry('empty'));
   native.open.mockResolvedValueOnce(rawOutput);
   await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('editor.common.select') }));
+    fireEvent.click(view.getByRole('button', { name: translate('action.browse') }));
   });
   const directory = view.getByLabelText(translate('editor.source.directory'));
   expect(directory.readOnly).toBe(true);
@@ -640,7 +631,8 @@ test('application preview formats source files but preserves component identitie
     rawLog,
   );
   await act(async () => {
-    fireEvent.click(view.getByRole('button', { name: translate('workflow.application.copySlot') }));
+    // The slot description precedes the per-file snapshots, which carry their own copy buttons.
+    fireEvent.click(view.getAllByRole('button', { name: translate('action.copy') })[0]);
   });
   expect(JSON.parse(clipboard.mock.calls.at(-1)[0])).toEqual([
     {
@@ -697,9 +689,7 @@ test.each(['zh-CN', 'en'])(
       expect(view.getByText(slot.entrySymbols[0]).classList.contains('path-text')).toBe(true);
     }
     await act(async () => {
-      fireEvent.click(
-        view.getByRole('button', { name: translate('workflow.application.copySlot') }),
-      );
+      fireEvent.click(view.getAllByRole('button', { name: translate('action.copy') })[0]);
     });
     expect(JSON.parse(clipboard.mock.calls.at(-1)[0])).toEqual(slots);
     for (const file of preview.files) {
@@ -708,7 +698,7 @@ test.each(['zh-CN', 'en'])(
         file.contents,
       );
     }
-    fireEvent.click(view.getByRole('button', { name: translate('workflow.application.confirm') }));
+    fireEvent.click(view.getByRole('button', { name: translate('action.confirmInitialize') }));
     expect(initialize).toHaveBeenCalledTimes(1);
     expect(preview.revision).toBe('complete-application-revision');
   },

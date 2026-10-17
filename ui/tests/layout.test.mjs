@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { previewLanguage, translate } from '../src/i18n';
 import { ObjectEditor } from '../src/workbench/ObjectEditor';
@@ -42,13 +42,15 @@ test('delivery steps keep each path beside its chooser, one primary each, and no
       active: true,
     }),
   );
-  for (const [field, chooser] of [
-    ['shell.delivery.output', 'shell.delivery.chooseOutput'],
-    ['shell.delivery.buildInput', 'shell.delivery.chooseBuildDirectory'],
-    ['shell.delivery.importDirectory', 'shell.delivery.chooseImportDirectory'],
+  for (const field of [
+    'shell.delivery.output',
+    'shell.delivery.buildDirectory',
+    'shell.delivery.importDirectory',
   ]) {
     const input = view.getByRole('textbox', { name: translate(field) });
-    const button = view.getByRole('button', { name: translate(chooser) });
+    const button = within(input.parentElement).getByRole('button', {
+      name: translate('action.browse'),
+    });
     expect(button.parentElement).toBe(input.parentElement);
     expect(input.parentElement.className).toBe('path-picker');
   }
@@ -58,9 +60,8 @@ test('delivery steps keep each path beside its chooser, one primary each, and no
     expect(step.querySelectorAll('.primary-button').length).toBeLessThanOrEqual(1);
   // The preview exists, but generation is confirmed only inside its dialog.
   expect(view.queryByText(preview.after)).toBeNull();
-  expect(
-    view.queryByRole('button', { name: translate('workflow.generation.confirmExport') }),
-  ).toBeNull();
+  for (const action of ['action.confirmGenerate', 'action.confirmExport'])
+    expect(view.queryByRole('button', { name: translate(action) })).toBeNull();
 });
 
 test('object rows stay on one line: no repeated kind, reasons and paths move to titles', () => {

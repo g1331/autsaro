@@ -55,7 +55,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
     <Dialog
       title={t('shell.settings.title')}
       className="settings-dialog"
-      busy={c.busy ?? (c.languageSaving ? message('shell.settings.saveLanguage') : null)}
+      busy={c.busy ?? (c.languageSaving ? message('activity.saveLanguage') : null)}
       onCancelBusy={c.busy ? c.cancelOperation : undefined}
       onClose={close}
       footer={
@@ -64,7 +64,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
             {c.settingsNotice ? <NoticeBanner notice={c.settingsNotice} /> : null}
           </div>
           <button type="button" onClick={close} disabled={Boolean(c.busy) || c.languageSaving}>
-            {t('workflow.common.cancel')}
+            {t('action.cancel')}
           </button>
           {/* One primary per category: saving commits only the visible category. */}
           {category === 'appearance' ? (
@@ -74,7 +74,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
               disabled={locked}
               onClick={() => void c.configureAppearance()}
             >
-              {t('shell.settings.saveAppearance')}
+              {t('action.saveAppearance')}
             </button>
           ) : category === 'language' ? (
             <button
@@ -84,7 +84,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
               aria-busy={c.languageSaving}
               onClick={() => void c.configureLanguage()}
             >
-              {t('shell.settings.saveLanguage')}
+              {t('action.saveLanguage')}
             </button>
           ) : category === 'tools' ? (
             <button
@@ -93,7 +93,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
               disabled={locked}
               onClick={() => void c.configureTools()}
             >
-              {t('shell.settings.saveTools')}
+              {t('action.saveTools')}
             </button>
           ) : null}
         </>
@@ -223,9 +223,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
             </details>
             <h3>{t('shell.settings.extensions')}</h3>
             <p>{t('shell.settings.extensionHelp')}</p>
-            <CommandButton command={acceptDefinitions} reasonId={`${reasonsId}-0`}>
-              {t('shell.settings.acceptCatalog')}
-            </CommandButton>
+            <CommandButton command={acceptDefinitions} reasonId={`${reasonsId}-0`} />
             <CommandReasons commands={[acceptDefinitions]} id={reasonsId} />
             {(c.projection?.acceptedExtensionDefinitions ?? []).map((identity) => (
               <section className="catalog-row" key={identity.catalogId}>
@@ -234,17 +232,14 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                   {identity.release} · {identity.version}
                 </span>
                 <p className="mono path-text">{identity.sha256}</p>
-                <CopyText
-                  text={JSON.stringify(identity, null, 2)}
-                  label={t('shell.settings.copyIdentity')}
-                />
+                <CopyText text={JSON.stringify(identity, null, 2)} label={t('action.copy')} />
                 <button
                   type="button"
                   className="danger-button"
                   disabled={locked}
                   onClick={() => void c.removeDefinitionCatalog(identity.catalogId)}
                 >
-                  {t('shell.settings.remove')}
+                  {t('action.removeDefinitions')}
                 </button>
               </section>
             ))}
@@ -274,10 +269,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                 ) : (
                   <p>{t('shell.settings.noConsumers')}</p>
                 )}
-                <CopyText
-                  text={JSON.stringify(extension, null, 2)}
-                  label={t('shell.settings.copyConsumers')}
-                />
+                <CopyText text={JSON.stringify(extension, null, 2)} label={t('action.copy')} />
               </details>
             ))}
             {c.projection?.dirty ? (
@@ -299,7 +291,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                   {t(label)}
                   <div className="path-picker">
                     <input
-                      aria-label={t('shell.settings.savedToolPath', { tool: t(label) })}
+                      aria-label={t(label)}
                       value={displayPath(c.toolDraft[key])}
                       disabled={locked}
                       aria-invalid={Boolean(c.toolErrors[key])}
@@ -320,7 +312,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
                         })
                       }
                     >
-                      {t('shell.settings.browse')}
+                      {t('action.browse')}
                     </button>
                   </div>
                   {c.toolErrors[key] ? (

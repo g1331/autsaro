@@ -33,11 +33,11 @@ export function CommandPalette({
             <VisuallyHidden.Root asChild>
               <Dialog.Title>{t('shell.app.commandSearch')}</Dialog.Title>
             </VisuallyHidden.Root>
-            <Palette label={t('shell.app.searchAvailable')} loop vimBindings={false}>
+            <Palette label={t('shell.app.searchPlaceholder')} loop vimBindings={false}>
               <label className="search-field">
                 <Search size={iconSize.control} aria-hidden="true" />
                 <Palette.Input
-                  aria-label={t('shell.app.searchAvailable')}
+                  aria-label={t('shell.app.searchPlaceholder')}
                   placeholder={t('shell.app.searchPlaceholder')}
                 />
               </label>

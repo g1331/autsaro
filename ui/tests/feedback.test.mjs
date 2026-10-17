@@ -104,7 +104,7 @@ test('a rejected value is reported on its field with name and range, and retract
   expect(localize(notice.text)).not.toContain('changeId');
   expect(localize(fieldErrors[rangeField.fieldId])).toContain('1–65535');
   // The raw backend evidence stays available for copying.
-  expect(localize(notice.detail)).toContain('changeId=field-period');
+  expect(localize(notice.detail)).toContain('field-period');
 
   batch(current).stageChange(valueChange('20'));
   expect(current.stateRef.current.fieldErrors).toEqual({});
@@ -361,9 +361,7 @@ test('dialogs report operation results inside the dialog with copyable detail', 
   expect(alert.textContent).toContain('Save failed');
   expect(alert.textContent).toContain('raw backend detail');
   await act(async () => {
-    fireEvent.click(
-      within(alert).getByRole('button', { name: translate('editor.common.copyDetails') }),
-    );
+    fireEvent.click(within(alert).getByRole('button', { name: translate('action.copyDetails') }));
   });
   expect(clipboard).toHaveBeenCalledWith('raw backend detail');
 });

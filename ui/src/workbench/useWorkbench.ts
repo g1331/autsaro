@@ -626,7 +626,7 @@ export function useWorkbench(): Workbench {
 
   function inspectIntegration() {
     void run(
-      { kind: 'action', label: message('controller.integration.inspect') },
+      { kind: 'action', label: message('activity.validate') },
       () => call<IntegrationInspection>('inspect_integration'),
       (report) => {
         acceptIntegration(report);
@@ -666,7 +666,7 @@ export function useWorkbench(): Workbench {
         2147483647,
       );
       void run(
-        { kind: 'integrationEdit', label: message('controller.integration.apply') },
+        { kind: 'integrationEdit', label: message('activity.apply') },
         async () => {
           const report = await call<IntegrationInspection>('edit_integration', {
             changes: { canIds: ids, applicationPeriodMs: period },
@@ -689,9 +689,9 @@ export function useWorkbench(): Workbench {
   async function reopenIntegration() {
     if (!workspace) return;
     const path = stateRef.current.memberProjectPath;
-    await replaceProject(message('controller.project.reopen'), () =>
+    await replaceProject(message('activity.reopen'), () =>
       run(
-        { kind: 'action', label: message('controller.project.reopen') },
+        { kind: 'action', label: message('activity.reopen') },
         () =>
           path
             ? call<WorkspaceView>('open_member_project', { path })
@@ -739,9 +739,9 @@ export function useWorkbench(): Workbench {
   }
 
   async function verificationOwnedFailure(delayMs = 0) {
-    await guardContext(message('controller.verification.failure'), () =>
+    await guardContext(message('activity.verificationFailure'), () =>
       run(
-        { kind: 'action', label: message('controller.verification.failure') },
+        { kind: 'action', label: message('activity.verificationFailure') },
         () => call<OwnedVerificationFailure>('verification_owned_failure', { delayMs }),
         (result) => {
           field('toolWindow')('log');

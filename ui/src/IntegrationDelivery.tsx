@@ -109,15 +109,10 @@ export function IntegrationDelivery({
             : preview
               ? t('shell.delivery.previewed', { count: preview.files.length })
               : t('shell.delivery.directoryHint');
-  const choose = (label: string, onChoose: (path: string) => void) => (
-    <button
-      type="button"
-      aria-label={label}
-      disabled={busy || !native}
-      onClick={() => void chooseDirectory(onChoose)}
-    >
+  const choose = (onChoose: (path: string) => void) => (
+    <button type="button" disabled={busy || !native} onClick={() => void chooseDirectory(onChoose)}>
       <FolderOpen size={iconSize.control} aria-hidden="true" />
-      {t('editor.common.select')}
+      {t('action.browse')}
     </button>
   );
   return (
@@ -149,11 +144,7 @@ export function IntegrationDelivery({
       <section className="delivery-step">
         <h3>{t('shell.delivery.liveSource')}</h3>
         <p className="field-help">{t('shell.delivery.liveDescription')}</p>
-        <CommandActions
-          actions={[
-            { command: command('initialize-application'), label: t('shell.command.initialize') },
-          ]}
-        />
+        <CommandActions actions={[{ command: command('initialize-application') }]} />
         {controller.applicationWarnings.map((warning, index) => (
           <p key={index} className="notice info">
             {text(warning)}
@@ -166,7 +157,7 @@ export function IntegrationDelivery({
               {controller.applicationRecoveryFiles.map((path) => (
                 <li key={path} className="mono path-text">
                   {displayPath(path)}
-                  <CopyText text={displayPath(path)} label={t('shell.delivery.copyRecovery')} />
+                  <CopyText text={displayPath(path)} label={t('action.copyPath')} />
                 </li>
               ))}
             </ul>
@@ -179,7 +170,6 @@ export function IntegrationDelivery({
           <label>
             {t('shell.delivery.target')}
             <select
-              aria-label={t('shell.delivery.target')}
               value={target}
               disabled={busy}
               onChange={(event) => void controller.changeTarget(event.target.value as BuildTarget)}
@@ -200,7 +190,7 @@ export function IntegrationDelivery({
                 disabled={busy}
                 onChange={(e) => changeOutput(e.target.value)}
               />
-              {choose(t('shell.delivery.chooseOutput'), changeOutput)}
+              {choose(changeOutput)}
             </div>
           </label>
           <label className="checkbox-field">
@@ -221,10 +211,9 @@ export function IntegrationDelivery({
           actions={[
             {
               command: command('preview'),
-              label: t('shell.delivery.preview'),
               className: 'primary-button',
             },
-            { command: command('preflight'), label: t('shell.command.preflight') },
+            { command: command('preflight') },
           ]}
         />
       </section>
@@ -235,12 +224,12 @@ export function IntegrationDelivery({
             {t('shell.delivery.buildDirectory')}
             <div className="path-picker">
               <input
-                aria-label={t('shell.delivery.buildInput')}
+                aria-label={t('shell.delivery.buildDirectory')}
                 value={displayPath(buildDirectory)}
                 disabled={busy}
                 onChange={(e) => changeBuildDirectory(e.target.value)}
               />
-              {choose(t('shell.delivery.chooseBuildDirectory'), changeBuildDirectory)}
+              {choose(changeBuildDirectory)}
             </div>
           </label>
         </div>
@@ -248,7 +237,6 @@ export function IntegrationDelivery({
           actions={[
             {
               command: command('build-ecu'),
-              label: t('shell.delivery.build'),
               className: 'primary-button',
             },
           ]}
@@ -260,14 +248,13 @@ export function IntegrationDelivery({
           actions={[
             {
               command: command('verify-ecu'),
-              label: t('shell.delivery.verify'),
               className: 'primary-button',
             },
           ]}
         />
       </section>
       <section className="delivery-step">
-        <h3>{t('shell.delivery.reimport')}</h3>
+        <h3>{t('workflow.handoff.title')}</h3>
         <div className="form-fields">
           <label>
             {t('shell.delivery.importDirectory')}
@@ -278,7 +265,7 @@ export function IntegrationDelivery({
                 disabled={busy}
                 onChange={(e) => setImportDirectory(e.target.value)}
               />
-              {choose(t('shell.delivery.chooseImportDirectory'), setImportDirectory)}
+              {choose(setImportDirectory)}
             </div>
           </label>
         </div>
@@ -286,7 +273,6 @@ export function IntegrationDelivery({
           actions={[
             {
               command: command('ecu-package'),
-              label: t('shell.delivery.reimport'),
               run: () => onImport(importDirectory),
             },
           ]}
@@ -297,7 +283,7 @@ export function IntegrationDelivery({
         {!busy && !failed && (built || generated) ? (
           <CopyText
             text={displayPath(built ? built.binaryPath : generated!.outputDirectory)}
-            label={built ? t('editor.tools.copyBinary') : t('editor.tools.copyOutput')}
+            label={t('action.copyPath')}
           />
         ) : null}
       </div>

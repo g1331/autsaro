@@ -154,9 +154,9 @@ test('page, tool window and menu show one reason for an unavailable command, and
   const reason = translate('backend.workbench.compiler_required');
   expect(reason).toBe('未配置编译器');
   const entries = [
-    page().getByRole('button', { name: translate('shell.delivery.build') }),
-    toolWindow().getByRole('button', { name: translate('editor.tools.build') }),
-    openMenu('tools').getByRole('menuitem', { name: translate('shell.delivery.build') }),
+    page().getByRole('button', { name: translate('action.build') }),
+    toolWindow().getByRole('button', { name: translate('action.build') }),
+    openMenu('tools').getByRole('menuitem', { name: translate('action.build') }),
   ];
   for (const entry of entries) {
     expect(entry.getAttribute('aria-disabled')).toBe('true');
@@ -167,9 +167,7 @@ test('page, tool window and menu show one reason for an unavailable command, and
   expect(controller.buildEcu).not.toHaveBeenCalled();
   // The reason is visible beside the group with the entry that resolves it.
   const row = document.getElementById(entries[0].getAttribute('aria-describedby')).closest('li');
-  fireEvent.click(
-    within(row).getByRole('button', { name: translate('shell.command.executionTools') }),
-  );
+  fireEvent.click(within(row).getByRole('button', { name: translate('action.executionTools') }));
   expect(controller.setSettingsCategory).toHaveBeenCalledWith('tools');
   expect(controller.setSettingsOpen).toHaveBeenCalledWith(true);
 });
@@ -183,8 +181,8 @@ test('an available command runs from the page and the tool window alike', () => 
   });
   render(React.createElement(App));
   for (const button of [
-    page().getByRole('button', { name: translate('shell.delivery.verify') }),
-    toolWindow().getByRole('button', { name: translate('editor.tools.verify') }),
+    page().getByRole('button', { name: translate('action.verifyHost') }),
+    toolWindow().getByRole('button', { name: translate('action.verifyHost') }),
   ]) {
     expect(button.hasAttribute('aria-disabled')).toBe(false);
     fireEvent.click(button);
@@ -203,13 +201,13 @@ test('the toolbar delivery button is disabled with the workspace reason', () => 
   expect(controller.openDocument).not.toHaveBeenCalled();
   cleanup();
   // While busy, the toolbar's own operation status is the reason.
-  workbench({ disabled: true, busy: message('workflow.action.buildEcu') });
+  workbench({ disabled: true, busy: message('activity.build') });
   render(React.createElement(App));
   const busy = within(document.querySelector('.context-toolbar')).getByRole('button', {
     name: translate('shell.document.delivery'),
   });
   expect(describedText(busy)).toBe(
-    translate('shell.busy', { operation: translate('workflow.action.buildEcu') }),
+    translate('shell.busy', { operation: translate('activity.build') }),
   );
 });
 
@@ -220,19 +218,19 @@ test.each(['zh-CN', 'en'])(
     workbench({ workspace: { applicationInitialized: false }, ecuOutputDirectory: '/out' });
     render(React.createElement(App));
     const remedy = translate('backend.prepared.application_initialization_required');
-    const preview = page().getByRole('button', { name: translate('shell.delivery.preview') });
+    const preview = page().getByRole('button', { name: translate('action.previewSource') });
     expect(preview.getAttribute('aria-disabled')).toBe('true');
     expect(describedText(preview)).toBe(remedy);
     fireEvent.click(preview);
     expect(controller.previewEcu).not.toHaveBeenCalled();
     const item = openMenu('tools').getByRole('menuitem', {
-      name: translate('shell.command.preview'),
+      name: translate('action.previewSource'),
     });
     expect(describedText(item)).toBe(remedy);
     fireEvent.keyDown(document.activeElement, { key: 'Escape' });
     const row = page().getByText(remedy).closest('li');
     fireEvent.click(
-      within(row).getByRole('button', { name: translate('shell.command.initialize') }),
+      within(row).getByRole('button', { name: translate('action.initializeApplication') }),
     );
     expect(controller.previewApplicationInitialization).toHaveBeenCalled();
   },
@@ -241,7 +239,7 @@ test.each(['zh-CN', 'en'])(
 test('an initialized application can be previewed', () => {
   workbench({ ecuOutputDirectory: '/out' });
   render(React.createElement(App));
-  const preview = page().getByRole('button', { name: translate('shell.delivery.preview') });
+  const preview = page().getByRole('button', { name: translate('action.previewSource') });
   expect(preview.hasAttribute('aria-disabled')).toBe(false);
   fireEvent.click(preview);
   expect(controller.previewEcu).toHaveBeenCalled();
@@ -277,21 +275,21 @@ test('menus open with ↓, move with ←→, close with Tab, and focus unavailab
   expect(document.querySelector('[role="menu"]').getAttribute('aria-labelledby')).toBe(
     trigger('file').id,
   );
-  expect(file.getByRole('menuitem', { name: translate('shell.command.new') })).toBeTruthy();
+  expect(file.getByRole('menuitem', { name: translate('action.newProject') })).toBeTruthy();
   fireEvent.keyDown(document.activeElement, { key: 'ArrowRight' });
   const menu = document.querySelector('[role="menu"]');
   expect(menu.getAttribute('aria-labelledby')).toBe(trigger('edit').id);
   // Every Edit item is unavailable without drafts, yet ↓ moves focus onto them and their reason.
   fireEvent.keyDown(document.activeElement, { key: 'ArrowDown' });
   const edit = within(menu);
-  const apply = edit.getByRole('menuitem', { name: translate('shell.command.apply') });
+  const apply = edit.getByRole('menuitem', { name: translate('action.apply') });
   expect(document.activeElement).toBe(apply);
   expect(apply.getAttribute('aria-disabled')).toBe('true');
   expect(describedText(apply)).toBe(translate('shell.reason.noChanges'));
   fireEvent.keyDown(apply, { key: 'ArrowDown' });
   // Radix moves roving focus on the next task.
   await act(() => new Promise((resolve) => setTimeout(resolve)));
-  expect(document.activeElement.textContent).toContain(translate('shell.command.restore'));
+  expect(document.activeElement.textContent).toContain(translate('action.revert'));
   fireEvent.keyDown(document.activeElement, { key: 'Enter' });
   expect(controller.restoreAllDrafts).not.toHaveBeenCalled();
   expect(document.querySelector('[role="menu"]')).not.toBeNull();

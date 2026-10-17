@@ -13,12 +13,12 @@ test.each([
   ],
   [
     'after publishing the result, before the UI releases busy state',
-    '<section aria-label="标准输入工作区"><input aria-label="接收 CAN ID" disabled></section>',
+    '<section aria-label="标准输入工作区"><div class="integration-fields"><label>接收 CAN ID<input disabled></label></div></section>',
     false,
   ],
   [
     'after accepting the inspection reply and releasing busy state',
-    '<section aria-label="标准输入工作区"><input aria-label="接收 CAN ID"></section>',
+    '<section aria-label="标准输入工作区"><div class="integration-fields"><label>接收 CAN ID<input></label></div></section>',
     true,
   ],
 ])('desktop standard inspection boundary: %s', (_scene, markup, ready) => {

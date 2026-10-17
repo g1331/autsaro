@@ -114,7 +114,6 @@ export function StructureEditor({
         <label>
           {t('editor.structure.create')}
           <select
-            aria-label={t('editor.structure.definitionLabel')}
             value=""
             disabled={blocked || !object.writable}
             onChange={(event) => {
@@ -159,7 +158,6 @@ export function StructureEditor({
             <label>
               SHORT-NAME
               <input
-                aria-label={t('editor.structure.pendingName', { id: creation.changeId })}
                 value={creation.shortName}
                 disabled={blocked}
                 onChange={(event) => c.stageChange({ ...creation, shortName: event.target.value })}
@@ -376,7 +374,6 @@ export function StructureEditor({
                 {t('editor.structure.children')}
                 <select
                   value=""
-                  aria-label={t('editor.structure.childLabel', { id: creation.changeId })}
                   disabled={blocked}
                   onChange={(event) => {
                     if (event.target.value)
