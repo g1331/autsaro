@@ -3,6 +3,7 @@ import { useId } from 'react';
 import type { ReactNode } from 'react';
 import { message, useLocale } from '../i18n';
 import type { Workbench } from './useWorkbench';
+import { commandById } from './commands';
 import type { InstanceDefinitionOption, ObjectProjection } from './projectTypes';
 
 type MenuController = Pick<
@@ -16,7 +17,12 @@ type MenuController = Pick<
   | 'guardContext'
   | 'selectObject'
   | 'setInspectorTab'
+  | 'commands'
 >;
+
+/** Atomic software components, whose user application code the workbench initializes. */
+const isAtomicComponent = (object: ObjectProjection) =>
+  /SW-COMPONENT-TYPE$/.test(object.kind) && object.kind !== 'COMPOSITION-SW-COMPONENT-TYPE';
 
 export const definitionName = (definitionId: string) =>
   definitionId.split('/').pop() ?? definitionId;
@@ -113,7 +119,7 @@ export function ObjectContextMenu({
 }) {
   return (
     <ContextMenu.Root>
-      <ContextMenu.Trigger asChild disabled={!object.writable}>
+      <ContextMenu.Trigger asChild disabled={!object.writable && !isAtomicComponent(object)}>
         {children}
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
@@ -138,23 +144,47 @@ function ObjectMenuItems({
   const { t, text } = useLocale();
   const reasonId = useId();
   const reason = text(c.actionReason('prepare-change'));
-  const item = (key: string, label: string, run: () => void) => (
+  const item = (
+    key: string,
+    label: string,
+    run: () => void,
+    blocked = reason,
+    describedBy = reasonId,
+  ) => (
     <ContextMenu.Item
       key={key}
       className="menu-item"
-      aria-disabled={reason ? true : undefined}
-      aria-describedby={reason ? reasonId : undefined}
+      aria-disabled={blocked ? true : undefined}
+      aria-describedby={blocked ? describedBy : undefined}
       onSelect={(event) => {
-        if (reason) event.preventDefault();
+        if (blocked) event.preventDefault();
         else run();
       }}
     >
       <span>{label}</span>
     </ContextMenu.Item>
   );
+  // ADR 0020 D7: user application initialization starts from the component node.
+  const initialize = isAtomicComponent(object) ? commandById(c, 'initialize-application') : null;
+  const initializeReason = initialize ? text(initialize.reason) : '';
+  const initializeItem = initialize ? (
+    <>
+      {item(
+        'initialize',
+        text(initialize.label),
+        () => void initialize.run(),
+        initializeReason,
+        `${reasonId}-initialize`,
+      )}
+      {initializeReason ? <small id={`${reasonId}-initialize`}>{initializeReason}</small> : null}
+    </>
+  ) : null;
+  if (!object.writable) return initializeItem;
   const options = addableDefinitions(c, object);
   return (
     <>
+      {initializeItem}
+      {initializeItem ? <ContextMenu.Separator /> : null}
       {options.map((option) =>
         item(
           option.definition.definitionId,

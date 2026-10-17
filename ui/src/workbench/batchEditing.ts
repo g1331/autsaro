@@ -55,6 +55,71 @@ export function fieldRejection(
   };
 }
 
+/** One diagnostic of a rejected change, split into the fields the problems window shows. */
+export type RejectedDiagnostic = {
+  severity: 'error' | 'warning' | 'info';
+  code: string;
+  message: Text;
+  remedy: Text;
+  /** Object path, or the field's object path for a rejected value. */
+  path: string;
+  file: string;
+  objectId: string | null;
+  fieldId: string | null;
+  sourceId: string | null;
+};
+export type Rejection = { items: RejectedDiagnostic[]; detail: Text };
+
+/**
+ * The diagnostics in a rejected change: each `*_diagnostic_context` message is followed by
+ * the diagnostic's message and remedy, possibly inside nested message lists.
+ */
+export function rejectedDiagnostics(error: unknown): RejectedDiagnostic[] {
+  const items: RejectedDiagnostic[] = [];
+  const text = (value: unknown) => (value === undefined || value === null ? '' : String(value));
+  const visit = (list: unknown[]) =>
+    list.forEach((item, index) => {
+      if (Array.isArray(item)) return visit(item);
+      if (!isMessage(item)) return;
+      const params = item.params;
+      const message = list[index + 1] === undefined ? '' : errorText(list[index + 1]);
+      const remedy = list[index + 2] === undefined ? '' : errorText(list[index + 2]);
+      if (item.key === 'backend.arxml.changes.configuration_diagnostic_context') {
+        let severity: RejectedDiagnostic['severity'] = 'error';
+        try {
+          const parsed: unknown = JSON.parse(text(params.severity));
+          if (parsed === 'warning' || parsed === 'info') severity = parsed;
+        } catch {
+          // An unreadable severity stays an error: the change was refused.
+        }
+        items.push({
+          severity,
+          code: text(params.code),
+          message,
+          remedy,
+          path: text(params.path),
+          file: text(params.file),
+          objectId: text(params.object_id) || null,
+          fieldId: text(params.field_id) || null,
+          sourceId: text(params.source_id) || null,
+        });
+      } else if (item.key === 'backend.arxml.integration_diagnostic_context')
+        items.push({
+          severity: 'error',
+          code: text(params.code),
+          message,
+          remedy,
+          path: text(params.object),
+          file: text(params.file),
+          objectId: null,
+          fieldId: null,
+          sourceId: null,
+        });
+    });
+  if (Array.isArray(error)) visit(error);
+  return items;
+}
+
 interface Dependencies {
   invalidateAfterEdit: () => void;
   acceptIntegration: (report: IntegrationInspection) => void;
@@ -71,13 +136,44 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
   function rejection(
     key: string,
     error: unknown,
-  ): { notice: Notice; fieldErrors: Record<string, Text> } {
+  ): { notice: Notice; fieldErrors: Record<string, Text>; rejection: Rejection } {
     const detail = errorText(error);
-    const field = fieldRejection(error, stateRef.current.projection?.fields ?? []);
+    const projection = stateRef.current.projection;
+    const field = fieldRejection(error, projection?.fields ?? []);
+    let items = rejectedDiagnostics(error);
+    if (!items.length) {
+      // A rejected value or a reply without diagnostics is still shown field by field.
+      const object = field
+        ? projection?.objects.find((item) => item.objectId === field.field.objectId)
+        : undefined;
+      items = [
+        {
+          severity: 'error',
+          code: '',
+          message: field ? field.message : headline(error),
+          remedy: '',
+          path: object ? `${object.path} · ${fieldName(field!.field)}` : '',
+          file: object
+            ? (projection?.sources.find((source) => source.sourceId === object.sourceId)?.path ??
+              '')
+            : '',
+          objectId: object?.objectId ?? null,
+          fieldId: field?.field.fieldId ?? null,
+          sourceId: object?.sourceId ?? null,
+        },
+      ];
+    }
+    const rejected = { items, detail };
     if (!field)
       return {
-        notice: { tone: 'error', text: composedMessage(key, { error: headline(error) }), detail },
+        notice: {
+          tone: 'error',
+          text: composedMessage(key, { error: headline(error) }),
+          detail,
+          rejected: true,
+        },
         fieldErrors: {},
+        rejection: rejected,
       };
     return {
       notice: {
@@ -89,8 +185,10 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
         ),
         detail,
         fieldId: field.field.fieldId,
+        rejected: true,
       },
       fieldErrors: { [field.field.fieldId]: field.message },
+      rejection: rejected,
     };
   }
 
@@ -122,7 +220,9 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       changePreview: null,
       preparedChangeSet: null,
       fieldErrors,
-      ...(notice?.fieldId && edited.includes(notice.fieldId) ? { notice: null } : {}),
+      ...(notice?.fieldId && edited.includes(notice.fieldId)
+        ? { notice: null, rejection: null }
+        : {}),
     });
     changeConfirmation.current?.(false);
     changeConfirmation.current = null;
@@ -152,7 +252,12 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       changes: current.changes,
     };
     running.current = true;
-    patchState({ busy: message('activity.previewChanges'), notice: null, fieldErrors: {} });
+    patchState({
+      busy: message('activity.previewChanges'),
+      notice: null,
+      fieldErrors: {},
+      rejection: null,
+    });
     const generation = epoch.current;
     try {
       const preview = await call<ChangePreview>('prepare_configuration_change', { changeSet });
@@ -234,6 +339,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       busy: message('activity.apply'),
       notice: keepNotice ? notice : null,
       fieldErrors: otherErrors(),
+      ...(keepNotice ? {} : { rejection: null }),
     });
     const generation = epoch.current;
     const fingerprintBefore = capabilitiesRef.current?.fingerprint;
@@ -357,6 +463,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
           ),
           detail: errorText(error),
           fieldId: field.fieldId,
+          rejected: true,
         };
       }
       patchState({
@@ -364,6 +471,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
         preparedChangeSet: null,
         notice: rejected.notice,
         fieldErrors: { ...otherErrors(), ...rejected.fieldErrors },
+        rejection: rejected.rejection,
       });
       return false;
     } finally {

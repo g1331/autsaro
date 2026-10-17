@@ -1298,37 +1298,123 @@ label.checkbox-field > input[type='checkbox'] {
 .validation-scopes details > p {
   margin: 2px 0 2px 18px;
 }
-/* One row per problem: message beside its label, actions on the right; not cards. */
-.problem-list {
-  list-style: none;
+/* Problems: dense sortable rows, filters above; the rejected change sits above the table. */
+.problem-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   margin: 6px 0;
-  padding: 0;
 }
-.problem-list > li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--line);
+.problem-filters > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 2px 8px;
   font-size: 12px;
 }
-.problem-main > p {
-  margin: 0;
-  line-height: 1.5;
+.problem-filters > button[aria-pressed='false'] {
+  opacity: 0.55;
 }
-.problem-main strong {
-  font-size: 11px;
+.problem-filters > select {
+  width: auto;
 }
-.problem-list > li.error strong {
+.problem-filters > input {
+  width: auto;
+  flex: 1 1 18ch;
+  max-width: 320px;
+}
+.problems-table {
+  table-layout: fixed;
+  /* One line per problem: narrow tool windows scroll sideways instead of wrapping. */
+  min-width: 880px;
+}
+.problems-table th,
+.problems-table td {
+  padding: 5px 8px;
+}
+.problems-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.problems-table .col-severity {
+  width: 84px;
+}
+.problems-table .col-module {
+  width: 90px;
+}
+.problems-table .col-target {
+  width: 26%;
+}
+.problems-table .col-file {
+  width: 16%;
+}
+.problems-table .col-actions {
+  width: 150px;
+}
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+}
+.severity-error {
   color: var(--error);
 }
-.problem-list > li.warning strong {
+.severity-warning {
   color: var(--warning);
 }
-.problem-meta {
+td.severity-error > svg,
+td.severity-warning > svg,
+td.severity-info > svg,
+.rejection-item dd > span > svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.rejection-details {
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--error);
+}
+.rejection-details > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rejection-details h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.rejection-item + .rejection-item {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.rejection-item .property-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 16px;
+  margin: 6px 0;
+}
+.rejection-item .property-list > div {
+  display: contents;
+}
+.rejection-item .property-list dd {
+  margin: 0;
+}
+.rejection-item dd small {
   display: block;
-  line-height: 1.5;
+  color: var(--secondary);
 }
 .problem-actions {
   display: flex;
@@ -1917,4 +2003,20 @@ details + details {
   margin: 6px 0;
   padding-left: 16px;
   font-size: 12px;
+}
+/* A rejected change: one summary line; the split diagnostic is in the problems window. */
+.notice.summary {
+  align-items: center;
+}
+.notice.summary > svg {
+  margin-top: 0;
+}
+.notice.summary .notice-body > span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notice.summary > button {
+  flex: none;
 }

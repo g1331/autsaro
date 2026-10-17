@@ -812,7 +812,15 @@ pub(super) fn documents(
                                 )
                             } else {
                                 crate::product_message!(
-                                    "backend.definitions.validation.invalid_entry_cardinality"
+                                    "backend.definitions.validation.invalid_entry_cardinality",
+                                    "object" => object(node),
+                                    "definition" => child.definition_id.rsplit('/').next().unwrap_or(&child.definition_id),
+                                    "multiplicity" => format!(
+                                        "{}..{}",
+                                        child.lower_multiplicity,
+                                        child.upper_multiplicity.unwrap_or_default()
+                                    ),
+                                    "actual" => count
                                 )
                             },
                             serde_json::to_string(child)

@@ -18,9 +18,12 @@ const noticeIcons = {
 export function NoticeBanner({
   notice,
   onDismiss,
+  onDetails,
 }: {
   notice: NonNullable<Notice>;
   onDismiss?: () => void;
+  /** For a rejected change: one summary line, with the split diagnostic shown elsewhere. */
+  onDetails?: () => void;
 }) {
   const { t, text } = useLocale();
   const Icon = noticeIcons[notice.tone];
@@ -29,6 +32,29 @@ export function NoticeBanner({
   const headline = full.replace(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+[:：]\s*/g, '');
   const detail =
     notice.detail === undefined ? (headline === full ? '' : full) : text(notice.detail);
+  if (notice.rejected && onDetails)
+    return (
+      <div className={`notice ${notice.tone} summary`} role="alert">
+        <Icon size={iconSize.control} aria-hidden="true" />
+        <div className="notice-body">
+          <span title={headline.slice(0, 3000)}>{headline.slice(0, 3000)}</span>
+        </div>
+        <button type="button" onClick={onDetails}>
+          {t('action.viewDetails')}
+        </button>
+        {onDismiss ? (
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t('editor.dialog.dismiss')}
+            title={t('editor.dialog.dismiss')}
+            onClick={onDismiss}
+          >
+            <X size={iconSize.inline} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    );
   return (
     <div className={`notice ${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>
       <Icon size={iconSize.control} aria-hidden="true" />

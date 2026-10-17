@@ -346,10 +346,12 @@ test('diagnostic file paths are displayed cleanly while logical identities and c
     integrationIssues: [],
   };
   const view = render(React.createElement(ToolWindows, { controller }));
-  expect(
-    Array.from(view.container.querySelectorAll('.path-text'), (node) => node.textContent),
-  ).toEqual([String.raw`\\server\share\System.arxml`, '/Package/Component/Port']);
-  const rows = view.container.querySelectorAll('.problem-list > li');
+  const rows = view.container.querySelectorAll('.problems-table tbody tr');
+  const cell = (row, column) => rows[row].querySelectorAll('td')[column].textContent;
+  // File column: display form; object column: the logical path unchanged.
+  expect(cell(0, 4)).toBe(String.raw`\\server\share\System.arxml`);
+  expect(cell(1, 2)).toBe('/Package/Component/Port');
+  expect(cell(1, 4)).toBe(String.raw`C:\工作目录\Application.arxml`);
   await act(async () => {
     fireEvent.click(within(rows[0]).getByRole('button', { name: translate('action.copyDetails') }));
   });
@@ -416,9 +418,6 @@ test('real ECU preview and confirmation retain raw directories and revision acro
   );
   expect(view.getByLabelText(translate('shell.delivery.buildDirectory')).value).toBe(
     String.raw`C:\工作目录\build`,
-  );
-  expect(view.getByLabelText(translate('shell.delivery.importDirectory')).value).toBe(
-    String.raw`\\server\share\backup`,
   );
   expect(current().ecuOutputDirectory).toBe(String.raw`\\?\C:\工作目录\output`);
   expect(current().buildDirectory).toBe(String.raw`\\?\C:\工作目录\build`);

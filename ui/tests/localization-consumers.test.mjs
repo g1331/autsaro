@@ -360,11 +360,11 @@ test('Problems renders serialized cardinality child names, bounds and actual cou
     let firstLanguage;
     for (const language of ['zh-CN', 'en']) {
       act(() => current().setLanguageDraft(language));
-      const rows = view.container.querySelectorAll('.problem-list > li');
+      const rows = view.container.querySelectorAll('.problems-table tbody tr');
       expect(rows).toHaveLength(2);
       for (let index = 0; index < rows.length; index++) {
         const issue = diagnostics[index];
-        const content = rows[index].querySelector('p').textContent;
+        const content = rows[index].querySelector('.problem-message').textContent;
         expect(content).toContain(issue.witness.subjects[0]);
         expect(content).toContain(issue.message[0].params.min);
         expect(content).toContain(issue.message[0].params.max);
@@ -467,7 +467,7 @@ test('the problem count is the number of listed problems, each listed once', asy
     diagnostics: [diagnostic, { ...diagnostic }, other],
   });
   act(() => current().setToolWindow('problems'));
-  const rows = view.container.querySelectorAll('.problem-list > li');
+  const rows = view.container.querySelectorAll('.problems-table tbody tr');
   expect(rows).toHaveLength(2);
   expect(current().problemCount).toBe(2);
   expect(current().errorCount).toBe(2);

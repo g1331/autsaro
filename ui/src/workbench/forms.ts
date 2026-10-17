@@ -14,7 +14,14 @@ export type NoticeTone = 'error' | 'warning' | 'info' | 'success';
  * `text` is the sentence shown to the user; `detail` keeps the original backend
  * reply for copying. `fieldId` ties a rejection to the field that caused it.
  */
-export type Notice = { tone: NoticeTone; text: Text; detail?: Text; fieldId?: string } | null;
+export type Notice = {
+  tone: NoticeTone;
+  text: Text;
+  detail?: Text;
+  fieldId?: string;
+  /** A rejected change: the banner gives one line and the problems window the split details. */
+  rejected?: true;
+} | null;
 
 /** Drops exact repeats so counts always match the rendered list. */
 export function distinct<T>(items: readonly T[]): T[] {

@@ -31,6 +31,7 @@ import type {
 } from './projectTypes';
 import { stageDefaults } from './useDelivery';
 import { fieldState } from './projectGroups';
+import type { Rejection } from './batchEditing';
 export type WorkbenchState = {
   workspace: WorkspaceView | null;
   integrationUnapplied: boolean;
@@ -59,8 +60,10 @@ export type WorkbenchState = {
   settingsCategory: 'appearance' | 'language' | 'definitions' | 'tools';
   toolDraft: ExecutionTools;
   settingsNotice: Notice;
-  /** Rejections attached to the inspector field that caused them, by fieldId. */
+  /** Rejections attached to the grid cell that caused them, by fieldId. */
   fieldErrors: Record<string, Text>;
+  /** The last rejected change, split into diagnostics for the problems window. */
+  rejection: Rejection | null;
   toolErrors: Partial<Record<keyof ExecutionTools, Text>>;
   operationGeneration: number;
   integrationInspection: IntegrationInspection | null;
@@ -124,8 +127,10 @@ export function reducer(state: WorkbenchState, action: Action): WorkbenchState {
 /** Merges a patch; a projection without unsaved changes becomes the saved baseline. */
 export function applyPatch(state: WorkbenchState, patch: Partial<WorkbenchState>): WorkbenchState {
   const next = { ...state, ...patch };
-  if (patch.projection === null) next.savedValues = null;
-  else if (patch.projection && !patch.projection.dirty)
+  if (patch.projection === null) {
+    next.savedValues = null;
+    next.rejection = null;
+  } else if (patch.projection && !patch.projection.dirty)
     next.savedValues = Object.fromEntries(
       patch.projection.fields.map((field) => [field.fieldId, fieldState(field)]),
     );
@@ -161,6 +166,7 @@ export function initialState(): WorkbenchState {
     toolDraft: { compiler: '', objdump: '', git: '', python: '' },
     settingsNotice: null,
     fieldErrors: {},
+    rejection: null,
     toolErrors: {},
     operationGeneration: 0,
     integrationInspection: null,

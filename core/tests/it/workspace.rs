@@ -2483,6 +2483,15 @@ fn creation_rejects_module_and_container_upper_bounds_atomically() {
         let error = workspace.prepare_change(&changes).unwrap_err();
         assert!(error.to_string().contains(code), "{error}");
         assert!(error.to_string().contains(&parent.path), "{error}");
+        if code == "MULTIPLICITY" {
+            // The message names the child definition, its multiplicity and the actual count.
+            assert!(
+                error
+                    .to_string()
+                    .contains("too many CanIfPublicCfg entries (allowed 1..1, currently 2)"),
+                "{error}"
+            );
+        }
         assert_eq!(workspace.input_fingerprint().unwrap(), before);
         assert_eq!(
             serde_json::to_value(projection(&workspace)).unwrap(),

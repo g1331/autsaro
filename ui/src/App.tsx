@@ -462,7 +462,23 @@ export default function App() {
             <SourceEntry controller={c} logo={logo} />
           )}
           {c.notice && !previewOpen && !c.settingsOpen && !startSurface ? (
-            <NoticeBanner notice={c.notice} onDismiss={() => c.setNotice(null)} />
+            <NoticeBanner
+              notice={c.notice}
+              onDismiss={() => c.setNotice(null)}
+              onDetails={
+                c.notice.rejected && c.rejection
+                  ? () => {
+                      c.setToolWindow('problems');
+                      requestAnimationFrame(() =>
+                        // preventScroll: focusing would also scroll the fixed shell.
+                        document
+                          .getElementById('rejection-details')
+                          ?.focus({ preventScroll: true }),
+                      );
+                    }
+                  : undefined
+              }
+            />
           ) : null}
           {!c.native ? <p className="notice info">{t('shell.app.browser')}</p> : null}
           {c.capabilities?.ruleError ? (

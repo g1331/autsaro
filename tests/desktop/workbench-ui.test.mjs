@@ -275,17 +275,18 @@ check('problem-focus', async () => {
     return JSON.stringify(reply.value.diagnostics[${issueIndex}], null, 2);
   })()`);
   assert.deepEqual(displayPaths(JSON.parse(details)), issue);
-  const copiedDiagnostic = await clipboard(
-    details,
-    `[...document.querySelectorAll('.problem-list li')].filter(${visible})[${issueIndex}]`,
-    '复制详情',
-  );
+  // The table sorts by severity and module; the row is found by code, object and parameter.
+  const parameter = view.fields
+    .find((field) => field.fieldId === issue.fieldId)
+    .definitionId.split('/')
+    .pop();
+  const row = `[...document.querySelectorAll('.problems-table tbody tr')].filter(${visible}).find(row => row.dataset.problemCode === ${json(issue.code)} && row.textContent.includes(${json(issue.path ?? issue.file)}) && row.textContent.includes(${json(` · ${parameter}`)}))`;
+  const copiedDiagnostic = await clipboard(details, row, '复制详情');
   const location = await evaluate(`(() => {
-    const rows = [...document.querySelectorAll('.problem-list li')].filter(${visible});
-    const row = rows[${issueIndex}];
-    if (!row?.textContent.includes(${json(issue.code)}) || !row.textContent.includes(${json(issue.path ?? issue.file)}))
-      throw new Error('Actual projected diagnostic row identity changed');
-    const button = row.querySelector('button'); if (!button) throw new Error('Genuine issue locator missing');
+    const row = ${row};
+    if (!row) throw new Error('Actual projected diagnostic row identity changed');
+    const button = [...row.querySelectorAll('button')].find(button => button.textContent.trim() === '定位');
+    if (!button) throw new Error('Genuine issue locator missing');
     button.scrollIntoView({block:'nearest'}); const box=button.getBoundingClientRect();
     return {x:box.x+box.width/2,y:box.y+box.height/2};
   })()`);

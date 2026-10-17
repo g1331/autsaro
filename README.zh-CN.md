@@ -17,7 +17,7 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
 
 <h3><img src="docs/images/icon-configuration.svg" width="22" alt=""> 配置编辑与引用检查</h3>
 
-工程树、帧与信号表、属性检查器共用同一工作区。选择对象后，可检查参数与引用关系，编辑 CAN ID、信号布局和发送周期。
+工程树按模块分组，节点上标出错误、警告和修改状态。选中容器后在容器视图中打开：子容器按定义分组，显示多重性和缺少的条目；参数表中改好一个值按 Enter 即可应用，也可以攒下多处修改一起预览。检查器说明当前参数；在工程树节点和子容器行上右键，可以添加定义允许的子容器、改名或删除。帧与信号表用于编辑 CAN ID、信号布局和发送周期。
 
 <a href="docs/images/workbench-configuration.png"><img src="docs/images/workbench-configuration.png" width="980" alt="CAN 配置工作区：左侧工程树、中间帧与信号表、右侧属性和引用检查器"></a>
 
@@ -34,7 +34,7 @@ Autsaro 支持从内置模板创建 ECU 工程，或导入多份 ARXML；在同�
     </td>
     <td width="50%" valign="top">
       <h3><img src="docs/images/icon-validation.svg" width="22" alt=""> 校验与问题定位</h3>
-      <p>结构、定义与生成约束分别报告；从问题详情定位到对应配置对象。</p>
+      <p>结构、定义与生成检查的结果集中在一张问题表里，可以排序，也可以按严重度、模块和文本筛选。定位问题会直接聚焦到对应的参数格；被拒绝的修改会列出严重度、代码、消息、对象路径和来源文件。</p>
       <a href="docs/images/workbench-validation.png"><img src="docs/images/workbench-validation.png" width="480" alt="问题工具窗口：分域校验结果、基数错误与定位到真实来源操作"></a>
     </td>
   </tr>
