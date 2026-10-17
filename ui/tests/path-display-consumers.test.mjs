@@ -94,11 +94,12 @@ function captureClipboard() {
   return writeText;
 }
 
-async function renderWorkbench(integrationCandidate = false) {
+async function renderWorkbench(integrationCandidate = false, initialized = integrationCandidate) {
   let opened = false;
+  let initializedNow = false;
   const workspace = {
     integrationCandidate,
-    applicationInitialized: integrationCandidate,
+    applicationInitialized: initialized,
     name: 'PathProject',
     dirty: false,
     files: [],
@@ -147,6 +148,21 @@ async function renderWorkbench(integrationCandidate = false) {
       });
     if (command === 'preview_ecu_project') return reply(generationPreview);
     if (command === 'generate_ecu_project') return reply(generated);
+    if (command === 'preview_application_initialization')
+      return reply({
+        revision: 'application',
+        slots: [],
+        files: [],
+        manifestBefore: '{}',
+        manifestAfter: '{}',
+      });
+    if (command === 'initialize_application_previewed') {
+      initializedNow = true;
+      return reply({ projection, warnings: [], retainedRecoveryFiles: [] });
+    }
+    // A fresh view: the controller must store it, not see a mutated earlier one.
+    if (command === 'workspace_view')
+      return reply({ ...workspace, applicationInitialized: initialized || initializedNow });
     throw new Error(`Unexpected command: ${command}`);
   });
   let controller;
@@ -697,3 +713,23 @@ test.each(['zh-CN', 'en'])(
     expect(preview.revision).toBe('complete-application-revision');
   },
 );
+
+test('confirming application initialization makes ECU delivery available without reopening', async () => {
+  previewLanguage('en');
+  const consumer = await renderWorkbench(true, false);
+  await importSources(consumer);
+  const { current } = consumer;
+  const preview = () => current().commands.find((command) => command.id === 'preview');
+  expect(localize(preview().reason)).toBe(
+    translate('backend.prepared.application_initialization_required'),
+  );
+  await act(async () => {
+    await current().previewApplicationInitialization();
+  });
+  await act(async () => {
+    await current().initializeApplicationPreviewed();
+  });
+  await waitFor(() => expect(current().busy).toBeNull());
+  expect(current().workspace.applicationInitialized).toBe(true);
+  expect(preview().reason).toBe('');
+});
