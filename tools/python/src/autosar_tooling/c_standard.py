@@ -99,28 +99,48 @@ def parameter_name(words: list[str]) -> str:
     # Callback parameters have their name inside (*name), arrays before [extent].
     for index in range(len(words) - 2):
         if words[index:index + 2] == ["(", "*"]:
-            return words[index + 2]
+            return words[index + 2] if IDENTIFIER.fullmatch(words[index + 2]) else "<unnamed>"
     words = words[:words.index("[")] if "[" in words else words
-    names = [word for word in words if IDENTIFIER.fullmatch(word)]
+    qualifiers = {"const", "volatile", "restrict", "struct", "union", "enum"}
+    names = [word for word in words if IDENTIFIER.fullmatch(word) and word not in qualifiers]
+    if any(word in NATIVE for word in words):
+        names = [word for word in names if word not in NATIVE]
+        return names[-1] if names else "<unnamed>"
     return names[-1] if len(names) > 1 else "<unnamed>"
 
 
-def contract_rules(comment: str, parameters: list[str]) -> list[str]:
+def contract_rules(comment: str, parameters: list[str], *, returns_void: bool = False) -> list[str]:
     rules = []
     if not comment.startswith("/**") or comment.startswith("/**<"):
         return ["api-contract"]
-    brief = re.split(r"@param|@return|Preconditions:|Context:|Reentrancy:|Ownership:", comment)[0]
+    brief = re.split(r"@param|@return|@par|Preconditions:|Context:|Reentrancy:|Ownership:", comment)[0]
     if not re.sub(r"[/\s*]|@brief", "", brief):
         rules.append("api-purpose")
+    body = comment_body(comment)
+    boundary = r"(?=\b(?:" + "|".join(FIELDS) + r"):|@|\Z)"
     for field in FIELDS:
-        if not re.search(rf"\b{field}:\s*[^\s*]", comment):
+        value = re.search(rf"\b{field}:\s*(.*?)" + boundary, body, re.DOTALL)
+        if not value or not value[1].strip():
             rules.append("api-" + field.lower())
-    if not re.search(r"@return\s+[^\s*]", comment):
+    void_return = returns_void and re.search(r"@par\s+Return\s+None\.", body)
+    returned = re.search(r"@return\s+(.*?)" + boundary, body, re.DOTALL)
+    if not void_return and (not returned or not returned[1].strip()):
         rules.append("api-return")
-    documented = [match[1] for match in PARAM.findall(comment) if match[2].strip(" */")]
-    if collections.Counter(documented) != collections.Counter(parameters):
+    documented = [match[1] for match in PARAM.findall(body) if match[2].strip(" */")]
+    positional = []
+    section = re.search(r"@par\s+Parameters\s+(.*?)(?=@par|@return|Preconditions:|Context:|Reentrancy:|Ownership:|\Z)", body, re.DOTALL)
+    if section:
+        positional = [int(m[0]) if m[1] in {"in", "out", "in,out"} and m[2].strip(" */") else -1 for m in re.findall(r"(?m)^\s*\*?\s*(\d+)\.\s*\[([^]]*)\]\s*([^@\n]*)", section[1])]
+    expected_positions = [index for index, name in enumerate(parameters, 1) if name == "<unnamed>"]
+    if (collections.Counter(documented) != collections.Counter(name for name in parameters if name != "<unnamed>")
+        or positional != expected_positions):
         rules.append("api-parameters")
     return rules
+
+
+def void_function(tokens: list[Token], name: str) -> bool:
+    prefix = [token.text for token in tokens[:next(i for i, token in enumerate(tokens) if token.text == name)]]
+    return "void" in prefix and "*" not in prefix
 
 
 def findings(name: str, source: str, *, bsw: bool | None = None, known_switches: frozenset[str] = frozenset()) -> collections.Counter[Key]:
@@ -238,7 +258,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
         word = token.text
         if word == "{" and parens == 0:
             words = [t.text for t in statement]
-            aggregate = ("linkage" if words == ["extern", '"C"']
+            aggregate = ("body" if function(statement) else "linkage" if words == ["extern", '"C"']
                          else "initializer" if "=" in words else "enum" if "enum" in words
                          else "record" if set(words) & {"struct", "union"} else "body")
             if (not stack or stack == ["linkage"]) and aggregate == "initializer":
@@ -249,7 +269,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
             if (not stack or stack == ["linkage"]) and aggregate == "body" and public:
                 declaration = function(statement)
                 if declaration:
-                    for rule in contract_rules(adjacent(source, tokens, statement[0].start), declaration[1]):
+                    for rule in contract_rules(adjacent(source, tokens, statement[0].start), declaration[1], returns_void=void_function(statement, declaration[0])):
                         add(rule, statement[0])
             stack.append(aggregate)
             statement = []
@@ -283,7 +303,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
                     add("typedef-comment", statement[0])
             elif declaration := function(statement):
                 if public:
-                    for rule in contract_rules(comment, declaration[1]):
+                    for rule in contract_rules(comment, declaration[1], returns_void=void_function(statement, declaration[0])):
                         add(rule, statement[0])
             elif "extern" not in words and not trailing(source, token.end):
                 add("state-comment", statement[0])

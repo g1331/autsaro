@@ -37,6 +37,23 @@ class CStandardTests(unittest.TestCase):
         self.assertNotIn("config-switch", self.rules("#ifndef INTERNAL_H\n#define INTERNAL_H\n#endif", "runtime/bsw/src/Internal.h"))
         self.assertNotIn("config-switch", self.rules("#ifndef RTE_TEST_H\n#ifdef RTE_APPLICATION_HEADER_FILE\n#error Duplicate\n#endif\n#define RTE_TEST_H\n#ifdef RTE_CORE\n#endif\n#if defined(RTE_RUNNABLEAPI_Run)\n#endif\n#endif", "emitted/generated/include/Rte_Test.h"))
 
+    def test_void_and_required_unnamed_parameter_comment_forms(self):
+        comment = CONTRACT.replace(" * @param[in] id Object index, borrowed for this call.\n * @param[out] value Caller-owned result; written on success.\n", " * @par Parameters\n * 1. [in] Object index.\n * 2. [out] Caller-owned writable result.\n").replace("@return E_OK on success; E_NOT_OK preserves output.", "@par Return\n * None.")
+        declaration = "void Run(uint8, const uint32 *);"
+        self.assertEqual(self.rules(comment + declaration), [])
+        for original, replacement in (("2. [out]", "3. [out]"), ("2. [out]", "2. [inout]"), ("1. [in]", "1. []"), (" * 2. [out] Caller-owned writable result.\n", "")):
+            self.assertIn("api-parameters", self.rules(comment.replace(original, replacement) + declaration))
+        self.assertIn("api-return", self.rules(comment + "uint8 Run(uint8, const uint32 *);"))
+        self.assertIn("api-purpose", self.rules(comment.replace("Read the selected object.", "") + declaration))
+        self.assertEqual(c_standard.parameter_name(["const", "uint8", "*"]), "<unnamed>")
+        self.assertEqual(c_standard.parameter_name(["unsigned", "int", "id"]), "id")
+
+    def test_wrapped_contract_fields_and_inline_record_result(self):
+        wrapped = CONTRACT.replace("Ownership: neither pointer is retained.", "Ownership:\n * neither pointer is retained.")
+        self.assertEqual(self.rules(wrapped + DECLARATION), [])
+        self.assertIn("api-ownership", self.rules(CONTRACT.replace("neither pointer is retained.", "") + DECLARATION))
+        self.assertIn("api-contract", self.rules("static inline struct Value Read(void) { return value; }"))
+
     def test_complete_multiline_contract(self):
         self.assertEqual(self.rules(CONTRACT + DECLARATION), [])
 
