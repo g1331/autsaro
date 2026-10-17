@@ -93,6 +93,11 @@ class SealedSourceTests(unittest.TestCase):
         link_directory(self.project / "bsw", external)
         self.refused("Source links/reparse points are refused: bsw")
 
+    def test_package_below_a_host_alias_is_accepted(self):
+        alias = self.root / "alias"
+        link_directory(alias, self.root)
+        self.assertEqual(sealed_sources(alias / "package")[0], self.names)
+
     def test_package_reached_through_a_directory_link_or_junction_is_refused(self):
         alias = self.root / "alias"
         link_directory(alias, self.project)

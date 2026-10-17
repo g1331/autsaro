@@ -28,11 +28,18 @@ def safe_relative(value: str) -> bool:
                 and all(part not in ("", ".", "..") for part in value.split("/")))
 
 
-def refuse_links(path: Path) -> None:
-    for entry in (path.absolute(), *path.absolute().parents):
+def refuse_links(path: Path, root: Path | None = None) -> None:
+    """Refuse links within the input boundary, including the root itself."""
+    root = (root if root is not None else path).absolute()
+    entry = path.absolute()
+    entry.relative_to(root)
+    while True:
         if entry.is_symlink() or (
                 entry.exists() and getattr(entry.lstat(), "st_file_attributes", 0) & 0x400):
             raise ValueError(f"Links/reparse points are refused: {entry}")
+        if entry == root:
+            break
+        entry = entry.parent
 
 
 FILE_LIST = "meta/files.list"
@@ -238,11 +245,16 @@ def require_kernel_identity(kernel: Path, expected: dict[str, str]) -> None:
     for name, identity in expected.items():
         if not safe_relative(name) or not isinstance(identity, str) or not re.fullmatch(r"[0-9a-f]{64}", identity):
             raise ValueError(f"Invalid kernel identity: kernel/{name}")
-    actual = {path.relative_to(kernel).as_posix() for path in kernel.rglob("*") if path.is_file()}
+    refuse_links(kernel)
+    actual = set()
+    for path in kernel.rglob("*"):
+        refuse_links(path, kernel)
+        if path.is_file():
+            actual.add(path.relative_to(kernel).as_posix())
     for name in sorted(actual ^ expected.keys()):
         raise ValueError(f"Kernel file closure mismatch: kernel/{name}")
     for name, identity in expected.items():
-        refuse_links(kernel / name)
+        refuse_links(kernel / name, kernel)
         if digest(kernel / name) != identity:
             raise ValueError(f"Kernel identity mismatch: kernel/{name}")
 

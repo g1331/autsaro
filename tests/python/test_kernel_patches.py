@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +16,7 @@ from ecu_tools.build import (
     require_kernel_identity,
     require_kernel_patch_applied,
 )
+from test_sealed_sources import link_directory
 
 
 class KernelPatchTests(unittest.TestCase):
@@ -64,6 +67,35 @@ class KernelPatchTests(unittest.TestCase):
                 require_kernel_patch_applied(patch, before)
             (kernel / "selected.h").write_bytes(b"after\n")
             require_kernel_patch_applied(patch, before)
+
+    def test_host_ancestor_alias_is_accepted(self):
+        with tempfile.TemporaryDirectory(prefix="autosar-kernel-patch-") as temporary:
+            root = Path(temporary).resolve(strict=True)
+            (root / "real/kernel").mkdir(parents=True)
+            link_directory(root / "alias", root / "real")
+            kernel = root / "alias/kernel"
+            (kernel / "task.h").write_bytes(b"header")
+            require_kernel_identity(kernel, {"task.h": hashlib.sha256(b"header").hexdigest()})
+
+    def test_kernel_links_are_refused(self):
+        with tempfile.TemporaryDirectory(prefix="autosar-kernel-patch-") as temporary:
+            root = Path(temporary).resolve(strict=True)
+            kernel = root / "kernel"
+            kernel.mkdir()
+            external = root / "external"
+            external.mkdir()
+            (external / "task.h").write_bytes(b"header")
+            identity = hashlib.sha256(b"header").hexdigest()
+            link_directory(kernel / "include", external)
+            with self.assertRaisesRegex(ValueError, re.escape(f"Links/reparse points are refused: {kernel / 'include'}")):
+                require_kernel_identity(kernel, {"include/task.h": identity})
+            if os.name == "nt":
+                (kernel / "include").rmdir()
+            else:
+                (kernel / "include").unlink()
+            (kernel / "task.h").symlink_to(external / "task.h")
+            with self.assertRaisesRegex(ValueError, re.escape(f"Links/reparse points are refused: {kernel / 'task.h'}")):
+                require_kernel_identity(kernel, {"task.h": identity})
 
     def test_identity_closure_and_records_are_required(self):
         with tempfile.TemporaryDirectory(prefix="autosar-kernel-patch-") as temporary:
