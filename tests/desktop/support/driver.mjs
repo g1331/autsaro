@@ -498,7 +498,12 @@ class WebDriver {
         durationMs: performance.now() - started,
         method,
         route: route.replace(/session\/[^/]+/, 'session'),
-        script: body?.args?.[0]?.slice(0, 240),
+        script: route.endsWith('/execute/sync') ? body?.args?.[0] : body?.args?.[0]?.slice(0, 240),
+        status: response.status,
+        error: result.value?.error ? result.value : undefined,
+        probe: body?.args?.[0]?.includes('Boolean(window.__TAURI_INTERNALS__')
+          ? result.value
+          : undefined,
       }) + '\n',
     );
     if (!response.ok || result.value?.error)
@@ -605,6 +610,19 @@ export async function launch(name, { delayOperations = false } = {}) {
       nativeDriver = await tool('WebKitWebDriver');
     } else {
       nativeDriver = await tool('msedgedriver');
+      await writeFile(
+        path.join(scratch, 'windows-versions.json'),
+        JSON.stringify(
+          {
+            driver: (await run(nativeDriver, ['--version'])).stdout.trim(),
+            webview2: await powershell(
+              "(Get-ItemProperty 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv",
+            ),
+          },
+          null,
+          2,
+        ),
+      );
     }
     const [port, nativePort] = await driverPorts();
     driverProcess = spawn(
@@ -655,7 +673,11 @@ export async function launch(name, { delayOperations = false } = {}) {
       ),
     );
     let driverLog = '';
-    driverProcess.stderr.on('data', (chunk) => (driverLog += chunk));
+    const driverOutput = path.join(scratch, 'driver.stderr.log');
+    driverProcess.stderr.on('data', (chunk) => {
+      driverLog += chunk;
+      appendFile(driverOutput, chunk).catch(() => undefined);
+    });
     client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
     await until(async () => {
       try {
@@ -719,6 +741,29 @@ export async function launch(name, { delayOperations = false } = {}) {
       });
       if (result.error) throw new Error(result.error);
       return result.value;
+    },
+    // Let the driver synchronize navigation without a user async callback;
+    // execute/sync also awaits the diagnostic sampler's returned Promise.
+    async evaluateReadiness(expression) {
+      return client.request('POST', route('/execute/sync'), {
+        script: 'return (0, eval)(arguments[0]);',
+        args: [expression],
+      });
+    },
+    async diagnoseStartup(error) {
+      const evidence = { at: Date.now(), error: String(error) };
+      evidence.processes = await processTree(driverProcess.pid).catch(String);
+      evidence.context = await client
+        .request('POST', route('/execute/sync'), {
+          script:
+            'return {url: location.href, readyState: document.readyState, timeOrigin: performance.timeOrigin, native: Boolean(window.__TAURI_INTERNALS__), buttons: document.querySelectorAll("button").length, text: document.body?.innerText};',
+          args: [],
+        })
+        .catch(String);
+      await writeFile(
+        path.join(scratch, 'startup-failure.json'),
+        JSON.stringify(evidence, null, 2),
+      );
     },
     async screenshot(file) {
       const image = await client.request('GET', route('/screenshot'));
