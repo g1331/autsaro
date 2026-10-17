@@ -5,7 +5,8 @@
 /** Arbitrate the indicated ComM mode and run the matching rule's action (SWS_BswM_00047).
  * @param[in] Network Configured channel; other channels are ignored.
  * @param[in] RequestedMode NO, SILENT or FULL; other values are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized; otherwise no action.
  * Context: ComM callback; not inside an exclusive area.
  * Reentrancy: reentrant. An indication received while an action runs is postponed and

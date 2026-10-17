@@ -16,7 +16,8 @@
 #include "Can_MemMap.h"
 /** Initialize the driver and set the controller to STOPPED (SWS_Can_00259).
  * @param[in] Config Host controller configuration; NULL or a missing synchronous sink is ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: driver UNINIT; a repeated call leaves the initialized state unchanged.
  * Context: task, outside any Can callback; not inside the CAN_STATE area.
  * Reentrancy: non reentrant.
@@ -24,7 +25,8 @@
  */
 CAN_CODE void Can_Init(const Can_ConfigType *Config);
 /** De-initialize the driver and return the controller to UNINIT (SWS_Can_91010).
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: driver initialized and controller not STARTED; otherwise the call is ignored.
  * Context: task; not inside the CAN_STATE area.
  * Reentrancy: non reentrant.
@@ -91,7 +93,8 @@ CAN_CODE Std_ReturnType Can_GetControllerTxErrorCounter(uint8 ControllerId,
                                                         uint8 *TxErrorCounterPtr);
 /** Count one nested disable of the controller interrupts; the polled controller uses none.
  * @param[in] Controller Driver controller identifier; other values are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: driver initialized; otherwise the call is ignored.
  * Context: any; not inside the CAN_STATE area.
  * Reentrancy: reentrant.
@@ -100,7 +103,8 @@ CAN_CODE Std_ReturnType Can_GetControllerTxErrorCounter(uint8 ControllerId,
 CAN_CODE void Can_DisableControllerInterrupts(uint8 Controller);
 /** Undo one counted disable; no action when none is outstanding (SWS_Can_00208).
  * @param[in] Controller Driver controller identifier; other values are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: driver initialized; otherwise the call is ignored.
  * Context: any; not inside the CAN_STATE area.
  * Reentrancy: reentrant.

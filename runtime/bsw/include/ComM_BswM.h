@@ -6,7 +6,8 @@
  * (SWS_ComM_00871, SWS_ComM_00896).
  * @param[in] Channel Configured channel; other channels are ignored.
  * @param[in] Allowed TRUE permits a pending request to enter FULL.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized; otherwise no action. Init resets the flag to FALSE.
  * Context: task or callback; not inside an exclusive area.
  * Reentrancy: reentrant; a bus request it causes is issued by one caller at a time.

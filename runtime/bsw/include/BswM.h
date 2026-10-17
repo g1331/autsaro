@@ -26,7 +26,8 @@ typedef struct {
 } BswM_ConfigType;
 /** Start arbitrating ComM indications (SWS_BswM_00002).
  * @param[in] ConfigPtr Configuration with an action; otherwise BswM is unchanged.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: None.
  * Context: startup task; not inside an exclusive area.
  * Reentrancy: not reentrant. A restart drops a postponed input; an action already
@@ -35,7 +36,8 @@ typedef struct {
  */
 void BswM_Init(const BswM_ConfigType *ConfigPtr);
 /** Stop arbitration; later indications have no effect (SWS_BswM_00119, SWS_BswM_00120).
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: None.
  * Context: shutdown task; not inside an exclusive area.
  * Reentrancy: not reentrant. An action already running completes; postponed input is

@@ -4,7 +4,8 @@
 #include "Std_Types.h"
 /** Disable reception and new response transmissions (SWS_Dcm_00356).
  * @param[in] NetworkId Configured ComM channel; other channels are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized; otherwise no action.
  * Context: ComM callback, including interrupt; not inside an exclusive area.
  * Reentrancy: reentrant.
@@ -13,7 +14,8 @@
 void Dcm_ComM_NoComModeEntered(uint8 NetworkId);
 /** Allow reception and disable new response transmissions (SWS_Dcm_00358).
  * @param[in] NetworkId Configured ComM channel; other channels are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized; otherwise no action.
  * Context: ComM callback, including interrupt; not inside an exclusive area.
  * Reentrancy: reentrant.
@@ -22,7 +24,8 @@ void Dcm_ComM_NoComModeEntered(uint8 NetworkId);
 void Dcm_ComM_SilentComModeEntered(uint8 NetworkId);
 /** Allow reception and new response transmissions (SWS_Dcm_00360).
  * @param[in] NetworkId Configured ComM channel; other channels are ignored.
- * @return None.
+ * @par Return
+ * None.
  * Preconditions: initialized; otherwise no action.
  * Context: ComM callback, including interrupt; not inside an exclusive area.
  * Reentrancy: reentrant.
