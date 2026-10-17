@@ -2,7 +2,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { localize, message, previewLanguage, translate } from '../src/i18n';
+import { composedMessage, localize, message, previewLanguage, translate } from '../src/i18n';
 import { createBatchEditing, fieldRejection } from '../src/workbench/batchEditing';
 import { createDeliveryActions } from '../src/workbench/deliveryActions';
 import { createSettingsActions } from '../src/workbench/settingsActions';
@@ -154,6 +154,58 @@ test('Counter period rejections show only the backend reason in both languages',
     previewLanguage(language);
     const result = fieldRejection([fieldRejected[0], reason], [period]);
     expect(localize(result.message)).toBe(localize(reason));
+  }
+});
+
+test('composed rejections end in exactly one sentence mark whether or not the backend reason has one', () => {
+  const expected = {
+    'zh-CN': {
+      reasons: ['取值超出范围', '取值超出范围。'],
+      cell: 'PERIOD 未应用，原配置保持：取值超出范围。修正后按 Enter 重新应用。',
+      batch: '更改被拒绝，原配置保持。PERIOD：取值超出范围。修正后重新预览。',
+      range: '取值超出范围（允许范围 1–65535）',
+      ranged:
+        'PERIOD 未应用，原配置保持：取值超出范围（允许范围 1–65535）。修正后按 Enter 重新应用。',
+      tool: '尚未配置执行工具（找不到编译器）：',
+      detail: '找不到编译器。',
+    },
+    en: {
+      reasons: ['Value is out of range', 'Value is out of range.'],
+      cell: 'PERIOD was not applied; the configuration is unchanged: Value is out of range. Correct it and press Enter to apply again.',
+      batch:
+        'Changes rejected; the configuration is unchanged. PERIOD: Value is out of range. Correct it and preview again.',
+      range: 'Value is out of range (allowed range 1–65535)',
+      ranged:
+        'PERIOD was not applied; the configuration is unchanged: Value is out of range (allowed range 1–65535). Correct it and press Enter to apply again.',
+      tool: 'Execution tools are not configured (Compiler not found).',
+      detail: 'Compiler not found.',
+    },
+  };
+  const params = { field: 'PERIOD' };
+  for (const language of ['zh-CN', 'en']) {
+    previewLanguage(language);
+    const want = expected[language];
+    for (const reason of want.reasons) {
+      const range = composedMessage(
+        'workflow.error.fieldRange',
+        { reason },
+        { minimum: '1', maximum: '65535' },
+      );
+      expect(localize(range)).toBe(want.range);
+      expect(
+        localize(composedMessage('workflow.error.fieldRejected', { error: reason }, params)),
+      ).toBe(want.cell);
+      expect(
+        localize(composedMessage('workflow.error.batchFieldRejected', { error: reason }, params)),
+      ).toBe(want.batch);
+      // The bracketed range stays before the single closing mark of the notice.
+      expect(
+        localize(composedMessage('workflow.error.fieldRejected', { error: range }, params)),
+      ).toBe(want.ranged);
+    }
+    for (const detail of [want.detail, want.detail.slice(0, -1)]) {
+      expect(translate('shell.settings.toolMissing', { detail })).toContain(want.tool);
+    }
   }
 });
 

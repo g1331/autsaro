@@ -9,10 +9,10 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.batch.applied': '已应用 {{count}} 项更改；工程尚未保存。',
     'workflow.batch.fieldApplied': '已应用 {{field}}；工程尚未保存。',
     'workflow.error.fieldRejected':
-      '{{field}} 未应用，原配置保持：{{error}}。修正后按 Enter 重新应用。',
+      '{{field}} 未应用，原配置保持：{{error, bare}}。修正后按 Enter 重新应用。',
     'workflow.error.batchFieldRejected':
-      '更改被拒绝，原配置保持。{{field}}：{{error}}。修正后重新预览。',
-    'workflow.error.fieldRange': '{{reason}}（允许范围 {{minimum}}–{{maximum}}）',
+      '更改被拒绝，原配置保持。{{field}}：{{error, bare}}。修正后重新预览。',
+    'workflow.error.fieldRange': '{{reason, bare}}（允许范围 {{minimum}}–{{maximum}}）',
     'workflow.stage.blockingErrors_one': '{{count}} 个错误阻断生成',
     'workflow.stage.blockingErrors_other': '{{count}} 个错误阻断生成',
     'workflow.batch.count_one': '{{count}} 项更改 · 不写入文件',
@@ -168,10 +168,10 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.batch.applied': 'Applied {{count}} changes; the project is not saved yet.',
     'workflow.batch.fieldApplied': 'Applied {{field}}; the project is not saved yet.',
     'workflow.error.fieldRejected':
-      '{{field}} was not applied; the configuration is unchanged: {{error}}. Correct it and press Enter to apply again.',
+      '{{field}} was not applied; the configuration is unchanged: {{error, bare}}. Correct it and press Enter to apply again.',
     'workflow.error.batchFieldRejected':
-      'Changes rejected; the configuration is unchanged. {{field}}: {{error}}. Correct it and preview again.',
-    'workflow.error.fieldRange': '{{reason}} (allowed range {{minimum}}–{{maximum}})',
+      'Changes rejected; the configuration is unchanged. {{field}}: {{error, bare}}. Correct it and preview again.',
+    'workflow.error.fieldRange': '{{reason, bare}} (allowed range {{minimum}}–{{maximum}})',
     'workflow.stage.blockingErrors_one': '{{count}} error blocks generation',
     'workflow.stage.blockingErrors_other': '{{count}} errors block generation',
     'workflow.batch.count_one': '{{count}} change · no files written',

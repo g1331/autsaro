@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed:** Rejection notices, range hints and the missing-tool notice insert backend messages without their sentence-final mark, so each composed text ends in exactly one mark and a bracketed range follows the reason instead of a stray period (#286).
+
 - **Fixed:** Rejected parameter cells show definition bounds only for definition range violations; Counter period errors retain their backend reason alone (#282).
 
 - **Fixed:** Standard ECU CAN IDs and application periods apply atomically from the parameter grid, with linked-location hints and cell-local rejection feedback (#277).

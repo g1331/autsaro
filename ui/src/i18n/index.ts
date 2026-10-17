@@ -106,6 +106,11 @@ void i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
   initAsync: false,
 });
+/**
+ * `{{name, bare}}` inserts a backend message without its sentence-final mark: the template supplies
+ * the punctuation (or bracket) that follows, so the result has exactly one whatever the backend wrote.
+ */
+i18n.services.formatter?.add('bare', (value) => String(value).replace(/\s*[。.！!？?；;]+$/, ''));
 export function translate(key: string, params: MessageParams = {}): string {
   const displayParams = { ...params };
   for (const name of ['path', 'file', 'directory', 'backup']) {
