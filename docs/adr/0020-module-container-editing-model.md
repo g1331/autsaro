@@ -115,4 +115,4 @@ AUTOSAR 的 ECU 配置按 ECUC 结构组织：模块配置（`ECUC-MODULE-CONFIG
 
 ## 状态
 
-提议（2026-10-17，[#233](https://github.com/g1331/autsaro/issues/233)）。
+已接受（2026-10-17，[#233](https://github.com/g1331/autsaro/issues/233)）。

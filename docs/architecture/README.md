@@ -94,4 +94,4 @@ flowchart LR
 | [0017](../adr/0017-requirement-disposition-in-tests-and-standards.md) | 条款处置写在测试与标准基线文档，核算结果现算 | 已接受，已实施 |
 | [0018](../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md) | 独占区按模块划分，持区期间不调用其他模块 | 已接受 |
 | [0019](../adr/0019-workbench-interactive-primitives.md) | 工作台交互组件采用 Radix Primitives，外观由自有 token 决定 | 已接受，实施中 |
-| [0020](../adr/0020-module-container-editing-model.md) | 配置编辑采用“模块 → 容器”树、容器参数视图与单字段直接应用 | 提议 |
+| [0020](../adr/0020-module-container-editing-model.md) | 配置编辑采用“模块 → 容器”树、容器参数视图与单字段直接应用 | 已接受 |
