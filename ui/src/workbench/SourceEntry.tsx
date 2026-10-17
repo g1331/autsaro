@@ -4,12 +4,18 @@ import { FolderOpen } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
 import { NoticeBanner } from './Dialog';
 import { iconSize } from './icons';
+import { useId } from 'react';
+import { CommandButton, CommandReasons, reasonIdFor } from './CommandActions';
+import { commandById } from './commands';
 
 export function SourceEntry({ controller: c, logo }: { controller: Workbench; logo: string }) {
   const { t, text } = useLocale();
   const openReason = c.actionReason('open');
   const createReason = c.actionReason('create');
   const saveAs = c.source === 'save-as';
+  const reasonsId = useId();
+  const entryCommands = [commandById(c, 'member'), commandById(c, 'ecu-package')];
+  const reasonId = reasonIdFor(entryCommands, reasonsId, text);
   // The start page is in front: its own operations report here, next to the button.
   const notice = c.notice ? (
     <NoticeBanner notice={c.notice} onDismiss={() => c.setNotice(null)} />
@@ -48,17 +54,22 @@ export function SourceEntry({ controller: c, logo }: { controller: Workbench; lo
             </button>
           ) : null}
           <span className="toolbar-separator" />
-          <button
-            type="button"
-            onClick={() => void c.openMemberProject()}
-            disabled={Boolean(openReason)}
-          >
-            {t('editor.source.open')}
-          </button>
-          <button type="button" onClick={c.importHandoff} disabled={Boolean(openReason)}>
-            {t('editor.source.importHandoff')}
-          </button>
+          {(
+            [
+              ['member', 'editor.source.open'],
+              ['ecu-package', 'editor.source.importHandoff'],
+            ] as const
+          ).map(([id, label]) => (
+            <CommandButton
+              key={id}
+              command={commandById(c, id)}
+              reasonId={reasonId(commandById(c, id))}
+            >
+              {t(label)}
+            </CommandButton>
+          ))}
         </div>
+        <CommandReasons commands={entryCommands} id={reasonsId} />
         <section>
           {c.source !== 'import' ? (
             <div className="form-fields">

@@ -1,6 +1,6 @@
 import { message, useLocale } from './i18n';
 import { displayPath } from './pathDisplay';
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   ChevronRight,
@@ -40,10 +40,15 @@ import { Tabs, tabPanelProps } from './workbench/Tabs';
 import { iconSize } from './workbench/icons';
 import { labelFromPath } from './workbench/forms';
 import { profileLabel, targetLabel, workspaceTitle } from './workbench/labels';
-import { menuRows } from './workbench/menu';
-import type { Command } from './workbench/menu';
+import { WorkbenchMenubar } from './workbench/menu';
+import type { Command } from './workbench/commands';
+import { CommandButton, CommandReasons, reasonIdFor } from './workbench/CommandActions';
+import { Tooltip } from './workbench/Tooltip';
 import type { DocumentTab } from './workbench/projectTypes';
 
+// Fields whose keys belong to text entry; global shortcuts leave them alone.
+const editableFields =
+  'textarea, select, [contenteditable="true"], input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="color"]):not([type="file"])';
 const documentLabels = {
   configuration: 'shell.document.configuration',
   integration: 'shell.document.integration',
@@ -54,13 +59,13 @@ const documentLabels = {
 export default function App() {
   const { t, text } = useLocale();
   const c = useWorkbench();
-  const [menu, setMenu] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
   const [help, setHelp] = useState(false);
   const [systemDark, setSystemDark] = useState(
     () => window.matchMedia('(prefers-color-scheme: dark)').matches,
   );
   const toolOpener = useRef<HTMLElement | null>(null);
+  const toolbarReasonId = useId();
   const preference = c.settingsOpen ? c.appearanceDraft : (c.capabilities?.appearance ?? 'system');
   const effectiveTheme = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
   const logo = effectiveTheme === 'dark' ? '/logo-workbench-dark.png' : '/logo-workbench.png';
@@ -120,259 +125,29 @@ export default function App() {
       stop?.();
     };
   }, [c.native]);
-  const workspaceReason = !c.workspace
-    ? t('shell.reason.noProject')
-    : c.disabled
-      ? c.busy
-        ? t('shell.busy', { operation: text(c.busy) })
-        : c.capabilities?.ruleError
-          ? text(c.capabilities.ruleError)
-          : t('shell.reason.backend')
-      : '';
-  const sourceReason =
-    workspaceReason ||
-    (c.workspace?.dirty || c.projection?.dirty ? t('shell.reason.save') : '') ||
-    (c.unapplied ? t('shell.reason.draft') : '');
   const commands: Command[] = [
-    {
-      id: 'new',
-      group: 'open',
-      label: t('shell.command.new'),
-      menu: 'file',
-      reason: text(c.actionReason('create')),
-      run: () => c.openProjectEntry('empty'),
-    },
-    {
-      id: 'open',
-      group: 'open',
-      label: t('shell.command.open'),
-      menu: 'file',
-      shortcut: 'Ctrl+O',
-      reason: text(c.actionReason('open')),
-      run: () => c.openProjectEntry('import'),
-    },
-    {
-      id: 'member',
-      group: 'open',
-      label: t('shell.command.member'),
-      menu: 'file',
-      reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
-      run: c.openMemberProject,
-    },
-    {
-      id: 'ecu-package',
-      group: 'open',
-      label: t('shell.command.ecuPackage'),
-      menu: 'file',
-      reason: c.busy || !c.native ? t('shell.reason.desktopBusy') : '',
-      run: c.importHandoff,
-    },
-    {
-      id: 'save',
-      group: 'save',
-      label: t('shell.command.save'),
-      menu: 'file',
-      shortcut: 'Ctrl+S',
-      reason: workspaceReason,
-      run: c.requestSave,
-    },
-    {
-      id: 'save-as',
-      group: 'save',
-      label: t('shell.command.saveAs'),
-      menu: 'file',
-      reason: workspaceReason || text(c.actionReason('save')),
-      run: () => c.openProjectEntry('save-as'),
-    },
-    {
-      id: 'close',
-      group: 'close',
-      label: t('shell.command.close'),
-      menu: 'file',
-      reason: !c.workspace ? t('shell.reason.noProject') : text(c.actionReason('open')),
-      run: () => c.startProject(),
-    },
-    {
-      id: 'settings',
-      group: 'settings',
-      label: t('shell.command.settings'),
-      menu: 'file',
-      reason: '',
-      run: () => c.setSettingsOpen(true),
-    },
-    {
-      id: 'apply',
-      label: t('shell.command.apply'),
-      menu: 'edit',
-      reason: workspaceReason || (!c.unapplied ? t('shell.reason.noChanges') : ''),
-      run: c.applyCurrentDrafts,
-    },
-    {
-      id: 'restore',
-      label: t('shell.command.restore'),
-      menu: 'edit',
-      reason: workspaceReason || (!c.unapplied ? t('shell.reason.noDrafts') : ''),
-      run: c.restoreAllDrafts,
-    },
-    {
-      id: 'tree',
-      group: 'panels',
-      label: t('shell.command.tree'),
-      menu: 'view',
-      shortcut: 'Alt+1',
-      reason: '',
-      run: () => c.setTreeVisible((previous) => !previous),
-    },
-    {
-      id: 'inspector',
-      group: 'panels',
-      label: t('shell.command.inspector'),
-      menu: 'view',
-      reason: '',
-      run: () => c.setInspectorVisible((previous) => !previous),
-    },
-    {
-      id: 'objects',
-      group: 'documents',
-      label: t('shell.document.configuration'),
-      menu: 'view',
-      reason: workspaceReason,
-      run: () => c.openDocument({ kind: 'configuration' }),
-    },
-    {
-      id: 'standard',
-      group: 'documents',
-      label: t('shell.document.integration'),
-      menu: 'view',
-      reason: workspaceReason,
-      run: () => c.openDocument({ kind: 'integration' }),
-    },
-    {
-      id: 'delivery',
-      group: 'documents',
-      label: t('shell.document.delivery'),
-      menu: 'view',
-      reason: workspaceReason,
-      run: () => c.openDocument({ kind: 'delivery' }),
-    },
-    {
-      id: 'validate',
-      group: 'run',
-      label: c.workspace?.integrationCandidate
-        ? t('shell.command.inspect')
-        : t('shell.command.validate'),
-      menu: 'tools',
-      reason: workspaceReason,
-      run: () =>
-        c.guardContext(message('shell.command.validate'), () =>
-          c.workspace?.integrationCandidate ? c.inspectIntegration() : c.validateProject(),
-        ),
-    },
-    {
-      id: 'preview',
-      group: 'run',
-      label: t('shell.command.preview'),
-      menu: 'tools',
-      reason:
-        sourceReason || (!c.workspace?.integrationCandidate ? t('shell.reason.standard') : ''),
-      run: () => {
-        c.openDocument({ kind: 'delivery' });
-        if (!c.ecuOutputDirectory) void c.chooseDirectory(c.changeEcuOutput);
-        else c.previewEcu();
-      },
-    },
-    {
-      id: 'preflight',
-      group: 'run',
-      label: t('shell.command.preflight'),
-      menu: 'tools',
-      reason:
-        sourceReason ||
-        text(c.executionReason) ||
-        (!c.workspace?.integrationCandidate ? t('shell.reason.standard') : ''),
-      run: c.preflightEcu,
-    },
-    {
-      id: 'initialize-application',
-      group: 'run',
-      label: t('shell.command.initialize'),
-      menu: 'tools',
-      reason:
-        sourceReason ||
-        text(c.actionReason('edit')) ||
-        (!c.workspace?.integrationCandidate ? t('shell.reason.noSlots') : ''),
-      run: c.previewApplicationInitialization,
-    },
-    {
-      id: 'problems',
-      group: 'tool-windows',
-      label: t('shell.command.problems'),
-      menu: 'view',
-      reason: '',
-      run: () => c.setToolWindow('problems'),
-    },
-    {
-      id: 'build',
-      group: 'tool-windows',
-      label: t('shell.command.build'),
-      menu: 'view',
-      shortcut: 'Alt+4',
-      reason: '',
-      run: () => c.setToolWindow('build'),
-    },
-    {
-      id: 'host',
-      group: 'tool-windows',
-      label: t('shell.command.host'),
-      menu: 'view',
-      shortcut: 'Alt+9',
-      reason: '',
-      run: () => c.setToolWindow('host'),
-    },
-    {
-      id: 'cancel',
-      group: 'cancel',
-      label: t('shell.command.cancel'),
-      menu: 'tools',
-      reason: !c.busy ? t('shell.reason.idle') : '',
-      run: c.cancelOperation,
-    },
+    ...c.commands,
     {
       id: 'help',
-      label: t('shell.command.help'),
+      label: message('shell.command.help'),
       menu: 'help',
       reason: '',
       run: () => setHelp(true),
     },
   ];
-  if (c.capabilities?.verificationMode === true) {
-    const reason = !c.native
-      ? t('shell.reason.desktop')
-      : c.busy
-        ? t('shell.busy', { operation: text(c.busy) })
-        : '';
-    commands.push(
-      {
-        id: 'verification-owned-long-failure',
-        label: t('shell.command.verifyFailure'),
-        reason,
-        run: () => c.verificationOwnedFailure(0),
-      },
-      {
-        id: 'verification-owned-cancel',
-        label: t('shell.command.verifyCancel'),
-        reason,
-        run: () => c.verificationOwnedFailure(5000),
-      },
-    );
-  }
+  const command = (id: string) => commands.find((entry) => entry.id === id)!;
+  const busyStatus = c.busy ? t('shell.busy', { operation: text(c.busy) }) : '';
+  // While busy, the toolbar's own status already states the reason.
+  const toolbarCommands = ['save', 'validate', 'delivery']
+    .map(command)
+    .filter((entry) => text(entry.reason) !== busyStatus);
+  const toolbarReason = reasonIdFor(toolbarCommands, toolbarReasonId, text);
   const dispatchCommand = (id: string) => {
-    const command = commands.find((entry) => entry.id === id);
-    if (!command || command.reason) return;
+    const entry = commands.find((item) => item.id === id);
+    if (!entry || entry.reason) return;
     rememberDialogOpener();
-    setMenu(null);
     setPalette(false);
-    void command.run();
+    void entry.run();
   };
   // Preview dialogs show the current notice inside themselves (see PreviewDialogs).
   const previewOpen = Boolean(
@@ -388,48 +163,36 @@ export default function App() {
   const startSurface = !c.workspace || c.activeDocument.kind === 'project-entry';
   const shortcut = useEffectEvent((event: KeyboardEvent) => {
     if (event.isComposing || event.defaultPrevented) return;
+    // Keys typed into a field belong to the field, Escape included (open menus and dialogs handle their own).
+    if (event.target instanceof Element && event.target.closest(editableFields)) return;
     const modal = c.settingsOpen || previewOpen || palette || help;
     if (event.key === 'Escape') {
-      if (modal) return;
-      if (menu) {
-        event.preventDefault();
-        setMenu(null);
-        return;
-      }
-      if (c.toolWindow) {
-        event.preventDefault();
-        c.setToolWindow(null);
-        toolOpener.current?.focus();
-      }
+      if (modal || !c.toolWindow) return;
+      event.preventDefault();
+      c.setToolWindow(null);
+      toolOpener.current?.focus();
       return;
     }
     if (modal) return;
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    const editing = target?.matches('input, textarea, select, [contenteditable="true"]');
+    // `code` is the physical key, so shortcuts also work with non-Latin keyboard layouts.
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
-      const key = event.key.toLocaleLowerCase();
-      if (key === 'k') {
+      if (event.code === 'KeyK') {
         event.preventDefault();
         rememberDialogOpener();
         setPalette(true);
-      } else if (key === 's' || key === 'o') {
+      } else if (event.code === 'KeyS' || event.code === 'KeyO') {
         event.preventDefault();
-        dispatchCommand(key === 's' ? 'save' : 'open');
+        dispatchCommand(event.code === 'KeyS' ? 'save' : 'open');
       }
-    } else if (!editing && event.altKey && !event.ctrlKey && !event.metaKey) {
-      const command =
-        event.key === '1'
-          ? 'tree'
-          : event.key === '4'
-            ? 'build'
-            : event.key === '9'
-              ? 'host'
-              : null;
-      if (command) {
+    } else if (event.altKey && !event.ctrlKey && !event.metaKey) {
+      const id = ({ Digit1: 'tree', Digit4: 'build', Digit9: 'host' } as Record<string, string>)[
+        event.code
+      ];
+      if (id) {
         event.preventDefault();
         toolOpener.current =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        dispatchCommand(command);
+        dispatchCommand(id);
       }
     }
   });
@@ -437,15 +200,6 @@ export default function App() {
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
   }, []);
-  useEffect(() => {
-    if (!menu) return;
-    document.querySelector<HTMLButtonElement>('.menu-popup button:not(:disabled)')?.focus();
-    const closeOutside = (event: PointerEvent) => {
-      if (event.target instanceof HTMLElement && !event.target.closest('.menu-root')) setMenu(null);
-    };
-    window.addEventListener('pointerdown', closeOutside);
-    return () => window.removeEventListener('pointerdown', closeOutside);
-  }, [menu]);
   const activeDocument = c.activeDocument;
   const source = c.projection?.sources.find((item) => item.sourceId === activeDocument.sourceId);
   const tabKey = (tab: DocumentTab) => `${tab.kind}-${tab.sourceId ?? ''}`;
@@ -460,61 +214,7 @@ export default function App() {
     <div className="app-shell">
       <header className="menubar" data-tauri-drag-region>
         <img src={logo} width="27" height="27" alt={t('shell.app.title')} data-tauri-drag-region />
-        <nav aria-label={t('shell.app.menu')}>
-          {(['file', 'edit', 'view', 'tools', 'help'] as const).map((label) => (
-            <div className="menu-root" key={label}>
-              <button
-                type="button"
-                className="ghost-button"
-                aria-expanded={menu === label}
-                aria-haspopup="menu"
-                onClick={() => setMenu(menu === label ? null : label)}
-              >
-                {t(`shell.menu.${label}`)}
-              </button>
-              {menu === label ? (
-                <div
-                  className="menu-popup"
-                  role="menu"
-                  aria-label={t(`shell.menu.${label}`)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      event.preventDefault();
-                      setMenu(null);
-                      (
-                        event.currentTarget.parentElement?.querySelector(
-                          'button',
-                        ) as HTMLElement | null
-                      )?.focus();
-                    }
-                    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-                      event.preventDefault();
-                      const items = Array.from(
-                        event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                          'button:not(:disabled)',
-                        ),
-                      );
-                      const index = items.indexOf(event.target as HTMLButtonElement);
-                      items[
-                        event.key === 'Home'
-                          ? 0
-                          : event.key === 'End'
-                            ? items.length - 1
-                            : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) %
-                              items.length
-                      ]?.focus();
-                    }
-                  }}
-                >
-                  {menuRows(
-                    commands.filter((command) => command.menu === label),
-                    dispatchCommand,
-                  )}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </nav>
+        <WorkbenchMenubar label={t('shell.app.menu')} commands={commands} run={dispatchCommand} />
         <div className="titlebar-drag-region" data-tauri-drag-region>
           <span className="app-title">{t('shell.app.title')}</span>
         </div>
@@ -544,33 +244,41 @@ export default function App() {
                   ? t('shell.app.standardEcu')
                   : null}
             </span>
-            <button
-              type="button"
-              onClick={() => dispatchCommand('save')}
-              disabled={Boolean(workspaceReason)}
-            >
-              <Save size={iconSize.control} aria-hidden="true" />
-              {t('shell.command.save')}
-            </button>
-            <button
-              type="button"
-              onClick={() => dispatchCommand('validate')}
-              disabled={Boolean(workspaceReason)}
-            >
-              <ListChecks size={iconSize.control} aria-hidden="true" />
-              {t('shell.app.validate')}
-            </button>
-            <button type="button" onClick={() => dispatchCommand('delivery')}>
-              <Code2 size={iconSize.control} aria-hidden="true" />
-              {t('shell.document.delivery')}
-            </button>
+            {(
+              [
+                ['save', Save, t('shell.command.save')],
+                ['validate', ListChecks, t('shell.app.validate')],
+                ['delivery', Code2, t('shell.document.delivery')],
+              ] as const
+            ).map(([id, Icon, label]) => (
+              <CommandButton
+                key={id}
+                command={command(id)}
+                run={() => dispatchCommand(id)}
+                reasonId={
+                  text(command(id).reason) === busyStatus
+                    ? 'operation-status'
+                    : toolbarReason(command(id))
+                }
+              >
+                <Icon size={iconSize.control} aria-hidden="true" />
+                {label}
+              </CommandButton>
+            ))}
+            <CommandReasons
+              commands={toolbarCommands}
+              id={toolbarReasonId}
+              className="toolbar-reasons"
+            />
           </>
         ) : null}
         <span className="toolbar-spacer" />
         {c.busy ? (
           <>
             <span className="busy-indicator" aria-hidden="true" />
-            <span role="status">{t('shell.busy', { operation: text(c.busy) })}</span>
+            <span role="status" id="operation-status">
+              {busyStatus}
+            </span>
             <button type="button" onClick={() => dispatchCommand('cancel')}>
               {t('shell.app.cancel')}
             </button>
@@ -589,71 +297,77 @@ export default function App() {
           {t('shell.app.searchPlaceholder')}
           <kbd>Ctrl+K</kbd>
         </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={t('shell.settings.title')}
-          title={t('shell.settings.title')}
-          onClick={() => dispatchCommand('settings')}
-        >
-          <Settings size={iconSize.control} aria-hidden="true" />
-        </button>
+        <Tooltip label={t('shell.settings.title')}>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t('shell.settings.title')}
+            onClick={() => dispatchCommand('settings')}
+          >
+            <Settings size={iconSize.control} aria-hidden="true" />
+          </button>
+        </Tooltip>
       </div>
       <main className="workspace-frame">
         <nav className="tool-rail" aria-label={t('shell.app.rail')}>
           {c.workspace ? (
             <>
-              <button
-                type="button"
-                className="ghost-button"
-                aria-label={t('shell.app.treeShortcut')}
-                title={t('shell.app.treeShortcut')}
-                aria-pressed={c.treeVisible}
-                onClick={() => dispatchCommand('tree')}
-              >
-                <FolderTree size={iconSize.rail} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                aria-label={t('shell.app.problems')}
-                title={t('shell.app.problems')}
-                aria-pressed={c.toolWindow === 'problems'}
-                onClick={() => dispatchCommand('problems')}
-              >
-                <CircleAlert size={iconSize.rail} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                aria-label={t('shell.app.buildShortcut')}
-                title={t('shell.app.buildShortcut')}
-                aria-pressed={c.toolWindow === 'build'}
-                onClick={() => dispatchCommand('build')}
-              >
-                <Hammer size={iconSize.rail} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                aria-label={t('shell.app.hostShortcut')}
-                title={t('shell.app.hostShortcut')}
-                aria-pressed={c.toolWindow === 'host'}
-                onClick={() => dispatchCommand('host')}
-              >
-                <MonitorPlay size={iconSize.rail} aria-hidden="true" />
-              </button>
+              <Tooltip label={t('shell.app.treeShortcut')}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  aria-label={t('shell.app.treeShortcut')}
+                  aria-pressed={c.treeVisible}
+                  onClick={() => dispatchCommand('tree')}
+                >
+                  <FolderTree size={iconSize.rail} aria-hidden="true" />
+                </button>
+              </Tooltip>
+              <Tooltip label={t('shell.app.problems')}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  aria-label={t('shell.app.problems')}
+                  aria-pressed={c.toolWindow === 'problems'}
+                  onClick={() => dispatchCommand('problems')}
+                >
+                  <CircleAlert size={iconSize.rail} aria-hidden="true" />
+                </button>
+              </Tooltip>
+              <Tooltip label={t('shell.app.buildShortcut')}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  aria-label={t('shell.app.buildShortcut')}
+                  aria-pressed={c.toolWindow === 'build'}
+                  onClick={() => dispatchCommand('build')}
+                >
+                  <Hammer size={iconSize.rail} aria-hidden="true" />
+                </button>
+              </Tooltip>
+              <Tooltip label={t('shell.app.hostShortcut')}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  aria-label={t('shell.app.hostShortcut')}
+                  aria-pressed={c.toolWindow === 'host'}
+                  onClick={() => dispatchCommand('host')}
+                >
+                  <MonitorPlay size={iconSize.rail} aria-hidden="true" />
+                </button>
+              </Tooltip>
               <span />
-              <button
-                type="button"
-                className="ghost-button"
-                aria-label={t('shell.command.inspector')}
-                title={t('shell.command.inspector')}
-                aria-pressed={c.inspectorVisible}
-                onClick={() => dispatchCommand('inspector')}
-              >
-                <PanelRight size={iconSize.rail} aria-hidden="true" />
-              </button>
+              <Tooltip label={t('shell.command.inspector')}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  aria-label={t('shell.command.inspector')}
+                  aria-pressed={c.inspectorVisible}
+                  onClick={() => dispatchCommand('inspector')}
+                >
+                  <PanelRight size={iconSize.rail} aria-hidden="true" />
+                </button>
+              </Tooltip>
             </>
           ) : null}
         </nav>
@@ -682,15 +396,16 @@ export default function App() {
                     closeIcon: <X size={iconSize.inline} aria-hidden="true" />,
                   }))}
                 />
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={t('shell.app.openConfiguration')}
-                  title={t('shell.app.openConfiguration')}
-                  onClick={() => c.openDocument({ kind: 'configuration' })}
-                >
-                  <Plus size={iconSize.control} aria-hidden="true" />
-                </button>
+                <Tooltip label={t('shell.app.openConfiguration')}>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={t('shell.app.openConfiguration')}
+                    onClick={() => c.openDocument({ kind: 'configuration' })}
+                  >
+                    <Plus size={iconSize.control} aria-hidden="true" />
+                  </button>
+                </Tooltip>
               </div>
               <div
                 className="document-content"
@@ -765,15 +480,16 @@ export default function App() {
                   { key: 'references', label: t('shell.app.references') },
                 ]}
               />
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t('shell.app.collapseInspector')}
-                title={t('shell.app.collapseInspector')}
-                onClick={() => c.setInspectorVisible(false)}
-              >
-                <ChevronRight size={iconSize.control} aria-hidden="true" />
-              </button>
+              <Tooltip label={t('shell.app.collapseInspector')}>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={t('shell.app.collapseInspector')}
+                  onClick={() => c.setInspectorVisible(false)}
+                >
+                  <ChevronRight size={iconSize.control} aria-hidden="true" />
+                </button>
+              </Tooltip>
             </div>
             <div className="inspector-scroll" {...tabPanelProps('inspector', c.inspectorTab)}>
               <ObjectInspector controller={c} />
@@ -821,7 +537,7 @@ export default function App() {
       <PreviewDialogs controller={c} />
       {palette ? (
         <CommandPalette
-          commands={commands.filter((command) => !command.reason)}
+          commands={commands}
           onRun={dispatchCommand}
           onClose={() => setPalette(false)}
         />

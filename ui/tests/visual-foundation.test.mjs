@@ -5,7 +5,6 @@ import path from 'node:path';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Tabs, tabPanelProps } from '../src/workbench/Tabs';
-import { menuRows } from '../src/workbench/menu';
 import { objectRole } from '../src/workbench/objectRole';
 import { resources } from '../src/i18n';
 
@@ -87,48 +86,6 @@ test('manual tabs move focus without activating, and Delete closes a closable ta
   const close = getAllByRole('button', { name: 'Close one' })[0];
   expect(close.tabIndex).toBe(-1);
   expect(close.closest('[role="tab"]')).toBeNull();
-});
-
-test('menus separate groups and show a reason shared within a group once at its end', () => {
-  const command = (id, group, reason = '') => ({ id, label: id, group, reason, run: () => {} });
-  const run = vi.fn();
-  const { container } = render(
-    createElement(
-      'div',
-      null,
-      menuRows(
-        [
-          command('new', 'open'),
-          command('save', 'save', 'Open a project first'),
-          command('save-as', 'save', 'Open a project first'),
-          command('close', 'close', 'Open a project first'),
-          command('settings', 'settings'),
-        ],
-        run,
-      ),
-    ),
-  );
-  const rows = [...container.firstChild.children].map((node) =>
-    node.tagName === 'HR'
-      ? '---'
-      : node.tagName === 'SMALL'
-        ? `(${node.textContent})`
-        : node.textContent,
-  );
-  expect(rows).toEqual([
-    'new',
-    '---',
-    'save',
-    'save-as',
-    '(Open a project first)',
-    '---',
-    'close',
-    '(Open a project first)',
-    '---',
-    'settings',
-  ]);
-  fireEvent.click(container.querySelector('button'));
-  expect(run).toHaveBeenCalledWith('new');
 });
 
 test('object roles follow the ECUC module or the element kind', () => {

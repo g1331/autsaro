@@ -7,6 +7,7 @@ import { ObjectEditor } from '../src/workbench/ObjectEditor';
 import { IntegrationDelivery } from '../src/IntegrationDelivery';
 import { stageDefaults } from '../src/workbench/useDelivery';
 import { initialState } from '../src/workbench/state';
+import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));
 
@@ -18,7 +19,7 @@ afterEach(() => {
 const preview = { path: 'out/Rte.c', before: null, after: 'int x;', status: 'added' };
 
 function delivery(overrides = {}) {
-  return {
+  return withCommands({
     ...initialState(),
     workspace: { dirty: false },
     native: true,
@@ -29,7 +30,7 @@ function delivery(overrides = {}) {
     applicationWarnings: [],
     applicationRecoveryFiles: [],
     ...overrides,
-  };
+  });
 }
 
 test('delivery steps keep each path beside its chooser, one primary each, and no page-level generate', () => {
@@ -86,14 +87,13 @@ test('object rows stay on one line: no repeated kind, reasons and paths move to 
   ];
   const view = render(
     React.createElement(ObjectEditor, {
-      controller: {
+      controller: withCommands({
         ...initialState(),
         projection: { objects, fields: [], profile: 'p', release: 'R24-11' },
         objectFilter: '',
         objectSelection: [],
         changes: [],
-        actionReason: () => '',
-      },
+      }),
     }),
   );
   const [first, second] = view.container.querySelectorAll('tbody tr');

@@ -9,6 +9,7 @@ import { PreviewDialogs } from '../src/workbench/PreviewDialogs';
 import { IntegrationPanel } from '../src/IntegrationPanel';
 import { SettingsPage } from '../src/pages/SettingsPage';
 import { initialState } from '../src/workbench/state';
+import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));
 
@@ -19,11 +20,12 @@ afterEach(() => {
 
 const commands = [
   { id: 'save', label: 'Preview save', reason: '', run: vi.fn() },
+  { id: 'build', label: 'Build ECU', reason: 'Generate the ECU source first', run: vi.fn() },
   { id: 'open', label: 'Open project…', shortcut: 'Ctrl+O', reason: '', run: vi.fn() },
   { id: 'settings', label: 'Settings', reason: '', run: vi.fn() },
 ];
 
-test('command palette matches case-insensitively, moves with arrows, runs on Enter and shows an empty state', () => {
+test('command palette lists unavailable commands with their reason, matches case-insensitively, moves with arrows, runs on Enter and shows an empty state', () => {
   previewLanguage('en');
   const onRun = vi.fn();
   const view = render(React.createElement(CommandPalette, { commands, onRun, onClose: vi.fn() }));
@@ -32,10 +34,13 @@ test('command palette matches case-insensitively, moves with arrows, runs on Ent
   fireEvent.change(input, { target: { value: 'preview' } });
   expect(view.getAllByRole('option').map((option) => option.textContent)).toEqual(['Preview save']);
   fireEvent.change(input, { target: { value: '' } });
-  // The first available command is highlighted; ↓ moves, Enter runs the highlighted one.
+  const build = view.getByRole('option', { name: /Build ECU/ });
+  expect(build.getAttribute('aria-disabled')).toBe('true');
+  expect(build.textContent).toContain('Generate the ECU source first');
+  // The first available command is highlighted; ↓ skips the unavailable one, Enter runs.
   expect(view.getAllByRole('option')[0].getAttribute('aria-selected')).toBe('true');
   fireEvent.keyDown(input, { key: 'ArrowDown' });
-  expect(input.getAttribute('aria-activedescendant')).toBe(view.getAllByRole('option')[1].id);
+  expect(input.getAttribute('aria-activedescendant')).toBe(view.getAllByRole('option')[2].id);
   fireEvent.keyDown(input, { key: 'Enter' });
   expect(onRun).toHaveBeenCalledWith('open');
   fireEvent.change(input, { target: { value: 'zzzz' } });
@@ -126,15 +131,18 @@ test.each(['appearance', 'language', 'definitions', 'tools'])(
     previewLanguage('zh-CN');
     const view = render(
       React.createElement(SettingsPage, {
-        controller: {
+        controller: withCommands({
           ...initialState(),
           settingsOpen: true,
+          settingsCategory: category,
           native: true,
           capabilities: { environmentOverrides: [], executionTools: null, toolError: null },
-        },
+        }),
       }),
     );
-    fireEvent.click(view.getByRole('tab', { name: translate(`shell.settings.${category}`) }));
+    expect(view.getByRole('tab', { selected: true }).textContent).toBe(
+      translate(`shell.settings.${category}`),
+    );
     const dialog = view.getByRole('dialog');
     expect([...dialog.classList]).toContain('settings-dialog');
     expect(dialog.querySelectorAll('.primary-button').length).toBe(

@@ -7,6 +7,8 @@ import {
   LoaderCircle,
 } from 'lucide-react';
 import { CopyText, OwnedLog } from './workbench/Dialog';
+import { CommandActions } from './workbench/CommandActions';
+import { commandById } from './workbench/commands';
 import { useLocale } from './i18n';
 import type { StageState } from './workbench/forms';
 import { targetLabel } from './workbench/labels';
@@ -43,14 +45,7 @@ export function IntegrationDelivery({
   if (!workspace) return null;
   const busy = Boolean(controller.busy);
   const sourceReady = !workspace.dirty && !controller.projection?.dirty && !controller.unapplied;
-  const disabled = !native || busy || !sourceReady || Boolean(controller.capabilities?.ruleError);
-  const executionReason = controller.capabilities?.nativeExecution
-    ? text(controller.capabilities.toolError ?? '')
-    : t('shell.delivery.noExecution');
-  const executionDisabled =
-    disabled ||
-    !controller.capabilities?.nativeExecution ||
-    Boolean(controller.capabilities.toolError);
+  const command = (id: string) => commandById(controller, id);
   const handoff = controller.generationKind === 'handoff';
   const labels: Record<StageState, string> = {
     pending: t('shell.stage.pending'),
@@ -118,7 +113,6 @@ export function IntegrationDelivery({
     <button
       type="button"
       aria-label={label}
-      title={label}
       disabled={busy || !native}
       onClick={() => void chooseDirectory(onChoose)}
     >
@@ -155,18 +149,11 @@ export function IntegrationDelivery({
       <section className="delivery-step">
         <h3>{t('shell.delivery.liveSource')}</h3>
         <p className="field-help">{t('shell.delivery.liveDescription')}</p>
-        <div className="section-actions">
-          <button
-            type="button"
-            disabled={disabled || Boolean(controller.actionReason('edit'))}
-            onClick={() => void controller.previewApplicationInitialization()}
-          >
-            {t('shell.command.initialize')}
-          </button>
-        </div>
-        {controller.actionReason('edit') ? (
-          <p className="field-help">{text(controller.actionReason('edit'))}</p>
-        ) : null}
+        <CommandActions
+          actions={[
+            { command: command('initialize-application'), label: t('shell.command.initialize') },
+          ]}
+        />
         {controller.applicationWarnings.map((warning, index) => (
           <p key={index} className="notice info">
             {text(warning)}
@@ -229,25 +216,17 @@ export function IntegrationDelivery({
             {t('shell.delivery.metadata')}
           </label>
         </div>
-        <div className="section-actions">
-          {/* Generation itself is confirmed in the preview dialog, once. */}
-          <button
-            type="button"
-            className="primary-button"
-            disabled={disabled || !output.trim()}
-            onClick={controller.previewEcu}
-          >
-            {t('shell.delivery.preview')}
-          </button>
-          <button
-            type="button"
-            disabled={executionDisabled}
-            title={executionReason}
-            onClick={controller.preflightEcu}
-          >
-            {t('shell.command.preflight')}
-          </button>
-        </div>
+        {/* Generation itself is confirmed in the preview dialog, once. */}
+        <CommandActions
+          actions={[
+            {
+              command: command('preview'),
+              label: t('shell.delivery.preview'),
+              className: 'primary-button',
+            },
+            { command: command('preflight'), label: t('shell.command.preflight') },
+          ]}
+        />
       </section>
       <section className="delivery-step">
         <h3>{t('shell.stage.build')}</h3>
@@ -265,29 +244,27 @@ export function IntegrationDelivery({
             </div>
           </label>
         </div>
-        <div className="section-actions">
-          <button
-            type="button"
-            className="primary-button"
-            disabled={executionDisabled || !generated || !buildDirectory.trim()}
-            onClick={controller.buildEcu}
-          >
-            {t('shell.delivery.build')}
-          </button>
-        </div>
+        <CommandActions
+          actions={[
+            {
+              command: command('build-ecu'),
+              label: t('shell.delivery.build'),
+              className: 'primary-button',
+            },
+          ]}
+        />
       </section>
       <section className="delivery-step">
         <h3>{t('shell.stage.host')}</h3>
-        <div className="section-actions">
-          <button
-            type="button"
-            className="primary-button"
-            disabled={executionDisabled || !built}
-            onClick={controller.verifyEcu}
-          >
-            {t('shell.delivery.verify')}
-          </button>
-        </div>
+        <CommandActions
+          actions={[
+            {
+              command: command('verify-ecu'),
+              label: t('shell.delivery.verify'),
+              className: 'primary-button',
+            },
+          ]}
+        />
       </section>
       <section className="delivery-step">
         <h3>{t('shell.delivery.reimport')}</h3>
@@ -305,15 +282,15 @@ export function IntegrationDelivery({
             </div>
           </label>
         </div>
-        <div className="section-actions">
-          <button
-            type="button"
-            disabled={disabled || !importDirectory.trim()}
-            onClick={() => onImport(importDirectory)}
-          >
-            {t('shell.delivery.reimport')}
-          </button>
-        </div>
+        <CommandActions
+          actions={[
+            {
+              command: command('ecu-package'),
+              label: t('shell.delivery.reimport'),
+              run: () => onImport(importDirectory),
+            },
+          ]}
+        />
       </section>
       <div className={`page-guidance${failed ? ' error' : ''}`}>
         <span role="status">{guidance}</span>

@@ -2,6 +2,7 @@ import { useLocale } from '../i18n';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Copy, Minus, Square, X } from 'lucide-react';
+import { Tooltip } from './Tooltip';
 
 type Props = {
   onClose: () => Promise<void>;
@@ -44,37 +45,40 @@ export function WindowControls({ onClose, onError }: Props) {
   const maximizeLabel = maximized ? t('editor.window.restore') : t('editor.window.maximize');
   return (
     <div className="window-controls" role="group" aria-label={t('editor.window.actions')}>
-      <button
-        type="button"
-        className="ghost-button window-control"
-        aria-label={t('editor.window.minimize')}
-        title={t('editor.window.minimize')}
-        onClick={() => void getCurrentWindow().minimize().catch(onError)}
-      >
-        <Minus size={14} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="ghost-button window-control"
-        aria-label={maximizeLabel}
-        title={maximizeLabel}
-        onClick={() => void getCurrentWindow().toggleMaximize().catch(onError)}
-      >
-        {maximized ? (
-          <Copy size={13} aria-hidden="true" />
-        ) : (
-          <Square size={12} aria-hidden="true" />
-        )}
-      </button>
-      <button
-        type="button"
-        className="ghost-button window-control window-close"
-        aria-label={t('editor.window.close')}
-        title={t('editor.window.close')}
-        onClick={() => void onClose().catch(onError)}
-      >
-        <X size={16} aria-hidden="true" />
-      </button>
+      <Tooltip label={t('editor.window.minimize')}>
+        <button
+          type="button"
+          className="ghost-button window-control"
+          aria-label={t('editor.window.minimize')}
+          onClick={() => void getCurrentWindow().minimize().catch(onError)}
+        >
+          <Minus size={14} aria-hidden="true" />
+        </button>
+      </Tooltip>
+      <Tooltip label={maximizeLabel}>
+        <button
+          type="button"
+          className="ghost-button window-control"
+          aria-label={maximizeLabel}
+          onClick={() => void getCurrentWindow().toggleMaximize().catch(onError)}
+        >
+          {maximized ? (
+            <Copy size={13} aria-hidden="true" />
+          ) : (
+            <Square size={12} aria-hidden="true" />
+          )}
+        </button>
+      </Tooltip>
+      <Tooltip label={t('editor.window.close')}>
+        <button
+          type="button"
+          className="ghost-button window-control window-close"
+          aria-label={t('editor.window.close')}
+          onClick={() => void onClose().catch(onError)}
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+      </Tooltip>
     </div>
   );
 }

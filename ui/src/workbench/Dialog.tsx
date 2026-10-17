@@ -63,7 +63,9 @@ export function rememberDialogOpener() {
     active.closest('[role="dialog"], [role="alertdialog"]')
   )
     return;
-  const opener = active.closest('.menu-root')?.querySelector<HTMLElement>('button') ?? active;
+  // A menu item leaves with its portalled menu; focus returns to the menu's trigger.
+  const menu = active.closest('[role="menu"]')?.getAttribute('aria-labelledby');
+  const opener = (menu && document.getElementById(menu)) || active;
   document
     .querySelectorAll('[data-dialog-opener]')
     .forEach((element) => element.removeAttribute('data-dialog-opener'));

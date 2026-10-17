@@ -2,11 +2,14 @@ import { Command as Palette } from 'cmdk';
 import { Search } from 'lucide-react';
 import { Dialog, VisuallyHidden } from 'radix-ui';
 import { useLocale } from '../i18n';
+import type { Command } from './commands';
 import { useFocusReturn } from './Dialog';
 import { iconSize } from './icons';
-import type { Command } from './menu';
 
-/** Ctrl+K: available commands only; cmdk owns filtering, ↑↓/Enter and the empty state. */
+/**
+ * Ctrl+K: every command with its reason when unavailable; cmdk owns filtering, ↑↓/Enter
+ * (unavailable rows are skipped) and the empty state.
+ */
 export function CommandPalette({
   commands,
   onRun,
@@ -16,7 +19,7 @@ export function CommandPalette({
   onRun: (id: string) => void;
   onClose: () => void;
 }) {
-  const { t } = useLocale();
+  const { t, text } = useLocale();
   const returnFocus = useFocusReturn();
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
@@ -43,10 +46,12 @@ export function CommandPalette({
                 {commands.map((command) => (
                   <Palette.Item
                     key={command.id}
-                    value={command.label}
+                    value={text(command.label)}
+                    disabled={Boolean(command.reason)}
                     onSelect={() => onRun(command.id)}
                   >
-                    {command.label}
+                    <span>{text(command.label)}</span>
+                    {command.reason ? <small>{text(command.reason)}</small> : null}
                     {command.shortcut ? <kbd>{command.shortcut}</kbd> : null}
                   </Palette.Item>
                 ))}

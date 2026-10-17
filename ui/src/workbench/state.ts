@@ -54,6 +54,7 @@ export type WorkbenchState = {
   previewPath: string;
   capabilities: WorkbenchCapabilities | null;
   settingsOpen: boolean;
+  settingsCategory: 'appearance' | 'language' | 'definitions' | 'tools';
   toolDraft: ExecutionTools;
   settingsNotice: Notice;
   /** Rejections attached to the inspector field that caused them, by fieldId. */
@@ -139,6 +140,7 @@ export function initialState(): WorkbenchState {
     previewPath: '',
     capabilities: null,
     settingsOpen: false,
+    settingsCategory: 'appearance',
     toolDraft: { compiler: '', objdump: '', git: '', python: '' },
     settingsNotice: null,
     fieldErrors: {},

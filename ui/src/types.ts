@@ -74,6 +74,7 @@ export type Issue = {
 
 export type WorkspaceView = {
   integrationCandidate?: boolean;
+  applicationInitialized?: boolean;
   name: string;
   files: { path: string; readonly: boolean; retainedCount: number }[];
   issues: Issue[];

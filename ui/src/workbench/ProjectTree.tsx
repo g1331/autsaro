@@ -21,6 +21,7 @@ import { workspaceTitle } from './labels';
 import { Tabs, tabPanelProps } from './Tabs';
 import { iconSize } from './icons';
 import { objectRoleClass } from './objectRole';
+import { Tooltip } from './Tooltip';
 
 const objectIcons = new Map<string, LucideIcon>([
   ['AR-PACKAGE', FolderTree],
@@ -256,15 +257,16 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
         <strong className="workspace-name" title={c.workspace ? workspaceTitle(c) : undefined}>
           {c.workspace ? workspaceTitle(c) : t('editor.tree.project')}
         </strong>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={t('editor.tree.collapse')}
-          title={t('editor.tree.collapse')}
-          onClick={() => c.setTreeVisible(false)}
-        >
-          <ChevronLeft size={iconSize.control} aria-hidden="true" />
-        </button>
+        <Tooltip label={t('editor.tree.collapse')}>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t('editor.tree.collapse')}
+            onClick={() => c.setTreeVisible(false)}
+          >
+            <ChevronLeft size={iconSize.control} aria-hidden="true" />
+          </button>
+        </Tooltip>
       </header>
       <div className="panel-tabs">
         <Tabs

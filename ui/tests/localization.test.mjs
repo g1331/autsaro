@@ -20,6 +20,7 @@ import { SettingsPage } from '../src/pages/SettingsPage';
 import { createSettingsActions } from '../src/workbench/settingsActions';
 import { initialState } from '../src/workbench/state';
 import { OwnedLog } from '../src/workbench/Dialog';
+import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));
 
@@ -227,7 +228,7 @@ test('settings page reports unreadable settings as an alert and retired archive 
       environmentOverrides: [],
     },
   };
-  const view = render(React.createElement(SettingsPage, { controller }));
+  const view = render(React.createElement(SettingsPage, { controller: withCommands(controller) }));
   expect(view.getByRole('alert').textContent).toBe(
     localize(message('controller.error.capabilitiesNotReady')),
   );
