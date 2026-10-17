@@ -77,6 +77,8 @@ export type WorkbenchState = {
   projection: ProjectProjection | null;
   objectSelection: string[];
   activeObjectId: string | null;
+  /** Parameter whose grid row has focus; the inspector describes it. */
+  activeFieldId: string | null;
   activeSourceId: string | null;
   sourceText: string | null;
   changes: ConfigurationChange[];
@@ -175,6 +177,7 @@ export function initialState(): WorkbenchState {
     projection: null,
     objectSelection: [],
     activeObjectId: null,
+    activeFieldId: null,
     activeSourceId: null,
     sourceText: null,
     changes: [],

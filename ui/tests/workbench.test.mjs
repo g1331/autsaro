@@ -54,10 +54,11 @@ function batch(current) {
 }
 
 test('committed changes are cleared even when refreshing the workspace fails', async () => {
+  const changes = [{ changeId: 'edit' }];
   const current = session({
-    changes: [{ changeId: 'edit' }],
+    changes,
     changePreview: { changeRevision: 'preview' },
-    preparedChangeSet: { changes: [] },
+    preparedChangeSet: { changes },
   });
   const confirmed = vi.fn();
   current.changeConfirmation.current = confirmed;

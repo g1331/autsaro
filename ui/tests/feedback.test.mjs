@@ -7,7 +7,6 @@ import { createBatchEditing, fieldRejection } from '../src/workbench/batchEditin
 import { createDeliveryActions } from '../src/workbench/deliveryActions';
 import { createSettingsActions } from '../src/workbench/settingsActions';
 import { CopyText, Dialog } from '../src/workbench/Dialog';
-import { DescriptorField } from '../src/workbench/ObjectEditor';
 import { SettingsPage } from '../src/pages/SettingsPage';
 import { headline } from '../src/workbench/forms';
 import { workspaceTitle } from '../src/workbench/labels';
@@ -178,40 +177,6 @@ test('an applied batch reports how many changes it applied', async () => {
     tone: 'success',
     text: message('workflow.batch.applied', { count: 1 }),
   });
-});
-
-test('the field shows the rejection, links it for assistive technology and flags out-of-range input', () => {
-  previewLanguage('zh-CN');
-  const controller = {
-    ...initialState(),
-    actionReason: () => null,
-    stageChange: vi.fn(),
-    fieldErrors: {
-      [rangeField.fieldId]: message('workflow.error.fieldRange', {
-        reason: 'x',
-        minimum: '1',
-        maximum: '65535',
-      }),
-    },
-  };
-  const view = render(React.createElement(DescriptorField, { field: rangeField, controller }));
-  const input = view.container.querySelector('input');
-  expect(input.getAttribute('aria-invalid')).toBe('true');
-  const error = view.container.querySelector(`#field-error-${rangeField.fieldId}`);
-  expect(input.getAttribute('aria-describedby').split(' ')).toContain(error.id);
-  expect(error.textContent).toContain('1–65535');
-
-  const clean = { ...controller, fieldErrors: {} };
-  view.rerender(React.createElement(DescriptorField, { field: rangeField, controller: clean }));
-  expect(input.getAttribute('aria-invalid')).toBe('false');
-  expect(view.container.querySelector('.field-error')).toBeNull();
-
-  const staged = { ...clean, changes: [valueChange('70000')] };
-  view.rerender(React.createElement(DescriptorField, { field: rangeField, controller: staged }));
-  expect(input.getAttribute('aria-invalid')).toBe('true');
-  expect(view.container.querySelector('.field-error').textContent).toContain(
-    translate('editor.objects.outOfRange', { minimum: '1', maximum: '65535' }),
-  );
 });
 
 function delivery(current, overrides = {}) {

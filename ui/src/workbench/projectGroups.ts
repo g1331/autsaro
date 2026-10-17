@@ -104,6 +104,11 @@ export type ObjectMarks = {
   unapplied: boolean;
 };
 
+/** Multiplicity as `lower..upper`, `*` for unbounded. */
+export function multiplicity(lower: number, upper: number | null) {
+  return `${lower}..${upper ?? '*'}`;
+}
+
 /** Serialized current state of a field; equal strings mean an unchanged field. */
 export function fieldState(field: Pick<FieldDescriptor, 'current' | 'reference'>): string {
   return JSON.stringify([

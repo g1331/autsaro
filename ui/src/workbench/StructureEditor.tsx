@@ -158,6 +158,7 @@ export function StructureEditor({
             <label>
               SHORT-NAME
               <input
+                data-creation-id={creation.changeId}
                 value={creation.shortName}
                 disabled={blocked}
                 onChange={(event) => c.stageChange({ ...creation, shortName: event.target.value })}

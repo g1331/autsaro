@@ -7,12 +7,10 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleX,
   FileCode2,
   FolderTree,
   Search,
   Settings2,
-  TriangleAlert,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
@@ -23,7 +21,9 @@ import { workspaceTitle } from './labels';
 import { Tabs, tabPanelProps } from './Tabs';
 import { iconSize } from './icons';
 import { objectRoleClass } from './objectRole';
-import { groupedObjectTree, moduleLabel, objectMarks } from './projectGroups';
+import { groupedObjectTree, moduleLabel } from './projectGroups';
+import { MarkIcons, markLabels, useObjectMarks } from './ObjectMarks';
+import { ObjectContextMenu } from './ObjectMenu';
 import type { ObjectGroup, TreeNode } from './projectGroups';
 import { Tooltip } from './Tooltip';
 
@@ -91,20 +91,10 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
         link(child);
       });
     tree.forEach(link);
-    return { tree, searchText, paths, parents };
+    const byId = new Map(objects.map((object) => [object.objectId, object]));
+    return { tree, searchText, paths, parents, byId };
   }, [c.projection]);
-  const marks = useMemo(
-    () =>
-      objectMarks(index.tree, {
-        objects: c.projection?.objects ?? [],
-        fields: c.projection?.fields ?? [],
-        diagnostics: c.projection?.diagnostics ?? [],
-        integrationIssues: c.integrationIssues,
-        saved: c.savedValues,
-        changes: c.changes,
-      }),
-    [index, c.projection, c.integrationIssues, c.savedValues, c.changes],
-  );
+  const marks = useObjectMarks(c, index.tree);
   const model = useMemo(() => {
     const query = c.treeFilter.trim().toLocaleLowerCase();
     const revealed = new Set<string>();
@@ -148,12 +138,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
           ? t(groupLabelKeys[node.group], { lng: language })
           : moduleLabel(node.object);
       const mark = marks.get(node.key);
-      const markText = [
-        mark?.errors ? t('editor.tree.errors', { count: mark.errors, lng: language }) : '',
-        mark?.warnings ? t('editor.tree.warnings', { count: mark.warnings, lng: language }) : '',
-        mark?.modified ? t('editor.tree.modified', { lng: language }) : '',
-        mark?.unapplied ? t('editor.tree.unapplied', { lng: language }) : '',
-      ].filter(Boolean);
+      const markText = markLabels(mark);
       const object = node.type === 'object' ? node.object : null;
       const path = object ? index.paths.get(object.objectId) : undefined;
       const Icon = object ? (objectIcons.get(object.kind) ?? FileCode2) : null;
@@ -161,7 +146,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
         object
           ? void actions.current.selectObject(object.objectId, multiple)
           : toggle(node.key, expanded);
-      return (
+      const row = (
         <div
           key={node.key}
           role="treeitem"
@@ -219,25 +204,16 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
           ) : null}
           <span className="tree-name">{name}</span>
           {node.type === 'group' ? <small>{node.children.length}</small> : null}
-          {markText.length ? (
-            <small className="tree-marks" aria-hidden="true">
-              {mark?.errors ? (
-                <span className="tree-mark-error">
-                  <CircleX size={iconSize.inline} />
-                  {mark.errors}
-                </span>
-              ) : null}
-              {mark?.warnings ? (
-                <span className="tree-mark-warning">
-                  <TriangleAlert size={iconSize.inline} />
-                  {mark.warnings}
-                </span>
-              ) : null}
-              {mark?.unapplied ? <span className="tree-mark-unapplied">◆</span> : null}
-              {mark?.modified ? <span className="tree-mark-modified">●</span> : null}
-            </small>
-          ) : null}
+          <MarkIcons mark={mark} />
         </div>
+      );
+      const projected = object ? index.byId.get(object.objectId) : undefined;
+      return projected ? (
+        <ObjectContextMenu key={node.key} controller={() => actions.current} object={projected}>
+          {row}
+        </ObjectContextMenu>
+      ) : (
+        row
       );
     });
   }, [

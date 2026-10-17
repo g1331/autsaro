@@ -7,6 +7,9 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.save.saved': '已保存：写入 {{count}} 个文件。',
     'workflow.save.noChanges': '没有需要写入的更改。',
     'workflow.batch.applied': '已应用 {{count}} 项更改；工程尚未保存。',
+    'workflow.batch.fieldApplied': '已应用 {{field}}；工程尚未保存。',
+    'workflow.error.fieldRejected':
+      '{{field}} 未应用，原配置保持：{{error}}。修正后按 Enter 重新应用。',
     'workflow.error.batchFieldRejected':
       '更改被拒绝，原配置保持。{{field}}：{{error}}。修正后重新预览。',
     'workflow.error.fieldRange': '{{reason}}（允许范围 {{minimum}}–{{maximum}}）',
@@ -163,6 +166,9 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.save.saved': 'Saved: {{count}} files written.',
     'workflow.save.noChanges': 'There are no changes to write.',
     'workflow.batch.applied': 'Applied {{count}} changes; the project is not saved yet.',
+    'workflow.batch.fieldApplied': 'Applied {{field}}; the project is not saved yet.',
+    'workflow.error.fieldRejected':
+      '{{field}} was not applied; the configuration is unchanged: {{error}}. Correct it and press Enter to apply again.',
     'workflow.error.batchFieldRejected':
       'Changes rejected; the configuration is unchanged. {{field}}: {{error}}. Correct it and preview again.',
     'workflow.error.fieldRange': '{{reason}} (allowed range {{minimum}}–{{maximum}})',

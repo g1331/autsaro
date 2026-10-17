@@ -176,17 +176,73 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
   }
 
   async function applyChanges(): Promise<boolean> {
-    const before = stateRef.current;
-    const { changePreview, preparedChangeSet } = before;
+    const { changePreview, preparedChangeSet } = stateRef.current;
     if (!changePreview || !preparedChangeSet || running.current) return false;
+    const generation = epoch.current;
+    const applied = await commit(preparedChangeSet, changePreview.changeRevision);
+    if (generation === epoch.current) {
+      changeConfirmation.current?.(applied);
+      changeConfirmation.current = null;
+    }
+    return applied;
+  }
+
+  /**
+   * Applies the draft of one existing field on its own (ADR 0020 decision 3): the same
+   * prepare and apply transaction as a batch, without the preview dialog. Other drafts stay.
+   */
+  async function applyField(fieldId: string): Promise<boolean> {
+    const current = stateRef.current;
+    const change = current.changes.find(
+      (item) => 'field' in item && item.field.kind === 'existing' && item.field.fieldId === fieldId,
+    );
+    if (!current.projection || !change || running.current) return false;
+    const changeSet: ChangeSet = {
+      workspaceEpoch: current.projection.workspaceEpoch,
+      inputFingerprint: capabilitiesRef.current!.fingerprint,
+      definitionFingerprint: current.projection.definitionFingerprint,
+      changes: [change],
+    };
+    return commit(
+      changeSet,
+      async () =>
+        (await call<ChangePreview>('prepare_configuration_change', { changeSet })).changeRevision,
+      fieldId,
+    );
+  }
+
+  /** Publishes a change set; on success only its own changes leave the drafts. */
+  async function commit(
+    changeSet: ChangeSet,
+    revision: string | (() => Promise<string>),
+    fieldId?: string,
+  ): Promise<boolean> {
+    const before = stateRef.current;
+    const remaining = () =>
+      stateRef.current.changes.filter((change) => !changeSet.changes.includes(change));
+    const otherErrors = () =>
+      fieldId === undefined
+        ? {}
+        : Object.fromEntries(
+            Object.entries(stateRef.current.fieldErrors).filter(([id]) => id !== fieldId),
+          );
     running.current = true;
-    patchState({ busy: message('activity.apply'), notice: null, fieldErrors: {} });
+    // A single apply leaves another field's rejection notice with that field's cell error.
+    const notice = stateRef.current.notice;
+    const keepNotice = fieldId !== undefined && notice?.fieldId && notice.fieldId !== fieldId;
+    patchState({
+      busy: message('activity.apply'),
+      notice: keepNotice ? notice : null,
+      fieldErrors: otherErrors(),
+    });
     const generation = epoch.current;
     const fingerprintBefore = capabilitiesRef.current?.fingerprint;
     try {
+      const changeRevision = typeof revision === 'string' ? revision : await revision();
+      if (generation !== epoch.current) return false;
       const result = await call<ChangeOutcome>('apply_configuration_change', {
-        changeSet: preparedChangeSet,
-        changeRevision: changePreview.changeRevision,
+        changeSet,
+        changeRevision,
       });
       if (generation !== epoch.current) return false;
       if (fingerprintBefore !== capabilitiesRef.current?.fingerprint) invalidateAfterEdit();
@@ -207,7 +263,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
         workspace: before.workspace
           ? { ...before.workspace, dirty: result.projection.dirty }
           : null,
-        changes: [],
+        changes: remaining(),
         changePreview: null,
         preparedChangeSet: null,
         activeObjectId: nextId,
@@ -226,15 +282,13 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
           tone: 'error',
           text: composedMessage('workflow.error.batchReadView', { error: errorText(error) }),
         });
-        changeConfirmation.current?.(true);
-        changeConfirmation.current = null;
         return true;
       }
       if (generation !== epoch.current) return false;
       patchState({
         projection: result.projection,
         workspace: view,
-        changes: [],
+        changes: remaining(),
         changePreview: null,
         preparedChangeSet: null,
         activeObjectId: nextId,
@@ -276,23 +330,41 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
           });
         }
       }
-      if (!stateRef.current.notice)
+      if (!stateRef.current.notice) {
+        const field = before.projection?.fields.find((item) => item.fieldId === fieldId);
         setNotice({
           tone: 'success',
-          text: message('workflow.batch.applied', { count: preparedChangeSet.changes.length }),
+          text: field
+            ? message('workflow.batch.fieldApplied', { field: fieldName(field) })
+            : message('workflow.batch.applied', { count: changeSet.changes.length }),
         });
-      changeConfirmation.current?.(true);
-      changeConfirmation.current = null;
+      }
       return true;
     } catch (error) {
       if (generation !== epoch.current) return false;
+      const rejected = rejection('workflow.error.draftsRejected', error);
+      const field = before.projection?.fields.find((item) => item.fieldId === fieldId);
+      if (field) {
+        // A single field's rejection stays on its cell even when the backend names no field.
+        const reason = rejected.fieldErrors[field.fieldId] ?? errorText(error);
+        rejected.fieldErrors = { [field.fieldId]: reason };
+        rejected.notice = {
+          tone: 'error',
+          text: composedMessage(
+            'workflow.error.fieldRejected',
+            { error: reason },
+            { field: fieldName(field) },
+          ),
+          detail: errorText(error),
+          fieldId: field.fieldId,
+        };
+      }
       patchState({
         changePreview: null,
         preparedChangeSet: null,
-        ...rejection('workflow.error.draftsRejected', error),
+        notice: rejected.notice,
+        fieldErrors: { ...otherErrors(), ...rejected.fieldErrors },
       });
-      changeConfirmation.current?.(false);
-      changeConfirmation.current = null;
       return false;
     } finally {
       if (generation === epoch.current) {
@@ -301,5 +373,12 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       }
     }
   }
-  return { stageChange, prepareChanges, applyChanges, discardChanges, cancelChangePreview };
+  return {
+    stageChange,
+    prepareChanges,
+    applyChanges,
+    applyField,
+    discardChanges,
+    cancelChangePreview,
+  };
 }

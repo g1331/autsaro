@@ -73,6 +73,7 @@ export interface Workbench
         | 'treeVisible'
         | 'inspectorVisible'
         | 'inspectorTab'
+        | 'activeFieldId'
         | 'treeMode'
         | 'treeFilter'
         | 'treeRevealId'
@@ -160,6 +161,7 @@ export interface Workbench
   cancelChangePreview(): void;
   prepareChanges(): Promise<void>;
   applyChanges(): Promise<boolean>;
+  applyField(fieldId: string): Promise<boolean>;
   configureAppearance(): Promise<void>;
   configureLanguage(): Promise<void>;
   importDefinitionCatalog(): Promise<void>;
@@ -829,8 +831,14 @@ export function useWorkbench(): Workbench {
     previewIntegrationSave: (...args) => previewIntegrationSave(...args),
     saveProject: (...args) => saveProject(...args),
   });
-  const { stageChange, prepareChanges, applyChanges, discardChanges, cancelChangePreview } =
-    createBatchEditing(session, { invalidateAfterEdit, acceptIntegration });
+  const {
+    stageChange,
+    prepareChanges,
+    applyChanges,
+    applyField,
+    discardChanges,
+    cancelChangePreview,
+  } = createBatchEditing(session, { invalidateAfterEdit, acceptIntegration });
   const { changeTarget, configureTools, configureAppearance, configureLanguage } =
     createSettingsActions(session, { invalidateOperation });
   const {
@@ -904,6 +912,7 @@ export function useWorkbench(): Workbench {
     setTreeVisible: field('treeVisible'),
     setInspectorVisible: field('inspectorVisible'),
     setInspectorTab: field('inspectorTab'),
+    setActiveFieldId: field('activeFieldId'),
     setTreeMode: field('treeMode'),
     setTreeFilter: field('treeFilter'),
     setTreeRevealId: field('treeRevealId'),
@@ -925,6 +934,7 @@ export function useWorkbench(): Workbench {
     cancelChangePreview,
     prepareChanges,
     applyChanges,
+    applyField,
     configureAppearance,
     configureLanguage,
     verificationOwnedFailure,
