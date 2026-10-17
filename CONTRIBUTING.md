@@ -50,7 +50,7 @@ Use a dedicated branch for each Issue, and when you start, create it with `gh is
 
 Use an isolated environment for real GUI acceptance without occupying a developer's active desktop. Work is tracked in GitHub Issues and Milestones; before opening an Issue or starting work, search existing Issues (including closed ones) and open PRs, and extend what already covers it instead of duplicating work; when a change also completes part of another Issue, comment there with the PR, and close it with `Closes #N` once it is fully done; see [docs/roadmap/](docs/roadmap/README.md) for direction and [docs/architecture/](docs/architecture/README.md) for design constraints.
 
-Every open Issue carries at least one type label and one area label. Type labels are `bug`, `known-gap` (a capability, standard or verification gap), `tech-debt`, `enhancement`, `question`, `story` or `tracking` (a stage overview). An Issue may have several area labels:
+Every open Issue carries at least one type label and one area label; a cross-module `tracking` overview needs only its type label. Type labels are `bug`, `known-gap` (a capability, standard or verification gap), `tech-debt`, `enhancement`, `question`, `story` or `tracking` (a stage overview). An Issue may have several area labels:
 
 - `area:os`: OS runtime, OS configuration generation and target ports
 - `area:bsw`: BSW module runtime and configuration
