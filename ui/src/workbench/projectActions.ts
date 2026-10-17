@@ -1,7 +1,6 @@
 import { composedMessage, message, translate } from '../i18n';
 import type { Text } from '../i18n';
 import { open } from '@tauri-apps/plugin-dialog';
-import { requestConfirmation } from '../confirmation';
 import type { IntegrationInspection, WorkspaceView } from '../types';
 import { rememberDialogOpener } from './Dialog';
 import type { Stage, StageState } from './forms';
@@ -58,6 +57,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     pendingGuard,
     epoch,
     changeConfirmation,
+    catalogDecision,
     pendingReplacement,
   } = session;
   const { busy, integrationProcessing, importPaths } = session.state;
@@ -132,20 +132,21 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     }
   }
 
-  async function confirmAction(prompt: Text): Promise<boolean> {
-    if (busy || integrationProcessing) return false;
-    setBusy(message('activity.confirm'));
-    try {
-      return await requestConfirmation(prompt);
-    } catch (error) {
-      setNotice({
-        tone: 'error',
-        text: composedMessage('workflow.error.confirm', { error: errorText(error) }),
-      });
-      return false;
-    } finally {
-      setBusy(null);
-    }
+  /** The in-app dialog for a definition catalog; resolves with the user's decision. */
+  function confirmCatalog(kind: 'accept' | 'remove', subject: string): Promise<boolean> {
+    if (busy || integrationProcessing || catalogDecision.current) return Promise.resolve(false);
+    rememberDialogOpener();
+    return new Promise((resolve) => {
+      catalogDecision.current = resolve;
+      patchState({ catalogConfirmation: { kind, subject } });
+    });
+  }
+
+  function resolveCatalogConfirmation(accepted: boolean) {
+    const decide = catalogDecision.current;
+    catalogDecision.current = null;
+    patchState({ catalogConfirmation: null });
+    decide?.(accepted);
   }
 
   function applyProject(view: WorkspaceView) {
@@ -614,8 +615,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         title: translate('workflow.dialog.chooseCatalog'),
       });
       if (typeof catalogPath !== 'string') return;
-      if (!(await confirmAction(message('workflow.confirm.acceptCatalog', { path: catalogPath }))))
-        return;
+      if (!(await confirmCatalog('accept', catalogPath))) return;
       await guardContext(message('activity.acceptDefinitions'), () =>
         run(
           { kind: 'action', label: message('activity.acceptDefinitions') },
@@ -636,7 +636,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   }
 
   async function removeDefinitionCatalog(catalogId: string) {
-    if (!(await confirmAction(message('workflow.confirm.removeCatalog', { catalogId })))) return;
+    if (!(await confirmCatalog('remove', catalogId))) return;
     await guardContext(message('activity.removeDefinitions'), () =>
       run(
         { kind: 'action', label: message('activity.removeDefinitions') },
@@ -734,7 +734,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     chooseDirectory,
     chooseBinary,
     chooseFiles,
-    confirmAction,
+    resolveCatalogConfirmation,
     applyProject,
     openProjectEntry,
     startProject,

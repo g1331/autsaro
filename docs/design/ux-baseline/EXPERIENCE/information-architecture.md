@@ -59,6 +59,6 @@
 | 打开设置、编辑／核对保存 XSD 与 MOD（当前旧流程）    | 历史“官方资源”；后续仅兼容／开发用途，非普通设置 | `setSettingsOpen`, `setResourceDraft`, `configureResources`（未迁移）                                                                 |
 | 编辑／保存 compiler、objdump、Git、CPython 路径       | 设置／执行工具                   | `setToolDraft`, `configureTools`                                                                                                      |
 | 关闭设置并还原未保存设置草稿                          | 设置关闭按钮                     | SettingsPage close 处理器：从 capabilities 恢复 `setResourceDraft`／`setToolDraft`，`setSettingsNotice('')`, `setSettingsOpen(false)` |
-| 取消后台操作、确认保护性操作                          | 操作条取消／保护对话框           | `cancelOperation`, `confirmAction`／`confirmDiscard`                                                                                  |
+| 取消后台操作、确认保护性操作                          | 操作条取消／保护对话框           | `cancelOperation`, `resolveCatalogConfirmation`／`confirmDiscard`                                                                                  |
 
 工程树／对象筛选、工具窗口展开、主题、标签生命周期、焦点管理与会话操作日志属于 PROPOSED，本地界面状态负责；不能以映射表中的 setter 暗示已有真实全文搜索、永久日志、草稿持久化或主题配置接口。

@@ -59,7 +59,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.error.chooseDirectory': '选择目录失败：{{error}}',
     'workflow.error.chooseBinary': '选择二进制失败：{{error}}',
     'workflow.error.chooseFiles': '选择文件失败：{{error}}',
-    'workflow.error.confirm': '确认操作失败：{{error}}',
     'workflow.error.draftsPartiallyApplied':
       '部分更改已应用；其余输入已保留，请修正后继续：{{error}}',
     'workflow.error.draftsRejected': '更改未应用，输入已保留：{{error}}',
@@ -75,7 +74,7 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.application.initialized':
       '用户应用已初始化：{{warnings}} 条警告，{{recoveryFiles}} 个恢复文件待处理。之前的生成、构建与验证结果已失效。',
     'workflow.confirm.acceptCatalog':
-      '接纳此扩展定义？将核对版本和完整性；失败时保留原设置。\n{{path}}',
+      '将核对此扩展定义目录的版本和完整性，通过后加入设置；失败时保留原设置。',
     'workflow.confirm.removeCatalog':
       '移除扩展 {{catalogId}}？源文件保留，使用它的配置将失去对应定义。',
     'workflow.stage.blockingErrors': '{{count}} 个错误阻断生成',
@@ -225,7 +224,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.error.chooseDirectory': 'Could not select directory: {{error}}',
     'workflow.error.chooseBinary': 'Could not select binary: {{error}}',
     'workflow.error.chooseFiles': 'Could not select files: {{error}}',
-    'workflow.error.confirm': 'Confirmation failed: {{error}}',
     'workflow.error.draftsPartiallyApplied':
       'Some changes were applied; the remaining input is kept. Correct it and continue: {{error}}',
     'workflow.error.draftsRejected': 'Changes not applied; your input is kept: {{error}}',
@@ -241,7 +239,7 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.application.initialized':
       'User application initialized: {{warnings}} warnings, {{recoveryFiles}} recovery files to resolve. Previous generation, build and verification results are no longer valid.',
     'workflow.confirm.acceptCatalog':
-      'Accept this extension definition? Its release and integrity are checked; on failure the previous setting is kept.\n{{path}}',
+      'This extension definition catalog is checked for release and integrity and added to the settings; on failure the previous settings are kept.',
     'workflow.confirm.removeCatalog':
       'Remove extension {{catalogId}}? Source files are kept; configuration that uses it loses the matching definitions.',
     'workflow.stage.blockingErrors': '{{count}} errors block generation',

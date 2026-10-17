@@ -119,7 +119,6 @@ export interface Workbench
   chooseDirectory(onChoose: (path: string) => void): Promise<void>;
   chooseBinary(onChoose: (path: string) => void): Promise<void>;
   chooseFiles(): Promise<void>;
-  confirmAction(message: Text): Promise<boolean>;
   startProject(source?: 'empty' | 'import'): Promise<void>;
   openProjectEntry(source: WorkbenchState['source']): void;
   createProject(): void;
@@ -165,6 +164,7 @@ export interface Workbench
   configureLanguage(): Promise<void>;
   importDefinitionCatalog(): Promise<void>;
   removeDefinitionCatalog(catalogId: string): Promise<void>;
+  resolveCatalogConfirmation(accepted: boolean): void;
   openMemberProject(): Promise<void>;
   previewSaveAs(): Promise<void>;
   confirmProjectPreview(): Promise<void>;
@@ -207,6 +207,7 @@ export function useWorkbench(): Workbench {
   const pendingGuard = useRef<(() => void | Promise<void>) | null>(null);
   const pendingReplacement = useRef<(() => void | Promise<void>) | null>(null);
   const changeConfirmation = useRef<((applied: boolean) => void) | null>(null);
+  const catalogDecision = useRef<((accepted: boolean) => void) | null>(null);
 
   useEffect(() => {
     if (!native) return;
@@ -318,10 +319,13 @@ export function useWorkbench(): Workbench {
     running.current = false;
     changeConfirmation.current?.(false);
     changeConfirmation.current = null;
+    catalogDecision.current?.(false);
+    catalogDecision.current = null;
     pendingGuard.current = null;
     pendingReplacement.current = null;
     patchState({
       guard: null,
+      catalogConfirmation: null,
       changePreview: null,
       preparedChangeSet: null,
       applicationPreview: null,
@@ -776,6 +780,7 @@ export function useWorkbench(): Workbench {
     pendingGuard,
     pendingReplacement,
     changeConfirmation,
+    catalogDecision,
     field,
     patchState,
     call,
@@ -784,7 +789,6 @@ export function useWorkbench(): Workbench {
     chooseDirectory,
     chooseBinary,
     chooseFiles,
-    confirmAction,
     applyProject,
     openProjectEntry,
     startProject,
@@ -809,6 +813,7 @@ export function useWorkbench(): Workbench {
     readSource,
     importDefinitionCatalog,
     removeDefinitionCatalog,
+    resolveCatalogConfirmation,
     openMemberProject,
     previewSaveAs,
     confirmProjectPreview,
@@ -925,6 +930,7 @@ export function useWorkbench(): Workbench {
     verificationOwnedFailure,
     importDefinitionCatalog,
     removeDefinitionCatalog,
+    resolveCatalogConfirmation,
     openMemberProject,
     native,
     workspace,
@@ -966,7 +972,6 @@ export function useWorkbench(): Workbench {
     chooseDirectory,
     chooseBinary,
     chooseFiles,
-    confirmAction,
     startProject,
     openProjectEntry,
     createProject,

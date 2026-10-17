@@ -2,11 +2,23 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { createExtensionInputs } from './support/inputs.mjs';
-import { openWorkbench, explicit, existing, sha256, json } from './support/workbench.mjs';
+import {
+  openWorkbench,
+  dialogNamed,
+  explicit,
+  existing,
+  sha256,
+  json,
+} from './support/workbench.mjs';
 
 const {
   check,
   scratch,
+  until,
+  click,
+  choose,
+  evaluate,
+  key,
   invoke,
   projection,
   input,
@@ -207,8 +219,9 @@ check('source-safety-rejections', async () => {
   await writeFile(source.path, saved);
   await save();
 });
+let extension;
 check('extension-isolation-and-default-preservation', async () => {
-  const extension = await createExtensionInputs(scratch);
+  extension = await createExtensionInputs(scratch);
   const original = await projection();
   for (const [name, catalogPath] of Object.entries(extension.variants))
     await refuse('import_definition_catalog', { catalogPath }, `Extension ${name} rejection`);
@@ -320,4 +333,70 @@ check('extension-isolation-and-default-preservation', async () => {
   assert.deepEqual(removed.acceptedExtensionDefinitions, []);
   assert.deepEqual(removed.ruleSetIdentity, original.ruleSetIdentity);
   await unchanged(portableBytes);
+});
+check('definition-catalog-decisions-use-in-app-dialogs', async () => {
+  const accepted = async () => (await projection()).acceptedExtensionDefinitions;
+  const acceptedCount = async (count, description) => {
+    const deadline = Date.now() + 30000;
+    while ((await accepted()).length !== count) {
+      assert(Date.now() < deadline, `Timed out waiting for ${description}`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  };
+  const alertdialog = (title) => `Boolean(${dialogNamed(title)}?.matches('[role=alertdialog]'))`;
+  const closed = (title) => `!${dialogNamed(title)}`;
+  assert.deepEqual(await accepted(), [], 'The previous check leaves no accepted catalog');
+  const openCatalogChooser = async () => {
+    await click('设置');
+    await click('规则与模块定义', "document.querySelector('[role=dialog]')");
+    await choose(
+      'file',
+      extension.valid,
+      () => click('接纳扩展定义…', "document.querySelector('[role=dialog]')"),
+      async () => {
+        await until(alertdialog('接纳扩展定义'), 'catalog acceptance confirmation');
+        return evaluate(`${dialogNamed('接纳扩展定义')}.querySelector('.path-text').textContent`);
+      },
+    );
+  };
+  await openCatalogChooser();
+  assert.deepEqual(await accepted(), [], 'The dialog alone accepts nothing');
+  await click('取消', dialogNamed('接纳扩展定义'));
+  await until(closed('接纳扩展定义'), 'catalog acceptance cancelled');
+  assert.deepEqual(await accepted(), [], 'Cancel keeps the catalog out');
+  await key('Escape');
+  await until(`!document.querySelector('[role=dialog]')`, 'settings closed');
+
+  await openCatalogChooser();
+  await click('接纳', dialogNamed('接纳扩展定义'));
+  await acceptedCount(1, 'catalog accepted after confirmation');
+  assert.deepEqual(await accepted(), [extension.identity]);
+  await until(`Boolean(${dialogNamed('设置')})`, 'settings return after the decision');
+
+  await click('移除扩展', dialogNamed('设置'));
+  await until(alertdialog('移除扩展定义'), 'catalog removal confirmation');
+  assert.equal(
+    await evaluate(
+      `${dialogNamed('移除扩展定义')}.textContent.includes(${json(extension.identity.catalogId)})`,
+    ),
+    true,
+    'The removal dialog names the catalog',
+  );
+  assert.equal(
+    await evaluate(
+      `[...${dialogNamed('移除扩展定义')}.querySelectorAll('button')].some(button => button.textContent.trim() === '移除扩展' && button.classList.contains('danger-button'))`,
+    ),
+    true,
+    'Removal is the danger action',
+  );
+  await click('取消', dialogNamed('移除扩展定义'));
+  await until(closed('移除扩展定义'), 'catalog removal cancelled');
+  assert.deepEqual(await accepted(), [extension.identity], 'Cancel keeps the catalog');
+  await click('移除扩展', dialogNamed('设置'));
+  await until(alertdialog('移除扩展定义'), 'second removal confirmation');
+  await click('移除扩展', dialogNamed('移除扩展定义'));
+  await until(closed('移除扩展定义'), 'catalog removal confirmed');
+  await acceptedCount(0, 'catalog removed after confirmation');
+  await key('Escape');
+  await until(`!document.querySelector('[role=dialog]')`, 'settings closed');
 });
