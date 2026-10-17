@@ -186,11 +186,12 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
             group = ""
     for token in directives:
         if name.startswith("runtime/bsw/") and Path(name).name != "Platform_Types.h":
-            match = re.match(r"\s*#\s*define\s+\w+\s*(.*)", token.text)
+            match = re.match(r"\s*#\s*define\s+\w+\s*(.*)", token.text, re.DOTALL)
             if match:
                 for value in lex(match[1]):
                     if value.text in NATIVE:
-                        add("bsw-native-type", token)
+                        offset = token.start + match.start(1)
+                        add("bsw-native-type", Token(value.text, offset + value.start, offset + value.end))
 
     code = [t for t in tokens if not is_comment(t) and not t.text.lstrip().startswith("#")]
     stack: list[str] = []
