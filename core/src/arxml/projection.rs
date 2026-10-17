@@ -152,6 +152,7 @@ fn readonly_definition(
 ) -> DefinitionDescriptor {
     DefinitionDescriptor {
         definition_id: id,
+        description: None,
         element_kind: element.into(),
         kind: None,
         lower_multiplicity: 0,

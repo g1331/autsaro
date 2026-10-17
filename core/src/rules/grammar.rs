@@ -4,7 +4,7 @@
 //! This is deliberately not an embedded or converted AUTOSAR schema.
 
 pub const RELEASE: &str = "R24-11";
-pub const RULES_VERSION: &str = "1.0.0";
+pub const RULES_VERSION: &str = "1.1.0";
 pub const STRUCTURES: &[(&str, &str)] = &[
     ("AUTOSAR", "ADMIN-DATA? AR-PACKAGES?"),
     ("AR-PACKAGES", "AR-PACKAGE+"),

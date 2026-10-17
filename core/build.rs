@@ -459,6 +459,7 @@ fn build_native_inventory(core: &Path) {
         "src/rules",
         "src/schema.rs",
         "src/definitions.rs",
+        "src/messages.json",
         "src/model.rs",
         "src/project_model.rs",
         "src/arxml.rs",

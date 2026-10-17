@@ -76,6 +76,7 @@ impl Author<'_> {
         }
         let mut entry = descriptor(format!("{ROOT}{path}/{name}"), tag, Some(kind));
         entry.lower_multiplicity = lower;
+        entry.description = super::descriptions::parameter(name);
         self.0.insert(entry, Vec::new())
     }
 

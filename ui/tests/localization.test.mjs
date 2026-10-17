@@ -251,3 +251,13 @@ test('mandatory-entry shortfalls name the object, definition and counts in both 
     '/Configuration/NewCanIf is missing required CanIfCtrlDrvCfg entries (at least 1, currently 0)',
   );
 });
+
+test('parameter guidance reuses the backend message descriptor across language changes', () => {
+  const descriptor = message('backend.definitions.description.CanIfTxPduCanId');
+  const before = JSON.stringify(descriptor);
+  previewLanguage('zh-CN');
+  expect(localize(descriptor)).toBe('设置此 PDU 发送时使用的 CAN 标识符。');
+  previewLanguage('en');
+  expect(localize(descriptor)).toBe('Set the CAN identifier used to transmit this PDU.');
+  expect(JSON.stringify(descriptor)).toBe(before);
+});

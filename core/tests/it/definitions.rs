@@ -1152,3 +1152,134 @@ fn standard_documents_accept_definition_valid_sc2_and_float_baud_without_target_
         assert_eq!(codes, expected, "{parameter}: {:?}", changed.diagnostics);
     }
 }
+
+#[test]
+fn every_builtin_ecuc_parameter_has_product_guidance_in_both_languages() {
+    let catalog = DefinitionCatalog::builtin().unwrap();
+    let messages: serde_json::Value =
+        serde_json::from_str(include_str!("../../src/messages.json")).unwrap();
+    let mut used = std::collections::BTreeSet::new();
+    let mut modules = std::collections::BTreeSet::new();
+    let mut count = 0;
+    for definition in catalog.definitions().filter(|definition| {
+        definition.definition_id.starts_with(ROOT) && definition.kind.is_some()
+    }) {
+        count += 1;
+        modules.insert(
+            definition.definition_id[ROOT.len()..]
+                .split('/')
+                .next()
+                .unwrap(),
+        );
+        let Some(autosar_config_core::LocalizedText::Message(message)) = &definition.description
+        else {
+            panic!("{} has no product guidance", definition.definition_id);
+        };
+        assert!(
+            message.params.is_empty(),
+            "guidance must be reusable without UI context"
+        );
+        assert!(message.key.starts_with("backend.definitions.description."));
+        used.insert(message.key.as_ref());
+        for language in ["zh-CN", "en"] {
+            let text = messages[language][message.key.as_ref()].as_str().unwrap();
+            assert!(
+                !text.trim().is_empty(),
+                "{} {language}",
+                definition.definition_id
+            );
+            assert!(!text.contains("{{"), "guidance must be self-contained");
+        }
+        assert_ne!(
+            messages["zh-CN"][message.key.as_ref()],
+            messages["en"][message.key.as_ref()]
+        );
+    }
+    let authored: std::collections::BTreeSet<_> = messages["en"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .filter(|key| key.starts_with("backend.definitions.description."))
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        used, authored,
+        "orphaned guidance is not reachable through the catalog"
+    );
+    assert_eq!(count, 500);
+    assert_eq!(modules.len(), 15);
+}
+
+#[test]
+fn guidance_reaches_present_absent_and_creation_fields_without_changing_sources() {
+    use autosar_config_core::{LocalizedText, Workspace};
+    let directory = Directory::new();
+    let path = directory.0.join("can.arxml");
+    let catalog = DefinitionCatalog::builtin().unwrap();
+    let id = format!("{ROOT}Can/CanGeneral/CanDevErrorDetect");
+    let absent = format!("{ROOT}Can/CanGeneral/CanVersionInfoApi");
+    let xml = crate::support::rule_inputs::document(&module(
+        &format!("{ROOT}Can"),
+        "Can",
+        &container(
+            &format!("{ROOT}Can/CanGeneral"),
+            "General",
+            &field(&catalog, &id, "true"),
+            "",
+        ),
+    ));
+    fs::write(&path, &xml).unwrap();
+    let workspace = Workspace::open(vec![path.clone()]).unwrap();
+    let fingerprint = workspace.input_fingerprint().unwrap();
+    let projection = workspace.project_projection(&fingerprint).unwrap();
+    let wire = serde_json::to_value(&projection).unwrap();
+    for definition_id in [&id, &absent] {
+        let field = projection
+            .fields
+            .iter()
+            .find(|field| &field.definition.definition_id == definition_id)
+            .unwrap();
+        assert_eq!(
+            field.definition.description,
+            catalog.get(definition_id).unwrap().description
+        );
+        assert!(matches!(
+            field.definition.description,
+            Some(LocalizedText::Message(_))
+        ));
+        let serialized = wire["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|field| field["definitionId"] == **definition_id)
+            .unwrap();
+        assert_eq!(
+            serialized["description"],
+            serde_json::to_value(&field.definition.description).unwrap()
+        );
+        let templates = wire["instanceDefinitions"].as_array().unwrap();
+        let creation = templates
+            .iter()
+            .flat_map(|template| template["fields"].as_array().unwrap())
+            .find(|field| field["definitionId"] == **definition_id)
+            .unwrap();
+        assert_eq!(creation["description"], serialized["description"]);
+    }
+    let absent_field = projection
+        .fields
+        .iter()
+        .find(|field| field.definition.definition_id == absent)
+        .unwrap();
+    assert!(matches!(
+        absent_field.current,
+        autosar_config_core::project_model::ValueState::Absent
+    ));
+    assert_eq!(workspace.input_fingerprint().unwrap(), fingerprint);
+    assert_eq!(fs::read_to_string(path).unwrap(), xml);
+    assert_eq!(
+        workspace
+            .source_text(&projection.sources[0].source_id)
+            .unwrap(),
+        xml
+    );
+}

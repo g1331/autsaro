@@ -70,6 +70,8 @@ fn fixed_r24_11_mod_agrees_on_ecuc_integer_precision_enum_and_default() {
         }
     }
     let mut failures = Vec::new();
+    let mut defaults = 0;
+    let mut without_defaults = 0;
     for expected in catalog
         .definitions()
         .filter(|entry| is_ecuc(&entry.definition_id))
@@ -136,6 +138,34 @@ fn fixed_r24_11_mod_agrees_on_ecuc_integer_precision_enum_and_default() {
                 .as_ref()
                 .map(|value| value.lexeme.as_str()),
         );
+        if expected.kind.is_some() {
+            if text("DEFAULT-VALUE").is_some() {
+                defaults += 1;
+                compare(
+                    &mut failures,
+                    id,
+                    "default origin",
+                    Some("builtin:product-ecuc-r24-11"),
+                    expected.default_origin.as_deref(),
+                );
+                compare(
+                    &mut failures,
+                    id,
+                    "default kind",
+                    expected.kind,
+                    expected.default_value.as_ref().map(|value| value.kind),
+                );
+            } else {
+                without_defaults += 1;
+                compare(
+                    &mut failures,
+                    id,
+                    "absent default origin",
+                    None,
+                    expected.default_origin.as_deref(),
+                );
+            }
+        }
         if expected.kind == Some(ValueKind::Enumeration) {
             let mut actual: Vec<_> = node
                 .descendants()
@@ -152,6 +182,14 @@ fn fixed_r24_11_mod_agrees_on_ecuc_integer_precision_enum_and_default() {
             compare(&mut failures, id, "literals", actual, authored);
         }
     }
+    assert_eq!(
+        (defaults, without_defaults),
+        (140, 360),
+        "all 500 delivered parameters must be compared, including absent defaults"
+    );
+    eprintln!(
+        "R24-11 default comparison: {defaults} declared, {without_defaults} absent; all 500 parameters compared"
+    );
     assert!(
         failures.is_empty(),
         "Fixed metadata oracle mismatches:\n{}",
