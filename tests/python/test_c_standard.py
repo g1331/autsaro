@@ -1,0 +1,123 @@
+"""C coding checks inspect declarations, not keyword counts."""
+
+import collections
+import tempfile
+import unittest
+from pathlib import Path
+
+from autosar_tooling import c_standard
+
+CONTRACT = """/** Read the selected object.
+ * @param[in] id Object index, borrowed for this call.
+ * @param[out] value Caller-owned result; written on success.
+ * @return E_OK on success; E_NOT_OK preserves output.
+ * Preconditions: initialized; otherwise E_NOT_OK.
+ * Context: task, outside exclusive areas.
+ * Reentrancy: reentrant across instances.
+ * Ownership: neither pointer is retained.
+ */
+"""
+DECLARATION = "Std_ReturnType Read(uint8 id,\n uint32 *value);\n"
+
+
+class CStandardTests(unittest.TestCase):
+    def rules(self, source, name="runtime/bsw/include/Test.h"):
+        return [rule for rule, _, _ in c_standard.findings(name, source)]
+
+    def test_complete_multiline_contract(self):
+        self.assertEqual(self.rules(CONTRACT + DECLARATION), [])
+
+    def test_each_contract_item_is_observed(self):
+        for field in c_standard.FIELDS:
+            with self.subTest(field=field):
+                self.assertIn("api-" + field.lower(), self.rules((CONTRACT + DECLARATION).replace(field + ":", "Other:")))
+        self.assertIn("api-return", self.rules((CONTRACT + DECLARATION).replace("@return", "@result")))
+        for original, replacement in (("[out]", "[inout]"), ("[in]", ""), ("id Object", "wrong Object")):
+            with self.subTest(original=original):
+                self.assertIn("api-parameters", self.rules((CONTRACT + DECLARATION).replace(original, replacement)))
+
+    def test_contract_must_be_adjacent(self):
+        self.assertIn("api-contract", self.rules(CONTRACT + "#define OTHER 1\n" + DECLARATION))
+        self.assertIn("api-contract", self.rules(CONTRACT + "/* unrelated */\n" + DECLARATION))
+
+    def test_void_still_requires_return_and_four_fields(self):
+        source = CONTRACT.replace(" * @param[in] id Object index, borrowed for this call.\n", "").replace(" * @param[out] value Caller-owned result; written on success.\n", "")
+        self.assertEqual(self.rules(source + "void Stop(void);"), [])
+
+    def test_function_pointer_typedef_is_not_api(self):
+        self.assertEqual(self.rules("/** Callback type. */\ntypedef void (*CallbackType)(uint8 id);"), [])
+        self.assertEqual(self.rules("typedef void (*CallbackType)(uint8 id);"), ["typedef-comment"])
+
+    def test_aggregate_members_and_enum_last_value(self):
+        self.assertEqual(self.rules("/** Choices. */\ntypedef enum {\n A, /**< First. */\n B /**< Last. */\n} ChoiceType;"), [])
+        self.assertEqual(self.rules("/** Record. */\ntypedef struct {\n uint8 id; /**< Index. */\n} RecordType;"), [])
+        self.assertIn("member-comment", self.rules("/** Record. */\ntypedef struct { uint8 id; } RecordType;"))
+
+    def test_states_not_local_variables(self):
+        source = "static uint8 state;\nvoid Run(void) { uint8 local; local = 1; }\nstatic uint8 next;"
+        self.assertEqual(self.rules(source, "runtime/bsw/src/Test.c"), ["state-comment", "state-comment"])
+
+    def test_array_initializers_are_states(self):
+        self.assertEqual(self.rules("static uint8 values[2] = {0, 1};", "runtime/bsw/src/Test.c"), ["state-comment"])
+        self.assertEqual(self.rules("static uint8 values[2] = {0, 1}; /**< Values. */", "runtime/bsw/src/Test.c"), [])
+
+    def test_strings_comments_and_inactive_code(self):
+        self.assertNotIn("bsw-native-type", self.rules('/* unsigned int */\n#define TEXT "unsigned int"\n'))
+        self.assertIn("bsw-native-type", self.rules("#if 0\ntypedef unsigned HiddenType;\n#endif"))
+
+    def test_guard_and_memmap_protocol_exempt(self):
+        self.assertEqual(self.rules("#ifndef TEST_H\n#define TEST_H\n#endif\n"), [])
+        self.assertEqual(self.rules("#ifdef TEST_START_SEC_CODE\n#define TEST_CODE\n#endif\n", "runtime/bsw/include/Test_MemMap.h"), [])
+
+    def test_switch_requires_value_comparison(self):
+        self.assertIn("config-switch", self.rules("#define TEST_API STD_ON\n#ifdef TEST_API\n#endif"))
+        self.assertNotIn("config-switch", self.rules("#define TEST_API STD_ON\n#if (TEST_API == STD_ON)\n#endif"))
+
+    def test_baseline_multiplicity_and_fixed_entries(self):
+        with tempfile.TemporaryDirectory(prefix="171-") as temporary:
+            path = Path(temporary) / "baseline.txt"
+            path.write_text("api-contract runtime/bsw/include/Test.h void Run(void);\n", encoding="utf-8")
+            key = ("api-contract", "runtime/bsw/include/Test.h", "void Run(void);")
+            self.assertEqual(c_standard.baseline_errors(collections.Counter({key: 1}), path), [])
+            self.assertIn("new C standard", c_standard.baseline_errors(collections.Counter({key: 2}), path)[0])
+            self.assertIn("fixed finding", c_standard.baseline_errors(collections.Counter(), path)[0])
+
+    def test_generated_headers_use_runtime_rules_and_skip_copies(self):
+        import json
+
+        with tempfile.TemporaryDirectory(prefix="171-") as temporary:
+            samples = Path(temporary)
+            project = samples / "sample"
+            (project / "generated/include").mkdir(parents=True)
+            (project / "bsw/include").mkdir(parents=True)
+            (project / "meta").mkdir()
+            (project / "target.json").write_text("{}", encoding="utf-8")
+            (project / "meta/integration.json").write_text(json.dumps({"originalBswSources": {"runtime/bsw/include/Test.h": "bsw/include/Test.h"}}), encoding="utf-8")
+            (project / "bsw/include/Test.h").write_text("void Copied(void);", encoding="utf-8")
+            (project / "generated/include/Test.h").write_text("void Emitted(void);", encoding="utf-8")
+            self.assertEqual(c_standard.generated_findings(samples), {("api-contract", "emitted/generated/include/Test.h", "void Emitted(void);"): 1})
+            (project / "generated/include/Test.h").write_text(CONTRACT + DECLARATION, encoding="utf-8")
+            self.assertEqual(c_standard.generated_findings(samples), {})
+
+    def test_deviations_match_both_directions_and_exact_symbol(self):
+        with tempfile.TemporaryDirectory(prefix="171-") as temporary:
+            root = Path(temporary)
+            (root / "runtime/bsw/src").mkdir(parents=True)
+            (root / "docs/standards").mkdir(parents=True)
+            source = root / "runtime/bsw/src/Test.c"
+            source.write_text("/* MR12 RULE 8.7 VIOLATION: required API. */\nvoid Test_Run(void) {}", encoding="utf-8")
+            document = root / "docs/standards/test.md"
+            document.write_text("| MISRA C:2012 Rule 8.7 | `runtime/bsw/src/Test.c` 中 `Test_Run` | required | Approved by maintainer |\n", encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            source.write_text("void Test_Run(void) {} /* MR12 RULE 8.7 VIOLATION: required API. */", encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            approved = document.read_text()
+            document.write_text(approved.replace("Approved by maintainer", "Pending"), encoding="utf-8")
+            self.assertEqual({key[0] for key in c_standard.deviation_findings(root)}, {"deviation-unrecorded"})
+            document.write_text(approved, encoding="utf-8")
+            document.write_text(document.read_text().replace("Test_Run", "Test_Other"), encoding="utf-8")
+            self.assertEqual({key[0] for key in c_standard.deviation_findings(root)}, {"deviation-unrecorded", "deviation-uncommented"})
+
+
+if __name__ == "__main__":
+    unittest.main()
