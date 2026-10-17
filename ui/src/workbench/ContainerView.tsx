@@ -121,7 +121,9 @@ export function ContainerView({ controller: c }: { controller: Workbench }) {
   return (
     <>
       <header className="container-heading">
-        <h2>{moduleLabel(object)}</h2>
+        <h2 tabIndex={-1} data-object-title={object.objectId}>
+          {moduleLabel(object)}
+        </h2>
         <span className={['role-tag', objectRoleClass(object)].filter(Boolean).join(' ')}>
           {object.kind} ·{' '}
           {object.writable ? t('editor.common.configurable') : t('editor.common.readonly')}

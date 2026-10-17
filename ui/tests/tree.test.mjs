@@ -106,8 +106,9 @@ test('tool windows mount active content and retain source navigation when switch
     }),
   );
   expect(view.getByText('Source diagnostic')).toBeTruthy();
-  fireEvent.click(view.getByRole('button', { name: translate('action.locate') }));
-  expect(controller.readSource).toHaveBeenCalledWith('source');
+  // A problem without an object opens its source file.
+  fireEvent.click(view.getByRole('button', { name: translate('editor.common.viewSource') }));
+  await vi.waitFor(() => expect(controller.readSource).toHaveBeenCalledWith('source'));
   view.rerender(
     createElement(ToolWindows, {
       controller: withCommands({ ...controller, toolWindow: 'build', busy: 'Running' }),

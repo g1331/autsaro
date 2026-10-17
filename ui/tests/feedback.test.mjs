@@ -68,6 +68,14 @@ const rangeField = {
   reference: null,
 };
 
+const projection = {
+  workspaceEpoch: 1,
+  definitionFingerprint: 'defs',
+  fields: [rangeField],
+  objects: [{ objectId: 'object', path: '/Com/ComConfig/ComTimeBase', sourceId: 'source' }],
+  sources: [{ sourceId: 'source', path: 'Com.arxml' }],
+};
+
 const valueChange = (lexeme) => ({
   op: 'set-value',
   changeId: rangeField.fieldId,
@@ -92,7 +100,7 @@ function batch(current) {
 test('a rejected value is reported on its field with name and range, and retracted by editing it', async () => {
   previewLanguage('zh-CN');
   const current = session({
-    projection: { workspaceEpoch: 1, definitionFingerprint: 'defs', fields: [rangeField] },
+    projection,
     changes: [valueChange('0')],
   });
   current.call.mockRejectedValue(fieldRejected);
@@ -104,10 +112,22 @@ test('a rejected value is reported on its field with name and range, and retract
   expect(localize(fieldErrors[rangeField.fieldId])).toContain('1–65535');
   // The raw backend evidence stays available for copying.
   expect(localize(notice.detail)).toContain('field-period');
+  // The details in the problems window name the object, the parameter and its file.
+  expect(notice.rejected).toBe(true);
+  expect(current.stateRef.current.rejection.items).toMatchObject([
+    {
+      severity: 'error',
+      path: '/Com/ComConfig/ComTimeBase · ComMainFunctionPeriod',
+      file: 'Com.arxml',
+      objectId: 'object',
+      fieldId: rangeField.fieldId,
+    },
+  ]);
 
   batch(current).stageChange(valueChange('20'));
   expect(current.stateRef.current.fieldErrors).toEqual({});
   expect(current.stateRef.current.notice).toBeNull();
+  expect(current.stateRef.current.rejection).toBeNull();
 });
 
 test('a rejection of another field stays when an unrelated draft changes', async () => {
@@ -117,7 +137,7 @@ test('a rejection of another field stays when an unrelated draft changes', async
     field: { kind: 'existing', fieldId: 'other' },
   };
   const current = session({
-    projection: { workspaceEpoch: 1, definitionFingerprint: 'defs', fields: [rangeField] },
+    projection,
     changes: [valueChange('0')],
   });
   current.call.mockRejectedValue(fieldRejected);
@@ -145,7 +165,7 @@ test('errors without a field context keep the generic message and are not attach
 
 test('a new preview clears the previous rejection before the backend answers', async () => {
   const current = session({
-    projection: { workspaceEpoch: 1, definitionFingerprint: 'defs', fields: [rangeField] },
+    projection,
     changes: [valueChange('0')],
     notice: { tone: 'error', text: 'old failure' },
     fieldErrors: { [rangeField.fieldId]: 'old' },

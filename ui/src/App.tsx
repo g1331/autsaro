@@ -462,7 +462,20 @@ export default function App() {
             <SourceEntry controller={c} logo={logo} />
           )}
           {c.notice && !previewOpen && !c.settingsOpen && !startSurface ? (
-            <NoticeBanner notice={c.notice} onDismiss={() => c.setNotice(null)} />
+            <NoticeBanner
+              notice={c.notice}
+              onDismiss={() => c.setNotice(null)}
+              onDetails={
+                c.notice.rejected && c.rejection
+                  ? () => {
+                      c.setToolWindow('problems');
+                      requestAnimationFrame(() =>
+                        document.getElementById('rejection-details')?.focus(),
+                      );
+                    }
+                  : undefined
+              }
+            />
           ) : null}
           {!c.native ? <p className="notice info">{t('shell.app.browser')}</p> : null}
           {c.capabilities?.ruleError ? (

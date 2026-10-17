@@ -1,19 +1,13 @@
 import { message, useLocale } from '../i18n';
 import { displayPath } from '../pathDisplay';
-import {
-  editorCategoryKeys,
-  editorScopeKeys,
-  editorSeverityKeys,
-  editorStatusKeys,
-} from '../i18n/editors';
+import { editorScopeKeys, editorStatusKeys } from '../i18n/editors';
 import type { Message } from '../i18n';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useMemo } from 'react';
 import type { Workbench } from './useWorkbench';
-import type { ConfigurationDiagnostic, ToolWindow } from './projectTypes';
+import type { ToolWindow } from './projectTypes';
+import { ProblemsTable, RejectionDetails } from './Problems';
 import { CopyText, OwnedLog } from './Dialog';
 import { PanelResizeHandle } from './PanelResizeHandle';
-import { distinct } from './forms';
 import { commandLabel } from './labels';
 import { iconSize } from './icons';
 import { CommandActions } from './CommandActions';
@@ -30,47 +24,6 @@ export const toolLabels: Record<ToolWindow, Message> = {
 
 export function ToolWindows({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
-  const targets = useMemo(
-    () => ({
-      objects: new Set(c.projection?.objects.map((object) => object.objectId)),
-      fields: new Map(c.projection?.fields.map((field) => [field.fieldId, field.objectId])),
-      sources: new Set(c.projection?.sources.map((source) => source.sourceId)),
-      objectsByPath: new Map(c.projection?.objects.map((object) => [object.path, object])),
-      sourcesByPath: new Map(c.projection?.sources.map((source) => [source.path, source])),
-    }),
-    [c.projection],
-  );
-  const integrationProblems = distinct(c.integrationIssues);
-  async function locate(issue: ConfigurationDiagnostic) {
-    await c.guardContext(message('activity.locate'), async () => {
-      const objectId =
-        issue.objectId ?? (issue.fieldId ? targets.fields.get(issue.fieldId) : undefined);
-      c.setTreeVisible(true);
-      c.setInspectorVisible(true);
-      c.setInspectorTab('properties');
-      c.setTreeFilter('');
-      c.setObjectFilter('');
-      if (objectId && targets.objects.has(objectId)) {
-        await c.selectObject(objectId);
-        requestAnimationFrame(() => {
-          const row = Array.from(document.querySelectorAll<HTMLElement>('[data-object-row]')).find(
-            (element) => element.dataset.objectRow === objectId,
-          );
-          row?.scrollIntoView({ block: 'nearest' });
-          const field = issue.fieldId
-            ? Array.from(document.querySelectorAll<HTMLElement>('[data-field-id]')).find(
-                (element) => element.dataset.fieldId === issue.fieldId,
-              )
-            : null;
-          const title = Array.from(
-            document.querySelectorAll<HTMLElement>('[data-object-title]'),
-          ).find((element) => element.dataset.objectTitle === objectId);
-          (field ?? title)?.focus();
-        });
-      } else if (issue.sourceId && targets.sources.has(issue.sourceId))
-        await c.readSource(issue.sourceId);
-    });
-  }
   return (
     <section className="bottom-tools" aria-label={t('editor.tools.heading')}>
       {c.toolWindow ? <PanelResizeHandle kind="tools" /> : null}
@@ -111,99 +64,8 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
                   </details>
                 ))}
               </div>
-              <ul className="problem-list">
-                {c.diagnostics.map((issue, index) => {
-                  const resolvable = Boolean(
-                    (issue.objectId && targets.objects.has(issue.objectId)) ||
-                    (issue.fieldId && targets.fields.has(issue.fieldId)) ||
-                    (issue.sourceId && targets.sources.has(issue.sourceId)),
-                  );
-                  return (
-                    <li key={`${issue.code}-${issue.fieldId}-${index}`} className={issue.severity}>
-                      <div className="problem-main">
-                        <p>
-                          <strong>
-                            {t(editorSeverityKeys[issue.severity])} ·{' '}
-                            {t(editorScopeKeys[issue.scope])} · {issue.code}
-                          </strong>{' '}
-                          {text(issue.message)}
-                        </p>
-                        <ProblemMeta
-                          path={displayPath(issue.path ?? issue.file ?? '')}
-                          remedy={text(issue.remedy)}
-                        />
-                      </div>
-                      <div className="problem-actions">
-                        {resolvable ? (
-                          <button type="button" onClick={() => void locate(issue)}>
-                            {t('action.locate')}
-                          </button>
-                        ) : (
-                          <small>{t('editor.tools.unqualifiedTarget')}</small>
-                        )}
-                        <CopyText
-                          text={JSON.stringify(issue, null, 2)}
-                          label={t('action.copyDetails')}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-                {c.issues.map((issue, index) => (
-                  <li key={`workspace-${issue.code}-${index}`} className={issue.severity}>
-                    <div className="problem-main">
-                      <p>
-                        <strong>
-                          {t(editorSeverityKeys[issue.severity])} · {issue.code}
-                        </strong>{' '}
-                        {text(issue.message)}
-                      </p>
-                      <ProblemMeta path={displayPath(issue.path ?? issue.file ?? '')} />
-                    </div>
-                    <div className="problem-actions">
-                      <CopyText
-                        text={JSON.stringify(issue, null, 2)}
-                        label={t('action.copyDetails')}
-                      />
-                    </div>
-                  </li>
-                ))}
-                {integrationProblems.map((issue, index) => {
-                  const object = issue.object ? targets.objectsByPath.get(issue.object) : undefined;
-                  const source = issue.file ? targets.sourcesByPath.get(issue.file) : undefined;
-                  return (
-                    <li key={`standard-${issue.code}-${index}`} className="error">
-                      <div className="problem-main">
-                        <p>
-                          <strong>
-                            {issue.code} · {t(editorCategoryKeys[issue.category])}
-                          </strong>{' '}
-                          {text(issue.message)}
-                        </p>
-                        <ProblemMeta remedy={text(issue.remedy)} />
-                      </div>
-                      <div className="problem-actions">
-                        {object ? (
-                          <button
-                            type="button"
-                            onClick={() => void c.selectObject(object.objectId)}
-                          >
-                            {t('action.locate')}
-                          </button>
-                        ) : source ? (
-                          <button type="button" onClick={() => void c.readSource(source.sourceId)}>
-                            {t('editor.common.viewSource')}
-                          </button>
-                        ) : null}
-                        <CopyText
-                          text={JSON.stringify(issue, null, 2)}
-                          label={t('action.copyDetails')}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <RejectionDetails controller={c} />
+              <ProblemsTable controller={c} />
               {!c.problemCount ? (
                 <p className="empty-state">{t('editor.tools.noProblems')}</p>
               ) : null}
@@ -326,15 +188,4 @@ export function ToolWindows({ controller: c }: { controller: Workbench }) {
       </nav>
     </section>
   );
-}
-
-/** The secondary line of a problem row: where it is and what to do. */
-function ProblemMeta({ path = '', remedy = '' }: { path?: string; remedy?: string }) {
-  return path || remedy ? (
-    <small className="problem-meta">
-      {path ? <span className="mono path-text">{path}</span> : null}
-      {path && remedy ? ' · ' : null}
-      {remedy}
-    </small>
-  ) : null;
 }

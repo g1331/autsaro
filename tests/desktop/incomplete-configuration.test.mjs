@@ -107,7 +107,7 @@ check('create-apply-save-reopen-incomplete-canif-through-workbench', async () =>
   assert.deepEqual(await readFile(source), saved);
   await click('问题', 'document.querySelector(\'[aria-label="底部工具窗口"]\')');
   await until(
-    `document.querySelector('.problem-list')?.innerText.includes('缺少必需的')`,
+    `document.querySelector('.problems-table')?.innerText.includes('缺少必需的')`,
     'readable mandatory-entry message in the real problems list',
   );
 });
