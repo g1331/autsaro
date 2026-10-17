@@ -19,15 +19,13 @@ on:
 permissions:
   contents: read
 jobs:
-  desktop:
+  build:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    env:
-      AUTOSAR_DESKTOP_RESULTS: ${{ github.workspace }}/build/desktop-results
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,6 +46,85 @@ jobs:
       - uses: ./.github/actions/core-build-dependencies
         with:
           linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf webkit2gtk-driver xvfb xdotool xclip xsettingsd
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/tauri-driver*
+            ~/.cargo/registry
+            target/desktop-test
+          key: desktop-test-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}
+          restore-keys: desktop-test-${{ runner.os }}-${{ env.CACHE_IMAGE }}-
+      - name: Install tauri-driver
+        shell: bash
+        run: tauri-driver --help > /dev/null 2>&1 || cargo install tauri-driver --version 2.1.0 --locked
+      - run: npm ci --prefix ui
+      - name: Build the WebDriver verification application
+        run: npm run tauri --prefix ui -- build --debug --no-bundle --features native-webdriver -- --profile desktop-test
+      - name: Stage the shared verification application and driver
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          output = Path('build/desktop-app')
+          output.mkdir(parents=True)
+          suffix = '.exe' if os.name == 'nt' else ''
+          for name in ('autosar-config-desktop' + suffix, 'LICENSE', 'NOTICE'):
+              shutil.copy2(Path('target/desktop-test') / name, output / name)
+          shutil.copy2(shutil.which('tauri-driver'), output / ('tauri-driver' + suffix))
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-app-${{ matrix.os }}
+          path: build/desktop-app
+          if-no-files-found: error
+          retention-days: 1
+
+  desktop:
+    name: Desktop (${{ matrix.os }}, shard ${{ matrix.shard.id }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        # Runs 39008074660 / 39013110980: Windows needs a third serial shard
+        # to absorb observed scenario variance without duplicating the build.
+        # A file and all its stateful checks always stay on the same runner.
+        include:
+          - os: ubuntu-24.04
+            shard:
+              id: 1
+              files: composition-editing editing responsiveness startup process-tree
+          - os: ubuntu-24.04
+            shard:
+              id: 2
+              files: standard-delivery application value-editing workbench-ui owned-execution projects incomplete-configuration
+          - os: windows-latest
+            shard:
+              id: 1
+              files: responsiveness startup process-tree
+          - os: windows-latest
+            shard:
+              id: 2
+              files: composition-editing editing application incomplete-configuration
+          - os: windows-latest
+            shard:
+              id: 3
+              files: standard-delivery value-editing workbench-ui owned-execution projects
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      AUTOSAR_DESKTOP_RESULTS: ${{ github.workspace }}/build/desktop-results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - name: Linux desktop runtime dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-0 libxml2 webkit2gtk-driver xvfb xdotool xclip xsettingsd
       - uses: ./.github/actions/native-analysis-compiler
       - name: Edge WebDriver
         if: runner.os == 'Windows'
@@ -57,26 +134,21 @@ jobs:
           $env:EDGEWEBDRIVER >> $env:GITHUB_PATH
           & (Join-Path $env:EDGEWEBDRIVER msedgedriver.exe) --version
           (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv | ForEach-Object { "WebView2 runtime $_" }
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          path: |
-            ~/.cargo/bin/tauri-driver*
-            ~/.cargo/registry
-            target
-          key: desktop-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: desktop-${{ runner.os }}-${{ env.CACHE_IMAGE }}-
-      - name: Install tauri-driver
-        shell: bash
-        run: tauri-driver --help > /dev/null 2>&1 || cargo install tauri-driver --version 2.1.0 --locked
-      - run: npm ci --prefix ui
-      - name: Build the WebDriver verification application
-        run: npm run tauri --prefix ui -- build --debug --no-bundle --features native-webdriver
+          name: desktop-app-${{ matrix.os }}
+          path: build/desktop-app
       - name: Select application and declared execution tools
         shell: python
         run: |
           import os, shutil, subprocess
           from pathlib import Path
-          application = Path('target/debug/autosar-config-desktop' + ('.exe' if os.name == 'nt' else ''))
+          application = Path('build/desktop-app/autosar-config-desktop' + ('.exe' if os.name == 'nt' else ''))
+          if os.name != 'nt':
+              application.chmod(0o755)
+              Path('build/desktop-app/tauri-driver').chmod(0o755)
+          with open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8') as output:
+              output.write(str(Path('build/desktop-app').resolve()) + '\n')
           tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_GIT': 'git'}
           python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
               check=True, capture_output=True, text=True).stdout.strip()
@@ -89,14 +161,31 @@ jobs:
         shell: bash
         env:
           SCENARIOS: ${{ inputs.scenarios }}
-        # Split on spaces only; node expands the globs itself.
+          SHARD_FILES: ${{ matrix.shard.files }}
+          TEST_CONCURRENCY: ${{ runner.os == 'Linux' && '2' || '1' }}
         run: |
-          read -ra scenarios <<< "$SCENARIOS"
-          node --test --test-concurrency=1 "${scenarios[@]}"
+          node --input-type=module <<'JS'
+          import { globSync } from 'node:fs';
+          import { spawnSync } from 'node:child_process';
+          import { relative, resolve } from 'node:path';
+          const normalize = file => relative(process.cwd(), resolve(file.replaceAll('\\', '/'))).replaceAll('\\', '/');
+          const requested = [...new Set(process.env.SCENARIOS.split(/\s+/).filter(Boolean).flatMap(pattern => [...globSync(pattern)].map(normalize)))];
+          if (!requested.length) throw new Error('No desktop scenarios matched SCENARIOS');
+          const supported = [...globSync('tests/desktop/*.test.mjs')].map(normalize);
+          if (requested.some(file => !supported.includes(file))) throw new Error('SCENARIOS matched files outside the desktop suite');
+          const assigned = process.env.SHARD_FILES.split(' ').map(name => `tests/desktop/${name}.test.mjs`);
+          const files = requested.filter(file => assigned.includes(file));
+          console.log('Shard files:', files);
+          if (files.length) {
+            const result = spawnSync(process.execPath, ['--test', `--test-concurrency=${process.env.TEST_CONCURRENCY}`, ...files], { stdio: 'inherit' });
+            if (result.error) throw result.error;
+            process.exit(result.status ?? 1);
+          }
+          JS
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: desktop-${{ matrix.os }}
+          name: desktop-${{ matrix.os }}-${{ matrix.shard.id }}
           path: build/desktop-results
           if-no-files-found: ignore
           retention-days: 14

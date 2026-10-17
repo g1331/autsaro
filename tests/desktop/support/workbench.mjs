@@ -44,8 +44,8 @@ export function displayPaths(value) {
   return value;
 }
 
-export async function openWorkbench(name) {
-  const session = await launch(name);
+export async function openWorkbench(name, options) {
+  const session = await launch(name, options);
   const { evaluate, screenshot, resize, key, pointer, media, scratch, platform } = session;
   const ipcLog = await openFile(path.join(scratch, 'ipc.jsonl'), 'w');
   let failed = false;

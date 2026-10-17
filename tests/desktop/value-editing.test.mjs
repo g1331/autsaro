@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { createExtensionInputs } from './support/inputs.mjs';
+import { catalogResultReady } from './support/readiness.mjs';
 import {
   openWorkbench,
   dialogNamed,
@@ -337,11 +338,12 @@ check('extension-isolation-and-default-preservation', async () => {
 check('definition-catalog-decisions-use-in-app-dialogs', async () => {
   const accepted = async () => (await projection()).acceptedExtensionDefinitions;
   const acceptedCount = async (count, description) => {
-    const deadline = Date.now() + 30000;
-    while ((await accepted()).length !== count) {
-      assert(Date.now() < deadline, `Timed out waiting for ${description}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    await until(
+      `(${catalogResultReady.toString()})(${dialogNamed('设置')}, ${count})`,
+      description,
+      30000,
+    );
+    assert.equal((await accepted()).length, count, description);
   };
   const alertdialog = (title) => `Boolean(${dialogNamed(title)}?.matches('[role=alertdialog]'))`;
   const closed = (title) => `!${dialogNamed(title)}`;

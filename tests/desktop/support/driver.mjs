@@ -3,8 +3,19 @@
 // private Xvfb display and D-Bus; Windows relies on a dedicated runner or VM.
 import assert from 'node:assert/strict';
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, readdir, readlink, writeFile } from 'node:fs/promises';
+import {
+  access,
+  appendFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  readlink,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { createServer } from 'node:net';
+import { rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -55,12 +66,23 @@ async function tool(name) {
   throw new Error(`Required desktop test tool is missing from PATH: ${name}`);
 }
 
-async function freePort() {
-  const server = createServer();
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  await new Promise((resolve) => server.close(resolve));
-  return port;
+// Keep both sockets bound until both numbers are selected, so a session cannot
+// accidentally give tauri-driver and its native driver the same port.
+async function driverPorts() {
+  const servers = [];
+  try {
+    for (let index = 0; index < 2; index += 1) {
+      const server = createServer();
+      servers.push(server);
+      await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+      });
+    }
+    return servers.map((server) => server.address().port);
+  } finally {
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
+  }
 }
 
 async function until(probe, description, timeout = 30000) {
@@ -206,20 +228,29 @@ export function descendants(listed, root) {
 }
 
 async function privateDisplay(scratch, environment) {
-  const xvfb = started(
-    await tool('Xvfb'),
-    ['-displayfd', '1', '-screen', '0', '1440x1200x24', '-nolisten', 'tcp', '-nolisten', 'unix'],
-    { env: environment },
-    'Private Xvfb',
-  );
-  environment.DISPLAY = `:${await xvfb.line}`;
-  // Only owner connections and no service activation: nothing reaches the
-  // user's session bus, and nothing outlives this daemon.
-  const bus = path.join(scratch, 'bus');
-  await mkdir(bus, { mode: 0o700 });
-  await writeFile(
-    path.join(bus, 'bus.conf'),
-    `<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+  const children = [];
+  let bus;
+  const cleanup = async () => {
+    await Promise.all(children.map(stopped));
+    if (bus) await rm(bus, { recursive: true, force: true });
+  };
+  try {
+    const xvfb = started(
+      await tool('Xvfb'),
+      ['-displayfd', '1', '-screen', '0', '1440x1200x24', '-nolisten', 'tcp', '-nolisten', 'unix'],
+      { env: environment },
+      'Private Xvfb',
+    );
+    children.push(xvfb.child);
+    environment.DISPLAY = `:${await xvfb.line}`;
+    // Only owner connections and no service activation: nothing reaches the
+    // user's session bus, and nothing outlives this daemon.
+    // Unix socket addresses are bounded independently of result-path length.
+    bus = await mkdtemp(path.join(os.tmpdir(), 'autosar-bus-'));
+    const busConfig = path.join(scratch, 'dbus.conf');
+    await writeFile(
+      busConfig,
+      `<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
   <type>session</type>
@@ -233,39 +264,47 @@ async function privateDisplay(scratch, environment) {
   </policy>
 </busconfig>
 `,
-  );
-  const dbus = started(
-    await tool('dbus-daemon'),
-    ['--nofork', '--nosyslog', `--config-file=${path.join(bus, 'bus.conf')}`, '--print-address=1'],
-    { env: environment },
-    'Private D-Bus',
-  );
-  environment.DBUS_SESSION_BUS_ADDRESS = await dbus.line;
-  const settings = path.join(scratch, 'xsettings.conf');
-  const media = async (scheme, reduceMotion) => {
-    await writeFile(
-      settings,
-      `Net/ThemeName "${scheme === 'dark' ? 'Adwaita-dark' : 'Adwaita'}"\nGtk/EnableAnimations ${reduceMotion ? 0 : 1}\n`,
     );
-  };
-  await media('light', false);
-  const xsettings = spawn(await tool('xsettingsd'), ['--config', settings], {
-    env: environment,
-    stdio: 'ignore',
-  });
-  return {
-    children: [xsettings, dbus.child, xvfb.child],
-    async media(scheme, reduceMotion) {
-      await media(scheme, reduceMotion);
-      xsettings.kill('SIGHUP');
-      return {
-        scheme,
-        reduceMotion,
-        scope: 'private-xvfb-xsettings',
-        display: environment.DISPLAY,
-      };
-    },
-  };
+    const dbus = started(
+      await tool('dbus-daemon'),
+      ['--nofork', '--nosyslog', `--config-file=${busConfig}`, '--print-address=1'],
+      { env: environment },
+      'Private D-Bus',
+    );
+    children.push(dbus.child);
+    environment.DBUS_SESSION_BUS_ADDRESS = await dbus.line;
+    const settings = path.join(scratch, 'xsettings.conf');
+    const media = async (scheme, reduceMotion) => {
+      await writeFile(
+        settings,
+        `Net/ThemeName "${scheme === 'dark' ? 'Adwaita-dark' : 'Adwaita'}"\nGtk/EnableAnimations ${reduceMotion ? 0 : 1}\n`,
+      );
+    };
+    await media('light', false);
+    const xsettings = spawn(await tool('xsettingsd'), ['--config', settings], {
+      env: environment,
+      stdio: 'ignore',
+    });
+    children.push(xsettings);
+    return {
+      children,
+      busDirectory: bus,
+      cleanup,
+      async media(scheme, reduceMotion) {
+        await media(scheme, reduceMotion);
+        xsettings.kill('SIGHUP');
+        return {
+          scheme,
+          reduceMotion,
+          scope: 'private-xvfb-xsettings',
+          display: environment.DISPLAY,
+        };
+      },
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
 }
 
 async function linuxChoose(environment, application, kind, selected) {
@@ -426,10 +465,12 @@ throw "Native chooser stayed open after accepting the selection: $(Shown)"
 `;
 
 class WebDriver {
-  constructor(base) {
+  constructor(base, log) {
     this.base = base;
+    this.log = log;
   }
   async request(method, route, body) {
+    const started = performance.now();
     const response = await fetch(`${this.base}${route}`, {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -437,6 +478,16 @@ class WebDriver {
       signal: AbortSignal.timeout(300000),
     });
     const result = await response.json();
+    await appendFile(
+      this.log,
+      JSON.stringify({
+        at: Date.now(),
+        durationMs: performance.now() - started,
+        method,
+        route: route.replace(/session\/[^/]+/, 'session'),
+        script: body?.args?.[0]?.slice(0, 240),
+      }) + '\n',
+    );
     if (!response.ok || result.value?.error)
       throw new Error(`WebDriver ${method} ${route}: ${JSON.stringify(result)}`);
     return result.value;
@@ -448,7 +499,7 @@ class WebDriver {
  * Results (screenshots, IPC log) go to AUTOSAR_DESKTOP_RESULTS or the system
  * temporary directory.
  */
-export async function launch(name) {
+export async function launch(name, { delayOperations = false } = {}) {
   if (!platform)
     throw new Error(`tauri-driver supports Linux and Windows desktops, not ${process.platform}`);
   if (platform === 'windows') windowsGuard();
@@ -469,6 +520,7 @@ export async function launch(name) {
     'app-path',
     'config',
     'data',
+    'cache',
     'projects',
     'deliveries',
   ])
@@ -489,7 +541,7 @@ export async function launch(name) {
     if (
       EXECUTION_VARIABLES.includes(variable) ||
       DEVELOPMENT_VARIABLES.includes(variable) ||
-      /^(UV|CARGO|RUSTUP|NPM_CONFIG)_/i.test(variable)
+      /^(UV|CARGO|RUSTUP|NPM_CONFIG|AUTOSAR_VERIFY_DELAY)_/i.test(variable)
     )
       delete environment[variable];
   Object.assign(environment, {
@@ -498,6 +550,7 @@ export async function launch(name) {
     LOCALAPPDATA: path.join(scratch, 'app-local'),
     XDG_CONFIG_HOME: path.join(scratch, 'config'),
     XDG_DATA_HOME: path.join(scratch, 'data'),
+    XDG_CACHE_HOME: path.join(scratch, 'cache'),
     HOME: path.join(scratch, 'app-home'),
     USERPROFILE: path.join(scratch, 'app-home'),
     TEMP: path.join(scratch, 'app-temp'),
@@ -506,15 +559,17 @@ export async function launch(name) {
     PATH: path.join(scratch, 'app-path'),
     NO_AT_BRIDGE: '1',
   });
-  // Accepted only by the native-webdriver feature: delay real backend work so
-  // pending operations and cancellation are observable.
-  for (const [action, delay] of [
-    ['SOURCE_READ', 500],
-    ['SNAPSHOT_BUILD', 250],
-    ['SCHEMA_CHECK', 100],
-    ['SOURCE_SCAN', 250],
-    ['DEFINITION_READ', 100],
-  ])
+  // Only cancellation scenarios need injected latency. Repeated opens and
+  // snapshot builds in the other files must not pay for this test control.
+  for (const [action, delay] of delayOperations
+    ? [
+        ['SOURCE_READ', 500],
+        ['SNAPSHOT_BUILD', 250],
+        ['SCHEMA_CHECK', 100],
+        ['SOURCE_SCAN', 250],
+        ['DEFINITION_READ', 100],
+      ]
+    : [])
     environment[`AUTOSAR_VERIFY_DELAY_${action}_MS`] = String(delay);
 
   const children = [];
@@ -534,14 +589,14 @@ export async function launch(name) {
     } else {
       nativeDriver = await tool('msedgedriver');
     }
-    const port = await freePort();
+    const [port, nativePort] = await driverPorts();
     driverProcess = spawn(
       await tool('tauri-driver'),
       [
         '--port',
         String(port),
         '--native-port',
-        String(await freePort()),
+        String(nativePort),
         '--native-driver',
         nativeDriver,
       ],
@@ -562,11 +617,29 @@ export async function launch(name) {
         }
       } else spawnSync('taskkill', ['/PID', String(driverProcess.pid), '/T', '/F']);
       for (const child of children) child.kill('SIGKILL');
+      if (display) rmSync(display.busDirectory, { recursive: true, force: true });
     };
     process.once('exit', abandon);
+    await writeFile(
+      path.join(scratch, 'session.json'),
+      JSON.stringify(
+        {
+          driverPid: driverProcess.pid,
+          port,
+          nativePort,
+          display: environment.DISPLAY,
+          busDirectory: display?.busDirectory,
+          config: environment.AUTOSAR_CONFIG_DIR,
+          data: environment.XDG_DATA_HOME,
+          cache: environment.XDG_CACHE_HOME,
+        },
+        null,
+        2,
+      ),
+    );
     let driverLog = '';
     driverProcess.stderr.on('data', (chunk) => (driverLog += chunk));
-    client = new WebDriver(`http://127.0.0.1:${port}`);
+    client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
     await until(async () => {
       try {
         return (await fetch(`${client.base}/status`)).ok;
@@ -589,7 +662,8 @@ export async function launch(name) {
       process.off('exit', abandon);
       abandon();
     }
-    await Promise.all([driverProcess, ...children].filter(Boolean).map(stopped));
+    await Promise.all([driverProcess].filter(Boolean).map(stopped));
+    await display?.cleanup();
     throw error;
   }
   const route = (suffix) => `/session/${session}${suffix}`;
@@ -755,7 +829,8 @@ export async function launch(name) {
             () => undefined,
           );
         }
-        await Promise.all([stopped(driverProcess), ...children.map(stopped)]);
+        await stopped(driverProcess);
+        await display?.cleanup();
       }
       const survivors = [];
       await until(

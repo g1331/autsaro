@@ -1931,6 +1931,55 @@ fn builtin_remove_preserves_unsupported_subtrees_and_attributes_but_allows_known
 }
 
 #[test]
+fn projection_indexes_wide_siblings_without_changing_paths_or_safety_boundaries() {
+    let scratch = Scratch::new();
+    let source = scratch.0.join("indexed.arxml");
+    let siblings: String = (0..512)
+        .map(|index| format!("<IMPLEMENTATION-DATA-TYPE><SHORT-NAME>Item_{index}</SHORT-NAME><CATEGORY>VALUE</CATEGORY></IMPLEMENTATION-DATA-TYPE>"))
+        .collect();
+    fs::write(&source, format!(r#"<AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:foreign="urn:foreign" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd"><AR-PACKAGES>
+<AR-PACKAGE><SHORT-NAME>Safe</SHORT-NAME><ELEMENTS>{siblings}</ELEMENTS></AR-PACKAGE>
+<AR-PACKAGE><SHORT-NAME>Conditional</SHORT-NAME><ELEMENTS><SW-SYSCOND/><AR-PACKAGE><SHORT-NAME>Nested</SHORT-NAME></AR-PACKAGE></ELEMENTS></AR-PACKAGE>
+<AR-PACKAGE><SHORT-NAME>Variant</SHORT-NAME><ELEMENTS><AR-PACKAGE><SHORT-NAME>Nested</SHORT-NAME><VARIATION-POINT/></AR-PACKAGE></ELEMENTS></AR-PACKAGE>
+<AR-PACKAGE><SHORT-NAME>Foreign</SHORT-NAME><ELEMENTS><foreign:wrapper><SHORT-NAME>RetainedAncestor</SHORT-NAME><AR-PACKAGE><SHORT-NAME>Nested</SHORT-NAME></AR-PACKAGE></foreign:wrapper></ELEMENTS></AR-PACKAGE>
+</AR-PACKAGES></AUTOSAR>"#)).unwrap();
+    let workspace = Workspace::open(vec![source.clone()]).unwrap();
+    let view = projection(&workspace);
+    let object = |path: &str| {
+        view.objects
+            .iter()
+            .find(|object| object.path == path)
+            .unwrap()
+    };
+    assert!(object("/Safe").writable, "{:?}", object("/Safe"));
+    for index in 0..512 {
+        let item = object(&format!("/Safe/Item_{index}"));
+        assert_eq!(item.short_name, format!("Item_{index}"));
+        assert_eq!(item.parent_id, Some(object("/Safe").object_id.clone()));
+    }
+    // A direct marker on an unnamed ancestor affects its descendants; a
+    // descendant variation also keeps the containing package read-only.
+    assert!(object("/Conditional").writable);
+    assert!(!object("/Conditional/Nested").writable);
+    assert!(!object("/Variant").writable);
+    assert!(!object("/Variant/Nested").writable);
+    // Path names on foreign ancestors were retained even though those nodes
+    // themselves are outside the native object projection.
+    assert!(object("/Foreign/RetainedAncestor/Nested").writable);
+    assert!(
+        !view
+            .objects
+            .iter()
+            .any(|object| object.short_name == "RetainedAncestor")
+    );
+    assert_eq!(view.objects.len(), 519);
+    assert_eq!(
+        fs::read_to_string(source).unwrap().matches("Item_").count(),
+        512
+    );
+}
+
+#[test]
 fn catalog_wide_creation_completes_mandatory_container_subtrees() {
     use autosar_config_core::definitions::DefinitionCatalog;
     let catalog = DefinitionCatalog::builtin().unwrap();
