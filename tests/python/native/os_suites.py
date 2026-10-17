@@ -1215,7 +1215,7 @@ def check_idle_state(binary: Path) -> list[dict]:
 # Verifies: SWS_Os_00304, 00763
 def check_status_modes(directory: Path) -> list[dict]:
     invalid = run_native([compiler(), "-std=c99", "-E", "-x", "c", "-", "-DOS_STATUS_EXTENDED=2",
-     "-I", str(TARGET / "include")],
+     "-I", str(TARGET / "include"), "-I", str(ROOT / "runtime/bsw/include")],
     input='#include "Os_Cfg.h"\n', capture_output=True, text=True, timeout=20,)
     require(invalid.returncode != 0 and "Invalid OS status configuration" in invalid.stderr,
             {"stdout": invalid.stdout, "stderr": invalid.stderr, "exit": invalid.returncode})

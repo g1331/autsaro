@@ -5,6 +5,11 @@
 #include <stdio.h>
 #include <string.h>
 
+/* ARTI injects a callable observer; ordinary hook vectors need no observer. */
+#ifndef TASK_HOOK_OBSERVER
+#define TASK_HOOK_OBSERVER() ((void)0)
+#endif
+
 static char trace[128];         /**< Execution-order bytes; fixture-owned, no Init reset. */
 static unsigned length;         /**< Used execution-order bytes; fixture-owned, no Init reset. */
 static unsigned owner_entries;  /**< Owner entries observations; fixture-owned, no Init reset. */
@@ -29,9 +34,7 @@ static void task_hook(char code)
 {
     TaskType id = INVALID_TASK;
     TaskStateType state = 99u;
-#if defined(TASK_HOOK_OBSERVER) && (TASK_HOOK_OBSERVER == STD_ON)
     TASK_HOOK_OBSERVER();
-#endif
     TickType value = UINT64_MAX;
     Os_ActivationInfo info;
     check(GetTaskID(&id) == E_OK && id < 3u);
