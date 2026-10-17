@@ -499,6 +499,8 @@ class WebDriver {
         method,
         route: route.replace(/session\/[^/]+/, 'session'),
         script: body?.args?.[0]?.slice(0, 240),
+        status: response.status,
+        error: result.value?.error ? result.value : undefined,
       }) + '\n',
     );
     if (!response.ok || result.value?.error)
@@ -655,7 +657,11 @@ export async function launch(name, { delayOperations = false } = {}) {
       ),
     );
     let driverLog = '';
-    driverProcess.stderr.on('data', (chunk) => (driverLog += chunk));
+    const driverOutput = path.join(scratch, 'driver.stderr.log');
+    driverProcess.stderr.on('data', (chunk) => {
+      driverLog += chunk;
+      appendFile(driverOutput, chunk).catch(() => undefined);
+    });
     client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
     await until(async () => {
       try {
@@ -719,6 +725,15 @@ export async function launch(name, { delayOperations = false } = {}) {
       });
       if (result.error) throw new Error(result.error);
       return result.value;
+    },
+    async diagnoseStartup(error) {
+      const evidence = { at: Date.now(), error: String(error) };
+      evidence.processes = await processTree(driverProcess.pid).catch(String);
+      evidence.context = await client.request('POST', route('/execute/sync'), {
+        script: 'return {url: location.href, readyState: document.readyState, timeOrigin: performance.timeOrigin, native: Boolean(window.__TAURI_INTERNALS__), buttons: document.querySelectorAll("button").length, text: document.body?.innerText};',
+        args: [],
+      }).catch(String);
+      await writeFile(path.join(scratch, 'startup-failure.json'), JSON.stringify(evidence, null, 2));
     },
     async screenshot(file) {
       const image = await client.request('GET', route('/screenshot'));
