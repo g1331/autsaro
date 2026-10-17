@@ -1,7 +1,7 @@
 export const shellResources: { 'zh-CN': Record<string, string>; en: Record<string, string> } = {
   'zh-CN': {
     'shell.settings.toolMissing':
-      '尚未配置执行工具（{{detail}}）：构建与主机验证需要它，配置编辑与源码生成不受影响。',
+      '尚未配置执行工具（{{detail, bare}}）：构建与主机验证需要它，配置编辑与源码生成不受影响。',
     'shell.delivery.previewed': '已预览 {{count}} 个文件，尚未写入。',
     'shell.delivery.generated': '已生成 {{count}} 个文件到 {{directory}}。下一步可构建。',
     'shell.delivery.built': '构建完成：{{path}}。下一步可进行主机验证。',
@@ -258,7 +258,7 @@ export const shellResources: { 'zh-CN': Record<string, string>; en: Record<strin
   },
   en: {
     'shell.settings.toolMissing':
-      'Execution tools are not configured ({{detail}}). Build and host verification need them; configuration editing and source generation are unaffected.',
+      'Execution tools are not configured ({{detail, bare}}). Build and host verification need them; configuration editing and source generation are unaffected.',
     'shell.delivery.previewed': 'Previewed {{count}} files; nothing written yet.',
     'shell.delivery.generated': 'Generated {{count}} files in {{directory}}. Next, build.',
     'shell.delivery.built': 'Build complete: {{path}}. Next, verify on host.',
