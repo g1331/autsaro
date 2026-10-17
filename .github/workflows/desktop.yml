@@ -84,14 +84,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
-        # Rebalanced after run 39005768979: move projects to the shorter shard.
+        # Runs 39008074660 / 39013110980: Windows needs a third serial shard
+        # to absorb observed scenario variance without duplicating the build.
         # A file and all its stateful checks always stay on the same runner.
-        shard:
-          - id: 1
-            files: composition-editing editing responsiveness startup process-tree
-          - id: 2
-            files: standard-delivery application value-editing workbench-ui owned-execution projects incomplete-configuration
+        include:
+          - os: ubuntu-24.04
+            shard:
+              id: 1
+              files: composition-editing editing responsiveness startup process-tree
+          - os: ubuntu-24.04
+            shard:
+              id: 2
+              files: standard-delivery application value-editing workbench-ui owned-execution projects incomplete-configuration
+          - os: windows-latest
+            shard:
+              id: 1
+              files: responsiveness startup process-tree
+          - os: windows-latest
+            shard:
+              id: 2
+              files: composition-editing editing application incomplete-configuration
+          - os: windows-latest
+            shard:
+              id: 3
+              files: standard-delivery value-editing workbench-ui owned-execution projects
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:

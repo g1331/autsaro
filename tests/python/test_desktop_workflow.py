@@ -19,10 +19,13 @@ class DesktopWorkflowTests(unittest.TestCase):
 
     def test_every_file_runs_in_exactly_one_shard_on_each_platform(self):
         matrix = self.job['strategy']['matrix']
-        self.assertEqual(matrix['os'], ['ubuntu-24.04', 'windows-latest'])
-        assigned = [name for shard in matrix['shard'] for name in shard['files'].split()]
+        entries = matrix['include']
+        self.assertEqual({entry['os'] for entry in entries}, {'ubuntu-24.04', 'windows-latest'})
         expected = [file.name.removesuffix('.test.mjs') for file in (ROOT / 'tests/desktop').glob('*.test.mjs')]
-        self.assertCountEqual(assigned, expected)
+        for platform, count in (('ubuntu-24.04', 2), ('windows-latest', 3)):
+            shards = [entry['shard'] for entry in entries if entry['os'] == platform]
+            self.assertEqual([shard['id'] for shard in shards], list(range(1, count + 1)))
+            self.assertCountEqual([name for shard in shards for name in shard['files'].split()], expected)
         self.assertFalse(self.job['strategy']['fail-fast'])
         self.assertEqual(self.job['needs'], 'build')
         extended = yaml.safe_load((ROOT / '.github/workflows/extended.yml').read_text(encoding='utf-8'))
