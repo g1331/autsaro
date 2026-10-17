@@ -448,7 +448,10 @@ fn communication_types_and_polling_periods_are_source_derived() {
     let defines = |name: &str, value: &str| {
         text("generated/include/Ecu_ProfileConfig.h")
             .lines()
-            .any(|line| line.split_whitespace().eq(["#define", name, value]))
+            .any(|line| {
+                let code = line.split_once("/**<").map_or(line, |(code, _)| code);
+                code.split_whitespace().eq(["#define", name, value])
+            })
     };
     assert!(defines("CAN_RX_HOH", "1u"));
     assert!(defines("CAN_TX_HOH", "0u"));
