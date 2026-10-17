@@ -350,6 +350,21 @@ fn native_schema_rejects_linked_source_ancestors() {
 
 #[test]
 fn native_inventory_rejects_tampering_even_with_self_recomputed_metadata_hash() {
+    let bound: serde_json::Value = serde_json::from_slice(rules::inventory_bytes()).unwrap();
+    let paths = bound["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|source| source["path"] == "core/src/xml_paths.rs")
+        .expect("XML diagnostic path indexing must be bound to the native rule identity");
+    assert_eq!(
+        paths["sha256"],
+        format!(
+            "{:x}",
+            Sha256::digest(include_bytes!("../../src/xml_paths.rs"))
+        )
+    );
+
     let expected = rules::verify_inventory_bytes(rules::inventory_bytes()).unwrap();
     assert_eq!(expected.release, "R24-11");
     assert_eq!(expected.rules_version, "1.0.0");

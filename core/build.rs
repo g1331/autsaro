@@ -451,6 +451,7 @@ fn build_native_inventory(core: &Path) {
     for relative in [
         "build.rs",
         "src/rules.rs",
+        "src/xml_paths.rs",
         "src/rules",
         "src/schema.rs",
         "src/definitions.rs",
