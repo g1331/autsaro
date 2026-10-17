@@ -4,63 +4,130 @@
 #include "Std_Types.h"
 #include <stddef.h>
 #ifdef _WIN32
+/** Native four-byte aligned cell type required by the controlled host Interlocked ABI. */
 typedef long ArtiAtomic32;
 #else
+/** Native four-byte aligned cell type required by the controlled host Interlocked ABI. */
 typedef int32_t ArtiAtomic32;
 #endif
+/** Compile-time rejection when the native ARTI publication cell is not exactly four bytes. */
 typedef char ArtiAtomic32IsFourBytes[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1];
 
 /** @brief Maximum number of retained events; overflow is explicitly counted. */
-#define ARTI_EVENT_CAPACITY 4096u
+#define ARTI_EVENT_CAPACITY                                                                        \
+    4096u /**< Maximum retained tool events; excess reservations are counted as dropped. */
+/** Retained tool event; read payloads only after OS shutdown/quiescence, not from reservation
+ * count. */
 typedef struct {
-    const char *context;
-    const char *class_name;
-    const char *instance;
-    const char *event;
-    uint32_t instance_parameter;
-    uint32_t event_parameter;
-    uintptr_t event_address;
-    uint8_t address_valid;
-    uint32_t service_status;
-    uint8_t status_valid;
-    volatile ArtiAtomic32 published;
+    const char *context;         /**< Static literal ARTI execution-context name. */
+    const char *class_name;      /**< Static literal standard ARTI class name. */
+    const char *instance;        /**< Static literal configured module instance name. */
+    const char *event;           /**< Static literal standard event name. */
+    uint32_t instance_parameter; /**< Captured instance/core payload; core zero on this target. */
+    uint32_t event_parameter;    /**< Captured standard uint32 event payload. */
+    uintptr_t event_address;     /**< Lossless native address bits when address_valid is nonzero. */
+    uint8_t address_valid; /**< Nonzero when event_address carries captured native address bits. */
+    uint32_t service_status; /**< Captured service result when status_valid is nonzero. */
+    uint8_t status_valid; /**< Nonzero when service_status distinguishes a result from an error. */
+    volatile ArtiAtomic32
+        published; /**< Atomic publication flag, zero until all slot payload fields are written. */
 } Arti_Event;
+/** Actor-local lossless native address and service-status side data for standard uint32 event
+ * payloads. */
 typedef struct {
-    uintptr_t address;
-    uint8_t valid;
-    uint32_t service_status;
-    uint8_t status_valid;
+    uintptr_t address;       /**< Captured native address bits; never dereferenced here. */
+    uint8_t valid;           /**< Nonzero when address is valid for the next recorded event. */
+    uint32_t service_status; /**< Captured service result for the next recorded event. */
+    uint8_t status_valid;    /**< Nonzero when service_status is meaningful. */
 } Arti_AddressCapture;
-/** @brief Lossless x64 side data for standard uint32 pointer payloads. */
+/** @brief Lossless x64 side data for standard uint32 pointer payloads.
+ * @param[in] address Native address bits captured without dereferencing the address.
+ * @par Return
+ * None.
+ * Preconditions: initialized actor TLS; save/restore scopes are properly nested.
+ * Context: current native OS actor, including the native critical section; no blocking or BSW area
+ * entry. Reentrancy: actor-local; nested logical actors save and restore the complete capture.
+ * Ownership: stores scalar address/status bits only; never dereferences or retains a pointed-to
+ * object.
+ */
 void Arti_CaptureAddress(uintptr_t address);
-/** @brief Distinguish a failed getter from a genuine UINT32_MAX result. */
+/** @brief Distinguish a failed getter from a genuine UINT32_MAX result.
+ * @param[in] status Captured getter result distinguishing errors from valid payloads.
+ * @par Return
+ * None.
+ * Preconditions: initialized actor TLS; save/restore scopes are properly nested.
+ * Context: current native OS actor, including the native critical section; no blocking or BSW area
+ * entry. Reentrancy: actor-local; nested logical actors save and restore the complete capture.
+ * Ownership: stores scalar address/status bits only; never dereferences or retains a pointed-to
+ * object.
+ */
 void Arti_CaptureServiceStatus(uint32_t status);
+/** Save and clear the current actor capture validity for a nested logical caller.
+ * @return Prior capture state, to restore after the nested caller.
+ * Preconditions: initialized actor TLS; save/restore scopes are properly nested.
+ * Context: current native OS actor, including the native critical section; no blocking or BSW area
+ * entry. Reentrancy: actor-local; nested logical actors save and restore the complete capture.
+ * Ownership: stores scalar address/status bits only; never dereferences or retains a pointed-to
+ * object.
+ */
 Arti_AddressCapture Arti_SaveAddressCapture(void);
+/** Restore the suspended logical caller address/status capture.
+ * @param[in] capture Snapshot previously returned by Arti_SaveAddressCapture.
+ * @par Return
+ * None.
+ * Preconditions: initialized actor TLS; save/restore scopes are properly nested.
+ * Context: current native OS actor, including the native critical section; no blocking or BSW area
+ * entry. Reentrancy: actor-local; nested logical actors save and restore the complete capture.
+ * Ownership: stores scalar address/status bits only; never dereferences or retains a pointed-to
+ * object.
+ */
 void Arti_RestoreAddressCapture(Arti_AddressCapture capture);
 extern Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
 /* Native atomics require the host ABI's four-byte cell type. */
 extern volatile ArtiAtomic32 Arti_EventCount;
 extern volatile ArtiAtomic32 Arti_EventsDropped;
 extern volatile ArtiAtomic32 Arti_DevelopmentError;
-#define ARTI_E_INIT_FAILED    0x01u
-#define ARTI_E_PARAM_POINTER  0x02u
-#define ARTI_STOPWATCH_FLAT   0x00u
-#define ARTI_STOPWATCH_NESTED 0x01u
+#define ARTI_E_INIT_FAILED   0x01u /**< SWS_Arti_91002: ARTI initialization failure. */
+#define ARTI_E_PARAM_POINTER 0x02u /**< SWS_Arti_91002: invalid API output pointer. */
+#define ARTI_STOPWATCH_FLAT  0x00u /**< SWS_Arti_91000: stopwatch evaluation ignores nesting. */
+#define ARTI_STOPWATCH_NESTED                                                                      \
+    0x01u /**< SWS_Arti_91000: stopwatch evaluation accounts for nesting. */
 
-/** @brief Initialize before OS actors start; resets only the tool buffer. */
+/** @brief Initialize before OS actors start; resets only the tool buffer.
+ * @par Return
+ * None.
+ * Preconditions: no OS actors exist; reinitialization during execution is outside the contract.
+ * Context: native startup before actor creation, outside exclusive areas.
+ * Reentrancy: non-reentrant with recording, reading or another initialization.
+ * Ownership: resets event publication/count/error cells and the calling actor capture validity;
+ * payload bytes need not be cleared.
+ */
 void Arti_Init(void);
 /** @brief Read the host ARTI binding software version.
- * @param versioninfo Writable version result; NULL raises ARTI_E_PARAM_POINTER
+ * @param[out] versioninfo Writable version result; NULL raises ARTI_E_PARAM_POINTER
  * in the host binding's debugger-visible development-error cell.
+ * @par Return
+ * None.
+ * Preconditions: versioninfo is writable when non-NULL; NULL records the development error.
+ * Context: native or automotive OS actor, outside BSW exclusive areas.
+ * Reentrancy: reentrant with separate outputs; the development-error publication is atomic.
+ * Ownership: borrows versioninfo only until return, writes it when non-NULL and retains no pointer.
  */
 void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
 /** @brief Tool callback; arguments contain only captured values and literals.
- * @param context Literal ARTI execution context.
- * @param class_name Literal standard ARTI class.
- * @param instance Literal configured module SHORT-NAME.
- * @param event Literal standard event name.
- * @param instance_parameter Hardware core index.
- * @param event_parameter Captured event payload.
+ * @param[in] context Literal ARTI execution context.
+ * @param[in] class_name Literal standard ARTI class.
+ * @param[in] instance Literal configured module SHORT-NAME.
+ * @param[in] event Literal standard event name.
+ * @param[in] instance_parameter Hardware core index.
+ * @param[in] event_parameter Captured event payload.
+ * @par Return
+ * None.
+ * Preconditions: initialized buffer and process-lifetime string literals; readers wait for OS
+ * shutdown/quiescence. Context: OS tracing actor, including its existing native critical section;
+ * no blocking or BSW area entry. Reentrancy: reentrant; bounded atomic slot reservation, overflow
+ * explicitly counted. Ownership: retains literal string pointers for the tool buffer lifetime;
+ * captured payloads are copied.
  */
 void Arti_Record(const char *context,
                  const char *class_name,
@@ -72,6 +139,19 @@ void Arti_Record(const char *context,
 /* The standard contract requires literal tokens here. Stringification retains
  * those identities without expanding a caller's unrelated macro definitions.
  * Each numeric argument is evaluated exactly once. */
+/** Record standard literal ARTI identities with captured scalar payloads.
+ * @param[in] context Literal execution-context token; stringified without evaluation.
+ * @param[in] class_name Literal ARTI class token; stringified without evaluation.
+ * @param[in] instance Literal module instance token; stringified without evaluation.
+ * @param[in] instance_parameter Scalar core/instance payload, evaluated once.
+ * @param[in] event Literal standard event token; stringified without evaluation.
+ * @param[in] event_parameter Captured scalar event payload, evaluated once.
+ * @return No value; expands to the void Arti_Record call.
+ * Preconditions: ARTI initialized and scalar payloads captured before expansion; no concurrent
+ * buffer reader. Context: OS trace site, including its existing native critical section; outside
+ * BSW exclusive areas. Reentrancy: reentrant recording with atomic slot reservation. Ownership:
+ * retains static stringified literals and copies scalar payloads; no application object retained.
+ */
 #define ARTI_TRACE(context, class_name, instance, instance_parameter, event, event_parameter)      \
     Arti_Record(#context, #class_name, #instance, #event, (instance_parameter), (event_parameter))
 #endif

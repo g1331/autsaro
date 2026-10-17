@@ -492,6 +492,23 @@ def clang_tidy_errors(samples: Path) -> list[str]:
 def clang_tidy_comparison(
     current: collections.Counter[ClangTidyKey], baseline: collections.Counter[ClangTidyKey]
 ) -> list[str]:
+    def documented_lines(entries: collections.Counter[ClangTidyKey]) -> collections.Counter[ClangTidyKey]:
+        # Required trailing documentation does not create a new code diagnostic.
+        # Keep ordinary comments and literal contents, and preserve multiplicity.
+        from autosar_tooling.c_standard import lex
+
+        result: collections.Counter[ClangTidyKey] = collections.Counter()
+        for (check, name, text), count in entries.items():
+            # The source lexer otherwise treats a whole directive as one token.
+            offset = 1 if text.startswith("#") else 0
+            for token in lex(text[offset:]):
+                if token.text.startswith("/**<") and not text[offset + token.end:].strip():
+                    text = text[:offset + token.start].rstrip()
+                    break
+            result[(check, name, text)] += count
+        return result
+
+    current, baseline = documented_lines(current), documented_lines(baseline)
     errors = [
         f"{name}: new clang-tidy finding [{check}]: {text}"
         for (check, name, text), count in sorted((current - baseline).items())

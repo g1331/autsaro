@@ -5,13 +5,13 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static unsigned errors;
-static unsigned probes;
-static unsigned helpers;
-static StatusType statuses[3];
-static char trace[32];
-static unsigned length;
+static const char *scenario;   /**< Main-owned scenario selection before StartOS; no Init reset. */
+static unsigned errors;        /**< Observed checks/errors; fixture-owned, no Init reset. */
+static unsigned probes;        /**< Probes observations; fixture-owned, no Init reset. */
+static unsigned helpers;       /**< Helpers observations; fixture-owned, no Init reset. */
+static StatusType statuses[3]; /**< Observed service results; fixture-owned, no Init reset. */
+static char trace[32];         /**< Execution-order bytes; fixture-owned, no Init reset. */
+static unsigned length;        /**< Used execution-order bytes; fixture-owned, no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

@@ -9,9 +9,11 @@ typedef struct {
 } InterruptState;
 /* One cell per physical Task/boot actor, and separate logical ISR cells on
  * the native ISR thread. This preserves ownership across interrupted actors. */
-static OS_THREAD_LOCAL InterruptState states[33u * ((uint32)OS_HOOK_ALARM + 1u)];
-static volatile Os_Atomic32 all_owners;
-static volatile Os_Atomic32 os_owners;
+static OS_THREAD_LOCAL InterruptState
+    states[33u * ((uint32)OS_HOOK_ALARM +
+                  1u)];                 /**< Actor TLS logical-caller mask depths; no Init reset. */
+static volatile Os_Atomic32 all_owners; /**< Atomic outer All-mask owner count; no Init reset. */
+static volatile Os_Atomic32 os_owners;  /**< Atomic outer OS-mask owner count; no Init reset. */
 
 static InterruptState *owner_state(void)
 {

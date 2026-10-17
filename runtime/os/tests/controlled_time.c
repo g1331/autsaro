@@ -4,41 +4,60 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static volatile LONG producer_done;
-static volatile LONG owner_held;
-static volatile LONG release_owner;
-static volatile LONG owner_entered;
-static volatile LONG tick_mask_observed;
-static volatile LONG tick_mask_kernel;
-static volatile LONG dispatch_release_stage;
-static volatile LONG service_closed;
-static unsigned work_count;
-static unsigned app_count;
-static unsigned completed_count;
-static unsigned native_rejects;
-static TaskHandle_t owner_handle;
-static uint64_t initial_epoch;
-static uint32_t initial_kernel;
-static unsigned steps;
-static Os_TickCompletion boundary[3];
-static bool manual;
-static unsigned standard_rejects;
-static unsigned context_rejects;
-static unsigned alarm_entries;
-static unsigned callbacks;
-static unsigned error_hooks;
-static StatusType last_error;
-static TickType final_counter;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static volatile LONG
+    producer_done; /**< Atomic native/OS handoff producer done; fixture-owned, no Init reset. */
+static volatile LONG
+    owner_held; /**< Atomic native/OS handoff owner held; fixture-owned, no Init reset. */
+static volatile LONG
+    release_owner; /**< Atomic native/OS handoff release owner; fixture-owned, no Init reset. */
+static volatile LONG
+    owner_entered; /**< Atomic native/OS handoff owner entered; fixture-owned, no Init reset. */
+static volatile LONG tick_mask_observed;     /**< Atomic native/OS handoff tick mask observed;
+                                                fixture-owned, no Init reset. */
+static volatile LONG tick_mask_kernel;       /**< Atomic native/OS handoff tick mask kernel;
+                                                fixture-owned, no Init reset. */
+static volatile LONG dispatch_release_stage; /**< Atomic native/OS handoff dispatch release stage;
+                                                fixture-owned, no Init reset. */
+static volatile LONG
+    service_closed; /**< Atomic native/OS handoff service closed; fixture-owned, no Init reset. */
+static unsigned work_count; /**< Work count observations; fixture-owned, no Init reset. */
+static unsigned app_count;  /**< App count observations; fixture-owned, no Init reset. */
+static unsigned
+    completed_count; /**< Producer-owned accepted completions; producer-owned, no Init reset. */
+static unsigned
+    native_rejects; /**< Producer-owned refused requests; producer-owned, no Init reset. */
+static TaskHandle_t
+    owner_handle; /**< Startup-published owner Task handle; fixture-owned, no Init reset. */
+static uint64_t
+    initial_epoch; /**< Main-owned initial epoch selection before StartOS; no Init reset. */
+static uint32_t
+    initial_kernel;    /**< Main-owned initial kernel selection before StartOS; no Init reset. */
+static unsigned steps; /**< Main-owned steps selection before StartOS; no Init reset. */
+static Os_TickCompletion
+    boundary[3];    /**< Producer-owned completion snapshots; producer-owned, no Init reset. */
+static bool manual; /**< Main-owned manual selection before StartOS; no Init reset. */
+static unsigned
+    standard_rejects; /**< Standard rejects observations; fixture-owned, no Init reset. */
+static unsigned context_rejects; /**< Context rejects observations; fixture-owned, no Init reset. */
+static unsigned alarm_entries;   /**< Alarm entries observations; fixture-owned, no Init reset. */
+static unsigned callbacks;       /**< Callbacks observations; fixture-owned, no Init reset. */
+static unsigned error_hooks;     /**< Error hooks observations; fixture-owned, no Init reset. */
+static StatusType last_error;    /**< Latest ErrorHook result; fixture-owned, no Init reset. */
+static TickType
+    final_counter; /**< Final Counter-ticks observation; fixture-owned, no Init reset. */
 typedef struct {
     uint64_t epoch;
     uint32_t kernel;
     TickType value;
     TickType elapsed;
 } HardwareRecord;
-static HardwareRecord hardware[20];
-static unsigned hardware_count;
-static TickType hardware_previous;
+static HardwareRecord
+    hardware[20]; /**< Observed software-Counter tick records; fixture-owned, no Init reset. */
+static unsigned
+    hardware_count; /**< Used software-Counter tick records; fixture-owned, no Init reset. */
+static TickType
+    hardware_previous; /**< Previous software-Counter ticks; fixture-owned, no Init reset. */
 static void check_line(bool condition, unsigned line)
 {
     if (!condition) {

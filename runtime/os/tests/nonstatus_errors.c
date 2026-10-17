@@ -5,10 +5,10 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static unsigned errors;
-static unsigned probes;
-static bool configured;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static unsigned errors;      /**< Observed checks/errors; fixture-owned, no Init reset. */
+static unsigned probes;      /**< Probes observations; fixture-owned, no Init reset. */
+static bool configured;      /**< Main-owned configured selection before StartOS; no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

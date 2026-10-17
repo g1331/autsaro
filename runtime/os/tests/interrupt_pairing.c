@@ -5,25 +5,34 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static unsigned category1;
-static unsigned category2;
-static unsigned source_deliveries;
-static TaskType isr_task = INVALID_TASK;
-static unsigned errors;
-static unsigned startup;
-static StatusType statuses[40];
-static OSServiceIdType services[40];
-static char actors[40];
-static char trace[40];
-static unsigned length;
-static TaskType output_task = 42u;
-static TaskStateType output_state = 42u;
-static EventMaskType output_event = UINT32_C(0xdead);
-static TickType output_value = UINT64_MAX;
-static TickType output_elapsed = UINT64_MAX;
-static AlarmBaseType output_base = {61u, 62u, 63u};
-static ScheduleTableStatusType output_table = 42u;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static unsigned category1;   /**< Category1 observations; fixture-owned, no Init reset. */
+static unsigned category2;   /**< Category2 observations; fixture-owned, no Init reset. */
+static unsigned
+    source_deliveries; /**< Source deliveries observations; fixture-owned, no Init reset. */
+static TaskType isr_task =
+    INVALID_TASK;               /**< Observed ISR interrupted Task; fixture-owned, no Init reset. */
+static unsigned errors;         /**< Observed checks/errors; fixture-owned, no Init reset. */
+static unsigned startup;        /**< Startup observations; fixture-owned, no Init reset. */
+static StatusType statuses[40]; /**< Observed service results; fixture-owned, no Init reset. */
+static OSServiceIdType
+    services[40];       /**< Observed service identities; fixture-owned, no Init reset. */
+static char actors[40]; /**< Observed logical caller identities; fixture-owned, no Init reset. */
+static char trace[40];  /**< Execution-order bytes; fixture-owned, no Init reset. */
+static unsigned length; /**< Used execution-order bytes; fixture-owned, no Init reset. */
+static TaskType output_task = 42u; /**< Task-ID output sentinel; fixture-owned, no Init reset. */
+static TaskStateType output_state =
+    42u; /**< Task-state output sentinel; fixture-owned, no Init reset. */
+static EventMaskType output_event =
+    UINT32_C(0xdead); /**< Event-mask output sentinel; fixture-owned, no Init reset. */
+static TickType output_value =
+    UINT64_MAX; /**< Counter output sentinel; fixture-owned, no Init reset. */
+static TickType output_elapsed =
+    UINT64_MAX; /**< Elapsed-ticks output sentinel; fixture-owned, no Init reset. */
+static AlarmBaseType output_base = {
+    61u, 62u, 63u}; /**< Alarm-base output sentinel; fixture-owned, no Init reset. */
+static ScheduleTableStatusType output_table =
+    42u; /**< Schedule-table output sentinel; fixture-owned, no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

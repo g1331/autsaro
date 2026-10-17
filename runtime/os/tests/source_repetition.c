@@ -5,17 +5,20 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static bool configured;
-static unsigned errors;
-static unsigned deliveries;
-static unsigned parents;
-static char trace[16];
-static unsigned trace_length;
-static StatusType expected_error;
-static OSServiceIdType expected_service;
-static ISRType expected_id;
-static boolean expected_clear;
+static const char *scenario;  /**< Main-owned scenario selection before StartOS; no Init reset. */
+static bool configured;       /**< Main-owned configured selection before StartOS; no Init reset. */
+static unsigned errors;       /**< Observed checks/errors; fixture-owned, no Init reset. */
+static unsigned deliveries;   /**< Deliveries observations; fixture-owned, no Init reset. */
+static unsigned parents;      /**< Parents observations; fixture-owned, no Init reset. */
+static char trace[16];        /**< Execution-order bytes; fixture-owned, no Init reset. */
+static unsigned trace_length; /**< Used execution-order bytes; fixture-owned, no Init reset. */
+static StatusType
+    expected_error; /**< Caller-owned expected error for synchronous checks; no Init reset. */
+static OSServiceIdType
+    expected_service; /**< Caller-owned expected service for synchronous checks; no Init reset. */
+static ISRType expected_id; /**< Caller-owned expected id for synchronous checks; no Init reset. */
+static boolean
+    expected_clear; /**< Caller-owned expected clear for synchronous checks; no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

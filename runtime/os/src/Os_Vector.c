@@ -4,4 +4,4 @@
  * native port installs handlers before delivery; this is its actual table,
  * not a parallel description of callbacks. */
 Os_InterruptHandler Os_InterruptVectorTable[OS_INTERRUPT_VECTOR_COUNT] OS_VECTOR_TABLE_SECTION = {
-    0};
+    0}; /**< Port-synchronized vector bindings; no Init reset. */

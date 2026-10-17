@@ -15,25 +15,31 @@
 
 #define OS_ALTSTACK_BYTES 65536u
 
-static Os_NativeStack stacks[OS_NATIVE_STACKS];
-const Os_NativeStack *const Os_ArtiStacks = stacks;
-static CONTEXT saved_contexts[OS_NATIVE_STACKS];
-const size_t Os_ArtiNativeContextSize = sizeof(CONTEXT);
+static Os_NativeStack stacks[OS_NATIVE_STACKS]; /**< Actor/stopped-observer records, atomic
+                                                   allocation; no Init reset. */
+const Os_NativeStack *const Os_ArtiStacks =
+    stacks; /**< Fixed native stacks tool view; C init only, never reset. */
+static CONTEXT
+    saved_contexts[OS_NATIVE_STACKS]; /**< Observer-owned stopped contexts; no Init reset. */
+const size_t Os_ArtiNativeContextSize =
+    sizeof(CONTEXT); /**< Fixed native context size tool view; C init only, never reset. */
 static union {
     long double alignment;
     unsigned char bytes[OS_ALTSTACK_BYTES];
-} altstacks[OS_NATIVE_STACKS];
-static volatile Os_Atomic32 stack_count;
-static volatile Os_Atomic32 fault_claimed;
-static volatile Os_Atomic32 fault_count;
-static volatile Os_Atomic32 fatal_claimed;
-static volatile int32_t fault_park;
-static Os_StackFault fault_records[OS_NATIVE_STACKS];
-static __thread Os_NativeStack *current_stack;
-#ifdef OS_HOST_FAILURE_TESTS
-static char invalid_alt_role;
+} altstacks[OS_NATIVE_STACKS];           /**< Actor-owned alternate signal stacks; no Init reset. */
+static volatile Os_Atomic32 stack_count; /**< Atomic native record reservations; no Init reset. */
+static volatile Os_Atomic32 fault_claimed; /**< Atomic first-fault winner latch; no Init reset. */
+static volatile Os_Atomic32 fault_count;   /**< Atomic fault claim/count state; no Init reset. */
+static volatile Os_Atomic32
+    fatal_claimed;                  /**< Atomic terminal-report winner latch; no Init reset. */
+static volatile int32_t fault_park; /**< Constant-zero futex park cell; no Init writes. */
+static Os_StackFault fault_records[OS_NATIVE_STACKS]; /**< Per-actor fault slots, atomic
+                                                         publication; no Init reset. */
+static __thread Os_NativeStack *current_stack; /**< Owning actor TLS stack record; no Init reset. */
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
+static char invalid_alt_role; /**< Startup-only test fault role; no Init reset. */
 #endif
-Os_StackFault Os_Fault;
+Os_StackFault Os_Fault; /**< First-fault winner snapshot, atomic publication; no Init reset. */
 
 const void *Os_StackSavedContext(const Os_NativeStack *stack)
 {
@@ -114,7 +120,7 @@ static void guard_signal(int signum, siginfo_t *details, void *native_context)
 void Os_StackPrepare(void)
 {
     struct sigaction handler = {0};
-#ifdef OS_HOST_FAILURE_TESTS
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
     const char *invalid = getenv("AUTOSAR_OS_BAD_GUARANTEE");
     if (invalid != NULL && invalid[0] != '\0' && invalid[1] == '\0') {
         invalid_alt_role = invalid[0];
@@ -146,7 +152,7 @@ int Os_StackRegister(char role)
     uintptr_t low = 0u;
     uintptr_t high = 0u;
     size_t guard = 0u;
-#ifdef OS_HOST_FAILURE_TESTS
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
     if (role == invalid_alt_role) {
         return 0;
     }

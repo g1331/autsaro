@@ -24,6 +24,28 @@ class CStandardTests(unittest.TestCase):
     def rules(self, source, name="runtime/bsw/include/Test.h"):
         return [rule for rule, _, _ in c_standard.findings(name, source)]
 
+    def test_aggregate_objects_and_forward_tags(self):
+        for prefix in ("", 'extern "C" {\n'):
+            suffix = "\n}" if prefix else ""
+            for kind in ("struct", "union", "enum"):
+                body = "VALUE /**< Value. */" if kind == "enum" else "uint8 value; /**< Value. */"
+                for declaration in (f"{kind} Opaque;", f"{kind} Tag {{ {body} }};"):
+                    self.assertNotIn("state-comment", self.rules(prefix + declaration + suffix))
+                for declaration in (f"static {kind} {{ {body} }} objects[2];", f"{kind} Tag *object;"):
+                    self.assertIn("state-comment", self.rules(prefix + declaration + suffix))
+                    self.assertNotIn("state-comment", self.rules(prefix + declaration + " /**< Owned state. */" + suffix))
+                self.assertEqual(self.rules(prefix + f"typedef {kind} {{ {body} }} ValueType;" + suffix).count("typedef-comment"), 1)
+
+    def test_definition_and_consistency_assertions_are_not_feature_switches(self):
+        guards = ("#ifndef EXPECTED_STATUS", "#if STATUS_MODE != EXPECTED_STATUS")
+        for guard in guards:
+            source = guard + "\n#error Invalid independent configuration\n#endif\n"
+            self.assertNotIn("config-switch", self.rules(source))
+            active = source.replace("#error Invalid independent configuration", "uint8 enabled;")
+            findings = c_standard.findings("runtime/os/src/Test.c", active, known_switches=frozenset({"STATUS_MODE"}))
+            self.assertIn("config-switch", {key[0] for key in findings})
+        self.assertIn("config-switch", self.rules("#if STATUS_MODE\n#error Unavailable\n#endif"))
+
     def test_review_declarators_and_empty_comments(self):
         self.assertIn("state-comment", self.rules("static void (*hook)(void);", "runtime/bsw/src/Test.c"))
         self.assertIn("state-comment", self.rules("static Std_ReturnType (*hook)(void);", "runtime/bsw/src/Test.c"))

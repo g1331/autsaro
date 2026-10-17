@@ -2,11 +2,13 @@
 #include "Arti.h"
 #include "Os_Host.h"
 
-Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
-volatile ArtiAtomic32 Arti_EventCount;
-volatile ArtiAtomic32 Arti_EventsDropped;
-volatile ArtiAtomic32 Arti_DevelopmentError;
-static __thread Arti_AddressCapture captured_address;
+Arti_Event Arti_Events[ARTI_EVENT_CAPACITY]; /**< Reserved slots, atomically published; Arti_Init
+                                                clears flags. */
+volatile ArtiAtomic32 Arti_EventCount;       /**< Atomic slot reservations; Arti_Init resets. */
+volatile ArtiAtomic32 Arti_EventsDropped;    /**< Atomic saturated drop count; Arti_Init resets. */
+volatile ArtiAtomic32 Arti_DevelopmentError; /**< Atomic latest tool error; Arti_Init resets. */
+static __thread Arti_AddressCapture
+    captured_address; /**< Actor TLS capture; Arti_Init clears calling-actor validity. */
 void Arti_CaptureAddress(uintptr_t address)
 {
     captured_address.address = address;

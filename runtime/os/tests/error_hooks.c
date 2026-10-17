@@ -4,10 +4,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#if !OS_USE_GET_SERVICE_ID && defined(OSErrorGetServiceId)
+#if !(OS_USE_GET_SERVICE_ID == STD_ON) && defined(OSErrorGetServiceId)
 #error Service ID macro must be absent when disabled
 #endif
-#if !OS_USE_PARAMETER_ACCESS && defined(OSError_ActivateTask_TaskID)
+#if !(OS_USE_PARAMETER_ACCESS == STD_ON) && defined(OSError_ActivateTask_TaskID)
 #error Parameter macro must be absent when disabled
 #endif
 
@@ -19,16 +19,21 @@ typedef struct {
     unsigned checked;
     char actor;
 } Record;
-static Record records[40];
-static unsigned count;
-static unsigned vector;
-static bool configured = true;
-static TaskStateType state = 99u;
-static EventMaskType events = UINT32_C(0xdead);
-static TickType value = UINT64_MAX;
-static TickType elapsed = UINT64_MAX;
-static AlarmBaseType base = {61u, 62u, 63u};
-static ScheduleTableStatusType table_status = 99u;
+static Record records[40]; /**< Ordered ErrorHook snapshots; fixture-owned, no Init reset. */
+static unsigned count;     /**< Used ErrorHook snapshots; fixture-owned, no Init reset. */
+static unsigned vector;    /**< Selected interrupt observation; fixture-owned, no Init reset. */
+static bool configured =
+    true; /**< Main-owned configured selection before StartOS; no Init reset. */
+static TaskStateType state = 99u; /**< Task-state output sentinel; fixture-owned, no Init reset. */
+static EventMaskType events =
+    UINT32_C(0xdead); /**< Event-mask output sentinel; fixture-owned, no Init reset. */
+static TickType value = UINT64_MAX; /**< Counter output sentinel; fixture-owned, no Init reset. */
+static TickType elapsed =
+    UINT64_MAX; /**< Elapsed-ticks output sentinel; fixture-owned, no Init reset. */
+static AlarmBaseType base = {
+    61u, 62u, 63u}; /**< Alarm-base output sentinel; fixture-owned, no Init reset. */
+static ScheduleTableStatusType table_status =
+    99u; /**< Schedule-table output sentinel; fixture-owned, no Init reset. */
 
 static void check(bool condition)
 {
@@ -36,7 +41,7 @@ static void check(bool condition)
         ShutdownOS(E_OS_STATE);
     }
 }
-#if OS_USE_PARAMETER_ACCESS
+#if (OS_USE_PARAMETER_ACCESS == STD_ON)
 static void check_parameters(void)
 {
     switch (vector) {
@@ -154,10 +159,10 @@ void ErrorHook(StatusType Error)
     if (vector != 28u) {
         check(GetTaskState(caller, &actual_state) == E_OK && actual_state == RUNNING);
     }
-#if OS_USE_GET_SERVICE_ID
+#if (OS_USE_GET_SERVICE_ID == STD_ON)
     service = OSErrorGetServiceId();
 #endif
-#if OS_USE_PARAMETER_ACCESS
+#if (OS_USE_PARAMETER_ACCESS == STD_ON)
     check_parameters();
     checked = 1u;
 #endif
@@ -166,10 +171,10 @@ void ErrorHook(StatusType Error)
     check(ActivateTask(99u) == E_OS_CALLEVEL);
     check(GetTaskState(99u, &actual_state) == E_OS_ID &&
           actual_state == ((vector == 28u) ? 99u : RUNNING));
-#if OS_USE_GET_SERVICE_ID
+#if (OS_USE_GET_SERVICE_ID == STD_ON)
     check(OSErrorGetServiceId() == service);
 #endif
-#if OS_USE_PARAMETER_ACCESS
+#if (OS_USE_PARAMETER_ACCESS == STD_ON)
     check_parameters();
 #endif
     records[count++] = (Record){vector, Error, service, caller, checked, Os_StackCurrent()->role};
@@ -356,7 +361,7 @@ static void owner(void)
         check(state == 99u && events == UINT32_C(0xdead) && elapsed == UINT64_MAX &&
               table_status == 99u);
         check(base.maxallowedvalue == 61u && base.ticksperbase == 62u && base.mincycle == 63u);
-#if OS_USE_GET_SERVICE_ID
+#if (OS_USE_GET_SERVICE_ID == STD_ON)
         check(OSErrorGetServiceId() == OSServiceId_Unknown);
 #endif
     }

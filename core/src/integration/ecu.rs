@@ -422,7 +422,7 @@ pub(super) fn configure_os(
             "STD_OFF"
         };
         (
-            format!("#ifndef {macro_name}\n#define {macro_name} 1\n#endif"),
+            format!("#ifndef {macro_name}\n#define {macro_name} STD_ON\n#endif"),
             format!(
                 "#if defined({macro_name}) && ({macro_name} != {value})\n#error {} differs from the validated plan\n#endif\n#ifndef {macro_name}\n/** ECUC {parameter}; generated from the validated OS plan. */\n#define {macro_name} {value}\n#endif",
                 &parameter[1..]
@@ -459,11 +459,7 @@ pub(super) fn configure_os(
         path,
         &[
             super::outputs::Edit::Once(
-                "#define AUTOSAR_OS_CFG_H",
-                "#define AUTOSAR_OS_CFG_H\n#include \"Std_Types.h\"",
-            ),
-            super::outputs::Edit::Once(
-                "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED 1\n#endif",
+                "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED STD_ON\n#endif",
                 status,
             ),
             super::outputs::Edit::Once(&service_id.0, &service_id.1),

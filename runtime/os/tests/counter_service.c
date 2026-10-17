@@ -5,11 +5,15 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-static unsigned errors;
-static StatusType expected_error;
-static OSServiceIdType expected_service;
-static CounterType expected_counter;
-static TickRefType expected_value, expected_elapsed;
+static unsigned errors; /**< Observed checks/errors; fixture-owned, no Init reset. */
+static StatusType
+    expected_error; /**< Caller-owned expected error for synchronous checks; no Init reset. */
+static OSServiceIdType
+    expected_service; /**< Caller-owned expected service for synchronous checks; no Init reset. */
+static CounterType
+    expected_counter; /**< Caller-owned expected counter for synchronous checks; no Init reset. */
+static TickRefType expected_value,
+    expected_elapsed; /**< Caller-owned expected elapsed for synchronous checks; no Init reset. */
 
 static void check(bool condition)
 {

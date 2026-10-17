@@ -44,13 +44,13 @@ sint32 Os_TimeSignalFailed(void);
 void Os_TimeTick(void);
 void vApplicationTickHook(void);
 sint32 Os_TimeBeginTick(void);
-#ifdef OS_IDLE_TESTS
+#if defined(OS_IDLE_TESTS) && (OS_IDLE_TESTS == STD_ON)
 void Os_TestIdleObserved(void);
 #endif
-#ifdef OS_ARTI_TESTS
+#if defined(OS_ARTI_TESTS) && (OS_ARTI_TESTS == STD_ON)
 void Os_ArtiTestShutdownObserved(void);
 #endif
-#ifdef OS_TIME_TESTS
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
 void Os_TimeTestSeed(uint64 epoch, uint32 kernel_tick, TickType value);
 void Os_TimeTestCloseEvent(void);
 void Os_TimeTestBeforePending(void);
@@ -62,7 +62,7 @@ void Os_MailboxInstall(void);
 void Os_MailboxClose(void);
 sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(void));
 sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(void));
-#ifdef OS_EVENT_TESTS
+#if defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON)
 void Os_TestObserve(void);
 void Os_TestInputNotified(void);
 void Os_TestInputLastTicket(uint64 ticket);
@@ -94,7 +94,7 @@ StatusType Os_ErrorResult(OSServiceIdType service,
                           const Os_ErrorParameters *arguments);
 void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected);
 void Os_ShutdownHookInvoke(StatusType error);
-#ifdef OS_TIME_TESTS
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
 void Os_TimeTestDispatchFinishing(void);
 void Os_TimeTestDispatchUnlocked(void);
 void Os_TimeTestOnWaiting(void);
@@ -132,7 +132,7 @@ HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t 
 void Os_PortResumeThread(HANDLE thread);
 DWORD Os_PortSuspendThread(HANDLE thread);
 BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context);
-#if defined(__linux__) && defined(OS_STACK_TESTS)
+#if defined(__linux__) && (defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON))
 void Os_StackTestTriggerBackupFault(void);
 #endif
 

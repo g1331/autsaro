@@ -5,12 +5,14 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *scenario;
-static bool probed;
-static unsigned errors;
-static StatusType statuses[29];
-static StatusType error_status[64];
-static OSServiceIdType error_service[64];
+static const char *scenario;    /**< Main-owned scenario selection before StartOS; no Init reset. */
+static bool probed;             /**< Context probe completion; fixture-owned, no Init reset. */
+static unsigned errors;         /**< Observed checks/errors; fixture-owned, no Init reset. */
+static StatusType statuses[29]; /**< Observed service results; fixture-owned, no Init reset. */
+static StatusType
+    error_status[64]; /**< Observed ErrorHook results; fixture-owned, no Init reset. */
+static OSServiceIdType
+    error_service[64]; /**< Observed ErrorHook services; fixture-owned, no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

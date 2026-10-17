@@ -2,8 +2,9 @@
 #include "Os_Backend.h"
 
 typedef Os_ArtiScheduleState ScheduleState;
-static ScheduleState tables[OS_MAX_SCHEDULE_TABLES];
-const Os_ArtiScheduleState *const Os_ArtiScheduleTables = tables;
+static ScheduleState tables[OS_MAX_SCHEDULE_TABLES]; /**< Port-locked table state; no Init reset. */
+const Os_ArtiScheduleState *const Os_ArtiScheduleTables =
+    tables; /**< Fixed table state tool view; C init only, never reset. */
 
 static size_t table_index(ScheduleTableType id)
 {

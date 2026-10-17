@@ -2,11 +2,12 @@
 #include "Os_Backend.h"
 #include <string.h>
 
-static Os_InputRecord records[OS_INPUT_CAPACITY];
-static uint64 last_ticket;
-static volatile Os_Atomic32 published;
+static Os_InputRecord
+    records[OS_INPUT_CAPACITY]; /**< SPSC-owned ring slots, atomic publication; no Init reset. */
+static uint64 last_ticket;      /**< Single-producer accepted ticket; no Init reset. */
+static volatile Os_Atomic32 published; /**< Atomic complete-record count; no Init reset. */
 /* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
-static volatile Os_Atomic32 admission;
+static volatile Os_Atomic32 admission; /**< Atomic producer/close bits; no Init reset. */
 
 static uint32 input_interrupt(void)
 {
@@ -17,7 +18,7 @@ static uint32 input_interrupt(void)
         if (status != E_OK) {
             Os_BackendShutdown(E_OS_STATE);
         }
-#ifdef OS_EVENT_TESTS
+#if defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON)
         Os_TestInputNotified();
 #endif
     }
@@ -36,7 +37,7 @@ sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
             (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt));
 }
 void Os_MailboxClose(void) { InterlockedOr(&admission, 2); }
-#ifdef OS_EVENT_TESTS
+#if defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON)
 void Os_TestInputLastTicket(uint64 ticket) { last_ticket = ticket; }
 #endif
 StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket)

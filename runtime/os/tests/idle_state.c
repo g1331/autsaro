@@ -8,17 +8,21 @@
 #include <time.h>
 #endif
 
-static const char *scenario;
-static volatile LONG requested;
-static volatile LONG observed;
-static unsigned wakes;
-static unsigned errors;
-static StatusType error_status[5];
-static OSServiceIdType error_service[5];
-static IdleModeType rejected_mode;
-static uint64_t idle_started_ms;
-static uint64_t idle_cpu_ms;
-static uint64_t idle_window_ms;
+static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
+static volatile LONG
+    requested; /**< Atomic native/OS handoff requested; fixture-owned, no Init reset. */
+static volatile LONG
+    observed;           /**< Atomic native/OS handoff observed; fixture-owned, no Init reset. */
+static unsigned wakes;  /**< Wakes observations; fixture-owned, no Init reset. */
+static unsigned errors; /**< Observed checks/errors; fixture-owned, no Init reset. */
+static StatusType error_status[5]; /**< Observed ErrorHook results; fixture-owned, no Init reset. */
+static OSServiceIdType
+    error_service[5]; /**< Observed ErrorHook services; fixture-owned, no Init reset. */
+static IdleModeType
+    rejected_mode; /**< Rejected idle-mode observation; fixture-owned, no Init reset. */
+static uint64_t idle_started_ms; /**< Host observer idle started ms measurement; no Init reset. */
+static uint64_t idle_cpu_ms;     /**< Host observer idle cpu ms measurement; no Init reset. */
+static uint64_t idle_window_ms;  /**< Host observer idle window ms measurement; no Init reset. */
 static void check(bool condition)
 {
     if (!condition) {

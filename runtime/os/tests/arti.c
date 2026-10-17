@@ -7,7 +7,8 @@ static void observed_hook(void);
 #include "task_hooks.c"
 #undef main
 
-static bool stack_published[3];
+static bool
+    stack_published[3]; /**< Observed Task stack publication; fixture-owned, no Init reset. */
 static void observed_hook(void)
 {
     TaskType id = INVALID_TASK;

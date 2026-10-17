@@ -18,7 +18,8 @@ static uint32 revision ECU_HOSTBUSSM_VAR_CLEARED; /**< Transition events; never 
 static struct {
     boolean due;     /**< A completion is unpublished. */
     boolean running; /**< A publisher is running. */
-} bussm_publication ECU_HOSTBUSSM_VAR_CLEARED;
+} bussm_publication
+    ECU_HOSTBUSSM_VAR_CLEARED; /**< Area-protected publication; Init keeps a running publisher. */
 #define ECU_HOSTBUSSM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Ecu_HostBusSM_MemMap.h"
 #define ECU_HOSTBUSSM_START_SEC_CODE
