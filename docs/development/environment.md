@@ -15,6 +15,8 @@ uv sync --locked
 
 Windows 核心和桌面开发需要 Rust MSVC、Visual Studio C++ Build Tools、Windows SDK、WebView2、libclang 和 vcpkg 的 libxml2。设置 `VCPKG_ROOT`、`VCPKGRS_TRIPLET=x64-windows-static-md`、`LIBCLANG_PATH`；vcpkg 安装 `libxml2[iconv,zlib]`。`LIBCLANG_PATH` 指向的 `libclang.dll` 还须能加载其依赖 DLL：使用 MSYS2 提供的 libclang 时，把同一 `bin` 目录加入 `PATH`，否则构建 `libxml` 时会报 `LoadLibraryExW failed`。
 
+Cargo 构建另需 Git（默认从 PATH 查找，或设置 `AUTOSAR_GIT`），用于从固定来源计算两个目标的补丁后内核摘要；不需要目标编译器。
+
 Ubuntu 核心开发安装 `build-essential libxml2-dev libclang-dev clang pkg-config`；桌面另安装 `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf`。macOS 使用 Xcode Command Line Tools、libxml2 和 LLVM。
 
 原生 ECU 检查仍核对 `runtime/os/toolchain.json` 或 `toolchain-linux.json` 中的 GCC/binutils 身份。它们不是 UI 或默认核心测试的要求。官方资源仅供对应资源测试，位置与身份统一定义在 `core/resources/official.json`，下载不入库。
