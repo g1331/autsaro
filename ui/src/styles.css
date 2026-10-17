@@ -332,7 +332,7 @@ svg {
 /* Selection colour plus a leading bar, so selection never relies on the background alone. */
 .tree-row[aria-selected='true'],
 .tree-row[aria-selected='true']:hover,
-tr[aria-selected='true'],
+tr[aria-current='true'],
 nav > button[aria-current='true'],
 nav > button[aria-current='true']:not(:disabled):not([aria-disabled='true']):hover,
 .settings-layout [role='tab'][aria-selected='true'] {
@@ -340,10 +340,10 @@ nav > button[aria-current='true']:not(:disabled):not([aria-disabled='true']):hov
   color: var(--selection-text);
   box-shadow: inset 2px 0 var(--selection-text);
 }
-tr[aria-selected='true'] {
+tr[aria-current='true'] {
   box-shadow: none;
 }
-tr[aria-selected='true'] > td:first-child {
+tr[aria-current='true'] > td:first-child {
   box-shadow: inset 2px 0 var(--selection-text);
 }
 .app-shell {
@@ -849,7 +849,7 @@ td small {
   display: block;
   padding-top: 3px;
 }
-tbody tr:not([aria-selected='true']):hover {
+tbody tr:not([aria-current='true']):hover {
   background: var(--hover);
 }
 .path-text {
@@ -1725,4 +1725,192 @@ details + details {
 }
 .tree-mark-unapplied {
   color: var(--warning);
+}
+/* Configuration document (ADR 0020): view switch, container view, parameter grid. */
+.configuration-document > .document-heading {
+  align-items: center;
+}
+.view-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+}
+.view-tabs [role='tab'] {
+  border-radius: 0;
+  color: var(--secondary);
+}
+.view-tabs [role='tab'][aria-selected='true'] {
+  color: var(--text);
+  box-shadow: inset 0 -2px var(--primary);
+}
+.container-heading {
+  margin-bottom: 8px;
+}
+.container-heading h2 {
+  font-size: 18px;
+  margin: 0 8px 6px 0;
+  display: inline-block;
+}
+.container-heading p {
+  margin: 4px 0 0;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.container-section {
+  margin-top: 20px;
+}
+.container-section > h2 {
+  font-size: 15px;
+}
+.secondary {
+  color: var(--secondary);
+}
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+.data-table tbody th {
+  position: static;
+  background: transparent;
+  font-weight: 400;
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.data-table td,
+.data-table th {
+  vertical-align: middle;
+}
+.data-table .row-group th {
+  background: var(--surface);
+  font-weight: 600;
+  padding: 6px 10px;
+}
+.row-group th > small {
+  margin-left: 8px;
+  font-weight: 400;
+  color: var(--secondary);
+}
+.row-group th > button {
+  margin-left: 8px;
+  min-height: 22px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 400;
+}
+.row-missing td {
+  color: var(--warning);
+}
+.row-missing svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.child-table {
+  table-layout: fixed;
+}
+.child-table .col-name {
+  width: 30%;
+}
+.child-table .col-status,
+.parameter-grid .col-status {
+  width: 150px;
+}
+.child-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.parameter-grid {
+  table-layout: fixed;
+  min-width: 860px;
+}
+.parameter-grid .col-name {
+  width: 22%;
+}
+.parameter-grid .col-unit {
+  width: 56px;
+}
+.parameter-grid .col-default {
+  width: 11%;
+}
+.parameter-grid .col-range {
+  width: 12%;
+}
+.parameter-grid .col-multiplicity {
+  width: 72px;
+}
+.parameter-grid tbody th,
+.parameter-grid td {
+  padding: 6px 10px;
+  overflow-wrap: anywhere;
+}
+.parameter-grid tbody th > small {
+  display: block;
+  color: var(--secondary);
+  font-size: 11px;
+}
+.parameter-grid tr.unapplied > th:first-child {
+  box-shadow: inset 2px 0 var(--warning);
+}
+.parameter-grid tr.current {
+  background: var(--hover);
+}
+.value-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* A column of values reads as text; the border appears on hover, focus or error. */
+.value-cell input,
+.value-cell select {
+  flex: 1;
+  padding: 4px 8px;
+  border-color: transparent;
+  background-color: transparent;
+}
+.value-cell input:hover,
+.value-cell select:hover,
+.value-cell input:focus,
+.value-cell select:focus {
+  border-color: var(--border-strong);
+  background-color: var(--canvas);
+}
+.value-cell [aria-invalid='true'] {
+  border-color: var(--error);
+}
+.value-cell > small {
+  flex: none;
+  color: var(--secondary);
+  font-size: 11px;
+}
+.readonly-cell {
+  user-select: text;
+}
+.readonly-cell small {
+  display: block;
+  color: var(--secondary);
+  font-family: inherit;
+}
+.parameter-status > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 1px 8px 1px 0;
+  font-size: 11px;
+}
+.parameter-status > button {
+  min-height: 22px;
+  padding: 1px 6px;
+}
+.status-unapplied,
+.status-warning {
+  color: var(--warning);
+}
+.status-error {
+  color: var(--error);
+}
+.field-details {
+  margin: 12px 0;
+}
+.candidate-list {
+  margin: 6px 0;
+  padding-left: 16px;
+  font-size: 12px;
 }

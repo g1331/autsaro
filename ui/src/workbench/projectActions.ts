@@ -563,6 +563,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       const current = stateRef.current;
       patchState({
         activeObjectId: objectId,
+        activeFieldId: current.activeObjectId === objectId ? current.activeFieldId : null,
         activeSourceId: object.sourceId,
         treeMode: 'objects',
         treeRevealId: objectId,

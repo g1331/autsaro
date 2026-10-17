@@ -22,7 +22,8 @@ import { IntegrationPanel } from './IntegrationPanel';
 import { IntegrationDelivery } from './IntegrationDelivery';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProjectTree } from './workbench/ProjectTree';
-import { ObjectEditor, ObjectInspector } from './workbench/ObjectEditor';
+import { ObjectInspector } from './workbench/ObjectEditor';
+import { ConfigurationDocument } from './workbench/ContainerView';
 import { PreviewDialogs } from './workbench/PreviewDialogs';
 import {
   CopyText,
@@ -420,7 +421,9 @@ export default function App() {
                 {activeDocument.kind === 'project-entry' ? (
                   <SourceEntry controller={c} logo={logo} />
                 ) : null}
-                {activeDocument.kind === 'configuration' ? <ObjectEditor controller={c} /> : null}
+                {activeDocument.kind === 'configuration' ? (
+                  <ConfigurationDocument controller={c} />
+                ) : null}
                 {activeDocument.kind === 'integration' ? <IntegrationPanel controller={c} /> : null}
                 {activeDocument.kind === 'delivery' ? (
                   <IntegrationDelivery controller={c} active />

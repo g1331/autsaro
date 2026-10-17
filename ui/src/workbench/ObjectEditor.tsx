@@ -1,17 +1,19 @@
-import { editorValueKindKeys, editorChangeKeys } from '../i18n/editors';
+import { editorChangeKeys, editorSeverityKeys, editorValueKindKeys } from '../i18n/editors';
 import { useLocale } from '../i18n';
 import { displayPath } from '../pathDisplay';
 import { useId, useMemo } from 'react';
+import type { ReactNode } from 'react';
 import { Search } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
-import type { FieldDescriptor, ValueState } from './projectTypes';
+import type { FieldDescriptor } from './projectTypes';
+import { fieldName } from './batchEditing';
+import { multiplicity } from './projectGroups';
 import { StructureEditor } from './StructureEditor';
 import { CopyText } from './Dialog';
 import { iconSize } from './icons';
 import { CommandActions, CommandButton, CommandReasons } from './CommandActions';
 import { commandById } from './commands';
 import { objectRoleClass } from './objectRole';
-import { profileLabel } from './labels';
 
 export function ObjectEditor({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
@@ -37,17 +39,13 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
           .includes(query),
     );
   }, [c.projection, c.objectFilter]);
+  // A checkbox shows batch selection only; the current object alone is not a batch (D8).
+  const batch = c.objectSelection.length > 1;
   return (
-    <div className="document-page">
-      <div className="document-heading">
-        <div>
-          <h2>{t('editor.objects.heading')}</h2>
-          <span>
-            {c.projection ? profileLabel(c.projection.profile) : null} · {c.projection?.release}
-          </span>
-        </div>
-        <span>{t('editor.objects.selectedCount', { count: c.objectSelection.length })}</span>
-      </div>
+    <>
+      <p className="field-help">
+        {t('editor.objects.selectedCount', { count: c.objectSelection.length })}
+      </p>
       <label className="search-field">
         <Search size={iconSize.inline} aria-hidden="true" />
         <input
@@ -97,13 +95,13 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
                 <tr
                   key={object.objectId}
                   data-object-row={object.objectId}
-                  aria-selected={c.objectSelection.includes(object.objectId)}
+                  aria-current={object.objectId === c.activeObjectId ? 'true' : undefined}
                 >
                   <td>
                     <input
                       type="checkbox"
                       aria-label={t('editor.objects.batchSelect', { path: object.path })}
-                      checked={c.objectSelection.includes(object.objectId)}
+                      checked={batch && c.objectSelection.includes(object.objectId)}
                       onChange={() => void c.selectObject(object.objectId, true)}
                     />
                   </td>
@@ -132,6 +130,15 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+/** Pending drafts of the configuration document, with the batch preview for multi-item and structural changes. */
+export function BatchBar({ controller: c }: { controller: Workbench }) {
+  const { t } = useLocale();
+  return (
+    <>
       <div className="batch-bar">
         <span>{t('editor.objects.pendingCount', { count: c.changes.length })}</span>
         <CommandActions
@@ -158,243 +165,7 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
           ))}
         </details>
       ) : null}
-    </div>
-  );
-}
-
-export function DescriptorField({
-  field,
-  controller: c,
-}: {
-  field: FieldDescriptor;
-  controller: Workbench;
-}) {
-  const { t, text } = useLocale();
-  const staged = c.changes.find(
-    (change) =>
-      (change.op === 'set-value' || change.op === 'set-reference') &&
-      change.field.kind === 'existing' &&
-      change.field.fieldId === field.fieldId,
-  );
-  const value: ValueState = staged?.op === 'set-value' ? staged.value : field.current;
-  const explicit = value.state === 'explicit';
-  const lexeme = explicit ? value.value.lexeme : '';
-  const blocked = Boolean(c.actionReason('prepare-change'));
-  const errors =
-    c.projection?.diagnostics.filter(
-      (issue) => issue.fieldId === field.fieldId && issue.severity === 'error',
-    ) ?? [];
-  const description = `field-description-${field.fieldId}`;
-  const errorId = `field-error-${field.fieldId}`;
-  const rejection = c.fieldErrors[field.fieldId];
-  // Immediate hint only; the backend still validates on preview.
-  const outOfRange = field.kind === 'integer' && explicit && outsideRange(lexeme, field);
-  const invalid = errors.length > 0 || Boolean(rejection) || outOfRange;
-  const describedBy = invalid ? `${description} ${errorId}` : description;
-  const stageValue = (next: ValueState) =>
-    c.stageChange({
-      op: 'set-value',
-      changeId: field.fieldId,
-      field: { kind: 'existing', fieldId: field.fieldId },
-      expected: field.current,
-      value: next,
-    });
-  const currentReference = staged?.op === 'set-reference' ? staged.value : field.reference;
-  const candidates =
-    c.projection?.referenceCandidates.filter((candidate) => candidate.fieldId === field.fieldId) ??
-    [];
-  return (
-    <div className="descriptor-field">
-      <label htmlFor={`field-${field.fieldId}`}>
-        {field.definitionId.split('#').pop()?.split('/').pop()}{' '}
-        <small>
-          {field.kind ? t(editorValueKindKeys[field.kind]) : field.elementKind}
-          {field.unit ? ` · ${field.unit}` : ''}
-        </small>
-      </label>
-      {!field.writable ? (
-        <div className="readonly-value" tabIndex={-1} data-field-id={field.fieldId}>
-          <span className="mono">
-            {currentReference?.state === 'explicit'
-              ? `${currentReference.rawPath} · DEST=${currentReference.dest}`
-              : field.current.state === 'explicit'
-                ? field.current.value.lexeme
-                : (field.defaultValue?.lexeme ?? t('editor.common.unset'))}
-          </span>
-          <p>{field.reason ? text(field.reason) : t('editor.objects.noCapability')}</p>
-        </div>
-      ) : field.kind === 'reference' ? (
-        <>
-          <p className="mono path-text">
-            {currentReference?.state === 'explicit'
-              ? `${currentReference.rawPath} · DEST=${currentReference.dest}`
-              : t('editor.objects.unsetReference')}
-          </p>
-          <select
-            id={`field-${field.fieldId}`}
-            data-field-id={field.fieldId}
-            value={
-              currentReference?.state === 'explicit' && currentReference.target?.kind === 'existing'
-                ? `${currentReference.target.objectId}:${currentReference.dest}`
-                : ''
-            }
-            aria-invalid={invalid}
-            aria-describedby={describedBy}
-            disabled={blocked}
-            onChange={(event) => {
-              const candidate = candidates.find(
-                (item) => `${item.targetId}:${item.dest}` === event.target.value,
-              );
-              if (candidate)
-                c.stageChange({
-                  op: 'set-reference',
-                  changeId: field.fieldId,
-                  field: { kind: 'existing', fieldId: field.fieldId },
-                  expected: field.reference ?? { state: 'absent' },
-                  value: {
-                    state: 'explicit',
-                    rawPath: candidate.path,
-                    dest: candidate.dest,
-                    target: { kind: 'existing', objectId: candidate.targetId },
-                  },
-                });
-            }}
-          >
-            <option value="">{t('editor.objects.chooseTarget')}</option>
-            {candidates.map((candidate) => (
-              <option
-                key={`${candidate.targetId}:${candidate.dest}`}
-                value={`${candidate.targetId}:${candidate.dest}`}
-              >
-                {candidate.shortName} · {candidate.path} · {candidate.dest}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={blocked}
-            onClick={() =>
-              c.stageChange({
-                op: 'set-reference',
-                changeId: field.fieldId,
-                field: { kind: 'existing', fieldId: field.fieldId },
-                expected: field.reference ?? { state: 'absent' },
-                value: { state: 'absent' },
-              })
-            }
-          >
-            {t('editor.objects.removeReference')}
-          </button>
-          {!candidates.length ? (
-            <p className="field-help">{t('editor.objects.noTargets')}</p>
-          ) : null}
-        </>
-      ) : (
-        <>
-          {field.kind === 'boolean' || field.enumeration.length ? (
-            <select
-              id={`field-${field.fieldId}`}
-              data-field-id={field.fieldId}
-              value={lexeme}
-              aria-invalid={invalid}
-              aria-describedby={describedBy}
-              disabled={blocked}
-              onChange={(event) =>
-                stageValue({
-                  state: 'explicit',
-                  value: { kind: field.kind!, lexeme: event.target.value },
-                })
-              }
-            >
-              <option value="">
-                {explicit ? t('editor.objects.emptyExplicit') : t('editor.common.unset')}
-              </option>
-              {(field.kind === 'boolean' ? ['true', 'false'] : field.enumeration).map((entry) => (
-                <option key={entry} value={entry}>
-                  {entry}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              id={`field-${field.fieldId}`}
-              data-field-id={field.fieldId}
-              value={lexeme}
-              aria-invalid={invalid}
-              aria-describedby={describedBy}
-              disabled={blocked}
-              onChange={(event) =>
-                stageValue({
-                  state: 'explicit',
-                  value: { kind: field.kind!, lexeme: event.target.value },
-                })
-              }
-            />
-          )}
-          <div className="field-actions">
-            <button
-              type="button"
-              disabled={blocked}
-              onClick={() => stageValue({ state: 'absent' })}
-            >
-              {t('editor.objects.removeValue')}
-            </button>
-            {field.defaultValue ? (
-              <button
-                type="button"
-                disabled={blocked}
-                onClick={() => stageValue({ state: 'explicit', value: field.defaultValue! })}
-              >
-                {t('editor.objects.useDefault')}
-              </button>
-            ) : null}
-          </div>
-        </>
-      )}
-      <div id={description} className="field-help">
-        <span>
-          {t('editor.objects.multiplicity', {
-            state: explicit ? t('editor.objects.explicit') : t('editor.objects.notWritten'),
-            lower: field.lowerMultiplicity,
-            upper: field.upperMultiplicity ?? t('editor.common.unlimited'),
-          })}
-        </span>
-        {field.minimum !== null || field.maximum !== null ? (
-          <span>
-            {t('editor.objects.range', {
-              minimum: field.minimum ?? t('editor.common.unlimited'),
-              maximum: field.maximum ?? t('editor.common.unlimited'),
-            })}
-          </span>
-        ) : null}
-        {field.defaultValue ? (
-          <span>
-            {t('editor.objects.default', {
-              value: field.defaultValue.lexeme,
-              origin: field.defaultOrigin,
-            })}
-          </span>
-        ) : null}
-      </div>
-      {invalid ? (
-        <div id={errorId} className="field-error">
-          {rejection ? <p>{text(rejection)}</p> : null}
-          {!rejection && outOfRange ? (
-            <p>
-              {t('editor.objects.outOfRange', {
-                minimum: field.minimum ?? '−∞',
-                maximum: field.maximum ?? '+∞',
-              })}
-            </p>
-          ) : null}
-          {errors.map((error, index) => (
-            <p key={`${error.code}-${index}`}>
-              {error.code} · {text(error.message)}
-            </p>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    </>
   );
 }
 
@@ -403,12 +174,14 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
   const reasonsId = useId();
   const previewChanges = commandById(c, 'preview-changes');
   const object = c.projection?.objects.find((item) => item.objectId === c.activeObjectId);
-  const fields =
-    c.projection?.fields.filter((field) =>
-      c.objectSelection.length > 1
-        ? c.objectSelection.includes(field.objectId)
-        : field.objectId === c.activeObjectId,
-    ) ?? [];
+  // The focused grid row, while it belongs to the shown object or batch selection.
+  const field = c.projection?.fields.find(
+    (item) =>
+      item.fieldId === c.activeFieldId &&
+      (c.objectSelection.length > 1
+        ? c.objectSelection.includes(item.objectId)
+        : item.objectId === c.activeObjectId),
+  );
   const references =
     c.projection?.references.filter(
       (edge) => edge.objectId === c.activeObjectId || edge.targetId === c.activeObjectId,
@@ -445,6 +218,7 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
                 <label className="descriptor-field">
                   {t('editor.objects.instanceName')}
                   <input
+                    data-rename-input
                     aria-label={t('editor.objects.instanceName')}
                     value={rename?.op === 'rename-instance' ? rename.shortName : object.shortName}
                     disabled={Boolean(c.busy)}
@@ -460,19 +234,7 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
                   />
                 </label>
               ) : null}
-              {fields.map((field) => (
-                <div key={field.fieldId}>
-                  {c.objectSelection.length > 1 ? (
-                    <h3 className="mono path-text">
-                      {c.projection?.objects.find((item) => item.objectId === field.objectId)?.path}
-                    </h3>
-                  ) : null}
-                  <DescriptorField field={field} controller={c} />
-                </div>
-              ))}
-              {!fields.length ? (
-                <p className="empty-state">{t('editor.objects.noFields')}</p>
-              ) : null}
+              {field ? <FieldDetails controller={c} field={field} /> : null}
               <div className="inspector-actions">
                 <CommandButton command={previewChanges} reasonId={`${reasonsId}-0`} />
                 {object.writable && !c.actionReason('prepare-change') ? (
@@ -528,16 +290,97 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
   );
 }
 
-/** Integer lexemes can exceed Number precision; compare as BigInt. */
-function outsideRange(lexeme: string, field: FieldDescriptor): boolean {
-  if (!/^[+-]?\d+$/.test(lexeme.trim())) return false;
-  const value = BigInt(lexeme.trim());
-  try {
-    return (
-      (field.minimum !== null && value < BigInt(field.minimum)) ||
-      (field.maximum !== null && value > BigInt(field.maximum))
-    );
-  } catch {
-    return false;
-  }
+/** Read-only facts of the current parameter; its value is edited in the grid (ADR 0020). */
+function FieldDetails({ controller: c, field }: { controller: Workbench; field: FieldDescriptor }) {
+  const { t, text } = useLocale();
+  const diagnostics =
+    c.projection?.diagnostics.filter(
+      (issue) => issue.fieldId === field.fieldId && issue.severity !== 'info',
+    ) ?? [];
+  const rejection = c.fieldErrors[field.fieldId];
+  const candidates =
+    c.projection?.referenceCandidates.filter((candidate) => candidate.fieldId === field.fieldId) ??
+    [];
+  const reference = field.reference;
+  const rows: [string, ReactNode][] = [
+    [t('editor.objects.definition'), <span className="mono path-text">{field.definitionId}</span>],
+    [t('editor.common.type'), field.kind ? t(editorValueKindKeys[field.kind]) : field.elementKind],
+    [
+      t('editor.container.multiplicity'),
+      <span className="mono">
+        {multiplicity(field.lowerMultiplicity, field.upperMultiplicity)}
+      </span>,
+    ],
+  ];
+  if (field.minimum !== null || field.maximum !== null)
+    rows.push([
+      t('editor.container.range'),
+      <span className="mono">{`${field.minimum ?? '−∞'}..${field.maximum ?? '+∞'}`}</span>,
+    ]);
+  if (field.defaultValue)
+    rows.push([
+      t('editor.container.default'),
+      <span className="mono">
+        {field.defaultValue.lexeme}
+        {field.defaultOrigin ? ` · ${field.defaultOrigin}` : ''}
+      </span>,
+    ]);
+  if (field.unit) rows.push([t('editor.container.unit'), field.unit]);
+  if (field.enumeration.length)
+    rows.push([
+      t('editor.container.choices'),
+      <span className="mono path-text">{field.enumeration.join(', ')}</span>,
+    ]);
+  if (field.kind === 'reference')
+    rows.push([
+      t('editor.container.target'),
+      <span className="mono path-text">
+        {reference?.state === 'explicit'
+          ? `${reference.rawPath} · DEST=${reference.dest}`
+          : t('editor.objects.unsetReference')}
+      </span>,
+    ]);
+  if (!field.writable)
+    rows.push([
+      t('editor.common.access'),
+      field.reason ? text(field.reason) : t('editor.objects.noCapability'),
+    ]);
+  return (
+    <section className="field-details" aria-label={fieldName(field)}>
+      <h3>{fieldName(field)}</h3>
+      <dl className="property-list">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {field.kind === 'reference' && candidates.length ? (
+        <details>
+          <summary>{t('editor.container.candidates', { count: candidates.length })}</summary>
+          <ul className="candidate-list">
+            {candidates.map((candidate) => (
+              <li key={`${candidate.targetId}:${candidate.dest}`} className="mono path-text">
+                {candidate.path} · {candidate.dest}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {rejection || diagnostics.length ? (
+        <div className="field-error">
+          {rejection ? <p>{text(rejection)}</p> : null}
+          {diagnostics.map((issue, index) => (
+            <div key={`${issue.code}-${index}`}>
+              <p>
+                {t(editorSeverityKeys[issue.severity])} · {issue.code} · {text(issue.message)}
+              </p>
+              {text(issue.remedy) ? <p className="field-help">{text(issue.remedy)}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
 }
