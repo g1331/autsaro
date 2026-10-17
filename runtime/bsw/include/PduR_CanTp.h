@@ -2,17 +2,18 @@
 #ifndef PDUR_CANTP_H
 #define PDUR_CANTP_H
 #include "ComStack_Types.h"
-/** Route reception admission directly to Dcm (SWS_PduR_00507).
+/** Route reception admission directly to Dcm (SWS_PduR_00507, SWS_Dcm_00642).
  * @param[in] id A configured CanTp Rx N-SDU handle.
- * @param[in] info Borrowed first-frame data, or NULL when no initial data is available; no
- * metadata.
- * @param[in] length Total N-SDU bytes, or zero to query receive capacity.
- * @param[out] available Caller-owned writable count of free receive-buffer bytes.
- * @return The Dcm admission result; BUFREQ_E_NOT_OK without a route. Dcm refusal preserves
- * available. Preconditions: Initialized and a configured route; otherwise BUFREQ_E_NOT_OK. Context:
- * lower-layer callback, including interrupt context; not inside an exclusive area. Reentrancy:
- * reentrant. Ownership: PduR retains no pointer; the configured Dcm callback copies any accepted
- * first-frame data before return.
+ * @param[in] info Borrowed first-frame descriptor, or NULL when no initial data is available;
+ * no metadata. Initial bytes are not consumed by this admission call.
+ * @param[in] length Positive total N-SDU length in bytes; Dcm rejects zero.
+ * @param[out] available Caller-owned free receive-buffer capacity, written on acceptance.
+ * @return The Dcm admission result; BUFREQ_E_NOT_OK without a route. Refusal preserves available.
+ * Preconditions: Initialized and a configured route; otherwise BUFREQ_E_NOT_OK.
+ * Context: lower-layer callback, including interrupt context; not inside an exclusive area.
+ * Reentrancy: reentrant.
+ * Ownership: No pointer is retained. Submit the initial bytes through CopyRxData after admission
+ * (SWS_Dcm_00556); StartOfReception only reserves the reception state.
  */
 BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
                                              const PduInfoType *info,

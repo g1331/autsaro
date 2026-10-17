@@ -204,16 +204,16 @@ typedef uint8 Dcm_SesCtrlType;
  * selected. */
 /** SWS_Dcm_00977: Security level before access is granted. */
 #define DCM_SEC_LEV_LOCKED 0u
-/** SWS_Dcm_00977: UDS session identifier; availability is
+/** SWS_Dcm_00978: UDS session identifier; availability is
  * configuration-dependent. */
 #define DCM_DEFAULT_SESSION 1u
-/** SWS_Dcm_00977: UDS session identifier; availability is
+/** SWS_Dcm_00978: UDS session identifier; availability is
  * configuration-dependent. */
 #define DCM_PROGRAMMING_SESSION 2u
-/** SWS_Dcm_00977: UDS session identifier; availability is
+/** SWS_Dcm_00978: UDS session identifier; availability is
  * configuration-dependent. */
 #define DCM_EXTENDED_DIAGNOSTIC_SESSION 3u
-/** SWS_Dcm_00977: UDS session identifier; availability is
+/** SWS_Dcm_00978: UDS session identifier; availability is
  * configuration-dependent. */
 #define DCM_SAFETY_SYSTEM_DIAGNOSTIC_SESSION 4u
 /** SWS_Dcm_91019: explicit-order session mode; startup/default is 0. */

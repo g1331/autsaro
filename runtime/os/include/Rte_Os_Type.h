@@ -6,7 +6,7 @@
 #define AUTOSAR_RTE_OS_TYPE_H
 #include "Os_Types.h"
 
-/** OS service value carrier (SWS_Os_00786); Counter APIs carry ticks
+/** OS service value carrier (SWS_Os_00794); Counter APIs carry ticks
  * (SWS_Os_00560). */
 typedef uint64 TimeInMicrosecondsType;
 
