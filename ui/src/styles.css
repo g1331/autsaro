@@ -73,6 +73,11 @@
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
+/* WebKitGTK paints native overlay scrollbars above portalled modal layers.
+   Radix hides the workbench root while a modal owns interaction. */
+#root[aria-hidden='true'] * {
+  scrollbar-width: none;
+}
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -1267,6 +1272,13 @@ label.checkbox-field > input[type='checkbox'] {
 .tool-content .workflow-page {
   padding: 8px 0;
 }
+summary {
+  cursor: pointer;
+  padding: 7px 0;
+}
+details + details {
+  margin-top: 4px;
+}
 .validation-scopes {
   display: flex;
   flex-wrap: wrap;
@@ -1274,14 +1286,17 @@ label.checkbox-field > input[type='checkbox'] {
   gap: 4px 12px;
   font-size: 12px;
 }
-.validation-scopes > p {
+.validation-scopes > p,
+.validation-scopes summary {
   margin: 0;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .validation-scopes summary {
   display: inline-flex;
   align-items: center;
   list-style: none;
-  padding: 4px 0;
 }
 .validation-scopes summary::-webkit-details-marker {
   display: none;
@@ -1291,6 +1306,9 @@ label.checkbox-field > input[type='checkbox'] {
 }
 .validation-scopes details[open] > summary > svg {
   transform: rotate(90deg);
+}
+.validation-scopes > details {
+  margin: 0;
 }
 .validation-scopes details[open] {
   flex-basis: 100%;
@@ -1732,13 +1750,6 @@ td.severity-info > svg,
 .reference-list,
 .pending-change {
   font-size: 12px;
-}
-summary {
-  cursor: pointer;
-  padding: 7px 0;
-}
-details + details {
-  margin-top: 4px;
 }
 @media (prefers-reduced-motion: no-preference) {
   button {

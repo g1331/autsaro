@@ -197,7 +197,7 @@ export const editorResources: {
     'editor.structure.chooseReference': '选择引用',
     'editor.structure.create': '添加实例',
     'editor.structure.createdTarget': '{{path}} · {{dest}} · 待创建',
-    'editor.structure.default': '默认 {{value}}（{{origin}}），未写入',
+    'editor.structure.default': '默认 {{value}}，未写入',
     'editor.structure.draftReference': '待应用的引用 {{path}} · {{dest}}',
     'editor.structure.heading': '新建实例',
     'editor.structure.intro': '新实例连同必需字段和子实例一起预览，然后应用。',
@@ -423,7 +423,7 @@ export const editorResources: {
     'editor.structure.chooseReference': 'Choose a reference',
     'editor.structure.create': 'Add instance',
     'editor.structure.createdTarget': '{{path}} · {{dest}} · to be created',
-    'editor.structure.default': 'Default {{value}} ({{origin}}), not written',
+    'editor.structure.default': 'Default {{value}}, not written',
     'editor.structure.draftReference': 'Pending reference {{path}} · {{dest}}',
     'editor.structure.heading': 'New instances',
     'editor.structure.intro':

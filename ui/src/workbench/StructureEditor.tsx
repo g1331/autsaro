@@ -340,7 +340,6 @@ export function StructureEditor({
                     {descriptor.defaultValue
                       ? t('editor.structure.default', {
                           value: descriptor.defaultValue.lexeme,
-                          origin: descriptor.defaultOrigin,
                         })
                       : t('editor.structure.noDefault')}
                   </p>

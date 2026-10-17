@@ -316,7 +316,8 @@ test('the inspector describes the focused parameter without editing it', () => {
   const details = view.getByRole('region', { name: 'Period' });
   expect(details.textContent).toContain('1..1');
   expect(details.textContent).toContain('1..65535');
-  expect(details.textContent).toContain('5 · definition');
+  expect(details.textContent).toContain('5');
+  expect(details.textContent).not.toContain('definition');
   expect(details.querySelector('input, select')).toBeNull();
   expect(view.container.querySelector('[data-field-id]')).toBeNull();
 });
@@ -488,3 +489,30 @@ test('a rejected field apply keeps its draft and attaches the reason to the cell
   expect(localize(state.notice.text)).toContain('Period');
   expect(current.call).toHaveBeenCalledTimes(1);
 });
+
+for (const language of ['zh-CN', 'en']) {
+  test(`default descriptions hide opaque origins in ${language}`, () => {
+    previewLanguage(language);
+    const c = controller({ activeFieldId: 'Period' });
+    const origin = 'builtin:product-ecuc-r24-11';
+    c.projection.fields[0] = { ...period, defaultOrigin: origin };
+    const option = c.projection.instanceDefinitions[0];
+    option.fields = [{ ...period, defaultOrigin: origin }];
+    c.changes = [
+      {
+        op: 'create-instance',
+        changeId: 'new-buffer',
+        parent: { kind: 'existing', objectId: 'init' },
+        sourceId: 'source',
+        definitionId: option.definition.definitionId,
+        shortName: 'NewBuffer',
+      },
+    ];
+    const view = render(createElement(ObjectInspector, { controller: c }));
+    expect(view.container.textContent).not.toContain(origin);
+    expect(
+      view.getByText(language === 'en' ? /Default 5, not written/ : /默认 5，未写入/),
+    ).toBeTruthy();
+    expect(within(view.getByRole('region', { name: 'Period' })).getByText('5')).toBeTruthy();
+  });
+}
