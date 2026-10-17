@@ -345,6 +345,7 @@ function FieldDetails({ controller: c, field }: { controller: Workbench; field: 
   return (
     <section className="field-details" aria-label={fieldName(field)}>
       <h3>{fieldName(field)}</h3>
+      {field.description ? <p className="field-description">{text(field.description)}</p> : null}
       <dl className="property-list">
         {rows.map(([label, value]) => (
           <div key={label}>

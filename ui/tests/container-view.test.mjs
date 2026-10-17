@@ -48,6 +48,7 @@ const definition = (definitionId, lower, upper, extra = {}) => ({
   defaultValue: null,
   defaultOrigin: null,
   referenceDestinations: [],
+  description: null,
   writable: true,
   reason: null,
   ...extra,
@@ -84,6 +85,7 @@ const period = field('Period', {
   unit: 'ms',
   defaultValue: { kind: 'integer', lexeme: '5' },
   defaultOrigin: 'definition',
+  description: message('backend.definitions.description.CanIfTxPduCanId'),
 });
 const locked = field('Locked', { writable: false, reason: 'Fixed by the profile' });
 const choice = field('Mode', {
@@ -320,6 +322,66 @@ test('the inspector describes the focused parameter without editing it', () => {
   expect(details.textContent).not.toContain('definition');
   expect(details.querySelector('input, select')).toBeNull();
   expect(view.container.querySelector('[data-field-id]')).toBeNull();
+});
+
+const guidance = {
+  en: 'Set the CAN identifier used to transmit this PDU.',
+  'zh-CN': '设置此 PDU 发送时使用的 CAN 标识符。',
+};
+
+test('the grid row offers the parameter description as inline help that keeps editing intact', () => {
+  const c = controller({ changes: [valueChange('Period', '20')] });
+  const view = render(createElement(ContainerView, { controller: c }));
+  const row = view.container.querySelector('[data-parameter-row="Period"]');
+  const toggle = within(row).getByRole('button', { name: 'Description of Period' });
+  const help = document.getElementById(toggle.getAttribute('aria-controls'));
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  expect(help.hidden).toBe(true);
+  fireEvent.click(toggle);
+  expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  expect(help.hidden).toBe(false);
+  expect(help.textContent).toBe(guidance.en);
+  // The help never takes over the value cell: its focus, Enter and activation are unchanged.
+  expect(c.setActiveFieldId).not.toHaveBeenCalled();
+  const input = row.querySelector('[data-field-id="Period"]');
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(c.applyField).toHaveBeenCalledWith('Period');
+  // The text follows the language without remounting; the identifier stays as written.
+  previewLanguage('zh-CN');
+  view.rerender(createElement(ContainerView, { controller: c }));
+  expect(help.textContent).toBe(guidance['zh-CN']);
+  expect(
+    within(row).getByRole('button', {
+      name: translate('editor.container.help', { name: 'Period' }),
+    }),
+  ).toBe(toggle);
+  expect(row.querySelector('th span').textContent).toBe('Period');
+  // A parameter without description has neither a help button nor an empty help block.
+  const mode = view.container.querySelector('[data-parameter-row="Mode"]');
+  expect(mode.querySelector('.help-toggle, .field-help')).toBeNull();
+});
+
+test('the inspector shows the description before the definition facts only when there is one', () => {
+  const view = render(
+    createElement(ObjectInspector, { controller: controller({ activeFieldId: 'Period' }) }),
+  );
+  const described = () => view.getByRole('region', { name: 'Period' });
+  expect(described().querySelector('.field-description').textContent).toBe(guidance.en);
+  expect(
+    described()
+      .querySelector('.field-description')
+      .compareDocumentPosition(described().querySelector('dl')) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  previewLanguage('zh-CN');
+  view.rerender(
+    createElement(ObjectInspector, { controller: controller({ activeFieldId: 'Period' }) }),
+  );
+  expect(described().querySelector('.field-description').textContent).toBe(guidance['zh-CN']);
+  view.rerender(
+    createElement(ObjectInspector, { controller: controller({ activeFieldId: 'Mode' }) }),
+  );
+  expect(view.container.querySelector('.field-details')).not.toBeNull();
+  expect(view.container.querySelector('.field-description')).toBeNull();
 });
 
 test('the tree context menu offers allowed children, rename and removal', async () => {

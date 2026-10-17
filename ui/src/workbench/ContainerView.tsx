@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { CircleX, TriangleAlert } from 'lucide-react';
+import { CircleQuestionMark, CircleX, TriangleAlert } from 'lucide-react';
 import { ContextMenu } from 'radix-ui';
 import { useLocale } from '../i18n';
 import { editorValueKindKeys } from '../i18n/editors';
@@ -395,6 +395,8 @@ function ParameterGrid({
 
 function ParameterRow({ controller: c, field }: { controller: Workbench; field: FieldDescriptor }) {
   const { t, text } = useLocale();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpId = useId();
   const staged = stagedField(c.changes, field.fieldId);
   const value: ValueState = staged?.op === 'set-value' ? staged.value : field.current;
   const explicit = value.state === 'explicit';
@@ -570,7 +572,24 @@ function ParameterRow({ controller: c, field }: { controller: Workbench; field: 
     >
       <th scope="row" title={field.definitionId}>
         <span>{name}</span>
+        {field.description ? (
+          <button
+            type="button"
+            className="icon-button help-toggle"
+            aria-label={t('editor.container.help', { name })}
+            aria-expanded={helpOpen}
+            aria-controls={helpId}
+            onClick={() => setHelpOpen(!helpOpen)}
+          >
+            <CircleQuestionMark size={iconSize.inline} aria-hidden="true" />
+          </button>
+        ) : null}
         <small>{field.kind ? t(editorValueKindKeys[field.kind]) : field.elementKind}</small>
+        {field.description ? (
+          <p id={helpId} className="field-help" hidden={!helpOpen}>
+            {text(field.description)}
+          </p>
+        ) : null}
       </th>
       <td>
         <div className="value-cell">
