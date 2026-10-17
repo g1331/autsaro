@@ -367,7 +367,20 @@ fn native_inventory_rejects_tampering_even_with_self_recomputed_metadata_hash() 
 
     let expected = rules::verify_inventory_bytes(rules::inventory_bytes()).unwrap();
     assert_eq!(expected.release, "R24-11");
-    assert_eq!(expected.rules_version, "1.0.0");
+    assert_eq!(expected.rules_version, "1.1.0");
+    let messages = bound["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|source| source["path"] == "core/src/messages.json")
+        .expect("localized catalog guidance must participate in the rule identity");
+    assert_eq!(
+        messages["sha256"],
+        format!(
+            "{:x}",
+            Sha256::digest(include_bytes!("../../src/messages.json"))
+        )
+    );
     let inventory_bytes = rules::inventory_bytes().to_vec();
     let unsupported = rules::coverage()
         .unwrap()

@@ -2,6 +2,7 @@
 //! Configuration bytes remain the authority; this catalog is a rebuildable projection.
 
 mod builtin;
+mod descriptions;
 mod extension;
 pub(crate) mod standard;
 mod validation;
@@ -337,6 +338,7 @@ pub(crate) fn descriptor(
 ) -> DefinitionDescriptor {
     DefinitionDescriptor {
         definition_id: id,
+        description: None,
         element_kind: element_kind.into(),
         kind,
         lower_multiplicity: 0,

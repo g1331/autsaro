@@ -24,6 +24,7 @@ export type ReferenceState =
   | { state: 'absent' }
   | { state: 'explicit'; rawPath: string; dest: string; target: ObjectRef | null };
 export type DefinitionDescriptor = {
+  description: LocalizedText | null;
   definitionId: string;
   elementKind: string;
   kind: ValueKind | null;

@@ -146,6 +146,8 @@ pub enum ReferenceState {
 #[serde(rename_all = "camelCase")]
 pub struct DefinitionDescriptor {
     pub definition_id: String,
+    #[serde(default)]
+    pub description: Option<LocalizedText>,
     pub element_kind: String,
     pub kind: Option<ValueKind>,
     pub lower_multiplicity: u32,

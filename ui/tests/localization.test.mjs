@@ -251,3 +251,39 @@ test('mandatory-entry shortfalls name the object, definition and counts in both 
     '/Configuration/NewCanIf is missing required CanIfCtrlDrvCfg entries (at least 1, currently 0)',
   );
 });
+
+test('parameter guidance reuses the backend message descriptor across language changes', () => {
+  const descriptor = message('backend.definitions.description.CanIfTxPduCanId');
+  const before = JSON.stringify(descriptor);
+  previewLanguage('zh-CN');
+  expect(localize(descriptor)).toBe('设置此 PDU 发送时使用的 CAN 标识符。');
+  previewLanguage('en');
+  expect(localize(descriptor)).toBe('Set the CAN identifier used to transmit this PDU.');
+  expect(JSON.stringify(descriptor)).toBe(before);
+});
+
+test('parameter guidance identifies buffer sizing, blocking calls and reset handover', () => {
+  const guidance = [
+    ['CanIfFixedBuffer', ['短报文', '8 字节', 'PDU'], ['short-message', 'eight-byte', 'PDU']],
+    [
+      'RteInExclusiveAreaCheckEnabled',
+      ['RTE 阻塞调用', '独占区'],
+      ['blocking RTE call', 'exclusive area'],
+    ],
+    [
+      'DcmSendRespPendOnRestart',
+      ['复位', '引导程序前', '0x78'],
+      ['before', 'reset', 'bootloader', '0x78'],
+    ],
+  ];
+  for (const [parameter, chinese, english] of guidance) {
+    const descriptor = message(`backend.definitions.description.${parameter}`);
+    for (const [language, expected] of [
+      ['zh-CN', chinese],
+      ['en', english],
+    ]) {
+      previewLanguage(language);
+      for (const text of expected) expect(localize(descriptor), parameter).toContain(text);
+    }
+  }
+});
