@@ -12,10 +12,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.error.fieldRange': '{{reason}}（允许范围 {{minimum}}–{{maximum}}）',
     'workflow.stage.blockingErrors_one': '{{count}} 个错误阻断生成',
     'workflow.stage.blockingErrors_other': '{{count}} 个错误阻断生成',
-    'workflow.generation.sourcePreview_one': '纯源码预览 {{count}} 个文件；尚未写入输出目录。',
-    'workflow.generation.sourcePreview_other': '纯源码预览 {{count}} 个文件；尚未写入输出目录。',
-    'workflow.confirm.generateFiles_one': '确认将 {{count}} 个文件写入 {{directory}}？',
-    'workflow.confirm.generateFiles_other': '确认将 {{count}} 个文件写入 {{directory}}？',
     'workflow.batch.count_one': '{{count}} 项更改 · 不写入文件',
     'workflow.batch.count_other': '{{count}} 项更改 · 不写入文件',
     'workflow.application.seedCount_one': '{{count}} 个初始源文件 · 只创建不存在的文件',
@@ -24,9 +20,14 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.project.fileCount_other': '{{count}} 个文件 · 新目录',
     'workflow.save.changedCount_one': '{{count}} 个文件将修改 · 其余保持不变',
     'workflow.save.changedCount_other': '{{count}} 个文件将修改 · 其余保持不变',
-    'workflow.generation.fileCount_one': '{{count}} 个文件 · {{target}}',
-    'workflow.generation.fileCount_other': '{{count}} 个文件 · {{target}}',
     'workflow.project.requireNameDirectory': '请输入工程名称并选择新工程目录。',
+    'workflow.generation.writeSummary_one': '{{count}} 个文件将写入 {{directory}} · {{target}}',
+    'workflow.generation.writeSummary_other': '{{count}} 个文件将写入 {{directory}} · {{target}}',
+    'workflow.generation.writeSummary': '{{count}} 个文件将写入 {{directory}} · {{target}}',
+    'workflow.guard.unapplied_one': '有 {{count}} 项更改尚未应用。',
+    'workflow.guard.unapplied_other': '有 {{count}} 项更改尚未应用。',
+    'workflow.guard.unapplied': '有 {{count}} 项更改尚未应用。',
+    'workflow.guard.unsaved': '工程有未保存的更改。',
     'workflow.project.requireArxml': '请至少选择一份 ARXML 文件',
     'workflow.stage.applicationWritten': '用户应用与成员清单已按预览写入',
     'workflow.field.applicationPeriod': '应用周期',
@@ -40,7 +41,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.stage.integrationSaved': '标准输入已保存',
     'workflow.integration.savedNotGenerated': '标准输入已保存，尚未生成源码',
     'workflow.stage.integrationValidated': '标准输入已校验',
-    'workflow.generation.cancelled': '已取消生成，输出目录未改动。',
     'workflow.stage.currentNotBuilt': '尚未构建本次工程',
     'workflow.stage.currentNotVerified': '尚未验证本次工程',
     'workflow.stage.rebuilding': '正在重新构建，之前的验证结果已失效',
@@ -79,7 +79,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.confirm.removeCatalog':
       '移除扩展 {{catalogId}}？源文件保留，使用它的配置将失去对应定义。',
     'workflow.stage.blockingErrors': '{{count}} 个错误阻断生成',
-    'workflow.confirm.generateFiles': '确认将 {{count}} 个文件写入 {{directory}}？',
     'workflow.preflight.result': '编译预检：{{status}}；源码指纹：{{fingerprint}}。{{logs}}',
     'workflow.error.batchPreview': '更改被拒绝，原配置保持：{{error}}',
     'workflow.error.batchReadView': '更改已应用，但读取工程失败：{{error}}',
@@ -87,8 +86,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.error.batchRecheck': '更改已应用，但重新校验标准输入失败：{{error}}',
     'workflow.guard.projectExplanation': '当前工程有未保存或未应用的更改。',
     'workflow.guard.contextExplanation': '有未应用的更改。',
-    'workflow.common.yes': '是',
-    'workflow.common.no': '否',
     'workflow.batch.title': '确认应用更改',
     'workflow.batch.objectChangeId': '对象',
     'workflow.batch.before': '旧值',
@@ -142,7 +139,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.generation.binary': '二进制或不可展示内容',
     'workflow.handoff.title': '导入 ECU 交接包',
     'workflow.handoff.directory': '交接包目录',
-    'workflow.guard.state': '尚未保存：{{unsaved}} · 未应用：{{unapplied}}',
     'workflow.batch.count': '{{count}} 项更改 · 不写入文件',
     'workflow.batch.inputIdentity': '输入 {{fingerprint}}',
     'workflow.batch.definitionIdentity': '定义 {{fingerprint}}',
@@ -151,7 +147,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.project.fileCount': '{{count}} 个文件 · 新目录',
     'workflow.project.extensionCount': '接纳的扩展（{{count}}）',
     'workflow.save.changedCount': '{{count}} 个文件将修改 · 其余保持不变',
-    'workflow.generation.fileCount': '{{count}} 个文件 · {{target}}',
     'workflow.application.explanation': '只创建尚不存在的源文件，不覆盖已有文件。',
     'workflow.handoff.explanation': '交接包通过全部核对后才替换当前工程；失败时当前工程保持不变。',
     'workflow.handoff.sourceHelp':
@@ -174,12 +169,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.error.fieldRange': '{{reason}} (allowed range {{minimum}}–{{maximum}})',
     'workflow.stage.blockingErrors_one': '{{count}} error blocks generation',
     'workflow.stage.blockingErrors_other': '{{count}} errors block generation',
-    'workflow.generation.sourcePreview_one':
-      'Source-only preview of {{count}} file; the output directory has not been written.',
-    'workflow.generation.sourcePreview_other':
-      'Source-only preview of {{count}} files; the output directory has not been written.',
-    'workflow.confirm.generateFiles_one': 'Write {{count}} file to {{directory}}?',
-    'workflow.confirm.generateFiles_other': 'Write {{count}} files to {{directory}}?',
     'workflow.batch.count_one': '{{count}} change · no files written',
     'workflow.batch.count_other': '{{count}} changes · no files written',
     'workflow.application.seedCount_one':
@@ -191,8 +180,16 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.save.changedCount_one': '{{count}} file will change · other original bytes preserved',
     'workflow.save.changedCount_other':
       '{{count}} files will change · other original bytes preserved',
-    'workflow.generation.fileCount_one': '{{count}} file · {{target}}',
-    'workflow.generation.fileCount_other': '{{count}} files · {{target}}',
+    'workflow.generation.writeSummary_one':
+      '{{count}} file will be written to {{directory}} · {{target}}',
+    'workflow.generation.writeSummary_other':
+      '{{count}} files will be written to {{directory}} · {{target}}',
+    'workflow.generation.writeSummary':
+      '{{count}} files will be written to {{directory}} · {{target}}',
+    'workflow.guard.unapplied_one': '{{count}} change has not been applied.',
+    'workflow.guard.unapplied_other': '{{count}} changes have not been applied.',
+    'workflow.guard.unapplied': '{{count}} changes have not been applied.',
+    'workflow.guard.unsaved': 'The project has unsaved changes.',
     'workflow.project.requireNameDirectory':
       'Enter a project name and choose a new project directory.',
     'workflow.project.requireArxml': 'Select at least one ARXML file',
@@ -209,7 +206,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.stage.integrationSaved': 'Standard inputs saved',
     'workflow.integration.savedNotGenerated': 'Standard inputs saved; source not generated yet',
     'workflow.stage.integrationValidated': 'Standard inputs validated',
-    'workflow.generation.cancelled': 'Generation cancelled; the output directory is unchanged.',
     'workflow.stage.currentNotBuilt': 'The current project has not been built',
     'workflow.stage.currentNotVerified': 'The current project has not been verified',
     'workflow.stage.rebuilding': 'Rebuilding; the previous verification result is no longer valid',
@@ -249,7 +245,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.confirm.removeCatalog':
       'Remove extension {{catalogId}}? Source files are kept; configuration that uses it loses the matching definitions.',
     'workflow.stage.blockingErrors': '{{count}} errors block generation',
-    'workflow.confirm.generateFiles': 'Write {{count}} files to {{directory}}?',
     'workflow.preflight.result':
       'Compilation preflight: {{status}}; source fingerprint: {{fingerprint}}. {{logs}}',
     'workflow.error.batchPreview': 'Changes rejected; the configuration is unchanged: {{error}}',
@@ -260,8 +255,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
       'Changes applied, but validating the standard inputs again failed: {{error}}',
     'workflow.guard.projectExplanation': 'The current project has unsaved or unapplied changes.',
     'workflow.guard.contextExplanation': 'There are unapplied changes.',
-    'workflow.common.yes': 'Yes',
-    'workflow.common.no': 'No',
     'workflow.batch.title': 'Confirm changes',
     'workflow.batch.objectChangeId': 'Object',
     'workflow.batch.before': 'Previous value',
@@ -318,7 +311,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.generation.binary': 'Binary or content that cannot be displayed',
     'workflow.handoff.title': 'Import ECU handoff package',
     'workflow.handoff.directory': 'Handoff package directory',
-    'workflow.guard.state': 'Unsaved: {{unsaved}} · Unapplied: {{unapplied}}',
     'workflow.batch.count': '{{count}} changes · no files written',
     'workflow.batch.inputIdentity': 'Input {{fingerprint}}',
     'workflow.batch.definitionIdentity': 'Definitions {{fingerprint}}',
@@ -328,7 +320,6 @@ export const workflowResources: Record<'zh-CN' | 'en', Record<string, string>> =
     'workflow.project.fileCount': '{{count}} files · new empty directory',
     'workflow.project.extensionCount': 'Accepted extensions ({{count}})',
     'workflow.save.changedCount': '{{count}} files will change · other original bytes preserved',
-    'workflow.generation.fileCount': '{{count}} files · {{target}}',
     'workflow.application.explanation':
       'Only missing source files are created; existing files are never overwritten.',
     'workflow.handoff.explanation':

@@ -54,7 +54,7 @@ export type WorkbenchState = {
   previewPath: string;
   capabilities: WorkbenchCapabilities | null;
   settingsOpen: boolean;
-  settingsCategory: 'appearance' | 'definitions' | 'tools';
+  settingsCategory: 'appearance' | 'language' | 'definitions' | 'tools';
   toolDraft: ExecutionTools;
   settingsNotice: Notice;
   /** Rejections attached to the inspector field that caused them, by fieldId. */

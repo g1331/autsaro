@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createPipelineInputs } from './support/inputs.mjs';
-import { openWorkbench, existing, json } from './support/workbench.mjs';
+import { dialogNamed, openWorkbench, existing, json } from './support/workbench.mjs';
 
 const {
   check,
@@ -52,10 +52,7 @@ check('composition-shared-editing-and-source-protection', async () => {
   await resize(1080, 720);
   await screenshot('composition-long-name-narrow-draft.png');
   await click('预览更改');
-  await until(
-    `Boolean(document.querySelector('[aria-label="确认应用更改"]'))`,
-    'composition field batch preview',
-  );
+  await until(`Boolean(${dialogNamed('确认应用更改')})`, 'composition field batch preview');
   await until(
     `[...document.querySelectorAll('[role=dialog] button')].some(node => node.textContent.trim() === '应用更改' && !node.disabled)`,
     'composition preview ready for keyboard cancel',
@@ -71,10 +68,7 @@ check('composition-shared-editing-and-source-protection', async () => {
     '0.0100',
   );
   await click('预览更改');
-  await until(
-    `Boolean(document.querySelector('[aria-label="确认应用更改"]'))`,
-    'composition field preview again',
-  );
+  await until(`Boolean(${dialogNamed('确认应用更改')})`, 'composition field preview again');
   await click('应用更改', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'composition batch applied');
   await until(
@@ -143,10 +137,7 @@ check('composition-shared-editing-and-source-protection', async () => {
   );
   await input(`[data-field-id=${json(port.fieldId)}]`, `${portTarget.targetId}:${portTarget.dest}`);
   await click('预览更改');
-  await until(
-    `Boolean(document.querySelector('[aria-label="确认应用更改"]'))`,
-    'composition paired endpoint preview',
-  );
+  await until(`Boolean(${dialogNamed('确认应用更改')})`, 'composition paired endpoint preview');
   await click('应用更改', "document.querySelector('[role=dialog]')");
   await until(`!document.querySelector('[role=dialog]')`, 'composition paired endpoint applied');
   await until(

@@ -22,8 +22,6 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
     integrationUnapplied: changed,
     integrationIds: ids,
     integrationPeriod: period,
-    integrationPreview: preview,
-    integrationPreviewPath: selectedFile,
     integrationNotice: notice,
     integrationIssues: issues,
     integrationInspection: inspection,
@@ -31,12 +29,10 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
     reopenIntegration: reopen,
     applyIntegration: apply,
     previewIntegrationSave: showPreview,
-    saveIntegration: save,
     restoreIntegrationDraft,
     setIntegrationIds: setIds,
     setIntegrationPeriod: setPeriod,
     setIntegrationPreview: setPreview,
-    setIntegrationPreviewPath: setSelectedFile,
     setIntegrationUnapplied: onDraftChange,
   } = controller;
   if (!workspace) return null;
@@ -46,7 +42,6 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
   const component = plan?.component;
   // The historical chain and the mainline both plan one shared application period.
   const planned = applicationPeriodMs(plan);
-  const selected = preview?.files.find((file) => file.path === selectedFile);
   return (
     <div className="workflow-page integration-view" aria-label={t('shell.integration.workspace')}>
       <div className="section-header">
@@ -202,46 +197,6 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
             </div>
           )}
         </>
-      )}
-      {preview && (
-        <div className="inspector-block">
-          <h3>{t('shell.integration.savePreview')}</h3>
-          <p>
-            {t('shell.integration.changedFiles', {
-              count: preview.files.filter((file) => file.changed).length,
-            })}
-          </p>
-          <div className="section-actions">
-            {preview.files.map((file) => (
-              <button key={file.path} onClick={() => setSelectedFile(file.path)}>
-                {file.path.split(/[\\/]/).pop()} ·{' '}
-                {file.changed ? t('shell.integration.changed') : t('shell.integration.unchanged')}
-              </button>
-            ))}
-          </div>
-          {selected && (
-            <>
-              <p className="mono path-text">{selected.path}</p>
-              {selected.changed ? (
-                <div className="integration-diff">
-                  <details>
-                    <summary>{t('shell.integration.before')}</summary>
-                    <pre>{selected.before}</pre>
-                  </details>
-                  <details>
-                    <summary>{t('shell.integration.after')}</summary>
-                    <pre>{selected.after}</pre>
-                  </details>
-                </div>
-              ) : (
-                <p>{t('shell.integration.unchangedBytes')}</p>
-              )}
-            </>
-          )}
-          <button className="primary-button" onClick={save} disabled={busy || locked || changed}>
-            {t('action.confirmSave')}
-          </button>
-        </div>
       )}
     </div>
   );

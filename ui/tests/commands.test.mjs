@@ -166,7 +166,7 @@ test('page, tool window and menu show one reason for an unavailable command, and
   fireEvent.click(entries[0]);
   expect(controller.buildEcu).not.toHaveBeenCalled();
   // The reason is visible beside the group with the entry that resolves it.
-  const row = page().getByText(reason).closest('li');
+  const row = document.getElementById(entries[0].getAttribute('aria-describedby')).closest('li');
   fireEvent.click(within(row).getByRole('button', { name: translate('action.executionTools') }));
   expect(controller.setSettingsCategory).toHaveBeenCalledWith('tools');
   expect(controller.setSettingsOpen).toHaveBeenCalledWith(true);
@@ -219,11 +219,8 @@ test.each(['zh-CN', 'en'])(
     render(React.createElement(App));
     const remedy = translate('backend.prepared.application_initialization_required');
     const preview = page().getByRole('button', { name: translate('action.previewSource') });
-    const generate = page().getByRole('button', { name: translate('action.confirmGenerate') });
-    for (const button of [preview, generate]) {
-      expect(button.getAttribute('aria-disabled')).toBe('true');
-      expect(describedText(button)).toBe(remedy);
-    }
+    expect(preview.getAttribute('aria-disabled')).toBe('true');
+    expect(describedText(preview)).toBe(remedy);
     fireEvent.click(preview);
     expect(controller.previewEcu).not.toHaveBeenCalled();
     const item = openMenu('tools').getByRole('menuitem', {

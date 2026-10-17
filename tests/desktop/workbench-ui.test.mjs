@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { openWorkbench, displayPaths, explicit, json } from './support/workbench.mjs';
+import { dialogNamed, openWorkbench, displayPaths, explicit, json } from './support/workbench.mjs';
 
 const {
   check,
@@ -42,10 +42,7 @@ check('themes-settings-layout-and-keyboard', async () => {
   ]) {
     await resize(width, height);
     await click('设置');
-    await until(
-      `Boolean(document.querySelector('[role=dialog][aria-label="设置"]'))`,
-      'settings dialog',
-    );
+    await until(`Boolean(${dialogNamed('设置')})`, 'settings dialog');
     for (const theme of ['light', 'dark', 'system']) {
       await click('外观', "document.querySelector('[role=dialog]')");
       await input(label('主题'), theme);
@@ -163,15 +160,16 @@ check('themes-settings-layout-and-keyboard', async () => {
     (object) => object.objectId !== field.objectId && object.writable,
   );
   await selectObject(second.objectId);
-  await until(`Boolean(document.querySelector('[role=dialog]'))`, 'context draft guard');
-  await click('取消', "document.querySelector('[role=dialog]')");
+  // Draft guards are alert dialogs (Radix AlertDialog).
+  await until(`Boolean(document.querySelector('[role=alertdialog]'))`, 'context draft guard');
+  await click('取消', "document.querySelector('[role=alertdialog]')");
   assert.equal(
     await evaluate(`document.querySelector(${json(draftSelector)}).value`),
     '18446744073709551614',
   );
   await input(draftSelector, '18446744073709551616');
   await selectObject(second.objectId);
-  await click('应用并继续', "document.querySelector('[role=dialog]')");
+  await click('应用并继续', "document.querySelector('[role=alertdialog]')");
   await until(`Boolean(document.querySelector('[role=alert]'))`, 'invalid apply rejected');
   assert.equal(
     await evaluate(`document.querySelector('[data-object-title]').dataset.objectTitle`),
@@ -184,8 +182,11 @@ check('themes-settings-layout-and-keyboard', async () => {
     'Failed apply must retain draft',
   );
   await selectObject(second.objectId);
-  await until(`Boolean(document.querySelector('[role=dialog]'))`, 'retained invalid draft guard');
-  await click('放弃并继续', "document.querySelector('[role=dialog]')");
+  await until(
+    `Boolean(document.querySelector('[role=alertdialog]'))`,
+    'retained invalid draft guard',
+  );
+  await click('放弃并继续', "document.querySelector('[role=alertdialog]')");
   await until(
     `document.querySelector('[data-object-title]')?.dataset.objectTitle === ${json(second.objectId)}`,
     'explicit draft discard',
@@ -200,6 +201,7 @@ check('language-preview-save-preserves-project-and-draft', async () => {
   await input(draftSelector, draftValue);
   const caps = await capabilities();
   await click('设置');
+  await click('界面语言', "document.querySelector('[role=dialog]')");
   await input(label('界面语言'), 'en');
   await until(`document.documentElement.lang === 'en'`, 'English language preview');
   assert.equal((await capabilities()).language, 'zh-CN', 'Preview must not save');
@@ -209,6 +211,7 @@ check('language-preview-save-preserves-project-and-draft', async () => {
   await until(`document.documentElement.lang === 'zh-CN'`, 'Canceled language preview');
   assert.equal(await evaluate(`document.querySelector(${json(draftSelector)}).value`), draftValue);
   await click('设置');
+  await click('界面语言', "document.querySelector('[role=dialog]')");
   await input(label('界面语言'), 'en');
   await until(`document.documentElement.lang === 'en'`, 'English settings');
   await click('Save language', "document.querySelector('[role=dialog]')");
@@ -229,6 +232,7 @@ check('language-preview-save-preserves-project-and-draft', async () => {
   assert.equal(await evaluate(`document.querySelector(${json(draftSelector)}).value`), draftValue);
   await screenshot('language-english-saved.png');
   await click('Settings');
+  await click('Interface language', "document.querySelector('[role=dialog]')");
   await input(label('Interface language'), 'zh-CN');
   await until(`document.documentElement.lang === 'zh-CN'`, 'Chinese settings');
   await click('保存语言', "document.querySelector('[role=dialog]')");

@@ -10,21 +10,33 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
   const [projectFile, setProjectFile] = useState('');
   const [applicationFile, setApplicationFile] = useState('');
+  const busy = { busy: c.busy, onCancelBusy: c.cancelOperation };
   if (c.guard) {
     const project = c.guard.kind === 'project';
+    const unappliedCount = c.changes.length + (c.integrationUnapplied ? 1 : 0);
     return (
       <Dialog
+        alert
+        size="confirm"
         notice={c.notice}
+        busy={c.busy}
+        onCancelBusy={c.cancelOperation}
         title={text(c.guard.title)}
         onClose={() => void c.resolveGuard('cancel')}
         footer={
           <>
-            <button type="button" onClick={() => void c.resolveGuard('cancel')}>
-              {project ? t('action.cancel') : t('action.cancel')}
+            <button
+              type="button"
+              data-initial-focus
+              disabled={Boolean(c.busy)}
+              onClick={() => void c.resolveGuard('cancel')}
+            >
+              {t('action.cancel')}
             </button>
             <button
               type="button"
               className="danger-button"
+              disabled={Boolean(c.busy)}
               onClick={() => void c.resolveGuard('discard')}
             >
               {project ? t('action.discardContinue') : t('action.discardContinue')}
@@ -32,6 +44,7 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             <button
               type="button"
               className="primary-button"
+              disabled={Boolean(c.busy)}
               onClick={() => void c.resolveGuard('apply')}
             >
               {project ? t('action.saveContinue') : t('action.applyContinue')}
@@ -44,16 +57,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
             ? t('workflow.guard.projectExplanation')
             : t('workflow.guard.contextExplanation')}
         </p>
-        <p>
-          {t('workflow.guard.state', {
-            unsaved: t(
-              c.workspace?.dirty || c.projection?.dirty
-                ? 'workflow.common.yes'
-                : 'workflow.common.no',
-            ),
-            unapplied: t(c.unapplied ? 'workflow.common.yes' : 'workflow.common.no'),
-          })}
-        </p>
+        {unappliedCount ? <p>{t('workflow.guard.unapplied', { count: unappliedCount })}</p> : null}
+        {c.workspace?.dirty || c.projection?.dirty ? <p>{t('workflow.guard.unsaved')}</p> : null}
       </Dialog>
     );
   }
@@ -61,10 +66,10 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     return (
       <Dialog
         notice={c.notice}
+        size="preview"
+        {...busy}
         title={t('workflow.batch.title')}
-        onClose={() => {
-          if (!c.busy) c.cancelChangePreview();
-        }}
+        onClose={() => c.cancelChangePreview()}
         footer={
           <>
             <span>{t('workflow.batch.count', { count: c.changePreview.impacts.length })}</span>
@@ -137,11 +142,11 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const preview = c.applicationPreview;
     const selected =
       preview.files.find((file) => file.path === applicationFile) ?? preview.files[0];
-    const close = () => {
-      if (!c.busy) c.setApplicationPreview(null);
-    };
+    const close = () => c.setApplicationPreview(null);
     return (
       <Dialog
+        size="preview"
+        {...busy}
         notice={c.notice}
         title={t('workflow.application.title')}
         onClose={close}
@@ -244,15 +249,15 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const selected = preview.files.find((file) => file.path === projectFile) ?? preview.files[0];
     return (
       <Dialog
+        size="preview"
+        {...busy}
         notice={c.notice}
         title={
           c.projectPreviewKind === 'create'
             ? t('workflow.project.createTitle')
             : t('workflow.project.saveAsTitle')
         }
-        onClose={() => {
-          if (!c.busy) c.setProjectPreview(null);
-        }}
+        onClose={() => c.setProjectPreview(null)}
         footer={
           <>
             <span>{t('workflow.project.fileCount', { count: preview.files.length })}</span>
@@ -326,6 +331,8 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const close = () => c.cancelSavePreview();
     return (
       <Dialog
+        size="preview"
+        {...busy}
         notice={c.notice}
         title={t('workflow.save.title')}
         onClose={close}
@@ -418,11 +425,11 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     const preview = c.generationPreview;
     const file =
       preview.files.find((item) => item.path === c.generationPreviewPath) ?? preview.files[0];
-    const close = () => {
-      if (!c.busy) c.setGenerationPreview(null);
-    };
+    const close = () => c.setGenerationPreview(null);
     return (
       <Dialog
+        size="preview"
+        {...busy}
         notice={c.notice}
         title={
           c.generationKind === 'handoff'
@@ -433,8 +440,9 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
         footer={
           <>
             <span>
-              {t('workflow.generation.fileCount', {
+              {t('workflow.generation.writeSummary', {
                 count: preview.files.length,
+                directory: displayPath(preview.outputDirectory),
                 target: targetLabel(c.buildTarget),
               })}
             </span>
@@ -538,11 +546,10 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
     );
   }
   if (c.handoffImportOpen) {
-    const close = () => {
-      if (!c.busy) c.setHandoffImportOpen(false);
-    };
+    const close = () => c.setHandoffImportOpen(false);
     return (
       <Dialog
+        {...busy}
         notice={c.notice}
         title={t('workflow.handoff.title')}
         onClose={close}

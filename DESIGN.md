@@ -240,7 +240,7 @@ No globally fixed line height is defined. Do not invent a uniform type scale or 
 
 Use a vertical shell and a horizontal engineering area, not a centered marketing-content container. The left tool rail is 42px wide, the project tree is 250px wide, and the inspector is 290px wide. The center fills the remaining space flexibly and allows independent scrolling. Panel padding references `spacing.panel`, control spacing references `spacing.gap`, and editor and dialog padding reference their respective tokens.
 
-Fixed heights: menu bar 34px, context toolbar 38px, the first header row of every column (tree header, editor tabs, inspector tabs) 39px, tree sub-tabs 34px, bottom tool tabs 32px, status bar 27px, tree nodes at least 30px. Dialog padding: header 16px 24px, body 20px 24px, footer 12px 24px. Dialog widths, capped at 96vw: confirmation 480px, form 720px, preview 1100px.
+Fixed heights: menu bar 34px, context toolbar 38px, first header row of each column (tree, editor tabs, inspector tabs) 39px, tree sub-tabs 34px, bottom tool tabs 32px, status bar 27px, tree nodes ≥30px. Dialog padding: header 16px 24px, body 20px 24px, footer 12px 24px. Dialog widths ≤96vw: confirmation 480px, form 720px, preview 1100px; settings 640px high. Page forms ≤960px.
 
 The window's minimum is 1080×720, so the only compact range is 1080–1250px: tree / inspector shrink to 220 / 260px, editor padding to panel padding, and table headers and cells to 9px 8px. Tables keep a 560px minimum width and scroll inside their containers; narrow windows collapse the inspector and tree from the tool rail instead of overlaying them. Below 1080px (browser review only) the layout is not adapted; this is not a mobile-product claim.
 

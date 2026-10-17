@@ -336,9 +336,17 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     if (!preview) return;
     await run(
       { kind: 'action', label: message('activity.initializeApplication') },
-      () => call<ApplicationInitializationOutcome>('initialize_application_previewed', { preview }),
-      (outcome) => {
+      async () => {
+        const outcome = await call<ApplicationInitializationOutcome>(
+          'initialize_application_previewed',
+          { preview },
+        );
+        // The member list now names the application; only the workspace view reports that.
+        return { outcome, view: await call<WorkspaceView>('workspace_view') };
+      },
+      ({ outcome, view }) => {
         patchState({
+          workspace: view,
           applicationPreview: null,
           projection: outcome.projection,
           applicationWarnings: outcome.warnings,

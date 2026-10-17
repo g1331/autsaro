@@ -331,9 +331,10 @@ test('the settings page marks the rejected tool and clears the mark when the pat
     setToolErrors,
   };
   const view = render(React.createElement(SettingsPage, { controller: withCommands(controller) }));
-  const input = view.container.querySelector('[aria-invalid="true"]');
+  // The dialog is portalled out of the render container.
+  const input = view.baseElement.querySelector('[aria-invalid="true"]');
   expect(input).not.toBeNull();
-  const error = view.container.querySelector(`#${input.getAttribute('aria-describedby')}`);
+  const error = view.baseElement.querySelector(`#${input.getAttribute('aria-describedby')}`);
   expect(error.textContent).toContain('/missing/gcc');
   fireEvent.change(input, { target: { value: '/usr/bin/gcc' } });
   expect(setToolErrors).toHaveBeenCalledWith({ compiler: undefined });

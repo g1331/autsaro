@@ -38,10 +38,7 @@ test('browser confirmation renders a product descriptor before asking', async ()
   platform.native = false;
   const browserConfirm = vi.fn(() => false);
   vi.stubGlobal('window', { confirm: browserConfirm });
-  const prompt = message('workflow.confirm.generateFiles', {
-    count: 3,
-    directory: 'D:/Project/output',
-  });
+  const prompt = message('workflow.confirm.acceptCatalog', { path: 'D:/Project/catalog.json' });
   expect(await requestConfirmation(prompt)).toBe(false);
   expect(browserConfirm).toHaveBeenCalledWith(localize(prompt));
 });

@@ -30,19 +30,11 @@ interface Dependencies {
   continueReplacement: (saved: WorkspaceView, error: Text | null) => Promise<void>;
   unapplied: boolean;
   acceptIntegration: (report: IntegrationInspection) => void;
-  confirmAction: (message: Text) => Promise<boolean>;
 }
 
 export function createDeliveryActions(session: WorkbenchSession, dependencies: Dependencies) {
-  const {
-    run,
-    acceptView,
-    markStage,
-    continueReplacement,
-    unapplied,
-    acceptIntegration,
-    confirmAction,
-  } = dependencies;
+  const { run, acceptView, markStage, continueReplacement, unapplied, acceptIntegration } =
+    dependencies;
   const { call, stateRef, field, state, patchState } = session;
   const {
     savePreview,
@@ -271,19 +263,9 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     );
   }
 
-  async function generateEcu() {
+  function generateEcu() {
+    // The preview dialog is the only confirmation; it names the files and directory.
     if (!generationPreview) return;
-    if (
-      !(await confirmAction(
-        message('workflow.confirm.generateFiles', {
-          count: generationPreview.files.length,
-          directory: generationPreview.outputDirectory,
-        }),
-      ))
-    ) {
-      setNotice({ tone: 'info', text: message('workflow.generation.cancelled') });
-      return;
-    }
     void run(
       { kind: 'action', label: message('activity.generate') },
       () =>

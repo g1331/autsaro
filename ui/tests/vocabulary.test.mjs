@@ -330,10 +330,13 @@ test.each(languages)(
 
     fireEvent.click(view.getByRole('button', { name: /Ctrl\+K/ }));
     const palette = view.getByRole('dialog');
+    // The palette also lists unavailable commands, so its name does not say "available".
+    expect(
+      within(palette).getByRole('combobox', { name: translate('shell.app.searchPlaceholder') }),
+    ).toBeTruthy();
     const commands = within(palette)
-      .getAllByRole('button')
-      .map((button) => button.firstChild?.textContent)
-      .filter(Boolean);
+      .getAllByRole('option')
+      .map((option) => option.firstChild.textContent);
     expect(commands).toContain(translate('action.previewSave'));
     // Commands without a menu entry (page-only actions) still read their action label.
     const actionLabels = Object.entries(actionResources[language])
@@ -345,15 +348,13 @@ test.each(languages)(
 
     fireEvent.click(view.getByRole('button', { name: translate('shell.settings.title') }));
     const settings = view.getByRole('dialog');
-    for (const category of ['appearance', 'definitions', 'tools']) {
+    for (const category of ['appearance', 'language', 'definitions', 'tools']) {
       fireEvent.click(
         within(settings).getByRole('tab', { name: translate(`shell.settings.${category}`) }),
       );
       expectLabelsMatchNames(settings, `settings ${category}`);
     }
-    fireEvent.click(
-      within(settings).getAllByRole('button', { name: translate('action.close') })[0],
-    );
+    fireEvent.click(within(settings).getByRole('button', { name: translate('action.cancel') }));
 
     fireEvent.click(
       openMenu(view, 'view').getByRole('menuitem', {
