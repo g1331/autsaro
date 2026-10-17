@@ -28,6 +28,10 @@ typedef enum {
 /** @brief Return a stable text name for a host status code.
  * @param[in] status Status value to describe.
  * @return Static text owned by the runtime.
+ * Preconditions: None; unknown codes map to INTERNAL.
+ * Context: Any context, including inside exclusive areas.
+ * Reentrancy: Reentrant; immutable literals only.
+ * Ownership: Returned string is runtime-owned static storage; caller must not free or modify it.
  */
 const char *Ecu_StatusName(EcuStatus status);
 

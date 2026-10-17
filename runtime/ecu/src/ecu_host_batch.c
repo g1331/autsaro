@@ -3,7 +3,7 @@
 #include "Os_Host.h"
 #include <stdio.h>
 
-static Ecu_HostBatch batch;
+static Ecu_HostBatch batch; /**< Native control only; HostBatchInitialize zeros before use. */
 
 static int write_output(const Ecu_OutputRecord *output,
                         const Ecu_HostBatch *state,

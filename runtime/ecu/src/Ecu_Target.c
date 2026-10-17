@@ -39,36 +39,59 @@ typedef struct {
     Ecu_ProtocolRecord record;
 } Ecu_ProtocolSlot;
 
-static volatile Os_Atomic32 lifecycle;
-static volatile Os_Atomic32 native_owner;
-static Os_HostThreadId native_thread;
+/* Process-local target: zero-initialized once; Prepare never resets these queues.
+ * Atomic lifecycle/native-owner and slot states publish cross-thread payloads.
+ * Native identity is immutable after native_owner reaches 2. Output slots advance
+ * 0 free -> 1 published -> 2 taken -> 3 confirmation admitted -> 0 owner-retired.
+ * Batch ownership advances 0 free -> 1 native writing -> 2 published -> 3 owner
+ * executing -> 4 awaiting quiescence -> 5 complete -> 0 native consumed.
+ * Ordinary epoch/cycle/output-writer state is accessed only by the ECU owner.
+ * Native reader/confirmation indices are accessed only by the bound producer.
+ */
+static volatile Os_Atomic32 lifecycle; /**< Atomic target lifecycle; Prepare claims zero once. */
+static volatile Os_Atomic32
+    native_owner; /**< Atomic native binding: 0 unbound, 1 binding, 2 published. */
+static Os_HostThreadId
+    native_thread; /**< Bound native identity; published by native_owner, never reset. */
 /* Accessed only by the native producer after its atomic identity publication. */
-static uint64_t native_input_epoch;
-static uint64_t native_batch_ticket;
-static volatile Os_Atomic32 batch_state;
-static uint64_t batch_epoch;
-static uint16_t batch_count;
-static uint8_t batch_needs_tick;
-static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY];
-static Ecu_BatchCompletion batch_completion;
-static Os_HostThreadId initialization_thread;
-static uint64_t epoch;
-static uint64_t processed_tick;
-static uint64_t processed_epoch;
-static uint64_t next_output_ticket;
-static unsigned output_write;
-static unsigned output_read;
-static unsigned output_confirm;
-static unsigned output_retire;
-static unsigned output_pending;
+static uint64_t
+    native_input_epoch; /**< Native-only last admitted input epoch, ms; initially zero. */
+static uint64_t
+    native_batch_ticket; /**< Native-only last accepted batch identity; initially zero. */
+static volatile Os_Atomic32 batch_state; /**< Atomic batch handoff state, 0..5; no Prepare reset. */
+static uint64_t batch_epoch; /**< Published batch epoch, ms; protected by batch_state. */
+static uint16_t batch_count; /**< Published frame count, 0..256; protected by batch_state. */
+static uint8_t
+    batch_needs_tick; /**< Owner-only flag: batch needs a delivered tick; initially zero. */
+static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY]; /**< Copied batch payload protected by
+                                                           batch_state; no Init reset. */
+static Ecu_BatchCompletion
+    batch_completion; /**< Owner completion protected by batch_state; no Init reset. */
+static Os_HostThreadId
+    initialization_thread;      /**< StartupHook writes once before READY publication; no reset. */
+static uint64_t epoch;          /**< Owner-only current logical epoch, ms; initially zero. */
+static uint64_t processed_tick; /**< Owner-only last processed tick ticket; initially zero. */
+static uint64_t
+    processed_epoch; /**< Owner-only last processed logical epoch, ms; initially zero. */
+static uint64_t next_output_ticket; /**< Owner-only monotonic output identity; initially zero. */
+static unsigned output_write;       /**< Owner-only next publication slot; initially zero. */
+static unsigned output_read;        /**< Native-only next take slot; initially zero. */
+static unsigned output_confirm;     /**< Native-only next confirmation slot; initially zero. */
+static unsigned output_retire;      /**< Owner-only next retirement slot; initially zero. */
+static unsigned output_pending;     /**< Owner-only outstanding output count; initially zero. */
 /* Confirmations taken before their epoch's cycle, retired after it in order. */
-static unsigned output_deferred;
-static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];
-static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY];
-static unsigned protocol_write;
-static unsigned protocol_read;
+static unsigned
+    output_deferred; /**< Owner-only confirmations deferred until cycle; initially zero. */
+static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY]; /**< Copied outputs protected by atomic
+                                                              slot states; no Init reset. */
+static Ecu_ProtocolSlot
+    protocol_failures[ECU_TARGET_OUTPUT_CAPACITY]; /**< Copied failures protected by atomic slot
+                                                      states; no Init reset. */
+static unsigned protocol_write; /**< Owner-only next failure publication slot; initially zero. */
+static unsigned protocol_read;  /**< Native-only next failure consumption slot; initially zero. */
 /* Highest generated bootstrap stage that began; retirement undoes only those. */
-static uint8 bootstrap_reached;
+static uint8
+    bootstrap_reached; /**< Startup writes begun stage; stopped-owner shutdown reads; no reset. */
 
 static void fail(void)
 {
@@ -180,7 +203,7 @@ StatusType Ecu_TargetPrepare(void)
     }
     return status;
 }
-#if defined(ECU_TARGET_TESTS)
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
 static void stage(unsigned number)
 {
     if (Ecu_TargetTestFailStage(number) != 0) {
@@ -209,7 +232,7 @@ void ShutdownHook(StatusType Error)
         (Error == E_OK) ? (Os_Atomic32)ECU_TARGET_CLOSED : (Os_Atomic32)ECU_TARGET_FAILED;
     Ecu_StackRetire(bootstrap_reached);
     (void)Os_HostAtomicExchange(&lifecycle, state);
-#ifdef ECU_TARGET_TESTS
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
     Ecu_TargetTestShutdown(Error);
 #endif
 }
@@ -482,7 +505,7 @@ static void consume(const Ecu_Input *input)
         (void)Can_Inject(input->can_id, input->dlc, input->data, epoch);
         Ecu_ComReceptionBeforeMain(input->epoch > processed_epoch);
         Can_MainFunction_Read();
-#ifdef ECU_TARGET_TESTS
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
         stage(11u);
 #endif
         if (Can_HostFlush() != ECU_OK) {
@@ -516,7 +539,7 @@ static void consume(const Ecu_Input *input)
                 batch_frames[index].id, batch_frames[index].dlc, batch_frames[index].data, epoch);
             Ecu_ComReceptionBeforeMain(batch_epoch > processed_epoch);
             Can_MainFunction_Read();
-#ifdef ECU_TARGET_TESTS
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
             stage(11u);
 #endif
             if (Can_HostFlush() != ECU_OK) {
@@ -526,7 +549,7 @@ static void consume(const Ecu_Input *input)
                 batch_completion.input_status = status;
             }
         }
-#ifdef ECU_TARGET_TESTS
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
         stage(12u);
 #endif
         (void)Os_HostAtomicExchange(&batch_state, 4);
@@ -577,13 +600,13 @@ void Ecu_TargetTask(void)
                 fail();
             }
             epoch = delivered;
-#ifdef ECU_TARGET_TESTS
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
             stage(9u);
 #endif
             if (Ecu_StackRunCycle(events) != E_OK) {
                 fail();
             }
-#ifdef ECU_TARGET_TESTS
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
             stage(10u);
 #endif
             processed_tick = ticket;

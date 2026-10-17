@@ -10,7 +10,8 @@
 /* All CAN_HOST_AREA_BUSSM. Init keeps an in-flight publisher so that no second one
  * overtakes it. */
 /** The configuration, or NULL when uninitialized. */
-static const Ecu_HostBusSM_ConfigType *bussm_configuration ECU_HOSTBUSSM_VAR_CLEARED;
+static const Ecu_HostBusSM_ConfigType *bussm_configuration
+    ECU_HOSTBUSSM_VAR_CLEARED; /**< BUSSM area; Init replaces, DeInit clears borrowed config. */
 static ComM_ModeType requested_mode ECU_HOSTBUSSM_VAR_CLEARED; /**< Last accepted request. */
 static boolean transition_pending ECU_HOSTBUSSM_VAR_CLEARED;   /**< Controller transition. */
 static uint32 revision ECU_HOSTBUSSM_VAR_CLEARED; /**< Transition events; never reset. */
