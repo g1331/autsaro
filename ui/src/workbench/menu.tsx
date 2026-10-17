@@ -91,7 +91,7 @@ function MenuRows({ commands, run }: { commands: Command[]; run: (id: string) =>
           {reason}
         </small>,
       );
-    if (commands[index + 1]?.group !== command.group)
+    if (index === commands.length - 1 || commands[index + 1].group !== command.group)
       for (const shared of reasons.filter((entry) => users(entry) > 1))
         rows.push(
           <small key={`${command.id}-${shared}`} id={reasonId(shared)}>
