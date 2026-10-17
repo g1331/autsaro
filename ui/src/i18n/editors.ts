@@ -52,6 +52,10 @@ export const editorResources: {
   en: Record<string, string>;
 } = {
   'zh-CN': {
+    'editor.container.linked.can-id': '同时更新帧触发标识符和 CanIf PDU CAN ID。',
+    'editor.container.linked.application-period': '同时更新关联定时事件和 OS 触发器。',
+    'editor.container.linked.application-com-period':
+      '同时更新关联定时事件、OS 触发器和 Com 发送周期。',
     'editor.tools.automaticChecks': '自动检查（打开和编辑时运行）',
     'editor.objects.outOfRange': '超出允许范围 {{minimum}}–{{maximum}}，预览时会被拒绝。',
     'editor.dialog.copied': '已复制',
@@ -269,6 +273,12 @@ export const editorResources: {
     'editor.window.restore': '还原窗口',
   },
   en: {
+    'editor.container.linked.can-id':
+      'Updates the frame triggering identifier and CanIf PDU CAN ID together.',
+    'editor.container.linked.application-period':
+      'Updates linked timing events and OS triggers together.',
+    'editor.container.linked.application-com-period':
+      'Updates linked timing events, OS triggers and Com transmit timing together.',
     'editor.container.add': 'Add {{name}}',
     'editor.problems.actions': 'Actions',
     'editor.problems.allModules': 'All modules',

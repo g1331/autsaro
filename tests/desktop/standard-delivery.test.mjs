@@ -12,6 +12,10 @@ import {
 
 const {
   check,
+  screenshot,
+  resize,
+  key,
+  selectObject,
   evaluate,
   scratch,
   until,
@@ -45,17 +49,120 @@ check('seven-source-standard-variant', async () => {
   const view = await projection();
   assert.equal(view.sources.length, 7);
   const savedBytes = await sourceBytes(view);
+  await awaitStandardInspectionReady();
+  const linkedFields = [
+    [view.fields.find((field) => field.definitionId.endsWith('/CanIfRxPduCanId')), '1104'],
+    [view.fields.find((field) => field.definitionId.endsWith('/CanIfTxPduCanId')), '1105'],
+    [
+      view.fields.find((field) => field.definitionId === 'TIMING-EVENT#PERIOD' && field.linkedEdit),
+      '0.020',
+    ],
+  ];
+  for (const [parameter, value] of linkedFields) {
+    assert(parameter?.linkedEdit);
+    await selectObject(parameter.objectId);
+    const cell = `[data-field-id=${json(parameter.fieldId)}]`;
+    await input(cell, value);
+    await key('Escape');
+    assert.equal(
+      await evaluate(`document.querySelector(${json(cell)}).value`),
+      parameter.current.value.lexeme,
+    );
+    await input(cell, value);
+    await key('Enter');
+    await until(
+      `!document.querySelector(${json(cell)}).readOnly && !document.querySelector('[data-parameter-row="${parameter.fieldId}"]').classList.contains('unapplied')`,
+      'linked grid edit applied',
+    );
+    assert.equal(
+      (await projection()).fields.find((field) => field.fieldId === parameter.fieldId).current.value
+        .lexeme,
+      value,
+    );
+    assert.equal(await evaluate(`Boolean(document.querySelector('[role=dialog]'))`), false);
+  }
+  // A rejected linked period keeps the draft and every committed linked location.
+  const [period] = linkedFields[2];
+  const cell = `[data-field-id=${json(period.fieldId)}]`;
+  const committed = await projection();
+  await input(cell, '0.0001');
+  await key('Enter');
   await until(
-    `Boolean(document.querySelector('[aria-label="标准输入工作区"] .integration-fields label:first-child input:not(:disabled)'))`,
-    'automatic standard inspection editor ready',
+    `Boolean(document.querySelector('[data-parameter-row="${period.fieldId}"] .field-error')) && !document.querySelector(${json(cell)}).readOnly`,
+    'linked rejection belongs to the edited cell',
   );
-  // This is the existing bounded standard editor, not a new private grammar.
+  assert.deepEqual(
+    (await projection()).fields.map((field) => field.current),
+    committed.fields.map((field) => field.current),
+  );
+  await screenshot('linked-period-rejected.png');
+  await key('Escape');
+  for (const [width, height] of [
+    [1480, 920],
+    [1080, 720],
+  ]) {
+    await resize(width, height);
+    for (const theme of ['light', 'dark']) {
+      await click('设置');
+      await until(`Boolean(${dialogNamed('设置')})`, 'settings opened');
+      await click('外观', "document.querySelector('[role=dialog]')");
+      await input(label('主题'), theme);
+      await click('保存外观', "document.querySelector('[role=dialog]')");
+      await until(
+        `(async()=> (await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).appearance === ${json(theme)} && document.documentElement.dataset.theme === ${json(theme)} && Boolean([...document.querySelectorAll('[role=dialog] button')].find(node => node.textContent.trim() === '保存外观' && !node.disabled)))()`,
+        'theme saved',
+      );
+      await key('Escape');
+      await until(`!document.querySelector('[role=dialog]')`, 'settings closed');
+      await screenshot(`linked-grid-${width}x${height}-${theme}.png`);
+    }
+  }
+  await click('设置');
+  await click('界面语言', "document.querySelector('[role=dialog]')");
+  await input(label('界面语言'), 'en');
+  await until(`document.documentElement.lang === 'en'`, 'English preview');
+  await click('Save language', "document.querySelector('[role=dialog]')");
+  await until(
+    `Boolean([...document.querySelectorAll('[role=dialog] button')].find(node => node.textContent.trim() === 'Save language' && !node.disabled && node.getAttribute('aria-busy') === 'false'))`,
+    'English language saved',
+  );
+  await key('Escape');
+  await until(`!document.querySelector('[role=dialog]')`, 'English settings closed');
+  await input(cell, '0.0001');
+  await key('Enter');
+  await until(
+    `Boolean(document.querySelector('[data-parameter-row="${period.fieldId}"] .field-error')) && !document.querySelector(${json(cell)}).readOnly`,
+    'English rejection',
+  );
+  await screenshot('linked-grid-1080x720-dark-en-rejected.png');
+  await key('Escape');
+  for (const value of ['0.030', '0.020']) {
+    await input(cell, value);
+    await key('Enter');
+    await until(
+      `!document.querySelector(${json(cell)}).readOnly && !document.querySelector('[data-parameter-row="${period.fieldId}"]').classList.contains('unapplied')`,
+      'English linked apply',
+    );
+    assert.equal(
+      (await projection()).fields.find((field) => field.fieldId === period.fieldId).current.value
+        .lexeme,
+      value,
+    );
+  }
+  await screenshot('linked-grid-1080x720-dark-en.png');
+  await click('Settings');
+  await click('Interface language', "document.querySelector('[role=dialog]')");
+  await input(label('Interface language'), 'zh-CN');
+  await until(`document.documentElement.lang === 'zh-CN'`, 'Chinese preview');
+  await click('保存语言', "document.querySelector('[role=dialog]')");
+  await until(
+    `Boolean([...document.querySelectorAll('[role=dialog] button')].find(node => node.textContent.trim() === '保存语言' && !node.disabled && node.getAttribute('aria-busy') === 'false'))`,
+    'Chinese language saved',
+  );
+  await key('Escape');
+  await until(`!document.querySelector('[role=dialog]')`, 'Chinese settings closed');
+  await resize(1480, 920);
   await menu('标准输入');
-  await input(field('接收 CAN ID'), '1104');
-  await input(field('发送 CAN ID'), '1105');
-  await input(field('应用 / Com 发送 / 对应 Alarm 周期（ms）'), '20');
-  await click('应用更改', 'document.querySelector(\'[aria-label="标准输入工作区"]\')');
-  await until(`document.body.innerText.includes('尚未保存')`, 'real standard variant apply');
   await unchanged(savedBytes);
   await click('预览保存');
   await until(`Boolean(${dialogNamed('保存配置')})`, 'standard source preview');

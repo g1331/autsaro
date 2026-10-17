@@ -578,3 +578,34 @@ for (const language of ['zh-CN', 'en']) {
     expect(within(view.getByRole('region', { name: 'Period' })).getByText('5')).toBeTruthy();
   });
 }
+
+test('linked parameter keeps the cell editor and describes other locations in both languages', () => {
+  const linked = {
+    ...period,
+    linkedEdit: {
+      kind: 'can-id',
+      groupId: '/Application/SharedAlarm',
+      operation: 'set-value',
+      locations: ['RxFrame · IDENTIFIER', 'ApplicationAlarm · OsAlarmCycleTime'],
+    },
+  };
+  for (const [language, hint] of [
+    ['en', 'Updates the frame'],
+    ['zh-CN', '同时更新帧'],
+  ]) {
+    previewLanguage(language);
+    const c = controller();
+    c.projection = { ...c.projection, fields: [linked] };
+    const view = render(createElement(ContainerView, { controller: c }));
+    expect(view.getByText((text) => text.startsWith(hint)).className).toBe('field-help');
+    expect(view.getByText((text) => text.startsWith(hint)).textContent).toContain(
+      'CanIf PDU CAN ID',
+    );
+    const input = view.container.querySelector('[data-field-id="Period"]');
+    fireEvent.change(input, { target: { value: '20' } });
+    expect(c.stageChange).toHaveBeenCalledWith(
+      expect.objectContaining({ op: 'set-value', field: { kind: 'existing', fieldId: 'Period' } }),
+    );
+    cleanup();
+  }
+});

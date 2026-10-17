@@ -585,6 +585,9 @@ function ParameterRow({ controller: c, field }: { controller: Workbench; field: 
           </button>
         ) : null}
         <small>{field.kind ? t(editorValueKindKeys[field.kind]) : field.elementKind}</small>
+        {field.linkedEdit ? (
+          <p className="field-help">{t(`editor.container.linked.${field.linkedEdit.kind}`)}</p>
+        ) : null}
         {field.description ? (
           <p id={helpId} className="field-help" hidden={!helpOpen}>
             {text(field.description)}
