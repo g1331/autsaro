@@ -174,7 +174,7 @@ check('live-application-initialization-and-immutable-snapshot', async () => {
     .trim()
     .split('\n')
     .map(JSON.parse)
-    .filter((request) => request.script?.startsWith('performance.timeOrigin !=='));
+    .filter((request) => request.script?.includes('performance.timeOrigin !=='));
   assert(navigationProbes.length >= 4, 'Startup and all three public reloads were observed');
   assert(
     navigationProbes.every((request) => request.route === '/session/execute/sync'),
