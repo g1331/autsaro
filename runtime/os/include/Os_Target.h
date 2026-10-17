@@ -156,56 +156,56 @@ StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info);
 /** Observe a committed native scheduling transition in test builds.
  * @par Return
  * None.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
- * Ownership: no pointer is retained; all arguments/results are scalar.
+ * Preconditions: ready OS and a registered Task/Category 2 ISR; invoked only by the OS transition
+ * path. Context: Task or Category 2 ISR transition under the native OS critical section; no BSW
+ * area entry. Reentrancy: virtual-core serialized; the callback must not recursively change
+ * scheduling. Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestObserve(void);
 /** Set the activation ordering stamp for saturation tests.
  * @param[in] sequence New stamp, at least the current request sequence.
  * @par Return
  * None.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
+ * Preconditions: OS_ACTIVATION_TESTS enabled; sequence is at least the current request stamp or
+ * asserts. Context: fixture Task; acquires the native OS critical section internally, outside BSW
+ * areas. Reentrancy: serialized by the OS critical section; fixture controls the injected stamp.
  * Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TargetTestSequence(uint64 sequence);
 /** Observe admission before the native activation lock in tests.
  * @par Return
  * None.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
- * Ownership: no pointer is retained; all arguments/results are scalar.
+ * Preconditions: OS_ACTIVATION_TESTS enabled; called by the backend for a valid ActivateTask
+ * target. Context: Task or Category 2 ISR ActivateTask path, before acquiring the native OS
+ * critical section. Reentrancy: fixture must coordinate its injected close request; no recursive
+ * activation. Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestBeforeActivationLock(void);
 /** Observe a selected activation admission boundary in tests.
  * @param[in] point Implementation-defined boundary selector used by the fixture.
  * @par Return
  * None.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
+ * Preconditions: OS_ACTIVATION_TESTS enabled; point 0 is before admission claim, point 1 after it.
+ * Context: Task or Category 2 ISR ActivateTask path with the native OS critical section held.
+ * Reentrancy: virtual-core serialized; preserve admission and lock state on return.
  * Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestAtActivationAdmission(uint32 point);
 /** Observe the shutdown boundary before permanent close in tests.
  * @par Return
  * None.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
- * Ownership: no pointer is retained; all arguments/results are scalar.
+ * Preconditions: OS_ACTIVATION_TESTS enabled; closing is published but execution actors may still
+ * run. Context: native shutdown controllers before actor retirement; no ordinary OS mutex is
+ * acquired. Reentrancy: primary and backup controllers may call concurrently; synchronize shared
+ * fixture state. Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestBeforeClose(void);
-/** Read a configured Task pending activation count in tests.
+/** Read admitted current/pending activations at the stopped-actor shutdown boundary.
  * @param[in] id Configured Task identifier; must exist.
- * @return Current queued activation count.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
+ * @return Admitted current/pending activation count remaining at shutdown.
+ * Preconditions: OS_ACTIVATION_TESTS enabled, OS closing and id configured; violations assert.
+ * Context: ShutdownHook observation after execution actors have stopped; outside BSW areas.
+ * Reentrancy: stopped-actor observation only; no concurrent activation mutation is permitted.
  * Ownership: no pointer is retained; all arguments/results are scalar.
  */
 uint32 Os_TargetTestPending(TaskType id);
@@ -214,19 +214,19 @@ uint32 Os_TargetTestPending(TaskType id);
 /** Observe a committed native scheduling transition in test builds.
  * @par Return
  * None.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
- * Ownership: no pointer is retained; all arguments/results are scalar.
+ * Preconditions: ready OS and a registered Task/Category 2 ISR; invoked only by the OS transition
+ * path. Context: Task or Category 2 ISR transition under the native OS critical section; no BSW
+ * area entry. Reentrancy: virtual-core serialized; the callback must not recursively change
+ * scheduling. Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestObserve(void);
 /** Observe a selected Task finish boundary in tests.
  * @param[in] point Implementation-defined boundary selector used by the fixture.
  * @par Return
  * None.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
+ * Preconditions: OS_FINISH_TESTS enabled; point 0 precedes admission claim, point 1 follows ledger
+ * commit. Context: current Task completion path with the native OS critical section held; no BSW
+ * area entry. Reentrancy: virtual-core serialized; preserve admission and lock state on return.
  * Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestFinishBoundary(uint32 point);
@@ -235,10 +235,10 @@ void Os_TestFinishBoundary(uint32 point);
 /** Observe a committed native scheduling transition in test builds.
  * @par Return
  * None.
- * Preconditions: matching native test feature enabled; only the linked fixture may use this seam.
- * Context: native test boundary specified above; preserve the existing OS lock state.
- * Reentrancy: fixture controls serialization; no production caller.
- * Ownership: no pointer is retained; all arguments/results are scalar.
+ * Preconditions: ready OS and a registered Task/Category 2 ISR; invoked only by the OS transition
+ * path. Context: Task or Category 2 ISR transition under the native OS critical section; no BSW
+ * area entry. Reentrancy: virtual-core serialized; the callback must not recursively change
+ * scheduling. Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestObserve(void);
 #endif
