@@ -320,10 +320,7 @@ function FieldDetails({ controller: c, field }: { controller: Workbench; field: 
   if (field.defaultValue)
     rows.push([
       t('editor.container.default'),
-      <span className="mono">
-        {field.defaultValue.lexeme}
-        {field.defaultOrigin ? ` · ${field.defaultOrigin}` : ''}
-      </span>,
+      <span className="mono">{field.defaultValue.lexeme}</span>,
     ]);
   if (field.unit) rows.push([t('editor.container.unit'), field.unit]);
   if (field.enumeration.length)

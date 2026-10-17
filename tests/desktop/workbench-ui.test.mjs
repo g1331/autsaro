@@ -57,6 +57,16 @@ check('themes-settings-layout-and-keyboard', async () => {
         view.workspaceEpoch,
         'Appearance cannot rebuild the workspace',
       );
+      assert.equal(
+        await evaluate(`getComputedStyle(document.querySelector('.tree-content')).scrollbarWidth`),
+        'none',
+        'Native background scrollbars are suppressed while a portalled modal owns interaction',
+      );
+      assert.notEqual(
+        await evaluate(`getComputedStyle(document.querySelector('.dialog-body')).scrollbarWidth`),
+        'none',
+        'The active dialog keeps its own scrolling',
+      );
       await screenshot(`layout-${width}x${height}-${theme}.png`);
     }
     for (const scheme of ['dark', 'light']) {
@@ -122,6 +132,11 @@ check('themes-settings-layout-and-keyboard', async () => {
     await key('Escape');
     await until(`!document.querySelector('[role=dialog]')`, 'Escape closes settings');
     assert.equal(
+      await evaluate(`getComputedStyle(document.querySelector('.tree-content')).scrollbarWidth`),
+      'thin',
+      'Background scrollbars return when the modal closes',
+    );
+    assert.equal(
       await evaluate(`document.querySelector(${json(draftSelector)}).value`),
       '18446744073709551614',
     );
@@ -140,6 +155,27 @@ check('themes-settings-layout-and-keyboard', async () => {
       'Core actions must remain in usable viewport',
     );
   }
+  await click('问题', "document.querySelector('.tool-tabs')");
+  await until(`Boolean(document.querySelector('.validation-scopes'))`, 'automatic checks strip');
+  const scopeGeometry = await evaluate(`(() => {
+    const strip = document.querySelector('.validation-scopes');
+    return [...strip.querySelectorAll(':scope > p, summary')].map(node => {
+      const text = [...node.childNodes].find(child => child.nodeType === Node.TEXT_NODE && child.textContent.trim());
+      const range = document.createRange(); range.selectNode(text);
+      const box = node.getBoundingClientRect(), glyph = range.getBoundingClientRect();
+      return {height: box.height, textOffset: glyph.y - box.y, lineHeight: getComputedStyle(node).lineHeight};
+    });
+  })()`);
+  assert.equal(scopeGeometry.length, 5, 'Caption and all four automatic-check stages are visible');
+  for (const item of scopeGeometry.slice(1)) {
+    assert(Math.abs(item.height - scopeGeometry[0].height) < 1, 'Stage and caption heights match');
+    assert(
+      Math.abs(item.textOffset - scopeGeometry[0].textOffset) < 1,
+      'Stage and caption text align',
+    );
+    assert.equal(item.lineHeight, scopeGeometry[0].lineHeight);
+  }
+  await screenshot('automatic-checks-aligned.png');
   await key('4', { alt: true });
   await until(
     `Boolean(document.querySelector('[role=region][aria-label="构建"]'))`,

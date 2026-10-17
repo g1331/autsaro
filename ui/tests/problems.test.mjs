@@ -1,10 +1,15 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { createElement } from 'react';
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { localize, message, previewLanguage, translate } from '../src/i18n';
 import { rejectedDiagnostics } from '../src/workbench/batchEditing';
 import { NoticeBanner } from '../src/workbench/Dialog';
+import { ToolWindows } from '../src/workbench/ToolWindows';
+import { initialState } from '../src/workbench/state';
+import { withCommands } from './support/commands.mjs';
 import { ProblemsTable, RejectionDetails } from '../src/workbench/Problems';
 
 beforeEach(() => previewLanguage('en'));
@@ -273,4 +278,49 @@ test('a rejected change notice is one summary line with a details action', () =>
   // Without a details target the full notice is kept.
   view.rerender(createElement(NoticeBanner, { notice }));
   expect(view.queryByRole('button', { name: 'View details' })).toBeNull();
+});
+
+test('automatic-check caption and summaries share type and spacing while keeping expandable coverage', () => {
+  const style = document.createElement('style');
+  style.textContent = readFileSync(path.join(import.meta.dirname, '../src/styles.css'), 'utf8');
+  document.head.append(style);
+  try {
+    const c = withCommands({
+      ...initialState(),
+      ...controller(),
+      toolWindow: 'problems',
+      problemCount: 0,
+    });
+    c.projection.validation = ['source-safety', 'schema', 'definition', 'target-generation'].map(
+      (scope) => ({
+        scope,
+        status: 'passed',
+        coverage: [{ ruleId: 'witness', supported: true, reason: 'Coverage detail' }],
+      }),
+    );
+    const view = render(createElement(ToolWindows, { controller: c }));
+    const strip = view.container.querySelector('.validation-scopes');
+    const caption = strip.querySelector(':scope > p');
+    const summaries = [...strip.querySelectorAll('summary')];
+    expect(summaries).toHaveLength(4);
+    const metrics = (node) => {
+      const css = getComputedStyle(node);
+      return [
+        css.fontSize,
+        css.lineHeight,
+        css.paddingTop,
+        css.paddingBottom,
+        css.marginTop,
+        css.marginBottom,
+      ];
+    };
+    for (const summary of summaries) {
+      expect(metrics(summary)).toEqual(metrics(caption));
+      expect(summary.parentElement.tagName).toBe('DETAILS');
+      expect(getComputedStyle(summary.parentElement).marginTop).toBe('0px');
+      expect(summary.parentElement.textContent).toContain('Coverage detail');
+    }
+  } finally {
+    style.remove();
+  }
 });

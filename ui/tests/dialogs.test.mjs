@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { message, previewLanguage, translate } from '../src/i18n';
@@ -179,4 +181,37 @@ test('the standard save preview renders only in its dialog, not inline in the pa
   );
   expect(view.getAllByText('NEW-BYTES')).toHaveLength(1);
   expect(view.getByRole('dialog').textContent).toContain('NEW-BYTES');
+});
+
+test('modal ownership hides background native scrollbars and restores them on close', () => {
+  const style = document.createElement('style');
+  style.textContent = readFileSync(path.join(import.meta.dirname, '../src/styles.css'), 'utf8');
+  document.head.append(style);
+  const root = document.createElement('div');
+  root.id = 'root';
+  document.body.append(root);
+  try {
+    const background = React.createElement('div', { 'data-testid': 'scroll-panel' }, 'Workbench');
+    const view = render(
+      React.createElement(
+        React.Fragment,
+        null,
+        background,
+        React.createElement(Dialog, { title: 'Settings', onClose: vi.fn() }, 'Settings body'),
+      ),
+      { container: root },
+    );
+    expect(root.getAttribute('aria-hidden')).toBe('true');
+    expect(getComputedStyle(view.getByTestId('scroll-panel')).scrollbarWidth).toBe('none');
+    expect(getComputedStyle(within(document.body).getByRole('dialog')).scrollbarWidth).not.toBe(
+      'none',
+    );
+    view.rerender(background);
+    expect(root.hasAttribute('aria-hidden')).toBe(false);
+    expect(getComputedStyle(view.getByTestId('scroll-panel')).scrollbarWidth).toBe('thin');
+  } finally {
+    cleanup();
+    root.remove();
+    style.remove();
+  }
 });
