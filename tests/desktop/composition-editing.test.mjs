@@ -88,6 +88,39 @@ check('composition-shared-editing-and-source-protection', async () => {
   );
   await selectObject(view.objects.find((object) => object.shortName === longPeriodicName).objectId);
   await screenshot('composition-long-name-narrow-reopened.png');
+  // A single parameter applies with Enter, without the batch preview, and keeps its cell focused.
+  const renamedPeriod = view.fields.find(
+    (field) =>
+      field.definitionId === 'TIMING-EVENT#PERIOD' &&
+      field.objectId ===
+        view.objects.find((object) => object.shortName === longPeriodicName).objectId,
+  );
+  const periodCell = `[data-field-id=${json(renamedPeriod.fieldId)}]`;
+  // Apply a new period and then the supported one again; the application needs 10 ms.
+  for (const value of ['0.0200', '0.0100']) {
+    await input(periodCell, value);
+    await key('Enter');
+    await until(
+      `document.activeElement?.dataset.fieldId === ${json(renamedPeriod.fieldId)} && !document.activeElement.readOnly && !document.querySelector('.batch-bar').textContent.match(/[1-9]\\d* 项/) && (async()=> !(await window.__TAURI_INTERNALS__.invoke('workbench_capabilities')).operation)()`,
+      'applied cell keeps focus and leaves no draft',
+    );
+    assert.equal(await evaluate(`Boolean(document.querySelector('[role=dialog]'))`), false);
+    assert.equal(
+      (await projection()).fields.find((field) => field.fieldId === renamedPeriod.fieldId).current
+        .value.lexeme,
+      value,
+      'single field applied with Enter',
+    );
+  }
+  // Escape reverts only the cell's draft.
+  await input(periodCell, '0.0300');
+  await key('Escape');
+  assert.equal(await evaluate(`document.querySelector(${json(periodCell)}).value`), '0.0100');
+  assert.equal(
+    (await projection()).fields.find((field) => field.fieldId === renamedPeriod.fieldId).current
+      .value.lexeme,
+    '0.0100',
+  );
   await resize(1480, 920);
   await unchanged(
     original.filter(

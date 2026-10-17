@@ -521,19 +521,37 @@ export async function openWorkbench(name) {
     assert.equal(view.projectPath, manifest);
     return view;
   }
-  async function selectObject(objectId, multi = false) {
-    await click('打开配置对象文档');
-    await input(label('搜索对象表名称、路径、定义、值'), '');
-    await evaluate(`(() => {
-      const row = [...document.querySelectorAll('[data-object-row]')].find(node => node.dataset.objectRow === ${json(objectId)});
-      if (!row) throw new Error('Real object row missing');
-      const node = row.querySelector(${json(multi ? 'input[type=checkbox]' : 'button.table-link')});
-      node.focus(); node.click();
+  /**
+   * Chooses an object as users do: in the project tree, or for objects the tree does not show
+   * (packages) in the “全部对象” view; the configuration document then shows its container view.
+   */
+  async function selectObject(objectId) {
+    await click('对象', "document.querySelector('[aria-label=" + json('工程树视图') + "]')");
+    await input(label('搜索工程树名称、路径、定义、值'), '');
+    const target = `[...document.querySelectorAll('[role=tree] [data-object-id]')].find(node => node.dataset.objectId === ${json(objectId)})?.querySelector('.tree-name')`;
+    if (!(await evaluate(`Boolean(${target})`))) {
+      await click('打开配置对象文档');
+      await configurationView('全部对象');
+      await input(label('搜索对象表名称、路径、定义、值'), '');
+    }
+    const point = await evaluate(`(() => {
+      const node = ${target} ?? [...document.querySelectorAll('[data-object-row]')].find(row => row.dataset.objectRow === ${json(objectId)})?.querySelector('button.table-link');
+      if (!node) throw new Error('Real object row missing');
+      node.scrollIntoView({block:'nearest'});
+      const box = node.getBoundingClientRect();
+      return {x:box.x+box.width/2,y:box.y+box.height/2};
     })()`);
+    await pointer(point.x, point.y);
     await until(
       `document.querySelector('[data-object-title]')?.dataset.objectTitle === ${json(objectId)} || Boolean(document.querySelector('[role=dialog],[role=alertdialog]'))`,
       'object focus',
     );
+    if (!(await evaluate(`Boolean(document.querySelector('[role=dialog],[role=alertdialog]'))`)))
+      await configurationView('容器');
+  }
+  /** Switches the configuration document between “容器” and “全部对象”. */
+  async function configurationView(name) {
+    await click(name, "document.querySelector('[aria-label=" + json('配置视图') + "]')");
   }
   async function sourceSurface(view) {
     await click('文件', "document.querySelector('[aria-label=" + json('工程树视图') + "]')");
@@ -757,6 +775,7 @@ export async function openWorkbench(name) {
     awaitStandardInspectionReady,
     openMember,
     selectObject,
+    configurationView,
     sourceSurface,
     exportSource,
     packageBytes,

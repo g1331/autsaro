@@ -25,6 +25,7 @@ const {
   save,
   fieldBy,
   selectObject,
+  configurationView,
   importAuthoredInputs,
 } = await openWorkbench('workbench-ui');
 
@@ -149,15 +150,25 @@ check('themes-settings-layout-and-keyboard', async () => {
     `Boolean(document.querySelector('[role=region][aria-label="主机验证"]'))`,
     'Alt+9 opens host',
   );
+  await configurationView('全部对象');
   await input(label('搜索对象表名称、路径、定义、值'), 'does-not-match');
+  await until(
+    `document.querySelector('.filter-retained') && document.querySelector('.batch-bar').textContent.includes('1 项未应用的更改')`,
+    'filtered-out current object keeps its draft',
+  );
+  await input(label('搜索对象表名称、路径、定义、值'), '');
+  await configurationView('容器');
   assert.equal(
     await evaluate(`document.querySelector(${json(draftSelector)}).value`),
     '18446744073709551614',
     'Filtering must not discard hidden object draft',
   );
-  await input(label('搜索对象表名称、路径、定义、值'), '');
+  // A container the tree shows, so navigation stays in the container view.
   const second = view.objects.find(
-    (object) => object.objectId !== field.objectId && object.writable,
+    (object) =>
+      object.objectId !== field.objectId &&
+      object.writable &&
+      object.kind === 'ECUC-CONTAINER-VALUE',
   );
   await selectObject(second.objectId);
   // Draft guards are alert dialogs (Radix AlertDialog).
