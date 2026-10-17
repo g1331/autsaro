@@ -2010,6 +2010,22 @@ td.severity-info > svg,
 .field-details {
   margin: 12px 0;
 }
+.field-description {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.parameter-grid .field-help {
+  margin: 4px 0 0;
+  font-weight: 400;
+}
+.help-toggle {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin-left: 4px;
+  vertical-align: -5px;
+  color: var(--secondary);
+}
 .candidate-list {
   margin: 6px 0;
   padding-left: 16px;
