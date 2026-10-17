@@ -6,23 +6,29 @@
 #include "SchM_CanIf.h"
 #define CANIF_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
-static const CanIf_ConfigType *configuration CANIF_VAR_CLEARED;
-static Can_ControllerStateType controller_mode CANIF_VAR_CLEARED;
-static CanIf_PduModeType pdu_mode CANIF_VAR_CLEARED;
+/* CANIF_STATE protects every object below. Init and DeInit clear the configuration/controller state
+ * and all Tx ledgers; generation and mode_writes advance instead of resetting, and stops is
+ * preserved. */
+static const CanIf_ConfigType *configuration
+    CANIF_VAR_CLEARED; /**< Init installs or clears; DeInit clears. */
+static Can_ControllerStateType controller_mode
+    CANIF_VAR_CLEARED; /**< Last indicated mode; Init sets STOPPED or UNINIT. */
+static CanIf_PduModeType pdu_mode
+    CANIF_VAR_CLEARED; /**< Current channel gating; Init sets OFFLINE. */
 /* Tx ledger per L-PDU (ADR 0018). Driver calls run outside the area, so a request is
  * reserved before Can_Write and settled after it: `writing` counts reservations whose
  * Can_Write has not returned, `early` the confirmations that already answered one of
  * them, `accepted` settled requests awaiting their result, and `owed` E_NOT_OK results of
  * cancelled requests still to be delivered. A request gets exactly one result. */
-static uint32 accepted[32] CANIF_VAR_CLEARED;
-static uint32 owed[32] CANIF_VAR_CLEARED;
-static uint8 writing[32] CANIF_VAR_CLEARED;
-static uint8 early[32] CANIF_VAR_CLEARED;
+static uint32 accepted[32] CANIF_VAR_CLEARED; /**< Accepted requests per L-PDU; Init resets. */
+static uint32 owed[32] CANIF_VAR_CLEARED;     /**< Cancelled results owed; Init resets. */
+static uint8 writing[32] CANIF_VAR_CLEARED;   /**< Unsettled driver calls; Init resets. */
+static uint8 early[32] CANIF_VAR_CLEARED; /**< Confirmations before driver return; Init resets. */
 /* Init/DeInit end every request silently; a stop cancels what was accepted before it;
  * every PDU mode write lets a check-then-set request detect a newer decision. */
-static uint32 generation CANIF_VAR_CLEARED;
-static uint32 stops CANIF_VAR_CLEARED;
-static uint32 mode_writes CANIF_VAR_CLEARED;
+static uint32 generation CANIF_VAR_CLEARED;  /**< Configuration lifetime; Init increments. */
+static uint32 stops CANIF_VAR_CLEARED;       /**< Stop generation; Init preserves. */
+static uint32 mode_writes CANIF_VAR_CLEARED; /**< PDU-mode generation; Init increments. */
 #define CANIF_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
 #define CANIF_START_SEC_CODE

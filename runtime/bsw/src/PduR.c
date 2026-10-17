@@ -8,7 +8,10 @@
 #include "Det.h"
 #define PDUR_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "PduR_MemMap.h"
-static const PduR_PBConfigType *configuration PDUR_VAR_CLEARED;
+/* PDUR_STATE protects pointer publication and reads. The accepted objects are immutable. Init
+ * publishes only while NULL and never resets the published pointer. */
+static const PduR_PBConfigType *configuration
+    PDUR_VAR_CLEARED; /**< First accepted route set; Init never replaces it. */
 #define PDUR_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "PduR_MemMap.h"
 #define PDUR_START_SEC_CODE
