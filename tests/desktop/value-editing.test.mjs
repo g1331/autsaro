@@ -345,33 +345,14 @@ check('definition-catalog-decisions-use-in-app-dialogs', async () => {
   };
   const alertdialog = (title) => `Boolean(${dialogNamed(title)}?.matches('[role=alertdialog]'))`;
   const closed = (title) => `!${dialogNamed(title)}`;
-  assert.deepEqual(await accepted(), [], 'The previous check leaves no accepted catalog');
-  const openCatalogChooser = async () => {
-    await click('设置');
-    await click('规则与模块定义', "document.querySelector('[role=dialog]')");
-    await choose(
-      'file',
-      extension.valid,
-      () => click('接纳扩展定义…', "document.querySelector('[role=dialog]')"),
-      async () => {
-        await until(alertdialog('接纳扩展定义'), 'catalog acceptance confirmation');
-        return evaluate(`${dialogNamed('接纳扩展定义')}.querySelector('.path-text').textContent`);
-      },
-    );
-  };
-  await openCatalogChooser();
-  assert.deepEqual(await accepted(), [], 'The dialog alone accepts nothing');
-  await click('取消', dialogNamed('接纳扩展定义'));
-  await until(closed('接纳扩展定义'), 'catalog acceptance cancelled');
-  assert.deepEqual(await accepted(), [], 'Cancel keeps the catalog out');
-  await key('Escape');
-  await until(`!document.querySelector('[role=dialog]')`, 'settings closed');
-
-  await openCatalogChooser();
-  await click('接纳', dialogNamed('接纳扩展定义'));
-  await acceptedCount(1, 'catalog accepted after confirmation');
+  // The previous check changed definitions through IPC; the page must start from its result.
+  // The saved member project records the catalog it accepted.
+  await refreshSurface(
+    path.join(scratch, 'projects', 'ExtensionConsumers', 'workbench-project.json'),
+  );
   assert.deepEqual(await accepted(), [extension.identity]);
-  await until(`Boolean(${dialogNamed('设置')})`, 'settings return after the decision');
+  await click('设置');
+  await click('规则与模块定义', "document.querySelector('[role=dialog]')");
 
   await click('移除扩展', dialogNamed('设置'));
   await until(alertdialog('移除扩展定义'), 'catalog removal confirmation');
@@ -392,11 +373,35 @@ check('definition-catalog-decisions-use-in-app-dialogs', async () => {
   await click('取消', dialogNamed('移除扩展定义'));
   await until(closed('移除扩展定义'), 'catalog removal cancelled');
   assert.deepEqual(await accepted(), [extension.identity], 'Cancel keeps the catalog');
+  await until(`Boolean(${dialogNamed('设置')})`, 'settings return after cancel');
   await click('移除扩展', dialogNamed('设置'));
   await until(alertdialog('移除扩展定义'), 'second removal confirmation');
   await click('移除扩展', dialogNamed('移除扩展定义'));
   await until(closed('移除扩展定义'), 'catalog removal confirmed');
   await acceptedCount(0, 'catalog removed after confirmation');
+  await until(`Boolean(${dialogNamed('设置')})`, 'settings return after removal');
+
+  const chooseCatalog = () =>
+    choose(
+      'file',
+      extension.valid,
+      () => click('接纳扩展定义…', dialogNamed('设置')),
+      async () => {
+        await until(alertdialog('接纳扩展定义'), 'catalog acceptance confirmation');
+        return evaluate(`${dialogNamed('接纳扩展定义')}.querySelector('.path-text').textContent`);
+      },
+    );
+  await chooseCatalog();
+  assert.deepEqual(await accepted(), [], 'The dialog alone accepts nothing');
+  await click('取消', dialogNamed('接纳扩展定义'));
+  await until(closed('接纳扩展定义'), 'catalog acceptance cancelled');
+  assert.deepEqual(await accepted(), [], 'Cancel keeps the catalog out');
+  await until(`Boolean(${dialogNamed('设置')})`, 'settings return after cancel');
+  await chooseCatalog();
+  await click('接纳', dialogNamed('接纳扩展定义'));
+  await until(closed('接纳扩展定义'), 'catalog acceptance confirmed');
+  await acceptedCount(1, 'catalog accepted after confirmation');
+  assert.deepEqual(await accepted(), [extension.identity]);
   await key('Escape');
   await until(`!document.querySelector('[role=dialog]')`, 'settings closed');
 });
