@@ -57,7 +57,7 @@ static uint64_t native_batch_ticket;     /**< Native-only last admitted batch id
 static volatile Os_Atomic32 batch_state; /**< Atomic batch handoff state, 0..5; no Prepare reset. */
 static uint64_t batch_epoch;     /**< Published batch epoch, ms; protected by batch_state. */
 static uint16_t batch_count;     /**< Published frame count, 0..256; protected by batch_state. */
-static uint8_t batch_needs_tick; /**< Owner-only batch requires delivered tick. */
+static uint8_t batch_needs_tick; /**< Native-published tick flag; batch_state handoff. */
 static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY]; /**< Payload protected by batch_state. */
 static Ecu_BatchCompletion batch_completion;            /**< Result protected by batch_state. */
 static Os_HostThreadId initialization_thread;           /**< Startup writes once before READY. */

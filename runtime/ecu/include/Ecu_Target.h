@@ -178,7 +178,8 @@ StatusType Ecu_TargetPostBatch(uint64_t at,
 StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *result);
 /** Copy the next published output from the sole native control consumer.
  * @param[out] record Caller-owned output, unchanged when empty or rejected.
- * @return E_OK, E_OS_NOFUNC, E_OS_ACCESS, E_OS_STATE or E_OS_ILLEGAL_ADDRESS.
+ * @return E_OK, E_OS_NOFUNC, E_OS_ACCESS, E_OS_STATE, E_OS_ILLEGAL_ADDRESS, or
+ * E_OS_CALLEVEL when called from the automotive owner.
  * Preconditions: Target READY; nonnull record and valid native context required.
  * Context: Sole bound native control thread, outside exclusive areas.
  * Reentrancy: Not reentrant on the same process-local target.
