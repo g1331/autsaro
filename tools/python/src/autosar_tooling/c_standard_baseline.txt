@@ -16,6 +16,8 @@ api-context emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Obse
 api-context emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
 api-context emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
 api-context emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-context emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
+api-context emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
 api-context emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
 api-context emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
 api-context emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
@@ -152,6 +154,10 @@ api-contract emitted/generated/include/Ecu_TargetConfig.h int Ecu_TargetTestFail
 api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_StackRetire(uint8 reached);
 api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_TargetTestRetire(unsigned stage);
 api-contract emitted/generated/include/Ecu_TargetConfig.h void Ecu_TargetTestShutdown(StatusType reason);
+api-contract emitted/generated/include/Os_Counter.h static inline PhysicalTimeType Os_TicksToMs_SystemCounter(TickType ticks)
+api-contract emitted/generated/include/Os_Counter.h static inline PhysicalTimeType Os_TicksToNs_SystemCounter(TickType ticks)
+api-contract emitted/generated/include/Os_Counter.h static inline PhysicalTimeType Os_TicksToSec_SystemCounter(TickType ticks)
+api-contract emitted/generated/include/Os_Counter.h static inline PhysicalTimeType Os_TicksToUs_SystemCounter(TickType ticks)
 api-contract emitted/generated/include/Rte_Com.h void Rte_COMCbk(CbkHandleIdType handle);
 api-contract emitted/generated/include/Rte_Com.h void Rte_COMCbkRxTOut(CbkHandleIdType handle);
 api-contract emitted/generated/include/Rte_Main.h Std_ReturnType Rte_Start(void);
@@ -274,6 +280,8 @@ api-ownership emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Ob
 api-ownership emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
 api-ownership emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
 api-ownership emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-ownership emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
+api-ownership emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
 api-ownership emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
 api-ownership emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
 api-ownership emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
@@ -408,6 +416,8 @@ api-parameters emitted/generated/include/Rte_Ingress.h Ingress_CODE Std_ReturnTy
 api-parameters emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Call_Observe_ResultService_Transform(uint32 Input,
 api-parameters emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
 api-parameters emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-parameters emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
+api-parameters emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
 api-parameters emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
 api-parameters runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId, Can_ErrorStateType *ErrorStatePtr);
 api-parameters runtime/bsw/include/CanIf.h Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId, uint8 *RxErrorCounterPtr);
@@ -502,6 +512,8 @@ api-preconditions emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Rea
 api-preconditions emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
 api-preconditions emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
 api-preconditions emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-preconditions emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
+api-preconditions emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
 api-preconditions emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
 api-preconditions emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
 api-preconditions emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
@@ -648,6 +660,8 @@ api-reentrancy emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_O
 api-reentrancy emitted/generated/include/Rte_Observe.h Std_ReturnType Rte_Read_Observe_Value_Value(uint32 *data);
 api-reentrancy emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
 api-reentrancy emitted/generated/include/Rte_Os.h StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+api-reentrancy emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
+api-reentrancy emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
 api-reentrancy emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
 api-reentrancy emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
 api-reentrancy emitted/generated/include/Rte_Process.h Std_ReturnType Rte_Read_Process_Value_Value(uint32 *data);
@@ -780,6 +794,8 @@ api-reentrancy runtime/os/include/Os_Time.h StatusType Os_TargetWaitTick(uint64 
 api-return emitted/generated/include/Rte_EchoApplication.h EchoApplication_CODE void EchoApplication_Periodic(void);
 api-return emitted/generated/include/Rte_Ingress.h Ingress_CODE void Ingress_Periodic(void);
 api-return emitted/generated/include/Rte_Observe.h Observe_CODE void Observe_Periodic(void);
+api-return emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType
+api-return emitted/generated/include/Rte_Os.h static inline RTE_Rte_CODE StatusType Rte_Call_OsService_GetElapsedValue(
 api-return emitted/generated/include/Rte_Process.h Process_CODE void Process_Periodic(void);
 api-return emitted/generated/include/Rte_Process.h Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);
 api-return emitted/generated/include/SchM_Can.h CAN_CODE void Can_MainFunction_BusOff(void);
@@ -842,6 +858,24 @@ api-return runtime/os/include/Os_Host.h void Os_HostSleepMs(uint32_t millisecond
 api-return runtime/os/include/Os_IntegrationHooks.h sint32 Os_IntegrationTimingAuthorized(void);
 api-return runtime/os/include/Os_IntegrationHooks.h void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate);
 api-return runtime/os/include/Os_Target.h void Os_TargetTrace(char marker);
+bsw-native-type emitted/generated/include/BswM_MemMap.h typedef unsigned char BswM_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/BswM_MemMap.h typedef unsigned char BswM_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/CanIf_MemMap.h typedef unsigned char CanIf_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/CanIf_MemMap.h typedef unsigned char CanIf_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/CanTp_MemMap.h typedef unsigned char CanTp_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/CanTp_MemMap.h typedef unsigned char CanTp_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/ComM_MemMap.h typedef unsigned char ComM_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/ComM_MemMap.h typedef unsigned char ComM_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/Com_MemMap.h typedef unsigned char Com_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/Com_MemMap.h typedef unsigned char Com_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/Dcm_MemMap.h typedef unsigned char Dcm_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/Dcm_MemMap.h typedef unsigned char Dcm_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/Det_MemMap.h typedef unsigned char Det_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/Det_MemMap.h typedef unsigned char Det_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/LSduR_MemMap.h typedef unsigned char LSduR_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/LSduR_MemMap.h typedef unsigned char LSduR_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/PduR_MemMap.h typedef unsigned char PduR_MemMap_HeaderCheck;
+bsw-native-type emitted/generated/include/PduR_MemMap.h typedef unsigned char PduR_MemMap_HeaderCheck;
 bsw-native-type runtime/bsw/include/BswM_MemMap.h typedef unsigned char BswM_MemMap_HeaderCheck;
 bsw-native-type runtime/bsw/include/BswM_MemMap.h typedef unsigned char BswM_MemMap_HeaderCheck;
 bsw-native-type runtime/bsw/include/CanIf_MemMap.h typedef unsigned char CanIf_MemMap_HeaderCheck;
@@ -909,53 +943,6 @@ config-switch emitted/generated/include/Os_Cfg.h #if defined(OS_USE_PARAMETER_AC
 config-switch emitted/generated/include/Os_Cfg.h #ifndef OS_STATUS_EXTENDED
 config-switch emitted/generated/include/Os_Cfg.h #ifndef OS_USE_GET_SERVICE_ID
 config-switch emitted/generated/include/Os_Cfg.h #ifndef OS_USE_PARAMETER_ACCESS
-config-switch emitted/generated/include/Rte_DcmService.h #if defined(RTE_CORE) || (!defined(RTE_RUNNABLEAPI_DcmReadData)) ||                                \
-config-switch emitted/generated/include/Rte_DcmService.h #ifdef RTE_APPLICATION_HEADER_FILE
-config-switch emitted/generated/include/Rte_DcmService.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_DcmService.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_DcmService.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_DcmService.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_DcmService.h #ifndef RTE_DCMSERVICE_H
-config-switch emitted/generated/include/Rte_EchoApplication.h #if defined(RTE_CORE) ||                                                                           \
-config-switch emitted/generated/include/Rte_EchoApplication.h #if defined(RTE_CORE) ||                                                                           \
-config-switch emitted/generated/include/Rte_EchoApplication.h #ifdef RTE_APPLICATION_HEADER_FILE
-config-switch emitted/generated/include/Rte_EchoApplication.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_EchoApplication.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_EchoApplication.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_EchoApplication.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_EchoApplication.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_EchoApplication.h #ifndef RTE_ECHOAPPLICATION_H
-config-switch emitted/generated/include/Rte_Ingress.h #if defined(RTE_CORE) ||                                                                           \
-config-switch emitted/generated/include/Rte_Ingress.h #if defined(RTE_CORE) ||                                                                           \
-config-switch emitted/generated/include/Rte_Ingress.h #if defined(RTE_CORE) ||                                                                           \
-config-switch emitted/generated/include/Rte_Ingress.h #ifdef RTE_APPLICATION_HEADER_FILE
-config-switch emitted/generated/include/Rte_Ingress.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Ingress.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Ingress.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Ingress.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Ingress.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Ingress.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Ingress.h #ifndef RTE_INGRESS_H
-config-switch emitted/generated/include/Rte_Observe.h #if defined(RTE_CORE) || (!defined(RTE_RUNNABLEAPI_Periodic)) || defined(RTE_RUNNABLEAPI_Periodic)
-config-switch emitted/generated/include/Rte_Observe.h #if defined(RTE_CORE) || (!defined(RTE_RUNNABLEAPI_Periodic)) || defined(RTE_RUNNABLEAPI_Periodic)
-config-switch emitted/generated/include/Rte_Observe.h #if defined(RTE_CORE) || (!defined(RTE_RUNNABLEAPI_Periodic)) || defined(RTE_RUNNABLEAPI_Periodic)
-config-switch emitted/generated/include/Rte_Observe.h #ifdef RTE_APPLICATION_HEADER_FILE
-config-switch emitted/generated/include/Rte_Observe.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Observe.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Observe.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Observe.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Observe.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Observe.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Observe.h #ifndef RTE_OBSERVE_H
-config-switch emitted/generated/include/Rte_Process.h #if defined(RTE_CORE) ||                                                                           \
-config-switch emitted/generated/include/Rte_Process.h #if defined(RTE_CORE) ||                                                                           \
-config-switch emitted/generated/include/Rte_Process.h #ifdef RTE_APPLICATION_HEADER_FILE
-config-switch emitted/generated/include/Rte_Process.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Process.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Process.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Process.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Process.h #ifndef RTE_CORE
-config-switch emitted/generated/include/Rte_Process.h #ifndef RTE_PROCESS_H
 config-switch runtime/bsw/include/Platform_Types.h #ifndef FALSE
 config-switch runtime/bsw/include/Platform_Types.h #ifndef TRUE
 config-switch runtime/bsw/src/Can.c #ifndef CAN_BUSOFF_POLLING
@@ -966,9 +953,6 @@ config-switch runtime/bsw/src/Can.c #ifndef CAN_RX_HOH
 config-switch runtime/bsw/src/Can.c #ifndef CAN_RX_POLLING
 config-switch runtime/bsw/src/Can.c #ifndef CAN_TX_HOH
 config-switch runtime/bsw/src/Can.c #ifndef CAN_TX_POLLING
-config-switch runtime/bsw/src/Can_Internal.h #ifndef CAN_INTERNAL_H
-config-switch runtime/bsw/src/ComM_Internal.h #ifndef COMM_INTERNAL_H
-config-switch runtime/bsw/src/Com_Internal.h #ifndef COM_INTERNAL_H
 config-switch runtime/ecu/src/Ecu_Target.c #if defined(ECU_TARGET_TESTS)
 config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
 config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
@@ -978,9 +962,6 @@ config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
 config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
 config-switch runtime/ecu/src/ecu_probe.c #ifdef ECU_TARGET_TESTS
 config-switch runtime/ecu/src/ecu_probe.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/host/src/Can_HostLock.h #ifndef CAN_HOSTLOCK_H
-config-switch runtime/host/src/Det_Host.h #ifndef DET_HOST_H
-config-switch runtime/os/FreeRTOSConfig.h #ifndef AUTOSAR_FREERTOS_CONFIG_H
 config-switch runtime/os/include/Os_Cfg.h #ifndef OS_STATUS_EXTENDED
 config-switch runtime/os/include/Os_Cfg.h #ifndef OS_USE_GET_SERVICE_ID
 config-switch runtime/os/include/Os_Cfg.h #ifndef OS_USE_PARAMETER_ACCESS
@@ -1021,20 +1002,15 @@ config-switch runtime/os/src/Os_Backend.h #ifdef OS_EVENT_TESTS
 config-switch runtime/os/src/Os_Backend.h #ifdef OS_IDLE_TESTS
 config-switch runtime/os/src/Os_Backend.h #ifdef OS_TIME_TESTS
 config-switch runtime/os/src/Os_Backend.h #ifdef OS_TIME_TESTS
-config-switch runtime/os/src/Os_Backend.h #ifndef AUTOSAR_OS_BACKEND_H
 config-switch runtime/os/src/Os_Mailbox.c #ifdef OS_EVENT_TESTS
 config-switch runtime/os/src/Os_Mailbox.c #ifdef OS_EVENT_TESTS
 config-switch runtime/os/src/Os_Stack.c #ifdef OS_HOST_FAILURE_TESTS
 config-switch runtime/os/src/Os_Stack.c #ifdef OS_HOST_FAILURE_TESTS
 config-switch runtime/os/src/Os_Stack.c #ifdef OS_HOST_FAILURE_TESTS
-config-switch runtime/os/src/Os_Stack.h #ifndef AUTOSAR_OS_STACK_H
 config-switch runtime/os/src/Os_Time.c #ifdef OS_TIME_TESTS
 config-switch runtime/os/src/Os_Time.c #ifdef OS_TIME_TESTS
 config-switch runtime/os/src/Os_Time.c #ifdef OS_TIME_TESTS
-config-switch runtime/os/src/Os_Vector.h #ifndef AUTOSAR_OS_VECTOR_H
 config-switch runtime/os/src/Os_Windows.h #ifdef OS_RESTORE_EVENT_SERVICE
-config-switch runtime/os/src/Os_Windows.h #ifndef AUTOSAR_OS_WINDOWS_H
-config-switch runtime/os/src/host/linux/Os_HostLinux.h #ifndef AUTOSAR_OS_HOST_LINUX_H
 config-switch runtime/os/src/host/linux/Os_HostLinux.h #ifndef FALSE
 config-switch runtime/os/src/host/linux/Os_HostLinux.h #ifndef TRUE
 config-switch runtime/os/src/host/linux/Os_StackLinux.c #ifdef OS_HOST_FAILURE_TESTS
@@ -1181,7 +1157,6 @@ macro-comment emitted/generated/include/Rte_ComM_Type.h #define COMM_FULL_COMMUN
 macro-comment emitted/generated/include/Rte_ComM_Type.h #define COMM_NO_COMMUNICATION     0u
 macro-comment emitted/generated/include/Rte_ComM_Type.h #define COMM_SILENT_COMMUNICATION 1u
 macro-comment emitted/generated/include/Rte_DcmService.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_DcmService.h #define RTE_DCMSERVICE_H
 macro-comment emitted/generated/include/Rte_DcmService.h #define RTE_E_DataServices_ApplicationValue_E_NOT_OK 1U
 macro-comment emitted/generated/include/Rte_DcmService.h #define RTE_RUNNABLE_DcmReadData DcmService_ReadData
 macro-comment emitted/generated/include/Rte_DcmService.h #define Rte_Call_DataServices_ApplicationValue_ReadData                                            \
@@ -1297,7 +1272,6 @@ macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_TRANSITION_Dc
 macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmModeRapidPowerShutDown                          255u
 macro-comment emitted/generated/include/Rte_Dcm_Type.h #define RTE_TRANSITION_DcmSecurityAccess              255u
 macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_ECHOAPPLICATION_H
 macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_E_DataServices_ApplicationValue_E_NOT_OK 1U
 macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_RUNNABLE_Periodic       EchoApplication_Periodic
 macro-comment emitted/generated/include/Rte_EchoApplication.h #define RTE_RUNNABLE_ServerReadData EchoApplication_ReadData
@@ -1307,7 +1281,6 @@ macro-comment emitted/generated/include/Rte_EchoApplication.h #define Rte_Read_R
 macro-comment emitted/generated/include/Rte_EchoApplication.h #define Rte_Write_TxValue_Value Rte_Write_EchoApplication_TxValue_Value
 macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_APPLICATION_HEADER_FILE
 macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_E_DataServices_ApplicationValue_E_NOT_OK 1U
-macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_INGRESS_H
 macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_RUNNABLE_Periodic       Ingress_Periodic
 macro-comment emitted/generated/include/Rte_Ingress.h #define RTE_RUNNABLE_ServerReadData Ingress_ReadData
 macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_InitValue_RxValue_Value 0UL
@@ -1317,7 +1290,6 @@ macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_Read_RxValue_V
 macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_Write_TxValue_Value Rte_Write_Ingress_TxValue_Value
 macro-comment emitted/generated/include/Rte_Ingress.h #define Rte_Write_Value_Value Rte_Write_Ingress_Value_Value
 macro-comment emitted/generated/include/Rte_Observe.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_Observe.h #define RTE_OBSERVE_H
 macro-comment emitted/generated/include/Rte_Observe.h #define RTE_RUNNABLE_Periodic Observe_Periodic
 macro-comment emitted/generated/include/Rte_Observe.h #define Rte_Call_ResultService_Transform Rte_Call_Observe_ResultService_Transform
 macro-comment emitted/generated/include/Rte_Observe.h #define Rte_InitValue_Result_Value 11UL
@@ -1325,7 +1297,6 @@ macro-comment emitted/generated/include/Rte_Observe.h #define Rte_InitValue_Valu
 macro-comment emitted/generated/include/Rte_Observe.h #define Rte_Read_Result_Value Rte_Read_Observe_Result_Value
 macro-comment emitted/generated/include/Rte_Observe.h #define Rte_Read_Value_Value Rte_Read_Observe_Value_Value
 macro-comment emitted/generated/include/Rte_Process.h #define RTE_APPLICATION_HEADER_FILE
-macro-comment emitted/generated/include/Rte_Process.h #define RTE_PROCESS_H
 macro-comment emitted/generated/include/Rte_Process.h #define RTE_RUNNABLE_Periodic        Process_Periodic
 macro-comment emitted/generated/include/Rte_Process.h #define RTE_RUNNABLE_ServerTransform Process_Transform
 macro-comment emitted/generated/include/Rte_Process.h #define Rte_InitValue_Result_Value 2UL

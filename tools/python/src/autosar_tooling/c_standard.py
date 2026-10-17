@@ -56,16 +56,27 @@ def trailing(source: str, end: int) -> bool:
     return bool(re.match(r"\s*/\*\*<\s*[^\s*/]", line))
 
 
+def comment_body(comment: str) -> str:
+    """Discard C/Doxygen delimiters before deciding whether prose exists."""
+    return re.sub(r"(?m)^\s*\* ?", "", re.sub(r"/\*+[<!]?|\*/|//[/!]?", "", comment)).strip()
+
+
 def function(tokens: list[Token]) -> tuple[str, list[str]] | None:
     """Recognize direct function declarators, not function pointer objects/types."""
     words = [t.text for t in tokens]
     if "typedef" in words or "=" in words:
         return None
-    depth = 0
+    attribute_depth = 0
     for index, word in enumerate(words):
-        if word == "(" and depth == 0 and index and IDENTIFIER.fullmatch(words[index - 1]):
+        if index and words[index - 1] in {"__attribute__", "__declspec"} and word == "(":
+            attribute_depth = 1
+            continue
+        if attribute_depth:
+            attribute_depth += (word == "(") - (word == ")")
+            continue
+        if word == "(" and index and IDENTIFIER.fullmatch(words[index - 1]) and words[index + 1:index + 2] != ["*"]:
             name = words[index - 1]
-            if name in {"__attribute__", "sizeof"}:
+            if name in NATIVE | {"void", "__attribute__", "__declspec", "sizeof"}:
                 continue
             parameters = []
             segment = []
@@ -81,7 +92,6 @@ def function(tokens: list[Token]) -> tuple[str, list[str]] | None:
                 else:
                     segment.append(value)
                 nested += (value == "(") - (value == ")")
-        depth += (word == "(") - (word == ")")
     return None
 
 
@@ -113,10 +123,11 @@ def contract_rules(comment: str, parameters: list[str]) -> list[str]:
     return rules
 
 
-def findings(name: str, source: str) -> collections.Counter[Key]:
+def findings(name: str, source: str, *, bsw: bool | None = None) -> collections.Counter[Key]:
     result: collections.Counter[Key] = collections.Counter()
     lines = source.splitlines()
     tokens = lex(source)
+    bsw = name.startswith("runtime/bsw/") if bsw is None else bsw
     public = name.endswith(".h") and "include" in Path(name).parts
 
     def add(rule: str, token: Token) -> None:
@@ -125,11 +136,9 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
 
     directives = [t for t in tokens if t.text.lstrip().startswith("#")]
     guard = None
-    if public and directives:
+    if name.endswith(".h") and directives:
         match = re.fullmatch(r"\s*#\s*ifndef\s+(\w+)\s*", directives[0].text)
-        if match and len(directives) > 1 and re.fullmatch(
-            rf"\s*#\s*define\s+{match[1]}\s*", directives[1].text
-        ):
+        if match and any(re.fullmatch(rf"\s*#\s*define\s+{match[1]}\s*", t.text) for t in directives[1:]):
             guard = match[1]
     switches = set()
     for token in directives:
@@ -147,6 +156,11 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
             if command in {"ifdef", "ifndef", "if", "elif"}:
                 identifiers = set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", body)) - {"STD_ON", "STD_OFF", guard}
                 for switch in sorted(identifiers):
+                    if Path(name).name.startswith("Rte") and (
+                        switch in {"RTE_CORE", "RTE_APPLICATION_HEADER_FILE"}
+                        or switch.startswith("RTE_RUNNABLEAPI_")
+                    ):
+                        continue
                     if (re.search(r"_(?:START_SEC_|STOP_SEC_|MEMMAP(?:_|$))", switch)
                         or (name.endswith("_MemMap.h") and switch.endswith(("_CODE", "_THREAD_LOCAL")))):
                         continue
@@ -162,7 +176,7 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
                 macro = re.match(r"(\w+)(.*)", body, re.DOTALL)
                 if macro and macro[1] != guard and not name.endswith("_MemMap.h") and not re.search(r"_(?:START|STOP)_SEC_", macro[1]):
                     tail = source[token.end:].split("\n", 1)[0]
-                    inline = re.search(r"/\*\*?<\s*\S|/\*\*\s*\S", token.text + tail)
+                    inline = any(comment_body(c) for c in re.findall(r"/\*.*?\*/|//[^\n]*", token.text + tail, re.DOTALL))
                     comment = adjacent(source, tokens, token.start)
                     if macro[2].startswith("("):
                         # Whitespace separates object-like replacements from function-like macros.
@@ -180,12 +194,12 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
                             add("macro-comment", token)
             continue
         # Native types in code, not strings, comments or macro bodies (checked below).
-        if name.startswith("runtime/bsw/") and token.text in NATIVE and Path(name).name != "Platform_Types.h":
+        if bsw and token.text in NATIVE and Path(name).name != "Platform_Types.h":
             add("bsw-native-type", token)
         if token.text not in {",", ";"}:
             group = ""
     for token in directives:
-        if name.startswith("runtime/bsw/") and Path(name).name != "Platform_Types.h":
+        if bsw and Path(name).name != "Platform_Types.h":
             match = re.match(r"\s*#\s*define\s+\w+\s*(.*)", token.text, re.DOTALL)
             if match:
                 for value in lex(match[1]):
@@ -208,8 +222,13 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
             if (not stack or stack == ["linkage"]) and aggregate == "initializer":
                 initializer_declaration = statement
             if ((not stack or stack == ["linkage"]) and aggregate != "body" and public and "typedef" in words
-                and not adjacent(source, tokens, statement[0].start)):
+                and not comment_body(adjacent(source, tokens, statement[0].start))):
                 add("typedef-comment", statement[0])
+            if (not stack or stack == ["linkage"]) and aggregate == "body" and public:
+                declaration = function(statement)
+                if declaration:
+                    for rule in contract_rules(adjacent(source, tokens, statement[0].start), declaration[1]):
+                        add(rule, statement[0])
             stack.append(aggregate)
             statement = []
             continue
@@ -238,7 +257,7 @@ def findings(name: str, source: str) -> collections.Counter[Key]:
         elif words[0] != "}":
             comment = adjacent(source, tokens, statement[0].start)
             if "typedef" in words:
-                if public and not comment:
+                if public and not comment_body(comment):
                     add("typedef-comment", statement[0])
             elif declaration := function(statement):
                 if public:
@@ -311,7 +330,17 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
         for index, token in enumerate(tokens):
             if not is_comment(token) and not token.text.lstrip().startswith("#"):
                 continue
-            for match in DEVIATION.finditer(token.text):
+            candidates = list(re.finditer(r"\bMR12\b", token.text))
+            matches = list(DEVIATION.finditer(token.text))
+            for candidate in candidates:
+                match = next((m for m in matches if m.start() == candidate.start()), None)
+                reason = comment_body(token.text[match.end():]) if match else ""
+                if not match or not reason:
+                    line = source.splitlines()[source.count("\n", 0, token.start)].strip()
+                    result[("deviation-format", name, line)] += 1
+            for match in matches:
+                if not comment_body(token.text[match.end():]):
+                    continue
                 line_start = source.rfind("\n", 0, token.start) + 1
                 preceding = [t for t in tokens[:index] if t.start >= line_start and not is_comment(t)]
                 following = ([token] if token.text.lstrip().startswith("#") else preceding
@@ -348,6 +377,7 @@ def generated_findings(samples: Path) -> collections.Counter[Key]:
     projects = sorted(p for p in samples.iterdir() if (p / "target.json").is_file())
     if not projects:
         raise RuntimeError(f"No generated samples in {samples}")
+    bsw_modules = {p.stem.split("_", 1)[0] for p in (ROOT / "runtime/bsw/include").glob("*.h")}
     for project in projects:
         integration = json.loads((project / "meta/integration.json").read_text(encoding="utf-8"))
         copies = set(integration["originalBswSources"].values())
@@ -357,17 +387,16 @@ def generated_findings(samples: Path) -> collections.Counter[Key]:
             if relative.startswith(("kernel/", "app/")) or relative in copies:
                 continue
             if "include" in path.relative_to(project).parts:
-                current.update(findings("emitted/" + relative, path.read_text(encoding="utf-8")))
+                current.update(findings("emitted/" + relative, path.read_text(encoding="utf-8"), bsw=path.stem.split("_", 1)[0] in bsw_modules))
         result |= current
     return result
 
 
-def documentation_findings(output: str, project: Path, *, foreign_roots: tuple[Path, ...] = ()) -> collections.Counter[Key]:
+def documentation_locations(output: str, project: Path, *, foreign_roots: tuple[Path, ...] = ()) -> dict[tuple, Key]:
     integration = json.loads((project / "meta/integration.json").read_text(encoding="utf-8"))
     origins = {copy: source for source, copy in integration["originalBswSources"].items()}
-    result: collections.Counter[Key] = collections.Counter()
-    seen = set()
-    for match in re.finditer(r"^(.+?):(\d+):(\d+): warning: .*?\[(-Wdocumentation[^]]*)\]$", output, re.MULTILINE):
+    result = {}
+    for match in re.finditer(r"^(.+?):(\d+):(\d+): warning: (.*?)\[(-Wdocumentation[^]]*)\]$", output, re.MULTILINE):
         path = Path(match[1]).resolve()
         if any(path.is_relative_to(root.resolve()) for root in foreign_roots):
             continue
@@ -376,11 +405,12 @@ def documentation_findings(output: str, project: Path, *, foreign_roots: tuple[P
         relative = path.relative_to(project.resolve()).as_posix()
         if relative.startswith(("kernel/", "app/")):
             continue
-        position = (relative, int(match[2]), int(match[3]), match[4])
-        if position in seen:
-            continue
-        seen.add(position)
         line = path.read_text(encoding="utf-8").splitlines()[int(match[2]) - 1].strip()
         name = origins.get(relative, "emitted/" + relative)
-        result[("clang-documentation" + match[4].removeprefix("-Wdocumentation"), name, line)] += 1
+        position = (name, int(match[2]), int(match[3]), match[4], match[5], line)
+        result[position] = ("clang-documentation" + match[5].removeprefix("-Wdocumentation"), name, line)
     return result
+
+
+def documentation_findings(output: str, project: Path, *, foreign_roots: tuple[Path, ...] = ()) -> collections.Counter[Key]:
+    return collections.Counter(documentation_locations(output, project, foreign_roots=foreign_roots).values())

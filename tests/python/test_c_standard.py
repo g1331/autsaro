@@ -24,6 +24,19 @@ class CStandardTests(unittest.TestCase):
     def rules(self, source, name="runtime/bsw/include/Test.h"):
         return [rule for rule, _, _ in c_standard.findings(name, source)]
 
+    def test_review_declarators_and_empty_comments(self):
+        self.assertIn("state-comment", self.rules("static void (*hook)(void);", "runtime/bsw/src/Test.c"))
+        self.assertIn("state-comment", self.rules("static Std_ReturnType (*hook)(void);", "runtime/bsw/src/Test.c"))
+        self.assertIn("api-contract", self.rules("__attribute__((warn_unused_result)) uint8 Read(uint8 id); /**< Value. */"))
+        self.assertEqual(c_standard.function(c_standard.lex("void (*GetCallback(uint8 id))(void);")), ("GetCallback", ["id"]))
+        self.assertIn("api-contract", self.rules("static inline void Run(uint8 id) { (void)id; }"))
+        self.assertIn("typedef-comment", self.rules("/** */ typedef uint8 ValueType;"))
+        self.assertIn("macro-comment", self.rules("#define TEST_LIMIT 7U /**< */"))
+
+    def test_private_and_delayed_guards(self):
+        self.assertNotIn("config-switch", self.rules("#ifndef INTERNAL_H\n#define INTERNAL_H\n#endif", "runtime/bsw/src/Internal.h"))
+        self.assertNotIn("config-switch", self.rules("#ifndef RTE_TEST_H\n#ifdef RTE_APPLICATION_HEADER_FILE\n#error Duplicate\n#endif\n#define RTE_TEST_H\n#ifdef RTE_CORE\n#endif\n#if defined(RTE_RUNNABLEAPI_Run)\n#endif\n#endif", "emitted/generated/include/Rte_Test.h"))
+
     def test_complete_multiline_contract(self):
         self.assertEqual(self.rules(CONTRACT + DECLARATION), [])
 
@@ -119,6 +132,10 @@ class CStandardTests(unittest.TestCase):
             first = f"{header}:1:5: warning: parameter missing [-Wdocumentation]\n"
             second = f"{header}:1:19: warning: parameter missing [-Wdocumentation]\n"
             self.assertEqual(sum(c_standard.documentation_findings(first + first + second, project).values()), 2)
+            header.write_text("/** Same. */\n/** Same. */", encoding="utf-8")
+            positions = c_standard.documentation_locations(first, project)
+            positions.update(c_standard.documentation_locations(first.replace(":1:5:", ":2:5:"), project))
+            self.assertEqual(sum(collections.Counter(positions.values()).values()), 2)
 
     def test_generated_headers_use_runtime_rules_and_skip_copies(self):
         import json
@@ -136,6 +153,8 @@ class CStandardTests(unittest.TestCase):
             self.assertEqual(c_standard.generated_findings(samples), {("api-contract", "emitted/generated/include/Test.h", "void Emitted(void);"): 1})
             (project / "generated/include/Test.h").write_text(CONTRACT + DECLARATION, encoding="utf-8")
             self.assertEqual(c_standard.generated_findings(samples), {})
+            (project / "generated/include/Com_Cfg.h").write_text("/** Signal identifier. */ typedef unsigned Com_SignalIdType;", encoding="utf-8")
+            self.assertIn("bsw-native-type", {key[0] for key in c_standard.generated_findings(samples)})
 
     def test_deviations_match_both_directions_and_exact_symbol(self):
         with tempfile.TemporaryDirectory(prefix="171-") as temporary:
@@ -149,6 +168,10 @@ class CStandardTests(unittest.TestCase):
             self.assertEqual(c_standard.deviation_findings(root), {})
             source.write_text("void Test_Run(void) {} /* MR12 RULE 8.7 VIOLATION: required API. */", encoding="utf-8")
             self.assertEqual(c_standard.deviation_findings(root), {})
+            for marker in ("/* MR12 RULE 8.7 VIOLATION required API. */", "/* MR12 RULE 8.7 VIOLATION: */"):
+                source.write_text(marker + "\nvoid Test_Run(void) {}", encoding="utf-8")
+                self.assertIn("deviation-format", {key[0] for key in c_standard.deviation_findings(root)})
+            source.write_text("/* MR12 RULE 8.7 VIOLATION: required API. */\nvoid Test_Run(void) {}", encoding="utf-8")
             approved = document.read_text()
             document.write_text(approved + approved, encoding="utf-8")
             self.assertIn("deviation-duplicate", {key[0] for key in c_standard.deviation_findings(root)})
