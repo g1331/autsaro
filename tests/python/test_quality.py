@@ -228,6 +228,13 @@ class QualityTests(unittest.TestCase):
         documented = entry("uint8 StandardName; /**< Owned by the calling actor. */")
         self.assertEqual(quality.clang_tidy_comparison(documented, original), [])
         self.assertEqual(quality.clang_tidy_comparison(original, documented), [])
+        self.assertEqual(quality.clang_tidy_comparison(
+            entry("#define SetEvent Os_SetEvent /**< Standard service alias. */"),
+            entry("#define SetEvent Os_SetEvent"),
+        ), [])
+        self.assertTrue(quality.clang_tidy_comparison(
+            entry('#define TEXT "/**< changed literal */"'), entry('#define TEXT "original"'),
+        ))
         for changed in (
             entry("uint8 OtherName; /**< Owned by the calling actor. */"),
             entry("uint8 StandardName; /* ordinary comment */"),

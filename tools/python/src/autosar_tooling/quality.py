@@ -499,9 +499,11 @@ def clang_tidy_comparison(
 
         result: collections.Counter[ClangTidyKey] = collections.Counter()
         for (check, name, text), count in entries.items():
-            for token in lex(text):
-                if token.text.startswith("/**<") and not text[token.end:].strip():
-                    text = text[:token.start].rstrip()
+            # The source lexer otherwise treats a whole directive as one token.
+            offset = 1 if text.startswith("#") else 0
+            for token in lex(text[offset:]):
+                if token.text.startswith("/**<") and not text[offset + token.end:].strip():
+                    text = text[:offset + token.start].rstrip()
                     break
             result[(check, name, text)] += count
         return result
