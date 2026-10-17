@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed:** Rejected parameter cells show definition bounds only for definition range violations; Counter period errors retain their backend reason alone (#282).
+
 - **Fixed:** Standard ECU CAN IDs and application periods apply atomically from the parameter grid, with linked-location hints and cell-local rejection feedback (#277).
 - **Added:** `quality` checks runtime and emitted public C contracts, source comments, BSW type/switch rules and deviation-record correspondence against an occurrence-counted baseline; the second compiler checks documentation diagnostics against the same baseline (#276).
 
