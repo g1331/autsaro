@@ -48,31 +48,22 @@ typedef struct {
  * Ordinary epoch/cycle/output-writer state is accessed only by the ECU owner.
  * Native reader/confirmation indices are accessed only by the bound producer.
  */
-static volatile Os_Atomic32 lifecycle; /**< Atomic target lifecycle; Prepare claims zero once. */
-static volatile Os_Atomic32
-    native_owner; /**< Atomic native binding: 0 unbound, 1 binding, 2 published. */
-static Os_HostThreadId
-    native_thread; /**< Bound native identity; published by native_owner, never reset. */
+static volatile Os_Atomic32 lifecycle;    /**< Atomic target lifecycle; Prepare claims zero once. */
+static volatile Os_Atomic32 native_owner; /**< Atomic binding: 0 unbound, 1 writing, 2 ready. */
+static Os_HostThreadId native_thread;     /**< Native identity published by native_owner. */
 /* Accessed only by the native producer after its atomic identity publication. */
-static uint64_t
-    native_input_epoch; /**< Native-only last admitted input epoch, ms; initially zero. */
-static uint64_t
-    native_batch_ticket; /**< Native-only last accepted batch identity; initially zero. */
+static uint64_t native_input_epoch;      /**< Native-only last admitted epoch, ms. */
+static uint64_t native_batch_ticket;     /**< Native-only last admitted batch identity. */
 static volatile Os_Atomic32 batch_state; /**< Atomic batch handoff state, 0..5; no Prepare reset. */
-static uint64_t batch_epoch; /**< Published batch epoch, ms; protected by batch_state. */
-static uint16_t batch_count; /**< Published frame count, 0..256; protected by batch_state. */
-static uint8_t
-    batch_needs_tick; /**< Owner-only flag: batch needs a delivered tick; initially zero. */
-static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY]; /**< Copied batch payload protected by
-                                                           batch_state; no Init reset. */
-static Ecu_BatchCompletion
-    batch_completion; /**< Owner completion protected by batch_state; no Init reset. */
-static Os_HostThreadId
-    initialization_thread;      /**< StartupHook writes once before READY publication; no reset. */
-static uint64_t epoch;          /**< Owner-only current logical epoch, ms; initially zero. */
-static uint64_t processed_tick; /**< Owner-only last processed tick ticket; initially zero. */
-static uint64_t
-    processed_epoch; /**< Owner-only last processed logical epoch, ms; initially zero. */
+static uint64_t batch_epoch;     /**< Published batch epoch, ms; protected by batch_state. */
+static uint16_t batch_count;     /**< Published frame count, 0..256; protected by batch_state. */
+static uint8_t batch_needs_tick; /**< Owner-only batch requires delivered tick. */
+static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY]; /**< Payload protected by batch_state. */
+static Ecu_BatchCompletion batch_completion;            /**< Result protected by batch_state. */
+static Os_HostThreadId initialization_thread;           /**< Startup writes once before READY. */
+static uint64_t epoch;              /**< Owner-only current logical epoch, ms; initially zero. */
+static uint64_t processed_tick;     /**< Owner-only last processed tick ticket; initially zero. */
+static uint64_t processed_epoch;    /**< Owner-only last processed epoch, ms. */
 static uint64_t next_output_ticket; /**< Owner-only monotonic output identity; initially zero. */
 static unsigned output_write;       /**< Owner-only next publication slot; initially zero. */
 static unsigned output_read;        /**< Native-only next take slot; initially zero. */
@@ -80,18 +71,15 @@ static unsigned output_confirm;     /**< Native-only next confirmation slot; ini
 static unsigned output_retire;      /**< Owner-only next retirement slot; initially zero. */
 static unsigned output_pending;     /**< Owner-only outstanding output count; initially zero. */
 /* Confirmations taken before their epoch's cycle, retired after it in order. */
-static unsigned
-    output_deferred; /**< Owner-only confirmations deferred until cycle; initially zero. */
-static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY]; /**< Copied outputs protected by atomic
-                                                              slot states; no Init reset. */
+static unsigned output_deferred; /**< Owner-only confirmations deferred until cycle. */
+static Ecu_OutputSlot
+    outputs[ECU_TARGET_OUTPUT_CAPACITY]; /**< Payloads protected by atomic slot states. */
 static Ecu_ProtocolSlot
-    protocol_failures[ECU_TARGET_OUTPUT_CAPACITY]; /**< Copied failures protected by atomic slot
-                                                      states; no Init reset. */
+    protocol_failures[ECU_TARGET_OUTPUT_CAPACITY]; /**< Atomic-slot-protected failures. */
 static unsigned protocol_write; /**< Owner-only next failure publication slot; initially zero. */
 static unsigned protocol_read;  /**< Native-only next failure consumption slot; initially zero. */
 /* Highest generated bootstrap stage that began; retirement undoes only those. */
-static uint8
-    bootstrap_reached; /**< Startup writes begun stage; stopped-owner shutdown reads; no reset. */
+static uint8 bootstrap_reached; /**< Startup writes; stopped-owner shutdown reads. */
 
 static void fail(void)
 {
