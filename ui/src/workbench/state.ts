@@ -29,6 +29,7 @@ import type {
   ToolWindow,
 } from './projectTypes';
 import { stageDefaults } from './useDelivery';
+import { fieldState } from './projectGroups';
 export type WorkbenchState = {
   workspace: WorkspaceView | null;
   integrationUnapplied: boolean;
@@ -105,6 +106,8 @@ export type WorkbenchState = {
   replacementReady: boolean;
   savingForReplacement: boolean;
   memberProjectPath: string | null;
+  /** Field states of the last projection without unsaved changes, by fieldId; the tree's modified marks compare against it. */
+  savedValues: Record<string, string> | null;
 };
 
 type Action = {
@@ -112,7 +115,17 @@ type Action = {
   patch: Partial<WorkbenchState> | ((state: WorkbenchState) => Partial<WorkbenchState>);
 };
 export function reducer(state: WorkbenchState, action: Action): WorkbenchState {
-  return { ...state, ...(typeof action.patch === 'function' ? action.patch(state) : action.patch) };
+  return applyPatch(state, typeof action.patch === 'function' ? action.patch(state) : action.patch);
+}
+/** Merges a patch; a projection without unsaved changes becomes the saved baseline. */
+export function applyPatch(state: WorkbenchState, patch: Partial<WorkbenchState>): WorkbenchState {
+  const next = { ...state, ...patch };
+  if (patch.projection === null) next.savedValues = null;
+  else if (patch.projection && !patch.projection.dirty)
+    next.savedValues = Object.fromEntries(
+      patch.projection.fields.map((field) => [field.fieldId, fieldState(field)]),
+    );
+  return next;
 }
 export function initialState(): WorkbenchState {
   return {
@@ -190,5 +203,6 @@ export function initialState(): WorkbenchState {
     replacementReady: false,
     savingForReplacement: false,
     memberProjectPath: null,
+    savedValues: null,
   };
 }

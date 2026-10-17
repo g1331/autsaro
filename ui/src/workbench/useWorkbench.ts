@@ -50,7 +50,7 @@ import type {
 import type { WorkbenchSession } from './session';
 import { createSettingsActions } from './settingsActions';
 import type { WorkbenchState } from './state';
-import { initialState, reducer } from './state';
+import { applyPatch, initialState, reducer } from './state';
 import { native } from './useDelivery';
 
 type StateSetters<S> = {
@@ -368,7 +368,7 @@ export function useWorkbench(): Workbench {
           ? { changePreview: null, preparedChangeSet: null, applicationPreview: null }
           : {}),
       } as Partial<WorkbenchState>;
-      stateRef.current = { ...previous, ...patch };
+      stateRef.current = applyPatch(previous, patch);
       dispatch({ type: 'patch', patch });
     };
   }
@@ -707,7 +707,7 @@ export function useWorkbench(): Workbench {
   }
 
   function patchState(patch: Partial<WorkbenchState>) {
-    stateRef.current = { ...stateRef.current, ...patch };
+    stateRef.current = applyPatch(stateRef.current, patch);
     dispatch({ type: 'patch', patch });
   }
 

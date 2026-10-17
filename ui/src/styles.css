@@ -1695,3 +1695,34 @@ details + details {
     padding: 9px 8px;
   }
 }
+.tree-group {
+  font-weight: 600;
+}
+.tree-group > small {
+  font-weight: 400;
+  color: var(--secondary);
+}
+.tree-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.tree-marks > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.tree-mark-error {
+  color: var(--error);
+}
+.tree-mark-warning {
+  color: var(--warning);
+}
+.tree-mark-modified {
+  color: var(--secondary);
+}
+.tree-mark-unapplied {
+  color: var(--warning);
+}
