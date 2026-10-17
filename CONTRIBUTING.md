@@ -50,6 +50,19 @@ Use a dedicated branch for each Issue, and when you start, create it with `gh is
 
 Use an isolated environment for real GUI acceptance without occupying a developer's active desktop. Work is tracked in GitHub Issues and Milestones; before opening an Issue or starting work, search existing Issues (including closed ones) and open PRs, and extend what already covers it instead of duplicating work; when a change also completes part of another Issue, comment there with the PR, and close it with `Closes #N` once it is fully done; see [docs/roadmap/](docs/roadmap/README.md) for direction and [docs/architecture/](docs/architecture/README.md) for design constraints.
 
+Every open Issue carries at least one type label and one area label. Type labels are `bug`, `known-gap` (a capability, standard or verification gap), `tech-debt`, `enhancement`, `question`, `story` or `tracking` (a stage overview). An Issue may have several area labels:
+
+- `area:os`: OS runtime, OS configuration generation and target ports
+- `area:bsw`: BSW module runtime and configuration
+- `area:rte`: RTE/SchM generation and component contracts
+- `area:generator`: configuration model, ARXML reading and writing, definition catalog and the C generation mainline
+- `area:ui`: workbench interface, interaction and text
+- `area:desktop`: Tauri desktop backend, installers and desktop scenario tests
+- `area:quality-ci`: CI, `quality`, C static checks and test infrastructure
+- `area:delivery`: delivery packages, asset inventory and offline ECU tools
+
+Add `blocked` when an Issue waits for target hardware or another Issue, and name what it waits for in the body. Progress is shown by the Milestone and the linked branch or PR, not by status labels; work done in parallel should avoid sharing an `area`.
+
 ## Interface text and languages
 
 Frontend text is organized by domain under `ui/src/i18n/`. Backend text uses `core/src/messages.json` as its single source: Cargo generates static Rust templates at build time, and the frontend imports the same resource directly. Use stable semantic keys for new product messages. Maintain complete Chinese and English sentences with matching interpolation parameters. Do not translate by matching original sentences or replacing DOM content.

@@ -50,6 +50,19 @@ uv run --locked python -m autosar_tooling quality --merge-base origin/master
 
 真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。任务与进度用 GitHub Issues 和 Milestones 跟踪；新建 Issue 或开始实现前先搜索已有 Issue（含已关闭）和进行中的 PR，已有覆盖的在原处补充，避免重复工作；顺带完成了其他 Issue 的内容时，在该 Issue 留言并注明 PR，全部完成的用 `Closes #N` 关闭；方向见 [docs/roadmap/](docs/roadmap/README.md)，设计约束见 [docs/architecture/](docs/architecture/README.md)。
 
+每个开着的 Issue 至少有一个性质标签和一个模块标签。性质标签为 `bug`、`known-gap`（能力、标准或验证差距）、`tech-debt`、`enhancement`、`question`、`story` 或 `tracking`（阶段总览）。模块标签可以有多个：
+
+- `area:os`：OS 运行时、OS 配置生成与目标端口
+- `area:bsw`：BSW 模块的运行时与配置
+- `area:rte`：RTE／SchM 生成与组件契约
+- `area:generator`：配置模型、ARXML 读写、定义目录与 C 生成主线
+- `area:ui`：工作台界面、交互与文案
+- `area:desktop`：Tauri 桌面后端、安装包与桌面场景测试
+- `area:quality-ci`：CI、`quality`、C 静态检查与测试设施
+- `area:delivery`：交付包、资产清单与离线 ECU 工具
+
+等待实机或其他 Issue 的加 `blocked`，并在正文写明等待对象。进度由 Milestone 与关联的分支或 PR 表示，不另设状态标签；并行推进的工作尽量不落在同一 `area`。
+
 ## 界面文案与语言
 
 前端文案位于 `ui/src/i18n/` 的分域资源；后端文案以 `core/src/messages.json` 为唯一来源，由 Cargo 构建生成 Rust 静态模板，前端直接导入同一资源。新增产品消息使用稳定的语义键，并同时维护中英文完整句子和相同的插值参数；不要通过原句匹配或 DOM 替换翻译。
