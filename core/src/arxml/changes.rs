@@ -704,6 +704,18 @@ impl Workspace {
         }
         let mut linked = Vec::new();
         let mut linked_fields = Vec::new();
+        // Renames retain field IDs but change the plan's physical object paths.
+        let rebound_groups = ordered
+            .iter()
+            .any(|change| {
+                matches!(
+                    change,
+                    ConfigurationChange::RenameInstance { .. }
+                        | ConfigurationChange::CreateInstance { .. }
+                )
+            })
+            .then(|| candidate.workspace.linked_groups());
+        let current_groups = rebound_groups.as_deref().unwrap_or(&groups);
         for change in &ordered {
             if let ConfigurationChange::SetValue {
                 change_id,
@@ -711,11 +723,17 @@ impl Workspace {
                 value,
                 ..
             } = change
-                && let Some(group) = groups
+                && groups
+                    .iter()
+                    .any(|group| group.fields.iter().any(|(id, _)| id == field_id))
+            {
+                let group = current_groups
                     .iter()
                     .find(|group| group.fields.iter().any(|(id, _)| id == field_id))
-            {
-                linked_fields.extend(self.linked_fields(group, field_id, value).map_err(|message| {
+                    .ok_or_else(|| {
+                        crate::product_message!("backend.arxml.changes.stale_field_id")
+                    })?;
+                linked_fields.extend(candidate.workspace.linked_fields(group, field_id, value).map_err(|message| {
                     crate::message::LocalizedText::messages([
                         crate::product_message!("backend.arxml.changes.field_change_context", "change_id" => change_id, "field" => serde_json::to_string(&FieldRef::Existing { field_id: field_id.clone() }).unwrap()),
                         message,

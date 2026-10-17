@@ -290,3 +290,55 @@ fn linked_can_groups_swap_identifiers_in_one_atomic_batch() {
     );
     assert!(workspace.inspect_integration().diagnostics.is_empty());
 }
+
+#[test]
+fn linked_grid_batch_rebinds_locations_after_instance_rename() {
+    let scratch = Scratch::new();
+    let preview =
+        Workspace::preview_project_creation(&scratch.0.join("rename"), "Rename", "standard-ecu")
+            .unwrap();
+    let mut workspace = Workspace::create_project_previewed(&preview).unwrap();
+    let view = projection(&workspace);
+    let field = view
+        .fields
+        .iter()
+        .find(|field| field.definition.definition_id.ends_with("/CanIfTxPduCanId"))
+        .unwrap();
+    let owner = view
+        .objects
+        .iter()
+        .find(|owner| owner.object_id == field.object_id)
+        .unwrap();
+    let mut changes = change(&view, field, "1105");
+    changes.changes.push(ConfigurationChange::RenameInstance {
+        change_id: "rename-pdu".into(),
+        object: ObjectRef::Existing {
+            object_id: owner.object_id.clone(),
+        },
+        expected_short_name: owner.short_name.clone(),
+        short_name: "RenamedTransmitPdu".into(),
+    });
+    let preview = workspace.prepare_change(&changes).unwrap();
+    let outcome = workspace
+        .apply_change(&changes, &preview.change_revision)
+        .unwrap();
+    assert_eq!(
+        outcome
+            .projection
+            .objects
+            .iter()
+            .find(|object| object.object_id == owner.object_id)
+            .unwrap()
+            .short_name,
+        "RenamedTransmitPdu"
+    );
+    let plan = workspace.integration_plan().unwrap();
+    let signal = plan
+        .description()
+        .signals
+        .iter()
+        .find(|signal| !signal.receive)
+        .unwrap();
+    assert_eq!(signal.can_id, 1105);
+    assert!(signal.can_if_pdu.ends_with("/RenamedTransmitPdu"));
+}
