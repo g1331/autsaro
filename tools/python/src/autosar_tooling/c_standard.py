@@ -123,7 +123,7 @@ def contract_rules(comment: str, parameters: list[str]) -> list[str]:
     return rules
 
 
-def findings(name: str, source: str, *, bsw: bool | None = None) -> collections.Counter[Key]:
+def findings(name: str, source: str, *, bsw: bool | None = None, known_switches: frozenset[str] = frozenset()) -> collections.Counter[Key]:
     result: collections.Counter[Key] = collections.Counter()
     lines = source.splitlines()
     tokens = lex(source)
@@ -140,9 +140,31 @@ def findings(name: str, source: str, *, bsw: bool | None = None) -> collections.
         match = re.fullmatch(r"\s*#\s*ifndef\s+(\w+)\s*", directives[0].text)
         if match and any(re.fullmatch(rf"\s*#\s*define\s+{match[1]}\s*", t.text) for t in directives[1:]):
             guard = match[1]
-    switches = set()
+    definition_guards = set()
+    validation_guards = set()
+    for first, second, third in zip(directives, directives[1:], directives[2:]):
+        default = re.fullmatch(r"\s*#\s*ifndef\s+(\w+)\s*", first.text)
+        if (default and re.match(rf"\s*#\s*define\s+{default[1]}\b", second.text)
+            and re.fullmatch(r"\s*#\s*endif\s*", third.text)
+            and not re.sub(r"/\*.*?\*/|//[^\n]*", "", source[first.end:second.start] + source[second.end:third.start], flags=re.DOTALL).strip()):
+            definition_guards.add(first.start)
+        # A value-range or explicit-override diagnostic validates a definition;
+        # it does not enable a feature through the symbol's presence.
+        if (re.match(r"\s*#\s*if\b", first.text) and re.match(r"\s*#\s*error\b", second.text)
+            and re.fullmatch(r"\s*#\s*endif\s*", third.text)
+            and not re.sub(r"/\*.*?\*/|//[^\n]*", "", source[first.end:second.start] + source[second.end:third.start], flags=re.DOTALL).strip()):
+            identifiers = set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", first.text)) - {"STD_ON", "STD_OFF"}
+            if identifiers and all(
+                (re.search(rf"{symbol}\s*!=\s*(?:0|STD_OFF)\b", first.text)
+                 and re.search(rf"{symbol}\s*!=\s*(?:1|STD_ON)\b", first.text))
+                or (re.search(rf"defined\s*\(\s*{symbol}\s*\)", first.text)
+                    and re.search(rf"{symbol}\s*!=\s*(?:[01]|STD_ON|STD_OFF)\b", first.text))
+                for symbol in identifiers
+            ):
+                validation_guards.add(first.start)
+    switches = set(known_switches)
     for token in directives:
-        match = re.match(r"\s*#\s*define\s+(\w+)\s+\(?STD_(?:ON|OFF)\)?\s*$", token.text)
+        match = re.match(r"\s*#\s*define\s+(\w+)\s+\(?(?:STD_(?:ON|OFF)|[01](?:[uUlL]*))\)?\s*$", re.sub(r"/\*.*?\*/|//[^\n]*", "", token.text, flags=re.DOTALL))
         if match:
             switches.add(match[1])
     group = ""
@@ -153,7 +175,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None) -> collections.
         directive = re.match(r"\s*#\s*(\w+)\s*(.*)", token.text, re.DOTALL)
         if directive:
             command, body = directive.groups()
-            if command in {"ifdef", "ifndef", "if", "elif"}:
+            if command in {"ifdef", "ifndef", "if", "elif"} and token.start not in definition_guards | validation_guards:
                 identifiers = set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", body)) - {"STD_ON", "STD_OFF", guard}
                 for switch in sorted(identifiers):
                     if Path(name).name.startswith("Rte") and (
@@ -269,11 +291,18 @@ def findings(name: str, source: str, *, bsw: bool | None = None) -> collections.
     return result
 
 
+def switch_definitions(sources: list[str]) -> frozenset[str]:
+    return frozenset(match[1] for source in sources for token in lex(source)
+                     if (match := re.fullmatch(r"\s*#\s*define\s+(\w+)\s+\(?STD_(?:ON|OFF)\)?\s*", re.sub(r"/\*.*?\*/|//[^\n]*", "", token.text, flags=re.DOTALL))))
+
+
 def runtime_findings(root: Path = ROOT) -> collections.Counter[Key]:
     result: collections.Counter[Key] = collections.Counter()
-    for path in sorted((root / "runtime").rglob("*")):
-        if path.suffix in {".c", ".h"}:
-            result.update(findings(path.relative_to(root).as_posix(), path.read_text(encoding="utf-8")))
+    sources = {path.relative_to(root).as_posix(): path.read_text(encoding="utf-8")
+               for path in sorted((root / "runtime").rglob("*")) if path.suffix in {".c", ".h"}}
+    switches = switch_definitions(list(sources.values()))
+    for name, source in sources.items():
+        result.update(findings(name, source, known_switches=switches))
     return result
 
 
@@ -330,16 +359,19 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
         for index, token in enumerate(tokens):
             if not is_comment(token) and not token.text.lstrip().startswith("#"):
                 continue
-            candidates = list(re.finditer(r"\bMR12\b", token.text))
-            matches = list(DEVIATION.finditer(token.text))
+            marker_text = token.text if is_comment(token) else " ".join(
+                item.text for item in lex(token.text.lstrip()[1:]) if is_comment(item)
+            )
+            candidates = list(re.finditer(r"\bMR12\b", marker_text))
+            matches = list(DEVIATION.finditer(marker_text))
             for candidate in candidates:
                 match = next((m for m in matches if m.start() == candidate.start()), None)
-                reason = comment_body(token.text[match.end():]) if match else ""
+                reason = comment_body(marker_text[match.end():]) if match else ""
                 if not match or not reason:
                     line = source.splitlines()[source.count("\n", 0, token.start)].strip()
                     result[("deviation-format", name, line)] += 1
             for match in matches:
-                if not comment_body(token.text[match.end():]):
+                if not comment_body(marker_text[match.end():]):
                     continue
                 line_start = source.rfind("\n", 0, token.start) + 1
                 preceding = [t for t in tokens[:index] if t.start >= line_start and not is_comment(t)]
@@ -382,12 +414,14 @@ def generated_findings(samples: Path) -> collections.Counter[Key]:
         integration = json.loads((project / "meta/integration.json").read_text(encoding="utf-8"))
         copies = set(integration["originalBswSources"].values())
         current: collections.Counter[Key] = collections.Counter()
-        for path in sorted(project.rglob("*.h")):
+        headers = {path: path.read_text(encoding="utf-8") for path in sorted(project.rglob("*.h")) if not path.relative_to(project).as_posix().startswith(("kernel/", "app/"))}
+        switches = switch_definitions(list(headers.values()))
+        for path, source in headers.items():
             relative = path.relative_to(project).as_posix()
             if relative.startswith(("kernel/", "app/")) or relative in copies:
                 continue
             if "include" in path.relative_to(project).parts:
-                current.update(findings("emitted/" + relative, path.read_text(encoding="utf-8"), bsw=path.stem.split("_", 1)[0] in bsw_modules))
+                current.update(findings("emitted/" + relative, source, bsw=path.stem.split("_", 1)[0] in bsw_modules, known_switches=switches))
         result |= current
     return result
 

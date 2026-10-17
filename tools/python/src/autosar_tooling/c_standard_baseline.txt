@@ -937,22 +937,26 @@ clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
 clang-documentation runtime/host/include/Ecu_HostBusSM.h * @return None.
 clang-documentation runtime/host/src/Det_Host.h * @return Never returns.
 config-switch emitted/generated/include/Ecu_TargetConfig.h #ifdef ECU_TARGET_TESTS
-config-switch emitted/generated/include/Os_Cfg.h #if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)
-config-switch emitted/generated/include/Os_Cfg.h #if defined(OS_USE_GET_SERVICE_ID) && (OS_USE_GET_SERVICE_ID != 1)
-config-switch emitted/generated/include/Os_Cfg.h #if defined(OS_USE_PARAMETER_ACCESS) && (OS_USE_PARAMETER_ACCESS != 1)
-config-switch emitted/generated/include/Os_Cfg.h #ifndef OS_STATUS_EXTENDED
-config-switch emitted/generated/include/Os_Cfg.h #ifndef OS_USE_GET_SERVICE_ID
-config-switch emitted/generated/include/Os_Cfg.h #ifndef OS_USE_PARAMETER_ACCESS
-config-switch runtime/bsw/include/Platform_Types.h #ifndef FALSE
-config-switch runtime/bsw/include/Platform_Types.h #ifndef TRUE
-config-switch runtime/bsw/src/Can.c #ifndef CAN_BUSOFF_POLLING
-config-switch runtime/bsw/src/Can.c #ifndef CAN_CANIF_CONTROLLER_ID
-config-switch runtime/bsw/src/Can.c #ifndef CAN_CONTROLLER_ID
-config-switch runtime/bsw/src/Can.c #ifndef CAN_HOST_QUEUED_COMPLETION
-config-switch runtime/bsw/src/Can.c #ifndef CAN_RX_HOH
-config-switch runtime/bsw/src/Can.c #ifndef CAN_RX_POLLING
-config-switch runtime/bsw/src/Can.c #ifndef CAN_TX_HOH
-config-switch runtime/bsw/src/Can.c #ifndef CAN_TX_POLLING
+config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
+config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
+config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 0
+config-switch runtime/bsw/src/Can.c #if CAN_BUSOFF_POLLING == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_HOST_QUEUED_COMPLETION == 1
+config-switch runtime/bsw/src/Can.c #if CAN_RX_POLLING == 0
+config-switch runtime/bsw/src/Can.c #if CAN_RX_POLLING == 0
+config-switch runtime/bsw/src/Can.c #if CAN_RX_POLLING == 1
+config-switch runtime/bsw/src/Can.c #if CAN_RX_POLLING == 1
+config-switch runtime/bsw/src/Can.c #if CAN_RX_POLLING == 1
+config-switch runtime/bsw/src/Can.c #if CAN_TX_POLLING == 0
 config-switch runtime/ecu/src/Ecu_Target.c #if defined(ECU_TARGET_TESTS)
 config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
 config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
@@ -962,9 +966,6 @@ config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
 config-switch runtime/ecu/src/Ecu_Target.c #ifdef ECU_TARGET_TESTS
 config-switch runtime/ecu/src/ecu_probe.c #ifdef ECU_TARGET_TESTS
 config-switch runtime/ecu/src/ecu_probe.c #ifdef ECU_TARGET_TESTS
-config-switch runtime/os/include/Os_Cfg.h #ifndef OS_STATUS_EXTENDED
-config-switch runtime/os/include/Os_Cfg.h #ifndef OS_USE_GET_SERVICE_ID
-config-switch runtime/os/include/Os_Cfg.h #ifndef OS_USE_PARAMETER_ACCESS
 config-switch runtime/os/include/Os_Hooks.h #if OS_USE_GET_SERVICE_ID
 config-switch runtime/os/include/Os_Hooks.h #if OS_USE_PARAMETER_ACCESS
 config-switch runtime/os/include/Os_Target.h #ifdef OS_ACTIVATION_TESTS
@@ -1011,8 +1012,6 @@ config-switch runtime/os/src/Os_Time.c #ifdef OS_TIME_TESTS
 config-switch runtime/os/src/Os_Time.c #ifdef OS_TIME_TESTS
 config-switch runtime/os/src/Os_Time.c #ifdef OS_TIME_TESTS
 config-switch runtime/os/src/Os_Windows.h #ifdef OS_RESTORE_EVENT_SERVICE
-config-switch runtime/os/src/host/linux/Os_HostLinux.h #ifndef FALSE
-config-switch runtime/os/src/host/linux/Os_HostLinux.h #ifndef TRUE
 config-switch runtime/os/src/host/linux/Os_StackLinux.c #ifdef OS_HOST_FAILURE_TESTS
 config-switch runtime/os/src/host/linux/Os_StackLinux.c #ifdef OS_HOST_FAILURE_TESTS
 config-switch runtime/os/src/host/linux/Os_StackLinux.c #ifdef OS_HOST_FAILURE_TESTS

@@ -107,6 +107,18 @@ class CStandardTests(unittest.TestCase):
     def test_memmap_file_does_not_exempt_functional_switches(self):
         self.assertIn("config-switch", self.rules("#ifdef TEST_API\n#endif", "runtime/bsw/include/Test_MemMap.h"))
 
+    def test_commented_and_included_switch_definitions(self):
+        self.assertIn("config-switch", self.rules("#define FEATURE_FLAG STD_ON /**< Enabled. */\n#if (FEATURE_FLAG == 1)\n#endif"))
+        self.assertIn("config-switch", self.rules("#define CAN_RX_POLLING 0\n#if CAN_RX_POLLING == 1\n#endif"))
+        switches = c_standard.switch_definitions(["#define FEATURE_FLAG STD_ON /**< Enabled. */"])
+        result = c_standard.findings("runtime/bsw/src/Test.c", "#if (FEATURE_FLAG == 1)\n#endif", known_switches=switches)
+        self.assertIn("config-switch", {key[0] for key in result})
+
+    def test_switch_definition_and_value_validation_are_not_feature_selection(self):
+        self.assertNotIn("config-switch", self.rules("#ifndef TEST_API\n#define TEST_API STD_ON\n#endif"))
+        self.assertNotIn("config-switch", self.rules("#define TEST_API STD_ON\n#if (TEST_API != 0) && (TEST_API != 1)\n#error Invalid\n#endif"))
+        self.assertIn("config-switch", self.rules("#define TEST_API STD_OFF\n#ifdef TEST_API\n#error Unsupported\n#endif"))
+
     def test_switch_requires_value_comparison(self):
         self.assertIn("config-switch", self.rules("#define TEST_API STD_ON\n#ifdef TEST_API\n#endif"))
         self.assertNotIn("config-switch", self.rules("#define TEST_API STD_ON\n#if (TEST_API == STD_ON)\n#endif"))
@@ -162,6 +174,8 @@ class CStandardTests(unittest.TestCase):
             (root / "runtime/bsw/src").mkdir(parents=True)
             (root / "docs/standards").mkdir(parents=True)
             source = root / "runtime/bsw/src/Test.c"
+            source.write_text('#define TEXT "MR12 RULE 8.7 VIOLATION: text"\n', encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
             source.write_text("/* MR12 RULE 8.7 VIOLATION: required API. */\nvoid Test_Run(void) {}", encoding="utf-8")
             document = root / "docs/standards/test.md"
             document.write_text("| MISRA C:2012 Rule 8.7 | `runtime/bsw/src/Test.c` 中 `Test_Run` | required | Approved by maintainer |\n", encoding="utf-8")
