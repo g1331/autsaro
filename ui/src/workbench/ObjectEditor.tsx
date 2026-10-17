@@ -1,13 +1,15 @@
 import { editorValueKindKeys, editorChangeKeys } from '../i18n/editors';
 import { useLocale } from '../i18n';
 import { displayPath } from '../pathDisplay';
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import type { Workbench } from './useWorkbench';
 import type { FieldDescriptor, ValueState } from './projectTypes';
 import { StructureEditor } from './StructureEditor';
 import { CopyText } from './Dialog';
 import { iconSize } from './icons';
+import { CommandActions, CommandButton, CommandReasons } from './CommandActions';
+import { commandById } from './commands';
 import { objectRoleClass } from './objectRole';
 
 export function ObjectEditor({ controller: c }: { controller: Workbench }) {
@@ -112,20 +114,13 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
       </div>
       <div className="batch-bar">
         <span>{t('editor.objects.pendingCount', { count: c.changes.length })}</span>
-        <button
-          type="button"
-          onClick={() => void c.prepareChanges()}
-          disabled={!c.changes.length || Boolean(c.busy)}
-        >
-          {t('editor.objects.previewBatch')}
-        </button>
-        <button
-          type="button"
-          onClick={() => c.discardChanges()}
-          disabled={!c.changes.length || Boolean(c.busy)}
-        >
-          {t('editor.objects.restoreBatch')}
-        </button>
+        <CommandActions
+          className="batch-actions"
+          actions={[
+            { command: commandById(c, 'preview-changes'), label: t('editor.objects.previewBatch') },
+            { command: commandById(c, 'discard-changes'), label: t('editor.objects.restoreBatch') },
+          ]}
+        />
       </div>
       {c.changes.length ? (
         <details>
@@ -385,6 +380,8 @@ export function DescriptorField({
 
 export function ObjectInspector({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
+  const reasonsId = useId();
+  const previewChanges = commandById(c, 'preview-changes');
   const object = c.projection?.objects.find((item) => item.objectId === c.activeObjectId);
   const fields =
     c.projection?.fields.filter((field) =>
@@ -457,13 +454,9 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
                 <p className="empty-state">{t('editor.objects.noFields')}</p>
               ) : null}
               <div className="inspector-actions">
-                <button
-                  type="button"
-                  onClick={() => void c.prepareChanges()}
-                  disabled={!c.changes.length || Boolean(c.busy)}
-                >
+                <CommandButton command={previewChanges} reasonId={`${reasonsId}-0`}>
                   {t('editor.objects.preview')}
-                </button>
+                </CommandButton>
                 {object.writable && !c.actionReason('prepare-change') ? (
                   <button
                     type="button"
@@ -480,6 +473,7 @@ export function ObjectInspector({ controller: c }: { controller: Workbench }) {
                   </button>
                 ) : null}
               </div>
+              <CommandReasons commands={[previewChanges]} id={reasonsId} />
               <StructureEditor controller={c} object={object} />
             </>
           ) : (

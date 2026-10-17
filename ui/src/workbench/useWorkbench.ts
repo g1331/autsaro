@@ -25,6 +25,8 @@ import type {
   WorkspaceView,
 } from '../types';
 import { createBatchEditing } from './batchEditing';
+import type { Command } from './commands';
+import { workbenchCommands } from './commands';
 import { createDeliveryActions } from './deliveryActions';
 import { rememberDialogOpener } from './Dialog';
 import type { PreviewDelta, Stage, StageState } from './forms';
@@ -88,6 +90,7 @@ export interface Workbench
         | 'notice'
         | 'previewPath'
         | 'settingsOpen'
+        | 'settingsCategory'
         | 'toolDraft'
         | 'settingsNotice'
         | 'toolErrors'
@@ -99,8 +102,9 @@ export interface Workbench
       >
     > {
   native: boolean;
-  executionDisabled: boolean;
   executionReason: Text;
+  /** Availability, reason and action of every user command; see `workbenchCommands`. */
+  commands: Command[];
   unapplied: boolean;
   /** Automatic diagnostics, explicit validation findings and standard-input findings, each listed once. */
   diagnostics: ConfigurationDiagnostic[];
@@ -599,8 +603,6 @@ export function useWorkbench(): Workbench {
   const executionReason = state.capabilities?.nativeExecution
     ? (state.capabilities.toolError ?? '')
     : message('controller.execution.unsupported');
-  const executionDisabled =
-    disabled || !state.capabilities?.nativeExecution || Boolean(state.capabilities.toolError);
 
   function acceptIntegration(report: IntegrationInspection) {
     patchState({
@@ -880,7 +882,7 @@ export function useWorkbench(): Workbench {
     state.capabilities,
   ]);
 
-  return {
+  const controller: Omit<Workbench, 'commands'> = {
     ...state,
     setApplicationPreview: field('applicationPreview'),
     previewApplicationInitialization,
@@ -980,6 +982,7 @@ export function useWorkbench(): Workbench {
     generationDelta,
     disabled,
     setSettingsOpen,
+    setSettingsCategory: field('settingsCategory'),
     setToolDraft,
     setSettingsNotice,
     setToolErrors: field('toolErrors'),
@@ -1005,7 +1008,7 @@ export function useWorkbench(): Workbench {
     verifyEcu,
     changeEcuOutput,
     changeEcuBuildDirectory,
-    executionDisabled,
     executionReason,
   };
+  return { ...controller, commands: workbenchCommands(controller) };
 }

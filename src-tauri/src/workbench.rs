@@ -158,17 +158,35 @@ pub(super) struct Operation {
 
 fn tools(settings: &Settings) -> Result<ExecutionSettings, autosar_config_core::LocalizedText> {
     let stored = settings.execution_tools.as_ref();
-    let path = |name: &str, value: Option<&PathBuf>| {
-        std::env::var_os(name)
-            .map(PathBuf::from)
-            .or_else(|| value.cloned())
-            .ok_or_else(|| autosar_config_core::product_message!("backend.workbench.tool_required", "name" => name))
-    };
+    // Missing tools are named as the user configures them, not by environment variable.
+    let path =
+        |name: &str, value: Option<&PathBuf>, missing: autosar_config_core::LocalizedText| {
+            std::env::var_os(name)
+                .map(PathBuf::from)
+                .or_else(|| value.cloned())
+                .ok_or(missing)
+        };
     let result = ExecutionSettings::new(
-        path("AUTOSAR_CC", stored.map(|value| &value.compiler))?,
-        path("AUTOSAR_OBJDUMP", stored.map(|value| &value.objdump))?,
-        path("AUTOSAR_GIT", stored.map(|value| &value.git))?,
-        path("AUTOSAR_PYTHON", stored.map(|value| &value.python))?,
+        path(
+            "AUTOSAR_CC",
+            stored.map(|value| &value.compiler),
+            autosar_config_core::product_message!("backend.workbench.compiler_required"),
+        )?,
+        path(
+            "AUTOSAR_OBJDUMP",
+            stored.map(|value| &value.objdump),
+            autosar_config_core::product_message!("backend.workbench.objdump_required"),
+        )?,
+        path(
+            "AUTOSAR_GIT",
+            stored.map(|value| &value.git),
+            autosar_config_core::product_message!("backend.workbench.git_required"),
+        )?,
+        path(
+            "AUTOSAR_PYTHON",
+            stored.map(|value| &value.python),
+            autosar_config_core::product_message!("backend.workbench.python_required"),
+        )?,
     )?;
     for (name, path) in [
         ("compiler", &result.compiler),

@@ -165,13 +165,16 @@ export async function openWorkbench(name) {
         return label.textContent.trim() === ${json(text)} || node.getAttribute('aria-label') === ${json(text)};
       });
     })()`;
+    // Unavailable commands stay focusable with aria-disabled; they are not ready either.
+    const ready = (button) =>
+      `Boolean(${button} && !${button}.disabled && ${button}.getAttribute('aria-disabled') !== 'true')`;
     await until(
-      `(() => { const button = ${buttonQuery}; return Boolean(button && !button.disabled); })()`,
+      `(() => { const button = ${buttonQuery}; return ${ready('button')}; })()`,
       `actual button ready: ${text}`,
     );
     const point = await evaluate(`(() => {
       const button = ${buttonQuery};
-      if (!button || button.disabled) throw new Error('Actual button missing/disabled: ' + ${json(text)});
+      if (!${ready('button')}) throw new Error('Actual button missing/disabled: ' + ${json(text)});
       button.scrollIntoView({block:'nearest',inline:'nearest'});
       const box = button.getBoundingClientRect();
       return {x:box.x+box.width/2,y:box.y+box.height/2};
@@ -189,6 +192,10 @@ export async function openWorkbench(name) {
   }
   const label = (name) => `[aria-label=${json(name)}]`;
   async function menu(command) {
+    // Global shortcuts leave text fields alone; leave the field as a user would.
+    await evaluate(
+      `document.activeElement?.closest('input, textarea, select') ? document.activeElement.blur() : null; true`,
+    );
     await key('k', { ctrl: true });
     await until(
       `Boolean(document.querySelector('[aria-label="搜索当前可用命令"]'))`,
@@ -219,7 +226,7 @@ export async function openWorkbench(name) {
     );
     await evaluate('window.__BUILTIN_NATIVE_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke');
     await until(
-      `Boolean([...document.querySelectorAll('.start-page button')].find(node => node.textContent.trim() === '打开成员工程…' && !node.disabled))`,
+      `Boolean([...document.querySelectorAll('.start-page button')].find(node => node.textContent.trim() === '打开成员工程…' && node.getAttribute('aria-disabled') !== 'true'))`,
       'native capabilities restored',
     );
     if (manifest) return openMember(manifest);

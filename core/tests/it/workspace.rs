@@ -1460,9 +1460,11 @@ fn builtin_application_initialization_is_reviewed_create_only_and_owns_real_live
     );
     assert!(!application.exists());
     assert_eq!(workspace.input_fingerprint().unwrap(), old_identity);
+    assert!(!workspace.view().application_initialized);
     let outcome = workspace
         .initialize_application_previewed(&preview)
         .unwrap();
+    assert!(workspace.view().application_initialized);
     assert!(!outcome.projection.dirty);
     assert_eq!(outcome.projection.workspace_epoch, before.workspace_epoch);
     assert_ne!(workspace.input_fingerprint().unwrap(), old_identity);

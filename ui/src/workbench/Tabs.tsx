@@ -1,4 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react';
+import { Tooltip } from './Tooltip';
 
 export type TabItem<K extends string> = {
   key: K;
@@ -99,16 +100,17 @@ export function Tabs<K extends string>({
               {item.label}
             </button>
             {item.onClose ? (
-              <button
-                type="button"
-                className="icon-button tab-close"
-                tabIndex={-1}
-                aria-label={item.closeLabel}
-                title={item.closeLabel}
-                onClick={item.onClose}
-              >
-                {item.closeIcon}
-              </button>
+              <Tooltip label={item.closeLabel ?? ''}>
+                <button
+                  type="button"
+                  className="icon-button tab-close"
+                  tabIndex={-1}
+                  aria-label={item.closeLabel}
+                  onClick={item.onClose}
+                >
+                  {item.closeIcon}
+                </button>
+              </Tooltip>
             ) : null}
           </span>
         );
