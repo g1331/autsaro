@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Added:** The parameter inspector shows the parameter's description above its definition facts, and each parameter grid row with a description offers it as inline help behind a toggle next to the name (#272). Both resolve at render time, so they follow the interface language; parameters without a description show neither.
 - **Fixed:** Offline build tools accept host directory aliases above the selected package or build root while still refusing links and reparse points at the root and inside package and kernel trees (#271).
 
 - **Fixed:** Workbench modal dialogs suppress background native scrollbars, default-value descriptions hide internal rule-set IDs, and automatic-check captions and stages align consistently (#269).
