@@ -61,7 +61,7 @@ Every open Issue carries at least one type label and one area label; a cross-mod
 - `area:quality-ci`: CI, `quality`, C static checks and test infrastructure
 - `area:delivery`: delivery packages, asset inventory and offline ECU tools
 
-Add `blocked` when an Issue waits for target hardware or another Issue, and name what it waits for in the body. Progress is shown by the Milestone and the linked branch or PR, not by status labels; work done in parallel should avoid sharing an `area`.
+Add `blocked` when an Issue waits for target hardware or another Issue, and name what it waits for in the body. Progress is shown by the Milestone and the linked branch or PR, not by status labels; pull requests get area labels automatically from their changed paths (the `Pull request labels` workflow, mapped in `.github/labeler.yml`); work done in parallel should avoid sharing an `area`.
 
 ## Interface text and languages
 

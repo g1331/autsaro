@@ -1,0 +1,56 @@
+# Area labels for pull requests by changed path; definitions are in CONTRIBUTING.md.
+area:os:
+  - changed-files:
+      - any-glob-to-any-file:
+          - runtime/os/**
+          - third_party/freertos/**
+          - tests/freertos/**
+          - core/src/integration/os_service.rs
+          - core/src/integration/schedule.rs
+          - core/src/integration/arti.rs
+area:bsw:
+  - changed-files:
+      - any-glob-to-any-file:
+          - runtime/bsw/**
+          - core/src/integration/com.rs
+          - core/src/integration/routing.rs
+          - core/src/integration/signals.rs
+          - core/src/integration/can_runtime.rs
+          - core/src/integration/diagnostic.rs
+          - core/src/integration/mode.rs
+area:rte:
+  - changed-files:
+      - any-glob-to-any-file:
+          - core/src/integration/rte*.rs
+          - core/src/integration/component.rs
+          - core/src/integration/composition.rs
+          - core/src/integration/contracts.rs
+area:generator:
+  - changed-files:
+      - any-glob-to-any-file:
+          - core/src/**
+area:ui:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ui/**
+          - DESIGN.md
+          - docs/design/**
+area:desktop:
+  - changed-files:
+      - any-glob-to-any-file:
+          - src-tauri/**
+          - tests/desktop/**
+area:quality-ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+          - tools/python/src/autosar_tooling/**
+area:delivery:
+  - changed-files:
+      - any-glob-to-any-file:
+          - tools/python/src/ecu_tools/**
+          - runtime/ecu/**
+          - runtime/host/**
+          - runtime/contracts/**
+          - core/src/generator/delivery/**
+          - core/src/generator/delivery.rs
