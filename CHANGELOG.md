@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed:** Offline build tools accept host directory aliases above the selected package or build root while still refusing links and reparse points at the root and inside package and kernel trees (#271).
+
 - **Fixed:** Workbench modal dialogs suppress background native scrollbars, default-value descriptions hide internal rule-set IDs, and automatic-check captions and stages align consistently (#269).
 - **Breaking:** Source packages use `autosar-build-target-v3` with build-derived SHA-256 identities for every final kernel file; regenerate v2 packages. Offline ecu-tool and CMake reject patched kernel byte mismatches before compilation. Cargo builds now require Git (PATH or `AUTOSAR_GIT`). C ABI, FreeRTOS upstream/port/patch identities and the independent seal guard are unchanged; rule-set and package seals are recomputed (#265).
 - **Added:** Built-in ECUC metadata provides product-authored Chinese and English parameter descriptions in field and instance-creation projections. Rule identity advances to 1.1.0 and binds the shared localized resources; R24-11 defaults are verified for all 500 parameters (140 declared, 360 absent) (#266).
