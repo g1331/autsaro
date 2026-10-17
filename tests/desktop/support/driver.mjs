@@ -1,8 +1,8 @@
 // One isolated native application session per test file, driven through the
 // official tauri-driver WebDriver intermediary. Linux isolates itself on a
 // private Xvfb display and D-Bus; Windows relies on a dedicated runner or VM.
-import assert from "node:assert/strict";
-import { execFile, spawn, spawnSync } from "node:child_process";
+import assert from 'node:assert/strict';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 import {
   access,
   appendFile,
@@ -13,51 +13,48 @@ import {
   readlink,
   rm,
   writeFile,
-} from "node:fs/promises";
-import { createServer } from "node:net";
-import { rmSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { promisify } from "node:util";
+} from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 
 const run = promisify(execFile);
-const sleep = (milliseconds) =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
-const platform = { linux: "linux", win32: "windows" }[process.platform];
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const platform = { linux: 'linux', win32: 'windows' }[process.platform];
 // Let Ctrl-C and CI cancellation run the 'exit' cleanup registered by launch().
 for (const [signal, code] of [
-  ["SIGINT", 130],
-  ["SIGTERM", 143],
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
 ])
   process.once(signal, () => process.exit(code));
 
 // Execution tools are declared to the application only through its settings UI.
 export const EXECUTION_VARIABLES = [
-  "AUTOSAR_CC",
-  "AUTOSAR_OBJDUMP",
-  "AUTOSAR_NM",
-  "AUTOSAR_GIT",
-  "AUTOSAR_PYTHON",
-  "AUTOSAR_XSD_ARCHIVE",
-  "AUTOSAR_MOD_ARCHIVE",
+  'AUTOSAR_CC',
+  'AUTOSAR_OBJDUMP',
+  'AUTOSAR_NM',
+  'AUTOSAR_GIT',
+  'AUTOSAR_PYTHON',
+  'AUTOSAR_XSD_ARCHIVE',
+  'AUTOSAR_MOD_ARCHIVE',
 ];
 const DEVELOPMENT_VARIABLES = [
-  "VIRTUAL_ENV",
-  "PYTHONPATH",
-  "PYTHONHOME",
-  "NODE_OPTIONS",
-  "ECU_OWNER_SOCKET",
-  "ECU_OWNER_TOKEN",
-  "ECU_OWNER_SCOPE",
-  "GTK_THEME",
-  "WAYLAND_DISPLAY",
+  'VIRTUAL_ENV',
+  'PYTHONPATH',
+  'PYTHONHOME',
+  'NODE_OPTIONS',
+  'ECU_OWNER_SOCKET',
+  'ECU_OWNER_TOKEN',
+  'ECU_OWNER_SCOPE',
+  'GTK_THEME',
+  'WAYLAND_DISPLAY',
 ];
 
 async function tool(name) {
-  for (const directory of (process.env.PATH ?? "")
-    .split(path.delimiter)
-    .filter(Boolean))
-    for (const suffix of platform === "windows" ? [".exe", ""] : [""]) {
+  for (const directory of (process.env.PATH ?? '').split(path.delimiter).filter(Boolean))
+    for (const suffix of platform === 'windows' ? ['.exe', ''] : ['']) {
       const candidate = path.join(directory, name + suffix);
       try {
         await access(candidate);
@@ -78,15 +75,13 @@ async function driverPorts() {
       const server = createServer();
       servers.push(server);
       await new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", resolve);
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
       });
     }
     return servers.map((server) => server.address().port);
   } finally {
-    await Promise.all(
-      servers.map((server) => new Promise((resolve) => server.close(resolve))),
-    );
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
   }
 }
 
@@ -104,24 +99,24 @@ async function until(probe, description, timeout = 30000) {
 function started(command, args, options, description) {
   const child = spawn(command, args, {
     ...options,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  let stderr = "";
-  child.stderr.on("data", (chunk) => (stderr += chunk));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => (stderr += chunk));
   const line = new Promise((resolve, reject) => {
-    let stdout = "";
+    let stdout = '';
     const timer = setTimeout(
       () => reject(new Error(`${description} did not start: ${stderr}`)),
       15000,
     );
-    child.stdout.on("data", (chunk) => {
+    child.stdout.on('data', (chunk) => {
       stdout += chunk;
-      if (stdout.includes("\n")) {
+      if (stdout.includes('\n')) {
         clearTimeout(timer);
-        resolve(stdout.split("\n")[0].trim());
+        resolve(stdout.split('\n')[0].trim());
       }
     });
-    child.on("exit", (code) => {
+    child.on('exit', (code) => {
       clearTimeout(timer);
       reject(new Error(`${description} exited with ${code}: ${stderr}`));
     });
@@ -130,30 +125,29 @@ function started(command, args, options, description) {
 }
 
 function stopped(child) {
-  if (child.exitCode !== null || child.signalCode !== null)
-    return Promise.resolve();
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve) => {
-    child.once("exit", resolve);
+    child.once('exit', resolve);
     child.kill();
   });
 }
 
 function windowsGuard() {
   const dedicated =
-    process.env.GITHUB_ACTIONS === "true" ||
-    os.userInfo().username === "WDAGUtilityAccount" ||
-    process.env.AUTOSAR_DESKTOP_DEDICATED_SESSION === "1";
+    process.env.GITHUB_ACTIONS === 'true' ||
+    os.userInfo().username === 'WDAGUtilityAccount' ||
+    process.env.AUTOSAR_DESKTOP_DEDICATED_SESSION === '1';
   if (!dedicated)
     throw new Error(
-      "Windows desktop tests run only in a dedicated session (GitHub-hosted runner, Windows Sandbox, " +
-        "or a VM with AUTOSAR_DESKTOP_DEDICATED_SESSION=1); they never use your active desktop.",
+      'Windows desktop tests run only in a dedicated session (GitHub-hosted runner, Windows Sandbox, ' +
+        'or a VM with AUTOSAR_DESKTOP_DEDICATED_SESSION=1); they never use your active desktop.',
     );
 }
 
 async function powershell(script) {
   const { stdout } = await run(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-Command", script],
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-Command', script],
     { maxBuffer: 64 * 1024 * 1024, windowsHide: true },
   );
   return stdout;
@@ -161,11 +155,11 @@ async function powershell(script) {
 
 async function processes() {
   const listed = [];
-  if (platform === "windows") {
+  if (platform === 'windows') {
     const items = JSON.parse(
       await powershell(
-        "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-CimInstance Win32_Process | " +
-          "Select-Object ProcessId,ParentProcessId,Name,CommandLine,WorkingSetSize,PrivatePageCount," +
+        '[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-CimInstance Win32_Process | ' +
+          'Select-Object ProcessId,ParentProcessId,Name,CommandLine,WorkingSetSize,PrivatePageCount,' +
           '@{n="Created";e={if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() }}} | ConvertTo-Json -Compress',
       ),
     );
@@ -180,29 +174,25 @@ async function processes() {
         privateBytes: item.PrivatePageCount,
       });
   } else {
-    for (const entry of await readdir("/proc")) {
+    for (const entry of await readdir('/proc')) {
       if (!/^\d+$/.test(entry)) continue;
       try {
-        const status = await readFile(`/proc/${entry}/status`, "utf8");
+        const status = await readFile(`/proc/${entry}/status`, 'utf8');
         const fields = Object.fromEntries(
           status
-            .split("\n")
+            .split('\n')
             .map((line) => line.split(/:\s*/, 2))
             .filter((pair) => pair.length === 2),
         );
-        const stat = (await readFile(`/proc/${entry}/stat`, "utf8"))
-          .split(") ")[1]
-          .split(" ");
+        const stat = (await readFile(`/proc/${entry}/stat`, 'utf8')).split(') ')[1].split(' ');
         listed.push({
           pid: Number(entry),
           parent: Number(fields.PPid),
           name: fields.Name,
-          command: (await readFile(`/proc/${entry}/cmdline`, "utf8"))
-            .replaceAll("\0", " ")
-            .trim(),
+          command: (await readFile(`/proc/${entry}/cmdline`, 'utf8')).replaceAll('\0', ' ').trim(),
           identity: stat[19],
-          VmRSS: Number.parseInt(fields.VmRSS ?? "0", 10) * 1024,
-          VmHWM: Number.parseInt(fields.VmHWM ?? "0", 10) * 1024,
+          VmRSS: Number.parseInt(fields.VmRSS ?? '0', 10) * 1024,
+          VmHWM: Number.parseInt(fields.VmHWM ?? '0', 10) * 1024,
         });
       } catch {
         // The process exited during the scan.
@@ -233,8 +223,7 @@ export async function processTree(root) {
 // Windows keeps a child's ParentProcessId after the parent exits, so a later
 // process reusing that PID is not its parent: a child must not predate it.
 export function descendants(listed, root) {
-  const created = (item) =>
-    /^\d+$/.test(item.identity) ? BigInt(item.identity) : undefined;
+  const created = (item) => (/^\d+$/.test(item.identity) ? BigInt(item.identity) : undefined);
   const owned = new Map();
   const start = created(listed.find((item) => item.pid === root) ?? {});
   if (start !== undefined) owned.set(root, start);
@@ -242,11 +231,7 @@ export function descendants(listed, root) {
     grew = false;
     for (const item of listed) {
       const time = created(item);
-      if (
-        owned.has(item.parent) &&
-        !owned.has(item.pid) &&
-        time >= owned.get(item.parent)
-      ) {
+      if (owned.has(item.parent) && !owned.has(item.pid) && time >= owned.get(item.parent)) {
         owned.set(item.pid, time);
         grew = true;
       }
@@ -264,35 +249,25 @@ async function privateDisplay(scratch, environment) {
   };
   try {
     const xvfb = started(
-      await tool("Xvfb"),
-      [
-        "-displayfd",
-        "1",
-        "-screen",
-        "0",
-        "1440x1200x24",
-        "-nolisten",
-        "tcp",
-        "-nolisten",
-        "unix",
-      ],
+      await tool('Xvfb'),
+      ['-displayfd', '1', '-screen', '0', '1440x1200x24', '-nolisten', 'tcp', '-nolisten', 'unix'],
       { env: environment },
-      "Private Xvfb",
+      'Private Xvfb',
     );
     children.push(xvfb.child);
     environment.DISPLAY = `:${await xvfb.line}`;
     // Only owner connections and no service activation: nothing reaches the
     // user's session bus, and nothing outlives this daemon.
     // Unix socket addresses are bounded independently of result-path length.
-    bus = await mkdtemp(path.join(os.tmpdir(), "autosar-bus-"));
-    const busConfig = path.join(scratch, "dbus.conf");
+    bus = await mkdtemp(path.join(os.tmpdir(), 'autosar-bus-'));
+    const busConfig = path.join(scratch, 'dbus.conf');
     await writeFile(
       busConfig,
       `<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
   <type>session</type>
-  <listen>unix:path=${path.join(bus, "bus.sock")}</listen>
+  <listen>unix:path=${path.join(bus, 'bus.sock')}</listen>
   <auth>EXTERNAL</auth>
   <policy context="default">
     <allow send_destination="*"/>
@@ -304,29 +279,24 @@ async function privateDisplay(scratch, environment) {
 `,
     );
     const dbus = started(
-      await tool("dbus-daemon"),
-      [
-        "--nofork",
-        "--nosyslog",
-        `--config-file=${busConfig}`,
-        "--print-address=1",
-      ],
+      await tool('dbus-daemon'),
+      ['--nofork', '--nosyslog', `--config-file=${busConfig}`, '--print-address=1'],
       { env: environment },
-      "Private D-Bus",
+      'Private D-Bus',
     );
     children.push(dbus.child);
     environment.DBUS_SESSION_BUS_ADDRESS = await dbus.line;
-    const settings = path.join(scratch, "xsettings.conf");
+    const settings = path.join(scratch, 'xsettings.conf');
     const media = async (scheme, reduceMotion) => {
       await writeFile(
         settings,
-        `Net/ThemeName "${scheme === "dark" ? "Adwaita-dark" : "Adwaita"}"\nGtk/EnableAnimations ${reduceMotion ? 0 : 1}\n`,
+        `Net/ThemeName "${scheme === 'dark' ? 'Adwaita-dark' : 'Adwaita'}"\nGtk/EnableAnimations ${reduceMotion ? 0 : 1}\n`,
       );
     };
-    await media("light", false);
-    const xsettings = spawn(await tool("xsettingsd"), ["--config", settings], {
+    await media('light', false);
+    const xsettings = spawn(await tool('xsettingsd'), ['--config', settings], {
       env: environment,
-      stdio: "ignore",
+      stdio: 'ignore',
     });
     children.push(xsettings);
     return {
@@ -335,11 +305,11 @@ async function privateDisplay(scratch, environment) {
       cleanup,
       async media(scheme, reduceMotion) {
         await media(scheme, reduceMotion);
-        xsettings.kill("SIGHUP");
+        xsettings.kill('SIGHUP');
         return {
           scheme,
           reduceMotion,
-          scope: "private-xvfb-xsettings",
+          scope: 'private-xvfb-xsettings',
           display: environment.DISPLAY,
         };
       },
@@ -351,19 +321,14 @@ async function privateDisplay(scratch, environment) {
 }
 
 async function linuxChoose(environment, application, kind, selected) {
-  const xdotool = await tool("xdotool");
-  const xclip = await tool("xclip");
+  const xdotool = await tool('xdotool');
+  const xclip = await tool('xclip');
   const options = { env: environment };
   const windows = async () => {
     try {
       const { stdout } = await run(
         xdotool,
-        [
-          "search",
-          "--onlyvisible",
-          "--name",
-          "^(Open|Save|Select|Choose|打开|保存|选择)",
-        ],
+        ['search', '--onlyvisible', '--name', '^(Open|Save|Select|Choose|打开|保存|选择)'],
         options,
       );
       return stdout.split(/\s+/).filter(Boolean);
@@ -374,51 +339,38 @@ async function linuxChoose(environment, application, kind, selected) {
   };
   const window = await until(
     async () => ((await windows()).length === 1 ? (await windows())[0] : null),
-    "one native chooser on the private display",
+    'one native chooser on the private display',
   );
-  const owner = Number(
-    (await run(xdotool, ["getwindowpid", window], options)).stdout.trim(),
-  );
+  const owner = Number((await run(xdotool, ['getwindowpid', window], options)).stdout.trim());
   assert.equal(
     owner,
     await application(),
-    "Native chooser must belong to the application under test",
+    'Native chooser must belong to the application under test',
   );
-  const focused = await run(
-    xdotool,
-    ["windowfocus", "--sync", window, "getwindowfocus"],
-    options,
-  );
-  assert.equal(
-    focused.stdout.trim(),
-    window,
-    "Private chooser must receive X11 focus",
-  );
+  const focused = await run(xdotool, ['windowfocus', '--sync', window, 'getwindowfocus'], options);
+  assert.equal(focused.stdout.trim(), window, 'Private chooser must receive X11 focus');
   // Paste the URI into GtkFileChooser's file list; location-entry completion
   // only navigates and does not accept a folder.
   const uri = new URL(`file://${selected}`).href;
-  const clipboard = spawn(xclip, ["-quiet", "-selection", "clipboard", "-i"], {
+  const clipboard = spawn(xclip, ['-quiet', '-selection', 'clipboard', '-i'], {
     env: environment,
-    stdio: ["pipe", "ignore", "ignore"],
+    stdio: ['pipe', 'ignore', 'ignore'],
   });
   clipboard.stdin.end(uri);
   try {
     await until(async () => {
       try {
-        return (
-          (await run(xclip, ["-selection", "clipboard", "-out"], options))
-            .stdout === uri
-        );
+        return (await run(xclip, ['-selection', 'clipboard', '-out'], options)).stdout === uri;
       } catch {
         return false;
       }
-    }, "private chooser URI clipboard");
+    }, 'private chooser URI clipboard');
     for (const action of [
-      ["key", "--clearmodifiers", "alt+Home"],
-      ["sleep", "0.2"],
-      ["key", "--clearmodifiers", "ctrl+v"],
-      ["sleep", "0.2"],
-      ["key", "--clearmodifiers", "Return"],
+      ['key', '--clearmodifiers', 'alt+Home'],
+      ['sleep', '0.2'],
+      ['key', '--clearmodifiers', 'ctrl+v'],
+      ['sleep', '0.2'],
+      ['key', '--clearmodifiers', 'Return'],
     ])
       await run(xdotool, action, options);
     let accepted = false;
@@ -426,17 +378,13 @@ async function linuxChoose(environment, application, kind, selected) {
       async () => {
         if (!(await windows()).includes(window)) return true;
         // A populated folder is first navigated into; then use its Open button.
-        if (kind === "directory" && !accepted) {
-          await run(
-            xdotool,
-            ["sleep", "0.2", "key", "--clearmodifiers", "alt+o"],
-            options,
-          );
+        if (kind === 'directory' && !accepted) {
+          await run(xdotool, ['sleep', '0.2', 'key', '--clearmodifiers', 'alt+o'], options);
           accepted = true;
         }
         return false;
       },
-      "native chooser to accept the selection",
+      'native chooser to accept the selection',
       10000,
     );
   } finally {
@@ -538,7 +486,7 @@ class WebDriver {
     const started = performance.now();
     const response = await fetch(`${this.base}${route}`, {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(300000),
     });
@@ -549,19 +497,17 @@ class WebDriver {
         at: Date.now(),
         durationMs: performance.now() - started,
         method,
-        route: route.replace(/session\/[^/]+/, "session"),
+        route: route.replace(/session\/[^/]+/, 'session'),
         script: body?.args?.[0]?.slice(0, 240),
         status: response.status,
         error: result.value?.error ? result.value : undefined,
-        probe: body?.args?.[0]?.includes("Boolean(window.__TAURI_INTERNALS__")
+        probe: body?.args?.[0]?.includes('Boolean(window.__TAURI_INTERNALS__')
           ? result.value
           : undefined,
-      }) + "\n",
+      }) + '\n',
     );
     if (!response.ok || result.value?.error)
-      throw new Error(
-        `WebDriver ${method} ${route}: ${JSON.stringify(result)}`,
-      );
+      throw new Error(`WebDriver ${method} ${route}: ${JSON.stringify(result)}`);
     return result.value;
   }
 }
@@ -573,14 +519,12 @@ class WebDriver {
  */
 export async function launch(name, { delayOperations = false } = {}) {
   if (!platform)
-    throw new Error(
-      `tauri-driver supports Linux and Windows desktops, not ${process.platform}`,
-    );
-  if (platform === "windows") windowsGuard();
+    throw new Error(`tauri-driver supports Linux and Windows desktops, not ${process.platform}`);
+  if (platform === 'windows') windowsGuard();
   const application = process.env.AUTOSAR_DESKTOP_APP;
   assert(
     application && path.isAbsolute(application),
-    "Set AUTOSAR_DESKTOP_APP to the absolute path of a native-webdriver build",
+    'Set AUTOSAR_DESKTOP_APP to the absolute path of a native-webdriver build',
   );
   await access(application);
   const results = process.env.AUTOSAR_DESKTOP_RESULTS ?? os.tmpdir();
@@ -591,28 +535,27 @@ export async function launch(name, { delayOperations = false } = {}) {
     JSON.stringify(await hostEvidence(), null, 2),
   );
   for (const directory of [
-    "app-config",
-    "app-local",
-    "app-home",
-    "app-temp",
-    "app-path",
-    "config",
-    "data",
-    "cache",
-    "projects",
-    "deliveries",
+    'app-config',
+    'app-local',
+    'app-home',
+    'app-temp',
+    'app-path',
+    'config',
+    'data',
+    'cache',
+    'projects',
+    'deliveries',
   ])
     await mkdir(path.join(scratch, directory));
   // The Windows shell roots every chooser at %USERPROFILE%\Desktop and reports
   // a missing one in an extra "location is unavailable" dialog.
-  if (platform === "windows")
-    await mkdir(path.join(scratch, "app-home", "Desktop"));
+  if (platform === 'windows') await mkdir(path.join(scratch, 'app-home', 'Desktop'));
   // Settings written by the retired XSD/MOD validation mode must still load.
   await writeFile(
-    path.join(scratch, "app-config", "settings.json"),
+    path.join(scratch, 'app-config', 'settings.json'),
     JSON.stringify({
-      xsdArchive: "retired-xsd.zip",
-      modArchive: "retired-mod.zip",
+      xsdArchive: 'retired-xsd.zip',
+      modArchive: 'retired-mod.zip',
     }),
   );
   const environment = { ...process.env };
@@ -624,29 +567,29 @@ export async function launch(name, { delayOperations = false } = {}) {
     )
       delete environment[variable];
   Object.assign(environment, {
-    AUTOSAR_CONFIG_DIR: path.join(scratch, "app-config"),
-    APPDATA: path.join(scratch, "app-config"),
-    LOCALAPPDATA: path.join(scratch, "app-local"),
-    XDG_CONFIG_HOME: path.join(scratch, "config"),
-    XDG_DATA_HOME: path.join(scratch, "data"),
-    XDG_CACHE_HOME: path.join(scratch, "cache"),
-    HOME: path.join(scratch, "app-home"),
-    USERPROFILE: path.join(scratch, "app-home"),
-    TEMP: path.join(scratch, "app-temp"),
-    TMP: path.join(scratch, "app-temp"),
-    TMPDIR: path.join(scratch, "app-temp"),
-    PATH: path.join(scratch, "app-path"),
-    NO_AT_BRIDGE: "1",
+    AUTOSAR_CONFIG_DIR: path.join(scratch, 'app-config'),
+    APPDATA: path.join(scratch, 'app-config'),
+    LOCALAPPDATA: path.join(scratch, 'app-local'),
+    XDG_CONFIG_HOME: path.join(scratch, 'config'),
+    XDG_DATA_HOME: path.join(scratch, 'data'),
+    XDG_CACHE_HOME: path.join(scratch, 'cache'),
+    HOME: path.join(scratch, 'app-home'),
+    USERPROFILE: path.join(scratch, 'app-home'),
+    TEMP: path.join(scratch, 'app-temp'),
+    TMP: path.join(scratch, 'app-temp'),
+    TMPDIR: path.join(scratch, 'app-temp'),
+    PATH: path.join(scratch, 'app-path'),
+    NO_AT_BRIDGE: '1',
   });
   // Only cancellation scenarios need injected latency. Repeated opens and
   // snapshot builds in the other files must not pay for this test control.
   for (const [action, delay] of delayOperations
     ? [
-        ["SOURCE_READ", 500],
-        ["SNAPSHOT_BUILD", 250],
-        ["SCHEMA_CHECK", 100],
-        ["SOURCE_SCAN", 250],
-        ["DEFINITION_READ", 100],
+        ['SOURCE_READ', 500],
+        ['SNAPSHOT_BUILD', 250],
+        ['SCHEMA_CHECK', 100],
+        ['SOURCE_SCAN', 250],
+        ['DEFINITION_READ', 100],
       ]
     : [])
     environment[`AUTOSAR_VERIFY_DELAY_${action}_MS`] = String(delay);
@@ -659,19 +602,19 @@ export async function launch(name, { delayOperations = false } = {}) {
   let client;
   try {
     let nativeDriver;
-    if (platform === "linux") {
-      environment.GDK_BACKEND = "x11";
-      environment.WEBKIT_DISABLE_DMABUF_RENDERER = "1";
+    if (platform === 'linux') {
+      environment.GDK_BACKEND = 'x11';
+      environment.WEBKIT_DISABLE_DMABUF_RENDERER = '1';
       display = await privateDisplay(scratch, environment);
       children.push(...display.children);
-      nativeDriver = await tool("WebKitWebDriver");
+      nativeDriver = await tool('WebKitWebDriver');
     } else {
-      nativeDriver = await tool("msedgedriver");
+      nativeDriver = await tool('msedgedriver');
       await writeFile(
-        path.join(scratch, "windows-versions.json"),
+        path.join(scratch, 'windows-versions.json'),
         JSON.stringify(
           {
-            driver: (await run(nativeDriver, ["--version"])).stdout.trim(),
+            driver: (await run(nativeDriver, ['--version'])).stdout.trim(),
             webview2: await powershell(
               "(Get-ItemProperty 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv",
             ),
@@ -683,39 +626,37 @@ export async function launch(name, { delayOperations = false } = {}) {
     }
     const [port, nativePort] = await driverPorts();
     driverProcess = spawn(
-      await tool("tauri-driver"),
+      await tool('tauri-driver'),
       [
-        "--port",
+        '--port',
         String(port),
-        "--native-port",
+        '--native-port',
         String(nativePort),
-        "--native-driver",
+        '--native-driver',
         nativeDriver,
       ],
       {
         env: environment,
-        detached: platform === "linux",
-        stdio: ["ignore", "ignore", "pipe"],
+        detached: platform === 'linux',
+        stdio: ['ignore', 'ignore', 'pipe'],
         windowsHide: true,
       },
     );
     // An interrupted run never reaches close(); end the whole session with it.
     abandon = () => {
-      if (platform === "linux") {
+      if (platform === 'linux') {
         try {
-          process.kill(-driverProcess.pid, "SIGKILL");
+          process.kill(-driverProcess.pid, 'SIGKILL');
         } catch {
           // Already gone.
         }
-      } else
-        spawnSync("taskkill", ["/PID", String(driverProcess.pid), "/T", "/F"]);
-      for (const child of children) child.kill("SIGKILL");
-      if (display)
-        rmSync(display.busDirectory, { recursive: true, force: true });
+      } else spawnSync('taskkill', ['/PID', String(driverProcess.pid), '/T', '/F']);
+      for (const child of children) child.kill('SIGKILL');
+      if (display) rmSync(display.busDirectory, { recursive: true, force: true });
     };
-    process.once("exit", abandon);
+    process.once('exit', abandon);
     await writeFile(
-      path.join(scratch, "session.json"),
+      path.join(scratch, 'session.json'),
       JSON.stringify(
         {
           driverPid: driverProcess.pid,
@@ -731,37 +672,33 @@ export async function launch(name, { delayOperations = false } = {}) {
         2,
       ),
     );
-    let driverLog = "";
-    const driverOutput = path.join(scratch, "driver.stderr.log");
-    driverProcess.stderr.on("data", (chunk) => {
+    let driverLog = '';
+    const driverOutput = path.join(scratch, 'driver.stderr.log');
+    driverProcess.stderr.on('data', (chunk) => {
       driverLog += chunk;
       appendFile(driverOutput, chunk).catch(() => undefined);
     });
-    client = new WebDriver(
-      `http://127.0.0.1:${port}`,
-      path.join(scratch, "webdriver.jsonl"),
-    );
+    client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
     await until(async () => {
       try {
         return (await fetch(`${client.base}/status`)).ok;
       } catch {
-        if (driverProcess.exitCode !== null)
-          throw new Error(`tauri-driver exited: ${driverLog}`);
+        if (driverProcess.exitCode !== null) throw new Error(`tauri-driver exited: ${driverLog}`);
         return false;
       }
-    }, "tauri-driver");
+    }, 'tauri-driver');
     session = (
-      await client.request("POST", "/session", {
-        capabilities: { alwaysMatch: { "tauri:options": { application } } },
+      await client.request('POST', '/session', {
+        capabilities: { alwaysMatch: { 'tauri:options': { application } } },
       })
     ).sessionId;
-    await client.request("POST", `/session/${session}/timeouts`, {
+    await client.request('POST', `/session/${session}/timeouts`, {
       script: 300000,
       pageLoad: 300000,
     });
   } catch (error) {
     if (abandon) {
-      process.off("exit", abandon);
+      process.off('exit', abandon);
       abandon();
     }
     await Promise.all([driverProcess].filter(Boolean).map(stopped));
@@ -773,37 +710,33 @@ export async function launch(name, { delayOperations = false } = {}) {
     const binary = path.resolve(application).toLowerCase();
     const tree = await processTree(driverProcess.pid);
     for (const item of tree) {
-      if (platform === "linux") {
+      if (platform === 'linux') {
         try {
-          if (
-            (await readlink(`/proc/${item.pid}/exe`)).toLowerCase() === binary
-          )
-            return item.pid;
+          if ((await readlink(`/proc/${item.pid}/exe`)).toLowerCase() === binary) return item.pid;
         } catch {
           // Exited or not ours.
         }
-      } else if (item.name.toLowerCase() === path.basename(binary))
-        return item.pid;
+      } else if (item.name.toLowerCase() === path.basename(binary)) return item.pid;
     }
-    throw new Error("Application process is not running below tauri-driver");
+    throw new Error('Application process is not running below tauri-driver');
   };
   const pressed = {
-    Escape: "",
-    Tab: "",
-    ArrowDown: "",
-    ArrowUp: "",
-    ArrowLeft: "",
-    ArrowRight: "",
-    Enter: "",
+    Escape: '',
+    Tab: '',
+    ArrowDown: '',
+    ArrowUp: '',
+    ArrowLeft: '',
+    ArrowRight: '',
+    Enter: '',
   };
-  const held = { alt: "", ctrl: "", meta: "", shift: "" };
+  const held = { alt: '', ctrl: '', meta: '', shift: '' };
   return {
     platform,
     scratch,
     async evaluate(expression) {
-      const result = await client.request("POST", route("/execute/async"), {
+      const result = await client.request('POST', route('/execute/async'), {
         script:
-          "const done = arguments[arguments.length - 1]; Promise.resolve().then(() => (0, eval)(arguments[0])).then(value => done({value}), error => done({error: String(error)}));",
+          'const done = arguments[arguments.length - 1]; Promise.resolve().then(() => (0, eval)(arguments[0])).then(value => done({value}), error => done({error: String(error)}));',
         args: [expression],
       });
       if (result.error) throw new Error(result.error);
@@ -813,107 +746,104 @@ export async function launch(name, { delayOperations = false } = {}) {
       const evidence = { at: Date.now(), error: String(error) };
       evidence.processes = await processTree(driverProcess.pid).catch(String);
       evidence.context = await client
-        .request("POST", route("/execute/sync"), {
+        .request('POST', route('/execute/sync'), {
           script:
             'return {url: location.href, readyState: document.readyState, timeOrigin: performance.timeOrigin, native: Boolean(window.__TAURI_INTERNALS__), buttons: document.querySelectorAll("button").length, text: document.body?.innerText};',
           args: [],
         })
         .catch(String);
       await writeFile(
-        path.join(scratch, "startup-failure.json"),
+        path.join(scratch, 'startup-failure.json'),
         JSON.stringify(evidence, null, 2),
       );
     },
     async screenshot(file) {
-      const image = await client.request("GET", route("/screenshot"));
-      await writeFile(path.join(scratch, file), Buffer.from(image, "base64"));
+      const image = await client.request('GET', route('/screenshot'));
+      await writeFile(path.join(scratch, file), Buffer.from(image, 'base64'));
     },
     async resize(width, height) {
-      return client.request("POST", route("/window/rect"), { width, height });
+      return client.request('POST', route('/window/rect'), { width, height });
     },
     async key(value, modifiers = {}) {
       const codes = Object.entries(held)
         .filter(([modifier]) => modifiers[modifier])
         .map(([, code]) => code);
       const code = pressed[value] ?? value;
-      await client.request("POST", route("/actions"), {
+      await client.request('POST', route('/actions'), {
         actions: [
           {
-            type: "key",
-            id: "keyboard",
+            type: 'key',
+            id: 'keyboard',
             actions: [
-              ...codes.map((item) => ({ type: "keyDown", value: item })),
-              { type: "keyDown", value: code },
-              { type: "keyUp", value: code },
-              ...codes
-                .reverse()
-                .map((item) => ({ type: "keyUp", value: item })),
+              ...codes.map((item) => ({ type: 'keyDown', value: item })),
+              { type: 'keyDown', value: code },
+              { type: 'keyUp', value: code },
+              ...codes.reverse().map((item) => ({ type: 'keyUp', value: item })),
             ],
           },
         ],
       });
-      await client.request("DELETE", route("/actions"));
+      await client.request('DELETE', route('/actions'));
     },
     async pointer(x, y) {
-      await client.request("POST", route("/actions"), {
+      await client.request('POST', route('/actions'), {
         actions: [
           {
-            type: "pointer",
-            id: "mouse",
-            parameters: { pointerType: "mouse" },
+            type: 'pointer',
+            id: 'mouse',
+            parameters: { pointerType: 'mouse' },
             actions: [
               {
-                type: "pointerMove",
+                type: 'pointerMove',
                 duration: 0,
-                origin: "viewport",
+                origin: 'viewport',
                 x: Math.round(x),
                 y: Math.round(y),
               },
-              { type: "pointerDown", button: 0 },
-              { type: "pointerUp", button: 0 },
+              { type: 'pointerDown', button: 0 },
+              { type: 'pointerUp', button: 0 },
             ],
           },
         ],
       });
-      await client.request("DELETE", route("/actions"));
+      await client.request('DELETE', route('/actions'));
     },
     // Linux changes the real GTK setting on the private display; WebView2 has
     // no per-session system setting, so Windows emulates the media features.
     async media(scheme, reduceMotion = false) {
-      if (platform === "linux") return display.media(scheme, reduceMotion);
-      await client.request("POST", route("/ms/cdp/execute"), {
-        cmd: "Emulation.setEmulatedMedia",
+      if (platform === 'linux') return display.media(scheme, reduceMotion);
+      await client.request('POST', route('/ms/cdp/execute'), {
+        cmd: 'Emulation.setEmulatedMedia',
         params: {
           features: [
-            { name: "prefers-color-scheme", value: scheme },
+            { name: 'prefers-color-scheme', value: scheme },
             {
-              name: "prefers-reduced-motion",
-              value: reduceMotion ? "reduce" : "no-preference",
+              name: 'prefers-reduced-motion',
+              value: reduceMotion ? 'reduce' : 'no-preference',
             },
           ],
         },
       });
-      return { scheme, reduceMotion, scope: "webview2-cdp-emulated-media" };
+      return { scheme, reduceMotion, scope: 'webview2-cdp-emulated-media' };
     },
     async choose(kind, selected) {
-      if (platform === "linux")
-        return linuxChoose(environment, applicationProcess, kind, selected);
-      const script = path.join(scratch, "choose.ps1");
+      if (platform === 'linux') return linuxChoose(environment, applicationProcess, kind, selected);
+      const script = path.join(scratch, 'choose.ps1');
       await writeFile(script, WINDOWS_CHOOSER);
       await run(
-        "powershell.exe",
+        'powershell.exe',
         [
-          "-NoProfile",
-          "-NonInteractive",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-File",
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
           script,
-          "-ProcessId",
+          '-ProcessId',
           String(await applicationProcess()),
-          "-Kind",
+          '-Kind',
           kind,
-          "-Selected",
+          '-Selected',
           selected,
         ],
         { windowsHide: true },
@@ -921,21 +851,17 @@ export async function launch(name, { delayOperations = false } = {}) {
     },
     async clipboard() {
       const text =
-        platform === "linux"
+        platform === 'linux'
           ? (
-              await run(
-                await tool("xclip"),
-                ["-selection", "clipboard", "-out"],
-                {
-                  env: environment,
-                  maxBuffer: 64 * 1024 * 1024,
-                },
-              )
+              await run(await tool('xclip'), ['-selection', 'clipboard', '-out'], {
+                env: environment,
+                maxBuffer: 64 * 1024 * 1024,
+              })
             ).stdout
           : await powershell(
-              "[Console]::OutputEncoding=[Text.Encoding]::UTF8; [Console]::Out.Write((Get-Clipboard -Raw))",
+              '[Console]::OutputEncoding=[Text.Encoding]::UTF8; [Console]::Out.Write((Get-Clipboard -Raw))',
             );
-      return text.replaceAll("\r\n", "\n");
+      return text.replaceAll('\r\n', '\n');
     },
     async memory() {
       return processTree(driverProcess.pid);
@@ -1009,19 +935,16 @@ export async function launch(name, { delayOperations = false } = {}) {
         );
         await client.request('DELETE', route(''));
       } finally {
-        if (platform === "linux") {
+        if (platform === 'linux') {
           try {
-            process.kill(-driverProcess.pid, "SIGTERM");
+            process.kill(-driverProcess.pid, 'SIGTERM');
           } catch (error) {
-            if (error.code !== "ESRCH") throw error;
+            if (error.code !== 'ESRCH') throw error;
           }
         } else {
-          await run("taskkill", [
-            "/PID",
-            String(driverProcess.pid),
-            "/T",
-            "/F",
-          ]).catch(() => undefined);
+          await run('taskkill', ['/PID', String(driverProcess.pid), '/T', '/F']).catch(
+            () => undefined,
+          );
         }
         await stopped(driverProcess);
         await display?.cleanup();
@@ -1031,25 +954,20 @@ export async function launch(name, { delayOperations = false } = {}) {
         async () => {
           const current = await processes();
           survivors.length = 0;
-          const remaining = new Map(
-            current.map((item) => [item.pid, item.identity]),
-          );
+          const remaining = new Map(current.map((item) => [item.pid, item.identity]));
           for (const item of tree)
             if (remaining.get(item.pid) === item.identity) survivors.push(item);
           return survivors.length === 0;
         },
-        "the application process tree to exit",
+        'the application process tree to exit',
         15000,
       ).catch(() => {
         throw new Error(
           `Desktop session left processes running: ${JSON.stringify(survivors, null, 2)}`,
         );
       });
-      process.off("exit", abandon);
-      await writeFile(
-        path.join(scratch, "process-tree.json"),
-        JSON.stringify(tree, null, 2),
-      );
+      process.off('exit', abandon);
+      await writeFile(path.join(scratch, 'process-tree.json'), JSON.stringify(tree, null, 2));
     },
   };
 }
