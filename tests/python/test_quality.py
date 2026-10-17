@@ -218,6 +218,25 @@ class QualityTests(unittest.TestCase):
         self.assertTrue(baseline)
         self.assertTrue(all(name.startswith(("runtime/", "generated/")) for _, name, _ in baseline))
 
+    def test_clang_tidy_trailing_documentation_preserves_code_and_counts(self):
+        from collections import Counter
+
+        def entry(text, count=1):
+            return Counter({("readability-identifier-naming", "runtime/os/include/Test.h", text): count})
+
+        original = entry("uint8 StandardName;")
+        documented = entry("uint8 StandardName; /**< Owned by the calling actor. */")
+        self.assertEqual(quality.clang_tidy_comparison(documented, original), [])
+        self.assertEqual(quality.clang_tidy_comparison(original, documented), [])
+        for changed in (
+            entry("uint8 OtherName; /**< Owned by the calling actor. */"),
+            entry("uint8 StandardName; /* ordinary comment */"),
+            entry("uint8 StandardName; /**< Owned by the calling actor. */", 2),
+            entry('const char *name = "/**< changed literal */";'),
+            entry("uint8 /**< embedded documentation */ StandardName;"),
+        ):
+            self.assertTrue(quality.clang_tidy_comparison(changed, original))
+
     def test_diff_hunk_counts_added_lines(self):
         diff = "@@ -2,0 +3,2 @@\n+a\n+b\n@@ -8 +10,0 @@\n-old\n"
         lines = set()
