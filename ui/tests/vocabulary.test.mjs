@@ -217,6 +217,8 @@ async function openWorkbench(language) {
     if (command === 'project_projection')
       return reply({
         workspaceEpoch: 'epoch',
+        profile: 'unrecognized',
+        release: 'R24-11',
         inputFingerprint: 'input',
         definitionFingerprint: 'definitions',
         projectPath: null,
@@ -351,6 +353,16 @@ test.each(languages)(
     }
     fireEvent.click(
       within(settings).getAllByRole('button', { name: translate('action.close') })[0],
+    );
+
+    fireEvent.click(
+      openMenu(view, 'view').getByRole('menuitem', {
+        name: translate('shell.document.configuration'),
+      }),
+    );
+    // The configuration page names the profile, never shows its identifier.
+    expect(view.container.querySelector('.document-heading').textContent).toContain(
+      `${translate('shell.profile.unrecognized')} · R24-11`,
     );
 
     fireEvent.click(

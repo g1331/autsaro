@@ -11,6 +11,7 @@ import { iconSize } from './icons';
 import { CommandActions, CommandButton, CommandReasons } from './CommandActions';
 import { commandById } from './commands';
 import { objectRoleClass } from './objectRole';
+import { profileLabel } from './labels';
 
 export function ObjectEditor({ controller: c }: { controller: Workbench }) {
   const { t, text } = useLocale();
@@ -42,7 +43,7 @@ export function ObjectEditor({ controller: c }: { controller: Workbench }) {
         <div>
           <h2>{t('editor.objects.heading')}</h2>
           <span>
-            {c.projection?.profile} · {c.projection?.release}
+            {c.projection ? profileLabel(c.projection.profile) : null} · {c.projection?.release}
           </span>
         </div>
         <span>{t('editor.objects.selectedCount', { count: c.objectSelection.length })}</span>
