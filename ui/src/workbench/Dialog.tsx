@@ -87,12 +87,12 @@ function dialogOpener() {
         document.querySelector<HTMLElement>('.menubar button'));
 }
 
-/** Radix `onCloseAutoFocus`: back to the opener, unless a following dialog already took focus. */
+/** Radix `onCloseAutoFocus`: back to the opener, unless a following dialog is open and takes focus. */
 export function useFocusReturn() {
   const [opener] = useState(dialogOpener);
   return (event: Event) => {
     event.preventDefault();
-    if (document.activeElement?.closest('[role="dialog"], [role="alertdialog"]')) return;
+    if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
     if (opener?.isConnected) opener.focus();
   };
 }

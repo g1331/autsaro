@@ -23,6 +23,7 @@ import type {
   ChangeSet,
   ConfigurationChange,
   DocumentTab,
+  CatalogConfirmation,
   DraftGuard,
   ProjectCreationPreview,
   ProjectProjection,
@@ -81,6 +82,7 @@ export type WorkbenchState = {
   changePreview: ChangePreview | null;
   preparedChangeSet: ChangeSet | null;
   guard: DraftGuard | null;
+  catalogConfirmation: CatalogConfirmation | null;
   tabs: DocumentTab[];
   activeDocument: DocumentTab;
   toolWindow: ToolWindow | null;
@@ -166,6 +168,7 @@ export function initialState(): WorkbenchState {
     changePreview: null,
     preparedChangeSet: null,
     guard: null,
+    catalogConfirmation: null,
     tabs: [{ kind: 'configuration' }],
     activeDocument: { kind: 'configuration' },
     toolWindow: null,

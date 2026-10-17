@@ -222,7 +222,6 @@ function delivery(current, overrides = {}) {
     continueReplacement: vi.fn(),
     unapplied: false,
     acceptIntegration: vi.fn(),
-    confirmAction: vi.fn(),
     ...overrides,
   };
   return { actions: createDeliveryActions(current, dependencies), dependencies };

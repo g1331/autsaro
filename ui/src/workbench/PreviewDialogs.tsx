@@ -62,6 +62,45 @@ export function PreviewDialogs({ controller: c }: { controller: Workbench }) {
       </Dialog>
     );
   }
+  if (c.catalogConfirmation) {
+    const { kind, subject } = c.catalogConfirmation;
+    const remove = kind === 'remove';
+    return (
+      <Dialog
+        alert
+        size="confirm"
+        title={t(remove ? 'activity.removeDefinitions' : 'activity.acceptDefinitions')}
+        onClose={() => c.resolveCatalogConfirmation(false)}
+        footer={
+          <>
+            <button
+              type="button"
+              data-initial-focus
+              onClick={() => c.resolveCatalogConfirmation(false)}
+            >
+              {t('action.cancel')}
+            </button>
+            <button
+              type="button"
+              className={remove ? 'danger-button' : 'primary-button'}
+              onClick={() => c.resolveCatalogConfirmation(true)}
+            >
+              {t(remove ? 'action.removeDefinitions' : 'action.confirmAccept')}
+            </button>
+          </>
+        }
+      >
+        {remove ? (
+          <p>{t('workflow.confirm.removeCatalog', { catalogId: subject })}</p>
+        ) : (
+          <>
+            <p>{t('workflow.confirm.acceptCatalog')}</p>
+            <p className="mono path-text">{displayPath(subject)}</p>
+          </>
+        )}
+      </Dialog>
+    );
+  }
   if (c.changePreview)
     return (
       <Dialog

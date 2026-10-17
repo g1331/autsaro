@@ -28,6 +28,7 @@ export const actionResources: Record<'zh-CN' | 'en', Record<string, string>> = {
     'action.initializeApplication': '初始化用户应用…',
     'action.confirmInitialize': '确认初始化',
     'action.confirmCreate': '确认创建',
+    'action.confirmAccept': '接纳',
     'action.import': '导入',
     'action.cancel': '取消',
     'action.cancelOperation': '取消操作',
@@ -81,7 +82,6 @@ export const actionResources: Record<'zh-CN' | 'en', Record<string, string>> = {
     'activity.chooseConfiguration': '切换配置对象',
     'activity.readSource': '读取原文',
     'activity.locate': '定位',
-    'activity.confirm': '确认',
     'activity.verificationFailure': '受管失败验证',
   },
   en: {
@@ -107,6 +107,7 @@ export const actionResources: Record<'zh-CN' | 'en', Record<string, string>> = {
     'action.initializeApplication': 'Initialize user application…',
     'action.confirmInitialize': 'Initialize',
     'action.confirmCreate': 'Create',
+    'action.confirmAccept': 'Accept',
     'action.import': 'Import',
     'action.cancel': 'Cancel',
     'action.cancelOperation': 'Cancel operation',
@@ -160,7 +161,6 @@ export const actionResources: Record<'zh-CN' | 'en', Record<string, string>> = {
     'activity.chooseConfiguration': 'Switching configuration objects',
     'activity.readSource': 'Reading the source',
     'activity.locate': 'Locating',
-    'activity.confirm': 'Confirming',
     'activity.verificationFailure': 'Verifying a managed failure',
   },
 };
