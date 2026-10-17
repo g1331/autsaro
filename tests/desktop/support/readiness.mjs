@@ -20,3 +20,20 @@ export function catalogResultReady(settings, count) {
     accept.getAttribute('aria-disabled') !== 'true',
   );
 }
+// Serialized into the WebView; keep synchronous predicates and their DOM
+// evidence in one turn, and preserve the existing await for async predicates.
+export async function sampleDomQuery(expression) {
+  let value = (0, eval)(expression);
+  if (value && typeof value.then === 'function') value = await value;
+  return {
+    value: Boolean(value),
+    at: Date.now(),
+    uiOperation: document.querySelector('#operation-status')?.textContent ?? null,
+    statuses: [...document.querySelectorAll('[role=status]')].map((node) => node.textContent),
+    editors: [...document.querySelectorAll('.integration-fields input')].map((node) => ({
+      label: node.closest('label')?.textContent,
+      disabled: node.disabled,
+      value: node.value,
+    })),
+  };
+}
