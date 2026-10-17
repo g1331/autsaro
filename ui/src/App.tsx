@@ -152,6 +152,7 @@ export default function App() {
   // Preview dialogs show the current notice inside themselves (see PreviewDialogs).
   const previewOpen = Boolean(
     c.guard ||
+    c.catalogConfirmation ||
     c.changePreview ||
     c.savePreview ||
     c.integrationPreview ||

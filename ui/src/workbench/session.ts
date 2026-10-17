@@ -12,6 +12,7 @@ export interface WorkbenchSession {
   pendingGuard: RefObject<(() => void | Promise<void>) | null>;
   pendingReplacement: RefObject<(() => void | Promise<void>) | null>;
   changeConfirmation: RefObject<((applied: boolean) => void) | null>;
+  catalogDecision: RefObject<((accepted: boolean) => void) | null>;
   field<K extends keyof WorkbenchState>(key: K): Dispatch<SetStateAction<WorkbenchState[K]>>;
   patchState(patch: Partial<WorkbenchState>): void;
   call<T>(command: string, payload?: Record<string, unknown>): Promise<T>;

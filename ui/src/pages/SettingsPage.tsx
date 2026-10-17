@@ -25,6 +25,7 @@ export function SettingsPage({ controller: c }: { controller: Workbench }) {
   if (
     !c.settingsOpen ||
     c.guard ||
+    c.catalogConfirmation ||
     c.changePreview ||
     c.savePreview ||
     c.integrationPreview ||

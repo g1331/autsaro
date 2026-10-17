@@ -219,6 +219,8 @@ export type DocumentKind =
 export type DocumentTab = { kind: DocumentKind; sourceId?: string };
 export type ToolWindow = 'problems' | 'generation' | 'build' | 'host' | 'log';
 export type DraftGuard = { kind: 'context' | 'project'; title: Text };
+/** An extension definition catalog waiting for the user's decision; `subject` is its path or ID. */
+export type CatalogConfirmation = { kind: 'accept' | 'remove'; subject: string };
 export type ProjectCreationPreview = {
   revision: string;
   templateId: string;
