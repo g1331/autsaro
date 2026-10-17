@@ -474,7 +474,13 @@ export async function openWorkbench(name) {
     );
   }
   async function awaitStandardInspectionReady(timeout) {
-    // Projects open on configuration; the standard input editor is one tab away.
+    // Projects open on configuration; the standard input editor is one tab away. An import
+    // replaces the tabs only when it publishes, so wait for the new tab before choosing it.
+    await until(
+      `Boolean(document.querySelector('[aria-label="标准输入工作区"]')) || [...document.querySelectorAll('.document-tabs [role=tab]')].some(node => node.textContent.trim() === '标准输入')`,
+      'standard input document available',
+      timeout,
+    );
     if (!(await evaluate(`Boolean(document.querySelector('[aria-label="标准输入工作区"]'))`)))
       await click('标准输入', "document.querySelector('.document-tabs')");
     await until(
