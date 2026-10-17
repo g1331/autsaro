@@ -573,7 +573,11 @@ function ParameterRow({ controller: c, field }: { controller: Workbench; field: 
       <td>
         <div className="value-cell">
           {cell}
-          {alternate ? <small className="mono">{alternate}</small> : null}
+          {alternate ? (
+            <small className="mono" title={alternate}>
+              {alternate}
+            </small>
+          ) : null}
         </div>
         {invalid ? (
           <div id={errorId} className="field-error">

@@ -1822,13 +1822,13 @@ details + details {
   min-width: 860px;
 }
 .parameter-grid .col-name {
-  width: 22%;
+  width: 20%;
 }
 .parameter-grid .col-unit {
   width: 56px;
 }
 .parameter-grid .col-default {
-  width: 11%;
+  width: 10%;
 }
 .parameter-grid .col-range {
   width: 12%;
@@ -1860,7 +1860,7 @@ details + details {
 /* A column of values reads as text; the border appears on hover, focus or error. */
 .value-cell input,
 .value-cell select {
-  flex: 1;
+  flex: 1 0 12ch;
   padding: 4px 8px;
   border-color: transparent;
   background-color: transparent;
@@ -1876,7 +1876,11 @@ details + details {
   border-color: var(--error);
 }
 .value-cell > small {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--secondary);
   font-size: 11px;
 }
