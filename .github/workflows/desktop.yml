@@ -91,7 +91,7 @@ jobs:
           - os: ubuntu-24.04
             shard:
               id: 1
-              files: composition-editing editing responsiveness startup process-tree
+              files: composition-editing editing responsiveness startup process-tree rejected-change
           - os: ubuntu-24.04
             shard:
               id: 2
@@ -103,7 +103,7 @@ jobs:
           - os: windows-latest
             shard:
               id: 2
-              files: composition-editing editing application incomplete-configuration
+              files: composition-editing editing application incomplete-configuration rejected-change
           - os: windows-latest
             shard:
               id: 3
