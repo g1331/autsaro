@@ -342,3 +342,63 @@ fn linked_grid_batch_rebinds_locations_after_instance_rename() {
     assert_eq!(signal.can_id, 1105);
     assert!(signal.can_if_pdu.ends_with("/RenamedTransmitPdu"));
 }
+
+#[test]
+fn linked_grid_can_id_removal_preserves_incomplete_configuration_editing() {
+    for definition in ["CanIfRxPduCanId", "CanIfTxPduCanId"] {
+        let scratch = Scratch::new();
+        let project = scratch.0.join("remove");
+        let preview =
+            Workspace::preview_project_creation(&project, "Remove", "standard-ecu").unwrap();
+        let mut workspace = Workspace::create_project_previewed(&preview).unwrap();
+        let view = projection(&workspace);
+        let field = view
+            .fields
+            .iter()
+            .find(|field| {
+                field
+                    .definition
+                    .definition_id
+                    .ends_with(&format!("/{definition}"))
+            })
+            .unwrap();
+        assert!(field.linked_edit.is_some());
+        let mut changes = change(&view, field, "1105");
+        let ConfigurationChange::SetValue { value, .. } = &mut changes.changes[0] else {
+            unreachable!()
+        };
+        *value = ValueState::Absent;
+        let preview = workspace.prepare_change(&changes).unwrap();
+        assert_eq!(preview.impacts.len(), 1);
+        let outcome = workspace
+            .apply_change(&changes, &preview.change_revision)
+            .unwrap();
+        assert!(!outcome.projection.fields.iter().any(|updated| {
+            updated.object_id == field.object_id
+                && updated.definition.definition_id == field.definition.definition_id
+                && matches!(updated.current, ValueState::Explicit { .. })
+        }));
+        assert!(workspace.integration_plan().is_err());
+        let save = workspace.preview_save().unwrap();
+        workspace.save_previewed(&save.revision).unwrap();
+        let reopened = Workspace::open_project_manifest(
+            &project.join("workbench-project.json"),
+            &scratch.0.join("cache"),
+        )
+        .unwrap();
+        assert!(reopened.integration_plan().is_err());
+        let explicit_count = |view: &ProjectProjection| {
+            view.fields
+                .iter()
+                .filter(|updated| {
+                    updated.definition.definition_id == field.definition.definition_id
+                        && matches!(updated.current, ValueState::Explicit { .. })
+                })
+                .count()
+        };
+        assert_eq!(
+            explicit_count(&projection(&reopened)),
+            explicit_count(&view) - 1
+        );
+    }
+}

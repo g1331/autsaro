@@ -526,9 +526,15 @@ impl Workspace {
                 ..
             } = change
             {
-                let affected = groups
-                    .iter()
-                    .find(|group| group.fields.iter().any(|(id, _)| id == field_id));
+                let affected = groups.iter().find(|group| {
+                    matches!(
+                        change,
+                        ConfigurationChange::SetValue {
+                            value: ValueState::Explicit { .. },
+                            ..
+                        }
+                    ) && group.fields.iter().any(|(id, _)| id == field_id)
+                });
                 let fields: Vec<_> = affected
                     .map(|group| group.fields.iter().map(|(id, _)| id).collect())
                     .unwrap_or_else(|| vec![field_id]);
@@ -723,6 +729,7 @@ impl Workspace {
                 value,
                 ..
             } = change
+                && matches!(value, ValueState::Explicit { .. })
                 && groups
                     .iter()
                     .any(|group| group.fields.iter().any(|(id, _)| id == field_id))
