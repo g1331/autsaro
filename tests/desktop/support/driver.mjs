@@ -11,9 +11,11 @@ import {
   readFile,
   readdir,
   readlink,
+  rm,
   writeFile,
 } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import { rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -226,20 +228,29 @@ export function descendants(listed, root) {
 }
 
 async function privateDisplay(scratch, environment) {
-  const xvfb = started(
-    await tool('Xvfb'),
-    ['-displayfd', '1', '-screen', '0', '1440x1200x24', '-nolisten', 'tcp', '-nolisten', 'unix'],
-    { env: environment },
-    'Private Xvfb',
-  );
-  environment.DISPLAY = `:${await xvfb.line}`;
-  // Only owner connections and no service activation: nothing reaches the
-  // user's session bus, and nothing outlives this daemon.
-  const bus = path.join(scratch, 'bus');
-  await mkdir(bus, { mode: 0o700 });
-  await writeFile(
-    path.join(bus, 'bus.conf'),
-    `<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+  const children = [];
+  let bus;
+  const cleanup = async () => {
+    await Promise.all(children.map(stopped));
+    if (bus) await rm(bus, { recursive: true, force: true });
+  };
+  try {
+    const xvfb = started(
+      await tool('Xvfb'),
+      ['-displayfd', '1', '-screen', '0', '1440x1200x24', '-nolisten', 'tcp', '-nolisten', 'unix'],
+      { env: environment },
+      'Private Xvfb',
+    );
+    children.push(xvfb.child);
+    environment.DISPLAY = `:${await xvfb.line}`;
+    // Only owner connections and no service activation: nothing reaches the
+    // user's session bus, and nothing outlives this daemon.
+    // Unix socket addresses are bounded independently of result-path length.
+    bus = await mkdtemp(path.join(os.tmpdir(), 'autosar-bus-'));
+    const busConfig = path.join(scratch, 'dbus.conf');
+    await writeFile(
+      busConfig,
+      `<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
   <type>session</type>
@@ -253,39 +264,47 @@ async function privateDisplay(scratch, environment) {
   </policy>
 </busconfig>
 `,
-  );
-  const dbus = started(
-    await tool('dbus-daemon'),
-    ['--nofork', '--nosyslog', `--config-file=${path.join(bus, 'bus.conf')}`, '--print-address=1'],
-    { env: environment },
-    'Private D-Bus',
-  );
-  environment.DBUS_SESSION_BUS_ADDRESS = await dbus.line;
-  const settings = path.join(scratch, 'xsettings.conf');
-  const media = async (scheme, reduceMotion) => {
-    await writeFile(
-      settings,
-      `Net/ThemeName "${scheme === 'dark' ? 'Adwaita-dark' : 'Adwaita'}"\nGtk/EnableAnimations ${reduceMotion ? 0 : 1}\n`,
     );
-  };
-  await media('light', false);
-  const xsettings = spawn(await tool('xsettingsd'), ['--config', settings], {
-    env: environment,
-    stdio: 'ignore',
-  });
-  return {
-    children: [xsettings, dbus.child, xvfb.child],
-    async media(scheme, reduceMotion) {
-      await media(scheme, reduceMotion);
-      xsettings.kill('SIGHUP');
-      return {
-        scheme,
-        reduceMotion,
-        scope: 'private-xvfb-xsettings',
-        display: environment.DISPLAY,
-      };
-    },
-  };
+    const dbus = started(
+      await tool('dbus-daemon'),
+      ['--nofork', '--nosyslog', `--config-file=${busConfig}`, '--print-address=1'],
+      { env: environment },
+      'Private D-Bus',
+    );
+    children.push(dbus.child);
+    environment.DBUS_SESSION_BUS_ADDRESS = await dbus.line;
+    const settings = path.join(scratch, 'xsettings.conf');
+    const media = async (scheme, reduceMotion) => {
+      await writeFile(
+        settings,
+        `Net/ThemeName "${scheme === 'dark' ? 'Adwaita-dark' : 'Adwaita'}"\nGtk/EnableAnimations ${reduceMotion ? 0 : 1}\n`,
+      );
+    };
+    await media('light', false);
+    const xsettings = spawn(await tool('xsettingsd'), ['--config', settings], {
+      env: environment,
+      stdio: 'ignore',
+    });
+    children.push(xsettings);
+    return {
+      children,
+      busDirectory: bus,
+      cleanup,
+      async media(scheme, reduceMotion) {
+        await media(scheme, reduceMotion);
+        xsettings.kill('SIGHUP');
+        return {
+          scheme,
+          reduceMotion,
+          scope: 'private-xvfb-xsettings',
+          display: environment.DISPLAY,
+        };
+      },
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
 }
 
 async function linuxChoose(environment, application, kind, selected) {
@@ -598,6 +617,7 @@ export async function launch(name, { delayOperations = false } = {}) {
         }
       } else spawnSync('taskkill', ['/PID', String(driverProcess.pid), '/T', '/F']);
       for (const child of children) child.kill('SIGKILL');
+      if (display) rmSync(display.busDirectory, { recursive: true, force: true });
     };
     process.once('exit', abandon);
     await writeFile(
@@ -608,6 +628,7 @@ export async function launch(name, { delayOperations = false } = {}) {
           port,
           nativePort,
           display: environment.DISPLAY,
+          busDirectory: display?.busDirectory,
           config: environment.AUTOSAR_CONFIG_DIR,
           data: environment.XDG_DATA_HOME,
           cache: environment.XDG_CACHE_HOME,
@@ -641,7 +662,8 @@ export async function launch(name, { delayOperations = false } = {}) {
       process.off('exit', abandon);
       abandon();
     }
-    await Promise.all([driverProcess, ...children].filter(Boolean).map(stopped));
+    await Promise.all([driverProcess].filter(Boolean).map(stopped));
+    await display?.cleanup();
     throw error;
   }
   const route = (suffix) => `/session/${session}${suffix}`;
@@ -807,7 +829,8 @@ export async function launch(name, { delayOperations = false } = {}) {
             () => undefined,
           );
         }
-        await Promise.all([stopped(driverProcess), ...children.map(stopped)]);
+        await stopped(driverProcess);
+        await display?.cleanup();
       }
       const survivors = [];
       await until(
