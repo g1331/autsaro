@@ -34,7 +34,7 @@ class DesktopWorkflowTests(unittest.TestCase):
     def test_selected_files_run_once_and_failure_reaches_the_job(self):
         script = self.step['run'].split("<<'JS'\n", 1)[1].rsplit('\nJS', 1)[0]
         with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
+            directory = Path(temporary).resolve()
             tests = directory / 'tests/desktop'
             tests.mkdir(parents=True)
             (tests / 'pass.test.mjs').write_text("import test from 'node:test'; test('selected pass', () => {});", encoding='utf-8')
