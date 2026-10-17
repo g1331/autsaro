@@ -8,12 +8,11 @@
 #define OS_ALARM_ACTIVATE          0u  /**< Expiry action activates the configured Task. */
 #define OS_ALARM_EVENT             1u  /**< Expiry action sets configured Task event bits. */
 #define OS_ALARM_CALLBACK          2u  /**< Alarm expiry invokes its static callback. */
-#define OS_ALARM_INCREMENT_COUNTER 3u  /**< Alarm expiry increments the selected software Counter. \
-                                        */
-#define OS_MAX_SCHEDULE_TABLES 8u      /**< Maximum configured ScheduleTable descriptors. */
-#define OS_MAX_EXPIRY_POINTS   32u     /**< Maximum expiry points in one table. */
-#define OS_MAX_EXPIRY_ACTIONS  16u     /**< Maximum actions at one expiry point. */
-#define OS_SCHEDULE_SYNC_NONE  0u      /**< Only supported table synchronization strategy: NONE. */
+#define OS_ALARM_INCREMENT_COUNTER 3u  /**< Increment software Counter. */
+#define OS_MAX_SCHEDULE_TABLES     8u  /**< Maximum configured ScheduleTable descriptors. */
+#define OS_MAX_EXPIRY_POINTS       32u /**< Maximum expiry points in one table. */
+#define OS_MAX_EXPIRY_ACTIONS      16u /**< Maximum actions at one expiry point. */
+#define OS_SCHEDULE_SYNC_NONE      0u  /**< Only supported table synchronization strategy: NONE. */
 /** Static software/controlled Counter bounds; maximum/minimum values use Counter ticks. */
 typedef struct {
     CounterType id;          /**< Unique configured Counter identifier. */
