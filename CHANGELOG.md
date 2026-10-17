@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Fixed:** Workbench modal dialogs suppress background native scrollbars, default-value descriptions hide internal rule-set IDs, and automatic-check captions and stages align consistently (#267).
+- **Fixed:** Workbench modal dialogs suppress background native scrollbars, default-value descriptions hide internal rule-set IDs, and automatic-check captions and stages align consistently (#269).
 
 - **Changed:** Opening wide ARXML documents indexes ancestor names and safety markers once per document, avoiding repeated sibling scans while preserving object paths and validation decisions (#256).
 - **Changed:** Creating ECUC modules and containers recursively creates mandatory children and writes declared mandatory defaults for built-in and accepted extension definitions. Missing required entries can be applied and saved with readable, object-linked errors; they still block the relevant plan and generation. Upper bounds, invalid values/types/references and schema errors remain rejected (#257).
