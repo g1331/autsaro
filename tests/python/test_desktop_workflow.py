@@ -36,12 +36,18 @@ class DesktopWorkflowTests(unittest.TestCase):
             tests.mkdir(parents=True)
             (tests / 'pass.test.mjs').write_text("import test from 'node:test'; test('selected pass', () => {});", encoding='utf-8')
             (tests / 'fail.test.mjs').write_text("import test from 'node:test'; test('selected fail', () => { throw new Error('shard failure'); });", encoding='utf-8')
+            (directory / 'outside.test.mjs').write_text("throw new Error('must not run');", encoding='utf-8')
             for assigned, selected, status in (
                 ('pass', 'tests/desktop/*.test.mjs', 0),
                 ('fail', 'tests/desktop/*.test.mjs', 1),
                 ('fail', 'tests/desktop/pass.test.mjs', 0),
                 ('pass', 'tests/desktop/missing.test.mjs', 1),
                 ('windows-paths', 'tests/desktop/*.test.mjs', 0),
+                ('pass', str(tests / 'pass.test.mjs'), 0),
+                ('fail', str(tests / 'fail.test.mjs'), 1),
+                ('fail', str(tests / 'pass.test.mjs'), 0),
+                ('pass', './tests/desktop/pass.test.mjs', 0),
+                ('pass', str(directory / 'outside.test.mjs'), 1),
             ):
                 with self.subTest(assigned=assigned, selected=selected):
                     windows = assigned == 'windows-paths'

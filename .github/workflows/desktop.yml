@@ -151,8 +151,12 @@ jobs:
           node --input-type=module <<'JS'
           import { globSync } from 'node:fs';
           import { spawnSync } from 'node:child_process';
-          const requested = [...new Set(process.env.SCENARIOS.split(/\s+/).filter(Boolean).flatMap(pattern => [...globSync(pattern)].map(file => file.replaceAll('\\', '/'))))];
+          import { relative, resolve } from 'node:path';
+          const normalize = file => relative(process.cwd(), resolve(file.replaceAll('\\', '/'))).replaceAll('\\', '/');
+          const requested = [...new Set(process.env.SCENARIOS.split(/\s+/).filter(Boolean).flatMap(pattern => [...globSync(pattern)].map(normalize)))];
           if (!requested.length) throw new Error('No desktop scenarios matched SCENARIOS');
+          const supported = [...globSync('tests/desktop/*.test.mjs')].map(normalize);
+          if (requested.some(file => !supported.includes(file))) throw new Error('SCENARIOS matched files outside the desktop suite');
           const assigned = process.env.SHARD_FILES.split(' ').map(name => `tests/desktop/${name}.test.mjs`);
           const files = requested.filter(file => assigned.includes(file));
           console.log('Shard files:', files);
