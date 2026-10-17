@@ -56,6 +56,26 @@
 ```
 
 - 参数方向：`@param[in]`、`@param[out]`、`@param[in,out]` 按 SWS 接口表的 Parameters (in)／(out)／(inout) 标注，非标准接口按实际读写标注；无参数时省略 `@param`。
+- `void` 函数用 `@par Return` 单独起一段，下一行写 `None.`；不使用会触发 clang `-Wdocumentation` 的 `@return`。非 `void` 函数继续用 `@return` 说明结果。
+- AUTOSAR 要求无名参数时保留签名：`SWS_Rte_06703` 规定存在 `RunnableEntityArgument.symbol` 时的参数名，`SWS_Rte_06705` 规定既无该对象又无 BSW 映射时生成无名 role 参数。无名参数用 `@par Parameters` 段，按声明顺序逐项写 `1. [in] …`、`2. [out] …` 或 `3. [in,out] …`；编号从 1 开始，数量、顺序与方向逐项由同一检查器校验。有名参数仍用 `@param`，不以增加参数名规避规范。
+
+```c
+/** Run the selected server operation.
+ * @par Parameters
+ * 1. [in] Input value.
+ * 2. [out] Non-NULL caller-owned result storage; borrowed until return.
+ * @par Return
+ * None.
+ * Preconditions: ECU initialized and the component's owner task active.
+ * Context: component task, outside exclusive areas.
+ * Reentrancy: not reentrant for the same component.
+ * Ownership: no pointer is retained.
+ */
+void Server_Run(uint8, uint32 *);
+```
+
+规范规定的签名和语义优先于工具的默认注释写法；遇到冲突时核对条款，在本篇记录可校验的等价注释形式，并由检查器适配。例行选择由实现者在 PR 写明依据与验证，不改变签名或降低诊断要求。
+
 - 前置条件：调用前必须成立的状态，以及不成立时的结果。
 - 调用上下文：任务、回调、中断，以及是否允许在独占区内调用。
 - 可重入性：同一实例与不同实例能否并发调用。
@@ -126,6 +146,8 @@
 | --- | --- | --- |
 | 文件头 | `runtime/` 的 `.c`／`.h` 第一行为 `/** @file` | `quality` |
 | 公开头自包含 | `runtime/{bsw,host,ecu,os}/include` 的全部头文件单独以 C99 编译；MemMap 头按成对段使用 | `quality`：C 文件有改动、`--scope runtime` 或 `--all-format` 时运行 |
+| 契约与可判定源码规则 | runtime 公开头的函数、typedef、成员、枚举值与宏注释，文件状态注释，BSW 原生类型、开关写法及偏离记录双向对应 | 每次 `quality`；`--c-samples` 同时检查实际生成的公开头 |
+| clang documentation | 生成样本的实际编译闭包，检查参数名称及方向语法 | 第二编译器 `-Wdocumentation` |
 | clang-tidy | 生成样本中除 `kernel/`、`app/` 外的全部编译单元及其头文件 | `quality --c-samples <样本目录>` |
 
 clang-tidy 的配置在仓库根目录 `.clang-tidy`，启用 `clang-analyzer-*`、`bugprone-*`、`readability-function-size`（60 行）、`readability-braces-around-statements` 与 `readability-identifier-naming`。停用的检查及原因写在配置文件中：`easily-swappable-parameters` 与固定的标准签名冲突；`branch-clone` 把 MISRA 15.7 要求的结尾 `else` 和其他刻意为空的分支视为重复；`optin.performance.Padding` 要求按大小重排字段。命名检查只用于 `runtime/` 的源码，生成 C 的名字来自 RTE／BSW 规则与配置短名。工具只能检查名字的形式，模块前缀是否正确仍由审阅确认。
@@ -139,3 +161,5 @@ uv run --locked python -m autosar_tooling quality --scope runtime --c-samples bu
 结果按“检查＋文件＋源码行文本”与基线 `tools/python/src/autosar_tooling/clang_tidy_baseline.txt` 比较，同一行文本出现多次时按次数计。代码移动不影响比较；新出现的结果和已经修好、但仍留在基线中的条目都会失败。修好后删除对应条目；新增条目须在 PR 中说明理由并经审阅。基线只覆盖 Linux 样本，必需 CI 在 Linux 的 `c-analysis-prepare` 中运行；Windows 样本会被拒绝。
 
 clang-tidy 与 clang-format 由 uv 固定为同一版本 **22.1.8**（`pyproject.toml` 的 `quality` 组），两者一起升级：`--fix` 产生的排版与格式检查一致。PyPI 的 `clang-tidy` 包还没有更新的主版本前不单独升级 clang-format。升级后对运行时源码和生成样本重做格式检查，重新生成样本并核对基线变化：分析器结论会随版本改变。
+
+源码规则的存量基线为 `tools/python/src/autosar_tooling/c_standard_baseline.txt`，同样按“规则＋相对文件＋源码行文本”计数，新增违规与已修复但未删的条目均失败。`emitted/` 标识实际生成头文件，只有提供 `--c-samples` 时比较这部分；共享源码从 `integration.json` 的来源映射识别，避免重复记录。检查器验证注释结构和参数覆盖；范围、单位、生命周期和 SWS 语义仍须人工按调用链核对。偏离检查读取现有模块篇的批准表，按 RULE／DIR、规则号、文件与具体符号双向比较；注释与记录匹配不构成批准，也不改变原始 MISRA 结果。

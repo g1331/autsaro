@@ -202,6 +202,19 @@ async function processes() {
   return listed;
 }
 
+async function hostEvidence() {
+  const listed = await processes();
+  return {
+    at: Date.now(),
+    uptime: platform === 'linux' ? (await run('uptime', [])).stdout.trim() : os.uptime(),
+    cpus: os.availableParallelism(),
+    freeMemory: os.freemem(),
+    desktopProcesses: listed.filter((item) =>
+      /tauri-driver|WebKit|autosar-config|Xvfb|msedge|cargo|rustc/i.test(item.name),
+    ),
+  };
+}
+
 // Processes below the driver: native WebDriver, application and WebView.
 export async function processTree(root) {
   return descendants(await processes(), root);
@@ -485,7 +498,12 @@ class WebDriver {
         durationMs: performance.now() - started,
         method,
         route: route.replace(/session\/[^/]+/, 'session'),
-        script: body?.args?.[0]?.slice(0, 240),
+        script: route.endsWith('/execute/sync') ? body?.args?.[0] : body?.args?.[0]?.slice(0, 240),
+        status: response.status,
+        error: result.value?.error ? result.value : undefined,
+        probe: body?.args?.[0]?.includes('Boolean(window.__TAURI_INTERNALS__')
+          ? result.value
+          : undefined,
       }) + '\n',
     );
     if (!response.ok || result.value?.error)
@@ -512,6 +530,10 @@ export async function launch(name, { delayOperations = false } = {}) {
   const results = process.env.AUTOSAR_DESKTOP_RESULTS ?? os.tmpdir();
   await mkdir(results, { recursive: true });
   const scratch = await mkdtemp(path.join(path.resolve(results), `${name}-`));
+  await writeFile(
+    path.join(scratch, 'host-start.json'),
+    JSON.stringify(await hostEvidence(), null, 2),
+  );
   for (const directory of [
     'app-config',
     'app-local',
@@ -588,6 +610,19 @@ export async function launch(name, { delayOperations = false } = {}) {
       nativeDriver = await tool('WebKitWebDriver');
     } else {
       nativeDriver = await tool('msedgedriver');
+      await writeFile(
+        path.join(scratch, 'windows-versions.json'),
+        JSON.stringify(
+          {
+            driver: (await run(nativeDriver, ['--version'])).stdout.trim(),
+            webview2: await powershell(
+              "(Get-ItemProperty 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv",
+            ),
+          },
+          null,
+          2,
+        ),
+      );
     }
     const [port, nativePort] = await driverPorts();
     driverProcess = spawn(
@@ -638,7 +673,11 @@ export async function launch(name, { delayOperations = false } = {}) {
       ),
     );
     let driverLog = '';
-    driverProcess.stderr.on('data', (chunk) => (driverLog += chunk));
+    const driverOutput = path.join(scratch, 'driver.stderr.log');
+    driverProcess.stderr.on('data', (chunk) => {
+      driverLog += chunk;
+      appendFile(driverOutput, chunk).catch(() => undefined);
+    });
     client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
     await until(async () => {
       try {
@@ -702,6 +741,29 @@ export async function launch(name, { delayOperations = false } = {}) {
       });
       if (result.error) throw new Error(result.error);
       return result.value;
+    },
+    // Let the driver synchronize navigation without a user async callback;
+    // execute/sync also awaits the diagnostic sampler's returned Promise.
+    async evaluateReadiness(expression) {
+      return client.request('POST', route('/execute/sync'), {
+        script: 'return (0, eval)(arguments[0]);',
+        args: [expression],
+      });
+    },
+    async diagnoseStartup(error) {
+      const evidence = { at: Date.now(), error: String(error) };
+      evidence.processes = await processTree(driverProcess.pid).catch(String);
+      evidence.context = await client
+        .request('POST', route('/execute/sync'), {
+          script:
+            'return {url: location.href, readyState: document.readyState, timeOrigin: performance.timeOrigin, native: Boolean(window.__TAURI_INTERNALS__), buttons: document.querySelectorAll("button").length, text: document.body?.innerText};',
+          args: [],
+        })
+        .catch(String);
+      await writeFile(
+        path.join(scratch, 'startup-failure.json'),
+        JSON.stringify(evidence, null, 2),
+      );
     },
     async screenshot(file) {
       const image = await client.request('GET', route('/screenshot'));
@@ -812,10 +874,73 @@ export async function launch(name, { delayOperations = false } = {}) {
     async memory() {
       return processTree(driverProcess.pid);
     },
+    async failureProcesses() {
+      const at = Date.now();
+      await writeFile(
+        path.join(scratch, 'host-failure.json'),
+        JSON.stringify(await hostEvidence(), null, 2),
+      );
+      const tree = await processTree(driverProcess.pid);
+      await writeFile(
+        path.join(scratch, 'failure-processes.json'),
+        JSON.stringify({ at, tree }, null, 2),
+      );
+      if (platform !== 'linux') return;
+      for (const item of tree) {
+        const threads = [];
+        try {
+          for (const tid of await readdir(`/proc/${item.pid}/task`)) {
+            const thread = { tid };
+            for (const field of ['status', 'stat', 'wchan', 'stack']) {
+              thread[field] = await readFile(
+                `/proc/${item.pid}/task/${tid}/${field}`,
+                'utf8',
+              ).catch((error) => String(error));
+            }
+            threads.push(thread);
+          }
+        } catch (error) {
+          threads.push({ error: String(error) });
+        }
+        await writeFile(
+          path.join(scratch, `failure-threads-${item.pid}.json`),
+          JSON.stringify({ at: Date.now(), threads }, null, 2),
+        );
+      }
+      for (const item of tree.filter((item) => /autosar-config|WebKitWeb/.test(item.name))) {
+        const stack = await run(
+          'gdb',
+          [
+            '--batch',
+            '-nx',
+            '-p',
+            String(item.pid),
+            '-ex',
+            'set pagination off',
+            '-ex',
+            'thread apply all bt',
+            '-ex',
+            'detach',
+          ],
+          { timeout: 20000, maxBuffer: 16 * 1024 * 1024 },
+        ).catch((error) => ({
+          stdout: error.stdout ?? '',
+          stderr: String(error) + '\n' + (error.stderr ?? ''),
+        }));
+        await writeFile(
+          path.join(scratch, `failure-backtrace-${item.pid}.txt`),
+          `${stack.stdout}\n${stack.stderr}`,
+        );
+      }
+    },
     // Close the session, end the driver tree and prove nothing survived.
     async close() {
       const tree = await processTree(driverProcess.pid);
       try {
+        await writeFile(
+          path.join(scratch, 'host-end.json'),
+          JSON.stringify(await hostEvidence(), null, 2),
+        );
         await client.request('DELETE', route(''));
       } finally {
         if (platform === 'linux') {

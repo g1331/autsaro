@@ -6,6 +6,7 @@ not already cover, in production and in test mode. The FreeRTOS kernel and the
 user application keep their own style and are compiled by GCC only.
 """
 
+import collections
 import json
 import os
 import shutil
@@ -15,6 +16,8 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from autosar_tooling.c_standard import baseline_errors, documentation_locations
+
 FOREIGN = ("kernel/", "app/")
 WARNINGS = (
     "-Wshadow",
@@ -23,6 +26,8 @@ WARNINGS = (
     "-Wcast-qual",
     "-Wextra-semi",
     "-Wformat=2",
+    "-Wdocumentation",
+    "-Wno-error=documentation",
 )
 TEST_MODE = ("-DECU_TARGET_TESTS", "-DOS_HOST_FAILURE_TESTS")
 
@@ -46,16 +51,19 @@ class ClangBuildTests(unittest.TestCase):
         print(version.stdout.splitlines()[0])
         projects = sorted(p for p in Path(samples).iterdir() if p.is_dir())
         self.assertTrue(projects, "No generated samples")
+        documentation = {}
         for project in projects:
             with (
                 self.subTest(project=project.name),
                 tempfile.TemporaryDirectory() as temporary,
             ):
-                failures = self.compile(project, Path(temporary), clang, git)
+                failures, findings = self.compile(project, Path(temporary), clang, git)
+                documentation.update(findings)
                 self.assertEqual(failures, [], "\n".join(failures))
+        self.assertEqual(baseline_errors(collections.Counter(documentation.values()), documentation=True), [])
 
     @staticmethod
-    def compile(project: Path, scratch: Path, clang: str, git: str) -> list[str]:
+    def compile(project: Path, scratch: Path, clang: str, git: str) -> tuple[list[str], dict[tuple, tuple[str, str, str]]]:
         target = json.loads((project / "target.json").read_text(encoding="utf-8"))
         # The build applies the pinned kernel patches first; its headers declare port hooks.
         kernel = scratch / "kernel"
@@ -86,7 +94,7 @@ class ClangBuildTests(unittest.TestCase):
         sources = [*target["sources"], *target["entries"].values()]
         units = [name for name in sources if not name.startswith(FOREIGN)]
 
-        def build(job: tuple[int, str, tuple[str, ...]]) -> str | None:
+        def build(job: tuple[int, str, tuple[str, ...]]) -> tuple[str | None, dict[tuple, tuple[str, str, str]], str]:
             index, name, mode = job
             argv = [
                 clang,
@@ -104,7 +112,7 @@ class ClangBuildTests(unittest.TestCase):
                 f"{name} {' '.join(mode)}\n{result.stderr}"
                 if result.returncode
                 else None
-            )
+            ), documentation_locations(result.stderr, project, foreign_roots=(kernel,)), result.stderr
 
         jobs = [
             (index, name, mode)
@@ -113,7 +121,13 @@ class ClangBuildTests(unittest.TestCase):
             )
         ]
         with ThreadPoolExecutor(max_workers=os.cpu_count() or 2) as pool:
-            return [failure for failure in pool.map(build, jobs) if failure]
+            results = list(pool.map(build, jobs))
+        documentation = {}
+        for _, findings, output in results:
+            if findings.keys() - documentation.keys():
+                print(output, end="")
+            documentation.update(findings)
+        return [failure for failure, _, _ in results if failure], documentation
 
 
 if __name__ == "__main__":
