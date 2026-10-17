@@ -742,6 +742,14 @@ export async function launch(name, { delayOperations = false } = {}) {
       if (result.error) throw new Error(result.error);
       return result.value;
     },
+    // Readiness is synchronous: initial navigation must not invalidate an
+    // async-script callback before the application document is available.
+    async evaluateReadiness(expression) {
+      return client.request('POST', route('/execute/sync'), {
+        script: 'return (0, eval)(arguments[0]);',
+        args: [expression],
+      });
+    },
     async diagnoseStartup(error) {
       const evidence = { at: Date.now(), error: String(error) };
       evidence.processes = await processTree(driverProcess.pid).catch(String);

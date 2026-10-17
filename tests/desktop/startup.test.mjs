@@ -25,6 +25,18 @@ check('retired-validation-archive-settings-ignored', async () => {
 });
 
 check('packaged-builtin-boundary', async () => {
+  const requests = (await readFile(path.join(scratch, 'webdriver.jsonl'), 'utf8'))
+    .trim()
+    .split('\n')
+    .map(JSON.parse);
+  const startupProbes = requests.filter((request) =>
+    request.script?.includes('Boolean(window.__TAURI_INTERNALS__'),
+  );
+  assert(startupProbes.length >= 2, 'Initial and reloaded application readiness were observed');
+  assert(
+    startupProbes.every((request) => request.route === '/session/execute/sync'),
+    'Navigation readiness must not depend on an async callback in the departing document',
+  );
   const location = await evaluate(
     `({protocol: location.protocol, hostname: location.hostname, port: location.port})`,
   );

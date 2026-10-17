@@ -102,12 +102,12 @@ export async function openWorkbench(name, options) {
     });
   }
   const visible = `node => node.getClientRects().length > 0 && !node.closest('[hidden]')`;
-  async function until(expression, description, timeout = 60000) {
+  async function until(expression, description, timeout = 60000, probe = evaluate) {
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
       const startedAt = Date.now();
       lastQuery = { expression, description, deadline, startedAt, pending: true };
-      const sample = await evaluate(`(${sampleDomQuery.toString()})(${json(expression)})`);
+      const sample = await probe(`(${sampleDomQuery.toString()})(${json(expression)})`);
       lastQuery = {
         expression,
         description,
@@ -767,6 +767,8 @@ export async function openWorkbench(name, options) {
     await until(
       `Boolean(window.__TAURI_INTERNALS__ && document.querySelector('button'))`,
       'native startup',
+      60000,
+      session.evaluateReadiness,
     );
     initialCapabilities = await capabilities();
     // Keep the Chinese assertions deterministic on every host locale.
@@ -776,6 +778,8 @@ export async function openWorkbench(name, options) {
     await until(
       `performance.timeOrigin !== ${startupBoot} && Boolean(window.__TAURI_INTERNALS__ && document.querySelector('[aria-label="设置"]'))`,
       'explicit Chinese native startup',
+      60000,
+      session.evaluateReadiness,
     );
     await evaluate(`window.__BUILTIN_NATIVE_TRANSPORT__ = window.__TAURI_INTERNALS__.invoke`);
     await resize(1480, 920);
