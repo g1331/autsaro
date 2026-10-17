@@ -72,10 +72,8 @@ static unsigned output_retire;      /**< Owner-only next retirement slot; initia
 static unsigned output_pending;     /**< Owner-only outstanding output count; initially zero. */
 /* Confirmations taken before their epoch's cycle, retired after it in order. */
 static unsigned output_deferred; /**< Owner-only confirmations deferred until cycle. */
-static Ecu_OutputSlot
-    outputs[ECU_TARGET_OUTPUT_CAPACITY]; /**< Payloads protected by atomic slot states. */
-static Ecu_ProtocolSlot
-    protocol_failures[ECU_TARGET_OUTPUT_CAPACITY]; /**< Atomic-slot-protected failures. */
+static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];             /**< Atomic output slots. */
+static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY]; /**< Atomic failure slots. */
 static unsigned protocol_write; /**< Owner-only next failure publication slot; initially zero. */
 static unsigned protocol_read;  /**< Native-only next failure consumption slot; initially zero. */
 /* Highest generated bootstrap stage that began; retirement undoes only those. */

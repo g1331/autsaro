@@ -81,7 +81,7 @@ StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count
  * None.
  * Preconditions: Fault control after a native output/watchdog failure; E_OK maps to E_OS_STATE.
  * Context: Native control or its watchdog thread, outside exclusive areas.
- * Reentrancy: Not reentrant on the same process-local target.
+ * Reentrancy: Concurrent native faults request the same process shutdown.
  * Ownership: No pointer is retained; requests shutdown and terminates without returning.
  */
 void Ecu_TargetAbortNative(StatusType reason);

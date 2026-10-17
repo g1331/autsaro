@@ -16,8 +16,8 @@
 /** One copied Classical CAN input staged before automotive admission. */
 typedef struct {
     uint32_t id;     /**< 11-bit Classical CAN identifier. */
-    uint8_t dlc;     /**< Payload length, 1..8 bytes. */
-    uint8_t data[8]; /**< Copied payload; unused bytes zero. */
+    uint8_t dlc;     /**< Payload length, 0..8; the ASCII codec accepts 1..8. */
+    uint8_t data[8]; /**< Copied payload; bytes beyond dlc are ignored. */
 } Ecu_BatchFrame;
 
 /** HostBatchV1 command accepted by the bounded ASCII codec. */
@@ -46,12 +46,11 @@ typedef struct {
     EcuStatus transport_status;       /**< First observed transport failure, or ECU_OK. */
     uint64_t transport_epoch;         /**< Logical epoch of first transport failure, ms. */
     uint16_t transport_count; /**< Observed transport failure count; overflow closes target. */
-    Ecu_BatchFrame
-        frames[ECU_BATCH_CAPACITY]; /**< Copied frames owned by this native staging object. */
+    Ecu_BatchFrame frames[ECU_BATCH_CAPACITY]; /**< Native-owned copied frame storage. */
 } Ecu_HostBatch;
 
 /** Initialize caller-owned native staging with epoch/id/sequence zero.
- * @param[out] batch Nonnull caller-owned staging.
+ * @param[out] batch Caller-owned staging; NULL is ignored.
  * @par Return
  * None.
  * Preconditions: None; NULL is ignored.
