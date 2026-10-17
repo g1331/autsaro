@@ -409,7 +409,7 @@ def clang_tidy_project(project: Path, tidy: str) -> collections.Counter[ClangTid
         for patch in target["kernelPatches"]:
             run_bounded(ProcessSpec.seconds(
                 [
-                    git, "apply", "--ignore-space-change",
+                    git, "-c", "core.autocrlf=false", "apply", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]),
                     str(project / patch["path"].removeprefix("runtime/")),
                 ],

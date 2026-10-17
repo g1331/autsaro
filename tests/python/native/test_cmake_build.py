@@ -22,6 +22,36 @@ def tool(variable: str, name: str) -> str:
 
 
 class CMakeBuildTests(unittest.TestCase):
+    def test_cmake_refuses_one_byte_corruption_after_patching(self):
+        samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
+        self.assertTrue(samples, "Generate c_analysis samples first")
+        with tempfile.TemporaryDirectory(prefix="autosar-cmake-corruption-") as temporary:
+            directory = Path(temporary)
+            project = directory / "package"
+            shutil.copytree(Path(samples) / "standard-ecu", project)
+            # Inject at the actual boundary between patching and verification.
+            corrupt = directory / "corrupt.py"
+            corrupt.write_text("import pathlib, sys\np = pathlib.Path(sys.argv[1])\n"
+                               "b = p.read_bytes()\ni = b.index(b'FreeRTOS Kernel')\n"
+                               "p.write_bytes(b[:i] + bytes([b[i] ^ 1]) + b[i + 1:])\n",
+                               encoding="utf-8")
+            cmake_file = project / "CMakeLists.txt"
+            source = cmake_file.read_text(encoding="utf-8")
+            anchor = "file(GLOB_RECURSE actual_files"
+            self.assertEqual(source.count(anchor), 1)
+            injection = (f'execute_process(COMMAND "{Path(sys.executable).as_posix()}" '
+                         f'"{corrupt.as_posix()}" "${{AUTSARO_KERNEL}}/tasks.c" COMMAND_ERROR_IS_FATAL ANY)\n')
+            cmake_file.write_text(source.replace(anchor, injection + anchor), encoding="utf-8", newline="\n")
+            result = OwnedProcess(ProcessSpec.seconds(
+                [tool("CMAKE", "cmake"), "-S", str(project), "-B", str(directory / "build"),
+                 "-G", "Ninja", f'-DCMAKE_MAKE_PROGRAM={tool("NINJA", "ninja")}',
+                 f'-DCMAKE_C_COMPILER={tool("AUTOSAR_CC", "gcc")}'],
+                directory, 60, directory, "corrupt-configure")).wait()
+            output = result.stdout.read_text() + result.stderr.read_text()
+            self.assertEqual(result.status, "exited", output)
+            self.assertNotEqual(result.exit_code, 0, output)
+            self.assertIn("Kernel identity mismatch: kernel/tasks.c", output)
+
     def test_cmake_and_ecu_tool_build_the_same_translation_units(self):
         samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
         if not samples:

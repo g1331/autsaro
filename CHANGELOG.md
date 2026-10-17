@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Fixed:** Workbench modal dialogs suppress background native scrollbars, default-value descriptions hide internal rule-set IDs, and automatic-check captions and stages align consistently (#269).
+- **Breaking:** Source packages use `autosar-build-target-v3` with build-derived SHA-256 identities for every final kernel file; regenerate v2 packages. Offline ecu-tool and CMake reject patched kernel byte mismatches before compilation. Cargo builds now require Git (PATH or `AUTOSAR_GIT`). C ABI, FreeRTOS upstream/port/patch identities and the independent seal guard are unchanged; rule-set and package seals are recomputed (#265).
 
 - **Changed:** Opening wide ARXML documents indexes ancestor names and safety markers once per document, avoiding repeated sibling scans while preserving object paths and validation decisions (#256).
 - **Changed:** Creating ECUC modules and containers recursively creates mandatory children and writes declared mandatory defaults for built-in and accepted extension definitions. Missing required entries can be applied and saved with readable, object-linked errors; they still block the relevant plan and generation. Upper bounds, invalid values/types/references and schema errors remain rejected (#257).

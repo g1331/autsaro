@@ -24,4 +24,5 @@ pub use prepared::{
     ApplicationSource, PreparedProject, prepare_ecu_project, prepare_ecu_project_with_applications,
 };
 
+mod target_spec;
 mod xml_paths;

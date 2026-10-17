@@ -10,11 +10,41 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from ecu_tools import build as ecu_build
 from ecu_tools.process import OwnedProcess, ProcessSpec
 
 
 class EcuBuildModeTests(unittest.TestCase):
+    def test_one_byte_corruption_after_patching_is_rejected_before_compilation(self):
+        samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
+        self.assertTrue(samples, "Generate c_analysis samples first")
+        project = (Path(samples) / "standard-ecu").resolve(strict=True)
+        target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+        original = ecu_build.require_kernel_patch_applied
+        calls = 0
+        with tempfile.TemporaryDirectory(prefix="autosar-corrupt-kernel-") as temporary:
+            output = Path(temporary) / "build"
+
+            def corrupt_last_result(patch_path, before):
+                nonlocal calls
+                original(patch_path, before)
+                calls += 1
+                if calls == len(target["kernelPatches"]):
+                    path = output / "kernel/tasks.c"
+                    data = path.read_bytes()
+                    # Change a comment byte so the mutant still compiles.
+                    index = data.index(b"FreeRTOS Kernel")
+                    path.write_bytes(data[:index] + bytes([data[index] ^ 1]) + data[index + 1:])
+
+            with (patch.object(ecu_build, "query", wraps=ecu_build.query) as queries,
+                  patch.object(ecu_build, "require_kernel_patch_applied", side_effect=corrupt_last_result),
+                  self.assertRaisesRegex(ValueError, "^Kernel identity mismatch: kernel/tasks.c$")):
+                ecu_build.build(project, output, "host-batch")
+            self.assertEqual(calls, len(target["kernelPatches"]))
+            self.assertNotIn("native-c99-build", [call.args[2] for call in queries.call_args_list])
+
     def test_received_packages_build_and_preserve_failure_diagnostics(self):
         samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
         if not samples:

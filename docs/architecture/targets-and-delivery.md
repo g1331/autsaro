@@ -34,7 +34,7 @@
 | `autosar-component-contract` | 组件契约包 `contract.json`、ECU 包 `meta/contract.json` | v2 |
 | `autosar-asset-inventory` | `runtime/contracts/assets.json` 及包内 `meta/assets.json` | v2 |
 | `autosar-workbench-build-tool-inventory` | 包内 `tools/build-tool-inventory.json` | v2 |
-| `autosar-build-target` | 包内 `target.json` | v2 |
+| `autosar-build-target` | 包内 `target.json` | v3 |
 | `autosar-ecu-test-inputs`、`autosar-os-generation-timing` | 包内 `meta/verification-inputs.json`、`meta/os-generation-timing.json` | v1 |
 | 工程清单 `formatVersion` | 用户工程 `workbench-project.json` | 1 |
 | 扩展目录 `formatVersion` | 外部 `catalog.json` | 1 |

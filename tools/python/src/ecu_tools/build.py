@@ -73,7 +73,7 @@ def sealed_sources(project: Path) -> tuple[list[str], dict]:
         if digest(project / name) != identity:
             raise ValueError(f"Source identity mismatch: {name}")
     target = json.loads((project / "target.json").read_text(encoding="utf-8"))
-    if target.get("format") != "autosar-build-target-v2" or target.get("target") not in TARGETS:
+    if target.get("format") != "autosar-build-target-v3" or target.get("target") not in TARGETS:
         raise ValueError("Unsupported build target format or identity")
     return names, target
 
@@ -231,6 +231,22 @@ def require_kernel_patch_applied(patch: Path, before: dict[Path, bytes]) -> None
         raise RuntimeError(f"Kernel patch {patch.name} left {', '.join(unchanged)} unchanged")
 
 
+def require_kernel_identity(kernel: Path, expected: dict[str, str]) -> None:
+    """Check the final copy, including headers and unchanged kernel members."""
+    if not isinstance(expected, dict) or not expected:
+        raise ValueError("Missing patched kernel identities")
+    for name, identity in expected.items():
+        if not safe_relative(name) or not isinstance(identity, str) or not re.fullmatch(r"[0-9a-f]{64}", identity):
+            raise ValueError(f"Invalid kernel identity: kernel/{name}")
+    actual = {path.relative_to(kernel).as_posix() for path in kernel.rglob("*") if path.is_file()}
+    for name in sorted(actual ^ expected.keys()):
+        raise ValueError(f"Kernel file closure mismatch: kernel/{name}")
+    for name, identity in expected.items():
+        refuse_links(kernel / name)
+        if digest(kernel / name) != identity:
+            raise ValueError(f"Kernel identity mismatch: kernel/{name}")
+
+
 def build(project: Path, output: Path, mode: str, control_source: Path | None = None) -> Path:
     names, target = sealed_sources(project)
     project = project.resolve(strict=True)
@@ -267,13 +283,14 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
         patch_flags = ["--include=" + name for name in patch["includes"]]
         before = kernel_patch_targets(kernel, project / relative, patch["includes"])
         for checked in (True, False):
-            argv = [str(git), "apply", "--ignore-space-change", *patch_flags,
+            argv = [str(git), "-c", "core.autocrlf=false", "apply", "--ignore-space-change", *patch_flags,
                     *(["--check"] if checked else []), tool_argument(project / relative)]
             result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch",
                                   env=kernel_patch_environment(kernel))).wait()
             if not result.success:
                 raise RuntimeError(f"Kernel patch failed: {relative}; logs={logs}")
         require_kernel_patch_applied(project / relative, before)
+    require_kernel_identity(kernel, target.get("kernelSha256"))
     sources = [tool_argument(project / name) for name in source_map]
     kernel_sources = target.get("kernelSources")
     if not kernel_sources or any(not safe_relative(name) or not (kernel / name).is_file() for name in kernel_sources):
