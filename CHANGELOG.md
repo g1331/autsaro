@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Breaking:** Source packages use `autosar-build-target-v3` with build-derived SHA-256 identities for every final kernel file; regenerate v2 packages. Offline ecu-tool and CMake reject patched kernel byte mismatches before compilation. Cargo builds now require Git (PATH or `AUTOSAR_GIT`). C ABI, FreeRTOS upstream/port/patch identities and the independent seal guard are unchanged; rule-set and package seals are recomputed (#265).
+- **Added:** Built-in ECUC metadata provides product-authored Chinese and English parameter descriptions in field and instance-creation projections. Rule identity advances to 1.1.0 and binds the shared localized resources; R24-11 defaults are verified for all 500 parameters (140 declared, 360 absent) (#266).
 
 - **Changed:** Opening wide ARXML documents indexes ancestor names and safety markers once per document, avoiding repeated sibling scans while preserving object paths and validation decisions (#256).
 - **Changed:** Creating ECUC modules and containers recursively creates mandatory children and writes declared mandatory defaults for built-in and accepted extension definitions. Missing required entries can be applied and saved with readable, object-linked errors; they still block the relevant plan and generation. Upper bounds, invalid values/types/references and schema errors remain rejected (#257).
