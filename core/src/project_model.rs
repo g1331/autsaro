@@ -165,6 +165,15 @@ pub struct DefinitionDescriptor {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LinkedEdit {
+    pub kind: String,
+    pub group_id: String,
+    pub operation: String,
+    pub locations: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FieldDescriptor {
     pub field_id: String,
     pub object_id: String,
@@ -172,6 +181,7 @@ pub struct FieldDescriptor {
     pub definition: DefinitionDescriptor,
     pub current: ValueState,
     pub reference: Option<ReferenceState>,
+    pub linked_edit: Option<LinkedEdit>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

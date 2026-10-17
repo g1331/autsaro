@@ -506,6 +506,8 @@ impl Workspace {
                 "backend.arxml.changes.stale_change_set_identity"
             ));
         }
+        let groups = self.linked_groups();
+        let mut linked_targets = BTreeSet::new();
         let mut ids = BTreeSet::new();
         let mut targets = BTreeSet::new();
         let mut entry_keys = BTreeSet::new();
@@ -514,6 +516,29 @@ impl Workspace {
                 return Err(crate::product_message!(
                     "backend.arxml.changes.change_id_required_unique"
                 ));
+            }
+            if let ConfigurationChange::SetValue {
+                field: FieldRef::Existing { field_id },
+                ..
+            }
+            | ConfigurationChange::SetReference {
+                field: FieldRef::Existing { field_id },
+                ..
+            } = change
+            {
+                let affected = groups
+                    .iter()
+                    .find(|group| group.fields.iter().any(|(id, _)| id == field_id));
+                let fields: Vec<_> = affected
+                    .map(|group| group.fields.iter().map(|(id, _)| id).collect())
+                    .unwrap_or_else(|| vec![field_id]);
+                for id in fields {
+                    if !linked_targets.insert(id) {
+                        return Err(crate::product_message!(
+                            "backend.arxml.changes.conflicting_target_operations"
+                        ));
+                    }
+                }
             }
             let target = match change {
                 ConfigurationChange::SetValue { field, .. }
@@ -677,7 +702,73 @@ impl Workspace {
                     })?;
             }
         }
+        let mut linked = Vec::new();
+        let mut linked_fields = Vec::new();
         for change in &ordered {
+            if let ConfigurationChange::SetValue {
+                change_id,
+                field: FieldRef::Existing { field_id },
+                value,
+                ..
+            } = change
+                && let Some(group) = groups
+                    .iter()
+                    .find(|group| group.fields.iter().any(|(id, _)| id == field_id))
+            {
+                linked_fields.extend(self.linked_fields(group, field_id, value).map_err(|message| {
+                    crate::message::LocalizedText::messages([
+                        crate::product_message!("backend.arxml.changes.field_change_context", "change_id" => change_id, "field" => serde_json::to_string(&FieldRef::Existing { field_id: field_id.clone() }).unwrap()),
+                        message,
+                    ])
+                })?);
+                linked.push((change_id, field_id, group));
+            }
+        }
+        if !linked_fields.is_empty() {
+            let before = candidate.workspace.clone();
+            candidate
+                .workspace
+                .edit_integration_fields(&linked_fields)
+                .map_err(|issues| {
+                    crate::message::LocalizedText::messages(
+                        issues.into_iter().map(|issue| issue.message),
+                    )
+                })?;
+            // The outer transaction owns the single published workspace revision.
+            candidate.workspace.revision = before.revision;
+            for (change_id, _, group) in &linked {
+                for (id, _) in &group.fields {
+                    let original = &before.snapshot.fields[before.snapshot.field_by_id[id]];
+                    let updated = &candidate.workspace.snapshot.fields
+                        [candidate.workspace.snapshot.field_by_id[id]];
+                    if original.view.current != updated.view.current {
+                        let owner = object(&before, &original.view.object_id)?;
+                        candidate.impacts.push(impact(
+                            change_id,
+                            &before,
+                            owner,
+                            Some(original),
+                            serde_json::to_string(&original.view.current).unwrap(),
+                            serde_json::to_string(&updated.view.current).unwrap(),
+                            false,
+                        ));
+                    }
+                }
+            }
+        }
+        for (_, field_id, _) in &linked {
+            candidate.selection = Some(
+                self.snapshot.fields[self.snapshot.field_by_id[*field_id]]
+                    .view
+                    .object_id
+                    .clone(),
+            );
+        }
+        for change in &ordered {
+            if matches!(change, ConfigurationChange::SetValue { field: FieldRef::Existing { field_id }, .. } if linked.iter().any(|(_, id, _)| id == &field_id))
+            {
+                continue;
+            }
             match change {
                 ConfigurationChange::SetValue {
                     change_id,
@@ -1512,6 +1603,7 @@ impl Candidate {
                     .count();
                 Ok(IndexedField {
                     view: FieldDescriptor {
+                        linked_edit: None,
                         field_id: String::new(),
                         object_id: id,
                         definition: descriptor.clone(),

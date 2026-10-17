@@ -7,6 +7,7 @@ mod det;
 mod diagnostic_configuration;
 mod diagnostics;
 mod handoff;
+mod linked_edits;
 mod modes;
 mod os;
 mod os_configuration;

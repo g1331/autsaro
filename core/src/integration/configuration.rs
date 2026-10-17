@@ -813,7 +813,8 @@ fn inspect_with_catalog(
             if (name.ends_with("Id") || name.ends_with("HandleId"))
                 && graph.external.get(definition).map(String::as_str)
                     == Some("ECUC-INTEGER-PARAM-DEF")
-                && literals[0].parse::<u16>().is_err()
+                && crate::definitions::unsigned_integer(&literals[0])
+                    .is_none_or(|value| value > u16::MAX.into())
             {
                 return Err(reject(
                     graph,

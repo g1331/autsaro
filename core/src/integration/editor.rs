@@ -51,6 +51,14 @@ pub(crate) fn fields(
     plan: &ValidatedIntegrationPlan,
     changes: &IntegrationEdit,
 ) -> Result<Vec<FieldEdit>, Vec<PlanDiagnostic>> {
+    fields_including_unchanged(plan, changes, false)
+}
+
+pub(crate) fn fields_including_unchanged(
+    plan: &ValidatedIntegrationPlan,
+    changes: &IntegrationEdit,
+    include_unchanged: bool,
+) -> Result<Vec<FieldEdit>, Vec<PlanDiagnostic>> {
     let description = plan.description();
     let mut edits: BTreeMap<(String, String, bool), String> = BTreeMap::new();
     for (port, id) in &changes.can_ids {
@@ -78,7 +86,7 @@ pub(crate) fn fields(
                 ),
             ));
         }
-        if *id == channel.can_id {
+        if !include_unchanged && *id == channel.can_id {
             continue;
         }
         edits.insert(
@@ -121,7 +129,7 @@ pub(crate) fn fields(
                 crate::product_message!("backend.integration.editor.application_period_invalid"),
             ));
         }
-        if period != application.period_ms {
+        if include_unchanged || period != application.period_ms {
             let seconds = format!("{}.{:03}", period / 1000, period % 1000);
             let shared: Vec<_> = description
                 .schedule

@@ -16,7 +16,7 @@ pub(crate) fn identifier(value: &str) -> bool {
         && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
-fn integer(raw: &str) -> Result<i128, crate::message::LocalizedText> {
+pub(crate) fn integer(raw: &str) -> Result<i128, crate::message::LocalizedText> {
     let (negative, raw) = match raw.strip_prefix('-') {
         Some(raw) => (true, raw),
         None => (false, raw.strip_prefix('+').unwrap_or(raw)),

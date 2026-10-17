@@ -207,13 +207,13 @@ pub(super) fn inspect_events(
         return Err(task_profile());
     }
     let maximum = value(graph, counter, "OsCounterMaxAllowedValue", false)
-        .and_then(|value| value.parse::<u32>().ok())
+        .and_then(crate::definitions::unsigned_integer)
         .filter(|value| *value <= 65535);
     let counter_tick_ms = value(graph, counter, "OsSecondsPerTick", false).and_then(milliseconds);
     let counter_ticks_per_base = value(graph, counter, "OsCounterTicksPerBase", false)
-        .and_then(|text| text.parse::<u32>().ok());
-    let counter_minimum_cycle =
-        value(graph, counter, "OsCounterMinCycle", false).and_then(|text| text.parse::<u32>().ok());
+        .and_then(crate::definitions::unsigned_integer);
+    let counter_minimum_cycle = value(graph, counter, "OsCounterMinCycle", false)
+        .and_then(crate::definitions::unsigned_integer);
     let (
         Some(maximum),
         Some(counter_ticks_per_base @ 1),
@@ -475,7 +475,7 @@ pub(super) fn inspect_events(
         };
         let os_event = reference(graph, mapping, &format!("{prefix}UsedOsEventRef"))?;
         let position = value(graph, mapping, &format!("{prefix}PositionInTask"), false)
-            .and_then(|value| value.parse::<u32>().ok())
+            .and_then(crate::definitions::unsigned_integer)
             .filter(|value| *value <= 65535)
             .ok_or_else(|| {
                 reject(
@@ -577,13 +577,13 @@ pub(super) fn inspect_events(
         let expiry_offset = using_table
             .then(|| {
                 value(graph, alarm, "OsScheduleTblExpPointOffset", false)
-                    .and_then(|text| text.parse::<u32>().ok())
+                    .and_then(crate::definitions::unsigned_integer)
             })
             .flatten();
         let table_start = using_table
             .then(|| {
                 value(graph, autostart, "OsScheduleTableStartValue", false)
-                    .and_then(|text| text.parse::<u32>().ok())
+                    .and_then(crate::definitions::unsigned_integer)
             })
             .flatten();
         // A table-driven mapping without its table was rejected above.
@@ -616,7 +616,7 @@ pub(super) fn inspect_events(
                 ));
             }
             if value(graph, table, "OsScheduleTableDuration", false)
-                .and_then(|value| value.parse::<u32>().ok())
+                .and_then(crate::definitions::unsigned_integer)
                 != Some(period)
                 || expiry_offset.is_none_or(|offset| offset >= period)
                 || table_start.is_none_or(|start| {
@@ -636,10 +636,10 @@ pub(super) fn inspect_events(
                 ));
             }
         } else if value(graph, autostart, "OsAlarmAlarmTime", false)
-            .and_then(|value| value.parse::<u32>().ok())
+            .and_then(crate::definitions::unsigned_integer)
             != Some(period)
             || value(graph, autostart, "OsAlarmCycleTime", false)
-                .and_then(|value| value.parse::<u32>().ok())
+                .and_then(crate::definitions::unsigned_integer)
                 != Some(period)
             || reference(graph, actions[0], "OsAlarmSetEventTaskRef")? != task
             || reference(graph, actions[0], "OsAlarmSetEventRef")? != os_event

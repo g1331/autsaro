@@ -130,7 +130,7 @@ pub(super) fn c_name(value: &str) -> String {
     result
 }
 
-pub(super) fn milliseconds(value: &str) -> Option<u32> {
+pub(crate) fn milliseconds(value: &str) -> Option<u32> {
     let (mantissa, exponent) = match value.split_once(['e', 'E']) {
         Some((mantissa, exponent)) => (mantissa, exponent.parse::<i32>().ok()?),
         None => (value, 0),

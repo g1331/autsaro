@@ -602,6 +602,7 @@ impl Workspace {
                     .insert(field_id.clone(), snapshot.fields.len());
                 snapshot.fields.push(IndexedField {
                     view: FieldDescriptor {
+                        linked_edit: None,
                         field_id,
                         object_id: object_id.clone(),
                         definition: descriptor,
@@ -707,6 +708,7 @@ impl Workspace {
                     .insert(field_id.clone(), snapshot.fields.len());
                 snapshot.fields.push(IndexedField {
                     view: FieldDescriptor {
+                        linked_edit: None,
                         field_id,
                         object_id: object.view.object_id.clone(),
                         definition: descriptor,
@@ -1095,6 +1097,7 @@ impl Workspace {
     ) -> Result<ProjectProjection, crate::message::LocalizedText> {
         let identity = crate::rules::rule_set_identity()
             .unwrap_or_else(|_| crate::rules::trusted_rule_set_identity());
+        let groups = self.linked_groups();
         Ok(ProjectProjection {
             workspace_epoch: self.epoch.clone(),
             input_fingerprint: input_fingerprint.into(),
@@ -1117,7 +1120,44 @@ impl Workspace {
                 .snapshot
                 .fields
                 .iter()
-                .map(|field| field.view.clone())
+                .map(|field| {
+                    let mut view = field.view.clone();
+                    if view.definition.writable
+                        && view.definition.kind.is_some()
+                        && let Some(group) = groups
+                            .iter()
+                            .find(|group| group.fields.iter().any(|(id, _)| id == &view.field_id))
+                    {
+                        view.linked_edit = Some(LinkedEdit {
+                            kind: group.kind.clone(),
+                            group_id: group.id.clone(),
+                            operation: "set-value".into(),
+                            locations: group
+                                .fields
+                                .iter()
+                                .filter(|(id, _)| id != &view.field_id)
+                                .map(|(id, _)| {
+                                    let other =
+                                        &self.snapshot.fields[self.snapshot.field_by_id[id]];
+                                    let owner = &self.snapshot.objects
+                                        [self.snapshot.object_by_id[&other.view.object_id]];
+                                    format!(
+                                        "{} · {}",
+                                        owner.view.short_name,
+                                        other
+                                            .view
+                                            .definition
+                                            .definition_id
+                                            .rsplit(['/', '#'])
+                                            .next()
+                                            .unwrap_or(&other.element)
+                                    )
+                                })
+                                .collect(),
+                        });
+                    }
+                    view
+                })
                 .collect(),
             references: self.snapshot.references.clone(),
             reference_candidates: self.snapshot.reference_candidates.clone(),
