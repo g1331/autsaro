@@ -61,7 +61,7 @@ uv run --locked python -m autosar_tooling quality --merge-base origin/master
 - `area:quality-ci`：CI、`quality`、C 静态检查与测试设施
 - `area:delivery`：交付包、资产清单与离线 ECU 工具
 
-等待实机或其他 Issue 的加 `blocked`，并在正文写明等待对象。进度由 Milestone 与关联的分支或 PR 表示，不另设状态标签；并行推进的工作尽量不落在同一 `area`。
+等待实机或其他 Issue 的加 `blocked`，并在正文写明等待对象。进度由 Milestone 与关联的分支或 PR 表示，不另设状态标签；PR 的模块标签由 `Pull request labels` 工作流按改动路径自动添加（映射见 `.github/labeler.yml`）；并行推进的工作尽量不落在同一 `area`。
 
 ## 界面文案与语言
 
