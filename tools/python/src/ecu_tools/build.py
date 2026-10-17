@@ -283,7 +283,7 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
         patch_flags = ["--include=" + name for name in patch["includes"]]
         before = kernel_patch_targets(kernel, project / relative, patch["includes"])
         for checked in (True, False):
-            argv = [str(git), "apply", "--ignore-space-change", *patch_flags,
+            argv = [str(git), "-c", "core.autocrlf=false", "apply", "--ignore-space-change", *patch_flags,
                     *(["--check"] if checked else []), tool_argument(project / relative)]
             result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch",
                                   env=kernel_patch_environment(kernel))).wait()

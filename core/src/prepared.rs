@@ -551,7 +551,7 @@ function(autsaro_patch patch)
     # A ceiling keeps git from resolving patch paths against an enclosing checkout.
     execute_process(
       COMMAND "${{CMAKE_COMMAND}}" -E env "GIT_CEILING_DIRECTORIES=${{CMAKE_BINARY_DIR}}"
-              "${{GIT_EXECUTABLE}}" apply --ignore-space-change ${{ARGN}} ${{check}} "${{CMAKE_SOURCE_DIR}}/${{patch}}"
+              "${{GIT_EXECUTABLE}}" -c core.autocrlf=false apply --ignore-space-change ${{ARGN}} ${{check}} "${{CMAKE_SOURCE_DIR}}/${{patch}}"
       WORKING_DIRECTORY "${{AUTSARO_KERNEL}}"
       RESULT_VARIABLE result)
     if(NOT result EQUAL 0)

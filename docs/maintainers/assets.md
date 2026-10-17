@@ -32,6 +32,6 @@ FreeRTOS 或固定 GCC/binutils 升级是独立改动：核对来源、许可、
 
 ## 补丁后内核身份
 
-Cargo 构建需要 Git（默认 `git`，可用 `AUTOSAR_GIT` 指定），在 OUT_DIR 中按共享目标定义为两个目标复制已校验的内核、应用各自补丁并计算最终字节摘要。生成器把完整文件 map 写入 `autosar-build-target-v3` 的 `kernelSha256`，不维护手抄的结果摘要。包内工具及 CMake 在编译前核对补丁后的副本，错误指出 `kernel/` 下的文件。旧构建清单须重新生成。
+Cargo 构建需要 Git（默认 `git`，可用 `AUTOSAR_GIT` 指定），在 OUT_DIR 中按共享目标定义为两个目标复制已校验的内核、应用各自补丁并计算最终字节摘要。所有内核补丁入口用命令级 `core.autocrlf=false` 保留固定来源的换行字节，不受用户全局 Git 换行配置影响。生成器把完整文件 map 写入 `autosar-build-target-v3` 的 `kernelSha256`，不维护手抄的结果摘要。包内工具及 CMake 在编译前核对补丁后的副本，错误指出 `kernel/` 下的文件。旧构建清单须重新生成。
 
 这不改变 source manifest 的上游／补丁身份校验，也不需要 `assets update`；只有 seal guard 本身改变才更新独立清单。规则集与封存身份仍随实际来源重算。

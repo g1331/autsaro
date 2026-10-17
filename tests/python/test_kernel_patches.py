@@ -28,19 +28,20 @@ class KernelPatchTests(unittest.TestCase):
             patch = root / "change.patch"
             patch.write_bytes(b"--- a/selected.h\n+++ b/selected.h\n@@ -1 +1 @@\n-before\n+after\n"
                               b"--- a/excluded.h\n+++ b/excluded.h\n@@ -1 +1 @@\n-before\n+after\n")
-            for parent in (checkout, root):
-                with self.subTest(enclosing_checkout=parent == checkout):
-                    kernel = parent / "output" / "kernel"
+            for parent, autocrlf in ((checkout, "true"), (root, "true"), (checkout, "false"), (root, "false")):
+                with self.subTest(enclosing_checkout=parent == checkout, autocrlf=autocrlf):
+                    kernel = parent / autocrlf / "output" / "kernel"
                     kernel.mkdir(parents=True)
                     for name in ("selected.h", "excluded.h"):
                         (kernel / name).write_bytes(b"before\n")
-                    env = kernel_patch_environment(kernel)
+                    env = {**kernel_patch_environment(kernel), "GIT_CONFIG_COUNT": "1",
+                           "GIT_CONFIG_KEY_0": "core.autocrlf", "GIT_CONFIG_VALUE_0": autocrlf}
                     for check in (True, False):
-                        result = subprocess.run([git, "apply", "--include=selected.h",
+                        result = subprocess.run([git, "-c", "core.autocrlf=false", "apply", "--include=selected.h",
                                                  *(["--check"] if check else []), str(patch)],
                                                 cwd=kernel, env=env, capture_output=True, text=True, check=False)
                         self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual((kernel / "selected.h").read_text(), "after\n")
+                    self.assertEqual((kernel / "selected.h").read_bytes(), b"after\n")
                     self.assertEqual((kernel / "excluded.h").read_bytes(), b"before\n")
                     expected = {"selected.h": hashlib.sha256(b"after\n").hexdigest(),
                                 "excluded.h": hashlib.sha256(b"before\n").hexdigest()}

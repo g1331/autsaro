@@ -65,7 +65,7 @@ class FeedbackTests(unittest.TestCase):
             (project / "meta/integration.json").write_text('{"originalBswSources":{}}')
             with patch.object(quality, "run_bounded", side_effect=self.hung):
                 self.assert_failure(lambda: quality.clang_tidy_project(project, "unused"), "sample: kernel-patch")
-            self.assertEqual(self.commands[0][1], "apply")
+            self.assertEqual(self.commands[0][1:4], ("-c", "core.autocrlf=false", "apply"))
 
     def test_c_analysis_timeout_and_nonzero_exit_keep_raw_evidence(self):
         with tempfile.TemporaryDirectory() as temporary:

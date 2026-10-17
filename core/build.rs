@@ -591,7 +591,12 @@ fn build_kernel_digests(root: &Path, rows: &BTreeMap<String, Source>) {
                 .map(|(_, includes)| *includes)
                 .unwrap_or(&[]);
             let result = std::process::Command::new(&git)
-                .args(["apply", "--ignore-space-change"])
+                .args([
+                    "-c",
+                    "core.autocrlf=false",
+                    "apply",
+                    "--ignore-space-change",
+                ])
                 .args(includes.iter().map(|name| format!("--include={name}")))
                 .arg(root.join(patch))
                 .current_dir(&kernel)
