@@ -20,6 +20,12 @@ use std::sync::{Arc, LazyLock};
 pub(crate) const NS: &str = "http://autosar.org/schema/r4.0";
 pub(crate) const RELEASE: &str = "R24-11";
 
+pub(crate) fn unsigned_integer(raw: &str) -> Option<u32> {
+    validation::integer(raw)
+        .ok()
+        .and_then(|value| u32::try_from(value).ok())
+}
+
 #[derive(Clone, Debug)]
 pub struct DefinitionCatalog {
     entries: Arc<BTreeMap<String, DefinitionDescriptor>>,

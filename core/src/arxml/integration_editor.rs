@@ -63,8 +63,16 @@ impl Workspace {
     ) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
         let plan = self.integration_plan()?;
         let fields = editor::fields(&plan, &changes)?;
+        self.edit_integration_fields(&fields)
+    }
+
+    pub(super) fn edit_integration_fields(
+        &mut self,
+        fields: &[editor::FieldEdit],
+    ) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+        let plan = self.integration_plan()?;
         let mut patches: Vec<Vec<Patch>> = self.files.iter().map(|_| Vec::new()).collect();
-        for field in &fields {
+        for field in fields {
             let mut found = 0;
             for (index, file) in self.files.iter().enumerate() {
                 let document = Document::parse(&file.text).map_err(|error| {
@@ -148,6 +156,173 @@ fn inspection(
             description: None,
             diagnostics,
         },
+    }
+}
+
+pub(super) struct LinkedGroup {
+    pub kind: String,
+    pub id: String,
+    edit: IntegrationEdit,
+    pub fields: Vec<(String, String)>,
+}
+
+impl Workspace {
+    /// Resolve identities from the same checked plan and edit closure as the standard editor.
+    pub(super) fn linked_groups(&self) -> Vec<LinkedGroup> {
+        let Ok(plan) = self.integration_plan() else {
+            return Vec::new();
+        };
+        let description = plan.description();
+        let mut edits: Vec<_> = description
+            .signals
+            .iter()
+            .map(|signal| {
+                (
+                    signal.port.clone(),
+                    IntegrationEdit {
+                        can_ids: [(signal.port.clone(), signal.can_id)].into(),
+                        application_period_ms: None,
+                    },
+                )
+            })
+            .collect();
+        if let Some(application) = description
+            .schedule
+            .entities
+            .iter()
+            .find(|entity| entity.application)
+        {
+            edits.push((
+                application.trigger().into(),
+                IntegrationEdit {
+                    can_ids: Default::default(),
+                    application_period_ms: Some(application.period_ms),
+                },
+            ));
+        }
+        edits
+            .into_iter()
+            .filter_map(|(id, edit)| {
+                let edits = editor::fields_including_unchanged(&plan, &edit, true).ok()?;
+                let fields: Option<Vec<_>> = edits
+                    .iter()
+                    .map(|edit| {
+                        let mut found = self.snapshot.fields.iter().filter(|field| {
+                            let owner = &self.snapshot.objects
+                                [self.snapshot.object_by_id[&field.view.object_id]];
+                            owner.view.path == edit.object
+                                && if edit.parameter {
+                                    field.view.definition.definition_id.rsplit('/').next()
+                                        == Some(edit.field.as_str())
+                                } else {
+                                    field.element == edit.field
+                                }
+                        });
+                        let field = found.next()?;
+                        if found.next().is_some() {
+                            return None;
+                        }
+                        Some((field.view.field_id.clone(), edit.value.clone()))
+                    })
+                    .collect();
+                let kind = if edit.application_period_ms.is_none() {
+                    "can-id"
+                } else if edits.iter().any(|field| field.field.starts_with("Com")) {
+                    "application-com-period"
+                } else {
+                    "application-period"
+                };
+                Some(LinkedGroup {
+                    kind: kind.into(),
+                    id,
+                    edit,
+                    fields: fields?,
+                })
+            })
+            .collect()
+    }
+
+    pub(super) fn linked_fields(
+        &self,
+        group: &LinkedGroup,
+        field_id: &str,
+        value: &crate::project_model::ValueState,
+    ) -> Result<Vec<editor::FieldEdit>, crate::message::LocalizedText> {
+        use crate::project_model::{ValueKind, ValueState};
+        let invalid =
+            || crate::product_message!("backend.integration.editor.application_period_invalid");
+        let field = &self.snapshot.fields[self.snapshot.field_by_id[field_id]];
+        if !field.view.definition.writable || field.view.reference.is_some() {
+            return Err(
+                crate::product_message!("backend.arxml.changes.field_value_editing_unsupported", "change_id" => field_id),
+            );
+        }
+        if field.view.current == *value {
+            return Ok(Vec::new());
+        }
+        let ValueState::Explicit { value } = value else {
+            return Err(
+                crate::product_message!("backend.arxml.changes.field_value_editing_unsupported", "change_id" => field_id),
+            );
+        };
+        self.catalog
+            .validate_value(&field.view.definition.definition_id, value)?;
+        let mut edit = group.edit.clone();
+        let raw = value.lexeme.trim();
+        if let Some(period) = edit.application_period_ms {
+            let seconds = field.view.definition.kind == Some(ValueKind::Float);
+            let numeric = |raw: &str| -> Option<u32> {
+                if seconds {
+                    crate::integration::milliseconds(raw)
+                } else {
+                    crate::definitions::unsigned_integer(raw)
+                }
+            };
+            let current = group
+                .fields
+                .iter()
+                .find(|(id, _)| id == field_id)
+                .ok_or_else(invalid)?;
+            // Autostart start values can differ from the period by an expiry offset.
+            let offset = period
+                .checked_sub(numeric(&current.1).ok_or_else(invalid)?)
+                .ok_or_else(invalid)?;
+            edit.application_period_ms = Some(
+                numeric(raw)
+                    .and_then(|value| value.checked_add(offset))
+                    .ok_or_else(invalid)?,
+            );
+        } else {
+            let id = crate::definitions::unsigned_integer(raw).ok_or_else(invalid)?;
+            for value in edit.can_ids.values_mut() {
+                *value = id;
+            }
+        }
+        let plan = self.integration_plan().map_err(|issues| {
+            crate::message::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
+        })?;
+        let mut edits = editor::fields(&plan, &edit).map_err(|issues| {
+            crate::message::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
+        })?;
+        let index = group
+            .fields
+            .iter()
+            .position(|(id, _)| id == field_id)
+            .ok_or_else(invalid)?;
+        if edits.is_empty() {
+            // Equivalent numeric input only changes this cell's spelling.
+            let all = editor::fields_including_unchanged(&plan, &edit, true).map_err(|issues| {
+                crate::message::LocalizedText::messages(
+                    issues.into_iter().map(|issue| issue.message),
+                )
+            })?;
+            let mut source = all.into_iter().nth(index).ok_or_else(invalid)?;
+            source.value = value.lexeme.clone();
+            edits.push(source);
+        } else {
+            edits[index].value = value.lexeme.clone();
+        }
+        Ok(edits)
     }
 }
 

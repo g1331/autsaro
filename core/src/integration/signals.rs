@@ -390,7 +390,7 @@ pub(super) fn inspect_ports(
         check_trigger(graph, trigger, pdu, Some(signal), port.read)?;
         let can_id = graph
             .text(trigger, "IDENTIFIER")
-            .and_then(|value| value.parse::<u32>().ok())
+            .and_then(crate::definitions::unsigned_integer)
             .filter(|id| *id <= 0x7ff)
             .ok_or_else(|| {
                 reject(
@@ -522,7 +522,7 @@ pub(super) fn inspect_ports(
             "SIGNAL_MAPPING",
         )?;
         if value(graph, can_if, &format!("{can_prefix}CanId"), false)
-            .and_then(|value| value.parse::<u32>().ok())
+            .and_then(crate::definitions::unsigned_integer)
             != Some(can_id)
             || value(graph, can_if, &format!("{can_prefix}CanIdType"), false)
                 != Some(if port.read {

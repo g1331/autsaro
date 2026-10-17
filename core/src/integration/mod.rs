@@ -46,6 +46,7 @@ mod signals;
 pub use can_runtime::{CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract};
 pub use catalog::{ContractArgument, SymbolContract};
 pub use com::{ComMainFunction, ComReception, ComRuntimeContract, ComRxGroup};
+pub(crate) use component::milliseconds;
 pub use component::{ComponentContract, DataPort, ServicePort};
 pub use composition::{
     CompositionContract, Connection as ComponentConnection, Endpoint as ComponentEndpoint,

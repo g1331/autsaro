@@ -41,6 +41,12 @@ export type DefinitionDescriptor = {
   reason: LocalizedText | null;
 };
 export type FieldDescriptor = DefinitionDescriptor & {
+  linkedEdit?: {
+    kind: 'can-id' | 'application-period' | 'application-com-period';
+    groupId: string;
+    operation: 'set-value';
+    locations: string[];
+  } | null;
   fieldId: string;
   objectId: string;
   current: ValueState;
