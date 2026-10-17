@@ -6,6 +6,9 @@ use std::path::{Component, Path, PathBuf};
 #[path = "src/rules/grammar.rs"]
 mod native_grammar;
 
+#[path = "src/target_spec.rs"]
+mod target_spec;
+
 #[derive(Clone)]
 struct Source {
     path: String,
@@ -334,6 +337,7 @@ fn main() {
         output,
     )
     .expect("write embedded asset index");
+    build_kernel_digests(root, &rows);
     build_message_templates(&core);
     build_native_inventory(&core);
     println!(
@@ -461,6 +465,7 @@ fn build_native_inventory(core: &Path) {
         "src/arxml",
         "src/integration",
         "src/prepared.rs",
+        "src/target_spec.rs",
         "src/generator.rs",
         "src/generator",
         "src/verification.rs",
@@ -549,4 +554,83 @@ fn build_native_inventory(core: &Path) {
          static INVENTORY_BYTES: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/native_rule_inventory.json\"));\n"
     ));
     fs::write(out.join("native_rule_index.rs"), generated).expect("trusted native index");
+}
+
+/// Derive expected patch results from pinned inputs, never from receiver output.
+fn build_kernel_digests(root: &Path, rows: &BTreeMap<String, Source>) {
+    let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"));
+    let mut targets = BTreeMap::new();
+    println!("cargo:rerun-if-env-changed=AUTOSAR_GIT");
+    println!("cargo:rerun-if-changed=src/target_spec.rs");
+    let git = std::env::var_os("AUTOSAR_GIT").unwrap_or_else(|| "git".into());
+    for target in target_spec::BuildTarget::ALL {
+        let spec = target.spec();
+        let kernel = out.join(spec.id).join("kernel");
+        if kernel.exists() {
+            fs::remove_dir_all(&kernel).expect("remove previous kernel derivation");
+        }
+        let files: Vec<_> = rows
+            .values()
+            .filter(|row| {
+                target_spec::kernel_path(&row.path).is_some()
+                    && row.targets.iter().any(|id| id == spec.id)
+            })
+            .collect();
+        for row in &files {
+            let name = target_spec::kernel_path(&row.path).expect("kernel source path");
+            let destination = kernel.join(name);
+            fs::create_dir_all(destination.parent().expect("kernel parent"))
+                .expect("kernel directory");
+            fs::copy(root.join(&row.path), destination).expect("copy pinned kernel");
+        }
+        for patch in spec.kernel_patches {
+            let includes = spec
+                .kernel_patch_includes
+                .iter()
+                .find(|(path, _)| path == patch)
+                .map(|(_, includes)| *includes)
+                .unwrap_or(&[]);
+            let result = std::process::Command::new(&git)
+                .args([
+                    "-c",
+                    "core.autocrlf=false",
+                    "apply",
+                    "--ignore-space-change",
+                ])
+                .args(includes.iter().map(|name| format!("--include={name}")))
+                .arg(root.join(patch))
+                .current_dir(&kernel)
+                .env(
+                    "GIT_CEILING_DIRECTORIES",
+                    kernel.parent().expect("kernel parent"),
+                )
+                .output()
+                .expect("Git is required to derive kernel patch identities");
+            assert!(
+                result.status.success(),
+                "kernel identity patch failed: {patch}: {}{}",
+                String::from_utf8_lossy(&result.stdout),
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+        let hashes: BTreeMap<_, _> = files
+            .iter()
+            .map(|row| {
+                let name = target_spec::kernel_path(&row.path).expect("kernel source path");
+                (
+                    name,
+                    format!(
+                        "{:x}",
+                        Sha256::digest(fs::read(kernel.join(name)).expect("patched kernel bytes"))
+                    ),
+                )
+            })
+            .collect();
+        targets.insert(spec.id, hashes);
+    }
+    fs::write(
+        out.join("kernel-digests.json"),
+        serde_json::to_vec(&targets).expect("kernel identities JSON"),
+    )
+    .expect("write kernel identities");
 }

@@ -192,7 +192,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                 raise ValueError("Pinned kernel patch is outside the sealed inventory")
             before = kernel_patch_targets(root / "kernel", root / patch_path, patch["includes"])
             touched.update(before)
-            argv = [str(Path(git).resolve()), "apply", "--ignore-space-change",
+            argv = [str(Path(git).resolve()), "-c", "core.autocrlf=false", "apply", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]), str(root / patch_path)]
             # Apply only inside the copied kernel, never the authoritative source.
             run(argv, output, f"patch-{index}", 30, context=f"Kernel patch {index} failed",

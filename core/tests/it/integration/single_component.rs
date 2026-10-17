@@ -1085,7 +1085,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
                 .bytes,
         )
         .unwrap();
-        assert_eq!(metadata["format"], "autosar-build-target-v2");
+        assert_eq!(metadata["format"], "autosar-build-target-v3");
         // Each mode's main is sealed, recorded once and never a shared translation unit.
         for (mode, entry) in metadata["entries"].as_object().unwrap() {
             assert!(has(entry.as_str().unwrap()), "{mode}");
@@ -1098,6 +1098,40 @@ fn source_preparation_is_target_complete_without_native_tools() {
         assert_eq!(
             metadata["kernelPatches"].as_array().unwrap().len(),
             target.spec().kernel_patches.len()
+        );
+        let hashes = metadata["kernelSha256"].as_object().unwrap();
+        let kernel_files: std::collections::BTreeSet<_> = first
+            .files()
+            .iter()
+            .filter_map(|file| file.path.strip_prefix("kernel/"))
+            .collect();
+        assert_eq!(
+            hashes
+                .keys()
+                .map(String::as_str)
+                .collect::<std::collections::BTreeSet<_>>(),
+            kernel_files
+        );
+        for name in ["tasks.c", "include/task.h", "include/FreeRTOS.h"] {
+            let original = first
+                .files()
+                .iter()
+                .find(|file| file.path == format!("kernel/{name}"))
+                .unwrap();
+            assert_ne!(
+                hashes[name],
+                format!("{:x}", Sha256::digest(&original.bytes)),
+                "{name}"
+            );
+        }
+        let unchanged = first
+            .files()
+            .iter()
+            .find(|file| file.path == "kernel/list.c")
+            .unwrap();
+        assert_eq!(
+            hashes["list.c"],
+            format!("{:x}", Sha256::digest(&unchanged.bytes))
         );
         targets.push((selected, first.fingerprint().to_owned()));
     }

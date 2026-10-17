@@ -24,7 +24,7 @@ class ActualCAnalysisTests(unittest.TestCase):
         abi = "x86_64-w64-mingw32" if platform.system() == "Windows" else "x86_64-linux-gnu"
         extra_files = extra_files or {}
         files = {**extra_files, source_name: source, "target.json": json.dumps({
-            "format": "autosar-build-target-v2", "target": target, "abi": abi, "profile": "host",
+            "format": "autosar-build-target-v3", "target": target, "abi": abi, "profile": "host",
             "compilerFlags": ["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"],
             "sources": [source_name, *(name for name in extra_files if name.endswith(".c") and name not in unbuilt)],
             "includePaths": ["."]})}

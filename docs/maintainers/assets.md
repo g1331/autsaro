@@ -29,3 +29,9 @@ uv run --locked python -B -m unittest discover -s tests/python -p test_developme
 ## 上游及工具链升级
 
 FreeRTOS 或固定 GCC/binutils 升级是独立改动：核对来源、许可、上游 commit/tag、两份 source manifest 与目标锁，审阅补丁兼容性并完整执行原生消费者。构建继续对 FreeRTOS 内核和端口实际字节与 source manifest 比较；source-manifest.json 的 `patches` map 单独固定 15 个受控采用补丁的仓库相对路径与摘要，update 不接纳补丁变化；不要用项目资产更新命令吸收上游变化。
+
+## 补丁后内核身份
+
+Cargo 构建需要 Git（默认 `git`，可用 `AUTOSAR_GIT` 指定），在 OUT_DIR 中按共享目标定义为两个目标复制已校验的内核、应用各自补丁并计算最终字节摘要。所有内核补丁入口用命令级 `core.autocrlf=false` 保留固定来源的换行字节，不受用户全局 Git 换行配置影响。生成器把完整文件 map 写入 `autosar-build-target-v3` 的 `kernelSha256`，不维护手抄的结果摘要。包内工具及 CMake 在编译前核对补丁后的副本，错误指出 `kernel/` 下的文件。旧构建清单须重新生成。
+
+这不改变 source manifest 的上游／补丁身份校验，也不需要 `assets update`；只有 seal guard 本身改变才更新独立清单。规则集与封存身份仍随实际来源重算。
