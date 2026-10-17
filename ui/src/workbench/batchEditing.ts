@@ -45,7 +45,13 @@ export function fieldRejection(
   return {
     field,
     message:
-      field.minimum !== null || field.maximum !== null
+      reason.some(
+        (item) =>
+          isMessage(item) &&
+          (item.key === 'backend.definitions.validation.integer_out_of_range' ||
+            item.key === 'backend.definitions.validation.float_out_of_range'),
+      ) &&
+      (field.minimum !== null || field.maximum !== null)
         ? composedMessage(
             'workflow.error.fieldRange',
             { reason: detail },
