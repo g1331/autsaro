@@ -480,7 +480,7 @@ class WebDriver {
  * Results (screenshots, IPC log) go to AUTOSAR_DESKTOP_RESULTS or the system
  * temporary directory.
  */
-export async function launch(name) {
+export async function launch(name, { delayOperations = false } = {}) {
   if (!platform)
     throw new Error(`tauri-driver supports Linux and Windows desktops, not ${process.platform}`);
   if (platform === 'windows') windowsGuard();
@@ -522,7 +522,7 @@ export async function launch(name) {
     if (
       EXECUTION_VARIABLES.includes(variable) ||
       DEVELOPMENT_VARIABLES.includes(variable) ||
-      /^(UV|CARGO|RUSTUP|NPM_CONFIG)_/i.test(variable)
+      /^(UV|CARGO|RUSTUP|NPM_CONFIG|AUTOSAR_VERIFY_DELAY)_/i.test(variable)
     )
       delete environment[variable];
   Object.assign(environment, {
@@ -540,15 +540,17 @@ export async function launch(name) {
     PATH: path.join(scratch, 'app-path'),
     NO_AT_BRIDGE: '1',
   });
-  // Accepted only by the native-webdriver feature: delay real backend work so
-  // pending operations and cancellation are observable.
-  for (const [action, delay] of [
-    ['SOURCE_READ', 500],
-    ['SNAPSHOT_BUILD', 250],
-    ['SCHEMA_CHECK', 100],
-    ['SOURCE_SCAN', 250],
-    ['DEFINITION_READ', 100],
-  ])
+  // Only cancellation scenarios need injected latency. Repeated opens and
+  // snapshot builds in the other files must not pay for this test control.
+  for (const [action, delay] of delayOperations
+    ? [
+        ['SOURCE_READ', 500],
+        ['SNAPSHOT_BUILD', 250],
+        ['SCHEMA_CHECK', 100],
+        ['SOURCE_SCAN', 250],
+        ['DEFINITION_READ', 100],
+      ]
+    : [])
     environment[`AUTOSAR_VERIFY_DELAY_${action}_MS`] = String(delay);
 
   const children = [];

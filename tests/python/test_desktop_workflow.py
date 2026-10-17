@@ -41,14 +41,20 @@ class DesktopWorkflowTests(unittest.TestCase):
                 ('fail', 'tests/desktop/*.test.mjs', 1),
                 ('fail', 'tests/desktop/pass.test.mjs', 0),
                 ('pass', 'tests/desktop/missing.test.mjs', 1),
+                ('windows-paths', 'tests/desktop/*.test.mjs', 0),
             ):
                 with self.subTest(assigned=assigned, selected=selected):
+                    windows = assigned == 'windows-paths'
+                    invocation = script.replace(
+                        "import { globSync } from 'node:fs';",
+                        r"const globSync = () => ['tests\\desktop\\pass.test.mjs'];",
+                    ) if windows else script
                     result = subprocess.run(
-                        ['node', '--input-type=module', '-e', script], cwd=directory,
-                        env={**os.environ, 'SHARD_FILES': assigned, 'SCENARIOS': selected, 'TEST_CONCURRENCY': '1'},
+                        ['node', '--input-type=module', '-e', invocation], cwd=directory,
+                        env={**os.environ, 'SHARD_FILES': 'pass' if windows else assigned, 'SCENARIOS': selected, 'TEST_CONCURRENCY': '1'},
                         capture_output=True, text=True, check=False,
                     )
                     self.assertEqual(result.returncode, status, result.stdout + result.stderr)
-                    if assigned == 'pass' and status == 0:
+                    if (assigned == 'pass' or windows) and status == 0:
                         self.assertIn('selected pass', result.stdout)
                         self.assertNotIn('selected fail', result.stdout)

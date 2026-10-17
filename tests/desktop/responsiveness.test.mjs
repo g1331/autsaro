@@ -17,7 +17,7 @@ const {
   menu,
   memorySample,
   importAuthoredInputs,
-} = await openWorkbench('responsiveness');
+} = await openWorkbench('responsiveness', { delayOperations: true });
 
 let authored;
 check('expanded-input-responsiveness-and-cancel', async () => {

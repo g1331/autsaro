@@ -79,6 +79,7 @@ jobs:
           retention-days: 1
 
   desktop:
+    name: Desktop (${{ matrix.os }}, shard ${{ matrix.shard.id }})
     needs: build
     strategy:
       fail-fast: false
@@ -150,7 +151,7 @@ jobs:
           node --input-type=module <<'JS'
           import { globSync } from 'node:fs';
           import { spawnSync } from 'node:child_process';
-          const requested = [...new Set(process.env.SCENARIOS.split(/\s+/).filter(Boolean).flatMap(pattern => [...globSync(pattern)]))];
+          const requested = [...new Set(process.env.SCENARIOS.split(/\s+/).filter(Boolean).flatMap(pattern => [...globSync(pattern)].map(file => file.replaceAll('\\', '/'))))];
           if (!requested.length) throw new Error('No desktop scenarios matched SCENARIOS');
           const assigned = process.env.SHARD_FILES.split(' ').map(name => `tests/desktop/${name}.test.mjs`);
           const files = requested.filter(file => assigned.includes(file));
