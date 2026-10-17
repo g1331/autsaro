@@ -555,6 +555,18 @@ def check(
         errors.extend(changed_format_errors(path, source, formatted, changed))
     if changed_c or scope == "runtime" or all_format:
         errors.extend(c_syntax_errors())
+    from autosar_tooling.c_standard import (
+        baseline_errors,
+        deviation_findings,
+        generated_findings,
+        runtime_findings,
+    )
+
+    coding = runtime_findings()
+    coding.update(deviation_findings())
+    if c_samples is not None:
+        coding |= generated_findings(c_samples)
+    errors.extend(baseline_errors(coding, generated=c_samples is not None))
     tidy = clang_tidy_errors(c_samples) if c_samples is not None else []
     errors.extend(tidy)
     numbers = plan_number_errors()
