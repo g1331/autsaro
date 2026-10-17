@@ -130,6 +130,33 @@ test('a rejected value is reported on its field with name and range, and retract
   expect(current.stateRef.current.rejection).toBeNull();
 });
 
+test('definition range rejections retain their bounds in both languages', () => {
+  for (const language of ['zh-CN', 'en']) {
+    previewLanguage(language);
+    for (const kind of ['integer', 'float']) {
+      const reason = message(`backend.definitions.validation.${kind}_out_of_range`);
+      const result = fieldRejection([fieldRejected[0], reason], [rangeField]);
+      expect(localize(result.message)).toBe(
+        translate('workflow.error.fieldRange', {
+          reason: localize(reason),
+          minimum: '1',
+          maximum: '65535',
+        }),
+      );
+    }
+  }
+});
+
+test('Counter period rejections show only the backend reason in both languages', () => {
+  const period = { ...rangeField, minimum: '0', maximum: null };
+  const reason = message('backend.integration.editor.application_period_invalid');
+  for (const language of ['zh-CN', 'en']) {
+    previewLanguage(language);
+    const result = fieldRejection([fieldRejected[0], reason], [period]);
+    expect(localize(result.message)).toBe(localize(reason));
+  }
+});
+
 test('a rejection of another field stays when an unrelated draft changes', async () => {
   const other = {
     ...valueChange('5'),
