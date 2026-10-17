@@ -982,11 +982,9 @@ impl Workspace {
                 .flat_map(|scope| &scope.diagnostics)
                 .filter_map(|issue| issue.witness.as_ref())
                 .collect();
-            for issue in scope
-                .diagnostics
-                .iter()
-                .filter(|issue| matches!(issue.severity, Severity::Error))
-            {
+            for issue in scope.diagnostics.iter().filter(|issue| {
+                matches!(issue.severity, Severity::Error) && issue.code != "MULTIPLICITY_LOWER"
+            }) {
                 if issue
                     .witness
                     .as_ref()
@@ -1065,6 +1063,84 @@ fn configuration_error(
             witness.counterexample.clone(),
         ])),
     )
+}
+
+// Build the complete new subtree before applying the single source patch.
+fn mandatory_entries(
+    catalog: &crate::definitions::DefinitionCatalog,
+    definition_id: &str,
+) -> Result<String, crate::message::LocalizedText> {
+    let mut parameters = String::new();
+    let mut containers = String::new();
+    let children = catalog.children(definition_id);
+    let reserved: BTreeSet<_> = children
+        .iter()
+        .filter(|child| child.kind.is_none() && child.lower_multiplicity > 0 && child.writable)
+        .filter_map(|child| child.definition_id.rsplit('/').next())
+        .collect();
+    let mut names = BTreeSet::new();
+    for child in children {
+        if !child.writable {
+            continue;
+        }
+        for ordinal in 0..child.lower_multiplicity {
+            if let Some(kind) = child.kind {
+                if kind == ValueKind::Reference {
+                    continue;
+                }
+                if let Some(value) = &child.default_value {
+                    catalog.validate_value(&child.definition_id, value)?;
+                    let tag = super::projection::field_element(kind);
+                    parameters.push_str(&format!(
+                        "<{tag}><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF><VALUE>{}</VALUE></{tag}>",
+                        child.element_kind, escape(&child.definition_id)?, escape(&value.lexeme)?
+                    ));
+                }
+            } else {
+                let name = child
+                    .definition_id
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(&child.definition_id);
+                let name = if ordinal == 0 {
+                    name.to_owned()
+                } else {
+                    let mut suffix = ordinal;
+                    loop {
+                        let candidate = format!("{name}_{suffix}");
+                        if !reserved.contains(candidate.as_str()) && !names.contains(&candidate) {
+                            break candidate;
+                        }
+                        suffix += 1;
+                    }
+                };
+                names.insert(name.clone());
+                containers.push_str(&format!(
+                    "<ECUC-CONTAINER-VALUE><SHORT-NAME>{}</SHORT-NAME><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF>{}</ECUC-CONTAINER-VALUE>",
+                    escape(&name)?, child.element_kind, escape(&child.definition_id)?,
+                    mandatory_entries(catalog, &child.definition_id)?
+                ));
+            }
+        }
+    }
+    let mut xml = String::new();
+    if !parameters.is_empty() {
+        xml.push_str(&format!(
+            "<PARAMETER-VALUES>{parameters}</PARAMETER-VALUES>"
+        ));
+    }
+    if !containers.is_empty() {
+        let group = if catalog
+            .get(definition_id)
+            .is_some_and(|d| d.element_kind == "ECUC-MODULE-DEF")
+        {
+            "CONTAINERS"
+        } else {
+            "SUB-CONTAINERS"
+        };
+        xml.push_str(&format!("<{group}>{containers}</{group}>"));
+    }
+    Ok(xml)
 }
 
 impl Candidate {
@@ -1155,10 +1231,11 @@ impl Candidate {
             )
         } else {
             format!(
-                "<{kind}><SHORT-NAME>{}</SHORT-NAME><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF>{category}</{kind}>",
+                "<{kind}><SHORT-NAME>{}</SHORT-NAME><DEFINITION-REF DEST=\"{}\">{}</DEFINITION-REF>{category}{}</{kind}>",
                 escape(short_name)?,
                 descriptor.element_kind,
-                escape(definition_id)?
+                escape(definition_id)?,
+                mandatory_entries(&self.workspace.catalog, definition_id)?
             )
         };
         let mut patches = Vec::new();
@@ -1405,6 +1482,23 @@ impl Candidate {
                 let kind = descriptor.kind.ok_or_else(|| {
                     crate::product_message!("backend.arxml.changes.new_field_kind_required")
                 })?;
+                // A field staged on this newly created object overrides a seeded
+                // default before adding another explicit occurrence.
+                if matches!(reference, ObjectRef::Created { .. })
+                    && descriptor.lower_multiplicity > 0
+                    && descriptor.default_value.is_some()
+                    && let Some(field) = self.workspace.snapshot.fields.iter().find(|field| {
+                        field.view.object_id == id
+                            && field.view.definition.definition_id == *definition_id
+                            && field.entry_range.is_some()
+                            && !self
+                                .fields
+                                .iter()
+                                .any(|claimed| claimed.field_id == field.view.field_id)
+                    })
+                {
+                    return Ok(field.clone());
+                }
                 let ordinal = self
                     .workspace
                     .snapshot
@@ -1465,6 +1559,9 @@ impl Candidate {
             escape(&value.lexeme)?;
         }
         if field.view.current == *value {
+            if field.entry_range.is_some() {
+                self.record_field(reference, &field)?;
+            }
             self.selection = Some(field.view.object_id.clone());
             return Ok(());
         }
@@ -1527,7 +1624,9 @@ impl Candidate {
         ));
         self.retire_new_placeholder(reference, &field);
         apply_local(&mut self.workspace, field.source, &mut patches)?;
-        self.record_field(reference, &field)?;
+        if !matches!(value, ValueState::Absent) {
+            self.record_field(reference, &field)?;
+        }
         self.selection = Some(owner.view.object_id);
         Ok(())
     }

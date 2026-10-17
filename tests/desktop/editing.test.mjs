@@ -118,11 +118,10 @@ check('structure-and-incoming-reference-closure', async () => {
     definitionId: `${parent.definitionId}/Pdu`,
     shortName: 'SpareAcceptancePdu',
   };
-  await refuse(
-    'prepare_configuration_change',
-    { changeSet: changeSet(current, [createChange]) },
-    'Incomplete required creation cannot publish',
-  );
+  const incomplete = await invoke('prepare_configuration_change', {
+    changeSet: changeSet(current, [createChange]),
+  });
+  assert(incomplete.changeRevision, 'Missing required values permit creation preview');
   const length = {
     op: 'set-value',
     changeId: 'new-length',

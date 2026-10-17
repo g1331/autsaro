@@ -234,3 +234,20 @@ test('settings page reports unreadable settings as an alert and retired archive 
   );
   expect(view.getByText(localize(message('controller.integration.validated')))).toBeTruthy();
 });
+
+test('mandatory-entry shortfalls name the object, definition and counts in both languages', () => {
+  const shortfall = message('backend.definitions.validation.missing_required_entries', {
+    object: '/Configuration/NewCanIf',
+    definition: 'CanIfCtrlDrvCfg',
+    minimum: 1,
+    actual: 0,
+  });
+  previewLanguage('zh-CN');
+  expect(localize(shortfall)).toBe(
+    '/Configuration/NewCanIf缺少必需的CanIfCtrlDrvCfg（至少 1 个，现有 0 个）',
+  );
+  previewLanguage('en');
+  expect(localize(shortfall)).toBe(
+    '/Configuration/NewCanIf is missing required CanIfCtrlDrvCfg entries (at least 1, currently 0)',
+  );
+});
