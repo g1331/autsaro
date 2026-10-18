@@ -226,6 +226,7 @@ def cppcheck(directory: Path, repository: Path) -> list[dict]:
 def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> list[dict]:
     from autosar_tooling.quality import clang_tidy_comparison, read_clang_tidy_baseline
 
+    samples, repository = samples.resolve(), repository.resolve()
     raw = json.loads(path.read_text(encoding="utf-8"))
     rows = []
     per_sample = {}
