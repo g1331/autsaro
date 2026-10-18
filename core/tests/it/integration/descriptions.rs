@@ -161,6 +161,92 @@ fn module_descriptions_include_delivered_public_entries_and_manuals() {
             .any(|node| node.has_tag_name("BSW-MODULE-ENTRY-REF")
                 && node.text() == Some("/Autsaro_Rte/BswModuleEntrys/Ecu_DetRuntimeCallout"))
     );
+    // Verifies: constr_4016, constr_4017, TPS_BSWMDT_04002, TPS_BSWMDT_04130.
+    // Callout prototypes remain interfaces; only ordinary/callback or scheduled
+    // entries can acquire the corresponding executable entity type.
+    for entity in xml.descendants().filter(|node| {
+        matches!(
+            node.tag_name().name(),
+            "BSW-CALLED-ENTITY" | "BSW-SCHEDULABLE-ENTITY"
+        )
+    }) {
+        let name = entity
+            .children()
+            .find(|node| node.has_tag_name("IMPLEMENTED-ENTRY-REF"))
+            .unwrap()
+            .text()
+            .unwrap()
+            .rsplit('/')
+            .next()
+            .unwrap();
+        let entry = xml
+            .descendants()
+            .find(|node| {
+                node.has_tag_name("BSW-MODULE-ENTRY")
+                    && node
+                        .children()
+                        .any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some(name))
+            })
+            .unwrap();
+        let call_type = entry
+            .children()
+            .find(|node| node.has_tag_name("CALL-TYPE"))
+            .unwrap()
+            .text()
+            .unwrap();
+        if entity.has_tag_name("BSW-CALLED-ENTITY") {
+            assert!(
+                matches!(call_type, "REGULAR" | "CALLBACK"),
+                "{name}: {call_type}"
+            );
+        } else {
+            assert_eq!(call_type, "SCHEDULED", "{name}");
+        }
+    }
+    let owner = |name| {
+        xml.descendants()
+            .find(|node| {
+                node.has_tag_name("BSW-MODULE-DESCRIPTION")
+                    && node
+                        .children()
+                        .any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some(name))
+            })
+            .unwrap()
+    };
+    for name in [
+        "ErrorHook",
+        "PreTaskHook",
+        "PostTaskHook",
+        "StartupHook",
+        "ShutdownHook",
+    ] {
+        let reference = format!("/Autsaro_Rte/BswModuleEntrys/{name}");
+        for (module, role) in [("Os", "EXPECTED-ENTRYS"), ("Rte", "IMPLEMENTED-ENTRYS")] {
+            assert!(
+                owner(module)
+                    .children()
+                    .find(|node| node.has_tag_name(role))
+                    .unwrap()
+                    .descendants()
+                    .any(|node| node.has_tag_name("BSW-MODULE-ENTRY-REF")
+                        && node.text() == Some(reference.as_str())),
+                "{module}/{role}/{name}"
+            );
+        }
+        assert!(
+            !owner("Os")
+                .children()
+                .find(|node| node.has_tag_name("IMPLEMENTED-ENTRYS"))
+                .unwrap()
+                .descendants()
+                .any(|node| node
+                    .text()
+                    .is_some_and(|value| value.ends_with(&format!("/{name}"))))
+        );
+    }
+    let rte_manual = text("generated/descriptions/modules/Rte/README.md");
+    assert!(rte_manual.contains("integration/src/Ecu_OsHooks.c"));
+    assert!(rte_manual.contains("integration/src/Ecu_Target.c"));
     let bus = xml
         .descendants()
         .find(|node| {
@@ -226,6 +312,16 @@ fn module_descriptions_include_delivered_public_entries_and_manuals() {
         .join("\n");
     assert!(manuals.contains("CanControllerBaudRate"));
     assert!(manuals.contains("CanControllerBaseAddress"));
+    assert!(manuals.contains("definition range: false, true (0, 1)"));
+    assert!(manuals.contains("Reference destinations:"));
+    assert!(manuals.contains("target definitions:"));
+    let mode_period = manuals
+        .split("### ")
+        .find(|section| section.contains("/ `CanMainFunctionModePeriod`\n"))
+        .unwrap();
+    assert!(mode_period.contains("must equal the OS counter tick"));
+    assert!(mode_period.contains("CAN_POLLING_TIMEBASE"));
+    assert!(!mode_period.contains("Descriptor only"));
     assert!(manuals.contains("Unit:"));
     assert!(manuals.contains("definition range:"));
     assert!(manuals.contains("No declared default"));

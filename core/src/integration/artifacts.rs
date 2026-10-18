@@ -3,6 +3,13 @@ use super::component::c_name;
 use super::{ContractArgument, PlanDescription, PlanDiagnostic};
 use std::collections::{BTreeMap, BTreeSet};
 
+fn os_hook(name: &str) -> bool {
+    matches!(
+        name,
+        "StartupHook" | "ShutdownHook" | "ErrorHook" | "PreTaskHook" | "PostTaskHook"
+    )
+}
+
 /// The one exclusive area a module declares and enters (ADR 0018). A module is added
 /// here when its code stops using another module's area.
 pub(super) fn exclusive_area(module: &str) -> Option<&'static str> {
@@ -787,7 +794,7 @@ pub(super) fn files(
             }
             let module = if path == "integration/include/Ecu_HostBusSM.h" {
                 "Ecu_HostBusSM"
-            } else if path == "generated/include/Det_Externals.h" {
+            } else if path == "generated/include/Det_Externals.h" || os_hook(&declaration.name) {
                 "Rte"
             } else if matches!(path, "os/include/Os.h" | "os/include/Os_Hooks.h") {
                 "Os"
@@ -803,7 +810,17 @@ pub(super) fn files(
                 return_type: declaration.result.clone(),
                 arguments: declaration.arguments.clone(),
                 declaration_owner: path.into(),
-                definition_owner: format!("bsw/src/{module}.c"),
+                definition_owner: if os_hook(&name) {
+                    if name == "ShutdownHook" {
+                        "integration/src/Ecu_Target.c".into()
+                    } else {
+                        "integration/src/Ecu_OsHooks.c".into()
+                    }
+                } else if name == "Ecu_DetRuntimeCallout" {
+                    "integration/src/Det_Callouts.c".into()
+                } else {
+                    format!("bsw/src/{module}.c")
+                },
                 consumers: Vec::new(),
             };
             if let Some(existing) = contract.iter_mut().find(|entry| entry.symbol == name) {
@@ -1011,6 +1028,9 @@ pub(super) fn files(
                                 | "SchM_Diagnostic_Host.c"
                                 | "SchM_Host.c"
                                 | "Ecu_RuntimeConfig.c"
+                                | "Ecu_OsHooks.c"
+                                | "Ecu_Target.c"
+                                | "Os_Hooks.h"
                                 | "Det_Callouts.c"
                                 | "Det_Externals.h"
                                 | "Rte_MemMap.h"
@@ -1112,10 +1132,7 @@ pub(super) fn files(
                         | "Ecu_HostBusSM_ControllerModeIndication"
                         | "Ecu_HostBusSM_ControllerBusOff"
                 );
-            let hook = matches!(
-                name.as_str(),
-                "StartupHook" | "ShutdownHook" | "ErrorHook" | "PreTaskHook" | "PostTaskHook"
-            );
+            let hook = os_hook(name);
             let callout = hook
                 || matches!(
                     name.as_str(),
@@ -1185,7 +1202,11 @@ pub(super) fn files(
             } else {
                 ""
             };
-            entities.push_str(&format!(r#"<{entity_type}><SHORT-NAME>{name}Entity</SHORT-NAME>{can_enter}<IMPLEMENTED-ENTRY-REF DEST="BSW-MODULE-ENTRY">{entry_path}</IMPLEMENTED-ENTRY-REF>{managed}{scheduler_prefix}</{entity_type}>"#));
+            // constr_4016 only permits REGULAR/CALLBACK for BswCalledEntity;
+            // callout prototypes are provided/expected entries, not scheduler entities.
+            if !callout {
+                entities.push_str(&format!(r#"<{entity_type}><SHORT-NAME>{name}Entity</SHORT-NAME>{can_enter}<IMPLEMENTED-ENTRY-REF DEST="BSW-MODULE-ENTRY">{entry_path}</IMPLEMENTED-ENTRY-REF>{managed}{scheduler_prefix}</{entity_type}>"#));
+            }
             if let Some(scheduled) = scheduled {
                 let seconds = format!(
                     "{}.{:03}",
@@ -1199,6 +1220,13 @@ pub(super) fn files(
         let mut dependencies = String::new();
         let mut imported_entries: Vec<(&str, &str)> = match module {
             "Det" => vec![("Rte", "Ecu_DetRuntimeCallout")],
+            "Os" => vec![
+                ("Rte", "ErrorHook"),
+                ("Rte", "PreTaskHook"),
+                ("Rte", "PostTaskHook"),
+                ("Rte", "StartupHook"),
+                ("Rte", "ShutdownHook"),
+            ],
             "Rte" => vec![
                 ("Com", "Com_ReceiveSignal"),
                 ("Com", "Com_SendSignal"),
@@ -1314,11 +1342,12 @@ pub(super) fn files(
             } else {
                 owners.insert(owner);
             }
-            let entry_package = if owner == "Rte" && name == "Ecu_DetRuntimeCallout" {
-                "Autsaro_Rte".to_owned()
-            } else {
-                format!("AUTOSAR_{owner}")
-            };
+            let entry_package =
+                if owner == "Rte" && (name == "Ecu_DetRuntimeCallout" || os_hook(name)) {
+                    "Autsaro_Rte".to_owned()
+                } else {
+                    format!("AUTOSAR_{owner}")
+                };
             let entry_ref = format!("/{entry_package}/BswModuleEntrys/{name}");
             expected.push_str(&format!("<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST=\"BSW-MODULE-ENTRY\">{entry_ref}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>"));
         }

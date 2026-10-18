@@ -1,5 +1,6 @@
 //! Integrator manuals consume the same selected contracts and definition metadata as generation.
 use super::{PlanDescription, PlanDiagnostic, catalog::SymbolContract};
+use crate::project_model::ValueKind;
 use std::collections::BTreeMap;
 
 fn cell(value: &str) -> String {
@@ -115,7 +116,7 @@ pub(super) fn module(
     if module == "Ecu_HostBusSM" {
         text.push_str("\nThe host BusSM uses its private CAN_HOST_AREA_BUSSM host lock through Ecu_HostBusSM_Enter/Exit; it exports no SchM interlink header. The BSWMD records this actual adapter area without claiming a CanSM implementation.\n");
     }
-    text.push_str(&format!("\n## Resources and integration\n\nExclusive area: `{area}`. Module areas serialize their own state, never nest or span cross-module callbacks. BSWMD canEnter relations describe actual entering entities; generated SchM headers are checked before delivery. OS resources/interrupt suspension are separate OS services. No physical MCU vendor/family/derivative/stepping is selected.\n\nThe target, compiler identity/version/options, source list and host libraries are recorded in [target.json](../../../../target.json); use the [normal offline build](../../../../README.md#independent-native-build). The delivered controlled x64 target uses C99 and its selected FreeRTOS port. RAM/ROM/stack footprint and hardware timing have not been qualified. Static buffers and module state are owned by the delivered implementation; API comments below specify borrowing and retained configuration.\n\nInitialize through the generated SchM lifecycle before normal calls; start periodic work only after configuration and application initialization. `Rte_Start`/`SchM_Start`/`SchM_StartTiming` authorize the owner-task release; stop through the matching lifecycle. [Ecu_RuntimeConfig.c](../../../src/Ecu_RuntimeConfig.c) is the executable initialization/API-use example with the actual configuration objects; [SchM_Main.c](../../../src/SchM_Main.c) implements the lifecycle. Callback APIs are invoked by their lower/upper layer, never substituted for initialization.\n\nWhen several scheduled entities are due on one task, execute their configured positions in order; different tasks have no invented global sequence. The complete selected schedule follows, including application dependencies:\n\n| Function | Task | Position | Period (ms) | Trigger |\n| --- | --- | --- | --- | --- |\n"));
+    text.push_str(&format!("\n## Resources and integration\n\nExclusive area: `{area}`. Module areas serialize their own state, never nest or span cross-module callbacks. BSWMD canEnter relations describe actual entering entities; callout prototypes have no BswCalledEntity (constr_4016) and their locking contract remains in the public API comments; generated SchM headers are checked before delivery. OS resources/interrupt suspension are separate OS services. No physical MCU vendor/family/derivative/stepping is selected.\n\nThe target, compiler identity/version/options, source list and host libraries are recorded in [target.json](../../../../target.json); use the [normal offline build](../../../../README.md#independent-native-build). The delivered controlled x64 target uses C99 and its selected FreeRTOS port. RAM/ROM/stack footprint and hardware timing have not been qualified. Static buffers and module state are owned by the delivered implementation; API comments below specify borrowing and retained configuration.\n\nInitialize through the generated SchM lifecycle before normal calls; start periodic work only after configuration and application initialization. `Rte_Start`/`SchM_Start`/`SchM_StartTiming` authorize the owner-task release; stop through the matching lifecycle. [Ecu_RuntimeConfig.c](../../../src/Ecu_RuntimeConfig.c) is the executable initialization/API-use example with the actual configuration objects; [SchM_Main.c](../../../src/SchM_Main.c) implements the lifecycle. Callback APIs are invoked by their lower/upper layer, never substituted for initialization.\n\nWhen several scheduled entities are due on one task, execute their configured positions in order; different tasks have no invented global sequence. The complete selected schedule follows, including application dependencies:\n\n| Function | Task | Position | Period (ms) | Trigger |\n| --- | --- | --- | --- | --- |\n"));
     for entity in &plan.schedule.entities {
         text.push_str(&format!(
             "| `{}` | `{}` | {} | {} | `{}` |\n",
@@ -145,14 +146,21 @@ pub(super) fn module(
             let description = descriptor.and_then(|entry| entry.description.as_ref()).map(ToString::to_string).unwrap_or_else(|| "Configured reference or integration value; resolve against the declared target type.".into());
             let range = descriptor
                 .map(|entry| {
-                    if !entry.enumeration.is_empty() {
+                    if entry.kind == Some(ValueKind::Boolean) {
+                        "false, true (0, 1)".into()
+                    } else if entry.kind == Some(ValueKind::Reference) || record.references.contains_key(&id) {
+                        format!("Reference destinations: {}; target definitions: {}. Target must resolve and satisfy the connected module constraints",
+                            entry.reference_destinations.join(", "), catalog.reference_target_definitions(&id).join(", "))
+                    } else if !entry.enumeration.is_empty() {
                         entry.enumeration.join(", ")
-                    } else {
+                    } else if matches!(entry.kind, Some(ValueKind::Integer | ValueKind::Float)) {
                         format!(
                             "{} .. {}",
                             entry.minimum.as_deref().unwrap_or("unbounded"),
                             entry.maximum.as_deref().unwrap_or("unbounded")
                         )
+                    } else {
+                        format!("{:?}; must satisfy the definition type and connected module constraints", entry.kind)
                     }
                 })
                 .unwrap_or_else(|| "Validated connected target".into());
@@ -163,11 +171,23 @@ pub(super) fn module(
             let unit = descriptor
                 .and_then(|entry| entry.unit.as_deref())
                 .unwrap_or("—");
-            let profile = if super::native_configuration::DISABLED_FEATURES
+            let profile = if matches!(
+                name,
+                "CanMainFunctionPeriod"
+                    | "CanMainFunctionModePeriod"
+                    | "CanMainFunctionBusoffPeriod"
+            ) {
+                "Convert seconds to whole milliseconds; must equal the OS counter tick and each corresponding Can_MainFunction Read/Write, Mode or BusOff mapped entity period (CAN_POLLING_TIMEBASE)"
+            } else if super::native_configuration::DISABLED_FEATURES
                 .split_ascii_whitespace()
                 .any(|field| field == name)
             {
                 "Must be false/0; enabling is rejected"
+            } else if super::configuration::RUNTIME_PARAMETERS
+                .split_ascii_whitespace()
+                .any(|field| field == name)
+            {
+                "Consumed by the selected runtime/configuration validator; must satisfy the connected module/profile constraints"
             } else if super::native_configuration::DESCRIPTOR_PARAMETERS
                 .split_ascii_whitespace()
                 .any(|field| field == name)
