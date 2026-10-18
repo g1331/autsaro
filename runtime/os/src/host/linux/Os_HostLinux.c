@@ -106,6 +106,16 @@ static void capture_context(HANDLE thread, const ucontext_t *source)
     thread->captured.ContextFlags = CONTEXT_CONTROL;
 }
 
+static void terminal_park(HANDLE thread)
+{
+    __atomic_store_n(&thread->acknowledged, INT32_MAX, __ATOMIC_RELEASE);
+    futex_wake(&thread->acknowledged);
+    for (;;) {
+        const int32_t current = __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE);
+        (void)futex_wait(&thread->resumed, current);
+    }
+}
+
 static void park_signal(int signal_number, siginfo_t *info, void *native_context)
 {
     /* The futex calls set errno; the interrupted code must see its own value. */
@@ -119,7 +129,14 @@ static void park_signal(int signal_number, siginfo_t *info, void *native_context
             capture_context(thread, (const ucontext_t *)native_context);
             __atomic_store_n(&thread->acknowledged, generation, __ATOMIC_RELEASE);
             futex_wake(&thread->acknowledged);
-            while (__atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE) < generation) {
+            for (;;) {
+                /* Stop an already parked actor without nesting another signal handler. */
+                if (__atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE) == INT32_MAX) {
+                    terminal_park(thread);
+                }
+                if (__atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE) >= generation) {
+                    break;
+                }
                 (void)futex_wait(&thread->resumed, generation - 1);
             }
         }
@@ -136,12 +153,7 @@ static void fault_stop_signal(int signal_number, siginfo_t *info, void *native_c
         _exit(1);
     }
     capture_context(thread, (const ucontext_t *)native_context);
-    __atomic_store_n(&thread->acknowledged, INT32_MAX, __ATOMIC_RELEASE);
-    futex_wake(&thread->acknowledged);
-    for (;;) {
-        const int32_t current = __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE);
-        (void)futex_wait(&thread->resumed, current);
-    }
+    terminal_park(thread);
 }
 
 int Os_HostInstallSignals(void)
@@ -150,6 +162,7 @@ int Os_HostInstallSignals(void)
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&handler.sa_mask);
     sigaddset(&handler.sa_mask, SIGRTMIN);
+    sigaddset(&handler.sa_mask, SIGRTMIN + 1);
     handler.sa_sigaction = park_signal;
     if (sigaction(SIGRTMIN, &handler, NULL) != 0) {
         return 0;
@@ -534,7 +547,8 @@ DWORD ResumeThread(HANDLE thread)
         return UINT32_MAX;
     }
     generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
-    if (generation == 0 || __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) < generation) {
+    if (generation == 0 || generation == INT32_MAX ||
+        __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) < generation) {
         return UINT32_MAX;
     }
     __atomic_store_n(&thread->resumed, generation, __ATOMIC_RELEASE);
@@ -684,8 +698,12 @@ int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard)
 int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
 {
     const uint64_t end = monotonic_ms() + timeout_ms;
-    if (thread == NULL || thread->kind != OS_HOST_THREAD ||
-        pthread_kill(thread->thread, SIGRTMIN + 1) != 0) {
+    if (thread == NULL || thread->kind != OS_HOST_THREAD) {
+        return 0;
+    }
+    __atomic_store_n(&thread->requested, INT32_MAX, __ATOMIC_RELEASE);
+    futex_wake(&thread->resumed);
+    if (pthread_kill(thread->thread, SIGRTMIN + 1) != 0) {
         return 0;
     }
     while (__atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) != INT32_MAX) {

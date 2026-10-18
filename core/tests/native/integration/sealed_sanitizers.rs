@@ -8,7 +8,10 @@ use std::time::Duration;
 
 fn enabled() -> bool {
     cfg!(target_os = "linux")
-        && std::env::var("AUTOSAR_SANITIZE").as_deref() == Ok("address,undefined")
+        && matches!(
+            std::env::var("AUTOSAR_SANITIZE").as_deref(),
+            Ok("thread" | "address,undefined")
+        )
 }
 
 fn require_success(output: &Output) {
@@ -140,7 +143,7 @@ fn sealed_probe_and_test_modes_preserve_closure_and_runtime_protocol() {
 
 #[test]
 fn sealed_control_reports_runtime_faults_and_accepts_clean_boundaries() {
-    if !enabled() {
+    if !enabled() || std::env::var("AUTOSAR_SANITIZE").as_deref() != Ok("address,undefined") {
         return;
     }
     let scratch = Scratch::new();
@@ -246,12 +249,7 @@ fn sealed_guard_refuses_untrusted_standard_library_shadow_before_import() {
 
 #[test]
 fn sealed_os_registration_and_interrupt_identity_use_real_thread_owners() {
-    if !cfg!(target_os = "linux")
-        || !matches!(
-            std::env::var("AUTOSAR_SANITIZE").as_deref(),
-            Ok("thread" | "address,undefined")
-        )
-    {
+    if !enabled() {
         return;
     }
     let scratch = Scratch::new();
@@ -272,4 +270,34 @@ fn sealed_os_registration_and_interrupt_identity_use_real_thread_owners() {
         "registration=published host_isr=inactive dispatcher_isr=restored"
     );
     assert!(run.stderr.is_empty(), "{run:?}");
+}
+
+#[test]
+fn sealed_actor_signal_lifecycle_preserves_context_and_terminal_stop() {
+    if !enabled() {
+        return;
+    }
+    let scratch = Scratch::new();
+    let (project, _) = single_component_project(&scratch.0, tooling::native_target());
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/os_signal_lifecycle.c");
+    let output = scratch.0.join("signal-lifecycle");
+    instrument(&project, &output, "probe", Some(&fixture));
+    for (name, directory) in [
+        ("production", output.join("production")),
+        ("sanitized", output),
+    ] {
+        let run = tooling::run_public_command(
+            &mut Command::new(tooling::native_binary(&directory, "ecu_probe")),
+            &scratch.0,
+            &format!("signal-lifecycle-{name}"),
+            Duration::from_secs(30),
+        );
+        require_success(&run);
+        assert_eq!(
+            String::from_utf8_lossy(&run.stdout).trim(),
+            "suspend=acknowledged resume=progress context=preserved terminal=irreversible running=stopped"
+        );
+        assert!(run.stderr.is_empty(), "{run:?}");
+    }
 }
