@@ -14,8 +14,8 @@ def main() -> None:
     mode = sys.argv[3]
     control = Path(sys.argv[4]).resolve() if len(sys.argv) == 5 else None
     kinds = os.environ["AUTOSAR_SANITIZE"]
-    if sys.platform != "linux" or kinds != "address,undefined":
-        raise ValueError("Sealed ECU sanitizer tests require Linux address,undefined")
+    if sys.platform != "linux" or kinds not in ("thread", "address,undefined"):
+        raise ValueError("Sealed ECU sanitizer tests require Linux thread or address,undefined")
     # Let the seal guard establish import paths after its standard-library imports.
     sys.dont_write_bytecode = True
     guard = runpy.run_path(str(project / "tools/ecu-tool.py"))

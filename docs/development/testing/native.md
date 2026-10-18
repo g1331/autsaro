@@ -33,7 +33,7 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - `sanitizers::` 的故意越界写（`memcpy` 超出固定静态缓冲）、数据竞争和超宽移位证明检测器确实报错；未设置 `AUTOSAR_SANITIZE` 时该测试不做任何事。
 - 封存 ECU 的检测器路径只用于 Linux ASan／UBSan：测试辅助先完整执行包内生产 build（含 seal、固定工具、选择补丁、内核摘要与严格段布局检查），记录实际编译 argv，再用同一源码、include 顺序、补丁后内核、test 模式宏与链接参数额外加入检测器选项，编译到独立程序。测试辅助不得在加载原 guard 前加入包内 Python 搜索路径，以免未封存的同名标准库模块提前执行。生产 `ecu-tool`、`target.json` 和 object 检查不变；检测器程序不作为交付程序。共享 HostBatch 按检测器选项区分 image，消费者仍拿独立副本。每个新输入多编译一次，后续相同 HostBatch 复用；不缓存跨运行的通过结果。
 - `integration::protocol::` 与 `integration::sealed_projects::` 在该路径运行现有协议向量和封存工程 owner 用例；`integration::sealed_sanitizers::` 验证 probe 实际完成 20 ticks、test 模式故障退出、完整编译 argv 只差检测器选项／输出路径、封存输入不变及共享副本隔离。外部 probe control 复用既有故意越界／超宽移位夹具，要求实际运行报告与非零退出，并让合法边界输入成功。
-- 完整 FreeRTOS ECU 路径未纳入 TSan：本次同闭包实测能够产生 HostBatch receipt，但退出 7，报告栈注册／观察及中断状态／shutdown 的两项 data race，原始诊断及裁决／整改出口见 [#300](https://github.com/g1331/autsaro/issues/300)。这与上面的 OS suites 信号超时是不同证据，不将其写成 TSan 通过或已批准偏离；现有直接线程测试继续运行；`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
+- 完整 FreeRTOS ECU 路径未纳入 TSan：[#300](https://github.com/g1331/autsaro/issues/300) 修复栈注册的逐槽发布与非 ISR actor 的中断身份查询，聚焦用例 `integration::sealed_sanitizers::sealed_os_registration_and_interrupt_identity_use_real_thread_owners` 在完整封存编译闭包中以真实线程验证这两个边界，但不启动异步暂停协议。完整 HostBatch 仍在终止已暂停 actor 时退出 7：同源码的最小暂停／终止反例在普通构建成功、TSan 下无法完成终止信号握手，GDB 显示 actor 停在 TSan 包装的 SIGRTMIN 处理器内。剩余信号／上下文模型限制与完整 ECU lane 的退出条件见 [#316](https://github.com/g1331/autsaro/issues/316)，不能把没有 race 报告写成完整 ECU 通过。现有直接线程测试继续运行；`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
 
 必需 CI 的 `native-sanitizers` 任务在 Linux 上按 `thread` 与 `address,undefined` 各用一个 runner 运行上述命令；与 `native`、`native-os` 并行。
 
