@@ -279,24 +279,36 @@ test('the shared tree menu resolves nested targets, refuses groups and restores 
   });
 });
 
-test('a shared tree menu closes when its object leaves the current projection', async () => {
-  const c = controllerFor({ actionReason: () => null });
-  const view = render(createElement(ProjectTree, { controller: c }));
-  fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Can' }));
-  await view.findByRole('menu');
-  view.rerender(
-    createElement(ProjectTree, {
-      controller: {
-        ...c,
-        projection: {
-          ...c.projection,
-          objects: c.projection.objects.filter((item) => item.objectId !== 'can'),
-        },
-      },
-    }),
-  );
-  await waitFor(() => expect(view.queryByRole('menu')).toBeNull());
-});
+test.each(['removed', 'readonly', 'files'])(
+  'a shared tree menu stays closed after an invalid %s target returns',
+  async (change) => {
+    const c = controllerFor({ actionReason: () => null });
+    const view = render(createElement(ProjectTree, { controller: c }));
+    fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Can' }));
+    await view.findByRole('menu');
+    const invalid =
+      change === 'files'
+        ? { ...c, treeMode: 'files' }
+        : {
+            ...c,
+            projection: {
+              ...c.projection,
+              objects:
+                change === 'removed'
+                  ? c.projection.objects.filter((item) => item.objectId !== 'can')
+                  : c.projection.objects.map((item) =>
+                      item.objectId === 'can' ? { ...item, writable: false } : item,
+                    ),
+            },
+          };
+    view.rerender(createElement(ProjectTree, { controller: invalid }));
+    await waitFor(() => expect(view.queryByRole('menu')).toBeNull());
+    view.rerender(createElement(ProjectTree, { controller: c }));
+    expect(view.queryByRole('menu')).toBeNull();
+    fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Can' }));
+    expect(await view.findByRole('menu')).toBeTruthy();
+  },
+);
 
 test('touch long press resolves the row and rejects readonly objects', () => {
   vi.useFakeTimers();

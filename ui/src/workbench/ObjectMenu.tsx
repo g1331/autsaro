@@ -144,6 +144,11 @@ export function ObjectTreeContextMenu({
   const [objectId, setObjectId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const current = objectId ? objects?.get(objectId) : null;
+  const available = Boolean(current && (current.writable || isAtomicComponent(current)));
+  if (objectId !== null && !available) {
+    setObjectId(null);
+    setOpen(false);
+  }
   function selectTarget(event: SyntheticEvent<HTMLElement>) {
     const row =
       event.target instanceof Element
@@ -153,15 +158,13 @@ export function ObjectTreeContextMenu({
     if (!candidate || (!candidate.writable && !isAtomicComponent(candidate))) {
       event.preventDefault();
       setObjectId(null);
+      setOpen(false);
       return;
     }
     setObjectId(candidate.objectId);
   }
   return (
-    <ContextMenu.Root
-      open={open && Boolean(current && (current.writable || isAtomicComponent(current)))}
-      onOpenChange={setOpen}
-    >
+    <ContextMenu.Root open={open && available} onOpenChange={setOpen}>
       <ContextMenu.Trigger
         asChild
         onContextMenuCapture={selectTarget}
