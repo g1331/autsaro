@@ -184,6 +184,8 @@ def sarif(rows: list[dict], tool: str) -> dict:
 def cppcheck(
     directory: Path, repository: Path, baseline: Path | None = None
 ) -> list[dict]:
+    repository = repository.absolute().resolve()
+    directory = (repository / directory).resolve()
     rows = []
     details = []
     for path in sorted(directory.glob("*/summary.json")):
@@ -263,7 +265,8 @@ def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> lis
         read_clang_tidy_baseline,
     )
 
-    samples, repository = samples.resolve(), repository.resolve()
+    repository = repository.absolute().resolve()
+    samples = (repository / samples).resolve()
     raw = json.loads(path.read_text(encoding="utf-8"))
     rows = []
     per_sample = {}
@@ -282,7 +285,7 @@ def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> lis
             )
         original = name in mappings[sample] or name.startswith("runtime/")
         delivered = mappings[sample].get(name, name)
-        source = repository / name if original else samples / sample / name
+        source = (repository / name if original else samples / sample / name).resolve()
         line = int(item["line"])
         text = source.read_text(encoding="utf-8").splitlines()[line - 1].strip()
         key = (item["rule"], name, text)

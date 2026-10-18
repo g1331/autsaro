@@ -384,6 +384,49 @@ Stale citations (not an official item of R24-11):
                 rows = report.clang_tidy(artifact, Path("samples"), root, "success")
             self.assertEqual(rows[0]["file"], "samples/probe/probe.c")
             self.assertEqual(rows[0]["line"], 1)
+            # The helper's explicit repository is also the base when process cwd differs.
+            with mock.patch(
+                "autosar_tooling.quality.read_clang_tidy_baseline",
+                return_value=Counter(),
+            ):
+                rows = report.clang_tidy(artifact, Path("samples"), root, "success")
+            self.assertEqual(rows[0]["file"], "samples/probe/probe.c")
+
+    def test_relative_samples_under_a_real_symlinked_repository_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            physical = Path(directory) / "physical"
+            source = physical / "samples/probe/probe.c"
+            source.parent.mkdir(parents=True)
+            source.write_text("bad();\n")
+            alias = Path(directory) / "alias"
+            try:
+                alias.symlink_to(physical, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"Directory symlinks unavailable: {error}")
+            artifact = physical / "tidy.json"
+            artifact.write_text(
+                json.dumps(
+                    [
+                        {
+                            "rule": "test-rule",
+                            "file": "probe.c",
+                            "line": 1,
+                            "message": "bad",
+                            "sample": "probe",
+                        }
+                    ]
+                )
+            )
+            with (
+                mock.patch("os.getcwd", return_value=str(alias)),
+                mock.patch(
+                    "autosar_tooling.quality.read_clang_tidy_baseline",
+                    return_value=Counter(),
+                ),
+            ):
+                rows = report.clang_tidy(artifact, Path("samples"), alias, "success")
+            self.assertEqual(rows[0]["file"], "samples/probe/probe.c")
+            self.assertEqual(rows[0]["line"], 1)
 
     def test_summary_escapes_external_markdown_and_html(self):
         with tempfile.TemporaryDirectory() as directory:
