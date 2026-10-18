@@ -72,6 +72,64 @@ class DocumentationTests(unittest.TestCase):
             {"a", "a-1", "a-1-1", "标题", "manual"},
         )
 
+    def test_list_continuation_is_prose_but_relative_code_indentation_is_not(self):
+        root, paths = self.fixture(
+            {
+                "README.md": "1.  Parent\n\n    [child](missing.md)\n\n        [code](ignored.md)\n\n    - Nested\n\n      [nested](also-missing.md)\n\n          [code](ignored.md)\n"
+            }
+        )
+        errors = docs.link_errors(root, paths)
+        self.assertEqual(len(errors), 2, errors)
+        self.assertIn("README.md:3: missing link target: missing.md", errors)
+        self.assertIn("README.md:9: missing link target: also-missing.md", errors)
+        root.joinpath("README.md").write_text(
+            "    [code](ignored.md)\n", encoding="utf-8"
+        )
+        self.assertEqual(docs.link_errors(root, paths), [])
+
+    def test_list_fenced_example_is_code(self):
+        root, paths = self.fixture(
+            {
+                "README.md": "- ```md\n  [code](ignored.md)\n  ```\n\n  [prose](missing.md)\n"
+            }
+        )
+        self.assertEqual(
+            docs.link_errors(root, paths),
+            ["README.md:5: missing link target: missing.md"],
+        )
+
+    def test_heading_inline_formatting_preserves_text_and_rejects_wrong_slug(self):
+        root, paths = self.fixture(
+            {
+                "README.md": "# _Hello_\n# `<thing>`\n# `snake_case`\n# snake_case\n```md\n# Hidden\n```\n[jump](#hello) [jump](#thing) [jump](#snake_case) [jump](#snake_case-1)\n"
+            }
+        )
+        self.assertEqual(docs.link_errors(root, paths), [])
+        with root.joinpath("README.md").open("a") as output:
+            output.write("[bad](#_hello_) [bad](#hidden)\n")
+        errors = docs.link_errors(root, paths)
+        self.assertEqual(len(errors), 2, errors)
+        self.assertIn("missing link anchor: #_hello_", errors[0])
+        self.assertIn("missing link anchor: #hidden", errors[1])
+
+    def test_markdown_destination_escapes_are_decoded_but_html_is_literal(self):
+        root, paths = self.fixture(
+            {
+                "README.md": r"[jump](file\(v1\).md)"
+                + "\n"
+                + r"[jump][ref]"
+                + "\n"
+                + r"[ref]: file\(v1\).md"
+                + "\n",
+                "file(v1).md": "# File",
+            }
+        )
+        self.assertEqual(docs.link_errors(root, paths), [])
+        self.assertEqual(
+            list(docs.links(r'<a href="file\(v1\).md">literal</a>')),
+            [(1, r"file\(v1\).md")],
+        )
+
     def test_bilingual_only_existing_root_pairs_and_all_change_kinds(self):
         english, chinese = Path("README.md"), Path("README.zh-CN.md")
         known = {english, chinese, Path("CHANGELOG.md"), Path("docs/a.md")}

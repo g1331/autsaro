@@ -11,25 +11,45 @@ from urllib.parse import unquote, urlsplit
 EXCLUDED = ("docs/project/archive/", "third_party/")
 
 
-def prose(source: str) -> str:
+def prose(source: str, *, mask_inline: bool = True) -> str:
     """Mask code and comments while preserving line numbers."""
     source = re.sub(
         r"<!--.*?-->", lambda m: "\n" * m[0].count("\n"), source, flags=re.DOTALL
     )
     lines = source.splitlines(keepends=True)
     fence = None
+    list_indents: list[int] = []
     for index, line in enumerate(lines):
-        marker = re.match(r" {0,3}(`{3,}|~{3,})", line)
+        expanded = line.expandtabs(4)
+        indent = len(expanded) - len(expanded.lstrip())
+        item = None
+        if expanded.strip() and fence is None:
+            while list_indents and indent < list_indents[-1]:
+                list_indents.pop()
+            item = re.match(r" *(?:[-+*]|\d{1,9}[.)])( +)(?=\S)", expanded)
+            if item:
+                list_indents.append(item.end())
+        # List content is indented relative to its marker, not to the document.
+        content = (
+            expanded[list_indents[-1] :]
+            if list_indents and indent >= list_indents[-1]
+            else expanded
+        )
+        if item:
+            content = expanded[item.end() :]
+        marker = re.match(r" {0,3}(`{3,}|~{3,})", content)
         if marker and fence is None:
             fence = marker[1]
         elif fence and re.match(
-            r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*$", line
+            r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*$", content
         ):
             fence = None
             lines[index] = "\n"
             continue
-        if fence or line.startswith(("    ", "\t")):
+        if fence or content.startswith("    "):
             lines[index] = "\n"
+    if not mask_inline:
+        return "".join(lines)
     return re.sub(
         r"(`+).*?\1",
         lambda m: "".join("\n" if c == "\n" else " " for c in m[0]),
@@ -39,8 +59,10 @@ def prose(source: str) -> str:
 
 def anchors(source: str) -> set[str]:
     # Inline code contributes its text to a heading, even though links inside it do not.
-    source = re.sub(r"(`+)(.*?)\1", r"\2", source)
-    source = prose(source)
+    source = prose(source, mask_inline=False)
+    source = re.sub(
+        r"(`+)(.*?)\1", lambda m: html.escape(m[2]).replace("_", "&#95;"), source
+    )
     result = set(re.findall(r"""\b(?:id|name)=["']([^"']+)["']""", source))
     counts: dict[str, int] = {}
     lines = source.splitlines()
@@ -56,6 +78,7 @@ def anchors(source: str) -> set[str]:
         if title is None:
             continue
         title = re.sub(r"!?\[([^\]]+)\]\([^)]*\)", r"\1", title)
+        title = re.sub(r"(?<!\w)(_+)(.+?)\1(?!\w)", r"\2", title)
         title = html.unescape(re.sub(r"<[^>]*>", "", title)).lower()
         slug = "".join(c for c in title if c.isalnum() or c in "_ -").replace(" ", "-")
         candidate = slug
@@ -89,6 +112,11 @@ def links(source: str):
                 if match[4] is not None:
                     yield source.count("\n", 0, match.start()) + 1, None
                 continue
+        if match[5] is None:
+            # Markdown backslash escapes apply to ASCII punctuation, not HTML attributes.
+            target = re.sub(
+                r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]\^_`{|}~])", r"\1", target
+            )
         yield (
             source.count("\n", 0, match.start()) + 1,
             html.unescape(target.strip("<>")),
