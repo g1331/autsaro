@@ -186,6 +186,37 @@ Stale citations (not an official item of R24-11):
             )
             self.assertIn("runtime/test.c:1", output.read_text())
 
+    def test_relative_sample_cli_maps_actual_generated_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "samples/probe/probe.c"
+            source.parent.mkdir(parents=True)
+            source.write_text("bad();\n")
+            artifact = root / "tidy.json"
+            artifact.write_text(
+                json.dumps(
+                    [
+                        {
+                            "rule": "test-rule",
+                            "file": "probe.c",
+                            "line": 1,
+                            "message": "bad",
+                            "sample": "probe",
+                        }
+                    ]
+                )
+            )
+            with (
+                mock.patch("os.getcwd", return_value=str(root)),
+                mock.patch(
+                    "autosar_tooling.quality.read_clang_tidy_baseline",
+                    return_value=Counter(),
+                ),
+            ):
+                rows = report.clang_tidy(artifact, Path("samples"), root, "success")
+            self.assertEqual(rows[0]["file"], "samples/probe/probe.c")
+            self.assertEqual(rows[0]["line"], 1)
+
     def test_summary_escapes_external_markdown_and_html(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "summary"
