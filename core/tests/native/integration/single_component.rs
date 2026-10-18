@@ -5,43 +5,55 @@ use std::path::Path;
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn short_application_period_saves_builds_and_passes_reference_verifier() {
-    // 1 ms and 3 ms let a CanTp frame take the single Tx HOH before the
-    // periodic PDU in the same tick; the verifier does not model that (#82).
-    use autosar_config_core::integration::{IntegrationEdit, verify_ecu_project};
-    let scratch = Scratch::new();
-    let mut workspace =
-        live_pipeline_workspace(&scratch.0.join("live"), &single_component_sources());
-    workspace
-        .edit_integration(IntegrationEdit {
-            application_period_ms: Some(2),
-            ..IntegrationEdit::default()
-        })
-        .unwrap_or_else(|issues| panic!("{issues:?}"));
-    let save = workspace.preview_integration_save().unwrap();
-    workspace
-        .save_integration_previewed(&save.revision)
-        .unwrap();
-    let plan = workspace
-        .saved_integration_plan()
-        .unwrap_or_else(|issues| panic!("{issues:?}"));
-    assert!(
-        plan.description()
-            .schedule
-            .entities
-            .iter()
-            .filter(|entity| entity.application)
-            .all(|entity| entity.period_ms == 2)
-    );
-    let (project, files) =
-        single_component_project_from(&scratch.0, tooling::native_target(), &plan);
-    let report = verify_ecu_project(
-        &files,
-        &project,
-        &tooling::execution_settings(),
-        &tooling::execution_owner(),
-    )
-    .unwrap_or_else(|error| panic!("{error}"));
-    assert!(report.passed, "{}", report.log);
+    use autosar_config_core::integration::{
+        IntegrationEdit, build_ecu_project, verify_ecu_project,
+    };
+    for period in [1, 2, 3] {
+        let scratch = Scratch::new();
+        let mut workspace =
+            live_pipeline_workspace(&scratch.0.join("live"), &single_component_sources());
+        workspace
+            .edit_integration(IntegrationEdit {
+                application_period_ms: Some(period),
+                ..IntegrationEdit::default()
+            })
+            .unwrap_or_else(|issues| panic!("{issues:?}"));
+        let save = workspace.preview_integration_save().unwrap();
+        workspace
+            .save_integration_previewed(&save.revision)
+            .unwrap();
+        let plan = workspace
+            .saved_integration_plan()
+            .unwrap_or_else(|issues| panic!("{issues:?}"));
+        assert!(
+            plan.description()
+                .schedule
+                .entities
+                .iter()
+                .filter(|entity| entity.application)
+                .all(|entity| entity.period_ms == period)
+        );
+        let (project, files) =
+            single_component_project_from(&scratch.0, tooling::native_target(), &plan);
+        let settings = tooling::execution_settings();
+        let owner = tooling::execution_owner();
+        let output = scratch.0.join("build");
+        std::fs::create_dir(&output).unwrap();
+        let built = build_ecu_project(&files, &project, &output, &settings, &owner)
+            .unwrap_or_else(|error| panic!("period={period}: {error}"));
+        assert!(Path::new(&built.binary_path).is_file(), "{}", built.log);
+        let report = verify_ecu_project(&files, &project, &settings, &owner)
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert!(report.passed, "period={period}: {}", report.log);
+        assert!(
+            report
+                .log
+                .to_string()
+                .contains("protocol=arbitration PASS batches=6"),
+            "period={period}: {}",
+            report.log
+        );
+    }
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
