@@ -2953,11 +2953,20 @@ fn second_cantp_connection_is_refused() {
                     })
             },
             |text| {
-                let copy = text.replacen(
-                    &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
-                    &format!("<SHORT-NAME>{name}Second</SHORT-NAME>"),
-                    1,
-                );
+                let copy = text
+                    .replacen(
+                        &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+                        &format!("<SHORT-NAME>{name}Second</SHORT-NAME>"),
+                        1,
+                    )
+                    .replace(
+                        "<SHORT-NAME>Frame</SHORT-NAME>",
+                        "<SHORT-NAME>FrameSecond</SHORT-NAME>",
+                    )
+                    .replace(
+                        "<SHORT-NAME>FlowControl</SHORT-NAME>",
+                        "<SHORT-NAME>FlowControlSecond</SHORT-NAME>",
+                    );
                 format!("{text}{copy}")
             },
         );

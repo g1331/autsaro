@@ -1769,18 +1769,42 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             names.insert(format!("{module}_AR_RELEASE_{field}_VERSION"));
         }
     }
-    names.insert("COM_CFG_H".into());
-    for signal in graph
+    for module in ["CANIF", "PDUR", "LSDUR"] {
+        names.insert(format!("{module}_CFG_H"));
+    }
+    let routed_sources: BTreeSet<_> = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()
-        .filter(|index| {
-            graph
-                .text(*index, "DEFINITION-REF")
-                .is_some_and(|definition| definition.ends_with("/ComSignal"))
-        })
-    {
-        if !names.insert(super::com::symbolic_name(&graph.elements[signal].object)) {
-            return Err(fail(graph, signal, "CONTRACT_NAME_COLLISION"));
+        .filter(|index| super::schedule::definition_is(graph, *index, "PduRRoutingPath"))
+        .filter_map(|index| super::schedule::value(graph, index, "PduRSrcPduRRef", true))
+        .collect();
+    for container in graph.of_kind("ECUC-CONTAINER-VALUE") {
+        let Some(definition) = graph.text(container, "DEFINITION-REF") else {
+            continue;
+        };
+        if !super::symbolic_names::configured_kind(definition) {
+            continue;
+        }
+        let module = definition.split('/').nth(3).unwrap_or("");
+        let kind = super::short_name(definition);
+        names.insert(format!("{}_CFG_H", module.to_uppercase()));
+        let path = &graph.elements[container].object;
+        // SWS_Com_00402 applies to the source short name before adding ComConf_.
+        if module == "Com" && super::contracts::reserved_identifier(super::short_name(path)) {
+            return Err(fail(graph, container, "CONTRACT_NAME_COLLISION"));
+        }
+        let mut generated = vec![super::symbolic_names::name(module, kind, path)];
+        if kind == "PduRSrcPdu" && routed_sources.contains(path.as_str()) {
+            generated.push(super::symbolic_names::name(
+                "LSduR",
+                "LSduRPathSourcePdu",
+                path,
+            ));
+        }
+        for symbol in generated {
+            if !names.insert(symbol) {
+                return Err(fail(graph, container, "CONTRACT_NAME_COLLISION"));
+            }
         }
     }
     for component in &plan.components {

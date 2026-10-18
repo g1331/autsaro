@@ -1,6 +1,7 @@
 //! ECU configuration and integration sources from the selected plan; applications remain caller owned.
 use super::c_layout::{self, Item};
 use super::outputs::ECU;
+use super::symbolic_names::{self, name};
 use super::{PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::target::BuildTarget;
 
@@ -150,9 +151,10 @@ pub(super) fn files(
     let communication = description.ecu_communication()?;
     let can = &communication.can;
     let mode = description.ecu_mode()?;
+    let symbolic = symbolic_names::Names::new(description)?;
     let mut outputs = super::outputs::EcuOutputs::new(target)?;
     // The contract provenance is package metadata; its headers are generated C.
-    for (path, bytes) in plan.contract_headers(composition)? {
+    for (path, bytes) in plan.contract_headers(composition, &symbolic)? {
         if matches!(
             path.as_str(),
             "include/Rte_Main.h"
@@ -242,25 +244,22 @@ pub(super) fn files(
     )?;
     outputs.emit_rendered(super::outputs::OS, super::ecu::ECU_CONFIG, os_config)?;
     outputs.emit_all(ECU, super::can_runtime::type_headers(communication))?;
-    let symbols: Vec<_> = description
-        .handles
-        .iter()
-        .filter(|handle| handle.domain == "com_signal")
-        .map(|handle| {
-            (
-                super::com::symbolic_name(&handle.path),
-                format!("{}U", handle.handle),
-            )
-        })
-        .collect();
-    outputs.emit(
-        ECU,
-        "include/Com_Cfg.h",
-        header(
-            "COM_CFG_H",
-            &c_layout::commented_defines(&symbols, "Generated signal handle."),
-        ),
-    )?;
+    let (path, bytes) =
+        super::can_runtime::profile_header(communication, symbolic.parameter("CanIfCtrlId")?);
+    outputs.emit(ECU, path, bytes)?;
+    for (module, definitions) in &symbolic.headers {
+        if matches!(module.as_str(), "CanIf" | "PduR" | "LSduR" | "Rte") {
+            continue;
+        }
+        outputs.emit(
+            ECU,
+            format!("include/{module}_Cfg.h"),
+            header(
+                &format!("{}_CFG_H", module.to_uppercase()),
+                &c_layout::commented_defines(definitions, "Generated handle."),
+            ),
+        )?;
+    }
 
     for (module, area) in [
         ("CanIf", "CANIF"),
@@ -349,7 +348,7 @@ pub(super) fn files(
     let path = "include/Ecu_TargetConfig.h";
     let defines = c_layout::commented_defines(
         &[
-            ("ECU_TARGET_TASK", "0u".to_owned()),
+            ("ECU_TARGET_TASK", os.task_symbol.clone()),
             (
                 "ECU_MAX_PDU_PAYLOAD",
                 format!(
@@ -385,7 +384,10 @@ pub(super) fn files(
     let text = super::outputs::render(
         outputs.template(ECU, path)?,
         path,
-        &[super::outputs::Edit::Once("@DEFINES@", &defines)],
+        &[super::outputs::Edit::Once(
+            "@DEFINES@",
+            &format!("#include \"Os_Cfg.h\"\n{defines}"),
+        )],
     )?;
     outputs.emit_rendered(ECU, path, text)?;
     let mut config = String::from(
@@ -395,12 +397,21 @@ pub(super) fn files(
 #include "Ecu_Target.h"
 #include "Ecu_Config.h"
 #include "Can_Host.h"
+#include "Can_Cfg.h"
 #include "CanIf.h"
+#include "CanIf_Cfg.h"
+#include "PduR_Cfg.h"
+#include "LSduR_Cfg.h"
 #include "Det.h"
 #include "Det_Externals.h"
 #include "CanTp.h"
 #include "Com.h"
 #include "Com_Internal.h"
+#include "Com_Cfg.h"
+#include "Rte_Cfg.h"
+#include "ComM_Cfg.h"
+#include "CanTp_Cfg.h"
+#include "Dcm_Cfg.h"
 #include "ComM.h"
 #include "ComM_BswM.h"
 #include "ComM_Internal.h"
@@ -442,7 +453,13 @@ pub(super) fn files(
         "static const Can_ConfigType driver",
         &values("NULL_PTR"),
     );
-    let routing_headers = r#"#include "Com.h"
+    let routing_headers = r#"#include "Com_Cfg.h"
+#include "CanIf_Cfg.h"
+#include "CanTp_Cfg.h"
+#include "Dcm_Cfg.h"
+#include "LSduR_Cfg.h"
+#include "PduR_Cfg.h"
+#include "Com.h"
 #include "Dcm.h"
 #include "CanTp.h"
 #include "PduR.h"
@@ -462,6 +479,7 @@ pub(super) fn files(
 {routing_headers}"#
     );
     let mut can_if_configuration = r#"/** @file Source-derived selected CanIf configuration. */
+#include "Can_Cfg.h"
 #include "CanIf_Cfg.h"
 #include "Ecu_HostBusSM.h"
 "#
@@ -479,19 +497,24 @@ pub(super) fn files(
             .iter()
             .find(|route| route.pdu == signal.global_pdu)
             .ok_or_else(|| PlanDiagnostic::plan_premise(&signal.global_pdu))?;
-        // No explicit ComIPduHandleId is selected. Assign its generated ID from
-        // the corresponding unique route; public router IDs remain separate.
+        // Tx IDs are passed to PduR_ComTransmit; Rx IDs are provided by COM.
         let pdu = if signal.receive {
-            route.destination_handle
+            name("Com", "ComIPdu", &signal.com_pdu)
         } else {
-            route.source_handle
+            name("PduR", "PduRSrcPdu", &route.source)
         };
-        let signal_id = description
-            .handles
-            .iter()
-            .find(|handle| handle.domain == "com_signal" && handle.path == signal.com_signal)
-            .ok_or_else(|| PlanDiagnostic::plan_premise(&signal.com_signal))?
-            .handle;
+        let signal_id = name("Com", "ComSignal", &signal.com_signal);
+        let can_if = name(
+            "CanIf",
+            if signal.receive {
+                "CanIfRxPduCfg"
+            } else {
+                "CanIfTxPduCfg"
+            },
+            &signal.can_if_pdu,
+        );
+        let source = name("PduR", "PduRSrcPdu", &route.source);
+        let ls_source = name("LSduR", "LSduRPathSourcePdu", &route.source);
         // signals::inspect requires source ComSignalInitValue=0.
         // Receiver ComSpec init is independent RTE state; it must not replace
         // the actual COM initialization or group Start(TRUE) value.
@@ -508,35 +531,27 @@ pub(super) fn files(
             )?,
             None => 0,
         };
+        let callback = reception.map_or_else(
+            || "0u".into(),
+            |rx| name("Rte", "ComUserSignal", &rx.user_signal),
+        );
         pdus.push(row(&format!(
-            "{pdu}u, {signal_id}u, {}, {initial}u, {}u, {}u",
+            "{pdu}, {signal_id}, {}, {initial}u, {}u, {callback}",
             if signal.receive { "TRUE" } else { "FALSE" },
-            reception_timeout,
-            reception.map_or(0, |rx| u32::from(rx.callback_handle))
+            reception_timeout
         )));
         if signal.receive {
-            receive.push(row(&format!(
-                "{}u, {}u, 4u",
-                signal.can_id, signal.can_if_handle
-            )));
+            receive.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));
             ls_rx.push(row(&format!(
-                "{}u, {}u, PduR_CanIfRxIndication",
-                signal.can_if_handle, route.source_handle
+                "{ls_source}, {source}, PduR_CanIfRxIndication"
             )));
-            pd_rx.push(row(&format!(
-                "{}u, {pdu}u, Com_RxIndication",
-                route.source_handle
-            )));
+            pd_rx.push(row(&format!("{source}, {pdu}, Com_RxIndication")));
         } else {
-            transmit.push(row(&format!(
-                "{}u, {}u, 4u",
-                signal.can_id, signal.can_if_handle
-            )));
+            transmit.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));
             ls_tx.push(row(&format!(
-                "LSDUR_UP_PDUR, {}u, {}u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit",
-                route.destination_handle, signal.can_if_handle
+                "LSDUR_UP_PDUR, {ls_source}, {can_if}, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit"
             )));
-            pd_tx.push(row(&format!("PDUR_UP_COM, {}u, PDUR_LO_LSDUR, {}u, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit", route.source_handle, route.destination_handle)));
+            pd_tx.push(row(&format!("PDUR_UP_COM, {source}, PDUR_LO_LSDUR, {ls_source}, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit")));
         }
     }
     config_data(
@@ -550,9 +565,9 @@ pub(super) fn files(
         "Com",
         "static const Com_ConfigType com_config",
         &values(&format!(
-            "com_pdus, {}u, {}u, Rte_COMCbk, Rte_COMCbkRxTOut, PduR_ComTransmit",
+            "com_pdus, {}u, {}, Rte_COMCbk, Rte_COMCbkRxTOut, PduR_ComTransmit",
             description.signals.len(),
-            com.receive_group.handle
+            name("Com", "ComIPduGroup", &com.receive_group.path)
         )),
     );
     let transport = &description.diagnostic_transport;
@@ -572,37 +587,32 @@ pub(super) fn files(
 #include "LSduR_CanTp.h"
 "#,
         );
-        receive.push(row(&format!(
-            "{}u, {}u, 8u",
-            tp.request_can_id, tp.request_can_if_handle
-        )));
-        transmit.push(row(&format!(
-            "{}u, {}u, 8u",
-            tp.response_can_id, tp.response_can_if_handle
-        )));
-        ls_rx.push(row(&format!(
-            "{}u, {}u, CanTp_RxIndication",
-            tp.request_can_if_handle, tp.receive_npdu
-        )));
+        let can_rx = symbolic.reference("CanIfRxPduRef", &tp.rx_npdu)?;
+        let can_tx = symbolic.reference("CanIfTxPduRef", &tp.tx_npdu)?;
+        let tp_rx = symbolic.parameter("CanTpRxNPduId")?;
+        let tp_rx_sdu = symbolic.parameter("CanTpRxNSduId")?;
+        let tp_tx_sdu = symbolic.parameter("CanTpTxNSduId")?;
+        let dcm_rx = symbolic.parameter("DcmDslProtocolRxPduId")?;
+        let dcm_tx = symbolic.parameter("DcmDslTxConfirmationPduId")?;
+        let pd_rx_source = name("PduR", "PduRSrcPdu", &rx_route.source);
+        let pd_tx_source = name("PduR", "PduRSrcPdu", &tx_route.source);
+        let pd_tx_destination = name("PduR", "PduRDestPdu", &tx_route.destination);
+        let ls_rx_source = name("LSduR", "LSduRPathSourcePdu", &rx_route.source);
+        let ls_tx_source = name("LSduR", "LSduRPathSourcePdu", &tx_route.source);
+        receive.push(row(&format!("{}u, {can_rx}, 8u", tp.request_can_id)));
+        transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.response_can_id)));
+        ls_rx.push(row(&format!("{ls_rx_source}, {tp_rx}, CanTp_RxIndication")));
         ls_tx.push(row(&format!(
-            "LSDUR_UP_CANTP, {}u, {}u, CanTp_TxConfirmation, NULL_PTR",
-            tp.transmit_npdu, tp.response_can_if_handle
+            "LSDUR_UP_CANTP, {ls_tx_source}, {can_tx}, CanTp_TxConfirmation, NULL_PTR"
         )));
-        pd_tx.push(row(&format!(
-            // CanTp confirms through tp_routes, under its own N-SDU namespace.
-            "PDUR_UP_DCM, {}u, PDUR_LO_CANTP, {}u, CanTp_Transmit, NULL_PTR, NULL_PTR",
-            tx_route.source_handle, tp.transmit_nsdu
-        )));
+        // CanTp confirms through tp_routes, under its own N-SDU namespace.
+        pd_tx.push(row(&format!("PDUR_UP_DCM, {pd_tx_source}, PDUR_LO_CANTP, {tp_tx_sdu}, CanTp_Transmit, NULL_PTR, NULL_PTR")));
         config_data(
             &mut pd_configuration,
             "PduR",
             "static const PduR_TpRouteType tp_routes[]",
             &[row(&format!(
-                "{}u, {}u, {}u, {}u, Dcm_StartOfReception, Dcm_CopyRxData, Dcm_TpRxIndication, Dcm_CopyTxData, Dcm_TpTxConfirmation",
-                rx_route.source_handle,
-                tp.dcm_receive,
-                tx_route.destination_handle,
-                tp.dcm_transmit
+                "{pd_rx_source}, {dcm_rx}, {pd_tx_destination}, {dcm_tx}, Dcm_StartOfReception, Dcm_CopyRxData, Dcm_TpRxIndication, Dcm_CopyTxData, Dcm_TpTxConfirmation"
             ))],
         );
         let period = description.schedule.counter_tick_ms;
@@ -612,20 +622,14 @@ pub(super) fn files(
             "CanTp",
             "static const CanTp_ConfigType tp_config",
             &values(&format!(
-                "{}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {period}u, 0u, 0u, {}u, {}u",
-                tp.receive_nsdu,
-                tp.transmit_nsdu,
-                tp.receive_npdu,
-                tp.transmit_npdu,
+                "{tp_rx_sdu}, {tp_tx_sdu}, {tp_rx}, {ls_tx_source}, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {period}u, 0u, 0u, {pd_rx_source}, {pd_tx_destination}",
                 tp.buffer_bytes,
                 ticks(tp.n_as_ms)?,
                 ticks(tp.n_ar_ms)?,
                 ticks(tp.n_br_ms)?,
                 ticks(tp.n_bs_ms)?,
                 ticks(tp.n_cr_ms)?,
-                ticks(tp.n_cs_ms)?,
-                rx_route.source_handle,
-                tx_route.destination_handle
+                ticks(tp.n_cs_ms)?
             )),
         );
         let (did, read) = match &description.diagnostic {
@@ -650,16 +654,13 @@ pub(super) fn files(
             "Dcm",
             "static const Dcm_ConfigType dcm_config",
             &values(&format!(
-                "{}u, {}u, {}u, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {}u, Ecu_DcmAuthenticationMode, {}u",
-                tp.dcm_receive,
-                tp.dcm_transmit,
-                mode.channel_handle,
+                "{dcm_rx}, {dcm_tx}, {}, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {pd_tx_source}, Ecu_DcmAuthenticationMode, {}u",
+                name("ComM", "ComMChannel", &mode.channel),
                 ticks(tp.p2_ms)?,
                 tp.p2_ms,
                 tp.p2_star_ms,
                 ticks(tp.s3_ms)?,
                 tp.buffer_bytes,
-                tx_route.source_handle,
                 tp.max_did_to_read.unwrap_or(0)
             )),
         );
@@ -701,8 +702,11 @@ pub(super) fn files(
         "CanIf",
         "const CanIf_ConfigType CanIf_Config",
         &values(&format!(
-            "can_rx, {rx_count}u, can_tx, {tx_count}u, Ecu_HostBusSM_ControllerModeIndication, Ecu_HostBusSM_ControllerBusOff, {}u, {}u, {}u, {}u",
-            can.can_if_controller_id, can.controller_id, can.receive_handle, can.transmit_handle
+            "can_rx, {rx_count}u, can_tx, {tx_count}u, Ecu_HostBusSM_ControllerModeIndication, Ecu_HostBusSM_ControllerBusOff, {}, {}, {}, {}",
+            symbolic.parameter("CanIfCtrlId")?,
+            name("Can", "CanController", &can.controller),
+            name("Can", "CanHardwareObject", &can.receive_hardware),
+            name("Can", "CanHardwareObject", &can.transmit_hardware)
         )),
     );
     config_data(
@@ -744,11 +748,20 @@ pub(super) fn files(
             format!("include/{module}_Cfg.h"),
             header(
                 &format!("{}_CFG_H", module.to_uppercase()),
-                &format!("#include \"{module}.h\"\nextern const {ty} {module}_Config;"),
+                &format!(
+                    "#include \"{module}.h\"\n{}extern const {ty} {module}_Config;",
+                    c_layout::commented_defines(
+                        symbolic
+                            .headers
+                            .get(module)
+                            .map(Vec::as_slice)
+                            .unwrap_or_default(),
+                        "Generated handle."
+                    )
+                ),
             ),
         )?;
         outputs.emit(ECU, format!("src/{module}_PBcfg.c"), source.as_str())?;
-        config.push_str(&format!("#include \"{module}_Cfg.h\"\n"));
     }
 
     config_data(
@@ -756,8 +769,9 @@ pub(super) fn files(
         "Ecu_HostBusSM",
         "static const Ecu_HostBusSM_ConfigType bus_config",
         &values(&format!(
-            "{}u, {}u",
-            mode.channel_handle, can.can_if_controller_id
+            "{}, {}",
+            name("ComM", "ComMChannel", &mode.channel),
+            symbolic.parameter("CanIfCtrlId")?
         )),
     );
     config_data(
@@ -767,7 +781,7 @@ pub(super) fn files(
         &mode
             .users
             .iter()
-            .map(|user| Item::Value(format!("{}u", user.handle)))
+            .map(|user| Item::Value(name("ComM", "ComMUser", &user.path)))
             .collect::<Vec<_>>(),
     );
     config_data(
@@ -775,8 +789,8 @@ pub(super) fn files(
         "ComM",
         "static const ComM_ConfigType comm_config",
         &values(&format!(
-            "{}u, users, {}u, {}u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, {}",
-            mode.channel_handle,
+            "{}, users, {}u, {}u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, {}",
+            name("ComM", "ComMChannel", &mode.channel),
             mode.users.len(),
             periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
             if transport.is_some() {
@@ -790,7 +804,10 @@ pub(super) fn files(
         &mut config,
         "BswM",
         "static const BswM_ConfigType bswm_config",
-        &values(&format!("{}u, Ecu_BswMAction", mode.channel_handle)),
+        &values(&format!(
+            "{}, Ecu_BswMAction",
+            name("ComM", "ComMChannel", &mode.channel)
+        )),
     );
     for (symbol, scope, body) in [
         (&com.receive_main.symbol, "Com", "Ecu_ComMainFunctionRx();"),
@@ -829,20 +846,26 @@ pub(super) fn files(
 "#,
     );
     config.push_str(&format!(
-        r#"    if (channel != {}u) {{
+        r#"    if (channel != {}) {{
         return E_NOT_OK;
     }}
     switch (requested) {{
 "#,
-        mode.channel_handle
+        name("ComM", "ComMChannel", &mode.channel)
     ));
     for rule in &mode.rules {
+        let requested = [
+            "COMM_NO_COMMUNICATION",
+            "COMM_SILENT_COMMUNICATION",
+            "COMM_FULL_COMMUNICATION",
+        ][usize::from(rule.mode)];
+        let channel = name("ComM", "ComMChannel", &mode.channel);
         config.push_str(&format!(
             r#"        case {}u:
-            (void){};
+            (void)Ecu_HostBusSM_ApplyMode({channel}, {requested});
             break;
 "#,
-            rule.mode, rule.callout
+            rule.mode
         ));
     }
     config.push_str(
@@ -932,20 +955,24 @@ pub(super) fn files(
         r#"    if (Rte_Start() != E_OK) {{
         return E_NOT_OK;
     }}
-    ComM_CommunicationAllowed({}u, TRUE);
-    if (ComM_RequestComMode({}u, COMM_FULL_COMMUNICATION) != E_OK) {{
+    ComM_CommunicationAllowed({}, TRUE);
+    if (ComM_RequestComMode({}, COMM_FULL_COMMUNICATION) != E_OK) {{
         return E_NOT_OK;
     }}
     {}();
     Can_MainFunction_Mode();
-    if ((CanIf_GetControllerMode({}u, &actual) != E_OK) || (actual != CAN_CS_STARTED)) {{
+    if ((CanIf_GetControllerMode({}, &actual) != E_OK) ||
+        (actual != CAN_CS_STARTED)) {{
         return E_NOT_OK;
     }}
     SchM_StartTiming();
     return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;
 }}
 "#,
-        mode.channel_handle, first_user.handle, mode.main_symbol, can.can_if_controller_id
+        name("ComM", "ComMChannel", &mode.channel),
+        name("ComM", "ComMUser", &first_user.path),
+        mode.main_symbol,
+        symbolic.parameter("CanIfCtrlId")?
     ));
     config.push_str(
         r#"RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events)
@@ -1013,12 +1040,12 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     retired.push((
         3,
         format!(
-            r#"(void)Can_SetControllerMode({}u, CAN_CS_STOPPED);
+            r#"(void)Can_SetControllerMode({}, CAN_CS_STOPPED);
         Can_MainFunction_Mode();
         Can_MainFunction_BusOff();
         Can_DeInit();
 "#,
-            can.controller_id
+            name("Can", "CanController", &can.controller)
         ),
     ));
     retired.push((1, "SchM_Deinit();\n".to_owned()));

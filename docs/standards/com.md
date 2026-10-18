@@ -11,7 +11,7 @@
 - 每个 I-PDU 是 `NORMAL`、`IMMEDIATE` 的 4 字节 PDU，恰含一个从第 0 位开始、32 位、小端、初值 0、`PENDING` 的 `UINT32` 信号，没有未用区域、更新位、callout、过滤器或 metadata；句柄号由生成器分配，显式的 `ComHandleId`／`ComIPduHandleId` 在生成前拒绝。
 - 全部 Rx I-PDU 属于唯一的 I-PDU group（句柄 0），只按 I-PDU 做接收截止监控：首次超时为 0、超时动作为 `NONE`，`ComTimeout` 等于接收端口的存活超时且是 Rx 主函数周期的整数倍。
 - Tx I-PDU 不属于任何 group，由 `Com_Init` 启动（SWS_Com_00840），`ComMinimumDelayTime` 为 0，只有 `ComTxModeTrue` 下周期等于 Tx 主函数周期的 `PERIODIC` 模式；没有 `ComTxModeFalse`，其缺省模式 NONE 只经 `Com_SwitchIpduTxMode(…, FALSE)` 选中。发送信号不做截止监控。
-- 唯一用户是 RTE：`ComUserModuleCnf` 位于 `Rte/RteComUser` 下，回调只有 `COM_RX_ACK`（`Rte_COMCbk`）与 `COM_RX_TOUT`（`Rte_COMCbkRxTOut`），按 `ComUserCbkHandleId` 区分接收信号。
+- 唯一用户是 RTE：`ComUserModuleCnf` 位于 `Rte/RteComUser` 下，回调只有 `COM_RX_ACK`（`Rte_COMCbk`）与 `COM_RX_TOUT`（`Rte_COMCbkRxTOut`），按 `ComUserCbkHandleId` 区分接收信号；RTE 在 `Rte_Cfg.h` 唯一导出 `RteConf_ComUserSignal_*`，COM 配置与 RTE 回调使用该符号。
 - 各有一个 `ComMainFunctionRx` 与 `ComMainFunctionTx`，生成为 `Com_MainFunctionRx_<名>`／`Com_MainFunctionTx_<名>`（声明在 `SchM_Com.h`），每个 I-PDU 由其 `ComIPduMainFunctionRef` 引用的主函数处理。
 
 Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知，离开该区后再调用 PduR 与用户回调（[ADR 0018](../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md)）。接收与超时通知在区内登记，同一时刻只有一个上下文按登记顺序送达：每次接收各通知一次，重复的超时合并，最后登记的事件最后送达。
@@ -53,7 +53,7 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 | I-PDU callout | 不适用（配置：ECUC_Com_00387）：SWS_Com_00221、00492、00700、00816、00346、00381、00719、00720、00839；不适用（配置：ECUC_Com_00765）：SWS_Com_00766、00395 |
 | post-build | 不适用（配置：ECUC_Com_00540 声明 VARIANT-POST-BUILD）：SWS_Com_00373 |
 | 发送信号的归属 | 已核对（配置模型：唯一的 Com 用户是 RTE）：SWS_Com_00892 |
-| 名字规则 | 差距 #160：SWS_Com_00401、00402、00732 |
+| 名字规则 | 已核对（所选 ComConfig 下 signal／IPdu／group 共享对象路径，Graph 重名拒绝、SHORT-NAME 标量语法与 composition 的 C 关键字拒绝；回调仅接纳固定 Rte_COMCbk／Rte_COMCbkRxTOut，不与 Com_ 前缀相撞；symbolic_com_names_share_the_standard_short_name_namespace／symbolic_com_names_are_c_identifiers_before_prefixing）：SWS_Com_00401、00402、00732 |
 
 ### ECUC 参数
 
@@ -86,5 +86,5 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 ## 已知差距
 
 - 头文件不含软件与规范版本号（#59）。
-- 句柄号以字面量写入使用方，没有按 Symbolic Name Value 经提供方头文件导出；名字规则依赖该机制（#160）。
+- Com_Cfg.h 导出 ComSignal、ComIPdu 与 ComIPduGroup 符号；Tx 配置使用 PduR 提供的源句柄，Rx 回调映射使用 COM 提供的 PDU 句柄。
 - 生成 C 的 MISRA 诊断裁决与人工评估未完成（#58）。

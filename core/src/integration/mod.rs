@@ -42,6 +42,7 @@ mod rte_memory;
 mod rte_types;
 mod schedule;
 mod signals;
+mod symbolic_names;
 
 pub use can_runtime::{CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract};
 pub use catalog::{ContractArgument, SymbolContract};

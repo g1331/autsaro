@@ -403,6 +403,7 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     }
     for name in [
         "ComStack_Cfg.h",
+        "Ecu_ProfileConfig.h",
         "SchM_CanIf.h",
         "SchM_ComM.h",
         "SchM_CanTp.h",

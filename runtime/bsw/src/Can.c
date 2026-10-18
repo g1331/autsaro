@@ -1,5 +1,6 @@
 /** @file Standard Can driver for one Classical CAN controller on the controlled host. */
 #include "Can_Internal.h"
+#include "Ecu_ProfileConfig.h"
 #include "Det.h"
 #include "CanIf.h"
 #include "SchM_Can.h"

@@ -36,4 +36,4 @@ BswM 只有一个 IMMEDIATE 的 ComM 模式输入和三条规则，动作是静�
 | MISRA | 差距 #58[BswM]：SWS_BSW_00115 |
 | 完整 BSWMD／模块文档 | 交付的 BSWMD 已描述 BswM 入口与独占区 BSWM_STATE，但不是完整的模块描述与文档，BswM_MainFunction 的调用顺序也没有文档。 差距 #159[BswM]：SWS_BSW_00001、00002、00038、00054、00061 |
 | BSWMD 模式组 | BswM 的 BSWMD 没有 providedModeGroup，因此没有需要映射的 synchronizedModeGroup。 已核对（BSWMD 生成）[BswM]：SWS_BSW_00238 |
-| Symbolic Name Value | 通道句柄以字面量写入配置与动作调用，未经提供方头文件导入。 差距 #160[BswM]：SWS_BSW_00200 |
+| Symbolic Name Value | 配置、动作与通道比较包含 ComM_Cfg.h 并使用 ComMConf_ComMChannel_*；独立非默认句柄生成工程实际运行。已核对（生成头与真实消费者）[BswM]：SWS_BSW_00200 |

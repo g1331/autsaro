@@ -29,7 +29,7 @@
 | 跨模块版本检查与发布信息 |  | 差距 #59[Can]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[Can]：SWS_BSW_00115 |
 | BSWMD 与模块文档 | 包括独占区、主函数调用顺序，以及所依赖的微控制器与工具链说明 | 差距 #159[Can]：SWS_BSW_00001、00002、00038、00061、00054、00003 |
-| Symbolic Name Value |  | 差距 #160[Can]：SWS_BSW_00200 |
+| Symbolic Name Value | Can_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[Can]：SWS_BSW_00200 |
 | 硬件寄存器 | 并发访问与只写一次寄存器只在真实控制器上存在 | 差距 #170[Can]：SWS_BSW_00179、00188 |
 | 开发错误 |  | 不适用（配置：ECUC_Can_00064=true）[Can]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |
 | 安全事件 |  | 不适用（配置：ECUC_Can_00496=true）[Can]：SWS_BSW_00244、00250、00251、00252、00253、00258 |

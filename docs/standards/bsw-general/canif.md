@@ -28,7 +28,7 @@
 | 跨模块版本检查与发布信息 |  | 差距 #59[CanIf]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[CanIf]：SWS_BSW_00115 |
 | BSWMD 与模块文档 | 包括独占区说明 | 差距 #159[CanIf]：SWS_BSW_00001、00002、00038、00061 |
-| Symbolic Name Value |  | 差距 #160[CanIf]：SWS_BSW_00200 |
+| Symbolic Name Value | CanIf_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[CanIf]：SWS_BSW_00200 |
 | 开发错误 |  | 不适用（配置：ECUC_CanIf_00614=true）[CanIf]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |
 | 安全事件 |  | 不适用（配置：ECUC_CanIf_00848=true）[CanIf]：SWS_BSW_00244、00250、00251、00252、00253、00258 |
 | metadata |  | 不适用（配置：ECUC_CanIf_00824）[CanIf]：SWS_BSW_00239、00240、00241、00242 |
