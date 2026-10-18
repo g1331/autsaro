@@ -344,7 +344,12 @@ fn template_files(
             if node.tag_name().name() == "ECU-INSTANCE"
                 && child_text(node, "SHORT-NAME").as_deref() == Some("ReferenceEcu")
             {
-                patch_child(node, "SHORT-NAME", name.into(), &mut patches)?;
+                for leaf in node
+                    .children()
+                    .filter(|child| child.has_tag_name((NS, "SHORT-NAME")))
+                {
+                    patch_text(leaf, name.into(), &mut patches)?;
+                }
             } else if node.tag_name().name().ends_with("-REF")
                 && let Some(path) = node
                     .text()

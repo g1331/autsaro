@@ -22,7 +22,7 @@ pub use project::{
 
 pub use persistence::{PreparedSave, SaveFailure};
 
-use persistence::{Patch, apply_patches, patch_child, patch_param};
+use persistence::{Patch, apply_patches, patch_text};
 use xml::{child_text, definition, path_of, valid_name};
 
 const NS: &str = "http://autosar.org/schema/r4.0";

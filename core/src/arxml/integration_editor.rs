@@ -1,5 +1,5 @@
 use super::persistence::Patch;
-use super::{Workspace, apply_patches, child_text, patch_child, patch_param, path_of};
+use super::{Workspace, apply_patches, child_text, patch_text, path_of};
 use crate::integration::{
     DiagnosticCategory, IntegrationEdit, IntegrationInspection, PlanDiagnostic,
     ValidatedIntegrationPlan, editor,
@@ -86,15 +86,39 @@ impl Workspace {
                         && child_text(*node, "SHORT-NAME").is_some()
                         && path_of(*node) == field.object
                 }) {
-                    found += 1;
-                    let result = if field.parameter {
-                        patch_param(node, &field.field, field.value.clone(), &mut patches[index])
+                    // The validated plan already requires each edited scalar. Count
+                    // actual leaves here so source selection has one owner.
+                    let leaves: Vec<_> = if field.parameter {
+                        node.descendants()
+                            .filter(|parameter| {
+                                parameter.is_element()
+                                    && matches!(
+                                        parameter.tag_name().name(),
+                                        "ECUC-NUMERICAL-PARAM-VALUE" | "ECUC-TEXTUAL-PARAM-VALUE"
+                                    )
+                                    && super::definition(*parameter).is_some_and(|definition| {
+                                        definition.ends_with(&format!("/{}", field.field))
+                                    })
+                            })
+                            .flat_map(|parameter| {
+                                parameter.children().filter(|child| {
+                                    child.is_element() && child.tag_name().name() == "VALUE"
+                                })
+                            })
+                            .collect()
                     } else {
-                        patch_child(node, &field.field, field.value.clone(), &mut patches[index])
+                        node.children()
+                            .filter(|child| {
+                                child.is_element() && child.tag_name().name() == field.field
+                            })
+                            .collect()
                     };
-                    result.map_err(|error| {
-                        editor::issue(&plan, "EDIT_UNSAFE", &field.object, error)
-                    })?;
+                    for leaf in leaves {
+                        found += 1;
+                        patch_text(leaf, field.value.clone(), &mut patches[index]).map_err(
+                            |error| editor::issue(&plan, "EDIT_UNSAFE", &field.object, error),
+                        )?;
+                    }
                 }
             }
             if found != 1 {
