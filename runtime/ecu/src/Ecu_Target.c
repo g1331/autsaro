@@ -7,6 +7,7 @@
 #include "Can_Host.h"
 #include "CanIf.h"
 #include "CanTp.h"
+#include "CanTp_Internal.h"
 #include "Com.h"
 #include "Com_Internal.h"
 #include "Dcm.h"
@@ -490,7 +491,9 @@ static void consume(const Ecu_Input *input)
         /* Single-frame control has no receipt; only batches report input status. */
         (void)Can_Inject(input->can_id, input->dlc, input->data, epoch);
         Ecu_ComReceptionBeforeMain(input->epoch > processed_epoch);
+        Ecu_CanTpReceptionBeforeMain(input->epoch > processed_epoch);
         Can_MainFunction_Read();
+        Ecu_CanTpReceptionBeforeMain(FALSE);
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
         stage(11u);
 #endif
@@ -524,7 +527,9 @@ static void consume(const Ecu_Input *input)
             EcuStatus status = Can_Inject(
                 batch_frames[index].id, batch_frames[index].dlc, batch_frames[index].data, epoch);
             Ecu_ComReceptionBeforeMain(batch_epoch > processed_epoch);
+            Ecu_CanTpReceptionBeforeMain(batch_epoch > processed_epoch);
             Can_MainFunction_Read();
+            Ecu_CanTpReceptionBeforeMain(FALSE);
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
             stage(11u);
 #endif

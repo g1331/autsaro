@@ -820,6 +820,171 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     }
 }
 
+/// Reception and confirmation origins share logical milliseconds, including an input
+/// submitted after its epoch already ticked. Verifies: SWS_CanTp_00312、00315、00313、00316
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_receive_timers_use_complete_periods() {
+    let built = host_batch_project();
+    let seed = (0, &[(RECEIVE, "78563412")][..]);
+    let tx = (10, &[(REQUEST, "0522123412340000")][..]);
+    let rx = (10, &[(REQUEST, "1014221234123412")][..]);
+    let cf1 = &[(REQUEST, "2134123412341234")][..];
+    let cf2 = &[(REQUEST, "2234123412341234")][..];
+    let wait = &[(REQUEST, "3100000000000000")][..];
+    let cts = &[(REQUEST, "3000000000000000")][..];
+    for already_ticked in [false, true] {
+        for late in [false, true] {
+            let at = 250 + u64::from(late);
+            let mut batches = vec![rx];
+            if already_ticked {
+                batches.push((50, &[]));
+            }
+            batches.extend([(50, cf1), (at, cf2)]);
+            let text = run(
+                &built.binary,
+                &built.scratch.0.join(format!("cf-{already_ticked}-{late}")),
+                script(&batches).as_bytes(),
+            );
+            if late {
+                assert!(
+                    text.contains(" transport_epoch=250 transport_count=1"),
+                    "{text}"
+                );
+                assert!(text.contains("COMMIT_ERROR "), "{text}");
+                assert_eq!(frames(&text, RESPONSE), owned(&[(10, "3000000000000000")]));
+            } else {
+                assert!(!text.contains("COMMIT_ERROR "), "{text}");
+                assert_eq!(
+                    frames(&text, RESPONSE),
+                    owned(&[(10, "3000000000000000"), (250, "037F221300000000")]),
+                    "{text}"
+                );
+            }
+            for flow in [wait, cts] {
+                let at = 211 + u64::from(late);
+                let mut batches = vec![seed, tx];
+                if already_ticked {
+                    batches.push((11, &[]));
+                }
+                batches.extend([(11, wait), (at, flow)]);
+                if flow == wait && !late {
+                    batches.push((212, cts));
+                }
+                let name = format!("fc-{already_ticked}-{late}-{}", flow[0].1);
+                let text = run(
+                    &built.binary,
+                    &built.scratch.0.join(name),
+                    script(&batches).as_bytes(),
+                );
+                if late {
+                    assert!(text.contains("COMMIT_ERROR "), "{text}");
+                    assert!(
+                        text.contains(" transport_epoch=211 transport_count=1"),
+                        "{text}"
+                    );
+                    assert_eq!(frames(&text, RESPONSE), owned(&[(10, "100D621234123456")]));
+                } else {
+                    assert!(!text.contains("COMMIT_ERROR "), "{text}");
+                    let sent = if flow == wait { 212 } else { 211 };
+                    assert_eq!(
+                        frames(&text, RESPONSE),
+                        owned(&[(10, "100D621234123456"), (sent, "2178123412345678")]),
+                        "{text}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// The native single-frame mailbox entry also injects before the pending cycle.
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_frame_input_keeps_the_receive_deadline() {
+    let built = super::Scratch::new();
+    let (project, _) = super::single_component_project(&built.0, super::tooling::native_target());
+    let output = build(
+        "probe",
+        Some(&root().join("core/tests/fixtures/cantp_frame_timer.c")),
+        &built,
+        &project,
+    );
+    let result = super::tooling::run_public_command(
+        &mut Command::new(super::tooling::native_binary(&output, "ecu_probe")),
+        &built.0,
+        "frame-timer",
+        Duration::from_secs(30),
+    );
+    require_success(&result);
+    let text = String::from_utf8(result.stdout).unwrap();
+    assert!(
+        text.contains("frame_timer deadline=250 accepted=1 no_timeout=1"),
+        "{text}"
+    );
+    assert!(
+        text.contains("lifecycle=Closed state=Ready reason=0"),
+        "{text}"
+    );
+}
+
+/// A busy upper layer exposes N_Cs without changing the selected CanTp configuration.
+/// Verifies: SWS_CanTp_00184、00280
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn single_component_cts_starts_a_complete_copy_timeout() {
+    let built = super::Scratch::new();
+    let (project, _) = super::single_component_project(&built.0, super::tooling::native_target());
+    let control = built.0.join("copy-timeout.c");
+    fs::write(
+        &control,
+        format!(
+            "{}\n{}",
+            fs::read_to_string(project.join("integration/src/ecu_host_batch.c")).unwrap(),
+            fs::read_to_string(root().join("core/tests/fixtures/host_batch_copy_timeout.c"))
+                .unwrap()
+        ),
+    )
+    .unwrap();
+    let output = build("test", Some(&control), &built, &project);
+    let binary = super::tooling::native_binary(&output, "ecu_probe");
+    for already_ticked in [false, true] {
+        let mut batches = vec![(10, &[(REQUEST, "0522123412340000")][..])];
+        if already_ticked {
+            batches.push((11, &[]));
+        }
+        batches.extend([
+            (11, &[(REQUEST, "3000000000000000")][..]),
+            (210, &[]),
+            (211, &[]),
+            (212, &[(REQUEST, READ)][..]),
+        ]);
+        let text = run(
+            &binary,
+            &built.0.join(format!("copy-{already_ticked}")),
+            script(&batches).as_bytes(),
+        );
+        let commits = text
+            .lines()
+            .filter(|line| line.starts_with("COMMIT_"))
+            .collect::<Vec<_>>();
+        assert_eq!(commits.len(), batches.len(), "{text}");
+        let before = if already_ticked { 3 } else { 2 };
+        assert!(commits[before].starts_with("COMMIT_OK "), "{text}");
+        assert!(commits[before + 1].starts_with("COMMIT_ERROR "), "{text}");
+        assert!(
+            commits[before + 1].contains(" transport_epoch=211 transport_count=1"),
+            "{text}"
+        );
+        assert!(commits[before + 2].starts_with("COMMIT_OK "), "{text}");
+        assert_eq!(
+            frames(&text, RESPONSE),
+            owned(&[(10, "100D621234000000"), (212, "0762123400000000")]),
+            "{text}"
+        );
+    }
+}
+
 /// The host thread may confirm a frame sent from a batch input before or after
 /// that epoch's cycle; the test build forces the early order. N_Cr runs from
 /// the FC confirmation either way (200 ms after epoch 10).

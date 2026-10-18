@@ -14,6 +14,7 @@
  * Verifies: SWS_CanTp_00216、00209
  */
 #include "CanTp.h"
+#include "CanTp_Internal.h"
 #include "PduR_CanTp.h"
 #include "LSduR_CanTp.h"
 #include "SchM_CanTp.h"
@@ -558,6 +559,59 @@ static void buffer_waits(void)
     assert(rx_done == 2u && rx_result == E_NOT_OK && sent_count == 3u);
     expect_det(MAIN, E_RX_COM);
 }
+/* A receive before the owner's pending cycle owes a full period. Replacing a
+ * timer or connection must not carry that skip into confirmation/direct calls. */
+static void reception_timer_ordering(void)
+{
+    start();
+    assert(transmit(20u) == E_OK);
+    confirm(E_OK);
+    Ecu_CanTpReceptionBeforeMain(TRUE);
+    receive8(0x31u, 0u, 0u, 0u);
+    Ecu_CanTpReceptionBeforeMain(FALSE);
+    ticks(N_BS);
+    assert(tx_done == 0u && det_count == 0u);
+    ticks(1u);
+    assert(tx_done == 1u && tx_result == E_NOT_OK);
+    expect_det(MAIN, E_TX_COM);
+
+    start();
+    receive_data(0x10u, 20u, 1u, 8u);
+    confirm(E_OK);
+    Ecu_CanTpReceptionBeforeMain(TRUE);
+    receive_data(0x21u, 0u, 7u, 8u);
+    Ecu_CanTpReceptionBeforeMain(FALSE);
+    ticks(N_CR);
+    assert(rx_done == 0u && det_count == 0u);
+    ticks(1u);
+    assert(rx_done == 1u && rx_result == E_NOT_OK);
+    expect_det(MAIN, E_RX_COM);
+
+    start();
+    assert(transmit(20u) == E_OK);
+    confirm(E_OK);
+    Ecu_CanTpReceptionBeforeMain(TRUE);
+    receive8(0x30u, 0u, 0u, 0u);
+    Ecu_CanTpReceptionBeforeMain(FALSE);
+    /* Confirmation replaces the receive-started N_As with its own N_Cs. */
+    copy_tx_result = BUFREQ_E_BUSY;
+    confirm(E_OK);
+    ticks(N_CS - 1u);
+    assert(tx_done == 0u);
+    ticks(1u);
+    assert(tx_done == 1u && tx_result == E_NOT_OK);
+    expect_det(MAIN, E_TX_COM);
+
+    start();
+    Ecu_CanTpReceptionBeforeMain(TRUE);
+    CanTp_Shutdown();
+    CanTp_Init(&config);
+    assert(transmit(20u) == E_OK);
+    confirm(E_OK);
+    ticks(N_BS);
+    assert(tx_done == 1u && tx_result == E_NOT_OK);
+    expect_det(MAIN, E_TX_COM);
+}
 /* The shortest timers, two main-function periods, and WFTmax 0 as generated: an action
  * left to the main function by a confirmation is made in time, and N_Br expiry asks for
  * buffer once more before it decides (SWS_CanTp_00341). A one-period timer is refused. */
@@ -742,6 +796,7 @@ int main(void)
     segmented_reception();
     reception_admission();
     buffer_waits();
+    reception_timer_ordering();
     shortest_timers();
     full_duplex();
     cancellation();

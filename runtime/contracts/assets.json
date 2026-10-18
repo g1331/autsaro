@@ -1520,6 +1520,19 @@
       "responsibility": "workbench"
     },
     {
+      "path": "runtime/bsw/src/CanTp_Internal.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
       "path": "runtime/bsw/src/Com.c",
       "license": "Apache-2.0",
       "targets": [
