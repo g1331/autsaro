@@ -1,0 +1,60 @@
+name: Diagnostic reporting probe
+on:
+  pull_request:
+    paths: [.github/workflows/diagnostic-probe.yml, tests/fixtures/ci-reporting/**]
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: tools/python/src
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv sync --locked
+      - name: Real failing unittest
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/fixtures/ci-reporting
+      - name: Real new clang-tidy diagnostic
+        id: analyzer
+        if: always()
+        shell: python
+        run: |
+          import json, subprocess, sys
+          from pathlib import Path
+          from autosar_tooling.quality import CLANG_TIDY_LINE
+          source = Path('tests/fixtures/ci-reporting/probe/probe.c').resolve()
+          result = subprocess.run(['uv', 'run', '--locked', 'clang-tidy', str(source), '--checks=-*,clang-analyzer-core.NullDereference', '--warnings-as-errors=clang-analyzer-core.NullDereference', '--', '-std=c99'], capture_output=True, text=True)
+          print(result.stdout, result.stderr)
+          rows = []
+          for line in result.stdout.splitlines():
+              match = CLANG_TIDY_LINE.match(line)
+              if match:
+                  rows.append(dict(rule=match[6], file='probe.c', line=int(match[2]), message=match[5], sample='probe'))
+          Path('build').mkdir(exist_ok=True)
+          Path('build/probe-tidy.json').write_text(json.dumps(rows), encoding='utf-8')
+          if not rows:
+              raise RuntimeError('Real analyzer produced no diagnostic')
+          sys.exit(result.returncode)
+      - name: Production reporting converter
+        if: always()
+        env:
+          ANALYZER_OUTCOME: ${{ steps.analyzer.outcome }}
+        run: python -m autosar_tooling.ci_reporting sarif --clang-tidy build/probe-tidy.json --samples tests/fixtures/ci-reporting --analysis-outcome "$ANALYZER_OUTCOME" --output build/probe.sarif
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        if: always()
+        with:
+          sarif_file: build/probe.sarif
+          category: diagnostic-reporting-probe
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: diagnostic-probe-evidence
+          path: |
+            build/probe.sarif
+            build/probe-tidy.json
+          retention-days: 14
