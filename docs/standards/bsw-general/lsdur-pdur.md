@@ -28,7 +28,7 @@
 | 跨模块版本检查与发布信息 |  | 差距 #59[LSduR]：SWS_BSW_00036、00059、00161、00162、00256；差距 #59[PduR]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[LSduR]：SWS_BSW_00115；差距 #58[PduR]：SWS_BSW_00115 |
 | BSWMD 与模块文档 |  | 差距 #159[LSduR]：SWS_BSW_00001、00002、00038、00061；差距 #159[PduR]：SWS_BSW_00001、00002、00038、00061 |
-| Symbolic Name Value |  | 差距 #160[LSduR]：SWS_BSW_00200；差距 #160[PduR]：SWS_BSW_00200 |
+| Symbolic Name Value | PduR_Cfg.h 与 LSduR_Cfg.h 唯一生产各自符号；LSduR 仅导出由已验证路由合成的源／目的句柄，不接纳独立 LSduR ECUC。PBcfg 消费者包含提供方头，非等 ID／改名工程实际运行 | 已核对（symbolic_handles_compile_link_and_run_renamed_nondefault_mapping）[LSduR]：SWS_BSW_00200；已核对（symbolic_handles_compile_link_and_run_renamed_nondefault_mapping）[PduR]：SWS_BSW_00200 |
 | 开发错误 |  | 不适用（配置：ECUC_PduR_00302=true）[PduR]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |
 | 运行时错误 |  | 不适用（配置：ECUC_PduR_00291、ECUC_PduR_00356）[PduR]：SWS_BSW_00219、00222；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00219、00222 |
 | 生产错误 | LSduR SWS 没有定义生产错误 | 不适用（配置：ECUC_PduR_00365）[PduR]：SWS_BSW_00204、00205、00143、00046、00066、00206、00207、00208；已核对（规范原文）[LSduR]：SWS_BSW_00204、00205、00143、00046、00066、00206、00207、00208 |

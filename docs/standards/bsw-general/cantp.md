@@ -30,7 +30,7 @@
 | 跨模块版本检查与发布信息 |  | 差距 #59[CanTp]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[CanTp]：SWS_BSW_00115 |
 | BSWMD 与模块文档 | 包括独占区与主函数调用顺序的说明 | 差距 #159[CanTp]：SWS_BSW_00001、00002、00038、00061、00054 |
-| Symbolic Name Value |  | 差距 #160[CanTp]：SWS_BSW_00200 |
+| Symbolic Name Value | CanTp_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[CanTp]：SWS_BSW_00200 |
 | 开发错误 |  | 不适用（配置：ECUC_CanTp_00239=true）[CanTp]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |
 | 扩展生产错误 | CanTp SWS 第 7 章按模板记录扩展生产错误；只有配置了 Dem 事件引用时才报告 | 已核对（规范原文）[CanTp]：SWS_BSW_00204；不适用（配置：ECUC_CanTp_00307）[CanTp]：SWS_BSW_00205、00143、00046、00066、00206、00207、00208 |
 | 安全事件 |  | 不适用（配置：ECUC_CanTp_00318=true）[CanTp]：SWS_BSW_00244、00251、00252、00253、00258 |

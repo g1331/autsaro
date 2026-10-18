@@ -37,4 +37,4 @@ OS 是 SC1、单核的 AUTOSAR OS，内核采用固定版本的 FreeRTOS 并打�
 | MISRA | 差距 #58[Os]：SWS_BSW_00115 |
 | 完整 BSWMD／模块文档 | 交付的 BSWMD 只描述 OS 的两个计数器服务入口，没有其余服务、ISR 与独占区说明；没有随实现交付、写明处理器与工具链的模块文档。 差距 #159[Os]：SWS_BSW_00001、00002、00003、00038、00041、00054、00061 |
 | BSWMD 模式组 | OS 的 BSWMD 没有 providedModeGroup。 已核对（BSWMD 生成）[Os]：SWS_BSW_00238 |
-| Symbolic Name Value | 生成代码经 `Os_Cfg.h`／`Os_Counter.h` 使用 `OS_TASK_ID_*`、`OS_COUNTER_ID_*`，但集成头 `Ecu_TargetConfig.h` 中的任务 ID 以字面量写出。 差距 #160[Os]：SWS_BSW_00200 |
+| Symbolic Name Value | Ecu_TargetConfig.h 包含 Os_Cfg.h，owner task 使用该头唯一生产的 OS_TASK_ID_*；计数器继续从 Os_Counter.h 导入。已核对（配置记录与实际生成头／消费者）[Os]：SWS_BSW_00200 |

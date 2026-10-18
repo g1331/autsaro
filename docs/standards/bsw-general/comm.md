@@ -35,4 +35,4 @@ ComM 只有一个 CDD 通道（ComMNmVariant 为 NONE），经 Ecu_HostBusSM 请
 | MISRA | 差距 #58[ComM]：SWS_BSW_00115 |
 | 完整 BSWMD／模块文档 | 交付的 BSWMD 已描述 ComM 入口、独占区 COMM_STATE 与按周期触发的主函数，但不是完整的模块描述与文档。 差距 #159[ComM]：SWS_BSW_00001、00002、00038、00054、00061 |
 | BSWMD 模式组 | ComM 的 BSWMD 没有 providedModeGroup，因此没有需要映射的 synchronizedModeGroup；SW-C 模式端口补齐后须重新核对。 已核对（BSWMD 生成）[ComM]：SWS_BSW_00238 |
-| Symbolic Name Value | 通道与用户句柄以字面量写入使用方，未经提供方头文件导入。 差距 #160[ComM]：SWS_BSW_00200 |
+| Symbolic Name Value | ComM_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[ComM]：SWS_BSW_00200 |

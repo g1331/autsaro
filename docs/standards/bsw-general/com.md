@@ -28,7 +28,7 @@
 | 跨模块版本检查与发布信息 |  | 差距 #59[Com]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[Com]：SWS_BSW_00115 |
 | BSWMD 与模块文档 | 包括独占区与主函数调用顺序的说明 | 差距 #159[Com]：SWS_BSW_00001、00002、00038、00061、00054 |
-| Symbolic Name Value |  | 差距 #160[Com]：SWS_BSW_00200 |
+| Symbolic Name Value | Com_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[Com]：SWS_BSW_00200 |
 | 开发错误 |  | 不适用（配置：ECUC_Com_00141）[Com]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |
 | 运行时错误 | 唯一的运行时错误只用于大型 I-PDU | 不适用（配置：ECUC_Com_00761=TP）[Com]：SWS_BSW_00219、00222 |
 | 安全事件 |  | 不适用（配置：ECUC_Com_10042=true）[Com]：SWS_BSW_00244、00250、00251、00252、00253、00258 |

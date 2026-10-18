@@ -34,4 +34,4 @@ Dcm 使用自己的 `DCM_STATE`，跨模块调用与应用回调都在区外。�
 | 发布版本信息 | 差距 #59[Dcm]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA | 差距 #58[Dcm]：SWS_BSW_00115 |
 | 完整 BSWMD／模块文档 | 包含 interface 描述、独占区、调度顺序与 synchronizedModeGroup 映射；本次补全 managed mode group 的调用方关系，其余完整交付仍由原差距负责。差距 #159[Dcm]：SWS_BSW_00001、00002、00038、00040、00054、00061、00238 |
-| Symbolic Name Value | 差距 #160[Dcm]：SWS_BSW_00200 |
+| Symbolic Name Value | Dcm_Cfg.h 导出所选接收／发送／连接／会话及协议符号；Ecu_RuntimeConfig.c 从 PduR_Cfg.h／ComM_Cfg.h 导入对端句柄。已核对（生成头与真实消费者）[Dcm]：SWS_BSW_00200 |
