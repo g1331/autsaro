@@ -68,8 +68,7 @@ fn build(mode: &str, control: Option<&Path>, built: &super::Scratch, project: &P
 fn host_batch_project() -> Built {
     let scratch = super::Scratch::new();
     let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
-    let output = build("host-batch", None, &scratch, &project);
-    let binary = super::tooling::native_binary(&output, "ecu_host_batch");
+    let binary = super::sealed_builds::host_batch(&project, &scratch.0.join("host-batch-build"));
     Built {
         scratch,
         project,
@@ -888,5 +887,53 @@ fn single_component_native_batch_boundary_and_confirmations() {
         String::from_utf8(result.stdout).unwrap().contains(
             "native_batch capacity=256 refusal=257 same_epoch=0 future_requires_tick=pass confirmations=pass second_producer=refused"
         )
+    );
+}
+
+/// A consumer may mutate its own files without changing another consumer's
+/// executable, or turning a changed sealed input into a cached success.
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn shared_host_batch_builds_isolate_mutating_consumers() {
+    let first = host_batch_project();
+    let second = host_batch_project();
+    assert_ne!(first.binary, second.binary);
+    assert_ne!(first.project, second.project);
+    let original = fs::read(&second.binary).unwrap();
+    assert_eq!(fs::read(&first.binary).unwrap(), original);
+    fs::write(&first.binary, b"corrupted consumer executable").unwrap();
+    fs::write(first.project.join("README.md"), b"changed consumer project").unwrap();
+    assert_eq!(fs::read(&second.binary).unwrap(), original);
+    let third = host_batch_project();
+    assert_eq!(fs::read(&third.binary).unwrap(), original);
+    for built in [&second, &third] {
+        let text = run(
+            &built.binary,
+            &built.scratch.0.join("isolated"),
+            b"BEGIN 10\nRX 800 4 78563412\nCOMMIT\nBEGIN 20\nCOMMIT\n",
+        );
+        assert_eq!(
+            frames(&text, TRANSMIT),
+            owned(&[(10, "78563412"), (20, "78563412")])
+        );
+    }
+    // Corrupt an input whose seal is unchanged. Reusing a build by a fixture
+    // label or seal alone would incorrectly accept it instead of rejecting it.
+    let rejected = std::panic::catch_unwind(|| {
+        super::sealed_builds::host_batch(&first.project, &first.scratch.0.join("changed-build"));
+    });
+    let error = rejected.expect_err("modified project reused an earlier successful build");
+    let message = error
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| error.downcast_ref::<&str>().copied())
+        .unwrap();
+    assert!(
+        message.contains("Source identity mismatch: README.md"),
+        "{message}"
+    );
+    assert!(
+        !super::tooling::native_binary(&first.scratch.0.join("changed-build"), "ecu_host_batch")
+            .exists()
     );
 }

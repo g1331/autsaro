@@ -896,19 +896,16 @@ pub(crate) fn verify_production_owner(
     p2_star: Option<(&str, &str)>,
 ) {
     let output = consumer.join("pipeline-build");
-    let result = tooling::ecu_build_command(project, &output, "host-batch", None)
-        .current_dir(consumer)
-        .env_remove("PYTHONPATH")
-        .env_remove("PYTHONHOME")
-        .output()
-        .unwrap();
-    assert!(
-        result.status.success(),
-        "{}\n{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
-    let binary = tooling::native_binary(&output, "ecu_host_batch");
+    let binary = super::sealed_builds::host_batch(project, &output);
+    verify_production_owner_binary(&binary, consumer, p2_star);
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+pub(crate) fn verify_production_owner_binary(
+    binary: &Path,
+    consumer: &Path,
+    p2_star: Option<(&str, &str)>,
+) {
     let logs = consumer.join("owner-logs");
     std::fs::create_dir(&logs).unwrap();
     #[cfg(unix)]
@@ -917,7 +914,7 @@ pub(crate) fn verify_production_owner(
         std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
     }
     let mut spec = autosar_config_core::execution::ProcessSpec::for_duration(
-        vec![binary.into_os_string()],
+        vec![binary.as_os_str().to_owned()],
         consumer.to_path_buf(),
         vec![],
         std::time::Duration::from_secs(30),
