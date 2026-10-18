@@ -24,7 +24,7 @@ class VerifierTests(unittest.TestCase):
         ff = "100a621234123456"
         cf = "2178f18601000000"
         deadline = 201
-        recovery = next(tick for tick in range(202, 212) if tick % period == 0)
+        recovery = next(tick for tick in range(deadline + 1, deadline + period + 1) if tick % period == 0)
         # period=1 crosses the verifier's bounded-batch split at129.
         wait = [(129, [], "00000000", [], False)] if period == 1 else []
         scenarios = {
@@ -37,7 +37,7 @@ class VerifierTests(unittest.TestCase):
             ],
             "arbitration": [
                 (period, [rx], value, [], False),
-                (2 * period, [rx, two], value, [ff], False),
+                (3 * period - 1, [rx, two], value, [ff], False),
                 (3 * period, [rx, cts], value, [cf], False),
                 (4 * period, [rx, two], value, [ff], False),
                 (4 * period, [cts], value, [cf], False),
@@ -111,6 +111,9 @@ class VerifierTests(unittest.TestCase):
         for period in [1, 2, 3, 10]:
             with self.subTest(period=period):
                 self.replay(period)
+
+    def test_flow_control_does_not_wait_for_long_application_period(self):
+        self.replay(250)
 
     def test_missing_periodic_or_diagnostic_frames_are_refused(self):
         for period in [1, 2, 3, 10]:

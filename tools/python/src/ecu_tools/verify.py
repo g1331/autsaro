@@ -143,7 +143,8 @@ def verify(project: Path, build_directory: Path) -> None:
     ])
     actor("arbitration", [
         (period, [rx], "78563412", [], False),
-        (2 * period, [rx, diagnostic(f"0522{did}f1860000")], "78563412", [f"100a62{did}123456"], False),
+        # Keep FF-to-CTS at one tick even when the application period exceeds N_Bs.
+        (3 * period - 1, [rx, diagnostic(f"0522{did}f1860000")], "78563412", [f"100a62{did}123456"], False),
         (3 * period, [rx, diagnostic("3000000000000000")], "78563412", ["2178f18601000000"], False),
         (4 * period, [rx, diagnostic(f"0522{did}f1860000")], "78563412", [f"100a62{did}123456"], False),
         # An already-ticked epoch admits the CF without repeating periodic work.
