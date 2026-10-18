@@ -26,7 +26,9 @@ const size_t Os_ArtiNativeContextSize =
 static union {
     long double alignment;
     unsigned char bytes[OS_ALTSTACK_BYTES];
-} altstacks[OS_NATIVE_STACKS];           /**< Actor-owned alternate signal stacks; no Init reset. */
+} altstacks[OS_NATIVE_STACKS]; /**< Actor-owned alternate signal stacks; no Init reset. */
+static volatile Os_Atomic32
+    stack_published[OS_NATIVE_STACKS];   /**< Completed registration publication; no Init reset. */
 static volatile Os_Atomic32 stack_count; /**< Atomic native record reservations; no Init reset. */
 static volatile Os_Atomic32 fault_claimed; /**< Atomic first-fault winner latch; no Init reset. */
 static volatile Os_Atomic32 fault_count;   /**< Atomic fault claim/count state; no Init reset. */
@@ -180,6 +182,7 @@ int Os_StackRegister(char role)
     record->altstack_size = alternate.ss_size;
     current_stack = record;
     Os_StackCheck();
+    __atomic_store_n(&stack_published[index], 1, __ATOMIC_RELEASE);
     return 1;
 }
 
@@ -217,9 +220,13 @@ void Os_StackObserve(HANDLE thread, const CONTEXT *context)
     if (context == NULL || context->ContextFlags != CONTEXT_CONTROL) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    for (index = 0; index < stack_count && index < (LONG)OS_NATIVE_STACKS; ++index) {
+    for (index = 0;
+         index < InterlockedCompareExchange(&stack_count, 0, 0) && index < (LONG)OS_NATIVE_STACKS;
+         ++index) {
         Os_NativeStack *record = &stacks[index];
-        if (record->thread_id == id) {
+        /* A reservation can belong to another actor still registering. */
+        if (__atomic_load_n(&stack_published[index], __ATOMIC_ACQUIRE) != 0 &&
+            record->thread_id == id) {
             uintptr_t sp = context->Rsp;
             if (sp < record->committed_low || sp >= record->high) {
                 publish_fault(record, 0u, sp, sp, 'M');
@@ -288,9 +295,11 @@ int Os_StackReport(void)
 {
     int result = 0;
     LONG index;
-    for (index = 0; index < stack_count && index < (LONG)OS_NATIVE_STACKS; ++index) {
+    for (index = 0;
+         index < InterlockedCompareExchange(&stack_count, 0, 0) && index < (LONG)OS_NATIVE_STACKS;
+         ++index) {
         const Os_NativeStack *record = &stacks[index];
-        if (record->thread_id == 0u) {
+        if (__atomic_load_n(&stack_published[index], __ATOMIC_ACQUIRE) == 0) {
             continue;
         }
         if (printf(

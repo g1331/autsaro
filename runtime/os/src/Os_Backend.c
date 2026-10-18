@@ -179,7 +179,12 @@ sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
     }
     return 1;
 }
-uint32 Os_BackendCurrentInterrupt(void) { return current_interrupt; }
+uint32 Os_BackendCurrentInterrupt(void)
+{
+    const Os_NativeStack *stack = Os_StackCurrent();
+    /* Host controllers run concurrently with the dispatcher and own no ISR. */
+    return (stack != NULL && stack->role == 'S') ? current_interrupt : 32u;
+}
 sint32 Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
 void Os_BackendInterruptEnter(uint32 interrupt)
 {

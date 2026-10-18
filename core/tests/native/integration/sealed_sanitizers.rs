@@ -1,4 +1,4 @@
-//! Linux ASan/UBSan over the sealed ECU closure, without changing delivery builds.
+//! Linux sealed ECU sanitizers and focused OS thread owners, without changing delivery builds.
 use super::*;
 use std::ffi::OsStr;
 use std::fs;
@@ -27,7 +27,7 @@ fn instrument(project: &Path, output: &Path, mode: &str, control: Option<&Path>)
             output,
             mode,
             control,
-            OsStr::new("address,undefined"),
+            OsStr::new(&std::env::var("AUTOSAR_SANITIZE").unwrap()),
         ),
         output.parent().unwrap(),
         &format!("build-{mode}"),
@@ -42,10 +42,11 @@ fn instrument(project: &Path, output: &Path, mode: &str, control: Option<&Path>)
             .iter()
             .any(|arg| arg.as_str().unwrap().starts_with("-fsanitize="))
     );
+    let sanitizer = format!("-fsanitize={}", std::env::var("AUTOSAR_SANITIZE").unwrap());
     assert_eq!(
         instrumented.drain(1..5).collect::<Vec<_>>(),
         [
-            "-fsanitize=address,undefined",
+            sanitizer.as_str(),
             "-fno-sanitize-recover=all",
             "-fno-omit-frame-pointer",
             "-g"
@@ -241,4 +242,34 @@ fn sealed_guard_refuses_untrusted_standard_library_shadow_before_import() {
         "{rejected:?}",
     );
     assert!(!output.exists(), "refused source created build output");
+}
+
+#[test]
+fn sealed_os_registration_and_interrupt_identity_use_real_thread_owners() {
+    if !cfg!(target_os = "linux")
+        || !matches!(
+            std::env::var("AUTOSAR_SANITIZE").as_deref(),
+            Ok("thread" | "address,undefined")
+        )
+    {
+        return;
+    }
+    let scratch = Scratch::new();
+    let (project, _) = single_component_project(&scratch.0, tooling::native_target());
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/os_lifecycle_threads.c");
+    let output = scratch.0.join("thread-owners");
+    instrument(&project, &output, "probe", Some(&fixture));
+    let run = tooling::run_public_command(
+        &mut Command::new(tooling::native_binary(&output, "ecu_probe")),
+        &scratch.0,
+        "thread-owners",
+        Duration::from_secs(30),
+    );
+    require_success(&run);
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout).trim(),
+        "registration=published host_isr=inactive dispatcher_isr=restored"
+    );
+    assert!(run.stderr.is_empty(), "{run:?}");
 }
