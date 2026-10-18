@@ -512,7 +512,7 @@ BOOL CloseHandle(HANDLE handle)
             const int result = close(handle->fd);
             if (result == 0) {
                 handle->fd = -1;
-                __atomic_store_n(&handle->reserved, 0, __ATOMIC_RELEASE);
+                (void)InterlockedExchange(&handle->reserved, 0);
             }
             closed = (result == 0) ? TRUE : FALSE;
         } else if (handle->kind == OS_HOST_MUTEX) {
