@@ -333,11 +333,9 @@ fn builtin_ecu_delivers_project_license_and_preserves_kernel_notice() {
         ] {
             assert_eq!(fs::read(output.join(name)).unwrap(), expected);
             assert!(names.lines().any(|path| path == name));
-            assert!(
-                hashes
-                    .lines()
-                    .any(|line| { line == format!("{:x}  {name}", Sha256::digest(expected)) })
-            );
+            assert!(hashes.lines().any(|line| {
+                line == format!("{}  {name}", hex::encode(Sha256::digest(expected)))
+            }));
         }
         assert_eq!(
             fs::read(output.join("kernel/LICENSE.md")).unwrap(),
@@ -1231,7 +1229,7 @@ fn runtime_source_inventory_has_no_manual_digests_and_delivery_has_computed_dige
         assert!(source.get("sha256").is_none());
         let path = source["path"].as_str().unwrap();
         let bytes = fs::read(root.join(path)).unwrap();
-        let expected = format!("{:x}", Sha256::digest(&bytes));
+        let expected = hex::encode(Sha256::digest(&bytes));
         assert_eq!(delivered["sha256"], expected, "{path}");
         let asset = inventory.get(path).unwrap();
         assert_eq!(asset.sha256, expected, "{path}");

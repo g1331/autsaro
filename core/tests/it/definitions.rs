@@ -70,7 +70,7 @@ fn extension(directory: &Path, id: &str, package: &str) -> PathBuf {
         "<ECUC-MODULE-DEF><SHORT-NAME>{package}</SHORT-NAME><LOWER-MULTIPLICITY>0</LOWER-MULTIPLICITY><UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY><CONTAINERS><ECUC-PARAM-CONF-CONTAINER-DEF><SHORT-NAME>Settings</SHORT-NAME><LOWER-MULTIPLICITY>0</LOWER-MULTIPLICITY><UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY><PARAMETERS><ECUC-INTEGER-PARAM-DEF><SHORT-NAME>Limit</SHORT-NAME><LOWER-MULTIPLICITY>0</LOWER-MULTIPLICITY><UPPER-MULTIPLICITY>1</UPPER-MULTIPLICITY><MIN>0</MIN><MAX>18446744073709551615</MAX><DEFAULT-VALUE>9007199254740993</DEFAULT-VALUE></ECUC-INTEGER-PARAM-DEF></PARAMETERS></ECUC-PARAM-CONF-CONTAINER-DEF></CONTAINERS></ECUC-MODULE-DEF>"
     ));
     fs::write(directory.join("definitions.arxml"), &xml).unwrap();
-    let inventory = serde_json::json!({"formatVersion":1,"catalogId":id,"release":"R24-11","version":"1.0.0","files":[{"path":"definitions.arxml","sha256":format!("{:x}",Sha256::digest(xml.as_bytes()))}]});
+    let inventory = serde_json::json!({"formatVersion":1,"catalogId":id,"release":"R24-11","version":"1.0.0","files":[{"path":"definitions.arxml","sha256":hex::encode(Sha256::digest(xml.as_bytes()))}]});
     let path = directory.join("catalog.json");
     fs::write(&path, serde_json::to_vec_pretty(&inventory).unwrap()).unwrap();
     path
@@ -435,7 +435,7 @@ fn extension_acceptance_is_explicit_and_restore_requires_exact_complete_cache() 
     let accepted = catalog.accept_extension(&path, &cache).unwrap();
     assert_eq!(
         accepted.sha256,
-        format!("{:x}", Sha256::digest(fs::read(&path).unwrap()))
+        hex::encode(Sha256::digest(fs::read(&path).unwrap()))
     );
     let id = "/Project/VendorOne/Settings/Limit";
     catalog
@@ -663,7 +663,7 @@ fn extension_cannot_shadow_builtin_definition_namespace() {
     fs::write(&member, &raw).unwrap();
     let mut inventory: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    inventory["files"][0]["sha256"] = format!("{:x}", Sha256::digest(raw.as_bytes())).into();
+    inventory["files"][0]["sha256"] = hex::encode(Sha256::digest(raw.as_bytes())).into();
     fs::write(&path, serde_json::to_vec(&inventory).unwrap()).unwrap();
     let mut catalog = DefinitionCatalog::builtin().unwrap();
     let old = catalog.fingerprint(&identity());
@@ -1056,7 +1056,7 @@ fn extension_split_name_bound_and_default_are_not_truncated() {
     fs::write(&member, &updated).unwrap();
     let mut inventory: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    inventory["files"][0]["sha256"] = format!("{:x}", Sha256::digest(updated.as_bytes())).into();
+    inventory["files"][0]["sha256"] = hex::encode(Sha256::digest(updated.as_bytes())).into();
     fs::write(&path, serde_json::to_vec(&inventory).unwrap()).unwrap();
     let mut catalog = DefinitionCatalog::builtin().unwrap();
     catalog

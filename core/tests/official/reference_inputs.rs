@@ -82,13 +82,9 @@ fn verify_reference_inputs() {
     // Locate the archive like every official test; the manifest pins its identity.
     let schema_path = schema::schema_archive(root);
     assert_eq!(
-        format!(
-            "{:x}",
-            Sha256::digest(
-                fs::read(&schema_path)
-                    .expect("not_run: required local R24-11 XSD archive is missing")
-            )
-        ),
+        hex::encode(Sha256::digest(
+            fs::read(&schema_path).expect("not_run: required local R24-11 XSD archive is missing")
+        )),
         manifest["external_xsd"]["sha256"].as_str().unwrap(),
         "R24-11 XSD archive identity; missing dependency is a failure, never a skip"
     );
@@ -98,7 +94,7 @@ fn verify_reference_inputs() {
         let path = fixture.join(relative);
         let bytes = fs::read(&path).unwrap();
         assert_eq!(
-            format!("{:x}", Sha256::digest(&bytes)),
+            hex::encode(Sha256::digest(&bytes)),
             entry["sha256"].as_str().unwrap(),
             "raw fixture bytes: {relative}"
         );

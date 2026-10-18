@@ -836,7 +836,7 @@ fn author_extension(directory: &Path) -> std::path::PathBuf {
     fs::write(directory.join("custom.arxml"), xml).unwrap();
     let inventory = serde_json::json!({
         "formatVersion": 1, "catalogId": "vendor-custom", "release": "R24-11", "version": "1.0.0",
-        "files": [{ "path": "custom.arxml", "sha256": format!("{:x}", Sha256::digest(xml.as_bytes())) }]
+        "files": [{ "path": "custom.arxml", "sha256": hex::encode(Sha256::digest(xml.as_bytes())) }]
     });
     let path = directory.join("catalog.json");
     fs::write(&path, serde_json::to_vec_pretty(&inventory).unwrap()).unwrap();
@@ -2248,7 +2248,7 @@ fn accepted_extension_creation_recurses_and_writes_repeated_defaults() {
     fs::write(&source, &text).unwrap();
     let mut inventory: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    inventory["files"][0]["sha256"] = format!("{:x}", Sha256::digest(text.as_bytes())).into();
+    inventory["files"][0]["sha256"] = hex::encode(Sha256::digest(text.as_bytes())).into();
     fs::write(&path, serde_json::to_vec(&inventory).unwrap()).unwrap();
     let mut workspace = signals(&scratch.0.join("Extension"), "Extension");
     workspace

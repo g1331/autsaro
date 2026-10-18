@@ -11,7 +11,7 @@ pub(super) fn new_epoch() -> String {
     digest.update(std::process::id().to_le_bytes());
     digest.update(EPOCH_SEQUENCE.fetch_add(1, Ordering::Relaxed).to_le_bytes());
     digest.update(format!("{:?}", std::time::SystemTime::now()).as_bytes());
-    format!("{:x}", digest.finalize())
+    hex::encode(digest.finalize())
 }
 
 #[derive(Clone)]
@@ -271,7 +271,7 @@ impl Workspace {
             digest.update(epoch.as_bytes());
             digest.update(category.as_bytes());
             digest.update(next_identity.to_le_bytes());
-            format!("{:x}", digest.finalize())
+            hex::encode(digest.finalize())
         };
         let old_objects: BTreeMap<_, _> = previous
             .objects
@@ -315,7 +315,7 @@ impl Workspace {
                 source_id: source_id.clone(),
                 path,
                 readonly: false,
-                sha256: format!("{:x}", Sha256::digest(file.text.as_bytes())),
+                sha256: hex::encode(Sha256::digest(file.text.as_bytes())),
             });
             #[cfg(feature = "verification-metrics")]
             crate::verification::before(crate::verification::Phase::SourceScan);
@@ -1222,7 +1222,7 @@ impl Workspace {
             digest.update((bytes.len() as u64).to_le_bytes());
             digest.update(bytes);
         }
-        Ok(format!("{:x}", digest.finalize()))
+        Ok(hex::encode(digest.finalize()))
     }
 
     pub(super) fn is_dirty(&self) -> bool {

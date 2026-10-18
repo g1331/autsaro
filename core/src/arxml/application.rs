@@ -289,7 +289,7 @@ impl Workspace {
             }
         }
         Ok(ApplicationInitializationPreview {
-            revision: format!("{:x}", digest.finalize()),
+            revision: hex::encode(digest.finalize()),
             slots,
             files,
             manifest_before: project.saved.clone(),

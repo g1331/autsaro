@@ -116,10 +116,9 @@ fn main() {
     .expect("official constants");
     println!("cargo:rerun-if-changed={}", official_path.display());
     let helper = root.join("tools/python/src/ecu_tools/sealed_package.py");
-    let helper_digest = format!(
-        "{:x}",
-        Sha256::digest(fs::read(&helper).expect("sealed package helper"))
-    );
+    let helper_digest = hex::encode(Sha256::digest(
+        fs::read(&helper).expect("sealed package helper"),
+    ));
     let helper_manifest =
         read_manifest(root, "tools/python/src/ecu_tools/build-tool-inventory.json");
     assert_eq!(helper_manifest["files"][0]["path"], "sealed_package.py");
@@ -168,10 +167,9 @@ fn main() {
             entry.get("sha256").is_none(),
             "runtime digests are computed at build time"
         );
-        let hash = format!(
-            "{:x}",
-            Sha256::digest(fs::read(root.join(&path)).expect("asset bytes"))
-        );
+        let hash = hex::encode(Sha256::digest(
+            fs::read(root.join(&path)).expect("asset bytes"),
+        ));
         // Preserve the delivered v2 manifest's existing field order and formatting.
         let anchor = format!(
             "      \"path\": {},\n",
@@ -221,7 +219,7 @@ fn main() {
         add(
             &mut rows,
             path.into(),
-            format!("{:x}", Sha256::digest(bytes)),
+            hex::encode(Sha256::digest(bytes)),
             license,
             "provenance",
             "upstream inventory",
@@ -237,7 +235,7 @@ fn main() {
     add(
         &mut rows,
         own_manifest.into(),
-        format!("{:x}", Sha256::digest(own_bytes)),
+        hex::encode(Sha256::digest(own_bytes)),
         "Apache-2.0",
         "provenance",
         "workbench",
@@ -299,7 +297,7 @@ fn main() {
     }
     let mut output = format!(
         "const SOURCE_INVENTORY_SHA256: &str = {:?};\n",
-        format!("{:x}", Sha256::digest(&source_inventory))
+        hex::encode(Sha256::digest(&source_inventory))
     );
     output.push_str("pub static EMBEDDED_ASSETS: &[AssetEntry] = &[\n");
     for item in rows.values() {
@@ -317,7 +315,7 @@ fn main() {
         };
         let contents = fs::read(embedded_path).expect("asset bytes");
         assert_eq!(
-            format!("{:x}", Sha256::digest(&contents)),
+            hex::encode(Sha256::digest(&contents)),
             item.expected,
             "asset digest differs: {}",
             item.path
@@ -516,7 +514,7 @@ fn build_native_inventory(core: &Path) {
             !bytes.is_empty(),
             "empty native implementation source: {path}"
         );
-        let sha256 = format!("{:x}", Sha256::digest(&bytes));
+        let sha256 = hex::encode(Sha256::digest(&bytes));
         sources.push(serde_json::json!({"path": path, "sha256": sha256}));
         generated.push_str(&format!(
             "InventorySource {{ path: {path:?}, sha256: {sha256:?}, bytes: include_bytes!({:?}) }},\n",
@@ -547,7 +545,7 @@ fn build_native_inventory(core: &Path) {
         "coverage": coverage
     });
     let bytes = serde_json::to_vec(&inventory).expect("deterministic rule inventory");
-    let sha256 = format!("{:x}", Sha256::digest(&bytes));
+    let sha256 = hex::encode(Sha256::digest(&bytes));
     let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"));
     fs::write(out.join("native_rule_inventory.json"), &bytes).expect("native inventory");
     generated.push_str(&format!(
@@ -620,10 +618,9 @@ fn build_kernel_digests(root: &Path, rows: &BTreeMap<String, Source>) {
                 let name = target_spec::kernel_path(&row.path).expect("kernel source path");
                 (
                     name,
-                    format!(
-                        "{:x}",
-                        Sha256::digest(fs::read(kernel.join(name)).expect("patched kernel bytes"))
-                    ),
+                    hex::encode(Sha256::digest(
+                        fs::read(kernel.join(name)).expect("patched kernel bytes"),
+                    )),
                 )
             })
             .collect();

@@ -392,7 +392,7 @@ fn preview_revision(
     let identity = crate::rules::rule_set_identity()?;
     digest.update(serde_json::to_vec(&identity).map_err(|error| error.to_string())?);
     digest.update(catalog.fingerprint(&identity).as_bytes());
-    Ok(format!("{:x}", digest.finalize()))
+    Ok(hex::encode(digest.finalize()))
 }
 
 fn from_preview(

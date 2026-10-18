@@ -439,7 +439,7 @@ fn interactive_stdin_preserves_binary_bytes_and_eof_closes_the_child() {
     let output = std::fs::read_to_string(result.stdout).unwrap();
     let lines: Vec<_> = output.lines().collect();
     let actual_pid = lines[0].parse::<u32>().unwrap();
-    assert_eq!(lines[1], format!("{:x}", Sha256::digest(bytes)));
+    assert_eq!(lines[1], hex::encode(Sha256::digest(bytes)));
     assert_pids_gone(&[actual_pid, result.pid]);
 }
 

@@ -453,7 +453,7 @@ impl Workspace {
                 digest.update(bytes);
             }
         }
-        format!("{:x}", digest.finalize())
+        hex::encode(digest.finalize())
     }
 
     pub fn preview_save(&mut self) -> Result<SavePreview, crate::message::LocalizedText> {

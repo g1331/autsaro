@@ -88,7 +88,7 @@ fn unpack_schema(archive: &Path) -> Result<PrivateSchemaDirectory, crate::Locali
         }
         digest.update(&buffer[..count]);
     }
-    if format!("{:x}", digest.finalize()) != XSD_SHA256 {
+    if hex::encode(digest.finalize()) != XSD_SHA256 {
         return Err(crate::product_message!("backend.schema.archive_identity"));
     }
     file.seek(SeekFrom::Start(0))

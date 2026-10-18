@@ -293,7 +293,7 @@ impl InputSource {
         &self.bytes
     }
     pub fn sha256(&self) -> String {
-        format!("{:x}", Sha256::digest(&self.bytes))
+        hex::encode(Sha256::digest(&self.bytes))
     }
 
     fn text(&self) -> Result<&str, Box<PlanDiagnostic>> {

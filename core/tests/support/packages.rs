@@ -130,7 +130,7 @@ pub(crate) fn reseal(root: &Path) {
     let mut ledger: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     for entry in ledger["files"].as_array_mut().unwrap() {
         let bytes = fs::read(root.join(entry["path"].as_str().unwrap())).unwrap();
-        entry["sha256"] = serde_json::Value::String(format!("{:x}", Sha256::digest(bytes)));
+        entry["sha256"] = serde_json::Value::String(hex::encode(Sha256::digest(bytes)));
     }
     let mut bytes = serde_json::to_vec_pretty(&ledger).unwrap();
     bytes.push(b'\n');
@@ -143,8 +143,8 @@ pub(crate) fn seal(root: &Path) {
     let mut seal = String::new();
     for path in names.lines().chain(["meta/files.list"]) {
         seal.push_str(&format!(
-            "{:x}  {path}\n",
-            Sha256::digest(fs::read(root.join(path)).unwrap())
+            "{}  {path}\n",
+            hex::encode(Sha256::digest(fs::read(root.join(path)).unwrap()))
         ));
     }
     fs::write(root.join("meta/files.sha256"), seal).unwrap();
