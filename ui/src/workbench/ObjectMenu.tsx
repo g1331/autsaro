@@ -1,6 +1,6 @@
 import { ContextMenu } from 'radix-ui';
-import { useId } from 'react';
-import type { ReactNode } from 'react';
+import { useId, useState } from 'react';
+import type { ReactNode, SyntheticEvent } from 'react';
 import { message, useLocale } from '../i18n';
 import type { Workbench } from './useWorkbench';
 import { commandById } from './commands';
@@ -125,6 +125,55 @@ export function ObjectContextMenu({
       <ContextMenu.Portal>
         <ContextMenu.Content className="menu-popup" loop>
           <ObjectMenuItems controller={controller} object={object} />
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
+  );
+}
+
+/** One menu owner for a tree, rather than global keyboard listeners per row. */
+export function ObjectTreeContextMenu({
+  controller,
+  objects,
+  children,
+}: {
+  controller: MenuController | (() => MenuController);
+  objects: ReadonlyMap<string, ObjectProjection> | null;
+  children: ReactNode;
+}) {
+  const [objectId, setObjectId] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const current = objectId ? objects?.get(objectId) : null;
+  function selectTarget(event: SyntheticEvent<HTMLElement>) {
+    const row =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>('[data-object-id]')
+        : null;
+    const candidate = row && objects?.get(row.dataset.objectId ?? '');
+    if (!candidate || (!candidate.writable && !isAtomicComponent(candidate))) {
+      event.preventDefault();
+      setObjectId(null);
+      return;
+    }
+    setObjectId(candidate.objectId);
+  }
+  return (
+    <ContextMenu.Root
+      open={open && Boolean(current && (current.writable || isAtomicComponent(current)))}
+      onOpenChange={setOpen}
+    >
+      <ContextMenu.Trigger
+        asChild
+        onContextMenuCapture={selectTarget}
+        onPointerDownCapture={(event) => {
+          if (event.pointerType !== 'mouse') selectTarget(event);
+        }}
+      >
+        {children}
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content className="menu-popup" loop>
+          {current ? <ObjectMenuItems controller={controller} object={current} /> : null}
         </ContextMenu.Content>
       </ContextMenu.Portal>
     </ContextMenu.Root>

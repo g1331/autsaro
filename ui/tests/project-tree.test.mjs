@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement } from 'react';
-import { cleanup, fireEvent, render, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ProjectTree } from '../src/workbench/ProjectTree';
 import {
@@ -213,4 +213,123 @@ test('revealing an object expands its collapsed group', () => {
   expect(
     view.getByRole('treeitem', { name: 'BSW descriptions' }).getAttribute('aria-expanded'),
   ).toBe('true');
+});
+
+test('a wide tree shares global menu keyboard listeners across its object rows', () => {
+  const add = vi.spyOn(document, 'addEventListener');
+  try {
+    const wide = Array.from({ length: 32 }, (_, i) =>
+      object(`wide-${i}`, null, 'IMPLEMENTATION-DATA-TYPE', `Type_${i}`),
+    );
+    const view = render(
+      createElement(ProjectTree, {
+        controller: controllerFor({
+          projection: { objects: wide, fields: [], sources: [], diagnostics: [] },
+        }),
+      }),
+    );
+    expect(view.getAllByRole('treeitem')).toHaveLength(33);
+    const keyboard = add.mock.calls.filter(([type]) => type === 'keydown').length;
+    expect(keyboard).toBeLessThanOrEqual(1);
+    add.mockClear();
+    fireEvent.keyDown(view.getByRole('treeitem', { name: 'Type_0' }), { key: 'ArrowDown' });
+    const pointer = add.mock.calls.filter(
+      ([type]) => type === 'pointerdown' || type === 'pointermove',
+    ).length;
+    expect(pointer).toBeLessThanOrEqual(2);
+  } finally {
+    add.mockRestore();
+  }
+});
+
+test('the shared tree menu resolves nested targets, refuses groups and restores row focus', async () => {
+  const first = object('first', null, 'IMPLEMENTATION-DATA-TYPE', 'First');
+  const second = object('second', null, 'IMPLEMENTATION-DATA-TYPE', 'Second');
+  const readonly = {
+    ...object('readonly', null, 'IMPLEMENTATION-DATA-TYPE', 'Readonly'),
+    writable: false,
+  };
+  const c = controllerFor({
+    projection: { objects: [first, second, readonly], fields: [], sources: [], diagnostics: [] },
+    activeObjectId: 'second',
+    actionReason: () => null,
+    stageChange: vi.fn(),
+    setInspectorTab: vi.fn(),
+    guardContext: (_message, action) => action(),
+  });
+  const view = render(createElement(ProjectTree, { controller: c }));
+  fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Types' }));
+  expect(view.queryByRole('menu')).toBeNull();
+  fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Readonly' }));
+  expect(view.queryByRole('menu')).toBeNull();
+  const firstRow = view.getByRole('treeitem', { name: 'First' });
+  firstRow.focus();
+  fireEvent.contextMenu(firstRow.querySelector('.tree-name'));
+  fireEvent.keyDown(await view.findByRole('menu'), { key: 'Escape' });
+  await waitFor(() => expect(document.activeElement).toBe(firstRow));
+  const secondRow = view.getByRole('treeitem', { name: 'Second' });
+  fireEvent.contextMenu(secondRow.querySelector('.tree-name'));
+  const menu = await view.findByRole('menu');
+  fireEvent.click(within(menu).getByRole('menuitem', { name: /Remove/ }));
+  expect(c.stageChange).toHaveBeenCalledWith({
+    op: 'remove-instance',
+    changeId: 'second',
+    object: { kind: 'existing', objectId: 'second' },
+    expectedShortName: 'Second',
+  });
+});
+
+test('a shared tree menu closes when its object leaves the current projection', async () => {
+  const c = controllerFor({ actionReason: () => null });
+  const view = render(createElement(ProjectTree, { controller: c }));
+  fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Can' }));
+  await view.findByRole('menu');
+  view.rerender(
+    createElement(ProjectTree, {
+      controller: {
+        ...c,
+        projection: {
+          ...c.projection,
+          objects: c.projection.objects.filter((item) => item.objectId !== 'can'),
+        },
+      },
+    }),
+  );
+  await waitFor(() => expect(view.queryByRole('menu')).toBeNull());
+});
+
+test('touch long press resolves the row and rejects readonly objects', () => {
+  vi.useFakeTimers();
+  try {
+    const writable = object('touch', null, 'IMPLEMENTATION-DATA-TYPE', 'Touch');
+    const readonly = {
+      ...object('locked', null, 'IMPLEMENTATION-DATA-TYPE', 'Locked'),
+      writable: false,
+    };
+    const view = render(
+      createElement(ProjectTree, {
+        controller: controllerFor({
+          projection: { objects: [writable, readonly], fields: [], sources: [], diagnostics: [] },
+          actionReason: () => null,
+        }),
+      }),
+    );
+    const press = (name) => {
+      const event = new Event('pointerdown', { bubbles: true, cancelable: true });
+      Object.defineProperties(event, {
+        pointerType: { value: 'touch' },
+        clientX: { value: 10 },
+        clientY: { value: 20 },
+      });
+      fireEvent(view.getByRole('treeitem', { name }).querySelector('.tree-name'), event);
+      act(() => vi.advanceTimersByTime(700));
+    };
+    press('Locked');
+    expect(view.queryByRole('menu')).toBeNull();
+    press('Touch');
+    expect(view.getByRole('menu')).toBeTruthy();
+  } finally {
+    cleanup();
+    vi.useRealTimers();
+  }
 });

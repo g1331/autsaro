@@ -23,7 +23,7 @@ import { iconSize } from './icons';
 import { objectRoleClass } from './objectRole';
 import { groupedObjectTree, moduleLabel } from './projectGroups';
 import { MarkIcons, markLabels, useObjectMarks } from './ObjectMarks';
-import { ObjectContextMenu } from './ObjectMenu';
+import { ObjectTreeContextMenu } from './ObjectMenu';
 import type { ObjectGroup, TreeNode } from './projectGroups';
 import { Tooltip } from './Tooltip';
 
@@ -207,14 +207,7 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
           <MarkIcons mark={mark} />
         </div>
       );
-      const projected = object ? index.byId.get(object.objectId) : undefined;
-      return projected ? (
-        <ObjectContextMenu key={node.key} controller={() => actions.current} object={projected}>
-          {row}
-        </ObjectContextMenu>
-      ) : (
-        row
-      );
+      return row;
     });
   }, [
     model,
@@ -307,43 +300,48 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
             placeholder={t('editor.tree.placeholder')}
           />
         </label>
-        <div
-          className="tree-content"
-          role="tree"
-          aria-label={
-            c.treeMode === 'objects' ? t('editor.objects.heading') : t('editor.tree.sourceFiles')
-          }
-          aria-multiselectable
-          onKeyDown={keyboard}
+        <ObjectTreeContextMenu
+          controller={() => actions.current}
+          objects={c.treeMode === 'objects' ? index.byId : null}
         >
-          {c.treeMode === 'objects'
-            ? objectRows
-            : sources.map((source, index) => (
-                <button
-                  key={source.sourceId}
-                  type="button"
-                  role="treeitem"
-                  tabIndex={
-                    c.activeSourceId === source.sourceId || (!activeSourceInRows && index === 0)
-                      ? 0
-                      : -1
-                  }
-                  aria-level={1}
-                  aria-selected={c.activeSourceId === source.sourceId}
-                  className="tree-row ghost-button"
-                  onClick={() => void c.readSource(source.sourceId)}
-                >
-                  <FileCode2 size={iconSize.inline} aria-hidden="true" />
-                  <span className="tree-name" title={displayPath(source.path)}>
-                    {labelFromPath(source.path)}
-                  </span>
-                  <small>
-                    {source.readonly ? t('editor.common.readonly') : t('editor.tree.source')}
-                  </small>
-                </button>
-              ))}
-          {!c.projection ? <p className="empty-state">{t('editor.tree.loading')}</p> : null}
-        </div>
+          <div
+            className="tree-content"
+            role="tree"
+            aria-label={
+              c.treeMode === 'objects' ? t('editor.objects.heading') : t('editor.tree.sourceFiles')
+            }
+            aria-multiselectable
+            onKeyDown={keyboard}
+          >
+            {c.treeMode === 'objects'
+              ? objectRows
+              : sources.map((source, index) => (
+                  <button
+                    key={source.sourceId}
+                    type="button"
+                    role="treeitem"
+                    tabIndex={
+                      c.activeSourceId === source.sourceId || (!activeSourceInRows && index === 0)
+                        ? 0
+                        : -1
+                    }
+                    aria-level={1}
+                    aria-selected={c.activeSourceId === source.sourceId}
+                    className="tree-row ghost-button"
+                    onClick={() => void c.readSource(source.sourceId)}
+                  >
+                    <FileCode2 size={iconSize.inline} aria-hidden="true" />
+                    <span className="tree-name" title={displayPath(source.path)}>
+                      {labelFromPath(source.path)}
+                    </span>
+                    <small>
+                      {source.readonly ? t('editor.common.readonly') : t('editor.tree.source')}
+                    </small>
+                  </button>
+                ))}
+            {!c.projection ? <p className="empty-state">{t('editor.tree.loading')}</p> : null}
+          </div>
+        </ObjectTreeContextMenu>
       </div>
       {c.activeObjectId && c.treeMode === 'objects' && !activeInRows ? (
         <p className="filter-retained">
