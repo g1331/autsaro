@@ -88,6 +88,94 @@ fn module_descriptions_include_delivered_public_entries_and_manuals() {
             );
         }
     }
+    // SWS_CANIF_91003: the output is caller-owned uint8 storage, distinct from the controller value.
+    let counter = xml
+        .descendants()
+        .find(|node| {
+            node.has_tag_name("BSW-MODULE-ENTRY")
+                && node.children().any(|child| {
+                    child.has_tag_name("SHORT-NAME")
+                        && child.text() == Some("CanIf_GetControllerRxErrorCounter")
+                })
+        })
+        .unwrap();
+    let arguments: Vec<_> = counter
+        .children()
+        .find(|node| node.has_tag_name("ARGUMENTS"))
+        .unwrap()
+        .children()
+        .filter(|node| node.has_tag_name("SW-SERVICE-ARG"))
+        .map(|arg| {
+            let field = |tag| {
+                arg.children()
+                    .find(|node| node.has_tag_name(tag))
+                    .unwrap()
+                    .text()
+                    .unwrap()
+            };
+            let base_ref = arg
+                .descendants()
+                .find(|node| node.has_tag_name("BASE-TYPE-REF"))
+                .unwrap()
+                .text()
+                .unwrap()
+                .rsplit('/')
+                .next()
+                .unwrap();
+            let base = xml
+                .descendants()
+                .find(|node| {
+                    node.has_tag_name("SW-BASE-TYPE")
+                        && node.children().any(|child| {
+                            child.has_tag_name("SHORT-NAME") && child.text() == Some(base_ref)
+                        })
+                })
+                .unwrap();
+            let native = base
+                .children()
+                .find(|node| node.has_tag_name("NATIVE-DECLARATION"))
+                .unwrap()
+                .text()
+                .unwrap();
+            (field("SHORT-NAME"), field("DIRECTION"), native)
+        })
+        .collect();
+    assert_eq!(
+        arguments,
+        [
+            ("ControllerId", "IN", "uint8"),
+            ("RxErrorCounterPtr", "OUT", "uint8 *")
+        ]
+    );
+    let det = xml
+        .descendants()
+        .find(|node| {
+            node.has_tag_name("BSW-MODULE-DESCRIPTION")
+                && node
+                    .children()
+                    .any(|child| child.has_tag_name("SHORT-NAME") && child.text() == Some("Det"))
+        })
+        .unwrap();
+    assert!(
+        det.descendants()
+            .any(|node| node.has_tag_name("BSW-MODULE-ENTRY-REF")
+                && node.text() == Some("/Autsaro_Rte/BswModuleEntrys/Ecu_DetRuntimeCallout"))
+    );
+    let bus = xml
+        .descendants()
+        .find(|node| {
+            node.has_tag_name("BSW-MODULE-DESCRIPTION")
+                && node.children().any(|child| {
+                    child.has_tag_name("SHORT-NAME") && child.text() == Some("Ecu_HostBusSM")
+                })
+        })
+        .unwrap();
+    assert!(bus.descendants().any(|node| {
+        node.has_tag_name("EXCLUSIVE-AREA")
+            && node.children().any(|child| {
+                child.has_tag_name("SHORT-NAME") && child.text() == Some("CAN_HOST_AREA_BUSSM")
+            })
+    }));
     for module in [
         "Can",
         "CanIf",
