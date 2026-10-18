@@ -16,6 +16,7 @@ permissions:
   pull-requests: read
 env:
   PYTHONUTF8: '1'
+  PYTHONPATH: tools/python/src
 jobs:
   changes:
     name: Detect changed areas
@@ -76,7 +77,7 @@ jobs:
           cache-dependency-path: ui/package-lock.json
       - run: npm ci --prefix ui
       - run: npm run lint --prefix ui
-      - run: npm run test --prefix ui
+      - run: python -m autosar_tooling.ci_reporting run -- npm run test --prefix ui
       - run: npm run build --prefix ui
   python:
     needs: changes
@@ -109,7 +110,7 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run --locked ruff check tools tests/python scripts
-      - run: uv run --locked python -B -m unittest discover -s tests/python
+      - run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python
       - run: uv build --out-dir build/python
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -127,7 +128,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/core-build-dependencies
-      - run: cargo test --locked -p autosar-config-core
+      - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core
       - name: Runtime build identities and dependency pinning
         env:
           PYTHONPATH: tools/python/src
@@ -158,7 +159,7 @@ jobs:
           linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
-      - run: cargo test --locked -p autosar-config-desktop
+      - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-desktop
       - run: cargo build --locked -p autosar-config-desktop
       - if: runner.os == 'Linux'
         run: cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
@@ -177,7 +178,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
-      - run: uv run --locked python -B -m unittest discover -s tests/python/process
+      - run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/process
   native:
     # Native suites that need GCC but no licensed archive; the rest stay in acceptance.yml.
     needs: changes
@@ -245,7 +246,7 @@ jobs:
           scratch = Path(os.environ['RUNNER_TEMP']) / 'native-scratch'
           scratch.mkdir()
           env = dict(os.environ, TMP=str(scratch), TEMP=str(scratch), TMPDIR=str(scratch))
-          sys.exit(subprocess.run(['cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests',
+          sys.exit(subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', 'cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests',
               '--lib', '--test', 'native', '--no-fail-fast', '--', *filters], env=env).returncode)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
@@ -282,7 +283,7 @@ jobs:
         env:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
           AUTOSAR_OS_SHARD: ${{ matrix.shard }}
-        run: uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -292,7 +293,7 @@ jobs:
           retention-days: 14
       - name: Host I/O and lock failure boundaries
         if: startsWith(matrix.shard, '0/')
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
   native-sanitizers:
     # GCC sanitizers over the directly compiled native programs and the OS suites (#129).
     needs: changes
@@ -346,7 +347,7 @@ jobs:
       # which GCC 13's ThreadSanitizer needs under the runner's vm.mmap_rnd_bits.
       - name: Instrumented native programs
         run: >-
-          setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native
+          setarch x86_64 -R python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --features native-tests --test native
           --no-fail-fast -- 'runtime_contracts::' 'host::' 'integration::generated_c::'
           'integration::os::counter_header_oracles' 'sanitizers::'
       # ThreadSanitizer defers asynchronous signal handlers to its own safe points, so the
@@ -355,7 +356,7 @@ jobs:
         if: matrix.sanitize != 'thread'
         env:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
-        run: setarch x86_64 -R uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
+        run: setarch x86_64 -R python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -393,7 +394,7 @@ jobs:
       - run: uv run --locked python -m autosar_tooling quality --scope all --base "$CHECK_BASE"
       # Accounts each committed catalog in core/resources/requirements (ADR 0017) without the archive.
       - name: Requirement dispositions
-        run: uv run --locked python -m autosar_tooling requirements
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -m autosar_tooling requirements
       - name: Workflow syntax (actionlint)
         run: uv run --locked --group workflows actionlint
       - name: Workflow security (zizmor)
@@ -410,6 +411,9 @@ jobs:
         run: osv-scanner scan source --lockfile uv.lock --lockfile ui/package-lock.json
 
   c-analysis-prepare:
+    permissions:
+      contents: read
+      security-events: write
     needs: changes
     if: needs.changes.outputs.native == 'true'
     strategy:
@@ -500,9 +504,9 @@ jobs:
             target
           key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
       - name: Analyzer behavior tests
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Generate complete analysis samples
-        run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
+        run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - name: Validate generated sample inventory
         shell: python
         run: |
@@ -522,13 +526,26 @@ jobs:
           retention-days: 14
       # After publishing, so a format failure still leaves the samples for diagnosis.
       - name: Generated C follows .clang-format
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_generated_format.py
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_generated_format.py
       - name: Generated C compiles with clang warnings
         if: runner.os == 'Linux'
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py
       - name: Generated C adds no clang-tidy findings to the baseline
+        id: tidy
         if: runner.os == 'Linux'
+        env:
+          AUTOSAR_CLANG_TIDY_REPORT: build/clang-tidy.json
         run: uv run --locked python -m autosar_tooling quality --scope runtime --c-samples "$AUTOSAR_C_ANALYSIS_SAMPLES"
+      - name: Convert clang-tidy diagnostics
+        if: ${{ always() && runner.os == 'Linux' && hashFiles('build/clang-tidy.json') != '' }}
+        env:
+          TIDY_OUTCOME: ${{ steps.tidy.outcome }}
+        run: python -m autosar_tooling.ci_reporting sarif --clang-tidy build/clang-tidy.json --analysis-outcome "$TIDY_OUTCOME" --output build/clang-tidy.sarif
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        if: ${{ always() && runner.os == 'Linux' && hashFiles('build/clang-tidy.sarif') != '' }}
+        with:
+          sarif_file: build/clang-tidy.sarif
+          category: clang-tidy-linux
 
   native-delivery:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.
@@ -571,10 +588,10 @@ jobs:
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Sealed ECU build mode fault isolation
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
       # The generated CMake build (uv-locked CMake and Ninja) compiles the target.json closure.
       - name: CMake build matches the sealed ECU build
-        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_cmake_build.py
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_cmake_build.py
       # Oldest supported receiver runs every sample; Extended covers the full interpreter matrix.
       - name: All moved samples build and run with receiver Python 3.11
         shell: python
@@ -583,7 +600,7 @@ jobs:
           subprocess.run(['uv', 'python', 'install', '--no-bin', '3.11'], check=True)
           receiver = subprocess.check_output(['uv', 'python', 'find', '--no-project', '--managed-python', '3.11'], text=True).strip()
           print(f'Receiver Python 3.11: {receiver}', flush=True)
-          result = subprocess.run(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
+          result = subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', 'uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
               env={**os.environ, 'AUTOSAR_RECEIVER_PYTHON': receiver,
                    'AUTOSAR_RECEIVER_SAMPLES': 'standard-ecu user-application component-pipeline no-diagnostic'})
           if result.returncode:
@@ -591,6 +608,10 @@ jobs:
           sys.exit(result.returncode)
 
   c-analysis-samples:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     needs: c-analysis-prepare
     strategy:
       fail-fast: false
@@ -680,6 +701,36 @@ jobs:
                   print(name, error)
                   failed = True
           sys.exit(1 if failed else 0)
+      - name: Retrieve matching master baseline for presentation
+        if: always()
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASELINE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base }}
+          BASELINE_ARTIFACT: c-analysis-${{ matrix.target }}-${{ matrix.group }}
+        run: |
+          import json, os, subprocess
+          # Optional display evidence only. Missing/expired artifacts cannot change the source verdict.
+          base = os.environ['BASELINE_SHA']
+          try:
+              if not base or set(base) == {'0'}:
+                  raise ValueError('No baseline commit')
+              runs = subprocess.run(['gh', 'run', 'list', '--workflow', 'checks.yml', '--branch', 'master',
+                  '--commit', base, '--status', 'success', '--limit', '1', '--json', 'databaseId'],
+                  capture_output=True, text=True, check=True)
+              run = json.loads(runs.stdout)[0]['databaseId']
+              subprocess.run(['gh', 'run', 'download', str(run), '--name', os.environ['BASELINE_ARTIFACT'],
+                  '--dir', 'build/c-analysis-baseline'], check=True)
+          except (subprocess.SubprocessError, ValueError, IndexError) as error:
+              print('Baseline unavailable for presentation:', error)
+      - name: Summarize and convert Cppcheck diagnostics
+        if: always()
+        run: python -m autosar_tooling.ci_reporting sarif --cppcheck-directory build/c-analysis-results --baseline-directory build/c-analysis-baseline --output build/cppcheck.sarif
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        if: ${{ always() && hashFiles('build/cppcheck.sarif') != '' }}
+        with:
+          sarif_file: build/cppcheck.sarif
+          category: cppcheck-${{ matrix.target }}-${{ matrix.group }}
       # Existing source remediation precedes automatic strict source gating.
       # Readiness above verifies complete analysis; it does not approve violations.
       - name: Strict generated source gate
