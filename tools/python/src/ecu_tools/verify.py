@@ -49,6 +49,8 @@ def verify(project: Path, build_directory: Path) -> None:
             commands.append(f"BEGIN {at}")
             commands.extend(messages)
             commands.append("COMMIT")
+            # Input-phase FC/first CF flush before periodic work; Com flushes
+            # before Dcm. Equal epochs alone do not contend for the single HOH.
             outputs = [(epoch, inputs["transmitCanId"], 4, tx)
                        for epoch in range((previous // period + 1) * period, at + 1, period)]
             outputs.extend((at, inputs["responseCanId"], 8, data) for data in diagnostics)
@@ -139,6 +141,15 @@ def verify(project: Path, build_directory: Path) -> None:
         (period + 3, [rx, diagnostic("3000000000000000")], "78563412", ["2178f18601000000"], False),
         (period + 4, [rx, diagnostic(f"0722{did}f186{did}")], "78563412", ["037f221300000000"], False),
     ])
+    actor("arbitration", [
+        (period, [rx], "78563412", [], False),
+        (2 * period, [rx, diagnostic(f"0522{did}f1860000")], "78563412", [f"100a62{did}123456"], False),
+        (3 * period, [rx, diagnostic("3000000000000000")], "78563412", ["2178f18601000000"], False),
+        (4 * period, [rx, diagnostic(f"0522{did}f1860000")], "78563412", [f"100a62{did}123456"], False),
+        # An already-ticked epoch admits the CF without repeating periodic work.
+        (4 * period, [diagnostic("3000000000000000")], "78563412", ["2178f18601000000"], False),
+        (5 * period, [rx, diagnostic(request)], "78563412", [response], False),
+    ])
     deadline = 1 + inputs["receiveTimeoutMs"]
     recovery = (deadline // period + 1) * period
     actor("ncr-recovery", [
@@ -149,4 +160,4 @@ def verify(project: Path, build_directory: Path) -> None:
     ])
     actor("malformed", [], malformed=True)
     sealed_sources(project)
-    print("ECU_HANDOFF_VERIFY PASS: CAN/DID echo, two-DID boundary, real N_Cr timeout/recovery, malformed admission; host behavior only.")
+    print("ECU_HANDOFF_VERIFY PASS: CAN/DID echo, single-HOH arbitration, two-DID boundary, real N_Cr timeout/recovery, malformed admission; host behavior only.")
