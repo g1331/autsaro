@@ -277,6 +277,83 @@ Stale citations (not an official item of R24-11):
                 self.assertNotIn("fixed finding, remove", output.read_text())
                 self.assertIn("report may be partial", output.read_text())
 
+    def test_merged_quality_producer_and_consumer_share_raw_identity_and_origin_mapping(
+        self,
+    ):
+        from autosar_tooling import quality
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "samples/sample"
+            for name in (
+                "runtime/Test.c",
+                "third_party/kernel.h",
+                "samples/sample/unit.c",
+                "samples/sample/kernel/test.h",
+                "samples/sample/bsw/Test.h",
+            ):
+                source = root / name
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text("int x;\n")
+            (project / "meta").mkdir()
+            (project / "meta/integration.json").write_text(
+                json.dumps(
+                    {
+                        "originalBswSources": {
+                            "runtime/Test.c": "unit.c",
+                            "third_party/kernel.h": "kernel/test.h",
+                        }
+                    }
+                )
+            )
+            (project / "target.json").write_text(
+                json.dumps(
+                    {
+                        "target": "linux-test",
+                        "kernelPatches": [],
+                        "includePaths": ["."],
+                        "sources": ["unit.c"],
+                        "entries": {},
+                        "compilerFlags": ["-std=c99"],
+                    }
+                )
+            )
+            output = "".join(
+                f"{project}/unit.c:1:{column}: warning: Runtime [test-rule]\n"
+                for column in (2, 3, 2)
+            )
+            output += f"{project}/bsw/Test.h:1:1: warning: Generated [readability-identifier-naming]\n"
+            output += f"{project}/kernel/test.h:1:1: warning: Foreign [test-rule]\n"
+            artifact = root / "raw.json"
+            summary = root / "summary"
+            baseline = Counter({("test-rule", "runtime/Test.c", "int x;"): 2})
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "AUTOSAR_CLANG_TIDY_REPORT": str(artifact),
+                        "GITHUB_STEP_SUMMARY": str(summary),
+                    },
+                ),
+                mock.patch.object(quality.shutil, "which", return_value="tidy"),
+                mock.patch.object(
+                    quality,
+                    "run",
+                    return_value=subprocess.CompletedProcess([], 0, output, ""),
+                ),
+                mock.patch.object(
+                    quality, "read_clang_tidy_baseline", return_value=baseline
+                ),
+            ):
+                self.assertEqual(quality.clang_tidy_errors(project.parent), [])
+                self.assertEqual(len(json.loads(artifact.read_text())), 5)
+                rows = report.clang_tidy(artifact, project.parent, root, "success")
+            self.assertIn("No new or fixed baseline findings.", summary.read_text())
+            self.assertEqual(
+                {row["file"] for row in rows},
+                {"runtime/Test.c", "third_party/kernel.h", "samples/sample/bsw/Test.h"},
+            )
+
     def test_relative_sample_cli_maps_actual_generated_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

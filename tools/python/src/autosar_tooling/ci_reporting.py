@@ -269,28 +269,31 @@ def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> lis
     per_sample = {}
     seen = set()
     positions = {}
+    mappings = {}
     for item in raw:
         name = relative(item["file"])
-        source = (
-            repository / name
-            if name.startswith("runtime/")
-            else samples / relative(item["sample"]) / name
-        )
+        sample = relative(item["sample"])
+        if sample not in mappings:
+            metadata = samples / sample / "meta/integration.json"
+            mappings[sample] = (
+                json.loads(metadata.read_text(encoding="utf-8"))["originalBswSources"]
+                if metadata.is_file()
+                else {}
+            )
+        original = name in mappings[sample] or name.startswith("runtime/")
+        delivered = mappings[sample].get(name, name)
+        source = repository / name if original else samples / sample / name
         line = int(item["line"])
         text = source.read_text(encoding="utf-8").splitlines()[line - 1].strip()
         key = (item["rule"], name, text)
         position = (item["sample"], name, line, item.get("column", 1), item["rule"])
-        eligible = not name.startswith(CLANG_TIDY_FOREIGN) and (
-            item["rule"] not in CLANG_TIDY_RUNTIME_ONLY or name.startswith("runtime/")
+        eligible = not delivered.startswith(CLANG_TIDY_FOREIGN) and (
+            item["rule"] not in CLANG_TIDY_RUNTIME_ONLY or original
         )
         if eligible and position not in seen:
             seen.add(position)
             per_sample.setdefault(item["sample"], Counter())[key] += 1
-        mapped = (
-            name
-            if name.startswith("runtime/")
-            else source.relative_to(repository).as_posix()
-        )
+        mapped = name if original else source.relative_to(repository).as_posix()
         row = {**item, "file": mapped}
         if row not in rows:
             rows.append(row)
