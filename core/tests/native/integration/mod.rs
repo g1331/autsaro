@@ -5,4 +5,5 @@ mod generated_c;
 mod os;
 mod protocol;
 mod sealed_projects;
+mod sealed_sanitizers;
 mod single_component;

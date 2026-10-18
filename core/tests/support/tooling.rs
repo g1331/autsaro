@@ -69,6 +69,25 @@ pub(crate) fn ecu_build_command(
     mode: &str,
     control: Option<&std::path::Path>,
 ) -> Command {
+    // TSan's standalone consumers still use a production ECU as a compile prerequisite.
+    if std::env::var("AUTOSAR_SANITIZE").as_deref() == Ok("address,undefined") {
+        return ecu_sanitizer_build_command(
+            project,
+            output,
+            mode,
+            control,
+            std::ffi::OsStr::new("address,undefined"),
+        );
+    }
+    ecu_production_build_command(project, output, mode, control)
+}
+
+pub(crate) fn ecu_production_build_command(
+    project: &Path,
+    output: &Path,
+    mode: &str,
+    control: Option<&Path>,
+) -> Command {
     let settings = execution_settings();
     let mut command = Command::new(&settings.python);
     command
@@ -85,6 +104,32 @@ pub(crate) fn ecu_build_command(
         .env("AUTOSAR_GIT", settings.git);
     if let Some(source) = control {
         command.arg("--control-source").arg(source);
+    }
+    command
+}
+
+/// Test-only instrumentation reuses the sealed package's production build owner.
+pub(crate) fn ecu_sanitizer_build_command(
+    project: &Path,
+    output: &Path,
+    mode: &str,
+    control: Option<&Path>,
+    kinds: &std::ffi::OsStr,
+) -> Command {
+    let settings = execution_settings();
+    let mut command = Command::new(&settings.python);
+    command
+        .args(["-I", "-S", "-B"])
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/support/sealed_sanitizers.py"))
+        .arg(project)
+        .arg(output)
+        .arg(mode)
+        .env("AUTOSAR_CC", settings.compiler)
+        .env("AUTOSAR_OBJDUMP", settings.objdump)
+        .env("AUTOSAR_GIT", settings.git)
+        .env("AUTOSAR_SANITIZE", kinds);
+    if let Some(source) = control {
+        command.arg(source);
     }
     command
 }
