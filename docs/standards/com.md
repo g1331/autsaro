@@ -53,7 +53,7 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 | I-PDU callout | 不适用（配置：ECUC_Com_00387）：SWS_Com_00221、00492、00700、00816、00346、00381、00719、00720、00839；不适用（配置：ECUC_Com_00765）：SWS_Com_00766、00395 |
 | post-build | 不适用（配置：ECUC_Com_00540 声明 VARIANT-POST-BUILD）：SWS_Com_00373 |
 | 发送信号的归属 | 已核对（配置模型：唯一的 Com 用户是 RTE）：SWS_Com_00892 |
-| 名字规则 | 已核对（所选 ComConfig 下 signal／IPdu／group 共享对象路径，Graph 重名拒绝与 SHORT-NAME 标量语法；回调仅接纳固定 Rte_COMCbk／Rte_COMCbkRxTOut，不与 Com_ 前缀相撞；symbolic_com_names_share_the_standard_short_name_namespace）：SWS_Com_00401、00402、00732 |
+| 名字规则 | 已核对（所选 ComConfig 下 signal／IPdu／group 共享对象路径，Graph 重名拒绝、SHORT-NAME 标量语法与 composition 的 C 关键字拒绝；回调仅接纳固定 Rte_COMCbk／Rte_COMCbkRxTOut，不与 Com_ 前缀相撞；symbolic_com_names_share_the_standard_short_name_namespace／symbolic_com_names_are_c_identifiers_before_prefixing）：SWS_Com_00401、00402、00732 |
 
 ### ECUC 参数
 

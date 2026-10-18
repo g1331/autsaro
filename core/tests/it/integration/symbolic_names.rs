@@ -78,6 +78,12 @@ fn symbolic_headers_and_consumers_preserve_provider_names_and_values() {
             assert!(source.contains(symbol), "{path}: {symbol}");
         }
     }
+    let config = text("generated/src/Ecu_RuntimeConfig.c");
+    assert!(config.contains("Ecu_HostBusSM_ApplyMode(ComMConf_ComMChannel_Host,"));
+    assert!(config.contains("PduRConf_PduRSrcPdu_TxValueSource"));
+    let profile = text("generated/include/Ecu_ProfileConfig.h");
+    assert!(profile.contains("#include \"Can_Cfg.h\""));
+    assert!(profile.contains("#include \"CanIf_Cfg.h\""));
 }
 
 #[test]
@@ -133,4 +139,51 @@ fn symbolic_com_names_share_the_standard_short_name_namespace() {
             && error.object.as_deref() == Some("/Configuration/Com/Config/RxValue")),
         "{errors:?}"
     );
+}
+
+// Verifies: SWS_Com_00402
+#[test]
+fn symbolic_com_names_are_c_identifiers_before_prefixing() {
+    for (kind, original) in [
+        ("ComSignal", "RxValue"),
+        ("ComIPdu", "RxValuePdu"),
+        ("ComIPduGroup", "RxGroup"),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", original)
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF")
+                            && child
+                                .text()
+                                .is_some_and(|definition| definition.ends_with(&format!("/{kind}")))
+                    })
+            },
+            |text| {
+                text.replacen(
+                    &format!("<SHORT-NAME>{original}</SHORT-NAME>"),
+                    "<SHORT-NAME>if</SHORT-NAME>",
+                    1,
+                )
+            },
+        );
+        replace_all(
+            &mut sources,
+            &format!("/Com/Config/{original}</"),
+            "/Com/Config/if</",
+        );
+        let errors = build(&sources)
+            .err()
+            .expect("C keyword accepted as a COM identifier");
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.code == "CONTRACT_NAME_COLLISION"
+                    && error.object.as_deref() == Some("/Configuration/Com/Config/if")),
+            "{errors:?}"
+        );
+    }
 }

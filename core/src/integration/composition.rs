@@ -1784,6 +1784,10 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
         let module = definition.split('/').nth(3).unwrap_or("");
         let kind = super::short_name(definition);
         let path = &graph.elements[container].object;
+        // SWS_Com_00402 applies to the source short name before adding ComConf_.
+        if module == "Com" && super::contracts::reserved_identifier(super::short_name(path)) {
+            return Err(fail(graph, container, "CONTRACT_NAME_COLLISION"));
+        }
         let mut generated = vec![super::symbolic_names::name(module, kind, path)];
         if kind == "PduRSrcPdu" {
             generated.push(super::symbolic_names::name(
