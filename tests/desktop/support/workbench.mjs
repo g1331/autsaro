@@ -289,7 +289,7 @@ export async function openWorkbench(name, options) {
       true,
     );
     const previousBoot = await evaluate('performance.timeOrigin');
-    await evaluate('setTimeout(() => location.reload(), 0); true');
+    await session.refresh();
     await until(
       `performance.timeOrigin !== ${previousBoot} && Boolean(window.__TAURI_INTERNALS__ && document.querySelector('.start-page'))`,
       'public application reload',
@@ -776,7 +776,7 @@ export async function openWorkbench(name, options) {
     // Keep the Chinese assertions deterministic on every host locale.
     const startupBoot = await evaluate('performance.timeOrigin');
     await invoke('configure_language', { language: 'zh-CN' });
-    await evaluate('setTimeout(() => location.reload(), 0); true');
+    await session.refresh();
     await until(
       `performance.timeOrigin !== ${startupBoot} && Boolean(window.__TAURI_INTERNALS__ && document.querySelector('[aria-label="设置"]'))`,
       'explicit Chinese native startup',
