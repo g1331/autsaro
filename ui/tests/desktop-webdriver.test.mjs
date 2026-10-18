@@ -44,6 +44,10 @@ test('native refresh waits for the navigation response before a new frame query'
       args: [],
     });
   })();
+  cleanups.push(async () => {
+    completeNavigation?.();
+    await navigation.catch(() => undefined);
+  });
   await started;
   expect(requests).toEqual([{ method: 'POST', url: '/session/native/refresh', body: {} }]);
   completeNavigation();
