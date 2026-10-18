@@ -45,7 +45,7 @@ Clippy 以默认规则集加 `-D warnings` 检查两个 crate，本地 `verify` 
 
 同一命令按 PR 分叉点检查根目录 `X.md`／`X.zh-CN.md` 是否成对修改，以及本次新增的 CHANGELOG 行是否为 `Breaking`／`Added`／`Changed`／`Fixed` 三级标题下、以 `(#N)` 结束的单行条目；双语内容仍由审阅核对。存量 CHANGELOG 条目留到发版整理。官方清单登记的文件名、`AUTOSAR_CP/FO/AP_*.pdf/zip` 和 `docs/official/` 下非 Markdown 文件不能提交，强制添加也会被检查。
 
-`quality --c-samples` 可通过 `AUTOSAR_CLANG_TIDY_REPORT` 指定原始诊断 JSON 的输出路径，记录 `rule`、`file`、`line`、`message`、`sample`。运行时文件映射到仓库路径，其他文件相对 `sample` 对应的样本根目录；保留各翻译单元的重复诊断和已有基线诊断。分析失败仍返回失败，报告可能只含已收集的部分结果，不能单凭报告存在判断分析完整或通过。未设置该变量时不写报告。
+`quality --c-samples` 可通过 `AUTOSAR_CLANG_TIDY_REPORT` 指定原始诊断 JSON 的输出路径，记录 `rule`、`file`、`line`、`column`、`message`、`sample`。运行时文件映射到仓库路径，其他文件相对 `sample` 对应的样本根目录；保留各翻译单元的重复诊断和已有基线诊断。分析失败仍返回失败，报告可能只含已收集的部分结果，不能单凭报告存在判断分析完整或通过。未设置该变量时不写报告。
 
 ## 依赖与 workflow 检查
 
