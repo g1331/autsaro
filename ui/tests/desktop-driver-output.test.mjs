@@ -53,14 +53,23 @@ test('driver output keeps split records and UTF-8 bytes in order while a write i
   expect(bytes('driver.stdout.log').toString()).toBe('driver ready\n');
 });
 
-test('driver output retains a file write failure while consuming the remaining stream', async () => {
+test.each([
+  { code: 'EACCES', syscall: 'open', path: path.join('/evidence', 'driver.stderr.log') },
+  { code: 'EISDIR', syscall: 'write' },
+])('driver output identifies its file after $syscall failure', async (details) => {
   const driver = streams();
-  const failure = Object.assign(new Error('capture denied'), { code: 'EACCES' });
+  const failure = Object.assign(new Error('capture denied'), details);
   state.append.mockRejectedValue(failure);
   const complete = captureDriverOutput(driver, '/evidence');
   driver.stdout.end();
   driver.stderr.end('native command returned\n');
-  await expect(complete).resolves.toEqual([null, failure]);
+  const [stdout, stderr] = await complete;
+  expect(stdout).toBeNull();
+  expect(stderr).toMatchObject({
+    path: path.join('/evidence', 'driver.stderr.log'),
+    code: details.code,
+  });
+  expect(stderr.cause).toBe(failure);
 });
 
 test('driver output retains a source stream failure', async () => {
@@ -69,5 +78,8 @@ test('driver output retains a source stream failure', async () => {
   const complete = captureDriverOutput(driver, '/evidence');
   driver.stdout.end();
   driver.stderr.destroy(failure);
-  await expect(complete).resolves.toEqual([null, failure]);
+  const [stdout, stderr] = await complete;
+  expect(stdout).toBeNull();
+  expect(stderr.path).toBe(path.join('/evidence', 'driver.stderr.log'));
+  expect(stderr.cause).toBe(failure);
 });

@@ -141,7 +141,12 @@ test('a driver output write failure is reported after complete owned native exit
           ),
           error,
         );
-        captureErrors = error.errors.map(String);
+        captureErrors = error.errors.map((item) => ({
+          message: String(item),
+          path: item.path,
+          code: item.code,
+          cause: item.cause ? String(item.cause) : undefined,
+        }));
         return true;
       });
     else await session.close();

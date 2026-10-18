@@ -31,17 +31,26 @@ export function captureDriverOutput(driver, directory, onStderr = () => {}) {
   return Promise.all(
     ['stdout', 'stderr'].map(async (channel) => {
       let failure = null;
+      const output = path.join(directory, `driver.${channel}.log`);
+      const rememberFailure = (error) => {
+        // Descriptor write errors can omit path, notably on Windows. The
+        // collector owns this destination; retain the OS error as the cause.
+        failure ??= Object.assign(
+          new Error(`Driver ${channel} output capture failed: ${output}`, { cause: error }),
+          { path: output, code: error?.code },
+        );
+      };
       try {
         for await (const chunk of driver[channel]) {
           if (channel === 'stderr') onStderr(chunk);
           try {
-            await appendFile(path.join(directory, `driver.${channel}.log`), chunk);
+            await appendFile(output, chunk);
           } catch (error) {
-            failure ??= error;
+            rememberFailure(error);
           }
         }
       } catch (error) {
-        failure ??= error;
+        rememberFailure(error);
       }
       return failure;
     }),
