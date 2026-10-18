@@ -62,3 +62,7 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 ## Windows 进程
 
 受管 supervisor 启动以期限内的认证就绪响应为准，不能将 socket 文件出现当作已开始监听。Windows 上 Job 活动计数归零与进程对象进入已退出状态之间可能有窗口，关闭后的 PID 也会很快被复用：检查进程已关闭时按创建时间排除复用的 PID，并有界等待真实退出事件，不用零超时探测 PID 存活；Windows 的父 PID 在父进程退出后不更新，按父 PID 归属进程树时要求子进程创建时间不早于父进程。
+
+## 封存构建复用
+
+原生集成测试的生产 HostBatch 可在同一测试进程中复用：辅助按完整工程目录字节（含 seal、应用、目标与工具）及当前工具路径精确匹配，每份输入只构建一次。缓存只保留可执行文件的字节和权限，各消费者写入自己的普通文件，运行输出与日志保持独立；测试进程结束即失效。自定义 control、preflight、Build／Verify、离线搬迁及重封存拒绝测试仍独立构建。`shared_host_batch_builds_isolate_mutating_consumers` 实际改写消费者程序与工程，检查其他副本的协议结果，并确认修改过的封存输入不能复用成功构建。
