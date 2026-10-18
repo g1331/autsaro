@@ -18,7 +18,14 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --locked
       - name: Real failing unittest
-        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/fixtures/ci-reporting
+        shell: python
+        run: |
+          import os, shutil, subprocess, sys
+          from pathlib import Path
+          result = subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', 'uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/fixtures/ci-reporting'])
+          Path('build').mkdir(exist_ok=True)
+          shutil.copyfile(os.environ['GITHUB_STEP_SUMMARY'], 'build/probe-test-summary.md')
+          sys.exit(result.returncode)
       - name: Real new clang-tidy diagnostic
         id: analyzer
         if: always()
@@ -44,7 +51,12 @@ jobs:
         if: always()
         env:
           ANALYZER_OUTCOME: ${{ steps.analyzer.outcome }}
-        run: python -m autosar_tooling.ci_reporting sarif --clang-tidy build/probe-tidy.json --samples tests/fixtures/ci-reporting --analysis-outcome "$ANALYZER_OUTCOME" --output build/probe.sarif
+        shell: python
+        run: |
+          import os, shutil, subprocess, sys
+          result = subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'sarif', '--clang-tidy', 'build/probe-tidy.json', '--samples', 'tests/fixtures/ci-reporting', '--analysis-outcome', os.environ['ANALYZER_OUTCOME'], '--output', 'build/probe.sarif'])
+          shutil.copyfile(os.environ['GITHUB_STEP_SUMMARY'], 'build/probe-scanner-summary.md')
+          sys.exit(result.returncode)
       - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         if: always()
         with:
@@ -57,4 +69,6 @@ jobs:
           path: |
             build/probe.sarif
             build/probe-tidy.json
+            build/probe-test-summary.md
+            build/probe-scanner-summary.md
           retention-days: 14
