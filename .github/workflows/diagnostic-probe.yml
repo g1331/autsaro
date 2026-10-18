@@ -34,7 +34,7 @@ jobs:
           for line in result.stdout.splitlines():
               match = CLANG_TIDY_LINE.match(line)
               if match:
-                  rows.append(dict(rule=match[6], file='probe.c', line=int(match[2]), message=match[5], sample='probe'))
+                  rows.append(dict(rule=match[6].split(',')[0], file='probe.c', line=int(match[2]), message=match[5], sample='probe'))
           Path('build').mkdir(exist_ok=True)
           Path('build/probe-tidy.json').write_text(json.dumps(rows), encoding='utf-8')
           if not rows:
