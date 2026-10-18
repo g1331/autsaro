@@ -939,9 +939,82 @@ mod delivery_path_tests {
     // An unmapped runtime family would fall through to tools/ without an error.
     #[test]
     fn runtime_sources_deliver_to_their_owner_directories() {
+        // These former emitter literals keep their generated paths rather than
+        // becoming verbatim integration sources when registered as assets.
+        let generated = std::collections::BTreeMap::from([
+            (
+                "runtime/ecu/include/Det_Externals.h",
+                ("ecu-config", "include/Det_Externals.h"),
+            ),
+            (
+                "runtime/ecu/include/Ecu_Config.h",
+                ("ecu-config", "include/Ecu_Config.h"),
+            ),
+            (
+                "runtime/ecu/include/Rte_Cfg.h",
+                ("rte", "include/Rte_Cfg.h"),
+            ),
+            (
+                "runtime/ecu/include/Rte_Com.h",
+                ("rte", "include/Rte_Com.h"),
+            ),
+            (
+                "runtime/ecu/include/Rte_DataHandleType.h",
+                ("rte", "include/Rte_DataHandleType.h"),
+            ),
+            (
+                "runtime/ecu/include/Rte_Main.h",
+                ("rte", "include/Rte_Main.h"),
+            ),
+            (
+                "runtime/ecu/src/Ecu_DetCallout.c",
+                ("ecu-config", "src/Det_Callouts.c"),
+            ),
+            (
+                "runtime/ecu/src/Ecu_Execution.c",
+                ("ecu-config", "src/Ecu_Execution.c"),
+            ),
+            (
+                "runtime/ecu/src/Ecu_Execution.h",
+                ("ecu-config", "src/Ecu_Execution.h"),
+            ),
+            (
+                "runtime/ecu/templates/Ecu_TargetConfig.h.in",
+                ("ecu-config", "include/Ecu_TargetConfig.h"),
+            ),
+            ("runtime/ecu/templates/Rte.h.in", ("rte", "include/Rte.h")),
+            (
+                "runtime/ecu/templates/SchM_Main.c.in",
+                ("ecu-config", "src/SchM_Main.c"),
+            ),
+        ]);
+        let targets = [
+            crate::target::BuildTarget::LinuxX64ControlledV1,
+            crate::target::BuildTarget::WindowsX64ControlledV1,
+        ];
+        let originals: Vec<_> = targets
+            .into_iter()
+            .map(|target| crate::integration::ecu::source_assets(target).unwrap())
+            .collect();
+        let mut seen = std::collections::BTreeSet::new();
         let mut checked = 0;
         for asset in crate::resources::AssetInventory::embedded().entries() {
             let path = asset.relative_path;
+            if let Some(&(producer, output)) = generated.get(path) {
+                assert_eq!(
+                    crate::integration::template_of(asset),
+                    Some((producer, output.to_owned())),
+                    "{path}"
+                );
+                for original in &originals {
+                    assert!(
+                        original.values().all(|entry| entry.relative_path != path),
+                        "{path} must be rendered, not delivered as an original source"
+                    );
+                }
+                seen.insert(path);
+                continue;
+            }
             let expected = [
                 ("runtime/bsw/", "bsw/"),
                 ("runtime/host/", "integration/"),
@@ -959,5 +1032,6 @@ mod delivery_path_tests {
             }
         }
         assert_eq!(checked, 78);
+        assert_eq!(seen, generated.keys().copied().collect());
     }
 }

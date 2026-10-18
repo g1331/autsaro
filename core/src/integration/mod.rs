@@ -60,6 +60,8 @@ pub use editor::{IntegrationEdit, IntegrationInspection};
 pub use handoff::{build_ecu_project, verify_ecu_project};
 pub use mode::{ModeRule, ModeRuntimeContract, ModeUser};
 pub use outputs::INTEGRATION_PATH;
+#[cfg(test)]
+pub(crate) use outputs::template_of;
 pub use plan::{HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan_native};
 pub use routing::PduRoute;
 pub use rte_configuration::RteGenerationContract;
