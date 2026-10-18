@@ -479,9 +479,13 @@ fn initialized_scaffolds_compile_link_and_initialize_only_out_arguments() {
             .generate(&project)
             .unwrap();
         let build = scratch.0.join("build");
-        let compiled = tooling::ecu_build_command(&project, &build, "host-batch", None)
-            .output()
-            .unwrap();
+        // Only the independent C consumer runs here; keep its TSan scaffold prerequisite plain.
+        let mut build_command = if std::env::var("AUTOSAR_SANITIZE").as_deref() == Ok("thread") {
+            tooling::ecu_production_build_command(&project, &build, "host-batch", None)
+        } else {
+            tooling::ecu_build_command(&project, &build, "host-batch", None)
+        };
+        let compiled = build_command.output().unwrap();
         assert!(
             compiled.status.success(),
             "{}\n{}",

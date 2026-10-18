@@ -755,7 +755,9 @@ static DWORD WINAPI control(void *argument)
         Os_MailboxClose();
     }
 #endif
+#ifndef __linux__
     vPortEndScheduler();
+#endif
     /* Stop the ISR owner first, then all execution threads. Never take its mutex. */
     if (main_thread != NULL && GetThreadId(main_thread) != current) {
         stop_thread(main_thread);
@@ -769,6 +771,10 @@ static DWORD WINAPI control(void *argument)
     if (controller_healthy[1] == 0 && backup_thread != NULL && argument == NULL) {
         stop_thread(backup_thread);
     }
+#ifdef __linux__
+    /* No actor may still read the port state when the controller retires it. */
+    vPortEndScheduler();
+#endif
     if (Os_StackHasFault()) {
         ShutdownOS(E_OS_STACKFAULT);
     }

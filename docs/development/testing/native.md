@@ -16,24 +16,23 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 ## 检测器构建
 
-Linux 上用 GCC 的 ThreadSanitizer、AddressSanitizer（含 LeakSanitizer）和 UndefinedBehaviorSanitizer 检查直接编译的原生测试程序，ASan／UBSan 另外检查 OS suites 和封存 ECU 的 HostBatch／probe／test 闭包。`AUTOSAR_SANITIZE` 指定检测器（`thread` 或 `address,undefined`），测试辅助据此为这些程序加入 `-fsanitize=…`、`-fno-sanitize-recover=all` 与调试信息；任何报告都使程序以错误结束，测试随之失败。
+Linux 上用 GCC 的 ThreadSanitizer、AddressSanitizer（含 LeakSanitizer）和 UndefinedBehaviorSanitizer 检查直接编译的原生测试程序，两种检测器还检查 OS suites 和封存 ECU 的 HostBatch／probe／test 闭包。`AUTOSAR_SANITIZE` 指定检测器（`thread` 或 `address,undefined`），测试辅助据此为这些程序加入 `-fsanitize=…`、`-fno-sanitize-recover=all` 与调试信息；任何报告都使程序以错误结束，测试随之失败。
 
 ```bash
 export AUTOSAR_SANITIZE=thread   # 或 address,undefined
 export ASAN_OPTIONS=use_sigaltstack=0:detect_stack_use_after_return=0
 setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native --no-fail-fast -- runtime_contracts:: host:: integration::generated_c:: integration::os::counter_header_oracles sanitizers::sanitizer_lane_reports_deliberate_faults
-# 仅 address,undefined
 setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native --no-fail-fast -- integration::protocol:: integration::sealed_projects:: integration::sealed_sanitizers::
 setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py
 ```
 
 - `setarch -R` 关闭地址随机化：Ubuntu 24.04 的 `vm.mmap_rnd_bits=32` 使 GCC 13 的 TSan 报告 `unexpected memory mapping`，这样不必修改宿主设置。
 - OS 主机层自己安装备用信号栈，并用 ucontext 切换栈，所以 ASan 不接管备用信号栈（`use_sigaltstack=0`），也不把局部变量移到假栈（`detect_stack_use_after_return=0`）；后者使嵌套中断用例比较栈地址失真，代价是不检查返回后使用栈变量。
-- OS suites 不在 TSan 下运行：TSan 把异步信号处理推迟到它自己的拦截点执行，FreeRTOS POSIX 端口用 `SIGRTMIN` 暂停 actor 并取得被中断的上下文，这一机制在 TSan 下超时（`E_OS_STATE`）。TSan 覆盖 BSW 独占区与主机锁的真实线程用例（`runtime_contracts::`）；它在 OS suites 中报告过信号处理函数改写 `errno` 的问题，已修复。
+- OS suites 在两种检测器下运行，覆盖真实暂停／恢复、嵌套中断、栈上下文与故障关闭。Linux 的已暂停 actor 从现有请求状态读取终止意图，保持首次捕获的上下文并确认永久停止；运行中的 actor 仍由终止信号停止。控制器在 actor 停止后才关闭端口调度状态，关闭主机线程句柄时释放 pthread 资源并保留注册栈身份。
 - `sanitizers::` 的故意越界写（`memcpy` 超出固定静态缓冲）、数据竞争和超宽移位证明检测器确实报错；未设置 `AUTOSAR_SANITIZE` 时该测试不做任何事。
-- 封存 ECU 的检测器路径只用于 Linux ASan／UBSan：测试辅助先完整执行包内生产 build（含 seal、固定工具、选择补丁、内核摘要与严格段布局检查），记录实际编译 argv，再用同一源码、include 顺序、补丁后内核、test 模式宏与链接参数额外加入检测器选项，编译到独立程序。测试辅助不得在加载原 guard 前加入包内 Python 搜索路径，以免未封存的同名标准库模块提前执行。生产 `ecu-tool`、`target.json` 和 object 检查不变；检测器程序不作为交付程序。共享 HostBatch 按检测器选项区分 image，消费者仍拿独立副本。每个新输入多编译一次，后续相同 HostBatch 复用；不缓存跨运行的通过结果。
+- 封存 ECU 的检测器路径用于 Linux TSan 与 ASan／UBSan：测试辅助先完整执行包内生产 build（含 seal、固定工具、选择补丁、内核摘要与严格段布局检查），记录实际编译 argv，再用同一源码、include 顺序、补丁后内核、test 模式宏与链接参数额外加入检测器选项，编译到独立程序。测试辅助不得在加载原 guard 前加入包内 Python 搜索路径，以免未封存的同名标准库模块提前执行。生产 `ecu-tool`、`target.json` 和 object 检查不变；检测器程序不作为交付程序。共享 HostBatch 按检测器选项区分 image，消费者仍拿独立副本。每个新输入多编译一次，后续相同 HostBatch 复用；不缓存跨运行的通过结果。
 - `integration::protocol::` 与 `integration::sealed_projects::` 在该路径运行现有协议向量和封存工程 owner 用例；`integration::sealed_sanitizers::` 验证 probe 实际完成 20 ticks、test 模式故障退出、完整编译 argv 只差检测器选项／输出路径、封存输入不变及共享副本隔离。外部 probe control 复用既有故意越界／超宽移位夹具，要求实际运行报告与非零退出，并让合法边界输入成功。
-- 完整 FreeRTOS ECU 路径未纳入 TSan：[#300](https://github.com/g1331/autsaro/issues/300) 修复栈注册的逐槽发布与非 ISR actor 的中断身份查询，聚焦用例 `integration::sealed_sanitizers::sealed_os_registration_and_interrupt_identity_use_real_thread_owners` 在完整封存编译闭包中以真实线程验证这两个边界，但不启动异步暂停协议。完整 HostBatch 仍在终止已暂停 actor 时退出 7：同源码的最小暂停／终止反例在普通构建成功、TSan 下无法完成终止信号握手，GDB 显示 actor 停在 TSan 包装的 SIGRTMIN 处理器内。剩余信号／上下文模型限制与完整 ECU lane 的退出条件见 [#316](https://github.com/g1331/autsaro/issues/316)，不能把没有 race 报告写成完整 ECU 通过。现有直接线程测试继续运行；`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
+- `integration::sealed_sanitizers::` 在两种检测器下持续选择真实线程注册／中断身份回归，以及暂停／恢复进展、终止前后上下文、拒绝终止后恢复、运行 actor 停止和关闭句柄后 pthread 状态的成对回归。`HostBatch`、probe 与 test 使用相同封存源码，生产／插桩 argv 只允许检测器选项与输出路径不同。故意越界／超宽移位 control 仅在 ASan／UBSan 下运行；直接线程 TSan 测试继续运行。`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
 
 必需 CI 的 `native-sanitizers` 任务在 Linux 上按 `thread` 与 `address,undefined` 各用一个 runner 运行上述命令；与 `native`、`native-os` 并行。
 
@@ -57,6 +56,7 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - Windows 托管 runner 混用 AMD EPYC 9V45／9V74／7763 与 Intel Xeon 8370C／8573C，只在一种机型出现的时序失败（#61：9V45 上另一 vCPU 忙等时，跨线程唤醒有约 2 ms 停顿）要按 CPU 型号记录，在同一 runner 上配对比较变体；筛选机型用读取型号后立即结束的小矩阵，不用大矩阵随机抽样占用共享 runner。
 - 子进程失败消息须带 stdout／stderr 的内容，不能只给随 scratch 目录删除的日志路径：共用执行入口（`ProcessOwner::run`、`ecu_tools.process.run_bounded`）与测试的 `tooling::wait_success` 已默认附带输出末尾，新的失败路径沿用它们，不另写只报路径的错误。 调整共用执行入口时，保留各调用方的相对源对象与失败解释，并覆盖同一原因涉及的其他调用点；阶段名或宿主绝对路径不能替代这层上下文。排查 CI 失败先下载 `native-scratch-*`／`os-suites-*` 现场，不靠猜测重跑。
 - 新增测试后无关用例在 CI 上稳定失败时，按完成时间比较失败与基线运行中重叠的测试，不当作偶发重跑；改变线程交接时机的修复可能暴露依赖原时序的竞态，以超过 CPU 数的并发重复运行受影响用例，比较修复前后的失败率，相互依赖的修复一起合入。
+- 共享主机出现编译或 supervisor 启动超时、socket 不可用、`EAGAIN` 时，保留原始输出与资源快照，停止本任务被替代的检查，并与并行任务协调单个有界验收批次。资源快照本身不证明失败原因或容量已恢复；容量发生变化后仍用原入口、期限和断言验证，启动失败、中止与部分矩阵均不计为通过，不停止其他任务的进程。
 - 间歇超时先区分挂起与接近期限：Linux 上并发重复到复现，超时时用 `gdb -p` 抓全部线程栈再结束进程，失败检查不带位置时先让它记录源码行。不能未经实测就放宽期限，也不用重试或固定延时掩盖竞态。
 - 长时间原生验收启动前，核对后续消费者阶段所需的全部外层工具路径，保持应用配置阶段的工具隔离；不能把缺失前置条件留到末尾才发现。含大响应时，将完整事件逐条写入既有证据文件，避免在内存保留全部历史 snapshot；保留原有 payload、场景与断言，并分别核查驱动和产品进程的内存，不能用证据写入优化掩盖产品内存问题。
 
