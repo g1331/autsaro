@@ -21,6 +21,9 @@ ecu_tools = ["*.json"]
 
 [dependency-groups]
 build = ["cmake==4.4.4", "ninja==1.13.2"]
+coverage = [
+    "coverage[toml]==7.16.2",
+]
 quality = [
     "clang-format==22.1.8",
     "ruff==0.16.10",
@@ -33,3 +36,18 @@ workflows = ["actionlint-py==1.7.12.25", "zizmor==1.30.1"]
 
 [tool.uv]
 default-groups = ["quality", "build"]
+
+[tool.coverage.run]
+branch = true
+source = ["tools/python/src"]
+relative_files = true
+data_file = "build/coverage/python/.coverage"
+
+[tool.coverage.html]
+directory = "build/coverage/python/html"
+
+[tool.coverage.json]
+output = "build/coverage/python/coverage.json"
+
+[tool.coverage.report]
+show_missing = true
