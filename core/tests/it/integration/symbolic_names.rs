@@ -15,6 +15,11 @@ use super::*;
 fn symbolic_headers_and_consumers_preserve_provider_names_and_values() {
     let plan = build(&inputs()).unwrap();
     let files = prepared_pipeline_files(&plan);
+    assert!(
+        !files
+            .iter()
+            .any(|(path, _)| path == "generated/include/Det_Cfg.h")
+    );
     let text = |path: &str| -> String {
         String::from_utf8(
             files
@@ -186,4 +191,19 @@ fn symbolic_com_names_are_c_identifiers_before_prefixing() {
             "{errors:?}"
         );
     }
+}
+
+#[test]
+fn symbolic_names_reserve_only_headers_with_actual_providers() {
+    let mut sources = inputs();
+    change(
+        &mut sources,
+        "ingress.arxml",
+        "<SYMBOL>Ingress_Periodic</SYMBOL>",
+        "<SYMBOL>DET_CFG_H</SYMBOL>",
+    );
+    assert!(
+        build(&sources).is_ok(),
+        "an absent configuration header cannot own this name"
+    );
 }

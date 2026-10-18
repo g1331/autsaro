@@ -1769,9 +1769,7 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             names.insert(format!("{module}_AR_RELEASE_{field}_VERSION"));
         }
     }
-    for module in [
-        "CAN", "COM", "COMM", "DET", "CANIF", "CANTP", "DCM", "PDUR", "LSDUR",
-    ] {
+    for module in ["CANIF", "PDUR", "LSDUR"] {
         names.insert(format!("{module}_CFG_H"));
     }
     let routed_sources: BTreeSet<_> = graph
@@ -1789,6 +1787,7 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
         }
         let module = definition.split('/').nth(3).unwrap_or("");
         let kind = super::short_name(definition);
+        names.insert(format!("{}_CFG_H", module.to_uppercase()));
         let path = &graph.elements[container].object;
         // SWS_Com_00402 applies to the source short name before adding ComConf_.
         if module == "Com" && super::contracts::reserved_identifier(super::short_name(path)) {
