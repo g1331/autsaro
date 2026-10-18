@@ -201,6 +201,59 @@ Stale citations (not an official item of R24-11):
             )
             self.assertIn("runtime/test.c:1", output.read_text())
 
+    def test_raw_foreign_findings_survive_but_baseline_counts_use_columns_and_scope(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in (
+                "runtime/test.c",
+                "samples/sample/kernel/test.c",
+                "samples/sample/generated.c",
+            ):
+                source = root / name
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text("bad();\n")
+            base = {
+                "rule": "test-rule",
+                "file": "runtime/test.c",
+                "line": 1,
+                "column": 1,
+                "message": "bad",
+                "sample": "sample",
+            }
+            raw = [
+                base,
+                base,
+                {**base, "column": 9},
+                {**base, "file": "kernel/test.c"},
+                {
+                    **base,
+                    "file": "generated.c",
+                    "rule": "readability-identifier-naming",
+                },
+            ]
+            artifact = root / "tidy.json"
+            artifact.write_text(json.dumps(raw))
+            output = root / "summary"
+            baseline = Counter({("test-rule", "runtime/test.c", "bad();"): 2})
+            with (
+                mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(output)}),
+                mock.patch(
+                    "autosar_tooling.quality.read_clang_tidy_baseline",
+                    return_value=baseline,
+                ),
+            ):
+                rows = report.clang_tidy(artifact, root / "samples", root, "success")
+                self.assertEqual(len(rows), 4)
+                self.assertIn("No new or fixed baseline findings.", output.read_text())
+                self.assertNotIn("new clang-tidy finding", output.read_text())
+                artifact.write_text(json.dumps([base]))
+                output.unlink()
+                report.clang_tidy(artifact, root / "samples", root, "failure")
+                self.assertNotIn("fixed finding, remove", output.read_text())
+                self.assertIn("report may be partial", output.read_text())
+
     def test_relative_sample_cli_maps_actual_generated_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -248,7 +248,12 @@ def cppcheck(
 
 
 def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> list[dict]:
-    from autosar_tooling.quality import clang_tidy_comparison, read_clang_tidy_baseline
+    from autosar_tooling.quality import (
+        CLANG_TIDY_FOREIGN,
+        CLANG_TIDY_RUNTIME_ONLY,
+        clang_tidy_comparison,
+        read_clang_tidy_baseline,
+    )
 
     samples, repository = samples.resolve(), repository.resolve()
     raw = json.loads(path.read_text(encoding="utf-8"))
@@ -266,8 +271,11 @@ def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> lis
         line = int(item["line"])
         text = source.read_text(encoding="utf-8").splitlines()[line - 1].strip()
         key = (item["rule"], name, text)
-        position = (item["sample"], name, line, item["rule"])
-        if position not in seen:
+        position = (item["sample"], name, line, item.get("column", 1), item["rule"])
+        eligible = not name.startswith(CLANG_TIDY_FOREIGN) and (
+            item["rule"] not in CLANG_TIDY_RUNTIME_ONLY or name.startswith("runtime/")
+        )
+        if eligible and position not in seen:
             seen.add(position)
             per_sample.setdefault(item["sample"], Counter())[key] += 1
         mapped = (
@@ -293,6 +301,8 @@ def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> lis
             "Analysis did not complete successfully; this report may be partial."
         )
     for error in errors:
+        if outcome != "success" and ": fixed finding, remove:" in error:
+            continue
         details.append(
             error
             + ("; " + ", ".join(sorted(positions[error])) if error in positions else "")
