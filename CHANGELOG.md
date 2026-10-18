@@ -12,6 +12,8 @@
 
 ### Fixed
 
+- Native graph construction indexes short names once per document instead of repeatedly scanning wide sibling lists for every descendant; object paths, source bytes and public interfaces are unchanged. Desktop WebDriver logs retain complete pending requests and failure outcomes (#311)
+
 - Linux native stack observations acquire completed actor registrations, and concurrent host shutdown callers use their own inactive ISR identity; regenerate sealed ECU projects to receive the synchronization fix (#317)
 
 - COM raw configuration short names reject C keywords before symbolic-name prefixing, preserving the original source location in the diagnostic (#303)

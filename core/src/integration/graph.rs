@@ -90,6 +90,10 @@ impl Graph {
         let mut diagnostics = Vec::new();
         for (file, document) in sources {
             let mut indices = HashMap::new();
+            // Scan each child list once, including unnamed/foreign ancestors.
+            let names = crate::xml_paths::NamedPaths::new(document, |node| {
+                short_name(node).map(std::borrow::Cow::into_owned)
+            });
             for node in document
                 .descendants()
                 .filter(|node| node.is_element() && node.tag_name().namespace() == Some(NS))
@@ -98,7 +102,7 @@ impl Graph {
                     .parent()
                     .and_then(|parent| indices.get(&parent.id()).copied());
                 let index = graph.elements.len();
-                let object = path(node);
+                let object = names.path(node);
                 graph.elements.push(Element {
                     tag: node.tag_name().name().into(),
                     text: if node.children().any(|child| child.is_element()) {
@@ -119,7 +123,7 @@ impl Graph {
                     graph.elements[parent].children.push(index);
                 }
                 indices.insert(node.id(), index);
-                if short_name(node).is_some() && node.tag_name().name() != "AR-PACKAGE" {
+                if names.name(node).is_some() && node.tag_name().name() != "AR-PACKAGE" {
                     if graph.objects.insert(object.clone(), index).is_some() {
                         diagnostics.push(graph.diagnostic(
                             index,
@@ -447,9 +451,16 @@ impl crate::definitions::DefinitionCatalog {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static NAME_CHILD_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn short_name<'a, 'input>(node: roxmltree::Node<'a, 'input>) -> Option<std::borrow::Cow<'a, str>> {
     node.children()
         .find(|child| {
+            #[cfg(test)]
+            NAME_CHILD_VISITS.with(|visits| visits.set(visits.get() + 1));
             child.is_element()
                 && child.tag_name().namespace() == Some(NS)
                 && child.tag_name().name() == "SHORT-NAME"
@@ -457,15 +468,74 @@ fn short_name<'a, 'input>(node: roxmltree::Node<'a, 'input>) -> Option<std::borr
         .map(crate::definitions::xml_text_trimmed)
 }
 
-fn path(node: roxmltree::Node<'_, '_>) -> String {
-    let mut names: Vec<_> = node.ancestors().filter_map(short_name).collect();
-    names.reverse();
-    format!("/{}", names.join("/"))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::Graph;
+    use super::{Graph, NAME_CHILD_VISITS, NS};
+
+    #[test]
+    fn wide_unnamed_ancestors_are_scanned_once() {
+        let objects = (0..1000)
+            .map(|index| {
+                format!("<ITEM><SHORT-NAME>Item_{index}</SHORT-NAME><VALUE>v</VALUE></ITEM>")
+            })
+            .collect::<String>();
+        let text = format!(
+            "<AUTOSAR xmlns='{NS}'><AR-PACKAGE><SHORT-NAME>Pkg</SHORT-NAME><ELEMENTS>{objects}</ELEMENTS></AR-PACKAGE></AUTOSAR>"
+        );
+        let document = roxmltree::Document::parse(&text).unwrap();
+        NAME_CHILD_VISITS.with(|visits| visits.set(0));
+        let graph = Graph::build_documents(
+            std::iter::once(("wide.arxml", &document)),
+            Default::default(),
+        )
+        .unwrap();
+        let visits = NAME_CHILD_VISITS.with(|visits| visits.get());
+        assert!(
+            visits <= document.descendants().count(),
+            "child lists were scanned repeatedly: {visits}"
+        );
+        assert_eq!(graph.objects.len(), 1000);
+        assert_eq!(
+            graph.elements[graph.objects["/Pkg/Item_999"]].object,
+            "/Pkg/Item_999"
+        );
+        assert!(
+            graph
+                .elements
+                .iter()
+                .filter(|element| element.tag == "VALUE")
+                .all(|element| element.object.starts_with("/Pkg/Item_"))
+        );
+    }
+
+    #[test]
+    fn indexed_names_preserve_foreign_and_unnamed_ancestors() {
+        let text = format!(
+            "<AUTOSAR xmlns='{NS}' xmlns:x='urn:extension'><x:WRAPPER><SHORT-NAME> Foreign </SHORT-NAME><ELEMENTS><ITEM><SHORT-NAME>Child</SHORT-NAME><VALUE>v</VALUE></ITEM></ELEMENTS></x:WRAPPER></AUTOSAR>"
+        );
+        let document = roxmltree::Document::parse(&text).unwrap();
+        let graph = Graph::build_documents(
+            std::iter::once(("foreign.arxml", &document)),
+            Default::default(),
+        )
+        .unwrap();
+        assert!(graph.objects.contains_key("/Foreign/Child"));
+        assert_eq!(
+            graph
+                .elements
+                .iter()
+                .find(|element| element.tag == "VALUE")
+                .unwrap()
+                .object,
+            "/Foreign/Child"
+        );
+        assert!(
+            graph
+                .elements
+                .iter()
+                .all(|element| element.tag != "WRAPPER")
+        );
+    }
 
     #[test]
     fn missing_objects_are_located_input_diagnostics() {
