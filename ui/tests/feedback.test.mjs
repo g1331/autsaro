@@ -356,6 +356,170 @@ test('validation summarises automatic and explicit findings once and opens probl
   expect(clean.stateRef.current.toolWindow).toBeNull();
 });
 
+function settingsWithResults() {
+  const current = session({
+    generated: { files: ['output.c'] },
+    built: { binaryPath: '/build/ecu' },
+    virtualResult: { passed: true },
+    generationPreview: { revision: 'owned' },
+    notice: { tone: 'success', text: 'previous result' },
+    stages: Object.fromEntries(
+      Object.keys(initialState().stages).map((key) => [
+        key,
+        { state: 'done', detail: `previous ${key}` },
+      ]),
+    ),
+  });
+  const invalidateOperation = vi.fn(() => current.epoch.current++);
+  return {
+    current,
+    invalidateOperation,
+    actions: createSettingsActions(current, { invalidateOperation }),
+  };
+}
+
+test('target selection invalidates the old operation and clears each previous output on success', async () => {
+  const { current, actions, invalidateOperation } = settingsWithResults();
+  const before = current.state;
+  current.call.mockImplementation(async () => {
+    expect(invalidateOperation).toHaveBeenCalledExactlyOnceWith();
+    expect(current.state).toBe(before);
+  });
+  await actions.changeTarget('linux-x64-controlled-v1');
+  expect(current.call).toHaveBeenCalledExactlyOnceWith('select_build_target', {
+    target: 'linux-x64-controlled-v1',
+  });
+  for (const key of ['generated', 'built', 'virtualResult', 'generationPreview', 'notice']) {
+    expect(current.state[key], key).toBeNull();
+  }
+  for (const key of ['generate', 'build', 'virtual']) {
+    expect(current.state.stages[key], key).toEqual(initialState().stages[key]);
+  }
+  for (const key of ['save', 'validate']) {
+    expect(current.state.stages[key], key).toBe(before.stages[key]);
+  }
+});
+
+test.each(['zh-CN', 'en'])(
+  'target refusal retains outputs and reports the localized error in %s',
+  async (language) => {
+    previewLanguage(language);
+    const { current, actions, invalidateOperation } = settingsWithResults();
+    const before = current.state;
+    const error = message('controller.error.capabilitiesNotReady');
+    current.call.mockRejectedValue(error);
+    await actions.changeTarget('linux-x64-controlled-v1');
+    expect(invalidateOperation).toHaveBeenCalledExactlyOnceWith();
+    expect(current.call).toHaveBeenCalledExactlyOnceWith('select_build_target', {
+      target: 'linux-x64-controlled-v1',
+    });
+    expect(current.state.notice).toEqual({ tone: 'error', text: error });
+    expect(localize(current.state.notice.text)).toBe(translate(error.key));
+    expect(localize(current.state.notice.text)).not.toBe(error.key);
+    for (const key of ['generated', 'built', 'virtualResult', 'generationPreview', 'stages']) {
+      expect(current.state[key], key).toBe(before[key]);
+    }
+  },
+);
+
+test.each(['zh-CN', 'en'])(
+  'appearance refusal releases its operation and permits a fresh save in %s',
+  async (language) => {
+    previewLanguage(language);
+    const { current, actions } = settingsWithResults();
+    current.patchState({ appearanceDraft: 'dark' });
+    const before = current.state;
+    let reject;
+    current.call.mockImplementationOnce(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    );
+    const saving = actions.configureAppearance();
+    expect(current.running.current).toBe(true);
+    expect(current.state.busy).toEqual(message('activity.saveAppearance'));
+    expect(current.call).toHaveBeenCalledExactlyOnceWith('configure_appearance', {
+      appearance: 'dark',
+    });
+    await actions.configureAppearance();
+    expect(current.call).toHaveBeenCalledTimes(1);
+    const error = message('controller.error.capabilitiesNotReady');
+    reject(error);
+    await saving;
+    expect(current.state.settingsNotice).toEqual({ tone: 'error', text: error });
+    expect(localize(current.state.settingsNotice.text)).toBe(translate(error.key));
+    expect(localize(current.state.settingsNotice.text)).not.toBe(error.key);
+    expect(current.running.current).toBe(false);
+    expect(current.state.busy).toBeNull();
+    for (const key of [
+      'generated',
+      'built',
+      'virtualResult',
+      'generationPreview',
+      'stages',
+      'notice',
+    ]) {
+      expect(current.state[key], key).toBe(before[key]);
+    }
+    current.patchState({ appearanceDraft: 'light' });
+    current.call.mockResolvedValueOnce(undefined);
+    await actions.configureAppearance();
+    expect(current.call).toHaveBeenNthCalledWith(2, 'configure_appearance', {
+      appearance: 'light',
+    });
+    expect(current.state.settingsNotice).toEqual({
+      tone: 'success',
+      text: message('controller.settings.appearanceSaved'),
+    });
+    expect(current.running.current).toBe(false);
+    expect(current.state.busy).toBeNull();
+  },
+);
+
+test.each(['success', 'failure'])(
+  'old-epoch appearance %s cannot release a newer pending operation',
+  async (outcome) => {
+    const { current, actions } = settingsWithResults();
+    let resolveOld;
+    let rejectOld;
+    let resolveNew;
+    current.call
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            resolveOld = resolve;
+            rejectOld = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNew = resolve;
+          }),
+      );
+    const oldSave = actions.configureAppearance();
+    // Match invalidateOperation's ownership transition before starting the new epoch.
+    current.epoch.current++;
+    current.running.current = false;
+    current.patchState({ busy: null, appearanceDraft: 'light' });
+    const newSave = actions.configureAppearance();
+    expect(current.call).toHaveBeenCalledTimes(2);
+    const busy = current.state.busy;
+    if (outcome === 'success') resolveOld();
+    else rejectOld(message('controller.error.staleDelivery'));
+    await oldSave;
+    expect(current.running.current).toBe(true);
+    expect(current.state.busy).toBe(busy);
+    await actions.configureAppearance();
+    expect(current.call).toHaveBeenCalledTimes(2);
+    resolveNew();
+    await newSave;
+    expect(current.running.current).toBe(false);
+    expect(current.state.busy).toBeNull();
+  },
+);
+
 test('a rejected tool path is attached to the field holding it', async () => {
   const current = session({
     toolDraft: { compiler: '/missing/gcc', objdump: '', git: '', python: '' },
