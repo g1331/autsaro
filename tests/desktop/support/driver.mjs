@@ -86,7 +86,7 @@ async function driverPorts() {
   }
 }
 
-async function until(probe, description, timeout = 30000) {
+export async function until(probe, description, timeout = 30000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const value = await probe();
