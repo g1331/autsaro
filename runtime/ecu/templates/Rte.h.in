@@ -1,0 +1,42 @@
+/** @file
+ * @brief Generated component contract; runtime implementation is separate.
+ */
+#ifndef RTE_H
+#define RTE_H
+
+#include "Rte_Cfg.h"
+#include "Std_Types.h"
+#include "ComStack_Types.h"
+
+/** Standard RTE and SchM statuses (SWS_Rte_07712/07713). */
+@STATUSES@
+/** Test the infrastructure bit (SWS_Rte_07404); the argument is evaluated once.
+ * @param[in] status An RTE status value; evaluated once.
+ * @return TRUE if the infrastructure bit is set.
+ * Preconditions: None.
+ * Context: any context, including inside exclusive areas.
+ * Reentrancy: reentrant; no state is accessed.
+ * Ownership: no storage is borrowed or retained.
+ */
+#define Rte_IsInfrastructureError(status) (((status) & 128U) != 0U)
+/** Test the overlay bit (SWS_Rte_07405); the argument is evaluated once.
+ * @param[in] status An RTE status value; evaluated once.
+ * @return TRUE if the overlay bit is set.
+ * Preconditions: None.
+ * Context: any context, including inside exclusive areas.
+ * Reentrancy: reentrant; no state is accessed.
+ * Ownership: no storage is borrowed or retained.
+ */
+#define Rte_HasOverlayedError(status) (((status) & 64U) != 0U)
+/** Read the application error (SWS_Rte_07406); the argument is evaluated once.
+ * @param[in] status An RTE status value; evaluated once.
+ * @return The lower six bits of the status.
+ * Preconditions: None.
+ * Context: any context, including inside exclusive areas.
+ * Reentrancy: reentrant; no state is accessed.
+ * Ownership: no storage is borrowed or retained.
+ */
+#define Rte_ApplicationError(status) ((status) & 63U)
+#include "Rte_Main.h"
+
+#endif

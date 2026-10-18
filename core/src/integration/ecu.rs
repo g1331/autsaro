@@ -81,15 +81,19 @@ impl ValidatedIntegrationPlan {
                 .ok_or_else(|| PlanDiagnostic::plan_premise(&slot.component_path))?;
             let scope = c_name(super::short_name(&component.component));
             let mut source = format!(
-                "/** @file User-owned application entry points. */\n#include \"{}\"\n",
+                r#"/** @file User-owned application entry points. */
+#include "{}"
+"#,
                 component.header.trim_start_matches("include/")
             );
             if reference.is_some() {
-                source.push_str(&format!("#define {scope}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"{scope}_MemMap.h\"\n/* Last value committed from the receive port; the DID reports it. */\nstatic uint32 committed {scope}_VAR_CLEARED_UNSPECIFIED;\n#define {scope}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"{scope}_MemMap.h\"\n"));
+                source.push_str(&format!(
+ r#"{start_var_cleared_unspecified}/* Last value committed from the receive port; the DID reports it. */
+static uint32 committed {scope}_VAR_CLEARED_UNSPECIFIED;
+{stop_var_cleared_unspecified}"#,
+start_var_cleared_unspecified = c_layout::section(&scope, &scope, "VAR_CLEARED_UNSPECIFIED", true), stop_var_cleared_unspecified = c_layout::section(&scope, &scope, "VAR_CLEARED_UNSPECIFIED", false)));
             }
-            source.push_str(&format!(
-                "#define {scope}_START_SEC_CODE\n#include \"{scope}_MemMap.h\"\n"
-            ));
+            source.push_str(&c_layout::section(&scope, &scope, "CODE", true));
             for symbol in self
                 .description()
                 .symbols
@@ -119,15 +123,28 @@ impl ValidatedIntegrationPlan {
                     source.push_str(&format!("{}\n", c_layout::short_function(&head, "")));
                     continue;
                 }
-                source.push_str(&format!("{head}\n{{\n"));
+                source.push_str(&format!(
+                    r#"{head}
+{{
+"#
+                ));
                 if let Some(shape) = reference
                     .as_ref()
                     .filter(|shape| shape.periodic_symbol == symbol.symbol)
                 {
                     // RTE_E_MAX_AGE_EXCEEDED still delivers the last received
                     // value (SWS_Rte_02703); RTE_E_NEVER_RECEIVED does not.
-                    source.push_str(&format!("    uint32 value = committed;\n    const Std_ReturnType status = {}(&value);\n    if ((status == RTE_E_OK) || (status == RTE_E_MAX_AGE_EXCEEDED)) {{\n        committed = value;\n        (void){}(value);\n    }}\n}}\n",
-                        shape.read.api_symbol, shape.write.api_symbol));
+                    source.push_str(&format!(
+                        r#"    uint32 value = committed;
+    const Std_ReturnType status = {}(&value);
+    if ((status == RTE_E_OK) || (status == RTE_E_MAX_AGE_EXCEEDED)) {{
+        committed = value;
+        (void){}(value);
+    }}
+}}
+"#,
+                        shape.read.api_symbol, shape.write.api_symbol
+                    ));
                     continue;
                 }
                 if let (Some(_), [argument]) = (&reference, symbol.arguments.as_slice())
@@ -169,9 +186,7 @@ impl ValidatedIntegrationPlan {
                 }
                 source.push_str("}\n");
             }
-            source.push_str(&format!(
-                "#define {scope}_STOP_SEC_CODE\n#include \"{scope}_MemMap.h\"\n"
-            ));
+            source.push_str(&c_layout::section(&scope, &scope, "CODE", false));
             files.push((source_path.clone(), source.into_bytes()));
         }
         Ok(files)
@@ -360,8 +375,32 @@ pub(super) fn configure_os(
             "",
             false,
         );
-        conversions.push_str(&format!("/** Convert the selected Counter ticks to {unit} (SWS_Os_00393).\n * @param[in] ticks Tick count from zero through UINT32_MAX; evaluated once.\n * @return PhysicalTimeType in {unit}; integer seconds truncate toward zero.\n * Preconditions: None; the validated resolution prevents overflow.\n * Context: any context, including inside exclusive areas.\n * Reentrancy: reentrant; no state is accessed.\n * Ownership: no storage is borrowed or retained.\n */\n{head}\n{{\n    return {result};\n}}\n"));
-        conversion_macros.push_str(&format!("/** Convert ticks to {unit} (SWS_Os_00393); argument evaluated once.\n * @param[in] ticks Tick count from zero through UINT32_MAX.\n * @return PhysicalTimeType in {unit}; integer seconds truncate toward zero.\n * Preconditions: None; the validated resolution prevents overflow.\n * Context: any context, including inside exclusive areas.\n * Reentrancy: reentrant; no state is accessed.\n * Ownership: no storage is borrowed or retained.\n */\n"));
+        conversions.push_str(&format!(
+            r#"/** Convert the selected Counter ticks to {unit} (SWS_Os_00393).
+ * @param[in] ticks Tick count from zero through UINT32_MAX; evaluated once.
+ * @return PhysicalTimeType in {unit}; integer seconds truncate toward zero.
+ * Preconditions: None; the validated resolution prevents overflow.
+ * Context: any context, including inside exclusive areas.
+ * Reentrancy: reentrant; no state is accessed.
+ * Ownership: no storage is borrowed or retained.
+ */
+{head}
+{{
+    return {result};
+}}
+"#
+        ));
+        conversion_macros.push_str(&format!(
+            r#"/** Convert ticks to {unit} (SWS_Os_00393); argument evaluated once.
+ * @param[in] ticks Tick count from zero through UINT32_MAX.
+ * @return PhysicalTimeType in {unit}; integer seconds truncate toward zero.
+ * Preconditions: None; the validated resolution prevents overflow.
+ * Context: any context, including inside exclusive areas.
+ * Reentrancy: reentrant; no state is accessed.
+ * Ownership: no storage is borrowed or retained.
+ */
+"#
+        ));
         conversion_macros.push_str(&c_layout::defines(&[(
             format!("OS_TICKS2{unit}_{counter_name}(ticks)"),
             format!("({function}((ticks)))"),
@@ -397,7 +436,17 @@ pub(super) fn configure_os(
     ));
     let macros = c_layout::commented_defines(&macros, "Generated Counter configuration.");
     let counter_header = format!(
-        "/** @file Generated Counter time conversions (SWS_Os_00393).\n * Argument: a TickType value in 0..UINT32_MAX; evaluated once.\n * Result: PhysicalTimeType. Integer seconds truncate toward zero.\n * The validated Counter resolution is {tick_ms} logical millisecond(s).\n * The largest nanosecond result fits uint64 without overflow.\n */\n#ifndef AUTOSAR_GENERATED_OS_COUNTER_H\n#define AUTOSAR_GENERATED_OS_COUNTER_H\n#include \"Os_Types.h\"\n{conversions}{conversion_macros}\n{macros}#endif\n",
+        r#"/** @file Generated Counter time conversions (SWS_Os_00393).
+ * Argument: a TickType value in 0..UINT32_MAX; evaluated once.
+ * Result: PhysicalTimeType. Integer seconds truncate toward zero.
+ * The validated Counter resolution is {tick_ms} logical millisecond(s).
+ * The largest nanosecond result fits uint64 without overflow.
+ */
+{guard_start}#include "Os_Types.h"
+{conversions}{conversion_macros}
+{macros}#endif
+"#,
+        guard_start = c_layout::header_start("AUTOSAR_GENERATED_OS_COUNTER_H"),
     );
     outputs.emit_all(
         "os-service",
@@ -422,9 +471,19 @@ pub(super) fn configure_os(
             "STD_OFF"
         };
         (
-            format!("#ifndef {macro_name}\n#define {macro_name} STD_ON\n#endif"),
             format!(
-                "#if defined({macro_name}) && ({macro_name} != {value})\n#error {} differs from the validated plan\n#endif\n#ifndef {macro_name}\n/** ECUC {parameter}; generated from the validated OS plan. */\n#define {macro_name} {value}\n#endif",
+                r#"#ifndef {macro_name}
+#define {macro_name} STD_ON
+#endif"#
+            ),
+            format!(
+                r#"#if defined({macro_name}) && ({macro_name} != {value})
+#error {} differs from the validated plan
+#endif
+#ifndef {macro_name}
+/** ECUC {parameter}; generated from the validated OS plan. */
+#define {macro_name} {value}
+#endif"#,
                 &parameter[1..]
             ),
         )
@@ -432,9 +491,21 @@ pub(super) fn configure_os(
     let service_id = error_access("OS_USE_GET_SERVICE_ID", "/OsUseGetServiceId");
     let parameter_access = error_access("OS_USE_PARAMETER_ACCESS", "/OsUseParameterAccess");
     let status = if extended_status {
-        "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n/** ECUC OsStatus; generated Extended Status selection. */\n#define OS_STATUS_EXTENDED STD_ON\n#endif"
+        r#"#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 1)
+#error OsStatus differs from the validated plan
+#endif
+#ifndef OS_STATUS_EXTENDED
+/** ECUC OsStatus; generated Extended Status selection. */
+#define OS_STATUS_EXTENDED STD_ON
+#endif"#
     } else {
-        "#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)\n#error OsStatus differs from the validated plan\n#endif\n#ifndef OS_STATUS_EXTENDED\n/** ECUC OsStatus; generated Standard Status selection. */\n#define OS_STATUS_EXTENDED STD_OFF\n#endif"
+        r#"#if defined(OS_STATUS_EXTENDED) && (OS_STATUS_EXTENDED != 0)
+#error OsStatus differs from the validated plan
+#endif
+#ifndef OS_STATUS_EXTENDED
+/** ECUC OsStatus; generated Standard Status selection. */
+#define OS_STATUS_EXTENDED STD_OFF
+#endif"#
     };
     let task_symbol = format!("OS_TASK_ID_{}", super::short_name(&plan.schedule.task));
     let use_res_scheduler = plan
@@ -459,13 +530,17 @@ pub(super) fn configure_os(
         path,
         &[
             super::outputs::Edit::Once(
-                "#ifndef OS_STATUS_EXTENDED\n#define OS_STATUS_EXTENDED STD_ON\n#endif",
+                r#"#ifndef OS_STATUS_EXTENDED
+#define OS_STATUS_EXTENDED STD_ON
+#endif"#,
                 status,
             ),
             super::outputs::Edit::Once(&service_id.0, &service_id.1),
             super::outputs::Edit::Once(&parameter_access.0, &parameter_access.1),
             super::outputs::Edit::BeforeGuardEnd(&format!(
-                "#include \"Os_Counter.h\"\n#define {task_symbol} 0u /**< Generated owner task handle. */\n"
+                r#"#include "Os_Counter.h"
+#define {task_symbol} 0u /**< Generated owner task handle. */
+"#
             )),
         ],
     )?;

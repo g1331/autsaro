@@ -128,12 +128,24 @@ pub(super) fn rte(
             entries.push(("RTE_CODE".into(), format!("RTE_{scope}_{segment}")));
         }
         let macros = c_layout::defines(&entries);
-        mapping.push_str(&format!("#{} defined(RTE_{scope}_START_SEC_{segment})\n#undef RTE_{scope}_START_SEC_{segment}\n#ifdef RTE_MEMMAP_ACTIVE\n#error \"Nested RTE memory section\"\n#endif\n#define RTE_MEMMAP_ACTIVE\n#define RTE_{scope}_{segment}_ACTIVE\n{macros}#elif defined(RTE_{scope}_STOP_SEC_{segment})\n#undef RTE_{scope}_STOP_SEC_{segment}\n#ifndef RTE_{scope}_{segment}_ACTIVE\n#error \"Unmatched RTE memory section\"\n#endif\n#undef RTE_{scope}_{segment}_ACTIVE\n#undef RTE_MEMMAP_ACTIVE\n#undef RTE_{scope}_{segment}\n", if index == 0 { "if" } else { "elif" }));
+        mapping.push_str(&mapping_branch(
+            index == 0,
+            &format!("RTE_{scope}"),
+            "RTE",
+            segment,
+            &macros,
+            "RTE",
+        ));
         if mode_alias {
             mapping.push_str("#undef RTE_CODE\n");
         }
     }
-    mapping.push_str("#else\n#error \"Unknown RTE memory section\"\n#endif\n");
+    mapping.push_str(
+        r#"#else
+#error "Unknown RTE memory section"
+#endif
+"#,
+    );
     mapping
 }
 
@@ -151,8 +163,70 @@ pub(super) fn component(scope: &str) -> String {
             format!("{scope}_{segment}"),
             format!("__attribute__((section(\"{placement}\")))"),
         )]);
-        output.push_str(&format!("#{} defined({scope}_START_SEC_{segment})\n#undef {scope}_START_SEC_{segment}\n#ifdef {scope}_MEMMAP_ACTIVE\n#error \"Nested SWC memory section\"\n#endif\n#define {scope}_MEMMAP_ACTIVE\n#define {scope}_{segment}_ACTIVE\n{define}#elif defined({scope}_STOP_SEC_{segment})\n#undef {scope}_STOP_SEC_{segment}\n#ifndef {scope}_{segment}_ACTIVE\n#error \"Unmatched SWC memory section\"\n#endif\n#undef {scope}_{segment}_ACTIVE\n#undef {scope}_MEMMAP_ACTIVE\n#undef {scope}_{segment}\n", if index == 0 { "if" } else { "elif" }));
+        output.push_str(&mapping_branch(
+            index == 0,
+            scope,
+            scope,
+            segment,
+            &define,
+            "SWC",
+        ));
     }
-    output.push_str("#else\n#error \"Unknown SWC memory section\"\n#endif\n");
+    output.push_str(
+        r#"#else
+#error "Unknown SWC memory section"
+#endif
+"#,
+    );
     output
+}
+
+/// RTE scopes share one active section; each SWC owns its own active section.
+fn mapping_branch(
+    first: bool,
+    prefix: &str,
+    owner: &str,
+    segment: &str,
+    definitions: &str,
+    kind: &str,
+) -> String {
+    let directive = if first { "if" } else { "elif" };
+    format!(
+        r#"#{directive} defined({prefix}_START_SEC_{segment})
+#undef {prefix}_START_SEC_{segment}
+#ifdef {owner}_MEMMAP_ACTIVE
+#error "Nested {kind} memory section"
+#endif
+#define {owner}_MEMMAP_ACTIVE
+#define {prefix}_{segment}_ACTIVE
+{definitions}#elif defined({prefix}_STOP_SEC_{segment})
+#undef {prefix}_STOP_SEC_{segment}
+#ifndef {prefix}_{segment}_ACTIVE
+#error "Unmatched {kind} memory section"
+#endif
+#undef {prefix}_{segment}_ACTIVE
+#undef {owner}_MEMMAP_ACTIVE
+#undef {prefix}_{segment}
+"#
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_mode_code_alias_ends_at_its_own_stop_boundary() {
+        let text = rte(
+            &[("Modes".into(), "CODE"), ("Other".into(), "CODE")],
+            Some(".rte_code"),
+            "Modes",
+        );
+        assert!(text.contains("#define RTE_CODE"));
+        assert!(text.contains(
+            "#undef RTE_Modes_CODE\n#undef RTE_CODE\n#elif defined(RTE_Other_START_SEC_CODE)"
+        ));
+        assert_eq!(text.matches("#undef RTE_CODE\n").count(), 1);
+        assert!(!component("Modes").contains("RTE_CODE"));
+    }
 }

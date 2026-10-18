@@ -42,24 +42,33 @@ impl ComponentContractFiles {
 
 fn header(guard: &str, body: &str) -> Vec<u8> {
     format!(
-        "/** @file\n * @brief Generated component contract; runtime implementation is separate.\n */\n#ifndef {guard}\n#define {guard}\n\n{body}\n#endif\n"
+        r#"/** @file
+ * @brief Generated component contract; runtime implementation is separate.
+ */
+{}"#,
+        c_layout::header(guard, &format!("\n{body}"))
     )
     .into_bytes()
 }
 
 fn declaration(output: &mut String, brief: &str, prototype: &str, parameters: &str) {
-    output.push_str(&format!("/** @brief {brief}\n"));
-    for line in parameters.lines() {
+    let lines = parameters.lines().map(|line| {
         let line = line.trim_start().trim_start_matches('*').trim_start();
-        if ["Preconditions:", "Context:", "Reentrancy:", "Ownership:"]
-            .iter()
-            .any(|field| line.starts_with(field))
-        {
-            output.push_str(" *\n");
+        for field in c_layout::CONTRACT_FIELDS {
+            if let Some(value) = line
+                .strip_prefix(field)
+                .and_then(|text| text.strip_prefix(": "))
+            {
+                return c_layout::ContractLine::Condition(field, value);
+            }
         }
-        output.push_str(&c_layout::comment(" * ", line));
-    }
-    output.push_str(" */\n");
+        c_layout::ContractLine::Detail(line)
+    });
+    output.push_str(&c_layout::contract_comment(
+        &format!("@brief {brief}"),
+        lines,
+        true,
+    ));
     output.push_str(&format!("{prototype}\n\n"));
 }
 
@@ -123,7 +132,12 @@ impl ValidatedIntegrationPlan {
             "include/Rte_Dcm_Type.h".into(),
             self.dcm_type_header(composition)?.into_bytes(),
         ));
-        files.push(("README.md".into(), b"# Component contracts\n\nInclude the generated header for your component in each application translation unit. Standard component API macros select unique implementation symbols. Shared application types are declared in Rte_Type.h. Synchronous servers with no application errors return void; their RTE clients return Std_ReturnType. OUT and INOUT arguments require non-NULL writable caller-owned storage, and fixed byte arrays require four bytes.\n\nThis delivery contains component-level declarations and selected relationships from the validated source-derived plan, not the complete ECU plan. contract.json records component, endpoint, type, selected mapping/schedule, symbol ownership and validation-source identities. Runtime implementation and OS execution are separate stages. Local Read retains each receiver's initial value until publication; handleNeverReceived selects whether it reports RTE_E_NEVER_RECEIVED before that publication. Unconnected Read returns its initial value and RTE_E_UNCONNECTED; unconnected Write discards and succeeds; unconnected Call preserves OUT/INOUT and returns RTE_E_UNCONNECTED. Network Read retains initial/last values and reports reception/age status; COM_SERVICE_NOT_AVAILABLE maps to RTE_E_COM_STOPPED. This contract kit contains declarations; generate the ECU project to obtain these runtime implementations. Keep user sources outside this generated directory.\n".to_vec()));
+        files.push(("README.md".into(), br#"# Component contracts
+
+Include the generated header for your component in each application translation unit. Standard component API macros select unique implementation symbols. Shared application types are declared in Rte_Type.h. Synchronous servers with no application errors return void; their RTE clients return Std_ReturnType. OUT and INOUT arguments require non-NULL writable caller-owned storage, and fixed byte arrays require four bytes.
+
+This delivery contains component-level declarations and selected relationships from the validated source-derived plan, not the complete ECU plan. contract.json records component, endpoint, type, selected mapping/schedule, symbol ownership and validation-source identities. Runtime implementation and OS execution are separate stages. Local Read retains each receiver's initial value until publication; handleNeverReceived selects whether it reports RTE_E_NEVER_RECEIVED before that publication. Unconnected Read returns its initial value and RTE_E_UNCONNECTED; unconnected Write discards and succeeds; unconnected Call preserves OUT/INOUT and returns RTE_E_UNCONNECTED. Network Read retains initial/last values and reports reception/age status; COM_SERVICE_NOT_AVAILABLE maps to RTE_E_COM_STOPPED. This contract kit contains declarations; generate the ECU project to obtain these runtime implementations. Keep user sources outside this generated directory.
+"#.to_vec()));
         Ok(ComponentContractFiles {
             files: generator::output::seal_files(files),
         })
@@ -143,7 +157,10 @@ impl ValidatedIntegrationPlan {
             .transpose()?
             .map_or(String::new(), |types| types.0);
         let addition = format!(
-            "{declarations}/** Authentication mode for the selected Dcm connection (SWS_Dcm_91067). */\ntypedef uint8 Rte_ModeType_{group};\n/** Connection authentication modes and transition sentinel (SWS_Dcm_91067). */\n{}",
+            r#"{declarations}/** Authentication mode for the selected Dcm connection (SWS_Dcm_91067). */
+typedef uint8 Rte_ModeType_{group};
+/** Connection authentication modes and transition sentinel (SWS_Dcm_91067). */
+{}"#,
             c_layout::defines(&[
                 (format!("RTE_MODE_{group}_DCM_DEAUTHENTICATED"), "0u"),
                 (format!("RTE_MODE_{group}_DCM_AUTHENTICATED"), "1u"),
@@ -181,33 +198,57 @@ impl ValidatedIntegrationPlan {
                 .map(|length| format!("[{length}]"))
                 .unwrap_or_default();
             types.push_str(&format!(
-                "/** Application type selected by the source implementation-data-type. */\ntypedef {} {}{suffix};\n",
+                r#"/** Application type selected by the source implementation-data-type. */
+typedef {} {}{suffix};
+"#,
                 datatype.native_type, datatype.symbol
             ));
         }
         let mut files = vec![
             (
                 "include/Rte_Cfg.h".into(),
-                header("RTE_CFG_H", "#include \"Std_Types.h\"\n"),
+                super::outputs::trusted_asset("runtime/ecu/include/Rte_Cfg.h")?
+                    .bytes
+                    .to_vec(),
             ),
             ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
             (
                 "include/Rte.h".into(),
-                header("RTE_H", &super::rte_types::standard()),
+                super::rte_types::standard()?.into_bytes(),
             ),
             (
                 "include/Rte_Main.h".into(),
-                super::rte::MAIN_HEADER.to_vec(),
+                super::outputs::trusted_asset("runtime/ecu/include/Rte_Main.h")?
+                    .bytes
+                    .to_vec(),
             ),
             (
                 "include/Rte_DataHandleType.h".into(),
-                header("RTE_DATA_HANDLE_TYPE_H", "#include \"Rte_Type.h\"\n"),
+                super::outputs::trusted_asset("runtime/ecu/include/Rte_DataHandleType.h")?
+                    .bytes
+                    .to_vec(),
             ),
         ];
         for component in &composition.components {
             let scope = super::short_name(&component.component);
             let mut body = format!(
-                "#include \"Rte_{scope}_Type.h\"\n#include \"Rte_DataHandleType.h\"\n\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\n\nstruct Rte_CDS_{scope} {{\n    uint8 Rte_Dummy; /**< Empty CDS for the source, single-instance component. */\n}};\n/** Component data structure for the selected single instance. */\ntypedef struct Rte_CDS_{scope} Rte_CDS_{scope};\n#ifndef RTE_CORE\n/** Borrowed component instance; immutable for the ECU lifetime. */\ntypedef const Rte_CDS_{scope} *Rte_Instance;\n#endif\nextern const Rte_CDS_{scope} *const Rte_Inst_{scope};\n\n"
+                r#"#include "Rte_{scope}_Type.h"
+#include "Rte_DataHandleType.h"
+
+{linkage_begin}
+struct Rte_CDS_{scope} {{
+    uint8 Rte_Dummy; /**< Empty CDS for the source, single-instance component. */
+}};
+/** Component data structure for the selected single instance. */
+typedef struct Rte_CDS_{scope} Rte_CDS_{scope};
+#ifndef RTE_CORE
+/** Borrowed component instance; immutable for the ECU lifetime. */
+typedef const Rte_CDS_{scope} *Rte_Instance;
+#endif
+extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
+
+"#,
+                linkage_begin = c_layout::linkage(true)
             );
             let init_values: Vec<_> = component
                 .data_ports
@@ -334,22 +375,29 @@ impl ValidatedIntegrationPlan {
                     docs.push_str(&c_layout::comment(" * ", &format!("@return {status}")));
                 }
                 if symbol.return_type == "void" {
-                    docs.push_str(" * @par Return\n * None.\n");
+                    docs.push_str(
+                        r#" * @par Return
+ * None.
+"#,
+                    );
                 }
                 if unnamed {
                     docs.push_str(" * Preconditions: called by the configured RTE activation or synchronous server dispatch with valid argument storage; the application implements this role.\n");
                 } else {
                     docs.push_str(" * Preconditions: ECU initialized; RTE data APIs and connected calls require a started RTE and the owner task. Guard rejection preserves outputs; stopped RTE returns RTE_E_COM_STOPPED, invalid context/storage returns E_NOT_OK or the configured application error.\n");
                 }
-                docs.push_str(" * Context: configured component task, outside exclusive areas.\n * Reentrancy: not reentrant for the same single-instance component.\n * Ownership: pointer storage is borrowed for this call; no pointer is retained.\n");
+                docs.push_str(
+                    r#" * Context: configured component task, outside exclusive areas.
+ * Reentrancy: not reentrant for the same single-instance component.
+ * Ownership: pointer storage is borrowed for this call; no pointer is retained.
+"#,
+                );
                 let scope = super::short_name(&component.component);
                 if !runnable {
                     body.push_str(&api_visibility(component, symbol));
                 }
                 if runnable {
-                    body.push_str(&format!(
-                        "#define {scope}_START_SEC_CODE\n#include \"{scope}_MemMap.h\"\n"
-                    ));
+                    body.push_str(&c_layout::section(scope, scope, "CODE", true));
                 }
                 let parameters = if runnable && symbol.definition_owner.starts_with("application/")
                 {
@@ -394,7 +442,9 @@ impl ValidatedIntegrationPlan {
                 );
                 if runnable {
                     body.push_str(&format!(
-                        "#define {scope}_STOP_SEC_CODE\n#include \"{scope}_MemMap.h\"\n\n"
+                        r#"{stop_code}
+"#,
+                        stop_code = c_layout::section(scope, scope, "CODE", false)
                     ));
                 }
                 if !runnable {
@@ -417,7 +467,9 @@ impl ValidatedIntegrationPlan {
                         });
                     if let Some(alias) = alias {
                         body.push_str(&format!(
-                            "#ifndef RTE_CORE\n{}#endif\n",
+                            r#"#ifndef RTE_CORE
+{}#endif
+"#,
                             c_layout::commented_defines(
                                 &[(alias, symbol.symbol.as_str())],
                                 "API alias."
@@ -431,13 +483,35 @@ impl ValidatedIntegrationPlan {
                 .header
                 .trim_start_matches("include/Rte_")
                 .trim_end_matches(".h");
-            body.push_str("#ifdef __cplusplus\n}\n#endif\n");
+            body.push_str(c_layout::linkage(false));
             let guard = format!("RTE_{}_H", name.to_uppercase());
             let application_header = format!(
-                "/** @file Application contract for {name}. */\n#ifndef {guard}\n#ifndef RTE_CORE\n#ifdef RTE_APPLICATION_HEADER_FILE\n#error Multiple application header files included.\n#endif\n/** Application-header singleton marker (SWS_Rte_01006). */\n#define RTE_APPLICATION_HEADER_FILE\n#endif\n#define {guard}\n{body}\n#endif\n"
+                r#"/** @file Application contract for {name}. */
+#ifndef {guard}
+#ifndef RTE_CORE
+#ifdef RTE_APPLICATION_HEADER_FILE
+#error Multiple application header files included.
+#endif
+/** Application-header singleton marker (SWS_Rte_01006). */
+#define RTE_APPLICATION_HEADER_FILE
+#endif
+#define {guard}
+{body}
+#endif
+"#
             );
             files.push((component.header.clone(), application_header.into_bytes()));
-            files.push((format!("include/Rte_{name}_Type.h"), header(&format!("RTE_{name}_TYPE_H"), "#include \"Rte_Type.h\"\n#include \"Rte_Dcm_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n#ifdef __cplusplus\n}\n#endif\n")));
+            files.push((
+                format!("include/Rte_{name}_Type.h"),
+                header(
+                    &format!("RTE_{name}_TYPE_H"),
+                    &format!(
+                        "#include \"Rte_Type.h\"\n#include \"Rte_Dcm_Type.h\"\n{}{}",
+                        c_layout::linkage(true),
+                        c_layout::linkage(false)
+                    ),
+                ),
+            ));
             files.push((
                 format!("include/{name}_MemMap.h"),
                 super::memmap::component(name).into_bytes(),

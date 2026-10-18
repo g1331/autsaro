@@ -1,0 +1,106 @@
+/** @file Generated from the selected source contract. */
+#ifndef ECU_TARGET_CONFIG_H
+#define ECU_TARGET_CONFIG_H
+#include "Ecu_ProfileConfig.h"
+#include "Os_Target.h"
+@DEFINES@extern const Os_TargetConfig Ecu_OsConfig;
+/** Initialize the generated communication stack in dependency order.
+ * @param[out] reached Non-NULL stage ledger; set to zero, then 1..8 as each stage begins.
+ * @return E_OK when all stages and timing start; E_NOT_OK leaves the last begun stage for
+ * retirement.
+ *
+ * Preconditions: Trusted startup context; NULL or invalid lifecycle context preserves the ledger.
+ *
+ * Context: StartupHook, outside exclusive areas.
+ *
+ * Reentrancy: not reentrant.
+ *
+ * Ownership: No pointer is retained.
+ */
+Std_ReturnType Ecu_StackBootstrap(uint8 *reached);
+/** Dispatch the configured owner events and flush outgoing frames.
+ * @param[in] events Owner event mask; configured work, application and I/O bits select dispatch.
+ * @return E_OK after successful dispatch/flush; E_NOT_OK for invalid context or lower failure.
+ *
+ * Preconditions: Owner task and active SchM timing; otherwise no dispatch.
+ *
+ * Context: ECU owner task, outside exclusive areas.
+ *
+ * Reentrancy: not reentrant.
+ *
+ * Ownership: No pointer is retained.
+ */
+Std_ReturnType Ecu_StackRunCycle(EventMaskType events);
+/** Retire supported begun stages, newest first; Det and routing tables have no DeInit.
+ * @param[in] reached Last stage begun by Bootstrap, 0..8; zero retires none.
+ * @par Return
+ * None.
+ *
+ * Preconditions: Trusted shutdown context after owner dispatch has stopped.
+ *
+ * Context: ShutdownHook, outside exclusive areas.
+ *
+ * Reentrancy: not reentrant.
+ *
+ * Ownership: No pointer is retained.
+ */
+void Ecu_StackRetire(uint8 reached);
+/** Validate a host frame against the generated CAN routes.
+ * @param[in] id 11-bit CAN identifier, 0..0x7ff.
+ * @param[in] dlc Classical CAN payload length, 0..8 bytes.
+ * @return Nonzero for allowed Rx shapes or unknown IDs; zero for invalid ranges, Tx IDs or wrong
+ * known Rx lengths.
+ *
+ * Preconditions: None.
+ *
+ * Context: Any context, including inside exclusive areas.
+ *
+ * Reentrancy: reentrant; configuration is immutable.
+ *
+ * Ownership: No pointer is retained.
+ */
+int Ecu_StackFrameShape(uint32 id, uint8 dlc);
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
+/** Test provider: select a bootstrap failure at this stage.
+ * @param[in] stage Initialization stage, 1..8.
+ * @return Nonzero injects failure; zero continues initialization.
+ *
+ * Preconditions: Test build only; provider linked by the test application.
+ *
+ * Context: StartupHook.
+ *
+ * Reentrancy: not reentrant.
+ *
+ * Ownership: No pointer is retained.
+ */
+int Ecu_TargetTestFailStage(unsigned stage);
+/** Test provider: observe retirement of one stage.
+ * @param[in] stage Initialization stage being retired, 1..8.
+ * @par Return
+ * None.
+ *
+ * Preconditions: Test build only; provider linked by the test application.
+ *
+ * Context: ShutdownHook.
+ *
+ * Reentrancy: not reentrant.
+ *
+ * Ownership: No pointer is retained.
+ */
+void Ecu_TargetTestRetire(unsigned stage);
+/** Test provider: observe OS shutdown.
+ * @param[in] reason OS shutdown status.
+ * @par Return
+ * None.
+ *
+ * Preconditions: Test build only; provider linked by the test application.
+ *
+ * Context: ShutdownHook.
+ *
+ * Reentrancy: not reentrant.
+ *
+ * Ownership: No pointer is retained.
+ */
+void Ecu_TargetTestShutdown(StatusType reason);
+#endif
+#endif

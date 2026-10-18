@@ -22,9 +22,54 @@ pub(super) const OS: &str = "os";
 pub(super) const MEMMAP: &str = "memmap";
 pub(super) const RTE: &str = "rte";
 
-/// Selected assets an emitter renders from instead of delivering verbatim,
-/// with the logical path of the rendering.
-const TEMPLATES: [(&str, &str, &str); 9] = [
+pub(super) const ECU: &str = "ecu-config";
+
+/// Trusted inputs reserved at their existing generated output paths.
+const TEMPLATES: [(&str, &str, &str); 21] = [
+    ("runtime/ecu/templates/Rte.h.in", RTE, "include/Rte.h"),
+    ("runtime/ecu/include/Rte_Cfg.h", RTE, "include/Rte_Cfg.h"),
+    (
+        "runtime/ecu/include/Rte_DataHandleType.h",
+        RTE,
+        "include/Rte_DataHandleType.h",
+    ),
+    (
+        "runtime/ecu/include/Ecu_Config.h",
+        ECU,
+        "include/Ecu_Config.h",
+    ),
+    (
+        "runtime/ecu/templates/Ecu_TargetConfig.h.in",
+        ECU,
+        "include/Ecu_TargetConfig.h",
+    ),
+    (
+        "runtime/ecu/src/Ecu_Execution.c",
+        ECU,
+        "src/Ecu_Execution.c",
+    ),
+    (
+        "runtime/ecu/src/Ecu_Execution.h",
+        ECU,
+        "src/Ecu_Execution.h",
+    ),
+    (
+        "runtime/ecu/src/Ecu_DetCallout.c",
+        ECU,
+        "src/Det_Callouts.c",
+    ),
+    (
+        "runtime/ecu/include/Det_Externals.h",
+        ECU,
+        "include/Det_Externals.h",
+    ),
+    ("runtime/ecu/include/Rte_Main.h", RTE, "include/Rte_Main.h"),
+    ("runtime/ecu/include/Rte_Com.h", RTE, "include/Rte_Com.h"),
+    (
+        "runtime/ecu/templates/SchM_Main.c.in",
+        ECU,
+        "src/SchM_Main.c",
+    ),
     ("runtime/os/include/Os_Cfg.h", OS, "include/Os_Cfg.h"),
     (
         "runtime/ecu/templates/Ecu_Config.c.in",
@@ -267,6 +312,11 @@ pub(super) fn trusted_asset(path: &str) -> Result<&'static AssetEntry, Vec<PlanD
         })
 }
 
+pub(super) fn trusted_text(path: &str) -> Result<&'static str, Vec<PlanDiagnostic>> {
+    std::str::from_utf8(trusted_asset(path)?.bytes)
+        .map_err(|_| PlanDiagnostic::output_missing(path))
+}
+
 /// One edit of a trusted runtime template.
 pub(super) enum Edit<'a> {
     /// The anchor occurs exactly once.
@@ -347,6 +397,32 @@ mod tests {
     }
 
     #[test]
+    fn schm_template_preserves_both_partition_uses_and_requires_one_mode_insertion() {
+        let outputs = outputs();
+        let path = "src/SchM_Main.c";
+        let template = outputs.template(ECU, path).unwrap();
+        let text = render(
+            template,
+            path,
+            &[
+                Edit::Every("@PARTITION@", "65535"),
+                Edit::Once("@MODES@", "/* modes */\n"),
+            ],
+        )
+        .unwrap();
+        assert!(text.contains("= {65535u};"));
+        assert!(text.contains("ConfigPtr->partition != 65535u"));
+        assert!(text.ends_with("/* modes */\n"));
+        assert!(!text.contains('@'));
+        let duplicate = format!("{template}@MODES@");
+        for source in [duplicate.as_str(), "missing template anchors"] {
+            let error = render(source, path, &[Edit::Once("@MODES@", "")]).unwrap_err();
+            assert_eq!(error[0].code, "TEMPLATE_ANCHOR");
+            assert_eq!(error[0].object.as_deref(), Some(path));
+        }
+    }
+
+    #[test]
     fn a_second_producer_of_a_path_is_rejected() {
         let mut outputs = outputs();
         outputs
@@ -415,7 +491,11 @@ mod tests {
 
     #[test]
     fn template_edits_require_their_anchor() {
-        let template = "#ifndef A\n#define A\n#define X 1\n#endif\n";
+        let template = r#"#ifndef A
+#define A
+#define X 1
+#endif
+"#;
         assert_eq!(
             render(
                 template,
@@ -426,16 +506,29 @@ mod tests {
                 ]
             )
             .unwrap(),
-            "#ifndef A\n#define A\n#define X 0\n#define Y\n#endif\n"
+            r#"#ifndef A
+#define A
+#define X 0
+#define Y
+#endif
+"#
         );
         assert_eq!(
             render(
-                "f(a, Os, 0u);\ng(Os_X,\n  Os,\n  OsAlt);\n",
+                r#"f(a, Os, 0u);
+g(Os_X,
+  Os,
+  OsAlt);
+"#,
                 "a.c",
                 &[Edit::Token("Os", "Rt")]
             )
             .unwrap(),
-            "f(a, Rt, 0u);\ng(Os_X,\n  Rt,\n  OsAlt);\n"
+            r#"f(a, Rt, 0u);
+g(Os_X,
+  Rt,
+  OsAlt);
+"#
         );
         for edit in [
             Edit::Token("Os", ""),

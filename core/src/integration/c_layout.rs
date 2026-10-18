@@ -6,6 +6,71 @@
 //! generated samples. clang-format weighs several breaks of an over-long
 //! function head by penalty; the rules here follow its usual choice.
 
+/// One side of a module's repeated-include memory-section protocol.
+pub(super) fn section(prefix: &str, module: &str, segment: &str, start: bool) -> String {
+    let edge = if start { "START" } else { "STOP" };
+    format!(
+        r#"#define {prefix}_{edge}_SEC_{segment}
+#include "{module}_MemMap.h"
+"#
+    )
+}
+
+/// C++ linkage boundaries around C declarations.
+pub(super) fn linkage(start: bool) -> &'static str {
+    if start {
+        r#"#ifdef __cplusplus
+extern "C" {
+#endif
+"#
+    } else {
+        r#"#ifdef __cplusplus
+}
+#endif
+"#
+    }
+}
+
+pub(super) fn header_start(guard: &str) -> String {
+    format!("#ifndef {guard}\n#define {guard}\n")
+}
+
+/// Include-guard body; callers supply the file comment and any intentional spacing.
+pub(super) fn header(guard: &str, body: &str) -> String {
+    format!("{}{body}\n#endif\n", header_start(guard))
+}
+
+/// A contract detail or one of its named state/context/ownership conditions.
+pub(super) enum ContractLine<'a> {
+    Detail(&'a str),
+    Condition(&'a str, &'a str),
+}
+
+pub(super) const CONTRACT_FIELDS: [&str; 4] =
+    ["Preconditions", "Context", "Reentrancy", "Ownership"];
+
+/// Render structured contract lines with the existing compact or paragraph layout.
+pub(super) fn contract_comment<'a>(
+    purpose: &str,
+    lines: impl IntoIterator<Item = ContractLine<'a>>,
+    paragraphs: bool,
+) -> String {
+    let mut output = format!("/** {purpose}\n");
+    for line in lines {
+        match line {
+            ContractLine::Detail(text) => output.push_str(&comment(" * ", text)),
+            ContractLine::Condition(field, value) => {
+                if paragraphs {
+                    output.push_str(" *\n");
+                }
+                output.push_str(&comment(" * ", &format!("{field}: {value}")));
+            }
+        }
+    }
+    output.push_str(" */\n");
+    output
+}
+
 /// `ColumnLimit` of `.clang-format`.
 const COLUMNS: usize = 100;
 
@@ -92,9 +157,18 @@ pub(super) fn short_function(head: &str, statement: &str) -> String {
     if fits(&one) {
         one
     } else if statement.is_empty() {
-        format!("{head}\n{{\n}}")
+        format!(
+            r#"{head}
+{{
+}}"#
+        )
     } else {
-        format!("{head}\n{{\n    {statement}\n}}")
+        format!(
+            r#"{head}
+{{
+    {statement}
+}}"#
+        )
     }
 }
 
@@ -123,7 +197,9 @@ pub(super) fn initializer(declaration: &str, attribute: &str, items: &[Item]) ->
         return continued;
     }
     format!(
-        "{declaration}\n    {attribute} = {{\n{}}};",
+        r#"{declaration}
+    {attribute} = {{
+{}}};"#,
         lines("        ", items)
     )
 }
@@ -210,7 +286,9 @@ pub(super) fn defines<N: AsRef<str>, V: AsRef<str>>(entries: &[(N, V)]) -> Strin
         if format!("#define {name} {value}").len() > COLUMNS {
             flush(&mut text, &mut run);
             text.push_str(&format!(
-                "{:<width$}\\\n    {value}\n",
+                r#"{:<width$}\
+    {value}
+"#,
                 format!("#define {name}"),
                 width = COLUMNS - 1
             ));
@@ -262,24 +340,43 @@ pub(super) fn commented_defines<N: AsRef<str>, V: AsRef<str>>(
         }
         let line = format!("#define {name} {value}{tail}");
         if line.len() == COLUMNS {
-            if !output.is_empty() && !output.ends_with("\n\n") {
+            if !output.is_empty()
+                && !output.ends_with(
+                    r#"
+
+"#,
+                )
+            {
                 output.push('\n');
             }
             // At this boundary clang-format's stable form keeps both the
             // replacement and the comment terminator on continuation lines.
             output.push_str(&format!(
-                "{:<width$}\\\n{:<width$}\\\n{}*/\n\n",
+                r#"{:<width$}\
+{:<width$}\
+{}*/
+
+"#,
                 format!("#define {name}"),
                 format!("    {value}{}", tail.trim_end_matches("*/")),
                 " ".repeat(value.len() + 6),
                 width = COLUMNS - 1
             ));
         } else if line.len() > COLUMNS {
-            if !output.is_empty() && !output.ends_with("\n\n") {
+            if !output.is_empty()
+                && !output.ends_with(
+                    r#"
+
+"#,
+                )
+            {
                 output.push('\n');
             }
             output.push_str(&format!(
-                "{:<width$}\\\n    {value}{tail}\n\n",
+                r#"{:<width$}\
+    {value}{tail}
+
+"#,
                 format!("#define {name}"),
                 width = COLUMNS - 1
             ));
@@ -325,6 +422,51 @@ mod tests {
     }
 
     #[test]
+    fn structural_boundaries_preserve_sections_linkage_and_nested_guards() {
+        assert_eq!(
+            section("RTE_App", "Rte", "CODE", true),
+            "#define RTE_App_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+        );
+        assert_eq!(
+            section("App", "App", "VAR_CLEARED_UNSPECIFIED", false),
+            "#define App_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"App_MemMap.h\"\n"
+        );
+        assert_eq!(
+            linkage(true),
+            "#ifdef __cplusplus\nextern \"C\" {\n#endif\n"
+        );
+        assert_eq!(linkage(false), "#ifdef __cplusplus\n}\n#endif\n");
+        assert_eq!(
+            header("A_H", "#if VALUE\n#endif"),
+            "#ifndef A_H\n#define A_H\n#if VALUE\n#endif\n#endif\n"
+        );
+    }
+
+    #[test]
+    fn contract_conditions_preserve_compact_and_paragraph_layouts() {
+        let render = |paragraphs| {
+            contract_comment(
+                "Run.",
+                [
+                    ContractLine::Detail("@par Return"),
+                    ContractLine::Detail("None."),
+                    ContractLine::Condition("Preconditions", "Ready."),
+                    ContractLine::Condition("Context", "Owner."),
+                ],
+                paragraphs,
+            )
+        };
+        assert_eq!(
+            render(false),
+            "/** Run.\n * @par Return\n * None.\n * Preconditions: Ready.\n * Context: Owner.\n */\n"
+        );
+        assert_eq!(
+            render(true),
+            "/** Run.\n * @par Return\n * None.\n *\n * Preconditions: Ready.\n *\n * Context: Owner.\n */\n"
+        );
+    }
+
+    #[test]
     fn trailing_comment_at_column_limit_keeps_clang_continuation() {
         assert_eq!(
             commented_defines(
@@ -334,7 +476,11 @@ mod tests {
                 )],
                 "API alias."
             ),
-            "#define Rte_Call_ResultService_Transform                                                           \\\n    Rte_Call_Observe_ResultService_Transform /**< API alias.                                       \\\n                                              */\n\n"
+            r#"#define Rte_Call_ResultService_Transform                                                           \
+    Rte_Call_Observe_ResultService_Transform /**< API alias.                                       \
+                                              */
+
+"#
         );
     }
 
@@ -390,17 +536,28 @@ mod tests {
             .map(|value| Item::Value(format!("{value}u")))
             .collect();
         let text = initializer("const T x", "", &long);
-        assert!(text.starts_with("const T x = {\n    0u,\n    1u,\n"));
+        assert!(text.starts_with(
+            r#"const T x = {
+    0u,
+    1u,
+"#
+        ));
         assert!(text.ends_with("    29u,\n};"));
         let row = Item::Row((0..30).map(|value| format!("{value}u")).collect());
-        assert!(initializer("const T x[]", "", &[row]).contains("    {\n        0u,\n"));
+        assert!(initializer("const T x[]", "", &[row]).contains(
+            r#"    {
+        0u,
+"#
+        ));
     }
 
     #[test]
     fn defines_align_runs_and_wrap_long_values() {
         assert_eq!(
             defines(&[("RTE_E_OK", "0U"), ("RTE_E_LIMIT", "130U")]),
-            "#define RTE_E_OK    0U\n#define RTE_E_LIMIT 130U\n"
+            r#"#define RTE_E_OK    0U
+#define RTE_E_LIMIT 130U
+"#
         );
         let wrapped = defines(&[("A", "x".repeat(95))]);
         let first = wrapped.lines().next().unwrap_or_default();
@@ -409,7 +566,11 @@ mod tests {
         let value = "V".repeat(80);
         assert_eq!(
             defines(&[(name.as_str(), "1"), ("M", value.as_str())]),
-            format!("#define {name} 1\n#define M {value}\n")
+            format!(
+                r#"#define {name} 1
+#define M {value}
+"#
+            )
         );
     }
 

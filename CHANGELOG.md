@@ -6,6 +6,10 @@
 
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
+### Changed
+
+- C emitters use trusted runtime sources and anchored templates for fixed integration files, with shared memory-section, C++ linkage, include-guard and contract-comment rendering. Generated paths, ABI and behavior are preserved; the execution source gains its required file description and the COM callback header directly imports its handle type. Asset provenance and rule-set/package identities are recomputed (#278)
+
 - **Fixed:** clang-tidy baseline comparison keeps existing code diagnostics stable when required trailing Doxygen comments are added, while retaining code, literal and occurrence-count checks (#289).
 
 - **Fixed:** Rejection notices, range hints and the missing-tool notice insert backend messages without their sentence-final mark, so each composed text ends in exactly one mark and a bracketed range follows the reason instead of a stray period (#286).
