@@ -581,9 +581,17 @@ export async function openWorkbench(name, options) {
     await input(label('搜索工程树名称、路径、定义、值'), '');
     const target = `[...document.querySelectorAll('[role=tree] [data-object-id]')].find(node => node.dataset.objectId === ${json(objectId)})?.querySelector('.tree-name')`;
     if (!(await evaluate(`Boolean(${target})`))) {
-      await click('打开配置对象文档');
-      await configurationView('全部对象');
-      await input(label('搜索对象表名称、路径、定义、值'), '');
+      const object = (await projection()).objects.find((object) => object.objectId === objectId);
+      assert(object, 'The requested object must belong to the current projection');
+      if (object.kind === 'AR-PACKAGE') {
+        await click('打开配置对象文档');
+        await configurationView('全部对象');
+        await input(label('搜索对象表名称、路径、定义、值'), '');
+      } else {
+        // A viewport row can be absent without being absent from the logical tree.
+        await input(label('搜索工程树名称、路径、定义、值'), object.path);
+        await until(`Boolean(${target})`, 'requested object appears in the searched tree');
+      }
     }
     const point = await evaluate(`(() => {
       const node = ${target} ?? [...document.querySelectorAll('[data-object-row]')].find(row => row.dataset.objectRow === ${json(objectId)})?.querySelector('button.table-link');
@@ -597,8 +605,10 @@ export async function openWorkbench(name, options) {
       `document.querySelector('[data-object-title]')?.dataset.objectTitle === ${json(objectId)} || Boolean(document.querySelector('[role=dialog],[role=alertdialog]'))`,
       'object focus',
     );
-    if (!(await evaluate(`Boolean(document.querySelector('[role=dialog],[role=alertdialog]'))`)))
+    if (!(await evaluate(`Boolean(document.querySelector('[role=dialog],[role=alertdialog]'))`))) {
       await configurationView('容器');
+      await input(label('搜索工程树名称、路径、定义、值'), '');
+    }
   }
   /** Switches the configuration document between “容器” and “全部对象”. */
   async function configurationView(name) {
