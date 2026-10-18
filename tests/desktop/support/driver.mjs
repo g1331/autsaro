@@ -24,6 +24,29 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const platform = { linux: 'linux', win32: 'windows' }[process.platform];
+
+// A record can span pipe chunks. Consume each stream in order and finish its
+// writes before accepting the session's captured evidence.
+export function captureDriverOutput(driver, directory, onStderr = () => {}) {
+  return Promise.all(
+    ['stdout', 'stderr'].map(async (channel) => {
+      let failure = null;
+      try {
+        for await (const chunk of driver[channel]) {
+          if (channel === 'stderr') onStderr(chunk);
+          try {
+            await appendFile(path.join(directory, `driver.${channel}.log`), chunk);
+          } catch (error) {
+            failure ??= error;
+          }
+        }
+      } catch (error) {
+        failure ??= error;
+      }
+      return failure;
+    }),
+  );
+}
 // Let Ctrl-C and CI cancellation run the 'exit' cleanup registered by launch().
 for (const [signal, code] of [
   ['SIGINT', 130],
@@ -567,6 +590,7 @@ export async function launch(name, { delayOperations = false } = {}) {
   let abandon;
   let session;
   let client;
+  let outputCapture = Promise.resolve([]);
   try {
     let nativeDriver;
     if (platform === 'linux') {
@@ -640,13 +664,8 @@ export async function launch(name, { delayOperations = false } = {}) {
       ),
     );
     let driverLog = '';
-    const driverOutput = path.join(scratch, 'driver.stderr.log');
-    driverProcess.stdout.on('data', (chunk) => {
-      appendFile(path.join(scratch, 'driver.stdout.log'), chunk).catch(() => undefined);
-    });
-    driverProcess.stderr.on('data', (chunk) => {
+    outputCapture = captureDriverOutput(driverProcess, scratch, (chunk) => {
       driverLog += chunk;
-      appendFile(driverOutput, chunk).catch(() => undefined);
     });
     client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
     await until(async () => {
@@ -673,6 +692,12 @@ export async function launch(name, { delayOperations = false } = {}) {
     }
     await Promise.all([driverProcess].filter(Boolean).map(stopped));
     await display?.cleanup();
+    const outputErrors = (await outputCapture).filter(Boolean);
+    if (outputErrors.length)
+      throw new AggregateError(
+        [error, ...outputErrors],
+        'Native startup failed and driver output capture was incomplete',
+      );
     throw error;
   }
   const route = (suffix) => `/session/${session}${suffix}`;
@@ -1002,6 +1027,12 @@ export async function launch(name, { delayOperations = false } = {}) {
       });
       process.off('exit', abandon);
       await writeFile(path.join(scratch, 'process-tree.json'), JSON.stringify(tree, null, 2));
+      const outputErrors = (await outputCapture).filter(Boolean);
+      if (outputErrors.length)
+        throw new AggregateError(
+          [...(closeError ? [closeError] : []), ...outputErrors],
+          'Driver output capture failed during desktop close',
+        );
       if (closeError) throw closeError;
     },
   };

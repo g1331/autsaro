@@ -12,7 +12,7 @@
 
 ### Fixed
 
-- Native graph construction indexes short names once per document instead of repeatedly scanning wide sibling lists for every descendant; object paths, source bytes and public interfaces are unchanged. Desktop WebDriver evaluation carries complete JSON results as text to avoid duplicating large object trees in the native driver; logs retain pending requests and failure outcomes, stopped applications exit through owned cleanup, and the project tree shares one context-menu keyboard listener and mounts only viewport rows while preserving full search, scroll and keyboard reachability (#311)
+- Native graph construction indexes short names once per document instead of repeatedly scanning wide sibling lists for every descendant; object paths, source bytes and public interfaces are unchanged. Desktop WebDriver evaluation carries complete JSON results as text to avoid duplicating large object trees in the native driver; logs retain pending requests and failure outcomes with ordered output and reported capture errors, stopped applications exit through owned cleanup, and the project tree shares one context-menu keyboard listener and mounts only viewport rows while preserving full search, scroll and keyboard reachability (#311)
 
 - Linux native stack observations acquire completed actor registrations, and concurrent host shutdown callers use their own inactive ISR identity; regenerate sealed ECU projects to receive the synchronization fix (#317)
 

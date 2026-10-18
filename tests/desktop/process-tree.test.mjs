@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { descendants, processTree, launch, until as waitFor } from './support/driver.mjs';
 
@@ -98,6 +98,62 @@ test('a failed transport still proves complete owned native process exit', async
     await readFile(path.join(session.scratch, 'process-tree.json'), 'utf8'),
   );
   assert(closed.length > 0, 'cleanup must retain the actual owned process tree');
+  const remaining = new Map(
+    (await processTree(process.pid)).map((item) => [item.pid, item.identity]),
+  );
+  for (const item of closed)
+    assert.notEqual(remaining.get(item.pid), item.identity, `owned process survived: ${item.pid}`);
+});
+
+test('a driver output write failure is reported after complete owned native exit', async () => {
+  const session = await launch('failed-output-cleanup');
+  const output = path.join(session.scratch, 'driver.stderr.log');
+  let injected = false;
+  let captureErrors;
+  try {
+    await waitFor(
+      () => session.evaluateReadiness('Boolean(window.__TAURI_INTERNALS__)'),
+      'native startup before controlled output failure',
+      60000,
+    );
+    await session.evaluate("window.__TAURI_INTERNALS__.invoke('workbench_capabilities')");
+    await waitFor(
+      async () =>
+        (
+          await readFile(output, 'utf8').catch((error) => {
+            if (error.code === 'ENOENT') return '';
+            throw error;
+          })
+        ).includes('AUTOSAR_NATIVE_REQUEST '),
+      'real native command evidence before output failure',
+    );
+    await rename(output, path.join(session.scratch, 'driver.stderr.before-fault.log'));
+    await mkdir(output);
+    injected = true;
+    await session.evaluate("window.__TAURI_INTERNALS__.invoke('workbench_capabilities')");
+  } finally {
+    if (injected)
+      await assert.rejects(session.close(), (error) => {
+        assert(error instanceof AggregateError);
+        assert(
+          error.errors.some(
+            (item) => item.path === output && ['EISDIR', 'EACCES', 'EPERM'].includes(item.code),
+          ),
+          'The reported failure must identify the injected output path',
+        );
+        captureErrors = error.errors.map(String);
+        return true;
+      });
+    else await session.close();
+  }
+  await writeFile(
+    path.join(session.scratch, 'output-capture-failure.json'),
+    JSON.stringify(captureErrors, null, 2),
+  );
+  const closed = JSON.parse(
+    await readFile(path.join(session.scratch, 'process-tree.json'), 'utf8'),
+  );
+  assert(closed.length > 0, 'output failure must retain the actual owned process tree');
   const remaining = new Map(
     (await processTree(process.pid)).map((item) => [item.pid, item.identity]),
   );
