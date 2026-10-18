@@ -11,6 +11,7 @@
 ### Fixed
 
 - COM raw configuration short names reject C keywords before symbolic-name prefixing, preserving the original source location in the diagnostic (#303)
+- CanTp receive-started timeouts retain their complete configured duration when an input precedes its epoch's cycle; same-epoch inputs after the cycle and confirmation timers keep their timing. Public interfaces, configuration layouts and third-party identities are unchanged; regenerate sealed ECU projects to receive the private owner-ordering adapter (#302)
 
 ### Changed
 

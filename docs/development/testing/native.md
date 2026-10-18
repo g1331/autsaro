@@ -16,13 +16,14 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 ## 检测器构建
 
-Linux 上用 GCC 的 ThreadSanitizer、AddressSanitizer（含 LeakSanitizer）和 UndefinedBehaviorSanitizer 检查直接编译的原生测试程序，ASan／UBSan 另外检查 OS suites。`AUTOSAR_SANITIZE` 指定检测器（`thread` 或 `address,undefined`），测试辅助据此为这些程序加入 `-fsanitize=…`、`-fno-sanitize-recover=all` 与调试信息；任何报告都使程序以错误结束，测试随之失败。
+Linux 上用 GCC 的 ThreadSanitizer、AddressSanitizer（含 LeakSanitizer）和 UndefinedBehaviorSanitizer 检查直接编译的原生测试程序，ASan／UBSan 另外检查 OS suites 和封存 ECU 的 HostBatch／probe／test 闭包。`AUTOSAR_SANITIZE` 指定检测器（`thread` 或 `address,undefined`），测试辅助据此为这些程序加入 `-fsanitize=…`、`-fno-sanitize-recover=all` 与调试信息；任何报告都使程序以错误结束，测试随之失败。
 
 ```bash
 export AUTOSAR_SANITIZE=thread   # 或 address,undefined
 export ASAN_OPTIONS=use_sigaltstack=0:detect_stack_use_after_return=0
-setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native --no-fail-fast -- runtime_contracts:: host:: integration::generated_c:: integration::os::counter_header_oracles sanitizers::
+setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native --no-fail-fast -- runtime_contracts:: host:: integration::generated_c:: integration::os::counter_header_oracles sanitizers::sanitizer_lane_reports_deliberate_faults
 # 仅 address,undefined
+setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native --no-fail-fast -- integration::protocol:: integration::sealed_projects:: integration::sealed_sanitizers::
 setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py
 ```
 
@@ -30,7 +31,9 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - OS 主机层自己安装备用信号栈，并用 ucontext 切换栈，所以 ASan 不接管备用信号栈（`use_sigaltstack=0`），也不把局部变量移到假栈（`detect_stack_use_after_return=0`）；后者使嵌套中断用例比较栈地址失真，代价是不检查返回后使用栈变量。
 - OS suites 不在 TSan 下运行：TSan 把异步信号处理推迟到它自己的拦截点执行，FreeRTOS POSIX 端口用 `SIGRTMIN` 暂停 actor 并取得被中断的上下文，这一机制在 TSan 下超时（`E_OS_STATE`）。TSan 覆盖 BSW 独占区与主机锁的真实线程用例（`runtime_contracts::`）；它在 OS suites 中报告过信号处理函数改写 `errno` 的问题，已修复。
 - `sanitizers::` 的故意越界写（`memcpy` 超出固定静态缓冲）、数据竞争和超宽移位证明检测器确实报错；未设置 `AUTOSAR_SANITIZE` 时该测试不做任何事。
-- 经 `ecu-tool` 封存构建的 ECU（`integration::protocol`、`sealed_projects` 等）不插桩：交付工具只接受 `target.json` 锁定的编译选项，并核对段布局。只列出直接编译程序的模块，避免重复运行未插桩的构建；HostBatch 集成路径的检测器覆盖见 [#140](https://github.com/g1331/autsaro/issues/140)。
+- 封存 ECU 的检测器路径只用于 Linux ASan／UBSan：测试辅助先完整执行包内生产 build（含 seal、固定工具、选择补丁、内核摘要与严格段布局检查），记录实际编译 argv，再用同一源码、include 顺序、补丁后内核、test 模式宏与链接参数额外加入检测器选项，编译到独立程序。测试辅助不得在加载原 guard 前加入包内 Python 搜索路径，以免未封存的同名标准库模块提前执行。生产 `ecu-tool`、`target.json` 和 object 检查不变；检测器程序不作为交付程序。共享 HostBatch 按检测器选项区分 image，消费者仍拿独立副本。每个新输入多编译一次，后续相同 HostBatch 复用；不缓存跨运行的通过结果。
+- `integration::protocol::` 与 `integration::sealed_projects::` 在该路径运行现有协议向量和封存工程 owner 用例；`integration::sealed_sanitizers::` 验证 probe 实际完成 20 ticks、test 模式故障退出、完整编译 argv 只差检测器选项／输出路径、封存输入不变及共享副本隔离。外部 probe control 复用既有故意越界／超宽移位夹具，要求实际运行报告与非零退出，并让合法边界输入成功。
+- 完整 FreeRTOS ECU 路径未纳入 TSan：本次同闭包实测能够产生 HostBatch receipt，但退出 7，报告栈注册／观察及中断状态／shutdown 的两项 data race，原始诊断及裁决／整改出口见 [#300](https://github.com/g1331/autsaro/issues/300)。这与上面的 OS suites 信号超时是不同证据，不将其写成 TSan 通过或已批准偏离；现有直接线程测试继续运行；`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
 
 必需 CI 的 `native-sanitizers` 任务在 Linux 上按 `thread` 与 `address,undefined` 各用一个 runner 运行上述命令；与 `native`、`native-os` 并行。
 

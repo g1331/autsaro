@@ -1031,7 +1031,13 @@ mod delivery_path_tests {
                 checked += 1;
             }
         }
-        assert_eq!(checked, 78);
+        assert_eq!(checked, 79);
         assert_eq!(seen, generated.keys().copied().collect());
+        for original in &originals {
+            let header = original.get("bsw/src/CanTp_Internal.h").unwrap();
+            assert_eq!(header.relative_path, "runtime/bsw/src/CanTp_Internal.h");
+            assert_eq!(header.role, "bsw");
+            assert_eq!(header.responsibility, "workbench");
+        }
     }
 }
