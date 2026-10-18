@@ -2,6 +2,7 @@
 // official tauri-driver WebDriver intermediary. Linux isolates itself on a
 // private Xvfb display and D-Bus; Windows relies on a dedicated runner or VM.
 import assert from 'node:assert/strict';
+import { WebDriver } from './webdriver.mjs';
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import {
   access,
@@ -477,41 +478,6 @@ while ((Get-Date) -lt $deadline) {
 throw "Native chooser stayed open after accepting the selection: $(Shown)"
 `;
 
-class WebDriver {
-  constructor(base, log) {
-    this.base = base;
-    this.log = log;
-  }
-  async request(method, route, body) {
-    const started = performance.now();
-    const response = await fetch(`${this.base}${route}`, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(300000),
-    });
-    const result = await response.json();
-    await appendFile(
-      this.log,
-      JSON.stringify({
-        at: Date.now(),
-        durationMs: performance.now() - started,
-        method,
-        route: route.replace(/session\/[^/]+/, 'session'),
-        script: route.endsWith('/execute/sync') ? body?.args?.[0] : body?.args?.[0]?.slice(0, 240),
-        status: response.status,
-        error: result.value?.error ? result.value : undefined,
-        probe: body?.args?.[0]?.includes('Boolean(window.__TAURI_INTERNALS__')
-          ? result.value
-          : undefined,
-      }) + '\n',
-    );
-    if (!response.ok || result.value?.error)
-      throw new Error(`WebDriver ${method} ${route}: ${JSON.stringify(result)}`);
-    return result.value;
-  }
-}
-
 /**
  * Launch the application named by AUTOSAR_DESKTOP_APP in a private session.
  * Results (screenshots, IPC log) go to AUTOSAR_DESKTOP_RESULTS or the system
@@ -733,6 +699,10 @@ export async function launch(name, { delayOperations = false } = {}) {
   return {
     platform,
     scratch,
+    // The navigation command owns unloading the old frame and waiting for load.
+    async refresh() {
+      return client.refresh(route(''));
+    },
     async evaluate(expression) {
       const result = await client.request('POST', route('/execute/async'), {
         script:
