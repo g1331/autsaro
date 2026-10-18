@@ -274,8 +274,16 @@ impl EcuOutputs {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(super) fn paths(&self) -> impl Iterator<Item = &str> {
         self.files.keys().map(String::as_str)
+    }
+
+    pub(super) fn contents(&self) -> BTreeMap<&str, &[u8]> {
+        self.files
+            .iter()
+            .map(|(path, (_, bytes))| (path.as_str(), bytes.as_ref()))
+            .collect()
     }
 
     /// Asset path to delivered path for every asset delivered verbatim.

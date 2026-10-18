@@ -27,7 +27,14 @@
 | 初始化调用方 |  | 不适用（归属：EcuM 角色——主线没有 EcuM 与 BswM，生成的 `Ecu_StackBootstrap` 承担启动顺序）[LSduR]：SWS_BSW_00150；不适用（归属：EcuM 角色——主线没有 EcuM 与 BswM，生成的 `Ecu_StackBootstrap` 承担启动顺序）[PduR]：SWS_BSW_00150 |
 | 跨模块版本检查与发布信息 |  | 差距 #59[LSduR]：SWS_BSW_00036、00059、00161、00162、00256；差距 #59[PduR]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[LSduR]：SWS_BSW_00115；差距 #58[PduR]：SWS_BSW_00115 |
-| BSWMD 与模块文档 |  | 差距 #159[LSduR]：SWS_BSW_00001、00002、00038、00061；差距 #159[PduR]：SWS_BSW_00001、00002、00038、00061 |
+| 交付描述 LSduR 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[LSduR]：SWS_BSW_00001 |
+| 交付描述 LSduR 00002 | 已核对（module_documentation::module 交付 modules/LSduR/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[LSduR]：SWS_BSW_00002 |
+| 交付描述 LSduR 00038 | 已核对（artifacts::exclusive_area 与 validate_areas 核对 LSduR 所选区域、实际 SchM Enter/Exit 声明及调用；mismatched_schm_declarations_and_calls_are_rejected_before_delivery 检查错配拒绝）[LSduR]：SWS_BSW_00038 |
+| 交付描述 LSduR 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[LSduR]：SWS_BSW_00061 |
+| 交付描述 PduR 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[PduR]：SWS_BSW_00001 |
+| 交付描述 PduR 00002 | 已核对（module_documentation::module 交付 modules/PduR/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[PduR]：SWS_BSW_00002 |
+| 交付描述 PduR 00038 | 已核对（artifacts::exclusive_area 与 validate_areas 核对 PduR 所选区域、实际 SchM Enter/Exit 声明及调用；mismatched_schm_declarations_and_calls_are_rejected_before_delivery 检查错配拒绝）[PduR]：SWS_BSW_00038 |
+| 交付描述 PduR 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[PduR]：SWS_BSW_00061 |
 | Symbolic Name Value | PduR_Cfg.h 与 LSduR_Cfg.h 唯一生产各自符号；LSduR 仅导出由已验证路由合成的公开入口句柄，目的 ID 从实际提供模块导入，不接纳独立 LSduR ECUC。PBcfg 消费者包含提供方头，非等 ID／改名工程实际运行 | 已核对（symbolic_handles_compile_link_and_run_renamed_nondefault_mapping）[LSduR]：SWS_BSW_00200；已核对（symbolic_handles_compile_link_and_run_renamed_nondefault_mapping）[PduR]：SWS_BSW_00200 |
 | 开发错误 |  | 不适用（配置：ECUC_PduR_00302=true）[PduR]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |
 | 运行时错误 |  | 不适用（配置：ECUC_PduR_00291、ECUC_PduR_00356）[PduR]：SWS_BSW_00219、00222；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00219、00222 |

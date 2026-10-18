@@ -29,4 +29,4 @@ ComM 按 [ADR 0018](../../adr/0018-per-module-exclusive-areas-without-cross-modu
 
 ## 剩余差距
 
-SW-C 服务端口 `UR_`／`UM_`、`ComM_UserRequest`／`ComM_CurrentMode` 接口与 RTE 模式通知由 #195 跟踪。版本检查由 #59、MISRA 人工评估由 #58、完整 BSWMD／模块交付文档由 #159、symbolic name 导入由 #160 跟踪。
+SW-C 服务端口 `UR_`／`UM_`、`ComM_UserRequest`／`ComM_CurrentMode` 接口与 RTE 模式通知由 #195 跟踪。版本检查由 #59、MISRA 人工评估由 #58 跟踪。

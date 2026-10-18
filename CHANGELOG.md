@@ -4,6 +4,8 @@
 
 ### Added
 
+- Generated ECU deliveries include complete selected BSW entry and area descriptions plus navigable module, API and configuration manuals sharing public headers and validation metadata; regenerate deliveries to receive them (#314)
+
 - Selected ECUC symbolic handles have one provider-owned configuration header, shared naming and collision checks; generated BSW consumers import those symbols while preserving numeric mappings, including decimal values written with leading zeros (#303)
 
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)

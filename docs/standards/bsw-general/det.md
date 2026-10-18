@@ -29,5 +29,11 @@
 | MetaData | Det 不处理 PDU、不引用 EcuC 全局 PDU 或分配 MetaData；它只按值传递四个标准报告身份。已核对（Det 全部 API 与 ECUC 参数）[Det]：SWS_BSW_00239–00242 |
 | 发布版本信息 | 实现仍没有跨模块版本宏检查；身份和版本的共同整改由原 Issue 负责。差距 #59[Det]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA | 保留源码分析原始结果；完整授权原文、221 项人工评估与主机 abort 的评估尚未闭合。差距 #58[Det]：SWS_BSW_00115 |
-| 完整 BSWMD／模块文档 | 当前 BSW 描述仍未完整表达 Det 的所有入口、DET_STATE、callout 与随包模块说明；无 ModeDeclarationGroup。差距 #159[Det]：SWS_BSW_00001、00002、00038、00040、00054、00061；已核对（Det 没有模式声明或模式接口）[Det]：SWS_BSW_00238 |
+| 交付描述 Det 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Det]：SWS_BSW_00001 |
+| 交付描述 Det 00002 | 已核对（module_documentation::module 交付 modules/Det/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Det]：SWS_BSW_00002 |
+| 交付描述 Det 00038 | 已核对（artifacts::exclusive_area 与 validate_areas 核对 Det 所选区域、实际 SchM Enter/Exit 声明及调用；mismatched_schm_declarations_and_calls_are_rejected_before_delivery 检查错配拒绝）[Det]：SWS_BSW_00038 |
+| SW-C 服务接口 | 非空 DetModule 在生成前拒绝，不提供 SW-C 服务接口。不适用（配置：ECUC_Det_00008）[Det]：SWS_BSW_00040 |
+| 交付描述 Det 00054 | 已核对（module_documentation 从同一 schedule.entities 交付任务、位置、周期与触发源，说明同任务到期项按 position 执行；无独立计划项不虚构调度顺序）[Det]：SWS_BSW_00054 |
+| 交付描述 Det 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[Det]：SWS_BSW_00061 |
+| BSWMD 模式组 | 已核对（Det 没有模式声明或模式接口）[Det]：SWS_BSW_00238 |
 | Symbolic Name Value | 所选配置仅有 DetGeneral／DetNotification，没有 DetModule 实例及需消费的 Symbolic Name Value；BSW 发布的固定 ModuleId 不是当前 ECUC 的 DetModuleId 值。导出器识别 DetModuleId，但本配置不生成没有提供值的 Det_Cfg.h，也不虚构配置实例。已核对（配置记录与实际生成头／消费者）[Det]：SWS_BSW_00200 |

@@ -35,6 +35,12 @@ OS 是 SC1、单核的 AUTOSAR OS，内核采用固定版本的 FreeRTOS 并打�
 | Post-build variation | 主线只生成一个预编译配置集。 不适用（归属：配置工具只生成单一预编译配置集；变体选择由 EcuM 角色承担，主线没有 EcuM）[Os]：SWS_BSW_00226–00228 |
 | 发布版本信息 | 差距 #59[Os]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA | 差距 #58[Os]：SWS_BSW_00115 |
-| 完整 BSWMD／模块文档 | 交付的 BSWMD 只描述 OS 的两个计数器服务入口，没有其余服务、ISR 与独占区说明；没有随实现交付、写明处理器与工具链的模块文档。 差距 #159[Os]：SWS_BSW_00001、00002、00003、00038、00041、00054、00061 |
+| 交付描述 Os 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，五个 OS hooks 由 integration/src/Ecu_OsHooks.c／Ecu_Target.c 提供，Os expectedEntry 与集成层 implementedEntry 引用同一入口；constr_4016 限定的实体类型配对由描述测试核验；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Os]：SWS_BSW_00001 |
+| 交付描述 Os 00002 | 已核对（module_documentation::module 交付 modules/Os/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Os]：SWS_BSW_00002 |
+| 交付描述 Os 00003 | 已核对（随包模块手册指向实际 target.json 的目标、编译器版本／选项与库；控制目标为 x64 主机，不虚构 MCU 厂商、系列、型号或掩膜版本）[Os]：SWS_BSW_00003 |
+| 交付描述 Os 00038 | 已核对（artifacts::exclusive_area 与 validate_areas 核对 Os 所选区域、实际 SchM Enter/Exit 声明及调用；mismatched_schm_declarations_and_calls_are_rejected_before_delivery 检查错配拒绝）[Os]：SWS_BSW_00038 |
+| 交付描述 Os 00041 | 已核对（Os.h 与 Os_Hooks.h 的已交付入口和源清单已描述；当前选定 OS 模块没有硬件 ISR，主机中断分发及应用 ISR 的调用契约在公开头与主机资源说明中区分）[Os]：SWS_BSW_00041 |
+| 交付描述 Os 00054 | 已核对（module_documentation 从同一 schedule.entities 交付任务、位置、周期与触发源，说明同任务到期项按 position 执行；无独立计划项不虚构调度顺序）[Os]：SWS_BSW_00054 |
+| 交付描述 Os 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[Os]：SWS_BSW_00061 |
 | BSWMD 模式组 | OS 的 BSWMD 没有 providedModeGroup。 已核对（BSWMD 生成）[Os]：SWS_BSW_00238 |
 | Symbolic Name Value | Ecu_TargetConfig.h 包含 Os_Cfg.h，owner task 使用该头唯一生产的 OS_TASK_ID_*；计数器继续从 Os_Counter.h 导入。已核对（配置记录与实际生成头／消费者）[Os]：SWS_BSW_00200 |

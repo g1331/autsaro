@@ -3,6 +3,7 @@ use super::*;
 
 mod communication;
 mod contracts;
+mod descriptions;
 mod det;
 mod diagnostic_configuration;
 mod diagnostics;

@@ -40,7 +40,7 @@ OsLockTrustedFunctionCall OsStackMonitoring OsUseArti OsUseGetServiceId OsUsePar
 PduRConfigurationId PduRDestPduHandleId PduRTransmissionConfirmation PduRSourcePduHandleId PduRSrcPduUpTxConf
 RteBswPositionInTask RtePositionInTask RteEventIsMappedToTask RteBswEventIsMappedToTask";
 
-const RUNTIME_PARAMETERS: &str = "EcucPartitionId ComIPduSignalProcessing ComMinimumDelayTime ComSupportedIPduGroups ComIPduGroupHandleId ComMainRxTimeBase ComMainTxTimeBase ComUserHeaderInclude ComUserCbkHandleId ComUserCallbackName ComUserCallbackType PduIdTypeEnum PduLengthTypeEnum CanDevErrorDetect CanMainFunctionPeriod CanMainFunctionModePeriod CanMainFunctionBusoffPeriod CanTriggerTransmitEnable ComMDevErrorDetect ComMDynamicPncToChannelMappingSupport ComMModeLimitationEnabled ComMPncSupport ComMResetAfterForcingNoComm ComMSynchronousWakeUp ComMVersionInfoApi ComMWakeupInhibitionEnabled ComMEcuGroupClassification ComMTMinFullComModeDuration ComMBusType ComMChannelId ComMCDDBusPrefix ComMMainFunctionPeriod ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup ComMNoWakeUpInhibitionNvmStorage ComMNmVariant ComMUserIdentifier BswMCanSMEnabled BswMComMEnabled BswMDcmEnabled BswMDevErrorDetect BswMEcuMEnabled BswMEthIfEnabled BswMEthSMEnabled BswMFrSMEnabled BswMGenericRequestEnabled BswMJ1939DcmEnabled BswMJ1939NmEnabled BswMLinSMEnabled BswMLinTPEnabled BswMNmEnabled BswMNvMEnabled BswMSdControlEnabled BswMSdEnabled BswMVersionInfoApi BswMUserIncludeFile BswMRequestProcessing BswMBswModeInitValue BswMConditionType BswMBswRequestedMode BswMLogicalOperator BswMRuleInitState BswMNestedExecutionOnly BswMUserCalloutFunction BswMActionListExecution BswMActionListPriority BswMActionListItemIndex BswMAbortOnFail";
+pub(super) const RUNTIME_PARAMETERS: &str = "EcucPartitionId ComIPduSignalProcessing ComMinimumDelayTime ComSupportedIPduGroups ComIPduGroupHandleId ComMainRxTimeBase ComMainTxTimeBase ComUserHeaderInclude ComUserCbkHandleId ComUserCallbackName ComUserCallbackType PduIdTypeEnum PduLengthTypeEnum CanDevErrorDetect CanMainFunctionPeriod CanMainFunctionModePeriod CanMainFunctionBusoffPeriod CanTriggerTransmitEnable ComMDevErrorDetect ComMDynamicPncToChannelMappingSupport ComMModeLimitationEnabled ComMPncSupport ComMResetAfterForcingNoComm ComMSynchronousWakeUp ComMVersionInfoApi ComMWakeupInhibitionEnabled ComMEcuGroupClassification ComMTMinFullComModeDuration ComMBusType ComMChannelId ComMCDDBusPrefix ComMMainFunctionPeriod ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup ComMNoWakeUpInhibitionNvmStorage ComMNmVariant ComMUserIdentifier BswMCanSMEnabled BswMComMEnabled BswMDcmEnabled BswMDevErrorDetect BswMEcuMEnabled BswMEthIfEnabled BswMEthSMEnabled BswMFrSMEnabled BswMGenericRequestEnabled BswMJ1939DcmEnabled BswMJ1939NmEnabled BswMLinSMEnabled BswMLinTPEnabled BswMNmEnabled BswMNvMEnabled BswMSdControlEnabled BswMSdEnabled BswMVersionInfoApi BswMUserIncludeFile BswMRequestProcessing BswMBswModeInitValue BswMConditionType BswMBswRequestedMode BswMLogicalOperator BswMRuleInitState BswMNestedExecutionOnly BswMUserCalloutFunction BswMActionListExecution BswMActionListPriority BswMActionListItemIndex BswMAbortOnFail";
 const RUNTIME_REFERENCES: &str = "EcucPartitionCoreRef EcucPartitionSoftwareComponentInstanceRef RteComUserEcucPartitionRef ComMainRxPartitionRef ComMainTxPartitionRef ComIPduGroupRef ComIPduMainFunctionRef ComUserCallbackRef ComUserSystemTemplateSystemSignalRef CanMainFunctionRWPeriodRef ComMUserChannel BswMComMChannelRef BswMConditionMode BswMArgumentRef BswMRuleExpressionRef BswMRuleTrueActionList BswMActionListItemRef DcmDslProtocolComMChannelRef";
 
 const MODULES: &[&str] = &[
@@ -634,6 +634,12 @@ fn inspect_with_catalog(
                                 graph, *index, catalog, reference,
                             )
                         }) {
+                            // Preserve accepted descriptor-only values for the selected
+                            // configuration/manual; they still enable no runtime feature.
+                            target
+                                .entry(definition.into())
+                                .or_default()
+                                .push(text.into());
                             continue;
                         }
                         return Err(reject(
