@@ -41,9 +41,17 @@ def failure_names(text: str) -> list[str]:
 def requirement_lines(text: str) -> list[str]:
     lines = []
     listing = False
+    scopes = undisposed = stale = 0
     for line in text.splitlines():
-        if re.search(r"official items;.*undisposed \d+; \d+ stale citations", line):
-            lines.append(line)
+        counts = re.search(
+            r"official items;.*undisposed (\d+); (\d+) stale citations", line
+        )
+        if counts:
+            scopes += 1
+            undisposed += int(counts[1])
+            stale += int(counts[2])
+            if int(counts[1]) or int(counts[2]):
+                lines.append(line)
             listing = False
         elif line.startswith(
             (
@@ -60,6 +68,11 @@ def requirement_lines(text: str) -> list[str]:
             listing = False
         elif line.startswith("error:"):
             lines.append(line)
+    if scopes:
+        lines.insert(
+            0,
+            f"Requirements: {scopes} accounting scopes; undisposed {undisposed}; {stale} stale citations.",
+        )
     return lines
 
 
