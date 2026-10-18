@@ -212,10 +212,20 @@ def check_object(binary: Path, objdump: Path, target: dict, project: Path, logs:
     ns = {"ar": "http://autosar.org/schema/r4.0"}
     owners = [node for node in tree.findall(".//ar:BSW-MODULE-DESCRIPTION", ns)
               if node.findtext("ar:SHORT-NAME", namespaces=ns) == "Rte"]
-    entries = [reference.text.rsplit("/", 1)[-1] for owner in owners
+    entries = [reference.text for owner in owners
                for reference in owner.findall("ar:IMPLEMENTED-ENTRYS/ar:BSW-MODULE-ENTRY-REF-CONDITIONAL/ar:BSW-MODULE-ENTRY-REF", ns)]
-    if not entries or any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or not owns(name, ".rte_code") for name in entries):
-        raise ValueError("Described RTE entries are outside their code section")
+    # Integration-owned callouts keep their public memory mappings: Det's
+    # dedicated input section links into .text; the OS hooks remain .os_code.
+    integration_sections = {"Ecu_DetRuntimeCallout": ".text", **dict.fromkeys(
+        ("ErrorHook", "PreTaskHook", "PostTaskHook", "StartupHook", "ShutdownHook"), ".os_code")}
+    if not entries:
+        raise ValueError("No described RTE entries")
+    for reference in entries:
+        name = reference.rsplit("/", 1)[-1]
+        section = integration_sections.get(name, ".rte_code")
+        if (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
+                or not owns(name, section)):
+            raise ValueError(f"Described RTE entry is outside its code section: {name}; expected {section}")
 
 
 def kernel_patch_environment(kernel: Path) -> dict[str, str]:
