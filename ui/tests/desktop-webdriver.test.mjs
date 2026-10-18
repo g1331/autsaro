@@ -14,7 +14,10 @@ async function driver(handler) {
   const scratch = await mkdtemp(path.join(os.tmpdir(), 'desktop-webdriver-'));
   cleanups.push(() => rm(scratch, { recursive: true, force: true }));
   const server = createServer(handler);
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
   cleanups.push(() => {
     server.closeAllConnections();
     return new Promise((resolve) => server.close(resolve));
