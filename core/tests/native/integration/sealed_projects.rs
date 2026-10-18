@@ -548,7 +548,26 @@ fn received_handoff_builds_and_runs_production_owner() {
 }
 
 fn verify_received_owner(project: &Path, consumer: &Path) {
-    verify_production_owner(project, consumer, None);
+    // This test checks the received build boundary, so it must compile the
+    // relocated project even when another test used identical source bytes.
+    let output = consumer.join("pipeline-build");
+    let result = tooling::ecu_build_command(project, &output, "host-batch", None)
+        .current_dir(consumer)
+        .env_remove("PYTHONPATH")
+        .env_remove("PYTHONHOME")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    verify_production_owner_binary(
+        &tooling::native_binary(&output, "ecu_host_batch"),
+        consumer,
+        None,
+    );
     let control = consumer.join("owner_probe.c");
     std::fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR"))

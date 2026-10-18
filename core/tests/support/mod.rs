@@ -7,5 +7,7 @@ pub(crate) mod os_variants;
 pub(crate) mod packages;
 pub(crate) mod protocol_oracles;
 pub(crate) mod rule_inputs;
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+pub(crate) mod sealed_builds;
 pub(crate) mod tooling;
 pub(crate) mod workspace;
