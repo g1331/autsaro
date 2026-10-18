@@ -27,7 +27,11 @@
 | 初始化调用方 |  | 不适用（归属：EcuM 角色——主线没有 EcuM，生成的 `Ecu_StackBootstrap` 承担启动与关闭顺序）[Com]：SWS_BSW_00150、00152 |
 | 跨模块版本检查与发布信息 |  | 差距 #59[Com]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[Com]：SWS_BSW_00115 |
-| BSWMD 与模块文档 | 包括独占区与主函数调用顺序的说明 | 差距 #159[Com]：SWS_BSW_00001、00002、00038、00061、00054 |
+| 交付描述 Com 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Com]：SWS_BSW_00001 |
+| 交付描述 Com 00002 | 已核对（module_documentation::module 交付 modules/Com/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Com]：SWS_BSW_00002 |
+| 交付描述 Com 00038 | 已核对（artifacts::exclusive_area 与 validate_areas 核对 Com 所选区域、实际 SchM Enter/Exit 声明及调用；mismatched_schm_declarations_and_calls_are_rejected_before_delivery 检查错配拒绝）[Com]：SWS_BSW_00038 |
+| 交付描述 Com 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[Com]：SWS_BSW_00061 |
+| 交付描述 Com 00054 | 已核对（module_documentation 从同一 schedule.entities 交付任务、位置、周期与触发源，说明同任务到期项按 position 执行；无独立计划项不虚构调度顺序）[Com]：SWS_BSW_00054 |
 | Symbolic Name Value | Com_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[Com]：SWS_BSW_00200 |
 | 开发错误 |  | 不适用（配置：ECUC_Com_00141）[Com]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |
 | 运行时错误 | 唯一的运行时错误只用于大型 I-PDU | 不适用（配置：ECUC_Com_00761=TP）[Com]：SWS_BSW_00219、00222 |

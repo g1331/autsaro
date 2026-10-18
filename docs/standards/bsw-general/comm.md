@@ -33,6 +33,10 @@ ComM 只有一个 CDD 通道（ComMNmVariant 为 NONE），经 Ecu_HostBusSM 请
 | Post-build variation | 主线只生成一个预编译配置集，不生成 post-build 变体，也没有变体选择入口。 不适用（归属：配置工具只生成单一预编译配置集；变体选择由 EcuM 角色承担，主线没有 EcuM）[ComM]：SWS_BSW_00226–00228 |
 | 发布版本信息 | 差距 #59[ComM]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA | 差距 #58[ComM]：SWS_BSW_00115 |
-| 完整 BSWMD／模块文档 | 交付的 BSWMD 已描述 ComM 入口、独占区 COMM_STATE 与按周期触发的主函数，但不是完整的模块描述与文档。 差距 #159[ComM]：SWS_BSW_00001、00002、00038、00054、00061 |
+| 交付描述 ComM 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[ComM]：SWS_BSW_00001 |
+| 交付描述 ComM 00002 | 已核对（module_documentation::module 交付 modules/ComM/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[ComM]：SWS_BSW_00002 |
+| 交付描述 ComM 00038 | 已核对（artifacts::exclusive_area 与 validate_areas 核对 ComM 所选区域、实际 SchM Enter/Exit 声明及调用；mismatched_schm_declarations_and_calls_are_rejected_before_delivery 检查错配拒绝）[ComM]：SWS_BSW_00038 |
+| 交付描述 ComM 00054 | 已核对（module_documentation 从同一 schedule.entities 交付任务、位置、周期与触发源，说明同任务到期项按 position 执行；无独立计划项不虚构调度顺序）[ComM]：SWS_BSW_00054 |
+| 交付描述 ComM 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[ComM]：SWS_BSW_00061 |
 | BSWMD 模式组 | ComM 的 BSWMD 没有 providedModeGroup，因此没有需要映射的 synchronizedModeGroup；SW-C 模式端口补齐后须重新核对。 已核对（BSWMD 生成）[ComM]：SWS_BSW_00238 |
 | Symbolic Name Value | ComM_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[ComM]：SWS_BSW_00200 |

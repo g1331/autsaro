@@ -28,7 +28,12 @@
 | 初始化调用方 |  | 不适用（归属：EcuM 角色——主线没有 EcuM，生成的 `Ecu_StackBootstrap` 承担启动与关闭顺序）[Can]：SWS_BSW_00150、00152 |
 | 跨模块版本检查与发布信息 |  | 差距 #59[Can]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[Can]：SWS_BSW_00115 |
-| BSWMD 与模块文档 | 包括独占区、主函数调用顺序，以及所依赖的微控制器与工具链说明 | 差距 #159[Can]：SWS_BSW_00001、00002、00038、00061、00054、00003 |
+| 交付描述 Can 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Can]：SWS_BSW_00001 |
+| 交付描述 Can 00002 | 已核对（module_documentation::module 交付 modules/Can/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Can]：SWS_BSW_00002 |
+| 交付描述 Can 00038 | 已核对（artifacts::exclusive_area 与 validate_areas 核对 Can 所选区域、实际 SchM Enter/Exit 声明及调用；mismatched_schm_declarations_and_calls_are_rejected_before_delivery 检查错配拒绝）[Can]：SWS_BSW_00038 |
+| 交付描述 Can 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[Can]：SWS_BSW_00061 |
+| 交付描述 Can 00054 | 已核对（module_documentation 从同一 schedule.entities 交付任务、位置、周期与触发源，说明同任务到期项按 position 执行；无独立计划项不虚构调度顺序）[Can]：SWS_BSW_00054 |
+| 交付描述 Can 00003 | 已核对（随包模块手册指向实际 target.json 的目标、编译器版本／选项与库；控制目标为 x64 主机，不虚构 MCU 厂商、系列、型号或掩膜版本）[Can]：SWS_BSW_00003 |
 | Symbolic Name Value | Can_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[Can]：SWS_BSW_00200 |
 | 硬件寄存器 | 并发访问与只写一次寄存器只在真实控制器上存在 | 差距 #170[Can]：SWS_BSW_00179、00188 |
 | 开发错误 |  | 不适用（配置：ECUC_Can_00064=true）[Can]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |

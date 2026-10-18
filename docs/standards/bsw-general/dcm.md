@@ -33,5 +33,11 @@ Dcm 使用自己的 `DCM_STATE`，跨模块调用与应用回调都在区外。�
 | Post-build variation | 主线拒绝 link-time／post-build 模块变体。 不适用（配置：ECUC_Dcm_01082）[Dcm]：SWS_BSW_00226–00228 |
 | 发布版本信息 | 差距 #59[Dcm]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA | 差距 #58[Dcm]：SWS_BSW_00115 |
-| 完整 BSWMD／模块文档 | 包含 interface 描述、独占区、调度顺序与 synchronizedModeGroup 映射；本次补全 managed mode group 的调用方关系，其余完整交付仍由原差距负责。差距 #159[Dcm]：SWS_BSW_00001、00002、00038、00040、00054、00061、00238 |
+| 交付描述 Dcm 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Dcm]：SWS_BSW_00001 |
+| 交付描述 Dcm 00002 | 已核对（module_documentation::module 交付 modules/Dcm/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Dcm]：SWS_BSW_00002 |
+| 交付描述 Dcm 00038 | 已核对（artifacts::exclusive_area 与 validate_areas 核对 Dcm 所选区域、实际 SchM Enter/Exit 声明及调用；mismatched_schm_declarations_and_calls_are_rejected_before_delivery 检查错配拒绝）[Dcm]：SWS_BSW_00038 |
+| SW-C 服务接口 | DCMServices 服务端口不由本次描述补全提供，保持原支持边界。差距 #187[Dcm]：SWS_BSW_00040 |
+| 交付描述 Dcm 00054 | 已核对（module_documentation 从同一 schedule.entities 交付任务、位置、周期与触发源，说明同任务到期项按 position 执行；无独立计划项不虚构调度顺序）[Dcm]：SWS_BSW_00054 |
+| 交付描述 Dcm 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[Dcm]：SWS_BSW_00061 |
+| 交付描述 Dcm 00238 | 已核对（artifacts 的 providedModeGroup 与 SwcBswMapping 保留 #186/#213 已交付关系；dcm_entities_declare_both_modes_for_every_possible_publisher 核对两个模式组及发布实体）[Dcm]：SWS_BSW_00238 |
 | Symbolic Name Value | Dcm_Cfg.h 导出所选接收／发送／连接／会话及协议符号；Ecu_RuntimeConfig.c 从 PduR_Cfg.h／ComM_Cfg.h 导入对端句柄。已核对（生成头与真实消费者）[Dcm]：SWS_BSW_00200 |

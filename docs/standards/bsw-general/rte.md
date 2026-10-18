@@ -24,6 +24,8 @@
 | MetaData | RTE 通过 Com_SendSignal/ReceiveSignal 访问信号，不引用或分配 EcuC 全局 PDU 的 MetaData；该存储属于实际 PDU producer。已核对（COM 接缝与 Rte.c）[Rte]：SWS_BSW_00239–00242 |
 | BSWMD | 当前实际 RTE entries、逐 API 依赖、MemorySections、static/constant memory、MC NONE、来源配置版本均生成；模式的 SWC-BSW 同步关系由 Dcm 的描述与映射提供。已核对（artifacts、rte_memory 与生成描述测试）[Rte]：SWS_BSW_00001、00040、00238 |
 | 跨模块共同事项 | 已新增 Rte.c 对实际导入标准模块的 major/minor checks；所有公共头的 published identity、统一模块发布版本仍由共同整改承接。差距 #59[Rte]：SWS_BSW_00036、00059、00161、00162、00256 |
-| 随包模块说明 | 交付 README 给出构建、来源与生命周期，尚未提供通用标准规定的完整封面/变更史/配置手册。差距 #159[Rte]：SWS_BSW_00002、00054、00061 |
+| 交付描述 Rte 00002 | 已核对（module_documentation::module 交付 modules/Rte/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Rte]：SWS_BSW_00002 |
+| 交付描述 Rte 00054 | 已核对（module_documentation 从同一 schedule.entities 交付任务、位置、周期与触发源，说明同任务到期项按 position 执行；无独立计划项不虚构调度顺序）[Rte]：SWS_BSW_00054 |
+| 交付描述 Rte 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[Rte]：SWS_BSW_00061 |
 | Symbolic Name Value | Rte.c 包含 Com_Cfg.h，并在 signal API 与接收回调中使用其唯一生产的 ComConf_ComSignal_*；Rte_Cfg.h 唯一导出 ComUserSignal 的 ComUserCbkHandleId，COM 配置与两个 RTE 回调比较导入同一 RteConf_ComUserSignal_*。已核对（symbolic_headers_and_consumers_preserve_provider_names_and_values、改名／非默认值编译链接与 HostBatch 回归）[Rte]：SWS_BSW_00200 |
 | MISRA | 保留标准要求与原始诊断；221 项人工核对、采用代码责任与偏离审批仍未全部完成。差距 #58[Rte]：SWS_BSW_00115 |
