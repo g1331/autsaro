@@ -296,7 +296,7 @@ fn sealed_actor_signal_lifecycle_preserves_context_and_terminal_stop() {
         require_success(&run);
         assert_eq!(
             String::from_utf8_lossy(&run.stdout).trim(),
-            "suspend=acknowledged resume=progress context=preserved terminal=irreversible running=stopped"
+            "suspend=acknowledged resume=progress context=preserved terminal=irreversible running=stopped closed=detached"
         );
         assert!(run.stderr.is_empty(), "{run:?}");
     }

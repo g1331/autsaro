@@ -131,10 +131,10 @@ static void park_signal(int signal_number, siginfo_t *info, void *native_context
             futex_wake(&thread->acknowledged);
             for (;;) {
                 /* Stop an already parked actor without nesting another signal handler. */
-                if (__atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE) == INT32_MAX) {
+                if (InterlockedCompareExchange(&thread->requested, 0, 0) == INT32_MAX) {
                     terminal_park(thread);
                 }
-                if (__atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE) >= generation) {
+                if (InterlockedCompareExchange(&thread->resumed, 0, 0) >= generation) {
                     break;
                 }
                 (void)futex_wait(&thread->resumed, generation - 1);
@@ -162,9 +162,9 @@ int Os_HostInstallSignals(void)
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&handler.sa_mask);
     sigaddset(&handler.sa_mask, SIGRTMIN);
-    sigaddset(&handler.sa_mask, SIGRTMIN + 1);
     handler.sa_sigaction = park_signal;
-    if (sigaction(SIGRTMIN, &handler, NULL) != 0) {
+    if ((sigaddset(&handler.sa_mask, SIGRTMIN + 1) != 0) ||
+        (sigaction(SIGRTMIN, &handler, NULL) != 0)) {
         return 0;
     }
     sigfillset(&handler.sa_mask);
@@ -481,37 +481,49 @@ BOOL ReleaseMutex(HANDLE mutex)
     return released == 0;
 }
 
+static BOOL close_thread(HANDLE thread)
+{
+    BOOL closed = TRUE;
+    if (thread->register_host != 0) {
+        /* Release pthread resources without discarding the registered stack identity. */
+        if ((InterlockedExchange(&thread->joined, 1) == 0) &&
+            (pthread_detach(thread->thread) != 0)) {
+            closed = FALSE;
+        }
+    } else if ((InterlockedCompareExchange(&thread->ended, 0, 0) != 0) &&
+               (InterlockedCompareExchange(&thread->joined, 0, 0) != 0)) {
+        if (munmap(thread->mapping, thread->mapping_size) != 0) {
+            closed = FALSE;
+        } else {
+            thread->mapping = NULL;
+            (void)InterlockedExchange(&thread->reserved, 0);
+        }
+    } else {
+        /* Closing an observer does not stop its live actor. */
+    }
+    return closed;
+}
+
 BOOL CloseHandle(HANDLE handle)
 {
-    if (handle == NULL || handle == &process_handle) {
-        return FALSE;
-    }
-    if (handle->kind == OS_HOST_EVENT && handle->fd >= 0) {
-        int result = close(handle->fd);
-        if (result == 0) {
-            handle->fd = -1;
-            __atomic_store_n(&handle->reserved, 0, __ATOMIC_RELEASE);
-        }
-        return result == 0;
-    }
-    if (handle->kind == OS_HOST_MUTEX) {
-        return pthread_mutex_destroy(&handle->mutex) == 0;
-    }
-    if (handle->kind == OS_HOST_THREAD) {
-        if ((handle->register_host == 0) &&
-            (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) &&
-            (__atomic_load_n(&handle->joined, __ATOMIC_ACQUIRE) != 0)) {
-            if (munmap(handle->mapping, handle->mapping_size) != 0) {
-                return FALSE;
+    BOOL closed = FALSE;
+    if ((handle != NULL) && (handle != &process_handle)) {
+        if ((handle->kind == OS_HOST_EVENT) && (handle->fd >= 0)) {
+            const int result = close(handle->fd);
+            if (result == 0) {
+                handle->fd = -1;
+                __atomic_store_n(&handle->reserved, 0, __ATOMIC_RELEASE);
             }
-            handle->mapping = NULL;
-            __atomic_store_n(&handle->reserved, 0, __ATOMIC_RELEASE);
+            closed = (result == 0) ? TRUE : FALSE;
+        } else if (handle->kind == OS_HOST_MUTEX) {
+            closed = (pthread_mutex_destroy(&handle->mutex) == 0) ? TRUE : FALSE;
+        } else if (handle->kind == OS_HOST_THREAD) {
+            closed = close_thread(handle);
+        } else {
+            /* Unsupported handle kinds cannot be closed. */
         }
-        /* A live actor continues after its observer closes. Automotive/host
-         * registrations retain their stack identity until process exit. */
-        return TRUE;
     }
-    return FALSE;
+    return closed;
 }
 
 DWORD SuspendThread(HANDLE thread)
@@ -547,8 +559,8 @@ DWORD ResumeThread(HANDLE thread)
         return UINT32_MAX;
     }
     generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
-    if (generation == 0 || generation == INT32_MAX ||
-        __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) < generation) {
+    if ((generation == 0) || (generation == INT32_MAX) ||
+        (InterlockedCompareExchange(&thread->acknowledged, 0, 0) < generation)) {
         return UINT32_MAX;
     }
     __atomic_store_n(&thread->resumed, generation, __ATOMIC_RELEASE);
@@ -698,20 +710,19 @@ int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard)
 int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
 {
     const uint64_t end = monotonic_ms() + timeout_ms;
-    if (thread == NULL || thread->kind != OS_HOST_THREAD) {
-        return 0;
-    }
-    __atomic_store_n(&thread->requested, INT32_MAX, __ATOMIC_RELEASE);
-    futex_wake(&thread->resumed);
-    if (pthread_kill(thread->thread, SIGRTMIN + 1) != 0) {
-        return 0;
-    }
-    while (__atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) != INT32_MAX) {
-        if (monotonic_ms() >= end) {
-            return 0;
+    int stopped = 0;
+    if ((thread != NULL) && (thread->kind == OS_HOST_THREAD)) {
+        (void)InterlockedExchange(&thread->requested, INT32_MAX);
+        futex_wake(&thread->resumed);
+        if (pthread_kill(thread->thread, SIGRTMIN + 1) == 0) {
+            while ((InterlockedCompareExchange(&thread->acknowledged, 0, 0) != INT32_MAX) &&
+                   (monotonic_ms() < end)) {
+                (void)futex_wait(&thread->acknowledged,
+                                 InterlockedCompareExchange(&thread->acknowledged, 0, 0));
+            }
+            stopped =
+                (InterlockedCompareExchange(&thread->acknowledged, 0, 0) == INT32_MAX) ? 1 : 0;
         }
-        (void)futex_wait(&thread->acknowledged,
-                         __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE));
     }
-    return 1;
+    return stopped;
 }

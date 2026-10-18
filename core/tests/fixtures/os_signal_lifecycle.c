@@ -1,10 +1,15 @@
 /** @file Real actor suspend/resume, captured context and irreversible terminal stop. */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "Os_Backend.h"
 #include <stdio.h>
 
 static HANDLE ready;
 static HANDLE continued;
 static volatile LONG phase;
+static HANDLE detach_gate;
+static HANDLE detach_done;
 
 static DWORD WINAPI actor(void *argument)
 {
@@ -32,6 +37,39 @@ static int valid_context(HANDLE thread, CONTEXT *context)
     return GetThreadContext(thread, context) != 0 && context->ContextFlags == CONTEXT_CONTROL &&
            Os_HostStackRange(thread, &low, &high, &guard) != 0 && context->Rsp >= low + guard &&
            context->Rsp < high;
+}
+
+static DWORD WINAPI detached_actor(void *argument)
+{
+    pthread_attr_t attributes;
+    int state;
+    (void)argument;
+    if (WaitForSingleObject(detach_gate, 2000u) != WAIT_OBJECT_0 ||
+        pthread_getattr_np(pthread_self(), &attributes) != 0) {
+        return 2u;
+    }
+    if (pthread_attr_getdetachstate(&attributes, &state) != 0) {
+        (void)pthread_attr_destroy(&attributes);
+        return 3u;
+    }
+    if (pthread_attr_destroy(&attributes) != 0 || state != PTHREAD_CREATE_DETACHED ||
+        Os_HostSetEvent(detach_done) == 0) {
+        return 4u;
+    }
+    return 0u;
+}
+
+static int detached_close(void)
+{
+    HANDLE thread;
+    detach_gate = CreateEventA(NULL, TRUE, FALSE, NULL);
+    detach_done = CreateEventA(NULL, TRUE, FALSE, NULL);
+    if (detach_gate == NULL || detach_done == NULL) {
+        return 0;
+    }
+    thread = CreateThread(NULL, 262144u, detached_actor, NULL, 0u, NULL);
+    return thread != NULL && CloseHandle(thread) != FALSE && Os_HostSetEvent(detach_gate) != 0 &&
+           WaitForSingleObject(detach_done, 2000u) == WAIT_OBJECT_0;
 }
 
 int main(void)
@@ -75,7 +113,10 @@ int main(void)
         ResumeThread(running) != UINT32_MAX) {
         return 9;
     }
+    if (detached_close() == 0) {
+        return 10;
+    }
     puts("suspend=acknowledged resume=progress context=preserved terminal=irreversible "
-         "running=stopped");
+         "running=stopped closed=detached");
     return 0;
 }
