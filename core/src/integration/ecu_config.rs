@@ -247,14 +247,16 @@ pub(super) fn files(
     let (path, bytes) =
         super::can_runtime::profile_header(communication, symbolic.parameter("CanIfCtrlId")?);
     outputs.emit(ECU, path, bytes)?;
-    for module in ["Can", "Com", "ComM", "CanTp", "Dcm", "Det"] {
-        let definitions = symbolic.headers.get(module).cloned().unwrap_or_default();
+    for (module, definitions) in &symbolic.headers {
+        if matches!(module.as_str(), "CanIf" | "PduR" | "LSduR") {
+            continue;
+        }
         outputs.emit(
             ECU,
             format!("include/{module}_Cfg.h"),
             header(
                 &format!("{}_CFG_H", module.to_uppercase()),
-                &c_layout::commented_defines(&definitions, "Generated handle."),
+                &c_layout::commented_defines(definitions, "Generated handle."),
             ),
         )?;
     }

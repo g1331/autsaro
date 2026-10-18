@@ -1774,6 +1774,12 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
     ] {
         names.insert(format!("{module}_CFG_H"));
     }
+    let routed_sources: BTreeSet<_> = graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| super::schedule::definition_is(graph, *index, "PduRRoutingPath"))
+        .filter_map(|index| super::schedule::value(graph, index, "PduRSrcPduRRef", true))
+        .collect();
     for container in graph.of_kind("ECUC-CONTAINER-VALUE") {
         let Some(definition) = graph.text(container, "DEFINITION-REF") else {
             continue;
@@ -1789,16 +1795,10 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             return Err(fail(graph, container, "CONTRACT_NAME_COLLISION"));
         }
         let mut generated = vec![super::symbolic_names::name(module, kind, path)];
-        if kind == "PduRSrcPdu" {
+        if kind == "PduRSrcPdu" && routed_sources.contains(path.as_str()) {
             generated.push(super::symbolic_names::name(
                 "LSduR",
                 "LSduRPathSourcePdu",
-                path,
-            ));
-        } else if kind == "PduRDestPdu" {
-            generated.push(super::symbolic_names::name(
-                "LSduR",
-                "LSduRPathDestinationPdu",
                 path,
             ));
         }

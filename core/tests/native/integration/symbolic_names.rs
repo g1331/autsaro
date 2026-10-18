@@ -132,7 +132,7 @@ int main(void)
              ComConf_ComIPdu_TxValuePdu == 13u &&
              ComConf_ComIPduGroup_RxGroupAlt == 0u &&
              LSduRConf_LSduRPathSourcePdu_TxValueSourceAlt == 14u &&
-             LSduRConf_LSduRPathDestinationPdu_TxValueDestinationAlt == 1u);
+             LSduRConf_LSduRPathSourcePdu_DiagResponseSourceAlt == 34u);
 }
 "#,
     )

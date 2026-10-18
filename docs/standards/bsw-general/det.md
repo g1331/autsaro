@@ -30,4 +30,4 @@
 | 发布版本信息 | 实现仍没有跨模块版本宏检查；身份和版本的共同整改由原 Issue 负责。差距 #59[Det]：SWS_BSW_00036、00059、00161、00162、00256 |
 | MISRA | 保留源码分析原始结果；完整授权原文、221 项人工评估与主机 abort 的评估尚未闭合。差距 #58[Det]：SWS_BSW_00115 |
 | 完整 BSWMD／模块文档 | 当前 BSW 描述仍未完整表达 Det 的所有入口、DET_STATE、callout 与随包模块说明；无 ModeDeclarationGroup。差距 #159[Det]：SWS_BSW_00001、00002、00038、00040、00054、00061；已核对（Det 没有模式声明或模式接口）[Det]：SWS_BSW_00238 |
-| Symbolic Name Value | 所选配置仅有 DetGeneral／DetNotification，没有 DetModule 实例及需消费的 Symbolic Name Value；BSW 发布的固定 ModuleId 不是当前 ECUC 的 DetModuleId 值。导出器识别 DetModuleId，不虚构配置实例。已核对（配置记录与实际生成头／消费者）[Det]：SWS_BSW_00200 |
+| Symbolic Name Value | 所选配置仅有 DetGeneral／DetNotification，没有 DetModule 实例及需消费的 Symbolic Name Value；BSW 发布的固定 ModuleId 不是当前 ECUC 的 DetModuleId 值。导出器识别 DetModuleId，但本配置不生成没有提供值的 Det_Cfg.h，也不虚构配置实例。已核对（配置记录与实际生成头／消费者）[Det]：SWS_BSW_00200 |

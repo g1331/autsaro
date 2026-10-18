@@ -119,45 +119,33 @@ impl Names {
                 }),
             );
         }
-        // LSduR has no accepted standalone ECUC input. Its actual generated
-        // source/destination entries inherit the unique PduR endpoint names.
+        // LSduR owns the synthesized entry IDs. Outgoing IDs belong to the
+        // actual destination modules and are imported from their headers.
         for route in &plan.routes {
-            let (lower, upper) = if route.transport {
+            let handle = if route.transport {
                 let tp = plan
                     .diagnostic_transport
                     .as_ref()
                     .ok_or_else(|| PlanDiagnostic::plan_premise(&route.path))?;
                 if route.receive {
-                    (tp.request_can_if_handle, tp.receive_npdu)
+                    tp.request_can_if_handle
                 } else {
-                    (tp.response_can_if_handle, tp.transmit_npdu)
+                    tp.transmit_npdu
                 }
-            } else {
-                let signal = plan
-                    .signals
+            } else if route.receive {
+                plan.signals
                     .iter()
                     .find(|signal| signal.global_pdu == route.pdu)
-                    .ok_or_else(|| PlanDiagnostic::plan_premise(&route.path))?;
-                (
-                    signal.can_if_handle,
-                    if route.receive {
-                        route.source_handle
-                    } else {
-                        route.destination_handle
-                    },
-                )
+                    .ok_or_else(|| PlanDiagnostic::plan_premise(&route.path))?
+                    .can_if_handle
+            } else {
+                route.destination_handle
             };
             result.add(
                 "LSduR",
                 "LSduRPathSourcePdu",
                 &route.source,
-                u32::from(if route.receive { lower } else { upper }),
-            );
-            result.add(
-                "LSduR",
-                "LSduRPathDestinationPdu",
-                &route.destination,
-                u32::from(if route.receive { upper } else { lower }),
+                u32::from(handle),
             );
         }
         for definitions in result.headers.values_mut() {
