@@ -182,7 +182,7 @@ int Os_StackRegister(char role)
     record->altstack_size = alternate.ss_size;
     current_stack = record;
     Os_StackCheck();
-    __atomic_store_n(&stack_published[index], 1, __ATOMIC_RELEASE);
+    (void)InterlockedExchange(&stack_published[index], 1);
     return 1;
 }
 
@@ -220,13 +220,13 @@ void Os_StackObserve(HANDLE thread, const CONTEXT *context)
     if (context == NULL || context->ContextFlags != CONTEXT_CONTROL) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    for (index = 0;
-         index < InterlockedCompareExchange(&stack_count, 0, 0) && index < (LONG)OS_NATIVE_STACKS;
+    for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
+                    (index < (LONG)OS_NATIVE_STACKS);
          ++index) {
         Os_NativeStack *record = &stacks[index];
         /* A reservation can belong to another actor still registering. */
-        if (__atomic_load_n(&stack_published[index], __ATOMIC_ACQUIRE) != 0 &&
-            record->thread_id == id) {
+        if ((InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) &&
+            (record->thread_id == id)) {
             uintptr_t sp = context->Rsp;
             if (sp < record->committed_low || sp >= record->high) {
                 publish_fault(record, 0u, sp, sp, 'M');
@@ -295,11 +295,11 @@ int Os_StackReport(void)
 {
     int result = 0;
     LONG index;
-    for (index = 0;
-         index < InterlockedCompareExchange(&stack_count, 0, 0) && index < (LONG)OS_NATIVE_STACKS;
+    for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
+                    (index < (LONG)OS_NATIVE_STACKS);
          ++index) {
         const Os_NativeStack *record = &stacks[index];
-        if (__atomic_load_n(&stack_published[index], __ATOMIC_ACQUIRE) == 0) {
+        if (InterlockedCompareExchange(&stack_published[index], 0, 0) == 0) {
             continue;
         }
         if (printf(
