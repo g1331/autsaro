@@ -127,7 +127,8 @@ impl ValidatedIntegrationPlan {
         files.extend(super::can_runtime::type_headers(
             self.description().ecu_communication()?,
         ));
-        files.extend(self.contract_headers(composition)?);
+        let symbolic = super::symbolic_names::Names::new(self.description())?;
+        files.extend(self.contract_headers(composition, &symbolic)?);
         files.push((
             "include/Rte_Dcm_Type.h".into(),
             self.dcm_type_header(composition)?.into_bytes(),
@@ -186,6 +187,7 @@ typedef uint8 Rte_ModeType_{group};
     pub(super) fn contract_headers(
         &self,
         composition: &super::composition::CompositionContract,
+        symbolic: &super::symbolic_names::Names,
     ) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         let description = self.description();
         let mut types = String::from("#include \"Rte.h\"\n");
@@ -207,9 +209,19 @@ typedef {} {}{suffix};
         let mut files = vec![
             (
                 "include/Rte_Cfg.h".into(),
-                super::outputs::trusted_asset("runtime/ecu/include/Rte_Cfg.h")?
-                    .bytes
-                    .to_vec(),
+                super::outputs::render(
+                    &String::from_utf8_lossy(
+                        super::outputs::trusted_asset("runtime/ecu/include/Rte_Cfg.h")?.bytes,
+                    ),
+                    "include/Rte_Cfg.h",
+                    &[super::outputs::Edit::BeforeGuardEnd(
+                        &c_layout::commented_defines(
+                            symbolic.headers.get("Rte").map_or(&[][..], Vec::as_slice),
+                            "Generated handle.",
+                        ),
+                    )],
+                )?
+                .into_bytes(),
             ),
             ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
             (

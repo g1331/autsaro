@@ -19,6 +19,7 @@ const PARAMETERS: &[(&str, &str)] = &[
     ("CanTpTxNPdu", "CanTpTxNPduConfirmationPduId"),
     ("CanTpTxFcNPdu", "CanTpTxFcNPduConfirmationPduId"),
     ("ComIPduGroup", "ComIPduGroupHandleId"),
+    ("ComUserSignal", "ComUserCbkHandleId"),
     ("DcmDslMainConnection", "DcmDslProtocolRxConnectionId"),
     ("DcmDslProtocolRow", "DcmDslProtocolType"),
     ("DcmDslProtocolRx", "DcmDslProtocolRxPduId"),

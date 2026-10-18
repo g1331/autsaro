@@ -8,6 +8,7 @@ use std::time::Duration;
 // Verifies[ComM]: SWS_BSW_00200
 // Verifies[BswM]: SWS_BSW_00200
 // Verifies[Com]: SWS_BSW_00200
+// Verifies[Rte]: SWS_BSW_00200
 // Verifies[CanIf]: SWS_BSW_00200
 // Verifies[CanTp]: SWS_BSW_00200
 // Verifies[Dcm]: SWS_BSW_00200
@@ -21,6 +22,7 @@ fn symbolic_handles_compile_link_and_run_renamed_nondefault_mapping() {
         ("Receive", "CanObjectId", "1"),
         ("Transmit", "CanObjectId", "0"),
         ("HostUser", "ComMUserIdentifier", "7"),
+        ("RxValue", "ComUserCbkHandleId", "29"),
         ("RxValueSource", "PduRSourcePduHandleId", "011"),
         ("RxValueDestination", "PduRDestPduHandleId", "12"),
         ("TxValueSource", "PduRSourcePduHandleId", "13"),
@@ -45,6 +47,12 @@ fn symbolic_handles_compile_link_and_run_renamed_nondefault_mapping() {
         parameter(&mut sources, owner, parameter_name, value);
     }
     // These names belong only to ECUC containers, so application source is unchanged.
+    change(
+        &mut sources,
+        "ecuc.arxml",
+        "<SHORT-NAME>RxValue</SHORT-NAME>\n                      <DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">/AUTOSAR/EcucDefs/Rte/RteComUser/ComUserModuleCnf/ComUserSignal</DEFINITION-REF>",
+        "<SHORT-NAME>RxCallbackAlt</SHORT-NAME>\n                      <DEFINITION-REF DEST=\"ECUC-PARAM-CONF-CONTAINER-DEF\">/AUTOSAR/EcucDefs/Rte/RteComUser/ComUserModuleCnf/ComUserSignal</DEFINITION-REF>",
+    );
     for before in [
         "RxValueSource",
         "TxValueSource",
@@ -104,12 +112,14 @@ fn symbolic_handles_compile_link_and_run_renamed_nondefault_mapping() {
 #include "Dcm_Cfg.h"
 #include "PduR_Cfg.h"
 #include "LSduR_Cfg.h"
+#include "Rte_Cfg.h"
 #if defined(PduRConf_PduRSrcPdu_RxValueSource) || defined(ComConf_ComIPduGroup_RxGroup)
 #error Renamed containers must not retain their former symbolic names
 #endif
 int main(void)
 {
-    return !(CanConf_CanController_Controller == 0u &&
+    return !(RteConf_ComUserSignal_RxCallbackAlt == 29u &&
+             CanConf_CanController_Controller == 0u &&
              CanConf_CanHardwareObject_ReceiveAlt == 1u &&
              CanConf_CanHardwareObject_TransmitAlt == 0u &&
              ComMConf_ComMChannel_Host == 0u &&

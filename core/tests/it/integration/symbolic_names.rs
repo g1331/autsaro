@@ -5,6 +5,7 @@ use super::*;
 // Verifies[ComM]: SWS_BSW_00200
 // Verifies[BswM]: SWS_BSW_00200
 // Verifies[Com]: SWS_BSW_00200
+// Verifies[Rte]: SWS_BSW_00200
 // Verifies[CanIf]: SWS_BSW_00200
 // Verifies[CanTp]: SWS_BSW_00200
 // Verifies[Dcm]: SWS_BSW_00200
@@ -33,6 +34,7 @@ fn symbolic_headers_and_consumers_preserve_provider_names_and_values() {
     };
     for (module, symbol, value) in [
         ("Com", "ComConf_ComIPduGroup_RxGroup", "0u"),
+        ("Rte", "RteConf_ComUserSignal_RxValue", "17u"),
         ("CanIf", "CanIfConf_CanIfRxPduCfg_RxValue", "0u"),
         ("CanIf", "CanIfConf_CanIfTxPduCfg_TxValue", "0u"),
         ("PduR", "PduRConf_PduRSrcPdu_RxValueSource", "0u"),
@@ -84,6 +86,15 @@ fn symbolic_headers_and_consumers_preserve_provider_names_and_values() {
         }
     }
     let config = text("generated/src/Ecu_RuntimeConfig.c");
+    assert!(config.contains("#include \"Rte_Cfg.h\""));
+    assert!(config.contains("RteConf_ComUserSignal_RxValue"));
+    let rte = text("generated/src/Rte.c");
+    assert!(rte.contains("#include \"Rte_Cfg.h\""));
+    assert_eq!(
+        rte.matches("handle == RteConf_ComUserSignal_RxValue")
+            .count(),
+        2
+    );
     assert!(config.contains("Ecu_HostBusSM_ApplyMode(ComMConf_ComMChannel_Host,"));
     assert!(config.contains("PduRConf_PduRSrcPdu_TxValueSource"));
     let profile = text("generated/include/Ecu_ProfileConfig.h");
@@ -100,6 +111,7 @@ fn symbolic_names_reject_application_producer_collisions_before_generation() {
         ("Com", "ComIPduGroup", "RxGroup"),
         ("CanTp", "CanTpRxNPdu", "Frame"),
         ("Dcm", "DcmDslProtocolRx", "Receive"),
+        ("Rte", "ComUserSignal", "RxValue"),
     ] {
         let mut sources = inputs();
         change(

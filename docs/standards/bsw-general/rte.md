@@ -25,5 +25,5 @@
 | BSWMD | 当前实际 RTE entries、逐 API 依赖、MemorySections、static/constant memory、MC NONE、来源配置版本均生成；模式的 SWC-BSW 同步关系由 Dcm 的描述与映射提供。已核对（artifacts、rte_memory 与生成描述测试）[Rte]：SWS_BSW_00001、00040、00238 |
 | 跨模块共同事项 | 已新增 Rte.c 对实际导入标准模块的 major/minor checks；所有公共头的 published identity、统一模块发布版本仍由共同整改承接。差距 #59[Rte]：SWS_BSW_00036、00059、00161、00162、00256 |
 | 随包模块说明 | 交付 README 给出构建、来源与生命周期，尚未提供通用标准规定的完整封面/变更史/配置手册。差距 #159[Rte]：SWS_BSW_00002、00054、00061 |
-| Symbolic Name Value | Rte.c 包含 Com_Cfg.h，并在 signal API 与接收回调中使用其唯一生产的 ComConf_ComSignal_*；生成配置中的其余通信句柄也从各提供方导入。已核对（配置记录与实际生成头／消费者）[Rte]：SWS_BSW_00200 |
+| Symbolic Name Value | Rte.c 包含 Com_Cfg.h，并在 signal API 与接收回调中使用其唯一生产的 ComConf_ComSignal_*；Rte_Cfg.h 唯一导出 ComUserSignal 的 ComUserCbkHandleId，COM 配置与两个 RTE 回调比较导入同一 RteConf_ComUserSignal_*。已核对（symbolic_headers_and_consumers_preserve_provider_names_and_values、改名／非默认值编译链接与 HostBatch 回归）[Rte]：SWS_BSW_00200 |
 | MISRA | 保留标准要求与原始诊断；221 项人工核对、采用代码责任与偏离审批仍未全部完成。差距 #58[Rte]：SWS_BSW_00115 |

@@ -151,9 +151,10 @@ pub(super) fn files(
     let communication = description.ecu_communication()?;
     let can = &communication.can;
     let mode = description.ecu_mode()?;
+    let symbolic = symbolic_names::Names::new(description)?;
     let mut outputs = super::outputs::EcuOutputs::new(target)?;
     // The contract provenance is package metadata; its headers are generated C.
-    for (path, bytes) in plan.contract_headers(composition)? {
+    for (path, bytes) in plan.contract_headers(composition, &symbolic)? {
         if matches!(
             path.as_str(),
             "include/Rte_Main.h"
@@ -242,13 +243,12 @@ pub(super) fn files(
         os.use_res_scheduler,
     )?;
     outputs.emit_rendered(super::outputs::OS, super::ecu::ECU_CONFIG, os_config)?;
-    let symbolic = symbolic_names::Names::new(description)?;
     outputs.emit_all(ECU, super::can_runtime::type_headers(communication))?;
     let (path, bytes) =
         super::can_runtime::profile_header(communication, symbolic.parameter("CanIfCtrlId")?);
     outputs.emit(ECU, path, bytes)?;
     for (module, definitions) in &symbolic.headers {
-        if matches!(module.as_str(), "CanIf" | "PduR" | "LSduR") {
+        if matches!(module.as_str(), "CanIf" | "PduR" | "LSduR" | "Rte") {
             continue;
         }
         outputs.emit(
@@ -408,6 +408,7 @@ pub(super) fn files(
 #include "Com.h"
 #include "Com_Internal.h"
 #include "Com_Cfg.h"
+#include "Rte_Cfg.h"
 #include "ComM_Cfg.h"
 #include "CanTp_Cfg.h"
 #include "Dcm_Cfg.h"
@@ -530,11 +531,14 @@ pub(super) fn files(
             )?,
             None => 0,
         };
+        let callback = reception.map_or_else(
+            || "0u".into(),
+            |rx| name("Rte", "ComUserSignal", &rx.user_signal),
+        );
         pdus.push(row(&format!(
-            "{pdu}, {signal_id}, {}, {initial}u, {}u, {}u",
+            "{pdu}, {signal_id}, {}, {initial}u, {}u, {callback}",
             if signal.receive { "TRUE" } else { "FALSE" },
-            reception_timeout,
-            reception.map_or(0, |rx| u32::from(rx.callback_handle))
+            reception_timeout
         )));
         if signal.receive {
             receive.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));

@@ -56,6 +56,7 @@ pub(super) fn files(
         r#"/** @file Generated RTE for the checked single-owner component graph. */
 #define RTE_CORE
 #include "Rte_Main.h"
+#include "Rte_Cfg.h"
 #include "Rte_Com.h"
 #include "Com.h"
 #include "Com_Cfg.h"
@@ -490,8 +491,8 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
             }) {
                 let name = &states[&network.endpoint];
                 source.push_str(&format!(
-                    "    if (handle == {}u) {{\n",
-                    reception.callback_handle
+                    "    if (handle == {}) {{\n",
+                    super::symbolic_names::name("Rte", "ComUserSignal", &reception.user_signal)
                 ));
                 if timeout {
                     source.push_str(&format!(
