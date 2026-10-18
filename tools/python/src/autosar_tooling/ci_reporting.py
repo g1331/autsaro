@@ -300,12 +300,16 @@ def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> lis
         row = {**item, "file": mapped}
         if row not in rows:
             rows.append(row)
-        positions.setdefault(
-            f"{name}: new clang-tidy finding [{item['rule']}]: {text}", set()
-        ).add(f"{mapped}:{line}")
+        if eligible:
+            positions.setdefault(key, set()).add(f"{mapped}:{line}")
     current = Counter()
     for counts in per_sample.values():
         current |= counts
+    # Derive display identities through the same normalization as the baseline verdict.
+    normalized_positions = {}
+    for key, places in positions.items():
+        for message in clang_tidy_comparison(Counter({key: 1}), Counter()):
+            normalized_positions.setdefault(message, set()).update(places)
     errors = clang_tidy_comparison(current, read_clang_tidy_baseline())
     details = [
         f"Analysis step: {outcome}; raw findings: {len(raw)} (includes existing baseline diagnostics)."
@@ -319,7 +323,11 @@ def clang_tidy(path: Path, samples: Path, repository: Path, outcome: str) -> lis
             continue
         details.append(
             error
-            + ("; " + ", ".join(sorted(positions[error])) if error in positions else "")
+            + (
+                "; " + ", ".join(sorted(normalized_positions[error]))
+                if error in normalized_positions
+                else ""
+            )
         )
     if not errors:
         details.append("No new or fixed baseline findings.")

@@ -354,6 +354,52 @@ Stale citations (not an official item of R24-11):
                 {"runtime/Test.c", "third_party/kernel.h", "samples/sample/bsw/Test.h"},
             )
 
+    def test_new_diagnostic_position_survives_trailing_documentation_normalization(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "runtime/a.c"
+            source.parent.mkdir()
+            source.write_text(
+                "typedef void *BadPtr; /**< A documented pointer type. */\n"
+            )
+            artifact = root / "tidy.json"
+            artifact.write_text(
+                json.dumps(
+                    [
+                        {
+                            "rule": "readability-identifier-naming",
+                            "file": "runtime/a.c",
+                            "line": 1,
+                            "column": 15,
+                            "message": "invalid case style",
+                            "sample": "probe",
+                        }
+                    ]
+                )
+            )
+            output = root / "summary"
+            with (
+                mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(output)}),
+                mock.patch(
+                    "autosar_tooling.quality.read_clang_tidy_baseline",
+                    return_value=Counter(),
+                ),
+            ):
+                rows = report.clang_tidy(artifact, root / "samples", root, "success")
+            self.assertIn(
+                "new clang-tidy finding [readability-identifier-naming]: typedef void *BadPtr;",
+                output.read_text(),
+            )
+            self.assertIn("runtime/a.c:1", output.read_text())
+            self.assertEqual(
+                report.sarif(rows, "clang-tidy")["runs"][0]["results"][0]["locations"][
+                    0
+                ]["physicalLocation"]["region"]["startLine"],
+                1,
+            )
+
     def test_relative_sample_cli_maps_actual_generated_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
