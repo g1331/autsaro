@@ -33,6 +33,7 @@ node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
 
 ## 编写场景
 
+- 主动刷新页面使用 WebDriver `POST /session/{id}/refresh` 并等待导航响应，再查询新文档的 timeOrigin、公开界面与原生 transport。不要用定时 `location.reload()` 后立即探测脚本：脚本及其返回的 Promise 可能跨越旧 frame 的 unload；`execute/sync` 本身不能等待尚未开始的定时导航。导航错误直接失败，不能通过重试掩盖。
 - 原生交互按真实异步操作边界同步：对话框出现后等待其可操作且获得焦点，再测试键盘；保存配置后同时核对界面控件解除忙态，不能把 capability 值已更新当作界面动作已完成；对话框关闭后等待后台事务完成，再发起后续 IPC。不能用弱化并发拒绝或固定延时掩盖操作竞态。
 - 场景按 IPC 错误的消息 key 判断后端错误，不匹配界面翻译文本。
 - Windows 上 msedgedriver 的参数只能经上述 WebView2 API 转交，不要另设 `WEBVIEW2_USER_DATA_FOLDER`。改写应用的 `USERPROFILE` 时须提供 `Desktop`，否则 Shell 会在原生选择框之外再弹出“位置不可用”；场景遇到选择框以外的原生对话框应失败并报告其文字，不能静默关闭。
