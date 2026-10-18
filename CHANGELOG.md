@@ -8,14 +8,13 @@
 
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
-### Changed
-
-- The CAN driver directly imports its ECU-private profile configuration; shared ComStack type configuration no longer imports it transitively, and component source kits omit the unused private profile. Regenerate and rebuild generated configurations; public C signatures and layouts and third-party identities are unchanged (#303)
 ### Fixed
 
 - COM raw configuration short names reject C keywords before symbolic-name prefixing, preserving the original source location in the diagnostic (#303)
 
 ### Changed
+
+- The CAN driver directly imports its ECU-private profile configuration; shared ComStack type configuration no longer imports it transitively, and component source kits omit the unused private profile. Regenerate and rebuild generated configurations; public C signatures and layouts and third-party identities are unchanged (#303)
 
 - C emitters use trusted runtime sources and anchored templates for fixed integration files, with shared memory-section, C++ linkage, include-guard and contract-comment rendering. Generated paths, ABI and behavior are preserved; the execution source gains its required file description and the COM callback header directly imports its handle type. Asset provenance and rule-set/package identities are recomputed (#278)
 
