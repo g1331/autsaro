@@ -878,10 +878,24 @@ export async function launch(name, { delayOperations = false } = {}) {
         }
         await writeFile(
           path.join(scratch, `failure-threads-${item.pid}.json`),
-          JSON.stringify({ at: Date.now(), threads }, null, 2),
+          JSON.stringify(
+            {
+              at: Date.now(),
+              mappings: await readFile(`/proc/${item.pid}/maps`, 'utf8').catch(String),
+              threads,
+            },
+            null,
+            2,
+          ),
         );
       }
       for (const item of tree.filter((item) => /autosar-config|WebKitWeb/.test(item.name))) {
+        if (
+          !(await processes()).some(
+            (live) => live.pid === item.pid && live.identity === item.identity,
+          )
+        )
+          continue;
         const startedAt = Date.now();
         const stack = await run(
           'gdb',
