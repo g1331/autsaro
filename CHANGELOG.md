@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
+
 - **Fixed:** clang-tidy baseline comparison keeps existing code diagnostics stable when required trailing Doxygen comments are added, while retaining code, literal and occurrence-count checks (#289).
 
 - **Fixed:** Rejection notices, range hints and the missing-tool notice insert backend messages without their sentence-final mark, so each composed text ends in exactly one mark and a bracketed range follows the reason instead of a stray period (#286).

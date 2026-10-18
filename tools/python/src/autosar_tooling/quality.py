@@ -386,7 +386,7 @@ CLANG_TIDY_LINE = re.compile(r"^(.+?):(\d+):(\d+): (warning|error): (.*?) \[([\w
 ClangTidyKey = tuple[str, str, str]
 
 
-def clang_tidy_project(project: Path, tidy: str) -> collections.Counter[ClangTidyKey]:
+def clang_tidy_project(project: Path, tidy: str, *, report: list[dict] | None = None) -> collections.Counter[ClangTidyKey]:
     from ecu_tools.build import kernel_patch_environment
 
     # git apply and clang-tidy run in other directories than the caller's.
@@ -444,6 +444,14 @@ def clang_tidy_project(project: Path, tidy: str) -> collections.Counter[ClangTid
             results = list(pool.map(analyze, units))
         for name, result in zip(units, results):
             matches = [CLANG_TIDY_LINE.match(line) for line in result.stdout.splitlines()]
+            if report is not None:
+                for match in filter(None, matches):
+                    try:
+                        relative = Path(match[1]).resolve().relative_to(project).as_posix()
+                    except ValueError:
+                        continue
+                    for rule in match[6].split(","):
+                        report.append({"rule": rule, "file": origins.get(relative, relative), "line": int(match[2]), "column": int(match[3]), "message": match[5], "sample": project.name})
             if result.returncode or any(match and match[4] == "error" for match in matches):
                 raise RuntimeError(f"{project.name}: clang-tidy could not analyze {name}:\n{result.stdout}{result.stderr}")
             for match in filter(None, matches):
@@ -483,9 +491,17 @@ def clang_tidy_errors(samples: Path) -> list[str]:
     if not projects:
         raise RuntimeError(f"No generated samples in {samples}")
     current: collections.Counter[ClangTidyKey] = collections.Counter()
-    for project in projects:
-        # Samples share the runtime sources; a finding counts once however many include it.
-        current |= clang_tidy_project(project, tidy)
+    report_path = os.environ.get("AUTOSAR_CLANG_TIDY_REPORT")
+    report: list[dict] = []
+    try:
+        for project in projects:
+            # Samples share the runtime sources; a finding counts once however many include it.
+            current |= clang_tidy_project(project, tidy, report=report if report_path else None)
+    finally:
+        if report_path:
+            destination = Path(report_path)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return clang_tidy_comparison(current, read_clang_tidy_baseline())
 
 
@@ -590,10 +606,14 @@ def check(
     errors.extend(numbers)
     oversized = document_size_errors()
     errors.extend(oversized)
+    from autosar_tooling import documentation
+
+    documents = documentation.check(base)
+    errors.extend(documents)
     paired = paired_tool_errors()
     errors.extend(paired)
     print(
-        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; clang-tidy={f'{len(tidy)} new or fixed' if c_samples is not None else 'not requested'}; plan numbers={len(numbers)}; oversized documents={len(oversized)}; paired tool versions={'mismatched' if paired else 'equal'}"
+        f"Quality scope={scope} baseline={base}; formatted files checked={checked}; C syntax={'checked' if changed_c or scope == 'runtime' or all_format else 'not requested'}; clang-tidy={f'{len(tidy)} new or fixed' if c_samples is not None else 'not requested'}; plan numbers={len(numbers)}; oversized documents={len(oversized)}; documentation={len(documents)}; paired tool versions={'mismatched' if paired else 'equal'}"
     )
     return errors
 

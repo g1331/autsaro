@@ -256,3 +256,57 @@ class QualityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClangTidyReportTests(unittest.TestCase):
+    def test_optional_report_preserves_raw_existing_findings_and_failure(self):
+        import collections
+        import os
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'sample').mkdir()
+            (root / 'sample/target.json').write_text('{}')
+            destination = root / 'reports/tidy.json'
+            raw = {'rule': 'readability-test', 'file': 'runtime/test.h', 'line': 7, 'message': 'raw message'}
+            def analyze(project, tidy, *, report=None):
+                if report is not None:
+                    report.append(raw)
+                return collections.Counter({('readability-test', 'runtime/test.h', 'int x;'): 1})
+            baseline = collections.Counter({('readability-test', 'runtime/test.h', 'int x;'): 1})
+            with patch.dict(os.environ, {'AUTOSAR_CLANG_TIDY_REPORT': str(destination)}), patch.object(quality.shutil, 'which', return_value='tidy'), patch.object(quality, 'clang_tidy_project', side_effect=analyze), patch.object(quality, 'read_clang_tidy_baseline', return_value=baseline):
+                self.assertEqual(quality.clang_tidy_errors(root), [])
+                self.assertEqual(json.loads(destination.read_text()), [raw])
+            def fail(project, tidy, *, report=None):
+                report.append(raw)
+                raise RuntimeError('analysis failed')
+            with patch.dict(os.environ, {'AUTOSAR_CLANG_TIDY_REPORT': str(destination)}), patch.object(quality.shutil, 'which', return_value='tidy'), patch.object(quality, 'clang_tidy_project', side_effect=fail), self.assertRaisesRegex(RuntimeError, 'analysis failed'):
+                quality.clang_tidy_errors(root)
+            self.assertEqual(json.loads(destination.read_text()), [raw])
+
+    def test_raw_report_parser_includes_baseline_excluded_rules_and_sample(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / 'sample'
+            (project / 'kernel').mkdir(parents=True)
+            (project / 'meta').mkdir()
+            (project / 'bsw').mkdir()
+            (project / 'bsw/Test.h').write_text('int generated;\n')
+            (project / 'unit.c').write_text('int runtime;\n')
+            (project / 'target.json').write_text(json.dumps({
+                'target': 'linux-test', 'kernelPatches': [], 'includePaths': ['.'],
+                'sources': ['unit.c'], 'entries': {}, 'compilerFlags': ['-std=c99'],
+            }))
+            (project / 'meta/integration.json').write_text(json.dumps({'originalBswSources': {'runtime/Test.c': 'unit.c'}}))
+            output = f'{project}/unit.c:1:2: warning: Runtime message [check-one]\n{project}/bsw/Test.h:1:1: warning: Generated message [readability-identifier-naming]\n'
+            output += f'{project}/unit.c:1:3: warning: Other column [check-one]\n{project}/unit.c:1:2: warning: Runtime message [check-one]\n'
+            report = []
+            with patch.object(quality, 'run', return_value=subprocess.CompletedProcess(['tidy'], 0, output, '')):
+                findings = quality.clang_tidy_project(project, 'tidy', report=report)
+            self.assertEqual(list(findings), [('check-one', 'runtime/Test.c', 'int runtime;')])
+            self.assertEqual(findings[('check-one', 'runtime/Test.c', 'int runtime;')], 2)
+            self.assertEqual(report, [
+                {'rule': 'check-one', 'file': 'runtime/Test.c', 'line': 1, 'column': 2, 'message': 'Runtime message', 'sample': 'sample'},
+                {'rule': 'readability-identifier-naming', 'file': 'bsw/Test.h', 'line': 1, 'column': 1, 'message': 'Generated message', 'sample': 'sample'},
+                {'rule': 'check-one', 'file': 'runtime/Test.c', 'line': 1, 'column': 3, 'message': 'Other column', 'sample': 'sample'},
+                {'rule': 'check-one', 'file': 'runtime/Test.c', 'line': 1, 'column': 2, 'message': 'Runtime message', 'sample': 'sample'},
+            ])
