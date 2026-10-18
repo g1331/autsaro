@@ -4,6 +4,7 @@
 
 | 主题 | 内容 |
 | --- | --- |
+| [覆盖率报告](coverage.md) | Rust、Vitest V8 与 Python 的本地测量、CI 工件与范围 |
 | [生成 C 的静态检查](generated-c.md) | Cppcheck／MISRA 分析、格式检查、clang 编译、封存构建模式与 CMake 构建 |
 | [进程与原生行为](native.md) | 受管进程、原生 Rust 套件、OS suites、检测器构建、原生 CI 任务，以及平台路径、运行时文件迁移、主机时序与 Windows 进程的注意事项 |
 | [官方对照](official.md) | 官方档案下载与对照、条款处置核算 |
