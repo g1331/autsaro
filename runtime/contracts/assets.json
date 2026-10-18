@@ -1843,6 +1843,162 @@
       ],
       "role": "bsw",
       "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_Execution.c",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_Execution.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_DetCallout.c",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/include/Det_Externals.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/include/Rte_Main.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/include/Rte_Com.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/templates/SchM_Main.c.in",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/include/Ecu_Config.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/templates/Ecu_TargetConfig.h.in",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/templates/Rte.h.in",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/include/Rte_Cfg.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/ecu/include/Rte_DataHandleType.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench"
     }
   ]
 }

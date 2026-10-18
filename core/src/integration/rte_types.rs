@@ -32,10 +32,15 @@ pub(super) const STATUSES: &[(&str, &str)] = &[
     ("SCHM_E_LOST_DATA", "64U"),
 ];
 
-pub(super) fn standard() -> String {
-    format!(
-        "#include \"Rte_Cfg.h\"\n#include \"Std_Types.h\"\n#include \"ComStack_Types.h\"\n\n/** Standard RTE and SchM statuses (SWS_Rte_07712/07713). */\n{}\n/** Test the infrastructure bit (SWS_Rte_07404); the argument is evaluated once.\n * @param[in] status An RTE status value; evaluated once.\n * @return TRUE if the infrastructure bit is set.\n * Preconditions: None.\n * Context: any context, including inside exclusive areas.\n * Reentrancy: reentrant; no state is accessed.\n * Ownership: no storage is borrowed or retained.\n */\n#define Rte_IsInfrastructureError(status) (((status) & 128U) != 0U)\n/** Test the overlay bit (SWS_Rte_07405); the argument is evaluated once.\n * @param[in] status An RTE status value; evaluated once.\n * @return TRUE if the overlay bit is set.\n * Preconditions: None.\n * Context: any context, including inside exclusive areas.\n * Reentrancy: reentrant; no state is accessed.\n * Ownership: no storage is borrowed or retained.\n */\n#define Rte_HasOverlayedError(status) (((status) & 64U) != 0U)\n/** Read the application error (SWS_Rte_07406); the argument is evaluated once.\n * @param[in] status An RTE status value; evaluated once.\n * @return The lower six bits of the status.\n * Preconditions: None.\n * Context: any context, including inside exclusive areas.\n * Reentrancy: reentrant; no state is accessed.\n * Ownership: no storage is borrowed or retained.\n */\n#define Rte_ApplicationError(status) ((status) & 63U)\n#include \"Rte_Main.h\"\n",
-        c_layout::defines(STATUSES)
+pub(super) fn standard() -> Result<String, Vec<super::PlanDiagnostic>> {
+    let path = "runtime/ecu/templates/Rte.h.in";
+    super::outputs::render(
+        super::outputs::trusted_text(path)?,
+        path,
+        &[super::outputs::Edit::Once(
+            "@STATUSES@",
+            &c_layout::defines(STATUSES),
+        )],
     )
 }
 

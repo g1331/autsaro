@@ -13,9 +13,11 @@ fn signal(plan: &PlanDescription, path: &str) -> Result<String, Vec<PlanDiagnost
 }
 
 fn section(source: &mut String, scope: &str, segment: &str, start: bool) {
-    source.push_str(&format!(
-        "#define RTE_{scope}_{}_SEC_{segment}\n#include \"Rte_MemMap.h\"\n",
-        if start { "START" } else { "STOP" }
+    source.push_str(&c_layout::section(
+        &format!("RTE_{scope}"),
+        "Rte",
+        segment,
+        start,
     ));
 }
 
@@ -51,7 +53,16 @@ pub(super) fn files(
     let description = plan.description();
     let composition = description.ecu_composition()?;
     let mut source = String::from(
-        "/** @file Generated RTE for the checked single-owner component graph. */\n#define RTE_CORE\n#include \"Rte_Main.h\"\n#include \"Rte_Com.h\"\n#include \"Com.h\"\n#include \"Com_Cfg.h\"\n#include \"Os.h\"\n#include \"Rte.h\"\n#include \"Ecu_Target.h\"\n",
+        r#"/** @file Generated RTE for the checked single-owner component graph. */
+#define RTE_CORE
+#include "Rte_Main.h"
+#include "Rte_Com.h"
+#include "Com.h"
+#include "Com_Cfg.h"
+#include "Os.h"
+#include "Rte.h"
+#include "Ecu_Target.h"
+"#,
     );
     for (module, prefix) in [
         ("Com", "COM"),
@@ -76,7 +87,9 @@ pub(super) fn files(
             ],
         ));
         source.push_str(&format!(
-            "#error Incompatible {module} AUTOSAR release\n#endif\n"
+            r#"#error Incompatible {module} AUTOSAR release
+#endif
+"#
         ));
     }
     let diagnostic_types = description
@@ -93,7 +106,15 @@ pub(super) fn files(
             component.header.trim_start_matches("include/")
         ));
     }
-    source.push_str("#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n/* Owner only; cleared at Stop. */\nstatic boolean rte_started RTE_Rte_VAR_CLEARED_UNSPECIFIED;\n/* Owner only; allocated once. */\nstatic boolean rte_allocated RTE_Rte_VAR_CLEARED_UNSPECIFIED;\n");
+    source.push_str(&format!(
+        r#"{start_var_cleared_unspecified}/* Owner only; cleared at Stop. */
+static boolean rte_started RTE_Rte_VAR_CLEARED_UNSPECIFIED;
+/* Owner only; allocated once. */
+static boolean rte_allocated RTE_Rte_VAR_CLEARED_UNSPECIFIED;
+"#,
+        start_var_cleared_unspecified =
+            c_layout::section("RTE_Rte", "Rte", "VAR_CLEARED_UNSPECIFIED", true)
+    ));
     let receivers = super::rte_memory::receivers(composition);
     let states: BTreeMap<_, _> = receivers
         .iter()
@@ -154,18 +175,50 @@ pub(super) fn files(
                 for receiver in receivers.iter().filter(|receiver| receiver.scope == scope) {
                     let name = &receiver.name;
                     if receiver.received {
-                        source.push_str(&format!("/* Owner-only reception status; starts FALSE and publication sets TRUE. */\nstatic boolean {name}_received RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n"));
+                        source.push_str(&format!(
+ r#"/* Owner-only reception status; starts FALSE and publication sets TRUE. */
+static boolean {name}_received RTE_{scope}_VAR_CLEARED_UNSPECIFIED;
+"#));
                     }
                     if receiver.expired {
-                        source.push_str(&format!("/* Owner-only timeout status; a successful reception clears it. */\nstatic boolean {name}_expired RTE_{scope}_VAR_CLEARED_UNSPECIFIED;\n"));
+                        source.push_str(&format!(
+                            r#"/* Owner-only timeout status; a successful reception clears it. */
+static boolean {name}_expired RTE_{scope}_VAR_CLEARED_UNSPECIFIED;
+"#
+                        ));
                     }
                 }
                 section(&mut source, scope, "VAR_CLEARED_UNSPECIFIED", false);
             }
         }
     }
-    source.push_str("#define RTE_Rte_START_SEC_CODE\n#include \"Rte_MemMap.h\"\nRTE_Rte_CODE Std_ReturnType Rte_Start(void)\n{\n    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) {\n        return RTE_E_LIMIT;\n    }\n    if (rte_allocated == TRUE) {\n        return RTE_E_LIMIT;\n    }\n");
-    source.push_str("    rte_allocated = TRUE;\n    rte_started = TRUE;\n    return E_OK;\n}\nRTE_Rte_CODE Std_ReturnType Rte_Stop(void)\n{\n    if (Ecu_TargetCheckLifecycleContext(FALSE) != E_OK) {\n        return RTE_E_LIMIT;\n    }\n    rte_started = FALSE;\n    return E_OK;\n}\n");
+    source.push_str(&format!(
+        r#"{start_code}RTE_Rte_CODE Std_ReturnType Rte_Start(void)
+{{
+    if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) {{
+        return RTE_E_LIMIT;
+    }}
+    if (rte_allocated == TRUE) {{
+        return RTE_E_LIMIT;
+    }}
+"#,
+        start_code = c_layout::section("RTE_Rte", "Rte", "CODE", true)
+    ));
+    source.push_str(
+        r#"    rte_allocated = TRUE;
+    rte_started = TRUE;
+    return E_OK;
+}
+RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
+{
+    if (Ecu_TargetCheckLifecycleContext(FALSE) != E_OK) {
+        return RTE_E_LIMIT;
+    }
+    rte_started = FALSE;
+    return E_OK;
+}
+"#,
+    );
     section(&mut source, "Rte", "CODE", false);
     for component in &composition.components {
         let scope = super::short_name(&component.component);
@@ -187,10 +240,48 @@ pub(super) fn files(
             if port.read {
                 let name = &states[&endpoint];
                 let head = function(scope, &symbol, &[format!("{} *data", port.c_type)]);
-                source.push_str(&format!("{head}\n{{\n    if (data == NULL_PTR) {{\n        return E_NOT_OK;\n    }}\n    if (rte_started == FALSE) {{\n        return RTE_E_COM_STOPPED;\n    }}\n    if (Ecu_TargetIsOwner() == 0) {{\n        return E_NOT_OK;\n    }}\n"));
+                source.push_str(&format!(
+                    r#"{head}
+{{
+    if (data == NULL_PTR) {{
+        return E_NOT_OK;
+    }}
+    if (rte_started == FALSE) {{
+        return RTE_E_COM_STOPPED;
+    }}
+    if (Ecu_TargetIsOwner() == 0) {{
+        return E_NOT_OK;
+    }}
+"#
+                ));
                 if let Some(network) = network {
                     let id = signal(description, &network.transport.com_signal)?;
-                    source.push_str(&format!("    {{\n        uint32 value = {name};\n        const uint8 status = Com_ReceiveSignal({id}, &value);\n        if (status == COM_SERVICE_NOT_AVAILABLE) {{\n            *data = {name};\n            return RTE_E_COM_STOPPED;\n        }}\n        if (status != E_OK) {{\n            return E_NOT_OK;\n        }}\n        if ({name}_received == FALSE) {{\n            *data = {name};\n            return {};\n        }}\n        {name} = value;\n        *data = value;\n        return ({name}_expired == TRUE) ? RTE_E_MAX_AGE_EXCEEDED : E_OK;\n    }}\n", if port.handle_never_received { "RTE_E_NEVER_RECEIVED" } else { "E_OK" }));
+                    source.push_str(&format!(
+                        r#"    {{
+        uint32 value = {name};
+        const uint8 status = Com_ReceiveSignal({id}, &value);
+        if (status == COM_SERVICE_NOT_AVAILABLE) {{
+            *data = {name};
+            return RTE_E_COM_STOPPED;
+        }}
+        if (status != E_OK) {{
+            return E_NOT_OK;
+        }}
+        if ({name}_received == FALSE) {{
+            *data = {name};
+            return {};
+        }}
+        {name} = value;
+        *data = value;
+        return ({name}_expired == TRUE) ? RTE_E_MAX_AGE_EXCEEDED : E_OK;
+    }}
+"#,
+                        if port.handle_never_received {
+                            "RTE_E_NEVER_RECEIVED"
+                        } else {
+                            "E_OK"
+                        }
+                    ));
                 } else {
                     source.push_str(&format!("    *data = {name};\n"));
                     if !composition.data_connected(&endpoint) {
@@ -205,10 +296,24 @@ pub(super) fn files(
                 }
             } else {
                 let head = function(scope, &symbol, &[format!("{} data", port.c_type)]);
-                source.push_str(&format!("{head}\n{{\n    if (rte_started == FALSE) {{\n        return RTE_E_COM_STOPPED;\n    }}\n    if (Ecu_TargetIsOwner() == 0) {{\n        return E_NOT_OK;\n    }}\n"));
+                source.push_str(&format!(
+                    r#"{head}
+{{
+    if (rte_started == FALSE) {{
+        return RTE_E_COM_STOPPED;
+    }}
+    if (Ecu_TargetIsOwner() == 0) {{
+        return E_NOT_OK;
+    }}
+"#
+                ));
                 if let Some(network) = network {
                     let id = signal(description, &network.transport.com_signal)?;
-                    source.push_str(&format!("    const uint8 status = Com_SendSignal({id}, &data);\n    return (status == COM_SERVICE_NOT_AVAILABLE) ? RTE_E_COM_STOPPED : status;\n"));
+                    source.push_str(&format!(
+                        r#"    const uint8 status = Com_SendSignal({id}, &data);
+    return (status == COM_SERVICE_NOT_AVAILABLE) ? RTE_E_COM_STOPPED : status;
+"#
+                    ));
                 } else {
                     if !composition.data_connected(&endpoint) {
                         source.push_str("    (void)data;\n");
@@ -249,11 +354,19 @@ pub(super) fn files(
                     &operation.implementation_symbol,
                     &parameters(&operation.arguments),
                 );
-                source.push_str(&format!("{head}\n{{\n"));
+                source.push_str(&format!(
+                    r#"{head}
+{{
+"#
+                ));
                 for argument in &operation.arguments {
                     source.push_str(&format!("    (void){};\n", argument.name));
                 }
-                source.push_str("    return RTE_E_UNCONNECTED;\n}\n");
+                source.push_str(
+                    r#"    return RTE_E_UNCONNECTED;
+}
+"#,
+                );
                 continue;
             };
             let provider = composition
@@ -280,7 +393,17 @@ pub(super) fn files(
                 &operation.implementation_symbol,
                 &parameters(&operation.arguments),
             );
-            source.push_str(&format!("{head}\n{{\n    if (rte_started == FALSE) {{\n        return RTE_E_COM_STOPPED;\n    }}\n    if (Ecu_TargetIsOwner() == 0) {{\n        return E_NOT_OK;\n    }}\n"));
+            source.push_str(&format!(
+                r#"{head}
+{{
+    if (rte_started == FALSE) {{
+        return RTE_E_COM_STOPPED;
+    }}
+    if (Ecu_TargetIsOwner() == 0) {{
+        return E_NOT_OK;
+    }}
+"#
+            ));
             for argument in &operation.arguments {
                 if argument.native_type.contains('*')
                     || composition
@@ -289,7 +412,10 @@ pub(super) fn files(
                         .any(|name| name == &argument.native_type)
                 {
                     source.push_str(&format!(
-                        "    if ({} == NULL_PTR) {{\n        return {};\n    }}\n",
+                        r#"    if ({} == NULL_PTR) {{
+        return {};
+    }}
+"#,
                         argument.name,
                         operation.application_error.as_deref().unwrap_or("E_NOT_OK")
                     ));
@@ -333,7 +459,13 @@ pub(super) fn files(
                 &names(&operation.arguments),
                 ";",
             );
-            source.push_str(&format!("{head}\n{{\n{call}\n}}\n"));
+            source.push_str(&format!(
+                r#"{head}
+{{
+{call}
+}}
+"#
+            ));
         }
         section(&mut source, scope, "CODE", false);
     }
@@ -341,7 +473,17 @@ pub(super) fn files(
     section(&mut source, partition, "CALLOUT_CODE", true);
     let com = description.ecu_com()?;
     for (callback, timeout) in [("Rte_COMCbk", false), ("Rte_COMCbkRxTOut", true)] {
-        source.push_str(&format!("RTE_{partition}_CALLOUT_CODE void {callback}(CbkHandleIdType handle)\n{{\n    if (rte_started == FALSE) {{\n        return;\n    }}\n    if (Ecu_TargetIsOwner() == 0) {{\n        return;\n    }}\n"));
+        source.push_str(&format!(
+            r#"RTE_{partition}_CALLOUT_CODE void {callback}(CbkHandleIdType handle)
+{{
+    if (rte_started == FALSE) {{
+        return;
+    }}
+    if (Ecu_TargetIsOwner() == 0) {{
+        return;
+    }}
+"#
+        ));
         for reception in &com.receptions {
             for network in composition.network_endpoints.iter().filter(|network| {
                 network.transport.receive && network.transport.com_signal == reception.signal
@@ -353,11 +495,20 @@ pub(super) fn files(
                 ));
                 if timeout {
                     source.push_str(&format!(
-                        "        if ({name}_received == TRUE) {{\n            {name}_expired = TRUE;\n        }}\n"
+                        r#"        if ({name}_received == TRUE) {{
+            {name}_expired = TRUE;
+        }}
+"#
                     ));
                 } else {
                     let id = signal(description, &reception.signal)?;
-                    source.push_str(&format!("        if (Com_ReceiveSignal({id}, &{name}) == E_OK) {{\n            {name}_received = TRUE;\n            {name}_expired = FALSE;\n        }}\n"));
+                    source.push_str(&format!(
+                        r#"        if (Com_ReceiveSignal({id}, &{name}) == E_OK) {{
+            {name}_received = TRUE;
+            {name}_expired = FALSE;
+        }}
+"#
+                    ));
                 }
                 source.push_str("    }\n");
             }
@@ -367,129 +518,15 @@ pub(super) fn files(
     section(&mut source, partition, "CALLOUT_CODE", false);
     Ok(BTreeMap::from([
         // The delivered targets place all RTE code in their executable RTE section.
-        ("include/Rte_MemMap.h".into(), super::memmap::rte(&scopes, Some(".rte_code"), super::memmap::dcm_scope(composition)).into_bytes()),
+        (
+            "include/Rte_MemMap.h".into(),
+            super::memmap::rte(
+                &scopes,
+                Some(".rte_code"),
+                super::memmap::dcm_scope(composition),
+            )
+            .into_bytes(),
+        ),
         ("src/Rte.c".into(), source.into_bytes()),
-        ("include/Rte_Com.h".into(), b"/** @file Handle-bearing COM reception and timeout notifications. */\n#ifndef RTE_COM_H\n#define RTE_COM_H\n#include \"Rte_Type.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/** Refresh receiver values after a successful COM reception.\n * @param[in] handle Configured ComUserCbkHandleId; unknown handles are ignored.\n * @par Return\n * None.\n *\n * Preconditions: RTE started and ECU owner context; otherwise no action.\n *\n * Context: COM callback on the ECU owner task, outside exclusive areas.\n *\n * Reentrancy: not reentrant for the same ECU receiver state.\n *\n * Ownership: No pointer is retained; receiver storage remains owned by the RTE.\n */\nvoid Rte_COMCbk(CbkHandleIdType handle);\n/** Mark previously received values as expired after a COM Rx deadline.\n * @param[in] handle Configured ComUserCbkHandleId; unknown handles are ignored.\n * @par Return\n * None.\n *\n * Preconditions: RTE started and ECU owner context; otherwise no action.\n *\n * Context: COM callback on the ECU owner task, outside exclusive areas.\n *\n * Reentrancy: not reentrant for the same ECU receiver state.\n *\n * Ownership: No pointer is retained; receiver storage remains owned by the RTE.\n */\nvoid Rte_COMCbkRxTOut(CbkHandleIdType handle);\n#ifdef __cplusplus\n}\n#endif\n#endif\n".to_vec()),
     ]))
 }
-
-pub(super) const MAIN_HEADER: &[u8] =
-    br#"/** @file RTE trusted-context lifecycle; Start follows BSW/SchM Init. */
-#ifndef RTE_MAIN_H
-#define RTE_MAIN_H
-#include "Rte.h"
-#ifdef __cplusplus
-extern "C" {
-#endif
-/** Start the RTE once for this ECU lifetime.
- * @return E_OK after start; RTE_E_LIMIT on an invalid lifecycle context or repeated allocation.
- *
- * Preconditions: BSW and SchM initialized; StartupHook context, otherwise RTE_E_LIMIT.
- *
- * Context: StartupHook, outside exclusive areas.
- *
- * Reentrancy: not reentrant.
- *
- * Ownership: No pointer is retained.
- */
-Std_ReturnType Rte_Start(void);
-/** Stop component execution without permitting another allocation.
- * @return E_OK after stop; RTE_E_LIMIT for an invalid lifecycle context.
- *
- * Preconditions: Trusted shutdown context; rejected calls preserve the started state.
- *
- * Context: ShutdownHook, outside exclusive areas.
- *
- * Reentrancy: not reentrant.
- *
- * Ownership: No pointer is retained.
- */
-Std_ReturnType Rte_Stop(void);
-/** Immutable SchM partition selection for this generated ECU. */
-typedef struct {
-    uint16 partition; /**< Validated partition handle; no other handle is accepted. */
-} SchM_ConfigType;
-/** Initialize the selected SchM partition once.
- * @param[in] ConfigPtr Non-NULL configuration with the generated partition handle.
- * @par Return
- * None.
- *
- * Preconditions: Trusted startup context and no prior allocation; invalid or repeated calls have no
- * effect.
- *
- * Context: StartupHook, outside exclusive areas.
- *
- * Reentrancy: not reentrant.
- *
- * Ownership: No pointer is retained.
- */
-void SchM_Init(const SchM_ConfigType *ConfigPtr);
-/** Enable SchM processing after initialization.
- * @par Return
- * None.
- *
- * Preconditions: Trusted startup context and SchM initialized; otherwise no effect.
- *
- * Context: StartupHook, outside exclusive areas.
- *
- * Reentrancy: not reentrant.
- *
- * Ownership: No pointer is retained.
- */
-void SchM_Start(void);
-/** Enable configured timing after SchM start.
- * @par Return
- * None.
- *
- * Preconditions: Trusted startup context and SchM started; otherwise no effect.
- *
- * Context: StartupHook, outside exclusive areas.
- *
- * Reentrancy: not reentrant.
- *
- * Ownership: No pointer is retained.
- */
-void SchM_StartTiming(void);
-/** Retire SchM permanently for this ECU lifetime.
- * @par Return
- * None.
- *
- * Preconditions: Trusted shutdown context; unallocated state stays unchanged.
- *
- * Context: ShutdownHook, outside exclusive areas.
- *
- * Reentrancy: not reentrant.
- *
- * Ownership: No pointer is retained.
- */
-void SchM_Deinit(void);
-extern const SchM_ConfigType Ecu_SchMConfig;
-/** Read whether SchM processing has started.
- * @return TRUE in started or timing state; FALSE otherwise.
- *
- * Preconditions: Lifecycle changes are serialized by the owner; no concurrent lifecycle writer.
- *
- * Context: StartupHook, ShutdownHook or ECU owner task; no concurrent lifecycle writer.
- *
- * Reentrancy: reentrant when lifecycle state is stable.
- *
- * Ownership: No pointer is retained.
- */
-boolean Ecu_SchMReady(void);
-/** Read whether SchM timing has started.
- * @return TRUE only in timing state; FALSE otherwise.
- *
- * Preconditions: Lifecycle changes are serialized by the owner; no concurrent lifecycle writer.
- *
- * Context: StartupHook, ShutdownHook or ECU owner task; no concurrent lifecycle writer.
- *
- * Reentrancy: reentrant when lifecycle state is stable.
- *
- * Ownership: No pointer is retained.
- */
-boolean Ecu_SchMTimingActive(void);
-#ifdef __cplusplus
-}
-#endif
-#endif
-"#;

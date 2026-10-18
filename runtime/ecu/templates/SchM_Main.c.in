@@ -1,0 +1,57 @@
+#include "Rte_Main.h"
+#include "Ecu_Target.h"
+#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Rte_MemMap.h"
+#define SCHM_LIFECYCLE_UNALLOCATED 0U
+#define SCHM_LIFECYCLE_INITIALIZED 1U
+#define SCHM_LIFECYCLE_STARTED     2U
+#define SCHM_LIFECYCLE_TIMING      3U
+#define SCHM_LIFECYCLE_RETIRED     4U
+static uint8 schm_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;
+#define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Rte_MemMap.h"
+#define RTE_Rte_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED
+#include "Rte_MemMap.h"
+const SchM_ConfigType Ecu_SchMConfig RTE_Rte_CONFIG_DATA_PREBUILD_UNSPECIFIED = {@PARTITION@u};
+#define RTE_Rte_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED
+#include "Rte_MemMap.h"
+#define RTE_Rte_START_SEC_CODE
+#include "Rte_MemMap.h"
+RTE_Rte_CODE void SchM_Init(const SchM_ConfigType *ConfigPtr)
+{
+    if ((Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) ||
+        (schm_lifecycle != SCHM_LIFECYCLE_UNALLOCATED) || (ConfigPtr == NULL_PTR) ||
+        (ConfigPtr->partition != @PARTITION@u)) {
+        return;
+    }
+    schm_lifecycle = SCHM_LIFECYCLE_INITIALIZED;
+}
+RTE_Rte_CODE void SchM_Start(void)
+{
+    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) &&
+        (schm_lifecycle == SCHM_LIFECYCLE_INITIALIZED)) {
+        schm_lifecycle = SCHM_LIFECYCLE_STARTED;
+    }
+}
+RTE_Rte_CODE void SchM_StartTiming(void)
+{
+    if ((Ecu_TargetCheckLifecycleContext(TRUE) == E_OK) &&
+        (schm_lifecycle == SCHM_LIFECYCLE_STARTED)) {
+        schm_lifecycle = SCHM_LIFECYCLE_TIMING;
+    }
+}
+RTE_Rte_CODE void SchM_Deinit(void)
+{
+    if ((Ecu_TargetCheckLifecycleContext(FALSE) == E_OK) &&
+        (schm_lifecycle != SCHM_LIFECYCLE_UNALLOCATED)) {
+        schm_lifecycle = SCHM_LIFECYCLE_RETIRED;
+    }
+}
+RTE_Rte_CODE boolean Ecu_SchMReady(void)
+{
+    return (schm_lifecycle == SCHM_LIFECYCLE_STARTED) || (schm_lifecycle == SCHM_LIFECYCLE_TIMING);
+}
+RTE_Rte_CODE boolean Ecu_SchMTimingActive(void) { return schm_lifecycle == SCHM_LIFECYCLE_TIMING; }
+#define RTE_Rte_STOP_SEC_CODE
+#include "Rte_MemMap.h"
+@MODES@
