@@ -14,6 +14,7 @@ mod os_configuration;
 mod rte;
 mod scheduling;
 mod single_component;
+mod symbolic_names;
 mod validation;
 mod workbench;
 mod workspace;

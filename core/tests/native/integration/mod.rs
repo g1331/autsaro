@@ -2,6 +2,7 @@
 use super::*;
 
 mod generated_c;
+mod symbolic_names;
 mod os;
 mod protocol;
 mod sealed_projects;

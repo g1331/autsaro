@@ -453,8 +453,27 @@ fn communication_types_and_polling_periods_are_source_derived() {
                 code.split_whitespace().eq(["#define", name, value])
             })
     };
-    assert!(defines("CAN_RX_HOH", "1u"));
-    assert!(defines("CAN_TX_HOH", "0u"));
+    assert!(defines("CAN_RX_HOH", "CanConf_CanHardwareObject_Receive"));
+    assert!(defines("CAN_TX_HOH", "CanConf_CanHardwareObject_Transmit"));
+    let can_symbols = text("generated/include/Can_Cfg.h");
+    assert!(
+        can_symbols
+            .lines()
+            .any(|line| line.split_whitespace().take(3).eq([
+                "#define",
+                "CanConf_CanHardwareObject_Receive",
+                "1u"
+            ]))
+    );
+    assert!(
+        can_symbols
+            .lines()
+            .any(|line| line.split_whitespace().take(3).eq([
+                "#define",
+                "CanConf_CanHardwareObject_Transmit",
+                "0u"
+            ]))
+    );
     let description = text("generated/descriptions/Host_Implementation.arxml");
     assert!(description.contains("Can_VAR_CLEARED_UNSPECIFIED"));
     assert!(description.contains(

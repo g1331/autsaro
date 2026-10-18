@@ -376,39 +376,55 @@ pub(super) fn inspect(
     })
 }
 
-/// One producer for the selected communication widths and target configuration.
-pub(super) fn type_headers(communication: &CommunicationRuntimeContract) -> Vec<(String, Vec<u8>)> {
+/// ECU-only CAN selection; component contracts do not consume driver configuration.
+pub(super) fn profile_header(
+    communication: &CommunicationRuntimeContract,
+    can_if_controller: &str,
+) -> (String, Vec<u8>) {
     let can = &communication.can;
-    let mut files = Vec::new();
     let profile = super::c_layout::commented_defines(
         &[
             ("CAN_HOST_QUEUED_COMPLETION", "STD_ON".to_owned()),
             ("CAN_RX_POLLING", "STD_ON".to_owned()),
             ("CAN_TX_POLLING", "STD_ON".to_owned()),
             ("CAN_BUSOFF_POLLING", "STD_ON".to_owned()),
-            ("CAN_CONTROLLER_ID", format!("{}u", can.controller_id)),
             (
-                "CAN_CANIF_CONTROLLER_ID",
-                format!("{}u", can.can_if_controller_id),
+                "CAN_CONTROLLER_ID",
+                super::symbolic_names::name("Can", "CanController", &can.controller),
             ),
-            ("CAN_TX_HOH", format!("{}u", can.transmit_handle)),
-            ("CAN_RX_HOH", format!("{}u", can.receive_handle)),
+            ("CAN_CANIF_CONTROLLER_ID", can_if_controller.to_owned()),
+            (
+                "CAN_TX_HOH",
+                super::symbolic_names::name("Can", "CanHardwareObject", &can.transmit_hardware),
+            ),
+            (
+                "CAN_RX_HOH",
+                super::symbolic_names::name("Can", "CanHardwareObject", &can.receive_hardware),
+            ),
         ],
         "Generated CAN selection.",
     );
-    files.push((
-        "include/Ecu_ProfileConfig.h",
+    (
+        "include/Ecu_ProfileConfig.h".into(),
         format!(
             r#"/** @file Generated communication selection. */
 {guard_start}#include "Std_Types.h"
+#include "Can_Cfg.h"
+#include "CanIf_Cfg.h"
 /** ECUC CanRxProcessing, CanTxProcessing and CanBusoffProcessing select POLLING.
  * The generated host target owns queued completion and the controller/HOH handles.
  */
 {profile}#endif
 "#,
             guard_start = c_layout::header_start("ECU_PROFILE_CONFIG_H")
-        ),
-    ));
+        )
+        .into_bytes(),
+    )
+}
+
+/// One producer for the selected standard communication widths.
+pub(super) fn type_headers(communication: &CommunicationRuntimeContract) -> Vec<(String, Vec<u8>)> {
+    let mut files = Vec::new();
     let integer = |kind: super::CommunicationIntegerType| match kind {
         super::CommunicationIntegerType::Uint8 => "uint8",
         super::CommunicationIntegerType::Uint16 => "uint16",
@@ -419,7 +435,6 @@ pub(super) fn type_headers(communication: &CommunicationRuntimeContract) -> Vec<
         format!(
             r#"/** @file EcuC-selected communication widths. */
 {guard_start}#include "Platform_Types.h"
-#include "Ecu_ProfileConfig.h"
 /** PDU handle width selected by EcuC PduIdTypeEnum. */
 typedef {} PduIdType;
 /** PDU byte-count width selected by EcuC PduLengthTypeEnum. */
