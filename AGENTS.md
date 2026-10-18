@@ -18,7 +18,7 @@
 | 实现或核对 BSW／RTE／OS 规范，写条款处置 | [标准基线](docs/standards/README.md)（§5 处置标记与核算）及对应模块篇 |
 | 修改独占区、跨模块回调或并发 | [运行时架构 · 独占区协议](docs/architecture/runtime.md#独占区协议) |
 | 原生、OS、进程测试；迁移 runtime 文件或改运行时配置结构；排查时序与间歇失败 | [进程与原生行为](docs/development/testing/native.md) |
-| 修改 CI 或 workflow；变异确认；本地复核 Clippy | [测试说明](docs/development/testing/README.md) |
+| CI／workflow、代理独立审查、变异与 Clippy | [测试说明](docs/development/testing/README.md) |
 | 桌面场景与界面交互验收 | [桌面场景](docs/development/testing/desktop.md) |
 | 官方档案、官方对照或登记了字节摘要的夹具 | [官方对照](docs/development/testing/official.md) |
 | 交付资产与资产摘要 | [资产清单维护](docs/maintainers/assets.md) |
