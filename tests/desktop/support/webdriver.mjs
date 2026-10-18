@@ -1,5 +1,43 @@
 import { appendFile } from 'node:fs/promises';
 
+// Serialized into the page. The optional observer is diagnostic only; the
+// expression and native IPC still execute through the original transport.
+export function evaluateInPage(expression, id, done) {
+  function observe(stage) {
+    const sample = {
+      id,
+      stage,
+      at: Date.now(),
+      timeOrigin: performance.timeOrigin,
+      url: location.href,
+      readyState: document.readyState,
+      expression: expression.slice(0, 512),
+      nativeCallbacks: window.__TAURI_INTERNALS__?.callbacks?.size,
+    };
+    window.__AUTOSAR_DESKTOP_EVALUATION__ = sample;
+    try {
+      window.__AUTOSAR_DESKTOP_OBSERVER__?.(sample);
+    } catch (error) {
+      sample.observerError = String(error);
+    }
+  }
+  observe('entered');
+  Promise.resolve()
+    .then(() => (0, eval)(expression))
+    .then(
+      (value) => {
+        observe('resolved');
+        observe('callback');
+        done({ value });
+      },
+      (error) => {
+        observe('rejected');
+        observe('callback');
+        done({ error: String(error) });
+      },
+    );
+}
+
 export class WebDriver {
   constructor(base, log) {
     this.base = base;
@@ -17,6 +55,7 @@ export class WebDriver {
       method,
       route: route.replace(/session\/[^/]+/, 'session'),
       script: body?.args?.[0],
+      evaluation: route.endsWith('/execute/async') ? body?.args?.[1] : undefined,
     };
     const record = (fields) =>
       appendFile(this.log, JSON.stringify({ ...request, at: Date.now(), ...fields }) + '\n');

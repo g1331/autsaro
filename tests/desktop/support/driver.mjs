@@ -2,7 +2,7 @@
 // official tauri-driver WebDriver intermediary. Linux isolates itself on a
 // private Xvfb display and D-Bus; Windows relies on a dedicated runner or VM.
 import assert from 'node:assert/strict';
-import { WebDriver } from './webdriver.mjs';
+import { WebDriver, evaluateInPage } from './webdriver.mjs';
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import {
   access,
@@ -192,6 +192,7 @@ async function processes() {
           name: fields.Name,
           command: (await readFile(`/proc/${entry}/cmdline`, 'utf8')).replaceAll('\0', ' ').trim(),
           identity: stat[19],
+          state: fields.State,
           VmRSS: Number.parseInt(fields.VmRSS ?? '0', 10) * 1024,
           VmHWM: Number.parseInt(fields.VmHWM ?? '0', 10) * 1024,
         });
@@ -604,7 +605,7 @@ export async function launch(name, { delayOperations = false } = {}) {
       {
         env: environment,
         detached: platform === 'linux',
-        stdio: ['ignore', 'ignore', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       },
     );
@@ -640,6 +641,9 @@ export async function launch(name, { delayOperations = false } = {}) {
     );
     let driverLog = '';
     const driverOutput = path.join(scratch, 'driver.stderr.log');
+    driverProcess.stdout.on('data', (chunk) => {
+      appendFile(path.join(scratch, 'driver.stdout.log'), chunk).catch(() => undefined);
+    });
     driverProcess.stderr.on('data', (chunk) => {
       driverLog += chunk;
       appendFile(driverOutput, chunk).catch(() => undefined);
@@ -696,6 +700,7 @@ export async function launch(name, { delayOperations = false } = {}) {
     Enter: '',
   };
   const held = { alt: '', ctrl: '', meta: '', shift: '' };
+  let nextEvaluation = 0;
   return {
     platform,
     scratch,
@@ -705,9 +710,8 @@ export async function launch(name, { delayOperations = false } = {}) {
     },
     async evaluate(expression) {
       const result = await client.request('POST', route('/execute/async'), {
-        script:
-          'const done = arguments[arguments.length - 1]; Promise.resolve().then(() => (0, eval)(arguments[0])).then(value => done({value}), error => done({error: String(error)}));',
-        args: [expression],
+        script: `return (${evaluateInPage.toString()}).apply(null, arguments);`,
+        args: [expression, ++nextEvaluation],
       });
       if (result.error) throw new Error(result.error);
       return result.value;
@@ -878,11 +882,16 @@ export async function launch(name, { delayOperations = false } = {}) {
         );
       }
       for (const item of tree.filter((item) => /autosar-config|WebKitWeb/.test(item.name))) {
+        const startedAt = Date.now();
         const stack = await run(
           'gdb',
           [
             '--batch',
             '-nx',
+            '-iex',
+            'set auto-load off',
+            '-iex',
+            'set debuginfod enabled off',
             '-p',
             String(item.pid),
             '-ex',
@@ -892,14 +901,37 @@ export async function launch(name, { delayOperations = false } = {}) {
             '-ex',
             'detach',
           ],
-          { timeout: 20000, maxBuffer: 16 * 1024 * 1024 },
-        ).catch((error) => ({
-          stdout: error.stdout ?? '',
-          stderr: String(error) + '\n' + (error.stderr ?? ''),
-        }));
+          { timeout: 20000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024 },
+        )
+          .then((result) => ({ ...result, outcome: 'completed' }))
+          .catch((error) => ({
+            outcome: 'failed',
+            code: error.code,
+            signal: error.signal,
+            killed: error.killed,
+            stdout: error.stdout ?? '',
+            stderr: String(error) + '\n' + (error.stderr ?? ''),
+          }));
         await writeFile(
           path.join(scratch, `failure-backtrace-${item.pid}.txt`),
           `${stack.stdout}\n${stack.stderr}`,
+        );
+        await writeFile(
+          path.join(scratch, `failure-debugger-${item.pid}.json`),
+          JSON.stringify(
+            {
+              pid: item.pid,
+              startedAt,
+              finishedAt: Date.now(),
+              outcome: stack.outcome,
+              code: stack.code,
+              signal: stack.signal,
+              killed: stack.killed,
+              statusAfter: await readFile(`/proc/${item.pid}/status`, 'utf8').catch(String),
+            },
+            null,
+            2,
+          ),
         );
       }
     },
@@ -919,6 +951,9 @@ export async function launch(name, { delayOperations = false } = {}) {
         if (platform === 'linux') {
           try {
             process.kill(-driverProcess.pid, 'SIGTERM');
+            // A debugger can leave the application stopped after detaching.
+            // Resume the owned group so pending termination can be delivered.
+            process.kill(-driverProcess.pid, 'SIGCONT');
           } catch (error) {
             if (error.code !== 'ESRCH') throw error;
           }
@@ -935,9 +970,10 @@ export async function launch(name, { delayOperations = false } = {}) {
         async () => {
           const current = await processes();
           survivors.length = 0;
-          const remaining = new Map(current.map((item) => [item.pid, item.identity]));
+          const remaining = new Map(current.map((item) => [item.pid, item]));
           for (const item of tree)
-            if (remaining.get(item.pid) === item.identity) survivors.push(item);
+            if (remaining.get(item.pid)?.identity === item.identity)
+              survivors.push(remaining.get(item.pid));
           return survivors.length === 0;
         },
         'the application process tree to exit',

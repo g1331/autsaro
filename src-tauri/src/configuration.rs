@@ -26,12 +26,17 @@ pub(crate) async fn project_projection(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
 ) -> Result<Reply<ProjectProjection>, autosar_config_core::LocalizedText> {
-    background(state, move |state| {
+    #[cfg(feature = "native-webdriver")]
+    let request = crate::verification::NativeRequest::begin("project_projection");
+    let result = background(state, move |state| {
         state.read_workspace(&fingerprint, |workspace| {
             workspace.project_projection(&fingerprint)
         })
     })
-    .await
+    .await;
+    #[cfg(feature = "native-webdriver")]
+    request.finish(result.is_ok());
+    result
 }
 
 #[tauri::command]

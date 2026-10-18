@@ -147,3 +147,61 @@ test('a truncated response records its parsing failure against the started reque
     }),
   );
 });
+
+// Run the exact function serialized by the native session, without replacing
+// any invocation inside the expression.
+test('page evaluation records entry, pending resolution and callback handoff', async () => {
+  const { evaluateInPage } = await import('../../tests/desktop/support/webdriver.mjs');
+  const stages = [];
+  const page = {
+    __TAURI_INTERNALS__: { callbacks: new Map([[7, () => {}]]) },
+    __AUTOSAR_DESKTOP_OBSERVER__: (sample) => stages.push({ ...sample }),
+  };
+  let resolve;
+  page.pending = new Promise((done) => (resolve = done));
+  vi.stubGlobal('window', page);
+  vi.stubGlobal('location', { href: 'tauri://localhost' });
+  vi.stubGlobal('document', { readyState: 'complete' });
+  try {
+    const result = new Promise((done) => evaluateInPage('window.pending', 41, done));
+    await Promise.resolve();
+    expect(stages.map(({ stage }) => stage)).toEqual(['entered']);
+    expect(page.__AUTOSAR_DESKTOP_EVALUATION__).toEqual(
+      expect.objectContaining({
+        id: 41,
+        nativeCallbacks: 1,
+        expression: 'window.pending',
+        readyState: 'complete',
+      }),
+    );
+    resolve({ native: 'unchanged' });
+    expect(await result).toEqual({ value: { native: 'unchanged' } });
+    expect(stages.map(({ stage }) => stage)).toEqual(['entered', 'resolved', 'callback']);
+    stages.length = 0;
+    const error = await new Promise((done) =>
+      evaluateInPage('Promise.reject(new Error("original"))', 42, done),
+    );
+    expect(error).toEqual({ error: 'Error: original' });
+    expect(stages.map(({ stage }) => stage)).toEqual(['entered', 'rejected', 'callback']);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test('an observer failure is retained without replacing the evaluated result', async () => {
+  const { evaluateInPage } = await import('../../tests/desktop/support/webdriver.mjs');
+  const page = {
+    __AUTOSAR_DESKTOP_OBSERVER__: () => {
+      throw new Error('observer lost');
+    },
+  };
+  vi.stubGlobal('window', page);
+  vi.stubGlobal('location', { href: 'tauri://localhost' });
+  vi.stubGlobal('document', { readyState: 'complete' });
+  try {
+    expect(await new Promise((done) => evaluateInPage('true', 43, done))).toEqual({ value: true });
+    expect(page.__AUTOSAR_DESKTOP_EVALUATION__.observerError).toBe('Error: observer lost');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

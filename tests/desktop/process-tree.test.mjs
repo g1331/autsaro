@@ -68,6 +68,23 @@ test('a failed transport still proves complete owned native process exit', async
       return response;
     };
     await assert.rejects(session.evaluate(expression), (error) => error === failure);
+    if (process.platform === 'linux') {
+      const owner = JSON.parse(await readFile(path.join(session.scratch, 'session.json'), 'utf8'));
+      const tree = await processTree(owner.driverPid);
+      const application = tree.find((item) => item.command === process.env.AUTOSAR_DESKTOP_APP);
+      assert(application, 'the stopped application must belong to this native session');
+      process.kill(application.pid, 'SIGSTOP');
+      await waitFor(
+        async () =>
+          (await processTree(owner.driverPid)).some(
+            (item) =>
+              item.pid === application.pid &&
+              item.identity === application.identity &&
+              item.state.startsWith('T'),
+          ),
+        'owned application stopped before failure-path cleanup',
+      );
+    }
   } finally {
     globalThis.fetch = originalFetch;
     if (injected) await assert.rejects(session.close(), (error) => error === failure);

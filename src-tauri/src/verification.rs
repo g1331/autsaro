@@ -17,6 +17,47 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::State;
 
 #[cfg(feature = "native-webdriver")]
+pub(crate) struct NativeRequest {
+    id: u64,
+    command: &'static str,
+}
+
+#[cfg(feature = "native-webdriver")]
+impl NativeRequest {
+    pub(crate) fn begin(command: &'static str) -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        let request = Self {
+            id: NEXT.fetch_add(1, Ordering::Relaxed),
+            command,
+        };
+        request.record("entered", None);
+        request
+    }
+
+    pub(crate) fn finish(self, ok: bool) {
+        self.record("returned", Some(ok));
+    }
+
+    fn record(&self, stage: &str, ok: Option<bool>) {
+        use std::io::Write;
+        // Keep native command receipt separate from WebView/driver delivery.
+        let _ = writeln!(
+            std::io::stderr(),
+            "AUTOSAR_NATIVE_REQUEST {}",
+            serde_json::json!({
+                "id": self.id,
+                "command": self.command,
+                "stage": stage,
+                "ok": ok,
+                "at": SystemTime::now().duration_since(UNIX_EPOCH).map(|at| at.as_millis()).ok(),
+                "pid": std::process::id(),
+            })
+        );
+    }
+}
+
+#[cfg(feature = "native-webdriver")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct OwnedFailure {
