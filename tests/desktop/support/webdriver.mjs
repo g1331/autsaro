@@ -24,18 +24,20 @@ export function evaluateInPage(expression, id, done) {
   observe('entered');
   Promise.resolve()
     .then(() => (0, eval)(expression))
-    .then(
-      (value) => {
-        observe('resolved');
-        observe('callback');
-        done({ value });
-      },
-      (error) => {
-        observe('rejected');
-        observe('callback');
-        done({ error: String(error) });
-      },
-    );
+    .then((value) => {
+      observe('resolved');
+      // Keep the complete result opaque to WebDriver's recursive JSON clone.
+      // Undefined has WebDriver's JSON-null representation, including properties.
+      return JSON.stringify({ value }, (_key, item) => (item === undefined ? null : item));
+    })
+    .catch((error) => {
+      observe('rejected');
+      return JSON.stringify({ error: String(error) });
+    })
+    .then((encoded) => {
+      observe('callback');
+      done(encoded);
+    });
 }
 
 export class WebDriver {

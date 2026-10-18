@@ -61,7 +61,11 @@ test('a failed transport still proves complete owned native process exit', async
       const response = await originalFetch(url, options);
       if (options?.body && JSON.parse(options.body).args?.[0] === expression) {
         const result = await response.json();
-        assert.equal(result.value.value.native, 'function', 'real native page evaluated first');
+        assert.equal(
+          JSON.parse(result.value).value.native,
+          'function',
+          'real native page evaluated first',
+        );
         injected = true;
         throw failure;
       }

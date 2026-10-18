@@ -175,13 +175,13 @@ test('page evaluation records entry, pending resolution and callback handoff', a
       }),
     );
     resolve({ native: 'unchanged' });
-    expect(await result).toEqual({ value: { native: 'unchanged' } });
+    expect(JSON.parse(await result)).toEqual({ value: { native: 'unchanged' } });
     expect(stages.map(({ stage }) => stage)).toEqual(['entered', 'resolved', 'callback']);
     stages.length = 0;
     const error = await new Promise((done) =>
       evaluateInPage('Promise.reject(new Error("original"))', 42, done),
     );
-    expect(error).toEqual({ error: 'Error: original' });
+    expect(JSON.parse(error)).toEqual({ error: 'Error: original' });
     expect(stages.map(({ stage }) => stage)).toEqual(['entered', 'rejected', 'callback']);
   } finally {
     vi.unstubAllGlobals();
@@ -199,8 +199,59 @@ test('an observer failure is retained without replacing the evaluated result', a
   vi.stubGlobal('location', { href: 'tauri://localhost' });
   vi.stubGlobal('document', { readyState: 'complete' });
   try {
-    expect(await new Promise((done) => evaluateInPage('true', 43, done))).toEqual({ value: true });
+    expect(JSON.parse(await new Promise((done) => evaluateInPage('true', 43, done)))).toEqual({
+      value: true,
+    });
     expect(page.__AUTOSAR_DESKTOP_EVALUATION__.observerError).toBe('Error: observer lost');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test('evaluation crosses WebDriver as opaque text without losing nested JSON values', async () => {
+  const { evaluateInPage } = await import('../../tests/desktop/support/webdriver.mjs');
+  const payload = Array.from({ length: 1000 }, (_, i) => ({
+    objectId: `object-${i}`,
+    fields: [{ value: `路径/"\\\n${i} Ω`, current: null, enabled: i % 2 === 0, count: i }],
+  }));
+  vi.stubGlobal('window', { payload });
+  vi.stubGlobal('location', { href: 'tauri://localhost' });
+  vi.stubGlobal('document', { readyState: 'complete' });
+  try {
+    const wire = await new Promise((done) => evaluateInPage('window.payload', 44, done));
+    expect(typeof wire).toBe('string');
+    expect(JSON.parse(wire)).toEqual({ value: payload });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test('evaluation serialization failures return one error callback instead of leaving a request pending', async () => {
+  const { evaluateInPage } = await import('../../tests/desktop/support/webdriver.mjs');
+  const payload = {};
+  payload.self = payload;
+  const stages = [];
+  vi.stubGlobal('window', {
+    payload,
+    __AUTOSAR_DESKTOP_OBSERVER__: (sample) => stages.push(sample.stage),
+  });
+  vi.stubGlobal('location', { href: 'tauri://localhost' });
+  vi.stubGlobal('document', { readyState: 'complete' });
+  const done = vi.fn();
+  try {
+    const encoded = await new Promise((resolve) =>
+      evaluateInPage('window.payload', 45, (value) => {
+        done(value);
+        resolve(value);
+      }),
+    );
+    expect(JSON.parse(encoded).error).toMatch(/TypeError.*circular/i);
+    expect(done).toHaveBeenCalledTimes(1);
+    expect(stages).toEqual(['entered', 'resolved', 'rejected', 'callback']);
+    const empty = await new Promise((resolve) =>
+      evaluateInPage('({missing:undefined, items:[undefined], value:NaN})', 46, resolve),
+    );
+    expect(JSON.parse(empty)).toEqual({ value: { missing: null, items: [null], value: null } });
   } finally {
     vi.unstubAllGlobals();
   }

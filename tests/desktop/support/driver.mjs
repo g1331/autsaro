@@ -711,10 +711,11 @@ export async function launch(name, { delayOperations = false } = {}) {
       return client.refresh(route(''));
     },
     async evaluate(expression) {
-      const result = await client.request('POST', route('/execute/async'), {
+      const encoded = await client.request('POST', route('/execute/async'), {
         script: `return (${evaluateInPage.toString()}).apply(null, arguments);`,
         args: [expression, ++nextEvaluation],
       });
+      const result = JSON.parse(encoded);
       if (result.error) throw new Error(result.error);
       return result.value;
     },
