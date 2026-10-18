@@ -39,6 +39,14 @@ Tauri 后端单测覆盖 Session、设置与请求归属，需先准备[桌面�
 
 Clippy 以默认规则集加 `-D warnings` 检查两个 crate，本地 `verify` 与 PR 使用相同参数。生成与集成模块（`core/src/generator.rs`、`core/src/integration/mod.rs`、`core/src/prepared.rs` 及其子模块）在模块属性中另外拒绝 `unwrap`、`expect`、`panic!` 以及 `core/clippy.toml` 列出的文本修补与文件嵌入：计划无法保证的前提返回 `PlanDiagnostic`，每个输出只渲染一次，受信模板经 `outputs::render` 编辑。确有理由的例外使用带 `reason` 的局部 `#[allow]`。启用门禁时其余模块遗留的告警以 `#[expect(.., reason = "clippy baseline #37: ...")]` 标记，`git grep -n "clippy baseline"` 列出剩余基线；修好告警后该 `#[expect]` 本身会报 `unfulfilled_lint_expectations`，须一并删除标记。CI 只在 Linux 运行 Clippy，Windows 专属的 `cfg` 代码不在门禁内。
 
+## 文档检查
+
+`uv run --locked python -m autosar_tooling quality --merge-base origin/master` 离线检查仓库 Markdown 的相对链接、图片和锚点（含引用式链接与显式 HTML ID），排除 `docs/project/archive/` 与 `third_party/`。链接目标必须来自 Git 文件集，不能依赖本机忽略的下载；官方 PDF 引用使用官方发布 URL。外部 URL 不发起网络检查。
+
+同一命令按 PR 分叉点检查根目录 `X.md`／`X.zh-CN.md` 是否成对修改，以及本次新增的 CHANGELOG 行是否为 `Breaking`／`Added`／`Changed`／`Fixed` 三级标题下、以 `(#N)` 结束的单行条目；双语内容仍由审阅核对。存量 CHANGELOG 条目留到发版整理。官方清单登记的文件名、`AUTOSAR_CP/FO/AP_*.pdf/zip` 和 `docs/official/` 下非 Markdown 文件不能提交，强制添加也会被检查。
+
+`quality --c-samples` 可通过 `AUTOSAR_CLANG_TIDY_REPORT` 指定原始诊断 JSON 的输出路径，记录 `rule`、`file`、`line`、`message`、`sample`。运行时文件映射到仓库路径，其他文件相对 `sample` 对应的样本根目录；保留各翻译单元的重复诊断和已有基线诊断。分析失败仍返回失败，报告可能只含已收集的部分结果，不能单凭报告存在判断分析完整或通过。未设置该变量时不写报告。
+
 ## 依赖与 workflow 检查
 
 ```powershell
