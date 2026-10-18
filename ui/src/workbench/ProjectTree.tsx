@@ -27,6 +27,9 @@ import { ObjectTreeContextMenu } from './ObjectMenu';
 import type { ObjectGroup, TreeNode } from './projectGroups';
 import { Tooltip } from './Tooltip';
 
+const rowHeight = 30;
+const overscan = 8;
+
 const objectIcons = new Map<string, LucideIcon>([
   ['AR-PACKAGE', FolderTree],
   ['ECUC-MODULE-CONFIGURATION-VALUES', Settings2],
@@ -51,6 +54,19 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
   useLayoutEffect(() => {
     actions.current = c;
   }, [c]);
+  const scroller = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<string | null>(null);
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const [viewport, setViewport] = useState({ top: 0, height: window.innerHeight });
+  useLayoutEffect(() => {
+    const tree = scroller.current;
+    if (!tree) return;
+    const observer = new ResizeObserver(() =>
+      setViewport({ top: tree.scrollTop, height: tree.clientHeight || window.innerHeight }),
+    );
+    observer.observe(tree);
+    return () => observer.disconnect();
+  }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(['group:bsw']));
   const index = useMemo(() => {
     const projection = c.projection;
@@ -103,17 +119,31 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
       revealed.add(ancestor);
       ancestor = index.parents.get(ancestor);
     }
-    const rows: { node: TreeNode; depth: number; parent: string | null; expanded: boolean }[] = [];
+    const rows: {
+      node: TreeNode;
+      depth: number;
+      parent: string | null;
+      expanded: boolean;
+      position: number;
+      siblings: number;
+    }[] = [];
     // A node is visible when it or a descendant matches the filter.
     const matches = (node: TreeNode): boolean =>
       node.children.some(matches) ||
       (node.type === 'object' &&
         (!query || Boolean(index.searchText.get(node.key)?.includes(query))));
     const visit = (nodes: TreeNode[], depth: number, parent: string | null) => {
-      for (const node of nodes) {
-        if (!matches(node)) continue;
+      const visible = nodes.filter(matches);
+      for (const [position, node] of visible.entries()) {
         const expanded = Boolean(query) || !collapsed.has(node.key) || revealed.has(node.key);
-        rows.push({ node, depth, parent, expanded });
+        rows.push({
+          node,
+          depth,
+          parent,
+          expanded,
+          position: position + 1,
+          siblings: visible.length,
+        });
         if (expanded) visit(node.children, depth + 1, node.key);
       }
     };
@@ -121,6 +151,68 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
     return { rows };
   }, [index, c.treeFilter, c.treeRevealId, collapsed]);
   const activeInRows = model.rows.some((row) => row.node.key === c.activeObjectId);
+  const scrollTop = Math.min(
+    viewport.top,
+    Math.max(0, model.rows.length * rowHeight - viewport.height),
+  );
+  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const end = Math.min(
+    model.rows.length,
+    Math.ceil((scrollTop + viewport.height) / rowHeight) + overscan,
+  );
+  const mounted = useMemo(() => {
+    const positions = new Set(
+      Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i),
+    );
+    // Retain a focused row if the user scrolls it out of view.
+    const focused = model.rows.findIndex((row) => row.node.key === focusedKey);
+    if (focused >= 0) positions.add(focused);
+    return [...positions].sort((a, b) => a - b);
+  }, [model, start, end, focusedKey]);
+  const activeMounted = mounted.some((i) => model.rows[i].node.key === c.activeObjectId);
+  function revealRow(position: number) {
+    const tree = scroller.current;
+    if (!tree || position < 0) return;
+    const top = position * rowHeight;
+    const height = tree.clientHeight || viewport.height;
+    const next =
+      top < tree.scrollTop
+        ? top
+        : top + rowHeight > tree.scrollTop + height
+          ? top + rowHeight - height
+          : tree.scrollTop;
+    tree.scrollTop = next;
+    setViewport({ top: next, height });
+  }
+  function focusRow(position: number) {
+    const row = model.rows[position];
+    if (!row) return;
+    pendingFocus.current = row.node.key;
+    revealRow(position);
+  }
+  useLayoutEffect(() => {
+    const key = pendingFocus.current;
+    if (!key) return;
+    const row = [
+      ...(scroller.current?.querySelectorAll<HTMLElement>('[data-tree-key]') ?? []),
+    ].find((row) => row.dataset.treeKey === key);
+    if (row) {
+      pendingFocus.current = null;
+      row.focus();
+    }
+  });
+  const revealPosition = c.treeRevealId
+    ? model.rows.findIndex((row) => row.node.key === c.treeRevealId)
+    : -1;
+  useLayoutEffect(() => {
+    if (revealPosition < 0 || c.treeMode !== 'objects') return;
+    const tree = scroller.current;
+    if (!tree) return;
+    const height = tree.clientHeight || window.innerHeight;
+    tree.scrollTop = Math.max(0, revealPosition * rowHeight - height / 2);
+    // Dispatch the same scroll event as user scrolling; measurement belongs to the viewport.
+    tree.dispatchEvent(new Event('scroll'));
+  }, [revealPosition, c.treeMode]);
   const objectRows = useMemo(() => {
     if (c.treeMode !== 'objects') return null;
     const toggle = (key: string, expanded: boolean) => {
@@ -132,7 +224,15 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
         return next;
       });
     };
-    return model.rows.map(({ node, depth, parent, expanded }, position) => {
+    return mounted.map((position) => {
+      const {
+        node,
+        depth,
+        parent,
+        expanded,
+        position: siblingPosition,
+        siblings,
+      } = model.rows[position];
       const name =
         node.type === 'group'
           ? t(groupLabelKeys[node.group], { lng: language })
@@ -150,8 +250,12 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
         <div
           key={node.key}
           role="treeitem"
-          tabIndex={c.activeObjectId === node.key || (!activeInRows && position === 0) ? 0 : -1}
+          tabIndex={
+            c.activeObjectId === node.key || (!activeMounted && position === mounted[0]) ? 0 : -1
+          }
           aria-level={depth}
+          aria-posinset={siblingPosition}
+          aria-setsize={siblings}
           aria-selected={object ? c.objectSelection.includes(object.objectId) : undefined}
           aria-label={name}
           aria-description={[object?.kind, ...markText].filter(Boolean).join(' · ') || undefined}
@@ -167,7 +271,12 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
           data-parent-key={parent ?? undefined}
           data-object-id={object?.objectId}
           className={node.type === 'group' ? 'tree-row tree-group' : 'tree-row'}
-          style={{ paddingLeft: `${depth * 12}px` }}
+          style={{
+            paddingLeft: `${depth * 12}px`,
+            position: 'absolute',
+            top: position * rowHeight,
+            height: rowHeight,
+          }}
           onClick={(event) => select(event.ctrlKey || event.metaKey)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
@@ -216,7 +325,8 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
     c.treeMode,
     c.objectSelection,
     c.activeObjectId,
-    activeInRows,
+    activeMounted,
+    mounted,
     language,
     t,
   ]);
@@ -233,16 +343,23 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
       document.activeElement instanceof HTMLElement
         ? document.activeElement.closest<HTMLElement>('[role="treeitem"]')
         : null;
-    const index = active ? rows.indexOf(active) : -1;
+    const objectMode = c.treeMode === 'objects';
+    const index = objectMode
+      ? model.rows.findIndex((row) => row.node.key === active?.dataset.treeKey)
+      : active
+        ? rows.indexOf(active)
+        : -1;
+    const length = objectMode ? model.rows.length : rows.length;
+    const focus = (position: number) => (objectMode ? focusRow(position) : rows[position]?.focus());
     if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       event.preventDefault();
       const next =
         event.key === 'Home'
           ? 0
           : event.key === 'End'
-            ? rows.length - 1
-            : Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
-      rows[next]?.focus();
+            ? length - 1
+            : Math.max(0, Math.min(length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+      focus(next);
     } else if (active && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
       event.preventDefault();
       const id = active.dataset.treeKey;
@@ -255,9 +372,13 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
         return next;
       });
       if (event.key === 'ArrowRight' && active.getAttribute('aria-expanded') === 'true')
-        rows[index + 1]?.focus();
+        focus(index + 1);
       if (event.key === 'ArrowLeft' && active.getAttribute('aria-expanded') !== 'true')
-        rows.find((row) => row.dataset.treeKey === active.dataset.parentKey)?.focus();
+        focus(
+          objectMode
+            ? model.rows.findIndex((row) => row.node.key === active.dataset.parentKey)
+            : rows.findIndex((row) => row.dataset.treeKey === active.dataset.parentKey),
+        );
     }
   }
   return (
@@ -305,7 +426,19 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
           objects={c.treeMode === 'objects' ? index.byId : null}
         >
           <div
+            ref={scroller}
             className="tree-content"
+            onScroll={(event) =>
+              setViewport({
+                top: event.currentTarget.scrollTop,
+                height: event.currentTarget.clientHeight || window.innerHeight,
+              })
+            }
+            onFocusCapture={(event) =>
+              setFocusedKey(
+                event.target.closest<HTMLElement>('[data-tree-key]')?.dataset.treeKey ?? null,
+              )
+            }
             role="tree"
             aria-label={
               c.treeMode === 'objects' ? t('editor.objects.heading') : t('editor.tree.sourceFiles')
@@ -313,32 +446,39 @@ export function ProjectTree({ controller: c }: { controller: Workbench }) {
             aria-multiselectable
             onKeyDown={keyboard}
           >
-            {c.treeMode === 'objects'
-              ? objectRows
-              : sources.map((source, index) => (
-                  <button
-                    key={source.sourceId}
-                    type="button"
-                    role="treeitem"
-                    tabIndex={
-                      c.activeSourceId === source.sourceId || (!activeSourceInRows && index === 0)
-                        ? 0
-                        : -1
-                    }
-                    aria-level={1}
-                    aria-selected={c.activeSourceId === source.sourceId}
-                    className="tree-row ghost-button"
-                    onClick={() => void c.readSource(source.sourceId)}
-                  >
-                    <FileCode2 size={iconSize.inline} aria-hidden="true" />
-                    <span className="tree-name" title={displayPath(source.path)}>
-                      {labelFromPath(source.path)}
-                    </span>
-                    <small>
-                      {source.readonly ? t('editor.common.readonly') : t('editor.tree.source')}
-                    </small>
-                  </button>
-                ))}
+            {c.treeMode === 'objects' ? (
+              <div
+                role="presentation"
+                style={{ position: 'relative', height: model.rows.length * rowHeight }}
+              >
+                {objectRows}
+              </div>
+            ) : (
+              sources.map((source, index) => (
+                <button
+                  key={source.sourceId}
+                  type="button"
+                  role="treeitem"
+                  tabIndex={
+                    c.activeSourceId === source.sourceId || (!activeSourceInRows && index === 0)
+                      ? 0
+                      : -1
+                  }
+                  aria-level={1}
+                  aria-selected={c.activeSourceId === source.sourceId}
+                  className="tree-row ghost-button"
+                  onClick={() => void c.readSource(source.sourceId)}
+                >
+                  <FileCode2 size={iconSize.inline} aria-hidden="true" />
+                  <span className="tree-name" title={displayPath(source.path)}>
+                    {labelFromPath(source.path)}
+                  </span>
+                  <small>
+                    {source.readonly ? t('editor.common.readonly') : t('editor.tree.source')}
+                  </small>
+                </button>
+              ))
+            )}
             {!c.projection ? <p className="empty-state">{t('editor.tree.loading')}</p> : null}
           </div>
         </ObjectTreeContextMenu>

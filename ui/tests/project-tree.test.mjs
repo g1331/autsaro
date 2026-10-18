@@ -345,3 +345,56 @@ test('touch long press resolves the row and rejects readonly objects', () => {
     vi.useRealTimers();
   }
 });
+
+test('large trees bound mounted rows while keyboard and reveal reach the complete logical tree', () => {
+  const many = Array.from({ length: 500 }, (_, i) =>
+    object(`type${i}`, null, 'IMPLEMENTATION-DATA-TYPE', `Type${String(i).padStart(3, '0')}`),
+  );
+  const controller = controllerFor({
+    projection: { objects: many, fields: [], sources: [], diagnostics: [] },
+  });
+  const view = render(createElement(ProjectTree, { controller }));
+  const tree = view.getByRole('tree');
+  expect(view.getAllByRole('treeitem').length).toBeLessThan(60);
+  expect(tree.firstElementChild.style.height).toBe('15030px');
+  const first = view.getByRole('treeitem', { name: 'Types' });
+  act(() => first.focus());
+  fireEvent.keyDown(first, { key: 'End' });
+  const last = view.getByRole('treeitem', { name: 'Type499' });
+  expect(document.activeElement).toBe(last);
+  expect(last.getAttribute('aria-posinset')).toBe('500');
+  expect(last.getAttribute('aria-setsize')).toBe('500');
+  expect(tree.scrollTop).toBeGreaterThan(14000);
+  fireEvent.keyDown(last, { key: 'ArrowUp' });
+  expect(document.activeElement).toBe(view.getByRole('treeitem', { name: 'Type498' }));
+  fireEvent.keyDown(document.activeElement, { key: 'ArrowLeft' });
+  expect(document.activeElement).toBe(view.getByRole('treeitem', { name: 'Types' }));
+  expect(tree.scrollTop).toBe(0);
+  view.rerender(
+    createElement(ProjectTree, { controller: { ...controller, treeRevealId: 'type400' } }),
+  );
+  expect(view.getByRole('treeitem', { name: 'Type400' })).toBeTruthy();
+  expect(view.getAllByRole('treeitem').length).toBeLessThan(60);
+});
+
+test('scrolling retains focus and filtering a distant viewport still mounts its matches', () => {
+  const many = Array.from({ length: 500 }, (_, i) =>
+    object(`type${i}`, null, 'IMPLEMENTATION-DATA-TYPE', `Type${String(i).padStart(3, '0')}`),
+  );
+  const controller = controllerFor({
+    projection: { objects: many, fields: [], sources: [], diagnostics: [] },
+  });
+  const view = render(createElement(ProjectTree, { controller }));
+  const tree = view.getByRole('tree');
+  const first = view.getByRole('treeitem', { name: 'Type000' });
+  act(() => first.focus());
+  fireEvent.scroll(tree, { target: { scrollTop: 14000 } });
+  expect(document.activeElement).toBe(first);
+  expect(view.getByRole('treeitem', { name: 'Type499' })).toBeTruthy();
+  expect(view.getAllByRole('treeitem').length).toBeLessThan(60);
+  view.rerender(
+    createElement(ProjectTree, { controller: { ...controller, treeFilter: 'Type200' } }),
+  );
+  expect(view.getByRole('treeitem', { name: 'Type200' })).toBeTruthy();
+  expect(view.getAllByRole('treeitem')).toHaveLength(2);
+});

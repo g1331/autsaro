@@ -693,6 +693,8 @@ export async function launch(name, { delayOperations = false } = {}) {
   const pressed = {
     Escape: '',
     Tab: '',
+    Home: '\uE011',
+    End: '\uE010',
     ArrowDown: '',
     ArrowUp: '',
     ArrowLeft: '',

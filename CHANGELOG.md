@@ -12,7 +12,7 @@
 
 ### Fixed
 
-- Native graph construction indexes short names once per document instead of repeatedly scanning wide sibling lists for every descendant; object paths, source bytes and public interfaces are unchanged. Desktop WebDriver logs retain complete pending requests and failure outcomes, stopped applications exit through owned cleanup, and the project tree shares one context-menu keyboard listener instead of registering one per object row (#311)
+- Native graph construction indexes short names once per document instead of repeatedly scanning wide sibling lists for every descendant; object paths, source bytes and public interfaces are unchanged. Desktop WebDriver logs retain complete pending requests and failure outcomes, stopped applications exit through owned cleanup, and the project tree shares one context-menu keyboard listener and mounts only viewport rows while preserving full search, scroll and keyboard reachability (#311)
 
 - Linux native stack observations acquire completed actor registrations, and concurrent host shutdown callers use their own inactive ISR identity; regenerate sealed ECU projects to receive the synchronization fix (#317)
 
