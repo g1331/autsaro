@@ -7,6 +7,7 @@ cargo install cargo-llvm-cov --version 0.9.1 --locked
 rustup component add llvm-tools-preview
 npm ci --prefix ui
 npm run build --prefix ui
+cargo llvm-cov clean --workspace
 cargo llvm-cov --locked --workspace --no-fail-fast --no-report
 cargo llvm-cov report --html --output-dir build/coverage/rust
 cargo llvm-cov report --json --output-path build/coverage/rust/coverage.json
@@ -17,7 +18,7 @@ uv run --locked --group coverage coverage html
 uv run --locked --group coverage coverage json
 ```
 
-HTML 入口分别是 `build/coverage/rust/html/index.html`、`build/coverage/ui/index.html`、`build/coverage/python/html/index.html`；同目录的 JSON 用于按文件查看未执行行，UI 另有 `lcov.info`。输出位于已忽略的 `build/`，不提交报告。Rust 每次运行会清理旧测量数据；Python 与 Vitest 默认覆盖上次结果，避免把不同版本的执行混在一起。
+HTML 入口分别是 `build/coverage/rust/html/index.html`、`build/coverage/ui/index.html`、`build/coverage/python/html/index.html`；同目录的 JSON 用于按文件查看未执行行，UI 另有 `lcov.info`。输出位于已忽略的 `build/`，不提交报告。Rust 每次独立测量先显式清理旧测量数据（`--no-report` 会保留数据用于后续报告，不能依赖隐式清理）；Python 与 Vitest 默认覆盖上次结果，避免把不同版本的执行混在一起。
 
 Rust 测量 core 与 src-tauri 默认测试的行、区域和函数，不宣称分支覆盖；稳定工具链不测量 doctest；不包含 `native-tests`、`official-oracles`、原生 GUI／IPC 或生成 C 运行时。需要单独调查原生路径时，可在同一 Cargo 命令追加 `--features native-tests`，先准备[原生工具](native.md)，将结果与默认报告分开保存。
 
