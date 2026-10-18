@@ -815,3 +815,105 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
         std::fs::write(path, original).unwrap();
     }
 }
+
+#[test]
+fn bsw_description_native_widths_and_added_api_signatures_match_public_headers() {
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    let scratch = Scratch::new();
+    for (path, bytes) in &files {
+        let target = scratch.0.join(path);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(target, bytes).unwrap();
+    }
+    let description = files
+        .iter()
+        .find(|(path, _)| path == "generated/descriptions/Host_Implementation.arxml")
+        .unwrap();
+    let document =
+        roxmltree::Document::parse(std::str::from_utf8(&description.1).unwrap()).unwrap();
+    let mut consumer = String::from(
+        r#"#include <limits.h>
+#include "Arti.h"
+#include "Os.h"
+#include "Can.h"
+#include "CanIf.h"
+#include "CanTp.h"
+#include "Com.h"
+#include "ComM.h"
+#include "Dcm.h"
+#include "PduR.h"
+#include "LSduR.h"
+void (*can_disable)(uint8) = Can_DisableControllerInterrupts;
+Std_ReturnType (*canif_count)(uint8, uint8 *) = CanIf_GetControllerRxErrorCounter;
+Std_ReturnType (*cancel_tx)(PduIdType) = CanTp_CancelTransmit;
+uint8 (*invalidate)(Com_SignalIdType) = Com_InvalidateSignal;
+Std_ReturnType (*request_mode)(ComM_UserHandleType, ComM_ModeType) = ComM_RequestComMode;
+Std_ReturnType (*security_level)(Dcm_SecLevelType *) = Dcm_GetSecurityLevel;
+void (*disable_route)(PduR_RoutingPathGroupIdType, boolean) = PduR_DisableRouting;
+LSduR_PBConfigIdType (*routing_configuration)(void) = LSduR_GetConfigurationId;
+"#,
+    );
+    for (index, native) in [
+        "Arti_AddressCapture",
+        "AlarmBaseRefType",
+        "TaskRefType",
+        "Com_StatusType",
+        "ComM_InitStatusType *",
+        "ComM_UserHandleType",
+        "PduR_PBConfigIdType",
+        "Dcm_SecLevelType *",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let base = document
+            .descendants()
+            .find(|node| {
+                node.has_tag_name("SW-BASE-TYPE")
+                    && node.children().any(|child| {
+                        child.has_tag_name("NATIVE-DECLARATION") && child.text() == Some(native)
+                    })
+            })
+            .unwrap_or_else(|| panic!("missing {native}"));
+        let bits = base
+            .children()
+            .find(|node| node.has_tag_name("BASE-TYPE-SIZE"))
+            .unwrap()
+            .text()
+            .unwrap()
+            .parse::<u32>()
+            .unwrap();
+        consumer.push_str(&format!(
+            "typedef char width_{index}[(sizeof({native}) * CHAR_BIT == {bits}u) ? 1 : -1];\n"
+        ));
+    }
+    std::fs::write(scratch.0.join("consumer.c"), consumer).unwrap();
+    let mut compiler = tooling::c_compiler();
+    compiler.current_dir(&scratch.0).args([
+        "-std=c99",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-Igenerated/include",
+        "-Ibsw/include",
+        "-Ios/include",
+        "-Iintegration/include",
+        "-c",
+        "consumer.c",
+        "-o",
+        "consumer.o",
+    ]);
+    let output = tooling::run_public_command(
+        &mut compiler,
+        &scratch.0,
+        "bsw-description-consumer",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

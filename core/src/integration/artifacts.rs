@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// The one exclusive area a module declares and enters (ADR 0018). A module is added
 /// here when its code stops using another module's area.
-fn exclusive_area(module: &str) -> Option<&'static str> {
+pub(super) fn exclusive_area(module: &str) -> Option<&'static str> {
     match module {
         "BswM" => Some("BSWM_STATE"),
         "Can" => Some("CAN_STATE"),
@@ -17,6 +17,7 @@ fn exclusive_area(module: &str) -> Option<&'static str> {
         "Det" => Some("DET_STATE"),
         "LSduR" => Some("LSDUR_STATE"),
         "PduR" => Some("PDUR_STATE"),
+        "Ecu_HostBusSM" => Some("CAN_HOST_AREA_BUSSM"),
         "Rte" => Some("SCHM_MODE"),
         _ => None,
     }
@@ -26,9 +27,12 @@ fn exclusive_area(module: &str) -> Option<&'static str> {
 /// directly or through a helper of the same file. ADR 0018 attaches `canEnter`
 /// only to entries that enter; generated wrappers keep it.
 fn non_entering_functions(module: &str) -> BTreeSet<String> {
-    let Some(asset) =
-        crate::resources::AssetInventory::embedded().get(&format!("runtime/bsw/src/{module}.c"))
-    else {
+    let path = if module == "Ecu_HostBusSM" {
+        "runtime/host/src/Ecu_HostBusSM.c".to_owned()
+    } else {
+        format!("runtime/bsw/src/{module}.c")
+    };
+    let Some(asset) = crate::resources::AssetInventory::embedded().get(&path) else {
         return BTreeSet::new();
     };
     // `lines` also drops the CR of CRLF sources.
@@ -64,7 +68,10 @@ fn non_entering_functions(module: &str) -> BTreeSet<String> {
     };
     let mut entering: BTreeSet<String> = bodies
         .iter()
-        .filter(|(_, text)| text.contains(&format!("SchM_Enter_{module}_")))
+        .filter(|(_, text)| {
+            text.contains(&format!("SchM_Enter_{module}_"))
+                || (module == "Ecu_HostBusSM" && text.contains("Ecu_HostBusSM_Enter("))
+        })
         .map(|(name, _)| name.clone())
         .collect();
     loop {
@@ -143,12 +150,60 @@ fn rte_symbol(name: &str, return_type: &str, args: &[(&str, &str, &str)]) -> Sym
     }
 }
 
+fn validate_areas(delivered: &BTreeMap<&str, &[u8]>) -> Result<(), Vec<PlanDiagnostic>> {
+    for module in [
+        "BswM", "Can", "CanIf", "CanTp", "Com", "ComM", "Dcm", "Det", "LSduR", "PduR",
+    ] {
+        let path = format!("generated/include/SchM_{module}.h");
+        let bytes = delivered
+            .get(path.as_str())
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&path))?;
+        let text = std::str::from_utf8(bytes).map_err(|_| PlanDiagnostic::plan_premise(&path))?;
+        let actual: BTreeSet<_> = super::module_contracts::declarations(text)?
+            .into_iter()
+            .filter(|entry| {
+                entry.name.starts_with("SchM_Enter_") || entry.name.starts_with("SchM_Exit_")
+            })
+            .map(|entry| entry.name)
+            .collect();
+        let area = exclusive_area(module).ok_or_else(|| PlanDiagnostic::plan_premise(module))?;
+        let expected = BTreeSet::from([
+            format!("SchM_Enter_{module}_{area}"),
+            format!("SchM_Exit_{module}_{area}"),
+        ]);
+        if actual != expected {
+            return Err(PlanDiagnostic::plan_premise(&path));
+        }
+        for (&source_path, bytes) in delivered.iter().filter(|(path, _)| path.ends_with(".c")) {
+            let source = std::str::from_utf8(bytes)
+                .map_err(|_| PlanDiagnostic::plan_premise(source_path))?;
+            for prefix in [
+                format!("SchM_Enter_{module}_"),
+                format!("SchM_Exit_{module}_"),
+            ] {
+                for (at, _) in source.match_indices(&prefix) {
+                    let symbol: String = source[at..]
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                        .collect();
+                    if !expected.contains(&symbol) {
+                        return Err(PlanDiagnostic::plan_premise(source_path));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Product implementation descriptions reference only the sealed project's actual files.
 /// They describe this host profile, not an ICC3 or complete standard API certification.
 pub(super) fn files(
     plan: &PlanDescription,
-    sources: &std::collections::BTreeSet<String>,
+    delivered: &BTreeMap<&str, &[u8]>,
 ) -> Result<BTreeMap<String, Vec<u8>>, Vec<PlanDiagnostic>> {
+    let sources: BTreeSet<String> = delivered.keys().map(|path| (*path).to_owned()).collect();
+    validate_areas(delivered)?;
     let mut entries: BTreeMap<String, Vec<SymbolContract>> = BTreeMap::new();
     for symbol in &plan.symbols {
         if symbol.definition_owner.starts_with("application/") {
@@ -711,6 +766,91 @@ pub(super) fn files(
             symbol.definition_owner = "src/SchM_Main.c".into();
         }
     }
+    let mut public_contracts = BTreeMap::new();
+    for (&path, bytes) in delivered {
+        if !(path.starts_with("bsw/include/") && path.ends_with(".h"))
+            && !matches!(
+                path,
+                "os/include/Os.h"
+                    | "os/include/Os_Hooks.h"
+                    | "os/include/Arti.h"
+                    | "generated/include/Det_Externals.h"
+                    | "integration/include/Ecu_HostBusSM.h"
+            )
+        {
+            continue;
+        }
+        let source = std::str::from_utf8(bytes).map_err(|_| PlanDiagnostic::plan_premise(path))?;
+        for declaration in super::module_contracts::declarations(source)? {
+            if declaration.name.starts_with("SchM_") {
+                continue;
+            }
+            let module = if path == "integration/include/Ecu_HostBusSM.h" {
+                "Ecu_HostBusSM"
+            } else if path == "generated/include/Det_Externals.h" {
+                "Rte"
+            } else if matches!(path, "os/include/Os.h" | "os/include/Os_Hooks.h") {
+                "Os"
+            } else if path == "os/include/Arti.h" {
+                "Arti"
+            } else {
+                declaration.name.split('_').next().unwrap_or("")
+            };
+            let name = declaration.name.clone();
+            let contract = entries.entry(module.into()).or_default();
+            let signature = super::catalog::SymbolContract {
+                symbol: name.clone(),
+                return_type: declaration.result.clone(),
+                arguments: declaration.arguments.clone(),
+                declaration_owner: path.into(),
+                definition_owner: format!("bsw/src/{module}.c"),
+                consumers: Vec::new(),
+            };
+            if let Some(existing) = contract.iter_mut().find(|entry| entry.symbol == name) {
+                existing.return_type = signature.return_type;
+                existing.arguments = signature.arguments;
+                existing.declaration_owner = signature.declaration_owner;
+            } else {
+                contract.push(signature);
+            }
+            public_contracts.insert(name, declaration.documentation);
+        }
+    }
+    for contracts in entries.values_mut() {
+        contracts.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+        contracts.dedup_by(|a, b| a.symbol == b.symbol);
+    }
+    for (&path, bytes) in delivered.iter().filter(|(path, _)| {
+        path.starts_with("generated/include/Rte") || path.starts_with("generated/include/SchM_")
+    }) {
+        let source = std::str::from_utf8(bytes).map_err(|_| PlanDiagnostic::plan_premise(path))?;
+        for declaration in super::module_contracts::declarations(source)? {
+            if declaration.name.contains("_MainFunction") {
+                let module = declaration.name.split('_').next().unwrap_or("");
+                let contracts = entries.entry(module.into()).or_default();
+                if !contracts
+                    .iter()
+                    .any(|entry| entry.symbol == declaration.name)
+                {
+                    contracts.push(SymbolContract {
+                        symbol: declaration.name.clone(),
+                        return_type: declaration.result.clone(),
+                        arguments: declaration.arguments.clone(),
+                        declaration_owner: path.into(),
+                        definition_owner: format!("bsw/src/{module}.c"),
+                        consumers: Vec::new(),
+                    });
+                }
+            }
+            if entries
+                .values()
+                .flatten()
+                .any(|entry| entry.symbol == declaration.name)
+            {
+                public_contracts.insert(declaration.name, declaration.documentation);
+            }
+        }
+    }
     let natives: BTreeSet<_> = entries
         .values()
         .flatten()
@@ -725,6 +865,8 @@ pub(super) fn files(
         .enumerate()
         .map(|(i, t)| (t, i))
         .collect();
+    let aliases = super::module_contracts::native_aliases(delivered)
+        .ok_or_else(|| PlanDiagnostic::plan_premise("delivered type aliases"))?;
     let mut elements = String::new();
     for (native, i) in &types {
         // Base types retain their C object size; array parameters decay only in the signature.
@@ -738,7 +880,9 @@ pub(super) fn files(
                 })
                 .map(|datatype| datatype.native_type.as_str())
                 .unwrap_or(native);
-        let bits = if native.contains('*') || matches!(native.as_str(), "size_t" | "uint64_t") {
+        let bits = if let Some(bits) = super::module_contracts::native_bits(native, &aliases) {
+            bits
+        } else if native.contains('*') || matches!(native.as_str(), "size_t" | "uint64_t") {
             64
         } else if matches!(
             native.as_str(),
@@ -824,6 +968,7 @@ pub(super) fn files(
     ];
     let composition = plan.ecu_composition()?;
     let mut selected_packages = String::new();
+    let mut manuals = BTreeMap::new();
     let mut private_entries = String::new();
     for &module in modules {
         let package = if module == "Ecu_HostBusSM" {
@@ -866,6 +1011,8 @@ pub(super) fn files(
                                 | "SchM_Diagnostic_Host.c"
                                 | "SchM_Host.c"
                                 | "Ecu_RuntimeConfig.c"
+                                | "Det_Callouts.c"
+                                | "Det_Externals.h"
                                 | "Rte_MemMap.h"
                         )
                 } else {
@@ -882,11 +1029,14 @@ pub(super) fn files(
                                 | "integration/src/Can_HostLock.c"
                                 | "integration/src/Can_HostLock.h"
                         ))
+                        || (module == "Det" && matches!(name, "Det_Callouts.c" | "Det_Externals.h"))
                         || *name == format!("{module}.c")
                         || *name == format!("{module}_PBcfg.c")
                         || *name == format!("{module}_Cfg.h")
                         || (matches!(module, "CanIf" | "LSduR" | "PduR") && name == "Rte_MemMap.h")
                         || *name == format!("{module}.h")
+                        || (name.starts_with(&format!("{module}_")) && name.ends_with(".h"))
+                        || name.starts_with(&format!("SchM_{module}_Host"))
                         || *name == format!("SchM_{module}.h")
                         || (matches!(module, "Com" | "ComM") && name == "Ecu_RuntimeConfig.c")
                 }
@@ -957,23 +1107,46 @@ pub(super) fn files(
                         | "Com_TriggerTransmit"
                         | "ComM_BusSM_ModeIndication"
                         | "BswM_ComM_CurrentMode"
+                        | "ComM_EcuM_WakeUpIndication"
+                        | "ComM_CommunicationAllowed"
+                        | "Ecu_HostBusSM_ControllerModeIndication"
+                        | "Ecu_HostBusSM_ControllerBusOff"
                 );
-            let call_type = if callback {
+            let hook = matches!(
+                name.as_str(),
+                "StartupHook" | "ShutdownHook" | "ErrorHook" | "PreTaskHook" | "PostTaskHook"
+            );
+            let callout = hook
+                || matches!(
+                    name.as_str(),
+                    "Ecu_DetRuntimeCallout" | "Ecu_HostBusSM_ApplyMode"
+                );
+            let main = scheduled.is_some() || name.contains("_MainFunction");
+            let call_type = if callout {
+                "CALLOUT"
+            } else if callback {
                 "CALLBACK"
-            } else if scheduled.is_some() {
+            } else if main {
                 "SCHEDULED"
             } else {
                 "REGULAR"
             };
-            let entity_type = if scheduled.is_some() {
+            let entity_type = if main {
                 "BSW-SCHEDULABLE-ENTITY"
             } else {
                 "BSW-CALLED-ENTITY"
             };
             let (reentrant, synchronous) = super::catalog::selected_behavior(name);
             let mut entry_xml = String::new();
+            let context = if hook {
+                "HOOK"
+            } else if main {
+                "TASK"
+            } else {
+                "UNSPECIFIED"
+            };
             let implementation_policy = "<SW-SERVICE-IMPL-POLICY>STANDARD</SW-SERVICE-IMPL-POLICY><BSW-ENTRY-KIND>CONCRETE</BSW-ENTRY-KIND>";
-            entry_xml.push_str(&format!("<BSW-MODULE-ENTRY><SHORT-NAME>{name}</SHORT-NAME><IS-REENTRANT>{reentrant}</IS-REENTRANT><IS-SYNCHRONOUS>{synchronous}</IS-SYNCHRONOUS><CALL-TYPE>{call_type}</CALL-TYPE><EXECUTION-CONTEXT>UNSPECIFIED</EXECUTION-CONTEXT>{implementation_policy}{fields}</BSW-MODULE-ENTRY>"));
+            entry_xml.push_str(&format!("<BSW-MODULE-ENTRY><SHORT-NAME>{name}</SHORT-NAME><IS-REENTRANT>{reentrant}</IS-REENTRANT><IS-SYNCHRONOUS>{synchronous}</IS-SYNCHRONOUS><CALL-TYPE>{call_type}</CALL-TYPE><EXECUTION-CONTEXT>{context}</EXECUTION-CONTEXT>{implementation_policy}{fields}</BSW-MODULE-ENTRY>"));
             if entry_package == "Autsaro_Rte" {
                 private_entries.push_str(&entry_xml);
             } else {
@@ -1025,6 +1198,7 @@ pub(super) fn files(
         let mut expected = String::new();
         let mut dependencies = String::new();
         let mut imported_entries: Vec<(&str, &str)> = match module {
+            "Det" => vec![("Rte", "Ecu_DetRuntimeCallout")],
             "Rte" => vec![
                 ("Com", "Com_ReceiveSignal"),
                 ("Com", "Com_SendSignal"),
@@ -1140,7 +1314,12 @@ pub(super) fn files(
             } else {
                 owners.insert(owner);
             }
-            let entry_ref = { format!("/AUTOSAR_{owner}/BswModuleEntrys/{name}") };
+            let entry_package = if owner == "Rte" && name == "Ecu_DetRuntimeCallout" {
+                "Autsaro_Rte".to_owned()
+            } else {
+                format!("AUTOSAR_{owner}")
+            };
+            let entry_ref = format!("/{entry_package}/BswModuleEntrys/{name}");
             expected.push_str(&format!("<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST=\"BSW-MODULE-ENTRY\">{entry_ref}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>"));
         }
         if module == "Dcm" && plan.diagnostic_transport.is_some() {
@@ -1315,8 +1494,16 @@ pub(super) fn files(
         };
         selected_packages.push_str(&format!("<AR-PACKAGE><SHORT-NAME>{package}</SHORT-NAME><ELEMENTS>{body}</ELEMENTS>{entry_package}</AR-PACKAGE>"));
 
+        let manual = super::module_documentation::module(
+            plan,
+            module,
+            &paths,
+            contracts,
+            &public_contracts,
+            &mut manuals,
+        )?;
         docs.push_str(&format!(
-            "| {module} | {} |\n",
+            "| {manual} | {} |\n",
             paths
                 .iter()
                 .map(|p| format!("`{p}`"))
@@ -1342,7 +1529,7 @@ pub(super) fn files(
 <AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>HostArtifacts</SHORT-NAME><ELEMENTS>{elements}</ELEMENTS></AR-PACKAGE>{selected_packages}</AR-PACKAGES></AUTOSAR>
 "#
     );
-    Ok(BTreeMap::from([
+    manuals.extend([
         (
             "generated/descriptions/Host_Implementation.arxml".into(),
             description.into_bytes(),
@@ -1351,5 +1538,53 @@ pub(super) fn files(
             "generated/descriptions/MODULES.md".into(),
             docs.into_bytes(),
         ),
-    ]))
+    ]);
+    Ok(manuals)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mismatched_schm_declarations_and_calls_are_rejected_before_delivery() {
+        let fixture = [
+            ("BswM", "BSWM_STATE"),
+            ("Can", "CAN_STATE"),
+            ("CanIf", "CANIF_STATE"),
+            ("CanTp", "CANTP_STATE"),
+            ("Com", "COM_STATE"),
+            ("ComM", "COMM_STATE"),
+            ("Dcm", "DCM_STATE"),
+            ("Det", "DET_STATE"),
+            ("LSduR", "LSDUR_STATE"),
+            ("PduR", "PDUR_STATE"),
+        ];
+        let mut headers: BTreeMap<String, Vec<u8>> = fixture.into_iter().map(|(module, area)| (
+            format!("generated/include/SchM_{module}.h"),
+            format!("void SchM_Enter_{module}_{area}(void);\nvoid SchM_Exit_{module}_{area}(void);\n").into_bytes(),
+        )).collect();
+        let validate = |headers: &BTreeMap<String, Vec<u8>>| {
+            validate_areas(
+                &headers
+                    .iter()
+                    .map(|(path, bytes)| (path.as_str(), bytes.as_slice()))
+                    .collect(),
+            )
+        };
+        assert!(validate(&headers).is_ok());
+        let path = "generated/include/SchM_Can.h";
+        let original = headers[path].clone();
+        headers.insert(
+            path.into(),
+            b"void SchM_Enter_Can_CAN_STATE(void);".to_vec(),
+        );
+        assert!(validate(&headers).is_err());
+        headers.insert(path.into(), original);
+        headers.insert(
+            "bsw/src/Can.c".into(),
+            b"void Bad(void) { SchM_Enter_Can_WRONG(); }".to_vec(),
+        );
+        assert!(validate(&headers).is_err());
+    }
 }

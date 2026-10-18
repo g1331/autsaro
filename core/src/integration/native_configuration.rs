@@ -4,13 +4,13 @@ use crate::project_model::{TypedValue, ValueKind};
 
 // These fields describe physical modules or disabled optional services. They do
 // not add a runtime implementation to the controlled virtual ECU target.
-const DESCRIPTOR_PARAMETERS: &str = "
+pub(super) const DESCRIPTOR_PARAMETERS: &str = "
 CanControllerBaseAddress CanControllerBaudRateConfigID CanControllerPropSeg
 CanControllerSeg1 CanControllerSeg2 CanControllerSyncJumpWidth
 CanMainFunctionModePeriod CanTimeoutDuration CanIfInitCfgSet
 PduIdTypeEnum PduLengthTypeEnum DcmDspDataDefaultEndianness";
 
-const DISABLED_FEATURES: &str = "
+pub(super) const DISABLED_FEATURES: &str = "
 CanDevErrorDetect CanEnableSecurityEventReporting CanGlobalTimeSupport
 CanMultiplexedTransmission CanVersionInfoApi CanIfCtrlWakeupSupport
 CanIfFixedBuffer CanIfSupportTTCAN CanIfBusMirroringSupport CanIfDevErrorDetect

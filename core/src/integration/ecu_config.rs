@@ -1141,6 +1141,8 @@ From this directory run `python tools/ecu-tool.py build --project . --output <ne
 
 ## Layout
 
+The [module manuals](generated/descriptions/MODULES.md) describe delivered BSW interfaces, exclusive areas, scheduling, selected configuration and integration limits. The selected implementation description is [Host_Implementation.arxml](generated/descriptions/Host_Implementation.arxml); input BSW descriptions remain source provenance.
+
 `bsw/` holds the static BSW, `integration/` the host adapters and both mains, `os/` and `kernel/` the OS adaptation, kernel patches and fixed kernel. `generated/` holds every configuration-derived file and is rewritten on each generation; `generated/templates/` holds component entry-point skeletons that are not compiled. `app/<component>/` is the sealed snapshot of each live application source, `inputs/` the configuration snapshot and `meta/` the package metadata and seal. Edit applications and configuration in the live project, never in this package.
 {}"#,
         target.spec().id,
@@ -1156,8 +1158,7 @@ This configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit si
         }
     );
     outputs.emit_all("handoff-verification", verification)?;
-    let paths = outputs.paths().map(str::to_owned).collect();
-    let artifacts = super::artifacts::files(description, &paths)?;
+    let artifacts = super::artifacts::files(description, &outputs.contents())?;
     outputs.emit_all("artifacts", artifacts)?;
     // Not compiled: the create-only live seed, to compare entry points after a configuration change.
     outputs.emit_all(

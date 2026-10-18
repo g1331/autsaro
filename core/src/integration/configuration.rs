@@ -634,6 +634,12 @@ fn inspect_with_catalog(
                                 graph, *index, catalog, reference,
                             )
                         }) {
+                            // Preserve accepted descriptor-only values for the selected
+                            // configuration/manual; they still enable no runtime feature.
+                            target
+                                .entry(definition.into())
+                                .or_default()
+                                .push(text.into());
                             continue;
                         }
                         return Err(reject(
