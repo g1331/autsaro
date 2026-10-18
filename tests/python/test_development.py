@@ -473,6 +473,100 @@ class AssetTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     assets.digest(root, name)
 
+    def test_linked_files_and_directories_are_rejected(self):
+        for directory_link in (False, True):
+            with self.subTest(directory_link=directory_link), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                target = root / "target"
+                target.mkdir()
+                source = target / "owned"
+                source.write_bytes(b"original")
+                link = root / "linked"
+                if directory_link and os.name == "nt":
+                    subprocess.run(["cmd", "/C", "mklink", "/J", str(link), str(target)],
+                                   check=True, capture_output=True)
+                else:
+                    try:
+                        link.symlink_to(target if directory_link else source,
+                                        target_is_directory=directory_link)
+                    except OSError as error:
+                        if os.name == "nt" and error.winerror == 1314:
+                            self.skipTest("File symlinks require Windows symlink privileges")
+                        raise
+                relative = "linked/owned" if directory_link else "linked"
+                try:
+                    self.assertEqual((root / relative).read_bytes(), b"original")
+                    self.assertEqual(assets.digest(root, "target/owned"),
+                                     hashlib.sha256(b"original").hexdigest())
+                    with self.assertRaises(ValueError) as caught:
+                        assets.digest(root, relative)
+                    self.assertEqual(str(caught.exception), f"Linked asset path: {relative}")
+                    self.assertEqual(source.read_bytes(), b"original")
+                finally:
+                    if directory_link and os.name == "nt":
+                        link.rmdir()
+                    else:
+                        link.unlink()
+
+    def test_invalid_inventory_is_refused_before_any_update(self):
+        cases = (
+            ("format", "Invalid asset inventory format"),
+            ("missing-field", "Invalid asset fields: owned"),
+            ("extra-field", "Invalid asset fields: owned"),
+            ("duplicate", "Duplicate asset: owned"),
+            *((field, "Invalid asset metadata: owned") for field in
+              ("license", "responsibility", "role", "targets-empty", "targets-unknown", "profiles")),
+        )
+        for case, reason in cases:
+            for update in (False, True):
+                with self.subTest(case=case, update=update), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    for folder in ("third_party/freertos", "runtime/contracts", "tools/python/src/ecu_tools"):
+                        (root / folder).mkdir(parents=True)
+                    for name in ("source-manifest.json", "posix-source-manifest.json"):
+                        source = root / "third_party/freertos" / (name + ".c")
+                        source.write_bytes(b"upstream")
+                        (source.parent / name).write_text(json.dumps({"files": {
+                            source.name: hashlib.sha256(b"upstream").hexdigest(),
+                        }}))
+                    (root / "owned").write_bytes(b"original")
+                    guard = root / "tools/python/src/ecu_tools/guard.py"
+                    guard.write_bytes(b"guard")
+                    trusted = guard.parent / "build-tool-inventory.json"
+                    trusted.write_text(json.dumps({"files": [{
+                        "path": "guard.py", "sha256": hashlib.sha256(b"guard").hexdigest(),
+                    }]}))
+                    item = {"path": "owned", "license": "Apache-2.0",
+                            "targets": ["linux-x64-controlled-v1"], "profiles": ["ecu"],
+                            "role": "bsw", "responsibility": "workbench"}
+                    inventory = {"format": "autosar-asset-inventory-v2", "assets": [item]}
+                    manifest = root / "runtime/contracts/assets.json"
+                    manifest.write_text(json.dumps(inventory))
+                    with redirect_stdout(io.StringIO()):
+                        self.assertEqual(assets.maintain(root=root), 0)
+                        self.assertEqual(assets.maintain(update=True, root=root), 0)
+                    # A refusal must precede an otherwise necessary trusted-identity write.
+                    guard.write_bytes(b"reviewed change")
+                    if case == "format":
+                        inventory["format"] = "retired-format"
+                    elif case == "missing-field":
+                        del item["role"]
+                    elif case == "extra-field":
+                        item["sha256"] = "0" * 64
+                    elif case == "duplicate":
+                        inventory["assets"].append(dict(item))
+                    else:
+                        field = "targets" if case.startswith("targets-") else case
+                        item[field] = {"license": "MIT", "responsibility": "", "role": "unknown",
+                                       "targets-empty": [], "targets-unknown": ["unknown"],
+                                       "profiles": ["legacy"]}[case]
+                    manifest.write_text(json.dumps(inventory))
+                    before = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
+                    with self.assertRaises(ValueError) as caught:
+                        assets.maintain(update=update, root=root)
+                    self.assertEqual(str(caught.exception), reason)
+                    self.assertEqual({path: path.read_bytes() for path in root.rglob("*") if path.is_file()}, before)
+
     def test_no_change_update_is_idempotent_and_does_not_write(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -545,6 +639,20 @@ class AssetTests(unittest.TestCase):
 class AssetLineEndingTests(unittest.TestCase):
     def test_checkout_obeys_fixed_line_endings(self):
         assets.check_line_endings()
+
+    def test_missing_git_is_reported_before_querying_or_writing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "owned"
+            source.write_bytes(b"original\r\n")
+            with patch("autosar_tooling.assets.shutil.which", return_value=None), patch(
+                "autosar_tooling.assets.run_bounded"
+            ) as run, self.assertRaises(ValueError) as caught:
+                assets.check_line_endings(root)
+            self.assertEqual(str(caught.exception), "Asset line endings require Git on PATH")
+            run.assert_not_called()
+            self.assertEqual(list(root.iterdir()), [source])
+            self.assertEqual(source.read_bytes(), b"original\r\n")
 
     def test_each_line_ending_violation_names_the_file(self):
         with tempfile.TemporaryDirectory() as directory:
