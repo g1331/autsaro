@@ -451,7 +451,7 @@ def clang_tidy_project(project: Path, tidy: str, *, report: list[dict] | None = 
                     except ValueError:
                         continue
                     for rule in match[6].split(","):
-                        report.append({"rule": rule, "file": origins.get(relative, relative), "line": int(match[2]), "message": match[5], "sample": project.name})
+                        report.append({"rule": rule, "file": origins.get(relative, relative), "line": int(match[2]), "column": int(match[3]), "message": match[5], "sample": project.name})
             if result.returncode or any(match and match[4] == "error" for match in matches):
                 raise RuntimeError(f"{project.name}: clang-tidy could not analyze {name}:\n{result.stdout}{result.stderr}")
             for match in filter(None, matches):

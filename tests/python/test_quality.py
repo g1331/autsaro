@@ -298,11 +298,15 @@ class ClangTidyReportTests(unittest.TestCase):
             }))
             (project / 'meta/integration.json').write_text(json.dumps({'originalBswSources': {'runtime/Test.c': 'unit.c'}}))
             output = f'{project}/unit.c:1:2: warning: Runtime message [check-one]\n{project}/bsw/Test.h:1:1: warning: Generated message [readability-identifier-naming]\n'
+            output += f'{project}/unit.c:1:3: warning: Other column [check-one]\n{project}/unit.c:1:2: warning: Runtime message [check-one]\n'
             report = []
             with patch.object(quality, 'run', return_value=subprocess.CompletedProcess(['tidy'], 0, output, '')):
                 findings = quality.clang_tidy_project(project, 'tidy', report=report)
             self.assertEqual(list(findings), [('check-one', 'runtime/Test.c', 'int runtime;')])
+            self.assertEqual(findings[('check-one', 'runtime/Test.c', 'int runtime;')], 2)
             self.assertEqual(report, [
-                {'rule': 'check-one', 'file': 'runtime/Test.c', 'line': 1, 'message': 'Runtime message', 'sample': 'sample'},
-                {'rule': 'readability-identifier-naming', 'file': 'bsw/Test.h', 'line': 1, 'message': 'Generated message', 'sample': 'sample'},
+                {'rule': 'check-one', 'file': 'runtime/Test.c', 'line': 1, 'column': 2, 'message': 'Runtime message', 'sample': 'sample'},
+                {'rule': 'readability-identifier-naming', 'file': 'bsw/Test.h', 'line': 1, 'column': 1, 'message': 'Generated message', 'sample': 'sample'},
+                {'rule': 'check-one', 'file': 'runtime/Test.c', 'line': 1, 'column': 3, 'message': 'Other column', 'sample': 'sample'},
+                {'rule': 'check-one', 'file': 'runtime/Test.c', 'line': 1, 'column': 2, 'message': 'Runtime message', 'sample': 'sample'},
             ])
