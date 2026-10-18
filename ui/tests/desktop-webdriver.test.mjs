@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -8,6 +8,7 @@ import { WebDriver } from '../../tests/desktop/support/webdriver.mjs';
 const cleanups = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+  vi.restoreAllMocks();
 });
 
 async function driver(handler) {
@@ -60,10 +61,9 @@ test('native refresh waits for the navigation response before a new frame query'
     '/session/native/execute/sync',
   ]);
   const entries = (await readFile(log, 'utf8')).trim().split('\n').map(JSON.parse);
-  expect(entries.map((entry) => entry.route)).toEqual([
-    '/session/refresh',
-    '/session/execute/sync',
-  ]);
+  expect(
+    entries.filter((entry) => entry.phase === 'completed').map((entry) => entry.route),
+  ).toEqual(['/session/refresh', '/session/execute/sync']);
 });
 
 test('native refresh preserves the navigation error without retry or a frame query', async () => {
@@ -75,8 +75,75 @@ test('native refresh preserves the navigation error without retry or a frame que
   });
   await expect(client.refresh('/session/native')).rejects.toThrow('no such window');
   expect(count).toBe(1);
-  expect(JSON.parse((await readFile(log, 'utf8')).trim()).error).toEqual({
+  expect((await readFile(log, 'utf8')).trim().split('\n').map(JSON.parse).at(-1).error).toEqual({
     error: 'no such window',
     message: 'closed',
   });
+});
+
+test('an aborted native request retains its exact script and paired terminal evidence', async () => {
+  const controller = new AbortController();
+  vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal);
+  let received;
+  const started = new Promise((resolve) => (received = resolve));
+  const { client, log } = await driver(() => received());
+  const expression = 'window.__TAURI_INTERNALS__.invoke("project_projection")';
+  const operation = client.request('POST', '/session/native/execute/async', {
+    script: 'evaluate',
+    args: [expression],
+  });
+  const rejected = expect(operation).rejects.toThrow('controlled transport failure');
+  cleanups.push(async () => {
+    controller.abort(new Error('controlled transport failure'));
+    await rejected;
+  });
+  await started;
+  const pending = (await readFile(log, 'utf8')).trim().split('\n').map(JSON.parse);
+  expect(pending).toEqual([
+    expect.objectContaining({
+      id: 1,
+      phase: 'started',
+      route: '/session/execute/async',
+      script: expression,
+    }),
+  ]);
+  controller.abort(new Error('controlled transport failure'));
+  await rejected;
+  const entries = (await readFile(log, 'utf8')).trim().split('\n').map(JSON.parse);
+  expect(entries).toHaveLength(2);
+  expect(entries[1]).toEqual(
+    expect.objectContaining({
+      id: 1,
+      phase: 'failed',
+      script: expression,
+      error: 'Error: controlled transport failure',
+      durationMs: expect.any(Number),
+      at: expect.any(Number),
+    }),
+  );
+  await expect(client.request('GET', '/session/native/screenshot')).rejects.toThrow(
+    'controlled transport failure',
+  );
+  await expect(client.request('DELETE', '/session/native')).rejects.toThrow(
+    'controlled transport failure',
+  );
+  expect((await readFile(log, 'utf8')).trim().split('\n')).toHaveLength(2);
+  expect(AbortSignal.timeout).toHaveBeenCalledExactlyOnceWith(300000);
+});
+
+test('a truncated response records its parsing failure against the started request', async () => {
+  const { client, log } = await driver((_request, response) => response.end('{"value":'));
+  await expect(client.request('GET', '/session/native/screenshot')).rejects.toThrow();
+  const entries = (await readFile(log, 'utf8')).trim().split('\n').map(JSON.parse);
+  expect(entries.map(({ id, phase }) => ({ id, phase }))).toEqual([
+    { id: 1, phase: 'started' },
+    { id: 1, phase: 'failed' },
+  ]);
+  expect(entries[1]).toEqual(
+    expect.objectContaining({
+      route: '/session/screenshot',
+      status: 200,
+      error: expect.stringContaining('SyntaxError'),
+    }),
+  );
 });

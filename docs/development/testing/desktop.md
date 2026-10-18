@@ -17,7 +17,7 @@ node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
 
 人工解析延迟只由 responsiveness 的取消场景显式启用，其他场景不注入延迟。`session.json` 记录每个会话的 display、两个 driver 端口及配置／数据／缓存目录，用于核对并行隔离。
 
-`AUTOSAR_DESKTOP_RESULTS` 指定结果目录，默认使用系统临时目录。每个文件在其中新建私有目录，保存各项检查的截图、`ipc.jsonl`、逐请求耗时 `webdriver.jsonl` 和会话关闭后的 `process-tree.json`；失败时另存 `failure.png` 与页面文本 `failure.txt`。启动失败也在清理前保存 `startup-failure.json`（原始错误、同步页面上下文与进程树）及可取得的 `startup-failure.png`，Windows 另存 `windows-versions.json`；driver stderr 保存为 `driver.stderr.log`。启动就绪条件使用同步脚本探测，避免 Chromium 将导航中止异步脚本映射为 `script timeout`；错误仍直接失败，不重试。`owned-execution.test.mjs` 还需要用 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 声明受控 GCC、binutils、Git 与受支持 Python 的绝对路径；应用环境仍剥除这些变量，由场景通过真实的“执行工具”设置填写，未声明时该文件失败。
+`AUTOSAR_DESKTOP_RESULTS` 指定结果目录，默认使用系统临时目录。每个文件在其中新建私有目录，保存各项检查的截图、`ipc.jsonl`、逐请求证据 `webdriver.jsonl`（按会话内 `id` 配对的 `started`／`completed`／`failed`，包含完整求值表达式、时间和失败原文；请求发出前即落盘，响应体解析失败也保留终态）和会话关闭后的 `process-tree.json`；失败时另存 `failure.png` 与页面文本 `failure.txt`。启动失败也在清理前保存 `startup-failure.json`（原始错误、同步页面上下文与进程树）及可取得的 `startup-failure.png`，Windows 另存 `windows-versions.json`；driver stderr 保存为 `driver.stderr.log`。启动就绪条件使用同步脚本探测，避免 Chromium 将导航中止异步脚本映射为 `script timeout`；错误仍直接失败，不重试。`owned-execution.test.mjs` 还需要用 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON` 声明受控 GCC、binutils、Git 与受支持 Python 的绝对路径；应用环境仍剥除这些变量，由场景通过真实的“执行工具”设置填写，未声明时该文件失败。
 
 页面条件采样写入 `dom-queries.jsonl`，包含完整查询、发出／页面采样／收到时间、返回值及同次 DOM 的活动操作和编辑器状态。失败时，在截图前保留最后采样 `failure-query.json`、随后读取的 `failure-capabilities.json` 与现场进程树 `failure-processes.json`；Linux 另存每个所属进程的线程状态及应用、WebKitWebDriver、WebKit WebProcess 的全线程 GDB backtrace（需安装 `gdb`）。采集错误原样保留，`failure-capture.json` 标明各项采集结果；后续截图不能替代最后查询的现场。每个会话的 `host-start.json`／`host-end.json` 记录宿主 uptime、可用 CPU 数、空闲内存及并行桌面／编译进程，失败另存 `host-failure.json`；时序结论须结合这些现场，不把争用下的失败归因为产品缺陷或计作通过。
 
@@ -25,7 +25,7 @@ node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
 - Windows：需要与 Edge／WebView2 版本一致的 `msedgedriver` 位于 PATH 中。会话显示真实窗口、读取会话剪贴板并操作原生文件选择框，因此只在 GitHub Actions、Windows Sandbox 或设置了 `AUTOSAR_DESKTOP_DEDICATED_SESSION=1` 的专用会话中启动，否则直接拒绝；不得在日常桌面运行。各会话共用桌面与剪贴板，必须串行运行。
 - macOS：`tauri-driver` 不支持 WKWebView，不运行桌面场景。
 
-关闭会话后，测试断言应用进程树已全部退出，残留时列出 pid、名称和命令行；按 Ctrl-C 或取消 CI 也会结束私有 display 与 driver 进程组。
+transport 请求中止或响应体解析失败后，会话保留首个错误并拒绝后续请求，避免在仍执行旧命令的 driver 上排队诊断和关闭操作；WebDriver 返回的正常协议错误仍可继续诊断。关闭会话时先清理所属进程，再断言应用进程树已全部退出并保存证据，最后传播关闭错误，残留时列出 pid、名称和命令行；按 Ctrl-C 或取消 CI 也会结束私有 display 与 driver 进程组。
 
 同一台 Linux 机器可以在不同工作树中并行运行多个场景。手动中止或清理时只结束自己启动并记下的进程或进程组（如用 `setsid` 启动后 `kill -- -<pgid>`），不要按名称或命令行匹配（`pkill -f`、`killall`），否则会连带结束其他工作树正在运行的场景。
 

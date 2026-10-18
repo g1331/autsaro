@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import test from 'node:test';
-import { descendants, processTree } from './support/driver.mjs';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { descendants, processTree, launch } from './support/driver.mjs';
 
 test('reused parent PID does not adopt older session processes', () => {
   // Session processes whose short-lived smss.exe (8040) exited before the
@@ -38,4 +40,35 @@ test('a real child process is attributed to its live parent', async () => {
   } finally {
     child.kill();
   }
+});
+
+test('a failed transport still proves complete owned native process exit', async () => {
+  const session = await launch('failed-request-cleanup');
+  const originalFetch = globalThis.fetch;
+  const failure = new Error('controlled response transport loss');
+  const expression = '({native: typeof window.__TAURI_INTERNALS__.invoke})';
+  try {
+    globalThis.fetch = async (url, options) => {
+      const response = await originalFetch(url, options);
+      if (options?.body && JSON.parse(options.body).args?.[0] === expression) {
+        const result = await response.json();
+        assert.equal(result.value.value.native, 'function', 'real native page evaluated first');
+        throw failure;
+      }
+      return response;
+    };
+    await assert.rejects(session.evaluate(expression), (error) => error === failure);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await assert.rejects(session.close(), (error) => error === failure);
+  }
+  const closed = JSON.parse(
+    await readFile(path.join(session.scratch, 'process-tree.json'), 'utf8'),
+  );
+  assert(closed.length > 0, 'cleanup must retain the actual owned process tree');
+  const remaining = new Map(
+    (await processTree(process.pid)).map((item) => [item.pid, item.identity]),
+  );
+  for (const item of closed)
+    assert.notEqual(remaining.get(item.pid), item.identity, `owned process survived: ${item.pid}`);
 });
