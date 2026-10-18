@@ -15,6 +15,8 @@
 
 CanTp 只在自己的 `CANTP_STATE` 区内读写连接状态、计时器与接收帧队列，离开该区后再调用 PduR、LSduR 与 Det（[ADR 0018](../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md)）。收发各有一台状态机，共用 Tx N-PDU 的占用记录；收到的帧先排入区内的队列（深度 4），同一时刻只有一个上下文按顺序取出工作并调用其他模块，其余上下文登记后立即返回。连接结束、取消、超时、开始接收与 `CanTp_Init` 都会推进该方向的代次，被它们超越的调用结果在回到区内时按当前真实状态丢弃。最终通知在调用上层前已使连接回到空闲，因此回调中可以立即请求下一个 N-SDU。`CanTp_TxConfirmation` 只结算确认，同一 N-PDU 的下一帧留给下一次主函数发送：主机 Can 驱动在确认回调期间对同一发送槽返回 `CAN_BUSY`。
 
+`Ecu_Target` 在 `Can_MainFunction_Read` 前后经私有 `Ecu_CanTpReceptionBeforeMain` 告知输入是否先于该 epoch 的周期。CanTp 只对这次接收中实际重装的计时器排除尚未流逝的周期；已执行周期的同 epoch 输入与确认后的计时仍从下一周期递减。`CanTp_StartTimer` 同时覆盖剩余周期与排序标记，连接重置清除输入排序，新状态不会继承旧 timer 的跳过。`single_component_receive_timers_use_complete_periods` 覆盖 CF 与 FC(WAIT)／CTS 的截止和晚一个 tick，`single_component_cts_starts_a_complete_copy_timeout` 通过 BUSY 上层核对 N_Cs 起点，既有确认顺序测试独立保留。
+
 SWS_CanTp_00229 把超时与协议错误称为开发错误，表 SWS_CanTp_00352 则把它们定义为运行时错误；实现按表格经 `Det_ReportRuntimeError` 报告。
 
 ## 条款处置

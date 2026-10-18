@@ -6,6 +6,10 @@
 
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
+### Fixed
+
+- CanTp receive-started timeouts retain their complete configured duration when an input precedes its epoch's cycle; same-epoch inputs after the cycle and confirmation timers keep their timing. Public interfaces, configuration layouts and third-party identities are unchanged; regenerate sealed ECU projects to receive the private owner-ordering adapter (#302)
+
 ### Changed
 
 - C emitters use trusted runtime sources and anchored templates for fixed integration files, with shared memory-section, C++ linkage, include-guard and contract-comment rendering. Generated paths, ABI and behavior are preserved; the execution source gains its required file description and the COM callback header directly imports its handle type. Asset provenance and rule-set/package identities are recomputed (#278)
