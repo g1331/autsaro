@@ -349,7 +349,6 @@ jobs:
           --no-fail-fast -- 'runtime_contracts::' 'host::' 'integration::generated_c::'
           'integration::os::counter_header_oracles' 'sanitizers::sanitizer_lane_reports_deliberate_faults'
       - name: Instrumented sealed ECU protocols
-        if: matrix.sanitize == 'address,undefined'
         shell: python
         run: |
           import os, subprocess, sys
@@ -361,16 +360,13 @@ jobs:
               'cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests', '--test', 'native',
               '--no-fail-fast', '--', 'integration::protocol::', 'integration::sealed_projects::', 'integration::sealed_sanitizers::'], env=env).returncode)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure() && matrix.sanitize == 'address,undefined'
+        if: failure()
         with:
-          name: sealed-sanitizer-scratch
+          name: sealed-sanitizer-scratch-${{ strategy.job-index }}
           path: ${{ runner.temp }}/sealed-sanitizer-scratch
           if-no-files-found: ignore
           retention-days: 14
-      # ThreadSanitizer defers asynchronous signal handlers to its own safe points, so the
-      # FreeRTOS POSIX port cannot suspend actors with SIGRTMIN; the OS suites run under ASan.
       - name: Instrumented OS suites
-        if: matrix.sanitize != 'thread'
         env:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
         run: setarch x86_64 -R python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py

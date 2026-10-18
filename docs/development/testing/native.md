@@ -16,24 +16,23 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 ## 检测器构建
 
-Linux 上用 GCC 的 ThreadSanitizer、AddressSanitizer（含 LeakSanitizer）和 UndefinedBehaviorSanitizer 检查直接编译的原生测试程序，ASan／UBSan 另外检查 OS suites 和封存 ECU 的 HostBatch／probe／test 闭包。`AUTOSAR_SANITIZE` 指定检测器（`thread` 或 `address,undefined`），测试辅助据此为这些程序加入 `-fsanitize=…`、`-fno-sanitize-recover=all` 与调试信息；任何报告都使程序以错误结束，测试随之失败。
+Linux 上用 GCC 的 ThreadSanitizer、AddressSanitizer（含 LeakSanitizer）和 UndefinedBehaviorSanitizer 检查直接编译的原生测试程序，两种检测器还检查 OS suites 和封存 ECU 的 HostBatch／probe／test 闭包。`AUTOSAR_SANITIZE` 指定检测器（`thread` 或 `address,undefined`），测试辅助据此为这些程序加入 `-fsanitize=…`、`-fno-sanitize-recover=all` 与调试信息；任何报告都使程序以错误结束，测试随之失败。
 
 ```bash
 export AUTOSAR_SANITIZE=thread   # 或 address,undefined
 export ASAN_OPTIONS=use_sigaltstack=0:detect_stack_use_after_return=0
 setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native --no-fail-fast -- runtime_contracts:: host:: integration::generated_c:: integration::os::counter_header_oracles sanitizers::sanitizer_lane_reports_deliberate_faults
-# 仅 address,undefined
 setarch x86_64 -R cargo test --locked -p autosar-config-core --features native-tests --test native --no-fail-fast -- integration::protocol:: integration::sealed_projects:: integration::sealed_sanitizers::
 setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py
 ```
 
 - `setarch -R` 关闭地址随机化：Ubuntu 24.04 的 `vm.mmap_rnd_bits=32` 使 GCC 13 的 TSan 报告 `unexpected memory mapping`，这样不必修改宿主设置。
 - OS 主机层自己安装备用信号栈，并用 ucontext 切换栈，所以 ASan 不接管备用信号栈（`use_sigaltstack=0`），也不把局部变量移到假栈（`detect_stack_use_after_return=0`）；后者使嵌套中断用例比较栈地址失真，代价是不检查返回后使用栈变量。
-- OS suites 不在 TSan 下运行：TSan 把异步信号处理推迟到它自己的拦截点执行，FreeRTOS POSIX 端口用 `SIGRTMIN` 暂停 actor 并取得被中断的上下文，这一机制在 TSan 下超时（`E_OS_STATE`）。TSan 覆盖 BSW 独占区与主机锁的真实线程用例（`runtime_contracts::`）；它在 OS suites 中报告过信号处理函数改写 `errno` 的问题，已修复。
+- OS suites 在两种检测器下运行，覆盖真实暂停／恢复、嵌套中断、栈上下文与故障关闭。Linux 的已暂停 actor 从现有请求状态读取终止意图，保持首次捕获的上下文并确认永久停止；运行中的 actor 仍由终止信号停止。控制器在 actor 停止后才关闭端口调度状态，关闭主机线程句柄时释放 pthread 资源并保留注册栈身份。
 - `sanitizers::` 的故意越界写（`memcpy` 超出固定静态缓冲）、数据竞争和超宽移位证明检测器确实报错；未设置 `AUTOSAR_SANITIZE` 时该测试不做任何事。
-- 封存 ECU 的检测器路径只用于 Linux ASan／UBSan：测试辅助先完整执行包内生产 build（含 seal、固定工具、选择补丁、内核摘要与严格段布局检查），记录实际编译 argv，再用同一源码、include 顺序、补丁后内核、test 模式宏与链接参数额外加入检测器选项，编译到独立程序。测试辅助不得在加载原 guard 前加入包内 Python 搜索路径，以免未封存的同名标准库模块提前执行。生产 `ecu-tool`、`target.json` 和 object 检查不变；检测器程序不作为交付程序。共享 HostBatch 按检测器选项区分 image，消费者仍拿独立副本。每个新输入多编译一次，后续相同 HostBatch 复用；不缓存跨运行的通过结果。
+- 封存 ECU 的检测器路径用于 Linux TSan 与 ASan／UBSan：测试辅助先完整执行包内生产 build（含 seal、固定工具、选择补丁、内核摘要与严格段布局检查），记录实际编译 argv，再用同一源码、include 顺序、补丁后内核、test 模式宏与链接参数额外加入检测器选项，编译到独立程序。测试辅助不得在加载原 guard 前加入包内 Python 搜索路径，以免未封存的同名标准库模块提前执行。生产 `ecu-tool`、`target.json` 和 object 检查不变；检测器程序不作为交付程序。共享 HostBatch 按检测器选项区分 image，消费者仍拿独立副本。每个新输入多编译一次，后续相同 HostBatch 复用；不缓存跨运行的通过结果。
 - `integration::protocol::` 与 `integration::sealed_projects::` 在该路径运行现有协议向量和封存工程 owner 用例；`integration::sealed_sanitizers::` 验证 probe 实际完成 20 ticks、test 模式故障退出、完整编译 argv 只差检测器选项／输出路径、封存输入不变及共享副本隔离。外部 probe control 复用既有故意越界／超宽移位夹具，要求实际运行报告与非零退出，并让合法边界输入成功。
-- 完整 FreeRTOS ECU 路径未纳入 TSan：[#300](https://github.com/g1331/autsaro/issues/300) 修复栈注册的逐槽发布与非 ISR actor 的中断身份查询，聚焦用例 `integration::sealed_sanitizers::sealed_os_registration_and_interrupt_identity_use_real_thread_owners` 在完整封存编译闭包中以真实线程验证这两个边界，但不启动异步暂停协议。完整 HostBatch 仍在终止已暂停 actor 时退出 7：同源码的最小暂停／终止反例在普通构建成功、TSan 下无法完成终止信号握手，GDB 显示 actor 停在 TSan 包装的 SIGRTMIN 处理器内。剩余信号／上下文模型限制与完整 ECU lane 的退出条件见 [#316](https://github.com/g1331/autsaro/issues/316)，不能把没有 race 报告写成完整 ECU 通过。现有直接线程测试继续运行；`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
+- `integration::sealed_sanitizers::` 在两种检测器下持续选择真实线程注册／中断身份回归，以及暂停／恢复进展、终止前后上下文、拒绝终止后恢复、运行 actor 停止和关闭句柄后 pthread 状态的成对回归。`HostBatch`、probe 与 test 使用相同封存源码，生产／插桩 argv 只允许检测器选项与输出路径不同。故意越界／超宽移位 control 仅在 ASan／UBSan 下运行；直接线程 TSan 测试继续运行。`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
 
 必需 CI 的 `native-sanitizers` 任务在 Linux 上按 `thread` 与 `address,undefined` 各用一个 runner 运行上述命令；与 `native`、`native-os` 并行。
 
