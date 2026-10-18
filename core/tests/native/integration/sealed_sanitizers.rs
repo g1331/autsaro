@@ -25,13 +25,7 @@ fn require_success(output: &Output) {
 
 fn instrument(project: &Path, output: &Path, mode: &str, control: Option<&Path>) {
     require_success(&tooling::run_public_command(
-        &mut tooling::ecu_sanitizer_build_command(
-            project,
-            output,
-            mode,
-            control,
-            OsStr::new(&std::env::var("AUTOSAR_SANITIZE").unwrap()),
-        ),
+        &mut tooling::ecu_build_command(project, output, mode, control),
         output.parent().unwrap(),
         &format!("build-{mode}"),
         Duration::from_secs(180),

@@ -69,14 +69,15 @@ pub(crate) fn ecu_build_command(
     mode: &str,
     control: Option<&std::path::Path>,
 ) -> Command {
-    // TSan's standalone consumers still use a production ECU as a compile prerequisite.
-    if std::env::var("AUTOSAR_SANITIZE").as_deref() == Ok("address,undefined") {
+    if let Ok(kinds) = std::env::var("AUTOSAR_SANITIZE")
+        && matches!(kinds.as_str(), "thread" | "address,undefined")
+    {
         return ecu_sanitizer_build_command(
             project,
             output,
             mode,
             control,
-            std::ffi::OsStr::new("address,undefined"),
+            std::ffi::OsStr::new(&kinds),
         );
     }
     ecu_production_build_command(project, output, mode, control)
