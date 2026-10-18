@@ -1,0 +1,37 @@
+name: Known gap
+description: 记录能力、标准或验证差距及退出条件
+labels: [known-gap]
+body:
+  - type: textarea
+    id: basis
+    attributes:
+      label: 规范依据
+      description: 写明规范版次、条款编号与原文位置（文档、页码或条目）；仅引用位置，勿上传官方规范档案。
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影响
+      description: 说明差距影响的能力、配置、平台或验证结论，以及当前限制。
+    validations:
+      required: true
+  - type: textarea
+    id: stage
+    attributes:
+      label: 承接阶段 / Milestone
+      description: 写明负责承接的路线阶段与已承诺的 Milestone；尚未排期时明确写“未排期”，不要为此新建 Milestone。
+    validations:
+      required: true
+  - type: textarea
+    id: exit
+    attributes:
+      label: 退出条件
+      description: 写明关闭差距所需的可验证结果、失败判据与证据。
+    validations:
+      required: true
+  - type: textarea
+    id: related
+    attributes:
+      label: 关联 Issue / PR
+      description: 可选，提供相关 Issue 或 PR 链接。
