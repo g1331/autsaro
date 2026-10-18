@@ -165,6 +165,29 @@ Stale citations (not an official item of R24-11):
                     json.loads((result_dir / "summary.json").read_text())["passed"]
                 )
 
+                sarif_path = root / "result.sarif"
+                with mock.patch("os.getcwd", return_value=str(root)):
+                    self.assertEqual(
+                        report.main(
+                            [
+                                "sarif",
+                                "--cppcheck-directory",
+                                str(result_dir.parent),
+                                "--baseline-directory",
+                                str(root / "missing-baseline"),
+                                "--output",
+                                str(sarif_path),
+                            ]
+                        ),
+                        0,
+                    )
+                self.assertEqual(
+                    json.loads(sarif_path.read_text())["runs"][0]["results"][0][
+                        "ruleId"
+                    ],
+                    "rule",
+                )
+
     def test_clang_tidy_uses_shared_baseline_and_reports_partial_analysis(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

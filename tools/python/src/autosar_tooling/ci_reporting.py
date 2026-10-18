@@ -324,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         "sarif", help="Convert existing scanner JSON artifacts"
     )
     report.add_argument("--cppcheck-directory", type=Path)
+    report.add_argument("--baseline-directory", type=Path)
     report.add_argument(
         "--samples", type=Path, default=Path("build/c-analysis-samples")
     )
