@@ -39,6 +39,8 @@ jobs:
           key: coverage-rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
+      - name: Start an independent measurement
+        run: cargo llvm-cov clean --workspace
       - name: Run workspace default tests with instrumentation
         run: cargo llvm-cov --locked --workspace --no-fail-fast --no-report
       - name: Render HTML
