@@ -359,10 +359,7 @@ fn native_inventory_rejects_tampering_even_with_self_recomputed_metadata_hash() 
         .expect("XML diagnostic path indexing must be bound to the native rule identity");
     assert_eq!(
         paths["sha256"],
-        format!(
-            "{:x}",
-            Sha256::digest(include_bytes!("../../src/xml_paths.rs"))
-        )
+        hex::encode(Sha256::digest(include_bytes!("../../src/xml_paths.rs")))
     );
 
     let expected = rules::verify_inventory_bytes(rules::inventory_bytes()).unwrap();
@@ -376,10 +373,7 @@ fn native_inventory_rejects_tampering_even_with_self_recomputed_metadata_hash() 
         .expect("localized catalog guidance must participate in the rule identity");
     assert_eq!(
         messages["sha256"],
-        format!(
-            "{:x}",
-            Sha256::digest(include_bytes!("../../src/messages.json"))
-        )
+        hex::encode(Sha256::digest(include_bytes!("../../src/messages.json")))
     );
     let inventory_bytes = rules::inventory_bytes().to_vec();
     let unsupported = rules::coverage()
@@ -395,10 +389,8 @@ fn native_inventory_rejects_tampering_even_with_self_recomputed_metadata_hash() 
     assert_eq!(rules::rule_set_identity().unwrap(), expected);
     let mut inventory: serde_json::Value =
         serde_json::from_slice(rules::inventory_bytes()).unwrap();
-    inventory["sources"][0]["sha256"] = serde_json::Value::String(format!(
-        "{:x}",
-        Sha256::digest(b"replacement implementation")
-    ));
+    inventory["sources"][0]["sha256"] =
+        serde_json::Value::String(hex::encode(Sha256::digest(b"replacement implementation")));
     let tampered = serde_json::to_vec(&inventory).unwrap();
     assert!(
         rules::verify_inventory_bytes(&tampered).is_err(),

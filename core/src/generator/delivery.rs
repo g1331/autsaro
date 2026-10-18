@@ -149,7 +149,7 @@ pub(crate) struct NativeInputs {
 }
 
 pub(crate) fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    hex::encode(Sha256::digest(bytes))
 }
 
 pub(crate) fn json_bytes(value: &impl Serialize) -> Result<Vec<u8>, crate::LocalizedText> {
@@ -330,7 +330,7 @@ fn snapshot_identity(
         hash.update((bytes.len() as u64).to_le_bytes());
         hash.update(bytes);
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(hex::encode(hash.finalize()))
 }
 
 impl NativeInputs {
@@ -348,7 +348,7 @@ impl NativeInputs {
                 hash.update(b"autosar-native-guarded-consumer-snapshot-v1\0");
                 hash.update(source.as_bytes());
                 hash.update(self.preparation_identity.as_bytes());
-                format!("{:x}", hash.finalize())
+                hex::encode(hash.finalize())
             }
             None => self.preparation_identity.clone(),
         };
@@ -410,7 +410,7 @@ impl NativeInputs {
             &rule_set_identity,
             &definition_fingerprint,
         )?;
-        let revision_source_identity = format!("{:x}", identity.finalize());
+        let revision_source_identity = hex::encode(identity.finalize());
         Ok(Self {
             revision_source_identity: Some(revision_source_identity.clone()),
             manifest,

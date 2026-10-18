@@ -1069,7 +1069,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
                 let trusted = inventory.get(asset.relative_path).unwrap();
                 assert_eq!(trusted.sha256, asset.sha256, "{}", file.path);
                 assert_eq!(
-                    format!("{:x}", Sha256::digest(&file.bytes)),
+                    hex::encode(Sha256::digest(&file.bytes)),
                     asset.sha256,
                     "{}",
                     file.path
@@ -1120,7 +1120,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
                 .unwrap();
             assert_ne!(
                 hashes[name],
-                format!("{:x}", Sha256::digest(&original.bytes)),
+                hex::encode(Sha256::digest(&original.bytes)),
                 "{name}"
             );
         }
@@ -1131,7 +1131,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
             .unwrap();
         assert_eq!(
             hashes["list.c"],
-            format!("{:x}", Sha256::digest(&unchanged.bytes))
+            hex::encode(Sha256::digest(&unchanged.bytes))
         );
         targets.push((selected, first.fingerprint().to_owned()));
     }

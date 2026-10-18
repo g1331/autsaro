@@ -227,14 +227,14 @@ impl<'a> PreparedProject<'a> {
                     .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
                 list.push_str(&format!("{}\n", file.path));
                 hashes.push_str(&format!(
-                    "{:x}  {}\n",
-                    Sha256::digest(&file.bytes),
+                    "{}  {}\n",
+                    hex::encode(Sha256::digest(&file.bytes)),
                     file.path
                 ));
             }
             hashes.push_str(&format!(
-                "{:x}  {}\n",
-                Sha256::digest(list.as_bytes()),
+                "{}  {}\n",
+                hex::encode(Sha256::digest(list.as_bytes())),
                 generator::output::FILE_LIST
             ));
             std::fs::write(source.join(generator::output::FILE_LIST), list)
@@ -695,7 +695,7 @@ fn finish<'a>(
         }
     }
     digest.update(native.guard.revision_identity.as_bytes());
-    let fingerprint = format!("{:x}", digest.finalize());
+    let fingerprint = hex::encode(digest.finalize());
     Ok(PreparedProject {
         target,
         handoff,

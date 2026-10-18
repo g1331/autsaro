@@ -1095,7 +1095,7 @@ pub(crate) fn forged_handoff(
             let mut policy: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&policy_path).unwrap()).unwrap();
             policy["payload"]["inputs/workbench-project.json"] =
-                format!("{:x}", sha2::Sha256::digest(&bytes)).into();
+                hex::encode(sha2::Sha256::digest(&bytes)).into();
             std::fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
             let manifest_row = ledger["files"]
                 .as_array_mut()
@@ -1103,7 +1103,7 @@ pub(crate) fn forged_handoff(
                 .iter_mut()
                 .find(|row| row["path"] == "inputs/workbench-project.json")
                 .unwrap();
-            manifest_row["sha256"] = format!("{:x}", sha2::Sha256::digest(&bytes)).into();
+            manifest_row["sha256"] = hex::encode(sha2::Sha256::digest(&bytes)).into();
         }
         "identity" | "format" => {
             let mut target: serde_json::Value =

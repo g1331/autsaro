@@ -25,7 +25,7 @@ pub(super) fn file_digest(path: &Path) -> Result<String, crate::LocalizedText> {
         }
         digest.update(&buffer[..count]);
     }
-    Ok(format!("{:x}", digest.finalize()))
+    Ok(hex::encode(digest.finalize()))
 }
 
 fn integrity_record(dir: &Path, names: &[String]) -> Result<String, crate::LocalizedText> {
@@ -227,11 +227,11 @@ pub(crate) fn seal_files(mut files: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<
     let list = names.join("\n") + "\n";
     let mut record = String::new();
     for (name, bytes) in &files {
-        record.push_str(&format!("{:x}  {name}\n", Sha256::digest(bytes)));
+        record.push_str(&format!("{}  {name}\n", hex::encode(Sha256::digest(bytes))));
     }
     record.push_str(&format!(
-        "{:x}  {FILE_LIST}\n",
-        Sha256::digest(list.as_bytes())
+        "{}  {FILE_LIST}\n",
+        hex::encode(Sha256::digest(list.as_bytes()))
     ));
     files.push((FILE_LIST.into(), list.into_bytes()));
     files.push((FILE_HASHES.into(), record.into_bytes()));
@@ -382,7 +382,7 @@ fn inspect_prepared(
     }
     Ok(GenerationPreview {
         output_directory: output.display().to_string(),
-        revision: format!("{:x}", digest.finalize()),
+        revision: hex::encode(digest.finalize()),
         files: changes,
     })
 }

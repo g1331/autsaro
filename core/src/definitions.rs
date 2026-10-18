@@ -140,7 +140,7 @@ impl DefinitionCatalog {
         hash.update(
             serde_json::to_vec(&self.accepted_extensions()).expect("identity serialization"),
         );
-        format!("{:x}", hash.finalize())
+        hex::encode(hash.finalize())
     }
 
     /// Deterministic metadata bytes for the trusted rule inventory, independent of
@@ -295,7 +295,7 @@ pub(crate) fn parent(id: &str) -> Option<&str> {
 }
 
 pub(crate) fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    hex::encode(Sha256::digest(bytes))
 }
 
 /// XML comments and CDATA boundaries do not truncate a simple literal.

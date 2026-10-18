@@ -77,7 +77,7 @@ pub fn inventory_bytes() -> &'static [u8] {
 }
 
 fn read_inventory(bytes: &[u8]) -> Result<Inventory, crate::LocalizedText> {
-    if format!("{:x}", Sha256::digest(bytes)) != TRUSTED_INVENTORY_SHA256 {
+    if hex::encode(Sha256::digest(bytes)) != TRUSTED_INVENTORY_SHA256 {
         return Err(crate::product_message!("backend.rules.inventory_hash"));
     }
     let inventory: Inventory = serde_json::from_slice(bytes).map_err(
@@ -93,7 +93,7 @@ fn read_inventory(bytes: &[u8]) -> Result<Inventory, crate::LocalizedText> {
     for (declared, source) in inventory.sources.iter().zip(INVENTORY_SOURCES) {
         if declared.path != source.path
             || declared.sha256 != source.sha256
-            || format!("{:x}", Sha256::digest(source.bytes)) != source.sha256
+            || hex::encode(Sha256::digest(source.bytes)) != source.sha256
         {
             return Err(
                 crate::product_message!("backend.rules.inventory_source", "path" => source.path),

@@ -32,7 +32,7 @@ fn fixed_r24_11_mod_agrees_on_ecuc_integer_precision_enum_and_default() {
         .read_to_string(&mut xml)
         .unwrap();
     assert_eq!(
-        format!("{:x}", Sha256::digest(xml.as_bytes())),
+        hex::encode(Sha256::digest(xml.as_bytes())),
         "55ad8924b9aaccf600effc06e779c2d9c3300d182749e1bc7c079a55e7a2c68f"
     );
     let document = roxmltree::Document::parse(&xml).unwrap();
@@ -364,7 +364,7 @@ fn fixed_r24_11_xsd_declares_template_elements_fields_and_references() {
         .read_to_string(&mut xml)
         .unwrap();
     assert_eq!(
-        format!("{:x}", Sha256::digest(xml.as_bytes())),
+        hex::encode(Sha256::digest(xml.as_bytes())),
         "43161400d3eaa55db2ab416289c933aba7977e61d3da8678fad1761caaf61457"
     );
     let document = roxmltree::Document::parse(&xml).unwrap();
