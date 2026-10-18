@@ -200,3 +200,45 @@ fn shared_host_batch_separates_instrumentation_and_consumer_images() {
     );
     verify_production_owner_binary(&second, &scratch.0, None);
 }
+
+#[test]
+fn sealed_guard_refuses_untrusted_standard_library_shadow_before_import() {
+    if !enabled() {
+        return;
+    }
+    let scratch = Scratch::new();
+    let (project, _) = single_component_project(&scratch.0, tooling::native_target());
+    let marker = scratch.0.join("untrusted-module-executed");
+    fs::write(
+        project.join("tools/hashlib.py"),
+        format!(
+            "from pathlib import Path\nPath({:?}).write_text('untrusted module executed')\n",
+            marker
+        ),
+    )
+    .unwrap();
+    let output = scratch.0.join("refused-shadow");
+    let rejected = tooling::run_public_command(
+        &mut tooling::ecu_sanitizer_build_command(
+            &project,
+            &output,
+            "probe",
+            None,
+            OsStr::new("address,undefined"),
+        ),
+        &scratch.0,
+        "reject-shadow",
+        Duration::from_secs(180),
+    );
+    assert!(!rejected.status.success(), "{rejected:?}");
+    assert!(
+        !marker.exists(),
+        "unverified module executed before seal validation"
+    );
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr)
+            .contains("Unlisted source file: tools/hashlib.py"),
+        "{rejected:?}",
+    );
+    assert!(!output.exists(), "refused source created build output");
+}

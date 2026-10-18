@@ -16,9 +16,8 @@ def main() -> None:
     kinds = os.environ["AUTOSAR_SANITIZE"]
     if sys.platform != "linux" or kinds != "address,undefined":
         raise ValueError("Sealed ECU sanitizer tests require Linux address,undefined")
-    # Import the immutable package's build owner, without adding unsealed bytecode.
+    # Let the seal guard establish import paths after its standard-library imports.
     sys.dont_write_bytecode = True
-    sys.path.insert(0, str(project / "tools"))
     guard = runpy.run_path(str(project / "tools/ecu-tool.py"))
     load = runpy.run_path
     commands: list[list[str]] = []
