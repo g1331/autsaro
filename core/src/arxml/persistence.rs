@@ -5,22 +5,11 @@ pub(super) struct Patch {
     pub(super) value: String,
 }
 
-pub(super) fn patch_child(
-    node: Node<'_, '_>,
-    child_name: &str,
+pub(super) fn patch_text(
+    leaf: Node<'_, '_>,
     value: String,
     patches: &mut Vec<Patch>,
 ) -> Result<(), crate::message::LocalizedText> {
-    let leaf = node
-        .children()
-        .find(|n| n.is_element() && n.tag_name().name() == child_name)
-        .ok_or_else(|| {
-            crate::product_message!(
-                "backend.arxml.persistence.missing_child",
-                "path" => path_of(node),
-                "child" => child_name
-            )
-        })?;
     let mut content = leaf.children();
     let text = content.next().filter(|n| n.is_text()).ok_or_else(|| {
         crate::product_message!("backend.arxml.persistence.value_not_simple_text")
@@ -37,50 +26,21 @@ pub(super) fn patch_child(
     Ok(())
 }
 
-pub(super) fn patch_param(
-    node: Node<'_, '_>,
-    name: &str,
-    value: String,
-    patches: &mut Vec<Patch>,
-) -> Result<(), crate::message::LocalizedText> {
-    let mut found = node
-        .descendants()
-        .filter(|n| {
-            n.is_element()
-                && matches!(
-                    n.tag_name().name(),
-                    "ECUC-NUMERICAL-PARAM-VALUE" | "ECUC-TEXTUAL-PARAM-VALUE"
-                )
-        })
-        .filter(|n| definition(*n).is_some_and(|d| d.ends_with(&format!("/{name}"))));
-    let parameter = found.next().ok_or_else(|| {
-        crate::product_message!(
-            "backend.arxml.persistence.missing_parameter",
-            "name" => name
-        )
-    })?;
-    if found.next().is_some() {
-        return Err(crate::product_message!(
-            "backend.arxml.persistence.multiple_parameter_variants",
-            "name" => name
-        ));
-    }
-    patch_child(parameter, "VALUE", value, patches)
-}
-
 pub(super) fn apply_patches(
     text: &mut String,
     patches: &mut Vec<Patch>,
 ) -> Result<(), crate::message::LocalizedText> {
     patches.sort_by_key(|patch| std::cmp::Reverse(patch.range.start));
     let mut next_start = text.len();
-    for patch in patches {
+    for patch in patches.iter() {
         if patch.range.end > next_start {
             return Err(crate::product_message!(
                 "backend.arxml.persistence.overlapping_patch_ranges"
             ));
         }
         next_start = patch.range.start;
+    }
+    for patch in patches {
         text.replace_range(patch.range.clone(), &patch.value);
     }
     Ok(())
@@ -798,6 +758,49 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn overlapping_patch_ranges_refuse_before_any_text_is_replaced() {
+        for ranges in [[1..4, 3..5], [1..4, 1..4], [0..2, 4..7]] {
+            let mut text = "abcdef".to_owned();
+            let mut patches: Vec<_> = ranges
+                .clone()
+                .into_iter()
+                .map(|range| super::Patch {
+                    range,
+                    value: "replacement".into(),
+                })
+                .collect();
+            let error = super::apply_patches(&mut text, &mut patches).unwrap_err();
+            assert_eq!(
+                error,
+                crate::product_message!("backend.arxml.persistence.overlapping_patch_ranges")
+            );
+            assert_eq!(text, "abcdef");
+            let mut expected = ranges.to_vec();
+            expected.sort_by_key(|range| std::cmp::Reverse(range.start));
+            assert_eq!(
+                patches
+                    .iter()
+                    .map(|patch| patch.range.clone())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+        }
+        let mut text = "aé日z".to_owned();
+        let mut patches = vec![
+            super::Patch {
+                range: 1..3,
+                value: "E".into(),
+            },
+            super::Patch {
+                range: 3..6,
+                value: "day".into(),
+            },
+        ];
+        super::apply_patches(&mut text, &mut patches).unwrap();
+        assert_eq!(text, "aEdayz");
     }
 
     #[test]

@@ -2500,3 +2500,231 @@ fn creation_rejects_module_and_container_upper_bounds_atomically() {
     }
     workspace.save().unwrap();
 }
+
+#[test]
+fn integration_patch_refusals_preserve_source_and_workspace_bytes() {
+    use autosar_config_core::integration::IntegrationEdit;
+    const NS: &str = "http://autosar.org/schema/r4.0";
+    for (case, message) in [
+        ("leading_comment", "value_not_simple_text"),
+        ("trailing_comment", "value_has_mixed_content"),
+    ] {
+        let scratch = Scratch::new();
+        let directory = scratch.0.join("Refusal");
+        let workspace = signals(&directory, "Refusal");
+        let channel = workspace.inspect_integration().description.unwrap().signals[0].clone();
+        let target = &channel.trigger;
+        let mut changed = false;
+        for source in projection(&workspace).sources {
+            let mut text = fs::read_to_string(&source.path).unwrap();
+            let document = roxmltree::Document::parse(&text).unwrap();
+            let node = document.descendants().find(|node| {
+                node.is_element()
+                    && named_xml_path(*node) == *target
+                    && node
+                        .children()
+                        .any(|child| child.has_tag_name((NS, "SHORT-NAME")))
+            });
+            let Some(node) = node else {
+                continue;
+            };
+            let identifier = node
+                .children()
+                .find(|child| child.has_tag_name((NS, "IDENTIFIER")))
+                .unwrap();
+            let range = identifier.range();
+            let replacement = if case == "leading_comment" {
+                format!(
+                    "<IDENTIFIER><!-- retained -->{}</IDENTIFIER>",
+                    channel.can_id
+                )
+            } else {
+                format!(
+                    "<IDENTIFIER>{}<!-- retained --></IDENTIFIER>",
+                    channel.can_id
+                )
+            };
+            text.replace_range(range, &replacement);
+            fs::write(&source.path, text).unwrap();
+            changed = true;
+            break;
+        }
+        assert!(changed, "{case}: target {target}");
+        let mut workspace = Workspace::open_project_manifest(
+            &directory.join("workbench-project.json"),
+            &scratch.0.join("cache"),
+        )
+        .unwrap();
+        assert!(
+            workspace.inspect_integration().diagnostics.is_empty(),
+            "{case}: {:?}",
+            workspace.inspect_integration().diagnostics
+        );
+        let before = workspace.preview_integration_save().unwrap();
+        let fingerprint = workspace.input_fingerprint().unwrap();
+        let projection_before = serde_json::to_value(projection(&workspace)).unwrap();
+        let bytes: Vec<_> = before
+            .files
+            .iter()
+            .map(|file| (file.path.clone(), fs::read(&file.path).unwrap()))
+            .collect();
+        let issues = workspace
+            .edit_integration(IntegrationEdit {
+                can_ids: [(channel.port.clone(), (channel.can_id + 1) % 0x800)].into(),
+                application_period_ms: None,
+            })
+            .unwrap_err();
+        assert_eq!(issues.len(), 1, "{case}: {issues:?}");
+        let issue = &issues[0];
+        assert_eq!(issue.code, "EDIT_UNSAFE", "{case}");
+        assert_eq!(issue.object.as_deref(), Some(target.as_str()), "{case}");
+        assert_eq!(issue.file.as_deref(), Some("extract.arxml"), "{case}");
+        assert_eq!(
+            serde_json::to_value(&issue.message).unwrap()["key"],
+            format!("backend.arxml.persistence.{message}"),
+            "{case}"
+        );
+        assert_eq!(
+            workspace.input_fingerprint().unwrap(),
+            fingerprint,
+            "{case}"
+        );
+        assert_eq!(
+            serde_json::to_value(projection(&workspace)).unwrap(),
+            projection_before,
+            "{case}"
+        );
+        assert_eq!(
+            serde_json::to_value(workspace.preview_integration_save().unwrap()).unwrap(),
+            serde_json::to_value(before).unwrap(),
+            "{case}"
+        );
+        for (path, original) in bytes {
+            assert_eq!(fs::read(path).unwrap(), original, "{case}");
+        }
+    }
+}
+
+fn named_xml_path(node: roxmltree::Node<'_, '_>) -> String {
+    let mut names: Vec<_> = node
+        .ancestors()
+        .filter_map(|ancestor| {
+            ancestor
+                .children()
+                .find(|child| child.has_tag_name(("http://autosar.org/schema/r4.0", "SHORT-NAME")))
+                .and_then(|child| child.text())
+        })
+        .collect();
+    names.reverse();
+    format!("/{}", names.join("/"))
+}
+
+#[test]
+fn integration_plan_refuses_missing_and_duplicate_patch_inputs_before_editing() {
+    use autosar_config_core::integration::IntegrationEdit;
+    for case in ["missing_child", "missing_parameter", "duplicate_parameter"] {
+        let scratch = Scratch::new();
+        let directory = scratch.0.join("Invalid");
+        let workspace = signals(&directory, "Invalid");
+        let channel = workspace.inspect_integration().description.unwrap().signals[0].clone();
+        let (file, target) = if case == "missing_child" {
+            ("extract.arxml", &channel.trigger)
+        } else {
+            ("ecuc.arxml", &channel.can_if_pdu)
+        };
+        let source = projection(&workspace)
+            .sources
+            .into_iter()
+            .find(|source| source.path.ends_with(file))
+            .unwrap();
+        let mut text = fs::read_to_string(&source.path).unwrap();
+        let document = roxmltree::Document::parse(&text).unwrap();
+        let owner = document
+            .descendants()
+            .find(|node| {
+                node.is_element()
+                    && named_xml_path(*node) == *target
+                    && node
+                        .children()
+                        .any(|child| child.tag_name().name() == "SHORT-NAME")
+            })
+            .unwrap();
+        let input = if case == "missing_child" {
+            owner
+                .children()
+                .find(|child| child.tag_name().name() == "IDENTIFIER")
+                .unwrap()
+        } else {
+            let parameter = if channel.receive {
+                "CanIfRxPduCanId"
+            } else {
+                "CanIfTxPduCanId"
+            };
+            owner
+                .descendants()
+                .find(|node| {
+                    node.tag_name().name() == "ECUC-NUMERICAL-PARAM-VALUE"
+                        && node.children().any(|child| {
+                            child.tag_name().name() == "DEFINITION-REF"
+                                && child
+                                    .text()
+                                    .is_some_and(|text| text.ends_with(&format!("/{parameter}")))
+                        })
+                })
+                .unwrap()
+        };
+        let range = input.range();
+        let replacement = if case == "duplicate_parameter" {
+            text[range.clone()].repeat(2)
+        } else {
+            String::new()
+        };
+        text.replace_range(range, &replacement);
+        fs::write(&source.path, &text).unwrap();
+        let mut workspace = Workspace::open_project_manifest(
+            &directory.join("workbench-project.json"),
+            &scratch.0.join("cache"),
+        )
+        .unwrap();
+        let before = serde_json::to_value(projection(&workspace)).unwrap();
+        let fingerprint = workspace.input_fingerprint().unwrap();
+        let issues = workspace
+            .edit_integration(IntegrationEdit {
+                can_ids: [(channel.port.clone(), channel.can_id + 1)].into(),
+                application_period_ms: None,
+            })
+            .unwrap_err();
+        let (code, key) = match case {
+            "missing_child" => (
+                "CAN_ID_CONFLICT",
+                "backend.integration.communication.classical_can_standard_identifier_invalid",
+            ),
+            "missing_parameter" => (
+                "CAN_ID_CONFLICT",
+                "backend.integration.communication.canif_identifier_or_addressing_type_mismatch",
+            ),
+            _ => (
+                "MULTIPLICITY",
+                "backend.definitions.validation.invalid_entry_cardinality",
+            ),
+        };
+        assert!(
+            issues.iter().any(|issue| issue.code == code
+                && issue.file.as_deref() == Some(file)
+                && issue.object.as_deref() == Some(target.as_str())
+                && serde_json::to_value(&issue.message).unwrap()["key"] == key),
+            "{case}: {issues:?}"
+        );
+        assert_eq!(
+            serde_json::to_value(projection(&workspace)).unwrap(),
+            before,
+            "{case}"
+        );
+        assert_eq!(
+            workspace.input_fingerprint().unwrap(),
+            fingerprint,
+            "{case}"
+        );
+        assert_eq!(fs::read_to_string(&source.path).unwrap(), text, "{case}");
+    }
+}
