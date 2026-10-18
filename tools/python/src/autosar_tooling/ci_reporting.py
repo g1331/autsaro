@@ -119,7 +119,11 @@ def relative(name: str) -> str:
 
 
 def location(
-    name: str, line: int, project: Path | None, repository: Path
+    name: str,
+    line: int,
+    project: Path | None,
+    repository: Path,
+    origins: dict[str, str],
 ) -> tuple[str, int]:
     """Map delivered runtime copies to their real checkout source, never to an emitter."""
     name = relative(name)
@@ -127,13 +131,6 @@ def location(
         raise ValueError("Scanner line must be positive")
     if project is None:
         return name, line
-    metadata = project / "meta/integration.json"
-    origins = {
-        copy: source
-        for source, copy in json.loads(metadata.read_text(encoding="utf-8"))[
-            "originalBswSources"
-        ].items()
-    }
     if name in origins:
         original = relative(origins[name])
         # Copies can carry a generated preamble. Only exact source text can relocate a line.
@@ -217,6 +214,17 @@ def cppcheck(
             (row["rule"], row["file"], row["source"])
             for row in (comparison or {}).get("new", [])
         }
+        metadata = project / "meta/integration.json"
+        origins = (
+            {
+                copy: source
+                for source, copy in json.loads(metadata.read_text(encoding="utf-8"))[
+                    "originalBswSources"
+                ].items()
+            }
+            if metadata.is_file()
+            else {}
+        )
         for diagnostic in data.get("diagnostics", []):
             if diagnostic["id"] == "checkersReport":
                 continue
@@ -224,7 +232,7 @@ def cppcheck(
                 if not place.get("line") or int(place["line"]) < 1:
                     continue
                 name, line = location(
-                    place["file"], int(place["line"]), project, repository
+                    place["file"], int(place["line"]), project, repository, origins
                 )
                 row = {
                     "rule": diagnostic["id"],
