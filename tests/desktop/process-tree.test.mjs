@@ -139,7 +139,7 @@ test('a driver output write failure is reported after complete owned native exit
           error.errors.some(
             (item) => item.path === output && ['EISDIR', 'EACCES', 'EPERM'].includes(item.code),
           ),
-          'The reported failure must identify the injected output path',
+          error,
         );
         captureErrors = error.errors.map(String);
         return true;
