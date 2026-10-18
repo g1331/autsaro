@@ -149,6 +149,21 @@ Stale citations (not an official item of R24-11):
                 self.assertIn("New diagnostics: 2 occurrences", output.read_text())
                 self.assertIn("rule runtime/test.c:1", output.read_text())
                 self.assertNotIn("unknown", output.read_text())
+                output.unlink()
+                del data["comparison"]
+                (result_dir / "summary.json").write_text(json.dumps(data))
+                with mock.patch(
+                    "autosar_tooling.c_comparison.compare",
+                    side_effect=ValueError("C baseline refused: identity differs"),
+                ):
+                    report.cppcheck(result_dir.parent, root, root / "baseline")
+                self.assertIn(
+                    "C baseline refused: identity differs", output.read_text()
+                )
+                self.assertIn("New diagnostics: unknown", output.read_text())
+                self.assertFalse(
+                    json.loads((result_dir / "summary.json").read_text())["passed"]
+                )
 
     def test_clang_tidy_uses_shared_baseline_and_reports_partial_analysis(self):
         with tempfile.TemporaryDirectory() as directory:

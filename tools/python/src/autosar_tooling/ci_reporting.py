@@ -171,7 +171,9 @@ def sarif(rows: list[dict], tool: str) -> dict:
     }
 
 
-def cppcheck(directory: Path, repository: Path) -> list[dict]:
+def cppcheck(
+    directory: Path, repository: Path, baseline: Path | None = None
+) -> list[dict]:
     rows = []
     details = []
     for path in sorted(directory.glob("*/summary.json")):
@@ -181,6 +183,15 @@ def cppcheck(directory: Path, repository: Path) -> list[dict]:
             f"{path.parent.name}: source passed={data['passed']}; analysis error={data['error']}"
         )
         comparison = data.get("comparison")
+        if comparison is None and baseline is not None:
+            from autosar_tooling.c_comparison import compare
+
+            try:
+                comparison = compare(
+                    data, project, path.parent, baseline / path.parent.name
+                )
+            except ValueError as error:
+                details.append(str(error))
         if comparison is None:
             details.append(
                 "New diagnostics: unknown (no accepted baseline comparison)."
@@ -305,7 +316,9 @@ def main(argv: list[str] | None = None) -> int:
     if bool(args.cppcheck_directory) == bool(args.clang_tidy):
         parser.error("select exactly one scanner input")
     if args.cppcheck_directory:
-        rows = cppcheck(args.cppcheck_directory.resolve(), Path.cwd())
+        rows = cppcheck(
+            args.cppcheck_directory.resolve(), Path.cwd(), args.baseline_directory
+        )
         tool = "Cppcheck / MISRA"
     else:
         rows = clang_tidy(

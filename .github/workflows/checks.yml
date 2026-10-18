@@ -610,6 +610,7 @@ jobs:
   c-analysis-samples:
     permissions:
       contents: read
+      actions: read
       security-events: write
     needs: c-analysis-prepare
     strategy:
@@ -700,9 +701,31 @@ jobs:
                   print(name, error)
                   failed = True
           sys.exit(1 if failed else 0)
+      - name: Retrieve matching master baseline for presentation
+        if: always()
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASELINE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base }}
+          BASELINE_ARTIFACT: c-analysis-${{ matrix.target }}-${{ matrix.group }}
+        run: |
+          import json, os, subprocess
+          # Optional display evidence only. Missing/expired artifacts cannot change the source verdict.
+          base = os.environ['BASELINE_SHA']
+          try:
+              if not base or set(base) == {'0'}:
+                  raise ValueError('No baseline commit')
+              runs = subprocess.run(['gh', 'run', 'list', '--workflow', 'checks.yml', '--branch', 'master',
+                  '--commit', base, '--status', 'success', '--limit', '1', '--json', 'databaseId'],
+                  capture_output=True, text=True, check=True)
+              run = json.loads(runs.stdout)[0]['databaseId']
+              subprocess.run(['gh', 'run', 'download', str(run), '--name', os.environ['BASELINE_ARTIFACT'],
+                  '--dir', 'build/c-analysis-baseline'], check=True)
+          except (subprocess.SubprocessError, ValueError, IndexError) as error:
+              print('Baseline unavailable for presentation:', error)
       - name: Summarize and convert Cppcheck diagnostics
         if: always()
-        run: python -m autosar_tooling.ci_reporting sarif --cppcheck-directory build/c-analysis-results --output build/cppcheck.sarif
+        run: python -m autosar_tooling.ci_reporting sarif --cppcheck-directory build/c-analysis-results --baseline-directory build/c-analysis-baseline --output build/cppcheck.sarif
       - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         if: ${{ always() && hashFiles('build/cppcheck.sarif') != '' }}
         with:
