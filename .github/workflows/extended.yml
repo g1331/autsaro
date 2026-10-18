@@ -18,6 +18,7 @@ permissions:
   contents: read
 env:
   PYTHONUTF8: '1'
+  PYTHONPATH: tools/python/src
 jobs:
   changes:
     name: Select extended checks
@@ -107,7 +108,7 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run --locked ruff check tools tests/python scripts
-      - run: uv run --locked python -B -m unittest discover -s tests/python
+      - run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python
       - run: uv build --out-dir build/python
   receiver:
     needs: changes
@@ -151,7 +152,7 @@ jobs:
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Generate complete receiver samples
-        run: cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
+        run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - name: All moved samples build and run with receiver Python 3.11–3.14
         shell: python
         run: |
@@ -161,7 +162,7 @@ jobs:
               subprocess.run(['uv', 'python', 'install', '--no-bin', version], check=True)
               receiver = subprocess.check_output(['uv', 'python', 'find', '--no-project', '--managed-python', version], text=True).strip()
               print(f'::group::Receiver Python {version}: {receiver}', flush=True)
-              result = subprocess.run(['uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
+              result = subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', 'uv', 'run', '--locked', 'python', '-B', '-m', 'unittest', 'discover', '-s', 'tests/python/native', '-p', 'test_offline_delivery.py'],
                   env={**os.environ, 'AUTOSAR_RECEIVER_PYTHON': receiver, 'AUTOSAR_RECEIVER_SAMPLES': 'standard-ecu user-application component-pipeline no-diagnostic'})
               print('::endgroup::', flush=True)
               if result.returncode:
@@ -186,7 +187,7 @@ jobs:
           cache-dependency-path: ui/package-lock.json
       - run: npm ci --prefix ui
       - run: npm run lint --prefix ui
-      - run: npm run test --prefix ui
+      - run: python -m autosar_tooling.ci_reporting run -- npm run test --prefix ui
       - run: npm run build --prefix ui
   desktop:
     needs: changes
