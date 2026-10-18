@@ -961,7 +961,8 @@ pub(super) fn files(
     }}
     {}();
     Can_MainFunction_Mode();
-    if ((CanIf_GetControllerMode({}, &actual) != E_OK) || (actual != CAN_CS_STARTED)) {{
+    if ((CanIf_GetControllerMode({}, &actual) != E_OK) ||
+        (actual != CAN_CS_STARTED)) {{
         return E_NOT_OK;
     }}
     SchM_StartTiming();

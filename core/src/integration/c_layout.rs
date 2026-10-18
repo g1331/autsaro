@@ -335,8 +335,11 @@ pub(super) fn commented_defines<N: AsRef<str>, V: AsRef<str>>(
             .max()
             .unwrap_or(0)
             .max(value.len());
-        if "#define ".len() + width + 1 + room + tail.len() >= COLUMNS {
+        if !run.is_empty() && "#define ".len() + width + 1 + room + tail.len() >= COLUMNS {
             flush(&mut output, &mut run);
+            // Blank lines keep clang-format from aligning separate runs
+            // back together beyond the column limit.
+            output.push('\n');
         }
         let line = format!("#define {name} {value}{tail}");
         if line.len() == COLUMNS {
