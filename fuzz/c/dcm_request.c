@@ -24,8 +24,10 @@ enum { MODE_NO, MODE_SILENT, MODE_FULL };
 
 static Std_ReturnType read_did(uint8 *data);
 static void authentication(uint8 state);
-static Dcm_ConfigType config = {
+/* Restored before each input, so that an input runs alone as it does when replayed. */
+static const Dcm_ConfigType defaults = {
     RX, TX, CHANNEL, 0x1234u, read_did, 4u, 50u, 5000u, 5u, 64u, ROUTER, authentication, 0u};
+static Dcm_ConfigType config;
 static const uint8 *input;
 static size_t input_size;
 static size_t input_at;
@@ -46,6 +48,8 @@ static uint8 rx_bytes[256];
 static boolean request_current;
 static boolean request_waiting;
 static boolean request_answered;
+/* Indicated in full communication, which has not been left since. */
+static boolean request_full;
 static uint8 request[256];
 static PduLengthType request_length;
 /* The response transmission from PduR_DcmTransmit until its confirmation. */
@@ -77,6 +81,10 @@ static boolean take(uint8 *value)
 static boolean no_response(uint8 sid)
 {
     return ((sid >= 0x40u) && (sid <= 0x7fu)) || (sid >= 0xc0u);
+}
+static boolean known_service(uint8 sid)
+{
+    return (sid == 0x10u) || (sid == 0x22u) || (sid == 0x3eu);
 }
 
 static Std_ReturnType read_did(uint8 *data)
@@ -114,14 +122,13 @@ Std_ReturnType SchM_Switch_Dcm_DcmDiagnosticSessionControl(
 static void check_response(void)
 {
     const uint8 sid = request[0];
-    const boolean known_service = (sid == 0x10u) || (sid == 0x22u) || (sid == 0x3eu);
     const boolean suppressed = ((sid == 0x10u) || (sid == 0x3eu)) && (request_length >= 2u) &&
                                ((request[1] & 0x80u) != 0u);
     if (response[0] == 0x7fu) {
         CHECK(tx_length == 3u && response[1] == sid && response[2] != 0u);
-        CHECK(known_service || response[2] == 0x11u);
+        CHECK(known_service(sid) || response[2] == 0x11u);
     } else {
-        CHECK(known_service && !suppressed && response[0] == (uint8)(sid + 0x40u));
+        CHECK(known_service(sid) && !suppressed && response[0] == (uint8)(sid + 0x40u));
     }
 }
 /* Copies through Dcm_CopyTxData with the retry semantics of SWS_COMTYPE_00027: DATACONF
@@ -259,6 +266,7 @@ static void indicate(PduIdType id, Std_ReturnType result)
         if ((result == E_OK) && (rx_copied == rx_length)) {
             request_current = TRUE;
             request_waiting = (mode != MODE_NO);
+            request_full = (mode == MODE_FULL);
             request_answered = FALSE;
             request_length = rx_length;
             memcpy(request, rx_bytes, rx_length);
@@ -266,15 +274,21 @@ static void indicate(PduIdType id, Std_ReturnType result)
     }
     Dcm_TpRxIndication(id, result);
 }
+/* A service outside the table is answered with NRC 0x11 (SWS_Dcm_00197) by the main
+ * function that processes it, when communication allows the response. */
 static void main_function(void)
 {
+    const boolean owed =
+        request_waiting && request_full && !known_service(request[0]) && !no_response(request[0]);
     Dcm_MainFunction();
+    CHECK(!owed || request_answered);
     request_waiting = FALSE;
 }
 static void enter(uint8 next, NetworkHandleType channel)
 {
     if (channel == CHANNEL) {
         mode = next;
+        request_full = request_full && (next == MODE_FULL);
     }
     if (next == MODE_NO) {
         Dcm_ComM_NoComModeEntered(channel);
@@ -457,6 +471,7 @@ int DcmFuzz_TestOneInput(const uint8 *data, size_t size)
     input = data;
     input_size = size;
     input_at = 0u;
+    config = defaults;
     configure();
     behave(0x06u);
     comm_active = FALSE;

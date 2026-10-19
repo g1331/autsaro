@@ -23,22 +23,24 @@ enum { RX_NSDU = 4u, TX_NSDU = 6u, RX_NPDU = 2u, TX_NPDU = 3u, UPPER_RX = 21u, U
  * most 9 periods and a reception sends at most three FC(WAIT). */
 enum { SETTLE = 6000u, FREE_LIMIT = 4096u };
 
-static CanTp_ConfigType config = {RX_NSDU,
-                                  TX_NSDU,
-                                  RX_NPDU,
-                                  TX_NPDU,
-                                  256u,
-                                  2u,
-                                  2u,
-                                  2u,
-                                  2u,
-                                  2u,
-                                  2u,
-                                  1u,
-                                  0u,
-                                  0xccu,
-                                  UPPER_RX,
-                                  UPPER_TX};
+/* Restored before each input, so that an input runs alone as it does when replayed. */
+static const CanTp_ConfigType defaults = {RX_NSDU,
+                                          TX_NSDU,
+                                          RX_NPDU,
+                                          TX_NPDU,
+                                          256u,
+                                          2u,
+                                          2u,
+                                          2u,
+                                          2u,
+                                          2u,
+                                          2u,
+                                          1u,
+                                          0u,
+                                          0xccu,
+                                          UPPER_RX,
+                                          UPPER_TX};
+static CanTp_ConfigType config;
 static const uint8 *input;
 static size_t input_size;
 static size_t input_at;
@@ -64,6 +66,12 @@ static PduLengthType tx_length;
 static PduLengthType tx_copied;
 /* A frame LSduR accepted and has not confirmed. */
 static boolean frame_pending;
+/* Data bytes of the last Tx copy, which fill the next SF or CF. */
+static PduLengthType tx_copy_length;
+/* An FF refused with BUFREQ_E_OVFL owes FC(OVFLW) (SWS_CanTp_00318) until it is sent, a new
+ * SF or FF replaces it (00057 table 1), the module restarts, or a main function runs while the
+ * Tx N-PDU is busy, after which N_Ar may end it (00311). */
+static boolean overflow_owed;
 static unsigned rx_results;
 static Std_ReturnType rx_last;
 static unsigned tx_results;
@@ -110,6 +118,7 @@ BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
     CHECK(info != NULL_PTR && info->MetaDataPtr == NULL_PTR && info->SduLength <= 8u);
     CHECK(info->SduLength <= length && (info->SduLength == 0u || info->SduDataPtr != NULL_PTR));
     CHECK(available != NULL_PTR);
+    overflow_owed = (start_result == BUFREQ_E_OVFL) && (length > 7u);
     if (start_result == BUFREQ_OK) {
         rx_open = TRUE;
         rx_length = length;
@@ -168,6 +177,7 @@ BufReq_ReturnType PduR_CanTpCopyTxData(PduIdType id,
         /* Writes the whole span CanTp offers, so a short frame buffer is reported. */
         memset(info->SduDataPtr, 0x5a, info->SduLength);
         tx_copied = (PduLengthType)(tx_copied + info->SduLength);
+        tx_copy_length = info->SduLength;
     }
     *available = (PduLengthType)(tx_length - tx_copied);
     return copy_tx_result;
@@ -184,13 +194,34 @@ void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result)
     ++tx_results;
 }
 /* One frame at a time on the Tx N-PDU until its confirmation (SWS_CanTp_00075, 00248),
- * always padded to eight bytes (SWS_CanTp_00347, 00348). */
+ * always eight bytes with the unused bytes of an SF, CF or FC set to the padding byte
+ * (SWS_CanTp_00347, 00348). */
 Std_ReturnType LSduR_CanTpTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
 {
+    const uint8 *frame;
+    uint8 used = 8u;
+    uint8 i;
     outside();
     CHECK(running && TxPduId == TX_NPDU && !frame_pending);
     CHECK(PduInfoPtr != NULL_PTR && PduInfoPtr->SduDataPtr != NULL_PTR);
     CHECK(PduInfoPtr->MetaDataPtr == NULL_PTR && PduInfoPtr->SduLength == 8u);
+    frame = PduInfoPtr->SduDataPtr;
+    if ((frame[0] >> 4u) == 0u) {
+        used = (uint8)(1u + frame[0]);
+        CHECK(used >= 2u && used <= 8u);
+    } else if ((frame[0] >> 4u) == 2u) {
+        used = (uint8)(1u + tx_copy_length);
+    } else if ((frame[0] >> 4u) == 3u) {
+        used = 3u;
+        if (frame[0] == 0x32u) {
+            overflow_owed = FALSE;
+        }
+    } else {
+        CHECK((frame[0] >> 4u) == 1u);
+    }
+    for (i = used; i < 8u; ++i) {
+        CHECK(frame[i] == config.padding);
+    }
     if (lower_result == E_OK) {
         frame_pending = TRUE;
         if (confirm_inside) {
@@ -239,6 +270,7 @@ static void restart(void)
 {
     CanTp_Init(&config);
     running = TRUE;
+    overflow_owed = FALSE;
     /* All connections are lost without notification; a frame in flight stays until its
      * confirmation (SWS_CanTp_00273, 00075). */
     close_reception();
@@ -345,6 +377,9 @@ static void operate(void)
             case 3u: {
                 uint8 i;
                 for (i = 0u; i <= (value & 3u); ++i) {
+                    if (frame_pending) {
+                        overflow_owed = FALSE;
+                    }
                     CanTp_MainFunction();
                 }
                 break;
@@ -396,6 +431,7 @@ static void operate(void)
                 /* No notification about pending sessions (SWS_CanTp_00200). */
                 CanTp_Shutdown();
                 running = FALSE;
+                overflow_owed = FALSE;
                 close_reception();
                 tx_open = FALSE;
                 break;
@@ -413,13 +449,13 @@ static void converge(void)
     if (!running) {
         restart();
     }
-    for (i = 0u; (i < SETTLE) && (rx_open || tx_open || frame_pending); ++i) {
+    for (i = 0u; (i < SETTLE) && (rx_open || tx_open || frame_pending || overflow_owed); ++i) {
         if (frame_pending) {
             confirm(E_OK);
         }
         CanTp_MainFunction();
     }
-    CHECK(!rx_open && !tx_open);
+    CHECK(!rx_open && !tx_open && !overflow_owed);
     before = rx_results;
     receive(RX_NPDU, single, 8u, FALSE);
     CHECK(rx_results == before + 1u && rx_last == E_OK);
@@ -439,6 +475,7 @@ int CanTpFuzz_TestOneInput(const uint8 *data, size_t size)
     input = data;
     input_size = size;
     input_at = 0u;
+    config = defaults;
     configure();
     frame_pending = FALSE;
     cooperate();
