@@ -60,7 +60,7 @@ jobs:
               native = code and not all(is_documentation(path) or path.startswith('ui/') for path in listing)
               print('\n'.join(listing))
           if not os.environ['PULL_REQUEST'] and os.environ.get('BASE') and set(os.environ['BASE']) != {'0'}:
-              diff = subprocess.run(['git', 'diff', '--name-only', os.environ['BASE'], os.environ['GITHUB_SHA']],
+              diff = subprocess.run(['git', 'diff', '--no-renames', '--name-only', os.environ['BASE'], os.environ['GITHUB_SHA']],
                   capture_output=True, text=True)
               listing = diff.stdout.split() if diff.returncode == 0 else None
           desktop_paths = ('ui/', 'src-tauri/', 'core/', 'runtime/', 'tests/desktop/', 'tools/python/',

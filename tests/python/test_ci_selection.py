@@ -92,6 +92,36 @@ class CiSelectionTests(unittest.TestCase):
                         except SystemExit as error:
                             self.assertEqual(error.code == 0, result == "success" or selected == "false" and result == "skipped")
 
+    def test_push_rename_out_of_gui_inputs_still_selects_desktop(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        script = workflow["jobs"]["changes"]["steps"][1]["run"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+            git("init", "--quiet")
+            original = root / "ui/public/example.svg"
+            original.parent.mkdir(parents=True)
+            original.write_text("<svg/>", encoding="utf-8")
+            git("add", ".")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "fixture")
+            base = git("rev-parse", "HEAD")
+            moved = root / "docs/images/example.svg"
+            moved.parent.mkdir(parents=True)
+            original.rename(moved)
+            git("add", "--all")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "move")
+            self.assertIn("R100", git("diff", "--name-status", "-M", base, "HEAD"))
+            source = root / "detect.py"
+            source.write_text(script, encoding="utf-8")
+            output = root / "output"
+            env = {"PULL_REQUEST": "", "BASE": base, "GITHUB_SHA": "HEAD", "GITHUB_OUTPUT": str(output)}
+            run = subprocess.run
+            with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as command:
+                command.side_effect = lambda argv, **kwargs: run(argv, cwd=root, **kwargs)
+                runpy.run_path(str(source))
+            self.assertIn("desktop=true\n", output.read_text())
+
     def test_extended_does_not_duplicate_automatic_desktop(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text(encoding="utf-8"))
         script = workflow["jobs"]["changes"]["steps"][1]["run"]
