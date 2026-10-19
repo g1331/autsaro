@@ -1,8 +1,8 @@
 name: Desktop acceptance
 # Real GUI/IPC scenarios through tauri-driver on disposable GitHub-hosted
 # runners: Linux runs on a private Xvfb display, Windows in the runner's own
-# session. Not part of the required checks; extended.yml calls it for pull
-# requests and master pushes that change the application.
+# session. checks.yml calls it for relevant pull requests and master pushes as
+# part of CI required; extended.yml also supports explicit manual acceptance.
 on:
   workflow_call:
     inputs:

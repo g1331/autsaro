@@ -25,16 +25,22 @@ jobs:
     outputs:
       code: ${{ steps.detect.outputs.code }}
       native: ${{ steps.detect.outputs.native }}
+      desktop: ${{ steps.detect.outputs.desktop }}
     steps:
       # Pull requests touching only reader documentation and design records
-      # skip build and test jobs; pushes and manual runs always check everything.
+      # skip build and test jobs; pushes keep the full non-GUI checks.
       # Pull requests that otherwise change only ui/ also skip the native, C analysis and
       # process jobs: none of their inputs is under ui/ (tests/python/test_ci_selection.py).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - id: detect
         shell: python
         env:
           GH_TOKEN: ${{ github.token }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.before }}
         run: |
           import os, subprocess
           documentation = ('docs/', '.agents/', '.claude/', '.codex/', '.impeccable/', '.github/ISSUE_TEMPLATE/')
@@ -44,18 +50,33 @@ jobs:
               # Root guides only; nested Markdown such as runtime/README.md ships with generated projects.
               return '/' not in path and path.endswith('.md')
           code = native = True
+          listing = None
           if os.environ['PULL_REQUEST']:
-              listing = subprocess.run(['gh', 'api', '--paginate', '--jq', '.[].filename',
+              listing = subprocess.run(['gh', 'api', '--paginate', '--jq', '.[] | .filename, (.previous_filename // empty)',
                   f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PULL_REQUEST']}/files"],
                   check=True, capture_output=True, text=True).stdout.split()
               # The files API stops at 3000 entries; treat a truncated listing as code.
               code = not listing or len(listing) >= 3000 or not all(map(is_documentation, listing))
               native = code and not all(is_documentation(path) or path.startswith('ui/') for path in listing)
               print('\n'.join(listing))
+          if not os.environ['PULL_REQUEST'] and os.environ.get('BASE') and set(os.environ['BASE']) != {'0'}:
+              diff = subprocess.run(['git', 'diff', '--no-renames', '--name-only', os.environ['BASE'], os.environ['GITHUB_SHA']],
+                  capture_output=True, text=True)
+              listing = diff.stdout.split() if diff.returncode == 0 else None
+          desktop_paths = ('ui/', 'src-tauri/', 'core/', 'runtime/', 'tests/desktop/', 'tools/python/',
+              'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.node-version', '.python-version',
+              'pyproject.toml', 'uv.lock', '.github/actions/', '.github/workflows/checks.yml',
+              '.github/workflows/desktop.yml', 'tests/python/test_ci_selection.py', 'tests/python/test_desktop_workflow.py')
+          desktop = listing is None or not listing or len(listing) >= 3000 or any(path.startswith(desktop_paths) for path in listing)
           print('code=' + str(code).lower(), 'native=' + str(native).lower())
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write('code=' + str(code).lower() + '\n')
               output.write('native=' + str(native).lower() + '\n')
+              output.write('desktop=' + str(desktop).lower() + '\n')
+  desktop-scenarios:
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    uses: ./.github/workflows/desktop.yml
   ui:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -815,7 +836,7 @@ jobs:
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
     name: CI required
-    needs: [changes, ui, python, core, desktop, process, native, native-os, native-sanitizers, native-delivery, quality, c-analysis]
+    needs: [changes, desktop-scenarios, ui, python, core, desktop, process, native, native-os, native-sanitizers, native-delivery, quality, c-analysis]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -833,6 +854,8 @@ jobs:
           UI_INDEPENDENT = {'core', 'process', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'c-analysis'}
           # Skips are accepted only where the change detection selected them.
           def accepted(name):
+              if name == 'desktop-scenarios':
+                  return {'success', 'skipped'} if outputs.get('desktop') == 'false' else {'success'}
               if name == 'changes':
                   return {'success'}
               return {'success', 'skipped'} if not code or not native and name in UI_INDEPENDENT else {'success'}

@@ -33,7 +33,7 @@ transport 请求中止或响应体解析失败后，会话保留首个错误并�
 
 在沙箱或容器外执行的会话，须在执行会话的同一宿主 PID 命名空间核对进程退出；另一命名空间的 `/proc` 看不到目标 PID，不能证明它已退出。归因时记录每次进程／线程读取的实际时间，集合入口时间不能代表所有后续读取；缺页次数和 CPU 时间是生命周期累计量，只有同一请求区间的增量及对应栈才能说明该次等待中的活动。
 
-`desktop.yml` 在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` 上各构建一次验证版，将应用、资源与 tauri-driver 上传为工件，再启动 Linux 两个、Windows 三个场景分片。文件名单按 run 38993367434 的基线与优化后 run 39005768979、39008074660、39013110980 的耗时均衡；Windows 的第三个分片为已观察到的执行波动留出余量，明确写在 workflow 的 `matrix.include` 中；每个文件只属于一个分片，Python 开发测试检查全量覆盖。Linux 分片内文件并发数为 2，Windows 为 1；文件内有状态的检查保持顺序。每个分片都保留自己的结果工件 14 天，任一分片失败都会使调用方的 `Extended checks result` 失败。它由 [`Extended checks`](README.md#ci) 调用：改动 `ui/`、`src-tauri/` 或 `tests/desktop/` 的 PR，以及改动这些目录、`core/` 或 Cargo 依赖的 master 推送；PR 加 `full-ci` 标签时也运行。手动运行 `desktop.yml` 可在 `scenarios` 中填写以空格分隔的场景文件或 glob，只运行受影响的场景，默认全部。它目前不在必需检查中。这些场景验证开发构建的界面与 IPC，不提供安装包、无源码 checkout 或断网环境的验收证据。
+`desktop.yml` 在 GitHub 托管的 `ubuntu-24.04` 与 `windows-latest` 上各构建一次验证版，将应用、资源与 tauri-driver 上传为工件，再启动 Linux 两个、Windows 三个场景分片。文件名单按 run 38993367434 的基线与优化后 run 39005768979、39008074660、39013110980 的耗时均衡；Windows 的第三个分片为已观察到的执行波动留出余量，明确写在 workflow 的 `matrix.include` 中；每个文件只属于一个分片，Python 开发测试检查全量覆盖。Linux 分片内文件并发数为 2，Windows 为 1；文件内有状态的检查保持顺序。每个分片都保留自己的结果工件 14 天，任一分片失败或取消都会使调用方的 `CI required` 失败。它由 [`Development checks`](README.md#ci) 按路径调用：PR 与 master 推送改动界面、桌面后端、core、runtime、桌面场景、Python 工具、共享依赖／构建配置或桌面 workflow 时运行；路径列表不完整或基准未知时运行全量。纯文档与无关路径跳过，汇总只在检测明确未选择时接受跳过。Extended 不重复自动运行桌面；手动 Extended 仍运行全量。手动运行 `desktop.yml` 可在 `scenarios` 中填写以空格分隔的场景文件或 glob，只运行受影响的场景，默认全部。这些场景验证开发构建的界面与 IPC，不提供安装包、无源码 checkout 或断网环境的验收证据。
 
 ## 编写场景
 
@@ -50,4 +50,4 @@ transport 请求中止或响应体解析失败后，会话保留首个错误并�
 
 核查每次运行的 commit、触发事件和 `run_attempt`，再从五个分片的实际日志核对文件名单、执行／失败／跳过数量及 Node 场景耗时。构建依赖、验证版应用构建、分片准备、场景步骤和排队分别计时；并行分片的平台场景关键路径取最慢分片，不把所有分片相加，也不把构建到末片结束的墙钟时间称为场景耗时。部分选择的手动运行不能代替全量证据。jobs、日志或工件不可读时保留证据缺口，不凭汇总成功提升门禁。
 
-证据成立后复用现有 `desktop.yml` 调用与共享构建，在 Development checks 按相关路径选择并加入 `CI required`，同时移除 Extended 中同一事件的重复调用。提升前仍保留现有手动与路径触发；#311 的历史请求归因须依其自身出口判断，后续绿色运行不构成其根因修复证明。
+门禁复用现有 `desktop.yml` 调用与共享构建，在 Development checks 按相关路径选择并加入 `CI required`；Extended 不重复自动调用，独立手动入口保留。#311 的历史请求归因须依其自身出口判断，后续绿色运行不构成其根因修复证明。
