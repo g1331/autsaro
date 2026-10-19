@@ -8,6 +8,16 @@ export function standardInspectionReady(document) {
   );
 }
 
+// Workspace tabs are published before the asynchronous object projection.
+// Scenarios expecting object rows must observe their publication, not just tabs.
+export function projectObjectsReady(document) {
+  return Boolean(
+    !document.querySelector('.start-page') &&
+    document.querySelector('.document-tabs') &&
+    document.querySelector('.tree-content [data-object-id]'),
+  );
+}
+
 // Closing the confirmation starts a transaction; it does not publish its reply.
 export function catalogResultReady(settings, count) {
   const accept = [...(settings?.querySelectorAll('button') ?? [])].find(
