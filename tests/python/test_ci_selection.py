@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
 from autosar_tooling.config import ROOT
 
 WORKFLOW = ROOT / ".github/workflows/checks.yml"
@@ -40,6 +41,35 @@ def jobs() -> dict[str, dict[str, object]]:
 
 
 class CiSelectionTests(unittest.TestCase):
+    def test_extended_desktop_selection_preserves_normal_path_triggers(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text(encoding="utf-8"))
+        script = workflow["jobs"]["changes"]["steps"][1]["run"]
+        cases = (
+            ("pull_request", "docs/development/testing/desktop.md", False),
+            ("push", "README.md", False),
+            ("pull_request", "ui/src/main.tsx", True),
+            ("pull_request", "src-tauri/src/lib.rs", True),
+            ("pull_request", "tests/desktop/startup.test.mjs", True),
+            ("pull_request", ".github/workflows/desktop.yml", True),
+            ("pull_request", "core/src/lib.rs", False),
+            ("push", "core/src/lib.rs", True),
+            ("push", "Cargo.lock", True),
+            ("push", ".github/actions/core-build-dependencies/action.yml", True),
+            ("pull_request", ".github/workflows/extended.yml", True),
+        )
+        for event, path, expected in cases:
+            with self.subTest(event=event, path=path), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "output"
+                source = Path(directory) / "select.py"
+                source.write_text(script, encoding="utf-8")
+                env = {"GITHUB_EVENT_NAME": event, "BASE": "base", "FULL": "false",
+                       "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
+                with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
+                    run.return_value = subprocess.CompletedProcess([], 0, path + "\n")
+                    runpy.run_path(str(source))
+                self.assertIn("desktop=" + str(expected).lower() + "\n", output.read_text())
+                self.assertEqual(run.call_args.args[0], ["git", "diff", "--name-only", "base", "head"])
+
     def test_receiver_sample_selection_defaults_restricts_and_refuses_unknown_names(self):
         module = runpy.run_path(str(ROOT / "tests/python/native/test_offline_delivery.py"))
         with mock.patch.dict(os.environ, {}, clear=True):
