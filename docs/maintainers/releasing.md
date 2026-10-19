@@ -12,7 +12,7 @@
 
 官方对照工作流 acceptance 运行时从 autosar.org 下载官方档案并按 `core/resources/official.json` 的哈希校验，不属于必需检查；触发方式与失败的查看方法见[测试说明](../development/testing/official.md)。维护者需关注定时运行的失败通知。站点更换 TLS 证书链时，下载入口固定的中间证书指纹会失效：审阅新证书链后更新指纹，不能关闭证书校验。官方档案不能提交进仓库、作为 artifact 上传或输出到日志。
 
-原生 GUI 场景由 desktop 工作流自行构建验证版并运行，上传场景结果目录；它不覆盖安装包的安装与离线验收。bundles 工作流见下节。
+原生 GUI 场景由 Development checks 按路径调用 desktop 工作流，复用每平台一次共享构建及五个分片，并纳入 `CI required`；Extended 不重复自动执行，手动入口保留。上传场景结果目录；它不覆盖安装包的安装与离线验收。bundles 工作流见下节。
 
 ## 发行版本
 
