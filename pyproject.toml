@@ -26,7 +26,7 @@ coverage = [
 ]
 quality = [
     "clang-format==22.1.8",
-    "ruff==0.16.10",
+    "ruff==0.17.0",
     "lxml==6.1.3",
     "clang-tidy==22.1.8",
     "pre-commit==4.7.0",
