@@ -4,6 +4,8 @@
 
 ### Added
 
+- cargo-fuzz targets drive ARXML and project import, definition extensions and the delivered CanTp and Dcm receive paths under ASan/UBSan with official-contract and convergence checks; committed corpus and reproducers replay in ordinary tests and changed paths run bounded fuzzing in Extended checks (#143)
+
 - Generated ECU deliveries include complete selected BSW entry and area descriptions plus navigable module, API and configuration manuals sharing public headers and validation metadata; regenerate deliveries to receive them (#314)
 
 - Selected ECUC symbolic handles have one provider-owned configuration header, shared naming and collision checks; generated BSW consumers import those symbols while preserving numeric mappings, including decimal values written with leading zeros (#303)
