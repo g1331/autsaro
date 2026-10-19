@@ -812,6 +812,41 @@ fn dcm_application_calls_and_publications_survive_concurrent_restarts() {
     assert!(result.success(), "{result:?}");
 }
 
+/// Replays the committed corpus and reproducers of the libFuzzer driver `fuzz/c/<driver>.c`
+/// through the delivered module; the sanitizer lane adds ASan/UBSan (docs/development/testing/fuzzing.md).
+fn replay_fuzz_inputs(module: &str, driver: &str, entry: &str) {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let fuzz = root.join("fuzz");
+    let scratch = Scratch::new();
+    let replay = fuzz.join("c/replay.c");
+    let executable = strict_consumer(
+        &scratch.0,
+        module,
+        fuzz.join(format!("c/{driver}.c")).to_str().unwrap(),
+        &[replay.to_str().unwrap(), &format!("-DFUZZ_ENTRY={entry}")],
+    );
+    let mut inputs = Vec::new();
+    for kind in ["corpus", "regressions"] {
+        if let Ok(entries) = std::fs::read_dir(fuzz.join(kind).join(driver)) {
+            inputs.extend(entries.map(|entry| entry.unwrap().path()));
+        }
+    }
+    inputs.sort();
+    assert!(!inputs.is_empty(), "{driver} has no committed inputs");
+    let output = Command::new(executable).args(&inputs).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
+#[test]
+fn cantp_fuzz_corpus_and_reproducers_replay() {
+    replay_fuzz_inputs("CanTp", "cantp_receive", "CanTpFuzz_TestOneInput");
+}
+
+#[test]
+fn dcm_fuzz_corpus_and_reproducers_replay() {
+    replay_fuzz_inputs("Dcm", "dcm_request", "DcmFuzz_TestOneInput");
+}
+
 /// The actual generated immediate SchM switch must work outside the ECU owner.
 /// Verifies: SWS_Dcm_00520, SWS_Dcm_01062, SWS_Dcm_00311
 #[test]

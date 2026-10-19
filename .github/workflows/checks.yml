@@ -136,6 +136,10 @@ jobs:
       # Lint every feature, including the native and official test binaries that only manual
       # acceptance runs. core/clippy.toml and module attributes add the generation rules.
       - run: cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
+      # The committed fuzz corpus and reproducers replay as ordinary tests; fuzzing itself runs
+      # in extended.yml with the pinned nightly (docs/development/testing/fuzzing.md).
+      - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked --manifest-path fuzz/Cargo.toml
+      - run: cargo clippy --locked --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
   desktop:
     needs: changes
     if: needs.changes.outputs.code == 'true'
