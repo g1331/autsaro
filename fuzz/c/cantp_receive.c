@@ -70,11 +70,13 @@ static boolean frame_pending;
 static PduLengthType tx_copy_length;
 /* An FF refused with BUFREQ_E_OVFL owes FC(OVFLW) (SWS_CanTp_00318) until it is sent, a new
  * SF or FF replaces it (00057 table 1), the module restarts, or N_Ar expires (00311): N_Ar
- * periods have passed and the Tx N-PDU was busy in one of them, else the FC could go. */
+ * periods have passed with the Tx N-PDU busy in each before the last, as an idle period could
+ * carry the FC. */
 static boolean overflow_owed;
 static unsigned overflow_starts;
 static unsigned overflow_periods;
-static boolean overflow_busy;
+static boolean overflow_idle;
+static unsigned frames_sent;
 static unsigned rx_results;
 static Std_ReturnType rx_last;
 static unsigned tx_results;
@@ -123,7 +125,7 @@ BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
     CHECK(available != NULL_PTR);
     overflow_owed = (start_result == BUFREQ_E_OVFL) && (length > 7u);
     overflow_periods = 0u;
-    overflow_busy = FALSE;
+    overflow_idle = FALSE;
     ++overflow_starts;
     if (start_result == BUFREQ_OK) {
         rx_open = TRUE;
@@ -211,6 +213,7 @@ Std_ReturnType LSduR_CanTpTransmit(PduIdType TxPduId, const PduInfoType *PduInfo
     CHECK(running && TxPduId == TX_NPDU && !frame_pending);
     CHECK(PduInfoPtr != NULL_PTR && PduInfoPtr->SduDataPtr != NULL_PTR);
     CHECK(PduInfoPtr->MetaDataPtr == NULL_PTR && PduInfoPtr->SduLength == 8u);
+    ++frames_sent;
     frame = PduInfoPtr->SduDataPtr;
     if ((frame[0] >> 4u) == 0u) {
         used = (uint8)(1u + frame[0]);
@@ -307,11 +310,14 @@ static void tick(void)
 {
     const boolean busy = frame_pending;
     const unsigned starts = overflow_starts;
+    const unsigned sent = frames_sent;
     CanTp_MainFunction();
     if (overflow_owed && (starts == overflow_starts)) {
         ++overflow_periods;
-        overflow_busy = overflow_busy || busy || frame_pending;
-        if (overflow_busy && (overflow_periods >= config.n_ar)) {
+        /* The period in which N_Ar elapses may end the reception before the FC goes. */
+        overflow_idle = overflow_idle || ((overflow_periods < config.n_ar) &&
+                                          !(busy || frame_pending || (sent != frames_sent)));
+        if (!overflow_idle && (overflow_periods >= config.n_ar)) {
             overflow_owed = FALSE;
         }
     }
