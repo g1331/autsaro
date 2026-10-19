@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { openWorkbench } from './support/workbench.mjs';
+import { projectObjectsReady } from './support/readiness.mjs';
 
 const {
   check,
@@ -58,11 +59,7 @@ check('expanded-input-responsiveness-and-cancel', async () => {
   await menu('导入 ARXML…');
   await input(field('ARXML 路径（每行一份）'), authored.large);
   await click('导入');
-  await until(
-    `!document.querySelector('.start-page') && Boolean(document.querySelector('.document-tabs'))`,
-    'expanded input published',
-    300000,
-  );
+  await until(`(${projectObjectsReady.toString()})(document)`, 'expanded input published', 300000);
   const expanded = await projection();
   assert(expanded.objects.some((object) => object.shortName === 'Preserved_15999'));
   await memorySample('expanded-input-opened');

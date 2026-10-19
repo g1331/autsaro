@@ -2,11 +2,35 @@
 import { afterEach, expect, test } from 'vitest';
 import {
   catalogResultReady,
+  projectObjectsReady,
   sampleDomQuery,
   standardInspectionReady,
 } from '../../tests/desktop/support/readiness.mjs';
 
 afterEach(() => document.body.replaceChildren());
+
+test.each([
+  ['start page before a workspace is published', '<div class="start-page"></div>', false],
+  [
+    'workspace tabs published while its object projection is pending',
+    '<div class="document-tabs"></div><div class="tree-content"><p>Loading project objects</p></div>',
+    false,
+  ],
+  [
+    'group placeholder before any object has been published',
+    '<div class="document-tabs"></div><div class="tree-content"><div data-tree-key="group:other"></div></div>',
+    false,
+  ],
+  [
+    'accepted object rows in the published workspace',
+    '<div class="document-tabs"></div><div class="tree-content"><div data-object-id="first-object"></div></div>',
+    true,
+  ],
+])('desktop object projection boundary: %s', (_scene, markup, ready) => {
+  document.body.innerHTML = markup;
+  const evaluate = new Function('document', `return (${projectObjectsReady.toString()})(document)`);
+  expect(evaluate(document)).toBe(ready);
+});
 
 test('DOM query evidence preserves the result and same-turn operation state', async () => {
   document.body.innerHTML =
