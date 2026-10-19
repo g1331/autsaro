@@ -73,10 +73,12 @@ jobs:
                       'core/src/rules/', 'core/resources/official.json', 'core/resources/requirements/', 'core/tests/official/',
                       'tools/python/src/autosar_tooling/official.py', 'tools/python/src/autosar_tooling/requirements.py',
                       'docs/standards/', '.github/workflows/acceptance.yml'),
-                  # The fuzz targets' inputs: ARXML parsing and import, definitions, CanTp, Dcm and their host areas.
-                  'fuzz': touched('fuzz/', 'core/src/arxml', 'core/src/integration/', 'core/src/definitions', 'core/src/xml_paths.rs',
-                      'core/src/project_model.rs', 'core/resources/', 'core/Cargo.toml', 'runtime/bsw/include/', 'runtime/bsw/src/CanTp',
-                      'runtime/bsw/src/Dcm', 'runtime/host/', 'core/tests/fixtures/bsw-contracts/'),
+                  # The fuzz targets' inputs and build: ARXML parsing, import and validation, definitions, CanTp, Dcm
+                  # and their host areas.
+                  'fuzz': touched('fuzz/', 'core/src/arxml', 'core/src/integration/', 'core/src/definitions', 'core/src/rules',
+                      'core/src/xml_paths.rs', 'core/src/project_model.rs', 'core/resources/', 'core/Cargo.toml', 'core/build.rs',
+                      'runtime/bsw/include/', 'runtime/bsw/src/CanTp', 'runtime/bsw/src/Dcm', 'runtime/host/',
+                      'core/tests/fixtures/bsw-contracts/', '.github/actions/core-build-dependencies/'),
               }
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               for name, value in selected.items():
