@@ -1,9 +1,9 @@
 name: Extended checks
 # Checks outside the required pull request layer (checks.yml), selected by the
-# changed paths: the rest of the Python and UI matrices, Desktop acceptance and
+# changed paths: the rest of the Python and UI matrices, manual Desktop acceptance and
 # the official archive comparison, the full offline receiver matrix and bounded fuzzing. Runs after every push to
-# master; a pull request runs Desktop acceptance, the official comparison and fuzzing for their paths,
-# and everything once it carries the full-ci label. Not part of the required checks.
+# master; a pull request runs the official comparison and fuzzing for their paths,
+# and the remaining extended checks once it carries full-ci. Desktop is manual here.
 on:
   push:
     branches: [master]
@@ -67,8 +67,7 @@ jobs:
                   'receiver': push and touched('core/', 'runtime/', 'tools/', 'tests/python/', 'Cargo.toml', 'Cargo.lock',
                       'rust-toolchain.toml', 'pyproject.toml', 'uv.lock', '.python-version', '.github/actions/', '.github/workflows/checks.yml'),
                   'ui': push and touched('ui/', '.node-version', '.github/workflows/checks.yml'),
-                  'desktop': touched('ui/', 'src-tauri/', 'tests/desktop/', '.github/workflows/desktop.yml')
-                      or push and touched('core/', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.node-version', '.github/actions/'),
+                  'desktop': False,
                   'official': touched('core/src/definitions.rs', 'core/src/definitions/', 'core/src/schema.rs', 'core/src/rules.rs',
                       'core/src/rules/', 'core/resources/official.json', 'core/resources/requirements/', 'core/tests/official/',
                       'tools/python/src/autosar_tooling/official.py', 'tools/python/src/autosar_tooling/requirements.py',
@@ -80,6 +79,8 @@ jobs:
                       'runtime/bsw/include/', 'runtime/bsw/src/CanTp', 'runtime/bsw/src/Dcm', 'runtime/host/',
                       'core/tests/fixtures/bsw-contracts/', '.github/actions/core-build-dependencies/'),
               }
+          # Automatic desktop coverage belongs to CI required; manual Extended remains available.
+          selected['desktop'] = event == 'workflow_dispatch'
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               for name, value in selected.items():
                   print(name + '=' + str(value).lower())

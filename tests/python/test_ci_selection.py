@@ -1,5 +1,6 @@
 """Keep required CI's documentation-only and ui/-only selection safe."""
 
+import json
 import os
 import re
 import runpy
@@ -41,34 +42,71 @@ def jobs() -> dict[str, dict[str, object]]:
 
 
 class CiSelectionTests(unittest.TestCase):
-    def test_extended_desktop_selection_preserves_normal_path_triggers(self):
+    def test_desktop_gate_selection_and_failure_propagation(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        detect = workflow["jobs"]["changes"]["steps"][1]["run"]
+        gate = workflow["jobs"]["required"]["steps"][0]["run"]
+        self.assertIn("desktop-scenarios", workflow["jobs"]["required"]["needs"])
+        self.assertEqual(workflow["jobs"]["desktop-scenarios"]["uses"], "./.github/workflows/desktop.yml")
+        for event in ("pull_request", "push"):
+            for path, expected in (("docs/guide.md", False), ("ui/src/main.tsx", True),
+                                   ("core/src/lib.rs", True), ("runtime/bsw/src/Com.c", True),
+                                   ("tests/desktop/startup.test.mjs", True), ("Cargo.lock", True),
+                                   (".github/workflows/checks.yml", True),
+                                   (".github/workflows/desktop.yml", True), ("uv.lock", True)):
+                with self.subTest(event=event, path=path), tempfile.TemporaryDirectory() as directory:
+                    output = Path(directory) / "output"
+                    source = Path(directory) / "detect.py"
+                    source.write_text(detect, encoding="utf-8")
+                    env = {"PULL_REQUEST": "91" if event == "pull_request" else "",
+                           "GITHUB_REPOSITORY": "g1331/autsaro", "BASE": "base",
+                           "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
+                    with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
+                        run.return_value = subprocess.CompletedProcess([], 0, path + "\n")
+                        runpy.run_path(str(source))
+                    self.assertIn("desktop=" + str(expected).lower() + "\n", output.read_text())
+        for listing, status, base in (("", 0, "base"), ("docs/a.md\n" * 3000, 0, "base"),
+                                      ("", 1, "base"), ("docs/a.md", 0, "")):
+            with self.subTest(status=status, base=base, length=len(listing)), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory) / "detect.py"
+                source.write_text(detect, encoding="utf-8")
+                output = Path(directory) / "output"
+                env = {"PULL_REQUEST": "", "BASE": base, "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
+                with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
+                    run.return_value = subprocess.CompletedProcess([], status, listing)
+                    runpy.run_path(str(source))
+                self.assertIn("desktop=true\n", output.read_text())
+        for selected in ("true", "false", None):
+            for result in ("success", "failure", "cancelled", "skipped"):
+                with self.subTest(selected=selected, result=result), tempfile.TemporaryDirectory() as directory:
+                    source = Path(directory) / "gate.py"
+                    source.write_text(gate, encoding="utf-8")
+                    outputs = {"code": "false", "native": "false"}
+                    if selected is not None:
+                        outputs["desktop"] = selected
+                    needs = {"changes": {"result": "success", "outputs": outputs},
+                             "desktop-scenarios": {"result": result}}
+                    with mock.patch.dict(os.environ, {"RESULTS": json.dumps(needs)}):
+                        try:
+                            runpy.run_path(str(source))
+                        except SystemExit as error:
+                            self.assertEqual(error.code == 0, result == "success" or selected == "false" and result == "skipped")
+
+    def test_extended_does_not_duplicate_automatic_desktop(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text(encoding="utf-8"))
         script = workflow["jobs"]["changes"]["steps"][1]["run"]
-        cases = (
-            ("pull_request", "docs/development/testing/desktop.md", False),
-            ("push", "README.md", False),
-            ("pull_request", "ui/src/main.tsx", True),
-            ("pull_request", "src-tauri/src/lib.rs", True),
-            ("pull_request", "tests/desktop/startup.test.mjs", True),
-            ("pull_request", ".github/workflows/desktop.yml", True),
-            ("pull_request", "core/src/lib.rs", False),
-            ("push", "core/src/lib.rs", True),
-            ("push", "Cargo.lock", True),
-            ("push", ".github/actions/core-build-dependencies/action.yml", True),
-            ("pull_request", ".github/workflows/extended.yml", True),
-        )
-        for event, path, expected in cases:
-            with self.subTest(event=event, path=path), tempfile.TemporaryDirectory() as directory:
+        for event, full in (("push", "false"), ("pull_request", "false"),
+                            ("pull_request", "true"), ("workflow_dispatch", "true")):
+            with self.subTest(event=event, full=full), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "output"
                 source = Path(directory) / "select.py"
                 source.write_text(script, encoding="utf-8")
-                env = {"GITHUB_EVENT_NAME": event, "BASE": "base", "FULL": "false",
+                env = {"GITHUB_EVENT_NAME": event, "BASE": "base", "FULL": full,
                        "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
                 with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
-                    run.return_value = subprocess.CompletedProcess([], 0, path + "\n")
+                    run.return_value = subprocess.CompletedProcess([], 0, ".github/workflows/extended.yml\n")
                     runpy.run_path(str(source))
-                self.assertIn("desktop=" + str(expected).lower() + "\n", output.read_text())
-                self.assertEqual(run.call_args.args[0], ["git", "diff", "--name-only", "base", "head"])
+                self.assertIn("desktop=" + str(event == "workflow_dispatch").lower() + "\n", output.read_text())
 
     def test_receiver_sample_selection_defaults_restricts_and_refuses_unknown_names(self):
         module = runpy.run_path(str(ROOT / "tests/python/native/test_offline_delivery.py"))
@@ -120,7 +158,7 @@ class CiSelectionTests(unittest.TestCase):
         script = textwrap.dedent(
             WORKFLOW.read_text(encoding="utf-8")
             .split("        run: |\n", 1)[1]
-            .split("\n  ui:", 1)[0]
+            .split("\n  desktop-scenarios:", 1)[0]
         )
         cases = (
             ([".codex/hooks.json"], False, False),
@@ -151,7 +189,7 @@ class CiSelectionTests(unittest.TestCase):
                     runpy.run_path(str(script_path))
                 self.assertEqual(
                     output.read_text(encoding="utf-8"),
-                    f"code={str(code).lower()}\nnative={str(native).lower()}\n",
+                    f"code={str(code).lower()}\nnative={str(native).lower()}\ndesktop={str(any(path.startswith(('ui/', 'runtime/')) for path in paths)).lower()}\n",
                 )
 
     def test_skipped_jobs_match_the_required_gate(self):
