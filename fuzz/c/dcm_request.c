@@ -48,8 +48,10 @@ static uint8 rx_bytes[256];
 static boolean request_current;
 static boolean request_waiting;
 static boolean request_answered;
-/* Indicated in full communication, which has not been left since. */
+/* Indicated in full communication, which has not been left since, and the main functions
+ * run since the indication. */
 static boolean request_full;
+static unsigned request_periods;
 static uint8 request[256];
 static PduLengthType request_length;
 /* The response transmission from PduR_DcmTransmit until its confirmation. */
@@ -235,6 +237,7 @@ static void start(PduIdType id, PduLengthType length, const PduInfoType *info)
         rx_length = length;
         rx_copied = 0u;
         request_current = FALSE;
+        request_full = FALSE;
     }
 }
 /* Accepted data fits the announced request and the free space is reported (SWS_Dcm_00443). */
@@ -267,6 +270,7 @@ static void indicate(PduIdType id, Std_ReturnType result)
             request_current = TRUE;
             request_waiting = (mode != MODE_NO);
             request_full = (mode == MODE_FULL);
+            request_periods = 0u;
             request_answered = FALSE;
             request_length = rx_length;
             memcpy(request, rx_bytes, rx_length);
@@ -274,15 +278,17 @@ static void indicate(PduIdType id, Std_ReturnType result)
     }
     Dcm_TpRxIndication(id, result);
 }
-/* A service outside the table is answered with NRC 0x11 (SWS_Dcm_00197) by the main
- * function that processes it, when communication allows the response. */
+/* A service outside the table is answered with NRC 0x11 (SWS_Dcm_00197); in full
+ * communication something is sent by P2ServerMax, one period of slack for the indication
+ * (SWS_Dcm_00024). */
 static void main_function(void)
 {
-    const boolean owed =
-        request_waiting && request_full && !known_service(request[0]) && !no_response(request[0]);
     Dcm_MainFunction();
-    CHECK(!owed || request_answered);
     request_waiting = FALSE;
+    if (request_full && !known_service(request[0]) && !no_response(request[0])) {
+        ++request_periods;
+        CHECK(request_answered || (request_periods <= config.p2_ticks));
+    }
 }
 static void enter(uint8 next, NetworkHandleType channel)
 {
@@ -307,6 +313,7 @@ static void restart(void)
     rx_open = FALSE;
     request_current = FALSE;
     request_waiting = FALSE;
+    request_full = FALSE;
     tx_pending = FALSE;
 }
 static void receive(const uint8 *bytes, PduLengthType length)

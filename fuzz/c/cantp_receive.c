@@ -69,9 +69,12 @@ static boolean frame_pending;
 /* Data bytes of the last Tx copy, which fill the next SF or CF. */
 static PduLengthType tx_copy_length;
 /* An FF refused with BUFREQ_E_OVFL owes FC(OVFLW) (SWS_CanTp_00318) until it is sent, a new
- * SF or FF replaces it (00057 table 1), the module restarts, or a main function runs while the
- * Tx N-PDU is busy, after which N_Ar may end it (00311). */
+ * SF or FF replaces it (00057 table 1), the module restarts, or N_Ar expires (00311): N_Ar
+ * periods have passed and the Tx N-PDU was busy in one of them, else the FC could go. */
 static boolean overflow_owed;
+static unsigned overflow_starts;
+static unsigned overflow_periods;
+static boolean overflow_busy;
 static unsigned rx_results;
 static Std_ReturnType rx_last;
 static unsigned tx_results;
@@ -119,6 +122,9 @@ BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
     CHECK(info->SduLength <= length && (info->SduLength == 0u || info->SduDataPtr != NULL_PTR));
     CHECK(available != NULL_PTR);
     overflow_owed = (start_result == BUFREQ_E_OVFL) && (length > 7u);
+    overflow_periods = 0u;
+    overflow_busy = FALSE;
+    ++overflow_starts;
     if (start_result == BUFREQ_OK) {
         rx_open = TRUE;
         rx_length = length;
@@ -296,6 +302,20 @@ static void receive(PduIdType id, const uint8 *bytes, PduLengthType length, bool
     CanTp_RxIndication(id, &info);
     free(frame);
 }
+/* A main function, counting the periods of an owed FC(OVFLW) from the one after its FF. */
+static void tick(void)
+{
+    const boolean busy = frame_pending;
+    const unsigned starts = overflow_starts;
+    CanTp_MainFunction();
+    if (overflow_owed && (starts == overflow_starts)) {
+        ++overflow_periods;
+        overflow_busy = overflow_busy || busy || frame_pending;
+        if (overflow_busy && (overflow_periods >= config.n_ar)) {
+            overflow_owed = FALSE;
+        }
+    }
+}
 static void confirm(Std_ReturnType result)
 {
     frame_pending = FALSE;
@@ -377,10 +397,7 @@ static void operate(void)
             case 3u: {
                 uint8 i;
                 for (i = 0u; i <= (value & 3u); ++i) {
-                    if (frame_pending) {
-                        overflow_owed = FALSE;
-                    }
-                    CanTp_MainFunction();
+                    tick();
                 }
                 break;
             }
@@ -453,7 +470,7 @@ static void converge(void)
         if (frame_pending) {
             confirm(E_OK);
         }
-        CanTp_MainFunction();
+        tick();
     }
     CHECK(!rx_open && !tx_open && !overflow_owed);
     before = rx_results;
@@ -465,7 +482,7 @@ static void converge(void)
         if (frame_pending) {
             confirm(E_OK);
         }
-        CanTp_MainFunction();
+        tick();
     }
     CHECK(tx_results == before + 1u && tx_last == E_OK && !frame_pending);
 }
