@@ -2,7 +2,7 @@
 // official tauri-driver WebDriver intermediary. Linux isolates itself on a
 // private Xvfb display and D-Bus; Windows relies on a dedicated runner or VM.
 import assert from 'node:assert/strict';
-import { WebDriver } from './webdriver.mjs';
+import { WebDriver, evaluateInPage } from './webdriver.mjs';
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import {
   access,
@@ -24,6 +24,38 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const platform = { linux: 'linux', win32: 'windows' }[process.platform];
+
+// A record can span pipe chunks. Consume each stream in order and finish its
+// writes before accepting the session's captured evidence.
+export function captureDriverOutput(driver, directory, onStderr = () => {}) {
+  return Promise.all(
+    ['stdout', 'stderr'].map(async (channel) => {
+      let failure = null;
+      const output = path.join(directory, `driver.${channel}.log`);
+      const rememberFailure = (error) => {
+        // Descriptor write errors can omit path, notably on Windows. The
+        // collector owns this destination; retain the OS error as the cause.
+        failure ??= Object.assign(
+          new Error(`Driver ${channel} output capture failed: ${output}`, { cause: error }),
+          { path: output, code: error?.code },
+        );
+      };
+      try {
+        for await (const chunk of driver[channel]) {
+          if (channel === 'stderr') onStderr(chunk);
+          try {
+            await appendFile(output, chunk);
+          } catch (error) {
+            rememberFailure(error);
+          }
+        }
+      } catch (error) {
+        rememberFailure(error);
+      }
+      return failure;
+    }),
+  );
+}
 // Let Ctrl-C and CI cancellation run the 'exit' cleanup registered by launch().
 for (const [signal, code] of [
   ['SIGINT', 130],
@@ -86,7 +118,7 @@ async function driverPorts() {
   }
 }
 
-async function until(probe, description, timeout = 30000) {
+export async function until(probe, description, timeout = 30000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const value = await probe();
@@ -192,6 +224,7 @@ async function processes() {
           name: fields.Name,
           command: (await readFile(`/proc/${entry}/cmdline`, 'utf8')).replaceAll('\0', ' ').trim(),
           identity: stat[19],
+          state: fields.State,
           VmRSS: Number.parseInt(fields.VmRSS ?? '0', 10) * 1024,
           VmHWM: Number.parseInt(fields.VmHWM ?? '0', 10) * 1024,
         });
@@ -566,6 +599,7 @@ export async function launch(name, { delayOperations = false } = {}) {
   let abandon;
   let session;
   let client;
+  let outputCapture = Promise.resolve([]);
   try {
     let nativeDriver;
     if (platform === 'linux') {
@@ -604,7 +638,7 @@ export async function launch(name, { delayOperations = false } = {}) {
       {
         env: environment,
         detached: platform === 'linux',
-        stdio: ['ignore', 'ignore', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       },
     );
@@ -639,10 +673,8 @@ export async function launch(name, { delayOperations = false } = {}) {
       ),
     );
     let driverLog = '';
-    const driverOutput = path.join(scratch, 'driver.stderr.log');
-    driverProcess.stderr.on('data', (chunk) => {
+    outputCapture = captureDriverOutput(driverProcess, scratch, (chunk) => {
       driverLog += chunk;
-      appendFile(driverOutput, chunk).catch(() => undefined);
     });
     client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
     await until(async () => {
@@ -669,6 +701,12 @@ export async function launch(name, { delayOperations = false } = {}) {
     }
     await Promise.all([driverProcess].filter(Boolean).map(stopped));
     await display?.cleanup();
+    const outputErrors = (await outputCapture).filter(Boolean);
+    if (outputErrors.length)
+      throw new AggregateError(
+        [error, ...outputErrors],
+        'Native startup failed and driver output capture was incomplete',
+      );
     throw error;
   }
   const route = (suffix) => `/session/${session}${suffix}`;
@@ -689,6 +727,8 @@ export async function launch(name, { delayOperations = false } = {}) {
   const pressed = {
     Escape: '',
     Tab: '',
+    Home: '\uE011',
+    End: '\uE010',
     ArrowDown: '',
     ArrowUp: '',
     ArrowLeft: '',
@@ -696,6 +736,7 @@ export async function launch(name, { delayOperations = false } = {}) {
     Enter: '',
   };
   const held = { alt: '', ctrl: '', meta: '', shift: '' };
+  let nextEvaluation = 0;
   return {
     platform,
     scratch,
@@ -704,11 +745,11 @@ export async function launch(name, { delayOperations = false } = {}) {
       return client.refresh(route(''));
     },
     async evaluate(expression) {
-      const result = await client.request('POST', route('/execute/async'), {
-        script:
-          'const done = arguments[arguments.length - 1]; Promise.resolve().then(() => (0, eval)(arguments[0])).then(value => done({value}), error => done({error: String(error)}));',
-        args: [expression],
+      const encoded = await client.request('POST', route('/execute/async'), {
+        script: `return (${evaluateInPage.toString()}).apply(null, arguments);`,
+        args: [expression, ++nextEvaluation],
       });
+      const result = JSON.parse(encoded);
       if (result.error) throw new Error(result.error);
       return result.value;
     },
@@ -874,15 +915,34 @@ export async function launch(name, { delayOperations = false } = {}) {
         }
         await writeFile(
           path.join(scratch, `failure-threads-${item.pid}.json`),
-          JSON.stringify({ at: Date.now(), threads }, null, 2),
+          JSON.stringify(
+            {
+              at: Date.now(),
+              mappings: await readFile(`/proc/${item.pid}/maps`, 'utf8').catch(String),
+              threads,
+            },
+            null,
+            2,
+          ),
         );
       }
       for (const item of tree.filter((item) => /autosar-config|WebKitWeb/.test(item.name))) {
+        if (
+          !(await processes()).some(
+            (live) => live.pid === item.pid && live.identity === item.identity,
+          )
+        )
+          continue;
+        const startedAt = Date.now();
         const stack = await run(
           'gdb',
           [
             '--batch',
             '-nx',
+            '-iex',
+            'set auto-load off',
+            '-iex',
+            'set debuginfod enabled off',
             '-p',
             String(item.pid),
             '-ex',
@@ -892,30 +952,59 @@ export async function launch(name, { delayOperations = false } = {}) {
             '-ex',
             'detach',
           ],
-          { timeout: 20000, maxBuffer: 16 * 1024 * 1024 },
-        ).catch((error) => ({
-          stdout: error.stdout ?? '',
-          stderr: String(error) + '\n' + (error.stderr ?? ''),
-        }));
+          { timeout: 20000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024 },
+        )
+          .then((result) => ({ ...result, outcome: 'completed' }))
+          .catch((error) => ({
+            outcome: 'failed',
+            code: error.code,
+            signal: error.signal,
+            killed: error.killed,
+            stdout: error.stdout ?? '',
+            stderr: String(error) + '\n' + (error.stderr ?? ''),
+          }));
         await writeFile(
           path.join(scratch, `failure-backtrace-${item.pid}.txt`),
           `${stack.stdout}\n${stack.stderr}`,
+        );
+        await writeFile(
+          path.join(scratch, `failure-debugger-${item.pid}.json`),
+          JSON.stringify(
+            {
+              pid: item.pid,
+              startedAt,
+              finishedAt: Date.now(),
+              outcome: stack.outcome,
+              code: stack.code,
+              signal: stack.signal,
+              killed: stack.killed,
+              statusAfter: await readFile(`/proc/${item.pid}/status`, 'utf8').catch(String),
+            },
+            null,
+            2,
+          ),
         );
       }
     },
     // Close the session, end the driver tree and prove nothing survived.
     async close() {
       const tree = await processTree(driverProcess.pid);
+      let closeError;
       try {
         await writeFile(
           path.join(scratch, 'host-end.json'),
           JSON.stringify(await hostEvidence(), null, 2),
         );
         await client.request('DELETE', route(''));
+      } catch (error) {
+        closeError = error;
       } finally {
         if (platform === 'linux') {
           try {
             process.kill(-driverProcess.pid, 'SIGTERM');
+            // A debugger can leave the application stopped after detaching.
+            // Resume the owned group so pending termination can be delivered.
+            process.kill(-driverProcess.pid, 'SIGCONT');
           } catch (error) {
             if (error.code !== 'ESRCH') throw error;
           }
@@ -932,9 +1021,10 @@ export async function launch(name, { delayOperations = false } = {}) {
         async () => {
           const current = await processes();
           survivors.length = 0;
-          const remaining = new Map(current.map((item) => [item.pid, item.identity]));
+          const remaining = new Map(current.map((item) => [item.pid, item]));
           for (const item of tree)
-            if (remaining.get(item.pid) === item.identity) survivors.push(item);
+            if (remaining.get(item.pid)?.identity === item.identity)
+              survivors.push(remaining.get(item.pid));
           return survivors.length === 0;
         },
         'the application process tree to exit',
@@ -946,6 +1036,13 @@ export async function launch(name, { delayOperations = false } = {}) {
       });
       process.off('exit', abandon);
       await writeFile(path.join(scratch, 'process-tree.json'), JSON.stringify(tree, null, 2));
+      const outputErrors = (await outputCapture).filter(Boolean);
+      if (outputErrors.length)
+        throw new AggregateError(
+          [...(closeError ? [closeError] : []), ...outputErrors],
+          'Driver output capture failed during desktop close',
+        );
+      if (closeError) throw closeError;
     },
   };
 }

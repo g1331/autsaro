@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement } from 'react';
-import { cleanup, fireEvent, render, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ProjectTree } from '../src/workbench/ProjectTree';
 import {
@@ -213,4 +213,188 @@ test('revealing an object expands its collapsed group', () => {
   expect(
     view.getByRole('treeitem', { name: 'BSW descriptions' }).getAttribute('aria-expanded'),
   ).toBe('true');
+});
+
+test('a wide tree shares global menu keyboard listeners across its object rows', () => {
+  const add = vi.spyOn(document, 'addEventListener');
+  try {
+    const wide = Array.from({ length: 32 }, (_, i) =>
+      object(`wide-${i}`, null, 'IMPLEMENTATION-DATA-TYPE', `Type_${i}`),
+    );
+    const view = render(
+      createElement(ProjectTree, {
+        controller: controllerFor({
+          projection: { objects: wide, fields: [], sources: [], diagnostics: [] },
+        }),
+      }),
+    );
+    expect(view.getAllByRole('treeitem')).toHaveLength(33);
+    const keyboard = add.mock.calls.filter(([type]) => type === 'keydown').length;
+    expect(keyboard).toBeLessThanOrEqual(1);
+    add.mockClear();
+    fireEvent.keyDown(view.getByRole('treeitem', { name: 'Type_0' }), { key: 'ArrowDown' });
+    const pointer = add.mock.calls.filter(
+      ([type]) => type === 'pointerdown' || type === 'pointermove',
+    ).length;
+    expect(pointer).toBeLessThanOrEqual(2);
+  } finally {
+    add.mockRestore();
+  }
+});
+
+test('the shared tree menu resolves nested targets, refuses groups and restores row focus', async () => {
+  const first = object('first', null, 'IMPLEMENTATION-DATA-TYPE', 'First');
+  const second = object('second', null, 'IMPLEMENTATION-DATA-TYPE', 'Second');
+  const readonly = {
+    ...object('readonly', null, 'IMPLEMENTATION-DATA-TYPE', 'Readonly'),
+    writable: false,
+  };
+  const c = controllerFor({
+    projection: { objects: [first, second, readonly], fields: [], sources: [], diagnostics: [] },
+    activeObjectId: 'second',
+    actionReason: () => null,
+    stageChange: vi.fn(),
+    setInspectorTab: vi.fn(),
+    guardContext: (_message, action) => action(),
+  });
+  const view = render(createElement(ProjectTree, { controller: c }));
+  fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Types' }));
+  expect(view.queryByRole('menu')).toBeNull();
+  fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Readonly' }));
+  expect(view.queryByRole('menu')).toBeNull();
+  const firstRow = view.getByRole('treeitem', { name: 'First' });
+  firstRow.focus();
+  fireEvent.contextMenu(firstRow.querySelector('.tree-name'));
+  fireEvent.keyDown(await view.findByRole('menu'), { key: 'Escape' });
+  await waitFor(() => expect(document.activeElement).toBe(firstRow));
+  const secondRow = view.getByRole('treeitem', { name: 'Second' });
+  fireEvent.contextMenu(secondRow.querySelector('.tree-name'));
+  const menu = await view.findByRole('menu');
+  fireEvent.click(within(menu).getByRole('menuitem', { name: /Remove/ }));
+  expect(c.stageChange).toHaveBeenCalledWith({
+    op: 'remove-instance',
+    changeId: 'second',
+    object: { kind: 'existing', objectId: 'second' },
+    expectedShortName: 'Second',
+  });
+});
+
+test.each(['removed', 'readonly', 'files'])(
+  'a shared tree menu stays closed after an invalid %s target returns',
+  async (change) => {
+    const c = controllerFor({ actionReason: () => null });
+    const view = render(createElement(ProjectTree, { controller: c }));
+    fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Can' }));
+    await view.findByRole('menu');
+    const invalid =
+      change === 'files'
+        ? { ...c, treeMode: 'files' }
+        : {
+            ...c,
+            projection: {
+              ...c.projection,
+              objects:
+                change === 'removed'
+                  ? c.projection.objects.filter((item) => item.objectId !== 'can')
+                  : c.projection.objects.map((item) =>
+                      item.objectId === 'can' ? { ...item, writable: false } : item,
+                    ),
+            },
+          };
+    view.rerender(createElement(ProjectTree, { controller: invalid }));
+    await waitFor(() => expect(view.queryByRole('menu')).toBeNull());
+    view.rerender(createElement(ProjectTree, { controller: c }));
+    expect(view.queryByRole('menu')).toBeNull();
+    fireEvent.contextMenu(view.getByRole('treeitem', { name: 'Can' }));
+    expect(await view.findByRole('menu')).toBeTruthy();
+  },
+);
+
+test('touch long press resolves the row and rejects readonly objects', () => {
+  vi.useFakeTimers();
+  try {
+    const writable = object('touch', null, 'IMPLEMENTATION-DATA-TYPE', 'Touch');
+    const readonly = {
+      ...object('locked', null, 'IMPLEMENTATION-DATA-TYPE', 'Locked'),
+      writable: false,
+    };
+    const view = render(
+      createElement(ProjectTree, {
+        controller: controllerFor({
+          projection: { objects: [writable, readonly], fields: [], sources: [], diagnostics: [] },
+          actionReason: () => null,
+        }),
+      }),
+    );
+    const press = (name) => {
+      const event = new Event('pointerdown', { bubbles: true, cancelable: true });
+      Object.defineProperties(event, {
+        pointerType: { value: 'touch' },
+        clientX: { value: 10 },
+        clientY: { value: 20 },
+      });
+      fireEvent(view.getByRole('treeitem', { name }).querySelector('.tree-name'), event);
+      act(() => vi.advanceTimersByTime(700));
+    };
+    press('Locked');
+    expect(view.queryByRole('menu')).toBeNull();
+    press('Touch');
+    expect(view.getByRole('menu')).toBeTruthy();
+  } finally {
+    cleanup();
+    vi.useRealTimers();
+  }
+});
+
+test('large trees bound mounted rows while keyboard and reveal reach the complete logical tree', () => {
+  const many = Array.from({ length: 500 }, (_, i) =>
+    object(`type${i}`, null, 'IMPLEMENTATION-DATA-TYPE', `Type${String(i).padStart(3, '0')}`),
+  );
+  const controller = controllerFor({
+    projection: { objects: many, fields: [], sources: [], diagnostics: [] },
+  });
+  const view = render(createElement(ProjectTree, { controller }));
+  const tree = view.getByRole('tree');
+  expect(view.getAllByRole('treeitem').length).toBeLessThan(60);
+  expect(tree.firstElementChild.style.height).toBe('15030px');
+  const first = view.getByRole('treeitem', { name: 'Types' });
+  act(() => first.focus());
+  fireEvent.keyDown(first, { key: 'End' });
+  const last = view.getByRole('treeitem', { name: 'Type499' });
+  expect(document.activeElement).toBe(last);
+  expect(last.getAttribute('aria-posinset')).toBe('500');
+  expect(last.getAttribute('aria-setsize')).toBe('500');
+  expect(tree.scrollTop).toBeGreaterThan(14000);
+  fireEvent.keyDown(last, { key: 'ArrowUp' });
+  expect(document.activeElement).toBe(view.getByRole('treeitem', { name: 'Type498' }));
+  fireEvent.keyDown(document.activeElement, { key: 'ArrowLeft' });
+  expect(document.activeElement).toBe(view.getByRole('treeitem', { name: 'Types' }));
+  expect(tree.scrollTop).toBe(0);
+  view.rerender(
+    createElement(ProjectTree, { controller: { ...controller, treeRevealId: 'type400' } }),
+  );
+  expect(view.getByRole('treeitem', { name: 'Type400' })).toBeTruthy();
+  expect(view.getAllByRole('treeitem').length).toBeLessThan(60);
+});
+
+test('scrolling retains focus and filtering a distant viewport still mounts its matches', () => {
+  const many = Array.from({ length: 500 }, (_, i) =>
+    object(`type${i}`, null, 'IMPLEMENTATION-DATA-TYPE', `Type${String(i).padStart(3, '0')}`),
+  );
+  const controller = controllerFor({
+    projection: { objects: many, fields: [], sources: [], diagnostics: [] },
+  });
+  const view = render(createElement(ProjectTree, { controller }));
+  const tree = view.getByRole('tree');
+  const first = view.getByRole('treeitem', { name: 'Type000' });
+  act(() => first.focus());
+  fireEvent.scroll(tree, { target: { scrollTop: 14000 } });
+  expect(document.activeElement).toBe(first);
+  expect(view.getByRole('treeitem', { name: 'Type499' })).toBeTruthy();
+  expect(view.getAllByRole('treeitem').length).toBeLessThan(60);
+  view.rerender(
+    createElement(ProjectTree, { controller: { ...controller, treeFilter: 'Type200' } }),
+  );
+  expect(view.getByRole('treeitem', { name: 'Type200' })).toBeTruthy();
+  expect(view.getAllByRole('treeitem')).toHaveLength(2);
 });

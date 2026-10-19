@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { openWorkbench } from './support/workbench.mjs';
 
 const {
   check,
+  scratch,
   evaluate,
   key,
   until,
@@ -64,6 +66,31 @@ check('expanded-input-responsiveness-and-cancel', async () => {
   const expanded = await projection();
   assert(expanded.objects.some((object) => object.shortName === 'Preserved_15999'));
   await memorySample('expanded-input-opened');
+  const layout = await evaluate(`(() => {
+    const tree = document.querySelector('.tree-content');
+    const rows = tree.querySelectorAll('.tree-row');
+    return { rows: rows.length, viewport: tree.clientHeight, height: rows[0].getBoundingClientRect().height, scrollHeight: tree.scrollHeight };
+  })()`);
+  assert(
+    layout.rows <= Math.ceil(layout.viewport / 30) + 17,
+    'Mounted rows stay bounded by the viewport',
+  );
+  assert.equal(layout.height, 30, 'Rows keep their original height');
+  assert.equal(layout.scrollHeight, 480036, 'The full logical tree scroll extent is preserved');
+  await evaluate(`document.querySelector('.tree-content .tree-row').focus()`);
+  await key('End');
+  await until(
+    `document.activeElement?.getAttribute('aria-posinset') === '16000' && document.activeElement?.getAttribute('aria-setsize') === '16000'`,
+    'End reaches the last logical object',
+    5000,
+  );
+  await key('Home');
+  await until(
+    `document.activeElement?.dataset.treeKey?.startsWith('group:') && document.querySelector('.tree-content').scrollTop === 0`,
+    'Home returns to the first logical row',
+    5000,
+  );
+  await writeFile(path.join(scratch, 'tree-layout.json'), JSON.stringify(layout, null, 2));
   const beforeFilters = await metrics();
   const timings = [];
   for (const term of ['Preserved_15999', 'Acceptance', 'Preserved_42', '']) {

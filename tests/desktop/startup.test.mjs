@@ -29,10 +29,20 @@ check('packaged-builtin-boundary', async () => {
     .trim()
     .split('\n')
     .map(JSON.parse);
-  const startupProbes = requests.filter((request) =>
-    request.script?.includes('Boolean(window.__TAURI_INTERNALS__'),
+  const startupProbes = requests.filter(
+    (request) =>
+      request.phase === 'completed' &&
+      request.probe?.value === true &&
+      request.script?.includes('Boolean(window.__TAURI_INTERNALS__'),
   );
-  assert(startupProbes.length >= 2, 'Initial and reloaded application readiness were observed');
+  assert(
+    startupProbes.some((request) => !request.script.includes('performance.timeOrigin !==')),
+    'Initial application readiness was observed',
+  );
+  assert(
+    startupProbes.some((request) => request.script.includes('performance.timeOrigin !==')),
+    'Reloaded application readiness was observed',
+  );
   assert(
     startupProbes.every((request) => request.route === '/session/execute/sync'),
     'Navigation readiness must not depend on an async callback in the departing document',

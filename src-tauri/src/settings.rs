@@ -8,7 +8,12 @@ use tauri::State;
 pub(super) fn workbench_capabilities(
     state: State<'_, Arc<AppState>>,
 ) -> Result<Capabilities, autosar_config_core::LocalizedText> {
-    state.capabilities()
+    #[cfg(feature = "native-webdriver")]
+    let request = crate::verification::NativeRequest::begin("workbench_capabilities");
+    let result = state.capabilities();
+    #[cfg(feature = "native-webdriver")]
+    request.finish(result.is_ok());
+    result
 }
 #[tauri::command]
 pub(super) async fn configure_execution_tools(

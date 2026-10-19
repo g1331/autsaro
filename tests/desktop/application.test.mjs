@@ -174,8 +174,22 @@ check('live-application-initialization-and-immutable-snapshot', async () => {
     .trim()
     .split('\n')
     .map(JSON.parse)
-    .filter((request) => request.script?.includes('performance.timeOrigin !=='));
-  assert(navigationProbes.length >= 4, 'Startup and all three public reloads were observed');
+    .filter(
+      (request) =>
+        request.phase === 'completed' &&
+        request.probe?.value === true &&
+        request.script?.includes('performance.timeOrigin !=='),
+    );
+  const previousDocuments = new Set(
+    navigationProbes.map(
+      (request) => request.script.match(/performance\.timeOrigin !== ([\d.]+)/)?.[1],
+    ),
+  );
+  assert(!previousDocuments.has(undefined));
+  assert(
+    previousDocuments.size >= 4,
+    'Startup and all three distinct public reloads were observed',
+  );
   assert(
     navigationProbes.every((request) => request.route === '/session/execute/sync'),
     'Public reload readiness must preserve the driver navigation boundary',
