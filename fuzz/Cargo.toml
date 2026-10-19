@@ -1,0 +1,55 @@
+[package]
+name = "autosar-config-core-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# A separate workspace: libFuzzer and the nightly sanitizer build stay out of the product lock file.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+autosar-config-core = { path = "../core" }
+sha2 = "0.11"
+hex = "0.4"
+
+# The C drivers compile delivered CanTp and Dcm sources; Dcm needs the generated RTE type headers.
+[build-dependencies]
+cc = "1"
+autosar-config-core = { path = "../core" }
+
+[[bin]]
+name = "project_import"
+path = "fuzz_targets/project_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "definition_extension"
+path = "fuzz_targets/definition_extension.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cantp_receive"
+path = "fuzz_targets/cantp_receive.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dcm_request"
+path = "fuzz_targets/dcm_request.rs"
+test = false
+doc = false
+bench = false
+
+[lints.rust]
+# `cargo fuzz` builds with `--cfg fuzzing`.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }

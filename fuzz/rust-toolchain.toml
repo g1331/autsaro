@@ -1,0 +1,4 @@
+# cargo-fuzz needs nightly for -Zsanitizer; a fixed date keeps local and CI builds alike.
+[toolchain]
+channel = "nightly-2026-10-18"
+profile = "minimal"
