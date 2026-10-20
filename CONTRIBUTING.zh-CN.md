@@ -34,6 +34,8 @@ uv run --locked python -m autosar_tooling quality --merge-base origin/master
 
 执行一次 `uv run --locked pre-commit install --allow-missing-config`，之后每次推送前自动运行上面最后一条 `quality`，未通过时阻止推送；它不替代 CI 的同一检查。`--allow-missing-config` 让尚无该配置的旧分支（共用同一 `.git/hooks` 的工作树也在内）照常推送。
 
+IPC 声明从 Rust 命令签名及实际序列化 DTO 生成。修改后运行 `npm run ipc:generate --prefix ui`，提交 `ui/src/ipc/` 下两份生成绑定；`npm run ipc:check --prefix ui` 重新生成并逐字比较，不修改已跟踪文件。命令使用锁定的 Cargo 生成器和项目 Prettier，先执行 `npm ci --prefix ui`。默认与 `native-webdriver` 签名分别检查；正常 TypeScript 构建还验证错误命令名、payload 和返回值假设会被拒绝。类型导出须保持 Serde 属性及原生 transport 不变。
+
 默认 Cargo 测试不要求官方资源或受控原生工具。真实进程、官方对照和桌面验收见[测试说明](docs/development/testing/README.md)。格式检查针对修改行，不整体重排历史代码。运行时 C 已整体符合 `.clang-format`；执行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，`git blame` 即跳过那次全量重排。生成的 C 由 emitter 直接写成同一排版，必需检查核对生成样本。
 
 解析、生成和运行行为的修改应有独立预期及关键拒绝路径。生成代码每个输出只渲染一次，计划不能保证的前提报告为诊断；Clippy 在这些模块拒绝 panic 和文本修补，见测试说明。修改 C 或生成 C 模板时遵守 [C 编码规范](docs/development/c-coding-standard.md)，并按仓库 MISRA 指导执行；公开 C 接口说明输入、输出和错误契约。
