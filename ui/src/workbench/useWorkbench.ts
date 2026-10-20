@@ -8,7 +8,9 @@ import {
   translate,
   useLocale,
 } from '../i18n';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../ipc';
+import type { CallArgs, Value, WorkbenchCommand } from '../ipc';
+import type { CommandMap } from '../ipc/bindings';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useEffectEvent, useReducer, useRef } from 'react';
@@ -17,11 +19,9 @@ import type {
   GenerationPreview,
   IntegrationInspection,
   Issue,
-  OwnedVerificationFailure,
   PlanDiagnostic,
   SavePreview,
   WorkbenchCapabilities,
-  WorkbenchReply,
   WorkspaceView,
 } from '../types';
 import { createBatchEditing } from './batchEditing';
@@ -41,12 +41,7 @@ import {
 } from './forms';
 import type { WorkbenchOperation } from './operation';
 import { createProjectActions } from './projectActions';
-import type {
-  ConfigurationChange,
-  ConfigurationDiagnostic,
-  DocumentTab,
-  ProjectProjection,
-} from './projectTypes';
+import type { ConfigurationChange, ConfigurationDiagnostic, DocumentTab } from './projectTypes';
 import type { WorkbenchSession } from './session';
 import { createSettingsActions } from './settingsActions';
 import type { WorkbenchState } from './state';
@@ -215,7 +210,7 @@ export function useWorkbench(): Workbench {
     if (!native) return;
     let live = true;
     const operationEpoch = epoch;
-    void invoke<WorkbenchCapabilities>('workbench_capabilities')
+    void invoke('workbench_capabilities')
       .then((capabilities) => {
         if (!live) return;
         capabilitiesRef.current = capabilities;
@@ -242,13 +237,17 @@ export function useWorkbench(): Workbench {
     };
   }, []);
 
-  async function call<T>(command: string, payload: Record<string, unknown> = {}): Promise<T> {
+  function call<C extends WorkbenchCommand>(command: C, ...args: CallArgs<C>): Promise<Value<C>>;
+  async function call(command: WorkbenchCommand, payload: Record<string, unknown> = {}) {
     const capabilities = capabilitiesRef.current;
     if (!capabilities) throw new ProductError(message('controller.error.capabilitiesNotReady'));
     const generation = epoch.current;
     const fingerprint = capabilities.fingerprint;
     try {
-      const reply = await invoke<WorkbenchReply<T>>(command, { ...payload, fingerprint });
+      const reply = await invoke(command, {
+        ...payload,
+        fingerprint,
+      } as CommandMap[WorkbenchCommand]['args']);
       if (generation !== epoch.current || reply.inputFingerprint !== fingerprint) {
         throw new ProductError(message('controller.error.staleDelivery'));
       }
@@ -298,7 +297,7 @@ export function useWorkbench(): Workbench {
           { command, outcome: 'failed', detail: errorText(error) },
         ]);
       if (generation === epoch.current) {
-        const current = await invoke<WorkbenchCapabilities>('workbench_capabilities');
+        const current = await invoke('workbench_capabilities');
         if (generation === epoch.current) {
           capabilitiesRef.current = current;
           const presentationOnly =
@@ -349,7 +348,7 @@ export function useWorkbench(): Workbench {
   async function cancelOperation() {
     invalidateOperation();
     try {
-      await call<void>('cancel_operation');
+      await call('cancel_operation');
       patchState({ notice: { tone: 'info', text: message('controller.operation.cancelled') } });
     } catch (error) {
       setNotice({
@@ -633,7 +632,7 @@ export function useWorkbench(): Workbench {
   function inspectIntegration() {
     void run(
       { kind: 'action', label: message('activity.validate') },
-      () => call<IntegrationInspection>('inspect_integration'),
+      () => call('inspect_integration'),
       (report) => {
         acceptIntegration(report);
         setIntegrationNotice(
@@ -674,10 +673,10 @@ export function useWorkbench(): Workbench {
       void run(
         { kind: 'integrationEdit', label: message('activity.apply') },
         async () => {
-          const report = await call<IntegrationInspection>('edit_integration', {
+          const report = await call('edit_integration', {
             changes: { canIds: ids, applicationPeriodMs: period },
           });
-          const view = await call<WorkspaceView>('workspace_view');
+          const view = await call('workspace_view');
           return { report, view };
         },
         ({ report, view }) => {
@@ -700,8 +699,8 @@ export function useWorkbench(): Workbench {
         { kind: 'action', label: message('activity.reopen') },
         () =>
           path
-            ? call<WorkspaceView>('open_member_project', { path })
-            : call<WorkspaceView>('open_project', {
+            ? call('open_member_project', { path })
+            : call('open_project', {
                 paths: workspace.files.map((file) => file.path),
               }),
         (view) => {
@@ -734,7 +733,7 @@ export function useWorkbench(): Workbench {
   async function refreshProjection() {
     if (!capabilitiesRef.current?.hasWorkspace) return;
     try {
-      const projection = await call<ProjectProjection>('project_projection');
+      const projection = await call('project_projection');
       patchState({ projection, memberProjectPath: projection.projectPath });
     } catch (error) {
       setNotice({
@@ -748,7 +747,7 @@ export function useWorkbench(): Workbench {
     await guardContext(message('activity.verificationFailure'), () =>
       run(
         { kind: 'action', label: message('activity.verificationFailure') },
-        () => call<OwnedVerificationFailure>('verification_owned_failure', { delayMs }),
+        () => call('verification_owned_failure', { delayMs }),
         (result) => {
           field('toolWindow')('log');
           setNotice({

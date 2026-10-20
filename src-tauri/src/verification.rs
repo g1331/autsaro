@@ -60,6 +60,7 @@ impl NativeRequest {
 #[cfg(feature = "native-webdriver")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(specta::Type))]
 pub(crate) struct OwnedFailure {
     exit_code: Option<i32>,
     status: String,
@@ -72,6 +73,7 @@ pub(crate) struct OwnedFailure {
 
 #[cfg(feature = "native-webdriver")]
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn verification_owned_failure(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -125,6 +127,7 @@ pub(crate) async fn verification_owned_failure(
 
 #[cfg(not(feature = "native-webdriver"))]
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn verification_owned_failure()
 -> Result<Reply<()>, autosar_config_core::LocalizedText> {
     Err(autosar_config_core::product_message!(

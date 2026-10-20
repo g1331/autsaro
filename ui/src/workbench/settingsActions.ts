@@ -25,7 +25,7 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
   async function changeTarget(target: BuildTarget) {
     invalidateOperation();
     try {
-      await call<void>('select_build_target', { target });
+      await call('select_build_target', { target });
       patchState({
         generationPreview: null,
         generated: null,
@@ -51,7 +51,7 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
     running.current = true;
     setBusy(message('activity.saveTools'));
     try {
-      await call<void>('configure_execution_tools', { tools: stateRef.current.toolDraft });
+      await call('configure_execution_tools', { tools: stateRef.current.toolDraft });
       setGenerated(null);
       setBuilt(null);
       setVirtualResult(null);
@@ -95,7 +95,7 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
     running.current = true;
     setBusy(message('activity.saveAppearance'));
     try {
-      await call<void>('configure_appearance', { appearance: stateRef.current.appearanceDraft });
+      await call('configure_appearance', { appearance: stateRef.current.appearanceDraft });
       setSettingsNotice({ tone: 'success', text: message('controller.settings.appearanceSaved') });
     } catch (error) {
       setSettingsNotice({ tone: 'error', text: errorText(error) });
@@ -111,7 +111,7 @@ export function createSettingsActions(session: WorkbenchSession, dependencies: D
     const language = stateRef.current.languageDraft;
     patchState({ settingsNotice: null, languageSaving: true });
     try {
-      if (native) await call<void>('configure_language', { language });
+      if (native) await call('configure_language', { language });
       else persistLanguagePreference(language);
       patchState({ savedLanguage: language });
       setSettingsNotice({ tone: 'success', text: message('controller.settings.languageSaved') });

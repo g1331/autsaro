@@ -1,4 +1,5 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react';
+import type { WorkbenchCall } from '../ipc';
 import type { WorkbenchCapabilities } from '../types';
 import type { WorkbenchState } from './state';
 
@@ -15,5 +16,5 @@ export interface WorkbenchSession {
   catalogDecision: RefObject<((accepted: boolean) => void) | null>;
   field<K extends keyof WorkbenchState>(key: K): Dispatch<SetStateAction<WorkbenchState[K]>>;
   patchState(patch: Partial<WorkbenchState>): void;
-  call<T>(command: string, payload?: Record<string, unknown>): Promise<T>;
+  call: WorkbenchCall;
 }

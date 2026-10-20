@@ -39,6 +39,7 @@ pub(crate) fn application_package_path(logical: &str) -> Option<String> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ApplicationSlotDescriptor {
     pub producer_slot: String,
     pub component_path: String,

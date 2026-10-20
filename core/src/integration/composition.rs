@@ -11,6 +11,7 @@ pub const PROFILE: &str = "singlecore-ecu-v1";
 // Fixed R24-11 Dcm declarations. Dormant groups do not enable their services.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct DcmModeDefinition {
     pub group: Cow<'static, str>,
     pub port: Cow<'static, str>,
@@ -68,6 +69,7 @@ pub(super) const DCM_MODES: &[DcmModeDefinition] = &[
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct Endpoint {
     pub instance: String,
     pub port: String,
@@ -76,6 +78,7 @@ pub struct Endpoint {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct Connection {
     pub path: String,
     pub provider: Endpoint,
@@ -85,6 +88,7 @@ pub struct Connection {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct Operation {
     pub port: String,
     pub interface: String,
@@ -103,6 +107,7 @@ pub struct Operation {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct Runnable {
     pub path: String,
     pub symbol: String,
@@ -112,6 +117,7 @@ pub struct Runnable {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct DataAccess {
     pub path: String,
     pub endpoint: Endpoint,
@@ -121,6 +127,7 @@ pub struct DataAccess {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct DiagnosticSessionPort {
     pub port: String,
     pub interface: String,
@@ -131,6 +138,7 @@ pub struct DiagnosticSessionPort {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct Component {
     pub component: String,
     pub instance: String,
@@ -150,6 +158,7 @@ pub struct Component {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct NetworkEndpoint {
     pub endpoint: Endpoint,
     pub network: String,
@@ -159,6 +168,7 @@ pub struct NetworkEndpoint {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CompositionContract {
     pub system: String,
     pub composition: String,

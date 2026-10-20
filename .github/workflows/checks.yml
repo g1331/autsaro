@@ -185,6 +185,7 @@ jobs:
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
       - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-desktop
+      - run: npm run ipc:check --prefix ui
       - run: cargo build --locked -p autosar-config-desktop
       - if: runner.os == 'Linux'
         run: cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings

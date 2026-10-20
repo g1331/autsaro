@@ -48,6 +48,7 @@ pub fn record_grammar_load() {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct Metrics {
     pub source_reads: String,
     pub snapshot_builds: String,

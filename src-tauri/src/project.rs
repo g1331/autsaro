@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tauri::State;
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn close_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -13,6 +14,7 @@ pub(super) async fn close_project(
     background(state, move |state| state.close(&fingerprint)).await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) fn workspace_view(
     state: State<'_, Arc<AppState>>,
 ) -> Result<Reply<WorkspaceView>, autosar_config_core::LocalizedText> {
@@ -20,6 +22,7 @@ pub(super) fn workspace_view(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn create_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -39,6 +42,7 @@ pub(super) async fn create_project(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn open_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -57,6 +61,7 @@ pub(super) async fn open_project(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn open_handoff_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -99,6 +104,7 @@ pub(super) async fn open_handoff_project(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn preview_save_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -116,6 +122,7 @@ pub(super) async fn preview_save_project(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn save_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,

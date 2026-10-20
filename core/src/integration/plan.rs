@@ -14,6 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct HandleAssignment {
     pub domain: String,
     pub path: String,
@@ -25,6 +26,7 @@ pub struct HandleAssignment {
 /// explicit: this description is not evidence of a W3 runtime link.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct PlanDescription {
     pub format_version: u32,
     pub profile: String,

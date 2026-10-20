@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct RteGenerationContract {
     pub strict_unconnected_r_port_check: bool,
     pub strict_initial_values_check: bool,

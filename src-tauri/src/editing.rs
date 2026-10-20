@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tauri::State;
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn validate_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -23,6 +24,7 @@ pub(super) async fn validate_project(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn inspect_integration(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -45,6 +47,7 @@ pub(super) async fn inspect_integration(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn edit_integration(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -71,6 +74,7 @@ pub(super) async fn edit_integration(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn preview_integration_save(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -96,6 +100,7 @@ pub(super) async fn preview_integration_save(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn save_integration(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,

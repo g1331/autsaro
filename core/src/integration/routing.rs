@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct PduRoute {
     pub path: String,
     pub pdu: String,

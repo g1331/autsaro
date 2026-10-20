@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ScheduledEntity {
     pub mapping: String,
     pub event: String,
@@ -31,6 +32,7 @@ impl ScheduledEntity {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ScheduleContract {
     pub task: String,
     pub task_priority: u8,

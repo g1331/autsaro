@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ComMainFunction {
     pub path: String,
     pub symbol: String,
@@ -16,6 +17,7 @@ pub struct ComMainFunction {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ComRxGroup {
     pub path: String,
     pub handle: u16,
@@ -24,6 +26,7 @@ pub struct ComRxGroup {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ComReception {
     pub signal: String,
     pub user_signal: String,
@@ -36,6 +39,7 @@ pub struct ComReception {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ComRuntimeContract {
     pub callback_header: String,
     pub receive_main: ComMainFunction,

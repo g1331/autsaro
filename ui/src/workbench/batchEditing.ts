@@ -3,13 +3,7 @@ import type { Text } from '../i18n';
 import type { IntegrationInspection, WorkspaceView } from '../types';
 import { errorText, headline } from './forms';
 import type { Notice } from './forms';
-import type {
-  ChangeOutcome,
-  ChangePreview,
-  ChangeSet,
-  ConfigurationChange,
-  FieldDescriptor,
-} from './projectTypes';
+import type { ChangeSet, ConfigurationChange, FieldDescriptor } from './projectTypes';
 import type { WorkbenchSession } from './session';
 
 /** Display name of a field, as its inspector label shows it. */
@@ -266,7 +260,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
     });
     const generation = epoch.current;
     try {
-      const preview = await call<ChangePreview>('prepare_configuration_change', { changeSet });
+      const preview = await call('prepare_configuration_change', { changeSet });
       if (generation !== epoch.current) return;
       if (stateRef.current.changes !== current.changes)
         throw new ProductError(message('workflow.error.draftChanged'));
@@ -316,8 +310,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
     };
     return commit(
       changeSet,
-      async () =>
-        (await call<ChangePreview>('prepare_configuration_change', { changeSet })).changeRevision,
+      async () => (await call('prepare_configuration_change', { changeSet })).changeRevision,
       fieldId,
     );
   }
@@ -352,7 +345,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
     try {
       const changeRevision = typeof revision === 'string' ? revision : await revision();
       if (generation !== epoch.current) return false;
-      const result = await call<ChangeOutcome>('apply_configuration_change', {
+      const result = await call('apply_configuration_change', {
         changeSet,
         changeRevision,
       });
@@ -387,7 +380,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
       });
       let view: WorkspaceView;
       try {
-        view = await call<WorkspaceView>('workspace_view');
+        view = await call('workspace_view');
       } catch (error) {
         if (generation !== epoch.current) return false;
         setNotice({
@@ -415,7 +408,7 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
           integrationNotice: message('workflow.integration.rechecking'),
         });
         try {
-          const report = await call<IntegrationInspection>('inspect_integration');
+          const report = await call('inspect_integration');
           if (generation !== epoch.current) return false;
           const integration = stateRef.current;
           acceptIntegration(report);

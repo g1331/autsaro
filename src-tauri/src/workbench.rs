@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(test, derive(specta::Type))]
 pub(super) enum Appearance {
     Light,
     Dark,
@@ -18,6 +19,7 @@ pub(super) enum Appearance {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(test, derive(specta::Type))]
 pub(super) enum Language {
     #[default]
     #[serde(rename = "system")]
@@ -47,6 +49,7 @@ struct Settings {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(specta::Type))]
 pub(super) struct OperationView {
     id: u64,
     stage: autosar_config_core::LocalizedText,
@@ -54,6 +57,7 @@ pub(super) struct OperationView {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(specta::Type))]
 pub(super) struct Capabilities {
     pub fingerprint: String,
     pub target: BuildTarget,
@@ -79,6 +83,7 @@ pub(super) struct Capabilities {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(specta::Type))]
 pub(super) struct Reply<T> {
     pub value: T,
     pub capabilities: Capabilities,

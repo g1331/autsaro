@@ -46,6 +46,7 @@ pub(super) fn standard() -> Result<String, Vec<super::PlanDiagnostic>> {
 
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct RteDataType {
     pub path: String,
     pub symbol: String,

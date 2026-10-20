@@ -36,3 +36,6 @@
 # Fuzz corpus and reproducers are byte-exact inputs.
 /fuzz/corpus/** -text
 /fuzz/regressions/** -text
+
+# Generated IPC declarations are compared byte-for-byte on both desktop platforms.
+/ui/src/ipc/bindings*.ts text eol=lf

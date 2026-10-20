@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ContractArgument {
     pub name: String,
     pub native_type: String,
@@ -391,6 +392,7 @@ pub(super) fn runtime_source_identities() -> BTreeMap<String, String> {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct SymbolContract {
     pub symbol: String,
     pub return_type: String,

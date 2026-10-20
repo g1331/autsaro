@@ -6,13 +6,7 @@ import { rememberDialogOpener } from './Dialog';
 import type { Stage, StageState } from './forms';
 import { applicationPeriodDraft, errorText, intInRange } from './forms';
 import type { WorkbenchOperation } from './operation';
-import type {
-  ApplicationInitializationOutcome,
-  ApplicationInitializationPreview,
-  DocumentTab,
-  ProjectCreationPreview,
-  ProjectProjection,
-} from './projectTypes';
+import type { DocumentTab } from './projectTypes';
 import type { WorkbenchSession } from './session';
 import type { WorkbenchState } from './state';
 import { importedSaveStage, native, stageDefaults } from './useDelivery';
@@ -206,7 +200,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     if (integrationProcessing) return;
     await replaceProject(message('activity.switchProject'), async () => {
       try {
-        await call<void>('close_project');
+        await call('close_project');
         invalidateOperation();
       } catch (error) {
         setNotice({ tone: 'error', text: errorText(error) });
@@ -263,7 +257,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       await run(
         { kind: 'action', label: message('activity.previewNewProject') },
         () =>
-          call<ProjectCreationPreview>('preview_project_creation', {
+          call('preview_project_creation', {
             directory: current.projectDirectory,
             name: current.projectName.trim(),
             templateId: 'standard-ecu',
@@ -281,7 +275,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     void replaceProject(message('activity.importArxml'), () =>
       run(
         { kind: 'action', label: message('activity.importArxml') },
-        () => call<WorkspaceView>('open_project', { paths: importPaths }),
+        () => call('open_project', { paths: importPaths }),
         applyProject,
       ),
     );
@@ -318,7 +312,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       field('handoffImportOpen')(false);
       await run(
         { kind: 'handoffImport', label: message('activity.importHandoff') },
-        () => call<WorkspaceView>('open_handoff_project', { directory, newWorkspaceDirectory }),
+        () => call('open_handoff_project', { directory, newWorkspaceDirectory }),
         (view) => {
           field('handoffImportDestination')('');
           applyProject(view);
@@ -331,7 +325,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     await guardContext(message('activity.initializeApplication'), () =>
       run(
         { kind: 'action', label: message('activity.previewApplication') },
-        () => call<ApplicationInitializationPreview>('preview_application_initialization'),
+        () => call('preview_application_initialization'),
         (applicationPreview) => field('applicationPreview')(applicationPreview),
       ),
     );
@@ -343,12 +337,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     await run(
       { kind: 'action', label: message('activity.initializeApplication') },
       async () => {
-        const outcome = await call<ApplicationInitializationOutcome>(
-          'initialize_application_previewed',
-          { preview },
-        );
+        const outcome = await call('initialize_application_previewed', { preview });
         // The member list now names the application; only the workspace view reports that.
-        return { outcome, view: await call<WorkspaceView>('workspace_view') };
+        return { outcome, view: await call('workspace_view') };
       },
       ({ outcome, view }) => {
         patchState({
@@ -464,7 +455,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
             intInRange(value, 'CAN ID', 0, 2047),
           ]),
         );
-        const report = await call<IntegrationInspection>('edit_integration', {
+        const report = await call('edit_integration', {
           changes: {
             canIds,
             applicationPeriodMs: intInRange(
@@ -478,7 +469,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         applied = true;
         acceptIntegration(report);
         patchState({ integrationUnapplied: false });
-        view = await call<WorkspaceView>('workspace_view');
+        view = await call('workspace_view');
         patchState({ workspace: view });
       }
       if (generation !== epoch.current) return false;
@@ -588,7 +579,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     patchState({ activeSourceId: sourceId, sourceText: null, treeMode: 'files' });
     openDocument({ kind: 'source', sourceId });
     try {
-      const contents = await call<string>('read_project_source', { sourceId });
+      const contents = await call('read_project_source', { sourceId });
       const current = stateRef.current;
       if (
         generation !== epoch.current ||
@@ -625,7 +616,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       await guardContext(message('activity.acceptDefinitions'), () =>
         run(
           { kind: 'action', label: message('activity.acceptDefinitions') },
-          () => call<ProjectProjection>('import_definition_catalog', { catalogPath }),
+          () => call('import_definition_catalog', { catalogPath }),
           (projection) => {
             patchState({ projection });
             invalidateAfterEdit();
@@ -646,7 +637,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     await guardContext(message('activity.removeDefinitions'), () =>
       run(
         { kind: 'action', label: message('activity.removeDefinitions') },
-        () => call<ProjectProjection>('remove_definition_catalog', { catalogId }),
+        () => call('remove_definition_catalog', { catalogId }),
         (projection) => {
           patchState({ projection });
           invalidateAfterEdit();
@@ -666,7 +657,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       if (typeof path !== 'string') return;
       await run(
         { kind: 'action', label: message('activity.openProject') },
-        () => call<WorkspaceView>('open_member_project', { path }),
+        () => call('open_member_project', { path }),
         (view) => {
           applyProject(view);
           field('memberProjectPath')(path);
@@ -685,7 +676,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       await run(
         { kind: 'action', label: message('activity.previewSaveAs') },
         () =>
-          call<ProjectCreationPreview>('preview_save_as_project', {
+          call('preview_save_as_project', {
             directory: current.projectDirectory,
           }),
         (projectPreview) => patchState({ projectPreview, projectPreviewKind: 'save-as' }),
@@ -706,7 +697,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
             : message('activity.saveAs'),
       },
       () =>
-        call<WorkspaceView>(
+        call(
           current.projectPreviewKind === 'create'
             ? 'create_project_previewed'
             : 'save_as_project_previewed',

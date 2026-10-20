@@ -60,6 +60,7 @@ pub(super) struct ProjectMembership {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ProjectFilePreview {
     pub path: String,
     pub contents: String,
@@ -67,6 +68,7 @@ pub struct ProjectFilePreview {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ProjectCreationPreview {
     pub revision: String,
     pub template_id: String,

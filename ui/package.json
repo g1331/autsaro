@@ -16,7 +16,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage --maxWorkers=2"
+    "test:coverage": "vitest run --coverage --maxWorkers=2",
+    "ipc:check": "cd .. && cargo test --locked -p autosar-config-desktop --lib ipc_bindings_match_rust && cargo test --locked -p autosar-config-desktop --features native-webdriver --lib ipc_bindings_match_rust",
+    "ipc:generate": "cd .. && cargo test --locked -p autosar-config-desktop --lib ipc_bindings_match_rust -- --ignored && cargo test --locked -p autosar-config-desktop --features native-webdriver --lib ipc_bindings_match_rust -- --ignored"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.3",

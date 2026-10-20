@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct IntegrationEdit {
     /// Selected S/R port identities, never short names or inferred routes.
     #[serde(default)]
@@ -13,6 +14,7 @@ pub struct IntegrationEdit {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct IntegrationInspection {
     pub profile: String,
     pub description: Option<PlanDescription>,
