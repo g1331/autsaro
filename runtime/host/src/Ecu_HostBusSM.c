@@ -1,5 +1,5 @@
 /** @file Explicit CDD bus state manager for one controlled-host CAN channel.
- * Its own strict area protects module data only (ADR 0018): CanIf and ComM are called
+ * Its own strict area protects module data only: CanIf and ComM are called
  * outside it. A controller transition is registered before CanIf is asked for it, so
  * a completion indicated from within that call finds it.
  */
@@ -275,7 +275,7 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId)
             Ecu_HostBusSM_Enter();
             requested = requested_mode;
             Ecu_HostBusSM_Exit();
-            /* Delivered after a restart (ADR 0018): CanIf already went TX_OFFLINE, so
+            /* Delivered after a restart: CanIf already went TX_OFFLINE, so
              * restore the requested mode as a bus-off recovery would. A pending
              * transition applies the same mode again on its completion. */
             (void)Ecu_HostBusSM_ApplyMode(config->channel, requested);

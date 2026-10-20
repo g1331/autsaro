@@ -1,10 +1,10 @@
-/** @file Host driver lock and per-module strict exclusive areas (ADR 0018). */
+/** @file Host driver lock and per-module strict exclusive areas. */
 #ifndef CAN_HOSTLOCK_H
 #define CAN_HOSTLOCK_H
 
 void Can_Lock(void);
 void Can_Unlock(void);
-/* Strict SchM areas (ADR 0018), one per module; the driver uses Can_Lock. Each
+/* Strict SchM areas, one per module; the driver uses Can_Lock. Each
  * protects its module's data only: a thread holding one that enters any area aborts. */
 typedef enum {
     CAN_HOST_AREA_DET = 0,

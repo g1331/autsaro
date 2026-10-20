@@ -1,5 +1,5 @@
 /** @file BswM with one IMMEDIATE ComM mode input and a single action, run in caller context.
- * BSWM_STATE protects module data only (ADR 0018); the action runs outside it.
+ * BSWM_STATE protects module data only; the action runs outside it.
  */
 #include "BswM.h"
 #include "BswM_ComM.h"

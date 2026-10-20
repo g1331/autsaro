@@ -77,7 +77,7 @@ static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config)
     }
     return valid;
 }
-/* The area guards only the published pointer (ADR 0018). The configuration it points to is
+/* The area guards only the published pointer. The configuration it points to is
  * immutable and stays published, so routing reads it and calls other modules outside. */
 static PDUR_CODE const PduR_PBConfigType *PduR_Configuration(void)
 {

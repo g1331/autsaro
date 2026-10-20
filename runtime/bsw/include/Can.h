@@ -5,8 +5,8 @@
 #include "Can_CfgTypes.h"
 #include "Std_Types.h"
 
-/* Published information (SWS_BSW_00059): the software version follows core/Cargo.toml; the
- * vendor ID and AUTOSAR release macros are absent until an identity is assigned (#59). */
+/* Published information (SWS_BSW_00059): module ID and software version are provided below;
+ * vendor ID and AUTOSAR release macros are not provided. */
 #define CAN_MODULE_ID        80u
 #define CAN_SW_MAJOR_VERSION 0u
 #define CAN_SW_MINOR_VERSION 1u

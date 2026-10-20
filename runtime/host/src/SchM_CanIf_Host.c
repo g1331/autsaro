@@ -1,4 +1,4 @@
-/** @file Host exclusive areas of the communication stack (ADR 0018). The driver, CanIf,
+/** @file Host exclusive areas of the communication stack. The driver, CanIf,
  * Det, PduR, LSduR, Com and CanTp areas are strict: separate resources that nest with nothing.
  * The selected target lock provider implements them.
  */

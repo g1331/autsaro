@@ -15,7 +15,7 @@ static Can_ControllerStateType controller_mode
     CANIF_VAR_CLEARED; /**< Last indicated mode; Init sets STOPPED or UNINIT. */
 static CanIf_PduModeType pdu_mode
     CANIF_VAR_CLEARED; /**< Current channel gating; Init sets OFFLINE. */
-/* Tx ledger per L-PDU (ADR 0018). Driver calls run outside the area, so a request is
+/* Tx ledger per L-PDU. Driver calls run outside the area, so a request is
  * reserved before Can_Write and settled after it: `writing` counts reservations whose
  * Can_Write has not returned, `early` the confirmations that already answered one of
  * them, `accepted` settled requests awaiting their result, and `owed` E_NOT_OK results of

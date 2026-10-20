@@ -53,7 +53,7 @@ static LSDUR_CODE boolean LSduR_Valid(const LSduR_PBConfigType *config)
     }
     return valid;
 }
-/* The area guards only the published pointer (ADR 0018). The configuration it points to is
+/* The area guards only the published pointer. The configuration it points to is
  * immutable and stays published, so routing reads it and calls other modules outside. */
 static LSDUR_CODE const LSduR_PBConfigType *LSduR_Configuration(void)
 {

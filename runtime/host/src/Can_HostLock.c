@@ -1,4 +1,4 @@
-/** @file Host driver lock and strict SchM exclusive areas with nesting detection (ADR 0018). */
+/** @file Host driver lock and strict SchM exclusive areas with nesting detection. */
 #if !defined(_WIN32)
 #define _XOPEN_SOURCE 700
 #endif
@@ -12,7 +12,7 @@
 #endif
 /* Every unrecoverable lock state stops here: a void caller must not continue. */
 static void Can_Fatal(void) { abort(); }
-/* SchM exclusive-area accounting (ADR 0018). A strict area (driver, Det, ...) protects
+/* SchM exclusive-area accounting. A strict area (driver, Det, ...) protects
  * module data only: a thread holding one must not enter another area. */
 static __thread unsigned
     strict_held; /**< Actor-local strict-area depth; initially zero; no Init reset. */

@@ -1,5 +1,5 @@
 /** @file Immediate UINT32 COM with real Rx group and PDU-level reception DM.
- * Com enters only its own COM_STATE area and calls PduR and its users outside it (ADR 0018):
+ * Com enters only its own COM_STATE area and calls PduR and its users outside it:
  * a transmission is packed in the area and sent after leaving it; notifications are
  * recorded in the area and published in order by one context at a time.
  */
@@ -125,7 +125,7 @@ static COM_CODE uint16 Com_TakeOwed(boolean *timeout)
     }
     return taken;
 }
-/* Single-flight ordered publication (ADR 0018): a context that finds another one delivering
+/* Single-flight ordered publication: a context that finds another one delivering
  * only records; the delivering context keeps going until nothing is owed. */
 static COM_CODE void Com_Publish(void)
 {
