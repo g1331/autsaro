@@ -142,7 +142,8 @@ fn sealed_control_reports_runtime_faults_and_accepts_clean_boundaries() {
     }
     let scratch = Scratch::new();
     let (project, _) = single_component_project(&scratch.0, tooling::native_target());
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sanitizer_faults.c");
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sanitizers/sanitizer_faults.c");
     let output = scratch.0.join("faults");
     instrument(&project, &output, "probe", Some(&fixture));
     let binary = tooling::native_binary(&output, "ecu_probe");
@@ -249,7 +250,7 @@ fn sealed_os_registration_and_interrupt_identity_use_real_thread_owners() {
     let scratch = Scratch::new();
     let (project, _) = single_component_project(&scratch.0, tooling::native_target());
     let fixture =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/os_lifecycle_threads.c");
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/os/os_lifecycle_threads.c");
     let output = scratch.0.join("thread-owners");
     instrument(&project, &output, "probe", Some(&fixture));
     let run = tooling::run_public_command(
@@ -274,7 +275,7 @@ fn sealed_actor_signal_lifecycle_preserves_context_and_terminal_stop() {
     let scratch = Scratch::new();
     let (project, _) = single_component_project(&scratch.0, tooling::native_target());
     let fixture =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/os_signal_lifecycle.c");
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/os/os_signal_lifecycle.c");
     let output = scratch.0.join("signal-lifecycle");
     instrument(&project, &output, "probe", Some(&fixture));
     for (name, directory) in [

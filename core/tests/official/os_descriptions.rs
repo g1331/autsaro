@@ -17,7 +17,7 @@ fn official_descriptions() {
     let scratch = Scratch::new();
     let reader = |project: &Path, os: &str, header: &Path| {
         std::process::Command::new(&python)
-            .arg(fixture("arti_reader.py"))
+            .arg(fixture("os/arti_reader.py"))
             .arg(project)
             .arg(root)
             .arg(os)

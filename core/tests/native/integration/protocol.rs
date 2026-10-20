@@ -762,7 +762,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
         format!(
             "#define main production_main\n#define batch production_batch\n#define control production_control\n{}\n#undef main\n#undef batch\n#undef control\n{}",
             fs::read_to_string(built.project.join("integration/src/ecu_host_batch.c")).unwrap(),
-            fs::read_to_string(root().join("core/tests/fixtures/host_batch_faults.c")).unwrap()
+            fs::read_to_string(root().join("core/tests/fixtures/host-batch/host_batch_faults.c")).unwrap()
         ),
     )
     .unwrap();
@@ -906,7 +906,7 @@ fn single_component_frame_input_keeps_the_receive_deadline() {
     let (project, _) = super::single_component_project(&built.0, super::tooling::native_target());
     let output = build(
         "probe",
-        Some(&root().join("core/tests/fixtures/cantp_frame_timer.c")),
+        Some(&root().join("core/tests/fixtures/host-batch/cantp_frame_timer.c")),
         &built,
         &project,
     );
@@ -941,8 +941,10 @@ fn single_component_cts_starts_a_complete_copy_timeout() {
         format!(
             "{}\n{}",
             fs::read_to_string(project.join("integration/src/ecu_host_batch.c")).unwrap(),
-            fs::read_to_string(root().join("core/tests/fixtures/host_batch_copy_timeout.c"))
-                .unwrap()
+            fs::read_to_string(
+                root().join("core/tests/fixtures/host-batch/host_batch_copy_timeout.c")
+            )
+            .unwrap()
         ),
     )
     .unwrap();
@@ -999,8 +1001,10 @@ fn single_component_confirmation_timers_ignore_host_confirmation_order() {
         format!(
             "{}\n{}",
             fs::read_to_string(project.join("integration/src/ecu_host_batch.c")).unwrap(),
-            fs::read_to_string(root().join("core/tests/fixtures/host_batch_confirmation_order.c"))
-                .unwrap()
+            fs::read_to_string(
+                root().join("core/tests/fixtures/host-batch/host_batch_confirmation_order.c")
+            )
+            .unwrap()
         ),
     )
     .unwrap();
@@ -1037,7 +1041,7 @@ fn single_component_native_batch_boundary_and_confirmations() {
     let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
     let output = build(
         "probe",
-        Some(&root().join("core/tests/fixtures/host_batch_native.c")),
+        Some(&root().join("core/tests/fixtures/host-batch/host_batch_native.c")),
         &scratch,
         &project,
     );
