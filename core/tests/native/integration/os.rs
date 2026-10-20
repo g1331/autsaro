@@ -79,7 +79,7 @@ fn counter_header_oracles() {
             command.arg("-DCOUNTER_TIME_RENAMED=1");
         }
         command
-            .arg(fixture("ecu_counter_time.c"))
+            .arg(fixture("os/ecu_counter_time.c"))
             .arg("-o")
             .arg(binary);
         checked(&mut command, &scratch.0, "counter-time-compile");
@@ -214,7 +214,7 @@ fn standard_status_build() {
         .arg(moved.join("bsw/include"))
         .arg("-I")
         .arg(moved.join("integration/include"))
-        .arg(fixture("ecu_standard_control.c"));
+        .arg(fixture("os/ecu_standard_control.c"));
     let result = super::tooling::run_public_command(
         &mut conflict,
         &scratch.0,
@@ -232,7 +232,7 @@ fn standard_status_build() {
         &moved,
         &scratch.0.join("standard-build"),
         "probe",
-        Some(&fixture("ecu_standard_control.c")),
+        Some(&fixture("os/ecu_standard_control.c")),
     );
     let stdout = run(&binary, &[]);
     assert!(
@@ -268,7 +268,7 @@ fn scheduler_resource_runs() {
             &project,
             &root.join("build"),
             "test",
-            Some(&fixture("ecu_scheduler_control.c")),
+            Some(&fixture("os/ecu_scheduler_control.c")),
         );
         let stdout = run(&binary, &[if enabled { "true" } else { "false" }]);
         assert!(
@@ -343,7 +343,7 @@ fn arti_consumer() {
         let consumer = root.join("consumer");
         std::fs::create_dir(&consumer).unwrap();
         for name in ["ecu_arti_control.c", "ecu_control.c"] {
-            std::fs::copy(fixture(name), consumer.join(name)).unwrap();
+            std::fs::copy(fixture(&format!("os/{name}")), consumer.join(name)).unwrap();
         }
         arti_expression_probe(&project, &consumer.join("Arti_ExpressionProbe.h"));
         let binary = build_ecu(
@@ -543,7 +543,7 @@ fn delivery_and_independent_control() {
             &project,
             &root.join("build"),
             "probe",
-            Some(&fixture("ecu_control.c")),
+            Some(&fixture("os/ecu_control.c")),
         );
         let stdout = run(&binary, &[]);
         assert!(

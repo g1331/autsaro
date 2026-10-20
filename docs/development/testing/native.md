@@ -43,6 +43,8 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - 修改文件保存的发布原语时，同时核对回滚、清理和遗留恢复资料：在移动原文件前验证原语可用性，避免“读取确认后删除”的竞态；不能将 POSIX 的目标类型限制推定为 Windows 保证，按锁定工具链在实际平台验证文件／目录替换。硬链接遗留会共享正式文件内容，须明确恢复语义，并用真实多文件事务验证失败后的字节与基线。
 - 原生 CI 使用交付目标锁定的工具链，不用滚动仓库最新版替代或放宽身份校验。测试以短期限调用 `nm` 等 binutils 时显式指定 BFD 目标（如 `--target=elf64-x86-64`）：Ubuntu 的 `/usr/lib/bfd-plugins` 带 LLVMgold，格式探测会加载 libLLVM，runner 上首次冷加载可超过数秒；外部工具超时先确认它实际加载的内容，不直接归为并行负载。
 
+原生夹具按消费者能力放在 `core/tests/fixtures/` 的子目录：`host-batch/` 保存 HostBatch 协议与帧计时控制，`os/` 保存 OS 控制、ARTI 读取及生命周期程序，`sanitizers/` 保存共享故障注入程序，`implementation-descriptions/` 保存实现描述读取程序。OS 控制文件之间的相对 include 保持同目录；移动夹具时同步 Rust、Python 和 official 消费方。
+
 ## 运行时配置结构与源文件迁移
 
 - 给运行时配置结构（如 `Os_TargetConfig`、`Os_ResourceConfig`）加字段时放在末尾，并更新全部位置式初始化：`runtime/*/tests/*.c`、生成器按位置输出的 `c_layout::initializer` 与模板。这些单元以 `-Werror=missing-field-initializers` 编译，生成工程只在 `--features native-tests` 的原生套件中编译，`it` 通过不能证明。测试用 `#define` 给 hook 改名再包含另一个 harness 时，宏也会改写被包含文件里对该 hook 的取址；改由 harness 提供显式观察点。

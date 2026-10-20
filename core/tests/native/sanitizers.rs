@@ -21,7 +21,7 @@ fn sanitizer_lane_reports_deliberate_faults() {
             "-pedantic",
             "-pthread",
         ])
-        .arg(root.join("core/tests/fixtures/sanitizer_faults.c"))
+        .arg(root.join("core/tests/fixtures/sanitizers/sanitizer_faults.c"))
         .arg("-o")
         .arg(&binary)
         .output()
