@@ -20,7 +20,11 @@ typedef struct Os_NativeStackType {
     unsigned observations;
     uint8_t context_valid;
 } Os_NativeStackType;
-extern const Os_NativeStackType *const Os_ArtiStacks;
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP extern const Os_NativeStackType *const Os_ArtiStacks;
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
 typedef struct {
     volatile Os_Atomic32Type published;
     DWORD thread_id;
@@ -33,22 +37,52 @@ typedef struct {
     char role;
     char origin;
 } Os_StackFaultType;
-extern Os_StackFaultType Os_Fault;
-void Os_StackInit(void);
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP extern Os_StackFaultType Os_Fault;
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_StackInit(void);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #ifdef __linux__
-void Os_StackPrepare(void);
-int Os_StackThreadHasFault(DWORD thread_id);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_StackPrepare(void);
+
+OS_MEMMAP int Os_StackThreadHasFault(DWORD thread_id);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
-int Os_StackRegister(char role);
-void Os_StackCheck(void);
-void Os_StackObserve(HANDLE thread, const CONTEXT *context);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP int Os_StackRegister(char role);
+
+OS_MEMMAP void Os_StackCheck(void);
+
+OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 /* Reports all available records; returns -1 if any stream write fails. */
-int Os_StackReport(void);
-const Os_NativeStackType *Os_StackCurrent(void);
-const void *Os_StackSavedContext(const Os_NativeStackType *stack);
-void Os_StackRecordBuffer(const StackType_t *top);
-void Os_BackendStackFault(char failed_role);
-void Os_StackFatalExit(void);
-int Os_StackHasFault(void);
-LONG Os_StackFaultCount(void);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP int Os_StackReport(void);
+
+OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void);
+
+OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack);
+
+OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top);
+
+OS_MEMMAP void Os_BackendStackFault(char failed_role);
+
+OS_MEMMAP void Os_StackFatalExit(void);
+
+OS_MEMMAP int Os_StackHasFault(void);
+
+OS_MEMMAP LONG Os_StackFaultCount(void);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif

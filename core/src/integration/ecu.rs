@@ -636,7 +636,7 @@ pub(super) fn os_configuration(
     let mut objects = Vec::new();
     if !groups.is_empty() {
         objects.push(c_layout::initializer(
-            "static const Os_AlarmConfigType alarms[]",
+            "OS_MEMMAP static const Os_AlarmConfigType alarms[]",
             "",
             &alarms,
         ));
@@ -644,12 +644,12 @@ pub(super) fn os_configuration(
     let mut table_entries = Vec::new();
     for (id, (_, (period, event, offset, start))) in table_groups.iter().enumerate() {
         objects.push(c_layout::initializer(
-            &format!("static const Os_ExpiryActionType table_actions_{id}[]"),
+            &format!("OS_MEMMAP static const Os_ExpiryActionType table_actions_{id}[]"),
             "",
             &[row(format!("OS_ALARM_EVENT, 0u, {event}u"))],
         ));
         objects.push(c_layout::initializer(
-            &format!("static const Os_ExpiryPointType table_points_{id}[]"),
+            &format!("OS_MEMMAP static const Os_ExpiryPointType table_points_{id}[]"),
             "",
             &[row(format!("{offset}u, table_actions_{id}, 1u"))],
         ));
@@ -657,14 +657,14 @@ pub(super) fn os_configuration(
     }
     if !table_groups.is_empty() {
         objects.push(c_layout::initializer(
-            "static const Os_ScheduleTableConfigType schedule_tables[]",
+            "OS_MEMMAP static const Os_ScheduleTableConfigType schedule_tables[]",
             "",
             &table_entries,
         ));
     }
     if use_res_scheduler {
         objects.push(c_layout::initializer(
-            "static const Os_ResourceConfigType scheduler_resource",
+            "OS_MEMMAP static const Os_ResourceConfigType scheduler_resource",
             "",
             &[
                 Item::Value("RES_SCHEDULER".into()),

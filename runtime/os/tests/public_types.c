@@ -25,7 +25,8 @@ typedef char AreaRange[(sizeof(AreaIdType) >= 2u) ? 1 : -1];
 typedef char CounterRange[(sizeof(CounterType) == 4u) ? 1 : -1];
 typedef char MicrosecondsRange[(sizeof(TimeInMicrosecondsType) == 8u) ? 1 : -1];
 
-/* Verifies: SWS_BSW_00120 [Os], SWS_Os_00781. Integration ABI expectations
+/* Verifies[Os]: SWS_BSW_00120.
+ * Verifies: SWS_Os_00781. Integration ABI expectations
  * are fixed independently of the implementation's choice of count typedef. */
 typedef char TaskCountWidth[(sizeof(((Os_TargetConfigType *)0)->task_count) == 4u) ? 1 : -1];
 typedef char

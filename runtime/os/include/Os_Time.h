@@ -96,6 +96,8 @@ typedef struct {
     uint64 alarm_actions; /**< Cumulative Alarm/ScheduleTable action executions. */
     uint64 action_errors; /**< Cumulative non-E_OK action results. */
 } Os_TickCompletionType;
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Accept the next one-millisecond request from the native control producer.
  * @param[in] epoch Exactly the next epoch; the last confirmed epoch is a no-op.
  * @param[out] ticket Accepted ticket, or the existing confirmed ticket on a no-op.
@@ -107,7 +109,8 @@ typedef struct {
  * with the automotive owner. Ownership: copies arguments and results during the call; caller output
  * storage is not retained.
  */
-StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket);
+OS_MEMMAP StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket);
+
 /** Read a complete tick record from the same native control producer.
  * @param[in] ticket Previously accepted ticket.
  * @param[out] record Complete output, unchanged until confirmation or on rejection.
@@ -119,7 +122,8 @@ StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket);
  * with the automotive owner. Ownership: copies arguments and results during the call; caller output
  * storage is not retained.
  */
-StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionType *record);
+OS_MEMMAP StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionType *record);
+
 /** Wait for the matching complete record without polling or advancing time.
  * @param[in] ticket Accepted ticket.
  * @param[in] timeout_ms Host watchdog duration, 1 through 5000 milliseconds.
@@ -133,7 +137,10 @@ StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionType *record)
  * with the automotive owner. Ownership: copies arguments and results during the call; caller output
  * storage is not retained.
  */
-StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletionType *record);
+OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
+                                       uint32 timeout_ms,
+                                       Os_TickCompletionType *record);
+
 /** Wake the native producer's Os_TargetWaitTick for work it must do before this tick
  * can complete, such as confirming a published output. A wake without such work only
  * returns one early E_OS_NOFUNC; it never completes a tick or changes automotive time.
@@ -143,7 +150,8 @@ StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion
  * Reentrancy: owner-only operation; state publication synchronizes with the native producer.
  * Ownership: no pointer retained; caller outputs, if any, are written before successful return.
  */
-StatusType Os_TargetNotifyNative(void);
+OS_MEMMAP StatusType Os_TargetNotifyNative(void);
+
 /** Confirm after the configured automotive owner has completed this tick's work.
  * @param[in] ticket Current delivered ticket.
  * @return E_OK, E_OS_STATE, E_OS_ID, E_OS_ACCESS or E_OS_CALLEVEL.
@@ -152,7 +160,8 @@ StatusType Os_TargetNotifyNative(void);
  * Reentrancy: owner-only operation; state publication synchronizes with the native producer.
  * Ownership: no pointer retained; caller outputs, if any, are written before successful return.
  */
-StatusType Os_TargetCompleteTick(uint64 ticket);
+OS_MEMMAP StatusType Os_TargetCompleteTick(uint64 ticket);
+
 /** Read the delivered tick on its automotive owner.
  * @param[out] ticket Delivered ticket output.
  * @param[out] epoch Delivered logical epoch output.
@@ -162,5 +171,7 @@ StatusType Os_TargetCompleteTick(uint64 ticket);
  * Reentrancy: owner-only operation; state publication synchronizes with the native producer.
  * Ownership: no pointer retained; caller outputs, if any, are written before successful return.
  */
-StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch);
+OS_MEMMAP StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif

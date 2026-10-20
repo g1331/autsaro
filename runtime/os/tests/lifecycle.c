@@ -121,7 +121,7 @@ int main(int argc, char **argv)
     } else if (strcmp(scenario, "repeat-start") == 0) {
         startup_failure = 2u;
     }
-    /* Verifies: SWS_BSW_00120 [Os]. Each independent count keeps the full uint32
+    /* Verifies[Os]: SWS_BSW_00120. Each independent count keeps the full uint32
      * input until its own capacity check, before any actor or table traversal. */
     if (strncmp(scenario, "count-", 6u) == 0) {
         uint32 *counts[] = {&config.task_count,

@@ -25,6 +25,72 @@ def native_fixture(name):
 
 
 class DependencyTests(unittest.TestCase):
+    def test_memory_mapping_source_rejects_wrong_classes_and_preprocessing(self):
+        def section(kind, body):
+            return (f'#define OS_START_SEC_{kind}\n#include "Os_MemMap.h"\n'
+                    f'{body}\n#define OS_STOP_SEC_{kind}\n#include "Os_MemMap.h"\n')
+        for kind, body in [("CODE", "void entry(void) {}"),
+                           ("CODE", "void worker(void) { typedef uint32 Count; Count n = 0u; (void)n; }"),
+                           ("VAR_CLEARED_32", "static uint32 state;"),
+                           ("VAR_INIT_32", "static uint32 state = 3u;"),
+                           ("CONST_PTR", "static const uint32 *const view = &state;"),
+                           ("CONFIG_DATA_PREBUILD_8", "static const uint8 name[] = {65u, 0u};"),
+                           ("VAR_CLEARED_TLS_32", "static OS_THREAD_LOCAL uint32 actor;")]:
+            os_suites.verify_memory_mapping_source(section(kind, body))
+        for source, expected in [
+            (section("CODE", "static uint32 state;"), "code/data"),
+            (section("VAR_CLEARED_32", "void entry(void) {}"), "code/data"),
+            (section("CODE", "#if FLAG\nvoid entry(void) {}\n#endif"), "preprocessing"),
+            (section("CODE", '#include "other.h"\nvoid entry(void) {}'), "preprocessing"),
+            (section("CONST_32", "static uint32 state;"), "constant/variable"),
+            (section("VAR_CLEARED_32", "static uint32 state = 3u;"), "initializer"),
+            (section("VAR_CLEARED_TLS_32", "static uint32 state;"), "TLS"),
+            ("static uint32 state;", "unmapped"),
+            ("void worker(void) { typedef uint32 Count; Count n = 0u; (void)n; }", "unmapped"),
+            (section("VAR_CLEARED_32", "struct Native { uint32 field; };"), "does not allocate"),
+            (section("CODE", "void entry(void) {}").replace("STOP_SEC_CODE", "STOP_SEC_CONST_32"), "mismatched"),
+        ]:
+            with self.subTest(expected=expected), self.assertRaisesRegex(AssertionError, expected):
+                os_suites.verify_memory_mapping_source(source)
+
+    def test_memory_mapping_owned_headers_require_mapping(self):
+        owned = os_suites.verify_memory_mapping_source(
+            '#define OS_START_SEC_CODE\n#include "Os_MemMap.h"\n'
+            'void Os_Entry(void) {}\n'
+            '#define OS_STOP_SEC_CODE\n#include "Os_MemMap.h"\n')
+        with self.assertRaisesRegex(AssertionError, "unmapped owned"):
+            os_suites.verify_memory_mapping_source("void Os_Entry(void);", owned)
+        os_suites.verify_memory_mapping_source("void Native_Imported(void);", owned)
+        os_suites.verify_memory_mapping_source("struct Native;", owned)
+
+    def test_memory_mapping_gate_checks_the_actual_module_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / "src").mkdir()
+            (target / "src/Os_Vector.c").write_text(
+                '#define OS_START_SEC_CODE\n#include "Os_MemMap.h"\n'
+                'static uint32 vector[32];\n'
+                '#define OS_STOP_SEC_CODE\n#include "Os_MemMap.h"\n', encoding="utf-8")
+            with (patch("os_suites.TARGET", target),
+                  patch("os_suites.compiler", side_effect=AssertionError("compiler ran before source gate")),
+                  self.assertRaisesRegex(AssertionError, "Os_Vector.c: code/data")):
+                os_suites.check_memory_mapping(target / "output")
+
+    def test_memory_mapping_gate_checks_actual_owned_headers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            (target / "src").mkdir()
+            (target / "include").mkdir()
+            (target / "src/Os_Entry.c").write_text(
+                '#define OS_START_SEC_CODE\n#include "Os_MemMap.h"\n'
+                'void Os_Entry(void) {}\n'
+                '#define OS_STOP_SEC_CODE\n#include "Os_MemMap.h"\n', encoding="utf-8")
+            (target / "include/Os_Entry.h").write_text("void Os_Entry(void);\n", encoding="utf-8")
+            with (patch("os_suites.TARGET", target),
+                  patch("os_suites.compiler", side_effect=AssertionError("compiler ran before source gate")),
+                  self.assertRaisesRegex(AssertionError, "include/Os_Entry.h: unmapped owned.*Os_Entry")):
+                os_suites.check_memory_mapping(target / "output")
+
     def test_explicit_output_preserves_success_and_refuses_existing_content(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / 'result'

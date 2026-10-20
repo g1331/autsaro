@@ -71,6 +71,8 @@ CI 分两层：
 - **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。真实桌面 GUI／IPC 场景由 `desktop-scenarios` 复用共享构建和五分片，PR／master 按应用、运行时、工具和构建输入路径选择；只有明确未选择时汇总接受跳过，失败与取消阻塞合并。原生、OS、检测器、交付与生成 C 分析在 Windows 和 Linux 上完整运行；离线接收端在两平台用 Python 3.11 运行全部四个样本（含多组件独立 HostBatch 期望）。新版解释器的必需层覆盖由 Python 开发测试承担（含 ecu_tools 单元测试与 `test_sealed_sources`），运行 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改根目录指南、`docs/`、代理说明或配置（含 `.codex/` hooks）或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。除这些文档外只改 `ui/` 的 PR（如前端依赖更新）只运行 `ui`、`python`、`desktop` 与 `quality`，跳过 core、原生、OS、检测器、交付、生成 C 分析与进程任务：这些任务的输入都不在 `ui/` 下，`tests/python/test_ci_selection.py` 检查它们的源码不引用 `ui/`，并核对跳过的任务与 `CI required` 接受跳过的名单一致。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
 - **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：离线接收端 Python 3.11–3.14 × 四样本的 Linux／Windows 完整矩阵、其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[官方对照](official.md)和[模糊测试](fuzzing.md)（PR 与 master 均按路径运行）。master 每次推送都运行它，接收端矩阵按 core／runtime／工具／测试与构建配置路径选择；桌面场景已由必需层负责，扩展层不重复自动执行；手动 Extended 仍运行桌面全量。PR 改动官方对照相关路径时运行官方对照。PR 加 `full-ci` 标签后运行其余扩展检查；手动运行全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
 
+自动合并在检查通过后仍为 `BLOCKED` 时，应处理保护或讨论阻塞，不等 watcher 提醒。存量诊断先回复依据再解决，保留告警。
+
 同一 Issue 分生态或分阶段交付时，全部出口满足后才由最终 PR 关闭；中间 PR 使用 `Refs #N`。每次合并后核对 Issue 的实际状态：分支／Development 关联仍可能使 GitHub 自动关闭未完成的父 Issue，此时立即重新打开，保留已完成子项，全部出口满足后再关闭并勾选总览。
 
 在功能分支上收集完整扩展证据：`gh workflow run extended.yml --ref <branch>`，再用 `gh run list --workflow extended.yml --branch <branch>` 定位运行；用 `gh run cancel <run-id>` 取消本分支已被替代的运行，不取消其他开发者的作业。

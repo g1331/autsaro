@@ -2,16 +2,30 @@
 #include "Os_Arti.h"
 #include <assert.h>
 
-static OS_THREAD_LOCAL uint32
+#define OS_START_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_THREAD_LOCAL uint32
     internal_depth; /**< Actor TLS origin depth; CallerSave resets, not Init. */
-static OS_THREAD_LOCAL uint32
+
+OS_MEMMAP static OS_THREAD_LOCAL uint32
     service_depth; /**< Actor TLS service depth; CallerSave resets, not Init. */
-static OS_THREAD_LOCAL StatusType
+#define OS_STOP_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_8
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_THREAD_LOCAL StatusType
     access_status; /**< Actor TLS access result; CallerSave resets, not Init. */
-void Os_ArtiAccessResult(StatusType status) { access_status = status; }
-sint32 Os_ArtiAccessValid(void) { return access_status == E_OK; }
-StatusType Os_ArtiAccessStatus(void) { return access_status; }
-Os_ArtiCallerType Os_ArtiCallerSave(void)
+#define OS_STOP_SEC_VAR_CLEARED_TLS_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_ArtiAccessResult(StatusType status) { access_status = status; }
+
+OS_MEMMAP sint32 Os_ArtiAccessValid(void) { return access_status == E_OK; }
+
+OS_MEMMAP StatusType Os_ArtiAccessStatus(void) { return access_status; }
+
+OS_MEMMAP Os_ArtiCallerType Os_ArtiCallerSave(void)
 {
     const Arti_AddressCapture address = Arti_SaveAddressCapture();
     const Os_ArtiCallerType previous = {internal_depth, service_depth, access_status, address};
@@ -20,33 +34,38 @@ Os_ArtiCallerType Os_ArtiCallerSave(void)
     access_status = E_OK;
     return previous;
 }
-void Os_ArtiCallerRestore(Os_ArtiCallerType caller)
+
+OS_MEMMAP void Os_ArtiCallerRestore(Os_ArtiCallerType caller)
 {
     internal_depth = caller.internal_depth;
     service_depth = caller.service_depth;
     access_status = caller.access_status;
     Arti_RestoreAddressCapture(caller.address);
 }
-void Os_ArtiInternalEnter(void) { ++internal_depth; }
-void Os_ArtiInternalLeave(void)
+
+OS_MEMMAP void Os_ArtiInternalEnter(void) { ++internal_depth; }
+
+OS_MEMMAP void Os_ArtiInternalLeave(void)
 {
     assert(internal_depth != 0u);
     --internal_depth;
 }
-sint32 Os_ArtiServiceEnter(void)
+
+OS_MEMMAP sint32 Os_ArtiServiceEnter(void)
 {
     const sint32 application = (internal_depth == 0u) && (service_depth == 0u);
     ++service_depth;
     access_status = E_OK;
     return application;
 }
-void Os_ArtiServiceLeave(void)
+
+OS_MEMMAP void Os_ArtiServiceLeave(void)
 {
     assert(service_depth != 0u);
     --service_depth;
 }
 
-void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)
+OS_MEMMAP void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)
 {
     switch (event) {
         case OS_ARTI_TASK_ACTIVATE:
@@ -72,7 +91,8 @@ void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)
             break;
     }
 }
-void Os_ArtiIsr(ISRType isr, sint32 returning)
+
+OS_MEMMAP void Os_ArtiIsr(ISRType isr, sint32 returning)
 {
     if (returning != 0) {
         ARTI_TRACE(NOSUSP, AR_CP_OS_CAT2ISR, Os, 0u, OsCat2Isr_Stop, (uint32)isr);
@@ -80,7 +100,8 @@ void Os_ArtiIsr(ISRType isr, sint32 returning)
         ARTI_TRACE(NOSUSP, AR_CP_OS_CAT2ISR, Os, 0u, OsCat2Isr_Start, (uint32)isr);
     }
 }
-void Os_ArtiHook(Os_HookPhaseType hook, StatusType error, sint32 returning)
+
+OS_MEMMAP void Os_ArtiHook(Os_HookPhaseType hook, StatusType error, sint32 returning)
 {
     switch (hook) {
         case OS_HOOK_ERROR:
@@ -123,7 +144,8 @@ void Os_ArtiHook(Os_HookPhaseType hook, StatusType error, sint32 returning)
             break;
     }
 }
-void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
+
+OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 {
     switch (service) {
         case OSServiceId_GetISRID:
@@ -797,10 +819,12 @@ void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
     }
 }
 
-void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address)
+OS_MEMMAP void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address)
 {
     const uint64 native_address = (uint64)address;
     const uint32 token = (uint32)native_address;
     Arti_CaptureAddress(native_address);
     ARTI_TRACE(SPRVSR, AR_CP_OS_SERVICECALLS, Os, 0u, OsServiceCall_GetAlarmBase_Return, token);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

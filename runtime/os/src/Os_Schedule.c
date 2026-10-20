@@ -2,12 +2,22 @@
 #include "Os_Backend.h"
 
 typedef Os_ArtiScheduleStateType Os_ScheduleStateType;
-static Os_ScheduleStateType
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_ScheduleStateType
     tables[OS_MAX_SCHEDULE_TABLES]; /**< Port-locked table state; no Init reset. */
-const Os_ArtiScheduleStateType *const Os_ArtiScheduleTables =
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const Os_ArtiScheduleStateType *const Os_ArtiScheduleTables =
     tables; /**< Fixed table state tool view; C init only, never reset. */
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
 
-static uint32 table_index(ScheduleTableType id)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 table_index(ScheduleTableType id)
 {
     const Os_TimeConfigType *time = Os_Config->time;
     if (time != NULL) {
@@ -19,7 +29,9 @@ static uint32 table_index(ScheduleTableType id)
     }
     return OS_MAX_SCHEDULE_TABLES;
 }
-static const Os_CounterConfigType *counter_config(const Os_TimeConfigType *time, CounterType id)
+
+OS_MEMMAP static const Os_CounterConfigType *counter_config(const Os_TimeConfigType *time,
+                                                            CounterType id)
 {
     const Os_CounterConfigType *result = NULL;
     for (uint32 i = 0u; i < time->counter_count; ++i) {
@@ -30,7 +42,9 @@ static const Os_CounterConfigType *counter_config(const Os_TimeConfigType *time,
     }
     return result;
 }
-static sint32 valid_action(const Os_TargetConfigType *target, const Os_ExpiryActionType *action)
+
+OS_MEMMAP static sint32 valid_action(const Os_TargetConfigType *target,
+                                     const Os_ExpiryActionType *action)
 {
     for (uint32 i = 0u; i < target->task_count; ++i) {
         const Os_TaskConfigType *task = &target->tasks[i];
@@ -42,7 +56,8 @@ static sint32 valid_action(const Os_TargetConfigType *target, const Os_ExpiryAct
     }
     return 0;
 }
-StatusType Os_ScheduleValidate(const Os_TargetConfigType *target)
+
+OS_MEMMAP StatusType Os_ScheduleValidate(const Os_TargetConfigType *target)
 {
     const Os_TimeConfigType *time = target->time;
     if ((time->schedule_table_count > OS_MAX_SCHEDULE_TABLES) ||
@@ -104,7 +119,8 @@ StatusType Os_ScheduleValidate(const Os_TargetConfigType *target)
     }
     return E_OK;
 }
-static void start(uint32 index, TickType delay)
+
+OS_MEMMAP static void start(uint32 index, TickType delay)
 {
     const Os_ScheduleTableConfigType *table = &Os_Config->time->schedule_tables[index];
     tables[index].status = SCHEDULETABLE_RUNNING;
@@ -113,14 +129,16 @@ static void start(uint32 index, TickType delay)
     tables[index].next = OS_MAX_SCHEDULE_TABLES;
     tables[index].previous = OS_MAX_SCHEDULE_TABLES;
 }
-static TickType absolute_delay(const Os_ScheduleTableConfigType *table, TickType value)
+
+OS_MEMMAP static TickType absolute_delay(const Os_ScheduleTableConfigType *table, TickType value)
 {
     const Os_CounterConfigType *counter = counter_config(Os_Config->time, table->counter);
     TickType current = Os_TimeCounterValue(table->counter);
     return (value > current) ? (value - current)
                              : (counter->maximum - (current - value) + UINT64_C(1));
 }
-void Os_ScheduleAutostart(AppModeType mode)
+
+OS_MEMMAP void Os_ScheduleAutostart(AppModeType mode)
 {
     const Os_TimeConfigType *time = Os_Config->time;
     if (time != NULL) {
@@ -136,7 +154,8 @@ void Os_ScheduleAutostart(AppModeType mode)
         }
     }
 }
-static void expiry(const Os_ExpiryPointType *point)
+
+OS_MEMMAP static void expiry(const Os_ExpiryPointType *point)
 {
     Os_ArtiInternalEnter();
     /* All activations precede all event settings; declaration order is not
@@ -154,7 +173,8 @@ static void expiry(const Os_ExpiryPointType *point)
     }
     Os_ArtiInternalLeave();
 }
-static void process(uint32 initial)
+
+OS_MEMMAP static void process(uint32 initial)
 {
     uint32 index = initial;
     uint32 transitions = 0u;
@@ -187,7 +207,8 @@ static void process(uint32 initial)
         }
     }
 }
-void Os_ScheduleIncrement(CounterType counter)
+
+OS_MEMMAP void Os_ScheduleIncrement(CounterType counter)
 {
     const Os_TimeConfigType *time = Os_Config->time;
     uint8 running[OS_MAX_SCHEDULE_TABLES] = {0};
@@ -205,13 +226,15 @@ void Os_ScheduleIncrement(CounterType counter)
         }
     }
 }
-static StatusType context(void)
+
+OS_MEMMAP static StatusType context(void)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return (Os_BackendServiceContext() != 0) ? E_OK : E_OS_CALLEVEL;
 }
-static StatusType start_table(ScheduleTableType id, TickType value, sint32 absolute)
+
+OS_MEMMAP static StatusType start_table(ScheduleTableType id, TickType value, sint32 absolute)
 {
     uint32 index;
     const Os_ScheduleTableConfigType *table;
@@ -242,17 +265,20 @@ static StatusType start_table(ScheduleTableType id, TickType value, sint32 absol
     Os_BackendGuardService();
     return status;
 }
-static StatusType implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
-                                                       TickType Offset)
+
+OS_MEMMAP static StatusType implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
+                                                                 TickType Offset)
 {
     return start_table(ScheduleTableID, Offset, 0);
 }
-static StatusType implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
-                                                       TickType Start)
+
+OS_MEMMAP static StatusType implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
+                                                                 TickType Start)
 {
     return start_table(ScheduleTableID, Start, 1);
 }
-static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
+
+OS_MEMMAP static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
 {
     uint32 index;
     StatusType status = context();
@@ -283,8 +309,9 @@ static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTab
     Os_BackendGuardService();
     return status;
 }
-static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                                                   ScheduleTableType ScheduleTableID_To)
+
+OS_MEMMAP static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                                                             ScheduleTableType ScheduleTableID_To)
 {
     uint32 from;
     uint32 to;
@@ -318,8 +345,9 @@ static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTab
     Os_BackendGuardService();
     return status;
 }
-static StatusType implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                                        ScheduleTableStatusRefType ScheduleStatus)
+
+OS_MEMMAP static StatusType implementation_GetScheduleTableStatus(
+    ScheduleTableType ScheduleTableID, ScheduleTableStatusRefType ScheduleStatus)
 {
     uint32 index;
     StatusType status;
@@ -342,8 +370,8 @@ static StatusType implementation_GetScheduleTableStatus(ScheduleTableType Schedu
     return E_OK;
 }
 
-StatusType Os_Implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
-                                                   TickType Offset)
+OS_MEMMAP StatusType Os_Implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
+                                                             TickType Offset)
 {
     const Os_ErrorParametersType arguments = {
         .service_StartScheduleTableRel = {ScheduleTableID, Offset}};
@@ -360,8 +388,8 @@ StatusType Os_Implementation_StartScheduleTableRel(ScheduleTableType ScheduleTab
     return Os_ErrorResult(OSServiceId_StartScheduleTableRel, status, &arguments);
 }
 
-StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
-                                                   TickType Start)
+OS_MEMMAP StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
+                                                             TickType Start)
 {
     const Os_ErrorParametersType arguments = {
         .service_StartScheduleTableAbs = {ScheduleTableID, Start}};
@@ -378,7 +406,7 @@ StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTab
     return Os_ErrorResult(OSServiceId_StartScheduleTableAbs, status, &arguments);
 }
 
-StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
+OS_MEMMAP StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
 {
     const Os_ErrorParametersType arguments = {.service_StopScheduleTable = {ScheduleTableID}};
     StatusType status;
@@ -394,8 +422,8 @@ StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID
     return Os_ErrorResult(OSServiceId_StopScheduleTable, status, &arguments);
 }
 
-StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                                               ScheduleTableType ScheduleTableID_To)
+OS_MEMMAP StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                                                         ScheduleTableType ScheduleTableID_To)
 {
     const Os_ErrorParametersType arguments = {
         .service_NextScheduleTable = {ScheduleTableID_From, ScheduleTableID_To}};
@@ -412,8 +440,8 @@ StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID
     return Os_ErrorResult(OSServiceId_NextScheduleTable, status, &arguments);
 }
 
-StatusType Os_Implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                                    ScheduleTableStatusRefType ScheduleStatus)
+OS_MEMMAP StatusType Os_Implementation_GetScheduleTableStatus(
+    ScheduleTableType ScheduleTableID, ScheduleTableStatusRefType ScheduleStatus)
 {
     const Os_ErrorParametersType arguments = {
         .service_GetScheduleTableStatus = {ScheduleTableID, ScheduleStatus}};
@@ -429,3 +457,5 @@ StatusType Os_Implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTa
     }
     return Os_ErrorResult(OSServiceId_GetScheduleTableStatus, status, &arguments);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

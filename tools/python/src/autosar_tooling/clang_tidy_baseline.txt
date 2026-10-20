@@ -11,20 +11,18 @@ clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if
 clang-analyzer-security.ArrayBound runtime/os/src/Os_Time.c TickType current = values[counter];
 clang-analyzer-unix.BlockInCriticalSection runtime/os/src/host/linux/Os_HostLinux.c read(handle->fd, &value, sizeof(value)) == sizeof(value)) {
 readability-function-size generated/src/Ecu_RuntimeConfig.c RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)
-readability-function-size generated/src/Os_Arti.c void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
+readability-function-size generated/src/Os_Arti.c OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 readability-function-size runtime/bsw/src/Can.c CAN_CODE void Can_InternalSetMode(CanMode mode)
 readability-function-size runtime/bsw/src/CanIf.c CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
 readability-function-size runtime/ecu/src/Ecu_HostBatch.c StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 readability-function-size runtime/ecu/src/Ecu_HostBridge.c StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
 readability-function-size runtime/ecu/src/Ecu_Target.c static void consume(const Ecu_Input *input)
 readability-function-size runtime/ecu/src/Ecu_Target.c void Ecu_TargetTask(void)
-readability-function-size runtime/os/src/Os.c StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
-readability-function-size runtime/os/src/Os_Backend.c StatusType Os_BackendResource(ResourceType id, sint32 acquire)
-readability-function-size runtime/os/src/Os_Backend.c static DWORD WINAPI control(void *argument)
-readability-function-size runtime/os/src/Os_Backend.c static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned)
-readability-function-size runtime/os/src/Os_Backend.c void Os_BackendStart(AppModeType mode)
-readability-function-size runtime/os/src/Os_Time.c StatusType Os_TimeValidate(const Os_TargetConfigType *target)
-readability-function-size runtime/os/src/host/linux/Os_HostLinux.c HANDLE Os_HostCreateActor(SIZE_T stack,
+readability-function-size runtime/os/src/Os.c OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
+readability-function-size runtime/os/src/Os_Backend.c OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
+readability-function-size runtime/os/src/Os_Backend.c OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned)
+readability-function-size runtime/os/src/Os_Time.c OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
+readability-function-size runtime/os/src/host/linux/Os_HostLinux.c OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
 readability-identifier-naming runtime/bsw/include/Platform_Types.h typedef const void *ConstVoidPtr;
 readability-identifier-naming runtime/bsw/include/Platform_Types.h typedef void *VoidPtr;
 readability-identifier-naming runtime/ecu/include/Ecu_HostBatch.h } Ecu_BatchCommand;
@@ -49,8 +47,8 @@ readability-identifier-naming runtime/os/include/Arti.h } Arti_AddressCapture;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_Event;
 readability-identifier-naming runtime/os/include/Os.h #define SetEvent Os_SetEvent
 readability-identifier-naming runtime/os/include/Os.h ScheduleTableType ScheduleTableID_To);
-readability-identifier-naming runtime/os/include/Os.h StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-readability-identifier-naming runtime/os/include/Os.h boolean isOsStarted(void);
+readability-identifier-naming runtime/os/include/Os.h OS_MEMMAP StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+readability-identifier-naming runtime/os/include/Os.h OS_MEMMAP boolean isOsStarted(void);
 readability-identifier-naming runtime/os/include/Os_Hooks.h ScheduleTableType ScheduleTableID_From;
 readability-identifier-naming runtime/os/include/Os_Hooks.h ScheduleTableType ScheduleTableID_To;
 readability-identifier-naming runtime/os/include/Os_Hooks.h } service_ActivateTask;
@@ -84,36 +82,36 @@ readability-identifier-naming runtime/os/include/Os_Hooks.h } service_StartSched
 readability-identifier-naming runtime/os/include/Os_Hooks.h } service_StopScheduleTable;
 readability-identifier-naming runtime/os/include/Os_Hooks.h } service_TerminateTask;
 readability-identifier-naming runtime/os/include/Os_Hooks.h } service_WaitEvent;
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_ActivateTask(TaskType TaskID)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_ChainTask(TaskType TaskID)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_ClearEvent(EventMaskType Mask)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_GetResource(ResourceType ResID)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_GetTaskID(TaskRefType TaskID)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_ReleaseResource(ResourceType ResID)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_Schedule(void)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_TerminateTask(void)
-readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_WaitEvent(EventMaskType Mask)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_ActivateTask(TaskType TaskID)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_ChainTask(TaskType TaskID)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_ClearEvent(EventMaskType Mask)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_GetResource(ResourceType ResID)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_GetTaskID(TaskRefType TaskID)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_ReleaseResource(ResourceType ResID)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_Schedule(void)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_TerminateTask(void)
+readability-identifier-naming runtime/os/src/Os.c OS_MEMMAP static StatusType implementation_WaitEvent(EventMaskType Mask)
 readability-identifier-naming runtime/os/src/Os_ArtiServices.c ScheduleTableType ScheduleTableID_To)
-readability-identifier-naming runtime/os/src/Os_ArtiServices.c StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+readability-identifier-naming runtime/os/src/Os_ArtiServices.c OS_MEMMAP StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
 readability-identifier-naming runtime/os/src/Os_Backend.h ScheduleTableType ScheduleTableID_To);
-readability-identifier-naming runtime/os/src/Os_Backend.h StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+readability-identifier-naming runtime/os/src/Os_Backend.h OS_MEMMAP StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
 readability-identifier-naming runtime/os/src/Os_Schedule.c ScheduleTableType ScheduleTableID_To)
 readability-identifier-naming runtime/os/src/Os_Schedule.c ScheduleTableType ScheduleTableID_To)
-readability-identifier-naming runtime/os/src/Os_Schedule.c StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-readability-identifier-naming runtime/os/src/Os_Schedule.c static StatusType implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-readability-identifier-naming runtime/os/src/Os_Schedule.c static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-readability-identifier-naming runtime/os/src/Os_Schedule.c static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-readability-identifier-naming runtime/os/src/Os_Schedule.c static StatusType implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
-readability-identifier-naming runtime/os/src/Os_Schedule.c static StatusType implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
-readability-identifier-naming runtime/os/src/Os_Schedule.c static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
-readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_CancelAlarm(AlarmType AlarmID)
-readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
-readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
-readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefType Value)
-readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_GetElapsedValue(CounterType CounterID,
-readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_IncrementCounter(CounterType CounterID)
-readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
-readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
+readability-identifier-naming runtime/os/src/Os_Schedule.c OS_MEMMAP StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+readability-identifier-naming runtime/os/src/Os_Schedule.c OS_MEMMAP static StatusType implementation_GetScheduleTableStatus(
+readability-identifier-naming runtime/os/src/Os_Schedule.c OS_MEMMAP static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+readability-identifier-naming runtime/os/src/Os_Schedule.c OS_MEMMAP static StatusType implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+readability-identifier-naming runtime/os/src/Os_Schedule.c OS_MEMMAP static StatusType implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
+readability-identifier-naming runtime/os/src/Os_Schedule.c OS_MEMMAP static StatusType implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
+readability-identifier-naming runtime/os/src/Os_Schedule.c OS_MEMMAP static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
+readability-identifier-naming runtime/os/src/Os_Time.c OS_MEMMAP static StatusType implementation_CancelAlarm(AlarmType AlarmID)
+readability-identifier-naming runtime/os/src/Os_Time.c OS_MEMMAP static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
+readability-identifier-naming runtime/os/src/Os_Time.c OS_MEMMAP static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
+readability-identifier-naming runtime/os/src/Os_Time.c OS_MEMMAP static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefType Value)
+readability-identifier-naming runtime/os/src/Os_Time.c OS_MEMMAP static StatusType implementation_GetElapsedValue(CounterType CounterID,
+readability-identifier-naming runtime/os/src/Os_Time.c OS_MEMMAP static StatusType implementation_IncrementCounter(CounterType CounterID)
+readability-identifier-naming runtime/os/src/Os_Time.c OS_MEMMAP static StatusType implementation_SetAbsAlarm(AlarmType AlarmID,
+readability-identifier-naming runtime/os/src/Os_Time.c OS_MEMMAP static StatusType implementation_SetRelAlarm(AlarmType AlarmID,

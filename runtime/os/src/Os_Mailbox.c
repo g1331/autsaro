@@ -2,14 +2,44 @@
 #include "Os_Backend.h"
 #include <string.h>
 
-static Os_InputRecordType
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_InputRecordType
     records[OS_INPUT_CAPACITY]; /**< SPSC-owned ring slots, atomic publication; no Init reset. */
-static uint64 last_ticket;      /**< Single-producer accepted ticket; no Init reset. */
-static volatile Os_Atomic32Type published; /**< Atomic complete-record count; no Init reset. */
-/* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
-static volatile Os_Atomic32Type admission; /**< Atomic producer/close bits; no Init reset. */
 
-static uint32 input_interrupt(void)
+OS_MEMMAP static uint64 last_ticket; /**< Single-producer accepted ticket; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
+    published; /**< Atomic complete-record count; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+/* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
+    admission; /**< Atomic producer/close bits; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+
+#if defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_input_notification(void) { Os_TestInputNotified(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_input_notification(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 input_interrupt(void)
 {
     if (Os_TargetReady() != 0) {
         Os_ArtiInternalEnter();
@@ -18,31 +48,45 @@ static uint32 input_interrupt(void)
         if (status != E_OK) {
             Os_BackendShutdown(E_OS_STATE);
         }
-#if defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON)
-        Os_TestInputNotified();
-#endif
+        observe_input_notification();
     }
     return 0u;
 }
-void Os_MailboxInstall(void)
+
+OS_MEMMAP void Os_MailboxInstall(void)
 {
     if (Os_Config->input_event != 0u) {
         vPortSetInterruptHandler(OS_INPUT_INTERRUPT, input_interrupt);
     }
 }
-sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
+
+OS_MEMMAP sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
 {
     return Os_BackendHandlerAllowed(interrupt, handler) &&
            ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
             (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt));
 }
-void Os_MailboxClose(void) { InterlockedOr(&admission, 2); }
+
+OS_MEMMAP void Os_MailboxClose(void) { InterlockedOr(&admission, 2); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #if defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON)
-void Os_TestInputLastTicket(uint64 ticket) { last_ticket = ticket; }
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_TestInputLastTicket(uint64 ticket) { last_ticket = ticket; }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
-StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket)
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 write_index; /**< Persistent function-owned state; existing caller/port
+                                        synchronization; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket)
 {
-    static uint32 write_index;
     StatusType context;
     Os_InputRecordType *record;
     if (Os_BridgeActorAllowed() == 0) {
@@ -84,18 +128,40 @@ StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket)
     }
     return E_OK;
 }
-sint32 Os_BridgeActorAllowed(void)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#ifdef __linux__
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 {
     const Os_NativeStackType *actor = Os_StackCurrent();
-#ifdef __linux__
     return actor == NULL || actor->role == 'H';
-#else
-    return actor == NULL;
-#endif
 }
-StatusType Os_BridgeContext(void)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 {
-    static volatile Os_Atomic32Type producer;
+    const Os_NativeStackType *actor = Os_StackCurrent();
+    return actor == NULL;
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
+    producer; /**< Persistent function-owned state; existing caller/port synchronization; no Init
+                 reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_BridgeContext(void)
+{
     LONG thread;
     LONG owner;
     if (Os_BridgeActorAllowed() == 0) {
@@ -105,12 +171,14 @@ StatusType Os_BridgeContext(void)
     owner = InterlockedCompareExchange(&producer, thread, 0);
     return ((owner == 0) || (owner == thread)) ? E_OK : E_OS_ACCESS;
 }
-sint32 Os_MailboxQuiescent(void)
+
+OS_MEMMAP sint32 Os_MailboxQuiescent(void)
 {
     return ((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) &&
            (InterlockedCompareExchange(&published, 0, 0) == 0);
 }
-static StatusType input_context(void)
+
+OS_MEMMAP static StatusType input_context(void)
 {
     sint32 owner;
     Os_BackendGuardService();
@@ -120,9 +188,18 @@ static StatusType input_context(void)
     owner = Os_BackendInputOwner();
     return (owner == 0) ? E_OS_CALLEVEL : ((owner < 0) ? E_OS_ACCESS : E_OK);
 }
-StatusType Os_TargetTakeInput(Os_InputRecordType *record)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 read_index; /**< Persistent function-owned state; existing caller/port
+                                       synchronization; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_TargetTakeInput(Os_InputRecordType *record)
 {
-    static uint32 read_index;
     StatusType status;
     if (record == NULL) {
         return E_OS_ILLEGAL_ADDRESS;
@@ -139,7 +216,8 @@ StatusType Os_TargetTakeInput(Os_InputRecordType *record)
     InterlockedDecrement(&published);
     return E_OK;
 }
-StatusType Os_TargetInputCount(uint32 *count)
+
+OS_MEMMAP StatusType Os_TargetInputCount(uint32 *count)
 {
     StatusType status;
     if (count == NULL) {
@@ -151,3 +229,5 @@ StatusType Os_TargetInputCount(uint32 *count)
     }
     return status;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

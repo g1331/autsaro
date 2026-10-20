@@ -2,33 +2,57 @@
 #include "Arti.h"
 #include "Os_Host.h"
 
-Arti_Event Arti_Events[ARTI_EVENT_CAPACITY]; /**< Reserved slots, atomically published; Arti_Init
-                                                clears flags. */
-volatile ArtiAtomic32 Arti_EventCount;       /**< Atomic slot reservations; Arti_Init resets. */
-volatile ArtiAtomic32 Arti_EventsDropped;    /**< Atomic saturated drop count; Arti_Init resets. */
-volatile ArtiAtomic32 Arti_DevelopmentError; /**< Atomic latest tool error; Arti_Init resets. */
-static OS_HOST_THREAD_LOCAL Arti_AddressCapture
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP Arti_Event Arti_Events[ARTI_EVENT_CAPACITY]; /**< Reserved slots, atomically published;
+                                                Arti_Init clears flags. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP volatile ArtiAtomic32 Arti_EventCount; /**< Atomic slot reservations; Arti_Init resets. */
+
+OS_MEMMAP volatile ArtiAtomic32
+    Arti_EventsDropped; /**< Atomic saturated drop count; Arti_Init resets. */
+
+OS_MEMMAP volatile ArtiAtomic32
+    Arti_DevelopmentError; /**< Atomic latest tool error; Arti_Init resets. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_64
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_HOST_THREAD_LOCAL Arti_AddressCapture
     captured_address; /**< Actor TLS capture; Arti_Init clears calling-actor validity. */
-void Arti_CaptureAddress(uintptr_t address)
+#define OS_STOP_SEC_VAR_CLEARED_TLS_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Arti_CaptureAddress(uintptr_t address)
 {
     captured_address.address = address;
     captured_address.valid = 1u;
 }
-void Arti_CaptureServiceStatus(uint32_t status)
+
+OS_MEMMAP void Arti_CaptureServiceStatus(uint32_t status)
 {
     captured_address.service_status = status;
     captured_address.status_valid = 1u;
 }
-Arti_AddressCapture Arti_SaveAddressCapture(void)
+
+OS_MEMMAP Arti_AddressCapture Arti_SaveAddressCapture(void)
 {
     const Arti_AddressCapture saved = captured_address;
     captured_address.valid = 0u;
     captured_address.status_valid = 0u;
     return saved;
 }
-void Arti_RestoreAddressCapture(Arti_AddressCapture capture) { captured_address = capture; }
 
-void Arti_Init(void)
+OS_MEMMAP void Arti_RestoreAddressCapture(Arti_AddressCapture capture)
+{
+    captured_address = capture;
+}
+
+OS_MEMMAP void Arti_Init(void)
 {
     /* Called before automotive actors exist. Payload bytes outside published
      * slots are inaccessible; only publication flags need clearing. */
@@ -41,7 +65,8 @@ void Arti_Init(void)
         Arti_Events[i].published = 0L;
     }
 }
-void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
+
+OS_MEMMAP void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
 {
     if (versioninfo != NULL) {
         versioninfo->vendorID = 0u;
@@ -55,12 +80,13 @@ void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
         InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);
     }
 }
-void Arti_Record(const char *context,
-                 const char *class_name,
-                 const char *instance,
-                 const char *event,
-                 uint32_t instance_parameter,
-                 uint32_t event_parameter)
+
+OS_MEMMAP void Arti_Record(const char *context,
+                           const char *class_name,
+                           const char *instance,
+                           const char *event,
+                           uint32_t instance_parameter,
+                           uint32_t event_parameter)
 {
     /* Slot reservation never waits for an actor that may be preempted or have
      * a damaged native stack. Read the buffer only after OS shutdown/quiescence;
@@ -103,3 +129,5 @@ void Arti_Record(const char *context,
     captured_address.valid = 0u;
     captured_address.status_valid = 0u;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

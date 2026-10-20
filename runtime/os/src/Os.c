@@ -1,10 +1,21 @@
 /** @file OS startup, shutdown and target validation; Task, resource and event service entries. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
-const Os_TargetConfigType
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const Os_TargetConfigType
     *Os_Config; /**< Startup-only retained graph; no Init replacement/reset. */
-static volatile Os_Atomic32Type start_called; /**< Atomic StartOS-entry latch; no Init reset. */
-uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id)
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
+    start_called; /**< Atomic StartOS-entry latch; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id)
 {
     uint32 index = 0u;
     while ((index < config->resource_count) && (config->resources[index].id != id)) {
@@ -12,7 +23,8 @@ uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id)
     }
     return index;
 }
-uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index)
+
+OS_MEMMAP uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index)
 {
     uint32 root = index;
     uint32 steps = 0u;
@@ -25,13 +37,17 @@ uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index)
                ? root
                : config->resource_count;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 /* Highest Task or ISR priority among the accessors of every member of the
  * LINKED group rooted at `root`, and the Tasks among them. Every ISR level is
  * above every Task level on this target. */
-static StatusType group_access(const Os_TargetConfigType *config,
-                               uint32 root,
-                               uint32 *tasks,
-                               uint8 *highest)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static StatusType group_access(const Os_TargetConfigType *config,
+                                         uint32 root,
+                                         uint32 *tasks,
+                                         uint8 *highest)
 {
     uint32 isrs = 0u;
     uint32 i;
@@ -63,9 +79,10 @@ static StatusType group_access(const Os_TargetConfigType *config,
     }
     return E_OK;
 }
-static StatusType validate_resource(const Os_TargetConfigType *config,
-                                    uint32 index,
-                                    uint8 highest_task)
+
+OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
+                                              uint32 index,
+                                              uint8 highest_task)
 {
     const Os_ResourceConfigType *resource = &config->resources[index];
     const uint32 root = Os_ResourceRoot(config, index);
@@ -107,7 +124,8 @@ static StatusType validate_resource(const Os_TargetConfigType *config,
     }
     return E_OK;
 }
-StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
+
+OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
 {
     uint32 i, j;
     uint8 highest_task = 0u;
@@ -244,7 +262,8 @@ StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
     Arti_Init();
     return E_OK;
 }
-void Os_Implementation_StartOS(AppModeType Mode)
+
+OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
 {
     InterlockedExchange(&start_called, 1);
     Os_StackCheck();
@@ -261,7 +280,8 @@ void Os_Implementation_StartOS(AppModeType Mode)
     }
     Os_BackendStart(Mode);
 }
-boolean Os_Implementation_isOsStarted(void)
+
+OS_MEMMAP boolean Os_Implementation_isOsStarted(void)
 {
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_isOsStarted);
     Os_StackCheck();
@@ -271,14 +291,16 @@ boolean Os_Implementation_isOsStarted(void)
     }
     return InterlockedCompareExchange(&start_called, 0, 0) != 0 ? TRUE : FALSE;
 }
-CoreIdType Os_Implementation_GetCoreID(void)
+
+OS_MEMMAP CoreIdType Os_Implementation_GetCoreID(void)
 {
     /* Available in every context and before StartOS (Table 7.3, SWS_Os_00625);
      * the answer has no side effect to ignore while interrupts are disabled. */
     Os_StackCheck();
     return OS_CORE_ID_0;
 }
-StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
+
+OS_MEMMAP StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
 {
     const Os_ErrorParametersType arguments = {.service_ControlIdle = {CoreID, IdleMode}};
     StatusType status = Os_ServiceAccessStatus(OSServiceId_ControlIdle);
@@ -299,7 +321,8 @@ StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMod
                ? status
                : Os_ErrorResult(OSServiceId_ControlIdle, status, &arguments);
 }
-void Os_Implementation_ShutdownOS(StatusType Error)
+
+OS_MEMMAP void Os_Implementation_ShutdownOS(StatusType Error)
 {
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_ShutdownOS);
     Os_StackCheck();
@@ -308,7 +331,8 @@ void Os_Implementation_ShutdownOS(StatusType Error)
     }
     Os_BackendShutdown(Error);
 }
-static StatusType implementation_GetTaskID(TaskRefType TaskID)
+
+OS_MEMMAP static StatusType implementation_GetTaskID(TaskRefType TaskID)
 {
     Os_StackCheck();
     Os_BackendGuardService();
@@ -317,7 +341,8 @@ static StatusType implementation_GetTaskID(TaskRefType TaskID)
     }
     return Os_BackendTaskId(TaskID);
 }
-AppModeType Os_Implementation_GetActiveApplicationMode(void)
+
+OS_MEMMAP AppModeType Os_Implementation_GetActiveApplicationMode(void)
 {
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_GetActiveApplicationMode);
     Os_StackCheck();
@@ -327,7 +352,8 @@ AppModeType Os_Implementation_GetActiveApplicationMode(void)
     }
     return Os_BackendApplicationMode();
 }
-ISRType Os_Implementation_GetISRID(void)
+
+OS_MEMMAP ISRType Os_Implementation_GetISRID(void)
 {
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_GetISRID);
     const Os_NativeStackType *stack = Os_StackCurrent();
@@ -343,7 +369,8 @@ ISRType Os_Implementation_GetISRID(void)
                ? (ISRType)interrupt
                : INVALID_ISR;
 }
-static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
+
+OS_MEMMAP static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
 {
     Os_StackCheck();
     Os_BackendGuardService();
@@ -352,61 +379,71 @@ static StatusType implementation_GetTaskState(TaskType TaskID, TaskStateRefType 
     }
     return Os_BackendState(TaskID, State);
 }
-static StatusType implementation_ActivateTask(TaskType TaskID)
+
+OS_MEMMAP static StatusType implementation_ActivateTask(TaskType TaskID)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendActivate(TaskID);
 }
-static StatusType implementation_TerminateTask(void)
+
+OS_MEMMAP static StatusType implementation_TerminateTask(void)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendFinish();
 }
-static StatusType implementation_ChainTask(TaskType TaskID)
+
+OS_MEMMAP static StatusType implementation_ChainTask(TaskType TaskID)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendChain(TaskID);
 }
-static StatusType implementation_GetResource(ResourceType ResID)
+
+OS_MEMMAP static StatusType implementation_GetResource(ResourceType ResID)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendResource(ResID, 1);
 }
-static StatusType implementation_ReleaseResource(ResourceType ResID)
+
+OS_MEMMAP static StatusType implementation_ReleaseResource(ResourceType ResID)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendResource(ResID, 0);
 }
-static StatusType implementation_Schedule(void)
+
+OS_MEMMAP static StatusType implementation_Schedule(void)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendSchedule();
 }
-static StatusType implementation_WaitEvent(EventMaskType Mask)
+
+OS_MEMMAP static StatusType implementation_WaitEvent(EventMaskType Mask)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendWait(Mask);
 }
-static StatusType implementation_ClearEvent(EventMaskType Mask)
+
+OS_MEMMAP static StatusType implementation_ClearEvent(EventMaskType Mask)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendClear(Mask);
 }
-static StatusType implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
+
+OS_MEMMAP static StatusType implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
 {
     Os_StackCheck();
     Os_BackendGuardService();
     return Os_BackendEvent(TaskID, Mask, NULL);
 }
-static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
+
+OS_MEMMAP static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
 {
     Os_StackCheck();
     Os_BackendGuardService();
@@ -415,7 +452,8 @@ static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Even
     }
     return Os_BackendEvent(TaskID, 0u, Event);
 }
-StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info)
+
+OS_MEMMAP StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info)
 {
     Os_StackCheck();
     Os_BackendGuardService();
@@ -425,7 +463,7 @@ StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info)
     return Os_BackendInspect(id, info);
 }
 
-StatusType Os_Implementation_GetTaskID(TaskRefType TaskID)
+OS_MEMMAP StatusType Os_Implementation_GetTaskID(TaskRefType TaskID)
 {
     const Os_ErrorParametersType arguments = {.service_GetTaskID = {TaskID}};
     StatusType status;
@@ -441,7 +479,7 @@ StatusType Os_Implementation_GetTaskID(TaskRefType TaskID)
     return Os_ErrorResult(OSServiceId_GetTaskID, status, &arguments);
 }
 
-StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
+OS_MEMMAP StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
 {
     const Os_ErrorParametersType arguments = {.service_GetTaskState = {TaskID, State}};
     StatusType status;
@@ -457,7 +495,7 @@ StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType Stat
     return Os_ErrorResult(OSServiceId_GetTaskState, status, &arguments);
 }
 
-StatusType Os_Implementation_ActivateTask(TaskType TaskID)
+OS_MEMMAP StatusType Os_Implementation_ActivateTask(TaskType TaskID)
 {
     const Os_ErrorParametersType arguments = {.service_ActivateTask = {TaskID}};
     StatusType status;
@@ -473,7 +511,7 @@ StatusType Os_Implementation_ActivateTask(TaskType TaskID)
     return Os_ErrorResult(OSServiceId_ActivateTask, status, &arguments);
 }
 
-StatusType Os_Implementation_TerminateTask(void)
+OS_MEMMAP StatusType Os_Implementation_TerminateTask(void)
 {
     const Os_ErrorParametersType arguments = {.service_TerminateTask = {0u}};
     StatusType status;
@@ -489,7 +527,7 @@ StatusType Os_Implementation_TerminateTask(void)
     return Os_ErrorResult(OSServiceId_TerminateTask, status, &arguments);
 }
 
-StatusType Os_Implementation_ChainTask(TaskType TaskID)
+OS_MEMMAP StatusType Os_Implementation_ChainTask(TaskType TaskID)
 {
     const Os_ErrorParametersType arguments = {.service_ChainTask = {TaskID}};
     StatusType status;
@@ -505,7 +543,7 @@ StatusType Os_Implementation_ChainTask(TaskType TaskID)
     return Os_ErrorResult(OSServiceId_ChainTask, status, &arguments);
 }
 
-StatusType Os_Implementation_GetResource(ResourceType ResID)
+OS_MEMMAP StatusType Os_Implementation_GetResource(ResourceType ResID)
 {
     const Os_ErrorParametersType arguments = {.service_GetResource = {ResID}};
     StatusType status;
@@ -521,7 +559,7 @@ StatusType Os_Implementation_GetResource(ResourceType ResID)
     return Os_ErrorResult(OSServiceId_GetResource, status, &arguments);
 }
 
-StatusType Os_Implementation_ReleaseResource(ResourceType ResID)
+OS_MEMMAP StatusType Os_Implementation_ReleaseResource(ResourceType ResID)
 {
     const Os_ErrorParametersType arguments = {.service_ReleaseResource = {ResID}};
     StatusType status;
@@ -537,7 +575,7 @@ StatusType Os_Implementation_ReleaseResource(ResourceType ResID)
     return Os_ErrorResult(OSServiceId_ReleaseResource, status, &arguments);
 }
 
-StatusType Os_Implementation_Schedule(void)
+OS_MEMMAP StatusType Os_Implementation_Schedule(void)
 {
     const Os_ErrorParametersType arguments = {.service_Schedule = {0u}};
     StatusType status;
@@ -553,7 +591,7 @@ StatusType Os_Implementation_Schedule(void)
     return Os_ErrorResult(OSServiceId_Schedule, status, &arguments);
 }
 
-StatusType Os_Implementation_WaitEvent(EventMaskType Mask)
+OS_MEMMAP StatusType Os_Implementation_WaitEvent(EventMaskType Mask)
 {
     const Os_ErrorParametersType arguments = {.service_WaitEvent = {Mask}};
     StatusType status;
@@ -569,7 +607,7 @@ StatusType Os_Implementation_WaitEvent(EventMaskType Mask)
     return Os_ErrorResult(OSServiceId_WaitEvent, status, &arguments);
 }
 
-StatusType Os_Implementation_ClearEvent(EventMaskType Mask)
+OS_MEMMAP StatusType Os_Implementation_ClearEvent(EventMaskType Mask)
 {
     const Os_ErrorParametersType arguments = {.service_ClearEvent = {Mask}};
     StatusType status;
@@ -585,7 +623,7 @@ StatusType Os_Implementation_ClearEvent(EventMaskType Mask)
     return Os_ErrorResult(OSServiceId_ClearEvent, status, &arguments);
 }
 
-StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
+OS_MEMMAP StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
 {
     const Os_ErrorParametersType arguments = {.service_SetEvent = {TaskID, Mask}};
     StatusType status;
@@ -601,7 +639,7 @@ StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
     return Os_ErrorResult(OSServiceId_SetEvent, status, &arguments);
 }
 
-StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
+OS_MEMMAP StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
 {
     const Os_ErrorParametersType arguments = {.service_GetEvent = {TaskID, Event}};
     StatusType status;
@@ -616,3 +654,5 @@ StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
     }
     return Os_ErrorResult(OSServiceId_GetEvent, status, &arguments);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

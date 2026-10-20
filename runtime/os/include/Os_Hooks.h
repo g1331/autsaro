@@ -269,6 +269,8 @@ typedef union {
             ScheduleStatus; /**< Original table-state output pointer; may be NULL on refusal. */
     } service_GetScheduleTableStatus; /**< Failed GetScheduleTableStatus parameter snapshot. */
 } Os_ErrorParametersType;
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Current failed-service snapshot; meaningful only within ErrorHook.
  * @return Current failed-service arguments, or the immutable empty snapshot outside ErrorHook.
  * Preconditions: called while ErrorHook is active; otherwise returns an empty snapshot.
@@ -277,7 +279,8 @@ typedef union {
  * Ownership: returned pointer is borrowed only for the current ErrorHook; never modify or retain
  * it.
  */
-const Os_ErrorParametersType *Os_ErrorParametersCurrent(void);
+OS_MEMMAP const Os_ErrorParametersType *Os_ErrorParametersCurrent(void);
+
 /** Current failed standard-service identity; meaningful only within ErrorHook.
  * @return Current failed-service identifier, or OSServiceId_Unknown outside ErrorHook.
  * Preconditions: called while ErrorHook is active; otherwise returns OSServiceId_Unknown.
@@ -285,7 +288,9 @@ const Os_ErrorParametersType *Os_ErrorParametersCurrent(void);
  * Reentrancy: actor-local TLS; nested errors preserve the active service identity.
  * Ownership: returns a scalar copy; no storage is transferred.
  */
-OSServiceIdType Os_ErrorServiceId(void);
+OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #if (OS_USE_GET_SERVICE_ID == STD_ON)
 /** Read the captured service identifier of failed OS service (OSEK OS 2.2.3 13.8.4).
  * @return Captured service identifier value, including its original pointer value when applicable.

@@ -1,5 +1,129 @@
 //! Independent expectations for the delivered BSWMD/manual boundary.
 use super::*;
+use std::collections::BTreeSet;
+
+#[test]
+fn os_memory_mapping_description_uses_delivered_sections_and_one_header() {
+    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    let source = |path: &str| {
+        std::str::from_utf8(&files.iter().find(|(file, _)| file == path).unwrap().1).unwrap()
+    };
+    let xml =
+        roxmltree::Document::parse(source("generated/descriptions/Host_Implementation.arxml"))
+            .unwrap();
+    assert!(
+        !xml.descendants()
+            .filter_map(|node| node.text())
+            .any(|text| text.contains("OS_MEMMAP"))
+    );
+    let os_sections = [
+        "CODE",
+        "CONFIG_DATA_PREBUILD_8",
+        "CONFIG_DATA_PREBUILD_64",
+        "CONST_64",
+        "CONST_8",
+        "CONST_PTR",
+        "VAR_CLEARED_32",
+        "VAR_CLEARED_64",
+        "VAR_CLEARED_8",
+        "VAR_CLEARED_PTR",
+        "VAR_CLEARED_TLS_32",
+        "VAR_CLEARED_TLS_64",
+        "VAR_CLEARED_TLS_8",
+        "VAR_CLEARED_TLS_PTR",
+        "VAR_CLEARED_TLS_UNSPECIFIED",
+        "VAR_CLEARED_UNSPECIFIED",
+        "VAR_INIT_32",
+        "VAR_INIT_8",
+        "VAR_INIT_UNSPECIFIED",
+        "VAR_INIT_VECTOR_PTR",
+    ];
+    let arti_sections = [
+        "CODE",
+        "VAR_CLEARED_32",
+        "VAR_CLEARED_64",
+        "VAR_CLEARED_TLS_64",
+    ];
+    // Verifies[Os]: SWS_BSW_00006.
+    // Verifies: SWS_MemMap_00003.
+    for (module, expected) in [
+        ("Os", os_sections.as_slice()),
+        ("Arti", arti_sections.as_slice()),
+    ] {
+        let name = format!("{module}HostImplementation");
+        let implementation = xml
+            .descendants()
+            .find(|node| named(*node, "BSW-IMPLEMENTATION", &name))
+            .unwrap();
+        let sections: BTreeSet<_> = implementation
+            .descendants()
+            .filter(|node| node.has_tag_name("MEMORY-SECTION"))
+            .map(|node| {
+                node.children()
+                    .find(|child| child.has_tag_name("SYMBOL"))
+                    .unwrap()
+                    .text()
+                    .unwrap()
+            })
+            .collect();
+        assert_eq!(sections, expected.iter().copied().collect(), "{module}");
+        for section in expected {
+            assert!(
+                source("generated/include/Os_MemMap.h")
+                    .contains(&format!("defined(OS_START_SEC_{section})")),
+                "{section}"
+            );
+        }
+        let owner = implementation
+            .descendants()
+            .find(|node| node.has_tag_name("IMPLEMENTED-IN-REF"))
+            .unwrap();
+        assert_eq!(
+            owner.text(),
+            Some("/AUTOSAR_Os/OsHostImplementation/generated_include_Os_MemMap_h")
+        );
+    }
+    let header = xml
+        .descendants()
+        .find(|node| {
+            named(
+                *node,
+                "DEPENDENCY-ON-ARTIFACT",
+                "generated_include_Os_MemMap_h",
+            )
+        })
+        .unwrap();
+    assert!(
+        header
+            .descendants()
+            .any(|node| node.has_tag_name("SHORT-LABEL") && node.text() == Some("Os_MemMap.h"))
+    );
+    assert!(
+        header
+            .descendants()
+            .any(|node| node.has_tag_name("DOMAIN") && node.text() == Some("generated.include"))
+    );
+    let config = source("generated/src/Ecu_Config.c");
+    assert!(config.contains("OS_MEMMAP const Os_TargetConfigType Ecu_OsConfig"));
+    assert!(config.contains("OS_MEMMAP static const Os_AlarmConfigType alarms[]"));
+    assert!(config.contains("OS_START_SEC_CONFIG_DATA_PREBUILD_8"));
+    assert!(config.contains("OS_START_SEC_CONFIG_DATA_PREBUILD_64"));
+    let descriptor = xml
+        .descendants()
+        .find(|node| {
+            named(
+                *node,
+                "DEPENDENCY-ON-ARTIFACT",
+                "generated_src_Ecu_Config_c",
+            )
+        })
+        .unwrap();
+    assert!(
+        descriptor
+            .descendants()
+            .any(|node| node.has_tag_name("SHORT-LABEL") && node.text() == Some("Ecu_Config.c"))
+    );
+}
 
 #[test]
 fn module_descriptions_include_delivered_public_entries_and_manuals() {

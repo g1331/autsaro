@@ -9,14 +9,26 @@ typedef struct {
 } Os_InterruptStateType;
 /* One cell per physical Task/boot actor, and separate logical ISR cells on
  * the native ISR thread. This preserves ownership across interrupted actors. */
-static OS_THREAD_LOCAL Os_InterruptStateType
+#define OS_START_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_THREAD_LOCAL Os_InterruptStateType
     states[33u * ((uint32)OS_HOOK_ALARM +
                   1u)]; /**< Actor TLS logical-caller mask depths; no Init reset. */
-static volatile Os_Atomic32Type
-    all_owners;                            /**< Atomic outer All-mask owner count; no Init reset. */
-static volatile Os_Atomic32Type os_owners; /**< Atomic outer OS-mask owner count; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
+    all_owners; /**< Atomic outer All-mask owner count; no Init reset. */
 
-static Os_InterruptStateType *owner_state(void)
+OS_MEMMAP static volatile Os_Atomic32Type
+    os_owners; /**< Atomic outer OS-mask owner count; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_InterruptStateType *owner_state(void)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 interrupt = Os_BackendCurrentInterrupt();
@@ -29,12 +41,14 @@ static Os_InterruptStateType *owner_state(void)
     }
     return &states[index];
 }
-sint32 Os_InterruptDisabled(void)
+
+OS_MEMMAP sint32 Os_InterruptDisabled(void)
 {
     const Os_InterruptStateType *state = owner_state();
     return state->disabled != 0u || state->all_depth != 0u || state->os_depth != 0u;
 }
-sint32 Os_InterruptAllows(uint32 interrupt)
+
+OS_MEMMAP sint32 Os_InterruptAllows(uint32 interrupt)
 {
     sint32 allowed = 0;
     if ((interrupt < 32u) && (InterlockedCompareExchange(&all_owners, 0, 0) == 0)) {
@@ -44,7 +58,8 @@ sint32 Os_InterruptAllows(uint32 interrupt)
     }
     return allowed;
 }
-static sint32 permitted(uint32 operation)
+
+OS_MEMMAP static sint32 permitted(uint32 operation)
 {
     const Os_HookPhaseType phase = Os_HookContext();
     const Os_NativeStackType *stack = Os_StackCurrent();
@@ -64,9 +79,13 @@ static sint32 permitted(uint32 operation)
     }
     return allowed;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 /* SWS_Os_00367: these services return no StatusType, so a refused call
  * (wrong context, or a saturated nesting counter) is ignored without ErrorHook. */
-static void change(uint32 operation)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void change(uint32 operation)
 {
     Os_InterruptStateType *state = owner_state();
     const sint32 running =
@@ -128,13 +147,20 @@ static void change(uint32 operation)
         }
     }
 }
-void Os_Implementation_EnableAllInterrupts(void) { change(0u); }
-void Os_Implementation_DisableAllInterrupts(void) { change(1u); }
-void Os_Implementation_ResumeAllInterrupts(void) { change(2u); }
-void Os_Implementation_SuspendAllInterrupts(void) { change(3u); }
-void Os_Implementation_ResumeOSInterrupts(void) { change(4u); }
-void Os_Implementation_SuspendOSInterrupts(void) { change(5u); }
-void Os_InterruptRestoreOwner(void)
+
+OS_MEMMAP void Os_Implementation_EnableAllInterrupts(void) { change(0u); }
+
+OS_MEMMAP void Os_Implementation_DisableAllInterrupts(void) { change(1u); }
+
+OS_MEMMAP void Os_Implementation_ResumeAllInterrupts(void) { change(2u); }
+
+OS_MEMMAP void Os_Implementation_SuspendAllInterrupts(void) { change(3u); }
+
+OS_MEMMAP void Os_Implementation_ResumeOSInterrupts(void) { change(4u); }
+
+OS_MEMMAP void Os_Implementation_SuspendOSInterrupts(void) { change(5u); }
+
+OS_MEMMAP void Os_InterruptRestoreOwner(void)
 {
     Os_InterruptStateType *state = owner_state();
     /* Internal exit cleanup is called under the real OS completion critical
@@ -152,7 +178,8 @@ void Os_InterruptRestoreOwner(void)
     state->all_depth = 0u;
     state->os_depth = 0u;
 }
-static StatusType source_control(ISRType interrupt, uint32 operation, boolean clear)
+
+OS_MEMMAP static StatusType source_control(ISRType interrupt, uint32 operation, boolean clear)
 {
     StatusType result = E_OK;
     const Os_NativeStackType *stack = Os_StackCurrent();
@@ -183,7 +210,8 @@ static StatusType source_control(ISRType interrupt, uint32 operation, boolean cl
     }
     return result;
 }
-StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID)
+
+OS_MEMMAP StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID)
 {
     const Os_ErrorParametersType arguments = {.service_DisableInterruptSource = {ISRID}};
     const StatusType status = source_control(ISRID, 0u, FALSE);
@@ -191,7 +219,8 @@ StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID)
                ? status
                : Os_ErrorResult(OSServiceId_DisableInterruptSource, status, &arguments);
 }
-StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearPending)
+
+OS_MEMMAP StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearPending)
 {
     const Os_ErrorParametersType arguments = {
         .service_EnableInterruptSource = {ISRID, ClearPending}};
@@ -200,7 +229,8 @@ StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearP
                ? status
                : Os_ErrorResult(OSServiceId_EnableInterruptSource, status, &arguments);
 }
-StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID)
+
+OS_MEMMAP StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID)
 {
     const Os_ErrorParametersType arguments = {.service_ClearPendingInterrupt = {ISRID}};
     const StatusType status = source_control(ISRID, 2u, FALSE);
@@ -208,3 +238,5 @@ StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID)
                ? status
                : Os_ErrorResult(OSServiceId_ClearPendingInterrupt, status, &arguments);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

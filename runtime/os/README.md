@@ -31,7 +31,7 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_os
 
 真实 dispatcher 使用32槽Os_InterruptVectorTable；Windows生成工程交付该源码及第14个受控补丁，Linux OS harness 从固定 POSIX 原件应用受控补丁。两目标都链接到256字节可重定位、可写的.os_vec段，分别检查PE或ELF的实际符号与段绑定。
 
-标准入口通过OS_START_SEC_CODE／OS_STOP_SEC_CODE与重复包含Os_MemMap.h声明，固定GCC目标的OS_CODE属性将Task、ISR、AlarmCallback及Hook放入只读可执行.os_code段；嵌套、错配、冲突和未支持标记明确拒绝。先包含Os.h，再开始映射，结束后再次包含Os_MemMap.h。参考配置没有SwAddrMethod位置引用，使用默认CODE。
+模块函数声明／定义、静态状态、常量与生成的 OS 配置通过成对段标记及重复包含 `Os_MemMap.h` 映射；配置常量使用 `CONFIG_DATA_PREBUILD`，固定实现常量使用 `CONST`；段内只含所属类别的对象，平台与测试条件位于配对之外。`OS_MEMMAP` 仅在配对期间有效；OSEK 入口宏保留 `OS_CODE`。代码使用只读可执行 `.os_code`，原生向量表保留可写、八字节对齐的 `.os_vec`；CLEARED、INIT 与 actor TLS 分别保持原有 C 启动值和线程归属。常量指针在 ELF 中使用重定位后只读区域，在 PE 中使用 `.rdata`。错误、嵌套、冲突和未支持标记均拒绝；完整配置仍由同一生成入口提供，不引入新生命周期状态。
 
 生成工程的generated/include/Rte_Os.h与generated/src/Rte_OsService.c提供同步Counter服务。Rte_Call_OsService_GetCounterValue与Rte_Call_OsService_GetElapsedValue绑定配置的Counter句柄，直接调用原生OS接口；输出为tick及tick差（SWS_Os_00560），不按TimeInMicrosecondsType名称额外换算。服务器OsService_{Counter}_GetCounterValue／GetElapsedValue接受CounterType端口定义参数。generated/descriptions/Os_Service.arxml描述OsService提供端口、服务接口、共享类型、错误及Runnable；受支持的单Counter配置句柄为0。调用方拥有输出存储，拒绝调用保留原生错误、ErrorHook参数快照与输出契约。
 
