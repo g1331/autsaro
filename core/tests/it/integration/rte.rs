@@ -401,7 +401,8 @@ fn all_rte_owned_input_types_have_one_declaration_and_external_emitters_stay_ext
         .unwrap()
     };
     let types = header("include/Rte_Type.h");
-    // Verifies: SWS_BSW_00147 [Os], SWS_Os_00786, SWS_Os_00794.
+    // Verifies[Os]: SWS_BSW_00147.
+    // Verifies: SWS_Os_00786, SWS_Os_00794.
     assert_eq!(types.matches("typedef uint32 CounterType;").count(), 1);
     assert_eq!(
         types
