@@ -335,7 +335,7 @@ sint32 Os_BackendReady(void)
     serving = Os_TargetReady();
     if (serving == 0) {
         /* A service that passed its entry guard before shutdown stops here instead of
-         * reporting the closing OS as a calling-context or state error (#162). */
+         * reporting the closing OS as a calling-context or state error. */
         Os_BackendGuardService();
     }
     return serving;
@@ -846,7 +846,7 @@ void Os_BackendRequestShutdown(StatusType error)
             report_and_exit();
         }
         /* Wake control before publishing Os_Closing: a dispatch that stops this Task
-         * after the publication never resumes it, so the wake-up would be lost (#154). */
+         * after the publication never resumes it, so the wake-up would be lost. */
         if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
             ExitProcess(E_OS_STATE);
         }

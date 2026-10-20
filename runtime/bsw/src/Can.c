@@ -294,7 +294,7 @@ static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType 
     } else if (pdu->length > 8u) {
         result = ECU_ERR_FRAME_DLC;
     } else {
-        /* The area guards data only (ADR 0018), so entering it is bounded and keeps
+        /* The area guards data only, so entering it is bounded and keeps
          * Can_Write non-blocking (SWS_Can_00275); CAN_BUSY means an occupied slot. */
         SchM_Enter_Can_CAN_STATE();
         if (can_initialized == 0u) {
@@ -382,7 +382,7 @@ CAN_CODE EcuStatus Can_InternalHostFlush(void)
 }
 
 /* Mode and bus-off indications leave the driver one context at a time, in the order
- * they were recorded (ADR 0018): a context that finds one in delivery only records,
+ * they were recorded: a context that finds one in delivery only records,
  * and the delivering context (or the next main function) publishes it. `drain` keeps
  * delivering what is recorded during a callback; polled publication stops after one. */
 static CAN_CODE void Can_PublishMode(uint8 drain)

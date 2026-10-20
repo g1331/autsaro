@@ -58,7 +58,7 @@ ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 res
 
 `Can.c` 的 CODE 和 VAR_CLEARED_UNSPECIFIED 通过 `Can_MemMap.h` 显式映射至受控 GCC PE/ELF 的 `.text`／`.bss`，由链接器及进程装载器提供代码和清零存储；BSWMD 记录对应标记及头文件。重复 include 必须带单一合法 marker，禁止嵌套和错配。该映射不定义 MCU linker 布局。
 
-`Can.c` 唯一管理发送、接收快照和生命周期，`Can_Host.c` 只转发主机操作；CanIf、CanTp 与 Dcm 使用各自独占区，ComM／BswM 仍在迁移中的共享区域上（ADR 0018）。Dcm 在区外调用 PduR、ComM 与应用；单飞执行／发布协议保护回调、模式顺序与重启身份。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后执行同一接收处理）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
+`Can.c` 唯一管理发送、接收快照和生命周期，`Can_Host.c` 只转发主机操作；CanIf、CanTp、Dcm、ComM 与 BswM 使用各自独立的独占区。Dcm 在区外调用 PduR、ComM 与应用；单飞执行／发布协议保护回调、模式顺序与重启身份。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后执行同一接收处理）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
 
 `CanVersionInfoApi` 缺失（`MULTIPLICITY`）或为 true（`CAN_FEATURE_UNSUPPORTED`）时在生成前拒绝，`Can.h` 不声明 `Can_GetVersionInfo`，也不提供版本信息开关宏。`CAN_MODULE_ID` 为 80，软件版本与项目 `0.1.0` 一致。项目尚无已分配的 AUTOSAR vendor ID，也无经过确认的 R24-11 数字发布宏映射，因此不编造这两项 published identity；取得并核对后才能实现适用的 GetVersionInfo 和外部版本交叉检查。这个缺口由现有质量规格承接，退出条件是正式身份、版本依据和双目标兼容测试成立。
 

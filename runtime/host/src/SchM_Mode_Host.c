@@ -1,4 +1,5 @@
-/** @file Strict ComM and BswM exclusive areas on the host (ADR 0018).
+/** @file Strict ComM and BswM exclusive areas on the host.
+ * Each module enters only its own area and makes cross-module calls outside it.
  * Configured exclusive-area declarations/provenance belong to full generation.
  */
 #include "SchM_ComM.h"

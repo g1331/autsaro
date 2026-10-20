@@ -1,7 +1,7 @@
 /** @file CanTp for one channel of physical, padded Classical CAN N-SDUs.
  * Reception and transmission are independent (full duplex, SWS_CanTp_00057) and share the
  * Tx N-PDU, which its TxConfirmation serializes (SWS_CanTp_00248). CanTp enters only its
- * own CANTP_STATE area and calls PduR, LSduR and Det outside it (ADR 0018): events are
+ * own CANTP_STATE area and calls PduR, LSduR and Det outside it: events are
  * recorded in the area, and one context at a time makes the calls they require.
  */
 #include "CanTp_Internal.h"
@@ -703,7 +703,7 @@ static CANTP_CODE void CanTp_Perform(CanTp_WorkType *work)
         CanTp_Report(CANTP_SID_MAIN, CanTp_Polled(work, result, available));
     }
 }
-/* Makes the calls owed so far unless another context is making them (ADR 0018); that
+/* Makes the calls owed so far unless another context is making them; that
  * context continues until nothing is left, so no recorded event is lost. Without `send`,
  * frames wait for the next run that allows them, at the latest the main function. */
 static CANTP_CODE void CanTp_Run(boolean send)

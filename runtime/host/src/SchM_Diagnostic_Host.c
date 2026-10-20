@@ -1,4 +1,4 @@
-/** @file Independent, non-recursive Dcm area with nesting detection (ADR 0018). */
+/** @file Independent, non-recursive Dcm area with nesting detection. */
 #include "ComStack_Cfg.h"
 #include "SchM_Dcm.h"
 #include "Can_HostLock.h"

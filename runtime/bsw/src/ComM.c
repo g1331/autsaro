@@ -1,5 +1,5 @@
 /** @file Single CDD channel ComM for NM variant NONE, without PNC, inhibition or NvM.
- * COMM_STATE protects module data only (ADR 0018): bus requests, the actual mode
+ * COMM_STATE protects module data only: bus requests, the actual mode
  * publication and the bus mode query run outside it.
  */
 #include "ComM.h"
