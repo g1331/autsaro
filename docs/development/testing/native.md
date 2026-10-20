@@ -49,7 +49,7 @@ Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元�
 
 ## 运行时配置结构与源文件迁移
 
-- 给运行时配置结构（如 `Os_TargetConfig`、`Os_ResourceConfig`）加字段时放在末尾，并更新全部位置式初始化：`runtime/*/tests/*.c`、生成器按位置输出的 `c_layout::initializer` 与模板。这些单元以 `-Werror=missing-field-initializers` 编译，生成工程只在 `--features native-tests` 的原生套件中编译，`it` 通过不能证明。测试用 `#define` 给 hook 改名再包含另一个 harness 时，宏也会改写被包含文件里对该 hook 的取址；改由 harness 提供显式观察点。
+- 给运行时配置结构（如 `Os_TargetConfigType`、`Os_ResourceConfigType`）加字段时放在末尾，并更新全部位置式初始化：`runtime/*/tests/*.c`、生成器按位置输出的 `c_layout::initializer` 与模板。这些单元以 `-Werror=missing-field-initializers` 编译，生成工程只在 `--features native-tests` 的原生套件中编译，`it` 通过不能证明。测试用 `#define` 给 hook 改名再包含另一个 harness 时，宏也会改写被包含文件里对该 hook 的取址；改由 harness 提供显式观察点。
 - 在 runtime 目录之间迁移 C 源文件或头文件时，从生成样本按每个实际 main 用 `gcc -MM` 列出编译闭包，并与 `integration.json`、ownership ledger 和交付字节逐项核对。GCC 的引号 include 优先查找同目录，迁移使不同目录出现同名头文件时，其解析结果可能改变：交付工程是扁平 include，仓库内按目录拼路径的夹具、工具和 `quality` 检查则不同，要逐个复核；也要检查按目录 glob 的检查是否悄悄漏掉了迁出的文件。原生测试的生成头文件通过实际消费者包含，不用全局 `-include` 注入宿主适配编译单元，避免改变 Windows 系统类型与平台特性宏的包含顺序。
 - 改动交付文件布局（如头文件移入子目录）、原生 fixture 或其共用辅助，重排运行时源码或改变 emitter 排版时，推送前在本地以 `--features native-tests` 运行受影响原生套件，并运行 OS suites、`test_host_boundaries.py` 和带改名变体（如 `OsAlt`）的原生套件。修改 OS 或 BSW 运行时 C 后，推送前也按[检测器构建](#检测器构建)运行受影响套件：插桩改变寄存器分配，`setjmp` 所在函数的 `-Wclobbered` 等告警只在该构建中出现。
 
