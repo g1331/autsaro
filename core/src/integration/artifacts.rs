@@ -1492,6 +1492,8 @@ pub(super) fn files(
             let sections: &[&str] = if module == "Os" {
                 &[
                     "CODE",
+                    "CONFIG_DATA_PREBUILD_8",
+                    "CONFIG_DATA_PREBUILD_64",
                     "CONST_64",
                     "CONST_8",
                     "CONST_PTR",

@@ -27,7 +27,10 @@
 #define OS_MEMMAP_TLS_CLEARED_SECTION ".tbss.os"
 #endif
 #endif
-#if (defined(OS_START_SEC_CODE) + defined(OS_STOP_SEC_CODE) + defined(OS_START_SEC_CONST_64) +     \
+#if (defined(OS_START_SEC_CODE) + defined(OS_STOP_SEC_CODE) +                                      \
+     defined(OS_START_SEC_CONFIG_DATA_PREBUILD_64) +                                               \
+     defined(OS_STOP_SEC_CONFIG_DATA_PREBUILD_64) + defined(OS_START_SEC_CONFIG_DATA_PREBUILD_8) + \
+     defined(OS_STOP_SEC_CONFIG_DATA_PREBUILD_8) + defined(OS_START_SEC_CONST_64) +                \
      defined(OS_STOP_SEC_CONST_64) + defined(OS_START_SEC_CONST_8) +                               \
      defined(OS_STOP_SEC_CONST_8) + defined(OS_START_SEC_CONST_PTR) +                              \
      defined(OS_STOP_SEC_CONST_PTR) + defined(OS_START_SEC_VAR_CLEARED_32) +                       \
@@ -65,16 +68,44 @@
 #undef OS_MEMMAP_ACTIVE
 #undef OS_MEMMAP
 #undef OS_MEMMAP_CODE_ACTIVE
-#elif defined(OS_START_SEC_CONST_64)
-#undef OS_START_SEC_CONST_64
+#elif defined(OS_START_SEC_CONFIG_DATA_PREBUILD_64)
+#undef OS_START_SEC_CONFIG_DATA_PREBUILD_64
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
 #define OS_MEMMAP_ACTIVE 2
 #define OS_MEMMAP        __attribute__((section(OS_MEMMAP_CONST_SECTION)))
+#elif defined(OS_STOP_SEC_CONFIG_DATA_PREBUILD_64)
+#undef OS_STOP_SEC_CONFIG_DATA_PREBUILD_64
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 2)
+#error OS section stopped without a matching start
+#endif
+#undef OS_MEMMAP_ACTIVE
+#undef OS_MEMMAP
+#elif defined(OS_START_SEC_CONFIG_DATA_PREBUILD_8)
+#undef OS_START_SEC_CONFIG_DATA_PREBUILD_8
+#ifdef OS_MEMMAP_ACTIVE
+#error Nested OS memory section
+#endif
+#define OS_MEMMAP_ACTIVE 3
+#define OS_MEMMAP        __attribute__((section(OS_MEMMAP_CONST_SECTION)))
+#elif defined(OS_STOP_SEC_CONFIG_DATA_PREBUILD_8)
+#undef OS_STOP_SEC_CONFIG_DATA_PREBUILD_8
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 3)
+#error OS section stopped without a matching start
+#endif
+#undef OS_MEMMAP_ACTIVE
+#undef OS_MEMMAP
+#elif defined(OS_START_SEC_CONST_64)
+#undef OS_START_SEC_CONST_64
+#ifdef OS_MEMMAP_ACTIVE
+#error Nested OS memory section
+#endif
+#define OS_MEMMAP_ACTIVE 4
+#define OS_MEMMAP        __attribute__((section(OS_MEMMAP_CONST_SECTION)))
 #elif defined(OS_STOP_SEC_CONST_64)
 #undef OS_STOP_SEC_CONST_64
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 2)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 4)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -84,11 +115,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 3
+#define OS_MEMMAP_ACTIVE 5
 #define OS_MEMMAP        __attribute__((section(OS_MEMMAP_CONST_SECTION)))
 #elif defined(OS_STOP_SEC_CONST_8)
 #undef OS_STOP_SEC_CONST_8
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 3)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 5)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -98,11 +129,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 4
+#define OS_MEMMAP_ACTIVE 6
 #define OS_MEMMAP        __attribute__((section(OS_MEMMAP_CONST_SECTION)))
 #elif defined(OS_STOP_SEC_CONST_PTR)
 #undef OS_STOP_SEC_CONST_PTR
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 4)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 6)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -112,11 +143,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 5
+#define OS_MEMMAP_ACTIVE 7
 #define OS_MEMMAP        __attribute__((section(".bss.os")))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_32)
 #undef OS_STOP_SEC_VAR_CLEARED_32
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 5)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 7)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -126,11 +157,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 6
+#define OS_MEMMAP_ACTIVE 8
 #define OS_MEMMAP        __attribute__((section(".bss.os")))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_64)
 #undef OS_STOP_SEC_VAR_CLEARED_64
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 6)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 8)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -140,11 +171,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 7
+#define OS_MEMMAP_ACTIVE 9
 #define OS_MEMMAP        __attribute__((section(".bss.os")))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_8)
 #undef OS_STOP_SEC_VAR_CLEARED_8
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 7)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 9)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -154,11 +185,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 8
+#define OS_MEMMAP_ACTIVE 10
 #define OS_MEMMAP        __attribute__((section(".bss.os")))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_PTR)
 #undef OS_STOP_SEC_VAR_CLEARED_PTR
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 8)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 10)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -168,11 +199,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 9
+#define OS_MEMMAP_ACTIVE 11
 #define OS_MEMMAP        __attribute__((section(OS_MEMMAP_TLS_CLEARED_SECTION)))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_TLS_32)
 #undef OS_STOP_SEC_VAR_CLEARED_TLS_32
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 9)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 11)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -182,11 +213,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 10
+#define OS_MEMMAP_ACTIVE 12
 #define OS_MEMMAP        __attribute__((section(OS_MEMMAP_TLS_CLEARED_SECTION)))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_TLS_64)
 #undef OS_STOP_SEC_VAR_CLEARED_TLS_64
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 10)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 12)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -196,11 +227,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 11
+#define OS_MEMMAP_ACTIVE 13
 #define OS_MEMMAP        __attribute__((section(OS_MEMMAP_TLS_CLEARED_SECTION)))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_TLS_8)
 #undef OS_STOP_SEC_VAR_CLEARED_TLS_8
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 11)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 13)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -210,11 +241,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 12
+#define OS_MEMMAP_ACTIVE 14
 #define OS_MEMMAP        __attribute__((section(OS_MEMMAP_TLS_CLEARED_SECTION)))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_TLS_PTR)
 #undef OS_STOP_SEC_VAR_CLEARED_TLS_PTR
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 12)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 14)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -224,11 +255,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 13
+#define OS_MEMMAP_ACTIVE 15
 #define OS_MEMMAP        __attribute__((section(OS_MEMMAP_TLS_CLEARED_SECTION)))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_TLS_UNSPECIFIED)
 #undef OS_STOP_SEC_VAR_CLEARED_TLS_UNSPECIFIED
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 13)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 15)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -238,11 +269,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 14
+#define OS_MEMMAP_ACTIVE 16
 #define OS_MEMMAP        __attribute__((section(".bss.os")))
 #elif defined(OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED)
 #undef OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 14)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 16)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -252,11 +283,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 15
+#define OS_MEMMAP_ACTIVE 17
 #define OS_MEMMAP        __attribute__((section(".data.os")))
 #elif defined(OS_STOP_SEC_VAR_INIT_32)
 #undef OS_STOP_SEC_VAR_INIT_32
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 15)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 17)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -266,11 +297,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 16
+#define OS_MEMMAP_ACTIVE 18
 #define OS_MEMMAP        __attribute__((section(".data.os")))
 #elif defined(OS_STOP_SEC_VAR_INIT_8)
 #undef OS_STOP_SEC_VAR_INIT_8
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 16)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 18)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -280,11 +311,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 17
+#define OS_MEMMAP_ACTIVE 19
 #define OS_MEMMAP        __attribute__((section(".data.os")))
 #elif defined(OS_STOP_SEC_VAR_INIT_UNSPECIFIED)
 #undef OS_STOP_SEC_VAR_INIT_UNSPECIFIED
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 17)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 19)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE
@@ -294,11 +325,11 @@
 #ifdef OS_MEMMAP_ACTIVE
 #error Nested OS memory section
 #endif
-#define OS_MEMMAP_ACTIVE 18
+#define OS_MEMMAP_ACTIVE 20
 #define OS_MEMMAP        __attribute__((section(".os_vec"), aligned(8)))
 #elif defined(OS_STOP_SEC_VAR_INIT_VECTOR_PTR)
 #undef OS_STOP_SEC_VAR_INIT_VECTOR_PTR
-#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 18)
+#if !defined(OS_MEMMAP_ACTIVE) || (OS_MEMMAP_ACTIVE != 20)
 #error OS section stopped without a matching start
 #endif
 #undef OS_MEMMAP_ACTIVE

@@ -8,12 +8,12 @@
 @TASK@
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
-#define OS_START_SEC_CONST_8
+#define OS_START_SEC_CONFIG_DATA_PREBUILD_8
 #include "Os_MemMap.h"
 OS_MEMMAP static const uint8 task_name[] = @TASK_NAME@;
-#define OS_STOP_SEC_CONST_8
+#define OS_STOP_SEC_CONFIG_DATA_PREBUILD_8
 #include "Os_MemMap.h"
-#define OS_START_SEC_CONST_64
+#define OS_START_SEC_CONFIG_DATA_PREBUILD_64
 #include "Os_MemMap.h"
 OS_MEMMAP static const Os_TaskConfigType tasks[] = {
     {
@@ -75,5 +75,5 @@ OS_MEMMAP const Os_TargetConfigType Ecu_OsConfig = {
     .use_res_scheduler = @USE_RES_SCHEDULER@u,
 };
 
-#define OS_STOP_SEC_CONST_64
+#define OS_STOP_SEC_CONFIG_DATA_PREBUILD_64
 #include "Os_MemMap.h"

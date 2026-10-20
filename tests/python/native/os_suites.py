@@ -1935,7 +1935,7 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
                     if "*" in head:
                         star = len(head) - 1 - head[::-1].index("*")
                         constant = head[star + 1:star + 2] == ["const"]
-                    require(active.startswith("CONST_") == constant,
+                    require(active.startswith(("CONST_", "CONFIG_DATA_")) == constant,
                             "constant/variable mapping class mismatch")
                     tls = any(word in head for word in ("OS_THREAD_LOCAL", "OS_HOST_THREAD_LOCAL"))
                     require(("_TLS_" in active) == tls, "TLS mapping class mismatch")

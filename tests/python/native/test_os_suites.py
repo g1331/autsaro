@@ -34,6 +34,7 @@ class DependencyTests(unittest.TestCase):
                            ("VAR_CLEARED_32", "static uint32 state;"),
                            ("VAR_INIT_32", "static uint32 state = 3u;"),
                            ("CONST_PTR", "static const uint32 *const view = &state;"),
+                           ("CONFIG_DATA_PREBUILD_8", "static const uint8 name[] = {65u, 0u};"),
                            ("VAR_CLEARED_TLS_32", "static OS_THREAD_LOCAL uint32 actor;")]:
             os_suites.verify_memory_mapping_source(section(kind, body))
         for source, expected in [
