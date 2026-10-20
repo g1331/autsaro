@@ -587,7 +587,7 @@ typedef struct {
     TaskFunction_t entry;
     void *argument;
     HANDLE registered, gate;
-    uint8 role;
+    char role;
     const StackType_t *buffer_top;
 } Os_NativeTaskStartType;
 static Os_NativeTaskStartType
@@ -781,7 +781,7 @@ static DWORD WINAPI control(void *argument)
     report_and_exit();
     return 0u;
 }
-void Os_BackendStackFault(uint8 failed_role)
+void Os_BackendStackFault(char failed_role)
 {
     Os_TimeClose();
     Os_MailboxClose();
@@ -804,7 +804,7 @@ void Os_BackendStackFault(uint8 failed_role)
     ExitProcess(E_OS_STACKFAULT);
 }
 #ifdef __linux__
-void Os_BackendSignalStackFault(uint8 failed_role)
+void Os_BackendSignalStackFault(char failed_role)
 {
     (void)InterlockedOr(&activation_admission, 2);
     (void)InterlockedExchange(&ready, 0);

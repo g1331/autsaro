@@ -47,7 +47,7 @@ int Os_StackReport(void);
 const Os_NativeStackType *Os_StackCurrent(void);
 const void *Os_StackSavedContext(const Os_NativeStackType *stack);
 void Os_StackRecordBuffer(const StackType_t *top);
-void Os_BackendStackFault(uint8 failed_role);
+void Os_BackendStackFault(char failed_role);
 void Os_StackFatalExit(void);
 int Os_StackHasFault(void);
 LONG Os_StackFaultCount(void);

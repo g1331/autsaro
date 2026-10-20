@@ -43,14 +43,45 @@ readability-identifier-naming runtime/ecu/src/Ecu_Target.c } Ecu_ProtocolSlot;
 readability-identifier-naming runtime/host/include/Can_Host.h } CanMode;
 readability-identifier-naming runtime/host/include/Ecu_Status.h } EcuStatus;
 readability-identifier-naming runtime/host/src/Can_HostLock.c } Can_RecursiveLock;
-readability-identifier-naming runtime/os/include/Arti.h typedef char ArtiAtomic32IsFourBytes[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1];
-readability-identifier-naming runtime/os/include/Arti.h typedef int32_t ArtiAtomic32;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_AddressCapture;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_Event;
 readability-identifier-naming runtime/os/include/Os.h #define SetEvent Os_SetEvent
 readability-identifier-naming runtime/os/include/Os.h ScheduleTableType ScheduleTableID_To);
 readability-identifier-naming runtime/os/include/Os.h StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
 readability-identifier-naming runtime/os/include/Os.h boolean isOsStarted(void);
+readability-identifier-naming runtime/os/include/Os_Hooks.h ScheduleTableType ScheduleTableID_From;
+readability-identifier-naming runtime/os/include/Os_Hooks.h ScheduleTableType ScheduleTableID_To;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_ActivateTask;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_CancelAlarm;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_ChainTask;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_ClearEvent;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_ClearPendingInterrupt;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_ControlIdle;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_DisableInterruptSource;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_EnableInterruptSource;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetAlarm;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetAlarmBase;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetCounterValue;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetElapsedValue;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetEvent;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetResource;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetScheduleTableStatus;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetTaskID;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_GetTaskState;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_IncrementCounter;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_NextScheduleTable;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_ReleaseResource;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_Schedule;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_SetAbsAlarm;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_SetEvent;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_SetRelAlarm;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_ShutdownOS;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_StartOS;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_StartScheduleTableAbs;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_StartScheduleTableRel;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_StopScheduleTable;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_TerminateTask;
+readability-identifier-naming runtime/os/include/Os_Hooks.h } service_WaitEvent;
 readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_ActivateTask(TaskType TaskID)
 readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_ChainTask(TaskType TaskID)
 readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_ClearEvent(EventMaskType Mask)
@@ -63,13 +94,10 @@ readability-identifier-naming runtime/os/src/Os.c static StatusType implementati
 readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
 readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_TerminateTask(void)
 readability-identifier-naming runtime/os/src/Os.c static StatusType implementation_WaitEvent(EventMaskType Mask)
-readability-identifier-naming runtime/os/src/Os_Backend.c } ActivationQueue;
-readability-identifier-naming runtime/os/src/Os_Backend.c } InterruptFrame;
-readability-identifier-naming runtime/os/src/Os_Backend.c } NativeTaskStart;
-readability-identifier-naming runtime/os/src/Os_Backend.c } OrderReference;
+readability-identifier-naming runtime/os/src/Os_ArtiServices.c ScheduleTableType ScheduleTableID_To)
+readability-identifier-naming runtime/os/src/Os_ArtiServices.c StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
 readability-identifier-naming runtime/os/src/Os_Backend.h ScheduleTableType ScheduleTableID_To);
 readability-identifier-naming runtime/os/src/Os_Backend.h StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-readability-identifier-naming runtime/os/src/Os_Interrupt.c } InterruptState;
 readability-identifier-naming runtime/os/src/Os_Schedule.c ScheduleTableType ScheduleTableID_To)
 readability-identifier-naming runtime/os/src/Os_Schedule.c ScheduleTableType ScheduleTableID_To)
 readability-identifier-naming runtime/os/src/Os_Schedule.c StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
@@ -87,6 +115,3 @@ readability-identifier-naming runtime/os/src/Os_Time.c static StatusType impleme
 readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_IncrementCounter(CounterType CounterID)
 readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
 readability-identifier-naming runtime/os/src/Os_Time.c static StatusType implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
-readability-identifier-naming runtime/os/src/Os_Time.c } CounterWork;
-readability-identifier-naming runtime/os/src/host/linux/Os_HostLinux.c } Os_HostKind;
-readability-identifier-naming runtime/os/src/host/linux/Os_HostLinux.h typedef char Os_HostLongMustBe32Bits[(sizeof(LONG) == 4u) ? 1 : -1];

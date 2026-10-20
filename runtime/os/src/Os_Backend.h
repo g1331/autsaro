@@ -71,7 +71,7 @@ void Os_BackendStart(AppModeType mode);
 void Os_BackendShutdown(StatusType error);
 void Os_BackendRequestShutdown(StatusType error);
 #ifdef __linux__
-void Os_BackendSignalStackFault(uint8 role);
+void Os_BackendSignalStackFault(char role);
 void Os_BackendSetDispatcher(void);
 #endif
 void Os_BackendGuardService(void);
