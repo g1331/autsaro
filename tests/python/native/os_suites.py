@@ -1959,13 +1959,13 @@ def check_memory_mapping(directory: Path) -> None:
         try:
             owned.update(verify_memory_mapping_source(path.read_text(encoding="utf-8")))
         except AssertionError as error:
-            raise AssertionError(f"{path.relative_to(TARGET)}: {error}") from error
+            raise AssertionError(f"{path.relative_to(TARGET).as_posix()}: {error}") from error
     for path in sorted((*((TARGET / "include").glob("*.h")), *((TARGET / "src").rglob("*.h")))):
         if path.name != "Os_MemMap.h":
             try:
                 verify_memory_mapping_source(path.read_text(encoding="utf-8"), owned)
             except AssertionError as error:
-                raise AssertionError(f"{path.relative_to(TARGET)}: {error}") from error
+                raise AssertionError(f"{path.relative_to(TARGET).as_posix()}: {error}") from error
     cc = compiler()
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
     tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
