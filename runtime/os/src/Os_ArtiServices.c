@@ -1,6 +1,9 @@
 /** @file Traced public OS service wrappers around the implementation entry points. */
 #include "Os_Backend.h"
 
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+
 ISRType GetISRID(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
@@ -122,7 +125,7 @@ StatusType ActivateTask(TaskType TaskID)
 StatusType TerminateTask(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 current =
         ((stack != NULL) && (stack->role == 'T')) ? (uint32)Os_ArtiRunningTask : UINT32_MAX;
     if (trace != 0) {
@@ -675,3 +678,6 @@ void SuspendOSInterrupts(void)
     }
     Os_ArtiServiceLeave();
 }
+
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

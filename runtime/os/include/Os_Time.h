@@ -21,7 +21,7 @@ typedef struct {
     TickType minimum_cycle;  /**< Minimum nonzero Alarm cycle in Counter ticks, no greater than
                                 maximum. */
     uint8 software;          /**< 1 for software Counter; 0 for the controlled system Counter. */
-} Os_CounterConfig;
+} Os_CounterConfigType;
 /** Static Alarm action and optional mode-specific autostart, expressed in its Counter ticks. */
 typedef struct {
     AlarmType id;           /**< Unique configured Alarm identifier. */
@@ -36,42 +36,42 @@ typedef struct {
     TickType cycle;         /**< Repeat period in Counter ticks; zero for one-shot. */
     CounterType increment_counter; /**< Counter incremented by INCREMENT_COUNTER actions; otherwise
                                       ignored. */
-} Os_AlarmConfig;
+} Os_AlarmConfigType;
 
 /** One static ScheduleTable expiry action, activating a Task or setting its events. */
 typedef struct {
     uint8 action;        /**< OS_ALARM_ACTIVATE or OS_ALARM_EVENT. */
     TaskType task;       /**< Configured target Task identifier. */
     EventMaskType event; /**< Bits set by EVENT action; ignored by ACTIVATE. */
-} Os_ExpiryAction;
+} Os_ExpiryActionType;
 /** Static offset in Counter ticks and ordered array of expiry actions. */
 typedef struct {
-    TickType offset;                /**< Offset from table start in its Counter ticks. */
-    const Os_ExpiryAction *actions; /**< Static ordered array of action_count descriptors. */
-    size_t action_count;            /**< Number of actions, bounded by OS_MAX_EXPIRY_ACTIONS. */
-} Os_ExpiryPoint;
+    TickType offset;                    /**< Offset from table start in its Counter ticks. */
+    const Os_ExpiryActionType *actions; /**< Static ordered array of action_count descriptors. */
+    uint32 action_count;                /**< Number of actions, bounded by OS_MAX_EXPIRY_ACTIONS. */
+} Os_ExpiryPointType;
 /** Static table retained for the process lifetime; validated before threads. */
 /** Process-lifetime NONE-synchronized ScheduleTable, validated before native actors exist. */
 typedef struct {
     ScheduleTableType id; /**< Unique configured ScheduleTable identifier. */
     CounterType counter;  /**< Counter driving the table. */
     TickType duration;    /**< Complete table duration in Counter ticks, including final delay. */
-    const Os_ExpiryPoint *points; /**< Static ordered array of point_count expiry points. */
-    size_t point_count;           /**< Number of points, 1 through OS_MAX_EXPIRY_POINTS. */
+    const Os_ExpiryPointType *points; /**< Static ordered array of point_count expiry points. */
+    uint32 point_count;               /**< Number of points, 1 through OS_MAX_EXPIRY_POINTS. */
     uint8 repeating; /**< Nonzero repeats after the final delay unless a successor is selected. */
     uint8 synchronization; /**< OS_SCHEDULE_SYNC_NONE; other strategies are rejected. */
     uint8 autostart_modes; /**< Mode bits selecting autostart; zero disables autostart. */
     uint8 absolute;        /**< Nonzero for absolute autostart; zero for relative offset. */
     TickType start;        /**< Absolute start or positive relative offset in Counter ticks. */
-} Os_ScheduleTableConfig;
+} Os_ScheduleTableConfigType;
 /** Process-lifetime Counter/Alarm/table graph and optional single-producer controlled-tick
  * handshake. */
 typedef struct {
-    const Os_CounterConfig *counters; /**< Process-lifetime counter_count descriptors. */
-    size_t counter_count;             /**< Counter count, 1 through OS_MAX_COUNTERS. */
-    const Os_AlarmConfig
+    const Os_CounterConfigType *counters; /**< Process-lifetime counter_count descriptors. */
+    uint32 counter_count;                 /**< Counter count, 1 through OS_MAX_COUNTERS. */
+    const Os_AlarmConfigType
         *alarms;        /**< Static alarm_count descriptors; may be NULL for zero count. */
-    size_t alarm_count; /**< Alarm count, zero through OS_MAX_ALARMS. */
+    uint32 alarm_count; /**< Alarm count, zero through OS_MAX_ALARMS. */
     CounterType
         system_counter; /**< Counter driven by the optional one-millisecond controlled tick. */
     TaskType owner;     /**< Controlled-tick owner Task; INVALID_TASK when wake_event is zero. */
@@ -82,10 +82,10 @@ typedef struct {
         wake_event; /**< Controlled owner wake bits; zero disables the private tick handshake. */
     void (*error_hook)(StatusType); /**< Optional action-error fallback when no standard ErrorHook
                                        is configured. */
-    const Os_ScheduleTableConfig *schedule_tables; /**< Static schedule_table_count descriptors;
+    const Os_ScheduleTableConfigType *schedule_tables; /**< Static schedule_table_count descriptors;
                                                       NULL allowed for zero count. */
-    size_t schedule_table_count; /**< Table count, zero through OS_MAX_SCHEDULE_TABLES. */
-} Os_TimeConfig;
+    uint32 schedule_table_count; /**< Table count, zero through OS_MAX_SCHEDULE_TABLES. */
+} Os_TimeConfigType;
 /** Complete acknowledged logical tick snapshot, copied to the native producer only after
  * publication. */
 typedef struct {
@@ -95,7 +95,7 @@ typedef struct {
     TickType counter;     /**< System Counter modular tick value at completion. */
     uint64 alarm_actions; /**< Cumulative Alarm/ScheduleTable action executions. */
     uint64 action_errors; /**< Cumulative non-E_OK action results. */
-} Os_TickCompletion;
+} Os_TickCompletionType;
 /** Accept the next one-millisecond request from the native control producer.
  * @param[in] epoch Exactly the next epoch; the last confirmed epoch is a no-op.
  * @param[out] ticket Accepted ticket, or the existing confirmed ticket on a no-op.
@@ -119,7 +119,7 @@ StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket);
  * with the automotive owner. Ownership: copies arguments and results during the call; caller output
  * storage is not retained.
  */
-StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
+StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionType *record);
 /** Wait for the matching complete record without polling or advancing time.
  * @param[in] ticket Accepted ticket.
  * @param[in] timeout_ms Host watchdog duration, 1 through 5000 milliseconds.
@@ -133,7 +133,7 @@ StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletion *record);
  * with the automotive owner. Ownership: copies arguments and results during the call; caller output
  * storage is not retained.
  */
-StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion *record);
+StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletionType *record);
 /** Wake the native producer's Os_TargetWaitTick for work it must do before this tick
  * can complete, such as confirming a published output. A wake without such work only
  * returns one early E_OS_NOFUNC; it never completes a tick or changes automotive time.

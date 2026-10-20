@@ -14,7 +14,8 @@ static void require_at(int accepted, unsigned line) {
 }
 #define require(accepted) require_at((accepted), __LINE__)
 
-static Os_HostThreadResult control(void *argument) {
+static Os_HostThreadResultType control(void *argument)
+{
     static const uint8_t signal[8] = {0x78u, 0x56u, 0x34u, 0x12u, 0u, 0u, 0u, 0u};
     static const uint8_t request[8] = {3u, 0x22u, 0x12u, 0x34u, 0u, 0u, 0u, 0u};
     static const uint8_t initial[8] = {7u, 0x62u, 0x12u, 0x34u, 0u, 0u, 0u, 0u};
@@ -36,7 +37,7 @@ static Os_HostThreadResult control(void *argument) {
     }
     for (step = UINT64_C(1); step <= UINT64_C(20); ++step) {
         uint64_t ticket;
-        Os_TickCompletion completion;
+        Os_TickCompletionType completion;
         if (step == UINT64_C(1)) {
             require(Ecu_TargetPostFrame(step, 0x320u, 4u, signal, &ticket) == E_OK);
             {
@@ -96,7 +97,7 @@ int main(void) {
         microseconds != UINT64_MAX || TotalNumberOfCores != 1u) {
         return 48;
     }
-    const Os_TimeConfig *time = Ecu_OsConfig.time;
+    const Os_TimeConfigType *time = Ecu_OsConfig.time;
     if (time == NULL || time->counter_count != 1u || time->counters == NULL ||
         time->system_counter != 0u || time->counters[0u].id != 0u ||
         time->counters[0u].maximum != UINT64_C(65535) || time->counters[0u].ticks_per_base != 1u ||
@@ -105,7 +106,7 @@ int main(void) {
         OSMINCYCLE != time->counters[0u].minimum_cycle || OSTICKDURATION != UINT64_C(1000000)) {
         return 49;
     }
-    Os_HostHandle thread;
+    Os_HostHandleType thread;
     require(Ecu_TargetPrepare() == E_OK);
     thread = Os_HostSpawnThread(control, NULL);
     require(thread != NULL);

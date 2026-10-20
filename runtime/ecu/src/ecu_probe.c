@@ -33,7 +33,7 @@ void Ecu_TargetTestShutdown(StatusType reason)
     }
 }
 #endif
-static Os_HostThreadResult control(void *argument)
+static Os_HostThreadResultType control(void *argument)
 {
     uint64_t step;
     uint64_t started = Os_HostMonotonicMs();
@@ -44,7 +44,7 @@ static Os_HostThreadResult control(void *argument)
     }
     for (step = UINT64_C(1); step <= UINT64_C(20); ++step) {
         uint64_t ticket;
-        Os_TickCompletion completion;
+        Os_TickCompletionType completion;
         require(Os_TargetAdvanceOneTick(step, &ticket) == E_OK);
         started = Os_HostMonotonicMs();
         for (;;) {
@@ -76,7 +76,7 @@ static Os_HostThreadResult control(void *argument)
 }
 int main(int argc, char **argv)
 {
-    Os_HostHandle thread;
+    Os_HostHandleType thread;
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
     if (argc == 2) {
         char *end;

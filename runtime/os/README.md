@@ -2,13 +2,15 @@
 
 内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用十四个受控补丁；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/0001-controlled-posix-port.patch`。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
 
-Os_TargetConfig 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。
+配置表的计数及模块索引使用uint32，容量仍由各OS_MAX_*限制；任务名为以NUL结尾的const uint8字节串，调用FreeRTOS时才转到原生字符接口。集成方须用当前头文件重新编译配置与消费者。
+
+Os_TargetConfigType 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。
 
 StartOS 成功后不返回。Task 正常终止或调用 ChainTask 时，通过原生入口移交；意外返回时报告 MISSINGEND，恢复遗留资源和屏蔽状态，再完成本次激活。PreTask／PostTask 随 Running 状态转换调用，Shutdown 不额外产生 PostTask。ErrorHook 提供标准服务标识与参数快照，Hook 内错误不会递归调用或覆盖外层快照。支持参考 EXTENDED 配置和显式 STANDARD 配置；两种模式均保留防御检查、非零结果报告、标准激活及 Alarm 告警。
 
-Disable／Enable、嵌套All／OS配对按调用者保存和恢复状态。Cat1与Cat2有不同屏蔽语义；源操作改变实际pending／disabled位。嵌套ISR使用同一真实S线程的原生栈，返回恢复外层身份和资源；泄漏屏蔽／资源在Cat2退出清理。Os_IsrConfig.entries可选32槽void身体表，用OS_ISR_ENTRY(name)绑定；私有0／1、Cat1、无优先级及已配置input mailbox槽不得指定身体，配置身体不能被raw handler替换。
+Disable／Enable、嵌套All／OS配对按调用者保存和恢复状态。Cat1与Cat2有不同屏蔽语义；源操作改变实际pending／disabled位。嵌套ISR使用同一真实S线程的原生栈，返回恢复外层身份和资源；泄漏屏蔽／资源在Cat2退出清理。Os_IsrConfigType.entries可选32槽void身体表，用OS_ISR_ENTRY(name)绑定；私有0／1、Cat1、无优先级及已配置input mailbox槽不得指定身体，配置身体不能被raw handler替换。
 
-TASK、ISR和ALARMCALLBACK用于标准入口声明／定义；TASK与ISR分别用OS_TASK_ENTRY／OS_ISR_ENTRY绑定实际配置。CounterType和FreeRTOS TickType均为uint32；Rte_Os_Type.h的TimeInMicrosecondsType为uint64。所选生成Counter提供对应常量及单位转换宏；转换参数只求值一次，合法范围0..UINT32_MAX，整数秒向下截断。
+TASK、ISR和ALARMCALLBACK用于标准入口声明／定义；TASK与ISR分别用OS_TASK_ENTRY／OS_ISR_ENTRY绑定实际配置。CounterType为uint32，汽车TickType为uint64，FreeRTOS的TickType_t为uint32。CounterType与TimeInMicrosecondsType由Rte_Type.h唯一定义，Rte_Os_Type.h包含该共享头。所选生成Counter提供对应常量及单位转换宏；转换参数只求值一次，合法范围0..UINT32_MAX，整数秒向下截断。
 
 时间由controlled_logical_ms逐毫秒请求／确认推进；软件Counter与内核tick分别保持模数，宿主看门狗不推进汽车时间。实际Waiting及输入／tick／输出确认决定提交完成。GetISRID读取真实ISR帧；GetCoreID在任何上下文及StartOS之前返回OS_CORE_ID_0；单核ControlIdle支持IDLE_NO_HALT且省略CoreID检查。isOsStarted 按 R24-11 的 DRAFT 定义记录是否进入过 StartOS，Ready 状态另行判断。
 

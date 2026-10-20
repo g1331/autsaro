@@ -192,7 +192,11 @@ typedef uint8 Rte_ModeType_{group};
         let description = self.description();
         let mut types = String::from("#include \"Rte.h\"\n");
         for datatype in &composition.types {
-            if datatype.symbol == datatype.native_type && datatype.array_length.is_none() {
+            if matches!(
+                datatype.symbol.as_str(),
+                "CounterType" | "TimeInMicrosecondsType"
+            ) || (datatype.symbol == datatype.native_type && datatype.array_length.is_none())
+            {
                 continue;
             }
             let suffix = datatype
@@ -223,7 +227,15 @@ typedef {} {}{suffix};
                 )?
                 .into_bytes(),
             ),
-            ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
+            (
+                "include/Rte_Type.h".into(),
+                super::outputs::render(
+                    super::outputs::trusted_text("runtime/os/include/Rte_Type.h")?,
+                    "include/Rte_Type.h",
+                    &[super::outputs::Edit::BeforeGuardEnd(&types)],
+                )?
+                .into_bytes(),
+            ),
             (
                 "include/Rte.h".into(),
                 super::rte_types::standard()?.into_bytes(),

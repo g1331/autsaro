@@ -55,7 +55,7 @@ static Ecu_BatchCompletion wait_batch(uint64_t ticket) {
 }
 
 static void tick(uint64_t at) {
-    Os_TickCompletion complete;
+    Os_TickCompletionType complete;
     uint64_t ticket;
     uint64_t started = Os_HostMonotonicMs();
     require(Os_TargetAdvanceOneTick(at, &ticket) == E_OK);
@@ -74,7 +74,8 @@ static void tick(uint64_t at) {
 
 /* A second native thread is refused once the control producer owns the target. */
 static StatusType intruder_status[3];
-static Os_HostThreadResult WINAPI intruder(void *argument) {
+static Os_HostThreadResultType WINAPI intruder(void *argument)
+{
     Ecu_OutputRecord output;
     Ecu_BatchCompletion completion;
     uint64_t *untouched = (uint64_t *)argument;
@@ -84,7 +85,8 @@ static Os_HostThreadResult WINAPI intruder(void *argument) {
     return 0u;
 }
 
-static Os_HostThreadResult WINAPI control(void *argument) {
+static Os_HostThreadResultType WINAPI control(void *argument)
+{
     uint64_t ticket;
     uint64_t untouched = UINT64_C(42);
     Ecu_BatchCompletion complete;
@@ -108,7 +110,7 @@ static Os_HostThreadResult WINAPI control(void *argument) {
     require(Ecu_TargetPostBatch(UINT64_C(0), frames, 256u, &ticket) == E_OK);
     require(ticket == UINT64_C(1));
     {
-        Os_HostHandle other = Os_HostSpawnObserverThread(intruder, &untouched);
+        Os_HostHandleType other = Os_HostSpawnObserverThread(intruder, &untouched);
         require(other != NULL);
         require(Os_HostWait(other, 5000u) != 0);
         require(Os_HostClose(other) != 0);
@@ -170,7 +172,7 @@ static Os_HostThreadResult WINAPI control(void *argument) {
 }
 
 int main(void) {
-    Os_HostHandle thread;
+    Os_HostHandleType thread;
     require(Ecu_TargetPrepare() == E_OK);
     thread = Os_HostSpawnThread(control, NULL);
     require(thread != NULL);

@@ -2,6 +2,9 @@
 #include "Os_Arti.h"
 #include <assert.h>
 
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+
 static OS_THREAD_LOCAL uint32
     internal_depth; /**< Actor TLS origin depth; CallerSave resets, not Init. */
 static OS_THREAD_LOCAL uint32
@@ -11,16 +14,16 @@ static OS_THREAD_LOCAL StatusType
 void Os_ArtiAccessResult(StatusType status) { access_status = status; }
 sint32 Os_ArtiAccessValid(void) { return access_status == E_OK; }
 StatusType Os_ArtiAccessStatus(void) { return access_status; }
-Os_ArtiCaller Os_ArtiCallerSave(void)
+Os_ArtiCallerType Os_ArtiCallerSave(void)
 {
     const Arti_AddressCapture address = Arti_SaveAddressCapture();
-    const Os_ArtiCaller previous = {internal_depth, service_depth, access_status, address};
+    const Os_ArtiCallerType previous = {internal_depth, service_depth, access_status, address};
     internal_depth = 0u;
     service_depth = 0u;
     access_status = E_OK;
     return previous;
 }
-void Os_ArtiCallerRestore(Os_ArtiCaller caller)
+void Os_ArtiCallerRestore(Os_ArtiCallerType caller)
 {
     internal_depth = caller.internal_depth;
     service_depth = caller.service_depth;
@@ -46,7 +49,7 @@ void Os_ArtiServiceLeave(void)
     --service_depth;
 }
 
-void Os_ArtiTask(Os_ArtiTaskEvent event, TaskType task)
+void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)
 {
     switch (event) {
         case OS_ARTI_TASK_ACTIVATE:
@@ -80,7 +83,7 @@ void Os_ArtiIsr(ISRType isr, sint32 returning)
         ARTI_TRACE(NOSUSP, AR_CP_OS_CAT2ISR, Os, 0u, OsCat2Isr_Start, (uint32)isr);
     }
 }
-void Os_ArtiHook(Os_HookPhase hook, StatusType error, sint32 returning)
+void Os_ArtiHook(Os_HookPhaseType hook, StatusType error, sint32 returning)
 {
     switch (hook) {
         case OS_HOOK_ERROR:
@@ -799,8 +802,11 @@ void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 
 void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address)
 {
-    const uintptr_t native_address = (uintptr_t)address;
+    const uint64 native_address = (uint64)address;
     const uint32 token = (uint32)native_address;
     Arti_CaptureAddress(native_address);
     ARTI_TRACE(SPRVSR, AR_CP_OS_SERVICECALLS, Os, 0u, OsServiceCall_GetAlarmBase_Return, token);
 }
+
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

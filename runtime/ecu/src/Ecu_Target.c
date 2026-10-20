@@ -30,13 +30,13 @@ typedef struct {
 /* C99 checked storage for one complete mailbox payload. */
 typedef Ecu_Input Ecu_MailboxInput[(sizeof(Ecu_Input) <= OS_INPUT_PAYLOAD) ? 1 : -1];
 typedef struct {
-    volatile Os_Atomic32 state;
+    volatile Os_Atomic32Type state;
     Ecu_OutputRecord record;
     uint64_t driver_token;
 } Ecu_OutputSlot;
 
 typedef struct {
-    volatile Os_Atomic32 state;
+    volatile Os_Atomic32Type state;
     Ecu_ProtocolRecord record;
 } Ecu_ProtocolSlot;
 
@@ -49,19 +49,21 @@ typedef struct {
  * Ordinary epoch/cycle/output-writer state is accessed only by the ECU owner.
  * Native reader/confirmation indices are accessed only by the bound producer.
  */
-static volatile Os_Atomic32 lifecycle;    /**< Atomic target lifecycle; Prepare claims zero once. */
-static volatile Os_Atomic32 native_owner; /**< Atomic binding: 0 unbound, 1 writing, 2 ready. */
-static Os_HostThreadId native_thread;     /**< Native identity published by native_owner. */
+static volatile Os_Atomic32Type
+    lifecycle; /**< Atomic target lifecycle; Prepare claims zero once. */
+static volatile Os_Atomic32Type native_owner; /**< Atomic binding: 0 unbound, 1 writing, 2 ready. */
+static Os_HostThreadIdType native_thread;     /**< Native identity published by native_owner. */
 /* Accessed only by the native producer after its atomic identity publication. */
-static uint64_t native_input_epoch;      /**< Native-only last admitted epoch, ms. */
-static uint64_t native_batch_ticket;     /**< Native-only last admitted batch identity. */
-static volatile Os_Atomic32 batch_state; /**< Atomic batch handoff state, 0..5; no Prepare reset. */
+static uint64_t native_input_epoch;  /**< Native-only last admitted epoch, ms. */
+static uint64_t native_batch_ticket; /**< Native-only last admitted batch identity. */
+static volatile Os_Atomic32Type
+    batch_state;                 /**< Atomic batch handoff state, 0..5; no Prepare reset. */
 static uint64_t batch_epoch;     /**< Published batch epoch, ms; protected by batch_state. */
 static uint16_t batch_count;     /**< Published frame count, 0..256; protected by batch_state. */
 static uint8_t batch_needs_tick; /**< Native-published tick flag; batch_state handoff. */
 static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY]; /**< Payload protected by batch_state. */
 static Ecu_BatchCompletion batch_completion;            /**< Result protected by batch_state. */
-static Os_HostThreadId initialization_thread;           /**< Startup writes once before READY. */
+static Os_HostThreadIdType initialization_thread;       /**< Startup writes once before READY. */
 static uint64_t epoch;              /**< Owner-only current logical epoch, ms; initially zero. */
 static uint64_t processed_tick;     /**< Owner-only last processed tick ticket; initially zero. */
 static uint64_t processed_epoch;    /**< Owner-only last processed epoch, ms. */
@@ -82,10 +84,10 @@ static uint8 bootstrap_reached; /**< Startup writes; stopped-owner shutdown read
 
 static void fail(void)
 {
-    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
+    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_FAILED);
     ShutdownOS(E_OS_STATE);
 }
-static Os_Atomic32 load(volatile Os_Atomic32 *value) { return Os_HostAtomicLoad(value); }
+static Os_Atomic32Type load(volatile Os_Atomic32Type *value) { return Os_HostAtomicLoad(value); }
 
 /* Owner-only writer; a full queue closes the target instead of dropping a record. */
 static void record_protocol_failure(EcuStatus status)
@@ -109,15 +111,15 @@ void Ecu_TargetReportTransportTimeout(void)
 }
 uint8_t Ecu_TargetState(void)
 {
-    Os_Atomic32 state = load(&lifecycle);
-    if ((state == (Os_Atomic32)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
+    Os_Atomic32Type state = load(&lifecycle);
+    if ((state == (Os_Atomic32Type)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
         return ECU_TARGET_INITIALIZING;
     }
     return (uint8_t)state;
 }
 int Ecu_TargetIsOwner(void)
 {
-    if (load(&lifecycle) == (Os_Atomic32)ECU_TARGET_INITIALIZING) {
+    if (load(&lifecycle) == (Os_Atomic32Type)ECU_TARGET_INITIALIZING) {
         return (initialization_thread != 0u) && (Os_HostThreadIdentity() == initialization_thread);
     }
     return (Ecu_TargetState() == ECU_TARGET_READY) && (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1);
@@ -130,7 +132,7 @@ void Ecu_TargetAssertOwner(void)
 }
 Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting)
 {
-    const Os_HookPhase phase = Os_HookContext();
+    const Os_HookPhaseType phase = Os_HookContext();
     return (((starting == TRUE) && (phase == OS_HOOK_STARTUP)) ||
             ((starting == FALSE) && (phase == OS_HOOK_SHUTDOWN)))
                ? E_OK
@@ -143,7 +145,7 @@ uint64_t Ecu_TargetNow(void)
 }
 static StatusType native_context(void)
 {
-    Os_Atomic32 owner;
+    Os_Atomic32Type owner;
     if (Ecu_TargetState() != ECU_TARGET_READY) {
         return E_OS_STATE;
     }
@@ -181,12 +183,13 @@ StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record)
 StatusType Ecu_TargetPrepare(void)
 {
     StatusType status;
-    if (Os_HostAtomicCompareExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_INITIALIZING, 0) != 0) {
+    if (Os_HostAtomicCompareExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_INITIALIZING, 0) !=
+        0) {
         return E_OS_STATE;
     }
     status = Os_TargetPrepare(&Ecu_OsConfig);
     if (status != E_OK) {
-        (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
+        (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_FAILED);
     }
     return status;
 }
@@ -207,7 +210,7 @@ void StartupHook(void)
         fail();
         return;
     }
-    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_READY);
+    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_READY);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -215,8 +218,8 @@ void StartupHook(void)
 #include "Os_MemMap.h"
 void ShutdownHook(StatusType Error)
 {
-    Os_Atomic32 state =
-        (Error == E_OK) ? (Os_Atomic32)ECU_TARGET_CLOSED : (Os_Atomic32)ECU_TARGET_FAILED;
+    Os_Atomic32Type state =
+        (Error == E_OK) ? (Os_Atomic32Type)ECU_TARGET_CLOSED : (Os_Atomic32Type)ECU_TARGET_FAILED;
     Ecu_StackRetire(bootstrap_reached);
     (void)Os_HostAtomicExchange(&lifecycle, state);
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
@@ -238,7 +241,7 @@ StatusType Ecu_TargetPostFrame(
     }
     status = native_context();
     if (status == E_OK) {
-        Os_TickCompletion completed;
+        Os_TickCompletionType completed;
         if (at < native_input_epoch) {
             return E_OS_VALUE;
         }
@@ -262,7 +265,7 @@ StatusType Ecu_TargetPostFrame(
     }
     return status;
 }
-static StatusType batch_time(uint64_t at, Os_TickCompletion *completed)
+static StatusType batch_time(uint64_t at, Os_TickCompletionType *completed)
 {
     StatusType status;
     if (at < native_input_epoch) {
@@ -297,7 +300,7 @@ StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count
 void Ecu_TargetAbortNative(StatusType reason)
 {
     StatusType failure = (reason == E_OK) ? E_OS_STATE : reason;
-    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32)ECU_TARGET_FAILED);
+    (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_FAILED);
     Os_BackendRequestShutdown(failure);
     /* Fault controllers normally close first; blocked host IO must not keep
      * this failed process alive after the native watchdog has expired. */
@@ -309,7 +312,7 @@ StatusType Ecu_TargetPostBatch(uint64_t at,
                                uint16_t count,
                                uint64_t *ticket)
 {
-    Os_TickCompletion completed;
+    Os_TickCompletionType completed;
     Ecu_Input input = {0};
     uint64_t mailbox_ticket;
     StatusType status;
@@ -553,7 +556,7 @@ void Ecu_TargetTask(void)
     const EventMaskType mask = ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP | ECU_TARGET_EVENT_IO;
     for (;;) {
         EventMaskType events;
-        Os_InputRecord record;
+        Os_InputRecordType record;
         uint64_t ticket;
         uint64_t delivered;
         unsigned count;

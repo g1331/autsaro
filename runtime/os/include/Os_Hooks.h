@@ -3,7 +3,8 @@
 #define AUTOSAR_OS_HOOKS_H
 #include "Os_Types.h"
 #include "Os_Cfg.h"
-/** Static optional ErrorHook/Task-hook bindings, retained with Os_TargetConfig for the process. */
+/** Static optional ErrorHook/Task-hook bindings, retained with Os_TargetConfigType for the process.
+ */
 typedef struct {
     void (*error)(
         StatusType Error); /**< Optional failed-service callback, valid for the process lifetime. */
@@ -11,7 +12,7 @@ typedef struct {
         void); /**< Optional callback before a Task runs, valid for the process lifetime. */
     void (*post_task)(void); /**< Optional callback before a Task leaves RUNNING, valid for the
                                 process lifetime. */
-} Os_HookConfig;
+} Os_HookConfigType;
 /** Current logical actor hook phase; NONE means ordinary execution, ALARM an AlarmCallback. */
 typedef enum {
     OS_HOOK_NONE = 0, /**< Ordinary actor execution, outside a hook. */
@@ -21,7 +22,7 @@ typedef enum {
     OS_HOOK_STARTUP,  /**< Current StartupHook invocation. */
     OS_HOOK_SHUTDOWN, /**< Current ShutdownHook invocation. */
     OS_HOOK_ALARM     /**< Current AlarmCallback invocation. */
-} Os_HookPhase;
+} Os_HookPhaseType;
 #define OSServiceId_Unknown                                                                        \
     ((OSServiceIdType)0u) /**< No active failed-service identity. OSEK OS 2.2.3 13.8.3. */
 #define OSServiceId_GetISRID                                                                       \
@@ -267,7 +268,7 @@ typedef union {
         ScheduleTableStatusRefType
             ScheduleStatus; /**< Original table-state output pointer; may be NULL on refusal. */
     } service_GetScheduleTableStatus; /**< Failed GetScheduleTableStatus parameter snapshot. */
-} Os_ErrorParameters;
+} Os_ErrorParametersType;
 /** Current failed-service snapshot; meaningful only within ErrorHook.
  * @return Current failed-service arguments, or the immutable empty snapshot outside ErrorHook.
  * Preconditions: called while ErrorHook is active; otherwise returns an empty snapshot.
@@ -276,7 +277,7 @@ typedef union {
  * Ownership: returned pointer is borrowed only for the current ErrorHook; never modify or retain
  * it.
  */
-const Os_ErrorParameters *Os_ErrorParametersCurrent(void);
+const Os_ErrorParametersType *Os_ErrorParametersCurrent(void);
 /** Current failed standard-service identity; meaningful only within ErrorHook.
  * @return Current failed-service identifier, or OSServiceId_Unknown outside ErrorHook.
  * Preconditions: called while ErrorHook is active; otherwise returns OSServiceId_Unknown.

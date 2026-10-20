@@ -15,6 +15,9 @@ ISR(ParentISR);
 ISR(ChildISR);
 ALARMCALLBACK(AlarmBody);
 
+static const uint8 task_name_0[] = "OwnerTask";  /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "WorkerTask"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static unsigned parents;     /**< Parents observations; fixture-owned, no Init reset. */
 static unsigned children;    /**< Children observations; fixture-owned, no Init reset. */
@@ -142,9 +145,9 @@ int main(int argc, char **argv)
 {
     check(argc == 2);
     scenario = argv[1];
-    Os_TaskConfig tasks[] = {
+    Os_TaskConfigType tasks[] = {
         {OwnerTask,
-         "OwnerTask",
+         task_name_0,
          OS_TASK_ENTRY(OwnerTask),
          10u,
          1u,
@@ -153,7 +156,7 @@ int main(int argc, char **argv)
          OS_SCHEDULE_FULL,
          0u},
         {WorkerTask,
-         "WorkerTask",
+         task_name_1,
          OS_TASK_ENTRY(WorkerTask),
          15u,
          0u,
@@ -162,15 +165,16 @@ int main(int argc, char **argv)
          OS_SCHEDULE_FULL,
          0u},
     };
-    const Os_ResourceConfig resource = {0u, 2u, 3u, UINT32_C(1) << 5u, 0u, 0u};
-    const Os_CounterConfig counter = {0u, 15u, 1u, 1u, 1u};
-    const Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_CALLBACK, 0u, 0u, AlarmBody, 0u, 0u, 0u, 0u, 0u};
-    const Os_TimeConfig time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
-    const Os_HookConfig hooks = {ErrorHook, NULL, NULL};
-    Os_IsrEntry entries[OS_MAX_INTERRUPTS] = {[5u] = OS_ISR_ENTRY(ParentISR),
-                                              [6u] = OS_ISR_ENTRY(ChildISR)};
-    Os_IsrConfig interrupts = {.priorities = {[5u] = 1u, [6u] = 2u}, .entries = entries};
-    Os_TargetConfig target = {
+    const Os_ResourceConfigType resource = {0u, 2u, 3u, UINT32_C(1) << 5u, 0u, 0u};
+    const Os_CounterConfigType counter = {0u, 15u, 1u, 1u, 1u};
+    const Os_AlarmConfigType alarm = {
+        0u, 0u, OS_ALARM_CALLBACK, 0u, 0u, AlarmBody, 0u, 0u, 0u, 0u, 0u};
+    const Os_TimeConfigType time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
+    const Os_HookConfigType hooks = {ErrorHook, NULL, NULL};
+    Os_IsrEntryType entries[OS_MAX_INTERRUPTS] = {[5u] = OS_ISR_ENTRY(ParentISR),
+                                                  [6u] = OS_ISR_ENTRY(ChildISR)};
+    Os_IsrConfigType interrupts = {.priorities = {[5u] = 1u, [6u] = 2u}, .entries = entries};
+    Os_TargetConfigType target = {
         tasks, 2u, 262144u, &resource, 1u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, &interrupts, 0u};
     if (is("invalid-priority")) {
         interrupts.priorities[5u] = 0u;

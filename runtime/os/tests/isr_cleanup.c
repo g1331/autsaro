@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "owner";  /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "helper"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario;   /**< Main-owned scenario selection before StartOS; no Init reset. */
 static unsigned errors;        /**< Observed checks/errors; fixture-owned, no Init reset. */
 static unsigned probes;        /**< Probes observations; fixture-owned, no Init reset. */
@@ -133,11 +136,11 @@ int main(int argc, char **argv)
 {
     check(argc == 2);
     scenario = argv[1];
-    const Os_TaskConfig tasks[2] = {
-        {0u, "owner", owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "helper", helper, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+    const Os_TaskConfigType tasks[2] = {
+        {0u, task_name_0, owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, helper, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
-    const Os_ResourceConfig resources[7] = {
+    const Os_ResourceConfigType resources[7] = {
         {0u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
         {1u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
         {2u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
@@ -146,21 +149,21 @@ int main(int argc, char **argv)
         {5u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
         {6u, 31u, 3u, (UINT32_C(1) << 5u) | (UINT32_C(1) << 6u), 0u, 0u},
     };
-    const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {tasks,
-                                    2u,
-                                    262144u,
-                                    resources,
-                                    strcmp(scenario, "maximum") == 0 ? 7u : 2u,
-                                    NULL,
-                                    0u,
-                                    0u,
-                                    0u,
-                                    0u,
-                                    NULL,
-                                    strncmp(scenario, "unconfigured", 12u) == 0 ? NULL : &hooks,
-                                    NULL,
-                                    0u};
+    const Os_HookConfigType hooks = {&ErrorHook, NULL, NULL};
+    const Os_TargetConfigType target = {tasks,
+                                        2u,
+                                        262144u,
+                                        resources,
+                                        strcmp(scenario, "maximum") == 0 ? 7u : 2u,
+                                        NULL,
+                                        0u,
+                                        0u,
+                                        0u,
+                                        0u,
+                                        NULL,
+                                        strncmp(scenario, "unconfigured", 12u) == 0 ? NULL : &hooks,
+                                        NULL,
+                                        0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

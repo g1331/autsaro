@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "E"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "M"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_2[] = "H"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static volatile LONG
     producer_done; /**< Atomic native/OS handoff producer done; fixture-owned, no Init reset. */
@@ -34,7 +38,7 @@ static uint64_t
 static uint32_t
     initial_kernel;    /**< Main-owned initial kernel selection before StartOS; no Init reset. */
 static unsigned steps; /**< Main-owned steps selection before StartOS; no Init reset. */
-static Os_TickCompletion
+static Os_TickCompletionType
     boundary[3];    /**< Producer-owned completion snapshots; producer-owned, no Init reset. */
 static bool manual; /**< Main-owned manual selection before StartOS; no Init reset. */
 static unsigned
@@ -238,8 +242,8 @@ static void manual_alarms(void)
         check(callbacks == 0u);
         check(CancelAlarm(0u) == E_OK);
     } else if (strcmp(scenario, "action-error") == 0) {
-        Os_ActivationInfo before;
-        Os_ActivationInfo after;
+        Os_ActivationInfoType before;
+        Os_ActivationInfoType after;
         check(ActivateTask(2u) == E_OK);
         check(Os_TargetInspectActivation(2u, &before) == E_OK);
         check(SetRelAlarm(0u, 1u, 0u) == E_OK);
@@ -347,7 +351,7 @@ static DWORD WINAPI requester(void *argument)
     native_check(ticket == initial_epoch);
     Sleep(5u);
     {
-        Os_TickCompletion value;
+        Os_TickCompletionType value;
         native_check(Os_TargetTickCompletion(ticket, &value) == E_OK);
         native_check(value.kernel_tick == initial_kernel);
     }
@@ -356,7 +360,7 @@ static DWORD WINAPI requester(void *argument)
     native_check(ticket == UINT64_C(777));
     for (i = 1u; i <= steps; ++i) {
         uint64_t epoch = initial_epoch + (uint64_t)i;
-        Os_TickCompletion record = {0};
+        Os_TickCompletionType record = {0};
         native_check(Os_TargetAdvanceOneTick(epoch, &ticket) == E_OK);
         native_check(ticket == epoch);
         if (i == 1u && (strncmp(scenario, "tick-mask-", 10u) == 0 ||
@@ -440,7 +444,7 @@ static void owner(void)
     {
         uint64_t ticket = UINT64_C(777);
         uint64_t epoch = UINT64_C(888);
-        Os_TickCompletion record = {0};
+        Os_TickCompletionType record = {0};
         record.ticket = UINT64_C(777);
         check(Os_TargetAdvanceOneTick(1u, &ticket) == E_OS_CALLEVEL);
         check(ticket == UINT64_C(777));
@@ -550,7 +554,7 @@ static void monitor(void)
         Sleep(1u);
     }
     {
-        Os_ActivationInfo value;
+        Os_ActivationInfoType value;
         check(Os_TargetInspectActivation(0u, &value) == E_OK);
         check((value.state == (manual ? SUSPENDED : WAITING)) &&
               (value.count == (manual ? 0u : 1u)) && (eTaskGetState(owner_handle) == eSuspended));
@@ -637,15 +641,15 @@ void ShutdownHook(StatusType Error)
 }
 int main(int argc, char **argv)
 {
-    Os_TaskConfig tasks[] = {
-        {0u, "E", owner, 2u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {2u, "H", alarm_task, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_CounterConfig counters[] = {{0u, 65535u, 1u, 1u, 1u}, {1u, 15u, 1u, 1u, 0u}};
-    Os_AlarmConfig alarms[] = {{0u, 0u, OS_ALARM_EVENT, 0u, 1u, NULL, 1u, 0u, 1u, 1u, 0u},
-                               {1u, 0u, OS_ALARM_EVENT, 0u, 2u, NULL, 1u, 0u, 10u, 10u, 0u}};
-    Os_TimeConfig time = {counters, 1u, alarms, 2u, 0u, 0u, 4u, NULL, NULL, 0u};
-    Os_TargetConfig config = {
+    Os_TaskConfigType tasks[] = {
+        {0u, task_name_0, owner, 2u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {2u, task_name_2, alarm_task, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    Os_CounterConfigType counters[] = {{0u, 65535u, 1u, 1u, 1u}, {1u, 15u, 1u, 1u, 0u}};
+    Os_AlarmConfigType alarms[] = {{0u, 0u, OS_ALARM_EVENT, 0u, 1u, NULL, 1u, 0u, 1u, 1u, 0u},
+                                   {1u, 0u, OS_ALARM_EVENT, 0u, 2u, NULL, 1u, 0u, 10u, 10u, 0u}};
+    Os_TimeConfigType time = {counters, 1u, alarms, 2u, 0u, 0u, 4u, NULL, NULL, 0u};
+    Os_TargetConfigType config = {
         tasks, 3u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL, 0u};
     scenario = (argc == 2) ? argv[1] : "thousand";
     steps = (strcmp(scenario, "thousand") == 0) ? 1000u : 1u;

@@ -5,11 +5,11 @@
 #include "Os_Host.h"
 
 typedef struct {
-    Os_HostHandle cancel;
+    Os_HostHandleType cancel;
     uint64_t started;
 } Ecu_HostWatch;
 
-static Os_HostThreadResult watch(void *argument)
+static Os_HostThreadResultType watch(void *argument)
 {
     const Ecu_HostWatch *control = (const Ecu_HostWatch *)argument;
     uint64_t elapsed = Os_HostMonotonicMs() - control->started;
@@ -74,7 +74,7 @@ static void tick(Ecu_HostBatch *batch,
                  const Ecu_HostWatch *control)
 {
     uint64_t ticket;
-    Os_TickCompletion result;
+    Os_TickCompletionType result;
     require(Os_TargetAdvanceOneTick(at, &ticket) == E_OK);
     for (;;) {
         StatusType status;
@@ -132,8 +132,8 @@ static StatusType admit_batch(const Ecu_HostBatch *batch)
 StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
 {
     Ecu_HostWatch control;
-    Os_HostHandle monitor;
-    Os_TickCompletion previous;
+    Os_HostHandleType monitor;
+    Os_TickCompletionType previous;
     Ecu_BatchCompletion completed;
     uint64_t at;
     uint64_t ticket;

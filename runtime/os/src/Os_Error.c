@@ -1,23 +1,26 @@
 /** @file Hook invocation and ErrorHook context kept separately for each actor. */
 #include "Os_Backend.h"
 
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+
 /* The fixed GCC/Win64 target uses the same native PE TLS ABI as Os_Stack.c.
  * Each actor keeps its own callback phase and typed snapshot; a failed call
  * from inside ErrorHook never recursively enters or overwrites that snapshot. */
-static OS_THREAD_LOCAL Os_HookPhase
+static OS_THREAD_LOCAL Os_HookPhaseType
     phase; /**< Actor TLS hook phase; context save/restore, no Init reset. */
 static OS_THREAD_LOCAL OSServiceIdType
     service_id; /**< Actor TLS failed-service identity; no Init reset. */
-static OS_THREAD_LOCAL Os_ErrorParameters
+static OS_THREAD_LOCAL Os_ErrorParametersType
     parameters;                           /**< Actor TLS ErrorHook snapshot; no Init reset. */
 static OS_THREAD_LOCAL uint32 hook_depth; /**< Actor TLS hook nesting count; no Init reset. */
 static OS_THREAD_LOCAL sint32
     error_active; /**< Actor TLS ErrorHook recursion guard; no Init reset. */
-static const Os_ErrorParameters empty_parameters = {
+static const Os_ErrorParametersType empty_parameters = {
     .service_TerminateTask = {0u}}; /**< C-initialized immutable empty snapshot; no Init writes. */
 sint32 Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
 
-void Os_ErrorContextSave(Os_ErrorContext *context)
+void Os_ErrorContextSave(Os_ErrorContextType *context)
 {
     context->phase = phase;
     context->service = service_id;
@@ -27,7 +30,7 @@ void Os_ErrorContextSave(Os_ErrorContext *context)
     service_id = OSServiceId_Unknown;
     parameters = empty_parameters;
 }
-void Os_ErrorContextRestore(const Os_ErrorContext *context)
+void Os_ErrorContextRestore(const Os_ErrorContextType *context)
 {
     phase = context->phase;
     service_id = context->service;
@@ -35,7 +38,7 @@ void Os_ErrorContextRestore(const Os_ErrorContext *context)
     Os_ArtiCallerRestore(context->arti);
 }
 
-Os_HookPhase Os_HookContext(void) { return phase; }
+Os_HookPhaseType Os_HookContext(void) { return phase; }
 sint32 Os_HookQueryContext(void)
 {
     return (phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST);
@@ -69,7 +72,7 @@ sint32 Os_ErrorHookConfigured(void)
 StatusType Os_ServiceAccessStatus(OSServiceIdType service)
 {
     StatusType result = E_OK;
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 interrupt = Os_BackendCurrentInterrupt();
     if (Os_InterruptDisabled() != 0) {
         result = E_OS_DISABLEDINT;
@@ -87,7 +90,7 @@ StatusType Os_ServiceAccessStatus(OSServiceIdType service)
     Os_ArtiAccessResult(result);
     return result;
 }
-const Os_ErrorParameters *Os_ErrorParametersCurrent(void)
+const Os_ErrorParametersType *Os_ErrorParametersCurrent(void)
 {
     return (phase == OS_HOOK_ERROR) ? &parameters : &empty_parameters;
 }
@@ -97,12 +100,12 @@ OSServiceIdType Os_ErrorServiceId(void)
 }
 StatusType Os_ErrorResult(OSServiceIdType service,
                           StatusType status,
-                          const Os_ErrorParameters *arguments)
+                          const Os_ErrorParametersType *arguments)
 {
     if ((status != E_OK) && (error_active == 0) && (Os_ErrorHookConfigured() != 0) &&
         (Os_StackCurrent() != NULL) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
-        const Os_HookPhase previous = phase;
-        const Os_NativeStack *stack = Os_StackCurrent();
+        const Os_HookPhaseType previous = phase;
+        const Os_NativeStackType *stack = Os_StackCurrent();
         const sint32 isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
         /* The native ISR dispatcher already owns the interrupt mutex. Do not
          * introduce an extra kernel critical level around an ISR ErrorHook.
@@ -116,7 +119,7 @@ StatusType Os_ErrorResult(OSServiceIdType service,
         phase = OS_HOOK_ERROR;
         ++hook_depth;
         error_active = 1;
-        const Os_ArtiCaller arti = Os_ArtiCallerSave();
+        const Os_ArtiCallerType arti = Os_ArtiCallerSave();
         Os_ArtiHook(OS_HOOK_ERROR, status, 0);
         Os_Config->hooks->error(status);
         Os_ArtiHook(OS_HOOK_ERROR, status, 1);
@@ -135,15 +138,15 @@ StatusType Os_ErrorResult(OSServiceIdType service,
     }
     return status;
 }
-void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected)
+void Os_HookInvoke(void (*hook)(void), Os_HookPhaseType selected)
 {
     if (hook != NULL) {
-        const Os_HookPhase previous = phase;
+        const Os_HookPhaseType previous = phase;
         taskENTER_CRITICAL();
         Os_BackendGuardService();
         phase = selected;
         ++hook_depth;
-        const Os_ArtiCaller arti = Os_ArtiCallerSave();
+        const Os_ArtiCallerType arti = Os_ArtiCallerSave();
         Os_ArtiHook(selected, E_OK, 0);
         hook();
         Os_ArtiHook(selected, E_OK, 1);
@@ -156,14 +159,17 @@ void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected)
 }
 void Os_ShutdownHookInvoke(StatusType error)
 {
-    const Os_HookPhase previous = phase;
+    const Os_HookPhaseType previous = phase;
     /* Closing runs on the established healthy controller. Never acquire the
      * ordinary port mutex: a suspended or damaged automotive actor may own it. */
     phase = OS_HOOK_SHUTDOWN;
-    const Os_ArtiCaller arti = Os_ArtiCallerSave();
+    const Os_ArtiCallerType arti = Os_ArtiCallerSave();
     Os_ArtiHook(OS_HOOK_SHUTDOWN, error, 0);
     ShutdownHook(error);
     Os_ArtiHook(OS_HOOK_SHUTDOWN, error, 1);
     Os_ArtiCallerRestore(arti);
     phase = previous;
 }
+
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

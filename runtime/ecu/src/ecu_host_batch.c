@@ -82,7 +82,7 @@ static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length)
     return 1;
 }
 
-static Os_HostThreadResult control(void *argument)
+static Os_HostThreadResultType control(void *argument)
 {
     uint64_t started = Os_HostMonotonicMs();
     char line[ECU_BATCH_LINE_CAPACITY];
@@ -124,7 +124,7 @@ static Os_HostThreadResult control(void *argument)
 
 int main(void)
 {
-    Os_HostHandle thread;
+    Os_HostHandleType thread;
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;
     }

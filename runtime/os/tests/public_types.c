@@ -13,6 +13,7 @@
 #if defined(OS_PUBLIC_TYPES_HOST_AFTER) && (OS_PUBLIC_TYPES_HOST_AFTER == STD_ON)
 #include "Os_Host.h"
 #endif
+#include "Os_Target.h"
 #include <stdio.h>
 
 /* Independent consumer constraints from R24-11 sections 8.3.1/8.3.18/8.3.19
@@ -23,6 +24,23 @@ typedef char SpinlockRange[(sizeof(SpinlockIdType) >= 2u) ? 1 : -1];
 typedef char AreaRange[(sizeof(AreaIdType) >= 2u) ? 1 : -1];
 typedef char CounterRange[(sizeof(CounterType) == 4u) ? 1 : -1];
 typedef char MicrosecondsRange[(sizeof(TimeInMicrosecondsType) == 8u) ? 1 : -1];
+
+/* Verifies: SWS_BSW_00120 [Os], SWS_Os_00781. Integration ABI expectations
+ * are fixed independently of the implementation's choice of count typedef. */
+typedef char TaskCountWidth[(sizeof(((Os_TargetConfigType *)0)->task_count) == 4u) ? 1 : -1];
+typedef char
+    ResourceCountWidth[(sizeof(((Os_TargetConfigType *)0)->resource_count) == 4u) ? 1 : -1];
+typedef char InternalCountWidth[(sizeof(((Os_TargetConfigType *)0)->internal_resource_count) == 4u)
+                                    ? 1
+                                    : -1];
+typedef char CounterCountWidth[(sizeof(((Os_TimeConfigType *)0)->counter_count) == 4u) ? 1 : -1];
+typedef char AlarmCountWidth[(sizeof(((Os_TimeConfigType *)0)->alarm_count) == 4u) ? 1 : -1];
+typedef char
+    TableCountWidth[(sizeof(((Os_TimeConfigType *)0)->schedule_table_count) == 4u) ? 1 : -1];
+typedef char
+    PointCountWidth[(sizeof(((Os_ScheduleTableConfigType *)0)->point_count) == 4u) ? 1 : -1];
+typedef char ActionCountWidth[(sizeof(((Os_ExpiryPointType *)0)->action_count) == 4u) ? 1 : -1];
+typedef char MemorySizeWidth[(sizeof(MemorySizeType) == 8u) ? 1 : -1];
 
 int main(void)
 {

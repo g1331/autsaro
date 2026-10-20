@@ -9,7 +9,7 @@
 #ifndef OS_STATUS_EXTENDED
 #define OS_STATUS_EXTENDED STD_ON
 #endif
-#if (OS_STATUS_EXTENDED != 0) && (OS_STATUS_EXTENDED != 1)
+#if (OS_STATUS_EXTENDED != STD_OFF) && (OS_STATUS_EXTENDED != STD_ON)
 #error Invalid OS status configuration
 #endif
 /* The fixed reference ECU selects both standard error-access switches.
@@ -22,8 +22,8 @@
 #ifndef OS_USE_PARAMETER_ACCESS
 #define OS_USE_PARAMETER_ACCESS STD_ON
 #endif
-#if ((OS_USE_GET_SERVICE_ID != 0) && (OS_USE_GET_SERVICE_ID != 1)) ||                              \
-    ((OS_USE_PARAMETER_ACCESS != 0) && (OS_USE_PARAMETER_ACCESS != 1))
+#if ((OS_USE_GET_SERVICE_ID != STD_OFF) && (OS_USE_GET_SERVICE_ID != STD_ON)) ||                   \
+    ((OS_USE_PARAMETER_ACCESS != STD_OFF) && (OS_USE_PARAMETER_ACCESS != STD_ON))
 #error Invalid OS error-access configuration
 #endif
 #endif

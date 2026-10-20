@@ -4,6 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "E"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "P"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_2[] = "M"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_3[] = "N"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static TaskHandle_t observed[4]; /**< Observed Task handles; fixture-owned, no Init reset. */
 static unsigned checks;          /**< Executed assertions; fixture-owned, no Init reset. */
@@ -45,7 +50,7 @@ void Os_TestObserve(void)
 {
     unsigned i;
     for (i = 0u; i < 4u; ++i) {
-        Os_ActivationInfo value;
+        Os_ActivationInfoType value;
         eTaskState state = eTaskGetState(observed[i]);
         check(Os_TargetInspectActivation((TaskType)i, &value) == E_OK);
         if (value.waiting != 0u) {
@@ -110,7 +115,7 @@ static DWORD WINAPI producer_thread(void *argument)
             uint8_t data = 99u;
             uint64_t ticket = UINT64_C(777);
             EventMaskType mask = 123u;
-            Os_InputRecord record = {0};
+            Os_InputRecordType record = {0};
             unsigned count = 777u;
             HANDLE handle;
             DWORD result;
@@ -159,7 +164,7 @@ static void publish(unsigned count)
 }
 static void drain(void)
 {
-    Os_InputRecord value;
+    Os_InputRecordType value;
     StatusType status = Os_TargetTakeInput(&value);
     while (status == E_OK) {
         check(value.length == 2u);
@@ -295,8 +300,8 @@ static void owner(void)
         check(bits(0u) == 0u);
         Os_TargetTrace('n');
     } else if (strcmp(scenario, "errors") == 0) {
-        Os_ActivationInfo before;
-        Os_ActivationInfo after;
+        Os_ActivationInfoType before;
+        Os_ActivationInfoType after;
         check(Os_TargetInspectActivation(0u, &before) == E_OK);
         refuse(SetEvent(15u, 1u), E_OS_ID);
         refuse(GetEvent(15u, &output), E_OS_ID);
@@ -336,7 +341,7 @@ static void peer(void)
 {
     Os_TargetTrace('P');
     if (strcmp(scenario, "mailbox-api") == 0) {
-        Os_InputRecord record = {0};
+        Os_InputRecordType record = {0};
         unsigned count = 777u;
         record.ticket = UINT64_C(777);
         refuse(Os_TargetTakeInput(&record), E_OS_ACCESS);
@@ -382,7 +387,7 @@ void StartupHook(void)
 {
     unsigned i;
     for (i = 0u; i < 4u; ++i) {
-        observed[i] = xTaskGetHandle(Os_Config->tasks[i].name);
+        observed[i] = xTaskGetHandle((const char *)Os_Config->tasks[i].name);
     }
     vPortSetInterruptHandler(29u, interrupt);
     vPortSetInterruptHandler(31u, interrupt);
@@ -418,26 +423,26 @@ void ShutdownHook(StatusType Error)
 }
 int main(int argc, char **argv)
 {
-    Os_TaskConfig tasks[] = {
-        {0u, "E", owner, 3u, 3u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "P", peer, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {2u, "M", monitor, 1u, 3u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {3u, "N", inactive, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_ResourceConfig resource = {0u, 31u, 1u, UINT32_C(1) << 29u, 0u, 0u};
-    Os_TargetConfig config = {tasks,
-                              4u,
-                              262144u,
-                              &resource,
-                              1u,
-                              NULL,
-                              0u,
-                              UINT32_C(1) << 31u,
-                              0u,
-                              0u,
-                              NULL,
-                              NULL,
-                              NULL,
-                              0u};
+    Os_TaskConfigType tasks[] = {
+        {0u, task_name_0, owner, 3u, 3u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, peer, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {2u, task_name_2, monitor, 1u, 3u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {3u, task_name_3, inactive, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    Os_ResourceConfigType resource = {0u, 31u, 1u, UINT32_C(1) << 29u, 0u, 0u};
+    Os_TargetConfigType config = {tasks,
+                                  4u,
+                                  262144u,
+                                  &resource,
+                                  1u,
+                                  NULL,
+                                  0u,
+                                  UINT32_C(1) << 31u,
+                                  0u,
+                                  0u,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  0u};
     scenario = (argc == 2) ? argv[1] : "already";
     mailbox = strncmp(scenario, "mailbox-", 8u) == 0;
     if (strcmp(scenario, "oracle-wait") == 0) {

@@ -6,6 +6,14 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "L"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "A"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_2[] = "B"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_3[] = "H"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_4[] = "D"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_5[] = "E"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_6[] = "M"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static TaskHandle_t observed[7]; /**< Observed Task handles; fixture-owned, no Init reset. */
 static unsigned entries[7];      /**< Entries observations; fixture-owned, no Init reset. */
@@ -13,7 +21,7 @@ static unsigned
     observations;            /**< Recorded scheduling observations; fixture-owned, no Init reset. */
 static unsigned rejected;    /**< Rejected service observations; fixture-owned, no Init reset. */
 static bool chain_committed; /**< Observed successful chain commit; fixture-owned, no Init reset. */
-static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b)
+static bool same_info(const Os_ActivationInfoType *a, const Os_ActivationInfoType *b)
 {
     unsigned i;
     bool same = (a->state == b->state) && (a->count == b->count) &&
@@ -40,7 +48,7 @@ void Os_TestObserve(void)
     unsigned i;
     ++observations;
     for (i = 0u; i < 7u; ++i) {
-        Os_ActivationInfo info;
+        Os_ActivationInfoType info;
         eTaskState actual = eTaskGetState(observed[i]);
         check(Os_TargetInspectActivation((TaskType)i, &info) == E_OK);
         check(info.state ==
@@ -58,8 +66,8 @@ void Os_TestObserve(void)
 }
 static void reject_finish(TaskType target, bool terminate, StatusType expected)
 {
-    Os_ActivationInfo before[7];
-    Os_ActivationInfo after;
+    Os_ActivationInfoType before[7];
+    Os_ActivationInfoType after;
     unsigned i;
     for (i = 0u; i < 7u; ++i) {
         check(Os_TargetInspectActivation((TaskType)i, &before[i]) == E_OK);
@@ -169,7 +177,7 @@ static void launcher(void)
 static void task_a(void)
 {
     volatile unsigned local = 0x12345678u;
-    Os_ActivationInfo info;
+    Os_ActivationInfoType info;
     char marker;
     ++entries[1];
     check(local == 0x12345678u);
@@ -236,7 +244,7 @@ static void task_a(void)
 }
 static void check_source_ended(void)
 {
-    Os_ActivationInfo info;
+    Os_ActivationInfoType info;
     check(Os_TargetInspectActivation(1u, &info) == E_OK);
     if (strncmp(scenario, "boundary-", 9u) == 0) {
         /* ISR accepted A#2 after Chain; the completed A#1 order3 is gone. */
@@ -289,7 +297,7 @@ static void monitor(void)
 {
     unsigned i;
     for (i = 0u; i < 6u; ++i) {
-        Os_ActivationInfo info;
+        Os_ActivationInfoType info;
         check(Os_TargetInspectActivation((TaskType)i, &info) == E_OK);
         check((info.count == 0u) && (info.state == SUSPENDED) && (info.resource_count == 0u));
     }
@@ -298,15 +306,16 @@ static void monitor(void)
 }
 int main(int argc, char **argv)
 {
-    Os_TaskConfig tasks[] = {{0u, "L", launcher, 6u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {1u, "A", task_a, 3u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
-                             {2u, "B", task_b, 3u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
-                             {3u, "H", task_h, 4u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {4u, "D", task_d, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {5u, "E", task_e, 3u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {6u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_ResourceConfig resources[] = {{0u, 5u, 10u, 0u, 0u, 0u}, {1u, 5u, 10u, 0u, 0u, 0u}};
-    Os_TargetConfig config = {
+    Os_TaskConfigType tasks[] = {
+        {0u, task_name_0, launcher, 6u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, task_a, 3u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
+        {2u, task_name_2, task_b, 3u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
+        {3u, task_name_3, task_h, 4u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {4u, task_name_4, task_d, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {5u, task_name_5, task_e, 3u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {6u, task_name_6, monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    Os_ResourceConfigType resources[] = {{0u, 5u, 10u, 0u, 0u, 0u}, {1u, 5u, 10u, 0u, 0u, 0u}};
+    Os_TargetConfigType config = {
         tasks, 7u, 262144u, resources, 1u, NULL, 0u, 0u, 0u, 0u, NULL, NULL, NULL, 0u};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "terminate-pending";

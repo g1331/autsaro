@@ -7,7 +7,7 @@ Arti_Event Arti_Events[ARTI_EVENT_CAPACITY]; /**< Reserved slots, atomically pub
 volatile ArtiAtomic32 Arti_EventCount;       /**< Atomic slot reservations; Arti_Init resets. */
 volatile ArtiAtomic32 Arti_EventsDropped;    /**< Atomic saturated drop count; Arti_Init resets. */
 volatile ArtiAtomic32 Arti_DevelopmentError; /**< Atomic latest tool error; Arti_Init resets. */
-static __thread Arti_AddressCapture
+static OS_HOST_THREAD_LOCAL Arti_AddressCapture
     captured_address; /**< Actor TLS capture; Arti_Init clears calling-actor validity. */
 void Arti_CaptureAddress(uintptr_t address)
 {

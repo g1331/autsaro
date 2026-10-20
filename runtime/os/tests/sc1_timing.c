@@ -9,6 +9,11 @@ typedef struct {
     CounterType counter;
     TickType value;
 } Observation;
+static const uint8 task_name_0[] = "Owner"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "A";     /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_2[] = "E";     /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_3[] = "B";     /**< Process-lifetime Task name bytes. */
+
 static Observation
     observations[256]; /**< Recorded scheduling observations; fixture-owned, no Init reset. */
 static unsigned
@@ -341,48 +346,48 @@ void ShutdownHook(StatusType error)
 }
 int main(int argc, char **argv)
 {
-    Os_TaskConfig tasks[] = {
-        {0u, "Owner", owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "A", task_a, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {2u, "E", task_e, 21u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {3u, "B", task_b, 19u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_CounterConfig counters[9];
-    Os_AlarmConfig alarms[] = {
+    Os_TaskConfigType tasks[] = {
+        {0u, task_name_0, owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, task_a, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {2u, task_name_2, task_e, 21u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {3u, task_name_3, task_b, 19u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    Os_CounterConfigType counters[9];
+    Os_AlarmConfigType alarms[] = {
         {0u, 2u, OS_ALARM_INCREMENT_COUNTER, 0u, 0u, NULL, 0u, 0u, 1u, 1u, 3u},
         {1u, 3u, OS_ALARM_INCREMENT_COUNTER, 0u, 0u, NULL, 0u, 0u, 1u, 1u, 4u}};
-    Os_ExpiryAction activate_a[] = {{OS_ALARM_ACTIVATE, 1u, 0u}};
-    Os_ExpiryAction set_e[] = {{OS_ALARM_EVENT, 2u, 1u}};
-    const Os_ExpiryAction activate_b[] = {{OS_ALARM_ACTIVATE, 3u, 0u}};
-    const Os_ExpiryAction same[] = {{OS_ALARM_EVENT, 2u, 1u}, {OS_ALARM_ACTIVATE, 2u, 0u}};
-    Os_ExpiryPoint points[] = {{1u, activate_a, 1u}, {3u, set_e, 1u}};
-    const Os_ExpiryPoint zero_point[] = {{0u, activate_a, 1u}};
-    const Os_ExpiryPoint bpoints[] = {{1u, activate_b, 1u}};
-    Os_ScheduleTableConfig tables[9] = {
+    Os_ExpiryActionType activate_a[] = {{OS_ALARM_ACTIVATE, 1u, 0u}};
+    Os_ExpiryActionType set_e[] = {{OS_ALARM_EVENT, 2u, 1u}};
+    const Os_ExpiryActionType activate_b[] = {{OS_ALARM_ACTIVATE, 3u, 0u}};
+    const Os_ExpiryActionType same[] = {{OS_ALARM_EVENT, 2u, 1u}, {OS_ALARM_ACTIVATE, 2u, 0u}};
+    Os_ExpiryPointType points[] = {{1u, activate_a, 1u}, {3u, set_e, 1u}};
+    const Os_ExpiryPointType zero_point[] = {{0u, activate_a, 1u}};
+    const Os_ExpiryPointType bpoints[] = {{1u, activate_b, 1u}};
+    Os_ScheduleTableConfigType tables[9] = {
         {0u, 0u, 5u, points, 2u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u},
         {1u, 1u, 5u, bpoints, 1u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u},
         {2u, 0u, 5u, points, 2u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u},
         {3u, 0u, 5u, points, 2u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 1u}};
-    Os_TimeConfig time = {counters, 8u, alarms, 2u, 0u, 0u, 4u, action_error, tables, 4u};
-    Os_TargetConfig config = {
+    Os_TimeConfigType time = {counters, 8u, alarms, 2u, 0u, 0u, 4u, action_error, tables, 4u};
+    Os_TargetConfigType config = {
         tasks, 4u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL, 0u};
     StatusType status;
     scenario = (argc == 2) ? argv[1] : "capacity";
     for (unsigned i = 0u; i < 9u; ++i) {
-        counters[i] = (Os_CounterConfig){(CounterType)i, 15u, 1u, 1u, 1u};
+        counters[i] = (Os_CounterConfigType){(CounterType)i, 15u, 1u, 1u, 1u};
     }
     if (strcmp(scenario, "eight-tables") == 0) {
         time.schedule_table_count = 8u;
         for (unsigned i = 0u; i < 8u; ++i) {
-            tables[i] = (Os_ScheduleTableConfig){(ScheduleTableType)i,
-                                                 (CounterType)i,
-                                                 3u,
-                                                 points,
-                                                 1u,
-                                                 0u,
-                                                 OS_SCHEDULE_SYNC_NONE,
-                                                 0u,
-                                                 0u,
-                                                 1u};
+            tables[i] = (Os_ScheduleTableConfigType){(ScheduleTableType)i,
+                                                     (CounterType)i,
+                                                     3u,
+                                                     points,
+                                                     1u,
+                                                     0u,
+                                                     OS_SCHEDULE_SYNC_NONE,
+                                                     0u,
+                                                     0u,
+                                                     1u};
         }
     }
     if (strcmp(scenario, "link-zero-final") == 0) {

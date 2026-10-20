@@ -2,6 +2,7 @@
 #ifndef AUTOSAR_HOST_OS_ARTI_H
 #define AUTOSAR_HOST_OS_ARTI_H
 #include "Arti.h"
+#include "Os_Host.h"
 #include "Os_Target.h"
 #include "Os_Hooks.h"
 /** Task transition selectors mapped to standard ARTI task events by Os_ArtiTask. */
@@ -12,7 +13,7 @@ typedef enum {
     OS_ARTI_TASK_WAIT,     /**< Task enters event wait. */
     OS_ARTI_TASK_RELEASE,  /**< Waiting Task becomes ready. */
     OS_ARTI_TASK_TERMINATE /**< Current Task activation completes. */
-} Os_ArtiTaskEvent;
+} Os_ArtiTaskEventType;
 /** Debugger/tool Task observation; refreshed under the OS mutex and never used to schedule. */
 typedef struct {
     TaskStateType state;     /**< Current observed Task state. */
@@ -20,43 +21,40 @@ typedef struct {
     uint32 activations;      /**< Number of admitted current/pending activations. */
     EventMaskType events;    /**< Stored Extended Task event bits. */
     EventMaskType wait_mask; /**< Current WaitEvent predicate; zero when none. */
-} Os_ArtiTaskState;
+} Os_ArtiTaskStateType;
 /** Authoritative Alarm remaining ticks, cycle and activation state exposed read-only to tools. */
 typedef struct {
     TickType remaining; /**< Counter ticks remaining before the active Alarm expires. */
     TickType cycle;     /**< Repeat interval in Counter ticks; zero means one-shot. */
     uint8 active;       /**< Nonzero while the Alarm is active. */
-} Os_ArtiAlarmState;
+} Os_ArtiAlarmStateType;
 /** Authoritative ScheduleTable state and expiry/successor positions exposed read-only to tools. */
 typedef struct {
     ScheduleTableStatusType status; /**< Current SCHEDULETABLE_* state. */
-    size_t point;                   /**< Index of the next expiry point. */
+    uint32 point;                   /**< Index of the next expiry point. */
     TickType remaining;             /**< Counter ticks until the next point/final delay. */
-    size_t next;     /**< Successor table index; OS_MAX_SCHEDULE_TABLES means none. */
-    size_t previous; /**< Predecessor table index; OS_MAX_SCHEDULE_TABLES means none. */
-} Os_ArtiScheduleState;
+    uint32 next;     /**< Successor table index; OS_MAX_SCHEDULE_TABLES means none. */
+    uint32 previous; /**< Predecessor table index; OS_MAX_SCHEDULE_TABLES means none. */
+} Os_ArtiScheduleStateType;
 /* Task observations are refreshed from native kernel state while its mutex is
  * owned. None of these cells is consulted by scheduling or public OS services.
  * The other pointers expose the original authoritative storage read-only. */
-extern Os_ArtiTaskState Os_ArtiTasks[OS_MAX_TASKS];
+extern Os_ArtiTaskStateType Os_ArtiTasks[OS_MAX_TASKS];
 extern TaskType Os_ArtiRunningTask;
-struct Os_NativeStack;
-extern const struct Os_NativeStack *Os_ArtiTaskStacks[OS_MAX_TASKS];
+struct Os_NativeStackType;
+extern const struct Os_NativeStackType *Os_ArtiTaskStacks[OS_MAX_TASKS];
 extern const void *Os_ArtiTaskContexts[OS_MAX_TASKS];
-extern const size_t Os_ArtiNativeContextSize;
-extern const Os_ArtiAlarmState *const Os_ArtiAlarms;
-extern const Os_ArtiScheduleState *const Os_ArtiScheduleTables;
+extern const uint64 Os_ArtiNativeContextSize;
+extern const Os_ArtiAlarmStateType *const Os_ArtiAlarms;
+extern const Os_ArtiScheduleStateType *const Os_ArtiScheduleTables;
 extern const TickType *const Os_ArtiCounters;
 extern const uint32 *const Os_ArtiResourceOwners;
 extern const AppModeType *const Os_ArtiAppMode;
-#ifdef _WIN32
-extern const volatile long *const Os_ArtiOsReady;
-#else
-extern const volatile sint32 *const Os_ArtiOsReady;
-#endif
+extern const volatile Os_Atomic32Type *const Os_ArtiOsReady;
+
 extern const uint32 *const Os_ArtiCurrentIsr;
 /** @brief Emit a captured task transition while the native OS mutex is owned.
- * @param[in] event Task transition selector; must be a defined Os_ArtiTaskEvent.
+ * @param[in] event Task transition selector; must be a defined Os_ArtiTaskEventType.
  * @param[in] task Configured Task identifier.
  * @par Return
  * None.
@@ -66,7 +64,7 @@ extern const uint32 *const Os_ArtiCurrentIsr;
  * slot reservation supports concurrent actors. Ownership: event payloads are copied; native
  * addresses are recorded without retaining their pointed-to storage.
  */
-void Os_ArtiTask(Os_ArtiTaskEvent event, TaskType task);
+void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task);
 /** @brief Emit paired configured Category 2 ISR events under the dispatcher mutex.
  * @param[in] isr Configured Category 2 ISR identifier.
  * @param[in] returning Zero for entry, nonzero for return.
@@ -93,7 +91,7 @@ void Os_ArtiIsr(ISRType isr, sint32 returning);
  * copied; native addresses are recorded as bits without retaining or dereferencing pointed-to
  * storage.
  */
-void Os_ArtiHook(Os_HookPhase hook, StatusType error, sint32 returning);
+void Os_ArtiHook(Os_HookPhaseType hook, StatusType error, sint32 returning);
 /** @brief Emit an application service event with an already captured payload.
  * @param[in] service Captured OS service identifier.
  * @param[in] parameter Already captured scalar service event payload.
@@ -128,7 +126,7 @@ typedef struct {
     uint32 service_depth;        /**< Nested service scopes to restore. */
     StatusType access_status;    /**< Suspended caller access-guard result. */
     Arti_AddressCapture address; /**< Suspended caller lossless address/status capture. */
-} Os_ArtiCaller;
+} Os_ArtiCallerType;
 /** Save and reset the current logical caller classification and capture.
  * @return Complete previous classification/capture for matching restore.
  * Preconditions: initialized actor TLS; logical caller scopes are nested.
@@ -136,7 +134,7 @@ typedef struct {
  * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
  * Ownership: copies scalar/capture state; no application object pointer is retained.
  */
-Os_ArtiCaller Os_ArtiCallerSave(void);
+Os_ArtiCallerType Os_ArtiCallerSave(void);
 /** Restore classification and capture of a suspended logical caller.
  * @param[in] caller Snapshot returned by the matching Os_ArtiCallerSave.
  * @par Return
@@ -146,7 +144,7 @@ Os_ArtiCaller Os_ArtiCallerSave(void);
  * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
  * Ownership: copies scalar/capture state; no application object pointer is retained.
  */
-void Os_ArtiCallerRestore(Os_ArtiCaller caller);
+void Os_ArtiCallerRestore(Os_ArtiCallerType caller);
 /** Enter one internal service-origin scope.
  * @par Return
  * None.

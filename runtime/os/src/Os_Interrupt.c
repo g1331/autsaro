@@ -2,24 +2,28 @@
 #include "Os_Backend.h"
 #include <limits.h>
 
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+
 typedef struct {
     uint32 all_depth;
     uint32 os_depth;
     uint8 disabled;
-} InterruptState;
+} Os_InterruptStateType;
 /* One cell per physical Task/boot actor, and separate logical ISR cells on
  * the native ISR thread. This preserves ownership across interrupted actors. */
-static OS_THREAD_LOCAL InterruptState
+static OS_THREAD_LOCAL Os_InterruptStateType
     states[33u * ((uint32)OS_HOOK_ALARM +
-                  1u)];                 /**< Actor TLS logical-caller mask depths; no Init reset. */
-static volatile Os_Atomic32 all_owners; /**< Atomic outer All-mask owner count; no Init reset. */
-static volatile Os_Atomic32 os_owners;  /**< Atomic outer OS-mask owner count; no Init reset. */
+                  1u)]; /**< Actor TLS logical-caller mask depths; no Init reset. */
+static volatile Os_Atomic32Type
+    all_owners;                            /**< Atomic outer All-mask owner count; no Init reset. */
+static volatile Os_Atomic32Type os_owners; /**< Atomic outer OS-mask owner count; no Init reset. */
 
-static InterruptState *owner_state(void)
+static Os_InterruptStateType *owner_state(void)
 {
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 interrupt = Os_BackendCurrentInterrupt();
-    const Os_HookPhase phase = Os_HookContext();
+    const Os_HookPhaseType phase = Os_HookContext();
     uint32 index = (stack != NULL && stack->role == 'S' && interrupt < 32u) ? interrupt : 32u;
     if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
         /* Each Hook has its own mask ownership, including its logical ISR.
@@ -30,7 +34,7 @@ static InterruptState *owner_state(void)
 }
 sint32 Os_InterruptDisabled(void)
 {
-    const InterruptState *state = owner_state();
+    const Os_InterruptStateType *state = owner_state();
     return state->disabled != 0u || state->all_depth != 0u || state->os_depth != 0u;
 }
 sint32 Os_InterruptAllows(uint32 interrupt)
@@ -45,8 +49,8 @@ sint32 Os_InterruptAllows(uint32 interrupt)
 }
 static sint32 permitted(uint32 operation)
 {
-    const Os_HookPhase phase = Os_HookContext();
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_HookPhaseType phase = Os_HookContext();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 group = operation / 2u;
     sint32 allowed = 0;
     if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
@@ -67,7 +71,7 @@ static sint32 permitted(uint32 operation)
  * (wrong context, or a saturated nesting counter) is ignored without ErrorHook. */
 static void change(uint32 operation)
 {
-    InterruptState *state = owner_state();
+    Os_InterruptStateType *state = owner_state();
     const sint32 running =
         Os_BackendStarted() != 0 && InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
     Os_StackCheck();
@@ -135,7 +139,7 @@ void Os_Implementation_ResumeOSInterrupts(void) { change(4u); }
 void Os_Implementation_SuspendOSInterrupts(void) { change(5u); }
 void Os_InterruptRestoreOwner(void)
 {
-    InterruptState *state = owner_state();
+    Os_InterruptStateType *state = owner_state();
     /* Internal exit cleanup is called under the real OS completion critical
      * section, so no ISR can observe partial restoration. */
     if (state->disabled != 0u) {
@@ -154,7 +158,7 @@ void Os_InterruptRestoreOwner(void)
 static StatusType source_control(ISRType interrupt, uint32 operation, boolean clear)
 {
     StatusType result = E_OK;
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 current = Os_BackendCurrentInterrupt();
     Os_StackCheck();
     Os_BackendGuardService();
@@ -184,7 +188,7 @@ static StatusType source_control(ISRType interrupt, uint32 operation, boolean cl
 }
 StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID)
 {
-    const Os_ErrorParameters arguments = {.service_DisableInterruptSource = {ISRID}};
+    const Os_ErrorParametersType arguments = {.service_DisableInterruptSource = {ISRID}};
     const StatusType status = source_control(ISRID, 0u, FALSE);
     return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
@@ -192,7 +196,8 @@ StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID)
 }
 StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearPending)
 {
-    const Os_ErrorParameters arguments = {.service_EnableInterruptSource = {ISRID, ClearPending}};
+    const Os_ErrorParametersType arguments = {
+        .service_EnableInterruptSource = {ISRID, ClearPending}};
     const StatusType status = source_control(ISRID, 1u, ClearPending);
     return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
@@ -200,9 +205,12 @@ StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearP
 }
 StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID)
 {
-    const Os_ErrorParameters arguments = {.service_ClearPendingInterrupt = {ISRID}};
+    const Os_ErrorParametersType arguments = {.service_ClearPendingInterrupt = {ISRID}};
     const StatusType status = source_control(ISRID, 2u, FALSE);
     return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
                : Os_ErrorResult(OSServiceId_ClearPendingInterrupt, status, &arguments);
 }
+
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

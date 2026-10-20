@@ -6,6 +6,13 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "A"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "B"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_2[] = "H"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_3[] = "D"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_4[] = "E"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_5[] = "M"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static TaskHandle_t observed[6]; /**< Observed Task handles; fixture-owned, no Init reset. */
 static unsigned
@@ -28,13 +35,13 @@ static void check(bool condition)
         ShutdownOS(E_OS_STATE);
     }
 }
-static Os_ActivationInfo info(TaskType id)
+static Os_ActivationInfoType info(TaskType id)
 {
-    Os_ActivationInfo value;
+    Os_ActivationInfoType value;
     check(Os_TargetInspectActivation(id, &value) == E_OK);
     return value;
 }
-static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b)
+static bool same_info(const Os_ActivationInfoType *a, const Os_ActivationInfoType *b)
 {
     unsigned i;
     bool same = (a->state == b->state) && (a->count == b->count) &&
@@ -54,8 +61,8 @@ static bool same_info(const Os_ActivationInfo *a, const Os_ActivationInfo *b)
 }
 static void refused(unsigned operation, StatusType expected)
 {
-    Os_ActivationInfo before[6];
-    Os_ActivationInfo after;
+    Os_ActivationInfoType before[6];
+    Os_ActivationInfoType after;
     StatusType result;
     unsigned i;
     for (i = 0u; i < 6u; ++i) {
@@ -96,7 +103,7 @@ void Os_TestObserve(void)
     unsigned i;
     ++observations;
     for (i = 0u; i < 6u; ++i) {
-        Os_ActivationInfo value = info((TaskType)i);
+        Os_ActivationInfoType value = info((TaskType)i);
         eTaskState state = eTaskGetState(observed[i]);
         check(value.effective_priority == uxTaskPriorityGet(observed[i]));
         if (value.waiting != 0u) {
@@ -123,7 +130,7 @@ static void finish(void)
 }
 static void check_priority(uint8_t priority, unsigned depth, uint8_t held)
 {
-    Os_ActivationInfo value = info(0u);
+    Os_ActivationInfoType value = info(0u);
     check((value.effective_priority == priority) && (value.resource_count == depth) &&
           (value.internal_held == held));
 }
@@ -353,7 +360,7 @@ static void task_b(void)
     ++b_entries;
     Os_TargetTrace('B');
     if (strcmp(scenario, "wait") == 0) {
-        Os_ActivationInfo value = info(0u);
+        Os_ActivationInfoType value = info(0u);
         check((value.state == WAITING) && (value.waiting == 1u) && (value.internal_held == 0u) &&
               (value.effective_priority == 2u));
         check(SetEvent(0u, 1u) == E_OK);
@@ -370,7 +377,7 @@ static void task_h(void)
     ++h_entries;
     Os_TargetTrace('H');
     if (strcmp(scenario, "oracle-resource") == 0) {
-        Os_ActivationInfo value = info(0u);
+        Os_ActivationInfoType value = info(0u);
         check((value.state == READY) && (value.effective_priority == 1u) &&
               (value.resource_count == 0u));
     }
@@ -378,7 +385,7 @@ static void task_h(void)
 }
 static void task_d(void)
 {
-    Os_ActivationInfo value = info(0u);
+    Os_ActivationInfoType value = info(0u);
     Os_TargetTrace('D');
     if (strcmp(scenario, "nonowner") == 0) {
         check((value.resource_count == 1u) && (value.effective_priority == 4u));
@@ -395,30 +402,31 @@ static void task_d(void)
 static void task_e(void) { ShutdownOS(E_OS_STATE); }
 static void monitor(void)
 {
-    Os_ActivationInfo value = info(0u);
+    Os_ActivationInfoType value = info(0u);
     check((value.count == 0u) && (value.resource_count == 0u) && (value.internal_held == 0u));
     Os_TargetTrace('M');
     ShutdownOS(E_OK);
 }
 int main(int argc, char **argv)
 {
-    Os_TaskConfig tasks[] = {{0u, "A", task_a, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {1u, "B", task_b, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {2u, "H", task_h, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {3u, "D", task_d, 5u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {4u, "E", task_e, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {5u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_ResourceConfig resources[] = {{0u, 3u, 5u, 0u, 0u, 0u},
-                                     {1u, 4u, 5u, 0u, 0u, 0u},
-                                     {2u, 4u, 5u, 0u, 0u, 0u},
-                                     {3u, 2u, 2u, 0u, 0u, 0u},
-                                     {4u, 31u, 1u, 0x80000000u, 0u, 0u},
-                                     {5u, 31u, 0u, 0x80000000u, 0u, 0u},
-                                     {RES_SCHEDULER, 5u, 63u, 0u, 0u, 0u},
-                                     {6u, 5u, 1u, 0u, 1u, RES_SCHEDULER}};
-    Os_InternalResourceConfig internal[] = {{1u, 3u}, {2u, 5u}};
-    Os_IsrConfig isr_levels = {{0u}, NULL};
-    Os_TargetConfig config = {
+    Os_TaskConfigType tasks[] = {
+        {0u, task_name_0, task_a, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, task_b, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {2u, task_name_2, task_h, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {3u, task_name_3, task_d, 5u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {4u, task_name_4, task_e, 2u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {5u, task_name_5, monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    Os_ResourceConfigType resources[] = {{0u, 3u, 5u, 0u, 0u, 0u},
+                                         {1u, 4u, 5u, 0u, 0u, 0u},
+                                         {2u, 4u, 5u, 0u, 0u, 0u},
+                                         {3u, 2u, 2u, 0u, 0u, 0u},
+                                         {4u, 31u, 1u, 0x80000000u, 0u, 0u},
+                                         {5u, 31u, 0u, 0x80000000u, 0u, 0u},
+                                         {RES_SCHEDULER, 5u, 63u, 0u, 0u, 0u},
+                                         {6u, 5u, 1u, 0u, 1u, RES_SCHEDULER}};
+    Os_InternalResourceConfigType internal[] = {{1u, 3u}, {2u, 5u}};
+    Os_IsrConfigType isr_levels = {{0u}, NULL};
+    Os_TargetConfigType config = {
         tasks, 6u, 262144u, resources, 7u, internal, 2u, 0u, 0u, 0u, NULL, NULL, NULL, 0u};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "non";

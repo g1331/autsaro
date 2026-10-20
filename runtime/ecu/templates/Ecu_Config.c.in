@@ -8,10 +8,11 @@
 @TASK@
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
-static const Os_TaskConfig tasks[] = {
+static const uint8 task_name[] = @TASK_NAME@;
+static const Os_TaskConfigType tasks[] = {
     {
         .id = @TASK_SYMBOL@,
-        .name = @TASK_NAME@,
+        .name = task_name,
         .entry = OS_TASK_ENTRY(@TASK_SYMBOL@),
         .priority = @TASK_PRIORITY@u,
         .autostart_modes = 1u,
@@ -21,7 +22,7 @@ static const Os_TaskConfig tasks[] = {
         .internal_resource = 0u,
     },
 };
-static const Os_CounterConfig counters[] = {
+static const Os_CounterConfigType counters[] = {
     {
         .id = @COUNTER_SYMBOL@,
         .maximum = @COUNTER_MAX@u,
@@ -31,12 +32,12 @@ static const Os_CounterConfig counters[] = {
     },
 };
 @OS_OBJECTS@
-static const Os_HookConfig hooks = {
+static const Os_HookConfigType hooks = {
     .error = &ErrorHook,
     .pre_task = &PreTaskHook,
     .post_task = &PostTaskHook,
 };
-static const Os_TimeConfig time_config = {
+static const Os_TimeConfigType time_config = {
     .counters = counters,
     .counter_count = 1u,
     .alarms = @ALARM_PTR@,
@@ -48,10 +49,10 @@ static const Os_TimeConfig time_config = {
     .schedule_tables = @SCHEDULE_PTR@,
     .schedule_table_count = @SCHEDULE_COUNT@u,
 };
-static const Os_IsrConfig interrupts = {
+static const Os_IsrConfigType interrupts = {
     .priorities = {[OS_INPUT_INTERRUPT] = 1u},
 };
-const Os_TargetConfig Ecu_OsConfig = {
+const Os_TargetConfigType Ecu_OsConfig = {
     .tasks = tasks,
     .task_count = 1u,
     .host_stack_reserve = 262144u,

@@ -12,13 +12,13 @@
 #define OS_KERNEL_YIELD_INTERRUPT    0u
 #define OS_CONTROLLED_TICK_INTERRUPT 1u
 typedef struct {
-    Os_HookPhase phase;
+    Os_HookPhaseType phase;
     OSServiceIdType service;
-    Os_ErrorParameters parameters;
-    Os_ArtiCaller arti;
-} Os_ErrorContext;
-void Os_ErrorContextSave(Os_ErrorContext *context);
-void Os_ErrorContextRestore(const Os_ErrorContext *context);
+    Os_ErrorParametersType parameters;
+    Os_ArtiCallerType arti;
+} Os_ErrorContextType;
+void Os_ErrorContextSave(Os_ErrorContextType *context);
+void Os_ErrorContextRestore(const Os_ErrorContextType *context);
 sint32 Os_HookBlocksCategory2(void);
 uint32 Os_BackendInterruptPriority(uint32 interrupt);
 sint32 Os_BackendInterruptMaySchedule(uint32 interrupt);
@@ -31,10 +31,10 @@ sint32 Os_BackendServiceContext(void);
 StatusType Os_BridgeContext(void);
 sint32 Os_BridgeActorAllowed(void);
 sint32 Os_MailboxQuiescent(void);
-StatusType Os_TimeValidate(const Os_TargetConfig *target);
+StatusType Os_TimeValidate(const Os_TargetConfigType *target);
 void Os_TimeInit(AppModeType mode);
 void Os_TimeAutostart(AppModeType mode);
-StatusType Os_ScheduleValidate(const Os_TargetConfig *target);
+StatusType Os_ScheduleValidate(const Os_TargetConfigType *target);
 void Os_ScheduleAutostart(AppModeType mode);
 void Os_ScheduleIncrement(CounterType counter);
 TickType Os_TimeCounterValue(CounterType counter);
@@ -71,12 +71,12 @@ void Os_BackendStart(AppModeType mode);
 void Os_BackendShutdown(StatusType error);
 void Os_BackendRequestShutdown(StatusType error);
 #ifdef __linux__
-void Os_BackendSignalStackFault(char role);
+void Os_BackendSignalStackFault(uint8 role);
 void Os_BackendSetDispatcher(void);
 #endif
 void Os_BackendGuardService(void);
 sint32 Os_BackendReady(void);
-Os_HookPhase Os_HookContext(void);
+Os_HookPhaseType Os_HookContext(void);
 sint32 Os_HookServiceAllowed(OSServiceIdType service);
 StatusType Os_ServiceAccessStatus(OSServiceIdType service);
 uint32 Os_BackendCurrentInterrupt(void);
@@ -91,8 +91,8 @@ sint32 Os_HookQueryContext(void);
 sint32 Os_ErrorHookConfigured(void);
 StatusType Os_ErrorResult(OSServiceIdType service,
                           StatusType status,
-                          const Os_ErrorParameters *arguments);
-void Os_HookInvoke(void (*hook)(void), Os_HookPhase selected);
+                          const Os_ErrorParametersType *arguments);
+void Os_HookInvoke(void (*hook)(void), Os_HookPhaseType selected);
 void Os_ShutdownHookInvoke(StatusType error);
 #if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
 void Os_TimeTestDispatchFinishing(void);
@@ -115,11 +115,11 @@ StatusType Os_BackendClear(EventMaskType mask);
 sint32 Os_BackendInterruptEnabled(uint32 interrupt);
 void Os_BackendInterruptEnter(uint32 interrupt);
 void Os_BackendInterruptLeave(void);
-StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info);
+StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info);
 void Os_BackendOnSwitch(void);
 void Os_BackendBeforeSelect(void *current, void *next);
 sint32 Os_BackendTakeIsrReschedule(void);
-void Os_BackendAssert(const char *file, sint32 line);
+void Os_BackendAssert(const void *file, sint32 line);
 HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name);
 HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name);
 HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
@@ -142,10 +142,10 @@ StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMod
 boolean Os_Implementation_isOsStarted(void);
 CoreIdType Os_Implementation_GetCoreID(void);
 /* Index of the configured resource `id`, or resource_count when absent. */
-size_t Os_ResourceIndex(const Os_TargetConfig *config, ResourceType id);
+uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id);
 /* Index of the STANDARD resource that the LINKED chain from `index` names, or
  * resource_count for a missing or cyclic link. */
-size_t Os_ResourceRoot(const Os_TargetConfig *config, size_t index);
+uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index);
 StatusType Os_Implementation_GetTaskID(TaskRefType TaskID);
 StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State);
 StatusType Os_Implementation_ActivateTask(TaskType TaskID);
@@ -189,6 +189,6 @@ void Os_Implementation_ResumeAllInterrupts(void);
 void Os_Implementation_SuspendAllInterrupts(void);
 void Os_Implementation_ResumeOSInterrupts(void);
 void Os_Implementation_SuspendOSInterrupts(void);
-extern const Os_TargetConfig *Os_Config;
+extern const Os_TargetConfigType *Os_Config;
 extern volatile LONG Os_Closing;
 #endif

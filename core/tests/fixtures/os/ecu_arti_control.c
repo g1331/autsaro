@@ -14,11 +14,11 @@ int Ecu_TargetTestFailStage(unsigned stage) {
      * configured 10 ms application points. */
     if ((stage == 9u) && ((Ecu_TargetNow() % 10u) == 0u)) {
         TickType counter = UINT64_MAX;
-        Os_ActivationInfo actual;
+        Os_ActivationInfoType actual;
         const CONTEXT *context = Os_ArtiTaskContexts[0];
-        const Os_NativeStack *scheduler_stack = NULL;
+        const Os_NativeStackType *scheduler_stack = NULL;
         ++observations;
-        require(*Os_ArtiOsReady != 0 && *Os_ArtiAppMode == 1u);
+        require(__atomic_load_n(Os_ArtiOsReady, __ATOMIC_SEQ_CST) != 0 && *Os_ArtiAppMode == 1u);
         require(GetCounterValue(0u, &counter) == E_OK && counter == observations * UINT64_C(10));
         require(Os_ArtiCounters[0] == counter);
         require(Os_TargetInspectActivation(0u, &actual) == E_OK && actual.state == RUNNING);
@@ -85,11 +85,16 @@ void Ecu_TargetTestRetire(unsigned stage) { (void)stage; }
 void Ecu_TargetTestShutdown(StatusType reason) {
     unsigned start = 0u, waits = 0u, releases = 0u, errors = 0u;
     unsigned getters = 0u, rejected = 0u, alarm_addresses = 0u, isr_start = 0u, isr_stop = 0u;
-    if (reason != E_OK || observations != 2u || *Os_ArtiOsReady != 0) {
-        (void)fprintf(stderr, "ARTI shutdown reason=%u observations=%u ready=%ld\n", reason,
-                      observations, (long)*Os_ArtiOsReady);
+    if (reason != E_OK || observations != 2u ||
+        __atomic_load_n(Os_ArtiOsReady, __ATOMIC_SEQ_CST) != 0) {
+        (void)fprintf(stderr,
+                      "ARTI shutdown reason=%u observations=%u ready=%ld\n",
+                      reason,
+                      observations,
+                      (long)__atomic_load_n(Os_ArtiOsReady, __ATOMIC_SEQ_CST));
     }
-    arti_require(reason == E_OK && observations == 2u && *Os_ArtiOsReady == 0);
+    arti_require(reason == E_OK && observations == 2u &&
+                 __atomic_load_n(Os_ArtiOsReady, __ATOMIC_SEQ_CST) == 0);
     arti_require(Arti_EventCount > 0 && Arti_EventCount <= (long)ARTI_EVENT_CAPACITY &&
                  Arti_EventsDropped == 0);
     for (long i = 0L; i < Arti_EventCount; ++i) {
@@ -139,8 +144,8 @@ void Ecu_TargetTestShutdown(StatusType reason) {
         arti_require(strcmp(event->event, "OsServiceCall_SetEvent_Start") != 0);
     }
     if (!(start > 20u && waits >= 20u && releases >= 20u)) {
-        (void)fprintf(stderr, "ARTI task events start=%u waits=%u releases=%u\n", start, waits,
-                      releases);
+        (void)fprintf(
+            stderr, "ARTI task events start=%u waits=%u releases=%u\n", start, waits, releases);
     }
     arti_require(start > 20u && waits >= 20u && releases >= 20u);
     arti_require(errors == 2u && rejected == 2u && getters == 2u);

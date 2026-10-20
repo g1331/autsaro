@@ -11,6 +11,9 @@
 #error The selected status mode differs from the independent input
 #endif
 
+static const uint8 task_name_0[] = "Owner"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "Peer";  /**< Process-lifetime Task name bytes. */
+
 static unsigned errors; /**< Observed checks/errors; fixture-owned, no Init reset. */
 static unsigned peers;  /**< Peers observations; fixture-owned, no Init reset. */
 static TickType remaining =
@@ -102,15 +105,15 @@ TASK(Owner)
 }
 int main(void)
 {
-    const Os_TaskConfig tasks[] = {
-        {0u, "Owner", OS_TASK_ENTRY(Owner), 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "Peer", OS_TASK_ENTRY(Peer), 5u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+    const Os_TaskConfigType tasks[] = {
+        {0u, task_name_0, OS_TASK_ENTRY(Owner), 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, OS_TASK_ENTRY(Peer), 5u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
-    const Os_CounterConfig counter = {0u, 15u, 1u, 1u, 1u};
-    const Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_ACTIVATE, 1u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
-    const Os_TimeConfig time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
-    const Os_HookConfig hooks = {ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {
+    const Os_CounterConfigType counter = {0u, 15u, 1u, 1u, 1u};
+    const Os_AlarmConfigType alarm = {0u, 0u, OS_ALARM_ACTIVATE, 1u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
+    const Os_TimeConfigType time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
+    const Os_HookConfigType hooks = {ErrorHook, NULL, NULL};
+    const Os_TargetConfigType target = {
         tasks, 2u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL, 0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);

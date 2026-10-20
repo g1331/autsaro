@@ -7,6 +7,9 @@
 #include <unistd.h>
 #endif
 
+static const uint8 task_name_0[] = "FaultTask"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "Inactive";  /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static volatile unsigned
     checksum; /**< Actor-owned stack-probe checksum; fixture-owned, no Init reset. */
@@ -78,7 +81,7 @@ void StartupHook(void)
 }
 void ShutdownHook(StatusType Error)
 {
-    const Os_NativeStack *current = Os_StackCurrent();
+    const Os_NativeStackType *current = Os_StackCurrent();
     ++hook_entries;
     if ((Os_StackFaultCount() != 0) && (Error != E_OS_STACKFAULT)) {
         Os_TargetTrace('X'); /* SWS_Os_00068: a detected fault shuts down with E_OS_STACKFAULT. */
@@ -108,7 +111,7 @@ static void entry(void)
         consume_stack(0u);
     } else if (strcmp(scenario, "sp-corrupt") == 0) {
 #ifdef __linux__
-        const Os_NativeStack *stack = Os_StackCurrent();
+        const Os_NativeStackType *stack = Os_StackCurrent();
         volatile unsigned char *outside = (volatile unsigned char *)(stack->reserve_low + 8u);
         *outside = 42u; /* Actual mapped guard, not a fabricated saved context. */
 #else
@@ -133,7 +136,7 @@ static void entry(void)
         Os_StackTestFailOperation(operation);
         vTaskResume(xTaskGetHandle("Inactive"));
     } else if (strcmp(scenario, "boundary") == 0 || strcmp(scenario, "boundary-read") == 0) {
-        const Os_NativeStack *stack = Os_StackCurrent();
+        const Os_NativeStackType *stack = Os_StackCurrent();
         volatile unsigned char *outside = (volatile unsigned char *)(stack->reserve_low + 8u);
         if (strcmp(scenario, "boundary-read") == 0) {
             checksum += *outside;
@@ -173,10 +176,10 @@ static void entry(void)
 }
 int main(int argc, char **argv)
 {
-    Os_TaskConfig tasks[2] = {
-        {0u, "FaultTask", entry, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "Inactive", entry, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_TargetConfig config = {
+    Os_TaskConfigType tasks[2] = {
+        {0u, task_name_0, entry, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, entry, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    Os_TargetConfigType config = {
         tasks, 1u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, NULL, NULL, 0u};
     scenario = argc == 2 ? argv[1] : "normal";
     if (strcmp(scenario, "sp-corrupt") == 0 || strncmp(scenario, "api-", 4u) == 0) {

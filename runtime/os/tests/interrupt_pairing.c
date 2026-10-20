@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "owner";   /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "monitor"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static unsigned category1;   /**< Category1 observations; fixture-owned, no Init reset. */
 static unsigned category2;   /**< Category2 observations; fixture-owned, no Init reset. */
@@ -422,12 +425,12 @@ int main(int argc, char **argv)
 {
     check(argc == 2);
     scenario = argv[1];
-    const Os_TaskConfig tasks[2] = {
-        {0u, "owner", owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "monitor", monitor, 5u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+    const Os_TaskConfigType tasks[2] = {
+        {0u, task_name_0, owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, monitor, 5u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
-    const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {
+    const Os_HookConfigType hooks = {&ErrorHook, NULL, NULL};
+    const Os_TargetConfigType target = {
         tasks, 2u, 262144u, NULL, 0u, NULL, 0u, UINT32_C(1) << 4u, 0u, 0u, NULL, &hooks, NULL, 0u};
     check(Os_TargetPrepare(&target) == E_OK);
     /* All four services operate before startup, including unmatched restores. */

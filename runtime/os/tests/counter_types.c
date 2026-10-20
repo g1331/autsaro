@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "owner"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario;    /**< Main-owned scenario selection before StartOS; no Init reset. */
 static unsigned checks, errors; /**< Observed checks/errors; fixture-owned, no Init reset. */
 static uint32_t expected_id; /**< Caller-owned expected id for synchronous checks; no Init reset. */
@@ -79,31 +81,31 @@ int main(int argc, char **argv)
 {
     check(argc == 2);
     scenario = argv[1];
-    const Os_TaskConfig task = {
-        0u, "owner", owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u};
-    Os_CounterConfig counters[2] = {{0u, 31u, 1u, 1u, 1u}, {1u, 31u, 1u, 1u, 1u}};
-    Os_AlarmConfig alarm = {.id = 0u, .counter = 0u, .action = OS_ALARM_ACTIVATE, .task = 0u};
-    const Os_ExpiryAction action = {OS_ALARM_ACTIVATE, 0u, 0u};
-    const Os_ExpiryPoint point = {2u, &action, 1u};
-    Os_ScheduleTableConfig table = {
+    const Os_TaskConfigType task = {
+        0u, task_name_0, owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u};
+    Os_CounterConfigType counters[2] = {{0u, 31u, 1u, 1u, 1u}, {1u, 31u, 1u, 1u, 1u}};
+    Os_AlarmConfigType alarm = {.id = 0u, .counter = 0u, .action = OS_ALARM_ACTIVATE, .task = 0u};
+    const Os_ExpiryActionType action = {OS_ALARM_ACTIVATE, 0u, 0u};
+    const Os_ExpiryPointType point = {2u, &action, 1u};
+    Os_ScheduleTableConfigType table = {
         .id = 0u, .counter = 0u, .duration = 4u, .points = &point, .point_count = 1u};
-    Os_TimeConfig time = {
+    Os_TimeConfigType time = {
         .counters = counters, .counter_count = 2u, .system_counter = 0u, .owner = INVALID_TASK};
-    const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {&task,
-                                    1u,
-                                    262144u,
-                                    NULL,
-                                    0u,
-                                    NULL,
-                                    0u,
-                                    0u,
-                                    0u,
-                                    0u,
-                                    &time,
-                                    strcmp(scenario, "configured") == 0 ? &hooks : NULL,
-                                    NULL,
-                                    0u};
+    const Os_HookConfigType hooks = {&ErrorHook, NULL, NULL};
+    const Os_TargetConfigType target = {&task,
+                                        1u,
+                                        262144u,
+                                        NULL,
+                                        0u,
+                                        NULL,
+                                        0u,
+                                        0u,
+                                        0u,
+                                        0u,
+                                        &time,
+                                        strcmp(scenario, "configured") == 0 ? &hooks : NULL,
+                                        NULL,
+                                        0u};
     const char *suffix = strchr(scenario, '-');
     if (suffix != NULL) {
         uint32_t identifier;

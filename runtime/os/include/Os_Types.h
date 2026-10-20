@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "Std_Types.h"
+#include "Rte_Os_Type.h"
 /** OSEK OS 2.2.3 13.1 service result; E_OK or a named E_OS_* status. */
 typedef uint8 StatusType;
 /** OSEK OS 2.2.3 13.2.1 Task identifier; selected target uses IDs below OS_MAX_TASKS. */
@@ -31,9 +32,6 @@ typedef uint8 ResourceType;
 typedef uint32 EventMaskType;
 /** OSEK OS 2.2.3 13.5.1 pointer to a caller-owned event-mask result. */
 typedef EventMaskType *EventMaskRefType;
-/* Shared with Rte_Os_Type.h; never narrow an external Counter identifier. */
-/** Counter identifier used by SWS_Os_00383; uint32 is shared with Rte_Os_Type.h. */
-typedef uint32 CounterType;
 /** OSEK OS 2.2.3 13.6.1 Alarm identifier below OS_MAX_ALARMS. */
 typedef uint8 AlarmType;
 /* R24-11 public type definitions remain available independently of whether
@@ -105,8 +103,9 @@ typedef uint8 ObjectTypeType;
 #define OBJECT_SCHEDULETABLE 5u /**< SWS_Os_00779: ScheduleTable object kind. */
 /** SWS_Os_00780 native address of a memory region; does not own that region. */
 typedef void *MemoryStartAddressType;
-/** SWS_Os_00781 size of a memory region in bytes; native size_t preserves host address width. */
-typedef size_t MemorySizeType;
+/** SWS_Os_00781 size of a memory region in bytes; uint64 preserves the controlled x64 address
+ * width. */
+typedef uint64 MemorySizeType;
 /** SWS_Os_00782 logical ISR identifier; INVALID_ISR means no active Category 2 ISR. */
 typedef uint8 ISRType;
 #define INVALID_ISR  UINT8_MAX /**< SWS_Os_00782: no active Category 2 ISR. */
