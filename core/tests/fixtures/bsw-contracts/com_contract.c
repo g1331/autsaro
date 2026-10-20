@@ -41,6 +41,8 @@ static void periods(unsigned count)
 }
 int main(void)
 {
+    /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
+    assert(COM_MODULE_ID == 50u);
     void (*initialize)(const Com_ConfigType *) = Com_Init;
     void (*deinitialize)(void) = Com_DeInit;
     Com_StatusType (*status)(void) = Com_GetStatus;

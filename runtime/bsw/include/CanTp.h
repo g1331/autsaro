@@ -7,6 +7,12 @@
 #define CANTP_H
 #include "Std_Types.h"
 #include "ComStack_Types.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define CANTP_MODULE_ID           35u
+#define CANTP_SID_MAIN_FUNCTION   0x06u /**< SWS_CanTp_00213: service ID. */
+#define CANTP_SID_RX_INDICATION   0x42u /**< SWS_CanTp_00214: service ID. */
+#define CANTP_SID_CANCEL_TRANSMIT 0x4au /**< SWS_CanTp_00246: service ID. */
+#define CANTP_SID_CANCEL_RECEIVE  0x4cu /**< SWS_CanTp_00257: service ID. */
 /** Implementation-defined configuration of the one channel (SWS_CanTp_00340), generated
  * as the read-only tp_config; each member names its ECUC parameter. N-SDU IDs are those
  * CanTp's own API accepts, N-PDU IDs those exchanged with LSduR, and the upper IDs those

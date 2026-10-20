@@ -24,6 +24,26 @@ class CStandardTests(unittest.TestCase):
     def rules(self, source, name="runtime/bsw/include/Test.h"):
         return [rule for rule, _, _ in c_standard.findings(name, source)]
 
+    def test_det_module_and_service_arguments_require_names(self):
+        for report in ("Det_ReportError", "Det_ReportRuntimeError", "Det_ReportTransientFault"):
+            for arguments in ("60u, 0u, API, 1u", "MODULE, 0u, (0x49U), 1u",
+                              "(uint16)60, 0u, API, 1u", "MODULE, 0u, API + 1u, 1u"):
+                with self.subTest(report=report, arguments=arguments):
+                    self.assertIn("det-numeric-id", self.rules(
+                        f"void Report(void) {{ {report}(\n{arguments}); }}", "runtime/bsw/src/Test.c"))
+        source = '''/* Det_ReportError(60u, 0u, 1u, 0u); */
+void Report(uint8 ApiId) {
+    Det_ReportRuntimeError(MODULE, 0u, ApiId, 7u);
+    Det_ReportError(MODULE, 1u, Select(API, OTHER_API), 2u);
+    Log("Det_ReportError(60u, 0u, 1u, 0u)");
+}
+Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
+                                    uint8 ApiId, uint8 ErrorId) { return E_OK; }
+'''
+        self.assertNotIn("det-numeric-id", self.rules(source, "runtime/bsw/src/Test.c"))
+        self.assertNotIn("det-numeric-id", self.rules(
+            "Det_ReportError(60u, 0u, 1u, 0u);", "runtime/os/src/Test.c"))
+
     def test_aggregate_objects_and_forward_tags(self):
         for prefix in ("", 'extern "C" {\n'):
             suffix = "\n}" if prefix else ""

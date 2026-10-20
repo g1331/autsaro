@@ -142,6 +142,9 @@ static void uninitialized(void) {
 }
 
 int main(void) {
+    /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
+    assert(CANIF_MODULE_ID == 60u && CANIF_SID_TRANSMIT == 0x49u &&
+           CANIF_SID_RX_INDICATION == 0x14u);
     CanIf_PduModeType pdu = CANIF_ONLINE;
     Can_ControllerStateType state = CAN_CS_UNINIT;
     Can_ErrorStateType error_status = CAN_ERRORSTATE_BUSOFF;

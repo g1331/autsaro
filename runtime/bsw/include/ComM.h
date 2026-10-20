@@ -6,6 +6,8 @@
 #define COMM_H
 #include "ComStack_Types.h"
 #include "Rte_ComM_Type.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define COMM_MODULE_ID 12u
 /** SWS_ComM_91027: Std_ReturnType extension of ComM. */
 /* MR12 RULE 2.5 VIOLATION: standard return code (SWS_ComM_91027) without mode limitation in
  * the selected profile; see the ComM deviation record. */

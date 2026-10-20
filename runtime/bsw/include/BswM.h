@@ -4,6 +4,8 @@
 #ifndef BSWM_H
 #define BSWM_H
 #include "ComM.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define BSWM_MODULE_ID 42u
 /** SWS_BswM_00214: mode requested by a BswM user. */
 /* MR12 RULE 2.3 VIOLATION: standard type (SWS_BswM_00214) without the generic request that
  * uses it; see the BswM deviation record. */

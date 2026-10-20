@@ -84,7 +84,7 @@ void __wrap_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *Pdu
 }
 static Std_ReturnType report_runtime(uint16 module, uint8 instance, uint8 api, uint8 error)
 {
-    assert(module == CAN_MODULE_ID && instance == 0u && api == 0x08u && error == CAN_E_DATALOST);
+    assert(module == 80u && instance == 0u && api == 0x08u && error == CAN_E_DATALOST);
     ++lost;
     return E_OK;
 }
@@ -103,6 +103,8 @@ static void polled_mode(Can_ControllerStateType expected)
 }
 int main(void)
 {
+    /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
+    assert(CAN_MODULE_ID == 80u && CAN_SID_MAIN_FUNCTION_READ == 0x08u);
     /* Standard signatures (Verifies: SWS_Can_00223, SWS_Can_91002, SWS_Can_00230); input
      * pointers are const (Verifies[Can]: SWS_BSW_00186). */
     void (*init)(const Can_ConfigType *) = Can_Init;

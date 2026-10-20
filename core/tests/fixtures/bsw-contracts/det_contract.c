@@ -77,6 +77,8 @@ static const Det_ConfigType config = {development_hooks, 2u, runtime_hooks, 2u};
 
 int main(int argc, char **argv)
 {
+    /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
+    assert(DET_MODULE_ID == 15u);
 #if defined(_WIN32)
     /* Observe this process's real abort before the CRT starts WER or a dialog. */
     (void)_set_error_mode(_OUT_TO_STDERR);

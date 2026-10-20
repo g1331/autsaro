@@ -3,6 +3,8 @@
 #define PDUR_H
 #include "Std_Types.h"
 #include "ComStack_Types.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define PDUR_MODULE_ID 51u
 /** Configuration identity (SWS_PduR_00771). */
 typedef uint16 PduR_PBConfigIdType;
 /** Routing-path group handle (SWS_PduR_00654); no groups are selected. */

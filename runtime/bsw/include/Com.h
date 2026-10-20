@@ -1,14 +1,16 @@
 /** @file Selected R24-11 immediate UINT32 COM interface and immutable configuration. */
 #ifndef COM_H
 #define COM_H
+#include "Std_Types.h"
+#include "ComStack_Types.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define COM_MODULE_ID 50u
 /** Published interface-release constants for the fixed R24-11 contract.
  * Vendor and software-version information is not supplied by this header.
  */
 #define COM_AR_RELEASE_MAJOR_VERSION    4U
 #define COM_AR_RELEASE_MINOR_VERSION    10U
 #define COM_AR_RELEASE_REVISION_VERSION 0U
-#include "Std_Types.h"
-#include "ComStack_Types.h"
 
 /** COM initialization state (SWS_Com_00819). */
 typedef enum {

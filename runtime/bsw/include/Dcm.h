@@ -4,6 +4,8 @@
 #include "Std_Types.h"
 #include "ComStack_Types.h"
 #include "Rte_Dcm_Type.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define DCM_MODULE_ID 53u
 /** SWS_Dcm_00989: one diagnostic payload byte. */
 typedef uint8 Dcm_MsgItemType;
 /** SWS_Dcm_00990: mutable diagnostic payload. */

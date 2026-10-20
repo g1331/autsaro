@@ -7,7 +7,8 @@
 
 /* Published information (SWS_BSW_00059): module ID and software version are provided below;
  * vendor ID and AUTOSAR release macros are not provided. */
-#define CAN_MODULE_ID        80u
+#define CAN_MODULE_ID              80u   /**< SWS_BSW_00256, Appendix A.2: CAN Driver. */
+#define CAN_SID_MAIN_FUNCTION_READ 0x08u /**< SWS_Can_00226: service ID. */
 #define CAN_SW_MAJOR_VERSION 0u
 #define CAN_SW_MINOR_VERSION 1u
 #define CAN_SW_PATCH_VERSION 0u
