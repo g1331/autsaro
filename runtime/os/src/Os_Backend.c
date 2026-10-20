@@ -626,7 +626,7 @@ void Os_PortPostInterrupt(uint32 interrupt)
 }
 void Os_TargetTrace(uint8 marker)
 {
-    if (marker == '\0') {
+    if (marker == 0u) {
         if (InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) {
             return;
         }
