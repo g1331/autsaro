@@ -3,6 +3,8 @@
 #define LSDUR_H
 #include "Std_Types.h"
 #include "ComStack_Types.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define LSDUR_MODULE_ID 132u
 /** Configuration identity (CP_SWS_LSduR_91004). */
 typedef uint16 LSduR_PBConfigIdType;
 /** Initialization state (CP_SWS_LSduR_91005). */

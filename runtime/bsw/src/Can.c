@@ -707,7 +707,7 @@ static CAN_CODE void Can_ReadRx(void)
     if (lost != 0u) {
         SchM_Exit_Can_CAN_STATE();
         /* SWS_Can_00226: report before Rx can reentrantly replace consumers. */
-        (void)Det_ReportRuntimeError(CAN_MODULE_ID, 0u, 0x08u, CAN_E_DATALOST);
+        (void)Det_ReportRuntimeError(CAN_MODULE_ID, 0u, CAN_SID_MAIN_FUNCTION_READ, CAN_E_DATALOST);
         SchM_Enter_Can_CAN_STATE();
     }
     (void)Can_DeliverRx();

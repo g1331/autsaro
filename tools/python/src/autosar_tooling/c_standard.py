@@ -252,6 +252,19 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
                         add("bsw-native-type", Token(value.text, offset + value.start, offset + value.end))
 
     code = [t for t in tokens if not is_comment(t) and not t.text.lstrip().startswith("#")]
+    if bsw and name.endswith(".c"):
+        for index, token in enumerate(code[:-1]):
+            if token.text not in {"Det_ReportError", "Det_ReportRuntimeError", "Det_ReportTransientFault"} or code[index + 1].text != "(":
+                continue
+            depth, argument = 0, 0
+            for value in code[index + 2:]:
+                if value.text == ")" and depth == 0:
+                    break
+                if value.text == "," and depth == 0:
+                    argument += 1
+                elif argument in {0, 2} and value.text[0].isdigit():
+                    add("det-numeric-id", value)
+                depth += (value.text == "(") - (value.text == ")")
     stack: list[str] = []
     statement: list[Token] = []
     parens = 0

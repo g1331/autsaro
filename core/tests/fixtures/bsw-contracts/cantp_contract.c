@@ -766,6 +766,10 @@ static void reentrant_requests(void)
 
 int main(void)
 {
+    /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
+    assert(CANTP_MODULE_ID == 35u && CANTP_SID_MAIN_FUNCTION == 0x06u &&
+           CANTP_SID_RX_INDICATION == 0x42u && CANTP_SID_CANCEL_TRANSMIT == 0x4au &&
+           CANTP_SID_CANCEL_RECEIVE == 0x4cu);
     void (*initialize)(const CanTp_ConfigType *) = CanTp_Init;
     void (*shutdown)(void) = CanTp_Shutdown;
     Std_ReturnType (*request)(PduIdType, const PduInfoType *) = CanTp_Transmit;

@@ -2,6 +2,8 @@
 #ifndef DET_H
 #define DET_H
 #include "Std_Types.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define DET_MODULE_ID 15u
 
 /** SWS_Det_00180/00181/00184: synchronous, reentrant report notification.
  * Callouts receive the original identity and should return E_OK. Det ignores

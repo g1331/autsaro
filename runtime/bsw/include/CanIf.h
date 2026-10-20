@@ -4,6 +4,10 @@
 #include "Std_Types.h"
 #include "ComStack_Types.h"
 #include "Can_GeneralTypes.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+#define CANIF_MODULE_ID         60u
+#define CANIF_SID_TRANSMIT      0x49u /**< SWS_CANIF_00005: service ID. */
+#define CANIF_SID_RX_INDICATION 0x14u /**< SWS_CANIF_00006: service ID. */
 /* Runtime errors reported to Det (SWS_CANIF_91007). */
 #define CANIF_E_INVALID_DATA_LENGTH   61u /**< Received DLC fails the data length check. */
 #define CANIF_E_DATA_LENGTH_MISMATCH  62u /**< Transmit length exceeds the CAN frame. */

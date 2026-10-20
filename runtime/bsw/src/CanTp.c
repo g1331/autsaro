@@ -12,11 +12,6 @@
 #define CANTP_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanTp_MemMap.h"
 
-#define CANTP_MODULE_ID       35u
-#define CANTP_SID_MAIN        0x06u
-#define CANTP_SID_RX_INDICATE 0x42u
-#define CANTP_SID_CANCEL_TX   0x4au
-#define CANTP_SID_CANCEL_RX   0x4cu
 /* Runtime error values (SWS_CanTp_00352); zero means none. */
 #define CANTP_E_PADDING       0x70u
 #define CANTP_E_OPER_NOT_SUPP 0xa0u
@@ -685,7 +680,7 @@ static CANTP_CODE void CanTp_Perform(CanTp_WorkType *work)
     } else if (work->kind == CANTP_WORK_RX_DONE) {
         PduR_CanTpRxIndication(work->id, work->result);
     } else if (work->kind == CANTP_WORK_FRAME) {
-        CanTp_Report(CANTP_SID_RX_INDICATE, CanTp_Frame(work));
+        CanTp_Report(CANTP_SID_RX_INDICATION, CanTp_Frame(work));
     } else if (work->kind == CANTP_WORK_COPY_TX) {
         /* No retry information: ISO 15765-2 has no recovery (SWS_CanTp_00272). */
         PduLengthType available = 0u;
@@ -700,7 +695,7 @@ static CANTP_CODE void CanTp_Perform(CanTp_WorkType *work)
         PduLengthType available = 0u;
         const PduInfoType query = {NULL_PTR, NULL_PTR, 0u};
         const BufReq_ReturnType result = PduR_CanTpCopyRxData(work->id, &query, &available);
-        CanTp_Report(CANTP_SID_MAIN, CanTp_Polled(work, result, available));
+        CanTp_Report(CANTP_SID_MAIN_FUNCTION, CanTp_Polled(work, result, available));
     }
 }
 /* Makes the calls owed so far unless another context is making them; that
@@ -786,7 +781,7 @@ CANTP_CODE Std_ReturnType CanTp_CancelTransmit(PduIdType TxPduId)
     SchM_Exit_CanTp_CANTP_STATE();
     /* CanTpTc is false: no transmission of this N-SDU can be cancelled (SWS_CanTp_00242). */
     if (known == TRUE) {
-        CanTp_Report(CANTP_SID_CANCEL_TX, CANTP_E_OPER_NOT_SUPP);
+        CanTp_Report(CANTP_SID_CANCEL_TRANSMIT, CANTP_E_OPER_NOT_SUPP);
     }
     return E_NOT_OK;
 }
@@ -813,7 +808,7 @@ CANTP_CODE Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId)
         }
     }
     SchM_Exit_CanTp_CANTP_STATE();
-    CanTp_Report(CANTP_SID_CANCEL_RX, error);
+    CanTp_Report(CANTP_SID_CANCEL_RECEIVE, error);
     if (result == E_OK) {
         CanTp_Run(TRUE);
     }
@@ -852,7 +847,7 @@ CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfo
         }
     }
     SchM_Exit_CanTp_CANTP_STATE();
-    CanTp_Report(CANTP_SID_RX_INDICATE, error);
+    CanTp_Report(CANTP_SID_RX_INDICATION, error);
     CanTp_Run(TRUE);
 }
 CANTP_CODE void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result)
@@ -886,8 +881,8 @@ CANTP_CODE void CanTp_MainFunction(void)
         rx_error = CanTp_RxTick();
     }
     SchM_Exit_CanTp_CANTP_STATE();
-    CanTp_Report(CANTP_SID_MAIN, tx_error);
-    CanTp_Report(CANTP_SID_MAIN, rx_error);
+    CanTp_Report(CANTP_SID_MAIN_FUNCTION, tx_error);
+    CanTp_Report(CANTP_SID_MAIN_FUNCTION, rx_error);
     CanTp_Run(TRUE);
 }
 #define CANTP_STOP_SEC_CODE

@@ -335,10 +335,10 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
     }
     SchM_Exit_CanIf_CANIF_STATE();
     if (errors[0] != 0u) {
-        (void)Det_ReportRuntimeError(60u, 0u, 0x49u, errors[0]);
+        (void)Det_ReportRuntimeError(CANIF_MODULE_ID, 0u, CANIF_SID_TRANSMIT, errors[0]);
     }
     if (errors[1] != 0u) {
-        (void)Det_ReportRuntimeError(60u, 0u, 0x49u, errors[1]);
+        (void)Det_ReportRuntimeError(CANIF_MODULE_ID, 0u, CANIF_SID_TRANSMIT, errors[1]);
     }
     if (reserved != 0u) {
         const Std_ReturnType written = Can_Write(hoh, &pdu);
@@ -486,7 +486,8 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
     }
     SchM_Exit_CanIf_CANIF_STATE();
     if (invalid_length != 0u) {
-        (void)Det_ReportRuntimeError(60u, 0u, 20u, CANIF_E_INVALID_DATA_LENGTH);
+        (void)Det_ReportRuntimeError(
+            CANIF_MODULE_ID, 0u, CANIF_SID_RX_INDICATION, CANIF_E_INVALID_DATA_LENGTH);
     }
     if (deliver != 0u) {
         LSduR_CanIfRxIndication(id, PduInfoPtr);

@@ -161,6 +161,9 @@ static void start(void)
 }
 int main(void)
 {
+    /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
+    assert(DCM_MODULE_ID == 53u && COMM_MODULE_ID == 12u && BSWM_MODULE_ID == 42u &&
+           PDUR_MODULE_ID == 51u && LSDUR_MODULE_ID == 132u);
     BufReq_ReturnType (*start_rx)(PduIdType, const PduInfoType *, PduLengthType, PduLengthType *) =
         Dcm_StartOfReception;
     BufReq_ReturnType (*copy_rx)(PduIdType, const PduInfoType *, PduLengthType *) = Dcm_CopyRxData;
