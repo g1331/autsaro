@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct DiagnosticContract {
     pub data: String,
     pub did_object: String,
@@ -37,6 +38,7 @@ pub struct DiagnosticContract {
 /// The physical UDS transport exists independently of an optional application DID.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct DiagnosticTransportContract {
     pub rx_sdu: String,
     pub tx_sdu: String,

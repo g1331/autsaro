@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct RuleSetIdentity {
     pub release: String,
     pub rules_version: String,
@@ -12,6 +13,7 @@ pub struct RuleSetIdentity {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum ValidationScope {
     SourceSafety,
     Schema,
@@ -21,6 +23,7 @@ pub enum ValidationScope {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum ValidationStatus {
     Passed,
     Failed,
@@ -30,6 +33,7 @@ pub enum ValidationStatus {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct RuleCoverage {
     pub rule_id: String,
     pub scope: ValidationScope,
@@ -40,6 +44,7 @@ pub struct RuleCoverage {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ValidationWitness {
     pub rule_id: String,
     pub subjects: Vec<String>,
@@ -49,6 +54,7 @@ pub struct ValidationWitness {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ConfigurationDiagnostic {
     pub scope: ValidationScope,
     pub rule_id: String,
@@ -66,6 +72,7 @@ pub struct ConfigurationDiagnostic {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ScopeValidation {
     pub scope: ValidationScope,
     pub status: ValidationStatus,
@@ -75,6 +82,7 @@ pub struct ScopeValidation {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum ValueKind {
     Integer,
     Float,
@@ -87,6 +95,7 @@ pub enum ValueKind {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct TypedValue {
     pub kind: ValueKind,
     pub lexeme: String,
@@ -94,6 +103,7 @@ pub struct TypedValue {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "lowercase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum ValueState {
     Absent,
     Explicit { value: TypedValue },
@@ -105,6 +115,7 @@ pub enum ValueState {
     rename_all = "lowercase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum ObjectRef {
     Existing { object_id: String },
     Created { change_id: String },
@@ -116,6 +127,7 @@ pub enum ObjectRef {
     rename_all = "lowercase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum FieldRef {
     Existing {
         field_id: String,
@@ -133,6 +145,7 @@ pub enum FieldRef {
     rename_all = "lowercase",
     rename_all_fields = "camelCase"
 )]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum ReferenceState {
     Absent,
     Explicit {
@@ -144,6 +157,7 @@ pub enum ReferenceState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct DefinitionDescriptor {
     pub definition_id: String,
     #[serde(default)]
@@ -165,6 +179,7 @@ pub struct DefinitionDescriptor {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct LinkedEdit {
     pub kind: String,
     pub group_id: String,
@@ -174,6 +189,7 @@ pub struct LinkedEdit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct FieldDescriptor {
     pub field_id: String,
     pub object_id: String,
@@ -186,6 +202,7 @@ pub struct FieldDescriptor {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct SourceProjection {
     pub source_id: String,
     pub path: String,
@@ -195,6 +212,7 @@ pub struct SourceProjection {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ObjectProjection {
     pub object_id: String,
     pub parent_id: Option<String>,
@@ -209,6 +227,7 @@ pub struct ObjectProjection {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ReferenceEdge {
     pub object_id: String,
     pub field_id: String,
@@ -220,6 +239,7 @@ pub struct ReferenceEdge {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ExtensionDefinitionIdentity {
     pub catalog_id: String,
     pub release: String,
@@ -229,6 +249,7 @@ pub struct ExtensionDefinitionIdentity {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ActionCapability {
     pub action: String,
     pub available: bool,
@@ -237,6 +258,7 @@ pub struct ActionCapability {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ReferenceCandidate {
     pub field_id: String,
     pub target_id: String,
@@ -248,6 +270,7 @@ pub struct ReferenceCandidate {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ReferenceTarget {
     pub target_id: String,
     pub path: String,
@@ -258,6 +281,7 @@ pub struct ReferenceTarget {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CreatedReferenceTarget {
     pub definition_id: String,
     pub dest: String,
@@ -265,6 +289,7 @@ pub struct CreatedReferenceTarget {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CreationReferenceOption {
     pub field_definition_id: String,
     pub existing_targets: Vec<ReferenceTarget>,
@@ -273,6 +298,7 @@ pub struct CreationReferenceOption {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct InstanceDefinitionTemplate {
     pub definition: DefinitionDescriptor,
     pub fields: Vec<DefinitionDescriptor>,
@@ -282,6 +308,7 @@ pub struct InstanceDefinitionTemplate {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct InstanceDefinitionOption {
     pub parent_id: String,
     pub definition: DefinitionDescriptor,
@@ -293,6 +320,7 @@ pub struct InstanceDefinitionOption {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ExtensionDefinitionView {
     pub identity: ExtensionDefinitionIdentity,
     pub source: Option<String>,
@@ -303,6 +331,7 @@ pub struct ExtensionDefinitionView {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ProjectProjection {
     pub workspace_epoch: String,
     pub input_fingerprint: String,
@@ -327,6 +356,7 @@ pub struct ProjectProjection {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "kebab-case", rename_all_fields = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum ConfigurationChange {
     SetValue {
         change_id: String,
@@ -362,6 +392,7 @@ pub enum ConfigurationChange {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ChangeSet {
     pub workspace_epoch: String,
     pub input_fingerprint: String,
@@ -371,6 +402,7 @@ pub struct ChangeSet {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ChangeImpact {
     pub change_id: String,
     pub source_id: String,
@@ -384,6 +416,7 @@ pub struct ChangeImpact {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ChangePreview {
     pub change_revision: String,
     pub input_fingerprint: String,
@@ -394,6 +427,7 @@ pub struct ChangePreview {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CreatedObject {
     pub change_id: String,
     pub object_id: String,
@@ -401,6 +435,7 @@ pub struct CreatedObject {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CreatedField {
     pub entry_key: String,
     pub field_id: String,
@@ -408,6 +443,7 @@ pub struct CreatedField {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ChangeOutcome {
     pub projection: ProjectProjection,
     pub selection_id: Option<String>,

@@ -8,6 +8,7 @@ use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum CommunicationIntegerType {
     Uint8,
     Uint16,
@@ -25,6 +26,7 @@ impl CommunicationIntegerType {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CanRuntimeContract {
     pub controller: String,
     pub controller_id: u8,
@@ -45,6 +47,7 @@ pub struct CanRuntimeContract {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct PartitionRuntimeContract {
     pub path: String,
     pub name: String,
@@ -56,6 +59,7 @@ pub struct PartitionRuntimeContract {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CommunicationRuntimeContract {
     pub pdu_collection: String,
     pub pdu_id_type: CommunicationIntegerType,

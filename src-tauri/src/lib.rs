@@ -1,3 +1,49 @@
+// Keep runtime registration and test-only signature extraction on one command list.
+macro_rules! ipc_commands {
+    ($($collector:ident)::+) => {
+        $($collector)::+![
+            configuration::project_projection,
+            configuration::read_project_source,
+            configuration::prepare_configuration_change,
+            configuration::apply_configuration_change,
+            configuration::import_definition_catalog,
+            configuration::remove_definition_catalog,
+            configuration::open_member_project,
+            configuration::preview_project_creation,
+            configuration::create_project_previewed,
+            configuration::preview_save_as_project,
+            configuration::save_as_project_previewed,
+            configuration::preview_application_initialization,
+            configuration::initialize_application_previewed,
+            configuration::configure_appearance,
+            configuration::configure_language,
+            configuration::verification_metrics,
+            verification::verification_owned_failure,
+            settings::workbench_capabilities,
+            settings::configure_execution_tools,
+            settings::select_build_target,
+            settings::cancel_operation,
+            project::close_project,
+            project::workspace_view,
+            editing::inspect_integration,
+            editing::edit_integration,
+            editing::preview_integration_save,
+            editing::save_integration,
+            project::create_project,
+            project::open_project,
+            project::open_handoff_project,
+            delivery::preview_ecu_project,
+            delivery::generate_ecu_project,
+            delivery::build_ecu,
+            delivery::verify_ecu,
+            delivery::preflight_ecu,
+            project::preview_save_project,
+            project::save_project,
+            editing::validate_project
+        ]
+    };
+}
+
 mod configuration;
 mod delivery;
 mod editing;
@@ -49,6 +95,7 @@ async fn integration_background<T: Send + 'static>(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(specta::Type))]
 struct SaveOutcome {
     workspace: WorkspaceView,
     error: Option<autosar_config_core::LocalizedText>,
@@ -103,46 +150,10 @@ pub fn run() {
             app.manage(state);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            configuration::project_projection,
-            configuration::read_project_source,
-            configuration::prepare_configuration_change,
-            configuration::apply_configuration_change,
-            configuration::import_definition_catalog,
-            configuration::remove_definition_catalog,
-            configuration::open_member_project,
-            configuration::preview_project_creation,
-            configuration::create_project_previewed,
-            configuration::preview_save_as_project,
-            configuration::save_as_project_previewed,
-            configuration::preview_application_initialization,
-            configuration::initialize_application_previewed,
-            configuration::configure_appearance,
-            configuration::configure_language,
-            configuration::verification_metrics,
-            verification::verification_owned_failure,
-            settings::workbench_capabilities,
-            settings::configure_execution_tools,
-            settings::select_build_target,
-            settings::cancel_operation,
-            project::close_project,
-            project::workspace_view,
-            editing::inspect_integration,
-            editing::edit_integration,
-            editing::preview_integration_save,
-            editing::save_integration,
-            project::create_project,
-            project::open_project,
-            project::open_handoff_project,
-            delivery::preview_ecu_project,
-            delivery::generate_ecu_project,
-            delivery::build_ecu,
-            delivery::verify_ecu,
-            delivery::preflight_ecu,
-            project::preview_save_project,
-            project::save_project,
-            editing::validate_project
-        ])
+        .invoke_handler(ipc_commands!(tauri::generate_handler))
         .run(context)
         .unwrap_or_else(|error| panic!("{error}"));
 }
+
+#[cfg(test)]
+mod ipc;

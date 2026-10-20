@@ -15,6 +15,7 @@ impl BuildTarget {
 /// External executable paths are supplied by the caller; constructing settings
 /// never launches a process or probes the host environment.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ExecutionSettings {
     pub compiler: PathBuf,
     pub objdump: PathBuf,

@@ -4,6 +4,7 @@ use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct DataPort {
     pub path: String,
     pub name: String,

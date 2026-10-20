@@ -107,6 +107,7 @@ pub const FORMAT_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum DiagnosticCategory {
     Input,
     Unsupported,
@@ -116,6 +117,7 @@ pub enum DiagnosticCategory {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct PlanDiagnostic {
     pub category: DiagnosticCategory,
     pub code: String,
@@ -331,6 +333,7 @@ fn portable_component(part: &str) -> bool {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct SourceIdentity {
     pub logical_path: String,
     pub raw_sha256: String,
@@ -339,6 +342,7 @@ pub struct SourceIdentity {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ObjectIdentity {
     pub path: String,
     pub kind: String,

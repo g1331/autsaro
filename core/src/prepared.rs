@@ -53,6 +53,7 @@ impl PlanDiagnostic {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum PreflightStatus {
     NotRun,
     Passed,
@@ -61,6 +62,7 @@ pub enum PreflightStatus {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct PreflightReport {
     pub status: PreflightStatus,
     pub fingerprint: String,

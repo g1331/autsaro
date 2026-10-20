@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tauri::State;
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) fn workbench_capabilities(
     state: State<'_, Arc<AppState>>,
 ) -> Result<Capabilities, autosar_config_core::LocalizedText> {
@@ -16,6 +17,7 @@ pub(super) fn workbench_capabilities(
     result
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn configure_execution_tools(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -27,6 +29,7 @@ pub(super) async fn configure_execution_tools(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn select_build_target(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -38,6 +41,7 @@ pub(super) async fn select_build_target(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn cancel_operation(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,

@@ -8,11 +8,13 @@ import { controllerResources } from './controller';
 import { actionResources } from './actions';
 import { displayPath } from '../pathDisplay';
 
-export type LanguagePreference = 'system' | 'zh-CN' | 'en';
+import type { Language as LanguagePreference } from '../ipc/bindings';
+export type { Language as LanguagePreference } from '../ipc/bindings';
 export type Language = 'zh-CN' | 'en';
 export type MessageParams = Record<string, string | number | boolean | null>;
-export type Message = { key: string; params: MessageParams };
-export type LocalizedText = Message | string | LocalizedText[];
+export type { LocalizedText } from '../ipc/bindings';
+import type { LocalizedText, ProductMessage as Message } from '../ipc/bindings';
+export type { ProductMessage as Message } from '../ipc/bindings';
 /** Frontend-only composition retains nested messages until presentation. IPC stays LocalizedText. */
 export type Text =
   LocalizedText | { key: string; params: MessageParams; values: Record<string, Text> } | Text[];
@@ -111,7 +113,7 @@ void i18n.use(initReactI18next).init({
  * the punctuation (or bracket) that follows, so the result has exactly one whatever the backend wrote.
  */
 i18n.services.formatter?.add('bare', (value) => String(value).replace(/\s*[。.！!？?；;]+$/, ''));
-export function translate(key: string, params: MessageParams = {}): string {
+export function translate(key: string, params: Message['params'] = {}): string {
   const displayParams = { ...params };
   for (const name of ['path', 'file', 'directory', 'backup']) {
     const value = displayParams[name];

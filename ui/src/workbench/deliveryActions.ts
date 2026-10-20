@@ -1,19 +1,8 @@
 import { composedMessage, message } from '../i18n';
 import type { Text } from '../i18n';
-import type {
-  BuildResult,
-  GenerateResult,
-  GenerationPreview,
-  IntegrationInspection,
-  PreflightReport,
-  SaveOutcome,
-  SavePreview,
-  VirtualResult,
-  WorkspaceView,
-} from '../types';
+import type { IntegrationInspection, WorkspaceView } from '../types';
 import type { Stage, StageState } from './forms';
 import { distinct } from './forms';
-import type { ProjectProjection } from './projectTypes';
 import type { WorkbenchOperation } from './operation';
 import type { WorkbenchSession } from './session';
 import { stageDefaults } from './useDelivery';
@@ -60,7 +49,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   function saveProject() {
     void run(
       { kind: 'savePreview', label: message('activity.previewSave') },
-      () => call<SavePreview>('preview_save_project'),
+      () => call('preview_save_project'),
       (preview) => {
         if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
           setNotice({ tone: 'info', text: message('workflow.save.noChanges') });
@@ -82,7 +71,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
       return;
     void run(
       { kind: 'action', label: message('activity.save') },
-      () => call<SaveOutcome>('save_project', { revision: savePreview.revision }),
+      () => call('save_project', { revision: savePreview.revision }),
       (result) => {
         acceptView(result.workspace);
         if (result.error) {
@@ -116,9 +105,9 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     void run(
       { kind: 'action', label: message('activity.validate') },
       async () => {
-        const view = await call<WorkspaceView>('validate_project');
+        const view = await call('validate_project');
         // Automatic diagnostics are only in the projection; count both sources.
-        const projection = await call<ProjectProjection>('project_projection');
+        const projection = await call('project_projection');
         return { view, projection };
       },
       ({ view, projection }) => {
@@ -153,7 +142,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   function previewIntegrationSave() {
     void run(
       { kind: 'savePreview', label: message('activity.previewSave') },
-      () => call<SavePreview>('preview_integration_save'),
+      () => call('preview_integration_save'),
       (preview) => {
         if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
           patchState({ integrationIssues: [] });
@@ -175,7 +164,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     if (!preview) return;
     void run(
       { kind: 'action', label: message('activity.save') },
-      () => call<SaveOutcome>('save_integration', { revision: preview.revision }),
+      () => call('save_integration', { revision: preview.revision }),
       (result) => {
         acceptView(result.workspace);
         patchState({
@@ -246,9 +235,9 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     void run(
       { kind: 'action', label: message('activity.previewSource') },
       async () => {
-        const inspection = await call<IntegrationInspection>('inspect_integration');
+        const inspection = await call('inspect_integration');
         if (!inspection.description) throw inspection.diagnostics;
-        const preview = await call<GenerationPreview>('preview_ecu_project', {
+        const preview = await call('preview_ecu_project', {
           outputDirectory: state.ecuOutputDirectory,
           handoff: generationKind === 'handoff',
         });
@@ -269,7 +258,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     void run(
       { kind: 'action', label: message('activity.generate') },
       () =>
-        call<GenerateResult>('generate_ecu_project', {
+        call('generate_ecu_project', {
           outputDirectory: generationPreview.outputDirectory,
           handoff: generationKind === 'handoff',
           revision: generationPreview.revision,
@@ -296,7 +285,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
     if (workspace?.dirty || state.projection?.dirty || unapplied) return;
     void run(
       { kind: 'action', label: message('activity.preflight') },
-      () => call<PreflightReport>('preflight_ecu', { handoff: generationKind === 'handoff' }),
+      () => call('preflight_ecu', { handoff: generationKind === 'handoff' }),
       (report) => {
         field('preflight')(report);
         setNotice({
@@ -328,7 +317,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
         setBuilt(null);
         setVirtualResult(null);
         markStage('virtual', 'stale', message('workflow.stage.rebuilding'));
-        return call<BuildResult>('build_ecu', {
+        return call('build_ecu', {
           outputDirectory: generated.outputDirectory,
           buildDirectory,
         });
@@ -349,7 +338,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
       { kind: 'action', label: message('activity.verifyHost') },
       () => {
         setVirtualResult(null);
-        return call<VirtualResult>('verify_ecu', { outputDirectory: generated.outputDirectory });
+        return call('verify_ecu', { outputDirectory: generated.outputDirectory });
       },
       (value) => {
         setVirtualResult(value);

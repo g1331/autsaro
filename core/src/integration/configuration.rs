@@ -64,6 +64,7 @@ RteUsedOsSchTblExpiryPointRef RteBswUsedOsSchTblExpiryPointRef OsScheduleTableCo
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ConfigurationRecord {
     pub path: String,
     pub definition: String,
@@ -73,6 +74,7 @@ pub struct ConfigurationRecord {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct EventAssignment {
     pub path: String,
     pub handle: u8,

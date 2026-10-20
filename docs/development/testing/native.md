@@ -45,6 +45,8 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 
 原生夹具按消费者能力放在 `core/tests/fixtures/` 的子目录：`host-batch/` 保存 HostBatch 协议与帧计时控制，`os/` 保存 OS 控制、ARTI 读取及生命周期程序，`sanitizers/` 保存共享故障注入程序，`implementation-descriptions/` 保存实现描述读取程序。OS 控制文件之间的相对 include 保持同目录；移动夹具时同步 Rust、Python 和 official 消费方。
 
+Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元数据收集可能把窗口运行时符号链接进 libtest，而上游默认只给应用二进制嵌入 manifest。`src-tauri/build.rs` 为应用与测试统一链接同一份 manifest，正常 `cargo test` 直接可用；遇到 `0xc0000139` 且零测试执行时先检查加载与 manifest，不能算成测试失败用例或靠跳过测试处理。
+
 ## 运行时配置结构与源文件迁移
 
 - 给运行时配置结构（如 `Os_TargetConfig`、`Os_ResourceConfig`）加字段时放在末尾，并更新全部位置式初始化：`runtime/*/tests/*.c`、生成器按位置输出的 `c_layout::initializer` 与模板。这些单元以 `-Werror=missing-field-initializers` 编译，生成工程只在 `--features native-tests` 的原生套件中编译，`it` 通过不能证明。测试用 `#define` 给 hook 改名再包含另一个 harness 时，宏也会改写被包含文件里对该 hook 的取址；改由 harness 提供显式观察点。

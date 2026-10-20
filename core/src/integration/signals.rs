@@ -6,6 +6,7 @@ use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct SignalChannel {
     pub port: String,
     pub system_signal: String,

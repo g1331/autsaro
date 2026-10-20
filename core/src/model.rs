@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct Issue {
     pub severity: Severity,
     pub code: String,
@@ -14,6 +15,7 @@ pub struct Issue {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum Severity {
     Error,
     Warning,
@@ -38,6 +40,7 @@ impl Issue {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct FileView {
     pub path: String,
     pub readonly: bool,
@@ -46,6 +49,7 @@ pub struct FileView {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct WorkspaceView {
     #[serde(default)]
     pub integration_candidate: bool,
@@ -60,6 +64,7 @@ pub struct WorkspaceView {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct SavePreviewFile {
     pub path: String,
     pub changed: bool,
@@ -69,6 +74,7 @@ pub struct SavePreviewFile {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct SavePreview {
     pub revision: String,
     pub files: Vec<SavePreviewFile>,
@@ -76,6 +82,7 @@ pub struct SavePreview {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct GenerationReport {
     pub output_directory: String,
     pub previous_output_directory: Option<String>,
@@ -85,6 +92,7 @@ pub struct GenerationReport {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct GenerationPreviewFile {
     pub path: String,
     pub status: String,
@@ -100,6 +108,7 @@ pub struct GenerationPreviewFile {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct GenerationPreview {
     pub output_directory: String,
     pub revision: String,
@@ -108,6 +117,7 @@ pub struct GenerationPreview {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct BuildReport {
     pub binary_path: String,
     pub log: String,
@@ -115,6 +125,7 @@ pub struct BuildReport {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct RunReport {
     pub passed: bool,
     pub log: crate::message::LocalizedText,

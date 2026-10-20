@@ -6,6 +6,7 @@ license = "Apache-2.0"
 publish = false
 
 [features]
+ipc-types = ["dep:specta", "dep:specta-typescript"]
 verification-metrics = []
 official-oracles = []
 native-tests = []
@@ -19,6 +20,8 @@ name = "native"
 required-features = ["native-tests"]
 
 [dependencies]
+specta-typescript = { version = "=0.0.12", optional = true }
+specta = { version = "=2.0.0-rc.25", features = ["derive", "serde_json"], optional = true }
 libxml = "0.3.21"
 libc = "0.2"
 parking_lot = "0.12"
@@ -30,6 +33,7 @@ hex = "0.4"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [build-dependencies]
+specta = { version = "=2.0.0-rc.25", features = ["derive"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"

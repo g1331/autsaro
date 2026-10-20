@@ -39,7 +39,6 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
   const busy = Boolean(controller.busy);
   const locked = busy;
   const plan = inspection?.description;
-  const component = plan?.component;
   // The historical chain and the mainline both plan one shared application period.
   const planned = applicationPeriodMs(plan);
   return (
@@ -121,7 +120,6 @@ export function IntegrationPanel({ controller }: { controller: Workbench }) {
           {planned !== null && (
             <div className="inspector-block">
               <h3>{t('shell.integration.parameters')}</h3>
-              {component && <p className="mono path-text">{component.instance}</p>}
               <div className="integration-fields">
                 {plan.signals.map((signal) => (
                   <label className="field" key={signal.port}>

@@ -47,6 +47,7 @@ fn english_template(key: &str) -> Option<&'static str> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum LocalizedText {
     Message(ProductMessage),
     Raw(String),
@@ -54,8 +55,11 @@ pub enum LocalizedText {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ProductMessage {
     pub key: Cow<'static, str>,
+    // JSON values are intentionally unrestricted; avoid recursively inlining serde_json::Value.
+    #[cfg_attr(feature = "ipc-types", specta(type = BTreeMap<String, specta_typescript::Unknown>))]
     pub params: BTreeMap<Cow<'static, str>, serde_json::Value>,
 }
 

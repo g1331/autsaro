@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Output identity, independent of the operating system running the workbench.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub enum BuildTarget {
     #[serde(rename = "windows-x64-controlled-v1")]
     WindowsX64ControlledV1,

@@ -22,6 +22,7 @@ fn check_batch_token(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn project_projection(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -40,6 +41,7 @@ pub(crate) async fn project_projection(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn read_project_source(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -52,6 +54,7 @@ pub(crate) async fn read_project_source(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn prepare_configuration_change(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -74,6 +77,7 @@ pub(crate) async fn prepare_configuration_change(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn apply_configuration_change(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -95,6 +99,7 @@ pub(crate) async fn apply_configuration_change(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn import_definition_catalog(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -116,6 +121,7 @@ pub(crate) async fn import_definition_catalog(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn remove_definition_catalog(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -136,6 +142,7 @@ pub(crate) async fn remove_definition_catalog(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn open_member_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -156,6 +163,7 @@ pub(crate) async fn open_member_project(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn preview_project_creation(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -177,6 +185,7 @@ pub(crate) async fn preview_project_creation(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn create_project_previewed(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -200,6 +209,7 @@ pub(crate) async fn create_project_previewed(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn preview_save_as_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -221,6 +231,7 @@ pub(crate) async fn preview_save_as_project(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn save_as_project_previewed(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -247,6 +258,7 @@ pub(crate) async fn save_as_project_previewed(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn configure_appearance(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -259,6 +271,7 @@ pub(crate) async fn configure_appearance(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn configure_language(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -272,6 +285,7 @@ pub(crate) async fn configure_language(
 
 #[cfg(feature = "native-webdriver")]
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn verification_metrics(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -281,6 +295,7 @@ pub(crate) async fn verification_metrics(
 
 #[cfg(not(feature = "native-webdriver"))]
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn verification_metrics() -> Result<Reply<()>, autosar_config_core::LocalizedText>
 {
     Err(autosar_config_core::product_message!(
@@ -289,6 +304,7 @@ pub(crate) async fn verification_metrics() -> Result<Reply<()>, autosar_config_c
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn preview_application_initialization(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -314,6 +330,7 @@ pub(crate) async fn preview_application_initialization(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(crate) async fn initialize_application_previewed(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,

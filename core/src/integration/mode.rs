@@ -8,12 +8,14 @@ use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ModeUser {
     pub path: String,
     pub handle: u16,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ModeRule {
     pub path: String,
     pub mode: u8,
@@ -25,6 +27,7 @@ pub struct ModeRule {
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ModeRuntimeContract {
     pub channel: String,
     pub channel_handle: u8,

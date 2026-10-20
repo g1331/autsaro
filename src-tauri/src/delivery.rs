@@ -37,6 +37,7 @@ pub(super) fn prepare_ecu_for_operation<'a>(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn preview_ecu_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -66,6 +67,7 @@ pub(super) async fn preview_ecu_project(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn generate_ecu_project(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -96,6 +98,7 @@ pub(super) async fn generate_ecu_project(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn preflight_ecu(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -198,6 +201,7 @@ fn expected_ecu_files(
 }
 
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn build_ecu(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
@@ -247,6 +251,7 @@ pub(super) async fn build_ecu(
     .await
 }
 #[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn verify_ecu(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,

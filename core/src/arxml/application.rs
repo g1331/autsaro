@@ -8,6 +8,7 @@ const MANIFEST: &str = "workbench-project.json";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ApplicationInitializationPreview {
     pub revision: String,
     pub slots: Vec<ApplicationSlotDescriptor>,
@@ -18,6 +19,7 @@ pub struct ApplicationInitializationPreview {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ApplicationInitializationOutcome {
     pub projection: ProjectProjection,
     pub warnings: Vec<crate::message::LocalizedText>,
