@@ -425,7 +425,7 @@ fn all_rte_owned_input_types_have_one_declaration_and_external_emitters_stay_ext
         );
         rejected_at(
             &wrong,
-            "RTE_TYPE_UNSUPPORTED",
+            "CONTRACT_NAME_COLLISION",
             "types.arxml",
             &format!("/Types/{reserved}"),
         );

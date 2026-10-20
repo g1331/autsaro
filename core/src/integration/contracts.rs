@@ -192,11 +192,7 @@ typedef uint8 Rte_ModeType_{group};
         let description = self.description();
         let mut types = String::from("#include \"Rte.h\"\n");
         for datatype in &composition.types {
-            if matches!(
-                datatype.symbol.as_str(),
-                "CounterType" | "TimeInMicrosecondsType"
-            ) || (datatype.symbol == datatype.native_type && datatype.array_length.is_none())
-            {
+            if datatype.symbol == datatype.native_type && datatype.array_length.is_none() {
                 continue;
             }
             let suffix = datatype

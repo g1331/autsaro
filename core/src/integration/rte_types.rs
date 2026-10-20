@@ -184,18 +184,6 @@ pub(super) fn inspect(
             return Err(invalid(graph.index(&array.path)?));
         }
     }
-    // OS service types share Rte_Type.h with application types. Refuse a source
-    // declaration that would change their fixed standard representation.
-    for (symbol, native) in [
-        ("CounterType", "uint32"),
-        ("TimeInMicrosecondsType", "uint64"),
-    ] {
-        if let Some(item) = primitives.get(symbol).or_else(|| arrays.get(symbol))
-            && (item.native_type != native || item.array_length.is_some())
-        {
-            return Err(invalid(graph.index(&item.path)?));
-        }
-    }
     Ok(primitives
         .into_values()
         .chain(arrays.into_values())
