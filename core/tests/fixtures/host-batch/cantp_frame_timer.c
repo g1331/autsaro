@@ -14,7 +14,7 @@ static void require_at(int accepted, unsigned line)
 }
 #define require(accepted) require_at((accepted), __LINE__)
 
-static Os_HostThreadResult control(void *argument)
+static Os_HostThreadResultType control(void *argument)
 {
     static const uint8_t first[8] = {0x10u, 20u, 0x22u, 0x12u, 0x34u, 0x12u, 0x34u, 0x12u};
     static const uint8_t consecutive[8] = {0x21u, 0x34u, 0x12u, 0x34u, 0x12u, 0x34u, 0x12u, 0x34u};
@@ -30,7 +30,7 @@ static Os_HostThreadResult control(void *argument)
     }
     for (step = 1u; step <= 250u; ++step) {
         uint64_t ticket;
-        Os_TickCompletion completion;
+        Os_TickCompletionType completion;
         Ecu_ProtocolRecord failure;
         if ((step == 10u) || (step == 50u) || (step == 250u)) {
             const uint8_t *data = (step == 10u) ? first : ((step == 50u) ? consecutive : last);
@@ -72,7 +72,7 @@ static Os_HostThreadResult control(void *argument)
 
 int main(void)
 {
-    Os_HostHandle thread;
+    Os_HostHandleType thread;
     require(Ecu_TargetPrepare() == E_OK);
     thread = Os_HostSpawnThread(control, NULL);
     require(thread != NULL);

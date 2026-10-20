@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "owner";  /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "helper"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static char trace[128];      /**< Execution-order bytes; fixture-owned, no Init reset. */
 static unsigned length;      /**< Used execution-order bytes; fixture-owned, no Init reset. */
@@ -34,7 +37,7 @@ static void record(char marker)
 }
 static void enter(unsigned expected, const volatile char *marker)
 {
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     const uintptr_t address = (uintptr_t)marker;
     check(stack != NULL && stack->role == 'S');
     check(Os_BackendCurrentInterrupt() == expected);
@@ -304,18 +307,18 @@ int main(int argc, char **argv)
 {
     check(argc == 2);
     scenario = argv[1];
-    Os_TaskConfig tasks[2] = {
-        {0u, "owner", owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "helper", helper, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+    Os_TaskConfigType tasks[2] = {
+        {0u, task_name_0, owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, helper, 20u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
-    Os_IsrConfig interrupts = {.priorities = {[4u] = 15u, [6u] = 9u, [20u] = 3u}};
-    Os_ResourceConfig resources[3] = {
+    Os_IsrConfigType interrupts = {.priorities = {[4u] = 15u, [6u] = 9u, [20u] = 3u}};
+    Os_ResourceConfigType resources[3] = {
         {0u, 3u, 1u, UINT32_C(1) << 20u, 0u, 0u},
         {1u, 9u, 0u, UINT32_C(1) << 6u, 0u, 0u},
         {2u, 15u, 0u, UINT32_C(1) << 4u, 0u, 0u},
     };
-    const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    Os_TargetConfig target = {
+    const Os_HookConfigType hooks = {&ErrorHook, NULL, NULL};
+    Os_TargetConfigType target = {
         tasks, 2u, 262144u, resources, 3u, NULL, 0u, 0u, 0u, 0u, NULL, &hooks, &interrupts, 0u};
     if (is("equal") || is("lower")) {
         interrupts.priorities[6u] = is("equal") ? 3u : 2u;

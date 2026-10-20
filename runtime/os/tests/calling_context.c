@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "owner";   /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "monitor"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario;    /**< Main-owned scenario selection before StartOS; no Init reset. */
 static bool probed;             /**< Context probe completion; fixture-owned, no Init reset. */
 static unsigned errors;         /**< Observed checks/errors; fixture-owned, no Init reset. */
@@ -197,29 +200,29 @@ int main(int argc, char **argv)
 {
     check(argc == 2);
     scenario = argv[1];
-    const Os_TaskConfig tasks[2] = {
-        {0u, "owner", owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "monitor", monitor, 5u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+    const Os_TaskConfigType tasks[2] = {
+        {0u, task_name_0, owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, monitor, 5u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
-    const Os_HookConfig hooks = {&ErrorHook, &pre, &post};
-    const Os_CounterConfig counter = {0u, 1000u, 1u, 1u, 1u};
-    const Os_AlarmConfig alarm = {
+    const Os_HookConfigType hooks = {&ErrorHook, &pre, &post};
+    const Os_CounterConfigType counter = {0u, 1000u, 1u, 1u, 1u};
+    const Os_AlarmConfigType alarm = {
         0u, 0u, OS_ALARM_CALLBACK, 0u, 0u, &probe_calls, 1u, 0u, 1u, 0u, 0u};
-    const Os_TimeConfig time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
-    const Os_TargetConfig target = {tasks,
-                                    2u,
-                                    262144u,
-                                    NULL,
-                                    0u,
-                                    NULL,
-                                    0u,
-                                    UINT32_C(1) << 4u,
-                                    0u,
-                                    0u,
-                                    strcmp(scenario, "alarm-callback") == 0 ? &time : NULL,
-                                    &hooks,
-                                    NULL,
-                                    0u};
+    const Os_TimeConfigType time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
+    const Os_TargetConfigType target = {tasks,
+                                        2u,
+                                        262144u,
+                                        NULL,
+                                        0u,
+                                        NULL,
+                                        0u,
+                                        UINT32_C(1) << 4u,
+                                        0u,
+                                        0u,
+                                        strcmp(scenario, "alarm-callback") == 0 ? &time : NULL,
+                                        &hooks,
+                                        NULL,
+                                        0u};
     check(Os_TargetPrepare(&target) == E_OK);
     check(GetCoreID() == OS_CORE_ID_0);
     StartOS(1u);

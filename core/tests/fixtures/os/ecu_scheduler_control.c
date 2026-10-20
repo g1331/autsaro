@@ -9,7 +9,7 @@ int Ecu_TargetTestFailStage(unsigned stage) {
     /* Stage 9 precedes the periodic owner cycle: once per 10 ms application
      * run in the single chain, every tick on the mainline. */
     if ((stage == 9u) && ((Ecu_TargetNow() % 10u) == 0u)) {
-        Os_ActivationInfo info;
+        Os_ActivationInfoType info;
         StatusType status = GetResource(RES_SCHEDULER);
         require(status == ((expected_enabled != 0u) ? E_OK : E_OS_ID));
         require(Os_TargetInspectActivation(ECU_TARGET_TASK, &info) == E_OK);
@@ -41,14 +41,14 @@ int main(int argc, char **argv) {
         return 97;
     }
     if (expected_enabled != 0u) {
-        const Os_ResourceConfig *resource = Ecu_OsConfig.resources;
+        const Os_ResourceConfigType *resource = Ecu_OsConfig.resources;
         if (resource == NULL || resource->id != RES_SCHEDULER || resource->ceiling != 1u ||
             resource->task_access != 1u || resource->isr_access != 0u || resource->linked != 0u) {
             return 96;
         }
         for (unsigned i = 0u; i < 3u; ++i) {
-            Os_ResourceConfig wrong = *resource;
-            Os_TargetConfig config = Ecu_OsConfig;
+            Os_ResourceConfigType wrong = *resource;
+            Os_TargetConfigType config = Ecu_OsConfig;
             config.resources = &wrong;
             if (i == 0u) {
                 wrong.ceiling = 0u;

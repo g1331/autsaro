@@ -401,12 +401,35 @@ fn all_rte_owned_input_types_have_one_declaration_and_external_emitters_stay_ext
         .unwrap()
     };
     let types = header("include/Rte_Type.h");
+    // Verifies: SWS_BSW_00147 [Os], SWS_Os_00786, SWS_Os_00794.
+    assert_eq!(types.matches("typedef uint32 CounterType;").count(), 1);
+    assert_eq!(
+        types
+            .matches("typedef uint64 TimeInMicrosecondsType;")
+            .count(),
+        1
+    );
     assert_eq!(types.matches("typedef uint32 ValueType;").count(), 1);
     assert!(types.contains("typedef uint8 UnusedByte;"));
     assert!(!types.contains("Rte_ModeType_"));
     assert!(!types.contains("#include \"Rte_Dcm_Type.h\""));
     assert!(header("include/Rte_Process_Type.h").contains("#include \"Rte_Dcm_Type.h\""));
     assert!(header("include/Rte_Process.h").contains("ValueType *data"));
+    for reserved in ["CounterType", "TimeInMicrosecondsType"] {
+        let mut wrong = sources.clone();
+        xml_edit(
+            &mut wrong,
+            "types.arxml",
+            |node| named(node, "IMPLEMENTATION-DATA-TYPE", "UnusedByte"),
+            |text| text.replace("UnusedByte", reserved),
+        );
+        rejected_at(
+            &wrong,
+            "CONTRACT_NAME_COLLISION",
+            "types.arxml",
+            &format!("/Types/{reserved}"),
+        );
+    }
     let mut wrong = sources.clone();
     xml_edit(
         &mut wrong,

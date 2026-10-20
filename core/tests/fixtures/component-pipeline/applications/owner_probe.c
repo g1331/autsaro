@@ -16,7 +16,7 @@
 #include <string.h>
 
 void PipelineTest_Copy(uint32 result[10]);
-static Os_Atomic32 snapshot_lock;
+static Os_Atomic32Type snapshot_lock;
 static unsigned after_main;
 static unsigned canonical;
 static unsigned controls;
@@ -287,14 +287,14 @@ static void complete_response(const Ecu_OutputRecord *output)
 }
 static void wait_tick(uint64_t ticket)
 {
-    Os_TickCompletion completion;
+    Os_TickCompletionType completion;
     const uint64_t started = Os_HostMonotonicMs();
     while (Os_TargetTickCompletion(ticket, &completion) != E_OK) {
         require((Os_HostMonotonicMs() - started) < 5000u);
         Os_HostSleepMs(1u);
     }
 }
-static Os_HostThreadResult control(void *argument)
+static Os_HostThreadResultType control(void *argument)
 {
     uint64_t step;
     uint64_t started = Os_HostMonotonicMs();
@@ -346,7 +346,7 @@ static Os_HostThreadResult control(void *argument)
          ((epoch_zero != 0u) ? 30u : ((controls != 0u) ? 120u : ((canonical != 0u) ? 20u : 61u)));
          ++step) {
         uint64_t ticket;
-        Os_TickCompletion completion;
+        Os_TickCompletionType completion;
         if ((step == 31u) && (after_main == 0u) && (controls == 0u)) {
             receive(step, 42u);
             receive(step, 42u);
@@ -390,7 +390,7 @@ static Os_HostThreadResult control(void *argument)
 }
 int main(int argc, char **argv)
 {
-    Os_HostHandle thread;
+    Os_HostHandleType thread;
     if ((argc != 2) || ((strcmp(argv[1], "before") != 0) && (strcmp(argv[1], "after") != 0) &&
                         (strcmp(argv[1], "canonical") != 0) && (strcmp(argv[1], "controls") != 0) &&
                         (strcmp(argv[1], "epoch0") != 0) && (strcmp(argv[1], "late") != 0))) {

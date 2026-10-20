@@ -12,7 +12,7 @@ static bool
 static void observed_hook(void)
 {
     TaskType id = INVALID_TASK;
-    Os_ActivationInfo actual;
+    Os_ActivationInfoType actual;
     check(GetTaskID(&id) == E_OK && id < 3u);
     check(GetCoreID() == OS_CORE_ID_0);
     check(Os_TargetInspectActivation(id, &actual) == E_OK);
@@ -32,7 +32,7 @@ static void observed_hook(void)
     check(Os_ArtiTaskContexts[id] != NULL && Os_ArtiNativeContextSize == sizeof(CONTEXT));
 #ifdef __linux__
     {
-        const Os_NativeStack *native = Os_ArtiTaskStacks[id];
+        const Os_NativeStackType *native = Os_ArtiTaskStacks[id];
         const CONTEXT *saved = Os_ArtiTaskContexts[id];
         check(native->context_valid == 1u && native->altstack_size >= 65536u);
         check(native->kernel_buffer_low < native->kernel_buffer_high);

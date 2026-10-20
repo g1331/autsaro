@@ -7,6 +7,6 @@
 #define OS_INTERRUPT_VECTOR_COUNT 32u
 /* The fixed GCC targets place the table in its own writable section. */
 #define OS_VECTOR_TABLE_SECTION __attribute__((section(".os_vec"), aligned(8)))
-typedef uint32 (*Os_InterruptHandler)(void);
-extern Os_InterruptHandler Os_InterruptVectorTable[OS_INTERRUPT_VECTOR_COUNT];
+typedef uint32 (*Os_InterruptHandlerType)(void);
+extern Os_InterruptHandlerType Os_InterruptVectorTable[OS_INTERRUPT_VECTOR_COUNT];
 #endif

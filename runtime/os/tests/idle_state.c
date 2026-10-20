@@ -8,6 +8,8 @@
 #include <time.h>
 #endif
 
+static const uint8 task_name_0[] = "owner"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 static volatile LONG
     requested; /**< Atomic native/OS handoff requested; fixture-owned, no Init reset. */
@@ -144,23 +146,23 @@ int main(int argc, char **argv)
     check(argc == 2);
     scenario = argv[1];
     check(isOsStarted() == FALSE);
-    const Os_TaskConfig task = {
-        0u, "owner", owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u};
-    const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {&task,
-                                    1u,
-                                    262144u,
-                                    NULL,
-                                    0u,
-                                    NULL,
-                                    0u,
-                                    0u,
-                                    0u,
-                                    0u,
-                                    NULL,
-                                    strcmp(scenario, "unconfigured") == 0 ? NULL : &hooks,
-                                    NULL,
-                                    0u};
+    const Os_TaskConfigType task = {
+        0u, task_name_0, owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u};
+    const Os_HookConfigType hooks = {&ErrorHook, NULL, NULL};
+    const Os_TargetConfigType target = {&task,
+                                        1u,
+                                        262144u,
+                                        NULL,
+                                        0u,
+                                        NULL,
+                                        0u,
+                                        0u,
+                                        0u,
+                                        0u,
+                                        NULL,
+                                        strcmp(scenario, "unconfigured") == 0 ? NULL : &hooks,
+                                        NULL,
+                                        0u};
     check(Os_TargetPrepare(&target) == E_OK && isOsStarted() == FALSE);
     StartOS(1u);
     return 99;

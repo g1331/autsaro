@@ -157,7 +157,8 @@ pub(super) fn files(
     for (path, bytes) in plan.contract_headers(composition, &symbolic)? {
         if matches!(
             path.as_str(),
-            "include/Rte_Main.h"
+            "include/Rte_Type.h"
+                | "include/Rte_Main.h"
                 | "include/Rte.h"
                 | "include/Rte_Cfg.h"
                 | "include/Rte_DataHandleType.h"

@@ -122,7 +122,7 @@ StatusType ActivateTask(TaskType TaskID)
 StatusType TerminateTask(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 current =
         ((stack != NULL) && (stack->role == 'T')) ? (uint32)Os_ArtiRunningTask : UINT32_MAX;
     if (trace != 0) {

@@ -15,35 +15,38 @@
 
 #define OS_ALTSTACK_BYTES 65536u
 
-static Os_NativeStack stacks[OS_NATIVE_STACKS]; /**< Actor/stopped-observer records, atomic
+static Os_NativeStackType stacks[OS_NATIVE_STACKS]; /**< Actor/stopped-observer records, atomic
                                                    allocation; no Init reset. */
-const Os_NativeStack *const Os_ArtiStacks =
+const Os_NativeStackType *const Os_ArtiStacks =
     stacks; /**< Fixed native stacks tool view; C init only, never reset. */
 static CONTEXT
     saved_contexts[OS_NATIVE_STACKS]; /**< Observer-owned stopped contexts; no Init reset. */
-const size_t Os_ArtiNativeContextSize =
+const uint64 Os_ArtiNativeContextSize =
     sizeof(CONTEXT); /**< Fixed native context size tool view; C init only, never reset. */
 static union {
     long double alignment;
     unsigned char bytes[OS_ALTSTACK_BYTES];
 } altstacks[OS_NATIVE_STACKS]; /**< Actor-owned alternate signal stacks; no Init reset. */
-static volatile Os_Atomic32
-    stack_published[OS_NATIVE_STACKS];   /**< Completed registration publication; no Init reset. */
-static volatile Os_Atomic32 stack_count; /**< Atomic native record reservations; no Init reset. */
-static volatile Os_Atomic32 fault_claimed; /**< Atomic first-fault winner latch; no Init reset. */
-static volatile Os_Atomic32 fault_count;   /**< Atomic fault claim/count state; no Init reset. */
-static volatile Os_Atomic32
+static volatile Os_Atomic32Type
+    stack_published[OS_NATIVE_STACKS]; /**< Completed registration publication; no Init reset. */
+static volatile Os_Atomic32Type
+    stack_count; /**< Atomic native record reservations; no Init reset. */
+static volatile Os_Atomic32Type
+    fault_claimed;                           /**< Atomic first-fault winner latch; no Init reset. */
+static volatile Os_Atomic32Type fault_count; /**< Atomic fault claim/count state; no Init reset. */
+static volatile Os_Atomic32Type
     fatal_claimed;                  /**< Atomic terminal-report winner latch; no Init reset. */
 static volatile int32_t fault_park; /**< Constant-zero futex park cell; no Init writes. */
-static Os_StackFault fault_records[OS_NATIVE_STACKS]; /**< Per-actor fault slots, atomic
+static Os_StackFaultType fault_records[OS_NATIVE_STACKS]; /**< Per-actor fault slots, atomic
                                                          publication; no Init reset. */
-static __thread Os_NativeStack *current_stack; /**< Owning actor TLS stack record; no Init reset. */
+static OS_HOST_THREAD_LOCAL Os_NativeStackType
+    *current_stack; /**< Owning actor TLS stack record; no Init reset. */
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
 static char invalid_alt_role; /**< Startup-only test fault role; no Init reset. */
 #endif
-Os_StackFault Os_Fault; /**< First-fault winner snapshot, atomic publication; no Init reset. */
+Os_StackFaultType Os_Fault; /**< First-fault winner snapshot, atomic publication; no Init reset. */
 
-const void *Os_StackSavedContext(const Os_NativeStack *stack)
+const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
     if (stack < stacks || stack >= stacks + OS_NATIVE_STACKS) {
         return NULL;
@@ -51,7 +54,7 @@ const void *Os_StackSavedContext(const Os_NativeStack *stack)
     return &saved_contexts[stack - stacks];
 }
 
-const Os_NativeStack *Os_StackCurrent(void) { return current_stack; }
+const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
 
 int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
 
@@ -60,7 +63,7 @@ int Os_StackThreadHasFault(DWORD thread_id)
 {
     size_t index;
     for (index = 0u; index < OS_NATIVE_STACKS; ++index) {
-        const Os_StackFault *fault = &fault_records[index];
+        const Os_StackFaultType *fault = &fault_records[index];
         if (__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0 &&
             fault->thread_id == thread_id) {
             return 1;
@@ -78,9 +81,9 @@ static void fault_park_forever(void)
 }
 
 static void publish_fault(
-    Os_NativeStack *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
+    Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
 {
-    Os_StackFault *local;
+    Os_StackFaultType *local;
     if (record == NULL || record < stacks || record >= stacks + OS_NATIVE_STACKS) {
         _exit(E_OS_STATE);
     }
@@ -108,7 +111,7 @@ static void publish_fault(
 
 static void guard_signal(int signum, siginfo_t *details, void *native_context)
 {
-    Os_NativeStack *record = current_stack;
+    Os_NativeStackType *record = current_stack;
     uintptr_t address = (uintptr_t)details->si_addr;
     const ucontext_t *context = native_context;
     if (record == NULL || (signum != SIGSEGV && signum != SIGBUS) ||
@@ -149,7 +152,7 @@ void Os_StackInit(void)
 int Os_StackRegister(char role)
 {
     LONG index = InterlockedIncrement(&stack_count) - 1;
-    Os_NativeStack *record;
+    Os_NativeStackType *record;
     stack_t alternate;
     uintptr_t low = 0u;
     uintptr_t high = 0u;
@@ -189,7 +192,7 @@ int Os_StackRegister(char role)
 void Os_StackCheck(void)
 {
     uintptr_t sp;
-    __asm__ volatile("movq %%rsp, %0" : "=r"(sp));
+    OS_HOST_STACK_POINTER(sp);
     if (current_stack == NULL) {
         return;
     }
@@ -223,7 +226,7 @@ void Os_StackObserve(HANDLE thread, const CONTEXT *context)
     for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
                     (index < (LONG)OS_NATIVE_STACKS);
          ++index) {
-        Os_NativeStack *record = &stacks[index];
+        Os_NativeStackType *record = &stacks[index];
         /* A reservation can belong to another actor still registering. */
         if ((InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) &&
             (record->thread_id == id)) {
@@ -261,7 +264,7 @@ void Os_StackFatalExit(void)
     char output[256];
     size_t used = 0u;
     size_t index;
-    const Os_StackFault *fault = &Os_Fault;
+    const Os_StackFaultType *fault = &Os_Fault;
     if (InterlockedCompareExchange(&fatal_claimed, 1, 0) != 0) {
         _exit(E_OS_STACKFAULT);
     }
@@ -298,7 +301,7 @@ int Os_StackReport(void)
     for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
                     (index < (LONG)OS_NATIVE_STACKS);
          ++index) {
-        const Os_NativeStack *record = &stacks[index];
+        const Os_NativeStackType *record = &stacks[index];
         if (InterlockedCompareExchange(&stack_published[index], 0, 0) == 0) {
             continue;
         }
@@ -323,7 +326,7 @@ int Os_StackReport(void)
         }
     }
     for (index = 0; index < (LONG)OS_NATIVE_STACKS; ++index) {
-        const Os_StackFault *fault = &fault_records[index];
+        const Os_StackFaultType *fault = &fault_records[index];
         if (__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0) {
             if (printf(
                     "FAULT role=%c tid=%u signal=%08X sp=%llu address=%llu captured=1 origin=%c\n",

@@ -1,6 +1,7 @@
 /** @file FreeRTOS kernel configuration: static allocation, 1 kHz tick, 32 priorities. */
 #ifndef AUTOSAR_FREERTOS_CONFIG_H
 #define AUTOSAR_FREERTOS_CONFIG_H
+#include "Platform_Types.h"
 #define configUSE_PREEMPTION                    1
 #define configUSE_TIME_SLICING                  0
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 0
@@ -33,7 +34,7 @@ void Os_BackendBeforeSelect(void *current, void *next);
 #define INCLUDE_xTaskGetCurrentTaskHandle     1
 #define INCLUDE_eTaskGetState                 1
 #define INCLUDE_xTaskGetHandle                1
-void Os_BackendAssert(const char *file, int line);
+void Os_BackendAssert(const void *file, sint32 line);
 #define configASSERT(x)                                                                            \
     do {                                                                                           \
         if (!(x))                                                                                  \

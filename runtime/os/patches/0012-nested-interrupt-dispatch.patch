@@ -52,7 +52,7 @@
 +
 +void Os_PortDispatchNested( void )
 +{
-+    const Os_NativeStack * stack = Os_StackCurrent();
++    const Os_NativeStackType * stack = Os_StackCurrent();
 +    const unsigned current = Os_BackendCurrentInterrupt();
 +    uint32_t seen = 0U;
 +    if( ( stack != NULL ) && ( stack->role == 'S' ) &&

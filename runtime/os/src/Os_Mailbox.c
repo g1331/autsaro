@@ -2,12 +2,12 @@
 #include "Os_Backend.h"
 #include <string.h>
 
-static Os_InputRecord
+static Os_InputRecordType
     records[OS_INPUT_CAPACITY]; /**< SPSC-owned ring slots, atomic publication; no Init reset. */
 static uint64 last_ticket;      /**< Single-producer accepted ticket; no Init reset. */
-static volatile Os_Atomic32 published; /**< Atomic complete-record count; no Init reset. */
+static volatile Os_Atomic32Type published; /**< Atomic complete-record count; no Init reset. */
 /* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
-static volatile Os_Atomic32 admission; /**< Atomic producer/close bits; no Init reset. */
+static volatile Os_Atomic32Type admission; /**< Atomic producer/close bits; no Init reset. */
 
 static uint32 input_interrupt(void)
 {
@@ -44,7 +44,7 @@ StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket)
 {
     static uint32 write_index;
     StatusType context;
-    Os_InputRecord *record;
+    Os_InputRecordType *record;
     if (Os_BridgeActorAllowed() == 0) {
         return E_OS_CALLEVEL;
     }
@@ -86,7 +86,7 @@ StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket)
 }
 sint32 Os_BridgeActorAllowed(void)
 {
-    const Os_NativeStack *actor = Os_StackCurrent();
+    const Os_NativeStackType *actor = Os_StackCurrent();
 #ifdef __linux__
     return actor == NULL || actor->role == 'H';
 #else
@@ -95,7 +95,7 @@ sint32 Os_BridgeActorAllowed(void)
 }
 StatusType Os_BridgeContext(void)
 {
-    static volatile Os_Atomic32 producer;
+    static volatile Os_Atomic32Type producer;
     LONG thread;
     LONG owner;
     if (Os_BridgeActorAllowed() == 0) {
@@ -120,7 +120,7 @@ static StatusType input_context(void)
     owner = Os_BackendInputOwner();
     return (owner == 0) ? E_OS_CALLEVEL : ((owner < 0) ? E_OS_ACCESS : E_OK);
 }
-StatusType Os_TargetTakeInput(Os_InputRecord *record)
+StatusType Os_TargetTakeInput(Os_InputRecordType *record)
 {
     static uint32 read_index;
     StatusType status;

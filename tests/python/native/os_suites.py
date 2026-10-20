@@ -869,6 +869,8 @@ def check_lifecycle(binary: Path) -> list[dict]:
     for scenario, code in [
         ("zero-count", 8),
         ("capacity", 8),
+        *[(f"count-{width}-{field}", 8) for width in ("wide", "huge")
+          for field in ("task", "resource", "internal", "counter", "alarm", "table", "point", "action")],
         ("duplicate", 3),
         ("bad-id", 3),
         ("zero-priority", 8),

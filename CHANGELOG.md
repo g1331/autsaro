@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking
+
+- OS integration types now use `Os_<Name>Type`, configuration counts and ARTI schedule indices use `uint32`, and task names/trace bytes use `uint8`; rebuild configurations and direct consumers with the current headers. Shared Counter service types are defined once in `Rte_Type.h`, exposed via `Rte_Os_Type.h`; regenerate ECU deliveries, including the updated native-stack type references in two production patches (#339)
+
 ### Added
 
 - Generated ECU deliveries include complete selected BSW entry and area descriptions plus navigable module, API and configuration manuals sharing public headers and validation metadata; regenerate deliveries to receive them (#314)

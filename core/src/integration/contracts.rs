@@ -223,7 +223,15 @@ typedef {} {}{suffix};
                 )?
                 .into_bytes(),
             ),
-            ("include/Rte_Type.h".into(), header("RTE_TYPE_H", &types)),
+            (
+                "include/Rte_Type.h".into(),
+                super::outputs::render(
+                    super::outputs::trusted_text("runtime/os/include/Rte_Type.h")?,
+                    "include/Rte_Type.h",
+                    &[super::outputs::Edit::BeforeGuardEnd(&types)],
+                )?
+                .into_bytes(),
+            ),
             (
                 "include/Rte.h".into(),
                 super::rte_types::standard()?.into_bytes(),

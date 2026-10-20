@@ -8,8 +8,15 @@
 #include <stdio.h>
 #include <string.h>
 
+static const uint8 task_name_0[] = "L"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "A"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_2[] = "B"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_3[] = "H"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_4[] = "E"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_5[] = "M"; /**< Process-lifetime Task name bytes. */
+
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
-static const Os_TaskConfig
+static const Os_TaskConfigType
     *configuration;        /**< Main-owned configuration selection before StartOS; no Init reset. */
 static unsigned a_entries; /**< A entries observations; fixture-owned, no Init reset. */
 static unsigned b_entries; /**< B entries observations; fixture-owned, no Init reset. */
@@ -58,7 +65,7 @@ static void check(bool condition)
         ShutdownOS(E_OS_STATE);
     }
 }
-static bool same_info(const Os_ActivationInfo *left, const Os_ActivationInfo *right)
+static bool same_info(const Os_ActivationInfoType *left, const Os_ActivationInfoType *right)
 {
     unsigned i;
     bool same = (left->state == right->state) && (left->count == right->count) &&
@@ -85,7 +92,7 @@ void Os_TestObserve(void)
     unsigned i;
     ++observations;
     for (i = 0u; i < 6u; ++i) {
-        Os_ActivationInfo info;
+        Os_ActivationInfoType info;
         TaskStateType expected;
         TaskHandle_t handle = observer_handles[i];
         eTaskState actual = eTaskGetState(handle);
@@ -122,8 +129,8 @@ void Os_TestObserve(void)
 
 static void expect_rejection(TaskType id, StatusType expected)
 {
-    Os_ActivationInfo before[6];
-    Os_ActivationInfo after;
+    Os_ActivationInfoType before[6];
+    Os_ActivationInfoType after;
     unsigned i;
     for (i = 0u; i < 6u; ++i) {
         check(Os_TargetInspectActivation(configuration[i].id, &before[i]) == E_OK);
@@ -145,8 +152,8 @@ static void finish(void)
 
 static uint32_t test_isr(void)
 {
-    Os_ActivationInfo before;
-    Os_ActivationInfo after;
+    Os_ActivationInfoType before;
+    Os_ActivationInfoType after;
     Os_TargetTrace('J');
     check(ActivateTask(1u) == E_OK);
     expect_rejection(99u, E_OS_ID);
@@ -168,7 +175,7 @@ void StartupHook(void)
     unsigned i;
     TaskStateType state = 99u;
     for (i = 0u; i < 6u; ++i) {
-        observer_handles[i] = xTaskGetHandle(configuration[i].name);
+        observer_handles[i] = xTaskGetHandle((const char *)configuration[i].name);
         check(observer_handles[i] != NULL);
     }
     Os_TargetTrace('S');
@@ -209,7 +216,7 @@ void ShutdownHook(StatusType Error)
 
 static void inspect_requests(TaskType id, unsigned count, uint64_t first, uint64_t second)
 {
-    Os_ActivationInfo info;
+    Os_ActivationInfoType info;
     check(Os_TargetInspectActivation(id, &info) == E_OK);
     check(info.count == count);
     if (count > 0u) {
@@ -255,7 +262,7 @@ static void launcher(void)
         inspect_requests(1u, 2u, 3u, 5u);
         inspect_requests(2u, 2u, 4u, 6u);
     } else if ((strcmp(scenario, "capacity") == 0) || (strcmp(scenario, "wrap") == 0)) {
-        Os_ActivationInfo info;
+        Os_ActivationInfoType info;
         unsigned i;
         for (i = 0u; i < 32u; ++i) {
             check(ActivateTask(1u) == E_OK);
@@ -314,7 +321,7 @@ static void task_a(void)
         Os_TargetTrace('a');
     }
     if ((strcmp(scenario, "wrap") == 0) && (a_entries == 17u)) {
-        Os_ActivationInfo info;
+        Os_ActivationInfoType info;
         unsigned i;
         for (i = 0u; i < 16u; ++i) {
             check(ActivateTask(1u) == E_OK);
@@ -335,7 +342,7 @@ static void task_b(void)
 }
 static void task_h(void)
 {
-    Os_ActivationInfo info;
+    Os_ActivationInfoType info;
     ++h_entries;
     check(Os_TargetInspectActivation(3u, &info) == E_OK);
     check((info.count == 1u) && (info.requests[0] == (expected_a + expected_b + 3u)));
@@ -356,7 +363,7 @@ static void monitor(void)
     check(h_entries == (preempt ? 1u : 0u));
     check(observations != 0u);
     for (i = 0u; i < 5u; ++i) {
-        Os_ActivationInfo info;
+        Os_ActivationInfoType info;
         check(Os_TargetInspectActivation((TaskType)i, &info) == E_OK);
         check((info.count == 0u) && (info.state == SUSPENDED));
     }
@@ -366,13 +373,14 @@ static void monitor(void)
 
 int main(int argc, char **argv)
 {
-    Os_TaskConfig tasks[] = {{0u, "L", launcher, 4u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {1u, "A", task_a, 2u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
-                             {2u, "B", task_b, 2u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
-                             {3u, "H", task_h, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {4u, "E", task_e, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                             {5u, "M", monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    const Os_TargetConfig config = {
+    Os_TaskConfigType tasks[] = {
+        {0u, task_name_0, launcher, 4u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, task_a, 2u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
+        {2u, task_name_2, task_b, 2u, 0u, OS_BASIC_TASK, 2u, OS_SCHEDULE_FULL, 0u},
+        {3u, task_name_3, task_h, 3u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {4u, task_name_4, task_e, 2u, 0u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {5u, task_name_5, monitor, 1u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    const Os_TargetConfigType config = {
         tasks, 6u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, NULL, NULL, 0u};
     StatusType prepared;
     scenario = (argc == 2) ? argv[1] : "aab";

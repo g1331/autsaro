@@ -18,7 +18,7 @@
 #define OS_SCHEDULE_NON  1u /**< Nonpreemptable Task scheduling selection. */
 /** Static Category 2 body taking no arguments and returning no value, called by the native
  * dispatcher. */
-typedef void (*Os_IsrEntry)(void);
+typedef void (*Os_IsrEntryType)(void);
 /** Process-lifetime ISR priority and optional entry bindings validated before StartOS. */
 typedef struct {
     /* Higher values preempt lower values. Zero leaves an application source
@@ -28,9 +28,9 @@ typedef struct {
     /* Optional array of exactly OS_MAX_INTERRUPTS static Category 2 bodies.
      * Use OS_ISR_ENTRY(name). NULL retains manual native handler binding.
      * Slots 0/1, Category 1 and the configured input mailbox must be NULL. */
-    const Os_IsrEntry *entries; /**< Optional OS_MAX_INTERRUPTS static Category 2 entry array;
+    const Os_IsrEntryType *entries; /**< Optional OS_MAX_INTERRUPTS static Category 2 entry array;
                                    reserved slots NULL. */
-} Os_IsrConfig;
+} Os_IsrConfigType;
 /** Static resource access/ceiling and optional LINKED-resource alias configuration. */
 typedef struct {
     ResourceType id; /**< Configured resource identifier below OS_MAX_RESOURCES. */
@@ -45,16 +45,16 @@ typedef struct {
      * ceiling and ISR sharing; the ceiling covers the accessors of every member. */
     uint8 linked; /**< Nonzero aliases the resource named by link; zero selects a root resource. */
     ResourceType link; /**< Linked resource identifier when linked is nonzero; otherwise ignored. */
-} Os_ResourceConfig;
+} Os_ResourceConfigType;
 /** Static internal-resource identity and Task-priority ceiling. */
 typedef struct {
     uint8 id;      /**< Internal resource ID, 1 through OS_MAX_INTERNAL_RESOURCES. */
     uint8 ceiling; /**< Task-priority ceiling, 1 through OS_MAX_PRIORITY. */
-} Os_InternalResourceConfig;
+} Os_InternalResourceConfigType;
 /** Process-lifetime Task descriptor; entry/name and all static settings survive OS execution. */
 typedef struct {
     TaskType id;             /**< Unique Task identifier below OS_MAX_TASKS. */
-    const char *name;        /**< Non-NULL process-lifetime native Task name. */
+    const uint8 *name;       /**< Non-NULL process-lifetime native Task name. */
     void (*entry)(void);     /**< Non-NULL static Task body, normally OS_TASK_ENTRY(name). */
     uint8 priority;          /**< Base Task priority, 1 through OS_MAX_PRIORITY. */
     uint8 autostart_modes;   /**< Mode bit mask: zero none, bit 0 mode 1, bit 1 mode 2. */
@@ -62,7 +62,7 @@ typedef struct {
     uint8 activation_limit;  /**< 1 through OS_MAX_ACTIVATIONS; Extended Tasks require exactly 1. */
     uint8 schedule;          /**< OS_SCHEDULE_FULL or OS_SCHEDULE_NON. */
     uint8 internal_resource; /**< Internal resource ID; zero means no explicit internal resource. */
-} Os_TaskConfig;
+} Os_TaskConfigType;
 /** Caller-owned stable Task/activation/resource snapshot copied under the native OS critical
  * section. */
 typedef struct {
@@ -81,38 +81,39 @@ typedef struct {
     uint8 internal_ceiling;  /**< Active internal-resource priority ceiling. */
     uint8 waiting;           /**< Nonzero while the current activation is waiting for events. */
     EventMaskType wait_mask; /**< Current WaitEvent predicate. */
-} Os_ActivationInfo;
+} Os_ActivationInfoType;
 /** One process-lifetime native target graph, validated and retained by Os_TargetPrepare. */
 typedef struct {
-    const Os_TaskConfig *tasks; /**< Process-lifetime array of task_count immutable descriptors. */
-    size_t task_count;          /**< Configured Tasks, 1 through OS_MAX_TASKS. */
-    uint32 host_stack_reserve;  /**< Native stack reserve bytes: 64 KiB through 16 MiB, in 64 KiB
-                                   steps. */
-    const Os_ResourceConfig
+    const Os_TaskConfigType
+        *tasks;                /**< Process-lifetime array of task_count immutable descriptors. */
+    uint32 task_count;         /**< Configured Tasks, 1 through OS_MAX_TASKS. */
+    uint32 host_stack_reserve; /**< Native stack reserve bytes: 64 KiB through 16 MiB, in 64 KiB
+                                  steps. */
+    const Os_ResourceConfigType
         *resources; /**< Static resource_count descriptors; may be NULL when count is zero. */
-    size_t resource_count; /**< Configured resources, zero through OS_MAX_RESOURCES. */
-    const Os_InternalResourceConfig
+    uint32 resource_count; /**< Configured resources, zero through OS_MAX_RESOURCES. */
+    const Os_InternalResourceConfigType
         *internal_resources; /**< Static internal_resource_count descriptors; NULL allowed for zero
                                 count. */
-    size_t internal_resource_count; /**< Configured internal resources, zero through
+    uint32 internal_resource_count; /**< Configured internal resources, zero through
                                        OS_MAX_INTERNAL_RESOURCES. */
     uint32 category1_isrs; /**< Category 1 vector mask; kernel vectors 0 and 1 must be clear. */
     TaskType input_task;   /**< Mailbox owner Task; meaningful when input_event is nonzero. */
     EventMaskType
         input_event; /**< Mailbox notification bits; zero disables the native input bridge. */
-    const Os_TimeConfig
+    const Os_TimeConfigType
         *time; /**< Optional static Counter/Alarm/ScheduleTable configuration; NULL disables it. */
-    const Os_HookConfig
+    const Os_HookConfigType
         *hooks; /**< Optional Error/PreTask/PostTask callbacks; NULL disables those callbacks. */
     /* NULL selects a flat, nonpreempting application ISR configuration. */
-    const Os_IsrConfig *interrupts; /**< Optional static priority/entry graph; NULL selects flat
+    const Os_IsrConfigType *interrupts; /**< Optional static priority/entry graph; NULL selects flat
                                        application ISR handling. */
     /* OsUseResScheduler: nonzero reserves RES_SCHEDULER for the scheduler lock
      * (STANDARD, all Tasks, highest Task ceiling); zero lets a configured
      * RES_SCHEDULER behave as any other resource (SWS_Os_00854). */
     uint8 use_res_scheduler; /**< Nonzero reserves RES_SCHEDULER as the global Task scheduler
                                 resource. */
-} Os_TargetConfig;
+} Os_TargetConfigType;
 /** Prepare one process-local target before StartOS.
  * @param[in] config Static configuration retained for the lifetime of the process.
  * @return E_OK or a standard validation error; no threads created on rejection.
@@ -121,7 +122,7 @@ typedef struct {
  * areas. Reentrancy: non-reentrant; the first successful preparation is retained. Ownership:
  * borrows config and all referenced arrays/strings/callbacks for the entire process lifetime.
  */
-StatusType Os_TargetPrepare(const Os_TargetConfig *config);
+StatusType Os_TargetPrepare(const Os_TargetConfigType *config);
 /** Bounded diagnostic prefix; does not perform host I/O.
  * Full capacity preserves the prefix and counts omitted markers in the closing
  * lifecycle report. Optional diagnostic text cannot terminate normal execution.
@@ -133,7 +134,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config);
  * Reentrancy: non-reentrant; callers serialize the bounded trace prefix.
  * Ownership: copies marker into internal trace; no caller storage retained.
  */
-void Os_TargetTrace(char marker);
+void Os_TargetTrace(uint8 marker);
 /** Whether target services may accept input/tick (Ready and not closing).
  * @return Nonzero only after successful StartupHook.
  * Preconditions: initialized C environment; returns zero before readiness or after close.
@@ -151,7 +152,7 @@ sint32 Os_TargetReady(void);
  * Reentrancy: reentrant; snapshots are taken under the existing OS critical section.
  * Ownership: caller owns info, borrowed until return only.
  */
-StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info);
+StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info);
 #if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
 /** Observe a committed native scheduling transition in test builds.
  * @par Return

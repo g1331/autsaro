@@ -18,14 +18,14 @@ typedef const char *LPCSTR;
 typedef void *LPSECURITY_ATTRIBUTES;
 typedef DWORD *LPDWORD;
 typedef DWORD (*LPTHREAD_START_ROUTINE)(void *);
-typedef struct Os_HostHandle *HANDLE;
+typedef struct Os_HostHandleType *HANDLE;
 typedef struct {
     ucontext_t native;
     uintptr_t Rsp;
     DWORD ContextFlags;
 } CONTEXT;
 
-typedef char Os_HostLongMustBe32Bits[(sizeof(LONG) == 4u) ? 1 : -1];
+typedef char Os_HostLongMustBe32BitsType[(sizeof(LONG) == 4u) ? 1 : -1];
 #if !defined(__GCC_ATOMIC_INT_LOCK_FREE) || (__GCC_ATOMIC_INT_LOCK_FREE != 2)
 #error Linux host requires always-lock-free 32-bit atomics
 #endif

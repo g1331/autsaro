@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+static const uint8 task_name_0[] = "owner"; /**< Process-lifetime Task name bytes. */
+
 static unsigned errors; /**< Observed checks/errors; fixture-owned, no Init reset. */
 static StatusType
     expected_error; /**< Caller-owned expected error for synchronous checks; no Init reset. */
@@ -90,13 +92,13 @@ static void owner(void)
 }
 int main(void)
 {
-    const Os_TaskConfig task = {
-        0u, "owner", owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u};
-    const Os_CounterConfig counter = {0u, OSMAXALLOWEDVALUE, 1u, 1u, 1u};
-    const Os_TimeConfig time = {
+    const Os_TaskConfigType task = {
+        0u, task_name_0, owner, 10u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u};
+    const Os_CounterConfigType counter = {0u, OSMAXALLOWEDVALUE, 1u, 1u, 1u};
+    const Os_TimeConfigType time = {
         .counters = &counter, .counter_count = 1u, .system_counter = 0u, .owner = INVALID_TASK};
-    const Os_HookConfig hooks = {&ErrorHook, NULL, NULL};
-    const Os_TargetConfig target = {
+    const Os_HookConfigType hooks = {&ErrorHook, NULL, NULL};
+    const Os_TargetConfigType target = {
         &task, 1u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, &hooks, NULL, 0u};
     check(OSMAXALLOWEDVALUE == 15u);
     check(Os_TargetPrepare(&target) == E_OK);

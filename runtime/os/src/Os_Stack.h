@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include "FreeRTOS.h"
 #define OS_NATIVE_STACKS 21u
-typedef struct Os_NativeStack {
+typedef struct Os_NativeStackType {
     DWORD thread_id;
     char role;
     uintptr_t reserve_low, high, committed_low, sp;
@@ -19,10 +19,10 @@ typedef struct Os_NativeStack {
 #endif
     unsigned observations;
     uint8_t context_valid;
-} Os_NativeStack;
-extern const Os_NativeStack *const Os_ArtiStacks;
+} Os_NativeStackType;
+extern const Os_NativeStackType *const Os_ArtiStacks;
 typedef struct {
-    volatile Os_Atomic32 published;
+    volatile Os_Atomic32Type published;
     DWORD thread_id;
 #ifdef _WIN32
     DWORD exception;
@@ -32,8 +32,8 @@ typedef struct {
     uintptr_t sp, address;
     char role;
     char origin;
-} Os_StackFault;
-extern Os_StackFault Os_Fault;
+} Os_StackFaultType;
+extern Os_StackFaultType Os_Fault;
 void Os_StackInit(void);
 #ifdef __linux__
 void Os_StackPrepare(void);
@@ -44,8 +44,8 @@ void Os_StackCheck(void);
 void Os_StackObserve(HANDLE thread, const CONTEXT *context);
 /* Reports all available records; returns -1 if any stream write fails. */
 int Os_StackReport(void);
-const Os_NativeStack *Os_StackCurrent(void);
-const void *Os_StackSavedContext(const Os_NativeStack *stack);
+const Os_NativeStackType *Os_StackCurrent(void);
+const void *Os_StackSavedContext(const Os_NativeStackType *stack);
 void Os_StackRecordBuffer(const StackType_t *top);
 void Os_BackendStackFault(char failed_role);
 void Os_StackFatalExit(void);

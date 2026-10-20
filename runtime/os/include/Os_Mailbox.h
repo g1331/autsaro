@@ -11,7 +11,7 @@ typedef struct {
     uint8 length;                 /**< Payload bytes, 1 through OS_INPUT_PAYLOAD. */
     uint8 data[OS_INPUT_PAYLOAD]; /**< Owned payload storage; only length bytes contain the
                                      submitted input. */
-} Os_InputRecord;
+} Os_InputRecordType;
 /** Copy one input record from the single native bridge producer.
  * @param[in] data Caller-owned bytes, copied before acceptance; never retained.
  * @param[in] length Number of bytes, 1 through OS_INPUT_PAYLOAD.
@@ -35,7 +35,7 @@ StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket);
  * owner-only operation; producer/consumer publication is atomic. Ownership: caller owns output
  * storage, borrowed until return and written only on success.
  */
-StatusType Os_TargetTakeInput(Os_InputRecord *record);
+StatusType Os_TargetTakeInput(Os_InputRecordType *record);
 /** Inspect published input count on the configured owner Task.
  * @param[out] count Output count, unchanged on rejection.
  * @return E_OK, E_OS_ACCESS, E_OS_CALLEVEL, E_OS_STATE or E_OS_ILLEGAL_ADDRESS.

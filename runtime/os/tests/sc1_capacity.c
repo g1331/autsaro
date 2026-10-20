@@ -14,6 +14,8 @@ typedef struct {
     EventMaskType final_events;
     TickType counter;
 } Observation;
+static const uint8 task_name_0[] = "capacity"; /**< Process-lifetime Task name bytes. */
+
 static Observation
     observations[32]; /**< Recorded scheduling observations; fixture-owned, no Init reset. */
 static unsigned
@@ -35,8 +37,9 @@ static bool multiplicity;  /**< Main-owned multiplicity selection before StartOS
 static bool nonpreemptive; /**< Main-owned nonpreemptive selection before StartOS; no Init reset. */
 static AppModeType selected_mode =
     1u; /**< Main-owned selected mode selection before StartOS; no Init reset. */
-static Os_TaskConfig tasks[16]; /**< Main-owned tasks selection before StartOS; no Init reset. */
-static Os_ResourceConfig
+static Os_TaskConfigType
+    tasks[16]; /**< Main-owned tasks selection before StartOS; no Init reset. */
+static Os_ResourceConfigType
     resources[8];            /**< Main-owned resources selection before StartOS; no Init reset. */
 static const char *scenario; /**< Main-owned scenario selection before StartOS; no Init reset. */
 
@@ -80,7 +83,7 @@ void ShutdownHook(StatusType Error)
 static void entry(void)
 {
     TaskType id = INVALID_TASK;
-    Os_ActivationInfo info;
+    Os_ActivationInfoType info;
     EventMaskType events = 0u;
     EventMaskType observed_events = 0u;
     TickType counter = UINT64_MAX;
@@ -168,11 +171,11 @@ static void entry(void)
 }
 int main(int argc, char **argv)
 {
-    Os_InternalResourceConfig internal[2] = {{1u, 1u}, {2u, 2u}};
-    Os_CounterConfig counters[2] = {{0u, 31u, 1u, 1u, 1u}, {1u, 31u, 1u, 1u, 0u}};
-    Os_AlarmConfig alarm = {0u, 0u, OS_ALARM_ACTIVATE, 1u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
-    Os_TimeConfig time = {counters, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
-    Os_TargetConfig target = {
+    Os_InternalResourceConfigType internal[2] = {{1u, 1u}, {2u, 2u}};
+    Os_CounterConfigType counters[2] = {{0u, 31u, 1u, 1u, 1u}, {1u, 31u, 1u, 1u, 0u}};
+    Os_AlarmConfigType alarm = {0u, 0u, OS_ALARM_ACTIVATE, 1u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
+    Os_TimeConfigType time = {counters, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, NULL, 0u};
+    Os_TargetConfigType target = {
         tasks, 0u, 262144u, resources, 0u, internal, 2u, 0u, 0u, 0u, &time, NULL, NULL, 1u};
     StatusType expected = E_OK;
     scenario = (argc == 2) ? argv[1] : "bcc1";
@@ -186,15 +189,15 @@ int main(int argc, char **argv)
     target.task_count = task_count;
     target.resource_count = resource_count;
     for (size_t i = 0u; i < task_count; ++i) {
-        tasks[i] = (Os_TaskConfig){(TaskType)i,
-                                   "capacity",
-                                   entry,
-                                   (uint8_t)(i + 1u),
-                                   selected_mode,
-                                   extended ? OS_EXTENDED_TASK : OS_BASIC_TASK,
-                                   1u,
-                                   OS_SCHEDULE_FULL,
-                                   (i < 2u) ? (uint8_t)(i + 1u) : 0u};
+        tasks[i] = (Os_TaskConfigType){(TaskType)i,
+                                       task_name_0,
+                                       entry,
+                                       (uint8_t)(i + 1u),
+                                       selected_mode,
+                                       extended ? OS_EXTENDED_TASK : OS_BASIC_TASK,
+                                       1u,
+                                       OS_SCHEDULE_FULL,
+                                       (i < 2u) ? (uint8_t)(i + 1u) : 0u};
     }
     if (multiplicity) {
         tasks[1].kind = OS_BASIC_TASK;
@@ -208,12 +211,12 @@ int main(int argc, char **argv)
     for (size_t i = 0u; i < resource_count; ++i) {
         const bool scheduler = i == resource_count - 1u;
         resources[i] =
-            (Os_ResourceConfig){scheduler ? RES_SCHEDULER : (ResourceType)i,
-                                scheduler ? highest_priority : 1u,
-                                scheduler ? (uint16_t)((UINT32_C(1) << task_count) - 1u) : 1u,
-                                0u,
-                                0u,
-                                0u};
+            (Os_ResourceConfigType){scheduler ? RES_SCHEDULER : (ResourceType)i,
+                                    scheduler ? highest_priority : 1u,
+                                    scheduler ? (uint16_t)((UINT32_C(1) << task_count) - 1u) : 1u,
+                                    0u,
+                                    0u,
+                                    0u};
     }
     if (strcmp(scenario, "bad-manual-owner") == 0) {
         time.owner = 0u;

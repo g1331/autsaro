@@ -73,7 +73,8 @@ static int sink(const Ecu_OutputRecord *output, const Ecu_HostBatch *state, Stat
     }
     return 1;
 }
-static Os_HostThreadResult control(void *argument) {
+static Os_HostThreadResultType control(void *argument)
+{
     Ecu_BatchCommand command;
     uint64_t started = Os_HostMonotonicMs();
     (void)argument;
@@ -93,7 +94,7 @@ static Os_HostThreadResult control(void *argument) {
         require(Ecu_HostBatchParse(&batch, "COMMIT", 6u, &command) == E_OK);
         require(Ecu_HostBatchExecute(&batch, sink, NULL) == E_OS_LIMIT);
         {
-            Os_TickCompletion initial;
+            Os_TickCompletionType initial;
             require(Os_TargetTickCompletion(UINT64_C(0), &initial) == E_OK);
             require(initial.epoch == UINT64_C(0));
         }
@@ -131,7 +132,7 @@ static Os_HostThreadResult control(void *argument) {
     return 0u;
 }
 int main(int argc, char **argv) {
-    Os_HostHandle thread;
+    Os_HostHandleType thread;
     if (argc != 2) {
         return 98;
     }

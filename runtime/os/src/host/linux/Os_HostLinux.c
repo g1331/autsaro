@@ -25,11 +25,11 @@ typedef enum {
     OS_HOST_MUTEX,
     OS_HOST_THREAD,
     OS_HOST_PROCESS
-} Os_HostKind;
+} Os_HostKindType;
 
-struct Os_HostHandle {
+struct Os_HostHandleType {
     volatile int32_t reserved;
-    Os_HostKind kind;
+    Os_HostKindType kind;
     int fd;
     int manual;
     pthread_mutex_t mutex;
@@ -50,15 +50,17 @@ struct Os_HostHandle {
     CONTEXT captured;
 };
 
-static struct Os_HostHandle handles[OS_HOST_HANDLES]; /**< Atomically reserved slots, per-handle
+static struct Os_HostHandleType handles[OS_HOST_HANDLES]; /**< Atomically reserved slots, per-handle
                                                          synchronization; no Init reset. */
-static struct Os_HostHandle process_handle = {
+static struct Os_HostHandleType process_handle = {
     .reserved = 1,
     .kind = OS_HOST_PROCESS}; /**< C-initialized immutable process pseudo-handle; no Init writes. */
 static HANDLE dispatcher;     /**< Atomic dispatcher-handle publication; no Init reset. */
-static __thread HANDLE current_thread;   /**< Native actor TLS handle; no Init reset. */
-static __thread sigset_t held_masks[32]; /**< Actor TLS prior signal masks; no Init reset. */
-static __thread unsigned held_depth;     /**< Actor TLS signal-mask nesting depth; no Init reset. */
+static OS_HOST_THREAD_LOCAL HANDLE current_thread; /**< Native actor TLS handle; no Init reset. */
+static OS_HOST_THREAD_LOCAL sigset_t
+    held_masks[32]; /**< Actor TLS prior signal masks; no Init reset. */
+static OS_HOST_THREAD_LOCAL unsigned
+    held_depth; /**< Actor TLS signal-mask nesting depth; no Init reset. */
 
 static int futex_wait(volatile int32_t *cell, int32_t expected)
 {
@@ -80,7 +82,7 @@ static uint64_t monotonic_ms(void)
     return ((uint64_t)now.tv_sec * UINT64_C(1000)) + ((uint64_t)now.tv_nsec / UINT64_C(1000000));
 }
 
-static HANDLE reserve_handle(Os_HostKind kind)
+static HANDLE reserve_handle(Os_HostKindType kind)
 {
     size_t index;
     for (index = 0u; index < OS_HOST_HANDLES; ++index) {

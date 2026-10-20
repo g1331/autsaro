@@ -425,7 +425,7 @@ index 2592610..1be0473 100644
 +
 +void Os_PortDispatchNested(void)
 +{
-+    const Os_NativeStack *stack = Os_StackCurrent();
++    const Os_NativeStackType *stack = Os_StackCurrent();
 +    const unsigned outer = Os_BackendCurrentInterrupt();
 +    uint32_t seen = 0u;
 +    if (stack != NULL && stack->role == 'S' && outer < PORT_INTERRUPT_COUNT &&
@@ -620,7 +620,7 @@ index 2592610..1be0473 100644
 -    /* Interrupts are always disabled inside ISRs (signals
 -     * handlers). */
 -    return ( UBaseType_t ) 0;
-+    const Os_NativeStack *actor = Os_StackCurrent();
++    const Os_NativeStackType *actor = Os_StackCurrent();
 +    PortTask *handoff = NULL;
 +    if (critical_nesting == 0u) {
 +        Os_BackendShutdown(E_OS_STATE);
@@ -697,7 +697,7 @@ index 2592610..1be0473 100644
 -        Thread_t * thread = prvGetThreadFromTask( xTaskGetCurrentTaskHandle() );
 -        pthread_kill( thread->pthread, SIGALRM );
 -        usleep( portTICK_RATE_MICROSECONDS );
-+    const Os_NativeStack *actor = Os_StackCurrent();
++    const Os_NativeStackType *actor = Os_StackCurrent();
 +    PortTask *task;
 +    if (interrupt >= PORT_INTERRUPT_COUNT || port_running == pdFALSE) {
 +        return;

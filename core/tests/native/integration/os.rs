@@ -317,7 +317,15 @@ fn arti_expression_probe(project: &Path, header: &Path) {
             !expression.contains('('),
             "call in debugger expression: {expression}"
         );
-        probe.push_str(&format!("    observed = (uintptr_t)({expression});\n"));
+        // Debugger expressions read stopped storage. This probe also executes
+        // live: retain the exact expression's compile check, but observe the
+        // native readiness publication atomically while controllers can read it.
+        probe.push_str(&format!("    (void)sizeof((uintptr_t)({expression}));\n"));
+        let live = expression.replace(
+            "*Os_ArtiOsReady",
+            "__atomic_load_n(Os_ArtiOsReady, __ATOMIC_SEQ_CST)",
+        );
+        probe.push_str(&format!("    observed = (uintptr_t)({live});\n"));
     }
     probe.push_str("    (void)observed;\n}\n");
     std::fs::write(header, probe).unwrap();

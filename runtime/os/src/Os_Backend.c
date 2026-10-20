@@ -17,8 +17,8 @@ typedef struct {
     uint64 requests[OS_MAX_ACTIVATIONS];
     uint32 head;
     uint32 count;
-} ActivationQueue;
-static ActivationQueue
+} Os_ActivationQueueType;
+static Os_ActivationQueueType
     activations[OS_MAX_TASKS]; /**< Activation FIFO ledger; OS port lock; no Init reset. */
 static EventMaskType
     task_events[OS_MAX_TASKS]; /**< Stored Task event bits; OS port lock; no Init reset. */
@@ -27,17 +27,17 @@ static EventMaskType
 static uint8 task_waiting[OS_MAX_TASKS]; /**< Task waiting flags; OS port lock; no Init reset. */
 static uint8
     internal_held[OS_MAX_TASKS]; /**< Internal-resource ownership; OS port lock; no Init reset. */
-static size_t running_hook_task =
+static uint32 running_hook_task =
     OS_MAX_TASKS; /**< RUNNING hook identity; OS port lock; no Init reset. */
 static uint64
     ready_sequences[OS_MAX_TASKS]; /**< Live rebased ready stamps; OS port lock; no Init reset. */
 #define OS_RESOURCE_ACTORS (OS_MAX_TASKS + OS_MAX_INTERRUPTS)
 static uint32 resource_depth[OS_RESOURCE_ACTORS]; /**< Per-actor acquisition depth; OS port lock; no
                                                      Init reset. */
-static size_t
+static uint32
     owned_resources[OS_RESOURCE_ACTORS]
                    [OS_MAX_RESOURCES]; /**< Per-actor resource LIFO; OS port lock; no Init reset. */
-static volatile Os_Atomic32
+static volatile Os_Atomic32Type
     interrupt_ceiling; /**< Atomic ISR ceiling publication; no Init reset. */
 static uint32 current_interrupt =
     32u; /**< Active vector, 32 means none; port lock; no Init reset. */
@@ -45,19 +45,20 @@ const uint32 *const Os_ArtiCurrentIsr =
     &current_interrupt; /**< Fixed ISR identity tool view; C init only, never reset. */
 typedef struct {
     uint32 interrupt;
-    Os_ErrorContext error;
-} InterruptFrame;
-static InterruptFrame interrupt_frames[OS_MAX_INTERRUPTS]; /**< Interrupted actor snapshots; port
-                                                              lock; no Init reset. */
+    Os_ErrorContextType error;
+} Os_InterruptFrameType;
+static Os_InterruptFrameType interrupt_frames[OS_MAX_INTERRUPTS]; /**< Interrupted actor snapshots;
+                                                              port lock; no Init reset. */
 static uint32 interrupt_depth;  /**< Nested ISR frame count; port lock; no Init reset. */
 static uint64 request_sequence; /**< Live rebased FIFO stamp; port lock; no Init reset. */
 typedef struct {
     uint64 *slot;
     uint64 previous;
-} OrderReference;
+} Os_OrderReferenceType;
 static jmp_buf
     restart_frames[OS_MAX_TASKS]; /**< Per-Task restart frames; owning Task; no Init reset. */
-static volatile Os_Atomic32 isr_reschedule; /**< Atomic pending ISR reschedule; no Init reset. */
+static volatile Os_Atomic32Type
+    isr_reschedule; /**< Atomic pending ISR reschedule; no Init reset. */
 sint32 Os_BackendTakeIsrReschedule(void) { return InterlockedExchange(&isr_reschedule, 0) != 0; }
 void Os_BackendRequestIsrReschedule(void) { InterlockedExchange(&isr_reschedule, 1); }
 uint32 Os_BackendInterruptPriority(uint32 interrupt)
@@ -87,7 +88,7 @@ HANDLE Os_StackTestBackupThread(void) { return backup_thread; }
 #endif
 static HANDLE backup_event; /**< Startup-published backup close event; no Init reset. */
 #if defined(__linux__) && (defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON))
-static volatile Os_Atomic32
+static volatile Os_Atomic32Type
     backup_fault_requested; /**< Atomic backup-fault test request; no Init reset. */
 void Os_StackTestTriggerBackupFault(void)
 {
@@ -100,7 +101,7 @@ void Os_StackTestTriggerBackupFault(void)
 static HANDLE main_thread; /**< Startup-published dispatcher handle; no Init reset. */
 static HANDLE
     controller_registered[2]; /**< Startup-published registration events; no Init reset. */
-static volatile Os_Atomic32
+static volatile Os_Atomic32Type
     controller_healthy[2]; /**< Atomic controller readiness flags; no Init reset. */
 static HANDLE
     task_threads[OS_MAX_TASKS + 2u]; /**< Startup-published actor handles; no Init reset. */
@@ -108,19 +109,15 @@ static uint32 task_thread_count;     /**< Bootstrap-owned actor handle count; no
 #if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
 HANDLE Os_StackTestTaskThread(uint32 index) { return task_threads[index]; }
 #endif
-static volatile Os_Atomic32 ready; /**< Atomic admission readiness; no Init reset. */
-#ifdef _WIN32
-const volatile long *const Os_ArtiOsReady =
+static volatile Os_Atomic32Type ready; /**< Atomic admission readiness; no Init reset. */
+const volatile Os_Atomic32Type *const Os_ArtiOsReady =
     &ready; /**< Fixed readiness tool view; C init only, never reset. */
-#else
-const volatile sint32 *const Os_ArtiOsReady =
-    &ready; /**< Fixed readiness tool view; C init only, never reset. */
-#endif
-volatile Os_Atomic32 Os_Closing; /**< Atomic permanent-close publication; no Init reset. */
+
+volatile Os_Atomic32Type Os_Closing; /**< Atomic permanent-close publication; no Init reset. */
 /* Bit 0: an accepted activation transaction; bit 1: admission permanently closed.
  * Both admission and close linearize on this atomic word. Close never waits for
  * a transaction or a damaged actor holding the ordinary interrupt mutex. */
-static volatile Os_Atomic32
+static volatile Os_Atomic32Type
     activation_admission; /**< Atomic transaction/close bits; no Init reset. */
 static StatusType
     shutdown_reason; /**< First-close winner reason, atomically published; no Init reset. */
@@ -131,39 +128,39 @@ static uint32
     resource_owner[OS_MAX_RESOURCES]; /**< Resource owners; OS port lock; no Init reset. */
 const uint32 *const Os_ArtiResourceOwners =
     resource_owner; /**< Fixed resource owners tool view; C init only, never reset. */
-Os_ArtiTaskState
+Os_ArtiTaskStateType
     Os_ArtiTasks[OS_MAX_TASKS]; /**< Observed Task state; OS port lock; no Init reset. */
 TaskType Os_ArtiRunningTask = INVALID_TASK; /**< Observed RUNNING Task; port lock; no Init reset. */
-const Os_NativeStack
+const Os_NativeStackType
     *Os_ArtiTaskStacks[OS_MAX_TASKS]; /**< Observed stack pointers; port lock; no Init reset. */
 const void
     *Os_ArtiTaskContexts[OS_MAX_TASKS]; /**< Observed context pointers; port lock; no Init reset. */
 static uint8
     arti_completed[OS_MAX_TASKS]; /**< Completion observation flags; port lock; no Init reset. */
 static void arti_observe_tasks(void);
-static char trace[128];      /**< Caller-serialized trace prefix bytes; no Init reset. */
-static size_t trace_length;  /**< Caller-serialized used trace bytes; no Init reset. */
+static uint8 trace[128];     /**< Caller-serialized trace prefix bytes; no Init reset. */
+static uint32 trace_length;  /**< Caller-serialized used trace bytes; no Init reset. */
 static uint64 trace_dropped; /**< Caller-serialized omitted-marker count; no Init reset. */
 static uint32 resource_calls, threads, events,
     mutexes; /**< Bootstrap-owned allocation/call totals; no Init reset. */
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
 static uint32 fail_resource; /**< Startup-only resource-failure selection; no Init reset. */
 #endif
-static volatile Os_Atomic32 started; /**< Atomic one-shot backend-start latch; no Init reset. */
+static volatile Os_Atomic32Type started; /**< Atomic one-shot backend-start latch; no Init reset. */
 static void task_entry(void *argument);
 static void bootstrap(void *argument);
-static void acquire_internal(size_t index);
-static void release_internal(size_t index);
-static uint8 internal_ceiling(size_t index);
+static void acquire_internal(uint32 index);
+static void release_internal(uint32 index);
+static uint8 internal_ceiling(uint32 index);
 static void observe_transition(void);
-static size_t current_task_index(void);
-static void leave_running(size_t index);
+static uint32 current_task_index(void);
+static void leave_running(uint32 index);
 static uint32 configured_interrupt(void)
 {
     const uint32 interrupt = current_interrupt;
     configASSERT(Os_Config != NULL && Os_Config->interrupts != NULL &&
                  Os_Config->interrupts->entries != NULL && interrupt < OS_MAX_INTERRUPTS);
-    const Os_IsrEntry entry = Os_Config->interrupts->entries[interrupt];
+    const Os_IsrEntryType entry = Os_Config->interrupts->entries[interrupt];
     configASSERT(entry != NULL);
     entry();
     /* Automotive services record their reschedule request in the established
@@ -181,7 +178,7 @@ sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
 }
 uint32 Os_BackendCurrentInterrupt(void)
 {
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     /* Host controllers run concurrently with the dispatcher and own no ISR. */
     return ((stack != NULL) && (stack->role == 'S')) ? current_interrupt : 32u;
 }
@@ -201,8 +198,8 @@ void Os_BackendInterruptEnter(uint32 interrupt)
 }
 void Os_BackendInterruptLeave(void)
 {
-    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
-    const size_t actor = OS_MAX_TASKS + current_interrupt;
+    const Os_ErrorParametersType arguments = {.service_TerminateTask = {0u}};
+    const uint32 actor = OS_MAX_TASKS + current_interrupt;
     configASSERT(interrupt_depth != 0u && current_interrupt < OS_MAX_INTERRUPTS);
     if (Os_InterruptDisabled() != 0) {
         /* Native ISR dispatch already owns the interrupt mutex and has stopped
@@ -218,7 +215,7 @@ void Os_BackendInterruptLeave(void)
         /* Dispatch still owns the native interrupt mutex. Release actual
          * configured resources in LIFO order before reporting the ISR fault. */
         while (resource_depth[actor] != 0u) {
-            const size_t resource = owned_resources[actor][resource_depth[actor] - 1u];
+            const uint32 resource = owned_resources[actor][resource_depth[actor] - 1u];
             const StatusType released = Os_BackendResource(Os_Config->resources[resource].id, 0);
             configASSERT(released == E_OK);
         }
@@ -254,17 +251,17 @@ sint32 Os_BackendInterruptEnabled(uint32 interrupt)
 #endif
     return allowed;
 }
-static size_t task_slot(const StaticTask_t *memory)
+static uint32 task_slot(const StaticTask_t *memory)
 {
-    size_t i = 0u;
+    uint32 i = 0u;
     while ((i < Os_Config->task_count) && (&task_memory[i] != memory)) {
         ++i;
     }
     return i;
 }
-static size_t task_index(TaskType id)
+static uint32 task_index(TaskType id)
 {
-    size_t i;
+    uint32 i;
     for (i = 0u; i < Os_Config->task_count; ++i) {
         if (Os_Config->tasks[i].id == id) {
             return i;
@@ -274,7 +271,7 @@ static size_t task_index(TaskType id)
 }
 sint32 Os_BackendServiceContext(void)
 {
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     Os_BackendGuardService();
     if (stack == NULL) {
         return 0;
@@ -290,7 +287,7 @@ sint32 Os_BackendServiceContext(void)
 }
 sint32 Os_BackendTaskOwner(TaskType id)
 {
-    size_t index = current_task_index();
+    uint32 index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return 0;
     }
@@ -305,7 +302,7 @@ StatusType Os_BackendTaskId(TaskRefType id)
     taskENTER_CRITICAL();
     Os_BackendGuardService();
     *id = INVALID_TASK;
-    for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+    for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
         if ((handles[i] == xTaskGetCurrentTaskHandle()) &&
             (eTaskGetState(handles[i]) == eRunning)) {
             *id = Os_Config->tasks[i].id;
@@ -319,7 +316,7 @@ StatusType Os_BackendTaskId(TaskRefType id)
 AppModeType Os_BackendApplicationMode(void) { return startup_mode; }
 void Os_BackendGuardService(void)
 {
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     /* Every shutdown path sets the admission close bit before readiness ends. */
     if (((InterlockedCompareExchange(&activation_admission, 0, 0) & 2) != 0) && (stack != NULL) &&
         ((stack->role == 'T') || (stack->role == 'S'))) {
@@ -344,14 +341,14 @@ sint32 Os_BackendReady(void)
  * the existing kernel ready-list policy remains the only selector. */
 static void rebase_orders(void)
 {
-    static OrderReference rebase_entries[OS_MAX_TASKS * (OS_MAX_ACTIVATIONS + 1u)];
-    size_t i;
+    static Os_OrderReferenceType rebase_entries[OS_MAX_TASKS * (OS_MAX_ACTIVATIONS + 1u)];
+    uint32 i;
     uint32 j;
     uint32 count = 0u;
     uint64 previous = 0u;
     uint64 rank = 0u;
     for (i = 0u; i < Os_Config->task_count; ++i) {
-        ActivationQueue *queue = &activations[i];
+        Os_ActivationQueueType *queue = &activations[i];
         for (j = 0u; j < queue->count; ++j) {
             uint64 *slot = &queue->requests[(queue->head + j) % OS_MAX_ACTIVATIONS];
             uint32 position = count;
@@ -389,9 +386,9 @@ static void rebase_orders(void)
     }
     request_sequence = rank;
 }
-static void append_activation(size_t index)
+static void append_activation(uint32 index)
 {
-    ActivationQueue *queue = &activations[index];
+    Os_ActivationQueueType *queue = &activations[index];
     uint32 tail = (queue->head + queue->count) % OS_MAX_ACTIVATIONS;
     if (queue->count == 0u) {
         task_events[index] = 0u;
@@ -403,7 +400,7 @@ static void append_activation(size_t index)
     queue->requests[tail] = request_sequence;
     ++queue->count;
 }
-static void leave_running(size_t index)
+static void leave_running(uint32 index)
 {
     if ((running_hook_task == index) && (index < OS_MAX_TASKS)) {
         if ((InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) && (Os_Config->hooks != NULL)) {
@@ -416,7 +413,7 @@ void Os_BackendBeforeSelect(void *current, void *next)
 {
     if ((current != next) && (Os_TargetReady() != 0) &&
         (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
-        for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+        for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
             if (handles[i] == current) {
                 leave_running(i);
                 break;
@@ -428,7 +425,7 @@ void Os_BackendOnSwitch(void)
 {
     if (Os_TargetReady() != 0) {
         arti_observe_tasks();
-        size_t i;
+        uint32 i;
         for (i = 0u; i < Os_Config->task_count; ++i) {
             if (handles[i] == xTaskGetCurrentTaskHandle()) {
                 acquire_internal(i);
@@ -446,7 +443,7 @@ void Os_BackendOnSwitch(void)
     }
     observe_transition();
 }
-static TaskStateType native_task_state(size_t index)
+static TaskStateType native_task_state(uint32 index)
 {
     /* A self-suspend inside the critical section defers the native switch.
      * Its waiting predicate is already committed even while it is current. */
@@ -473,7 +470,7 @@ static void arti_observe_tasks(void)
     TaskStateType previous[OS_MAX_TASKS];
     uint8 completed[OS_MAX_TASKS];
     Os_ArtiRunningTask = INVALID_TASK;
-    for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+    for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
         previous[i] = Os_ArtiTasks[i].state;
         completed[i] = arti_completed[i];
         arti_completed[i] = 0u;
@@ -489,7 +486,7 @@ static void arti_observe_tasks(void)
     /* Outgoing edges precede incoming edges, independent of declaration order.
      * Queued Basic activations have an atomic logical terminate/activate edge
      * even when the kernel reselects the same native thread. */
-    for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+    for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
         const TaskStateType state = Os_ArtiTasks[i].state;
         if (completed[i] != 0u) {
             Os_ArtiTask(OS_ARTI_TASK_TERMINATE, Os_Config->tasks[i].id);
@@ -499,7 +496,7 @@ static void arti_observe_tasks(void)
                         Os_Config->tasks[i].id);
         }
     }
-    for (size_t i = 0u; i < Os_Config->task_count; ++i) {
+    for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
         const TaskStateType state = Os_ArtiTasks[i].state;
         const TaskType id = Os_Config->tasks[i].id;
         if ((previous[i] == SUSPENDED) && (state != SUSPENDED)) {
@@ -518,18 +515,18 @@ static void observe_transition(void)
     (defined(OS_FINISH_TESTS) && (OS_FINISH_TESTS == STD_ON)) ||                                   \
     (defined(OS_RESOURCE_TESTS) && (OS_RESOURCE_TESTS == STD_ON)) ||                               \
     (defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON))
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     if ((Os_TargetReady() != 0) && (stack != NULL) &&
         ((stack->role == 'T') || (stack->role == 'S'))) {
         Os_TestObserve();
     }
 #endif
 }
-static uint8 internal_ceiling(size_t index)
+static uint8 internal_ceiling(uint32 index)
 {
-    size_t i;
+    uint32 i;
     uint8 ceiling = 0u;
-    const Os_TaskConfig *task = &Os_Config->tasks[index];
+    const Os_TaskConfigType *task = &Os_Config->tasks[index];
     if (task->schedule == OS_SCHEDULE_NON) {
         for (i = 0u; i < Os_Config->task_count; ++i) {
             if (Os_Config->tasks[i].priority > ceiling) {
@@ -548,7 +545,7 @@ static uint8 internal_ceiling(size_t index)
     }
     return ceiling;
 }
-static void acquire_internal(size_t index)
+static void acquire_internal(uint32 index)
 {
     uint8 ceiling = internal_ceiling(index);
     if ((ceiling != 0u) && (internal_held[index] == 0u)) {
@@ -559,7 +556,7 @@ static void acquire_internal(size_t index)
         }
     }
 }
-static void release_internal(size_t index)
+static void release_internal(uint32 index)
 {
     if (internal_held[index] != 0u) {
         configASSERT(resource_depth[index] == 0u);
@@ -577,7 +574,7 @@ void Os_TargetTestSequence(uint64 sequence)
 }
 uint32 Os_TargetTestPending(TaskType id)
 {
-    size_t index = task_index(id);
+    uint32 index = task_index(id);
     configASSERT(InterlockedCompareExchange(&Os_Closing, 0, 0) != 0);
     configASSERT(index < Os_Config->task_count);
     return activations[index].count;
@@ -589,8 +586,8 @@ typedef struct {
     HANDLE registered, gate;
     char role;
     const StackType_t *buffer_top;
-} NativeTaskStart;
-static NativeTaskStart
+} Os_NativeTaskStartType;
+static Os_NativeTaskStartType
     native_starts[OS_MAX_TASKS + 2u]; /**< Startup-owned actor entry records; no Init reset. */
 #if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
 static uint32
@@ -627,9 +624,9 @@ void Os_PortPostInterrupt(uint32 interrupt)
     Os_PosixPostInterrupt(interrupt);
 #endif
 }
-void Os_TargetTrace(char marker)
+void Os_TargetTrace(uint8 marker)
 {
-    if (marker == '\0') {
+    if (marker == 0u) {
         if (InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) {
             return;
         }
@@ -674,7 +671,7 @@ static void report_and_exit(void)
                "input_closed=1 tick_closed=1 time_signal_failed=%d trace_dropped=%llu\n",
                shutdown_reason == E_OK ? "Ready" : "Failed",
                shutdown_reason,
-               trace,
+               (const char *)trace,
                threads,
                events,
                mutexes,
@@ -825,7 +822,7 @@ void Os_BackendSignalStackFault(char failed_role)
 #endif
 void Os_BackendShutdown(StatusType error)
 {
-    const Os_NativeStack *current = Os_StackCurrent();
+    const Os_NativeStackType *current = Os_StackCurrent();
     if (error == E_OS_STACKFAULT && Os_StackHasFault() && current != NULL &&
         (current->role == 'C' || current->role == 'D') &&
         current->thread_id != Os_Fault.thread_id) {
@@ -853,7 +850,7 @@ void Os_BackendRequestShutdown(StatusType error)
         InterlockedExchange(&Os_Closing, 1);
     }
 }
-void Os_BackendAssert(const char *file, sint32 line)
+void Os_BackendAssert(const void *file, sint32 line)
 {
     (void)file;
     (void)line;
@@ -909,14 +906,14 @@ HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 }
 static DWORD WINAPI native_task_start(void *argument)
 {
-    NativeTaskStart *start = argument;
+    Os_NativeTaskStartType *start = argument;
     if (!Os_StackRegister(start->role)) {
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackRecordBuffer(start->buffer_top);
     if (start->entry == task_entry) {
-        const Os_TaskConfig *task = start->argument;
-        const size_t index = task_index(task->id);
+        const Os_TaskConfigType *task = start->argument;
+        const uint32 index = task_index(task->id);
         configASSERT(index < Os_Config->task_count);
         Os_ArtiTaskStacks[index] = Os_StackCurrent();
         Os_ArtiTaskContexts[index] = Os_StackSavedContext(Os_ArtiTaskStacks[index]);
@@ -931,7 +928,7 @@ static DWORD WINAPI native_task_start(void *argument)
 }
 HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t *buffer_top)
 {
-    NativeTaskStart *start;
+    Os_NativeTaskStartType *start;
     HANDLE thread;
     CONTEXT context;
     if (task_thread_count >= OS_MAX_TASKS + 2u) {
@@ -1004,9 +1001,9 @@ static void task_entry(void *argument)
 {
     /* The argument is the task's own control block, so the configuration stays const.
      * The index stays live across setjmp, so it is volatile (C99 7.13.2.1). */
-    const volatile size_t index = task_slot(argument);
+    const volatile uint32 index = task_slot(argument);
     configASSERT(index < Os_Config->task_count);
-    const Os_TaskConfig *task = &Os_Config->tasks[index];
+    const Os_TaskConfigType *task = &Os_Config->tasks[index];
     /* The private backend trampoline discards completed application frames.
      * No application or generated Runnable uses setjmp/longjmp. */
     (void)setjmp(restart_frames[index]);
@@ -1018,7 +1015,7 @@ static void task_entry(void *argument)
 }
 static void bootstrap(void *argument)
 {
-    size_t i;
+    uint32 i;
     (void)argument;
     if ((Os_Config->interrupts != NULL) && (Os_Config->interrupts->entries != NULL)) {
         for (i = 2u; i < OS_MAX_INTERRUPTS; ++i) {
@@ -1050,7 +1047,7 @@ static void bootstrap(void *argument)
 }
 void Os_BackendStart(AppModeType mode)
 {
-    size_t i;
+    uint32 i;
     Os_TargetTrace('I');
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
     const char *failure = getenv("AUTOSAR_OS_FAIL_RESOURCE");
@@ -1113,7 +1110,7 @@ void Os_BackendStart(AppModeType mode)
             append_activation(i);
         }
         handles[i] = xTaskCreateStatic(task_entry,
-                                       Os_Config->tasks[i].name,
+                                       (const char *)Os_Config->tasks[i].name,
                                        512,
                                        &task_memory[i],
                                        Os_Config->tasks[i].priority,
@@ -1153,7 +1150,7 @@ void Os_BackendSetDispatcher(void)
 #endif
 StatusType Os_BackendState(TaskType id, TaskStateRefType state)
 {
-    size_t i;
+    uint32 i;
     Os_StackCheck();
     if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
@@ -1189,9 +1186,9 @@ StatusType Os_BackendState(TaskType id, TaskStateRefType state)
 }
 StatusType Os_BackendActivate(TaskType id)
 {
-    size_t index;
-    const ActivationQueue *queue;
-    const Os_NativeStack *stack;
+    uint32 index;
+    const Os_ActivationQueueType *queue;
+    const Os_NativeStackType *stack;
     if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
     }
@@ -1247,10 +1244,10 @@ StatusType Os_BackendActivate(TaskType id)
     Os_BackendGuardService();
     return E_OK;
 }
-static size_t current_task_index(void)
+static uint32 current_task_index(void)
 {
-    const Os_NativeStack *stack = Os_StackCurrent();
-    size_t index;
+    const Os_NativeStackType *stack = Os_StackCurrent();
+    uint32 index;
     if ((stack == NULL) || (stack->role != 'T') || (Os_BackendReady() == 0)) {
         return OS_MAX_TASKS;
     }
@@ -1263,11 +1260,11 @@ static size_t current_task_index(void)
 }
 static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned)
 {
-    const Os_NativeStack *stack = Os_StackCurrent();
-    size_t index;
+    const Os_NativeStackType *stack = Os_StackCurrent();
+    uint32 index;
     TaskHandle_t current;
-    ActivationQueue *queue;
-    size_t target = OS_MAX_TASKS;
+    Os_ActivationQueueType *queue;
+    uint32 target = OS_MAX_TASKS;
     Os_BackendGuardService();
     if ((Os_BackendReady() == 0) || (stack == NULL) || (stack->role != 'T')) {
         return E_OS_CALLEVEL;
@@ -1309,7 +1306,7 @@ static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned
          * this activation transaction. A pending preemption cannot expose a
          * partly cleaned activation before it has completed normally. */
         while (resource_depth[index] != 0u) {
-            const size_t resource = owned_resources[index][resource_depth[index] - 1u];
+            const uint32 resource = owned_resources[index][resource_depth[index] - 1u];
             configASSERT(resource < Os_Config->resource_count);
             const StatusType released = Os_BackendResource(Os_Config->resources[resource].id, 0);
             configASSERT(released == E_OK);
@@ -1365,7 +1362,7 @@ StatusType Os_BackendFinish(void) { return complete_activation(0u, 0, 0); }
 StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1, 0); }
 void Os_BackendMissingEnd(void)
 {
-    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
+    const Os_ErrorParametersType arguments = {.service_TerminateTask = {0u}};
     Os_StackCheck();
     /* Report before leaving RUNNING, while the application's leaked resource
      * state remains observable. Normal completion then cleans this activation. */
@@ -1377,12 +1374,12 @@ StatusType Os_BackendResource(ResourceType id, sint32 acquire)
 {
     static UBaseType_t saved_priorities[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
     static LONG saved_interrupt_ceilings[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
-    const Os_NativeStack *stack = Os_StackCurrent();
-    size_t task;
-    size_t resource;
+    const Os_NativeStackType *stack = Os_StackCurrent();
+    uint32 task;
+    uint32 resource;
     uint32 depth;
     StatusType status = E_OK;
-    const Os_ResourceConfig *config;
+    const Os_ResourceConfigType *config;
     Os_BackendGuardService();
     task = current_task_index();
     if (task == OS_MAX_TASKS) {
@@ -1453,7 +1450,7 @@ StatusType Os_BackendResource(ResourceType id, sint32 acquire)
 }
 StatusType Os_BackendSchedule(void)
 {
-    size_t index = current_task_index();
+    uint32 index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return E_OS_CALLEVEL;
     }
@@ -1474,7 +1471,7 @@ StatusType Os_BackendSchedule(void)
 }
 StatusType Os_BackendWait(EventMaskType mask)
 {
-    size_t index = current_task_index();
+    uint32 index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return E_OS_CALLEVEL;
     }
@@ -1511,7 +1508,7 @@ StatusType Os_BackendWait(EventMaskType mask)
 }
 StatusType Os_BackendClear(EventMaskType mask)
 {
-    size_t index = current_task_index();
+    uint32 index = current_task_index();
     if (index == OS_MAX_TASKS) {
         return E_OS_CALLEVEL;
     }
@@ -1528,7 +1525,7 @@ StatusType Os_BackendClear(EventMaskType mask)
 }
 StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output)
 {
-    size_t index;
+    uint32 index;
     StatusType status = E_OK;
     if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
@@ -1548,7 +1545,7 @@ StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType out
     } else {
         task_events[index] |= mask;
         if ((task_waiting[index] != 0u) && ((task_events[index] & wait_masks[index]) != 0u)) {
-            const Os_NativeStack *stack = Os_StackCurrent();
+            const Os_NativeStackType *stack = Os_StackCurrent();
             if (request_sequence == UINT64_MAX) {
                 rebase_orders();
             }
@@ -1571,11 +1568,11 @@ StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType out
     Os_BackendGuardService();
     return status;
 }
-StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info)
+StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
 {
-    size_t index;
+    uint32 index;
     uint32 j;
-    Os_ActivationInfo snapshot;
+    Os_ActivationInfoType snapshot;
     if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
     }
@@ -1604,7 +1601,7 @@ StatusType Os_BackendInspect(TaskType id, Os_ActivationInfo *info)
     snapshot.waiting = task_waiting[index];
     snapshot.wait_mask = wait_masks[index];
     for (j = 0u; j < snapshot.resource_count; ++j) {
-        size_t resource = owned_resources[index][j];
+        uint32 resource = owned_resources[index][j];
         snapshot.resources[j] = (resource < Os_Config->resource_count)
                                     ? Os_Config->resources[resource].id
                                     : RES_SCHEDULER;

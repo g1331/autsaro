@@ -19,7 +19,7 @@ SC1 的任务、事件、资源、计数器、闹钟、调度表、中断、hook
 | 高等级特性的接口 | 已核对（`Os_Types.h`／`Os.h`：SC1 同时提供的高等级类型与中断源服务按 R24-11 签名声明，`public_types` 与 `public_compatibility` 按独立约束编译；不支持的高等级服务不声明）：SWS_Os_00240 |
 | Alarm callback 只用于 SC1 | 已核对（配置：OsAlarmCallback 由 `unselected_os_features_have_no_definition` 拒绝，SC2–SC4 由 `os_policy_values_outside_the_profile_are_rejected` 拒绝，生成的工程不含 callback）：SWS_Os_00242 |
 | OS 自用定时器 | 已核对（主机目标没有 GPT 驱动；固定 FreeRTOS 端口补丁 `runtime/os/patches/0007-controlled-tick.patch` 与 `runtime/os/patches/linux/0001-controlled-posix-port.patch` 由 OS 安装受控 tick 中断，`Os_Time.c` `Os_TimeTick` 驱动系统计数器）：SWS_Os_00374 |
-| Expiry point 与计数器 | 已核对（`Os_Time.h`：`Os_ExpiryPoint.offset` 为相对表起点的 tick，`Os_ScheduleTableConfig.counter` 为唯一驱动计数器，`Os_Schedule.c` 拒绝未配置的计数器；生成器取 OsScheduleTblExpPointOffset 与唯一 OsScheduleTableCounterRef）：SWS_Os_00404、00409 |
+| Expiry point 与计数器 | 已核对（`Os_Time.h`：`Os_ExpiryPointType.offset` 为相对表起点的 tick，`Os_ScheduleTableConfigType.counter` 为唯一驱动计数器，`Os_Schedule.c` 拒绝未配置的计数器；生成器取 OsScheduleTblExpPointOffset 与唯一 OsScheduleTableCounterRef）：SWS_Os_00404、00409 |
 | 自动启动顺序 | 已核对（`Os_Backend.c` 启动序列：先激活自动启动任务，再 `Os_TimeAutostart`，最后 `Os_ScheduleAutostart`）：SWS_Os_00510 |
 | 所有等级可用的服务 | 已核对（`Os.h` 无条件声明 StartScheduleTableRel／Abs、StopScheduleTable、NextScheduleTable、GetScheduleTableStatus、IncrementCounter、GetCounterValue、GetElapsedValue）：SWS_Os_00521、00522、00523、00524、00528、00530、00532、00534 |
 | GetElapsedValue 的多次回绕 | 已核对（规范说明：服务无法检测多于一次的相对回绕；`Os_Time.c` 按模数求差，与说明一致）：SWS_Os_00533 |

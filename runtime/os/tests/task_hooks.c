@@ -10,6 +10,10 @@
 #define TASK_HOOK_OBSERVER() ((void)0)
 #endif
 
+static const uint8 task_name_0[] = "owner";  /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "helper"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_2[] = "low";    /**< Process-lifetime Task name bytes. */
+
 static char trace[128];         /**< Execution-order bytes; fixture-owned, no Init reset. */
 static unsigned length;         /**< Used execution-order bytes; fixture-owned, no Init reset. */
 static unsigned owner_entries;  /**< Owner entries observations; fixture-owned, no Init reset. */
@@ -36,7 +40,7 @@ static void task_hook(char code)
     TaskStateType state = 99u;
     TASK_HOOK_OBSERVER();
     TickType value = UINT64_MAX;
-    Os_ActivationInfo info;
+    Os_ActivationInfoType info;
     check(GetTaskID(&id) == E_OK && id < 3u);
     check(GetTaskState(id, &state) == E_OK && state == RUNNING);
     check(Os_TargetInspectActivation(id, &info) == E_OK && info.state == RUNNING);
@@ -130,10 +134,10 @@ int main(int argc, char **argv)
     scenario = argv[1];
     configured = strcmp(scenario, "unconfigured") != 0;
     internal = strcmp(scenario, "internal") == 0;
-    Os_TaskConfig tasks[3] = {
-        {0u, "owner", owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {1u, "helper", helper, 30u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-        {2u, "low", low, 5u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+    Os_TaskConfigType tasks[3] = {
+        {0u, task_name_0, owner, 10u, 1u, OS_EXTENDED_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, helper, 30u, 0u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {2u, task_name_2, low, 5u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
     };
     if (strcmp(scenario, "queued") == 0) {
         tasks[0].kind = OS_BASIC_TASK;
@@ -142,22 +146,22 @@ int main(int argc, char **argv)
     if (internal) {
         tasks[0].internal_resource = 1u;
     }
-    const Os_InternalResourceConfig resource = {1u, 20u};
-    const Os_HookConfig hooks = {NULL, &PreTaskHook, &PostTaskHook};
-    const Os_TargetConfig target = {tasks,
-                                    3u,
-                                    262144u,
-                                    NULL,
-                                    0u,
-                                    internal ? &resource : NULL,
-                                    internal ? 1u : 0u,
-                                    0u,
-                                    0u,
-                                    0u,
-                                    NULL,
-                                    configured ? &hooks : NULL,
-                                    NULL,
-                                    0u};
+    const Os_InternalResourceConfigType resource = {1u, 20u};
+    const Os_HookConfigType hooks = {NULL, &PreTaskHook, &PostTaskHook};
+    const Os_TargetConfigType target = {tasks,
+                                        3u,
+                                        262144u,
+                                        NULL,
+                                        0u,
+                                        internal ? &resource : NULL,
+                                        internal ? 1u : 0u,
+                                        0u,
+                                        0u,
+                                        0u,
+                                        NULL,
+                                        configured ? &hooks : NULL,
+                                        NULL,
+                                        0u};
     check(Os_TargetPrepare(&target) == E_OK);
     StartOS(1u);
     return 99;

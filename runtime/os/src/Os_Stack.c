@@ -4,37 +4,39 @@
 #include "Os_Stack.h"
 #include <stdio.h>
 
-static Os_NativeStack stacks[OS_NATIVE_STACKS]; /**< Actor/stopped-observer records, atomic
+static Os_NativeStackType stacks[OS_NATIVE_STACKS]; /**< Actor/stopped-observer records, atomic
                                                    allocation; no Init reset. */
-const Os_NativeStack *const Os_ArtiStacks =
+const Os_NativeStackType *const Os_ArtiStacks =
     stacks; /**< Fixed native stacks tool view; C init only, never reset. */
 static CONTEXT
     saved_contexts[OS_NATIVE_STACKS]; /**< Observer-owned stopped contexts; no Init reset. */
-const size_t Os_ArtiNativeContextSize =
+const uint64 Os_ArtiNativeContextSize =
     sizeof(CONTEXT); /**< Fixed native context size tool view; C init only, never reset. */
-const void *Os_StackSavedContext(const Os_NativeStack *stack)
+const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
     /* The caller supplies a record obtained from this module's own array. */
     return &saved_contexts[stack - stacks];
 }
-static volatile Os_Atomic32 stack_count; /**< Atomic native record reservations; no Init reset. */
+static volatile Os_Atomic32Type
+    stack_count; /**< Atomic native record reservations; no Init reset. */
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
 static char invalid_guarantee_role; /**< Startup-only test fault role; no Init reset. */
 #endif
-static __thread Os_NativeStack *current_stack; /**< Owning actor TLS stack record; no Init reset. */
-Os_StackFault Os_Fault; /**< First-fault winner snapshot, atomic publication; no Init reset. */
-static volatile Os_Atomic32 fault_claimed,
+static OS_HOST_THREAD_LOCAL Os_NativeStackType
+    *current_stack;         /**< Owning actor TLS stack record; no Init reset. */
+Os_StackFaultType Os_Fault; /**< First-fault winner snapshot, atomic publication; no Init reset. */
+static volatile Os_Atomic32Type fault_claimed,
     fault_count;             /**< Atomic fault claim/count state; no Init reset. */
 static HANDLE fault_output;  /**< Startup-only stdout handle for fatal writes; no Init reset. */
 static HANDLE fault_error;   /**< Startup-only stderr handle for fatal writes; no Init reset. */
 static char fatal_text[256]; /**< Fatal-path winner owns this buffer; no Init reset. */
-static volatile Os_Atomic32
+static volatile Os_Atomic32Type
     fatal_claimed; /**< Atomic terminal-report winner latch; no Init reset. */
-static Os_StackFault fault_records[OS_NATIVE_STACKS]; /**< Per-actor fault slots, atomic
+static Os_StackFaultType fault_records[OS_NATIVE_STACKS]; /**< Per-actor fault slots, atomic
                                                          publication; no Init reset. */
 int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
 LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
-const Os_NativeStack *Os_StackCurrent(void) { return current_stack; }
+const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
 void Os_StackRecordBuffer(const StackType_t *top)
 {
     current_stack->kernel_buffer_high = (uintptr_t)(top + 1);
@@ -46,9 +48,9 @@ void Os_StackRecordBuffer(const StackType_t *top)
 }
 
 static void publish_fault(
-    Os_NativeStack *record, DWORD code, uintptr_t sp, uintptr_t address, char origin)
+    Os_NativeStackType *record, DWORD code, uintptr_t sp, uintptr_t address, char origin)
 {
-    Os_StackFault *local = &fault_records[record - stacks];
+    Os_StackFaultType *local = &fault_records[record - stacks];
     local->thread_id = record->thread_id;
     local->role = record->role;
     local->exception = code;
@@ -115,7 +117,7 @@ int Os_StackRegister(char role)
     uintptr_t cursor;
     ULONG guarantee = 16384u;
     LONG index = InterlockedIncrement(&stack_count) - 1;
-    Os_NativeStack *record;
+    Os_NativeStackType *record;
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
     if (invalid_guarantee_role == role) {
         guarantee = 0xffffffffu; /* Actual API rejection: larger than the reserved stack. */
@@ -170,7 +172,7 @@ void Os_StackCheck(void)
     uintptr_t sp;
     ULONG_PTR low, high;
     MEMORY_BASIC_INFORMATION region;
-    __asm__ volatile("movq %%rsp, %0" : "=r"(sp));
+    OS_HOST_STACK_POINTER(sp);
     if (current_stack == NULL) {
         return; /* Public preparation before StartOS does not yet execute an OS task. */
     }
@@ -189,7 +191,7 @@ void Os_StackObserve(HANDLE thread, const CONTEXT *context)
     DWORD id = GetThreadId(thread);
     LONG i;
     for (i = 0; i < stack_count && i < (LONG)OS_NATIVE_STACKS; ++i) {
-        Os_NativeStack *record = &stacks[i];
+        Os_NativeStackType *record = &stacks[i];
         if (record->thread_id == id) {
             uintptr_t sp = (uintptr_t)context->Rsp;
             MEMORY_BASIC_INFORMATION region;
@@ -216,7 +218,7 @@ void Os_StackFatalExit(void)
     static const char suffix[] = " captured=1 record_complete=1\n";
     size_t used = 0u, i;
     DWORD written;
-    const Os_StackFault *fault = &Os_Fault;
+    const Os_StackFaultType *fault = &Os_Fault;
     if (InterlockedCompareExchange(&fatal_claimed, 1, 0) != 0) {
         Sleep(INFINITE);
         ExitProcess(E_OS_STACKFAULT);
@@ -255,7 +257,7 @@ int Os_StackReport(void)
     int result = 0;
     LONG i;
     for (i = 0; i < stack_count && i < (LONG)OS_NATIVE_STACKS; ++i) {
-        Os_NativeStack *record = &stacks[i];
+        Os_NativeStackType *record = &stacks[i];
         if (record->thread_id == 0u) {
             continue;
         }
@@ -278,7 +280,7 @@ int Os_StackReport(void)
         }
     }
     for (i = 0; i < (LONG)OS_NATIVE_STACKS; ++i) {
-        Os_StackFault *fault = &fault_records[i];
+        Os_StackFaultType *fault = &fault_records[i];
         if (fault->published == 0) {
             continue;
         }

@@ -25,8 +25,9 @@ pub(super) const RTE: &str = "rte";
 pub(super) const ECU: &str = "ecu-config";
 
 /// Trusted inputs reserved at their existing generated output paths.
-const TEMPLATES: [(&str, &str, &str); 21] = [
+const TEMPLATES: [(&str, &str, &str); 22] = [
     ("runtime/ecu/templates/Rte.h.in", RTE, "include/Rte.h"),
+    ("runtime/os/include/Rte_Type.h", RTE, "include/Rte_Type.h"),
     ("runtime/ecu/include/Rte_Cfg.h", RTE, "include/Rte_Cfg.h"),
     (
         "runtime/ecu/include/Rte_DataHandleType.h",

@@ -1,20 +1,21 @@
 /** @file OS startup, shutdown and target validation; Task, resource and event service entries. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
-const Os_TargetConfig *Os_Config; /**< Startup-only retained graph; no Init replacement/reset. */
-static volatile Os_Atomic32 start_called; /**< Atomic StartOS-entry latch; no Init reset. */
-size_t Os_ResourceIndex(const Os_TargetConfig *config, ResourceType id)
+const Os_TargetConfigType
+    *Os_Config; /**< Startup-only retained graph; no Init replacement/reset. */
+static volatile Os_Atomic32Type start_called; /**< Atomic StartOS-entry latch; no Init reset. */
+uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id)
 {
-    size_t index = 0u;
+    uint32 index = 0u;
     while ((index < config->resource_count) && (config->resources[index].id != id)) {
         ++index;
     }
     return index;
 }
-size_t Os_ResourceRoot(const Os_TargetConfig *config, size_t index)
+uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index)
 {
-    size_t root = index;
-    size_t steps = 0u;
+    uint32 root = index;
+    uint32 steps = 0u;
     while ((root < config->resource_count) && (config->resources[root].linked != 0u) &&
            (steps < config->resource_count)) {
         root = Os_ResourceIndex(config, config->resources[root].link);
@@ -27,13 +28,13 @@ size_t Os_ResourceRoot(const Os_TargetConfig *config, size_t index)
 /* Highest Task or ISR priority among the accessors of every member of the
  * LINKED group rooted at `root`, and the Tasks among them. Every ISR level is
  * above every Task level on this target. */
-static StatusType group_access(const Os_TargetConfig *config,
-                               size_t root,
+static StatusType group_access(const Os_TargetConfigType *config,
+                               uint32 root,
                                uint32 *tasks,
                                uint8 *highest)
 {
     uint32 isrs = 0u;
-    size_t i;
+    uint32 i;
     *tasks = 0u;
     *highest = 0u;
     for (i = 0u; i < config->resource_count; ++i) {
@@ -62,14 +63,16 @@ static StatusType group_access(const Os_TargetConfig *config,
     }
     return E_OK;
 }
-static StatusType validate_resource(const Os_TargetConfig *config, size_t index, uint8 highest_task)
+static StatusType validate_resource(const Os_TargetConfigType *config,
+                                    uint32 index,
+                                    uint8 highest_task)
 {
-    const Os_ResourceConfig *resource = &config->resources[index];
-    const size_t root = Os_ResourceRoot(config, index);
+    const Os_ResourceConfigType *resource = &config->resources[index];
+    const uint32 root = Os_ResourceRoot(config, index);
     uint32 task_mask = 0u;
     uint32 group_tasks = 0u;
     uint8 highest_access = 0u;
-    size_t j;
+    uint32 j;
     for (j = 0u; j < config->task_count; ++j) {
         task_mask |= 1u << config->tasks[j].id;
     }
@@ -91,7 +94,7 @@ static StatusType validate_resource(const Os_TargetConfig *config, size_t index,
         return E_OS_VALUE;
     }
     for (j = 0u; j < config->task_count; ++j) {
-        const Os_TaskConfig *task = &config->tasks[j];
+        const Os_TaskConfigType *task = &config->tasks[j];
         if ((resource->isr_access == 0u) && ((group_tasks & (1u << task->id)) == 0u) &&
             (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
             return E_OS_VALUE;
@@ -104,9 +107,9 @@ static StatusType validate_resource(const Os_TargetConfig *config, size_t index,
     }
     return E_OK;
 }
-StatusType Os_TargetPrepare(const Os_TargetConfig *config)
+StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
 {
-    size_t i, j;
+    uint32 i, j;
     uint8 highest_task = 0u;
     if (Os_Config != NULL) {
         return E_OS_STATE;
@@ -117,7 +120,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config)
         return E_OS_VALUE;
     }
     for (i = 0u; i < config->task_count; ++i) {
-        const Os_TaskConfig *task = &config->tasks[i];
+        const Os_TaskConfigType *task = &config->tasks[i];
         if (task->priority > highest_task) {
             highest_task = task->priority;
         }
@@ -144,7 +147,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config)
         return E_OS_VALUE;
     }
     for (i = 0u; i < config->internal_resource_count; ++i) {
-        const Os_InternalResourceConfig *resource = &config->internal_resources[i];
+        const Os_InternalResourceConfigType *resource = &config->internal_resources[i];
         uint8 highest_access = 0u;
         if ((resource->id == 0u) || (resource->id > OS_MAX_INTERNAL_RESOURCES) ||
             (resource->ceiling == 0u) || (resource->ceiling > OS_MAX_PRIORITY)) {
@@ -156,7 +159,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config)
             }
         }
         for (j = 0u; j < config->task_count; ++j) {
-            const Os_TaskConfig *task = &config->tasks[j];
+            const Os_TaskConfigType *task = &config->tasks[j];
             if ((task->internal_resource == resource->id) && (task->priority > highest_access)) {
                 highest_access = task->priority;
             }
@@ -167,7 +170,7 @@ StatusType Os_TargetPrepare(const Os_TargetConfig *config)
             }
         }
         for (j = 0u; j < config->task_count; ++j) {
-            const Os_TaskConfig *task = &config->tasks[j];
+            const Os_TaskConfigType *task = &config->tasks[j];
             if ((highest_access != 0u) && (task->internal_resource != resource->id) &&
                 (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
                 return E_OS_VALUE;
@@ -277,7 +280,7 @@ CoreIdType Os_Implementation_GetCoreID(void)
 }
 StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
 {
-    const Os_ErrorParameters arguments = {.service_ControlIdle = {CoreID, IdleMode}};
+    const Os_ErrorParametersType arguments = {.service_ControlIdle = {CoreID, IdleMode}};
     StatusType status = Os_ServiceAccessStatus(OSServiceId_ControlIdle);
     Os_StackCheck();
     Os_BackendGuardService();
@@ -327,7 +330,7 @@ AppModeType Os_Implementation_GetActiveApplicationMode(void)
 ISRType Os_Implementation_GetISRID(void)
 {
     const StatusType status = Os_ServiceAccessStatus(OSServiceId_GetISRID);
-    const Os_NativeStack *stack = Os_StackCurrent();
+    const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 interrupt = Os_BackendCurrentInterrupt();
     Os_StackCheck();
     Os_BackendGuardService();
@@ -412,7 +415,7 @@ static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRefType Even
     }
     return Os_BackendEvent(TaskID, 0u, Event);
 }
-StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info)
+StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info)
 {
     Os_StackCheck();
     Os_BackendGuardService();
@@ -424,7 +427,7 @@ StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfo *info)
 
 StatusType Os_Implementation_GetTaskID(TaskRefType TaskID)
 {
-    const Os_ErrorParameters arguments = {.service_GetTaskID = {TaskID}};
+    const Os_ErrorParametersType arguments = {.service_GetTaskID = {TaskID}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -440,7 +443,7 @@ StatusType Os_Implementation_GetTaskID(TaskRefType TaskID)
 
 StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State)
 {
-    const Os_ErrorParameters arguments = {.service_GetTaskState = {TaskID, State}};
+    const Os_ErrorParametersType arguments = {.service_GetTaskState = {TaskID, State}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -456,7 +459,7 @@ StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType Stat
 
 StatusType Os_Implementation_ActivateTask(TaskType TaskID)
 {
-    const Os_ErrorParameters arguments = {.service_ActivateTask = {TaskID}};
+    const Os_ErrorParametersType arguments = {.service_ActivateTask = {TaskID}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -472,7 +475,7 @@ StatusType Os_Implementation_ActivateTask(TaskType TaskID)
 
 StatusType Os_Implementation_TerminateTask(void)
 {
-    const Os_ErrorParameters arguments = {.service_TerminateTask = {0u}};
+    const Os_ErrorParametersType arguments = {.service_TerminateTask = {0u}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -488,7 +491,7 @@ StatusType Os_Implementation_TerminateTask(void)
 
 StatusType Os_Implementation_ChainTask(TaskType TaskID)
 {
-    const Os_ErrorParameters arguments = {.service_ChainTask = {TaskID}};
+    const Os_ErrorParametersType arguments = {.service_ChainTask = {TaskID}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -504,7 +507,7 @@ StatusType Os_Implementation_ChainTask(TaskType TaskID)
 
 StatusType Os_Implementation_GetResource(ResourceType ResID)
 {
-    const Os_ErrorParameters arguments = {.service_GetResource = {ResID}};
+    const Os_ErrorParametersType arguments = {.service_GetResource = {ResID}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -520,7 +523,7 @@ StatusType Os_Implementation_GetResource(ResourceType ResID)
 
 StatusType Os_Implementation_ReleaseResource(ResourceType ResID)
 {
-    const Os_ErrorParameters arguments = {.service_ReleaseResource = {ResID}};
+    const Os_ErrorParametersType arguments = {.service_ReleaseResource = {ResID}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -536,7 +539,7 @@ StatusType Os_Implementation_ReleaseResource(ResourceType ResID)
 
 StatusType Os_Implementation_Schedule(void)
 {
-    const Os_ErrorParameters arguments = {.service_Schedule = {0u}};
+    const Os_ErrorParametersType arguments = {.service_Schedule = {0u}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -552,7 +555,7 @@ StatusType Os_Implementation_Schedule(void)
 
 StatusType Os_Implementation_WaitEvent(EventMaskType Mask)
 {
-    const Os_ErrorParameters arguments = {.service_WaitEvent = {Mask}};
+    const Os_ErrorParametersType arguments = {.service_WaitEvent = {Mask}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -568,7 +571,7 @@ StatusType Os_Implementation_WaitEvent(EventMaskType Mask)
 
 StatusType Os_Implementation_ClearEvent(EventMaskType Mask)
 {
-    const Os_ErrorParameters arguments = {.service_ClearEvent = {Mask}};
+    const Os_ErrorParametersType arguments = {.service_ClearEvent = {Mask}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -584,7 +587,7 @@ StatusType Os_Implementation_ClearEvent(EventMaskType Mask)
 
 StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
 {
-    const Os_ErrorParameters arguments = {.service_SetEvent = {TaskID, Mask}};
+    const Os_ErrorParametersType arguments = {.service_SetEvent = {TaskID, Mask}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();
@@ -600,7 +603,7 @@ StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
 
 StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
 {
-    const Os_ErrorParameters arguments = {.service_GetEvent = {TaskID, Event}};
+    const Os_ErrorParametersType arguments = {.service_GetEvent = {TaskID, Event}};
     StatusType status;
     Os_StackCheck();
     Os_BackendGuardService();

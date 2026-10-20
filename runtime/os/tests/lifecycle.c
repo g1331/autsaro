@@ -8,6 +8,9 @@
 #else
 #include <unistd.h>
 #endif
+static const uint8 task_name_0[] = "A"; /**< Process-lifetime Task name bytes. */
+static const uint8 task_name_1[] = "B"; /**< Process-lifetime Task name bytes. */
+
 static unsigned
     startup_failure; /**< Main-owned startup failure selection before StartOS; no Init reset. */
 static unsigned both_ready; /**< Startup readiness observations; fixture-owned, no Init reset. */
@@ -52,10 +55,20 @@ static void task_a(void) { check_task(0u, 1u, 'A'); }
 static void task_b(void) { check_task(1u, 0u, 'B'); }
 int main(int argc, char **argv)
 {
-    Os_TaskConfig tasks[2] = {{0u, "A", task_a, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
-                              {1u, "B", task_b, 2u, 2u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
-    Os_TargetConfig config = {
+    Os_TaskConfigType tasks[2] = {
+        {0u, task_name_0, task_a, 2u, 1u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u},
+        {1u, task_name_1, task_b, 2u, 2u, OS_BASIC_TASK, 1u, OS_SCHEDULE_FULL, 0u}};
+    Os_TargetConfigType config = {
         tasks, 2u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, NULL, NULL, NULL, 0u};
+    Os_CounterConfigType counter = {0u, 7u, 1u, 1u, 1u};
+    Os_AlarmConfigType alarm = {0u, 0u, OS_ALARM_ACTIVATE, 0u, 0u, NULL, 0u, 0u, 0u, 0u, 0u};
+    Os_ExpiryActionType action = {OS_ALARM_ACTIVATE, 0u, 0u};
+    Os_ExpiryPointType point = {0u, &action, 1u};
+    Os_ScheduleTableConfigType table = {
+        0u, 0u, 2u, &point, 1u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 0u};
+    Os_TimeConfigType time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, &table, 1u};
+    Os_ResourceConfigType resource = {0u, 2u, 1u, 0u, 0u, 0u};
+    Os_InternalResourceConfigType internal = {1u, 2u};
     AppModeType mode = 1u;
     StatusType expected = E_OK;
     const char *scenario = argc == 2 ? argv[1] : "normal";
@@ -107,6 +120,34 @@ int main(int argc, char **argv)
         startup_failure = 1u;
     } else if (strcmp(scenario, "repeat-start") == 0) {
         startup_failure = 2u;
+    }
+    /* Verifies: SWS_BSW_00120 [Os]. Each independent count keeps the full uint32
+     * input until its own capacity check, before any actor or table traversal. */
+    if (strncmp(scenario, "count-", 6u) == 0) {
+        uint32 *counts[] = {&config.task_count,
+                            &config.resource_count,
+                            &config.internal_resource_count,
+                            &time.counter_count,
+                            &time.alarm_count,
+                            &time.schedule_table_count,
+                            &table.point_count,
+                            &point.action_count};
+        const char *names[] = {
+            "task", "resource", "internal", "counter", "alarm", "table", "point", "action"};
+        config.time = &time;
+        config.resources = &resource;
+        config.internal_resources = &internal;
+        for (size_t i = 0u; i < 8u; ++i) {
+            char wide[40], huge[40];
+            if (snprintf(wide, sizeof(wide), "count-wide-%s", names[i]) < 0 ||
+                snprintf(huge, sizeof(huge), "count-huge-%s", names[i]) < 0) {
+                return 99;
+            }
+            if (strcmp(scenario, wide) == 0 || strcmp(scenario, huge) == 0) {
+                *counts[i] = strcmp(scenario, wide) == 0 ? 256u : UINT32_MAX;
+                expected = E_OS_VALUE;
+            }
+        }
     }
     if (Os_TargetPrepare(NULL) != E_OS_VALUE || Os_TargetReady()) {
         return 99;
