@@ -1,9 +1,6 @@
 /** @file Traced public OS service wrappers around the implementation entry points. */
 #include "Os_Backend.h"
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-
 ISRType GetISRID(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
@@ -678,6 +675,3 @@ void SuspendOSInterrupts(void)
     }
     Os_ArtiServiceLeave();
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"

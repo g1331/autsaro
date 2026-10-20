@@ -1,9 +1,6 @@
 /** @file Schedule table validation, start/stop/chain services and expiry-point processing. */
 #include "Os_Backend.h"
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-
 typedef Os_ArtiScheduleStateType Os_ScheduleStateType;
 static Os_ScheduleStateType
     tables[OS_MAX_SCHEDULE_TABLES]; /**< Port-locked table state; no Init reset. */
@@ -432,6 +429,3 @@ StatusType Os_Implementation_GetScheduleTableStatus(ScheduleTableType ScheduleTa
     }
     return Os_ErrorResult(OSServiceId_GetScheduleTableStatus, status, &arguments);
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"

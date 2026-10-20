@@ -43,6 +43,8 @@ readability-identifier-naming runtime/ecu/src/Ecu_Target.c } Ecu_ProtocolSlot;
 readability-identifier-naming runtime/host/include/Can_Host.h } CanMode;
 readability-identifier-naming runtime/host/include/Ecu_Status.h } EcuStatus;
 readability-identifier-naming runtime/host/src/Can_HostLock.c } Can_RecursiveLock;
+readability-identifier-naming runtime/os/include/Arti.h typedef char ArtiAtomic32IsFourBytes[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1];
+readability-identifier-naming runtime/os/include/Arti.h typedef int32_t ArtiAtomic32;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_AddressCapture;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_Event;
 readability-identifier-naming runtime/os/include/Os.h #define SetEvent Os_SetEvent

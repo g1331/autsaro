@@ -1,9 +1,6 @@
 /** @file Hook invocation and ErrorHook context kept separately for each actor. */
 #include "Os_Backend.h"
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-
 /* The fixed GCC/Win64 target uses the same native PE TLS ABI as Os_Stack.c.
  * Each actor keeps its own callback phase and typed snapshot; a failed call
  * from inside ErrorHook never recursively enters or overwrites that snapshot. */
@@ -170,6 +167,3 @@ void Os_ShutdownHookInvoke(StatusType error)
     Os_ArtiCallerRestore(arti);
     phase = previous;
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"

@@ -2,9 +2,6 @@
 #include "Os_Backend.h"
 #include <string.h>
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-
 static Os_InputRecordType
     records[OS_INPUT_CAPACITY]; /**< SPSC-owned ring slots, atomic publication; no Init reset. */
 static uint64 last_ticket;      /**< Single-producer accepted ticket; no Init reset. */
@@ -154,6 +151,3 @@ StatusType Os_TargetInputCount(uint32 *count)
     }
     return status;
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"

@@ -2,9 +2,6 @@
 #include "Os_Backend.h"
 #include "Os_IntegrationHooks.h"
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-
 static TickType values[OS_MAX_COUNTERS]; /**< Port-locked Counter ticks; TimeInit does not reset. */
 const TickType *const Os_ArtiCounters =
     values; /**< Fixed Counter ticks tool view; C init only, never reset. */
@@ -918,6 +915,3 @@ StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID)
     }
     return Os_ErrorResult(OSServiceId_CancelAlarm, status, &arguments);
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"

@@ -8,9 +8,6 @@
 #include <setjmp.h>
 #include <string.h>
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-
 static StaticTask_t
     task_memory[OS_MAX_TASKS + 2u]; /**< Native Task TCBs; kernel port lock; no Init reset. */
 static StackType_t task_buffers[OS_MAX_TASKS + 2u]
@@ -1614,6 +1611,3 @@ StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
     Os_BackendGuardService();
     return E_OK;
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"

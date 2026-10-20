@@ -1,9 +1,6 @@
 /** @file OS startup, shutdown and target validation; Task, resource and event service entries. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
-
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 const Os_TargetConfigType
     *Os_Config; /**< Startup-only retained graph; no Init replacement/reset. */
 static volatile Os_Atomic32Type start_called; /**< Atomic StartOS-entry latch; no Init reset. */
@@ -619,6 +616,3 @@ StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event)
     }
     return Os_ErrorResult(OSServiceId_GetEvent, status, &arguments);
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"

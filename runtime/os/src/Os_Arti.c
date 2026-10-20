@@ -2,9 +2,6 @@
 #include "Os_Arti.h"
 #include <assert.h>
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-
 static OS_THREAD_LOCAL uint32
     internal_depth; /**< Actor TLS origin depth; CallerSave resets, not Init. */
 static OS_THREAD_LOCAL uint32
@@ -807,6 +804,3 @@ void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address)
     Arti_CaptureAddress(native_address);
     ARTI_TRACE(SPRVSR, AR_CP_OS_SERVICECALLS, Os, 0u, OsServiceCall_GetAlarmBase_Return, token);
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"

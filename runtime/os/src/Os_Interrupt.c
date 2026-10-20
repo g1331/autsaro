@@ -2,9 +2,6 @@
 #include "Os_Backend.h"
 #include <limits.h>
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-
 typedef struct {
     uint32 all_depth;
     uint32 os_depth;
@@ -211,6 +208,3 @@ StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID)
                ? status
                : Os_ErrorResult(OSServiceId_ClearPendingInterrupt, status, &arguments);
 }
-
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
