@@ -21,6 +21,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
+from autosar_tooling.c_standard import function, is_comment, lex
 from autosar_tooling.config import ROOT
 from ecu_tools.build import (
     kernel_patch_environment,
@@ -1636,6 +1637,7 @@ def check_capacity(binary: Path) -> list[dict]:
 # Verifies: SWS_Os_00772, 00773, 00774, 00775, 00776, 00777, 00778, 00779, 00780, 00781, 00782,
 # 00786, 00787, 00788, 00789, 00790, 00791, 00792, 00793, 00794, 91000, 91002, 91007
 def check_public_types(directory: Path) -> None:
+    # Verifies[Os]: SWS_BSW_00120. Independent C99 widths; 256/UINT32_MAX refusal vectors run in lifecycle.
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
     binary = directory / ("public_types" if linux else "public_types.exe")
     command = [
@@ -1741,7 +1743,7 @@ def check_vector_mutations(directory: Path) -> None:
             result = execute(mutant, "normal")
             require(result["exit"] == 7 and not result["stderr"], result)
         else:
-            path = target / "src/Os_Vector.h"
+            path = target / "include/Os_MemMap.h"
             text = path.read_text(encoding="utf-8")
             attribute = '__attribute__((section(".os_vec"), aligned(8)))'
             require(text.count(attribute) == 1, "vector section mutation did not apply")
@@ -1838,7 +1840,132 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
 
 # Task, ISR, alarm callback and hook declarations sit inside OS_START/STOP_SEC_CODE.
 # Verifies: SWS_Os_00815
+def verify_storage_sections(binary: Path, tool: Path, linux: bool) -> None:
+    sections = run_native([str(tool), "-h", str(binary)], capture_output=True,
+                          text=True, check=True).stdout
+    symbols = run_native([str(tool), "-t", str(binary)], capture_output=True,
+                         text=True, check=True).stdout
+    require(linux or "__emutls" not in symbols, "storage mapping must retain native PE TLS")
+    wanted = {"mapped_cleared": ".bss.os", "mapped_initialized": ".data.os",
+              "mapped_reference": ".data.rel.ro.os" if linux else ".rdata",
+              "mapped_actor": ".tbss.os" if linux else ".tls$OS"}
+    for name, section in wanted.items():
+        entry = re.search(r"^\s*(\d+)\s+" + re.escape(section) + r"\s", sections, re.MULTILINE)
+        if entry is None:
+            raise ValueError(f"mapped storage section is missing: {section}")
+        if linux:
+            found = re.findall(r"^[0-9a-fA-F]+\s+[^\n]*\s" + re.escape(section)
+                               + r"\s+[0-9a-fA-F]+\s+" + re.escape(name) + r"$", symbols, re.MULTILINE)
+            if len(found) != 1:
+                raise ValueError(f"mapped storage is outside its section: {name}; {section}")
+        else:
+            found = re.findall(r"\(sec\s+(\d+)\)[^\n]*\s" + re.escape(name) + r"$",
+                               symbols, re.MULTILINE)
+            if len(found) != 1 or int(found[0]) != int(entry[1]) + 1:
+                raise ValueError(f"mapped storage is outside its section: {name}; {section}")
+
+
+def verify_memory_mapping_source(source: str, owned_names: set[str] | None = None) -> set[str]:
+    """Check explicit pairs and object classes independently of compiler attributes."""
+    active = None
+    names = set()
+    expecting = False
+    statement = []
+    depth = 0
+    code = False
+    for token in lex(source):
+        if is_comment(token):
+            continue
+        text = token.text.strip()
+        if text.startswith("#"):
+            if text == '#include "Os_MemMap.h"':
+                require(expecting, "unexpected MemMap include")
+                expecting = False
+                continue
+            require(not expecting, "mapping marker must immediately include its header")
+            marker = re.fullmatch(r"#define OS_(START|STOP)_SEC_(\w+)", text)
+            if marker:
+                direction, section = marker.groups()
+                if direction == "START":
+                    require(active is None and not statement, "nested mapping or split declaration")
+                    active = section
+                else:
+                    require(active == section and not statement, "mismatched mapping or split definition")
+                    active = None
+                expecting = True
+            else:
+                require(active is None, "preprocessing inside mapped section")
+            continue
+        require(not expecting, "mapping marker must immediately include its header")
+        statement.append(token)
+        if text == "{":
+            if depth == 0:
+                code = function(statement[:-1]) is not None
+            depth += 1
+        elif text == "}":
+            depth -= 1
+        finished = (text == ";" and depth == 0) or (text == "}" and depth == 0 and code)
+        if not finished:
+            continue
+        words = [item.text for item in statement]
+        signature = statement[:words.index("{")] if "{" in words else statement
+        declaration = function(signature)
+        head = [item.text for item in signature if item.text != "OS_MEMMAP"]
+        type_only = "typedef" in head or (
+            head and head[0] in ("struct", "union", "enum") and
+            (len(head) == 3 or words[-2:] == ["}", ";"])
+        )
+        if type_only:
+            require(active is None, "type-only declaration does not allocate section storage")
+        else:
+            if declaration is not None:
+                name = declaration[0]
+            else:
+                declarator = words[:words.index("=")] if "=" in words else words[:-1]
+                if "[" in declarator:
+                    declarator = declarator[:declarator.index("[")]
+                name = next((word for word in reversed(declarator) if word.isidentifier()), "")
+            names.add(name)
+            if active is not None:
+                require((active == "CODE") == (declaration is not None),
+                        "code/data mapping class mismatch")
+                if declaration is None:
+                    head = words[:words.index("=")] if "=" in words else words
+                    constant = "const" in head
+                    if "*" in head:
+                        star = len(head) - 1 - head[::-1].index("*")
+                        constant = head[star + 1:star + 2] == ["const"]
+                    require(active.startswith("CONST_") == constant,
+                            "constant/variable mapping class mismatch")
+                    tls = any(word in head for word in ("OS_THREAD_LOCAL", "OS_HOST_THREAD_LOCAL"))
+                    require(("_TLS_" in active) == tls, "TLS mapping class mismatch")
+                    require(not active.startswith("VAR_CLEARED_") or "=" not in words,
+                            "explicit initializer in cleared section")
+            else:
+                # Inline implementations are exempt under SWS_MemMap_00003.
+                required = owned_names is None or name in owned_names
+                require(not required or (declaration is not None and "inline" in head),
+                        f"unmapped owned declaration or definition: {name}")
+        statement = []
+        code = False
+    require(active is None and not expecting and not statement, "unclosed memory mapping")
+    return names
+
+
 def check_memory_mapping(directory: Path) -> None:
+    # These standard callback declarations belong to the OS interface even though RTE owns bodies.
+    owned = {"StartupHook", "ShutdownHook", "ErrorHook", "PreTaskHook", "PostTaskHook"}
+    for path in sorted((TARGET / "src").rglob("*.c")):
+        try:
+            owned.update(verify_memory_mapping_source(path.read_text(encoding="utf-8")))
+        except AssertionError as error:
+            raise AssertionError(f"{path.relative_to(TARGET)}: {error}") from error
+    for path in sorted((*((TARGET / "include").glob("*.h")), *((TARGET / "src").rglob("*.h")))):
+        if path.name != "Os_MemMap.h":
+            try:
+                verify_memory_mapping_source(path.read_text(encoding="utf-8"), owned)
+            except AssertionError as error:
+                raise AssertionError(f"{path.relative_to(TARGET)}: {error}") from error
     cc = compiler()
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
     tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
@@ -1847,6 +1974,9 @@ def check_memory_mapping(directory: Path) -> None:
     flags = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I", str(headers),
              "-I", str(ROOT / "runtime/bsw/include"), "-I", str(ROOT / "runtime/host/include")]
     source = TARGET / "tests/memory_mapping.c"
+    object_file = directory / "memory_mapping.o"
+    run_native([*flags, "-c", str(source), "-o", str(object_file)], check=True, timeout=60)
+    verify_storage_sections(object_file, tool, linux)
     binary = directory / ("memory_mapping" if linux else "memory_mapping.exe")
     run_native([*flags, str(source), "-o", str(binary)], check=True, timeout=60)
     names = ["Os_TaskEntry_FirstTask", "Os_TaskEntry_SecondTask", "Os_IsrEntry_FirstISR",
@@ -1858,15 +1988,19 @@ def check_memory_mapping(directory: Path) -> None:
     for name, markers, expected in [
         ("nested", ["OS_START_SEC_CODE", "OS_START_SEC_CODE"], "Nested OS code section"),
         ("unmatched-stop", ["OS_STOP_SEC_CODE"], "stopped without a matching start"),
+        ("mismatched-stop", ["OS_START_SEC_CODE", "OS_STOP_SEC_CONST_8"], "stopped without a matching start"),
         ("conflicting", [], "Conflicting OS memory mapping markers"),
         ("unsupported", ["OS_START_SEC_OTHER"], "Unsupported or missing OS memory mapping marker"),
         ("attribute-override", [], "OS_CODE override is unsupported"),
+        ("mapping-attribute-override", [], "OS_MEMMAP override is unsupported"),
         ("thread-local-override", [], "OS_THREAD_LOCAL override is unsupported"),
     ]:
         if name == "conflicting":
             text = '#include "Os.h"\n#define OS_START_SEC_CODE\n#define OS_STOP_SEC_CODE\n#include "Os_MemMap.h"\n'
         elif name.endswith("-override"):
-            text = f'#define {"OS_CODE" if name == "attribute-override" else "OS_THREAD_LOCAL"}\n#include "Os.h"\n'
+            macro = {"attribute-override": "OS_CODE", "mapping-attribute-override": "OS_MEMMAP",
+                     "thread-local-override": "OS_THREAD_LOCAL"}[name]
+            text = f'#define {macro}\n#include "Os.h"\n'
         else:
             text = '#include "Os.h"\n' + ''.join(
                 f'#define {marker}\n#include "Os_MemMap.h"\n' for marker in markers)
@@ -1875,6 +2009,18 @@ def check_memory_mapping(directory: Path) -> None:
         require(rejected.returncode != 0 and expected in rejected.stderr, rejected.stderr)
     header = headers / "Os_MemMap.h"
     original = header.read_text(encoding="utf-8")
+    cleared = '__attribute__((section(".bss.os")))'
+    require(original.count(cleared) > 0, "cleared-section mutation did not apply")
+    header.write_text(original.replace(cleared, ""), encoding="utf-8")
+    unmapped = directory / "missing-storage-section.o"
+    run_native([*flags, "-c", str(source), "-o", str(unmapped)], check=True, timeout=60)
+    try:
+        verify_storage_sections(unmapped, tool, linux)
+    except ValueError as error:
+        require("mapped storage section is missing: .bss.os" in str(error), str(error))
+    else:
+        raise AssertionError("unmapped storage passed its independent section check")
+    header.write_text(original, encoding="utf-8")
     attribute = '__attribute__((section(".os_code")))'
     require(original.count(attribute) == 1, "code-section mutation did not apply")
     header.write_text(original.replace(attribute, ""), encoding="utf-8")
@@ -1894,7 +2040,7 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
     with retained_workspace(output_directory) as temporary, native_session(temporary, suite):
         if suite == "memory-mapping":
             check_memory_mapping(Path(temporary))
-            print("memory-mapping PASS: 10 linked entries; 7 rejected compile/link cases")
+            print("memory-mapping PASS: 10 linked entries; 10 rejected compile/link cases")
             return
         if suite == "vector-section":
             check_vector_mutations(Path(temporary))

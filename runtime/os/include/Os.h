@@ -99,6 +99,8 @@
 #define ALARMCALLBACK(identifier)                                                                  \
     OS_CODE void identifier(void);                                                                 \
     OS_CODE void identifier(void)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** @brief Select the supported virtual-core idle mode.
  * @param[in] CoreID Ignored by this single-core target, including foreign values.
  * @param[in] IdleMode IDLE_NO_HALT; other modes return E_OS_ID without an effect.
@@ -108,7 +110,8 @@
  * Reentrancy: non-reentrant (SWS_Os_00769); callers serialize mode selection.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
+OS_MEMMAP StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
+
 /** @brief R24-11 DRAFT query of whether StartOS has been called.
  * @return TRUE after entry to StartOS; FALSE before it or when the call is ignored.
  * @note The draft API can be used before startup in an initialized C environment.
@@ -117,7 +120,8 @@ StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
  * Reentrancy: reentrant; the startup latch is atomic.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-boolean isOsStarted(void);
+OS_MEMMAP boolean isOsStarted(void);
+
 /** @brief Read the logical CoreID of the calling core (SWS_Os_00674, 00675).
  * @return OS_CORE_ID_0, the EcucCoreId of the only core of this target.
  * Preconditions: none; callable before StartOS (SWS_Os_00625) and with interrupts disabled.
@@ -126,8 +130,12 @@ boolean isOsStarted(void);
  * Reentrancy: reentrant.
  * Ownership: none.
  */
-CoreIdType GetCoreID(void);
+OS_MEMMAP CoreIdType GetCoreID(void);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #include "Os_Hooks.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Restore the caller's non-nested DisableAllInterrupts state; unmatched call has no effect.
  * @par Return
  * None.
@@ -137,7 +145,8 @@ CoreIdType GetCoreID(void);
  * different logical callers have separate nesting; same-caller pairs must remain balanced.
  * Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-void EnableAllInterrupts(void);
+OS_MEMMAP void EnableAllInterrupts(void);
+
 /** Mask all application interrupts. This pair does not support nesting.
  * @par Return
  * None.
@@ -147,7 +156,8 @@ void EnableAllInterrupts(void);
  * different logical callers have separate nesting; same-caller pairs must remain balanced.
  * Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-void DisableAllInterrupts(void);
+OS_MEMMAP void DisableAllInterrupts(void);
+
 /** Restore one nesting level of the caller's all-interrupt suspension.
  * @par Return
  * None.
@@ -157,7 +167,8 @@ void DisableAllInterrupts(void);
  * different logical callers have separate nesting; same-caller pairs must remain balanced.
  * Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-void ResumeAllInterrupts(void);
+OS_MEMMAP void ResumeAllInterrupts(void);
+
 /** Mask all application interrupts; nesting with the All/OS suspend pairs is supported.
  * @par Return
  * None.
@@ -167,7 +178,8 @@ void ResumeAllInterrupts(void);
  * different logical callers have separate nesting; same-caller pairs must remain balanced.
  * Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-void SuspendAllInterrupts(void);
+OS_MEMMAP void SuspendAllInterrupts(void);
+
 /** Restore one nesting level of the caller's Category 2 interrupt suspension.
  * @par Return
  * None.
@@ -176,7 +188,8 @@ void SuspendAllInterrupts(void);
  * masks. Reentrancy: different logical callers have separate nesting; same-caller pairs must remain
  * balanced. Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-void ResumeOSInterrupts(void);
+OS_MEMMAP void ResumeOSInterrupts(void);
+
 /** Mask Category 2 application interrupts, preserving Category 1 delivery.
  * @par Return
  * None.
@@ -185,7 +198,8 @@ void ResumeOSInterrupts(void);
  * masks. Reentrancy: different logical callers have separate nesting; same-caller pairs must remain
  * balanced. Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-void SuspendOSInterrupts(void);
+OS_MEMMAP void SuspendOSInterrupts(void);
+
 /** Read the active logical Category 2 ISR, including its ErrorHook.
  * @return ISR vector identifier, or INVALID_ISR outside a Category 2 ISR.
  * Preconditions: caller interrupts enabled; masked or non-ISR calls return INVALID_ISR.
@@ -193,7 +207,8 @@ void SuspendOSInterrupts(void);
  * Reentrancy: reentrant; observes the active logical ISR.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-ISRType GetISRID(void);
+OS_MEMMAP ISRType GetISRID(void);
+
 /** Enable a known Category 2 source; optionally clear its real pending bit.
  * @param[in] ISRID Logical source/vector identifier.
  * @param[in] ClearPending TRUE to consume the pending edge before enabling.
@@ -205,7 +220,8 @@ ISRType GetISRID(void);
  * Category 2 ISRs; mutations use the OS critical section. Ownership: scalar arguments are copied;
  * no application storage is retained.
  */
-StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
+OS_MEMMAP StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
+
 /** Disable a known Category 2 source, retaining any real pending edge.
  * @param[in] ISRID Logical source/vector identifier.
  * @return E_OK, E_OS_ID, E_OS_CALLEVEL, or E_OS_NOFUNC if already disabled.
@@ -215,7 +231,8 @@ StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
  * Category 2 ISRs; mutations use the OS critical section. Ownership: scalar arguments are copied;
  * no application storage is retained.
  */
-StatusType DisableInterruptSource(ISRType ISRID);
+OS_MEMMAP StatusType DisableInterruptSource(ISRType ISRID);
+
 /** Clear a known Category 2 source's real pending bit without enabling it.
  * @param[in] ISRID Logical source/vector identifier.
  * @return E_OK, E_OS_ID or E_OS_CALLEVEL.
@@ -225,7 +242,8 @@ StatusType DisableInterruptSource(ISRType ISRID);
  * Category 2 ISRs; mutations use the OS critical section. Ownership: scalar arguments are copied;
  * no application storage is retained.
  */
-StatusType ClearPendingInterrupt(ISRType ISRID);
+OS_MEMMAP StatusType ClearPendingInterrupt(ISRType ISRID);
+
 /** Start a NONE-synchronized table at a positive relative delay.
  * @param[in] ScheduleTableID Configured table identifier.
  * @param[in] Offset Delay; Offset plus initial offset must fit counter maximum.
@@ -235,7 +253,8 @@ StatusType ClearPendingInterrupt(ISRType ISRID);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset);
+OS_MEMMAP StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset);
+
 /** Start at the next occurrence of an absolute counter value.
  * @param[in] ScheduleTableID Configured table identifier.
  * @param[in] Start Value within counter maximum; equality waits a full wrap.
@@ -245,7 +264,8 @@ StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Off
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start);
+OS_MEMMAP StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start);
+
 /** Stop a running or reserved NEXT table and detach its successor.
  * @param[in] ScheduleTableID Configured table identifier.
  * @return E_OK or E_OS_ID/NOFUNC/CALLEVEL.
@@ -254,7 +274,8 @@ StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Sta
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType StopScheduleTable(ScheduleTableType ScheduleTableID);
+OS_MEMMAP StatusType StopScheduleTable(ScheduleTableType ScheduleTableID);
+
 /** Reserve a stopped table to follow the running source's final delay.
  * @param[in] ScheduleTableID_From Running source table.
  * @param[in] ScheduleTableID_To Stopped destination on the same counter/strategy.
@@ -264,8 +285,9 @@ StatusType StopScheduleTable(ScheduleTableType ScheduleTableID);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                             ScheduleTableType ScheduleTableID_To);
+OS_MEMMAP StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                                       ScheduleTableType ScheduleTableID_To);
+
 /** Copy the table's current state within the existing OS critical boundary.
  * @param[in] ScheduleTableID Configured table identifier.
  * @param[out] ScheduleStatus Nonnull caller-owned output, unchanged on refusal.
@@ -275,8 +297,9 @@ StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: caller retains output storage, borrowed until return and written only on success.
  */
-StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                  ScheduleTableStatusRefType ScheduleStatus);
+OS_MEMMAP StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
+                                            ScheduleTableStatusRefType ScheduleStatus);
+
 /** Start the configured OS in mode; successful startup never returns.
  * @param[in] Mode Static application mode (1 or 2).
  * @par Return
@@ -287,7 +310,8 @@ StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
  * OS startup. Ownership: retains the configuration already published by Os_TargetPrepare; scalar
  * Mode is copied.
  */
-void StartOS(AppModeType Mode);
+OS_MEMMAP void StartOS(AppModeType Mode);
+
 /** Close irreversibly; invoke ShutdownHook on the established control stack,
  * or on the startup caller before control resources exist.
  * @param[in] Error Standard shutdown reason.
@@ -298,7 +322,8 @@ void StartOS(AppModeType Mode);
  * Reentrancy: shutdown admission is atomic; the first accepted close wins.
  * Ownership: no caller pointer is retained; accepted shutdown does not return.
  */
-void ShutdownOS(StatusType Error);
+OS_MEMMAP void ShutdownOS(StatusType Error);
+
 /** Read the automotive task selected by the actual kernel.
  * @param[out] TaskID Nonnull caller-owned output; INVALID_TASK if none is selected.
  * @return E_OK, E_OS_CALLEVEL or E_OS_ILLEGAL_ADDRESS; refusal preserves output.
@@ -308,7 +333,8 @@ void ShutdownOS(StatusType Error);
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-StatusType GetTaskID(TaskRefType TaskID);
+OS_MEMMAP StatusType GetTaskID(TaskRefType TaskID);
+
 /** Read the application mode selected by StartOS, including in global hooks.
  * @return Selected mode; zero before StartOS has selected a mode.
  * Preconditions: enabled caller interrupts; refused access returns zero.
@@ -316,7 +342,8 @@ StatusType GetTaskID(TaskRefType TaskID);
  * Reentrancy: reentrant; reads the selected startup mode.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-AppModeType GetActiveApplicationMode(void);
+OS_MEMMAP AppModeType GetActiveApplicationMode(void);
+
 /** Query actual backend task state.
  * @param[in] TaskID Configured task identifier.
  * @param[out] State Output state, must not be null.
@@ -327,7 +354,8 @@ AppModeType GetActiveApplicationMode(void);
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-StatusType GetTaskState(TaskType TaskID, TaskStateRefType State);
+OS_MEMMAP StatusType GetTaskState(TaskType TaskID, TaskStateRefType State);
+
 /** Accept one activation request in Task or Category 2 ISR context.
  * @param[in] TaskID Configured task identifier.
  * @return E_OK, E_OS_ID, E_OS_LIMIT or E_OS_CALLEVEL; rejection preserves requests.
@@ -336,7 +364,8 @@ StatusType GetTaskState(TaskType TaskID, TaskStateRefType State);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType ActivateTask(TaskType TaskID);
+OS_MEMMAP StatusType ActivateTask(TaskType TaskID);
+
 /** Complete the current activation. Success never returns to the application.
  * @return E_OS_CALLEVEL, E_OS_RESOURCE or E_OS_STATE on rejection; success never returns.
  * Preconditions: configured OS and enabled caller interrupts; masked access returns
@@ -345,7 +374,8 @@ StatusType ActivateTask(TaskType TaskID);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType TerminateTask(void);
+OS_MEMMAP StatusType TerminateTask(void);
+
 /** Complete this activation and accept a sequential successor atomically.
  * @param[in] TaskID Configured successor; self-chain does not consume extra capacity.
  * @return E_OS_ID, E_OS_LIMIT, E_OS_RESOURCE or E_OS_CALLEVEL on rejection.
@@ -356,7 +386,8 @@ StatusType TerminateTask(void);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType ChainTask(TaskType TaskID);
+OS_MEMMAP StatusType ChainTask(TaskType TaskID);
+
 /** Acquire a configured external resource using its static priority ceiling.
  * @param[in] ResID Resource accessible to this logical Task/ISR caller.
  * @return E_OK, E_OS_ID, E_OS_ACCESS or E_OS_CALLEVEL; no blocking acquisition.
@@ -367,7 +398,8 @@ StatusType ChainTask(TaskType TaskID);
  * Ownership: resource ownership belongs to the logical Task/ISR until matching release; no pointer
  * retained.
  */
-StatusType GetResource(ResourceType ResID);
+OS_MEMMAP StatusType GetResource(ResourceType ResID);
+
 /** Release the last external resource acquired by this logical Task/ISR caller.
  * @param[in] ResID Last owned resource, in LIFO order.
  * @return E_OK, E_OS_ID, E_OS_NOFUNC or E_OS_CALLEVEL.
@@ -378,7 +410,8 @@ StatusType GetResource(ResourceType ResID);
  * Ownership: resource ownership belongs to the logical Task/ISR until matching release; no pointer
  * retained.
  */
-StatusType ReleaseResource(ResourceType ResID);
+OS_MEMMAP StatusType ReleaseResource(ResourceType ResID);
+
 /** Explicitly release/reacquire the current task's internal resource.
  * @return E_OK, E_OS_CALLEVEL or E_OS_RESOURCE; no effect for a FULL task without an internal
  * resource.
@@ -388,7 +421,8 @@ StatusType ReleaseResource(ResourceType ResID);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType Schedule(void);
+OS_MEMMAP StatusType Schedule(void);
+
 /** Wait until any requested stored event is set; the current instance is retained.
  * @param[in] Mask Event predicate, including zero for an indefinite wait.
  * @return E_OK, E_OS_ACCESS, E_OS_RESOURCE or E_OS_CALLEVEL.
@@ -398,7 +432,8 @@ StatusType Schedule(void);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType WaitEvent(EventMaskType Mask);
+OS_MEMMAP StatusType WaitEvent(EventMaskType Mask);
+
 /** Clear stored bits owned by the current Extended task.
  * @param[in] Mask Bits to clear.
  * @return E_OK, E_OS_ACCESS or E_OS_CALLEVEL.
@@ -408,7 +443,9 @@ StatusType WaitEvent(EventMaskType Mask);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType ClearEvent(EventMaskType Mask);
+OS_MEMMAP StatusType ClearEvent(EventMaskType Mask);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #define SetEvent Os_SetEvent /**< Standard name bound to the host-safe OS entry. */
 /** Set stored event bits of an active Extended task; repeated setting merges bits.
  * @param[in] TaskID Extended task identifier.
@@ -420,6 +457,8 @@ StatusType ClearEvent(EventMaskType Mask);
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
 StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Read the stored events of an active Extended task.
  * @param[in] TaskID Extended task identifier.
  * @param[out] Event Caller-owned non-null output; unchanged on rejection.
@@ -430,7 +469,8 @@ StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-StatusType GetEvent(TaskType TaskID, EventMaskRefType Event);
+OS_MEMMAP StatusType GetEvent(TaskType TaskID, EventMaskRefType Event);
+
 /** Increment a software Counter and execute due Alarm actions.
  * @param[in] CounterID Configured software Counter.
  * @return E_OK, E_OS_ID or E_OS_CALLEVEL; action errors invoke configured ErrorHook.
@@ -439,7 +479,8 @@ StatusType GetEvent(TaskType TaskID, EventMaskRefType Event);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType IncrementCounter(CounterType CounterID);
+OS_MEMMAP StatusType IncrementCounter(CounterType CounterID);
+
 /** Read a Counter's current modular value.
  * @param[in] CounterID Configured Counter.
  * @param[out] Value Non-null output; unchanged on rejection.
@@ -449,7 +490,8 @@ StatusType IncrementCounter(CounterType CounterID);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: caller retains result storage; borrowed until return, updated only on success.
  */
-StatusType GetCounterValue(CounterType CounterID, TickRefType Value);
+OS_MEMMAP StatusType GetCounterValue(CounterType CounterID, TickRefType Value);
+
 /** Read a modular elapsed value and update the prior sample.
  * @param[in] CounterID Configured Counter.
  * @param[in,out] Value Prior sample on input, current value on success.
@@ -460,7 +502,10 @@ StatusType GetCounterValue(CounterType CounterID, TickRefType Value);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: caller retains result storage; borrowed until return, updated only on success.
  */
-StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType ElapsedValue);
+OS_MEMMAP StatusType GetElapsedValue(CounterType CounterID,
+                                     TickRefType Value,
+                                     TickRefType ElapsedValue);
+
 /** Read immutable Alarm Counter properties.
  * @param[in] AlarmID Configured Alarm.
  * @param[out] Info Non-null output.
@@ -471,7 +516,8 @@ StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
+OS_MEMMAP StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
+
 /** Read ticks remaining until the active Alarm expires.
  * @param[in] AlarmID Configured Alarm.
  * @param[out] Tick Non-null output, unchanged on rejection.
@@ -482,7 +528,8 @@ StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
+OS_MEMMAP StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
+
 /** Start a relative Alarm.
  * @param[in] AlarmID Configured Alarm.
  * @param[in] Increment Positive distance within the Counter maximum.
@@ -493,7 +540,8 @@ StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle);
+OS_MEMMAP StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle);
+
 /** Start an absolute Alarm; the current value expires only after a complete modulus.
  * @param[in] AlarmID Configured Alarm.
  * @param[in] Start Absolute value within the Counter maximum.
@@ -504,7 +552,8 @@ StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle);
+OS_MEMMAP StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle);
+
 /** Cancel an active Alarm.
  * @param[in] AlarmID Configured Alarm.
  * @return E_OK, E_OS_ID, E_OS_NOFUNC or E_OS_CALLEVEL.
@@ -513,7 +562,9 @@ StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType CancelAlarm(AlarmType AlarmID);
+OS_MEMMAP StatusType CancelAlarm(AlarmType AlarmID);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 /** Initialize application services during OS startup (OSEK OS 2.2.3 13.8.2.4).

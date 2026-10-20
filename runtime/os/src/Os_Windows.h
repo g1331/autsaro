@@ -16,7 +16,11 @@
 #include <windows.h>
 #undef boolean
 #undef ApplicationType
-BOOL Os_HostSetEvent(HANDLE event);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #if defined(OS_RESTORE_EVENT_SERVICE) && (OS_RESTORE_EVENT_SERVICE == STD_ON)
 #define SetEvent Os_SetEvent
 #undef OS_RESTORE_EVENT_SERVICE

@@ -1,7 +1,9 @@
 /** @file Traced public OS service wrappers around the implementation entry points. */
 #include "Os_Backend.h"
 
-ISRType GetISRID(void)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP ISRType GetISRID(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -18,7 +20,7 @@ ISRType GetISRID(void)
     return result;
 }
 
-StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
+OS_MEMMAP StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -35,7 +37,7 @@ StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
     return result;
 }
 
-boolean isOsStarted(void)
+OS_MEMMAP boolean isOsStarted(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -53,7 +55,7 @@ boolean isOsStarted(void)
     return result;
 }
 
-CoreIdType GetCoreID(void)
+OS_MEMMAP CoreIdType GetCoreID(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -68,7 +70,7 @@ CoreIdType GetCoreID(void)
     return result;
 }
 
-StatusType GetTaskID(TaskRefType TaskID)
+OS_MEMMAP StatusType GetTaskID(TaskRefType TaskID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -85,7 +87,7 @@ StatusType GetTaskID(TaskRefType TaskID)
     return result;
 }
 
-StatusType GetTaskState(TaskType TaskID, TaskStateRefType State)
+OS_MEMMAP StatusType GetTaskState(TaskType TaskID, TaskStateRefType State)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -102,7 +104,7 @@ StatusType GetTaskState(TaskType TaskID, TaskStateRefType State)
     return result;
 }
 
-StatusType ActivateTask(TaskType TaskID)
+OS_MEMMAP StatusType ActivateTask(TaskType TaskID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -119,7 +121,7 @@ StatusType ActivateTask(TaskType TaskID)
     return result;
 }
 
-StatusType TerminateTask(void)
+OS_MEMMAP StatusType TerminateTask(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     const Os_NativeStackType *stack = Os_StackCurrent();
@@ -139,7 +141,7 @@ StatusType TerminateTask(void)
     return result;
 }
 
-StatusType ChainTask(TaskType TaskID)
+OS_MEMMAP StatusType ChainTask(TaskType TaskID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -156,7 +158,7 @@ StatusType ChainTask(TaskType TaskID)
     return result;
 }
 
-StatusType GetResource(ResourceType ResID)
+OS_MEMMAP StatusType GetResource(ResourceType ResID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -173,7 +175,7 @@ StatusType GetResource(ResourceType ResID)
     return result;
 }
 
-StatusType ReleaseResource(ResourceType ResID)
+OS_MEMMAP StatusType ReleaseResource(ResourceType ResID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -190,7 +192,7 @@ StatusType ReleaseResource(ResourceType ResID)
     return result;
 }
 
-StatusType Schedule(void)
+OS_MEMMAP StatusType Schedule(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -207,7 +209,7 @@ StatusType Schedule(void)
     return result;
 }
 
-StatusType WaitEvent(EventMaskType Mask)
+OS_MEMMAP StatusType WaitEvent(EventMaskType Mask)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -224,7 +226,7 @@ StatusType WaitEvent(EventMaskType Mask)
     return result;
 }
 
-StatusType ClearEvent(EventMaskType Mask)
+OS_MEMMAP StatusType ClearEvent(EventMaskType Mask)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -241,7 +243,7 @@ StatusType ClearEvent(EventMaskType Mask)
     return result;
 }
 
-StatusType SetEvent(TaskType TaskID, EventMaskType Mask)
+OS_MEMMAP StatusType SetEvent(TaskType TaskID, EventMaskType Mask)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -258,7 +260,7 @@ StatusType SetEvent(TaskType TaskID, EventMaskType Mask)
     return result;
 }
 
-StatusType GetEvent(TaskType TaskID, EventMaskRefType Event)
+OS_MEMMAP StatusType GetEvent(TaskType TaskID, EventMaskRefType Event)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -275,7 +277,7 @@ StatusType GetEvent(TaskType TaskID, EventMaskRefType Event)
     return result;
 }
 
-void ShutdownOS(StatusType Error)
+OS_MEMMAP void ShutdownOS(StatusType Error)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -285,7 +287,7 @@ void ShutdownOS(StatusType Error)
     Os_ArtiServiceLeave();
 }
 
-void StartOS(AppModeType Mode)
+OS_MEMMAP void StartOS(AppModeType Mode)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -295,7 +297,7 @@ void StartOS(AppModeType Mode)
     Os_ArtiServiceLeave();
 }
 
-AppModeType GetActiveApplicationMode(void)
+OS_MEMMAP AppModeType GetActiveApplicationMode(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -314,7 +316,7 @@ AppModeType GetActiveApplicationMode(void)
     return result;
 }
 
-StatusType IncrementCounter(CounterType CounterID)
+OS_MEMMAP StatusType IncrementCounter(CounterType CounterID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -331,7 +333,7 @@ StatusType IncrementCounter(CounterType CounterID)
     return result;
 }
 
-StatusType GetCounterValue(CounterType CounterID, TickRefType Value)
+OS_MEMMAP StatusType GetCounterValue(CounterType CounterID, TickRefType Value)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -349,7 +351,9 @@ StatusType GetCounterValue(CounterType CounterID, TickRefType Value)
     return result;
 }
 
-StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType ElapsedValue)
+OS_MEMMAP StatusType GetElapsedValue(CounterType CounterID,
+                                     TickRefType Value,
+                                     TickRefType ElapsedValue)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -367,7 +371,7 @@ StatusType GetElapsedValue(CounterType CounterID, TickRefType Value, TickRefType
     return result;
 }
 
-StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
+OS_MEMMAP StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -388,7 +392,7 @@ StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
     return result;
 }
 
-StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick)
+OS_MEMMAP StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -405,7 +409,7 @@ StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick)
     return result;
 }
 
-StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
+OS_MEMMAP StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -422,7 +426,7 @@ StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
     return result;
 }
 
-StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
+OS_MEMMAP StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -439,7 +443,7 @@ StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
     return result;
 }
 
-StatusType CancelAlarm(AlarmType AlarmID)
+OS_MEMMAP StatusType CancelAlarm(AlarmType AlarmID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -456,7 +460,7 @@ StatusType CancelAlarm(AlarmType AlarmID)
     return result;
 }
 
-StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset)
+OS_MEMMAP StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -473,7 +477,7 @@ StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Off
     return result;
 }
 
-StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start)
+OS_MEMMAP StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -490,7 +494,7 @@ StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Sta
     return result;
 }
 
-StatusType StopScheduleTable(ScheduleTableType ScheduleTableID)
+OS_MEMMAP StatusType StopScheduleTable(ScheduleTableType ScheduleTableID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -507,8 +511,8 @@ StatusType StopScheduleTable(ScheduleTableType ScheduleTableID)
     return result;
 }
 
-StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                             ScheduleTableType ScheduleTableID_To)
+OS_MEMMAP StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                                       ScheduleTableType ScheduleTableID_To)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -526,8 +530,8 @@ StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
     return result;
 }
 
-StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                  ScheduleTableStatusRefType ScheduleStatus)
+OS_MEMMAP StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
+                                            ScheduleTableStatusRefType ScheduleStatus)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -547,7 +551,7 @@ StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
     return result;
 }
 
-StatusType DisableInterruptSource(ISRType ISRID)
+OS_MEMMAP StatusType DisableInterruptSource(ISRType ISRID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -564,7 +568,7 @@ StatusType DisableInterruptSource(ISRType ISRID)
     return result;
 }
 
-StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending)
+OS_MEMMAP StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -581,7 +585,7 @@ StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending)
     return result;
 }
 
-StatusType ClearPendingInterrupt(ISRType ISRID)
+OS_MEMMAP StatusType ClearPendingInterrupt(ISRType ISRID)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -598,7 +602,7 @@ StatusType ClearPendingInterrupt(ISRType ISRID)
     return result;
 }
 
-void EnableAllInterrupts(void)
+OS_MEMMAP void EnableAllInterrupts(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -611,7 +615,7 @@ void EnableAllInterrupts(void)
     Os_ArtiServiceLeave();
 }
 
-void DisableAllInterrupts(void)
+OS_MEMMAP void DisableAllInterrupts(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -624,7 +628,7 @@ void DisableAllInterrupts(void)
     Os_ArtiServiceLeave();
 }
 
-void ResumeAllInterrupts(void)
+OS_MEMMAP void ResumeAllInterrupts(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -637,7 +641,7 @@ void ResumeAllInterrupts(void)
     Os_ArtiServiceLeave();
 }
 
-void SuspendAllInterrupts(void)
+OS_MEMMAP void SuspendAllInterrupts(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -650,7 +654,7 @@ void SuspendAllInterrupts(void)
     Os_ArtiServiceLeave();
 }
 
-void ResumeOSInterrupts(void)
+OS_MEMMAP void ResumeOSInterrupts(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -663,7 +667,7 @@ void ResumeOSInterrupts(void)
     Os_ArtiServiceLeave();
 }
 
-void SuspendOSInterrupts(void)
+OS_MEMMAP void SuspendOSInterrupts(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
     if (trace != 0) {
@@ -675,3 +679,5 @@ void SuspendOSInterrupts(void)
     }
     Os_ArtiServiceLeave();
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

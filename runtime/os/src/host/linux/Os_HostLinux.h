@@ -76,53 +76,92 @@ static inline LONG InterlockedDecrement(volatile LONG *cell)
     return __atomic_sub_fetch(cell, 1, __ATOMIC_SEQ_CST);
 }
 
-HANDLE Os_HostCurrentThread(void);
-HANDLE Os_HostDispatcherThread(void);
-void Os_HostSetDispatcher(HANDLE thread);
-int Os_HostInstallSignals(void);
-HANDLE Os_HostCreateActor(SIZE_T stack,
-                          LPTHREAD_START_ROUTINE start,
-                          LPVOID argument,
-                          DWORD flags,
-                          LPDWORD id,
-                          int register_host);
-int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard);
-int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard);
-int Os_HostStopActor(HANDLE thread, DWORD timeout_ms);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP HANDLE Os_HostCurrentThread(void);
 
-HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name);
-HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name);
-HANDLE CreateThread(LPSECURITY_ATTRIBUTES attributes,
-                    SIZE_T stack,
-                    LPTHREAD_START_ROUTINE start,
-                    LPVOID argument,
-                    DWORD flags,
-                    LPDWORD id);
-DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds);
-DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable);
-DWORD WaitForMultipleObjects(DWORD count, const HANDLE *handles, BOOL all, DWORD milliseconds);
-BOOL ResetEvent(HANDLE event);
-BOOL Os_HostSetEvent(HANDLE event);
-BOOL ReleaseMutex(HANDLE mutex);
-BOOL CloseHandle(HANDLE handle);
-DWORD SuspendThread(HANDLE thread);
-DWORD ResumeThread(HANDLE thread);
-BOOL GetThreadContext(HANDLE thread, CONTEXT *context);
-DWORD GetThreadId(HANDLE thread);
-DWORD GetCurrentThreadId(void);
-DWORD GetTickCount(void);
-uint64_t GetTickCount64(void);
-void Sleep(DWORD milliseconds);
-void ExitProcess(DWORD status) __attribute__((noreturn));
-BOOL DuplicateHandle(HANDLE source_process,
-                     HANDLE source_thread,
-                     HANDLE target_process,
-                     HANDLE *copy,
-                     DWORD access,
-                     BOOL inherit,
-                     DWORD options);
-HANDLE GetCurrentProcess(void);
-HANDLE GetCurrentThread(void);
-BOOL GetExitCodeThread(HANDLE thread, DWORD *code);
+OS_MEMMAP HANDLE Os_HostDispatcherThread(void);
+
+OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread);
+
+OS_MEMMAP int Os_HostInstallSignals(void);
+
+OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
+                                    LPTHREAD_START_ROUTINE start,
+                                    LPVOID argument,
+                                    DWORD flags,
+                                    LPDWORD id,
+                                    int register_host);
+
+OS_MEMMAP int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard);
+
+OS_MEMMAP int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard);
+
+OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms);
+
+OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
+                              BOOL manual,
+                              BOOL initial,
+                              LPCSTR name);
+
+OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name);
+
+OS_MEMMAP HANDLE CreateThread(LPSECURITY_ATTRIBUTES attributes,
+                              SIZE_T stack,
+                              LPTHREAD_START_ROUTINE start,
+                              LPVOID argument,
+                              DWORD flags,
+                              LPDWORD id);
+
+OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds);
+
+OS_MEMMAP DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable);
+
+OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
+                                       const HANDLE *handles,
+                                       BOOL all,
+                                       DWORD milliseconds);
+
+OS_MEMMAP BOOL ResetEvent(HANDLE event);
+
+OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event);
+
+OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex);
+
+OS_MEMMAP BOOL CloseHandle(HANDLE handle);
+
+OS_MEMMAP DWORD SuspendThread(HANDLE thread);
+
+OS_MEMMAP DWORD ResumeThread(HANDLE thread);
+
+OS_MEMMAP BOOL GetThreadContext(HANDLE thread, CONTEXT *context);
+
+OS_MEMMAP DWORD GetThreadId(HANDLE thread);
+
+OS_MEMMAP DWORD GetCurrentThreadId(void);
+
+OS_MEMMAP DWORD GetTickCount(void);
+
+OS_MEMMAP uint64_t GetTickCount64(void);
+
+OS_MEMMAP void Sleep(DWORD milliseconds);
+
+OS_MEMMAP void ExitProcess(DWORD status) __attribute__((noreturn));
+
+OS_MEMMAP BOOL DuplicateHandle(HANDLE source_process,
+                               HANDLE source_thread,
+                               HANDLE target_process,
+                               HANDLE *copy,
+                               DWORD access,
+                               BOOL inherit,
+                               DWORD options);
+
+OS_MEMMAP HANDLE GetCurrentProcess(void);
+
+OS_MEMMAP HANDLE GetCurrentThread(void);
+
+OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 
 #endif

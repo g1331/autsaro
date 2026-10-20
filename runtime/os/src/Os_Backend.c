@@ -8,60 +8,144 @@
 #include <setjmp.h>
 #include <string.h>
 
-static StaticTask_t
+#ifdef __linux__
+#define OS_NATIVE_HEAP "resource_calls=%u hidden=2 controllers=2 heap=posix static=freertos "
+#else
+#define OS_NATIVE_HEAP "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
+#endif
+
+#define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+OS_MEMMAP static StaticTask_t
     task_memory[OS_MAX_TASKS + 2u]; /**< Native Task TCBs; kernel port lock; no Init reset. */
-static StackType_t task_buffers[OS_MAX_TASKS + 2u]
-                               [512];      /**< Kernel-owned 512-word buffers; no Init reset. */
-static TaskHandle_t handles[OS_MAX_TASKS]; /**< Bootstrap-published Task handles; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static StackType_t
+    task_buffers[OS_MAX_TASKS + 2u][512]; /**< Kernel-owned 512-word buffers; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static TaskHandle_t
+    handles[OS_MAX_TASKS]; /**< Bootstrap-published Task handles; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
 typedef struct {
     uint64 requests[OS_MAX_ACTIVATIONS];
     uint32 head;
     uint32 count;
 } Os_ActivationQueueType;
-static Os_ActivationQueueType
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_ActivationQueueType
     activations[OS_MAX_TASKS]; /**< Activation FIFO ledger; OS port lock; no Init reset. */
-static EventMaskType
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static EventMaskType
     task_events[OS_MAX_TASKS]; /**< Stored Task event bits; OS port lock; no Init reset. */
-static EventMaskType
-    wait_masks[OS_MAX_TASKS];            /**< Task wait predicates; OS port lock; no Init reset. */
-static uint8 task_waiting[OS_MAX_TASKS]; /**< Task waiting flags; OS port lock; no Init reset. */
-static uint8
+
+OS_MEMMAP static EventMaskType
+    wait_masks[OS_MAX_TASKS]; /**< Task wait predicates; OS port lock; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+OS_MEMMAP static uint8
+    task_waiting[OS_MAX_TASKS]; /**< Task waiting flags; OS port lock; no Init reset. */
+
+OS_MEMMAP static uint8
     internal_held[OS_MAX_TASKS]; /**< Internal-resource ownership; OS port lock; no Init reset. */
-static uint32 running_hook_task =
+#define OS_STOP_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_INIT_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 running_hook_task =
     OS_MAX_TASKS; /**< RUNNING hook identity; OS port lock; no Init reset. */
-static uint64
+#define OS_STOP_SEC_VAR_INIT_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static uint64
     ready_sequences[OS_MAX_TASKS]; /**< Live rebased ready stamps; OS port lock; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
 #define OS_RESOURCE_ACTORS (OS_MAX_TASKS + OS_MAX_INTERRUPTS)
-static uint32 resource_depth[OS_RESOURCE_ACTORS]; /**< Per-actor acquisition depth; OS port lock; no
-                                                     Init reset. */
-static uint32
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 resource_depth[OS_RESOURCE_ACTORS]; /**< Per-actor acquisition depth; OS
+                                                     port lock; no Init reset. */
+
+OS_MEMMAP static uint32
     owned_resources[OS_RESOURCE_ACTORS]
                    [OS_MAX_RESOURCES]; /**< Per-actor resource LIFO; OS port lock; no Init reset. */
-static volatile Os_Atomic32Type
+
+OS_MEMMAP static volatile Os_Atomic32Type
     interrupt_ceiling; /**< Atomic ISR ceiling publication; no Init reset. */
-static uint32 current_interrupt =
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_INIT_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 current_interrupt =
     32u; /**< Active vector, 32 means none; port lock; no Init reset. */
-const uint32 *const Os_ArtiCurrentIsr =
+#define OS_STOP_SEC_VAR_INIT_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const uint32 *const Os_ArtiCurrentIsr =
     &current_interrupt; /**< Fixed ISR identity tool view; C init only, never reset. */
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
 typedef struct {
     uint32 interrupt;
     Os_ErrorContextType error;
 } Os_InterruptFrameType;
-static Os_InterruptFrameType interrupt_frames[OS_MAX_INTERRUPTS]; /**< Interrupted actor snapshots;
-                                                              port lock; no Init reset. */
-static uint32 interrupt_depth;  /**< Nested ISR frame count; port lock; no Init reset. */
-static uint64 request_sequence; /**< Live rebased FIFO stamp; port lock; no Init reset. */
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_InterruptFrameType
+    interrupt_frames[OS_MAX_INTERRUPTS]; /**< Interrupted actor snapshots;
+                           port lock; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 interrupt_depth; /**< Nested ISR frame count; port lock; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static uint64 request_sequence; /**< Live rebased FIFO stamp; port lock; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
 typedef struct {
     uint64 *slot;
     uint64 previous;
 } Os_OrderReferenceType;
-static jmp_buf
+#define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+OS_MEMMAP static jmp_buf
     restart_frames[OS_MAX_TASKS]; /**< Per-Task restart frames; owning Task; no Init reset. */
-static volatile Os_Atomic32Type
+#define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
     isr_reschedule; /**< Atomic pending ISR reschedule; no Init reset. */
-sint32 Os_BackendTakeIsrReschedule(void) { return InterlockedExchange(&isr_reschedule, 0) != 0; }
-void Os_BackendRequestIsrReschedule(void) { InterlockedExchange(&isr_reschedule, 1); }
-uint32 Os_BackendInterruptPriority(uint32 interrupt)
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP sint32 Os_BackendTakeIsrReschedule(void)
+{
+    return InterlockedExchange(&isr_reschedule, 0) != 0;
+}
+
+OS_MEMMAP void Os_BackendRequestIsrReschedule(void) { InterlockedExchange(&isr_reschedule, 1); }
+
+OS_MEMMAP uint32 Os_BackendInterruptPriority(uint32 interrupt)
 {
     uint32 priority = 0u;
     if ((interrupt > OS_CONTROLLED_TICK_INTERRUPT) && (interrupt < OS_MAX_INTERRUPTS) &&
@@ -75,87 +159,230 @@ uint32 Os_BackendInterruptPriority(uint32 interrupt)
     }
     return priority;
 }
-sint32 Os_BackendInterruptMaySchedule(uint32 interrupt)
+
+OS_MEMMAP sint32 Os_BackendInterruptMaySchedule(uint32 interrupt)
 {
     return (interrupt < OS_MAX_INTERRUPTS) &&
            ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) == 0u);
 }
-static HANDLE close_event;    /**< Startup-published primary close event; no Init reset. */
-static HANDLE control_thread; /**< Startup-published primary controller; no Init reset. */
-static HANDLE backup_thread;  /**< Startup-published backup controller; no Init reset. */
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static HANDLE close_event; /**< Startup-published primary close event; no Init reset. */
+
+OS_MEMMAP static HANDLE control_thread; /**< Startup-published primary controller; no Init reset. */
+
+OS_MEMMAP static HANDLE backup_thread; /**< Startup-published backup controller; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
 #if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
-HANDLE Os_StackTestBackupThread(void) { return backup_thread; }
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP HANDLE Os_StackTestBackupThread(void) { return backup_thread; }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
-static HANDLE backup_event; /**< Startup-published backup close event; no Init reset. */
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static HANDLE backup_event; /**< Startup-published backup close event; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
 #if defined(__linux__) && (defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON))
-static volatile Os_Atomic32Type
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
     backup_fault_requested; /**< Atomic backup-fault test request; no Init reset. */
-void Os_StackTestTriggerBackupFault(void)
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_StackTestTriggerBackupFault(void)
 {
     if (backup_thread == NULL || InterlockedExchange(&backup_fault_requested, 1) != 0 ||
         Os_HostSetEvent(backup_event) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
-static HANDLE main_thread; /**< Startup-published dispatcher handle; no Init reset. */
-static HANDLE
-    controller_registered[2]; /**< Startup-published registration events; no Init reset. */
-static volatile Os_Atomic32Type
-    controller_healthy[2]; /**< Atomic controller readiness flags; no Init reset. */
-static HANDLE
-    task_threads[OS_MAX_TASKS + 2u]; /**< Startup-published actor handles; no Init reset. */
-static uint32 task_thread_count;     /**< Bootstrap-owned actor handle count; no Init reset. */
-#if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
-HANDLE Os_StackTestTaskThread(uint32 index) { return task_threads[index]; }
-#endif
-static volatile Os_Atomic32Type ready; /**< Atomic admission readiness; no Init reset. */
-const volatile Os_Atomic32Type *const Os_ArtiOsReady =
-    &ready; /**< Fixed readiness tool view; C init only, never reset. */
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static HANDLE main_thread; /**< Startup-published dispatcher handle; no Init reset. */
 
-volatile Os_Atomic32Type Os_Closing; /**< Atomic permanent-close publication; no Init reset. */
+OS_MEMMAP static HANDLE
+    controller_registered[2]; /**< Startup-published registration events; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
+    controller_healthy[2]; /**< Atomic controller readiness flags; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static HANDLE
+    task_threads[OS_MAX_TASKS + 2u]; /**< Startup-published actor handles; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32
+    task_thread_count; /**< Bootstrap-owned actor handle count; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP HANDLE Os_StackTestTaskThread(uint32 index) { return task_threads[index]; }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type ready; /**< Atomic admission readiness; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const volatile Os_Atomic32Type *const Os_ArtiOsReady =
+    &ready; /**< Fixed readiness tool view; C init only, never reset. */
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
+
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP volatile Os_Atomic32Type
+    Os_Closing; /**< Atomic permanent-close publication; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
 /* Bit 0: an accepted activation transaction; bit 1: admission permanently closed.
  * Both admission and close linearize on this atomic word. Close never waits for
  * a transaction or a damaged actor holding the ordinary interrupt mutex. */
-static volatile Os_Atomic32Type
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
     activation_admission; /**< Atomic transaction/close bits; no Init reset. */
-static StatusType
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+OS_MEMMAP static StatusType
     shutdown_reason; /**< First-close winner reason, atomically published; no Init reset. */
-static AppModeType startup_mode; /**< Startup-only selected AppMode; no Init reset. */
-const AppModeType *const Os_ArtiAppMode =
+#define OS_STOP_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+OS_MEMMAP static AppModeType startup_mode; /**< Startup-only selected AppMode; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const AppModeType *const Os_ArtiAppMode =
     &startup_mode; /**< Fixed AppMode tool view; C init only, never reset. */
-static uint32
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32
     resource_owner[OS_MAX_RESOURCES]; /**< Resource owners; OS port lock; no Init reset. */
-const uint32 *const Os_ArtiResourceOwners =
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const uint32 *const Os_ArtiResourceOwners =
     resource_owner; /**< Fixed resource owners tool view; C init only, never reset. */
-Os_ArtiTaskStateType
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP Os_ArtiTaskStateType
     Os_ArtiTasks[OS_MAX_TASKS]; /**< Observed Task state; OS port lock; no Init reset. */
-TaskType Os_ArtiRunningTask = INVALID_TASK; /**< Observed RUNNING Task; port lock; no Init reset. */
-const Os_NativeStackType
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_INIT_8
+#include "Os_MemMap.h"
+OS_MEMMAP TaskType Os_ArtiRunningTask =
+    INVALID_TASK; /**< Observed RUNNING Task; port lock; no Init reset. */
+#define OS_STOP_SEC_VAR_INIT_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const Os_NativeStackType
     *Os_ArtiTaskStacks[OS_MAX_TASKS]; /**< Observed stack pointers; port lock; no Init reset. */
-const void
+
+OS_MEMMAP const void
     *Os_ArtiTaskContexts[OS_MAX_TASKS]; /**< Observed context pointers; port lock; no Init reset. */
-static uint8
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+OS_MEMMAP static uint8
     arti_completed[OS_MAX_TASKS]; /**< Completion observation flags; port lock; no Init reset. */
-static void arti_observe_tasks(void);
-static uint8 trace[128];     /**< Caller-serialized trace prefix bytes; no Init reset. */
-static uint32 trace_length;  /**< Caller-serialized used trace bytes; no Init reset. */
-static uint64 trace_dropped; /**< Caller-serialized omitted-marker count; no Init reset. */
-static uint32 resource_calls, threads, events,
+#define OS_STOP_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void arti_observe_tasks(void);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+OS_MEMMAP static uint8 trace[128]; /**< Caller-serialized trace prefix bytes; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 trace_length; /**< Caller-serialized used trace bytes; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static uint64
+    trace_dropped; /**< Caller-serialized omitted-marker count; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 resource_calls, threads, events,
     mutexes; /**< Bootstrap-owned allocation/call totals; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
-static uint32 fail_resource; /**< Startup-only resource-failure selection; no Init reset. */
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32
+    fail_resource; /**< Startup-only resource-failure selection; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
 #endif
-static volatile Os_Atomic32Type started; /**< Atomic one-shot backend-start latch; no Init reset. */
-static void task_entry(void *argument);
-static void bootstrap(void *argument);
-static void acquire_internal(uint32 index);
-static void release_internal(uint32 index);
-static uint8 internal_ceiling(uint32 index);
-static void observe_transition(void);
-static uint32 current_task_index(void);
-static void leave_running(uint32 index);
-static uint32 configured_interrupt(void)
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
+    started; /**< Atomic one-shot backend-start latch; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void task_entry(void *argument);
+
+OS_MEMMAP static void bootstrap(void *argument);
+
+OS_MEMMAP static void acquire_internal(uint32 index);
+
+OS_MEMMAP static void release_internal(uint32 index);
+
+OS_MEMMAP static uint8 internal_ceiling(uint32 index);
+
+OS_MEMMAP static void observe_transition(void);
+
+OS_MEMMAP static uint32 current_task_index(void);
+
+OS_MEMMAP static void leave_running(uint32 index);
+
+OS_MEMMAP static uint32 configured_interrupt(void)
 {
     const uint32 interrupt = current_interrupt;
     configASSERT(Os_Config != NULL && Os_Config->interrupts != NULL &&
@@ -167,7 +394,8 @@ static uint32 configured_interrupt(void)
      * backend ISR state. Its normal outer exit handles Task selection. */
     return 0u;
 }
-sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
+
+OS_MEMMAP sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
 {
     if ((Os_Config != NULL) && (Os_Config->interrupts != NULL) &&
         (Os_Config->interrupts->entries != NULL) && (interrupt < OS_MAX_INTERRUPTS) &&
@@ -176,14 +404,17 @@ sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
     }
     return 1;
 }
-uint32 Os_BackendCurrentInterrupt(void)
+
+OS_MEMMAP uint32 Os_BackendCurrentInterrupt(void)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
     /* Host controllers run concurrently with the dispatcher and own no ISR. */
     return ((stack != NULL) && (stack->role == 'S')) ? current_interrupt : 32u;
 }
-sint32 Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
-void Os_BackendInterruptEnter(uint32 interrupt)
+
+OS_MEMMAP sint32 Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
+
+OS_MEMMAP void Os_BackendInterruptEnter(uint32 interrupt)
 {
     configASSERT(interrupt < OS_MAX_INTERRUPTS);
     configASSERT(interrupt_depth < OS_MAX_INTERRUPTS);
@@ -196,7 +427,8 @@ void Os_BackendInterruptEnter(uint32 interrupt)
         Os_ArtiIsr((ISRType)interrupt, 0);
     }
 }
-void Os_BackendInterruptLeave(void)
+
+OS_MEMMAP void Os_BackendInterruptLeave(void)
 {
     const Os_ErrorParametersType arguments = {.service_TerminateTask = {0u}};
     const uint32 actor = OS_MAX_TASKS + current_interrupt;
@@ -229,7 +461,33 @@ void Os_BackendInterruptLeave(void)
     Os_ErrorContextRestore(&interrupt_frames[interrupt_depth].error);
     current_interrupt = interrupt_frames[interrupt_depth].interrupt;
 }
-sint32 Os_BackendInterruptEnabled(uint32 interrupt)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_tick_masked(uint32 interrupt, sint32 allowed)
+{
+    if (interrupt == OS_CONTROLLED_TICK_INTERRUPT && allowed == 0) {
+        Os_TimeTestMasked();
+    }
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_tick_masked(uint32 interrupt, sint32 allowed)
+{
+    (void)interrupt;
+    (void)allowed;
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP sint32 Os_BackendInterruptEnabled(uint32 interrupt)
 {
     sint32 allowed;
     /* The private kernel yield is not an application ISR; it must remain
@@ -244,14 +502,11 @@ sint32 Os_BackendInterruptEnabled(uint32 interrupt)
          ((LONG)Os_BackendInterruptPriority(interrupt) >
               InterlockedCompareExchange(&interrupt_ceiling, 0, 0) &&
           Os_HookBlocksCategory2() == 0));
-#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
-    if (interrupt == OS_CONTROLLED_TICK_INTERRUPT && allowed == 0) {
-        Os_TimeTestMasked();
-    }
-#endif
+    observe_tick_masked(interrupt, allowed);
     return allowed;
 }
-static uint32 task_slot(const StaticTask_t *memory)
+
+OS_MEMMAP static uint32 task_slot(const StaticTask_t *memory)
 {
     uint32 i = 0u;
     while ((i < Os_Config->task_count) && (&task_memory[i] != memory)) {
@@ -259,7 +514,8 @@ static uint32 task_slot(const StaticTask_t *memory)
     }
     return i;
 }
-static uint32 task_index(TaskType id)
+
+OS_MEMMAP static uint32 task_index(TaskType id)
 {
     uint32 i;
     for (i = 0u; i < Os_Config->task_count; ++i) {
@@ -269,7 +525,8 @@ static uint32 task_index(TaskType id)
     }
     return OS_MAX_TASKS;
 }
-sint32 Os_BackendServiceContext(void)
+
+OS_MEMMAP sint32 Os_BackendServiceContext(void)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
     Os_BackendGuardService();
@@ -285,7 +542,8 @@ sint32 Os_BackendServiceContext(void)
              ((current_interrupt >= 32u) ||
               ((Os_Config->category1_isrs & ((uint32)1u << current_interrupt)) == 0u))));
 }
-sint32 Os_BackendTaskOwner(TaskType id)
+
+OS_MEMMAP sint32 Os_BackendTaskOwner(TaskType id)
 {
     uint32 index = current_task_index();
     if (index == OS_MAX_TASKS) {
@@ -293,8 +551,10 @@ sint32 Os_BackendTaskOwner(TaskType id)
     }
     return (Os_Config->tasks[index].id == id) ? 1 : -1;
 }
-sint32 Os_BackendInputOwner(void) { return Os_BackendTaskOwner(Os_Config->input_task); }
-StatusType Os_BackendTaskId(TaskRefType id)
+
+OS_MEMMAP sint32 Os_BackendInputOwner(void) { return Os_BackendTaskOwner(Os_Config->input_task); }
+
+OS_MEMMAP StatusType Os_BackendTaskId(TaskRefType id)
 {
     if (!Os_BackendServiceContext()) {
         return E_OS_CALLEVEL;
@@ -313,8 +573,10 @@ StatusType Os_BackendTaskId(TaskRefType id)
     Os_BackendGuardService();
     return E_OK;
 }
-AppModeType Os_BackendApplicationMode(void) { return startup_mode; }
-void Os_BackendGuardService(void)
+
+OS_MEMMAP AppModeType Os_BackendApplicationMode(void) { return startup_mode; }
+
+OS_MEMMAP void Os_BackendGuardService(void)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
     /* Every shutdown path sets the admission close bit before readiness ends. */
@@ -323,12 +585,27 @@ void Os_BackendGuardService(void)
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-sint32 Os_BackendReady(void)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_ready_query(void) { Os_TimeTestBeforeReady(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_ready_query(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP sint32 Os_BackendReady(void)
 {
     sint32 serving;
-#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
-    Os_TimeTestBeforeReady();
-#endif
+    observe_ready_query();
     serving = Os_TargetReady();
     if (serving == 0) {
         /* A service that passed its entry guard before shutdown stops here instead of
@@ -337,11 +614,22 @@ sint32 Os_BackendReady(void)
     }
     return serving;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 /* Normalize only live metadata order stamps. This never chooses a runnable task;
  * the existing kernel ready-list policy remains the only selector. */
-static void rebase_orders(void)
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_OrderReferenceType
+    rebase_entries[OS_MAX_TASKS *
+                   (OS_MAX_ACTIVATIONS + 1u)]; /**< Persistent function-owned state; existing
+                                                  caller/port synchronization; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void rebase_orders(void)
 {
-    static Os_OrderReferenceType rebase_entries[OS_MAX_TASKS * (OS_MAX_ACTIVATIONS + 1u)];
     uint32 i;
     uint32 j;
     uint32 count = 0u;
@@ -386,7 +674,8 @@ static void rebase_orders(void)
     }
     request_sequence = rank;
 }
-static void append_activation(uint32 index)
+
+OS_MEMMAP static void append_activation(uint32 index)
 {
     Os_ActivationQueueType *queue = &activations[index];
     uint32 tail = (queue->head + queue->count) % OS_MAX_ACTIVATIONS;
@@ -400,7 +689,8 @@ static void append_activation(uint32 index)
     queue->requests[tail] = request_sequence;
     ++queue->count;
 }
-static void leave_running(uint32 index)
+
+OS_MEMMAP static void leave_running(uint32 index)
 {
     if ((running_hook_task == index) && (index < OS_MAX_TASKS)) {
         if ((InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) && (Os_Config->hooks != NULL)) {
@@ -409,7 +699,8 @@ static void leave_running(uint32 index)
         running_hook_task = OS_MAX_TASKS;
     }
 }
-void Os_BackendBeforeSelect(void *current, void *next)
+
+OS_MEMMAP void Os_BackendBeforeSelect(void *current, void *next)
 {
     if ((current != next) && (Os_TargetReady() != 0) &&
         (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
@@ -421,7 +712,8 @@ void Os_BackendBeforeSelect(void *current, void *next)
         }
     }
 }
-void Os_BackendOnSwitch(void)
+
+OS_MEMMAP void Os_BackendOnSwitch(void)
 {
     if (Os_TargetReady() != 0) {
         arti_observe_tasks();
@@ -443,7 +735,8 @@ void Os_BackendOnSwitch(void)
     }
     observe_transition();
 }
-static TaskStateType native_task_state(uint32 index)
+
+OS_MEMMAP static TaskStateType native_task_state(uint32 index)
 {
     /* A self-suspend inside the critical section defers the native switch.
      * Its waiting predicate is already committed even while it is current. */
@@ -465,7 +758,8 @@ static TaskStateType native_task_state(uint32 index)
             return SUSPENDED;
     }
 }
-static void arti_observe_tasks(void)
+
+OS_MEMMAP static void arti_observe_tasks(void)
 {
     TaskStateType previous[OS_MAX_TASKS];
     uint8 completed[OS_MAX_TASKS];
@@ -509,20 +803,34 @@ static void arti_observe_tasks(void)
         }
     }
 }
-static void observe_transition(void)
-{
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #if (defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)) ||                           \
     (defined(OS_FINISH_TESTS) && (OS_FINISH_TESTS == STD_ON)) ||                                   \
     (defined(OS_RESOURCE_TESTS) && (OS_RESOURCE_TESTS == STD_ON)) ||                               \
     (defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON))
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_transition(void)
+{
     const Os_NativeStackType *stack = Os_StackCurrent();
     if ((Os_TargetReady() != 0) && (stack != NULL) &&
         ((stack->role == 'T') || (stack->role == 'S'))) {
         Os_TestObserve();
     }
-#endif
 }
-static uint8 internal_ceiling(uint32 index)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_transition(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static uint8 internal_ceiling(uint32 index)
 {
     uint32 i;
     uint8 ceiling = 0u;
@@ -545,7 +853,8 @@ static uint8 internal_ceiling(uint32 index)
     }
     return ceiling;
 }
-static void acquire_internal(uint32 index)
+
+OS_MEMMAP static void acquire_internal(uint32 index)
 {
     uint8 ceiling = internal_ceiling(index);
     if ((ceiling != 0u) && (internal_held[index] == 0u)) {
@@ -556,7 +865,8 @@ static void acquire_internal(uint32 index)
         }
     }
 }
-static void release_internal(uint32 index)
+
+OS_MEMMAP static void release_internal(uint32 index)
 {
     if (internal_held[index] != 0u) {
         configASSERT(resource_depth[index] == 0u);
@@ -564,21 +874,28 @@ static void release_internal(uint32 index)
         vTaskPrioritySet(handles[index], Os_Config->tasks[index].priority);
     }
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
-void Os_TargetTestSequence(uint64 sequence)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_TargetTestSequence(uint64 sequence)
 {
     taskENTER_CRITICAL();
     configASSERT(sequence >= request_sequence);
     request_sequence = sequence;
     taskEXIT_CRITICAL();
 }
-uint32 Os_TargetTestPending(TaskType id)
+
+OS_MEMMAP uint32 Os_TargetTestPending(TaskType id)
 {
     uint32 index = task_index(id);
     configASSERT(InterlockedCompareExchange(&Os_Closing, 0, 0) != 0);
     configASSERT(index < Os_Config->task_count);
     return activations[index].count;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
 typedef struct {
     TaskFunction_t entry;
@@ -587,44 +904,83 @@ typedef struct {
     char role;
     const StackType_t *buffer_top;
 } Os_NativeTaskStartType;
-static Os_NativeTaskStartType
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_NativeTaskStartType
     native_starts[OS_MAX_TASKS + 2u]; /**< Startup-owned actor entry records; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
 #if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
-static uint32
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32
     failed_operation; /**< Test recovery selector, fixture/close handoff; no Init reset. */
-void Os_StackTestFailOperation(uint32 operation) { failed_operation = operation; }
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_StackTestFailOperation(uint32 operation) { failed_operation = operation; }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
-static sint32 operation_fails(uint32 operation)
-{
 #if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static sint32 operation_fails(uint32 operation)
+{
     if (failed_operation == operation) {
         failed_operation = 0u;
         Os_TargetTrace('F');
         return 1;
     }
-#else
-    (void)operation;
-#endif
     return 0;
 }
-DWORD Os_PortSuspendThread(HANDLE thread)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static sint32 operation_fails(uint32 operation)
+{
+    (void)operation;
+    return 0;
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP DWORD Os_PortSuspendThread(HANDLE thread)
 {
     return operation_fails(1u) ? (DWORD)-1 : SuspendThread(thread);
 }
-BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context)
+
+OS_MEMMAP BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context)
 {
     return operation_fails(2u) ? FALSE : GetThreadContext(thread, context);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 
-void Os_PortPostInterrupt(uint32 interrupt)
-{
 #ifdef _WIN32
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_PortPostInterrupt(uint32 interrupt)
+{
     vPortGenerateSimulatedInterruptFromWindowsThread(interrupt);
-#else
-    Os_PosixPostInterrupt(interrupt);
-#endif
 }
-void Os_TargetTrace(uint8 marker)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_PortPostInterrupt(uint32 interrupt) { Os_PosixPostInterrupt(interrupt); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_TargetTrace(uint8 marker)
 {
     if (marker == 0u) {
         if (InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) {
@@ -643,12 +999,30 @@ void Os_TargetTrace(uint8 marker)
     }
     trace[trace_length++] = marker;
 }
-sint32 Os_TargetReady(void)
+
+OS_MEMMAP sint32 Os_TargetReady(void)
 {
     return InterlockedCompareExchange(&ready, 0, 0) != 0 &&
            InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
 }
-static void report_and_exit(void)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_ARTI_TESTS) && (OS_ARTI_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_shutdown(void) { Os_ArtiTestShutdownObserved(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_shutdown(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void report_and_exit(void)
 {
     sint32 output_failed = 0;
     Os_StackCheck();
@@ -656,18 +1030,12 @@ static void report_and_exit(void)
         shutdown_reason = E_OS_STACKFAULT;
     }
     Os_ShutdownHookInvoke(shutdown_reason);
-#if defined(OS_ARTI_TESTS) && (OS_ARTI_TESTS == STD_ON)
-    Os_ArtiTestShutdownObserved();
-#endif
+    observe_shutdown();
     if (Os_StackReport() != 0) {
         output_failed = 1;
     }
-    if (printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u mutexes=%u "
-#ifdef __linux__
-               "resource_calls=%u hidden=2 controllers=2 heap=posix static=freertos "
-#else
-               "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
-#endif
+    if (printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u "
+               "mutexes=%u " OS_NATIVE_HEAP
                "input_closed=1 tick_closed=1 time_signal_failed=%d trace_dropped=%llu\n",
                shutdown_reason == E_OK ? "Ready" : "Failed",
                shutdown_reason,
@@ -685,27 +1053,126 @@ static void report_and_exit(void)
     }
     ExitProcess((output_failed != 0 && shutdown_reason == E_OK) ? E_OS_STATE : shutdown_reason);
 }
-static void stop_thread(HANDLE thread)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#ifdef __linux__
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void stop_thread(HANDLE thread)
 {
     CONTEXT context;
-#ifdef __linux__
     if (Os_StackHasFault() != 0 && Os_StackThreadHasFault(GetThreadId(thread)) != 0) {
         return; /* The guard handler parked the damaged actor on its altstack. */
     }
     if (Os_HostStopActor(thread, 2000u) == 0) {
         ExitProcess(E_OS_STATE);
     }
-#else
-    if (SuspendThread(thread) == (DWORD)-1) {
-        ExitProcess(E_OS_STATE);
-    }
-#endif
     context.ContextFlags = CONTEXT_CONTROL;
     if (!Os_PortGetThreadContext(thread, &context)) {
         ExitProcess(E_OS_STATE);
     }
 }
-static DWORD WINAPI control(void *argument)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void stop_thread(HANDLE thread)
+{
+    CONTEXT context;
+    if (SuspendThread(thread) == (DWORD)-1) {
+        ExitProcess(E_OS_STATE);
+    }
+    context.ContextFlags = CONTEXT_CONTROL;
+    if (!Os_PortGetThreadContext(thread, &context)) {
+        ExitProcess(E_OS_STATE);
+    }
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#if defined(__linux__) && (defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON))
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_backup_close(uint32 index)
+{
+    if (index == 1u && InterlockedExchange(&backup_fault_requested, 0) != 0) {
+        void Os_StackTestBackupFault(void);
+        Os_StackTestBackupFault();
+        Os_BackendShutdown(E_OS_STATE);
+    }
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_backup_close(uint32 index) { (void)index; }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_stack_close(void)
+{
+    {
+        void Os_StackTestBeforeClose(void);
+        Os_StackTestBeforeClose();
+    }
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_stack_close(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_activation_close(void) { Os_TestBeforeClose(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_activation_close(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#ifdef __linux__
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void close_native_fault_resources(void)
+{
+    if (Os_StackHasFault() != 0) {
+        Os_TimeClose();
+        Os_MailboxClose();
+    }
+}
+OS_MEMMAP static void stop_scheduler_before_actors(void) {}
+OS_MEMMAP static void stop_scheduler_after_actors(void)
+{
+    /* No actor may still read the port state when the controller retires it. */
+    vPortEndScheduler();
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void close_native_fault_resources(void) {}
+OS_MEMMAP static void stop_scheduler_before_actors(void) { vPortEndScheduler(); }
+OS_MEMMAP static void stop_scheduler_after_actors(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static DWORD WINAPI control(void *argument)
 {
     HANDLE event = argument == NULL ? close_event : backup_event;
     uint32 i;
@@ -730,31 +1197,11 @@ static DWORD WINAPI control(void *argument)
     }
     /* The requester may be stopped between its wake-up and its own publication. */
     (void)InterlockedExchange(&Os_Closing, 1);
-#if defined(__linux__) && (defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON))
-    if (index == 1u && InterlockedExchange(&backup_fault_requested, 0) != 0) {
-        void Os_StackTestBackupFault(void);
-        Os_StackTestBackupFault();
-        Os_BackendShutdown(E_OS_STATE);
-    }
-#endif
-#if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
-    {
-        void Os_StackTestBeforeClose(void);
-        Os_StackTestBeforeClose();
-    }
-#endif
-#if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
-    Os_TestBeforeClose();
-#endif
-#ifdef __linux__
-    if (Os_StackHasFault() != 0) {
-        Os_TimeClose();
-        Os_MailboxClose();
-    }
-#endif
-#ifndef __linux__
-    vPortEndScheduler();
-#endif
+    observe_backup_close(index);
+    observe_stack_close();
+    observe_activation_close();
+    close_native_fault_resources();
+    stop_scheduler_before_actors();
     /* Stop the ISR owner first, then all execution threads. Never take its mutex. */
     if (main_thread != NULL && GetThreadId(main_thread) != current) {
         stop_thread(main_thread);
@@ -768,17 +1215,15 @@ static DWORD WINAPI control(void *argument)
     if (controller_healthy[1] == 0 && backup_thread != NULL && argument == NULL) {
         stop_thread(backup_thread);
     }
-#ifdef __linux__
-    /* No actor may still read the port state when the controller retires it. */
-    vPortEndScheduler();
-#endif
+    stop_scheduler_after_actors();
     if (Os_StackHasFault()) {
         ShutdownOS(E_OS_STACKFAULT);
     }
     report_and_exit();
     return 0u;
 }
-void Os_BackendStackFault(char failed_role)
+
+OS_MEMMAP void Os_BackendStackFault(char failed_role)
 {
     Os_TimeClose();
     Os_MailboxClose();
@@ -800,8 +1245,12 @@ void Os_BackendStackFault(char failed_role)
     Sleep(INFINITE);
     ExitProcess(E_OS_STACKFAULT);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #ifdef __linux__
-void Os_BackendSignalStackFault(char failed_role)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
 {
     (void)InterlockedOr(&activation_admission, 2);
     (void)InterlockedExchange(&ready, 0);
@@ -819,8 +1268,12 @@ void Os_BackendSignalStackFault(char failed_role)
     }
     (void)InterlockedExchange(&Os_Closing, 1);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
-void Os_BackendShutdown(StatusType error)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_BackendShutdown(StatusType error)
 {
     const Os_NativeStackType *current = Os_StackCurrent();
     if (error == E_OS_STACKFAULT && Os_StackHasFault() && current != NULL &&
@@ -832,7 +1285,8 @@ void Os_BackendShutdown(StatusType error)
     Sleep(INFINITE);
     ExitProcess(E_OS_STATE);
 }
-void Os_BackendRequestShutdown(StatusType error)
+
+OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
 {
     Os_TimeClose();
     Os_MailboxClose();
@@ -850,22 +1304,42 @@ void Os_BackendRequestShutdown(StatusType error)
         InterlockedExchange(&Os_Closing, 1);
     }
 }
-void Os_BackendAssert(const void *file, sint32 line)
+
+OS_MEMMAP void Os_BackendAssert(const void *file, sint32 line)
 {
     (void)file;
     (void)line;
     Os_BackendShutdown(E_OS_STATE);
 }
-static sint32 fail_next(void)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static sint32 fail_next(void)
 {
     ++resource_calls;
-#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
     return fail_resource != 0u && resource_calls == fail_resource;
-#else
-    return 0;
-#endif
 }
-HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static sint32 fail_next(void)
+{
+    ++resource_calls;
+    return 0;
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes,
+                              BOOL manual,
+                              BOOL initial,
+                              LPCSTR name)
 {
     HANDLE result = fail_next() ? NULL : CreateEventA(attributes, manual, initial, name);
     if (result == NULL) {
@@ -874,7 +1348,8 @@ HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial,
     ++events;
     return result;
 }
-HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
+
+OS_MEMMAP HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
 {
     HANDLE result = fail_next() ? NULL : CreateMutexA(attributes, owner, name);
     if (result == NULL) {
@@ -883,28 +1358,53 @@ HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
     ++mutexes;
     return result;
 }
-HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
-                     SIZE_T stack,
-                     LPTHREAD_START_ROUTINE start,
-                     LPVOID argument,
-                     DWORD flags,
-                     LPDWORD id)
-{
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #ifdef __linux__
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
+                               SIZE_T stack,
+                               LPTHREAD_START_ROUTINE start,
+                               LPVOID argument,
+                               DWORD flags,
+                               LPDWORD id)
+{
     HANDLE result = (attributes != NULL || fail_next())
                         ? NULL
                         : Os_HostCreateActor(stack, start, argument, flags, id, 0);
-#else
-    HANDLE result =
-        fail_next() ? NULL : CreateThread(attributes, stack, start, argument, flags, id);
-#endif
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
     ++threads;
     return result;
 }
-static DWORD WINAPI native_task_start(void *argument)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
+                               SIZE_T stack,
+                               LPTHREAD_START_ROUTINE start,
+                               LPVOID argument,
+                               DWORD flags,
+                               LPDWORD id)
+{
+    HANDLE result =
+        fail_next() ? NULL : CreateThread(attributes, stack, start, argument, flags, id);
+    if (result == NULL) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    ++threads;
+    return result;
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
 {
     Os_NativeTaskStartType *start = argument;
     if (!Os_StackRegister(start->role)) {
@@ -926,7 +1426,10 @@ static DWORD WINAPI native_task_start(void *argument)
     Os_BackendShutdown(E_OS_STATE);
     return 0u;
 }
-HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t *buffer_top)
+
+OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
+                                   void *argument,
+                                   const StackType_t *buffer_top)
 {
     Os_NativeTaskStartType *start;
     HANDLE thread;
@@ -962,7 +1465,8 @@ HANDLE Os_PortTaskThread(TaskFunction_t code, void *argument, const StackType_t 
     }
     return thread;
 }
-void Os_PortResumeThread(HANDLE thread)
+
+OS_MEMMAP void Os_PortResumeThread(HANDLE thread)
 {
     CONTEXT context;
     context.ContextFlags = CONTEXT_CONTROL;
@@ -974,30 +1478,61 @@ void Os_PortResumeThread(HANDLE thread)
         Os_BackendShutdown(E_OS_STATE);
     }
 }
-void vApplicationGetIdleTaskMemory(StaticTask_t **task,
-                                   StackType_t **stack,
-                                   configSTACK_DEPTH_TYPE *depth)
+
+OS_MEMMAP void vApplicationGetIdleTaskMemory(StaticTask_t **task,
+                                             StackType_t **stack,
+                                             configSTACK_DEPTH_TYPE *depth)
 {
     *task = &task_memory[OS_MAX_TASKS + 1u];
     *stack = task_buffers[OS_MAX_TASKS + 1u];
     *depth = 512;
 }
-void vApplicationIdleHook(void)
-{
-    Os_StackCheck();
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #if defined(OS_IDLE_TESTS) && (OS_IDLE_TESTS == STD_ON)
-    Os_TestIdleObserved();
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_idle(void) { Os_TestIdleObserved(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_idle(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
 #if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_idle_stack(void)
+{
     void Os_StackTestIdle(void);
     Os_StackTestIdle();
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_idle_stack(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void vApplicationIdleHook(void)
+{
+    Os_StackCheck();
+    observe_idle();
+    observe_idle_stack();
     /* Give the host CPU back: the interrupt thread suspends this thread to switch
      * Tasks, so nothing waits on the idle loop. Spinning would occupy a host CPU
      * per ECU process and delay the tick handoff threads under parallel load. */
     Sleep(1u);
 }
-static void task_entry(void *argument)
+
+OS_MEMMAP static void task_entry(void *argument)
 {
     /* The argument is the task's own control block, so the configuration stays const.
      * The index stays live across setjmp, so it is volatile (C99 7.13.2.1). */
@@ -1013,7 +1548,8 @@ static void task_entry(void *argument)
     /* A returned entry is an erroneous activation, not a whole-OS shutdown. */
     Os_BackendMissingEnd();
 }
-static void bootstrap(void *argument)
+
+OS_MEMMAP static void bootstrap(void *argument)
 {
     uint32 i;
     (void)argument;
@@ -1045,11 +1581,26 @@ static void bootstrap(void *argument)
     vTaskSuspend(NULL);
     Os_BackendShutdown(E_OS_STATE);
 }
-void Os_BackendStart(AppModeType mode)
-{
-    uint32 i;
-    Os_TargetTrace('I');
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#ifdef __linux__
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void prepare_native_stack(void) { Os_StackPrepare(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void prepare_native_stack(void) { Os_StackInit(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void read_resource_failure(void)
+{
     const char *failure = getenv("AUTOSAR_OS_FAIL_RESOURCE");
     if (failure != NULL) {
         char *end;
@@ -1062,7 +1613,47 @@ void Os_BackendStart(AppModeType mode)
         }
         fail_resource = (uint32)value;
     }
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void read_resource_failure(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
+#ifndef __linux__
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void bind_main_thread(void)
+{
+    if (!DuplicateHandle(GetCurrentProcess(),
+                         GetCurrentThread(),
+                         GetCurrentProcess(),
+                         &main_thread,
+                         0u,
+                         FALSE,
+                         DUPLICATE_SAME_ACCESS)) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void bind_main_thread(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_BackendStart(AppModeType mode)
+{
+    uint32 i;
+    Os_TargetTrace('I');
+    read_resource_failure();
     if (InterlockedCompareExchange(&started, 1, 0) != 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1075,23 +1666,9 @@ void Os_BackendStart(AppModeType mode)
     }
     startup_mode = mode;
     Os_TimeInit(mode);
-#ifdef __linux__
-    Os_StackPrepare();
-#else
-    Os_StackInit();
-#endif
+    prepare_native_stack();
     Os_MailboxInstall();
-#ifndef __linux__
-    if (!DuplicateHandle(GetCurrentProcess(),
-                         GetCurrentThread(),
-                         GetCurrentProcess(),
-                         &main_thread,
-                         0u,
-                         FALSE,
-                         DUPLICATE_SAME_ACCESS)) {
-        Os_BackendShutdown(E_OS_STATE);
-    }
-#endif
+    bind_main_thread();
     close_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
     backup_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
     controller_registered[0] = Os_PortEvent(NULL, FALSE, FALSE, NULL);
@@ -1132,8 +1709,12 @@ void Os_BackendStart(AppModeType mode)
     vTaskStartScheduler();
     Os_BackendShutdown(E_OS_STATE);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #ifdef __linux__
-void Os_BackendSetDispatcher(void)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_BackendSetDispatcher(void)
 {
     if (!DuplicateHandle(GetCurrentProcess(),
                          GetCurrentThread(),
@@ -1147,8 +1728,12 @@ void Os_BackendSetDispatcher(void)
     Os_HostSetDispatcher(main_thread);
     Os_StackInit();
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
-StatusType Os_BackendState(TaskType id, TaskStateRefType state)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_BackendState(TaskType id, TaskStateRefType state)
 {
     uint32 i;
     Os_StackCheck();
@@ -1184,7 +1769,40 @@ StatusType Os_BackendState(TaskType id, TaskStateRefType state)
     }
     return E_OS_ID;
 }
-StatusType Os_BackendActivate(TaskType id)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_activation_lock(void) { Os_TestBeforeActivationLock(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_activation_lock(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_activation_admission(uint32 phase)
+{
+    Os_TestAtActivationAdmission(phase);
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_activation_admission(uint32 phase) { (void)phase; }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
 {
     uint32 index;
     const Os_ActivationQueueType *queue;
@@ -1198,9 +1816,7 @@ StatusType Os_BackendActivate(TaskType id)
     }
     queue = &activations[index];
     stack = Os_StackCurrent();
-#if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
-    Os_TestBeforeActivationLock();
-#endif
+    observe_activation_lock();
     taskENTER_CRITICAL();
     Os_BackendGuardService();
     if (!Os_BackendReady()) {
@@ -1211,16 +1827,12 @@ StatusType Os_BackendActivate(TaskType id)
         taskEXIT_CRITICAL();
         return E_OS_LIMIT;
     }
-#if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
-    Os_TestAtActivationAdmission(0u);
-#endif
+    observe_activation_admission(0u);
     if (InterlockedCompareExchange(&activation_admission, 1, 0) != 0) {
         /* Closing already owns admission; no record or ready key is changed. */
         Os_BackendShutdown(E_OS_STATE);
     }
-#if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
-    Os_TestAtActivationAdmission(1u);
-#endif
+    observe_activation_admission(1u);
     if (request_sequence == UINT64_MAX) {
         rebase_orders();
     }
@@ -1244,7 +1856,8 @@ StatusType Os_BackendActivate(TaskType id)
     Os_BackendGuardService();
     return E_OK;
 }
-static uint32 current_task_index(void)
+
+OS_MEMMAP static uint32 current_task_index(void)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
     uint32 index;
@@ -1258,7 +1871,24 @@ static uint32 current_task_index(void)
     }
     return OS_MAX_TASKS;
 }
-static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_FINISH_TESTS) && (OS_FINISH_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_finish_boundary(uint32 phase) { Os_TestFinishBoundary(phase); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_finish_boundary(uint32 phase) { (void)phase; }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
     uint32 index;
@@ -1312,9 +1942,7 @@ static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned
             configASSERT(released == E_OK);
         }
     }
-#if defined(OS_FINISH_TESTS) && (OS_FINISH_TESTS == STD_ON)
-    Os_TestFinishBoundary(0u);
-#endif
+    observe_finish_boundary(0u);
     if (InterlockedCompareExchange(&activation_admission, 1, 0) != 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1345,9 +1973,7 @@ static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned
     }
     ready_sequences[index] = (queue->count == 0u) ? 0u : queue->requests[queue->head];
     vTaskOsSetReadySequence(current, ready_sequences[index]);
-#if defined(OS_FINISH_TESTS) && (OS_FINISH_TESTS == STD_ON)
-    Os_TestFinishBoundary(1u);
-#endif
+    observe_finish_boundary(1u);
     InterlockedAnd(&activation_admission, ~1L);
     if (queue->count == 0u) {
         vTaskSuspend(NULL);
@@ -1358,9 +1984,12 @@ static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned
     Os_BackendGuardService();
     longjmp(restart_frames[index], 1);
 }
-StatusType Os_BackendFinish(void) { return complete_activation(0u, 0, 0); }
-StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1, 0); }
-void Os_BackendMissingEnd(void)
+
+OS_MEMMAP StatusType Os_BackendFinish(void) { return complete_activation(0u, 0, 0); }
+
+OS_MEMMAP StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1, 0); }
+
+OS_MEMMAP void Os_BackendMissingEnd(void)
 {
     const Os_ErrorParametersType arguments = {.service_TerminateTask = {0u}};
     Os_StackCheck();
@@ -1370,10 +1999,28 @@ void Os_BackendMissingEnd(void)
     (void)complete_activation(0u, 0, 1);
     Os_BackendShutdown(E_OS_STATE);
 }
-StatusType Os_BackendResource(ResourceType id, sint32 acquire)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static UBaseType_t
+    saved_priorities[OS_RESOURCE_ACTORS]
+                    [OS_MAX_RESOURCES]; /**< Persistent function-owned state; existing caller/port
+                                           synchronization; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static LONG
+    saved_interrupt_ceilings[OS_RESOURCE_ACTORS]
+                            [OS_MAX_RESOURCES]; /**< Persistent function-owned state; existing
+                                                   caller/port synchronization; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
 {
-    static UBaseType_t saved_priorities[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
-    static LONG saved_interrupt_ceilings[OS_RESOURCE_ACTORS][OS_MAX_RESOURCES];
     const Os_NativeStackType *stack = Os_StackCurrent();
     uint32 task;
     uint32 resource;
@@ -1448,7 +2095,8 @@ StatusType Os_BackendResource(ResourceType id, sint32 acquire)
     Os_BackendGuardService();
     return status;
 }
-StatusType Os_BackendSchedule(void)
+
+OS_MEMMAP StatusType Os_BackendSchedule(void)
 {
     uint32 index = current_task_index();
     if (index == OS_MAX_TASKS) {
@@ -1469,7 +2117,8 @@ StatusType Os_BackendSchedule(void)
     acquire_internal(index);
     return E_OK;
 }
-StatusType Os_BackendWait(EventMaskType mask)
+
+OS_MEMMAP StatusType Os_BackendWait(EventMaskType mask)
 {
     uint32 index = current_task_index();
     if (index == OS_MAX_TASKS) {
@@ -1506,7 +2155,8 @@ StatusType Os_BackendWait(EventMaskType mask)
     configASSERT(task_waiting[index] == 0u);
     return E_OK;
 }
-StatusType Os_BackendClear(EventMaskType mask)
+
+OS_MEMMAP StatusType Os_BackendClear(EventMaskType mask)
 {
     uint32 index = current_task_index();
     if (index == OS_MAX_TASKS) {
@@ -1523,7 +2173,8 @@ StatusType Os_BackendClear(EventMaskType mask)
     Os_BackendGuardService();
     return E_OK;
 }
-StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output)
+
+OS_MEMMAP StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType output)
 {
     uint32 index;
     StatusType status = E_OK;
@@ -1568,7 +2219,8 @@ StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskRefType out
     Os_BackendGuardService();
     return status;
 }
-StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
+
+OS_MEMMAP StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
 {
     uint32 index;
     uint32 j;
@@ -1611,3 +2263,5 @@ StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
     Os_BackendGuardService();
     return E_OK;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

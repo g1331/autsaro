@@ -2,27 +2,71 @@
 #include "Os_Backend.h"
 #include "Os_IntegrationHooks.h"
 
-static TickType values[OS_MAX_COUNTERS]; /**< Port-locked Counter ticks; TimeInit does not reset. */
-const TickType *const Os_ArtiCounters =
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static TickType
+    values[OS_MAX_COUNTERS]; /**< Port-locked Counter ticks; TimeInit does not reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const TickType *const Os_ArtiCounters =
     values; /**< Fixed Counter ticks tool view; C init only, never reset. */
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
 typedef Os_ArtiAlarmStateType Os_AlarmStateType;
-static Os_AlarmStateType
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_AlarmStateType
     alarms[OS_MAX_ALARMS]; /**< Port-locked Alarm state; TimeInit does not reset. */
-const Os_ArtiAlarmStateType *const Os_ArtiAlarms =
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const Os_ArtiAlarmStateType *const Os_ArtiAlarms =
     alarms; /**< Fixed Alarm state tool view; C init only, never reset. */
-static volatile Os_Atomic32Type
-    tick_state;                /**< Atomic handshake/close state; TimeInit does not reset. */
-static uint64 requested_epoch; /**< Producer-owned epoch, tick_state ordered; no Init reset. */
-static uint64 confirmed_epoch; /**< Owner-Task epoch, tick_state ordered; no Init reset. */
-static uint64 action_count;    /**< Port-locked action total; TimeInit does not reset. */
-static uint64 error_count;     /**< Port-locked action-error total; TimeInit does not reset. */
-static Os_TickCompletionType
-    completion;                 /**< Owner-Task snapshot, tick_state published; no Init reset. */
-static HANDLE completion_event; /**< Manual event created by TimeInit; then fixed. */
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
+    tick_state; /**< Atomic handshake/close state; TimeInit does not reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static uint64
+    requested_epoch; /**< Producer-owned epoch, tick_state ordered; no Init reset. */
+
+OS_MEMMAP static uint64
+    confirmed_epoch; /**< Owner-Task epoch, tick_state ordered; no Init reset. */
+
+OS_MEMMAP static uint64 action_count; /**< Port-locked action total; TimeInit does not reset. */
+
+OS_MEMMAP static uint64
+    error_count; /**< Port-locked action-error total; TimeInit does not reset. */
+
+OS_MEMMAP static Os_TickCompletionType
+    completion; /**< Owner-Task snapshot, tick_state published; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static HANDLE completion_event; /**< Manual event created by TimeInit; then fixed. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
 /* Auto-reset: one early native wake per notification, never a completion. */
-static HANDLE attention_event; /**< Auto-reset event created by TimeInit; then fixed. */
-static volatile Os_Atomic32Type
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static HANDLE attention_event; /**< Auto-reset event created by TimeInit; then fixed. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
     signal_failed; /**< Atomic host-signal failure latch; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
 #define TIME_CLOSED     256L
 #define TIME_RESERVED   1L
 #define TIME_PENDING    2L
@@ -32,7 +76,9 @@ static volatile Os_Atomic32Type
 #define TIME_COMPLETE   6L
 #define TIME_PUBLISHING 7L
 
-static uint32 counter_index(CounterType id)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static uint32 counter_index(CounterType id)
 {
     const Os_TimeConfigType *config = Os_Config->time;
     if (config != NULL) {
@@ -44,7 +90,8 @@ static uint32 counter_index(CounterType id)
     }
     return OS_MAX_COUNTERS;
 }
-static uint32 alarm_index(AlarmType id)
+
+OS_MEMMAP static uint32 alarm_index(AlarmType id)
 {
     const Os_TimeConfigType *config = Os_Config->time;
     if (config != NULL) {
@@ -56,7 +103,9 @@ static uint32 alarm_index(AlarmType id)
     }
     return OS_MAX_ALARMS;
 }
-static const Os_TaskConfigType *configured_task(const Os_TargetConfigType *config, TaskType id)
+
+OS_MEMMAP static const Os_TaskConfigType *configured_task(const Os_TargetConfigType *config,
+                                                          TaskType id)
 {
     uint32 i;
     const Os_TaskConfigType *result = NULL;
@@ -68,11 +117,13 @@ static const Os_TaskConfigType *configured_task(const Os_TargetConfigType *confi
     }
     return result;
 }
-static sint32 valid_cycle(const Os_CounterConfigType *counter, TickType cycle)
+
+OS_MEMMAP static sint32 valid_cycle(const Os_CounterConfigType *counter, TickType cycle)
 {
     return (cycle == 0u) || ((cycle >= counter->minimum_cycle) && (cycle <= counter->maximum));
 }
-StatusType Os_TimeValidate(const Os_TargetConfigType *target)
+
+OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
 {
     const Os_TimeConfigType *config = target->time;
     const Os_TaskConfigType *owner;
@@ -183,13 +234,15 @@ StatusType Os_TimeValidate(const Os_TargetConfigType *target)
     }
     return Os_ScheduleValidate(target);
 }
-static TickType absolute_distance(uint32 counter, TickType start)
+
+OS_MEMMAP static TickType absolute_distance(uint32 counter, TickType start)
 {
     TickType current = values[counter];
     TickType modulus = Os_Config->time->counters[counter].maximum + UINT64_C(1);
     return (start > current) ? (start - current) : (modulus - (current - start));
 }
-void Os_TimeInit(AppModeType mode)
+
+OS_MEMMAP void Os_TimeInit(AppModeType mode)
 {
     const Os_TimeConfigType *config = Os_Config->time;
     if ((config != NULL) && (config->wake_event != 0u)) {
@@ -201,7 +254,8 @@ void Os_TimeInit(AppModeType mode)
         attention_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
     }
 }
-void Os_TimeAutostart(AppModeType mode)
+
+OS_MEMMAP void Os_TimeAutostart(AppModeType mode)
 {
     const Os_TimeConfigType *config = Os_Config->time;
     if (config != NULL) {
@@ -218,15 +272,21 @@ void Os_TimeAutostart(AppModeType mode)
         }
     }
 }
-void Os_TimeClose(void)
+
+OS_MEMMAP void Os_TimeClose(void)
 {
     (void)InterlockedOr(&tick_state, TIME_CLOSED);
     if ((completion_event != NULL) && (Os_HostSetEvent(completion_event) == 0)) {
         (void)InterlockedExchange(&signal_failed, 1);
     }
 }
-sint32 Os_TimeSignalFailed(void) { return InterlockedCompareExchange(&signal_failed, 0, 0) != 0; }
-void Os_TimeReportAction(StatusType status)
+
+OS_MEMMAP sint32 Os_TimeSignalFailed(void)
+{
+    return InterlockedCompareExchange(&signal_failed, 0, 0) != 0;
+}
+
+OS_MEMMAP void Os_TimeReportAction(StatusType status)
 {
     if (action_count == UINT64_MAX) {
         Os_BackendShutdown(E_OS_STATE);
@@ -242,7 +302,8 @@ void Os_TimeReportAction(StatusType status)
         }
     }
 }
-static void action(uint32 index)
+
+OS_MEMMAP static void action(uint32 index)
 {
     const Os_AlarmConfigType *alarm = &Os_Config->time->alarms[index];
     StatusType status = E_OK;
@@ -268,8 +329,16 @@ static void action(uint32 index)
     Os_ArtiInternalLeave();
     Os_TimeReportAction(status);
 }
-TickType Os_TimeCounterValue(CounterType counter) { return values[counter_index(counter)]; }
-static void increment(uint32 counter)
+
+OS_MEMMAP TickType Os_TimeCounterValue(CounterType counter)
+{
+    return values[counter_index(counter)];
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void increment(uint32 counter)
 {
     typedef struct {
         uint32 counter;
@@ -318,7 +387,11 @@ static void increment(uint32 counter)
         }
     }
 }
-static StatusType implementation_IncrementCounter(CounterType CounterID)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static StatusType implementation_IncrementCounter(CounterType CounterID)
 {
     uint32 index;
     Os_StackCheck();
@@ -337,7 +410,8 @@ static StatusType implementation_IncrementCounter(CounterType CounterID)
     Os_BackendGuardService();
     return E_OK;
 }
-static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefType Value)
+
+OS_MEMMAP static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefType Value)
 {
     uint32 index;
     Os_StackCheck();
@@ -359,9 +433,10 @@ static StatusType implementation_GetCounterValue(CounterType CounterID, TickRefT
     Os_BackendGuardService();
     return E_OK;
 }
-static StatusType implementation_GetElapsedValue(CounterType CounterID,
-                                                 TickRefType Value,
-                                                 TickRefType ElapsedValue)
+
+OS_MEMMAP static StatusType implementation_GetElapsedValue(CounterType CounterID,
+                                                           TickRefType Value,
+                                                           TickRefType ElapsedValue)
 {
     uint32 index;
     StatusType status = E_OK;
@@ -392,7 +467,8 @@ static StatusType implementation_GetElapsedValue(CounterType CounterID,
     Os_BackendGuardService();
     return status;
 }
-static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
+
+OS_MEMMAP static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
 {
     uint32 index;
     const Os_CounterConfigType *counter;
@@ -415,7 +491,8 @@ static StatusType implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefTyp
     Os_BackendGuardService();
     return E_OK;
 }
-static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
+
+OS_MEMMAP static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
 {
     uint32 index;
     StatusType status = E_OK;
@@ -442,7 +519,8 @@ static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
     Os_BackendGuardService();
     return status;
 }
-static StatusType set_alarm(AlarmType id, TickType start, TickType cycle, sint32 absolute)
+
+OS_MEMMAP static StatusType set_alarm(AlarmType id, TickType start, TickType cycle, sint32 absolute)
 {
     uint32 index;
     uint32 counter;
@@ -475,15 +553,22 @@ static StatusType set_alarm(AlarmType id, TickType start, TickType cycle, sint32
     Os_BackendGuardService();
     return status;
 }
-static StatusType implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
+
+OS_MEMMAP static StatusType implementation_SetRelAlarm(AlarmType AlarmID,
+                                                       TickType Increment,
+                                                       TickType Cycle)
 {
     return set_alarm(AlarmID, Increment, Cycle, 0);
 }
-static StatusType implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
+
+OS_MEMMAP static StatusType implementation_SetAbsAlarm(AlarmType AlarmID,
+                                                       TickType Start,
+                                                       TickType Cycle)
 {
     return set_alarm(AlarmID, Start, Cycle, 1);
 }
-static StatusType implementation_CancelAlarm(AlarmType AlarmID)
+
+OS_MEMMAP static StatusType implementation_CancelAlarm(AlarmType AlarmID)
 {
     uint32 index;
     StatusType status = E_OK;
@@ -509,7 +594,8 @@ static StatusType implementation_CancelAlarm(AlarmType AlarmID)
     Os_BackendGuardService();
     return status;
 }
-sint32 Os_TimeBeginTick(void)
+
+OS_MEMMAP sint32 Os_TimeBeginTick(void)
 {
     if (Os_Config->time == NULL) {
         return Os_TargetReady();
@@ -519,7 +605,8 @@ sint32 Os_TimeBeginTick(void)
     }
     return InterlockedCompareExchange(&tick_state, TIME_PROCESSING, TIME_PENDING) == TIME_PENDING;
 }
-void Os_TimeTick(void)
+
+OS_MEMMAP void Os_TimeTick(void)
 {
     const Os_TimeConfigType *config = Os_Config->time;
     if ((config != NULL) && (config->wake_event != 0u)) {
@@ -545,8 +632,10 @@ void Os_TimeTick(void)
         (void)InterlockedCompareExchange(&tick_state, TIME_DELIVERED, TIME_PROCESSING);
     }
 }
-void vApplicationTickHook(void) { Os_TimeTick(); }
-static StatusType native_time_context(void)
+
+OS_MEMMAP void vApplicationTickHook(void) { Os_TimeTick(); }
+
+OS_MEMMAP static StatusType native_time_context(void)
 {
     if (Os_BridgeActorAllowed() == 0) {
         return E_OS_CALLEVEL;
@@ -557,7 +646,24 @@ static StatusType native_time_context(void)
     }
     return Os_BridgeContext();
 }
-StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_tick_pending(void) { Os_TimeTestBeforePending(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_tick_pending(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket)
 {
     StatusType status;
     LONG state;
@@ -591,9 +697,7 @@ StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket)
         return E_OS_STATE;
     }
     requested_epoch = epoch;
-#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
-    Os_TimeTestBeforePending();
-#endif
+    observe_tick_pending();
     if (InterlockedCompareExchange(&tick_state, TIME_PENDING, TIME_RESERVED) != TIME_RESERVED) {
         return E_OS_STATE;
     }
@@ -601,7 +705,8 @@ StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket)
     Os_PortPostInterrupt(1u);
     return E_OK;
 }
-StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionType *record)
+
+OS_MEMMAP StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionType *record)
 {
     StatusType status;
     LONG state;
@@ -625,7 +730,10 @@ StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionType *record)
     *record = completion;
     return E_OK;
 }
-StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletionType *record)
+
+OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
+                                       uint32 timeout_ms,
+                                       Os_TickCompletionType *record)
 {
     DWORD started_at;
     if ((timeout_ms == 0u) || (timeout_ms > 5000u)) {
@@ -659,7 +767,8 @@ StatusType Os_TargetWaitTick(uint64 ticket, uint32 timeout_ms, Os_TickCompletion
         }
     }
 }
-static StatusType time_owner(void)
+
+OS_MEMMAP static StatusType time_owner(void)
 {
     sint32 owner;
     Os_StackCheck();
@@ -671,7 +780,8 @@ static StatusType time_owner(void)
     owner = Os_BackendTaskOwner(Os_Config->time->owner);
     return (owner == 0) ? E_OS_CALLEVEL : ((owner < 0) ? E_OS_ACCESS : E_OK);
 }
-StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch)
+
+OS_MEMMAP StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch)
 {
     StatusType status;
     LONG state;
@@ -695,7 +805,8 @@ StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch)
     Os_BackendGuardService();
     return status;
 }
-StatusType Os_TargetNotifyNative(void)
+
+OS_MEMMAP StatusType Os_TargetNotifyNative(void)
 {
     StatusType status = time_owner();
     if (status == E_OK) {
@@ -708,7 +819,8 @@ StatusType Os_TargetNotifyNative(void)
     }
     return status;
 }
-StatusType Os_TargetCompleteTick(uint64 ticket)
+
+OS_MEMMAP StatusType Os_TargetCompleteTick(uint64 ticket)
 {
     StatusType status = time_owner();
     LONG state;
@@ -734,12 +846,27 @@ StatusType Os_TargetCompleteTick(uint64 ticket)
     Os_BackendGuardService();
     return status;
 }
-void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_tick_waiting(void) { Os_TimeTestOnWaiting(); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_tick_waiting(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
 {
     const Os_TimeConfigType *config = Os_Config->time;
-#if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
-    Os_TimeTestOnWaiting();
-#endif
+    observe_tick_waiting();
     Os_IntegrationOnWaiting(id, pending, predicate);
     if ((config != NULL) && (id == config->owner) && (pending == 0u) &&
         ((predicate & config->wake_event) != 0u) && (Os_MailboxQuiescent() != 0) &&
@@ -762,13 +889,18 @@ void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicat
         }
     }
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #if defined(OS_TIME_TESTS) && (OS_TIME_TESTS == STD_ON)
-void Os_TimeTestCloseEvent(void)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_TimeTestCloseEvent(void)
 {
     configASSERT(completion_event != NULL);
     configASSERT(CloseHandle(completion_event) != 0);
 }
-void Os_TimeTestSeed(uint64 epoch, uint32 kernel_tick, TickType value)
+
+OS_MEMMAP void Os_TimeTestSeed(uint64 epoch, uint32 kernel_tick, TickType value)
 {
     void vTaskOsTestTick(TickType_t tick);
     configASSERT(Os_Config->time != NULL);
@@ -783,9 +915,13 @@ void Os_TimeTestSeed(uint64 epoch, uint32 kernel_tick, TickType value)
     completion.kernel_tick = kernel_tick;
     completion.counter = value;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
 
-StatusType Os_Implementation_IncrementCounter(CounterType CounterID)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_Implementation_IncrementCounter(CounterType CounterID)
 {
     const Os_ErrorParametersType arguments = {.service_IncrementCounter = {CounterID}};
     StatusType status;
@@ -801,7 +937,7 @@ StatusType Os_Implementation_IncrementCounter(CounterType CounterID)
     return Os_ErrorResult(OSServiceId_IncrementCounter, status, &arguments);
 }
 
-StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType Value)
+OS_MEMMAP StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType Value)
 {
     const Os_ErrorParametersType arguments = {.service_GetCounterValue = {CounterID, Value}};
     StatusType status;
@@ -817,9 +953,9 @@ StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType 
     return Os_ErrorResult(OSServiceId_GetCounterValue, status, &arguments);
 }
 
-StatusType Os_Implementation_GetElapsedValue(CounterType CounterID,
-                                             TickRefType Value,
-                                             TickRefType ElapsedValue)
+OS_MEMMAP StatusType Os_Implementation_GetElapsedValue(CounterType CounterID,
+                                                       TickRefType Value,
+                                                       TickRefType ElapsedValue)
 {
     const Os_ErrorParametersType arguments = {
         .service_GetElapsedValue = {CounterID, Value, ElapsedValue}};
@@ -836,7 +972,7 @@ StatusType Os_Implementation_GetElapsedValue(CounterType CounterID,
     return Os_ErrorResult(OSServiceId_GetElapsedValue, status, &arguments);
 }
 
-StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
+OS_MEMMAP StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
 {
     const Os_ErrorParametersType arguments = {.service_GetAlarmBase = {AlarmID, Info}};
     StatusType status;
@@ -852,7 +988,7 @@ StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType In
     return Os_ErrorResult(OSServiceId_GetAlarmBase, status, &arguments);
 }
 
-StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
+OS_MEMMAP StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
 {
     const Os_ErrorParametersType arguments = {.service_GetAlarm = {AlarmID, Tick}};
     StatusType status;
@@ -868,7 +1004,9 @@ StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick)
     return Os_ErrorResult(OSServiceId_GetAlarm, status, &arguments);
 }
 
-StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle)
+OS_MEMMAP StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID,
+                                                   TickType Increment,
+                                                   TickType Cycle)
 {
     const Os_ErrorParametersType arguments = {.service_SetRelAlarm = {AlarmID, Increment, Cycle}};
     StatusType status;
@@ -884,7 +1022,9 @@ StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID, TickType Increment, 
     return Os_ErrorResult(OSServiceId_SetRelAlarm, status, &arguments);
 }
 
-StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
+OS_MEMMAP StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID,
+                                                   TickType Start,
+                                                   TickType Cycle)
 {
     const Os_ErrorParametersType arguments = {.service_SetAbsAlarm = {AlarmID, Start, Cycle}};
     StatusType status;
@@ -900,7 +1040,7 @@ StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID, TickType Start, Tick
     return Os_ErrorResult(OSServiceId_SetAbsAlarm, status, &arguments);
 }
 
-StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID)
+OS_MEMMAP StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID)
 {
     const Os_ErrorParametersType arguments = {.service_CancelAlarm = {AlarmID}};
     StatusType status;
@@ -915,3 +1055,5 @@ StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID)
     }
     return Os_ErrorResult(OSServiceId_CancelAlarm, status, &arguments);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

@@ -40,6 +40,8 @@ typedef struct {
     uint32_t service_status; /**< Captured service result for the next recorded event. */
     uint8_t status_valid;    /**< Nonzero when service_status is meaningful. */
 } Arti_AddressCapture;
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** @brief Lossless x64 side data for standard uint32 pointer payloads.
  * @param[in] address Native address bits captured without dereferencing the address.
  * @par Return
@@ -50,7 +52,8 @@ typedef struct {
  * Ownership: stores scalar address/status bits only; never dereferences or retains a pointed-to
  * object.
  */
-void Arti_CaptureAddress(uintptr_t address);
+OS_MEMMAP void Arti_CaptureAddress(uintptr_t address);
+
 /** @brief Distinguish a failed getter from a genuine UINT32_MAX result.
  * @param[in] status Captured getter result distinguishing errors from valid payloads.
  * @par Return
@@ -61,7 +64,8 @@ void Arti_CaptureAddress(uintptr_t address);
  * Ownership: stores scalar address/status bits only; never dereferences or retains a pointed-to
  * object.
  */
-void Arti_CaptureServiceStatus(uint32_t status);
+OS_MEMMAP void Arti_CaptureServiceStatus(uint32_t status);
+
 /** Save and clear the current actor capture validity for a nested logical caller.
  * @return Prior capture state, to restore after the nested caller.
  * Preconditions: initialized actor TLS; save/restore scopes are properly nested.
@@ -70,7 +74,8 @@ void Arti_CaptureServiceStatus(uint32_t status);
  * Ownership: stores scalar address/status bits only; never dereferences or retains a pointed-to
  * object.
  */
-Arti_AddressCapture Arti_SaveAddressCapture(void);
+OS_MEMMAP Arti_AddressCapture Arti_SaveAddressCapture(void);
+
 /** Restore the suspended logical caller address/status capture.
  * @param[in] capture Snapshot previously returned by Arti_SaveAddressCapture.
  * @par Return
@@ -81,18 +86,32 @@ Arti_AddressCapture Arti_SaveAddressCapture(void);
  * Ownership: stores scalar address/status bits only; never dereferences or retains a pointed-to
  * object.
  */
-void Arti_RestoreAddressCapture(Arti_AddressCapture capture);
-extern Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
+OS_MEMMAP void Arti_RestoreAddressCapture(Arti_AddressCapture capture);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP extern Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
 /* Native atomics require the host ABI's four-byte cell type. */
-extern volatile ArtiAtomic32 Arti_EventCount;
-extern volatile ArtiAtomic32 Arti_EventsDropped;
-extern volatile ArtiAtomic32 Arti_DevelopmentError;
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP extern volatile ArtiAtomic32 Arti_EventCount;
+
+OS_MEMMAP extern volatile ArtiAtomic32 Arti_EventsDropped;
+
+OS_MEMMAP extern volatile ArtiAtomic32 Arti_DevelopmentError;
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
 #define ARTI_E_INIT_FAILED   0x01u /**< SWS_Arti_91002: ARTI initialization failure. */
 #define ARTI_E_PARAM_POINTER 0x02u /**< SWS_Arti_91002: invalid API output pointer. */
 #define ARTI_STOPWATCH_FLAT  0x00u /**< SWS_Arti_91000: stopwatch evaluation ignores nesting. */
 #define ARTI_STOPWATCH_NESTED                                                                      \
     0x01u /**< SWS_Arti_91000: stopwatch evaluation accounts for nesting. */
 
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** @brief Initialize before OS actors start; resets only the tool buffer.
  * @par Return
  * None.
@@ -102,7 +121,8 @@ extern volatile ArtiAtomic32 Arti_DevelopmentError;
  * Ownership: resets event publication/count/error cells and the calling actor capture validity;
  * payload bytes need not be cleared.
  */
-void Arti_Init(void);
+OS_MEMMAP void Arti_Init(void);
+
 /** @brief Read the host ARTI binding software version.
  * @param[out] versioninfo Writable version result; NULL raises ARTI_E_PARAM_POINTER
  * in the host binding's debugger-visible development-error cell.
@@ -113,7 +133,8 @@ void Arti_Init(void);
  * Reentrancy: reentrant with separate outputs; the development-error publication is atomic.
  * Ownership: borrows versioninfo only until return, writes it when non-NULL and retains no pointer.
  */
-void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
+OS_MEMMAP void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
+
 /** @brief Tool callback; arguments contain only captured values and literals.
  * @param[in] context Literal ARTI execution context.
  * @param[in] class_name Literal standard ARTI class.
@@ -129,12 +150,14 @@ void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
  * explicitly counted. Ownership: retains literal string pointers for the tool buffer lifetime;
  * captured payloads are copied.
  */
-void Arti_Record(const char *context,
-                 const char *class_name,
-                 const char *instance,
-                 const char *event,
-                 uint32_t instance_parameter,
-                 uint32_t event_parameter);
+OS_MEMMAP void Arti_Record(const char *context,
+                           const char *class_name,
+                           const char *instance,
+                           const char *event,
+                           uint32_t instance_parameter,
+                           uint32_t event_parameter);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 
 /* The standard contract requires literal tokens here. Stringification retains
  * those identities without expanding a caller's unrelated macro definitions.

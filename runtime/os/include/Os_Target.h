@@ -114,6 +114,8 @@ typedef struct {
     uint8 use_res_scheduler; /**< Nonzero reserves RES_SCHEDULER as the global Task scheduler
                                 resource. */
 } Os_TargetConfigType;
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Prepare one process-local target before StartOS.
  * @param[in] config Static configuration retained for the lifetime of the process.
  * @return E_OK or a standard validation error; no threads created on rejection.
@@ -122,7 +124,8 @@ typedef struct {
  * areas. Reentrancy: non-reentrant; the first successful preparation is retained. Ownership:
  * borrows config and all referenced arrays/strings/callbacks for the entire process lifetime.
  */
-StatusType Os_TargetPrepare(const Os_TargetConfigType *config);
+OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config);
+
 /** Bounded diagnostic prefix; does not perform host I/O.
  * Full capacity preserves the prefix and counts omitted markers in the closing
  * lifecycle report. Optional diagnostic text cannot terminate normal execution.
@@ -134,7 +137,8 @@ StatusType Os_TargetPrepare(const Os_TargetConfigType *config);
  * Reentrancy: non-reentrant; callers serialize the bounded trace prefix.
  * Ownership: copies marker into internal trace; no caller storage retained.
  */
-void Os_TargetTrace(uint8 marker);
+OS_MEMMAP void Os_TargetTrace(uint8 marker);
+
 /** Whether target services may accept input/tick (Ready and not closing).
  * @return Nonzero only after successful StartupHook.
  * Preconditions: initialized C environment; returns zero before readiness or after close.
@@ -142,7 +146,8 @@ void Os_TargetTrace(uint8 marker);
  * Reentrancy: reentrant; readiness and close are atomic publications.
  * Ownership: returns a scalar snapshot; no storage transferred.
  */
-sint32 Os_TargetReady(void);
+OS_MEMMAP sint32 Os_TargetReady(void);
+
 /** Inspect a stable request/state snapshot in Task or Category 2 ISR context.
  * @param[in] id Configured Task identifier.
  * @param[out] info Caller-owned output; unchanged on rejection.
@@ -152,7 +157,9 @@ sint32 Os_TargetReady(void);
  * Reentrancy: reentrant; snapshots are taken under the existing OS critical section.
  * Ownership: caller owns info, borrowed until return only.
  */
-StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info);
+OS_MEMMAP StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
 /** Observe a committed native scheduling transition in test builds.
  * @par Return
@@ -163,6 +170,8 @@ StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info);
  * scheduling. Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestObserve(void);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Set the activation ordering stamp for saturation tests.
  * @param[in] sequence New stamp, at least the current request sequence.
  * @par Return
@@ -172,7 +181,9 @@ void Os_TestObserve(void);
  * areas. Reentrancy: serialized by the OS critical section; fixture controls the injected stamp.
  * Ownership: no pointer is retained; all arguments/results are scalar.
  */
-void Os_TargetTestSequence(uint64 sequence);
+OS_MEMMAP void Os_TargetTestSequence(uint64 sequence);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 /** Observe admission before the native activation lock in tests.
  * @par Return
  * None.
@@ -201,6 +212,8 @@ void Os_TestAtActivationAdmission(uint32 point);
  * fixture state. Ownership: no pointer is retained; all arguments/results are scalar.
  */
 void Os_TestBeforeClose(void);
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Read admitted current/pending activations at the stopped-actor shutdown boundary.
  * @param[in] id Configured Task identifier; must exist.
  * @return Admitted current/pending activation count remaining at shutdown.
@@ -209,7 +222,9 @@ void Os_TestBeforeClose(void);
  * Reentrancy: stopped-actor observation only; no concurrent activation mutation is permitted.
  * Ownership: no pointer is retained; all arguments/results are scalar.
  */
-uint32 Os_TargetTestPending(TaskType id);
+OS_MEMMAP uint32 Os_TargetTestPending(TaskType id);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
 #if defined(OS_FINISH_TESTS) && (OS_FINISH_TESTS == STD_ON)
 /** Observe a committed native scheduling transition in test builds.

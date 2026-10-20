@@ -177,6 +177,7 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
         }
         let result = format!("{}{}", result, "*".repeat(stars));
         let result = result
+            .trim_start_matches("OS_MEMMAP ")
             .trim_start_matches("OS_CODE ")
             .trim_start_matches("CAN_CODE ")
             .trim_start_matches("DET_CALLOUT_CODE ")
@@ -248,7 +249,7 @@ typedef void (*Callback)(void);
 static inline void Local(void) { GetValue(0, 0); }
 #define MACRO(x) \
     GetValue(x, 0)
-void Stop(void);
+OS_MEMMAP void Stop(void);
 #ifdef __cplusplus
 }
 #endif
@@ -262,6 +263,7 @@ void Stop(void);
         assert_eq!(entries[0].arguments[1].direction, "OUT");
         assert!(entries[0].documentation.contains("Fetch a value."));
         assert_eq!(entries[1].name, "Stop");
+        assert_eq!(entries[1].result, "void");
         assert!(declarations("void Broken(void (*handler)(void));").is_err());
     }
 }

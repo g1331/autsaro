@@ -4,20 +4,44 @@
 /* The fixed GCC/Win64 target uses the same native PE TLS ABI as Os_Stack.c.
  * Each actor keeps its own callback phase and typed snapshot; a failed call
  * from inside ErrorHook never recursively enters or overwrites that snapshot. */
-static OS_THREAD_LOCAL Os_HookPhaseType
+#define OS_START_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_THREAD_LOCAL Os_HookPhaseType
     phase; /**< Actor TLS hook phase; context save/restore, no Init reset. */
-static OS_THREAD_LOCAL OSServiceIdType
+#define OS_STOP_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_8
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_THREAD_LOCAL OSServiceIdType
     service_id; /**< Actor TLS failed-service identity; no Init reset. */
-static OS_THREAD_LOCAL Os_ErrorParametersType
-    parameters;                           /**< Actor TLS ErrorHook snapshot; no Init reset. */
-static OS_THREAD_LOCAL uint32 hook_depth; /**< Actor TLS hook nesting count; no Init reset. */
-static OS_THREAD_LOCAL sint32
-    error_active; /**< Actor TLS ErrorHook recursion guard; no Init reset. */
-static const Os_ErrorParametersType empty_parameters = {
-    .service_TerminateTask = {0u}}; /**< C-initialized immutable empty snapshot; no Init writes. */
-sint32 Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
+#define OS_STOP_SEC_VAR_CLEARED_TLS_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_64
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_THREAD_LOCAL Os_ErrorParametersType
+    parameters; /**< Actor TLS ErrorHook snapshot; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_TLS_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_THREAD_LOCAL uint32
+    hook_depth; /**< Actor TLS hook nesting count; no Init reset. */
 
-void Os_ErrorContextSave(Os_ErrorContextType *context)
+OS_MEMMAP static OS_THREAD_LOCAL sint32
+    error_active; /**< Actor TLS ErrorHook recursion guard; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_64
+#include "Os_MemMap.h"
+OS_MEMMAP static const Os_ErrorParametersType empty_parameters = {
+    .service_TerminateTask = {0u}}; /**< C-initialized immutable empty snapshot; no Init writes. */
+#define OS_STOP_SEC_CONST_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP sint32 Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
+
+OS_MEMMAP void Os_ErrorContextSave(Os_ErrorContextType *context)
 {
     context->phase = phase;
     context->service = service_id;
@@ -27,7 +51,8 @@ void Os_ErrorContextSave(Os_ErrorContextType *context)
     service_id = OSServiceId_Unknown;
     parameters = empty_parameters;
 }
-void Os_ErrorContextRestore(const Os_ErrorContextType *context)
+
+OS_MEMMAP void Os_ErrorContextRestore(const Os_ErrorContextType *context)
 {
     phase = context->phase;
     service_id = context->service;
@@ -35,12 +60,14 @@ void Os_ErrorContextRestore(const Os_ErrorContextType *context)
     Os_ArtiCallerRestore(context->arti);
 }
 
-Os_HookPhaseType Os_HookContext(void) { return phase; }
-sint32 Os_HookQueryContext(void)
+OS_MEMMAP Os_HookPhaseType Os_HookContext(void) { return phase; }
+
+OS_MEMMAP sint32 Os_HookQueryContext(void)
 {
     return (phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST);
 }
-sint32 Os_HookServiceAllowed(OSServiceIdType service)
+
+OS_MEMMAP sint32 Os_HookServiceAllowed(OSServiceIdType service)
 {
     if (phase == OS_HOOK_NONE) {
         return 1;
@@ -62,11 +89,13 @@ sint32 Os_HookServiceAllowed(OSServiceIdType service)
     }
     return 0;
 }
-sint32 Os_ErrorHookConfigured(void)
+
+OS_MEMMAP sint32 Os_ErrorHookConfigured(void)
 {
     return (Os_Config != NULL) && (Os_Config->hooks != NULL) && (Os_Config->hooks->error != NULL);
 }
-StatusType Os_ServiceAccessStatus(OSServiceIdType service)
+
+OS_MEMMAP StatusType Os_ServiceAccessStatus(OSServiceIdType service)
 {
     StatusType result = E_OK;
     const Os_NativeStackType *stack = Os_StackCurrent();
@@ -87,17 +116,20 @@ StatusType Os_ServiceAccessStatus(OSServiceIdType service)
     Os_ArtiAccessResult(result);
     return result;
 }
-const Os_ErrorParametersType *Os_ErrorParametersCurrent(void)
+
+OS_MEMMAP const Os_ErrorParametersType *Os_ErrorParametersCurrent(void)
 {
     return (phase == OS_HOOK_ERROR) ? &parameters : &empty_parameters;
 }
-OSServiceIdType Os_ErrorServiceId(void)
+
+OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void)
 {
     return (phase == OS_HOOK_ERROR) ? service_id : OSServiceId_Unknown;
 }
-StatusType Os_ErrorResult(OSServiceIdType service,
-                          StatusType status,
-                          const Os_ErrorParametersType *arguments)
+
+OS_MEMMAP StatusType Os_ErrorResult(OSServiceIdType service,
+                                    StatusType status,
+                                    const Os_ErrorParametersType *arguments)
 {
     if ((status != E_OK) && (error_active == 0) && (Os_ErrorHookConfigured() != 0) &&
         (Os_StackCurrent() != NULL) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
@@ -135,7 +167,8 @@ StatusType Os_ErrorResult(OSServiceIdType service,
     }
     return status;
 }
-void Os_HookInvoke(void (*hook)(void), Os_HookPhaseType selected)
+
+OS_MEMMAP void Os_HookInvoke(void (*hook)(void), Os_HookPhaseType selected)
 {
     if (hook != NULL) {
         const Os_HookPhaseType previous = phase;
@@ -154,7 +187,8 @@ void Os_HookInvoke(void (*hook)(void), Os_HookPhaseType selected)
         Os_BackendGuardService();
     }
 }
-void Os_ShutdownHookInvoke(StatusType error)
+
+OS_MEMMAP void Os_ShutdownHookInvoke(StatusType error)
 {
     const Os_HookPhaseType previous = phase;
     /* Closing runs on the established healthy controller. Never acquire the
@@ -167,3 +201,5 @@ void Os_ShutdownHookInvoke(StatusType error)
     Os_ArtiCallerRestore(arti);
     phase = previous;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

@@ -54,6 +54,8 @@ typedef DWORD Os_HostThreadResultType;
 /** Native callback taking a retained context pointer and returning the native thread exit code. */
 typedef LPTHREAD_START_ROUTINE Os_HostThreadEntryType;
 
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Load one initialized, aligned 32-bit publication cell atomically.
  * @param[in,out] cell Initialized writable aligned cell; atomic read-modify-write preserves its
  * value.
@@ -63,7 +65,8 @@ typedef LPTHREAD_START_ROUTINE Os_HostThreadEntryType;
  * Reentrancy: reentrant for the same or different cells; Interlocked provides atomic ordering.
  * Ownership: borrows cell for the call only; no address is retained.
  */
-Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *cell);
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *cell);
+
 /** Replace a publication cell and return its prior value.
  * @param[in,out] cell Initialized writable aligned publication cell.
  * @param[in] value Replacement cell value.
@@ -73,7 +76,9 @@ Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *cell);
  * Reentrancy: reentrant for the same or different cells; Interlocked provides atomic ordering.
  * Ownership: borrows cell for the call only; no address is retained.
  */
-Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *cell, Os_Atomic32Type value);
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *cell,
+                                                Os_Atomic32Type value);
+
 /** Compare with expected, publish desired on equality, and return prior value.
  * @param[in,out] cell Initialized writable aligned publication cell.
  * @param[in] desired Value written when the comparison matches.
@@ -84,9 +89,10 @@ Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *cell, Os_Atomic3
  * Reentrancy: reentrant for the same or different cells; Interlocked provides atomic ordering.
  * Ownership: borrows cell for the call only; no address is retained.
  */
-Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *cell,
-                                             Os_Atomic32Type desired,
-                                             Os_Atomic32Type expected);
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *cell,
+                                                       Os_Atomic32Type desired,
+                                                       Os_Atomic32Type expected);
+
 /** Read the calling native actor identity, independent of the automotive clock.
  * @return Calling native thread identifier.
  * Preconditions: initialized host C environment.
@@ -94,7 +100,8 @@ Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *cell,
  * Reentrancy: reentrant; identity is local to the calling native thread.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-Os_HostThreadIdType Os_HostThreadIdentity(void);
+OS_MEMMAP Os_HostThreadIdType Os_HostThreadIdentity(void);
+
 /** Monotonic host milliseconds used only for bounded supervision.
  * @return Monotonic host milliseconds since the platform clock origin.
  * Preconditions: initialized host clock.
@@ -102,7 +109,8 @@ Os_HostThreadIdType Os_HostThreadIdentity(void);
  * Reentrancy: reentrant; observes the host monotonic clock.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-uint64_t Os_HostMonotonicMs(void);
+OS_MEMMAP uint64_t Os_HostMonotonicMs(void);
+
 /** Sleep the calling host actor for a finite number of host milliseconds.
  * @param[in] milliseconds Host delay in milliseconds; zero yields execution.
  * @par Return
@@ -112,7 +120,8 @@ uint64_t Os_HostMonotonicMs(void);
  * Reentrancy: independent native actors may sleep concurrently.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-void Os_HostSleepMs(uint32_t milliseconds);
+OS_MEMMAP void Os_HostSleepMs(uint32_t milliseconds);
+
 /** Create an initially clear manual-reset event; NULL means allocation failed.
  * @return Initially clear manual-reset event handle, or NULL on failure.
  * Preconditions: host event allocation available; failure returns NULL.
@@ -120,7 +129,8 @@ void Os_HostSleepMs(uint32_t milliseconds);
  * Reentrancy: reentrant; each successful call creates an independent event.
  * Ownership: caller owns the returned handle and closes it with Os_HostClose.
  */
-Os_HostHandleType Os_HostOpenManualEvent(void);
+OS_MEMMAP Os_HostHandleType Os_HostOpenManualEvent(void);
+
 /** Create a bounded-stack native actor. Callback storage must outlive the actor.
  * @param[in] entry Thread body, valid until the actor ends.
  * @param[in,out] argument Callback context, valid for the whole actor lifetime; may be NULL if
@@ -132,7 +142,8 @@ Os_HostHandleType Os_HostOpenManualEvent(void);
  * Ownership: entry and argument are retained until the actor ends; caller owns the returned
  * observer handle.
  */
-Os_HostHandleType Os_HostSpawnThread(Os_HostThreadEntryType entry, void *argument);
+OS_MEMMAP Os_HostHandleType Os_HostSpawnThread(Os_HostThreadEntryType entry, void *argument);
+
 /** Create a joinable supervisory actor, not an automotive/host-input actor.
  * @param[in] entry Thread body, valid until the actor ends.
  * @param[in,out] argument Callback context, valid for the whole actor lifetime; may be NULL if
@@ -144,7 +155,9 @@ Os_HostHandleType Os_HostSpawnThread(Os_HostThreadEntryType entry, void *argumen
  * Ownership: entry and argument are retained until the actor ends; caller owns the returned
  * observer handle.
  */
-Os_HostHandleType Os_HostSpawnObserverThread(Os_HostThreadEntryType entry, void *argument);
+OS_MEMMAP Os_HostHandleType Os_HostSpawnObserverThread(Os_HostThreadEntryType entry,
+                                                       void *argument);
+
 /** Return nonzero only when the event is signaled or the thread has ended.
  * @param[in] handle Open event or thread observation handle.
  * @param[in] milliseconds Host wait duration; platform infinite sentinel is allowed.
@@ -154,7 +167,8 @@ Os_HostHandleType Os_HostSpawnObserverThread(Os_HostThreadEntryType entry, void 
  * Reentrancy: concurrent waits require the host object to remain alive.
  * Ownership: borrows the handle without closing or transferring it.
  */
-int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds);
+OS_MEMMAP int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds);
+
 /** Close a host observer handle, not the live actor it observes.
  * @param[in] handle Open host observer/event handle to close.
  * @return Nonzero on successful close; zero on native failure.
@@ -163,7 +177,8 @@ int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds);
  * reentrant for the same handle; independent handles may close concurrently. Ownership: consumes
  * the handle on success; closing a thread observer does not terminate its actor.
  */
-int Os_HostClose(Os_HostHandleType handle);
+OS_MEMMAP int Os_HostClose(Os_HostHandleType handle);
+
 /** Select byte-preserving stdin/stdout operation. Failure returns zero.
  * @return Nonzero when both streams preserve bytes; zero on a native mode failure.
  * Preconditions: stdin and stdout descriptors are open.
@@ -171,7 +186,8 @@ int Os_HostClose(Os_HostHandleType handle);
  * Reentrancy: non-reentrant with concurrent standard-stream mode changes.
  * Ownership: changes process stream modes; does not close or transfer either stream.
  */
-int Os_HostSetBinaryStandardStreams(void);
+OS_MEMMAP int Os_HostSetBinaryStandardStreams(void);
+
 /** Terminate this host process with the supplied status; never returns.
  * @param[in] status Native process exit status.
  * @par Return
@@ -181,5 +197,7 @@ int Os_HostSetBinaryStandardStreams(void);
  * Reentrancy: the first process termination wins; no call returns.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-void Os_HostExit(uint32_t status);
+OS_MEMMAP void Os_HostExit(uint32_t status);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif

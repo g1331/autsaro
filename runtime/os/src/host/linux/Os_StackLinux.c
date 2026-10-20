@@ -15,38 +15,87 @@
 
 #define OS_ALTSTACK_BYTES 65536u
 
-static Os_NativeStackType stacks[OS_NATIVE_STACKS]; /**< Actor/stopped-observer records, atomic
-                                                   allocation; no Init reset. */
-const Os_NativeStackType *const Os_ArtiStacks =
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_NativeStackType stacks[OS_NATIVE_STACKS]; /**< Actor/stopped-observer records,
+                                                   atomic allocation; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP const Os_NativeStackType *const Os_ArtiStacks =
     stacks; /**< Fixed native stacks tool view; C init only, never reset. */
-static CONTEXT
+#define OS_STOP_SEC_CONST_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+OS_MEMMAP static CONTEXT
     saved_contexts[OS_NATIVE_STACKS]; /**< Observer-owned stopped contexts; no Init reset. */
-const uint64 Os_ArtiNativeContextSize =
+#define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+#define OS_START_SEC_CONST_64
+#include "Os_MemMap.h"
+OS_MEMMAP const uint64 Os_ArtiNativeContextSize =
     sizeof(CONTEXT); /**< Fixed native context size tool view; C init only, never reset. */
-static union {
+#define OS_STOP_SEC_CONST_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+OS_MEMMAP static union {
     long double alignment;
     unsigned char bytes[OS_ALTSTACK_BYTES];
 } altstacks[OS_NATIVE_STACKS]; /**< Actor-owned alternate signal stacks; no Init reset. */
-static volatile Os_Atomic32Type
+#define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+OS_MEMMAP static volatile Os_Atomic32Type
     stack_published[OS_NATIVE_STACKS]; /**< Completed registration publication; no Init reset. */
-static volatile Os_Atomic32Type
-    stack_count; /**< Atomic native record reservations; no Init reset. */
-static volatile Os_Atomic32Type
-    fault_claimed;                           /**< Atomic first-fault winner latch; no Init reset. */
-static volatile Os_Atomic32Type fault_count; /**< Atomic fault claim/count state; no Init reset. */
-static volatile Os_Atomic32Type
-    fatal_claimed;                  /**< Atomic terminal-report winner latch; no Init reset. */
-static volatile int32_t fault_park; /**< Constant-zero futex park cell; no Init writes. */
-static Os_StackFaultType fault_records[OS_NATIVE_STACKS]; /**< Per-actor fault slots, atomic
-                                                         publication; no Init reset. */
-static OS_HOST_THREAD_LOCAL Os_NativeStackType
-    *current_stack; /**< Owning actor TLS stack record; no Init reset. */
-#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
-static char invalid_alt_role; /**< Startup-only test fault role; no Init reset. */
-#endif
-Os_StackFaultType Os_Fault; /**< First-fault winner snapshot, atomic publication; no Init reset. */
 
-const void *Os_StackSavedContext(const Os_NativeStackType *stack)
+OS_MEMMAP static volatile Os_Atomic32Type
+    stack_count; /**< Atomic native record reservations; no Init reset. */
+
+OS_MEMMAP static volatile Os_Atomic32Type
+    fault_claimed; /**< Atomic first-fault winner latch; no Init reset. */
+
+OS_MEMMAP static volatile Os_Atomic32Type
+    fault_count; /**< Atomic fault claim/count state; no Init reset. */
+
+OS_MEMMAP static volatile Os_Atomic32Type
+    fatal_claimed; /**< Atomic terminal-report winner latch; no Init reset. */
+
+OS_MEMMAP static volatile int32_t fault_park; /**< Constant-zero futex park cell; no Init writes. */
+#define OS_STOP_SEC_VAR_CLEARED_32
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP static Os_StackFaultType fault_records[OS_NATIVE_STACKS]; /**< Per-actor fault slots,
+                                                         atomic publication; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_HOST_THREAD_LOCAL Os_NativeStackType
+    *current_stack; /**< Owning actor TLS stack record; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_TLS_PTR
+#include "Os_MemMap.h"
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
+#define OS_START_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+OS_MEMMAP static char invalid_alt_role; /**< Startup-only test fault role; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_8
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+OS_MEMMAP Os_StackFaultType
+    Os_Fault; /**< First-fault winner snapshot, atomic publication; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
+
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
     if (stack < stacks || stack >= stacks + OS_NATIVE_STACKS) {
         return NULL;
@@ -54,12 +103,13 @@ const void *Os_StackSavedContext(const Os_NativeStackType *stack)
     return &saved_contexts[stack - stacks];
 }
 
-const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
+OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
 
-int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
+OS_MEMMAP int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
 
-LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
-int Os_StackThreadHasFault(DWORD thread_id)
+OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
+
+OS_MEMMAP int Os_StackThreadHasFault(DWORD thread_id)
 {
     size_t index;
     for (index = 0u; index < OS_NATIVE_STACKS; ++index) {
@@ -72,7 +122,7 @@ int Os_StackThreadHasFault(DWORD thread_id)
     return 0;
 }
 
-static void fault_park_forever(void)
+OS_MEMMAP static void fault_park_forever(void)
 {
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = 10000000L};
     for (;;) {
@@ -80,7 +130,7 @@ static void fault_park_forever(void)
     }
 }
 
-static void publish_fault(
+OS_MEMMAP static void publish_fault(
     Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
 {
     Os_StackFaultType *local;
@@ -109,7 +159,7 @@ static void publish_fault(
     fault_park_forever();
 }
 
-static void guard_signal(int signum, siginfo_t *details, void *native_context)
+OS_MEMMAP static void guard_signal(int signum, siginfo_t *details, void *native_context)
 {
     Os_NativeStackType *record = current_stack;
     uintptr_t address = (uintptr_t)details->si_addr;
@@ -121,16 +171,34 @@ static void guard_signal(int signum, siginfo_t *details, void *native_context)
     publish_fault(
         record, (DWORD)signum, (uintptr_t)context->uc_mcontext.gregs[REG_RSP], address, 'E');
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 
-void Os_StackPrepare(void)
-{
-    struct sigaction handler = {0};
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void read_invalid_altstack(void)
+{
     const char *invalid = getenv("AUTOSAR_OS_BAD_GUARANTEE");
     if (invalid != NULL && invalid[0] != '\0' && invalid[1] == '\0') {
         invalid_alt_role = invalid[0];
     }
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void read_invalid_altstack(void) {}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_StackPrepare(void)
+{
+    struct sigaction handler = {0};
+    read_invalid_altstack();
     if (Os_HostInstallSignals() == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -142,14 +210,44 @@ void Os_StackPrepare(void)
     }
 }
 
-void Os_StackInit(void)
+OS_MEMMAP void Os_StackInit(void)
 {
     if (Os_StackRegister('S') == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 
-int Os_StackRegister(char role)
+#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static int registration_stack_range(char role,
+                                              uintptr_t *low,
+                                              uintptr_t *high,
+                                              size_t *guard)
+{
+    return role == invalid_alt_role ? 0 : Os_HostCurrentStackRange(low, high, guard);
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static int registration_stack_range(char role,
+                                              uintptr_t *low,
+                                              uintptr_t *high,
+                                              size_t *guard)
+{
+    (void)role;
+    return Os_HostCurrentStackRange(low, high, guard);
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP int Os_StackRegister(char role)
 {
     LONG index = InterlockedIncrement(&stack_count) - 1;
     Os_NativeStackType *record;
@@ -157,13 +255,9 @@ int Os_StackRegister(char role)
     uintptr_t low = 0u;
     uintptr_t high = 0u;
     size_t guard = 0u;
-#if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
-    if (role == invalid_alt_role) {
-        return 0;
-    }
-#endif
     if (index < 0 || index >= (LONG)OS_NATIVE_STACKS ||
-        Os_HostCurrentStackRange(&low, &high, &guard) == 0 || low >= high || guard >= high - low) {
+        registration_stack_range(role, &low, &high, &guard) == 0 || low >= high ||
+        guard >= high - low) {
         return 0;
     }
     record = &stacks[index];
@@ -189,7 +283,7 @@ int Os_StackRegister(char role)
     return 1;
 }
 
-void Os_StackCheck(void)
+OS_MEMMAP void Os_StackCheck(void)
 {
     uintptr_t sp;
     OS_HOST_STACK_POINTER(sp);
@@ -203,7 +297,7 @@ void Os_StackCheck(void)
     ++current_stack->observations;
 }
 
-void Os_StackRecordBuffer(const StackType_t *top)
+OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
 {
     if (current_stack == NULL) {
         Os_BackendShutdown(E_OS_STATE);
@@ -216,7 +310,7 @@ void Os_StackRecordBuffer(const StackType_t *top)
     }
 }
 
-void Os_StackObserve(HANDLE thread, const CONTEXT *context)
+OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
 {
     LONG index;
     const DWORD id = GetThreadId(thread);
@@ -246,7 +340,7 @@ void Os_StackObserve(HANDLE thread, const CONTEXT *context)
     Os_BackendShutdown(E_OS_STATE);
 }
 
-static size_t append_hex(char *output, size_t offset, DWORD value)
+OS_MEMMAP static size_t append_hex(char *output, size_t offset, DWORD value)
 {
     unsigned index;
     for (index = 0u; index < 8u; ++index) {
@@ -254,13 +348,28 @@ static size_t append_hex(char *output, size_t offset, DWORD value)
     }
     return offset;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 
-void Os_StackFatalExit(void)
+#define OS_START_SEC_CONST_8
+#include "Os_MemMap.h"
+OS_MEMMAP static const char fatal_prefix[] =
+    "FATAL state=Failed reason=13 controllers_exhausted=1\nFAULT role="; /**< Immutable native
+                                                                            fatal-report bytes;
+                                                                            process lifetime. */
+
+OS_MEMMAP static const char fatal_middle[] =
+    " signal="; /**< Immutable native fatal-report bytes; process lifetime. */
+
+OS_MEMMAP static const char fatal_suffix[] =
+    " captured=1 record_complete=1\n"; /**< Immutable native fatal-report bytes; process lifetime.
+                                        */
+#define OS_STOP_SEC_CONST_8
+#include "Os_MemMap.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP void Os_StackFatalExit(void)
 {
-    static const char prefix[] =
-        "FATAL state=Failed reason=13 controllers_exhausted=1\nFAULT role=";
-    static const char middle[] = " signal=";
-    static const char suffix[] = " captured=1 record_complete=1\n";
     char output[256];
     size_t used = 0u;
     size_t index;
@@ -276,16 +385,16 @@ void Os_StackFatalExit(void)
             }
         }
     }
-    for (index = 0u; index < sizeof(prefix) - 1u; ++index) {
-        output[used++] = prefix[index];
+    for (index = 0u; index < sizeof(fatal_prefix) - 1u; ++index) {
+        output[used++] = fatal_prefix[index];
     }
     output[used++] = fault->role;
-    for (index = 0u; index < sizeof(middle) - 1u; ++index) {
-        output[used++] = middle[index];
+    for (index = 0u; index < sizeof(fatal_middle) - 1u; ++index) {
+        output[used++] = fatal_middle[index];
     }
     used = append_hex(output, used, fault->signal_number);
-    for (index = 0u; index < sizeof(suffix) - 1u; ++index) {
-        output[used++] = suffix[index];
+    for (index = 0u; index < sizeof(fatal_suffix) - 1u; ++index) {
+        output[used++] = fatal_suffix[index];
     }
     if (write(STDOUT_FILENO, output, used) != (ssize_t)used) {
         const ssize_t fallback = write(STDERR_FILENO, output, used);
@@ -294,7 +403,7 @@ void Os_StackFatalExit(void)
     _exit(E_OS_STACKFAULT);
 }
 
-int Os_StackReport(void)
+OS_MEMMAP int Os_StackReport(void)
 {
     int result = 0;
     LONG index;
@@ -342,3 +451,5 @@ int Os_StackReport(void)
     }
     return result;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

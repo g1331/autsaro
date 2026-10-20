@@ -50,30 +50,58 @@ struct Os_HostHandleType {
     CONTEXT captured;
 };
 
-static struct Os_HostHandleType handles[OS_HOST_HANDLES]; /**< Atomically reserved slots, per-handle
-                                                         synchronization; no Init reset. */
-static struct Os_HostHandleType process_handle = {
+#define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+OS_MEMMAP static struct Os_HostHandleType
+    handles[OS_HOST_HANDLES]; /**< Atomically reserved slots, per-handle
+                   synchronization; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_INIT_UNSPECIFIED
+#include "Os_MemMap.h"
+OS_MEMMAP static struct Os_HostHandleType process_handle = {
     .reserved = 1,
     .kind = OS_HOST_PROCESS}; /**< C-initialized immutable process pseudo-handle; no Init writes. */
-static HANDLE dispatcher;     /**< Atomic dispatcher-handle publication; no Init reset. */
-static OS_HOST_THREAD_LOCAL HANDLE current_thread; /**< Native actor TLS handle; no Init reset. */
-static OS_HOST_THREAD_LOCAL sigset_t
+#define OS_STOP_SEC_VAR_INIT_UNSPECIFIED
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static HANDLE dispatcher; /**< Atomic dispatcher-handle publication; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_PTR
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_HOST_THREAD_LOCAL HANDLE
+    current_thread; /**< Native actor TLS handle; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_TLS_PTR
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_UNSPECIFIED
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_HOST_THREAD_LOCAL sigset_t
     held_masks[32]; /**< Actor TLS prior signal masks; no Init reset. */
-static OS_HOST_THREAD_LOCAL unsigned
+#define OS_STOP_SEC_VAR_CLEARED_TLS_UNSPECIFIED
+#include "Os_MemMap.h"
+#define OS_START_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
+OS_MEMMAP static OS_HOST_THREAD_LOCAL unsigned
     held_depth; /**< Actor TLS signal-mask nesting depth; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_TLS_32
+#include "Os_MemMap.h"
 
-static int futex_wait(volatile int32_t *cell, int32_t expected)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static int futex_wait(volatile int32_t *cell, int32_t expected)
 {
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = OS_HOST_WAIT_SLICE_NS};
     return (int)syscall(SYS_futex, cell, FUTEX_WAIT_PRIVATE, expected, &interval, NULL, 0);
 }
 
-static void futex_wake(volatile int32_t *cell)
+OS_MEMMAP static void futex_wake(volatile int32_t *cell)
 {
     (void)syscall(SYS_futex, cell, FUTEX_WAKE_PRIVATE, INT32_MAX, NULL, NULL, 0);
 }
 
-static uint64_t monotonic_ms(void)
+OS_MEMMAP static uint64_t monotonic_ms(void)
 {
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
@@ -82,7 +110,7 @@ static uint64_t monotonic_ms(void)
     return ((uint64_t)now.tv_sec * UINT64_C(1000)) + ((uint64_t)now.tv_nsec / UINT64_C(1000000));
 }
 
-static HANDLE reserve_handle(Os_HostKindType kind)
+OS_MEMMAP static HANDLE reserve_handle(Os_HostKindType kind)
 {
     size_t index;
     for (index = 0u; index < OS_HOST_HANDLES; ++index) {
@@ -97,7 +125,7 @@ static HANDLE reserve_handle(Os_HostKindType kind)
     return NULL;
 }
 
-static void capture_context(HANDLE thread, const ucontext_t *source)
+OS_MEMMAP static void capture_context(HANDLE thread, const ucontext_t *source)
 {
     thread->captured.native = *source;
     if (source->uc_mcontext.fpregs != NULL) {
@@ -108,7 +136,7 @@ static void capture_context(HANDLE thread, const ucontext_t *source)
     thread->captured.ContextFlags = CONTEXT_CONTROL;
 }
 
-static void terminal_park(HANDLE thread)
+OS_MEMMAP static void terminal_park(HANDLE thread)
 {
     __atomic_store_n(&thread->acknowledged, INT32_MAX, __ATOMIC_RELEASE);
     futex_wake(&thread->acknowledged);
@@ -118,7 +146,7 @@ static void terminal_park(HANDLE thread)
     }
 }
 
-static void park_signal(int signal_number, siginfo_t *info, void *native_context)
+OS_MEMMAP static void park_signal(int signal_number, siginfo_t *info, void *native_context)
 {
     /* The futex calls set errno; the interrupted code must see its own value. */
     const int interrupted_errno = errno;
@@ -146,7 +174,7 @@ static void park_signal(int signal_number, siginfo_t *info, void *native_context
     errno = interrupted_errno;
 }
 
-static void fault_stop_signal(int signal_number, siginfo_t *info, void *native_context)
+OS_MEMMAP static void fault_stop_signal(int signal_number, siginfo_t *info, void *native_context)
 {
     HANDLE thread = current_thread;
     (void)signal_number;
@@ -158,7 +186,7 @@ static void fault_stop_signal(int signal_number, siginfo_t *info, void *native_c
     terminal_park(thread);
 }
 
-int Os_HostInstallSignals(void)
+OS_MEMMAP int Os_HostInstallSignals(void)
 {
     struct sigaction handler = {0};
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
@@ -174,7 +202,7 @@ int Os_HostInstallSignals(void)
     return sigaction(SIGRTMIN + 1, &handler, NULL) == 0;
 }
 
-static void *actor_start(void *argument)
+OS_MEMMAP static void *actor_start(void *argument)
 {
     HANDLE thread = argument;
     current_thread = thread;
@@ -189,12 +217,12 @@ static void *actor_start(void *argument)
     return NULL;
 }
 
-HANDLE Os_HostCreateActor(SIZE_T stack,
-                          LPTHREAD_START_ROUTINE start,
-                          LPVOID argument,
-                          DWORD flags,
-                          LPDWORD id,
-                          int register_host)
+OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
+                                    LPTHREAD_START_ROUTINE start,
+                                    LPVOID argument,
+                                    DWORD flags,
+                                    LPDWORD id,
+                                    int register_host)
 {
     HANDLE thread;
     pthread_attr_t attributes;
@@ -272,12 +300,12 @@ HANDLE Os_HostCreateActor(SIZE_T stack,
     return thread;
 }
 
-HANDLE CreateThread(LPSECURITY_ATTRIBUTES attributes,
-                    SIZE_T stack,
-                    LPTHREAD_START_ROUTINE start,
-                    LPVOID argument,
-                    DWORD flags,
-                    LPDWORD id)
+OS_MEMMAP HANDLE CreateThread(LPSECURITY_ATTRIBUTES attributes,
+                              SIZE_T stack,
+                              LPTHREAD_START_ROUTINE start,
+                              LPVOID argument,
+                              DWORD flags,
+                              LPDWORD id)
 {
     if (attributes != NULL) {
         return NULL;
@@ -285,7 +313,10 @@ HANDLE CreateThread(LPSECURITY_ATTRIBUTES attributes,
     return Os_HostCreateActor(stack, start, argument, flags, id, 1);
 }
 
-HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial, LPCSTR name)
+OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
+                              BOOL manual,
+                              BOOL initial,
+                              LPCSTR name)
 {
     HANDLE event;
     if (attributes != NULL || name != NULL) {
@@ -304,7 +335,7 @@ HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial,
     return event;
 }
 
-BOOL Os_HostSetEvent(HANDLE event)
+OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event)
 {
     const uint64_t signal_value = 1u;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
@@ -313,7 +344,7 @@ BOOL Os_HostSetEvent(HANDLE event)
     return write(event->fd, &signal_value, sizeof(signal_value)) == (ssize_t)sizeof(signal_value);
 }
 
-BOOL ResetEvent(HANDLE event)
+OS_MEMMAP BOOL ResetEvent(HANDLE event)
 {
     uint64_t value;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
@@ -324,7 +355,7 @@ BOOL ResetEvent(HANDLE event)
     return errno == EAGAIN;
 }
 
-HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
+OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
 {
     HANDLE mutex;
     pthread_mutexattr_t type;
@@ -354,7 +385,7 @@ HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
     return mutex;
 }
 
-DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
+OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
 {
     uint64_t end = monotonic_ms();
     if (handle == NULL || end == UINT64_MAX) {
@@ -408,14 +439,21 @@ DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
     }
 }
 
-DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable)
+OS_MEMMAP DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable)
 {
     (void)alertable;
     return WaitForSingleObject(handle, milliseconds);
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 
 /* Same 1 ms poll as WaitForSingleObject; the first signalled handle wins. */
-static DWORD wait_any(DWORD count, const HANDLE *observed, DWORD milliseconds, uint64_t end)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static DWORD wait_any(DWORD count,
+                                const HANDLE *observed,
+                                DWORD milliseconds,
+                                uint64_t end)
 {
     DWORD result = WAIT_TIMEOUT;
     int waiting = 1;
@@ -440,7 +478,10 @@ static DWORD wait_any(DWORD count, const HANDLE *observed, DWORD milliseconds, u
     return result;
 }
 
-static DWORD wait_all(DWORD count, const HANDLE *observed, DWORD milliseconds, uint64_t end)
+OS_MEMMAP static DWORD wait_all(DWORD count,
+                                const HANDLE *observed,
+                                DWORD milliseconds,
+                                uint64_t end)
 {
     DWORD result = WAIT_OBJECT_0;
     DWORD index;
@@ -455,7 +496,10 @@ static DWORD wait_all(DWORD count, const HANDLE *observed, DWORD milliseconds, u
     return result;
 }
 
-DWORD WaitForMultipleObjects(DWORD count, const HANDLE *observed, BOOL all, DWORD milliseconds)
+OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
+                                       const HANDLE *observed,
+                                       BOOL all,
+                                       DWORD milliseconds)
 {
     DWORD result = WAIT_FAILED;
     uint64_t end = monotonic_ms();
@@ -469,7 +513,7 @@ DWORD WaitForMultipleObjects(DWORD count, const HANDLE *observed, BOOL all, DWOR
     return result;
 }
 
-BOOL ReleaseMutex(HANDLE mutex)
+OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex)
 {
     int released;
     if (mutex == NULL || mutex->kind != OS_HOST_MUTEX || held_depth == 0u) {
@@ -483,7 +527,7 @@ BOOL ReleaseMutex(HANDLE mutex)
     return released == 0;
 }
 
-static BOOL close_thread(HANDLE thread)
+OS_MEMMAP static BOOL close_thread(HANDLE thread)
 {
     BOOL closed = TRUE;
     if (thread->register_host != 0) {
@@ -506,7 +550,7 @@ static BOOL close_thread(HANDLE thread)
     return closed;
 }
 
-BOOL CloseHandle(HANDLE handle)
+OS_MEMMAP BOOL CloseHandle(HANDLE handle)
 {
     BOOL closed = FALSE;
     if ((handle != NULL) && (handle != &process_handle)) {
@@ -528,7 +572,7 @@ BOOL CloseHandle(HANDLE handle)
     return closed;
 }
 
-DWORD SuspendThread(HANDLE thread)
+OS_MEMMAP DWORD SuspendThread(HANDLE thread)
 {
     int32_t generation;
     uint64_t end;
@@ -554,7 +598,7 @@ DWORD SuspendThread(HANDLE thread)
     return 0u;
 }
 
-DWORD ResumeThread(HANDLE thread)
+OS_MEMMAP DWORD ResumeThread(HANDLE thread)
 {
     int32_t generation;
     if (thread == NULL || thread->kind != OS_HOST_THREAD) {
@@ -570,7 +614,7 @@ DWORD ResumeThread(HANDLE thread)
     return 1u;
 }
 
-BOOL GetThreadContext(HANDLE thread, CONTEXT *context)
+OS_MEMMAP BOOL GetThreadContext(HANDLE thread, CONTEXT *context)
 {
     int32_t generation;
     if (thread == NULL || context == NULL || thread->kind != OS_HOST_THREAD) {
@@ -587,22 +631,22 @@ BOOL GetThreadContext(HANDLE thread, CONTEXT *context)
     return TRUE;
 }
 
-DWORD GetCurrentThreadId(void)
+OS_MEMMAP DWORD GetCurrentThreadId(void)
 {
     long id = syscall(SYS_gettid);
     return id > 0 && (uint64_t)id <= UINT32_MAX ? (DWORD)id : 0u;
 }
 
-DWORD GetThreadId(HANDLE thread)
+OS_MEMMAP DWORD GetThreadId(HANDLE thread)
 {
     return thread != NULL ? __atomic_load_n(&thread->thread_id, __ATOMIC_ACQUIRE) : 0u;
 }
 
-uint64_t GetTickCount64(void) { return monotonic_ms(); }
+OS_MEMMAP uint64_t GetTickCount64(void) { return monotonic_ms(); }
 
-DWORD GetTickCount(void) { return (DWORD)monotonic_ms(); }
+OS_MEMMAP DWORD GetTickCount(void) { return (DWORD)monotonic_ms(); }
 
-void Sleep(DWORD milliseconds)
+OS_MEMMAP void Sleep(DWORD milliseconds)
 {
     struct timespec pause_time;
     if (milliseconds == INFINITE) {
@@ -616,9 +660,9 @@ void Sleep(DWORD milliseconds)
     }
 }
 
-void ExitProcess(DWORD status) { _exit((int)status); }
+OS_MEMMAP void ExitProcess(DWORD status) { _exit((int)status); }
 
-HANDLE Os_HostCurrentThread(void)
+OS_MEMMAP HANDLE Os_HostCurrentThread(void)
 {
     HANDLE thread;
     if (current_thread != NULL) {
@@ -633,17 +677,17 @@ HANDLE Os_HostCurrentThread(void)
     return thread;
 }
 
-HANDLE GetCurrentProcess(void) { return &process_handle; }
+OS_MEMMAP HANDLE GetCurrentProcess(void) { return &process_handle; }
 
-HANDLE GetCurrentThread(void) { return Os_HostCurrentThread(); }
+OS_MEMMAP HANDLE GetCurrentThread(void) { return Os_HostCurrentThread(); }
 
-BOOL DuplicateHandle(HANDLE source_process,
-                     HANDLE source_thread,
-                     HANDLE target_process,
-                     HANDLE *copy,
-                     DWORD access,
-                     BOOL inherit,
-                     DWORD options)
+OS_MEMMAP BOOL DuplicateHandle(HANDLE source_process,
+                               HANDLE source_thread,
+                               HANDLE target_process,
+                               HANDLE *copy,
+                               DWORD access,
+                               BOOL inherit,
+                               DWORD options)
 {
     (void)access;
     (void)inherit;
@@ -656,7 +700,7 @@ BOOL DuplicateHandle(HANDLE source_process,
     return TRUE;
 }
 
-BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
+OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
 {
     if (thread == NULL || code == NULL || thread->kind != OS_HOST_THREAD) {
         return FALSE;
@@ -666,14 +710,17 @@ BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
     return TRUE;
 }
 
-HANDLE Os_HostDispatcherThread(void) { return __atomic_load_n(&dispatcher, __ATOMIC_ACQUIRE); }
+OS_MEMMAP HANDLE Os_HostDispatcherThread(void)
+{
+    return __atomic_load_n(&dispatcher, __ATOMIC_ACQUIRE);
+}
 
-void Os_HostSetDispatcher(HANDLE thread)
+OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread)
 {
     __atomic_store_n(&dispatcher, thread, __ATOMIC_RELEASE);
 }
 
-int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard)
+OS_MEMMAP int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard)
 {
     if (thread == NULL || thread->mapping == NULL || low == NULL || high == NULL || guard == NULL) {
         return 0;
@@ -684,7 +731,7 @@ int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *gu
     return 1;
 }
 
-int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard)
+OS_MEMMAP int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard)
 {
     pthread_attr_t attributes;
     void *base = NULL;
@@ -709,7 +756,7 @@ int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard)
     return 1;
 }
 
-int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
+OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
 {
     const uint64_t end = monotonic_ms() + timeout_ms;
     int stopped = 0;
@@ -728,3 +775,5 @@ int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
     }
     return stopped;
 }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"

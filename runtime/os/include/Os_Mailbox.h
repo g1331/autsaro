@@ -12,6 +12,8 @@ typedef struct {
     uint8 data[OS_INPUT_PAYLOAD]; /**< Owned payload storage; only length bytes contain the
                                      submitted input. */
 } Os_InputRecordType;
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Copy one input record from the single native bridge producer.
  * @param[in] data Caller-owned bytes, copied before acceptance; never retained.
  * @param[in] length Number of bytes, 1 through OS_INPUT_PAYLOAD.
@@ -25,7 +27,8 @@ typedef struct {
  * Ownership: copies data before acceptance and writes ticket on success; neither pointer is
  * retained.
  */
-StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket);
+OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket);
+
 /** Consume the oldest complete input on the configured owner Task.
  * @param[out] record Output copy; unchanged when no record or on rejection.
  * @return E_OK, E_OS_NOFUNC (empty), E_OS_ACCESS (other Task),
@@ -35,7 +38,8 @@ StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 *ticket);
  * owner-only operation; producer/consumer publication is atomic. Ownership: caller owns output
  * storage, borrowed until return and written only on success.
  */
-StatusType Os_TargetTakeInput(Os_InputRecordType *record);
+OS_MEMMAP StatusType Os_TargetTakeInput(Os_InputRecordType *record);
+
 /** Inspect published input count on the configured owner Task.
  * @param[out] count Output count, unchanged on rejection.
  * @return E_OK, E_OS_ACCESS, E_OS_CALLEVEL, E_OS_STATE or E_OS_ILLEGAL_ADDRESS.
@@ -44,5 +48,7 @@ StatusType Os_TargetTakeInput(Os_InputRecordType *record);
  * owner-only operation; producer/consumer publication is atomic. Ownership: caller owns output
  * storage, borrowed until return and written only on success.
  */
-StatusType Os_TargetInputCount(uint32 *count);
+OS_MEMMAP StatusType Os_TargetInputCount(uint32 *count);
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
 #endif
