@@ -1005,7 +1005,12 @@ pub(super) fn files(
                     p.starts_with("generated/include/") || p.starts_with("generated/src/");
                 if module == "Os" {
                     (os && !matches!(name, "Arti.c" | "Arti.h"))
-                        || (generated && (name.starts_with("Os_") || name == "Rte_Os_Type.h"))
+                        || (generated
+                            && (name.starts_with("Os_")
+                                || matches!(
+                                    name,
+                                    "Rte_Os_Type.h" | "Ecu_Config.c" | "Ecu_TargetConfig.h"
+                                )))
                 } else if module == "Arti" {
                     os && matches!(name, "Arti.c" | "Arti.h")
                 } else if module == "Rte" {
@@ -1449,7 +1454,9 @@ pub(super) fn files(
                 )
             })
             .collect();
-        let generated = if matches!(module, "Rte" | "Can") || (matches!(module, "LSduR" | "PduR")) {
+        let generated = if matches!(module, "Rte" | "Can" | "Os")
+            || (matches!(module, "LSduR" | "PduR"))
+        {
             format!("<GENERATED-ARTIFACTS>{}</GENERATED-ARTIFACTS>", paths.iter().map(|p| format!("<DEPENDENCY-ON-ARTIFACT><SHORT-NAME>{}</SHORT-NAME><ARTIFACT-DESCRIPTOR>{}</ARTIFACT-DESCRIPTOR><USAGES><USAGE>COMPILE</USAGE></USAGES></DEPENDENCY-ON-ARTIFACT>", c_name(p), artifact(p))).collect::<String>())
         } else {
             String::new()
@@ -1480,8 +1487,41 @@ pub(super) fn files(
             format!(
                 "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/RTE_{module}</PREFIX-REF><SYMBOL>CONFIG_DATA_PREBUILD_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>RTE_{module}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/generated_include_Rte_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
-        } else if module == "Os" || module == "Rte" {
-            "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>CODE</SHORT-NAME><SYMBOL>CODE</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS></RESOURCE-CONSUMPTION>".to_string()
+        } else if matches!(module, "Os" | "Arti") {
+            // The native ARTI binding shares the OS mapping header, without owning a second copy.
+            let sections: &[&str] = if module == "Os" {
+                &[
+                    "CODE",
+                    "CONST_64",
+                    "CONST_8",
+                    "CONST_PTR",
+                    "VAR_CLEARED_32",
+                    "VAR_CLEARED_64",
+                    "VAR_CLEARED_8",
+                    "VAR_CLEARED_PTR",
+                    "VAR_CLEARED_TLS_32",
+                    "VAR_CLEARED_TLS_64",
+                    "VAR_CLEARED_TLS_8",
+                    "VAR_CLEARED_TLS_PTR",
+                    "VAR_CLEARED_TLS_UNSPECIFIED",
+                    "VAR_CLEARED_UNSPECIFIED",
+                    "VAR_INIT_32",
+                    "VAR_INIT_8",
+                    "VAR_INIT_UNSPECIFIED",
+                    "VAR_INIT_VECTOR_PTR",
+                ]
+            } else {
+                &[
+                    "CODE",
+                    "VAR_CLEARED_32",
+                    "VAR_CLEARED_64",
+                    "VAR_CLEARED_TLS_64",
+                ]
+            };
+            let sections: String = sections.iter().map(|section| format!("<MEMORY-SECTION><SHORT-NAME>{module}_{section}</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/OS</PREFIX-REF><SYMBOL>{section}</SYMBOL></MEMORY-SECTION>")).collect();
+            format!(
+                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS>{sections}</MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>OS</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/AUTOSAR_Os/OsHostImplementation/generated_include_Os_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
+            )
         } else {
             String::new()
         };

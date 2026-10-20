@@ -3,7 +3,11 @@
 #define ECU_TARGET_CONFIG_H
 #include "Ecu_ProfileConfig.h"
 #include "Os_Target.h"
-@DEFINES@extern const Os_TargetConfigType Ecu_OsConfig;
+@DEFINES@#define OS_START_SEC_CONST_64
+#include "Os_MemMap.h"
+OS_MEMMAP extern const Os_TargetConfigType Ecu_OsConfig;
+#define OS_STOP_SEC_CONST_64
+#include "Os_MemMap.h"
 /** Initialize the generated communication stack in dependency order.
  * @param[out] reached Non-NULL stage ledger; set to zero, then 1..8 as each stage begins.
  * @return E_OK when all stages and timing start; E_NOT_OK leaves the last begun stage for
