@@ -505,4 +505,3 @@ class ActualCAnalysisTests(unittest.TestCase):
             after = run("metadata", "baseline")
             self.assertIsNone(after["error"])
             self.assertEqual(after["comparison"], {"new": [], "removed": []})
-
