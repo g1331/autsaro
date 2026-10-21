@@ -31,7 +31,7 @@ Dcm 使用自己的 `DCM_STATE`，跨模块调用与应用回调都在区外。�
 | 版本 API | DcmVersionInfoApi 默认 false，仅预编译选择。已核对（配置模型）[Dcm]：SWS_BSW_00051、00236；不适用（配置：ECUC_Dcm_00821=true）[Dcm]：SWS_BSW_00052、00064、00164 |
 | MetaData | 接收和配置均只接纳非 generic 的物理连接；generic ECU 地址配置拒绝。 不适用（配置：ECUC_Dcm_01081）[Dcm]：SWS_BSW_00239–00242 |
 | Post-build variation | 主线拒绝 link-time／post-build 模块变体。 不适用（配置：ECUC_Dcm_01082）[Dcm]：SWS_BSW_00226–00228 |
-| 发布版本信息 | 差距 #59[Dcm]：SWS_BSW_00036、00059、00161、00162、00256 |
+| 发布版本信息 | 已核对（`Dcm.h`／`Dcm.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[Dcm]：SWS_BSW_00036；release 4.10.0 已发布，完整身份与软件信息仍为差距 #59[Dcm]：SWS_BSW_00059、00161、00162、00256 |
 | MISRA | 差距 #58[Dcm]：SWS_BSW_00115 |
 | 交付描述 Dcm 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Dcm]：SWS_BSW_00001 |
 | 交付描述 Dcm 00002 | 已核对（module_documentation::module 交付 modules/Dcm/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Dcm]：SWS_BSW_00002 |

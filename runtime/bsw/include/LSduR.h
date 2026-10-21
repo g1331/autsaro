@@ -1,6 +1,7 @@
 /** @file R24-11 LSduR: immutable one-to-one, no-metadata intra-partition routes. */
 #ifndef LSDUR_H
 #define LSDUR_H
+#include "LSduR_Version.h"
 #include "Std_Types.h"
 #include "ComStack_Types.h"
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */

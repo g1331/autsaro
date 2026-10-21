@@ -2025,6 +2025,201 @@
       ],
       "role": "delivery",
       "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/Can_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/CanIf_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/CanTp_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/Com_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/ComM_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/BswM_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/Dcm_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/Det_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/PduR_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/LSduR_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/os/include/Os_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/include/Arti_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/bsw/include/Rte_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/MemMap_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/ComStack_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
     }
   ]
 }

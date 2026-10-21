@@ -1,17 +1,25 @@
 /** @file Selected R24-11 immediate UINT32 COM interface and immutable configuration. */
 #ifndef COM_H
 #define COM_H
+#include "Com_Version.h"
 #include "Std_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(STD_TYPES_AR_RELEASE_MAJOR_VERSION) || !defined(STD_TYPES_AR_RELEASE_MINOR_VERSION)
+#error "Com.h -> Std_Types.h: missing AUTOSAR release"
+#elif (STD_TYPES_AR_RELEASE_MAJOR_VERSION != 4U) || (STD_TYPES_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Com.h -> Std_Types.h: incompatible AUTOSAR release"
+#endif
 #include "ComStack_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION) ||                                             \
+    !defined(COMSTACKTYPE_AR_RELEASE_MINOR_VERSION)
+#error "Com.h -> ComStack_Types.h: missing AUTOSAR release"
+#elif (COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION != 4U) ||                                             \
+    (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Com.h -> ComStack_Types.h: incompatible AUTOSAR release"
+#endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define COM_MODULE_ID 50u
-/** Published interface-release constants for the fixed R24-11 contract.
- * Vendor and software-version information is not supplied by this header.
- */
-#define COM_AR_RELEASE_MAJOR_VERSION    4U
-#define COM_AR_RELEASE_MINOR_VERSION    10U
-#define COM_AR_RELEASE_REVISION_VERSION 0U
-
 /** COM initialization state (SWS_Com_00819). */
 typedef enum {
     COM_UNINIT = 0, /**< No valid configuration; reset state. */

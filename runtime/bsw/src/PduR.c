@@ -1,11 +1,23 @@
 /** @file Standard PduR with immutable one-to-one routes between Com, Dcm and lower layers. */
 #include "PduR.h"
 #include "SchM_PduR.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "PduR.c -> SchM_PduR.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "PduR.c -> SchM_PduR.h: incompatible AUTOSAR release"
+#endif
 #include "PduR_Com.h"
 #include "PduR_Dcm.h"
 #include "PduR_CanIf.h"
 #include "PduR_CanTp.h"
 #include "Det.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(DET_AR_RELEASE_MAJOR_VERSION) || !defined(DET_AR_RELEASE_MINOR_VERSION)
+#error "PduR.c -> Det.h: missing AUTOSAR release"
+#elif (DET_AR_RELEASE_MAJOR_VERSION != 4U) || (DET_AR_RELEASE_MINOR_VERSION != 10U)
+#error "PduR.c -> Det.h: incompatible AUTOSAR release"
+#endif
 #define PDUR_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "PduR_MemMap.h"
 /* PDUR_STATE protects pointer publication and reads. The accepted objects are immutable. Init
@@ -14,6 +26,12 @@ static const PduR_PBConfigType *configuration
     PDUR_VAR_CLEARED; /**< First accepted route set; Init never replaces it. */
 #define PDUR_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "PduR_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "PduR.c -> PduR_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "PduR.c -> PduR_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define PDUR_START_SEC_CODE
 #include "PduR_MemMap.h"
 static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config)

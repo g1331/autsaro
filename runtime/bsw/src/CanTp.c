@@ -6,9 +6,33 @@
  */
 #include "CanTp_Internal.h"
 #include "PduR_CanTp.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(PDUR_AR_RELEASE_MAJOR_VERSION) || !defined(PDUR_AR_RELEASE_MINOR_VERSION)
+#error "CanTp.c -> PduR_CanTp.h: missing AUTOSAR release"
+#elif (PDUR_AR_RELEASE_MAJOR_VERSION != 4U) || (PDUR_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanTp.c -> PduR_CanTp.h: incompatible AUTOSAR release"
+#endif
 #include "LSduR_CanTp.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(LSDUR_AR_RELEASE_MAJOR_VERSION) || !defined(LSDUR_AR_RELEASE_MINOR_VERSION)
+#error "CanTp.c -> LSduR_CanTp.h: missing AUTOSAR release"
+#elif (LSDUR_AR_RELEASE_MAJOR_VERSION != 4U) || (LSDUR_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanTp.c -> LSduR_CanTp.h: incompatible AUTOSAR release"
+#endif
 #include "SchM_CanTp.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "CanTp.c -> SchM_CanTp.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanTp.c -> SchM_CanTp.h: incompatible AUTOSAR release"
+#endif
 #include "Det.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(DET_AR_RELEASE_MAJOR_VERSION) || !defined(DET_AR_RELEASE_MINOR_VERSION)
+#error "CanTp.c -> Det.h: missing AUTOSAR release"
+#elif (DET_AR_RELEASE_MAJOR_VERSION != 4U) || (DET_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanTp.c -> Det.h: incompatible AUTOSAR release"
+#endif
 #define CANTP_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanTp_MemMap.h"
 
@@ -141,6 +165,12 @@ static boolean running CANTP_VAR_CLEARED;                      /**< A runner is 
 static CanTp_ReceiveOrderType receive_order CANTP_VAR_CLEARED; /**< Owner's receive ordering. */
 #define CANTP_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanTp_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "CanTp.c -> CanTp_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanTp.c -> CanTp_MemMap.h: incompatible AUTOSAR release"
+#endif
 
 #define CANTP_START_SEC_CODE
 #include "CanTp_MemMap.h"

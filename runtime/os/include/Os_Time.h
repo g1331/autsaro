@@ -1,6 +1,7 @@
 /** @file Counter, alarm and schedule-table configuration plus controlled-tick target services. */
 #ifndef AUTOSAR_OS_TIME_H
 #define AUTOSAR_OS_TIME_H
+#include "Os_Version.h"
 #include "Os.h"
 #include <stddef.h>
 #define OS_MAX_COUNTERS            8u  /**< Maximum configured Counter descriptors. */
@@ -174,4 +175,10 @@ OS_MEMMAP StatusType Os_TargetCompleteTick(uint64 ticket);
 OS_MEMMAP StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Time.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Time.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

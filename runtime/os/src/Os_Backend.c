@@ -20,6 +20,12 @@ OS_MEMMAP static StaticTask_t
     task_memory[OS_MAX_TASKS + 2u]; /**< Native Task TCBs; kernel port lock; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Backend.c -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Backend.c -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 OS_MEMMAP static StackType_t

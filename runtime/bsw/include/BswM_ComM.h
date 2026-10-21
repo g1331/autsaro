@@ -1,6 +1,7 @@
 /** @file ComM mode indication entry of BswM for the single configured channel. */
 #ifndef BSWM_COMM_H
 #define BSWM_COMM_H
+#include "BswM_Version.h"
 #include "BswM.h"
 /** Arbitrate the indicated ComM mode and run the matching rule's action (SWS_BswM_00047).
  * @param[in] Network Configured channel; other channels are ignored.

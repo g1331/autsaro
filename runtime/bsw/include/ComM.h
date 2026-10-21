@@ -4,8 +4,23 @@
  */
 #ifndef COMM_H
 #define COMM_H
+#include "ComM_Version.h"
 #include "ComStack_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION) ||                                             \
+    !defined(COMSTACKTYPE_AR_RELEASE_MINOR_VERSION)
+#error "ComM.h -> ComStack_Types.h: missing AUTOSAR release"
+#elif (COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION != 4U) ||                                             \
+    (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "ComM.h -> ComStack_Types.h: incompatible AUTOSAR release"
+#endif
 #include "Rte_ComM_Type.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "ComM.h -> Rte_ComM_Type.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "ComM.h -> Rte_ComM_Type.h: incompatible AUTOSAR release"
+#endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define COMM_MODULE_ID 12u
 /** SWS_ComM_91027: Std_ReturnType extension of ComM. */

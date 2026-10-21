@@ -1,6 +1,7 @@
 /** @file Private backend operations shared across the OS sources. */
 #ifndef AUTOSAR_OS_BACKEND_H
 #define AUTOSAR_OS_BACKEND_H
+#include "Os_Version.h"
 #include "Os_Target.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -32,6 +33,12 @@ OS_MEMMAP sint32 Os_BackendInterruptMaySchedule(uint32 interrupt);
 OS_MEMMAP void Os_BackendRequestIsrReschedule(void);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Backend.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Backend.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 void Os_PortDispatchNested(void);
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"

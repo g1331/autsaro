@@ -1,6 +1,7 @@
 /** @file Standard configured PduR upper transmission interface. */
 #ifndef PDUR_DCM_H
 #define PDUR_DCM_H
+#include "PduR_Version.h"
 #include "PduR.h"
 /** Forward a configured Dcm request to its lower handle (SWS_PduR_00406).
  * @param[in] TxPduId A configured Dcm source handle; distinct from the lower namespace.

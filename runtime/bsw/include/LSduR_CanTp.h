@@ -1,6 +1,7 @@
 /** @file Standard configured LSduR upper interface. */
 #ifndef LSDUR_CANTP_H
 #define LSDUR_CANTP_H
+#include "LSduR_Version.h"
 #include "LSduR.h"
 /** Forward a configured CanTp request to its lower handle (CP_SWS_LSduR_91009).
  * @param[in] TxPduId A configured CanTp source handle; distinct from the lower namespace.

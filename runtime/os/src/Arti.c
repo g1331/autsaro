@@ -1,6 +1,12 @@
 /** @file ARTI event buffer with lock-free slot reservation; read only after shutdown. */
 #include "Arti.h"
 #include "Os_Host.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(OS_AR_RELEASE_MAJOR_VERSION) || !defined(OS_AR_RELEASE_MINOR_VERSION)
+#error "Arti.c -> Os_Host.h: missing AUTOSAR release"
+#elif (OS_AR_RELEASE_MAJOR_VERSION != 4U) || (OS_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Arti.c -> Os_Host.h: incompatible AUTOSAR release"
+#endif
 
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
@@ -8,6 +14,12 @@ OS_MEMMAP Arti_Event Arti_Events[ARTI_EVENT_CAPACITY]; /**< Reserved slots, atom
                                                 Arti_Init clears flags. */
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Arti.c -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Arti.c -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 OS_MEMMAP volatile ArtiAtomic32 Arti_EventCount; /**< Atomic slot reservations; Arti_Init resets. */
@@ -70,9 +82,8 @@ OS_MEMMAP void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
 {
     if (versioninfo != NULL) {
         versioninfo->vendorID = 0u;
-        /* This original tool binding has no assigned vendor/module identity;
-         * document ID 923 is not an AUTOSAR module identifier. */
-        versioninfo->moduleID = 0u;
+        /* BSWGeneral Appendix A.2 fixes the module ID; vendor identity is unassigned. */
+        versioninfo->moduleID = ARTI_MODULE_ID;
         versioninfo->sw_major_version = 1u;
         versioninfo->sw_minor_version = 0u;
         versioninfo->sw_patch_version = 0u;

@@ -7,6 +7,12 @@ OS_MEMMAP const Os_TargetConfigType
     *Os_Config; /**< Startup-only retained graph; no Init replacement/reset. */
 #define OS_STOP_SEC_VAR_CLEARED_PTR
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os.c -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os.c -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type

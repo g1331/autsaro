@@ -3,6 +3,7 @@
  */
 #ifndef SCHM_CAN_H
 #define SCHM_CAN_H
+#include "Rte_Version.h"
 #include "SchM_Can_Type.h"
 #ifdef __cplusplus
 extern "C" {
@@ -63,6 +64,12 @@ CAN_CODE void Can_MainFunction_Mode(void);
 
 #define CAN_STOP_SEC_CODE
 #include "Can_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "SchM_Can.h -> Can_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "SchM_Can.h -> Can_MemMap.h: incompatible AUTOSAR release"
+#endif
 
 /** Enter the driver state area (SWS_Rte_07250).
  * @par Return

@@ -6,6 +6,12 @@
 #define STD_TYPES_AR_RELEASE_MINOR_VERSION    10U
 #define STD_TYPES_AR_RELEASE_REVISION_VERSION 0U
 #include "Platform_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(PLATFORM_AR_RELEASE_MAJOR_VERSION) || !defined(PLATFORM_AR_RELEASE_MINOR_VERSION)
+#error "Std_Types.h -> Platform_Types.h: missing AUTOSAR release"
+#elif (PLATFORM_AR_RELEASE_MAJOR_VERSION != 4U) || (PLATFORM_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Std_Types.h -> Platform_Types.h: incompatible AUTOSAR release"
+#endif
 
 /** SWS_Std_00005: API return: E_OK/E_NOT_OK; 0x02..0x3f for module errors. */
 typedef uint8 Std_ReturnType;

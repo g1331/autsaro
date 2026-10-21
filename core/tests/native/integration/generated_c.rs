@@ -791,11 +791,11 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
         check(label, source, false, false, error);
     }
     for (header, prefix) in [
-        ("bsw/include/Com.h", "COM"),
-        ("os/include/Os.h", "OS"),
+        ("bsw/include/Com_Version.h", "COM"),
+        ("os/include/Os_Version.h", "OS"),
         ("bsw/include/Std_Types.h", "STD_TYPES"),
         ("bsw/include/Platform_Types.h", "PLATFORM"),
-        ("bsw/include/ComStack_Types.h", "COMSTACKTYPE"),
+        ("bsw/include/ComStack_Version.h", "COMSTACKTYPE"),
     ] {
         let path = scratch.0.join(header);
         let original = std::fs::read_to_string(&path).unwrap();

@@ -3,8 +3,17 @@
  */
 #ifndef CAN_GENERALTYPES_H
 #define CAN_GENERALTYPES_H
+#include "Can_Version.h"
 
 #include "ComStack_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION) ||                                             \
+    !defined(COMSTACKTYPE_AR_RELEASE_MINOR_VERSION)
+#error "Can_GeneralTypes.h -> ComStack_Types.h: missing AUTOSAR release"
+#elif (COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION != 4U) ||                                             \
+    (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Can_GeneralTypes.h -> ComStack_Types.h: incompatible AUTOSAR release"
+#endif
 
 /** SWS_Can_00416; the host profile accepts only 11-bit standard identifiers. */
 typedef uint32 Can_IdType;

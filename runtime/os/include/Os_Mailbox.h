@@ -1,6 +1,7 @@
 /** @file Single-producer native input mailbox between the host bridge and an owner Task. */
 #ifndef AUTOSAR_OS_MAILBOX_H
 #define AUTOSAR_OS_MAILBOX_H
+#include "Os_Version.h"
 #include "Os.h"
 #define OS_INPUT_CAPACITY  256u /**< Maximum simultaneously queued input records. */
 #define OS_INPUT_PAYLOAD   32u  /**< Maximum bytes in one input record. */
@@ -51,4 +52,10 @@ OS_MEMMAP StatusType Os_TargetTakeInput(Os_InputRecordType *record);
 OS_MEMMAP StatusType Os_TargetInputCount(uint32 *count);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Mailbox.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Mailbox.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

@@ -6,6 +6,7 @@
  * The native vector refinement retains the existing writable, eight-byte-aligned .os_vec ABI.
  * This header intentionally has no include guard.
  */
+#include "MemMap_Version.h"
 #ifndef OS_MEMMAP_ATTRIBUTES_DEFINED
 #ifdef OS_CODE
 #error OS_CODE override is unsupported

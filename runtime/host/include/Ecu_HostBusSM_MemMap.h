@@ -2,6 +2,7 @@
  * Repeated inclusion consumes balanced module markers. Native host TLS remains
  * in the toolchain's TLS sections. This mapping makes no MCU placement claim.
  */
+#include "MemMap_Version.h"
 #if defined(ECU_HOSTBUSSM_START_SEC_VAR_CLEARED_UNSPECIFIED)
 #undef ECU_HOSTBUSSM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #if defined(ECU_HOSTBUSSM_MEMMAP_VAR_ACTIVE) || defined(ECU_HOSTBUSSM_MEMMAP_CODE_ACTIVE)

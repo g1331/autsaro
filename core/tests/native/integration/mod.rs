@@ -8,3 +8,5 @@ mod sealed_projects;
 mod sealed_sanitizers;
 mod single_component;
 mod symbolic_names;
+
+mod release_contracts;

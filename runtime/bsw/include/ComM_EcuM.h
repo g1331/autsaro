@@ -1,6 +1,7 @@
 /** @file EcuM wake-up indication for the configured CDD channel. */
 #ifndef COMM_ECUM_H
 #define COMM_ECUM_H
+#include "ComM_Version.h"
 #include "ComM.h"
 /** Turn a wake-up in COMM_NO_COM_NO_PENDING_REQUEST into a pending request that lasts
  * until the channel enters FULL (SWS_ComM_00275, SWS_ComM_00893).

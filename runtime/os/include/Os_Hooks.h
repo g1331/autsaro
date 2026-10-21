@@ -1,6 +1,7 @@
 /** @file OS hook configuration, service identifiers and ErrorHook parameter snapshots. */
 #ifndef AUTOSAR_OS_HOOKS_H
 #define AUTOSAR_OS_HOOKS_H
+#include "Os_Version.h"
 #include "Os_Types.h"
 #include "Os_Cfg.h"
 /** Static optional ErrorHook/Task-hook bindings, retained with Os_TargetConfigType for the process.
@@ -291,6 +292,12 @@ OS_MEMMAP const Os_ErrorParametersType *Os_ErrorParametersCurrent(void);
 OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Hooks.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Hooks.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #if (OS_USE_GET_SERVICE_ID == STD_ON)
 /** Read the captured service identifier of failed OS service (OSEK OS 2.2.3 13.8.4).
  * @return Captured service identifier value, including its original pointer value when applicable.

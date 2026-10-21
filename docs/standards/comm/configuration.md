@@ -16,7 +16,7 @@
 | 只在 BusSM 与 Dcm 所在分区调用它们 | 已核对（分区引用在生成前拒绝，ComM、Ecu_HostBusSM 与 Dcm 在同一分区由同一主线调度；ComM_IssueBus 与 ComM_Publish 在调用者上下文直接调用）：SWS_ComM_01020、01059 |
 | 用户到通道的静态映射 | 已核对（mode.rs 的 MODE_USER_MAPPING 要求用户经 ComMUserPerChannel 静态映射到唯一通道；生成的 comm_config.users 为 const 数组，ComM_User 按它解析）：SWS_ComM_00795–00798 |
 | 配置检查、配置与实现分离、交付形式 | 已核对（mode.rs 在生成前静态校验全部 ComM／BswM 参数，ComM_Valid 在 Init 再校验；ComM.c 不含配置常量，配置由生成的 Ecu_RuntimeConfig.c 经 ComM_ConfigType 提供；runtime/bsw/src/ComM.c 以源码交付并参与生成样本编译；ComMBusType 在 metadata 中按通道配置）：SWS_ComM_00322、00419、00459–00464 |
-| 发布版本信息 | 差距 #59：SWS_ComM_00418 |
+| 发布版本信息 | `ComM.c` 独立源端 release 与 `ComM_Version.h` 三分量一致性已有编译正反例；软件政策及软件一致性仍为差距 #59：SWS_ComM_00418 |
 | ComMVersionInfoApi | 不适用（配置：ECUC_ComM_00622）：ECUC_ComM_00622 |
 | ComMDevErrorDetect | 不适用（配置：ECUC_ComM_00555）：ECUC_ComM_00555 |
 | ComMModeLimitationEnabled | 不适用（配置：ECUC_ComM_00560）：ECUC_ComM_00560 |

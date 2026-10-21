@@ -1,6 +1,7 @@
 /** @file Private driver operations; state remains in Can.c. */
 #ifndef CAN_INTERNAL_H
 #define CAN_INTERNAL_H
+#include "Can_Version.h"
 #include "Can_Host.h"
 EcuStatus Can_InternalHostFlush(void);
 uint64 Can_InternalHostTransmitToken(void);

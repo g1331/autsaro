@@ -262,6 +262,16 @@ pub(crate) fn initialized_pipeline_workspace(root: &Path) -> autosar_config_core
 
 // Consume the normal complete producer rather than a public source-fragment API.
 pub(crate) fn prepared_pipeline_files(plan: &ValidatedIntegrationPlan) -> Vec<(String, Vec<u8>)> {
+    prepared_pipeline_files_for_target(
+        plan,
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+    )
+}
+
+pub(crate) fn prepared_pipeline_files_for_target(
+    plan: &ValidatedIntegrationPlan,
+    target: autosar_config_core::target::BuildTarget,
+) -> Vec<(String, Vec<u8>)> {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/component-pipeline/applications");
     let scratch = Scratch::new();
@@ -306,13 +316,9 @@ pub(crate) fn prepared_pipeline_files(plan: &ValidatedIntegrationPlan) -> Vec<(S
             }
         })
         .collect();
-    autosar_config_core::prepare_ecu_project_with_applications(
-        plan,
-        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
-        &sources,
-    )
-    .unwrap()
-    .into_files()
+    autosar_config_core::prepare_ecu_project_with_applications(plan, target, &sources)
+        .unwrap()
+        .into_files()
 }
 
 pub(crate) fn replace_all(sources: &mut [InputSource], before: &str, after: &str) {

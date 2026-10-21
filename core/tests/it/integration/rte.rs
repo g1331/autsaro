@@ -823,3 +823,90 @@ fn private_rte_memory_sections_have_real_consumers_and_only_used_aliases() {
         .collect();
     assert_eq!(described, used);
 }
+
+#[test]
+fn version_assets_reserve_public_files_guards_and_macros_at_the_source_object() {
+    // Verifies: SWS_Rte_01126, SWS_Rte_06713
+    // Literal names independently cover the public version producer namespace.
+    for (module, prefix) in [
+        ("Can", "CAN"),
+        ("CanIf", "CANIF"),
+        ("CanTp", "CANTP"),
+        ("Com", "COM"),
+        ("ComM", "COMM"),
+        ("BswM", "BSWM"),
+        ("Dcm", "DCM"),
+        ("Det", "DET"),
+        ("PduR", "PDUR"),
+        ("LSduR", "LSDUR"),
+        ("Rte", "RTE"),
+        ("MemMap", "MEMMAP"),
+        ("ComStack", "COMSTACKTYPE"),
+        ("Os", "OS"),
+        ("Arti", "ARTI"),
+    ] {
+        let mut names = vec![format!("{}_VERSION_H", module.to_uppercase())];
+        for part in ["MAJOR", "MINOR", "REVISION"] {
+            names.push(format!("{prefix}_AR_RELEASE_{part}_VERSION"));
+        }
+        if module == "Arti" {
+            names.push("ARTI_MODULE_ID".to_owned());
+        }
+        for name in names {
+            let mut sources = inputs();
+            change(
+                &mut sources,
+                "ingress.arxml",
+                "<SYMBOL>Ingress_Periodic</SYMBOL>",
+                &format!("<SYMBOL>{name}</SYMBOL>"),
+            );
+            rejected_at(
+                &sources,
+                "SYMBOL_PRODUCER_DUPLICATE",
+                "ingress.arxml",
+                "/Application/Ingress/Behavior/Periodic",
+            );
+        }
+    }
+    for name in ["Version", "VERSION"] {
+        let mut sources = inputs();
+        replace_all(
+            &mut sources,
+            "/Application/Ingress",
+            &format!("/Application/{name}"),
+        );
+        change(
+            &mut sources,
+            "ingress.arxml",
+            "<SHORT-NAME>Ingress</SHORT-NAME>",
+            &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
+        );
+        rejected_at(
+            &sources,
+            "CONTRACT_NAME_COLLISION",
+            "ingress.arxml",
+            &format!("/Application/{name}"),
+        );
+    }
+    let mut sources = inputs();
+    change(
+        &mut sources,
+        "ingress.arxml",
+        "<SYMBOL>Ingress_Periodic</SYMBOL>",
+        "<SYMBOL>Control_ReleaseVersion</SYMBOL>",
+    );
+    let plan = build(&sources).unwrap();
+    let contract = plan.component_contract_files().unwrap();
+    let mut paths = std::collections::BTreeSet::new();
+    for (path, _) in contract.files() {
+        assert!(
+            paths.insert(path.to_uppercase()),
+            "duplicate producer: {path}"
+        );
+    }
+    assert!(contract.files().iter().any(|(_, bytes)| {
+        std::str::from_utf8(bytes)
+            .unwrap()
+            .contains("Control_ReleaseVersion")
+    }));
+}

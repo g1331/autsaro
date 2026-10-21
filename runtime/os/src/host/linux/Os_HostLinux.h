@@ -1,6 +1,7 @@
 /** @file Private Linux host declarations: Win32-style types, atomics and thread/event calls. */
 #ifndef AUTOSAR_OS_HOST_LINUX_H
 #define AUTOSAR_OS_HOST_LINUX_H
+#include "Os_Version.h"
 
 #include <pthread.h>
 #include <stddef.h>
@@ -163,5 +164,11 @@ OS_MEMMAP HANDLE GetCurrentThread(void);
 OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_HostLinux.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_HostLinux.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 
 #endif

@@ -1,6 +1,7 @@
 /** @file Private native stack and fault records; Linux adds signal-stack fields. */
 #ifndef AUTOSAR_OS_STACK_H
 #define AUTOSAR_OS_STACK_H
+#include "Os_Version.h"
 #include "Os_Host.h"
 #include <stdint.h>
 #include "FreeRTOS.h"
@@ -25,6 +26,12 @@ typedef struct Os_NativeStackType {
 OS_MEMMAP extern const Os_NativeStackType *const Os_ArtiStacks;
 #define OS_STOP_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Stack.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Stack.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 typedef struct {
     volatile Os_Atomic32Type published;
     DWORD thread_id;

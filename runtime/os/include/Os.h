@@ -1,13 +1,15 @@
 /** @file Public AUTOSAR OS API for the single-core target, with OSEK compatibility macros. */
 #ifndef AUTOSAR_OS_H
 #define AUTOSAR_OS_H
-/** Published interface version from AUTOSAR CP R24-11 (4.10.0).
- * Vendor/module and implementation version macros are not exposed. */
-#define OS_AR_RELEASE_MAJOR_VERSION    4U
-#define OS_AR_RELEASE_MINOR_VERSION    10U
-#define OS_AR_RELEASE_REVISION_VERSION 0U
+#include "Os_Version.h"
 #include "Os_Types.h"
 #include "Rte_Os_Type.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "Os.h -> Rte_Os_Type.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os.h -> Rte_Os_Type.h: incompatible AUTOSAR release"
+#endif
 /* OSEK source compatibility only (R24-11 section 7.1.2.1). The unused tag
  * deliberately consumes a legacy file-scope semicolon in strict C99. It has
  * no object, function, configuration or argument-evaluation effect. R2.4
@@ -133,6 +135,12 @@ OS_MEMMAP boolean isOsStarted(void);
 OS_MEMMAP CoreIdType GetCoreID(void);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #include "Os_Hooks.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"

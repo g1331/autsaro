@@ -1,6 +1,7 @@
 /** @file Standard PduR interface callbacks, invoked through configured LSduR. */
 #ifndef PDUR_CANIF_H
 #define PDUR_CANIF_H
+#include "PduR_Version.h"
 #include "PduR.h"
 /** Synchronously route a matching CanIf reception (SWS_PduR_00362).
  * @param[in] RxPduId A configured lower Rx handle.

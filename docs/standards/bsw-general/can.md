@@ -26,7 +26,7 @@
 | metadata | Can 不引用全局 PDU，`Can_PduType` 不携带 metadata | 已核对（规范原文）[Can]：SWS_BSW_00239、00240、00241、00242 |
 | 版本信息 API | `CanVersionInfoApi` 在预编译期配置、只接受默认值 `false` | 已核对（配置模型）[Can]：SWS_BSW_00051、00236；不适用（配置：ECUC_Can_00106=true）[Can]：SWS_BSW_00064、00052、00164 |
 | 初始化调用方 |  | 不适用（归属：EcuM 角色——主线没有 EcuM，生成的 `Ecu_StackBootstrap` 承担启动与关闭顺序）[Can]：SWS_BSW_00150、00152 |
-| 跨模块版本检查与发布信息 |  | 差距 #59[Can]：SWS_BSW_00036、00059、00161、00162、00256 |
+| 跨模块版本检查与发布信息 |  | 已核对（`Can.h`／`Can.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[Can]：SWS_BSW_00036；release 4.10.0 已发布，完整身份与软件信息仍为差距 #59[Can]：SWS_BSW_00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[Can]：SWS_BSW_00115 |
 | 交付描述 Can 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Can]：SWS_BSW_00001 |
 | 交付描述 Can 00002 | 已核对（module_documentation::module 交付 modules/Can/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Can]：SWS_BSW_00002 |

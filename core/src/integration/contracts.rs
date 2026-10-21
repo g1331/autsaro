@@ -46,7 +46,7 @@ fn header(guard: &str, body: &str) -> Vec<u8> {
  * @brief Generated component contract; runtime implementation is separate.
  */
 {}"#,
-        c_layout::header(guard, &format!("\n{body}"))
+        c_layout::header(guard, &format!("#include \"Rte_Version.h\"\n{body}"))
     )
     .into_bytes()
 }
@@ -120,7 +120,15 @@ impl ValidatedIntegrationPlan {
     ) -> Result<ComponentContractFiles, Vec<PlanDiagnostic>> {
         let mut files = Vec::new();
         // The same platform and standard types the delivered ECU compiles with.
-        for name in ["Platform_Types.h", "Std_Types.h", "ComStack_Types.h"] {
+        for name in [
+            "Platform_Types.h",
+            "Std_Types.h",
+            "ComStack_Types.h",
+            "ComStack_Version.h",
+            "Rte_Version.h",
+            "Dcm_Version.h",
+            "MemMap_Version.h",
+        ] {
             let asset = super::outputs::trusted_asset(&format!("runtime/bsw/include/{name}"))?;
             files.push((format!("include/{name}"), asset.bytes.to_vec()));
         }
@@ -175,7 +183,10 @@ typedef uint8 Rte_ModeType_{group};
             &[
                 super::outputs::Edit::Once(
                     "\"Std_Types.h\"",
-                    "\"Std_Types.h\"\n#include \"Rte_Type.h\"",
+                    &format!(
+                        "\"Std_Types.h\"\n#include \"Rte_Type.h\"\n{}",
+                        c_layout::release_check("Rte_Dcm_Type.h", "Rte_Type.h", "RTE")
+                    ),
                 ),
                 super::outputs::Edit::BeforeGuardEnd(&addition),
             ],
@@ -503,6 +514,13 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
                 .header
                 .trim_start_matches("include/Rte_")
                 .trim_end_matches(".h");
+            if body.contains("_MemMap.h") {
+                body.push_str(&c_layout::release_check(
+                    &format!("Rte_{name}.h"),
+                    &format!("{scope}_MemMap.h"),
+                    "MEMMAP",
+                ));
+            }
             body.push_str(c_layout::linkage(false));
             let guard = format!("RTE_{}_H", name.to_uppercase());
             let application_header = format!(
@@ -516,6 +534,7 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
 #define RTE_APPLICATION_HEADER_FILE
 #endif
 #define {guard}
+#include "Rte_Version.h"
 {body}
 #endif
 "#
@@ -526,7 +545,12 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
                 header(
                     &format!("RTE_{name}_TYPE_H"),
                     &format!(
-                        "#include \"Rte_Type.h\"\n#include \"Rte_Dcm_Type.h\"\n{}{}",
+                        "#include \"Rte_Type.h\"\n#include \"Rte_Dcm_Type.h\"\n{}{}{}",
+                        c_layout::release_check(
+                            &format!("Rte_{name}_Type.h"),
+                            "Rte_Dcm_Type.h",
+                            "DCM"
+                        ),
                         c_layout::linkage(true),
                         c_layout::linkage(false)
                     ),

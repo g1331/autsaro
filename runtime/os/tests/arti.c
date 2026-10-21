@@ -170,7 +170,7 @@ int main(int argc, char **argv)
         uint32_t core = 0u, value = 7u;
         Arti_Init();
         Arti_GetVersionInfo(&version);
-        if (version.vendorID != 0u || version.moduleID != 0u || version.sw_major_version != 1u ||
+        if (version.vendorID != 0u || version.moduleID != 5u || version.sw_major_version != 1u ||
             version.sw_minor_version != 0u || version.sw_patch_version != 0u) {
             return 7;
         }

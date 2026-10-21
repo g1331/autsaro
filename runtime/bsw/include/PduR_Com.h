@@ -1,6 +1,7 @@
 /** @file Standard configured PduR upper transmission interface. */
 #ifndef PDUR_COM_H
 #define PDUR_COM_H
+#include "PduR_Version.h"
 #include "PduR.h"
 /** Forward a configured Com request to its lower handle (SWS_PduR_00406).
  * @param[in] TxPduId A configured Com source handle; distinct from the lower namespace.

@@ -3,7 +3,14 @@
  */
 #ifndef BSWM_H
 #define BSWM_H
+#include "BswM_Version.h"
 #include "ComM.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMM_AR_RELEASE_MAJOR_VERSION) || !defined(COMM_AR_RELEASE_MINOR_VERSION)
+#error "BswM.h -> ComM.h: missing AUTOSAR release"
+#elif (COMM_AR_RELEASE_MAJOR_VERSION != 4U) || (COMM_AR_RELEASE_MINOR_VERSION != 10U)
+#error "BswM.h -> ComM.h: incompatible AUTOSAR release"
+#endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define BSWM_MODULE_ID 42u
 /** SWS_BswM_00214: mode requested by a BswM user. */

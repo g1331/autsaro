@@ -10,6 +10,12 @@ OS_MEMMAP static OS_THREAD_LOCAL Os_HookPhaseType
     phase; /**< Actor TLS hook phase; context save/restore, no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_TLS_32
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Error.c -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Error.c -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define OS_START_SEC_VAR_CLEARED_TLS_8
 #include "Os_MemMap.h"
 OS_MEMMAP static OS_THREAD_LOCAL OSServiceIdType

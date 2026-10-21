@@ -1,6 +1,7 @@
 /** @file Static target configuration and host-process preparation for the OS. */
 #ifndef AUTOSAR_OS_TARGET_H
 #define AUTOSAR_OS_TARGET_H
+#include "Os_Version.h"
 #include "Os.h"
 #include "Os_Time.h"
 #include <stddef.h>
@@ -160,6 +161,12 @@ OS_MEMMAP sint32 Os_TargetReady(void);
 OS_MEMMAP StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Target.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Target.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #if defined(OS_ACTIVATION_TESTS) && (OS_ACTIVATION_TESTS == STD_ON)
 /** Observe a committed native scheduling transition in test builds.
  * @par Return

@@ -7,6 +7,7 @@ Compiler/MISRA checks remain responsible for C validity and normative semantics.
 from __future__ import annotations
 
 import collections
+import itertools
 import json
 import re
 from dataclasses import dataclass
@@ -184,6 +185,27 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
                 for symbol in identifiers
             )):
                 validation_guards.add(first.start)
+    # Release presence/value assertions reject an incompatible import; they do
+    # not select functionality by a configuration switch's presence.
+    for index, first in enumerate(directives):
+        if not re.match(r"\s*#\s*if\b", first.text):
+            continue
+        chain = []
+        for current in directives[index:]:
+            chain.append(current)
+            if re.match(r"\s*#\s*endif\b", current.text):
+                break
+        commands = [re.match(r"\s*#\s*(\w+)", item.text)[1] for item in chain]
+        if not re.fullmatch(r"if error(?: elif error)* endif", " ".join(commands)):
+            continue
+        if any(re.sub(r"/\*.*?\*/|//[^\n]*", "", source[a.end:b.start], flags=re.DOTALL).strip()
+               for a, b in itertools.pairwise(chain)):
+            continue
+        conditions = chain[:-1:2]
+        identifiers = set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", " ".join(item.text for item in conditions)))
+        if identifiers and all(re.fullmatch(r"[A-Z][A-Z0-9_]*_AR_RELEASE_(?:MAJOR|MINOR|REVISION)_VERSION", name)
+                               for name in identifiers):
+            validation_guards.update(item.start for item in conditions)
     switches = set(known_switches)
     for token in directives:
         match = re.match(r"\s*#\s*define\s+(\w+)\s+\(?(?:STD_(?:ON|OFF)|[01](?:[uUlL]*))\)?\s*$", re.sub(r"/\*.*?\*/|//[^\n]*", "", token.text, flags=re.DOTALL))

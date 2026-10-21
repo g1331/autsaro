@@ -1,9 +1,33 @@
 /** @file Standard CanIf for one Classical CAN controller and immutable routes. */
 #include "CanIf.h"
 #include "Can.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(CAN_AR_RELEASE_MAJOR_VERSION) || !defined(CAN_AR_RELEASE_MINOR_VERSION)
+#error "CanIf.c -> Can.h: missing AUTOSAR release"
+#elif (CAN_AR_RELEASE_MAJOR_VERSION != 4U) || (CAN_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanIf.c -> Can.h: incompatible AUTOSAR release"
+#endif
 #include "Det.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(DET_AR_RELEASE_MAJOR_VERSION) || !defined(DET_AR_RELEASE_MINOR_VERSION)
+#error "CanIf.c -> Det.h: missing AUTOSAR release"
+#elif (DET_AR_RELEASE_MAJOR_VERSION != 4U) || (DET_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanIf.c -> Det.h: incompatible AUTOSAR release"
+#endif
 #include "LSduR_CanIf.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(LSDUR_AR_RELEASE_MAJOR_VERSION) || !defined(LSDUR_AR_RELEASE_MINOR_VERSION)
+#error "CanIf.c -> LSduR_CanIf.h: missing AUTOSAR release"
+#elif (LSDUR_AR_RELEASE_MAJOR_VERSION != 4U) || (LSDUR_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanIf.c -> LSduR_CanIf.h: incompatible AUTOSAR release"
+#endif
 #include "SchM_CanIf.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "CanIf.c -> SchM_CanIf.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanIf.c -> SchM_CanIf.h: incompatible AUTOSAR release"
+#endif
 #define CANIF_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
 /* CANIF_STATE protects every object below. Init and DeInit clear the configuration/controller state
@@ -31,6 +55,12 @@ static uint32 stops CANIF_VAR_CLEARED;       /**< Stop generation; Init preserve
 static uint32 mode_writes CANIF_VAR_CLEARED; /**< PDU-mode generation; Init increments. */
 #define CANIF_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "CanIf.c -> CanIf_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanIf.c -> CanIf_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define CANIF_START_SEC_CODE
 #include "CanIf_MemMap.h"
 static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)

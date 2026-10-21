@@ -5,6 +5,12 @@
  */
 #include "Com.h"
 #include "SchM_Com.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "Com.c -> SchM_Com.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Com.c -> SchM_Com.h: incompatible AUTOSAR release"
+#endif
 #include "Com_Internal.h"
 #include <stddef.h>
 #include <string.h>
@@ -46,6 +52,12 @@ static boolean reception_before_main
 static boolean publishing COM_VAR_CLEARED; /**< Callback in flight; Init preserves. */
 #define COM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Com_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Com.c -> Com_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Com.c -> Com_MemMap.h: incompatible AUTOSAR release"
+#endif
 
 #define COM_START_SEC_CODE
 #include "Com_MemMap.h"

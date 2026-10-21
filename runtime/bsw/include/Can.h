@@ -1,9 +1,16 @@
 /** @file R24-11 Can Driver services for one polled Classical CAN controller on the host. */
 #ifndef CAN_H
 #define CAN_H
+#include "Can_Version.h"
 #include "Can_GeneralTypes.h"
 #include "Can_CfgTypes.h"
 #include "Std_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(STD_TYPES_AR_RELEASE_MAJOR_VERSION) || !defined(STD_TYPES_AR_RELEASE_MINOR_VERSION)
+#error "Can.h -> Std_Types.h: missing AUTOSAR release"
+#elif (STD_TYPES_AR_RELEASE_MAJOR_VERSION != 4U) || (STD_TYPES_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Can.h -> Std_Types.h: incompatible AUTOSAR release"
+#endif
 
 /* Published information (SWS_BSW_00059): module ID and software version are provided below;
  * vendor ID and AUTOSAR release macros are not provided. */
@@ -135,4 +142,10 @@ CAN_CODE Std_ReturnType Can_CheckWakeup(uint8 Controller);
 CAN_CODE Std_ReturnType Can_Write(Can_HwHandleType Hth, const Can_PduType *PduInfo);
 #define CAN_STOP_SEC_CODE
 #include "Can_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Can.h -> Can_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Can.h -> Can_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

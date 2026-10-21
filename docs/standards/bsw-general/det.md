@@ -27,7 +27,7 @@
 | 安全事件 | Det SWS 没有安全事件，DetGeneral 没有对应开关，模块也不调用 IdsM。已核对（Det SWS §7.5、全部 Det ECUC 定义和 Det.c）[Det]：SWS_BSW_00244、00250–00253、00258 |
 | 版本 API | DetVersionInfoApi 必填、默认 false；目标拒绝 true，不提供 Det_GetVersionInfo。已核对（builtin::error_tracing 与配置正反例）[Det]：SWS_BSW_00051、00236；不适用（配置：ECUC_Det_00003=true）[Det]：SWS_BSW_00052、00064、00164 |
 | MetaData | Det 不处理 PDU、不引用 EcuC 全局 PDU 或分配 MetaData；它只按值传递四个标准报告身份。已核对（Det 全部 API 与 ECUC 参数）[Det]：SWS_BSW_00239–00242 |
-| 发布版本信息 | 实现仍没有跨模块版本宏检查；身份和版本的共同整改由原 Issue 负责。差距 #59[Det]：SWS_BSW_00036、00059、00161、00162、00256 |
+| 发布版本信息 | 不适用（归属：SWS_Det_NA_00999 排除 SRS_BSW_00004 的消费者义务）[Det]：SWS_BSW_00036；头 release 已发布，完整发布信息仍为差距 #59[Det]：SWS_BSW_00059、00161、00162、00256 |
 | MISRA | 保留源码分析原始结果；完整授权原文、221 项人工评估与主机 abort 的评估尚未闭合。差距 #58[Det]：SWS_BSW_00115 |
 | 交付描述 Det 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Det]：SWS_BSW_00001 |
 | 交付描述 Det 00002 | 已核对（module_documentation::module 交付 modules/Det/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Det]：SWS_BSW_00002 |
