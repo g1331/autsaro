@@ -23,12 +23,19 @@ static uintptr_t
 static TaskStateType parent_state =
     77u; /**< Task-state output sentinel; fixture-owned, no Init reset. */
 static bool is(const char *name) { return strcmp(scenario, name) == 0; }
-static void check(bool condition)
+static unsigned failure_line; /**< First failed fixture assertion, reported after actor shutdown. */
+static const char
+    *failure_invariant; /**< Static expression bytes; only written on assertion failure. */
+static void nested_check(bool condition, unsigned line, const char *invariant)
 {
     if (!condition) {
+        failure_line = line;
+        failure_invariant = invariant;
         Os_BackendShutdown(E_OS_STATE);
     }
 }
+/* Evaluate each original assertion once; retain its identity before shutdown. */
+#define check(condition) nested_check((condition), __LINE__, #condition)
 static void record(char marker)
 {
     check(length + 1u < sizeof(trace));
@@ -247,6 +254,14 @@ void StartupHook(void)
 }
 void ShutdownHook(StatusType error)
 {
+    if (failure_invariant != NULL) {
+        fprintf(stderr,
+                "nested assertion failed: %s:%u invariant=%s reason=%u\n",
+                __FILE__,
+                failure_line,
+                failure_invariant,
+                (unsigned)error);
+    }
     printf("nested scenario=%s children=%u grandchildren=%u helpers=%u errors=%u depth=%u "
            "maximum=%u trace=%s reason=%u\n",
            scenario,
