@@ -66,6 +66,23 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
             self.assertIn("config-switch", {key[0] for key in findings})
         self.assertIn("config-switch", self.rules("#if STATUS_MODE\n#error Unavailable\n#endif"))
 
+    def test_release_presence_and_value_assertions_are_not_feature_switches(self):
+        source = """#if !defined(CAN_AR_RELEASE_MAJOR_VERSION) || !defined(CAN_AR_RELEASE_MINOR_VERSION)
+#error Missing release
+#elif CAN_AR_RELEASE_MAJOR_VERSION != 4U || CAN_AR_RELEASE_MINOR_VERSION != 10U
+#error Incompatible release
+#endif
+"""
+        self.assertNotIn("config-switch", self.rules(source))
+        self.assertNotIn("config-switch", self.rules(source.replace(
+            "CAN_AR_RELEASE_MAJOR_VERSION != 4U", "CAN_AR_RELEASE_MAJOR_VERSION != CAN_C_AR_RELEASE_MAJOR_VERSION")))
+        for active in (source.replace("#error Missing release", "uint8 selected;"),
+                       source.replace("#error Incompatible release", "#include \"active.h\""),
+                       source.replace("#endif", "#else\nuint8 selected;\n#endif"),
+                       source.replace("CAN_AR_RELEASE_MAJOR_VERSION", "CAN_FEATURE_API")):
+            with self.subTest(active=active):
+                self.assertIn("config-switch", self.rules(active))
+
     def test_review_declarators_and_empty_comments(self):
         self.assertIn("state-comment", self.rules("static void (*hook)(void);", "runtime/bsw/src/Test.c"))
         self.assertIn("state-comment", self.rules("static Std_ReturnType (*hook)(void);", "runtime/bsw/src/Test.c"))
