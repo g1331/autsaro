@@ -135,7 +135,7 @@ class CAnalysisTests(unittest.TestCase):
                 (directory / "cache/files.txt").write_text("absent.a1:::missing.c\n")
                 return 0, "", "<results><errors/></results>"
 
-            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "prepare", return_value=(root, ["main.c"], [], {})), patch.object(c_check, "run", side_effect=run):
+            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "semantic_identity", return_value={}), patch.object(c_check, "prepare", return_value=(root, ["main.c"], [], {"cppcheckLibraries": {}})), patch.object(c_check, "run", side_effect=run):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
             summary = json.loads((output / "summary.json").read_text())
             self.assertFalse(summary["passed"])
@@ -159,7 +159,7 @@ class CAnalysisTests(unittest.TestCase):
                 failed = output.name == "probe"
                 return (1 if failed else 0), not failed, [], []
 
-            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES})), patch.object(c_check, "analyze_program", side_effect=analyze), patch.object(c_check, "sealed_sources"):
+            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "semantic_identity", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES, "cppcheckLibraries": {}})), patch.object(c_check, "analyze_program", side_effect=analyze), patch.object(c_check, "sealed_sources"):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
             self.assertEqual(calls, [["src/common.c", "integration/src/ecu_host_batch.c"], ["src/common.c", "integration/src/ecu_probe.c"]])
             summary = json.loads((output / "summary.json").read_text())
@@ -189,9 +189,28 @@ class CAnalysisTests(unittest.TestCase):
                     (receipts / f"{index}.json").write_text(json.dumps(data))
                 return 0, "", "<results><errors/></results>"
 
-            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES})), patch.object(c_check, "run", side_effect=run):
+            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "semantic_identity", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES, "cppcheckLibraries": {}})), patch.object(c_check, "run", side_effect=run):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
             summary = json.loads((output / "summary.json").read_text())
             self.assertFalse(summary["passed"])
             self.assertEqual(summary["error"], "Invalid project addon receipt structure")
+            self.assertTrue(summary["programs"][0]["passed"])
+
+    def test_changed_semantic_inputs_during_scan_cannot_leave_green_summary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = directory / "source"
+            (source / "meta").mkdir(parents=True)
+            (source / "meta/files.sha256").write_text("seal")
+            output = directory / "analysis"
+            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), \
+                    patch.object(c_check, "coverage", return_value={}), \
+                    patch.object(c_check, "prepare", return_value=(output / "project", ["main.c"], [], {})), \
+                    patch.object(c_check, "semantic_identity", side_effect=[{"version": 1}, {"version": 2}]), \
+                    patch.object(c_check, "analyze_program", return_value=(0, True, [], [])), \
+                    patch.object(c_check, "sealed_sources"):
+                self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
+            summary = json.loads((output / "summary.json").read_text())
+            self.assertEqual(summary["error"], "Semantic inputs changed during analysis")
+            self.assertFalse(summary["passed"])
             self.assertTrue(summary["programs"][0]["passed"])

@@ -246,3 +246,160 @@ class ActualCAnalysisTests(unittest.TestCase):
                     self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"bsw/src/main.c", "bsw/src/helper.c", "bsw/src/second.c", "bsw/src/third.c"})
                     for definitions in summary["scope"]["compilerDiscoveredDefines"].values():
                         self.assertTrue(any(value.startswith("-DUINT32_C(") for value in definitions))
+
+
+    def test_semantic_inputs_from_real_producer_refuse_changed_macro_and_allow_relocation(self):
+        from autosar_tooling.c_comparison import compare
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, "#include <limits.h>\nint main(void) { return CHAR_BIT; }\n",
+                                   extra_files={"meta/integration.json": '{"plan":{}}'})
+            target = json.loads((project / "target.json").read_text())["target"]
+            baseline = root / "baseline"
+            self.assertEqual(c_check.check(project, target, baseline), 0)
+            original = c_check.run
+            def changed(*args, **kwargs):
+                code, stdout, stderr = original(*args, **kwargs)
+                if args[2] == "compiler-values-0":
+                    stdout = stdout.replace("AUTSAR_VALUE_CHAR_BIT 8", "AUTSAR_VALUE_CHAR_BIT 16")
+                return code, stdout, stderr
+            with patch.object(c_check, "run", side_effect=changed):
+                self.assertEqual(c_check.check(project, target, root / "changed", baseline), 1)
+            summary = json.loads((root / "changed/summary.json").read_text())
+            self.assertIn("Semantic identity differs: defines", summary["error"])
+            self.assertEqual(summary["semanticIdentity"]["defines"]["bsw/src/main.c"], ["-DCHAR_BIT=16"])
+            self.assertEqual(summary["programs"][0]["exitCode"], 0)
+            self.assertNotIn("comparison", summary)
+            self.assertEqual(c_check.check(project, target, root / "same", baseline), 0)
+            summary = json.loads((root / "same/summary.json").read_text())
+            # Paths, scheduling and arbitrary executable carriers are provenance.
+            summary["scope"]["diagnosticCompiler"].update(path="other/gcc", sha256="other-carrier")
+            summary["scope"]["systemIncludePaths"] = ["other/include"]
+            summary["scope"]["compilerWorkers"] = 1
+            summary["tool"]["binarySha256"] = "other-carrier"
+            self.assertEqual(compare(summary, project, root / "same", baseline), {"new": [], "removed": []})
+
+    def test_semantic_capture_uses_actual_model_library_and_analysis_source_contents(self):
+        import shutil
+
+        from autosar_tooling.c_comparison import compare
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, 'extern int pthread_create(void);\nint main(void) { return pthread_create(); }\n',
+                                   extra_files={"meta/integration.json": '{"plan":{}}'})
+            target = json.loads((project / "target.json").read_text())["target"]
+            baseline = root / "baseline"
+            c_check.check(project, target, baseline)
+            before = json.loads((baseline / "summary.json").read_text())
+            self.assertIsNone(before["error"])
+            self.assertTrue(any(d["id"] == "autsaro-hostThreadInBsw" for d in before["diagnostics"]))
+            original_prepare = c_check.prepare
+            # The generated header is actually passed to Cppcheck, changing its diagnostics.
+            def modeled(*args):
+                copied, units, database, scope = original_prepare(*args)
+                model = args[2] / "injected-model.h"
+                model.write_text("#define pthread_create() 0\n")
+                scope["platformModel"] = {"path": str(model), "sha256": hashlib.sha256(model.read_bytes()).hexdigest()}
+                return copied, units, database, scope
+            with patch.object(c_check, "prepare", side_effect=modeled):
+                c_check.check(project, target, root / "modeled", baseline)
+            changed = json.loads((root / "modeled/summary.json").read_text())
+            self.assertIn("Semantic identity differs: models", changed["error"])
+            self.assertFalse(any(d["id"] == "autsaro-hostThreadInBsw" for d in changed["diagnostics"]))
+            # Execute the changed addon from its real file, not a self-reported label.
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for name in ("c_check.py", "c_addon.py", "c_comparison.py"):
+                shutil.copyfile(Path(c_check.__file__).with_name(name), scripts / name)
+            addon = scripts / "c_addon.py"
+            addon.write_text(addon.read_text().replace('"pthread_create", ', ''))
+            with patch.object(c_check, "__file__", str(scripts / "c_check.py")):
+                c_check.check(project, target, root / "addon", baseline)
+            changed = json.loads((root / "addon/summary.json").read_text())
+            self.assertIn("Semantic identity differs: analysisCode", changed["error"])
+            self.assertFalse(any(d["id"] == "autsaro-hostThreadInBsw" for d in changed["diagnostics"]))
+            # Content capture also covers the optional Windows library on Linux.
+            scope = before["scope"]
+            library = root / "platform-library.cfg"
+            library.write_text('<def format="2"/>\n')
+            scope["platformLibrary"] = {"path": str(library)}
+            executable = Path(before["programs"][0]["command"][0])
+            first = c_check.semantic_identity(executable, scope)
+            library.write_text('<def format="2"><function name="setvbuf"/></def>\n')
+            second = c_check.semantic_identity(executable, scope)
+            self.assertNotEqual(first["models"]["platformLibrary"], second["models"]["platformLibrary"])
+            # Alter a real cfg copy; selecting this installation loads and fingerprints it.
+            install = root / "install"
+            (install / "cfg").mkdir(parents=True)
+            for name, path in scope["cppcheckLibraries"].items():
+                shutil.copyfile(path, install / "cfg" / (name + ".cfg"))
+            first = c_check.semantic_identity(install / "cppcheck", scope)
+            cfg = install / "cfg/std.cfg"
+            cfg.write_text(cfg.read_text().replace('<valid>-1.0:1.0</valid>', '<valid>0.0:1.0</valid>', 1))
+            second = c_check.semantic_identity(install / "cppcheck", scope)
+            self.assertNotEqual(first["libraries"]["std"], second["libraries"]["std"])
+            # The unchanged original producer result remains comparable.
+            self.assertEqual(compare(before, project, baseline, baseline), {"new": [], "removed": []})
+
+    def test_actual_compiler_predefines_and_release_are_comparison_inputs(self):
+        source = ('#if __GNUC__ > 90\nint main(void) { int value = 1; if (value) { return 1; } return 0; }\n'
+                  '#else\nint main(void) { return 0; }\n#endif\n')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, source, extra_files={"meta/integration.json": '{"plan":{}}'})
+            target = json.loads((project / "target.json").read_text())["target"]
+            self.assertEqual(c_check.check(project, target, root / "baseline"), 0)
+            original = c_check.run
+            for stage in ("compiler-macros", "compiler-release"):
+                def changed(*args, stage=stage, **kwargs):
+                    code, stdout, stderr = original(*args, **kwargs)
+                    if args[2] == stage:
+                        if stage == "compiler-release":
+                            stdout = "99.1.0\n"
+                        else:
+                            import re
+                            stdout = re.sub(r"#define __GNUC__ [0-9]+", "#define __GNUC__ 99", stdout)
+                    return code, stdout, stderr
+                with self.subTest(stage=stage), patch.object(c_check, "run", side_effect=changed):
+                    self.assertEqual(c_check.check(project, target, root / stage, root / "baseline"), 1)
+                summary = json.loads((root / stage / "summary.json").read_text())
+                self.assertIn("Semantic identity differs: compiler", summary["error"])
+                self.assertIn(summary["programs"][0]["exitCode"], (0, 1))
+                if stage == "compiler-macros":
+                    self.assertTrue(any(row["id"].startswith("misra-c2012-") for row in summary["diagnostics"]))
+
+    @unittest.skipUnless(platform.system() == "Linux", "ELF carrier and shell relocation positive control")
+    def test_actual_relocated_tool_carriers_keep_semantic_equivalence(self):
+        import os
+        import shutil
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, "int main(void) { return 0; }\n",
+                                   extra_files={"meta/integration.json": '{"plan":{}}'})
+            target = "linux-x64-controlled-v1"
+            self.assertEqual(c_check.check(project, target, root / "baseline"), 0)
+            before = json.loads((root / "baseline/summary.json").read_text())
+            install = root / "relocated"
+            (install / "cfg").mkdir(parents=True)
+            original = Path(before["programs"][0]["command"][0])
+            executable = install / "cppcheck"
+            shutil.copyfile(original, executable)
+            # ELF permits trailing carrier data; actual analyzer code is unchanged.
+            with executable.open("ab") as carrier:
+                carrier.write(b"relocation positive control\n")
+            executable.chmod(0o700)
+            for name, path in before["scope"]["cppcheckLibraries"].items():
+                shutil.copyfile(path, install / "cfg" / (name + ".cfg"))
+            compiler = install / "gcc"
+            import shlex
+            compiler.write_text("#!/bin/sh\nexec " + shlex.quote(before["scope"]["diagnosticCompiler"]["path"]) + ' "$@"\n')
+            compiler.chmod(0o700)
+            with patch.dict(os.environ, {"CPPCHECK": str(executable), "CPPCHECK_ADDON_DIR": str(c_check.addon_directory(original)),
+                                         "AUTOSAR_CC": str(compiler)}):
+                self.assertEqual(c_check.check(project, target, root / "relocated-result", root / "baseline"), 0)
+            after = json.loads((root / "relocated-result/summary.json").read_text())
+            self.assertNotEqual(before["tool"]["binarySha256"], after["tool"]["binarySha256"])
+            self.assertNotEqual(before["scope"]["diagnosticCompiler"]["sha256"], after["scope"]["diagnosticCompiler"]["sha256"])
+            self.assertEqual(before["semanticIdentity"], after["semanticIdentity"])
+            self.assertEqual(after["comparison"], {"new": [], "removed": []})

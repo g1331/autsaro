@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import difflib
+import hashlib
 import importlib.util
 import json
 import os
@@ -159,6 +160,10 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                 context="Cannot identify diagnostic compiler target")
     if machine.strip() != target["abi"]:
         raise ValueError("Diagnostic compiler ABI differs from the sealed target")
+    _, compiler_release, _ = run([compiler, "-dumpfullversion", "-dumpversion"], output, "compiler-release", 30,
+                context="Cannot identify diagnostic compiler release")
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", compiler_release.strip()):
+        raise ValueError("Invalid diagnostic compiler release")
     _, compiler_version, _ = run([compiler, "--version"], output, "compiler-version", 30,
                 context="Cannot identify diagnostic compiler")
     empty = output / "headers.c"
@@ -321,6 +326,9 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                    "compilerFlags": flags, "compilerWorkers": compiler_workers, "includePaths": target["includePaths"],
                                    "systemIncludePaths": system_includes, "diagnosticCompiler": {"path": compiler, "version": compiler_version, "sha256": digest(Path(compiler))},
                                    "compilerDiscoveredDefines": per_unit_macros,
+                                   "compilerSemanticInputs": {"machine": machine.strip(), "release": compiler_release.strip(),
+                                                              "predefines": sorted(predefines.read_text(encoding="utf-8").splitlines()),
+                                                              "builtins": sorted(builtins)},
                                    "platformModel": {"path": str(model), "sha256": digest(model)} if model else None,
                                    "platformLibrary": {"path": str(library_model), "sha256": digest(library_model), "stdioModes": stdio_modes} if library_model else None,
                                    "translationUnits": sources, "supplemental": supplemental,
@@ -378,7 +386,7 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
     (output / "cache").mkdir()
     platform_name = "win64" if target_id.startswith("windows") else "unix64"
     argv = [str(executable), "--std=c99", "--language=c", f"--platform={platform_name}",
-            "--check-level=exhaustive", "--library=" + ("windows" if target_id.startswith("windows") else "posix"),
+            "--check-level=exhaustive", *("--library=" + path for path in scope["cppcheckLibraries"].values()),
             "--enable=warning,style,performance,portability,information", "--error-exitcode=1",
             "--xml", "--xml-version=2", "--addon-python=" + sys.executable,
             "--project=" + str(output / "compile_commands.json"),
@@ -416,6 +424,34 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
     return code, passed, diagnostics, command
 
 
+def semantic_identity(executable: Path, scope: dict) -> dict:
+    """Capture actual inputs; installation paths and binary carriers are provenance only."""
+    libraries = ("std", "windows" if scope["target"].startswith("windows") else "posix")
+    candidates = (executable.parent / "cfg", executable.parent.parent / "share/cppcheck/cfg",
+                  Path("/usr/share/cppcheck/cfg"))
+    cfg = next((path for path in candidates if all((path / (name + ".cfg")).is_file() for name in libraries)), None)
+    if cfg is None:
+        raise ValueError("Cppcheck analysis library contents unavailable")
+    scope["cppcheckLibraries"] = {name: str((cfg / (name + ".cfg")).resolve()) for name in libraries}
+    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py")]
+    # Build/owner helpers determine selected inputs, patching and executed processes.
+    import ecu_tools.build
+    import ecu_tools.owner
+    import ecu_tools.process
+    drivers.extend(Path(module.__file__) for module in (ecu_tools.build, ecu_tools.process, ecu_tools.owner))
+    def text_hash(path):
+        return hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+    return {
+        "version": 1,
+        "compiler": scope["compilerSemanticInputs"],
+        "defines": {name: sorted(values) for name, values in scope["compilerDiscoveredDefines"].items()},
+        "models": {name: text_hash(Path(scope[name]["path"])) if scope[name] else None
+                   for name in ("platformModel", "platformLibrary")},
+        "libraries": {name: text_hash(Path(path)) for name, path in scope["cppcheckLibraries"].items()},
+        "analysisCode": {path.name: text_hash(path) for path in drivers},
+    }
+
+
 def check(project: Path, target_id: str, output: Path, baseline: Path | None = None) -> int:
     refuse_links(project)
     project = project.resolve(strict=True)
@@ -434,6 +470,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         summary["sourceSealSha256"] = digest(project / FILE_HASHES)
         root, sources, database, scope = prepare(project, target_id, output)
         summary["scope"] = scope
+        summary["semanticIdentity"] = semantic_identity(executable, scope)
         entries = scope.get("entries") or {}
         # build.py selects exactly one ECU main for each native executable.
         # Keep cross-TU checking inside that same link boundary.
@@ -470,6 +507,8 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         sealed_sources(project)
         if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:
             raise ValueError("Source seal changed during analysis")
+        if semantic_identity(executable, scope) != summary["semanticIdentity"]:
+            raise ValueError("Semantic inputs changed during analysis")
         summary["passed"] = all_passed
         if baseline is not None:
             from autosar_tooling.c_comparison import compare

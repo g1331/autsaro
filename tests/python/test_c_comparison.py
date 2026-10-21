@@ -31,6 +31,16 @@ class CComparisonTests(unittest.TestCase):
             "programs": [{"name": "target", "entry": "main.c", "translationUnits": ["main.c"], "exitCode": 1}],
             "diagnostics": [self.diagnostic("rule", 1), self.diagnostic("rule", 2)],
         }
+        summary["semanticIdentity"] = {
+            "version": 1,
+            "compiler": {"machine": "x86_64-linux-gnu", "release": "13.3.0",
+                         "predefines": ["#define __GNUC__ 13"], "builtins": ["-D__GNUC__=13"]},
+            "defines": {"main.c": []},
+            "models": {"platformModel": None, "platformLibrary": None},
+            "libraries": {name: "a" * 64 for name in ("std", "posix")},
+            "analysisCode": {name: "b" * 64 for name in
+                             ("c_check.py", "c_addon.py", "c_comparison.py", "build.py", "process.py", "owner.py")},
+        }
         self.write(baseline, summary)
         return summary, project, output, baseline
 
@@ -113,3 +123,38 @@ class CComparisonTests(unittest.TestCase):
             self.assertEqual(compare(current, project, output, baseline), {"new": [], "removed": []})
             self.assertFalse(current["passed"])
             self.assertEqual(json.loads((baseline / "summary.json").read_text()), previous)
+
+    def test_semantic_components_refuse_independently(self):
+        changes = {
+            "compiler": lambda x: x["compiler"].update(release="14.1.0"),
+            "defines": lambda x: x["defines"]["main.c"].append("-DCHAR_BIT=16"),
+            "models": lambda x: x["models"].update(platformModel="c" * 64),
+            "libraries": lambda x: x["libraries"].update(posix="c" * 64),
+            "analysisCode": lambda x: x["analysisCode"].update({"c_addon.py": "c" * 64}),
+        }
+        for field, change in changes.items():
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                current, project, output, baseline = self.fixture(Path(temporary))
+                change(current["semanticIdentity"])
+                with self.assertRaisesRegex(ValueError, "Semantic identity differs: " + field):
+                    compare(current, project, output, baseline)
+
+    def test_missing_old_and_incomplete_identity_refuse_on_either_side(self):
+        changes = [lambda x: x.pop("semanticIdentity"),
+                   lambda x: x.update(semanticIdentity=None),
+                   lambda x: x["semanticIdentity"].update(version=0)]
+        for field in ("compiler", "defines", "models", "libraries", "analysisCode"):
+            changes.append(lambda x, field=field: x["semanticIdentity"].update({field: {}}))
+        changes.append(lambda x: x["semanticIdentity"]["models"].update(platformModel="broken"))
+        for previous in (False, True):
+            for change in changes:
+                with self.subTest(previous=previous, change=change), tempfile.TemporaryDirectory() as temporary:
+                    current, project, output, baseline = self.fixture(Path(temporary))
+                    if previous:
+                        old = deepcopy(current)
+                        change(old)
+                        self.write(baseline, old)
+                    else:
+                        change(current)
+                    with self.assertRaisesRegex(ValueError, "Semantic identity missing, unsupported or incomplete"):
+                        compare(current, project, output, baseline)

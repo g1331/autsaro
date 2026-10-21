@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -43,6 +44,35 @@ def _complete(summary: dict) -> None:
         raise ValueError("Analysis contains configuration/parsing failures")
 
 
+def _semantic(summary: dict) -> dict:
+    identity = summary.get("semanticIdentity")
+    def require(condition):
+        if not condition:
+            raise ValueError("Semantic identity missing, unsupported or incomplete")
+    def hashes(value, keys, nullable=False):
+        require(isinstance(value, dict) and set(value) == set(keys))
+        require(all((nullable and item is None) or
+                    (isinstance(item, str) and re.fullmatch(r"[0-9a-f]{64}", item))
+                    for item in value.values()))
+    def strings(value, nonempty=False):
+        return isinstance(value, list) and (not nonempty or bool(value)) and all(isinstance(x, str) and x for x in value)
+    require(isinstance(identity, dict) and set(identity) ==
+            {"version", "compiler", "defines", "models", "libraries", "analysisCode"})
+    require(type(identity["version"]) is int and identity["version"] == 1)
+    compiler = identity["compiler"]
+    require(isinstance(compiler, dict) and set(compiler) == {"machine", "release", "predefines", "builtins"})
+    require(isinstance(compiler["machine"], str) and bool(compiler["machine"]))
+    require(isinstance(compiler["release"], str) and bool(re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", compiler["release"])))
+    require(strings(compiler["predefines"], True) and strings(compiler["builtins"], True))
+    defines = identity["defines"]
+    require(isinstance(defines, dict) and set(defines) == set(summary["scope"]["translationUnits"]))
+    require(all(strings(value) for value in defines.values()))
+    hashes(identity["models"], ("platformModel", "platformLibrary"), True)
+    hashes(identity["libraries"], ("std", "windows" if summary["scope"]["target"].startswith("windows") else "posix"))
+    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "build.py", "process.py", "owner.py"))
+    return identity
+
+
 def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
     """A baseline is evidence for comparison, never permission to skip analysis."""
     try:
@@ -73,6 +103,10 @@ def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
             return [(row["name"], row["entry"], row["translationUnits"]) for row in summary["programs"]]
         if programs(current) != programs(previous):
             raise ValueError("Program identity differs")
+        current_identity, previous_identity = _semantic(current), _semantic(previous)
+        for field in ("compiler", "defines", "models", "libraries", "analysisCode"):
+            if current_identity[field] != previous_identity[field]:
+                raise ValueError(f"Semantic identity differs: {field}")
         now = _counts(current, output / "project")
         before = _counts(previous, old_root)
         def rows(counts):
