@@ -1,7 +1,14 @@
 /** @file OS ARTI binding; include the tool header before module declarations. */
 #ifndef AUTOSAR_HOST_OS_ARTI_H
 #define AUTOSAR_HOST_OS_ARTI_H
+#include "Os_Version.h"
 #include "Arti.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(ARTI_AR_RELEASE_MAJOR_VERSION) || !defined(ARTI_AR_RELEASE_MINOR_VERSION)
+#error "Os_Arti.h -> Arti.h: missing AUTOSAR release"
+#elif (ARTI_AR_RELEASE_MAJOR_VERSION != 4U) || (ARTI_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Arti.h -> Arti.h: incompatible AUTOSAR release"
+#endif
 #include "Os_Host.h"
 #include "Os_Target.h"
 #include "Os_Hooks.h"
@@ -44,6 +51,12 @@ typedef struct {
 OS_MEMMAP extern Os_ArtiTaskStateType Os_ArtiTasks[OS_MAX_TASKS];
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Arti.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Arti.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define OS_START_SEC_VAR_INIT_8
 #include "Os_MemMap.h"
 OS_MEMMAP extern TaskType Os_ArtiRunningTask;

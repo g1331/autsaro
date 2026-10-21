@@ -2,6 +2,7 @@
  * configuration. */
 #ifndef SCHM_BSWM_H
 #define SCHM_BSWM_H
+#include "Rte_Version.h"
 #include "SchM_BswM_Type.h"
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,12 @@ extern "C" {
 void BswM_MainFunction(void);
 #define BSWM_STOP_SEC_CODE
 #include "BswM_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "SchM_BswM.h -> BswM_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "SchM_BswM.h -> BswM_MemMap.h: incompatible AUTOSAR release"
+#endif
 /** Enter the BswM state area (SWS_Rte_07250).
  * @par Return
  * None.

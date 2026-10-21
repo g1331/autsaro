@@ -90,8 +90,9 @@ pub(super) fn rte(
     code_section: Option<&str>,
     mode_scope: &str,
 ) -> String {
-    let mut mapping =
-        String::from("/** @file Source-derived RTE scopes; controlled x64 section placement. */\n");
+    let mut mapping = String::from(
+        "/** @file Source-derived RTE scopes; controlled x64 section placement. */\n#include \"MemMap_Version.h\"\n",
+    );
     for (index, (scope, segment)) in scopes.iter().enumerate() {
         let class = if *segment == "VAR_CLEARED_UNSPECIFIED" {
             "VAR_CLEARED"
@@ -152,8 +153,9 @@ pub(super) fn rte(
 /// The default SWC sections (SWS_MemMap_00027/00029, SWS_Rte_07194).
 /// The controlled target places runnable code beside RTE code; ownership stays with the SWC.
 pub(super) fn component(scope: &str) -> String {
-    let mut output =
-        String::from("/** @file Default SWC sections for the controlled x64 target. */\n");
+    let mut output = String::from(
+        "/** @file Default SWC sections for the controlled x64 target. */\n#include \"MemMap_Version.h\"\n",
+    );
     for (index, (segment, placement)) in
         [("CODE", ".rte_code"), ("VAR_CLEARED_UNSPECIFIED", ".bss")]
             .iter()

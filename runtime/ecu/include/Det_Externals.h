@@ -1,6 +1,7 @@
 /** @file Generated from the selected source contract. */
 #ifndef DET_EXTERNALS_H
 #define DET_EXTERNALS_H
+#include "Det_Version.h"
 #include "Std_Types.h"
 #define DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE
 #include "Det_MemMap.h"

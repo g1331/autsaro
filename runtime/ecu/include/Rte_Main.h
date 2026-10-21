@@ -1,6 +1,7 @@
 /** @file RTE trusted-context lifecycle; Start follows BSW/SchM Init. */
 #ifndef RTE_MAIN_H
 #define RTE_MAIN_H
+#include "Rte_Version.h"
 #include "Rte.h"
 #ifdef __cplusplus
 extern "C" {

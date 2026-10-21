@@ -1,9 +1,30 @@
 /** @file Standard CanIf for one Classical CAN controller and immutable routes. */
 #ifndef CANIF_H
 #define CANIF_H
+#include "CanIf_Version.h"
 #include "Std_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(STD_TYPES_AR_RELEASE_MAJOR_VERSION) || !defined(STD_TYPES_AR_RELEASE_MINOR_VERSION)
+#error "CanIf.h -> Std_Types.h: missing AUTOSAR release"
+#elif (STD_TYPES_AR_RELEASE_MAJOR_VERSION != 4U) || (STD_TYPES_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanIf.h -> Std_Types.h: incompatible AUTOSAR release"
+#endif
 #include "ComStack_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION) ||                                             \
+    !defined(COMSTACKTYPE_AR_RELEASE_MINOR_VERSION)
+#error "CanIf.h -> ComStack_Types.h: missing AUTOSAR release"
+#elif (COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION != 4U) ||                                             \
+    (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanIf.h -> ComStack_Types.h: incompatible AUTOSAR release"
+#endif
 #include "Can_GeneralTypes.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(CAN_AR_RELEASE_MAJOR_VERSION) || !defined(CAN_AR_RELEASE_MINOR_VERSION)
+#error "CanIf.h -> Can_GeneralTypes.h: missing AUTOSAR release"
+#elif (CAN_AR_RELEASE_MAJOR_VERSION != 4U) || (CAN_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanIf.h -> Can_GeneralTypes.h: incompatible AUTOSAR release"
+#endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define CANIF_MODULE_ID         60u
 #define CANIF_SID_TRANSMIT      0x49u /**< SWS_CANIF_00005: service ID. */

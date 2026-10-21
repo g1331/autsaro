@@ -1,6 +1,7 @@
 /** @file R24-11 Default Error Tracer; no DLT, persistent log or version API. */
 #ifndef DET_H
 #define DET_H
+#include "Det_Version.h"
 #include "Std_Types.h"
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define DET_MODULE_ID 15u

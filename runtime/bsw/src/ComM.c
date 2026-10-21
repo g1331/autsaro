@@ -8,7 +8,31 @@
 #include "ComM_EcuM.h"
 #include "ComM_Internal.h"
 #include "BswM_ComM.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(BSWM_AR_RELEASE_MAJOR_VERSION) || !defined(BSWM_AR_RELEASE_MINOR_VERSION)
+#error "ComM.c -> BswM_ComM.h: missing AUTOSAR release"
+#elif (BSWM_AR_RELEASE_MAJOR_VERSION != 4U) || (BSWM_AR_RELEASE_MINOR_VERSION != 10U)
+#error "ComM.c -> BswM_ComM.h: incompatible AUTOSAR release"
+#endif
 #include "SchM_ComM.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "ComM.c -> SchM_ComM.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "ComM.c -> SchM_ComM.h: incompatible AUTOSAR release"
+#endif
+/* SWS_ComM_00418: source release is independent of the imported header producer. */
+#define COMM_C_AR_RELEASE_MAJOR_VERSION    4U
+#define COMM_C_AR_RELEASE_MINOR_VERSION    10U
+#define COMM_C_AR_RELEASE_REVISION_VERSION 0U
+#if !defined(COMM_AR_RELEASE_MAJOR_VERSION) || !defined(COMM_AR_RELEASE_MINOR_VERSION) ||          \
+    !defined(COMM_AR_RELEASE_REVISION_VERSION)
+#error "ComM.c -> ComM.h: missing internal AUTOSAR release"
+#elif (COMM_AR_RELEASE_MAJOR_VERSION != COMM_C_AR_RELEASE_MAJOR_VERSION) ||                        \
+    (COMM_AR_RELEASE_MINOR_VERSION != COMM_C_AR_RELEASE_MINOR_VERSION) ||                          \
+    (COMM_AR_RELEASE_REVISION_VERSION != COMM_C_AR_RELEASE_REVISION_VERSION)
+#error "ComM.c -> ComM.h: inconsistent internal AUTOSAR release"
+#endif
 #define COMM_USER_CAPACITY 32u /**< Users per channel; the generator enforces it. */
 #define COMM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"
@@ -38,6 +62,12 @@ static ComM_ModeType comm_published COMM_VAR_CLEARED; /**< Last mode sent to use
 static boolean comm_publishing COMM_VAR_CLEARED;      /**< Publisher; Init preserves. */
 #define COMM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "ComM.c -> ComM_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "ComM.c -> ComM_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define COMM_START_SEC_CODE
 #include "ComM_MemMap.h"
 static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config)

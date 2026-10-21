@@ -1,6 +1,7 @@
 /** @file Standard configured CanIf callbacks to LSduR. */
 #ifndef LSDUR_CANIF_H
 #define LSDUR_CANIF_H
+#include "LSduR_Version.h"
 #include "LSduR.h"
 /** Synchronously route a matching CanIf reception (CP_SWS_LSduR_91011).
  * @param[in] RxPduId A configured lower Rx handle.

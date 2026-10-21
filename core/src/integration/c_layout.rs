@@ -589,3 +589,24 @@ mod tests {
         assert_eq!(wrapped.lines().count(), 2);
     }
 }
+
+/// SWS_BSW_00036 checks an actual external include, independently of its producer.
+pub(super) fn release_check(consumer: &str, header: &str, prefix: &str) -> String {
+    let missing = condition(
+        "if",
+        &[
+            format!("!defined({prefix}_AR_RELEASE_MAJOR_VERSION)"),
+            format!("!defined({prefix}_AR_RELEASE_MINOR_VERSION)"),
+        ],
+    );
+    let wrong = condition(
+        "elif",
+        &[
+            format!("({prefix}_AR_RELEASE_MAJOR_VERSION != 4U)"),
+            format!("({prefix}_AR_RELEASE_MINOR_VERSION != 10U)"),
+        ],
+    );
+    format!(
+        "/* SWS_BSW_00036: imported AUTOSAR major/minor release. */\n{missing}#error \"{consumer} -> {header}: missing AUTOSAR release\"\n{wrong}#error \"{consumer} -> {header}: incompatible AUTOSAR release\"\n#endif\n"
+    )
+}

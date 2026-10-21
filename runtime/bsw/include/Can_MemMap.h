@@ -1,6 +1,7 @@
 /** @file Repeated section protocol for controlled GCC PE/ELF targets.
  * Explicit .text/.bss mapping; no MCU linker placement is implied.
  */
+#include "MemMap_Version.h"
 #if (defined(CAN_START_SEC_CODE) + defined(CAN_STOP_SEC_CODE) +                                    \
      defined(CAN_START_SEC_VAR_CLEARED_UNSPECIFIED) +                                              \
      defined(CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED)) != 1

@@ -3,6 +3,7 @@
  */
 #ifndef RTE_DATA_HANDLE_TYPE_H
 #define RTE_DATA_HANDLE_TYPE_H
+#include "Rte_Version.h"
 
 #include "Rte_Type.h"
 

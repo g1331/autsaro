@@ -2,8 +2,26 @@
 #include "Dcm.h"
 #include "Dcm_ComM.h"
 #include "PduR_Dcm.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(PDUR_AR_RELEASE_MAJOR_VERSION) || !defined(PDUR_AR_RELEASE_MINOR_VERSION)
+#error "Dcm.c -> PduR_Dcm.h: missing AUTOSAR release"
+#elif (PDUR_AR_RELEASE_MAJOR_VERSION != 4U) || (PDUR_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Dcm.c -> PduR_Dcm.h: incompatible AUTOSAR release"
+#endif
 #include "ComM_Dcm.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMM_AR_RELEASE_MAJOR_VERSION) || !defined(COMM_AR_RELEASE_MINOR_VERSION)
+#error "Dcm.c -> ComM_Dcm.h: missing AUTOSAR release"
+#elif (COMM_AR_RELEASE_MAJOR_VERSION != 4U) || (COMM_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Dcm.c -> ComM_Dcm.h: incompatible AUTOSAR release"
+#endif
 #include "SchM_Dcm.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "Dcm.c -> SchM_Dcm.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Dcm.c -> SchM_Dcm.h: incompatible AUTOSAR release"
+#endif
 #define DCM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Dcm_MemMap.h"
 #define DCM_BUFFER_CAPACITY 256u
@@ -125,6 +143,12 @@ typedef struct {
 static Dcm_ActorsType dcm_actors DCM_VAR_CLEARED; /**< DCM_STATE; preserved by Init. */
 #define DCM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Dcm_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Dcm.c -> Dcm_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Dcm.c -> Dcm_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define DCM_START_SEC_CODE
 #include "Dcm_MemMap.h"
 static DCM_CODE void Dcm_SetSession(Dcm_SesCtrlType next)

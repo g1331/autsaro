@@ -5,20 +5,30 @@ use super::symbolic_names::{self, name};
 use super::{PlanDiagnostic, ValidatedIntegrationPlan};
 use crate::target::BuildTarget;
 
-fn header(name: &str, body: &str) -> String {
+fn header(owner: &str, name: &str, body: &str) -> String {
     format!(
         "/** @file Generated from the selected source contract. */\n{}",
-        c_layout::header(name, body)
+        c_layout::header(name, &format!("#include \"{owner}_Version.h\"\n{body}"))
     )
 }
 /// Module interlink headers share the standard type import and C++ linkage.
 fn schm_header(module: &str, body: &str) -> String {
     header(
+        "Rte",
         &format!("SCHM_{}_H", module.to_uppercase()),
         &format!(
             r#"#include "SchM_{module}_Type.h"
-{linkage_begin}{body}
+{linkage_begin}{body}{memmap_check}
 {linkage_end}"#,
+            memmap_check = if body.contains("_MemMap.h") {
+                c_layout::release_check(
+                    &format!("SchM_{module}.h"),
+                    &format!("{module}_MemMap.h"),
+                    "MEMMAP",
+                )
+            } else {
+                String::new()
+            },
             linkage_begin = c_layout::linkage(true),
             linkage_end = c_layout::linkage(false)
         ),
@@ -256,6 +266,7 @@ pub(super) fn files(
             ECU,
             format!("include/{module}_Cfg.h"),
             header(
+                module,
                 &format!("{}_CFG_H", module.to_uppercase()),
                 &c_layout::commented_defines(definitions, "Generated handle."),
             ),
@@ -315,13 +326,17 @@ pub(super) fn files(
             ECU,
             format!("include/SchM_{module}_Type.h"),
             header(
+                "Rte",
                 &format!("SCHM_{}_TYPE_H", module.to_uppercase()),
                 &format!(
                     "#include \"Rte_Type.h\"\n{}",
                     if module == "Dcm" {
-                        "#include \"Rte_Dcm_Type.h\"\n"
+                        format!(
+                            "#include \"Rte_Dcm_Type.h\"\n{}",
+                            c_layout::release_check("SchM_Dcm_Type.h", "Rte_Dcm_Type.h", "DCM")
+                        )
                     } else {
-                        ""
+                        String::new()
                     }
                 ),
             ),
@@ -387,7 +402,10 @@ pub(super) fn files(
         path,
         &[super::outputs::Edit::Once(
             "@DEFINES@",
-            &format!("#include \"Os_Cfg.h\"\n{defines}"),
+            &format!(
+                "#include \"Os_Cfg.h\"\n{}{defines}",
+                c_layout::release_check("Ecu_TargetConfig.h", "Os_Cfg.h", "OS")
+            ),
         )],
     )?;
     outputs.emit_rendered(ECU, path, text)?;
@@ -435,6 +453,48 @@ pub(super) fn files(
 #include "SchM_Dcm.h"
 "#,
     );
+    for (header, prefix) in [
+        ("Can_Cfg.h", "CAN"),
+        ("CanIf.h", "CANIF"),
+        ("CanIf_Cfg.h", "CANIF"),
+        ("PduR_Cfg.h", "PDUR"),
+        ("LSduR_Cfg.h", "LSDUR"),
+        ("Det.h", "DET"),
+        ("Det_Externals.h", "DET"),
+        ("CanTp.h", "CANTP"),
+        ("Com.h", "COM"),
+        ("Com_Internal.h", "COM"),
+        ("Com_Cfg.h", "COM"),
+        ("ComM_Cfg.h", "COMM"),
+        ("CanTp_Cfg.h", "CANTP"),
+        ("Dcm_Cfg.h", "DCM"),
+        ("ComM.h", "COMM"),
+        ("ComM_BswM.h", "COMM"),
+        ("ComM_Internal.h", "COMM"),
+        ("BswM.h", "BSWM"),
+        ("BswM_ComM.h", "BSWM"),
+        ("Dcm.h", "DCM"),
+        ("Dcm_ComM.h", "DCM"),
+        ("PduR.h", "PDUR"),
+        ("PduR_Com.h", "PDUR"),
+        ("PduR_CanIf.h", "PDUR"),
+        ("LSduR.h", "LSDUR"),
+        ("LSduR_PduR.h", "LSDUR"),
+        ("Rte_Cfg.h", "RTE"),
+        ("Rte_Main.h", "RTE"),
+        ("Rte_Com.h", "RTE"),
+        ("SchM_Can.h", "RTE"),
+        ("SchM_CanTp.h", "RTE"),
+        ("SchM_Com.h", "RTE"),
+        ("SchM_ComM.h", "RTE"),
+        ("SchM_Dcm.h", "RTE"),
+    ] {
+        config.push_str(&c_layout::release_check(
+            "Ecu_RuntimeConfig.c",
+            header,
+            prefix,
+        ));
+    }
     for component in &composition.components {
         config.push_str(&format!(
             "#include \"{}\"\n",
@@ -485,6 +545,25 @@ pub(super) fn files(
 #include "Ecu_HostBusSM.h"
 "#
     .to_owned();
+    can_if_configuration.push_str(&c_layout::release_check(
+        "CanIf_PBcfg.c",
+        "Can_Cfg.h",
+        "CAN",
+    ));
+    for (header, prefix) in [
+        ("Com_Cfg.h", "COM"),
+        ("CanIf_Cfg.h", "CANIF"),
+        ("CanTp_Cfg.h", "CANTP"),
+        ("Dcm_Cfg.h", "DCM"),
+        ("LSduR_Cfg.h", "LSDUR"),
+        ("Com.h", "COM"),
+        ("Dcm.h", "DCM"),
+        ("CanTp.h", "CANTP"),
+        ("LSduR.h", "LSDUR"),
+        ("LSduR_PduR.h", "LSDUR"),
+    ] {
+        pd_configuration.push_str(&c_layout::release_check("PduR_PBcfg.c", header, prefix));
+    }
     let mut receive = Vec::new();
     let mut transmit = Vec::new();
     let mut ls_rx = Vec::new();
@@ -588,6 +667,16 @@ pub(super) fn files(
 #include "LSduR_CanTp.h"
 "#,
         );
+        config.push_str(&c_layout::release_check(
+            "Ecu_RuntimeConfig.c",
+            "PduR_CanTp.h",
+            "PDUR",
+        ));
+        config.push_str(&c_layout::release_check(
+            "Ecu_RuntimeConfig.c",
+            "LSduR_CanTp.h",
+            "LSDUR",
+        ));
         let can_rx = symbolic.reference("CanIfRxPduRef", &tp.rx_npdu)?;
         let can_tx = symbolic.reference("CanIfTxPduRef", &tp.tx_npdu)?;
         let tp_rx = symbolic.parameter("CanTpRxNPduId")?;
@@ -748,6 +837,7 @@ pub(super) fn files(
             ECU,
             format!("include/{module}_Cfg.h"),
             header(
+                module,
                 &format!("{}_CFG_H", module.to_uppercase()),
                 &format!(
                     "#include \"{module}.h\"\n{}extern const {ty} {module}_Config;",

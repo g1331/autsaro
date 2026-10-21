@@ -93,6 +93,7 @@ pub(super) fn files(
 "#
         ));
     }
+    source.push_str(&c_layout::release_check("Rte.c", "Com_Cfg.h", "COM"));
     let diagnostic_types = description
         .diagnostic
         .as_ref()
@@ -100,6 +101,7 @@ pub(super) fn files(
         .transpose()?;
     if diagnostic_types.is_some() {
         source.push_str("#include \"Rte_Dcm_Type.h\"\n");
+        source.push_str(&c_layout::release_check("Rte.c", "Rte_Dcm_Type.h", "DCM"));
     }
     for component in &composition.components {
         source.push_str(&format!(
@@ -517,6 +519,7 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
         source.push_str("}\n");
     }
     section(&mut source, partition, "CALLOUT_CODE", false);
+    source.push_str(&c_layout::release_check("Rte.c", "Rte_MemMap.h", "MEMMAP"));
     Ok(BTreeMap::from([
         // The delivered targets place all RTE code in their executable RTE section.
         (

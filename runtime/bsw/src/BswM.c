@@ -4,6 +4,12 @@
 #include "BswM.h"
 #include "BswM_ComM.h"
 #include "SchM_BswM.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "BswM.c -> SchM_BswM.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "BswM.c -> SchM_BswM.h: incompatible AUTOSAR release"
+#endif
 #define BSWM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "BswM_MemMap.h"
 /* All BSWM_STATE. Postponed inputs imply processing: an input received while an action
@@ -19,6 +25,12 @@ static uint32 postponed BSWM_VAR_CLEARED;   /**< Inputs awaiting arbitration. */
 static boolean processing BSWM_VAR_CLEARED; /**< An arbitration is in flight. */
 #define BSWM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "BswM_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "BswM.c -> BswM_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "BswM.c -> BswM_MemMap.h: incompatible AUTOSAR release"
+#endif
 #define BSWM_START_SEC_CODE
 #include "BswM_MemMap.h"
 BSWM_CODE void BswM_Init(const BswM_ConfigType *ConfigPtr)

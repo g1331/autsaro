@@ -3,6 +3,7 @@
  */
 #ifndef OS_INTEGRATION_HOOKS_H
 #define OS_INTEGRATION_HOOKS_H
+#include "Os_Version.h"
 
 #include "Os_Types.h"
 

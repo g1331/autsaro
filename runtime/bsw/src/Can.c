@@ -2,8 +2,26 @@
 #include "Can_Internal.h"
 #include "Ecu_ProfileConfig.h"
 #include "Det.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(DET_AR_RELEASE_MAJOR_VERSION) || !defined(DET_AR_RELEASE_MINOR_VERSION)
+#error "Can.c -> Det.h: missing AUTOSAR release"
+#elif (DET_AR_RELEASE_MAJOR_VERSION != 4U) || (DET_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Can.c -> Det.h: incompatible AUTOSAR release"
+#endif
 #include "CanIf.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(CANIF_AR_RELEASE_MAJOR_VERSION) || !defined(CANIF_AR_RELEASE_MINOR_VERSION)
+#error "Can.c -> CanIf.h: missing AUTOSAR release"
+#elif (CANIF_AR_RELEASE_MAJOR_VERSION != 4U) || (CANIF_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Can.c -> CanIf.h: incompatible AUTOSAR release"
+#endif
 #include "SchM_Can.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "Can.c -> SchM_Can.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Can.c -> SchM_Can.h: incompatible AUTOSAR release"
+#endif
 #include "Ecu_Execution.h"
 
 /* Static controller options are supplied by the validated integrated configuration. */
@@ -107,6 +125,12 @@ static uint8 rx_overrun_pending CAN_VAR_CLEARED; /**< CAN_E_DATALOST to report; 
 
 #define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Can.c -> Can_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Can.c -> Can_MemMap.h: incompatible AUTOSAR release"
+#endif
 
 #define CAN_START_SEC_CODE
 #include "Can_MemMap.h"

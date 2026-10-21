@@ -23,10 +23,12 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
         r#"/** @file Generated synchronous Counter service bindings.
  * Values are OS ticks, as specified by SWS_Os_00560, despite the type name.
  */
-{guard_start}#include "Os.h"
+{guard_start}#include "Rte_Version.h"
+#include "Os.h"
 #include "Rte_Os_Type.h"
-{linkage_begin}"#,
+{release_check}{linkage_begin}"#,
         guard_start = c_layout::header_start("AUTOSAR_GENERATED_RTE_OS_H"),
+        release_check = c_layout::release_check("Rte_Os.h", "Os.h", "OS"),
         linkage_begin = c_layout::linkage(true),
     );
     let mut clients = String::new();
@@ -153,11 +155,17 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
 "#
     );
     header.push_str(&format!(
-        r#"{start_code}{clients}{stop_code}{linkage_end}#endif
+        r#"{start_code}{clients}{stop_code}{release_check}{linkage_end}#endif
 "#,
         start_code = c_layout::section("RTE_Rte", "Rte", "CODE", true),
         stop_code = c_layout::section("RTE_Rte", "Rte", "CODE", false),
+        release_check = c_layout::release_check(HEADER, "Rte_MemMap.h", "MEMMAP"),
         linkage_end = c_layout::linkage(false)
+    ));
+    source.push_str(&c_layout::release_check(
+        "Rte_OsService.c",
+        "Rte_MemMap.h",
+        "MEMMAP",
     ));
     BTreeMap::from([
         (

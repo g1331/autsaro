@@ -418,8 +418,16 @@ pub(super) fn profile_header(
 /** ECUC CanRxProcessing, CanTxProcessing and CanBusoffProcessing select POLLING.
  * The generated host target owns queued completion and the controller/HOH handles.
  */
-{profile}#endif
+{checks}{profile}#endif
 "#,
+            checks = [
+                ("Std_Types.h", "STD_TYPES"),
+                ("Can_Cfg.h", "CAN"),
+                ("CanIf_Cfg.h", "CANIF")
+            ]
+            .into_iter()
+            .map(|(h, p)| c_layout::release_check("Ecu_ProfileConfig.h", h, p))
+            .collect::<String>(),
             guard_start = c_layout::header_start("ECU_PROFILE_CONFIG_H")
         )
         .into_bytes(),
@@ -438,7 +446,8 @@ pub(super) fn type_headers(communication: &CommunicationRuntimeContract) -> Vec<
         "include/ComStack_Cfg.h",
         format!(
             r#"/** @file EcuC-selected communication widths. */
-{guard_start}#include "Platform_Types.h"
+{guard_start}#include "ComStack_Version.h"
+#include "Platform_Types.h"
 /** PDU handle width selected by EcuC PduIdTypeEnum. */
 typedef {} PduIdType;
 /** PDU byte-count width selected by EcuC PduLengthTypeEnum. */

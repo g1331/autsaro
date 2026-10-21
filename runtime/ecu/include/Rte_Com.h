@@ -1,8 +1,17 @@
 /** @file Handle-bearing COM reception and timeout notifications. */
 #ifndef RTE_COM_H
 #define RTE_COM_H
+#include "Rte_Version.h"
 #include "Rte_Type.h"
 #include "ComStack_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION) ||                                             \
+    !defined(COMSTACKTYPE_AR_RELEASE_MINOR_VERSION)
+#error "Rte_Com.h -> ComStack_Types.h: missing AUTOSAR release"
+#elif (COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION != 4U) ||                                             \
+    (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Rte_Com.h -> ComStack_Types.h: incompatible AUTOSAR release"
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif

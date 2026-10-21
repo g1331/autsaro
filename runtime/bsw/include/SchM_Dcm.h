@@ -2,11 +2,18 @@
  */
 #ifndef SCHM_DCM_H
 #define SCHM_DCM_H
+#include "Rte_Version.h"
 #include "SchM_Dcm_Type.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 #include "Rte_Dcm_Type.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(DCM_AR_RELEASE_MAJOR_VERSION) || !defined(DCM_AR_RELEASE_MINOR_VERSION)
+#error "SchM_Dcm.h -> Rte_Dcm_Type.h: missing AUTOSAR release"
+#elif (DCM_AR_RELEASE_MAJOR_VERSION != 4U) || (DCM_AR_RELEASE_MINOR_VERSION != 10U)
+#error "SchM_Dcm.h -> Rte_Dcm_Type.h: incompatible AUTOSAR release"
+#endif
 #include "Rte.h"
 /** Enter the Dcm state area (SWS_Rte_07250).
  * @par Return
@@ -41,6 +48,12 @@ void SchM_Exit_Dcm_DCM_STATE(void);
 void Dcm_MainFunction(void);
 #define DCM_STOP_SEC_CODE
 #include "Dcm_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "SchM_Dcm.h -> Dcm_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "SchM_Dcm.h -> Dcm_MemMap.h: incompatible AUTOSAR release"
+#endif
 /** Publish the session mode through the selected immediate SchM interface.
  * @param[in] mode Configured session mode, distinct from the UDS session ID.
  * @return SCHM_E_OK after publishing the immediate mode.

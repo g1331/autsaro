@@ -6,6 +6,7 @@
  */
 #ifndef AUTOSAR_OS_HOST_H
 #define AUTOSAR_OS_HOST_H
+#include "Os_Version.h"
 
 #include <stdint.h>
 /** SWS_BSW_00121 native GCC TLS mapping; initialized once per host thread. */
@@ -200,4 +201,10 @@ OS_MEMMAP int Os_HostSetBinaryStandardStreams(void);
 OS_MEMMAP void Os_HostExit(uint32_t status);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_Host.h -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Host.h -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

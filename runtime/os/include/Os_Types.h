@@ -1,10 +1,23 @@
 /** @file Public AUTOSAR OS scalar types and constants for the single-core target. */
 #ifndef AUTOSAR_OS_TYPES_H
 #define AUTOSAR_OS_TYPES_H
+#include "Os_Version.h"
 #include <stddef.h>
 #include <stdint.h>
 #include "Std_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(STD_TYPES_AR_RELEASE_MAJOR_VERSION) || !defined(STD_TYPES_AR_RELEASE_MINOR_VERSION)
+#error "Os_Types.h -> Std_Types.h: missing AUTOSAR release"
+#elif (STD_TYPES_AR_RELEASE_MAJOR_VERSION != 4U) || (STD_TYPES_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Types.h -> Std_Types.h: incompatible AUTOSAR release"
+#endif
 #include "Rte_Os_Type.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
+#error "Os_Types.h -> Rte_Os_Type.h: missing AUTOSAR release"
+#elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_Types.h -> Rte_Os_Type.h: incompatible AUTOSAR release"
+#endif
 /** OSEK OS 2.2.3 13.1 service result; E_OK or a named E_OS_* status. */
 typedef uint8 StatusType;
 /** OSEK OS 2.2.3 13.2.1 Task identifier; selected target uses IDs below OS_MAX_TASKS. */

@@ -1,6 +1,7 @@
 /** @file Standard configured LSduR upper interface. */
 #ifndef LSDUR_PDUR_H
 #define LSDUR_PDUR_H
+#include "LSduR_Version.h"
 #include "LSduR.h"
 /** Forward a configured PduR request to its lower handle (CP_SWS_LSduR_91009).
  * @param[in] TxPduId A configured PduR source handle; distinct from the lower namespace.

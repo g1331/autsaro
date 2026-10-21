@@ -1,8 +1,23 @@
 /** @file One physical UDS connection with synchronous reads and caller-owned configuration. */
 #ifndef DCM_H
 #define DCM_H
+#include "Dcm_Version.h"
 #include "Std_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(STD_TYPES_AR_RELEASE_MAJOR_VERSION) || !defined(STD_TYPES_AR_RELEASE_MINOR_VERSION)
+#error "Dcm.h -> Std_Types.h: missing AUTOSAR release"
+#elif (STD_TYPES_AR_RELEASE_MAJOR_VERSION != 4U) || (STD_TYPES_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Dcm.h -> Std_Types.h: incompatible AUTOSAR release"
+#endif
 #include "ComStack_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION) ||                                             \
+    !defined(COMSTACKTYPE_AR_RELEASE_MINOR_VERSION)
+#error "Dcm.h -> ComStack_Types.h: missing AUTOSAR release"
+#elif (COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION != 4U) ||                                             \
+    (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Dcm.h -> ComStack_Types.h: incompatible AUTOSAR release"
+#endif
 #include "Rte_Dcm_Type.h"
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define DCM_MODULE_ID 53u

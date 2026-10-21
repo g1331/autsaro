@@ -4,6 +4,7 @@
  */
 #ifndef COMM_INTERNAL_H
 #define COMM_INTERNAL_H
+#include "ComM_Version.h"
 #include "ComM.h"
 ComM_StateType ComM_RunChannel(void);
 #endif

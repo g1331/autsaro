@@ -1,6 +1,7 @@
 /** @file R24-11 Dcm active and inactive diagnostic notifications to ComM. */
 #ifndef COMM_DCM_H
 #define COMM_DCM_H
+#include "ComM_Version.h"
 #include "ComM.h"
 /** Keep the channel requested while diagnosis is active (SWS_ComM_00873).
  * @param[in] Channel Configured channel; other channels are ignored.

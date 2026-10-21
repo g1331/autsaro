@@ -54,4 +54,9 @@ RTE_Rte_CODE boolean Ecu_SchMReady(void)
 RTE_Rte_CODE boolean Ecu_SchMTimingActive(void) { return schm_lifecycle == SCHM_LIFECYCLE_TIMING; }
 #define RTE_Rte_STOP_SEC_CODE
 #include "Rte_MemMap.h"
-@MODES@
+@MODES@/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "SchM_Main.c -> Rte_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "SchM_Main.c -> Rte_MemMap.h: incompatible AUTOSAR release"
+#endif

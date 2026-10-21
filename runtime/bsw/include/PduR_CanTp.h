@@ -1,7 +1,16 @@
 /** @file Selected unbuffered CanTp-to-Dcm transport routes. */
 #ifndef PDUR_CANTP_H
 #define PDUR_CANTP_H
+#include "PduR_Version.h"
 #include "ComStack_Types.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION) ||                                             \
+    !defined(COMSTACKTYPE_AR_RELEASE_MINOR_VERSION)
+#error "PduR_CanTp.h -> ComStack_Types.h: missing AUTOSAR release"
+#elif (COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION != 4U) ||                                             \
+    (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
+#error "PduR_CanTp.h -> ComStack_Types.h: incompatible AUTOSAR release"
+#endif
 /** Route reception admission directly to Dcm (SWS_PduR_00507, SWS_Dcm_00642).
  * @param[in] id A configured CanTp Rx N-SDU handle.
  * @param[in] info Borrowed first-frame descriptor, or NULL when no initial data is available;
