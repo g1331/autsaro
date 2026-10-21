@@ -4,19 +4,95 @@
 #include "nested_interrupts.c"
 #undef main
 
-static void arti_check(int accepted)
+static void arti_failure(const char *invariant,
+                         unsigned line,
+                         long cursor,
+                         const ISRType *stack,
+                         unsigned used,
+                         unsigned starts,
+                         unsigned returns,
+                         unsigned service_queries,
+                         unsigned hook_errors)
 {
-    if (accepted == 0) {
-        fprintf(stderr, "ARTI consumer assertion failed after actor shutdown\n");
-        ExitProcess(7u);
+    fprintf(stderr,
+            "ARTI consumer assertion failed after actor shutdown: %s:%u invariant=%s\n"
+            "arti_snapshot scenario=%s cursor=%ld count=%ld dropped=%ld development_error=%ld "
+            "used=%u starts=%u returns=%u queries=%u hook_errors=%u\n"
+            "nested_snapshot children=%u grandchildren=%u helpers=%u errors=%u depth=%u "
+            "maximum=%u trace=%s parent_state=%u\n",
+            __FILE__,
+            line,
+            invariant,
+            scenario,
+            cursor,
+            (long)Arti_EventCount,
+            (long)Arti_EventsDropped,
+            (long)Arti_DevelopmentError,
+            used,
+            starts,
+            returns,
+            service_queries,
+            hook_errors,
+            children,
+            grandchildren,
+            helpers,
+            errors,
+            depth,
+            maximum,
+            trace,
+            (unsigned)parent_state);
+    for (unsigned j = 0u; j < used && j < 32u; ++j) {
+        fprintf(stderr, "arti_stack index=%u isr=%u\n", j, (unsigned)stack[j]);
     }
+    for (unsigned j = 0u; j < errors && j < 8u; ++j) {
+        fprintf(stderr,
+                "nested_error isr=%u status=%u service=%u\n",
+                error_isrs[j],
+                (unsigned)error_codes[j],
+                (unsigned)error_services[j]);
+    }
+    /* Actors are stopped; an unpublished reservation has no readable payload. */
+    for (long j = 0L; j < Arti_EventCount && j < (long)ARTI_EVENT_CAPACITY; ++j) {
+        const Arti_Event *event = &Arti_Events[j];
+        fprintf(stderr, "arti_record index=%ld published=%ld", j, (long)event->published);
+        if (event->published == 1L) {
+            fprintf(stderr,
+                    " context=%s class=%s instance=%s event=%s instance_parameter=%u "
+                    "event_parameter=%u status_valid=%u service_status=%u",
+                    event->context,
+                    event->class_name,
+                    event->instance,
+                    event->event,
+                    (unsigned)event->instance_parameter,
+                    (unsigned)event->event_parameter,
+                    (unsigned)event->status_valid,
+                    (unsigned)event->service_status);
+        }
+        fputc('\n', stderr);
+    }
+    ExitProcess(7u);
 }
+#define arti_check(condition)                                                                      \
+    do {                                                                                           \
+        if (!(condition)) {                                                                        \
+            arti_failure(#condition,                                                               \
+                         __LINE__,                                                                 \
+                         i,                                                                        \
+                         stack,                                                                    \
+                         used,                                                                     \
+                         starts,                                                                   \
+                         returns,                                                                  \
+                         service_queries,                                                          \
+                         hook_errors);                                                             \
+        }                                                                                          \
+    } while (0)
 void Os_ArtiTestShutdownObserved(void)
 {
     ISRType stack[32];
     unsigned used = 0u, starts = 0u, returns = 0u;
     unsigned service_queries = 0u, hook_errors = 0u;
-    for (long i = 0L; i < Arti_EventCount; ++i) {
+    long i;
+    for (i = 0L; i < Arti_EventCount; ++i) {
         const Arti_Event *event = &Arti_Events[i];
         arti_check(event->published == 1L && event->instance_parameter == 0u);
         arti_check(strcmp(event->instance, "Os") == 0);

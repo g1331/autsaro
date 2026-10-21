@@ -1518,6 +1518,61 @@ def check_arti_native(directory: Path) -> None:
             require(not compile_failure, name)
             result = execute(damaged, "transitions")
             require(result["exit"] == 7 and "arti scenario=" not in result["stdout"], result)
+    # Corrupt only the stopped-actor fixture's retained observations, not runtime timing.
+    for name, mutation, invariant, observation in [
+        ("unpublished", "Arti_Events[0].published = 0L;",
+         "event->published == 1L", "arti_record index=0 published=0\n"),
+        ("nesting", ('if (strcmp(event->event, "OsCat2Isr_Stop") == 0) { '
+         'Arti_Events[i].event_parameter = 20u; }'),
+         "stack[--used] == id", "event=OsCat2Isr_Stop instance_parameter=0 event_parameter=20"),
+        ("status", ('if (strcmp(event->event, "OsServiceCall_GetISRID_Return") == 0) { '
+         'Arti_Events[i].status_valid = 0u; }'),
+         "event->status_valid == 1u", "status_valid=0 service_status=0"),
+        ("drops", "Arti_EventsDropped = 1L;",
+         "hook_errors == errors && Arti_EventsDropped == 0L", "dropped=1"),
+    ]:
+        faulty = directory / ("nested-" + name)
+        faulty.mkdir()
+        target = faulty / "target"
+        shutil.copytree(TARGET, target)
+        fixture = target / "tests/arti_nested.c"
+        text = fixture.read_text(encoding="utf-8")
+        anchor = "        const Arti_Event *event = &Arti_Events[i];"
+        require(text.count(anchor) == 1, name)
+        fixture.write_bytes(text.replace(anchor, anchor + "\n        " + mutation, 1).encode("utf-8"))
+        build_dir = faulty / "build"
+        build_dir.mkdir()
+        damaged, _ = build(build_dir, "arti_nested.c", ("OS_ARTI_TESTS",), target=target)
+        result = execute(damaged, "nested")
+        require(result["exit"] == 7, result)
+        require(re.search(r"arti_nested\.c:\d+ invariant=", result["stderr"]) is not None, result)
+        for expected in (invariant, observation, "arti_snapshot scenario=nested cursor=",
+                         "nested_snapshot children=1 grandchildren=1 helpers=1 errors=0 depth=0",
+                         "maximum=3 trace=APCGcpHB", "arti_record index=0 published="):
+            require(expected in result["stderr"], result)
+        if name == "unpublished":
+            require("arti_record index=0 published=0 context=" not in result["stderr"], result)
+    faulty = directory / "nested-fixture"
+    faulty.mkdir()
+    target = faulty / "target"
+    shutil.copytree(TARGET, target)
+    fixture = target / "tests/nested_interrupts.c"
+    text = fixture.read_text(encoding="utf-8")
+    original = "check(isr_thread == GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
+    replacement = "check(isr_thread != GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
+    require(text.count(original) == 1, "nested fixture assertion")
+    fixture.write_bytes(text.replace(original, replacement, 1).encode("utf-8"))
+    build_dir = faulty / "build"
+    build_dir.mkdir()
+    damaged, _ = build(build_dir, "arti_nested.c", ("OS_ARTI_TESTS",), target=target)
+    result = execute(damaged, "nested")
+    require(result["exit"] == 7, result)
+    require(re.search(r"nested_interrupts\.c:\d+ invariant=isr_thread !=", result["stderr"]) is not None, result)
+    for expected in ("reason=7", "used=2 starts=2 returns=0 queries=0 hook_errors=0",
+                     "nested_snapshot children=0 grandchildren=0 helpers=0 errors=0 depth=1",
+                     "maximum=1 trace=AP", "arti_stack index=1 isr=6"):
+        require(expected in result["stderr"], result)
+    print("ARTI nested diagnostics PASS: four recorder faults and one fixture fault identified")
     print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; two compiled faults rejected")
 
 
