@@ -57,7 +57,7 @@ def _semantic(summary: dict) -> dict:
     def strings(value, nonempty=False):
         return isinstance(value, list) and (not nonempty or bool(value)) and all(isinstance(x, str) and x for x in value)
     require(isinstance(identity, dict) and set(identity) ==
-            {"version", "compiler", "defines", "models", "libraries", "analysisCode"})
+            {"version", "compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime"})
     require(type(identity["version"]) is int and identity["version"] == 1)
     compiler = identity["compiler"]
     require(isinstance(compiler, dict) and set(compiler) == {"machine", "release", "predefines", "builtins"})
@@ -68,8 +68,9 @@ def _semantic(summary: dict) -> dict:
     require(isinstance(defines, dict) and set(defines) == set(summary["scope"]["translationUnits"]))
     require(all(strings(value) for value in defines.values()))
     hashes(identity["models"], ("platformModel", "platformLibrary"), True)
-    hashes(identity["libraries"], ("std", "windows" if summary["scope"]["target"].startswith("windows") else "posix"))
-    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "build.py", "process.py", "owner.py"))
+    hashes(identity["libraries"], ("std", "windows" if summary["scope"]["target"].startswith("windows") else "posix", "implicitStd"))
+    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py"))
+    hashes(identity["addonRuntime"], ("runaddon.py", "cppcheck.py", "cppcheckdata.py"))
     return identity
 
 
@@ -104,7 +105,7 @@ def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
         if programs(current) != programs(previous):
             raise ValueError("Program identity differs")
         current_identity, previous_identity = _semantic(current), _semantic(previous)
-        for field in ("compiler", "defines", "models", "libraries", "analysisCode"):
+        for field in ("compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime"):
             if current_identity[field] != previous_identity[field]:
                 raise ValueError(f"Semantic identity differs: {field}")
         now = _counts(current, output / "project")

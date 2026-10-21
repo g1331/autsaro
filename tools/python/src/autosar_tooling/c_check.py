@@ -85,10 +85,14 @@ def tool_identity(directory: Path) -> tuple[Path, Path, dict]:
     hashes = {name: digest(addons / name) for name in ADDON_HASHES}
     if hashes != ADDON_HASHES:
         raise ValueError("Cppcheck addon hashes differ from the pinned 2.21.0 source")
+    _, filesdir, _ = run([str(executable), "--filesdir"], directory, "files-directory", 30)
+    if filesdir.strip() and not Path(filesdir.strip()).is_absolute():
+        raise ValueError("Cppcheck reported a relative files directory")
     return executable, addons, {
         "version": CPPCHECK_VERSION,
         "expectedSourceRevision": CPPCHECK_REVISION,
         "binarySha256": digest(executable),
+        "filesDirectory": filesdir.strip(),
         "addons": hashes,
     }
 
@@ -424,7 +428,7 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
     return code, passed, diagnostics, command
 
 
-def semantic_identity(executable: Path, scope: dict) -> dict:
+def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ...] = ()) -> dict:
     """Capture actual inputs; installation paths and binary carriers are provenance only."""
     libraries = ("std", "windows" if scope["target"].startswith("windows") else "posix")
     candidates = (executable.parent / "cfg", executable.parent.parent / "share/cppcheck/cfg",
@@ -439,15 +443,48 @@ def semantic_identity(executable: Path, scope: dict) -> dict:
     import ecu_tools.owner
     import ecu_tools.process
     drivers.extend(Path(module.__file__) for module in (ecu_tools.build, ecu_tools.process, ecu_tools.owner))
+    drivers.extend(Path(ecu_tools.process.__file__).with_name(name) for name in ("launch.py", "windows_job.py"))
     def text_hash(path):
         return hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+    filesdir = Path(scope["cppcheckFilesDirectory"]) if scope.get("cppcheckFilesDirectory") else None
+    # Cppcheck 2.21 Library::load and AddonInfo::getFullPath search in this order.
+    def first(paths, name):
+        found = next((path / name for path in paths if (path / name).is_file()), None)
+        if found is None:
+            raise ValueError(f"Actual Cppcheck input unavailable: {name}")
+        return found.resolve()
+    runtimes = []
+    implicit = []
+    for directory in directories or (Path.cwd(),):
+        implicit.append(first([directory, executable.parent, executable.parent / "cfg",
+                               *([filesdir / "cfg"] if filesdir else [])], "std.cfg"))
+        runner = first([directory, executable.parent, executable.parent / "addons",
+                        *([filesdir, filesdir / "addons"] if filesdir else [])], "runaddon.py")
+        runtimes.append({name: str(first([runner.parent], name))
+                         for name in ("runaddon.py", "cppcheck.py", "cppcheckdata.py")})
+        config = next((path / "cppcheck.cfg" for path in
+                       ([filesdir, executable.parent] if filesdir else [executable.parent])
+                       if (path / "cppcheck.cfg").is_file()), None)
+        # External addons/suppressions introduce an unbounded extra input closure.
+        if config and any(json.loads(config.read_text(encoding="utf-8")).get(key)
+                          for key in ("addons", "suppressions", "safety")):
+            raise ValueError("Implicit Cppcheck config adds unsupported addons, suppressions or safety overrides")
+        scope["cppcheckConfig"] = {"path": str(config), "sha256": text_hash(config)} if config else None
+    runtime_hashes = [{name: text_hash(Path(path)) for name, path in runtime.items()} for runtime in runtimes]
+    if (any(value != runtime_hashes[0] for value in runtime_hashes)
+            or any(text_hash(path) != text_hash(implicit[0]) for path in implicit)):
+        raise ValueError("Cppcheck implicit inputs differ between programs")
+    scope["implicitStdLibrary"] = str(implicit[0])
+    scope["addonRuntime"] = runtimes[0]
     return {
         "version": 1,
         "compiler": scope["compilerSemanticInputs"],
         "defines": {name: sorted(values) for name, values in scope["compilerDiscoveredDefines"].items()},
         "models": {name: text_hash(Path(scope[name]["path"])) if scope[name] else None
                    for name in ("platformModel", "platformLibrary")},
-        "libraries": {name: text_hash(Path(path)) for name, path in scope["cppcheckLibraries"].items()},
+        "libraries": {**{name: text_hash(Path(path)) for name, path in scope["cppcheckLibraries"].items()},
+                      "implicitStd": text_hash(implicit[0])},
+        "addonRuntime": runtime_hashes[0],
         "analysisCode": {path.name: text_hash(path) for path in drivers},
     }
 
@@ -470,7 +507,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         summary["sourceSealSha256"] = digest(project / FILE_HASHES)
         root, sources, database, scope = prepare(project, target_id, output)
         summary["scope"] = scope
-        summary["semanticIdentity"] = semantic_identity(executable, scope)
+        scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
         entries = scope.get("entries") or {}
         # build.py selects exactly one ECU main for each native executable.
         # Keep cross-TU checking inside that same link boundary.
@@ -486,6 +523,8 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
             directory.mkdir(exist_ok=True, mode=0o700)
             commands = [row for row in database if Path(row["file"]).resolve() in {(root / name).resolve() for name in units}]
             jobs.append((program, entry, units, commands, directory))
+        directories = tuple(directory for _, _, _, _, directory in jobs)
+        summary["semanticIdentity"] = semantic_identity(executable, scope, directories)
         # Each program keeps its own CTU, build directory and receipts, so the
         # single-threaded analyzer runs concurrently; results merge in declared order.
         with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
@@ -507,7 +546,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         sealed_sources(project)
         if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:
             raise ValueError("Source seal changed during analysis")
-        if semantic_identity(executable, scope) != summary["semanticIdentity"]:
+        if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
             raise ValueError("Semantic inputs changed during analysis")
         summary["passed"] = all_passed
         if baseline is not None:

@@ -37,9 +37,11 @@ class CComparisonTests(unittest.TestCase):
                          "predefines": ["#define __GNUC__ 13"], "builtins": ["-D__GNUC__=13"]},
             "defines": {"main.c": []},
             "models": {"platformModel": None, "platformLibrary": None},
-            "libraries": {name: "a" * 64 for name in ("std", "posix")},
+            "libraries": {name: "a" * 64 for name in ("std", "posix", "implicitStd")},
+            "addonRuntime": {"runaddon.py": "d" * 64, "cppcheck.py": "d" * 64,
+                             "cppcheckdata.py": "d" * 64},
             "analysisCode": {name: "b" * 64 for name in
-                             ("c_check.py", "c_addon.py", "c_comparison.py", "build.py", "process.py", "owner.py")},
+                             ("c_check.py", "c_addon.py", "c_comparison.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
         }
         self.write(baseline, summary)
         return summary, project, output, baseline
@@ -130,6 +132,7 @@ class CComparisonTests(unittest.TestCase):
             "defines": lambda x: x["defines"]["main.c"].append("-DCHAR_BIT=16"),
             "models": lambda x: x["models"].update(platformModel="c" * 64),
             "libraries": lambda x: x["libraries"].update(posix="c" * 64),
+            "addonRuntime": lambda x: x["addonRuntime"].update({"runaddon.py": "c" * 64}),
             "analysisCode": lambda x: x["analysisCode"].update({"c_addon.py": "c" * 64}),
         }
         for field, change in changes.items():
@@ -143,7 +146,7 @@ class CComparisonTests(unittest.TestCase):
         changes = [lambda x: x.pop("semanticIdentity"),
                    lambda x: x.update(semanticIdentity=None),
                    lambda x: x["semanticIdentity"].update(version=0)]
-        for field in ("compiler", "defines", "models", "libraries", "analysisCode"):
+        for field in ("compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime"):
             changes.append(lambda x, field=field: x["semanticIdentity"].update({field: {}}))
         changes.append(lambda x: x["semanticIdentity"]["models"].update(platformModel="broken"))
         for previous in (False, True):

@@ -333,11 +333,23 @@ class ActualCAnalysisTests(unittest.TestCase):
             (install / "cfg").mkdir(parents=True)
             for name, path in scope["cppcheckLibraries"].items():
                 shutil.copyfile(path, install / "cfg" / (name + ".cfg"))
+            (install / "addons").mkdir()
+            for name, path in scope["addonRuntime"].items():
+                shutil.copyfile(path, install / "addons" / name)
             first = c_check.semantic_identity(install / "cppcheck", scope)
             cfg = install / "cfg/std.cfg"
             cfg.write_text(cfg.read_text().replace('<valid>-1.0:1.0</valid>', '<valid>0.0:1.0</valid>', 1))
             second = c_check.semantic_identity(install / "cppcheck", scope)
             self.assertNotEqual(first["libraries"]["std"], second["libraries"]["std"])
+            directories = (root / "program-a", root / "program-b")
+            for directory in directories:
+                directory.mkdir()
+                shutil.copyfile(install / "cfg/std.cfg", directory / "std.cfg")
+            c_check.semantic_identity(install / "cppcheck", scope, directories)
+            (directories[1] / "std.cfg").write_text('<def format="2"/>\n')
+            with self.assertRaisesRegex(ValueError, "implicit inputs differ between programs"):
+                c_check.semantic_identity(install / "cppcheck", scope, directories)
+
             # The unchanged original producer result remains comparable.
             self.assertEqual(compare(before, project, baseline, baseline), {"new": [], "removed": []})
 
@@ -391,6 +403,7 @@ class ActualCAnalysisTests(unittest.TestCase):
             executable.chmod(0o700)
             for name, path in before["scope"]["cppcheckLibraries"].items():
                 shutil.copyfile(path, install / "cfg" / (name + ".cfg"))
+            shutil.copytree(c_check.addon_directory(original), install / "addons", ignore=shutil.ignore_patterns("__pycache__"))
             compiler = install / "gcc"
             import shlex
             compiler.write_text("#!/bin/sh\nexec " + shlex.quote(before["scope"]["diagnosticCompiler"]["path"]) + ' "$@"\n')
@@ -403,3 +416,93 @@ class ActualCAnalysisTests(unittest.TestCase):
             self.assertNotEqual(before["scope"]["diagnosticCompiler"]["sha256"], after["scope"]["diagnosticCompiler"]["sha256"])
             self.assertEqual(before["semanticIdentity"], after["semanticIdentity"])
             self.assertEqual(after["comparison"], {"new": [], "removed": []})
+
+    def test_implicit_library_runner_and_execution_helpers_are_actual_inputs(self):
+        import os
+        import shutil
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self.project(root, 'extern int pthread_create(void);\nextern int review_probe(int);\n'
+                                   'int main(void) { return pthread_create() + review_probe(1); }\n',
+                                   extra_files={"meta/integration.json": '{"plan":{}}'})
+            target = json.loads((project / "target.json").read_text())["target"]
+            original = Path(os.environ.get("CPPCHECK") or shutil.which("cppcheck")).resolve()
+            install = root / "install"
+            (install / "cfg").mkdir(parents=True)
+            executable = install / original.name
+            shutil.copyfile(original, executable)
+            executable.chmod(0o700)
+            # Match the real CMake install layout, with all actual runner dependencies.
+            scope_output = root / "locate"
+            c_check.check(project, target, scope_output)
+            scope = json.loads((scope_output / "summary.json").read_text())["scope"]
+            for name, path in scope["cppcheckLibraries"].items():
+                shutil.copyfile(path, install / "cfg" / (name + ".cfg"))
+            shutil.copytree(c_check.addon_directory(original), install / "addons", ignore=shutil.ignore_patterns("__pycache__"))
+            modules = root / "modules"
+            shutil.copytree(Path(c_check.__file__).parents[1], modules, ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"))
+            env = {**os.environ, "PYTHONPATH": str(modules), "PYTHONDONTWRITEBYTECODE": "1",
+                   "CPPCHECK": str(executable), "CPPCHECK_ADDON_DIR": str(install / "addons")}
+            def run(name, baseline=None):
+                argv = [sys.executable, "-B", "-m", "autosar_tooling", "c-check", "--target", target,
+                        "--project", str(project), "--output-directory", str(root / name)]
+                if baseline:
+                    argv.extend(["--baseline", str(root / baseline)])
+                result = subprocess.run(argv, env=env, capture_output=True, text=True, check=False)
+                summary = json.loads((root / name / "summary.json").read_text())
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(summary["programs"][0]["exitCode"], (0, 1))
+                return summary
+            before = run("baseline")
+            self.assertIsNone(before["error"])
+            shadow = install / "std.cfg"
+            shadow.write_text('<def format="2"><function name="review_probe"><arg nr="1"><valid>0</valid></arg></function></def>\n')
+            after = run("shadow", "baseline")
+            self.assertIn("Semantic identity differs: libraries", after["error"])
+            self.assertFalse(any(d["id"] == "invalidFunctionArg" for d in before["diagnostics"]))
+            self.assertTrue(any(d["id"] == "invalidFunctionArg" for d in after["diagnostics"]))
+            shadow.unlink()
+            runner = install / "addons/runaddon.py"
+            runner_text = runner.read_text()
+            needle = "    runpy.run_path(addon, run_name='__main__')"
+            self.assertIn(needle, runner_text)
+            runner.write_text(runner_text.replace(needle,
+                "    original_report = cppcheckdata.reportError\n"
+                "    def filtered(*args, **kwargs):\n"
+                "        if len(args) > 4 and args[3:5] == ('autsaro', 'hostThreadInBsw'):\n"
+                "            return\n"
+                "        return original_report(*args, **kwargs)\n"
+                "    cppcheckdata.reportError = filtered\n" + needle))
+            after = run("runner", "baseline")
+            self.assertIn("Semantic identity differs: addonRuntime", after["error"])
+            self.assertFalse(any(d["id"] == "autsaro-hostThreadInBsw" for d in after["diagnostics"]))
+            runner.write_text(runner_text)
+            if platform.system() != "Windows":
+                launcher = modules / "ecu_tools/launch.py"
+                text = launcher.read_text()
+                needle = "        os.execve(argv[0], argv, os.environ)"
+                self.assertIn(needle, text)
+                launcher.write_text(text.replace(needle, '        if "--xml" in argv:\n'
+                                                '            argv.append("--suppress=autsaro-hostThreadInBsw")\n' + needle))
+                after = run("launcher", "baseline")
+                self.assertIn("Semantic identity differs: analysisCode", after["error"])
+                self.assertFalse(any(d["id"] == "autsaro-hostThreadInBsw" for d in after["diagnostics"]))
+                launcher.write_text(text)
+            config = install / "cppcheck.cfg"
+            config.write_text('{"suppressions":["autsaro-hostThreadInBsw"]}')
+            with patch.dict(os.environ, env):
+                self.assertEqual(c_check.check(project, target, root / "config"), 1)
+            error = json.loads((root / "config/summary.json").read_text())["error"]
+            self.assertIn("Implicit Cppcheck config adds unsupported addons, suppressions or safety overrides", error)
+            config.write_text('{"safety":true}')
+            with patch.dict(os.environ, env):
+                self.assertEqual(c_check.check(project, target, root / "safety"), 1)
+            error = json.loads((root / "safety/summary.json").read_text())["error"]
+            self.assertIn("Implicit Cppcheck config adds unsupported", error)
+
+            config.write_text('{"manualUrl":"https://example.invalid/display-only"}')
+            after = run("metadata", "baseline")
+            self.assertIsNone(after["error"])
+            self.assertEqual(after["comparison"], {"new": [], "removed": []})
+
