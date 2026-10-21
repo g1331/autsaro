@@ -25,7 +25,7 @@
 | 生产错误 | CanIf SWS 没有定义生产错误 | 已核对（规范原文）[CanIf]：SWS_BSW_00204、00205、00143、00046、00066、00206、00207、00208 |
 | 版本信息 API | `CanIfVersionInfoApi` 在预编译期配置、只接受默认值 `false` | 已核对（配置模型）[CanIf]：SWS_BSW_00051、00236；不适用（配置：ECUC_CanIf_00613=true）[CanIf]：SWS_BSW_00064、00052、00164 |
 | 初始化调用方 |  | 不适用（归属：EcuM 角色——主线没有 EcuM，生成的 `Ecu_StackBootstrap` 承担启动与关闭顺序）[CanIf]：SWS_BSW_00150、00152 |
-| 跨模块版本检查与发布信息 |  | 差距 #59[CanIf]：SWS_BSW_00036、00059、00161、00162、00256 |
+| 跨模块版本检查与发布信息 |  | 已核对（`CanIf.h`／`CanIf.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[CanIf]：SWS_BSW_00036；release 4.10.0 已发布，完整身份与软件信息仍为差距 #59[CanIf]：SWS_BSW_00059、00161、00162、00256 |
 | MISRA |  | 差距 #58[CanIf]：SWS_BSW_00115 |
 | 交付描述 CanIf 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[CanIf]：SWS_BSW_00001 |
 | 交付描述 CanIf 00002 | 已核对（module_documentation::module 交付 modules/CanIf/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[CanIf]：SWS_BSW_00002 |

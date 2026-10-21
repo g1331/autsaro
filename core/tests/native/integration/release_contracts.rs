@@ -57,12 +57,14 @@ fn install(files: &[(String, Vec<u8>)], root: &Path) {
             serde_json::from_slice(&std::fs::read(root.join("target.json")).unwrap()).unwrap();
         for patch in target["kernelPatches"].as_array().unwrap() {
             let mut git = std::process::Command::new(tooling::execution_settings().git);
-            git.current_dir(root.join("kernel")).args([
-                "-c",
-                "core.autocrlf=false",
-                "apply",
-                "--ignore-space-change",
-            ]);
+            git.current_dir(root.join("kernel"))
+                .env("GIT_CEILING_DIRECTORIES", root)
+                .args([
+                    "-c",
+                    "core.autocrlf=false",
+                    "apply",
+                    "--ignore-space-change",
+                ]);
             for include in patch["includes"].as_array().unwrap() {
                 git.arg(format!("--include={}", include.as_str().unwrap()));
             }
@@ -89,11 +91,37 @@ fn install(files: &[(String, Vec<u8>)], root: &Path) {
     }
 }
 
+// The five pre-existing RTE imports retain their original dependency-specific diagnostics.
+fn import_diagnostic(consumer: &str, dependency: &str, missing: bool) -> String {
+    let legacy = if consumer == "Rte.c" {
+        match dependency {
+            "Com.h" => Some("Com"),
+            "Os.h" => Some("Os"),
+            "Std_Types.h" => Some("Std_Types"),
+            "Platform_Types.h" => Some("Platform"),
+            "ComStack_Types.h" => Some("ComStack_Types"),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    match legacy {
+        Some(module) => format!(
+            "{} {module} AUTOSAR release",
+            if missing { "Missing" } else { "Incompatible" }
+        ),
+        None => format!(
+            "{consumer} -> {dependency}: {} AUTOSAR release",
+            if missing { "missing" } else { "incompatible" }
+        ),
+    }
+}
+
 // Poison only the intended include edge, then restore it before another consumer
 // can observe it. The real source is compiled, including declarations and bodies;
 // a different guard or syntax error cannot satisfy the single exact diagnostic.
 fn isolated(source: &str, consumer: &str, dependency: &str, prefix: &str, poison: &str) -> String {
-    let error = format!("{consumer} -> {dependency}: missing AUTOSAR release");
+    let error = import_diagnostic(consumer, dependency, true);
     let marker = source
         .find(&error)
         .unwrap_or_else(|| panic!("missing edge {error}"));
@@ -130,6 +158,11 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
     let scratch = Scratch::new();
     install(&files, &scratch.0);
     let edges = [
+        ("Rte.c", "Com.h", "COM"),
+        ("Rte.c", "Os.h", "OS"),
+        ("Rte.c", "Std_Types.h", "STD_TYPES"),
+        ("Rte.c", "Platform_Types.h", "PLATFORM"),
+        ("Rte.c", "ComStack_Types.h", "COMSTACKTYPE"),
         ("BswM_MemMap.h", "Std_Types.h", "STD_TYPES"),
         ("CanIf_MemMap.h", "Std_Types.h", "STD_TYPES"),
         ("CanIf_PBcfg.c", "Can_Cfg.h", "CAN"),
@@ -330,10 +363,7 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
                 };
                 let source = isolated(text, consumer, dependency, prefix, &poison);
                 let label = format!("{consumer}-{dependency}-{part}-{absent}");
-                let diagnostic = format!(
-                    "{consumer} -> {dependency}: {} AUTOSAR release",
-                    if absent { "missing" } else { "incompatible" }
-                );
+                let diagnostic = import_diagnostic(consumer, dependency, absent);
                 compile(
                     &scratch.0,
                     &scratch.0.join(path),

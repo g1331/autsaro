@@ -415,10 +415,10 @@ pub(super) fn profile_header(
 {guard_start}#include "Std_Types.h"
 #include "Can_Cfg.h"
 #include "CanIf_Cfg.h"
-/** ECUC CanRxProcessing, CanTxProcessing and CanBusoffProcessing select POLLING.
+{checks}/** ECUC CanRxProcessing, CanTxProcessing and CanBusoffProcessing select POLLING.
  * The generated host target owns queued completion and the controller/HOH handles.
  */
-{checks}{profile}#endif
+{profile}#endif
 "#,
             checks = [
                 ("Std_Types.h", "STD_TYPES"),
