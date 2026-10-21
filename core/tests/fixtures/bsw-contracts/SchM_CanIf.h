@@ -4,6 +4,7 @@
  */
 #ifndef SCHM_CANIF_H
 #define SCHM_CANIF_H
+#include "Rte_Version.h"
 void SchM_Enter_CanIf_CANIF_STATE(void);
 void SchM_Exit_CanIf_CANIF_STATE(void);
 #endif
