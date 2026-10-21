@@ -61,6 +61,8 @@ uv run --locked python -m autosar_tooling c-check --target linux-x64-controlled-
 
 其他样本按同样方式下载 `c-analysis-<target>-<group>`，各次下载和分析使用新的目录。工件保留 14 天。`c-analysis-summaries-*` 只有摘要，没有诊断对应的源码文本，不能单独用于比较。
 
-`--baseline` 指向含 `summary.json` 和 `project/` 的样本目录。完整本地扫描后，入口核对 Cppcheck 版本、源码 revision 与三个 addon 摘要、checker coverage、目标、样本的完整 `target.json` 与生成计划和全部 TU／程序范围，以及基线源清单摘要。不同主机编译的 Cppcheck 二进制 SHA-256 可不同，版本和 addon 必须一致。任何身份不同、工件缺失或分析不完整都明确拒绝：在对应基线检出，用相同配置和工具通过正常 c-check 命令本地计算基线。配置本身改变时也需重新确定可比较的同配置基线，不能强行接受不相符的 CI 样本。
+`--baseline` 指向含 `summary.json` 和 `project/` 的样本目录。完整本地扫描后，入口核对 Cppcheck 版本、源码 revision 与三个 addon 摘要、checker coverage、目标、样本的完整 `target.json` 与生成计划和全部 TU／程序范围，以及基线源清单摘要。`semanticIdentity.version=1` 另核对实际 GCC 目标与数值 release、完整预定义行、有效 builtin／逐 TU 宏定义、平台模型头／库内容、实际显式加载的 Cppcheck std／POSIX 或 Windows cfg、按正常查找顺序隐式加载的 std.cfg、实际 addon runner 及其 cppcheck／cppcheckdata 辅助文件，以及项目分析驱动、addon 和直接构建／进程辅助源码（含 POSIX launch 与 Windows Job）的内容摘要。文本摘要统一换行；预定义与宏定义排序，安装路径、结果目录、并发数及编译器／Cppcheck 二进制载体摘要仅作追溯，不决定等价。相同目标、版本、有效输入和分析代码可跨主机比较；版本字符串单独相同不足以证明等价，改变这些内容需要同配置重新扫描基线。驱动源码使用保守字节身份，注释变化也可能要求新基线。
+
+缺失、旧版本或不完整语义身份明确拒绝，旧工件保持原样；结果身份版本不代表工具来源证明或 MISRA 评估状态。正常入口在扫描前捕获身份并在扫描后检查内容未变化。隐式路径按固定版本的实际规则及程序工作目录解析，不能由 CPPCHECK_ADDON_DIR 推定 runner；隐式 cppcheck.cfg 额外引入 addon、suppression 或 safety 覆盖时明确拒绝，纯展示元数据不影响等价。不同主机编译的 Cppcheck 二进制 SHA-256 可不同，版本和 addon 必须一致。任何身份不同、工件缺失或分析不完整都明确拒绝：在对应基线检出，用相同配置和工具通过正常 c-check 命令本地计算基线。配置本身改变时也需重新确定可比较的同配置基线，不能强行接受不相符的 CI 样本。
 
 比较按每个诊断位置的“规则＋相对文件＋源码行文本”及程序出现次数计数，源码移动不算新增；新增和移除分别输出，不能用净差抵消，完整条目保存在现有 `summary.json` 的 `comparison.new`／`removed`。本地扫描与基线比较各自保留事实：零新增不改变 `passed=false`，现存违规仍返回非零；身份拒绝也返回非零。它不是扫描通过缓存，不减少样本、规则或比较粒度。严格源码门的启用与实际阻断证据由 [#55](https://github.com/g1331/autsaro/issues/55) 承接。
