@@ -18,7 +18,7 @@
 
 ### Fixed
 
-- Delivered module headers share owner AUTOSAR release 4.10.0 and applicable external includes reject missing or incompatible major/minor releases; ComM also validates its internal source/header release, and Arti_GetVersionInfo now reports standard module ID 5. Regenerate sealed ECU deliveries and rebuild consumers; existing software values and unassigned vendor identity are preserved (#350)
+- Delivered module headers share owner AUTOSAR release 4.10.0 and applicable external includes reject missing or incompatible major/minor releases; ComM also validates its internal source/header release, and Arti_GetVersionInfo now reports standard module ID 5. Component and runnable names that collide with version headers or macros are rejected at their source objects. Regenerate sealed ECU deliveries and rebuild consumers; existing software values and unassigned vendor identity are preserved (#350)
 
 - Native graph construction indexes short names once per document instead of repeatedly scanning wide sibling lists for every descendant; object paths, source bytes and public interfaces are unchanged. Desktop WebDriver evaluation carries complete JSON results as text to avoid duplicating large object trees in the native driver; logs retain pending requests and failure outcomes with ordered output and path-attributed capture errors, stopped applications exit through owned cleanup, and the project tree shares one context-menu keyboard listener and mounts only viewport rows while preserving full search, scroll and keyboard reachability (#311)
 

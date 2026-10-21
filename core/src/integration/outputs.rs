@@ -421,7 +421,8 @@ mod tests {
         .unwrap();
         assert!(text.contains("= {65535u};"));
         assert!(text.contains("ConfigPtr->partition != 65535u"));
-        assert!(text.ends_with("/* modes */\n"));
+        assert_eq!(text.matches("/* modes */\n").count(), 1);
+        assert!(text.contains("/* modes */\n/* SWS_BSW_00036:"));
         assert!(!text.contains('@'));
         let duplicate = format!("{template}@MODES@");
         for source in [duplicate.as_str(), "missing template anchors"] {

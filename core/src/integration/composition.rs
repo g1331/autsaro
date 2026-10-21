@@ -1723,6 +1723,24 @@ pub(super) fn reserved_memory_scope(name: &str) -> bool {
 }
 
 fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<PlanDiagnostic>> {
+    // Public version assets introduce filenames, guards and macros into the
+    // application namespace. Read the real producers rather than duplicate them.
+    let mut version_names = BTreeSet::new();
+    let mut version_files = BTreeSet::new();
+    for asset in crate::resources::AssetInventory::embedded().entries() {
+        if !asset.relative_path.ends_with("_Version.h") {
+            continue;
+        }
+        let filename = super::short_name(asset.relative_path);
+        version_files.insert(format!("include/{filename}").to_uppercase());
+        for line in super::outputs::trusted_text(asset.relative_path)?.lines() {
+            if let Some(definition) = line.strip_prefix("#define ")
+                && let Some(name) = definition.split_whitespace().next()
+            {
+                version_names.insert(name.to_owned());
+            }
+        }
+    }
     let mut filenames = BTreeSet::from([
         "INCLUDE/RTE.H".to_owned(),
         "INCLUDE/RTE_TYPE.H".to_owned(),
@@ -1782,6 +1800,8 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
     for module in ["CANIF", "PDUR", "LSDUR"] {
         names.insert(format!("{module}_CFG_H"));
     }
+    filenames.extend(version_files);
+    names.extend(version_names);
     let routed_sources: BTreeSet<_> = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()

@@ -7,6 +7,7 @@ Compiler/MISRA checks remain responsible for C validity and normative semantics.
 from __future__ import annotations
 
 import collections
+import itertools
 import json
 import re
 from dataclasses import dataclass
@@ -198,7 +199,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
         if not re.fullmatch(r"if error(?: elif error)* endif", " ".join(commands)):
             continue
         if any(re.sub(r"/\*.*?\*/|//[^\n]*", "", source[a.end:b.start], flags=re.DOTALL).strip()
-               for a, b in zip(chain, chain[1:])):
+               for a, b in itertools.pairwise(chain)):
             continue
         conditions = chain[:-1:2]
         identifiers = set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", " ".join(item.text for item in conditions)))

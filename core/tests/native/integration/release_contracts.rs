@@ -154,10 +154,13 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
     // Verifies[Os]: SWS_BSW_00036
     // Verifies[Rte]: SWS_BSW_00036
     let plan = build(&inputs()).unwrap();
-    let files = prepared_pipeline_files(&plan);
+    let files = prepared_pipeline_files_for_target(&plan, native_delivery_target());
     let scratch = Scratch::new();
     install(&files, &scratch.0);
     let edges = [
+        ("CanIf_PBcfg.c", "Rte_MemMap.h", "MEMMAP"),
+        ("PduR_PBcfg.c", "Rte_MemMap.h", "MEMMAP"),
+        ("Ecu_RuntimeConfig.c", "Rte_MemMap.h", "MEMMAP"),
         ("Rte.c", "Com.h", "COM"),
         ("Rte.c", "Os.h", "OS"),
         ("Rte.c", "Std_Types.h", "STD_TYPES"),
@@ -392,7 +395,7 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
 #[test]
 fn public_headers_publish_their_owner_release_in_ecu_and_contract_deliveries() {
     let plan = build(&inputs()).unwrap();
-    let ecu = prepared_pipeline_files(&plan);
+    let ecu = prepared_pipeline_files_for_target(&plan, native_delivery_target());
     let contract = plan.component_contract_files().unwrap();
     for files in [&ecu[..], contract.files()] {
         let scratch = Scratch::new();

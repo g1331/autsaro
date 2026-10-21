@@ -852,7 +852,15 @@ pub(super) fn files(
                 ),
             ),
         )?;
-        outputs.emit(ECU, format!("src/{module}_PBcfg.c"), source.as_str())?;
+        let source = if module == "LSduR" {
+            source.to_owned()
+        } else {
+            format!(
+                "{source}{}",
+                c_layout::release_check(&format!("{module}_PBcfg.c"), "Rte_MemMap.h", "MEMMAP")
+            )
+        };
+        outputs.emit(ECU, format!("src/{module}_PBcfg.c"), source)?;
     }
 
     config_data(
@@ -1199,6 +1207,11 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
             stop_code = c_layout::section("RTE_Dcm", "Rte", "CODE", false)
         ));
     }
+    config.push_str(&c_layout::release_check(
+        "Ecu_RuntimeConfig.c",
+        "Rte_MemMap.h",
+        "MEMMAP",
+    ));
     outputs.emit(ECU, "src/Ecu_RuntimeConfig.c", config)?;
     let mode_scope = super::memmap::dcm_scope(composition);
     let path = "src/SchM_Main.c";
