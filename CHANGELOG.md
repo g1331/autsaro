@@ -18,6 +18,8 @@
 
 ### Fixed
 
+- Project-owned BSW software headers, BSWMD and manuals now share an explicit 0.1.0 release owner, independently of Cargo; ARTI keeps its own 1.0.0 owner and reports it through the existing API. ComM rejects source/header software-version mismatches. RTE source DOC-REVISION and disabled SchM build-version semantics remain separate. Regenerate sealed ECU deliveries and rebuild consumers for the new shared header; public function signatures, type layouts, third-party identities and unassigned vendor identity are unchanged (#353)
+
 - Delivered module headers share owner AUTOSAR release 4.10.0 and applicable external includes reject missing or incompatible major/minor releases; ComM also validates its internal source/header release, and Arti_GetVersionInfo now reports standard module ID 5. Component and runnable names that collide with version headers or macros are rejected at their source objects. Regenerate sealed ECU deliveries and rebuild consumers; existing software values and unassigned vendor identity are preserved (#350)
 
 - Native graph construction indexes short names once per document instead of repeatedly scanning wide sibling lists for every descendant; object paths, source bytes and public interfaces are unchanged. Desktop WebDriver evaluation carries complete JSON results as text to avoid duplicating large object trees in the native driver; logs retain pending requests and failure outcomes with ordered output and path-attributed capture errors, stopped applications exit through owned cleanup, and the project tree shares one context-menu keyboard listener and mounts only viewport rows while preserving full search, scroll and keyboard reachability (#311)

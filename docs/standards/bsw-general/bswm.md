@@ -32,7 +32,7 @@ BswM 只有一个 IMMEDIATE 的 ComM 模式输入和三条规则，动作是静�
 | 版本 API | BswMVersionInfoApi 默认 false，仅预编译选择；主线只接受 false，不交付 BswM_GetVersionInfo。 已核对（配置模型）[BswM]：SWS_BSW_00051、00236；不适用（配置：ECUC_BswM_00812=true）[BswM]：SWS_BSW_00052、00064、00164 |
 | MetaData | BswM 不引用全局 PDU，没有 PDU 元数据可分配、对齐或访问。 不适用（归属：生产与转发 PDU 的 Com、PduR、CanIf 等模块；BswM 不引用全局 PDU）[BswM]：SWS_BSW_00239–00242 |
 | Post-build variation | 主线只生成一个预编译配置集，不生成 post-build 变体，也没有变体选择入口。 不适用（归属：配置工具只生成单一预编译配置集；变体选择由 EcuM 角色承担，主线没有 EcuM）[BswM]：SWS_BSW_00226–00228 |
-| 发布版本信息 | 已核对（`BswM.h`／`BswM.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[BswM]：SWS_BSW_00036；release 4.10.0 已发布，完整身份与软件信息仍为差距 #59[BswM]：SWS_BSW_00059、00161、00162、00256 |
+| 发布版本信息 | 已核对（`BswM.h`／`BswM.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[BswM]：SWS_BSW_00036；release 4.10.0 已发布，正式 vendor 身份仍为差距 #59[BswM]：SWS_BSW_00059、00161、00256；已核对（[软件发行政策](README.md#软件发行版本)、`Autsaro_Version.h` 及 `shared_software_owner_propagates_independent_component_upgrades`）[BswM]：SWS_BSW_00162 |
 | MISRA | 差距 #58[BswM]：SWS_BSW_00115 |
 | 交付描述 BswM 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[BswM]：SWS_BSW_00001 |
 | 交付描述 BswM 00002 | 已核对（module_documentation::module 交付 modules/BswM/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[BswM]：SWS_BSW_00002 |

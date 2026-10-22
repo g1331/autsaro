@@ -31,7 +31,7 @@ ComM 只有一个 CDD 通道（ComMNmVariant 为 NONE），经 Ecu_HostBusSM 请
 | 版本 API | ComMVersionInfoApi 默认 false，仅预编译选择；主线只接受 false，不交付 ComM_GetVersionInfo。 已核对（配置模型）[ComM]：SWS_BSW_00051、00236；不适用（配置：ECUC_ComM_00622=true）[ComM]：SWS_BSW_00052、00064、00164 |
 | MetaData | ComM 不引用全局 PDU，没有 PDU 元数据可分配、对齐或访问。 不适用（归属：生产与转发 PDU 的 Com、PduR、CanIf 等模块；ComM 不引用全局 PDU）[ComM]：SWS_BSW_00239–00242 |
 | Post-build variation | 主线只生成一个预编译配置集，不生成 post-build 变体，也没有变体选择入口。 不适用（归属：配置工具只生成单一预编译配置集；变体选择由 EcuM 角色承担，主线没有 EcuM）[ComM]：SWS_BSW_00226–00228 |
-| 发布版本信息 | 已核对（`ComM.h`／`ComM.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[ComM]：SWS_BSW_00036；release 4.10.0 已发布，完整身份与软件信息仍为差距 #59[ComM]：SWS_BSW_00059、00161、00162、00256 |
+| 发布版本信息 | 已核对（`ComM.h`／`ComM.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[ComM]：SWS_BSW_00036；release 4.10.0 已发布，正式 vendor 身份仍为差距 #59[ComM]：SWS_BSW_00059、00161、00256；已核对（[软件发行政策](README.md#软件发行版本)、`Autsaro_Version.h` 及 `shared_software_owner_propagates_independent_component_upgrades`）[ComM]：SWS_BSW_00162 |
 | MISRA | 差距 #58[ComM]：SWS_BSW_00115 |
 | 交付描述 ComM 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，保留计划所选动态入口；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[ComM]：SWS_BSW_00001 |
 | 交付描述 ComM 00002 | 已核对（module_documentation::module 交付 modules/ComM/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[ComM]：SWS_BSW_00002 |
