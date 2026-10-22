@@ -891,6 +891,12 @@ fn version_assets_reserve_public_files_guards_and_macros_at_the_source_object() 
         "AUTSARO_SW_MAJOR_VERSION",
         "AUTSARO_SW_MINOR_VERSION",
         "AUTSARO_SW_PATCH_VERSION",
+        "STD_TYPES_SW_MAJOR_VERSION",
+        "STD_TYPES_SW_MINOR_VERSION",
+        "STD_TYPES_SW_PATCH_VERSION",
+        "PLATFORM_SW_MAJOR_VERSION",
+        "PLATFORM_SW_MINOR_VERSION",
+        "PLATFORM_SW_PATCH_VERSION",
     ] {
         let mut sources = inputs();
         change(
