@@ -117,7 +117,6 @@ fn rte_generation_options_are_explicit_and_unsupported_values_are_refused() {
         ("Generation", "RteCalibrationSupport", "INITIALIZED_RAM"),
         ("Generation", "RteGenerationMode", "VENDOR_MODE"),
         ("Generation", "RteOptimizationMode", "MEMORY"),
-        ("Generation", "RteCodeVendorId", "1"),
         ("Generation", "RteDevErrorDetect", "true"),
         ("Generation", "RteDevErrorDetectUninit", "true"),
         ("Generation", "RteInExclusiveAreaCheckEnabled", "true"),

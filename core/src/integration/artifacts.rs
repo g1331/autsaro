@@ -1530,6 +1530,11 @@ pub(super) fn files(
         } else {
             String::new()
         };
+        let vendor_id = if module == "Rte" {
+            composition.generation.code_vendor_id
+        } else {
+            0
+        };
         let version = if module == "Rte" {
             &composition.generation.software_version
         } else if module == "Arti" {
@@ -1557,7 +1562,7 @@ pub(super) fn files(
         } else {
             ""
         };
-        elements.push_str(&format!(r#"<BSW-IMPLEMENTATION><SHORT-NAME>{module}HostImplementation</SHORT-NAME>{revision}<CODE-DESCRIPTORS><CODE><SHORT-NAME>DeliveredCode</SHORT-NAME><ARTIFACT-DESCRIPTORS>{artifacts}</ARTIFACT-DESCRIPTORS></CODE></CODE-DESCRIPTORS>{generated}{mc_support}<PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>{resource}<SW-VERSION>{}</SW-VERSION><USED-CODE-GENERATOR>Autosar host ECU generator</USED-CODE-GENERATOR><VENDOR-ID>0</VENDOR-ID><AR-RELEASE-VERSION>4.10.0</AR-RELEASE-VERSION><BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/{package}/{module}/HostBehavior</BEHAVIOR-REF></BSW-IMPLEMENTATION>"#, version));
+        elements.push_str(&format!(r#"<BSW-IMPLEMENTATION><SHORT-NAME>{module}HostImplementation</SHORT-NAME>{revision}<CODE-DESCRIPTORS><CODE><SHORT-NAME>DeliveredCode</SHORT-NAME><ARTIFACT-DESCRIPTORS>{artifacts}</ARTIFACT-DESCRIPTORS></CODE></CODE-DESCRIPTORS>{generated}{mc_support}<PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>{resource}<SW-VERSION>{}</SW-VERSION><USED-CODE-GENERATOR>Autosar host ECU generator</USED-CODE-GENERATOR><VENDOR-ID>{vendor_id}</VENDOR-ID><AR-RELEASE-VERSION>4.10.0</AR-RELEASE-VERSION><BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/{package}/{module}/HostBehavior</BEHAVIOR-REF></BSW-IMPLEMENTATION>"#, version));
         let body = elements.split_off(module_start);
         let entry_package = if module_entries.is_empty() {
             String::new()
