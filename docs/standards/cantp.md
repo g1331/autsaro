@@ -19,6 +19,8 @@ CanTp 只在自己的 `CANTP_STATE` 区内读写连接状态、计时器与接�
 
 SWS_CanTp_00229 把超时与协议错误称为开发错误，表 SWS_CanTp_00352 则把它们定义为运行时错误；实现按表格经 `Det_ReportRuntimeError` 报告。
 
+首帧的 12 位长度先以 `uint16` 解码，只有可由所选 `PduLengthType` 表示时才调用 PduR。不可表示的长度按 SWS_CanTp_00352 的实现错误报告 `CANTP_E_COM` 并拒绝；这不是上层返回 OVFL 的场景。新有效首帧仍先按 SWS_CanTp_00057 终止旧接收。`cantp_lengths.c` 以真实生成的 UINT8／UINT16／UINT32 头验证 255／256 的完整收发、256／263／511 不截断、上层溢出和拒绝后恢复。初始化要求 8..256 容量可由所选长度类型表示，拒绝保持既有状态。
+
 ## 条款处置
 
 由测试验证的条目见 `core/tests/fixtures/bsw-contracts/cantp_contract.c`、`cantp_parallel.c` 与 `diagnostic_contract.c` 中的 `Verifies:`；拒绝测试见 `core/tests/it/integration/single_component.rs`。下表处置其余条目。“配置”类写明控制该义务的 ECUC 参数及主线不提供的取值（未写取值的参数整项不提供），这些配置在生成前被拒绝，每个参数都有带 `Rejects:` 标记的测试。

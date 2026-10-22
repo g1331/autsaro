@@ -57,7 +57,8 @@ typedef struct {
 } CanTp_ConfigType;
 /** Start the module with a generated configuration and drop all connections without
  * notification (SWS_CanTp_00208, 00273).
- * @param[in] CfgPtr Generated configuration with 8 to 256 bytes per N-SDU, timers of at
+ * @param[in] CfgPtr Generated configuration with 8 to 256 bytes per N-SDU, representable by
+ * PduLengthType, timers of at
  * least 2 periods and a nonzero period; any other pointer, including NULL, is ignored and
  * the state is unchanged.
  * @par Return

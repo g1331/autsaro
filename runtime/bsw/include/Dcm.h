@@ -76,15 +76,15 @@ typedef struct {
     uint16 p2_ms;         /**< Advertised P2, in ms (DcmDspSessionP2ServerMax). */
     uint32 p2_star_ms;    /**< Advertised P2*, in ms (DcmDspSessionP2StarServerMax). */
     uint32 s3_ticks;      /**< Positive idle session timeout, in main periods (S3Server). */
-    PduLengthType buffer_length; /**< Rx/Tx capacity, 7..256 bytes (DcmDslBufferSize). */
-    PduIdType router_transmit;   /**< PduR transmit ID, distinct from Dcm's confirmation ID. */
+    uint16 buffer_length; /**< Rx/Tx capacity, 8..256 bytes, representable by PduLengthType. */
+    PduIdType router_transmit; /**< PduR transmit ID, distinct from Dcm's confirmation ID. */
     Ecu_DcmAuthenticationModeType authentication_mode; /**< Non-NULL mode publisher; state 0. */
     uint16 max_did_to_read; /**< DcmDspMaxDidToRead; 0 means absent, with no count limit. */
 } Dcm_ConfigType;
 /** Initialize the connection, default session and deauthenticated mode (SWS_Dcm_00037).
  * @param[in] ConfigPtr Immutable selected configuration; NULL or an invalid configuration
- * leaves the module unchanged. Buffers must hold 7..256 bytes, timers must be positive,
- * did must differ from F186, and authentication_mode must not be NULL.
+ * leaves the module unchanged. Buffers must hold 8..256 bytes representable by PduLengthType,
+ * timers must be positive, did must differ from F186, and authentication_mode must not be NULL.
  * @par Return
  * None.
  * Preconditions: the old transport lifetime is quiesced before restarting an accepted

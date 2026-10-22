@@ -4,6 +4,91 @@ use autosar_config_core::integration::InputSource;
 use std::path::Path;
 
 #[test]
+fn diagnostic_lengths_keep_selected_types_and_refuse_at_the_capacity_owner() {
+    // Verifies: SWS_COMTYPE_00008, ECUC_EcuC_00042, ECUC_Dcm_00738
+    for width in ["UINT8", "UINT16", "UINT32"] {
+        for routes in [false, true] {
+            let mut sources = sources_without_application_did(routes);
+            parameter(&mut sources, "Pdus", "PduIdTypeEnum", "UINT8");
+            parameter(&mut sources, "Pdus", "PduLengthTypeEnum", width);
+            assert!(normal_validation(&sources).diagnostics.is_empty());
+            let plan = build(&sources).unwrap();
+            assert_eq!(plan.description().diagnostic_transport.is_some(), routes);
+            if routes {
+                assert_eq!(
+                    plan.description()
+                        .diagnostic_transport
+                        .as_ref()
+                        .unwrap()
+                        .buffer_bytes,
+                    64
+                );
+            }
+            let files = prepared_pipeline_files(&plan);
+            let header = &files
+                .iter()
+                .find(|(path, _)| path == "generated/include/ComStack_Cfg.h")
+                .unwrap()
+                .1;
+            let expected = match width {
+                "UINT8" => "typedef uint8 PduLengthType;",
+                "UINT16" => "typedef uint16 PduLengthType;",
+                _ => "typedef uint32 PduLengthType;",
+            };
+            assert!(std::str::from_utf8(header).unwrap().contains(expected));
+        }
+        // The selected 64-byte linear buffers and N-SDUs share one capacity.
+        for (owner, field, object) in [
+            (
+                "RxBuffer",
+                "DcmDslBufferSize",
+                "/Configuration/Dcm/Config/Dsl/RxBuffer",
+            ),
+            (
+                "TxBuffer",
+                "DcmDslBufferSize",
+                "/Configuration/Dcm/Config/Dsl/TxBuffer",
+            ),
+            (
+                "DiagRequestSdu",
+                "PduLength",
+                "/Configuration/EcuC/Config/Pdus/DiagRequestSdu",
+            ),
+            (
+                "DiagResponseSdu",
+                "PduLength",
+                "/Configuration/EcuC/Config/Pdus/DiagResponseSdu",
+            ),
+        ] {
+            for length in ["8", "63", "65", "255", "256"] {
+                let mut sources = sources_without_application_did(true);
+                parameter(&mut sources, "Pdus", "PduLengthTypeEnum", width);
+                parameter(&mut sources, owner, field, length);
+                let issues = build(&sources)
+                    .err()
+                    .expect("unsupported capacity accepted");
+                assert!(
+                    issues.iter().any(|issue| issue.code == "LENGTH_CONFLICT"
+                        && issue.object.as_deref() == Some(object)),
+                    "{width}/{owner}/{length}: {issues:?}"
+                );
+                let validation = normal_validation(&sources);
+                assert!(
+                    validation
+                        .diagnostics
+                        .iter()
+                        .any(|issue| issue.code == "LENGTH_CONFLICT"
+                            && issue.path.as_deref() == Some(object)),
+                    "{width}/{owner}/{length}: {:?}",
+                    validation.diagnostics
+                );
+                assert_rejected_sources_preserved(&sources);
+            }
+        }
+    }
+}
+
+#[test]
 fn dcm_bridge_requires_actual_service_identity_and_follows_renames() {
     for (before, after) in [
         (

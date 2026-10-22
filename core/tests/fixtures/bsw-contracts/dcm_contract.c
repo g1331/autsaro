@@ -213,7 +213,7 @@ static void ordered_reads_and_limits(void)
     exchange(reversed, sizeof(reversed));
     expect(reverse_response, sizeof(reverse_response));
     limited.max_did_to_read = 0u;
-    limited.buffer_length = 7u;
+    limited.buffer_length = 8u;
     Dcm_Init(&limited);
     Dcm_ComM_FullComModeEntered(CHANNEL);
     const uint8 too_long[] = {0x22u, 0x12u, 0x34u, 0x12u, 0x34u};
@@ -410,7 +410,7 @@ static void obd_data_and_availability(void)
         assert(reads == before + 1u);
         const uint8 absent[] = {0x22u, (uint8)(family / 256u), 0x40u};
         negative(absent, sizeof(absent), 0x31u);
-        selected.buffer_length = 7u;
+        selected.buffer_length = 8u;
         Dcm_Init(&selected);
         Dcm_ComM_FullComModeEntered(CHANNEL);
         negative(request, sizeof(request), 0x14u);

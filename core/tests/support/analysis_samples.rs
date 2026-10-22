@@ -126,7 +126,7 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
     // configuration takes its no-diagnostic branches, which no other sample reaches.
     let mut sources = super::mainline::sources_without_application_did(false);
     super::mainline::parameter(&mut sources, "Pdus", "PduIdTypeEnum", "UINT8");
-    // UINT8 length is accepted by planning but cannot compile Dcm yet (#354).
+    super::mainline::parameter(&mut sources, "Pdus", "PduLengthTypeEnum", "UINT8");
     let plan = super::mainline::build(&sources).unwrap();
     assert!(plan.description().diagnostic_transport.is_none());
     autosar_config_core::prepare_ecu_project_with_applications(

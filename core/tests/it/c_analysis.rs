@@ -19,7 +19,7 @@ fn generated_c_analysis_samples() {
         ("standard-ecu", "UINT16", "UINT16"),
         ("user-application", "UINT16", "UINT16"),
         ("component-pipeline", "UINT8", "UINT32"),
-        ("no-diagnostic", "UINT8", "UINT16"),
+        ("no-diagnostic", "UINT8", "UINT8"),
     ] {
         let metadata: serde_json::Value = serde_json::from_slice(
             &std::fs::read(output.join(sample).join("meta/integration.json")).unwrap(),

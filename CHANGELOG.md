@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Dcm configuration buffer capacity now uses `uint16` independently of `PduLengthType`; regenerate sealed ECU deliveries and rebuild direct consumers. Initialization accepts 8..256 bytes only when representable by the selected communication length type. CanTp validates capacity and decodes complete first-frame lengths before conversion, preserving legal UINT8 delivery and preventing truncated reception admission. Standard function signatures and third-party identities are unchanged (#354)
+
 - OS implementations, native adapters, ARTI bindings and generated configuration now use explicit code, constant, initialized/cleared state, TLS and vector mappings through `Os_MemMap.h`; regenerate sealed ECU deliveries and rebuild direct consumers for the section layout. Existing startup, signal, interrupt and terminal-stop ownership are preserved; upstream kernel and production patch identities are unchanged (#203)
 
 - OS integration types now use `Os_<Name>Type`, configuration counts and ARTI schedule indices use `uint32`, and task names/trace bytes use `uint8`; rebuild configurations and direct consumers with the current headers. Shared Counter service types are defined once in `Rte_Type.h`, exposed via `Rte_Os_Type.h`; regenerate ECU deliveries, including the updated native-stack type references in two production patches (#339)

@@ -252,7 +252,8 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
 {
     SchM_Enter_Dcm_DCM_STATE();
     if ((ConfigPtr != NULL_PTR) && (ConfigPtr->p2_ticks > 0u) && (ConfigPtr->s3_ticks > 0u) &&
-        (ConfigPtr->buffer_length >= 7u) && (ConfigPtr->buffer_length <= DCM_BUFFER_CAPACITY) &&
+        (ConfigPtr->buffer_length >= 8u) && (ConfigPtr->buffer_length <= DCM_BUFFER_CAPACITY) &&
+        ((PduLengthType)ConfigPtr->buffer_length == ConfigPtr->buffer_length) &&
         (ConfigPtr->did != DCM_SESSION_DID) && (Dcm_IsAvailability(ConfigPtr->did) == FALSE) &&
         (ConfigPtr->authentication_mode != NULL_PTR)) {
         dcm_configuration = ConfigPtr;
@@ -345,7 +346,7 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
                 received = 0u;
                 state = DCM_RECEIVING;
                 session_change_cancelled = FALSE;
-                *bufferSizePtr = dcm_configuration->buffer_length;
+                *bufferSizePtr = (PduLengthType)dcm_configuration->buffer_length;
                 result = BUFREQ_OK;
             }
         } else {
@@ -371,7 +372,7 @@ DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
                 request[received + i] = info->SduDataPtr[i];
             }
             received += info->SduLength;
-            *bufferSizePtr = dcm_configuration->buffer_length - received;
+            *bufferSizePtr = (PduLengthType)(dcm_configuration->buffer_length - received);
             result = BUFREQ_OK;
         } else {
             /* A rejected copy preserves both the destination and the size output. */

@@ -23,7 +23,7 @@ fn generated_analysis_samples_use_selected_types_and_mapped_can_state() {
         ("standard-ecu", "2 65535 2 65535 2\n"),
         ("user-application", "2 65535 2 65535 2\n"),
         ("component-pipeline", "1 255 4 4294967295 4\n"),
-        ("no-diagnostic", "1 255 2 65535 2\n"),
+        ("no-diagnostic", "1 255 1 255 1\n"),
     ] {
         generated_communication_types(&output.join(case), expected);
     }
