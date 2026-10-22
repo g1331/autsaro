@@ -90,9 +90,19 @@ pub(super) fn module(
     let version = if module == "Rte" {
         plan.ecu_composition()?.generation.software_version.as_str()
     } else if module == "Arti" {
-        "1.0.0"
+        env!("ARTI_SOFTWARE_VERSION")
     } else {
-        env!("CARGO_PKG_VERSION")
+        env!("AUTSARO_SOFTWARE_VERSION")
+    };
+    let version_scope = if module == "Rte" {
+        format!(
+            "BSWMD/configuration version above comes from source DOC-REVISION. RTE header software macros identify generator implementation {} (Autsaro_Version.h). The disabled SchM_GetVersionInfo API would require a build version depending on both generator and input configuration; neither value alone is that build version.\n\n",
+            env!("AUTSARO_SOFTWARE_VERSION")
+        )
+    } else if module == "Arti" {
+        "Software version is owned by Arti_Version.h and shared by Arti_GetVersionInfo and this description.\n\n".into()
+    } else {
+        "Software version is owned by Autsaro_Version.h and shared by module headers and this description, independently of the Cargo package version.\n\n".into()
     };
     let activation = if matches!(module, "Dcm" | "CanTp") && plan.diagnostic_transport.is_none() {
         "Diagnostic activation is disabled in this selected plan. Public implementation entries are delivered, but the generated bootstrap neither initializes nor schedules this module.\n\n"
@@ -100,7 +110,7 @@ pub(super) fn module(
         ""
     };
     let mut text = format!(
-        "# {module} module manual\n\nDocument: `{module}/README.md`; document revision: 1; date: 2026-10-18; status: generated selected implementation. Company/author: Autsaro project (no assigned AUTOSAR vendor identity). Implementation version: `{version}`; standard baseline: R24-11. Configuration and source identities: [integration.json](../../../../meta/integration.json). AUTOSAR release 4.10.0 is published by each header owner; applicable direct imports check major/minor. Arti uses standard module ID 5; vendor identity remains unassigned. Formal vendor/software-version assignment and remaining API obligations remain [#59](https://github.com/g1331/autsaro/issues/59).\n\n[Overview](#overview) · [History](#history) · [Files](#files) · [Resources and integration](#resources-and-integration) · [Configuration](#configuration) · [API](#api) · [Requirements and limitations](#requirements-and-limitations)\n\n## Overview\n\n{function}\n\n{activation}## History\n\n| Document revision | Date | Company/author | Change | Status |\n| --- | --- | --- | --- | --- |\n| 1 | 2026-10-18 | Autsaro project | Generated manual for the selected implementation and configuration above | Generated |\n\nRegeneration replaces this manual; integration.json and the delivery seal record the selected source/configuration identities.\n\n## Files\n\n| File | Role |\n| --- | --- |\n"
+        "# {module} module manual\n\nDocument: `{module}/README.md`; document revision: 1; date: 2026-10-18; status: generated selected implementation. Company/author: Autsaro project (no assigned AUTOSAR vendor identity). Implementation version: `{version}`; standard baseline: R24-11. Configuration and source identities: [integration.json](../../../../meta/integration.json). AUTOSAR release 4.10.0 is published by each header owner; applicable direct imports check major/minor. Arti uses standard module ID 5; vendor identity remains unassigned. Formal vendor identity and remaining API obligations remain [#59](https://github.com/g1331/autsaro/issues/59).\n\n[Overview](#overview) · [History](#history) · [Files](#files) · [Resources and integration](#resources-and-integration) · [Configuration](#configuration) · [API](#api) · [Requirements and limitations](#requirements-and-limitations)\n\n## Overview\n\n{version_scope}{function}\n\n{activation}## History\n\n| Document revision | Date | Company/author | Change | Status |\n| --- | --- | --- | --- | --- |\n| 1 | 2026-10-18 | Autsaro project | Generated manual for the selected implementation and configuration above | Generated |\n\nRegeneration replaces this manual; integration.json and the delivery seal record the selected source/configuration identities.\n\n## Files\n\n| File | Role |\n| --- | --- |\n"
     );
     for path in paths {
         let role = if path.ends_with(".h") {

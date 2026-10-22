@@ -2,6 +2,89 @@
 use super::*;
 use std::collections::BTreeSet;
 
+#[path = "../../../build_support/software_version.rs"]
+mod software_version;
+
+#[test]
+fn software_version_owner_requires_each_literal_uint8_component() {
+    let source = "#define OWNER_SW_MAJOR_VERSION 2U\n#define OWNER_SW_MINOR_VERSION 3U\n#define OWNER_SW_PATCH_VERSION 4U\n";
+    assert_eq!(software_version::read(source, "OWNER").unwrap(), "2.3.4");
+    for (part, current) in [("MAJOR", 2), ("MINOR", 3), ("PATCH", 4)] {
+        let name = format!("OWNER_SW_{part}_VERSION");
+        let definition = format!("#define {name} {current}U\n");
+        for replacement in [
+            String::new(),
+            format!("#define {name} 256U\n"),
+            format!("#define {name} 01U\n"),
+            format!("{definition}{definition}"),
+            format!("#define {name} OTHER\n"),
+        ] {
+            let error = software_version::read(&source.replace(&definition, &replacement), "OWNER")
+                .unwrap_err();
+            assert!(error.starts_with(&format!("{name}:")), "{error}");
+        }
+    }
+}
+
+#[test]
+fn software_versions_are_published_by_the_selected_description_and_manual() {
+    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    let text = |path: &str| {
+        std::str::from_utf8(&files.iter().find(|(file, _)| file == path).unwrap().1).unwrap()
+    };
+    let document =
+        roxmltree::Document::parse(text("generated/descriptions/Host_Implementation.arxml"))
+            .unwrap();
+    for implementation in document
+        .descendants()
+        .filter(|node| node.has_tag_name("BSW-IMPLEMENTATION"))
+    {
+        let name = implementation
+            .children()
+            .find(|node| node.has_tag_name("SHORT-NAME"))
+            .unwrap()
+            .text()
+            .unwrap();
+        let module = name.strip_suffix("HostImplementation").unwrap();
+        let expected = match module {
+            "Rte" => "0.0.0",
+            "Arti" => "1.0.0",
+            _ => "0.1.0",
+        };
+        assert_eq!(
+            implementation
+                .children()
+                .find(|node| node.has_tag_name("SW-VERSION"))
+                .unwrap()
+                .text(),
+            Some(expected),
+            "{module}"
+        );
+        let manual = text(&format!(
+            "generated/descriptions/modules/{module}/README.md"
+        ));
+        let owner = if module == "Arti" {
+            "Arti_Version.h"
+        } else {
+            "Autsaro_Version.h"
+        };
+        assert!(
+            implementation
+                .descendants()
+                .any(|node| node.has_tag_name("SHORT-LABEL") && node.text() == Some(owner)),
+            "{module}: missing {owner}"
+        );
+        assert!(
+            manual.contains(owner),
+            "{module}: missing owner documentation"
+        );
+        assert!(
+            manual.contains(&format!("Implementation version: `{expected}`")),
+            "{module}"
+        );
+    }
+}
+
 #[test]
 fn os_memory_mapping_description_uses_delivered_sections_and_one_header() {
     let files = prepared_pipeline_files(&build(&inputs()).unwrap());

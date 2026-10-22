@@ -121,6 +121,7 @@ impl ValidatedIntegrationPlan {
         let mut files = Vec::new();
         // The same platform and standard types the delivered ECU compiles with.
         for name in [
+            "Autsaro_Version.h",
             "Platform_Types.h",
             "Std_Types.h",
             "ComStack_Types.h",

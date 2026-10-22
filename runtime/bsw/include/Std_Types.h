@@ -1,10 +1,15 @@
 /** @file Standard BSW statuses for the controlled multi-component stack. */
 #ifndef STD_TYPES_H
 #define STD_TYPES_H
+#include "Autsaro_Version.h"
 /** Published information (SWS_BSW_00059): fixed R24-11 interface release, 4.10.0. */
 #define STD_TYPES_AR_RELEASE_MAJOR_VERSION    4U
 #define STD_TYPES_AR_RELEASE_MINOR_VERSION    10U
 #define STD_TYPES_AR_RELEASE_REVISION_VERSION 0U
+/** SWS_BSW_00059/00256: project implementation software release. */
+#define STD_TYPES_SW_MAJOR_VERSION AUTSARO_SW_MAJOR_VERSION
+#define STD_TYPES_SW_MINOR_VERSION AUTSARO_SW_MINOR_VERSION
+#define STD_TYPES_SW_PATCH_VERSION AUTSARO_SW_PATCH_VERSION
 #include "Platform_Types.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
 #if !defined(PLATFORM_AR_RELEASE_MAJOR_VERSION) || !defined(PLATFORM_AR_RELEASE_MINOR_VERSION)

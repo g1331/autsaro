@@ -84,9 +84,9 @@ OS_MEMMAP void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
         versioninfo->vendorID = 0u;
         /* BSWGeneral Appendix A.2 fixes the module ID; vendor identity is unassigned. */
         versioninfo->moduleID = ARTI_MODULE_ID;
-        versioninfo->sw_major_version = 1u;
-        versioninfo->sw_minor_version = 0u;
-        versioninfo->sw_patch_version = 0u;
+        versioninfo->sw_major_version = ARTI_SW_MAJOR_VERSION;
+        versioninfo->sw_minor_version = ARTI_SW_MINOR_VERSION;
+        versioninfo->sw_patch_version = ARTI_SW_PATCH_VERSION;
     } else {
         InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);
     }

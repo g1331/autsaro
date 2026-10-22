@@ -168,7 +168,7 @@ fn rte_generation_options_are_explicit_and_unsupported_values_are_refused() {
     }
 }
 
-fn description_with_revisions(revisions: &str) -> String {
+fn description_with_revisions(revisions: &str) -> (String, String) {
     let mut sources = inputs();
     if !revisions.is_empty() {
         xml_edit(
@@ -186,14 +186,21 @@ fn description_with_revisions(revisions: &str) -> String {
         );
     }
     let files = prepared_pipeline_files(&build(&sources).unwrap());
-    String::from_utf8(
-        files
-            .into_iter()
-            .find(|(path, _)| path == "generated/descriptions/Host_Implementation.arxml")
-            .unwrap()
-            .1,
+    let text = |name: &str| {
+        String::from_utf8(
+            files
+                .iter()
+                .find(|(path, _)| path == name)
+                .unwrap()
+                .1
+                .clone(),
+        )
+        .unwrap()
+    };
+    (
+        text("generated/descriptions/Host_Implementation.arxml"),
+        text("generated/descriptions/modules/Rte/README.md"),
     )
-    .unwrap()
 }
 
 #[test]
@@ -209,6 +216,9 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
     for (revisions, expected, suffix) in [
         (String::new(), "0.0.0", None),
         (revision("3.12.45", "2026-10-16"), "3.12.45", None),
+        (revision("4.12.45", "2026-10-16"), "4.12.45", None),
+        (revision("3.13.45", "2026-10-16"), "3.13.45", None),
+        (revision("3.12.46", "2026-10-16"), "3.12.46", None),
         (
             revision("3.12.45_rc1", "2026-10-16"),
             "3.12.45",
@@ -244,7 +254,12 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
             None,
         ),
     ] {
-        let xml = description_with_revisions(&revisions);
+        let (xml, manual) = description_with_revisions(&revisions);
+        assert!(manual.contains(&format!("Implementation version: `{expected}`")));
+        assert!(
+            manual.contains("RTE header software macros identify generator implementation 0.1.0")
+        );
+        assert!(manual.contains("both generator and input configuration"));
         let document = roxmltree::Document::parse(&xml).unwrap();
         let implementation = document
             .descendants()
@@ -849,6 +864,9 @@ fn version_assets_reserve_public_files_guards_and_macros_at_the_source_object() 
         for part in ["MAJOR", "MINOR", "REVISION"] {
             names.push(format!("{prefix}_AR_RELEASE_{part}_VERSION"));
         }
+        for part in ["MAJOR", "MINOR", "PATCH"] {
+            names.push(format!("{prefix}_SW_{part}_VERSION"));
+        }
         if module == "Arti" {
             names.push("ARTI_MODULE_ID".to_owned());
         }
@@ -867,6 +885,26 @@ fn version_assets_reserve_public_files_guards_and_macros_at_the_source_object() 
                 "/Application/Ingress/Behavior/Periodic",
             );
         }
+    }
+    for name in [
+        "AUTSARO_VERSION_H",
+        "AUTSARO_SW_MAJOR_VERSION",
+        "AUTSARO_SW_MINOR_VERSION",
+        "AUTSARO_SW_PATCH_VERSION",
+    ] {
+        let mut sources = inputs();
+        change(
+            &mut sources,
+            "ingress.arxml",
+            "<SYMBOL>Ingress_Periodic</SYMBOL>",
+            &format!("<SYMBOL>{name}</SYMBOL>"),
+        );
+        rejected_at(
+            &sources,
+            "SYMBOL_PRODUCER_DUPLICATE",
+            "ingress.arxml",
+            "/Application/Ingress/Behavior/Periodic",
+        );
     }
     for name in ["Version", "VERSION"] {
         let mut sources = inputs();

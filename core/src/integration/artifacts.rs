@@ -1003,8 +1003,10 @@ pub(super) fn files(
                 let os = p.starts_with("os/src/") || p.starts_with("os/include/");
                 let generated =
                     p.starts_with("generated/include/") || p.starts_with("generated/src/");
-                if module == "Os" {
-                    (os && !matches!(name, "Arti.c" | "Arti.h"))
+                if name == "Autsaro_Version.h" {
+                    module != "Arti"
+                } else if module == "Os" {
+                    (os && !matches!(name, "Arti.c" | "Arti.h" | "Arti_Version.h"))
                         || (generated
                             && (name.starts_with("Os_")
                                 || matches!(
@@ -1012,9 +1014,10 @@ pub(super) fn files(
                                     "Rte_Os_Type.h" | "Ecu_Config.c" | "Ecu_TargetConfig.h"
                                 )))
                 } else if module == "Arti" {
-                    os && matches!(name, "Arti.c" | "Arti.h")
+                    os && matches!(name, "Arti.c" | "Arti.h" | "Arti_Version.h")
                 } else if module == "Rte" {
-                    (generated && (name.starts_with("Rte") || name.starts_with("SchM_")))
+                    name == "Rte_Version.h"
+                        || (generated && (name.starts_with("Rte") || name.starts_with("SchM_")))
                         || (generated
                             && composition.components.iter().any(|component| {
                                 name == format!(
@@ -1530,9 +1533,9 @@ pub(super) fn files(
         let version = if module == "Rte" {
             &composition.generation.software_version
         } else if module == "Arti" {
-            "1.0.0"
+            env!("ARTI_SOFTWARE_VERSION")
         } else {
-            env!("CARGO_PKG_VERSION")
+            env!("AUTSARO_SOFTWARE_VERSION")
         };
         let revision = if module == "Rte" {
             composition
