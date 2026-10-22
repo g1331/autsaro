@@ -29,6 +29,17 @@ fn code_user_vendor_input_reaches_only_rte_implementation_and_contract() {
     ] {
         let mut sources = inputs();
         parameter(&mut sources, "Generation", "RteCodeVendorId", source);
+        let source_revision = source == "42017";
+        if source_revision {
+            xml_edit(
+                &mut sources,
+                "ecuc.arxml",
+                |node| named(node, "ECUC-MODULE-CONFIGURATION-VALUES", "Rte"),
+                |text| {
+                    text.replacen("<DEFINITION-REF", "<ADMIN-DATA><DOC-REVISIONS><DOC-REVISION><REVISION-LABEL>1.2.3</REVISION-LABEL><DATE>2026-10-20</DATE></DOC-REVISION><DOC-REVISION><REVISION-LABEL>3.12.45_test</REVISION-LABEL><DATE>2026-10-21</DATE></DOC-REVISION></DOC-REVISIONS></ADMIN-DATA><DEFINITION-REF", 1)
+                },
+            );
+        }
         assert!(normal_validation(&sources).diagnostics.is_empty());
         let plan = build(&sources).unwrap();
         assert_eq!(
@@ -65,6 +76,7 @@ fn code_user_vendor_input_reaches_only_rte_implementation_and_contract() {
             assert_eq!(
                 field("SW-VERSION"),
                 match name {
+                    "RteHostImplementation" if source_revision => "3.12.45",
                     "RteHostImplementation" => "0.0.0",
                     "ArtiHostImplementation" => "1.0.0",
                     _ => "0.1.0",
@@ -89,6 +101,17 @@ fn code_user_vendor_input_reaches_only_rte_implementation_and_contract() {
             contract["composition"]["generation"]["codeVendorId"],
             expected
         );
+        assert_eq!(
+            contract["composition"]["generation"]["softwareVersion"],
+            if source_revision { "3.12.45" } else { "0.0.0" }
+        );
+        if source_revision {
+            assert_eq!(
+                contract["composition"]["generation"]["revisionSuffix"],
+                "test"
+            );
+            assert!(xml.contains("Configuration revision suffix: test"));
+        }
         assert!(
             !kit.files()
                 .iter()
@@ -194,6 +217,10 @@ fn code_user_vendor_survives_save_reopen_and_contract_seal_refusal() {
         let mut sources = inputs();
         parameter(&mut sources, "Generation", "RteCodeVendorId", value);
         let mut workspace = live_pipeline_workspace(&root, &sources);
+        let initialization = workspace.preview_application_initialization().unwrap();
+        workspace
+            .initialize_application_previewed(&initialization)
+            .unwrap();
         let save = workspace.preview_save().unwrap();
         workspace.save_previewed(&save.revision).unwrap();
         let reopened = Workspace::open_project_manifest(
@@ -202,6 +229,50 @@ fn code_user_vendor_survives_save_reopen_and_contract_seal_refusal() {
         )
         .unwrap();
         let plan = reopened.saved_integration_plan().unwrap();
+        let prepare = || {
+            autosar_config_core::prepared::prepare_ecu_project_for_workspace(
+                &reopened,
+                &plan,
+                autosar_config_core::target::BuildTarget::LinuxX64ControlledV1,
+                true,
+            )
+            .unwrap()
+        };
+        let ecu = scratch.0.join("ecu");
+        let preview = prepare().preview(&ecu).unwrap();
+        prepare()
+            .generate_previewed(&ecu, &preview.revision)
+            .unwrap();
+        let xml_path = ecu.join("generated/descriptions/Host_Implementation.arxml");
+        let xml = std::fs::read_to_string(&xml_path).unwrap();
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let implementation = doc
+            .descendants()
+            .find(|node| named(*node, "BSW-IMPLEMENTATION", "RteHostImplementation"))
+            .unwrap();
+        assert_eq!(
+            implementation
+                .children()
+                .find(|node| node.has_tag_name("VENDOR-ID"))
+                .unwrap()
+                .text(),
+            Some(value)
+        );
+        let seal = std::fs::read(ecu.join("meta/files.sha256")).unwrap();
+        let pending = prepare();
+        let old = prepare().preview(&ecu).unwrap();
+        let source_path = root.join("ecuc.arxml");
+        let original = std::fs::read(&source_path).unwrap();
+        let mut external = original.clone();
+        external.push(b'\n');
+        std::fs::write(&source_path, &external).unwrap();
+        assert!(pending.generate_previewed(&ecu, &old.revision).is_err());
+        assert_eq!(std::fs::read(&source_path).unwrap(), external);
+        assert_eq!(std::fs::read(ecu.join("meta/files.sha256")).unwrap(), seal);
+        std::fs::write(&source_path, original).unwrap();
+        std::fs::write(&xml_path, b"tampered").unwrap();
+        assert!(prepare().preview(&ecu).is_err());
+        assert_eq!(std::fs::read(&xml_path).unwrap(), b"tampered");
         let files = plan.component_contract_files().unwrap();
         let contract: serde_json::Value =
             serde_json::from_slice(content(files.files(), "contract.json")).unwrap();

@@ -1000,6 +1000,7 @@ export type RteGenerationContract = {
   strictUnconnectedRPortCheck: boolean;
   strictInitialValuesCheck: boolean;
   strictConfigurationCheck: boolean;
+  codeVendorId: number;
   softwareVersion: string;
   revisionSuffix: string | null;
 };
