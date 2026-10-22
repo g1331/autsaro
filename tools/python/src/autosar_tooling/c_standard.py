@@ -185,7 +185,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
                 for symbol in identifiers
             )):
                 validation_guards.add(first.start)
-    # Release presence/value assertions reject an incompatible import; they do
+    # Version presence/value assertions reject an incompatible import; they do
     # not select functionality by a configuration switch's presence.
     for index, first in enumerate(directives):
         if not re.match(r"\s*#\s*if\b", first.text):
@@ -203,7 +203,7 @@ def findings(name: str, source: str, *, bsw: bool | None = None, known_switches:
             continue
         conditions = chain[:-1:2]
         identifiers = set(re.findall(r"\b[A-Z][A-Z0-9_]+\b", " ".join(item.text for item in conditions)))
-        if identifiers and all(re.fullmatch(r"[A-Z][A-Z0-9_]*_AR_RELEASE_(?:MAJOR|MINOR|REVISION)_VERSION", name)
+        if identifiers and all(re.fullmatch(r"[A-Z][A-Z0-9_]*_(?:AR_RELEASE_(?:MAJOR|MINOR|REVISION)|SW_(?:MAJOR|MINOR|PATCH))_VERSION", name)
                                for name in identifiers):
             validation_guards.update(item.start for item in conditions)
     switches = set(known_switches)
