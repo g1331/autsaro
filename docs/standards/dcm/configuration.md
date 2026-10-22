@@ -53,7 +53,7 @@
 | subservice security filter | 不适用（配置：ECUC_Dcm_00812）：ECUC_Dcm_00812 |
 | subservice session filter | 不适用（配置：ECUC_Dcm_00804）：ECUC_Dcm_00804 |
 | DcmDsl | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00690 |
-| DcmDslBuffer | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00738–00739 |
+| DcmDslBuffer | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 的64字节容量约束；Dcm_Init 独立 uint16 容量检查8..256及通信长度可表示性，dcm_lengths.c 验证255／256边界和拒绝保留状态）：ECUC_Dcm_00738–00739 |
 | DcmDslDiagResp | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00691、00693、00914 |
 | DcmDslProtocol | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00694 |
 | DcmDslProtocolRow | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00695、00699、00701–00702、00704、00728–00729、01043、01110、01114 |

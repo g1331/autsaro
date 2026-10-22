@@ -590,7 +590,26 @@ fn communication_rejects_truncation_and_unbound_polling_in_both_entries() {
             )
         },
     );
-    rejects_in_both(&sources, "COMMUNICATION_LENGTH_RANGE");
+    let object = "/Configuration/EcuC/Config/Pdus/AdditionalPdu";
+    assert!(
+        build(&sources)
+            .err()
+            .expect("UINT8 accepted 256 bytes")
+            .iter()
+            .any(|issue| issue.code == "COMMUNICATION_LENGTH_RANGE"
+                && issue.object.as_deref() == Some(object))
+    );
+    assert!(
+        normal_validation(&sources)
+            .diagnostics
+            .iter()
+            .any(|issue| issue.code == "COMMUNICATION_LENGTH_RANGE"
+                && issue.path.as_deref() == Some(object))
+    );
+    assert_rejected_sources_preserved(&sources);
+    parameter(&mut sources, "AdditionalPdu", "PduLength", "255");
+    assert!(normal_validation(&sources).diagnostics.is_empty());
+    build(&sources).unwrap();
     let mut sources = inputs();
     change(
         &mut sources,
