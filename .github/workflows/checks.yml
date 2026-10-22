@@ -361,10 +361,13 @@ jobs:
         run: |
           import os, shutil, subprocess
           from pathlib import Path
+          scratch = Path(os.environ['RUNNER_TEMP']) / 'sanitizer-scratch'
+          scratch.mkdir()
           tools = {'AUTOSAR_CC': 'gcc', 'AUTOSAR_OBJDUMP': 'objdump', 'AUTOSAR_NM': 'nm', 'AUTOSAR_GIT': 'git'}
           python = subprocess.run(['uv', 'run', '--locked', 'python', '-c', 'import sys; print(sys.executable)'],
               check=True, capture_output=True, text=True).stdout.strip()
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('TMPDIR=' + str(scratch) + '\n')
               for variable, name in tools.items():
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
@@ -379,8 +382,7 @@ jobs:
         run: |
           import os, subprocess, sys
           from pathlib import Path
-          scratch = Path(os.environ['RUNNER_TEMP']) / 'sealed-sanitizer-scratch'
-          scratch.mkdir()
+          scratch = Path(os.environ['TMPDIR'])
           env = dict(os.environ, TMP=str(scratch), TEMP=str(scratch), TMPDIR=str(scratch))
           sys.exit(subprocess.run(['setarch', 'x86_64', '-R', 'python', '-m', 'autosar_tooling.ci_reporting', 'run', '--',
               'cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests', '--test', 'native',
@@ -388,8 +390,8 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: sealed-sanitizer-scratch-${{ strategy.job-index }}
-          path: ${{ runner.temp }}/sealed-sanitizer-scratch
+          name: sanitizer-scratch-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/sanitizer-scratch
           if-no-files-found: ignore
           retention-days: 14
       - name: Instrumented OS suites
