@@ -8,6 +8,8 @@
 | --- | --- |
 | `SWS_BSW_00006`、`SWS_BSW_00115`、`[SWS_BSW_00103]`、`[SWS_BSW_00170]`／`[SWS_BSW_00171]`、`SWS_BSW_00036`；附录 A.2 模块 ID | 实现源包含 `<Mip>_MemMap.h`；文件名区分大小写且不能只靠大小写区分；跨模块头文件版本检查；模块 ID：Can 80、CanIf 60、CanTp 35、Com 50、ComM 12、Dcm 53、PduR 51、Rte 2、Os 1、BswM 42、Det 15、CDD 255，LSduR 132 |
 
+`SWS_BSW_00115` 的具体偏离记录与就近 MR12 注释沿用 [C 编码规范](../../development/c-coding-standard.md#misra-偏离注释)；已有有界冲突授权、逐项证据和独立复核按 [ADR 0023](../../adr/0023-autosar-required-conflict-disposition.md)执行。项目授权不能替代该条款的 MISRA 符合义务，原文与必要人工评估仍由 #57／#58 承接，以下各模块差距不因此关闭。
+
 ## 按模块处置
 
 | 模块 | 处置 |

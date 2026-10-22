@@ -6,7 +6,7 @@
 
 | 约束 | 依据 | 要点 |
 | --- | --- | --- |
-| MISRA C:2012 修订基线 | [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)、[misra-c2012 指导](../../.agents/skills/misra-c2012/SKILL.md) | C99；偏离见下文 [MISRA 偏离注释](#misra-偏离注释)；`c-check` 的用法见[生成 C 的静态检查](testing/generated-c.md) |
+| MISRA C:2012 修订基线 | [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)／[ADR 0023](../adr/0023-autosar-required-conflict-disposition.md)、[misra-c2012 指导](../../.agents/skills/misra-c2012/SKILL.md) | C99；偏离见下文 [MISRA 偏离注释](#misra-偏离注释)；`c-check` 的用法见[生成 C 的静态检查](testing/generated-c.md) |
 | BSW 命名 | SWS BSWGeneral R24-11 | API `<Mip>_<Sn>`（`SRS_BSW_00310`）；主函数 `<Mip>_MainFunction[<Sd>]`（`SWS_BSW_00153`）；类型 `<Ma>_<Tn>Type`，平台基本类型除外（`SWS_BSW_00146`）；宏、枚举字面值与状态值 `<MIP>_<SN>`，全大写，`E_OK`／`E_NOT_OK` 除外（`SWS_BSW_00124`）；错误值 `<MIP>_E_<EN>`（`SWS_BSW_00125`）；全局变量 `<Mip>_<Vn>`（`SWS_BSW_00130`），只读的加 `const`（`SWS_BSW_00131`） |
 | BSW 文件 | SWS BSWGeneral R24-11 | 文件名 `<Mip>[_<Ie>]*.*`（`SWS_BSW_00103`）；区分大小写，且不能只靠大小写区分（`SWS_BSW_00170`／`00171`）；实现源包含 `<Mip>_MemMap.h`（`SWS_BSW_00006`）；只引入需要的头、只导出其他模块需要的内容（`SWS_BSW_00104`／`00105`）；全局变量定义在实现源中（`SWS_BSW_00129`） |
 | 数据类型 | `SWS_BSW_00120`、MISRA Dir 4.6 | BSW 模块（`runtime/bsw`）不用 C 原生类型（`int`、`unsigned`、`char` 等），用 `Platform_Types.h` 的 AUTOSAR 类型（`uint8`、`sint16`、`boolean` 等），经 `Std_Types.h` 引入；`Platform_Types.h` 自身的定义除外。OS 的模块代码同样使用 AUTOSAR 类型，配置计数使用有界 AUTOSAR 整数，文本字节使用 `uint8`，仅在原生 API 调用边界转换字符指针；主机适配（`runtime/host`、`runtime/ecu` 及 OS 主机后端）对接平台 API 时按其签名 |
@@ -125,7 +125,7 @@ void Server_Run(uint8, uint32 *);
 
 固定版次的 AUTOSAR 必需契约优先。核对原文后，若接口、callout 专用内存段等标准义务与 MISRA 规则或工具诊断无法同时满足，保留正确契约和原始分析结果。对应 PR 逐条列出新增诊断的规则、文件与源码行，以及要求该行的条款编号和必要性（条目多时放折叠块或 PR 评论）；对不上必需条款的诊断不属于冲突，应修改代码消除。Issue 范围内的这类决定由实现者依据上述证据作出，源码诊断裁决的 Issue 只记录结论与链接。不能靠删除标准段标记、停止 include、缩小扫描范围或增加无依据 suppression 来消除诊断。
 
-按冲突保留的诊断不等于正式 MISRA 偏离批准，也不改变 `passed=false` 或人工未评估的事实。正式偏离仍按以下约定处理。
+按 [ADR 0023](../adr/0023-autosar-required-conflict-disposition.md) 执行 [2026-10-17 用户决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)：独立核实必需且无法同时满足的冲突，允许逐项依证据记为偏离，无需用户再次逐条批准。项目授权与 MISRA 规范效力分开记录；合法原件（#57）、适用版次／amendment／TC、类别（包括 Mandatory）、实际调用／包含闭包、风险控制及修改后源码人工评估（#58）与独立复核均是实际处置前提。缺任何依据时保持未核查／待评估，不进入批准表或添加违反注释；不能从用户意图、工具编号或技能摘要推定允许偏离。Mandatory 不允许偏离的限制仍保留，原文确认不能偏离的真实违反保持阻塞。保留必需行本身不构成偏离或符合性结论，`passed=false`、`error` 与人工 `not_assessed` 原样保留。
 
 ## MISRA 偏离注释
 
@@ -138,8 +138,8 @@ void Server_Run(uint8, uint32 *);
 
 注释写在引起违反的语句同一行或上一行，一处违反一条注释。注释只标出位置和理由，不构成批准：
 
-- 偏离记录写明规则、适用范围、依据、风险控制和批准人，位于对应模块的标准篇（`docs/standards/`）或 ADR；只能由维护者批准（ADR 0008）。
-- 记录获批后才在源码中加注释，注释中的规则编号与记录一致；Cppcheck 的原始诊断照常保留，注释不是 suppression。
+- 具体记录位于对应模块的标准篇（`docs/standards/`），沿用现有记录路径；[ADR 0023 的逐项格式](../adr/0023-autosar-required-conflict-disposition.md#逐项记录与复核)连接固定提交／profile／target／program／TU、规则、文件／源码行和符号、实际调用闭包、SWS 全文必要性及替代方案、合法 MISRA 版次／amendment／TC、风险控制与验证、评估和独立复核。原授权来源、评估者及日期、复核 head／发现／处置分开写，不把实现者写成新增批准人；范围外新例外先完成具体文本再由用户决定。
+- 只有具体记录满足原授权范围、规范允许条件与上述全部评估／复核前提后才在源码中加注释，注释中的规则编号与记录一致；Cppcheck 的原始诊断照常保留，注释不是 suppression。本次政策同步不批准具体诊断，不修改既有批准表或源码注释。
 - 已批准的偏离：[PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7，[Com](../standards/com.md#misra-偏离) 的 Rule 8.7 与 2.5，[CanTp](../standards/cantp.md#misra-偏离) 的 Rule 8.7，[ComM](../standards/comm/README.md#misra-偏离) 的 Rule 8.7 与 2.5，[BswM](../standards/bswm/README.md#misra-偏离) 的 Rule 8.7 与 2.3。其余模块整改时补齐所需记录与注释。
 
 ## 自动检查
