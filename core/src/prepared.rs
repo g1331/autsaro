@@ -1033,9 +1033,16 @@ mod delivery_path_tests {
                 checked += 1;
             }
         }
-        assert_eq!(checked, 92);
+        assert_eq!(checked, 93);
         assert_eq!(seen, generated.keys().copied().collect());
         for original in &originals {
+            let version = original.get("bsw/include/Autsaro_Version.h").unwrap();
+            assert_eq!(
+                version.relative_path,
+                "runtime/bsw/include/Autsaro_Version.h"
+            );
+            assert_eq!(version.role, "bsw");
+            assert_eq!(version.responsibility, "workbench");
             let header = original.get("bsw/src/CanTp_Internal.h").unwrap();
             assert_eq!(header.relative_path, "runtime/bsw/src/CanTp_Internal.h");
             assert_eq!(header.role, "bsw");

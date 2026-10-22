@@ -9,6 +9,9 @@ mod native_grammar;
 #[path = "src/target_spec.rs"]
 mod target_spec;
 
+#[path = "build_support/software_version.rs"]
+mod software_version;
+
 #[derive(Clone)]
 struct Source {
     path: String,
@@ -84,6 +87,16 @@ fn add(
 fn main() {
     let core = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let root = core.parent().expect("workspace root");
+    for (path, prefix) in [
+        ("runtime/bsw/include/Autsaro_Version.h", "AUTSARO"),
+        ("runtime/os/include/Arti_Version.h", "ARTI"),
+    ] {
+        println!("cargo:rerun-if-changed={}", root.join(path).display());
+        let source = fs::read_to_string(root.join(path)).expect(path);
+        let version = software_version::read(&source, prefix)
+            .unwrap_or_else(|error| panic!("{path}: {error}"));
+        println!("cargo:rustc-env={prefix}_SOFTWARE_VERSION={version}");
+    }
     let official_path = root.join("core/resources/official.json");
     let official = read_manifest(root, "core/resources/official.json");
     let mut official_constants = String::new();
@@ -452,6 +465,7 @@ fn build_native_inventory(core: &Path) {
     let mut paths = Vec::new();
     for relative in [
         "build.rs",
+        "build_support/software_version.rs",
         "src/rules.rs",
         "src/xml_paths.rs",
         "src/rules",

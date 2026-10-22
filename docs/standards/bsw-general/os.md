@@ -38,7 +38,7 @@ OS 是 SC1、单核的 AUTOSAR OS，内核采用固定版本的 FreeRTOS 并打�
 | 版本 API | SWS_OS 不定义 `Os_GetVersionInfo`，OS ECUC 没有 `OsVersionInfoApi`；OS 不提供版本 API，与默认不可用一致。 已核对（原文与源码）[Os]：SWS_BSW_00051、00052、00064、00164、00236 |
 | MetaData | OS 不引用全局 PDU。 不适用（归属：生产与转发 PDU 的 Com、PduR、CanIf 等模块；OS 不引用全局 PDU）[Os]：SWS_BSW_00239–00242 |
 | Post-build variation | 主线只生成一个预编译配置集。 不适用（归属：配置工具只生成单一预编译配置集；变体选择由 EcuM 角色承担，主线没有 EcuM）[Os]：SWS_BSW_00226–00228 |
-| 发布版本信息 | 已核对（`Os.h`／`Os.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[Os]：SWS_BSW_00036；release 4.10.0 已发布，完整身份与软件信息仍为差距 #59[Os]：SWS_BSW_00059、00161、00162、00256 |
+| 发布版本信息 | 已核对（`Os.h`／`Os.c` 及 `release_contracts::direct_external_headers_refuse_only_missing_or_wrong_major_minor`）[Os]：SWS_BSW_00036；release 4.10.0 已发布，正式 vendor 身份仍为差距 #59[Os]：SWS_BSW_00059、00161、00256；已核对（[软件发行政策](README.md#软件发行版本)、`Autsaro_Version.h` 及 `shared_software_owner_propagates_independent_component_upgrades`）[Os]：SWS_BSW_00162 |
 | MISRA | 差距 #58[Os]：SWS_BSW_00115 |
 | 交付描述 Os 00001 | 已核对（artifacts::files 从交付公开头补齐真实入口，五个 OS hooks 由 integration/src/Ecu_OsHooks.c／Ecu_Target.c 提供，Os expectedEntry 与集成层 implementedEntry 引用同一入口；constr_4016 限定的实体类型配对由描述测试核验；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 与固定 XSD oracle 检查实际交付 BSWMD）[Os]：SWS_BSW_00001 |
 | 交付描述 Os 00002 | 已核对（module_documentation::module 交付 modules/Os/README.md、API 与配置分页；descriptions::module_descriptions_include_delivered_public_entries_and_manuals 检查导航、封面、历史、文件、资源、集成、限制与实例入口）[Os]：SWS_BSW_00002 |

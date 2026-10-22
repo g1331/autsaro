@@ -1728,10 +1728,12 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
     let mut version_names = BTreeSet::new();
     let mut version_files = BTreeSet::new();
     for asset in crate::resources::AssetInventory::embedded().entries() {
-        if !asset.relative_path.ends_with("_Version.h") {
+        let filename = super::short_name(asset.relative_path);
+        if !filename.ends_with("_Version.h")
+            && !matches!(filename, "Std_Types.h" | "Platform_Types.h")
+        {
             continue;
         }
-        let filename = super::short_name(asset.relative_path);
         version_files.insert(format!("include/{filename}").to_uppercase());
         for line in super::outputs::trusted_text(asset.relative_path)?.lines() {
             if let Some(definition) = line.strip_prefix("#define ")

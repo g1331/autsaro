@@ -22,5 +22,5 @@ SchM 由生成器输出：生命周期在 `SchM_Main.c`，声明在 `Rte_Main.h`
 
 ## 差距
 
-- **SchM_GetVersionInfo**：RteBswGeneral 与其必填 RteSchMVersionInfoApi 已进入内置定义，所选配置为 false；参数处拒绝 true 的证据在 `integration/rte.rs`。不生成无条件版本 API。
+- **SchM_GetVersionInfo**：RteBswGeneral 与其必填 RteSchMVersionInfoApi 已进入内置定义，所选配置为 false；参数处拒绝 true 的证据在 `integration/rte.rs`。不生成无条件版本 API。R24-11 RTE p954 要求返回的 build version 同时依赖生成器版本与输入配置，不能单用 Cargo、头中的实现版本或 BSWMD 的 DOC-REVISION；启用 API 前须与 #59 的真实身份及 build-version 方案一起闭合。
 - **嵌套与中断上下文**：见 #202。

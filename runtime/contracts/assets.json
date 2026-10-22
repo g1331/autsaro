@@ -2220,6 +2220,19 @@
       ],
       "role": "bsw",
       "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/bsw/include/Autsaro_Version.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "bsw",
+      "responsibility": "workbench"
     }
   ]
 }

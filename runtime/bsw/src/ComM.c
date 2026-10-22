@@ -33,6 +33,18 @@
     (COMM_AR_RELEASE_REVISION_VERSION != COMM_C_AR_RELEASE_REVISION_VERSION)
 #error "ComM.c -> ComM.h: inconsistent internal AUTOSAR release"
 #endif
+/* SWS_ComM_00418: source software release is independent of the header owner. */
+#define COMM_C_SW_MAJOR_VERSION 0U
+#define COMM_C_SW_MINOR_VERSION 1U
+#define COMM_C_SW_PATCH_VERSION 0U
+#if !defined(COMM_SW_MAJOR_VERSION) || !defined(COMM_SW_MINOR_VERSION) ||                          \
+    !defined(COMM_SW_PATCH_VERSION)
+#error "ComM.c -> ComM.h: missing internal software version"
+#elif (COMM_SW_MAJOR_VERSION != COMM_C_SW_MAJOR_VERSION) ||                                        \
+    (COMM_SW_MINOR_VERSION != COMM_C_SW_MINOR_VERSION) ||                                          \
+    (COMM_SW_PATCH_VERSION != COMM_C_SW_PATCH_VERSION)
+#error "ComM.c -> ComM.h: inconsistent internal software version"
+#endif
 #define COMM_USER_CAPACITY 32u /**< Users per channel; the generator enforces it. */
 #define COMM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"

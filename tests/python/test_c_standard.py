@@ -83,6 +83,26 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
             with self.subTest(active=active):
                 self.assertIn("config-switch", self.rules(active))
 
+    def test_software_presence_and_value_assertions_keep_feature_selection_rejected(self):
+        source = """#define COMM_C_SW_MAJOR_VERSION 0U
+#define COMM_C_SW_MINOR_VERSION 1U
+#define COMM_C_SW_PATCH_VERSION 0U
+#if !defined(COMM_SW_MAJOR_VERSION) || !defined(COMM_SW_MINOR_VERSION) || !defined(COMM_SW_PATCH_VERSION)
+#error Missing software version
+#elif COMM_SW_MAJOR_VERSION != COMM_C_SW_MAJOR_VERSION || COMM_SW_MINOR_VERSION != COMM_C_SW_MINOR_VERSION || COMM_SW_PATCH_VERSION != COMM_C_SW_PATCH_VERSION
+#error Inconsistent software version
+#endif
+"""
+        self.assertNotIn("config-switch", self.rules(source))
+        for active in (
+            source.replace("#error Missing software version", "uint8 selected;"),
+            source.replace("#error Inconsistent software version", '#include "active.h"'),
+            source.replace("#endif", "#else\nuint8 selected;\n#endif"),
+            source.replace("COMM_SW_PATCH_VERSION", "COMM_FEATURE_API"),
+        ):
+            with self.subTest(active=active):
+                self.assertIn("config-switch", self.rules(active))
+
     def test_review_declarators_and_empty_comments(self):
         self.assertIn("state-comment", self.rules("static void (*hook)(void);", "runtime/bsw/src/Test.c"))
         self.assertIn("state-comment", self.rules("static Std_ReturnType (*hook)(void);", "runtime/bsw/src/Test.c"))

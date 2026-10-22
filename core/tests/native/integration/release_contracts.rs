@@ -444,6 +444,10 @@ fn public_headers_publish_their_owner_release_in_ecu_and_contract_deliveries() {
             let source = format!(
                 "#include \"{path}\"\n#if !defined({prefix}_AR_RELEASE_MAJOR_VERSION) || !defined({prefix}_AR_RELEASE_MINOR_VERSION) || !defined({prefix}_AR_RELEASE_REVISION_VERSION)\n#error Missing owner release\n#endif\n#if ({prefix}_AR_RELEASE_MAJOR_VERSION != 4U) || ({prefix}_AR_RELEASE_MINOR_VERSION != 10U) || ({prefix}_AR_RELEASE_REVISION_VERSION != 0U)\n#error Wrong owner release\n#endif\n"
             );
+            let (major, minor) = if prefix == "ARTI" { (1, 0) } else { (0, 1) };
+            let source = format!(
+                "{source}#if !defined({prefix}_SW_MAJOR_VERSION) || !defined({prefix}_SW_MINOR_VERSION) || !defined({prefix}_SW_PATCH_VERSION)\n#error Missing owner software version\n#endif\n#if ({prefix}_SW_MAJOR_VERSION != {major}U) || ({prefix}_SW_MINOR_VERSION != {minor}U) || ({prefix}_SW_PATCH_VERSION != 0U)\n#error Wrong owner software version\n#endif\n"
+            );
             let source = if name == "Arti.h" {
                 format!(
                     "{source}#if ARTI_MODULE_ID != 5U\n#error Wrong ARTI module ID\n#endif\nint release_consumer;\n"
@@ -494,7 +498,7 @@ fn public_headers_publish_their_owner_release_in_ecu_and_contract_deliveries() {
             for _ in 0..2 {
                 source.push_str(&format!("#define {scope}_START_SEC_CODE\n#include \"{path}\"\n#ifdef {scope}_START_SEC_CODE\n#error Unconsumed start\n#endif\n#define {scope}_STOP_SEC_CODE\n#include \"{path}\"\n#ifdef {scope}_STOP_SEC_CODE\n#error Unconsumed stop\n#endif\n"));
             }
-            source.push_str("#if MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U || MEMMAP_AR_RELEASE_MINOR_VERSION != 10U || MEMMAP_AR_RELEASE_REVISION_VERSION != 0U\n#error Wrong MemMap release\n#endif\nint mapped_consumer;\n");
+            source.push_str("#if MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U || MEMMAP_AR_RELEASE_MINOR_VERSION != 10U || MEMMAP_AR_RELEASE_REVISION_VERSION != 0U\n#error Wrong MemMap release\n#endif\n#if MEMMAP_SW_MAJOR_VERSION != 0U || MEMMAP_SW_MINOR_VERSION != 1U || MEMMAP_SW_PATCH_VERSION != 0U\n#error Wrong MemMap software version\n#endif\nint mapped_consumer;\n");
             compile(
                 &scratch.0,
                 &scratch.0.join(path),
@@ -509,7 +513,7 @@ fn public_headers_publish_their_owner_release_in_ecu_and_contract_deliveries() {
 
 #[test]
 fn comm_source_checks_its_own_header_release_independently() {
-    // Release part only; the remaining software-version policy is tracked separately.
+    // Independent source/header release values; software is checked separately below.
     let files = prepared_pipeline_files(&build(&inputs()).unwrap());
     let scratch = Scratch::new();
     install(&files, &scratch.0);
@@ -617,5 +621,247 @@ fn excluded_consumers_do_not_acquire_external_release_obligations() {
             "",
         );
         std::fs::write(path, original).unwrap();
+    }
+}
+
+#[test]
+fn comm_source_checks_each_software_component_and_accepts_synchronized_upgrades() {
+    // Verifies: SWS_ComM_00418.
+    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    let scratch = Scratch::new();
+    install(&files, &scratch.0);
+    let path = scratch.0.join("bsw/src/ComM.c");
+    let original = std::fs::read_to_string(&path).unwrap();
+    compile(
+        &scratch.0,
+        &path,
+        &original,
+        "comm-software-control",
+        true,
+        "",
+    );
+    let position = original.find("/* SWS_ComM_00418: source software").unwrap();
+    for (part, current, next) in [("MAJOR", 0, 1), ("MINOR", 1, 2), ("PATCH", 0, 1)] {
+        let name = format!("COMM_SW_{part}_VERSION");
+        for missing in [false, true] {
+            let change = if missing {
+                format!("#undef {name}\n")
+            } else {
+                format!("#undef {name}\n#define {name} {next}U\n")
+            };
+            let source = format!("{}{change}{}", &original[..position], &original[position..]);
+            compile(
+                &scratch.0,
+                &path,
+                &source,
+                "comm-software-header-only",
+                false,
+                if missing {
+                    "ComM.c -> ComM.h: missing internal software version"
+                } else {
+                    "ComM.c -> ComM.h: inconsistent internal software version"
+                },
+            );
+            if !missing {
+                let macro_name = format!("COMM_C_SW_{part}_VERSION");
+                let line = source
+                    .lines()
+                    .find(|line| line.split_whitespace().nth(1) == Some(macro_name.as_str()))
+                    .unwrap();
+                assert_eq!(
+                    line.split_whitespace().nth(2),
+                    Some(format!("{current}U").as_str())
+                );
+                let synchronized = source.replace(line, &format!("#define {macro_name} {next}U"));
+                compile(
+                    &scratch.0,
+                    &path,
+                    &synchronized,
+                    "comm-software-synchronized",
+                    true,
+                    "",
+                );
+            }
+        }
+    }
+    // A legal major upgrade also resets the lower components (SWS_BSW_00162).
+    let owner = scratch.0.join("bsw/include/Autsaro_Version.h");
+    let upgraded = std::fs::read_to_string(&owner)
+        .unwrap()
+        .replace("AUTSARO_SW_MAJOR_VERSION 0U", "AUTSARO_SW_MAJOR_VERSION 1U")
+        .replace("AUTSARO_SW_MINOR_VERSION 1U", "AUTSARO_SW_MINOR_VERSION 0U");
+    std::fs::write(owner, upgraded).unwrap();
+    let synchronized = original
+        .lines()
+        .map(|line| match line.split_whitespace().nth(1) {
+            Some("COMM_C_SW_MAJOR_VERSION") => "#define COMM_C_SW_MAJOR_VERSION 1U",
+            Some("COMM_C_SW_MINOR_VERSION") => "#define COMM_C_SW_MINOR_VERSION 0U",
+            _ => line,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    compile(
+        &scratch.0,
+        &path,
+        &synchronized,
+        "comm-software-major-upgrade",
+        true,
+        "",
+    );
+}
+
+#[test]
+fn arti_software_api_observes_each_owner_component_and_each_assignment() {
+    // Software portion of SWS_Arti_91005; formal vendor identity remains unresolved.
+    let files =
+        prepared_pipeline_files_for_target(&build(&inputs()).unwrap(), tooling::native_target());
+    let scratch = Scratch::new();
+    install(&files, &scratch.0);
+    let source_path = scratch.0.join("os/src/Arti.c");
+    let source = std::fs::read_to_string(&source_path).unwrap();
+    let header_path = scratch.0.join("os/include/Arti_Version.h");
+    let header = std::fs::read_to_string(&header_path).unwrap();
+    let target: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(scratch.0.join("target.json")).unwrap()).unwrap();
+    let run = |expected: [u8; 3], accepted: bool| {
+        let consumer = scratch.0.join("software-consumer.c");
+        std::fs::write(
+            &consumer,
+            format!(
+                r#"#include "Arti.h"
+int main(void) {{
+    Std_VersionInfoType result = {{99u, 99u, 99u, 99u, 99u}};
+    void (*get_version)(Std_VersionInfoType *) = &Arti_GetVersionInfo;
+    get_version(&result);
+    if (result.vendorID != 0u || result.moduleID != 5u) {{ return 10; }}
+    if (result.sw_major_version != {}u) {{ return 11; }}
+    if (result.sw_minor_version != {}u) {{ return 12; }}
+    if (result.sw_patch_version != {}u) {{ return 13; }}
+    return 0;
+}}
+"#,
+                expected[0], expected[1], expected[2]
+            ),
+        )
+        .unwrap();
+        let executable = scratch.0.join(if cfg!(windows) {
+            "software-consumer.exe"
+        } else {
+            "software-consumer"
+        });
+        let mut command = tooling::c_compiler();
+        command.current_dir(&scratch.0);
+        for flag in target["compilerFlags"].as_array().unwrap() {
+            command.arg(flag.as_str().unwrap());
+        }
+        for path in target["includePaths"].as_array().unwrap() {
+            command.arg("-I").arg(path.as_str().unwrap());
+        }
+        command
+            .arg(&source_path)
+            .arg(&consumer)
+            .arg("-o")
+            .arg(&executable);
+        let output = tooling::run_public_command(
+            &mut command,
+            &scratch.0,
+            "arti-software-build",
+            std::time::Duration::from_secs(60),
+        );
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let output = tooling::run_public_command(
+            &mut std::process::Command::new(executable),
+            &scratch.0,
+            "arti-software-observe",
+            std::time::Duration::from_secs(30),
+        );
+        assert_eq!(output.status.success(), accepted, "{output:?}");
+        output.status.code()
+    };
+    run([1, 0, 0], true);
+    for (index, part, current, next) in [(0, "MAJOR", 1, 2), (1, "MINOR", 0, 1), (2, "PATCH", 0, 1)]
+    {
+        let name = format!("ARTI_SW_{part}_VERSION");
+        let line = header
+            .lines()
+            .find(|line| line.split_whitespace().nth(1) == Some(name.as_str()))
+            .unwrap();
+        assert_eq!(
+            line.split_whitespace().nth(2),
+            Some(format!("{current}U").as_str())
+        );
+        std::fs::write(
+            &header_path,
+            header.replace(line, &format!("#define {name} {next}U")),
+        )
+        .unwrap();
+        let mut expected = [1, 0, 0];
+        expected[index] = next;
+        run(expected, true);
+        std::fs::write(&header_path, &header).unwrap();
+        let assignment = format!("versioninfo->sw_{}_version = {name};", part.to_lowercase());
+        assert_eq!(source.matches(&assignment).count(), 1);
+        std::fs::write(&source_path, source.replace(&assignment, "")).unwrap();
+        assert_eq!(run([1, 0, 0], false), Some(11 + index as i32));
+        std::fs::write(&source_path, &source).unwrap();
+    }
+}
+
+#[test]
+fn shared_software_owner_propagates_independent_component_upgrades() {
+    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    let scratch = Scratch::new();
+    install(&files, &scratch.0);
+    let owner = scratch.0.join("bsw/include/Autsaro_Version.h");
+    let original = std::fs::read_to_string(&owner).unwrap();
+    let headers = [
+        ("Can_Version.h", "CAN"),
+        ("CanIf_Version.h", "CANIF"),
+        ("CanTp_Version.h", "CANTP"),
+        ("Com_Version.h", "COM"),
+        ("ComM_Version.h", "COMM"),
+        ("BswM_Version.h", "BSWM"),
+        ("Dcm_Version.h", "DCM"),
+        ("Det_Version.h", "DET"),
+        ("PduR_Version.h", "PDUR"),
+        ("LSduR_Version.h", "LSDUR"),
+        ("Rte_Version.h", "RTE"),
+        ("MemMap_Version.h", "MEMMAP"),
+        ("ComStack_Version.h", "COMSTACKTYPE"),
+        ("Os_Version.h", "OS"),
+        ("Std_Types.h", "STD_TYPES"),
+        ("Platform_Types.h", "PLATFORM"),
+    ];
+    for values in [[1, 1, 0], [0, 2, 0], [0, 1, 1], [1, 0, 0]] {
+        let mut changed = original.clone();
+        for (part, value) in ["MAJOR", "MINOR", "PATCH"].into_iter().zip(values) {
+            let name = format!("AUTSARO_SW_{part}_VERSION");
+            let line = original
+                .lines()
+                .find(|line| line.split_whitespace().nth(1) == Some(name.as_str()))
+                .unwrap();
+            changed = changed.replace(line, &format!("#define {name} {value}U"));
+        }
+        std::fs::write(&owner, changed).unwrap();
+        let mut consumer = String::new();
+        for (header, prefix) in headers {
+            consumer.push_str(&format!("#include \"{header}\"\n"));
+            for (part, value) in ["MAJOR", "MINOR", "PATCH"].into_iter().zip(values) {
+                consumer.push_str(&format!("#if {prefix}_SW_{part}_VERSION != {value}U\n#error {prefix} software {part} did not follow owner\n#endif\n"));
+            }
+        }
+        consumer.push_str("int software_consumer;\n");
+        compile(
+            &scratch.0,
+            &owner,
+            &consumer,
+            "shared-software-upgrade",
+            true,
+            "",
+        );
     }
 }
