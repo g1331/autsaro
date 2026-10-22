@@ -7,15 +7,17 @@
 #include <string.h>
 
 static unsigned char frame[8];
-static unsigned long shared_counter;
+/* Volatile preserves the deliberate non-atomic access, not synchronization. */
+static volatile unsigned long shared_value;
+static int published;
 
-static void *increment(void *argument)
+static void *observe(void *argument)
 {
-    unsigned long i;
     (void)argument;
-    for (i = 0u; i < 100000u; ++i) {
-        ++shared_counter;
+    /* Acquire orders the value only when main uses the clean release store. */
+    while (__atomic_load_n(&published, __ATOMIC_ACQUIRE) == 0) {
     }
+    printf("%lu\n", shared_value);
     return NULL;
 }
 
@@ -27,12 +29,20 @@ int main(int argc, char **argv)
     }
     const int amount = atoi(argv[2]);
     if (strcmp(argv[1], "race") == 0) {
-        pthread_t threads[2];
-        (void)pthread_create(&threads[0], NULL, increment, NULL);
-        (void)pthread_create(&threads[1], NULL, increment, NULL);
-        (void)pthread_join(threads[0], NULL);
-        (void)pthread_join(threads[1], NULL);
-        printf("%lu\n", shared_counter);
+        pthread_t thread;
+        if (pthread_create(&thread, NULL, observe, NULL) != 0) {
+            return 3;
+        }
+        shared_value = 1u;
+        if (amount == 0) {
+            /* Arrange the read after the write without a happens-before edge. */
+            __atomic_store_n(&published, 1, __ATOMIC_RELAXED);
+        } else {
+            __atomic_store_n(&published, 1, __ATOMIC_RELEASE);
+        }
+        if (pthread_join(thread, NULL) != 0) {
+            return 4;
+        }
     } else if (strcmp(argv[1], "overflow") == 0) {
         /* A received length larger than the fixed static frame. */
         memcpy(frame, payload, (size_t)amount);
