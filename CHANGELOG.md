@@ -20,6 +20,8 @@
 
 ### Fixed
 
+- Explicit `RteCodeVendorId` values in 0..65535 now reach the RTE implementation description and standalone contract metadata from source configuration; other modules keep their own supplier identity, and formal allocation remains the code user's responsibility. Regenerate deliveries to use the configured value (#363)
+
 - Project-owned BSW software headers, BSWMD and manuals now share an explicit 0.1.0 release owner, independently of Cargo; ARTI keeps its own 1.0.0 owner and reports it through the existing API. ComM rejects source/header software-version mismatches. RTE source DOC-REVISION and disabled SchM build-version semantics remain separate. Regenerate sealed ECU deliveries and rebuild consumers for the new shared header; public function signatures, type layouts, third-party identities and unassigned vendor identity are unchanged (#353)
 
 - Delivered module headers share owner AUTOSAR release 4.10.0 and applicable external includes reject missing or incompatible major/minor releases; ComM also validates its internal source/header release, and Arti_GetVersionInfo now reports standard module ID 5. Component and runnable names that collide with version headers or macros are rejected at their source objects. Regenerate sealed ECU deliveries and rebuild consumers; existing software values and unassigned vendor identity are preserved (#350)
