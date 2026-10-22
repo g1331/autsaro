@@ -231,15 +231,20 @@ static CANTP_CODE boolean CanTp_Receiving(void)
                ? TRUE
                : FALSE;
 }
+/* Decode the 12-bit wire length before converting to the selected communication type. */
+static CANTP_CODE uint16 CanTp_DataLength(const uint8 *data)
+{
+    const uint16 low = (uint16)(data[0] & 0x0fu);
+    return ((data[0] / 16u) == CANTP_PCI_FF) ? (uint16)((low * 256u) + data[1]) : low;
+}
 /* A well-formed SF or FF that starts a reception (SWS_CanTp_00344, ISO 15765-2 DL rules). */
 static CANTP_CODE boolean CanTp_Starts(const uint8 *data, uint8 length)
 {
     const uint8 kind = data[0] / 16u;
-    const PduLengthType sf_dl = (PduLengthType)data[0] & 0x0fu;
-    const PduLengthType ff_dl = (PduLengthType)((sf_dl * 256u) + data[1]);
+    const uint16 total = CanTp_DataLength(data);
     return ((length == CANTP_FRAME_BYTES) &&
-            (((kind == CANTP_PCI_SF) && (sf_dl > 0u) && (sf_dl <= CANTP_SF_MAX)) ||
-             ((kind == CANTP_PCI_FF) && (ff_dl > CANTP_SF_MAX))))
+            (((kind == CANTP_PCI_SF) && (total > 0u) && (total <= CANTP_SF_MAX)) ||
+             ((kind == CANTP_PCI_FF) && (total > CANTP_SF_MAX))))
                ? TRUE
                : FALSE;
 }
@@ -587,12 +592,10 @@ static CANTP_CODE uint8 CanTp_Admit(CanTp_WorkType *work)
 {
     uint8 error = 0u;
     boolean copy = FALSE;
-    const boolean first = ((work->frame[0] / 16u) == CANTP_PCI_FF) ? TRUE : FALSE;
-    const PduLengthType sf_dl = (PduLengthType)work->frame[0] & 0x0fu;
-    const PduLengthType length =
-        (first == TRUE) ? (PduLengthType)((sf_dl * 256u) + work->frame[1]) : sf_dl;
+    const boolean first = ((work->frame[0] / 16u) == CANTP_PCI_FF);
+    const PduLengthType length = (PduLengthType)CanTp_DataLength(work->frame);
     const PduInfoType payload = {
-        &work->frame[(first == TRUE) ? 2u : 1u], NULL_PTR, (first == TRUE) ? CANTP_FF_DATA : sf_dl};
+        &work->frame[first ? 2u : 1u], NULL_PTR, first ? CANTP_FF_DATA : length};
     PduLengthType available = 0u;
     const BufReq_ReturnType result =
         PduR_CanTpStartOfReception(work->id, &payload, length, &available);
@@ -678,21 +681,26 @@ static CANTP_CODE uint8 CanTp_Frame(CanTp_WorkType *work)
             error = CANTP_E_PADDING; /* Rejected; a reception in progress continues. */
         } else if ((CanTp_Starts(work->frame, (uint8)work->length) == TRUE) &&
                    (rx.state == CANTP_RX_IDLE)) {
-            const PduLengthType sf_dl = (PduLengthType)work->frame[0] & 0x0fu;
-            rx.total =
-                (kind == CANTP_PCI_FF) ? (PduLengthType)((sf_dl * 256u) + work->frame[1]) : sf_dl;
-            rx.position = 0u;
-            rx.sequence = 1u;
-            rx.waits = 0u;
-            rx.due = FALSE;
-            rx.flow = CANTP_FS_CTS;
-            CanTp_StartTimer(&rx.timer,
-                             configuration->n_br); /* Before the upper call (SWS_CanTp_00166). */
-            rx.state = CANTP_RX_START;
-            ++rx.generation;
-            work->generation = rx.generation;
-            work->id = configuration->upper_receive;
-            admit = TRUE;
+            const uint16 total = CanTp_DataLength(work->frame);
+            if ((PduLengthType)total != total) {
+                /* The upper API cannot represent this wire length (SWS_CanTp_00352).
+                 * Do not admit a truncated N-SDU or fabricate an upper overflow result. */
+                error = CANTP_E_COM;
+            } else {
+                rx.total = (PduLengthType)total;
+                rx.position = 0u;
+                rx.sequence = 1u;
+                rx.waits = 0u;
+                rx.due = FALSE;
+                rx.flow = CANTP_FS_CTS;
+                CanTp_StartTimer(
+                    &rx.timer, configuration->n_br); /* Before the upper call (SWS_CanTp_00166). */
+                rx.state = CANTP_RX_START;
+                ++rx.generation;
+                work->generation = rx.generation;
+                work->id = configuration->upper_receive;
+                admit = (boolean)TRUE;
+            }
         } else {
             /* Malformed SF or FF: ignored (ISO 15765-2). */
         }
@@ -757,10 +765,12 @@ CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr)
     /* A timer of one period could expire at the very next call, before an action left to
      * the main function by a confirmation is made. */
     if ((CfgPtr != NULL_PTR) && (CfgPtr->maximum_length > CANTP_SF_MAX) &&
-        (CfgPtr->maximum_length <= 256u) && (CfgPtr->n_as >= CANTP_TIMER_MIN) &&
-        (CfgPtr->n_ar >= CANTP_TIMER_MIN) && (CfgPtr->n_bs >= CANTP_TIMER_MIN) &&
-        (CfgPtr->n_br >= CANTP_TIMER_MIN) && (CfgPtr->n_cr >= CANTP_TIMER_MIN) &&
-        (CfgPtr->n_cs >= CANTP_TIMER_MIN) && (CfgPtr->main_period_ms > 0u)) {
+        (CfgPtr->maximum_length <= 256u) &&
+        ((PduLengthType)CfgPtr->maximum_length == CfgPtr->maximum_length) &&
+        (CfgPtr->n_as >= CANTP_TIMER_MIN) && (CfgPtr->n_ar >= CANTP_TIMER_MIN) &&
+        (CfgPtr->n_bs >= CANTP_TIMER_MIN) && (CfgPtr->n_br >= CANTP_TIMER_MIN) &&
+        (CfgPtr->n_cr >= CANTP_TIMER_MIN) && (CfgPtr->n_cs >= CANTP_TIMER_MIN) &&
+        (CfgPtr->main_period_ms > 0u)) {
         configuration = CfgPtr;
         CanTp_Reset(); /* All connections are lost without notification (SWS_CanTp_00273). */
     }

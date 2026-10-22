@@ -345,7 +345,7 @@ static void configure(void)
     static const uint16 dids[4] = {0x1234u, 0xf40du, 0xf81fu, 0xf4ffu};
     uint8 value = 0u;
     if (take(&value)) {
-        config.buffer_length = (PduLengthType)(7u + (value % 250u));
+        config.buffer_length = (uint16)(8u + (value % 249u));
     }
     if (take(&value)) {
         config.p2_ticks = (uint16)(1u + (value & 7u));

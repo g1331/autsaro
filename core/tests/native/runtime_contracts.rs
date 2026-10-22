@@ -3,6 +3,69 @@ use super::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[test]
+fn diagnostic_public_length_boundaries_use_real_generated_types() {
+    for width in ["UINT8", "UINT16", "UINT32"] {
+        let scratch = Scratch::new();
+        let mut sources = sources_without_application_did(true);
+        parameter(&mut sources, "Pdus", "PduIdTypeEnum", "UINT8");
+        parameter(&mut sources, "Pdus", "PduLengthTypeEnum", width);
+        let files =
+            prepared_pipeline_files_for_target(&build(&sources).unwrap(), tooling::native_target());
+        for (path, bytes) in files {
+            let destination = scratch.0.join(path);
+            std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+            std::fs::write(destination, bytes).unwrap();
+        }
+        let target: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(scratch.0.join("target.json")).unwrap()).unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        for (module, fixture) in [("Dcm", "dcm_lengths.c"), ("CanTp", "cantp_lengths.c")] {
+            let executable = tooling::native_binary(&scratch.0, module);
+            let mut command = tooling::c_compiler();
+            command.current_dir(&scratch.0);
+            for flag in target["compilerFlags"].as_array().unwrap() {
+                command.arg(flag.as_str().unwrap());
+            }
+            for include in target["includePaths"].as_array().unwrap() {
+                command.arg("-I").arg(include.as_str().unwrap());
+            }
+            command.arg("-Werror");
+            if cfg!(target_os = "linux") {
+                command.arg("-pthread");
+            }
+            if module == "Dcm" {
+                command.arg("integration/src/SchM_Diagnostic_Host.c");
+            }
+            command
+                .arg("integration/src/SchM_CanIf_Host.c")
+                .arg("integration/src/Can_HostLock.c")
+                .arg(format!("bsw/src/{module}.c"))
+                .arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture))
+                .arg("-o")
+                .arg(&executable);
+            let compiled = tooling::run_public_command(
+                &mut command,
+                &scratch.0,
+                "compile-lengths",
+                std::time::Duration::from_secs(30),
+            );
+            assert!(compiled.status.success(), "{width}/{module}: {compiled:?}");
+            let output = tooling::run_public_command(
+                &mut Command::new(executable),
+                &scratch.0,
+                "run-lengths",
+                std::time::Duration::from_secs(30),
+            );
+            assert!(output.status.success(), "{width}/{module}: {output:?}");
+            assert!(
+                output.stdout.is_empty() && output.stderr.is_empty(),
+                "{output:?}"
+            );
+        }
+    }
+}
+
 fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     autosar_config_core::resources::AssetInventory::from_directory(root).unwrap();

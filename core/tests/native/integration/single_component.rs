@@ -1,5 +1,27 @@
 //! A single-component mainline project built, run and verified.
 use super::*;
+
+#[test]
+fn uint8_diagnostic_delivery_builds_and_runs_independent_oracles() {
+    use autosar_config_core::integration::verify_ecu_project;
+    let scratch = Scratch::new();
+    let mut sources = single_component_sources();
+    parameter(&mut sources, "Pdus", "PduIdTypeEnum", "UINT8");
+    parameter(&mut sources, "Pdus", "PduLengthTypeEnum", "UINT8");
+    let plan = build(&sources).unwrap();
+    let (project, files) =
+        single_component_project_from(&scratch.0, tooling::native_target(), &plan);
+    verify_production_owner(&project, &scratch.0, None);
+    let report = verify_ecu_project(
+        &files,
+        &project,
+        &tooling::execution_settings(),
+        &tooling::execution_owner(),
+    )
+    .unwrap_or_else(|error| panic!("{error}"));
+    assert!(report.passed, "{}", report.log);
+    assert!(report.log.to_string().contains("ECU_HANDOFF_VERIFY PASS:"));
+}
 use std::path::Path;
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
