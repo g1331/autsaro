@@ -51,7 +51,11 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
             .generate(&output.join(case))
             .unwrap();
     }
-    let sources = super::mainline::inputs();
+    let mut sources = super::mainline::inputs();
+    // Exercise the supported non-default communication widths through the same
+    // delivered programs and imported application sources as the normal pipeline.
+    super::mainline::parameter(&mut sources, "Pdus", "PduIdTypeEnum", "UINT8");
+    super::mainline::parameter(&mut sources, "Pdus", "PduLengthTypeEnum", "UINT32");
     let plan = super::mainline::build(&sources).unwrap();
     let applications = pipeline_applications(&plan);
     let live = scratch.0.join("author");
@@ -120,8 +124,10 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
     assert_eq!(packages::payload(&package), packages::payload(&regenerated));
     // Without application DIDs or diagnostic routes the PduR, RTE and SchM
     // configuration takes its no-diagnostic branches, which no other sample reaches.
-    let plan =
-        super::mainline::build(&super::mainline::sources_without_application_did(false)).unwrap();
+    let mut sources = super::mainline::sources_without_application_did(false);
+    super::mainline::parameter(&mut sources, "Pdus", "PduIdTypeEnum", "UINT8");
+    // UINT8 length is accepted by planning but cannot compile Dcm yet (#354).
+    let plan = super::mainline::build(&sources).unwrap();
     assert!(plan.description().diagnostic_transport.is_none());
     autosar_config_core::prepare_ecu_project_with_applications(
         &plan,

@@ -15,4 +15,21 @@ fn generated_c_analysis_samples() {
         output.display()
     );
     analysis_samples::generate(&output, &scratch);
+    for (sample, id, length) in [
+        ("standard-ecu", "UINT16", "UINT16"),
+        ("user-application", "UINT16", "UINT16"),
+        ("component-pipeline", "UINT8", "UINT32"),
+        ("no-diagnostic", "UINT8", "UINT16"),
+    ] {
+        let metadata: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(output.join(sample).join("meta/integration.json")).unwrap(),
+        )
+        .unwrap();
+        let communication = &metadata["plan"]["communicationRuntime"];
+        assert_eq!(communication["pduIdType"], id, "{sample}: PDU ID selection");
+        assert_eq!(
+            communication["pduLengthType"], length,
+            "{sample}: PDU length selection"
+        );
+    }
 }
