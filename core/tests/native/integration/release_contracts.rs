@@ -713,7 +713,8 @@ fn comm_source_checks_each_software_component_and_accepts_synchronized_upgrades(
 #[test]
 fn arti_software_api_observes_each_owner_component_and_each_assignment() {
     // Software portion of SWS_Arti_91005; formal vendor identity remains unresolved.
-    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    let files =
+        prepared_pipeline_files_for_target(&build(&inputs()).unwrap(), tooling::native_target());
     let scratch = Scratch::new();
     install(&files, &scratch.0);
     let source_path = scratch.0.join("os/src/Arti.c");
