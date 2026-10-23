@@ -384,7 +384,7 @@ class NativeFacilityTests(unittest.TestCase):
                     cas = ("                if (__atomic_compare_exchange_n(&thread->requested,\n"
                            "                                                &previous,\n"
                            "                                                generation,\n"
-                           "                                                0,\n"
+                           "                                                false,\n"
                            "                                                __ATOMIC_ACQ_REL,\n"
                            "                                                __ATOMIC_ACQUIRE)) {")
                     self.assertEqual(text.count(cas), 1)

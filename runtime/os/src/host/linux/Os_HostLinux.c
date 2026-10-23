@@ -719,7 +719,7 @@ OS_MEMMAP DWORD SuspendThread(HANDLE thread)
                 if (__atomic_compare_exchange_n(&thread->requested,
                                                 &previous,
                                                 generation,
-                                                0,
+                                                false,
                                                 __ATOMIC_ACQ_REL,
                                                 __ATOMIC_ACQUIRE)) {
                     if (pthread_kill(thread->thread, SIGRTMIN) == 0) {
