@@ -49,6 +49,8 @@ Linux actor的mapping成员按实际用途保存为unsigned char字节区间：g
 
 `Os_PortRestartLanding`是保留Task-loop帧内的汇编续行点，不是按C原型调用的函数。该符号现在只在本对象内可见；C侧通过真正遵循调用ABI的`Os_PortRestartAddress`取得native PC：Linux为uintptr_t，Windows为RtlUnwindEx要求的void指针表示。叶函数在原`.os_code`内用RIP相对LEA返回RAX，保留其他寄存器及配对call/return，不需要C函数指针转整数或void指针。依据R11.1（Required，主文页93–94／PDF101–102；AMD2.58只修订隐式转换例外说明），不使用该条的新例外；实际native扩展仍按上表R1.2／D4.2／D4.3评估。原生restart验证10000次同一物理栈重入、拒绝与外来异常，并分别检查全局C入口和本地续行点的代码段身份；错误PC变异必须被实际restart成功判据拒绝。该边界仍依赖受控x64 ABI，Windows执行及硬件SHSTK按实际结果记录。
 
+Linux 备用信号栈原匿名 union 仅借 long double 成员取得对齐，实际消费者为 `Os_StackRegister → Os_LinuxAltStack`。R19.2（Advisory、C99，主文页154–155／PDF162–163；AMD2 只增加 C11 适用性及行为索引）直接约束 union 关键字，不因没有交叉成员读取而不适用。现改为仅含 long double 存储数组的 struct，每个 actor 仍取得原来的 65536 字节和原生对齐；C 代码不读取浮点值，不新增平台属性或转换。真实源的编译布局对照检查容量、对齐与槽数，降低对齐和缩短容量的反例分别拒绝；ARTI 消费者另检查发布地址的实际对齐。该整改不改变注册、信号及故障关闭路径，也不处置 ErrorHook 快照或采用 Queue 的其他 union。
+
 ## C11 无返回说明符的适用边界
 
 AMD3.36 新增的 R17.9（Mandatory）、R17.10（Required）及 R17.11（Advisory）均只适用于 C11，原文分别在 AMD3 印刷页17–18／PDF25–26、页18／PDF26、页19／PDF27；AMD3.74 的适用性表（页45／PDF53）与 AMD4 后续修订未改变这些条件。R17.9／R17.10 约束以 `_Noreturn` 声明的函数的返回路径／返回类型；R17.11 建议为不返回的函数使用该说明符，并明确排除 main。

@@ -34,6 +34,8 @@ ECU state／owner、输出槽、等待发布及 tick 完成路径的原子查询
 
 所查 `CanTp_Receiving`／`CanTp_Starts`／`CanTp_DataLength`、`Dcm_IsAvailability`、`Det_ValidHooks`、`Os_ErrorHookConfigured`、`Os_StackCurrent`、`Os_BackendCurrentInterrupt`、`Os_BackendInterruptMaySchedule`、`task_index`、`valid_cycle` 及生成端 `Ecu_SchMTimingActive`／`Ecu_TargetCheckLifecycleContext` 只读普通对象或修改自身临时量，不能把它们仅因出现在逻辑右侧而判为违反。该判断针对这些实际定义，不外推其他 volatile 表达式、采用内核调用或同名平台接口；完整源码人工评估仍由 #58 承接，原始结果不变。
 
+在 `5243b3ef` 的 Linux standard-ecu 冻结源码中，两个实际入口的 56 个 TU 均取得所选宏展开 AST；采用／补丁后四个内核 TU 有 68 个逻辑表达式。所列 RHS 未见直接 volatile 读取、赋值或自增减；全部调用候选再按实际定义核查。端口剩余的 `Os_BackendInterruptPriority`、`Os_BackendHandlerAllowed` 与 `Os_MailboxHandlerAllowed` 只读普通配置，后者的闭包仍为前述 handler 判定，没有获取锁或改写状态。`Ecu_TargetCheckLifecycleContext` 读取普通 TLS phase，`Ecu_SchMTimingActive` 读取普通生命周期对象。源码与 TU 身份、AST 候选及被调函数核查收据见 PR #371；此结论不代替系统头展开、其他配置和 Windows 的实际平台调用评估。
+
 ## 按模块处置
 
 | 模块 | 处置 |
