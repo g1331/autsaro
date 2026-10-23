@@ -11,6 +11,7 @@ pub struct RteGenerationContract {
     pub strict_unconnected_r_port_check: bool,
     pub strict_initial_values_check: bool,
     pub strict_configuration_check: bool,
+    pub code_vendor_id: u16,
     pub software_version: String,
     pub revision_suffix: Option<String>,
 }
@@ -26,6 +27,7 @@ pub(super) fn inspect(graph: &Graph) -> Result<RteGenerationContract, Vec<PlanDi
         strict_unconnected_r_port_check: false,
         strict_initial_values_check: true,
         strict_configuration_check: true,
+        code_vendor_id: 0,
         software_version: "0.0.0".into(),
         revision_suffix: None,
     };
@@ -83,6 +85,20 @@ pub(super) fn inspect(graph: &Graph) -> Result<RteGenerationContract, Vec<PlanDi
         .into_iter()
         .find(|index| graph.text(*index, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/Rte"))
     {
+        // ECUC_Rte_09086 has no default; metadata validates the exact source
+        // definition/cardinality before this shared composition inspection.
+        let generation = graph
+            .descendants(module, "ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .find(|index| {
+                graph.text(*index, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/Rte/RteGeneration")
+            })
+            .ok_or_else(|| invalid(graph, module))?;
+        configuration.code_vendor_id =
+            super::schedule::value(graph, generation, "RteCodeVendorId", false)
+                .and_then(|value| crate::definitions::unsigned_integer(value.trim()))
+                .and_then(|value| u16::try_from(value).ok())
+                .ok_or_else(|| invalid(graph, generation))?;
         let revisions: Vec<_> = graph
             .children(module, "ADMIN-DATA")
             .into_iter()

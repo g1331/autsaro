@@ -13,6 +13,7 @@ mod modes;
 mod os;
 mod os_configuration;
 mod rte;
+mod rte_vendor;
 mod scheduling;
 mod single_component;
 mod symbolic_names;

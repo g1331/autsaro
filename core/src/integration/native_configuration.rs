@@ -97,7 +97,8 @@ pub(super) fn descriptor_only(
         "RteBypassSupport" | "RteCalibrationSupport" => lexeme == "NONE",
         "RteGenerationMode" => lexeme == "COMPATIBILITY_MODE",
         "RteOptimizationMode" => lexeme == "RUNTIME",
-        "RteCodeVendorId" => lexeme.parse::<u16>() == Ok(0),
+        // Already range-checked above; the RTE generation contract consumes it.
+        "RteCodeVendorId" => true,
         "RteInitializationStrategy" => {
             let Some(container) = graph.ancestor(index, "ECUC-CONTAINER-VALUE") else {
                 return false;

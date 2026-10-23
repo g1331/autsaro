@@ -38,3 +38,5 @@ ECUC metadata 的数值范围通过不等于配置语义合法；非等值 ID（
 RPort 的 MAY-BE-UNCONNECTED=true 是该严格检查的例外。strictInitialValuesCheck 与 strictConfigurationCheck 当前只接受 true，默认也为 true；非严格补全模式见 #212，不把 false 静默当成 true。未知、重复、放在非 Rte module 的选项均拒绝。
 
 RTE 配置版本来自同一 ADMIN-DATA 中 DOC-REVISIONS 的最新 DATE 与 REVISION-LABEL；没有可解析版本时生成 BSWMD 的 SW-VERSION=0.0.0。工具摘要继续标识生成器自身，两种身份分别保留。
+
+`RteGeneration/RteCodeVendorId` 必须显式提供一个 0..65535 整数，无默认值。生成器把该代码使用方输入传至 RTE BSWMD 的 `RteHostImplementation/VENDOR-ID`，并在独立契约包 `contract.json` 的 generation 中保留；不据此核实正式分配资格，也不将它作为其他模块或工具供应方的身份。模板显式 0 保持为 0；修改后重新预览/生成，不改写旧封存包。
