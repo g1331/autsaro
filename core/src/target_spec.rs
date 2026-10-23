@@ -52,7 +52,13 @@ const LINUX_PATCHES: &[&str] = &[
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
     (
         "runtime/os/patches/0015-typed-port-state.patch",
-        &["tasks.c", "include/task.h"],
+        &[
+            "tasks.c",
+            "include/task.h",
+            "include/FreeRTOS.h",
+            "queue.c",
+            "include/queue.h",
+        ],
     ),
     (
         "runtime/os/patches/0003-activation-ready-policy.patch",

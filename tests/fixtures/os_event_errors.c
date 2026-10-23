@@ -36,6 +36,16 @@ int __wrap_pthread_mutex_destroy(pthread_mutex_t *mutex)
 
 int __wrap_close(int fd)
 {
+    if ((scenario != NULL) && (strcmp(scenario, "event-close-error-reuse") == 0)) {
+        ++calls;
+        bad_errno |= errno != 0;
+        const int result = __real_close(fd);
+        if (result == 0) {
+            errno = EINTR;
+            return -1;
+        }
+        return result;
+    }
     if ((scenario != NULL) && (strcmp(scenario, "close-interrupted") == 0)) {
         ++calls;
         if (calls == 1u) {
@@ -165,6 +175,13 @@ int main(int argc, char **argv)
         if ((second == NULL) || (first == second) || (CloseHandle(second) == FALSE) ||
             (CloseHandle(first) == FALSE)) {
             return 12;
+        }
+    } else if (strcmp(scenario, "event-close-error-reuse") == 0) {
+        for (unsigned index = 0u; index < 128u; ++index) {
+            HANDLE temporary = CreateEventA(NULL, FALSE, FALSE, NULL);
+            if ((temporary == NULL) || (CloseHandle(temporary) != FALSE)) {
+                return 13;
+            }
         }
     } else if (strcmp(scenario, "close-interrupted") == 0) {
         if ((CloseHandle(event) != FALSE) || (CloseHandle(event) != FALSE) || (calls != 1u) ||

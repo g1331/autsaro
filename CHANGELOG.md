@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Native OS task and queue buffers now have their actual kernel object types, and list sentinels use complete list items. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed private headers, list storage and controlled patch identities (#58)
+
 - Native Task activations restart through the sole port's platform unwinder on the same thread and execution stack. Sealed C99 consumers now require exception-unwind metadata, including sanitizer cleanup frames; regenerate deliveries and rebuild all application and runtime translation units (#60)
 
 - HostBatch, probe and OS lifecycle/stack reports use bounded native byte I/O, with complete output required before confirmation. Raw input bytes, partial writes, interrupted calls and closed pipes retain explicit outcomes. CRT stream setup is removed; application hooks using CRT streams must flush their own output. Regenerate sealed deliveries and rebuild consumers for the additive host I/O header and removed stream-mode helper (#60)
@@ -25,6 +27,8 @@
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
 ### Fixed
+
+- Linux OS events classify syscall errors, interruptions and incomplete reads; event close errors release descriptor ownership safely, and successfully destroyed mutexes return their fixed handle slots for reuse (#58)
 
 - Dcm and CanTp timing events must match the fixed 1 ms timer base; validation rejects consistently remapped slower schedules at their source events before generation (#57)
 

@@ -2,7 +2,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
 index 2592610..1be0473 100644
 --- a/portable/ThirdParty/GCC/Posix/port.c
 +++ b/portable/ThirdParty/GCC/Posix/port.c
-@@ -23,658 +23,395 @@
+@@ -23,658 +23,397 @@
   *
   * https://www.FreeRTOS.org
   * https://github.com/FreeRTOS
@@ -87,6 +87,7 @@ index 2592610..1be0473 100644
  
 -    return ( Thread_t * ) ( pxTopOfStack + 1 );
 -}
++#include <stddef.h>
 +#include <stdint.h>
 +#include <string.h>
  
@@ -558,11 +559,13 @@ index 2592610..1be0473 100644
 -    xThreadToResume = prvGetThreadFromTask( xTaskGetCurrentTaskHandle() );
 -
 -    prvSwitchThread( xThreadToResume, xThreadToSuspend );
-+    StackType_t *storage = top - ((sizeof(PortTask) + sizeof(StackType_t) - 1u) / sizeof(StackType_t));
++    const ptrdiff_t state_words = ((ptrdiff_t)sizeof(PortTask) + (ptrdiff_t)sizeof(StackType_t) - 1) /
++                                 (ptrdiff_t)sizeof(StackType_t);
++    StackType_t *storage = &top[-state_words];
 +    PortTask state;
 +    state.yielded = Os_PortEvent(NULL, FALSE, FALSE, NULL);
 +    state.thread = Os_PortTaskThread(code, argument, top);
-+    configASSERT(state.yielded != NULL && state.thread != NULL);
++    configASSERT((state.yielded != NULL) && (state.thread != NULL));
 +    (void)memcpy((unsigned char *)storage, (const unsigned char *)&state, sizeof(state));
 +    return storage;
  }
@@ -631,12 +634,12 @@ index 2592610..1be0473 100644
 -     * handlers). */
 -    return ( UBaseType_t ) 0;
 +    const Os_NativeStackType *actor = Os_StackCurrent();
-+    HANDLE handoff = NULL;
 +    if (critical_nesting == 0u) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
 +    --critical_nesting;
 +    if (port_running != pdFALSE) {
++        HANDLE handoff = NULL;
 +        if (critical_nesting == 0u && xInsideInterrupt != pdFALSE) {
 +            Os_PortDispatchNested();
 +        }
@@ -655,7 +658,7 @@ index 2592610..1be0473 100644
 +        if (ReleaseMutex(interrupt_gate) == 0) {
 +            Os_BackendShutdown(E_OS_STATE);
 +        }
-+        if (handoff != NULL && WaitForSingleObject(handoff, 2000u) != WAIT_OBJECT_0) {
++        if ((handoff != NULL) && (WaitForSingleObject(handoff, 2000u) != WAIT_OBJECT_0)) {
 +            Os_BackendShutdown(E_OS_STATE);
 +        }
 +    }
@@ -708,7 +711,6 @@ index 2592610..1be0473 100644
 -        pthread_kill( thread->pthread, SIGALRM );
 -        usleep( portTICK_RATE_MICROSECONDS );
 +    const Os_NativeStackType *actor = Os_StackCurrent();
-+    PortTask task;
 +    if (interrupt >= PORT_INTERRUPT_COUNT || port_running == pdFALSE) {
 +        return;
      }
@@ -764,9 +766,9 @@ index 2592610..1be0473 100644
 +    if (wait_for_dispatch != 0 && actor != NULL &&
 +        (actor->role == 'T' || actor->role == 'I' || actor->role == 'B') &&
 +        critical_nesting == 0u) {
-+        task = selected_task();
-+        if (ResetEvent(task.yielded) == 0 || ReleaseMutex(interrupt_gate) == 0 ||
-+            WaitForSingleObject(task.yielded, 2000u) != WAIT_OBJECT_0) {
++        const PortTask task = selected_task();
++        if ((ResetEvent(task.yielded) == 0) || (ReleaseMutex(interrupt_gate) == 0) ||
++            (WaitForSingleObject(task.yielded, 2000u) != WAIT_OBJECT_0)) {
 +            Os_BackendShutdown(E_OS_STATE);
          }
 -

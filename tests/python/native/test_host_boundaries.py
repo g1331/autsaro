@@ -178,6 +178,23 @@ class HostIoTests(unittest.TestCase):
                         self.assertEqual(errors, fault if case == "fatal-broken-pipe" else b"", case)
 
 
+@unittest.skipUnless(platform.system() in ("Linux", "Windows"), "native kernel object consumers")
+class NativeKernelObjectTests(unittest.TestCase):
+    def test_static_kernel_object_types_and_queue_storage(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "kernel-object-types"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_kernel_objects.c"),
+                )
+                result = os_suites.run_native([str(binary)], timeout=10)
+                self.assertEqual(result.returncode, 0, result)
+                self.assertEqual(result.stdout, "static task and queue types; task stack identity; bounded FIFO/reset observed\n")
+                self.assertEqual(result.stderr, "")
+
+
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
     def test_native_handle_errors_and_resource_reuse(self):
@@ -196,7 +213,7 @@ class NativeFacilityTests(unittest.TestCase):
                                  "poll-interrupted", "read-error", "read-zero", "read-short",
                                  "read-interrupted", "wait-read-error", "wait-read-interrupted",
                                  "wait-read-empty", "wait-read-zero", "wait-read-short",
-                                 "write-error", "write-interrupted", "mutex-reuse", "mutex-close-error",
+                                 "write-error", "write-interrupted", "mutex-reuse", "mutex-close-error", "event-close-error-reuse",
                                  "close-interrupted"):
                     with self.subTest(scenario=scenario):
                         result = os_suites.run_native([str(binary), scenario], timeout=10)

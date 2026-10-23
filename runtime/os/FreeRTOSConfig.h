@@ -17,6 +17,8 @@ void Os_BackendBeforeSelect(void *current, void *next);
 #define configMINIMAL_STACK_SIZE              512
 #define configMAX_TASK_NAME_LEN               16
 #define configTICK_TYPE_WIDTH_IN_BITS         TICK_TYPE_WIDTH_32_BITS
+/* List sentinels have the same complete type as every traversed list item. */
+#define configUSE_MINI_LIST_ITEM              0
 #define configSUPPORT_STATIC_ALLOCATION       1
 #define configSUPPORT_DYNAMIC_ALLOCATION      0
 #define configUSE_TIMERS                      0
@@ -34,7 +36,7 @@ void Os_BackendBeforeSelect(void *current, void *next);
 #define INCLUDE_xTaskGetCurrentTaskHandle     1
 #define INCLUDE_eTaskGetState                 1
 #define INCLUDE_xTaskGetHandle                1
-void Os_BackendAssert(const void *file, sint32 line);
+void Os_BackendAssert(const void *file, sint32 line) __attribute__((noreturn));
 #define configASSERT(x)                                                                            \
     do {                                                                                           \
         if (!(x))                                                                                  \

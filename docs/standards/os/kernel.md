@@ -36,7 +36,7 @@ Linux `Os_HostLinux.c` 的 `CreateEventA` 为每个事件持有非阻塞 eventfd
 
 `NativeFacilityTests.test_native_handle_errors_and_resource_reuse` 链接实际 OS 与平台实现，以真实描述符检查自动／手动复位，再注入 poll／read／write 错误、中断和 EAGAIN；包括无限等待遇到错误必须返回，以及 errno 遗留值不能制造零读／短读成功。此证据只处置这些调用点；D4.7 的其他调用、采用内核及完整221项人工评估仍由 [#58](https://github.com/g1331/autsaro/issues/58) 承接。
 
-`CloseHandle` 的资源状态按 D4.13（2013主文页35／PDF43，AMD2扩充C11）另行核查：mutex只有在真实销毁成功后清除kind并归还固定槽，失败时仍持有原资源；否则正常反复创建／关闭会耗尽96个槽。事件的Linux close即使返回EINTR也已释放描述符，保留失败返回但立即撤销本句柄的fd所有权，避免误关随后复用该数字的资源；依据为 [Linux close契约](https://man7.org/linux/man-pages/man2/close.2.html#NOTES)，不外推其他POSIX目标的EINTR行为。实际消费者执行128轮mutex获取／释放／关闭，并在真正关闭事件后复用同一个fd再注入EINTR，断言失败返回及新描述符仍有效。mutex销毁失败通过链接器注入，不以销毁仍被持有的mutex这类未满足API前置条件的调用作探针。
+`CloseHandle` 的资源状态按 D4.13（2013主文页35／PDF43，AMD2扩充C11）另行核查：mutex只有在真实销毁成功后清除kind并归还固定槽，失败时仍持有原资源；否则正常反复创建／关闭会耗尽96个槽。事件的Linux close即使返回EINTR也已释放描述符，保留失败返回但立即撤销本句柄的fd所有权，避免误关随后复用该数字的资源；依据为 [Linux close契约](https://man7.org/linux/man-pages/man2/close.2.html#NOTES)，不外推其他POSIX目标的EINTR行为。实际消费者执行128轮mutex获取／释放／关闭，并在真正关闭事件后复用同一个fd再注入EINTR，断言失败返回及新描述符仍有效。事件另在128轮真实close成功后注入EINTR，确认报错路径也归还句柄槽；mutex销毁失败通过链接器注入，不以销毁仍被持有的mutex这类未满足API前置条件的调用作探针。
 
 ## 原子返回值与条件类型
 
@@ -57,6 +57,14 @@ Linux `Sleep` 的两个时间字段先把原始 DWORD 转成实际64位 `time_t`
 两个端口在创建任务时用真实自动线程状态对象构造句柄，以unsigned char表示复制到原有StackType_t数组保留区，返回该数组内的StackType_t指针；读取时复制回真实同类型对象。保存区按元素数向上取整，不新增分配或任务选择状态。读取逐字节保留TCB成员原有volatile限定；Windows删除路径写回清空的线程句柄也保留volatile，不经memcpy去掉限定。初始化时的memcpy两实参均指向unsigned char，只复制本状态对象的sizeof字节。依据R11.3（主文页96–97／PDF104–105，TC2.21交叉引用R18.1，AMD4.7–4.9将标题改为conversion且字符例外限定非atomic对象）、R11.8及AMD1 R21.15（页6／PDF14）。这些对象不是_Atomic；字符访问和表示复制有明确的原文允许条件，不能推广为不同结构指针互转的许可。
 
 任务创建、首次启动、调度器挂起／恢复、中断交接、事件等待、Windows非当前任务删除和自删除都消费同一状态表示；Windows自删除仍先写回NULL再关闭句柄。保护仍由原调度门、任务停止和初始化时序提供；volatile不是新增同步机制。源清单保留全部固定上游原始摘要，仅增加项目受控补丁的身份，交付目标登记和原生构建入口同时选择该补丁。旧封存工程仍按自身身份识别，新的生成工程包含新内核／端口字节，不能拿旧工件当作本改动的分析结果。
+
+`StaticTask_t` 和 `StaticQueue_t` 的旧dummy结构虽与实际对象尺寸对齐，仍不是同一C对象类型；把其地址转成TCB／Queue后访问字段不因尺寸相同而满足R11.3。相同补丁把真实任务、队列定义移入各自内核头，静态缓冲类型直接引用原始tag，不复制第二份字段布局。内核源码、静态分配调用者、idle任务内存回调和队列创建／静态缓冲查询因而使用相同类型；结构字段和调度算法保留。`NativeKernelObjectTests.test_static_kernel_object_types_and_queue_storage` 用独立C99消费者直接将静态对象地址赋给TaskHandle_t／QueueHandle_t，检查两个不同任务的栈身份及真实队列的FIFO、满／空、peek和reset；旧dummy类型不能通过该消费者的编译。
+
+链表哨兵选用上游已有的完整ListItem_t表示（`configUSE_MINI_LIST_ITEM=0`），消除MiniListItem_t与ListItem_t之间的不同结构访问；这改变的是内核存储表示，没有减少任务、中断、队列或配置支持。每个List_t在两个64位目标上增加两个指针字段，静态缓冲随真实类型统一计算，必须重新生成并重编译直接消费者。采用源码仍保留其原始摘要，项目承担新增补丁和此表示选择的责任；上游的coverity说明注释不作为本项目偏离许可。
+
+同一补丁把Windows端口的七处UINT32_C(1)位图移位也改为显式uint32_t左操作数，理由与Linux的R12.2处置相同；原有四处1UL左操作数保持，它的essential type按原文页106示例为unsigned long，在所选32位long的Windows目标上允许0..31的移位。内核创建任务时直接断言端口返回位置处于同一栈数组的有效下界和原栈顶之间，避免将指针差的复合表达式转为无符号整数，修复R10.8；两个指针仍位于调用者的同一栈数组。`Os_Backend.c` 的backup controller参数使用其真实静态句柄对象的地址作为非NULL身份，替代整数1转void指针；control仍只检查是否为NULL，不解引用该借用地址，依据R11.6（主文页99／PDF107，只有零整数常量的例外；TC2.22将整数转void指针的说明更正为implementation-defined，AMD2扩充C11不改变本项）。
+
+Windows采用端口在处理器数不满足其既有进入条件时保留pdFAIL及调度启动失败路径，删除其中非必需printf和stdio.h包含；外层仍走正常的OS失败报告，不以C标准I/O作为内核低层报错设施。此处按R21.6（2013主文页169／PDF177，AMD2.79覆盖标准I/O标识符／宏和wide I/O）修复独立的采用代码，不追认上游例外，也不重复#60已整改的一方I/O。新表示复制显式包含string.h，ptrdiff_t显式包含stddef.h。
 
 ## 目标端口承担的差距
 
