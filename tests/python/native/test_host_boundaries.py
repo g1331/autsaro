@@ -221,6 +221,24 @@ class NativeFacilityTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "event success/reset/failure/interruption observed\n")
                         self.assertEqual(result.stderr, "")
 
+    def test_concurrent_event_construction_and_rollback(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "native-event-release"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_native_event_release.c"),
+                    extra_sources=(ROOT / "runtime/os/src/Os_HostServices.c",),
+                    link_flags=("-Wl,--wrap=eventfd",),
+                )
+                for scenario in ("success", "failure"):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0, result)
+                        self.assertEqual(result.stdout, "concurrent native event construction and failure reuse observed\n")
+                        self.assertEqual(result.stderr, "")
+
     def test_native_errno_across_initialization_wait_and_cleanup(self):
         import os_suites
 

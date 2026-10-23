@@ -135,8 +135,12 @@ OS_MEMMAP static HANDLE reserve_handle(Os_HostKindType kind)
     size_t index;
     for (index = 0u; index < OS_HOST_HANDLES; ++index) {
         int32_t expected = 0;
-        if (__atomic_compare_exchange_n(
-                &handles[index].reserved, &expected, 1, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+        if (__atomic_compare_exchange_n(&handles[index].reserved,
+                                        &expected,
+                                        1,
+                                        false,
+                                        __ATOMIC_SEQ_CST,
+                                        __ATOMIC_SEQ_CST)) {
             handles[index].kind = kind;
             handles[index].fd = -1;
             return &handles[index];
@@ -287,7 +291,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         mmap(NULL, reserve, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (thread->mapping == MAP_FAILED) {
         thread->mapping = NULL;
-        thread->reserved = 0;
+        (void)InterlockedExchange(&thread->reserved, 0);
         return NULL;
     }
     errno = 0;
@@ -295,7 +299,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         errno = 0;
         (void)munmap(thread->mapping, reserve);
         thread->mapping = NULL;
-        thread->reserved = 0;
+        (void)InterlockedExchange(&thread->reserved, 0);
         return NULL;
     }
     thread->mapping_size = reserve;
@@ -324,7 +328,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         errno = 0;
         (void)munmap(thread->mapping, reserve);
         thread->mapping = NULL;
-        thread->reserved = 0;
+        (void)InterlockedExchange(&thread->reserved, 0);
         return NULL;
     }
     if (id != NULL) {
@@ -372,7 +376,7 @@ OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
     errno = 0;
     event->fd = eventfd(initial != 0 ? 1u : 0u, EFD_CLOEXEC | EFD_NONBLOCK);
     if (event->fd < 0) {
-        event->reserved = 0;
+        (void)InterlockedExchange(&event->reserved, 0);
         return NULL;
     }
     return event;
@@ -429,12 +433,12 @@ OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCS
         return NULL;
     }
     if (pthread_mutex_init(&mutex->mutex, NULL) != 0) {
-        mutex->reserved = 0;
+        (void)InterlockedExchange(&mutex->reserved, 0);
         return NULL;
     }
     if (owner != 0 && WaitForSingleObject(mutex, 0u) != WAIT_OBJECT_0) {
         (void)pthread_mutex_destroy(&mutex->mutex);
-        mutex->reserved = 0;
+        (void)InterlockedExchange(&mutex->reserved, 0);
         return NULL;
     }
     return mutex;

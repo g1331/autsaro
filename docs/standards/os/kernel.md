@@ -34,9 +34,11 @@ Linux `Os_HostLinux.c` 的 `CreateEventA` 为每个事件持有非阻塞 eventfd
 
 此处按固定 MISRA 2013 主文 D4.7（印刷页30／PDF38）的错误信息义务整改，不是 AUTOSAR 必需冲突或偏离。R17.7（页141–142／PDF149–150）允许显式丢弃普通返回值，但不能替代错误分类。AMD1 R22.8–22.10（页13–16／PDF21–24）也覆盖实际通过 errno 返回错误的附加函数：每次调用前在同函数清零，只有负返回值才按本次 errno 分类；返回值本身可确定是否发生错误时使用 R22.9 的例外。AMD2 的语言扩充及 TC2.38 的 R22.9 标题勘误不改变本项目 C99 的该结论。固定 checker 的 R22.10 原始报告不因此删除或改写。
 
-`NativeFacilityTests.test_native_handle_errors_and_resource_reuse` 链接实际 OS 与平台实现，以真实描述符检查自动／手动复位，再注入 poll／read／write 错误、中断和 EAGAIN；包括无限等待遇到错误必须返回，以及 errno 遗留值不能制造零读／短读成功。此证据只处置这些调用点；D4.7 的其他调用、采用内核及完整221项人工评估仍由 [#58](https://github.com/g1331/autsaro/issues/58) 承接。
+`NativeFacilityTests.test_native_handle_errors_and_resource_reuse`消费真实描述符，覆盖自动／手动复位、poll／read／write错误、中断、EAGAIN及无限等待失败。只处置对应调用点；其他义务仍由 [#58](https://github.com/g1331/autsaro/issues/58) 承接。
 
 `CloseHandle` 的资源状态按 D4.13（2013主文页35／PDF43，AMD2扩充C11）另行核查：mutex只有在真实销毁成功后清除kind并归还固定槽，失败时仍持有原资源；否则正常反复创建／关闭会耗尽96个槽。事件的Linux close即使返回EINTR也已释放描述符，保留失败返回但立即撤销本句柄的fd所有权，避免误关随后复用该数字的资源；依据为 [Linux close契约](https://man7.org/linux/man-pages/man2/close.2.html#NOTES)，不外推其他POSIX目标的EINTR行为。实际消费者执行128轮mutex获取／释放／关闭，并在真正关闭事件后复用同一个fd再注入EINTR，断言失败返回及新描述符仍有效。事件另在128轮真实close成功后注入EINTR，确认报错路径也归还句柄槽；mutex销毁失败通过链接器注入，不以销毁仍被持有的mutex这类未满足API前置条件的调用作探针。
+
+`reserve_handle`以CAS领取槽位，正常关闭以原子操作归还；六个构造失败回滚（actor映射／保护／pthread创建、eventfd、mutex初始化／初始获取）也改用`InterlockedExchange`，避免普通写入与其他领取者竞争。[GCC 13.3 §6.55](https://gcc.gnu.org/onlinedocs/gcc-13.3.0/gcc.pdf)的原子扩展要求无数据竞争，按R1.3（Required，主文页38–39／PDF46–47）评估实际C99实现。先清理再归还，不增加锁或状态，保持注册栈身份和失败mutex所有权。`test_concurrent_event_construction_and_rollback`链接HostServices和Linux设施，以失败／干净对照检查竞争和复用；两个sanitizer lane运行同一回归。
 
 ## 原子返回值与条件类型
 
@@ -58,7 +60,7 @@ Linux `Sleep` 的两个时间字段先把原始 DWORD 转成实际64位 `time_t`
 
 任务创建、首次启动、调度器挂起／恢复、中断交接、事件等待、Windows非当前任务删除和自删除都消费同一状态表示；Windows自删除仍先写回NULL再关闭句柄。保护仍由原调度门、任务停止和初始化时序提供；volatile不是新增同步机制。源清单保留全部固定上游原始摘要，仅增加项目受控补丁的身份，交付目标登记和原生构建入口同时选择该补丁。旧封存工程仍按自身身份识别，新的生成工程包含新内核／端口字节，不能拿旧工件当作本改动的分析结果。
 
-`StaticTask_t` 和 `StaticQueue_t` 的旧dummy结构虽与实际对象尺寸对齐，仍不是同一C对象类型；把其地址转成TCB／Queue后访问字段不因尺寸相同而满足R11.3。相同补丁把真实任务、队列定义移入各自内核头，静态缓冲类型直接引用原始tag，不复制第二份字段布局。内核源码、静态分配调用者、idle任务内存回调和队列创建／静态缓冲查询因而使用相同类型；结构字段和调度算法保留。`NativeKernelObjectTests.test_static_kernel_object_types_and_queue_storage` 用独立C99消费者直接将静态对象地址赋给TaskHandle_t／QueueHandle_t，检查两个不同任务的栈身份及真实队列的FIFO、满／空、peek和reset；旧dummy类型不能通过该消费者的编译。
+`StaticTask_t` 和 `StaticQueue_t` 的旧dummy结构虽与实际对象尺寸对齐，仍不是同一C对象类型；把其地址转成TCB／Queue后访问字段不因尺寸相同而满足R11.3。相同补丁把真实任务、队列定义移入各自内核头，静态缓冲类型直接引用原始tag，不复制第二份字段布局。内核源码、静态分配调用者、idle任务内存回调和队列创建／静态缓冲查询因而使用相同类型；结构字段和调度算法保留。独立C99消费者检查这两种静态对象类型、任务栈身份与队列FIFO／满空／peek／reset；旧dummy类型必须编译失败。
 
 链表哨兵选用上游已有的完整ListItem_t表示（`configUSE_MINI_LIST_ITEM=0`），消除MiniListItem_t与ListItem_t之间的不同结构访问；这改变的是内核存储表示，没有减少任务、中断、队列或配置支持。每个List_t在两个64位目标上增加两个指针字段，静态缓冲随真实类型统一计算，必须重新生成并重编译直接消费者。采用源码仍保留其原始摘要，项目承担新增补丁和此表示选择的责任；上游的coverity说明注释不作为本项目偏离许可。
 
@@ -70,11 +72,13 @@ Windows采用端口在处理器数不满足其既有进入条件时保留pdFAIL�
 
 人工核查的R22.8还覆盖`Os_HostLinux.c`的时钟、sysconf、映射／保护／回收、eventfd、等待中的nanosleep、Sleep和信号安装，以及`Os_StackPrepare`的两个sigaction。每次调用前在同一函数清零；短路中的连续调用拆开，SIGRTMIN的动态求值在清零前完成。R22.9原文例外允许由返回值判定是否出错，不增加重复errno判错；失败、EINTR重试和资源回收仍走原结果路径。依据AMD1 R22.8–22.10（页13–16／PDF21–24）及TC2.38，另按所选Linux的[时钟](https://man7.org/linux/man-pages/man2/clock_gettime.2.html#RETURN_VALUE)、[sysconf](https://man7.org/linux/man-pages/man3/sysconf.3.html#RETURN_VALUE)、[映射](https://man7.org/linux/man-pages/man2/mmap.2.html#RETURN_VALUE)和[nanosleep](https://man7.org/linux/man-pages/man2/nanosleep.2.html#RETURN_VALUE)契约分类。直接内核边界`Os_LinuxAltStack`／futex返回负错误值，pthread调用返回错误号，不因此伪装成errno接口。
 
-`NativeFacilityTests.test_native_errno_across_initialization_wait_and_cleanup`在真实设施成功后留下非零errno，逐次观察九类调用入口；正常与被中断Sleep、mprotect失败和pthread创建失败都经过真实初始化／清理路径。可回收actor的映射释放与普通注册线程保留栈身份是不同所有权路径，夹具使用原生端口实际的前者；有限single／wait-any等待和mutex也实际执行。此处的errno整改不处置signal.h／time.h的独立规则报告，不改变原始通过状态或目录中的人工评估状态。
+`NativeFacilityTests.test_native_errno_across_initialization_wait_and_cleanup`以真实设施成功后遗留非零errno检查九类入口，覆盖EINTR、保护／创建失败、可回收actor、等待与mutex。signal.h／time.h规则及原始分析／人工状态另行处置。
 
 R10.1（主文页82–84／PDF90–92、TC1逻辑指针补充及AMD3.20表）要求逻辑操作数为essential Boolean；R14.4（页121–122／PDF129–130）也覆盖单次执行宏的循环条件。`0016`将采用内核断言的指针／计数／原生BOOL参数显式比较，tasks／queue／list宏用`false`；自有configASSERT用`FALSE`，OS原生整数返回值显式比较，私有故障谓词采用boolean。参数仍只求值一次，原来的失败／非空／非零含义与全部配置容量保持。实际activation、nested-interrupts、resources、error-hooks及静态对象消费者验证未改变调度／队列行为；固定addon对R10.1逻辑操作数和R14.4的for条件覆盖不足，不能据其无报告判定满足。
 
 R13.3（Advisory，主文页111／PDF119）处置到trace、线程表、mutex mask及两端口故障文本：存储与索引自增分成两个full expression，保留原顺序和容量。R15.7（Required，页129／PDF137、TC1函数调用澄清、TC2.29交叉引用）在ARTI出／入边、故障controller标记和source_control的五处else-if链明确无动作含义。未增加新状态或容错分支。
+
+采用头`include/deprecated_definitions.h`的15个旧端口文件名通过0017改用`/`分隔符，未删除分支或文件。R20.2（Required，主文页156／PDF164）禁止header-name中的反斜杠，不以所选端口未进入这些分支判为豁免；上游原件不变，补丁与摘要固定交付内容。
 
 ## 目标端口承担的差距
 

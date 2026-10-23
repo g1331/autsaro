@@ -398,6 +398,8 @@ jobs:
         env:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
         run: setarch x86_64 -R python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
+      - name: Check concurrent native constructor rollback
+        run: setarch x86_64 -R python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py -k concurrent_event_construction_and_rollback
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
