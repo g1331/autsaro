@@ -6,7 +6,7 @@
 
 ## 已选配置与使用
 
-Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把四个身份参数依次传给全部配置 callout，忽略其返回值并返回 `E_OK`；尚未初始化时直接返回 `E_OK`。`Det_ReportError` 调用开发 hooks 后停止执行，尚未初始化时直接停止；受控主机由私有 `Det_HostHalt` 终止 ECU 进程。每个线程有自己的开发报告递归边界，递归报告直接停止，不重复调用 hooks。
+Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把四个身份参数依次传给全部配置 callout，忽略其返回值并返回 `E_OK`；尚未初始化时直接返回 `E_OK`。`Det_ReportError` 调用开发 hooks 后停止执行，尚未初始化时直接停止；受控主机由私有 `Det_HostHalt` 使用平台进程停止，以退出码134终止 ECU，不经过 CRT 清理或用户 SIGABRT handler（平台拒绝停止的 trap 回退按失败退出处理）。每个线程有自己的开发报告递归边界，递归报告直接停止，不重复调用 hooks。
 
 `Det_Init` 重置并选择不可变配置；NULL 表示空 hooks。并发 Init 不受支持，配置对象及 hook 数组须存活到使用它们的最后一次报告完成。运行时和开发报告在 `DET_STATE` 中只读取状态，随后在区外调用 hooks；报告可并发，运行时 callout 可再次报告。当前不记录日志，不提供读记录、故障注入或清空记录等标准外公开 API。`Det_Start` 存在；所选实现没有需要它启动的存储，因而无需额外动作。
 
@@ -44,4 +44,4 @@ Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把�
 
 原生测试检查标准接口、报告身份、通知顺序、重入、真实线程及主机终止；生成的 callout 另以实际公开头编译、链接、运行，并核对其目标文件代码段。受影响的单 SWC／多 SWC、含诊断／无诊断样本仍须运行正常生成、原生回归和 c-check。
 
-C 分析保留原始源码诊断与人工 `not_assessed`。MISRA 授权正文及 221 项评估由 #57／#58 跟踪；版本身份由 #59 跟踪；随包 BSWMD 与模块手册从当前生成计划和公开头产生，跨模块 Symbolic Name Value 按实际配置导出。这里的处置不关闭这些共享差距，也不提供真实 MCU／中断、功能安全或认证证据。
+C 分析保留原始源码诊断与人工 `not_assessed`。固定 MISRA 原件已可用，锁与 Det 停止适配的 R21.1／R21.8 整改见[运行时架构](../architecture/runtime.md#锁失败与停止策略d-10)，不使用偏离；其余221项及采用代码评估由 #58 跟踪；版本身份由 #59 跟踪；随包 BSWMD 与模块手册从当前生成计划和公开头产生，跨模块 Symbolic Name Value 按实际配置导出。这里的处置不关闭这些共享差距，也不提供真实 MCU／中断、功能安全或认证证据。

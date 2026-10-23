@@ -1,32 +1,43 @@
 /** @file Host driver lock and strict SchM exclusive areas with nesting detection. */
-#if !defined(_WIN32)
-#define _XOPEN_SOURCE 700
-#endif
 #include "Can_HostLock.h"
 #include <stddef.h>
-#include <stdlib.h>
 #if defined(_WIN32)
 #include <windows.h>
 #else
 #include <pthread.h>
+#include <unistd.h>
 #endif
+#define CAN_HOST_FATAL_STATUS    134
+#define CAN_HOST_DRIVER_OWNER    1u
+#define CAN_HOST_AREA_OWNER_BASE 2u
+
 /* Every unrecoverable lock state stops here: a void caller must not continue. */
-static void Can_Fatal(void) { abort(); }
+static void Can_Fatal(void)
+{
+#if defined(_WIN32)
+    (void)TerminateProcess(GetCurrentProcess(), CAN_HOST_FATAL_STATUS);
+    /* Self-termination never returns on success; trap if the platform refuses it. */
+    __builtin_trap();
+#else
+    _exit(CAN_HOST_FATAL_STATUS);
+#endif
+}
 /* SchM exclusive-area accounting. A strict area (driver, Det, ...) protects
  * module data only: a thread holding one must not enter another area. */
 static __thread unsigned
-    strict_held; /**< Actor-local strict-area depth; initially zero; no Init reset. */
-static void Can_NoteEnter(void)
+    strict_held; /**< Actor-local owner token (zero when free); no Init reset. */
+static void Can_NoteEnter(unsigned owner)
 {
     if (strict_held != 0u) {
         Can_Fatal();
     }
-    ++strict_held;
+    strict_held = owner;
 }
-static void Can_NoteExit(void)
+static void Can_CheckExit(unsigned owner)
 {
-    if (strict_held != 0u) {
-        --strict_held;
+    /* Default POSIX mutexes require us to reject wrong-thread/wrong-area exits first. */
+    if (strict_held != owner) {
+        Can_Fatal();
     }
 }
 #if defined(_WIN32)
@@ -52,7 +63,7 @@ static BOOL CALLBACK Can_InitAreas(PINIT_ONCE once, PVOID parameter, PVOID *cont
     }
     return initialized;
 }
-static void Can_EnterRecursive(PINIT_ONCE once, PINIT_ONCE_FN init, LPCRITICAL_SECTION lock)
+static void Can_EnterLock(PINIT_ONCE once, PINIT_ONCE_FN init, LPCRITICAL_SECTION lock)
 {
     if (InitOnceExecuteOnce(once, init, NULL, NULL) == 0) {
         Can_Fatal();
@@ -62,79 +73,62 @@ static void Can_EnterRecursive(PINIT_ONCE once, PINIT_ONCE_FN init, LPCRITICAL_S
 void Can_Lock(void)
 {
     static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
-    Can_NoteEnter();
-    Can_EnterRecursive(&can_lock_once, Can_InitLock, &can_lock);
+    Can_NoteEnter(CAN_HOST_DRIVER_OWNER);
+    Can_EnterLock(&can_lock_once, Can_InitLock, &can_lock);
 }
 void Can_Unlock(void)
 {
+    Can_CheckExit(CAN_HOST_DRIVER_OWNER);
     LeaveCriticalSection(&can_lock);
-    Can_NoteExit();
+    strict_held = 0u;
 }
 void Can_HostAreaEnter(Can_HostAreaType area)
 {
     static INIT_ONCE area_once = INIT_ONCE_STATIC_INIT;
-    if (area >= CAN_HOST_AREA_COUNT) {
+    if ((unsigned)area >= (unsigned)CAN_HOST_AREA_COUNT) {
         Can_Fatal();
     }
-    Can_NoteEnter();
-    Can_EnterRecursive(&area_once, Can_InitAreas, &area_locks[area]);
+    Can_NoteEnter((unsigned)area + CAN_HOST_AREA_OWNER_BASE);
+    Can_EnterLock(&area_once, Can_InitAreas, &area_locks[area]);
 }
 void Can_HostAreaExit(Can_HostAreaType area)
 {
-    if (area >= CAN_HOST_AREA_COUNT) {
+    if ((unsigned)area >= (unsigned)CAN_HOST_AREA_COUNT) {
         Can_Fatal();
     }
+    Can_CheckExit((unsigned)area + CAN_HOST_AREA_OWNER_BASE);
     LeaveCriticalSection(&area_locks[area]);
-    Can_NoteExit();
+    strict_held = 0u;
 }
 #else
 typedef struct {
     pthread_mutex_t mutex;
     int ready;
-} Can_RecursiveLock;
-static Can_RecursiveLock
-    can_lock; /**< Process lock, pthread_once-initialized; no ECU Init reset. */
-static Can_RecursiveLock
+} Can_HostLockType;
+static Can_HostLockType can_lock; /**< Process lock, pthread_once-initialized; no ECU Init reset. */
+static Can_HostLockType
     area_locks[CAN_HOST_AREA_COUNT]; /**< Once-initialized area mutexes; no ECU Init reset. */
-static void Can_InitRecursive(Can_RecursiveLock *lock)
+static void Can_InitMutex(Can_HostLockType *lock)
 {
-    pthread_mutexattr_t attributes;
-    int initialized = 0;
-    int result = pthread_mutexattr_init(&attributes);
-    if (result == 0) {
-        result = pthread_mutexattr_settype(&attributes, PTHREAD_MUTEX_RECURSIVE);
-        if (result == 0) {
-            result = pthread_mutex_init(&lock->mutex, &attributes);
-            initialized = (result == 0) ? 1 : 0;
-        }
-        if (pthread_mutexattr_destroy(&attributes) != 0) {
-            result = -1;
-        }
-        if ((result != 0) && (initialized != 0)) {
-            /* Never publish a partially constructed lock; retire it if possible. */
-            if (pthread_mutex_destroy(&lock->mutex) != 0) {
-                result = -1;
-            }
-        }
-    }
-    lock->ready = (result == 0) ? 1 : 0;
+    /* Strict ownership rejects recursion before entering the platform mutex. */
+    lock->ready = (pthread_mutex_init(&lock->mutex, NULL) == 0) ? 1 : 0;
 }
-static void Can_InitLock(void) { Can_InitRecursive(&can_lock); }
+static void Can_InitLock(void) { Can_InitMutex(&can_lock); }
 static void Can_InitAreas(void)
 {
     size_t area;
     for (area = 0u; area < (size_t)CAN_HOST_AREA_COUNT; ++area) {
-        Can_InitRecursive(&area_locks[area]);
+        Can_InitMutex(&area_locks[area]);
     }
 }
-static void Can_EnterRecursive(pthread_once_t *once, void (*init)(void), Can_RecursiveLock *lock)
+static void Can_EnterLock(pthread_once_t *once, void (*init)(void), Can_HostLockType *lock)
 {
     if ((pthread_once(once, init) != 0) || (lock->ready == 0) ||
         (pthread_mutex_lock(&lock->mutex) != 0)) {
         Can_Fatal();
     }
 }
-static void Can_LeaveRecursive(Can_RecursiveLock *lock)
+static void Can_LeaveLock(Can_HostLockType *lock)
 {
     if (pthread_mutex_unlock(&lock->mutex) != 0) {
         /* The lock ownership state is no longer reliable. */
@@ -144,29 +138,31 @@ static void Can_LeaveRecursive(Can_RecursiveLock *lock)
 void Can_Lock(void)
 {
     static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
-    Can_NoteEnter();
-    Can_EnterRecursive(&can_lock_once, Can_InitLock, &can_lock);
+    Can_NoteEnter(CAN_HOST_DRIVER_OWNER);
+    Can_EnterLock(&can_lock_once, Can_InitLock, &can_lock);
 }
 void Can_Unlock(void)
 {
-    Can_LeaveRecursive(&can_lock);
-    Can_NoteExit();
+    Can_CheckExit(CAN_HOST_DRIVER_OWNER);
+    Can_LeaveLock(&can_lock);
+    strict_held = 0u;
 }
 void Can_HostAreaEnter(Can_HostAreaType area)
 {
     static pthread_once_t area_once = PTHREAD_ONCE_INIT;
-    if (area >= CAN_HOST_AREA_COUNT) {
+    if ((unsigned)area >= (unsigned)CAN_HOST_AREA_COUNT) {
         Can_Fatal();
     }
-    Can_NoteEnter();
-    Can_EnterRecursive(&area_once, Can_InitAreas, &area_locks[area]);
+    Can_NoteEnter((unsigned)area + CAN_HOST_AREA_OWNER_BASE);
+    Can_EnterLock(&area_once, Can_InitAreas, &area_locks[area]);
 }
 void Can_HostAreaExit(Can_HostAreaType area)
 {
-    if (area >= CAN_HOST_AREA_COUNT) {
+    if ((unsigned)area >= (unsigned)CAN_HOST_AREA_COUNT) {
         Can_Fatal();
     }
-    Can_LeaveRecursive(&area_locks[area]);
-    Can_NoteExit();
+    Can_CheckExit((unsigned)area + CAN_HOST_AREA_OWNER_BASE);
+    Can_LeaveLock(&area_locks[area]);
+    strict_held = 0u;
 }
 #endif

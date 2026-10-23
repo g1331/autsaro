@@ -135,13 +135,7 @@ fn det_standard_consumer_executes_runtime_and_halt_contracts() {
         assert!(output.stderr.is_empty(), "{mode}: {:?}", output);
         if halted {
             // A failed assertion or ordinary rejection cannot satisfy halt.
-            #[cfg(target_os = "linux")]
-            {
-                use std::os::unix::process::ExitStatusExt;
-                assert_eq!(output.status.signal(), Some(6), "{mode}: {:?}", output);
-            }
-            #[cfg(windows)]
-            assert_eq!(output.status.code(), Some(86), "{mode}: {:?}", output);
+            assert_eq!(output.status.code(), Some(134), "{mode}: {:?}", output);
         } else {
             assert!(output.status.success(), "{mode}: {:?}", output);
         }

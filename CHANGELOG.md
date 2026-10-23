@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Host lock failures and Det development-error halts now stop the ECU directly with process status 134, bypassing CRT cleanup and SIGABRT handlers; integrations must observe the exit status rather than SIGABRT or core dumps. Strict SchM areas reject unmatched exits before touching the platform mutex, and Linux no longer requires recursive mutex attributes for these locks. Regenerate sealed deliveries and rebuild consumers (#365)
+
 - Dcm configuration buffer capacity now uses `uint16` independently of `PduLengthType`; regenerate sealed ECU deliveries and rebuild direct consumers. Initialization accepts 8..256 bytes only when representable by the selected communication length type. CanTp validates capacity and decodes complete first-frame lengths before conversion, preserving legal UINT8 delivery and preventing truncated reception admission. Standard function signatures and third-party identities are unchanged (#354)
 
 - OS implementations, native adapters, ARTI bindings and generated configuration now use explicit code, constant, initialized/cleared state, TLS and vector mappings through `Os_MemMap.h`; regenerate sealed ECU deliveries and rebuild direct consumers for the section layout. Existing startup, signal, interrupt and terminal-stop ownership are preserved; upstream kernel and production patch identities are unchanged (#203)
