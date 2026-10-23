@@ -2,7 +2,7 @@ name: Native restart experiment
 on:
   push:
     branches: [fix/host-task-restart-port]
-    paths: [runtime/os/tests/port_restart_probe.c, .github/workflows/port-experiment.yml]
+    paths: [runtime/os/**, core/tests/fixtures/os/**, tests/python/native/os_suites.py, .github/workflows/port-experiment.yml]
 permissions:
   contents: read
 jobs:
@@ -24,3 +24,5 @@ jobs:
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py -k NativeSuiteTests.test_port_restart
       - name: Actual Task finish and FIFO contracts
         run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py -k NativeSuiteTests.test_finish
+      - name: Actual physical stack and ARTI contracts
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py -k NativeSuiteTests.test_stack

@@ -784,6 +784,30 @@
       ]
     },
     {
+      "path": "runtime/os/src/host/linux/Os_LinuxNative.c",
+      "license": "Apache-2.0",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/host/linux/Os_LinuxNative.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
       "path": "runtime/os/src/host/linux/Os_HostLinux.h",
       "license": "Apache-2.0",
       "targets": [

@@ -115,11 +115,13 @@ def target_configuration(names: list[str], target: dict) -> tuple[list[str], lis
     """Read the same validated C flags, translation units and includes for build/analysis."""
     flags = target.get("compilerFlags")
     allowed_flags = {"-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
-                     "-pedantic", "-D_GNU_SOURCE", "-pthread", "-fexceptions"}
+                     "-pedantic", "-pthread", "-fexceptions"}
     if (not isinstance(flags, list) or "-std=c99" not in flags
             or any(not isinstance(flag, str) or flag not in allowed_flags for flag in flags)
             or len(flags) != len(set(flags))):
         raise ValueError("Pinned compiler flags are invalid or contain private test/unsafe options")
+    if target.get("profile") == "ecu" and "-fexceptions" not in flags:
+        raise ValueError("Automotive Task restart requires exception-unwind metadata")
     sources = target.get("sources")
     if (not isinstance(sources, list) or not sources
             or any(not isinstance(name, str) or name not in names or not name.endswith(".c") for name in sources)

@@ -1,5 +1,4 @@
 /** @file Native stack registration, guard checks and fault capture for the Win64 target. */
-#define _WIN32_WINNT 0x0602
 #include "Os_Backend.h"
 #include "Os_Stack.h"
 #include "Os_HostIo.h"
@@ -227,7 +226,6 @@ OS_MEMMAP static ULONG native_stack_guarantee(char role)
 #include "Os_MemMap.h"
 OS_MEMMAP int Os_StackRegister(char role)
 {
-    ULONG_PTR low, high;
     MEMORY_BASIC_INFORMATION region;
     uintptr_t cursor;
     ULONG guarantee = native_stack_guarantee(role);
@@ -237,24 +235,21 @@ OS_MEMMAP int Os_StackRegister(char role)
         return 0;
     }
     record = &stacks[index];
-    GetCurrentThreadStackLimits(&low, &high);
     if (VirtualQuery((const void *)&cursor, &region, sizeof(region)) != sizeof(region)) {
         return 0;
     }
     record->thread_id = GetCurrentThreadId();
     record->role = role;
     record->reserve_low = (uintptr_t)region.AllocationBase;
-    if (record->reserve_low >= high || low < record->reserve_low || low >= high) {
-        return 0;
-    }
-    record->high = high;
-    record->reserve = high - record->reserve_low;
-    record->committed_low = high;
     cursor = record->reserve_low;
-    while (cursor < high) {
+    record->committed_low = UINTPTR_MAX;
+    for (;;) {
         if (VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region) ||
-            region.RegionSize == 0u) {
+            region.RegionSize == 0u || region.RegionSize > UINTPTR_MAX - cursor) {
             return 0;
+        }
+        if ((uintptr_t)region.AllocationBase != record->reserve_low) {
+            break;
         }
         if (region.State == MEM_COMMIT) {
             record->committed += region.RegionSize;
@@ -267,6 +262,12 @@ OS_MEMMAP int Os_StackRegister(char role)
         }
         cursor += region.RegionSize;
     }
+    record->high = cursor;
+    if (record->reserve_low >= record->high || record->committed_low >= record->high ||
+        (uintptr_t)&cursor < record->committed_low || (uintptr_t)&cursor >= record->high) {
+        return 0;
+    }
+    record->reserve = record->high - record->reserve_low;
     guarantee = 0u;
     if (!SetThreadStackGuarantee(&guarantee)) {
         return 0;
@@ -280,13 +281,11 @@ OS_MEMMAP int Os_StackRegister(char role)
 OS_MEMMAP void Os_StackCheck(void)
 {
     uintptr_t sp;
-    ULONG_PTR low, high;
     MEMORY_BASIC_INFORMATION region;
     OS_HOST_STACK_POINTER(sp);
     if (current_stack == NULL) {
         return; /* Public preparation before StartOS does not yet execute an OS task. */
     }
-    GetCurrentThreadStackLimits(&low, &high);
     if (sp < low || sp >= high || sp < current_stack->reserve_low || sp >= current_stack->high ||
         VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region) ||
         region.State != MEM_COMMIT || (region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u) {

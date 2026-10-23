@@ -1,6 +1,9 @@
 /** @file ARTI trace of task transitions, hook events and event-buffer bounds. */
 #include <limits.h>
 #include "Os_Arti.h"
+#ifdef __linux__
+#include "Os_LinuxNative.h"
+#endif
 static void observed_hook(void);
 static void observed_body(void);
 #define TASK_HOOK_OBSERVER observed_hook
@@ -11,16 +14,36 @@ static void observed_body(void);
 
 static bool
     stack_published[3]; /**< Observed Task stack publication; fixture-owned, no Init reset. */
-static uintptr_t entry_sp[3]; /**< First entry stack pointer, compared on each activation. */
-static DWORD entry_thread[3]; /**< First native thread identity, compared on each activation. */
+#ifdef __linux__
+static int cet_requested; /**< Main enables enforcement before creating native actors. */
+#endif
+static uintptr_t entry_ssp[3]; /**< First per-Task hardware shadow-stack pointer. */
+static uintptr_t entry_sp[3];  /**< First entry stack pointer, compared on each activation. */
+static DWORD entry_thread[3];  /**< First native thread identity, compared on each activation. */
 static const Os_NativeStackType *entry_stack[3]; /**< First native/ARTI stack record. */
 static unsigned body_observations[3]; /**< Number of actual entries inspected per Task. */
 static void observed_body(void)
 {
+#ifdef __linux__
+    if (cet_requested != 0) {
+        long result;
+        unsigned long enabled = 0u;
+        __asm__ volatile("syscall"
+                         : "=a"(result)
+                         : "a"(158L), "D"(0x5005L), "S"(&enabled)
+                         : "rcx", "r11", "memory");
+        check(result == 0 && enabled == 1u);
+    }
+#endif
     TaskType id = INVALID_TASK;
     uintptr_t sp;
     check(GetTaskID(&id) == E_OK && id < 3u);
     OS_HOST_STACK_POINTER(sp);
+    uintptr_t ssp = 0u;
+    __asm__ volatile("rdsspq %0" : "+r"(ssp));
+#ifdef __linux__
+    check(cet_requested == 0 || ssp != 0u);
+#endif
     const DWORD thread = GetCurrentThreadId();
     const Os_NativeStackType *stack = Os_StackCurrent();
     check(stack != NULL && Os_ArtiTaskStacks[id] == stack);
@@ -28,10 +51,12 @@ static void observed_body(void)
     check(Os_ArtiTaskContexts[id] == Os_StackSavedContext(stack));
     if (body_observations[id] == 0u) {
         entry_sp[id] = sp;
+        entry_ssp[id] = ssp;
         entry_thread[id] = thread;
         entry_stack[id] = stack;
     } else {
-        check(entry_sp[id] == sp && entry_thread[id] == thread && entry_stack[id] == stack);
+        check(entry_sp[id] == sp && entry_ssp[id] == ssp && entry_thread[id] == thread &&
+              entry_stack[id] == stack);
     }
     ++body_observations[id];
 }
@@ -66,8 +91,8 @@ static void observed_hook(void)
               native->kernel_buffer_low >= native->high);
         check(saved->ContextFlags == CONTEXT_CONTROL && saved->Rsp >= native->committed_low &&
               saved->Rsp < native->high);
-        check((uintptr_t)saved->native.uc_mcontext.gregs[REG_RSP] == saved->Rsp);
-        check(saved->native.uc_mcontext.fpregs == &saved->native.__fpregs_mem);
+        check(Os_LinuxSignalSp(&saved->native) == saved->Rsp);
+        check(Os_LinuxContextOwnsFp(saved));
     }
 #endif
 }
@@ -193,6 +218,33 @@ void Os_ArtiTestShutdownObserved(void)
 }
 int main(int argc, char **argv)
 {
+#ifdef __linux__
+    if (argc == 3 && strcmp(argv[2], "cet") == 0) {
+        long result;
+        unsigned long enabled = 0u;
+        /* Enable in this nonreturning main frame, before creating native actors. */
+        __asm__ volatile("syscall"
+                         : "=a"(result)
+                         : "a"(158L), "D"(0x5001L), "S"(1L)
+                         : "rcx", "r11", "memory");
+        if (result != 0) {
+            return 77;
+        }
+        __asm__ volatile("syscall"
+                         : "=a"(result)
+                         : "a"(158L), "D"(0x5005L), "S"(&enabled)
+                         : "rcx", "r11", "memory");
+        if (result != 0 || enabled != 1u) {
+            return 78;
+        }
+        cet_requested = 1;
+        printf("task CET status=1\n");
+        if (fflush(stdout) != 0) {
+            return 79;
+        }
+        argc = 2;
+    }
+#endif
     if (argc == 2 && strcmp(argv[1], "buffer") == 0) {
         Std_VersionInfoType version = {99u, 99u, 99u, 99u, 99u};
         uint32_t core = 0u, value = 7u;

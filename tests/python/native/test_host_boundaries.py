@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import tempfile
 import unittest
@@ -175,3 +176,29 @@ class HostIoTests(unittest.TestCase):
                         self.assertEqual(result.exit_code, 13, (case, output, errors))
                         self.assertEqual(output, fault if case in ("fatal-partial", "fatal-interrupted", "fatal-errno") else b"", case)
                         self.assertEqual(errors, fault if case == "fatal-broken-pipe" else b"", case)
+
+
+@unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
+class NativeFacilityTests(unittest.TestCase):
+    def test_kernel_calls_and_native_mutex_ownership(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            target = directory / "target"
+            shutil.copytree(os_suites.TARGET, target)
+            source = target / "src/host/linux/Os_HostLinux.c"
+            text = source.read_text(encoding="utf-8")
+            text = text.replace('#include "Os_LinuxNative.h"', '#include "Os_LinuxNative.h"\n'
+                                'int Os_FacilityTryLock(pthread_mutex_t *);\n'
+                                '#define pthread_mutex_trylock Os_FacilityTryLock')
+            source.write_text(text, encoding="utf-8")
+            with os_suites.native_session(directory, "native-facilities"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_native_facilities.c"), target=target,
+                )
+                for scenario in ("normal", "error"):
+                    result = os_suites.run_native([str(binary), scenario], timeout=10)
+                    self.assertEqual(result.returncode, 0, result)
+                    self.assertEqual(result.stdout, "native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified\n")
+                    self.assertEqual(result.stderr, "")

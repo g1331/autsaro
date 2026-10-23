@@ -26,9 +26,11 @@ void Os_BackendShutdown(StatusType error)
     _exit(92);
 #endif
 }
-static unsigned count;    /**< Probe entry count; single actor. */
-static int foreign;       /**< Main selects an unrelated native exception before entry. */
-static uintptr_t initial; /**< First physical stack observation; single actor. */
+static unsigned count;        /**< Probe entry count; single actor. */
+static int shadow_required;   /**< Main requests hardware enforcement in CET vectors. */
+static int foreign;           /**< Main selects an unrelated native exception before entry. */
+static uintptr_t initial_ssp; /**< First hardware shadow-stack pointer, including disabled zero. */
+static uintptr_t initial;     /**< First physical stack observation; single actor. */
 #ifdef __SANITIZE_ADDRESS__
 static char *abandoned; /**< Deep abandoned redzone; inspected after native unwinding. */
 #endif
@@ -89,11 +91,14 @@ __attribute__((noinline)) static void entry(void *argument)
     }
 #endif
     uintptr_t sp;
+    uintptr_t ssp = 0u;
     __asm__ volatile("mov %%rsp,%0" : "=r"(sp));
+    __asm__ volatile("rdsspq %0" : "+r"(ssp));
     if (!count) {
         initial = sp;
+        initial_ssp = ssp;
     }
-    if (initial != sp) {
+    if (((shadow_required != 0) && (ssp == 0u)) || (initial != sp) || (initial_ssp != ssp)) {
         fprintf(stderr,
                 "stack initial=%lx actual=%lx count=%u\n",
                 (unsigned long)initial,
@@ -126,13 +131,17 @@ __attribute__((noinline)) static void entry(void *argument)
             exit(85);
         }
 #endif
-        puts("restart iterations=10000 stack=stable");
+        printf("restart iterations=10000 stack=stable shadow_stack=stable ssp=%llu\n",
+               (unsigned long long)initial_ssp);
         exit(0);
     }
     nested(8u + count % 31u);
 }
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
     if (argc > 1 && argv[1][0] == 'u') {
         Os_PortRestart();
     }
@@ -159,6 +168,7 @@ int main(int argc, char **argv)
         if (result || !(status & 1)) {
             return 78;
         }
+        shadow_required = 1;
         if (argv[1][0] == 'b') {
             corrupt_return();
             return 79;

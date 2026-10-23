@@ -1,8 +1,7 @@
 /** @file Real actor suspend/resume, captured context and irreversible terminal stop. */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include "Os_Backend.h"
+#include "Os_LinuxNative.h"
+#include <errno.h>
 #include <stdio.h>
 
 static HANDLE ready;
@@ -41,19 +40,12 @@ static int valid_context(HANDLE thread, CONTEXT *context)
 
 static DWORD WINAPI detached_actor(void *argument)
 {
-    pthread_attr_t attributes;
-    int state;
     (void)argument;
-    if (WaitForSingleObject(detach_gate, 2000u) != WAIT_OBJECT_0 ||
-        pthread_getattr_np(pthread_self(), &attributes) != 0) {
+    if (WaitForSingleObject(detach_gate, 2000u) != WAIT_OBJECT_0) {
         return 2u;
     }
-    if (pthread_attr_getdetachstate(&attributes, &state) != 0) {
-        (void)pthread_attr_destroy(&attributes);
-        return 3u;
-    }
-    if (pthread_attr_destroy(&attributes) != 0 || state != PTHREAD_CREATE_DETACHED ||
-        Os_HostSetEvent(detach_done) == 0) {
+    /* A detached live pthread is not joinable, including from itself. */
+    if (pthread_join(pthread_self(), NULL) != EINVAL || Os_HostSetEvent(detach_done) == 0) {
         return 4u;
     }
     return 0u;
@@ -96,8 +88,7 @@ int main(void)
         return 5;
     }
     if (Os_HostStopActor(thread, 2000u) == 0 || valid_context(thread, &stopped) == 0 ||
-        paused.Rsp != stopped.Rsp ||
-        paused.native.uc_mcontext.gregs[REG_RIP] != stopped.native.uc_mcontext.gregs[REG_RIP]) {
+        paused.Rsp != stopped.Rsp || Os_LinuxContextIp(&paused) != Os_LinuxContextIp(&stopped)) {
         return 6;
     }
     if (ResumeThread(thread) != UINT32_MAX || Os_HostStopActor(thread, 2000u) == 0 ||

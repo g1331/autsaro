@@ -284,6 +284,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         [
             target / "src/host/linux/Os_StackLinux.c",
             target / "src/host/linux/Os_HostLinux.c",
+            target / "src/host/linux/Os_LinuxNative.c",
             copied / "portable/ThirdParty/GCC/Posix/port.c",
         ]
         if linux else
@@ -296,7 +297,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
     command = [
         cc,
         "-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-fexceptions",
-        *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
+        *(["-pthread"] if linux else []),
         "-I", str(target),
         "-I", str(target / "include"),
         "-I", str(target / "src"),
@@ -1701,7 +1702,7 @@ def check_public_types(directory: Path) -> None:
     binary = directory / ("public_types" if linux else "public_types.exe")
     command = [
         compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
-        *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
+        *(["-pthread"] if linux else []),
         "-I" + str(TARGET / "include"), str(TARGET / "tests/public_types.c"),
         "-I" + str(ROOT / "runtime/bsw/include"), "-I" + str(ROOT / "runtime/host/include"),
         "-o", str(binary),
@@ -1734,7 +1735,7 @@ def check_public_compatibility(directory: Path) -> None:
     # LLVMgold pulls in libLLVM), whose cold first load can outlast the 5 s deadline.
     nm_target = "--target=" + ("elf64-x86-64" if linux else "pe-x86-64")
     command = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
-               *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
+               *(["-pthread"] if linux else []),
                "-I" + str(TARGET / "include"), "-I" + str(TARGET / "src"),
                *(["-I" + str(TARGET / "src/host/linux")] if linux else []),
                "-I" + str(ROOT / "runtime/bsw/include"), "-I" + str(ROOT / "runtime/host/include"),
@@ -2109,13 +2110,21 @@ def check_port_restart(directory: Path) -> None:
                 *(value for path in include_paths for value in ("-I", str(path))),
                 str(TARGET / "src/Os_PortRestart.c"), str(TARGET / "tests/port_restart_probe.c"),
                 "-o", str(binary)], check=True, timeout=60)
+    if linux:
+        for source in ("src/host/linux/Os_HostLinux.c", "src/host/linux/Os_StackLinux.c",
+                       "src/host/linux/Os_LinuxNative.c", "src/Os_PortRestart.c"):
+            macros = run_native([cc, "-std=c99", "-pthread", "-E", "-dM",
+                                 *(value for path in include_paths for value in ("-I", str(path))),
+                                 str(TARGET / source)], check=True)
+            require(re.search(r"^#define _GNU_SOURCE\b", macros.stdout, re.MULTILINE) is None,
+                    f"Reserved feature selection reintroduced by {source}")
     result = run_native([str(binary)], timeout=10)
     require(result.returncode == 0 and not result.stderr
-            and result.stdout == "restart iterations=10000 stack=stable\n", result)
+            and re.fullmatch(r"restart iterations=10000 stack=stable shadow_stack=stable ssp=\d+\n", result.stdout), result)
     unhandled = run_native([str(binary), "unhandled"], timeout=10)
-    require(unhandled.returncode == (92 if linux else 0xE0426001), unhandled)
+    require((unhandled.returncode if linux else unhandled.returncode & 0xFFFFFFFF) == (92 if linux else 0xE0426001), unhandled)
     foreign = run_native([str(binary), "foreign"], timeout=10)
-    require(foreign.returncode == (94 if linux else 0xE0426002), foreign)
+    require((foreign.returncode if linux else foreign.returncode & 0xFFFFFFFF) == (94 if linux else 0xE0426002), foreign)
     if os.environ.get("AUTOSAR_SANITIZE") == "thread":
         fault = run_native([str(binary), "race"], timeout=10)
         require(fault.returncode == 66 and "ThreadSanitizer: data race" in fault.stderr
@@ -2126,9 +2135,21 @@ def check_port_restart(directory: Path) -> None:
             print("port-restart CET not_assessed: kernel refused shadow-stack enable", flush=True)
         else:
             require(cet.returncode == 0 and "CET status=1 result=0" in cet.stdout
-                    and "iterations=10000 stack=stable" in cet.stdout, cet)
+                    and re.search(r"shadow_stack=stable ssp=[1-9]\d*", cet.stdout), cet)
+            print(cet.stdout, end="", flush=True)
             broken = run_native([str(binary), "bad"], timeout=10)
             require(broken.returncode == -11 and "CET status=1 result=0" in broken.stdout, broken)
+            print(f"port-restart corrupt-return exit={broken.returncode}", flush=True)
+            task_directory = directory / "cet-task"
+            task_directory.mkdir()
+            task, _ = build(task_directory, "arti.c", ("OS_ARTI_TESTS",))
+            for scenario in ("transitions", "self-chain", "queued", "internal", "unconfigured", "noop-yield", "wait-satisfied", "shutdown"):
+                actual = run_native([str(task), scenario, "cet"], timeout=10)
+                require(actual.returncode == 0 and not actual.stderr
+                        and "task CET status=1" in actual.stdout
+                        and f"arti scenario={scenario}" in actual.stdout, actual)
+            print("port-restart CET PASS: active enforcement and actual Task/TCB/stack/ARTI/hooks", flush=True)
+
     tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
     verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartLanding", "Os_PortRestart"])
     print("port-restart PASS: native unwind; 10000 stable physical-stack entries", flush=True)

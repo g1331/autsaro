@@ -8,11 +8,6 @@
 
 /* All traversed C frames use -fexceptions, including sanitizer-generated cleanup
  * landing pads. Native unwinding also restores the hardware shadow stack. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-OS_MEMMAP void Os_PortRestartLanding(void);
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 #ifndef _WIN32
 #define OS_START_SEC_VAR_CLEARED_TLS_UNSPECIFIED
 #include "Os_MemMap.h"
@@ -22,24 +17,27 @@ OS_MEMMAP static OS_HOST_THREAD_LOCAL struct _Unwind_Exception
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+/* _Unwind_Personality_Fn fixes the writable exception-pointer signature. */
 OS_MEMMAP __attribute__((used)) static _Unwind_Reason_Code Os_PortRestartPersonality(
     int version,
     _Unwind_Action actions,
-    uint64_t cls,
+    _Unwind_Exception_Class cls,
     struct _Unwind_Exception *exception,
     struct _Unwind_Context *context)
 {
-    if (version != 1 || cls != UINT64_C(0x4155544f53525431) || exception != &restart_exception) {
-        return _URC_CONTINUE_UNWIND;
+    _Unwind_Reason_Code result = _URC_CONTINUE_UNWIND;
+    if ((version == 1) && (cls == UINT64_C(0x4155544f53525431)) &&
+        (exception == &restart_exception)) {
+        if ((actions & _UA_SEARCH_PHASE) != 0) {
+            result = _URC_HANDLER_FOUND;
+        } else if ((actions & _UA_HANDLER_FRAME) != 0) {
+            _Unwind_SetIP(context, (uintptr_t)Os_PortRestartLanding);
+            result = _URC_INSTALL_CONTEXT;
+        } else {
+            /* The native unwinder continues through non-handler cleanup frames. */
+        }
     }
-    if (actions & _UA_SEARCH_PHASE) {
-        return _URC_HANDLER_FOUND;
-    }
-    if (actions & _UA_HANDLER_FRAME) {
-        _Unwind_SetIP(context, (uintptr_t)Os_PortRestartLanding);
-        return _URC_INSTALL_CONTEXT;
-    }
-    return _URC_CONTINUE_UNWIND;
+    return result;
 }
 OS_MEMMAP void Os_PortRestart(void)
 {
@@ -50,20 +48,14 @@ OS_MEMMAP void Os_PortRestart(void)
 __asm__(
     ".pushsection .os_code,\"ax\",@progbits\n"
     ".global Os_PortTaskLoop\n.type Os_PortTaskLoop,@function\nOs_PortTaskLoop:\n.cfi_startproc\n"
-    ".cfi_personality 0x9b,DW.ref.Os_PortRestartPersonality\n"
+    ".cfi_personality 0x1b,Os_PortRestartPersonality\n"
     "endbr64\npush %r12\n.cfi_def_cfa_offset 16\n.cfi_offset 12,-16\n"
     "push %r13\n.cfi_def_cfa_offset 24\n.cfi_offset 13,-24\n"
     "sub $8,%rsp\n.cfi_def_cfa_offset 32\nmov %rdi,%r12\nmov %rsi,%r13\n"
     ".global Os_PortRestartLanding\n.type "
     "Os_PortRestartLanding,@function\nOs_PortRestartLanding:\nendbr64\nmov %r13,%rdi\ncall "
     "*%r12\nud2\n.size Os_PortRestartLanding,.-Os_PortRestartLanding\n.cfi_endproc\n.size "
-    "Os_PortTaskLoop,.-Os_PortTaskLoop\n.popsection\n"
-    ".hidden DW.ref.Os_PortRestartPersonality\n.weak DW.ref.Os_PortRestartPersonality\n.section "
-    ".data.rel.ro.os.DW.ref.Os_PortRestartPersonality,\"awG\",@progbits,DW.ref.Os_"
-    "PortRestartPersonality,comdat\n.align "
-    "8\n.type DW.ref.Os_PortRestartPersonality,@object\n.size "
-    "DW.ref.Os_PortRestartPersonality,8\nDW.ref.Os_PortRestartPersonality:\n.quad "
-    "Os_PortRestartPersonality\n.previous\n");
+    "Os_PortTaskLoop,.-Os_PortTaskLoop\n.popsection\n");
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #else

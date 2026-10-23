@@ -46,6 +46,15 @@ class CAnalysisTests(unittest.TestCase):
             with self.subTest(flags=flags), self.assertRaises(ValueError):
                 target_configuration(["main.c"], {**target, "compilerFlags": flags})
 
+    def test_automotive_target_requires_unwind_metadata(self):
+        target = {"profile": "ecu", "compilerFlags": ["-std=c99"],
+                  "sources": ["main.c"], "includePaths": ["."]}
+        with self.assertRaisesRegex(ValueError, "exception-unwind metadata"):
+            target_configuration(["main.c"], target)
+        target["compilerFlags"].append("-fexceptions")
+        self.assertEqual(target_configuration(["main.c"], target)[0],
+                         ["-std=c99", "-fexceptions"])
+
     def test_output_conflicts_preserve_existing_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve(strict=True)
