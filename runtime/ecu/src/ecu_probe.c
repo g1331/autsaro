@@ -4,6 +4,7 @@
 #include "Os_Host.h"
 #include "Rte_Main.h"
 #include "Os_HostIo.h"
+#include <errno.h>
 #include <stdlib.h>
 
 static void require(boolean condition)
@@ -91,7 +92,9 @@ int main(int argc, char **argv)
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
     if (argc == 2) {
         char *end;
-        unsigned long value = strtoul(argv[1], &end, 10);
+        unsigned long value;
+        errno = 0;
+        value = strtoul(argv[1], &end, 10);
         if ((argv[1][0] < '0') || (argv[1][0] > '9') || (*end != '\0') || (value > 8u)) {
             return 98;
         }

@@ -1698,7 +1698,7 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
     control_thread =
         Os_PortThread(NULL, 262144u, control, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     backup_thread = Os_PortThread(
-        NULL, 262144u, control, &backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        NULL, 262144u, control, (void *)&backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0 ||
         controller_healthy[0] == 0 || controller_healthy[1] == 0) {
         Os_BackendShutdown(E_OS_STATE);
