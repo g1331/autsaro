@@ -3,6 +3,35 @@
 #include "Os_Host.h"
 #include "Os_HostIo.h"
 
+#ifndef _WIN32
+#include <errno.h>
+#include <unistd.h>
+#endif
+
+/* The only input consumer owns this private platform read boundary. */
+static int read_byte(char *byte)
+{
+#ifdef _WIN32
+    DWORD count = 0u;
+    int result = -1;
+    if (ReadFile(GetStdHandle(STD_INPUT_HANDLE), byte, 1u, &count, NULL) != 0) {
+        result = (int)count;
+    } else if (GetLastError() == ERROR_BROKEN_PIPE) {
+        result = 0;
+    } else {
+        /* Invalid handles and other read failures are not EOF. */
+    }
+    return result;
+#else
+    ssize_t count;
+    do {
+        errno = 0;
+        count = read(STDIN_FILENO, byte, 1u);
+    } while ((count < 0) && (errno == EINTR));
+    return (count < 0) ? -1 : (int)count;
+#endif
+}
+
 static Ecu_HostBatch batch; /**< Native control only; HostBatchInitialize zeros before use. */
 
 static void receipt(Os_HostTextType *text, const Ecu_HostBatch *state, StatusType status)
@@ -49,7 +78,7 @@ static int write_output(const Ecu_OutputRecord *output,
     return Os_HostTextWrite(&text);
 }
 
-static int reject(const Ecu_HostBatch *state, StatusType status)
+static int write_rejection(const Ecu_HostBatch *state, StatusType status)
 {
     char storage[128];
     Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
@@ -69,7 +98,7 @@ static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length)
     size_t count = 0u;
     int overflow = 0;
     for (;;) {
-        received = Os_HostReadByte(&byte);
+        received = read_byte(&byte);
         if ((received != 1) || (byte == '\n')) {
             break;
         }
@@ -117,7 +146,7 @@ static Os_HostThreadResultType control(void *argument)
             status = Ecu_HostBatchExecute(&batch, write_output, NULL);
         }
         if (status != E_OK) {
-            if (reject(&batch, status) == 0) {
+            if (write_rejection(&batch, status) == 0) {
                 Ecu_TargetAbortNative(E_OS_STATE);
             }
         }

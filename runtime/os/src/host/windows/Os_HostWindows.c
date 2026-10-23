@@ -15,20 +15,6 @@ OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event) { return SetEvent(event); }
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP int Os_HostReadByte(char *byte)
-{
-    DWORD count = 0u;
-    int result = -1;
-    if (ReadFile(GetStdHandle(STD_INPUT_HANDLE), byte, 1u, &count, NULL) != 0) {
-        result = (int)count;
-    } else if (GetLastError() == ERROR_BROKEN_PIPE) {
-        result = 0;
-    } else {
-        /* Invalid handles and other read failures are not EOF. */
-    }
-    return result;
-}
-
 OS_MEMMAP int Os_HostWriteBytes(int error_stream, const char *data, size_t length)
 {
     size_t offset = 0u;

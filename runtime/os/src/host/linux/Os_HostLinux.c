@@ -787,16 +787,6 @@ OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP int Os_HostReadByte(char *byte)
-{
-    ssize_t count;
-    do {
-        errno = 0;
-        count = read(STDIN_FILENO, byte, 1u);
-    } while ((count < 0) && (errno == EINTR));
-    return (count < 0) ? -1 : (int)count;
-}
-
 OS_MEMMAP static int write_bytes(int descriptor, const char *data, size_t length)
 {
     size_t offset = 0u;
@@ -822,7 +812,6 @@ OS_MEMMAP int Os_HostWriteBytes(int error_stream, const char *data, size_t lengt
     sigset_t previous;
     sigset_t pending;
     int result = 0;
-    int was_pending;
     const struct timespec immediate = {0, 0};
     if ((error_stream == 0) || (error_stream == 1)) {
         /* Convert this call's broken pipe into an error without changing the
@@ -830,10 +819,11 @@ OS_MEMMAP int Os_HostWriteBytes(int error_stream, const char *data, size_t lengt
         if ((sigemptyset(&blocked) == 0) && (sigaddset(&blocked, SIGPIPE) == 0) &&
             (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)) {
             if (sigpending(&pending) == 0) {
-                was_pending = sigismember(&pending, SIGPIPE);
+                const int was_pending = sigismember(&pending, SIGPIPE);
                 if (was_pending >= 0) {
+                    errno = 0;
                     result = write_bytes(
-                        error_stream == 0 ? STDOUT_FILENO : STDERR_FILENO, data, length);
+                        (error_stream == 0) ? STDOUT_FILENO : STDERR_FILENO, data, length);
                     if ((result == 0) && (errno == EPIPE) && (was_pending == 0)) {
                         int signal_number;
                         do {

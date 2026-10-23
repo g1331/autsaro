@@ -2,6 +2,7 @@
 #include "Os_HostIo.h"
 #include "Os_Host.h"
 #include "Os.h"
+#include "Os_Stack.h"
 #include <string.h>
 #ifndef _WIN32
 #include <errno.h>
@@ -13,41 +14,48 @@ void StartupHook(void) {}
 void ShutdownHook(StatusType reason) { (void)reason; }
 
 static const char *scenario;
-#ifndef _WIN32
+#ifdef _WIN32
+static unsigned calls;
+BOOL WINAPI HostIoWriteFile(
+    HANDLE handle, LPCVOID data, DWORD length, LPDWORD written, LPOVERLAPPED overlapped);
+BOOL WINAPI
+HostIoWriteFile(HANDLE handle, LPCVOID data, DWORD length, LPDWORD written, LPOVERLAPPED overlapped)
+{
+    ++calls;
+    if (strstr(scenario, "zero") != NULL) {
+        *written = 0u;
+        return TRUE;
+    }
+    if (strcmp(scenario, "partial-error") == 0 && calls > 1u) {
+        SetLastError(ERROR_WRITE_FAULT);
+        return FALSE;
+    }
+    if (strstr(scenario, "partial") != NULL) {
+        length = length > 2u ? 2u : length;
+    }
+    return WriteFile(handle, data, length, written, overlapped);
+}
+#else
 static unsigned calls;
 ssize_t __real_write(int descriptor, const void *data, size_t length);
-ssize_t __real_read(int descriptor, void *data, size_t length);
 ssize_t __wrap_write(int descriptor, const void *data, size_t length)
 {
     ++calls;
-    if (strcmp(scenario, "interrupted") == 0 && calls == 1u) {
+    if (strstr(scenario, "interrupted") != NULL && calls == 1u) {
         errno = EINTR;
         return -1;
     }
-    if (strcmp(scenario, "zero") == 0) {
+    if (strstr(scenario, "zero") != NULL) {
         return 0;
     }
     if (strcmp(scenario, "partial-error") == 0 && calls > 1u) {
         errno = EIO;
         return -1;
     }
-    if (strcmp(scenario, "partial") == 0 || strcmp(scenario, "partial-error") == 0) {
+    if (strstr(scenario, "partial") != NULL) {
         length = length > 2u ? 2u : length;
     }
     return __real_write(descriptor, data, length);
-}
-ssize_t __wrap_read(int descriptor, void *data, size_t length)
-{
-    ++calls;
-    if (strcmp(scenario, "read-interrupted") == 0 && calls == 1u) {
-        errno = EINTR;
-        return -1;
-    }
-    if (strcmp(scenario, "read-error") == 0) {
-        errno = EIO;
-        return -1;
-    }
-    return __real_read(descriptor, data, length);
 }
 #endif
 
@@ -112,6 +120,12 @@ static int broken_pipe(void)
         }
     }
 #endif
+    if (strcmp(scenario, "fatal-broken-pipe") == 0) {
+        Os_StackInit();
+        Os_Fault.role = 'S';
+        Os_Fault.published = 1;
+        Os_StackFatalExit();
+    }
     if (Os_HostWriteBytes(0, "x", 1u) != 0) {
         return 22;
     }
@@ -132,7 +146,6 @@ static int broken_pipe(void)
 
 int main(int argc, char **argv)
 {
-    char byte = 'x';
     int count;
     if (argc != 2) {
         return 2;
@@ -144,19 +157,15 @@ int main(int argc, char **argv)
     if (strcmp(scenario, "capacity") == 0 || strncmp(scenario, "hex-", 4u) == 0) {
         return refusal();
     }
-    if (strcmp(scenario, "broken-pipe") == 0 || strcmp(scenario, "pending-pipe") == 0) {
+    if (strcmp(scenario, "broken-pipe") == 0 || strcmp(scenario, "pending-pipe") == 0 ||
+        strcmp(scenario, "fatal-broken-pipe") == 0) {
         return broken_pipe();
     }
-    if (strncmp(scenario, "read-", 5u) == 0) {
-        if (strcmp(scenario, "read-error") == 0) {
-            return Os_HostReadByte(&byte) == -1 && byte == 'x' ? 0 : 30;
-        }
-        while ((count = Os_HostReadByte(&byte)) == 1) {
-            if (Os_HostWriteBytes(0, &byte, 1u) == 0) {
-                return 31;
-            }
-        }
-        return count == 0 ? 0 : 32;
+    if (strncmp(scenario, "fatal-", 6u) == 0) {
+        Os_StackInit();
+        Os_Fault.role = 'S';
+        Os_Fault.published = 1;
+        Os_StackFatalExit();
     }
     count = Os_HostWriteBytes(0, "abcdef", 6u);
     return count == ((strcmp(scenario, "zero") == 0 || strcmp(scenario, "partial-error") == 0) ? 0

@@ -396,6 +396,7 @@ OS_MEMMAP static int fatal_write(int descriptor, const char *data, size_t length
 OS_MEMMAP void Os_StackFatalExit(void)
 {
     char output[256];
+    sigset_t blocked;
     size_t used = 0u;
     size_t index;
     const Os_StackFaultType *fault = &Os_Fault;
@@ -421,8 +422,14 @@ OS_MEMMAP void Os_StackFatalExit(void)
     for (index = 0u; index < sizeof(fatal_suffix) - 1u; ++index) {
         output[used++] = fatal_suffix[index];
     }
-    if (fatal_write(STDOUT_FILENO, output, used) == 0) {
-        (void)fatal_write(STDERR_FILENO, output, used);
+    /* This terminal path never resumes: block only this thread's SIGPIPE so a
+     * closed output can fall back to stderr without replacing the fault status.
+     * These signal-set/mask operations and write are async-signal-safe. */
+    if ((sigemptyset(&blocked) == 0) && (sigaddset(&blocked, SIGPIPE) == 0) &&
+        (pthread_sigmask(SIG_BLOCK, &blocked, NULL) == 0)) {
+        if (fatal_write(STDOUT_FILENO, output, used) == 0) {
+            (void)fatal_write(STDERR_FILENO, output, used);
+        }
     }
     _exit(E_OS_STACKFAULT);
 }

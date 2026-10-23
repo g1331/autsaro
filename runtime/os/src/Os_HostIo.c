@@ -41,13 +41,13 @@ OS_MEMMAP void Os_HostTextField(Os_HostTextType *text, const char *name, uint64_
 
 OS_MEMMAP void Os_HostTextHex(Os_HostTextType *text, uint64_t value, size_t width, int uppercase)
 {
-    size_t remaining = width;
     const char *digits = (uppercase == 0) ? "0123456789abcdef" : "0123456789ABCDEF";
     if ((width == 0u) || (width > 16u) || ((uppercase != 0) && (uppercase != 1))) {
         text->failed = 1;
     } else if ((width < 16u) && ((value >> (width * 4u)) != 0u)) {
         text->failed = 1;
     } else {
+        size_t remaining = width;
         while (remaining != 0u) {
             --remaining;
             Os_HostTextByte(text, digits[(value >> (remaining * 4u)) & UINT64_C(15)]);

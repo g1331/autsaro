@@ -15,15 +15,6 @@ typedef struct {
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-/** Read one input byte without newline or NUL translation.
- * @param[out] byte Non-NULL output, written only when a byte is read.
- * @return 1 for a byte, 0 for EOF, -1 for a native error.
- * Preconditions: native standard input belongs to the caller.
- * Context: host control, outside exclusive areas; may block.
- * Reentrancy: one reader per input. Ownership: borrows byte until return; does not close input.
- */
-OS_MEMMAP int Os_HostReadByte(char *byte);
-
 /** Deliver every requested byte to a native standard output handle.
  * @param[in] error_stream 0 selects stdout, 1 selects stderr; other values are refused.
  * @param[in] data Non-NULL readable bytes, borrowed until return.
