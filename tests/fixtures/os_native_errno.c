@@ -1,4 +1,8 @@
 /** @file Actual Linux facilities observe fresh errno even after successful calls leave a value. */
+#include "Os_HostLinux.h"
+#if defined(TRUE) || defined(FALSE)
+#error Native declarations must not own the AUTOSAR boolean constants
+#endif
 #include "Os_Host.h"
 #include "Os_Stack.h"
 #include "Os.h"
@@ -172,16 +176,16 @@ int main(int argc, char **argv)
         return 2;
     }
     Sleep(0u);
-    HANDLE event = CreateEventA(NULL, FALSE, FALSE, NULL);
-    if ((event == NULL) || (CloseHandle(event) == FALSE)) {
+    HANDLE event = CreateEventA(NULL, 0, 0, NULL);
+    if ((event == NULL) || (CloseHandle(event) == 0)) {
         return 3;
     }
-    HANDLE mutex = CreateMutexA(NULL, FALSE, NULL);
+    HANDLE mutex = CreateMutexA(NULL, 0, NULL);
     if ((mutex == NULL) || (WaitForSingleObject(mutex, 0u) != WAIT_OBJECT_0) ||
-        (ReleaseMutex(mutex) == FALSE) || (CloseHandle(mutex) == FALSE)) {
+        (ReleaseMutex(mutex) == 0) || (CloseHandle(mutex) == 0)) {
         return 3;
     }
-    gate = CreateEventA(NULL, FALSE, FALSE, NULL);
+    gate = CreateEventA(NULL, 0, 0, NULL);
     if (gate == NULL) {
         return 3;
     }
@@ -195,15 +199,14 @@ int main(int argc, char **argv)
         DWORD code = 0u;
         const HANDLE pending[] = {gate, thread};
         if ((thread == NULL) || (WaitForSingleObject(thread, 1u) != WAIT_TIMEOUT) ||
-            (WaitForMultipleObjects(2u, pending, FALSE, 1u) != WAIT_TIMEOUT) ||
-            (Os_HostSetEvent(gate) == FALSE) ||
-            (WaitForSingleObject(thread, 5000u) != WAIT_OBJECT_0) ||
-            (GetExitCodeThread(thread, &code) == FALSE) || (code != 42u) ||
-            (CloseHandle(thread) == FALSE)) {
+            (WaitForMultipleObjects(2u, pending, 0, 1u) != WAIT_TIMEOUT) ||
+            (Os_HostSetEvent(gate) == 0) || (WaitForSingleObject(thread, 5000u) != WAIT_OBJECT_0) ||
+            (GetExitCodeThread(thread, &code) == 0) || (code != 42u) ||
+            (CloseHandle(thread) == 0)) {
             return 5;
         }
     }
-    if (CloseHandle(gate) == FALSE) {
+    if (CloseHandle(gate) == 0) {
         return 3;
     }
     if ((__atomic_load_n(&bad_errno, __ATOMIC_RELAXED) != 0u) ||

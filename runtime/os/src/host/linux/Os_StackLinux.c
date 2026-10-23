@@ -109,7 +109,10 @@ OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
 
-OS_MEMMAP int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
+OS_MEMMAP int Os_StackHasFault(void)
+{
+    return (InterlockedCompareExchange(&fault_count, 0, 0) > 0) ? 1 : 0;
+}
 
 OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 

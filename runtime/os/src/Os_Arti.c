@@ -27,7 +27,7 @@ OS_MEMMAP static OS_THREAD_LOCAL StatusType
 #include "Os_MemMap.h"
 OS_MEMMAP void Os_ArtiAccessResult(StatusType status) { access_status = status; }
 
-OS_MEMMAP sint32 Os_ArtiAccessValid(void) { return access_status == E_OK; }
+OS_MEMMAP sint32 Os_ArtiAccessValid(void) { return (access_status == E_OK) ? 1 : 0; }
 
 OS_MEMMAP StatusType Os_ArtiAccessStatus(void) { return access_status; }
 

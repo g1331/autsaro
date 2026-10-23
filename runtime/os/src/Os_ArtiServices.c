@@ -14,7 +14,8 @@ OS_MEMMAP ISRType GetISRID(void)
         Arti_CaptureServiceStatus((uint32)Os_ArtiAccessStatus());
     }
     if (trace != 0) {
-        Os_ArtiService(OSServiceId_GetISRID, Os_ArtiAccessValid() ? (uint32)result : UINT32_MAX, 1);
+        Os_ArtiService(
+            OSServiceId_GetISRID, (Os_ArtiAccessValid() != 0) ? (uint32)result : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
     return result;
@@ -49,7 +50,8 @@ OS_MEMMAP boolean isOsStarted(void)
     }
     if (trace != 0) {
         const uint32 started = result ? 1u : 0u;
-        Os_ArtiService(OSServiceId_isOsStarted, Os_ArtiAccessValid() ? started : UINT32_MAX, 1);
+        Os_ArtiService(
+            OSServiceId_isOsStarted, (Os_ArtiAccessValid() != 0) ? started : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
     return result;
@@ -309,7 +311,7 @@ OS_MEMMAP AppModeType GetActiveApplicationMode(void)
     }
     if (trace != 0) {
         Os_ArtiService(OSServiceId_GetActiveApplicationMode,
-                       Os_ArtiAccessValid() ? (uint32)result : UINT32_MAX,
+                       (Os_ArtiAccessValid() != 0) ? (uint32)result : UINT32_MAX,
                        1);
     }
     Os_ArtiServiceLeave();

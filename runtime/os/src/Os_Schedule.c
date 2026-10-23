@@ -55,9 +55,11 @@ OS_MEMMAP static sint32 valid_action(const Os_TargetConfigType *target,
     for (uint32 i = 0u; i < target->task_count; ++i) {
         const Os_TaskConfigType *task = &target->tasks[i];
         if (task->id == action->task) {
-            return (action->action == OS_ALARM_ACTIVATE) ||
-                   ((action->action == OS_ALARM_EVENT) && (action->event != 0u) &&
-                    (task->kind == OS_EXTENDED_TASK));
+            return ((action->action == OS_ALARM_ACTIVATE) ||
+                    ((action->action == OS_ALARM_EVENT) && (action->event != 0u) &&
+                     (task->kind == OS_EXTENDED_TASK)))
+                       ? 1
+                       : 0;
         }
     }
     return 0;

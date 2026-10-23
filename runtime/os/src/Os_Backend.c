@@ -140,7 +140,7 @@ OS_MEMMAP static volatile Os_Atomic32Type
 #include "Os_MemMap.h"
 OS_MEMMAP sint32 Os_BackendTakeIsrReschedule(void)
 {
-    return InterlockedExchange(&isr_reschedule, 0) != 0;
+    return (InterlockedExchange(&isr_reschedule, 0) != 0) ? 1 : 0;
 }
 
 OS_MEMMAP void Os_BackendRequestIsrReschedule(void)
@@ -165,8 +165,10 @@ OS_MEMMAP uint32 Os_BackendInterruptPriority(uint32 interrupt)
 
 OS_MEMMAP sint32 Os_BackendInterruptMaySchedule(uint32 interrupt)
 {
-    return (interrupt < OS_MAX_INTERRUPTS) &&
-           ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) == 0u);
+    return ((interrupt < OS_MAX_INTERRUPTS) &&
+            ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) == 0u))
+               ? 1
+               : 0;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -403,7 +405,7 @@ OS_MEMMAP sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(vo
     if ((Os_Config != NULL) && (Os_Config->interrupts != NULL) &&
         (Os_Config->interrupts->entries != NULL) && (interrupt < OS_MAX_INTERRUPTS) &&
         (Os_Config->interrupts->entries[interrupt] != NULL)) {
-        return handler == configured_interrupt;
+        return (handler == configured_interrupt) ? 1 : 0;
     }
     return 1;
 }
@@ -415,7 +417,10 @@ OS_MEMMAP uint32 Os_BackendCurrentInterrupt(void)
     return ((stack != NULL) && (stack->role == 'S')) ? current_interrupt : 32u;
 }
 
-OS_MEMMAP sint32 Os_BackendStarted(void) { return InterlockedCompareExchange(&started, 0, 0) != 0; }
+OS_MEMMAP sint32 Os_BackendStarted(void)
+{
+    return (InterlockedCompareExchange(&started, 0, 0) != 0) ? 1 : 0;
+}
 
 OS_MEMMAP void Os_BackendInterruptEnter(uint32 interrupt)
 {
@@ -541,11 +546,13 @@ OS_MEMMAP sint32 Os_BackendServiceContext(void)
     if (Os_HookQueryContext() != 0) {
         return 1;
     }
-    return (Os_BackendReady() != 0) &&
-           ((stack->role == 'T') ||
-            ((stack->role == 'S') &&
-             ((current_interrupt >= 32u) ||
-              ((Os_Config->category1_isrs & ((uint32)1u << current_interrupt)) == 0u))));
+    return ((Os_BackendReady() != 0) &&
+            ((stack->role == 'T') ||
+             ((stack->role == 'S') &&
+              ((current_interrupt >= 32u) ||
+               ((Os_Config->category1_isrs & ((uint32)1u << current_interrupt)) == 0u)))))
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP sint32 Os_BackendTaskOwner(TaskType id)
@@ -966,7 +973,7 @@ OS_MEMMAP DWORD Os_PortSuspendThread(HANDLE thread)
 
 OS_MEMMAP BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context)
 {
-    return operation_fails(2u) ? FALSE : GetThreadContext(thread, context);
+    return operation_fails(2u) ? 0 : GetThreadContext(thread, context);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1012,8 +1019,10 @@ OS_MEMMAP void Os_TargetTrace(uint8 marker)
 
 OS_MEMMAP sint32 Os_TargetReady(void)
 {
-    return InterlockedCompareExchange(&ready, 0, 0) != 0 &&
-           InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
+    return (InterlockedCompareExchange(&ready, 0, 0) != 0 &&
+            InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)
+               ? 1
+               : 0;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1201,7 +1210,7 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
         return 0u;
     }
     do {
-        waited = WaitForSingleObjectEx(event, INFINITE, TRUE);
+        waited = WaitForSingleObjectEx(event, INFINITE, 1);
     } while (waited == WAIT_IO_COMPLETION);
     if (waited != WAIT_OBJECT_0) {
         ExitProcess(E_OS_STATE);
@@ -1459,8 +1468,8 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
     start->argument = argument;
     start->buffer_top = buffer_top;
     start->role = code == task_entry ? 'T' : (code == bootstrap ? 'B' : 'I');
-    start->registered = Os_PortEvent(NULL, FALSE, FALSE, NULL);
-    start->gate = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+    start->registered = Os_PortEvent(NULL, 0, 0, NULL);
+    start->gate = Os_PortEvent(NULL, 0, 0, NULL);
     thread = Os_PortThread(NULL,
                            Os_Config->host_stack_reserve,
                            native_task_start,
@@ -1646,7 +1655,7 @@ OS_MEMMAP static void bind_main_thread(void)
                         GetCurrentProcess(),
                         &main_thread,
                         0u,
-                        FALSE,
+                        0,
                         DUPLICATE_SAME_ACCESS) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1682,15 +1691,15 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
     prepare_native_stack();
     Os_MailboxInstall();
     bind_main_thread();
-    close_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
-    backup_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
-    controller_registered[0] = Os_PortEvent(NULL, FALSE, FALSE, NULL);
-    controller_registered[1] = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+    close_event = Os_PortEvent(NULL, 0, 0, NULL);
+    backup_event = Os_PortEvent(NULL, 0, 0, NULL);
+    controller_registered[0] = Os_PortEvent(NULL, 0, 0, NULL);
+    controller_registered[1] = Os_PortEvent(NULL, 0, 0, NULL);
     control_thread =
         Os_PortThread(NULL, 262144u, control, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     backup_thread = Os_PortThread(
         NULL, 262144u, control, &backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
-    if (WaitForMultipleObjects(2u, controller_registered, TRUE, 5000u) != WAIT_OBJECT_0 ||
+    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0 ||
         controller_healthy[0] == 0 || controller_healthy[1] == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1734,7 +1743,7 @@ OS_MEMMAP void Os_BackendSetDispatcher(void)
                         GetCurrentProcess(),
                         &main_thread,
                         0u,
-                        FALSE,
+                        0,
                         DUPLICATE_SAME_ACCESS) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }

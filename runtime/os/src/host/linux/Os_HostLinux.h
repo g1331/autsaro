@@ -33,13 +33,7 @@ typedef char Os_HostLongMustBe32BitsType[(sizeof(LONG) == 4u) ? 1 : -1];
 
 #define WINAPI
 #define CALLBACK
-#define VOID void
-#ifndef TRUE
-#define TRUE 1
-#endif
-#ifndef FALSE
-#define FALSE 0
-#endif
+#define VOID                              void
 #define INFINITE                          UINT32_MAX
 #define WAIT_OBJECT_0                     0u
 #define WAIT_TIMEOUT                      258u

@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Native integer predicates and BOOL flags now stay separate from AUTOSAR Boolean constants; private Linux declarations leave TRUE/FALSE ownership to Platform_Types, independent of include order. Existing public result values and native handle contracts are preserved (#58)
+
 - Linux OS events classify syscall errors, interruptions and incomplete reads; event close errors release descriptor ownership safely, and successfully destroyed mutexes return their fixed handle slots for reuse (#58)
 
 - Dcm and CanTp timing events must match the fixed 1 ms timer base; validation rejects consistently remapped slower schedules at their source events before generation (#57)

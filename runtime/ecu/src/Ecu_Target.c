@@ -120,9 +120,13 @@ uint8_t Ecu_TargetState(void)
 int Ecu_TargetIsOwner(void)
 {
     if (load(&lifecycle) == (Os_Atomic32Type)ECU_TARGET_INITIALIZING) {
-        return (initialization_thread != 0u) && (Os_HostThreadIdentity() == initialization_thread);
+        return ((initialization_thread != 0u) && (Os_HostThreadIdentity() == initialization_thread))
+                   ? 1
+                   : 0;
     }
-    return (Ecu_TargetState() == ECU_TARGET_READY) && (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1);
+    return ((Ecu_TargetState() == ECU_TARGET_READY) && (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1))
+               ? 1
+               : 0;
 }
 void Ecu_TargetAssertOwner(void)
 {
@@ -381,7 +385,7 @@ StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *resul
     (void)Os_HostAtomicExchange(&batch_state, 0);
     return E_OK;
 }
-int Os_IntegrationTimingAuthorized(void) { return Ecu_SchMTimingActive() == TRUE; }
+int Os_IntegrationTimingAuthorized(void) { return (Ecu_SchMTimingActive() == TRUE) ? 1 : 0; }
 void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
 {
     if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u) &&

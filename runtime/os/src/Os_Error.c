@@ -45,7 +45,7 @@ OS_MEMMAP static const Os_ErrorParametersType empty_parameters = {
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP sint32 Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
+OS_MEMMAP sint32 Os_HookBlocksCategory2(void) { return (hook_depth != 0u) ? 1 : 0; }
 
 OS_MEMMAP void Os_ErrorContextSave(Os_ErrorContextType *context)
 {
@@ -70,7 +70,7 @@ OS_MEMMAP Os_HookPhaseType Os_HookContext(void) { return phase; }
 
 OS_MEMMAP sint32 Os_HookQueryContext(void)
 {
-    return (phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST);
+    return ((phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST)) ? 1 : 0;
 }
 
 OS_MEMMAP sint32 Os_HookServiceAllowed(OSServiceIdType service)
@@ -79,26 +79,32 @@ OS_MEMMAP sint32 Os_HookServiceAllowed(OSServiceIdType service)
         return 1;
     }
     if (Os_HookQueryContext() != 0) {
-        return (service == OSServiceId_GetTaskID) || (service == OSServiceId_GetTaskState) ||
-               (service == OSServiceId_GetEvent) || (service == OSServiceId_GetAlarmBase) ||
-               (service == OSServiceId_GetAlarm) ||
-               (service == OSServiceId_GetActiveApplicationMode) ||
-               ((phase == OS_HOOK_ERROR) &&
-                ((service == OSServiceId_GetISRID) || (service == OSServiceId_ShutdownOS)));
+        return ((service == OSServiceId_GetTaskID) || (service == OSServiceId_GetTaskState) ||
+                (service == OSServiceId_GetEvent) || (service == OSServiceId_GetAlarmBase) ||
+                (service == OSServiceId_GetAlarm) ||
+                (service == OSServiceId_GetActiveApplicationMode) ||
+                ((phase == OS_HOOK_ERROR) &&
+                 ((service == OSServiceId_GetISRID) || (service == OSServiceId_ShutdownOS))))
+                   ? 1
+                   : 0;
     }
     if (phase == OS_HOOK_STARTUP) {
-        return (service == OSServiceId_GetActiveApplicationMode) ||
-               (service == OSServiceId_ShutdownOS);
+        return ((service == OSServiceId_GetActiveApplicationMode) ||
+                (service == OSServiceId_ShutdownOS))
+                   ? 1
+                   : 0;
     }
     if (phase == OS_HOOK_SHUTDOWN) {
-        return service == OSServiceId_GetActiveApplicationMode;
+        return (service == OSServiceId_GetActiveApplicationMode) ? 1 : 0;
     }
     return 0;
 }
 
 OS_MEMMAP sint32 Os_ErrorHookConfigured(void)
 {
-    return (Os_Config != NULL) && (Os_Config->hooks != NULL) && (Os_Config->hooks->error != NULL);
+    return ((Os_Config != NULL) && (Os_Config->hooks != NULL) && (Os_Config->hooks->error != NULL))
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP StatusType Os_ServiceAccessStatus(OSServiceIdType service)

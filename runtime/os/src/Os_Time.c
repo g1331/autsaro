@@ -126,7 +126,9 @@ OS_MEMMAP static const Os_TaskConfigType *configured_task(const Os_TargetConfigT
 
 OS_MEMMAP static sint32 valid_cycle(const Os_CounterConfigType *counter, TickType cycle)
 {
-    return (cycle == 0u) || ((cycle >= counter->minimum_cycle) && (cycle <= counter->maximum));
+    return ((cycle == 0u) || ((cycle >= counter->minimum_cycle) && (cycle <= counter->maximum)))
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
@@ -256,8 +258,8 @@ OS_MEMMAP void Os_TimeInit(AppModeType mode)
         if ((owner->autostart_modes & mode) == 0u) {
             Os_BackendShutdown(E_OS_VALUE);
         }
-        completion_event = Os_PortEvent(NULL, TRUE, FALSE, NULL);
-        attention_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+        completion_event = Os_PortEvent(NULL, 1, 0, NULL);
+        attention_event = Os_PortEvent(NULL, 0, 0, NULL);
     }
 }
 
@@ -289,7 +291,7 @@ OS_MEMMAP void Os_TimeClose(void)
 
 OS_MEMMAP sint32 Os_TimeSignalFailed(void)
 {
-    return InterlockedCompareExchange(&signal_failed, 0, 0) != 0;
+    return (InterlockedCompareExchange(&signal_failed, 0, 0) != 0) ? 1 : 0;
 }
 
 OS_MEMMAP void Os_TimeReportAction(StatusType status)
@@ -609,7 +611,9 @@ OS_MEMMAP sint32 Os_TimeBeginTick(void)
     if (Os_Config->time->wake_event == 0u) {
         return 0;
     }
-    return InterlockedCompareExchange(&tick_state, TIME_PROCESSING, TIME_PENDING) == TIME_PENDING;
+    return (InterlockedCompareExchange(&tick_state, TIME_PROCESSING, TIME_PENDING) == TIME_PENDING)
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP void Os_TimeTick(void)
@@ -760,7 +764,7 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
         }
         /* Native timed waits may round up to the host timer period (about 15.6 ms on
          * Windows), so pending native work must wake this producer explicitly. */
-        waited = WaitForMultipleObjects(2u, observed, FALSE, timeout_ms - elapsed);
+        waited = WaitForMultipleObjects(2u, observed, 0, timeout_ms - elapsed);
         if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
             /* A simultaneous close wins over a timeout or attention report. */
             status = Os_TargetTickCompletion(ticket, record);

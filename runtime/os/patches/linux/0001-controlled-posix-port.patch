@@ -207,8 +207,8 @@ index 2592610..1be0473 100644
 +int Os_PortInterruptSourceEnabled(uint32_t interrupt)
  {
 -    pthread_key_delete( xThreadKey );
-+    return interrupt < PORT_INTERRUPT_COUNT &&
-+           (disabled_sources & ((uint32_t)1u << interrupt)) == 0u;
++    return ((interrupt < PORT_INTERRUPT_COUNT) &&
++            ((disabled_sources & ((uint32_t)1u << interrupt)) == 0u)) ? 1 : 0;
  }
 -/*-----------------------------------------------------------*/
  

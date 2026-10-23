@@ -101,7 +101,10 @@ OS_MEMMAP static Os_StackFaultType fault_records[OS_NATIVE_STACKS]; /**< Per-act
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
+OS_MEMMAP int Os_StackHasFault(void)
+{
+    return (InterlockedCompareExchange(&fault_count, 0, 0) > 0) ? 1 : 0;
+}
 
 OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 
@@ -127,7 +130,7 @@ OS_MEMMAP static void publish_fault(
     local->origin = origin;
     local->sp = sp;
     local->address = address;
-    InterlockedExchange(&local->published, 1);
+    (void)InterlockedExchange(&local->published, 1);
     if (InterlockedCompareExchange(&fault_claimed, 1, 0) == 0) {
         Os_Fault.thread_id = record->thread_id;
         Os_Fault.role = record->role;
@@ -135,9 +138,9 @@ OS_MEMMAP static void publish_fault(
         Os_Fault.origin = origin;
         Os_Fault.sp = sp;
         Os_Fault.address = address;
-        InterlockedExchange(&Os_Fault.published, 1);
+        (void)InterlockedExchange(&Os_Fault.published, 1);
     }
-    InterlockedIncrement(&fault_count);
+    (void)InterlockedIncrement(&fault_count);
     Os_BackendStackFault(current_stack != NULL ? current_stack->role : record->role);
 }
 

@@ -22,9 +22,9 @@ static Os_HostThreadResultType watch(void *argument)
     return 0u;
 }
 
-static void require(int accepted)
+static void require(boolean accepted)
 {
-    if (accepted == 0) {
+    if (accepted == FALSE) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
 }

@@ -51,7 +51,7 @@ OS_MEMMAP static Os_InterruptStateType *owner_state(void)
 OS_MEMMAP sint32 Os_InterruptDisabled(void)
 {
     const Os_InterruptStateType *state = owner_state();
-    return state->disabled != 0u || state->all_depth != 0u || state->os_depth != 0u;
+    return (state->disabled != 0u || state->all_depth != 0u || state->os_depth != 0u) ? 1 : 0;
 }
 
 OS_MEMMAP sint32 Os_InterruptAllows(uint32 interrupt)

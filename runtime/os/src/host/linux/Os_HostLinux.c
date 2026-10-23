@@ -383,13 +383,13 @@ OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event)
     const uint64_t signal_value = 1u;
     ssize_t written;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
-        return FALSE;
+        return 0;
     }
     do {
         errno = 0;
         written = write(event->fd, &signal_value, sizeof(signal_value));
     } while ((written < 0) && (errno == EINTR));
-    return written == (ssize_t)sizeof(signal_value);
+    return (written == (ssize_t)sizeof(signal_value)) ? 1 : 0;
 }
 
 OS_MEMMAP static int read_event(HANDLE event)
@@ -410,12 +410,12 @@ OS_MEMMAP BOOL ResetEvent(HANDLE event)
 {
     int received;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
-        return FALSE;
+        return 0;
     }
     do {
         received = read_event(event);
     } while (received > 0);
-    return received == 0;
+    return (received == 0) ? 1 : 0;
 }
 
 OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
@@ -617,7 +617,7 @@ OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex)
     int released = 0;
     if ((mutex == NULL) || (mutex->kind != OS_HOST_MUTEX) || (held_depth == 0u) ||
         (__atomic_load_n(&mutex->mutex_owner, __ATOMIC_ACQUIRE) != GetCurrentThreadId())) {
-        return FALSE;
+        return 0;
     }
     if (mutex->mutex_depth > 1u) {
         --mutex->mutex_depth;
@@ -629,23 +629,23 @@ OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex)
         --held_depth;
         (void)pthread_sigmask(SIG_SETMASK, &held_masks[held_depth], NULL);
     }
-    return released == 0;
+    return (released == 0) ? 1 : 0;
 }
 
 OS_MEMMAP static BOOL close_thread(HANDLE thread)
 {
-    BOOL closed = TRUE;
+    BOOL closed = 1;
     if (thread->register_host != 0) {
         /* Release pthread resources without discarding the registered stack identity. */
         if ((InterlockedExchange(&thread->joined, 1) == 0) &&
             (pthread_detach(thread->thread) != 0)) {
-            closed = FALSE;
+            closed = 0;
         }
     } else if ((InterlockedCompareExchange(&thread->ended, 0, 0) != 0) &&
                (InterlockedCompareExchange(&thread->joined, 0, 0) != 0)) {
         errno = 0;
         if (munmap(thread->mapping, thread->mapping_size) != 0) {
-            closed = FALSE;
+            closed = 0;
         } else {
             thread->mapping = NULL;
             (void)InterlockedExchange(&thread->reserved, 0);
@@ -658,7 +658,7 @@ OS_MEMMAP static BOOL close_thread(HANDLE thread)
 
 OS_MEMMAP BOOL CloseHandle(HANDLE handle)
 {
-    BOOL closed = FALSE;
+    BOOL closed = 0;
     if ((handle != NULL) && (handle != &process_handle)) {
         if ((handle->kind == OS_HOST_EVENT) && (handle->fd >= 0)) {
             errno = 0;
@@ -666,10 +666,10 @@ OS_MEMMAP BOOL CloseHandle(HANDLE handle)
             /* Linux releases the descriptor even on EINTR; it must never be closed again. */
             handle->fd = -1;
             (void)InterlockedExchange(&handle->reserved, 0);
-            closed = (result == 0) ? TRUE : FALSE;
+            closed = (result == 0) ? 1 : 0;
         } else if (handle->kind == OS_HOST_MUTEX) {
-            closed = (pthread_mutex_destroy(&handle->mutex) == 0) ? TRUE : FALSE;
-            if (closed != FALSE) {
+            closed = (pthread_mutex_destroy(&handle->mutex) == 0) ? 1 : 0;
+            if (closed != 0) {
                 handle->kind = OS_HOST_UNUSED;
                 (void)InterlockedExchange(&handle->reserved, 0);
             }
@@ -728,16 +728,16 @@ OS_MEMMAP BOOL GetThreadContext(HANDLE thread, CONTEXT *context)
 {
     int32_t generation;
     if (thread == NULL || context == NULL || thread->kind != OS_HOST_THREAD) {
-        return FALSE;
+        return 0;
     }
     generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
     if (__atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) != INT32_MAX &&
         (generation == 0 ||
          __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) < generation)) {
-        return FALSE;
+        return 0;
     }
     Os_LinuxCaptureContext(context, &thread->captured.native);
-    return TRUE;
+    return 1;
 }
 
 OS_MEMMAP DWORD GetCurrentThreadId(void) { return Os_LinuxThreadId(); }
@@ -803,20 +803,20 @@ OS_MEMMAP BOOL DuplicateHandle(HANDLE source_process,
     (void)options;
     if (copy == NULL || source_process != &process_handle || target_process != &process_handle ||
         source_thread == NULL || source_thread->kind != OS_HOST_THREAD) {
-        return FALSE;
+        return 0;
     }
     *copy = source_thread;
-    return TRUE;
+    return 1;
 }
 
 OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
 {
     if (thread == NULL || code == NULL || thread->kind != OS_HOST_THREAD) {
-        return FALSE;
+        return 0;
     }
     *code =
         __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0 ? thread->exit_code : STILL_ACTIVE;
-    return TRUE;
+    return 1;
 }
 
 OS_MEMMAP HANDLE Os_HostDispatcherThread(void)

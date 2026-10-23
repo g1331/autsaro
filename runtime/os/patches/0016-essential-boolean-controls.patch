@@ -611,15 +611,69 @@
   *  vTaskGetInfo( xHandle,
 --- a/portable/MSVC-MingW/port.c
 +++ b/portable/MSVC-MingW/port.c
-@@ -312,7 +312,7 @@
+@@ -142,8 +142,8 @@
+ static uint32_t ulOsDisabledSources;
+ int Os_PortInterruptSourceEnabled( uint32_t interrupt )
+ {
+-    return ( interrupt < 32U ) &&
+-           ( ( ulOsDisabledSources & ( ( ( uint32_t ) 1U ) << interrupt ) ) == 0U );
++    return ( ( interrupt < 32U ) &&
++           ( ( ulOsDisabledSources & ( ( ( uint32_t ) 1U ) << interrupt ) ) == 0U ) ) ? 1 : 0;
+ }
+ int Os_PortInterruptSourceControl( uint32_t interrupt, unsigned operation, boolean clear )
+ {
+@@ -246,7 +246,7 @@
+         {
+             const uint32_t requested = prvRunOsInterrupt( interrupt );
+             seen |= ( ( uint32_t ) 1U ) << interrupt;
+-            if( ( requested != 0U ) && Os_BackendInterruptMaySchedule( interrupt ) )
++            if( ( requested != 0U ) && ( Os_BackendInterruptMaySchedule( interrupt ) != 0 ) )
+             {
+                 Os_BackendRequestIsrReschedule();
+             }
+@@ -295,8 +295,8 @@
+      * point if the SuspendThread() call that suspends the thread does not take
+      * effect immediately (it is an asynchronous call). */
+     xThreadState.pvYieldEvent = Os_PortEvent( NULL,   /* Default security attributes. */
+-                                               FALSE,  /* Auto reset. */
+-                                               FALSE,  /* Start not signalled. */
++                                               0,  /* Auto reset. */
++                                               0,  /* Start not signalled. */
+                                                NULL ); /* No name. */
+ 
+ 
+@@ -312,9 +312,9 @@
  #pragma GCC diagnostic pop
  #endif
  
 -    configASSERT( xThreadState.pvThread ); /* See comment where TerminateThread() is called. */
 +    configASSERT( xThreadState.pvThread != NULL ); /* See comment where TerminateThread() is called. */
      SetThreadAffinityMask( xThreadState.pvThread, 0x01 );
-     SetThreadPriorityBoost( xThreadState.pvThread, TRUE );
+-    SetThreadPriorityBoost( xThreadState.pvThread, TRUE );
++    SetThreadPriorityBoost( xThreadState.pvThread, 1 );
      SetThreadPriority( xThreadState.pvThread, portTASK_THREAD_PRIORITY );
+ 
+     ( void ) memcpy( ( unsigned char * ) pxStateStorage,
+@@ -356,8 +356,8 @@
+ 
+         /* Create the events and mutexes that are used to synchronise all the
+          * threads. */
+-        pvInterruptEventMutex = Os_PortMutex( NULL, FALSE, NULL );
+-        pvInterruptEvent = Os_PortEvent( NULL, FALSE, FALSE, NULL );
++        pvInterruptEventMutex = Os_PortMutex( NULL, 0, NULL );
++        pvInterruptEvent = Os_PortEvent( NULL, 0, 0, NULL );
+ 
+         if( ( pvInterruptEventMutex == NULL ) || ( pvInterruptEvent == NULL ) )
+         {
+@@ -382,7 +382,7 @@
+             lSuccess = pdFAIL;
+         }
+ 
+-        SetThreadPriorityBoost( pvHandle, TRUE );
++        SetThreadPriorityBoost( pvHandle, 1 );
+         SetThreadAffinityMask( pvHandle, 0x01 );
+     }
+ 
 @@ -425,7 +425,7 @@
      uint32_t ulSwitchRequired;
  
@@ -629,6 +683,15 @@
      ulSwitchRequired = 0;
      if( Os_TimeBeginTick() != 0 )
      {
+@@ -462,7 +462,7 @@
+ 
+         /* Wait with timeout so that we can exit from this loop when
+          * the scheduler is stopped by calling vPortEndScheduler. */
+-        xWinApiResult = WaitForMultipleObjects( sizeof( pvObjectList ) / sizeof( void * ), pvObjectList, TRUE, xTimeoutMilliseconds );
++        xWinApiResult = WaitForMultipleObjects( sizeof( pvObjectList ) / sizeof( void * ), pvObjectList, 1, xTimeoutMilliseconds );
+ 
+         if( xWinApiResult != WAIT_TIMEOUT )
+         {
 @@ -486,7 +486,7 @@
               * https://devblogs.microsoft.com/oldnewthing/20150205-00/?p=44743
               * they do - so as they do not harm (slight run-time hit). */
@@ -638,6 +701,19 @@
              Os_StackObserve( xThreadState.pvThread, &xContext );
  
  
+@@ -506,10 +506,10 @@
+                     /* OSEK 14.2.3.1: a Cat2 nested inside an outer Cat1 does
+                      * not schedule Tasks on that Cat1's return. Retain the
+                      * request until a later Cat2 or explicit yield boundary. */
+-                    if( Os_BackendInterruptMaySchedule( i ) )
++                    if( Os_BackendInterruptMaySchedule( i ) != 0 )
+                     {
+                         const int serviceRequested = Os_BackendTakeIsrReschedule();
+-                        if( ( requested != pdFALSE ) || serviceRequested )
++                        if( ( requested != pdFALSE ) || ( serviceRequested != 0 ) )
+                         {
+                             ulSwitchRequired |= ( ( uint32_t ) 1U ) << i;
+                         }
 @@ -586,10 +586,10 @@
           * tasks (rather than deleting themselves) as the task stacks will not be
           * freed. */
@@ -669,6 +745,15 @@
  
      if( ( ulInterruptNumber < portMAX_INTERRUPTS ) && ( pvInterruptEventMutex != NULL ) )
      {
+@@ -764,7 +764,7 @@
+         Os_BackendShutdown( E_OS_ID );
+     }
+ 
+-    if( !Os_MailboxHandlerAllowed( ulInterruptNumber, pvHandler ) )
++    if( Os_MailboxHandlerAllowed( ulInterruptNumber, pvHandler ) == 0 )
+     {
+         Os_BackendShutdown( E_OS_ACCESS );
+     }
 @@ -825,7 +825,7 @@
              {
                  ThreadState_t xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );

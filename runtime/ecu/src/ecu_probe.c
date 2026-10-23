@@ -6,16 +6,16 @@
 #include "Os_HostIo.h"
 #include <stdlib.h>
 
-static void require(int condition)
+static void require(boolean condition)
 {
-    if (condition == 0) {
+    if (condition == FALSE) {
         ShutdownOS(E_OS_STATE);
     }
 }
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
 static unsigned
     failure_stage; /**< Main initializes before OS startup; hooks only read; no Init reset. */
-int Ecu_TargetTestFailStage(unsigned stage) { return stage == failure_stage; }
+int Ecu_TargetTestFailStage(unsigned stage) { return (stage == failure_stage) ? 1 : 0; }
 void Ecu_TargetTestRetire(unsigned stage)
 {
     char storage[64];

@@ -68,9 +68,11 @@ OS_MEMMAP void Os_MailboxInstall(void)
 
 OS_MEMMAP sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
 {
-    return Os_BackendHandlerAllowed(interrupt, handler) &&
-           ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
-            (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt));
+    return ((Os_BackendHandlerAllowed(interrupt, handler) != 0) &&
+            ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
+             (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt)))
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP void Os_MailboxClose(void) { (void)InterlockedOr(&admission, 2); }
@@ -142,7 +144,7 @@ OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 
 OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 {
     const Os_NativeStackType *actor = Os_StackCurrent();
-    return actor == NULL || actor->role == 'H';
+    return (actor == NULL || actor->role == 'H') ? 1 : 0;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -152,7 +154,7 @@ OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 {
     const Os_NativeStackType *actor = Os_StackCurrent();
-    return actor == NULL;
+    return (actor == NULL) ? 1 : 0;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -180,8 +182,10 @@ OS_MEMMAP StatusType Os_BridgeContext(void)
 
 OS_MEMMAP sint32 Os_MailboxQuiescent(void)
 {
-    return ((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) &&
-           (InterlockedCompareExchange(&published, 0, 0) == 0);
+    return (((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) &&
+            (InterlockedCompareExchange(&published, 0, 0) == 0))
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP static StatusType input_context(void)
