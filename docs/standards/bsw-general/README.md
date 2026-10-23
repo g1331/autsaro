@@ -20,6 +20,20 @@ R21.11 经 AMD3.40–43 改为 Advisory，约束 `tgmath.h` 的包含，不能�
 
 上述证据只覆盖所列源码，系统头预处理闭包和链接库内部实现仍须各自核查。signal／time、动态分配、终止函数及 errno 的实际使用不属于这里的缺席结论，沿对应模块继续评估；原始诊断与 `not_assessed` 不变。
 
+## 逻辑右侧的持续副作用
+
+R13.5 为 Required、适用于 C99（主文印刷页113–114／PDF121–122）。Glossary 页224／PDF232 区分被调函数自己的临时对象与返回后仍存活的对象：写调用者输出参数、修改静态对象或文件、访问 volatile 对象均可能产生持续副作用。TC1 Appendix J（页14／PDF20）要求按函数本身判断，不因当前参数或状态避开某条路径就把函数当作 pure；AMD2 增列 C11 不改变当前 C99 义务。
+
+`CanIf_SetPduMode` 先按原配置 guard 决定是否查询 `Can_GetControllerMode`，再检查查询结果、实际 controller mode 和请求值；CAN 查询有持区及输出参数效果，不能放在 guard 的逻辑右侧。重新取得 CANIF_STATE 后的 lifetime／decision 检查和重试保持，查询仍在模块区外。`Det_ReportError` 只在配置存在时进入开发报告递归边界，再按进入结果调用 hooks，随后走原有不可返回的 halt；不能把修改线程报告状态的 helper 当作普通配置查询。
+
+主机 CDD 的发布者先确认 owner，再取得当前模式并在本模块区外通知 ComM；其 getter 的持区和输出效果按实际闭包核查。POSIX `Can_EnterLock` 完成 once／ready 检查后才获取 mutex，初始化失败不触及原生 lock；现有故障夹具以 `UNEXPECTED_LOCK` 区分提前获取与预期 fatal，不能仅凭相同退出码认定调用顺序正确。
+
+HostBatch 的 `number` 成功时写调用者的 at／id／dlc，这些对象的存储期尚未结束。解析依次保留 token 数量、ID 成功、DLC 成功及后续值域／长度检查，局部 Boolean 只表示前面解析是否成功；缺失 token 和前项失败时不调用后续解析，返回状态、batch 状态和输出命令的更新位置保持。数字累加临时量本身不是这一判断的依据。
+
+ECU state／owner、输出槽、等待发布及 tick 完成路径的原子查询、事件清除和完成调用均在原条件下独立求值；第二次事件刷新使用局部 event_status，不覆盖既有 tick 状态。平台线程身份读取也保留条件调用，不依赖未建立的 pure 模型。Backend 查询 Task 状态的 critical 效果与调用者输出分别核查；断言内的 kernel 查询保留在 `configASSERT` 参数中，条件运算符只在无排队 activation 时求值，断言不求值时不额外调用 kernel。
+
+所查 `CanTp_Receiving`／`CanTp_Starts`／`CanTp_DataLength`、`Dcm_IsAvailability`、`Det_ValidHooks`、`Os_ErrorHookConfigured`、`Os_StackCurrent`、`Os_BackendCurrentInterrupt`、`Os_BackendInterruptMaySchedule`、`task_index`、`valid_cycle` 及生成端 `Ecu_SchMTimingActive`／`Ecu_TargetCheckLifecycleContext` 只读普通对象或修改自身临时量，不能把它们仅因出现在逻辑右侧而判为违反。该判断针对这些实际定义，不外推其他 volatile 表达式、采用内核调用或同名平台接口；完整源码人工评估仍由 #58 承接，原始结果不变。
+
 ## 按模块处置
 
 | 模块 | 处置 |
