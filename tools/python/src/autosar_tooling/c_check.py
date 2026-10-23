@@ -127,7 +127,7 @@ def coverage(addons: Path) -> dict:
             "basis": "MISRA C:2012 R14.4",
         }, {
             "guideline": "R21.8",
-            "detail": "Pinned addon still reports getenv although AMD2.81 removed that prohibition; its termination-call list also omits _Exit/quick_exit. Raw diagnostics remain unchanged.",
+            "detail": "Pinned addon still reports getenv although AMD1 removed that prohibition. AMD2.81 defines the termination-call set as abort/exit/_Exit/quick_exit, but the pinned addon omits the latter two. Raw diagnostics remain unchanged.",
             "basis": "https://misra.org.uk/app/uploads/2021/06/MISRA-C-2012-AMD2.pdf",
         }],
         "rules": [{"id": item["id"], "category": item["category"],

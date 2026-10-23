@@ -4,7 +4,7 @@
 
 ### Breaking
 
-- Native OS task and queue buffers now have their actual kernel object types, list sentinels use complete list items, and invalid Task/ISR ID constants retain their public identifier types. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed private headers, list storage and controlled patch identities (#58)
+- Native OS static task and queue buffers now require task.h/queue.h and use their actual kernel object types, list sentinels use complete list items, and invalid Task/ISR ID constants retain their public identifier types. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed headers, list storage and controlled patch identities (#58)
 
 - Native Task activations restart through the sole port's platform unwinder on the same thread and execution stack. Sealed C99 consumers now require exception-unwind metadata, including sanitizer cleanup frames; regenerate deliveries and rebuild all application and runtime translation units (#60)
 
