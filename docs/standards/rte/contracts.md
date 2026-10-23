@@ -52,6 +52,15 @@ Rte_Init/StartTiming 只在配置 InitializationRunnableBatch 时生成；当前
 
 标准要求的 nameless runnable role prototype、固定状态/初值/runnable 宏、const CDS/handle 和 MemMap 重复包含会产生 MISRA 8.2、2.3/2.5、5.6、8.7、20.1/20.5 等诊断。保留必需契约与原始诊断；这不是偏离已批准。全部源码诊断裁决与 221 项必要人工评估仍归 #58。
 
+### 无名 role 参数的逐处核查
+
+所选四个主线样本中，`EchoApplication_ReadData`（standard-ecu／user-application）、`Ingress_ReadData`和`Process_Transform`（component-pipeline／no-diagnostic）的application runnable没有`RunnableEntityArgument`或BSW mapping。固定R24-11 SWS_RTE（SHA-256 `d9b95dfa8ae5c94418382835b7f5da9fd53e0c76c07b5d14f139c8a58dd39769`）§5.7.3页806–807的`SWS_Rte_06703`／`06705`分别规定有symbol时命名、两种来源都没有时生成无名参数。`contracts::contract_headers`据此在这些声明中保留类型而省略名字；诊断样本的ReadData经RTE client／Dcm调用应用实现，Transform经同步client调用应用server；no-diagnostic只保留Ingress的应用声明，不存在Dcm调用闭包，不能借诊断样本证明其执行。
+
+MISRA 2013主文R8.2（Required，页64–66／PDF72–74）仍要求声明参数命名；TC2.10只增加8.3交叉引用，TC2.12对8.3的无名参数例外不豁免8.2，AMD2只扩充语言适用性，AMD3.63只增加交叉引用。这里是真实冲突，不能标成误报；增加声明参数名会违反06705，删除声明会失去公开契约，改变为无参数则破坏C/S签名。风险是省略名字降低接口可读性；按顺序记录方向／存储义务、固定参数类型并由真实应用TU编译／链接验证约束它。`source_derived_composition_contract_is_deterministic_and_keeps_local_identity`同时断言单一数组参数与IN／OUT／INOUT三参数原型，补名反例应失败。
+
+此结论适用ADR0023已有授权范围；逐项独立复核和实际源码注释完成前，仍不登记为已批准偏离。全部221项人工评估、其他无名参数和其他配置分别核查。
+
+
 已核对（源码：每个组件独立 Application Header、标准 typedef 与状态返回，configuration/schedule 的唯一来源）：SWS_Rte_01004、01012、01034、01146、01157、01161–01162、01167、01169、01197、01260、01262、01266、01314、01316、01318、01368–01370、02200–02202、02204、02207、07284、07288、07500–07501、07533–07535、07593–07596、08600–08601。
 
 已核对（生成样本：Rte_Cfg.h 通过 Rte.h 被实际消费者包含，配置头导入 Std_Types.h）：SWS_Rte_01321、07641。

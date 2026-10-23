@@ -58,6 +58,25 @@ fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity
         [("uint32", "IN"), ("uint32 *", "OUT"), ("uint32 *", "INOUT")]
     );
     let files = plan.component_contract_files().unwrap();
+    // Verifies: SWS_Rte_06705
+    // These application runnables have neither argument symbols nor a BSW mapping.
+    for (path, prototype) in [
+        (
+            "include/Rte_Process.h",
+            "Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);",
+        ),
+        (
+            "include/Rte_Ingress.h",
+            "Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);",
+        ),
+    ] {
+        let header = files.files().iter().find(|(name, _)| name == path).unwrap();
+        let header = String::from_utf8_lossy(&header.1);
+        assert!(
+            header.contains(prototype),
+            "{path}: nameless role parameters"
+        );
+    }
     let mut reversed = sources.clone();
     reversed.reverse();
     assert_eq!(
