@@ -143,7 +143,10 @@ OS_MEMMAP sint32 Os_BackendTakeIsrReschedule(void)
     return InterlockedExchange(&isr_reschedule, 0) != 0;
 }
 
-OS_MEMMAP void Os_BackendRequestIsrReschedule(void) { InterlockedExchange(&isr_reschedule, 1); }
+OS_MEMMAP void Os_BackendRequestIsrReschedule(void)
+{
+    (void)InterlockedExchange(&isr_reschedule, 1);
+}
 
 OS_MEMMAP uint32 Os_BackendInterruptPriority(uint32 interrupt)
 {
@@ -1180,8 +1183,8 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
     DWORD current = GetCurrentThreadId();
     DWORD waited;
     uint32 index = argument == NULL ? 0u : 1u;
-    if (Os_StackRegister(argument == NULL ? 'C' : 'D')) {
-        InterlockedExchange(&controller_healthy[index], 1);
+    if (Os_StackRegister(argument == NULL ? 'C' : 'D') != 0) {
+        (void)InterlockedExchange(&controller_healthy[index], 1);
     }
     if (!Os_HostSetEvent(controller_registered[index])) {
         ExitProcess(E_OS_STATE);
@@ -1217,7 +1220,7 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
         stop_thread(backup_thread);
     }
     stop_scheduler_after_actors();
-    if (Os_StackHasFault()) {
+    if (Os_StackHasFault() != 0) {
         ShutdownOS(E_OS_STACKFAULT);
     }
     report_and_exit();
@@ -1228,13 +1231,13 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
 {
     Os_TimeClose();
     Os_MailboxClose();
-    InterlockedOr(&activation_admission, 2);
-    InterlockedExchange(&ready, 0);
+    (void)InterlockedOr(&activation_admission, 2);
+    (void)InterlockedExchange(&ready, 0);
     shutdown_reason = E_OS_STACKFAULT;
     if (failed_role == 'C') {
-        InterlockedExchange(&controller_healthy[0], 0);
+        (void)InterlockedExchange(&controller_healthy[0], 0);
     } else if (failed_role == 'D') {
-        InterlockedExchange(&controller_healthy[1], 0);
+        (void)InterlockedExchange(&controller_healthy[1], 0);
     }
     if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
         Os_StackFatalExit();
@@ -1242,7 +1245,7 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
     if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
         ExitProcess(E_OS_STACKFAULT);
     }
-    InterlockedExchange(&Os_Closing, 1);
+    (void)InterlockedExchange(&Os_Closing, 1);
     Sleep(INFINITE);
     ExitProcess(E_OS_STACKFAULT);
 }
@@ -1293,7 +1296,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
     Os_MailboxClose();
     if ((InterlockedOr(&activation_admission, 2) & 2) == 0) {
         shutdown_reason = error;
-        InterlockedExchange(&ready, 0);
+        (void)InterlockedExchange(&ready, 0);
         if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
             report_and_exit();
         }
@@ -1302,7 +1305,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
         if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
             ExitProcess(E_OS_STATE);
         }
-        InterlockedExchange(&Os_Closing, 1);
+        (void)InterlockedExchange(&Os_Closing, 1);
     }
 }
 
@@ -1571,7 +1574,7 @@ OS_MEMMAP static void bootstrap(void *argument)
     }
     Os_TimeAutostart(startup_mode);
     Os_ScheduleAutostart(startup_mode);
-    InterlockedExchange(&ready, 1);
+    (void)InterlockedExchange(&ready, 1);
     arti_observe_tasks();
     Os_TargetTrace('R');
     observe_transition();
@@ -1841,7 +1844,7 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
         if (stack->role == 'S') {
             BaseType_t wake = xTaskResumeFromISR(handles[index]);
             if (wake != pdFALSE) {
-                InterlockedExchange(&isr_reschedule, 1);
+                (void)InterlockedExchange(&isr_reschedule, 1);
             }
         } else {
             vTaskResume(handles[index]);
@@ -1849,7 +1852,7 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
     }
     arti_observe_tasks();
     observe_transition();
-    InterlockedAnd(&activation_admission, ~1L);
+    (void)InterlockedAnd(&activation_admission, ~1L);
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return E_OK;
@@ -1972,7 +1975,7 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
     ready_sequences[index] = (queue->count == 0u) ? 0u : queue->requests[queue->head];
     vTaskOsSetReadySequence(current, ready_sequences[index]);
     observe_finish_boundary(1u);
-    InterlockedAnd(&activation_admission, ~1L);
+    (void)InterlockedAnd(&activation_admission, ~1L);
     if (queue->count == 0u) {
         vTaskSuspend(NULL);
     } else {
@@ -2073,7 +2076,8 @@ OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
             if (config->isr_access != 0u) {
                 const LONG previous = saved_interrupt_ceilings[task][depth];
                 const LONG ceiling = (LONG)config->ceiling;
-                InterlockedExchange(&interrupt_ceiling, ceiling > previous ? ceiling : previous);
+                (void)InterlockedExchange(&interrupt_ceiling,
+                                          ceiling > previous ? ceiling : previous);
             }
         }
     } else if ((depth == 0u) || (depth > OS_MAX_RESOURCES) ||
@@ -2083,7 +2087,7 @@ OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
     } else {
         resource_depth[task] = depth - 1u;
         resource_owner[resource] = 0u;
-        InterlockedExchange(&interrupt_ceiling, saved_interrupt_ceilings[task][depth - 1u]);
+        (void)InterlockedExchange(&interrupt_ceiling, saved_interrupt_ceilings[task][depth - 1u]);
         if (task < OS_MAX_TASKS) {
             vTaskPrioritySet(handles[task], saved_priorities[task][depth - 1u]);
         }
@@ -2205,7 +2209,7 @@ OS_MEMMAP StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskR
             vTaskOsSetReadySequence(handles[index], ready_sequences[index]);
             if (stack->role == 'S') {
                 if (xTaskResumeFromISR(handles[index]) != pdFALSE) {
-                    InterlockedExchange(&isr_reschedule, 1);
+                    (void)InterlockedExchange(&isr_reschedule, 1);
                 }
             } else {
                 vTaskResume(handles[index]);

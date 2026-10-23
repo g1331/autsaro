@@ -271,7 +271,7 @@ OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
 
 OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
 {
-    InterlockedExchange(&start_called, 1);
+    (void)InterlockedExchange(&start_called, 1);
     Os_StackCheck();
     if (Os_InterruptDisabled() != 0) {
         if (Os_BackendStarted() == 0) {

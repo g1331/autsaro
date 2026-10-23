@@ -36,6 +36,10 @@ Linux `Os_HostLinux.c` 的 `CreateEventA` 为每个事件持有非阻塞 eventfd
 
 `NativeFacilityTests.test_event_syscall_errors_are_not_timeouts_or_success` 链接实际 OS 与平台实现，以真实描述符检查自动／手动复位，再注入 poll／read／write 错误、中断和 EAGAIN；包括无限等待遇到错误必须返回，以及 errno 遗留值不能制造零读／短读成功。此证据只处置这些调用点；D4.7 的其他调用、采用内核及完整221项人工评估仍由 [#58](https://github.com/g1331/autsaro/issues/58) 承接。
 
+## 原子返回值与条件类型
+
+`Arti.c`、`Os.c`、`Os_Backend.c`、`Os_Interrupt.c`、`Os_Mailbox.c` 中只用于更新状态的32处 Interlocked 调用显式转为 `void`；这些接口返回先前值或更新后的计数，不返回错误信息。Linux `InterlockedCompareExchange` 同样丢弃 builtin 的成功标志并返回交换前值，保持 Windows 的返回契约。此处采用 R17.7（2013主文页141–142／PDF149–150）的允许形式，不把有错误信息的事件／锁调用一并丢弃。`control` 对 `Os_StackRegister`、`Os_StackHasFault` 的整数结果显式与零比较，满足 R14.4（页123／PDF131）的 essentially Boolean 条件要求；原有成功／故障分支不变。AMD2只扩充这两条的C11适用范围，其他修订没有为这些源码点增加条件例外。
+
 ## 目标端口承担的差距
 
 | 义务 | 处置 |

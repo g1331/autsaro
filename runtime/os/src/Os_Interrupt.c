@@ -106,27 +106,27 @@ OS_MEMMAP static void change(uint32 operation)
             case 0u:
                 if (state->disabled != 0u) {
                     state->disabled = 0u;
-                    InterlockedDecrement(&all_owners);
+                    (void)InterlockedDecrement(&all_owners);
                 }
                 break;
             case 1u:
                 if (state->disabled == 0u) {
                     state->disabled = 1u;
-                    InterlockedIncrement(&all_owners);
+                    (void)InterlockedIncrement(&all_owners);
                 }
                 break;
             case 2u:
                 if (state->all_depth != 0u) {
                     --state->all_depth;
                     if (state->all_depth == 0u) {
-                        InterlockedDecrement(&all_owners);
+                        (void)InterlockedDecrement(&all_owners);
                     }
                 }
                 break;
             case 3u:
                 if (state->all_depth != UINT32_MAX) {
                     if (state->all_depth == 0u) {
-                        InterlockedIncrement(&all_owners);
+                        (void)InterlockedIncrement(&all_owners);
                     }
                     ++state->all_depth;
                 }
@@ -135,14 +135,14 @@ OS_MEMMAP static void change(uint32 operation)
                 if (state->os_depth != 0u) {
                     --state->os_depth;
                     if (state->os_depth == 0u) {
-                        InterlockedDecrement(&os_owners);
+                        (void)InterlockedDecrement(&os_owners);
                     }
                 }
                 break;
             default:
                 if (state->os_depth != UINT32_MAX) {
                     if (state->os_depth == 0u) {
-                        InterlockedIncrement(&os_owners);
+                        (void)InterlockedIncrement(&os_owners);
                     }
                     ++state->os_depth;
                 }
@@ -172,13 +172,13 @@ OS_MEMMAP void Os_InterruptRestoreOwner(void)
     /* Internal exit cleanup is called under the real OS completion critical
      * section, so no ISR can observe partial restoration. */
     if (state->disabled != 0u) {
-        InterlockedDecrement(&all_owners);
+        (void)InterlockedDecrement(&all_owners);
     }
     if (state->all_depth != 0u) {
-        InterlockedDecrement(&all_owners);
+        (void)InterlockedDecrement(&all_owners);
     }
     if (state->os_depth != 0u) {
-        InterlockedDecrement(&os_owners);
+        (void)InterlockedDecrement(&os_owners);
     }
     state->disabled = 0u;
     state->all_depth = 0u;

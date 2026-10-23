@@ -73,7 +73,7 @@ OS_MEMMAP sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(vo
             (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt));
 }
 
-OS_MEMMAP void Os_MailboxClose(void) { InterlockedOr(&admission, 2); }
+OS_MEMMAP void Os_MailboxClose(void) { (void)InterlockedOr(&admission, 2); }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #if defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON)
@@ -127,8 +127,8 @@ OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 
     *ticket = last_ticket;
     write_index = (write_index + 1u) % OS_INPUT_CAPACITY;
     /* Interlocked publication orders the complete copy before consumer reads. */
-    InterlockedIncrement(&published);
-    InterlockedAnd(&admission, ~1L);
+    (void)InterlockedIncrement(&published);
+    (void)InterlockedAnd(&admission, ~1L);
     if (Os_TargetReady() != 0) {
         Os_PortPostInterrupt(OS_INPUT_INTERRUPT);
     }
@@ -219,7 +219,7 @@ OS_MEMMAP StatusType Os_TargetTakeInput(Os_InputRecordType *record)
     }
     *record = records[read_index];
     read_index = (read_index + 1u) % OS_INPUT_CAPACITY;
-    InterlockedDecrement(&published);
+    (void)InterlockedDecrement(&published);
     return E_OK;
 }
 

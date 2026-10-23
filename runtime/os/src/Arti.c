@@ -88,7 +88,7 @@ OS_MEMMAP void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
         versioninfo->sw_minor_version = ARTI_SW_MINOR_VERSION;
         versioninfo->sw_patch_version = ARTI_SW_PATCH_VERSION;
     } else {
-        InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);
+        (void)InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);
     }
 }
 
@@ -124,7 +124,7 @@ OS_MEMMAP void Arti_Record(const char *context,
         Arti_Events[slot].address_valid = captured_address.valid;
         Arti_Events[slot].service_status = captured_address.service_status;
         Arti_Events[slot].status_valid = captured_address.status_valid;
-        InterlockedExchange(&Arti_Events[slot].published, 1L);
+        (void)InterlockedExchange(&Arti_Events[slot].published, 1L);
     } else {
         LONG dropped = InterlockedCompareExchange(&Arti_EventsDropped, 0L, 0L);
         /* Saturate the four-byte native cell rather than wrap its drop count. */

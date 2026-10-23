@@ -53,7 +53,8 @@ typedef char Os_HostLongMustBe32BitsType[(sizeof(LONG) == 4u) ? 1 : -1];
 
 static inline LONG InterlockedCompareExchange(volatile LONG *cell, LONG desired, LONG expected)
 {
-    __atomic_compare_exchange_n(cell, &expected, desired, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    (void)__atomic_compare_exchange_n(
+        cell, &expected, desired, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
     return expected;
 }
 static inline LONG InterlockedExchange(volatile LONG *cell, LONG value)
