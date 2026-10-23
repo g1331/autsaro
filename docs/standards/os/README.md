@@ -57,4 +57,6 @@ R22.11（Required）没有 C11 的 join／detach 对象；R22.12（Mandatory）�
 
 R22.16、R22.17、R22.18、R22.19（均为 Required）分别没有 C11 mutex 的显式同线程解锁、持锁等待、非递归重入及 condition-variable／mutex 关联对象，故在上述源码范围分别不适用。R22.20（Mandatory）没有由 `tss_create` 创建的线程特定存储标识，故不适用。这些是规定对象缺席的判断，不是对 Mandatory 违反的豁免；引入相应类型或接口时重新核查。
 
+R21.26（Required，AMD4.33，印刷页19–20／PDF26–27）同样只适用于 C11，约束 `mtx_timedlock` 的 mutex 类型必须为 mtx_timed 或 mtx_timed 与 mtx_recursive 的组合。上述源码没有该标准函数调用，故不适用；POSIX／Win32 的有界等待不能因此免除其实际锁类型、超时与失败契约核查。
+
 pthread／Win32 的获取／释放、持有者、失败清理与停止交错仍须按实际平台契约及 D4.1、D4.7、R22.1 等适用义务核查。C11 条款不适用不能代替这些核查，也不解除 D4.12 或采用代码责任；原始分析及其 `not_assessed` 状态保持。
