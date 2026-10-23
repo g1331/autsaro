@@ -299,7 +299,9 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     thread->exit_code = 0u;
     status = pthread_attr_init(&attributes);
     if (status == 0) {
-        status = pthread_attr_setstacksize(&attributes, OS_HOST_DEFAULT_STACK);
+        /* clone3 sizes the hardware shadow stack from this pthread reserve. */
+        status = pthread_attr_setstacksize(
+            &attributes, (reserve > OS_HOST_DEFAULT_STACK) ? reserve : OS_HOST_DEFAULT_STACK);
         if (status == 0) {
             status = pthread_create(&thread->thread, &attributes, actor_start, thread);
         }

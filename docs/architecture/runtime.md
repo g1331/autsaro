@@ -108,7 +108,7 @@ Linux 的 DWARF personality 仅接收该线程自己的 restart 对象，由 lib
 
 Linux 的 `Os_LinuxNative` 按系统 UAPI 调用 futex、gettid 与 alternate-stack，替代 libc 的变参 syscall／feature 入口；signal frame 转入既有 `linux-x86_64-ucontext` 快照并重定位复制的 fp 存储。ARTI／lifecycle 按平台 ABI 独立解码，停车、停止和 guard fault 仍检查真实地址／身份。信号与映射常量取自 UAPI，没有项目等价保留宏。
 
-独立 mmap 执行栈和 PROT_NONE guard 保持；同一 pthread 通过配对 call/return 一次进入，激活不重复切换。ASan fiber 协议覆盖进入与有限 helper 返回。每个 pthread 另请求 262144 字节启动栈及平台 guard/TLS，执行栈仍按配置单独核算。生产 actor（含 S）取原始 mapping；其他调用线程按 `/proc/self/maps` 查询当前映射，不把它称为最大可增长 reserve。
+独立 mmap 执行栈和 PROT_NONE guard 保持；同一 pthread 通过配对 call/return 一次进入，激活不重复切换。ASan fiber 协议覆盖进入与有限 helper 返回。每个 pthread 另请求 max(262144, 执行栈 reserve) 字节启动栈及平台 guard/TLS，使 clone3 的硬件影子栈覆盖合法调用深度；执行栈仍单独核算。生产 actor（含 S）取原始 mapping；其他调用线程按 `/proc/self/maps` 查询当前映射，不作可增长 reserve。
 
 默认 pthread mutex 加 owner/depth 保持原生端口递归及跨线程互斥，沿已有信号屏蔽／held-mask 协议运行，不改变汽车 resource 或调度。Windows 用 `VirtualQuery` 枚举当前栈 allocation 的 reserve／commit／guard，保留 StackGuarantee 和故障捕获，替代 StackLimits。项目源码、生成、独立 OS 和分析模型的 feature 定义均已移除；`-pthread` 保留正常线程编译模式，原宏未移至命令行。
 
