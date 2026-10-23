@@ -831,3 +831,57 @@ fn dcm_refuses_obd_relevant_dem_declarations_at_their_source() {
         "{issues:?}"
     );
 }
+
+#[test]
+fn diagnostic_timer_mains_cannot_drift_from_the_generated_timebase() {
+    // Verifies: SWS_Dcm_00027, SWS_Dcm_01668, SWS_CanTp_00300
+    // Rejects: ECUC_Dcm_00820, ECUC_CanTp_00240
+    let control = single_component_sources();
+    assert!(normal_validation(&control).diagnostics.is_empty());
+    let plan = build(&control).unwrap();
+    for entity in &plan.description().schedule.entities {
+        if matches!(
+            entity.symbol.as_str(),
+            "Dcm_MainFunction" | "CanTp_MainFunction"
+        ) {
+            assert_eq!(entity.period_ms, 1);
+        }
+    }
+    for module in ["Dcm", "CanTp"] {
+        let mut sources = single_component_sources();
+        let event = format!("{module}_MainFunction_1ms");
+        let timing = subtree(&sources, "bsw.arxml", "BSW-TIMING-EVENT", &event);
+        change(
+            &mut sources,
+            "bsw.arxml",
+            &timing,
+            &timing.replace("<PERIOD>0.001</PERIOD>", "<PERIOD>0.010</PERIOD>"),
+        );
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", "Work1ms")
+                    && node
+                        .ancestors()
+                        .any(|owner| named(owner, "ECUC-CONTAINER-VALUE", module))
+                    && node.children().any(|child| {
+                        child.tag_name().name() == "DEFINITION-REF"
+                            && child
+                                .text()
+                                .is_some_and(|text| text.ends_with("/RteBswEventToTaskMapping"))
+                    })
+            },
+            |text| {
+                text.replace("/Alarm_Work</VALUE-REF>", "/Alarm_App</VALUE-REF>")
+                    .replace("/Ev_Work</VALUE-REF>", "/Ev_App</VALUE-REF>")
+            },
+        );
+        rejected_at(
+            &sources,
+            "PERIOD_ALARM_CONFLICT",
+            "bsw.arxml",
+            &format!("/AUTOSAR_{module}/{module}/Behavior/{event}"),
+        );
+    }
+}
