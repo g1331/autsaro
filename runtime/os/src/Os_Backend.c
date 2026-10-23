@@ -968,17 +968,6 @@ OS_MEMMAP static boolean operation_fails(uint32 operation)
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
-#else
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-OS_MEMMAP static boolean operation_fails(uint32 operation)
-{
-    (void)operation;
-    return FALSE;
-}
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 OS_MEMMAP DWORD Os_PortSuspendThread(HANDLE thread)
@@ -990,8 +979,27 @@ OS_MEMMAP BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context)
 {
     return operation_fails(2u) ? 0 : GetThreadContext(thread, context);
 }
+
+OS_MEMMAP static DWORD resume_native_thread(HANDLE thread)
+{
+    return operation_fails(3u) ? (DWORD)-1 : ResumeThread(thread);
+}
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP DWORD Os_PortSuspendThread(HANDLE thread) { return SuspendThread(thread); }
+
+OS_MEMMAP BOOL Os_PortGetThreadContext(HANDLE thread, CONTEXT *context)
+{
+    return GetThreadContext(thread, context);
+}
+
+OS_MEMMAP static DWORD resume_native_thread(HANDLE thread) { return ResumeThread(thread); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
 
 #ifdef _WIN32
 #define OS_START_SEC_CODE
@@ -1375,21 +1383,14 @@ OS_MEMMAP void Os_BackendAssert(const void *file, sint32 line)
 #include "Os_MemMap.h"
 OS_MEMMAP static boolean fail_next(void)
 {
-    ++resource_calls;
     return fail_resource != 0u && resource_calls == fail_resource;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* Defer the native call until after injection; a function argument would run it first. */
+#define OS_RESOURCE_CREATE(call) (fail_next() ? NULL : (call))
 #else
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-OS_MEMMAP static boolean fail_next(void)
-{
-    ++resource_calls;
-    return FALSE;
-}
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
+#define OS_RESOURCE_CREATE(call) (call)
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
@@ -1398,7 +1399,9 @@ OS_MEMMAP HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes,
                               BOOL initial,
                               LPCSTR name)
 {
-    HANDLE result = fail_next() ? NULL : CreateEventA(attributes, manual, initial, name);
+    HANDLE result;
+    ++resource_calls;
+    result = OS_RESOURCE_CREATE(CreateEventA(attributes, manual, initial, name));
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1408,7 +1411,9 @@ OS_MEMMAP HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes,
 
 OS_MEMMAP HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
 {
-    HANDLE result = fail_next() ? NULL : CreateMutexA(attributes, owner, name);
+    HANDLE result;
+    ++resource_calls;
+    result = OS_RESOURCE_CREATE(CreateMutexA(attributes, owner, name));
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1429,7 +1434,8 @@ OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 {
     HANDLE result = NULL;
     if (attributes == NULL) {
-        result = fail_next() ? NULL : Os_HostCreateActor(stack, start, argument, flags, id, 0);
+        ++resource_calls;
+        result = OS_RESOURCE_CREATE(Os_HostCreateActor(stack, start, argument, flags, id, 0));
     }
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
@@ -1449,8 +1455,9 @@ OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
                                DWORD flags,
                                LPDWORD id)
 {
-    HANDLE result =
-        fail_next() ? NULL : CreateThread(attributes, stack, start, argument, flags, id);
+    HANDLE result;
+    ++resource_calls;
+    result = OS_RESOURCE_CREATE(CreateThread(attributes, stack, start, argument, flags, id));
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1539,10 +1546,7 @@ OS_MEMMAP void Os_PortResumeThread(HANDLE thread)
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackObserve(thread, &context);
-    if (operation_fails(3u)) {
-        Os_BackendShutdown(E_OS_STATE);
-    }
-    if (ResumeThread(thread) == (DWORD)-1) {
+    if (resume_native_thread(thread) == (DWORD)-1) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }

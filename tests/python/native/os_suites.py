@@ -874,6 +874,11 @@ def check_lifecycle(binary: Path) -> list[dict]:
         require(result["exit"] == 0 and f"trace={trace} " in result["stdout"], result)
         require("input_closed=1 tick_closed=1" in result["stdout"], result)
         require("FORBIDDEN" not in result["stdout"], result)
+        resources = re.search(
+            r"threads=(\d+) events=(\d+) mutexes=(\d+) resource_calls=(\d+) ", result["stdout"]
+        )
+        require(resources is not None, result)
+        require(int(resources[4]) == sum(map(int, resources.group(1, 2, 3))), result)
         observations.append(result)
     for scenario, code in [
         ("zero-count", 8),
@@ -2247,6 +2252,8 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
             for failure in ("invalid", 1):
                 observation = execute(production, "normal", failure, invalid_stack="S")
                 require(observation["exit"] == 0 and "trace=ISRAD " in observation["stdout"], observation)
+                calls = observations[0]["stdout"].split("resource_calls=")[1].split()[0]
+                require(f"resource_calls={calls} " in observation["stdout"], observation)
                 observation["production_resource_injection_disabled"] = True
                 observations.append(observation)
         if suite == "stack":
