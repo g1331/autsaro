@@ -12,7 +12,7 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，unittest 按 suite 保存到该目录。已有目录不会被覆盖；未指定时仍只保留失败现场。
 
-`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件（Windows 按测试名把最慢的几个模块分到第二个 runner，同一名单在另一半用 `--skip` 排除，每个测试只运行一次），工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。失败的测试保留自己的 scratch 目录（输出 `scratch retained at …`），独立 ECU 校验器保留其诊断目录，失败消息附带子进程输出末尾；该任务把临时根目录作为 `native-scratch-*` artifact 在失败时上传（保留 14 天），与 OS suites 的 `os-suites-*` 相同；`native-os` 任务在两个平台运行 26 个 OS suites 和主机锁错误边界测试，Windows 用 `AUTOSAR_OS_SHARD=k/n` 把 suite 按序号分到两个 runner，每个 suite 仍单独串行运行。`native-delivery` 任务下载准备任务发布的样本，与样本分析并行运行封存工程构建模式和 CMake 构建，再把样本移到新目录：Python 3.11 运行全部四个样本，Extended 在两平台运行完整版本与样本矩阵。用 uv 管理的接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制（`acceptance.yml`，见[官方对照](official.md)）与桌面场景（`desktop.yml`，见[桌面场景](desktop.md)）由不属于必需检查的 `Extended checks` 按改动路径调用（见 [CI](README.md#ci)）；PR 检查通过不代表这些检查通过。
+`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件（Windows 按测试名把最慢的几个模块分到第二个 runner，同一名单在另一半用 `--skip` 排除，每个测试只运行一次），工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。失败的测试保留自己的 scratch 目录（输出 `scratch retained at …`），独立 ECU 校验器保留其诊断目录，失败消息附带子进程输出末尾；该任务把临时根目录作为 `native-scratch-*` artifact 在失败时上传（保留 14 天），与 OS suites 的 `os-suites-*` 相同；`native-os` 任务在两个平台运行 27 个 OS suites 和主机锁错误边界测试，Windows 用 `AUTOSAR_OS_SHARD=k/n` 把 suite 按序号分到两个 runner，每个 suite 仍单独串行运行。`native-delivery` 任务下载准备任务发布的样本，与样本分析并行运行封存工程构建模式和 CMake 构建，再把样本移到新目录：Python 3.11 运行全部四个样本，Extended 在两平台运行完整版本与样本矩阵。用 uv 管理的接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制（`acceptance.yml`，见[官方对照](official.md)）与桌面场景（`desktop.yml`，见[桌面场景](desktop.md)）由不属于必需检查的 `Extended checks` 按改动路径调用（见 [CI](README.md#ci)）；PR 检查通过不代表这些检查通过。
 
 ## 检测器构建
 
@@ -27,12 +27,15 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 ```
 
 - `setarch -R` 关闭地址随机化：Ubuntu 24.04 的 `vm.mmap_rnd_bits=32` 使 GCC 13 的 TSan 报告 `unexpected memory mapping`，这样不必修改宿主设置。
-- OS 主机层自己安装备用信号栈，并用 ucontext 切换栈，所以 ASan 不接管备用信号栈（`use_sigaltstack=0`），也不把局部变量移到假栈（`detect_stack_use_after_return=0`）；后者使嵌套中断用例比较栈地址失真，代价是不检查返回后使用栈变量。
+- OS 主机层自己安装备用信号栈，并通过声明的原生入口进入 mmap 执行栈，所以 ASan 不接管备用信号栈（`use_sigaltstack=0`），也不把局部变量移到假栈（`detect_stack_use_after_return=0`）；后者使嵌套中断用例比较栈地址失真，代价是不检查返回后使用栈变量。
+- 涉及非局部转移或栈／上下文恢复时，先核对并实测当前目标的 shadow stack 与检测器调用栈；重复入口同时比较 RSP／SSP，使用故障／干净对照检查丢弃帧。ELF 属性、普通或 ASan 的短时通过不能替代实际启用状态、TSan 调用链及目标平台证据；启动失败保持未执行。
 - OS suites 在两种检测器下运行，覆盖真实暂停／恢复、嵌套中断、栈上下文与故障关闭。Linux 的已暂停 actor 从现有请求状态读取终止意图，保持首次捕获的上下文并确认永久停止；运行中的 actor 仍由终止信号停止。控制器在 actor 停止后才关闭端口调度状态，关闭主机线程句柄时释放 pthread 资源并保留注册栈身份。
 - `sanitizers::` 的故意越界写（`memcpy` 超出固定静态缓冲）、数据竞争和超宽移位证明检测器确实报错；未设置 `AUTOSAR_SANITIZE` 时该测试不做任何事。 自检在 `-O0`／`-O2` 下分别要求故障报告与非零退出、干净对照成功。竞争夹具先创建观察线程，再写入 volatile 非原子值，以 relaxed 原子发布安排读取而不建立 happens-before；干净对照仅将发布改为 release，与观察线程的 acquire 配对。volatile 只保留访问，不提供同步；不能用循环次数或后续绿色运行证明历史漏报原因。编译与子进程沿用受管执行入口，失败 scratch 与原始输出由 `sanitizer-scratch-*` 上传，覆盖直接原生与封存检测器两步。
 - 封存 ECU 的检测器路径用于 Linux TSan 与 ASan／UBSan：测试辅助先完整执行包内生产 build（含 seal、固定工具、选择补丁、内核摘要与严格段布局检查），记录实际编译 argv，再用同一源码、include 顺序、补丁后内核、test 模式宏与链接参数额外加入检测器选项，编译到独立程序。测试辅助不得在加载原 guard 前加入包内 Python 搜索路径，以免未封存的同名标准库模块提前执行。生产 `ecu-tool`、`target.json` 和 object 检查不变；检测器程序不作为交付程序。共享 HostBatch 按检测器选项区分 image，消费者仍拿独立副本。每个新输入多编译一次，后续相同 HostBatch 复用；不缓存跨运行的通过结果。
 - `integration::protocol::` 与 `integration::sealed_projects::` 在该路径运行现有协议向量和封存工程 owner 用例；`integration::sealed_sanitizers::` 验证 probe 实际完成 20 ticks、test 模式故障退出、完整编译 argv 只差检测器选项／输出路径、封存输入不变及共享副本隔离。外部 probe control 复用既有故意越界／超宽移位夹具，要求实际运行报告与非零退出，并让合法边界输入成功。
 - `integration::sealed_sanitizers::` 在两种检测器下持续选择真实线程注册／中断身份回归，以及暂停／恢复进展、终止前后上下文、拒绝终止后恢复、运行 actor 停止和关闭句柄后 pthread 状态的成对回归。`HostBatch`、probe 与 test 使用相同封存源码，生产／插桩 argv 只允许检测器选项与输出路径不同。故意越界／超宽移位 control 仅在 ASan／UBSan 下运行；直接线程 TSan 测试继续运行。`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
+
+`port-restart` suite 直接验证原生展开的有界重入、未处理／无关异常，以及检测器对丢弃调用帧的处理；Linux 具备内核 SHSTK 时还执行实际启用的正反对照和真实 Task／ARTI 消费者，不具备时保留 `not_assessed`。全部被展开的 C 单元（含应用与检测器构建）使用交付清单中的 `-fexceptions`，不能只为端口单元添加该选项。
 
 必需 CI 的 `native-sanitizers` 任务在 Linux 上按 `thread` 与 `address,undefined` 各用一个 runner 运行上述命令；与 `native`、`native-os` 并行。
 
@@ -51,7 +54,7 @@ Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元�
 
 - 给运行时配置结构（如 `Os_TargetConfigType`、`Os_ResourceConfigType`）加字段时放在末尾，并更新全部位置式初始化：`runtime/*/tests/*.c`、生成器按位置输出的 `c_layout::initializer` 与模板。这些单元以 `-Werror=missing-field-initializers` 编译，生成工程只在 `--features native-tests` 的原生套件中编译，`it` 通过不能证明。测试用 `#define` 给 hook 改名再包含另一个 harness 时，宏也会改写被包含文件里对该 hook 的取址；改由 harness 提供显式观察点。
 - 在 runtime 目录之间迁移 C 源文件或头文件时，从生成样本按每个实际 main 用 `gcc -MM` 列出编译闭包，并与 `integration.json`、ownership ledger 和交付字节逐项核对。GCC 的引号 include 优先查找同目录，迁移使不同目录出现同名头文件时，其解析结果可能改变：交付工程是扁平 include，仓库内按目录拼路径的夹具、工具和 `quality` 检查则不同，要逐个复核；也要检查按目录 glob 的检查是否悄悄漏掉了迁出的文件。原生测试的生成头文件通过实际消费者包含，不用全局 `-include` 注入宿主适配编译单元，避免改变 Windows 系统类型与平台特性宏的包含顺序。
-- 改动交付文件布局（如头文件移入子目录）、原生 fixture 或其共用辅助，重排运行时源码或改变 emitter 排版时，推送前在本地以 `--features native-tests` 运行受影响原生套件，并运行 OS suites、`test_host_boundaries.py` 和带改名变体（如 `OsAlt`）的原生套件。修改 OS 或 BSW 运行时 C 后，推送前也按[检测器构建](#检测器构建)运行受影响套件：插桩改变寄存器分配，`setjmp` 所在函数的 `-Wclobbered` 等告警只在该构建中出现。
+- 改动交付文件布局（如头文件移入子目录）、原生 fixture 或其共用辅助，重排运行时源码或改变 emitter 排版时，推送前在本地以 `--features native-tests` 运行受影响原生套件，并运行 OS suites、`test_host_boundaries.py` 和带改名变体（如 `OsAlt`）的原生套件。修改 OS 或 BSW 运行时 C 后，推送前也按[检测器构建](#检测器构建)运行受影响套件：插桩改变寄存器分配与展开清理路径，普通构建不能替代检测器构建的编译与行为检查。
 
 ## 主机时序与间歇失败
 
