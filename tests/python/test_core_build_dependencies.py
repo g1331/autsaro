@@ -2,7 +2,9 @@
 
 import json
 import os
+import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,10 +22,12 @@ class CoreBuildDependenciesTests(unittest.TestCase):
         desktop = yaml.safe_load((ROOT / '.github/workflows/desktop.yml').read_text())
         consumer = next(item for item in desktop['jobs']['build']['steps']
                         if item.get('uses') == './.github/actions/core-build-dependencies')
+        # Windows' system bash launches WSL; Actions uses Git Bash for shell: bash.
+        bash = str(Path(os.environ['ProgramFiles']) / 'Git/bin/bash.exe') if os.name == 'nt' else 'bash'
         for mirror in ('mirror+file:/etc/apt/apt-mirrors.txt', 'http://azure.archive.ubuntu.com/ubuntu/'):
             for packages, failure in (('', ''), (consumer['with']['linux-packages'], ''),
                                       ('build-essential cmake', 'update'), ('pkg-config', 'install')):
-                with self.subTest(mirror=mirror, packages=packages, failure=failure), tempfile.TemporaryDirectory() as temporary:
+                with self.subTest(mirror=mirror, packages=packages, failure=failure), tempfile.TemporaryDirectory(prefix='apt test ') as temporary:
                     directory = Path(temporary)
                     source = directory / 'ubuntu.sources'
                     original = (f'Types: deb\nURIs: {mirror}\n'
@@ -31,9 +35,8 @@ class CoreBuildDependenciesTests(unittest.TestCase):
                                 'Components: main restricted universe multiverse\n'
                                 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n')
                     source.write_text(original)
-                    command = directory / 'sudo'
-                    command.write_text('''#!/usr/bin/env python3
-import json, os, sys
+                    command = directory / 'sudo.py'
+                    command.write_text('''import json, os, sys
 from pathlib import Path
 args = sys.argv[1:]
 assert args[0] == 'apt-get', args
@@ -43,14 +46,14 @@ source = Path(args[2].split('=', 1)[1])
 with open(os.environ['APT_LOG'], 'a') as output:
     output.write(json.dumps({'args': args, 'source': str(source), 'text': source.read_text()}) + '\\n')
 sys.exit(100 if args[5] == os.environ['FAIL_APT_PHASE'] else 0)
-''')
-                    command.chmod(0o755)
+''', newline='\n')
                     log = directory / 'apt.jsonl'
-                    script = step['run'].replace('/etc/apt/sources.list.d/ubuntu.sources', str(source))
+                    script = step['run'].replace('/etc/apt/sources.list.d/ubuntu.sources', shlex.quote(source.as_posix()))
+                    script = (f'sudo() {{ {shlex.quote(Path(sys.executable).as_posix())} '
+                              f'{shlex.quote(command.as_posix())} "$@"; }}\n' + script)
                     result = subprocess.run(
-                        ['bash', '--noprofile', '--norc', '-eo', 'pipefail', '-c', script],
-                        env={**os.environ, 'PATH': str(directory) + os.pathsep + os.environ['PATH'],
-                             'RUNNER_TEMP': str(directory), 'LINUX_PACKAGES': packages,
+                        [bash, '--noprofile', '--norc', '-eo', 'pipefail', '-c', script],
+                        env={**os.environ, 'RUNNER_TEMP': directory.as_posix(), 'LINUX_PACKAGES': packages,
                              'APT_LOG': str(log), 'FAIL_APT_PHASE': failure},
                         capture_output=True, text=True, check=False,
                     )
