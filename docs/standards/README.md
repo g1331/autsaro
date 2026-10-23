@@ -17,11 +17,11 @@ R24-11 中标记为 DRAFT 的条款（例如 LSduR 全文，`SWS_Com_91019／910
 
 ## 2. 官方资料与本地位置
 
-- 原件统一使用仓库外持久目录，本机默认位置为项目相邻的 `../autsaro-official-specs`，按标准／版次隔离并保存来源、官方清单及收到字节摘要；`/tmp` 只放可重建提取文本、页面和实验，不作唯一原件位置。原件与提取全文不提交或随产品分发，路径参数／已有环境变量可覆盖本机位置，不硬编码到产品或 CI。目录与核验结果见 [docs/official/README.md](../official/README.md) 与 [docs/official/R24-11/README.md](../official/R24-11/README.md)。
-- 恢复与核验优先复用私有资料库的 `specs.py restore R24-11 [DIR]`／`specs.py verify R24-11 [DIR]`（从资料库目录运行）。从官网收集仍用既有 `scripts/collect_official_specs.py`，按两份官方清单校验；不重复编写下载工具，失败或缺项不算已取得。
-- 开发对照档案的路径与环境变量登记在 `core/resources/official.json`：XSD／MOD／示例（`AUTOSAR_XSD_ARCHIVE`、`AUTOSAR_MOD_ARCHIVE`、`AUTOSAR_SAMPLE_ARCHIVE`）供 `official-oracles` 测试检验内置规则；`AUTOSAR_CP_MOD_SpecificationsARXML.zip`（`AUTOSAR_SPECIFICATIONS_ARCHIVE`）是 [§5](#5-条款处置与核算) 条款核算的条目来源。这些变量仅在任务命令环境中指向持久副本，不改宿主全局设置，也不替换清单中既有的跨平台相对默认路径。普通配置与源码生成不需要这些档案。
-- 官方单份文件的统一入口为 `https://www.autosar.org/fileadmin/standards/R24-11/CP/<文件名>`。
-- MISRA C:2012 的 2013 第三版主文及 AMD1–AMD4／TC1–TC2 已在本机持久资料库 `MISRA/C-2012/` 可读，版次、来源和收到字节摘要见该目录 README／SHA256SUMS 及 #57。主文、AMD1、TC1 的项目提供摘要只固定收到字节，不宣称匹配出版方摘要；资料可用与规则修订合成、逐项适用性、源码和人工评估分别证明。原件不在产品仓库中。编码指导与 221 项编号目录见项目技能 `.agents/skills/misra-c2012/`（`references/baseline-index.json`）；它是编码辅助，不替代正文或人工评估。
+- 规范原件保存在仓库外的持久目录，例如 `../autsaro-official-specs`，按标准和版次隔离，并保留来源、官方清单及收到字节摘要。原件与提取全文不提交或随产品分发；临时目录不作为唯一原件位置。目录与核验方式见[官方资料入口](../official/README.md)。
+- 官网收集使用 `python scripts/collect_official_specs.py R24-11`，默认输出到 `docs/official/R24-11/` 并按两份官方清单校验。有私有资料库访问权限的维护者也可用该库的 `specs.py restore` 和 `specs.py verify`；校验失败或缺项不算已取得。
+- 开发对照档案的默认路径和环境变量见 `core/resources/official.json`：`AUTOSAR_XSD_ARCHIVE`、`AUTOSAR_MOD_ARCHIVE`、`AUTOSAR_SAMPLE_ARCHIVE` 供官方对照测试引用，`AUTOSAR_SPECIFICATIONS_ARCHIVE` 指定条款核算的 SpecificationsARXML ZIP。引用其他位置的副本时使用这些变量；示例持久目录不会自动替代现有默认路径。普通配置、源码生成和无关开发检查不需要先准备这些档案。
+- 官方单份文件的入口为 `https://www.autosar.org/fileadmin/standards/R24-11/CP/<文件名>`。
+- MISRA 原文使用固定的 C:2012 Third Edition 与 AMD1–AMD4、TC1–TC2 组合，按版次保存并记录来源和字节身份，在评估时引用具体正文位置。项目技能 `.agents/skills/misra-c2012/` 的编码指导及221项目录只作辅助，不能替代完整授权原文、修订合成或逐项人工评估。
 - 合法正文缺失时，只阻塞依赖该正文的标准裁决；记录缺口与解除条件，不凭记忆、旧版本或现有实现补齐。
 
 ## 3. 预期从标准独立定义
