@@ -10,6 +10,10 @@ Linux 的暂停请求、确认与恢复使用同一代次：普通代次在 1..I
 
 三个 `__atomic_compare_exchange_n` 调用的 `weak` 参数均使用 `stdbool.h` 的 `false`，与 [GCC 原子内建契约](https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html) 的 Boolean 形参一致。R10.3（Required，主文页86–87／PDF94–95，Glossary 的 assignment 含实参传递）不允许把 essentially signed 的整数0作为Boolean实参；TC1的常量例外、TC2.20的case修正和AMD3.27的浮点例外均不提供该转换的例外。这里保留strong CAS语义，修复的是实参的essential type，非新增同步机制。
 
+在[PR #371](https://github.com/g1331/autsaro/pull/371)核验的 `1b4c11ff` 八份双平台四样本中，R5.5 的47个原始位置对应46个名字：tasks.c的29处、queue.c的17处及受控task.h的extern一处。两处是pxCurrentTCB，其余为FreeRTOS API函数；相关tasks／queue／task.h／mpu_wrappers.h／FreeRTOS.h／FreeRTOSConfig.h字节在八样本间相同，所选端口和编译参数不覆盖cores／MPU默认值。configNUMBER_OF_CORES=1排除了pxCurrentTCB的SMP宏定义；portUSING_MPU_WRAPPERS=0排除了45个API的MPU宏别名。Linux标准ECU的实际GCC `-E -dD` 确认全部名字保留为标识符，且从未进入生效的宏定义历史（含后续undef的历史，非仅检查最终宏表）。据R5.5主文页53／PDF61、AMD2.39及Glossary（页223／PDF231）对条件编译排除代码的定义，这47处报告的同名宏条件不成立；不据此判定其他R5.5位置通过。
+
+固定2.21.0 addon的最小对照仍对排除分支中的同名函数式宏报告R5.5；生效的同名宏、定义后undef而标识符继续存在两个真实违反对照也均报告。misra_5_5从directives收集名字时没有区分上述排除定义；因此保留这些原始报告与adopted／patched归属，在人工裁决中说明误报，不改addon、suppression或源码名字。
+
 Os_TargetConfigType 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。
 
 StartOS 成功后不返回。Task 正常终止或调用 ChainTask 时，通过原生入口移交；意外返回时报告 MISSINGEND，恢复遗留资源和屏蔽状态，再完成本次激活。PreTask／PostTask 随 Running 状态转换调用，Shutdown 不额外产生 PostTask。ErrorHook 提供标准服务标识与参数快照，Hook 内错误不会递归调用或覆盖外层快照。支持参考 EXTENDED 配置和显式 STANDARD 配置；两种模式均保留防御检查、非零结果报告、标准激活及 Alarm 告警。
