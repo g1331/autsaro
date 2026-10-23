@@ -42,6 +42,7 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch",
     "runtime/os/patches/0015-typed-port-state.patch",
     "runtime/os/patches/0016-essential-boolean-controls.patch",
+    "runtime/os/patches/0017-portable-header-paths.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",
@@ -49,9 +50,14 @@ const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0008-task-hook-boundaries.patch",
     "runtime/os/patches/0015-typed-port-state.patch",
     "runtime/os/patches/0016-essential-boolean-controls.patch",
+    "runtime/os/patches/0017-portable-header-paths.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
+    (
+        "runtime/os/patches/0017-portable-header-paths.patch",
+        &["include/deprecated_definitions.h"],
+    ),
     (
         "runtime/os/patches/0016-essential-boolean-controls.patch",
         &["tasks.c", "queue.c", "include/list.h", "include/task.h"],
