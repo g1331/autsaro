@@ -706,42 +706,43 @@ OS_MEMMAP BOOL CloseHandle(HANDLE handle)
 
 OS_MEMMAP DWORD SuspendThread(HANDLE thread)
 {
-    int32_t generation;
-    int32_t previous;
-    uint64_t end;
-    if (thread == NULL || thread->kind != OS_HOST_THREAD ||
-        __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) {
-        return UINT32_MAX;
-    }
-    previous = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
-    if (previous == INT32_MAX) {
-        return UINT32_MAX;
-    }
-    if (previous != __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE)) {
-        return 1u;
-    }
-    /* Reserve INT32_MAX for irreversible stop; do not overwrite a concurrent stop request. */
-    generation = previous == INT32_MAX - 1 ? 1 : previous + 1;
-    if (!__atomic_compare_exchange_n(
-            &thread->requested, &previous, generation, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
-        return UINT32_MAX;
-    }
-    if (pthread_kill(thread->thread, SIGRTMIN) != 0) {
-        return UINT32_MAX;
-    }
-    end = monotonic_ms() + 2000u;
-    for (;;) {
-        const int32_t acknowledged = __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE);
-        if (acknowledged == generation) {
-            break;
+    DWORD result = UINT32_MAX;
+    if ((thread != NULL) && (thread->kind == OS_HOST_THREAD) &&
+        (__atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) == 0)) {
+        int32_t previous = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
+        if (previous != INT32_MAX) {
+            if (previous != __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE)) {
+                result = 1u;
+            } else {
+                /* Reserve INT32_MAX for stop; CAS preserves a concurrent stop request. */
+                const int32_t generation = (previous == (INT32_MAX - 1)) ? 1 : (previous + 1);
+                if (__atomic_compare_exchange_n(&thread->requested,
+                                                &previous,
+                                                generation,
+                                                0,
+                                                __ATOMIC_ACQ_REL,
+                                                __ATOMIC_ACQUIRE)) {
+                    if (pthread_kill(thread->thread, SIGRTMIN) == 0) {
+                        const uint64_t end = monotonic_ms() + 2000u;
+                        int32_t acknowledged =
+                            __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE);
+                        while ((acknowledged != generation) && (acknowledged != INT32_MAX)) {
+                            if ((monotonic_ms() >= end) ||
+                                (__atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0)) {
+                                break;
+                            }
+                            (void)futex_wait(&thread->acknowledged, acknowledged);
+                            acknowledged = __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE);
+                        }
+                        if (acknowledged == generation) {
+                            result = 0u;
+                        }
+                    }
+                }
+            }
         }
-        if (acknowledged == INT32_MAX || monotonic_ms() >= end ||
-            __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) {
-            return UINT32_MAX;
-        }
-        (void)futex_wait(&thread->acknowledged, acknowledged);
     }
-    return 0u;
+    return result;
 }
 
 OS_MEMMAP DWORD ResumeThread(HANDLE thread)

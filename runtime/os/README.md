@@ -6,6 +6,8 @@
 
 Linux 的暂停请求、确认与恢复使用同一代次：普通代次在 1..INT32_MAX-1 循环，0 表示尚未暂停，INT32_MAX 只表示不可逆停止。dispatcher 在既有中断 mutex 下串行提交普通请求；Task 创建的首次暂停先于 dispatcher 启动，独立控制线程仍可并发停止 actor。请求以 CAS 发布，避免覆盖先到的停止；确认与恢复按当前代次相等判断，信号 handler 返回前不清零旧恢复值。`NativeFacilityTests.test_suspend_generation_wrap_preserves_context_and_terminal_stop` 在测试副本中设置近上界初值，检查真实信号回绕、上下文与停止交错，并拒绝无界递增及覆盖停止的变异；这是 D4.1 的算术边界与失败预防证据。
 
+`SuspendThread` 的混合优先级表达式显式加括号，并只在函数末尾返回结果；依据 R12.1 主文页103–104／PDF111–112（含优先级表与表达式树）、AMD2.62 的前三行表格修订及 R15.5 主文页126／PDF134，两项在 C99 下均为 Advisory。拒绝、已暂停、成功与并发停止仍保留各自结果，未以理由记录代替这两处源码修复。固定 checker 的 R17.3 原始报告仍保留；主文页138／PDF146仅适用C90，C99的声明义务与GCC内建签名另按R1.1／R8.2／R8.4及实际编译核查。
+
 Os_TargetConfigType 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。
 
 StartOS 成功后不返回。Task 正常终止或调用 ChainTask 时，通过原生入口移交；意外返回时报告 MISSINGEND，恢复遗留资源和屏蔽状态，再完成本次激活。PreTask／PostTask 随 Running 状态转换调用，Shutdown 不额外产生 PostTask。ErrorHook 提供标准服务标识与参数快照，Hook 内错误不会递归调用或覆盖外层快照。支持参考 EXTENDED 配置和显式 STANDARD 配置；两种模式均保留防御检查、非零结果报告、标准激活及 Alarm 告警。

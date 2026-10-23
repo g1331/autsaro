@@ -367,7 +367,7 @@ class NativeFacilityTests(unittest.TestCase):
                         self.assertEqual(text.count(old), 1)
                         text = text.replace(old, f"thread->{field} = INT32_MAX - 2;")
                 if scenario == "wrap-mutant":
-                    old = "generation = previous == INT32_MAX - 1 ? 1 : previous + 1;"
+                    old = "generation = (previous == (INT32_MAX - 1)) ? 1 : (previous + 1);"
                     self.assertEqual(text.count(old), 1)
                     text = text.replace(old, "generation = previous + 1;")
                 elif scenario == "wrap-handler-mutant":
@@ -381,11 +381,15 @@ class NativeFacilityTests(unittest.TestCase):
                 fixture_text = (ROOT / "core/tests/fixtures/os/os_signal_lifecycle.c").read_text(encoding="utf-8")
                 if scenario.startswith("stop"):
                     # Deterministically publish stop immediately before the competing request CAS.
-                    cas = ("    if (!__atomic_compare_exchange_n(\n"
-                           "            &thread->requested, &previous, generation, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {")
+                    cas = ("                if (__atomic_compare_exchange_n(&thread->requested,\n"
+                           "                                                &previous,\n"
+                           "                                                generation,\n"
+                           "                                                0,\n"
+                           "                                                __ATOMIC_ACQ_REL,\n"
+                           "                                                __ATOMIC_ACQUIRE)) {")
                     self.assertEqual(text.count(cas), 1)
                     replacement = cas if scenario == "stop" else (
-                        "    __atomic_store_n(&thread->requested, generation, __ATOMIC_RELEASE);\n    if (0) {")
+                        "    __atomic_store_n(&thread->requested, generation, __ATOMIC_RELEASE);\n    if (1) {")
                     text = text.replace(cas, "    (void)Os_HostStopActor(thread, 2000u);\n" + replacement)
                     first_pause = "    if (SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {"
                     self.assertEqual(fixture_text.count(first_pause), 1)
