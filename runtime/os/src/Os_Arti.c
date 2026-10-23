@@ -59,7 +59,7 @@ OS_MEMMAP void Os_ArtiInternalLeave(void)
 
 OS_MEMMAP sint32 Os_ArtiServiceEnter(void)
 {
-    const sint32 application = (internal_depth == 0u) && (service_depth == 0u);
+    const sint32 application = ((internal_depth == 0u) && (service_depth == 0u)) ? 1 : 0;
     ++service_depth;
     access_status = E_OK;
     return application;

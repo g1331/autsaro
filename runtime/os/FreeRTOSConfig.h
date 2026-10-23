@@ -8,15 +8,15 @@
 #define configOS_REQUEST_FIFO                   1
 void Os_BackendOnSwitch(void);
 void Os_BackendBeforeSelect(void *current, void *next);
-#define traceOS_TASK_SELECTED(current, next)  Os_BackendBeforeSelect((current), (next))
-#define traceTASK_SWITCHED_IN()               Os_BackendOnSwitch()
-#define configUSE_IDLE_HOOK                   1
-#define configUSE_TICK_HOOK                   1
-#define configTICK_RATE_HZ                    1000
-#define configMAX_PRIORITIES                  32
-#define configMINIMAL_STACK_SIZE              512
-#define configMAX_TASK_NAME_LEN               16
-#define configTICK_TYPE_WIDTH_IN_BITS         TICK_TYPE_WIDTH_32_BITS
+#define traceOS_TASK_SELECTED(current, next) Os_BackendBeforeSelect((current), (next))
+#define traceTASK_SWITCHED_IN()              Os_BackendOnSwitch()
+#define configUSE_IDLE_HOOK                  1
+#define configUSE_TICK_HOOK                  1
+#define configTICK_RATE_HZ                   1000
+#define configMAX_PRIORITIES                 32u
+#define configMINIMAL_STACK_SIZE             512
+#define configMAX_TASK_NAME_LEN              16u
+#define configTICK_TYPE_WIDTH_IN_BITS        TICK_TYPE_WIDTH_32_BITS
 /* List sentinels have the same complete type as every traversed list item. */
 #define configUSE_MINI_LIST_ITEM              0
 #define configSUPPORT_STATIC_ALLOCATION       1
@@ -24,7 +24,7 @@ void Os_BackendBeforeSelect(void *current, void *next);
 #define configUSE_TIMERS                      0
 #define configUSE_MUTEXES                     0
 #define configUSE_TASK_NOTIFICATIONS          1
-#define configTASK_NOTIFICATION_ARRAY_ENTRIES 1
+#define configTASK_NOTIFICATION_ARRAY_ENTRIES 1u
 #define configUSE_TRACE_FACILITY              1
 #define configCHECK_FOR_STACK_OVERFLOW        0
 #define configUSE_CO_ROUTINES                 0

@@ -66,7 +66,7 @@ OS_MEMMAP static StatusType group_access(const Os_TargetConfigType *config,
         }
     }
     for (i = 0u; (isrs == 0u) && (i < config->task_count); ++i) {
-        if (((*tasks & (1u << config->tasks[i].id)) != 0u) &&
+        if (((*tasks & ((uint32)1u << config->tasks[i].id)) != 0u) &&
             (config->tasks[i].priority > *highest)) {
             *highest = config->tasks[i].priority;
         }
@@ -97,7 +97,7 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
     uint8 highest_access = 0u;
     uint32 j;
     for (j = 0u; j < config->task_count; ++j) {
-        task_mask |= 1u << config->tasks[j].id;
+        task_mask |= (uint32)1u << config->tasks[j].id;
     }
     if ((resource->id >= OS_MAX_RESOURCES) || (resource->ceiling == 0u) ||
         (resource->ceiling > ((resource->isr_access != 0u) ? 31u : OS_MAX_PRIORITY)) ||
@@ -118,7 +118,7 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
     }
     for (j = 0u; j < config->task_count; ++j) {
         const Os_TaskConfigType *task = &config->tasks[j];
-        if ((resource->isr_access == 0u) && ((group_tasks & (1u << task->id)) == 0u) &&
+        if ((resource->isr_access == 0u) && ((group_tasks & ((uint32)1u << task->id)) == 0u) &&
             (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
             return E_OS_VALUE;
         }

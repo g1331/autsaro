@@ -42,6 +42,9 @@ typedef char
     PointCountWidth[(sizeof(((Os_ScheduleTableConfigType *)0)->point_count) == 4u) ? 1 : -1];
 typedef char ActionCountWidth[(sizeof(((Os_ExpiryPointType *)0)->action_count) == 4u) ? 1 : -1];
 typedef char MemorySizeWidth[(sizeof(MemorySizeType) == 8u) ? 1 : -1];
+/* OSEK 13.2.4 types INVALID_TASK as TaskType; the selected ISR sentinel also keeps its type. */
+typedef char InvalidTaskTypeWidth[(sizeof(INVALID_TASK) == sizeof(TaskType)) ? 1 : -1];
+typedef char InvalidIsrTypeWidth[(sizeof(INVALID_ISR) == sizeof(ISRType)) ? 1 : -1];
 
 int main(void)
 {

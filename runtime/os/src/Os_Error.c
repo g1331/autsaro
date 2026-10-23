@@ -141,11 +141,11 @@ OS_MEMMAP StatusType Os_ErrorResult(OSServiceIdType service,
         (Os_StackCurrent() != NULL) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
         const Os_HookPhaseType previous = phase;
         const Os_NativeStackType *stack = Os_StackCurrent();
-        const sint32 isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
+        const boolean isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
         /* The native ISR dispatcher already owns the interrupt mutex. Do not
          * introduce an extra kernel critical level around an ISR ErrorHook.
          * The Hook gate excludes Cat2; higher priority Cat1 may interrupt it. */
-        if (isr == 0) {
+        if (!isr) {
             taskENTER_CRITICAL();
         }
         Os_BackendGuardService();
@@ -164,7 +164,7 @@ OS_MEMMAP StatusType Os_ErrorResult(OSServiceIdType service,
         phase = previous;
         service_id = OSServiceId_Unknown;
         parameters = empty_parameters;
-        if (isr == 0) {
+        if (!isr) {
             taskEXIT_CRITICAL();
         } else {
             Os_PortDispatchNested();

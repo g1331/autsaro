@@ -58,9 +58,11 @@ OS_MEMMAP sint32 Os_InterruptAllows(uint32 interrupt)
 {
     sint32 allowed = 0;
     if ((interrupt < 32u) && (InterlockedCompareExchange(&all_owners, 0, 0) == 0)) {
-        allowed = (InterlockedCompareExchange(&os_owners, 0, 0) == 0) ||
-                  ((Os_Config != NULL) &&
-                   ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u));
+        allowed = ((InterlockedCompareExchange(&os_owners, 0, 0) == 0) ||
+                   ((Os_Config != NULL) &&
+                    ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)))
+                      ? 1
+                      : 0;
     }
     return allowed;
 }
@@ -79,7 +81,10 @@ OS_MEMMAP static sint32 permitted(uint32 operation)
                (Os_BackendStarted() == 0 || InterlockedCompareExchange(&Os_Closing, 0, 0) != 0)) {
         allowed = 1;
     } else if (phase == OS_HOOK_NONE && stack != NULL) {
-        allowed = stack->role == 'T' || (stack->role == 'S' && Os_BackendCurrentInterrupt() < 32u);
+        allowed =
+            ((stack->role == 'T') || ((stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u)))
+                ? 1
+                : 0;
     } else {
         /* A registered nonautomotive actor is not a Task or active ISR. */
     }
@@ -94,12 +99,12 @@ OS_MEMMAP static sint32 permitted(uint32 operation)
 OS_MEMMAP static void change(uint32 operation)
 {
     Os_InterruptStateType *state = owner_state();
-    const sint32 running =
-        Os_BackendStarted() != 0 && InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
+    const boolean running =
+        (Os_BackendStarted() != 0) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0);
     Os_StackCheck();
     Os_BackendGuardService();
     if (permitted(operation) != 0) {
-        if (running != 0) {
+        if (running) {
             taskENTER_CRITICAL();
         }
         switch (operation) {
@@ -148,7 +153,7 @@ OS_MEMMAP static void change(uint32 operation)
                 }
                 break;
         }
-        if (running != 0) {
+        if (running) {
             taskEXIT_CRITICAL();
         }
     }
@@ -200,7 +205,7 @@ OS_MEMMAP static StatusType source_control(ISRType interrupt, uint32 operation, 
         result = E_OS_CALLEVEL;
     } else if ((interrupt >= 32u) || (interrupt == OS_KERNEL_YIELD_INTERRUPT) ||
                (interrupt == OS_CONTROLLED_TICK_INTERRUPT) ||
-               ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) {
+               ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)) {
         result = E_OS_ID;
     } else {
         taskENTER_CRITICAL();

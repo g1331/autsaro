@@ -48,7 +48,7 @@ static void pump(Ecu_HostBatch *batch,
     status = Ecu_TargetTakeProtocolFailure(&failure);
     while (status == E_OK) {
         sequence(batch);
-        require(batch->transport_count != UINT16_MAX);
+        require(batch->transport_count != (uint16)UINT16_MAX);
         ++batch->transport_count;
         if (batch->transport_status == ECU_OK) {
             batch->transport_status = failure.status;

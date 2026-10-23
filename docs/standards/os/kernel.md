@@ -66,6 +66,8 @@ Linux `Sleep` 的两个时间字段先把原始 DWORD 转成实际64位 `time_t`
 
 Windows采用端口在处理器数不满足其既有进入条件时保留pdFAIL及调度启动失败路径，删除其中非必需printf和stdio.h包含；外层仍走正常的OS失败报告，不以C标准I/O作为内核低层报错设施。此处按R21.6（2013主文页169／PDF177，AMD2.79覆盖标准I/O标识符／宏和wide I/O）修复独立的采用代码，不追认上游例外，也不重复#60已整改的一方I/O。新表示复制显式包含string.h，ptrdiff_t显式包含stddef.h。
 
+人工核查将相同移位根因继续追到`Os.c`的资源任务组／任务mask与`Os_BackendResource`：实际支持16个Task，验证只把ID限制为0..15，因此1u的unsigned-char essential宽度仍不足；四处改为uint32左操作数。`Os_InterruptAllows`和`source_control`的两个UINT32_C(1)同样改为uint32，仍由0..31边界保护。保留全部Task／ISR容量，`capacity`与`nested-interrupts`继续消费真实配置。内核优先级、任务名长度和notification数组数量采用unsigned常量，队列unsigned长度／大小及scheduler挂起计数按同类别比较，处理R10.4；这些固定数值和原有拒绝边界没有改变。公共类型与boolean宏的处置见[标准类型](../types.md#c99-essential-type-与实际常量)。
+
 ## 目标端口承担的差距
 
 | 义务 | 处置 |

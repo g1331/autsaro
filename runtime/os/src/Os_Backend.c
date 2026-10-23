@@ -499,12 +499,14 @@ OS_MEMMAP sint32 Os_BackendInterruptEnabled(uint32 interrupt)
         return 1;
     }
     allowed =
-        (Os_BackendInterruptPriority(interrupt) != 0u) && (Os_InterruptAllows(interrupt) != 0) &&
-        (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
-        (((interrupt < 32u) && ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)) ||
-         ((LONG)Os_BackendInterruptPriority(interrupt) >
-              InterlockedCompareExchange(&interrupt_ceiling, 0, 0) &&
-          Os_HookBlocksCategory2() == 0));
+        ((Os_BackendInterruptPriority(interrupt) != 0u) && (Os_InterruptAllows(interrupt) != 0) &&
+         (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
+         (((interrupt < 32u) && ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)) ||
+          (((LONG)Os_BackendInterruptPriority(interrupt) >
+            InterlockedCompareExchange(&interrupt_ceiling, 0, 0)) &&
+           (Os_HookBlocksCategory2() == 0))))
+            ? 1
+            : 0;
     observe_tick_masked(interrupt, allowed);
     return allowed;
 }
@@ -2052,7 +2054,7 @@ OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
     if (acquire != 0) {
         if ((depth >= OS_MAX_RESOURCES) || (resource_owner[resource] != 0u) ||
             ((task < OS_MAX_TASKS) &&
-             (((config->task_access & (1u << Os_Config->tasks[task].id)) == 0u) ||
+             (((config->task_access & ((uint32)1u << Os_Config->tasks[task].id)) == 0u) ||
               ((config->isr_access == 0u) &&
                (Os_Config->tasks[task].priority > config->ceiling)))) ||
             ((task >= OS_MAX_TASKS) &&

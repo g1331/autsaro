@@ -350,6 +350,42 @@
          }
          #endif /* portSTACK_GROWTH */
      }
+@@ -2333,7 +2249,7 @@
+                     {
+                         if( pxTCB->xTaskRunState == ( BaseType_t ) portGET_CORE_ID() )
+                         {
+-                            configASSERT( uxSchedulerSuspended == 0 );
++                            configASSERT( uxSchedulerSuspended == 0U );
+                             taskYIELD_WITHIN_API();
+                         }
+                         else
+@@ -2372,7 +2288,7 @@
+             {
+                 if( pxTCB == pxCurrentTCB )
+                 {
+-                    configASSERT( uxSchedulerSuspended == 0 );
++                    configASSERT( uxSchedulerSuspended == 0U );
+                     taskYIELD_WITHIN_API();
+                 }
+                 else
+@@ -3302,7 +3218,7 @@
+                         if( pxTCB->xTaskRunState == ( BaseType_t ) portGET_CORE_ID() )
+                         {
+                             /* The current task has just been suspended. */
+-                            configASSERT( uxSchedulerSuspended == 0 );
++                            configASSERT( uxSchedulerSuspended == 0U );
+                             vTaskYieldWithinAPI();
+                         }
+                         else
+@@ -3348,7 +3264,7 @@
+                 if( xSchedulerRunning != pdFALSE )
+                 {
+                     /* The current task has just been suspended. */
+-                    configASSERT( uxSchedulerSuspended == 0 );
++                    configASSERT( uxSchedulerSuspended == 0U );
+                     portYIELD_WITHIN_API();
+                 }
+                 else
 @@ -9038,6 +8954,12 @@
      pxReady->pxIndex = pxPreviousIndex;
  }
@@ -491,6 +527,51 @@
  
  /*-----------------------------------------------------------*/
  
+@@ -959,7 +912,7 @@
+ 
+     configASSERT( pxQueue );
+     configASSERT( !( ( pvItemToQueue == NULL ) && ( pxQueue->uxItemSize != ( UBaseType_t ) 0U ) ) );
+-    configASSERT( !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1 ) ) );
++    configASSERT( !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1U ) ) );
+     #if ( ( INCLUDE_xTaskGetSchedulerState == 1 ) || ( configUSE_TIMERS == 1 ) )
+     {
+         configASSERT( !( ( xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED ) && ( xTicksToWait != 0 ) ) );
+@@ -1176,7 +1129,7 @@
+     traceENTER_xQueueGenericSendFromISR( xQueue, pvItemToQueue, pxHigherPriorityTaskWoken, xCopyPosition );
+ 
+     configASSERT( ( pxQueue != NULL ) && !( ( pvItemToQueue == NULL ) && ( pxQueue->uxItemSize != ( UBaseType_t ) 0U ) ) );
+-    configASSERT( ( pxQueue != NULL ) && !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1 ) ) );
++    configASSERT( ( pxQueue != NULL ) && !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1U ) ) );
+ 
+     /* RTOS ports that support interrupt nesting have the concept of a maximum
+      * system call (or maximum API call) interrupt priority.  Interrupts that are
+@@ -1352,7 +1305,7 @@
+ 
+     /* xQueueGenericSendFromISR() should be used instead of xQueueGiveFromISR()
+      * if the item size is not 0. */
+-    configASSERT( ( pxQueue != NULL ) && ( pxQueue->uxItemSize == 0 ) );
++    configASSERT( ( pxQueue != NULL ) && ( pxQueue->uxItemSize == 0U ) );
+ 
+     /* Normally a mutex would not be given from an interrupt, especially if
+      * there is a mutex holder, as priority inheritance makes no sense for an
+@@ -1674,7 +1627,7 @@
+ 
+     /* Check this really is a semaphore, in which case the item size will be
+      * 0. */
+-    configASSERT( pxQueue->uxItemSize == 0 );
++    configASSERT( pxQueue->uxItemSize == 0U );
+ 
+     /* Cannot block if the scheduler is suspended. */
+     #if ( ( INCLUDE_xTaskGetSchedulerState == 1 ) || ( configUSE_TIMERS == 1 ) )
+@@ -2147,7 +2100,7 @@
+     traceENTER_xQueuePeekFromISR( xQueue, pvBuffer );
+ 
+     configASSERT( ( pxQueue != NULL ) && !( ( pvBuffer == NULL ) && ( pxQueue->uxItemSize != ( UBaseType_t ) 0U ) ) );
+-    configASSERT( ( pxQueue != NULL ) && ( pxQueue->uxItemSize != 0 ) ); /* Can't peek a semaphore. */
++    configASSERT( ( pxQueue != NULL ) && ( pxQueue->uxItemSize != 0U ) ); /* Can't peek a semaphore. */
+ 
+     /* RTOS ports that support interrupt nesting have the concept of a maximum
+      * system call (or maximum API call) interrupt priority.  Interrupts that are
 --- a/portable/MSVC-MingW/port.c
 +++ b/portable/MSVC-MingW/port.c
 @@ -27,7 +27,8 @@
