@@ -123,6 +123,7 @@ OS_MEMMAP static void futex_wake(const volatile int32_t *cell) { Os_LinuxFutexWa
 OS_MEMMAP static uint64_t monotonic_ms(void)
 {
     struct timespec now;
+    errno = 0;
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
         return UINT64_MAX;
     }
@@ -197,17 +198,24 @@ OS_MEMMAP static void fault_stop_signal(int signal_number, siginfo_t *info, void
 OS_MEMMAP int Os_HostInstallSignals(void)
 {
     struct sigaction handler = {0};
+    const int suspend_signal = SIGRTMIN;
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
     (void)sigemptyset(&handler.sa_mask);
-    (void)sigaddset(&handler.sa_mask, SIGRTMIN);
+    errno = 0;
+    (void)sigaddset(&handler.sa_mask, suspend_signal);
     handler.sa_sigaction = park_signal;
-    if ((sigaddset(&handler.sa_mask, SIGRTMIN + 1) != 0) ||
-        (sigaction(SIGRTMIN, &handler, NULL) != 0)) {
+    errno = 0;
+    if (sigaddset(&handler.sa_mask, suspend_signal + 1) != 0) {
+        return 0;
+    }
+    errno = 0;
+    if (sigaction(suspend_signal, &handler, NULL) != 0) {
         return 0;
     }
     (void)sigfillset(&handler.sa_mask);
     handler.sa_sigaction = fault_stop_signal;
-    return sigaction(SIGRTMIN + 1, &handler, NULL) == 0;
+    errno = 0;
+    return (sigaction(suspend_signal + 1, &handler, NULL) == 0) ? 1 : 0;
 }
 
 OS_MEMMAP static DWORD actor_body(void *argument)
@@ -258,11 +266,13 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         (flags & ~(STACK_SIZE_PARAM_IS_A_RESERVATION | CREATE_SUSPENDED)) != 0u) {
         return NULL;
     }
+    errno = 0;
     page = sysconf(_SC_PAGESIZE);
     if (page <= 0 || stack > SIZE_MAX - (size_t)page) {
         return NULL;
     }
     reserve = stack == 0u ? OS_HOST_DEFAULT_STACK : stack;
+    errno = 0;
     const long minimum = sysconf(_SC_THREAD_STACK_MIN);
     if ((minimum <= 0) || (reserve < ((size_t)minimum + (size_t)page))) {
         return NULL;
@@ -272,6 +282,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     if (thread == NULL) {
         return NULL;
     }
+    errno = 0;
     thread->mapping =
         mmap(NULL, reserve, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (thread->mapping == MAP_FAILED) {
@@ -279,7 +290,9 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         thread->reserved = 0;
         return NULL;
     }
+    errno = 0;
     if (mprotect(thread->mapping, (size_t)page, PROT_NONE) != 0) {
+        errno = 0;
         (void)munmap(thread->mapping, reserve);
         thread->mapping = NULL;
         thread->reserved = 0;
@@ -308,6 +321,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         (void)pthread_attr_destroy(&attributes);
     }
     if (status != 0) {
+        errno = 0;
         (void)munmap(thread->mapping, reserve);
         thread->mapping = NULL;
         thread->reserved = 0;
@@ -317,6 +331,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         const uint64_t end = monotonic_ms() + 2000u;
         while (GetThreadId(thread) == 0u && monotonic_ms() < end) {
             const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+            errno = 0;
             (void)nanosleep(&interval, NULL);
         }
         if (GetThreadId(thread) == 0u) {
@@ -354,6 +369,7 @@ OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
         return NULL;
     }
     event->manual = manual != 0;
+    errno = 0;
     event->fd = eventfd(initial != 0 ? 1u : 0u, EFD_CLOEXEC | EFD_NONBLOCK);
     if (event->fd < 0) {
         event->reserved = 0;
@@ -429,8 +445,10 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
     DWORD outcome = WAIT_FAILED;
     sigset_t blocked;
     sigset_t previous;
+    const int suspend_signal = SIGRTMIN;
     (void)sigemptyset(&blocked);
-    (void)sigaddset(&blocked, SIGRTMIN);
+    errno = 0;
+    (void)sigaddset(&blocked, suspend_signal);
     if ((held_depth < 32u) && (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)) {
         const DWORD caller = GetCurrentThreadId();
         int locked = EINVAL;
@@ -510,6 +528,7 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
             }
             if (pending != 0) {
                 const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+                errno = 0;
                 (void)nanosleep(&interval, NULL);
             }
         }
@@ -548,6 +567,7 @@ OS_MEMMAP static DWORD wait_any(DWORD count,
             waiting = 0;
         } else if (waiting != 0) {
             const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+            errno = 0;
             (void)nanosleep(&interval, NULL);
         } else {
             /* A handle was signalled or failed. */
@@ -622,6 +642,7 @@ OS_MEMMAP static BOOL close_thread(HANDLE thread)
         }
     } else if ((InterlockedCompareExchange(&thread->ended, 0, 0) != 0) &&
                (InterlockedCompareExchange(&thread->joined, 0, 0) != 0)) {
+        errno = 0;
         if (munmap(thread->mapping, thread->mapping_size) != 0) {
             closed = FALSE;
         } else {
@@ -734,13 +755,17 @@ OS_MEMMAP void Sleep(DWORD milliseconds)
     struct timespec pause_time;
     if (milliseconds == INFINITE) {
         for (;;) {
+            errno = 0;
             (void)pause();
         }
     }
     pause_time.tv_sec = (time_t)milliseconds / (time_t)1000;
     pause_time.tv_nsec = ((long)milliseconds % 1000L) * 1000000L;
-    while (nanosleep(&pause_time, &pause_time) != 0 && errno == EINTR) {
-    }
+    int status;
+    do {
+        errno = 0;
+        status = nanosleep(&pause_time, &pause_time);
+    } while ((status != 0) && (errno == EINTR));
 }
 
 OS_MEMMAP void ExitProcess(DWORD status) { _exit((int)status); }

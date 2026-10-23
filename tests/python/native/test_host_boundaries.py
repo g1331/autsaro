@@ -221,6 +221,26 @@ class NativeFacilityTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "event success/reset/failure/interruption observed\n")
                         self.assertEqual(result.stderr, "")
 
+    def test_native_errno_across_initialization_wait_and_cleanup(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "native-errno"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_native_errno.c"),
+                    link_flags=tuple(f"-Wl,--wrap={name}" for name in (
+                        "clock_gettime", "sysconf", "mmap", "mprotect", "munmap", "eventfd",
+                        "nanosleep", "sigaddset", "sigaction", "pthread_create",
+                    )),
+                )
+                for scenario in ("normal", "sleep-interrupted", "protect-error", "create-error"):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0, result)
+                        self.assertEqual(result.stdout, "native errno initialized across signal, clock, sleep, mapping, event and cleanup calls\n")
+                        self.assertEqual(result.stderr, "")
+
     def test_kernel_calls_native_mutex_and_stack_capacity(self):
         import os_suites
 

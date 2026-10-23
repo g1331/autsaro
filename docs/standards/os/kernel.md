@@ -32,7 +32,7 @@ SC1 的任务、事件、资源、计数器、闹钟、调度表、中断、hook
 
 Linux `Os_HostLinux.c` 的 `CreateEventA` 为每个事件持有非阻塞 eventfd；`Os_HostSetEvent`、`ResetEvent` 与 `WaitForSingleObject` 由原生端口、tick 确认和关闭路径消费。事件计数只在完整八字节读取后视为已消费；手动复位等待只观察可读性。负 `poll` 或 `POLLERR`／`POLLHUP`／`POLLNVAL` 返回 `WAIT_FAILED`，不能成为正常超时或无限等待。读／写／poll 的 `EINTR` 保留未完成操作并重新调用；读到 `EAGAIN` 表示当前无可消费事件，零读／短读及其他读错误保留失败。
 
-此处按固定 MISRA 2013 主文 D4.7（印刷页30／PDF38）的错误信息义务整改，不是 AUTOSAR 必需冲突或偏离。R17.7（页141–142／PDF149–150）允许显式丢弃普通返回值，但不能替代错误分类。AMD1 R22.8–22.10（页13–16／PDF21–24）也覆盖实际通过 errno 返回错误的附加函数：每次调用前在同函数清零，只有负返回值才按本次 errno 分类；返回值已确定成功时使用 R22.9 的例外。AMD2 的语言扩充及 TC2.38 的 R22.9 标题勘误不改变本项目 C99 的该结论。固定 checker 的 R22.10 原始报告不因此删除或改写。
+此处按固定 MISRA 2013 主文 D4.7（印刷页30／PDF38）的错误信息义务整改，不是 AUTOSAR 必需冲突或偏离。R17.7（页141–142／PDF149–150）允许显式丢弃普通返回值，但不能替代错误分类。AMD1 R22.8–22.10（页13–16／PDF21–24）也覆盖实际通过 errno 返回错误的附加函数：每次调用前在同函数清零，只有负返回值才按本次 errno 分类；返回值本身可确定是否发生错误时使用 R22.9 的例外。AMD2 的语言扩充及 TC2.38 的 R22.9 标题勘误不改变本项目 C99 的该结论。固定 checker 的 R22.10 原始报告不因此删除或改写。
 
 `NativeFacilityTests.test_native_handle_errors_and_resource_reuse` 链接实际 OS 与平台实现，以真实描述符检查自动／手动复位，再注入 poll／read／write 错误、中断和 EAGAIN；包括无限等待遇到错误必须返回，以及 errno 遗留值不能制造零读／短读成功。此证据只处置这些调用点；D4.7 的其他调用、采用内核及完整221项人工评估仍由 [#58](https://github.com/g1331/autsaro/issues/58) 承接。
 
@@ -67,6 +67,10 @@ Linux `Sleep` 的两个时间字段先把原始 DWORD 转成实际64位 `time_t`
 Windows采用端口在处理器数不满足其既有进入条件时保留pdFAIL及调度启动失败路径，删除其中非必需printf和stdio.h包含；外层仍走正常的OS失败报告，不以C标准I/O作为内核低层报错设施。此处按R21.6（2013主文页169／PDF177，AMD2.79覆盖标准I/O标识符／宏和wide I/O）修复独立的采用代码，不追认上游例外，也不重复#60已整改的一方I/O。新表示复制显式包含string.h，ptrdiff_t显式包含stddef.h。
 
 人工核查将相同移位根因继续追到`Os.c`的资源任务组／任务mask与`Os_BackendResource`：实际支持16个Task，验证只把ID限制为0..15，因此1u的unsigned-char essential宽度仍不足；四处改为uint32左操作数。`Os_InterruptAllows`和`source_control`的两个UINT32_C(1)同样改为uint32，仍由0..31边界保护。保留全部Task／ISR容量，`capacity`与`nested-interrupts`继续消费真实配置。内核优先级、任务名长度和notification数组数量采用unsigned常量，队列unsigned长度／大小及scheduler挂起计数按同类别比较，处理R10.4；这些固定数值和原有拒绝边界没有改变。公共类型与boolean宏的处置见[标准类型](../types.md#c99-essential-type-与实际常量)。
+
+人工核查的R22.8还覆盖`Os_HostLinux.c`的时钟、sysconf、映射／保护／回收、eventfd、等待中的nanosleep、Sleep和信号安装，以及`Os_StackPrepare`的两个sigaction。每次调用前在同一函数清零；短路中的连续调用拆开，SIGRTMIN的动态求值在清零前完成。R22.9原文例外允许由返回值判定是否出错，不增加重复errno判错；失败、EINTR重试和资源回收仍走原结果路径。依据AMD1 R22.8–22.10（页13–16／PDF21–24）及TC2.38，另按所选Linux的[时钟](https://man7.org/linux/man-pages/man2/clock_gettime.2.html#RETURN_VALUE)、[sysconf](https://man7.org/linux/man-pages/man3/sysconf.3.html#RETURN_VALUE)、[映射](https://man7.org/linux/man-pages/man2/mmap.2.html#RETURN_VALUE)和[nanosleep](https://man7.org/linux/man-pages/man2/nanosleep.2.html#RETURN_VALUE)契约分类。直接内核边界`Os_LinuxAltStack`／futex返回负错误值，pthread调用返回错误号，不因此伪装成errno接口。
+
+`NativeFacilityTests.test_native_errno_across_initialization_wait_and_cleanup`在真实设施成功后留下非零errno，逐次观察九类调用入口；正常与被中断Sleep、mprotect失败和pthread创建失败都经过真实初始化／清理路径。可回收actor的映射释放与普通注册线程保留栈身份是不同所有权路径，夹具使用原生端口实际的前者；有限single／wait-any等待和mutex也实际执行。此处的errno整改不处置signal.h／time.h的独立规则报告，不改变原始通过状态或目录中的人工评估状态。
 
 ## 目标端口承担的差距
 
