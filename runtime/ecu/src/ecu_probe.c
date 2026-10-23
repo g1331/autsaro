@@ -3,7 +3,7 @@
 #include "Ecu_TargetConfig.h"
 #include "Os_Host.h"
 #include "Rte_Main.h"
-#include <stdio.h>
+#include "Os_HostIo.h"
 #include <stdlib.h>
 
 static void require(int condition)
@@ -18,17 +18,24 @@ static unsigned
 int Ecu_TargetTestFailStage(unsigned stage) { return stage == failure_stage; }
 void Ecu_TargetTestRetire(unsigned stage)
 {
-    if (printf("ecu_retire stage=%u\n", stage) < 0) {
+    char storage[64];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextField(&text, "ecu_retire stage=", stage);
+    Os_HostTextByte(&text, '\n');
+    if (Os_HostTextWrite(&text) == 0) {
         Os_HostExit(93u);
     }
 }
 void Ecu_TargetTestShutdown(StatusType reason)
 {
-    if (printf("ecu_shutdown reason=%u state=%u fail_stage=%u schm_timing=%u\n",
-               reason,
-               Ecu_TargetState(),
-               failure_stage,
-               (unsigned)Ecu_SchMTimingActive()) < 0) {
+    char storage[128];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextField(&text, "ecu_shutdown reason=", reason);
+    Os_HostTextField(&text, " state=", Ecu_TargetState());
+    Os_HostTextField(&text, " fail_stage=", failure_stage);
+    Os_HostTextField(&text, " schm_timing=", Ecu_SchMTimingActive());
+    Os_HostTextByte(&text, '\n');
+    if (Os_HostTextWrite(&text) == 0) {
         Os_HostExit(93u);
     }
 }
@@ -51,12 +58,15 @@ static Os_HostThreadResultType control(void *argument)
             Ecu_OutputRecord output;
             StatusType status = Ecu_TargetTakeOutput(&output);
             if (status == E_OK) {
-                require(printf("ecu_output epoch=%llu ticket=%llu pdu=%u id=%u dlc=%u\n",
-                               (unsigned long long)output.epoch,
-                               (unsigned long long)output.ticket,
-                               output.pdu,
-                               output.can_id,
-                               output.dlc) >= 0);
+                char storage[192];
+                Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+                Os_HostTextField(&text, "ecu_output epoch=", output.epoch);
+                Os_HostTextField(&text, " ticket=", output.ticket);
+                Os_HostTextField(&text, " pdu=", output.pdu);
+                Os_HostTextField(&text, " id=", output.can_id);
+                Os_HostTextField(&text, " dlc=", output.dlc);
+                Os_HostTextByte(&text, '\n');
+                require(Os_HostTextWrite(&text) != 0);
                 require(Ecu_TargetConfirmOutput(output.ticket, output.pdu) == E_OK);
             } else {
                 require(status == E_OS_NOFUNC);
@@ -70,7 +80,8 @@ static Os_HostThreadResultType control(void *argument)
         }
         require((completion.epoch == step) && (completion.kernel_tick == (uint32_t)step));
     }
-    require(printf("ecu_probe completed=20\n") >= 0);
+    require(Os_HostWriteBytes(
+                0, "ecu_probe completed=20\n", sizeof("ecu_probe completed=20\n") - 1u) != 0);
     ShutdownOS(E_OK);
     return 0u;
 }

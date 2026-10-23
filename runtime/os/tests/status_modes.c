@@ -75,6 +75,9 @@ void ShutdownHook(StatusType error)
                  peers,
                  (unsigned)(remaining == UINT64_MAX),
                  (unsigned)error);
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 TASK(Peer)
 {

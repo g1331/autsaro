@@ -27,6 +27,9 @@ void Ecu_TargetTestRetire(unsigned stage) { (void)stage; }
 void Ecu_TargetTestShutdown(StatusType reason) {
     printf("scheduler_consumer enabled=%u calls=%u reason=%u\n", expected_enabled, scheduler_calls,
            reason);
+    if (fflush(stdout) != 0) {
+        Os_HostExit(93u);
+    }
     if (reason == E_OK && scheduler_calls != 2u) {
         ExitProcess(E_OS_STATE);
     }

@@ -180,6 +180,9 @@ void ShutdownHook(StatusType error)
     for (unsigned i = 0u; i < errors; ++i) {
         printf("matrix_error status=%u service=%u\n", error_status[i], error_service[i]);
     }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void owner(void)
 {

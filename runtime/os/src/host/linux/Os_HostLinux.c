@@ -3,6 +3,7 @@
 #define _GNU_SOURCE
 #endif
 #include "Os_HostLinux.h"
+#include "Os_HostIo.h"
 #include "Os_Stack.h"
 
 #include <errno.h>
@@ -780,6 +781,72 @@ OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
         }
     }
     return stopped;
+}
+OS_MEMMAP static int write_bytes(int descriptor, const char *data, size_t length)
+{
+    size_t offset = 0u;
+    int result = 1;
+    while ((offset < length) && (result != 0)) {
+        ssize_t count;
+        errno = 0;
+        count = write(descriptor, &data[offset], length - offset);
+        if (count > 0) {
+            offset += (size_t)count;
+        } else if ((count < 0) && (errno == EINTR)) {
+            /* No bytes transferred; retry the same suffix. */
+        } else {
+            result = 0;
+        }
+    }
+    return result;
+}
+
+OS_MEMMAP int Os_HostWriteBytes(int error_stream, const char *data, size_t length)
+{
+    sigset_t blocked;
+    sigset_t previous;
+    sigset_t pending;
+    int result = 0;
+    const struct timespec immediate = {0, 0};
+    if ((error_stream == 0) || (error_stream == 1)) {
+        /* Convert this call's broken pipe into an error without changing the
+         * process disposition or consuming a signal already owned by the caller. */
+        int prepared;
+        errno = 0;
+        prepared = sigemptyset(&blocked);
+        if (prepared == 0) {
+            errno = 0;
+            prepared = sigaddset(&blocked, SIGPIPE);
+        }
+        if (prepared == 0) {
+            prepared = pthread_sigmask(SIG_BLOCK, &blocked, &previous);
+        }
+        if (prepared == 0) {
+            errno = 0;
+            if (sigpending(&pending) == 0) {
+                errno = 0;
+                const int was_pending = sigismember(&pending, SIGPIPE);
+                if (was_pending >= 0) {
+                    errno = 0;
+                    result = write_bytes(
+                        (error_stream == 0) ? STDOUT_FILENO : STDERR_FILENO, data, length);
+                    if ((result == 0) && (errno == EPIPE) && (was_pending == 0)) {
+                        int signal_number;
+                        do {
+                            errno = 0;
+                            signal_number = sigtimedwait(&blocked, NULL, &immediate);
+                        } while ((signal_number < 0) && (errno == EINTR));
+                        /* An ignored SIGPIPE creates no pending signal; the
+                         * output result remains failure in either case. */
+                    }
+                }
+            }
+            if (pthread_sigmask(SIG_SETMASK, &previous, NULL) != 0) {
+                result = 0;
+            }
+        }
+    }
+    return result;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"

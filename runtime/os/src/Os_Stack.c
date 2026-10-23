@@ -2,7 +2,7 @@
 #define _WIN32_WINNT 0x0602
 #include "Os_Backend.h"
 #include "Os_Stack.h"
-#include <stdio.h>
+#include "Os_HostIo.h"
 
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
@@ -339,10 +339,25 @@ OS_MEMMAP static const char fatal_suffix[] =
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+OS_MEMMAP static int fatal_write(HANDLE handle, const char *data, size_t length)
+{
+    size_t offset = 0u;
+    int result = 1;
+    while ((offset < length) && (result != 0)) {
+        DWORD written = 0u;
+        if ((WriteFile(handle, &data[offset], (DWORD)(length - offset), &written, NULL) == 0) ||
+            (written == 0u)) {
+            result = 0;
+        } else {
+            offset += written;
+        }
+    }
+    return result;
+}
+
 OS_MEMMAP void Os_StackFatalExit(void)
 {
     size_t used = 0u, i;
-    DWORD written;
     const Os_StackFaultType *fault = &Os_Fault;
     if (InterlockedCompareExchange(&fatal_claimed, 1, 0) != 0) {
         Sleep(INFINITE);
@@ -371,53 +386,66 @@ OS_MEMMAP void Os_StackFatalExit(void)
     }
     /* No CRT/ordinary mutex/allocation or another Hook on exhausted control stacks. */
     if (fault_output == NULL || fault_output == INVALID_HANDLE_VALUE ||
-        !WriteFile(fault_output, fatal_text, (DWORD)used, &written, NULL) || written != used) {
-        (void)WriteFile(fault_error, fatal_text, (DWORD)used, &written, NULL);
+        fatal_write(fault_output, fatal_text, used) == 0) {
+        (void)fatal_write(fault_error, fatal_text, used);
     }
     ExitProcess(E_OS_STACKFAULT);
+}
+
+OS_MEMMAP static int report_stack(const Os_NativeStackType *record)
+{
+    char storage[512];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextAppend(&text, "STACK role=");
+    Os_HostTextByte(&text, record->role);
+    Os_HostTextField(&text, " tid=", record->thread_id);
+    Os_HostTextField(&text, " low=", record->reserve_low);
+    Os_HostTextField(&text, " high=", record->high);
+    Os_HostTextField(&text, " reserve=", record->reserve);
+    Os_HostTextField(&text, " commit=", record->committed);
+    Os_HostTextField(&text, " guard=", record->guard);
+    Os_HostTextField(&text, " guarantee=", record->guarantee);
+    Os_HostTextField(&text, " sp=", record->sp);
+    Os_HostTextField(&text, " observations=", record->observations);
+    Os_HostTextField(&text, " buffer_low=", record->kernel_buffer_low);
+    Os_HostTextField(&text, " buffer_high=", record->kernel_buffer_high);
+    Os_HostTextByte(&text, '\n');
+    return Os_HostTextWrite(&text);
+}
+
+OS_MEMMAP static int report_fault(const Os_StackFaultType *fault)
+{
+    char storage[256];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextAppend(&text, "FAULT role=");
+    Os_HostTextByte(&text, fault->role);
+    Os_HostTextField(&text, " tid=", fault->thread_id);
+    Os_HostTextAppend(&text, " exception=");
+    Os_HostTextHex(&text, fault->exception, 8u, 1);
+    Os_HostTextField(&text, " sp=", fault->sp);
+    Os_HostTextField(&text, " address=", fault->address);
+    Os_HostTextAppend(&text, " captured=1 origin=");
+    Os_HostTextByte(&text, fault->origin);
+    Os_HostTextByte(&text, '\n');
+    return Os_HostTextWrite(&text);
 }
 
 OS_MEMMAP int Os_StackReport(void)
 {
     int result = 0;
-    LONG i;
-    for (i = 0; i < stack_count && i < (LONG)OS_NATIVE_STACKS; ++i) {
-        Os_NativeStackType *record = &stacks[i];
-        if (record->thread_id == 0u) {
-            continue;
-        }
-        if (printf("STACK role=%c tid=%lu low=%llu high=%llu reserve=%llu commit=%llu "
-                   "guard=%llu guarantee=%lu sp=%llu observations=%u buffer_low=%llu "
-                   "buffer_high=%llu\n",
-                   record->role,
-                   (unsigned long)record->thread_id,
-                   (unsigned long long)record->reserve_low,
-                   (unsigned long long)record->high,
-                   (unsigned long long)record->reserve,
-                   (unsigned long long)record->committed,
-                   (unsigned long long)record->guard,
-                   (unsigned long)record->guarantee,
-                   (unsigned long long)record->sp,
-                   record->observations,
-                   (unsigned long long)record->kernel_buffer_low,
-                   (unsigned long long)record->kernel_buffer_high) < 0) {
-            result = -1;
+    LONG index;
+    for (index = 0; (index < stack_count) && (index < (LONG)OS_NATIVE_STACKS); ++index) {
+        if (stacks[index].thread_id != 0u) {
+            if (report_stack(&stacks[index]) == 0) {
+                result = -1;
+            }
         }
     }
-    for (i = 0; i < (LONG)OS_NATIVE_STACKS; ++i) {
-        Os_StackFaultType *fault = &fault_records[i];
-        if (fault->published == 0) {
-            continue;
-        }
-        if (printf(
-                "FAULT role=%c tid=%lu exception=%08lX sp=%llu address=%llu captured=1 origin=%c\n",
-                fault->role,
-                (unsigned long)fault->thread_id,
-                (unsigned long)fault->exception,
-                (unsigned long long)fault->sp,
-                (unsigned long long)fault->address,
-                fault->origin) < 0) {
-            result = -1;
+    for (index = 0; index < (LONG)OS_NATIVE_STACKS; ++index) {
+        if (fault_records[index].published != 0) {
+            if (report_fault(&fault_records[index]) == 0) {
+                result = -1;
+            }
         }
     }
     return result;

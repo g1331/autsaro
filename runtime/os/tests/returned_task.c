@@ -84,6 +84,9 @@ void ShutdownHook(StatusType error)
            last_service,
            trace,
            error);
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void owner(void)
 {

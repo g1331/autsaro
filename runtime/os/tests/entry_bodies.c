@@ -65,6 +65,9 @@ void ShutdownHook(StatusType error)
            errors,
            trace,
            error);
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static uint32_t replacement(void) { return 0u; }
 void StartupHook(void)

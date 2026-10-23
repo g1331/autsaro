@@ -212,6 +212,9 @@ void ShutdownHook(StatusType Error)
                Error) < 0) {
         ExitProcess(E_OS_STATE);
     }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 
 static void inspect_requests(TaskType id, unsigned count, uint64_t first, uint64_t second)

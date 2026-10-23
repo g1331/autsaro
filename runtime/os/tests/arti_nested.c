@@ -133,5 +133,6 @@ void Os_ArtiTestShutdownObserved(void)
            starts,
            service_queries,
            hook_errors);
+    arti_check(fflush(stdout) == 0);
 }
 int main(int argc, char **argv) { return nested_main(argc, argv); }

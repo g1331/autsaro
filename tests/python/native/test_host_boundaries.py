@@ -115,3 +115,63 @@ class HostBoundaryTests(unittest.TestCase):
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
                 self.assertNotIn("UNEXPECTED_UNLOCK", output)
+
+
+class HostIoTests(unittest.TestCase):
+    """Use the actual native adapter and full OS link, including syscall refusal seams."""
+
+    def test_native_bytes_and_record_completion(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            target = None
+            if os.name == "nt":
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                # Redirect only the selected production TUs after platform declarations.
+                for relative in ("src/host/windows/Os_HostWindows.c", "src/Os_Stack.c"):
+                    source = target / relative
+                    text = source.read_text(encoding="utf-8")
+                    text = text.replace('#include "Os_HostIo.h"', '#include "Os_HostIo.h"\n'
+                                        'BOOL WINAPI HostIoWriteFile(HANDLE, LPCVOID, DWORD, LPDWORD, LPOVERLAPPED);\n'
+                                        '#define WriteFile HostIoWriteFile')
+                    source.write_text(text, encoding="utf-8")
+            with os_suites.native_session(directory, "host-io"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/host_io.c"),
+                    target=target, link_flags=() if os.name == "nt" else tuple(f"-Wl,--wrap={name}" for name in (
+                        "write", "sigemptyset", "sigaddset", "sigpending", "sigismember",
+                    )),
+                )
+                expected = {
+                    "format": b"zero=0 max=18446744073709551615 hex=ffffffffffffffff fault=000000A5\x00\r\n",
+                    "capacity": b"", "hex-width": b"", "hex-value": b"", "hex-case": b"",
+                    "broken-pipe": b"", "partial": b"abcdef", "zero": b"", "partial-error": b"ab",
+                }
+                if os.name != "nt":
+                    expected.update({"interrupted": b"abcdef", "pending-pipe": b"", "errno-sequence": b"abcdef"})
+                for case, output in expected.items():
+                    with self.subTest(case=case):
+                        result = OwnedProcess(ProcessSpec.seconds(
+                            [str(binary), case], directory, 10, directory, case,
+                        )).wait()
+                        actual = result.stdout.read_bytes()
+                        self.assertEqual(result.exit_code, 0, (case, actual, result.stderr.read_bytes()))
+                        self.assertEqual(actual, output, case)
+
+                fault = (b"FATAL state=Failed reason=13 controllers_exhausted=1\nFAULT role=S "
+                         + (b"exception=" if os.name == "nt" else b"signal=")
+                         + b"00000000 captured=1 record_complete=1\n")
+                fatal_cases = ("fatal-partial", "fatal-zero", "fatal-broken-pipe")
+                if os.name != "nt":
+                    fatal_cases += ("fatal-interrupted", "fatal-errno")
+                for case in fatal_cases:
+                    with self.subTest(case=case):
+                        result = OwnedProcess(ProcessSpec.seconds(
+                            [str(binary), case], directory, 10, directory, case,
+                        )).wait()
+                        output, errors = result.stdout.read_bytes(), result.stderr.read_bytes()
+                        self.assertEqual(result.exit_code, 13, (case, output, errors))
+                        self.assertEqual(output, fault if case in ("fatal-partial", "fatal-interrupted", "fatal-errno") else b"", case)
+                        self.assertEqual(errors, fault if case == "fatal-broken-pipe" else b"", case)

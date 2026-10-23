@@ -234,6 +234,9 @@ void ShutdownHook(StatusType error)
     for (unsigned i = 0u; i < errors; ++i) {
         printf("mask_error status=%u service=%u actor=%c\n", statuses[i], services[i], actors[i]);
     }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void begin_mask(void)
 {

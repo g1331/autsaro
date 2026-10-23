@@ -1,10 +1,5 @@
 /** @file Host primitives (atomics, threads, events, exit) over Win32 or the Linux shim. */
 #include "Os_Host.h"
-#include <stdio.h>
-#if defined(_WIN32)
-#include <fcntl.h>
-#include <io.h>
-#endif
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
@@ -78,28 +73,6 @@ OS_MEMMAP int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds)
 OS_MEMMAP int Os_HostClose(Os_HostHandleType handle) { return CloseHandle(handle) != 0; }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
-#if defined(_WIN32)
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-OS_MEMMAP int Os_HostSetBinaryStandardStreams(void)
-{
-    const int input = _setmode(_fileno(stdin), _O_BINARY);
-    const int output = _setmode(_fileno(stdout), _O_BINARY);
-    return (input != -1) && (output != -1);
-}
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#else
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
-OS_MEMMAP int Os_HostSetBinaryStandardStreams(void)
-{
-    /* POSIX streams already preserve every byte, including CR and NUL. */
-    return 1;
-}
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 OS_MEMMAP void Os_HostExit(uint32_t status) { ExitProcess(status); }

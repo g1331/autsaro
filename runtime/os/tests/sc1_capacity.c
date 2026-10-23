@@ -1,5 +1,6 @@
 /** @file BCC and ECC conformance classes at their capacity and configuration limits. */
 #include "Os_Target.h"
+#include "Os_Host.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -78,6 +79,9 @@ void ShutdownHook(StatusType Error)
                o->events,
                o->final_events,
                (unsigned long long)o->counter);
+    }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
     }
 }
 static void entry(void)

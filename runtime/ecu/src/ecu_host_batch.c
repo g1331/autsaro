@@ -1,78 +1,118 @@
 /** @file Host batch ECU executable speaking HostBatchV1 over standard streams. */
 #include "Ecu_HostBridge.h"
 #include "Os_Host.h"
-#include <stdio.h>
+#include "Os_HostIo.h"
+
+#ifndef _WIN32
+#include <errno.h>
+#include <unistd.h>
+#endif
+
+/* The only input consumer owns this private platform read boundary. */
+static int read_byte(char *byte)
+{
+#ifdef _WIN32
+    DWORD count = 0u;
+    int result = -1;
+    if (ReadFile(GetStdHandle(STD_INPUT_HANDLE), byte, 1u, &count, NULL) != 0) {
+        result = (int)count;
+    } else if (GetLastError() == (DWORD)ERROR_BROKEN_PIPE) {
+        result = 0;
+    } else {
+        /* Invalid handles and other read failures are not EOF. */
+    }
+    return result;
+#else
+    ssize_t count;
+    do {
+        errno = 0;
+        count = read(STDIN_FILENO, byte, 1u);
+    } while ((count < 0) && (errno == EINTR));
+    return (count < 0) ? -1 : (int)count;
+#endif
+}
 
 static Ecu_HostBatch batch; /**< Native control only; HostBatchInitialize zeros before use. */
+
+static void receipt(Os_HostTextType *text, const Ecu_HostBatch *state, StatusType status)
+{
+    Os_HostTextAppend(text, (status == E_OK) ? "COMMIT_OK" : "COMMIT_ERROR");
+    Os_HostTextField(text, " batch=", state->batch_id);
+    Os_HostTextField(text, " epoch=", state->completed_epoch);
+    Os_HostTextField(text, " sequence=", state->sequence);
+    Os_HostTextField(text, " input_first=", state->first_input_sequence);
+    Os_HostTextField(text, " inputs=", state->count);
+    Os_HostTextField(text, " status=", status);
+    Os_HostTextField(text, " input_status=", state->input_status);
+    Os_HostTextField(text, " transport_status=", state->transport_status);
+    Os_HostTextField(text, " transport_epoch=", state->transport_epoch);
+    Os_HostTextField(text, " transport_count=", state->transport_count);
+}
 
 static int write_output(const Ecu_OutputRecord *output,
                         const Ecu_HostBatch *state,
                         StatusType status,
                         void *context)
 {
+    char storage[512];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
     (void)context;
     if (output == NULL) {
-        if (printf("%s batch=%llu epoch=%llu sequence=%llu input_first=%llu inputs=%u status=%u "
-                   "input_status=%u transport_status=%u transport_epoch=%llu transport_count=%u\n",
-                   (status == E_OK) ? "COMMIT_OK" : "COMMIT_ERROR",
-                   (unsigned long long)state->batch_id,
-                   (unsigned long long)state->completed_epoch,
-                   (unsigned long long)state->sequence,
-                   (unsigned long long)state->first_input_sequence,
-                   (unsigned)state->count,
-                   (unsigned)status,
-                   (unsigned)state->input_status,
-                   (unsigned)state->transport_status,
-                   (unsigned long long)state->transport_epoch,
-                   (unsigned)state->transport_count) < 0) {
-            return 0;
-        }
+        receipt(&text, state, status);
+    } else if ((output->dlc > sizeof(output->data)) || (output->can_id > 0x7ffu)) {
+        text.failed = 1;
     } else {
-        unsigned index;
-        if (printf("OUT epoch=%llu sequence=%llu ticket=%llu pdu=%u id=%u dlc=%u data=",
-                   (unsigned long long)output->epoch,
-                   (unsigned long long)state->sequence,
-                   (unsigned long long)output->ticket,
-                   (unsigned)output->pdu,
-                   (unsigned)output->can_id,
-                   (unsigned)output->dlc) < 0) {
-            return 0;
-        }
+        size_t index;
+        Os_HostTextField(&text, "OUT epoch=", output->epoch);
+        Os_HostTextField(&text, " sequence=", state->sequence);
+        Os_HostTextField(&text, " ticket=", output->ticket);
+        Os_HostTextField(&text, " pdu=", output->pdu);
+        Os_HostTextField(&text, " id=", output->can_id);
+        Os_HostTextField(&text, " dlc=", output->dlc);
+        Os_HostTextAppend(&text, " data=");
         for (index = 0u; index < output->dlc; ++index) {
-            if (printf("%02x", (unsigned)output->data[index]) < 0) {
-                return 0;
-            }
-        }
-        if (putchar('\n') == EOF) {
-            return 0;
+            Os_HostTextHex(&text, output->data[index], 2u, 0);
         }
     }
-    return fflush(stdout) == 0;
+    Os_HostTextByte(&text, '\n');
+    return Os_HostTextWrite(&text);
+}
+
+static int write_rejection(const Ecu_HostBatch *state, StatusType status)
+{
+    char storage[128];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextField(&text, "REJECT status=", status);
+    Os_HostTextField(&text, " epoch=", state->completed_epoch);
+    Os_HostTextField(&text, " sequence=", state->sequence);
+    Os_HostTextByte(&text, '\n');
+    return Os_HostTextWrite(&text);
 }
 
 /* Retain the exact byte count, including embedded NULs, and drain an oversized
  * line before refusing it. fgets/strlen would hide an invalid trailing suffix. */
 static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length)
 {
-    int byte;
+    char byte;
+    int received;
     size_t count = 0u;
     int overflow = 0;
     for (;;) {
-        byte = getchar();
-        if ((byte == EOF) || (byte == (int)'\n')) {
+        received = read_byte(&byte);
+        if ((received != 1) || (byte == '\n')) {
             break;
         }
         if (count < ECU_BATCH_LINE_CAPACITY) {
-            line[count] = (char)byte;
+            line[count] = byte;
             ++count;
         } else {
             overflow = 1;
         }
     }
-    if ((byte == EOF) && (ferror(stdin) != 0)) {
+    if (received < 0) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
-    if ((byte == EOF) && (count == 0u) && (overflow == 0)) {
+    if ((received == 0) && (count == 0u) && (overflow == 0)) {
         return 0;
     }
     if ((count != 0u) && (line[count - 1u] == '\r')) {
@@ -95,10 +135,7 @@ static Os_HostThreadResultType control(void *argument)
         Os_HostSleepMs(1u);
     }
     Ecu_HostBatchInitialize(&batch);
-    if (Os_HostSetBinaryStandardStreams() == 0) {
-        Ecu_TargetAbortNative(E_OS_STATE);
-    }
-    if ((printf("READY HostBatchV1\n") < 0) || (fflush(stdout) != 0)) {
+    if (Os_HostWriteBytes(0, "READY HostBatchV1\n", sizeof("READY HostBatchV1\n") - 1u) == 0) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     while (read_line(line, &length) != 0) {
@@ -109,11 +146,7 @@ static Os_HostThreadResultType control(void *argument)
             status = Ecu_HostBatchExecute(&batch, write_output, NULL);
         }
         if (status != E_OK) {
-            if ((printf("REJECT status=%u epoch=%llu sequence=%llu\n",
-                        (unsigned)status,
-                        (unsigned long long)batch.completed_epoch,
-                        (unsigned long long)batch.sequence) < 0) ||
-                (fflush(stdout) != 0)) {
+            if (write_rejection(&batch, status) == 0) {
                 Ecu_TargetAbortNative(E_OS_STATE);
             }
         }

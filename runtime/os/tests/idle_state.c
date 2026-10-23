@@ -119,6 +119,9 @@ void ShutdownHook(StatusType error)
                (unsigned long long)idle_cpu_ms,
                (unsigned long long)idle_window_ms);
     }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void owner(void)
 {

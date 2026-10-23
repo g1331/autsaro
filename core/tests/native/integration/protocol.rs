@@ -754,6 +754,15 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
         );
     }
 
+    let text = run(binary, &directory("cr-eof"), b"BEGIN 0\r\nCOMMIT\r");
+    assert_eq!(text.matches("COMMIT_OK ").count(), 1, "{text}");
+    let mut oversized = b"BEGIN 0\n".to_vec();
+    oversized.extend(std::iter::repeat_n(b'X', 129));
+    oversized.extend_from_slice(b"\nCOMMIT\nBEGIN 1\nCOMMIT\n");
+    let text = run(binary, &directory("oversized-line"), &oversized);
+    assert_eq!(text.matches("REJECT ").count(), 2, "{text}");
+    assert_eq!(text.matches("COMMIT_OK ").count(), 1, "{text}");
+
     // Compile the sealed production writer in the same control TU; the
     // fixture calls that exact function rather than simulating I/O refusal.
     let faults = built.scratch.0.join("host-batch-faults.c");
@@ -771,7 +780,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     // stage 8, which the mainline bootstrap does not have, and the mainline
     // cannot queue more than its one Tx hardware object holds (output
     // reuse is gated by the host confirmation).
-    for mode in ["fail", "block", "sequence", "write", "flush"] {
+    for mode in ["fail", "block", "sequence", "write", "closed"] {
         let directory = built.scratch.0.join("faults").join(mode);
         fs::create_dir_all(&directory).unwrap();
         let started = std::time::Instant::now();
@@ -806,7 +815,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
             assert_eq!(result.code(), Some(7), "{text}");
             assert_eq!(text.matches("fault_output ").count(), 1, "{text}");
             assert!(!text.contains("fault_commit "), "{text}");
-            if matches!(mode, "write" | "flush") {
+            if matches!(mode, "write" | "closed") {
                 assert!(
                     text.contains(&format!("physical_{mode} failed no_receipt ticket=")),
                     "{text}"
@@ -816,6 +825,98 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
             if mode == "block" {
                 assert!(started.elapsed() >= Duration::from_millis(4500));
             }
+        }
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn probe_confirms_only_fully_written_output() {
+    let built = host_batch_project();
+    let output = build(
+        "probe",
+        Some(&root().join("core/tests/fixtures/host-batch/probe_io.c")),
+        &built.scratch,
+        &built.project,
+    );
+    for closed in [false, true] {
+        let mut command = Command::new(super::tooling::native_binary(&output, "ecu_probe"));
+        if closed {
+            command.arg("closed");
+        }
+        let result = super::tooling::run_public_command(
+            &mut command,
+            &built.scratch.0,
+            if closed {
+                "probe-closed"
+            } else {
+                "probe-complete"
+            },
+            Duration::from_secs(15),
+        );
+        let text = String::from_utf8_lossy(&result.stdout);
+        let errors = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(
+            result.status.code(),
+            Some(if closed { 7 } else { 0 }),
+            "{text}{errors}"
+        );
+        if closed {
+            assert!(text.is_empty() && errors.is_empty(), "{text}{errors}");
+        } else {
+            assert_eq!(text.matches("ecu_output epoch=").count(), 2, "{text}");
+            assert_eq!(errors, "confirmed\nconfirmed\n");
+            assert!(text.contains("ecu_probe completed=20"), "{text}");
+        }
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn host_batch_refuses_invalid_output_fields_and_distinguishes_read_errors() {
+    let built = host_batch_project();
+    let output = build(
+        "probe",
+        Some(&root().join("core/tests/fixtures/host-batch/batch_io.c")),
+        &built.scratch,
+        &built.project,
+    );
+    for mode in ["fields", "read-error", "read-eof"] {
+        let result = super::tooling::run_public_command(
+            Command::new(super::tooling::native_binary(&output, "ecu_probe"))
+                .arg(mode)
+                .stdin(Stdio::null()),
+            &built.scratch.0,
+            mode,
+            Duration::from_secs(15),
+        );
+        let text = String::from_utf8_lossy(&result.stdout);
+        let errors = String::from_utf8_lossy(&result.stderr);
+        assert!(errors.is_empty(), "{errors}");
+        if mode == "fields" {
+            assert!(result.status.success(), "{text}{errors}");
+            assert_eq!(text.lines().count(), 2, "{text}");
+            assert_eq!(
+                text.lines().next().unwrap(),
+                "OUT epoch=18446744073709551615 sequence=18446744073709551615 ticket=18446744073709551615 pdu=0 id=2047 dlc=8 data=ffffffffffffffff"
+            );
+            assert!(text.contains("COMMIT_OK batch=18446744073709551615 epoch=18446744073709551615 sequence=18446744073709551615 input_first=18446744073709551615 inputs=256 status=0 input_status=0 transport_status=0 transport_epoch=18446744073709551615 transport_count=65535\n"), "{text}");
+        } else {
+            assert_eq!(
+                result.status.code(),
+                Some(if mode == "read-error" { 7 } else { 0 }),
+                "{text}{errors}"
+            );
+            assert!(text.starts_with("READY HostBatchV1\n"), "{text}");
+            assert!(
+                text.contains(if mode == "read-error" {
+                    "lifecycle=Closed state=Failed reason=7"
+                } else {
+                    "lifecycle=Closed state=Ready reason=0"
+                }),
+                "{text}"
+            );
+            assert!(!text.contains("COMMIT_OK"), "{text}");
         }
     }
 }

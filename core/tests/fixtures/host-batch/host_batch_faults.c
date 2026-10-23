@@ -31,6 +31,9 @@ int Ecu_TargetTestFailStage(unsigned stage) {
 void Ecu_TargetTestRetire(unsigned stage) { (void)stage; }
 void Ecu_TargetTestShutdown(StatusType reason) {
     require(printf("output_close queued=%u reason=%u\n", queued, reason) >= 0);
+    if (fflush(stdout) != 0) {
+        Os_HostExit(93u);
+    }
 }
 #endif
 
@@ -51,9 +54,9 @@ static int sink(const Ecu_OutputRecord *output, const Ecu_HostBatch *state, Stat
             /* Use the exact production writer, with a real failed host stream. */
             int written = write_output(output, state, status, context);
             require(written == 0);
-            require(ferror(stdout) != 0);
-            require(fprintf(stderr, "physical_%s failed no_receipt ticket=%llu\n",
-                            (mode == 5) ? "write" : "flush",
+            require(fprintf(stderr,
+                            "physical_%s failed no_receipt ticket=%llu\n",
+                            (mode == 5) ? "write" : "closed",
                             (unsigned long long)output->ticket) >= 0);
             return 0;
         }
@@ -105,6 +108,7 @@ static Os_HostThreadResultType control(void *argument)
         require(Ecu_HostBatchExecute(&batch, sink, NULL) == E_OK);
         require(batch.sequence == UINT64_MAX);
         require(printf("sequence_limit before_state_change=pass final_identity=pass\n") >= 0);
+        require(fflush(stdout) == 0);
         ShutdownOS(E_OK);
     } else {
         require(Ecu_HostBatchParse(&batch, "BEGIN 10", 8u, &command) == E_OK);
@@ -113,17 +117,20 @@ static Os_HostThreadResultType control(void *argument)
 #ifdef _WIN32
             HANDLE reader;
             HANDLE writer;
-            int descriptor;
             require(CreatePipe(&reader, &writer, NULL, 0u) != 0);
             require(CloseHandle(reader) != 0);
-            descriptor = _open_osfhandle((intptr_t)writer, _O_WRONLY | _O_BINARY);
-            require(descriptor >= 0);
-            require(_dup2(descriptor, _fileno(stdout)) == 0);
-            require(_close(descriptor) == 0);
+            if (mode == 6) {
+                require(CloseHandle(writer) != 0);
+                writer = INVALID_HANDLE_VALUE;
+            }
+            require(SetStdHandle(STD_OUTPUT_HANDLE, writer) != 0);
 #else
-            require(freopen("/dev/full", "w", stdout) != NULL);
+            if (mode == 5) {
+                require(freopen("/dev/full", "w", stdout) != NULL);
+            } else {
+                require(close(STDOUT_FILENO) == 0);
+            }
 #endif
-            require(setvbuf(stdout, NULL, (mode == 5) ? _IONBF : _IOFBF, BUFSIZ) == 0);
         }
         (void)Ecu_HostBatchExecute(&batch, sink, NULL);
         /* A failed/blocked output must close, not report a completed batch. */
@@ -142,7 +149,7 @@ int main(int argc, char **argv) {
         mode = 2;
     } else if (strcmp(argv[1], "write") == 0) {
         mode = 5;
-    } else if (strcmp(argv[1], "flush") == 0) {
+    } else if (strcmp(argv[1], "closed") == 0) {
         mode = 6;
     } else if (strcmp(argv[1], "sequence") == 0) {
         mode = 3;

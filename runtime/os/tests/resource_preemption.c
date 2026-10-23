@@ -195,6 +195,9 @@ void ShutdownHook(StatusType Error)
                Error) < 0) {
         ExitProcess(E_OS_STATE);
     }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void task_a(void)
 {

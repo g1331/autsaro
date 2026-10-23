@@ -3,15 +3,15 @@
 #include "Os_IntegrationHooks.h"
 #include <errno.h>
 #include <limits.h>
-#include <stdio.h>
+#include "Os_HostIo.h"
 #include <stdlib.h>
 #include <setjmp.h>
 #include <string.h>
 
 #ifdef __linux__
-#define OS_NATIVE_HEAP "resource_calls=%u hidden=2 controllers=2 heap=posix static=freertos "
+#define OS_NATIVE_HEAP "hidden=2 controllers=2 heap=posix static=freertos "
 #else
-#define OS_NATIVE_HEAP "resource_calls=%u hidden=2 controllers=2 heap=windows static=freertos "
+#define OS_NATIVE_HEAP "hidden=2 controllers=2 heap=windows static=freertos "
 #endif
 
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
@@ -1040,21 +1040,22 @@ OS_MEMMAP static void report_and_exit(void)
     if (Os_StackReport() != 0) {
         output_failed = 1;
     }
-    if (printf("lifecycle=Closed state=%s reason=%u trace=%s threads=%u events=%u "
-               "mutexes=%u " OS_NATIVE_HEAP
-               "input_closed=1 tick_closed=1 time_signal_failed=%d trace_dropped=%llu\n",
-               shutdown_reason == E_OK ? "Ready" : "Failed",
-               shutdown_reason,
-               (const char *)trace,
-               threads,
-               events,
-               mutexes,
-               resource_calls,
-               Os_TimeSignalFailed(),
-               (unsigned long long)trace_dropped) < 0) {
-        output_failed = 1;
-    }
-    if (fflush(stdout) != 0) {
+    char storage[512];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextAppend(&text, "lifecycle=Closed state=");
+    Os_HostTextAppend(&text, (shutdown_reason == E_OK) ? "Ready" : "Failed");
+    Os_HostTextField(&text, " reason=", shutdown_reason);
+    Os_HostTextAppend(&text, " trace=");
+    Os_HostTextAppend(&text, (const char *)trace);
+    Os_HostTextField(&text, " threads=", threads);
+    Os_HostTextField(&text, " events=", events);
+    Os_HostTextField(&text, " mutexes=", mutexes);
+    Os_HostTextField(&text, " resource_calls=", resource_calls);
+    Os_HostTextAppend(&text, " " OS_NATIVE_HEAP "input_closed=1 tick_closed=1");
+    Os_HostTextField(&text, " time_signal_failed=", (Os_TimeSignalFailed() != 0) ? 1u : 0u);
+    Os_HostTextField(&text, " trace_dropped=", trace_dropped);
+    Os_HostTextByte(&text, '\n');
+    if (Os_HostTextWrite(&text) == 0) {
         output_failed = 1;
     }
     ExitProcess((output_failed != 0 && shutdown_reason == E_OK) ? E_OS_STATE : shutdown_reason);
@@ -1418,8 +1419,7 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
     }
     Os_StackRecordBuffer(start->buffer_top);
     if (start->entry == task_entry) {
-        const Os_TaskConfigType *task = start->argument;
-        const uint32 index = task_index(task->id);
+        const uint32 index = task_slot(start->argument);
         configASSERT(index < Os_Config->task_count);
         Os_ArtiTaskStacks[index] = Os_StackCurrent();
         Os_ArtiTaskContexts[index] = Os_StackSavedContext(Os_ArtiTaskStacks[index]);
