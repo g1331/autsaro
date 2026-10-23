@@ -1,6 +1,13 @@
 /** @file Controlled GCC x64 adapter; no automotive time or scheduling. */
 #include "Det_Host.h"
-#include <stdlib.h>
+#if defined(_WIN32)
+/* Import process primitives without unrelated RPC boolean declarations. */
+#include <processthreadsapi.h>
+#else
+#include <unistd.h>
+#endif
+
+#define DET_HOST_FATAL_STATUS 134
 
 /* Same controlled GCC native TLS mechanism as the delivered OS hook context.
  * Each reporting thread has its own recursion boundary; independent threads
@@ -21,10 +28,14 @@ DET_CODE boolean Det_HostEnterDevelopmentReport(void)
 }
 DET_CODE void Det_HostHalt(void)
 {
-    /* R24-11 requires stopping execution, including an uninitialized report.
-     * The controlled host aborts the ECU process instead of hanging its owner.
-     */
-    abort();
+    /* Stop the entire ECU without CRT cleanup, locks or buffered output. */
+#if defined(_WIN32)
+    (void)TerminateProcess(GetCurrentProcess(), DET_HOST_FATAL_STATUS);
+    /* Self-termination never returns on success; trap if the platform refuses it. */
+    __builtin_trap();
+#else
+    _exit(DET_HOST_FATAL_STATUS);
+#endif
 }
 #define DET_STOP_SEC_CODE
 #include "Det_MemMap.h"

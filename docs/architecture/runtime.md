@@ -61,17 +61,30 @@ flowchart LR
 
 ## 主机终止、流协议与激活重启
 
-主机适配的历史偏离草案由 [#60](https://github.com/g1331/autsaro/issues/60) 跟踪。D-10／D-34 是历史问题标识，不能直接当作当前源码的规则裁决。固定基线及合法原文要求见[标准基线](../standards/README.md)与 [ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)。以下说明实现边界和候选改造的验收约束；候选尚未实现，现有调用的 MISRA 适用性与完整评估仍依赖 [#57](https://github.com/g1331/autsaro/issues/57)／[#58](https://github.com/g1331/autsaro/issues/58)。
+主机适配的历史偏离草案由 [#60](https://github.com/g1331/autsaro/issues/60) 跟踪。D-10／D-34 是历史标识，当前判断依据实际调用与固定 MISRA C:2012 Third Edition＋AMD1–AMD4／TC1–TC2、C99。原件已可读，身份及持久保存入口见[标准基线](../standards/README.md)；资料可用、规范裁决、源码整改和完整符合分别证明。[ADR 0023](../adr/0023-autosar-required-conflict-disposition.md) 不提供主机自动豁免。
 
 ### 锁失败与停止策略（D-10）
 
-`runtime/host/src/Can_HostLock.c` 为生成 SchM、通信栈、诊断栈、模式数据和主机 BusSM 提供独立锁。void Enter／Exit 的调用方以“已取得／已释放保护”继续执行，不能接收可恢复的锁错误。`Can_Fatal` 通过 `abort` 终止进程，覆盖 once、mutex 属性与初始化、加锁／解锁失败，以及非法 area 和 strict-area 嵌套。`Can_InitRecursive` 仅在属性释放等步骤成功后发布 ready，失败时尝试销毁已创建 mutex。当前机制不是旧文件中仅有的三个 abort 点。
+`runtime/host/src/Can_HostLock.c` 为生成 SchM、通信栈、诊断栈、模式数据和主机 BusSM 提供独立锁。void Enter／Exit 只有成功取得／释放保护或终止两种结果，不能忽略故障返回或用 `CAN_BUSY` 代替保护。每线程的 owner token 同时记录“是否持区”和具体区；任何同区／跨区嵌套、非法 area、无 owner 或错区 Exit 都在接触对应平台锁前拒绝。退出必须由原线程匹配原区，不能由其他线程代为释放。
 
-若授权原文核对要求替换终止调用，候选是锁提供者内部的平台 fatal 原语：Windows／Linux 各自停止整个 ECU 进程，永不返回，也不进入可能尚未初始化或已损坏的 OS／SchM 关闭链。实施前须确定并验证信号／退出状态、core dump、检测器及进程 owner 的观察契约。不能把锁失败映射成 `CAN_BUSY`、忽略失败后返回、等待健康控制器无限期接管，或仅把 abort 藏到另一个包装中。
+Linux 使用 `pthread_once` 与默认非递归 mutex，ready 仅在初始化成功后发布。既有 strict-area 协议不允许递归，因此无需递归属性和 `_XOPEN_SOURCE`。这消除了该 TU 的 R21.1 宏操作，未把同一宏移到编译参数；C99 独立消费者不带 feature 宏编译并执行。Windows 保留 once／critical section，同样由 owner token 限定为严格不嵌套的区。正常竞争仍阻塞到取得锁，不伪报 busy；once、初始化、加锁／解锁失败终止进程。
 
-Linux 在包含 pthread 头之前定义 `_XOPEN_SOURCE=700`，用于取得递归 mutex 的声明。候选改造须先在锁翻译单元及全部直接 C99 consumer 中验证所需接口的真实可见性，再按授权原文核对保留名字及适用例外；把同一宏移到编译参数不证明问题已消除。不能改用普通 mutex 后保留递归的初始化假设，也不能删掉嵌套检测来迎合测试。
+`Can_Fatal` 与 `Det_HostHalt` 直接使用平台进程停止：Linux `_exit(134)`（受控 glibc 的进程级退出），Windows `TerminateProcess(GetCurrentProcess(), 134)`；Windows 自终止失败时 trap。它们不调用标准终止函数，不执行 CRT 清理、stdio、新锁或可能损坏的 OS／SchM 关闭链。集成方以实际进程退出码 **134** 识别此类故障；不再使用 SIGABRT、用户 signal handler 或 core dump 作为该故障的观察契约。Windows 平台拒绝自终止的 trap 回退也须按失败退出处理，不要求其状态仍为 134。
 
-`Det_HostHalt` 的 abort 是另一条真实停止路径：开发报告依次执行 hooks 后停止，未初始化和递归报告同样停止。锁提供者的替换不能使它返回、改变 hooks 次序或把停止改成成功退出。现有 `runtime_contracts::det_standard_consumer_executes_runtime_and_halt_contracts` 检查真实停止状态；`test_host_boundaries.py` 通过替换平台故障入口验证每条锁失败与嵌套策略，后者不等于验证未替换的生产 abort。
+Det 仍在全部开发 hooks 按顺序返回后停止；未初始化和递归报告直接停止，runtime 报告仍可返回。R24-11 Det §7.3 的停止和通知义务、PDF 第32–33页图9.1–9.5 及 SpecificationsARXML 正文都不要求 `abort`。平台适配替换满足这些义务而消除 R21.8 的标准终止调用，不使用偏离注释或 suppression。`runtime_contracts::det_standard_consumer_executes_runtime_and_halt_contracts` 检查通知顺序及真实退出状态；`test_host_boundaries.py` 分别验证替换平台调用后的错误传播、未替换生产停止（含已安装 SIGABRT handler／CRT cleanup）、owner 拒绝和所有区的真实线程竞争。
+
+### 四条规则的修订与剩余整改
+
+下列定位是本项逐条核对范围，原文不入库；完整源码行／反例／检查证据留在实施 PR。四条均为 Required，没有本项主机自动例外；不从本表推导其他规则或采用代码已评估。
+
+| 规则 | 修订合成与本项结论 |
+| --- | --- |
+| R21.1 | 2013 主文印刷页165–166；TC1 页10 增加 R20.5 交叉引用；AMD2 §2.10、AMD2.27 页9 扩充 C11 适用性／来源。AMD1／AMD3／AMD4／TC2 没有增加本项 feature 宏例外。锁 TU 已去除 `_XOPEN_SOURCE`；OS 其他 feature 宏仍按各自真实闭包在 #60 评估，不能批量视为合规。 |
+| R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 的 setjmp／longjmp 仍是实际违反，须由 #60 交付同 Task 的 port 栈重启替代；移除 include 或隐藏调用无效。 |
+| R21.6 | 主文页168–169，覆盖 stdio 函数及 C99 指定的宽字符 I/O；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源，其他修订没有本项流协议例外。HostBatch／probe／正常 OS 报告的 stdio 调用仍是实际违反，包括内存格式化；平台 `_fileno`／`_setmode` 不仅因引用标准流就属于这些标准函数，但接缝须随 #60 流迁移保留。 |
+| R21.8 | 主文页169；AMD1 §3 页17 移除 getenv；TC1 页11 修正表述；AMD2 §2.10.41（AMD2.81）页17 整条替换为 abort、exit、_Exit、quick_exit，后续 AMD3／AMD4／TC2 未再改变集合。锁与 Det 已去除 abort；R21.8 原文按所列标识符限制使用；POSIX `_exit` 不在该集合。受控 glibc 的 `_exit`／`_Exit` 可共享实现，这不是实现隔离证明；选择平台 API 的依据是明确的进程级停止及不执行 CRT 清理的契约与真实消费者测试，其他规则仍须独立评估。固定 checker 的 getenv 旧诊断及 _Exit／quick_exit 漏检仍原样保留。 |
+
+流迁移与 restart 的生产完成边界、port／第三方身份及反例各自独立，不能由锁补丁的测试证明。#60 保持开放并承接以下两段；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。
 
 ### 主机 I/O 与故障报告（D-34／E4-HOST-REPORT）
 
@@ -79,7 +92,7 @@ Linux 在包含 pthread 头之前定义 `_XOPEN_SOURCE=700`，用于取得递归
 
 HostBatch 的控制线程逐字节读取输入，保留嵌入 NUL，排空过长行，并区分 EOF 与输入错误。输出 sink 完成格式化并 flush 成功后，`Ecu_HostBridge.c:pump` 才调用 `Ecu_TargetConfirmOutput`；协议拒绝、运行中输出失败及成功收据有各自的效果。probe 的输出与测试构建的初始化／退役记录也被工具消费。只删掉日志、把错误当 EOF，或在缓冲写入后提前确认，都会改变可观察契约。
 
-若原文核对要求消除这些 stdio 调用，候选是既有 host 层内的有界字节读写与格式化：Windows 使用标准 HANDLE，Linux 使用文件描述符；按部分读写、EOF、中断、关闭管道及实际错误处理结果。格式化须保持十进制／十六进制字段、精确字节数和容量拒绝；确认只能发生在完整记录实际输出成功后。替换后没有 stdio 缓冲，原 flush 的完成边界仍须由平台写入完成来承担，不把额外磁盘同步引入管道协议。该方案涉及两平台生产 HostBatch、probe、test 与验证器，不能只迁移一个 printf，或仅转移 stdio 的文件位置。
+为消除已确认的 R21.6 违反，候选是既有 host 层内的有界字节读写与格式化：Windows 使用标准 HANDLE，Linux 使用文件描述符；按部分读写、EOF、中断、关闭管道及实际错误处理结果。格式化须保持十进制／十六进制字段、精确字节数和容量拒绝；确认只能发生在完整记录实际输出成功后。替换后没有 stdio 缓冲，原 flush 的完成边界仍须由平台写入完成来承担，不把额外磁盘同步引入管道协议。该方案涉及两平台生产 HostBatch、probe、test 与验证器，不能只迁移一个 printf，或仅转移 stdio 的文件位置。
 
 正常关闭由 `report_and_exit` 调用 `Os_StackReport`、输出 lifecycle 并检查 flush；输出失败会使原本成功的退出变为 `E_OS_STATE`。耗尽控制器后的 `Os_StackFatalExit` 则已用有界手工格式化和 Linux `write`／Windows `WriteFile`，失败时尝试 stderr，再终止进程；不能把 stdio 或新锁引入此路径。Linux guard handler 对非本模块 guard 的异常直接退出；自己的 guard fault 发布记录并永久停放 actor。任何改造均须保留首次故障记录、关闭 admission、备用控制器、不可恢复时的终止与失败状态。
 
@@ -87,13 +100,13 @@ HostBatch 的控制线程逐字节读取输入，保留嵌入 NUL，排空过长
 
 `Os_Backend.c:task_entry` 在每个 Task 自己的原生线程建立 restart frame。TerminateTask、ChainTask 与 missing-end 经 `complete_activation` 结算激活 FIFO、资源和 ready sequence，完成 suspend／yield 后才 longjmp 到同一 Task 的 trampoline，丢弃已完成应用的调用帧；应用和生成 Runnable 不持有 restart frame。
 
-候选替代须由唯一 FreeRTOS port 提供同 Task 的执行栈重启，在现有结算点切换到该 Task 的入口上下文，保持线程／原生栈及 ARTI 身份、FIFO 次序、抢占、资源释放、错误返回和成功终止不返回的行为。不能用普通 return 模拟 TerminateTask，不能递归调用 entry，也不能每次激活新建线程或另设调度器。修改 port 会影响固定内核补丁和第三方身份，须在实施时独立审阅；本方案不预先授权或追认这些字节的变化。缺失的规则全文及 port 语义证据未补齐前保留当前 trampoline。
+候选替代须由唯一 FreeRTOS port 提供同 Task 的执行栈重启，在现有结算点切换到该 Task 的入口上下文，保持线程／原生栈及 ARTI 身份、FIFO 次序、抢占、资源释放、错误返回和成功终止不返回的行为。不能用普通 return 模拟 TerminateTask，不能递归调用 entry，也不能每次激活新建线程或另设调度器。修改 port 会影响固定内核补丁和第三方身份，须在实施时独立审阅；本方案不预先授权或追认这些字节的变化。规则全文已可读，现有 trampoline 的 R21.4 违反已确认；port 替代及其独立执行证据完成前保留当前行为，不把候选设计当作整改。
 
 ### 解除条件与验收
 
-[#57](https://github.com/g1331/autsaro/issues/57) 的资料提供方须提供合法可读的 MISRA C:2012 Third Edition 与适用 AMD1–AMD4／TC1–TC2 正文，核定版次、摘要及相关修订位置；需核对 R21.1／R21.6／R21.8、restart 涉及的 R21.4、适用例外及主机代码角色。技能目录、旧 addon 诊断和公开摘要均不替代该来源。AUTOSAR 义务发生变化时，还须取得固定 R24-11 对应 SpecificationsARXML／PDF 原文；OS 停机的现有差距仍由 [#200](https://github.com/g1331/autsaro/issues/200) 跟踪，不因主机进程退出而关闭。
+固定原件已可用，不再以 #57 的 MISRA 缺件阻塞本项。后续直接从持久资料库核对对应修订及 R24-11 原文、图页，按真实调用消除剩余违反；Dcm 的 ISO 缺件不在本项闭包。OS 停机的既有差距仍由 [#200](https://github.com/g1331/autsaro/issues/200) 跟踪，不因主机进程退出而关闭。源码诊断与必要人工评估由 #58 承接，原始状态不因资料、局部整改或绿色 CI 改写。
 
-资料到位后，#60 的实施者按真实调用逐项决定是否适用、如何改造，并在 #58 保留逐行源码诊断与人工评估。实际修改应由独立反例证伪：锁故障不得返回且正常锁可用；HostBatch NUL／CR／过长输入、EOF／输入错误、部分输出／flush 失败不得提前确认；终止／ChainTask 不得返回到已完成调用帧，FIFO／抢占／资源清理保持；正常和控制器耗尽的栈故障均保留报告及失败状态。复用现有 host-boundary、protocol、OS activation／finish／stack suites 与生产／TSan／ASan／UBSan 封存入口，保持 #324 的 2000 ms terminal-stop 协议和 #331 的公开接口 fuzz／重放断言。改动生成 C 后运行两平台受影响 main 和全部受影响 profile 的完整 c-check，分别报告分析完整性、原始 `passed`、新增／移除诊断与未核查项；不得用 suppression、基线新增、漏扫或更换成 checker 未识别的调用证明整改完成。
+实际修改应由独立反例证伪：锁故障不得返回且正常锁可用；HostBatch NUL／CR／过长输入、EOF／输入错误、部分输出／flush 失败不得提前确认；终止／ChainTask 不得返回到已完成调用帧，FIFO／抢占／资源清理保持；正常和控制器耗尽的栈故障均保留报告及失败状态。复用现有 host-boundary、protocol、OS activation／finish／stack suites 与生产／TSan／ASan／UBSan 封存入口，保持 #324 的 2000 ms terminal-stop 协议和 #331 的公开接口 fuzz／重放断言。改动生成 C 后运行两平台受影响 main 和全部受影响 profile 的完整 c-check，分别报告分析完整性、原始 `passed`、新增／移除诊断与未核查项；不得用 suppression、基线新增、漏扫或更换成 checker 未识别的调用证明整改完成。
 
 ## 当前支持剖面与边界
 

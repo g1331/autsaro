@@ -10,7 +10,7 @@
  * Ownership: The thread-local marker lasts until the thread/process exits.
  */
 boolean Det_HostEnterDevelopmentReport(void);
-/** Abort the controlled host ECU after development reporting.
+/** Terminate the controlled host ECU with status 134 after development reporting.
  * @par Return
  * None.
  * This function never returns.

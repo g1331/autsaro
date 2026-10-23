@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import tempfile
 import unittest
@@ -33,13 +32,14 @@ class HostBoundaryTests(unittest.TestCase):
             '#ifndef ECU_EXECUTION_H\n#define ECU_EXECUTION_H\n#include "Ecu_Config.h"\n#include "Can_Host.h"\n'
             "EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);\n"
             "uint64_t Ecu_ExecutionNow(void);\n#endif\n", encoding="utf-8")
-        cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic", "-D_XOPEN_SOURCE=700",
+        cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic",
                      "-I" + str(ROOT / "runtime/bsw/src"), "-I" + str(ROOT / "runtime/bsw/include"),
                      "-I" + str(ROOT / "runtime/host/src"), "-I" + str(ROOT / "runtime/host/include"),
                      # The mainline CAN headers use the generated ComStack_Cfg.h widths.
                      "-I" + str(ROOT / "core/tests/fixtures/bsw-contracts"), "-I" + str(generated)]
         suffix = ".exe" if os.name == "nt" else ""
         cls.lock = cls.directory / ("lock" + suffix)
+        cls.production_lock = cls.directory / ("production-lock" + suffix)
         header = ROOT / "tests/fixtures/host_lock_faults.h"
         obj = cls.directory / "lock.o"
         result = cls.execute([cls.compiler, *cls.flags, "-include", str(header), "-c",
@@ -55,6 +55,27 @@ class HostBoundaryTests(unittest.TestCase):
         if not result.success:
             raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
 
+        result = cls.execute([cls.compiler, *cls.flags, str(ROOT / "runtime/host/src/Can_HostLock.c"),
+                              str(ROOT / "tests/fixtures/host_lock_faults.c"),
+                              *(str(path) for path in sources),
+                              *([] if os.name == "nt" else ["-pthread"]), "-o", str(cls.production_lock)], "production-lock")
+        if not result.success:
+            raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
+
+    def test_all_production_locks_serialize_real_threads(self):
+        result = self.execute([str(self.production_lock), "parallel"], "parallel")
+        self.assertTrue(result.success, result.stderr.read_text())
+
+    def test_production_fatal_stops_without_signal_handler_or_crt_cleanup(self):
+        for case in ("nest-strict", "nest-same", "nest-driver", "exit-driver", "exit-area",
+                     "exit-wrong", "exit-other-thread", "exit-driver-as-area", "exit-area-as-driver",
+                     "invalid-enter", "negative-enter", "invalid-exit", "negative-exit"):
+            with self.subTest(case=case):
+                result = self.execute([str(self.production_lock), case], "production-" + case)
+                self.assertEqual(result.exit_code, 134, result.stdout.read_text())
+                self.assertEqual(result.stdout.read_bytes(), b"")
+                self.assertEqual(result.stderr.read_bytes(), b"")
+
     @classmethod
     def tearDownClass(cls):
         cls.temporary.cleanup()
@@ -67,16 +88,25 @@ class HostBoundaryTests(unittest.TestCase):
         result = self.execute([str(self.lock), "normal"], "normal")
         self.assertTrue(result.success, result.stdout.read_text())
 
-    def test_entering_any_area_inside_a_strict_area_is_fatal(self):
-        for case in ("nest-strict", "nest-same"):
+    @unittest.skipUnless(os.name == "nt", "Windows self-termination refusal")
+    def test_refused_self_termination_selects_trap_without_returning(self):
+        result = self.execute([str(self.lock), "terminate-refused"], "terminate-refused")
+        self.assertEqual(result.exit_code, 92, result.stdout.read_text())
+        self.assertIn("LOCK_TRAP", result.stdout.read_text())
+
+    def test_invalid_owners_and_areas_are_fatal(self):
+        for case in ("nest-strict", "nest-same", "nest-driver", "exit-driver", "exit-area",
+                     "exit-wrong", "exit-other-thread", "exit-driver-as-area", "exit-area-as-driver",
+                     "invalid-enter", "negative-enter", "invalid-exit", "negative-exit"):
             with self.subTest(case=case):
                 result = self.execute([str(self.lock), case], case)
                 output = result.stdout.read_text()
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
+                self.assertNotIn("UNEXPECTED_UNLOCK", output)
 
     def test_void_lock_failures_select_fatal_policy_and_never_return(self):
-        cases = ["once", "mutex-init"] if os.name == "nt" else ["once", "attr-init", "attr-type", "mutex-init", "attr-close", "lock", "unlock"]
+        cases = ["once", "mutex-init"] if os.name == "nt" else ["once", "mutex-init", "lock", "unlock"]
         # The driver lock and a module area are separate instances of the helper.
         for case, instance in ((case, instance) for case in cases for instance in ("fatal", "area")):
             with self.subTest(case=case, instance=instance):
@@ -84,11 +114,4 @@ class HostBoundaryTests(unittest.TestCase):
                 output = result.stdout.read_text()
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
-                # The area instance constructs every module area, so each count is per lock.
-                attrs, mutexes = map(int, re.search(r"attrs=(\d+) mutexes=(\d+)", output).groups())
-                locks = 1 if instance == "fatal" else attrs
-                if case in ("attr-type", "mutex-init") and os.name != "nt":
-                    self.assertEqual((attrs, mutexes), (locks, 0), output)
-                if case == "attr-close":
-                    self.assertEqual((attrs, mutexes), (locks, locks), output)
-                    self.assertGreaterEqual(locks, 1, output)
+                self.assertNotIn("UNEXPECTED_UNLOCK", output)

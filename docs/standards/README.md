@@ -17,11 +17,11 @@ R24-11 中标记为 DRAFT 的条款（例如 LSduR 全文，`SWS_Com_91019／910
 
 ## 2. 官方资料与本地位置
 
-- 官方 PDF、ZIP 与哈希清单只在本地查阅，由 `.gitignore` 排除，不随仓库或产品再分发。目录与核验结果见 [docs/official/README.md](../official/README.md) 与 [docs/official/R24-11/README.md](../official/R24-11/README.md)。
-- 下载与核验：`python scripts/collect_official_specs.py R24-11`，按两份官方清单逐项校验，结果写入 `download-status.json`。校验失败或官网缺项不算已收集。
-- 开发对照档案的路径与环境变量登记在 `core/resources/official.json`：XSD／MOD（`AUTOSAR_XSD_ARCHIVE`、`AUTOSAR_MOD_ARCHIVE`）供 `official-oracles` 测试检验内置规则；`AUTOSAR_CP_MOD_SpecificationsARXML.zip`（`AUTOSAR_SPECIFICATIONS_ARCHIVE`）是 [§5](#5-条款处置与核算) 条款核算的条目来源。普通配置与源码生成不需要这些档案。
-- 官方单份文件的统一入口为 `https://www.autosar.org/fileadmin/standards/R24-11/CP/<文件名>`。
-- MISRA 正文需授权取得，不在仓库中。编码指导与 221 项编号目录见项目技能 `.agents/skills/misra-c2012/`（`references/baseline-index.json`）；它是编码辅助，不替代正文或人工评估。
+- 规范原件保存在仓库外的持久目录，例如 `../autsaro-official-specs`，按标准和版次隔离，并保留来源、官方清单及收到字节摘要。原件与提取全文不提交或随产品分发；临时目录不作为唯一原件位置。目录与核验方式见[官方资料入口](../official/README.md)。
+- 官网收集使用 `python scripts/collect_official_specs.py R24-11`，默认输出到 `docs/official/R24-11/` 并按两份官方清单校验。有私有资料库访问权限的维护者也可用该库的 `specs.py restore` 和 `specs.py verify`；校验失败或缺项不算已取得。
+- 开发对照档案的默认路径和环境变量见 `core/resources/official.json`：`AUTOSAR_XSD_ARCHIVE`、`AUTOSAR_MOD_ARCHIVE`、`AUTOSAR_SAMPLE_ARCHIVE` 供官方对照测试引用，`AUTOSAR_SPECIFICATIONS_ARCHIVE` 指定条款核算的 SpecificationsARXML ZIP。引用其他位置的副本时使用这些变量；示例持久目录不会自动替代现有默认路径。普通配置、源码生成和无关开发检查不需要先准备这些档案。
+- 官方单份文件的入口为 `https://www.autosar.org/fileadmin/standards/R24-11/CP/<文件名>`。
+- MISRA 原文使用固定的 C:2012 Third Edition 与 AMD1–AMD4、TC1–TC2 组合，按版次保存并记录来源和字节身份，在评估时引用具体正文位置。项目技能 `.agents/skills/misra-c2012/` 的编码指导及221项目录只作辅助，不能替代完整授权原文、修订合成或逐项人工评估。
 - 合法正文缺失时，只阻塞依赖该正文的标准裁决；记录缺口与解除条件，不凭记忆、旧版本或现有实现补齐。
 
 ## 3. 预期从标准独立定义

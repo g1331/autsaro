@@ -3,12 +3,8 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <string.h>
-#if defined(_WIN32)
-#include <signal.h>
 #include <stdlib.h>
-static void observed_abort(int signal_number) { _Exit((signal_number == SIGABRT) ? 86 : 87); }
-#endif
+#include <string.h>
 
 static unsigned events[16];
 static unsigned event_count;
@@ -16,6 +12,12 @@ static boolean nested;
 static boolean recurse_development;
 static boolean reinitialize_runtime;
 
+static void unexpected_cleanup(void)
+{
+    (void)fputs("CRT_CLEANUP\n", stdout);
+    (void)fflush(stdout);
+    _Exit(89);
+}
 static void record(unsigned value)
 {
     assert(event_count < 16u);
@@ -79,13 +81,6 @@ int main(int argc, char **argv)
 {
     /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
     assert(DET_MODULE_ID == 15u);
-#if defined(_WIN32)
-    /* Observe this process's real abort before the CRT starts WER or a dialog. */
-    (void)_set_error_mode(_OUT_TO_STDERR);
-    if (signal(SIGABRT, observed_abort) == SIG_ERR) {
-        return 88;
-    }
-#endif
     /* Verifies: SWS_Det_00008, SWS_Det_00009, SWS_Det_00010, SWS_Det_01001 */
     /* Verifies: SWS_Det_00014, SWS_Det_00018, SWS_Det_00019, SWS_Det_00020 */
     /* Verifies: SWS_Det_00024, SWS_Det_00025, SWS_Det_00026, SWS_Det_00035 */
@@ -95,6 +90,12 @@ int main(int argc, char **argv)
     Std_ReturnType (*runtime_report)(uint16, uint8, uint8, uint8) = Det_ReportRuntimeError;
     Std_ReturnType (*development_report)(uint16, uint8, uint8, uint8) = Det_ReportError;
     assert(argc == 2);
+    if (strcmp(argv[1], "runtime") != 0) {
+        assert(atexit(unexpected_cleanup) == 0);
+    }
+    if (strcmp(argv[1], "cleanup-control") == 0) {
+        return 0;
+    }
     assert(NULL_PTR == NULL);
     assert(sizeof(uint8) == 1u && sizeof(uint16) == 2u && sizeof(uint32) == 4u);
     assert(CPU_TYPE == CPU_TYPE_64 && CPU_BIT_ORDER == LSB_FIRST);

@@ -5,7 +5,8 @@
 void Can_Lock(void);
 void Can_Unlock(void);
 /* Strict SchM areas, one per module; the driver uses Can_Lock. Each
- * protects its module's data only: a thread holding one that enters any area aborts. */
+ * protects its module's data only: a thread holding one that enters any area terminates the ECU
+ * with status 134. Exit must match the current thread's exact area, including the driver lock. */
 typedef enum {
     CAN_HOST_AREA_DET = 0,
     CAN_HOST_AREA_CANIF,

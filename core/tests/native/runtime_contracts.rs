@@ -107,19 +107,20 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
 fn det_standard_consumer_executes_runtime_and_halt_contracts() {
     let scratch = Scratch::new();
     let executable = det_consumer(&scratch.0, "det_contract.c");
-    for (mode, expected, halted) in [
-        ("runtime", "runtime-ok\n", false),
-        ("before-init", "", true),
+    for (mode, expected, exit_code) in [
+        ("runtime", "runtime-ok\n", 0),
+        ("cleanup-control", "CRT_CLEANUP\n", 89),
+        ("before-init", "", 134),
         (
             "development",
             "development-first\ndevelopment-second\n",
-            true,
+            134,
         ),
-        ("recursive-development", "development-first\n", true),
-        ("invalid-config", "", true),
-        ("invalid-runtime-config", "", true),
-        ("invalid-hook-entry", "", true),
-        ("development-without-hooks", "", true),
+        ("recursive-development", "development-first\n", 134),
+        ("invalid-config", "", 134),
+        ("invalid-runtime-config", "", 134),
+        ("invalid-hook-entry", "", 134),
+        ("development-without-hooks", "", 134),
     ] {
         let output = Command::new(&executable)
             .arg(mode)
@@ -133,18 +134,13 @@ fn det_standard_consumer_executes_runtime_and_halt_contracts() {
             "{mode}"
         );
         assert!(output.stderr.is_empty(), "{mode}: {:?}", output);
-        if halted {
-            // A failed assertion or ordinary rejection cannot satisfy halt.
-            #[cfg(target_os = "linux")]
-            {
-                use std::os::unix::process::ExitStatusExt;
-                assert_eq!(output.status.signal(), Some(6), "{mode}: {:?}", output);
-            }
-            #[cfg(windows)]
-            assert_eq!(output.status.code(), Some(86), "{mode}: {:?}", output);
-        } else {
-            assert!(output.status.success(), "{mode}: {:?}", output);
-        }
+        // A failed assertion, cleanup callback or ordinary rejection cannot satisfy halt.
+        assert_eq!(
+            output.status.code(),
+            Some(exit_code),
+            "{mode}: {:?}",
+            output
+        );
     }
 }
 
