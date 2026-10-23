@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Native Task restart uses a typed assembler PC accessor and keeps its continuation private. Linux constructor rollback remains atomic and event waits distinguish clock failures from ordinary timeouts; Windows thread setup and native handoff failures stop before consuming invalid synchronization state. Regenerate sealed deliveries and rebuild native consumers for the changed private ABI and controlled patches (#58)
+
 - Native integer predicates and BOOL flags now stay separate from AUTOSAR Boolean constants; private Linux declarations leave TRUE/FALSE ownership to Platform_Types, independent of include order. Existing public result values and native handle contracts are preserved (#58)
 
 - Linux OS events classify syscall errors, interruptions and incomplete reads; event close errors release descriptor ownership safely, and successfully destroyed mutexes return their fixed handle slots for reuse (#58)

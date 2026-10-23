@@ -2,6 +2,14 @@
 #ifndef AUTOSAR_OS_PORT_RESTART_H
 #define AUTOSAR_OS_PORT_RESTART_H
 #include "Os_Version.h"
+#include <stdint.h>
+
+/* The native unwinder consumes a PC representation, not a callable C function. */
+#ifdef _WIN32
+typedef void *Os_PortRestartAddressType;
+#else
+typedef uintptr_t Os_PortRestartAddressType;
+#endif
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
@@ -13,8 +21,8 @@ OS_MEMMAP void Os_PortTaskLoop(void (*entry)(void *), void *argument) __attribut
  * Invalid/unhandled native unwinding stops the OS; it cannot return success. */
 OS_MEMMAP void Os_PortRestart(void) __attribute__((noreturn));
 
-/* Assembler-defined continuation address used by native unwind tables. */
-OS_MEMMAP void Os_PortRestartLanding(void);
+/* Borrow the assembler continuation in the representation required by the native unwinder. */
+OS_MEMMAP Os_PortRestartAddressType Os_PortRestartAddress(void);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */

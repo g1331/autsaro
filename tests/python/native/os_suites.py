@@ -1819,7 +1819,8 @@ def check_vector_mutations(directory: Path) -> None:
                 raise AssertionError("missing vector section passed its linked contract check")
 
 
-def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
+def verify_code_section(binary: Path, tool: Path, names: list[str],
+                        local_names: tuple[str, ...] = ()) -> None:
     output = run_native([str(tool), "-h", str(binary)], capture_output=True,
                             text=True, check=True).stdout
     code = list(re.finditer(
@@ -1832,10 +1833,11 @@ def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
         raise ValueError("OS entry section must be allocated read-only executable code")
     symbols = run_native([str(tool), "-t", str(binary)], capture_output=True,
                              text=True, check=True).stdout
-    for name in names:
+    for name in (*names, *local_names):
         if _TARGET_ID.get() == "linux-x64-controlled-v1":
+            binding = "l" if name in local_names else "g"
             functions = re.findall(
-                r"^[0-9a-fA-F]+\s+g\s+F\s+\.os_code\s+[0-9a-fA-F]+\s+"
+                r"^[0-9a-fA-F]+\s+" + binding + r"\s+F\s+\.os_code\s+[0-9a-fA-F]+\s+"
                 + re.escape(name) + r"$", symbols, re.MULTILINE,
             )
             if len(functions) != 1:
@@ -1847,6 +1849,8 @@ def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
             ))
             if len(functions) != 1 or int(functions[0][1]) != int(code[0][1]) + 1:
                 raise ValueError(f"PE OS entry is outside its code section: {name}")
+            if name in local_names and re.search(r"\(scl\s+3\)", functions[0][0]) is None:
+                raise ValueError(f"PE OS continuation must be local: {name}")
 
 
 def check_counter_service(directory: Path, project: Path, counter: str) -> None:
@@ -2155,7 +2159,8 @@ def check_port_restart(directory: Path) -> None:
             print("port-restart CET PASS: active SSP and actual Task/TCB/stack/ARTI/hooks", flush=True)
 
     tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
-    verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartLanding", "Os_PortRestart"])
+    verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartAddress", "Os_PortRestart"],
+                        local_names=("Os_PortRestartLanding",))
     print("port-restart PASS: native unwind; 10000 stable physical-stack entries", flush=True)
 
 

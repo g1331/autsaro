@@ -31,7 +31,7 @@ OS_MEMMAP __attribute__((used)) static _Unwind_Reason_Code Os_PortRestartPersona
         if ((actions & _UA_SEARCH_PHASE) != 0) {
             result = _URC_HANDLER_FOUND;
         } else if ((actions & _UA_HANDLER_FRAME) != 0) {
-            _Unwind_SetIP(context, (uintptr_t)Os_PortRestartLanding);
+            _Unwind_SetIP(context, Os_PortRestartAddress());
             result = _URC_INSTALL_CONTEXT;
         } else {
             /* The native unwinder continues through non-handler cleanup frames. */
@@ -52,10 +52,14 @@ __asm__(
     "endbr64\npush %r12\n.cfi_def_cfa_offset 16\n.cfi_offset 12,-16\n"
     "push %r13\n.cfi_def_cfa_offset 24\n.cfi_offset 13,-24\n"
     "sub $8,%rsp\n.cfi_def_cfa_offset 32\nmov %rdi,%r12\nmov %rsi,%r13\n"
-    ".global Os_PortRestartLanding\n.type "
+    ".local Os_PortRestartLanding\n.type "
     "Os_PortRestartLanding,@function\nOs_PortRestartLanding:\nendbr64\nmov %r13,%rdi\ncall "
     "*%r12\nud2\n.size Os_PortRestartLanding,.-Os_PortRestartLanding\n.cfi_endproc\n.size "
-    "Os_PortTaskLoop,.-Os_PortTaskLoop\n.popsection\n");
+    "Os_PortTaskLoop,.-Os_PortTaskLoop\n"
+    ".global Os_PortRestartAddress\n.type Os_PortRestartAddress,@function\n"
+    "Os_PortRestartAddress:\n.cfi_startproc\nendbr64\n"
+    "leaq Os_PortRestartLanding(%rip),%rax\nret\n.cfi_endproc\n"
+    ".size Os_PortRestartAddress,.-Os_PortRestartAddress\n.popsection\n");
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #else
@@ -68,7 +72,7 @@ OS_MEMMAP __attribute__((used)) static EXCEPTION_DISPOSITION Os_PortRestartHandl
     if ((record->ExceptionCode == 0xE0426001u) &&
         ((record->ExceptionFlags & EXCEPTION_UNWINDING) == 0)) {
         RtlUnwindEx(frame,
-                    (void *)Os_PortRestartLanding,
+                    Os_PortRestartAddress(),
                     record,
                     NULL,
                     dispatch->ContextRecord,
@@ -87,9 +91,13 @@ __asm__(".section .os_code,\"xr\"\n.global Os_PortTaskLoop\n.def Os_PortTaskLoop
         "endbr64\nsub $56,%rsp\n.seh_stackalloc 56\nmov %r12,40(%rsp)\n.seh_savereg r12,40\n"
         "mov %r13,48(%rsp)\n.seh_savereg r13,48\n.seh_handler "
         "Os_PortRestartHandler,@except\n.seh_endprologue\n"
-        "mov %rcx,%r12\nmov %rdx,%r13\n.global "
-        "Os_PortRestartLanding\nOs_PortRestartLanding:\nendbr64\nmov %r13,%rcx\ncall "
-        "*%r12\nud2\n.seh_endproc\n.text\n");
+        "mov %rcx,%r12\nmov %rdx,%r13\n"
+        ".def Os_PortRestartLanding; .scl 3; .type 32; .endef\n"
+        "Os_PortRestartLanding:\nendbr64\nmov %r13,%rcx\ncall "
+        "*%r12\nud2\n.seh_endproc\n"
+        ".global Os_PortRestartAddress\n.def Os_PortRestartAddress; .scl 2; .type 32; .endef\n"
+        ".seh_proc Os_PortRestartAddress\nOs_PortRestartAddress:\n.seh_endprologue\nendbr64\n"
+        "leaq Os_PortRestartLanding(%rip),%rax\nret\n.seh_endproc\n.text\n");
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #endif

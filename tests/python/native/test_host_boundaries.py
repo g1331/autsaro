@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from autosar_tooling.config import ROOT
 from ecu_tools.process import OwnedProcess, ProcessSpec
@@ -181,6 +182,51 @@ class HostIoTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() in ("Linux", "Windows"), "native kernel object consumers")
 class NativeKernelObjectTests(unittest.TestCase):
+    def test_native_restart_rejects_wrong_pc_and_exported_continuation(self):
+        import os_suites
+
+        for mutation in ("wrong-pc", "exported-continuation"):
+            with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/Os_PortRestart.c"
+                text = source.read_text(encoding="utf-8")
+                if mutation == "exported-continuation":
+                    before, after = (".scl 3; .type 32", ".scl 2; .type 32") if os.name == "nt" else (
+                        ".local Os_PortRestartLanding", ".global Os_PortRestartLanding",
+                    )
+                    self.assertEqual(text.count(before), 1)
+                    text = text.replace(before, after)
+                else:
+                    before = "leaq Os_PortRestartLanding(%rip),%rax"
+                    self.assertEqual(text.count(before), 2)
+                    text = text.replace(before, "leaq Os_PortRestartRejected(%rip),%rax")
+                    if os.name == "nt":
+                        before = 'ret\\n.seh_endproc\\n.text\\n'
+                        after = ('ret\\n.seh_endproc\\nOs_PortRestartRejected:\\nendbr64\\n'
+                                 'mov $93,%ecx\\ncall ExitProcess\\nud2\\n.text\\n')
+                    else:
+                        before = '.size Os_PortRestartAddress,.-Os_PortRestartAddress\\n.popsection'
+                        after = ('.size Os_PortRestartAddress,.-Os_PortRestartAddress\\n'
+                                 '.local Os_PortRestartRejected\\nOs_PortRestartRejected:\\nendbr64\\n'
+                                 'mov $93,%edi\\ncall _exit\\nud2\\n.popsection')
+                    self.assertEqual(text.count(before), 1)
+                    text = text.replace(before, after)
+                source.write_text(text, encoding="utf-8")
+                with patch.object(os_suites, "TARGET", target), os_suites.native_session(directory, mutation):
+                    if mutation == "wrong-pc":
+                        with self.assertRaises(AssertionError) as caught:
+                            os_suites.check_port_restart(directory)
+                        result = caught.exception.args[0]
+                        self.assertEqual(result.returncode, 93, result)
+                        self.assertEqual(result.stdout, "")
+                        self.assertEqual(result.stderr, "")
+                    else:
+                        with self.assertRaisesRegex(ValueError,
+                                r"(ELF OS entry is outside its code section|PE OS continuation must be local): Os_PortRestartLanding"):
+                            os_suites.check_port_restart(directory)
+
     def _windows_port_target(self, directory: Path, omitted_patch: str | None,
                              scenario_symbol: str, declarations: str) -> Path:
         import os_suites
