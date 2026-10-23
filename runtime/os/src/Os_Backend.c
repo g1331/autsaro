@@ -1712,6 +1712,27 @@ OS_MEMMAP static void bind_main_thread(void) {}
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+OS_MEMMAP static void start_controllers(void)
+{
+    close_event = Os_PortEvent(NULL, 0, 0, NULL);
+    backup_event = Os_PortEvent(NULL, 0, 0, NULL);
+    controller_registered[0] = Os_PortEvent(NULL, 0, 0, NULL);
+    controller_registered[1] = Os_PortEvent(NULL, 0, 0, NULL);
+    control_thread =
+        Os_PortThread(NULL, 262144u, control, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+    backup_thread = Os_PortThread(
+        NULL, 262144u, control, (void *)&backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (controller_healthy[0] == 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (controller_healthy[1] == 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+}
+
 OS_MEMMAP void Os_BackendStart(AppModeType mode)
 {
     uint32 i;
@@ -1732,23 +1753,7 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
     prepare_native_stack();
     Os_MailboxInstall();
     bind_main_thread();
-    close_event = Os_PortEvent(NULL, 0, 0, NULL);
-    backup_event = Os_PortEvent(NULL, 0, 0, NULL);
-    controller_registered[0] = Os_PortEvent(NULL, 0, 0, NULL);
-    controller_registered[1] = Os_PortEvent(NULL, 0, 0, NULL);
-    control_thread =
-        Os_PortThread(NULL, 262144u, control, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
-    backup_thread = Os_PortThread(
-        NULL, 262144u, control, (void *)&backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
-    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0) {
-        Os_BackendShutdown(E_OS_STATE);
-    }
-    if (controller_healthy[0] == 0) {
-        Os_BackendShutdown(E_OS_STATE);
-    }
-    if (controller_healthy[1] == 0) {
-        Os_BackendShutdown(E_OS_STATE);
-    }
+    start_controllers();
     for (i = 0u; i < Os_Config->task_count; ++i) {
         Os_ArtiTasks[i].state = SUSPENDED;
         if ((Os_Config->tasks[i].autostart_modes & mode) != 0u) {

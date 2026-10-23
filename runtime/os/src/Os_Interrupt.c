@@ -103,6 +103,56 @@ OS_MEMMAP static sint32 permitted(uint32 operation)
  * (wrong context, or a saturated nesting counter) is ignored without ErrorHook. */
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+OS_MEMMAP static void update_owner_mask(Os_InterruptStateType *state, uint32 operation)
+{
+    switch (operation) {
+        case 0u:
+            if (state->disabled != 0u) {
+                state->disabled = 0u;
+                (void)InterlockedDecrement(&all_owners);
+            }
+            break;
+        case 1u:
+            if (state->disabled == 0u) {
+                state->disabled = 1u;
+                (void)InterlockedIncrement(&all_owners);
+            }
+            break;
+        case 2u:
+            if (state->all_depth != 0u) {
+                --state->all_depth;
+                if (state->all_depth == 0u) {
+                    (void)InterlockedDecrement(&all_owners);
+                }
+            }
+            break;
+        case 3u:
+            if (state->all_depth != UINT32_MAX) {
+                if (state->all_depth == 0u) {
+                    (void)InterlockedIncrement(&all_owners);
+                }
+                ++state->all_depth;
+            }
+            break;
+        case 4u:
+            if (state->os_depth != 0u) {
+                --state->os_depth;
+                if (state->os_depth == 0u) {
+                    (void)InterlockedDecrement(&os_owners);
+                }
+            }
+            break;
+        default:
+            if (state->os_depth != UINT32_MAX) {
+                if (state->os_depth == 0u) {
+                    (void)InterlockedIncrement(&os_owners);
+                }
+                ++state->os_depth;
+            }
+            break;
+    }
+}
+
 OS_MEMMAP static void change(uint32 operation)
 {
     Os_InterruptStateType *state = owner_state();
@@ -116,52 +166,7 @@ OS_MEMMAP static void change(uint32 operation)
         if (running) {
             taskENTER_CRITICAL();
         }
-        switch (operation) {
-            case 0u:
-                if (state->disabled != 0u) {
-                    state->disabled = 0u;
-                    (void)InterlockedDecrement(&all_owners);
-                }
-                break;
-            case 1u:
-                if (state->disabled == 0u) {
-                    state->disabled = 1u;
-                    (void)InterlockedIncrement(&all_owners);
-                }
-                break;
-            case 2u:
-                if (state->all_depth != 0u) {
-                    --state->all_depth;
-                    if (state->all_depth == 0u) {
-                        (void)InterlockedDecrement(&all_owners);
-                    }
-                }
-                break;
-            case 3u:
-                if (state->all_depth != UINT32_MAX) {
-                    if (state->all_depth == 0u) {
-                        (void)InterlockedIncrement(&all_owners);
-                    }
-                    ++state->all_depth;
-                }
-                break;
-            case 4u:
-                if (state->os_depth != 0u) {
-                    --state->os_depth;
-                    if (state->os_depth == 0u) {
-                        (void)InterlockedDecrement(&os_owners);
-                    }
-                }
-                break;
-            default:
-                if (state->os_depth != UINT32_MAX) {
-                    if (state->os_depth == 0u) {
-                        (void)InterlockedIncrement(&os_owners);
-                    }
-                    ++state->os_depth;
-                }
-                break;
-        }
+        update_owner_mask(state, operation);
         if (running) {
             taskEXIT_CRITICAL();
         }
