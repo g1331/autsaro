@@ -16,7 +16,7 @@ static int read_byte(char *byte)
     int result = -1;
     if (ReadFile(GetStdHandle(STD_INPUT_HANDLE), byte, 1u, &count, NULL) != 0) {
         result = (int)count;
-    } else if (GetLastError() == ERROR_BROKEN_PIPE) {
+    } else if (GetLastError() == (DWORD)ERROR_BROKEN_PIPE) {
         result = 0;
     } else {
         /* Invalid handles and other read failures are not EOF. */

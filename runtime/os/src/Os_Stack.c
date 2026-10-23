@@ -345,8 +345,8 @@ OS_MEMMAP static int fatal_write(HANDLE handle, const char *data, size_t length)
     int result = 1;
     while ((offset < length) && (result != 0)) {
         DWORD written = 0u;
-        if (!WriteFile(handle, &data[offset], (DWORD)(length - offset), &written, NULL) ||
-            written == 0u) {
+        if ((WriteFile(handle, &data[offset], (DWORD)(length - offset), &written, NULL) == 0) ||
+            (written == 0u)) {
             result = 0;
         } else {
             offset += written;
