@@ -48,3 +48,13 @@ Windows补丁`0018-windows-thread-setup-errors.patch`按D4.7／R17.7检查Task�
 Linux actor的mapping成员按实际用途保存为unsigned char字节区间：guard偏移、ASan fiber底端及一次性栈入口直接在同一映射内计算，不再从void指针反复转换。`Os_HostCurrentStackRange`仍将真实映射地址转为uintptr_t供栈界限／ARTI消费者比较，不隐藏为符合：原R11.6（Required，主文页99／PDF107，TC2.22修正整数到void指针的描述）已随存储类型消除；mmap返回到字节指针的R11.5与地址到整数的R11.4是保留的Advisory违反（页97–98／PDF105–106，TC1限定对象指针、AMD2.60扩充stdint说明）。mmap保证页对齐，偏移和长度来自同一次映射，uintptr_t不截短地址，转换结果只用于数值边界检查，不转换回指针解引用；原生stack／ARTI和errno回收消费者验证这些约束。依据§6.2.3记录建议性违反及理由，不申请新的Required豁免。
 
 `Os_PortRestartLanding`是保留Task-loop帧内的汇编续行点，不是按C原型调用的函数。该符号现在只在本对象内可见；C侧通过真正遵循调用ABI的`Os_PortRestartAddress`取得native PC：Linux为uintptr_t，Windows为RtlUnwindEx要求的void指针表示。叶函数在原`.os_code`内用RIP相对LEA返回RAX，保留其他寄存器及配对call/return，不需要C函数指针转整数或void指针。依据R11.1（Required，主文页93–94／PDF101–102；AMD2.58只修订隐式转换例外说明），不使用该条的新例外；实际native扩展仍按上表R1.2／D4.2／D4.3评估。原生restart验证10000次同一物理栈重入、拒绝与外来异常，并分别检查全局C入口和本地续行点的代码段身份；错误PC变异必须被实际restart成功判据拒绝。该边界仍依赖受控x64 ABI，Windows执行及硬件SHSTK按实际结果记录。
+
+## C11 标准线程规则的适用边界
+
+AMD4.34 的 R22.11–R22.20 均适用于 C11 标准线程设施（AMD4 印刷页20–30／PDF27–37）。已核对的双平台四样本及当前四个 C99 生成样本，其交付 C／头文件和采用内核没有 `threads.h`，也没有 `thrd_*`、`mtx_*`、`cnd_*`、`tss_*` 类型或函数。实际 OS 消费的是 pthread／Win32／FreeRTOS 接口；不因函数用途相近而把它们写成 C11 标准对象。冻结源码身份及逐文件核对收据留在 PR #371。
+
+R22.11（Required）没有 C11 的 join／detach 对象；R22.12（Mandatory）没有受其标准函数访问限制的四类 C11 对象，R22.13（Required）没有须核对存储期的 `thrd_t`／`mtx_t`／`cnd_t`／`tss_t`，分别不适用。R22.14（Mandatory）没有由 `mtx_init`／`cnd_init` 初始化的对象，R22.15（Required）没有由 `mtx_destroy`／`cnd_destroy`／`tss_delete` 销毁的资源，分别不适用。
+
+R22.16、R22.17、R22.18、R22.19（均为 Required）分别没有 C11 mutex 的显式同线程解锁、持锁等待、非递归重入及 condition-variable／mutex 关联对象，故在上述源码范围分别不适用。R22.20（Mandatory）没有由 `tss_create` 创建的线程特定存储标识，故不适用。这些是规定对象缺席的判断，不是对 Mandatory 违反的豁免；引入相应类型或接口时重新核查。
+
+pthread／Win32 的获取／释放、持有者、失败清理与停止交错仍须按实际平台契约及 D4.1、D4.7、R22.1 等适用义务核查。C11 条款不适用不能代替这些核查，也不解除 D4.12 或采用代码责任；原始分析及其 `not_assessed` 状态保持。
