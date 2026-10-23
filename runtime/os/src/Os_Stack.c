@@ -244,8 +244,8 @@ OS_MEMMAP int Os_StackRegister(char role)
     cursor = record->reserve_low;
     record->committed_low = UINTPTR_MAX;
     for (;;) {
-        if (VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region) ||
-            region.RegionSize == 0u || region.RegionSize > UINTPTR_MAX - cursor) {
+        if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||
+            (region.RegionSize == 0u) || (region.RegionSize > (UINTPTR_MAX - cursor))) {
             return 0;
         }
         if ((uintptr_t)region.AllocationBase != record->reserve_low) {
@@ -263,8 +263,10 @@ OS_MEMMAP int Os_StackRegister(char role)
         cursor += region.RegionSize;
     }
     record->high = cursor;
-    if (record->reserve_low >= record->high || record->committed_low >= record->high ||
-        (uintptr_t)&cursor < record->committed_low || (uintptr_t)&cursor >= record->high) {
+    uintptr_t sp;
+    OS_HOST_STACK_POINTER(sp);
+    if ((record->reserve_low >= record->high) || (record->committed_low >= record->high) ||
+        (sp < record->committed_low) || (sp >= record->high)) {
         return 0;
     }
     record->reserve = record->high - record->reserve_low;
@@ -286,9 +288,9 @@ OS_MEMMAP void Os_StackCheck(void)
     if (current_stack == NULL) {
         return; /* Public preparation before StartOS does not yet execute an OS task. */
     }
-    if (sp < current_stack->reserve_low || sp >= current_stack->high ||
-        VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region) ||
-        region.State != MEM_COMMIT || (region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u) {
+    if ((sp < current_stack->reserve_low) || (sp >= current_stack->high) ||
+        (VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region)) ||
+        (region.State != MEM_COMMIT) || ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u)) {
         publish_fault(current_stack, 0u, sp, sp, 'M');
     }
     current_stack->sp = sp;

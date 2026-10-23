@@ -65,8 +65,8 @@ OS_MEMMAP __attribute__((used)) static EXCEPTION_DISPOSITION Os_PortRestartHandl
     EXCEPTION_RECORD *record, void *frame, CONTEXT *context, DISPATCHER_CONTEXT *dispatch)
 {
     (void)context;
-    if (record->ExceptionCode == 0xE0426001u &&
-        (record->ExceptionFlags & EXCEPTION_UNWINDING) == 0) {
+    if ((record->ExceptionCode == 0xE0426001u) &&
+        ((record->ExceptionFlags & EXCEPTION_UNWINDING) == 0)) {
         RtlUnwindEx(frame,
                     (void *)Os_PortRestartLanding,
                     record,
