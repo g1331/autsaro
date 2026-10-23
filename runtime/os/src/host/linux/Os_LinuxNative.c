@@ -139,13 +139,13 @@ OS_MEMMAP static int mapped_line(const char *line,
 
 OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard)
 {
-    uintptr_t sp;
     int result = 0;
     int descriptor;
-    OS_HOST_STACK_POINTER(sp);
     errno = 0;
     descriptor = open("/proc/self/maps", O_RDONLY);
     if (descriptor >= 0) {
+        uintptr_t sp;
+        OS_HOST_STACK_POINTER(sp);
         char data[1024];
         char line[64];
         size_t used = 0u;

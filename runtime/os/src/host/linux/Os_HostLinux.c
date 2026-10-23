@@ -112,13 +112,13 @@ OS_MEMMAP static OS_HOST_THREAD_LOCAL unsigned
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static int futex_wait(volatile int32_t *cell, int32_t expected)
+OS_MEMMAP static int futex_wait(const volatile int32_t *cell, int32_t expected)
 {
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = OS_HOST_WAIT_SLICE_NS};
     return Os_LinuxFutexWait(cell, expected, &interval);
 }
 
-OS_MEMMAP static void futex_wake(volatile int32_t *cell) { Os_LinuxFutexWake(cell); }
+OS_MEMMAP static void futex_wake(const volatile int32_t *cell) { Os_LinuxFutexWake(cell); }
 
 OS_MEMMAP static uint64_t monotonic_ms(void)
 {
