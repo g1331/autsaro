@@ -42,7 +42,7 @@ OS_MEMMAP __attribute__((used)) static _Unwind_Reason_Code Os_PortRestartPersona
 OS_MEMMAP void Os_PortRestart(void)
 {
     restart_exception.exception_class = UINT64_C(0x4155544f53525431);
-    _Unwind_RaiseException(&restart_exception);
+    (void)_Unwind_RaiseException(&restart_exception);
     Os_BackendShutdown(E_OS_STATE);
 }
 __asm__(

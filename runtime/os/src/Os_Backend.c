@@ -1183,7 +1183,7 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
     DWORD current = GetCurrentThreadId();
     DWORD waited;
     uint32 index = argument == NULL ? 0u : 1u;
-    if (Os_StackRegister(argument == NULL ? 'C' : 'D') != 0) {
+    if (Os_StackRegister((argument == NULL) ? 'C' : 'D') != 0) {
         (void)InterlockedExchange(&controller_healthy[index], 1);
     }
     if (!Os_HostSetEvent(controller_registered[index])) {
@@ -2077,7 +2077,7 @@ OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
                 const LONG previous = saved_interrupt_ceilings[task][depth];
                 const LONG ceiling = (LONG)config->ceiling;
                 (void)InterlockedExchange(&interrupt_ceiling,
-                                          ceiling > previous ? ceiling : previous);
+                                          (ceiling > previous) ? ceiling : previous);
             }
         }
     } else if ((depth == 0u) || (depth > OS_MAX_RESOURCES) ||

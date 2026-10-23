@@ -180,7 +180,7 @@ class HostIoTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
-    def test_event_syscall_errors_are_not_timeouts_or_success(self):
+    def test_native_handle_errors_and_resource_reuse(self):
         import os_suites
 
         with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
@@ -188,13 +188,16 @@ class NativeFacilityTests(unittest.TestCase):
             with os_suites.native_session(directory, "event-errors"):
                 binary, _ = os_suites.build(
                     directory, str(ROOT / "tests/fixtures/os_event_errors.c"),
-                    link_flags=tuple(f"-Wl,--wrap={name}" for name in ("poll", "read", "write")),
+                    link_flags=tuple(f"-Wl,--wrap={name}" for name in (
+                        "poll", "read", "write", "close", "pthread_mutex_destroy",
+                    )),
                 )
                 for scenario in ("poll-error", "poll-error-infinite", "poll-invalid", "poll-hangup", "poll-revents-error",
                                  "poll-interrupted", "read-error", "read-zero", "read-short",
                                  "read-interrupted", "wait-read-error", "wait-read-interrupted",
                                  "wait-read-empty", "wait-read-zero", "wait-read-short",
-                                 "write-error", "write-interrupted"):
+                                 "write-error", "write-interrupted", "mutex-reuse", "mutex-close-error",
+                                 "close-interrupted"):
                     with self.subTest(scenario=scenario):
                         result = os_suites.run_native([str(binary), scenario], timeout=10)
                         self.assertEqual(result.returncode, 0, result)

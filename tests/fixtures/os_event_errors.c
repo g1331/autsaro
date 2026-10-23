@@ -1,15 +1,18 @@
-/** @file Real Linux eventfd consumer with syscall error and interruption controls. */
+/** @file Real Linux handle lifecycle with syscall error and interruption controls. */
 #include "Os_Host.h"
 #include "Os.h"
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/eventfd.h>
 #include <unistd.h>
 
 static const char *scenario;
 static unsigned calls;
 static int bad_errno;
+static int replacement = -1;
 
 void StartupHook(void) {}
 void ShutdownHook(StatusType reason) { (void)reason; }
@@ -17,6 +20,38 @@ void ShutdownHook(StatusType reason) { (void)reason; }
 int __real_poll(struct pollfd *fds, nfds_t count, int timeout);
 ssize_t __real_read(int fd, void *data, size_t length);
 ssize_t __real_write(int fd, const void *data, size_t length);
+int __real_close(int fd);
+int __real_pthread_mutex_destroy(pthread_mutex_t *mutex);
+
+int __wrap_pthread_mutex_destroy(pthread_mutex_t *mutex)
+{
+    if ((scenario != NULL) && (strcmp(scenario, "mutex-close-error") == 0)) {
+        ++calls;
+        if (calls == 1u) {
+            return EBUSY;
+        }
+    }
+    return __real_pthread_mutex_destroy(mutex);
+}
+
+int __wrap_close(int fd)
+{
+    if ((scenario != NULL) && (strcmp(scenario, "close-interrupted") == 0)) {
+        ++calls;
+        if (calls == 1u) {
+            if (__real_close(fd) != 0) {
+                return -1;
+            }
+            replacement = eventfd(0u, EFD_CLOEXEC | EFD_NONBLOCK);
+            if (replacement != fd) {
+                bad_errno = 1;
+            }
+            errno = EINTR;
+            return -1;
+        }
+    }
+    return __real_close(fd);
+}
 
 int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout)
 {
@@ -112,7 +147,35 @@ int main(int argc, char **argv)
     }
     scenario = argv[1];
     errno = EAGAIN;
-    if (strncmp(scenario, "write-", 6u) == 0) {
+    if (strcmp(scenario, "mutex-reuse") == 0) {
+        for (unsigned index = 0u; index < 128u; ++index) {
+            HANDLE mutex = CreateMutexA(NULL, FALSE, NULL);
+            if ((mutex == NULL) || (WaitForSingleObject(mutex, 0u) != WAIT_OBJECT_0) ||
+                (ReleaseMutex(mutex) == FALSE) || (CloseHandle(mutex) == FALSE)) {
+                return 8;
+            }
+        }
+        calls = 1u;
+    } else if (strcmp(scenario, "mutex-close-error") == 0) {
+        HANDLE first = CreateMutexA(NULL, FALSE, NULL);
+        if ((first == NULL) || (CloseHandle(first) != FALSE)) {
+            return 11;
+        }
+        HANDLE second = CreateMutexA(NULL, FALSE, NULL);
+        if ((second == NULL) || (first == second) || (CloseHandle(second) == FALSE) ||
+            (CloseHandle(first) == FALSE)) {
+            return 12;
+        }
+    } else if (strcmp(scenario, "close-interrupted") == 0) {
+        if ((CloseHandle(event) != FALSE) || (CloseHandle(event) != FALSE) || (calls != 1u) ||
+            (replacement < 0) || (fcntl(replacement, F_GETFD) < 0)) {
+            return 9;
+        }
+        if (__real_close(replacement) != 0) {
+            return 10;
+        }
+        event = NULL;
+    } else if (strncmp(scenario, "write-", 6u) == 0) {
         const BOOL result = Os_HostSetEvent(event);
         if (result != ((strcmp(scenario, "write-error") == 0) ? FALSE : TRUE)) {
             return 3;
@@ -138,7 +201,7 @@ int main(int argc, char **argv)
     if ((bad_errno != 0) || (calls == 0u)) {
         return 6;
     }
-    if ((CloseHandle(event) == FALSE) || (CloseHandle(manual) == FALSE)) {
+    if (((event != NULL) && (CloseHandle(event) == FALSE)) || (CloseHandle(manual) == FALSE)) {
         return 7;
     }
     puts("event success/reset/failure/interruption observed");

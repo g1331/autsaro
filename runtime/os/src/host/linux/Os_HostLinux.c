@@ -198,14 +198,14 @@ OS_MEMMAP int Os_HostInstallSignals(void)
 {
     struct sigaction handler = {0};
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
-    sigemptyset(&handler.sa_mask);
-    sigaddset(&handler.sa_mask, SIGRTMIN);
+    (void)sigemptyset(&handler.sa_mask);
+    (void)sigaddset(&handler.sa_mask, SIGRTMIN);
     handler.sa_sigaction = park_signal;
     if ((sigaddset(&handler.sa_mask, SIGRTMIN + 1) != 0) ||
         (sigaction(SIGRTMIN, &handler, NULL) != 0)) {
         return 0;
     }
-    sigfillset(&handler.sa_mask);
+    (void)sigfillset(&handler.sa_mask);
     handler.sa_sigaction = fault_stop_signal;
     return sigaction(SIGRTMIN + 1, &handler, NULL) == 0;
 }
@@ -429,8 +429,8 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
     DWORD outcome = WAIT_FAILED;
     sigset_t blocked;
     sigset_t previous;
-    sigemptyset(&blocked);
-    sigaddset(&blocked, SIGRTMIN);
+    (void)sigemptyset(&blocked);
+    (void)sigaddset(&blocked, SIGRTMIN);
     if ((held_depth < 32u) && (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)) {
         const DWORD caller = GetCurrentThreadId();
         int locked = EINVAL;
@@ -639,14 +639,18 @@ OS_MEMMAP BOOL CloseHandle(HANDLE handle)
     BOOL closed = FALSE;
     if ((handle != NULL) && (handle != &process_handle)) {
         if ((handle->kind == OS_HOST_EVENT) && (handle->fd >= 0)) {
+            errno = 0;
             const int result = close(handle->fd);
-            if (result == 0) {
-                handle->fd = -1;
-                (void)InterlockedExchange(&handle->reserved, 0);
-            }
+            /* Linux releases the descriptor even on EINTR; it must never be closed again. */
+            handle->fd = -1;
+            (void)InterlockedExchange(&handle->reserved, 0);
             closed = (result == 0) ? TRUE : FALSE;
         } else if (handle->kind == OS_HOST_MUTEX) {
             closed = (pthread_mutex_destroy(&handle->mutex) == 0) ? TRUE : FALSE;
+            if (closed != FALSE) {
+                handle->kind = OS_HOST_UNUSED;
+                (void)InterlockedExchange(&handle->reserved, 0);
+            }
         } else if (handle->kind == OS_HOST_THREAD) {
             closed = close_thread(handle);
         } else {
