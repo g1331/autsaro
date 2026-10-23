@@ -206,7 +206,7 @@ class NativeFacilityTests(unittest.TestCase):
                 binary, _ = os_suites.build(
                     directory, str(ROOT / "tests/fixtures/os_event_errors.c"),
                     link_flags=tuple(f"-Wl,--wrap={name}" for name in (
-                        "poll", "read", "write", "close", "pthread_mutex_destroy",
+                        "poll", "read", "write", "close", "pthread_mutex_destroy", "clock_gettime",
                     )),
                 )
                 for scenario in ("poll-error", "poll-error-infinite", "poll-invalid", "poll-hangup", "poll-revents-error",
@@ -214,7 +214,8 @@ class NativeFacilityTests(unittest.TestCase):
                                  "read-interrupted", "wait-read-error", "wait-read-interrupted",
                                  "wait-read-empty", "wait-read-zero", "wait-read-short",
                                  "write-error", "write-interrupted", "mutex-reuse", "mutex-close-error", "event-close-error-reuse",
-                                 "close-interrupted"):
+                                 "close-interrupted", "clock-single-normal", "clock-any-normal", "clock-all-normal",
+                                 "clock-any-initial", "clock-all-initial", "clock-single-later", "clock-any-later", "clock-all-later"):
                     with self.subTest(scenario=scenario):
                         result = os_suites.run_native([str(binary), scenario], timeout=10)
                         self.assertEqual(result.returncode, 0, result)

@@ -34,9 +34,9 @@ Linux `Os_HostLinux.c` 的 `CreateEventA` 为每个事件持有非阻塞 eventfd
 
 此处按固定 MISRA 2013 主文 D4.7（印刷页30／PDF38）的错误信息义务整改，不是 AUTOSAR 必需冲突或偏离。R17.7（页141–142／PDF149–150）允许显式丢弃普通返回值，但不能替代错误分类。AMD1 R22.8–22.10（页13–16／PDF21–24）也覆盖实际通过 errno 返回错误的附加函数：每次调用前在同函数清零，只有负返回值才按本次 errno 分类；返回值本身可确定是否发生错误时使用 R22.9 的例外。AMD2 的语言扩充及 TC2.38 的 R22.9 标题勘误不改变本项目 C99 的该结论。固定 checker 的 R22.10 原始报告不因此删除或改写。
 
-`NativeFacilityTests.test_native_handle_errors_and_resource_reuse`消费真实描述符，覆盖自动／手动复位、poll／read／write错误、中断、EAGAIN及无限等待失败。只处置对应调用点；其他义务仍由 [#58](https://github.com/g1331/autsaro/issues/58) 承接。
+同一D4.7义务也适用于等待时钟：单对象及wait-any后续读取、多对象初始读取、wait-all逐项读取失败均返回WAIT_FAILED；普通wait-all超时保留WAIT_TIMEOUT。`test_native_handle_errors_and_resource_reuse`用真实事件验证I/O、时钟失败和正常对照；不改变wait-all在现有单消费者启动标记上的顺序获取方式。
 
-`CloseHandle` 的资源状态按 D4.13（2013主文页35／PDF43，AMD2扩充C11）另行核查：mutex只有在真实销毁成功后清除kind并归还固定槽，失败时仍持有原资源；否则正常反复创建／关闭会耗尽96个槽。事件的Linux close即使返回EINTR也已释放描述符，保留失败返回但立即撤销本句柄的fd所有权，避免误关随后复用该数字的资源；依据为 [Linux close契约](https://man7.org/linux/man-pages/man2/close.2.html#NOTES)，不外推其他POSIX目标的EINTR行为。实际消费者执行128轮mutex获取／释放／关闭，并在真正关闭事件后复用同一个fd再注入EINTR，断言失败返回及新描述符仍有效。事件另在128轮真实close成功后注入EINTR，确认报错路径也归还句柄槽；mutex销毁失败通过链接器注入，不以销毁仍被持有的mutex这类未满足API前置条件的调用作探针。
+`CloseHandle` 的资源状态按 D4.13（2013主文页35／PDF43，AMD2扩充C11）另行核查：mutex只有在真实销毁成功后清除kind并归还固定槽，失败时仍持有原资源；否则正常反复创建／关闭会耗尽96个槽。事件的Linux close即使返回EINTR也已释放描述符，保留失败返回但立即撤销本句柄的fd所有权，避免误关随后复用该数字的资源；依据为 [Linux close契约](https://man7.org/linux/man-pages/man2/close.2.html#NOTES)，不外推其他POSIX目标的EINTR行为。实际消费者执行128轮mutex获取／释放／关闭，并在真正关闭事件后复用同一个fd再注入EINTR，断言失败返回及新描述符仍有效。事件close成功后注入EINTR也验证槽归还；mutex销毁失败经链接器注入，保持API前置条件。
 
 `reserve_handle`以CAS领取槽位，正常关闭以原子操作归还；六个构造失败回滚（actor映射／保护／pthread创建、eventfd、mutex初始化／初始获取）也改用`InterlockedExchange`，避免普通写入与其他领取者竞争。[GCC 13.3 §6.55](https://gcc.gnu.org/onlinedocs/gcc-13.3.0/gcc.pdf)的原子扩展要求无数据竞争，按R1.3（Required，主文页38–39／PDF46–47）评估实际C99实现。先清理再归还，不增加锁或状态，保持注册栈身份和失败mutex所有权。`test_concurrent_event_construction_and_rollback`链接HostServices和Linux设施，以失败／干净对照检查竞争和复用；两个sanitizer lane运行同一回归。
 

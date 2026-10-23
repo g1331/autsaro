@@ -527,9 +527,17 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
             } else {
                 pending = 0;
             }
-            if ((pending != 0) && (milliseconds != INFINITE) && (monotonic_ms() >= end)) {
-                outcome = WAIT_TIMEOUT;
-                pending = 0;
+            if ((pending != 0) && (milliseconds != INFINITE)) {
+                const uint64_t now = monotonic_ms();
+                if (now == UINT64_MAX) {
+                    outcome = WAIT_FAILED;
+                    pending = 0;
+                } else if (now >= end) {
+                    outcome = WAIT_TIMEOUT;
+                    pending = 0;
+                } else {
+                    /* The finite deadline has not expired. */
+                }
             }
             if (pending != 0) {
                 const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
@@ -568,14 +576,21 @@ OS_MEMMAP static DWORD wait_any(DWORD count,
                 waiting = 0;
             }
         }
-        if ((waiting != 0) && (milliseconds != INFINITE) && (monotonic_ms() >= end)) {
-            waiting = 0;
-        } else if (waiting != 0) {
+        if ((waiting != 0) && (milliseconds != INFINITE)) {
+            const uint64_t now = monotonic_ms();
+            if (now == UINT64_MAX) {
+                result = WAIT_FAILED;
+                waiting = 0;
+            } else if (now >= end) {
+                waiting = 0;
+            } else {
+                /* The finite deadline has not expired. */
+            }
+        }
+        if (waiting != 0) {
             const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
             errno = 0;
             (void)nanosleep(&interval, NULL);
-        } else {
-            /* A handle was signalled or failed. */
         }
     }
     return result;
@@ -590,10 +605,12 @@ OS_MEMMAP static DWORD wait_all(DWORD count,
     DWORD index;
     for (index = 0u; (index < count) && (result == WAIT_OBJECT_0); ++index) {
         const uint64_t now = monotonic_ms();
-        const DWORD remaining =
-            (milliseconds == INFINITE) ? INFINITE : ((end > now) ? (DWORD)(end - now) : 0u);
-        if (WaitForSingleObject(observed[index], remaining) != WAIT_OBJECT_0) {
+        if (now == UINT64_MAX) {
             result = WAIT_FAILED;
+        } else {
+            const DWORD remaining =
+                (milliseconds == INFINITE) ? INFINITE : ((end > now) ? (DWORD)(end - now) : 0u);
+            result = WaitForSingleObject(observed[index], remaining);
         }
     }
     return result;
@@ -606,7 +623,7 @@ OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
 {
     DWORD result = WAIT_FAILED;
     uint64_t end = monotonic_ms();
-    if ((observed != NULL) && (count != 0u) && (count <= OS_HOST_HANDLES)) {
+    if ((observed != NULL) && (count != 0u) && (count <= OS_HOST_HANDLES) && (end != UINT64_MAX)) {
         if (milliseconds != INFINITE) {
             end += milliseconds;
         }

@@ -7,12 +7,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/eventfd.h>
+#include <time.h>
 #include <unistd.h>
 
 static const char *scenario;
 static unsigned calls;
 static int bad_errno;
 static int replacement = -1;
+static unsigned clock_calls;
 
 void StartupHook(void) {}
 void ShutdownHook(StatusType reason) { (void)reason; }
@@ -22,6 +24,32 @@ ssize_t __real_read(int fd, void *data, size_t length);
 ssize_t __real_write(int fd, const void *data, size_t length);
 int __real_close(int fd);
 int __real_pthread_mutex_destroy(pthread_mutex_t *mutex);
+int __real_clock_gettime(clockid_t clock, struct timespec *value);
+
+int __wrap_clock_gettime(clockid_t clock, struct timespec *value)
+{
+    if ((scenario != NULL) && (strncmp(scenario, "clock-", 6u) == 0)) {
+        ++clock_calls;
+        unsigned failed_call = 0u;
+        if ((strcmp(scenario, "clock-any-initial") == 0) ||
+            (strcmp(scenario, "clock-all-initial") == 0)) {
+            failed_call = 1u;
+        } else if ((strcmp(scenario, "clock-single-later") == 0) ||
+                   (strcmp(scenario, "clock-all-later") == 0)) {
+            failed_call = 2u;
+        } else if (strcmp(scenario, "clock-any-later") == 0) {
+            failed_call = 4u;
+        } else {
+            /* The clean controls use the real clock on every call. */
+        }
+        if (clock_calls == failed_call) {
+            ++calls;
+            errno = EIO;
+            return -1;
+        }
+    }
+    return __real_clock_gettime(clock, value);
+}
 
 int __wrap_pthread_mutex_destroy(pthread_mutex_t *mutex)
 {
@@ -157,7 +185,27 @@ int main(int argc, char **argv)
     }
     scenario = argv[1];
     errno = EAGAIN;
-    if (strcmp(scenario, "mutex-reuse") == 0) {
+    if (strncmp(scenario, "clock-", 6u) == 0) {
+        const BOOL all = strstr(scenario, "-all-") != NULL ? 1 : 0;
+        HANDLE observed =
+            ((strstr(scenario, "-initial") != NULL) || (strcmp(scenario, "clock-all-later") == 0))
+                ? event
+                : manual;
+        const DWORD result = strstr(scenario, "-single-") != NULL
+                                 ? WaitForSingleObject(observed, 0u)
+                                 : WaitForMultipleObjects(1u, &observed, all, 0u);
+        const DWORD expected = strstr(scenario, "-normal") != NULL ? WAIT_TIMEOUT : WAIT_FAILED;
+        if (result != expected) {
+            printf("clock wait result=%lu expected=%lu calls=%u\n",
+                   (unsigned long)result,
+                   (unsigned long)expected,
+                   clock_calls);
+            return 14;
+        }
+        if (expected == WAIT_TIMEOUT) {
+            calls = clock_calls;
+        }
+    } else if (strcmp(scenario, "mutex-reuse") == 0) {
         for (unsigned index = 0u; index < 128u; ++index) {
             HANDLE mutex = CreateMutexA(NULL, FALSE, NULL);
             if ((mutex == NULL) || (WaitForSingleObject(mutex, 0u) != WAIT_OBJECT_0) ||
