@@ -16,6 +16,10 @@ Linux 主机调用、后端启动／关闭及中断准入将有持久副作用�
 
 固定2.21.0 addon的最小对照仍对排除分支中的同名函数式宏报告R5.5；生效的同名宏、定义后undef而标识符继续存在两个真实违反对照也均报告。misra_5_5从directives收集名字时没有区分上述排除定义；因此保留这些原始报告与adopted／patched归属，在人工裁决中说明误报，不改addon、suppression或源码名字。
 
+八份同配置工件中的 `arrayIndexOutOfBounds`（error，tasks.c:3554）均指向 `prvCreateIdleTasks` 的默认 `configIDLE_TASK_NAME="IDLE"`：源对象为5个char，目标 `cIdleName` 为16个char，单核保留1个终止位置，循环上界为15。实际只读取索引0..4；复制索引4的NUL后立即break，再在同一索引写目标终止符，不会读取报告中的索引14。R18.1（Required、C99，主文页143／PDF151）约束实际指针算术和数组索引；AMD2.75–76（页16／PDF23）及TC2.33–34（页11／PDF17）没有把此字符串判断改成无条件扫描到上界，也无需使用其对象表示注释作为例外。
+
+Linux真实scheduler的ASan／UBSan对照正常到达Ready、stderr为空；仅在测试副本移除上述break，UBSan在同一读取行精确报告索引5越过char[5]并以1退出。这支持此报告的边界误报裁决，不是全部R18.1通过。Windows判断依据相同内核、宏配置和源码条件，未作Windows运行声明；保留原始error报告、adopted归属及扫描的passed=false，执行收据见PR #371。
+
 Os_TargetConfigType 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。
 
 StartOS 成功后不返回。Task 正常终止或调用 ChainTask 时，通过原生入口移交；意外返回时报告 MISSINGEND，恢复遗留资源和屏蔽状态，再完成本次激活。PreTask／PostTask 随 Running 状态转换调用，Shutdown 不额外产生 PostTask。ErrorHook 提供标准服务标识与参数快照，Hook 内错误不会递归调用或覆盖外层快照。支持参考 EXTENDED 配置和显式 STANDARD 配置；两种模式均保留防御检查、非零结果报告、标准激活及 Alarm 告警。
