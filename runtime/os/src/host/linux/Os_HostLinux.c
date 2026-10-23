@@ -404,6 +404,40 @@ OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCS
     return mutex;
 }
 
+OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
+{
+    DWORD outcome = WAIT_FAILED;
+    sigset_t blocked;
+    sigset_t previous;
+    sigemptyset(&blocked);
+    sigaddset(&blocked, SIGRTMIN);
+    if ((held_depth < 32u) && (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)) {
+        const DWORD caller = GetCurrentThreadId();
+        int locked = EINVAL;
+        if (caller != 0u) {
+            if (__atomic_load_n(&handle->mutex_owner, __ATOMIC_ACQUIRE) == caller) {
+                /* mutex_depth is bounded by the existing held_depth limit. */
+                ++handle->mutex_depth;
+                locked = 0;
+            } else {
+                locked = pthread_mutex_trylock(&handle->mutex);
+                if (locked == 0) {
+                    handle->mutex_depth = 1u;
+                    __atomic_store_n(&handle->mutex_owner, caller, __ATOMIC_RELEASE);
+                }
+            }
+        }
+        if (locked == 0) {
+            held_masks[held_depth++] = previous;
+            outcome = WAIT_OBJECT_0;
+        } else {
+            (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
+            outcome = (locked == EBUSY) ? WAIT_TIMEOUT : WAIT_FAILED;
+        }
+    }
+    return outcome;
+}
+
 OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
 {
     uint64_t end = monotonic_ms();
@@ -419,45 +453,15 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
                 uint64_t value;
                 const int ready = poll(&observed, 1u, 0);
                 if ((ready > 0) && ((observed.revents & POLLIN) != 0)) {
-                    if ((handle->manual != 0) ||
-                        (read(handle->fd, &value, sizeof(value)) == sizeof(value))) {
+                    if (handle->manual != 0 ||
+                        read(handle->fd, &value, sizeof(value)) == sizeof(value)) {
                         outcome = WAIT_OBJECT_0;
                         pending = 0;
                     }
                 }
             } else if (handle->kind == OS_HOST_MUTEX) {
-                sigset_t blocked, previous;
-                sigemptyset(&blocked);
-                sigaddset(&blocked, SIGRTMIN);
-                if ((held_depth < 32u) && (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)) {
-                    const DWORD caller = GetCurrentThreadId();
-                    int locked = EINVAL;
-                    if (caller != 0u) {
-                        if (__atomic_load_n(&handle->mutex_owner, __ATOMIC_ACQUIRE) == caller) {
-                            /* mutex_depth is bounded by the existing held_depth limit. */
-                            ++handle->mutex_depth;
-                            locked = 0;
-                        } else {
-                            locked = pthread_mutex_trylock(&handle->mutex);
-                            if (locked == 0) {
-                                handle->mutex_depth = 1u;
-                                __atomic_store_n(&handle->mutex_owner, caller, __ATOMIC_RELEASE);
-                            }
-                        }
-                    }
-                    if (locked == 0) {
-                        held_masks[held_depth++] = previous;
-                        outcome = WAIT_OBJECT_0;
-                        pending = 0;
-                    } else {
-                        (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
-                        if (locked != EBUSY) {
-                            pending = 0;
-                        }
-                    }
-                } else {
-                    pending = 0;
-                }
+                outcome = try_wait_mutex(handle);
+                pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
             } else if (handle->kind == OS_HOST_THREAD) {
                 if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
                     if ((__atomic_exchange_n(&handle->joined, 1, __ATOMIC_ACQ_REL) != 0) ||

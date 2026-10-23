@@ -61,7 +61,7 @@ OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
         (void)memmove(copied, kernel.uc_mcontext.fpstate, sizeof(destination->native.__fpregs_mem));
         (void)memcpy(
             &((char *)&destination->native)[offsetof(struct ucontext, uc_mcontext.fpstate)],
-            &copied,
+            (const void *)&copied,
             sizeof(copied));
     }
     destination->Rsp = kernel.uc_mcontext.rsp;
