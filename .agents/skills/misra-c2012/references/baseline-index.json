@@ -1555,5 +1555,11 @@
       "reference_url": "https://www.mathworks.com/help/bugfinder/ref/misrac2012rule23.8.html",
       "guidance_file": "references/resources-generics.md"
     }
-  ]
+  ],
+  "original_review": {
+    "checked_on": "2026-10-23",
+    "basis": "March 2013 Third Edition + AMD1-AMD4 + TC1-TC2; see standard-baseline.md",
+    "scope": "221 identities, effective categories, introduction revisions, language applicability and key judgments in existing guidance; not exhaustive amplification/example or source compliance assessment",
+    "snapshot_policy": "source_url, source_sha256 and checked_on above retain the original public catalog snapshot; identifier/category and introduction fingerprints unchanged"
+  }
 }
