@@ -10,12 +10,6 @@
 #include <string.h>
 #include <unistd.h>
 
-/* Linux UAPI supplies the signal frame; libc's ucontext snapshot stays the ARTI ABI. */
-typedef char Os_LinuxContextOffsetType
-    [offsetof(struct ucontext, uc_mcontext) == offsetof(ucontext_t, uc_mcontext) ? 1 : -1];
-typedef char
-    Os_LinuxFpSizeType[sizeof(struct _fpstate) == sizeof(((ucontext_t *)0)->__fpregs_mem) ? 1 : -1];
-
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 OS_MEMMAP static long native_call(
@@ -29,14 +23,14 @@ OS_MEMMAP static long native_call(
     return result;
 }
 
-OS_MEMMAP int Os_LinuxFutexWait(volatile int32_t *cell,
+OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
                                 int32_t expected,
                                 const struct timespec *interval)
 {
     return (int)native_call(__NR_futex, cell, FUTEX_WAIT_PRIVATE, expected, interval);
 }
 
-OS_MEMMAP void Os_LinuxFutexWake(volatile int32_t *cell)
+OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell)
 {
     (void)native_call(__NR_futex, cell, FUTEX_WAKE_PRIVATE, INT32_MAX, NULL);
 }
@@ -54,15 +48,21 @@ OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack)
 
 OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
 {
+    /* C99 compile-time ABI constraints: incompatible platform layouts fail compilation. */
+    (void)sizeof(
+        char[offsetof(struct ucontext, uc_mcontext) == offsetof(ucontext_t, uc_mcontext) ? 1 : -1]);
+    (void)sizeof(
+        char[sizeof(struct _fpstate) == sizeof(destination->native.__fpregs_mem) ? 1 : -1]);
     struct ucontext kernel;
-    memcpy(&kernel, source, sizeof(kernel));
-    memmove(&destination->native, source, sizeof(destination->native));
+    (void)memcpy(&kernel, source, sizeof(kernel));
+    (void)memmove(&destination->native, source, sizeof(destination->native));
     if (kernel.uc_mcontext.fpstate != NULL) {
         void *copied = &destination->native.__fpregs_mem;
-        memmove(copied, kernel.uc_mcontext.fpstate, sizeof(destination->native.__fpregs_mem));
-        memcpy((char *)&destination->native + offsetof(struct ucontext, uc_mcontext.fpstate),
-               &copied,
-               sizeof(copied));
+        (void)memmove(copied, kernel.uc_mcontext.fpstate, sizeof(destination->native.__fpregs_mem));
+        (void)memcpy(
+            &((char *)&destination->native)[offsetof(struct ucontext, uc_mcontext.fpstate)],
+            &copied,
+            sizeof(copied));
     }
     destination->Rsp = kernel.uc_mcontext.rsp;
     destination->ContextFlags = CONTEXT_CONTROL;
@@ -71,23 +71,8 @@ OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
 OS_MEMMAP uintptr_t Os_LinuxSignalSp(const void *context)
 {
     struct ucontext kernel;
-    memcpy(&kernel, context, sizeof(kernel));
+    (void)memcpy(&kernel, context, sizeof(kernel));
     return kernel.uc_mcontext.rsp;
-}
-
-OS_MEMMAP uintptr_t Os_LinuxContextIp(const CONTEXT *context)
-{
-    struct ucontext kernel;
-    memcpy(&kernel, &context->native, sizeof(kernel));
-    return kernel.uc_mcontext.rip;
-}
-
-OS_MEMMAP int Os_LinuxContextOwnsFp(const CONTEXT *context)
-{
-    struct ucontext kernel;
-    memcpy(&kernel, &context->native, sizeof(kernel));
-    const void *storage = &context->native.__fpregs_mem;
-    return kernel.uc_mcontext.fpstate == storage;
 }
 
 OS_MEMMAP static int map_address(const char **cursor, uintptr_t *value)
@@ -103,7 +88,7 @@ OS_MEMMAP static int map_address(const char **cursor, uintptr_t *value)
             valid = 0;
             break;
         }
-        result = result * 16u + digit;
+        result = (result * 16u) + digit;
         ++count;
         ++text;
     }
@@ -120,7 +105,8 @@ OS_MEMMAP static int mapped_line(const char *line,
                                  uintptr_t *high,
                                  size_t *guard)
 {
-    uintptr_t first = 0u, last = 0u;
+    uintptr_t first = 0u;
+    uintptr_t last = 0u;
     const char *cursor = line;
     int result = 0;
     int valid = map_address(&cursor, &first);
@@ -132,7 +118,7 @@ OS_MEMMAP static int mapped_line(const char *line,
     }
     if ((valid != 0) && (*cursor == ' ') && (first < last)) {
         ++cursor;
-        valid = strlen(cursor) >= 4u;
+        valid = (strlen(cursor) >= 4u) ? 1 : 0;
     } else {
         valid = 0;
     }
@@ -153,34 +139,38 @@ OS_MEMMAP static int mapped_line(const char *line,
 
 OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard)
 {
-    char data[1024], line[64];
-    size_t used = 0u;
-    uintptr_t previous_low = 0u, previous_high = 0u, sp;
+    uintptr_t sp;
     int result = 0;
-    ssize_t count;
     int descriptor;
     OS_HOST_STACK_POINTER(sp);
     errno = 0;
     descriptor = open("/proc/self/maps", O_RDONLY);
     if (descriptor >= 0) {
+        char data[1024];
+        char line[64];
+        size_t used = 0u;
+        uintptr_t previous_low = 0u;
+        uintptr_t previous_high = 0u;
+        ssize_t count;
         do {
             errno = 0;
             count = read(descriptor, data, sizeof(data));
             if (count > 0) {
-                for (size_t index = 0u; index < (size_t)count && result == 0; ++index) {
+                for (size_t index = 0u; (index < (size_t)count) && (result == 0); ++index) {
                     if (data[index] == '\n') {
                         line[used] = '\0';
                         result =
                             mapped_line(line, sp, &previous_low, &previous_high, low, high, guard);
                         used = 0u;
                     } else if (used < sizeof(line) - 1u) {
-                        line[used++] = data[index];
+                        line[used] = data[index];
+                        ++used;
                     } else {
                         /* Only the bounded address/permission prefix is needed. */
                     }
                 }
             }
-        } while (result == 0 && (count > 0 || (count < 0 && errno == EINTR)));
+        } while ((result == 0) && ((count > 0) || ((count < 0) && (errno == EINTR))));
         errno = 0;
         if (close(descriptor) != 0) {
             result = 0;

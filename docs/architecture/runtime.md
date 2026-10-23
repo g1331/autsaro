@@ -106,7 +106,7 @@ Linux 的 DWARF personality 仅接收该线程自己的 restart 对象，由 lib
 
 ### 无项目 feature 定义的平台设施
 
-Linux 的 `Os_LinuxNative` 按系统 UAPI 调用 futex、gettid 与 alternate-stack，替代 libc 的变参 syscall／feature 入口；signal frame 转入既有 `linux-x86_64-ucontext` 快照并重定位复制的 fp 存储。ARTI／lifecycle 经同一声明访问，停车、停止和 guard fault 仍检查真实地址／身份。信号与映射常量取自 UAPI，没有项目等价保留宏。
+Linux 的 `Os_LinuxNative` 按系统 UAPI 调用 futex、gettid 与 alternate-stack，替代 libc 的变参 syscall／feature 入口；signal frame 转入既有 `linux-x86_64-ucontext` 快照并重定位复制的 fp 存储。ARTI／lifecycle 按平台 ABI 独立解码，停车、停止和 guard fault 仍检查真实地址／身份。信号与映射常量取自 UAPI，没有项目等价保留宏。
 
 独立 mmap 执行栈和 PROT_NONE guard 保持；同一 pthread 通过配对 call/return 一次进入，激活不重复切换。ASan fiber 协议覆盖进入与有限 helper 返回。每个 pthread 另请求 262144 字节启动栈及平台 guard/TLS，执行栈仍按配置单独核算。生产 actor（含 S）取原始 mapping；其他调用线程按 `/proc/self/maps` 查询当前映射，不把它称为最大可增长 reserve。
 

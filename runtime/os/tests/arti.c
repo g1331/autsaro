@@ -2,7 +2,8 @@
 #include <limits.h>
 #include "Os_Arti.h"
 #ifdef __linux__
-#include "Os_LinuxNative.h"
+#include <asm/sigcontext.h>
+#include <asm/ucontext.h>
 #endif
 static void observed_hook(void);
 static void observed_body(void);
@@ -91,8 +92,10 @@ static void observed_hook(void)
               native->kernel_buffer_low >= native->high);
         check(saved->ContextFlags == CONTEXT_CONTROL && saved->Rsp >= native->committed_low &&
               saved->Rsp < native->high);
-        check(Os_LinuxSignalSp(&saved->native) == saved->Rsp);
-        check(Os_LinuxContextOwnsFp(saved));
+        struct ucontext snapshot;
+        memcpy(&snapshot, &saved->native, sizeof(snapshot));
+        check(snapshot.uc_mcontext.rsp == saved->Rsp);
+        check((const void *)snapshot.uc_mcontext.fpstate == &saved->native.__fpregs_mem);
     }
 #endif
 }

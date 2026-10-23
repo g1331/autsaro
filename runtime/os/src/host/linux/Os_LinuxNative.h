@@ -2,21 +2,18 @@
 #ifndef AUTOSAR_OS_LINUX_NATIVE_H
 #define AUTOSAR_OS_LINUX_NATIVE_H
 #include "Os_Host.h"
-#include <time.h>
 #include <asm-generic/signal-defs.h>
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP int Os_LinuxFutexWait(volatile int32_t *cell,
+OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
                                 int32_t expected,
                                 const struct timespec *interval);
-OS_MEMMAP void Os_LinuxFutexWake(volatile int32_t *cell);
+OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell);
 OS_MEMMAP DWORD Os_LinuxThreadId(void);
 OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack);
 OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source);
 OS_MEMMAP uintptr_t Os_LinuxSignalSp(const void *context);
-OS_MEMMAP uintptr_t Os_LinuxContextIp(const CONTEXT *context);
-OS_MEMMAP int Os_LinuxContextOwnsFp(const CONTEXT *context);
 OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard);
 OS_MEMMAP DWORD Os_LinuxCallOnStack(void *top, LPTHREAD_START_ROUTINE entry, void *argument);
 #define OS_STOP_SEC_CODE

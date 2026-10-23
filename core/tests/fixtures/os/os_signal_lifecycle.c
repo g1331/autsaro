@@ -1,6 +1,8 @@
 /** @file Real actor suspend/resume, captured context and irreversible terminal stop. */
 #include "Os_Backend.h"
-#include "Os_LinuxNative.h"
+#include <asm/sigcontext.h>
+#include <asm/ucontext.h>
+#include <string.h>
 #include <errno.h>
 #include <stdio.h>
 
@@ -87,8 +89,15 @@ int main(void)
         SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {
         return 5;
     }
-    if (Os_HostStopActor(thread, 2000u) == 0 || valid_context(thread, &stopped) == 0 ||
-        paused.Rsp != stopped.Rsp || Os_LinuxContextIp(&paused) != Os_LinuxContextIp(&stopped)) {
+    if (Os_HostStopActor(thread, 2000u) == 0 || valid_context(thread, &stopped) == 0) {
+        return 6;
+    }
+    struct ucontext paused_native;
+    struct ucontext stopped_native;
+    memcpy(&paused_native, &paused.native, sizeof(paused_native));
+    memcpy(&stopped_native, &stopped.native, sizeof(stopped_native));
+    if (paused.Rsp != stopped.Rsp ||
+        paused_native.uc_mcontext.rip != stopped_native.uc_mcontext.rip) {
         return 6;
     }
     if (ResumeThread(thread) != UINT32_MAX || Os_HostStopActor(thread, 2000u) == 0 ||

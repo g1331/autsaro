@@ -212,9 +212,9 @@ OS_MEMMAP int Os_HostInstallSignals(void)
 
 OS_MEMMAP static DWORD actor_body(void *argument)
 {
-    HANDLE thread = argument;
+    HANDLE thread = current_thread;
+    (void)argument;
     OS_LINUX_STACK_FINISH(NULL, &thread->bootstrap_bottom, &thread->bootstrap_size);
-    current_thread = thread;
     __atomic_store_n(&thread->thread_id, GetCurrentThreadId(), __ATOMIC_RELEASE);
     DWORD result;
     if ((thread->register_host != 0) && (Os_StackRegister('H') == 0)) {
@@ -230,11 +230,12 @@ OS_MEMMAP static DWORD actor_body(void *argument)
 OS_MEMMAP static void *actor_start(void *argument)
 {
     HANDLE thread = argument;
+    current_thread = thread;
     OS_LINUX_STACK_START(&thread->bootstrap_fake,
                          (char *)thread->mapping + thread->guard_size,
                          thread->mapping_size - thread->guard_size);
     thread->exit_code =
-        Os_LinuxCallOnStack((char *)thread->mapping + thread->mapping_size, actor_body, thread);
+        Os_LinuxCallOnStack(&((char *)thread->mapping)[thread->mapping_size], actor_body, thread);
     OS_LINUX_STACK_FINISH(thread->bootstrap_fake, NULL, NULL);
     __atomic_store_n(&thread->ended, 1, __ATOMIC_RELEASE);
     futex_wake(&thread->ended);
@@ -263,7 +264,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     }
     reserve = stack == 0u ? OS_HOST_DEFAULT_STACK : stack;
     const long minimum = sysconf(_SC_THREAD_STACK_MIN);
-    if (minimum <= 0 || reserve < (size_t)minimum + (size_t)page) {
+    if ((minimum <= 0) || (reserve < ((size_t)minimum + (size_t)page))) {
         return NULL;
     }
     reserve = ((reserve + (size_t)page - 1u) / (size_t)page) * (size_t)page;
@@ -404,73 +405,79 @@ OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCS
 OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
 {
     uint64_t end = monotonic_ms();
-    if (handle == NULL || end == UINT64_MAX) {
-        return WAIT_FAILED;
-    }
-    if (milliseconds != INFINITE) {
-        end += milliseconds;
-    }
-    for (;;) {
-        if (handle->kind == OS_HOST_EVENT && handle->fd >= 0) {
-            struct pollfd observed = {.fd = handle->fd, .events = POLLIN, .revents = 0};
-            uint64_t value;
-            int ready = poll(&observed, 1u, 0);
-            if (ready > 0 && (observed.revents & POLLIN) != 0) {
-                if (handle->manual != 0 ||
-                    read(handle->fd, &value, sizeof(value)) == sizeof(value)) {
-                    return WAIT_OBJECT_0;
+    DWORD outcome = WAIT_FAILED;
+    if ((handle != NULL) && (end != UINT64_MAX)) {
+        int pending = 1;
+        if (milliseconds != INFINITE) {
+            end += milliseconds;
+        }
+        while (pending != 0) {
+            if ((handle->kind == OS_HOST_EVENT) && (handle->fd >= 0)) {
+                struct pollfd observed = {.fd = handle->fd, .events = POLLIN, .revents = 0};
+                uint64_t value;
+                const int ready = poll(&observed, 1u, 0);
+                if ((ready > 0) && ((observed.revents & POLLIN) != 0)) {
+                    if ((handle->manual != 0) ||
+                        (read(handle->fd, &value, sizeof(value)) == sizeof(value))) {
+                        outcome = WAIT_OBJECT_0;
+                        pending = 0;
+                    }
                 }
-            }
-        } else if (handle->kind == OS_HOST_MUTEX) {
-            sigset_t blocked, previous;
-            sigemptyset(&blocked);
-            sigaddset(&blocked, SIGRTMIN);
-            if (held_depth >= 32u || pthread_sigmask(SIG_BLOCK, &blocked, &previous) != 0) {
-                return WAIT_FAILED;
-            }
-            const DWORD caller = GetCurrentThreadId();
-            int locked = EINVAL;
-            if (caller != 0u) {
-                if (__atomic_load_n(&handle->mutex_owner, __ATOMIC_ACQUIRE) == caller) {
-                    /* mutex_depth is bounded by the existing held_depth limit. */
-                    ++handle->mutex_depth;
-                    locked = 0;
-                } else {
-                    locked = pthread_mutex_trylock(&handle->mutex);
+            } else if (handle->kind == OS_HOST_MUTEX) {
+                sigset_t blocked, previous;
+                sigemptyset(&blocked);
+                sigaddset(&blocked, SIGRTMIN);
+                if ((held_depth < 32u) && (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)) {
+                    const DWORD caller = GetCurrentThreadId();
+                    int locked = EINVAL;
+                    if (caller != 0u) {
+                        if (__atomic_load_n(&handle->mutex_owner, __ATOMIC_ACQUIRE) == caller) {
+                            /* mutex_depth is bounded by the existing held_depth limit. */
+                            ++handle->mutex_depth;
+                            locked = 0;
+                        } else {
+                            locked = pthread_mutex_trylock(&handle->mutex);
+                            if (locked == 0) {
+                                handle->mutex_depth = 1u;
+                                __atomic_store_n(&handle->mutex_owner, caller, __ATOMIC_RELEASE);
+                            }
+                        }
+                    }
                     if (locked == 0) {
-                        handle->mutex_depth = 1u;
-                        __atomic_store_n(&handle->mutex_owner, caller, __ATOMIC_RELEASE);
+                        held_masks[held_depth++] = previous;
+                        outcome = WAIT_OBJECT_0;
+                        pending = 0;
+                    } else {
+                        (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
+                        if (locked != EBUSY) {
+                            pending = 0;
+                        }
                     }
+                } else {
+                    pending = 0;
                 }
-            }
-            if (locked == 0) {
-                held_masks[held_depth++] = previous;
-                return WAIT_OBJECT_0;
-            }
-            (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
-            if (locked != EBUSY) {
-                return WAIT_FAILED;
-            }
-        } else if (handle->kind == OS_HOST_THREAD) {
-            if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
-                if (__atomic_exchange_n(&handle->joined, 1, __ATOMIC_ACQ_REL) == 0) {
-                    if (pthread_join(handle->thread, NULL) != 0) {
-                        return WAIT_FAILED;
+            } else if (handle->kind == OS_HOST_THREAD) {
+                if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
+                    if ((__atomic_exchange_n(&handle->joined, 1, __ATOMIC_ACQ_REL) != 0) ||
+                        (pthread_join(handle->thread, NULL) == 0)) {
+                        outcome = WAIT_OBJECT_0;
                     }
+                    pending = 0;
                 }
-                return WAIT_OBJECT_0;
+            } else {
+                pending = 0;
             }
-        } else {
-            return WAIT_FAILED;
-        }
-        if (milliseconds != INFINITE && monotonic_ms() >= end) {
-            return WAIT_TIMEOUT;
-        }
-        {
-            const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
-            (void)nanosleep(&interval, NULL);
+            if ((pending != 0) && (milliseconds != INFINITE) && (monotonic_ms() >= end)) {
+                outcome = WAIT_TIMEOUT;
+                pending = 0;
+            }
+            if (pending != 0) {
+                const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+                (void)nanosleep(&interval, NULL);
+            }
         }
     }
+    return outcome;
 }
 
 OS_MEMMAP DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable)
@@ -550,8 +557,8 @@ OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
 OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex)
 {
     int released = 0;
-    if (mutex == NULL || mutex->kind != OS_HOST_MUTEX || held_depth == 0u ||
-        __atomic_load_n(&mutex->mutex_owner, __ATOMIC_ACQUIRE) != GetCurrentThreadId()) {
+    if ((mutex == NULL) || (mutex->kind != OS_HOST_MUTEX) || (held_depth == 0u) ||
+        (__atomic_load_n(&mutex->mutex_owner, __ATOMIC_ACQUIRE) != GetCurrentThreadId())) {
         return FALSE;
     }
     if (mutex->mutex_depth > 1u) {
@@ -771,7 +778,7 @@ OS_MEMMAP int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *
     if (current_thread != NULL && current_thread->mapping != NULL) {
         return Os_HostStackRange(current_thread, low, high, guard);
     }
-    if (low == NULL || high == NULL || guard == NULL) {
+    if ((low == NULL) || (high == NULL) || (guard == NULL)) {
         return 0;
     }
     return Os_LinuxMappedStack(low, high, guard);

@@ -60,17 +60,24 @@ int main(int argc, char **argv)
         return 2;
     }
     injected_error = strcmp(argv[1], "error") == 0;
+    struct ucontext snapshot;
     handler.sa_sigaction = capture_signal;
     handler.sa_flags = SA_SIGINFO;
     if (sigemptyset(&handler.sa_mask) != 0 || sigaction(SIGUSR1, &handler, NULL) != 0 ||
         raise(SIGUSR1) != 0 || captured_signal != 1 || captured.Rsp == 0u ||
-        Os_LinuxContextIp(&captured) == 0u || Os_LinuxContextOwnsFp(&captured) == 0 ||
         memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0) {
         return 9;
     }
+    memcpy(&snapshot, &captured.native, sizeof(snapshot));
+    if (snapshot.uc_mcontext.rip == 0u ||
+        (const void *)snapshot.uc_mcontext.fpstate != &captured.native.__fpregs_mem) {
+        return 11;
+    }
     const uintptr_t saved_sp = captured.Rsp;
     Os_LinuxCaptureContext(&captured, &captured.native);
-    if (captured.Rsp != saved_sp || Os_LinuxContextOwnsFp(&captured) == 0 ||
+    memcpy(&snapshot, &captured.native, sizeof(snapshot));
+    if (captured.Rsp != saved_sp ||
+        (const void *)snapshot.uc_mcontext.fpstate != &captured.native.__fpregs_mem ||
         memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0) {
         return 10;
     }
