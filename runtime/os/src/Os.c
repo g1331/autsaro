@@ -106,9 +106,13 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
         ((config->resources[root].isr_access == 0u) != (resource->isr_access == 0u)) ||
         ((resource->task_access == 0u) && (resource->isr_access == 0u)) ||
         (((uint32)resource->task_access & ~task_mask) != 0u) ||
-        ((resource->isr_access & config->category1_isrs) != 0u) ||
-        (group_access(config, root, &group_tasks, &highest_access) != E_OK) ||
-        (resource->ceiling < highest_access)) {
+        ((resource->isr_access & config->category1_isrs) != 0u)) {
+        return E_OS_VALUE;
+    }
+    if (group_access(config, root, &group_tasks, &highest_access) != E_OK) {
+        return E_OS_VALUE;
+    }
+    if (resource->ceiling < highest_access) {
         return E_OS_VALUE;
     }
     if ((config->use_res_scheduler != 0u) && (resource->id == RES_SCHEDULER) &&
@@ -281,7 +285,10 @@ OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
         }
         return;
     }
-    if ((Os_HookContext() != OS_HOOK_NONE) || (Os_BackendStarted() != 0)) {
+    if (Os_HookContext() != OS_HOOK_NONE) {
+        return;
+    }
+    if (Os_BackendStarted() != 0) {
         return;
     }
     Os_BackendStart(Mode);

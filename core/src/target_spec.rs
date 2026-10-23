@@ -54,6 +54,7 @@ const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0016-essential-boolean-controls.patch",
     "runtime/os/patches/0017-portable-header-paths.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
+    "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
     (

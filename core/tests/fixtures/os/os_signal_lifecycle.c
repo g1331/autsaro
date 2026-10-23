@@ -98,7 +98,14 @@ int main(void)
         WaitForSingleObject(ready, 2000u) != WAIT_OBJECT_0) {
         return 3;
     }
-    if (SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {
+    if (SuspendThread(NULL) != UINT32_MAX || ResumeThread(NULL) != UINT32_MAX ||
+        GetThreadContext(NULL, &paused) != FALSE || SuspendThread(ready) != UINT32_MAX ||
+        ResumeThread(ready) != UINT32_MAX || GetThreadContext(ready, &paused) != FALSE ||
+        GetThreadContext(thread, NULL) != FALSE) {
+        return 19;
+    }
+    if (SuspendThread(thread) != 0u || SuspendThread(thread) != 1u ||
+        valid_context(thread, &paused) == 0) {
         return 4;
     }
     (void)InterlockedExchange(&phase, 1);

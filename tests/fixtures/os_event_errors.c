@@ -25,6 +25,8 @@ ssize_t __real_write(int fd, const void *data, size_t length);
 int __real_close(int fd);
 int __real_pthread_mutex_destroy(pthread_mutex_t *mutex);
 int __real_clock_gettime(clockid_t clock, struct timespec *value);
+int __real___poll_chk(struct pollfd *fds, nfds_t count, int timeout, size_t bytes);
+ssize_t __real___read_chk(int fd, void *data, size_t length, size_t bytes);
 
 int __wrap_clock_gettime(clockid_t clock, struct timespec *value)
 {
@@ -120,6 +122,14 @@ int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout)
     return __real_poll(fds, count, timeout);
 }
 
+int __wrap___poll_chk(struct pollfd *fds, nfds_t count, int timeout, size_t bytes)
+{
+    if (count > bytes / sizeof(*fds)) {
+        return __real___poll_chk(fds, count, timeout, bytes);
+    }
+    return __wrap_poll(fds, count, timeout);
+}
+
 ssize_t __wrap_read(int fd, void *data, size_t length)
 {
     const char *operation = scenario;
@@ -149,6 +159,14 @@ ssize_t __wrap_read(int fd, void *data, size_t length)
         }
     }
     return __real_read(fd, data, length);
+}
+
+ssize_t __wrap___read_chk(int fd, void *data, size_t length, size_t bytes)
+{
+    if (length > bytes) {
+        return __real___read_chk(fd, data, length, bytes);
+    }
+    return __wrap_read(fd, data, length);
 }
 
 ssize_t __wrap_write(int fd, const void *data, size_t length)
@@ -184,6 +202,16 @@ int main(int argc, char **argv)
         return 2;
     }
     scenario = argv[1];
+    if (strcmp(scenario, "fortify-read") == 0) {
+        char byte = 0;
+        (void)__wrap___read_chk(-1, &byte, 2u, sizeof(byte));
+        return 15;
+    }
+    if (strcmp(scenario, "fortify-poll") == 0) {
+        struct pollfd one = {.fd = -1, .events = 0, .revents = 0};
+        (void)__wrap___poll_chk(&one, 2u, 0, sizeof(one));
+        return 16;
+    }
     errno = EAGAIN;
     if (strncmp(scenario, "clock-", 6u) == 0) {
         const BOOL all = strstr(scenario, "-all-") != NULL ? 1 : 0;

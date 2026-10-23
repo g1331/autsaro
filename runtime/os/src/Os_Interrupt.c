@@ -57,12 +57,14 @@ OS_MEMMAP sint32 Os_InterruptDisabled(void)
 OS_MEMMAP sint32 Os_InterruptAllows(uint32 interrupt)
 {
     sint32 allowed = 0;
-    if ((interrupt < 32u) && (InterlockedCompareExchange(&all_owners, 0, 0) == 0)) {
-        allowed = ((InterlockedCompareExchange(&os_owners, 0, 0) == 0) ||
-                   ((Os_Config != NULL) &&
-                    ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)))
-                      ? 1
-                      : 0;
+    if (interrupt < 32u) {
+        if (InterlockedCompareExchange(&all_owners, 0, 0) == 0) {
+            allowed = ((InterlockedCompareExchange(&os_owners, 0, 0) == 0) ||
+                       ((Os_Config != NULL) &&
+                        ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)))
+                          ? 1
+                          : 0;
+        }
     }
     return allowed;
 }
@@ -77,14 +79,19 @@ OS_MEMMAP static sint32 permitted(uint32 operation)
         /* R24-11 Table 7.1 permits all six primitives from every supported
          * global Hook and Alarm callback, extending the older OSEK table. */
         allowed = 1;
-    } else if (phase == OS_HOOK_NONE && group != 2u &&
-               (Os_BackendStarted() == 0 || InterlockedCompareExchange(&Os_Closing, 0, 0) != 0)) {
-        allowed = 1;
-    } else if (phase == OS_HOOK_NONE && stack != NULL) {
-        allowed =
-            ((stack->role == 'T') || ((stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u)))
-                ? 1
-                : 0;
+    } else if (phase == OS_HOOK_NONE) {
+        if (group != 2u) {
+            allowed = (Os_BackendStarted() == 0) ? 1 : 0;
+            if (allowed == 0) {
+                allowed = (InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) ? 1 : 0;
+            }
+        }
+        if ((allowed == 0) && (stack != NULL)) {
+            allowed = ((stack->role == 'T') ||
+                       ((stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u)))
+                          ? 1
+                          : 0;
+        }
     } else {
         /* A registered nonautomotive actor is not a Task or active ISR. */
     }
@@ -99,8 +106,10 @@ OS_MEMMAP static sint32 permitted(uint32 operation)
 OS_MEMMAP static void change(uint32 operation)
 {
     Os_InterruptStateType *state = owner_state();
-    const boolean running =
-        (Os_BackendStarted() != 0) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0);
+    boolean running = FALSE;
+    if (Os_BackendStarted() != 0) {
+        running = InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
+    }
     Os_StackCheck();
     Os_BackendGuardService();
     if (permitted(operation) != 0) {
@@ -199,9 +208,12 @@ OS_MEMMAP static StatusType source_control(ISRType interrupt, uint32 operation, 
     Os_BackendGuardService();
     /* Source operations are interrupt services, so application All/OS masks
      * do not reject them. Hooks and Category 1 callers cannot change sources. */
-    if ((Os_HookContext() != OS_HOOK_NONE) || (Os_BackendServiceContext() == 0) ||
-        ((stack != NULL) && (stack->role == 'S') &&
-         ((current >= 32u) || (current == OS_KERNEL_YIELD_INTERRUPT)))) {
+    sint32 serving = 0;
+    if (Os_HookContext() == OS_HOOK_NONE) {
+        serving = Os_BackendServiceContext();
+    }
+    if ((serving == 0) || ((stack != NULL) && (stack->role == 'S') &&
+                           ((current >= 32u) || (current == OS_KERNEL_YIELD_INTERRUPT)))) {
         result = E_OS_CALLEVEL;
     } else if ((interrupt >= 32u) || (interrupt == OS_KERNEL_YIELD_INTERRUPT) ||
                (interrupt == OS_CONTROLLED_TICK_INTERRUPT) ||

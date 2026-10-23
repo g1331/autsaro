@@ -4,6 +4,7 @@ from __future__ import annotations
 import difflib
 import os
 import platform
+import re
 import shutil
 import tempfile
 import unittest
@@ -350,6 +351,30 @@ class NativeKernelObjectTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
+    def test_mutex_initial_owner_and_capacity_mutations(self):
+        import os_suites
+
+        for name, before, after, refused in (
+            ("unowned", "} else if (owner != 0) {", "} else if (owner == 0) {", 28),
+            ("capacity", "if (held_depth < 32u) {", "if (held_depth < 31u) {", 27),
+        ):
+            with self.subTest(mutant=name), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_HostLinux.c"
+                text = source.read_text(encoding="utf-8")
+                self.assertEqual(text.count(before), 1)
+                source.write_text(text.replace(before, after), encoding="utf-8")
+                with os_suites.native_session(directory, "mutex-boundaries"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_native_facilities.c"), target=target,
+                    )
+                    result = os_suites.run_native([str(binary), "owned-capacity"], timeout=10)
+                    self.assertEqual(result.returncode, refused, result)
+                    self.assertEqual(result.stdout, "", result)
+                    self.assertEqual(result.stderr, "", result)
+
     def test_suspend_generation_wrap_preserves_context_and_terminal_stop(self):
         import os_suites
 
@@ -381,18 +406,22 @@ class NativeFacilityTests(unittest.TestCase):
                 fixture_text = (ROOT / "core/tests/fixtures/os/os_signal_lifecycle.c").read_text(encoding="utf-8")
                 if scenario.startswith("stop"):
                     # Deterministically publish stop immediately before the competing request CAS.
-                    cas = ("                if (__atomic_compare_exchange_n(&thread->requested,\n"
-                           "                                                &previous,\n"
-                           "                                                generation,\n"
-                           "                                                false,\n"
-                           "                                                __ATOMIC_ACQ_REL,\n"
-                           "                                                __ATOMIC_ACQUIRE)) {")
-                    self.assertEqual(text.count(cas), 1)
+                    matches = list(re.finditer(
+                        r"(?m)^\s*if \(__atomic_compare_exchange_n\(&thread->requested,\s*"
+                        r"&previous,\s*generation,\s*false,\s*__ATOMIC_ACQ_REL,\s*__ATOMIC_ACQUIRE\)\) \{",
+                        text,
+                    ))
+                    self.assertEqual(len(matches), 1)
+                    cas = matches[0].group()
                     replacement = cas if scenario == "stop" else (
                         "    __atomic_store_n(&thread->requested, generation, __ATOMIC_RELEASE);\n    if (1) {")
                     text = text.replace(cas, "    (void)Os_HostStopActor(thread, 2000u);\n" + replacement)
-                    first_pause = "    if (SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {"
-                    self.assertEqual(fixture_text.count(first_pause), 1)
+                    pauses = list(re.finditer(
+                        r"(?m)^    if \(SuspendThread\(thread\) != 0u \|\| SuspendThread\(thread\) != 1u \|\|\s*"
+                        r"valid_context\(thread, &paused\) == 0\) \{", fixture_text,
+                    ))
+                    self.assertEqual(len(pauses), 1)
+                    first_pause = pauses[0].group()
                     fixture_text = fixture_text.replace(first_pause, (
                         "    if (SuspendThread(thread) != UINT32_MAX || SuspendThread(thread) != UINT32_MAX ||\n"
                         "        ResumeThread(thread) != UINT32_MAX || valid_context(thread, &stopped) == 0) {\n"
@@ -430,9 +459,15 @@ class NativeFacilityTests(unittest.TestCase):
                 binary, _ = os_suites.build(
                     directory, str(ROOT / "tests/fixtures/os_event_errors.c"),
                     link_flags=tuple(f"-Wl,--wrap={name}" for name in (
-                        "poll", "read", "write", "close", "pthread_mutex_destroy", "clock_gettime",
+                        "poll", "read", "__poll_chk", "__read_chk", "write", "close", "pthread_mutex_destroy", "clock_gettime",
                     )),
                 )
+                for scenario in ("fortify-read", "fortify-poll"):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, -6, result)
+                        self.assertEqual(result.stdout, "", result)
+                        self.assertIn("buffer overflow detected", result.stderr, result)
                 for scenario in ("poll-error", "poll-error-infinite", "poll-invalid", "poll-hangup", "poll-revents-error",
                                  "poll-interrupted", "read-error", "read-zero", "read-short",
                                  "read-interrupted", "wait-read-error", "wait-read-interrupted",
@@ -506,6 +541,15 @@ class NativeFacilityTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result)
                     self.assertEqual(result.stdout, "native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified context=signal+self\n")
                     self.assertEqual(result.stderr, "")
+                for scenario, receipt in (
+                    ("owned-capacity", "native mutex initially-owned depth=32 overflow=rejected mask=restored\n"),
+                    ("actor-id", "native actor identity=published completion=joined-once ended=rejected\n"),
+                ):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0, result)
+                        self.assertEqual(result.stdout, receipt)
+                        self.assertEqual(result.stderr, "")
                 if not os.environ.get("AUTOSAR_SANITIZE"):
                     depth = os_suites.run_native([str(binary), "depth"], timeout=15)
                     self.assertEqual(depth.returncode, 0, depth)

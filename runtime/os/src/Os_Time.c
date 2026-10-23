@@ -284,8 +284,10 @@ OS_MEMMAP void Os_TimeAutostart(AppModeType mode)
 OS_MEMMAP void Os_TimeClose(void)
 {
     (void)InterlockedOr(&tick_state, TIME_CLOSED);
-    if ((completion_event != NULL) && (Os_HostSetEvent(completion_event) == 0)) {
-        (void)InterlockedExchange(&signal_failed, 1);
+    if (completion_event != NULL) {
+        if (Os_HostSetEvent(completion_event) == 0) {
+            (void)InterlockedExchange(&signal_failed, 1);
+        }
     }
 }
 
@@ -768,7 +770,12 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
         if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
             /* A simultaneous close wins over a timeout or attention report. */
             status = Os_TargetTickCompletion(ticket, record);
-            return ((status == E_OS_NOFUNC) && (Os_TargetReady() == 0)) ? E_OS_STATE : status;
+            if (status == E_OS_NOFUNC) {
+                if (Os_TargetReady() == 0) {
+                    status = E_OS_STATE;
+                }
+            }
+            return status;
         }
         if (waited != WAIT_OBJECT_0) {
             (void)InterlockedExchange(&signal_failed, 1);
@@ -878,9 +885,15 @@ OS_MEMMAP void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskTyp
     const Os_TimeConfigType *config = Os_Config->time;
     observe_tick_waiting();
     Os_IntegrationOnWaiting(id, pending, predicate);
+    boolean publish = FALSE;
     if ((config != NULL) && (id == config->owner) && (pending == 0u) &&
-        ((predicate & config->wake_event) != 0u) && (Os_MailboxQuiescent() != 0) &&
-        (InterlockedCompareExchange(&tick_state, TIME_PUBLISHING, TIME_MARKED) == TIME_MARKED)) {
+        ((predicate & config->wake_event) != 0u)) {
+        if (Os_MailboxQuiescent() != 0) {
+            publish = InterlockedCompareExchange(&tick_state, TIME_PUBLISHING, TIME_MARKED) ==
+                      TIME_MARKED;
+        }
+    }
+    if (publish) {
         completion.epoch = requested_epoch;
         completion.ticket = requested_epoch;
         completion.kernel_tick = (uint32)xTaskGetTickCount();

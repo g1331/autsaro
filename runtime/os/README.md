@@ -1,10 +1,12 @@
 # 受控主机 Automotive OS runtime
 
-内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用十九个受控补丁；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/0001-controlled-posix-port.patch`。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
+内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用十九个受控补丁；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/` 中的受控端口补丁。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
 
 配置表的计数及模块索引使用uint32，容量仍由各OS_MAX_*限制；任务名为以NUL结尾的const uint8字节串，调用FreeRTOS时才转到原生字符接口。集成方须用当前头文件重新编译配置与消费者。
 
 Linux 的暂停请求、确认与恢复使用同一代次：普通代次在 1..INT32_MAX-1 循环，0 表示尚未暂停，INT32_MAX 只表示不可逆停止。dispatcher 在既有中断 mutex 下串行提交普通请求；Task 创建的首次暂停先于 dispatcher 启动，独立控制线程仍可并发停止 actor。请求以 CAS 发布，避免覆盖先到的停止；确认与恢复按当前代次相等判断，信号 handler 返回前不清零旧恢复值。`NativeFacilityTests.test_suspend_generation_wrap_preserves_context_and_terminal_stop` 在测试副本中设置近上界初值，检查真实信号回绕、上下文与停止交错，并拒绝无界递增及覆盖停止的变异；这是 D4.1 的算术边界与失败预防证据。
+
+Linux 主机调用、后端启动／关闭及中断准入将有持久副作用的操作放在独立语句或嵌套条件中；受控 POSIX 后续补丁 `linux/0002-sequence-persistent-side-effects.patch` 保留事件发布、mutex 交接与 ISR 重调度请求的原有条件和顺序。R13.5 为 Required、适用 C99（主文页113–114／PDF121–122）；volatile 读取也属于持久副作用（Glossary 页224／PDF232），TC1 Appendix J 页14／PDF20明确函数判断不依赖可能的实参或非局部对象值。因此空句柄保护、已知状态或包装调用不构成 RHS 例外，不能无条件提前执行原来受保护的系统调用或取走请求。本次改写没有增加共享状态、改变公开 ABI 或去掉 volatile；夹具保留普通、失败、容量、已结束线程和停止交错观察。固定 checker 的零条 R13.5 报告不能替代此项源码核查；采用内核及其他模块仍需分别完成处置。
 
 `SuspendThread` 的混合优先级表达式显式加括号，并只在函数末尾返回结果；依据 R12.1 主文页103–104／PDF111–112（含优先级表与表达式树）、AMD2.62 的前三行表格修订及 R15.5 主文页126／PDF134，两项在 C99 下均为 Advisory。拒绝、已暂停、成功与并发停止仍保留各自结果，未以理由记录代替这两处源码修复。固定 checker 的 R17.3 原始报告仍保留；主文页138／PDF146仅适用C90，C99的声明义务与GCC内建签名另按R1.1／R8.2／R8.4及实际编译核查。
 

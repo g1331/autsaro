@@ -234,7 +234,10 @@ OS_MEMMAP int Os_StackRegister(char role)
     ULONG guarantee = native_stack_guarantee(role);
     LONG index = InterlockedIncrement(&stack_count) - 1;
     Os_NativeStackType *record;
-    if (index >= (LONG)OS_NATIVE_STACKS || (SetThreadStackGuarantee(&guarantee) == 0)) {
+    if (index >= (LONG)OS_NATIVE_STACKS) {
+        return 0;
+    }
+    if (SetThreadStackGuarantee(&guarantee) == 0) {
         return 0;
     }
     record = &stacks[index];
@@ -291,9 +294,15 @@ OS_MEMMAP void Os_StackCheck(void)
     if (current_stack == NULL) {
         return; /* Public preparation before StartOS does not yet execute an OS task. */
     }
-    if ((sp < current_stack->reserve_low) || (sp >= current_stack->high) ||
-        (VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region)) ||
-        (region.State != MEM_COMMIT) || ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u)) {
+    boolean invalid = (sp < current_stack->reserve_low) || (sp >= current_stack->high);
+    if (!invalid) {
+        invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);
+    }
+    if (!invalid) {
+        invalid =
+            (region.State != MEM_COMMIT) || ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u);
+    }
+    if (invalid) {
         publish_fault(current_stack, 0u, sp, sp, 'M');
     }
     current_stack->sp = sp;
@@ -309,10 +318,15 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
         if (record->thread_id == id) {
             uintptr_t sp = (uintptr_t)context->Rsp;
             MEMORY_BASIC_INFORMATION region;
-            if (sp < record->reserve_low || sp >= record->high ||
-                VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region) ||
-                region.State != MEM_COMMIT ||
-                (region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u) {
+            boolean invalid = (sp < record->reserve_low) || (sp >= record->high);
+            if (!invalid) {
+                invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);
+            }
+            if (!invalid) {
+                invalid = (region.State != MEM_COMMIT) ||
+                          ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u);
+            }
+            if (invalid) {
                 publish_fault(record, 0u, sp, sp, 'M');
             }
             record->sp = sp;
@@ -394,8 +408,11 @@ OS_MEMMAP void Os_StackFatalExit(void)
         ++used;
     }
     /* No CRT/ordinary mutex/allocation or another Hook on exhausted control stacks. */
-    if (fault_output == NULL || fault_output == INVALID_HANDLE_VALUE ||
-        fatal_write(fault_output, fatal_text, used) == 0) {
+    int written = 0;
+    if ((fault_output != NULL) && (fault_output != INVALID_HANDLE_VALUE)) {
+        written = fatal_write(fault_output, fatal_text, used);
+    }
+    if (written == 0) {
         (void)fatal_write(fault_error, fatal_text, used);
     }
     ExitProcess(E_OS_STACKFAULT);

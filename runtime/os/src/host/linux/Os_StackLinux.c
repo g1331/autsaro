@@ -265,9 +265,13 @@ OS_MEMMAP int Os_StackRegister(char role)
     uintptr_t low = 0u;
     uintptr_t high = 0u;
     size_t guard = 0u;
-    if (index < 0 || index >= (LONG)OS_NATIVE_STACKS ||
-        registration_stack_range(role, &low, &high, &guard) == 0 || low >= high ||
-        guard >= high - low) {
+    if ((index < 0) || (index >= (LONG)OS_NATIVE_STACKS)) {
+        return 0;
+    }
+    if (registration_stack_range(role, &low, &high, &guard) == 0) {
+        return 0;
+    }
+    if ((low >= high) || (guard >= high - low)) {
         return 0;
     }
     record = &stacks[index];

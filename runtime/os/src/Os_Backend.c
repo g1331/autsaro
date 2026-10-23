@@ -204,8 +204,13 @@ OS_MEMMAP static volatile Os_Atomic32Type
 #include "Os_MemMap.h"
 OS_MEMMAP void Os_StackTestTriggerBackupFault(void)
 {
-    if (backup_thread == NULL || InterlockedExchange(&backup_fault_requested, 1) != 0 ||
-        Os_HostSetEvent(backup_event) == 0) {
+    if (backup_thread == NULL) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (InterlockedExchange(&backup_fault_requested, 1) != 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (Os_HostSetEvent(backup_event) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -497,21 +502,27 @@ OS_MEMMAP static void observe_tick_masked(uint32 interrupt, sint32 allowed)
 #include "Os_MemMap.h"
 OS_MEMMAP sint32 Os_BackendInterruptEnabled(uint32 interrupt)
 {
-    sint32 allowed;
+    sint32 allowed = 0;
     /* The private kernel yield is not an application ISR; it must remain
      * available to complete native port critical-section handshakes. */
     if (interrupt == OS_KERNEL_YIELD_INTERRUPT) {
         return 1;
     }
-    allowed =
-        ((Os_BackendInterruptPriority(interrupt) != 0u) && (Os_InterruptAllows(interrupt) != 0) &&
-         (Os_PortInterruptSourceEnabled(interrupt) != 0) &&
-         (((interrupt < 32u) && ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)) ||
-          (((LONG)Os_BackendInterruptPriority(interrupt) >
-            InterlockedCompareExchange(&interrupt_ceiling, 0, 0)) &&
-           (Os_HookBlocksCategory2() == 0))))
-            ? 1
-            : 0;
+    if (Os_BackendInterruptPriority(interrupt) != 0u) {
+        if (Os_InterruptAllows(interrupt) != 0) {
+            if (Os_PortInterruptSourceEnabled(interrupt) != 0) {
+                if ((interrupt < 32u) &&
+                    ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)) {
+                    allowed = 1;
+                } else if ((LONG)Os_BackendInterruptPriority(interrupt) >
+                           InterlockedCompareExchange(&interrupt_ceiling, 0, 0)) {
+                    allowed = (Os_HookBlocksCategory2() == 0) ? 1 : 0;
+                } else {
+                    /* A category-2 source at or below the current ceiling stays masked. */
+                }
+            }
+        }
+    }
     observe_tick_masked(interrupt, allowed);
     return allowed;
 }
@@ -714,12 +725,15 @@ OS_MEMMAP static void leave_running(uint32 index)
 
 OS_MEMMAP void Os_BackendBeforeSelect(void *current, void *next)
 {
-    if ((current != next) && (Os_TargetReady() != 0) &&
-        (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
-        for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
-            if (handles[i] == current) {
-                leave_running(i);
-                break;
+    if (current != next) {
+        if (Os_TargetReady() != 0) {
+            if (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) {
+                for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
+                    if (handles[i] == current) {
+                        leave_running(i);
+                        break;
+                    }
+                }
             }
         }
     }
@@ -734,11 +748,12 @@ OS_MEMMAP void Os_BackendOnSwitch(void)
             if (handles[i] == xTaskGetCurrentTaskHandle()) {
                 acquire_internal(i);
                 arti_observe_tasks();
-                if ((running_hook_task != i) &&
-                    (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
-                    running_hook_task = i;
-                    if (Os_Config->hooks != NULL) {
-                        Os_HookInvoke(Os_Config->hooks->pre_task, OS_HOOK_PRE);
+                if (running_hook_task != i) {
+                    if (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) {
+                        running_hook_task = i;
+                        if (Os_Config->hooks != NULL) {
+                            Os_HookInvoke(Os_Config->hooks->pre_task, OS_HOOK_PRE);
+                        }
                     }
                 }
                 break;
@@ -1019,10 +1034,11 @@ OS_MEMMAP void Os_TargetTrace(uint8 marker)
 
 OS_MEMMAP sint32 Os_TargetReady(void)
 {
-    return (InterlockedCompareExchange(&ready, 0, 0) != 0 &&
-            InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)
-               ? 1
-               : 0;
+    sint32 serving = 0;
+    if (InterlockedCompareExchange(&ready, 0, 0) != 0) {
+        serving = (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) ? 1 : 0;
+    }
+    return serving;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1081,8 +1097,10 @@ OS_MEMMAP static void report_and_exit(void)
 OS_MEMMAP static void stop_thread(HANDLE thread)
 {
     CONTEXT context;
-    if (Os_StackHasFault() != 0 && Os_StackThreadHasFault(GetThreadId(thread)) != 0) {
-        return; /* The guard handler parked the damaged actor on its altstack. */
+    if (Os_StackHasFault() != 0) {
+        if (Os_StackThreadHasFault(GetThreadId(thread)) != 0) {
+            return; /* The guard handler parked the damaged actor on its altstack. */
+        }
     }
     if (Os_HostStopActor(thread, 2000u) == 0) {
         ExitProcess(E_OS_STATE);
@@ -1116,10 +1134,12 @@ OS_MEMMAP static void stop_thread(HANDLE thread)
 #include "Os_MemMap.h"
 OS_MEMMAP static void observe_backup_close(uint32 index)
 {
-    if (index == 1u && InterlockedExchange(&backup_fault_requested, 0) != 0) {
-        void Os_StackTestBackupFault(void);
-        Os_StackTestBackupFault();
-        Os_BackendShutdown(E_OS_STATE);
+    if (index == 1u) {
+        if (InterlockedExchange(&backup_fault_requested, 0) != 0) {
+            void Os_StackTestBackupFault(void);
+            Os_StackTestBackupFault();
+            Os_BackendShutdown(E_OS_STATE);
+        }
     }
 }
 #define OS_STOP_SEC_CODE
@@ -1223,14 +1243,18 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
     close_native_fault_resources();
     stop_scheduler_before_actors();
     /* Stop the ISR owner first, then all execution threads. Never take its mutex. */
-    if (main_thread != NULL && GetThreadId(main_thread) != current) {
-        stop_thread(main_thread);
+    if (main_thread != NULL) {
+        if (GetThreadId(main_thread) != current) {
+            stop_thread(main_thread);
+        }
     }
     for (i = 0u; i < task_thread_count; ++i) {
         stop_thread(task_threads[i]);
     }
-    if (argument != NULL && control_thread != NULL && GetThreadId(control_thread) != current) {
-        stop_thread(control_thread);
+    if ((argument != NULL) && (control_thread != NULL)) {
+        if (GetThreadId(control_thread) != current) {
+            stop_thread(control_thread);
+        }
     }
     if (controller_healthy[1] == 0 && backup_thread != NULL && argument == NULL) {
         stop_thread(backup_thread);
@@ -1257,8 +1281,10 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
     } else {
         /* A Task, ISR or startup fault leaves both controller health states intact. */
     }
-    if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
-        Os_StackFatalExit();
+    if (controller_healthy[0] == 0) {
+        if (controller_healthy[1] == 0) {
+            Os_StackFatalExit();
+        }
     }
     if (Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event) == 0) {
         ExitProcess(E_OS_STACKFAULT);
@@ -1284,8 +1310,10 @@ OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
     } else {
         /* A Task, ISR or startup fault leaves both controller health states intact. */
     }
-    if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
-        Os_StackFatalExit();
+    if (controller_healthy[0] == 0) {
+        if (controller_healthy[1] == 0) {
+            Os_StackFatalExit();
+        }
     }
     if (Os_HostSetEvent(controller_healthy[0] != 0 ? close_event : backup_event) == 0) {
         ExitProcess(E_OS_STACKFAULT);
@@ -1300,10 +1328,13 @@ OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
 OS_MEMMAP void Os_BackendShutdown(StatusType error)
 {
     const Os_NativeStackType *current = Os_StackCurrent();
-    if (error == E_OS_STACKFAULT && (Os_StackHasFault() != 0) && current != NULL &&
-        (current->role == 'C' || current->role == 'D') &&
-        current->thread_id != Os_Fault.thread_id) {
-        report_and_exit();
+    if (error == E_OS_STACKFAULT) {
+        if (Os_StackHasFault() != 0) {
+            if ((current != NULL) && ((current->role == 'C') || (current->role == 'D')) &&
+                (current->thread_id != Os_Fault.thread_id)) {
+                report_and_exit();
+            }
+        }
     }
     Os_BackendRequestShutdown(error);
     Sleep(INFINITE);
@@ -1317,8 +1348,10 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
     if ((InterlockedOr(&activation_admission, 2) & 2) == 0) {
         shutdown_reason = error;
         (void)InterlockedExchange(&ready, 0);
-        if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
-            report_and_exit();
+        if (controller_healthy[0] == 0) {
+            if (controller_healthy[1] == 0) {
+                report_and_exit();
+            }
         }
         /* Wake control before publishing Os_Closing: a dispatch that stops this Task
          * after the publication never resumes it, so the wake-up would be lost. */
@@ -1394,9 +1427,10 @@ OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
                                DWORD flags,
                                LPDWORD id)
 {
-    HANDLE result = (attributes != NULL || fail_next())
-                        ? NULL
-                        : Os_HostCreateActor(stack, start, argument, flags, id, 0);
+    HANDLE result = NULL;
+    if (attributes == NULL) {
+        result = fail_next() ? NULL : Os_HostCreateActor(stack, start, argument, flags, id, 0);
+    }
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1441,8 +1475,10 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
         Os_ArtiTaskStacks[index] = Os_StackCurrent();
         Os_ArtiTaskContexts[index] = Os_StackSavedContext(Os_ArtiTaskStacks[index]);
     }
-    if ((Os_HostSetEvent(start->registered) == 0) ||
-        WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
+    if (Os_HostSetEvent(start->registered) == 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if (start->entry == task_entry) {
@@ -1478,8 +1514,10 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
                            NULL);
     task_threads[task_thread_count] = thread;
     ++task_thread_count;
-    if (WaitForSingleObject(start->registered, 5000u) != WAIT_OBJECT_0 ||
-        SuspendThread(thread) == (DWORD)-1) {
+    if (WaitForSingleObject(start->registered, 5000u) != WAIT_OBJECT_0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (SuspendThread(thread) == (DWORD)-1) {
         Os_BackendShutdown(E_OS_STATE);
     }
     context.ContextFlags = CONTEXT_CONTROL;
@@ -1501,7 +1539,10 @@ OS_MEMMAP void Os_PortResumeThread(HANDLE thread)
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackObserve(thread, &context);
-    if (operation_fails(3u) || ResumeThread(thread) == (DWORD)-1) {
+    if (operation_fails(3u)) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (ResumeThread(thread) == (DWORD)-1) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -1699,8 +1740,13 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
         Os_PortThread(NULL, 262144u, control, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     backup_thread = Os_PortThread(
         NULL, 262144u, control, (void *)&backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
-    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0 ||
-        controller_healthy[0] == 0 || controller_healthy[1] == 0) {
+    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (controller_healthy[0] == 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    if (controller_healthy[1] == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     for (i = 0u; i < Os_Config->task_count; ++i) {
@@ -1858,7 +1904,9 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
     if (request_sequence == UINT64_MAX) {
         rebase_orders();
     }
-    configASSERT((queue->count != 0u) || (eTaskGetState(handles[index]) == eSuspended));
+    if (queue->count == 0u) {
+        configASSERT(eTaskGetState(handles[index]) == eSuspended);
+    }
     append_activation(index);
     if (queue->count == 1u) {
         vTaskOsSetReadySequence(handles[index], ready_sequences[index]);
@@ -1883,7 +1931,10 @@ OS_MEMMAP static uint32 current_task_index(void)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
     uint32 index;
-    if ((stack == NULL) || (stack->role != 'T') || (Os_BackendReady() == 0)) {
+    if ((stack == NULL) || (stack->role != 'T')) {
+        return OS_MAX_TASKS;
+    }
+    if (Os_BackendReady() == 0) {
         return OS_MAX_TASKS;
     }
     for (index = 0u; index < Os_Config->task_count; ++index) {

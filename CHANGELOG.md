@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Linux host and controlled POSIX port synchronization now sequence conditional native operations and volatile state reads explicitly; backend startup, readiness and interrupt admission preserve their existing failure and handoff order. Regenerate sealed deliveries for the changed source and selected patch (#58)
+
 - Linux native pause generations now cycle below the reserved terminal-stop value and preserve concurrent stop requests. Long-running actors remain resumable across the generation boundary; regenerate sealed deliveries for the corrected host source (#58)
 
 - Native Task restart uses a typed assembler PC accessor and keeps its continuation private. Linux constructor rollback remains atomic and event waits distinguish clock failures from ordinary timeouts; Windows thread setup and native handoff failures stop before consuming invalid synchronization state. Regenerate sealed deliveries and rebuild native consumers for the changed private ABI and controlled patches (#58)

@@ -182,10 +182,11 @@ OS_MEMMAP StatusType Os_BridgeContext(void)
 
 OS_MEMMAP sint32 Os_MailboxQuiescent(void)
 {
-    return (((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) &&
-            (InterlockedCompareExchange(&published, 0, 0) == 0))
-               ? 1
-               : 0;
+    sint32 quiescent = 0;
+    if ((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) {
+        quiescent = (InterlockedCompareExchange(&published, 0, 0) == 0) ? 1 : 0;
+    }
+    return quiescent;
 }
 
 OS_MEMMAP static StatusType input_context(void)

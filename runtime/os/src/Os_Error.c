@@ -143,8 +143,12 @@ OS_MEMMAP StatusType Os_ErrorResult(OSServiceIdType service,
                                     StatusType status,
                                     const Os_ErrorParametersType *arguments)
 {
+    boolean invoke = FALSE;
     if ((status != E_OK) && (error_active == 0) && (Os_ErrorHookConfigured() != 0) &&
-        (Os_StackCurrent() != NULL) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
+        (Os_StackCurrent() != NULL)) {
+        invoke = InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
+    }
+    if (invoke) {
         const Os_HookPhaseType previous = phase;
         const Os_NativeStackType *stack = Os_StackCurrent();
         const boolean isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
