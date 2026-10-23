@@ -49,6 +49,7 @@
     "runtime/os/patches/0013-interrupt-source-repetition.patch": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch": "8324f410501be231047bfb6df88ac97c7f584771f7289125a668e62664fc242f",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch": "a15fa95c66aa03533c654fa5c19fd0f8da9fac15c2fb30a6d85157970c85b3bb",
-    "runtime/os/patches/0015-typed-port-state.patch": "05a05c349cb59b63e176ccd104ccad89ba0bbcc915c513f2f9fb3e26dbcd8898"
+    "runtime/os/patches/0015-typed-port-state.patch": "05a05c349cb59b63e176ccd104ccad89ba0bbcc915c513f2f9fb3e26dbcd8898",
+    "runtime/os/patches/0016-essential-boolean-controls.patch": "ad6c96416518b8db01ecbdf96ce75f47bd2561c992c8ddc0576b3127f6a5be0e"
   }
 }

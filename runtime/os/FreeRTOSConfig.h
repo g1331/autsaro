@@ -41,5 +41,5 @@ void Os_BackendAssert(const void *file, sint32 line) __attribute__((noreturn));
     do {                                                                                           \
         if (!(x))                                                                                  \
             Os_BackendAssert(__FILE__, __LINE__);                                                  \
-    } while (0)
+    } while (FALSE)
 #endif

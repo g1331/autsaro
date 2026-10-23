@@ -41,15 +41,21 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0013-interrupt-source-repetition.patch",
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch",
     "runtime/os/patches/0015-typed-port-state.patch",
+    "runtime/os/patches/0016-essential-boolean-controls.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",
     "runtime/os/patches/0007-controlled-tick.patch",
     "runtime/os/patches/0008-task-hook-boundaries.patch",
     "runtime/os/patches/0015-typed-port-state.patch",
+    "runtime/os/patches/0016-essential-boolean-controls.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
+    (
+        "runtime/os/patches/0016-essential-boolean-controls.patch",
+        &["tasks.c", "queue.c", "include/list.h", "include/task.h"],
+    ),
     (
         "runtime/os/patches/0015-typed-port-state.patch",
         &[

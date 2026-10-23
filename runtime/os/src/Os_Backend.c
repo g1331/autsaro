@@ -561,7 +561,7 @@ OS_MEMMAP sint32 Os_BackendInputOwner(void) { return Os_BackendTaskOwner(Os_Conf
 
 OS_MEMMAP StatusType Os_BackendTaskId(TaskRefType id)
 {
-    if (!Os_BackendServiceContext()) {
+    if (Os_BackendServiceContext() == 0) {
         return E_OS_CALLEVEL;
     }
     taskENTER_CRITICAL();
@@ -759,7 +759,7 @@ OS_MEMMAP static TaskStateType native_task_state(uint32 index)
             return (task_waiting[index] != 0u) ? WAITING : SUSPENDED;
         default:
             /* Automotive Task objects are never deleted. */
-            configASSERT(0);
+            configASSERT(FALSE);
             return SUSPENDED;
     }
 }
@@ -931,24 +931,24 @@ OS_MEMMAP void Os_StackTestFailOperation(uint32 operation) { failed_operation = 
 #if defined(OS_STACK_TESTS) && (OS_STACK_TESTS == STD_ON)
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static sint32 operation_fails(uint32 operation)
+OS_MEMMAP static boolean operation_fails(uint32 operation)
 {
     if (failed_operation == operation) {
         failed_operation = 0u;
         Os_TargetTrace('F');
-        return 1;
+        return TRUE;
     }
-    return 0;
+    return FALSE;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #else
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static sint32 operation_fails(uint32 operation)
+OS_MEMMAP static boolean operation_fails(uint32 operation)
 {
     (void)operation;
-    return 0;
+    return FALSE;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1074,7 +1074,7 @@ OS_MEMMAP static void stop_thread(HANDLE thread)
         ExitProcess(E_OS_STATE);
     }
     context.ContextFlags = CONTEXT_CONTROL;
-    if (!Os_PortGetThreadContext(thread, &context)) {
+    if (Os_PortGetThreadContext(thread, &context) == 0) {
         ExitProcess(E_OS_STATE);
     }
 }
@@ -1090,7 +1090,7 @@ OS_MEMMAP static void stop_thread(HANDLE thread)
         ExitProcess(E_OS_STATE);
     }
     context.ContextFlags = CONTEXT_CONTROL;
-    if (!Os_PortGetThreadContext(thread, &context)) {
+    if (Os_PortGetThreadContext(thread, &context) == 0) {
         ExitProcess(E_OS_STATE);
     }
 }
@@ -1188,7 +1188,7 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
     if (Os_StackRegister((argument == NULL) ? 'C' : 'D') != 0) {
         (void)InterlockedExchange(&controller_healthy[index], 1);
     }
-    if (!Os_HostSetEvent(controller_registered[index])) {
+    if (Os_HostSetEvent(controller_registered[index]) == 0) {
         ExitProcess(E_OS_STATE);
     }
     if (controller_healthy[index] == 0) {
@@ -1244,7 +1244,7 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
     if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
         Os_StackFatalExit();
     }
-    if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
+    if (Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event) == 0) {
         ExitProcess(E_OS_STACKFAULT);
     }
     (void)InterlockedExchange(&Os_Closing, 1);
@@ -1269,7 +1269,7 @@ OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
     if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
         Os_StackFatalExit();
     }
-    if (!Os_HostSetEvent(controller_healthy[0] != 0 ? close_event : backup_event)) {
+    if (Os_HostSetEvent(controller_healthy[0] != 0 ? close_event : backup_event) == 0) {
         ExitProcess(E_OS_STACKFAULT);
     }
     (void)InterlockedExchange(&Os_Closing, 1);
@@ -1282,7 +1282,7 @@ OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
 OS_MEMMAP void Os_BackendShutdown(StatusType error)
 {
     const Os_NativeStackType *current = Os_StackCurrent();
-    if (error == E_OS_STACKFAULT && Os_StackHasFault() && current != NULL &&
+    if (error == E_OS_STACKFAULT && (Os_StackHasFault() != 0) && current != NULL &&
         (current->role == 'C' || current->role == 'D') &&
         current->thread_id != Os_Fault.thread_id) {
         report_and_exit();
@@ -1304,7 +1304,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
         }
         /* Wake control before publishing Os_Closing: a dispatch that stops this Task
          * after the publication never resumes it, so the wake-up would be lost. */
-        if (!Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event)) {
+        if (Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event) == 0) {
             ExitProcess(E_OS_STATE);
         }
         (void)InterlockedExchange(&Os_Closing, 1);
@@ -1322,7 +1322,7 @@ OS_MEMMAP void Os_BackendAssert(const void *file, sint32 line)
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static sint32 fail_next(void)
+OS_MEMMAP static boolean fail_next(void)
 {
     ++resource_calls;
     return fail_resource != 0u && resource_calls == fail_resource;
@@ -1332,10 +1332,10 @@ OS_MEMMAP static sint32 fail_next(void)
 #else
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static sint32 fail_next(void)
+OS_MEMMAP static boolean fail_next(void)
 {
     ++resource_calls;
-    return 0;
+    return FALSE;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1413,7 +1413,7 @@ OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
 {
     Os_NativeTaskStartType *start = argument;
-    if (!Os_StackRegister(start->role)) {
+    if (Os_StackRegister(start->role) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackRecordBuffer(start->buffer_top);
@@ -1423,7 +1423,7 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
         Os_ArtiTaskStacks[index] = Os_StackCurrent();
         Os_ArtiTaskContexts[index] = Os_StackSavedContext(Os_ArtiTaskStacks[index]);
     }
-    if (!Os_HostSetEvent(start->registered) ||
+    if ((Os_HostSetEvent(start->registered) == 0) ||
         WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1464,11 +1464,11 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
         Os_BackendShutdown(E_OS_STATE);
     }
     context.ContextFlags = CONTEXT_CONTROL;
-    if (!GetThreadContext(thread, &context)) {
+    if (GetThreadContext(thread, &context) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackObserve(thread, &context);
-    if (!Os_HostSetEvent(start->gate)) {
+    if (Os_HostSetEvent(start->gate) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     return thread;
@@ -1478,7 +1478,7 @@ OS_MEMMAP void Os_PortResumeThread(HANDLE thread)
 {
     CONTEXT context;
     context.ContextFlags = CONTEXT_CONTROL;
-    if (!GetThreadContext(thread, &context)) {
+    if (GetThreadContext(thread, &context) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackObserve(thread, &context);
@@ -1631,13 +1631,13 @@ OS_MEMMAP static void read_resource_failure(void) {}
 #include "Os_MemMap.h"
 OS_MEMMAP static void bind_main_thread(void)
 {
-    if (!DuplicateHandle(GetCurrentProcess(),
-                         GetCurrentThread(),
-                         GetCurrentProcess(),
-                         &main_thread,
-                         0u,
-                         FALSE,
-                         DUPLICATE_SAME_ACCESS)) {
+    if (DuplicateHandle(GetCurrentProcess(),
+                        GetCurrentThread(),
+                        GetCurrentProcess(),
+                        &main_thread,
+                        0u,
+                        FALSE,
+                        DUPLICATE_SAME_ACCESS) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -1719,13 +1719,13 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
 #include "Os_MemMap.h"
 OS_MEMMAP void Os_BackendSetDispatcher(void)
 {
-    if (!DuplicateHandle(GetCurrentProcess(),
-                         GetCurrentThread(),
-                         GetCurrentProcess(),
-                         &main_thread,
-                         0u,
-                         FALSE,
-                         DUPLICATE_SAME_ACCESS)) {
+    if (DuplicateHandle(GetCurrentProcess(),
+                        GetCurrentThread(),
+                        GetCurrentProcess(),
+                        &main_thread,
+                        0u,
+                        FALSE,
+                        DUPLICATE_SAME_ACCESS) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_HostSetDispatcher(main_thread);
@@ -1740,7 +1740,7 @@ OS_MEMMAP StatusType Os_BackendState(TaskType id, TaskStateRefType state)
 {
     uint32 i;
     Os_StackCheck();
-    if (!Os_BackendServiceContext()) {
+    if (Os_BackendServiceContext() == 0) {
         return E_OS_CALLEVEL;
     }
     for (i = 0u; i < Os_Config->task_count; ++i) {
@@ -1810,7 +1810,7 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
     uint32 index;
     const Os_ActivationQueueType *queue;
     const Os_NativeStackType *stack;
-    if (!Os_BackendServiceContext()) {
+    if (Os_BackendServiceContext() == 0) {
         return E_OS_CALLEVEL;
     }
     index = task_index(id);
@@ -1822,7 +1822,7 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
     observe_activation_lock();
     taskENTER_CRITICAL();
     Os_BackendGuardService();
-    if (!Os_BackendReady()) {
+    if (Os_BackendReady() == 0) {
         taskEXIT_CRITICAL();
         return E_OS_STATE;
     }
@@ -2182,7 +2182,7 @@ OS_MEMMAP StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskR
 {
     uint32 index;
     StatusType status = E_OK;
-    if (!Os_BackendServiceContext()) {
+    if (Os_BackendServiceContext() == 0) {
         return E_OS_CALLEVEL;
     }
     index = task_index(id);
@@ -2229,7 +2229,7 @@ OS_MEMMAP StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
     uint32 index;
     uint32 j;
     Os_ActivationInfoType snapshot;
-    if (!Os_BackendServiceContext()) {
+    if (Os_BackendServiceContext() == 0) {
         return E_OS_CALLEVEL;
     }
     index = task_index(id);

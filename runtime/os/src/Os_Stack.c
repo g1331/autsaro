@@ -194,7 +194,7 @@ OS_MEMMAP void Os_StackInit(void)
     if (AddVectoredExceptionHandler(1u, stack_exception) == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (!Os_StackRegister('S')) {
+    if (Os_StackRegister('S') == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -231,7 +231,7 @@ OS_MEMMAP int Os_StackRegister(char role)
     ULONG guarantee = native_stack_guarantee(role);
     LONG index = InterlockedIncrement(&stack_count) - 1;
     Os_NativeStackType *record;
-    if (index >= (LONG)OS_NATIVE_STACKS || !SetThreadStackGuarantee(&guarantee)) {
+    if (index >= (LONG)OS_NATIVE_STACKS || (SetThreadStackGuarantee(&guarantee) == 0)) {
         return 0;
     }
     record = &stacks[index];
@@ -271,7 +271,7 @@ OS_MEMMAP int Os_StackRegister(char role)
     }
     record->reserve = record->high - record->reserve_low;
     guarantee = 0u;
-    if (!SetThreadStackGuarantee(&guarantee)) {
+    if (SetThreadStackGuarantee(&guarantee) == 0) {
         return 0;
     }
     record->guarantee = guarantee;
