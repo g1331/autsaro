@@ -1,8 +1,10 @@
-"""Exercise inventory mutations and prevent false matrix completion."""
+"""Exercise inventory mutations and the read-only catalog command contract."""
 
 import json
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,7 +37,7 @@ class CatalogTests(unittest.TestCase):
     def test_missing_guidance_is_rejected(self):
         def mutate(root):
             p = root / "references/directives.md"
-            p.write_text(re.sub(r"^\| \[D3\.1\].*\n", "", p.read_text(encoding="utf-8"), flags=re.M), encoding="utf-8")
+            p.write_text(re.sub(r"^\| \[D3\.1\].*\n", "", p.read_text(encoding="utf-8"), flags=re.MULTILINE), encoding="utf-8")
         self.assert_catalog_mutation_rejected(mutate)
 
     def test_duplicate_guidance_is_rejected(self):
@@ -50,7 +52,7 @@ class CatalogTests(unittest.TestCase):
         def mutate(root):
             p = root / "references/control-flow.md"
             s = p.read_text(encoding="utf-8")
-            s = re.sub(r"(^\| \[R17\.5\].*?)\| Required \|", r"\1| Advisory |", s, flags=re.M)
+            s = re.sub(r"(^\| \[R17\.5\].*?)\| Required \|", r"\1| Advisory |", s, flags=re.MULTILINE)
             p.write_text(s, encoding="utf-8")
         self.assert_catalog_mutation_rejected(mutate)
 
@@ -83,51 +85,31 @@ class CatalogTests(unittest.TestCase):
             p.write_text(json.dumps(data), encoding="utf-8")
         self.assert_catalog_mutation_rejected(mutate)
 
-    def test_matrix_starts_unassessed_and_is_not_complete(self):
-        matrix = catalog.create_matrix(self.rows)
-        self.assertEqual(len(matrix["entries"]), 221)
-        self.assertTrue(all(entry["result"] == "not_assessed" for entry in matrix["entries"]))
-        self.assertEqual(len(catalog.check_matrix(matrix, self.rows)), 222)
+    def run_catalog(self, *arguments):
+        return subprocess.run(
+            [sys.executable, str(catalog.ROOT / "scripts/catalog.py"), *arguments],
+            capture_output=True, text=True, encoding="utf-8", check=False,
+        )
 
-    def test_matrix_missing_entry_is_rejected(self):
-        matrix = catalog.create_matrix(self.rows)
-        matrix["entries"].pop()
-        with self.assertRaises(ValueError):
-            catalog.check_matrix(matrix, self.rows)
+    def test_query_filters_exact_identifiers(self):
+        result = self.run_catalog("query", "--id", "R17.3", "--id", "R21.4")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        rows = json.loads(result.stdout)
+        self.assertEqual({row["id"] for row in rows}, {"R17.3", "R21.4"})
+        self.assertTrue(all(row["condition"] and row["action"] and row["check"] for row in rows))
 
-    def test_mandatory_deviation_is_rejected(self):
-        matrix = catalog.create_matrix(self.rows)
-        entry = next(row for row in matrix["entries"] if row["id"] == "R9.1")
-        entry.update(applicability="applicable", result="deviation_approved", approval="some approval")
-        with self.assertRaisesRegex(ValueError, "Mandatory"):
-            catalog.check_matrix(matrix, self.rows)
+    def test_query_intersects_group_and_identifier(self):
+        result = self.run_catalog("query", "--group", "libraries", "--id", "R21.6", "--id", "R17.3")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([row["id"] for row in json.loads(result.stdout)], ["R21.6"])
 
-    def test_required_cannot_be_disapplied(self):
-        matrix = catalog.create_matrix(self.rows)
-        matrix["entries"][0]["effective_category"] = "Disapplied"
-        with self.assertRaisesRegex(ValueError, "classification"):
-            catalog.check_matrix(matrix, self.rows)
-
-    def test_not_applicable_needs_reason_and_evidence(self):
-        matrix = catalog.create_matrix(self.rows)
-        entry = matrix["entries"][0]
-        entry.update(applicability="not_applicable", result="not_applicable")
-        issues = catalog.check_matrix(matrix, self.rows)
-        self.assertIn("D1.1: reason missing", issues)
-        self.assertIn("D1.1: normative basis or evidence missing", issues)
-
-    def test_approved_deviation_needs_approval_record(self):
-        matrix = catalog.create_matrix(self.rows)
-        entry = matrix["entries"][0]
-        entry.update(applicability="applicable", result="deviation_approved", reason="bounded requirement", normative_basis="licensed source section", evidence=["review record"])
-        self.assertIn("D1.1: approval evidence missing", catalog.check_matrix(matrix, self.rows))
-
-    def test_bookkeeping_accepts_accounted_entries_without_certifying_evidence(self):
-        matrix = catalog.create_matrix(self.rows)
-        matrix.update(scope="hypothetical test", target_and_configuration="hypothetical C99")
-        for entry in matrix["entries"]:
-            entry.update(applicability="applicable", result="pass", normative_basis="synthetic test source", evidence=["synthetic test evidence"])
-        self.assertEqual(catalog.check_matrix(matrix, self.rows), [])
+    def test_query_rejects_unknown_identifier_and_empty_selection(self):
+        for arguments in (("--id", "R99.1"), ("--group", "missing")):
+            with self.subTest(arguments=arguments):
+                result = self.run_catalog("query", *arguments)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("ERROR:", result.stderr)
 
     def test_official_comparison_rejects_a_duplicate(self):
         contents = "\n".join(f"{'Dir' if r['id'].startswith('D') else 'Rule'} {r['id'][1:]}\t{r['category']}" for r in self.rows)
