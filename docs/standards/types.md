@@ -22,6 +22,8 @@ Linux私有`Os_HostLinux.h`不再定义TRUE／FALSE，避免它在Platform_Types
 
 `Os_TargetWaitTick` 的 waiting 和受控 POSIX 端口 `Os_PortInterruptSourceControl` 的 clear 均为 boolean，分别消费 TRUE／FALSE 的赋值与比较。最小对照在固定 Cppcheck 默认模型中没有 R10.3／R10.4 报告；加入真实分析输入的 `-Dtrue=1`／`-Dfalse=0` 后，同一源码出现两条 R10.3 和一条 R10.4。因此裁决依据是原文与实际宏展开，不能把默认模型的零报告外推为生产分析通过。
 
+`complete_activation` 的 `configASSERT` 参数用条件运算符在 TRUE 与 `eTaskGetState(...) == eSuspended` 之间选择；前者是附录 D.6 的 Boolean 常量，后者是附录 D.7 的 essentially Boolean 比较结果，R10.4 不要求把其中一支改成整数。内核查询仍在断言参数内，仅在 count 为零时执行。保留 enum 返回类型的最小断言对照，在默认模型下没有 R10.4，加入生产 true／false 定义后报告一条；把 TRUE 改为有符号整数参数的真实类别冲突在两种模型下均报告。当前源码的原始报告保留，不因上述裁决计作扫描通过。
+
 `Os_PortTaskThread` 给 role 选择 `'T'`、`'B'`、`'I'` 的嵌套条件表达式，两个层级的结果均为 essentially character。依据主文附录 D.6／D.7（页199–200／PDF207–208）及 TC1 的括号运算符勘误，外层 `:` 两侧的 essential type 相同；报告位置不是函数指针比较。固定 addon 把嵌套结果退回标准 int 的类别，最小字符对照仍报告 R10.4；把内层两个分支改为整数的真实类别冲突也报告。R10.4（Required，页87–88／PDF95–96）、AMD2.52 及 AMD3.31–32 没有要求把这些字符标签改成整数，也未使用字符算术或实／复浮点例外。
 
 ## 源码诊断的语法边界
