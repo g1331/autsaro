@@ -85,7 +85,7 @@
 | DcmDspDataInfo | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00611、00810 |
 | DcmDspSession | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00769 |
 | DcmDspSessionRow | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00765–00768、00815 |
-| DcmGeneral | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00600、00820–00823、00971、01187 |
+| DcmGeneral | 已核对（内置 ECUC metadata、configuration 参数／引用白名单和 diagnostic 选择约束；`schedule.rs::inspect_events` 将 Dcm 主函数实际周期绑定到 1 ms，配置反例同时检查普通校验和计划的源对象拒绝；未列入主线的字段拒绝而非忽略）：ECUC_Dcm_00600、00820–00823、00971、01187 |
 | 自定义 C 回调头文件 | 不适用（配置：ECUC_Dcm_01019）：ECUC_Dcm_01019 |
 | S3 覆盖值 | 不适用（配置：ECUC_Dcm_01240）：ECUC_Dcm_01240 |
 | 可选 VIN 引用 | 不适用（配置：ECUC_Dcm_00984）：ECUC_Dcm_00984 |

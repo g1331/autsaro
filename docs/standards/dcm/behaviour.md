@@ -112,7 +112,7 @@ PduR 发送在 Dcm 区内一次判定 FullCom 并提交 admission，这是发送
 
 ISO14229-1 §7.5图5/6（印刷页20/21）、§9.2图7（37页）、§10.2图15（110页），以及ISO14229-2 §9.3图7（17页）、§10.1.4.2图13（29–31页）均按渲染原页核对。适用角色为单物理UDS server，默认／扩展会话、0x10/0x22/0x3E；不把客户端计时、功能寻址、多客户端或未选服务的能力写成已实现。15765-3 §6.1/6.2沿用UDS应用服务，§6.3表3/4/8及物理时序的网络无关部分对应同一S3和传输失败处理；CAN专属传输状态由CanTp承担；§9.2.1表27–29与§9.2.5表34的会话／TesterPresent子功能及P2编码与所选值一致，§9.3.1未增加0x22限制。R24-11明确的P2/P2*最小值0（00143）、S3缺省5000ms（01679）、FullCom门控（01142）继续成立。
 
-配置从`diagnostic.rs::inspect_transport/inspect_service`进入同一校验与生成计划，拒绝功能寻址、第二协议／连接、异步数据端口及未选SID；两会话使用同一P2/P2*，P2*须可按10ms编码。`schedule.rs`固定1ms counter与BSW周期，`ecu_config.rs`生成Dcm配置和PduR TP路由。实际接缝为CanIf→LSduR→CanTp→PduR→Dcm，发送按反向路径调用下层。独立C consumer使用生成RTE类型头，封存HostBatch按公开CAN帧输入验证真实应用及网络闭包。
+配置从`diagnostic.rs::inspect_transport/inspect_service`进入同一校验与生成计划，拒绝功能寻址、第二协议／连接、异步数据端口及未选SID；两会话使用同一P2/P2*，P2*须可按10ms编码。`schedule.rs`固定1ms counter，并在解析真实event／alarm或schedule-table映射后逐项要求Dcm／CanTp主函数的实际周期与counter一致；`diagnostic_timer_mains_cannot_drift_from_the_generated_timebase`将主函数与现有10ms alarm／event一致重映射，普通校验和计划均在BSW timing event源对象拒绝。`ecu_config.rs`生成Dcm配置和PduR TP路由。实际接缝为CanIf→LSduR→CanTp→PduR→Dcm，发送按反向路径调用下层。独立C consumer使用生成RTE类型头，封存HostBatch按公开CAN帧输入验证真实应用及网络闭包。
 
 - **请求顺序与消息。** 图5先检查SID；图6先检查最小两字节、子功能是否支持，再进入具体服务的精确长度检查。0x10／0x3E在私有请求副本中去除SPRMIB，正响应可以抑制，负响应必须发送。0x10响应携带P2的毫秒值和P2*的10ms值，正响应成功确认才发布会话；抑制时本地完成。重复请求当前会话仍成功并重启其计时；无SecurityAccess、RoE、周期诊断状态需要迁移。
 - **0x22。** §10.2表146／图15要求先验最小长度、偶数DID字节数与最大DID数，然后筛选支持DID并检查总响应容量，最后读取。未知DID跳过，已支持项保持输入顺序和重复次数；无支持项回0x31，容量不足回0x14，不调用应用。F186为当前会话，应用数据固定四字节；无可选安全／条件过滤。RTE失败按既有通用失败返回0x10并丢弃部分数据；它不能遮盖先发生的格式／容量拒绝。
