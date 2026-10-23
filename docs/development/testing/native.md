@@ -34,6 +34,7 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - 封存 ECU 的检测器路径用于 Linux TSan 与 ASan／UBSan：测试辅助先完整执行包内生产 build（含 seal、固定工具、选择补丁、内核摘要与严格段布局检查），记录实际编译 argv，再用同一源码、include 顺序、补丁后内核、test 模式宏与链接参数额外加入检测器选项，编译到独立程序。测试辅助不得在加载原 guard 前加入包内 Python 搜索路径，以免未封存的同名标准库模块提前执行。生产 `ecu-tool`、`target.json` 和 object 检查不变；检测器程序不作为交付程序。共享 HostBatch 按检测器选项区分 image，消费者仍拿独立副本。每个新输入多编译一次，后续相同 HostBatch 复用；不缓存跨运行的通过结果。
 - `integration::protocol::` 与 `integration::sealed_projects::` 在该路径运行现有协议向量和封存工程 owner 用例；`integration::sealed_sanitizers::` 验证 probe 实际完成 20 ticks、test 模式故障退出、完整编译 argv 只差检测器选项／输出路径、封存输入不变及共享副本隔离。外部 probe control 复用既有故意越界／超宽移位夹具，要求实际运行报告与非零退出，并让合法边界输入成功。
 - `integration::sealed_sanitizers::` 在两种检测器下持续选择真实线程注册／中断身份回归，以及暂停／恢复进展、终止前后上下文、拒绝终止后恢复、运行 actor 停止和关闭句柄后 pthread 状态的成对回归。`HostBatch`、probe 与 test 使用相同封存源码，生产／插桩 argv 只允许检测器选项与输出路径不同。故意越界／超宽移位 control 仅在 ASan／UBSan 下运行；直接线程 TSan 测试继续运行。`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
+- 观察 pthread 生命周期时遵守被调用 API 的前置条件，不用 join 已 detach 线程来推断状态：普通 libc 的错误返回不保证检测器接受该探针。需要观察平台调用时，沿现有测试链接观察器保留真实调用、返回值与检测器拦截，并核对目标线程身份；生产／插桩记录须显式包含相同观察选项，移除实际调用的变异须失败。
 
 `port-restart` suite 直接验证原生展开的有界重入、未处理／无关异常，以及检测器对丢弃调用帧的处理；Linux 具备内核 SHSTK 时还执行实际启用的正反对照和真实 Task／ARTI 消费者，不具备时保留 `not_assessed`。全部被展开的 C 单元（含应用与检测器构建）使用交付清单中的 `-fexceptions`，不能只为端口单元添加该选项。
 
