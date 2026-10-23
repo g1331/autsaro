@@ -14,7 +14,16 @@ runs:
       env:
         LINUX_PACKAGES: ${{ inputs.linux-packages }}
       # Word splitting turns the space-separated input into package arguments.
-      run: sudo apt-get update && sudo apt-get install -y libxml2-dev libclang-dev clang pkg-config $LINUX_PACKAGES
+      run: |
+        # Use the runner's official archive fallback without changing host apt configuration.
+        sources=$(mktemp "$RUNNER_TEMP/ubuntu.XXXXXX.sources")
+        trap 'rm -f "$sources"' EXIT
+        sed 's|mirror+file:/etc/apt/apt-mirrors.txt|https://archive.ubuntu.com/ubuntu/|g; s|http://azure\.archive\.ubuntu\.com/ubuntu/|https://archive.ubuntu.com/ubuntu/|g' \
+          /etc/apt/sources.list.d/ubuntu.sources > "$sources"
+        cat "$sources"
+        apt_sources=(-o "Dir::Etc::sourcelist=$sources" -o 'Dir::Etc::sourceparts=-')
+        sudo apt-get "${apt_sources[@]}" update
+        sudo apt-get "${apt_sources[@]}" install -y libxml2-dev libclang-dev clang pkg-config $LINUX_PACKAGES
     - name: Identify vcpkg cache image
       id: vcpkg-image
       if: runner.os == 'Windows'
