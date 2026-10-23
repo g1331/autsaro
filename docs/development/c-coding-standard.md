@@ -43,6 +43,8 @@
 
 公开头中的每个函数在声明前说明契约。标准接口只写本实现的选择与限制，不抄规范原文；四项中不适用的写“无”，不省略。注释使用英文，与现有代码一致：
 
+为声明增加标准处置说明（如 MR12）时，并入该声明现有的契约注释；不在契约与声明之间插入独立注释块，以免断开 API 文档检查和生成消费者的关联。
+
 ```c
 /** <What the call does; cite the SWS item where it helps>.
  * @param[in] <Name> <Accepted range; who owns a pointed-to object>.
