@@ -49,6 +49,12 @@ Linux actor的mapping成员按实际用途保存为unsigned char字节区间：g
 
 `Os_PortRestartLanding`是保留Task-loop帧内的汇编续行点，不是按C原型调用的函数。该符号现在只在本对象内可见；C侧通过真正遵循调用ABI的`Os_PortRestartAddress`取得native PC：Linux为uintptr_t，Windows为RtlUnwindEx要求的void指针表示。叶函数在原`.os_code`内用RIP相对LEA返回RAX，保留其他寄存器及配对call/return，不需要C函数指针转整数或void指针。依据R11.1（Required，主文页93–94／PDF101–102；AMD2.58只修订隐式转换例外说明），不使用该条的新例外；实际native扩展仍按上表R1.2／D4.2／D4.3评估。原生restart验证10000次同一物理栈重入、拒绝与外来异常，并分别检查全局C入口和本地续行点的代码段身份；错误PC变异必须被实际restart成功判据拒绝。该边界仍依赖受控x64 ABI，Windows执行及硬件SHSTK按实际结果记录。
 
+## C11 无返回说明符的适用边界
+
+AMD3.36 新增的 R17.9（Mandatory）、R17.10（Required）及 R17.11（Advisory）均只适用于 C11，原文分别在 AMD3 印刷页17–18／PDF25–26、页18／PDF26、页19／PDF27；AMD3.74 的适用性表（页45／PDF53）与 AMD4 后续修订未改变这些条件。R17.9／R17.10 约束以 `_Noreturn` 声明的函数的返回路径／返回类型；R17.11 建议为不返回的函数使用该说明符，并明确排除 main。
+
+固定双平台八份分析工程及 `5243b3ef` 四个 Linux 封存工程的交付 C／头文件（含采用内核）均没有 `_Noreturn` 或 `stdnoreturn.h`；逐文件身份及词法收据见 PR #371。因此，三条 C11 义务在上述 C99 源码范围分别不适用，不借用 main 例外，也不豁免 Mandatory 违反。保留的 GNU `__attribute__((noreturn))` 用于 Assert、Shutdown、原生 ExitProcess 及 Task-loop／restart；它不是 C11 说明符，仍按 R1.2 的扩展依据及各终止消费者的真实控制流核查。原始 POSIX port 的同类属性与所选补丁的移除也保留在来源记录中，不能把未打补丁的输入内核当成最终分析源码。该词法收据不证明系统头展开或链接库内部实现。
+
 ## C11 标准线程规则的适用边界
 
 AMD4.34 的 R22.11–R22.20 均适用于 C11 标准线程设施（AMD4 印刷页20–30／PDF27–37）。已核对的双平台四样本及当前四个 C99 生成样本，其交付 C／头文件和采用内核没有 `threads.h`，也没有 `thrd_*`、`mtx_*`、`cnd_*`、`tss_*` 类型或函数。实际 OS 消费的是 pthread／Win32／FreeRTOS 接口；不因函数用途相近而把它们写成 C11 标准对象。冻结源码身份及逐文件核对收据留在 PR #371。
