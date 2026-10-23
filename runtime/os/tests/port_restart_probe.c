@@ -10,6 +10,12 @@
 extern void run(void (*entry)(void *), void *argument);
 extern void landing(void);
 #ifndef _WIN32
+extern void corrupt_return(void);
+__asm__(
+    ".text\n.global corrupt_return\n.type corrupt_return,@function\ncorrupt_return:\nendbr64\nlea "
+    "1f(%rip),%rax\nmov %rax,(%rsp)\nret\n1:\nmov $99,%edi\ncall exit\nud2\n");
+#endif
+#ifndef _WIN32
 static __thread struct _Unwind_Exception
     restart_exception; /**< Per-thread unwind object; no reset. */
 static void cleanup(_Unwind_Reason_Code code, struct _Unwind_Exception *exception)
@@ -127,7 +133,7 @@ __attribute__((noinline)) static void entry(void *argument)
 int main(int argc, char **argv)
 {
 #ifndef _WIN32
-    if (argc > 1 && argv[1][0] == 'c') {
+    if (argc > 1 && (argv[1][0] == 'c' || argv[1][0] == 'b')) {
         long result;
         unsigned long status = 0;
         __asm__ volatile("syscall"
@@ -147,6 +153,10 @@ int main(int argc, char **argv)
         fflush(stdout);
         if (result || !(status & 1)) {
             return 78;
+        }
+        if (argv[1][0] == 'b') {
+            corrupt_return();
+            return 79;
         }
     }
 #else

@@ -31,3 +31,9 @@ jobs:
         run: |
           lscpu
           ./port-probe cet
+          python - <<'PYTHON'
+          import subprocess
+          result = subprocess.run(['./port-probe', 'bad'], capture_output=True, text=True)
+          print(result.stdout, result.stderr, 'negative return=', result.returncode)
+          assert result.returncode == -11, result
+          PYTHON
