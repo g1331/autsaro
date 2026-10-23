@@ -38,7 +38,13 @@ Linux `Os_HostLinux.c` 的 `CreateEventA` 为每个事件持有非阻塞 eventfd
 
 ## 原子返回值与条件类型
 
-`Arti.c`、`Os.c`、`Os_Backend.c`、`Os_Interrupt.c`、`Os_Mailbox.c` 中只用于更新状态的32处 Interlocked 调用显式转为 `void`；这些接口返回先前值或更新后的计数，不返回错误信息。Linux `InterlockedCompareExchange` 同样丢弃 builtin 的成功标志并返回交换前值，保持 Windows 的返回契约。此处采用 R17.7（2013主文页141–142／PDF149–150）的允许形式，不把有错误信息的事件／锁调用一并丢弃。`control` 对 `Os_StackRegister`、`Os_StackHasFault` 的整数结果显式与零比较，满足 R14.4（页123／PDF131）的 essentially Boolean 条件要求；原有成功／故障分支不变。AMD2只扩充这两条的C11适用范围，其他修订没有为这些源码点增加条件例外。
+`Arti.c`、`Os.c`、`Os_Backend.c`、`Os_Interrupt.c`、`Os_Mailbox.c` 中只用于更新状态的32处 Interlocked 调用显式转为 `void`；这些接口返回先前值或更新后的计数，不返回错误信息。Linux `InterlockedCompareExchange` 同样丢弃 builtin 的成功标志并返回交换前值，保持 Windows 的返回契约。此处采用 R17.7（2013主文页141–142／PDF149–150）的允许形式，不把有错误信息的事件／锁调用一并丢弃。`control` 对 `Os_StackRegister`、`Os_StackHasFault` 的整数结果显式与零比较，满足 R14.4（页121／PDF129）的 essentially Boolean 条件要求；原有成功／故障分支不变。AMD2只扩充这两条的C11适用范围，其他修订没有为这些源码点增加条件例外。
+
+## 移位宽度与时间单位
+
+Linux受控port补丁中，`Os_PortInterruptSourceEnabled`、`Os_PortInterruptSourceControl`、`next_interrupt`、`run_interrupt`、`Os_PortDispatchNested`、`dispatch`（两处）与 `post_interrupt` 共八处中断位图移位的左操作数显式使用 `uint32_t`。R12.2（2013主文页105–106／PDF113–114，含原页示例）约束 essential type 的宽度；在实际GCC模型中 `UINT32_C(1)` 展开成 `1U`，其 essential type 按附录D.3／D.6的UTLR为 unsigned char，不能仅因标准类型是32位就允许移到第31位。TC1附录D.3勘误和AMD2.97不取消此限制。移位量仍由既有0..31边界及调用闭包限制；声明目标、内核选择器和中断状态协议未改变。该补丁属于项目修改代码，显式更新其固定摘要，不把它重新标为未修改的采用代码。原生 `nested-interrupts` 的 `maximum` 向量实际递送至31号中断。
+
+Linux `Sleep` 的两个时间字段先把原始 DWORD 转成实际64位 `time_t`／`long`，再做除法和余数，避免将无符号复合表达式转为不同essential类别。依据R10.8（主文页91–92／PDF99–100）、TC1的模数说明勘误及AMD3.35仅针对浮点／复数的例外；这些例外不适用于此处整数运算。有限DWORD最大值在两个有符号目标类型内可表示，余数0..999乘以1000000后小于1000000000；`INFINITE` 仍在转换前走原停车路径。
 
 ## 目标端口承担的差距
 

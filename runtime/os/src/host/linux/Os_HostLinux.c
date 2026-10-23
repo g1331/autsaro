@@ -733,8 +733,8 @@ OS_MEMMAP void Sleep(DWORD milliseconds)
             (void)pause();
         }
     }
-    pause_time.tv_sec = (time_t)(milliseconds / 1000u);
-    pause_time.tv_nsec = (long)(milliseconds % 1000u) * 1000000L;
+    pause_time.tv_sec = (time_t)milliseconds / (time_t)1000;
+    pause_time.tv_nsec = ((long)milliseconds % 1000L) * 1000000L;
     while (nanosleep(&pause_time, &pause_time) != 0 && errno == EINTR) {
     }
 }

@@ -199,7 +199,7 @@ index 2592610..1be0473 100644
  {
 -    pthread_key_delete( xThreadKey );
 +    return interrupt < PORT_INTERRUPT_COUNT &&
-+           (disabled_sources & (UINT32_C(1) << interrupt)) == 0u;
++           (disabled_sources & ((uint32_t)1u << interrupt)) == 0u;
  }
 -/*-----------------------------------------------------------*/
  
@@ -319,7 +319,7 @@ index 2592610..1be0473 100644
 -    while( xSchedulerEnd != pdTRUE )
 -    {
 -        sigwait( &xSignals, &iSignal );
-+    bit = UINT32_C(1) << interrupt;
++    bit = (uint32_t)1u << interrupt;
 +    if ((operation == 0u && (disabled_sources & bit) != 0u) ||
 +        (operation == 1u && (disabled_sources & bit) == 0u)) {
 +        return 2;
@@ -371,7 +371,7 @@ index 2592610..1be0473 100644
 +    unsigned priority = floor;
 +    uint32_t index;
 +    for (index = 0u; index < PORT_INTERRUPT_COUNT; ++index) {
-+        const uint32_t bit = UINT32_C(1) << index;
++        const uint32_t bit = (uint32_t)1u << index;
 +        const unsigned candidate = Os_BackendInterruptPriority(index);
 +        if ((pending & ~seen & bit) != 0u && Os_BackendInterruptEnabled(index) != 0) {
 +            if (nested == 0 && index == portINTERRUPT_YIELD) {
@@ -412,7 +412,7 @@ index 2592610..1be0473 100644
 -        pxCurrentThread = prvGetThreadFromTask( xTaskGetCurrentTaskHandle() );
 -        event_wait( pxCurrentThread->ev );
 +    uint32_t requested = 0u;
-+    pending &= ~(UINT32_C(1) << interrupt);
++    pending &= ~((uint32_t)1u << interrupt);
 +    if (Os_InterruptVectorTable[interrupt] != NULL) {
 +        Os_StackCheck();
 +        Os_BackendInterruptEnter(interrupt);
@@ -433,7 +433,7 @@ index 2592610..1be0473 100644
 +        uint32_t interrupt = next_interrupt(seen, Os_BackendInterruptPriority(outer), 1);
 +        while (interrupt < PORT_INTERRUPT_COUNT) {
 +            const uint32_t requested = run_interrupt(interrupt);
-+            seen |= UINT32_C(1) << interrupt;
++            seen |= (uint32_t)1u << interrupt;
 +            if (requested != 0u && Os_BackendInterruptMaySchedule(interrupt) != 0) {
 +                Os_BackendRequestIsrReschedule();
 +            }
@@ -470,10 +470,10 @@ index 2592610..1be0473 100644
 +    interrupt = next_interrupt(seen, 0u, 0);
 +    while (interrupt < PORT_INTERRUPT_COUNT) {
 +        const uint32_t requested = run_interrupt(interrupt);
-+        seen |= UINT32_C(1) << interrupt;
++        seen |= (uint32_t)1u << interrupt;
 +        if (Os_BackendInterruptMaySchedule(interrupt) != 0 &&
 +            (requested != 0u || Os_BackendTakeIsrReschedule() != 0)) {
-+            switched |= UINT32_C(1) << interrupt;
++            switched |= (uint32_t)1u << interrupt;
 +        }
 +        interrupt = next_interrupt(seen, 0u, 0);
 +    }
@@ -744,7 +744,7 @@ index 2592610..1be0473 100644
 +    if (WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
-+    pending |= UINT32_C(1) << interrupt;
++    pending |= (uint32_t)1u << interrupt;
 +    if (actor != NULL && actor->role == 'S') {
 +        Os_PortDispatchNested();
 +    }
