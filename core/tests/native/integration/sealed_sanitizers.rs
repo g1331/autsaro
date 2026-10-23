@@ -23,9 +23,15 @@ fn require_success(output: &Output) {
     );
 }
 
-fn instrument(project: &Path, output: &Path, mode: &str, control: Option<&Path>) {
+fn instrument(
+    project: &Path,
+    output: &Path,
+    mode: &str,
+    control: Option<&Path>,
+    link_flags: &[&str],
+) {
     require_success(&tooling::run_public_command(
-        &mut tooling::ecu_build_command(project, output, mode, control),
+        tooling::ecu_build_command(project, output, mode, control).args(link_flags),
         output.parent().unwrap(),
         &format!("build-{mode}"),
         Duration::from_secs(180),
@@ -33,6 +39,11 @@ fn instrument(project: &Path, output: &Path, mode: &str, control: Option<&Path>)
     let commands: serde_json::Value =
         serde_json::from_slice(&fs::read(output.join("compile-commands.json")).unwrap()).unwrap();
     let original = commands["production"].as_array().unwrap();
+    let expected_link_flags = link_flags
+        .iter()
+        .map(|flag| serde_json::Value::from(*flag))
+        .collect::<Vec<_>>();
+    assert!(original.ends_with(&expected_link_flags));
     let mut instrumented = commands["instrumented"].as_array().unwrap().clone();
     assert!(
         !original
@@ -76,7 +87,7 @@ fn sealed_probe_and_test_modes_preserve_closure_and_runtime_protocol() {
     let before = packages::package_tree(&project);
     for mode in ["probe", "test"] {
         let output = scratch.0.join(mode);
-        instrument(&project, &output, mode, None);
+        instrument(&project, &output, mode, None, &[]);
         let binary = tooling::native_binary(&output, "ecu_probe");
         let run = tooling::run_public_command(
             &mut Command::new(&binary),
@@ -145,7 +156,7 @@ fn sealed_control_reports_runtime_faults_and_accepts_clean_boundaries() {
     let fixture =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sanitizers/sanitizer_faults.c");
     let output = scratch.0.join("faults");
-    instrument(&project, &output, "probe", Some(&fixture));
+    instrument(&project, &output, "probe", Some(&fixture), &[]);
     let binary = tooling::native_binary(&output, "ecu_probe");
     for (fault, bad, clean, report) in [
         (
@@ -252,7 +263,7 @@ fn sealed_os_registration_and_interrupt_identity_use_real_thread_owners() {
     let fixture =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/os/os_lifecycle_threads.c");
     let output = scratch.0.join("thread-owners");
-    instrument(&project, &output, "probe", Some(&fixture));
+    instrument(&project, &output, "probe", Some(&fixture), &[]);
     let run = tooling::run_public_command(
         &mut Command::new(tooling::native_binary(&output, "ecu_probe")),
         &scratch.0,
@@ -277,7 +288,13 @@ fn sealed_actor_signal_lifecycle_preserves_context_and_terminal_stop() {
     let fixture =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/os/os_signal_lifecycle.c");
     let output = scratch.0.join("signal-lifecycle");
-    instrument(&project, &output, "probe", Some(&fixture));
+    instrument(
+        &project,
+        &output,
+        "probe",
+        Some(&fixture),
+        &["-Wl,--wrap=pthread_detach"],
+    );
     for (name, directory) in [
         ("production", output.join("production")),
         ("sanitized", output),

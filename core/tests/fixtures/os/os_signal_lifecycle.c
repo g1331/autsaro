@@ -3,7 +3,6 @@
 #include <asm/sigcontext.h>
 #include <asm/ucontext.h>
 #include <string.h>
-#include <errno.h>
 #include <stdio.h>
 
 static HANDLE ready;
@@ -11,6 +10,21 @@ static HANDLE continued;
 static volatile LONG phase;
 static HANDLE detach_gate;
 static HANDLE detach_done;
+static pthread_t detached_native;
+static volatile LONG detach_observed;
+
+int __real_pthread_detach(pthread_t thread);
+
+/* Linker observer retains the real call and the detector's pthread bookkeeping. */
+int __wrap_pthread_detach(pthread_t thread)
+{
+    const int result = __real_pthread_detach(thread);
+    if (result == 0) {
+        detached_native = thread;
+        (void)InterlockedExchange(&detach_observed, 1);
+    }
+    return result;
+}
 
 static DWORD WINAPI actor(void *argument)
 {
@@ -46,8 +60,8 @@ static DWORD WINAPI detached_actor(void *argument)
     if (WaitForSingleObject(detach_gate, 2000u) != WAIT_OBJECT_0) {
         return 2u;
     }
-    /* A detached live pthread is not joinable, including from itself. */
-    if (pthread_join(pthread_self(), NULL) != EINVAL || Os_HostSetEvent(detach_done) == 0) {
+    if (InterlockedCompareExchange(&detach_observed, 0, 0) != 1 ||
+        pthread_equal(detached_native, pthread_self()) == 0 || Os_HostSetEvent(detach_done) == 0) {
         return 4u;
     }
     return 0u;
