@@ -793,6 +793,8 @@ OS_MEMMAP static void arti_observe_tasks(void)
         } else if ((previous[i] == RUNNING) && (state != RUNNING)) {
             Os_ArtiTask(state == WAITING ? OS_ARTI_TASK_WAIT : OS_ARTI_TASK_PREEMPT,
                         Os_Config->tasks[i].id);
+        } else {
+            /* No outgoing task-state edge occurred. */
         }
     }
     for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
@@ -802,6 +804,8 @@ OS_MEMMAP static void arti_observe_tasks(void)
             Os_ArtiTask(OS_ARTI_TASK_ACTIVATE, id);
         } else if ((previous[i] == WAITING) && ((state == READY) || (state == RUNNING))) {
             Os_ArtiTask(OS_ARTI_TASK_RELEASE, id);
+        } else {
+            /* Neither activation nor release occurred. */
         }
         if ((state == RUNNING) && (previous[i] != RUNNING)) {
             Os_ArtiTask(OS_ARTI_TASK_START, id);
@@ -1002,7 +1006,8 @@ OS_MEMMAP void Os_TargetTrace(uint8 marker)
         }
         return;
     }
-    trace[trace_length++] = marker;
+    trace[trace_length] = marker;
+    ++trace_length;
 }
 
 OS_MEMMAP sint32 Os_TargetReady(void)
@@ -1240,6 +1245,8 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
         (void)InterlockedExchange(&controller_healthy[0], 0);
     } else if (failed_role == 'D') {
         (void)InterlockedExchange(&controller_healthy[1], 0);
+    } else {
+        /* A Task, ISR or startup fault leaves both controller health states intact. */
     }
     if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
         Os_StackFatalExit();
@@ -1265,6 +1272,8 @@ OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
         (void)InterlockedExchange(&controller_healthy[0], 0);
     } else if (failed_role == 'D') {
         (void)InterlockedExchange(&controller_healthy[1], 0);
+    } else {
+        /* A Task, ISR or startup fault leaves both controller health states intact. */
     }
     if (controller_healthy[0] == 0 && controller_healthy[1] == 0) {
         Os_StackFatalExit();
@@ -1458,7 +1467,8 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
                            start,
                            STACK_SIZE_PARAM_IS_A_RESERVATION,
                            NULL);
-    task_threads[task_thread_count++] = thread;
+    task_threads[task_thread_count] = thread;
+    ++task_thread_count;
     if (WaitForSingleObject(start->registered, 5000u) != WAIT_OBJECT_0 ||
         SuspendThread(thread) == (DWORD)-1) {
         Os_BackendShutdown(E_OS_STATE);

@@ -466,7 +466,8 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
             }
         }
         if (locked == 0) {
-            held_masks[held_depth++] = previous;
+            held_masks[held_depth] = previous;
+            ++held_depth;
             outcome = WAIT_OBJECT_0;
         } else {
             (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);

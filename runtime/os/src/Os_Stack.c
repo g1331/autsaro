@@ -373,17 +373,22 @@ OS_MEMMAP void Os_StackFatalExit(void)
         }
     }
     for (i = 0u; i < sizeof(fatal_prefix) - 1u; ++i) {
-        fatal_text[used++] = fatal_prefix[i];
+        fatal_text[used] = fatal_prefix[i];
+        ++used;
     }
-    fatal_text[used++] = fault->role;
+    fatal_text[used] = fault->role;
+    ++used;
     for (i = 0u; i < sizeof(fatal_middle) - 1u; ++i) {
-        fatal_text[used++] = fatal_middle[i];
+        fatal_text[used] = fatal_middle[i];
+        ++used;
     }
     for (i = 0u; i < 8u; ++i) {
-        fatal_text[used++] = "0123456789ABCDEF"[(fault->exception >> (28u - 4u * i)) & 15u];
+        fatal_text[used] = "0123456789ABCDEF"[(fault->exception >> (28u - 4u * i)) & 15u];
+        ++used;
     }
     for (i = 0u; i < sizeof(fatal_suffix) - 1u; ++i) {
-        fatal_text[used++] = fatal_suffix[i];
+        fatal_text[used] = fatal_suffix[i];
+        ++used;
     }
     /* No CRT/ordinary mutex/allocation or another Hook on exhausted control stacks. */
     if (fault_output == NULL || fault_output == INVALID_HANDLE_VALUE ||

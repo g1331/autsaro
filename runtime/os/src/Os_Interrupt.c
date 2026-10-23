@@ -215,6 +215,8 @@ OS_MEMMAP static StatusType source_control(ISRType interrupt, uint32 operation, 
             result = E_OS_ID;
         } else if (source_result == 2) {
             result = E_OS_NOFUNC;
+        } else {
+            /* Successful source control retains E_OK. */
         }
         taskEXIT_CRITICAL();
         Os_BackendGuardService();

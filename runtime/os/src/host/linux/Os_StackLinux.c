@@ -349,7 +349,8 @@ OS_MEMMAP static size_t append_hex(char *output, size_t offset, DWORD value)
 {
     unsigned index;
     for (index = 0u; index < 8u; ++index) {
-        output[offset++] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
+        output[offset] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
+        ++offset;
     }
     return offset;
 }
@@ -411,15 +412,19 @@ OS_MEMMAP void Os_StackFatalExit(void)
         }
     }
     for (index = 0u; index < sizeof(fatal_prefix) - 1u; ++index) {
-        output[used++] = fatal_prefix[index];
+        output[used] = fatal_prefix[index];
+        ++used;
     }
-    output[used++] = fault->role;
+    output[used] = fault->role;
+    ++used;
     for (index = 0u; index < sizeof(fatal_middle) - 1u; ++index) {
-        output[used++] = fatal_middle[index];
+        output[used] = fatal_middle[index];
+        ++used;
     }
     used = append_hex(output, used, fault->signal_number);
     for (index = 0u; index < sizeof(fatal_suffix) - 1u; ++index) {
-        output[used++] = fatal_suffix[index];
+        output[used] = fatal_suffix[index];
+        ++used;
     }
     /* This terminal path never resumes: block only this thread's SIGPIPE so a
      * closed output can fall back to stderr without replacing the fault status.
