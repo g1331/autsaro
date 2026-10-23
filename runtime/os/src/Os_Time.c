@@ -747,42 +747,46 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
                                        uint32 timeout_ms,
                                        Os_TickCompletionType *record)
 {
-    DWORD started_at;
-    if ((timeout_ms == 0u) || (timeout_ms > 5000u)) {
-        return E_OS_VALUE;
-    }
-    started_at = GetTickCount();
-    for (;;) {
-        const HANDLE observed[2] = {completion_event, attention_event};
-        DWORD elapsed;
-        DWORD waited;
-        StatusType status = Os_TargetTickCompletion(ticket, record);
-        if (status != E_OS_NOFUNC) {
-            return status;
-        }
-        elapsed = GetTickCount() - started_at;
-        if (elapsed >= timeout_ms) {
-            return E_OS_NOFUNC;
-        }
-        /* Native timed waits may round up to the host timer period (about 15.6 ms on
-         * Windows), so pending native work must wake this producer explicitly. */
-        waited = WaitForMultipleObjects(2u, observed, 0, timeout_ms - elapsed);
-        if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
-            /* A simultaneous close wins over a timeout or attention report. */
+    StatusType status = E_OS_VALUE;
+    if ((timeout_ms != 0u) && (timeout_ms <= 5000u)) {
+        const DWORD started_at = GetTickCount();
+        boolean waiting = TRUE;
+        while (waiting) {
+            const HANDLE observed[2] = {completion_event, attention_event};
             status = Os_TargetTickCompletion(ticket, record);
-            if (status == E_OS_NOFUNC) {
-                if (Os_TargetReady() == 0) {
-                    status = E_OS_STATE;
+            if (status != E_OS_NOFUNC) {
+                waiting = FALSE;
+            } else {
+                const DWORD elapsed = GetTickCount() - started_at;
+                if (elapsed >= timeout_ms) {
+                    waiting = FALSE;
+                } else {
+                    /* Native timed waits can round up to the host timer period;
+                     * pending native work wakes this producer explicitly. */
+                    const DWORD waited =
+                        WaitForMultipleObjects(2u, observed, 0, timeout_ms - elapsed);
+                    if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
+                        /* A simultaneous close wins over timeout or attention. */
+                        status = Os_TargetTickCompletion(ticket, record);
+                        if (status == E_OS_NOFUNC) {
+                            if (Os_TargetReady() == 0) {
+                                status = E_OS_STATE;
+                            }
+                        }
+                        waiting = FALSE;
+                    } else if (waited != WAIT_OBJECT_0) {
+                        (void)InterlockedExchange(&signal_failed, 1);
+                        Os_BackendRequestShutdown(E_OS_STATE);
+                        status = E_OS_STATE;
+                        waiting = FALSE;
+                    } else {
+                        /* Completion publication is rechecked before returning. */
+                    }
                 }
             }
-            return status;
-        }
-        if (waited != WAIT_OBJECT_0) {
-            (void)InterlockedExchange(&signal_failed, 1);
-            Os_BackendRequestShutdown(E_OS_STATE);
-            return E_OS_STATE;
         }
     }
+    return status;
 }
 
 OS_MEMMAP static StatusType time_owner(void)

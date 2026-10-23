@@ -96,6 +96,7 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
     uint32 group_tasks = 0u;
     uint8 highest_access = 0u;
     uint32 j;
+    StatusType status = E_OK;
     for (j = 0u; j < config->task_count; ++j) {
         task_mask |= (uint32)1u << config->tasks[j].id;
     }
@@ -107,32 +108,32 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
         ((resource->task_access == 0u) && (resource->isr_access == 0u)) ||
         (((uint32)resource->task_access & ~task_mask) != 0u) ||
         ((resource->isr_access & config->category1_isrs) != 0u)) {
-        return E_OS_VALUE;
+        status = E_OS_VALUE;
     }
-    if (group_access(config, root, &group_tasks, &highest_access) != E_OK) {
-        return E_OS_VALUE;
+    if (status == E_OK) {
+        status = group_access(config, root, &group_tasks, &highest_access);
     }
-    if (resource->ceiling < highest_access) {
-        return E_OS_VALUE;
+    if ((status == E_OK) && (resource->ceiling < highest_access)) {
+        status = E_OS_VALUE;
     }
-    if ((config->use_res_scheduler != 0u) && (resource->id == RES_SCHEDULER) &&
+    if ((status == E_OK) && (config->use_res_scheduler != 0u) && (resource->id == RES_SCHEDULER) &&
         ((resource->linked != 0u) || (resource->task_access != task_mask) ||
          (resource->isr_access != 0u) || (resource->ceiling != highest_task))) {
-        return E_OS_VALUE;
+        status = E_OS_VALUE;
     }
-    for (j = 0u; j < config->task_count; ++j) {
+    for (j = 0u; (status == E_OK) && (j < config->task_count); ++j) {
         const Os_TaskConfigType *task = &config->tasks[j];
         if ((resource->isr_access == 0u) && ((group_tasks & ((uint32)1u << task->id)) == 0u) &&
             (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
-            return E_OS_VALUE;
+            status = E_OS_VALUE;
         }
     }
-    for (j = 0u; j < index; ++j) {
+    for (j = 0u; (status == E_OK) && (j < index); ++j) {
         if (resource->id == config->resources[j].id) {
-            return E_OS_ID;
+            status = E_OS_ID;
         }
     }
-    return E_OK;
+    return status;
 }
 
 OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
@@ -283,15 +284,11 @@ OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
              * no native scheduler or automotive startup is performed. */
             Os_BackendShutdown(E_OS_DISABLEDINT);
         }
-        return;
+    } else if (Os_HookContext() == OS_HOOK_NONE) {
+        if (Os_BackendStarted() == 0) {
+            Os_BackendStart(Mode);
+        }
     }
-    if (Os_HookContext() != OS_HOOK_NONE) {
-        return;
-    }
-    if (Os_BackendStarted() != 0) {
-        return;
-    }
-    Os_BackendStart(Mode);
 }
 
 OS_MEMMAP boolean Os_Implementation_isOsStarted(void)

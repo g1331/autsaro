@@ -265,36 +265,34 @@ OS_MEMMAP int Os_StackRegister(char role)
     uintptr_t low = 0u;
     uintptr_t high = 0u;
     size_t guard = 0u;
-    if ((index < 0) || (index >= (LONG)OS_NATIVE_STACKS)) {
-        return 0;
+    int result = 0;
+    if ((index >= 0) && (index < (LONG)OS_NATIVE_STACKS)) {
+        if (registration_stack_range(role, &low, &high, &guard) != 0) {
+            if ((low < high) && (guard < (high - low))) {
+                record = &stacks[index];
+                alternate.ss_sp = altstacks[index].bytes;
+                alternate.ss_size = sizeof(altstacks[index].bytes);
+                alternate.ss_flags = 0;
+                if (Os_LinuxAltStack(&alternate) == 0) {
+                    record->thread_id = GetCurrentThreadId();
+                    record->role = role;
+                    record->reserve_low = low;
+                    record->high = high;
+                    record->reserve = high - low;
+                    record->guard = guard;
+                    record->committed_low = low + guard;
+                    record->committed = high - record->committed_low;
+                    record->altstack_low = (uintptr_t)alternate.ss_sp;
+                    record->altstack_size = alternate.ss_size;
+                    current_stack = record;
+                    Os_StackCheck();
+                    (void)InterlockedExchange(&stack_published[index], 1);
+                    result = 1;
+                }
+            }
+        }
     }
-    if (registration_stack_range(role, &low, &high, &guard) == 0) {
-        return 0;
-    }
-    if ((low >= high) || (guard >= high - low)) {
-        return 0;
-    }
-    record = &stacks[index];
-    alternate.ss_sp = altstacks[index].bytes;
-    alternate.ss_size = sizeof(altstacks[index].bytes);
-    alternate.ss_flags = 0;
-    if (Os_LinuxAltStack(&alternate) != 0) {
-        return 0;
-    }
-    record->thread_id = GetCurrentThreadId();
-    record->role = role;
-    record->reserve_low = low;
-    record->high = high;
-    record->reserve = high - low;
-    record->guard = guard;
-    record->committed_low = low + guard;
-    record->committed = high - record->committed_low;
-    record->altstack_low = (uintptr_t)alternate.ss_sp;
-    record->altstack_size = alternate.ss_size;
-    current_stack = record;
-    Os_StackCheck();
-    (void)InterlockedExchange(&stack_published[index], 1);
-    return 1;
+    return result;
 }
 
 OS_MEMMAP void Os_StackCheck(void)

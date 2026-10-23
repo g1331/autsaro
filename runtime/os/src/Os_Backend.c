@@ -1930,19 +1930,18 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
 OS_MEMMAP static uint32 current_task_index(void)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
-    uint32 index;
-    if ((stack == NULL) || (stack->role != 'T')) {
-        return OS_MAX_TASKS;
-    }
-    if (Os_BackendReady() == 0) {
-        return OS_MAX_TASKS;
-    }
-    for (index = 0u; index < Os_Config->task_count; ++index) {
-        if (handles[index] == xTaskGetCurrentTaskHandle()) {
-            return index;
+    uint32 result = OS_MAX_TASKS;
+    if ((stack != NULL) && (stack->role == 'T')) {
+        if (Os_BackendReady() != 0) {
+            for (uint32 index = 0u; index < Os_Config->task_count; ++index) {
+                if (handles[index] == xTaskGetCurrentTaskHandle()) {
+                    result = index;
+                    break;
+                }
+            }
         }
     }
-    return OS_MAX_TASKS;
+    return result;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
