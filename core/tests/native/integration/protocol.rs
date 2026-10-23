@@ -639,7 +639,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     );
     assert_eq!(text.matches("COMMIT_OK ").count(), 4, "{text}");
     assert_eq!(text.matches("REJECT ").count(), 1, "{text}");
-    assert_eq!(text.matches("ecu_output epoch=").count(), 2, "{text}");
+    assert_eq!(text.matches("OUT epoch=").count(), 2, "{text}");
     for expected in [
         "COMMIT_OK batch=1 epoch=0 sequence=2 input_first=1 inputs=1",
         "OUT epoch=10 sequence=13 ticket=1 pdu=0 id=801 dlc=4 data=78563412",

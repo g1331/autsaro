@@ -4,17 +4,7 @@
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event) { return SetEvent(event); }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
-#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
-#error "Os_HostWindows.c -> Os_MemMap.h: missing AUTOSAR release"
-#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
-#error "Os_HostWindows.c -> Os_MemMap.h: incompatible AUTOSAR release"
-#endif
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP int Os_HostWriteBytes(int error_stream, const char *data, size_t length)
 {
     size_t offset = 0u;
@@ -38,3 +28,9 @@ OS_MEMMAP int Os_HostWriteBytes(int error_stream, const char *data, size_t lengt
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Os_HostWindows.c -> Os_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Os_HostWindows.c -> Os_MemMap.h: incompatible AUTOSAR release"
+#endif

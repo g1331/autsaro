@@ -425,8 +425,17 @@ OS_MEMMAP void Os_StackFatalExit(void)
     /* This terminal path never resumes: block only this thread's SIGPIPE so a
      * closed output can fall back to stderr without replacing the fault status.
      * These signal-set/mask operations and write are async-signal-safe. */
-    if ((sigemptyset(&blocked) == 0) && (sigaddset(&blocked, SIGPIPE) == 0) &&
-        (pthread_sigmask(SIG_BLOCK, &blocked, NULL) == 0)) {
+    int prepared;
+    errno = 0;
+    prepared = sigemptyset(&blocked);
+    if (prepared == 0) {
+        errno = 0;
+        prepared = sigaddset(&blocked, SIGPIPE);
+    }
+    if (prepared == 0) {
+        prepared = pthread_sigmask(SIG_BLOCK, &blocked, NULL);
+    }
+    if (prepared == 0) {
         if (fatal_write(STDOUT_FILENO, output, used) == 0) {
             (void)fatal_write(STDERR_FILENO, output, used);
         }

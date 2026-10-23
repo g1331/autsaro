@@ -37,6 +37,57 @@ HostIoWriteFile(HANDLE handle, LPCVOID data, DWORD length, LPDWORD written, LPOV
 }
 #else
 static unsigned calls;
+static int check_errno;
+static void require_clear_errno(void)
+{
+    if ((check_errno != 0) && (errno != 0)) {
+        _exit(85);
+    }
+}
+int __real_sigemptyset(sigset_t *set);
+int __wrap_sigemptyset(sigset_t *set)
+{
+    int result;
+    require_clear_errno();
+    result = __real_sigemptyset(set);
+    if ((check_errno != 0) && (result >= 0)) {
+        errno = EIO;
+    }
+    return result;
+}
+int __real_sigaddset(sigset_t *set, int signal_number);
+int __wrap_sigaddset(sigset_t *set, int signal_number)
+{
+    int result;
+    require_clear_errno();
+    result = __real_sigaddset(set, signal_number);
+    if ((check_errno != 0) && (result >= 0)) {
+        errno = EIO;
+    }
+    return result;
+}
+int __real_sigpending(sigset_t *set);
+int __wrap_sigpending(sigset_t *set)
+{
+    int result;
+    require_clear_errno();
+    result = __real_sigpending(set);
+    if ((check_errno != 0) && (result >= 0)) {
+        errno = EIO;
+    }
+    return result;
+}
+int __real_sigismember(const sigset_t *set, int signal_number);
+int __wrap_sigismember(const sigset_t *set, int signal_number)
+{
+    int result;
+    require_clear_errno();
+    result = __real_sigismember(set, signal_number);
+    if ((check_errno != 0) && (result >= 0)) {
+        errno = EIO;
+    }
+    return result;
+}
 ssize_t __real_write(int descriptor, const void *data, size_t length);
 ssize_t __wrap_write(int descriptor, const void *data, size_t length)
 {
@@ -165,8 +216,16 @@ int main(int argc, char **argv)
         Os_StackInit();
         Os_Fault.role = 'S';
         Os_Fault.published = 1;
+#ifndef _WIN32
+        check_errno = strcmp(scenario, "fatal-errno") == 0;
+        errno = EIO;
+#endif
         Os_StackFatalExit();
     }
+#ifndef _WIN32
+    check_errno = strcmp(scenario, "errno-sequence") == 0;
+    errno = EIO;
+#endif
     count = Os_HostWriteBytes(0, "abcdef", 6u);
     return count == ((strcmp(scenario, "zero") == 0 || strcmp(scenario, "partial-error") == 0) ? 0
                                                                                                : 1)

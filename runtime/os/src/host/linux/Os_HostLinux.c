@@ -782,11 +782,6 @@ OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
     }
     return stopped;
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP static int write_bytes(int descriptor, const char *data, size_t length)
 {
     size_t offset = 0u;
@@ -816,9 +811,20 @@ OS_MEMMAP int Os_HostWriteBytes(int error_stream, const char *data, size_t lengt
     if ((error_stream == 0) || (error_stream == 1)) {
         /* Convert this call's broken pipe into an error without changing the
          * process disposition or consuming a signal already owned by the caller. */
-        if ((sigemptyset(&blocked) == 0) && (sigaddset(&blocked, SIGPIPE) == 0) &&
-            (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)) {
+        int prepared;
+        errno = 0;
+        prepared = sigemptyset(&blocked);
+        if (prepared == 0) {
+            errno = 0;
+            prepared = sigaddset(&blocked, SIGPIPE);
+        }
+        if (prepared == 0) {
+            prepared = pthread_sigmask(SIG_BLOCK, &blocked, &previous);
+        }
+        if (prepared == 0) {
+            errno = 0;
             if (sigpending(&pending) == 0) {
+                errno = 0;
                 const int was_pending = sigismember(&pending, SIGPIPE);
                 if (was_pending >= 0) {
                     errno = 0;

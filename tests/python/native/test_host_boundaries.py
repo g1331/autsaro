@@ -140,7 +140,9 @@ class HostIoTests(unittest.TestCase):
             with os_suites.native_session(directory, "host-io"):
                 binary, _ = os_suites.build(
                     directory, str(ROOT / "tests/fixtures/host_io.c"),
-                    target=target, link_flags=() if os.name == "nt" else ("-Wl,--wrap=write",),
+                    target=target, link_flags=() if os.name == "nt" else tuple(f"-Wl,--wrap={name}" for name in (
+                        "write", "sigemptyset", "sigaddset", "sigpending", "sigismember",
+                    )),
                 )
                 expected = {
                     "format": b"zero=0 max=18446744073709551615 hex=ffffffffffffffff fault=000000A5\x00\r\n",
@@ -148,7 +150,7 @@ class HostIoTests(unittest.TestCase):
                     "broken-pipe": b"", "partial": b"abcdef", "zero": b"", "partial-error": b"ab",
                 }
                 if os.name != "nt":
-                    expected.update({"interrupted": b"abcdef", "pending-pipe": b""})
+                    expected.update({"interrupted": b"abcdef", "pending-pipe": b"", "errno-sequence": b"abcdef"})
                 for case, output in expected.items():
                     with self.subTest(case=case):
                         result = OwnedProcess(ProcessSpec.seconds(
@@ -163,7 +165,7 @@ class HostIoTests(unittest.TestCase):
                          + b"00000000 captured=1 record_complete=1\n")
                 fatal_cases = ("fatal-partial", "fatal-zero", "fatal-broken-pipe")
                 if os.name != "nt":
-                    fatal_cases += ("fatal-interrupted",)
+                    fatal_cases += ("fatal-interrupted", "fatal-errno")
                 for case in fatal_cases:
                     with self.subTest(case=case):
                         result = OwnedProcess(ProcessSpec.seconds(
@@ -171,5 +173,5 @@ class HostIoTests(unittest.TestCase):
                         )).wait()
                         output, errors = result.stdout.read_bytes(), result.stderr.read_bytes()
                         self.assertEqual(result.exit_code, 13, (case, output, errors))
-                        self.assertEqual(output, fault if case in ("fatal-partial", "fatal-interrupted") else b"", case)
+                        self.assertEqual(output, fault if case in ("fatal-partial", "fatal-interrupted", "fatal-errno") else b"", case)
                         self.assertEqual(errors, fault if case == "fatal-broken-pipe" else b"", case)
