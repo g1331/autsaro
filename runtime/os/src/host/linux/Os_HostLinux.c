@@ -48,7 +48,7 @@ struct Os_HostHandleType {
     DWORD thread_id;
     LPTHREAD_START_ROUTINE entry;
     LPVOID argument;
-    void *mapping;
+    unsigned char *mapping;
     size_t mapping_size;
     size_t guard_size;
     int register_host;
@@ -244,10 +244,10 @@ OS_MEMMAP static void *actor_start(void *argument)
     HANDLE thread = argument;
     current_thread = thread;
     OS_LINUX_STACK_START(&thread->bootstrap_fake,
-                         (char *)thread->mapping + thread->guard_size,
+                         thread->mapping + thread->guard_size,
                          thread->mapping_size - thread->guard_size);
     thread->exit_code =
-        Os_LinuxCallOnStack(&((char *)thread->mapping)[thread->mapping_size], actor_body, thread);
+        Os_LinuxCallOnStack(&thread->mapping[thread->mapping_size], actor_body, thread);
     OS_LINUX_STACK_FINISH(thread->bootstrap_fake, NULL, NULL);
     __atomic_store_n(&thread->ended, 1, __ATOMIC_RELEASE);
     futex_wake(&thread->ended);
