@@ -2,7 +2,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
 index 2592610..1be0473 100644
 --- a/portable/ThirdParty/GCC/Posix/port.c
 +++ b/portable/ThirdParty/GCC/Posix/port.c
-@@ -23,658 +23,386 @@
+@@ -23,658 +23,413 @@
   *
   * https://www.FreeRTOS.org
   * https://github.com/FreeRTOS
@@ -960,6 +960,33 @@ index 2592610..1be0473 100644
 +    Os_BackendShutdown(E_OS_STATE);
  }
 -/*-----------------------------------------------------------*/
++
++/* This root frame lives until host shutdown. Activation settlement remains in
++ * the backend; restoring here discards only the completed Task's call frames. */
++#define OS_START_SEC_VAR_CLEARED_TLS_UNSPECIFIED
++#include "Os_MemMap.h"
++OS_MEMMAP static OS_HOST_THREAD_LOCAL ucontext_t task_root;
++#define OS_STOP_SEC_VAR_CLEARED_TLS_UNSPECIFIED
++#include "Os_MemMap.h"
++#define OS_START_SEC_CODE
++#include "Os_MemMap.h"
++OS_MEMMAP void vPortRunTask(TaskFunction_t entry, void *argument)
++{
++    if (getcontext(&task_root) != 0) {
++        Os_BackendShutdown(E_OS_STATE);
++    }
++    entry(argument);
++    Os_BackendShutdown(E_OS_STATE);
++}
++
++OS_MEMMAP void vPortRestartTask(void)
++{
++    (void)setcontext(&task_root);
++    Os_BackendShutdown(E_OS_STATE);
++    __builtin_trap();
++}
++#define OS_STOP_SEC_CODE
++#include "Os_MemMap.h"
 diff --git a/portable/ThirdParty/GCC/Posix/portmacro.h b/portable/ThirdParty/GCC/Posix/portmacro.h
 index 52a9c0e..880e346 100644
 --- a/portable/ThirdParty/GCC/Posix/portmacro.h

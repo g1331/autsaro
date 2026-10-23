@@ -57,3 +57,33 @@
 +            Os_PortResumeThread( pxThreadState->pvThread );
          }
              }
+@@ -664,3 +667,29 @@
+     }
+ }
+ /*-----------------------------------------------------------*/
++
++
++/* This root frame lives until host shutdown. Activation settlement remains in
++ * the backend; restoring here discards only the completed Task's call frames. */
++#define OS_START_SEC_VAR_CLEARED_TLS_UNSPECIFIED
++#include "Os_MemMap.h"
++OS_MEMMAP static OS_HOST_THREAD_LOCAL CONTEXT task_root;
++#define OS_STOP_SEC_VAR_CLEARED_TLS_UNSPECIFIED
++#include "Os_MemMap.h"
++#define OS_START_SEC_CODE
++#include "Os_MemMap.h"
++OS_MEMMAP void vPortRunTask(TaskFunction_t entry, void *argument)
++{
++    RtlCaptureContext(&task_root);
++    entry(argument);
++    Os_BackendShutdown(E_OS_STATE);
++}
++
++OS_MEMMAP void vPortRestartTask(void)
++{
++    RtlRestoreContext(&task_root, NULL);
++    Os_BackendShutdown(E_OS_STATE);
++    __builtin_trap();
++}
++#define OS_STOP_SEC_CODE
++#include "Os_MemMap.h"

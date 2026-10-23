@@ -9,6 +9,9 @@
 #ifndef TASK_HOOK_OBSERVER
 #define TASK_HOOK_OBSERVER() ((void)0)
 #endif
+#ifndef TASK_BODY_OBSERVER
+#define TASK_BODY_OBSERVER() ((void)0)
+#endif
 
 static const uint8 task_name_0[] = "owner";  /**< Process-lifetime Task name bytes. */
 static const uint8 task_name_1[] = "helper"; /**< Process-lifetime Task name bytes. */
@@ -69,6 +72,7 @@ void ShutdownHook(StatusType error)
 }
 static void owner(void)
 {
+    TASK_BODY_OBSERVER();
     ++owner_entries;
     if (strcmp(scenario, "self-chain") == 0 || strcmp(scenario, "queued") == 0) {
         record(owner_entries == 1u ? 'X' : 'Y');
@@ -110,6 +114,7 @@ static void owner(void)
 }
 static void helper(void)
 {
+    TASK_BODY_OBSERVER();
     ++helper_entries;
     record(helper_entries == 1u ? 'H' : 'J');
     (void)TerminateTask();
@@ -117,6 +122,7 @@ static void helper(void)
 }
 static void low(void)
 {
+    TASK_BODY_OBSERVER();
     TaskStateType state = 99u;
     if (strcmp(scenario, "self-chain") == 0 || strcmp(scenario, "queued") == 0) {
         check(owner_entries == 2u && GetTaskState(0u, &state) == E_OK && state == SUSPENDED);

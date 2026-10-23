@@ -2,13 +2,39 @@
 #include <limits.h>
 #include "Os_Arti.h"
 static void observed_hook(void);
+static void observed_body(void);
 #define TASK_HOOK_OBSERVER observed_hook
+#define TASK_BODY_OBSERVER observed_body
 #define main               transition_main
 #include "task_hooks.c"
 #undef main
 
 static bool
     stack_published[3]; /**< Observed Task stack publication; fixture-owned, no Init reset. */
+static uintptr_t entry_sp[3]; /**< First entry stack pointer, compared on each activation. */
+static DWORD entry_thread[3]; /**< First native thread identity, compared on each activation. */
+static const Os_NativeStackType *entry_stack[3]; /**< First native/ARTI stack record. */
+static unsigned body_observations[3]; /**< Number of actual entries inspected per Task. */
+static void observed_body(void)
+{
+    TaskType id = INVALID_TASK;
+    uintptr_t sp;
+    check(GetTaskID(&id) == E_OK && id < 3u);
+    OS_HOST_STACK_POINTER(sp);
+    const DWORD thread = GetCurrentThreadId();
+    const Os_NativeStackType *stack = Os_StackCurrent();
+    check(stack != NULL && Os_ArtiTaskStacks[id] == stack);
+    check(stack->thread_id == thread && sp >= stack->committed_low && sp < stack->high);
+    check(Os_ArtiTaskContexts[id] == Os_StackSavedContext(stack));
+    if (body_observations[id] == 0u) {
+        entry_sp[id] = sp;
+        entry_thread[id] = thread;
+        entry_stack[id] = stack;
+    } else {
+        check(entry_sp[id] == sp && entry_thread[id] == thread && entry_stack[id] == stack);
+    }
+    ++body_observations[id];
+}
 static void observed_hook(void)
 {
     TaskType id = INVALID_TASK;
@@ -69,6 +95,7 @@ void Os_ArtiTestShutdownObserved(void)
         expected = "A0A2S0";
     }
     arti_check(Arti_EventCount > 0 && Arti_EventCount <= (long)ARTI_EVENT_CAPACITY);
+    arti_check(body_observations[0] == owner_entries && body_observations[1] == helper_entries);
     arti_check(Arti_EventsDropped == 0 && Arti_DevelopmentError == 0);
     for (long i = 0; i < Arti_EventCount; ++i) {
         const Arti_Event *event = &Arti_Events[i];

@@ -80,11 +80,11 @@ Det 仍在全部开发 hooks 按顺序返回后停止；未初始化和递归报
 | 规则 | 修订合成与本项结论 |
 | --- | --- |
 | R21.1 | 2013 主文印刷页165–166；TC1 页10 增加 R20.5 交叉引用；AMD2 §2.10、AMD2.27 页9 扩充 C11 适用性／来源。AMD1／AMD3／AMD4／TC2 没有增加本项 feature 宏例外。锁 TU 已去除 `_XOPEN_SOURCE`；OS 其他 feature 宏仍按各自真实闭包在 #60 评估，不能批量视为合规。 |
-| R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 的 setjmp／longjmp 仍是实际违反，须由 #60 交付同 Task 的 port 栈重启替代；移除 include 或隐藏调用无效。 |
+| R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 已删除 setjmp／longjmp，唯一 port 使用原生上下文恢复同 Task 入口；没有把禁止设施移到包装层。 |
 | R21.6 | 主文页168–169，覆盖 stdio 函数及 C99 指定的宽字符 I/O；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源，AMD2.79 页16 替换首段 Amplification，明确覆盖 stdio.h 规定的函数及 wchar.h 中的宽字符等价函数；其余修订没有本项流协议例外。HostBatch／probe／OS 报告已用原生字节 I/O 和有界格式化替代这些调用；这不替代其他规则评估。 |
 | R21.8 | 主文页169；AMD1 §3 页17 移除 getenv；TC1 页11 修正表述；AMD2 §2.10.41（AMD2.81）页17 整条替换为 abort、exit、_Exit、quick_exit，后续 AMD3／AMD4／TC2 未再改变集合。锁与 Det 已去除 abort；R21.8 原文按所列标识符限制使用；POSIX `_exit` 不在该集合。受控 glibc 的 `_exit`／`_Exit` 可共享实现，这不是实现隔离证明；选择平台 API 的依据是明确的进程级停止及不执行 CRT 清理的契约与真实消费者测试，其他规则仍须独立评估。固定 checker 的 getenv 旧诊断及 _Exit／quick_exit 漏检仍原样保留。 |
 
-流迁移与 restart 的生产完成边界、port／第三方身份及反例各自独立，不能由锁补丁的测试证明。#60 保持开放并承接以下两段；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。
+流迁移与 restart 分别验证生产完成边界与 port／第三方身份。#60 仍拥有未关闭的保留 feature 宏整改；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。
 
 ### 主机 I/O 与故障报告（D-34／E4-HOST-REPORT）
 
@@ -98,9 +98,11 @@ HostBatch 逐字节保留 NUL、排空过长行、移除行尾 CR，区分 EOF �
 
 ### 激活重启（E4-HOST-RESTART）
 
-`Os_Backend.c:task_entry` 在每个 Task 自己的原生线程建立 restart frame。TerminateTask、ChainTask 与 missing-end 经 `complete_activation` 结算激活 FIFO、资源和 ready sequence，完成 suspend／yield 后才 longjmp 到同一 Task 的 trampoline，丢弃已完成应用的调用帧；应用和生成 Runnable 不持有 restart frame。
+唯一 FreeRTOS port 的 `vPortRunTask` 在 Task 自己的原生线程中保存入口上下文，根帧保持存活；Linux 使用 `getcontext`／`setcontext`，Windows 使用 `RtlCaptureContext`／`RtlRestoreContext`（异常参数为 NULL，不使用 jump buffer）。`complete_activation` 仍先结算 FIFO、资源、PostTaskHook 和 ready sequence，完成 suspend／yield、离开 critical 后才调用不返回的 `vPortRestartTask`。错误分支继续返回原状态；missing-end 仍先报告 `E_OS_MISSINGEND`，再释放资源和结算。
 
-候选替代须由唯一 FreeRTOS port 提供同 Task 的执行栈重启，在现有结算点切换到该 Task 的入口上下文，保持线程／原生栈及 ARTI 身份、FIFO 次序、抢占、资源释放、错误返回和成功终止不返回的行为。不能用普通 return 模拟 TerminateTask，不能递归调用 entry，也不能每次激活新建线程或另设调度器。修改 port 会影响固定内核补丁和第三方身份，须在实施时独立审阅；本方案不预先授权或追认这些字节的变化。规则全文已可读，现有 trampoline 的 R21.4 违反已确认；port 替代及其独立执行证据完成前保留当前行为，不把候选设计当作整改。
+恢复丢弃已完成激活的调用帧，在同线程、同物理栈重新调用 Task 入口，不创建新线程或第二调度器。ARTI 注册按真实 TCB 查找配置槽；`arti.c` 在 Task 入口比较实际线程、栈、context 映射及重复入口栈指针，`finish`／`returned-task` 独立检查成功不返回、拒绝可返回及状态顺序。上游 FreeRTOS 原件不变；两平台的生产 port 补丁及其 `source-manifest.json` 摘要随交付变更，需重新生成并构建。
+
+保留宏尚未解决：Linux 的 `_GNU_SOURCE` 关联 futex 系统调用、signal/altstack、完整 ucontext 字段及非受控调用线程的栈查询；Windows 的 `_WIN32_WINNT` 关联系统提供的当前线程栈边界。当前 C99 消费者去除 Linux 源码和编译参数中的宏后，实际因 `syscall`、`gregs`／`REG_RSP` 和 `SA_ONSTACK` 等声明缺失拒绝编译。删除局部定义但保留 `-D_GNU_SOURCE` 不算整改；#60 的后续出口仍须提供真实平台替代并验证停车、故障栈和第三方身份，不能凭主机用途豁免。
 
 ### 解除条件与验收
 

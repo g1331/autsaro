@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Task activation restart now restores a native entry context in the existing FreeRTOS port, preserving the thread, physical stack and activation settlement without setjmp/longjmp. ARTI stack/context registration resolves the actual TCB slot. Both controlled port patch identities change; regenerate sealed deliveries and rebuild consumers (#60)
+
 - HostBatch, probe and OS lifecycle/stack reports use bounded native byte I/O, with complete output required before confirmation. Raw input bytes, partial writes, interrupted calls and closed pipes retain explicit outcomes. CRT stream setup is removed; application hooks using CRT streams must flush their own output. Regenerate sealed deliveries and rebuild consumers for the additive host I/O header and removed stream-mode helper (#60)
 
 - Host lock failures and Det development-error halts now stop the ECU directly with process status 134, bypassing CRT cleanup and SIGABRT handlers; integrations must observe the exit status rather than SIGABRT or core dumps. Strict SchM areas reject unmatched exits before touching the platform mutex, and Linux no longer requires recursive mutex attributes for these locks. Regenerate sealed deliveries and rebuild consumers (#365)
