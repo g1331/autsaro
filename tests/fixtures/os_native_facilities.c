@@ -1,6 +1,7 @@
 /** @file Linux native primitive consumers independent of automotive scheduling. */
 #include "Os_Host.h"
 #include "Os.h"
+#include "Os_Stack.h"
 #include "Os_LinuxNative.h"
 #include <asm/sigcontext.h>
 #include <asm/ucontext.h>
@@ -18,6 +19,47 @@ static int worker_error;
 static CONTEXT captured;
 static unsigned char expected_fp[sizeof(captured.native.__fpregs_mem)];
 static volatile sig_atomic_t captured_signal;
+static volatile unsigned deep_returns;
+__attribute__((noinline)) static void deep_call(unsigned depth)
+{
+    if (depth != 0u) {
+        deep_call(depth - 1u);
+    }
+    __asm__ volatile("" ::: "memory");
+    ++deep_returns;
+}
+static DWORD deep_actor(void *argument)
+{
+    uintptr_t low, high, sp;
+    uintptr_t ssp = 0u;
+    size_t guard;
+    (void)argument;
+    OS_HOST_STACK_POINTER(sp);
+    __asm__ volatile("rdsspq %0" : "+r"(ssp));
+    if (Os_HostCurrentStackRange(&low, &high, &guard) == 0 || sp < low + guard || sp >= high) {
+        return 1u;
+    }
+    FILE *maps = fopen("/proc/self/maps", "r");
+    unsigned long shadow_size = 0u;
+    if (maps != NULL) {
+        char line[256];
+        while (fgets(line, sizeof(line), maps) != NULL) {
+            unsigned long first, last;
+            if (sscanf(line, "%lx-%lx", &first, &last) == 2 && first <= ssp && ssp < last) {
+                shadow_size = last - first;
+                break;
+            }
+        }
+        (void)fclose(maps);
+    }
+    printf("native-stack usable=%lu shadow=%lu ssp=%lu\n",
+           (unsigned long)(high - low - guard),
+           shadow_size,
+           (unsigned long)ssp);
+    (void)fflush(stdout);
+    deep_call(50000u);
+    return deep_returns == 50001u ? 0u : 2u;
+}
 static void capture_signal(int signal_number, siginfo_t *info, void *context)
 {
     struct ucontext kernel;
@@ -58,6 +100,39 @@ int main(int argc, char **argv)
     struct sigaction handler = {0};
     if (argc != 2) {
         return 2;
+    }
+    if (strcmp(argv[1], "depth") == 0 || strcmp(argv[1], "cet-depth") == 0) {
+        if (argv[1][0] == 'c') {
+            long result;
+            unsigned long enabled = 0u;
+            __asm__ volatile("syscall"
+                             : "=a"(result)
+                             : "a"(158L), "D"(0x5001L), "S"(1L)
+                             : "rcx", "r11", "memory");
+            if (result != 0) {
+                printf("native-stack CET not_assessed enable=%ld\n", result);
+                (void)fflush(stdout);
+                _exit(77);
+            }
+            __asm__ volatile("syscall"
+                             : "=a"(result)
+                             : "a"(158L), "D"(0x5005L), "S"(&enabled)
+                             : "rcx", "r11", "memory");
+            printf("native-stack CET status=%lu result=%ld\n", enabled, result);
+            (void)fflush(stdout);
+            if (result != 0 || enabled != 1u) {
+                _exit(12);
+            }
+        }
+        Os_StackPrepare();
+        HANDLE actor = CreateThread(NULL, 1048576u, deep_actor, NULL, 0u, NULL);
+        if (actor == NULL || WaitForSingleObject(actor, 10000u) != WAIT_OBJECT_0 ||
+            deep_returns != 50001u || CloseHandle(actor) == FALSE) {
+            _exit(13);
+        }
+        puts("native-stack depth=50000 completed");
+        (void)fflush(stdout);
+        _exit(0);
     }
     injected_error = strcmp(argv[1], "error") == 0;
     struct ucontext snapshot;

@@ -180,7 +180,7 @@ class HostIoTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
-    def test_kernel_calls_and_native_mutex_ownership(self):
+    def test_kernel_calls_native_mutex_and_stack_capacity(self):
         import os_suites
 
         with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
@@ -202,3 +202,18 @@ class NativeFacilityTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result)
                     self.assertEqual(result.stdout, "native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified context=signal+self\n")
                     self.assertEqual(result.stderr, "")
+                if not os.environ.get("AUTOSAR_SANITIZE"):
+                    depth = os_suites.run_native([str(binary), "depth"], timeout=15)
+                    self.assertEqual(depth.returncode, 0, depth)
+                    self.assertIn("native-stack depth=50000 completed", depth.stdout)
+                    self.assertEqual(depth.stderr, "")
+                    print(depth.stdout, end="", flush=True)
+                    cet = os_suites.run_native([str(binary), "cet-depth"], timeout=15)
+                    if cet.returncode == 77:
+                        print(cet.stdout, end="", flush=True)
+                    else:
+                        self.assertEqual(cet.returncode, 0, cet)
+                        self.assertIn("native-stack CET status=1 result=0", cet.stdout)
+                        self.assertIn("native-stack depth=50000 completed", cet.stdout)
+                        self.assertEqual(cet.stderr, "")
+                        print(cet.stdout, end="", flush=True)
