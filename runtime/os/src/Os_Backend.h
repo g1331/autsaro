@@ -248,12 +248,6 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
                                    void *argument,
                                    const StackType_t *buffer_top);
 
-/** Keep a native Task root frame live on its owning thread until shutdown. */
-OS_MEMMAP void vPortRunTask(TaskFunction_t entry, void *argument);
-
-/** After activation settlement, discard its frames on the same thread and stack. */
-OS_MEMMAP void vPortRestartTask(void) __attribute__((noreturn));
-
 OS_MEMMAP void Os_PortResumeThread(HANDLE thread);
 
 OS_MEMMAP DWORD Os_PortSuspendThread(HANDLE thread);

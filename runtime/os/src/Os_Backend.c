@@ -5,6 +5,7 @@
 #include <limits.h>
 #include "Os_HostIo.h"
 #include <stdlib.h>
+#include <setjmp.h>
 #include <string.h>
 
 #ifdef __linux__
@@ -129,6 +130,12 @@ typedef struct {
     uint64 *slot;
     uint64 previous;
 } Os_OrderReferenceType;
+#define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
+OS_MEMMAP static jmp_buf
+    restart_frames[OS_MAX_TASKS]; /**< Per-Task restart frames; owning Task; no Init reset. */
+#define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
@@ -1036,7 +1043,7 @@ OS_MEMMAP static void report_and_exit(void)
     char storage[512];
     Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
     Os_HostTextAppend(&text, "lifecycle=Closed state=");
-    Os_HostTextAppend(&text, shutdown_reason == E_OK ? "Ready" : "Failed");
+    Os_HostTextAppend(&text, (shutdown_reason == E_OK) ? "Ready" : "Failed");
     Os_HostTextField(&text, " reason=", shutdown_reason);
     Os_HostTextAppend(&text, " trace=");
     Os_HostTextAppend(&text, (const char *)trace);
@@ -1045,7 +1052,7 @@ OS_MEMMAP static void report_and_exit(void)
     Os_HostTextField(&text, " mutexes=", mutexes);
     Os_HostTextField(&text, " resource_calls=", resource_calls);
     Os_HostTextAppend(&text, " " OS_NATIVE_HEAP "input_closed=1 tick_closed=1");
-    Os_HostTextField(&text, " time_signal_failed=", Os_TimeSignalFailed() != 0 ? 1u : 0u);
+    Os_HostTextField(&text, " time_signal_failed=", (Os_TimeSignalFailed() != 0) ? 1u : 0u);
     Os_HostTextField(&text, " trace_dropped=", trace_dropped);
     Os_HostTextByte(&text, '\n');
     if (Os_HostTextWrite(&text) == 0) {
@@ -1421,11 +1428,7 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
         WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (start->entry == task_entry) {
-        vPortRunTask(start->entry, start->argument);
-    } else {
-        start->entry(start->argument);
-    }
+    start->entry(start->argument);
     Os_BackendShutdown(E_OS_STATE);
     return 0u;
 }
@@ -1537,10 +1540,14 @@ OS_MEMMAP void vApplicationIdleHook(void)
 
 OS_MEMMAP static void task_entry(void *argument)
 {
-    /* The port re-enters this function with the same owning control block. */
-    const uint32 index = task_slot(argument);
+    /* The argument is the task's own control block, so the configuration stays const.
+     * The index stays live across setjmp, so it is volatile (C99 7.13.2.1). */
+    const volatile uint32 index = task_slot(argument);
     configASSERT(index < Os_Config->task_count);
     const Os_TaskConfigType *task = &Os_Config->tasks[index];
+    /* The private backend trampoline discards completed application frames.
+     * No application or generated Runnable uses setjmp/longjmp. */
+    (void)setjmp(restart_frames[index]);
     (void)Os_ArtiCallerSave();
     configASSERT(activations[index].count != 0u);
     task->entry();
@@ -1981,7 +1988,7 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
-    vPortRestartTask();
+    longjmp(restart_frames[index], 1);
 }
 
 OS_MEMMAP StatusType Os_BackendFinish(void) { return complete_activation(0u, 0, 0); }

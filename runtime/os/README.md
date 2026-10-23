@@ -35,8 +35,6 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_os
 
 生成工程的generated/include/Rte_Os.h与generated/src/Rte_OsService.c提供同步Counter服务。Rte_Call_OsService_GetCounterValue与Rte_Call_OsService_GetElapsedValue绑定配置的Counter句柄，直接调用原生OS接口；输出为tick及tick差（SWS_Os_00560），不按TimeInMicrosecondsType名称额外换算。服务器OsService_{Counter}_GetCounterValue／GetElapsedValue接受CounterType端口定义参数。generated/descriptions/Os_Service.arxml描述OsService提供端口、服务接口、共享类型、错误及Runnable；受支持的单Counter配置句柄为0。调用方拥有输出存储，拒绝调用保留原生错误、ErrorHook参数快照与输出契约。
 
-激活完成后由现有 FreeRTOS port 恢复同线程的原生入口上下文，保留物理栈和 TCB。`complete_activation` 仍负责资源、FIFO、hook 与调度结算；成功 TerminateTask／ChainTask 不返回，错误保留返回状态。原生 ARTI 消费者在每个 Task 入口核对线程、栈、context 及重复激活的栈指针。port 补丁身份变更后须重新生成封存工程并重建。
-
 ## ARTI observation
 
 The generated ECU includes `generated/descriptions/Os_Arti.arxml`, R24-11 ECUC descriptions of its actual OS, logical core, Task, input Cat2 ISR, native stacks/context, Counter, configured Alarm/ScheduleTable and optional scheduler resource. Expressions use global data and constants; Task observations are refreshed from the native kernel under its mutex, while timer/resource pointers refer to original storage. These values never select runnable work. The delivered build retains debug type information for those expressions.

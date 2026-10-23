@@ -80,29 +80,29 @@ Det 仍在全部开发 hooks 按顺序返回后停止；未初始化和递归报
 | 规则 | 修订合成与本项结论 |
 | --- | --- |
 | R21.1 | 2013 主文印刷页165–166；TC1 页10 增加 R20.5 交叉引用；AMD2 §2.10、AMD2.27 页9 扩充 C11 适用性／来源。AMD1／AMD3／AMD4／TC2 没有增加本项 feature 宏例外。锁 TU 已去除 `_XOPEN_SOURCE`；OS 其他 feature 宏仍按各自真实闭包在 #60 评估，不能批量视为合规。 |
-| R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 已删除 setjmp／longjmp，唯一 port 使用原生上下文恢复同 Task 入口；没有把禁止设施移到包装层。 |
+| R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 的 setjmp／longjmp 仍是实际违反；#60 继续承接通过完整原生与检测器验收的同 Task port 替代。 |
 | R21.6 | 主文页168–169，覆盖 stdio 函数及 C99 指定的宽字符 I/O；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源，AMD2.79 页16 替换首段 Amplification，明确覆盖 stdio.h 规定的函数及 wchar.h 中的宽字符等价函数；其余修订没有本项流协议例外。HostBatch／probe／OS 报告已用原生字节 I/O 和有界格式化替代这些调用；这不替代其他规则评估。 |
 | R21.8 | 主文页169；AMD1 §3 页17 移除 getenv；TC1 页11 修正表述；AMD2 §2.10.41（AMD2.81）页17 整条替换为 abort、exit、_Exit、quick_exit，后续 AMD3／AMD4／TC2 未再改变集合。锁与 Det 已去除 abort；R21.8 原文按所列标识符限制使用；POSIX `_exit` 不在该集合。受控 glibc 的 `_exit`／`_Exit` 可共享实现，这不是实现隔离证明；选择平台 API 的依据是明确的进程级停止及不执行 CRT 清理的契约与真实消费者测试，其他规则仍须独立评估。固定 checker 的 getenv 旧诊断及 _Exit／quick_exit 漏检仍原样保留。 |
 
-流迁移与 restart 分别验证生产完成边界与 port／第三方身份。#60 仍拥有未关闭的保留 feature 宏整改；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。
+流迁移与 restart 的出口独立。#60 仍拥有未关闭的 same-Task port 替代及保留 feature 宏整改；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。
 
 ### 主机 I/O 与故障报告（D-34／E4-HOST-REPORT）
 
-HostBatch、probe、正常 OS 生命周期与栈报告通过 `Os_HostIo.h` 使用原生标准句柄和调用方持有的有界记录。Linux 读取文件描述符，Windows 读取 HANDLE，不经过 CRT 文本翻译。`Os_HostServices.c` 不再设置 CRT 标准流模式；使用 CRT 的应用或测试消费者自行完成自己的缓冲输出。已删除的存储实现不属于本闭包，后续存储能力由 [R7](../roadmap/README.md)／[#124](https://github.com/g1331/autsaro/issues/124) 承接。
+HostBatch、probe、正常 OS 生命周期与栈报告通过 `Os_HostIo.h` 使用原生标准句柄和调用方持有的有界记录。HostBatch 自己持有私有读入口：Linux 读取文件描述符，Windows 读取 HANDLE，不经过 CRT 文本翻译。`Os_HostServices.c` 不再设置 CRT 标准流模式；使用 CRT 的应用或测试消费者自行完成自己的缓冲输出。已删除的存储实现不属于本闭包，后续存储能力由 [R7](../roadmap/README.md)／[#124](https://github.com/g1331/autsaro/issues/124) 承接。
 
 HostBatch 逐字节保留 NUL、排空过长行、移除行尾 CR，区分 EOF 与实际输入错误；输入错误进入故障关闭。十进制字段支持完整 uint64 范围，十六进制字段拒绝无效宽度和截断，容量错误锁存并拒绝发布记录前缀。原生写入处理部分完成、EINTR、零进展和句柄关闭；Linux 仅阻塞调用线程的 SIGPIPE 并消费本次断管产生的信号，保留调用前已有的 pending 信号及原来的屏蔽集合。
 
 `Ecu_HostBridge.c:pump` 只在 sink 把完整 OUT 记录实际写出后调用 `Ecu_TargetConfirmOutput`；probe 同样先完成输出再确认。写入失败可能留下可见前缀，但不能确认输出或发布成功收据。无 stdio 缓冲后的完成边界是全部字节交给平台输出成功，不额外要求管道协议进行磁盘同步。正式 HostBatch／probe、测试构建的初始化和退役记录均使用同一输出入口。
 
-正常关闭在 `report_and_exit` 依次调用 ShutdownHook、栈报告和 lifecycle 报告，后两者均检查完整输出；报告失败把原本成功的退出转为 `E_OS_STATE`，已有失败原因保持。控制器耗尽后的 `Os_StackFatalExit` 保留预分配缓冲、首次故障记录和原生停止，只重试剩余字节及 EINTR，stdout 失败后尝试 stderr。该路径不调用 stdio、不分配内存或取得新的应用锁。Linux guard handler 对非本模块 guard 的异常直接退出；自己的 guard fault 发布记录并永久停放 actor。
+正常关闭在 `report_and_exit` 依次调用 ShutdownHook、栈报告和 lifecycle 报告，后两者均检查完整输出；报告失败把原本成功的退出转为 `E_OS_STATE`，已有失败原因保持。控制器耗尽后的 `Os_StackFatalExit` 保留预分配缓冲、首次故障记录和原生停止，只重试剩余字节及 EINTR，stdout 失败后尝试 stderr。Linux 终止线程屏蔽 SIGPIPE 后直接退出，断管不替换栈故障状态。该路径不调用 stdio、不分配内存或取得新的应用锁。Linux guard handler 对非本模块 guard 的异常直接退出；自己的 guard fault 发布记录并永久停放 actor。
 
 ### 激活重启（E4-HOST-RESTART）
 
-唯一 FreeRTOS port 的 `vPortRunTask` 在 Task 自己的原生线程中保存入口上下文，根帧保持存活；Linux 使用 `getcontext`／`setcontext`，Windows 使用 `RtlCaptureContext`／`RtlRestoreContext`（异常参数为 NULL，不使用 jump buffer）。`complete_activation` 仍先结算 FIFO、资源、PostTaskHook 和 ready sequence，完成 suspend／yield、离开 critical 后才调用不返回的 `vPortRestartTask`。错误分支继续返回原状态；missing-end 仍先报告 `E_OS_MISSINGEND`，再释放资源和结算。
+`Os_Backend.c:task_entry` 在每个 Task 原生线程保留 restart frame。`complete_activation` 先结算 FIFO、资源、PostTaskHook 和 ready sequence，完成 suspend／yield、离开 critical 后才 longjmp 回同 Task 入口。错误分支可返回；missing-end 先报告 `E_OS_MISSINGEND`，再释放资源和结算。ARTI 注册已改为按真实 TCB 查找配置槽；`arti.c` 在 Task 入口核对当前线程、物理栈、context 映射和重复激活的栈指针，不能只检查某个栈记录非空。
 
-恢复丢弃已完成激活的调用帧，在同线程、同物理栈重新调用 Task 入口，不创建新线程或第二调度器。ARTI 注册按真实 TCB 查找配置槽；`arti.c` 在 Task 入口比较实际线程、栈、context 映射及重复入口栈指针，`finish`／`returned-task` 独立检查成功不返回、拒绝可返回及状态顺序。上游 FreeRTOS 原件不变；两平台的生产 port 补丁及其 `source-manifest.json` 摘要随交付变更，需重新生成并构建。
+port 替代的入口须保持同线程、同物理栈、FIFO／抢占与成功不返回，不能递归调用 entry、每次重建线程或另设调度器。受控 Linux 工具链产生带 IBT／SHSTK 的 ELF：恢复普通栈还必须处理硬件影子栈与各检测器的调用栈状态。仅在正常运行和 ASan 下通过的上下文替代不足以关闭该出口；不得为接受候选去掉这些工具链属性或减弱检测器。FreeRTOS 上游与生产补丁身份仍保持既有版本，#60 承接最终替代及其第三方身份审阅。
 
-保留宏尚未解决：Linux 的 `_GNU_SOURCE` 关联 futex 系统调用、signal/altstack、完整 ucontext 字段及非受控调用线程的栈查询；Windows 的 `_WIN32_WINNT` 关联系统提供的当前线程栈边界。当前 C99 消费者去除 Linux 源码和编译参数中的宏后，实际因 `syscall`、`gregs`／`REG_RSP` 和 `SA_ONSTACK` 等声明缺失拒绝编译。删除局部定义但保留 `-D_GNU_SOURCE` 不算整改；#60 的后续出口仍须提供真实平台替代并验证停车、故障栈和第三方身份，不能凭主机用途豁免。
+保留宏尚未解决：Linux 的 `_GNU_SOURCE` 关联 futex 系统调用、signal/altstack、完整 ucontext 字段及非受控调用线程的栈查询；Windows 的 `_WIN32_WINNT` 关联系统提供的当前线程栈边界。当前 C99 消费者去除 Linux 源码和编译参数中的宏后，实际因 `syscall`、`gregs`／`REG_RSP` 和 `SA_ONSTACK` 等声明缺失拒绝编译。删除局部定义但保留 `-D_GNU_SOURCE` 不算整改；#60 的后续出口须提供真实平台替代并验证停车、故障栈和第三方身份，不能凭主机用途豁免。
 
 ### 解除条件与验收
 

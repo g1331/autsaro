@@ -4,8 +4,6 @@
 
 ### Breaking
 
-- Task activation restart now restores a native entry context in the existing FreeRTOS port, preserving the thread, physical stack and activation settlement without setjmp/longjmp. ARTI stack/context registration resolves the actual TCB slot. Both controlled port patch identities change; regenerate sealed deliveries and rebuild consumers (#60)
-
 - HostBatch, probe and OS lifecycle/stack reports use bounded native byte I/O, with complete output required before confirmation. Raw input bytes, partial writes, interrupted calls and closed pipes retain explicit outcomes. CRT stream setup is removed; application hooks using CRT streams must flush their own output. Regenerate sealed deliveries and rebuild consumers for the additive host I/O header and removed stream-mode helper (#60)
 
 - Host lock failures and Det development-error halts now stop the ECU directly with process status 134, bypassing CRT cleanup and SIGABRT handlers; integrations must observe the exit status rather than SIGABRT or core dumps. Strict SchM areas reject unmatched exits before touching the platform mutex, and Linux no longer requires recursive mutex attributes for these locks. Regenerate sealed deliveries and rebuild consumers (#365)
@@ -25,6 +23,8 @@
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
 ### Fixed
+
+- OS ARTI stack/context registration now resolves the actual Task control block slot; independent Task-entry observations check the thread, native stack and stable restart frame. Regenerate ECU deliveries; upstream FreeRTOS and production patch identities remain unchanged (#60)
 
 - Explicit `RteCodeVendorId` values in 0..65535 now reach the RTE implementation description and standalone contract metadata from source configuration; other modules keep their own supplier identity, and formal allocation remains the code user's responsibility. Regenerate deliveries to use the configured value (#363)
 
