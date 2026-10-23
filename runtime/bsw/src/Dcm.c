@@ -441,9 +441,7 @@ static DCM_CODE void Dcm_ReadValue(Dcm_WorkType *work, uint16 did)
 {
     const Dcm_MsgLenType size = (did == DCM_SESSION_DID) ? 3u : 6u;
     const Dcm_MsgLenType offset = work->message.resDataLen;
-    if (offset > (work->message.resMaxDataLen - size)) {
-        Dcm_Negative(work, DCM_NRC_TOO_LONG);
-    } else if (Dcm_Current(work->generation) == FALSE) {
+    if (Dcm_Current(work->generation) == FALSE) {
         work->cancelled = TRUE;
     } else {
         work->message.resData[offset] = (uint8)(did / 256u);
@@ -463,6 +461,19 @@ static DCM_CODE void Dcm_ReadValue(Dcm_WorkType *work, uint16 did)
         }
     }
 }
+static DCM_CODE Dcm_MsgLenType Dcm_ReadSize(const Dcm_WorkType *work, uint16 did)
+{
+    Dcm_MsgLenType size = 0u;
+    if (did == DCM_SESSION_DID) {
+        size = 3u;
+    } else if ((Dcm_Available(work, did) == TRUE) ||
+               ((work->configuration->read != NULL_PTR) && (did == work->configuration->did))) {
+        size = 6u;
+    } else {
+        /* Unsupported DIDs do not contribute to a multi-DID response. */
+    }
+    return size;
+}
 static DCM_CODE void Dcm_ReadData(Dcm_WorkType *work)
 {
     if ((work->message.reqDataLen < 2u) || ((work->message.reqDataLen % 2u) != 0u) ||
@@ -471,20 +482,29 @@ static DCM_CODE void Dcm_ReadData(Dcm_WorkType *work)
         Dcm_Negative(work, DCM_NRC_FORMAT);
     } else {
         Dcm_MsgLenType i;
-        work->response[0] = DCM_POSITIVE_READ;
-        work->message.resDataLen = 0u;
-        for (i = 0u; (i < work->message.reqDataLen) && (work->response[0] == DCM_POSITIVE_READ) &&
-                     (work->cancelled == FALSE);
-             i += 2u) {
+        Dcm_MsgLenType length = 0u;
+        /* ISO 14229-1 Figure 15: validate the complete response before reading data. */
+        for (i = 0u; i < work->message.reqDataLen; i += 2u) {
             const uint16 did =
                 ((uint16)work->message.reqData[i] * 256u) + work->message.reqData[i + 1u];
-            if ((did == DCM_SESSION_DID) || (Dcm_Available(work, did) == TRUE) ||
-                ((work->configuration->read != NULL_PTR) && (did == work->configuration->did))) {
-                Dcm_ReadValue(work, did);
-            }
+            length += Dcm_ReadSize(work, did);
         }
-        if (work->message.resDataLen == 0u) {
+        if (length == 0u) {
             Dcm_Negative(work, DCM_NRC_RANGE);
+        } else if (length > work->message.resMaxDataLen) {
+            Dcm_Negative(work, DCM_NRC_TOO_LONG);
+        } else {
+            work->response[0] = DCM_POSITIVE_READ;
+            work->message.resDataLen = 0u;
+            for (i = 0u; (i < work->message.reqDataLen) &&
+                         (work->response[0] == DCM_POSITIVE_READ) && (work->cancelled == FALSE);
+                 i += 2u) {
+                const uint16 did =
+                    ((uint16)work->message.reqData[i] * 256u) + work->message.reqData[i + 1u];
+                if (Dcm_ReadSize(work, did) != 0u) {
+                    Dcm_ReadValue(work, did);
+                }
+            }
         }
     }
 }

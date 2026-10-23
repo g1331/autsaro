@@ -48,7 +48,7 @@ CMake 不核对固定工具链身份和目标段，也不运行 `verify`；这�
 
 ReadData 应用服务返回 `Std_ReturnType`，提供四个有效或替代字节并返回 `E_OK`；标准 C/S 接口声明 `E_NOT_OK=1`，保留 RTE 基础设施失败的返回语义，普通无 application error 的 C/S 服务仍返回 void。应用 DID 不可使用 F186，或 F400–F4E0／F800–F8E0 中每隔 0x20 的 availability 标识。后者由 Dcm 按已配置 DID 生成支持位图，不调用应用。
 
-ReadData 保留请求顺序、`0xF186`、不可读/unsupported DID 跳过及 response-too-long NRC。const Rx/Tx 表明确区分 CanIf 下层句柄和 Com/CanTp 上层句柄，来自 canonical PDU 计划。配置重初始化不会将 Tx-only 帧当成 Rx 路由。
+ReadData 保留请求顺序、重复DID、`0xF186`及不可读/unsupported DID跳过；先验证格式、DID数量和完整响应容量，再调用应用。容量不足返回NRC 0x14且不读取应用数据，RTE失败不遮盖先发生的拒绝。const Rx/Tx 表明确区分 CanIf 下层句柄和 Com/CanTp 上层句柄，来自 canonical PDU 计划。配置重初始化不会将 Tx-only 帧当成 Rx 路由。
 
 发送、时钟和诊断 admission/pending/process 由链接选中的 adapter 实现；queued 请求 ring 与 owner 操作属于 ECU adapter，不进入公共 Dcm 接口。`Os_IntegrationOnWaiting` 在原持锁 quiescence 点、完成收据发布前通知 ECU adapter；无 ECU consumer 的独立 OS harness 使用无观察者 adapter，不发布伪造的 ECU 收据。私有 `OS_*_TESTS`/`ECU_TARGET_TESTS` 仅用于对应测试构建，生产 HostBatch 拒绝混合控制源。
 

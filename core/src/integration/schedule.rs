@@ -706,6 +706,19 @@ pub(super) fn inspect_events(
                 })?;
             graph.text(entry, "SHORT-NAME").unwrap_or("").to_owned()
         };
+        if !application
+            && matches!(symbol.as_str(), "Dcm_MainFunction" | "CanTp_MainFunction")
+            && period != counter_tick_ms
+        {
+            return Err(reject(
+                graph,
+                event,
+                "PERIOD_ALARM_CONFLICT",
+                crate::product_message!(
+                    "backend.integration.configuration.bsw_main_function_period_mismatch"
+                ),
+            ));
+        }
         entities.push(ScheduledEntity {
             mapping: graph.elements[mapping].object.clone(),
             event: graph.elements[event].object.clone(),

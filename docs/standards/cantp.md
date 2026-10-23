@@ -30,7 +30,7 @@ SWS_CanTp_00229 把超时与协议错误称为开发错误，表 SWS_CanTp_00352
 | 总括与不适用 SRS | 已核对（规范原文：总括条款，ISO 15765-2 的推荐由本规范各条目展开并在本篇逐条处置）：SWS_CanTp_00033；已核对（规范原文：规范自身列出的不适用 SRS，没有实现义务）：SWS_CanTp_NA_00327 |
 | 类型与状态 | 已核对（源码：内部类型均按 `CanTp_<名>Type` 命名，只定义在 `CanTp.c` 中）：SWS_CanTp_00002、00296；已核对（源码：`CanTp_ConfigType` 由 `CanTp.h` 提供，内容由实现定义）：SWS_CanTp_00340；已核对（源码：配置指针是清零的静态变量，`CanTp_Init` 才置为非空，各 API 以它判断是否已初始化）：SWS_CanTp_00161 |
 | 中断上下文 | 已核对（源码：`CanTp_RxIndication`／`CanTp_TxConfirmation` 只在区内登记或结算后返回，另一上下文正在调用其他模块时不等待；区由 SchM 按目标实现）：SWS_CanTp_00235、00236 |
-| 配置来源与一致性 | 已核对（配置模型：参数取自 ECUC ARXML，生成前由内置规则检查一致性）：SWS_CanTp_00146、00147；已核对（配置模型与生成样本：`CanTpMainFunctionPeriod` 只接受 1 ms，生成为 `main_period_ms`，计时按它换算）：SWS_CanTp_00300 |
+| 配置来源与一致性 | 已核对（配置模型：参数取自 ECUC ARXML，生成前由内置规则检查一致性）：SWS_CanTp_00146、00147；已核对（配置模型与生成样本：`CanTpMainFunctionPeriod` 只接受 1 ms；`schedule.rs::inspect_events` 要求真实映射的主函数周期等于 1 ms counter，`diagnostic_timer_mains_cannot_drift_from_the_generated_timebase` 在源对象拒绝一致改为 10 ms 的映射；生成为 `main_period_ms`，计时按它换算）：SWS_CanTp_00300 |
 | 连接通道 | 已核对（配置模型与生成样本：唯一的 `CanTpChannel` 只含一个 Rx 与一个 Tx N-SDU，通道是 `CanTp.c` 的内部状态，不对外提供，数量由生成器从配置得出）：SWS_CanTp_00121、00190、00285、00286、00289；已核对（配置模型：每个 N-SDU 只属于一个通道且没有 MetaData，同一方向只有一个 N-SDU，不共享通道资源）：SWS_CanTp_00287、00288；不适用（配置：ECUC_CanTp_00137、ECUC_CanTp_00138 各多于一个）：SWS_CanTp_00120、00122 |
 | N-SDU 与 N-PDU | 已核对（配置模型：每个 N-SDU 只引用一个发送 N-PDU，数据帧与 FC 共用同一 N-PDU，生成器核对两侧引用与句柄号一致）：SWS_CanTp_00035、00328；已核对（规范原文：FC 的作用说明，FS 的具体义务由 `cantp_contract.c` 验证）：SWS_CanTp_00282 |
 | 扩展与混合寻址 | 不适用（配置：ECUC_CanTp_00281、ECUC_CanTp_00262 非 CANTP_STANDARD，ECUC_CanTp_00139、ECUC_CanTp_00284）：SWS_CanTp_00094、00095、00281、00283、00284 |

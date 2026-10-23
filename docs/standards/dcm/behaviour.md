@@ -44,7 +44,11 @@ PduR 发送在 Dcm 区内一次判定 FullCom 并提交 admission，这是发送
 | 外置服务 OpStatus | 不适用（配置：ECUC_Dcm_00777）：SWS_Dcm_00732–00733、00735 |
 | 功能寻址：NRC 抑制与并发 TesterPresent（仅以功能寻址接收） | 不适用（配置：ECUC_Dcm_00710）：SWS_Dcm_00001、01666–01667 |
 | 请求通知与确认 | 不适用（配置：ECUC_Dcm_00681、ECUC_Dcm_00816）：SWS_Dcm_00677–00678、00741–00742 |
-| ISO 引用的独立原文裁决 | 差距 #57：SWS_Dcm_00027、00030、00827、01075、01622、01668–01669、01671 |
+| ISO 计时及DSL直接闭包 | 已核对（下文固定原文与角色；dcm_contract.c response_deadline／session_transport_boundaries，生成配置与封存协议消费者）：SWS_Dcm_00027、00030 |
+| ISO 请求检查与NRC顺序 | 已核对（ISO14229-1图5/6/15；Dcm_ReadData先核算总容量，dcm_contract.c read_validation_priority／failure_and_dispatch）：SWS_Dcm_00827、01075、01622 |
+| ISO 消息接收 | 已核对（ISO14229-2 §7/8及图13；dcm_contract.c admission_and_copy／session_transport_boundaries）：SWS_Dcm_01671 |
+| ISO S3生命周期 | 已核对（ISO14229-2表6/10及图13；dcm_contract.c session_transport_boundaries）：SWS_Dcm_01668 |
+| ISO 会话连接归属 | 已核对（单物理连接配置拒绝及dcm_contract.c session_connection_identity，外来PDU不续期）：SWS_Dcm_01669 |
 | UDS 服务表（所选 0x10／0x22／0x3E 由各服务条目验证，其余 SID 生成前拒绝，由 R7 承接） | 不适用（配置：ECUC_Dcm_00735）：SWS_Dcm_00442、01641 |
 | 多协议优先级、抢占及跨协议并行 | 不适用（配置：ECUC_Dcm_00695）：SWS_Dcm_00015、00079、00460、00575–00576、00727、00729、01046–01047、01050、01367、01369–01372、01602–01605、SWS_Dcm_CONSTR_06102–06103 |
 | Types | 已核对（diagnostic.rs 只接纳 UINT8_N／OPAQUE；Dcm.c 原样透传数据字节）：SWS_Dcm_00969–00970 |
@@ -101,3 +105,18 @@ PduR 发送在 Dcm 区内一次判定 FullCom 并提交 admission，这是发送
 | Not applicable requirements | 已核对（原始 SpecificationsARXML 中的 NA 条目；是规范本身的追溯表，不是本实现未核查条目的豁免）：SWS_Dcm_NA_00999 |
 
 `responsePending` 时清除 SPRMIB 的义务不在所选同步处理路径上。不适用（配置：ECUC_Dcm_00713）：SWS_Dcm_00203
+
+## 跨标准原文与适用闭包
+
+原件身份、收到字节摘要及来源限制集中在 [#57](https://github.com/g1331/autsaro/issues/57#issuecomment-6366451292)。本次使用 ISO 14229-1:2013（第二版）、14229-2:2021（第二版）及15765-3:2004（第一版）；2013会话层副本不替代2021。原件保存在仓库外持久资料库，全文／页面不进入产品Git或CI。收到字节匹配不是出版方独立认证或完整符合性结论。
+
+ISO14229-1 §7.5图5/6（印刷页20/21）、§9.2图7（37页）、§10.2图15（110页），以及ISO14229-2 §9.3图7（17页）、§10.1.4.2图13（29–31页）均按渲染原页核对。适用角色为单物理UDS server，默认／扩展会话、0x10/0x22/0x3E；不把客户端计时、功能寻址、多客户端或未选服务的能力写成已实现。15765-3 §6.1/6.2沿用UDS应用服务，§6.3表3/4/8及物理时序的网络无关部分对应同一S3和传输失败处理；CAN专属传输状态由CanTp承担；§9.2.1表27–29与§9.2.5表34的会话／TesterPresent子功能及P2编码与所选值一致，§9.3.1未增加0x22限制。R24-11明确的P2/P2*最小值0（00143）、S3缺省5000ms（01679）、FullCom门控（01142）继续成立。
+
+配置从`diagnostic.rs::inspect_transport/inspect_service`进入同一校验与生成计划，拒绝功能寻址、第二协议／连接、异步数据端口及未选SID；两会话使用同一P2/P2*，P2*须可按10ms编码。`schedule.rs`固定1ms counter，并在解析真实event／alarm或schedule-table映射后逐项要求Dcm／CanTp主函数的实际周期与counter一致；`diagnostic_timer_mains_cannot_drift_from_the_generated_timebase`将主函数与现有10ms alarm／event一致重映射，普通校验和计划均在BSW timing event源对象拒绝。`ecu_config.rs`生成Dcm配置和PduR TP路由。实际接缝为CanIf→LSduR→CanTp→PduR→Dcm，发送按反向路径调用下层。独立C consumer使用生成RTE类型头，封存HostBatch按公开CAN帧输入验证真实应用及网络闭包。
+
+- **请求顺序与消息。** 图5先检查SID；图6先检查最小两字节、子功能是否支持，再进入具体服务的精确长度检查。0x10／0x3E在私有请求副本中去除SPRMIB，正响应可以抑制，负响应必须发送。0x10响应携带P2的毫秒值和P2*的10ms值，正响应成功确认才发布会话；抑制时本地完成。重复请求当前会话仍成功并重启其计时；无SecurityAccess、RoE、周期诊断状态需要迁移。
+- **0x22。** §10.2表146／图15要求先验最小长度、偶数DID字节数与最大DID数，然后筛选支持DID并检查总响应容量，最后读取。未知DID跳过，已支持项保持输入顺序和重复次数；无支持项回0x31，容量不足回0x14，不调用应用。F186为当前会话，应用数据固定四字节；无可选安全／条件过滤。RTE失败按既有通用失败返回0x10并丢弃部分数据；它不能遮盖先发生的格式／容量拒绝。
+- **计时与消息边界。** ISO14229-2 §7/8及§9表3/4/6将StartOfReception映射到T_DataSOM.ind、TpRxIndication映射到T_Data.ind、PduR_DcmTransmit映射到T_Data.req、TpTxConfirmation映射到T_Data.conf。S3仅在空闲非默认会话递减，接收开始后暂停，最终响应确认（含失败）或抑制响应本地完成后重新装载；接收错误也重启而不执行请求。未知服务仍续期，外来PDU不能续期。§9.7表10要求发送错误后不重传，实际拒绝／确认失败均释放且不重试。
+- **P2与P2*。** §9.1.1 REQ5.4/5.6、§9.2及图13区分最终响应与扩展pending等待。本配置同步处理，不接纳OpStatus／DCM_E_PENDING；P2*按0x10广告，不启动异步pending计时器。P2从完整接收后起算，FullCom在最后允许主函数周期到达仍可发送，过期则丢弃未发答案并释放。函数周期和同步应用执行预算属于所选受控调度条件；逻辑周期验收不外推宿主硬实时或实机时延保证。
+
+`dcm_contract.c`覆盖容量不足与应用失败同时发生时的NRC优先级、零应用调用、精确容量、长度／最大DID数优先级、S3接收与确认等待暂停、两类传输失败后重启、未知服务／抑制TesterPresent续期、外来PDU、会话确认及P2门控边界。`diagnostics.rs`／`diagnostic_configuration.rs`保留相应配置拒绝，`integration::protocol`以封存ECU核对S3边界和物理帧。测试／变异及分析原始结果记录在PR；条款处置仅限上述选择，#58的221项评估、#59身份和#187服务端口保持各自出口。

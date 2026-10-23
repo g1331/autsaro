@@ -220,6 +220,53 @@ static void ordered_reads_and_limits(void)
     negative(too_long, sizeof(too_long), 0x14u);
     start(); /* Retire the caller-owned configuration before it leaves scope. */
 }
+/* ISO 14229-1:2013 7.5 Figures 5/6, 10.2 Table 146 and Figure 15.
+ * Verifies: SWS_Dcm_01075, SWS_Dcm_00827, SWS_Dcm_01622
+ */
+static void read_validation_priority(void)
+{
+    Dcm_ConfigType limited = config;
+    const uint8 repeated[] = {0x22u, 0x12u, 0x34u, 0x12u, 0x34u};
+    const uint8 mixed[] = {0x22u, 0xabu, 0xcdu, 0x12u, 0x34u};
+    const uint8 odd[] = {0x22u, 0xabu, 0xcdu, 0x12u};
+    const uint8 expected[] = {0x62u, 0x12u, 0x34u, 0x12u, 0x34u, 0x56u, 0x78u};
+    limited.buffer_length = 8u;
+    Dcm_Init(&limited);
+    Dcm_ComM_FullComModeEntered(CHANNEL);
+    unsigned before = reads;
+    read_mode = READ_FAIL;
+    negative(repeated, sizeof(repeated), 0x14u);
+    assert(reads == before);
+    negative(odd, sizeof(odd), 0x13u);
+    assert(reads == before);
+    limited.max_did_to_read = 1u;
+    Dcm_Init(&limited);
+    Dcm_ComM_FullComModeEntered(CHANNEL);
+    negative(mixed, sizeof(mixed), 0x13u);
+    assert(reads == before);
+    limited.max_did_to_read = 2u;
+    Dcm_Init(&limited);
+    Dcm_ComM_FullComModeEntered(CHANNEL);
+    read_mode = READ_OK;
+    exchange(mixed, sizeof(mixed));
+    expect(expected, sizeof(expected));
+    assert(reads == before + 1u);
+    /* Exactly 1 SID + 2 * (2 DID + 4 data) bytes must fit. */
+    limited.buffer_length = 13u;
+    Dcm_Init(&limited);
+    Dcm_ComM_FullComModeEntered(CHANNEL);
+    before = reads;
+    exchange(repeated, sizeof(repeated));
+    assert(sent_length == 13u && reads == before + 2u);
+    assert(memcmp(sent + 1u, sent + 7u, 6u) == 0);
+    limited.buffer_length = 12u;
+    Dcm_Init(&limited);
+    Dcm_ComM_FullComModeEntered(CHANNEL);
+    before = reads;
+    negative(repeated, sizeof(repeated), 0x14u);
+    assert(reads == before);
+    start();
+}
 static void failure_and_dispatch(void)
 {
     /* Verifies: SWS_Dcm_00273, SWS_Dcm_00696, SWS_Dcm_00272
@@ -315,6 +362,126 @@ static void sessions_and_keepalive(void)
     reset_from_mode = TRUE;
     exchange(suppressed, sizeof(suppressed));
     assert(Dcm_GetSesCtrlType(&session) == E_OK && session == 1u && published_mode == 0u);
+}
+static void ticks(unsigned count)
+{
+    for (unsigned i = 0u; i < count; ++i) {
+        Dcm_MainFunction();
+    }
+}
+static void expect_session(uint8 expected)
+{
+    Dcm_SesCtrlType value = 99u;
+    assert(Dcm_GetSesCtrlType(&value) == E_OK && value == expected);
+}
+static void enter_extended(void)
+{
+    const uint8 extended[] = {0x10u, 3u};
+    const uint8 expected[] = {0x50u, 3u, 0u, 50u, 1u, 0xf4u};
+    start();
+    exchange(extended, sizeof(extended));
+    expect(expected, sizeof(expected));
+    expect_session(3u);
+}
+/* ISO 14229-2:2021 7.3/7.5, 9.5 Table 6, 9.7 Table 10, 10.1.4.2 Figure 13.
+ * Verifies: SWS_Dcm_01671, SWS_Dcm_01668, SWS_Dcm_00030
+ */
+static void session_transport_boundaries(void)
+{
+    const uint8 read[] = {0x22u, 0xf1u, 0x86u};
+    const uint8 keepalive[] = {0x3eu, 0x80u};
+    const uint8 unsupported[] = {0x2eu};
+    const uint8 repeat_session[] = {0x10u, 0x83u};
+    PduLengthType available = 999u;
+    enter_extended();
+    ticks(4u);
+    unsigned before = transmissions;
+    exchange(repeat_session, sizeof(repeat_session));
+    assert(transmissions == before);
+    ticks(4u);
+    expect_session(3u);
+    assert(Dcm_StartOfReception(RX, NULL_PTR, 9u, &available) == BUFREQ_OK);
+    Dcm_TpRxIndication(RX + 1u, E_NOT_OK);
+    ticks(6u); /* S3 is stopped at SOM, before reception completes. */
+    expect_session(3u);
+    before = transmissions;
+    Dcm_TpRxIndication(RX, E_NOT_OK);
+    ticks(4u);
+    expect_session(3u);
+    assert(transmissions == before);
+    Dcm_MainFunction();
+    expect_session(1u);
+    enter_extended();
+    ticks(4u);
+    synchronous = FALSE;
+    exchange(read, sizeof(read));
+    Dcm_TpTxConfirmation(TX + 1u, E_NOT_OK);
+    ticks(6u); /* S3 remains stopped until the final response confirmation. */
+    expect_session(3u);
+    before = transmissions;
+    Dcm_TpTxConfirmation(TX, E_NOT_OK);
+    ticks(4u);
+    expect_session(3u);
+    Dcm_MainFunction();
+    expect_session(1u);
+    assert(transmissions == before); /* Failed transmission is never retried. */
+    synchronous = TRUE;
+    enter_extended();
+    ticks(4u);
+    before = transmissions;
+    exchange(keepalive, sizeof(keepalive));
+    assert(transmissions == before);
+    ticks(4u);
+    expect_session(3u);
+    negative(unsupported, sizeof(unsupported), 0x11u);
+    ticks(4u); /* Even an unsupported service renews this connection's S3. */
+    expect_session(3u);
+    Dcm_MainFunction();
+    expect_session(1u);
+}
+/* The only accepted connection owns S3; rejected foreign indications cannot renew it.
+ * Verifies: SWS_Dcm_01669
+ */
+static void session_connection_identity(void)
+{
+    PduLengthType available = 999u;
+    enter_extended();
+    ticks(4u);
+    assert(Dcm_StartOfReception(RX + 1u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK);
+    assert(available == 999u);
+    Dcm_TpRxIndication(RX + 1u, E_NOT_OK);
+    Dcm_TpTxConfirmation(TX + 1u, E_OK);
+    Dcm_MainFunction();
+    expect_session(1u);
+}
+/* ISO 14229-2:2021 9.1.1/9.2, R24-11 00143/01142: final response within P2,
+ * or retire an answer whose FullCom gate stayed closed; no asynchronous NRC 0x78.
+ * Verifies: SWS_Dcm_00027
+ */
+static void response_deadline(void)
+{
+    const uint8 tester[] = {0x3eu, 0u};
+    const uint8 expected[] = {0x7eu, 0u};
+    start();
+    Dcm_ComM_SilentComModeEntered(CHANNEL);
+    unsigned before = transmissions;
+    receive(tester, sizeof(tester));
+    ticks(3u);
+    assert(transmissions == before);
+    Dcm_ComM_FullComModeEntered(CHANNEL);
+    Dcm_MainFunction();
+    assert(transmissions == before + 1u);
+    expect(expected, sizeof(expected));
+    Dcm_ComM_SilentComModeEntered(CHANNEL);
+    before = transmissions;
+    receive(tester, sizeof(tester));
+    ticks(4u);
+    Dcm_ComM_FullComModeEntered(CHANNEL);
+    Dcm_MainFunction();
+    assert(transmissions == before);
+    exchange(tester, sizeof(tester));
+    assert(transmissions == before + 1u);
+    expect(expected, sizeof(expected));
 }
 static void gates_and_reentrancy(void)
 {
@@ -468,8 +635,12 @@ int main(void)
     assert(security_get(&security) == E_OK && security == 0u);
     admission_and_copy();
     ordered_reads_and_limits();
+    read_validation_priority();
     failure_and_dispatch();
     sessions_and_keepalive();
+    session_transport_boundaries();
+    session_connection_identity();
+    response_deadline();
     gates_and_reentrancy();
     obd_data_and_availability();
     lower_lifetime();
