@@ -44,6 +44,7 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0016-essential-boolean-controls.patch",
     "runtime/os/patches/0017-portable-header-paths.patch",
     "runtime/os/patches/0018-windows-thread-setup-errors.patch",
+    "runtime/os/patches/0019-windows-native-handoff-errors.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",

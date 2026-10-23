@@ -52,6 +52,7 @@
     "runtime/os/patches/0015-typed-port-state.patch": "05a05c349cb59b63e176ccd104ccad89ba0bbcc915c513f2f9fb3e26dbcd8898",
     "runtime/os/patches/0016-essential-boolean-controls.patch": "82ecf312546b9dbc1fb1b4a20a351bee930f19cf460f5e3e7d6a7ce6e7b18cc6",
     "runtime/os/patches/0017-portable-header-paths.patch": "7d408cb149a895028fc254e6091d27d644bd12632a71ba6fb7429ac9ff6b398d",
-    "runtime/os/patches/0018-windows-thread-setup-errors.patch": "57f44144b74b2fa246400a272ec7474533ee1eead627e2af2b37d254c98b6108"
+    "runtime/os/patches/0018-windows-thread-setup-errors.patch": "57f44144b74b2fa246400a272ec7474533ee1eead627e2af2b37d254c98b6108",
+    "runtime/os/patches/0019-windows-native-handoff-errors.patch": "fdddb1d4889dd848b4a44df47b8d06245c31a3285d104b7d5b9090f14efa07cf"
   }
 }
