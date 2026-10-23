@@ -45,9 +45,9 @@ OS_MEMMAP const uint64 Os_ArtiNativeContextSize =
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
-OS_MEMMAP static union {
-    long double alignment;
-    unsigned char bytes[OS_ALTSTACK_BYTES];
+OS_MEMMAP static struct {
+    /* Alignment-only backing storage; never read as floating point. */
+    long double storage[OS_ALTSTACK_BYTES / sizeof(long double)];
 } altstacks[OS_NATIVE_STACKS]; /**< Actor-owned alternate signal stacks; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
@@ -270,8 +270,8 @@ OS_MEMMAP int Os_StackRegister(char role)
         if (registration_stack_range(role, &low, &high, &guard) != 0) {
             if ((low < high) && (guard < (high - low))) {
                 record = &stacks[index];
-                alternate.ss_sp = altstacks[index].bytes;
-                alternate.ss_size = sizeof(altstacks[index].bytes);
+                alternate.ss_sp = altstacks[index].storage;
+                alternate.ss_size = sizeof(altstacks[index].storage);
                 alternate.ss_flags = 0;
                 if (Os_LinuxAltStack(&alternate) == 0) {
                     record->thread_id = GetCurrentThreadId();

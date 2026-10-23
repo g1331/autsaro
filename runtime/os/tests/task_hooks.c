@@ -28,7 +28,8 @@ static bool internal; /**< Main-owned internal selection before StartOS; no Init
 static void check(bool condition)
 {
     if (!condition) {
-        ShutdownOS(E_OS_STATE);
+        /* Hook assertions must not depend on permission to call an OS service. */
+        ExitProcess(E_OS_STATE);
     }
 }
 static void record(char code)
@@ -42,6 +43,11 @@ static void task_hook(char code)
     TaskType id = INVALID_TASK;
     TaskStateType state = 99u;
     TASK_HOOK_OBSERVER();
+    if (((code == 'p') && (strcmp(scenario, "assert-pre") == 0)) ||
+        ((code == 'q') && (strcmp(scenario, "assert-post") == 0))) {
+        (void)fprintf(stderr, "hook_assertion context=%c\n", code);
+        check(false);
+    }
     TickType value = UINT64_MAX;
     Os_ActivationInfoType info;
     check(GetTaskID(&id) == E_OK && id < 3u);

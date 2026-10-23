@@ -1612,6 +1612,12 @@ def check_task_hooks(binary: Path) -> list[dict]:
         require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
         result["independent_expected_task_transition_trace"] = trace
         observations.append(result)
+    for scenario, context in [("assert-pre", "p"), ("assert-post", "q")]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 7, result)
+        require(result["stderr"] == f"hook_assertion context={context}", result)
+        require("task_hooks scenario=" not in result["stdout"], result)
+        observations.append(result)
     return observations
 
 

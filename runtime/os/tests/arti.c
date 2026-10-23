@@ -87,6 +87,7 @@ static void observed_hook(void)
         const Os_NativeStackType *native = Os_ArtiTaskStacks[id];
         const CONTEXT *saved = Os_ArtiTaskContexts[id];
         check(native->context_valid == 1u && native->altstack_size >= 65536u);
+        check((native->altstack_low % __alignof__(long double)) == 0u);
         check(native->kernel_buffer_low < native->kernel_buffer_high);
         check(native->kernel_buffer_high <= native->reserve_low ||
               native->kernel_buffer_low >= native->high);
