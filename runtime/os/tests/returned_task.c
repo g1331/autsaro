@@ -24,7 +24,7 @@ static unsigned length; /**< Used execution-order bytes; fixture-owned, no Init 
 static void check(bool condition)
 {
     if (!condition) {
-        ShutdownOS(E_OS_STATE);
+        ExitProcess(E_OS_STATE);
     }
 }
 static void record(char marker)
@@ -56,12 +56,20 @@ void ErrorHook(StatusType error)
 }
 void PreTaskHook(void)
 {
+    if (strcmp(scenario, "assert-pre") == 0) {
+        (void)fprintf(stderr, "hook_assertion context=p\n");
+        check(false);
+    }
     const TaskType id = running();
     record('p');
     record((char)('0' + id));
 }
 void PostTaskHook(void)
 {
+    if (strcmp(scenario, "assert-post") == 0) {
+        (void)fprintf(stderr, "hook_assertion context=q\n");
+        check(false);
+    }
     const TaskType id = running();
     Os_ActivationInfoType info;
     check(Os_TargetInspectActivation(id, &info) == E_OK && info.resource_count == 0u);

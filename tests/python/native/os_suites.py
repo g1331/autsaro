@@ -1456,6 +1456,12 @@ def check_returned_task(binary: Path) -> list[dict]:
         require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
         result["independent_expected_activation_cleanup"] = [entries, errors, helper, trace]
         observations.append(result)
+    for scenario, context in [("assert-pre", "p"), ("assert-post", "q")]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 7, result)
+        require(result["stderr"] == f"hook_assertion context={context}", result)
+        require("returned scenario=" not in result["stdout"], result)
+        observations.append(result)
     return observations
 
 
