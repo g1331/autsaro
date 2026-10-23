@@ -1,0 +1,33 @@
+name: Native restart experiment
+on:
+  push:
+    branches: [fix/host-task-restart-port]
+    paths: [runtime/os/tests/port_restart_probe.c, .github/workflows/port-experiment.yml]
+permissions:
+  contents: read
+jobs:
+  port:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --locked
+      - uses: ./.github/actions/native-analysis-compiler
+      - name: Native unwind proof
+        shell: bash
+        run: |
+          gcc -std=c99 -O2 -Wall -Wextra -Werror -fexceptions -fcf-protection=full runtime/os/tests/port_restart_probe.c -o port-probe
+          ./port-probe
+      - name: Actual Linux CET capability and execution
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          lscpu
+          ./port-probe cet
