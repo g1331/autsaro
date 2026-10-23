@@ -216,4 +216,32 @@ class NativeFacilityTests(unittest.TestCase):
                         self.assertIn("native-stack CET status=1 result=0", cet.stdout)
                         self.assertIn("native-stack depth=50000 completed", cet.stdout)
                         self.assertEqual(cet.stderr, "")
+                        self.assertGreaterEqual(int(cet.stdout.split(" shadow=", 1)[1].split()[0]), 50001 * 8)
                         print(cet.stdout, end="", flush=True)
+                        # Confirm the capacity repair on the same hardware and execution stack.
+                        mutant_target = directory / "small-shadow-target"
+                        shutil.copytree(target, mutant_target)
+                        host = mutant_target / "src/host/linux/Os_HostLinux.c"
+                        source = host.read_text(encoding="utf-8")
+                        selected = "(reserve > OS_HOST_DEFAULT_STACK) ? reserve : OS_HOST_DEFAULT_STACK"
+                        self.assertEqual(source.count(selected), 1)
+                        host.write_text(source.replace(selected, "OS_HOST_DEFAULT_STACK"), encoding="utf-8")
+                        mutant_output = directory / "small-shadow-output"
+                        mutant_output.mkdir(mode=0o700)
+                        mutant, _ = os_suites.build(
+                            mutant_output, str(ROOT / "tests/fixtures/os_native_facilities.c"),
+                            target=mutant_target,
+                        )
+                        small = os_suites.run_native([str(mutant), "cet-depth"], timeout=15)
+                        self.assertIn("native-stack CET status=1 result=0", small.stdout)
+                        shadow = int(small.stdout.split(" shadow=", 1)[1].split()[0])
+                        if small.returncode == 0:
+                            # Legacy clone allocates from RLIMIT_STACK instead of pthread size.
+                            self.assertIn("native-stack depth=50000 completed", small.stdout)
+                            self.assertGreaterEqual(shadow, 50001 * 8)
+                            print("native-stack capacity mutation not_assessed: kernel already supplies sufficient shadow stack", flush=True)
+                        else:
+                            self.assertEqual(small.returncode, -11, small)
+                            self.assertLess(shadow, 50001 * 8)
+                            self.assertNotIn("native-stack depth=50000 completed", small.stdout)
+                            print(f"native-stack capacity mutation exit={small.returncode} {small.stdout}", end="", flush=True)
