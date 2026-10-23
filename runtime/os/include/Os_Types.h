@@ -121,8 +121,9 @@ typedef void *MemoryStartAddressType;
 typedef uint64 MemorySizeType;
 /** SWS_Os_00782 logical ISR identifier; INVALID_ISR means no active Category 2 ISR. */
 typedef uint8 ISRType;
-#define INVALID_ISR  UINT8_MAX /**< SWS_Os_00782: no active Category 2 ISR. */
-#define INVALID_TASK UINT8_MAX /**< OSEK OS 2.2.3 13.2.3.5: no currently running Task. */
+#define INVALID_ISR ((ISRType)UINT8_MAX) /**< SWS_Os_00782: no active Category 2 ISR. */
+#define INVALID_TASK                                                                               \
+    ((TaskType)UINT8_MAX) /**< OSEK OS 2.2.3 13.2.3.5: no currently running Task. */
 /** SWS_Os_00787 protection decision; protection services are not selected in SC1. */
 typedef uint8 ProtectionReturnType;
 #define PRO_IGNORE                                                                                 \

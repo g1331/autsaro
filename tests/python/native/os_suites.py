@@ -249,6 +249,9 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
             ("0003-activation-ready-policy.patch", ("tasks.c", "include/task.h", "include/FreeRTOS.h")),
             ("0007-controlled-tick.patch", ("tasks.c",)),
             ("0008-task-hook-boundaries.patch", ("tasks.c",)),
+            ("0015-typed-port-state.patch", ("tasks.c", "include/task.h", "include/FreeRTOS.h", "queue.c", "include/queue.h")),
+            ("0016-essential-boolean-controls.patch", ("tasks.c", "queue.c", "include/list.h", "include/task.h")),
+            ("0017-portable-header-paths.patch", ("include/deprecated_definitions.h",)),
         ):
             patch = target / "patches" / name
             selection = [f"--include={path}" for path in includes]
@@ -871,6 +874,11 @@ def check_lifecycle(binary: Path) -> list[dict]:
         require(result["exit"] == 0 and f"trace={trace} " in result["stdout"], result)
         require("input_closed=1 tick_closed=1" in result["stdout"], result)
         require("FORBIDDEN" not in result["stdout"], result)
+        resources = re.search(
+            r"threads=(\d+) events=(\d+) mutexes=(\d+) resource_calls=(\d+) ", result["stdout"]
+        )
+        require(resources is not None, result)
+        require(int(resources[4]) == sum(map(int, resources.group(1, 2, 3))), result)
         observations.append(result)
     for scenario, code in [
         ("zero-count", 8),
@@ -1797,6 +1805,13 @@ def check_vector_mutations(directory: Path) -> None:
                     "+static uint32_t (*unbound_handlers[PORT_INTERRUPT_COUNT])(void);\n",
                 )
                 patch.write_text(text, encoding="utf-8")
+                # Keep later patch contexts bound to the same private mutant table.
+                for followup in sorted((target / "patches/linux").glob("*.patch")):
+                    if followup != patch:
+                        source = followup.read_text(encoding="utf-8")
+                        followup.write_text(
+                            source.replace(old, "unbound_handlers[interrupt]"), encoding="utf-8",
+                        )
             else:
                 (target / "patches/0014-relocatable-interrupt-vectors.patch").unlink()
             mutant, _ = build(output, "entry_bodies.c", target=target)
@@ -1816,7 +1831,8 @@ def check_vector_mutations(directory: Path) -> None:
                 raise AssertionError("missing vector section passed its linked contract check")
 
 
-def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
+def verify_code_section(binary: Path, tool: Path, names: list[str],
+                        local_names: tuple[str, ...] = ()) -> None:
     output = run_native([str(tool), "-h", str(binary)], capture_output=True,
                             text=True, check=True).stdout
     code = list(re.finditer(
@@ -1829,10 +1845,11 @@ def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
         raise ValueError("OS entry section must be allocated read-only executable code")
     symbols = run_native([str(tool), "-t", str(binary)], capture_output=True,
                              text=True, check=True).stdout
-    for name in names:
+    for name in (*names, *local_names):
         if _TARGET_ID.get() == "linux-x64-controlled-v1":
+            binding = "l" if name in local_names else "g"
             functions = re.findall(
-                r"^[0-9a-fA-F]+\s+g\s+F\s+\.os_code\s+[0-9a-fA-F]+\s+"
+                r"^[0-9a-fA-F]+\s+" + binding + r"\s+F\s+\.os_code\s+[0-9a-fA-F]+\s+"
                 + re.escape(name) + r"$", symbols, re.MULTILINE,
             )
             if len(functions) != 1:
@@ -1844,6 +1861,8 @@ def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
             ))
             if len(functions) != 1 or int(functions[0][1]) != int(code[0][1]) + 1:
                 raise ValueError(f"PE OS entry is outside its code section: {name}")
+            if name in local_names and re.search(r"\(scl\s+3\)", functions[0][0]) is None:
+                raise ValueError(f"PE OS continuation must be local: {name}")
 
 
 def check_counter_service(directory: Path, project: Path, counter: str) -> None:
@@ -2152,7 +2171,8 @@ def check_port_restart(directory: Path) -> None:
             print("port-restart CET PASS: active SSP and actual Task/TCB/stack/ARTI/hooks", flush=True)
 
     tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
-    verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartLanding", "Os_PortRestart"])
+    verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartAddress", "Os_PortRestart"],
+                        local_names=("Os_PortRestartLanding",))
     print("port-restart PASS: native unwind; 10000 stable physical-stack entries", flush=True)
 
 
@@ -2239,6 +2259,8 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
             for failure in ("invalid", 1):
                 observation = execute(production, "normal", failure, invalid_stack="S")
                 require(observation["exit"] == 0 and "trace=ISRAD " in observation["stdout"], observation)
+                calls = observations[0]["stdout"].split("resource_calls=")[1].split()[0]
+                require(f"resource_calls={calls} " in observation["stdout"], observation)
                 observation["production_resource_injection_disabled"] = True
                 observations.append(observation)
         if suite == "stack":

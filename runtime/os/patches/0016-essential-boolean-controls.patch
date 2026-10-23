@@ -1,0 +1,785 @@
+--- a/tasks.c
++++ b/tasks.c
+@@ -83,7 +83,7 @@
+     do {                                                         \
+         ( void ) ( pxTCB );                                      \
+         portYIELD_WITHIN_API();                                  \
+-    } while( 0 )
++    } while( false )
+ 
+         #define taskYIELD_ANY_CORE_IF_USING_PREEMPTION( pxTCB ) \
+     do {                                                        \
+@@ -95,7 +95,7 @@
+         {                                                       \
+             mtCOVERAGE_TEST_MARKER();                           \
+         }                                                       \
+-    } while( 0 )
++    } while( false )
+ 
+     #else /* if ( configNUMBER_OF_CORES == 1 ) */
+ 
+@@ -189,7 +189,7 @@
+         {                                           \
+             uxTopReadyPriority = ( uxPriority );    \
+         }                                           \
+-    } while( 0 ) /* taskRECORD_READY_PRIORITY */
++    } while( false ) /* taskRECORD_READY_PRIORITY */
+ 
+ /*-----------------------------------------------------------*/
+ 
+@@ -204,7 +204,7 @@
+         TCB_t * pxOsSelected = listGET_OWNER_OF_HEAD_ENTRY( list );     \
+         traceOS_TASK_SELECTED( ( target ), pxOsSelected );              \
+         ( target ) = pxOsSelected;                                     \
+-    } while( 0 )
++    } while( false )
+     #define taskOS_INSERT_READY( task ) prvOsInsertReadyTask( task )
+ #else
+     #define taskOS_SELECT_READY( target, list ) listGET_OWNER_OF_NEXT_ENTRY( target, list )
+@@ -219,7 +219,7 @@
+         /* Find the highest priority queue that contains ready tasks. */                 \
+         while( listLIST_IS_EMPTY( &( pxReadyTasksLists[ uxTopPriority ] ) ) != pdFALSE ) \
+         {                                                                                \
+-            configASSERT( uxTopPriority );                                               \
++            configASSERT( uxTopPriority != 0U );                                               \
+             --uxTopPriority;                                                             \
+         }                                                                                \
+                                                                                          \
+@@ -227,7 +227,7 @@
+          * the  same priority get an equal share of the processor time. */                    \
+         taskOS_SELECT_READY( pxCurrentTCB, &( pxReadyTasksLists[ uxTopPriority ] ) ); \
+         uxTopReadyPriority = uxTopPriority;                                                   \
+-    } while( 0 ) /* taskSELECT_HIGHEST_PRIORITY_TASK */
++    } while( false ) /* taskSELECT_HIGHEST_PRIORITY_TASK */
+     #else /* if ( configNUMBER_OF_CORES == 1 ) */
+ 
+         #define taskSELECT_HIGHEST_PRIORITY_TASK( xCoreID )    prvSelectHighestPriorityTask( xCoreID )
+@@ -261,7 +261,7 @@
+         portGET_HIGHEST_PRIORITY( uxTopPriority, uxTopReadyPriority );                          \
+         configASSERT( listCURRENT_LIST_LENGTH( &( pxReadyTasksLists[ uxTopPriority ] ) ) > 0 ); \
+         listGET_OWNER_OF_NEXT_ENTRY( pxCurrentTCB, &( pxReadyTasksLists[ uxTopPriority ] ) );   \
+-    } while( 0 )
++    } while( false )
+ 
+ /*-----------------------------------------------------------*/
+ 
+@@ -274,7 +274,7 @@
+         {                                                                                              \
+             portRESET_READY_PRIORITY( ( uxPriority ), ( uxTopReadyPriority ) );                        \
+         }                                                                                              \
+-    } while( 0 )
++    } while( false )
+ 
+ #endif /* configUSE_PORT_OPTIMISED_TASK_SELECTION */
+ 
+@@ -287,14 +287,14 @@
+         List_t * pxTemp;                                                          \
+                                                                                   \
+         /* The delayed tasks list should be empty when the lists are switched. */ \
+-        configASSERT( ( listLIST_IS_EMPTY( pxDelayedTaskList ) ) );               \
++        configASSERT( listLIST_IS_EMPTY( pxDelayedTaskList ) != pdFALSE );               \
+                                                                                   \
+         pxTemp = pxDelayedTaskList;                                               \
+         pxDelayedTaskList = pxOverflowDelayedTaskList;                            \
+         pxOverflowDelayedTaskList = pxTemp;                                       \
+         xNumOfOverflows = ( BaseType_t ) ( xNumOfOverflows + 1 );                 \
+         prvResetNextTaskUnblockTime();                                            \
+-    } while( 0 )
++    } while( false )
+ 
+ /*-----------------------------------------------------------*/
+ 
+@@ -308,7 +308,7 @@
+         taskRECORD_READY_PRIORITY( ( pxTCB )->uxPriority );                                                \
+         taskOS_INSERT_READY( pxTCB ); \
+         tracePOST_MOVED_TASK_TO_READY_STATE( pxTCB );                                                      \
+-    } while( 0 )
++    } while( false )
+ /*-----------------------------------------------------------*/
+ 
+ /*
+@@ -383,7 +383,7 @@
+                 pxCurrentTCBs[ ( xCoreID ) ]->xTaskRunState = taskTASK_SCHEDULED_TO_YIELD;   \
+             }                                                                                \
+         }                                                                                    \
+-    } while( 0 )
++    } while( false )
+ #endif /* #if ( configNUMBER_OF_CORES > 1 ) */
+ /*-----------------------------------------------------------*/
+ 
+@@ -1454,7 +1454,7 @@
+     {
+         TCB_t * pxNewTCB;
+ 
+-        configASSERT( pxTaskDefinition->puxStackBuffer );
++        configASSERT( pxTaskDefinition->puxStackBuffer != NULL );
+ 
+         if( pxTaskDefinition->puxStackBuffer != NULL )
+         {
+@@ -2314,7 +2314,7 @@
+ 
+         traceENTER_xTaskPeriodicDelay( pxPreviousWakeTime, xTimeIncrement );
+ 
+-        configASSERT( pxPreviousWakeTime );
++        configASSERT( pxPreviousWakeTime != NULL );
+         configASSERT( ( xTimeIncrement > 0U ) );
+ 
+         vTaskSuspendAll();
+@@ -2364,7 +2364,7 @@
+ 
+         traceENTER_xTaskDelayUntil( pxPreviousWakeTime, xTimeIncrement );
+ 
+-        configASSERT( pxPreviousWakeTime );
++        configASSERT( pxPreviousWakeTime != NULL );
+         configASSERT( ( xTimeIncrement > 0U ) );
+ 
+         vTaskSuspendAll();
+@@ -3316,7 +3316,7 @@
+          * section. */
+ 
+         /* It does not make sense to check if the calling task is suspended. */
+-        configASSERT( xTask );
++        configASSERT( xTask != NULL );
+ 
+         /* Is the task being resumed actually in the suspended list? */
+         if( listIS_CONTAINED_WITHIN( &xSuspendedTaskList, &( pxTCB->xStateListItem ) ) != pdFALSE )
+@@ -3384,7 +3384,7 @@
+         traceENTER_vTaskResume( xTaskToResume );
+ 
+         /* It does not make sense to resume the calling task. */
+-        configASSERT( xTaskToResume );
++        configASSERT( xTaskToResume != NULL );
+ 
+         #if ( configNUMBER_OF_CORES == 1 )
+ 
+@@ -3446,7 +3446,7 @@
+ 
+         traceENTER_xTaskResumeFromISR( xTaskToResume );
+ 
+-        configASSERT( xTaskToResume );
++        configASSERT( xTaskToResume != NULL );
+ 
+         /* RTOS ports that support interrupt nesting have the concept of a
+          * maximum  system call (or maximum API call) interrupt priority.
+@@ -4164,8 +4164,8 @@
+ void vTaskOsTestTick( TickType_t tick )
+ {
+     taskENTER_CRITICAL();
+-    configASSERT( listLIST_IS_EMPTY( pxDelayedTaskList ) );
+-    configASSERT( listLIST_IS_EMPTY( pxOverflowDelayedTaskList ) );
++    configASSERT( listLIST_IS_EMPTY( pxDelayedTaskList ) != pdFALSE );
++    configASSERT( listLIST_IS_EMPTY( pxOverflowDelayedTaskList ) != pdFALSE );
+     configASSERT( xPendedTicks == 0 );
+     xTickCount = tick;
+     xNumOfOverflows = 0;
+@@ -5368,7 +5368,7 @@
+ {
+     traceENTER_vTaskPlaceOnEventList( pxEventList, xTicksToWait );
+ 
+-    configASSERT( pxEventList );
++    configASSERT( pxEventList != NULL );
+ 
+     /* THIS FUNCTION MUST BE CALLED WITH THE
+      * SCHEDULER SUSPENDED AND THE QUEUE BEING ACCESSED LOCKED. */
+@@ -5398,7 +5398,7 @@
+ {
+     traceENTER_vTaskPlaceOnUnorderedEventList( pxEventList, xItemValue, xTicksToWait );
+ 
+-    configASSERT( pxEventList );
++    configASSERT( pxEventList != NULL );
+ 
+     /* THIS FUNCTION MUST BE CALLED WITH THE SCHEDULER SUSPENDED.  It is used by
+      * the event groups implementation. */
+@@ -5430,7 +5430,7 @@
+     {
+         traceENTER_vTaskPlaceOnEventListRestricted( pxEventList, xTicksToWait, xWaitIndefinitely );
+ 
+-        configASSERT( pxEventList );
++        configASSERT( pxEventList != NULL );
+ 
+         /* This function should not be called by application code hence the
+          * 'Restricted' in its name.  It is not part of the public API.  It is
+@@ -5485,7 +5485,7 @@
+     /* More details at: https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/main/MISRA.md#rule-115 */
+     /* coverity[misra_c_2012_rule_11_5_violation] */
+     pxUnblockedTCB = listGET_OWNER_OF_HEAD_ENTRY( pxEventList );
+-    configASSERT( pxUnblockedTCB );
++    configASSERT( pxUnblockedTCB != NULL );
+     listREMOVE_ITEM( &( pxUnblockedTCB->xEventListItem ) );
+ 
+     if( uxSchedulerSuspended == ( UBaseType_t ) 0U )
+@@ -5574,7 +5574,7 @@
+     /* More details at: https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/main/MISRA.md#rule-115 */
+     /* coverity[misra_c_2012_rule_11_5_violation] */
+     pxUnblockedTCB = listGET_LIST_ITEM_OWNER( pxEventListItem );
+-    configASSERT( pxUnblockedTCB );
++    configASSERT( pxUnblockedTCB != NULL );
+     listREMOVE_ITEM( pxEventListItem );
+ 
+     #if ( configUSE_TICKLESS_IDLE != 0 )
+@@ -5630,7 +5630,7 @@
+ {
+     traceENTER_vTaskSetTimeOutState( pxTimeOut );
+ 
+-    configASSERT( pxTimeOut );
++    configASSERT( pxTimeOut != NULL );
+     taskENTER_CRITICAL();
+     {
+         pxTimeOut->xOverflowCount = xNumOfOverflows;
+@@ -5661,8 +5661,8 @@
+ 
+     traceENTER_xTaskCheckForTimeOut( pxTimeOut, pxTicksToWait );
+ 
+-    configASSERT( pxTimeOut );
+-    configASSERT( pxTicksToWait );
++    configASSERT( pxTimeOut != NULL );
++    configASSERT( pxTicksToWait != NULL );
+ 
+     taskENTER_CRITICAL();
+     {
+@@ -6823,7 +6823,7 @@
+              * interrupt, and if a mutex is given by the holding task then it must
+              * be the running state task. */
+             configASSERT( pxTCB == pxCurrentTCB );
+-            configASSERT( pxTCB->uxMutexesHeld );
++            configASSERT( pxTCB->uxMutexesHeld != 0U );
+             ( pxTCB->uxMutexesHeld )--;
+ 
+             /* Has the holder of the mutex inherited the priority of another
+@@ -6916,7 +6916,7 @@
+         {
+             /* If pxMutexHolder is not NULL then the holder must hold at least
+              * one mutex. */
+-            configASSERT( pxTCB->uxMutexesHeld );
++            configASSERT( pxTCB->uxMutexesHeld != 0U );
+ 
+             /* Determine the priority to which the priority of the task that
+              * holds the mutex should be set.  This will be the greater of the
+@@ -7987,7 +7987,7 @@
+         traceENTER_xTaskGenericNotify( xTaskToNotify, uxIndexToNotify, ulValue, eAction, pulPreviousNotificationValue );
+ 
+         configASSERT( uxIndexToNotify < configTASK_NOTIFICATION_ARRAY_ENTRIES );
+-        configASSERT( xTaskToNotify );
++        configASSERT( xTaskToNotify != NULL );
+         pxTCB = xTaskToNotify;
+ 
+         taskENTER_CRITICAL();
+@@ -8108,7 +8108,7 @@
+ 
+         traceENTER_xTaskGenericNotifyFromISR( xTaskToNotify, uxIndexToNotify, ulValue, eAction, pulPreviousNotificationValue, pxHigherPriorityTaskWoken );
+ 
+-        configASSERT( xTaskToNotify );
++        configASSERT( xTaskToNotify != NULL );
+         configASSERT( uxIndexToNotify < configTASK_NOTIFICATION_ARRAY_ENTRIES );
+ 
+         /* RTOS ports that support interrupt nesting have the concept of a
+@@ -8286,7 +8286,7 @@
+ 
+         traceENTER_vTaskGenericNotifyGiveFromISR( xTaskToNotify, uxIndexToNotify, pxHigherPriorityTaskWoken );
+ 
+-        configASSERT( xTaskToNotify );
++        configASSERT( xTaskToNotify != NULL );
+         configASSERT( uxIndexToNotify < configTASK_NOTIFICATION_ARRAY_ENTRIES );
+ 
+         /* RTOS ports that support interrupt nesting have the concept of a
+--- a/queue.c
++++ b/queue.c
+@@ -235,7 +235,7 @@
+             configASSERT( ( cTxLock ) != queueINT8_MAX );                     \
+             ( pxQueue )->cTxLock = ( int8_t ) ( ( cTxLock ) + ( int8_t ) 1 ); \
+         }                                                                     \
+-    } while( 0 )
++    } while( false )
+ 
+ /*
+  * Macro to increment cRxLock member of the queue data structure. It is
+@@ -250,7 +250,7 @@
+             configASSERT( ( cRxLock ) != queueINT8_MAX );                     \
+             ( pxQueue )->cRxLock = ( int8_t ) ( ( cRxLock ) + ( int8_t ) 1 ); \
+         }                                                                     \
+-    } while( 0 )
++    } while( false )
+ /*-----------------------------------------------------------*/
+ 
+ BaseType_t xQueueGenericReset( QueueHandle_t xQueue,
+@@ -261,7 +261,7 @@
+ 
+     traceENTER_xQueueGenericReset( xQueue, xNewQueue );
+ 
+-    configASSERT( pxQueue );
++    configASSERT( pxQueue != NULL );
+ 
+     if( ( pxQueue != NULL ) &&
+         ( pxQueue->uxLength >= 1U ) &&
+@@ -338,7 +338,7 @@
+ 
+         /* The StaticQueue_t structure and the queue storage area must be
+          * supplied. */
+-        configASSERT( pxStaticQueue );
++        configASSERT( pxStaticQueue != NULL );
+ 
+         if( ( uxQueueLength > ( UBaseType_t ) 0 ) &&
+             ( pxStaticQueue != NULL ) &&
+@@ -382,7 +382,7 @@
+         }
+         else
+         {
+-            configASSERT( pxNewQueue );
++            configASSERT( pxNewQueue != NULL );
+             mtCOVERAGE_TEST_MARKER();
+         }
+ 
+@@ -405,8 +405,8 @@
+ 
+         traceENTER_xQueueGenericGetStaticBuffers( xQueue, ppucQueueStorage, ppxStaticQueue );
+ 
+-        configASSERT( pxQueue );
+-        configASSERT( ppxStaticQueue );
++        configASSERT( pxQueue != NULL );
++        configASSERT( ppxStaticQueue != NULL );
+ 
+         #if ( configSUPPORT_DYNAMIC_ALLOCATION == 1 )
+         {
+@@ -507,7 +507,7 @@
+         }
+         else
+         {
+-            configASSERT( pxNewQueue );
++            configASSERT( pxNewQueue != NULL );
+             mtCOVERAGE_TEST_MARKER();
+         }
+ 
+@@ -649,7 +649,7 @@
+ 
+         traceENTER_xQueueGetMutexHolder( xSemaphore );
+ 
+-        configASSERT( xSemaphore );
++        configASSERT( xSemaphore != NULL );
+ 
+         /* This function is called by xSemaphoreGetMutexHolder(), and should not
+          * be called directly.  Note:  This is a good way of determining if the
+@@ -685,7 +685,7 @@
+ 
+         traceENTER_xQueueGetMutexHolderFromISR( xSemaphore );
+ 
+-        configASSERT( xSemaphore );
++        configASSERT( xSemaphore != NULL );
+ 
+         /* Mutexes cannot be used in interrupt service routines, so the mutex
+          * holder should not change in an ISR, and therefore a critical section is
+@@ -716,7 +716,7 @@
+ 
+         traceENTER_xQueueGiveMutexRecursive( xMutex );
+ 
+-        configASSERT( pxMutex );
++        configASSERT( pxMutex != NULL );
+ 
+         /* If this is the task that holds the mutex then xMutexHolder will not
+          * change outside of this task.  If this task does not hold the mutex then
+@@ -776,7 +776,7 @@
+ 
+         traceENTER_xQueueTakeMutexRecursive( xMutex, xTicksToWait );
+ 
+-        configASSERT( pxMutex );
++        configASSERT( pxMutex != NULL );
+ 
+         /* Comments regarding mutual exclusion as per those within
+          * xQueueGiveMutexRecursive(). */
+@@ -788,7 +788,7 @@
+             ( pxMutex->u.xSemaphore.uxRecursiveCallCount )++;
+ 
+             /* Check if an overflow occurred. */
+-            configASSERT( pxMutex->u.xSemaphore.uxRecursiveCallCount );
++            configASSERT( pxMutex->u.xSemaphore.uxRecursiveCallCount != 0U );
+ 
+             xReturn = pdPASS;
+         }
+@@ -804,7 +804,7 @@
+                 ( pxMutex->u.xSemaphore.uxRecursiveCallCount )++;
+ 
+                 /* Check if an overflow occurred. */
+-                configASSERT( pxMutex->u.xSemaphore.uxRecursiveCallCount );
++                configASSERT( pxMutex->u.xSemaphore.uxRecursiveCallCount != 0U );
+             }
+             else
+             {
+@@ -848,7 +848,7 @@
+         }
+         else
+         {
+-            configASSERT( xHandle );
++            configASSERT( xHandle != NULL );
+             mtCOVERAGE_TEST_MARKER();
+         }
+ 
+@@ -887,7 +887,7 @@
+         }
+         else
+         {
+-            configASSERT( xHandle );
++            configASSERT( xHandle != NULL );
+             mtCOVERAGE_TEST_MARKER();
+         }
+ 
+@@ -910,7 +910,7 @@
+ 
+     traceENTER_xQueueGenericSend( xQueue, pvItemToQueue, xTicksToWait, xCopyPosition );
+ 
+-    configASSERT( pxQueue );
++    configASSERT( pxQueue != NULL );
+     configASSERT( !( ( pvItemToQueue == NULL ) && ( pxQueue->uxItemSize != ( UBaseType_t ) 0U ) ) );
+     configASSERT( !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1U ) ) );
+     #if ( ( INCLUDE_xTaskGetSchedulerState == 1 ) || ( configUSE_TIMERS == 1 ) )
+@@ -1470,7 +1470,7 @@
+     traceENTER_xQueueReceive( xQueue, pvBuffer, xTicksToWait );
+ 
+     /* Check the pointer is not NULL. */
+-    configASSERT( ( pxQueue ) );
++    configASSERT( pxQueue != NULL );
+ 
+     /* The buffer into which data is received can only be NULL if the data size
+      * is zero (so no data is copied into the buffer). */
+@@ -1623,7 +1623,7 @@
+     traceENTER_xQueueSemaphoreTake( xQueue, xTicksToWait );
+ 
+     /* Check the queue pointer is not NULL. */
+-    configASSERT( ( pxQueue ) );
++    configASSERT( pxQueue != NULL );
+ 
+     /* Check this really is a semaphore, in which case the item size will be
+      * 0. */
+@@ -1999,7 +1999,7 @@
+ 
+     traceENTER_xQueueReceiveFromISR( xQueue, pvBuffer, pxHigherPriorityTaskWoken );
+ 
+-    configASSERT( pxQueue );
++    configASSERT( pxQueue != NULL );
+     configASSERT( !( ( pvBuffer == NULL ) && ( pxQueue->uxItemSize != ( UBaseType_t ) 0U ) ) );
+ 
+     /* RTOS ports that support interrupt nesting have the concept of a maximum
+@@ -2156,7 +2156,7 @@
+ 
+     traceENTER_uxQueueMessagesWaiting( xQueue );
+ 
+-    configASSERT( xQueue );
++    configASSERT( xQueue != NULL );
+ 
+     portBASE_TYPE_ENTER_CRITICAL();
+     {
+@@ -2177,7 +2177,7 @@
+ 
+     traceENTER_uxQueueSpacesAvailable( xQueue );
+ 
+-    configASSERT( pxQueue );
++    configASSERT( pxQueue != NULL );
+ 
+     portBASE_TYPE_ENTER_CRITICAL();
+     {
+@@ -2198,7 +2198,7 @@
+ 
+     traceENTER_uxQueueMessagesWaitingFromISR( xQueue );
+ 
+-    configASSERT( pxQueue );
++    configASSERT( pxQueue != NULL );
+     uxReturn = pxQueue->uxMessagesWaiting;
+ 
+     traceRETURN_uxQueueMessagesWaitingFromISR( uxReturn );
+@@ -2213,9 +2213,9 @@
+ 
+     traceENTER_vQueueDelete( xQueue );
+ 
+-    configASSERT( pxQueue );
+-    configASSERT( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToSend ) ) );
+-    configASSERT( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToReceive ) ) );
++    configASSERT( pxQueue != NULL );
++    configASSERT( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToSend ) ) != pdFALSE );
++    configASSERT( listLIST_IS_EMPTY( &( pxQueue->xTasksWaitingToReceive ) ) != pdFALSE );
+     traceQUEUE_DELETE( pxQueue );
+ 
+     #if ( configQUEUE_REGISTRY_SIZE > 0 )
+@@ -2597,7 +2597,7 @@
+ 
+     traceENTER_xQueueIsQueueEmptyFromISR( xQueue );
+ 
+-    configASSERT( pxQueue );
++    configASSERT( pxQueue != NULL );
+ 
+     if( pxQueue->uxMessagesWaiting == ( UBaseType_t ) 0 )
+     {
+@@ -2642,7 +2642,7 @@
+ 
+     traceENTER_xQueueIsQueueFullFromISR( xQueue );
+ 
+-    configASSERT( pxQueue );
++    configASSERT( pxQueue != NULL );
+ 
+     if( pxQueue->uxMessagesWaiting == pxQueue->uxLength )
+     {
+@@ -2972,7 +2972,7 @@
+ 
+         traceENTER_vQueueAddToRegistry( xQueue, pcQueueName );
+ 
+-        configASSERT( xQueue );
++        configASSERT( xQueue != NULL );
+ 
+         if( pcQueueName != NULL )
+         {
+@@ -3022,7 +3022,7 @@
+ 
+         traceENTER_pcQueueGetName( xQueue );
+ 
+-        configASSERT( xQueue );
++        configASSERT( xQueue != NULL );
+ 
+         /* Note there is nothing here to protect against another task adding or
+          * removing entries from the registry while it is being searched. */
+@@ -3056,7 +3056,7 @@
+ 
+         traceENTER_vQueueUnregisterQueue( xQueue );
+ 
+-        configASSERT( xQueue );
++        configASSERT( xQueue != NULL );
+ 
+         /* See if the handle of the queue being unregistered in actually in the
+          * registry. */
+@@ -3304,7 +3304,7 @@
+         /* The following line is not reachable in unit tests because every call
+          * to prvNotifyQueueSetContainer is preceded by a check that
+          * pxQueueSetContainer != NULL */
+-        configASSERT( pxQueueSetContainer ); /* LCOV_EXCL_BR_LINE */
++        configASSERT( pxQueueSetContainer != NULL ); /* LCOV_EXCL_BR_LINE */
+         configASSERT( pxQueueSetContainer->uxMessagesWaiting < pxQueueSetContainer->uxLength );
+ 
+         /* pxQueue->pxQueueSetContainer is verified to be non-null by caller. */
+--- a/include/list.h
++++ b/include/list.h
+@@ -294,7 +294,7 @@
+             ( pxConstList )->pxIndex = ( pxConstList )->xListEnd.pxNext;                       \
+         }                                                                                      \
+         ( pxTCB ) = ( pxConstList )->pxIndex->pvOwner;                                         \
+-    } while( 0 )
++    } while( false )
+ #else /* #if ( configNUMBER_OF_CORES == 1 ) */
+ 
+ /* This function is not required in SMP. FreeRTOS SMP scheduler doesn't use
+@@ -335,7 +335,7 @@
+                                                                                                     \
+         ( pxItemToRemove )->pxContainer = NULL;                                                     \
+         ( ( pxList )->uxNumberOfItems ) = ( UBaseType_t ) ( ( ( pxList )->uxNumberOfItems ) - 1U ); \
+-    } while( 0 )
++    } while( false )
+ 
+ /*
+  * Inline version of vListInsertEnd() to provide slight optimisation for
+@@ -382,7 +382,7 @@
+         ( pxNewListItem )->pxContainer = ( pxList );                                                \
+                                                                                                     \
+         ( ( pxList )->uxNumberOfItems ) = ( UBaseType_t ) ( ( ( pxList )->uxNumberOfItems ) + 1U ); \
+-    } while( 0 )
++    } while( false )
+ 
+ /*
+  * Access function to obtain the owner of the first entry in a list.  Lists
+--- a/include/task.h
++++ b/include/task.h
+@@ -469,7 +469,7 @@
+  *   // an automatic stack variable it might no longer exist, or at least have been corrupted, by the time
+  *   // the new task attempts to access it.
+  *   xTaskCreate( vTaskCode, "NAME", STACK_SIZE, &ucParameterToPass, tskIDLE_PRIORITY, &xHandle );
+- *   configASSERT( xHandle );
++ *   configASSERT( xHandle != NULL );
+  *
+  *   // Use the handle to delete the task.
+  *   if( xHandle != NULL )
+@@ -1095,7 +1095,7 @@
+ #define vTaskDelayUntil( pxPreviousWakeTime, xTimeIncrement )                   \
+     do {                                                                        \
+         ( void ) xTaskDelayUntil( ( pxPreviousWakeTime ), ( xTimeIncrement ) ); \
+-    } while( 0 )
++    } while( false )
+ 
+ 
+ /**
+@@ -1288,7 +1288,7 @@
+  *  xHandle = xTaskGetHandle( "Task_Name" );
+  *
+  *  // Check the handle is not NULL.
+- *  configASSERT( xHandle );
++ *  configASSERT( xHandle != NULL );
+  *
+  *  // Use the handle to obtain further information about the task.
+  *  vTaskGetInfo( xHandle,
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -142,8 +142,8 @@
+ static uint32_t ulOsDisabledSources;
+ int Os_PortInterruptSourceEnabled( uint32_t interrupt )
+ {
+-    return ( interrupt < 32U ) &&
+-           ( ( ulOsDisabledSources & ( ( ( uint32_t ) 1U ) << interrupt ) ) == 0U );
++    return ( ( interrupt < 32U ) &&
++           ( ( ulOsDisabledSources & ( ( ( uint32_t ) 1U ) << interrupt ) ) == 0U ) ) ? 1 : 0;
+ }
+ int Os_PortInterruptSourceControl( uint32_t interrupt, unsigned operation, boolean clear )
+ {
+@@ -246,7 +246,7 @@
+         {
+             const uint32_t requested = prvRunOsInterrupt( interrupt );
+             seen |= ( ( uint32_t ) 1U ) << interrupt;
+-            if( ( requested != 0U ) && Os_BackendInterruptMaySchedule( interrupt ) )
++            if( ( requested != 0U ) && ( Os_BackendInterruptMaySchedule( interrupt ) != 0 ) )
+             {
+                 Os_BackendRequestIsrReschedule();
+             }
+@@ -295,8 +295,8 @@
+      * point if the SuspendThread() call that suspends the thread does not take
+      * effect immediately (it is an asynchronous call). */
+     xThreadState.pvYieldEvent = Os_PortEvent( NULL,   /* Default security attributes. */
+-                                               FALSE,  /* Auto reset. */
+-                                               FALSE,  /* Start not signalled. */
++                                               0,  /* Auto reset. */
++                                               0,  /* Start not signalled. */
+                                                NULL ); /* No name. */
+ 
+ 
+@@ -312,9 +312,9 @@
+ #pragma GCC diagnostic pop
+ #endif
+ 
+-    configASSERT( xThreadState.pvThread ); /* See comment where TerminateThread() is called. */
++    configASSERT( xThreadState.pvThread != NULL ); /* See comment where TerminateThread() is called. */
+     SetThreadAffinityMask( xThreadState.pvThread, 0x01 );
+-    SetThreadPriorityBoost( xThreadState.pvThread, TRUE );
++    SetThreadPriorityBoost( xThreadState.pvThread, 1 );
+     SetThreadPriority( xThreadState.pvThread, portTASK_THREAD_PRIORITY );
+ 
+     ( void ) memcpy( ( unsigned char * ) pxStateStorage,
+@@ -356,8 +356,8 @@
+ 
+         /* Create the events and mutexes that are used to synchronise all the
+          * threads. */
+-        pvInterruptEventMutex = Os_PortMutex( NULL, FALSE, NULL );
+-        pvInterruptEvent = Os_PortEvent( NULL, FALSE, FALSE, NULL );
++        pvInterruptEventMutex = Os_PortMutex( NULL, 0, NULL );
++        pvInterruptEvent = Os_PortEvent( NULL, 0, 0, NULL );
+ 
+         if( ( pvInterruptEventMutex == NULL ) || ( pvInterruptEvent == NULL ) )
+         {
+@@ -382,7 +382,7 @@
+             lSuccess = pdFAIL;
+         }
+ 
+-        SetThreadPriorityBoost( pvHandle, TRUE );
++        SetThreadPriorityBoost( pvHandle, 1 );
+         SetThreadAffinityMask( pvHandle, 0x01 );
+     }
+ 
+@@ -425,7 +425,7 @@
+     uint32_t ulSwitchRequired;
+ 
+     /* Process the tick itself. */
+-    configASSERT( xPortRunning );
++    configASSERT( xPortRunning != pdFALSE );
+     ulSwitchRequired = 0;
+     if( Os_TimeBeginTick() != 0 )
+     {
+@@ -462,7 +462,7 @@
+ 
+         /* Wait with timeout so that we can exit from this loop when
+          * the scheduler is stopped by calling vPortEndScheduler. */
+-        xWinApiResult = WaitForMultipleObjects( sizeof( pvObjectList ) / sizeof( void * ), pvObjectList, TRUE, xTimeoutMilliseconds );
++        xWinApiResult = WaitForMultipleObjects( sizeof( pvObjectList ) / sizeof( void * ), pvObjectList, 1, xTimeoutMilliseconds );
+ 
+         if( xWinApiResult != WAIT_TIMEOUT )
+         {
+@@ -486,7 +486,7 @@
+              * https://devblogs.microsoft.com/oldnewthing/20150205-00/?p=44743
+              * they do - so as they do not harm (slight run-time hit). */
+             xContext.ContextFlags = CONTEXT_CONTROL;
+-            configASSERT( Os_PortGetThreadContext( xThreadState.pvThread, &xContext ) );
++            configASSERT( Os_PortGetThreadContext( xThreadState.pvThread, &xContext ) != pdFALSE );
+             Os_StackObserve( xThreadState.pvThread, &xContext );
+ 
+ 
+@@ -506,10 +506,10 @@
+                     /* OSEK 14.2.3.1: a Cat2 nested inside an outer Cat1 does
+                      * not schedule Tasks on that Cat1's return. Retain the
+                      * request until a later Cat2 or explicit yield boundary. */
+-                    if( Os_BackendInterruptMaySchedule( i ) )
++                    if( Os_BackendInterruptMaySchedule( i ) != 0 )
+                     {
+                         const int serviceRequested = Os_BackendTakeIsrReschedule();
+-                        if( ( requested != pdFALSE ) || serviceRequested )
++                        if( ( requested != pdFALSE ) || ( serviceRequested != 0 ) )
+                         {
+                             ulSwitchRequired |= ( ( uint32_t ) 1U ) << i;
+                         }
+@@ -586,10 +586,10 @@
+          * tasks (rather than deleting themselves) as the task stacks will not be
+          * freed. */
+         ulErrorCode = TerminateThread( xThreadState.pvThread, 0 );
+-        configASSERT( ulErrorCode );
++        configASSERT( ulErrorCode != 0U );
+ 
+         ulErrorCode = CloseHandle( xThreadState.pvThread );
+-        configASSERT( ulErrorCode );
++        configASSERT( ulErrorCode != 0U );
+ 
+         ReleaseMutex( pvInterruptEventMutex );
+     }
+@@ -635,7 +635,7 @@
+ 
+     /* Close the thread. */
+     ulErrorCode = CloseHandle( pvThread );
+-    configASSERT( ulErrorCode );
++    configASSERT( ulErrorCode != 0U );
+ 
+     /* This is called from a critical section, which must be exited before the
+      * thread stops. */
+@@ -669,7 +669,7 @@
+ {
+     ThreadState_t xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
+ 
+-    configASSERT( xPortRunning );
++    configASSERT( xPortRunning != pdFALSE );
+ 
+     if( ( ulInterruptNumber < portMAX_INTERRUPTS ) && ( pvInterruptEventMutex != NULL ) )
+     {
+@@ -764,7 +764,7 @@
+         Os_BackendShutdown( E_OS_ID );
+     }
+ 
+-    if( !Os_MailboxHandlerAllowed( ulInterruptNumber, pvHandler ) )
++    if( Os_MailboxHandlerAllowed( ulInterruptNumber, pvHandler ) == 0 )
+     {
+         Os_BackendShutdown( E_OS_ACCESS );
+     }
+@@ -825,7 +825,7 @@
+             {
+                 ThreadState_t xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
+ 
+-                configASSERT( xPortRunning );
++                configASSERT( xPortRunning != pdFALSE );
+ 
+                 /* The interrupt won't actually executed until
+                  * pvInterruptEventMutex is released as it waits on both
+@@ -855,7 +855,7 @@
+     {
+         if( lMutexNeedsReleasing == pdTRUE )
+         {
+-            configASSERT( xPortRunning );
++            configASSERT( xPortRunning != pdFALSE );
+             ReleaseMutex( pvInterruptEventMutex );
+         }
+     }
+--- a/portable/MSVC-MingW/portmacro.h
++++ b/portable/MSVC-MingW/portmacro.h
+@@ -158,7 +158,7 @@
+                 unsigned long ulTopPriority;                                        \
+                 _BitScanReverse64( &ulTopPriority, ( uxReadyPriorities ) );         \
+                 uxTopPriority = ulTopPriority;                                      \
+-            } while( 0 )
++            } while( false )
+ 
+         #else /* #if defined( __x86_64__ ) || defined( _M_X64 ) */
+             #pragma intrinsic(_BitScanReverse)

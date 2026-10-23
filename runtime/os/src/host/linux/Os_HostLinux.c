@@ -48,7 +48,7 @@ struct Os_HostHandleType {
     DWORD thread_id;
     LPTHREAD_START_ROUTINE entry;
     LPVOID argument;
-    void *mapping;
+    unsigned char *mapping;
     size_t mapping_size;
     size_t guard_size;
     int register_host;
@@ -123,6 +123,7 @@ OS_MEMMAP static void futex_wake(const volatile int32_t *cell) { Os_LinuxFutexWa
 OS_MEMMAP static uint64_t monotonic_ms(void)
 {
     struct timespec now;
+    errno = 0;
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
         return UINT64_MAX;
     }
@@ -134,8 +135,12 @@ OS_MEMMAP static HANDLE reserve_handle(Os_HostKindType kind)
     size_t index;
     for (index = 0u; index < OS_HOST_HANDLES; ++index) {
         int32_t expected = 0;
-        if (__atomic_compare_exchange_n(
-                &handles[index].reserved, &expected, 1, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+        if (__atomic_compare_exchange_n(&handles[index].reserved,
+                                        &expected,
+                                        1,
+                                        false,
+                                        __ATOMIC_SEQ_CST,
+                                        __ATOMIC_SEQ_CST)) {
             handles[index].kind = kind;
             handles[index].fd = -1;
             return &handles[index];
@@ -163,19 +168,20 @@ OS_MEMMAP static void park_signal(int signal_number, siginfo_t *info, void *nati
     (void)info;
     if ((thread != NULL) && (thread->kind == OS_HOST_THREAD)) {
         const int32_t generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
-        if (generation > __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE)) {
+        if (generation != __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE)) {
             Os_LinuxCaptureContext(&thread->captured, native_context);
             __atomic_store_n(&thread->acknowledged, generation, __ATOMIC_RELEASE);
             futex_wake(&thread->acknowledged);
             for (;;) {
+                const int32_t resumed = __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE);
                 /* Stop an already parked actor without nesting another signal handler. */
                 if (InterlockedCompareExchange(&thread->requested, 0, 0) == INT32_MAX) {
                     terminal_park(thread);
                 }
-                if (InterlockedCompareExchange(&thread->resumed, 0, 0) >= generation) {
+                if (resumed == generation) {
                     break;
                 }
-                (void)futex_wait(&thread->resumed, generation - 1);
+                (void)futex_wait(&thread->resumed, resumed);
             }
         }
     }
@@ -197,17 +203,24 @@ OS_MEMMAP static void fault_stop_signal(int signal_number, siginfo_t *info, void
 OS_MEMMAP int Os_HostInstallSignals(void)
 {
     struct sigaction handler = {0};
+    const int suspend_signal = SIGRTMIN;
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
-    sigemptyset(&handler.sa_mask);
-    sigaddset(&handler.sa_mask, SIGRTMIN);
+    (void)sigemptyset(&handler.sa_mask);
+    errno = 0;
+    (void)sigaddset(&handler.sa_mask, suspend_signal);
     handler.sa_sigaction = park_signal;
-    if ((sigaddset(&handler.sa_mask, SIGRTMIN + 1) != 0) ||
-        (sigaction(SIGRTMIN, &handler, NULL) != 0)) {
+    errno = 0;
+    if (sigaddset(&handler.sa_mask, suspend_signal + 1) != 0) {
         return 0;
     }
-    sigfillset(&handler.sa_mask);
+    errno = 0;
+    if (sigaction(suspend_signal, &handler, NULL) != 0) {
+        return 0;
+    }
+    (void)sigfillset(&handler.sa_mask);
     handler.sa_sigaction = fault_stop_signal;
-    return sigaction(SIGRTMIN + 1, &handler, NULL) == 0;
+    errno = 0;
+    return (sigaction(suspend_signal + 1, &handler, NULL) == 0) ? 1 : 0;
 }
 
 OS_MEMMAP static DWORD actor_body(void *argument)
@@ -217,7 +230,11 @@ OS_MEMMAP static DWORD actor_body(void *argument)
     OS_LINUX_STACK_FINISH(NULL, &thread->bootstrap_bottom, &thread->bootstrap_size);
     __atomic_store_n(&thread->thread_id, GetCurrentThreadId(), __ATOMIC_RELEASE);
     DWORD result;
-    if ((thread->register_host != 0) && (Os_StackRegister('H') == 0)) {
+    int registered = 1;
+    if (thread->register_host != 0) {
+        registered = Os_StackRegister('H');
+    }
+    if (registered == 0) {
         result = UINT32_MAX;
     } else {
         result = thread->entry(thread->argument);
@@ -232,10 +249,10 @@ OS_MEMMAP static void *actor_start(void *argument)
     HANDLE thread = argument;
     current_thread = thread;
     OS_LINUX_STACK_START(&thread->bootstrap_fake,
-                         (char *)thread->mapping + thread->guard_size,
+                         thread->mapping + thread->guard_size,
                          thread->mapping_size - thread->guard_size);
     thread->exit_code =
-        Os_LinuxCallOnStack(&((char *)thread->mapping)[thread->mapping_size], actor_body, thread);
+        Os_LinuxCallOnStack(&thread->mapping[thread->mapping_size], actor_body, thread);
     OS_LINUX_STACK_FINISH(thread->bootstrap_fake, NULL, NULL);
     __atomic_store_n(&thread->ended, 1, __ATOMIC_RELEASE);
     futex_wake(&thread->ended);
@@ -258,11 +275,13 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         (flags & ~(STACK_SIZE_PARAM_IS_A_RESERVATION | CREATE_SUSPENDED)) != 0u) {
         return NULL;
     }
+    errno = 0;
     page = sysconf(_SC_PAGESIZE);
     if (page <= 0 || stack > SIZE_MAX - (size_t)page) {
         return NULL;
     }
     reserve = stack == 0u ? OS_HOST_DEFAULT_STACK : stack;
+    errno = 0;
     const long minimum = sysconf(_SC_THREAD_STACK_MIN);
     if ((minimum <= 0) || (reserve < ((size_t)minimum + (size_t)page))) {
         return NULL;
@@ -272,17 +291,20 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     if (thread == NULL) {
         return NULL;
     }
+    errno = 0;
     thread->mapping =
         mmap(NULL, reserve, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (thread->mapping == MAP_FAILED) {
         thread->mapping = NULL;
-        thread->reserved = 0;
+        (void)InterlockedExchange(&thread->reserved, 0);
         return NULL;
     }
+    errno = 0;
     if (mprotect(thread->mapping, (size_t)page, PROT_NONE) != 0) {
+        errno = 0;
         (void)munmap(thread->mapping, reserve);
         thread->mapping = NULL;
-        thread->reserved = 0;
+        (void)InterlockedExchange(&thread->reserved, 0);
         return NULL;
     }
     thread->mapping_size = reserve;
@@ -308,15 +330,20 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         (void)pthread_attr_destroy(&attributes);
     }
     if (status != 0) {
+        errno = 0;
         (void)munmap(thread->mapping, reserve);
         thread->mapping = NULL;
-        thread->reserved = 0;
+        (void)InterlockedExchange(&thread->reserved, 0);
         return NULL;
     }
     if (id != NULL) {
         const uint64_t end = monotonic_ms() + 2000u;
-        while (GetThreadId(thread) == 0u && monotonic_ms() < end) {
+        while (GetThreadId(thread) == 0u) {
+            if (monotonic_ms() >= end) {
+                break;
+            }
             const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+            errno = 0;
             (void)nanosleep(&interval, NULL);
         }
         if (GetThreadId(thread) == 0u) {
@@ -354,9 +381,10 @@ OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
         return NULL;
     }
     event->manual = manual != 0;
+    errno = 0;
     event->fd = eventfd(initial != 0 ? 1u : 0u, EFD_CLOEXEC | EFD_NONBLOCK);
     if (event->fd < 0) {
-        event->reserved = 0;
+        (void)InterlockedExchange(&event->reserved, 0);
         return NULL;
     }
     return event;
@@ -365,41 +393,62 @@ OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
 OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event)
 {
     const uint64_t signal_value = 1u;
+    ssize_t written;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
-        return FALSE;
+        return 0;
     }
-    return write(event->fd, &signal_value, sizeof(signal_value)) == (ssize_t)sizeof(signal_value);
+    do {
+        errno = 0;
+        written = write(event->fd, &signal_value, sizeof(signal_value));
+    } while ((written < 0) && (errno == EINTR));
+    return (written == (ssize_t)sizeof(signal_value)) ? 1 : 0;
+}
+
+OS_MEMMAP static int read_event(HANDLE event)
+{
+    uint64_t value;
+    ssize_t received;
+    do {
+        errno = 0;
+        received = read(event->fd, &value, sizeof(value));
+    } while ((received < 0) && (errno == EINTR));
+    /* Only a failed nonblocking read can establish that the event is empty. */
+    return (received == (ssize_t)sizeof(value))    ? 1
+           : ((received < 0) && (errno == EAGAIN)) ? 0
+                                                   : -1;
 }
 
 OS_MEMMAP BOOL ResetEvent(HANDLE event)
 {
-    uint64_t value;
+    int received;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
-        return FALSE;
+        return 0;
     }
-    while (read(event->fd, &value, sizeof(value)) == sizeof(value)) {
-    }
-    return errno == EAGAIN;
+    do {
+        received = read_event(event);
+    } while (received > 0);
+    return (received == 0) ? 1 : 0;
 }
 
 OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
 {
-    HANDLE mutex;
-    if (attributes != NULL || name != NULL) {
-        return NULL;
-    }
-    mutex = reserve_handle(OS_HOST_MUTEX);
-    if (mutex == NULL) {
-        return NULL;
-    }
-    if (pthread_mutex_init(&mutex->mutex, NULL) != 0) {
-        mutex->reserved = 0;
-        return NULL;
-    }
-    if (owner != 0 && WaitForSingleObject(mutex, 0u) != WAIT_OBJECT_0) {
-        (void)pthread_mutex_destroy(&mutex->mutex);
-        mutex->reserved = 0;
-        return NULL;
+    HANDLE mutex = NULL;
+    if ((attributes == NULL) && (name == NULL)) {
+        mutex = reserve_handle(OS_HOST_MUTEX);
+        if (mutex != NULL) {
+            if (pthread_mutex_init(&mutex->mutex, NULL) != 0) {
+                (void)InterlockedExchange(&mutex->reserved, 0);
+                mutex = NULL;
+            } else if (owner != 0) {
+                if (WaitForSingleObject(mutex, 0u) != WAIT_OBJECT_0) {
+                    (void)pthread_mutex_destroy(&mutex->mutex);
+                    (void)InterlockedExchange(&mutex->reserved, 0);
+                    mutex = NULL;
+                }
+            } else {
+                /* Leave the mutex initially unowned. */
+            }
+        }
     }
     return mutex;
 }
@@ -409,30 +458,54 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
     DWORD outcome = WAIT_FAILED;
     sigset_t blocked;
     sigset_t previous;
-    sigemptyset(&blocked);
-    sigaddset(&blocked, SIGRTMIN);
-    if ((held_depth < 32u) && (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)) {
-        const DWORD caller = GetCurrentThreadId();
-        int locked = EINVAL;
-        if (caller != 0u) {
-            if (__atomic_load_n(&handle->mutex_owner, __ATOMIC_ACQUIRE) == caller) {
-                /* mutex_depth is bounded by the existing held_depth limit. */
-                ++handle->mutex_depth;
-                locked = 0;
-            } else {
-                locked = pthread_mutex_trylock(&handle->mutex);
-                if (locked == 0) {
-                    handle->mutex_depth = 1u;
-                    __atomic_store_n(&handle->mutex_owner, caller, __ATOMIC_RELEASE);
+    const int suspend_signal = SIGRTMIN;
+    (void)sigemptyset(&blocked);
+    errno = 0;
+    (void)sigaddset(&blocked, suspend_signal);
+    if (held_depth < 32u) {
+        if (pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0) {
+            const DWORD caller = GetCurrentThreadId();
+            int locked = EINVAL;
+            if (caller != 0u) {
+                if (__atomic_load_n(&handle->mutex_owner, __ATOMIC_ACQUIRE) == caller) {
+                    /* mutex_depth is bounded by the existing held_depth limit. */
+                    ++handle->mutex_depth;
+                    locked = 0;
+                } else {
+                    locked = pthread_mutex_trylock(&handle->mutex);
+                    if (locked == 0) {
+                        handle->mutex_depth = 1u;
+                        __atomic_store_n(&handle->mutex_owner, caller, __ATOMIC_RELEASE);
+                    }
                 }
             }
+            if (locked == 0) {
+                held_masks[held_depth] = previous;
+                ++held_depth;
+                outcome = WAIT_OBJECT_0;
+            } else {
+                (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
+                outcome = (locked == EBUSY) ? WAIT_TIMEOUT : WAIT_FAILED;
+            }
         }
-        if (locked == 0) {
-            held_masks[held_depth++] = previous;
-            outcome = WAIT_OBJECT_0;
-        } else {
-            (void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
-            outcome = (locked == EBUSY) ? WAIT_TIMEOUT : WAIT_FAILED;
+    }
+    return outcome;
+}
+
+OS_MEMMAP static DWORD wait_event(HANDLE event)
+{
+    struct pollfd observed = {.fd = event->fd, .events = POLLIN, .revents = 0};
+    int ready;
+    do {
+        errno = 0;
+        ready = poll(&observed, 1u, 0);
+    } while ((ready < 0) && (errno == EINTR));
+    DWORD outcome = WAIT_FAILED;
+    if ((ready >= 0) && ((observed.revents & (POLLERR | POLLHUP | POLLNVAL)) == 0)) {
+        outcome = WAIT_TIMEOUT;
+        if ((ready > 0) && ((observed.revents & POLLIN) != 0)) {
+            const int received = (event->manual != 0) ? 1 : read_event(event);
+            outcome = (received > 0) ? WAIT_OBJECT_0 : (received == 0) ? WAIT_TIMEOUT : WAIT_FAILED;
         }
     }
     return outcome;
@@ -449,36 +522,42 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
         }
         while (pending != 0) {
             if ((handle->kind == OS_HOST_EVENT) && (handle->fd >= 0)) {
-                struct pollfd observed = {.fd = handle->fd, .events = POLLIN, .revents = 0};
-                uint64_t value;
-                const int ready = poll(&observed, 1u, 0);
-                if ((ready > 0) && ((observed.revents & POLLIN) != 0)) {
-                    if (handle->manual != 0 ||
-                        read(handle->fd, &value, sizeof(value)) == sizeof(value)) {
-                        outcome = WAIT_OBJECT_0;
-                        pending = 0;
-                    }
-                }
+                outcome = wait_event(handle);
+                pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
             } else if (handle->kind == OS_HOST_MUTEX) {
                 outcome = try_wait_mutex(handle);
                 pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
             } else if (handle->kind == OS_HOST_THREAD) {
                 if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
-                    if ((__atomic_exchange_n(&handle->joined, 1, __ATOMIC_ACQ_REL) != 0) ||
-                        (pthread_join(handle->thread, NULL) == 0)) {
+                    const int32_t was_joined =
+                        __atomic_exchange_n(&handle->joined, 1, __ATOMIC_ACQ_REL);
+                    if (was_joined != 0) {
                         outcome = WAIT_OBJECT_0;
+                    } else {
+                        if (pthread_join(handle->thread, NULL) == 0) {
+                            outcome = WAIT_OBJECT_0;
+                        }
                     }
                     pending = 0;
                 }
             } else {
                 pending = 0;
             }
-            if ((pending != 0) && (milliseconds != INFINITE) && (monotonic_ms() >= end)) {
-                outcome = WAIT_TIMEOUT;
-                pending = 0;
+            if ((pending != 0) && (milliseconds != INFINITE)) {
+                const uint64_t now = monotonic_ms();
+                if (now == UINT64_MAX) {
+                    outcome = WAIT_FAILED;
+                    pending = 0;
+                } else if (now >= end) {
+                    outcome = WAIT_TIMEOUT;
+                    pending = 0;
+                } else {
+                    /* The finite deadline has not expired. */
+                }
             }
             if (pending != 0) {
                 const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+                errno = 0;
                 (void)nanosleep(&interval, NULL);
             }
         }
@@ -513,13 +592,21 @@ OS_MEMMAP static DWORD wait_any(DWORD count,
                 waiting = 0;
             }
         }
-        if ((waiting != 0) && (milliseconds != INFINITE) && (monotonic_ms() >= end)) {
-            waiting = 0;
-        } else if (waiting != 0) {
+        if ((waiting != 0) && (milliseconds != INFINITE)) {
+            const uint64_t now = monotonic_ms();
+            if (now == UINT64_MAX) {
+                result = WAIT_FAILED;
+                waiting = 0;
+            } else if (now >= end) {
+                waiting = 0;
+            } else {
+                /* The finite deadline has not expired. */
+            }
+        }
+        if (waiting != 0) {
             const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+            errno = 0;
             (void)nanosleep(&interval, NULL);
-        } else {
-            /* A handle was signalled or failed. */
         }
     }
     return result;
@@ -534,10 +621,12 @@ OS_MEMMAP static DWORD wait_all(DWORD count,
     DWORD index;
     for (index = 0u; (index < count) && (result == WAIT_OBJECT_0); ++index) {
         const uint64_t now = monotonic_ms();
-        const DWORD remaining =
-            (milliseconds == INFINITE) ? INFINITE : ((end > now) ? (DWORD)(end - now) : 0u);
-        if (WaitForSingleObject(observed[index], remaining) != WAIT_OBJECT_0) {
+        if (now == UINT64_MAX) {
             result = WAIT_FAILED;
+        } else {
+            const DWORD remaining =
+                (milliseconds == INFINITE) ? INFINITE : ((end > now) ? (DWORD)(end - now) : 0u);
+            result = WaitForSingleObject(observed[index], remaining);
         }
     }
     return result;
@@ -550,7 +639,7 @@ OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
 {
     DWORD result = WAIT_FAILED;
     uint64_t end = monotonic_ms();
-    if ((observed != NULL) && (count != 0u) && (count <= OS_HOST_HANDLES)) {
+    if ((observed != NULL) && (count != 0u) && (count <= OS_HOST_HANDLES) && (end != UINT64_MAX)) {
         if (milliseconds != INFINITE) {
             end += milliseconds;
         }
@@ -562,60 +651,70 @@ OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
 
 OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex)
 {
-    int released = 0;
-    if ((mutex == NULL) || (mutex->kind != OS_HOST_MUTEX) || (held_depth == 0u) ||
-        (__atomic_load_n(&mutex->mutex_owner, __ATOMIC_ACQUIRE) != GetCurrentThreadId())) {
-        return FALSE;
+    int released = EINVAL;
+    if ((mutex != NULL) && (mutex->kind == OS_HOST_MUTEX) && (held_depth != 0u)) {
+        const DWORD owner = __atomic_load_n(&mutex->mutex_owner, __ATOMIC_ACQUIRE);
+        if (owner == GetCurrentThreadId()) {
+            released = 0;
+            if (mutex->mutex_depth > 1u) {
+                --mutex->mutex_depth;
+            } else {
+                __atomic_store_n(&mutex->mutex_owner, 0u, __ATOMIC_RELEASE);
+                released = pthread_mutex_unlock(&mutex->mutex);
+            }
+            if (released == 0) {
+                --held_depth;
+                (void)pthread_sigmask(SIG_SETMASK, &held_masks[held_depth], NULL);
+            }
+        }
     }
-    if (mutex->mutex_depth > 1u) {
-        --mutex->mutex_depth;
-    } else {
-        __atomic_store_n(&mutex->mutex_owner, 0u, __ATOMIC_RELEASE);
-        released = pthread_mutex_unlock(&mutex->mutex);
-    }
-    if (released == 0) {
-        --held_depth;
-        (void)pthread_sigmask(SIG_SETMASK, &held_masks[held_depth], NULL);
-    }
-    return released == 0;
+    return (released == 0) ? 1 : 0;
 }
 
 OS_MEMMAP static BOOL close_thread(HANDLE thread)
 {
-    BOOL closed = TRUE;
+    BOOL closed = 1;
     if (thread->register_host != 0) {
         /* Release pthread resources without discarding the registered stack identity. */
-        if ((InterlockedExchange(&thread->joined, 1) == 0) &&
-            (pthread_detach(thread->thread) != 0)) {
-            closed = FALSE;
-        }
-    } else if ((InterlockedCompareExchange(&thread->ended, 0, 0) != 0) &&
-               (InterlockedCompareExchange(&thread->joined, 0, 0) != 0)) {
-        if (munmap(thread->mapping, thread->mapping_size) != 0) {
-            closed = FALSE;
-        } else {
-            thread->mapping = NULL;
-            (void)InterlockedExchange(&thread->reserved, 0);
+        if (InterlockedExchange(&thread->joined, 1) == 0) {
+            if (pthread_detach(thread->thread) != 0) {
+                closed = 0;
+            }
         }
     } else {
         /* Closing an observer does not stop its live actor. */
+        if (InterlockedCompareExchange(&thread->ended, 0, 0) != 0) {
+            if (InterlockedCompareExchange(&thread->joined, 0, 0) != 0) {
+                errno = 0;
+                if (munmap(thread->mapping, thread->mapping_size) != 0) {
+                    closed = 0;
+                } else {
+                    thread->mapping = NULL;
+                    (void)InterlockedExchange(&thread->reserved, 0);
+                }
+            }
+        }
     }
     return closed;
 }
 
 OS_MEMMAP BOOL CloseHandle(HANDLE handle)
 {
-    BOOL closed = FALSE;
+    BOOL closed = 0;
     if ((handle != NULL) && (handle != &process_handle)) {
         if ((handle->kind == OS_HOST_EVENT) && (handle->fd >= 0)) {
+            errno = 0;
             const int result = close(handle->fd);
-            if (result == 0) {
-                handle->fd = -1;
+            /* Linux releases the descriptor even on EINTR; it must never be closed again. */
+            handle->fd = -1;
+            (void)InterlockedExchange(&handle->reserved, 0);
+            closed = (result == 0) ? 1 : 0;
+        } else if (handle->kind == OS_HOST_MUTEX) {
+            closed = (pthread_mutex_destroy(&handle->mutex) == 0) ? 1 : 0;
+            if (closed != 0) {
+                handle->kind = OS_HOST_UNUSED;
                 (void)InterlockedExchange(&handle->reserved, 0);
             }
-            closed = (result == 0) ? TRUE : FALSE;
-        } else if (handle->kind == OS_HOST_MUTEX) {
-            closed = (pthread_mutex_destroy(&handle->mutex) == 0) ? TRUE : FALSE;
         } else if (handle->kind == OS_HOST_THREAD) {
             closed = close_thread(handle);
         } else {
@@ -627,60 +726,83 @@ OS_MEMMAP BOOL CloseHandle(HANDLE handle)
 
 OS_MEMMAP DWORD SuspendThread(HANDLE thread)
 {
-    int32_t generation;
-    uint64_t end;
-    if (thread == NULL || thread->kind != OS_HOST_THREAD ||
-        __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) {
-        return UINT32_MAX;
+    DWORD result = UINT32_MAX;
+    bool active = false;
+    if ((thread != NULL) && (thread->kind == OS_HOST_THREAD)) {
+        active = __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) == 0;
     }
-    if (__atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE) !=
-        __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE)) {
-        return 1u;
-    }
-    generation = __atomic_add_fetch(&thread->requested, 1, __ATOMIC_ACQ_REL);
-    if (pthread_kill(thread->thread, SIGRTMIN) != 0) {
-        return UINT32_MAX;
-    }
-    end = monotonic_ms() + 2000u;
-    while (__atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) < generation) {
-        if (monotonic_ms() >= end || __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) {
-            return UINT32_MAX;
+    if (active) {
+        int32_t previous = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
+        if (previous != INT32_MAX) {
+            if (previous != __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE)) {
+                result = 1u;
+            } else {
+                /* Reserve INT32_MAX for stop; CAS preserves a concurrent stop request. */
+                const int32_t generation = (previous == (INT32_MAX - 1)) ? 1 : (previous + 1);
+                if (__atomic_compare_exchange_n(&thread->requested,
+                                                &previous,
+                                                generation,
+                                                false,
+                                                __ATOMIC_ACQ_REL,
+                                                __ATOMIC_ACQUIRE)) {
+                    if (pthread_kill(thread->thread, SIGRTMIN) == 0) {
+                        const uint64_t end = monotonic_ms() + 2000u;
+                        int32_t acknowledged =
+                            __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE);
+                        while ((acknowledged != generation) && (acknowledged != INT32_MAX)) {
+                            bool failed = monotonic_ms() >= end;
+                            if (!failed) {
+                                failed = __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0;
+                            }
+                            if (failed) {
+                                break;
+                            }
+                            (void)futex_wait(&thread->acknowledged, acknowledged);
+                            acknowledged = __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE);
+                        }
+                        if (acknowledged == generation) {
+                            result = 0u;
+                        }
+                    }
+                }
+            }
         }
-        (void)futex_wait(&thread->acknowledged, generation - 1);
     }
-    return 0u;
+    return result;
 }
 
 OS_MEMMAP DWORD ResumeThread(HANDLE thread)
 {
-    int32_t generation;
-    if (thread == NULL || thread->kind != OS_HOST_THREAD) {
-        return UINT32_MAX;
+    DWORD result = UINT32_MAX;
+    if ((thread != NULL) && (thread->kind == OS_HOST_THREAD)) {
+        const int32_t generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
+        if ((generation != 0) && (generation != INT32_MAX)) {
+            const int32_t acknowledged = InterlockedCompareExchange(&thread->acknowledged, 0, 0);
+            if (acknowledged == generation) {
+                __atomic_store_n(&thread->resumed, generation, __ATOMIC_RELEASE);
+                futex_wake(&thread->resumed);
+                result = 1u;
+            }
+        }
     }
-    generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
-    if ((generation == 0) || (generation == INT32_MAX) ||
-        (InterlockedCompareExchange(&thread->acknowledged, 0, 0) < generation)) {
-        return UINT32_MAX;
-    }
-    __atomic_store_n(&thread->resumed, generation, __ATOMIC_RELEASE);
-    futex_wake(&thread->resumed);
-    return 1u;
+    return result;
 }
 
 OS_MEMMAP BOOL GetThreadContext(HANDLE thread, CONTEXT *context)
 {
-    int32_t generation;
-    if (thread == NULL || context == NULL || thread->kind != OS_HOST_THREAD) {
-        return FALSE;
+    BOOL result = 0;
+    if ((thread != NULL) && (context != NULL) && (thread->kind == OS_HOST_THREAD)) {
+        const int32_t generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
+        bool allowed = __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) == INT32_MAX;
+        if ((!allowed) && (generation != 0)) {
+            allowed = __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) == generation;
+        }
+        if (allowed) {
+            Os_LinuxCaptureContext(context, &thread->captured.native);
+            result = 1;
+        }
     }
-    generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
-    if (__atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) != INT32_MAX &&
-        (generation == 0 ||
-         __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) < generation)) {
-        return FALSE;
-    }
-    Os_LinuxCaptureContext(context, &thread->captured.native);
-    return TRUE;
+    return result;
 }
 
 OS_MEMMAP DWORD GetCurrentThreadId(void) { return Os_LinuxThreadId(); }
@@ -699,13 +821,17 @@ OS_MEMMAP void Sleep(DWORD milliseconds)
     struct timespec pause_time;
     if (milliseconds == INFINITE) {
         for (;;) {
+            errno = 0;
             (void)pause();
         }
     }
-    pause_time.tv_sec = (time_t)(milliseconds / 1000u);
-    pause_time.tv_nsec = (long)(milliseconds % 1000u) * 1000000L;
-    while (nanosleep(&pause_time, &pause_time) != 0 && errno == EINTR) {
-    }
+    pause_time.tv_sec = (time_t)milliseconds / (time_t)1000;
+    pause_time.tv_nsec = ((long)milliseconds % 1000L) * 1000000L;
+    int status;
+    do {
+        errno = 0;
+        status = nanosleep(&pause_time, &pause_time);
+    } while ((status != 0) && (errno == EINTR));
 }
 
 OS_MEMMAP void ExitProcess(DWORD status) { _exit((int)status); }
@@ -742,20 +868,20 @@ OS_MEMMAP BOOL DuplicateHandle(HANDLE source_process,
     (void)options;
     if (copy == NULL || source_process != &process_handle || target_process != &process_handle ||
         source_thread == NULL || source_thread->kind != OS_HOST_THREAD) {
-        return FALSE;
+        return 0;
     }
     *copy = source_thread;
-    return TRUE;
+    return 1;
 }
 
 OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
 {
     if (thread == NULL || code == NULL || thread->kind != OS_HOST_THREAD) {
-        return FALSE;
+        return 0;
     }
     *code =
         __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0 ? thread->exit_code : STILL_ACTIVE;
-    return TRUE;
+    return 1;
 }
 
 OS_MEMMAP HANDLE Os_HostDispatcherThread(void)
@@ -798,8 +924,10 @@ OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
         (void)InterlockedExchange(&thread->requested, INT32_MAX);
         futex_wake(&thread->resumed);
         if (pthread_kill(thread->thread, SIGRTMIN + 1) == 0) {
-            while ((InterlockedCompareExchange(&thread->acknowledged, 0, 0) != INT32_MAX) &&
-                   (monotonic_ms() < end)) {
+            while (InterlockedCompareExchange(&thread->acknowledged, 0, 0) != INT32_MAX) {
+                if (monotonic_ms() >= end) {
+                    break;
+                }
                 (void)futex_wait(&thread->acknowledged,
                                  InterlockedCompareExchange(&thread->acknowledged, 0, 0));
             }

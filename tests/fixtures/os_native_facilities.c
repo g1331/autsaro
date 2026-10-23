@@ -20,6 +20,11 @@ static CONTEXT captured;
 static unsigned char expected_fp[sizeof(captured.native.__fpregs_mem)];
 static volatile sig_atomic_t captured_signal;
 static volatile unsigned deep_returns;
+static DWORD completed_actor(void *argument)
+{
+    (void)argument;
+    return 37u;
+}
 __attribute__((noinline)) static void deep_call(unsigned depth)
 {
     if (depth != 0u) {
@@ -100,6 +105,53 @@ int main(int argc, char **argv)
     struct sigaction handler = {0};
     if (argc != 2) {
         return 2;
+    }
+    if (strcmp(argv[1], "owned-capacity") == 0) {
+        if (pthread_sigmask(SIG_SETMASK, NULL, &original) != 0 ||
+            CreateMutexA(NULL, TRUE, "unsupported") != NULL) {
+            return 25;
+        }
+        owned = CreateMutexA(NULL, TRUE, NULL);
+        if (owned == NULL) {
+            return 26;
+        }
+        for (unsigned depth = 1u; depth < 32u; ++depth) {
+            if (WaitForSingleObject(owned, 0u) != WAIT_OBJECT_0) {
+                return 27;
+            }
+        }
+        if (WaitForSingleObject(owned, 0u) != WAIT_FAILED) {
+            return 28;
+        }
+        for (unsigned depth = 0u; depth < 32u; ++depth) {
+            if (ReleaseMutex(owned) == FALSE) {
+                return 29;
+            }
+        }
+        if (ReleaseMutex(owned) != FALSE || pthread_sigmask(SIG_SETMASK, NULL, &current) != 0 ||
+            sigismember(&original, SIGRTMIN) != sigismember(&current, SIGRTMIN) ||
+            CloseHandle(owned) == FALSE) {
+            return 30;
+        }
+        puts("native mutex initially-owned depth=32 overflow=rejected mask=restored");
+        return 0;
+    }
+    if (strcmp(argv[1], "actor-id") == 0) {
+        DWORD identity = 0u;
+        DWORD code = 0u;
+        CONTEXT context = {0};
+        Os_StackPrepare();
+        HANDLE actor = CreateThread(NULL, 262144u, completed_actor, NULL, 0u, &identity);
+        if (actor == NULL || identity == 0u || identity != GetThreadId(actor) ||
+            WaitForSingleObject(actor, 2000u) != WAIT_OBJECT_0 ||
+            WaitForSingleObject(actor, 0u) != WAIT_OBJECT_0 ||
+            GetExitCodeThread(actor, &code) == FALSE || code != 37u ||
+            SuspendThread(actor) != UINT32_MAX || ResumeThread(actor) != UINT32_MAX ||
+            GetThreadContext(actor, &context) != FALSE || CloseHandle(actor) == FALSE) {
+            return 31;
+        }
+        puts("native actor identity=published completion=joined-once ended=rejected");
+        return 0;
     }
     if (strcmp(argv[1], "depth") == 0 || strcmp(argv[1], "cet-depth") == 0) {
         if (argv[1][0] == 'c') {

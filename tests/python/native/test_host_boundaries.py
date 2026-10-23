@@ -1,12 +1,15 @@
 """Real host C fault injection, without adding hooks to delivery code."""
 from __future__ import annotations
 
+import difflib
 import os
 import platform
+import re
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from autosar_tooling.config import ROOT
 from ecu_tools.process import OwnedProcess, ProcessSpec
@@ -104,6 +107,7 @@ class HostBoundaryTests(unittest.TestCase):
                 output = result.stdout.read_text()
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
+                self.assertNotIn("UNEXPECTED_LOCK", output)
                 self.assertNotIn("UNEXPECTED_UNLOCK", output)
 
     def test_void_lock_failures_select_fatal_policy_and_never_return(self):
@@ -178,8 +182,344 @@ class HostIoTests(unittest.TestCase):
                         self.assertEqual(errors, fault if case == "fatal-broken-pipe" else b"", case)
 
 
+@unittest.skipUnless(platform.system() in ("Linux", "Windows"), "native kernel object consumers")
+class NativeKernelObjectTests(unittest.TestCase):
+    def test_native_restart_rejects_wrong_pc_and_exported_continuation(self):
+        import os_suites
+
+        for mutation in ("wrong-pc", "exported-continuation"):
+            with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/Os_PortRestart.c"
+                text = source.read_text(encoding="utf-8")
+                if mutation == "exported-continuation":
+                    before, after = (".scl 3; .type 32", ".scl 2; .type 32") if os.name == "nt" else (
+                        ".local Os_PortRestartLanding", ".global Os_PortRestartLanding",
+                    )
+                    self.assertEqual(text.count(before), 1)
+                    text = text.replace(before, after)
+                else:
+                    before = "leaq Os_PortRestartLanding(%rip),%rax"
+                    self.assertEqual(text.count(before), 2)
+                    text = text.replace(before, "leaq Os_PortRestartRejected(%rip),%rax")
+                    if os.name == "nt":
+                        before = 'ret\\n.seh_endproc\\n.text\\n'
+                        after = ('ret\\n.seh_endproc\\nOs_PortRestartRejected:\\nendbr64\\n'
+                                 'mov $93,%ecx\\ncall ExitProcess\\nud2\\n.text\\n')
+                    else:
+                        before = '.size Os_PortRestartAddress,.-Os_PortRestartAddress\\n.popsection'
+                        after = ('.size Os_PortRestartAddress,.-Os_PortRestartAddress\\n'
+                                 '.local Os_PortRestartRejected\\nOs_PortRestartRejected:\\nendbr64\\n'
+                                 'mov $93,%edi\\ncall _exit\\nud2\\n.popsection')
+                    self.assertEqual(text.count(before), 1)
+                    text = text.replace(before, after)
+                source.write_text(text, encoding="utf-8")
+                with patch.object(os_suites, "TARGET", target), os_suites.native_session(directory, mutation):
+                    if mutation == "wrong-pc":
+                        with self.assertRaises(AssertionError) as caught:
+                            os_suites.check_port_restart(directory)
+                        result = caught.exception.args[0]
+                        self.assertEqual(result.returncode, 93, result)
+                        self.assertEqual(result.stdout, "")
+                        self.assertEqual(result.stderr, "")
+                    else:
+                        with self.assertRaisesRegex(ValueError,
+                                r"(ELF OS entry is outside its code section|PE OS continuation must be local): Os_PortRestartLanding"):
+                            os_suites.check_port_restart(directory)
+
+    def _windows_port_target(self, directory: Path, omitted_patch: str | None,
+                             scenario_symbol: str, declarations: str) -> Path:
+        import os_suites
+
+        target = directory / "target"
+        shutil.copytree(os_suites.TARGET, target)
+        if omitted_patch:
+            (target / "patches" / omitted_patch).unlink()
+        # Redirect only the adopted port, after real platform declarations.
+        anchor = '#include "Os_Backend.h"\n'
+        before = ('/* Scheduler includes. */\n#include "FreeRTOS.h"\n#include "task.h"\n' + anchor +
+                  '\n#ifdef WIN32_LEAN_AND_MEAN\n    #include <winsock2.h>\n#else\n    #include <winsock.h>\n#endif\n')
+        after = before.replace(anchor, anchor + declarations)
+        name = "portable/MSVC-MingW/port.c"
+        (target / "patches/9999-test-native-port.patch").write_text("".join(difflib.unified_diff(
+            before.splitlines(True), after.splitlines(True),
+            fromfile="a/" + name, tofile="b/" + name,
+        )), encoding="utf-8")
+        fixture = target / "tests/lifecycle.c"
+        text = fixture.read_text(encoding="utf-8")
+        entry = "int main(int argc, char **argv)\n{"
+        self.assertEqual(text.count(entry), 1)
+        fixture.write_text(text.replace(entry, "extern const char *" + scenario_symbol + ";\n" + entry +
+            '\n    ' + scenario_symbol + ' = argc == 2 ? argv[1] : "normal";'), encoding="utf-8")
+        return target
+
+    @unittest.skipUnless(os.name == "nt", "Windows native handoff failures")
+    def test_windows_port_native_handoff_errors_stop_the_os(self):
+        import os_suites
+
+        for mutant in (False, True):
+            with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = self._windows_port_target(
+                    directory, "0019-windows-native-handoff-errors.patch" if mutant else None,
+                    "Os_HandoffScenario", (
+                    "DWORD WINAPI Os_TestWaitForSingleObject(HANDLE, DWORD);\n"
+                    "DWORD WINAPI Os_TestWaitForMultipleObjects(DWORD, const HANDLE *, BOOL, DWORD);\n"
+                    "BOOL WINAPI Os_TestReleaseMutex(HANDLE);\n"
+                    "BOOL Os_TestSignalEvent(HANDLE);\n"
+                    "BOOL WINAPI Os_TestResetEvent(HANDLE);\n"
+                    "#define WaitForSingleObject Os_TestWaitForSingleObject\n"
+                    "#define WaitForMultipleObjects Os_TestWaitForMultipleObjects\n"
+                    "#define ReleaseMutex Os_TestReleaseMutex\n"
+                    "#define Os_HostSetEvent Os_TestSignalEvent\n"
+                    "#define ResetEvent Os_TestResetEvent\n"
+                ))
+                with os_suites.native_session(directory, "windows-native-handoff"):
+                    binary, _ = os_suites.build(
+                        directory, "lifecycle.c", target=target,
+                        extra_sources=(ROOT / "tests/fixtures/os_windows_native_handoff.c",),
+                    )
+                    for scenario in ("normal", "timeout", "wait", "release", "signal", "reset", "wait-multiple", "abandoned"):
+                        with self.subTest(mutant=mutant, scenario=scenario):
+                            result = os_suites.run_native([str(binary), scenario], timeout=10)
+                            refused = scenario not in ("normal", "timeout")
+                            self.assertEqual(result.stderr, "")
+                            if refused:
+                                self.assertIn("native handoff refused=" + scenario, result.stdout)
+                                if mutant:
+                                    self.assertIn(result.returncode, (0, 91), result)
+                                else:
+                                    self.assertEqual(result.returncode, 7, result)  # E_OS_STATE, not E_OS_STACKFAULT.
+                                    self.assertIn("lifecycle=Closed state=Failed reason=7", result.stdout)
+                                    self.assertNotIn("native handoff continued", result.stdout)
+                            else:
+                                self.assertEqual(result.returncode, 0, result)
+                                self.assertIn("state=Ready", result.stdout)
+                                if scenario == "timeout":
+                                    self.assertIn("native handoff timeout", result.stdout)
+
+    @unittest.skipUnless(os.name == "nt", "Windows thread setup failures")
+    def test_windows_port_thread_setup_failures_stop_before_ready(self):
+        import os_suites
+
+        for mutant in (False, True):
+            with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = self._windows_port_target(
+                    directory, "0018-windows-thread-setup-errors.patch" if mutant else None,
+                    "Os_ThreadSetupScenario", (
+                    "DWORD_PTR WINAPI Os_TestSetThreadAffinityMask(HANDLE, DWORD_PTR);\n"
+                    "BOOL WINAPI Os_TestSetThreadPriorityBoost(HANDLE, BOOL);\n"
+                    "BOOL WINAPI Os_TestSetThreadPriority(HANDLE, int);\n"
+                    "#define SetThreadAffinityMask Os_TestSetThreadAffinityMask\n"
+                    "#define SetThreadPriorityBoost Os_TestSetThreadPriorityBoost\n"
+                    "#define SetThreadPriority Os_TestSetThreadPriority\n"
+                ))
+                with os_suites.native_session(directory, "windows-thread-setup"):
+                    binary, _ = os_suites.build(
+                        directory, "lifecycle.c", target=target,
+                        extra_sources=(ROOT / "tests/fixtures/os_windows_thread_setup.c",),
+                    )
+                    for scenario in ("normal", "task-affinity", "task-boost", "task-priority",
+                                     "dispatcher-boost", "dispatcher-affinity"):
+                        with self.subTest(mutant=mutant, scenario=scenario):
+                            result = os_suites.run_native([str(binary), scenario], timeout=10)
+                            refused = scenario != "normal"
+                            self.assertEqual(result.returncode, 7 if refused and not mutant else 0, result)
+                            self.assertEqual(result.stderr, "")
+                            if refused:
+                                self.assertIn("native setup refused=" + scenario, result.stdout)
+                                if not mutant:
+                                    self.assertIn("lifecycle=Closed state=Failed reason=7", result.stdout)
+                            self.assertEqual("state=Ready" in result.stdout, not refused or mutant, result)
+
+    def test_static_kernel_object_types_and_queue_storage(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "kernel-object-types"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_kernel_objects.c"),
+                )
+                result = os_suites.run_native([str(binary)], timeout=10)
+                self.assertEqual(result.returncode, 0, result)
+                self.assertEqual(result.stdout, "static task and queue types; task stack identity; bounded FIFO/reset observed\n")
+                self.assertEqual(result.stderr, "")
+
+
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
+    def test_mutex_initial_owner_and_capacity_mutations(self):
+        import os_suites
+
+        for name, before, after, refused in (
+            ("unowned", "} else if (owner != 0) {", "} else if (owner == 0) {", 28),
+            ("capacity", "if (held_depth < 32u) {", "if (held_depth < 31u) {", 27),
+        ):
+            with self.subTest(mutant=name), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_HostLinux.c"
+                text = source.read_text(encoding="utf-8")
+                self.assertEqual(text.count(before), 1)
+                source.write_text(text.replace(before, after), encoding="utf-8")
+                with os_suites.native_session(directory, "mutex-boundaries"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_native_facilities.c"), target=target,
+                    )
+                    result = os_suites.run_native([str(binary), "owned-capacity"], timeout=10)
+                    self.assertEqual(result.returncode, refused, result)
+                    self.assertEqual(result.stdout, "", result)
+                    self.assertEqual(result.stderr, "", result)
+
+    def test_suspend_generation_wrap_preserves_context_and_terminal_stop(self):
+        import os_suites
+
+        for scenario in ("initial", "wrap", "wrap-mutant", "wrap-handler-mutant", "wrap-resume-mutant", "stop", "stop-mutant"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_HostLinux.c"
+                text = source.read_text(encoding="utf-8")
+                if scenario.startswith("wrap"):
+                    # Seed only the test copy; exercise real signals across the reserved stop value.
+                    for field in ("requested", "acknowledged", "resumed"):
+                        old = f"thread->{field} = 0;"
+                        self.assertEqual(text.count(old), 1)
+                        text = text.replace(old, f"thread->{field} = INT32_MAX - 2;")
+                if scenario == "wrap-mutant":
+                    old = "generation = (previous == (INT32_MAX - 1)) ? 1 : (previous + 1);"
+                    self.assertEqual(text.count(old), 1)
+                    text = text.replace(old, "generation = previous + 1;")
+                elif scenario == "wrap-handler-mutant":
+                    old = "if (generation != __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE))"
+                    self.assertEqual(text.count(old), 1)
+                    text = text.replace(old, old.replace(" != ", " > "))
+                elif scenario == "wrap-resume-mutant":
+                    old = "if (resumed == generation)"
+                    self.assertEqual(text.count(old), 1)
+                    text = text.replace(old, "if (resumed >= generation)")
+                fixture_text = (ROOT / "core/tests/fixtures/os/os_signal_lifecycle.c").read_text(encoding="utf-8")
+                if scenario.startswith("stop"):
+                    # Deterministically publish stop immediately before the competing request CAS.
+                    matches = list(re.finditer(
+                        r"(?m)^\s*if \(__atomic_compare_exchange_n\(&thread->requested,\s*"
+                        r"&previous,\s*generation,\s*false,\s*__ATOMIC_ACQ_REL,\s*__ATOMIC_ACQUIRE\)\) \{",
+                        text,
+                    ))
+                    self.assertEqual(len(matches), 1)
+                    cas = matches[0].group()
+                    replacement = cas if scenario == "stop" else (
+                        "    __atomic_store_n(&thread->requested, generation, __ATOMIC_RELEASE);\n    if (1) {")
+                    text = text.replace(cas, "    (void)Os_HostStopActor(thread, 2000u);\n" + replacement)
+                    pauses = list(re.finditer(
+                        r"(?m)^    if \(SuspendThread\(thread\) != 0u \|\| SuspendThread\(thread\) != 1u \|\|\s*"
+                        r"valid_context\(thread, &paused\) == 0\) \{", fixture_text,
+                    ))
+                    self.assertEqual(len(pauses), 1)
+                    first_pause = pauses[0].group()
+                    fixture_text = fixture_text.replace(first_pause, (
+                        "    if (SuspendThread(thread) != UINT32_MAX || SuspendThread(thread) != UINT32_MAX ||\n"
+                        "        ResumeThread(thread) != UINT32_MAX || valid_context(thread, &stopped) == 0) {\n"
+                        "        return 16;\n    }\n    puts(\"concurrent stop preserved\");\n    return 0;\n" + first_pause))
+                source.write_text(text, encoding="utf-8")
+                fixture = directory / "signal-lifecycle.c"
+                fixture.write_text(fixture_text +
+                    "\nvoid StartupHook(void) {}\nvoid ShutdownHook(StatusType reason) { (void)reason; }\n",
+                    encoding="utf-8",
+                )
+                with os_suites.native_session(directory, "park-generation"):
+                    binary, _ = os_suites.build(
+                        directory, str(fixture), target=target,
+                        link_flags=("-Wl,--wrap=pthread_detach",),
+                    )
+                    result = os_suites.run_native([str(binary)], timeout=10)
+                    self.assertEqual(result.returncode, {
+                        "wrap-mutant": 14, "wrap-handler-mutant": 5, "wrap-resume-mutant": 17,
+                        "stop-mutant": 16,
+                    }.get(scenario, 0), result)
+                    self.assertEqual(result.stderr, "", result)
+                    expected = {
+                        "wrap-mutant": "", "wrap-handler-mutant": "", "wrap-resume-mutant": "",
+                        "stop-mutant": "", "stop": "concurrent stop preserved\n",
+                    }.get(scenario, "suspend=acknowledged resume=progress context=preserved "
+                          "terminal=irreversible running=stopped closed=detached\n")
+                    self.assertEqual(result.stdout, expected, result)
+
+    def test_native_handle_errors_and_resource_reuse(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "event-errors"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_event_errors.c"),
+                    link_flags=tuple(f"-Wl,--wrap={name}" for name in (
+                        "poll", "read", "__poll_chk", "__read_chk", "write", "close", "pthread_mutex_destroy", "clock_gettime",
+                    )),
+                )
+                for scenario in ("fortify-read", "fortify-poll"):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, -6, result)
+                        self.assertEqual(result.stdout, "", result)
+                        self.assertIn("buffer overflow detected", result.stderr, result)
+                for scenario in ("poll-error", "poll-error-infinite", "poll-invalid", "poll-hangup", "poll-revents-error",
+                                 "poll-interrupted", "read-error", "read-zero", "read-short",
+                                 "read-interrupted", "wait-read-error", "wait-read-interrupted",
+                                 "wait-read-empty", "wait-read-zero", "wait-read-short",
+                                 "write-error", "write-interrupted", "mutex-reuse", "mutex-close-error", "event-close-error-reuse",
+                                 "close-interrupted", "clock-single-normal", "clock-any-normal", "clock-all-normal",
+                                 "clock-any-initial", "clock-all-initial", "clock-single-later", "clock-any-later", "clock-all-later"):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0, result)
+                        self.assertEqual(result.stdout, "event success/reset/failure/interruption observed\n")
+                        self.assertEqual(result.stderr, "")
+
+    def test_concurrent_event_construction_and_rollback(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "native-event-release"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_native_event_release.c"),
+                    extra_sources=(ROOT / "runtime/os/src/Os_HostServices.c",),
+                    link_flags=("-Wl,--wrap=eventfd",),
+                )
+                for scenario in ("success", "failure"):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0, result)
+                        self.assertEqual(result.stdout, "concurrent native event construction and failure reuse observed\n")
+                        self.assertEqual(result.stderr, "")
+
+    def test_native_errno_across_initialization_wait_and_cleanup(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "native-errno"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_native_errno.c"),
+                    link_flags=tuple(f"-Wl,--wrap={name}" for name in (
+                        "clock_gettime", "sysconf", "mmap", "mprotect", "munmap", "eventfd",
+                        "nanosleep", "sigaddset", "sigaction", "pthread_create",
+                    )),
+                )
+                for scenario in ("normal", "sleep-interrupted", "protect-error", "create-error"):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0, result)
+                        self.assertEqual(result.stdout, "native errno initialized across signal, clock, sleep, mapping, event and cleanup calls\n")
+                        self.assertEqual(result.stderr, "")
+
     def test_kernel_calls_native_mutex_and_stack_capacity(self):
         import os_suites
 
@@ -202,6 +542,15 @@ class NativeFacilityTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result)
                     self.assertEqual(result.stdout, "native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified context=signal+self\n")
                     self.assertEqual(result.stderr, "")
+                for scenario, receipt in (
+                    ("owned-capacity", "native mutex initially-owned depth=32 overflow=rejected mask=restored\n"),
+                    ("actor-id", "native actor identity=published completion=joined-once ended=rejected\n"),
+                ):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0, result)
+                        self.assertEqual(result.stdout, receipt)
+                        self.assertEqual(result.stderr, "")
                 if not os.environ.get("AUTOSAR_SANITIZE"):
                     depth = os_suites.run_native([str(binary), "depth"], timeout=15)
                     self.assertEqual(depth.returncode, 0, depth)

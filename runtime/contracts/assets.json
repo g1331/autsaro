@@ -515,7 +515,82 @@
       ]
     },
     {
+      "path": "runtime/os/patches/0015-typed-port-state.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0016-essential-boolean-controls.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0017-portable-header-paths.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0018-windows-thread-setup-errors.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/0019-windows-native-handoff-errors.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
       "path": "runtime/os/patches/linux/0001-controlled-posix-port.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch",
       "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"

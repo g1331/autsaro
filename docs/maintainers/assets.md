@@ -28,7 +28,7 @@ uv run --locked python -B -m unittest discover -s tests/python -p test_developme
 
 ## 上游及工具链升级
 
-FreeRTOS 或固定 GCC/binutils 升级是独立改动：核对来源、许可、上游 commit/tag、两份 source manifest 与目标锁，审阅补丁兼容性并完整执行原生消费者。构建继续对 FreeRTOS 内核和端口实际字节与 source manifest 比较；source-manifest.json 的 `patches` map 单独固定 15 个受控采用补丁的仓库相对路径与摘要，update 不接纳补丁变化；不要用项目资产更新命令吸收上游变化。
+FreeRTOS 或固定 GCC/binutils 升级是独立改动：核对来源、许可、上游 commit/tag、两份 source manifest 与目标锁，审阅补丁兼容性并完整执行原生消费者。构建继续对 FreeRTOS 内核和端口实际字节与 source manifest 比较；source-manifest.json 的 `patches` map 单独固定受控采用补丁的仓库相对路径与摘要，update 不接纳补丁变化；不要用项目资产更新命令吸收上游变化。
 
 ## 补丁后内核身份
 

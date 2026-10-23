@@ -101,7 +101,10 @@ OS_MEMMAP static Os_StackFaultType fault_records[OS_NATIVE_STACKS]; /**< Per-act
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
+OS_MEMMAP int Os_StackHasFault(void)
+{
+    return (InterlockedCompareExchange(&fault_count, 0, 0) > 0) ? 1 : 0;
+}
 
 OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 
@@ -127,7 +130,7 @@ OS_MEMMAP static void publish_fault(
     local->origin = origin;
     local->sp = sp;
     local->address = address;
-    InterlockedExchange(&local->published, 1);
+    (void)InterlockedExchange(&local->published, 1);
     if (InterlockedCompareExchange(&fault_claimed, 1, 0) == 0) {
         Os_Fault.thread_id = record->thread_id;
         Os_Fault.role = record->role;
@@ -135,9 +138,9 @@ OS_MEMMAP static void publish_fault(
         Os_Fault.origin = origin;
         Os_Fault.sp = sp;
         Os_Fault.address = address;
-        InterlockedExchange(&Os_Fault.published, 1);
+        (void)InterlockedExchange(&Os_Fault.published, 1);
     }
-    InterlockedIncrement(&fault_count);
+    (void)InterlockedIncrement(&fault_count);
     Os_BackendStackFault(current_stack != NULL ? current_stack->role : record->role);
 }
 
@@ -194,7 +197,7 @@ OS_MEMMAP void Os_StackInit(void)
     if (AddVectoredExceptionHandler(1u, stack_exception) == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (!Os_StackRegister('S')) {
+    if (Os_StackRegister('S') == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -231,7 +234,10 @@ OS_MEMMAP int Os_StackRegister(char role)
     ULONG guarantee = native_stack_guarantee(role);
     LONG index = InterlockedIncrement(&stack_count) - 1;
     Os_NativeStackType *record;
-    if (index >= (LONG)OS_NATIVE_STACKS || !SetThreadStackGuarantee(&guarantee)) {
+    if (index >= (LONG)OS_NATIVE_STACKS) {
+        return 0;
+    }
+    if (SetThreadStackGuarantee(&guarantee) == 0) {
         return 0;
     }
     record = &stacks[index];
@@ -271,7 +277,7 @@ OS_MEMMAP int Os_StackRegister(char role)
     }
     record->reserve = record->high - record->reserve_low;
     guarantee = 0u;
-    if (!SetThreadStackGuarantee(&guarantee)) {
+    if (SetThreadStackGuarantee(&guarantee) == 0) {
         return 0;
     }
     record->guarantee = guarantee;
@@ -288,9 +294,15 @@ OS_MEMMAP void Os_StackCheck(void)
     if (current_stack == NULL) {
         return; /* Public preparation before StartOS does not yet execute an OS task. */
     }
-    if ((sp < current_stack->reserve_low) || (sp >= current_stack->high) ||
-        (VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region)) ||
-        (region.State != MEM_COMMIT) || ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u)) {
+    boolean invalid = (sp < current_stack->reserve_low) || (sp >= current_stack->high);
+    if (!invalid) {
+        invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);
+    }
+    if (!invalid) {
+        invalid =
+            (region.State != MEM_COMMIT) || ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u);
+    }
+    if (invalid) {
         publish_fault(current_stack, 0u, sp, sp, 'M');
     }
     current_stack->sp = sp;
@@ -306,10 +318,15 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
         if (record->thread_id == id) {
             uintptr_t sp = (uintptr_t)context->Rsp;
             MEMORY_BASIC_INFORMATION region;
-            if (sp < record->reserve_low || sp >= record->high ||
-                VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region) ||
-                region.State != MEM_COMMIT ||
-                (region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u) {
+            boolean invalid = (sp < record->reserve_low) || (sp >= record->high);
+            if (!invalid) {
+                invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);
+            }
+            if (!invalid) {
+                invalid = (region.State != MEM_COMMIT) ||
+                          ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u);
+            }
+            if (invalid) {
                 publish_fault(record, 0u, sp, sp, 'M');
             }
             record->sp = sp;
@@ -373,21 +390,29 @@ OS_MEMMAP void Os_StackFatalExit(void)
         }
     }
     for (i = 0u; i < sizeof(fatal_prefix) - 1u; ++i) {
-        fatal_text[used++] = fatal_prefix[i];
+        fatal_text[used] = fatal_prefix[i];
+        ++used;
     }
-    fatal_text[used++] = fault->role;
+    fatal_text[used] = fault->role;
+    ++used;
     for (i = 0u; i < sizeof(fatal_middle) - 1u; ++i) {
-        fatal_text[used++] = fatal_middle[i];
+        fatal_text[used] = fatal_middle[i];
+        ++used;
     }
     for (i = 0u; i < 8u; ++i) {
-        fatal_text[used++] = "0123456789ABCDEF"[(fault->exception >> (28u - 4u * i)) & 15u];
+        fatal_text[used] = "0123456789ABCDEF"[(fault->exception >> (28u - 4u * i)) & 15u];
+        ++used;
     }
     for (i = 0u; i < sizeof(fatal_suffix) - 1u; ++i) {
-        fatal_text[used++] = fatal_suffix[i];
+        fatal_text[used] = fatal_suffix[i];
+        ++used;
     }
     /* No CRT/ordinary mutex/allocation or another Hook on exhausted control stacks. */
-    if (fault_output == NULL || fault_output == INVALID_HANDLE_VALUE ||
-        fatal_write(fault_output, fatal_text, used) == 0) {
+    int written = 0;
+    if ((fault_output != NULL) && (fault_output != INVALID_HANDLE_VALUE)) {
+        written = fatal_write(fault_output, fatal_text, used);
+    }
+    if (written == 0) {
         (void)fatal_write(fault_error, fatal_text, used);
     }
     ExitProcess(E_OS_STACKFAULT);

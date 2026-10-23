@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Native OS static task and queue buffers now require task.h/queue.h and use their actual kernel object types, list sentinels use complete list items, and invalid Task/ISR ID constants retain their public identifier types. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed headers, list storage and controlled patch identities (#58)
+
 - Native Task activations restart through the sole port's platform unwinder on the same thread and execution stack. Sealed C99 consumers now require exception-unwind metadata, including sanitizer cleanup frames; regenerate deliveries and rebuild all application and runtime translation units (#60)
 
 - HostBatch, probe and OS lifecycle/stack reports use bounded native byte I/O, with complete output required before confirmation. Raw input bytes, partial writes, interrupted calls and closed pipes retain explicit outcomes. CRT stream setup is removed; application hooks using CRT streams must flush their own output. Regenerate sealed deliveries and rebuild consumers for the additive host I/O header and removed stream-mode helper (#60)
@@ -25,6 +27,16 @@
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
 ### Fixed
+
+- Linux host and controlled POSIX port synchronization now sequence conditional native operations and volatile state reads explicitly; backend startup, readiness and interrupt admission preserve their existing failure and handoff order. Regenerate sealed deliveries for the changed source and selected patch (#58)
+
+- Linux native pause generations now cycle below the reserved terminal-stop value and preserve concurrent stop requests. Long-running actors remain resumable across the generation boundary; regenerate sealed deliveries for the corrected host source (#58)
+
+- Native Task restart uses a typed assembler PC accessor and keeps its continuation private. Linux constructor rollback remains atomic and event waits distinguish clock failures from ordinary timeouts; Windows thread setup and native handoff failures stop before consuming invalid synchronization state. Regenerate sealed deliveries and rebuild native consumers for the changed private ABI and controlled patches (#58)
+
+- Native integer predicates and BOOL flags now stay separate from AUTOSAR Boolean constants; private Linux declarations leave TRUE/FALSE ownership to Platform_Types, independent of include order. Existing public result values and native handle contracts are preserved (#58)
+
+- Linux OS events classify syscall errors, interruptions and incomplete reads; event close errors release descriptor ownership safely, and successfully destroyed mutexes return their fixed handle slots for reuse (#58)
 
 - Dcm and CanTp timing events must match the fixed 1 ms timer base; validation rejects consistently remapped slower schedules at their source events before generation (#57)
 

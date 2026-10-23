@@ -17,6 +17,9 @@ static StatusType line(const char *text) {
 int main(void) {
     unsigned index;
     static const char *const malformed[] = {
+        "RX",
+        "RX bad 1 AA",
+        "RX 1 bad AA",
         "RX 800 9 000000000000000000",
         "RX 2048 4 78563412",
         "RX -1 4 78563412",
@@ -34,6 +37,8 @@ int main(void) {
         "BEGIN 1",
     };
     Ecu_HostBatchInitialize(&batch);
+    assert(line("BEGIN") == E_OS_VALUE);
+    assert(batch.open == 0u && batch.count == 0u);
     assert(line("BEGIN 0") == E_OK);
     for (index = 0u; index < 256u; ++index) {
         assert(line("RX 0x320 4 78563412") == E_OK);

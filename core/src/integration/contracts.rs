@@ -446,6 +446,20 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
                 } else {
                     parameters
                 };
+                let prototype = c_layout::signature(
+                    &if runnable {
+                        format!("{scope}_CODE {}", symbol.return_type)
+                    } else {
+                        symbol.return_type.clone()
+                    },
+                    &symbol.symbol,
+                    &parameters,
+                    ";",
+                    runnable,
+                );
+                if unnamed && !symbol.arguments.is_empty() {
+                    docs.push_str(" * MR12 RULE 8.2 VIOLATION: SWS_Rte_06705 requires nameless parameters; ordered parameter contracts and typed consumers preserve the interface.\n");
+                }
                 declaration(
                     &mut body,
                     if let Some(port) = port {
@@ -459,17 +473,7 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
                     } else {
                         "Call the selected synchronous component server."
                     },
-                    &c_layout::signature(
-                        &if runnable {
-                            format!("{scope}_CODE {}", symbol.return_type)
-                        } else {
-                            symbol.return_type.clone()
-                        },
-                        &symbol.symbol,
-                        &parameters,
-                        ";",
-                        runnable,
-                    ),
+                    &prototype,
                     &docs,
                 );
                 if runnable {

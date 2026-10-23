@@ -4,18 +4,19 @@
 #include "Os_Host.h"
 #include "Rte_Main.h"
 #include "Os_HostIo.h"
+#include <errno.h>
 #include <stdlib.h>
 
-static void require(int condition)
+static void require(boolean condition)
 {
-    if (condition == 0) {
+    if (condition == FALSE) {
         ShutdownOS(E_OS_STATE);
     }
 }
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
 static unsigned
     failure_stage; /**< Main initializes before OS startup; hooks only read; no Init reset. */
-int Ecu_TargetTestFailStage(unsigned stage) { return stage == failure_stage; }
+int Ecu_TargetTestFailStage(unsigned stage) { return (stage == failure_stage) ? 1 : 0; }
 void Ecu_TargetTestRetire(unsigned stage)
 {
     char storage[64];
@@ -75,7 +76,8 @@ static Os_HostThreadResultType control(void *argument)
             if (status == E_OK) {
                 break;
             }
-            require((status == E_OS_NOFUNC) && ((Os_HostMonotonicMs() - started) < 5000u));
+            require(status == E_OS_NOFUNC);
+            require((Os_HostMonotonicMs() - started) < 5000u);
             Os_HostSleepMs(1u);
         }
         require((completion.epoch == step) && (completion.kernel_tick == (uint32_t)step));
@@ -91,7 +93,9 @@ int main(int argc, char **argv)
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
     if (argc == 2) {
         char *end;
-        unsigned long value = strtoul(argv[1], &end, 10);
+        unsigned long value;
+        errno = 0;
+        value = strtoul(argv[1], &end, 10);
         if ((argv[1][0] < '0') || (argv[1][0] > '9') || (*end != '\0') || (value > 8u)) {
             return 98;
         }

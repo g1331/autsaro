@@ -40,14 +40,41 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0012-nested-interrupt-dispatch.patch",
     "runtime/os/patches/0013-interrupt-source-repetition.patch",
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch",
+    "runtime/os/patches/0015-typed-port-state.patch",
+    "runtime/os/patches/0016-essential-boolean-controls.patch",
+    "runtime/os/patches/0017-portable-header-paths.patch",
+    "runtime/os/patches/0018-windows-thread-setup-errors.patch",
+    "runtime/os/patches/0019-windows-native-handoff-errors.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",
     "runtime/os/patches/0007-controlled-tick.patch",
     "runtime/os/patches/0008-task-hook-boundaries.patch",
+    "runtime/os/patches/0015-typed-port-state.patch",
+    "runtime/os/patches/0016-essential-boolean-controls.patch",
+    "runtime/os/patches/0017-portable-header-paths.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
+    "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
+    (
+        "runtime/os/patches/0017-portable-header-paths.patch",
+        &["include/deprecated_definitions.h"],
+    ),
+    (
+        "runtime/os/patches/0016-essential-boolean-controls.patch",
+        &["tasks.c", "queue.c", "include/list.h", "include/task.h"],
+    ),
+    (
+        "runtime/os/patches/0015-typed-port-state.patch",
+        &[
+            "tasks.c",
+            "include/task.h",
+            "include/FreeRTOS.h",
+            "queue.c",
+            "include/queue.h",
+        ],
+    ),
     (
         "runtime/os/patches/0003-activation-ready-policy.patch",
         &["tasks.c", "include/task.h", "include/FreeRTOS.h"],

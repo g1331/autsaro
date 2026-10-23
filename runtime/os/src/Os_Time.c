@@ -126,7 +126,9 @@ OS_MEMMAP static const Os_TaskConfigType *configured_task(const Os_TargetConfigT
 
 OS_MEMMAP static sint32 valid_cycle(const Os_CounterConfigType *counter, TickType cycle)
 {
-    return (cycle == 0u) || ((cycle >= counter->minimum_cycle) && (cycle <= counter->maximum));
+    return ((cycle == 0u) || ((cycle >= counter->minimum_cycle) && (cycle <= counter->maximum)))
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
@@ -256,8 +258,8 @@ OS_MEMMAP void Os_TimeInit(AppModeType mode)
         if ((owner->autostart_modes & mode) == 0u) {
             Os_BackendShutdown(E_OS_VALUE);
         }
-        completion_event = Os_PortEvent(NULL, TRUE, FALSE, NULL);
-        attention_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+        completion_event = Os_PortEvent(NULL, 1, 0, NULL);
+        attention_event = Os_PortEvent(NULL, 0, 0, NULL);
     }
 }
 
@@ -282,14 +284,16 @@ OS_MEMMAP void Os_TimeAutostart(AppModeType mode)
 OS_MEMMAP void Os_TimeClose(void)
 {
     (void)InterlockedOr(&tick_state, TIME_CLOSED);
-    if ((completion_event != NULL) && (Os_HostSetEvent(completion_event) == 0)) {
-        (void)InterlockedExchange(&signal_failed, 1);
+    if (completion_event != NULL) {
+        if (Os_HostSetEvent(completion_event) == 0) {
+            (void)InterlockedExchange(&signal_failed, 1);
+        }
     }
 }
 
 OS_MEMMAP sint32 Os_TimeSignalFailed(void)
 {
-    return InterlockedCompareExchange(&signal_failed, 0, 0) != 0;
+    return (InterlockedCompareExchange(&signal_failed, 0, 0) != 0) ? 1 : 0;
 }
 
 OS_MEMMAP void Os_TimeReportAction(StatusType status)
@@ -609,7 +613,9 @@ OS_MEMMAP sint32 Os_TimeBeginTick(void)
     if (Os_Config->time->wake_event == 0u) {
         return 0;
     }
-    return InterlockedCompareExchange(&tick_state, TIME_PROCESSING, TIME_PENDING) == TIME_PENDING;
+    return (InterlockedCompareExchange(&tick_state, TIME_PROCESSING, TIME_PENDING) == TIME_PENDING)
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP void Os_TimeTick(void)
@@ -741,37 +747,46 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
                                        uint32 timeout_ms,
                                        Os_TickCompletionType *record)
 {
-    DWORD started_at;
-    if ((timeout_ms == 0u) || (timeout_ms > 5000u)) {
-        return E_OS_VALUE;
-    }
-    started_at = GetTickCount();
-    for (;;) {
-        const HANDLE observed[2] = {completion_event, attention_event};
-        DWORD elapsed;
-        DWORD waited;
-        StatusType status = Os_TargetTickCompletion(ticket, record);
-        if (status != E_OS_NOFUNC) {
-            return status;
-        }
-        elapsed = GetTickCount() - started_at;
-        if (elapsed >= timeout_ms) {
-            return E_OS_NOFUNC;
-        }
-        /* Native timed waits may round up to the host timer period (about 15.6 ms on
-         * Windows), so pending native work must wake this producer explicitly. */
-        waited = WaitForMultipleObjects(2u, observed, FALSE, timeout_ms - elapsed);
-        if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
-            /* A simultaneous close wins over a timeout or attention report. */
+    StatusType status = E_OS_VALUE;
+    if ((timeout_ms != 0u) && (timeout_ms <= 5000u)) {
+        const DWORD started_at = GetTickCount();
+        boolean waiting = TRUE;
+        while (waiting) {
+            const HANDLE observed[2] = {completion_event, attention_event};
             status = Os_TargetTickCompletion(ticket, record);
-            return ((status == E_OS_NOFUNC) && (Os_TargetReady() == 0)) ? E_OS_STATE : status;
-        }
-        if (waited != WAIT_OBJECT_0) {
-            (void)InterlockedExchange(&signal_failed, 1);
-            Os_BackendRequestShutdown(E_OS_STATE);
-            return E_OS_STATE;
+            if (status != E_OS_NOFUNC) {
+                waiting = FALSE;
+            } else {
+                const DWORD elapsed = GetTickCount() - started_at;
+                if (elapsed >= timeout_ms) {
+                    waiting = FALSE;
+                } else {
+                    /* Native timed waits can round up to the host timer period;
+                     * pending native work wakes this producer explicitly. */
+                    const DWORD waited =
+                        WaitForMultipleObjects(2u, observed, 0, timeout_ms - elapsed);
+                    if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
+                        /* A simultaneous close wins over timeout or attention. */
+                        status = Os_TargetTickCompletion(ticket, record);
+                        if (status == E_OS_NOFUNC) {
+                            if (Os_TargetReady() == 0) {
+                                status = E_OS_STATE;
+                            }
+                        }
+                        waiting = FALSE;
+                    } else if (waited != WAIT_OBJECT_0) {
+                        (void)InterlockedExchange(&signal_failed, 1);
+                        Os_BackendRequestShutdown(E_OS_STATE);
+                        status = E_OS_STATE;
+                        waiting = FALSE;
+                    } else {
+                        /* Completion publication is rechecked before returning. */
+                    }
+                }
+            }
         }
     }
+    return status;
 }
 
 OS_MEMMAP static StatusType time_owner(void)
@@ -874,9 +889,15 @@ OS_MEMMAP void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskTyp
     const Os_TimeConfigType *config = Os_Config->time;
     observe_tick_waiting();
     Os_IntegrationOnWaiting(id, pending, predicate);
+    boolean publish = FALSE;
     if ((config != NULL) && (id == config->owner) && (pending == 0u) &&
-        ((predicate & config->wake_event) != 0u) && (Os_MailboxQuiescent() != 0) &&
-        (InterlockedCompareExchange(&tick_state, TIME_PUBLISHING, TIME_MARKED) == TIME_MARKED)) {
+        ((predicate & config->wake_event) != 0u)) {
+        if (Os_MailboxQuiescent() != 0) {
+            publish = InterlockedCompareExchange(&tick_state, TIME_PUBLISHING, TIME_MARKED) ==
+                      TIME_MARKED;
+        }
+    }
+    if (publish) {
         completion.epoch = requested_epoch;
         completion.ticket = requested_epoch;
         completion.kernel_tick = (uint32)xTaskGetTickCount();

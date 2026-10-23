@@ -39,6 +39,9 @@ static DWORD WINAPI actor(void *argument)
         return 3u;
     }
     for (;;) {
+        if (InterlockedCompareExchange(&phase, 0, 0) > 1 && Os_HostSetEvent(continued) == 0) {
+            return 3u;
+        }
         Sleep(1u);
     }
     return 0u;
@@ -95,13 +98,33 @@ int main(void)
         WaitForSingleObject(ready, 2000u) != WAIT_OBJECT_0) {
         return 3;
     }
-    if (SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {
+    if (SuspendThread(NULL) != UINT32_MAX || ResumeThread(NULL) != UINT32_MAX ||
+        GetThreadContext(NULL, &paused) != FALSE || SuspendThread(ready) != UINT32_MAX ||
+        ResumeThread(ready) != UINT32_MAX || GetThreadContext(ready, &paused) != FALSE ||
+        GetThreadContext(thread, NULL) != FALSE) {
+        return 19;
+    }
+    if (SuspendThread(thread) != 0u || SuspendThread(thread) != 1u ||
+        valid_context(thread, &paused) == 0) {
         return 4;
     }
     (void)InterlockedExchange(&phase, 1);
     if (ResumeThread(thread) != 1u || WaitForSingleObject(continued, 2000u) != WAIT_OBJECT_0 ||
         SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {
         return 5;
+    }
+    for (unsigned round = 0u; round < 4u; ++round) {
+        if (ResetEvent(continued) == 0) {
+            return 18;
+        }
+        (void)InterlockedExchange(&phase, (LONG)round + 2);
+        if (WaitForSingleObject(continued, 100u) != WAIT_TIMEOUT) {
+            return 17;
+        }
+        if (ResumeThread(thread) != 1u || WaitForSingleObject(continued, 2000u) != WAIT_OBJECT_0 ||
+            SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {
+            return 14;
+        }
     }
     if (Os_HostStopActor(thread, 2000u) == 0 || valid_context(thread, &stopped) == 0) {
         return 6;
@@ -114,8 +137,8 @@ int main(void)
         paused_native.uc_mcontext.rip != stopped_native.uc_mcontext.rip) {
         return 6;
     }
-    if (ResumeThread(thread) != UINT32_MAX || Os_HostStopActor(thread, 2000u) == 0 ||
-        WaitForSingleObject(thread, 0u) != WAIT_TIMEOUT) {
+    if (ResumeThread(thread) != UINT32_MAX || SuspendThread(thread) != UINT32_MAX ||
+        Os_HostStopActor(thread, 2000u) == 0 || WaitForSingleObject(thread, 0u) != WAIT_TIMEOUT) {
         return 7;
     }
     if (ResetEvent(ready) == 0) {

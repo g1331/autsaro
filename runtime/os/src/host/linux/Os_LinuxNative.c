@@ -94,7 +94,7 @@ OS_MEMMAP static int map_address(const char **cursor, uintptr_t *value)
     }
     *cursor = text;
     *value = result;
-    return (valid != 0) && (count != 0u);
+    return ((valid != 0) && (count != 0u)) ? 1 : 0;
 }
 
 OS_MEMMAP static int mapped_line(const char *line,

@@ -109,7 +109,10 @@ OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
 
-OS_MEMMAP int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
+OS_MEMMAP int Os_StackHasFault(void)
+{
+    return (InterlockedCompareExchange(&fault_count, 0, 0) > 0) ? 1 : 0;
+}
 
 OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 
@@ -205,9 +208,14 @@ OS_MEMMAP void Os_StackPrepare(void)
         Os_BackendShutdown(E_OS_STATE);
     }
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
-    sigfillset(&handler.sa_mask);
+    (void)sigfillset(&handler.sa_mask);
     handler.sa_sigaction = guard_signal;
-    if (sigaction(SIGSEGV, &handler, NULL) != 0 || sigaction(SIGBUS, &handler, NULL) != 0) {
+    errno = 0;
+    if (sigaction(SIGSEGV, &handler, NULL) != 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    errno = 0;
+    if (sigaction(SIGBUS, &handler, NULL) != 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -257,32 +265,34 @@ OS_MEMMAP int Os_StackRegister(char role)
     uintptr_t low = 0u;
     uintptr_t high = 0u;
     size_t guard = 0u;
-    if (index < 0 || index >= (LONG)OS_NATIVE_STACKS ||
-        registration_stack_range(role, &low, &high, &guard) == 0 || low >= high ||
-        guard >= high - low) {
-        return 0;
+    int result = 0;
+    if ((index >= 0) && (index < (LONG)OS_NATIVE_STACKS)) {
+        if (registration_stack_range(role, &low, &high, &guard) != 0) {
+            if ((low < high) && (guard < (high - low))) {
+                record = &stacks[index];
+                alternate.ss_sp = altstacks[index].bytes;
+                alternate.ss_size = sizeof(altstacks[index].bytes);
+                alternate.ss_flags = 0;
+                if (Os_LinuxAltStack(&alternate) == 0) {
+                    record->thread_id = GetCurrentThreadId();
+                    record->role = role;
+                    record->reserve_low = low;
+                    record->high = high;
+                    record->reserve = high - low;
+                    record->guard = guard;
+                    record->committed_low = low + guard;
+                    record->committed = high - record->committed_low;
+                    record->altstack_low = (uintptr_t)alternate.ss_sp;
+                    record->altstack_size = alternate.ss_size;
+                    current_stack = record;
+                    Os_StackCheck();
+                    (void)InterlockedExchange(&stack_published[index], 1);
+                    result = 1;
+                }
+            }
+        }
     }
-    record = &stacks[index];
-    alternate.ss_sp = altstacks[index].bytes;
-    alternate.ss_size = sizeof(altstacks[index].bytes);
-    alternate.ss_flags = 0;
-    if (Os_LinuxAltStack(&alternate) != 0) {
-        return 0;
-    }
-    record->thread_id = GetCurrentThreadId();
-    record->role = role;
-    record->reserve_low = low;
-    record->high = high;
-    record->reserve = high - low;
-    record->guard = guard;
-    record->committed_low = low + guard;
-    record->committed = high - record->committed_low;
-    record->altstack_low = (uintptr_t)alternate.ss_sp;
-    record->altstack_size = alternate.ss_size;
-    current_stack = record;
-    Os_StackCheck();
-    (void)InterlockedExchange(&stack_published[index], 1);
-    return 1;
+    return result;
 }
 
 OS_MEMMAP void Os_StackCheck(void)
@@ -344,7 +354,8 @@ OS_MEMMAP static size_t append_hex(char *output, size_t offset, DWORD value)
 {
     unsigned index;
     for (index = 0u; index < 8u; ++index) {
-        output[offset++] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
+        output[offset] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
+        ++offset;
     }
     return offset;
 }
@@ -406,15 +417,19 @@ OS_MEMMAP void Os_StackFatalExit(void)
         }
     }
     for (index = 0u; index < sizeof(fatal_prefix) - 1u; ++index) {
-        output[used++] = fatal_prefix[index];
+        output[used] = fatal_prefix[index];
+        ++used;
     }
-    output[used++] = fault->role;
+    output[used] = fault->role;
+    ++used;
     for (index = 0u; index < sizeof(fatal_middle) - 1u; ++index) {
-        output[used++] = fatal_middle[index];
+        output[used] = fatal_middle[index];
+        ++used;
     }
     used = append_hex(output, used, fault->signal_number);
     for (index = 0u; index < sizeof(fatal_suffix) - 1u; ++index) {
-        output[used++] = fatal_suffix[index];
+        output[used] = fatal_suffix[index];
+        ++used;
     }
     /* This terminal path never resumes: block only this thread's SIGPIPE so a
      * closed output can fall back to stderr without replacing the fault status.

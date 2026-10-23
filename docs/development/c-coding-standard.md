@@ -43,6 +43,8 @@
 
 公开头中的每个函数在声明前说明契约。标准接口只写本实现的选择与限制，不抄规范原文；四项中不适用的写“无”，不省略。注释使用英文，与现有代码一致：
 
+为声明增加标准处置说明（如 MR12）时，并入该声明现有的契约注释；不在契约与声明之间插入独立注释块，以免断开 API 文档检查和生成消费者的关联。
+
 ```c
 /** <What the call does; cite the SWS item where it helps>.
  * @param[in] <Name> <Accepted range; who owns a pointed-to object>.
@@ -141,6 +143,7 @@ void Server_Run(uint8, uint32 *);
 - 具体记录位于对应模块的标准篇（`docs/standards/`），沿用现有记录路径；[ADR 0023 的逐项格式](../adr/0023-autosar-required-conflict-disposition.md#逐项记录与复核)连接固定提交／profile／target／program／TU、规则、文件／源码行和符号、实际调用闭包、SWS 全文必要性及替代方案、合法 MISRA 版次／amendment／TC、风险控制与验证、评估和独立复核。原授权来源、评估者及日期、复核 head／发现／处置分开写，不把实现者写成新增批准人；范围外新例外先完成具体文本再由用户决定。
 - 只有具体记录满足原授权范围、规范允许条件与上述全部评估／复核前提后才在源码中加注释，注释中的规则编号与记录一致；Cppcheck 的原始诊断照常保留，注释不是 suppression。本次政策同步不批准具体诊断，不修改既有批准表或源码注释。
 - 已批准的偏离：[PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7，[Com](../standards/com.md#misra-偏离) 的 Rule 8.7 与 2.5，[CanTp](../standards/cantp.md#misra-偏离) 的 Rule 8.7，[ComM](../standards/comm/README.md#misra-偏离) 的 Rule 8.7 与 2.5，[BswM](../standards/bswm/README.md#misra-偏离) 的 Rule 8.7 与 2.3。其余模块整改时补齐所需记录与注释。
+- ADR0023原授权下的具体有界冲突处置见[RTE无名role参数](../standards/rte/contracts.md#无名-role-参数的逐处核查)的Rule 8.2记录；它不改变其他源码点或221项人工评估的状态。
 
 ## 自动检查
 

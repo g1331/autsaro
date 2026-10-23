@@ -8,7 +8,6 @@ bugprone-tagged-union-member-count runtime/os/src/Os_Backend.h typedef struct {
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if ((previous[i] == SUSPENDED) && (state != SUSPENDED)) {
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if (completed[i] != 0u) {
 clang-analyzer-security.ArrayBound runtime/os/src/Os_Time.c TickType current = values[counter];
-clang-analyzer-unix.BlockInCriticalSection runtime/os/src/host/linux/Os_HostLinux.c read(handle->fd, &value, sizeof(value)) == sizeof(value)) {
 readability-function-size generated/src/Ecu_RuntimeConfig.c RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)
 readability-function-size generated/src/Os_Arti.c OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 readability-function-size runtime/bsw/src/Can.c CAN_CODE void Can_InternalSetMode(CanMode mode)

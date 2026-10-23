@@ -111,10 +111,14 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
     }
     if (equals(tokens[0], "BEGIN", 5u) != 0) {
         uint64_t at;
+        boolean parsed = count == 2u;
         if (batch->open != 0u) {
             return reject(batch, E_OS_STATE);
         }
-        if ((count != 2u) || (number(tokens[1], 10u, UINT64_MAX, &at) == 0)) {
+        if (parsed) {
+            parsed = number(tokens[1], 10u, UINT64_MAX, &at) != 0;
+        }
+        if (!parsed) {
             return E_OS_VALUE;
         }
         if ((at < batch->completed_epoch) || ((at - batch->completed_epoch) > ECU_BATCH_MAX_SPAN)) {
@@ -156,6 +160,7 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
         unsigned base = 10u;
         Ecu_BatchFrame frame = {0};
         size_t byte;
+        boolean parsed = count == 4u;
         if (batch->open == 0u) {
             return E_OS_STATE;
         }
@@ -169,9 +174,13 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
             ((tokens[1].data[1] == 'x') || (tokens[1].data[1] == 'X'))) {
             base = 16u;
         }
-        if ((count != 4u) || (number(tokens[1], base, UINT64_C(2047), &id) == 0) ||
-            (number(tokens[2], 10u, UINT64_C(8), &dlc) == 0) || (dlc == UINT64_C(0)) ||
-            (tokens[3].length != (2u * (size_t)dlc))) {
+        if (parsed) {
+            parsed = number(tokens[1], base, UINT64_C(2047), &id) != 0;
+        }
+        if (parsed) {
+            parsed = number(tokens[2], 10u, UINT64_C(8), &dlc) != 0;
+        }
+        if ((!parsed) || (dlc == UINT64_C(0)) || (tokens[3].length != (2u * (size_t)dlc))) {
             return reject(batch, E_OS_VALUE);
         }
         frame.id = (uint32_t)id;

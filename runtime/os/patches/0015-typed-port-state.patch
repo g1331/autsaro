@@ -1,0 +1,957 @@
+--- a/include/FreeRTOS.h
++++ b/include/FreeRTOS.h
+@@ -3160,123 +3160,11 @@
+     #endif
+ } StaticList_t;
+ 
+-/*
+- * In line with software engineering best practice, especially when supplying a
+- * library that is likely to change in future versions, FreeRTOS implements a
+- * strict data hiding policy.  This means the Task structure used internally by
+- * FreeRTOS is not accessible to application code.  However, if the application
+- * writer wants to statically allocate the memory required to create a task then
+- * the size of the task object needs to be known.  The StaticTask_t structure
+- * below is provided for this purpose.  Its sizes and alignment requirements are
+- * guaranteed to match those of the genuine structure, no matter which
+- * architecture is being used, and no matter how the values in FreeRTOSConfig.h
+- * are set.  Its contents are somewhat obfuscated in the hope users will
+- * recognise that it would be unwise to make direct use of the structure members.
+- */
+-typedef struct xSTATIC_TCB
+-{
+-    void * pxDummy1;
+-    #if ( portUSING_MPU_WRAPPERS == 1 )
+-        xMPU_SETTINGS xDummy2;
+-    #endif
+-    #if ( configUSE_CORE_AFFINITY == 1 ) && ( configNUMBER_OF_CORES > 1 )
+-        UBaseType_t uxDummy26;
+-    #endif
+-    #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
+-        uint64_t ullOsReadySequenceDummy;
+-    #endif
+-    StaticListItem_t xDummy3[ 2 ];
+-    UBaseType_t uxDummy5;
+-    void * pxDummy6;
+-    #if ( configNUMBER_OF_CORES > 1 )
+-        BaseType_t xDummy23;
+-        UBaseType_t uxDummy24;
+-    #endif
+-    uint8_t ucDummy7[ configMAX_TASK_NAME_LEN ];
+-    #if ( configUSE_TASK_PREEMPTION_DISABLE == 1 )
+-        BaseType_t xDummy25;
+-    #endif
+-    #if ( ( portSTACK_GROWTH > 0 ) || ( configRECORD_STACK_HIGH_ADDRESS == 1 ) )
+-        void * pxDummy8;
+-    #endif
+-    #if ( portCRITICAL_NESTING_IN_TCB == 1 )
+-        UBaseType_t uxDummy9;
+-    #endif
+-    #if ( configUSE_TRACE_FACILITY == 1 )
+-        UBaseType_t uxDummy10[ 2 ];
+-    #endif
+-    #if ( configUSE_MUTEXES == 1 )
+-        UBaseType_t uxDummy12[ 2 ];
+-    #endif
+-    #if ( configUSE_APPLICATION_TASK_TAG == 1 )
+-        void * pxDummy14;
+-    #endif
+-    #if ( configNUM_THREAD_LOCAL_STORAGE_POINTERS > 0 )
+-        void * pvDummy15[ configNUM_THREAD_LOCAL_STORAGE_POINTERS ];
+-    #endif
+-    #if ( configGENERATE_RUN_TIME_STATS == 1 )
+-        configRUN_TIME_COUNTER_TYPE ulDummy16;
+-    #endif
+-    #if ( configUSE_C_RUNTIME_TLS_SUPPORT == 1 )
+-        configTLS_BLOCK_TYPE xDummy17;
+-    #endif
+-    #if ( configUSE_TASK_NOTIFICATIONS == 1 )
+-        uint32_t ulDummy18[ configTASK_NOTIFICATION_ARRAY_ENTRIES ];
+-        uint8_t ucDummy19[ configTASK_NOTIFICATION_ARRAY_ENTRIES ];
+-    #endif
+-    #if ( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )
+-        uint8_t uxDummy20;
+-    #endif
+-
+-    #if ( INCLUDE_xTaskAbortDelay == 1 )
+-        uint8_t ucDummy21;
+-    #endif
+-    #if ( configUSE_POSIX_ERRNO == 1 )
+-        int iDummy22;
+-    #endif
+-} StaticTask_t;
+-
+-/*
+- * In line with software engineering best practice, especially when supplying a
+- * library that is likely to change in future versions, FreeRTOS implements a
+- * strict data hiding policy.  This means the Queue structure used internally by
+- * FreeRTOS is not accessible to application code.  However, if the application
+- * writer wants to statically allocate the memory required to create a queue
+- * then the size of the queue object needs to be known.  The StaticQueue_t
+- * structure below is provided for this purpose.  Its sizes and alignment
+- * requirements are guaranteed to match those of the genuine structure, no
+- * matter which architecture is being used, and no matter how the values in
+- * FreeRTOSConfig.h are set.  Its contents are somewhat obfuscated in the hope
+- * users will recognise that it would be unwise to make direct use of the
+- * structure members.
+- */
+-typedef struct xSTATIC_QUEUE
+-{
+-    void * pvDummy1[ 3 ];
+-
+-    union
+-    {
+-        void * pvDummy2;
+-        UBaseType_t uxDummy2;
+-    } u;
+-
+-    StaticList_t xDummy3[ 2 ];
+-    UBaseType_t uxDummy4[ 3 ];
+-    uint8_t ucDummy5[ 2 ];
+-
+-    #if ( ( configSUPPORT_STATIC_ALLOCATION == 1 ) && ( configSUPPORT_DYNAMIC_ALLOCATION == 1 ) )
+-        uint8_t ucDummy6;
+-    #endif
+-
+-    #if ( configUSE_QUEUE_SETS == 1 )
+-        void * pvDummy7;
+-    #endif
+-
+-    #if ( configUSE_TRACE_FACILITY == 1 )
+-        UBaseType_t uxDummy8;
+-        uint8_t ucDummy9;
+-    #endif
+-} StaticQueue_t;
++/* The complete task type is defined in task.h before callers allocate buffers. */
++typedef struct tskTaskControlBlock StaticTask_t;
++
++/* The complete queue type is defined in queue.h before callers allocate buffers. */
++typedef struct QueueDefinition StaticQueue_t;
+ typedef StaticQueue_t StaticSemaphore_t;
+ 
+ /*
+--- a/include/task.h
++++ b/include/task.h
+@@ -104,6 +104,95 @@
+  * conform.
+  */
+ typedef BaseType_t (* TaskHookFunction_t)( void * arg );
++
++/* Static task buffers have the kernel object type, not a layout-compatible surrogate. */
++typedef struct tskTaskControlBlock       /* The old naming convention is used to prevent breaking kernel aware debuggers. */
++{
++    volatile StackType_t * pxTopOfStack; /**< Points to the location of the last item placed on the tasks stack.  THIS MUST BE THE FIRST MEMBER OF THE TCB STRUCT. */
++
++    #if ( portUSING_MPU_WRAPPERS == 1 )
++        xMPU_SETTINGS xMPUSettings; /**< The MPU settings are defined as part of the port layer.  THIS MUST BE THE SECOND MEMBER OF THE TCB STRUCT. */
++    #endif
++
++    #if ( configUSE_CORE_AFFINITY == 1 ) && ( configNUMBER_OF_CORES > 1 )
++        UBaseType_t uxCoreAffinityMask; /**< Used to link the task to certain cores.  UBaseType_t must have greater than or equal to the number of bits as configNUMBER_OF_CORES. */
++    #endif
++
++    #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++        uint64_t ullOsReadySequence;
++    #endif
++
++    ListItem_t xStateListItem;                  /**< The list that the state list item of a task is reference from denotes the state of that task (Ready, Blocked, Suspended ). */
++    ListItem_t xEventListItem;                  /**< Used to reference a task from an event list. */
++    UBaseType_t uxPriority;                     /**< The priority of the task.  0 is the lowest priority. */
++    StackType_t * pxStack;                      /**< Points to the start of the stack. */
++    #if ( configNUMBER_OF_CORES > 1 )
++        volatile BaseType_t xTaskRunState;      /**< Used to identify the core the task is running on, if the task is running. Otherwise, identifies the task's state - not running or yielding. */
++        UBaseType_t uxTaskAttributes;           /**< Task's attributes - currently used to identify the idle tasks. */
++    #endif
++    char pcTaskName[ configMAX_TASK_NAME_LEN ]; /**< Descriptive name given to the task when created.  Facilitates debugging only. */
++
++    #if ( configUSE_TASK_PREEMPTION_DISABLE == 1 )
++        BaseType_t xPreemptionDisable; /**< Used to prevent the task from being preempted. */
++    #endif
++
++    #if ( ( portSTACK_GROWTH > 0 ) || ( configRECORD_STACK_HIGH_ADDRESS == 1 ) )
++        StackType_t * pxEndOfStack; /**< Points to the highest valid address for the stack. */
++    #endif
++
++    #if ( portCRITICAL_NESTING_IN_TCB == 1 )
++        UBaseType_t uxCriticalNesting; /**< Holds the critical section nesting depth for ports that do not maintain their own count in the port layer. */
++    #endif
++
++    #if ( configUSE_TRACE_FACILITY == 1 )
++        UBaseType_t uxTCBNumber;  /**< Stores a number that increments each time a TCB is created.  It allows debuggers to determine when a task has been deleted and then recreated. */
++        UBaseType_t uxTaskNumber; /**< Stores a number specifically for use by third party trace code. */
++    #endif
++
++    #if ( configUSE_MUTEXES == 1 )
++        UBaseType_t uxBasePriority; /**< The priority last assigned to the task - used by the priority inheritance mechanism. */
++        UBaseType_t uxMutexesHeld;
++    #endif
++
++    #if ( configUSE_APPLICATION_TASK_TAG == 1 )
++        TaskHookFunction_t pxTaskTag;
++    #endif
++
++    #if ( configNUM_THREAD_LOCAL_STORAGE_POINTERS > 0 )
++        void * pvThreadLocalStoragePointers[ configNUM_THREAD_LOCAL_STORAGE_POINTERS ];
++    #endif
++
++    #if ( configGENERATE_RUN_TIME_STATS == 1 )
++        configRUN_TIME_COUNTER_TYPE ulRunTimeCounter; /**< Stores the amount of time the task has spent in the Running state. */
++    #endif
++
++    #if ( configUSE_C_RUNTIME_TLS_SUPPORT == 1 )
++        configTLS_BLOCK_TYPE xTLSBlock; /**< Memory block used as Thread Local Storage (TLS) Block for the task. */
++    #endif
++
++    #if ( configUSE_TASK_NOTIFICATIONS == 1 )
++        volatile uint32_t ulNotifiedValue[ configTASK_NOTIFICATION_ARRAY_ENTRIES ];
++        volatile uint8_t ucNotifyState[ configTASK_NOTIFICATION_ARRAY_ENTRIES ];
++    #endif
++
++    /* See the comments in FreeRTOS.h with the definition of
++     * tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE. */
++    #if ( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )
++        uint8_t ucStaticallyAllocated; /**< Set to pdTRUE if the task is a statically allocated to ensure no attempt is made to free the memory. */
++    #endif
++
++    #if ( INCLUDE_xTaskAbortDelay == 1 )
++        uint8_t ucDelayAborted;
++    #endif
++
++    #if ( configUSE_POSIX_ERRNO == 1 )
++        int iTaskErrno;
++    #endif
++} tskTCB;
++
++/* The old tskTCB name is maintained above then typedefed to the new TCB_t name
++ * below to enable the use of older kernel aware debuggers. */
++typedef tskTCB TCB_t;
+ 
+ /* Task states returned by eTaskGetState. */
+ typedef enum
+@@ -1367,6 +1456,9 @@
+  */
+ void vTaskResume( TaskHandle_t xTaskToResume ) PRIVILEGED_FUNCTION;
+ #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
++    /* Native ports borrow the stack of a live task under the scheduler gate. */
++    volatile StackType_t * pxTaskOsPortStack( TaskHandle_t xTask );
++    extern TaskHandle_t volatile pxCurrentTCB;
+     void vTaskOsSetReadySequence( TaskHandle_t xTask, uint64_t ullSequence );
+     uint64_t ullTaskOsReadySequence( TaskHandle_t xTask );
+ #endif
+--- a/tasks.c
++++ b/tasks.c
+@@ -392,93 +392,7 @@
+  * and stores task state information, including a pointer to the task's context
+  * (the task's run time environment, including register values)
+  */
+-typedef struct tskTaskControlBlock       /* The old naming convention is used to prevent breaking kernel aware debuggers. */
+-{
+-    volatile StackType_t * pxTopOfStack; /**< Points to the location of the last item placed on the tasks stack.  THIS MUST BE THE FIRST MEMBER OF THE TCB STRUCT. */
+-
+-    #if ( portUSING_MPU_WRAPPERS == 1 )
+-        xMPU_SETTINGS xMPUSettings; /**< The MPU settings are defined as part of the port layer.  THIS MUST BE THE SECOND MEMBER OF THE TCB STRUCT. */
+-    #endif
+-
+-    #if ( configUSE_CORE_AFFINITY == 1 ) && ( configNUMBER_OF_CORES > 1 )
+-        UBaseType_t uxCoreAffinityMask; /**< Used to link the task to certain cores.  UBaseType_t must have greater than or equal to the number of bits as configNUMBER_OF_CORES. */
+-    #endif
+-
+-    #if defined( configOS_REQUEST_FIFO ) && ( configOS_REQUEST_FIFO == 1 )
+-        uint64_t ullOsReadySequence;
+-    #endif
+-
+-    ListItem_t xStateListItem;                  /**< The list that the state list item of a task is reference from denotes the state of that task (Ready, Blocked, Suspended ). */
+-    ListItem_t xEventListItem;                  /**< Used to reference a task from an event list. */
+-    UBaseType_t uxPriority;                     /**< The priority of the task.  0 is the lowest priority. */
+-    StackType_t * pxStack;                      /**< Points to the start of the stack. */
+-    #if ( configNUMBER_OF_CORES > 1 )
+-        volatile BaseType_t xTaskRunState;      /**< Used to identify the core the task is running on, if the task is running. Otherwise, identifies the task's state - not running or yielding. */
+-        UBaseType_t uxTaskAttributes;           /**< Task's attributes - currently used to identify the idle tasks. */
+-    #endif
+-    char pcTaskName[ configMAX_TASK_NAME_LEN ]; /**< Descriptive name given to the task when created.  Facilitates debugging only. */
+-
+-    #if ( configUSE_TASK_PREEMPTION_DISABLE == 1 )
+-        BaseType_t xPreemptionDisable; /**< Used to prevent the task from being preempted. */
+-    #endif
+-
+-    #if ( ( portSTACK_GROWTH > 0 ) || ( configRECORD_STACK_HIGH_ADDRESS == 1 ) )
+-        StackType_t * pxEndOfStack; /**< Points to the highest valid address for the stack. */
+-    #endif
+-
+-    #if ( portCRITICAL_NESTING_IN_TCB == 1 )
+-        UBaseType_t uxCriticalNesting; /**< Holds the critical section nesting depth for ports that do not maintain their own count in the port layer. */
+-    #endif
+-
+-    #if ( configUSE_TRACE_FACILITY == 1 )
+-        UBaseType_t uxTCBNumber;  /**< Stores a number that increments each time a TCB is created.  It allows debuggers to determine when a task has been deleted and then recreated. */
+-        UBaseType_t uxTaskNumber; /**< Stores a number specifically for use by third party trace code. */
+-    #endif
+-
+-    #if ( configUSE_MUTEXES == 1 )
+-        UBaseType_t uxBasePriority; /**< The priority last assigned to the task - used by the priority inheritance mechanism. */
+-        UBaseType_t uxMutexesHeld;
+-    #endif
+-
+-    #if ( configUSE_APPLICATION_TASK_TAG == 1 )
+-        TaskHookFunction_t pxTaskTag;
+-    #endif
+-
+-    #if ( configNUM_THREAD_LOCAL_STORAGE_POINTERS > 0 )
+-        void * pvThreadLocalStoragePointers[ configNUM_THREAD_LOCAL_STORAGE_POINTERS ];
+-    #endif
+-
+-    #if ( configGENERATE_RUN_TIME_STATS == 1 )
+-        configRUN_TIME_COUNTER_TYPE ulRunTimeCounter; /**< Stores the amount of time the task has spent in the Running state. */
+-    #endif
+-
+-    #if ( configUSE_C_RUNTIME_TLS_SUPPORT == 1 )
+-        configTLS_BLOCK_TYPE xTLSBlock; /**< Memory block used as Thread Local Storage (TLS) Block for the task. */
+-    #endif
+-
+-    #if ( configUSE_TASK_NOTIFICATIONS == 1 )
+-        volatile uint32_t ulNotifiedValue[ configTASK_NOTIFICATION_ARRAY_ENTRIES ];
+-        volatile uint8_t ucNotifyState[ configTASK_NOTIFICATION_ARRAY_ENTRIES ];
+-    #endif
+-
+-    /* See the comments in FreeRTOS.h with the definition of
+-     * tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE. */
+-    #if ( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )
+-        uint8_t ucStaticallyAllocated; /**< Set to pdTRUE if the task is a statically allocated to ensure no attempt is made to free the memory. */
+-    #endif
+-
+-    #if ( INCLUDE_xTaskAbortDelay == 1 )
+-        uint8_t ucDelayAborted;
+-    #endif
+-
+-    #if ( configUSE_POSIX_ERRNO == 1 )
+-        int iTaskErrno;
+-    #endif
+-} tskTCB;
+-
+-/* The old tskTCB name is maintained above then typedefed to the new TCB_t name
+- * below to enable the use of older kernel aware debuggers. */
+-typedef tskTCB TCB_t;
++
+ 
+ #if ( configNUMBER_OF_CORES == 1 )
+     /* MISRA Ref 8.4.1 [Declaration shall be visible] */
+@@ -2028,11 +1942,13 @@
+ 
+         #if ( portSTACK_GROWTH < 0 )
+         {
+-            configASSERT( ( ( portPOINTER_SIZE_TYPE ) ( pxTopOfStack - pxNewTCB->pxTopOfStack ) ) < ( ( portPOINTER_SIZE_TYPE ) uxStackDepth ) );
++            configASSERT( pxNewTCB->pxTopOfStack >= pxNewTCB->pxStack );
++            configASSERT( pxNewTCB->pxTopOfStack <= pxTopOfStack );
+         }
+         #else /* portSTACK_GROWTH */
+         {
+-            configASSERT( ( ( portPOINTER_SIZE_TYPE ) ( pxNewTCB->pxTopOfStack - pxTopOfStack ) ) < ( ( portPOINTER_SIZE_TYPE ) uxStackDepth ) );
++            configASSERT( pxNewTCB->pxTopOfStack >= pxTopOfStack );
++            configASSERT( pxNewTCB->pxTopOfStack <= &pxNewTCB->pxStack[ uxStackDepth - 1U ] );
+         }
+         #endif /* portSTACK_GROWTH */
+     }
+@@ -2333,7 +2249,7 @@
+                     {
+                         if( pxTCB->xTaskRunState == ( BaseType_t ) portGET_CORE_ID() )
+                         {
+-                            configASSERT( uxSchedulerSuspended == 0 );
++                            configASSERT( uxSchedulerSuspended == 0U );
+                             taskYIELD_WITHIN_API();
+                         }
+                         else
+@@ -2372,7 +2288,7 @@
+             {
+                 if( pxTCB == pxCurrentTCB )
+                 {
+-                    configASSERT( uxSchedulerSuspended == 0 );
++                    configASSERT( uxSchedulerSuspended == 0U );
+                     taskYIELD_WITHIN_API();
+                 }
+                 else
+@@ -3302,7 +3218,7 @@
+                         if( pxTCB->xTaskRunState == ( BaseType_t ) portGET_CORE_ID() )
+                         {
+                             /* The current task has just been suspended. */
+-                            configASSERT( uxSchedulerSuspended == 0 );
++                            configASSERT( uxSchedulerSuspended == 0U );
+                             vTaskYieldWithinAPI();
+                         }
+                         else
+@@ -3348,7 +3264,7 @@
+                 if( xSchedulerRunning != pdFALSE )
+                 {
+                     /* The current task has just been suspended. */
+-                    configASSERT( uxSchedulerSuspended == 0 );
++                    configASSERT( uxSchedulerSuspended == 0U );
+                     portYIELD_WITHIN_API();
+                 }
+                 else
+@@ -9038,6 +8954,12 @@
+     pxReady->pxIndex = pxPreviousIndex;
+ }
+ 
++volatile StackType_t * pxTaskOsPortStack( TaskHandle_t xTask )
++{
++    configASSERT( xTask != NULL );
++    return xTask->pxTopOfStack;
++}
++
+ void vTaskOsSetReadySequence( TaskHandle_t xTask, uint64_t ullSequence )
+ {
+     TCB_t * pxTask = xTask;
+--- a/include/queue.h
++++ b/include/queue.h
+@@ -63,6 +63,58 @@
+  * return value can be either a QueueHandle_t or a SemaphoreHandle_t.
+  */
+ typedef struct QueueDefinition   * QueueSetMemberHandle_t;
++
++/* Static queue buffers use the queue object type without aliasing a surrogate. */
++typedef struct QueuePointers
++{
++    int8_t * pcTail;     /**< Points to the byte at the end of the queue storage area.  Once more byte is allocated than necessary to store the queue items, this is used as a marker. */
++    int8_t * pcReadFrom; /**< Points to the last place that a queued item was read from when the structure is used as a queue. */
++} QueuePointers_t;
++
++typedef struct SemaphoreData
++{
++    TaskHandle_t xMutexHolder;        /**< The handle of the task that holds the mutex. */
++    UBaseType_t uxRecursiveCallCount; /**< Maintains a count of the number of times a recursive mutex has been recursively 'taken' when the structure is used as a mutex. */
++} SemaphoreData_t;
++
++typedef struct QueueDefinition /* The old naming convention is used to prevent breaking kernel aware debuggers. */
++{
++    int8_t * pcHead;           /**< Points to the beginning of the queue storage area. */
++    int8_t * pcWriteTo;        /**< Points to the free next place in the storage area. */
++
++    union
++    {
++        QueuePointers_t xQueue;     /**< Data required exclusively when this structure is used as a queue. */
++        SemaphoreData_t xSemaphore; /**< Data required exclusively when this structure is used as a semaphore. */
++    } u;
++
++    List_t xTasksWaitingToSend;             /**< List of tasks that are blocked waiting to post onto this queue.  Stored in priority order. */
++    List_t xTasksWaitingToReceive;          /**< List of tasks that are blocked waiting to read from this queue.  Stored in priority order. */
++
++    volatile UBaseType_t uxMessagesWaiting; /**< The number of items currently in the queue. */
++    UBaseType_t uxLength;                   /**< The length of the queue defined as the number of items it will hold, not the number of bytes. */
++    UBaseType_t uxItemSize;                 /**< The size of each items that the queue will hold. */
++
++    volatile int8_t cRxLock;                /**< Stores the number of items received from the queue (removed from the queue) while the queue was locked.  Set to queueUNLOCKED when the queue is not locked. */
++    volatile int8_t cTxLock;                /**< Stores the number of items transmitted to the queue (added to the queue) while the queue was locked.  Set to queueUNLOCKED when the queue is not locked. */
++
++    #if ( ( configSUPPORT_STATIC_ALLOCATION == 1 ) && ( configSUPPORT_DYNAMIC_ALLOCATION == 1 ) )
++        uint8_t ucStaticallyAllocated; /**< Set to pdTRUE if the memory used by the queue was statically allocated to ensure no attempt is made to free the memory. */
++    #endif
++
++    #if ( configUSE_QUEUE_SETS == 1 )
++        struct QueueDefinition * pxQueueSetContainer;
++    #endif
++
++    #if ( configUSE_TRACE_FACILITY == 1 )
++        UBaseType_t uxQueueNumber;
++        uint8_t ucQueueType;
++    #endif
++} xQUEUE;
++
++/* The old xQUEUE name is maintained above then typedefed to the new Queue_t
++ * name below to enable the use of older kernel aware debuggers. */
++typedef xQUEUE Queue_t;
+ 
+ /* For internal use only. */
+ #define queueSEND_TO_BACK                     ( ( BaseType_t ) 0 )
+--- a/queue.c
++++ b/queue.c
+@@ -65,17 +65,7 @@
+ #define uxQueueType               pcHead
+ #define queueQUEUE_IS_MUTEX       NULL
+ 
+-typedef struct QueuePointers
+-{
+-    int8_t * pcTail;     /**< Points to the byte at the end of the queue storage area.  Once more byte is allocated than necessary to store the queue items, this is used as a marker. */
+-    int8_t * pcReadFrom; /**< Points to the last place that a queued item was read from when the structure is used as a queue. */
+-} QueuePointers_t;
+-
+-typedef struct SemaphoreData
+-{
+-    TaskHandle_t xMutexHolder;        /**< The handle of the task that holds the mutex. */
+-    UBaseType_t uxRecursiveCallCount; /**< Maintains a count of the number of times a recursive mutex has been recursively 'taken' when the structure is used as a mutex. */
+-} SemaphoreData_t;
++
+ 
+ /* Semaphores do not actually store or copy data, so have an item size of
+  * zero. */
+@@ -100,44 +90,7 @@
+  * Items are queued by copy, not reference.  See the following link for the
+  * rationale: https://www.FreeRTOS.org/Embedded-RTOS-Queues.html
+  */
+-typedef struct QueueDefinition /* The old naming convention is used to prevent breaking kernel aware debuggers. */
+-{
+-    int8_t * pcHead;           /**< Points to the beginning of the queue storage area. */
+-    int8_t * pcWriteTo;        /**< Points to the free next place in the storage area. */
+-
+-    union
+-    {
+-        QueuePointers_t xQueue;     /**< Data required exclusively when this structure is used as a queue. */
+-        SemaphoreData_t xSemaphore; /**< Data required exclusively when this structure is used as a semaphore. */
+-    } u;
+-
+-    List_t xTasksWaitingToSend;             /**< List of tasks that are blocked waiting to post onto this queue.  Stored in priority order. */
+-    List_t xTasksWaitingToReceive;          /**< List of tasks that are blocked waiting to read from this queue.  Stored in priority order. */
+-
+-    volatile UBaseType_t uxMessagesWaiting; /**< The number of items currently in the queue. */
+-    UBaseType_t uxLength;                   /**< The length of the queue defined as the number of items it will hold, not the number of bytes. */
+-    UBaseType_t uxItemSize;                 /**< The size of each items that the queue will hold. */
+-
+-    volatile int8_t cRxLock;                /**< Stores the number of items received from the queue (removed from the queue) while the queue was locked.  Set to queueUNLOCKED when the queue is not locked. */
+-    volatile int8_t cTxLock;                /**< Stores the number of items transmitted to the queue (added to the queue) while the queue was locked.  Set to queueUNLOCKED when the queue is not locked. */
+-
+-    #if ( ( configSUPPORT_STATIC_ALLOCATION == 1 ) && ( configSUPPORT_DYNAMIC_ALLOCATION == 1 ) )
+-        uint8_t ucStaticallyAllocated; /**< Set to pdTRUE if the memory used by the queue was statically allocated to ensure no attempt is made to free the memory. */
+-    #endif
+-
+-    #if ( configUSE_QUEUE_SETS == 1 )
+-        struct QueueDefinition * pxQueueSetContainer;
+-    #endif
+-
+-    #if ( configUSE_TRACE_FACILITY == 1 )
+-        UBaseType_t uxQueueNumber;
+-        uint8_t ucQueueType;
+-    #endif
+-} xQUEUE;
+-
+-/* The old xQUEUE name is maintained above then typedefed to the new Queue_t
+- * name below to enable the use of older kernel aware debuggers. */
+-typedef xQUEUE Queue_t;
++
+ 
+ /*-----------------------------------------------------------*/
+ 
+@@ -959,7 +912,7 @@
+ 
+     configASSERT( pxQueue );
+     configASSERT( !( ( pvItemToQueue == NULL ) && ( pxQueue->uxItemSize != ( UBaseType_t ) 0U ) ) );
+-    configASSERT( !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1 ) ) );
++    configASSERT( !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1U ) ) );
+     #if ( ( INCLUDE_xTaskGetSchedulerState == 1 ) || ( configUSE_TIMERS == 1 ) )
+     {
+         configASSERT( !( ( xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED ) && ( xTicksToWait != 0 ) ) );
+@@ -1176,7 +1129,7 @@
+     traceENTER_xQueueGenericSendFromISR( xQueue, pvItemToQueue, pxHigherPriorityTaskWoken, xCopyPosition );
+ 
+     configASSERT( ( pxQueue != NULL ) && !( ( pvItemToQueue == NULL ) && ( pxQueue->uxItemSize != ( UBaseType_t ) 0U ) ) );
+-    configASSERT( ( pxQueue != NULL ) && !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1 ) ) );
++    configASSERT( ( pxQueue != NULL ) && !( ( xCopyPosition == queueOVERWRITE ) && ( pxQueue->uxLength != 1U ) ) );
+ 
+     /* RTOS ports that support interrupt nesting have the concept of a maximum
+      * system call (or maximum API call) interrupt priority.  Interrupts that are
+@@ -1352,7 +1305,7 @@
+ 
+     /* xQueueGenericSendFromISR() should be used instead of xQueueGiveFromISR()
+      * if the item size is not 0. */
+-    configASSERT( ( pxQueue != NULL ) && ( pxQueue->uxItemSize == 0 ) );
++    configASSERT( ( pxQueue != NULL ) && ( pxQueue->uxItemSize == 0U ) );
+ 
+     /* Normally a mutex would not be given from an interrupt, especially if
+      * there is a mutex holder, as priority inheritance makes no sense for an
+@@ -1674,7 +1627,7 @@
+ 
+     /* Check this really is a semaphore, in which case the item size will be
+      * 0. */
+-    configASSERT( pxQueue->uxItemSize == 0 );
++    configASSERT( pxQueue->uxItemSize == 0U );
+ 
+     /* Cannot block if the scheduler is suspended. */
+     #if ( ( INCLUDE_xTaskGetSchedulerState == 1 ) || ( configUSE_TIMERS == 1 ) )
+@@ -2147,7 +2100,7 @@
+     traceENTER_xQueuePeekFromISR( xQueue, pvBuffer );
+ 
+     configASSERT( ( pxQueue != NULL ) && !( ( pvBuffer == NULL ) && ( pxQueue->uxItemSize != ( UBaseType_t ) 0U ) ) );
+-    configASSERT( ( pxQueue != NULL ) && ( pxQueue->uxItemSize != 0 ) ); /* Can't peek a semaphore. */
++    configASSERT( ( pxQueue != NULL ) && ( pxQueue->uxItemSize != 0U ) ); /* Can't peek a semaphore. */
+ 
+     /* RTOS ports that support interrupt nesting have the concept of a maximum
+      * system call (or maximum API call) interrupt priority.  Interrupts that are
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -27,7 +27,8 @@
+  */
+ 
+ /* Standard includes. */
+-#include <stdio.h>
++#include <stddef.h>
++#include <string.h>
+ 
+ /* Scheduler includes. */
+ #include "FreeRTOS.h"
+@@ -142,7 +143,7 @@
+ int Os_PortInterruptSourceEnabled( uint32_t interrupt )
+ {
+     return ( interrupt < 32U ) &&
+-           ( ( ulOsDisabledSources & ( UINT32_C( 1 ) << interrupt ) ) == 0U );
++           ( ( ulOsDisabledSources & ( ( ( uint32_t ) 1U ) << interrupt ) ) == 0U );
+ }
+ int Os_PortInterruptSourceControl( uint32_t interrupt, unsigned operation, boolean clear )
+ {
+@@ -151,7 +152,7 @@
+     {
+         return 0;
+     }
+-    bit = UINT32_C( 1 ) << interrupt;
++    bit = ( ( uint32_t ) 1U ) << interrupt;
+     /* Extended-status source pairs are not nested. Reject before any register
+      * update, including pending clear on an already enabled source. */
+     if( ( ( operation == 0U ) && ( ( ulOsDisabledSources & bit ) != 0U ) ) ||
+@@ -190,7 +191,7 @@
+ static uint32_t prvRunOsInterrupt( uint32_t interrupt )
+ {
+     uint32_t requested = 0U;
+-    ulPendingInterrupts &= ~( UINT32_C( 1 ) << interrupt );
++    ulPendingInterrupts &= ~( ( ( uint32_t ) 1U ) << interrupt );
+     if( ulIsrHandler[ interrupt ] != NULL )
+     {
+         Os_StackCheck();
+@@ -209,7 +210,7 @@
+     uint32_t interrupt;
+     for( interrupt = 0U; interrupt < portMAX_INTERRUPTS; ++interrupt )
+     {
+-        const uint32_t bit = UINT32_C( 1 ) << interrupt;
++        const uint32_t bit = ( ( uint32_t ) 1U ) << interrupt;
+         const unsigned priority = Os_BackendInterruptPriority( interrupt );
+         if( ( ( ulPendingInterrupts & ~seen & bit ) != 0U ) &&
+             Os_BackendInterruptEnabled( interrupt ) )
+@@ -244,7 +245,7 @@
+         while( interrupt < portMAX_INTERRUPTS )
+         {
+             const uint32_t requested = prvRunOsInterrupt( interrupt );
+-            seen |= UINT32_C( 1 ) << interrupt;
++            seen |= ( ( uint32_t ) 1U ) << interrupt;
+             if( ( requested != 0U ) && Os_BackendInterruptMaySchedule( interrupt ) )
+             {
+                 Os_BackendRequestIsrReschedule();
+@@ -255,7 +256,18 @@
+ }
+ 
+ /* Pointer to the TCB of the currently executing task. */
+-extern void * volatile pxCurrentTCB;
++static ThreadState_t prvTaskThreadState( TaskHandle_t xTask )
++{
++    ThreadState_t xState;
++    unsigned char * pucState = ( unsigned char * ) &xState;
++    const volatile unsigned char * pucStorage = ( const volatile unsigned char * ) pxTaskOsPortStack( xTask );
++    size_t xByte;
++    for( xByte = 0U; xByte < sizeof( xState ); ++xByte )
++    {
++        pucState[ xByte ] = pucStorage[ xByte ];
++    }
++    return xState;
++}
+ 
+ /* Used to ensure nothing is processed during the startup sequence. */
+ static BaseType_t xPortRunning = pdFALSE;
+@@ -266,8 +278,10 @@
+                                      TaskFunction_t pxCode,
+                                      void * pvParameters )
+ {
+-    ThreadState_t * pxThreadState = NULL;
+-    int8_t * pcTopOfStack = ( int8_t * ) pxTopOfStack;
++    ThreadState_t xThreadState;
++    const ptrdiff_t xStateWords = ( ( ptrdiff_t ) sizeof( ThreadState_t ) +
++        ( ptrdiff_t ) sizeof( StackType_t ) - 1 ) / ( ptrdiff_t ) sizeof( StackType_t );
++    StackType_t * pxStateStorage = &pxTopOfStack[ -xStateWords ];
+ 
+ 
+     /* In this simulated case a stack is not initialised, but instead a thread
+@@ -276,12 +290,11 @@
+      * the stack that was created for the task - so the stack buffer is still
+      * used, just not in the conventional way.  It will not be used for anything
+      * other than holding this structure. */
+-    pxThreadState = ( ThreadState_t * ) ( pcTopOfStack - sizeof( ThreadState_t ) );
+ 
+     /* Create the event used to prevent the thread from executing past its yield
+      * point if the SuspendThread() call that suspends the thread does not take
+      * effect immediately (it is an asynchronous call). */
+-    pxThreadState->pvYieldEvent = Os_PortEvent( NULL,   /* Default security attributes. */
++    xThreadState.pvYieldEvent = Os_PortEvent( NULL,   /* Default security attributes. */
+                                                FALSE,  /* Auto reset. */
+                                                FALSE,  /* Start not signalled. */
+                                                NULL ); /* No name. */
+@@ -294,17 +307,19 @@
+ #pragma GCC diagnostic ignored "-Wcast-function-type"
+ #endif
+     /* Create the thread itself. */
+-    pxThreadState->pvThread = Os_PortTaskThread( pxCode, pvParameters, pxTopOfStack );
++    xThreadState.pvThread = Os_PortTaskThread( pxCode, pvParameters, pxTopOfStack );
+ #ifdef __GNUC__
+ #pragma GCC diagnostic pop
+ #endif
+ 
+-    configASSERT( pxThreadState->pvThread ); /* See comment where TerminateThread() is called. */
+-    SetThreadAffinityMask( pxThreadState->pvThread, 0x01 );
+-    SetThreadPriorityBoost( pxThreadState->pvThread, TRUE );
+-    SetThreadPriority( pxThreadState->pvThread, portTASK_THREAD_PRIORITY );
+-
+-    return ( StackType_t * ) pxThreadState;
++    configASSERT( xThreadState.pvThread ); /* See comment where TerminateThread() is called. */
++    SetThreadAffinityMask( xThreadState.pvThread, 0x01 );
++    SetThreadPriorityBoost( xThreadState.pvThread, TRUE );
++    SetThreadPriority( xThreadState.pvThread, portTASK_THREAD_PRIORITY );
++
++    ( void ) memcpy( ( unsigned char * ) pxStateStorage,
++                     ( const unsigned char * ) &xThreadState, sizeof( xThreadState ) );
++    return pxStateStorage;
+ }
+ /*-----------------------------------------------------------*/
+ 
+@@ -312,7 +327,7 @@
+ {
+     void * pvHandle = NULL;
+     int32_t lSuccess;
+-    ThreadState_t * pxThreadState = NULL;
++    ThreadState_t xThreadState;
+     SYSTEM_INFO xSystemInfo;
+ 
+     /* This port runs windows threads with extremely high priority.  All the
+@@ -322,7 +337,6 @@
+ 
+     if( xSystemInfo.dwNumberOfProcessors <= 1 )
+     {
+-        printf( "This version of the FreeRTOS Windows port can only be used on multi-core hosts.\r\n" );
+         lSuccess = pdFAIL;
+     }
+     else
+@@ -376,7 +390,7 @@
+     {
+         /* Start the highest priority task by obtaining its associated thread
+          * state structure, in which is stored the thread handle. */
+-        pxThreadState = ( ThreadState_t * ) *( ( size_t * ) pxCurrentTCB );
++        xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
+         ulCriticalNesting = portNO_CRITICAL_NESTING;
+ 
+         /* The scheduler is now running. */
+@@ -385,7 +399,7 @@
+         /* Start the first task. */
+         if( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 )
+         {
+-            Os_PortResumeThread( pxThreadState->pvThread );
++            Os_PortResumeThread( xThreadState.pvThread );
+         }
+ 
+         /* Handle all simulated interrupts - including yield requests and
+@@ -425,7 +439,7 @@
+ static void prvProcessSimulatedInterrupts( void )
+ {
+     uint32_t ulSwitchRequired, i;
+-    ThreadState_t * pxThreadState;
++    ThreadState_t xThreadState;
+     void * pvObjectList[ 2 ];
+     CONTEXT xContext;
+     DWORD xWinApiResult;
+@@ -461,8 +475,8 @@
+ 
+             /* Stop application execution for the entire real ISR interval. */
+             /* Suspend the old thread. */
+-            pxThreadState = ( ThreadState_t * ) *( ( size_t * ) pxCurrentTCB );
+-            configASSERT( Os_PortSuspendThread( pxThreadState->pvThread ) != ( DWORD ) -1 );
++            xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
++            configASSERT( Os_PortSuspendThread( xThreadState.pvThread ) != ( DWORD ) -1 );
+ 
+             /* Ensure the thread is actually suspended by performing a
+              * synchronous operation that can only complete when the thread
+@@ -472,8 +486,8 @@
+              * https://devblogs.microsoft.com/oldnewthing/20150205-00/?p=44743
+              * they do - so as they do not harm (slight run-time hit). */
+             xContext.ContextFlags = CONTEXT_CONTROL;
+-            configASSERT( Os_PortGetThreadContext( pxThreadState->pvThread, &xContext ) );
+-            Os_StackObserve( pxThreadState->pvThread, &xContext );
++            configASSERT( Os_PortGetThreadContext( xThreadState.pvThread, &xContext ) );
++            Os_StackObserve( xThreadState.pvThread, &xContext );
+ 
+ 
+             /* Used to indicate whether the simulated interrupt processing has
+@@ -488,7 +502,7 @@
+                 while( i < portMAX_INTERRUPTS )
+                 {
+                     const uint32_t requested = prvRunOsInterrupt( i );
+-                    seen |= UINT32_C( 1 ) << i;
++                    seen |= ( ( uint32_t ) 1U ) << i;
+                     /* OSEK 14.2.3.1: a Cat2 nested inside an outer Cat1 does
+                      * not schedule Tasks on that Cat1's return. Retain the
+                      * request until a later Cat2 or explicit yield boundary. */
+@@ -497,7 +511,7 @@
+                         const int serviceRequested = Os_BackendTakeIsrReschedule();
+                         if( ( requested != pdFALSE ) || serviceRequested )
+                         {
+-                            ulSwitchRequired |= UINT32_C( 1 ) << i;
++                            ulSwitchRequired |= ( ( uint32_t ) 1U ) << i;
+                         }
+                     }
+                     i = prvNextOsInterrupt( seen, 0U, 0 );
+@@ -511,15 +525,15 @@
+ 
+                 /* Obtain the state of the task now selected to enter the
+                  * Running state. */
+-                pxThreadState = ( ThreadState_t * ) ( *( size_t * ) pxCurrentTCB );
+-
+-                /* pxThreadState->pvThread can be NULL if the task deleted
++                xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
++
++                /* xThreadState.pvThread can be NULL if the task deleted
+                  * itself - but a deleted task should never be resumed here. */
+-                configASSERT( pxThreadState->pvThread != NULL );
++                configASSERT( xThreadState.pvThread != NULL );
+             }
+             if( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 )
+             {
+-                Os_PortResumeThread( pxThreadState->pvThread );
++                Os_PortResumeThread( xThreadState.pvThread );
+             }
+ 
+             /* If the thread that is about to be resumed stopped running
+@@ -530,8 +544,8 @@
+              * valid for it to do so.  Signaling the event is benign in the case that
+              * the task was switched out asynchronously by an interrupt as the event
+              * is reset before the task blocks on it. */
+-            pxThreadState = ( ThreadState_t * ) ( *( size_t * ) pxCurrentTCB );
+-            Os_HostSetEvent( pxThreadState->pvYieldEvent );
++            xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
++            Os_HostSetEvent( xThreadState.pvYieldEvent );
+             #ifdef OS_TIME_TESTS
+                 Os_TimeTestDispatchFinishing();
+             #endif
+@@ -550,20 +564,20 @@
+ 
+ void vPortDeleteThread( void * pvTaskToDelete )
+ {
+-    ThreadState_t * pxThreadState;
++    ThreadState_t xThreadState;
+     uint32_t ulErrorCode;
+ 
+     /* Remove compiler warnings if configASSERT() is not defined. */
+     ( void ) ulErrorCode;
+ 
+     /* Find the handle of the thread being deleted. */
+-    pxThreadState = ( ThreadState_t * ) ( *( size_t * ) pvTaskToDelete );
++    xThreadState = prvTaskThreadState( pvTaskToDelete );
+ 
+     /* Check that the thread is still valid, it might have been closed by
+      * vPortCloseRunningThread() - which will be the case if the task associated
+      * with the thread originally deleted itself rather than being deleted by a
+      * different task. */
+-    if( pxThreadState->pvThread != NULL )
++    if( xThreadState.pvThread != NULL )
+     {
+         WaitForSingleObject( pvInterruptEventMutex, INFINITE );
+ 
+@@ -571,10 +585,10 @@
+          * result in resources being depleted if tasks frequently delete other
+          * tasks (rather than deleting themselves) as the task stacks will not be
+          * freed. */
+-        ulErrorCode = TerminateThread( pxThreadState->pvThread, 0 );
++        ulErrorCode = TerminateThread( xThreadState.pvThread, 0 );
+         configASSERT( ulErrorCode );
+ 
+-        ulErrorCode = CloseHandle( pxThreadState->pvThread );
++        ulErrorCode = CloseHandle( xThreadState.pvThread );
+         configASSERT( ulErrorCode );
+ 
+         ReleaseMutex( pvInterruptEventMutex );
+@@ -585,7 +599,7 @@
+ void vPortCloseRunningThread( void * pvTaskToDelete,
+                               volatile BaseType_t * pxPendYield )
+ {
+-    ThreadState_t * pxThreadState;
++    ThreadState_t xThreadState;
+     void * pvThread;
+     uint32_t ulErrorCode;
+ 
+@@ -593,8 +607,8 @@
+     ( void ) ulErrorCode;
+ 
+     /* Find the handle of the thread being deleted. */
+-    pxThreadState = ( ThreadState_t * ) ( *( size_t * ) pvTaskToDelete );
+-    pvThread = pxThreadState->pvThread;
++    xThreadState = prvTaskThreadState( pvTaskToDelete );
++    pvThread = xThreadState.pvThread;
+ 
+     /* Raise the Windows priority of the thread to ensure the FreeRTOS scheduler
+      * does not run and swap it out before it is closed.  If that were to happen
+@@ -608,7 +622,16 @@
+ 
+     /* Mark the thread associated with this task as invalid so
+      * vPortDeleteThread() does not try to terminate it. */
+-    pxThreadState->pvThread = NULL;
++    xThreadState.pvThread = NULL;
++    {
++        volatile unsigned char * pucStorage = ( volatile unsigned char * ) pxTaskOsPortStack( pvTaskToDelete );
++        const unsigned char * pucState = ( const unsigned char * ) &xThreadState;
++        size_t xByte;
++        for( xByte = 0U; xByte < sizeof( xThreadState ); ++xByte )
++        {
++            pucStorage[ xByte ] = pucState[ xByte ];
++        }
++    }
+ 
+     /* Close the thread. */
+     ulErrorCode = CloseHandle( pvThread );
+@@ -631,7 +654,7 @@
+         ReleaseMutex( pvInterruptEventMutex );
+     }
+ 
+-    CloseHandle( pxThreadState->pvYieldEvent );
++    CloseHandle( xThreadState.pvYieldEvent );
+     ExitThread( 0 );
+ }
+ /*-----------------------------------------------------------*/
+@@ -644,7 +667,7 @@
+ 
+ void vPortGenerateSimulatedInterrupt( uint32_t ulInterruptNumber )
+ {
+-    ThreadState_t * pxThreadState = ( ThreadState_t * ) *( ( size_t * ) pxCurrentTCB );
++    ThreadState_t xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
+ 
+     configASSERT( xPortRunning );
+ 
+@@ -673,7 +696,7 @@
+ 
+             /* Going to wait for an event - make sure the event is not already
+              * signaled. */
+-            ResetEvent( pxThreadState->pvYieldEvent );
++            ResetEvent( xThreadState.pvYieldEvent );
+         }
+ 
+         ReleaseMutex( pvInterruptEventMutex );
+@@ -684,7 +707,7 @@
+              * execute.  In most cases the (simulated) interrupt will have
+              * executed before the next line is reached - so this is just to make
+              * sure. */
+-            WaitForSingleObject( pxThreadState->pvYieldEvent, INFINITE );
++            WaitForSingleObject( xThreadState.pvYieldEvent, INFINITE );
+         }
+     }
+ }
+@@ -800,7 +823,7 @@
+              * (simulated) disabled? */
+             if( ulPendingInterrupts != 0UL )
+             {
+-                ThreadState_t * pxThreadState = ( ThreadState_t * ) *( ( size_t * ) pxCurrentTCB );
++                ThreadState_t xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
+ 
+                 configASSERT( xPortRunning );
+ 
+@@ -817,13 +840,13 @@
+                  * interrupt that is pending executes immediately after the
+                  * critical section is exited - so make sure the event is not
+                  * already signaled. */
+-                ResetEvent( pxThreadState->pvYieldEvent );
++                ResetEvent( xThreadState.pvYieldEvent );
+ 
+                 /* Mutex will be released now so the (simulated) interrupt can
+                  * execute, so does not require releasing on function exit. */
+                 lMutexNeedsReleasing = pdFALSE;
+                 ReleaseMutex( pvInterruptEventMutex );
+-                WaitForSingleObject( pxThreadState->pvYieldEvent, INFINITE );
++                WaitForSingleObject( xThreadState.pvYieldEvent, INFINITE );
+             }
+         }
+     }

@@ -27,10 +27,7 @@ OS_MEMMAP uint64_t Os_HostMonotonicMs(void) { return GetTickCount64(); }
 
 OS_MEMMAP void Os_HostSleepMs(uint32_t milliseconds) { Sleep(milliseconds); }
 
-OS_MEMMAP Os_HostHandleType Os_HostOpenManualEvent(void)
-{
-    return CreateEventA(NULL, TRUE, FALSE, NULL);
-}
+OS_MEMMAP Os_HostHandleType Os_HostOpenManualEvent(void) { return CreateEventA(NULL, 1, 0, NULL); }
 
 OS_MEMMAP Os_HostHandleType Os_HostSpawnThread(Os_HostThreadEntryType entry, void *argument)
 {
@@ -67,10 +64,10 @@ OS_MEMMAP Os_HostHandleType Os_HostSpawnObserverThread(Os_HostThreadEntryType en
 #include "Os_MemMap.h"
 OS_MEMMAP int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds)
 {
-    return WaitForSingleObject(handle, milliseconds) == WAIT_OBJECT_0;
+    return (WaitForSingleObject(handle, milliseconds) == WAIT_OBJECT_0) ? 1 : 0;
 }
 
-OS_MEMMAP int Os_HostClose(Os_HostHandleType handle) { return CloseHandle(handle) != 0; }
+OS_MEMMAP int Os_HostClose(Os_HostHandleType handle) { return (CloseHandle(handle) != 0) ? 1 : 0; }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE

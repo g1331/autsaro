@@ -123,8 +123,10 @@ static void Can_InitAreas(void)
 }
 static void Can_EnterLock(pthread_once_t *once, void (*init)(void), Can_HostLockType *lock)
 {
-    if ((pthread_once(once, init) != 0) || (lock->ready == 0) ||
-        (pthread_mutex_lock(&lock->mutex) != 0)) {
+    if ((pthread_once(once, init) != 0) || (lock->ready == 0)) {
+        Can_Fatal();
+    }
+    if (pthread_mutex_lock(&lock->mutex) != 0) {
         Can_Fatal();
     }
 }

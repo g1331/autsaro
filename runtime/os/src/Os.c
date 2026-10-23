@@ -66,7 +66,7 @@ OS_MEMMAP static StatusType group_access(const Os_TargetConfigType *config,
         }
     }
     for (i = 0u; (isrs == 0u) && (i < config->task_count); ++i) {
-        if (((*tasks & (1u << config->tasks[i].id)) != 0u) &&
+        if (((*tasks & ((uint32)1u << config->tasks[i].id)) != 0u) &&
             (config->tasks[i].priority > *highest)) {
             *highest = config->tasks[i].priority;
         }
@@ -96,8 +96,9 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
     uint32 group_tasks = 0u;
     uint8 highest_access = 0u;
     uint32 j;
+    StatusType status = E_OK;
     for (j = 0u; j < config->task_count; ++j) {
-        task_mask |= 1u << config->tasks[j].id;
+        task_mask |= (uint32)1u << config->tasks[j].id;
     }
     if ((resource->id >= OS_MAX_RESOURCES) || (resource->ceiling == 0u) ||
         (resource->ceiling > ((resource->isr_access != 0u) ? 31u : OS_MAX_PRIORITY)) ||
@@ -106,29 +107,33 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
         ((config->resources[root].isr_access == 0u) != (resource->isr_access == 0u)) ||
         ((resource->task_access == 0u) && (resource->isr_access == 0u)) ||
         (((uint32)resource->task_access & ~task_mask) != 0u) ||
-        ((resource->isr_access & config->category1_isrs) != 0u) ||
-        (group_access(config, root, &group_tasks, &highest_access) != E_OK) ||
-        (resource->ceiling < highest_access)) {
-        return E_OS_VALUE;
+        ((resource->isr_access & config->category1_isrs) != 0u)) {
+        status = E_OS_VALUE;
     }
-    if ((config->use_res_scheduler != 0u) && (resource->id == RES_SCHEDULER) &&
+    if (status == E_OK) {
+        status = group_access(config, root, &group_tasks, &highest_access);
+    }
+    if ((status == E_OK) && (resource->ceiling < highest_access)) {
+        status = E_OS_VALUE;
+    }
+    if ((status == E_OK) && (config->use_res_scheduler != 0u) && (resource->id == RES_SCHEDULER) &&
         ((resource->linked != 0u) || (resource->task_access != task_mask) ||
          (resource->isr_access != 0u) || (resource->ceiling != highest_task))) {
-        return E_OS_VALUE;
+        status = E_OS_VALUE;
     }
-    for (j = 0u; j < config->task_count; ++j) {
+    for (j = 0u; (status == E_OK) && (j < config->task_count); ++j) {
         const Os_TaskConfigType *task = &config->tasks[j];
-        if ((resource->isr_access == 0u) && ((group_tasks & (1u << task->id)) == 0u) &&
+        if ((resource->isr_access == 0u) && ((group_tasks & ((uint32)1u << task->id)) == 0u) &&
             (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
-            return E_OS_VALUE;
+            status = E_OS_VALUE;
         }
     }
-    for (j = 0u; j < index; ++j) {
+    for (j = 0u; (status == E_OK) && (j < index); ++j) {
         if (resource->id == config->resources[j].id) {
-            return E_OS_ID;
+            status = E_OS_ID;
         }
     }
-    return E_OK;
+    return status;
 }
 
 OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
@@ -271,7 +276,7 @@ OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
 
 OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
 {
-    InterlockedExchange(&start_called, 1);
+    (void)InterlockedExchange(&start_called, 1);
     Os_StackCheck();
     if (Os_InterruptDisabled() != 0) {
         if (Os_BackendStarted() == 0) {
@@ -279,12 +284,13 @@ OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
              * no native scheduler or automotive startup is performed. */
             Os_BackendShutdown(E_OS_DISABLEDINT);
         }
-        return;
+    } else {
+        if (Os_HookContext() == OS_HOOK_NONE) {
+            if (Os_BackendStarted() == 0) {
+                Os_BackendStart(Mode);
+            }
+        }
     }
-    if ((Os_HookContext() != OS_HOOK_NONE) || (Os_BackendStarted() != 0)) {
-        return;
-    }
-    Os_BackendStart(Mode);
 }
 
 OS_MEMMAP boolean Os_Implementation_isOsStarted(void)

@@ -22,9 +22,9 @@ static Os_HostThreadResultType watch(void *argument)
     return 0u;
 }
 
-static void require(int accepted)
+static void require(boolean accepted)
 {
-    if (accepted == 0) {
+    if (accepted == FALSE) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
 }
@@ -48,7 +48,7 @@ static void pump(Ecu_HostBatch *batch,
     status = Ecu_TargetTakeProtocolFailure(&failure);
     while (status == E_OK) {
         sequence(batch);
-        require(batch->transport_count != UINT16_MAX);
+        require(batch->transport_count != (uint16)UINT16_MAX);
         ++batch->transport_count;
         if (batch->transport_status == ECU_OK) {
             batch->transport_status = failure.status;
