@@ -365,21 +365,41 @@ OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
 OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event)
 {
     const uint64_t signal_value = 1u;
+    ssize_t written;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
         return FALSE;
     }
-    return write(event->fd, &signal_value, sizeof(signal_value)) == (ssize_t)sizeof(signal_value);
+    do {
+        errno = 0;
+        written = write(event->fd, &signal_value, sizeof(signal_value));
+    } while ((written < 0) && (errno == EINTR));
+    return written == (ssize_t)sizeof(signal_value);
+}
+
+OS_MEMMAP static int read_event(HANDLE event)
+{
+    uint64_t value;
+    ssize_t received;
+    do {
+        errno = 0;
+        received = read(event->fd, &value, sizeof(value));
+    } while ((received < 0) && (errno == EINTR));
+    /* Only a failed nonblocking read can establish that the event is empty. */
+    return (received == (ssize_t)sizeof(value))    ? 1
+           : ((received < 0) && (errno == EAGAIN)) ? 0
+                                                   : -1;
 }
 
 OS_MEMMAP BOOL ResetEvent(HANDLE event)
 {
-    uint64_t value;
+    int received;
     if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
         return FALSE;
     }
-    while (read(event->fd, &value, sizeof(value)) == sizeof(value)) {
-    }
-    return errno == EAGAIN;
+    do {
+        received = read_event(event);
+    } while (received > 0);
+    return received == 0;
 }
 
 OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
@@ -438,6 +458,25 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
     return outcome;
 }
 
+OS_MEMMAP static DWORD wait_event(HANDLE event)
+{
+    struct pollfd observed = {.fd = event->fd, .events = POLLIN, .revents = 0};
+    int ready;
+    do {
+        errno = 0;
+        ready = poll(&observed, 1u, 0);
+    } while ((ready < 0) && (errno == EINTR));
+    DWORD outcome = WAIT_FAILED;
+    if ((ready >= 0) && ((observed.revents & (POLLERR | POLLHUP | POLLNVAL)) == 0)) {
+        outcome = WAIT_TIMEOUT;
+        if ((ready > 0) && ((observed.revents & POLLIN) != 0)) {
+            const int received = (event->manual != 0) ? 1 : read_event(event);
+            outcome = (received > 0) ? WAIT_OBJECT_0 : (received == 0) ? WAIT_TIMEOUT : WAIT_FAILED;
+        }
+    }
+    return outcome;
+}
+
 OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
 {
     uint64_t end = monotonic_ms();
@@ -449,16 +488,8 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
         }
         while (pending != 0) {
             if ((handle->kind == OS_HOST_EVENT) && (handle->fd >= 0)) {
-                struct pollfd observed = {.fd = handle->fd, .events = POLLIN, .revents = 0};
-                uint64_t value;
-                const int ready = poll(&observed, 1u, 0);
-                if ((ready > 0) && ((observed.revents & POLLIN) != 0)) {
-                    if (handle->manual != 0 ||
-                        read(handle->fd, &value, sizeof(value)) == sizeof(value)) {
-                        outcome = WAIT_OBJECT_0;
-                        pending = 0;
-                    }
-                }
+                outcome = wait_event(handle);
+                pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
             } else if (handle->kind == OS_HOST_MUTEX) {
                 outcome = try_wait_mutex(handle);
                 pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;

@@ -28,6 +28,14 @@ SC1 的任务、事件、资源、计数器、闹钟、调度表、中断、hook
 | EnableInterruptSource 的挂起标志 | 已核对（取舍：与 `SWS_Os_91020` 的 ClearPending 参数冲突时按参数处理，见上文；`Os_Interrupt.c` 在 ClearPending 为 TRUE 时清除挂起标志，`interrupt_pairing` 的 `source-enable-clear` 断言清除、`source-retain` 断言保留并在使能后递送）：SWS_Os_00811 |
 | 核编号 | 已核对（`Os_Types.h`：唯一核 `OS_CORE_ID_0` 为 0，`TotalNumberOfCores` 为 1；GetCoreID 返回 0，`calling_context` 断言）：SWS_Os_00825 |
 
+## 主机事件的错误信息
+
+Linux `Os_HostLinux.c` 的 `CreateEventA` 为每个事件持有非阻塞 eventfd；`Os_HostSetEvent`、`ResetEvent` 与 `WaitForSingleObject` 由原生端口、tick 确认和关闭路径消费。事件计数只在完整八字节读取后视为已消费；手动复位等待只观察可读性。负 `poll` 或 `POLLERR`／`POLLHUP`／`POLLNVAL` 返回 `WAIT_FAILED`，不能成为正常超时或无限等待。读／写／poll 的 `EINTR` 保留未完成操作并重新调用；读到 `EAGAIN` 表示当前无可消费事件，零读／短读及其他读错误保留失败。
+
+此处按固定 MISRA 2013 主文 D4.7（印刷页30／PDF38）的错误信息义务整改，不是 AUTOSAR 必需冲突或偏离。R17.7（页141–142／PDF149–150）允许显式丢弃普通返回值，但不能替代错误分类。AMD1 R22.8–22.10（页13–16／PDF21–24）也覆盖实际通过 errno 返回错误的附加函数：每次调用前在同函数清零，只有负返回值才按本次 errno 分类；返回值已确定成功时使用 R22.9 的例外。AMD2 的语言扩充及 TC2.38 的 R22.9 标题勘误不改变本项目 C99 的该结论。固定 checker 的 R22.10 原始报告不因此删除或改写。
+
+`NativeFacilityTests.test_event_syscall_errors_are_not_timeouts_or_success` 链接实际 OS 与平台实现，以真实描述符检查自动／手动复位，再注入 poll／read／write 错误、中断和 EAGAIN；包括无限等待遇到错误必须返回，以及 errno 遗留值不能制造零读／短读成功。此证据只处置这些调用点；D4.7 的其他调用、采用内核及完整221项人工评估仍由 [#58](https://github.com/g1331/autsaro/issues/58) 承接。
+
 ## 目标端口承担的差距
 
 | 义务 | 处置 |
