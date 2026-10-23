@@ -4,6 +4,7 @@
 #include "Os_Version.h"
 #include "Os_Types.h"
 #include "Rte_Os_Type.h"
+#include "Os_Hooks.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
 #if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
 #error "Os.h -> Rte_Os_Type.h: missing AUTOSAR release"
@@ -141,7 +142,6 @@ OS_MEMMAP CoreIdType GetCoreID(void);
 #elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
 #error "Os.h -> Os_MemMap.h: incompatible AUTOSAR release"
 #endif
-#include "Os_Hooks.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 /** Restore the caller's non-nested DisableAllInterrupts state; unmatched call has no effect.

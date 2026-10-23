@@ -495,6 +495,23 @@ pub(super) fn files(
             prefix,
         ));
     }
+    if description.diagnostic_transport.is_some() {
+        config.push_str(
+            r#"#include "PduR_CanTp.h"
+#include "LSduR_CanTp.h"
+"#,
+        );
+        config.push_str(&c_layout::release_check(
+            "Ecu_RuntimeConfig.c",
+            "PduR_CanTp.h",
+            "PDUR",
+        ));
+        config.push_str(&c_layout::release_check(
+            "Ecu_RuntimeConfig.c",
+            "LSduR_CanTp.h",
+            "LSDUR",
+        ));
+    }
     for component in &composition.components {
         config.push_str(&format!(
             "#include \"{}\"\n",
@@ -662,21 +679,6 @@ pub(super) fn files(
             .iter()
             .find(|route| route.pdu == tp.tx_sdu)
             .ok_or_else(|| PlanDiagnostic::plan_premise(&tp.tx_sdu))?;
-        config.push_str(
-            r#"#include "PduR_CanTp.h"
-#include "LSduR_CanTp.h"
-"#,
-        );
-        config.push_str(&c_layout::release_check(
-            "Ecu_RuntimeConfig.c",
-            "PduR_CanTp.h",
-            "PDUR",
-        ));
-        config.push_str(&c_layout::release_check(
-            "Ecu_RuntimeConfig.c",
-            "LSduR_CanTp.h",
-            "LSDUR",
-        ));
         let can_rx = symbolic.reference("CanIfRxPduRef", &tp.rx_npdu)?;
         let can_tx = symbolic.reference("CanIfTxPduRef", &tp.tx_npdu)?;
         let tp_rx = symbolic.parameter("CanTpRxNPduId")?;
@@ -1281,8 +1283,6 @@ This configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit si
 fn mode_switches(mode_scope: &str, authentication_group: &str) -> String {
     let mut modes = format!(
         r#"
-#include "SchM_Dcm.h"
-#include "Can_HostLock.h"
 {start_var_cleared_unspecified}"#,
         start_var_cleared_unspecified = c_layout::section(
             &format!("RTE_{mode_scope}"),

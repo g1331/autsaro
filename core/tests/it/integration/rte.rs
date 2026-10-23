@@ -527,6 +527,29 @@ fn unsupported_completion_modes_and_foreign_application_type_owners_are_refused(
 }
 
 #[test]
+fn generated_schm_lifecycle_section_contains_no_other_preprocessing() {
+    // Verifies: SWS_MemMap_00003.
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    let source = files
+        .iter()
+        .find(|(path, _)| path == "generated/src/SchM_Main.c")
+        .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
+        .unwrap();
+    let start = "#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n";
+    let body = source.split_once(start).unwrap().1;
+    let body = body
+        .split_once("#define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED")
+        .unwrap()
+        .0;
+    assert!(body.contains("schm_lifecycle"), "{body}");
+    assert!(
+        body.lines().all(|line| !line.trim_start().starts_with('#')),
+        "{body}"
+    );
+}
+
+#[test]
 fn task_memory_mapping_and_generator_option_scope_are_checked_at_the_source() {
     // Verifies: SWS_Rte_08923, SWS_Rte_04557
     let mut wrong = inputs();

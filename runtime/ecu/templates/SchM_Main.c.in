@@ -1,12 +1,14 @@
 #include "Rte_Main.h"
 #include "Ecu_Target.h"
-#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Rte_MemMap.h"
+#include "SchM_Dcm.h"
+#include "Can_HostLock.h"
 #define SCHM_LIFECYCLE_UNALLOCATED 0U
 #define SCHM_LIFECYCLE_INITIALIZED 1U
 #define SCHM_LIFECYCLE_STARTED     2U
 #define SCHM_LIFECYCLE_TIMING      3U
 #define SCHM_LIFECYCLE_RETIRED     4U
+#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Rte_MemMap.h"
 static uint8 schm_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;
 #define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Rte_MemMap.h"
