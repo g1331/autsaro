@@ -26,6 +26,8 @@
 
 ### Fixed
 
+- Dcm validates the complete ReadDataByIdentifier response size before invoking application reads, returning NRC 0x14 for an oversized response even when the application would fail; regenerate sealed ECU deliveries to receive the corrected validation order (#57)
+
 - OS ARTI stack/context registration now resolves the actual Task control block slot; independent Task-entry observations check the thread, native stack and stable restart frame. Regenerate ECU deliveries; upstream FreeRTOS and production patch identities remain unchanged (#60)
 
 - Explicit `RteCodeVendorId` values in 0..65535 now reach the RTE implementation description and standalone contract metadata from source configuration; other modules keep their own supplier identity, and formal allocation remains the code user's responsibility. Regenerate deliveries to use the configured value (#363)
