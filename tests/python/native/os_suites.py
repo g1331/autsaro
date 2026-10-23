@@ -1805,6 +1805,13 @@ def check_vector_mutations(directory: Path) -> None:
                     "+static uint32_t (*unbound_handlers[PORT_INTERRUPT_COUNT])(void);\n",
                 )
                 patch.write_text(text, encoding="utf-8")
+                # Keep later patch contexts bound to the same private mutant table.
+                for followup in sorted((target / "patches/linux").glob("*.patch")):
+                    if followup != patch:
+                        source = followup.read_text(encoding="utf-8")
+                        followup.write_text(
+                            source.replace(old, "unbound_handlers[interrupt]"), encoding="utf-8",
+                        )
             else:
                 (target / "patches/0014-relocatable-interrupt-vectors.patch").unlink()
             mutant, _ = build(output, "entry_bodies.c", target=target)
