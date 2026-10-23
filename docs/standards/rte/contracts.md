@@ -56,17 +56,19 @@ Rte_Init/StartTiming 只在配置 InitializationRunnableBatch 时生成；当前
 
 所选四个主线样本中，`EchoApplication_ReadData`（standard-ecu／user-application）、`Ingress_ReadData`和`Process_Transform`（component-pipeline／no-diagnostic）的application runnable没有`RunnableEntityArgument`或BSW mapping。固定R24-11 SWS_RTE（SHA-256 `d9b95dfa8ae5c94418382835b7f5da9fd53e0c76c07b5d14f139c8a58dd39769`）§5.7.3页806–807的`SWS_Rte_06703`／`06705`分别规定有symbol时命名、两种来源都没有时生成无名参数。`contracts::contract_headers`据此在这些声明中保留类型而省略名字；诊断样本的ReadData经RTE client／Dcm调用应用实现，Transform经同步client调用应用server；no-diagnostic只保留Ingress的应用声明，不存在Dcm调用闭包，不能借诊断样本证明其执行。
 
+当前native grammar不接受`RunnableEntityArgument`；`argument_symbols_are_rejected_before_nameless_runnable_disposition`向Transform加入三个symbol，断言生成前在该runnable对象报`NATIVE_UNSUPPORTED`，不把有名输入误作06705冲突。
+
 MISRA 2013主文R8.2（Required，页64–66／PDF72–74）仍要求声明参数命名；TC2.10只增加8.3交叉引用，TC2.12对8.3的无名参数例外不豁免8.2，AMD2只扩充语言适用性，AMD3.63只增加交叉引用。这里是真实冲突，不能标成误报；增加声明参数名会违反06705，删除声明会失去公开契约，改变为无参数则破坏C/S签名。风险是省略名字降低接口可读性；按顺序记录方向／存储义务、固定参数类型并由真实应用TU编译／链接验证约束它。`source_derived_composition_contract_is_deterministic_and_keeps_local_identity`同时断言单一数组参数与IN／OUT／INOUT三参数原型，补名反例应失败。
 
 原用户决定为[2026-10-17的有界授权](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)，按ADR0023执行，未产生新的批准人或扩大例外范围。MISRA主文§6.2.2允许Required按§5.4记录正式偏离；本记录区分项目授权及技术处置与完整MISRA符合声明。评估日期为2026-10-24；独立技术复核冻结于`996fb19a9775bec84708f60d1b3d9d694a7c62ea`，未发现可操作问题。该复核支持上述必要性、替代方案及风险判断；最终源码注释和新增改动的专项复核head、发现与处置留在实施PR最终收据。
 
-以下位置来自`00abb3ec`生成的实际样本，producer为`0143f44b`的`contracts::contract_headers`；每处声明前都有独立`MR12 RULE 8.2 VIOLATION`注释。两个controlled-x64目标、host-batch／probe分别沿自己的交付身份核实；Windows执行结果仍以实际CI为准，不用Linux运行代替。
+以下位置来自`1556d1ef`生成的实际样本，producer为`cb05e3cf`的`contracts::contract_headers`；每处声明的契约注释内都有`MR12 RULE 8.2 VIOLATION`说明，保留同一Doxygen契约与原型的关联。两个controlled-x64目标、host-batch／probe分别沿自己的交付身份核实；Windows执行结果仍以实际CI为准，不用Linux运行代替。
 
 | 规则与生成位置 | 配置、实际包含／调用闭包与边界 |
 | --- | --- |
-| MISRA C:2012 Rule 8.2：`generated/include/Rte_EchoApplication.h:77`，`EchoApplication_ReadData`（注释75–76行） | standard-ecu／user-application；应用TU及`generated/src/Rte.c`消费同一头，Dcm经RTE client调用ReadData。单一数组参数的类型、方向与借用期由公开参数契约及真实应用实现编译／链接检查。 |
-| MISRA C:2012 Rule 8.2：`generated/include/Rte_Ingress.h:78`，`Ingress_ReadData`（注释76–77行） | component-pipeline／no-diagnostic；Ingress应用TU消费同一头。component-pipeline有诊断client；no-diagnostic只保留此声明，不存在该Dcm调用。 |
-| MISRA C:2012 Rule 8.2：`generated/include/Rte_Process.h:79`，`Process_Transform`（注释77–78行） | component-pipeline／no-diagnostic；Process应用TU及RTE同步server dispatch消费相同IN／OUT／INOUT顺序与类型。独立输入定义的原型断言拒绝补名变异。 |
+| MISRA C:2012 Rule 8.2：`generated/include/Rte_EchoApplication.h:77`，`EchoApplication_ReadData`（说明74–76行） | standard-ecu／user-application；应用TU及`generated/src/Rte.c`消费同一头，Dcm经RTE client调用ReadData。单一数组参数的类型、方向与借用期由公开参数契约及真实应用实现编译／链接检查。 |
+| MISRA C:2012 Rule 8.2：`generated/include/Rte_Ingress.h:78`，`Ingress_ReadData`（说明75–77行） | component-pipeline／no-diagnostic；Ingress应用TU消费同一头。component-pipeline有诊断client；no-diagnostic只保留此声明，不存在该Dcm调用。 |
+| MISRA C:2012 Rule 8.2：`generated/include/Rte_Process.h:79`，`Process_Transform`（说明76–78行） | component-pipeline／no-diagnostic；Process应用TU及RTE同步server dispatch消费相同IN／OUT／INOUT顺序与类型。独立输入定义的原型断言拒绝补名变异。 |
 
 固定BSW General（SHA-256 `4709480090ff9a612d908e8bd46edd502e2e4fa332f7a3bf93801f17cc91872b`）§7.1.1页37的`SWS_BSW_00115`要求在引发违反的源码旁说明；注释说明nameless必要性及顺序契约控制，不是suppression。不具备上述输入条件、改变Argument symbol／BSW mapping、参数类型或调用方式时重新评估；不能将此记录推广到其他无名参数。原始R8.2报告及全部221项其他人工义务保持各自状态。
 

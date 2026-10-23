@@ -1882,3 +1882,24 @@ fn dcm_entities_declare_both_modes_for_every_possible_publisher() {
         );
     }
 }
+
+#[test]
+fn argument_symbols_are_rejected_before_nameless_runnable_disposition() {
+    let mut sources = inputs();
+    change(
+        &mut sources,
+        "process.arxml",
+        "<SHORT-NAME>ServerTransform</SHORT-NAME>",
+        "<SHORT-NAME>ServerTransform</SHORT-NAME><ARGUMENTS><RUNNABLE-ENTITY-ARGUMENT><SYMBOL>sourceValue</SYMBOL></RUNNABLE-ENTITY-ARGUMENT><RUNNABLE-ENTITY-ARGUMENT><SYMBOL>targetValue</SYMBOL></RUNNABLE-ENTITY-ARGUMENT><RUNNABLE-ENTITY-ARGUMENT><SYMBOL>updatedValue</SYMBOL></RUNNABLE-ENTITY-ARGUMENT></ARGUMENTS>",
+    );
+    // A named-argument input must not receive the SWS_Rte_06705 disposition.
+    let issues = build(&sources)
+        .err()
+        .expect("unsupported argument symbols accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "NATIVE_UNSUPPORTED"
+            && issue.file.as_deref() == Some("process.arxml")
+            && issue.object.as_deref() == Some("/Application/Process/Behavior/ServerTransform")),
+        "{issues:#?}"
+    );
+}
