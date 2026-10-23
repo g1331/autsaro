@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Linux native pause generations now cycle below the reserved terminal-stop value and preserve concurrent stop requests. Long-running actors remain resumable across the generation boundary; regenerate sealed deliveries for the corrected host source (#58)
+
 - Native Task restart uses a typed assembler PC accessor and keeps its continuation private. Linux constructor rollback remains atomic and event waits distinguish clock failures from ordinary timeouts; Windows thread setup and native handoff failures stop before consuming invalid synchronization state. Regenerate sealed deliveries and rebuild native consumers for the changed private ABI and controlled patches (#58)
 
 - Native integer predicates and BOOL flags now stay separate from AUTOSAR Boolean constants; private Linux declarations leave TRUE/FALSE ownership to Platform_Types, independent of include order. Existing public result values and native handle contracts are preserved (#58)

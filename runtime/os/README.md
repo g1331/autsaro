@@ -1,8 +1,10 @@
 # 受控主机 Automotive OS runtime
 
-内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用十四个受控补丁；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/0001-controlled-posix-port.patch`。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
+内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用十九个受控补丁；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/0001-controlled-posix-port.patch`。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
 
 配置表的计数及模块索引使用uint32，容量仍由各OS_MAX_*限制；任务名为以NUL结尾的const uint8字节串，调用FreeRTOS时才转到原生字符接口。集成方须用当前头文件重新编译配置与消费者。
+
+Linux 的暂停请求、确认与恢复使用同一代次：普通代次在 1..INT32_MAX-1 循环，0 表示尚未暂停，INT32_MAX 只表示不可逆停止。dispatcher 在既有中断 mutex 下串行提交普通请求；Task 创建的首次暂停先于 dispatcher 启动，独立控制线程仍可并发停止 actor。请求以 CAS 发布，避免覆盖先到的停止；确认与恢复按当前代次相等判断，信号 handler 返回前不清零旧恢复值。`NativeFacilityTests.test_suspend_generation_wrap_preserves_context_and_terminal_stop` 在测试副本中设置近上界初值，检查真实信号回绕、上下文与停止交错，并拒绝无界递增及覆盖停止的变异；这是 D4.1 的算术边界与失败预防证据。
 
 Os_TargetConfigType 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。
 

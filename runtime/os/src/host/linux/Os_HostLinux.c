@@ -168,19 +168,20 @@ OS_MEMMAP static void park_signal(int signal_number, siginfo_t *info, void *nati
     (void)info;
     if ((thread != NULL) && (thread->kind == OS_HOST_THREAD)) {
         const int32_t generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
-        if (generation > __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE)) {
+        if (generation != __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE)) {
             Os_LinuxCaptureContext(&thread->captured, native_context);
             __atomic_store_n(&thread->acknowledged, generation, __ATOMIC_RELEASE);
             futex_wake(&thread->acknowledged);
             for (;;) {
+                const int32_t resumed = __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE);
                 /* Stop an already parked actor without nesting another signal handler. */
                 if (InterlockedCompareExchange(&thread->requested, 0, 0) == INT32_MAX) {
                     terminal_park(thread);
                 }
-                if (InterlockedCompareExchange(&thread->resumed, 0, 0) >= generation) {
+                if (resumed == generation) {
                     break;
                 }
-                (void)futex_wait(&thread->resumed, generation - 1);
+                (void)futex_wait(&thread->resumed, resumed);
             }
         }
     }
@@ -706,25 +707,39 @@ OS_MEMMAP BOOL CloseHandle(HANDLE handle)
 OS_MEMMAP DWORD SuspendThread(HANDLE thread)
 {
     int32_t generation;
+    int32_t previous;
     uint64_t end;
     if (thread == NULL || thread->kind != OS_HOST_THREAD ||
         __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) {
         return UINT32_MAX;
     }
-    if (__atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE) !=
-        __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE)) {
+    previous = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
+    if (previous == INT32_MAX) {
+        return UINT32_MAX;
+    }
+    if (previous != __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE)) {
         return 1u;
     }
-    generation = __atomic_add_fetch(&thread->requested, 1, __ATOMIC_ACQ_REL);
+    /* Reserve INT32_MAX for irreversible stop; do not overwrite a concurrent stop request. */
+    generation = previous == INT32_MAX - 1 ? 1 : previous + 1;
+    if (!__atomic_compare_exchange_n(
+            &thread->requested, &previous, generation, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return UINT32_MAX;
+    }
     if (pthread_kill(thread->thread, SIGRTMIN) != 0) {
         return UINT32_MAX;
     }
     end = monotonic_ms() + 2000u;
-    while (__atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) < generation) {
-        if (monotonic_ms() >= end || __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) {
+    for (;;) {
+        const int32_t acknowledged = __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE);
+        if (acknowledged == generation) {
+            break;
+        }
+        if (acknowledged == INT32_MAX || monotonic_ms() >= end ||
+            __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) {
             return UINT32_MAX;
         }
-        (void)futex_wait(&thread->acknowledged, generation - 1);
+        (void)futex_wait(&thread->acknowledged, acknowledged);
     }
     return 0u;
 }
@@ -737,7 +752,7 @@ OS_MEMMAP DWORD ResumeThread(HANDLE thread)
     }
     generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
     if ((generation == 0) || (generation == INT32_MAX) ||
-        (InterlockedCompareExchange(&thread->acknowledged, 0, 0) < generation)) {
+        (InterlockedCompareExchange(&thread->acknowledged, 0, 0) != generation)) {
         return UINT32_MAX;
     }
     __atomic_store_n(&thread->resumed, generation, __ATOMIC_RELEASE);
@@ -754,7 +769,7 @@ OS_MEMMAP BOOL GetThreadContext(HANDLE thread, CONTEXT *context)
     generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
     if (__atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) != INT32_MAX &&
         (generation == 0 ||
-         __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) < generation)) {
+         __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE) != generation)) {
         return 0;
     }
     Os_LinuxCaptureContext(context, &thread->captured.native);

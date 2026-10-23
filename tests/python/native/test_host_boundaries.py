@@ -350,6 +350,73 @@ class NativeKernelObjectTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
+    def test_suspend_generation_wrap_preserves_context_and_terminal_stop(self):
+        import os_suites
+
+        for scenario in ("initial", "wrap", "wrap-mutant", "wrap-handler-mutant", "wrap-resume-mutant", "stop", "stop-mutant"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_HostLinux.c"
+                text = source.read_text(encoding="utf-8")
+                if scenario.startswith("wrap"):
+                    # Seed only the test copy; exercise real signals across the reserved stop value.
+                    for field in ("requested", "acknowledged", "resumed"):
+                        old = f"thread->{field} = 0;"
+                        self.assertEqual(text.count(old), 1)
+                        text = text.replace(old, f"thread->{field} = INT32_MAX - 2;")
+                if scenario == "wrap-mutant":
+                    old = "generation = previous == INT32_MAX - 1 ? 1 : previous + 1;"
+                    self.assertEqual(text.count(old), 1)
+                    text = text.replace(old, "generation = previous + 1;")
+                elif scenario == "wrap-handler-mutant":
+                    old = "if (generation != __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE))"
+                    self.assertEqual(text.count(old), 1)
+                    text = text.replace(old, old.replace(" != ", " > "))
+                elif scenario == "wrap-resume-mutant":
+                    old = "if (resumed == generation)"
+                    self.assertEqual(text.count(old), 1)
+                    text = text.replace(old, "if (resumed >= generation)")
+                fixture_text = (ROOT / "core/tests/fixtures/os/os_signal_lifecycle.c").read_text(encoding="utf-8")
+                if scenario.startswith("stop"):
+                    # Deterministically publish stop immediately before the competing request CAS.
+                    cas = ("    if (!__atomic_compare_exchange_n(\n"
+                           "            &thread->requested, &previous, generation, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {")
+                    self.assertEqual(text.count(cas), 1)
+                    replacement = cas if scenario == "stop" else (
+                        "    __atomic_store_n(&thread->requested, generation, __ATOMIC_RELEASE);\n    if (0) {")
+                    text = text.replace(cas, "    (void)Os_HostStopActor(thread, 2000u);\n" + replacement)
+                    first_pause = "    if (SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {"
+                    self.assertEqual(fixture_text.count(first_pause), 1)
+                    fixture_text = fixture_text.replace(first_pause, (
+                        "    if (SuspendThread(thread) != UINT32_MAX || SuspendThread(thread) != UINT32_MAX ||\n"
+                        "        ResumeThread(thread) != UINT32_MAX || valid_context(thread, &stopped) == 0) {\n"
+                        "        return 16;\n    }\n    puts(\"concurrent stop preserved\");\n    return 0;\n" + first_pause))
+                source.write_text(text, encoding="utf-8")
+                fixture = directory / "signal-lifecycle.c"
+                fixture.write_text(fixture_text +
+                    "\nvoid StartupHook(void) {}\nvoid ShutdownHook(StatusType reason) { (void)reason; }\n",
+                    encoding="utf-8",
+                )
+                with os_suites.native_session(directory, "park-generation"):
+                    binary, _ = os_suites.build(
+                        directory, str(fixture), target=target,
+                        link_flags=("-Wl,--wrap=pthread_detach",),
+                    )
+                    result = os_suites.run_native([str(binary)], timeout=10)
+                    self.assertEqual(result.returncode, {
+                        "wrap-mutant": 14, "wrap-handler-mutant": 5, "wrap-resume-mutant": 17,
+                        "stop-mutant": 16,
+                    }.get(scenario, 0), result)
+                    self.assertEqual(result.stderr, "", result)
+                    expected = {
+                        "wrap-mutant": "", "wrap-handler-mutant": "", "wrap-resume-mutant": "",
+                        "stop-mutant": "", "stop": "concurrent stop preserved\n",
+                    }.get(scenario, "suspend=acknowledged resume=progress context=preserved "
+                          "terminal=irreversible running=stopped closed=detached\n")
+                    self.assertEqual(result.stdout, expected, result)
+
     def test_native_handle_errors_and_resource_reuse(self):
         import os_suites
 
