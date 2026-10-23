@@ -153,6 +153,9 @@ void Ecu_TargetTestShutdown(StatusType reason) {
     arti_require(alarm_addresses == (Ecu_OsConfig.time->alarm_count != 0u ? 2u : 0u));
     printf("arti_consumer os=%s observations=2 getters=2 errors=2 internal_services=0 dropped=0\n",
            expected_os);
+    if (fflush(stdout) != 0) {
+        Os_HostExit(93u);
+    }
 }
 int main(int argc, char **argv) {
     if (argc != 2) {

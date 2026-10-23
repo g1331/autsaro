@@ -162,6 +162,7 @@ void Os_ArtiTestShutdownObserved(void)
            observed,
            pre_start + post_start + 2u,
            rejected_getters);
+    arti_check(fflush(stdout) == 0);
 }
 int main(int argc, char **argv)
 {

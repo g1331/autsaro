@@ -8,7 +8,7 @@
 #include <errno.h>
 #include <linux/futex.h>
 #include <signal.h>
-#include <stdio.h>
+#include "Os_HostIo.h"
 #include <stdlib.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -374,6 +374,25 @@ OS_MEMMAP static const char fatal_suffix[] =
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+OS_MEMMAP static int fatal_write(int descriptor, const char *data, size_t length)
+{
+    size_t offset = 0u;
+    int result = 1;
+    while ((offset < length) && (result != 0)) {
+        ssize_t written;
+        errno = 0;
+        written = write(descriptor, &data[offset], length - offset);
+        if (written > 0) {
+            offset += (size_t)written;
+        } else if ((written < 0) && (errno == EINTR)) {
+            /* Retry only the untransferred suffix. */
+        } else {
+            result = 0;
+        }
+    }
+    return result;
+}
+
 OS_MEMMAP void Os_StackFatalExit(void)
 {
     char output[256];
@@ -402,11 +421,50 @@ OS_MEMMAP void Os_StackFatalExit(void)
     for (index = 0u; index < sizeof(fatal_suffix) - 1u; ++index) {
         output[used++] = fatal_suffix[index];
     }
-    if (write(STDOUT_FILENO, output, used) != (ssize_t)used) {
-        const ssize_t fallback = write(STDERR_FILENO, output, used);
-        (void)fallback;
+    if (fatal_write(STDOUT_FILENO, output, used) == 0) {
+        (void)fatal_write(STDERR_FILENO, output, used);
     }
     _exit(E_OS_STACKFAULT);
+}
+
+OS_MEMMAP static int report_stack(const Os_NativeStackType *record)
+{
+    char storage[512];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextAppend(&text, "STACK role=");
+    Os_HostTextByte(&text, record->role);
+    Os_HostTextField(&text, " tid=", record->thread_id);
+    Os_HostTextField(&text, " low=", record->reserve_low);
+    Os_HostTextField(&text, " high=", record->high);
+    Os_HostTextField(&text, " reserve=", record->reserve);
+    Os_HostTextField(&text, " commit=", record->committed);
+    Os_HostTextField(&text, " guard=", record->guard);
+    Os_HostTextField(&text, " altstack=", record->altstack_size);
+    Os_HostTextField(&text, " sp=", record->sp);
+    Os_HostTextField(&text, " observations=", record->observations);
+    Os_HostTextField(&text, " buffer_low=", record->kernel_buffer_low);
+    Os_HostTextField(&text, " buffer_high=", record->kernel_buffer_high);
+    Os_HostTextAppend(&text, " context=linux-x86_64-ucontext");
+    Os_HostTextField(&text, " valid=", record->context_valid);
+    Os_HostTextByte(&text, '\n');
+    return Os_HostTextWrite(&text);
+}
+
+OS_MEMMAP static int report_fault(const Os_StackFaultType *fault)
+{
+    char storage[256];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextAppend(&text, "FAULT role=");
+    Os_HostTextByte(&text, fault->role);
+    Os_HostTextField(&text, " tid=", fault->thread_id);
+    Os_HostTextAppend(&text, " signal=");
+    Os_HostTextHex(&text, fault->signal_number, 8u, 1);
+    Os_HostTextField(&text, " sp=", fault->sp);
+    Os_HostTextField(&text, " address=", fault->address);
+    Os_HostTextAppend(&text, " captured=1 origin=");
+    Os_HostTextByte(&text, fault->origin);
+    Os_HostTextByte(&text, '\n');
+    return Os_HostTextWrite(&text);
 }
 
 OS_MEMMAP int Os_StackReport(void)
@@ -416,41 +474,15 @@ OS_MEMMAP int Os_StackReport(void)
     for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
                     (index < (LONG)OS_NATIVE_STACKS);
          ++index) {
-        const Os_NativeStackType *record = &stacks[index];
-        if (InterlockedCompareExchange(&stack_published[index], 0, 0) == 0) {
-            continue;
-        }
-        if (printf(
-                "STACK role=%c tid=%u low=%llu high=%llu reserve=%llu commit=%llu "
-                "guard=%llu altstack=%llu sp=%llu observations=%u buffer_low=%llu buffer_high=%llu "
-                "context=linux-x86_64-ucontext valid=%u\n",
-                record->role,
-                record->thread_id,
-                (unsigned long long)record->reserve_low,
-                (unsigned long long)record->high,
-                (unsigned long long)record->reserve,
-                (unsigned long long)record->committed,
-                (unsigned long long)record->guard,
-                (unsigned long long)record->altstack_size,
-                (unsigned long long)record->sp,
-                record->observations,
-                (unsigned long long)record->kernel_buffer_low,
-                (unsigned long long)record->kernel_buffer_high,
-                record->context_valid) < 0) {
-            result = -1;
+        if (InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) {
+            if (report_stack(&stacks[index]) == 0) {
+                result = -1;
+            }
         }
     }
     for (index = 0; index < (LONG)OS_NATIVE_STACKS; ++index) {
-        const Os_StackFaultType *fault = &fault_records[index];
-        if (__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0) {
-            if (printf(
-                    "FAULT role=%c tid=%u signal=%08X sp=%llu address=%llu captured=1 origin=%c\n",
-                    fault->role,
-                    fault->thread_id,
-                    fault->signal_number,
-                    (unsigned long long)fault->sp,
-                    (unsigned long long)fault->address,
-                    fault->origin) < 0) {
+        if (__atomic_load_n(&fault_records[index].published, __ATOMIC_ACQUIRE) != 0) {
+            if (report_fault(&fault_records[index]) == 0) {
                 result = -1;
             }
         }

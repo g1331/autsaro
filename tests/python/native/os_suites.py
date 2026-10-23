@@ -236,7 +236,8 @@ def sanitizer_flags() -> list[str]:
 def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...] = (),
           target: Path | None = None,
           extra_sources: tuple[Path, ...] = (),
-          host_failure_injection: bool = True) -> tuple[Path, dict]:
+          host_failure_injection: bool = True,
+          link_flags: tuple[str, ...] = ()) -> tuple[Path, dict]:
     target = TARGET if target is None else target
     verify_sources()
     cc = compiler()
@@ -314,6 +315,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(target / "src/Os_ArtiServices.c"),
         str(target / "src/Os_Interrupt.c"),
         str(target / "src/Os_Backend.c"),
+        str(target / "src/Os_HostIo.c"),
         str(target / "src/Os_Vector.c"),
         *(str(source) for source in native_sources),
         str(target / "src/Os_Mailbox.c"),
@@ -324,6 +326,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(copied / "tasks.c"),
         str(copied / "list.c"),
         str(copied / "queue.c"),
+        *link_flags,
         *(["-pthread"] if linux else ["-lwinmm"]),
         "-o", str(binary),
     ]

@@ -86,6 +86,9 @@ static Os_HostThreadResultType control(void *argument)
     }
     require((signal_outputs == 2u) && (diagnostic_outputs == 2u));
     printf("independent_control signal=2 default_session_did=2 completed=20\n");
+    if (fflush(stdout) != 0) {
+        Os_HostExit(93u);
+    }
     ShutdownOS(E_OK);
     return 0u;
 }

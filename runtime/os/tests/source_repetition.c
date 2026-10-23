@@ -110,6 +110,9 @@ void ShutdownHook(StatusType reason)
            errors,
            trace,
            reason);
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void owner(void)
 {

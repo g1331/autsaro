@@ -180,15 +180,6 @@ OS_MEMMAP int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds);
  */
 OS_MEMMAP int Os_HostClose(Os_HostHandleType handle);
 
-/** Select byte-preserving stdin/stdout operation. Failure returns zero.
- * @return Nonzero when both streams preserve bytes; zero on a native mode failure.
- * Preconditions: stdin and stdout descriptors are open.
- * Context: native startup before stream consumers exist, outside exclusive areas.
- * Reentrancy: non-reentrant with concurrent standard-stream mode changes.
- * Ownership: changes process stream modes; does not close or transfer either stream.
- */
-OS_MEMMAP int Os_HostSetBinaryStandardStreams(void);
-
 /** Terminate this host process with the supplied status; never returns.
  * @param[in] status Native process exit status.
  * @par Return

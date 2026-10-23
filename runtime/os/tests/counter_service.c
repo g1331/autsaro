@@ -41,6 +41,9 @@ void StartupHook(void) {}
 void ShutdownHook(StatusType reason)
 {
     printf("counter_service ticks=0 wrap=2 errors=%u reason=%u\n", errors, reason);
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void owner(void)
 {

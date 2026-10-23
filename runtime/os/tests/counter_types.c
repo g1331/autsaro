@@ -47,6 +47,9 @@ void ShutdownHook(StatusType reason)
            (unsigned long long)final_value,
            (unsigned long long)other_value,
            reason);
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void owner(void)
 {

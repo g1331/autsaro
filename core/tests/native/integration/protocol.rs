@@ -771,7 +771,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     // stage 8, which the mainline bootstrap does not have, and the mainline
     // cannot queue more than its one Tx hardware object holds (output
     // reuse is gated by the host confirmation).
-    for mode in ["fail", "block", "sequence", "write", "flush"] {
+    for mode in ["fail", "block", "sequence", "write", "closed"] {
         let directory = built.scratch.0.join("faults").join(mode);
         fs::create_dir_all(&directory).unwrap();
         let started = std::time::Instant::now();
@@ -806,7 +806,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
             assert_eq!(result.code(), Some(7), "{text}");
             assert_eq!(text.matches("fault_output ").count(), 1, "{text}");
             assert!(!text.contains("fault_commit "), "{text}");
-            if matches!(mode, "write" | "flush") {
+            if matches!(mode, "write" | "closed") {
                 assert!(
                     text.contains(&format!("physical_{mode} failed no_receipt ticket=")),
                     "{text}"

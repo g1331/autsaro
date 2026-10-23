@@ -66,6 +66,9 @@ static Os_HostThreadResultType control(void *argument)
     }
     require(responses == 1u);
     require(printf("frame_timer deadline=250 accepted=1 no_timeout=1\n") >= 0);
+    if (fflush(stdout) != 0) {
+        Os_HostExit(93u);
+    }
     ShutdownOS(E_OK);
     return 0u;
 }

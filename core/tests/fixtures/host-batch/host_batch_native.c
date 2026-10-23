@@ -167,6 +167,9 @@ static Os_HostThreadResultType WINAPI control(void *argument)
     require((signal_outputs == 1u) && (did_outputs == 2u));
     require(printf("native_batch capacity=256 refusal=257 same_epoch=0 future_requires_tick=pass "
                    "confirmations=pass second_producer=refused\n") >= 0);
+    if (fflush(stdout) != 0) {
+        Os_HostExit(93u);
+    }
     ShutdownOS(E_OK);
     return 0u;
 }

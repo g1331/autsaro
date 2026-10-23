@@ -81,20 +81,20 @@ Det 仍在全部开发 hooks 按顺序返回后停止；未初始化和递归报
 | --- | --- |
 | R21.1 | 2013 主文印刷页165–166；TC1 页10 增加 R20.5 交叉引用；AMD2 §2.10、AMD2.27 页9 扩充 C11 适用性／来源。AMD1／AMD3／AMD4／TC2 没有增加本项 feature 宏例外。锁 TU 已去除 `_XOPEN_SOURCE`；OS 其他 feature 宏仍按各自真实闭包在 #60 评估，不能批量视为合规。 |
 | R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 的 setjmp／longjmp 仍是实际违反，须由 #60 交付同 Task 的 port 栈重启替代；移除 include 或隐藏调用无效。 |
-| R21.6 | 主文页168–169，覆盖 stdio 函数及 C99 指定的宽字符 I/O；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源，其他修订没有本项流协议例外。HostBatch／probe／正常 OS 报告的 stdio 调用仍是实际违反，包括内存格式化；平台 `_fileno`／`_setmode` 不仅因引用标准流就属于这些标准函数，但接缝须随 #60 流迁移保留。 |
+| R21.6 | 主文页168–169，覆盖 stdio 函数及 C99 指定的宽字符 I/O；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源，AMD2.79 页16 替换首段 Amplification，明确覆盖 stdio.h 规定的函数及 wchar.h 中的宽字符等价函数；其余修订没有本项流协议例外。HostBatch／probe／OS 报告已用原生字节 I/O 和有界格式化替代这些调用；这不替代其他规则评估。 |
 | R21.8 | 主文页169；AMD1 §3 页17 移除 getenv；TC1 页11 修正表述；AMD2 §2.10.41（AMD2.81）页17 整条替换为 abort、exit、_Exit、quick_exit，后续 AMD3／AMD4／TC2 未再改变集合。锁与 Det 已去除 abort；R21.8 原文按所列标识符限制使用；POSIX `_exit` 不在该集合。受控 glibc 的 `_exit`／`_Exit` 可共享实现，这不是实现隔离证明；选择平台 API 的依据是明确的进程级停止及不执行 CRT 清理的契约与真实消费者测试，其他规则仍须独立评估。固定 checker 的 getenv 旧诊断及 _Exit／quick_exit 漏检仍原样保留。 |
 
 流迁移与 restart 的生产完成边界、port／第三方身份及反例各自独立，不能由锁补丁的测试证明。#60 保持开放并承接以下两段；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。
 
 ### 主机 I/O 与故障报告（D-34／E4-HOST-REPORT）
 
-当前交付的 stdio 使用者包括 `runtime/ecu/src/ecu_host_batch.c`、`ecu_probe.c`、`runtime/os/src/Os_Backend.c`、`Os_Stack.c`、`host/linux/Os_StackLinux.c`，以及设置 Windows 二进制标准流的 `Os_HostServices.c`。已删除的 `NvM_HostStorage.c`、`Security.c` 与 `ecu_host_main.c` 不属于当前闭包；后续存储能力由 [R7](../roadmap/README.md)／[#124](https://github.com/g1331/autsaro/issues/124) 承接，不为处理旧草案恢复它们。
+HostBatch、probe、正常 OS 生命周期与栈报告通过 `Os_HostIo.h` 使用原生标准句柄和调用方持有的有界记录。Linux 读取文件描述符，Windows 读取 HANDLE，不经过 CRT 文本翻译。`Os_HostServices.c` 不再设置 CRT 标准流模式；使用 CRT 的应用或测试消费者自行完成自己的缓冲输出。已删除的存储实现不属于本闭包，后续存储能力由 [R7](../roadmap/README.md)／[#124](https://github.com/g1331/autsaro/issues/124) 承接。
 
-HostBatch 的控制线程逐字节读取输入，保留嵌入 NUL，排空过长行，并区分 EOF 与输入错误。输出 sink 完成格式化并 flush 成功后，`Ecu_HostBridge.c:pump` 才调用 `Ecu_TargetConfirmOutput`；协议拒绝、运行中输出失败及成功收据有各自的效果。probe 的输出与测试构建的初始化／退役记录也被工具消费。只删掉日志、把错误当 EOF，或在缓冲写入后提前确认，都会改变可观察契约。
+HostBatch 逐字节保留 NUL、排空过长行、移除行尾 CR，区分 EOF 与实际输入错误；输入错误进入故障关闭。十进制字段支持完整 uint64 范围，十六进制字段拒绝无效宽度和截断，容量错误锁存并拒绝发布记录前缀。原生写入处理部分完成、EINTR、零进展和句柄关闭；Linux 仅阻塞调用线程的 SIGPIPE 并消费本次断管产生的信号，保留调用前已有的 pending 信号及原来的屏蔽集合。
 
-为消除已确认的 R21.6 违反，候选是既有 host 层内的有界字节读写与格式化：Windows 使用标准 HANDLE，Linux 使用文件描述符；按部分读写、EOF、中断、关闭管道及实际错误处理结果。格式化须保持十进制／十六进制字段、精确字节数和容量拒绝；确认只能发生在完整记录实际输出成功后。替换后没有 stdio 缓冲，原 flush 的完成边界仍须由平台写入完成来承担，不把额外磁盘同步引入管道协议。该方案涉及两平台生产 HostBatch、probe、test 与验证器，不能只迁移一个 printf，或仅转移 stdio 的文件位置。
+`Ecu_HostBridge.c:pump` 只在 sink 把完整 OUT 记录实际写出后调用 `Ecu_TargetConfirmOutput`；probe 同样先完成输出再确认。写入失败可能留下可见前缀，但不能确认输出或发布成功收据。无 stdio 缓冲后的完成边界是全部字节交给平台输出成功，不额外要求管道协议进行磁盘同步。正式 HostBatch／probe、测试构建的初始化和退役记录均使用同一输出入口。
 
-正常关闭由 `report_and_exit` 调用 `Os_StackReport`、输出 lifecycle 并检查 flush；输出失败会使原本成功的退出变为 `E_OS_STATE`。耗尽控制器后的 `Os_StackFatalExit` 则已用有界手工格式化和 Linux `write`／Windows `WriteFile`，失败时尝试 stderr，再终止进程；不能把 stdio 或新锁引入此路径。Linux guard handler 对非本模块 guard 的异常直接退出；自己的 guard fault 发布记录并永久停放 actor。任何改造均须保留首次故障记录、关闭 admission、备用控制器、不可恢复时的终止与失败状态。
+正常关闭在 `report_and_exit` 依次调用 ShutdownHook、栈报告和 lifecycle 报告，后两者均检查完整输出；报告失败把原本成功的退出转为 `E_OS_STATE`，已有失败原因保持。控制器耗尽后的 `Os_StackFatalExit` 保留预分配缓冲、首次故障记录和原生停止，只重试剩余字节及 EINTR，stdout 失败后尝试 stderr。该路径不调用 stdio、不分配内存或取得新的应用锁。Linux guard handler 对非本模块 guard 的异常直接退出；自己的 guard fault 发布记录并永久停放 actor。
 
 ### 激活重启（E4-HOST-RESTART）
 
@@ -106,7 +106,7 @@ HostBatch 的控制线程逐字节读取输入，保留嵌入 NUL，排空过长
 
 固定原件已可用，不再以 #57 的 MISRA 缺件阻塞本项。后续直接从持久资料库核对对应修订及 R24-11 原文、图页，按真实调用消除剩余违反；Dcm 的 ISO 缺件不在本项闭包。OS 停机的既有差距仍由 [#200](https://github.com/g1331/autsaro/issues/200) 跟踪，不因主机进程退出而关闭。源码诊断与必要人工评估由 #58 承接，原始状态不因资料、局部整改或绿色 CI 改写。
 
-实际修改应由独立反例证伪：锁故障不得返回且正常锁可用；HostBatch NUL／CR／过长输入、EOF／输入错误、部分输出／flush 失败不得提前确认；终止／ChainTask 不得返回到已完成调用帧，FIFO／抢占／资源清理保持；正常和控制器耗尽的栈故障均保留报告及失败状态。复用现有 host-boundary、protocol、OS activation／finish／stack suites 与生产／TSan／ASan／UBSan 封存入口，保持 #324 的 2000 ms terminal-stop 协议和 #331 的公开接口 fuzz／重放断言。改动生成 C 后运行两平台受影响 main 和全部受影响 profile 的完整 c-check，分别报告分析完整性、原始 `passed`、新增／移除诊断与未核查项；不得用 suppression、基线新增、漏扫或更换成 checker 未识别的调用证明整改完成。
+实际修改应由独立反例证伪：锁故障不得返回且正常锁可用；HostBatch NUL／CR／过长输入、EOF／输入错误、部分输出／原生写入失败不得提前确认；终止／ChainTask 不得返回到已完成调用帧，FIFO／抢占／资源清理保持；正常和控制器耗尽的栈故障均保留报告及失败状态。复用现有 host-boundary、protocol、OS activation／finish／stack suites 与生产／TSan／ASan／UBSan 封存入口，保持 #324 的 2000 ms terminal-stop 协议和 #331 的公开接口 fuzz／重放断言。改动生成 C 后运行两平台受影响 main 和全部受影响 profile 的完整 c-check，分别报告分析完整性、原始 `passed`、新增／移除诊断与未核查项；不得用 suppression、基线新增、漏扫或更换成 checker 未识别的调用证明整改完成。
 
 ## 当前支持剖面与边界
 

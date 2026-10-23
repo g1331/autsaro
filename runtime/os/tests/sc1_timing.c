@@ -343,6 +343,9 @@ void ShutdownHook(StatusType error)
            errors,
            (unsigned)last_error,
            (unsigned)error);
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 int main(int argc, char **argv)
 {

@@ -115,3 +115,37 @@ class HostBoundaryTests(unittest.TestCase):
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
                 self.assertNotIn("UNEXPECTED_UNLOCK", output)
+
+
+class HostIoTests(unittest.TestCase):
+    """Use the actual native adapter and full OS link, including syscall refusal seams."""
+
+    def test_native_bytes_and_record_completion(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "host-io"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/host_io.c"),
+                    link_flags=() if os.name == "nt" else ("-Wl,--wrap=write,--wrap=read",),
+                )
+                source = directory / "input.bin"
+                source.write_bytes(b"a\x00\r\nb\xff")
+                expected = {
+                    "format": b"zero=0 max=18446744073709551615 hex=ffffffffffffffff fault=000000A5\x00\r\n",
+                    "capacity": b"", "hex-width": b"", "hex-value": b"", "hex-case": b"",
+                    "broken-pipe": b"", "read-bytes": source.read_bytes(),
+                }
+                if os.name != "nt":
+                    expected.update({"partial": b"abcdef", "interrupted": b"abcdef", "zero": b"",
+                                     "partial-error": b"ab", "read-error": b"", "pending-pipe": b"",
+                                     "read-interrupted": source.read_bytes()})
+                for case, output in expected.items():
+                    with self.subTest(case=case):
+                        result = OwnedProcess(ProcessSpec.seconds(
+                            [str(binary), case], directory, 10, directory, case, stdin_file=source,
+                        )).wait()
+                        actual = result.stdout.read_bytes()
+                        self.assertEqual(result.exit_code, 0, (case, actual, result.stderr.read_bytes()))
+                        self.assertEqual(actual, output, case)

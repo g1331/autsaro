@@ -279,6 +279,9 @@ void ShutdownHook(StatusType error)
                error_codes[i],
                error_services[i]);
     }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void helper(void)
 {

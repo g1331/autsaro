@@ -420,6 +420,9 @@ void ShutdownHook(StatusType Error)
                (int)InterlockedCompareExchange(&bridge_rejected, 0, 0)) < 0) {
         ExitProcess(99u);
     }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 int main(int argc, char **argv)
 {

@@ -210,6 +210,9 @@ void ShutdownHook(StatusType Error)
                r->checked,
                r->actor);
     }
+    if (fflush(stdout) != 0) {
+        ExitProcess(99u);
+    }
 }
 static void basic(void)
 {
