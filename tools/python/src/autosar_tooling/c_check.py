@@ -118,8 +118,16 @@ def coverage(addons: Path) -> dict:
         "basis": "MISRA C:2012 + AMD1-AMD4 + TC1-TC2; C99",
         "completeCompliance": False,
         "knownCheckerLimitations": [{
+            "guideline": "R10.1",
+            "detail": "Pinned misra_10_1 checks shift/bitwise operands, but does not implement the logical-operand restrictions, including the TC1 pointer clarification. Checker availability is partial; manual evaluation remains required.",
+            "basis": "MISRA C:2012 R10.1; TC1 R10.1; AMD3.20",
+        }, {
+            "guideline": "R14.4",
+            "detail": "Pinned misra_14_4 visits if/while but omits for conditions; its isBoolExpression helper also treats integer literals 0 and 1 as Boolean. This is weaker than the C99 essential-Boolean obligation. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R14.4",
+        }, {
             "guideline": "R21.8",
-            "detail": "Pinned addon still reports getenv although AMD1 removed that prohibition; its termination-call list also omits _Exit/quick_exit. Raw diagnostics remain unchanged.",
+            "detail": "Pinned addon still reports getenv although AMD2.81 removed that prohibition; its termination-call list also omits _Exit/quick_exit. Raw diagnostics remain unchanged.",
             "basis": "https://misra.org.uk/app/uploads/2021/06/MISRA-C-2012-AMD2.pdf",
         }],
         "rules": [{"id": item["id"], "category": item["category"],
