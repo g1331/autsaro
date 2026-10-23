@@ -200,5 +200,5 @@ class NativeFacilityTests(unittest.TestCase):
                 for scenario in ("normal", "error"):
                     result = os_suites.run_native([str(binary), scenario], timeout=10)
                     self.assertEqual(result.returncode, 0, result)
-                    self.assertEqual(result.stdout, "native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified\n")
+                    self.assertEqual(result.stdout, "native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified context=signal+self\n")
                     self.assertEqual(result.stderr, "")

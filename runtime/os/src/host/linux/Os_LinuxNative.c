@@ -22,11 +22,10 @@ OS_MEMMAP static long native_call(
     long number, const volatile void *first, long second, long third, const void *fourth)
 {
     long result;
-    register const void *fourth_register __asm__("r10") = fourth;
-    __asm__ volatile("syscall"
+    __asm__ volatile("mov %5,%%r10\n\tsyscall"
                      : "=a"(result)
-                     : "a"(number), "D"(first), "S"(second), "d"(third), "r"(fourth_register)
-                     : "rcx", "r11", "memory");
+                     : "a"(number), "D"(first), "S"(second), "d"(third), "r"(fourth)
+                     : "rcx", "r11", "r10", "memory");
     return result;
 }
 

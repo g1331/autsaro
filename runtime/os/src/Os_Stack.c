@@ -286,7 +286,7 @@ OS_MEMMAP void Os_StackCheck(void)
     if (current_stack == NULL) {
         return; /* Public preparation before StartOS does not yet execute an OS task. */
     }
-    if (sp < low || sp >= high || sp < current_stack->reserve_low || sp >= current_stack->high ||
+    if (sp < current_stack->reserve_low || sp >= current_stack->high ||
         VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region) ||
         region.State != MEM_COMMIT || (region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u) {
         publish_fault(current_stack, 0u, sp, sp, 'M');

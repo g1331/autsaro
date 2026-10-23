@@ -156,7 +156,7 @@ OS_MEMMAP static void terminal_park(HANDLE thread)
 
 OS_MEMMAP static void park_signal(int signal_number, siginfo_t *info, void *native_context)
 {
-    /* The futex calls set errno; the interrupted code must see its own value. */
+    /* Preserve the interrupted actor's errno across signal-context capture and parking. */
     const int interrupted_errno = errno;
     HANDLE thread = current_thread;
     (void)signal_number;
