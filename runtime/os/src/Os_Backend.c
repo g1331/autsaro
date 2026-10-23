@@ -586,10 +586,11 @@ OS_MEMMAP StatusType Os_BackendTaskId(TaskRefType id)
     Os_BackendGuardService();
     *id = INVALID_TASK;
     for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
-        if ((handles[i] == xTaskGetCurrentTaskHandle()) &&
-            (eTaskGetState(handles[i]) == eRunning)) {
-            *id = Os_Config->tasks[i].id;
-            break;
+        if (handles[i] == xTaskGetCurrentTaskHandle()) {
+            if (eTaskGetState(handles[i]) == eRunning) {
+                *id = Os_Config->tasks[i].id;
+                break;
+            }
         }
     }
     taskEXIT_CRITICAL();
@@ -2031,8 +2032,10 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
         rebase_orders();
     }
     if ((chain != 0) && (target != index)) {
-        configASSERT((activations[target].count != 0u) ||
-                     (eTaskGetState(handles[target]) == eSuspended));
+        /* Keep the kernel query inside the assertion's evaluation boundary. */
+        configASSERT((activations[target].count != 0u)
+                         ? TRUE
+                         : (eTaskGetState(handles[target]) == eSuspended));
     }
     /* PostTaskHook observes the outgoing activation while still RUNNING,
      * before changing its queue/state or releasing its internal resource. */

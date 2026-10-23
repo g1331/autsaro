@@ -56,8 +56,10 @@ static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(void)
         }
         Ecu_HostBusSM_Exit();
         /* An unreadable controller publishes nothing; its next completion does. */
-        if (owner && (Ecu_HostBusSM_GetCurrentComMode(channel, &next) == E_OK)) {
-            ComM_BusSM_ModeIndication(channel, next);
+        if (owner) {
+            if (Ecu_HostBusSM_GetCurrentComMode(channel, &next) == E_OK) {
+                ComM_BusSM_ModeIndication(channel, next);
+            }
         }
     }
 }

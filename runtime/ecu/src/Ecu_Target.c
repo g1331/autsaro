@@ -112,21 +112,26 @@ void Ecu_TargetReportTransportTimeout(void)
 uint8_t Ecu_TargetState(void)
 {
     Os_Atomic32Type state = load(&lifecycle);
-    if ((state == (Os_Atomic32Type)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
-        return ECU_TARGET_INITIALIZING;
+    if (state == (Os_Atomic32Type)ECU_TARGET_READY) {
+        if (Os_TargetReady() == 0) {
+            state = (Os_Atomic32Type)ECU_TARGET_INITIALIZING;
+        }
     }
     return (uint8_t)state;
 }
 int Ecu_TargetIsOwner(void)
 {
+    int owned = 0;
     if (load(&lifecycle) == (Os_Atomic32Type)ECU_TARGET_INITIALIZING) {
-        return ((initialization_thread != 0u) && (Os_HostThreadIdentity() == initialization_thread))
-                   ? 1
-                   : 0;
+        if (initialization_thread != 0u) {
+            owned = (Os_HostThreadIdentity() == initialization_thread) ? 1 : 0;
+        }
+    } else {
+        if (Ecu_TargetState() == ECU_TARGET_READY) {
+            owned = (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1) ? 1 : 0;
+        }
     }
-    return ((Ecu_TargetState() == ECU_TARGET_READY) && (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1))
-               ? 1
-               : 0;
+    return owned;
 }
 void Ecu_TargetAssertOwner(void)
 {
@@ -150,6 +155,7 @@ uint64_t Ecu_TargetNow(void)
 static StatusType native_context(void)
 {
     Os_Atomic32Type owner;
+    StatusType status = E_OS_ACCESS;
     if (Ecu_TargetState() != ECU_TARGET_READY) {
         return E_OS_STATE;
     }
@@ -162,7 +168,12 @@ static StatusType native_context(void)
         (void)Os_HostAtomicExchange(&native_owner, 2);
         return E_OK;
     }
-    return ((owner == 2) && (native_thread == Os_HostThreadIdentity())) ? E_OK : E_OS_ACCESS;
+    if (owner == 2) {
+        if (native_thread == Os_HostThreadIdentity()) {
+            status = E_OK;
+        }
+    }
+    return status;
 }
 
 StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record)
@@ -388,10 +399,13 @@ StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *resul
 int Os_IntegrationTimingAuthorized(void) { return (Ecu_SchMTimingActive() == TRUE) ? 1 : 0; }
 void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
 {
-    if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u) &&
-        (Os_MailboxQuiescent() != 0) && (output_pending == 0u) && (load(&batch_state) == 4) &&
-        ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
-        (void)Os_HostAtomicCompareExchange(&batch_state, 5, 4);
+    if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u)) {
+        if ((Os_MailboxQuiescent() != 0) && (output_pending == 0u)) {
+            if ((load(&batch_state) == 4) &&
+                ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
+                (void)Os_HostAtomicCompareExchange(&batch_state, 5, 4);
+            }
+        }
     }
 }
 EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8])
@@ -400,8 +414,12 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, con
     if (Ecu_TargetIsOwner() == 0) {
         return ECU_ERR_IO;
     }
-    if ((dlc > 8u) || (data == NULL) || (id > 0x7ffu) || (next_output_ticket == UINT64_MAX) ||
-        (load(&slot->state) != 0)) {
+    boolean writable =
+        (dlc <= 8u) && (data != NULL) && (id <= 0x7ffu) && (next_output_ticket != UINT64_MAX);
+    if (writable) {
+        writable = load(&slot->state) == 0;
+    }
+    if (!writable) {
         fail();
         return ECU_ERR_IO;
     }
@@ -566,7 +584,11 @@ void Ecu_TargetTask(void)
         unsigned count;
         StatusType status;
         Ecu_TargetAssertOwner();
-        if ((GetEvent(ECU_TARGET_TASK, &events) != E_OK) || (ClearEvent(events & mask) != E_OK)) {
+        status = GetEvent(ECU_TARGET_TASK, &events);
+        if (status == E_OK) {
+            status = ClearEvent(events & mask);
+        }
+        if (status != E_OK) {
             fail();
         }
         status = Os_TargetTakeInput(&record);
@@ -588,9 +610,12 @@ void Ecu_TargetTask(void)
             /* A tick may arrive while this Task drains copied inputs. Its
              * alarm events are published before the delivered ticket, so
              * refresh the hints instead of losing this tick's application. */
-            if ((GetEvent(ECU_TARGET_TASK, &tick_events) != E_OK) ||
-                (ClearEvent(tick_events & (ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP)) !=
-                 E_OK)) {
+            StatusType event_status = GetEvent(ECU_TARGET_TASK, &tick_events);
+            if (event_status == E_OK) {
+                event_status =
+                    ClearEvent(tick_events & (ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP));
+            }
+            if (event_status != E_OK) {
                 fail();
             }
             events |= tick_events;
@@ -617,8 +642,10 @@ void Ecu_TargetTask(void)
             fail();
         } else {
         }
-        if ((status == E_OK) && (output_pending == 0u) && (Os_TargetCompleteTick(ticket) != E_OK)) {
-            fail();
+        if ((status == E_OK) && (output_pending == 0u)) {
+            if (Os_TargetCompleteTick(ticket) != E_OK) {
+                fail();
+            }
         }
         if (Os_TargetInputCount(&count) != E_OK) {
             fail();

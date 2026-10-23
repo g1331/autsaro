@@ -76,7 +76,8 @@ static Os_HostThreadResultType control(void *argument)
             if (status == E_OK) {
                 break;
             }
-            require((status == E_OS_NOFUNC) && ((Os_HostMonotonicMs() - started) < 5000u));
+            require(status == E_OS_NOFUNC);
+            require((Os_HostMonotonicMs() - started) < 5000u);
             Os_HostSleepMs(1u);
         }
         require((completion.epoch == step) && (completion.kernel_tick == (uint32_t)step));

@@ -85,10 +85,12 @@ DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId,
         config = configuration;
     }
     SchM_Exit_Det_DET_STATE();
-    if ((config != NULL_PTR) && (Det_HostEnterDevelopmentReport() == TRUE)) {
-        uint16 index;
-        for (index = 0u; index < config->error_hook_count; ++index) {
-            (void)config->error_hooks[index](ModuleId, InstanceId, ApiId, ErrorId);
+    if (config != NULL_PTR) {
+        if (Det_HostEnterDevelopmentReport() == TRUE) {
+            uint16 index;
+            for (index = 0u; index < config->error_hook_count; ++index) {
+                (void)config->error_hooks[index](ModuleId, InstanceId, ApiId, ErrorId);
+            }
         }
     }
     Det_HostHalt();

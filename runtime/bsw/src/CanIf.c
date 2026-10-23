@@ -286,22 +286,24 @@ CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType
         decision = mode_writes;
         lifetime = generation;
         SchM_Exit_CanIf_CANIF_STATE();
-        if ((valid != 0u) && (Can_GetControllerMode(driver, &actual_mode) == E_OK) &&
-            (actual_mode == CAN_CS_STARTED) &&
-            ((PduModeRequest == CANIF_OFFLINE) || (PduModeRequest == CANIF_TX_OFFLINE) ||
-             (PduModeRequest == CANIF_ONLINE))) {
-            SchM_Enter_CanIf_CANIF_STATE();
-            if (lifetime != generation) {
-                /* Reinitialized meanwhile: the request belonged to the old lifetime. */
-            } else if (decision != mode_writes) {
-                /* A mode change interleaved: decide again against the actual controller. */
-                retry = 1u;
-            } else {
-                pdu_mode = PduModeRequest;
-                ++mode_writes;
-                result = E_OK;
+        if (valid != 0u) {
+            if ((Can_GetControllerMode(driver, &actual_mode) == E_OK) &&
+                (actual_mode == CAN_CS_STARTED) &&
+                ((PduModeRequest == CANIF_OFFLINE) || (PduModeRequest == CANIF_TX_OFFLINE) ||
+                 (PduModeRequest == CANIF_ONLINE))) {
+                SchM_Enter_CanIf_CANIF_STATE();
+                if (lifetime != generation) {
+                    /* Reinitialized meanwhile: the request belonged to the old lifetime. */
+                } else if (decision != mode_writes) {
+                    /* A mode change interleaved: decide again against the actual controller. */
+                    retry = 1u;
+                } else {
+                    pdu_mode = PduModeRequest;
+                    ++mode_writes;
+                    result = E_OK;
+                }
+                SchM_Exit_CanIf_CANIF_STATE();
             }
-            SchM_Exit_CanIf_CANIF_STATE();
         }
     }
     return result;
