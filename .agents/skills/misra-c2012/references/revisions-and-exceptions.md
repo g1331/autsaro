@@ -35,7 +35,7 @@ TC 与 AMD 对既有条文的修订不增加编号；各清单的“新增于”
 - [D4.9](https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.9.html)、[D4.10](https://www.mathworks.com/help/bugfinder/ref/misrac2012d4.10.html)、[R20.7](https://www.mathworks.com/help/bugfinder/ref/misrac2012rule20.7.html)：泛型宏、重复包含协议和非表达式宏分别看上下文，不能一套括号/防重包含策略覆盖全部。
 
 - R8.1 与 R17.3 仅适用 C90（主文 §8.8／§8.17）；C99 中隐式声明仍违反语言约束，按 R1.1 及声明规则核查，不能转换成 R17.3 Mandatory 偏离。
-- R21.4 必须同时检查头文件与设施使用（AMD3.67，印刷p43／PDFp52），隐藏 include 或加包装不能消除 setjmp/longjmp。替代设计须保持原接口的不可返回、资源清理、队列与执行上下文义务；不能只改成错误返回。
+- R21.4 必须同时检查头文件与设施使用（AMD3.67，印刷p43／PDFp51），隐藏 include 或加包装不能消除 setjmp/longjmp。替代设计须保持原接口的不可返回、资源清理、队列与执行上下文义务；不能只改成错误返回。
 - R21.6 覆盖标准 I/O 标识符／宏及 wide I/O（主文 §8.21，AMD2.79），包括内存格式化；没有主机用途自动例外。沿实际调用图找标准设施，封装或改成平台接口名字不自动证明该设施已消除，也不自动批准偏离。
 - R21.8：AMD1 §3 移除 getenv，AMD2.81 整项替换为 abort/exit/_Exit/quick_exit；system 另由 AMD2.83 新增 R21.21 约束。不能把旧 TC1 的修辞性改动重新引入已删除的禁用项。
 - R7.6 的 AMD4.4 正文和 AMD4.64 摘要均为 Required；AMD4.65 附录属性表却写 Advisory。保留正文及锁定目录的 Required，不用该不一致降低约束。
