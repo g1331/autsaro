@@ -43,6 +43,7 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0015-typed-port-state.patch",
     "runtime/os/patches/0016-essential-boolean-controls.patch",
     "runtime/os/patches/0017-portable-header-paths.patch",
+    "runtime/os/patches/0018-windows-thread-setup-errors.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",

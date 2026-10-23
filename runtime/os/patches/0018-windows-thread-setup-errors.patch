@@ -1,0 +1,39 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -313,9 +313,9 @@
+ #endif
+ 
+     configASSERT( xThreadState.pvThread != NULL ); /* See comment where TerminateThread() is called. */
+-    SetThreadAffinityMask( xThreadState.pvThread, 0x01 );
+-    SetThreadPriorityBoost( xThreadState.pvThread, 1 );
+-    SetThreadPriority( xThreadState.pvThread, portTASK_THREAD_PRIORITY );
++    configASSERT( SetThreadAffinityMask( xThreadState.pvThread, 0x01 ) != 0U );
++    configASSERT( SetThreadPriorityBoost( xThreadState.pvThread, 1 ) != 0 );
++    configASSERT( SetThreadPriority( xThreadState.pvThread, portTASK_THREAD_PRIORITY ) != 0 );
+ 
+     ( void ) memcpy( ( unsigned char * ) pxStateStorage,
+                      ( const unsigned char * ) &xThreadState, sizeof( xThreadState ) );
+@@ -382,8 +382,12 @@
+             lSuccess = pdFAIL;
+         }
+ 
+-        SetThreadPriorityBoost( pvHandle, 1 );
+-        SetThreadAffinityMask( pvHandle, 0x01 );
++        if( ( lSuccess == pdPASS ) &&
++            ( ( SetThreadPriorityBoost( pvHandle, 1 ) == 0 ) ||
++              ( SetThreadAffinityMask( pvHandle, 0x01 ) == 0U ) ) )
++        {
++            lSuccess = pdFAIL;
++        }
+     }
+ 
+     if( lSuccess == pdPASS )
+@@ -614,7 +618,7 @@
+      * does not run and swap it out before it is closed.  If that were to happen
+      * the thread would never run again and effectively be a thread handle and
+      * memory leak. */
+-    SetThreadPriority( pvThread, portDELETE_SELF_THREAD_PRIORITY );
++    configASSERT( SetThreadPriority( pvThread, portDELETE_SELF_THREAD_PRIORITY ) != 0 );
+ 
+     /* This function will not return, therefore a yield is set as pending to
+      * ensure a context switch occurs away from this thread on the next tick. */

@@ -1,6 +1,7 @@
 """Real host C fault injection, without adding hooks to delivery code."""
 from __future__ import annotations
 
+import difflib
 import os
 import platform
 import shutil
@@ -180,6 +181,57 @@ class HostIoTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() in ("Linux", "Windows"), "native kernel object consumers")
 class NativeKernelObjectTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows thread setup failures")
+    def test_windows_port_thread_setup_failures_stop_before_ready(self):
+        import os_suites
+
+        for mutant in (False, True):
+            with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                if mutant:
+                    (target / "patches/0018-windows-thread-setup-errors.patch").unlink()
+                # Redirect only the adopted port, after real platform declarations.
+                anchor = '#include "Os_Backend.h"\n'
+                before = ('/* Scheduler includes. */\n#include "FreeRTOS.h"\n#include "task.h"\n' + anchor +
+                          '\n#ifdef WIN32_LEAN_AND_MEAN\n    #include <winsock2.h>\n#else\n    #include <winsock.h>\n#endif\n')
+                after = before.replace(anchor, anchor + (
+                    "DWORD_PTR WINAPI Os_TestSetThreadAffinityMask(HANDLE, DWORD_PTR);\n"
+                    "BOOL WINAPI Os_TestSetThreadPriorityBoost(HANDLE, BOOL);\n"
+                    "BOOL WINAPI Os_TestSetThreadPriority(HANDLE, int);\n"
+                    "#define SetThreadAffinityMask Os_TestSetThreadAffinityMask\n"
+                    "#define SetThreadPriorityBoost Os_TestSetThreadPriorityBoost\n"
+                    "#define SetThreadPriority Os_TestSetThreadPriority\n"
+                ))
+                name = "portable/MSVC-MingW/port.c"
+                seam = target / "patches/9999-test-thread-setup.patch"
+                seam.write_text("".join(difflib.unified_diff(
+                    before.splitlines(True), after.splitlines(True),
+                    fromfile="a/" + name, tofile="b/" + name,
+                )), encoding="utf-8")
+                fixture = target / "tests/lifecycle.c"
+                text = fixture.read_text(encoding="utf-8")
+                entry = "int main(int argc, char **argv)\n{"
+                self.assertEqual(text.count(entry), 1)
+                fixture.write_text(text.replace(entry, "extern const char *Os_ThreadSetupScenario;\n" + entry +
+                    '\n    Os_ThreadSetupScenario = argc == 2 ? argv[1] : "normal";'), encoding="utf-8")
+                with os_suites.native_session(directory, "windows-thread-setup"):
+                    binary, _ = os_suites.build(
+                        directory, "lifecycle.c", target=target,
+                        extra_sources=(ROOT / "tests/fixtures/os_windows_thread_setup.c",),
+                    )
+                    for scenario in ("normal", "task-affinity", "task-boost", "task-priority",
+                                     "dispatcher-boost", "dispatcher-affinity"):
+                        with self.subTest(mutant=mutant, scenario=scenario):
+                            result = os_suites.run_native([str(binary), scenario], timeout=10)
+                            refused = scenario != "normal"
+                            self.assertEqual(result.returncode, 13 if refused and not mutant else 0, result)
+                            self.assertEqual(result.stderr, "")
+                            if refused:
+                                self.assertIn("native setup refused=" + scenario, result.stdout)
+                            self.assertEqual("state=Ready" in result.stdout, not refused or mutant, result)
+
     def test_static_kernel_object_types_and_queue_storage(self):
         import os_suites
 

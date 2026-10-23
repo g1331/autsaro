@@ -25,3 +25,18 @@ OS-Application、IOC、多核、spinlock、时间／内存保护、ProtectionHoo
 
 - 引用的 OSEK 版本 ISO 17356-3 全文未取得，严格 ISO 条款由 [#57](https://github.com/g1331/autsaro/issues/57) 跟踪；固定 FreeRTOS 内核（[ADR 0004](../../adr/0004-freertos-kernel-with-own-os-semantics.md)）的上游代码诊断标记为 `adopted` 但不排除（[ADR 0008](../../adr/0008-misra-baseline-and-no-deviation.md)），由 [#58](https://github.com/g1331/autsaro/issues/58) 跟踪。
 - Windows 实际交接运行只在 CI 的 Windows 套件中执行。
+
+## C99 平台扩展的使用边界
+
+以下是所选GCC x64端口对R1.2的设计理由，不把建议性违反写成已批准偏离。MISRA 2013主文R1.1（页37／PDF45）允许目标编译器支持的扩展；R1.2（Advisory，页38／PDF46）要求说明保留扩展的理由及有效使用的保证。编译器身份、参数与预定义宏随实际交付记录；不从C99语言标签推导平台ABI或扩展正确。
+
+| 构造与实际消费者 | 必要性、风险与有效使用检查 |
+| --- | --- |
+| `__attribute__((section, aligned))`：`Os_MemMap.h`；`used`：`Os_PortRestart` personality／SEH handler；`noreturn`：关闭、断言与restart入口 | 段映射、向量表对齐及汇编引用的处理函数不能由普通C存储声明表达；错误属性可能导致丢失代码或错误优化。原生消费者检查ELF／PE的段、符号及向量表，真实故障／restart路径检查不返回行为；不把属性本身当作行为证明。 |
+| `__thread`、`__alignof__`：`Os_Host.h`、`Os_MemMap.h`与Linux端口 | TLS保存每个原生actor的上下文，不能换成共享全局状态；对齐检查约束Interlocked存储。编译期宽度／对齐断言及原生并发、嵌套中断、栈身份测试检查实际消费者。TLS不产生同步保证。 |
+| `__atomic_*`：Linux Interlocked、句柄、停车与故障发布 | C99没有标准原子接口；这里需要跨pthread及信号handler的发布顺序。保持明确的内存序、自然对齐及always-lock-free约束；构造失败归还同样使用原子写入。并发成功／失败对照及ThreadSanitizer回归验证实际路径，不能证明所有调度无竞争。 |
+| `__asm__`：`OS_HOST_STACK_POINTER`、`Os_LinuxNative`、`Os_PortRestart` | 分别读取真实RSP、调用Linux UAPI、建立可被平台unwinder识别的Task入口；寄存器、clobber、栈对齐及unwind元数据依赖目标ABI。宏／函数隔离符合D4.3（Required，主文页26／PDF34）；用途与C接口说明按D4.2（Advisory，同页）记录于[运行时架构](../../architecture/runtime.md#激活重启e4-host-restart)。真实Task、栈／ARTI、restart及sanitizer消费者验证这些边界，SHSTK未启用时保留not_assessed。 |
+
+这些理由不豁免D4.12的动态分配、R21.5的signal设施或R21.10的time设施，也不替代采用内核的其他逐项评估。
+
+Windows补丁`0018-windows-thread-setup-errors.patch`按D4.7／R17.7检查Task线程的affinity、boost、priority以及dispatcher的boost、affinity结果；失败沿现有断言或pdFAIL路径停止启动，不能进入Ready。`vPortCloseRunningThread`的priority调用同样检查，当前`INCLUDE_vTaskDelete=0`没有该删除调用路径，不声称它已被运行验证。依据[affinity](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadaffinitymask)、[boost](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriorityboost)与[priority](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority)的零返回失败契约。Windows原生回归通过临时端口包装逐项拒绝五个启动调用，并与去掉0018的变异及正常启动对照；执行结果以实际Windows CI为准。
