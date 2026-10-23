@@ -8,6 +8,8 @@ BOOL WINAPI Test_Terminate(HANDLE, UINT);
 #define TerminateProcess Test_Terminate
 BOOL WINAPI Test_Once(PINIT_ONCE, PINIT_ONCE_FN, PVOID, LPVOID *);
 BOOL WINAPI Test_Init(LPCRITICAL_SECTION, DWORD, DWORD);
+void WINAPI Test_Leave(LPCRITICAL_SECTION);
+#define LeaveCriticalSection        Test_Leave
 #define InitOnceExecuteOnce         Test_Once
 #define InitializeCriticalSectionEx Test_Init
 #else

@@ -1,10 +1,8 @@
 /** @file Controlled GCC x64 adapter; no automotive time or scheduling. */
 #include "Det_Host.h"
 #if defined(_WIN32)
-/* Keep the Win32 spelling separate from the AUTOSAR boolean type. */
-#define boolean Det_Win32Boolean
-#include <windows.h>
-#undef boolean
+/* Import process primitives without unrelated RPC boolean declarations. */
+#include <processthreadsapi.h>
 #else
 #include <unistd.h>
 #endif

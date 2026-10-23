@@ -79,9 +79,9 @@ Det 仍在全部开发 hooks 按顺序返回后停止；未初始化和递归报
 
 | 规则 | 修订合成与本项结论 |
 | --- | --- |
-| R21.1 | 2013 主文印刷页165–166；TC1 页10 增加 R20.5 交叉引用；AMD2 §2.4 扩充 C11 适用性／来源。AMD1／AMD3／AMD4／TC2 没有增加本项 feature 宏例外。锁 TU 已去除 `_XOPEN_SOURCE`；OS 其他 feature 宏仍按各自真实闭包在 #60 评估，不能批量视为合规。 |
-| R21.4 | 主文页168，禁止 setjmp.h 提供的设施；AMD2 扩充 C11 适用性，其他修订没有本项 restart 例外。backend 的 setjmp／longjmp 仍是实际违反，须由 #60 交付同 Task 的 port 栈重启替代；移除 include 或隐藏调用无效。 |
-| R21.6 | 主文页168–169，覆盖 stdio 函数及 C99 指定的宽字符 I/O；AMD2 扩充 C11 适用性，其他修订没有本项流协议例外。HostBatch／probe／正常 OS 报告的 stdio 调用仍是实际违反，包括内存格式化；平台 `_fileno`／`_setmode` 不仅因引用标准流就属于这些标准函数，但接缝须随 #60 流迁移保留。 |
+| R21.1 | 2013 主文印刷页165–166；TC1 页10 增加 R20.5 交叉引用；AMD2 §2.10、AMD2.27 页9 扩充 C11 适用性／来源。AMD1／AMD3／AMD4／TC2 没有增加本项 feature 宏例外。锁 TU 已去除 `_XOPEN_SOURCE`；OS 其他 feature 宏仍按各自真实闭包在 #60 评估，不能批量视为合规。 |
+| R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 的 setjmp／longjmp 仍是实际违反，须由 #60 交付同 Task 的 port 栈重启替代；移除 include 或隐藏调用无效。 |
+| R21.6 | 主文页168–169，覆盖 stdio 函数及 C99 指定的宽字符 I/O；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源，其他修订没有本项流协议例外。HostBatch／probe／正常 OS 报告的 stdio 调用仍是实际违反，包括内存格式化；平台 `_fileno`／`_setmode` 不仅因引用标准流就属于这些标准函数，但接缝须随 #60 流迁移保留。 |
 | R21.8 | 主文页169；AMD1 §3 页17 移除 getenv；TC1 页11 修正表述；AMD2 §2.10.41（AMD2.81）页17 整条替换为 abort、exit、_Exit、quick_exit，后续 AMD3／AMD4／TC2 未再改变集合。锁与 Det 已去除 abort；R21.8 原文按所列标识符限制使用；POSIX `_exit` 不在该集合。受控 glibc 的 `_exit`／`_Exit` 可共享实现，这不是实现隔离证明；选择平台 API 的依据是明确的进程级停止及不执行 CRT 清理的契约与真实消费者测试，其他规则仍须独立评估。固定 checker 的 getenv 旧诊断及 _Exit／quick_exit 漏检仍原样保留。 |
 
 流迁移与 restart 的生产完成边界、port／第三方身份及反例各自独立，不能由锁补丁的测试证明。#60 保持开放并承接以下两段；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。

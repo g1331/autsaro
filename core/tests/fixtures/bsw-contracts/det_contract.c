@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static unsigned events[16];
@@ -11,6 +12,12 @@ static boolean nested;
 static boolean recurse_development;
 static boolean reinitialize_runtime;
 
+static void unexpected_cleanup(void)
+{
+    (void)fputs("CRT_CLEANUP\n", stdout);
+    (void)fflush(stdout);
+    _Exit(89);
+}
 static void record(unsigned value)
 {
     assert(event_count < 16u);
@@ -83,6 +90,12 @@ int main(int argc, char **argv)
     Std_ReturnType (*runtime_report)(uint16, uint8, uint8, uint8) = Det_ReportRuntimeError;
     Std_ReturnType (*development_report)(uint16, uint8, uint8, uint8) = Det_ReportError;
     assert(argc == 2);
+    if (strcmp(argv[1], "runtime") != 0) {
+        assert(atexit(unexpected_cleanup) == 0);
+    }
+    if (strcmp(argv[1], "cleanup-control") == 0) {
+        return 0;
+    }
     assert(NULL_PTR == NULL);
     assert(sizeof(uint8) == 1u && sizeof(uint16) == 2u && sizeof(uint32) == 4u);
     assert(CPU_TYPE == CPU_TYPE_64 && CPU_BIT_ORDER == LSB_FIRST);

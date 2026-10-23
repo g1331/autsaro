@@ -103,6 +103,7 @@ class HostBoundaryTests(unittest.TestCase):
                 output = result.stdout.read_text()
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
+                self.assertNotIn("UNEXPECTED_UNLOCK", output)
 
     def test_void_lock_failures_select_fatal_policy_and_never_return(self):
         cases = ["once", "mutex-init"] if os.name == "nt" else ["once", "mutex-init", "lock", "unlock"]
@@ -113,3 +114,4 @@ class HostBoundaryTests(unittest.TestCase):
                 output = result.stdout.read_text()
                 self.assertEqual(result.exit_code, 91, output)
                 self.assertIn("LOCK_FATAL", output)
+                self.assertNotIn("UNEXPECTED_UNLOCK", output)

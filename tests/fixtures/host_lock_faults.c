@@ -18,6 +18,7 @@
 #endif
 
 static const char *failure = "normal";
+static int reject_unlock;
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 
 static void fatal_status(unsigned status) __attribute__((noreturn));
@@ -28,6 +29,13 @@ static void fatal_status(unsigned status)
     }
     (void)printf("LOCK_FATAL\n");
     exit(91);
+}
+static void check_unlock(void)
+{
+    if (reject_unlock != 0) {
+        (void)puts("UNEXPECTED_UNLOCK");
+        exit(94);
+    }
 }
 #ifdef _WIN32
 void Test_Trap(void)
@@ -48,6 +56,11 @@ BOOL WINAPI Test_Once(PINIT_ONCE once, PINIT_ONCE_FN callback, PVOID parameter, 
 {
     return strcmp(failure, "once") == 0 ? FALSE
                                         : InitOnceExecuteOnce(once, callback, parameter, context);
+}
+void WINAPI Test_Leave(LPCRITICAL_SECTION lock)
+{
+    check_unlock();
+    LeaveCriticalSection(lock);
 }
 BOOL WINAPI Test_Init(LPCRITICAL_SECTION lock, DWORD spin, DWORD flags)
 {
@@ -70,6 +83,7 @@ int Test_Lock(pthread_mutex_t *lock)
 }
 int Test_Unlock(pthread_mutex_t *lock)
 {
+    check_unlock();
     return strcmp(failure, "unlock") == 0 ? EINVAL : pthread_mutex_unlock(lock);
 }
 #endif
@@ -187,6 +201,9 @@ int main(int argc, char **argv)
     if (argc < 2) {
         return 1;
     }
+    /* Publish once before any foreign thread starts; valid exits remain a clean control. */
+    reject_unlock = strncmp(argv[1], "exit-", 5u) == 0 || strcmp(argv[1], "invalid-exit") == 0 ||
+                    strcmp(argv[1], "negative-exit") == 0;
     if (strcmp(argv[1], "normal") == 0) {
         Can_Init(&config);
         Can_Lock();
