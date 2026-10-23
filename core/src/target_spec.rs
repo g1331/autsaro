@@ -40,14 +40,20 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0012-nested-interrupt-dispatch.patch",
     "runtime/os/patches/0013-interrupt-source-repetition.patch",
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch",
+    "runtime/os/patches/0015-typed-port-state.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",
     "runtime/os/patches/0007-controlled-tick.patch",
     "runtime/os/patches/0008-task-hook-boundaries.patch",
+    "runtime/os/patches/0015-typed-port-state.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
+    (
+        "runtime/os/patches/0015-typed-port-state.patch",
+        &["tasks.c", "include/task.h"],
+    ),
     (
         "runtime/os/patches/0003-activation-ready-policy.patch",
         &["tasks.c", "include/task.h", "include/FreeRTOS.h"],

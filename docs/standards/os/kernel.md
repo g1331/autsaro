@@ -50,6 +50,14 @@ Linux受控port补丁中，`Os_PortInterruptSourceEnabled`、`Os_PortInterruptSo
 
 Linux `Sleep` 的两个时间字段先把原始 DWORD 转成实际64位 `time_t`／`long`，再做除法和余数，避免将无符号复合表达式转为不同essential类别。依据R10.8（主文页91–92／PDF99–100）、TC1的模数说明勘误及AMD3.35仅针对浮点／复数的例外；这些例外不适用于此处整数运算。有限DWORD最大值在两个有符号目标类型内可表示，余数0..999乘以1000000后小于1000000000；`INFINITE` 仍在转换前走原停车路径。
 
+## 内核与主机端口的状态类型
+
+采用的 `tasks.c` 以 `TCB_t * volatile` 定义 `pxCurrentTCB`，原两个主机端口却以 `void * volatile` 声明，并通过 `size_t *` 取首字段、转回线程状态指针。整改补丁 `0015-typed-port-state.patch` 在共同的 `task.h` 声明真实 `TaskHandle_t volatile`；`TaskHandle_t` 已是同一 `tskTaskControlBlock` 的指针。内核内部的 `pxTaskOsPortStack` 直接取具名成员，端口只借用该任务的栈位置，不再解读TCB布局或把指针经整数往返。依据R8.4（2013主文页67–68／PDF75–76）；TC1增加的main例外不适用于此对象，AMD2的C11扩充也不改变C99判定。
+
+两个端口在创建任务时用真实自动线程状态对象构造句柄，以unsigned char表示复制到原有StackType_t数组保留区，返回该数组内的StackType_t指针；读取时复制回真实同类型对象。保存区按元素数向上取整，不新增分配或任务选择状态。读取逐字节保留TCB成员原有volatile限定；Windows删除路径写回清空的线程句柄也保留volatile，不经memcpy去掉限定。初始化时的memcpy两实参均指向unsigned char，只复制本状态对象的sizeof字节。依据R11.3（主文页96–97／PDF104–105，TC2.21交叉引用R18.1，AMD4.7–4.9将标题改为conversion且字符例外限定非atomic对象）、R11.8及AMD1 R21.15（页6／PDF14）。这些对象不是_Atomic；字符访问和表示复制有明确的原文允许条件，不能推广为不同结构指针互转的许可。
+
+任务创建、首次启动、调度器挂起／恢复、中断交接、事件等待、Windows非当前任务删除和自删除都消费同一状态表示；Windows自删除仍先写回NULL再关闭句柄。保护仍由原调度门、任务停止和初始化时序提供；volatile不是新增同步机制。源清单保留全部固定上游原始摘要，仅增加项目受控补丁的身份，交付目标登记和原生构建入口同时选择该补丁。旧封存工程仍按自身身份识别，新的生成工程包含新内核／端口字节，不能拿旧工件当作本改动的分析结果。
+
 ## 目标端口承担的差距
 
 | 义务 | 处置 |

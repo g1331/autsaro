@@ -48,6 +48,7 @@
     "runtime/os/patches/0012-nested-interrupt-dispatch.patch": "026c30a373f7bfaadbbc365738cae304b72be677ef4a293cb777f76abe4ea59e",
     "runtime/os/patches/0013-interrupt-source-repetition.patch": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch": "8324f410501be231047bfb6df88ac97c7f584771f7289125a668e62664fc242f",
-    "runtime/os/patches/linux/0001-controlled-posix-port.patch": "b46e8297cf16ed83f905b1c4ef4e4e03ac343dd29d890ed7bdbc3a1d7f16628d"
+    "runtime/os/patches/linux/0001-controlled-posix-port.patch": "21882f931f0a7cd179674674e15f28d5655cd4335f15fc00b065c72119b620b8",
+    "runtime/os/patches/0015-typed-port-state.patch": "e7c837d276c4fcb1e11ba62497ff0b434348a4930a7959a6245674a7769d94e2"
   }
 }

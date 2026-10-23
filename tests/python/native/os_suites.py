@@ -249,6 +249,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
             ("0003-activation-ready-policy.patch", ("tasks.c", "include/task.h", "include/FreeRTOS.h")),
             ("0007-controlled-tick.patch", ("tasks.c",)),
             ("0008-task-hook-boundaries.patch", ("tasks.c",)),
+            ("0015-typed-port-state.patch", ("tasks.c", "include/task.h")),
         ):
             patch = target / "patches" / name
             selection = [f"--include={path}" for path in includes]
