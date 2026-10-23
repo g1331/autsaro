@@ -20,20 +20,7 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
-      - name: Native unwind proof
-        shell: bash
-        run: |
-          gcc -std=c99 -O2 -Wall -Wextra -Werror -fexceptions -fcf-protection=full runtime/os/tests/port_restart_probe.c -o port-probe
-          ./port-probe
-      - name: Actual Linux CET capability and execution
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          lscpu
-          ./port-probe cet
-          python - <<'PYTHON'
-          import subprocess
-          result = subprocess.run(['./port-probe', 'bad'], capture_output=True, text=True)
-          print(result.stdout, result.stderr, 'negative return=', result.returncode)
-          assert result.returncode == -11, result
-          PYTHON
+      - name: Actual native port and activation settlement
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py -k NativeSuiteTests.test_port_restart
+      - name: Actual Task finish and FIFO contracts
+        run: uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py -k NativeSuiteTests.test_finish

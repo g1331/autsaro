@@ -115,7 +115,7 @@ def target_configuration(names: list[str], target: dict) -> tuple[list[str], lis
     """Read the same validated C flags, translation units and includes for build/analysis."""
     flags = target.get("compilerFlags")
     allowed_flags = {"-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
-                     "-pedantic", "-D_GNU_SOURCE", "-pthread"}
+                     "-pedantic", "-D_GNU_SOURCE", "-pthread", "-fexceptions"}
     if (not isinstance(flags, list) or "-std=c99" not in flags
             or any(not isinstance(flag, str) or flag not in allowed_flags for flag in flags)
             or len(flags) != len(set(flags))):

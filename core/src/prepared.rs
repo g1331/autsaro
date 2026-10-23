@@ -629,7 +629,15 @@ fn finish<'a>(
         "os/src",
         "kernel/include",
     ];
-    let mut compiler_flags = vec!["-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror"];
+    let mut compiler_flags = vec![
+        "-std=c99",
+        "-O1",
+        "-g",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-fexceptions",
+    ];
     let mut kernel_sources = Vec::new();
     if linux {
         compiler_flags.extend(["-D_GNU_SOURCE", "-pthread"]);

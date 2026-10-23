@@ -1,116 +1,93 @@
-/** @file Temporary native unwind and actual CET execution experiment. */
+/** @file Native port re-entry, hardware shadow-stack and detector cleanup consumer. */
+#include "Os_PortRestart.h"
+#include "Os_Backend.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #ifndef _WIN32
+#include <unistd.h>
+#include <pthread.h>
 #include <unwind.h>
-#else
-#include <windows.h>
+#ifdef __SANITIZE_ADDRESS__
+#include <sanitizer/asan_interface.h>
 #endif
-extern void run(void (*entry)(void *), void *argument);
-extern void landing(void);
-#ifndef _WIN32
 extern void corrupt_return(void);
 __asm__(
     ".text\n.global corrupt_return\n.type corrupt_return,@function\ncorrupt_return:\nendbr64\nlea "
     "1f(%rip),%rax\nmov %rax,(%rsp)\nret\n1:\nmov $99,%edi\ncall exit\nud2\n");
 #endif
-#ifndef _WIN32
-static __thread struct _Unwind_Exception
-    restart_exception; /**< Per-thread unwind object; no reset. */
-static void cleanup(_Unwind_Reason_Code code, struct _Unwind_Exception *exception)
+void Os_BackendShutdown(StatusType error)
 {
-    (void)code;
-    (void)exception;
-}
-_Unwind_Reason_Code personality(int version,
-                                _Unwind_Action actions,
-                                uint64_t cls,
-                                struct _Unwind_Exception *exception,
-                                struct _Unwind_Context *context)
-{
-    (void)exception;
-    if (version != 1 || cls != UINT64_C(0x4155544f53525431)) {
-        return _URC_CONTINUE_UNWIND;
-    }
-    if (actions & _UA_SEARCH_PHASE) {
-        return _URC_HANDLER_FOUND;
-    }
-    if (actions & _UA_HANDLER_FRAME) {
-        _Unwind_SetIP(context, (uintptr_t)landing);
-        return _URC_INSTALL_CONTEXT;
-    }
-    return _URC_CONTINUE_UNWIND;
-}
-__attribute__((noinline)) void restart(void)
-{
-    restart_exception.exception_class = UINT64_C(0x4155544f53525431);
-    restart_exception.exception_cleanup = cleanup;
-    _Unwind_RaiseException(&restart_exception);
-    abort();
-}
-__asm__(".pushsection .text\n"
-        ".global run\n.type run,@function\nrun:\n.cfi_startproc\n"
-        ".cfi_personality 0x9b,DW.ref.personality\n"
-        "endbr64\npush %r12\n.cfi_def_cfa_offset 16\n.cfi_offset 12,-16\n"
-        "push %r13\n.cfi_def_cfa_offset 24\n.cfi_offset 13,-24\n"
-        "sub $8,%rsp\n.cfi_def_cfa_offset 32\nmov %rdi,%r12\nmov %rsi,%r13\n"
-        ".global landing\nlanding:\nendbr64\nmov %r13,%rdi\ncall *%r12\nud2\n.cfi_endproc\n.size "
-        "run,.-run\n.popsection\n"
-        ".hidden DW.ref.personality\n.weak DW.ref.personality\n.section "
-        ".data.rel.local.DW.ref.personality,\"awG\",@progbits,DW.ref.personality,comdat\n.align "
-        "8\n.type DW.ref.personality,@object\n.size "
-        "DW.ref.personality,8\nDW.ref.personality:\n.quad personality\n.previous\n");
+    (void)error;
+#ifdef _WIN32
+    TerminateProcess(GetCurrentProcess(), 92);
+    __builtin_trap();
 #else
-static EXCEPTION_DISPOSITION handler(EXCEPTION_RECORD *record,
-                                     void *frame,
-                                     CONTEXT *context,
-                                     DISPATCHER_CONTEXT *dispatch)
-{
-    (void)context;
-    if (record->ExceptionCode == 0xE0426001u &&
-        (record->ExceptionFlags & EXCEPTION_UNWINDING) == 0) {
-        RtlUnwindEx(
-            frame, (void *)landing, record, NULL, dispatch->ContextRecord, dispatch->HistoryTable);
-        TerminateProcess(GetCurrentProcess(), 90);
-    }
-    return ExceptionContinueSearch;
-}
-__attribute__((used)) static EXCEPTION_DISPOSITION (*const handler_address)(EXCEPTION_RECORD *,
-                                                                            void *,
-                                                                            CONTEXT *,
-                                                                            DISPATCHER_CONTEXT *) =
-    handler; /**< Link-time handler retention for assembler reference. */
-__attribute__((noinline)) void restart(void)
-{
-    RaiseException(0xE0426001u, EXCEPTION_NONCONTINUABLE, 0, NULL);
-    TerminateProcess(GetCurrentProcess(), 91);
-}
-__asm__(".text\n.global run\n.def run; .scl 2; .type 32; .endef\n.seh_proc run\nrun:\n"
-        "endbr64\nsub $56,%rsp\n.seh_stackalloc 56\nmov %r12,40(%rsp)\n.seh_savereg r12,40\n"
-        "mov %r13,48(%rsp)\n.seh_savereg r13,48\n.seh_handler handler,@except\n.seh_endprologue\n"
-        "mov %rcx,%r12\nmov %rdx,%r13\n.global landing\nlanding:\nendbr64\nmov %r13,%rcx\ncall "
-        "*%r12\nud2\n.seh_endproc\n");
+    _exit(92);
 #endif
+}
 static unsigned count;    /**< Probe entry count; single actor. */
+static int foreign;       /**< Main selects an unrelated native exception before entry. */
 static uintptr_t initial; /**< First physical stack observation; single actor. */
+#ifdef __SANITIZE_ADDRESS__
+static char *abandoned; /**< Deep abandoned redzone; inspected after native unwinding. */
+#endif
+#ifdef __SANITIZE_THREAD__
+static pthread_t observer; /**< Joined after the final observed access. */
+static int shared;         /**< Deliberately raced only in the explicit fault vector. */
+static int gate, done;     /**< Atomic observer handshake. */
+static int race;           /**< Immutable test selection before thread creation. */
+static void *observe(void *argument)
+{
+    (void)argument;
+    while (__atomic_load_n(&gate, __ATOMIC_ACQUIRE) == 0) {
+    }
+    volatile int value = shared;
+    (void)value;
+    __atomic_store_n(&done, 1, __ATOMIC_RELEASE);
+    return NULL;
+}
+#endif
 __attribute__((noinline)) void nested(unsigned depth)
 {
     volatile unsigned scratch[32];
     scratch[0] = depth;
+#ifdef __SANITIZE_ADDRESS__
+    if (depth == 0) {
+        abandoned = (char *)&scratch[32];
+        if (!__asan_address_is_poisoned(abandoned)) {
+            exit(87);
+        }
+    }
+#endif
     if (depth == 100) {
         return;
     }
     if (depth) {
         nested(depth - 1);
     } else {
-        restart();
+        Os_PortRestart();
     }
     scratch[0]++;
 }
 __attribute__((noinline)) static void entry(void *argument)
 {
-    (void)argument;
+    if (argument != &initial) {
+        exit(88);
+    }
+#ifndef _WIN32
+    if (foreign && count == 0u) {
+        struct _Unwind_Exception exception = {.exception_class = UINT64_C(0x4155544f53525431)};
+        ++count;
+        (void)_Unwind_RaiseException(&exception);
+        exit(94);
+    }
+#else
+    if (foreign) {
+        RaiseException(0xE0426002u, EXCEPTION_NONCONTINUABLE, 0, NULL);
+        exit(94);
+    }
+#endif
     uintptr_t sp;
     __asm__ volatile("mov %%rsp,%0" : "=r"(sp));
     if (!count) {
@@ -124,14 +101,42 @@ __attribute__((noinline)) static void entry(void *argument)
                 count);
         abort();
     }
-    if (++count == 10000) {
+    ++count;
+#ifdef __SANITIZE_THREAD__
+    const unsigned limit = race ? 20u : 10000u;
+#else
+    const unsigned limit = 10000u;
+#endif
+    if (count == limit) {
+#ifdef __SANITIZE_ADDRESS__
+        if (__asan_address_is_poisoned(abandoned)) {
+            exit(86);
+        }
+#endif
+#ifdef __SANITIZE_THREAD__
+        shared = 42;
+        if (race) {
+            __atomic_store_n(&gate, 1, __ATOMIC_RELAXED);
+        } else {
+            __atomic_store_n(&gate, 1, __ATOMIC_RELEASE);
+        }
+        while (__atomic_load_n(&done, __ATOMIC_ACQUIRE) == 0) {
+        }
+        if (pthread_join(observer, NULL) != 0) {
+            exit(85);
+        }
+#endif
         puts("restart iterations=10000 stack=stable");
         exit(0);
     }
-    nested(count % 31);
+    nested(8u + count % 31u);
 }
 int main(int argc, char **argv)
 {
+    if (argc > 1 && argv[1][0] == 'u') {
+        Os_PortRestart();
+    }
+    foreign = argc > 1 && argv[1][0] == 'f';
 #ifndef _WIN32
     if (argc > 1 && (argv[1][0] == 'c' || argv[1][0] == 'b')) {
         long result;
@@ -162,7 +167,13 @@ int main(int argc, char **argv)
 #else
     (void)argc;
     (void)argv;
-    (void)handler_address;
+
 #endif
-    run(entry, 0);
+#ifdef __SANITIZE_THREAD__
+    race = argc > 1 && argv[1][0] == 'r';
+    if (pthread_create(&observer, NULL, observe, NULL) != 0) {
+        return 84;
+    }
+#endif
+    Os_PortTaskLoop(entry, &initial);
 }

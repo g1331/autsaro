@@ -34,7 +34,7 @@ from ecu_tools.process import OwnedProcess, ProcessSpec
 KERNEL = ROOT / "third_party/freertos"
 TARGET = ROOT / "runtime/os"
 
-LIFECYCLE_SUITES = ('lifecycle', 'stack', 'returned-task', 'idle-state')
+LIFECYCLE_SUITES = ('port-restart', 'lifecycle', 'stack', 'returned-task', 'idle-state')
 SCHEDULING_SUITES = ('activation', 'finish', 'resources', 'events', 'capacity', 'sc1-timing', 'task-hooks')
 TIME_SUITES = ('time', 'counter-types')
 INTERRUPT_SUITES = ('interrupt-pairing', 'isr-cleanup', 'nested-interrupts', 'source-repetition', 'vector-section')
@@ -295,7 +295,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
     )
     command = [
         cc,
-        "-std=c99", "-O1", "-Wall", "-Wextra", "-Werror",
+        "-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-fexceptions",
         *(["-D_GNU_SOURCE", "-pthread"] if linux else []),
         "-I", str(target),
         "-I", str(target / "include"),
@@ -315,6 +315,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(target / "src/Os_ArtiServices.c"),
         str(target / "src/Os_Interrupt.c"),
         str(target / "src/Os_Backend.c"),
+        str(target / "src/Os_PortRestart.c"),
         str(target / "src/Os_HostIo.c"),
         str(target / "src/Os_Vector.c"),
         *(str(source) for source in native_sources),
@@ -2092,10 +2093,54 @@ def check_memory_mapping(directory: Path) -> None:
         raise AssertionError("unmapped entry definitions passed the linked section check")
 
 
+def check_port_restart(directory: Path) -> None:
+    """Compile the actual private port with a stand-alone native consumer."""
+    cc = compiler()
+    linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
+    binary = directory / ("port-restart" if linux else "port-restart.exe")
+    include_paths = [TARGET, TARGET / "include", TARGET / "src",
+                     ROOT / "runtime/bsw/include", ROOT / "runtime/host/include",
+                     KERNEL / "include",
+                     KERNEL / ("portable/ThirdParty/GCC/Posix" if linux else "portable/MSVC-MingW")]
+    if linux:
+        include_paths.append(TARGET / "src/host/linux")
+    run_native([cc, "-std=c99", "-O2", "-g", "-Wall", "-Wextra", "-Werror", "-fexceptions",
+                *sanitizer_flags(), *(["-pthread"] if linux else []),
+                *(value for path in include_paths for value in ("-I", str(path))),
+                str(TARGET / "src/Os_PortRestart.c"), str(TARGET / "tests/port_restart_probe.c"),
+                "-o", str(binary)], check=True, timeout=60)
+    result = run_native([str(binary)], timeout=10)
+    require(result.returncode == 0 and not result.stderr
+            and result.stdout == "restart iterations=10000 stack=stable\n", result)
+    unhandled = run_native([str(binary), "unhandled"], timeout=10)
+    require(unhandled.returncode == (92 if linux else 0xE0426001), unhandled)
+    foreign = run_native([str(binary), "foreign"], timeout=10)
+    require(foreign.returncode == (94 if linux else 0xE0426002), foreign)
+    if os.environ.get("AUTOSAR_SANITIZE") == "thread":
+        fault = run_native([str(binary), "race"], timeout=10)
+        require(fault.returncode == 66 and "ThreadSanitizer: data race" in fault.stderr
+                and "entry" in fault.stderr and "nested" not in fault.stderr, fault)
+    if linux and not os.environ.get("AUTOSAR_SANITIZE"):
+        cet = run_native([str(binary), "cet"], timeout=10)
+        if cet.returncode == 77:
+            print("port-restart CET not_assessed: kernel refused shadow-stack enable", flush=True)
+        else:
+            require(cet.returncode == 0 and "CET status=1 result=0" in cet.stdout
+                    and "iterations=10000 stack=stable" in cet.stdout, cet)
+            broken = run_native([str(binary), "bad"], timeout=10)
+            require(broken.returncode == -11 and "CET status=1 result=0" in broken.stdout, broken)
+    tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
+    verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartLanding", "Os_PortRestart"])
+    print("port-restart PASS: native unwind; 10000 stable physical-stack entries", flush=True)
+
+
 def run_suite(suite: str, output_directory: Path | None = None) -> None:
     if suite not in SUITES:
         raise ValueError(f"Unknown native OS suite: {suite}")
     with retained_workspace(output_directory) as temporary, native_session(temporary, suite):
+        if suite == "port-restart":
+            check_port_restart(Path(temporary))
+            return
         if suite == "memory-mapping":
             check_memory_mapping(Path(temporary))
             print("memory-mapping PASS: 10 linked entries; 10 rejected compile/link cases")
