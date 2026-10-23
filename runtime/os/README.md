@@ -8,6 +8,10 @@ Linux 的暂停请求、确认与恢复使用同一代次：普通代次在 1..I
 
 Linux 主机调用、后端启动／关闭及中断准入将有持久副作用的操作放在独立语句或嵌套条件中；受控 POSIX 后续补丁 `linux/0002-sequence-persistent-side-effects.patch` 保留事件发布、mutex 交接与 ISR 重调度请求的原有条件和顺序。R13.5 为 Required、适用 C99（主文页113–114／PDF121–122）；volatile 读取也属于持久副作用（Glossary 页224／PDF232），TC1 Appendix J 页14／PDF20明确函数判断不依赖可能的实参或非局部对象值。因此空句柄保护、已知状态或包装调用不构成 RHS 例外，不能无条件提前执行原来受保护的系统调用或取走请求。本次改写没有增加共享状态、改变公开 ABI 或去掉 volatile；夹具保留普通、失败、容量、已结束线程和停止交错观察。固定 checker 的零条 R13.5 报告不能替代此项源码核查；采用内核及其他模块仍需分别完成处置。
 
+R14.3（Required、C99，主文页119–120／PDF127–128）也覆盖条件运算符的第一操作数；生产配置中的恒假故障桩没有无限循环或 TC2.27–28 的 do-while 例外。backend 按既有 OS_STACK_TESTS／OS_HOST_FAILURE_TESTS 在完整 MemMap 配对外选择实现，生产分支直接执行 suspend／context／resume 和资源创建；测试分支保留一次性故障消费及原生失败检查。资源调用计数仍在每次实际尝试前递增，Linux 的非法 attributes 仍不计为尝试；lifecycle 消费者比较生产与注入构建的正常计数，并验证生产构建中的注入输入不生效。上下文观察仍先于恢复尝试，没有新增状态、配置或 ABI。
+
+资源包装使用文件私有的 OS_RESOURCE_CREATE：测试失败时不求值原生创建表达式，其他路径只求值一次；计数独立于该选择。接收创建结果的普通函数会先执行实参，不能保留这一故障边界，因此不属于 D4.9 的函数／宏可互换条件（Advisory，主文页31–32／PDF39–40；AMD2.26、AMD3.6–8未改变本条件，未援引泛型例外）。两种宏定义都将表达式参数放在括号内，按 R20.7（Required，页159／PDF167）核查。
+
 `SuspendThread` 的混合优先级表达式显式加括号，并只在函数末尾返回结果；依据 R12.1 主文页103–104／PDF111–112（含优先级表与表达式树）、AMD2.62 的前三行表格修订及 R15.5 主文页126／PDF134，两项在 C99 下均为 Advisory。拒绝、已暂停、成功与并发停止仍保留各自结果，未以理由记录代替这两处源码修复。固定 checker 的 R17.3 原始报告仍保留；主文页138／PDF146仅适用C90，C99的声明义务与GCC内建签名另按R1.1／R8.2／R8.4及实际编译核查。
 
 三个 `__atomic_compare_exchange_n` 调用的 `weak` 参数均使用 `stdbool.h` 的 `false`，与 [GCC 原子内建契约](https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html) 的 Boolean 形参一致。R10.3（Required，主文页86–87／PDF94–95，Glossary 的 assignment 含实参传递）不允许把 essentially signed 的整数0作为Boolean实参；TC1的常量例外、TC2.20的case修正和AMD3.27的浮点例外均不提供该转换的例外。这里保留strong CAS语义，修复的是实参的essential type，非新增同步机制。
