@@ -289,7 +289,8 @@ class NativeKernelObjectTests(unittest.TestCase):
                                 if mutant:
                                     self.assertIn(result.returncode, (0, 91), result)
                                 else:
-                                    self.assertEqual(result.returncode, 13, result)
+                                    self.assertEqual(result.returncode, 7, result)  # E_OS_STATE, not E_OS_STACKFAULT.
+                                    self.assertIn("lifecycle=Closed state=Failed reason=7", result.stdout)
                                     self.assertNotIn("native handoff continued", result.stdout)
                             else:
                                 self.assertEqual(result.returncode, 0, result)
@@ -324,10 +325,12 @@ class NativeKernelObjectTests(unittest.TestCase):
                         with self.subTest(mutant=mutant, scenario=scenario):
                             result = os_suites.run_native([str(binary), scenario], timeout=10)
                             refused = scenario != "normal"
-                            self.assertEqual(result.returncode, 13 if refused and not mutant else 0, result)
+                            self.assertEqual(result.returncode, 7 if refused and not mutant else 0, result)
                             self.assertEqual(result.stderr, "")
                             if refused:
                                 self.assertIn("native setup refused=" + scenario, result.stdout)
+                                if not mutant:
+                                    self.assertIn("lifecycle=Closed state=Failed reason=7", result.stdout)
                             self.assertEqual("state=Ready" in result.stdout, not refused or mutant, result)
 
     def test_static_kernel_object_types_and_queue_storage(self):
