@@ -131,7 +131,8 @@ __attribute__((noinline)) static void entry(void *argument)
             exit(85);
         }
 #endif
-        printf("restart iterations=10000 stack=stable shadow_stack=stable ssp=%llu\n",
+        printf("restart iterations=%u stack=stable shadow_stack=stable ssp=%llu\n",
+               count,
                (unsigned long long)initial_ssp);
         exit(0);
     }

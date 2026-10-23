@@ -2129,7 +2129,7 @@ def check_port_restart(directory: Path) -> None:
         fault = run_native([str(binary), "race"], timeout=10)
         require(fault.returncode == 66 and "ThreadSanitizer: data race" in fault.stderr
                 and "entry" in fault.stderr and "nested" not in fault.stderr, fault)
-    if linux and not os.environ.get("AUTOSAR_SANITIZE"):
+    if linux:
         cet = run_native([str(binary), "cet"], timeout=10)
         if cet.returncode == 77:
             print("port-restart CET not_assessed: kernel refused shadow-stack enable", flush=True)
@@ -2137,9 +2137,10 @@ def check_port_restart(directory: Path) -> None:
             require(cet.returncode == 0 and "CET status=1 result=0" in cet.stdout
                     and re.search(r"shadow_stack=stable ssp=[1-9]\d*", cet.stdout), cet)
             print(cet.stdout, end="", flush=True)
-            broken = run_native([str(binary), "bad"], timeout=10)
-            require(broken.returncode == -11 and "CET status=1 result=0" in broken.stdout, broken)
-            print(f"port-restart corrupt-return exit={broken.returncode}", flush=True)
+            if not os.environ.get("AUTOSAR_SANITIZE"):
+                broken = run_native([str(binary), "bad"], timeout=10)
+                require(broken.returncode == -11 and "CET status=1 result=0" in broken.stdout, broken)
+                print(f"port-restart corrupt-return exit={broken.returncode}", flush=True)
             task_directory = directory / "cet-task"
             task_directory.mkdir()
             task, _ = build(task_directory, "arti.c", ("OS_ARTI_TESTS",))
@@ -2148,7 +2149,7 @@ def check_port_restart(directory: Path) -> None:
                 require(actual.returncode == 0 and not actual.stderr
                         and "task CET status=1" in actual.stdout
                         and f"arti scenario={scenario}" in actual.stdout, actual)
-            print("port-restart CET PASS: active enforcement and actual Task/TCB/stack/ARTI/hooks", flush=True)
+            print("port-restart CET PASS: active SSP and actual Task/TCB/stack/ARTI/hooks", flush=True)
 
     tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
     verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartLanding", "Os_PortRestart"])
