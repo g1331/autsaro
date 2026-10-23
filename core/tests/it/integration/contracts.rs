@@ -76,6 +76,12 @@ fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity
             header.contains(prototype),
             "{path}: nameless role parameters"
         );
+        assert!(
+            header.contains(&format!(
+                "/* MR12 RULE 8.2 VIOLATION: SWS_Rte_06705 requires nameless parameters;\n * ordered parameter contracts and typed consumers preserve the interface. */\n{prototype}"
+            )),
+            "{path}: adjacent source disposition for the required nameless prototype"
+        );
     }
     let mut reversed = sources.clone();
     reversed.reverse();
