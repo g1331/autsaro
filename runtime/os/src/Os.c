@@ -284,9 +284,11 @@ OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
              * no native scheduler or automotive startup is performed. */
             Os_BackendShutdown(E_OS_DISABLEDINT);
         }
-    } else if (Os_HookContext() == OS_HOOK_NONE) {
-        if (Os_BackendStarted() == 0) {
-            Os_BackendStart(Mode);
+    } else {
+        if (Os_HookContext() == OS_HOOK_NONE) {
+            if (Os_BackendStarted() == 0) {
+                Os_BackendStart(Mode);
+            }
         }
     }
 }
