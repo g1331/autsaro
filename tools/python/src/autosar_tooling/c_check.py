@@ -233,20 +233,16 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     identifiers = set(re.findall(r"\b[A-Za-z_]\w*\b", owned_text))
     owned_macros = set(re.findall(r"^\s*#\s*define\s+(\w+)", owned_text, re.MULTILINE))
     model = None
-    if target_id.startswith("linux") and identifiers.intersection({"PTHREAD_MUTEX_RECURSIVE", "SIGRTMIN", "PTHREAD_STACK_MIN"}):
+    if target_id.startswith("linux") and "SIGRTMIN" in identifiers:
         model = output / "platform-model.h"
-        # Preserve anonymous-enum and dynamic-function types; never substitute
-        # the glibc runtime values with invented constants.
+        # Preserve the actual function-valued glibc signal macro.
         model.write_text("#ifndef AUTSAR_GLIBC_ANALYSIS_MODEL_H\n#define AUTSAR_GLIBC_ANALYSIS_MODEL_H\n"
-                         "enum { PTHREAD_MUTEX_RECURSIVE = 1 };\n"
                          "extern int __libc_current_sigrtmin(void);\n"
-                         "extern long __sysconf(int name);\n#endif\n", encoding="utf-8")
+                         "#endif\n", encoding="utf-8")
         validation = output / "platform-model-check.c"
-        validation.write_text("#ifndef _GNU_SOURCE\n#define _GNU_SOURCE 1\n#endif\n"
-                              "#include <pthread.h>\n#include <signal.h>\n#include <unistd.h>\n"
-                              "typedef char AutsaroMutexValue[(PTHREAD_MUTEX_RECURSIVE == 1) ? 1 : -1];\n"
-                              "int (*AutsaroSignalPrototype)(void) = &__libc_current_sigrtmin;\n"
-                              "long (*AutsaroStackPrototype)(int) = &__sysconf;\n", encoding="utf-8")
+        validation.write_text("#include <signal.h>\n"
+                              "int (*AutsaroSignalPrototype)(void) = &__libc_current_sigrtmin;\n",
+                              encoding="utf-8")
         run([compiler, *flags, *("-I" + path for path in includes), "-fsyntax-only", str(validation)], output, "platform-model-check", 30,
                 context="Linux library analysis model differs from the actual compiler headers")
     per_unit_macros = {}
@@ -287,9 +283,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                 continue
             macro, _, value = line.removeprefix("AUTSAR_VALUE_").partition(" ")
             numeric = re.fullmatch(r"[()\s0-9a-fA-FxXuUlL+*/|&<>~-]+", value)
-            dynamic = model is not None and (
-                (macro == "SIGRTMIN" and re.fullmatch(r"[()\s]*__libc_current_sigrtmin\s*\(\s*\)[()\s]*", value))
-                or (macro == "PTHREAD_STACK_MIN" and re.fullmatch(r"[()\s]*__sysconf\s*\(\s*[0-9]+\s*\)[()\s]*", value)))
+            dynamic = model is not None and macro == "SIGRTMIN" and re.fullmatch(
+                r"[()\s]*__libc_current_sigrtmin\s*\(\s*\)[()\s]*", value)
             if numeric or dynamic:
                 unit_macros.append(f"-D{macro}={value}")
                 if macro in mode_names:

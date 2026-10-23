@@ -106,12 +106,13 @@ class ActualCAnalysisTests(unittest.TestCase):
                 return original(spec, **kwargs)
             with self.subTest(stage=stage), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                source = ("#define _GNU_SOURCE 1\n#include <signal.h>\nint main(void) { return SIGRTMIN; }\n"
+                source = ("#include <signal.h>\nint main(void) { return SIGRTMIN; }\n"
                           if stage == "platform-model-check" else "int main(void) { return 0; }\n")
                 extras = {"kernel/unit.c": "before\n", "patch.diff": "+++ b/unit.c\n"} if stage == "patch-0" else None
                 project = self.project(root, source, extra_files=extras)
                 target = json.loads((project / "target.json").read_text())
                 if stage == "patch-0":
+                    target["compilerFlags"].append("-fexceptions")
                     target.update(profile="ecu", kernelSources=["unit.c"],
                                   kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}])
                     (project / "target.json").write_text(json.dumps(target))
@@ -183,11 +184,10 @@ class ActualCAnalysisTests(unittest.TestCase):
 
     @unittest.skipUnless(platform.system() == "Linux", "glibc target model")
     def test_linux_dynamic_values_keep_their_actual_function_types(self):
-        summary = self.analyze("#define _GNU_SOURCE 1\n#include <pthread.h>\n#include <signal.h>\nint main(void) { return PTHREAD_MUTEX_RECURSIVE + (SIGRTMIN > 0) + (PTHREAD_STACK_MIN > 0); }\n")
+        summary = self.analyze("#include <signal.h>\nint main(void) { return SIGRTMIN > 0; }\n")
         self.assertIsNotNone(summary["scope"]["platformModel"])
         definitions = summary["scope"]["compilerDiscoveredDefines"]["bsw/src/main.c"]
         self.assertTrue(any(value.startswith("-DSIGRTMIN=") and "__libc_current_sigrtmin" in value for value in definitions))
-        self.assertTrue(any(value.startswith("-DPTHREAD_STACK_MIN=") and "__sysconf" in value for value in definitions))
 
     @unittest.skipUnless(platform.system() == "Linux", "glibc target model")
     def test_unrecognized_linux_dynamic_macro_is_not_silently_dropped(self):
@@ -203,7 +203,7 @@ class ActualCAnalysisTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            project = self.project(root, "#define _GNU_SOURCE 1\n#include <signal.h>\nint main(void) { return SIGRTMIN; }\n")
+            project = self.project(root, "#include <signal.h>\nint main(void) { return SIGRTMIN; }\n")
             with patch.object(c_check, "run", side_effect=unsupported_macro):
                 self.assertEqual(c_check.check(project, "linux-x64-controlled-v1", root / "analysis"), 1)
             summary = json.loads((root / "analysis/summary.json").read_text())

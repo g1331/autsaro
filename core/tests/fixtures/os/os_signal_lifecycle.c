@@ -1,8 +1,8 @@
 /** @file Real actor suspend/resume, captured context and irreversible terminal stop. */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include "Os_Backend.h"
+#include <asm/sigcontext.h>
+#include <asm/ucontext.h>
+#include <string.h>
 #include <stdio.h>
 
 static HANDLE ready;
@@ -10,6 +10,21 @@ static HANDLE continued;
 static volatile LONG phase;
 static HANDLE detach_gate;
 static HANDLE detach_done;
+static pthread_t detached_native;
+static volatile LONG detach_observed;
+
+int __real_pthread_detach(pthread_t thread);
+
+/* Linker observer retains the real call and the detector's pthread bookkeeping. */
+int __wrap_pthread_detach(pthread_t thread)
+{
+    const int result = __real_pthread_detach(thread);
+    if (result == 0) {
+        detached_native = thread;
+        (void)InterlockedExchange(&detach_observed, 1);
+    }
+    return result;
+}
 
 static DWORD WINAPI actor(void *argument)
 {
@@ -41,19 +56,12 @@ static int valid_context(HANDLE thread, CONTEXT *context)
 
 static DWORD WINAPI detached_actor(void *argument)
 {
-    pthread_attr_t attributes;
-    int state;
     (void)argument;
-    if (WaitForSingleObject(detach_gate, 2000u) != WAIT_OBJECT_0 ||
-        pthread_getattr_np(pthread_self(), &attributes) != 0) {
+    if (WaitForSingleObject(detach_gate, 2000u) != WAIT_OBJECT_0) {
         return 2u;
     }
-    if (pthread_attr_getdetachstate(&attributes, &state) != 0) {
-        (void)pthread_attr_destroy(&attributes);
-        return 3u;
-    }
-    if (pthread_attr_destroy(&attributes) != 0 || state != PTHREAD_CREATE_DETACHED ||
-        Os_HostSetEvent(detach_done) == 0) {
+    if (InterlockedCompareExchange(&detach_observed, 0, 0) != 1 ||
+        pthread_equal(detached_native, pthread_self()) == 0 || Os_HostSetEvent(detach_done) == 0) {
         return 4u;
     }
     return 0u;
@@ -95,9 +103,15 @@ int main(void)
         SuspendThread(thread) != 0u || valid_context(thread, &paused) == 0) {
         return 5;
     }
-    if (Os_HostStopActor(thread, 2000u) == 0 || valid_context(thread, &stopped) == 0 ||
-        paused.Rsp != stopped.Rsp ||
-        paused.native.uc_mcontext.gregs[REG_RIP] != stopped.native.uc_mcontext.gregs[REG_RIP]) {
+    if (Os_HostStopActor(thread, 2000u) == 0 || valid_context(thread, &stopped) == 0) {
+        return 6;
+    }
+    struct ucontext paused_native;
+    struct ucontext stopped_native;
+    memcpy(&paused_native, &paused.native, sizeof(paused_native));
+    memcpy(&stopped_native, &stopped.native, sizeof(stopped_native));
+    if (paused.Rsp != stopped.Rsp ||
+        paused_native.uc_mcontext.rip != stopped_native.uc_mcontext.rip) {
         return 6;
     }
     if (ResumeThread(thread) != UINT32_MAX || Os_HostStopActor(thread, 2000u) == 0 ||

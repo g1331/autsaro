@@ -16,7 +16,7 @@ TASK、ISR和ALARMCALLBACK用于标准入口声明／定义；TASK与ISR分别�
 
 生成输入须在唯一OsOS中明确声明OsUseResScheduler及受支持状态／类／错误参数开关，OsHooks直接归属该OsOS。参考值false保持无虚拟scheduler资源；true生成全部本核Task可访问、无ISR访问、天花板为最高Task优先级的RES_SCHEDULER。启用时同名显式OsResource按SWS_Os_00850被忽略，虚拟实例取代其配置；生成剖面不接受其他未映射的显式资源。原生Os_TargetConfig仍支持已验证的Task／ISR资源及四一致性类容量：`use_res_scheduler`为0时名为RES_SCHEDULER的配置资源与普通资源相同（SWS_Os_00854）；`linked`资源按`link`解析到同一根资源，须与根资源天花板和ISR访问一致，不得成环（SWS_Os_00855）。生成的ErrorHook访问宏`OS_USE_GET_SERVICE_ID`／`OS_USE_PARAMETER_ACCESS`按OsUseGetServiceId／OsUseParameterAccess取值，生成的ECU以`StartOS(OSDEFAULTAPPMODE)`启动。
 
-Windows物理栈由实际线程、保护页和保证区验证。Linux OS 使用每个 Task／唯一 S dispatcher／双控制线程／宿主 actor 的独立 mmap+pthreads 栈，低端 PROT_NONE guard 与预留 sigaltstack；Task 栈和 FreeRTOS 的 512-word 元数据缓冲分开。普通停车使用 SIGRTMIN 的代际确认与 futex，仅在 port critical／宿主锁持有期间屏蔽；独立 SIGRTMIN+1 无锁故障停止。S 独占 ISR、受控 tick 与唯一内核任务选择器；host producer 只发布边沿，不能执行 ISR。仅注册地址保护页内的 SIGSEGV/SIGBUS 才归类栈故障，损坏 actor 停在 altstack，健康 C/D 停止其他 actor 并报告；未知故障或双控制失败非零 fail-closed，不在信号 handler 中调用 Hook／stdio。两目标均不推定 MCU 电气层或硬实时性。
+Windows物理栈由实际线程、保护页和保证区验证。Linux OS 使用每个 Task／唯一 S dispatcher／双控制线程／宿主 actor 的独立 mmap+pthreads 栈，低端 PROT_NONE guard 与预留 sigaltstack；pthread 启动栈只负责一次进入该 mmap 执行栈，ASan 使用实际 fiber 生命周期；Task 栈和 FreeRTOS 的 512-word 元数据缓冲分开。普通停车使用 SIGRTMIN 的代际确认与 futex，仅在 port critical／宿主锁持有期间屏蔽；独立 SIGRTMIN+1 无锁故障停止。S 独占 ISR、受控 tick 与唯一内核任务选择器；host producer 只发布边沿，不能执行 ISR。仅注册地址保护页内的 SIGSEGV/SIGBUS 才归类栈故障，损坏 actor 停在 altstack，健康 C/D 停止其他 actor 并报告；未知故障或双控制失败非零 fail-closed，不在信号 handler 中调用 Hook／stdio。两目标均不推定 MCU 电气层或硬实时性。
 
 ## 构建与测试
 
@@ -27,7 +27,7 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_os
 uv run --locked python -B -m unittest discover -s tests/python/native -p test_os_suites.py -k stack
 ```
 
-目标取当前执行宿主；`-k` 可选择 `lifecycle`、`stack`、`nested_interrupts`、`time` 等共 26 个 suite。编译器和原生进程由 owner 管理并设置执行期限，失败时保留独立工作区、stage/vector、stdout/stderr 和 PID 状态。Linux 单个 harness 最多 10 秒，自动 tick 和 Windows timer 不能驱动汽车时间；每次接受的 1ms epoch 只推动一次实际 FreeRTOS tick。原生 stack suite 还运行独立 ARTI C 消费者和 ELF64 符号／ucontext 断言，Windows 保留 PE/TLS 与原生栈检查。
+目标取当前执行宿主；`-k` 可选择 `lifecycle`、`stack`、`nested_interrupts`、`time` 等共 27 个 suite。编译器和原生进程由 owner 管理并设置执行期限，失败时保留独立工作区、stage/vector、stdout/stderr 和 PID 状态。Linux 单个 harness 最多 10 秒，自动 tick 和 Windows timer 不能驱动汽车时间；每次接受的 1ms epoch 只推动一次实际 FreeRTOS tick。原生 stack suite 还运行独立 ARTI C 消费者和 ELF64 符号／ucontext 断言，Windows 保留 PE/TLS 与原生栈检查。
 
 真实 dispatcher 使用32槽Os_InterruptVectorTable；Windows生成工程交付该源码及第14个受控补丁，Linux OS harness 从固定 POSIX 原件应用受控补丁。两目标都链接到256字节可重定位、可写的.os_vec段，分别检查PE或ELF的实际符号与段绑定。
 

@@ -1,4 +1,4 @@
-"""Recompile a verified sealed build's exact command for the native sanitizer tests."""
+"""Recompile verified sealed commands with explicit native test linker observers."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,10 @@ from unittest.mock import patch
 def main() -> None:
     project, output = (Path(value).resolve() for value in sys.argv[1:3])
     mode = sys.argv[3]
-    control = Path(sys.argv[4]).resolve() if len(sys.argv) == 5 else None
+    control = Path(sys.argv[4]).resolve() if len(sys.argv) >= 5 else None
+    link_flags = sys.argv[5:]
+    if link_flags not in ([], ["-Wl,--wrap=pthread_detach"]):
+        raise ValueError("Unsupported test linker observer")
     kinds = os.environ["AUTOSAR_SANITIZE"]
     if sys.platform != "linux" or kinds not in ("thread", "address,undefined"):
         raise ValueError("Sealed ECU sanitizer tests require Linux thread or address,undefined")
@@ -33,6 +36,9 @@ def main() -> None:
 
             def observe(argv: list[str], logs: Path, stage: str, **kwargs: object) -> str:
                 if stage == "native-c99-build":
+                    # Only the declared observer changes symbol resolution; the
+                    # sealed sources, includes and compiler flags stay intact.
+                    argv = [*argv, *link_flags]
                     commands.append(list(argv))
                 return query(argv, logs, stage, **kwargs)
 

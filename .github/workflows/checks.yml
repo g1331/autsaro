@@ -333,7 +333,7 @@ jobs:
     timeout-minutes: 30
     env:
       AUTOSAR_SANITIZE: ${{ matrix.sanitize }}
-      # The OS host owns its alternate signal stack and switches stacks with ucontext.
+      # The OS host owns its alternate signal stack; native tests compare physical frames.
       ASAN_OPTIONS: use_sigaltstack=0:detect_stack_use_after_return=0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

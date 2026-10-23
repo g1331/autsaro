@@ -1,16 +1,14 @@
 /** @file Linux native stack registration, alternate signal stacks and fault reporting. */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include "Os_Backend.h"
 #include "Os_Stack.h"
+#include "Os_LinuxNative.h"
 
 #include <errno.h>
 #include <linux/futex.h>
 #include <signal.h>
 #include "Os_HostIo.h"
 #include <stdlib.h>
-#include <sys/syscall.h>
+
 #include <unistd.h>
 
 #define OS_ALTSTACK_BYTES 65536u
@@ -132,7 +130,7 @@ OS_MEMMAP static void fault_park_forever(void)
 {
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = 10000000L};
     for (;;) {
-        (void)syscall(SYS_futex, &fault_park, FUTEX_WAIT_PRIVATE, 0, &interval, NULL, 0);
+        (void)Os_LinuxFutexWait(&fault_park, 0, &interval);
     }
 }
 
@@ -169,13 +167,11 @@ OS_MEMMAP static void guard_signal(int signum, siginfo_t *details, void *native_
 {
     Os_NativeStackType *record = current_stack;
     uintptr_t address = (uintptr_t)details->si_addr;
-    const ucontext_t *context = native_context;
     if (record == NULL || (signum != SIGSEGV && signum != SIGBUS) ||
         address < record->reserve_low || address >= record->committed_low) {
         _exit(E_OS_STATE);
     }
-    publish_fault(
-        record, (DWORD)signum, (uintptr_t)context->uc_mcontext.gregs[REG_RSP], address, 'E');
+    publish_fault(record, (DWORD)signum, Os_LinuxSignalSp(native_context), address, 'E');
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -270,7 +266,7 @@ OS_MEMMAP int Os_StackRegister(char role)
     alternate.ss_sp = altstacks[index].bytes;
     alternate.ss_size = sizeof(altstacks[index].bytes);
     alternate.ss_flags = 0;
-    if (sigaltstack(&alternate, NULL) != 0) {
+    if (Os_LinuxAltStack(&alternate) != 0) {
         return 0;
     }
     record->thread_id = GetCurrentThreadId();
@@ -335,9 +331,7 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
                 publish_fault(record, 0u, sp, sp, 'M');
             }
             record->sp = sp;
-            saved_contexts[index] = *context;
-            saved_contexts[index].native.uc_mcontext.fpregs =
-                &saved_contexts[index].native.__fpregs_mem;
+            Os_LinuxCaptureContext(&saved_contexts[index], &context->native);
             record->context_valid = 1u;
             ++record->observations;
             return;

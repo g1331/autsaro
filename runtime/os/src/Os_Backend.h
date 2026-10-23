@@ -127,7 +127,7 @@ OS_MEMMAP void Os_TestInputLastTicket(uint64 ticket);
 #include "Os_MemMap.h"
 OS_MEMMAP void Os_BackendStart(AppModeType mode);
 
-OS_MEMMAP void Os_BackendShutdown(StatusType error);
+OS_MEMMAP void Os_BackendShutdown(StatusType error) __attribute__((noreturn));
 
 OS_MEMMAP void Os_BackendRequestShutdown(StatusType error);
 #define OS_STOP_SEC_CODE

@@ -79,12 +79,12 @@ Det 仍在全部开发 hooks 按顺序返回后停止；未初始化和递归报
 
 | 规则 | 修订合成与本项结论 |
 | --- | --- |
-| R21.1 | 2013 主文印刷页165–166；TC1 页10 增加 R20.5 交叉引用；AMD2 §2.10、AMD2.27 页9 扩充 C11 适用性／来源。AMD1／AMD3／AMD4／TC2 没有增加本项 feature 宏例外。锁 TU 已去除 `_XOPEN_SOURCE`；OS 其他 feature 宏仍按各自真实闭包在 #60 评估，不能批量视为合规。 |
-| R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 的 setjmp／longjmp 仍是实际违反；#60 继续承接通过完整原生与检测器验收的同 Task port 替代。 |
+| R21.1 | 2013 主文印刷页165–166；TC1 页10 增加 R20.5 交叉引用；AMD2 §2.10、AMD2.27 页9 扩充 C11 适用性／来源。AMD1／AMD3／AMD4／TC2 没有增加本项 feature 宏例外。锁 TU 已去除 `_XOPEN_SOURCE`；OS 的 `_GNU_SOURCE`／`_WIN32_WINNT` 及生成／验证入口的同类定义也已移除，实际设施替换见下文，不推导其余规则符合。 |
+| R21.4 | 主文页168；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源；AMD3 §3.1.2、AMD3.67 页43 同时禁止包含 setjmp.h 和使用其规定设施，无本项 restart 例外。backend 已改为唯一 native port 的平台栈展开，不包含或使用 setjmp 设施；实际 Task、CET 与检测器消费者见下文。 |
 | R21.6 | 主文页168–169，覆盖 stdio 函数及 C99 指定的宽字符 I/O；AMD2 §2.10、AMD2.27 页10 扩充 C11 适用性／来源，AMD2.79 页16 替换首段 Amplification，明确覆盖 stdio.h 规定的函数及 wchar.h 中的宽字符等价函数；其余修订没有本项流协议例外。HostBatch／probe／OS 报告已用原生字节 I/O 和有界格式化替代这些调用；这不替代其他规则评估。 |
 | R21.8 | 主文页169；AMD1 §3 页17 移除 getenv；TC1 页11 修正表述；AMD2 §2.10.41（AMD2.81）页17 整条替换为 abort、exit、_Exit、quick_exit，后续 AMD3／AMD4／TC2 未再改变集合。锁与 Det 已去除 abort；R21.8 原文按所列标识符限制使用；POSIX `_exit` 不在该集合。受控 glibc 的 `_exit`／`_Exit` 可共享实现，这不是实现隔离证明；选择平台 API 的依据是明确的进程级停止及不执行 CRT 清理的契约与真实消费者测试，其他规则仍须独立评估。固定 checker 的 getenv 旧诊断及 _Exit／quick_exit 漏检仍原样保留。 |
 
-流迁移与 restart 的出口独立。#60 仍拥有未关闭的 same-Task port 替代及保留 feature 宏整改；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。
+流迁移与 restart 分别由实际消费者验证；#58 继续拥有全部221项、其他源码行及采用代码的评估，#200 保留目标端口停机差距。
 
 ### 主机 I/O 与故障报告（D-34／E4-HOST-REPORT）
 
@@ -98,17 +98,27 @@ HostBatch 逐字节保留 NUL、排空过长行、移除行尾 CR，区分 EOF �
 
 ### 激活重启（E4-HOST-RESTART）
 
-`Os_Backend.c:task_entry` 在每个 Task 原生线程保留 restart frame。`complete_activation` 先结算 FIFO、资源、PostTaskHook 和 ready sequence，完成 suspend／yield、离开 critical 后才 longjmp 回同 Task 入口。错误分支可返回；missing-end 先报告 `E_OS_MISSINGEND`，再释放资源和结算。ARTI 注册已改为按真实 TCB 查找配置槽；`arti.c` 在 Task 入口核对当前线程、物理栈、context 映射和重复激活的栈指针，不能只检查某个栈记录非空。
+`native_task_start` 注册真实 Task 栈／上下文一次，再进入 `Os_PortTaskLoop`。`task_entry` 每次调用配置的应用入口；`complete_activation` 先结算 FIFO、外部／内部资源、PostTaskHook、ARTI 与 ready sequence，完成 suspend／yield 并离开 critical 后调用 `Os_PortRestart`。成功不返回到已完成的服务或应用帧；校验失败仍返回错误，missing-end 仍先在 RUNNING 状态报告再清理。Task、TCB、线程、物理执行栈和 ARTI 记录均不重建。
 
-port 替代的入口须保持同线程、同物理栈、FIFO／抢占与成功不返回，不能递归调用 entry、每次重建线程或另设调度器。受控 Linux 工具链产生带 IBT／SHSTK 的 ELF：恢复普通栈还必须处理硬件影子栈与各检测器的调用栈状态。仅在正常运行和 ASan 下通过的上下文替代不足以关闭该出口；不得为接受候选去掉这些工具链属性或减弱检测器。FreeRTOS 上游与生产补丁身份仍保持既有版本，#60 承接最终替代及其第三方身份审阅。
+Linux 的 DWARF personality 仅接收该线程自己的 restart 对象，由 libgcc 两阶段 unwind 恢复非易失寄存器和硬件 shadow stack；Windows 的 SEH 帧仅接收端口保留的 exception code，由 `RtlUnwindEx` 展开。其他异常继续交给平台，无法展开的 restart 停止 OS。所有被遍历的 C 单元使用 `-fexceptions`，检测器 cleanup 随实际展开执行；C99、生成／离线／CMake 的共同契约保持。普通 return、递归 entry、重建 actor、仅恢复 RSP 或去掉检测器均不能替代。
 
-保留宏尚未解决：Linux 的 `_GNU_SOURCE` 关联 futex 系统调用、signal/altstack、完整 ucontext 字段及非受控调用线程的栈查询；Windows 的 `_WIN32_WINNT` 关联系统提供的当前线程栈边界。当前 C99 消费者去除 Linux 源码和编译参数中的宏后，实际因 `syscall`、`gregs`／`REG_RSP` 和 `SA_ONSTACK` 等声明缺失拒绝编译。删除局部定义但保留 `-D_GNU_SOURCE` 不算整改；#60 的后续出口须提供真实平台替代并验证停车、故障栈和第三方身份，不能凭主机用途豁免。
+`port-restart` suite 验证 10,000 次稳定 RSP／SSP 重入及检测器丢弃帧；Linux 另读回实际 SHSTK、执行损坏返回地址的负对照和真实 Task／ARTI／Hook。宿主不支持时保留 `not_assessed`，不从 ELF 属性推导启用；入口见[原生验证](../development/testing/native.md)。
+
+### 无项目 feature 定义的平台设施
+
+Linux 的 `Os_LinuxNative` 按系统 UAPI 调用 futex、gettid 与 alternate-stack，替代 libc 的变参 syscall／feature 入口；signal frame 转入既有 `linux-x86_64-ucontext` 快照并重定位复制的 fp 存储。ARTI／lifecycle 按平台 ABI 独立解码，停车、停止和 guard fault 仍检查真实地址／身份。信号与映射常量取自 UAPI，没有项目等价保留宏。
+
+独立 mmap 执行栈和 PROT_NONE guard 保持；同一 pthread 通过配对 call/return 一次进入，激活不重复切换。ASan fiber 协议覆盖进入与有限 helper 返回。每个 pthread 另请求 max(262144, 执行栈 reserve) 字节启动栈及平台 guard/TLS，使 clone3 的硬件影子栈覆盖合法调用深度；执行栈仍单独核算。生产 actor（含 S）取原始 mapping；其他调用线程按 `/proc/self/maps` 查询当前映射，不作可增长 reserve。
+
+默认 pthread mutex 加 owner/depth 保持原生端口递归及跨线程互斥，沿已有信号屏蔽／held-mask 协议运行，不改变汽车 resource 或调度。Windows 用 `VirtualQuery` 枚举当前栈 allocation 的 reserve／commit／guard，保留 StackGuarantee 和故障捕获，替代 StackLimits。项目源码、生成、独立 OS 和分析模型的 feature 定义均已移除；`-pthread` 保留正常线程编译模式，原宏未移至命令行。
+
+FreeRTOS 原件／补丁身份不变。私有 native 源码、编译参数与平台 unwind 依赖须重新生成／编译；其他人工及采用代码评估归 #58。
 
 ### 解除条件与验收
 
-固定原件已可用，不再以 #57 的 MISRA 缺件阻塞本项。后续直接从持久资料库核对对应修订及 R24-11 原文、图页，按真实调用消除剩余违反；Dcm 的 ISO 缺件不在本项闭包。OS 停机的既有差距仍由 [#200](https://github.com/g1331/autsaro/issues/200) 跟踪，不因主机进程退出而关闭。源码诊断与必要人工评估由 #58 承接，原始状态不因资料、局部整改或绿色 CI 改写。
+固定原件可用，Dcm ISO 缺件不在本闭包。#200 保留目标停机差距；#349／#364 的历史因果证据不被后续绿色运行替代；#58 保留全面源码、采用代码与人工评估。
 
-实际修改应由独立反例证伪：锁故障不得返回且正常锁可用；HostBatch NUL／CR／过长输入、EOF／输入错误、部分输出／原生写入失败不得提前确认；终止／ChainTask 不得返回到已完成调用帧，FIFO／抢占／资源清理保持；正常和控制器耗尽的栈故障均保留报告及失败状态。复用现有 host-boundary、protocol、OS activation／finish／stack suites 与生产／TSan／ASan／UBSan 封存入口，保持 #324 的 2000 ms terminal-stop 协议和 #331 的公开接口 fuzz／重放断言。改动生成 C 后运行两平台受影响 main 和全部受影响 profile 的完整 c-check，分别报告分析完整性、原始 `passed`、新增／移除诊断与未核查项；不得用 suppression、基线新增、漏扫或更换成 checker 未识别的调用证明整改完成。
+受影响主程序／profile 须在两平台运行，保留 #324 的 2000 ms terminal-stop、#331 的公开接口 fuzz／重放断言。完整 c-check 区分分析完整性、原始 `passed`、源码差集和未核查项；不添加 suppression／基线，不以漏扫或局部通过证明符合。
 
 ## 当前支持剖面与边界
 

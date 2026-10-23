@@ -629,10 +629,18 @@ fn finish<'a>(
         "os/src",
         "kernel/include",
     ];
-    let mut compiler_flags = vec!["-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror"];
+    let mut compiler_flags = vec![
+        "-std=c99",
+        "-O1",
+        "-g",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-fexceptions",
+    ];
     let mut kernel_sources = Vec::new();
     if linux {
-        compiler_flags.extend(["-D_GNU_SOURCE", "-pthread"]);
+        compiler_flags.push("-pthread");
         include_paths.extend(["os/src/host/linux", "kernel/portable/ThirdParty/GCC/Posix"]);
         kernel_sources.push("portable/ThirdParty/GCC/Posix/port.c");
     } else {

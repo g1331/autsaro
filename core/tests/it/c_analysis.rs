@@ -25,6 +25,21 @@ fn generated_c_analysis_samples() {
             &std::fs::read(output.join(sample).join("meta/integration.json")).unwrap(),
         )
         .unwrap();
+        let target: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(output.join(sample).join("target.json")).unwrap(),
+        )
+        .unwrap();
+        let flags = target["compilerFlags"].as_array().unwrap();
+        assert!(
+            flags.iter().any(|flag| flag == "-fexceptions"),
+            "{sample}: native unwind contract"
+        );
+        assert!(
+            !flags
+                .iter()
+                .any(|flag| flag.as_str().unwrap().starts_with("-D_GNU_SOURCE")),
+            "{sample}: reserved feature selection"
+        );
         let communication = &metadata["plan"]["communicationRuntime"];
         assert_eq!(communication["pduIdType"], id, "{sample}: PDU ID selection");
         assert_eq!(

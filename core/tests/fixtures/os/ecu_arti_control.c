@@ -1,5 +1,9 @@
 #include "Os_Arti.h"
 #include "Os_Backend.h"
+#ifdef __linux__
+#include <asm/sigcontext.h>
+#include <asm/ucontext.h>
+#endif
 #define main control_main
 #include "ecu_control.c"
 #undef main
@@ -42,8 +46,9 @@ int Ecu_TargetTestFailStage(unsigned stage) {
 #if defined(_WIN32)
         require(context->Rip != 0u && Os_ArtiNativeContextSize == sizeof(CONTEXT));
 #else
-        require(context->native.uc_mcontext.gregs[REG_RIP] != 0 &&
-                Os_ArtiNativeContextSize == sizeof(CONTEXT));
+        struct ucontext snapshot;
+        memcpy(&snapshot, &context->native, sizeof(snapshot));
+        require(snapshot.uc_mcontext.rip != 0 && Os_ArtiNativeContextSize == sizeof(CONTEXT));
 #endif
         if (Ecu_OsConfig.time->alarm_count != 0u) {
             static AlarmBaseType base;

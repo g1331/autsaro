@@ -1,0 +1,202 @@
+/** @file Linux native primitive consumers independent of automotive scheduling. */
+#include "Os_Host.h"
+#include "Os.h"
+#include "Os_Stack.h"
+#include "Os_LinuxNative.h"
+#include <asm/sigcontext.h>
+#include <asm/ucontext.h>
+#include <errno.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+static int injected_error;
+static HANDLE owned, other;
+static DWORD worker_id;
+static int worker_error;
+static CONTEXT captured;
+static unsigned char expected_fp[sizeof(captured.native.__fpregs_mem)];
+static volatile sig_atomic_t captured_signal;
+static volatile unsigned deep_returns;
+__attribute__((noinline)) static void deep_call(unsigned depth)
+{
+    if (depth != 0u) {
+        deep_call(depth - 1u);
+    }
+    __asm__ volatile("" ::: "memory");
+    ++deep_returns;
+}
+static DWORD deep_actor(void *argument)
+{
+    uintptr_t low, high, sp;
+    uintptr_t ssp = 0u;
+    size_t guard;
+    (void)argument;
+    OS_HOST_STACK_POINTER(sp);
+    __asm__ volatile("rdsspq %0" : "+r"(ssp));
+    if (Os_HostCurrentStackRange(&low, &high, &guard) == 0 || sp < low + guard || sp >= high) {
+        return 1u;
+    }
+    FILE *maps = fopen("/proc/self/maps", "r");
+    unsigned long shadow_size = 0u;
+    if (maps != NULL) {
+        char line[256];
+        while (fgets(line, sizeof(line), maps) != NULL) {
+            unsigned long first, last;
+            if (sscanf(line, "%lx-%lx", &first, &last) == 2 && first <= ssp && ssp < last) {
+                shadow_size = last - first;
+                break;
+            }
+        }
+        (void)fclose(maps);
+    }
+    printf("native-stack usable=%lu shadow=%lu ssp=%lu\n",
+           (unsigned long)(high - low - guard),
+           shadow_size,
+           (unsigned long)ssp);
+    (void)fflush(stdout);
+    deep_call(50000u);
+    return deep_returns == 50001u ? 0u : 2u;
+}
+static void capture_signal(int signal_number, siginfo_t *info, void *context)
+{
+    struct ucontext kernel;
+    (void)signal_number;
+    (void)info;
+    memcpy(&kernel, context, sizeof(kernel));
+    if (kernel.uc_mcontext.fpstate != NULL) {
+        memcpy(expected_fp, kernel.uc_mcontext.fpstate, sizeof(expected_fp));
+        Os_LinuxCaptureContext(&captured, context);
+        captured_signal = 1;
+    }
+}
+void StartupHook(void) {}
+void ShutdownHook(StatusType reason) { (void)reason; }
+int Os_FacilityTryLock(pthread_mutex_t *mutex)
+{
+    return injected_error != 0 ? EINVAL : pthread_mutex_trylock(mutex);
+}
+static void *contender(void *argument)
+{
+    (void)argument;
+    worker_id = GetCurrentThreadId();
+    if (WaitForSingleObject(other, 0u) != WAIT_OBJECT_0 ||
+        WaitForSingleObject(owned, 0u) != WAIT_TIMEOUT || ReleaseMutex(owned) != FALSE ||
+        ReleaseMutex(other) == FALSE) {
+        worker_error = 1;
+    }
+    return NULL;
+}
+int main(int argc, char **argv)
+{
+    volatile int32_t cell = 1;
+    const struct timespec immediate = {0, 0};
+    uintptr_t low, high, sp;
+    size_t guard;
+    sigset_t original, current;
+    pthread_t worker;
+    struct sigaction handler = {0};
+    if (argc != 2) {
+        return 2;
+    }
+    if (strcmp(argv[1], "depth") == 0 || strcmp(argv[1], "cet-depth") == 0) {
+        if (argv[1][0] == 'c') {
+            long result;
+            unsigned long enabled = 0u;
+            __asm__ volatile("syscall"
+                             : "=a"(result)
+                             : "a"(158L), "D"(0x5001L), "S"(1L)
+                             : "rcx", "r11", "memory");
+            if (result != 0) {
+                printf("native-stack CET not_assessed enable=%ld\n", result);
+                (void)fflush(stdout);
+                _exit(77);
+            }
+            __asm__ volatile("syscall"
+                             : "=a"(result)
+                             : "a"(158L), "D"(0x5005L), "S"(&enabled)
+                             : "rcx", "r11", "memory");
+            printf("native-stack CET status=%lu result=%ld\n", enabled, result);
+            (void)fflush(stdout);
+            if (result != 0 || enabled != 1u) {
+                _exit(12);
+            }
+        }
+        Os_StackPrepare();
+        HANDLE actor = CreateThread(NULL, 1048576u, deep_actor, NULL, 0u, NULL);
+        if (actor == NULL || WaitForSingleObject(actor, 10000u) != WAIT_OBJECT_0 ||
+            deep_returns != 50001u || CloseHandle(actor) == FALSE) {
+            _exit(13);
+        }
+        puts("native-stack depth=50000 completed");
+        (void)fflush(stdout);
+        _exit(0);
+    }
+    injected_error = strcmp(argv[1], "error") == 0;
+    struct ucontext snapshot;
+    handler.sa_sigaction = capture_signal;
+    handler.sa_flags = SA_SIGINFO;
+    if (sigemptyset(&handler.sa_mask) != 0 || sigaction(SIGUSR1, &handler, NULL) != 0 ||
+        raise(SIGUSR1) != 0 || captured_signal != 1 || captured.Rsp == 0u ||
+        memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0) {
+        return 9;
+    }
+    memcpy(&snapshot, &captured.native, sizeof(snapshot));
+    if (snapshot.uc_mcontext.rip == 0u ||
+        (const void *)snapshot.uc_mcontext.fpstate != &captured.native.__fpregs_mem) {
+        return 11;
+    }
+    const uintptr_t saved_sp = captured.Rsp;
+    Os_LinuxCaptureContext(&captured, &captured.native);
+    memcpy(&snapshot, &captured.native, sizeof(snapshot));
+    if (captured.Rsp != saved_sp ||
+        (const void *)snapshot.uc_mcontext.fpstate != &captured.native.__fpregs_mem ||
+        memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0) {
+        return 10;
+    }
+    if (Os_LinuxFutexWait(&cell, 0, &immediate) != -EAGAIN ||
+        Os_LinuxFutexWait(&cell, 1, &immediate) != -ETIMEDOUT ||
+        Os_LinuxThreadId() != (DWORD)getpid() ||
+        Os_HostCurrentStackRange(&low, &high, &guard) == 0) {
+        return 3;
+    }
+    OS_HOST_STACK_POINTER(sp);
+    if (sp < low + guard || sp >= high || pthread_sigmask(SIG_SETMASK, NULL, &original) != 0) {
+        return 4;
+    }
+    owned = CreateMutexA(NULL, FALSE, NULL);
+    other = CreateMutexA(NULL, FALSE, NULL);
+    if (owned == NULL || other == NULL) {
+        return 5;
+    }
+    if (injected_error != 0) {
+        if (WaitForSingleObject(owned, 0u) != WAIT_FAILED) {
+            return 24;
+        }
+    } else {
+        for (unsigned round = 0u; round < 2u; ++round) {
+            if (WaitForSingleObject(owned, 0u) != WAIT_OBJECT_0 ||
+                WaitForSingleObject(owned, 0u) != WAIT_OBJECT_0 || ReleaseMutex(owned) == FALSE ||
+                pthread_sigmask(SIG_SETMASK, NULL, &current) != 0 ||
+                sigismember(&current, SIGRTMIN) != 1 ||
+                pthread_create(&worker, NULL, contender, NULL) != 0) {
+                return 6;
+            }
+            if (pthread_join(worker, NULL) != 0 || worker_error != 0 ||
+                worker_id == GetCurrentThreadId() || ReleaseMutex(owned) == FALSE ||
+                ReleaseMutex(owned) != FALSE) {
+                return 7;
+            }
+        }
+    }
+    if (pthread_sigmask(SIG_SETMASK, NULL, &current) != 0 ||
+        sigismember(&original, SIGRTMIN) != sigismember(&current, SIGRTMIN) ||
+        CloseHandle(owned) == FALSE || CloseHandle(other) == FALSE) {
+        return 8;
+    }
+    puts("native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified "
+         "context=signal+self");
+    return 0;
+}

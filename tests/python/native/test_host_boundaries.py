@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import tempfile
 import unittest
@@ -175,3 +176,72 @@ class HostIoTests(unittest.TestCase):
                         self.assertEqual(result.exit_code, 13, (case, output, errors))
                         self.assertEqual(output, fault if case in ("fatal-partial", "fatal-interrupted", "fatal-errno") else b"", case)
                         self.assertEqual(errors, fault if case == "fatal-broken-pipe" else b"", case)
+
+
+@unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
+class NativeFacilityTests(unittest.TestCase):
+    def test_kernel_calls_native_mutex_and_stack_capacity(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            target = directory / "target"
+            shutil.copytree(os_suites.TARGET, target)
+            source = target / "src/host/linux/Os_HostLinux.c"
+            text = source.read_text(encoding="utf-8")
+            text = text.replace('#include "Os_LinuxNative.h"', '#include "Os_LinuxNative.h"\n'
+                                'int Os_FacilityTryLock(pthread_mutex_t *);\n'
+                                '#define pthread_mutex_trylock Os_FacilityTryLock')
+            source.write_text(text, encoding="utf-8")
+            with os_suites.native_session(directory, "native-facilities"):
+                binary, _ = os_suites.build(
+                    directory, str(ROOT / "tests/fixtures/os_native_facilities.c"), target=target,
+                )
+                for scenario in ("normal", "error"):
+                    result = os_suites.run_native([str(binary), scenario], timeout=10)
+                    self.assertEqual(result.returncode, 0, result)
+                    self.assertEqual(result.stdout, "native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified context=signal+self\n")
+                    self.assertEqual(result.stderr, "")
+                if not os.environ.get("AUTOSAR_SANITIZE"):
+                    depth = os_suites.run_native([str(binary), "depth"], timeout=15)
+                    self.assertEqual(depth.returncode, 0, depth)
+                    self.assertIn("native-stack depth=50000 completed", depth.stdout)
+                    self.assertEqual(depth.stderr, "")
+                    print(depth.stdout, end="", flush=True)
+                    cet = os_suites.run_native([str(binary), "cet-depth"], timeout=15)
+                    if cet.returncode == 77:
+                        print(cet.stdout, end="", flush=True)
+                    else:
+                        self.assertEqual(cet.returncode, 0, cet)
+                        self.assertIn("native-stack CET status=1 result=0", cet.stdout)
+                        self.assertIn("native-stack depth=50000 completed", cet.stdout)
+                        self.assertEqual(cet.stderr, "")
+                        self.assertGreaterEqual(int(cet.stdout.split(" shadow=", 1)[1].split()[0]), 50001 * 8)
+                        print(cet.stdout, end="", flush=True)
+                        # Confirm the capacity repair on the same hardware and execution stack.
+                        mutant_target = directory / "small-shadow-target"
+                        shutil.copytree(target, mutant_target)
+                        host = mutant_target / "src/host/linux/Os_HostLinux.c"
+                        source = host.read_text(encoding="utf-8")
+                        selected = "(reserve > OS_HOST_DEFAULT_STACK) ? reserve : OS_HOST_DEFAULT_STACK"
+                        self.assertEqual(source.count(selected), 1)
+                        host.write_text(source.replace(selected, "OS_HOST_DEFAULT_STACK"), encoding="utf-8")
+                        mutant_output = directory / "small-shadow-output"
+                        mutant_output.mkdir(mode=0o700)
+                        mutant, _ = os_suites.build(
+                            mutant_output, str(ROOT / "tests/fixtures/os_native_facilities.c"),
+                            target=mutant_target,
+                        )
+                        small = os_suites.run_native([str(mutant), "cet-depth"], timeout=15)
+                        self.assertIn("native-stack CET status=1 result=0", small.stdout)
+                        shadow = int(small.stdout.split(" shadow=", 1)[1].split()[0])
+                        if small.returncode == 0:
+                            # Legacy clone allocates from RLIMIT_STACK instead of pthread size.
+                            self.assertIn("native-stack depth=50000 completed", small.stdout)
+                            self.assertGreaterEqual(shadow, 50001 * 8)
+                            print("native-stack capacity mutation not_assessed: kernel already supplies sufficient shadow stack", flush=True)
+                        else:
+                            self.assertEqual(small.returncode, -11, small)
+                            self.assertLess(shadow, 50001 * 8)
+                            self.assertNotIn("native-stack depth=50000 completed", small.stdout)
+                            print(f"native-stack capacity mutation exit={small.returncode} {small.stdout}", end="", flush=True)
