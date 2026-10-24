@@ -122,6 +122,10 @@ def coverage(addons: Path) -> dict:
             "detail": "Pinned misra_10_1 checks shift/bitwise operands, but does not implement the logical-operand restrictions, including the TC1 pointer clarification. Checker availability is partial; manual evaluation remains required.",
             "basis": "MISRA C:2012 R10.1; TC1 R10.1; AMD3.20",
         }, {
+            "guideline": "R13.5",
+            "detail": "Pinned misra_13_5 counts assignments and increment/decrement operations, but omits function calls and volatile reads on logical right-hand operands. Manual evaluation must follow the actual types and call closure. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R13.5; TC1 Appendix J",
+        }, {
             "guideline": "R14.4",
             "detail": "Pinned misra_14_4 visits if/while but omits for conditions; its isBoolExpression helper also treats integer literals 0 and 1 as Boolean. This is weaker than the C99 essential-Boolean obligation. Raw diagnostics remain unchanged.",
             "basis": "MISRA C:2012 R14.4",
