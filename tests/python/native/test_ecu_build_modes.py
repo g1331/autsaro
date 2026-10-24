@@ -17,6 +17,51 @@ from ecu_tools.process import OwnedProcess, ProcessSpec
 
 
 class EcuBuildModeTests(unittest.TestCase):
+    def test_zero_dlc_output_keeps_library_copy_sizes_positive(self):
+        samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
+        self.assertTrue(samples, "Generate c_analysis samples first")
+        project = (Path(samples) / "standard-ecu").resolve(strict=True)
+        fixture = Path(__file__).resolve().parents[3] / "core/tests/fixtures/host-batch/zero_dlc_output.c"
+        target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+        original = ecu_build.query
+        commands = []
+
+        def observe(argv, logs, stage, **options):
+            if stage == "native-c99-build":
+                argv = [*argv, "-fno-builtin-memcpy", "-Wl,--wrap=memcpy"]
+                if target["target"].startswith("windows"):
+                    argv.append("-Wl,--wrap=__imp_memcpy")
+                else:
+                    argv.append("-Wl,--wrap=__memcpy_chk")
+                commands.append(argv)
+            return original(argv, logs, stage, **options)
+
+        with tempfile.TemporaryDirectory(prefix="autosar-zero-dlc-", delete=False) as temporary:
+            directory = Path(temporary)
+            with patch.object(ecu_build, "query", side_effect=observe):
+                binary = ecu_build.build(project, directory / "build", "test", fixture)
+            self.assertEqual(len(commands), 1)
+            if not target["target"].startswith("windows"):
+                bounds = OwnedProcess(ProcessSpec.seconds(
+                    [str(binary), "fortify"], directory, 10, directory, "copy-bounds",
+                )).wait()
+                self.assertEqual(bounds.exit_code, -6, bounds.stdout.read_text() + bounds.stderr.read_text())
+                self.assertIn("buffer overflow detected", bounds.stderr.read_text())
+            result = OwnedProcess(ProcessSpec.seconds(
+                [str(binary)], directory, 10, directory, "zero-dlc",
+            )).wait()
+            self.assertTrue(result.success,
+                            f"exit_code={result.exit_code}\n" +
+                            result.stdout.read_text() + result.stderr.read_text())
+            self.assertEqual(result.stderr.read_text(), "")
+            self.assertEqual([line for line in result.stdout.read_text().splitlines()
+                              if line.startswith("zero_dlc ")],
+                             ["zero_dlc epoch=1 length=0 confirmed=1",
+                              "zero_dlc epoch=2 length=1 confirmed=1",
+                              "zero_dlc epoch=3 length=8 confirmed=1",
+                              "zero_dlc closed reason=0"], result.stdout.read_text())
+            shutil.rmtree(directory)
+
     def test_one_byte_corruption_after_patching_is_rejected_before_compilation(self):
         samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
         self.assertTrue(samples, "Generate c_analysis samples first")

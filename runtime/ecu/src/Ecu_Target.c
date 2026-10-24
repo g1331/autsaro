@@ -435,7 +435,9 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, con
     slot->record.can_id = id;
     slot->record.dlc = dlc;
     (void)memset(slot->record.data, 0, sizeof(slot->record.data));
-    (void)memcpy(slot->record.data, data, dlc);
+    if (dlc != 0u) {
+        (void)memcpy(slot->record.data, data, dlc);
+    }
     ++output_pending;
     output_write = (output_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
     (void)Os_HostAtomicExchange(&slot->state, 1);
