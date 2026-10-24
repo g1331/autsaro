@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Linux actor creation stops on a failed mapping rollback before discarding its ownership; ordinary creation failures still return normally after successful cleanup. Regenerate sealed deliveries for the updated private source (#58)
+
 - Linux alternate signal stacks use a single aligned storage block instead of a union, preserving each actor's 64 KiB capacity, alignment and registration behavior. Regenerate sealed deliveries for the updated private source (#58)
 
 - Linux host and controlled POSIX port synchronization now sequence conditional native operations and volatile state reads explicitly; backend startup, readiness and interrupt admission preserve their existing failure and handoff order. Regenerate sealed deliveries for the changed source and selected patch (#58)

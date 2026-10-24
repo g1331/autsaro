@@ -519,6 +519,12 @@ class NativeFacilityTests(unittest.TestCase):
                         self.assertEqual(result.returncode, 0, result)
                         self.assertEqual(result.stdout, "native errno initialized across signal, clock, sleep, mapping, event and cleanup calls\n")
                         self.assertEqual(result.stderr, "")
+                for scenario in ("protect-rollback-error", "create-rollback-error"):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 1, result)
+                        self.assertEqual(result.stdout, "", result)
+                        self.assertEqual(result.stderr, f"rollback_munmap_failed stage={scenario}\n", result)
 
     def test_kernel_calls_native_mutex_and_stack_capacity(self):
         import os_suites

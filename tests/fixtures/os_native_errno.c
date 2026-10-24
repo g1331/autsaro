@@ -68,7 +68,8 @@ int __real_mprotect(void *address, size_t length, int protection);
 int __wrap_mprotect(void *address, size_t length, int protection)
 {
     entered(8u);
-    if (strcmp(scenario, "protect-error") == 0) {
+    if ((strcmp(scenario, "protect-error") == 0) ||
+        (strcmp(scenario, "protect-rollback-error") == 0)) {
         errno = EACCES;
         return -1;
     }
@@ -83,6 +84,12 @@ int __real_munmap(void *address, size_t length);
 int __wrap_munmap(void *address, size_t length)
 {
     entered(16u);
+    if ((strcmp(scenario, "protect-rollback-error") == 0) ||
+        (strcmp(scenario, "create-rollback-error") == 0)) {
+        (void)fprintf(stderr, "rollback_munmap_failed stage=%s\n", scenario);
+        errno = ENOMEM;
+        return -1;
+    }
     const int result = __real_munmap(address, length);
     if (result == 0) {
         errno = EAGAIN;
@@ -152,7 +159,8 @@ int __wrap_pthread_create(pthread_t *thread,
                           void *(*entry)(void *),
                           void *argument)
 {
-    if (strcmp(scenario, "create-error") == 0) {
+    if ((strcmp(scenario, "create-error") == 0) ||
+        (strcmp(scenario, "create-rollback-error") == 0)) {
         return EAGAIN;
     }
     return __real_pthread_create(thread, attributes, entry, argument);
@@ -191,7 +199,9 @@ int main(int argc, char **argv)
     }
     HANDLE thread =
         Os_HostCreateActor(262144u, actor, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
-    if ((strcmp(scenario, "protect-error") == 0) || (strcmp(scenario, "create-error") == 0)) {
+    if ((strcmp(scenario, "protect-error") == 0) || (strcmp(scenario, "create-error") == 0) ||
+        (strcmp(scenario, "protect-rollback-error") == 0) ||
+        (strcmp(scenario, "create-rollback-error") == 0)) {
         if (thread != NULL) {
             return 4;
         }

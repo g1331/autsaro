@@ -302,7 +302,10 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     errno = 0;
     if (mprotect(thread->mapping, (size_t)page, PROT_NONE) != 0) {
         errno = 0;
-        (void)munmap(thread->mapping, reserve);
+        /* Failed rollback must not discard ownership of a live mapping. */
+        if (munmap(thread->mapping, reserve) != 0) {
+            ExitProcess(1u);
+        }
         thread->mapping = NULL;
         (void)InterlockedExchange(&thread->reserved, 0);
         return NULL;
@@ -331,7 +334,9 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     }
     if (status != 0) {
         errno = 0;
-        (void)munmap(thread->mapping, reserve);
+        if (munmap(thread->mapping, reserve) != 0) {
+            ExitProcess(1u);
+        }
         thread->mapping = NULL;
         (void)InterlockedExchange(&thread->reserved, 0);
         return NULL;

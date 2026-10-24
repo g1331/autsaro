@@ -83,6 +83,7 @@ OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread);
 
 OS_MEMMAP int Os_HostInstallSignals(void);
 
+/** Recoverable creation failures return NULL; a failed mapping rollback terminates the process. */
 OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
                                     LPTHREAD_START_ROUTINE start,
                                     LPVOID argument,
