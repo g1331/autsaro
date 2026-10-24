@@ -26,6 +26,8 @@ Linux真实scheduler的ASan／UBSan对照正常到达Ready、stderr为空；仅�
 
 Linux `Os_HostCreateActor` 的 `mmap` 使用 `MAP_PRIVATE | MAP_ANONYMOUS`、fd=-1、offset=0。[Linux mmap 契约](https://www.man7.org/linux/man-pages/man2/mmap.2.html)明确匿名映射忽略 fd，并建议使用 -1；去掉匿名标志后才需要有效文件描述符。固定 Cppcheck 2.21.0 的 posix.cfg 对第五参数无条件限定非负数，不能表达该 flags 条件，因此这里的 `invalidFunctionArg`（error）不构成已证实的无效参数调用。最小真实调用对照中，匿名映射可读写并正常 munmap，去掉匿名标志则以 EBADF 拒绝；固定模型对两者都报告同一诊断。保留原始 error、源码归属与 passed=false，不修改固定模型、调用参数或 suppression；此裁决不解决动态分配、映射失败处理或全部平台调用的人工义务。
 
+同一构造函数在保护设置或 pthread 创建／属性设置失败后，必须检查映射回滚的 `munmap` 结果，再清空 mapping 和释放 reserved。D4.7（Required、C99，主文页30／PDF38；AMD2只增加C11适用性）要求有意义地检查错误信息，其“已证明不能报错”例外不能仅由地址／长度有效推出；Linux 契约还列有 `munmap` 的 ENOMEM。回滚失败时沿现有 Linux 原生致命失败约定 `ExitProcess(1)`，不把仍存活的映射遗失后作为普通 NULL 创建拒绝继续；正常成功及成功回滚的结果不变。实际 errno 夹具分别注入两处失败，检查精确位置回执、退出值和无正常收尾输出，并以恢复各处旧检查的编译副本证伪。此整改只覆盖这两个回滚点，不构成全部D4.7／D4.12处置或符合性结论。
+
 Os_TargetConfigType 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。
 
 StartOS 成功后不返回。Task 正常终止或调用 ChainTask 时，通过原生入口移交；意外返回时报告 MISSINGEND，恢复遗留资源和屏蔽状态，再完成本次激活。PreTask／PostTask 随 Running 状态转换调用，Shutdown 不额外产生 PostTask。ErrorHook 提供标准服务标识与参数快照，Hook 内错误不会递归调用或覆盖外层快照。支持参考 EXTENDED 配置和显式 STANDARD 配置；两种模式均保留防御检查、非零结果报告、标准激活及 Alarm 告警。
