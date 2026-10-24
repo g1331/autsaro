@@ -49,7 +49,11 @@ Linux actor的mapping成员按实际用途保存为unsigned char字节区间：g
 
 `Os_PortRestartLanding`是保留Task-loop帧内的汇编续行点，不是按C原型调用的函数。该符号现在只在本对象内可见；C侧通过真正遵循调用ABI的`Os_PortRestartAddress`取得native PC：Linux为uintptr_t，Windows为RtlUnwindEx要求的void指针表示。叶函数在原`.os_code`内用RIP相对LEA返回RAX，保留其他寄存器及配对call/return，不需要C函数指针转整数或void指针。依据R11.1（Required，主文页93–94／PDF101–102；AMD2.58只修订隐式转换例外说明），不使用该条的新例外；实际native扩展仍按上表R1.2／D4.2／D4.3评估。原生restart验证10000次同一物理栈重入、拒绝与外来异常，并分别检查全局C入口和本地续行点的代码段身份；错误PC变异必须被实际restart成功判据拒绝。该边界仍依赖受控x64 ABI，Windows执行及硬件SHSTK按实际结果记录。
 
-Linux 备用信号栈原匿名 union 仅借 long double 成员取得对齐，实际消费者为 `Os_StackRegister → Os_LinuxAltStack`。R19.2（Advisory、C99，主文页154–155／PDF162–163；AMD2 只增加 C11 适用性及行为索引）直接约束 union 关键字，不因没有交叉成员读取而不适用。现改为仅含 long double 存储数组的 struct，每个 actor 仍取得原来的 65536 字节和原生对齐；C 代码不读取浮点值，不新增平台属性或转换。真实源的编译布局对照检查容量、对齐与槽数，降低对齐和缩短容量的反例分别拒绝；ARTI 消费者另检查发布地址的实际对齐。该整改不改变注册、信号及故障关闭路径，也不处置 ErrorHook 快照或采用 Queue 的其他 union。
+Linux 备用信号栈原匿名 union 仅借 long double 成员取得对齐，实际消费者为 `Os_StackRegister → Os_LinuxAltStack`。R19.2（Advisory、C99，主文页154–155／PDF162–163；AMD2 只增加 C11 适用性及行为索引）直接约束 union 关键字，不因没有交叉成员读取而不适用。现改为仅含 long double 存储数组的 struct，每个 actor 仍取得原来的 65536 字节和原生对齐；C 代码不读取浮点值，不新增平台属性或转换。真实源的编译布局对照检查容量、对齐与槽数，降低对齐和缩短容量的反例分别拒绝；ARTI 消费者另检查发布地址的实际对齐。该整改不改变注册、信号及故障关闭路径。
+
+`Os_ErrorParametersType` 同样改为各服务参数各占独立字段的 struct。服务包装按名初始化，`Os_ErrorResult` 复制参数和服务标识，getter 保持“匹配的 ErrorHook 内”这一前置条件；`Os_ErrorContextSave/Restore` 连同 phase 保存及恢复，C 消费者不依赖原来的重叠表示。所选 GCC x64 的对象从24变272字节，现有 ErrorHook 各访问开关、嵌套拒绝及 ISR 消费者检查实际字段；丢失参数和损坏服务标识的编译变异分别被现有完整协议判据拒绝，进程 exit0 不能替代该判据。
+
+采用内核的 `QueueDefinition.u` 在共同受控补丁中也改为独立字段，保留 `xQueue`／`xSemaphore` 名称及全部原有分支。所选配置为静态分配开启、动态分配和 mutex 关闭，真实 FIFO／peek／满空／reset 路径消费 `xQueue`，不需要另一组字段的存储表示；未通过启用其他配置来替代所选配置的验证。该目标的 StaticQueue_t 从192变208字节，u从16变32字节；静态缓冲仍直接使用同一完整 QueueDefinition 类型。补丁摘要及双平台派生内核身份随源重新计算，原上游文件保持固定身份。两处布局均需重新生成交付物并整体重编；此逐处 R19.2 整改不外推系统头、未选变体或整个采用内核符合性。
 
 ## C11 无返回说明符的适用边界
 
