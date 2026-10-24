@@ -1,6 +1,6 @@
 # 受控主机 Automotive OS runtime
 
-内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用十九个受控补丁；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/` 中的受控端口补丁。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
+内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用二十个受控补丁；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/` 中的受控端口补丁。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
 
 配置表的计数及模块索引使用uint32，容量仍由各OS_MAX_*限制；任务名为以NUL结尾的const uint8字节串，调用FreeRTOS时才转到原生字符接口。集成方须用当前头文件重新编译配置与消费者。
 

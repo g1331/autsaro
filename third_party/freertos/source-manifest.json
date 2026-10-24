@@ -54,6 +54,7 @@
     "runtime/os/patches/0017-portable-header-paths.patch": "7d408cb149a895028fc254e6091d27d644bd12632a71ba6fb7429ac9ff6b398d",
     "runtime/os/patches/0018-windows-thread-setup-errors.patch": "57f44144b74b2fa246400a272ec7474533ee1eead627e2af2b37d254c98b6108",
     "runtime/os/patches/0019-windows-native-handoff-errors.patch": "fdddb1d4889dd848b4a44df47b8d06245c31a3285d104b7d5b9090f14efa07cf",
-    "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch": "d178bbc10f8d4e6dd7d80d3f43c60a0015ce6a36815da7b1bb83fcc4e0854bf5"
+    "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch": "d178bbc10f8d4e6dd7d80d3f43c60a0015ce6a36815da7b1bb83fcc4e0854bf5",
+    "runtime/os/patches/0020-bounded-queue-front.patch": "0d358577ef476e4cd8b7e8a36d9c084ab9f15c47790f50f82e7e7c410d423c44"
   }
 }

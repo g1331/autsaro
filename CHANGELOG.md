@@ -30,6 +30,7 @@
 
 ### Fixed
 
+- Static kernel queues select front-insertion and overwrite wrap positions before subtracting, keeping read cursors within their storage even for one-item queues. Regenerate sealed deliveries and rebuild for the changed controlled kernel patch identity (#371)
 - Zero-DLC CAN output retains its zero-filled record and normal confirmation without calling the payload copy with a zero length. Regenerate sealed deliveries for the updated private source (#371)
 - C analysis compares sealed runtime source edits without treating their content hashes as configuration changes, while retaining source-path, generator, checker, target and tool identity checks. (#371)
 - Linux actor creation stops on a failed mapping rollback before discarding its ownership; ordinary creation failures still return normally after successful cleanup. Regenerate sealed deliveries for the updated private source (#58)

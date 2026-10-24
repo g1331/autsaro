@@ -578,6 +578,19 @@
       ]
     },
     {
+      "path": "runtime/os/patches/0020-bounded-queue-front.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "patch",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
       "path": "runtime/os/patches/linux/0001-controlled-posix-port.patch",
       "license": "Apache-2.0",
       "targets": [

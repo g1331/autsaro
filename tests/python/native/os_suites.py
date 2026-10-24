@@ -252,6 +252,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
             ("0015-typed-port-state.patch", ("tasks.c", "include/task.h", "include/FreeRTOS.h", "queue.c", "include/queue.h")),
             ("0016-essential-boolean-controls.patch", ("tasks.c", "queue.c", "include/list.h", "include/task.h")),
             ("0017-portable-header-paths.patch", ("include/deprecated_definitions.h",)),
+            ("0020-bounded-queue-front.patch", ("queue.c",)),
         ):
             patch = target / "patches" / name
             selection = [f"--include={path}" for path in includes]

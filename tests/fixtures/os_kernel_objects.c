@@ -4,6 +4,22 @@
 #include "task.h"
 #include "queue.h"
 #include <stdio.h>
+#if defined(OS_QUEUE_POINTER_TESTS) && (OS_QUEUE_POINTER_TESTS == 1)
+#include <stdint.h>
+#include <stdlib.h>
+
+int8_t *Os_QueueTestPrevious(int8_t *head, int8_t *cursor, size_t size)
+{
+    const uintptr_t begin = (uintptr_t)head;
+    const uintptr_t current = (uintptr_t)cursor;
+    if ((current < begin) || ((current - begin) < size)) {
+        (void)fprintf(
+            stderr, "QUEUE_BEFORE_HEAD size=%zu offset=%zu\n", size, (size_t)(current - begin));
+        exit(78);
+    }
+    return cursor - size;
+}
+#endif
 
 void StartupHook(void) {}
 void ShutdownHook(StatusType reason) { (void)reason; }
@@ -50,11 +66,59 @@ int main(void)
         (xQueueReceive(typed_queue, &received, 0u) != errQUEUE_EMPTY)) {
         return 6;
     }
+    for (unsigned round = 0u; round < 3u; ++round) {
+        uint32 front = 0u;
+        uint32 back = 0u;
+        if ((xQueueSendToFront(typed_queue, &first_value, 0u) != pdPASS) ||
+            (xQueueSendToFront(typed_queue, &second_value, 0u) != pdPASS) ||
+            (xQueueReceive(typed_queue, &front, 0u) != pdPASS) ||
+            (xQueueReceive(typed_queue, &back, 0u) != pdPASS)) {
+            return 8;
+        }
+        if ((front != second_value) || (back != first_value)) {
+            (void)fprintf(stderr,
+                          "QUEUE_FRONT_ORDER round=%u front=%u back=%u\n",
+                          round,
+                          (unsigned)front,
+                          (unsigned)back);
+            return 9;
+        }
+    }
+    {
+        StaticQueue_t single;
+        uint32 cell = 0u;
+        QueueHandle_t one = xQueueCreateStatic(1u, sizeof(cell), (uint8 *)&cell, &single);
+        if (one == NULL) {
+            return 10;
+        }
+        for (unsigned round = 0u; round < 3u; ++round) {
+            if ((xQueueSendToFront(one, &first_value, 0u) != pdPASS) ||
+                (xQueueOverwrite(one, &second_value) != pdPASS) ||
+                (xQueuePeek(one, &received, 0u) != pdPASS) || (received != second_value) ||
+                (xQueueReceive(one, &received, 0u) != pdPASS) || (received != second_value) ||
+                (xQueueReceive(one, &received, 0u) != errQUEUE_EMPTY)) {
+                return 11;
+            }
+        }
+    }
+    {
+        StaticQueue_t empty_items;
+        QueueHandle_t zero = xQueueCreateStatic(2u, 0u, NULL, &empty_items);
+        if ((zero == NULL) || (xQueueSendToFront(zero, NULL, 0u) != pdPASS) ||
+            (xQueueSend(zero, NULL, 0u) != pdPASS) ||
+            (xQueueSendToFront(zero, NULL, 0u) != errQUEUE_FULL) ||
+            (xQueueReceive(zero, NULL, 0u) != pdPASS) ||
+            (xQueueReceive(zero, NULL, 0u) != pdPASS) ||
+            (xQueueReceive(zero, NULL, 0u) != errQUEUE_EMPTY)) {
+            return 12;
+        }
+    }
     vListInitialise(&list);
     if ((sentinel->pxNext != sentinel) || (sentinel->pxPrevious != sentinel) ||
         (list.uxNumberOfItems != 0u)) {
         return 7;
     }
-    puts("static task and queue types; task stack identity; bounded FIFO/reset observed");
+    puts("static task and queue types; task stack identity; bounded FIFO/front/overwrite/reset "
+         "observed");
     return 0;
 }

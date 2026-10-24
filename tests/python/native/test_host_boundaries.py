@@ -346,8 +346,79 @@ class NativeKernelObjectTests(unittest.TestCase):
                 )
                 result = os_suites.run_native([str(binary)], timeout=10)
                 self.assertEqual(result.returncode, 0, result)
-                self.assertEqual(result.stdout, "static task and queue types; task stack identity; bounded FIFO/reset observed\n")
+                self.assertEqual(result.stdout, "static task and queue types; task stack identity; bounded FIFO/front/overwrite/reset observed\n")
                 self.assertEqual(result.stderr, "")
+
+    def test_queue_front_pointer_bounds_and_order_mutations(self):
+        import os_suites
+
+        candidate = """        if( pxQueue->u.xQueue.pcReadFrom == pxQueue->pcHead )
+        {
+            pxQueue->u.xQueue.pcReadFrom = ( pxQueue->u.xQueue.pcTail - pxQueue->uxItemSize );
+        }
+        else
+        {
+            pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
+            mtCOVERAGE_TEST_MARKER();
+        }"""
+        old = """        pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
+
+        if( pxQueue->u.xQueue.pcReadFrom < pxQueue->pcHead )
+        {
+            pxQueue->u.xQueue.pcReadFrom = ( pxQueue->u.xQueue.pcTail - pxQueue->uxItemSize );
+        }
+        else
+        {
+            mtCOVERAGE_TEST_MARKER();
+        }"""
+        decrement = "pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;"
+        observed = ("pxQueue->u.xQueue.pcReadFrom = Os_QueueTestPrevious("
+                    "pxQueue->pcHead, pxQueue->u.xQueue.pcReadFrom, pxQueue->uxItemSize);")
+        for mutant, code, error in (
+            ("control", 0, ""),
+            ("old-subtract", 78, "QUEUE_BEFORE_HEAD size=4 offset=0\n"),
+            ("no-step", 9, "QUEUE_FRONT_ORDER round=0 front=29 back=29\n"),
+            ("wrong-wrap", 9, "QUEUE_FRONT_ORDER round=0 front=17 back=29\n"),
+        ):
+            with self.subTest(mutant=mutant), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                native = os_suites.run_native
+                compiled = []
+
+                def observe(command, *, directory=directory, mutant=mutant, native=native, compiled=compiled, **options):
+                    if "-std=c99" in command:
+                        queue = directory / "kernel/queue.c"
+                        text = queue.read_text(encoding="utf-8")
+                        self.assertEqual(text.count(candidate), 1)
+                        if mutant == "old-subtract":
+                            text = text.replace(candidate, old)
+                        self.assertEqual(text.count(decrement), 1)
+                        text = text.replace(decrement, observed)
+                        if mutant == "no-step":
+                            text = text.replace(observed, "(void)pxQueue;")
+                        elif mutant == "wrong-wrap":
+                            wrap = "( pxQueue->u.xQueue.pcTail - pxQueue->uxItemSize )"
+                            self.assertEqual(text.count(wrap), 1)
+                            text = text.replace(wrap, "pxQueue->pcHead")
+                        include = '#include "queue.h"'
+                        self.assertEqual(text.count(include), 1)
+                        text = text.replace(include, include + "\nextern int8_t *Os_QueueTestPrevious(int8_t *, int8_t *, size_t);")
+                        queue.write_text(text, encoding="utf-8")
+                        result = native(command, **options)
+                        compiled.append(result.returncode)
+                        return result
+                    return native(command, **options)
+
+                with os_suites.native_session(directory, "queue-front-bounds"), patch.object(os_suites, "run_native", side_effect=observe):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_kernel_objects.c"),
+                        defines=("OS_QUEUE_POINTER_TESTS=1",),
+                    )
+                    self.assertEqual(compiled, [0])
+                    result = os_suites.run_native([str(binary)], timeout=10)
+                self.assertEqual(result.returncode, code, result)
+                self.assertEqual(result.stderr, error, result)
+                self.assertEqual(result.stdout, "static task and queue types; task stack identity; bounded FIFO/front/overwrite/reset observed\n" if code == 0 else "", result)
 
 
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
