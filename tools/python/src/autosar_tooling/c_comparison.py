@@ -84,7 +84,7 @@ def _configuration(root: Path) -> dict:
         return plan
     sources, origins = plan["runtimeSources"], metadata.get("originalBswSources")
     if not isinstance(sources, dict) or not isinstance(origins, dict):
-        raise ValueError("Runtime source provenance invalid")
+        raise TypeError("Runtime source provenance invalid")
     records = (root / FILE_HASHES).read_text(encoding="utf-8").splitlines()
 
     def require_source(name, identity):

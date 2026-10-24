@@ -95,7 +95,8 @@ class CComparisonTests(unittest.TestCase):
 
     def test_runtime_source_bytes_provenance_configuration_and_generator_remain_bound(self):
         for mutation in ("input-bytes", "output-bytes", "baseline-bytes", "unsealed-metadata", "claimed-hash",
-                         "configuration", "generator", "copied-path", "extra-source", "missing-origin", "missing-sources"):
+                         "configuration", "generator", "copied-path", "extra-source", "missing-origin", "missing-sources",
+                         "origin-type", "source-type"):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
                 current, project, output, baseline = self.runtime_fixture(Path(temporary))
                 if mutation == "unsealed-metadata":
@@ -127,9 +128,16 @@ class CComparisonTests(unittest.TestCase):
                             metadata["originalBswSources"].clear()
                         elif mutation == "missing-sources":
                             del metadata["plan"]["runtimeSources"]
+                        elif mutation == "origin-type":
+                            metadata["originalBswSources"] = []
+                        elif mutation == "source-type":
+                            metadata["plan"]["runtimeSources"] = []
                         self.seal(root, metadata)
                     current["sourceSealSha256"] = digest(project / "meta/files.sha256")
-                with self.assertRaisesRegex(ValueError, "C baseline refused:"):
+                message = "C baseline refused:"
+                if mutation in ("origin-type", "source-type"):
+                    message += " Runtime source provenance invalid"
+                with self.assertRaisesRegex(ValueError, message):
                     compare(current, project, output, baseline)
 
     def test_origin_mapping_cannot_reclassify_generator_code_as_runtime_source(self):
