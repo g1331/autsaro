@@ -78,6 +78,8 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 
 ## MISRA 偏离
 
+R21.15（AMD1，Required、C99，页6／PDF14；AMD2增加C11适用性）的复制实参类型核查覆盖 `Com_SendSignal`／`Com_ReceiveSignal`：`SWS_Com_00197／00198` 的 `const void *`／`void *` 接口保持，内部 UINT32 状态以 object-to-void 视图与之配对，不将不兼容的原始实参交给库形参自动转换。COM 原文页106–107、109 的 `SWS_Com_00624／00631` 信号复制语义、4字节长度、COM_STATE、返回码及调用者类型／对齐责任不变；生成 RTE 仍传递对应 uint32 对象。该处没有 void-to-object 恢复或新偏离，实参兼容性与实际读写消费者分别核查；其他库、资源及采用代码义务不由此结论代替。
+
 | 规则 | 范围 | 依据与风险控制 | 批准 |
 | --- | --- | --- | --- |
 | MISRA C:2012 Rule 8.7（advisory） | `runtime/bsw/src/Com.c` 中 `Com_InvalidateSignal` 与 `Com_SwitchIpduTxMode` 的定义 | `SWS_Com_00203／00784` 规定这两个 API 经 `Com.h` 以外部链接提供；所选程序没有模块调用它们，Cppcheck 因此报告只在一个翻译单元中引用。偏离只影响符号可见性：两个函数只在 `COM_STATE` 区内读写本模块数据，不调用其他模块，行为由 `com_chain_contract.c` 验证；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-14（#42） |
