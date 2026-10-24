@@ -30,6 +30,7 @@
 
 ### Fixed
 
+- C analysis compares sealed runtime source edits without treating their content hashes as configuration changes, while retaining source-path, generator, checker, target and tool identity checks. (#371)
 - Linux actor creation stops on a failed mapping rollback before discarding its ownership; ordinary creation failures still return normally after successful cleanup. Regenerate sealed deliveries for the updated private source (#58)
 
 - Linux alternate signal stacks use a single aligned storage block instead of a union, preserving each actor's 64 KiB capacity, alignment and registration behavior. Regenerate sealed deliveries for the updated private source (#58)

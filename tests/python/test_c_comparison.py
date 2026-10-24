@@ -52,6 +52,107 @@ class CComparisonTests(unittest.TestCase):
     def write(self, baseline, summary):
         (baseline / "summary.json").write_text(json.dumps(summary))
 
+    def seal(self, root, metadata):
+        (root / "meta/integration.json").write_text(json.dumps(metadata))
+        names = sorted(p.relative_to(root).as_posix() for p in root.rglob("*")
+                       if p.is_file() and p.relative_to(root).as_posix()
+                       not in {"meta/files.list", "meta/files.sha256"})
+        (root / "meta/files.list").write_text("".join(name + "\n" for name in names))
+        (root / "meta/files.sha256").write_text("".join(
+            f"{digest(root / name)}  {name}\n" for name in sorted([*names, "meta/files.list"])))
+
+    def runtime_fixture(self, root):
+        current, project, output, baseline = self.fixture(root)
+        for path in (project, output / "project", baseline / "project"):
+            self.seal(path, {
+                "format": "autosar-ecu-integration-v2",
+                "originalBswSources": {"runtime/bsw/src/Example.c": "main.c"},
+                "plan": {"configuration": "same", "runtimeSources": {
+                    "runtime/bsw/src/Example.c": digest(path / "main.c"),
+                    "core/src/integration/example.rs": "c" * 64,
+                }},
+            })
+        current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+        self.write(baseline, current)
+        return current, project, output, baseline
+
+    def test_sealed_runtime_source_changes_reach_diagnostic_comparison(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.runtime_fixture(Path(temporary))
+            before = (baseline / "summary.json").read_bytes()
+            for root in (project, output / "project"):
+                (root / "main.c").write_text("new();\nold();\nsame();\n")
+                metadata = json.loads((root / "meta/integration.json").read_text())
+                metadata["plan"]["runtimeSources"]["runtime/bsw/src/Example.c"] = digest(root / "main.c")
+                self.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            self.assertEqual(compare(current, project, output, baseline), {
+                "new": [{"rule": "rule", "file": "main.c", "source": "new();", "count": 1}],
+                "removed": [{"rule": "rule", "file": "main.c", "source": "same();", "count": 1}],
+            })
+            self.assertFalse(current["passed"])
+            self.assertEqual((baseline / "summary.json").read_bytes(), before)
+
+    def test_runtime_source_bytes_provenance_configuration_and_generator_remain_bound(self):
+        for mutation in ("input-bytes", "output-bytes", "baseline-bytes", "unsealed-metadata", "claimed-hash",
+                         "configuration", "generator", "copied-path", "extra-source", "missing-origin", "missing-sources"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                current, project, output, baseline = self.runtime_fixture(Path(temporary))
+                if mutation == "unsealed-metadata":
+                    metadata = json.loads((project / "meta/integration.json").read_text())
+                    metadata["owner"] = "unsealed"
+                    (project / "meta/integration.json").write_text(json.dumps(metadata))
+                elif mutation.endswith("-bytes"):
+                    root = {"input-bytes": project, "output-bytes": output / "project",
+                            "baseline-bytes": baseline / "project"}[mutation]
+                    (root / "main.c").write_text("unsealed();\nold();\nsame();\n")
+                else:
+                    for root in (project, output / "project"):
+                        metadata = json.loads((root / "meta/integration.json").read_text())
+                        sources = metadata["plan"]["runtimeSources"]
+                        if mutation == "claimed-hash":
+                            sources["runtime/bsw/src/Example.c"] = "0" * 64
+                        elif mutation == "configuration":
+                            metadata["plan"]["configuration"] = "different"
+                        elif mutation == "generator":
+                            sources["core/src/integration/example.rs"] = "d" * 64
+                        elif mutation == "copied-path":
+                            (root / "copy.c").write_bytes((root / "main.c").read_bytes())
+                            metadata["originalBswSources"]["runtime/bsw/src/Example.c"] = "copy.c"
+                        elif mutation == "extra-source":
+                            (root / "copy.c").write_bytes((root / "main.c").read_bytes())
+                            metadata["originalBswSources"]["runtime/bsw/src/Other.c"] = "copy.c"
+                            sources["runtime/bsw/src/Other.c"] = digest(root / "copy.c")
+                        elif mutation == "missing-origin":
+                            metadata["originalBswSources"].clear()
+                        elif mutation == "missing-sources":
+                            del metadata["plan"]["runtimeSources"]
+                        self.seal(root, metadata)
+                    current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+                with self.assertRaisesRegex(ValueError, "C baseline refused:"):
+                    compare(current, project, output, baseline)
+
+    def test_origin_mapping_cannot_reclassify_generator_code_as_runtime_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.runtime_fixture(Path(temporary))
+            original = "core/src/integration/example.rs"
+            for root in (project, output / "project", baseline / "project"):
+                (root / "generator.rs").write_text("old generator\n")
+                metadata = json.loads((root / "meta/integration.json").read_text())
+                metadata["originalBswSources"][original] = "generator.rs"
+                metadata["plan"]["runtimeSources"][original] = digest(root / "generator.rs")
+                self.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            self.write(baseline, current)
+            for root in (project, output / "project"):
+                (root / "generator.rs").write_text("new generator\n")
+                metadata = json.loads((root / "meta/integration.json").read_text())
+                metadata["plan"]["runtimeSources"][original] = digest(root / "generator.rs")
+                self.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            with self.assertRaisesRegex(ValueError, "Sample generation configuration differs"):
+                compare(current, project, output, baseline)
+
     def test_counts_new_and_removed_separately_even_when_net_is_zero(self):
         # Mutation: set subtraction/net count loses the second identical occurrence.
         with tempfile.TemporaryDirectory() as temporary:
@@ -96,13 +197,17 @@ class CComparisonTests(unittest.TestCase):
                     compare(current, project, output, baseline)
 
     def test_missing_sources_changed_configuration_or_sample_and_bad_seal_refuse(self):
-        for name in ("source", "seal", "target", "plan"):
+        for name in ("source", "seal", "current-seal", "output-seal", "target", "plan"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 current, project, output, baseline = self.fixture(Path(temporary))
                 if name == "source":
                     (baseline / "project/main.c").unlink()
                 elif name == "seal":
                     (baseline / "project/meta/files.sha256").write_text("changed")
+                elif name == "current-seal":
+                    (project / "meta/files.sha256").write_text("changed")
+                elif name == "output-seal":
+                    (output / "project/meta/files.sha256").write_text("changed")
                 elif name == "target":
                     (project / "target.json").write_text('{}')
                 elif name == "plan":
