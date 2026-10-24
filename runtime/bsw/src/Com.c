@@ -231,7 +231,7 @@ COM_CODE uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataP
         result = E_NOT_OK;
         if ((index < configuration->pdu_count) && (SignalDataPtr != NULL_PTR) &&
             (configuration->pdus[index].receive == FALSE)) {
-            (void)memcpy(&values[index], SignalDataPtr, sizeof(values[index]));
+            (void)memcpy((void *)&values[index], SignalDataPtr, sizeof(values[index]));
             result = E_OK;
         }
     }
@@ -247,7 +247,7 @@ COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
         result = E_NOT_OK;
         if ((index < configuration->pdu_count) && (SignalDataPtr != NULL_PTR) &&
             (configuration->pdus[index].receive == TRUE)) {
-            (void)memcpy(SignalDataPtr, &values[index], sizeof(values[index]));
+            (void)memcpy(SignalDataPtr, (const void *)&values[index], sizeof(values[index]));
             result = (receive_started == TRUE) ? E_OK : COM_SERVICE_NOT_AVAILABLE;
         }
     }
