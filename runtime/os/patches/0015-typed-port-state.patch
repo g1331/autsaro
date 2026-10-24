@@ -424,7 +424,7 @@
 +    int8_t * pcHead;           /**< Points to the beginning of the queue storage area. */
 +    int8_t * pcWriteTo;        /**< Points to the free next place in the storage area. */
 +
-+    union
++    struct
 +    {
 +        QueuePointers_t xQueue;     /**< Data required exclusively when this structure is used as a queue. */
 +        SemaphoreData_t xSemaphore; /**< Data required exclusively when this structure is used as a semaphore. */

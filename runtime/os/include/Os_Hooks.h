@@ -144,7 +144,7 @@ typedef enum {
     ((OSServiceIdType)0xeu) /**< Failed-service identity for GetScheduleTableStatus. OSEK          \
                                OS 2.2.3 13.8.3. */
 /** Typed failed-service arguments; active only during the matching ErrorHook invocation. */
-typedef union {
+typedef struct {
     struct {
         CoreIdType CoreID;     /**< Original ControlIdle core argument; may be foreign. */
         IdleModeType IdleMode; /**< Original ControlIdle mode argument; may be invalid. */
