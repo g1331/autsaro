@@ -54,15 +54,18 @@ OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
     (void)sizeof(
         char[sizeof(struct _fpstate) == sizeof(destination->native.__fpregs_mem) ? 1 : -1]);
     struct ucontext kernel;
-    (void)memcpy(&kernel, source, sizeof(kernel));
-    (void)memmove(&destination->native, source, sizeof(destination->native));
+    const unsigned char *bytes = (const unsigned char *)source;
+    unsigned char *native = (unsigned char *)&destination->native;
+    (void)memcpy((unsigned char *)&kernel, bytes, sizeof(kernel));
+    (void)memmove(native, bytes, sizeof(destination->native));
     if (kernel.uc_mcontext.fpstate != NULL) {
         void *copied = &destination->native.__fpregs_mem;
-        (void)memmove(copied, kernel.uc_mcontext.fpstate, sizeof(destination->native.__fpregs_mem));
-        (void)memcpy(
-            &((char *)&destination->native)[offsetof(struct ucontext, uc_mcontext.fpstate)],
-            (const void *)&copied,
-            sizeof(copied));
+        (void)memmove((unsigned char *)&destination->native.__fpregs_mem,
+                      (const unsigned char *)kernel.uc_mcontext.fpstate,
+                      sizeof(destination->native.__fpregs_mem));
+        (void)memcpy(&native[offsetof(struct ucontext, uc_mcontext.fpstate)],
+                     (const unsigned char *)&copied,
+                     sizeof(copied));
     }
     destination->Rsp = kernel.uc_mcontext.rsp;
     destination->ContextFlags = CONTEXT_CONTROL;
@@ -71,7 +74,7 @@ OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
 OS_MEMMAP uintptr_t Os_LinuxSignalSp(const void *context)
 {
     struct ucontext kernel;
-    (void)memcpy(&kernel, context, sizeof(kernel));
+    (void)memcpy((unsigned char *)&kernel, (const unsigned char *)context, sizeof(kernel));
     return kernel.uc_mcontext.rsp;
 }
 

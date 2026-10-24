@@ -17,6 +17,7 @@ static HANDLE owned, other;
 static DWORD worker_id;
 static int worker_error;
 static CONTEXT captured;
+static uintptr_t expected_sp;
 static unsigned char expected_fp[sizeof(captured.native.__fpregs_mem)];
 static volatile sig_atomic_t captured_signal;
 static volatile unsigned deep_returns;
@@ -71,10 +72,11 @@ static void capture_signal(int signal_number, siginfo_t *info, void *context)
     (void)signal_number;
     (void)info;
     memcpy(&kernel, context, sizeof(kernel));
+    expected_sp = kernel.uc_mcontext.rsp;
     if (kernel.uc_mcontext.fpstate != NULL) {
         memcpy(expected_fp, kernel.uc_mcontext.fpstate, sizeof(expected_fp));
         Os_LinuxCaptureContext(&captured, context);
-        captured_signal = 1;
+        captured_signal = Os_LinuxSignalSp(context) == expected_sp ? 1 : 0;
     }
 }
 void StartupHook(void) {}
@@ -191,7 +193,8 @@ int main(int argc, char **argv)
     handler.sa_sigaction = capture_signal;
     handler.sa_flags = SA_SIGINFO;
     if (sigemptyset(&handler.sa_mask) != 0 || sigaction(SIGUSR1, &handler, NULL) != 0 ||
-        raise(SIGUSR1) != 0 || captured_signal != 1 || captured.Rsp == 0u ||
+        raise(SIGUSR1) != 0 || captured_signal != 1 || captured.Rsp != expected_sp ||
+        captured.ContextFlags != CONTEXT_CONTROL ||
         memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0) {
         return 9;
     }
@@ -203,7 +206,7 @@ int main(int argc, char **argv)
     const uintptr_t saved_sp = captured.Rsp;
     Os_LinuxCaptureContext(&captured, &captured.native);
     memcpy(&snapshot, &captured.native, sizeof(snapshot));
-    if (captured.Rsp != saved_sp ||
+    if (captured.Rsp != saved_sp || captured.ContextFlags != CONTEXT_CONTROL ||
         (const void *)snapshot.uc_mcontext.fpstate != &captured.native.__fpregs_mem ||
         memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0) {
         return 10;
