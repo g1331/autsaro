@@ -35,6 +35,7 @@ class DependencyTests(unittest.TestCase):
                 source = (os_suites.ROOT / relative).read_text(encoding="utf-8")
                 body = re.search(r"\b" + name + r"\([^)]*\)\s*\{(.*?)^\}", source, re.DOTALL | re.MULTILINE)
                 self.assertIsNotNone(body, name)
+                self.assertNotRegex(body[1], r"\bdefault\s*:\s*break\s*;", name)
                 tokens = [token.text for token in os_suites.lex(body[1])
                           if not os_suites.is_comment(token)]
                 start = tokens.index("{", tokens.index("switch"))

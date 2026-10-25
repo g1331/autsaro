@@ -40,6 +40,23 @@ fn generated_c_analysis_samples() {
                 .any(|flag| flag.as_str().unwrap().starts_with("-D_GNU_SOURCE")),
             "{sample}: reserved feature selection"
         );
+        let runtime_path = output
+            .join(sample)
+            .join("generated/src/Ecu_RuntimeConfig.c");
+        let runtime = std::fs::read_to_string(runtime_path).unwrap();
+        let callback = runtime
+            .rsplit_once("Ecu_BswMAction(")
+            .unwrap()
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0;
+        assert!(
+            callback.contains(
+                "default:\n            result = E_NOT_OK;\n            break;\n    }\n    return result;"
+            ),
+            "{sample}: rejected mode must break and preserve E_NOT_OK"
+        );
         let communication = &metadata["plan"]["communicationRuntime"];
         assert_eq!(communication["pduIdType"], id, "{sample}: PDU ID selection");
         assert_eq!(

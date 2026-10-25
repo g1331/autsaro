@@ -3,7 +3,7 @@
 
 const char *Ecu_StatusName(EcuStatus status)
 {
-    const char *name = "INTERNAL";
+    const char *name;
     switch (status) {
         case ECU_OK:
             name = "OK";
@@ -57,6 +57,7 @@ const char *Ecu_StatusName(EcuStatus status)
             name = "CAN_BUSY";
             break;
         default:
+            name = "INTERNAL";
             break;
     }
     return name;

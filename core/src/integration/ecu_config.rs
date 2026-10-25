@@ -946,6 +946,7 @@ pub(super) fn files(
         r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
                                                   ComM_ModeType requested)
 {
+    Std_ReturnType result = E_OK;
 "#,
     );
     config.push_str(&format!(
@@ -973,9 +974,10 @@ pub(super) fn files(
     }
     config.push_str(
         r#"        default:
-            return E_NOT_OK;
+            result = E_NOT_OK;
+            break;
     }
-    return E_OK;
+    return result;
 }
 "#,
     );
