@@ -1579,27 +1579,36 @@ def check_arti_native(directory: Path) -> None:
             require(expected in result["stderr"], result)
         if name == "unpublished":
             require("arti_record index=0 published=0 context=" not in result["stderr"], result)
-    faulty = directory / "nested-fixture"
-    faulty.mkdir()
-    target = faulty / "target"
-    shutil.copytree(TARGET, target)
-    fixture = target / "tests/nested_interrupts.c"
-    text = fixture.read_text(encoding="utf-8")
-    original = "check(isr_thread == GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
-    replacement = "check(isr_thread != GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
-    require(text.count(original) == 1, "nested fixture assertion")
-    fixture.write_bytes(text.replace(original, replacement, 1).encode("utf-8"))
-    build_dir = faulty / "build"
-    build_dir.mkdir()
-    damaged, _ = build(build_dir, "arti_nested.c", ("OS_ARTI_TESTS",), target=target)
-    result = execute(damaged, "nested")
-    require(result["exit"] == 7, result)
-    require(re.search(r"nested_interrupts\.c:\d+ invariant=isr_thread !=", result["stderr"]) is not None, result)
-    for expected in ("reason=7", "used=2 starts=2 returns=0 queries=0 hook_errors=0",
-                     "nested_snapshot children=0 grandchildren=0 helpers=0 errors=0 depth=1",
-                     "maximum=1 trace=AP", "arti_stack index=1 isr=6"):
-        require(expected in result["stderr"], result)
-    print("ARTI nested diagnostics PASS: four recorder faults and one fixture fault identified")
+    for defect in ("thread", "stack-pointer"):
+        faulty = directory / ("nested-fixture-" + defect)
+        faulty.mkdir()
+        target = faulty / "target"
+        shutil.copytree(TARGET, target)
+        fixture = target / "tests/nested_interrupts.c"
+        text = fixture.read_text(encoding="utf-8")
+        original = "check(isr_thread == GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
+        replacement = "check(isr_thread != GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
+        if defect == "thread":
+            require(text.count(original) == 1, "nested fixture assertion")
+            text = text.replace(original, replacement, 1)
+        else:
+            anchor = "OS_HOST_STACK_POINTER(marker);"
+            require(text.count(anchor) == 4, "native ISR stack observations")
+            text = text.replace(anchor, "marker = 1u;")
+        fixture.write_bytes(text.encode("utf-8"))
+        build_dir = faulty / "build"
+        build_dir.mkdir()
+        damaged, _ = build(build_dir, "arti_nested.c", ("OS_ARTI_TESTS",), target=target)
+        result = execute(damaged, "nested")
+        require(result["exit"] == 7, result)
+        invariant = "isr_thread !=" if defect == "thread" else "isr_thread =="
+        require(re.search(r"nested_interrupts\.c:\d+ invariant=" + invariant, result["stderr"]) is not None, result)
+        require("address < stack_marks[depth - 1u]" in result["stderr"], result)
+        for expected in ("reason=7", "used=2 starts=2 returns=0 queries=0 hook_errors=0",
+                         "nested_snapshot children=0 grandchildren=0 helpers=0 errors=0 depth=1",
+                         "maximum=1 trace=AP", "arti_stack index=1 isr=6"):
+            require(expected in result["stderr"], result)
+    print("ARTI nested diagnostics PASS: four recorder faults and two fixture faults identified")
     print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; two compiled faults rejected")
 
 
