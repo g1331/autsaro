@@ -81,8 +81,8 @@ typedef struct {
      * retains the configured AUTOSTART Extended owner and controlled ISR. */
     EventMaskType
         wake_event; /**< Controlled owner wake bits; zero disables the private tick handshake. */
-    void (*error_hook)(StatusType); /**< Optional action-error fallback when no standard ErrorHook
-                                       is configured. */
+    void (*error_hook)(StatusType Error); /**< Optional action-error fallback when no standard
+                                            ErrorHook is configured. */
     const Os_ScheduleTableConfigType *schedule_tables; /**< Static schedule_table_count descriptors;
                                                       NULL allowed for zero count. */
     uint32 schedule_table_count; /**< Table count, zero through OS_MAX_SCHEDULE_TABLES. */
