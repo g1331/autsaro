@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Custom OS target configuration member `time` is now `timing`, and COM PDU configuration member `signal` is now `signal_id`, avoiding reserved C library names. Update designated initializers/member access and regenerate deliveries; member order, types, binary layout and values are unchanged (#371)
+
 - Adopted kernel static-event, static-stream and MPU-task parameter structures omit three unused tags; use the retained `StaticEventGroup_t`, `StaticStreamBuffer_t` and `TaskParameters_t` names. Their members and layouts are unchanged. Regenerate sealed deliveries and rebuild for the updated controlled patch identities (#371)
 
 - ErrorHook parameter snapshots and native queue/semaphore metadata now use independent fields, changing their concrete storage layout. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed header and controlled patch identity (#58)

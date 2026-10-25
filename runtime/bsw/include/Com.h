@@ -41,7 +41,7 @@ typedef uint16 Com_IpduGroupIdType;
  */
 typedef struct {
     PduIdType pdu;           /**< Generated ComIPduHandleId from the referenced route. */
-    Com_SignalIdType signal; /**< Generated zero-based Com signal handle. */
+    Com_SignalIdType signal_id; /**< Generated zero-based Com signal handle. */
     boolean receive;         /**< TRUE for ComIPduDirection RECEIVE, FALSE for SEND. */
     uint32 initial_value;    /**< Native UINT32 ComSignalInitValue; selected value is zero. */
     uint32 timeout_ticks;    /**< ComTimeout in Rx-main periods; 0 disables the deadline. */

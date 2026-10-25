@@ -73,7 +73,7 @@ static COM_CODE uint16 Com_FindPdu(PduIdType id)
 static COM_CODE uint16 Com_FindSignal(Com_SignalIdType id)
 {
     uint16 index = 0u;
-    while ((index < configuration->pdu_count) && (configuration->pdus[index].signal != id)) {
+    while ((index < configuration->pdu_count) && (configuration->pdus[index].signal_id != id)) {
         ++index;
     }
     return index;
@@ -184,7 +184,7 @@ static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
             }
             for (previous = 0u; previous < index; ++previous) {
                 if ((pdu->pdu == config->pdus[previous].pdu) ||
-                    (pdu->signal == config->pdus[previous].signal) ||
+                    (pdu->signal_id == config->pdus[previous].signal_id) ||
                     ((pdu->receive == TRUE) && (config->pdus[previous].receive == TRUE) &&
                      (pdu->callback_handle == config->pdus[previous].callback_handle))) {
                     valid = FALSE;

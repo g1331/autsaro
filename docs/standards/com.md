@@ -90,3 +90,5 @@ R21.15（AMD1，Required、C99，页6／PDF14；AMD2增加C11适用性）的复�
 - 头文件不含软件与规范版本号（#59）。
 - Com_Cfg.h 导出 ComSignal、ComIPdu 与 ComIPduGroup 符号；Tx 配置使用 PduR 提供的源句柄，Rx 回调映射使用 COM 提供的 PDU 句柄。
 - 生成 C 的 MISRA 诊断裁决与人工评估未完成（#58）。
+
+R21.2（Required；主文印刷166–167／PDF174–175，含TC1更正及AMD2适用性扩展）的自有名字核查发现Com_PduConfigType.signal复用C99库函数标识符；现改为signal_id并同步Com查找／重复配置检查。固定SWS_Com_00825原页99的Com_ConfigType元素为implementation specific，没有强制该成员拼写；生成配置仍为同顺序位置初始化，SignalId和PDU的映射、类型／布局及标准函数签名保持，旧具名成员访问须更新。这不批准库标识符保留或改写原始诊断。

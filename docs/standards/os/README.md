@@ -45,3 +45,7 @@ D4.7为Required（主文印刷30／PDF38，AMD2.14追加C11）；错误信息应
 Os_HostLinux.c的私有futex_wait在终止停车、恢复停车、SuspendThread及停止ACK的共同边界区分0、-EAGAIN、-EINTR、-ETIMEDOUT；这些状态沿原子状态重新读取与原有10ms片段继续。其他结果沿既有原生致命出口退出1。Os_LinuxFutexWake在共享原生边界检查负结果，非负唤醒数保持；原始类型化Os_LinuxFutexWait仍返回kernel状态，未把错误改成成功。
 
 Os_StackLinux.c仅在已发布fault后进入永久停车；其等待遇到不可恢复错误时直接以E_OS_STACKFAULT终止，不能返回原故障帧，不假报controllers_exhausted。没有新增输出阻塞点、期限、重试或共享状态，公开签名与handle布局不变。测试的真实零waiter唤醒、值不匹配和超时与私有返回状态注入分开记账；各检查撤销必须由精确阶段拒绝。此处不覆盖其他系统调用、provider完整异步语义或全部D4.7。
+
+## 自有配置与保留名字
+
+R21.2为Required（主文印刷166–167／PDF174–175，名字集合见R21.1印刷165／PDF173；TC1更正标题及示例，AMD2追加C11）。旧Os_Schedule局部量／参数time和自有Os_ConfigType.time复用标准库标识符；没有因其不是时间函数调用而销项。局部名改为time_configuration、配置成员改为timing，Os_Time和生命周期消费者同步；生成器的位置初始化、成员类型／顺序、计时与调度语义不变。旧具名成员访问需更新并重新生成／构建，不能用宏别名恢复保留名。这是自有接口整改，不扩大ADR0024或批准SDK保留。

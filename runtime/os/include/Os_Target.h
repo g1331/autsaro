@@ -102,8 +102,8 @@ typedef struct {
     TaskType input_task;   /**< Mailbox owner Task; meaningful when input_event is nonzero. */
     EventMaskType
         input_event; /**< Mailbox notification bits; zero disables the native input bridge. */
-    const Os_TimeConfigType
-        *time; /**< Optional static Counter/Alarm/ScheduleTable configuration; NULL disables it. */
+    const Os_TimeConfigType *
+        timing; /**< Optional static Counter/Alarm/ScheduleTable configuration; NULL disables it. */
     const Os_HookConfigType
         *hooks; /**< Optional Error/PreTask/PostTask callbacks; NULL disables those callbacks. */
     /* NULL selects a flat, nonpreempting application ISR configuration. */
