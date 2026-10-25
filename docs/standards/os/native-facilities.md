@@ -46,6 +46,8 @@ D4.12为Required、适用C99（主文34–35／PDF42–43），明确覆盖第�
 
 D4.13按获取、初始化、使用、释放的实际顺序判断。Linux joinable observer在未结束或未成功join时close返回失败，调用方仍持有所有权；join／detach的0→2→1状态只在真实操作成功后发布完成，失败恢复0，并发wait不把进行中当成完成。HostBatch保留signal→wait→close observer→close event，借用的栈上control保持到结束；创建或执行失败进入既有进程停止，不返回后继续使用失效上下文。H注册失败及请求ID不可得均原生停止，不能隐藏失败后继续StartOS。
 
+有限H actor在注册前保存线程原备用信号栈，在callback完成后、pthread退休前恢复；查询或恢复失败原生停止，observer不替换备用栈。回调全程保留项目guard／altstack；原生适配器以typed syscall同时支持查询和设置，不通过关闭检测器回避栈所有权。D4.13约束这项临时借用后的归还，实际provider异步语义仍须单独取证。
+
 注册H／Task／dispatcher／controller按当前进程期拥有。detach不终止actor，terminal park不使pthread返回，关闭观察句柄不能写成所有native栈资源均已归还。对应glibc的join／detach回收进入__nptl_deallocate_stack；默认bootstrap栈缓存可保留映射／TLS，缓存再用不同于重新分配，也不同于直接归还系统。项目执行栈的munmap、provider缓存和静态槽位分别核算。同进程重启／返回宿主或不同provider需重新完整证明，不借本项解除#200。
 
 动态设施的[有界平台保留提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6393803857)仍待项目决定；当前不建立Accepted ADR、批准表或MR12。ADR0024仅覆盖三个include，不能扩成D4.12许可；固定上界、只在启动分配或主机角色也不是原文例外。
@@ -66,11 +68,7 @@ R8.2为Required、当前C99适用（主文64–65／PDF72–73）；命名要求
 
 R8.3（Required，主文66–67／PDF74–75）的参数名比较独立于上述命名义务。实际声明／定义核对发现Os_BackendSignalStackFault的role／failed_role和Linux WaitForMultipleObjects的handles／observed不一致，现只将两个声明统一到定义名字，类型及调用不变。Windows／Linux Can_InitLock／Can_InitAreas的不同签名属于互斥平台分支，两份main属于不同可执行程序，不能作为同一声明链误报；函数指针参数的名字也不要求与所指函数一致。该判断来自具体声明及实际编译边界，不把候选检索或checker零报告扩为全部声明符合。
 
-当前SDK仍有独立的R8.2缺口：项目私有Os_HostLinux.h直接包含pthread.h，其pthread_create声明的start_routine内层void指针参数未命名；Os_PortRestart.c直接包含GCC13的unwind.h，_Unwind_Trace_Fn、_Unwind_Personality_Fn及_Unwind_Backtrace声明也保留无名参数。主文的函数指针示例明确要求命名；TC2.10只增加交叉引用，TC2.12只澄清R8.3不比较无名参数，没有取消R8.2义务。AMD2追加C11，AMD3.63补充引用，均不提供当前例外。
-
-主文§6.7对ISO标准头内容及处理标准头时包含的文件另有边界；这里两条直接入口分别是POSIX和GNU接口，不能把整个pthread／unwind SDK归入ISO标准库豁免。删除显式包含而保留间接链、手写替代声明或修改本机SDK，均不能证明交付闭包已整改。保留对应SDK声明需新的有界项目取舍或供应方合规材料；当前只记录真实缺口，不套ADR0024、不写MR12，也不将该取舍等同MISRA合法偏离。此处列的是已核具体声明，不是整个SDK的完整违规清单。
-
-R8.14同为Required（主文印刷75／PDF83；AMD2追加C11）。同一pthread.h的pthread_create、pthread_attr_getstack等声明使用__restrict限定参数；这是当前GNU C99下的restrict类型限定，不因拼写有下划线而消失。标准库memcpy的原文示例不提供整个POSIX头豁免。这是独立于R8.2的已确认声明缺口，既有两头文件命名取舍提案尚未覆盖此规则；不扩张原提案、不擅自移除SDK限定或填写批准记录，其他实际SDK构造仍须继续核查。
+SDK声明及宏的独立Required缺口见[SDK声明与常量](README.md#sdk-声明与常量)；不随自有声明整改自动通过。
 
 ## 标准流对象与原生句柄
 
