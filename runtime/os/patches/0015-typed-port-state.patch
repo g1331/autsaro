@@ -138,6 +138,15 @@
      TickType_t xDummy1;
      StaticList_t xDummy2;
  
+@@ -3319,7 +3207,7 @@
+  * the structure members.
+  */
+-typedef struct xSTATIC_TIMER
++typedef struct
+ {
+     void * pvDummy1;
+     StaticListItem_t xDummy2;
+     TickType_t xDummy3;
 @@ -3346,7 +3234,7 @@
   * to make direct use of the structure members.
   */
