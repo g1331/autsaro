@@ -1072,7 +1072,7 @@ OS_MEMMAP static void observe_shutdown(void) {}
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static void report_and_exit(void)
+OS_MEMMAP static void __attribute__((noreturn)) report_and_exit(void)
 {
     sint32 output_failed = 0;
     Os_StackCheck();
@@ -1242,7 +1242,6 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
     }
     if (InterlockedCompareExchange(&controller_healthy[index], 0, 0) == 0) {
         Sleep(INFINITE);
-        return 0u;
     }
     do {
         waited = WaitForSingleObjectEx(event, INFINITE, 1);
@@ -1280,7 +1279,6 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
         ShutdownOS(E_OS_STACKFAULT);
     }
     report_and_exit();
-    return 0u;
 }
 
 OS_MEMMAP void Os_BackendStackFault(char failed_role)
@@ -1511,7 +1509,6 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
     }
     start->entry(start->argument);
     Os_BackendShutdown(E_OS_STATE);
-    return 0u;
 }
 
 OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
@@ -1651,7 +1648,6 @@ OS_MEMMAP static void bootstrap(void *argument)
     Os_HookInvoke(&StartupHook, OS_HOOK_STARTUP);
     if (Os_IntegrationTimingAuthorized() == 0) {
         Os_BackendShutdown(E_OS_STATE);
-        return;
     }
     taskENTER_CRITICAL();
     for (i = 0u; i < Os_Config->task_count; ++i) {

@@ -41,6 +41,12 @@ class DependencyTests(unittest.TestCase):
             with patch.object(os_suites, "run_native", return_value=control):
                 self.assertEqual(os_suites.execute(Path("native"), "normal")["exit"], 7)
 
+    def test_backend_terminal_paths_do_not_restore_dead_returns(self):
+        source = (os_suites.ROOT / "runtime/os/src/Os_Backend.c").read_text(encoding="utf-8")
+        for call in (r"Os_BackendShutdown\(E_OS_STATE\)", r"report_and_exit\(\)", r"Sleep\(INFINITE\)"):
+            with self.subTest(call=call):
+                self.assertNotRegex(source, call + r";\s*return\b")
+
     def test_status_switch_clauses_use_break_termination(self):
         for relative, name in [
             ("runtime/host/src/Ecu_Status.c", "Ecu_StatusName"),
