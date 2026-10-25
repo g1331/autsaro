@@ -53,3 +53,17 @@ R21.1／R21.2（Required，主文印刷165–167／PDF173–175，含TC1更正�
 R2.7为Advisory，当前C99适用（主文印刷44／PDF52；AMD2追加C11）。当前standard-ecu七处报告全在Os_LinuxNative.c：native_call的number、first、second、third、fourth分别进入a、D、S、d、r输入约束，第四参数先移入r10，再执行syscall；Os_LinuxAltStack的stack与previous分别进入D／S约束。它们都实际参与调用，不是未使用参数；不能删除或用void强制丢弃来掩盖检查器未建模的汇编输入。
 
 真实消费者分别为futex等待／唤醒、线程ID以及H先前altstack的查询／恢复和注册栈的安装。已有设施及故障注入证据只覆盖其指定调用和条件。此裁决仅解除这七处“未使用”判断，D4.3的隔离、GNU扩展、寄存器／clobber、原始errno返回、信号ABI与provider语义仍按平台篇独立核查；不以参数进入约束即宣称syscall实现符合。
+
+## C90隐式声明规则与当前编译
+
+R8.1为Required、R17.3为Mandatory，但两条均仅适用C90（主文印刷63、137–138／PDF71、145–146；AMD2的Annex H映射也明确R17.3只针对C90）。所选正常编译为-std=c99，当前standard-ecu的63条R17.3原始报告不能成为C99下的Mandatory违反或偏离申请。它们仍保留于原始摘要，不修改工具输出或人工字段。
+
+语言适用性不许可隐式声明。实际GCC13正常probe及HostBatch编译／链接使用-Wall、-Wextra、-Werror，当前运行已成功；Det_ValidHooks在Det.c中的调用前已完整定义，Os_BackendBeforeSelect由Os_Backend.h声明，__atomic_*由目标编译器内建契约处理。GNU内建不是漏写普通函数原型的统一理由，SDK自身参数名／restrict、R8.2／R8.4和目标扩展继续独立核查。该编译证据只证明实际TU／参数接受，不能据此声称任意用户代码、Windows当前head或全部声明义务已满足。
+
+## Advisory出口与可见性
+
+R15.4／R15.5均为Advisory（主文印刷125–127／PDF133–135，AMD2追加C11）。当前补丁后xTaskIncrementTick延迟链循环有两个break：空链先设置portMAX_DELAY，未到期队首先保存其到期时间；只有到期项才移入ready。这是真实R15.4违反。保留两个邻近出口可直接保持读队首／移除项之前的保护，不通过添加持久状态或声称采用代码豁免销项。R15.5也不能把guard return统称误报；当前355处仍须分别核对退出前的锁、资源、输出与失败发布。已有单出口整改不外推余下函数。
+
+R5.9为Advisory、System范围，TC1的amplification更正未取消跨TU唯一性建议。当前17个报告声明对应六模块configuration、Time与生成配置的alarms、Time／Com的values、HostLinux／Backend的handles、三份control及两份require，均保留真实私有名字重复；合法内部链接不消除该建议。当前按类型、文件与实际调用目标区分的模块词汇是保留理由，不是整条规则通过。
+
+R8.7／R8.9同为Advisory；TC2.15明确区分定义TU与调用TU，AMD4.43–44将后者的defined改为declared。一个外部调用TU不等于只在定义TU使用；未选调用的标准API仍须逐处连接固定SWS。HostLinux的handles只在reserve_handle直接出现，尽管元素地址逃逸供其他函数使用，仍是真实R8.9候选。生成配置对象即使只在初始化函数被命名，静态存储期及后续借用也不能随作用域移动而丢失。当前142／46条报告未批量销项，具体原文、位置与作者判断集中[PR记录](https://github.com/g1331/autsaro/pull/371#issuecomment-6401292791)。
