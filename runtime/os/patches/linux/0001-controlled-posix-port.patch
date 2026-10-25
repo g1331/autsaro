@@ -374,10 +374,10 @@ index 2592610..1be0473 100644
 +    return 1;
 +}
 +
-+static uint32_t next_interrupt(uint32_t seen, unsigned floor, int nested)
++static uint32_t next_interrupt(uint32_t seen, unsigned minimum_priority, int nested)
 +{
 +    uint32_t chosen = PORT_INTERRUPT_COUNT;
-+    unsigned priority = floor;
++    unsigned priority = minimum_priority;
 +    uint32_t index;
 +    for (index = 0u; index < PORT_INTERRUPT_COUNT; ++index) {
 +        const uint32_t bit = (uint32_t)1u << index;

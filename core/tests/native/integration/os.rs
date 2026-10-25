@@ -269,7 +269,11 @@ fn scheduler_resource_runs() {
         // MISRA R7.6: both controlled targets have 32-bit int.
         for small_macro in ["INT8_C", "UINT8_C", "INT16_C", "UINT16_C"] {
             assert!(
-                !configuration.contains(small_macro),
+                !configuration
+                    .split(|character: char| {
+                        !character.is_ascii_alphanumeric() && character != '_'
+                    })
+                    .any(|identifier| identifier == small_macro),
                 "scheduler {value}: small integer constant macro {small_macro}"
             );
         }

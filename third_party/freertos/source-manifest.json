@@ -48,7 +48,7 @@
     "runtime/os/patches/0012-nested-interrupt-dispatch.patch": "026c30a373f7bfaadbbc365738cae304b72be677ef4a293cb777f76abe4ea59e",
     "runtime/os/patches/0013-interrupt-source-repetition.patch": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch": "8324f410501be231047bfb6df88ac97c7f584771f7289125a668e62664fc242f",
-    "runtime/os/patches/linux/0001-controlled-posix-port.patch": "1a89f8d1c67adfa18906c11e2e9a71a9388975a369b46b2b5b98b86d4e85e5fa",
+    "runtime/os/patches/linux/0001-controlled-posix-port.patch": "8fcd510886701c877efc4a4fd01650cb371475d74fb4f003beaf7dac4deedd08",
     "runtime/os/patches/0015-typed-port-state.patch": "011edf178828a1f9cd8ec65201ed111a3bd0bb7b44b7779920426bb2627e771e",
     "runtime/os/patches/0016-essential-boolean-controls.patch": "82ecf312546b9dbc1fb1b4a20a351bee930f19cf460f5e3e7d6a7ce6e7b18cc6",
     "runtime/os/patches/0017-portable-header-paths.patch": "7d408cb149a895028fc254e6091d27d644bd12632a71ba6fb7429ac9ff6b398d",
