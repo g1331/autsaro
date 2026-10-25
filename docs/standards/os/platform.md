@@ -35,6 +35,14 @@
 
 见[原生设施与资源生命周期](native-facilities.md)：原生错误处理、上下文／布局、实际provider、初始化和所有权。
 
+## 入口及跟踪宏的实际展开
+
+R20.7为Required（主文159–160／PDF167–168），约束宏参数展开后形成的表达式，不要求给声明符加括号；AMD2增加C11，未改变当前C99判断。四份comment-final-results各有五条原始报告：Os.h的ALARMCALLBACK参数形成函数声明／定义名字，受控POSIX portmacro.h的portTASK_FUNCTION_PROTO／portTASK_FUNCTION参数形成函数名和形参声明，都不是缺括号的表达式。其余两条来自picolibc-freertos.h的configINIT_TLS_BLOCK；实际FreeRTOS.h默认configUSE_PICOLIBC_TLS为0并排除唯一包含入口，不能把未进入当前程序的宏体当作已生效展开，也不外推启用picolibc时满足本条。四份工件的Os.h／Arti.h均与本次冻结源码逐字节相同；端口宏按实际补丁后定义核对，不用原始POSIX定义替代。
+
+相同四份工件各有五条R20.10报告，均为真实Advisory违反（主文162／PDF170）：TASK、OS_TASK_ENTRY、ISR、OS_ISR_ENTRY以##连接既定入口前缀与配置标识符；ARTI_TRACE以#将context／class_name／instance／event分别保存为静态字符串。保留理由是入口定义与绑定使用同一名字约定，以及记录调用点的字面身份；改成普通函数不能自行取得这些预处理名字，手写每个绑定或重复字符串会增加两套身份来源。这是当前技术理由，不声称AUTOSAR强制选择##／#，也不提升为新的批准或整条规则符合。
+
+上述每个入口拼接只形成一个合法C标识符，两个声明中的拼接互不依赖求值次序；ARTI的四次字符串化独立形成四个实参，两个payload实参各有括号且只出现一次。R20.11（Required，主文162／PDF170）禁止的#参数后紧邻##在这些替换列表中不存在；R20.12（Required，163／PDF171）所约束的同一参数混用也不存在：入口参数只用于拼接，四个身份参数只用于字符串化，两个payload只按表达式展开。此判断仅覆盖这些实际定义与调用角色，不借它判定其他宏全部满足。
+
 ## 采用 Queue 的前端游标
 
 R18.1 为 Required、适用于 C99（主文印刷页143–144／PDF151–152），约束指针减法及 `-=` 的结果位于同一数组内，另允许末尾后一位；没有先越过头部再恢复的例外。AMD2.75／76（页16／PDF23）澄清非数组对象并删除旧理由句；TC2.33／34（页11／PDF17）将对象的字符表示视图按 `sizeof` 作为数组处理，两者都不允许负方向越界。
