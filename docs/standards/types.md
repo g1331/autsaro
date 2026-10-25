@@ -79,3 +79,9 @@ Dcm六个私有NRC重复了已交付的标准常量，实际负响应路径现�
 条件定义进一步按每个可执行程序的TU集合及定义／撤销时序核对（Glossary code／project，印刷223／225、PDF231／233）：上述四份旧工件的R2.5报告中，前三份各196处、no-diagnostic为194处定义在真实配置下从未发生，包括152个MPU映射、未导入的co-routine／newlib／picolibc、10个MemMap HEADER_CHECK及部分多核／动态创建／tick变体；前三份另有两个被RTE_CORE排除的DcmService别名。不能仅凭最终宏表缺席判定，须同时排除曾定义后#undef的情况。相反，timers头被tasks.c无条件包含；其消费者关闭并不排除宏定义，22个timer宏等61个实际生效定义仍未使用。完整精确位置与有效宏证据归PR，不把条件排除转为整组R2.5通过。
 
 固定addon按宏名合并并以同名后续#define覆盖位置，还会把真正的未使用定义定位到排除分支。上述196／194个位置中7个名字另有实际生效且未使用的定义，分别是FreeRTOS.h的configPRECONDITION_DEFINED及三个空registry宏、tasks.c的单核taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD、projdefs.h的32位pdINTEGRITY_CHECK_VALUE、timers.h的xTimerDelete；这些实际定义不能随错误位置一起销项，也不和原始位置重复计数。已生效定义仅在未展开宏的replacement list中出现同名引用，同样不能当作使用证明。原始报告、真实未使用状态及未复评部分分别保留。
+
+## C99过时形式与名称有效长度
+
+R1.5为Required，本仓库C99适用（AMD3.14，印刷7／PDF15；AMD3.60重置的Appendix F，印刷41／PDF49）。C99对应#1–5、#7–9；表中的ATOMIC_VAR_INIT和零长度realloc属于C18，不能混入此判断。所核四个Linux工程的实际声明、生成入口和采用补丁闭包没有旧式空参数／K&R定义、标准storage-class位置倒置、bool/true/false重定义或gets／受限ungetc调用；POSIX原件中的prvFatalError已由所选补丁整段删除，不拿未补丁输入判交付违反。此源码结论不涵盖任意外部应用。
+
+Appendix F #2／C99 §6.11.3另要求核对外部名字的实现有效长度，不能由名字较短或GCC版本替代。[GCC13.3实现说明](https://gcc.gnu.org/onlinedocs/gcc-13.3.0/gcc/Identifiers-implementation.html)将外部名字长度交给linker。当前解析的GNU ld为binutils2.42-4ubuntu2.10，字节与官方deb一致；对应发行源码的bfd_link_hash_lookup进入bfd_hash_lookup，按完整字符串计算长度、复制len+1并用strcmp比较，没有小于255字符的前缀限制。已核发行补丁未改变这两个函数；ELF名字使用字符串表，当前构建没有名字截断选项或编译器搜索路径覆盖。该证据支持这一Linux工具组合，不是所有linker的属性。Windows2.47-4的对应实现／目标选项尚缺同等级材料，保持此项边界；没有运行长名字边界实验。完整身份与原文证据集中PR #371。
