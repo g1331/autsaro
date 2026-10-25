@@ -27,3 +27,4 @@ OS-Application、IOC、多核、spinlock、时间／内存保护、ProtectionHoo
 
 - 引用的 OSEK 版本 ISO 17356-3 全文未取得，严格 ISO 条款由 [#57](https://github.com/g1331/autsaro/issues/57) 跟踪；固定 FreeRTOS 内核（[ADR 0004](../../adr/0004-freertos-kernel-with-own-os-semantics.md)）的上游代码诊断标记为 `adopted` 但不排除（[ADR 0008](../../adr/0008-misra-baseline-and-no-deviation.md)），由 [#58](https://github.com/g1331/autsaro/issues/58) 跟踪。
 - Windows 实际交接运行只在 CI 的 Windows 套件中执行。
+- Linux 非 ISO SDK 的已核 Required 缺口独立保留：pthread／unwind 的无名参数涉及 R8.2，pthread 的 `__restrict` 声明涉及 R8.14；`Os_HostLinux.c → sys/eventfd.h → bits/eventfd.h` 的三个 EFD 枚举使用八进制整数常量，涉及 R7.1（主文印刷59–60／PDF67–68，单个0例外；AMD2.27追加C11）。当前 libc6-dev 为 2.39-0ubuntu8.9，EFD_CLOEXEC／EFD_NONBLOCK 直接用于事件创建；EFD_SEMAPHORE 虽未选择，其声明仍进入 TU。这不是 ISO 标准库处理过程的普遍豁免。精确头文件身份、替代排除和[有界 SDK 取舍补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6397172894)仍待项目决定，不套 ADR0023／0024、不填批准表／MR12，也不据此声称其余 SDK 已评估。
