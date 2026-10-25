@@ -27,7 +27,7 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 ```
 
 - `setarch -R` 关闭地址随机化：Ubuntu 24.04 的 `vm.mmap_rnd_bits=32` 使 GCC 13 的 TSan 报告 `unexpected memory mapping`，这样不必修改宿主设置。
-- OS 主机层自己安装备用信号栈，并通过声明的原生入口进入 mmap 执行栈，所以 ASan 不接管备用信号栈（`use_sigaltstack=0`），也不把局部变量移到假栈（`detect_stack_use_after_return=0`）；后者使嵌套中断用例比较栈地址失真，代价是不检查返回后使用栈变量。
+- 当前 CI 的 OS／封存 ASan 入口使用 `use_sigaltstack=0:detect_stack_use_after_return=0`，后者不检查返回后使用栈变量；执行收据记录实际选项，不能把该配置下通过外推为默认选项通过。观察原生栈位置／增长方向时，复用 `OS_HOST_STACK_POINTER` 读取真实 RSP，保留线程身份、嵌套顺序和错误 SP 对照；C 局部对象地址可能被 ASan 放到 fake stack，不能代替原生 SP，也不应为这种观察错误关闭检测器。
 - 涉及非局部转移或栈／上下文恢复时，先核对并实测当前目标的 shadow stack 与检测器调用栈；重复入口同时比较 RSP／SSP，使用故障／干净对照检查丢弃帧。ELF 属性、普通或 ASan 的短时通过不能替代实际启用状态、TSan 调用链及目标平台证据；启动失败保持未执行。
 - OS suites 在两种检测器下运行，覆盖真实暂停／恢复、嵌套中断、栈上下文与故障关闭。Linux 的已暂停 actor 从现有请求状态读取终止意图，保持首次捕获的上下文并确认永久停止；运行中的 actor 仍由终止信号停止。控制器在 actor 停止后才关闭端口调度状态，关闭主机线程句柄时释放 pthread 资源并保留注册栈身份。
 - `sanitizers::` 的故意越界写（`memcpy` 超出固定静态缓冲）、数据竞争和超宽移位证明检测器确实报错；未设置 `AUTOSAR_SANITIZE` 时该测试不做任何事。 自检在 `-O0`／`-O2` 下分别要求故障报告与非零退出、干净对照成功。竞争夹具先创建观察线程，再写入 volatile 非原子值，以 relaxed 原子发布安排读取而不建立 happens-before；干净对照仅将发布改为 release，与观察线程的 acquire 配对。volatile 只保留访问，不提供同步；不能用循环次数或后续绿色运行证明历史漏报原因。编译与子进程沿用受管执行入口，失败 scratch 与原始输出由 `sanitizer-scratch-*` 上传，覆盖直接原生与封存检测器两步。
