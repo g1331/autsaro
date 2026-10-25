@@ -38,6 +38,8 @@ R8.14同为Required（主文印刷75／PDF83；AMD2追加C11）。同一pthread.
 
 R7.1为Required（主文印刷59–60／PDF67–68；单个0例外，AMD2.27追加C11）。Os_HostLinux.c经sys/eventfd.h实际包含bits/eventfd.h；其EFD_SEMAPHORE=00000001、EFD_CLOEXEC=02000000、EFD_NONBLOCK=00004000使用八进制，后两项直接用于事件创建。前者虽未选择，枚举声明仍进入TU。stdint.h处理先结束，再包含这些枚举，不能据主文§6.7把整个POSIX头豁免。当前libc6-dev为2.39-0ubuntu8.9，两个已核pthread／eventfd头与该固定源码字节一致；精确身份、替代和[有界SDK取舍补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6397172894)留PR。当前未接受，不填批准表／MR12，不套ADR0023／0024，也不据此声称其余SDK已评估。
 
+R8.10也是独立Required义务（主文印刷71／PDF79，AMD2追加C11）：当前pthread.h:624–630的__pthread_cleanup_routine和:1339–1343的pthread_equal均为生效的extern inline定义。前者由GNU与__EXCEPTIONS选择，后者由__USE_EXTERN_INLINES选择；正常GCC13.3 C99／O1／fexceptions宏收据确认两条条件。没有项目调用不消除已生效定义的义务，自有六个Interlocked辅助函数则均为static inline。固定libc6-dev 2.39-0ubuntu8.9头的身份、包含链及替代排除见[具体SDK补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6402928996)。仅关闭优化不能移除前者，改异常／inline语义会影响既有unwind及供应方接口；当前保留提案仍待决定，不扩ADR0024、不填批准表或MR12。
+
 ## futex 返回信息
 
 D4.7为Required（主文印刷30／PDF38，AMD2.14追加C11）；错误信息应尽快有意义地检查，只有证明函数不可能报错才适用免检条件。Linux private futex使用对齐且有存储期保证的32位字，但对应6.8.0-147.147发行源码的get_futex_key／futex_wake仍提供负错误返回；源码、发行补丁及论证留[PR调查](https://github.com/g1331/autsaro/pull/371#issuecomment-6398922631)。没有据此声称当前内核已启用故障注入，也不凭正常参数替全部结果作免检证明。
