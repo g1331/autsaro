@@ -5,6 +5,8 @@
 
 #include <errno.h>
 #include <linux/futex.h>
+/* MR12 RULE 21.5 VIOLATION: The fixed Linux port retains alternate-stack guard-fault capture,
+ * preallocated fault reporting, actor parking and terminal SIGPIPE protection; see ADR 0024. */
 #include <signal.h>
 #include "Os_HostIo.h"
 #include <stdlib.h>

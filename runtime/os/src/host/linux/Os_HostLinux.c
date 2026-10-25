@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <linux/futex.h>
 #include <poll.h>
+/* MR12 RULE 21.5 VIOLATION: The fixed Linux port retains signal-frame parking and terminal
+ * stop with generation ACKs, thread masks and pending-SIGPIPE preservation; see ADR 0024. */
 #include <signal.h>
 #include <sys/eventfd.h>
 #include <sys/mman.h>
@@ -21,6 +23,8 @@
 #define OS_LINUX_STACK_START(fake, bottom, length)  ((void)0)
 #define OS_LINUX_STACK_FINISH(fake, bottom, length) ((void)0)
 #endif
+/* MR12 RULE 21.10 VIOLATION: The fixed Linux port retains monotonic deadlines, EINTR remainder
+ * handling and zero-time SIGPIPE waits; pthread.h also includes time.h. See ADR 0024. */
 #include <time.h>
 #include <unistd.h>
 

@@ -39,6 +39,20 @@ OS-Application、IOC、多核、spinlock、时间／内存保护、ProtectionHoo
 
 这些理由不豁免D4.12的动态分配、R21.5的signal设施或R21.10的time设施，也不替代采用内核的其他逐项评估。
 
+## 三处有界 Linux 平台保留
+
+[ADR 0024](../../adr/0024-bounded-linux-platform-retention.md)记录[人类接受的项目决定](https://github.com/g1331/autsaro/pull/371#issuecomment-6392165780)，仅限当前 Linux C99／glibc-pthread x86-64 三处和其中列明的四 profile／两个程序及相同原生实现。它独立于 ADR 0023，既不是 MISRA 合法偏离或符合性批准，也不解除 `SWS_BSW_00115`。SDK 间接包含链及其他根路径继续可见，provider／ABI／flags／handler／合同变化重评。
+
+三处均为 Required、适用 C99 的真实违反：主文 R21.5／R21.10（印刷168／170，PDF176／178）、AMD2.82及AMD3.68／69／70仍禁止相应包含。独立只读复核固定 `97da3702e605a4cb9b923d10964a60cfff256065`，逐处原文、调用闭包、替代及风险控制均无新增技术发现；没有把项目取舍当作技术结论，也未重跑作者测试。完整进入调查、替代分析及证据见[PR具体提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6391387787)。
+
+| 规则 | 精确位置 | 技术理由、风险与控制 | 项目决定来源 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Rule 21.5 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `#include <signal.h>` | 保留异步上下文捕获、代次ACK及终止；mask与pending SIGPIPE须保持。SWS_Os_00001／OSEK抢占语义不指定此头；不能改为合作式暂停或全局忽略SIGPIPE。 | 维护者 人类，2026-10-25；ADR0024有界项目保留，非MISRA符合性批准 |
+| MISRA C:2012 Rule 21.10 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `#include <time.h>` | 保留单调截止、futex间隔、EINTR余量及零时SIGPIPE等待；pthread间接链仍在。SWS_Os_00399／00286的软件Counter不能替代本机监督时钟。 | 维护者 人类，2026-10-25；ADR0024有界项目保留，非MISRA符合性批准 |
+| MISRA C:2012 Rule 21.5 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `#include <signal.h>` | 保留真实guard地址／SP、备用栈、故障发布与actor停车。SWS_Os_00067／00068不指定此头；终止报告保留预分配缓冲及stderr回退，不推导输出完成期限。 | 维护者 人类，2026-10-25；ADR0024有界项目保留，非MISRA符合性批准 |
+
+三处技术复核状态均为完成，范围如上；非零剩余睡眠时长仅有源码重试结构依据，现有 `Sleep(0)` 夹具不能作为该行为的完整证明。SDK／最终链接provider与完整异步语义证据缺口仍由 #58 承接。注释／记录只精确关联保留理由，不改变原始诊断、`passed`／`error`／`not_assessed`／比较拒绝或其他221项评估状态。
+
 ## 原生设施的源码处置
 
 Windows补丁`0018-windows-thread-setup-errors.patch`按D4.7／R17.7检查Task线程的affinity、boost、priority以及dispatcher的boost、affinity结果；失败沿现有断言或pdFAIL路径停止启动，不能进入Ready。`vPortCloseRunningThread`的priority调用同样检查，当前`INCLUDE_vTaskDelete=0`没有该删除调用路径，不声称它已被运行验证。依据[affinity](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadaffinitymask)、[boost](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriorityboost)与[priority](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority)的零返回失败契约。Windows原生回归通过临时端口包装逐项拒绝五个启动调用，并与去掉0018的变异及正常启动对照；执行结果以实际Windows CI为准。
