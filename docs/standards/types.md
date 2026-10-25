@@ -26,6 +26,10 @@ Linux私有`Os_HostLinux.h`不再定义TRUE／FALSE，避免它在Platform_Types
 
 `Os_PortTaskThread` 给 role 选择 `'T'`、`'B'`、`'I'` 的嵌套条件表达式，两个层级的结果均为 essentially character。依据主文附录 D.6／D.7（页199–200／PDF207–208）及 TC1 的括号运算符勘误，外层 `:` 两侧的 essential type 相同；报告位置不是函数指针比较。固定 addon 把嵌套结果退回标准 int 的类别，最小字符对照仍报告 R10.4；把内层两个分支改为整数的真实类别冲突也报告。R10.4（Required，页87–88／PDF95–96）、AMD2.52 及 AMD3.31–32 没有要求把这些字符标签改成整数，也未使用字符算术或实／复浮点例外。
 
+已对`8bd09194`与`platform-retention-results`四份完成工件逐位置核对整组R10.3／R10.4报告：standard-ecu、user-application各129／84，component-pipeline为129／90，no-diagnostic为129／89，共863条摘要诊断、按程序归属为1722次。516条赋值的目标与源均为Boolean；347条操作数报告中343条是Boolean同类表达式，4条是上述character条件式。逐列区分同一行的计数器、enum和指针比较，没有仅凭TRUE／FALSE文本归类。真实声明包括CanTp的due／send、Com的receive／Mode和状态数组、Dcm工作／actor字段、RTE生命周期／收包状态、HostBusSM及OS局部量；Platform的boolean为_Bool，TRUE／FALSE来自stdbool的Boolean常量，逻辑／比较／同类条件结果按附录D.6／D.7保留Boolean。未使用signed→unsigned常量等例外放行。
+
+固定addon未完整保留数值化Boolean宏及嵌套条件式的essential类型；上述位置据实际声明／表达式判为误报。独立只读复核核对18份直接交付源码与冻结Git字节、各自RTE生成来源、补丁端口的Boolean参数及完整seal／补丁来源；未重跑作者对照。完整位置、列与程序索引留在PR #371，原始四份2970／2970／3078／3044条诊断及221个not_assessed保持，不将863条的裁决扩大为R10.3／R10.4全部源码或配置符合。
+
 ## 源码诊断的语法边界
 
 R7.3（Required，主文页61–62／PDF69–70）禁止字面量后缀中的小写 l。所选 Linux 样本报告中的 cell／all 是变量或参数标识符，不是字面量；固定 addon 的正则未先要求数字 token，能同时匹配这些名字与真正的 `1l`。`OS_RESOURCE_CREATE(call)` 两种定义中的 call 同样是宏形参，两个替换列表均保留该形参的括号，不是带后缀的字面量。原始报告保留，不以重命名合法标识符代替裁决；此结论不覆盖其他字面量。
