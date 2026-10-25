@@ -5,8 +5,9 @@
  {
      uint32_t bit;
 -    if (interrupt <= OS_CONTROLLED_TICK_INTERRUPT || interrupt >= PORT_INTERRUPT_COUNT ||
+-        Os_InterruptVectorTable[interrupt] == NULL) {
 +    if ((interrupt <= OS_CONTROLLED_TICK_INTERRUPT) || (interrupt >= PORT_INTERRUPT_COUNT) ||
-         Os_InterruptVectorTable[interrupt] == NULL) {
++        (Os_InterruptVectorTable[interrupt] == NULL)) {
          return 0;
      }
      bit = (uint32_t)1u << interrupt;
@@ -97,15 +98,6 @@
              Os_BackendShutdown(E_OS_STATE);
          }
          if (port_running == pdFALSE) {
-@@ -257,7 +266,7 @@
-     PortTask state;
-     state.yielded = Os_PortEvent(NULL, FALSE, FALSE, NULL);
-     state.thread = Os_PortTaskThread(code, argument, top);
--    configASSERT((state.yielded != NULL) && (state.thread != NULL));
-+    configASSERT((state.yielded != NULL) && (state.thread != NULL));
-     (void)memcpy((unsigned char *)storage, (const unsigned char *)&state, sizeof(state));
-     return storage;
- }
 @@ -267,14 +276,18 @@
      interrupt_gate = Os_PortMutex(NULL, FALSE, NULL);
      interrupt_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
@@ -251,12 +243,13 @@
 -    if ((interrupt == portINTERRUPT_YIELD && handler != &yield_interrupt) ||
 -        (interrupt == portINTERRUPT_TICK && handler != &tick_interrupt) ||
 -        (interrupt > portINTERRUPT_TICK && Os_BackendInterruptPriority(interrupt) == 0u) ||
+-        Os_MailboxHandlerAllowed(interrupt, handler) == 0 ||
+-        Os_BackendHandlerAllowed(interrupt, handler) == 0) {
 +    if (((interrupt == portINTERRUPT_YIELD) && (handler != &yield_interrupt)) ||
 +        ((interrupt == portINTERRUPT_TICK) && (handler != &tick_interrupt)) ||
 +        ((interrupt > portINTERRUPT_TICK) && (Os_BackendInterruptPriority(interrupt) == 0u)) ||
--        Os_MailboxHandlerAllowed(interrupt, handler) == 0 ||
 +        (Os_MailboxHandlerAllowed(interrupt, handler) == 0) ||
-         Os_BackendHandlerAllowed(interrupt, handler) == 0) {
++        (Os_BackendHandlerAllowed(interrupt, handler) == 0)) {
          Os_BackendShutdown(E_OS_ACCESS);
      }
 -    if (interrupt_gate != NULL && WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
