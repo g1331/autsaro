@@ -69,3 +69,9 @@ R18.8为Required，AMD4.25–29将其明确到VLA；新增R18.10为Mandatory（A
 R17.13为Required（AMD3.38，印刷20–21／PDF28–29），适用当前C99。已核回调typedef均形成函数指针类型；配置中的const限定指针对象或返回对象，不限定函数类型本身。TaskFunction_t的声明宏同样形成函数指针；私有布局断言的typedef是字符数组。没有以指针对象的const或函数返回类型的const误报函数类型限定，也不从这项判断推导任意外部回调、SDK或其他类型规则已经满足。
 
 R17.3为Mandatory，但主文仅适用C90（印刷138／PDF146）；AMD2的语言表没有为它追加C99／C11。当前真实编译命令为-std=c99，因此原始R17.3报告不能作为本配置的Mandatory违反或偏离记录。C99调用前声明的语言约束仍由R1.1及实际原型／包含链承担；严格C编译通过不替代R8.2命名、R8.4可见声明或跨目标ABI核查，既有62条标准ECU原始报告仍保留。
+
+## 采用内核的私有条件定义
+
+共同0024把定义／包含与真实消费者条件对齐，不改变配置值：tasks.c仅在configUSE_TIMERS==1时包含timers.h；三种分配来源标志受tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE控制，五个状态字符受trace与stats-formatting共同条件控制。运行／待让出状态及idle属性只在多核时定义，affinity字节宽度还要求core-affinity；任务删除专用的RUNNING_OR_SCHEDULED_TO_YIELD在两种核心分支都受INCLUDE_vTaskDelete控制。queue.c的semaphore item length及mutex give timeout分别只在counting semaphore／recursive mutex启用时定义。每个条件对应现有消费者，保留相应功能启用时的原定义，而非用空引用消除R2.5。
+
+公开版本、状态集合、旧API兼容别名及timers.h交付资产保留；没有通过关闭支持能力删掉全部未使用宏。未选择分支只完成源码对应核查，不能当作那些配置已执行。上游原始文件、函数类型、成员布局及运行操作不变；有序补丁、派生内核身份和封存交付物仍按新字节更新。原有条件排除报告和真实未使用公共定义分开处置，不能把加入guard当成Cppcheck原始诊断自动清零或完整R2.5通过。
