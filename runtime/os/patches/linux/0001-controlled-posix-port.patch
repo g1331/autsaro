@@ -514,8 +514,8 @@ index 2592610..1be0473 100644
 -        vPortEnableInterrupts();
 +    (void)argument;
 +    Os_BackendSetDispatcher();
-+    vPortSetInterruptHandler(portINTERRUPT_YIELD, yield_interrupt);
-+    vPortSetInterruptHandler(portINTERRUPT_TICK, tick_interrupt);
++    vPortSetInterruptHandler(portINTERRUPT_YIELD, &yield_interrupt);
++    vPortSetInterruptHandler(portINTERRUPT_TICK, &tick_interrupt);
 +    port_running = pdTRUE;
 +    Os_PortResumeThread(selected_task().thread);
 +    if (Os_HostSetEvent(dispatcher_registered) == 0) {
@@ -589,7 +589,7 @@ index 2592610..1be0473 100644
 +    if (interrupt_gate == NULL || interrupt_event == NULL || dispatcher_registered == NULL) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
-+    dispatcher_thread = Os_HostCreateActor(262144u, dispatcher_start, NULL,
++    dispatcher_thread = Os_HostCreateActor(262144u, &dispatcher_start, NULL,
 +                                           STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
 +    if (dispatcher_thread == NULL ||
 +        WaitForSingleObject(dispatcher_registered, 5000u) != WAIT_OBJECT_0 ||
@@ -901,8 +901,8 @@ index 2592610..1be0473 100644
 -    if( pthread_self() != xThreadId->pthread )
 -    {
 -        event_signal( xThreadId->ev );
-+    if ((interrupt == portINTERRUPT_YIELD && handler != yield_interrupt) ||
-+        (interrupt == portINTERRUPT_TICK && handler != tick_interrupt) ||
++    if ((interrupt == portINTERRUPT_YIELD && handler != &yield_interrupt) ||
++        (interrupt == portINTERRUPT_TICK && handler != &tick_interrupt) ||
 +        (interrupt > portINTERRUPT_TICK && Os_BackendInterruptPriority(interrupt) == 0u) ||
 +        Os_MailboxHandlerAllowed(interrupt, handler) == 0 ||
 +        Os_BackendHandlerAllowed(interrupt, handler) == 0) {

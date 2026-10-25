@@ -57,7 +57,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
      }
 @@ -272,9 +281,13 @@
      }
-     dispatcher_thread = Os_HostCreateActor(262144u, dispatcher_start, NULL,
+     dispatcher_thread = Os_HostCreateActor(262144u, &dispatcher_start, NULL,
                                             STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
 -    if (dispatcher_thread == NULL ||
 -        WaitForSingleObject(dispatcher_registered, 5000u) != WAIT_OBJECT_0 ||
