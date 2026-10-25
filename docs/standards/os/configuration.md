@@ -77,6 +77,8 @@ R17.3为Mandatory，但主文仅适用C90（印刷138／PDF146）；AMD2的语�
 公开版本、状态集合、旧API兼容别名及timers.h交付资产保留；没有通过关闭支持能力删掉全部未使用宏。未选择分支只完成源码对应核查，不能当作那些配置已执行。上游原始文件、函数类型、成员布局及运行操作不变；有序补丁、派生内核身份和封存交付物仍按新字节更新。原有条件排除报告和真实未使用公共定义分开处置，不能把加入guard当成Cppcheck原始诊断自动清零或完整R2.5通过。
 
 
+条件整改也不消除公开头中已确认的30个生效但未使用定义：24个backward-compatibility别名，加上空FREERTOS_SYSTEM_CALL、configPRECONDITION_DEFINED、32位pdINTEGRITY_CHECK_VALUE及三个关闭registry时的空API宏。旧有逐定义审查与当前standard-ecu／user-application的56 TU宏记录相互对应，configENABLE_BACKWARD_COMPATIBILITY仍为1；TIMERS_H及所整改私有宏在这些真实TU中均不存在，而原始addon仍报告排除位置。为保留当前采用头的兼容名字、默认配置约定和可选完整性／registry接口，本轮保留这30处Advisory违反及理由；它们不是AUTOSAR强制项，也不因固定上游或没有消费者而成为误报。该判断不替其余未复评宏销项，不改变R2.5原始报告。
+
 ## 原生类型表示与封装
 
 D4.6为Advisory（主文印刷28–29／PDF36–37；AMD2.23–25及适用性表）。Platform_Types的sint／uint精确宽度别名来自stdint，least系列仍明确为至少相应宽度，不能混同精确宽度；float32／float64对应当前工具链的4／8字节、24／53位有效尾数和128／1024最大指数记录。TC1明确plain char不是本指令的数值类型，因此文本指针与角色字符不需伪装成数值typedef；main的int返回与argc也有原文例外。
