@@ -770,20 +770,26 @@ OS_MEMMAP static TaskStateType native_task_state(uint32 index)
     if (task_waiting[index] != 0u) {
         return WAITING;
     }
+    TaskStateType state = SUSPENDED;
     switch (eTaskGetState(handles[index])) {
         case eRunning:
-            return RUNNING;
+            state = RUNNING;
+            break;
         case eReady:
-            return READY;
+            state = READY;
+            break;
         case eBlocked:
-            return WAITING;
+            state = WAITING;
+            break;
         case eSuspended:
-            return (task_waiting[index] != 0u) ? WAITING : SUSPENDED;
+            state = (task_waiting[index] != 0u) ? WAITING : SUSPENDED;
+            break;
         default:
             /* Automotive Task objects are never deleted. */
             configASSERT(FALSE);
-            return SUSPENDED;
+            break;
     }
+    return state;
 }
 
 OS_MEMMAP static void arti_observe_tasks(void)
@@ -1822,6 +1828,7 @@ OS_MEMMAP StatusType Os_BackendState(TaskType id, TaskStateRefType state)
     }
     for (i = 0u; i < Os_Config->task_count; ++i) {
         if (Os_Config->tasks[i].id == id) {
+            StatusType status = E_OK;
             taskENTER_CRITICAL();
             Os_BackendGuardService();
             eTaskState actual = eTaskGetState(handles[i]);
@@ -1839,12 +1846,14 @@ OS_MEMMAP StatusType Os_BackendState(TaskType id, TaskStateRefType state)
                     *state = (task_waiting[i] != 0u) ? WAITING : SUSPENDED;
                     break;
                 default:
-                    taskEXIT_CRITICAL();
-                    return E_OS_STATE;
+                    status = E_OS_STATE;
+                    break;
             }
             taskEXIT_CRITICAL();
-            Os_BackendGuardService();
-            return E_OK;
+            if (status == E_OK) {
+                Os_BackendGuardService();
+            }
+            return status;
         }
     }
     return E_OS_ID;

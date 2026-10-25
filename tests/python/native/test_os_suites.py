@@ -25,6 +25,28 @@ def native_fixture(name):
 
 
 class DependencyTests(unittest.TestCase):
+    def test_status_switch_clauses_use_break_termination(self):
+        for relative, name in [
+            ("runtime/host/src/Ecu_Status.c", "Ecu_StatusName"),
+            ("runtime/os/src/Os_Backend.c", "native_task_state"),
+            ("runtime/os/src/Os_Backend.c", "Os_BackendState"),
+        ]:
+            with self.subTest(function=name):
+                source = (os_suites.ROOT / relative).read_text(encoding="utf-8")
+                body = re.search(r"\b" + name + r"\([^)]*\)\s*\{(.*?)^\}", source, re.DOTALL | re.MULTILINE)
+                self.assertIsNotNone(body, name)
+                tokens = [token.text for token in os_suites.lex(body[1])
+                          if not os_suites.is_comment(token)]
+                start = tokens.index("{", tokens.index("switch"))
+                end = start + 1
+                depth = 1
+                while depth != 0:
+                    depth += (tokens[end] == "{") - (tokens[end] == "}")
+                    end += 1
+                words = tokens[start + 1:end - 1]
+                self.assertNotIn("return", words, name)
+                self.assertEqual(words.count("break"), words.count("case") + words.count("default"), name)
+
     def test_memory_mapping_source_rejects_wrong_classes_and_preprocessing(self):
         def section(kind, body):
             return (f'#define OS_START_SEC_{kind}\n#include "Os_MemMap.h"\n'

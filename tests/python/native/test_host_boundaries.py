@@ -88,6 +88,22 @@ class HostBoundaryTests(unittest.TestCase):
     def execute(cls, argv, stage):
         return OwnedProcess(ProcessSpec.seconds(argv, cls.directory, 60, cls.directory, stage)).wait()
 
+    def test_public_status_names_and_unknown_fallback(self):
+        binary = self.directory / ("status-names.exe" if os.name == "nt" else "status-names")
+        result = self.execute([self.compiler, *self.flags,
+                               str(ROOT / "tests/fixtures/host_status_names.c"),
+                               str(ROOT / "runtime/host/src/Ecu_Status.c"), "-o", str(binary)],
+                              "status-names-build")
+        self.assertEqual(result.exit_code, 0, (result.stdout.read_text(), result.stderr.read_text()))
+        result = self.execute([str(binary)], "status-names-run")
+        self.assertEqual(result.exit_code, 0, (result.stdout.read_text(), result.stderr.read_text()))
+        self.assertEqual(result.stderr.read_text(), "")
+        self.assertEqual(result.stdout.read_text().splitlines(), [
+            "OK", "CONFIG", "SIGNAL_ID", "SIGNAL_VALUE", "DIRECTION", "FRAME_ID", "FRAME_DLC",
+            "CONTROLLER", "TIME", "TP_SEQUENCE", "TP_TIMEOUT", "TP_LENGTH", "TP_FLOW", "TP_BUSY",
+            "IO", "NVM", "CAN_BUSY", "INTERNAL",
+        ])
+
     def test_driver_lock_and_areas_admit_sequential_use(self):
         result = self.execute([str(self.lock), "normal"], "normal")
         self.assertTrue(result.success, result.stdout.read_text())
@@ -124,6 +140,54 @@ class HostBoundaryTests(unittest.TestCase):
 
 class HostIoTests(unittest.TestCase):
     """Use the actual native adapter and full OS link, including syscall refusal seams."""
+
+    def test_rejected_kernel_state_preserves_output_and_critical_cleanup(self):
+        import os_suites
+
+        anchor = "OS_MEMMAP void Os_BackendGuardService(void)\n{"
+        observer = "\n    extern void Os_StateGuardObserved(void);\n    Os_StateGuardObserved();"
+        variants = [
+            ("control", None, None, ""),
+            ("success-status", "status = E_OS_STATE;", "status = E_OK;",
+             "STATE_REJECTION result=0 output=99 queries=1 guards=3 enter=1 exit=1"),
+            ("changed-output", "status = E_OS_STATE;", "*state = SUSPENDED; status = E_OS_STATE;",
+             "STATE_REJECTION result=7 output=3 queries=1 guards=2 enter=1 exit=1"),
+            ("missing-release", "taskEXIT_CRITICAL();", "(void)0;",
+             "STATE_REJECTION result=7 output=99 queries=1 guards=2 enter=1 exit=0"),
+            ("extra-guard", "if (status == E_OK) {\n                Os_BackendGuardService();\n            }",
+             "Os_BackendGuardService();",
+             "STATE_REJECTION result=7 output=99 queries=1 guards=3 enter=1 exit=1"),
+        ]
+        for name, old, new, error in variants:
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/Os_Backend.c"
+                text = source.read_text(encoding="utf-8")
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor, anchor + observer)
+                if old is not None:
+                    start = text.index("OS_MEMMAP StatusType Os_BackendState(")
+                    end = text.index("#define OS_STOP_SEC_CODE", start)
+                    body = text[start:end]
+                    self.assertEqual(body.count(old), 1)
+                    text = text[:start] + body.replace(old, new) + text[end:]
+                source.write_text(text, encoding="utf-8")
+                shutil.copyfile(ROOT / "tests/fixtures/os_state_switch.c", target / "tests/os_state_switch.c")
+                with os_suites.native_session(directory, "state-switch-" + name):
+                    binary, _ = os_suites.build(
+                        directory, "os_state_switch.c", target=target,
+                        link_flags=tuple("-Wl,--wrap=" + function for function in (
+                            "eTaskGetState", "vPortEnterCritical", "vPortExitCritical")),
+                    )
+                    if old is None:
+                        self.assertGreater(len(os_suites.check_lifecycle(binary)), 3)
+                    else:
+                        result = os_suites.execute(binary, "normal")
+                        self.assertEqual(result["exit"], 63, result)
+                        self.assertEqual(result["stdout"], "", result)
+                        self.assertEqual(result["stderr"], error, result)
 
     def test_native_bytes_and_record_completion(self):
         import os_suites
