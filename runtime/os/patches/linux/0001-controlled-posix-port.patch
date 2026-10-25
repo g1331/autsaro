@@ -984,7 +984,7 @@ index 52a9c0e..880e346 100644
 -#define portBASE_TYPE            long
 -#define portPOINTER_SIZE_TYPE    intptr_t
 +#define portSTACK_TYPE           size_t
-+#define portBASE_TYPE            long long
++
 +#define portPOINTER_SIZE_TYPE    size_t
  
 -typedef portSTACK_TYPE   StackType_t;
@@ -1037,7 +1037,7 @@ index 52a9c0e..880e346 100644
 +/* The single native dispatcher owns all simulated ISR bodies. */
 +#define portINTERRUPT_YIELD                        0u
 +#define portINTERRUPT_TICK                         1u
-+#define portINTERRUPT_APPLICATION_DEFINED_START    2u
++
 +extern volatile BaseType_t xInsideInterrupt;
 +extern void vPortGenerateSimulatedInterrupt(uint32_t interrupt);
 +extern void Os_PosixPostInterrupt(uint32_t interrupt);

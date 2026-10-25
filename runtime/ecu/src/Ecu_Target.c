@@ -198,8 +198,10 @@ StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record)
 StatusType Ecu_TargetPrepare(void)
 {
     StatusType status;
-    if (Os_HostAtomicCompareExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_INITIALIZING, 0) !=
-        0) {
+    if (Os_HostAtomicCompareExchange(&lifecycle,
+                                     (Os_Atomic32Type)ECU_TARGET_INITIALIZING,
+                                     (Os_Atomic32Type)ECU_TARGET_UNPREPARED) !=
+        (Os_Atomic32Type)ECU_TARGET_UNPREPARED) {
         return E_OS_STATE;
     }
     status = Os_TargetPrepare(&Ecu_OsConfig);

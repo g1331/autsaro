@@ -11,8 +11,6 @@
 
 typedef int32_t LONG;
 typedef uint32_t DWORD;
-typedef uint32_t ULONG;
-typedef uintptr_t ULONG_PTR;
 typedef size_t SIZE_T;
 typedef int BOOL;
 typedef void *LPVOID;
@@ -33,8 +31,6 @@ typedef char Os_HostLongMustBe32BitsType[(sizeof(LONG) == 4u) ? 1 : -1];
 #endif
 
 #define WINAPI
-#define CALLBACK
-#define VOID                              void
 #define INFINITE                          UINT32_MAX
 #define WAIT_OBJECT_0                     0u
 #define WAIT_TIMEOUT                      258u

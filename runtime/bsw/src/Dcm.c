@@ -38,12 +38,6 @@
 #define DCM_POSITIVE_DSC    0x50u
 #define DCM_POSITIVE_TP     0x7eu
 #define DCM_DID_DATA_LENGTH 4u
-#define DCM_NRC_SERVICE     0x11u
-#define DCM_NRC_SUBFUNCTION 0x12u
-#define DCM_NRC_FORMAT      0x13u
-#define DCM_NRC_TOO_LONG    0x14u
-#define DCM_NRC_GENERAL     0x10u
-#define DCM_NRC_RANGE       0x31u
 #define DCM_SPRMIB          0x80u
 #define DCM_SUBFUNCTION     0x7fu
 #define DCM_NO_COM          0u
@@ -457,7 +451,7 @@ static DCM_CODE void Dcm_ReadValue(Dcm_WorkType *work, uint16 did)
         } else {
             /* The application always supplies valid data; an RTE infrastructure
              * failure may still reject its call (00686). Discard partial bytes. */
-            Dcm_Negative(work, DCM_NRC_GENERAL);
+            Dcm_Negative(work, DCM_E_GENERALREJECT);
         }
     }
 }
@@ -479,7 +473,7 @@ static DCM_CODE void Dcm_ReadData(Dcm_WorkType *work)
     if ((work->message.reqDataLen < 2u) || ((work->message.reqDataLen % 2u) != 0u) ||
         ((work->configuration->max_did_to_read != 0u) &&
          ((work->message.reqDataLen / 2u) > work->configuration->max_did_to_read))) {
-        Dcm_Negative(work, DCM_NRC_FORMAT);
+        Dcm_Negative(work, DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT);
     } else {
         Dcm_MsgLenType i;
         Dcm_MsgLenType length = 0u;
@@ -490,9 +484,9 @@ static DCM_CODE void Dcm_ReadData(Dcm_WorkType *work)
             length += Dcm_ReadSize(work, did);
         }
         if (length == 0u) {
-            Dcm_Negative(work, DCM_NRC_RANGE);
+            Dcm_Negative(work, DCM_E_REQUESTOUTOFRANGE);
         } else if (length > work->message.resMaxDataLen) {
-            Dcm_Negative(work, DCM_NRC_TOO_LONG);
+            Dcm_Negative(work, DCM_E_RESPONSETOOLONG);
         } else {
             work->response[0] = DCM_POSITIVE_READ;
             work->message.resDataLen = 0u;
@@ -511,12 +505,12 @@ static DCM_CODE void Dcm_ReadData(Dcm_WorkType *work)
 static DCM_CODE void Dcm_SessionRequest(Dcm_WorkType *work)
 {
     if (work->message.reqDataLen == 0u) {
-        Dcm_Negative(work, DCM_NRC_FORMAT);
+        Dcm_Negative(work, DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT);
     } else if ((work->message.reqData[0] != DCM_DEFAULT_SESSION) &&
                (work->message.reqData[0] != DCM_EXTENDED_DIAGNOSTIC_SESSION)) {
-        Dcm_Negative(work, DCM_NRC_SUBFUNCTION);
+        Dcm_Negative(work, DCM_E_SUBFUNCTIONNOTSUPPORTED);
     } else if (work->message.reqDataLen != 1u) {
-        Dcm_Negative(work, DCM_NRC_FORMAT);
+        Dcm_Negative(work, DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT);
     } else {
         work->pending_session = work->message.reqData[0];
         work->response[0] = DCM_POSITIVE_DSC;
@@ -542,11 +536,11 @@ static DCM_CODE void Dcm_Process(Dcm_WorkType *work)
         Dcm_SessionRequest(work);
     } else if (work->request[0] == DCM_SID_TESTER) {
         if (work->message.reqDataLen == 0u) {
-            Dcm_Negative(work, DCM_NRC_FORMAT);
+            Dcm_Negative(work, DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT);
         } else if (work->message.reqData[0] != 0u) {
-            Dcm_Negative(work, DCM_NRC_SUBFUNCTION);
+            Dcm_Negative(work, DCM_E_SUBFUNCTIONNOTSUPPORTED);
         } else if (work->message.reqDataLen != 1u) {
-            Dcm_Negative(work, DCM_NRC_FORMAT);
+            Dcm_Negative(work, DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT);
         } else {
             work->response[0] = DCM_POSITIVE_TP;
             work->message.resData[0] = 0u;
@@ -556,7 +550,7 @@ static DCM_CODE void Dcm_Process(Dcm_WorkType *work)
                (work->request[0] >= 0xc0u)) {
         /* SWS_Dcm_00084: the selected DcmRespondAllRequest is false. */
     } else {
-        Dcm_Negative(work, DCM_NRC_SERVICE);
+        Dcm_Negative(work, DCM_E_SERVICENOTSUPPORTED);
     }
 }
 /* Called inside DCM_STATE; the resulting payloads belong only to this executor. */

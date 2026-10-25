@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Adopted kernel static-event, static-stream and MPU-task parameter structures omit three unused tags; use the retained `StaticEventGroup_t`, `StaticStreamBuffer_t` and `TaskParameters_t` names. Their members and layouts are unchanged. Regenerate sealed deliveries and rebuild for the updated controlled patch identities (#371)
+
 - ErrorHook parameter snapshots and native queue/semaphore metadata now use independent fields, changing their concrete storage layout. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed header and controlled patch identity (#58)
 
 - Native OS static task and queue buffers now require task.h/queue.h and use their actual kernel object types, list sentinels use complete list items, and invalid Task/ISR ID constants retain their public identifier types. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed headers, list storage and controlled patch identities (#58)
@@ -29,6 +31,8 @@
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
 ### Fixed
+
+- Dcm negative responses use the generated standard NRC constants directly; Linux private compatibility declarations and unused port aliases are removed, and target initialization uses its named unprepared state (#371)
 
 - Linux native actors stop on failed host-input registration or unavailable requested identity. Joinable supervisors retain ownership until successful wait and close; join/detach failures no longer publish completion or let concurrent waits report it early. Regenerate sealed deliveries for the updated private source (#371)
 

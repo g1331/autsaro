@@ -129,6 +129,24 @@
  typedef StaticQueue_t StaticSemaphore_t;
  
  /*
+@@ -3291,7 +3179,7 @@
+  * direct use of the structure members.
+  */
+-typedef struct xSTATIC_EVENT_GROUP
++typedef struct
+ {
+     TickType_t xDummy1;
+     StaticList_t xDummy2;
+ 
+@@ -3346,7 +3234,7 @@
+  * to make direct use of the structure members.
+  */
+-typedef struct xSTATIC_STREAM_BUFFER
++typedef struct
+ {
+     size_t uxDummy1[ 4 ];
+     void * pvDummy2[ 3 ];
+     uint8_t ucDummy3;
 --- a/include/task.h
 +++ b/include/task.h
 @@ -104,6 +104,95 @@
@@ -227,6 +245,15 @@
  
  /* Task states returned by eTaskGetState. */
  typedef enum
+@@ -149,7 +238,7 @@
+  * Parameters required to create an MPU protected task.
+  */
+-typedef struct xTASK_PARAMETERS
++typedef struct
+ {
+     TaskFunction_t pvTaskCode;
+     const char * pcName;
+     configSTACK_DEPTH_TYPE usStackDepth;
 @@ -1367,6 +1456,9 @@
   */
  void vTaskResume( TaskHandle_t xTaskToResume ) PRIVILEGED_FUNCTION;
