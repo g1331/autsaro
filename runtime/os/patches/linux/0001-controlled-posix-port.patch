@@ -475,7 +475,7 @@ index 2592610..1be0473 100644
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
 +    Os_StackObserve(task.thread, &context);
-+    xInsideInterrupt = pdTRUE;
++    __atomic_store_n(&xInsideInterrupt, pdTRUE, __ATOMIC_SEQ_CST);
 +    interrupt = next_interrupt(seen, 0u, 0);
 +    while (interrupt < PORT_INTERRUPT_COUNT) {
 +        const uint32_t requested = run_interrupt(interrupt);
@@ -499,7 +499,7 @@ index 2592610..1be0473 100644
 +#ifdef OS_TIME_TESTS
 +    Os_TimeTestDispatchFinishing();
 +#endif
-+    xInsideInterrupt = pdFALSE;
++    __atomic_store_n(&xInsideInterrupt, pdFALSE, __ATOMIC_SEQ_CST);
  }
 -/*-----------------------------------------------------------*/
  
@@ -976,7 +976,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/portmacro.h b/portable/ThirdParty/GCC
 index 52a9c0e..880e346 100644
 --- a/portable/ThirdParty/GCC/Posix/portmacro.h
 +++ b/portable/ThirdParty/GCC/Posix/portmacro.h
-@@ -55,94 +55,67 @@
+@@ -55,94 +55,71 @@
  #define portDOUBLE               double
  #define portLONG                 long
  #define portSHORT                short
@@ -1045,7 +1045,11 @@ index 52a9c0e..880e346 100644
 +#define portYIELD() vPortGenerateSimulatedInterrupt(portINTERRUPT_YIELD)
 +#define portEND_SWITCHING_ISR(requested) return (requested)
 +#define portYIELD_FROM_ISR(requested) portEND_SWITCHING_ISR(requested)
-+#define portSOFTWARE_BARRIER() while (xInsideInterrupt != pdFALSE)
++#define portSOFTWARE_BARRIER() \
++    do { \
++        while (__atomic_load_n(&xInsideInterrupt, __ATOMIC_SEQ_CST) != pdFALSE) { \
++        } \
++    } while (false)
  /*-----------------------------------------------------------*/
  
 -/* Critical section management. */

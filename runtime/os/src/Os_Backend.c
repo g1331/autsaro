@@ -1240,7 +1240,7 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
     if (Os_HostSetEvent(controller_registered[index]) == 0) {
         ExitProcess(E_OS_STATE);
     }
-    if (controller_healthy[index] == 0) {
+    if (InterlockedCompareExchange(&controller_healthy[index], 0, 0) == 0) {
         Sleep(INFINITE);
         return 0u;
     }
@@ -1271,7 +1271,8 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
             stop_thread(control_thread);
         }
     }
-    if ((controller_healthy[1] == 0) && (backup_thread != NULL) && (argument == NULL)) {
+    if ((InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) &&
+        (backup_thread != NULL) && (argument == NULL)) {
         stop_thread(backup_thread);
     }
     stop_scheduler_after_actors();
@@ -1296,12 +1297,14 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
     } else {
         /* A Task, ISR or startup fault leaves both controller health states intact. */
     }
-    if (controller_healthy[0] == 0) {
-        if (controller_healthy[1] == 0) {
+    if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
+        if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
             Os_StackFatalExit();
         }
     }
-    if (Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event) == 0) {
+    if (Os_HostSetEvent((InterlockedCompareExchange(&controller_healthy[0], 0, 0) != 0)
+                            ? close_event
+                            : backup_event) == 0) {
         ExitProcess(E_OS_STACKFAULT);
     }
     (void)InterlockedExchange(&Os_Closing, 1);
@@ -1325,12 +1328,14 @@ OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
     } else {
         /* A Task, ISR or startup fault leaves both controller health states intact. */
     }
-    if (controller_healthy[0] == 0) {
-        if (controller_healthy[1] == 0) {
+    if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
+        if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
             Os_StackFatalExit();
         }
     }
-    if (Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event) == 0) {
+    if (Os_HostSetEvent((InterlockedCompareExchange(&controller_healthy[0], 0, 0) != 0)
+                            ? close_event
+                            : backup_event) == 0) {
         ExitProcess(E_OS_STACKFAULT);
     }
     (void)InterlockedExchange(&Os_Closing, 1);
@@ -1363,14 +1368,16 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
     if ((InterlockedOr(&activation_admission, 2) & 2) == 0) {
         shutdown_reason = error;
         (void)InterlockedExchange(&ready, 0);
-        if (controller_healthy[0] == 0) {
-            if (controller_healthy[1] == 0) {
+        if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
+            if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
                 report_and_exit();
             }
         }
         /* Wake control before publishing Os_Closing: a dispatch that stops this Task
          * after the publication never resumes it, so the wake-up would be lost. */
-        if (Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event) == 0) {
+        if (Os_HostSetEvent((InterlockedCompareExchange(&controller_healthy[0], 0, 0) != 0)
+                                ? close_event
+                                : backup_event) == 0) {
             ExitProcess(E_OS_STATE);
         }
         (void)InterlockedExchange(&Os_Closing, 1);
@@ -1479,6 +1486,10 @@ OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
 {
     Os_NativeTaskStartType *start = argument;
+    /* Creation publishes the handle and accounting before registration may fail. */
+    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
+        ExitProcess(E_OS_STATE);
+    }
     if (Os_StackRegister(start->role) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1528,6 +1539,9 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
                            NULL);
     task_threads[task_thread_count] = thread;
     ++task_thread_count;
+    if (Os_HostSetEvent(start->gate) == 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
     if (WaitForSingleObject(start->registered, 5000u) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1742,10 +1756,10 @@ OS_MEMMAP static void start_controllers(void)
     if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (controller_healthy[0] == 0) {
+    if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (controller_healthy[1] == 0) {
+    if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }

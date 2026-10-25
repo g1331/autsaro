@@ -391,7 +391,7 @@ def execute(
     capture_output=True,
     text=True,
     check=False,)
-    return {
+    observation = {
         "scenario": scenario,
         "failure": failure,
         "invalid_stack": invalid_stack,
@@ -399,6 +399,12 @@ def execute(
         "stdout": result.stdout.strip(),
         "stderr": result.stderr.strip(),
     }
+    if os.environ.get("AUTOSAR_SANITIZE"):
+        output = observation["stdout"] + "\n" + observation["stderr"]
+        require(not any(marker in output for marker in (
+            "ThreadSanitizer:", "AddressSanitizer:", "LeakSanitizer:", "runtime error:",
+        )), observation)
+    return observation
 
 
 def require(condition: bool, observation: dict) -> None:

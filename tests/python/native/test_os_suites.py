@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +26,21 @@ def native_fixture(name):
 
 
 class DependencyTests(unittest.TestCase):
+    def test_expected_native_exit_does_not_hide_sanitizer_reports(self):
+        with patch.dict(os.environ, {"AUTOSAR_SANITIZE": "thread"}):
+            for code in (7, 13):
+                for marker in ("ThreadSanitizer:", "AddressSanitizer:", "LeakSanitizer:", "runtime error:"):
+                    for stream in ("stdout", "stderr"):
+                        with self.subTest(exit=code, marker=marker, stream=stream):
+                            output = {"stdout": "", "stderr": ""}
+                            output[stream] = marker + " injected report"
+                            result = subprocess.CompletedProcess(["native"], code, **output)
+                            with patch.object(os_suites, "run_native", return_value=result), self.assertRaisesRegex(AssertionError, marker):
+                                os_suites.execute(Path("native"), "normal")
+            control = subprocess.CompletedProcess(["native"], 7, "state=Failed", "stage=expected")
+            with patch.object(os_suites, "run_native", return_value=control):
+                self.assertEqual(os_suites.execute(Path("native"), "normal")["exit"], 7)
+
     def test_status_switch_clauses_use_break_termination(self):
         for relative, name in [
             ("runtime/host/src/Ecu_Status.c", "Ecu_StatusName"),

@@ -157,14 +157,14 @@
 -            if (actor != NULL &&
 -                (actor->role == 'T' || actor->role == 'I' || actor->role == 'B')) {
 +        if (critical_nesting == 0u) {
-+            if (xInsideInterrupt != pdFALSE) {
++            if (__atomic_load_n(&xInsideInterrupt, __ATOMIC_SEQ_CST) != pdFALSE) {
 +                Os_PortDispatchNested();
 +            }
 +        }
 +        bool publish = false;
 +        if (critical_nesting == 0u) {
 +            if (pending != 0u) {
-+                publish = xInsideInterrupt == pdFALSE;
++                publish = __atomic_load_n(&xInsideInterrupt, __ATOMIC_SEQ_CST) == pdFALSE;
 +            }
 +        }
 +        if (publish) {

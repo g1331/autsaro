@@ -34,6 +34,8 @@
 
 ### Fixed
 
+- Native OS startup publishes Task handles before stack registration can fail; controller health and Linux interrupt handoff flags now use atomic accesses throughout, preserving fault shutdown without concurrent publication races (#371)
+
 - The sole HostBatch producer reuses process-lifetime watchdog context; disabled ErrorHook parameter access no longer captures pointers, and retired ISR snapshots are cleared after restoration. Regenerate sealed deliveries and rebuild consumers (#371)
 
 - Unexpected Linux futex errors stop native handoff instead of being ignored; faulted-stack parking preserves its stack-fault exit reason. Regenerate sealed deliveries and rebuild consumers (#371)
