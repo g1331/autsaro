@@ -112,7 +112,7 @@ OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack
 
 OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
 {
-    current_stack->kernel_buffer_high = (uintptr_t)(top + 1);
+    current_stack->kernel_buffer_high = (uintptr_t)&top[1];
     current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - (512u * sizeof(*top));
     if ((current_stack->reserve_low < current_stack->kernel_buffer_high) &&
         (current_stack->high > current_stack->kernel_buffer_low)) {

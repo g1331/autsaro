@@ -103,7 +103,7 @@ OS_MEMMAP Os_StackFaultType
 #include "Os_MemMap.h"
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
-    if ((stack < stacks) || (stack >= (stacks + OS_NATIVE_STACKS))) {
+    if ((stack < stacks) || (stack >= &stacks[OS_NATIVE_STACKS])) {
         return NULL;
     }
     return &saved_contexts[stack - stacks];
@@ -147,7 +147,7 @@ OS_MEMMAP static void publish_fault(
     Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
 {
     Os_StackFaultType *local;
-    if ((record == NULL) || (record < stacks) || (record >= (stacks + OS_NATIVE_STACKS))) {
+    if ((record == NULL) || (record < stacks) || (record >= &stacks[OS_NATIVE_STACKS])) {
         _exit(E_OS_STATE);
     }
     local = &fault_records[record - stacks];
@@ -321,7 +321,7 @@ OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
     if (current_stack == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    current_stack->kernel_buffer_high = (uintptr_t)(top + 1);
+    current_stack->kernel_buffer_high = (uintptr_t)&top[1];
     current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - (512u * sizeof(*top));
     if ((current_stack->reserve_low < current_stack->kernel_buffer_high) &&
         (current_stack->high > current_stack->kernel_buffer_low)) {
