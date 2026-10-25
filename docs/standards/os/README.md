@@ -83,3 +83,15 @@ R21.3与R22.1均为Required，C99适用（主文印刷167、172／PDF175、180�
 非user_stack线程的__nptl_deallocate_stack走queue_stack；缓存回收才经__nptl_free_stacks／_dl_deallocate_tls释放DTV。源码默认阈值40MiB可调，不是运行峰值保证。join和项目执行栈munmap不等于已free全部bootstrap／TLS；当前进程期Task／controller／dispatcher永久停车后由_exit结束，操作系统回收地址空间不等于R22.1的显式释放。因此R21.3的实际用途及这条R22.1释放差距仍需处置；不能由正确的observer wait→close或D4.13顺序结论覆盖。
 
 已有正常ELF没有直接calloc/malloc导入；LD_DEBUG以ecu_probe为reference打印的分配器binding来自lookup_malloc_symbol(main_map,...)，不作为项目直接调用或每次分配事件证明。需区分exec之前的owner Python与之后的实际ELF，源码闭包和真实绑定共同使用；普通／检测器各守自己的身份。原D4.12提案明确不扩其他规则，[针对Linux这两条的具体补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6401003340)仍待人类项目决定，不建Accepted ADR、批准表或MR12，不外推Windows。给actor静态汽车缓冲、只设bootstrap大小或等进程退出都不能消除这里的calloc／释放义务；真正改为调用方栈并退休所有相关线程还须重证guard、信号、restart及关闭合同。
+
+## 声明宏与表达式参数
+
+R20.7为Required（主文印刷159–160／PDF167–168，AMD2追加C11），约束参数展开形成的表达式；原文明确非表达式用途不要求括号。四份已完成样本各五处报告中，Os.h:102的ALARMCALLBACK(identifier)以identifier构成void函数声明／定义；所选portmacro.h:113–114的portTASK_FUNCTION_PROTO／portTASK_FUNCTION把function及parameters用作函数／形参声明符。它们不是算术或调用实参表达式，不因缺少无关的括号而违反该条。普通函数无法生成这些声明，D4.9的可互换前提也不成立，未援引AMD3.6的_Generic例外。
+
+另外两处为picolibc-freertos.h:66、76的configINIT_TLS_BLOCK；当前实际宏为configUSE_PICOLIBC_TLS=0、configUSE_NEWLIB_REENTRANT=0、configUSE_C_RUNTIME_TLS_SUPPORT=0，该头的入口未选择，不能将未生效的定义计作这些程序的R20.7使用。五处位置／定义在四个工件间身份相同；当前仅局部timing重命名不改变这些头。原始五处报告分别保留，这不是全部宏、所有配置或TLS变体的R20.7通过结论。表达式实参宏仍逐处检查完整展开中的括号与求值次数，不能从声明宏的判断推出通用豁免。
+
+## 非ISO SDK的保留名字
+
+R21.1／R21.2（Required，主文印刷165–167／PDF173–175，含TC1更正及AMD2语言扩展）的SDK责任不能用系统目录或供应方身份销项。pthread.h的_PTHREAD_H、unwind.h的_UNWIND_H及_Unwind_Word等声明、Linux UAPI的_LINUX_FUTEX_H／_LINUX_TYPES_H与__le16等类型，是当前实际包含的具体构造。既有TU宏收据确认这些guard生效；主文§6.7对ISO标准头内容的原有边界保留，不把所有宏／声明都算作项目自有代码，也不把非ISO头整批豁免。
+
+当前材料对应libc6-dev 2.39-0ubuntu8.9、libgcc-13-dev 13.3.0-6ubuntu2~24.04.1和linux-libc-dev 6.8.0-147.147。原SDK提案未自动覆盖这两条；保留现有ABI名字／guard的具体补充仍待人类决定与独立技术复核，不建Accepted ADR、批准表或MR12。删显式头却保留间接路径、手写声明或换名字隐藏同一设施不能作为修复；真正更改供应方头／实现须重证线程、信号帧、unwind及交付身份。该边界不扩ADR0024，也不替Windows实际provider取证。
