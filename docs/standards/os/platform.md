@@ -15,6 +15,8 @@
 
 这些理由不豁免D4.12的动态分配、R21.5的signal设施或R21.10的time设施，也不替代采用内核的其他逐项评估。
 
+受控POSIX补丁的`next_interrupt`参数原名`floor`，虽只用作unsigned优先级起点，仍复用标准数学函数名字。R21.2（Required、C99，主文印刷166–167／PDF174–175）引用R21.1的标准库名字集合；TC1修正标题／示例，未提供局部参数例外。现改为`minimum_priority`，四个调用、类型、选择顺序与ABI不变；九项有序补丁组合后的31个内核文件仅此参数及其引用两个token改变。该行属项目补丁责任，不能借adopted标签或固定checker未遍历参数声明而免除；它也不是数学调用，不改变D4.15的判断。
+
 ## 三处有界 Linux 平台保留
 
 [ADR 0024](../../adr/0024-bounded-linux-platform-retention.md)记录[人类接受的项目决定](https://github.com/g1331/autsaro/pull/371#issuecomment-6392165780)，仅限当前 Linux C99／glibc-pthread x86-64 三处和其中列明的四 profile／两个程序及相同原生实现。它独立于 ADR 0023，既不是 MISRA 合法偏离或符合性批准，也不解除 `SWS_BSW_00115`。SDK 间接包含链及其他根路径继续可见，provider／ABI／flags／handler／合同变化重评。
