@@ -141,7 +141,8 @@ OS_MEMMAP Os_HostHandleType Os_HostOpenManualEvent(void);
  * Context: native setup/supervision outside OS critical and BSW exclusive areas.
  * Reentrancy: reentrant; each successful call creates a separate actor.
  * Ownership: entry and argument are retained until the actor ends; caller owns the returned
- * observer handle. Linux host-input registration failure terminates the native process.
+ * observer handle. Linux host-input stack setup or restoration failure terminates the native
+ * process.
  */
 OS_MEMMAP Os_HostHandleType Os_HostSpawnThread(Os_HostThreadEntryType entry, void *argument);
 
