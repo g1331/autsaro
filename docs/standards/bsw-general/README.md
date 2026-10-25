@@ -112,3 +112,13 @@ ARTI 工具实现独立发行，初值 **1.0.0**，唯一 owner 为 `Arti_Versio
 正常测试在 `descriptions.rs` 检查独立字面量的 BSWMD／manual，在 `release_contracts.rs` 编译所有实际公共头／重复 MemMap、逐分量破坏 ComM 一致性、接受同步升级，并运行 ARTI 哨兵消费者及逐赋值删除反例。版本 owner 的传递测试允许合法同步升级，不把固定初值当不可升级的协议。
 
 这里只闭合软件发布来源；`SWS_BSW_00059/00256/00161` 的正式 vendor 部分仍欠缺，保留原有差距标记。项目尚未申请 vendor ID，不添加虚构 VENDOR_ID，不启用依赖真实身份的版本 API，不替代 RteCodeVendorId 的使用方身份。
+
+## 注释与字面量的实际词法边界
+
+R3.1（Required，主文印刷45／PDF53）在C99下禁止注释内的新注释起始序列；AMD4.39–40的例外1允许scheme://path形式的URI，例外2仍允许//出现在真正的//行注释中。FreeRTOS许可URI适用例外，Doxygen块内的C示例//不适用；@code／@verbatim不改变C词法。三个实际包含的采用头task.h／queue.h／timers.h分别有247／174／218处此类位置。受控0021补丁仅将对应23／15／10个Doxygen块转换为C99的///形式，保留说明、示例、标签、物理行数及全部非注释token，上游原件与许可URI不变。该正常修复不使用新偏离，原始checker未报告不作为满足依据。
+
+R3.2为Required、仅适用C99（印刷46／PDF54；AMD2.31删除说明性Note）。上述48块没有反斜杠换行，转换后的行注释也没有该构造。实际宏及Os_Hooks／commented_defines的续行仍位于预处理指令或完整块注释中，不能仅凭反斜杠换行判R3.2违反。新注释形式不改变此前的宏拼接语义。
+
+R4.1（Required，印刷46–47／PDF54–55；AMD2.32未放宽终结条件）要求数值转义在另一个转义或当前literal结束处终结，不能仅靠后续非数字字符停止。已核冻结自有C／头、模板、四份Linux生成语料及双目标补丁内核中的实际数值转义均为字符literal末端的\0。Task名字虽经JSON序列化形成C字符串，正常入口先按grammar／rules将SHORT-NAME限定为ASCII identifier，不会把引号、反斜杠或控制字符送入该生成点。R4.2（Advisory，印刷47／PDF55）按替换发生在注释和条件处理前的顺序核对九种trigraph，已核原始文本未发现；生成注释没有通用自由文本转义层，当前实际调用方为固定说明、受约束名字或类型化数值，不扩张到任意用户应用或未来输入。
+
+上述构造结论、源身份、生成入口与Windows语料补核集中PR #371；正常生成／编译／实际分析和独立复核按各自head记录。它们不改变原始passed/error/not_assessed及严格比较拒绝，也不构成全部221项或完整平台符合性。
