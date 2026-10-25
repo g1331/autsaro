@@ -139,7 +139,7 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
         if ((count != 1u) || (batch->rejected != 0u)) {
             status = E_OS_VALUE;
         } else if ((batch->batch_id == UINT64_MAX) ||
-                   ((uint64_t)batch->count + UINT64_C(1) > (UINT64_MAX - batch->sequence))) {
+                   (((uint64_t)batch->count + UINT64_C(1)) > (UINT64_MAX - batch->sequence))) {
             status = E_OS_LIMIT;
         } else {
             batch->executing = 1u;
@@ -213,7 +213,7 @@ StatusType Ecu_HostBatchComplete(Ecu_HostBatch *batch)
     ++batch->batch_id;
     if (batch->input_sequences_reserved == 0u) {
         batch->first_input_sequence =
-            (batch->count == 0u) ? UINT64_C(0) : batch->sequence + UINT64_C(1);
+            (batch->count == 0u) ? UINT64_C(0) : (batch->sequence + UINT64_C(1));
         batch->sequence += (uint64_t)batch->count;
     }
     ++batch->sequence;

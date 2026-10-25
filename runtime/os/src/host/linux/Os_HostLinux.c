@@ -277,16 +277,16 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     long page;
     size_t reserve;
     int status;
-    if (start == NULL || (flags & CREATE_SUSPENDED) != 0u ||
-        (flags & ~(STACK_SIZE_PARAM_IS_A_RESERVATION | CREATE_SUSPENDED)) != 0u) {
+    if ((start == NULL) || ((flags & CREATE_SUSPENDED) != 0u) ||
+        ((flags & ~(STACK_SIZE_PARAM_IS_A_RESERVATION | CREATE_SUSPENDED)) != 0u)) {
         return NULL;
     }
     errno = 0;
     page = sysconf(_SC_PAGESIZE);
-    if (page <= 0 || stack > SIZE_MAX - (size_t)page) {
+    if ((page <= 0) || (stack > (SIZE_MAX - (size_t)page))) {
         return NULL;
     }
-    reserve = stack == 0u ? OS_HOST_DEFAULT_STACK : stack;
+    reserve = (stack == 0u) ? OS_HOST_DEFAULT_STACK : stack;
     errno = 0;
     const long minimum = sysconf(_SC_THREAD_STACK_MIN);
     if ((minimum <= 0) || (reserve < ((size_t)minimum + (size_t)page))) {
@@ -385,7 +385,7 @@ OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
                               LPCSTR name)
 {
     HANDLE event;
-    if (attributes != NULL || name != NULL) {
+    if ((attributes != NULL) || (name != NULL)) {
         return NULL;
     }
     event = reserve_handle(OS_HOST_EVENT);
@@ -394,7 +394,7 @@ OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
     }
     event->manual = manual != 0;
     errno = 0;
-    event->fd = eventfd(initial != 0 ? 1u : 0u, EFD_CLOEXEC | EFD_NONBLOCK);
+    event->fd = eventfd((initial != 0) ? 1u : 0u, EFD_CLOEXEC | EFD_NONBLOCK);
     if (event->fd < 0) {
         (void)InterlockedExchange(&event->reserved, 0);
         return NULL;
@@ -406,7 +406,7 @@ OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event)
 {
     const uint64_t signal_value = 1u;
     ssize_t written;
-    if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
+    if ((event == NULL) || (event->kind != OS_HOST_EVENT) || (event->fd < 0)) {
         return 0;
     }
     do {
@@ -433,7 +433,7 @@ OS_MEMMAP static int read_event(HANDLE event)
 OS_MEMMAP BOOL ResetEvent(HANDLE event)
 {
     int received;
-    if (event == NULL || event->kind != OS_HOST_EVENT || event->fd < 0) {
+    if ((event == NULL) || (event->kind != OS_HOST_EVENT) || (event->fd < 0)) {
         return 0;
     }
     do {
@@ -837,7 +837,7 @@ OS_MEMMAP DWORD GetCurrentThreadId(void) { return Os_LinuxThreadId(); }
 
 OS_MEMMAP DWORD GetThreadId(HANDLE thread)
 {
-    return thread != NULL ? __atomic_load_n(&thread->thread_id, __ATOMIC_ACQUIRE) : 0u;
+    return (thread != NULL) ? __atomic_load_n(&thread->thread_id, __ATOMIC_ACQUIRE) : 0u;
 }
 
 OS_MEMMAP uint64_t GetTickCount64(void) { return monotonic_ms(); }
@@ -894,8 +894,9 @@ OS_MEMMAP BOOL DuplicateHandle(HANDLE source_process,
     (void)access;
     (void)inherit;
     (void)options;
-    if (copy == NULL || source_process != &process_handle || target_process != &process_handle ||
-        source_thread == NULL || source_thread->kind != OS_HOST_THREAD) {
+    if ((copy == NULL) || (source_process != &process_handle) ||
+        (target_process != &process_handle) || (source_thread == NULL) ||
+        (source_thread->kind != OS_HOST_THREAD)) {
         return 0;
     }
     *copy = source_thread;
@@ -904,11 +905,11 @@ OS_MEMMAP BOOL DuplicateHandle(HANDLE source_process,
 
 OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
 {
-    if (thread == NULL || code == NULL || thread->kind != OS_HOST_THREAD) {
+    if ((thread == NULL) || (code == NULL) || (thread->kind != OS_HOST_THREAD)) {
         return 0;
     }
     *code =
-        __atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0 ? thread->exit_code : STILL_ACTIVE;
+        (__atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) ? thread->exit_code : STILL_ACTIVE;
     return 1;
 }
 
@@ -924,7 +925,8 @@ OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread)
 
 OS_MEMMAP int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard)
 {
-    if (thread == NULL || thread->mapping == NULL || low == NULL || high == NULL || guard == NULL) {
+    if ((thread == NULL) || (thread->mapping == NULL) || (low == NULL) || (high == NULL) ||
+        (guard == NULL)) {
         return 0;
     }
     *low = (uintptr_t)thread->mapping;
@@ -935,7 +937,7 @@ OS_MEMMAP int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, 
 
 OS_MEMMAP int Os_HostCurrentStackRange(uintptr_t *low, uintptr_t *high, size_t *guard)
 {
-    if (current_thread != NULL && current_thread->mapping != NULL) {
+    if ((current_thread != NULL) && (current_thread->mapping != NULL)) {
         return Os_HostStackRange(current_thread, low, high, guard);
     }
     if ((low == NULL) || (high == NULL) || (guard == NULL)) {

@@ -50,9 +50,10 @@ OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
 {
     /* C99 compile-time ABI constraints: incompatible platform layouts fail compilation. */
     (void)sizeof(
-        char[offsetof(struct ucontext, uc_mcontext) == offsetof(ucontext_t, uc_mcontext) ? 1 : -1]);
+        char[(offsetof(struct ucontext, uc_mcontext) == offsetof(ucontext_t, uc_mcontext)) ? 1
+                                                                                           : -1]);
     (void)sizeof(
-        char[sizeof(struct _fpstate) == sizeof(destination->native.__fpregs_mem) ? 1 : -1]);
+        char[(sizeof(struct _fpstate) == sizeof(destination->native.__fpregs_mem)) ? 1 : -1]);
     struct ucontext kernel;
     unsigned char *native = (unsigned char *)&destination->native;
     (void)memcpy((void *)&kernel, source, sizeof(kernel));

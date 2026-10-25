@@ -113,9 +113,9 @@ OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack
 OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
 {
     current_stack->kernel_buffer_high = (uintptr_t)(top + 1);
-    current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - 512u * sizeof(*top);
-    if (current_stack->reserve_low < current_stack->kernel_buffer_high &&
-        current_stack->high > current_stack->kernel_buffer_low) {
+    current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - (512u * sizeof(*top));
+    if ((current_stack->reserve_low < current_stack->kernel_buffer_high) &&
+        (current_stack->high > current_stack->kernel_buffer_low)) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -141,7 +141,7 @@ OS_MEMMAP static void publish_fault(
         (void)InterlockedExchange(&Os_Fault.published, 1);
     }
     (void)InterlockedIncrement(&fault_count);
-    Os_BackendStackFault(current_stack != NULL ? current_stack->role : record->role);
+    Os_BackendStackFault((current_stack != NULL) ? current_stack->role : record->role);
 }
 
 OS_MEMMAP static LONG CALLBACK stack_exception(EXCEPTION_POINTERS *exception)
@@ -151,12 +151,13 @@ OS_MEMMAP static LONG CALLBACK stack_exception(EXCEPTION_POINTERS *exception)
     if (current_stack == NULL) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
-    if (code == EXCEPTION_ACCESS_VIOLATION && exception->ExceptionRecord->NumberParameters >= 2u) {
+    if ((code == EXCEPTION_ACCESS_VIOLATION) &&
+        (exception->ExceptionRecord->NumberParameters >= 2u)) {
         address = exception->ExceptionRecord->ExceptionInformation[1];
     }
-    if (code != EXCEPTION_STACK_OVERFLOW &&
-        !(code == EXCEPTION_ACCESS_VIOLATION && address >= current_stack->reserve_low &&
-          address < current_stack->committed_low)) {
+    if ((code != EXCEPTION_STACK_OVERFLOW) &&
+        !((code == EXCEPTION_ACCESS_VIOLATION) && (address >= current_stack->reserve_low) &&
+          (address < current_stack->committed_low))) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
     /* Only preallocated stores and kernel events; never acquire the port mutex. */
@@ -210,7 +211,7 @@ OS_MEMMAP void Os_StackInit(void)
 OS_MEMMAP static ULONG native_stack_guarantee(char role)
 {
     /* The injected value exceeds the actual reserve and must fail the native API. */
-    return invalid_guarantee_role == role ? 0xffffffffu : 16384u;
+    return (invalid_guarantee_role == role) ? 0xffffffffu : 16384u;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -313,7 +314,7 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
 {
     DWORD id = GetThreadId(thread);
     LONG i;
-    for (i = 0; i < stack_count && i < (LONG)OS_NATIVE_STACKS; ++i) {
+    for (i = 0; (i < stack_count) && (i < (LONG)OS_NATIVE_STACKS); ++i) {
         Os_NativeStackType *record = &stacks[i];
         if (record->thread_id == id) {
             uintptr_t sp = (uintptr_t)context->Rsp;
@@ -400,7 +401,7 @@ OS_MEMMAP void Os_StackFatalExit(void)
         ++used;
     }
     for (i = 0u; i < 8u; ++i) {
-        fatal_text[used] = "0123456789ABCDEF"[(fault->exception >> (28u - 4u * i)) & 15u];
+        fatal_text[used] = "0123456789ABCDEF"[(fault->exception >> (28u - (4u * i))) & 15u];
         ++used;
     }
     for (i = 0u; i < sizeof(fatal_suffix) - 1u; ++i) {

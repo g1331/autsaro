@@ -144,7 +144,7 @@ OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 
 OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 {
     const Os_NativeStackType *actor = Os_StackCurrent();
-    return (actor == NULL || actor->role == 'H') ? 1 : 0;
+    return ((actor == NULL) || (actor->role == 'H')) ? 1 : 0;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"

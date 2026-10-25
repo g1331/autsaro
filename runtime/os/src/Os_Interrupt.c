@@ -39,8 +39,8 @@ OS_MEMMAP static Os_InterruptStateType *owner_state(void)
     const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 interrupt = Os_BackendCurrentInterrupt();
     const Os_HookPhaseType phase = Os_HookContext();
-    uint32 index = (stack != NULL && stack->role == 'S' && interrupt < 32u) ? interrupt : 32u;
-    if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
+    uint32 index = ((stack != NULL) && (stack->role == 'S') && (interrupt < 32u)) ? interrupt : 32u;
+    if ((phase >= OS_HOOK_ERROR) && (phase <= OS_HOOK_ALARM)) {
         /* Each Hook has its own mask ownership, including its logical ISR.
          * Queries in ErrorHook do not inherit the failed caller's mask. */
         index += 33u * (uint32)phase;
@@ -51,7 +51,7 @@ OS_MEMMAP static Os_InterruptStateType *owner_state(void)
 OS_MEMMAP sint32 Os_InterruptDisabled(void)
 {
     const Os_InterruptStateType *state = owner_state();
-    return (state->disabled != 0u || state->all_depth != 0u || state->os_depth != 0u) ? 1 : 0;
+    return ((state->disabled != 0u) || (state->all_depth != 0u) || (state->os_depth != 0u)) ? 1 : 0;
 }
 
 OS_MEMMAP sint32 Os_InterruptAllows(uint32 interrupt)
@@ -75,7 +75,7 @@ OS_MEMMAP static sint32 permitted(uint32 operation)
     const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 group = operation / 2u;
     sint32 allowed = 0;
-    if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
+    if ((phase >= OS_HOOK_ERROR) && (phase <= OS_HOOK_ALARM)) {
         /* R24-11 Table 7.1 permits all six primitives from every supported
          * global Hook and Alarm callback, extending the older OSEK table. */
         allowed = 1;

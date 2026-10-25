@@ -103,7 +103,7 @@ OS_MEMMAP Os_StackFaultType
 #include "Os_MemMap.h"
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
-    if (stack < stacks || stack >= stacks + OS_NATIVE_STACKS) {
+    if ((stack < stacks) || (stack >= (stacks + OS_NATIVE_STACKS))) {
         return NULL;
     }
     return &saved_contexts[stack - stacks];
@@ -123,8 +123,8 @@ OS_MEMMAP int Os_StackThreadHasFault(DWORD thread_id)
     size_t index;
     for (index = 0u; index < OS_NATIVE_STACKS; ++index) {
         const Os_StackFaultType *fault = &fault_records[index];
-        if (__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0 &&
-            fault->thread_id == thread_id) {
+        if ((__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0) &&
+            (fault->thread_id == thread_id)) {
             return 1;
         }
     }
@@ -143,7 +143,7 @@ OS_MEMMAP static void publish_fault(
     Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
 {
     Os_StackFaultType *local;
-    if (record == NULL || record < stacks || record >= stacks + OS_NATIVE_STACKS) {
+    if ((record == NULL) || (record < stacks) || (record >= (stacks + OS_NATIVE_STACKS))) {
         _exit(E_OS_STATE);
     }
     local = &fault_records[record - stacks];
@@ -172,8 +172,8 @@ OS_MEMMAP static void guard_signal(int signum, siginfo_t *details, void *native_
 {
     Os_NativeStackType *record = current_stack;
     uintptr_t address = (uintptr_t)details->si_addr;
-    if (record == NULL || (signum != SIGSEGV && signum != SIGBUS) ||
-        address < record->reserve_low || address >= record->committed_low) {
+    if ((record == NULL) || ((signum != SIGSEGV) && (signum != SIGBUS)) ||
+        (address < record->reserve_low) || (address >= record->committed_low)) {
         _exit(E_OS_STATE);
     }
     publish_fault(record, (DWORD)signum, Os_LinuxSignalSp(native_context), address, 'E');
@@ -187,7 +187,7 @@ OS_MEMMAP static void guard_signal(int signum, siginfo_t *details, void *native_
 OS_MEMMAP static void read_invalid_altstack(void)
 {
     const char *invalid = getenv("AUTOSAR_OS_BAD_GUARANTEE");
-    if (invalid != NULL && invalid[0] != '\0' && invalid[1] == '\0') {
+    if ((invalid != NULL) && (invalid[0] != '\0') && (invalid[1] == '\0')) {
         invalid_alt_role = invalid[0];
     }
 }
@@ -240,7 +240,7 @@ OS_MEMMAP static int registration_stack_range(char role,
                                               uintptr_t *high,
                                               size_t *guard)
 {
-    return role == invalid_alt_role ? 0 : Os_HostCurrentStackRange(low, high, guard);
+    return (role == invalid_alt_role) ? 0 : Os_HostCurrentStackRange(low, high, guard);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -305,7 +305,7 @@ OS_MEMMAP void Os_StackCheck(void)
     if (current_stack == NULL) {
         return;
     }
-    if (sp < current_stack->committed_low || sp >= current_stack->high) {
+    if ((sp < current_stack->committed_low) || (sp >= current_stack->high)) {
         publish_fault(current_stack, 0u, sp, sp, 'M');
     }
     current_stack->sp = sp;
@@ -318,9 +318,9 @@ OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
         Os_BackendShutdown(E_OS_STATE);
     }
     current_stack->kernel_buffer_high = (uintptr_t)(top + 1);
-    current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - 512u * sizeof(*top);
-    if (current_stack->reserve_low < current_stack->kernel_buffer_high &&
-        current_stack->high > current_stack->kernel_buffer_low) {
+    current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - (512u * sizeof(*top));
+    if ((current_stack->reserve_low < current_stack->kernel_buffer_high) &&
+        (current_stack->high > current_stack->kernel_buffer_low)) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -329,7 +329,7 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
 {
     LONG index;
     const DWORD id = GetThreadId(thread);
-    if (context == NULL || context->ContextFlags != CONTEXT_CONTROL) {
+    if ((context == NULL) || (context->ContextFlags != CONTEXT_CONTROL)) {
         Os_BackendShutdown(E_OS_STATE);
     }
     for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
@@ -340,7 +340,7 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
         if ((InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) &&
             (record->thread_id == id)) {
             uintptr_t sp = context->Rsp;
-            if (sp < record->committed_low || sp >= record->high) {
+            if ((sp < record->committed_low) || (sp >= record->high)) {
                 publish_fault(record, 0u, sp, sp, 'M');
             }
             record->sp = sp;
@@ -358,7 +358,7 @@ OS_MEMMAP static size_t append_hex(char *output, size_t offset, DWORD value)
     size_t cursor = offset;
     unsigned index;
     for (index = 0u; index < 8u; ++index) {
-        output[cursor] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
+        output[cursor] = "0123456789ABCDEF"[(value >> (28u - (index * 4u))) & 15u];
         ++cursor;
     }
     return cursor;

@@ -104,7 +104,7 @@ static StatusType admit_batch(const Ecu_HostBatch *batch)
     if (status == E_OK) {
         const uint64_t span = batch->epoch - batch->completed_epoch;
         const uint64_t transport_frames =
-            ((uint64_t)ECU_MAX_PDU_PAYLOAD + UINT64_C(6)) / UINT64_C(7) + UINT64_C(2);
+            (((uint64_t)ECU_MAX_PDU_PAYLOAD + UINT64_C(6)) / UINT64_C(7)) + UINT64_C(2);
         unsigned diagnostic_inputs = 0u;
         uint16_t index;
         uint64_t required;
@@ -172,7 +172,7 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         tick(batch, at, sink, context, &control);
     }
     batch->first_input_sequence =
-        (batch->count == 0u) ? UINT64_C(0) : batch->sequence + UINT64_C(1);
+        (batch->count == 0u) ? UINT64_C(0) : (batch->sequence + UINT64_C(1));
     batch->sequence += (uint64_t)batch->count;
     batch->input_sequences_reserved = 1u;
     require(Ecu_TargetPostBatch(batch->epoch, batch->frames, batch->count, &ticket) == E_OK);

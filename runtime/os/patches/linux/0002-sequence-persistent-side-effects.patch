@@ -1,6 +1,22 @@
-diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posix/port.c
 --- a/portable/ThirdParty/GCC/Posix/port.c
 +++ b/portable/ThirdParty/GCC/Posix/port.c
+@@ -91,13 +91,13 @@
+ int Os_PortInterruptSourceControl(uint32_t interrupt, unsigned operation, boolean clear)
+ {
+     uint32_t bit;
+-    if (interrupt <= OS_CONTROLLED_TICK_INTERRUPT || interrupt >= PORT_INTERRUPT_COUNT ||
++    if ((interrupt <= OS_CONTROLLED_TICK_INTERRUPT) || (interrupt >= PORT_INTERRUPT_COUNT) ||
+         Os_InterruptVectorTable[interrupt] == NULL) {
+         return 0;
+     }
+     bit = (uint32_t)1u << interrupt;
+-    if ((operation == 0u && (disabled_sources & bit) != 0u) ||
+-        (operation == 1u && (disabled_sources & bit) == 0u)) {
++    if (((operation == 0u) && ((disabled_sources & bit) != 0u)) ||
++        ((operation == 1u) && ((disabled_sources & bit) == 0u))) {
+         return 2;
+     }
+     if (operation == 0u) {
 @@ -107,8 +107,10 @@
              pending &= ~bit;
          }
@@ -27,7 +43,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
 -                priority = candidate;
 +        if ((pending & ~seen & bit) != 0u) {
 +            if (Os_BackendInterruptEnabled(index) != 0) {
-+                if (nested == 0 && index == portINTERRUPT_YIELD) {
++                if ((nested == 0) && (index == portINTERRUPT_YIELD)) {
 +                    return index;
 +                }
 +                if (candidate > priority) {
@@ -37,6 +53,23 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
              }
          }
      }
+@@ -158,13 +162,13 @@
+     const Os_NativeStackType *stack = Os_StackCurrent();
+     const unsigned outer = Os_BackendCurrentInterrupt();
+     uint32_t seen = 0u;
+-    if (stack != NULL && stack->role == 'S' && outer < PORT_INTERRUPT_COUNT &&
+-        outer != portINTERRUPT_YIELD && critical_nesting == 0u) {
++    if ((stack != NULL) && (stack->role == 'S') && (outer < PORT_INTERRUPT_COUNT) &&
++        (outer != portINTERRUPT_YIELD) && (critical_nesting == 0u)) {
+         uint32_t interrupt = next_interrupt(seen, Os_BackendInterruptPriority(outer), 1);
+         while (interrupt < PORT_INTERRUPT_COUNT) {
+             const uint32_t requested = run_interrupt(interrupt);
+             seen |= (uint32_t)1u << interrupt;
+-            if (requested != 0u && Os_BackendInterruptMaySchedule(interrupt) != 0) {
++            if ((requested != 0u) && (Os_BackendInterruptMaySchedule(interrupt) != 0)) {
+                 Os_BackendRequestIsrReschedule();
+             }
+             interrupt = next_interrupt(seen, Os_BackendInterruptPriority(outer), 1);
 @@ -192,9 +196,14 @@
      while (interrupt < PORT_INTERRUPT_COUNT) {
          const uint32_t requested = run_interrupt(interrupt);
@@ -55,7 +88,31 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
          }
          interrupt = next_interrupt(seen, 0u, 0);
      }
-@@ -272,9 +281,13 @@
+@@ -227,7 +236,7 @@
+     }
+     for (;;) {
+         DWORD ready = WaitForSingleObject(interrupt_event, 100u);
+-        if (ready != WAIT_OBJECT_0 && ready != WAIT_TIMEOUT) {
++        if ((ready != WAIT_OBJECT_0) && (ready != WAIT_TIMEOUT)) {
+             Os_BackendShutdown(E_OS_STATE);
+         }
+         if (port_running == pdFALSE) {
+@@ -257,7 +266,7 @@
+     PortTask state;
+     state.yielded = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+     state.thread = Os_PortTaskThread(code, argument, top);
+-    configASSERT((state.yielded != NULL) && (state.thread != NULL));
++    configASSERT((state.yielded != NULL) && (state.thread != NULL));
+     (void)memcpy((unsigned char *)storage, (const unsigned char *)&state, sizeof(state));
+     return storage;
+ }
+@@ -267,14 +276,18 @@
+     interrupt_gate = Os_PortMutex(NULL, FALSE, NULL);
+     interrupt_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+     dispatcher_registered = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+-    if (interrupt_gate == NULL || interrupt_event == NULL || dispatcher_registered == NULL) {
++    if ((interrupt_gate == NULL) || (interrupt_event == NULL) || (dispatcher_registered == NULL)) {
+         Os_BackendShutdown(E_OS_STATE);
      }
      dispatcher_thread = Os_HostCreateActor(262144u, &dispatcher_start, NULL,
                                             STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
@@ -97,7 +154,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
      }
      ++critical_nesting;
  }
-@@ -306,10 +322,18 @@
+@@ -306,12 +322,20 @@
      --critical_nesting;
      if (port_running != pdFALSE) {
          HANDLE handoff = NULL;
@@ -105,6 +162,8 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
 -            Os_PortDispatchNested();
 -        }
 -        if (critical_nesting == 0u && pending != 0u && xInsideInterrupt == pdFALSE) {
+-            if (actor != NULL &&
+-                (actor->role == 'T' || actor->role == 'I' || actor->role == 'B')) {
 +        if (critical_nesting == 0u) {
 +            if (xInsideInterrupt != pdFALSE) {
 +                Os_PortDispatchNested();
@@ -117,9 +176,11 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
 +            }
 +        }
 +        if (publish) {
-             if (actor != NULL &&
-                 (actor->role == 'T' || actor->role == 'I' || actor->role == 'B')) {
++            if ((actor != NULL) &&
++                ((actor->role == 'T') || (actor->role == 'I') || (actor->role == 'B'))) {
                  handoff = selected_task().yielded;
+                 if (ResetEvent(handoff) == 0) {
+                     Os_BackendShutdown(E_OS_STATE);
 @@ -324,8 +348,10 @@
          if (ReleaseMutex(interrupt_gate) == 0) {
              Os_BackendShutdown(E_OS_STATE);
@@ -133,7 +194,15 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
          }
      }
  }
-@@ -346,7 +372,11 @@
+@@ -339,32 +365,41 @@
+ 
+ void vPortClearInterruptMask(UBaseType_t mask)
+ {
+-    configASSERT(critical_nesting == mask + 1u);
++    configASSERT(critical_nesting == (mask + 1u));
+     vPortExitCritical();
+ }
+ 
  static void post_interrupt(uint32_t interrupt, int wait_for_dispatch)
  {
      const Os_NativeStackType *actor = Os_StackCurrent();
@@ -146,9 +215,22 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
          return;
      }
      if (WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
-@@ -363,8 +393,13 @@
-         (actor->role == 'T' || actor->role == 'I' || actor->role == 'B') &&
-         critical_nesting == 0u) {
+         Os_BackendShutdown(E_OS_STATE);
+     }
+     pending |= (uint32_t)1u << interrupt;
+-    if (actor != NULL && actor->role == 'S') {
++    if ((actor != NULL) && (actor->role == 'S')) {
+         Os_PortDispatchNested();
+     }
+     if (Os_HostSetEvent(interrupt_event) == 0) {
+         Os_BackendShutdown(E_OS_STATE);
+     }
+-    if (wait_for_dispatch != 0 && actor != NULL &&
+-        (actor->role == 'T' || actor->role == 'I' || actor->role == 'B') &&
+-        critical_nesting == 0u) {
++    if ((wait_for_dispatch != 0) && (actor != NULL) &&
++        ((actor->role == 'T') || (actor->role == 'I') || (actor->role == 'B')) &&
++        (critical_nesting == 0u)) {
          const PortTask task = selected_task();
 -        if ((ResetEvent(task.yielded) == 0) || (ReleaseMutex(interrupt_gate) == 0) ||
 -            (WaitForSingleObject(task.yielded, 2000u) != WAIT_OBJECT_0)) {
@@ -162,7 +244,18 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
              Os_BackendShutdown(E_OS_STATE);
          }
          return;
-@@ -396,12 +431,16 @@
+@@ -389,19 +424,23 @@
+     if (interrupt >= PORT_INTERRUPT_COUNT) {
+         Os_BackendShutdown(E_OS_ID);
+     }
+-    if ((interrupt == portINTERRUPT_YIELD && handler != &yield_interrupt) ||
+-        (interrupt == portINTERRUPT_TICK && handler != &tick_interrupt) ||
+-        (interrupt > portINTERRUPT_TICK && Os_BackendInterruptPriority(interrupt) == 0u) ||
++    if (((interrupt == portINTERRUPT_YIELD) && (handler != &yield_interrupt)) ||
++        ((interrupt == portINTERRUPT_TICK) && (handler != &tick_interrupt)) ||
++        ((interrupt > portINTERRUPT_TICK) && (Os_BackendInterruptPriority(interrupt) == 0u)) ||
+-        Os_MailboxHandlerAllowed(interrupt, handler) == 0 ||
++        (Os_MailboxHandlerAllowed(interrupt, handler) == 0) ||
          Os_BackendHandlerAllowed(interrupt, handler) == 0) {
          Os_BackendShutdown(E_OS_ACCESS);
      }

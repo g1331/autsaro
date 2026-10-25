@@ -156,7 +156,8 @@ OS_MEMMAP uint32 Os_BackendInterruptPriority(uint32 interrupt)
         priority = (Os_Config->interrupts == NULL) ? OS_MAX_ISR_PRIORITY
                                                    : Os_Config->interrupts->priorities[interrupt];
     } else if (interrupt == OS_CONTROLLED_TICK_INTERRUPT) {
-        priority = (Os_Config != NULL && Os_Config->interrupts != NULL) ? 1u : OS_MAX_ISR_PRIORITY;
+        priority =
+            ((Os_Config != NULL) && (Os_Config->interrupts != NULL)) ? 1u : OS_MAX_ISR_PRIORITY;
     } else {
         /* Kernel yield and inactive identities cannot preempt an ISR. */
     }
@@ -395,8 +396,8 @@ OS_MEMMAP static void leave_running(uint32 index);
 OS_MEMMAP static uint32 configured_interrupt(void)
 {
     const uint32 interrupt = current_interrupt;
-    configASSERT(Os_Config != NULL && Os_Config->interrupts != NULL &&
-                 Os_Config->interrupts->entries != NULL && interrupt < OS_MAX_INTERRUPTS);
+    configASSERT((Os_Config != NULL) && (Os_Config->interrupts != NULL) &&
+                 (Os_Config->interrupts->entries != NULL) && (interrupt < OS_MAX_INTERRUPTS));
     const Os_IsrEntryType entry = Os_Config->interrupts->entries[interrupt];
     configASSERT(entry != NULL);
     entry();
@@ -445,7 +446,7 @@ OS_MEMMAP void Os_BackendInterruptLeave(void)
 {
     const Os_ErrorParametersType arguments = {.service_TerminateTask = {0u}};
     const uint32 actor = OS_MAX_TASKS + current_interrupt;
-    configASSERT(interrupt_depth != 0u && current_interrupt < OS_MAX_INTERRUPTS);
+    configASSERT((interrupt_depth != 0u) && (current_interrupt < OS_MAX_INTERRUPTS));
     if (Os_InterruptDisabled() != 0) {
         /* Native ISR dispatch already owns the interrupt mutex and has stopped
          * the automotive Task. Restore only this logical ISR's saved pairs. */
@@ -481,7 +482,7 @@ OS_MEMMAP void Os_BackendInterruptLeave(void)
 #include "Os_MemMap.h"
 OS_MEMMAP static void observe_tick_masked(uint32 interrupt, sint32 allowed)
 {
-    if (interrupt == OS_CONTROLLED_TICK_INTERRUPT && allowed == 0) {
+    if ((interrupt == OS_CONTROLLED_TICK_INTERRUPT) && (allowed == 0)) {
         Os_TimeTestMasked();
     }
 }
@@ -814,7 +815,7 @@ OS_MEMMAP static void arti_observe_tasks(void)
             Os_ArtiTask(OS_ARTI_TASK_TERMINATE, Os_Config->tasks[i].id);
             previous[i] = SUSPENDED;
         } else if ((previous[i] == RUNNING) && (state != RUNNING)) {
-            Os_ArtiTask(state == WAITING ? OS_ARTI_TASK_WAIT : OS_ARTI_TASK_PREEMPT,
+            Os_ArtiTask((state == WAITING) ? OS_ARTI_TASK_WAIT : OS_ARTI_TASK_PREEMPT,
                         Os_Config->tasks[i].id);
         } else {
             /* No outgoing task-state edge occurred. */
@@ -1031,7 +1032,7 @@ OS_MEMMAP void Os_TargetTrace(uint8 marker)
     /* This bounded diagnostic prefix is not an automotive output queue.
      * Continued operation must not depend on room for optional trace text;
      * report omitted markers explicitly without replacing the saved prefix. */
-    if (trace_length + 1u >= sizeof(trace)) {
+    if ((trace_length + 1u) >= sizeof(trace)) {
         if (trace_dropped != UINT64_MAX) {
             ++trace_dropped;
         }
@@ -1096,7 +1097,7 @@ OS_MEMMAP static void report_and_exit(void)
     if (Os_HostTextWrite(&text) == 0) {
         output_failed = 1;
     }
-    ExitProcess((output_failed != 0 && shutdown_reason == E_OK) ? E_OS_STATE : shutdown_reason);
+    ExitProcess(((output_failed != 0) && (shutdown_reason == E_OK)) ? E_OS_STATE : shutdown_reason);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1223,11 +1224,11 @@ OS_MEMMAP static void stop_scheduler_after_actors(void) {}
 #include "Os_MemMap.h"
 OS_MEMMAP static DWORD WINAPI control(void *argument)
 {
-    HANDLE event = argument == NULL ? close_event : backup_event;
+    HANDLE event = (argument == NULL) ? close_event : backup_event;
     uint32 i;
     DWORD current = GetCurrentThreadId();
     DWORD waited;
-    uint32 index = argument == NULL ? 0u : 1u;
+    uint32 index = (argument == NULL) ? 0u : 1u;
     if (Os_StackRegister((argument == NULL) ? 'C' : 'D') != 0) {
         (void)InterlockedExchange(&controller_healthy[index], 1);
     }
@@ -1265,7 +1266,7 @@ OS_MEMMAP static DWORD WINAPI control(void *argument)
             stop_thread(control_thread);
         }
     }
-    if (controller_healthy[1] == 0 && backup_thread != NULL && argument == NULL) {
+    if ((controller_healthy[1] == 0) && (backup_thread != NULL) && (argument == NULL)) {
         stop_thread(backup_thread);
     }
     stop_scheduler_after_actors();
@@ -1324,7 +1325,7 @@ OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
             Os_StackFatalExit();
         }
     }
-    if (Os_HostSetEvent(controller_healthy[0] != 0 ? close_event : backup_event) == 0) {
+    if (Os_HostSetEvent((controller_healthy[0] != 0) ? close_event : backup_event) == 0) {
         ExitProcess(E_OS_STACKFAULT);
     }
     (void)InterlockedExchange(&Os_Closing, 1);
@@ -1384,7 +1385,7 @@ OS_MEMMAP void Os_BackendAssert(const void *file, sint32 line)
 #include "Os_MemMap.h"
 OS_MEMMAP static boolean fail_next(void)
 {
-    return fail_resource != 0u && resource_calls == fail_resource;
+    return (fail_resource != 0u) && (resource_calls == fail_resource);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1504,14 +1505,14 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
     Os_NativeTaskStartType *start;
     HANDLE thread;
     CONTEXT context;
-    if (task_thread_count >= OS_MAX_TASKS + 2u) {
+    if (task_thread_count >= (OS_MAX_TASKS + 2u)) {
         Os_BackendShutdown(E_OS_STATE);
     }
     start = &native_starts[task_thread_count];
     start->entry = code;
     start->argument = argument;
     start->buffer_top = buffer_top;
-    start->role = (char)(code == &task_entry ? 'T' : (code == &bootstrap ? 'B' : 'I'));
+    start->role = (char)((code == &task_entry) ? 'T' : ((code == &bootstrap) ? 'B' : 'I'));
     start->registered = Os_PortEvent(NULL, 0, 0, NULL);
     start->gate = Os_PortEvent(NULL, 0, 0, NULL);
     thread = Os_PortThread(NULL,
@@ -1681,8 +1682,8 @@ OS_MEMMAP static void read_resource_failure(void)
         unsigned long value;
         errno = 0;
         value = strtoul(failure, &end, 10);
-        if (errno != 0 || *failure < '0' || *failure > '9' || *end != '\0' || value > UINT_MAX ||
-            value == 0u) {
+        if ((errno != 0) || (*failure < '0') || (*failure > '9') || (*end != '\0') ||
+            (value > UINT_MAX) || (value == 0u)) {
             Os_BackendShutdown(E_OS_VALUE);
         }
         fail_resource = (uint32)value;
@@ -1752,7 +1753,7 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
     if (InterlockedCompareExchange(&started, 1, 0) != 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (Os_Config == NULL || (mode != 1u && mode != 2u)) {
+    if ((Os_Config == NULL) || ((mode != 1u) && (mode != 2u))) {
         Os_BackendShutdown(E_OS_VALUE);
     }
     if ((Os_Config->input_event != 0u) &&
@@ -2157,7 +2158,7 @@ OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
             resource_owner[resource] = (uint32)task + 1u;
             if (task < OS_MAX_TASKS) {
                 const UBaseType_t ceiling =
-                    config->isr_access != 0u ? OS_MAX_PRIORITY + 1u : config->ceiling;
+                    (config->isr_access != 0u) ? (OS_MAX_PRIORITY + 1u) : config->ceiling;
                 if (ceiling > saved_priorities[task][depth]) {
                     vTaskPrioritySet(handles[task], ceiling);
                 }

@@ -381,7 +381,7 @@ OS_MEMMAP static void increment(uint32 counter)
                         ++depth;
                         values[child] = (values[child] == config->counters[child].maximum)
                                             ? 0u
-                                            : values[child] + UINT64_C(1);
+                                            : (values[child] + UINT64_C(1));
                     } else {
                         action(i);
                     }

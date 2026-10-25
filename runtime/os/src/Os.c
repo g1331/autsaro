@@ -143,9 +143,9 @@ OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
     if (Os_Config != NULL) {
         return E_OS_STATE;
     }
-    if (config == NULL || config->tasks == NULL || config->task_count == 0u ||
-        config->task_count > OS_MAX_TASKS || config->host_stack_reserve < 65536u ||
-        config->host_stack_reserve > 16777216u || config->host_stack_reserve % 65536u != 0u) {
+    if ((config == NULL) || (config->tasks == NULL) || (config->task_count == 0u) ||
+        (config->task_count > OS_MAX_TASKS) || (config->host_stack_reserve < 65536u) ||
+        (config->host_stack_reserve > 16777216u) || ((config->host_stack_reserve % 65536u) != 0u)) {
         return E_OS_VALUE;
     }
     for (i = 0u; i < config->task_count; ++i) {
@@ -301,7 +301,7 @@ OS_MEMMAP boolean Os_Implementation_isOsStarted(void)
     if (status != E_OK) {
         return FALSE;
     }
-    return InterlockedCompareExchange(&start_called, 0, 0) != 0 ? TRUE : FALSE;
+    return (InterlockedCompareExchange(&start_called, 0, 0) != 0) ? TRUE : FALSE;
 }
 
 OS_MEMMAP CoreIdType Os_Implementation_GetCoreID(void)
@@ -329,7 +329,7 @@ OS_MEMMAP StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeTy
              * is intentionally unchecked as required for single-core OS. */
         }
     }
-    return Os_HookContext() == OS_HOOK_ERROR
+    return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
                : Os_ErrorResult(OSServiceId_ControlIdle, status, &arguments);
 }
@@ -375,9 +375,10 @@ OS_MEMMAP ISRType Os_Implementation_GetISRID(void)
     if (status != E_OK) {
         return INVALID_ISR;
     }
-    return (stack != NULL && stack->role == 'S' && interrupt < 32u &&
-            interrupt != OS_KERNEL_YIELD_INTERRUPT && interrupt != OS_CONTROLLED_TICK_INTERRUPT &&
-            Os_Config != NULL && (Os_Config->category1_isrs & ((uint32)1u << interrupt)) == 0u)
+    return ((stack != NULL) && (stack->role == 'S') && (interrupt < 32u) &&
+            (interrupt != OS_KERNEL_YIELD_INTERRUPT) &&
+            (interrupt != OS_CONTROLLED_TICK_INTERRUPT) && (Os_Config != NULL) &&
+            ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) == 0u))
                ? (ISRType)interrupt
                : INVALID_ISR;
 }
