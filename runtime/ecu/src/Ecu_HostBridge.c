@@ -131,7 +131,8 @@ static StatusType admit_batch(const Ecu_HostBatch *batch)
 
 StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
 {
-    Ecu_HostWatch control;
+    /* The sole producer joins its observer before reusing this process-lifetime context. */
+    static Ecu_HostWatch control;
     Os_HostHandleType monitor;
     Os_TickCompletionType previous;
     Ecu_BatchCompletion completed;

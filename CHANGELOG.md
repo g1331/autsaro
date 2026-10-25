@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- The sole HostBatch producer reuses process-lifetime watchdog context; disabled ErrorHook parameter access no longer captures pointers, and retired ISR snapshots are cleared after restoration. Regenerate sealed deliveries and rebuild consumers (#371)
+
 - Unexpected Linux futex errors stop native handoff instead of being ignored; faulted-stack parking preserves its stack-fault exit reason. Regenerate sealed deliveries and rebuild consumers (#371)
 
 - Linux context observation copies only the fixed kernel control prefix and separate legacy FP state into an initialized owned snapshot, preserving self-copy without assuming the full glibc ucontext tail belongs to the signal frame. Regenerate sealed deliveries and rebuild consumers (#371)

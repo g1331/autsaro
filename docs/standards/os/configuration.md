@@ -95,3 +95,13 @@ R20.7为Required（主文印刷159／PDF167；AMD2追加C11），只要求宏参
 Os.h的TASK、OS_TASK_ENTRY、ISR、OS_ISR_ENTRY真实使用##，保留R20.10的Advisory违反（印刷162／PDF170）。实际Task／ISR ID是公共标量宏，入口函数在同一C名字空间须有不同名字；直接以identifier定义函数会遇到ID宏展开及名字冲突。经普通外层宏转交参数还会先展开ID，不能假定可以无损复用一次拼接。当前保留字面配置名到私有入口名的映射与既有ABI，不把具体Os_TaskEntry_／Os_IsrEntry_前缀说成SWS强制；技术理由与必要接口形状、后续独立复核分开记录，不冒称MISRA合法偏离。
 
 R20.11／R20.12均为Required（印刷162–163／PDF170–171，AMD2追加C11）。上述四宏的identifier仅作为##操作数；当前Arti.h的四个文本参数只作#操作数，两个数值参数只作一次普通表达式展开；没有#参数紧接##，也没有同一参数在字符串化／拼接与普通展开之间混用。实际configASSERT只在if中求值x并传递文件／行，不字符串化x。该结论来自全部五个自有操作符宏的替换列表；当前标准工程生成目录及真实编译的补丁后内核未发现其他#／##宏，不替未核SDK及任意应用扩张通过。
+
+## 自动与线程局部对象的借用
+
+R18.6为Required/System（主文印刷150／PDF158；AMD2追加C11），AMD4.24（印刷15／PDF22）扩展到thread-local。不能把正常join、后续不再读取或phase guard直接等同于不存在长寿命地址副本。Os_LinuxCaptureContext先完成局部快照及目标自有FP指针再写目标；复制的是copied中的指针值，不是&copied。此判断只覆盖该具体绑定，不替其他信号帧成员或provider地址证明存储期。
+
+HostBridge以既有sole native producer、同一target不可重入为前提，将watch context改成函数内static。两字段在每次创建observer前写入，上次observer已wait/close；未新增owner状态或锁，目标接口的native_thread绑定不冒充Bridge入口锁。真实静态地址编译属性对照与正常多批次／背压执行分开取证。host/probe入口传NULL，Task启动数据及其指向的task_memory均为静态对象；不把这些实际调用外推为任意外部callback参数均符合。
+
+Os_BackendInterruptLeave在恢复后清空退役error副本，避免继续留存已恢复的参数；父TLS状态和外层interrupt保持。Os_ErrorResult按已校验0/1开关从局部两项const source表选择empty_parameters或arguments，STD_OFF不再捕获指针字段，STD_ON保持getter语义；没有新增恒定控制表达式或宏。当前未使用槽的观察在父参数仍有效时进行，撤销清理和恢复禁用复制须被精确位置拒绝，不以失效地址解引用作反例。
+
+上述清理不把enabled ErrorHook的初始长寿命复制直接记为R18.6满足。OSEK2.2.3 §11.2／13.8.4只明确第一项object identifier的accessor义务及参数命名；固定SWS的ECUC_Os_00048把OsUseParameterAccess定义交给ISO17356，且没有给出默认值。当前generator缺值时STD_ON是项目选择。对应ISO原章及指针参数accessor必要性尚未核定，不能把全部已实现的getter当成已证AUTOSAR强制行，或填ADR0023批准／MR12。实际getter保留和其他TLS／SDK地址流仍分别核查；[来源及整改闭包](https://github.com/g1331/autsaro/pull/371#issuecomment-6399598461)留PR。

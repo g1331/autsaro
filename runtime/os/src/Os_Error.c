@@ -159,7 +159,8 @@ OS_MEMMAP StatusType Os_ErrorResult(OSServiceIdType service,
             taskENTER_CRITICAL();
         }
         Os_BackendGuardService();
-        parameters = *arguments;
+        const Os_ErrorParametersType *const sources[2] = {&empty_parameters, arguments};
+        parameters = *sources[OS_USE_PARAMETER_ACCESS];
         service_id = service;
         phase = OS_HOOK_ERROR;
         ++hook_depth;

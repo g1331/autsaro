@@ -103,7 +103,7 @@ void ShutdownHook(StatusType reason) { (void)reason; }
 
 int main(int argc, char **argv)
 {
-    volatile int32_t cell = 0;
+    static volatile int32_t cell;
     if (argc != 2) {
         return 2;
     }

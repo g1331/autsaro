@@ -428,6 +428,96 @@ class NativeFacilityTests(unittest.TestCase):
         "nanosleep", "sigaddset", "sigaction", "pthread_create", "sigemptyset", "sigfillset",
     )
 
+    def test_retired_interrupt_snapshot_drops_borrowed_parameters(self):
+        import os_suites
+
+        clear = "interrupt_frames[interrupt_depth].error = (Os_ErrorContextType){0};"
+        for retained in (False, True):
+            with self.subTest(retained=retained), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                backend = target / "src/Os_Backend.c"
+                text = backend.read_text(encoding="utf-8")
+                self.assertEqual(text.count(clear), 1)
+                if retained:
+                    text = text.replace(clear, "")
+                anchor = "    current_interrupt = interrupt_frames[interrupt_depth].interrupt;\n}\n"
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor, anchor +
+                    "\nOS_MEMMAP const void *Os_TestRetiredErrorPointer(void)\n{\n"
+                    "    return interrupt_frames[interrupt_depth].error.parameters.service_GetTaskState.State;\n}\n")
+                backend.write_text(text, encoding="utf-8")
+                fixture = target / "tests/nested_interrupts.c"
+                text = fixture.read_text(encoding="utf-8")
+                include = '#include "Os_Backend.h"'
+                self.assertEqual(text.count(include), 1)
+                text = text.replace(include, include + "\nconst void *Os_TestRetiredErrorPointer(void);")
+                anchor = ("check(OSErrorGetServiceId() == service && OSError_GetTaskState_TaskID() == 99u);\n"
+                          "        check(OSError_GetTaskState_State() == &parent_state && parent_state == 77u);")
+                self.assertEqual(text.count(anchor), 1)
+                observe = "check(Os_TestRetiredErrorPointer() == NULL);"
+                text = text.replace(anchor, anchor + "\n        " + observe)
+                line = next(i for i, value in enumerate(text.splitlines(), 1) if value.strip() == observe)
+                fixture.write_text(text, encoding="utf-8")
+                with os_suites.native_session(directory, "retired-error-parameters"):
+                    binary, _ = os_suites.build(directory, "nested_interrupts.c", target=target)
+                    result = os_suites.execute(binary, "hook")
+                self.assertEqual(result["exit"], 7 if retained else 0, result)
+                self.assertEqual(result["stderr"], (
+                    f"nested assertion failed: {fixture}:{line} invariant=Os_TestRetiredErrorPointer() == NULL reason=7"
+                    if retained else ""), result)
+                expected = ("children=0 grandchildren=1 helpers=0 errors=1 depth=1 maximum=2 trace=APEG reason=7"
+                            if retained else "children=1 grandchildren=1 helpers=1 errors=1 depth=0 maximum=2 trace=APEGeCcpHB reason=0")
+                self.assertIn("nested scenario=hook " + expected, result["stdout"])
+                print(f"retired-error retained={retained} exit={result['exit']}", flush=True)
+
+    def test_disabled_error_parameter_access_retains_no_pointer_fields(self):
+        import os_suites
+
+        fields = ("service_GetTaskID.TaskID", "service_GetTaskState.State", "service_GetEvent.Event",
+                  "service_GetCounterValue.Value", "service_GetElapsedValue.Value",
+                  "service_GetElapsedValue.ElapsedValue", "service_GetAlarmBase.Info",
+                  "service_GetAlarm.Tick", "service_GetScheduleTableStatus.ScheduleStatus")
+        for service_access, parameter_access, retained in ((1, 1, False), (0, 1, False),
+                                                         (1, 0, False), (0, 0, False), (1, 0, True)):
+            with self.subTest(service_access=service_access, parameter_access=parameter_access, retained=retained), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                fixture = target / "tests/error_hooks.c"
+                text = fixture.read_text(encoding="utf-8")
+                anchor = "void ErrorHook(StatusType Error)\n{"
+                self.assertEqual(text.count(anchor), 1)
+                observations = ("\n#if (OS_USE_PARAMETER_ACCESS == STD_OFF)\n"
+                                "    const Os_ErrorParametersType *const captured = Os_ErrorParametersCurrent();\n")
+                for field in fields:
+                    observations += (f"    if (captured->{field} != NULL) {{\n"
+                        f'        if (fprintf(stderr, "disabled_hook retained field={field}\\n") < 0) {{ ExitProcess(97u); }}\n'
+                        "        if (fflush(stderr) != 0) { ExitProcess(97u); }\n"
+                        "        ExitProcess(71u);\n    }\n")
+                text = text.replace(anchor, anchor + observations + "#endif\n")
+                fixture.write_text(text, encoding="utf-8")
+                if retained:
+                    source = target / "src/Os_Error.c"
+                    text = source.read_text(encoding="utf-8")
+                    selection = ("const Os_ErrorParametersType *const sources[2] = {&empty_parameters, arguments};\n"
+                                 "        parameters = *sources[OS_USE_PARAMETER_ACCESS];")
+                    self.assertEqual(text.count(selection), 1)
+                    source.write_text(text.replace(selection, "parameters = *arguments;"), encoding="utf-8")
+                with os_suites.native_session(directory, "disabled-error-parameters"):
+                    binary, _ = os_suites.build(directory, "error_hooks.c", target=target,
+                        defines=(f"OS_USE_GET_SERVICE_ID={service_access}", f"OS_USE_PARAMETER_ACCESS={parameter_access}"))
+                    if retained:
+                        result = os_suites.execute(binary, "normal")
+                        self.assertEqual(result["exit"], 71, result)
+                        self.assertEqual(result["stdout"], "", result)
+                        self.assertEqual(result["stderr"], "disabled_hook retained field=service_GetTaskState.State", result)
+                    else:
+                        observations = os_suites.check_error_hooks(binary, service_access, parameter_access)
+                        self.assertEqual(len(observations), 2)
+                print(f"error-parameters service={service_access} access={parameter_access} retained={retained}", flush=True)
+
     def test_native_futex_errors_and_expected_wake_outcomes(self):
         import os_suites
 

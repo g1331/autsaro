@@ -470,6 +470,7 @@ OS_MEMMAP void Os_BackendInterruptLeave(void)
     }
     --interrupt_depth;
     Os_ErrorContextRestore(&interrupt_frames[interrupt_depth].error);
+    interrupt_frames[interrupt_depth].error = (Os_ErrorContextType){0};
     current_interrupt = interrupt_frames[interrupt_depth].interrupt;
 }
 #define OS_STOP_SEC_CODE
