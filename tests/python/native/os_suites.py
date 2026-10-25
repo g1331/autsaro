@@ -259,6 +259,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
             ),
             ("0022-explicit-function-addresses.patch", ("tasks.c",)),
             ("0023-preserve-parameter-values.patch", ("tasks.c",)),
+            ("0024-conditional-private-definitions.patch", ("tasks.c", "queue.c")),
         ):
             patch = target / "patches" / name
             selection = [f"--include={path}" for path in includes]
