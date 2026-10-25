@@ -18,6 +18,11 @@ static unsigned detach_calls;
 static unsigned join_entered;
 static unsigned release_join;
 static unsigned callback_completed;
+static unsigned actor_joined;
+static unsigned actor_detached;
+static unsigned created_threads;
+static pthread_t actor_thread;
+static pthread_t waiter_thread;
 static DWORD waiter_result;
 
 void StartupHook(void) {}
@@ -39,6 +44,27 @@ DWORD __wrap_Os_LinuxThreadId(void)
     return strcmp(scenario, "identity-error") == 0 ? 0u : __real_Os_LinuxThreadId();
 }
 
+int __real_pthread_create(pthread_t *thread,
+                          const pthread_attr_t *attributes,
+                          void *(*entry)(void *),
+                          void *argument);
+int __wrap_pthread_create(pthread_t *thread,
+                          const pthread_attr_t *attributes,
+                          void *(*entry)(void *),
+                          void *argument)
+{
+    const int result = __real_pthread_create(thread, attributes, entry, argument);
+    if (result == 0) {
+        if (created_threads == 0u) {
+            actor_thread = *thread;
+        } else {
+            waiter_thread = *thread;
+        }
+        ++created_threads;
+    }
+    return result;
+}
+
 int __real_pthread_join(pthread_t thread, void **result);
 int __wrap_pthread_join(pthread_t thread, void **result)
 {
@@ -53,7 +79,11 @@ int __wrap_pthread_join(pthread_t thread, void **result)
             (void)sched_yield();
         }
     }
-    return __real_pthread_join(thread, result);
+    const int status = __real_pthread_join(thread, result);
+    if ((status == 0) && (pthread_equal(thread, actor_thread) != 0)) {
+        __atomic_store_n(&actor_joined, 1u, __ATOMIC_RELEASE);
+    }
+    return status;
 }
 
 int __real_pthread_detach(pthread_t thread);
@@ -64,7 +94,11 @@ int __wrap_pthread_detach(pthread_t thread)
         (void)fputs("detach_rejected attempt=1\n", stderr);
         return EINVAL;
     }
-    return __real_pthread_detach(thread);
+    const int status = __real_pthread_detach(thread);
+    if (status == 0) {
+        __atomic_store_n(&actor_detached, 1u, __ATOMIC_RELEASE);
+    }
+    return status;
 }
 
 static void reject(int code, const char *stage) __attribute__((noreturn));
@@ -72,7 +106,28 @@ static void reject(int code, const char *stage)
 {
     (void)fprintf(stderr, "thread_state_rejected stage=%s\n", stage);
     (void)fflush(stderr);
-    /* Intentional mutants can retain joinable threads; preserve the observed failure. */
+    /* The failure is already observed; reclaim only this fixture's native threads. */
+    __atomic_store_n(&release_join, 1u, __ATOMIC_RELEASE);
+    if ((gate != NULL) && (Os_HostSetEvent(gate) == 0)) {
+        _exit(97);
+    }
+    if ((created_threads > 1u) && (__real_pthread_join(waiter_thread, NULL) != 0)) {
+        _exit(97);
+    }
+    if (__atomic_load_n(&actor_detached, __ATOMIC_ACQUIRE) == 0u) {
+        if ((__atomic_load_n(&actor_joined, __ATOMIC_ACQUIRE) == 0u) &&
+            (__real_pthread_join(actor_thread, NULL) != 0)) {
+            _exit(97);
+        }
+    } else {
+        while (__atomic_load_n(&callback_completed, __ATOMIC_ACQUIRE) == 0u) {
+            (void)sched_yield();
+        }
+    }
+    if (((gate != NULL) && (CloseHandle(gate) == 0)) ||
+        ((completed != NULL) && (CloseHandle(completed) == 0))) {
+        _exit(97);
+    }
     _exit(code);
 }
 

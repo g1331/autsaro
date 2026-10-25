@@ -742,6 +742,7 @@ class NativeFacilityTests(unittest.TestCase):
                         for name in (
                             "Os_StackRegister",
                             "Os_LinuxThreadId",
+                            "pthread_create",
                             "pthread_join",
                             "pthread_detach",
                         )
@@ -870,6 +871,7 @@ class NativeFacilityTests(unittest.TestCase):
                                 for name in (
                                     "Os_StackRegister",
                                     "Os_LinuxThreadId",
+                                    "pthread_create",
                                     "pthread_join",
                                     "pthread_detach",
                                 )
