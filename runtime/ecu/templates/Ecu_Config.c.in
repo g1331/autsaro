@@ -19,7 +19,7 @@ OS_MEMMAP static const Os_TaskConfigType tasks[] = {
     {
         .id = @TASK_SYMBOL@,
         .name = task_name,
-        .entry = OS_TASK_ENTRY(@TASK_SYMBOL@),
+        .entry = &OS_TASK_ENTRY(@TASK_SYMBOL@),
         .priority = @TASK_PRIORITY@u,
         .autostart_modes = 1u,
         .kind = OS_EXTENDED_TASK,

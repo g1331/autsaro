@@ -112,7 +112,7 @@ int main(int argc, char **argv)
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;
     }
-    thread = Os_HostSpawnThread(control, NULL);
+    thread = Os_HostSpawnThread(&control, NULL);
     if (thread == NULL) {
         return 96;
     }

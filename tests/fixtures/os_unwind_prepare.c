@@ -48,7 +48,7 @@ _Unwind_Reason_Code __wrap__Unwind_Backtrace(_Unwind_Trace_Fn trace, void *argum
     } else {
         selected_trace = trace;
         selected_argument = argument;
-        status = __real__Unwind_Backtrace(observe_frame, NULL);
+        status = __real__Unwind_Backtrace(&observe_frame, NULL);
         prepared = ((status == _URC_END_OF_STACK) && (frames != 0u)) ? 1 : 0;
     }
     return status;

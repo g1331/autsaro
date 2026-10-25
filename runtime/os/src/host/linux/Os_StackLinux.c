@@ -211,7 +211,7 @@ OS_MEMMAP void Os_StackPrepare(void)
     }
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
     (void)sigfillset(&handler.sa_mask);
-    handler.sa_sigaction = guard_signal;
+    handler.sa_sigaction = &guard_signal;
     errno = 0;
     if (sigaction(SIGSEGV, &handler, NULL) != 0) {
         Os_BackendShutdown(E_OS_STATE);

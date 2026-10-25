@@ -640,15 +640,15 @@ pub(super) fn files(
         if signal.receive {
             receive.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));
             ls_rx.push(row(&format!(
-                "{ls_source}, {source}, PduR_CanIfRxIndication"
+                "{ls_source}, {source}, &PduR_CanIfRxIndication"
             )));
-            pd_rx.push(row(&format!("{source}, {pdu}, Com_RxIndication")));
+            pd_rx.push(row(&format!("{source}, {pdu}, &Com_RxIndication")));
         } else {
             transmit.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));
             ls_tx.push(row(&format!(
-                "LSDUR_UP_PDUR, {ls_source}, {can_if}, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit"
+                "LSDUR_UP_PDUR, {ls_source}, {can_if}, &PduR_CanIfTxConfirmation, &PduR_CanIfTriggerTransmit"
             )));
-            pd_tx.push(row(&format!("PDUR_UP_COM, {source}, PDUR_LO_LSDUR, {ls_source}, LSduR_PduRTransmit, Com_TxConfirmation, Com_TriggerTransmit")));
+            pd_tx.push(row(&format!("PDUR_UP_COM, {source}, PDUR_LO_LSDUR, {ls_source}, &LSduR_PduRTransmit, &Com_TxConfirmation, &Com_TriggerTransmit")));
         }
     }
     config_data(
@@ -662,7 +662,7 @@ pub(super) fn files(
         "Com",
         "static const Com_ConfigType com_config",
         &values(&format!(
-            "com_pdus, {}u, {}, Rte_COMCbk, Rte_COMCbkRxTOut, PduR_ComTransmit",
+            "com_pdus, {}u, {}, &Rte_COMCbk, &Rte_COMCbkRxTOut, &PduR_ComTransmit",
             description.signals.len(),
             name("Com", "ComIPduGroup", &com.receive_group.path)
         )),
@@ -693,18 +693,20 @@ pub(super) fn files(
         let ls_tx_source = name("LSduR", "LSduRPathSourcePdu", &tx_route.source);
         receive.push(row(&format!("{}u, {can_rx}, 8u", tp.request_can_id)));
         transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.response_can_id)));
-        ls_rx.push(row(&format!("{ls_rx_source}, {tp_rx}, CanTp_RxIndication")));
+        ls_rx.push(row(&format!(
+            "{ls_rx_source}, {tp_rx}, &CanTp_RxIndication"
+        )));
         ls_tx.push(row(&format!(
-            "LSDUR_UP_CANTP, {ls_tx_source}, {can_tx}, CanTp_TxConfirmation, NULL_PTR"
+            "LSDUR_UP_CANTP, {ls_tx_source}, {can_tx}, &CanTp_TxConfirmation, NULL_PTR"
         )));
         // CanTp confirms through tp_routes, under its own N-SDU namespace.
-        pd_tx.push(row(&format!("PDUR_UP_DCM, {pd_tx_source}, PDUR_LO_CANTP, {tp_tx_sdu}, CanTp_Transmit, NULL_PTR, NULL_PTR")));
+        pd_tx.push(row(&format!("PDUR_UP_DCM, {pd_tx_source}, PDUR_LO_CANTP, {tp_tx_sdu}, &CanTp_Transmit, NULL_PTR, NULL_PTR")));
         config_data(
             &mut pd_configuration,
             "PduR",
             "static const PduR_TpRouteType tp_routes[]",
             &[row(&format!(
-                "{pd_rx_source}, {dcm_rx}, {pd_tx_destination}, {dcm_tx}, Dcm_StartOfReception, Dcm_CopyRxData, Dcm_TpRxIndication, Dcm_CopyTxData, Dcm_TpTxConfirmation"
+                "{pd_rx_source}, {dcm_rx}, {pd_tx_destination}, {dcm_tx}, &Dcm_StartOfReception, &Dcm_CopyRxData, &Dcm_TpRxIndication, &Dcm_CopyTxData, &Dcm_TpTxConfirmation"
             ))],
         );
         let period = description.schedule.counter_tick_ms;
@@ -732,7 +734,7 @@ pub(super) fn files(
                     .flat_map(|component| &component.runnables)
                     .find(|runnable| runnable.event.is_none())
                     .ok_or_else(|| PlanDiagnostic::plan_premise(&did.client_port))?;
-                (did.did, bridge.symbol.clone())
+                (did.did, format!("&{}", bridge.symbol))
             }
             None => (0, "NULL_PTR".to_string()),
         };
@@ -746,7 +748,7 @@ pub(super) fn files(
             "Dcm",
             "static const Dcm_ConfigType dcm_config",
             &values(&format!(
-                "{dcm_rx}, {dcm_tx}, {}, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {pd_tx_source}, Ecu_DcmAuthenticationMode, {}u",
+                "{dcm_rx}, {dcm_tx}, {}, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {pd_tx_source}, &Ecu_DcmAuthenticationMode, {}u",
                 name("ComM", "ComMChannel", &mode.channel),
                 ticks(tp.p2_ms)?,
                 tp.p2_ms,
@@ -794,7 +796,7 @@ pub(super) fn files(
         "CanIf",
         "const CanIf_ConfigType CanIf_Config",
         &values(&format!(
-            "can_rx, {rx_count}u, can_tx, {tx_count}u, Ecu_HostBusSM_ControllerModeIndication, Ecu_HostBusSM_ControllerBusOff, {}, {}, {}, {}",
+            "can_rx, {rx_count}u, can_tx, {tx_count}u, &Ecu_HostBusSM_ControllerModeIndication, &Ecu_HostBusSM_ControllerBusOff, {}, {}, {}, {}",
             symbolic.parameter("CanIfCtrlId")?,
             name("Can", "CanController", &can.controller),
             name("Can", "CanHardwareObject", &can.receive_hardware),
@@ -890,12 +892,12 @@ pub(super) fn files(
         "ComM",
         "static const ComM_ConfigType comm_config",
         &values(&format!(
-            "{}, users, {}u, {}u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode, {}",
+            "{}, users, {}u, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode, {}",
             name("ComM", "ComMChannel", &mode.channel),
             mode.users.len(),
             periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
             if transport.is_some() {
-                "Dcm_ComM_NoComModeEntered, Dcm_ComM_SilentComModeEntered, Dcm_ComM_FullComModeEntered"
+                "&Dcm_ComM_NoComModeEntered, &Dcm_ComM_SilentComModeEntered, &Dcm_ComM_FullComModeEntered"
             } else {
                 "NULL_PTR, NULL_PTR, NULL_PTR"
             }
@@ -906,7 +908,7 @@ pub(super) fn files(
         "BswM",
         "static const BswM_ConfigType bswm_config",
         &values(&format!(
-            "{}, Ecu_BswMAction",
+            "{}, &Ecu_BswMAction",
             name("ComM", "ComMChannel", &mode.channel)
         )),
     );
@@ -930,7 +932,7 @@ pub(super) fn files(
         &mut config,
         "Det",
         "static const Det_ErrorHookType det_runtime_callouts[1]",
-        &values("Ecu_DetRuntimeCallout"),
+        &values("&Ecu_DetRuntimeCallout"),
     );
     config_data(
         &mut config,

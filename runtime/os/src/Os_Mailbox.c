@@ -62,7 +62,7 @@ OS_MEMMAP static uint32 input_interrupt(void)
 OS_MEMMAP void Os_MailboxInstall(void)
 {
     if (Os_Config->input_event != 0u) {
-        vPortSetInterruptHandler(OS_INPUT_INTERRUPT, input_interrupt);
+        vPortSetInterruptHandler(OS_INPUT_INTERRUPT, &input_interrupt);
     }
 }
 
@@ -70,7 +70,7 @@ OS_MEMMAP sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(vo
 {
     return ((Os_BackendHandlerAllowed(interrupt, handler) != 0) &&
             ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
-             (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt)))
+             (interrupt != OS_INPUT_INTERRUPT) || (handler == &input_interrupt)))
                ? 1
                : 0;
 }

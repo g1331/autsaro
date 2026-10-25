@@ -74,7 +74,7 @@ void Can_Lock(void)
 {
     static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
     Can_NoteEnter(CAN_HOST_DRIVER_OWNER);
-    Can_EnterLock(&can_lock_once, Can_InitLock, &can_lock);
+    Can_EnterLock(&can_lock_once, &Can_InitLock, &can_lock);
 }
 void Can_Unlock(void)
 {
@@ -89,7 +89,7 @@ void Can_HostAreaEnter(Can_HostAreaType area)
         Can_Fatal();
     }
     Can_NoteEnter((unsigned)area + CAN_HOST_AREA_OWNER_BASE);
-    Can_EnterLock(&area_once, Can_InitAreas, &area_locks[area]);
+    Can_EnterLock(&area_once, &Can_InitAreas, &area_locks[area]);
 }
 void Can_HostAreaExit(Can_HostAreaType area)
 {
@@ -141,7 +141,7 @@ void Can_Lock(void)
 {
     static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
     Can_NoteEnter(CAN_HOST_DRIVER_OWNER);
-    Can_EnterLock(&can_lock_once, Can_InitLock, &can_lock);
+    Can_EnterLock(&can_lock_once, &Can_InitLock, &can_lock);
 }
 void Can_Unlock(void)
 {
@@ -156,7 +156,7 @@ void Can_HostAreaEnter(Can_HostAreaType area)
         Can_Fatal();
     }
     Can_NoteEnter((unsigned)area + CAN_HOST_AREA_OWNER_BASE);
-    Can_EnterLock(&area_once, Can_InitAreas, &area_locks[area]);
+    Can_EnterLock(&area_once, &Can_InitAreas, &area_locks[area]);
 }
 void Can_HostAreaExit(Can_HostAreaType area)
 {

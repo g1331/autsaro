@@ -212,7 +212,7 @@ OS_MEMMAP int Os_HostInstallSignals(void)
     (void)sigemptyset(&handler.sa_mask);
     errno = 0;
     (void)sigaddset(&handler.sa_mask, suspend_signal);
-    handler.sa_sigaction = park_signal;
+    handler.sa_sigaction = &park_signal;
     errno = 0;
     if (sigaddset(&handler.sa_mask, suspend_signal + 1) != 0) {
         return 0;
@@ -222,7 +222,7 @@ OS_MEMMAP int Os_HostInstallSignals(void)
         return 0;
     }
     (void)sigfillset(&handler.sa_mask);
-    handler.sa_sigaction = fault_stop_signal;
+    handler.sa_sigaction = &fault_stop_signal;
     errno = 0;
     return (sigaction(suspend_signal + 1, &handler, NULL) == 0) ? 1 : 0;
 }
@@ -256,7 +256,7 @@ OS_MEMMAP static void *actor_start(void *argument)
                          thread->mapping + thread->guard_size,
                          thread->mapping_size - thread->guard_size);
     thread->exit_code =
-        Os_LinuxCallOnStack(&thread->mapping[thread->mapping_size], actor_body, thread);
+        Os_LinuxCallOnStack(&thread->mapping[thread->mapping_size], &actor_body, thread);
     OS_LINUX_STACK_FINISH(thread->bootstrap_fake, NULL, NULL);
     __atomic_store_n(&thread->ended, 1, __ATOMIC_RELEASE);
     futex_wake(&thread->ended);
@@ -332,7 +332,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         status = pthread_attr_setstacksize(
             &attributes, (reserve > OS_HOST_DEFAULT_STACK) ? reserve : OS_HOST_DEFAULT_STACK);
         if (status == 0) {
-            status = pthread_create(&thread->thread, &attributes, actor_start, thread);
+            status = pthread_create(&thread->thread, &attributes, &actor_start, thread);
         }
         (void)pthread_attr_destroy(&attributes);
     }

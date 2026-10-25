@@ -143,7 +143,7 @@ static Os_HostThreadResultType control(void *argument)
         StatusType status = Ecu_HostBatchParse(&batch, line, length, &command);
         if ((status == E_OK) && (command == ECU_BATCH_COMMIT)) {
             /* E_OK: the receipt is written. Otherwise nothing ran. */
-            status = Ecu_HostBatchExecute(&batch, write_output, NULL);
+            status = Ecu_HostBatchExecute(&batch, &write_output, NULL);
         }
         if (status != E_OK) {
             if (write_rejection(&batch, status) == 0) {
@@ -161,7 +161,7 @@ int main(void)
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;
     }
-    thread = Os_HostSpawnThread(control, NULL);
+    thread = Os_HostSpawnThread(&control, NULL);
     if (thread == NULL) {
         return 96;
     }

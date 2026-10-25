@@ -527,6 +527,90 @@ fn unsupported_completion_modes_and_foreign_application_type_owners_are_refused(
 }
 
 #[test]
+fn generated_callback_values_use_explicit_function_addresses() {
+    // MISRA AMD3.37 / R17.12: these interface slots hold addresses, not calls.
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    for (path, callbacks) in [
+        (
+            "generated/src/CanIf_PBcfg.c",
+            &[
+                "Ecu_HostBusSM_ControllerModeIndication",
+                "Ecu_HostBusSM_ControllerBusOff",
+            ][..],
+        ),
+        (
+            "generated/src/LSduR_PBcfg.c",
+            &[
+                "PduR_CanIfRxIndication",
+                "CanTp_RxIndication",
+                "PduR_CanIfTxConfirmation",
+                "PduR_CanIfTriggerTransmit",
+                "CanTp_TxConfirmation",
+            ][..],
+        ),
+        (
+            "generated/src/PduR_PBcfg.c",
+            &[
+                "Com_RxIndication",
+                "LSduR_PduRTransmit",
+                "Com_TxConfirmation",
+                "Com_TriggerTransmit",
+                "CanTp_Transmit",
+                "Dcm_StartOfReception",
+                "Dcm_CopyRxData",
+                "Dcm_TpRxIndication",
+                "Dcm_CopyTxData",
+                "Dcm_TpTxConfirmation",
+            ][..],
+        ),
+        (
+            "generated/src/Ecu_RuntimeConfig.c",
+            &[
+                "Rte_COMCbk",
+                "Rte_COMCbkRxTOut",
+                "PduR_ComTransmit",
+                "DcmService_ReadData",
+                "Ecu_DcmAuthenticationMode",
+                "Ecu_HostBusSM_RequestComMode",
+                "Ecu_HostBusSM_GetCurrentComMode",
+                "Dcm_ComM_NoComModeEntered",
+                "Dcm_ComM_SilentComModeEntered",
+                "Dcm_ComM_FullComModeEntered",
+                "Ecu_BswMAction",
+                "Ecu_DetRuntimeCallout",
+            ][..],
+        ),
+    ] {
+        let source = files.iter().find(|(name, _)| name == path).unwrap();
+        let source = std::str::from_utf8(&source.1).unwrap();
+        for callback in callbacks {
+            let mut values = 0;
+            for (position, _) in source.match_indices(callback) {
+                let following = source[position + callback.len()..].trim_start();
+                if following.starts_with([',', '}']) {
+                    values += 1;
+                    assert!(
+                        source[..position].trim_end().ends_with('&'),
+                        "{path}: {callback}: {source}"
+                    );
+                }
+            }
+            assert!(values > 0, "{path}: missing callback value {callback}");
+        }
+    }
+    let source = files
+        .iter()
+        .find(|(name, _)| name == "generated/src/Ecu_Config.c")
+        .unwrap();
+    assert!(
+        std::str::from_utf8(&source.1)
+            .unwrap()
+            .contains(".entry = &OS_TASK_ENTRY(")
+    );
+}
+
+#[test]
 fn generated_schm_lifecycle_section_contains_no_other_preprocessing() {
     // Verifies: SWS_MemMap_00003.
     let plan = build(&inputs()).unwrap();

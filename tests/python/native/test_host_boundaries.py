@@ -436,8 +436,8 @@ class NativeFacilityTests(unittest.TestCase):
             ("failure", None, None, None, "error", 7),
             ("omit", "src/Os_Backend.c", "if (Os_PortRestartPrepare() == 0)",
              "if (0)", "normal", 81),
-            ("skip-provider", "src/Os_PortRestart.c", "_Unwind_Backtrace(prepare_trace, NULL)",
-             "((void)prepare_trace, _URC_END_OF_STACK)", "normal", 81),
+            ("skip-provider", "src/Os_PortRestart.c", "_Unwind_Backtrace(&prepare_trace, NULL)",
+             "((void)&prepare_trace, _URC_END_OF_STACK)", "normal", 81),
             ("ignore-failure", "src/Os_Backend.c", "if (Os_PortRestartPrepare() == 0)",
              "if ((Os_PortRestartPrepare(), 0))", "error", 82),
         )

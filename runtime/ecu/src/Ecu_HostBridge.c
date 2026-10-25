@@ -162,7 +162,7 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     control.started = Os_HostMonotonicMs();
-    monitor = Os_HostSpawnObserverThread(watch, &control);
+    monitor = Os_HostSpawnObserverThread(&watch, &control);
     if (monitor == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }

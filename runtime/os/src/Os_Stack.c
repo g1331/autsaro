@@ -194,7 +194,7 @@ OS_MEMMAP void Os_StackInit(void)
     fault_output = GetStdHandle(STD_OUTPUT_HANDLE);
     fault_error = GetStdHandle(STD_ERROR_HANDLE);
     read_invalid_guarantee();
-    if (AddVectoredExceptionHandler(1u, stack_exception) == NULL) {
+    if (AddVectoredExceptionHandler(1u, &stack_exception) == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if (Os_StackRegister('S') == 0) {

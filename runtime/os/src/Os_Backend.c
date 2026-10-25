@@ -410,7 +410,7 @@ OS_MEMMAP sint32 Os_BackendHandlerAllowed(uint32 interrupt, uint32 (*handler)(vo
     if ((Os_Config != NULL) && (Os_Config->interrupts != NULL) &&
         (Os_Config->interrupts->entries != NULL) && (interrupt < OS_MAX_INTERRUPTS) &&
         (Os_Config->interrupts->entries[interrupt] != NULL)) {
-        return (handler == configured_interrupt) ? 1 : 0;
+        return (handler == &configured_interrupt) ? 1 : 0;
     }
     return 1;
 }
@@ -1477,7 +1477,7 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
         Os_BackendShutdown(E_OS_STATE);
     }
     Os_StackRecordBuffer(start->buffer_top);
-    if (start->entry == task_entry) {
+    if (start->entry == &task_entry) {
         const uint32 index = task_slot(start->argument);
         configASSERT(index < Os_Config->task_count);
         Os_ArtiTaskStacks[index] = Os_StackCurrent();
@@ -1489,7 +1489,7 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
     if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (start->entry == task_entry) {
+    if (start->entry == &task_entry) {
         Os_PortTaskLoop(start->entry, start->argument);
     }
     start->entry(start->argument);
@@ -1511,12 +1511,12 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
     start->entry = code;
     start->argument = argument;
     start->buffer_top = buffer_top;
-    start->role = code == task_entry ? 'T' : (code == bootstrap ? 'B' : 'I');
+    start->role = code == &task_entry ? 'T' : (code == &bootstrap ? 'B' : 'I');
     start->registered = Os_PortEvent(NULL, 0, 0, NULL);
     start->gate = Os_PortEvent(NULL, 0, 0, NULL);
     thread = Os_PortThread(NULL,
                            Os_Config->host_stack_reserve,
-                           native_task_start,
+                           &native_task_start,
                            start,
                            STACK_SIZE_PARAM_IS_A_RESERVATION,
                            NULL);
@@ -1624,7 +1624,7 @@ OS_MEMMAP static void bootstrap(void *argument)
     if ((Os_Config->interrupts != NULL) && (Os_Config->interrupts->entries != NULL)) {
         for (i = 2u; i < OS_MAX_INTERRUPTS; ++i) {
             if (Os_Config->interrupts->entries[i] != NULL) {
-                vPortSetInterruptHandler((uint32)i, configured_interrupt);
+                vPortSetInterruptHandler((uint32)i, &configured_interrupt);
             }
         }
     }
@@ -1730,9 +1730,9 @@ OS_MEMMAP static void start_controllers(void)
     controller_registered[0] = Os_PortEvent(NULL, 0, 0, NULL);
     controller_registered[1] = Os_PortEvent(NULL, 0, 0, NULL);
     control_thread =
-        Os_PortThread(NULL, 262144u, control, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        Os_PortThread(NULL, 262144u, &control, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     backup_thread = Os_PortThread(
-        NULL, 262144u, control, (void *)&backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        NULL, 262144u, &control, (void *)&backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
     if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1770,7 +1770,7 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
         if ((Os_Config->tasks[i].autostart_modes & mode) != 0u) {
             append_activation(i);
         }
-        handles[i] = xTaskCreateStatic(task_entry,
+        handles[i] = xTaskCreateStatic(&task_entry,
                                        (const char *)Os_Config->tasks[i].name,
                                        512,
                                        &task_memory[i],
@@ -1783,7 +1783,7 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
             (activations[i].count == 0u) ? 0u : activations[i].requests[activations[i].head]);
         vTaskSuspend(handles[i]);
     }
-    configASSERT(xTaskCreateStatic(bootstrap,
+    configASSERT(xTaskCreateStatic(&bootstrap,
                                    "Os_Bootstrap",
                                    512,
                                    NULL,

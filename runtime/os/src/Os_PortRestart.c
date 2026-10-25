@@ -27,7 +27,7 @@ OS_MEMMAP static _Unwind_Reason_Code prepare_trace(struct _Unwind_Context *conte
 OS_MEMMAP int Os_PortRestartPrepare(void)
 {
     /* A parked initializer must never block another Task inside the provider's once lock. */
-    const _Unwind_Reason_Code status = _Unwind_Backtrace(prepare_trace, NULL);
+    const _Unwind_Reason_Code status = _Unwind_Backtrace(&prepare_trace, NULL);
     return (status == _URC_END_OF_STACK) ? 1 : 0;
 }
 
