@@ -17,3 +17,9 @@ R4.1（Required，印刷46–47／PDF54–55；AMD2.32未放宽终结条件）�
 R9.1为Mandatory，R9.2–R9.5、R13.1为Required，当前C99适用（主文印刷75–81、108／PDF83–89、116）。AMD4.47–48明确禁止designator／位置项重复初始化同一子对象；AMD4.56只将C11 atomic初始化交给R9.7，AMD4.58为R9.2补充R9.6引用。R9.1仍按每个元素／成员及实际成功／失败路径判断，不由聚合布局或零诊断销项。
 
 四份switch-emitter工程中，Can载荷、CanIf错误槽、Os_Error来源与Os_Time等待句柄均给足数组元素；running、increments、向量表及内核计数数组使用允许的{0}。xYieldPendings的pdFALSE元素数对应实际单核。生成tasks[]内部.id是结构成员designator；实际数组designator仅为.priorities内部的[OS_INPUT_INTERRUPT]，容量由Os_IsrConfigType显式声明，单次指定、其余零初始化，未混入覆盖它的位置项。函数地址／OS_TASK_ENTRY名字及sizeof(storage)不执行回调或改变存储，等待列表读取普通HANDLE。此结论仅到上述初始化及宏闭包，不外推SDK、多核或任意用户应用；完整逐处依据留PR #371。
+
+## 采用内核的两处值域报告
+
+当前standard-ecu完成报告中的arrayIndexOutOfBounds指向prvCreateIdleTasks，把configIDLE_TASK_NAME的"IDLE"当成会读取下标14。实际循环从0递增，每次复制后立即检查NUL并break；该五字节literal在下标4停止，目的cIdleName容量为16，后续终结写仍在下标4。configIDLE_TASK_NAME未被目标覆盖；这条具体路径没有报告所称的越界，不借用上游coverity注释作为批准或证明。改名字宏、长度或循环顺序时应重核，不能按此结论豁免任意配置。
+
+另一条knownConditionTrueFalse称xTaskIncrementTick的xConstTickCount==0恒假。所选configTICK_TYPE_WIDTH_IN_BITS为32，实际端口TickType_t是uint32_t；volatile xTickCount加一再转换到同一无符号类型，UINT32_MAX后的零是定义明确的回绕值。R14.3为Required（主文印刷119–120／PDF127–128，AMD2追加C11）；此比较在完整类型域中可真可假，不因短时运行没有触及回绕就成为不变条件。它不是R12.4约束的整数常量表达式。该源码判断保留原始报告，不声称已有真实provider长时运行或该规则全部符合。
