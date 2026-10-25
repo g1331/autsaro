@@ -53,3 +53,21 @@ R8.11为Advisory、R8.12为Required（主文印刷72–73／PDF80–81，AMD2追
 自有外部数组声明为Arti_Events、Os_ArtiTasks、Os_ArtiTaskStacks、Os_ArtiTaskContexts和Os_InterruptVectorTable，头中分别给出ARTI_EVENT_CAPACITY、OS_MAX_TASKS或OS_INTERRUPT_VECTOR_COUNT。定义使用同一容量来源；CDS的Rte_Inst对象是指针而非不完整数组，不能仅按名字混入此组。这里核对声明容量及对应定义，不由它推导所有索引或发布过程安全。
 
 R2.6、R15.1为Advisory，R15.2／R15.3为Required（主文印刷44、122–123／PDF52、130–131；AMD2追加C11）。所核交付C／头及宏中没有C goto或具名语句标签；汇编字符串中的数字标签、switch的case／default不是这类标签，因此没有依靠早退或跨块goto绕过初始化的实际跳转。这里只按构造缺席裁决，不从中推出全部控制流或R9.1已满足。自有定义亦没有变参declarator或直接stdarg设施，但实际open调用的SDK变参义务已在OS篇单列，不能用自有标识符缺席批量关闭R17.1。
+
+## 致命出口之后的返回
+
+R2.1为Required（主文印刷39–41／PDF47–49，AMD2追加C11），其检查还包括函数出口，不限于switch clause。Backend的native_task_start和bootstrap曾在已声明noreturn的Os_BackendShutdown后保留return；control还在report_and_exit及Sleep(INFINITE)之后保留返回。这四句均没有可达的正常路径，现删除。report_and_exit全部路径最终调用ExitProcess，私有定义用既有GNU noreturn属性表达这一事实；没有新增公共签名、错误值、输出或退出期限。属性只是控制流契约，不能代替对函数体和调用者的核查。
+
+Linux的无限Sleep沿现有pause循环，即使信号使pause返回也继续；Windows的[原生Sleep合同](https://learn.microsoft.com/windows/win32/api/synchapi/nf-synchapi-sleep)规定INFINITE不超时，并另以SleepEx提供alertable等待。删除后仍保持原有永久停放，不把函数末尾返回当作平台故障后备。源码属性反例分别恢复四句时必须拒绝；普通原生消费者与严格编译另核对实际运行，不把不可达代码删除称为产生了新的行为差异，也不据此关闭全部R2.1／R17.4。
+
+## 包含与条件指令
+
+R20.3／R20.8／R20.9／R20.13／R20.14均为Required，当前C99适用（主文印刷156–157、160–161、163–165／PDF164–165、168–169、171–173；AMD2追加C11）。TC2.35只更正R20.14示例的末行文件名。atomic-handoff-final-results四份实际补丁后源码中的包含均为完整尖括号或引号形式；每个文件的条件分支自行闭合，没有跨文件连接的if／endif。重复MemMap包含的条件体也在头内闭合，不能把反复包含误判成跨文件条件；R20.1／R20.5的真实义务仍分别保留。
+
+标准ECU／用户应用、组件管线、无诊断三种语料组的if／elif合计分别为1290、1324、1299处。所有已核表达式的顶层为比较、逻辑或defined的布尔形式，没有以非零任意整数充当布尔结果。共同条件的155个数值标识符及160个别名闭包进一步核对到项目定义和实际编译器宏收据：定义为数值、单个别名或整体括起的表达式，没有宏替换把未括起的低优先级算符泄漏到外层。此处按实际展开边界判断，不由条件恰好选择了一个分支推定R20.8。
+
+未定义的OS测试选项及portARMV8M_MINOR_VERSION先受defined保护；主文R20.9的逻辑与示例明确允许这种只在已定义时才求值的形式。旧16位tick选项位于已由32位配置排除的兼容路径，旧DelayUntil别名仅在对应ifdef内生效；AVR32与picolibc标识符分别受未选择的工具链／运行库入口控制。不能把所有未定义名字按预处理器补零后就写成满足R20.9，也不能把最终宏清单单独当作每个时刻的定义证明。
+
+保留的上游兼容文件kernel/compat/include/StackMacros.h含非C99的#warning。kernel_path为避免大小写折叠碰撞将旧别名移至compat路径，真实tasks.c使用小写stack_macros.h，所选TU的include path不含compat，四语料也没有进入该旧别名的包含边。因此它不是这些实际TU中的R20.13违反，但该兼容文件本身不能称为C99指令已整改；将来启用它必须另作处置。上述检查处理了续行和注释，不把注释示例中的#字样当作指令；SDK指令与未取证配置不在这里销项。
+
+标准库名字的索引同样需要对照原文：固定addon的C99名字表把mode列在stdio.h项下，但N1256 §7.19.5.3中的mode是fopen形参名，不是R21.1／R21.2引用的标准库文件作用域标识符。当前标准ECU已选CTU的声明候选中14个同名局部／参数位置不因此成为真实违反；这不是把此前floor参数、time／signal成员的整改反向撤销，也不是整个R21.2或SDK名字空间已满足。该索引只用于定位，实际作用域与标准声明才是依据。
