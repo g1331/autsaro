@@ -3,7 +3,6 @@
 # Remove fixed entries; add one only with a reviewed reason in the PR (C coding standard).
 bugprone-narrowing-conversions runtime/os/src/Arti.c InterlockedCompareExchange(&Arti_EventsDropped, dropped + 1L, dropped);
 bugprone-narrowing-conversions runtime/os/src/Arti.c const LONG observed = InterlockedCompareExchange(&Arti_EventCount, slot + 1L, slot);
-bugprone-narrowing-conversions runtime/os/src/Os_Backend.c start->role = code == task_entry ? 'T' : (code == bootstrap ? 'B' : 'I');
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if ((previous[i] == SUSPENDED) && (state != SUSPENDED)) {
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if (completed[i] != 0u) {
 clang-analyzer-security.ArrayBound runtime/os/src/Os_Time.c TickType current = values[counter];
