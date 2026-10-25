@@ -22,10 +22,10 @@
 +    return requested;
 +}
 +
-+static uint32_t prvNextOsInterrupt( uint32_t seen, unsigned floor, int nested )
++static uint32_t prvNextOsInterrupt( uint32_t seen, unsigned minimum_priority, int nested )
 +{
 +    uint32_t chosen = portMAX_INTERRUPTS;
-+    unsigned highest = floor;
++    unsigned highest = minimum_priority;
 +    uint32_t interrupt;
 +    for( interrupt = 0U; interrupt < portMAX_INTERRUPTS; ++interrupt )
 +    {

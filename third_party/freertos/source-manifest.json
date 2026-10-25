@@ -45,7 +45,7 @@
     "runtime/os/patches/0009-interrupt-source-control.patch": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
     "runtime/os/patches/0010-native-interrupt-identities.patch": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
     "runtime/os/patches/0011-isr-phase-before-mutex-release.patch": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f",
-    "runtime/os/patches/0012-nested-interrupt-dispatch.patch": "026c30a373f7bfaadbbc365738cae304b72be677ef4a293cb777f76abe4ea59e",
+    "runtime/os/patches/0012-nested-interrupt-dispatch.patch": "c6b8326f7803f3023d8fc45fe4841d3058094442401f4bbdb88f2ac12b0906a5",
     "runtime/os/patches/0013-interrupt-source-repetition.patch": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch": "8324f410501be231047bfb6df88ac97c7f584771f7289125a668e62664fc242f",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch": "90f9f3a4ce38677f49d766b2b97f52347ec045227a84091498eaea8ee0278fbe",
