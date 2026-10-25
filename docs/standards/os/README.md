@@ -40,6 +40,10 @@ R7.1为Required（主文印刷59–60／PDF67–68；单个0例外，AMD2.27追�
 
 R8.10也是独立Required义务（主文印刷71／PDF79，AMD2追加C11）：当前pthread.h:624–630的__pthread_cleanup_routine和:1339–1343的pthread_equal均为生效的extern inline定义。前者由GNU与__EXCEPTIONS选择，后者由__USE_EXTERN_INLINES选择；正常GCC13.3 C99／O1／fexceptions宏收据确认两条条件。没有项目调用不消除已生效定义的义务，自有六个Interlocked辅助函数则均为static inline。固定libc6-dev 2.39-0ubuntu8.9头的身份、包含链及替代排除见[具体SDK补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6402928996)。仅关闭优化不能移除前者，改异常／inline语义会影响既有unwind及供应方接口；当前保留提案仍待决定，不扩ADR0024、不填批准表或MR12。
 
+按四个真实TU原参数预处理后，还确认bits/poll2.h的poll、bits/unistd.h的read／getcwd／confstr／getgroups／ttyname_r／getlogin_r，以及bits/fcntl2.h的open为当前fortify选择下的外部inline，共八个新增R8.10位置；不是前述两个pthread函数提案的自动扩张。按实际包含栈，ISO标准头及处理它们时包含文件的实现内联仍守主文§6.7边界。原_FORTIFY_SOURCE=3、GNU inline及异常选择保持，不通过关闭硬化使这些定义消失。
+
+R17.1同为Required、C99适用：AMD3.65–66禁止stdarg.h包含与其设施，TC2.8的变参声明示例直接标记不满足该规则。当前非ISO SDK有fcntl、open、makecontext、execle／execl／execlp、__open_alias的八个变参声明／定义位置（open在公开声明与fortify定义各一处）；生产只在Os_LinuxMappedStack中以固定O_RDONLY读取/proc/self/maps，不将其他声明记为执行。具体头字节、八个新增inline函数、变参位置、真实包含栈及替代排除见[合并SDK补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6403690524)。保留提案仍待决定，现成TU预处理不是新head完整分析／provider语义或合法偏离证明。
+
 ## futex 返回信息
 
 D4.7为Required（主文印刷30／PDF38，AMD2.14追加C11）；错误信息应尽快有意义地检查，只有证明函数不可能报错才适用免检条件。Linux private futex使用对齐且有存储期保证的32位字，但对应6.8.0-147.147发行源码的get_futex_key／futex_wake仍提供负错误返回；源码、发行补丁及论证留[PR调查](https://github.com/g1331/autsaro/pull/371#issuecomment-6398922631)。没有据此声称当前内核已启用故障注入，也不凭正常参数替全部结果作免检证明。
@@ -67,3 +71,13 @@ R11.5的HostBridge watch恢复实际传入的静态Ecu_HostWatch地址；native_
 第五处是采用内核prvTaskStatusArrayWriter从void恢复TaskStatusArrayWriterContext_t，并非TCB转换。uxTaskGetSystemState先写入xContext的数组指针及uxIndex=0，再在挂起调度期间同步遍历／调用，返回后才离开该自动对象作用域；这处未发现保存context供以后调用。调用方容量、真实遍历和输出对象仍各负其责，不能从该转换推导所有外部callback安全。C99对象指针经void回转的语言依据为N1256 §6.3.2.3p1（印刷47／PDF59），对象—整数转换另属实现定义；两者均不消除上述Advisory违反。
 
 MAP_FAILED另触发独立R11.6 Required义务（主文印刷99／PDF107；TC2.22澄清整数转void指针属实现定义，未取消规则）。当前Os_HostCreateActor实际失败比较展开固定sys/mman.h的((void *) -1)，不适用零常量例外，也不是R11.5的对象指针恢复。失败仍先识别该哨兵再释放槽位返回NULL；改看NULL／errno、搬动声明或改用同样哨兵的mmap64均非等价整改。针对这个精确SDK构造的有界保留仍待项目决定，不扩ADR0024、不填批准表／MR12；具体身份、替代与风险留PR #371。
+
+## 启动发布与中断交接
+
+R13.2为Required（主文印刷109–110／PDF117–118，AMD2追加C11）；这里还需按D4.1核对真实并发路径，volatile本身不提供线程同步。Linux的xInsideInterrupt曾由dispatcher普通写入，同时由已恢复Task的portSOFTWARE_BARRIER读取；启动线程也可能在Os_PortTaskThread发布task_threads及计数之前因注册失败唤醒关闭控制器。原有退出码与协议断言没有排除检测器报告，因此不能将历史栈套件的预期退出当作TSan干净证据。
+
+当前Os_PortTaskThread复用既有auto-reset gate：先完成Os_PortThread的句柄登记、task_threads写入与计数更新，再发出第一次gate通知；native_task_start收到后才注册栈并发布registered。创建方仍沿原有5000ms注册等待、暂停／上下文观察和第二次gate通知继续，未增加事件、容量或期限。第一次gate等待失败直接原生终止，不进入尚未完成发布的关闭遍历。注册失败发生时创建方等待registered，不继续创建下一个Task。
+
+控制器健康状态的全部读写统一使用既有Interlocked接口；Linux中断标志保留BaseType_t及公开布局，dispatcher写入、critical路径与软件屏障读取均使用GCC顺序一致原子操作。固定GCC13.3手册§6.55（印刷733／PDF749）明确这些内建采用C++11内存模型并假定程序没有数据竞争；这不是让混合的普通访问自动安全。软件屏障的循环同时改为显式复合语句，处置实际展开后的R15.6；原先仅检查闭合宏的词法结论没有覆盖这一开放式while宏。
+
+证据仅限实际运行的原有栈故障、暂停／恢复消费者及对应原子／事件发布链；不外推完整信号异步语义、所有provider或全部R13.2。检测器构建的正常execute入口现在拒绝stdout／stderr中的TSan、ASan、LSan与UBSan报告，即使产品退出码原本预期为7或13；故意验证检测器的专用run_native入口仍按其独立断言处理。历史原始报告和passed／error／not_assessed不改写。

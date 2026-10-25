@@ -45,3 +45,11 @@ Os_LinuxNative的sizeof(char[条件?1:-1])使用offsetof／非VLA类型sizeof构
 R15.6为Required（主文印刷127–128／PDF135–136），只有else紧跟if的特例，不豁免函数式宏内部的选择体。自有FreeRTOSConfig.h的configASSERT在if之后原为单条Os_BackendAssert调用，现只为该调用增加花括号，保留外层do／while FALSE和参数的一次求值。旧／新实际宏的局部严格C99编译控制均观察成功调用一次、失败条件调用一次及原失败出口；除增加一对复合语句括号外，其余宏token相同。没有新增断言开关或生产状态。
 
 R16.2、R16.5–R16.7均为Required（主文印刷131、134–136／PDF139、142–144，AMD2追加C11）。已读九个自有switch的标签均直接属于其switch复合语句，default在末尾且至少两个clause；控制类型分别为状态／发布／ARTI枚举、操作／服务ID及动作整数，没有Boolean控制。生成Ecu_BswMAction的模式是ComM_ModeType整数，同样有三种模式及末尾default；采用内核两个通知switch使用eNotifyAction枚举。统计格式化与协程模板的关闭条件另行保留，不能从未选择语法取得当前程序符合证明。这些是已列switch的布局及类型判断，不销项整个项目的可达性或所有新增配置。
+
+## 枚举值、数组声明及跳转
+
+R8.11为Advisory、R8.12为Required（主文印刷72–73／PDF80–81，AMD2追加C11）。所选四份交付物有相同的33种枚举体：有的值全部显式给定，其余是首项零（显式或隐式）后递增；已核体内没有给隐式项重置编号、溢出int或重复值的构造。R8.12针对同一枚举列表的隐式值，不要求不同枚举共享一套全局数值。该结论不涵盖SDK枚举、未读应用或未来生成输入。
+
+自有外部数组声明为Arti_Events、Os_ArtiTasks、Os_ArtiTaskStacks、Os_ArtiTaskContexts和Os_InterruptVectorTable，头中分别给出ARTI_EVENT_CAPACITY、OS_MAX_TASKS或OS_INTERRUPT_VECTOR_COUNT。定义使用同一容量来源；CDS的Rte_Inst对象是指针而非不完整数组，不能仅按名字混入此组。这里核对声明容量及对应定义，不由它推导所有索引或发布过程安全。
+
+R2.6、R15.1为Advisory，R15.2／R15.3为Required（主文印刷44、122–123／PDF52、130–131；AMD2追加C11）。所核交付C／头及宏中没有C goto或具名语句标签；汇编字符串中的数字标签、switch的case／default不是这类标签，因此没有依靠早退或跨块goto绕过初始化的实际跳转。这里只按构造缺席裁决，不从中推出全部控制流或R9.1已满足。自有定义亦没有变参declarator或直接stdarg设施，但实际open调用的SDK变参义务已在OS篇单列，不能用自有标识符缺席批量关闭R17.1。
