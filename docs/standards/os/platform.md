@@ -92,3 +92,5 @@ AMD1的R22.8–R22.10均为Required、适用C99（印刷13–16／PDF21–24；A
 固定glibc2.39-0ubuntu8.9的signal/sigempty.c与signal/sigfillset.c在NULL参数路径设置EINVAL；这些非ISO接口不能因POSIX未要求错误就被当成绝不设置errno。Os_HostInstallSignals的两个集合调用、wait_mutex的集合初始化和Os_StackPrepare的guard集合初始化现各自先清零；原有HostWriteBytes／StackFatalExit已清零。所有调用都传入同一栈帧内有效sigset_t对象，实际provider对这些实参返回0，支持D4.7的免检理由，而R22.8仍按函数错误契约保留调用前清零。既有errno夹具新增真实sigemptyset／sigfillset包装，在成功返回后留下EAGAIN并记录输入errno与调用序号，沿正常初始化、mutex及回滚入口观察，不把清零等同于完整异步安全证明。
 
 固定addon的`is_errno_setting_function`只有硬编码标准函数名，未包含上述平台函数／helper；`misra_22_10`又仅沿token记忆最近调用，并在右花括号清空，没有路径分析。因而这11个具体位置不能按其报告认定真实R22.10违反；源码、错误契约及失败分支支持限定误报裁决。名单还存在缺逗号导致相邻名字拼接的问题，不能据该checker缺报告确认R22.8／R22.9完整。保留原始报告和工具身份，不改addon、模型、基线或assessment；此结论不覆盖其他errno调用、Windows或全部三条规则。
+
+R12.1为Advisory（主文印刷103–104／PDF111–112；AMD2.62更新表前三行），当前C99适用。比较与逻辑运算、条件式与算术运算按既有优先级显式分组；覆盖所读Linux／Windows位置，另核对未报告的故障注入条件及本机布局常量。只增加完整子表达式的括号，保留求值顺序、短路边界、读写次数和ABI；不把非括号token相同单独当作解析树等价证明。configASSERT的字符串化文本与源码行号可随格式变化，仍表达原断言条件；不新增错误种类、时限或资源动作。实际编译／消费者和新分析分开取证，旧诊断不改写。
