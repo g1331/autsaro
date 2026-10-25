@@ -1511,7 +1511,7 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
     start->entry = code;
     start->argument = argument;
     start->buffer_top = buffer_top;
-    start->role = code == &task_entry ? 'T' : (code == &bootstrap ? 'B' : 'I');
+    start->role = (char)(code == &task_entry ? 'T' : (code == &bootstrap ? 'B' : 'I'));
     start->registered = Os_PortEvent(NULL, 0, 0, NULL);
     start->gate = Os_PortEvent(NULL, 0, 0, NULL);
     thread = Os_PortThread(NULL,
