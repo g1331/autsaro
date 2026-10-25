@@ -49,3 +49,15 @@ Os_StackLinux.c仅在已发布fault后进入永久停车；其等待遇到不可
 ## 自有配置与保留名字
 
 R21.2为Required（主文印刷166–167／PDF174–175，名字集合见R21.1印刷165／PDF173；TC1更正标题及示例，AMD2追加C11）。旧Os_Schedule局部量／参数time和自有Os_ConfigType.time复用标准库标识符；没有因其不是时间函数调用而销项。局部名改为time_configuration、配置成员改为timing，Os_Time和生命周期消费者同步；生成模板的具名初始化、成员类型／顺序、计时与调度语义不变。旧具名成员访问需更新并重新生成／构建，不能用宏别名恢复保留名。这是自有接口整改，不扩大ADR0024或批准SDK保留。
+
+## 实现依赖、编译与需求追溯
+
+D1.1、D2.1、D3.1均为Required，当前C99适用（主文印刷20–23／PDF28–31，AMD2.15–19及语言适用性更新）。D1.1采用AMD2.101–103重置的Appendix G.2（印刷20–23／PDF27–30）；其中C99／C11列分开，不能沿用TC1之前的J.3.11序号。实现选择被记录和理解，才构成对应依赖的证据；编译器版本、静态断言或绿色CI各自都不是全部实现定义行为的证明。
+
+已核Linux正常编译参数为C99、O1、fexceptions和pthread，编译器发现记录为GCC13.3的x86_64-linux-gnu；CHAR_BIT为8、int为32位、long及指针为64位、字节序为little-endian，属于所选目标的事实。GCC13.3手册§4.1把stderr输出识别为诊断，§4.5明确二进制补码，§4.7描述指针／整数等宽转换的位保留；这些定义不授权越界指针、任意地址解引用或有符号溢出。字符／位域布局仍由目标ABI决定；Dcm的位域契约、原生上下文布局和实际编译断言各自保留，不能用LP64推导Windows的long或位域布局。§4.10也明确volatile访问不保证原子性；句柄、ACK、completion等共享发布依赖实际原子／锁协议，不把volatile当作同步。依据为[GCC13.3固定手册§4](https://gcc.gnu.org/onlinedocs/gcc-13.3.0/gcc.pdf#page=545)及实际编译器发现记录。
+
+GCC手册将main参数、环境与多数库行为交给libc／操作系统。项目的Linux入口是hosted main，不能按freestanding入口作判断；OS_HOST_FAILURE_TESTS选择下的环境开关只按已记录格式解析，不把它们推广为任意环境名语义。pthread的TLS／线程回收、信号frame／UAPI、libgcc展开和Windows实际CRT／DLL的对应责任继续见[原生设施](native-facilities.md)。Linux已有libc6 2.39-0ubuntu8.9、libgcc-s1 14.2.0-4ubuntu2~24.04.1的字节／来源与相关pthread、loader、unwind源码核查，最终程序仍按自身ELF／装载绑定连接这些证据。Windows仍缺实际CRT／启动对象、导入最终解析到的系统DLL版本与映像摘要及对应线程／退出契约；最小补齐材料是相应正常入口的PE、导入／加载身份及配套实现或一手契约。检测器provider的拦截、fiber与异步调用上下文单列，不由普通provider或一次绿色运行代替。
+
+D2.1按真实TU的编译错误判断。正常c-check先用实际参数逐TU编译检查，封存build随后实际编译／链接目标程序；生成工程成功、解析器退出或旧程序运行不替代这些步骤。GNU扩展按所选编译器及R1.2单独评估，不能把有效目标扩展统称语法错误，也不能把被编译器拒绝的生成代码交给旧绿色结果覆盖。Windows仍须由相应head实际选中的正常编译入口证明。
+
+D3.1的项目方法是从自有接口／实际实现回到模块契约、设计与固定SWS，而非只比条款标题。Os、Time、Schedule的标准服务经后端映射到采用内核；[ADR0004](../../adr/0004-freertos-kernel-with-own-os-semantics.md)限定唯一backend、静态汽车对象和真实执行栈监测，[运行时架构](../../architecture/runtime.md)给出激活／独占区／HostBatch三层责任。HostBridge的监督与实际输出收据来自项目HostBatch合同，guard fault来自所选SC1栈合同；不能把5000ms批次监督解释为任意阻塞输出的完成保证。原生错误／回滚／停止处理属于这些合同的失败响应，不能仅因标准没有指定POSIX实现就删除。originalBswSources、patch manifest和seal证明角色／来源／字节身份，不证明需求追溯；采用内核和非ISO供应方调用仍须连到实际被选功能，未核定的ISO17356参数访问及供应方路径不据此销项。上述闭包支持这些明确的责任连接，不构成全部源代码、供应方或221项已满足。
