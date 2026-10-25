@@ -25,10 +25,10 @@ OS_MEMMAP const Os_ArtiScheduleStateType *const Os_ArtiScheduleTables =
 #include "Os_MemMap.h"
 OS_MEMMAP static uint32 table_index(ScheduleTableType id)
 {
-    const Os_TimeConfigType *time_configuration = Os_Config->timing;
-    if (time_configuration != NULL) {
-        for (uint32 i = 0u; i < time_configuration->schedule_table_count; ++i) {
-            if (time_configuration->schedule_tables[i].id == id) {
+    const Os_TimeConfigType *timing = Os_Config->timing;
+    if (timing != NULL) {
+        for (uint32 i = 0u; i < timing->schedule_table_count; ++i) {
+            if (timing->schedule_tables[i].id == id) {
                 return i;
             }
         }
@@ -36,13 +36,13 @@ OS_MEMMAP static uint32 table_index(ScheduleTableType id)
     return OS_MAX_SCHEDULE_TABLES;
 }
 
-OS_MEMMAP static const Os_CounterConfigType *counter_config(
-    const Os_TimeConfigType *time_configuration, CounterType id)
+OS_MEMMAP static const Os_CounterConfigType *counter_config(const Os_TimeConfigType *timing,
+                                                            CounterType id)
 {
     const Os_CounterConfigType *result = NULL;
-    for (uint32 i = 0u; i < time_configuration->counter_count; ++i) {
-        if (time_configuration->counters[i].id == id) {
-            result = &time_configuration->counters[i];
+    for (uint32 i = 0u; i < timing->counter_count; ++i) {
+        if (timing->counters[i].id == id) {
+            result = &timing->counters[i];
             break;
         }
     }
@@ -67,15 +67,14 @@ OS_MEMMAP static sint32 valid_action(const Os_TargetConfigType *target,
 
 OS_MEMMAP StatusType Os_ScheduleValidate(const Os_TargetConfigType *target)
 {
-    const Os_TimeConfigType *time_configuration = target->timing;
-    if ((time_configuration->schedule_table_count > OS_MAX_SCHEDULE_TABLES) ||
-        ((time_configuration->schedule_table_count != 0u) &&
-         (time_configuration->schedule_tables == NULL))) {
+    const Os_TimeConfigType *timing = target->timing;
+    if ((timing->schedule_table_count > OS_MAX_SCHEDULE_TABLES) ||
+        ((timing->schedule_table_count != 0u) && (timing->schedule_tables == NULL))) {
         return E_OS_VALUE;
     }
-    for (uint32 i = 0u; i < time_configuration->schedule_table_count; ++i) {
-        const Os_ScheduleTableConfigType *table = &time_configuration->schedule_tables[i];
-        const Os_CounterConfigType *counter = counter_config(time_configuration, table->counter);
+    for (uint32 i = 0u; i < timing->schedule_table_count; ++i) {
+        const Os_ScheduleTableConfigType *table = &timing->schedule_tables[i];
+        const Os_CounterConfigType *counter = counter_config(timing, table->counter);
         if (counter == NULL) {
             return E_OS_ID;
         }
@@ -86,7 +85,7 @@ OS_MEMMAP StatusType Os_ScheduleValidate(const Os_TargetConfigType *target)
             return E_OS_VALUE;
         }
         for (uint32 j = 0u; j < i; ++j) {
-            if (table->id == time_configuration->schedule_tables[j].id) {
+            if (table->id == timing->schedule_tables[j].id) {
                 return E_OS_ID;
             }
         }
@@ -149,10 +148,10 @@ OS_MEMMAP static TickType absolute_delay(const Os_ScheduleTableConfigType *table
 
 OS_MEMMAP void Os_ScheduleAutostart(AppModeType mode)
 {
-    const Os_TimeConfigType *time_configuration = Os_Config->timing;
-    if (time_configuration != NULL) {
-        for (uint32 i = 0u; i < time_configuration->schedule_table_count; ++i) {
-            const Os_ScheduleTableConfigType *table = &time_configuration->schedule_tables[i];
+    const Os_TimeConfigType *timing = Os_Config->timing;
+    if (timing != NULL) {
+        for (uint32 i = 0u; i < timing->schedule_table_count; ++i) {
+            const Os_ScheduleTableConfigType *table = &timing->schedule_tables[i];
             tables[i].status = SCHEDULETABLE_STOPPED;
             tables[i].next = OS_MAX_SCHEDULE_TABLES;
             tables[i].previous = OS_MAX_SCHEDULE_TABLES;
@@ -219,15 +218,15 @@ OS_MEMMAP static void process(uint32 initial)
 
 OS_MEMMAP void Os_ScheduleIncrement(CounterType counter)
 {
-    const Os_TimeConfigType *time_configuration = Os_Config->timing;
+    const Os_TimeConfigType *timing = Os_Config->timing;
     uint8 running[OS_MAX_SCHEDULE_TABLES] = {0};
-    for (uint32 i = 0u; i < time_configuration->schedule_table_count; ++i) {
-        running[i] = ((time_configuration->schedule_tables[i].counter == counter) &&
+    for (uint32 i = 0u; i < timing->schedule_table_count; ++i) {
+        running[i] = ((timing->schedule_tables[i].counter == counter) &&
                       (tables[i].status == SCHEDULETABLE_RUNNING))
                          ? 1u
                          : 0u;
     }
-    for (uint32 i = 0u; i < time_configuration->schedule_table_count; ++i) {
+    for (uint32 i = 0u; i < timing->schedule_table_count; ++i) {
         if (running[i] != 0u) {
             configASSERT(tables[i].remaining != 0u);
             --tables[i].remaining;
