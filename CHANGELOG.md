@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- Adopted kernel API examples use C99 Doxygen line comments instead of nested comment-start sequences, preserving their text and all executable tokens. Regenerate sealed deliveries for the new controlled comment patch identity (#371)
+
 - Dcm negative responses use the generated standard NRC constants directly; Linux private compatibility declarations and unused port aliases are removed, and target initialization uses its named unprepared state (#371)
 
 - Linux native actors stop on failed host-input registration or unavailable requested identity. Joinable supervisors retain ownership until successful wait and close; join/detach failures no longer publish completion or let concurrent waits report it early. Regenerate sealed deliveries for the updated private source (#371)

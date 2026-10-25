@@ -46,6 +46,7 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0018-windows-thread-setup-errors.patch",
     "runtime/os/patches/0019-windows-native-handoff-errors.patch",
     "runtime/os/patches/0020-bounded-queue-front.patch",
+    "runtime/os/patches/0021-c99-comment-examples.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",
@@ -55,10 +56,15 @@ const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0016-essential-boolean-controls.patch",
     "runtime/os/patches/0017-portable-header-paths.patch",
     "runtime/os/patches/0020-bounded-queue-front.patch",
+    "runtime/os/patches/0021-c99-comment-examples.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
     "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
+    (
+        "runtime/os/patches/0021-c99-comment-examples.patch",
+        &["include/task.h", "include/queue.h", "include/timers.h"],
+    ),
     (
         "runtime/os/patches/0020-bounded-queue-front.patch",
         &["queue.c"],
