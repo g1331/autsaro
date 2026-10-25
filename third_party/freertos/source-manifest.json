@@ -57,6 +57,7 @@
     "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch": "ff8d0bc841cbfd828044112af84b7e5825d6b375a4607ffc58fa8749e6b383ce",
     "runtime/os/patches/0020-bounded-queue-front.patch": "0d358577ef476e4cd8b7e8a36d9c084ab9f15c47790f50f82e7e7c410d423c44",
     "runtime/os/patches/0021-c99-comment-examples.patch": "10f65374d9d44d1d6980c09fb0d0075def7e960c18f638d8dcee252dc0f296e5",
-    "runtime/os/patches/0022-explicit-function-addresses.patch": "e0bf8bf01632619577b8de294b2fbc54d9ec8e1d209790c02bcc780891f13bcb"
+    "runtime/os/patches/0022-explicit-function-addresses.patch": "e0bf8bf01632619577b8de294b2fbc54d9ec8e1d209790c02bcc780891f13bcb",
+    "runtime/os/patches/0023-preserve-parameter-values.patch": "cf99e9963e017971d04a26ef6dc2c203ece2fdbc01e2d2f10722cc913b1f46a0"
   }
 }

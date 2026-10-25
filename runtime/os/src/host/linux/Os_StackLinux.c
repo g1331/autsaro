@@ -354,12 +354,13 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
 
 OS_MEMMAP static size_t append_hex(char *output, size_t offset, DWORD value)
 {
+    size_t cursor = offset;
     unsigned index;
     for (index = 0u; index < 8u; ++index) {
-        output[offset] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
-        ++offset;
+        output[cursor] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
+        ++cursor;
     }
-    return offset;
+    return cursor;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
