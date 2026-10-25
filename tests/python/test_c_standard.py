@@ -269,6 +269,106 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
             (project / "generated/include/Com_Cfg.h").write_text("/** Signal identifier. */ typedef unsigned Com_SignalIdType;", encoding="utf-8")
             self.assertIn("bsw-native-type", {key[0] for key in c_standard.generated_findings(samples)})
 
+    def test_include_deviations_match_file_rule_and_literal_header(self):
+        with tempfile.TemporaryDirectory(prefix="include-scope-") as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/src/Host.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/os.md"
+            document.parent.mkdir(parents=True)
+            marker = (
+                "/* MR12 RULE 21.5 VIOLATION: reviewed fixed platform interface. */\n"
+            )
+            record = (
+                "| MISRA C:2012 Rule 21.5 | `runtime/os/src/Host.c` 中 "
+                "`#include <signal.h>` | fixed platform | Approved by maintainer |\n"
+            )
+            document.write_text(record, encoding="utf-8")
+            for directive in (
+                "#include <signal.h>",
+                "# /* provider */ include /* header */ <signal.h> // spelling",
+                "#include \\\n <signal.h>",
+            ):
+                with self.subTest(directive=directive):
+                    source.write_text(marker + directive + "\n", encoding="utf-8")
+                    self.assertEqual(c_standard.deviation_findings(root), {})
+            source.write_text("#include <signal.h> " + marker, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            for header in ('"private/signal.h"', "<time.h>"):
+                with self.subTest(header=header):
+                    document.write_text(
+                        record.replace("<signal.h>", header), encoding="utf-8"
+                    )
+                    source.write_text(
+                        marker + "# include " + header + "\n", encoding="utf-8"
+                    )
+                    self.assertEqual(c_standard.deviation_findings(root), {})
+            cases = (
+                (
+                    "unapproved",
+                    record.replace("Approved by maintainer", "Pending review"),
+                    marker + "#include <signal.h>\n",
+                    {"deviation-unrecorded"},
+                ),
+                (
+                    "duplicate-record",
+                    record + record,
+                    marker + "#include <signal.h>\n",
+                    {"deviation-duplicate", "deviation-uncommented"},
+                ),
+                (
+                    "wrong-file",
+                    record.replace("Host.c", "Other.c"),
+                    marker + "#include <signal.h>\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "wrong-rule",
+                    record.replace("Rule 21.5", "Rule 21.10"),
+                    marker + "#include <signal.h>\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "wrong-header",
+                    record,
+                    marker + "#include <time.h>\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "wrong-delimiter",
+                    record,
+                    marker + '#include "signal.h"\n',
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "header-spelling",
+                    record,
+                    marker + "#include <sig/**/nal.h>\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                ("stale", record, "#include <signal.h>\n", {"deviation-uncommented"}),
+                (
+                    "macro-include",
+                    record,
+                    marker + "#include SIGNAL_HEADER\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "duplicate-site",
+                    record,
+                    (marker + "#include <signal.h>\n") * 2,
+                    {"deviation-duplicate", "deviation-unrecorded"},
+                ),
+            )
+            for case, text, code, expected in cases:
+                with self.subTest(case=case):
+                    document.write_text(text, encoding="utf-8")
+                    source.write_text(code, encoding="utf-8")
+                    self.assertEqual(
+                        {key[0] for key in c_standard.deviation_findings(root)},
+                        expected,
+                    )
+
     def test_deviations_match_both_directions_and_exact_symbol(self):
         with tempfile.TemporaryDirectory(prefix="171-") as temporary:
             root = Path(temporary)

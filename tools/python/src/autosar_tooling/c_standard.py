@@ -62,6 +62,18 @@ def comment_body(comment: str) -> str:
     return re.sub(r"(?m)^\s*\* ?", "", re.sub(r"/\*+[<!]?|\*/|//[/!]?", "", comment)).strip()
 
 
+def include_scope(text: str) -> str | None:
+    """Normalize directive spacing, retaining the literal header and delimiter."""
+    space = r"(?:[ \t\f\v]|/\*.*?\*/)*"
+    match = re.fullmatch(
+        rf'{space}#{space}include{space}(<[^>\r\n]+>|"[^"\r\n]+")'
+        rf"{space}(?://[^\r\n]*)?",
+        re.sub(r"\\\r?\n", "", text).strip(),
+        re.DOTALL,
+    )
+    return "#include " + match[1] if match else None
+
+
 def function(tokens: list[Token]) -> tuple[str, list[str]] | None:
     """Recognize direct function declarators, not function pointer objects/types."""
     words = [t.text for t in tokens]
@@ -406,7 +418,10 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
             pieces = re.split(r"(`runtime/[^`]+`)", scope)
             for index in range(1, len(pieces), 2):
                 name = pieces[index].strip("`")
-                for symbol in re.findall(r"`([A-Za-z_]\w*)`", pieces[index + 1]):
+                for item in re.findall(r"`([^`]+)`", pieces[index + 1]):
+                    symbol = include_scope(item) or (item if IDENTIFIER.fullmatch(item) else None)
+                    if symbol is None:
+                        continue
                     key = (kind, rule[2], name, symbol)
                     records[key] += 1
                     locations[key] = (path.relative_to(root).as_posix(), line.strip())
@@ -448,7 +463,14 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                 words = [t.text for t in declaration]
                 direct = function(declaration)
                 macro = re.match(r"\s*#\s*define\s+(\w+)", words[0]) if words else None
-                symbol = direct[0] if direct else macro[1] if macro else parameter_name(words[:-1])
+                included = include_scope(words[0]) if words else None
+                symbol = included or (
+                    direct[0]
+                    if direct
+                    else macro[1]
+                    if macro
+                    else parameter_name(words[:-1])
+                )
                 key = (match[1], match[2], name, symbol)
                 comments[key] += 1
                 source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())
