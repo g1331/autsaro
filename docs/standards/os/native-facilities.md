@@ -79,3 +79,5 @@ R21.6为Required；R22.5／R22.6为Mandatory（主文印刷176–177／PDF184–
 当前四份callback-parameter生成工程的自有／生成C及头文件没有FILE、EOF或stdio调用。两个目标的实际补丁后内核保留六处snprintf，但都在configUSE_STATS_FORMATTING_FUNCTIONS大于0的分支；当前FreeRTOS.h默认该值为0，实际TU宏收据一致，configGENERATE_RUN_TIME_STATS也为0，不能把这些排除位置当成当前用途，亦不删除上游功能。configUSE_TRACE_FACILITY为1并不单独启用格式化。这里支持当前源码的标准流对象／调用缺席，不豁免SDK或provider内部。
 
 HostBatch读取STDIN_FILENO，HostIo及故障输出写STDOUT_FILENO／STDERR_FILENO；Linux事件由单个eventfd读写，栈范围查询只以O_RDONLY打开/proc/self/maps，Windows使用原生句柄。它们不构成FILE对象，也不能因此免除D4.7／D4.13及平台资源契约。R22.3明确指出相似执行环境设施可能适用；将其完整结论扩展到任意外部启动方式，仍需知道实际继承的输入／输出对象、访问模式与是否别名，不能由没有fopen或绿色CI推出。既有受管测试使用分离管道的证据只覆盖那些具体启动，不新增用户输出期限或任意文件重定向保证。
+
+R21.8的有效Required文本禁止abort／exit／_Exit／quick_exit（AMD2.81，印刷16／PDF23），当前C99适用。四份callback-role语料及双目标补丁后内核没有这些标识符或宏用途；ExitProcess最终走POSIX _exit或Win32入口，不能按名称相似冒充标准库函数，也不因此证明provider内部或任意退出路径符合。
