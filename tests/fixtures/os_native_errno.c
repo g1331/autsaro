@@ -19,6 +19,8 @@ static const char *scenario;
 static unsigned bad_errno;
 static unsigned observed;
 static HANDLE gate;
+static unsigned sleep_case;
+static unsigned sleep_calls;
 
 void StartupHook(void) {}
 void ShutdownHook(StatusType reason) { (void)reason; }
@@ -113,6 +115,37 @@ int __wrap_nanosleep(const struct timespec *duration, struct timespec *remaining
 {
     static unsigned sleeps;
     entered(64u);
+    if (sleep_case != 0u) {
+        const unsigned expected = (sleep_case == 1u) ? 3u : 1u;
+        const time_t seconds[] = {1, 0, 0};
+        const long nanoseconds[] = {250000000L, 750000000L, 250000000L};
+        ++sleep_calls;
+        (void)fprintf(stderr,
+                      "sleep_request call=%u sec=%ld nsec=%ld errno=%d\n",
+                      sleep_calls,
+                      (long)duration->tv_sec,
+                      duration->tv_nsec,
+                      errno);
+        if (sleep_calls > expected) {
+            (void)fprintf(stderr, "sleep_extra_call case=%u call=%u\n", sleep_case, sleep_calls);
+            _exit(93);
+        }
+        if ((duration->tv_sec != seconds[sleep_calls - 1u]) ||
+            (duration->tv_nsec != nanoseconds[sleep_calls - 1u]) || (errno != 0)) {
+            (void)fprintf(stderr, "sleep_request_mismatch call=%u\n", sleep_calls);
+            _exit(91);
+        }
+        if ((sleep_case == 1u) && (sleep_calls < expected)) {
+            if (remaining != NULL) {
+                remaining->tv_sec = 0;
+                remaining->tv_nsec = nanoseconds[sleep_calls];
+            }
+            errno = EINTR;
+            return -1;
+        }
+        errno = (sleep_case == 3u) ? EINVAL : EAGAIN;
+        return (sleep_case == 3u) ? -1 : 0;
+    }
     if ((strcmp(scenario, "sleep-interrupted") == 0) &&
         (__atomic_fetch_add(&sleeps, 1u, __ATOMIC_RELAXED) == 0u)) {
         if (remaining != NULL) {
@@ -178,6 +211,26 @@ int main(int argc, char **argv)
         return 1;
     }
     scenario = argv[1];
+    if (strcmp(scenario, "sleep-remainder") == 0) {
+        sleep_case = 1u;
+    } else if (strcmp(scenario, "sleep-success") == 0) {
+        sleep_case = 2u;
+    } else if (strcmp(scenario, "sleep-error") == 0) {
+        sleep_case = 3u;
+    } else {
+        /* Existing native-facility scenarios retain their real calls. */
+    }
+    if (sleep_case != 0u) {
+        const unsigned expected = (sleep_case == 1u) ? 3u : 1u;
+        errno = EBUSY;
+        Sleep(1250u);
+        if (sleep_calls != expected) {
+            (void)fprintf(stderr, "sleep_count expected=%u actual=%u\n", expected, sleep_calls);
+            return 92;
+        }
+        (void)printf("sleep_protocol case=%u calls=%u\n", sleep_case, sleep_calls);
+        return 0;
+    }
     errno = EBUSY;
     Os_StackPrepare();
     if (GetTickCount64() == UINT64_MAX) {

@@ -423,6 +423,11 @@ class NativeKernelObjectTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
+    errno_functions = (
+        "clock_gettime", "sysconf", "mmap", "mprotect", "munmap", "eventfd",
+        "nanosleep", "sigaddset", "sigaction", "pthread_create",
+    )
+
     def test_mutex_initial_owner_and_capacity_mutations(self):
         import os_suites
 
@@ -571,6 +576,60 @@ class NativeFacilityTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "concurrent native event construction and failure reuse observed\n")
                         self.assertEqual(result.stderr, "")
 
+    def test_sleep_remainder_protocol_and_mutations(self):
+        import os_suites
+
+        call = "status = nanosleep(&pause_time, &pause_time);"
+        loop = "} while ((status != 0) && (errno == EINTR));"
+        trace = "sleep_request call=1 sec=1 nsec=250000000 errno=0\n"
+        for mutation in ("control", "original-request", "discard-remainder", "no-retry", "wrong-error"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_HostLinux.c"
+                text = source.read_text(encoding="utf-8")
+                self.assertEqual(text.count(call), 1)
+                self.assertEqual(text.count(loop), 1)
+                if mutation == "original-request":
+                    text = text.replace(call, "pause_time.tv_sec = 1; pause_time.tv_nsec = 250000000L; " + call)
+                elif mutation == "discard-remainder":
+                    text = text.replace(call, "status = nanosleep(&pause_time, NULL);")
+                elif mutation == "no-retry":
+                    text = text.replace(loop, "} while (0); (void)status;")
+                elif mutation == "wrong-error":
+                    text = text.replace(loop, "} while ((status != 0) && (errno != 0));")
+                source.write_text(text, encoding="utf-8")
+                with os_suites.native_session(directory, "sleep-protocol"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_native_errno.c"), target=target,
+                        link_flags=tuple(f"-Wl,--wrap={name}" for name in self.errno_functions),
+                    )
+                    cases = ("sleep-remainder", "sleep-success", "sleep-error") if mutation == "control" else (
+                        "sleep-error" if mutation == "wrong-error" else "sleep-remainder",
+                    )
+                    for case in cases:
+                        result = os_suites.run_native([str(binary), case], timeout=10)
+                        if mutation == "control":
+                            kind = {"sleep-remainder": 1, "sleep-success": 2, "sleep-error": 3}[case]
+                            calls = 3 if kind == 1 else 1
+                            self.assertEqual(result.returncode, 0, result)
+                            self.assertEqual(result.stdout, f"sleep_protocol case={kind} calls={calls}\n")
+                            self.assertEqual(result.stderr, trace + (
+                                "sleep_request call=2 sec=0 nsec=750000000 errno=0\n"
+                                "sleep_request call=3 sec=0 nsec=250000000 errno=0\n" if kind == 1 else ""
+                            ))
+                        else:
+                            self.assertEqual(result.stdout, "", result)
+                            code, tail = {
+                                "original-request": (91, "sleep_request call=2 sec=1 nsec=250000000 errno=0\nsleep_request_mismatch call=2\n"),
+                                "discard-remainder": (91, "sleep_request call=2 sec=1 nsec=250000000 errno=0\nsleep_request_mismatch call=2\n"),
+                                "no-retry": (92, "sleep_count expected=3 actual=1\n"),
+                                "wrong-error": (93, "sleep_request call=2 sec=1 nsec=250000000 errno=0\nsleep_extra_call case=3 call=2\n"),
+                            }[mutation]
+                            self.assertEqual(result.returncode, code, result)
+                            self.assertEqual(result.stderr, trace + tail, result)
+
     def test_native_errno_across_initialization_wait_and_cleanup(self):
         import os_suites
 
@@ -579,10 +638,7 @@ class NativeFacilityTests(unittest.TestCase):
             with os_suites.native_session(directory, "native-errno"):
                 binary, _ = os_suites.build(
                     directory, str(ROOT / "tests/fixtures/os_native_errno.c"),
-                    link_flags=tuple(f"-Wl,--wrap={name}" for name in (
-                        "clock_gettime", "sysconf", "mmap", "mprotect", "munmap", "eventfd",
-                        "nanosleep", "sigaddset", "sigaction", "pthread_create",
-                    )),
+                    link_flags=tuple(f"-Wl,--wrap={name}" for name in self.errno_functions),
                 )
                 for scenario in ("normal", "sleep-interrupted", "protect-error", "create-error"):
                     with self.subTest(scenario=scenario):
