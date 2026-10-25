@@ -34,7 +34,7 @@
          Os_BackendShutdown( E_OS_ACCESS );
      }
  
-     if( ( Os_Config != NULL ) && ( Os_Config->time != NULL ) &&
+     if( ( Os_Config != NULL ) && ( Os_Config->timing != NULL ) &&
 -        ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != prvProcessTickInterrupt ) )
 +        ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != &prvProcessTickInterrupt ) )
      {

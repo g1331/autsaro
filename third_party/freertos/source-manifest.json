@@ -40,10 +40,10 @@
     "runtime/os/patches/0004-windows-event-namespace.patch": "633529f96b0bb46cae34687cae8dd9bffda068b971f0dd22b8da9c5fdaa47bf1",
     "runtime/os/patches/0005-category2-resource-gate.patch": "e43dd1f0998e7ec0a8feb8e397ba37c285bf2c031480a6528297e078c94c82df",
     "runtime/os/patches/0006-input-handler-ownership.patch": "bcb70ae8a8947344c206ff4a0b31d445b6c6bb1956135d45f81c6e1b554a3075",
-    "runtime/os/patches/0007-controlled-tick.patch": "d027c76922a4d8d69e639b3cbe5a48c121b4dabfaf116334b4acff1fc472160f",
+    "runtime/os/patches/0007-controlled-tick.patch": "f36f2038c59675a510df5ea369604c6f4fd20c9f59754b9fef20e40e158b8eef",
     "runtime/os/patches/0008-task-hook-boundaries.patch": "bf6d08e9ff0b6e2c8eb866b5c0509559e9d5ab37cf9df25b23824dcc16beccdc",
     "runtime/os/patches/0009-interrupt-source-control.patch": "31b2a63c117986a01ba028b2f7dc4b91bb7b8d9c92bea78265a0240051b90829",
-    "runtime/os/patches/0010-native-interrupt-identities.patch": "c27b3887858dcace2630fd9b114eb7c55f8f365af328e7fa8f37897805b707d0",
+    "runtime/os/patches/0010-native-interrupt-identities.patch": "031ef5cd2fa762fe11175d1baadab87e70e97ec9f6afbc5fd3ceb1ee9ff7ed38",
     "runtime/os/patches/0011-isr-phase-before-mutex-release.patch": "e2aea7b4a24ea564c2cf8fcf85932982a8aec80d642394c37cb4dd1067eb1a4f",
     "runtime/os/patches/0012-nested-interrupt-dispatch.patch": "c6b8326f7803f3023d8fc45fe4841d3058094442401f4bbdb88f2ac12b0906a5",
     "runtime/os/patches/0013-interrupt-source-repetition.patch": "834f98c89a173d4eaabf842929dbf4ec27d8e216a1b9b0e9cb14b4fd90660c8c",
@@ -57,7 +57,7 @@
     "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch": "3c45c5c78c60624c7f559edc6669abeee4613119aae40cccdbe82a835cee0db8",
     "runtime/os/patches/0020-bounded-queue-front.patch": "0d358577ef476e4cd8b7e8a36d9c084ab9f15c47790f50f82e7e7c410d423c44",
     "runtime/os/patches/0021-c99-comment-examples.patch": "10f65374d9d44d1d6980c09fb0d0075def7e960c18f638d8dcee252dc0f296e5",
-    "runtime/os/patches/0022-explicit-function-addresses.patch": "e0bf8bf01632619577b8de294b2fbc54d9ec8e1d209790c02bcc780891f13bcb",
+    "runtime/os/patches/0022-explicit-function-addresses.patch": "e0d3d5ef9347e0511a5678c7a123945f5f8461e89609e5800a5c97e61d9887fd",
     "runtime/os/patches/0023-preserve-parameter-values.patch": "cf99e9963e017971d04a26ef6dc2c203ece2fdbc01e2d2f10722cc913b1f46a0",
     "runtime/os/patches/0024-conditional-private-definitions.patch": "7b45effaef7fbb001f4a854225248e7c4ead37338e147b7aea370dd2bd33dbb1"
   }
