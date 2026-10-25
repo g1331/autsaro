@@ -75,3 +75,11 @@ R1.5／Appendix F #2的Windows工具实现材料已取得：CI固定MSYS2 binuti
 x64 COFF外部名字经_bfd_coff_internal_syment_name、coff_link_hash_lookup和bfd_link_hash_lookup进入bfd_hash_lookup；hash遍历完整NUL终止串，以strcmp区分，复制len+1。coff_fix_symbol_name把超过SYMNMLEN的名字交给_bfd_stringtab_add，读端按字符串表offset返回；八字节短槽不等于整体名字上限。发行补丁未改变这些函数；i386pep配置使用pei-x86-64。此链支持所读实现不按小于255字符的前缀比较，不证明任意COFF工具、链接参数或未来版本。
 
 仍须连接Windows实际编译器所选linker。现有正常CI准备步骤输出gcc -print-prog-name=ld、可解析绝对路径的版本与摘要；相对查询结果保持未核实，新的Windows执行收据未取得前不销项。固定包中ld.exe硬链接到ld.bfd.exe，实际内容SHA256为e5f877e604846435aedd5b1dedf9b62fbde7cfe24b65625a3d6f0d8f76ff5f80，后续收据须与该身份核对。本地仅做包／源文件读取，没有执行PE程序或名字边界实验；此项不替代最终CRT／系统DLL、导入解析及平台并发责任。
+
+## 线程TLS的标准分配与释放
+
+R21.3与R22.1均为Required，C99适用（主文印刷167、172／PDF175、180；R22.1另合成AMD2.84）。主文§6.7不要求重审ISO标准库实现内部的全部规则，但接口用途和非ISO调用方的责任仍在。固定glibc 2.39-0ubuntu8.9的pthread_create／allocate_stack通过_dl_allocate_tls进入allocate_dtv，后者在elf/dl-tls.c:370调用calloc；rtld-malloc.h的inline接口经__rtld_calloc连接实际实现。这不是项目C的直接malloc调用，却不能据直接标识符缺席消除非ISO线程／TLS路径的标准分配用途。
+
+非user_stack线程的__nptl_deallocate_stack走queue_stack；缓存回收才经__nptl_free_stacks／_dl_deallocate_tls释放DTV。源码默认阈值40MiB可调，不是运行峰值保证。join和项目执行栈munmap不等于已free全部bootstrap／TLS；当前进程期Task／controller／dispatcher永久停车后由_exit结束，操作系统回收地址空间不等于R22.1的显式释放。因此R21.3的实际用途及这条R22.1释放差距仍需处置；不能由正确的observer wait→close或D4.13顺序结论覆盖。
+
+已有正常ELF没有直接calloc/malloc导入；LD_DEBUG以ecu_probe为reference打印的分配器binding来自lookup_malloc_symbol(main_map,...)，不作为项目直接调用或每次分配事件证明。需区分exec之前的owner Python与之后的实际ELF，源码闭包和真实绑定共同使用；普通／检测器各守自己的身份。原D4.12提案明确不扩其他规则，[针对Linux这两条的具体补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6401003340)仍待人类项目决定，不建Accepted ADR、批准表或MR12，不外推Windows。给actor静态汽车缓冲、只设bootstrap大小或等进程退出都不能消除这里的calloc／释放义务；真正改为调用方栈并退休所有相关线程还须重证guard、信号、restart及关闭合同。
