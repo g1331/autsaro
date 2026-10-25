@@ -61,3 +61,9 @@ GCC手册将main参数、环境与多数库行为交给libc／操作系统。项
 D2.1按真实TU的编译错误判断。正常c-check先用实际参数逐TU编译检查，封存build随后实际编译／链接目标程序；生成工程成功、解析器退出或旧程序运行不替代这些步骤。GNU扩展按所选编译器及R1.2单独评估，不能把有效目标扩展统称语法错误，也不能把被编译器拒绝的生成代码交给旧绿色结果覆盖。Windows仍须由相应head实际选中的正常编译入口证明。
 
 D3.1的项目方法是从自有接口／实际实现回到模块契约、设计与固定SWS，而非只比条款标题。Os、Time、Schedule的标准服务经后端映射到采用内核；[ADR0004](../../adr/0004-freertos-kernel-with-own-os-semantics.md)限定唯一backend、静态汽车对象和真实执行栈监测，[运行时架构](../../architecture/runtime.md)给出激活／独占区／HostBatch三层责任。HostBridge的监督与实际输出收据来自项目HostBatch合同，guard fault来自所选SC1栈合同；不能把5000ms批次监督解释为任意阻塞输出的完成保证。原生错误／回滚／停止处理属于这些合同的失败响应，不能仅因标准没有指定POSIX实现就删除。originalBswSources、patch manifest和seal证明角色／来源／字节身份，不证明需求追溯；采用内核和非ISO供应方调用仍须连到实际被选功能，未核定的ISO17356参数访问及供应方路径不据此销项。上述闭包支持这些明确的责任连接，不构成全部源代码、供应方或221项已满足。
+
+## 非左值聚合与临时数组
+
+R18.9为Required，当前C99适用（AMD3.39，印刷21–22／PDF29–30）；它限制非左值结构／union结果中的数组转换及修改，不等于禁止按值返回结构。当前四份生成工程的自有C／头文件、所选补丁后内核及自有Windows适配源码中，声明／typedef候选核查得到的按值聚合入口为Dcm_NextPublication、Arti_SaveAddressCapture、Os_ArtiCallerSave和Linux selected_task。前者只有kind、channel、mode及函数指针；两个ARTI快照只有整数状态和嵌套的整数地址记录；PortTask只有thread／yielded句柄。它们不含数组子对象，selected_task().thread等即时成员访问也不是临时数组转换。Task和portTASK_FUNCTION宏分别展开成void函数；不能将宏拼写当成未知聚合返回类型。
+
+CONTEXT的FP数组、ErrorHook参数及Queue存储不因此取得一般豁免：实际上下文先保存在具名对象后按地址复制，ISR退役快照的聚合赋值是独立语句；复合字面量在C99中是有存储期的左值，其地址借用另按R18.6核查，不能靠R18.9销项。此判断是这些实际构造与调用的限定结论；候选脚本不是C语义分析器，不能证明任意新返回类型、用户组件、SDK宏或未取证Windows生成物。新增含数组的按值结果、aggregate条件表达式或立即取其成员地址时须重新检查。
