@@ -59,19 +59,39 @@ OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
                                                                                            : -1]);
     (void)sizeof(
         char[(sizeof(struct _fpstate) == sizeof(destination->native.__fpregs_mem)) ? 1 : -1]);
+    (void)sizeof(char[(sizeof(struct sigcontext) == sizeof(mcontext_t)) ? 1 : -1]);
+    (void)sizeof(char[((offsetof(struct ucontext, uc_sigmask) == 296u) &&
+                       (offsetof(struct ucontext, uc_mcontext.rsp) == 160u) &&
+                       (offsetof(struct ucontext, uc_mcontext.fpstate) == 224u))
+                          ? 1
+                          : -1]);
+    (void)sizeof(
+        char[(offsetof(struct ucontext, uc_sigmask) == offsetof(ucontext_t, uc_sigmask)) ? 1 : -1]);
+    (void)sizeof(char[(offsetof(struct ucontext, uc_mcontext.fpstate) ==
+                       (offsetof(ucontext_t, uc_mcontext) + sizeof(gregset_t)))
+                          ? 1
+                          : -1]);
+    (void)sizeof(char[((offsetof(struct ucontext, uc_sigmask) + sizeof(uint64_t)) <=
+                       offsetof(ucontext_t, __fpregs_mem))
+                          ? 1
+                          : -1]);
+    /* Linux x64 supplies a 64-bit mask, not glibc's full sigset/FP/SSP tail. */
+    const size_t prefix = offsetof(struct ucontext, uc_sigmask) + sizeof(uint64_t);
     struct ucontext kernel;
-    unsigned char *native = (unsigned char *)&destination->native;
-    (void)memcpy((void *)&kernel, source, sizeof(kernel));
-    (void)memmove((void *)&destination->native, source, sizeof(destination->native));
+    ucontext_t snapshot = {0};
+    unsigned char *native = (unsigned char *)&snapshot;
+    (void)memcpy((void *)&kernel, source, prefix);
+    (void)memcpy((void *)&snapshot, (const void *)&kernel, prefix);
     if (kernel.uc_mcontext.fpstate != NULL) {
         void *copied = &destination->native.__fpregs_mem;
-        (void)memmove((unsigned char *)&destination->native.__fpregs_mem,
+        (void)memmove((unsigned char *)&snapshot.__fpregs_mem,
                       (const unsigned char *)kernel.uc_mcontext.fpstate,
-                      sizeof(destination->native.__fpregs_mem));
+                      sizeof(snapshot.__fpregs_mem));
         (void)memcpy(&native[offsetof(struct ucontext, uc_mcontext.fpstate)],
                      (const unsigned char *)&copied,
                      sizeof(copied));
     }
+    destination->native = snapshot;
     destination->Rsp = kernel.uc_mcontext.rsp;
     destination->ContextFlags = CONTEXT_CONTROL;
 }
@@ -79,7 +99,9 @@ OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
 OS_MEMMAP uintptr_t Os_LinuxSignalSp(const void *context)
 {
     struct ucontext kernel;
-    (void)memcpy((void *)&kernel, context, sizeof(kernel));
+    (void)memcpy((void *)&kernel,
+                 context,
+                 offsetof(struct ucontext, uc_mcontext.rsp) + sizeof(kernel.uc_mcontext.rsp));
     return kernel.uc_mcontext.rsp;
 }
 

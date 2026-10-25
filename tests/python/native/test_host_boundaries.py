@@ -759,6 +759,81 @@ class NativeFacilityTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "", result)
                         self.assertEqual(result.stderr, f"rollback_munmap_failed stage={scenario}\n", result)
 
+    def test_signal_context_reads_only_kernel_control_fields(self):
+        import os_suites
+
+        prefix = "const size_t prefix = offsetof(struct ucontext, uc_sigmask) + sizeof(uint64_t);"
+        sp_extent = "offsetof(struct ucontext, uc_mcontext.rsp) + sizeof(kernel.uc_mcontext.rsp)"
+        variants = (
+            ("control", None, None, 0, ""),
+            ("user-mask", prefix, "const size_t prefix = sizeof(struct ucontext);", 41,
+             "frame-copy rejected capture\n"),
+            ("user-tail", "(void)memcpy((void *)&kernel, source, prefix);",
+             "(void)memcpy((void *)&kernel, source, sizeof(ucontext_t));", 41,
+             "frame-copy rejected capture\n"),
+            ("sp-tail", sp_extent, "sizeof(kernel)", 42, "frame-copy rejected sp\n"),
+        )
+        for name, before, after, code, error in variants:
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_LinuxNative.c"
+                text = source.read_text(encoding="utf-8")
+                if before is not None:
+                    self.assertEqual(text.count(before), 1)
+                    text = text.replace(before, after)
+                include = "#include <string.h>"
+                self.assertEqual(text.count(include), 1)
+                text = text.replace(include, include + "\n"
+                    "void *Os_TestNativeCopy(void *, const void *, size_t, size_t, int);\n"
+                    "#define memcpy(d, s, n) Os_TestNativeCopy((d), (s), (n), __builtin_object_size((d), 0), 0)\n"
+                    "#define memmove(d, s, n) Os_TestNativeCopy((d), (s), (n), __builtin_object_size((d), 0), 1)\n")
+                source.write_text(text, encoding="utf-8")
+                with os_suites.native_session(directory, "signal-frame-projection"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_native_facilities.c"), target=target,
+                    )
+                    result = os_suites.run_native([str(binary), "frame-copies"], timeout=10)
+                self.assertEqual(result.returncode, code, result)
+                self.assertEqual(result.stderr, error, result)
+                self.assertEqual(result.stdout, "native facilities futex=2 mapping=1 mutex_owner=1 recursion=2 error=classified context=signal+self\n" if code == 0 else "", result)
+                print(f"signal-frame variant={name} exit={result.returncode} {result.stderr}", end="", flush=True)
+
+    def test_signal_context_content_mutants(self):
+        import os_suites
+
+        for name, before, after, code, stage in (
+            ("rsp", "destination->Rsp = kernel.uc_mcontext.rsp;", "destination->Rsp = 0u;", 9, "rsp"),
+            ("flags", "destination->ContextFlags = CONTEXT_CONTROL;", "destination->ContextFlags = 0u;", 9, "flags"),
+            ("signal-sp", "return kernel.uc_mcontext.rsp;", "return 0u;", 9, "signal-sp"),
+            ("fp-content", "sizeof(snapshot.__fpregs_mem));", "1u);", 9, "fp"),
+            ("fp-owner", "void *copied = &destination->native.__fpregs_mem;",
+             "void *copied = kernel.uc_mcontext.fpstate;", 11, "fp-owner"),
+            ("self-copy", "if (kernel.uc_mcontext.fpstate != NULL) {",
+             "destination->native = snapshot;\n    if (kernel.uc_mcontext.fpstate != NULL) {", 10, "self-copy"),
+            ("absent-fp", "unsigned char *native = (unsigned char *)&snapshot;",
+             ("unsigned char *native = (unsigned char *)&snapshot;\n"
+              "    (void)memset(&snapshot.__fpregs_mem, 0xa5, sizeof(snapshot.__fpregs_mem));"), 45, "absent-fp"),
+        ):
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_LinuxNative.c"
+                text = source.read_text(encoding="utf-8")
+                self.assertEqual(text.count(before), 1)
+                source.write_text(text.replace(before, after), encoding="utf-8")
+                with os_suites.native_session(directory, "signal-context-content"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_native_facilities.c"), target=target,
+                    )
+                    result = os_suites.run_native([str(binary), "normal"], timeout=10)
+                self.assertEqual(result.returncode, code, result)
+                self.assertEqual(result.stdout, "", result)
+                self.assertEqual(result.stderr, f"native-context rejected {stage}\n", result)
+                print(f"signal-content variant={name} exit={result.returncode} {result.stderr}", end="", flush=True)
+
     def test_kernel_calls_native_mutex_and_stack_capacity(self):
         import os_suites
 

@@ -20,7 +20,33 @@ static CONTEXT captured;
 static uintptr_t expected_sp;
 static unsigned char expected_fp[sizeof(captured.native.__fpregs_mem)];
 static volatile sig_atomic_t captured_signal;
+static const void *frame_source;
+static volatile sig_atomic_t frame_copies;
+void *Os_TestNativeCopy(
+    void *destination, const void *source, size_t length, size_t capacity, int moving)
+{
+    if (source == frame_source && frame_source != NULL) {
+        ++frame_copies;
+        const size_t expected = frame_copies == 1 ? 304u : 168u;
+        if (length != expected || frame_copies > 2) {
+            static const char capture[] = "frame-copy rejected capture\n";
+            static const char sp[] = "frame-copy rejected sp\n";
+            const char *message = frame_copies == 1 ? capture : sp;
+            const size_t bytes = frame_copies == 1 ? sizeof(capture) - 1u : sizeof(sp) - 1u;
+            if (write(STDERR_FILENO, message, bytes) != (ssize_t)bytes) {
+                _exit(44);
+            }
+            _exit(frame_copies == 1 ? 41 : 42);
+        }
+    }
+    return moving != 0 ? __builtin___memmove_chk(destination, source, length, capacity)
+                       : __builtin___memcpy_chk(destination, source, length, capacity);
+}
 static volatile unsigned deep_returns;
+static int reject_context(const char *stage, int code)
+{
+    return fprintf(stderr, "native-context rejected %s\n", stage) < 0 ? 46 : code;
+}
 static DWORD completed_actor(void *argument)
 {
     (void)argument;
@@ -71,12 +97,15 @@ static void capture_signal(int signal_number, siginfo_t *info, void *context)
     struct ucontext kernel;
     (void)signal_number;
     (void)info;
-    memcpy(&kernel, context, sizeof(kernel));
+    /* Fixed x64 kernel prefix through its 64-bit mask, independent of glibc's tail. */
+    memcpy(&kernel, context, 304u);
     expected_sp = kernel.uc_mcontext.rsp;
     if (kernel.uc_mcontext.fpstate != NULL) {
         memcpy(expected_fp, kernel.uc_mcontext.fpstate, sizeof(expected_fp));
+        frame_source = context;
         Os_LinuxCaptureContext(&captured, context);
         captured_signal = Os_LinuxSignalSp(context) == expected_sp ? 1 : 0;
+        frame_source = NULL;
     }
 }
 void StartupHook(void) {}
@@ -193,15 +222,25 @@ int main(int argc, char **argv)
     handler.sa_sigaction = capture_signal;
     handler.sa_flags = SA_SIGINFO;
     if (sigemptyset(&handler.sa_mask) != 0 || sigaction(SIGUSR1, &handler, NULL) != 0 ||
-        raise(SIGUSR1) != 0 || captured_signal != 1 || captured.Rsp != expected_sp ||
-        captured.ContextFlags != CONTEXT_CONTROL ||
-        memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0) {
-        return 9;
+        raise(SIGUSR1) != 0) {
+        return reject_context("setup", 9);
+    }
+    const char *failure =
+        captured_signal != 1                                                           ? "signal-sp"
+        : captured.Rsp != expected_sp                                                  ? "rsp"
+        : captured.ContextFlags != CONTEXT_CONTROL                                     ? "flags"
+        : memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0 ? "fp"
+                                                                                       : NULL;
+    if (failure != NULL) {
+        return reject_context(failure, 9);
+    }
+    if (strcmp(argv[1], "frame-copies") == 0 && frame_copies != 2) {
+        return 43;
     }
     memcpy(&snapshot, &captured.native, sizeof(snapshot));
     if (snapshot.uc_mcontext.rip == 0u ||
         (const void *)snapshot.uc_mcontext.fpstate != &captured.native.__fpregs_mem) {
-        return 11;
+        return reject_context("fp-owner", 11);
     }
     const uintptr_t saved_sp = captured.Rsp;
     Os_LinuxCaptureContext(&captured, &captured.native);
@@ -209,7 +248,17 @@ int main(int argc, char **argv)
     if (captured.Rsp != saved_sp || captured.ContextFlags != CONTEXT_CONTROL ||
         (const void *)snapshot.uc_mcontext.fpstate != &captured.native.__fpregs_mem ||
         memcmp(expected_fp, &captured.native.__fpregs_mem, sizeof(expected_fp)) != 0) {
-        return 10;
+        return reject_context("self-copy", 10);
+    }
+    CONTEXT absent = {0};
+    const unsigned char zero_fp[sizeof(absent.native.__fpregs_mem)] = {0};
+    snapshot.uc_mcontext.fpstate = NULL;
+    Os_LinuxCaptureContext(&absent, &snapshot);
+    memcpy(&snapshot, &absent.native, sizeof(snapshot));
+    if (absent.Rsp != saved_sp || absent.ContextFlags != CONTEXT_CONTROL ||
+        snapshot.uc_mcontext.fpstate != NULL ||
+        memcmp(zero_fp, &absent.native.__fpregs_mem, sizeof(zero_fp)) != 0) {
+        return reject_context("absent-fp", 45);
     }
     if (Os_LinuxFutexWait(&cell, 0, &immediate) != -EAGAIN ||
         Os_LinuxFutexWait(&cell, 1, &immediate) != -ETIMEDOUT ||

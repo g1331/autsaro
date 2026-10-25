@@ -24,11 +24,11 @@ Linux 备用信号栈原匿名 union 仅借 long double 成员取得对齐，实
 
 对应发行源码已按Ubuntu archive签名的InRelease→Sources.xz→原始源码及发行补丁摘要核对；实际libc／loader／libgcc与官方deb解包字节一致。标准库的实现内容与项目的调用分别按MISRA主文§6.7判断，不能据此免除第三方机制的D4.12或平台ABI／错误语义。libgcc的GNU展开接口另沿实际实现核对，不冒充ISO标准库设施。
 
-Linux返回型停车handler保存并恢复被打断actor的errno；futex／gettid／altstack边界使用既有类型化UAPI，直接保留原生返回信息。`Os_LinuxCaptureContext`先复制信号帧，再保留目标自有FP存储与重定位指针，完整快照的memmove仍支持self-copy。所核实际ELF的该函数调用真实libc memmove，停车handler另外调用__errno_location；不能只因调用名存在就宣称异步安全。对应glibc的`manual/string.texi`分别将memcpy／memmove标为AS-Safe，x86 IFUNC选择进入字节复制实现；该次ELF的NOW绑定先于handler使用。此依据与实际地址／长度、发布顺序、信号屏蔽及errno恢复共同支持当前闭包，不把它扩成任意库调用、任意动态加载或全部调度的证明。
+Linux返回型停车handler保存并恢复被打断actor的errno；futex／gettid／altstack边界使用既有类型化UAPI，直接保留原生返回信息。`Os_LinuxCaptureContext`只读取截至64位内核mask的304字节前缀及独立512字节传统FP，先构造初始化的局部快照、重定位到目标自有FP，再赋给目标，支持self-copy；SignalSp只读取截至Rsp的168字节。旧ELF的memmove绑定证据不冒充新复制布局的执行证明，停车handler仍使用__errno_location。对应glibc的`manual/string.texi`分别将memcpy／memmove标为AS-Safe，x86 IFUNC选择进入字节复制实现；该次ELF的NOW绑定先于handler使用。此依据与实际地址／长度、发布顺序、信号屏蔽及errno恢复共同支持当前闭包，不把它扩成任意库调用、任意动态加载或全部调度的证明。
 
 guard handler仅对注册actor的实际guard地址发布预分配记录、真实SP及首故障状态，然后永久停车；未识别故障原生退出。该路径没有格式化输出、堆分配或汽车回调。正常关闭报告中的有界字节数／预分配容量、失败回退与任意阻塞输出的时间保证分开；现有HostBatch监督及退出后备的验证边界见[平台记录](platform.md#三处有界-linux-平台保留)，不为probe或所有终止输出新增期限。
 
-对应运行内核6.8.0-147-generic的Ubuntu linux 6.8.0-147.147源码及发行补丁也按同一签名Sources核验。x64_setup_rt_frame将第三实参设为frame.uc地址，uc_mcontext.fpstate另指向fpu__alloc_mathframe分配的FP区域；[Linux sigaction接口](https://man7.org/linux/man-pages/man2/sigaction.2.html)将第三实参明确为转成void指针的ucontext_t。当前判断依赖这一平台接口及实际x64信号帧，不能从两个offsetof／sizeof断言推导内核与glibc的所有尾部字段相同。内核sigset为64位，glibc另有较大的sigset_t、内嵌FP及SSP尾部，须区分各自角色。
+对应运行内核6.8.0-147-generic的Ubuntu linux 6.8.0-147.147源码及发行补丁也按同一签名Sources核验。x64_setup_rt_frame将第三实参设为frame.uc地址，uc_mcontext.fpstate另指向fpu__alloc_mathframe分配的FP区域；[Linux sigaction接口](https://man7.org/linux/man-pages/man2/sigaction.2.html)将第三实参明确为转成void指针的ucontext_t。实际TU中的UAPI struct ucontext使用ambient glibc sigset_t，sizeof并非内核帧长度。现以固定偏移和布局断言限定读取；glibc完整sigset、内嵌FP及SSP尾部不从信号帧整块复制。
 
 Os_StackObserve只接受CONTEXT_CONTROL并检查真实Rsp；原生设施对照另外观察GPR、512字节传统FP内容及指针重定位。项目没有用该观察快照调用setcontext或恢复整个XSAVE区，不能把512字节副本称为完整扩展状态恢复。actor继续执行由原始信号帧的sigreturn承担，内核按其实际FP／XSAVE记录恢复。现有self-copy、指针独立性和内容对照支持这些具体消费者，不能替代所有信号交错、其他内核／libc布局或新恢复消费者的评估。
 

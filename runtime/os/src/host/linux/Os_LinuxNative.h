@@ -12,6 +12,8 @@ OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
 OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell);
 OS_MEMMAP DWORD Os_LinuxThreadId(void);
 OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack, stack_t *previous);
+/** Project the fixed x64 signal control prefix and legacy FP into owned storage; supports
+ * self-copy. */
 OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source);
 OS_MEMMAP uintptr_t Os_LinuxSignalSp(const void *context);
 OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard);
