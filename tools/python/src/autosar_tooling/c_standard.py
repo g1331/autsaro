@@ -74,6 +74,29 @@ def include_scope(text: str) -> str | None:
     return "#include " + match[1] if match else None
 
 
+def directive_scope(text: str) -> str | None:
+    """Identify literal includes and undef targets without accepting record locators as C."""
+    included = include_scope(text)
+    if included is not None:
+        return included
+    text = re.sub(r"\\\r?\n", "", text).strip()
+    text = re.sub(r"/\*.*?\*/|//[^\r\n]*", " ", text, flags=re.DOTALL)
+    match = re.fullmatch(r"\s*#\s*undef\s+([A-Za-z_]\w*)\s*", text)
+    return "#undef " + match[1] if match else None
+
+
+def record_scope(text: str) -> str | None:
+    """An optional positive occurrence selects a concrete repeated directive."""
+    if IDENTIFIER.fullmatch(text):
+        return text
+    occurrence = re.fullmatch(r"(.+?)\s+\[([1-9][0-9]*)\]", text, re.DOTALL)
+    normalized = directive_scope(occurrence[1] if occurrence else text)
+    if normalized is not None:
+        return normalized + (" [" + occurrence[2] + "]" if occurrence else "")
+    # An approved malformed directive must remain unmatched, rather than disappear.
+    return text if text.lstrip().startswith("#") else None
+
+
 def function(tokens: list[Token]) -> tuple[str, list[str]] | None:
     """Recognize direct function declarators, not function pointer objects/types."""
     words = [t.text for t in tokens]
@@ -419,7 +442,7 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
             for index in range(1, len(pieces), 2):
                 name = pieces[index].strip("`")
                 for item in re.findall(r"`([^`]+)`", pieces[index + 1]):
-                    symbol = include_scope(item) or (item if IDENTIFIER.fullmatch(item) else None)
+                    symbol = record_scope(item)
                     if symbol is None:
                         continue
                     key = (kind, rule[2], name, symbol)
@@ -434,6 +457,13 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
         name = path.relative_to(root).as_posix()
         source = path.read_text(encoding="utf-8")
         tokens = lex(source)
+        directive_counts: collections.Counter[str] = collections.Counter()
+        directive_numbers = {}
+        for token in tokens:
+            scope = directive_scope(token.text) if token.text.lstrip().startswith("#") else None
+            if scope is not None:
+                directive_counts[scope] += 1
+                directive_numbers[token.start] = directive_counts[scope]
         for index, token in enumerate(tokens):
             if not is_comment(token) and not token.text.lstrip().startswith("#"):
                 continue
@@ -463,7 +493,7 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                 words = [t.text for t in declaration]
                 direct = function(declaration)
                 macro = re.match(r"\s*#\s*define\s+(\w+)", words[0]) if words else None
-                included = include_scope(words[0]) if words else None
+                included = directive_scope(words[0]) if words else None
                 symbol = included or (
                     direct[0]
                     if direct
@@ -471,6 +501,13 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                     if macro
                     else parameter_name(words[:-1])
                 )
+                if included is not None:
+                    numbered = included + " [" + str(directive_numbers[declaration[0].start]) + "]"
+                    if (match[1], match[2], name, numbered) in records:
+                        symbol = numbered
+                    elif directive_counts[included] > 1:
+                        line = source.splitlines()[source.count("\n", 0, token.start)].strip()
+                        result[("deviation-ambiguous", name, line)] += 1
                 key = (match[1], match[2], name, symbol)
                 comments[key] += 1
                 source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())
