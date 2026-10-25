@@ -87,3 +87,5 @@ R6.1（Required，MISRA 主文页58／PDF66）在 C99 中允许实现支持的�
 ## 逻辑右操作数的调用闭包
 
 R13.5（Required，主文页113–114／PDF121–122；TC1 Appendix J 页14／PDF20）按函数可能的持久副作用判断，不能因调用实参已知而豁免。当前 `Dcm.c` 的逻辑右操作数没有 native／SchM 调用、volatile 读取或应用调用：`Dcm_Init` 条件内的 `Dcm_IsAvailability` 只对值参数做位运算与取模；`Dcm_Available` 只调用此前者并读取执行者持有的不可变配置。其余逻辑项读取普通标量、请求／响应边界或执行者私有 work。实际 ReadData 回调位于独立条件中；会进入 SchM 的 `Dcm_Current` 也单独求值，不能把它们当成无副作用函数移入逻辑 RHS。本结论只处置当前 Dcm 源码中的这些表达式，回调实现及其他模块继续按其实际源码核查。
+
+负响应的六个既有值直接消费生成的标准NRC常量，不再维护同值的私有DCM_NRC_*表。已对照SWS_Dcm_00980原表PDF365：DCM_E_GENERALREJECT／SERVICENOTSUPPORTED／SUBFUNCTIONNOTSUPPORTED／INCORRECTMESSAGELENGTHORINVALIDFORMAT／RESPONSETOOLONG／REQUESTOUTOFRANGE分别为0x10／11／12／13／14／31。Dcm.h原有Rte_Dcm_Type.h包含链、Dcm_Negative的uint8参数、响应字节／长度、各拒绝优先级及ReadData调用边界均保持；这是对R2.5未使用公共宏的真实消费者整理，不扩充服务或改变ISO处置。

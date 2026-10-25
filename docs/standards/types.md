@@ -63,3 +63,15 @@ R9.6（Required、C99，AMD4.5，印刷8–9／PDF15–16）由同一initializer
 D4.15（Required、C99，AMD3.10，印刷5–6／PDF13–14）针对可能生成NaN／Inf的浮点算术或数学函数结果。上述十二份交付C／头文件、宏及补丁后内核中，浮点类型仅见`Platform_Types.h`的float32／float64定义、两个portmacro的portFLOAT／portDOUBLE定义，以及Linux备用栈的`long double`存储／sizeof；没有浮点值运算、浮点literal或数学函数入口。诊断字符串、注释和`#error`文本不是浮点表达式，FP上下文的字节复制也不求浮点值。因此这些具体源码没有待检测的NaN／Inf结果；R14.1（Required，主文印刷117／PDF125，AMD2增加C11）也没有essentially floating循环计数器。两项都仍适用C99，不能把构造缺席写成语言豁免；系统头展开和provider内部不由本段证明。
 
 R8.15／R8.16／R8.17仅适用C11，类别分别为Required／Advisory／Advisory（AMD3.17，印刷10–13／PDF18–21）；本项目C99源码未使用`_Alignas`／`alignas`／`stdalign.h`，三项分别不适用。GNU aligned属性仍按平台扩展和实际布局约束核查。R1.4仅适用C11（AMD2.30，印刷11–12／PDF18–19）；合成AMD3.11–13与AMD4.53–54后不能再沿旧清单批量禁止已另设指导的泛型／noreturn／对齐／线程／原子设施。当前C99不适用本条，Annex K及平台扩展仍按实际接口检查，不能据此升级语言或免除R1.1／R1.3。
+
+## 未使用声明与真实消费者
+
+R2.3／R2.4／R2.5均为Advisory、System scope、适用C99（主文印刷43–44／PDF51–52；AMD2增列C11）。R2.4直接区分tag与typedef名，原文允许省去仅在定义处出现的tag；TC1确认#undef算宏使用，TC2.5／6将R2.5用语改为macro definitions，不能只比最终宏表或把replacement-list名字出现当成实际展开。
+
+Linux私有兼容头的ULONG／ULONG_PTR、CALLBACK／VOID没有所选Linux消费者，已删除；Windows的同名使用由Windows SDK提供。portBASE_TYPE与portINTERRUPT_APPLICATION_DEFINED_START也没有真实消费者，受控POSIX补丁删除两条冗余定义，实际BaseType_t／UBaseType_t和向量起点逻辑不变。编译期宽度／对齐拒绝typedef仍有声明本身的约束作用，不能因名字后续无引用而删除；Os_Atomic64Type在这些约束中仍被sizeof／alignof消费。
+
+采用内核的xSTATIC_EVENT_GROUP／xSTATIC_STREAM_BUFFER／xTASK_PARAMETERS只在typedef定义的tag位置出现，既有0015补丁将其省去，保留三个typedef名称、全部成员和条件布局；上游原件不改写，派生身份按完整有序补丁重新计算。直接引用这三个struct tag的外部源码须改用保留的typedef名，来源兼容影响已记CHANGELOG；当前实际交付／ARTI／内核消费者没有这些tag引用。LSduR、PduR、TryToGetSpinlockType及eSleepModeStatus的四处tag报告则落在匿名enum上，没有可删除的tag；这些具体报告按原始C语法判为误报，typedef名是否使用另按R2.3判断。
+
+Dcm六个私有NRC重复了已交付的标准常量，实际负响应路径现直接使用生成的DCM_E_*；SWS_Dcm_00980原表PDF365的0x10／11／12／13／14／31分别约束general reject、service、subfunction、format、response too long及range。该头由Dcm.h原有包含链提供，没有新增消警报引用。Ecu_TargetPrepare的初始CAS同样使用已有ECU_TARGET_UNPREPARED，仍表示原子状态0，拒绝顺序不变。
+
+其余所选程序未使用的标准公共类型、版本／状态／NRC常量、RTE句柄／runnable映射、OS访问宏及可选内核接口保留真实未使用状态；固定SWS发布要求、配置／接口稳定性与采用接口的理由不等于实际消费，也不将Advisory违反自动判为不适用。MemMap的HEADER_CHECK由同文件#ifndef路径核对，不能套用START／STOP关键词#undef的结论。完整逐位置的来源、实际消费者／配置条件及仍待处置项集中PR #371；上述删除／误报裁决不关闭整组三条或全部221项。
