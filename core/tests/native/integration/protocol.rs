@@ -841,7 +841,7 @@ fn host_batch_native_output_backpressure() {
     ])
     .unwrap();
     let script = "import sys; from pathlib import Path; from test_ecu_build_modes import check_native_output_backpressure; check_native_output_backpressure(Path(sys.argv[1]), Path(sys.argv[2]))";
-    require_success(&super::tooling::run_public_command(
+    let result = super::tooling::run_public_command(
         Command::new(super::tooling::execution_settings().python)
             .args(["-B", "-c", script])
             .arg(&project)
@@ -850,7 +850,9 @@ fn host_batch_native_output_backpressure() {
         &scratch.0,
         "native-output-backpressure",
         Duration::from_secs(180),
-    ));
+    );
+    require_success(&result);
+    print!("{}", String::from_utf8_lossy(&result.stdout));
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]

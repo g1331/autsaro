@@ -287,7 +287,7 @@ class EcuBuildModeTests(unittest.TestCase):
                                 self.assertEqual(tree(failed_output), old_output)
                                 self.assertEqual(tree(received), before)
                     output = directory / sample / "successful-empty-output"
-                    output.mkdir(mode=0o700)
+                    output.mkdir()
                     built = build(output, env, "success")
                     self.assertTrue(built.success, built.stdout.read_text() + built.stderr.read_text())
                     self.assertTrue((output / ("ecu_host_batch" + (".exe" if os.name == "nt" else ""))).is_file())
