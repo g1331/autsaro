@@ -22,6 +22,8 @@ D4.10为Required（主文印刷32–33／PDF40–41，AMD2追加C11）；TC2.2�
 
 普通业务头不受上述冲突理由保护。`Os.h` 的 Hooks 头、生成通信配置的诊断路由头，以及 SchM 的模式／主机独占区头在实际声明前导入；对应 release 检查保留。SchM 的五个生命周期常量也在 START 之前定义，段内只保留状态声明。正常消费者仍使用同一类型、数值和 MemMap 边界；`generated_schm_lifecycle_section_contains_no_other_preprocessing` 依据 00003 检查实际生成的生命周期变量块。
 
+同类连续对象也不要求在仅有空白的间隙关闭再开启：Os_Time、Os_Backend、Os_HostServices、Os.h及Ecu_Target中的这类块共用外层配对，保持声明顺序及每个C token的映射类；不跨不同类别、条件或其他预处理合并。只对余下实际必要的后置包含作冲突判断，不能把可删除的内部配对也写成AUTOSAR强制行。
+
 采用内核的可选测试头、MSVC 专属分支、MPU 标记，以及 Windows 名称导入的 undef，分别有自己的条件和消费者，不属于本节的必要映射关键词判断；原始报告及其后续人工评估保留。
 
 逐处评估还须区分00011直接要求的模块START／STOP关键词，与当前属性实现为清除临时OS_MEMMAP／active状态而使用的内部undef。后者不是该SWS直接规定的名字；不能把选定GCC属性策略写成AUTOSAR强制实现。实际替代、接口影响和Advisory保留理由应分别核查，不给全部undef统一授权。当前仅补齐这些规范边界，尚不进入具体批准表或添加MR12注释；完整来源、逐处位置、风险证据与累计独立复核仍按ADR0023前提执行。

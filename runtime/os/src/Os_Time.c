@@ -344,10 +344,7 @@ OS_MEMMAP TickType Os_TimeCounterValue(CounterType counter)
 {
     return values[counter_index(counter)];
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
+
 OS_MEMMAP static void increment(uint32 counter)
 {
     typedef struct {
@@ -397,10 +394,7 @@ OS_MEMMAP static void increment(uint32 counter)
         }
     }
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
+
 OS_MEMMAP static StatusType implementation_IncrementCounter(CounterType CounterID)
 {
     uint32 index;

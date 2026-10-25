@@ -571,10 +571,7 @@ OS_MEMMAP StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cyc
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
 OS_MEMMAP StatusType CancelAlarm(AlarmType AlarmID);
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
+
 /** Initialize application services during OS startup (OSEK OS 2.2.3 13.8.2.4).
  * @par Return
  * None.

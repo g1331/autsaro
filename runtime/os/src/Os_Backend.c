@@ -282,10 +282,7 @@ OS_MEMMAP static volatile Os_Atomic32Type
 #include "Os_MemMap.h"
 OS_MEMMAP static StatusType
     shutdown_reason; /**< First-close winner reason, atomically published; no Init reset. */
-#define OS_STOP_SEC_VAR_CLEARED_8
-#include "Os_MemMap.h"
-#define OS_START_SEC_VAR_CLEARED_8
-#include "Os_MemMap.h"
+
 OS_MEMMAP static AppModeType startup_mode; /**< Startup-only selected AppMode; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_8
 #include "Os_MemMap.h"
@@ -968,10 +965,7 @@ OS_MEMMAP static boolean operation_fails(uint32 operation)
     }
     return FALSE;
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
+
 OS_MEMMAP DWORD Os_PortSuspendThread(HANDLE thread)
 {
     return operation_fails(1u) ? (DWORD)-1 : SuspendThread(thread);

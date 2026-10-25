@@ -229,10 +229,7 @@ void StartupHook(void)
     }
     (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_READY);
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
+
 void ShutdownHook(StatusType Error)
 {
     Os_Atomic32Type state =

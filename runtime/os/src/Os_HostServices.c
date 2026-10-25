@@ -68,10 +68,7 @@ OS_MEMMAP int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds)
 }
 
 OS_MEMMAP int Os_HostClose(Os_HostHandleType handle) { return (CloseHandle(handle) != 0) ? 1 : 0; }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
+
 OS_MEMMAP void Os_HostExit(uint32_t status) { ExitProcess(status); }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
