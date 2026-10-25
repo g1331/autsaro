@@ -69,3 +69,11 @@ R8.3（Required，主文66–67／PDF74–75）的参数名比较独立于上述
 当前SDK仍有独立的R8.2缺口：项目私有Os_HostLinux.h直接包含pthread.h，其pthread_create声明的start_routine内层void指针参数未命名；Os_PortRestart.c直接包含GCC13的unwind.h，_Unwind_Trace_Fn、_Unwind_Personality_Fn及_Unwind_Backtrace声明也保留无名参数。主文的函数指针示例明确要求命名；TC2.10只增加交叉引用，TC2.12只澄清R8.3不比较无名参数，没有取消R8.2义务。AMD2追加C11，AMD3.63补充引用，均不提供当前例外。
 
 主文§6.7对ISO标准头内容及处理标准头时包含的文件另有边界；这里两条直接入口分别是POSIX和GNU接口，不能把整个pthread／unwind SDK归入ISO标准库豁免。删除显式包含而保留间接链、手写替代声明或修改本机SDK，均不能证明交付闭包已整改。保留对应SDK声明需新的有界项目取舍或供应方合规材料；当前只记录真实缺口，不套ADR0024、不写MR12，也不将该取舍等同MISRA合法偏离。此处列的是已核具体声明，不是整个SDK的完整违规清单。
+
+## 标准流对象与原生句柄
+
+R21.6为Required；R22.5／R22.6为Mandatory（主文印刷176–177／PDF184–185），禁止解引用FILE及关闭后继续使用其指针。R22.7为Required（AMD1印刷12／PDF20），限制EOF与未经修改的标准库返回值比较；AMD2追加C11，并由AMD2.85澄清FILE对象复制的理由。这些条款在当前C99适用，不能写成语言不适用。
+
+当前四份callback-parameter生成工程的自有／生成C及头文件没有FILE、EOF或stdio调用。两个目标的实际补丁后内核保留六处snprintf，但都在configUSE_STATS_FORMATTING_FUNCTIONS大于0的分支；当前FreeRTOS.h默认该值为0，实际TU宏收据一致，configGENERATE_RUN_TIME_STATS也为0，不能把这些排除位置当成当前用途，亦不删除上游功能。configUSE_TRACE_FACILITY为1并不单独启用格式化。这里支持当前源码的标准流对象／调用缺席，不豁免SDK或provider内部。
+
+HostBatch读取STDIN_FILENO，HostIo及故障输出写STDOUT_FILENO／STDERR_FILENO；Linux事件由单个eventfd读写，栈范围查询只以O_RDONLY打开/proc/self/maps，Windows使用原生句柄。它们不构成FILE对象，也不能因此免除D4.7／D4.13及平台资源契约。R22.3明确指出相似执行环境设施可能适用；将其完整结论扩展到任意外部启动方式，仍需知道实际继承的输入／输出对象、访问模式与是否别名，不能由没有fopen或绿色CI推出。既有受管测试使用分离管道的证据只覆盖那些具体启动，不新增用户输出期限或任意文件重定向保证。
