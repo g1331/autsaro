@@ -122,3 +122,5 @@ R3.2为Required，本仓库C99配置适用（印刷46／PDF54；AMD2.27追加C11
 R4.1（Required，印刷46–47／PDF54–55；AMD2.32未放宽终结条件）要求数值转义在另一个转义或当前literal结束处终结，不能仅靠后续非数字字符停止。已核冻结自有C／头、模板、四份Linux生成语料及双目标补丁内核中的实际数值转义均为字符literal末端的\0。Task名字虽经JSON序列化形成C字符串，正常入口先按grammar／rules将SHORT-NAME限定为ASCII identifier，不会把引号、反斜杠或控制字符送入该生成点。R4.2（Advisory，印刷47／PDF55）按替换发生在注释和条件处理前的顺序核对九种trigraph，已核原始文本未发现；生成注释没有通用自由文本转义层，当前实际调用方为固定说明、受约束名字或类型化数值，不扩张到任意用户应用或未来输入。
 
 上述构造结论、源身份、生成入口与Windows语料补核集中PR #371；正常生成／编译／实际分析和独立复核按各自head记录。它们不改变原始passed/error/not_assessed及严格比较拒绝，也不构成全部221项或完整平台符合性。
+
+R21.21／R21.24均为Required（AMD2.83印刷18／PDF25；AMD3.50印刷26／PDF34），分别禁止system及rand／srand；当前四份callback-parameter样本与双目标补丁后内核无这些标识符或宏用途。R21.22为Mandatory、R21.23为Required（AMD3.49印刷24–25／PDF32–33），约束tgmath操作数类别及多参数类型；同一语料对固定glibc头的122个公开宏名无普通token或指令用途。四条在当前C99均适用；这里是调用构造缺席，保留SDK展开、provider内部及其他配置边界。
