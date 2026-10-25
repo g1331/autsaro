@@ -669,7 +669,7 @@ pub(super) fn os_configuration(
             &[
                 Item::Value("RES_SCHEDULER".into()),
                 Item::Value(format!("{}u", plan.schedule.task_priority)),
-                Item::Value("UINT16_C(1)".into()),
+                Item::Value("1u".into()),
                 Item::Value("UINT32_C(0)".into()),
                 Item::Value("0u".into()),
                 Item::Value("0u".into()),

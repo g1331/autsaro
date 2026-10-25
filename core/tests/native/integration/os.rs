@@ -264,6 +264,15 @@ fn scheduler_resource_runs() {
             &root,
             super::tooling::native_target(),
         );
+        let configuration =
+            std::fs::read_to_string(project.join("generated/src/Ecu_Config.c")).unwrap();
+        // MISRA R7.6: both controlled targets have 32-bit int.
+        for small_macro in ["INT8_C", "UINT8_C", "INT16_C", "UINT16_C"] {
+            assert!(
+                !configuration.contains(small_macro),
+                "scheduler {value}: small integer constant macro {small_macro}"
+            );
+        }
         let binary = build_ecu(
             &project,
             &root.join("build"),
