@@ -135,7 +135,11 @@ OS_MEMMAP static void fault_park_forever(void)
 {
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = 10000000L};
     for (;;) {
-        (void)Os_LinuxFutexWait(&fault_park, 0, &interval);
+        const int result = Os_LinuxFutexWait(&fault_park, 0, &interval);
+        if ((result != 0) && (result != -EAGAIN) && (result != -EINTR) && (result != -ETIMEDOUT)) {
+            /* The published stack fault cannot return to its interrupted frame. */
+            ExitProcess(E_OS_STACKFAULT);
+        }
     }
 }
 

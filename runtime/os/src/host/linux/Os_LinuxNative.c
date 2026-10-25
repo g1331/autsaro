@@ -32,7 +32,10 @@ OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
 
 OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell)
 {
-    (void)native_call(__NR_futex, cell, FUTEX_WAKE_PRIVATE, INT32_MAX, NULL);
+    const long result = native_call(__NR_futex, cell, FUTEX_WAKE_PRIVATE, INT32_MAX, NULL);
+    if (result < 0) {
+        ExitProcess(1u);
+    }
 }
 
 OS_MEMMAP DWORD Os_LinuxThreadId(void)

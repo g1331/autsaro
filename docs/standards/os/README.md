@@ -37,3 +37,11 @@ OS-Application、IOC、多核、spinlock、时间／内存保护、ProtectionHoo
 R8.14同为Required（主文印刷75／PDF83；AMD2追加C11）。同一pthread.h的pthread_create、pthread_attr_getstack等声明使用__restrict限定参数；这是当前GNU C99下的restrict类型限定，不因拼写有下划线而消失。标准库memcpy的原文示例不提供整个POSIX头豁免。这是独立于R8.2的已确认声明缺口，既有两头文件命名取舍提案尚未覆盖此规则；不扩张原提案、不擅自移除SDK限定或填写批准记录，其他实际SDK构造仍须继续核查。
 
 R7.1为Required（主文印刷59–60／PDF67–68；单个0例外，AMD2.27追加C11）。Os_HostLinux.c经sys/eventfd.h实际包含bits/eventfd.h；其EFD_SEMAPHORE=00000001、EFD_CLOEXEC=02000000、EFD_NONBLOCK=00004000使用八进制，后两项直接用于事件创建。前者虽未选择，枚举声明仍进入TU。stdint.h处理先结束，再包含这些枚举，不能据主文§6.7把整个POSIX头豁免。当前libc6-dev为2.39-0ubuntu8.9，两个已核pthread／eventfd头与该固定源码字节一致；精确身份、替代和[有界SDK取舍补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6397172894)留PR。当前未接受，不填批准表／MR12，不套ADR0023／0024，也不据此声称其余SDK已评估。
+
+## futex 返回信息
+
+D4.7为Required（主文印刷30／PDF38，AMD2.14追加C11）；错误信息应尽快有意义地检查，只有证明函数不可能报错才适用免检条件。Linux private futex使用对齐且有存储期保证的32位字，但对应6.8.0-147.147发行源码的get_futex_key／futex_wake仍提供负错误返回；源码、发行补丁及论证留[PR调查](https://github.com/g1331/autsaro/pull/371#issuecomment-6398922631)。没有据此声称当前内核已启用故障注入，也不凭正常参数替全部结果作免检证明。
+
+Os_HostLinux.c的私有futex_wait在终止停车、恢复停车、SuspendThread及停止ACK的共同边界区分0、-EAGAIN、-EINTR、-ETIMEDOUT；这些状态沿原子状态重新读取与原有10ms片段继续。其他结果沿既有原生致命出口退出1。Os_LinuxFutexWake在共享原生边界检查负结果，非负唤醒数保持；原始类型化Os_LinuxFutexWait仍返回kernel状态，未把错误改成成功。
+
+Os_StackLinux.c仅在已发布fault后进入永久停车；其等待遇到不可恢复错误时直接以E_OS_STACKFAULT终止，不能返回原故障帧，不假报controllers_exhausted。没有新增输出阻塞点、期限、重试或共享状态，公开签名与handle布局不变。测试的真实零waiter唤醒、值不匹配和超时与私有返回状态注入分开记账；各检查撤销必须由精确阶段拒绝。此处不覆盖其他系统调用、provider完整异步语义或全部D4.7。

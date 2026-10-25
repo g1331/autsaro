@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- Unexpected Linux futex errors stop native handoff instead of being ignored; faulted-stack parking preserves its stack-fault exit reason. Regenerate sealed deliveries and rebuild consumers (#371)
+
 - Linux context observation copies only the fixed kernel control prefix and separate legacy FP state into an initialized owned snapshot, preserving self-copy without assuming the full glibc ucontext tail belongs to the signal frame. Regenerate sealed deliveries and rebuild consumers (#371)
 
 - Finite Linux host actors restore the thread's prior alternate signal stack before pthread retirement; failed snapshot or restoration stops the process. Regenerate sealed deliveries and rebuild consumers for the private native adapter change (#371)

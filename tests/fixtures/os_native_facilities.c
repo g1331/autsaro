@@ -23,6 +23,8 @@ static volatile sig_atomic_t captured_signal;
 static const void *frame_source;
 static volatile sig_atomic_t frame_copies;
 void *Os_TestNativeCopy(
+    void *destination, const void *source, size_t length, size_t capacity, int moving);
+void *Os_TestNativeCopy(
     void *destination, const void *source, size_t length, size_t capacity, int moving)
 {
     if (source == frame_source && frame_source != NULL) {

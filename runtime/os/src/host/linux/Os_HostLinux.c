@@ -116,10 +116,13 @@ OS_MEMMAP static OS_HOST_THREAD_LOCAL unsigned
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static int futex_wait(const volatile int32_t *cell, int32_t expected)
+OS_MEMMAP static void futex_wait(const volatile int32_t *cell, int32_t expected)
 {
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = OS_HOST_WAIT_SLICE_NS};
-    return Os_LinuxFutexWait(cell, expected, &interval);
+    const int result = Os_LinuxFutexWait(cell, expected, &interval);
+    if ((result != 0) && (result != -EAGAIN) && (result != -EINTR) && (result != -ETIMEDOUT)) {
+        ExitProcess(1u);
+    }
 }
 
 OS_MEMMAP static void futex_wake(const volatile int32_t *cell) { Os_LinuxFutexWake(cell); }
@@ -159,7 +162,7 @@ OS_MEMMAP static void terminal_park(HANDLE thread)
     futex_wake(&thread->acknowledged);
     for (;;) {
         const int32_t current = __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE);
-        (void)futex_wait(&thread->resumed, current);
+        futex_wait(&thread->resumed, current);
     }
 }
 
@@ -185,7 +188,7 @@ OS_MEMMAP static void park_signal(int signal_number, siginfo_t *info, void *nati
                 if (resumed == generation) {
                     break;
                 }
-                (void)futex_wait(&thread->resumed, resumed);
+                futex_wait(&thread->resumed, resumed);
             }
         }
     }
@@ -796,7 +799,7 @@ OS_MEMMAP DWORD SuspendThread(HANDLE thread)
                             if (failed) {
                                 break;
                             }
-                            (void)futex_wait(&thread->acknowledged, acknowledged);
+                            futex_wait(&thread->acknowledged, acknowledged);
                             acknowledged = __atomic_load_n(&thread->acknowledged, __ATOMIC_ACQUIRE);
                         }
                         if (acknowledged == generation) {
@@ -969,7 +972,7 @@ OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
                 if (monotonic_ms() >= end) {
                     break;
                 }
-                (void)futex_wait(&thread->acknowledged,
+                futex_wait(&thread->acknowledged,
                                  InterlockedCompareExchange(&thread->acknowledged, 0, 0));
             }
             stopped =

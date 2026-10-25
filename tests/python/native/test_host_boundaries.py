@@ -428,6 +428,82 @@ class NativeFacilityTests(unittest.TestCase):
         "nanosleep", "sigaddset", "sigaction", "pthread_create", "sigemptyset", "sigfillset",
     )
 
+    def test_native_futex_errors_and_expected_wake_outcomes(self):
+        import os_suites
+
+        injected = "futex injected mode={mode} call={call} result={result}\n"
+        park_error = "".join(injected.format(mode="park-error", call=i, result=result)
+                             for i, result in enumerate((0, -11, -4, -110, -14), 1))
+        controls = (
+            ("wake-empty", 0, "futex completed mode=wake-empty calls=1 result=0\n", ""),
+            ("wait-mismatch", 0, "futex completed mode=wait-mismatch calls=1 result=-11\n", ""),
+            ("wait-timeout", 0, "futex completed mode=wait-timeout calls=1 result=-110\n", ""),
+            ("wait-interrupted", 0, "futex completed mode=wait-interrupted calls=1 result=-4\n",
+             injected.format(mode="wait-interrupted", call=1, result=-4)),
+            ("wake-error", 1, "", injected.format(mode="wake-error", call=1, result=-22)),
+            ("wait-error", 1, "", injected.format(mode="wait-error", call=1, result=-14)),
+            ("park-error", 13, "", park_error),
+        )
+        for variant in ("control", "wake-unchecked", "wait-unchecked", "park-unchecked"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                native = target / "src/host/linux/Os_LinuxNative.c"
+                text = native.read_text(encoding="utf-8")
+                declaration = "OS_MEMMAP static long native_call("
+                self.assertEqual(text.count(declaration), 1)
+                text = text.replace(declaration, "OS_MEMMAP long Os_TestRealNativeCall(")
+                anchor = "OS_MEMMAP int Os_LinuxFutexWait("
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor,
+                    "extern long Os_TestNativeCall(long number, const volatile void *first, "
+                    "long second, long third, const void *fourth);\n"
+                    "#define native_call Os_TestNativeCall\n" + anchor)
+                if variant == "wake-unchecked":
+                    self.assertEqual(text.count("if (result < 0)"), 1)
+                    text = text.replace("if (result < 0)", "(void)result;\n    if (0)")
+                native.write_text(text, encoding="utf-8")
+                for filename, before, after, selected in (
+                    ("Os_HostLinux.c", "OS_MEMMAP static void futex_wait(",
+                     "OS_MEMMAP void Os_TestFutexWait(", "wait-unchecked"),
+                    ("Os_StackLinux.c", "OS_MEMMAP static void fault_park_forever(",
+                     "OS_MEMMAP void Os_TestFutexPark(", "park-unchecked"),
+                ):
+                    source = target / "src/host/linux" / filename
+                    text = source.read_text(encoding="utf-8")
+                    self.assertEqual(text.count(before), 1)
+                    text = text.replace(before, after)
+                    old_name = "futex_wait(" if selected == "wait-unchecked" else "fault_park_forever("
+                    new_name = "Os_TestFutexWait(" if selected == "wait-unchecked" else "Os_TestFutexPark("
+                    text = text.replace(old_name, new_name)
+                    if variant == selected:
+                        pattern = (r"if \(\(result != 0\)\s*&&\s*\(result != -EAGAIN\)\s*&&\s*"
+                                   r"\(result != -EINTR\)\s*&&\s*\(result != -ETIMEDOUT\)\) \{")
+                        matches = list(re.finditer(pattern, text, re.DOTALL))
+                        self.assertEqual(len(matches), 1)
+                        text = text.replace(matches[0].group(), "(void)result;\n        if (0) {")
+                    source.write_text(text, encoding="utf-8")
+                cases = controls if variant == "control" else {
+                    "wake-unchecked": (("wake-error", 51, "", injected.format(mode="wake-error", call=1, result=-22) +
+                                        "futex rejected stage=wake-error-returned calls=1\n"),),
+                    "wait-unchecked": (("wait-error", 52, "", injected.format(mode="wait-error", call=1, result=-14) +
+                                        "futex rejected stage=wait-error-returned calls=1\n"),),
+                    "park-unchecked": (("park-error", 54, "", park_error +
+                                        "futex rejected stage=unexpected-retry calls=6\n"),),
+                }[variant]
+                with os_suites.native_session(directory, "native-futex-errors"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_native_futex_errors.c"), target=target,
+                    )
+                    for scenario, code, output, error in cases:
+                        with self.subTest(scenario=scenario):
+                            result = os_suites.run_native([str(binary), scenario], timeout=10)
+                            self.assertEqual(result.returncode, code, result)
+                            self.assertEqual(result.stdout, output, result)
+                            self.assertEqual(result.stderr, error, result)
+                            print(f"futex variant={variant} scenario={scenario} exit={result.returncode}", flush=True)
+
     def test_finite_host_actor_restores_previous_altstack(self):
         self._finite_actor_altstack(mutants=False)
 
@@ -786,7 +862,8 @@ class NativeFacilityTests(unittest.TestCase):
                 include = "#include <string.h>"
                 self.assertEqual(text.count(include), 1)
                 text = text.replace(include, include + "\n"
-                    "void *Os_TestNativeCopy(void *, const void *, size_t, size_t, int);\n"
+                    "void *Os_TestNativeCopy(void *destination, const void *source, "
+                    "size_t length, size_t capacity, int moving);\n"
                     "#define memcpy(d, s, n) Os_TestNativeCopy((d), (s), (n), __builtin_object_size((d), 0), 0)\n"
                     "#define memmove(d, s, n) Os_TestNativeCopy((d), (s), (n), __builtin_object_size((d), 0), 1)\n")
                 source.write_text(text, encoding="utf-8")
