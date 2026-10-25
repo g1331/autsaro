@@ -237,13 +237,24 @@ OS_MEMMAP static DWORD actor_body(void *argument)
     __atomic_store_n(&thread->thread_id, GetCurrentThreadId(), __ATOMIC_RELEASE);
     DWORD result;
     int registered = 1;
-    if (thread->register_host != 0) {
+    const int register_host = thread->register_host;
+    stack_t previous = {0};
+    if (register_host != 0) {
+        if (Os_LinuxAltStack(NULL, &previous) != 0) {
+            ExitProcess(1u);
+        }
         registered = Os_StackRegister('H');
     }
     if (registered == 0) {
         ExitProcess(1u);
     } else {
         result = thread->entry(thread->argument);
+    }
+    /* Hand the original thread stack back to its owner before pthread retirement. */
+    if (register_host != 0) {
+        if (Os_LinuxAltStack(&previous, NULL) != 0) {
+            ExitProcess(1u);
+        }
     }
     /* Finite helper actors destroy their execution fiber before pthread retirement. */
     OS_LINUX_STACK_START(NULL, thread->bootstrap_bottom, thread->bootstrap_size);

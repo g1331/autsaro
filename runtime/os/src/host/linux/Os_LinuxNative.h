@@ -11,7 +11,7 @@ OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
                                 const struct timespec *interval);
 OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell);
 OS_MEMMAP DWORD Os_LinuxThreadId(void);
-OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack);
+OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack, stack_t *previous);
 OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source);
 OS_MEMMAP uintptr_t Os_LinuxSignalSp(const void *context);
 OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard);

@@ -428,6 +428,61 @@ class NativeFacilityTests(unittest.TestCase):
         "nanosleep", "sigaddset", "sigaction", "pthread_create", "sigemptyset", "sigfillset",
     )
 
+    def test_finite_host_actor_restores_previous_altstack(self):
+        self._finite_actor_altstack(mutants=False)
+
+    def test_finite_host_actor_altstack_mutants(self):
+        self._finite_actor_altstack(mutants=True)
+
+    def _finite_actor_altstack(self, *, mutants):
+        import os_suites
+
+        variants = (
+            ("control", None, None),
+            ("omit-query", "Os_LinuxAltStack(NULL, &previous)", "0"),
+            ("omit-restore", "Os_LinuxAltStack(&previous, NULL)", "0"),
+            ("damage-state", "Os_LinuxAltStack(&previous, NULL)",
+             "(previous.ss_size ^= 1u, Os_LinuxAltStack(&previous, NULL))"),
+            ("ignore-query", "Os_LinuxAltStack(NULL, &previous) != 0",
+             "(Os_LinuxAltStack(NULL, &previous), 0)"),
+            ("ignore-restore", "Os_LinuxAltStack(&previous, NULL) != 0",
+             "(Os_LinuxAltStack(&previous, NULL), 0)"),
+        )
+        for name, before, after in (variants[1:] if mutants else variants[:1]):
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                if before is not None:
+                    source = target / "src/host/linux/Os_HostLinux.c"
+                    text = source.read_text(encoding="utf-8")
+                    self.assertEqual(text.count(before), 1)
+                    source.write_text(text.replace(before, after), encoding="utf-8")
+                cases = {
+                    "control": (("normal", 0, ""), ("observer", 0, ""),
+                                ("query-error", 1, "altstack_injected query\n"),
+                                ("restore-error", 1, "altstack_injected restore\n")),
+                    "omit-query": (("normal", 21, "altstack_rejected stage=0 reason=sequence\n"),),
+                    "omit-restore": (("normal", 24, "altstack_rejected stage=3 reason=completion-state\n"),),
+                    "damage-state": (("normal", 23, "altstack_rejected stage=3 reason=restoration\n"),),
+                    "ignore-query": (("query-error", 21,
+                                     "altstack_injected query\naltstack_rejected stage=0 reason=sequence\n"),),
+                    "ignore-restore": (("restore-error", 24,
+                                       "altstack_injected restore\naltstack_rejected stage=3 reason=completion-state\n"),),
+                }[name]
+                with os_suites.native_session(directory, "altstack-" + name):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_native_altstack.c"), target=target,
+                        link_flags=("-Wl,--wrap=Os_LinuxAltStack",),
+                    )
+                    for scenario, code, stderr in cases:
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, code, result)
+                        stdout = (f"altstack actor={scenario} stage={0 if scenario == 'observer' else 4} "
+                                  "joined=1 closed=1\n") if code == 0 else ""
+                        self.assertEqual(result.stdout, stdout, result)
+                        self.assertEqual(result.stderr, stderr, result)
+
     def test_unwinder_initialization_precedes_native_threads(self):
         import os_suites
 

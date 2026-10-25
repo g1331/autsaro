@@ -41,9 +41,14 @@ OS_MEMMAP DWORD Os_LinuxThreadId(void)
     return ((result > 0) && ((uint64_t)result <= UINT32_MAX)) ? (DWORD)result : 0u;
 }
 
-OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack)
+OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack, stack_t *previous)
 {
-    return (int)native_call(__NR_sigaltstack, stack, 0, 0, NULL);
+    long result;
+    __asm__ volatile("syscall"
+                     : "=a"(result)
+                     : "a"(__NR_sigaltstack), "D"(stack), "S"(previous)
+                     : "rcx", "r11", "memory");
+    return (int)result;
 }
 
 OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)

@@ -276,7 +276,7 @@ OS_MEMMAP int Os_StackRegister(char role)
                 alternate.ss_sp = altstacks[index].storage;
                 alternate.ss_size = sizeof(altstacks[index].storage);
                 alternate.ss_flags = 0;
-                if (Os_LinuxAltStack(&alternate) == 0) {
+                if (Os_LinuxAltStack(&alternate, NULL) == 0) {
                     record->thread_id = GetCurrentThreadId();
                     record->role = role;
                     record->reserve_low = low;

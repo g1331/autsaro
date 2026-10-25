@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- Finite Linux host actors restore the thread's prior alternate signal stack before pthread retirement; failed snapshot or restoration stops the process. Regenerate sealed deliveries and rebuild consumers for the private native adapter change (#371)
+
 - Native signal-set operations initialize errno before calls; adopted kernel priority and stack scans preserve parameter values, and callback values use explicit function addresses. Regenerate sealed deliveries for the updated controlled source and patch identities (#371)
 
 - The Linux native OS initializes the GCC unwind register table before creating schedulable threads and rejects initialization errors before Ready, so its first-use initialization cannot depend on a parked Task. Regenerate sealed deliveries for the updated native sources (#371)
