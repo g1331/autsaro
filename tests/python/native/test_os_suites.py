@@ -30,6 +30,9 @@ class DependencyTests(unittest.TestCase):
             ("runtime/host/src/Ecu_Status.c", "Ecu_StatusName"),
             ("runtime/os/src/Os_Backend.c", "native_task_state"),
             ("runtime/os/src/Os_Backend.c", "Os_BackendState"),
+            ("runtime/os/src/Os_Arti.c", "Os_ArtiTask"),
+            ("runtime/os/src/Os_Arti.c", "Os_ArtiService"),
+            ("runtime/os/src/Os_Time.c", "action"),
         ]:
             with self.subTest(function=name):
                 source = (os_suites.ROOT / relative).read_text(encoding="utf-8")
@@ -46,6 +49,10 @@ class DependencyTests(unittest.TestCase):
                     end += 1
                 words = tokens[start + 1:end - 1]
                 self.assertNotIn("return", words, name)
+                self.assertNotRegex(" ".join(words),
+                                    r"(?:assert \( 0 \)|configASSERT \( FALSE \)|"
+                                    r"Os_BackendShutdown \( E_OS_STATE \)) ; break",
+                                    name)
                 self.assertEqual(words.count("break"), words.count("case") + words.count("default"), name)
 
     def test_memory_mapping_source_rejects_wrong_classes_and_preprocessing(self):

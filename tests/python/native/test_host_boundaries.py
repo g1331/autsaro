@@ -141,6 +141,41 @@ class HostBoundaryTests(unittest.TestCase):
 class HostIoTests(unittest.TestCase):
     """Use the actual native adapter and full OS link, including syscall refusal seams."""
 
+    @unittest.skipUnless(platform.system() == "Linux", "glibc assertion receipts are Linux-only")
+    def test_arti_invalid_switch_selectors_retain_fatal_guards(self):
+        import os_suites
+
+        for name, scenario, selector in [(None, None, None),
+                                          ("Os_ArtiTask", "reject-task", 99),
+                                          ("Os_ArtiService", "reject-service", 255)]:
+            with self.subTest(function=name), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                if name is not None:
+                    source = target / "src/Os_Arti.c"
+                    text = source.read_text(encoding="utf-8")
+                    start = text.index("OS_MEMMAP void " + name + "(")
+                    end = text.index("\n}\n", start) + 2
+                    body = text[start:end]
+                    guard = "if (valid == FALSE) {\n        assert(0);\n    }"
+                    self.assertEqual(body.count(guard), 1)
+                    source.write_text(text[:start] + body.replace(guard, "if (valid == FALSE) { (void)0; }")
+                                      + text[end:], encoding="utf-8")
+                with os_suites.native_session(directory, "arti-switch-guard"):
+                    binary, _ = os_suites.build(directory, "arti.c", ("OS_ARTI_TESTS",), target=target)
+                    if name is None:
+                        observations = os_suites.check_arti(binary)
+                        self.assertEqual(len(observations), 11)
+                        print("arti-switch control normal=9 rejected=2 SIGABRT", flush=True)
+                    else:
+                        result = os_suites.execute(binary, scenario)
+                        self.assertEqual(result["exit"], 91, result)
+                        self.assertEqual(result["stdout"], "", result)
+                        self.assertEqual(result["stderr"],
+                                         f"arti_reject function={name} selector={selector}", result)
+                        print(f"arti-switch removed={name} exit=91 assertion-bypassed", flush=True)
+
     def test_rejected_kernel_state_preserves_output_and_critical_cleanup(self):
         import os_suites
 

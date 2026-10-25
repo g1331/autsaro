@@ -317,6 +317,7 @@ OS_MEMMAP static void action(uint32 index)
 {
     const Os_AlarmConfigType *alarm = &Os_Config->timing->alarms[index];
     StatusType status = E_OK;
+    boolean valid = TRUE;
     Os_ArtiInternalEnter();
     switch (alarm->action) {
         case OS_ALARM_ACTIVATE:
@@ -330,11 +331,14 @@ OS_MEMMAP static void action(uint32 index)
             break;
         case OS_ALARM_INCREMENT_COUNTER:
             /* Counter actions are handled by the bounded iterative work stack. */
-            Os_BackendShutdown(E_OS_STATE);
+            valid = FALSE;
             break;
         default:
-            Os_BackendShutdown(E_OS_STATE);
+            valid = FALSE;
             break;
+    }
+    if (valid == FALSE) {
+        Os_BackendShutdown(E_OS_STATE);
     }
     Os_ArtiInternalLeave();
     Os_TimeReportAction(status);

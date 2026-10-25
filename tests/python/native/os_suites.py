@@ -1473,6 +1473,16 @@ def check_returned_task(binary: Path) -> list[dict]:
     return observations
 
 
+def check_arti_rejection(binary: Path, scenario: str, function_name: str, selector: int) -> dict:
+    result = execute(binary, scenario)
+    marker = f"arti_reject function={function_name} selector={selector}\n"
+    require(result["exit"] == -6 and not result["stdout"]
+            and result["stderr"].startswith(marker)
+            and function_name in result["stderr"][len(marker):]
+            and "Assertion `0' failed." in result["stderr"], result)
+    return result
+
+
 # Verifies: SWS_Os_00843
 def check_arti(binary: Path) -> list[dict]:
     scenarios = ["transitions", "internal", "unconfigured", "self-chain", "queued", "shutdown", "noop-yield", "wait-satisfied", "buffer"]
@@ -1483,6 +1493,10 @@ def check_arti(binary: Path) -> list[dict]:
         expected = "arti buffer=4096 dropped=3 once=1 version=1 error=2 saturated=1" if scenario == "buffer" else f"arti scenario={scenario} transitions="
         require(expected in result["stdout"], result)
         observations.append(result)
+    if _TARGET_ID.get() == "linux-x64-controlled-v1":
+        for scenario, name, selector in [("reject-task", "Os_ArtiTask", 99),
+                                         ("reject-service", "Os_ArtiService", 255)]:
+            observations.append(check_arti_rejection(binary, scenario, name, selector))
     return observations
 
 

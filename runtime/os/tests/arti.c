@@ -223,6 +223,18 @@ void Os_ArtiTestShutdownObserved(void)
 int main(int argc, char **argv)
 {
 #ifdef __linux__
+    if (argc == 2 && strcmp(argv[1], "reject-task") == 0) {
+        (void)fprintf(stderr, "arti_reject function=Os_ArtiTask selector=99\n");
+        arti_check(fflush(stderr) == 0);
+        Os_ArtiTask((Os_ArtiTaskEventType)99, 0u);
+        return 91;
+    }
+    if (argc == 2 && strcmp(argv[1], "reject-service") == 0) {
+        (void)fprintf(stderr, "arti_reject function=Os_ArtiService selector=255\n");
+        arti_check(fflush(stderr) == 0);
+        Os_ArtiService((OSServiceIdType)255u, 0u, 0);
+        return 91;
+    }
     if (argc == 3 && strcmp(argv[2], "cet") == 0) {
         long result;
         unsigned long enabled = 0u;

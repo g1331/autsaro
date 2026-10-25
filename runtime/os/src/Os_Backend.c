@@ -771,6 +771,7 @@ OS_MEMMAP static TaskStateType native_task_state(uint32 index)
         return WAITING;
     }
     TaskStateType state = SUSPENDED;
+    boolean valid = TRUE;
     switch (eTaskGetState(handles[index])) {
         case eRunning:
             state = RUNNING;
@@ -786,8 +787,11 @@ OS_MEMMAP static TaskStateType native_task_state(uint32 index)
             break;
         default:
             /* Automotive Task objects are never deleted. */
-            configASSERT(FALSE);
+            valid = FALSE;
             break;
+    }
+    if (valid == FALSE) {
+        configASSERT(FALSE);
     }
     return state;
 }

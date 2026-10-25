@@ -73,6 +73,7 @@ OS_MEMMAP void Os_ArtiServiceLeave(void)
 
 OS_MEMMAP void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)
 {
+    boolean valid = TRUE;
     switch (event) {
         case OS_ARTI_TASK_ACTIVATE:
             ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Activate, (uint32)task);
@@ -93,8 +94,11 @@ OS_MEMMAP void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)
             ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Terminate, (uint32)task);
             break;
         default:
-            assert(0);
+            valid = FALSE;
             break;
+    }
+    if (valid == FALSE) {
+        assert(0);
     }
 }
 
@@ -153,6 +157,7 @@ OS_MEMMAP void Os_ArtiHook(Os_HookPhaseType hook, StatusType error, sint32 retur
 
 OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 {
+    boolean valid = TRUE;
     switch (service) {
         case OSServiceId_GetISRID:
             if (returning != 0) {
@@ -820,8 +825,11 @@ OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 
             }
             break;
         default:
-            assert(0);
+            valid = FALSE;
             break;
+    }
+    if (valid == FALSE) {
+        assert(0);
     }
 }
 
