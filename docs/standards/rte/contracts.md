@@ -132,7 +132,7 @@ MISRA 2013主文R8.2（Required，页64–66／PDF72–74）仍要求声明参�
 
 已核对（所选值：严格初值/配置模式与缺席默认严格路径；非严格补全能力仍归 #212）：SWS_Rte_05148、07680。
 
-Rte_Instance 的标准短名在不同组件的独立 Application Header 中重复定义，会触发跨翻译单元的 5.6 唯一名字诊断；它们不会在同一应用翻译单元混用。该名字由接口契约要求，不能通过随意改名消除诊断。
+R5.6为Required/System（主文54／PDF62，AMD2追加C11）。component-pipeline／no-diagnostic的Ingress、Process、Observe应用TU各自定义Rte_Instance，是真实跨TU重名；RTE_CORE只排除核心TU。SWS_Rte_91176／01148／01150（R24-11页696）要求组件CDS指针与固定typedef名，不能改成共用类型或另取名。[逐处证据](https://github.com/g1331/autsaro/pull/371#issuecomment-6398733571)留PR；独立复核前不添加批准记录／MR12。
 
 已核对（源码：RTE-owned Rte.c/Rte_*.h 的文件名；Ecu_* 配置与目标胶水是集成依赖而非 RTE 模块文件）：SWS_Rte_07139。
 
