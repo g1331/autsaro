@@ -15,7 +15,14 @@ typedef uintptr_t Os_PortRestartAddressType;
 #include "Os_MemMap.h"
 /* Enter once on the registered native Task thread. Each restart discards the
  * outgoing C frames and invokes entry again on that same physical stack. */
-OS_MEMMAP void Os_PortTaskLoop(void (*entry)(void *), void *argument) __attribute__((noreturn));
+OS_MEMMAP void Os_PortTaskLoop(void (*entry)(void *context), void *argument)
+    __attribute__((noreturn));
+
+#ifndef _WIN32
+/* Initialize the provider's shared unwind register table before schedulable actors exist.
+ * Returns 1 after a complete startup-stack walk, otherwise 0. */
+OS_MEMMAP int Os_PortRestartPrepare(void);
+#endif
 
 /* Called only after successful automotive activation settlement and rescheduling.
  * Invalid/unhandled native unwinding stops the OS; it cannot return success. */

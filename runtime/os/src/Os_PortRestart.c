@@ -17,6 +17,20 @@ OS_MEMMAP static OS_HOST_THREAD_LOCAL struct _Unwind_Exception
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+OS_MEMMAP static _Unwind_Reason_Code prepare_trace(struct _Unwind_Context *context, void *argument)
+{
+    (void)context;
+    (void)argument;
+    return _URC_NO_REASON;
+}
+
+OS_MEMMAP int Os_PortRestartPrepare(void)
+{
+    /* A parked initializer must never block another Task inside the provider's once lock. */
+    const _Unwind_Reason_Code status = _Unwind_Backtrace(prepare_trace, NULL);
+    return (status == _URC_END_OF_STACK) ? 1 : 0;
+}
+
 /* _Unwind_Personality_Fn fixes the writable exception-pointer signature. */
 OS_MEMMAP __attribute__((used)) static _Unwind_Reason_Code Os_PortRestartPersonality(
     int version,

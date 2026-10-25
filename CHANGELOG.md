@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- The Linux native OS initializes the GCC unwind register table before creating schedulable threads and rejects initialization errors before Ready, so its first-use initialization cannot depend on a parked Task. Regenerate sealed deliveries for the updated native sources (#371)
+
 - Controlled Windows interrupt selection uses a private parameter name without reusing the standard library `floor` identifier; selection order and ABI are unchanged. Regenerate sealed deliveries for the updated patch identity (#371)
 
 - Adopted kernel API examples use C99 Doxygen line comments instead of nested comment-start sequences, preserving their text and all executable tokens. Regenerate sealed deliveries for the new controlled comment patch identity (#371)

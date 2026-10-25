@@ -428,6 +428,57 @@ class NativeFacilityTests(unittest.TestCase):
         "nanosleep", "sigaddset", "sigaction", "pthread_create",
     )
 
+    def test_unwinder_initialization_precedes_native_threads(self):
+        import os_suites
+
+        variants = (
+            ("control", None, None, None, "normal", 0),
+            ("failure", None, None, None, "error", 7),
+            ("omit", "src/Os_Backend.c", "if (Os_PortRestartPrepare() == 0)",
+             "if (0)", "normal", 81),
+            ("skip-provider", "src/Os_PortRestart.c", "_Unwind_Backtrace(prepare_trace, NULL)",
+             "((void)prepare_trace, _URC_END_OF_STACK)", "normal", 81),
+            ("ignore-failure", "src/Os_Backend.c", "if (Os_PortRestartPrepare() == 0)",
+             "if ((Os_PortRestartPrepare(), 0))", "error", 82),
+        )
+        for name, source, before, after, scenario, code in variants:
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = os_suites.TARGET
+                if source is not None:
+                    target = directory / "target"
+                    shutil.copytree(os_suites.TARGET, target)
+                    path = target / source
+                    text = path.read_text(encoding="utf-8")
+                    self.assertEqual(text.count(before), 1)
+                    path.write_text(text.replace(before, after), encoding="utf-8")
+                output = directory / "output"
+                output.mkdir(mode=0o700)
+                with os_suites.native_session(directory, "unwind-prepare"):
+                    binary, _ = os_suites.build(
+                        output, str(ROOT / "tests/fixtures/os_unwind_prepare.c"), target=target,
+                        link_flags=("-Wl,--wrap=_Unwind_Backtrace", "-Wl,--wrap=pthread_create",
+                                    "-Wl,--wrap=StartupHook"),
+                    )
+                    result = os_suites.run_native([str(binary), scenario], timeout=10)
+                self.assertEqual(result.returncode, code, result)
+                if code == 0:
+                    self.assertRegex(result.stderr,
+                                     r"\AUNWIND_PREPARE ready trace_calls=1 frames=[1-9][0-9]* before_threads=1\n\Z")
+                    self.assertIn("lifecycle=Closed state=Ready reason=0", result.stdout)
+                    self.assertIn("trace=ISRAD ", result.stdout)
+                elif code == 7:
+                    self.assertEqual(result.stderr, "UNWIND_PREPARE injected_failure\n")
+                    self.assertIn("lifecycle=Closed state=Failed reason=7", result.stdout)
+                    self.assertNotIn("state=Ready", result.stdout)
+                else:
+                    self.assertEqual(result.stdout, "")
+                    expected = ("UNWIND_PREPARE thread_before_trace trace_calls=0 frames=0\n"
+                                if code == 81 else "UNWIND_PREPARE injected_failure\n"
+                                "UNWIND_PREPARE thread_after_failed_trace trace_calls=1 frames=0\n")
+                    self.assertEqual(result.stderr, expected)
+                print(f"unwind-prepare variant={name} exit={result.returncode} {result.stderr}", end="", flush=True)
+
     def test_mutex_initial_owner_and_capacity_mutations(self):
         import os_suites
 

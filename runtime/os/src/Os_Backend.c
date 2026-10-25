@@ -1654,13 +1654,19 @@ OS_MEMMAP static void bootstrap(void *argument)
 #ifdef __linux__
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static void prepare_native_stack(void) { Os_StackPrepare(); }
+OS_MEMMAP static void prepare_native_runtime(void)
+{
+    Os_StackPrepare();
+    if (Os_PortRestartPrepare() == 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+}
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #else
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static void prepare_native_stack(void) { Os_StackInit(); }
+OS_MEMMAP static void prepare_native_runtime(void) { Os_StackInit(); }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #endif
@@ -1755,7 +1761,7 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
     }
     startup_mode = mode;
     Os_TimeInit(mode);
-    prepare_native_stack();
+    prepare_native_runtime();
     Os_MailboxInstall();
     bind_main_thread();
     start_controllers();
