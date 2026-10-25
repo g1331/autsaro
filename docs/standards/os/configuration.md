@@ -75,3 +75,12 @@ R17.3为Mandatory，但主文仅适用C90（印刷138／PDF146）；AMD2的语�
 共同0024把定义／包含与真实消费者条件对齐，不改变配置值：tasks.c仅在configUSE_TIMERS==1时包含timers.h；三种分配来源标志受tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE控制，五个状态字符受trace与stats-formatting共同条件控制。运行／待让出状态及idle属性只在多核时定义，affinity字节宽度还要求core-affinity；任务删除专用的RUNNING_OR_SCHEDULED_TO_YIELD在两种核心分支都受INCLUDE_vTaskDelete控制。queue.c的semaphore item length及mutex give timeout分别只在counting semaphore／recursive mutex启用时定义。每个条件对应现有消费者，保留相应功能启用时的原定义，而非用空引用消除R2.5。
 
 公开版本、状态集合、旧API兼容别名及timers.h交付资产保留；没有通过关闭支持能力删掉全部未使用宏。未选择分支只完成源码对应核查，不能当作那些配置已执行。上游原始文件、函数类型、成员布局及运行操作不变；有序补丁、派生内核身份和封存交付物仍按新字节更新。原有条件排除报告和真实未使用公共定义分开处置，不能把加入guard当成Cppcheck原始诊断自动清零或完整R2.5通过。
+
+
+## 原生类型表示与封装
+
+D4.6为Advisory（主文印刷28–29／PDF36–37；AMD2.23–25及适用性表）。Platform_Types的sint／uint精确宽度别名来自stdint，least系列仍明确为至少相应宽度，不能混同精确宽度；float32／float64对应当前工具链的4／8字节、24／53位有效尾数和128／1024最大指数记录。TC1明确plain char不是本指令的数值类型，因此文本指针与角色字符不需伪装成数值typedef；main的int返回与argc也有原文例外。
+
+本机边界仍真实保留基本数值类型：例如Linux BOOL为int、syscall结果为long、pthread错误结果为int，备用信号栈存储使用long double取得原生对齐。这里不能仅因ABI宽度已知就宣布D4.6全部满足；原文对标准库／项目控制外接口的衔接给出取舍理由，当前保留原生签名和错误表示，避免把long double的存储大小误命名为浮点有效位数。汽车配置与数值数据继续使用既有宽度类型；本判断不扩大到整个SDK或所有数值声明。
+
+D4.8同为Advisory（主文印刷30–31／PDF38–39），TC1澄清只有某类型在TU中的所有指针均不解引用时才触发隐藏要求。Linux HANDLE在Os_HostLinux.h仅指向不完整Os_HostHandleType，完整定义只在Os_HostLinux.c；Os_HostServices的创建／等待／关闭消费者只传递该指针，不取得字段或sizeof，符合这处封装目的。CONTEXT与公开配置对象则有实际完整对象存储／字段消费者，不能凭单个参数未解引用就批量判为应隐藏；其他结构／TU组合仍须按实际完整集合判断。
