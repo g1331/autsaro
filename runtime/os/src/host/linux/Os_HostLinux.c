@@ -209,6 +209,7 @@ OS_MEMMAP int Os_HostInstallSignals(void)
     struct sigaction handler = {0};
     const int suspend_signal = SIGRTMIN;
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    errno = 0;
     (void)sigemptyset(&handler.sa_mask);
     errno = 0;
     (void)sigaddset(&handler.sa_mask, suspend_signal);
@@ -221,6 +222,7 @@ OS_MEMMAP int Os_HostInstallSignals(void)
     if (sigaction(suspend_signal, &handler, NULL) != 0) {
         return 0;
     }
+    errno = 0;
     (void)sigfillset(&handler.sa_mask);
     handler.sa_sigaction = &fault_stop_signal;
     errno = 0;
@@ -469,6 +471,7 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
     sigset_t blocked;
     sigset_t previous;
     const int suspend_signal = SIGRTMIN;
+    errno = 0;
     (void)sigemptyset(&blocked);
     errno = 0;
     (void)sigaddset(&blocked, suspend_signal);

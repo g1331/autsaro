@@ -210,6 +210,7 @@ OS_MEMMAP void Os_StackPrepare(void)
         Os_BackendShutdown(E_OS_STATE);
     }
     handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    errno = 0;
     (void)sigfillset(&handler.sa_mask);
     handler.sa_sigaction = &guard_signal;
     errno = 0;

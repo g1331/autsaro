@@ -33,6 +33,38 @@ static void entered(unsigned bit)
     (void)__atomic_fetch_or(&observed, bit, __ATOMIC_RELAXED);
 }
 
+int __real_sigemptyset(sigset_t *set);
+int __wrap_sigemptyset(sigset_t *set)
+{
+    static unsigned calls;
+    ++calls;
+    entered(512u);
+    if (errno != 0) {
+        (void)fprintf(stderr, "signal_set_errno function=sigemptyset call=%u\n", calls);
+    }
+    const int result = __real_sigemptyset(set);
+    if (result == 0) {
+        errno = EAGAIN;
+    }
+    return result;
+}
+
+int __real_sigfillset(sigset_t *set);
+int __wrap_sigfillset(sigset_t *set)
+{
+    static unsigned calls;
+    ++calls;
+    entered(1024u);
+    if (errno != 0) {
+        (void)fprintf(stderr, "signal_set_errno function=sigfillset call=%u\n", calls);
+    }
+    const int result = __real_sigfillset(set);
+    if (result == 0) {
+        errno = EAGAIN;
+    }
+    return result;
+}
+
 int __real_clock_gettime(clockid_t clock, struct timespec *value);
 int __wrap_clock_gettime(clockid_t clock, struct timespec *value)
 {
@@ -273,7 +305,7 @@ int main(int argc, char **argv)
         return 3;
     }
     if ((__atomic_load_n(&bad_errno, __ATOMIC_RELAXED) != 0u) ||
-        (__atomic_load_n(&observed, __ATOMIC_RELAXED) != 511u)) {
+        (__atomic_load_n(&observed, __ATOMIC_RELAXED) != 2047u)) {
         (void)fprintf(stderr,
                       "errno_bad=%u observed=%u\n",
                       __atomic_load_n(&bad_errno, __ATOMIC_RELAXED),

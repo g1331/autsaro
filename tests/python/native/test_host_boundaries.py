@@ -425,7 +425,7 @@ class NativeKernelObjectTests(unittest.TestCase):
 class NativeFacilityTests(unittest.TestCase):
     errno_functions = (
         "clock_gettime", "sysconf", "mmap", "mprotect", "munmap", "eventfd",
-        "nanosleep", "sigaddset", "sigaction", "pthread_create",
+        "nanosleep", "sigaddset", "sigaction", "pthread_create", "sigemptyset", "sigfillset",
     )
 
     def test_unwinder_initialization_precedes_native_threads(self):
