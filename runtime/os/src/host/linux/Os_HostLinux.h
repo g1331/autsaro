@@ -112,7 +112,7 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds);
 OS_MEMMAP DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable);
 
 OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
-                                       const HANDLE *handles,
+                                       const HANDLE *observed,
                                        BOOL all,
                                        DWORD milliseconds);
 

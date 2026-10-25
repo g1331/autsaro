@@ -135,7 +135,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error);
 #ifdef __linux__
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP void Os_BackendSignalStackFault(char role);
+OS_MEMMAP void Os_BackendSignalStackFault(char failed_role);
 
 OS_MEMMAP void Os_BackendSetDispatcher(void);
 #define OS_STOP_SEC_CODE
