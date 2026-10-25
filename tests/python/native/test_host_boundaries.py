@@ -527,6 +527,70 @@ class NativeFacilityTests(unittest.TestCase):
         "nanosleep", "sigaddset", "sigaction", "pthread_create", "sigemptyset", "sigfillset",
     )
 
+    def test_startup_gate_failures_stop_before_continuation(self):
+        import os_suites
+
+        retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
+        output = Path(retained) / "startup-gates" if retained else None
+        with os_suites.host_target(), os_suites.retained_workspace(output) as workspace:
+            for operation in ("wait", "publish"):
+                for unchecked in (False, True):
+                    with self.subTest(operation=operation, unchecked=unchecked):
+                        directory = workspace / f"{operation}-{unchecked}"
+                        directory.mkdir(mode=0o700)
+                        target = directory / "target"
+                        shutil.copytree(os_suites.TARGET, target)
+                        source = target / "src/Os_Backend.c"
+                        text = source.read_text(encoding="utf-8")
+                        stage = f"startup_gate_failure={operation}\n"
+                        continued = f"startup_gate_continued={operation}\n"
+                        return_type, arguments, unused, result = (
+                            ("DWORD", "HANDLE gate, DWORD interval", "(void)gate;\n    (void)interval;", "WAIT_FAILED")
+                            if operation == "wait" else
+                            ("int", "HANDLE gate", "(void)gate;", "0")
+                        )
+                        helper = (
+                            f"OS_MEMMAP static {return_type} startup_gate_failure({arguments})\n{{\n"
+                            f"    {unused}\n"
+                            f'    (void)Os_HostWriteBytes(1, "startup_gate_failure={operation}\\n", {len(stage)}u);\n'
+                            f"    return {result};\n}}\n"
+                            "OS_MEMMAP static void __attribute__((noreturn)) startup_gate_continued(void)\n{\n"
+                            f'    (void)Os_HostWriteBytes(1, "startup_gate_continued={operation}\\n", {len(continued)}u);\n'
+                            "    ExitProcess(91u);\n}\n"
+                        )
+                        anchor = "OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)"
+                        self.assertEqual(text.count(anchor), 1)
+                        text = text.replace(anchor, helper + anchor)
+                        if operation == "wait":
+                            old = ("    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {\n"
+                                   "        ExitProcess(E_OS_STATE);\n    }\n")
+                            new = old.replace("WaitForSingleObject", "startup_gate_failure")
+                            fatal = "ExitProcess(E_OS_STATE);"
+                        else:
+                            old = ("    ++task_thread_count;\n"
+                                   "    if (Os_HostSetEvent(start->gate) == 0) {\n"
+                                   "        Os_BackendShutdown(E_OS_STATE);\n    }\n")
+                            new = old.replace("Os_HostSetEvent", "startup_gate_failure")
+                            fatal = "Os_BackendShutdown(E_OS_STATE);"
+                        if unchecked:
+                            self.assertEqual(new.count(fatal), 1)
+                            new = new.replace(fatal, "(void)0;")
+                        self.assertEqual(text.count(old), 1)
+                        source.write_text(text.replace(old, new + "    startup_gate_continued();\n"), encoding="utf-8")
+                        build = directory / "build"
+                        build.mkdir()
+                        with os_suites.native_session(directory, "startup-gate"):
+                            binary, _ = os_suites.build(build, "native_stack.c", target=target)
+                            observation = os_suites.execute(binary, "normal")
+                        self.assertEqual(observation["exit"], 91 if unchecked else 7, observation)
+                        self.assertEqual(observation["stderr"], (stage + (continued if unchecked else "")).strip(), observation)
+                        if unchecked or operation == "wait":
+                            self.assertEqual(observation["stdout"], "", observation)
+                        else:
+                            self.assertIn("lifecycle=Closed state=Failed reason=7", observation["stdout"], observation)
+                            self.assertIn(" threads=3 ", observation["stdout"], observation)
+                        print(observation, flush=True)
+
     def test_retired_interrupt_snapshot_drops_borrowed_parameters(self):
         import os_suites
 
