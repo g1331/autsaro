@@ -59,3 +59,11 @@
 | 规范附录 | 已核对（规范原文：附录列出不适用于本规范的上游需求，没有实现义务）：SWS_Os_NA_00767 |
 
 中断向量表段（`SWS_Os_00336`）与 OS 声明的 MemMap 包装（`SWS_Os_00815`）随 SchM／MemMap 责任链在 [#191](https://github.com/g1331/autsaro/issues/191) 处置。
+
+## C99 数组与回调类型
+
+R17.6为Mandatory（主文印刷140／PDF148），R18.7为Required（印刷151／PDF159）；AMD2追加C11。当前四份callback-parameter工程与两目标补丁后内核中，没有static数组形参，也没有柔性数组成员。未写边界的声明已分别核对：fatal文本及生成配置表由字符串／初始化列表确定大小，都是完整对象；内核prvSearchForNameWithinSingleList的pcNameToQuery[]是函数参数，不是结构成员。生成Task表中的.entry等designator初始化结构元素，不是给外层数组指定下标；不能仅凭其中出现点号，就按R9.5的数组designator构造裁决。
+
+R18.8为Required，AMD4.25–29将其明确到VLA；新增R18.10为Mandatory（AMD4.31，印刷17／PDF24），约束指向可变修改数组类型的指针。当前声明边界来自整数字面量、固定宏／枚举或非VLA类型的sizeof／对齐表达式：任务缓冲区为512个StackType_t，OS上限、协议容量及本机65536字节备用栈由固定定义决定，CAN_HOST_AREA_COUNT和OS_HOOK_ALARM是枚举常量。编译器实际宏收据确认当前容量；timers、registry、TLS及多核专属声明仍按各自关闭条件判断。没有发现运行值决定的数组声明或指向数组的可变修改指针；局部char条件数组的sizeof／offsetof布局约束是整数常量表达式，不是运行时VLA。此结论只覆盖已核声明、配置和生成来源，不覆盖SDK类型。
+
+R17.13为Required（AMD3.38，印刷20–21／PDF28–29），适用当前C99。已核回调typedef均形成函数指针类型；配置中的const限定指针对象或返回对象，不限定函数类型本身。TaskFunction_t的声明宏同样形成函数指针；私有布局断言的typedef是字符数组。没有以指针对象的const或函数返回类型的const误报函数类型限定，也不从这项判断推导任意外部回调、SDK或其他类型规则已经满足。
