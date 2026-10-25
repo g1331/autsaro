@@ -55,3 +55,15 @@ R21.2为Required（主文印刷166–167／PDF174–175，名字集合见R21.1�
 ## 实现与供应方边界
 
 实现定义、编译／需求追溯、临时聚合、Windows外部名字、线程TLS分配、声明宏及SDK保留名字见[实现与供应方边界](implementation.md)。各条的适用条件、原始诊断与待决定状态分别保留。
+
+## 对象地址与回调的转换
+
+R11.4、R11.5均为Advisory，当前C99适用（主文印刷97–98／PDF105–106；TC1限定R11.4为对象指针，AMD2.60及语言表扩展不取消义务）。当前switch-termination的standard-ecu原摘要中六处R11.4、五处R11.5均为真实转换，不按uintptr_t可容纳指针或void回转合法判误报；保留具体用途和原始诊断，不构成整条符合或新偏离批准。
+
+R11.4分别来自Os_ArtiAlarmBaseReturn记录完整地址／32位trace token、Os_HostThreadLayout导出映射范围、Os_StackRecordBuffer记录逻辑缓冲范围，以及采用tasks.c的栈顶对齐表达式两次转换及对齐断言。前几处用于地址身份、范围或输出，没有把截断的trace token恢复成指针解引用；采用栈顶仍须按实际StackType_t缓冲、深度与8字节对齐前提判断。当前x64的uintptr_t、size_t及64位地址记录由实际ABI／编译收据支持，不能外推任意整数、地址或Windows未取证供应方。
+
+R11.5的HostBridge watch恢复实际传入的静态Ecu_HostWatch地址；native_task_start恢复native_starts中的同型元素；Linux actor_start恢复reserve_handle返回的真实句柄对象。这些回调的生产者和消费者类型相配，借用和退休仍按原生生命周期篇处理，不由一次强制转换证明无竞态。mmap返回的void地址转为mapping字节视图，失败先检查MAP_FAILED后再使用；其动态设施仍保留D4.12和供应方责任。
+
+第五处是采用内核prvTaskStatusArrayWriter从void恢复TaskStatusArrayWriterContext_t，并非TCB转换。uxTaskGetSystemState先写入xContext的数组指针及uxIndex=0，再在挂起调度期间同步遍历／调用，返回后才离开该自动对象作用域；这处未发现保存context供以后调用。调用方容量、真实遍历和输出对象仍各负其责，不能从该转换推导所有外部callback安全。C99对象指针经void回转的语言依据为N1256 §6.3.2.3p1（印刷47／PDF59），对象—整数转换另属实现定义；两者均不消除上述Advisory违反。
+
+MAP_FAILED另触发独立R11.6 Required义务（主文印刷99／PDF107；TC2.22澄清整数转void指针属实现定义，未取消规则）。当前Os_HostCreateActor实际失败比较展开固定sys/mman.h的((void *) -1)，不适用零常量例外，也不是R11.5的对象指针恢复。失败仍先识别该哨兵再释放槽位返回NULL；改看NULL／errno、搬动声明或改用同样哨兵的mmap64均非等价整改。针对这个精确SDK构造的有界保留仍待项目决定，不扩ADR0024、不填批准表／MR12；具体身份、替代与风险留PR #371。
