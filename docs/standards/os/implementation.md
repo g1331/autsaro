@@ -67,3 +67,11 @@ R15.4／R15.5均为Advisory（主文印刷125–127／PDF133–135，AMD2追加C
 R5.9为Advisory、System范围，TC1的amplification更正未取消跨TU唯一性建议。当前17个报告声明对应六模块configuration、Time与生成配置的alarms、Time／Com的values、HostLinux／Backend的handles、三份control及两份require，均保留真实私有名字重复；合法内部链接不消除该建议。当前按类型、文件与实际调用目标区分的模块词汇是保留理由，不是整条规则通过。
 
 R8.7／R8.9同为Advisory；TC2.15明确区分定义TU与调用TU，AMD4.43–44将后者的defined改为declared。一个外部调用TU不等于只在定义TU使用；未选调用的标准API仍须逐处连接固定SWS。HostLinux的handles只在reserve_handle直接出现，尽管元素地址逃逸供其他函数使用，仍是真实R8.9候选。生成配置对象即使只在初始化函数被命名，静态存储期及后续借用也不能随作用域移动而丢失。当前142／46条报告未批量销项，具体原文、位置与作者判断集中[PR记录](https://github.com/g1331/autsaro/pull/371#issuecomment-6401292791)。
+
+## 字符串终止与复制容量
+
+R21.17／R21.18均为Mandatory（AMD1印刷8–9／PDF16–17；AMD2扩展C11），分别检查无界字符串访问和带size_t参数的实际正值／容量，不能混成“所有string.h调用都已核查”。Os_LinuxMappedStack的line为64字节，used只在小于63时递增；遇换行先写line[used]=NUL再调用mapped_line。后者的cursor只在已识别的分隔符之后前移，strlen之前仍指向该终止数组内部；长度不足四时不读取完整权限前缀。这支持当前这处strlen的终止边界，不是新的字符串实验或任意调用方证明。
+
+Os_TargetPostInput先拒绝零及超过32的length，清零整个32字节记录再复制；Ecu_TargetPostFrame的dlc先限制为1–8；batch_frames只在count非零且已验证不超过256时按完整元素复制。输出的0／1／8字节整改与实际收据沿用既有证据。COM的固定uint32复制仍以真实RTE原生对象和公开对齐／容量前提为边界，native上下文的304／168／512字节证明见原生设施篇。上述逐处依据不能替代采用内核、外部接口调用方或所有配置的完整容量义务。
+
+采用内核另有实际生效的xTaskGetHandle，其strlen(pcNameToQuery)位于INCLUDE_xTaskGetHandle=1的定义中；不能按“功能关闭”排除。当前项目／端口调用闭包没有调用该接口，因此本次程序未从该入口访问字符串，但若交付使用者调用，必须另证pcNameToQuery为有效终止串，configASSERT中的长度检查本身不能防止strlen先越界。统计格式化的strcpy／strlen则在configUSE_STATS_FORMATTING_FUNCTIONS=0的排除分支；头中示例注释不构成实际调用。未把这两种情况合并为库函数缺席。
