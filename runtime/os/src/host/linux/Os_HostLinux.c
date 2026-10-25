@@ -60,7 +60,7 @@ struct Os_HostHandleType {
     volatile int32_t acknowledged;
     volatile int32_t resumed;
     volatile int32_t ended;
-    volatile int32_t joined;
+    volatile int32_t joined; /**< 0 unclaimed, 2 join/detach in progress, 1 completed. */
     DWORD exit_code;
     CONTEXT captured;
 #ifdef __SANITIZE_ADDRESS__
@@ -239,7 +239,7 @@ OS_MEMMAP static DWORD actor_body(void *argument)
         registered = Os_StackRegister('H');
     }
     if (registered == 0) {
-        result = UINT32_MAX;
+        ExitProcess(1u);
     } else {
         result = thread->entry(thread->argument);
     }
@@ -356,7 +356,8 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
             (void)nanosleep(&interval, NULL);
         }
         if (GetThreadId(thread) == 0u) {
-            return NULL;
+            /* The actor owns its callback context and may already be running. */
+            ExitProcess(1u);
         }
         *id = GetThreadId(thread);
     }
@@ -538,16 +539,21 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
                 pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
             } else if (handle->kind == OS_HOST_THREAD) {
                 if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
-                    const int32_t was_joined =
-                        __atomic_exchange_n(&handle->joined, 1, __ATOMIC_ACQ_REL);
-                    if (was_joined != 0) {
+                    const int32_t previous = InterlockedCompareExchange(&handle->joined, 2, 0);
+                    if (previous == 1) {
                         outcome = WAIT_OBJECT_0;
-                    } else {
+                        pending = 0;
+                    } else if (previous == 0) {
                         if (pthread_join(handle->thread, NULL) == 0) {
+                            (void)InterlockedExchange(&handle->joined, 1);
                             outcome = WAIT_OBJECT_0;
+                        } else {
+                            (void)InterlockedExchange(&handle->joined, 0);
                         }
+                        pending = 0;
+                    } else {
+                        /* Another waiter owns the join; completion is not yet published. */
                     }
-                    pending = 0;
                 }
             } else {
                 pending = 0;
@@ -685,21 +691,31 @@ OS_MEMMAP static BOOL close_thread(HANDLE thread)
     BOOL closed = 1;
     if (thread->register_host != 0) {
         /* Release pthread resources without discarding the registered stack identity. */
-        if (InterlockedExchange(&thread->joined, 1) == 0) {
+        const int32_t previous = InterlockedCompareExchange(&thread->joined, 2, 0);
+        if (previous == 0) {
             if (pthread_detach(thread->thread) != 0) {
+                (void)InterlockedExchange(&thread->joined, 0);
                 closed = 0;
+            } else {
+                (void)InterlockedExchange(&thread->joined, 1);
             }
+        } else if (previous != 1) {
+            closed = 0;
+        } else {
+            /* A completed join or detach already released the pthread resource. */
         }
     } else {
-        /* Closing an observer does not stop its live actor. */
+        /* A joinable observer retains its owner until a successful wait and close. */
+        closed = 0;
         if (InterlockedCompareExchange(&thread->ended, 0, 0) != 0) {
-            if (InterlockedCompareExchange(&thread->joined, 0, 0) != 0) {
+            if (InterlockedCompareExchange(&thread->joined, 0, 0) == 1) {
                 errno = 0;
                 if (munmap(thread->mapping, thread->mapping_size) != 0) {
                     closed = 0;
                 } else {
                     thread->mapping = NULL;
                     (void)InterlockedExchange(&thread->reserved, 0);
+                    closed = 1;
                 }
             }
         }

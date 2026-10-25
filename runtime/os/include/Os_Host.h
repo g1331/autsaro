@@ -141,7 +141,7 @@ OS_MEMMAP Os_HostHandleType Os_HostOpenManualEvent(void);
  * Context: native setup/supervision outside OS critical and BSW exclusive areas.
  * Reentrancy: reentrant; each successful call creates a separate actor.
  * Ownership: entry and argument are retained until the actor ends; caller owns the returned
- * observer handle.
+ * observer handle. Linux host-input registration failure terminates the native process.
  */
 OS_MEMMAP Os_HostHandleType Os_HostSpawnThread(Os_HostThreadEntryType entry, void *argument);
 
@@ -154,7 +154,7 @@ OS_MEMMAP Os_HostHandleType Os_HostSpawnThread(Os_HostThreadEntryType entry, voi
  * Context: native setup/supervision outside OS critical and BSW exclusive areas.
  * Reentrancy: reentrant; each successful call creates a separate actor.
  * Ownership: entry and argument are retained until the actor ends; caller owns the returned
- * observer handle.
+ * observer handle. On Linux, complete a successful wait before closing this joinable supervisor.
  */
 OS_MEMMAP Os_HostHandleType Os_HostSpawnObserverThread(Os_HostThreadEntryType entry,
                                                        void *argument);
@@ -176,7 +176,8 @@ OS_MEMMAP int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds);
  * Preconditions: valid handle exclusively owned for closing; no concurrent waiter may use a closed
  * handle. Context: native cleanup outside OS critical and BSW exclusive areas. Reentrancy: not
  * reentrant for the same handle; independent handles may close concurrently. Ownership: consumes
- * the handle on success; closing a thread observer does not terminate its actor.
+ * the handle on success; closing a thread observer does not terminate its actor. A Linux joinable
+ * supervisor that has not completed a successful wait is rejected and remains owned by the caller.
  */
 OS_MEMMAP int Os_HostClose(Os_HostHandleType handle);
 

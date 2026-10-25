@@ -28,6 +28,8 @@ Linux `Os_HostCreateActor` 的 `mmap` 使用 `MAP_PRIVATE | MAP_ANONYMOUS`、fd=
 
 同一构造函数在保护设置或 pthread 创建／属性设置失败后，必须检查映射回滚的 `munmap` 结果，再清空 mapping 和释放 reserved。D4.7（Required、C99，主文页30／PDF38；AMD2只增加C11适用性）要求有意义地检查错误信息，其“已证明不能报错”例外不能仅由地址／长度有效推出；Linux 契约还列有 `munmap` 的 ENOMEM。回滚失败时沿现有 Linux 原生致命失败约定 `ExitProcess(1)`，不把仍存活的映射遗失后作为普通 NULL 创建拒绝继续；正常成功及成功回滚的结果不变。实际 errno 夹具分别注入两处失败，检查精确位置回执、退出值和无正常收尾输出，并以恢复各处旧检查的编译副本证伪。此整改只覆盖这两个回滚点，不构成全部D4.7／D4.12处置或符合性结论。
 
+Linux actor的H栈注册失败，以及原生线程已创建后无法发布所请求ID，沿既有native致命退出路径停止，不能让创建方继续使用未初始化actor或遗失仍在运行的callback所有权。D4.13（Advisory，主文印刷35–36／PDF43–44；AMD2增列C11）同时约束join／detach／close顺序：同一原子字段区分未领取、操作中与成功完成，只有真实pthread操作成功才发布完成，失败归还处理权，并发wait不能提前报告完成。Linux joinable supervisor在成功wait前close会拒绝并保留调用方所有权；HostBatch原有signal→wait→close顺序不变。H／Task／controller的进程期栈身份与detach不等于释放仍存活actor，进程终止前的所有权继续保留。实际注册、ID、join／detach失败、活跃／已结束observer提前close及并发wait消费者与逐分支变异收据归PR，不据此宣称全部D4.12／D4.13或provider语义完成。
+
 Linux 原生上下文复制按 R21.15（AMD1，Required，C99，页6／PDF14；AMD2增加C11适用性）逐处配对兼容的实参类型：原生 `const void *` 入口与显式 object-to-void 目标视图复制内核布局及完整 native 快照；FP 内容和内嵌 FP 指针表示写回使用 unsigned-char 对象表示视图。C99 的同型兼容规则见 [WG14 N1256 §6.2.7p1](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1256.pdf)；不是仅因库形参接收 void 就忽略实际实参。这里不把原生 void 指针还原成对象指针，避免新增 R11.5 Advisory 违反；结构、FP 及局部指针对象的字符视图符合 R11.3 主文页96／PDF104及 AMD4.7–9 的非 atomic 对象例外。保留 const、尺寸／偏移约束、自复制的 memmove 语义和自有 FP 存储，未通过不兼容结构指针解引用。真实信号消费者核对准确 RSP、ContextFlags、信号 SP、FP 内容与重定位指针，反例分别破坏这些观察点；这不处置其他模块的 R21.15，也不豁免 signal／time 设施。
 
 Os_TargetConfigType 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。

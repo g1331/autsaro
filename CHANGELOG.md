@@ -30,6 +30,8 @@
 
 ### Fixed
 
+- Linux native actors stop on failed host-input registration or unavailable requested identity. Joinable supervisors retain ownership until successful wait and close; join/detach failures no longer publish completion or let concurrent waits report it early. Regenerate sealed deliveries for the updated private source (#371)
+
 - Generated scheduler-resource task access masks use an unsigned literal instead of a small integer constant macro; regenerate deliveries to receive the corrected C source (#371)
 
 - Static kernel queues select front-insertion and overwrite wrap positions before subtracting, keeping read cursors within their storage even for one-item queues. Regenerate sealed deliveries and rebuild for the changed controlled kernel patch identity (#371)

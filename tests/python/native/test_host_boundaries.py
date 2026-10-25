@@ -727,3 +727,135 @@ class NativeFacilityTests(unittest.TestCase):
                             self.assertLess(shadow, 50001 * 8)
                             self.assertNotIn("native-stack depth=50000 completed", small.stdout)
                             print(f"native-stack capacity mutation exit={small.returncode} {small.stdout}", end="", flush=True)
+
+    def test_native_thread_lifecycle(self):
+        import os_suites
+
+        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+            directory = Path(temporary)
+            with os_suites.native_session(directory, "thread-lifecycle"):
+                binary, _ = os_suites.build(
+                    directory,
+                    str(ROOT / "tests/fixtures/os_native_thread_lifecycle.c"),
+                    link_flags=tuple(
+                        f"-Wl,--wrap={name}"
+                        for name in (
+                            "Os_StackRegister",
+                            "Os_LinuxThreadId",
+                            "pthread_join",
+                            "pthread_detach",
+                        )
+                    ),
+                )
+                for scenario in (
+                    "registered-normal",
+                    "registration-error",
+                    "identity-error",
+                    "close-live",
+                    "close-ended",
+                    "join-error",
+                    "detach-error",
+                    "concurrent-wait",
+                ):
+                    with self.subTest(scenario=scenario):
+                        result = os_suites.run_native(
+                            [str(binary), scenario], timeout=10
+                        )
+                        fatal = scenario in {"registration-error", "identity-error"}
+                        self.assertEqual(result.returncode, 1 if fatal else 0, result)
+                        expected = {
+                            "registration-error": "registration_rejected role=H\n",
+                            "identity-error": "identity_requested\n",
+                            "join-error": "join_rejected attempt=1\n",
+                            "detach-error": "detach_rejected attempt=1\n",
+                        }.get(scenario, "")
+                        self.assertEqual(result.stderr, expected, result)
+                        self.assertEqual(
+                            result.stdout,
+                            ""
+                            if fatal
+                            else (
+                                "registered_actor entry=completed identity=published\n"
+                                if scenario == "registered-normal"
+                                else f"thread_lifecycle scenario={scenario} ownership=retained completion=observed\n"
+                            ),
+                            result,
+                        )
+            mutations = (
+                (
+                    "registration",
+                    "if (registered == 0) {\n        ExitProcess(1u);",
+                    "if (registered == 0) {\n        result = UINT32_MAX;",
+                    (("registration-error", 5, "registration_rejected role=H\n"),),
+                ),
+                (
+                    "identity",
+                    "/* The actor owns its callback context and may already be running. */\n            ExitProcess(1u);",
+                    "return NULL;",
+                    (
+                        (
+                            "identity-error",
+                            4,
+                            "identity_requested\ncreation_returned_null\n",
+                        ),
+                    ),
+                ),
+                (
+                    "early-close",
+                    "closed = 0;\n        if (InterlockedCompareExchange(&thread->ended",
+                    "closed = 1;\n        if (InterlockedCompareExchange(&thread->ended",
+                    (("close-live", 50, ""), ("close-ended", 52, "")),
+                ),
+                (
+                    "failed-join",
+                    "(void)InterlockedExchange(&handle->joined, 0);",
+                    "(void)handle;",
+                    (("join-error", 51, "join_rejected attempt=1\n"),),
+                ),
+                (
+                    "early-join",
+                    "InterlockedCompareExchange(&handle->joined, 2, 0)",
+                    "InterlockedExchange(&handle->joined, 1)",
+                    (("concurrent-wait", 54, ""),),
+                ),
+                (
+                    "failed-detach",
+                    "(void)InterlockedExchange(&thread->joined, 0);",
+                    "(void)thread;",
+                    (("detach-error", 53, "detach_rejected attempt=1\n"),),
+                ),
+            )
+            for name, before, after, scenarios in mutations:
+                with self.subTest(mutation=name):
+                    changed = directory / name
+                    changed.mkdir(mode=0o700)
+                    target = changed / "target"
+                    shutil.copytree(os_suites.TARGET, target)
+                    source = target / "src/host/linux/Os_HostLinux.c"
+                    text = source.read_text(encoding="utf-8")
+                    self.assertEqual(text.count(before), 1)
+                    source.write_text(text.replace(before, after), encoding="utf-8")
+                    with os_suites.native_session(changed, "thread-lifecycle-mutation"):
+                        binary, _ = os_suites.build(
+                            changed,
+                            str(ROOT / "tests/fixtures/os_native_thread_lifecycle.c"),
+                            target=target,
+                            link_flags=tuple(
+                                f"-Wl,--wrap={name}"
+                                for name in (
+                                    "Os_StackRegister",
+                                    "Os_LinuxThreadId",
+                                    "pthread_join",
+                                    "pthread_detach",
+                                )
+                            ),
+                        )
+                        for scenario, code, errors in scenarios:
+                            result = os_suites.run_native(
+                                [str(binary), scenario], timeout=10
+                            )
+                            self.assertEqual(
+                                (result.returncode, result.stdout, result.stderr),
+                                (code, "", errors),
+                                result,
+                            )
