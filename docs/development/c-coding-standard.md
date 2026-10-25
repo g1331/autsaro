@@ -140,6 +140,10 @@ void Server_Run(uint8, uint32 *);
 
 注释写在引起违反的语句同一行或上一行，一处违反一条注释。注释只标出位置和理由，不构成批准：
 
+直接 include 的记录范围使用文件路径加完整字面指令，例如 `` `runtime/os/src/host/linux/Os_HostLinux.c` 中 `#include <signal.h>` ``；引号形式同样保留为 `#include "private/header.h"`。现有对应检查只归一化指令周围的空白、注释和续行，保留文件、规则、头名及尖括号／引号身份；宏 include 不会冒充字面头。未批准、重复、错文件／规则／头或过期记录仍须拒绝，不能用函数名、新宏或基线代替 include 位置。
+
+[ADR 0024](../adr/0024-bounded-linux-platform-retention.md) 的三个 Linux 位置是另行接受的有界项目保留，独立于上节 ADR 0023 的 AUTOSAR 必需冲突授权。项目接受、逐处技术复核和 MISRA 规范效力分别记录；仅在前两者具备后写入该决定范围内的技术记录和就近注释，真实违反及其他义务保持。
+
 - 具体记录位于对应模块的标准篇（`docs/standards/`），沿用现有记录路径；[ADR 0023 的逐项格式](../adr/0023-autosar-required-conflict-disposition.md#逐项记录与复核)连接固定提交／profile／target／program／TU、规则、文件／源码行和符号、实际调用闭包、SWS 全文必要性及替代方案、合法 MISRA 版次／amendment／TC、风险控制与验证、评估和独立复核。原授权来源、评估者及日期、复核 head／发现／处置分开写，不把实现者写成新增批准人；范围外新例外先完成具体文本再由用户决定。
 - 只有具体记录满足原授权范围、规范允许条件与上述全部评估／复核前提后才在源码中加注释，注释中的规则编号与记录一致；Cppcheck 的原始诊断照常保留，注释不是 suppression。本次政策同步不批准具体诊断，不修改既有批准表或源码注释。
 - 已批准的偏离：[PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7，[Com](../standards/com.md#misra-偏离) 的 Rule 8.7 与 2.5，[CanTp](../standards/cantp.md#misra-偏离) 的 Rule 8.7，[ComM](../standards/comm/README.md#misra-偏离) 的 Rule 8.7 与 2.5，[BswM](../standards/bswm/README.md#misra-偏离) 的 Rule 8.7 与 2.3。其余模块整改时补齐所需记录与注释。
