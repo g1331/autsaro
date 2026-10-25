@@ -28,13 +28,17 @@ Linux返回型停车handler保存并恢复被打断actor的errno；futex／getti
 
 guard handler仅对注册actor的实际guard地址发布预分配记录、真实SP及首故障状态，然后永久停车；未识别故障原生退出。该路径没有格式化输出、堆分配或汽车回调。正常关闭报告中的有界字节数／预分配容量、失败回退与任意阻塞输出的时间保证分开；现有HostBatch监督及退出后备的验证边界见[平台记录](platform.md#三处有界-linux-平台保留)，不为probe或所有终止输出新增期限。
 
+对应运行内核6.8.0-147-generic的Ubuntu linux 6.8.0-147.147源码及发行补丁也按同一签名Sources核验。x64_setup_rt_frame将第三实参设为frame.uc地址，uc_mcontext.fpstate另指向fpu__alloc_mathframe分配的FP区域；[Linux sigaction接口](https://man7.org/linux/man-pages/man2/sigaction.2.html)将第三实参明确为转成void指针的ucontext_t。当前判断依赖这一平台接口及实际x64信号帧，不能从两个offsetof／sizeof断言推导内核与glibc的所有尾部字段相同。内核sigset为64位，glibc另有较大的sigset_t、内嵌FP及SSP尾部，须区分各自角色。
+
+Os_StackObserve只接受CONTEXT_CONTROL并检查真实Rsp；原生设施对照另外观察GPR、512字节传统FP内容及指针重定位。项目没有用该观察快照调用setcontext或恢复整个XSAVE区，不能把512字节副本称为完整扩展状态恢复。actor继续执行由原始信号帧的sigreturn承担，内核按其实际FP／XSAVE记录恢复。现有self-copy、指针独立性和内容对照支持这些具体消费者，不能替代所有信号交错、其他内核／libc布局或新恢复消费者的评估。
+
 ## 展开器先于可抢占执行初始化
 
 对应GCC14的`unwind.inc::_Unwind_RaiseException → uw_init_context`及`unwind-dw2.c::uw_init_context_1`通过共享`once_regsizes`／__gthread_once初始化寄存器表；实际libgcc二进制也调用pthread_once。对应glibc实现使其他线程等待进行中的初始化。若把首次调用留在释放汽车临界区后的Task展开中，OS可能暂停初始化者，再让另一Task进入同一等待，形成对被暂停者的依赖。单Task样本或短时通过不能排除受支持多Task配置中的该窗口。
 
 Linux的`prepare_native_runtime`在创建控制器／Task及启动调度器之前调用`Os_PortRestartPrepare`，以真实_Unwind_Backtrace遍历当前启动栈；无状态回调返回_URC_NO_REASON，只有正常到达栈尾才允许继续，其他结果沿E_OS_STATE关闭。没有增加共享标志、锁、actor、重试或期限，也没有在临界区内包住非局部展开；激活结算和同一Task／TCB／物理栈的restart路径保持。依据为D4.1（Required，主文24–25／PDF32–33）、D4.7（Required，30／38）与D4.13（Advisory，35–36／43–44），AMD2的C11扩展不改变当前C99义务。
 
-原生观察复用正常lifecycle夹具，保留真实backtrace与pthread_create；检查真实帧遍历先于线程创建、正常Ready和初始化错误时不得Ready。缺准备调用、伪造栈尾结果而跳过真实provider、忽略初始化失败的编译副本分别由精确阶段拒绝。旧源码对照观察的是准备协议缺席，不冒称已复现生产死锁。执行与检测器结果按PR中的实际源码及运行范围记录；此项不消除provider中其他锁、运行中加载新DSO或新展开实现的再评估责任。Windows的SEH路径不使用该GNU准备操作。
+原生观察复用正常lifecycle夹具，保留真实backtrace与pthread_create；检查真实帧遍历先于该夹具的控制器／Task创建、正常Ready和初始化错误时不得Ready。生产probe／HostBatch在StartOS之前已创建H输入线程，本项不承诺早于所有native线程；该输入闭包不调用展开器。缺准备调用、伪造栈尾结果而跳过真实provider、忽略初始化失败的编译副本分别由精确阶段拒绝。旧源码对照观察的是准备协议缺席，不冒称已复现生产死锁。执行与检测器结果按PR中的实际源码及运行范围记录；此项不消除provider中其他锁、运行中加载新DSO或新展开实现的再评估责任。Windows的SEH路径不使用该GNU准备操作。
 
 ## 动态存储及回收责任
 
@@ -54,7 +58,7 @@ R17.2为Required（主文137／PDF145，AMD2.27增加C11），禁止直接或间
 
 OSEK OS2.2.3 §6（25–26页）及§14.2.3.1／Figure14-1（73–74页）描述中断类别、嵌套与调度风险，没有规定必须使用同一C函数递归。当前端口的严格递增优先级、yield排除、32槽frame容量、原生栈／guard及父上下文恢复是风险控制，不能据其把真实R17.2违反判为满足，也不证明任意用户handler的最坏栈用量。
 
-保留当前同步嵌套需要独立于ADR0023／0024的新项目决定；目前保持未处置，不填批准表或MR12。改为延迟处理会改变既有抢占合同；仅换helper名称不能消除调用环。独立ISR actor／原生上下文切换是可研究的替代架构，需要重新证明身份、容量、mask、资源、故障、Task返回及检测器合同，不能直接声称不可能或已经等价。具体取舍必须连同这些差异评估，不由默认profile或已有绿色CI代替。
+保留当前同步嵌套需要独立于ADR0023／0024的新项目决定；[具体范围、替代及拟议文字](https://github.com/g1331/autsaro/pull/371#issuecomment-6395097006)仍待决定，不填批准表或MR12。改为延迟处理会改变既有抢占合同；仅换helper名称不能消除调用环。独立ISR actor／原生上下文切换是可研究的替代架构，需要重新证明身份、容量、mask、资源、故障、Task返回及检测器合同，不能直接声称不可能或已经等价。具体取舍必须连同这些差异评估，不由默认profile或已有绿色CI代替。
 
 ## 自有回调声明的参数名
 
