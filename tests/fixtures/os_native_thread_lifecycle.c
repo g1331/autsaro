@@ -7,6 +7,7 @@
 #include <sched.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 static const char *scenario;
 static Os_HostHandleType gate;
@@ -16,6 +17,7 @@ static unsigned join_calls;
 static unsigned detach_calls;
 static unsigned join_entered;
 static unsigned release_join;
+static unsigned callback_completed;
 static DWORD waiter_result;
 
 void StartupHook(void) {}
@@ -65,6 +67,15 @@ int __wrap_pthread_detach(pthread_t thread)
     return __real_pthread_detach(thread);
 }
 
+static void reject(int code, const char *stage) __attribute__((noreturn));
+static void reject(int code, const char *stage)
+{
+    (void)fprintf(stderr, "thread_state_rejected stage=%s\n", stage);
+    (void)fflush(stderr);
+    /* Intentional mutants can retain joinable threads; preserve the observed failure. */
+    _exit(code);
+}
+
 static DWORD actor(void *argument)
 {
     (void)argument;
@@ -77,6 +88,7 @@ static DWORD actor(void *argument)
     if ((completed != NULL) && (Os_HostSetEvent(completed) == 0)) {
         return 41u;
     }
+    __atomic_store_n(&callback_completed, 1u, __ATOMIC_RELEASE);
     return 37u;
 }
 
@@ -130,15 +142,18 @@ int main(int argc, char **argv)
     }
     if (strcmp(scenario, "detach-error") == 0) {
         if ((CloseHandle(thread) != 0) || (CloseHandle(thread) == 0) || (detach_calls != 2u)) {
-            return 53;
+            reject(53, "detach-completion");
         }
         if ((Os_HostSetEvent(gate) == 0) ||
             (WaitForSingleObject(completed, 2000u) != WAIT_OBJECT_0)) {
             return 8;
         }
+        while (__atomic_load_n(&callback_completed, __ATOMIC_ACQUIRE) == 0u) {
+            (void)sched_yield();
+        }
     } else {
         if ((strcmp(scenario, "close-live") == 0) && (CloseHandle(thread) != 0)) {
-            return 50;
+            reject(50, "live-close");
         }
         if ((Os_HostSetEvent(gate) == 0) ||
             (WaitForSingleObject(completed, 2000u) != WAIT_OBJECT_0)) {
@@ -152,7 +167,7 @@ int main(int argc, char **argv)
                 (void)sched_yield();
             } while (code == STILL_ACTIVE);
             if (CloseHandle(thread) != 0) {
-                return 52;
+                reject(52, "ended-close");
             }
         }
         if (strcmp(scenario, "join-error") == 0) {
@@ -170,7 +185,7 @@ int main(int argc, char **argv)
                 (void)sched_yield();
             }
             if (WaitForSingleObject(thread, 0u) != WAIT_TIMEOUT) {
-                return 54;
+                reject(54, "concurrent-completion");
             }
             __atomic_store_n(&release_join, 1u, __ATOMIC_RELEASE);
             if ((pthread_join(worker, NULL) != 0) || (waiter_result != WAIT_OBJECT_0)) {
@@ -179,7 +194,7 @@ int main(int argc, char **argv)
         }
         if ((WaitForSingleObject(thread, 2000u) != WAIT_OBJECT_0) ||
             ((strcmp(scenario, "join-error") == 0) && (join_calls != 2u))) {
-            return 51;
+            reject(51, "join-completion");
         }
         if ((GetExitCodeThread(thread, &code) == 0) || (code != 37u) ||
             (CloseHandle(thread) == 0)) {

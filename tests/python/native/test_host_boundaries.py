@@ -804,25 +804,50 @@ class NativeFacilityTests(unittest.TestCase):
                     "early-close",
                     "closed = 0;\n        if (InterlockedCompareExchange(&thread->ended",
                     "closed = 1;\n        if (InterlockedCompareExchange(&thread->ended",
-                    (("close-live", 50, ""), ("close-ended", 52, "")),
+                    (
+                        ("close-live", 50, "thread_state_rejected stage=live-close\n"),
+                        (
+                            "close-ended",
+                            52,
+                            "thread_state_rejected stage=ended-close\n",
+                        ),
+                    ),
                 ),
                 (
                     "failed-join",
                     "(void)InterlockedExchange(&handle->joined, 0);",
                     "(void)handle;",
-                    (("join-error", 51, "join_rejected attempt=1\n"),),
+                    (
+                        (
+                            "join-error",
+                            51,
+                            "join_rejected attempt=1\nthread_state_rejected stage=join-completion\n",
+                        ),
+                    ),
                 ),
                 (
                     "early-join",
                     "InterlockedCompareExchange(&handle->joined, 2, 0)",
                     "InterlockedExchange(&handle->joined, 1)",
-                    (("concurrent-wait", 54, ""),),
+                    (
+                        (
+                            "concurrent-wait",
+                            54,
+                            "thread_state_rejected stage=concurrent-completion\n",
+                        ),
+                    ),
                 ),
                 (
                     "failed-detach",
                     "(void)InterlockedExchange(&thread->joined, 0);",
                     "(void)thread;",
-                    (("detach-error", 53, "detach_rejected attempt=1\n"),),
+                    (
+                        (
+                            "detach-error",
+                            53,
+                            "detach_rejected attempt=1\nthread_state_rejected stage=detach-completion\n",
+                        ),
+                    ),
                 ),
             )
             for name, before, after, scenarios in mutations:
