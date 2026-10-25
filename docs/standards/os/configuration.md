@@ -86,3 +86,12 @@ D4.6为Advisory（主文印刷28–29／PDF36–37；AMD2.23–25及适用性表
 本机边界仍真实保留基本数值类型：例如Linux BOOL为int、syscall结果为long、pthread错误结果为int，备用信号栈存储使用long double取得原生对齐。这里不能仅因ABI宽度已知就宣布D4.6全部满足；原文对标准库／项目控制外接口的衔接给出取舍理由，当前保留原生签名和错误表示，避免把long double的存储大小误命名为浮点有效位数。汽车配置与数值数据继续使用既有宽度类型；本判断不扩大到整个SDK或所有数值声明。
 
 D4.8同为Advisory（主文印刷30–31／PDF38–39），TC1澄清只有某类型在TU中的所有指针均不解引用时才触发隐藏要求。Linux HANDLE在Os_HostLinux.h仅指向不完整Os_HostHandleType，完整定义只在Os_HostLinux.c；Os_HostServices的创建／等待／关闭消费者只传递该指针，不取得字段或sizeof，符合这处封装目的。CONTEXT与公开配置对象则有实际完整对象存储／字段消费者，不能凭单个参数未解引用就批量判为应隐藏；其他结构／TU组合仍须按实际完整集合判断。
+
+
+## 接口宏的实际词法角色
+
+R20.7为Required（主文印刷159／PDF167；AMD2追加C11），只要求宏参数展开所得表达式有括号，不要求给非表达式参数套括号。已核Linux报告中的ALARMCALLBACK(identifier)展开为函数声明及定义头，端口portTASK_FUNCTION_PROTO／portTASK_FUNCTION的function、parameters分别处于函数和形参声明位置，均不是表达式；对应三处不能按缺括号判违反。另两处configINIT_TLS_BLOCK属于未进入实际include闭包的picolibc头，当前关闭runtime TLS的配置下不属于code；不能把这个条件裁决扩为启用TLS后也满足。
+
+Os.h的TASK、OS_TASK_ENTRY、ISR、OS_ISR_ENTRY真实使用##，保留R20.10的Advisory违反（印刷162／PDF170）。实际Task／ISR ID是公共标量宏，入口函数在同一C名字空间须有不同名字；直接以identifier定义函数会遇到ID宏展开及名字冲突。经普通外层宏转交参数还会先展开ID，不能假定可以无损复用一次拼接。当前保留字面配置名到私有入口名的映射与既有ABI，不把具体Os_TaskEntry_／Os_IsrEntry_前缀说成SWS强制；技术理由与必要接口形状、后续独立复核分开记录，不冒称MISRA合法偏离。
+
+R20.11／R20.12均为Required（印刷162–163／PDF170–171，AMD2追加C11）。上述四宏的identifier仅作为##操作数；当前Arti.h的四个文本参数只作#操作数，两个数值参数只作一次普通表达式展开；没有#参数紧接##，也没有同一参数在字符串化／拼接与普通展开之间混用。实际configASSERT只在if中求值x并传递文件／行，不字符串化x。该结论来自全部五个自有操作符宏的替换列表；当前标准工程生成目录及真实编译的补丁后内核未发现其他#／##宏，不替未核SDK及任意应用扩张通过。
