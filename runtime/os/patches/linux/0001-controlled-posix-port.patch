@@ -2,7 +2,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
 index 2592610..1be0473 100644
 --- a/portable/ThirdParty/GCC/Posix/port.c
 +++ b/portable/ThirdParty/GCC/Posix/port.c
-@@ -23,658 +23,397 @@
+@@ -23,658 +23,398 @@
   *
   * https://www.FreeRTOS.org
   * https://github.com/FreeRTOS
@@ -204,7 +204,7 @@ index 2592610..1be0473 100644
 -/*-----------------------------------------------------------*/
  
 -static void prvDestroyThreadKey( void )
-+int Os_PortInterruptSourceEnabled(uint32_t interrupt)
++sint32 Os_PortInterruptSourceEnabled(uint32 interrupt)
  {
 -    pthread_key_delete( xThreadKey );
 +    return ((interrupt < PORT_INTERRUPT_COUNT) &&
@@ -240,7 +240,7 @@ index 2592610..1be0473 100644
 -                                     StackType_t * pxEndOfStack,
 -                                     TaskFunction_t pxCode,
 -                                     void * pvParameters )
-+int Os_PortInterruptSourceControl(uint32_t interrupt, unsigned operation, boolean clear)
++sint32 Os_PortInterruptSourceControl(uint32 interrupt, uint32 operation, boolean clear)
  {
 -    Thread_t * thread;
 -    pthread_attr_t xThreadAttributes;
@@ -547,7 +547,8 @@ index 2592610..1be0473 100644
 -/*-----------------------------------------------------------*/
  
 -static void prvPortYieldFromISR( void )
-+StackType_t *pxPortInitialiseStack(StackType_t *top, TaskFunction_t code, void *argument)
++StackType_t *pxPortInitialiseStack(
++    StackType_t *pxTopOfStack, TaskFunction_t pxCode, void *pvParameters)
  {
 -    Thread_t * xThreadToSuspend;
 -    Thread_t * xThreadToResume;
@@ -561,10 +562,10 @@ index 2592610..1be0473 100644
 -    prvSwitchThread( xThreadToResume, xThreadToSuspend );
 +    const ptrdiff_t state_words = ((ptrdiff_t)sizeof(PortTask) + (ptrdiff_t)sizeof(StackType_t) - 1) /
 +                                 (ptrdiff_t)sizeof(StackType_t);
-+    StackType_t *storage = &top[-state_words];
++    StackType_t *storage = &pxTopOfStack[-state_words];
 +    PortTask state;
 +    state.yielded = Os_PortEvent(NULL, FALSE, FALSE, NULL);
-+    state.thread = Os_PortTaskThread(code, argument, top);
++    state.thread = Os_PortTaskThread(pxCode, pvParameters, pxTopOfStack);
 +    configASSERT((state.yielded != NULL) && (state.thread != NULL));
 +    (void)memcpy((unsigned char *)storage, (const unsigned char *)&state, sizeof(state));
 +    return storage;
@@ -1082,7 +1083,7 @@ index 52a9c0e..880e346 100644
 +#define portENTER_CRITICAL() vPortEnterCritical()
 +#define portEXIT_CRITICAL() vPortExitCritical()
 +
-+extern void vPortCloseRunningThread(void *task, volatile BaseType_t *pending);
++extern void vPortCloseRunningThread(void *task, volatile BaseType_t *pending_yield);
 +extern void vPortDeleteThread(void *task);
 +#define portPRE_TASK_DELETE_HOOK(task, pending) vPortCloseRunningThread((task), (pending))
 +#define portCLEAN_UP_TCB(task) vPortDeleteThread(task)

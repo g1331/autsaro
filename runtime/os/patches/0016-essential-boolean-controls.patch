@@ -613,14 +613,14 @@
 +++ b/portable/MSVC-MingW/port.c
 @@ -142,8 +142,8 @@
  static uint32_t ulOsDisabledSources;
- int Os_PortInterruptSourceEnabled( uint32_t interrupt )
+ sint32 Os_PortInterruptSourceEnabled( uint32 interrupt )
  {
 -    return ( interrupt < 32U ) &&
 -           ( ( ulOsDisabledSources & ( ( ( uint32_t ) 1U ) << interrupt ) ) == 0U );
 +    return ( ( interrupt < 32U ) &&
 +           ( ( ulOsDisabledSources & ( ( ( uint32_t ) 1U ) << interrupt ) ) == 0U ) ) ? 1 : 0;
  }
- int Os_PortInterruptSourceControl( uint32_t interrupt, unsigned operation, boolean clear )
+ sint32 Os_PortInterruptSourceControl( uint32 interrupt, uint32 operation, boolean clear )
  {
 @@ -246,7 +246,7 @@
          {

@@ -1,7 +1,7 @@
 --- a/portable/ThirdParty/GCC/Posix/port.c
 +++ b/portable/ThirdParty/GCC/Posix/port.c
 @@ -91,13 +91,13 @@
- int Os_PortInterruptSourceControl(uint32_t interrupt, unsigned operation, boolean clear)
+ sint32 Os_PortInterruptSourceControl(uint32 interrupt, uint32 operation, boolean clear)
  {
      uint32_t bit;
 -    if (interrupt <= OS_CONTROLLED_TICK_INTERRUPT || interrupt >= PORT_INTERRUPT_COUNT ||

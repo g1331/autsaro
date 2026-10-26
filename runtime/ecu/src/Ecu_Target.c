@@ -395,7 +395,7 @@ StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *resul
     (void)Os_HostAtomicExchange(&batch_state, 0);
     return E_OK;
 }
-int Os_IntegrationTimingAuthorized(void) { return (Ecu_SchMTimingActive() == TRUE) ? 1 : 0; }
+sint32 Os_IntegrationTimingAuthorized(void) { return (Ecu_SchMTimingActive() == TRUE) ? 1 : 0; }
 void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
 {
     if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u)) {

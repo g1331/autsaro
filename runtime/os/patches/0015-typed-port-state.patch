@@ -621,13 +621,13 @@
  /* Scheduler includes. */
  #include "FreeRTOS.h"
 @@ -142,7 +143,7 @@
- int Os_PortInterruptSourceEnabled( uint32_t interrupt )
+ sint32 Os_PortInterruptSourceEnabled( uint32 interrupt )
  {
      return ( interrupt < 32U ) &&
 -           ( ( ulOsDisabledSources & ( UINT32_C( 1 ) << interrupt ) ) == 0U );
 +           ( ( ulOsDisabledSources & ( ( ( uint32_t ) 1U ) << interrupt ) ) == 0U );
  }
- int Os_PortInterruptSourceControl( uint32_t interrupt, unsigned operation, boolean clear )
+ sint32 Os_PortInterruptSourceControl( uint32 interrupt, uint32 operation, boolean clear )
  {
 @@ -151,7 +152,7 @@
      {

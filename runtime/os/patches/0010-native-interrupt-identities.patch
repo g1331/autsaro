@@ -1,7 +1,7 @@
 --- a/portable/MSVC-MingW/port.c
 +++ b/portable/MSVC-MingW/port.c
 @@ -145,7 +145,7 @@
- int Os_PortInterruptSourceControl( uint32_t interrupt, unsigned operation, boolean clear )
+ sint32 Os_PortInterruptSourceControl( uint32 interrupt, uint32 operation, boolean clear )
  {
      uint32_t bit;
 -    if( ( interrupt >= 32U ) || ( interrupt == 1U ) || ( ulIsrHandler[ interrupt ] == NULL ) )

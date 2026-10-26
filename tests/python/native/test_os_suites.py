@@ -26,6 +26,57 @@ def native_fixture(name):
 
 
 class DependencyTests(unittest.TestCase):
+    def test_platform_definitions_use_declared_project_types(self):
+        def declaration(source, name):
+            matches = re.findall(r"\b(?:sint32|int)\s+" + name + r"\s*\([^)]*\)", source)
+            self.assertEqual(len(matches), 1, name)
+            return [token.text for token in os_suites.lex(matches[0])]
+
+        header = (os_suites.TARGET / "src/Os_Backend.h").read_text(encoding="utf-8")
+        for filename in ("0009-interrupt-source-control.patch", "linux/0001-controlled-posix-port.patch"):
+            text = (os_suites.ROOT / "runtime/os/patches" / filename).read_text(encoding="utf-8")
+            added = "\n".join(line[1:] for line in text.splitlines()
+                              if line.startswith("+") and not line.startswith("+++"))
+            for name in ("Os_PortInterruptSourceEnabled", "Os_PortInterruptSourceControl"):
+                with self.subTest(patch=filename, function=name):
+                    self.assertEqual(declaration(added, name), declaration(header, name))
+
+        header = (os_suites.TARGET / "include/Os_IntegrationHooks.h").read_text(encoding="utf-8")
+        for filename in ("runtime/ecu/src/Ecu_Target.c", "core/tests/fixtures/os/os_no_consumer_hooks.c"):
+            source = (os_suites.ROOT / filename).read_text(encoding="utf-8")
+            with self.subTest(file=filename, function="Os_IntegrationTimingAuthorized"):
+                self.assertEqual(declaration(source, "Os_IntegrationTimingAuthorized"),
+                                 declaration(header, "Os_IntegrationTimingAuthorized"))
+
+    def test_port_callback_parameter_names_match_their_declarations(self):
+        def names(source, name):
+            values = []
+            for declaration in re.findall(r"\b" + name + r"\s*\([^)]*\)", source):
+                signature = os_suites.function(os_suites.lex("void " + declaration))
+                if signature and "<unnamed>" not in signature[1]:
+                    values.append(signature[1])
+            return values
+
+        portable = (os_suites.KERNEL / "include/portable.h").read_text(encoding="utf-8")
+        task = (os_suites.KERNEL / "include/task.h").read_text(encoding="utf-8")
+        backend = (os_suites.TARGET / "src/Os_Backend.c").read_text(encoding="utf-8")
+        patch_text = (os_suites.ROOT / "runtime/os/patches/linux/0001-controlled-posix-port.patch").read_text(encoding="utf-8")
+        added = "\n".join(line[1:] for line in patch_text.splitlines()
+                          if line.startswith("+") and not line.startswith("+++"))
+        with self.subTest(function="pxPortInitialiseStack"):
+            expected = [parameters for parameters in names(portable, "pxPortInitialiseStack") if len(parameters) == 3]
+            self.assertEqual(len(expected), 1)
+            self.assertEqual(names(added, "pxPortInitialiseStack"), expected)
+        with self.subTest(function="vPortCloseRunningThread"):
+            declarations = names(added, "vPortCloseRunningThread")
+            self.assertEqual(len(declarations), 2)
+            self.assertEqual(declarations[0], declarations[1])
+        with self.subTest(function="vApplicationGetIdleTaskMemory"):
+            expected = names(task, "vApplicationGetIdleTaskMemory")
+            self.assertTrue(expected)
+            self.assertTrue(all(parameters == expected[0] for parameters in expected))
+            self.assertEqual(names(backend, "vApplicationGetIdleTaskMemory"), [expected[0]])
+
     def test_expected_native_exit_does_not_hide_sanitizer_reports(self):
         with patch.dict(os.environ, {"AUTOSAR_SANITIZE": "thread"}):
             for code in (7, 13):

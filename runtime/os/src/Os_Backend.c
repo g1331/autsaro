@@ -1569,13 +1569,13 @@ OS_MEMMAP void Os_PortResumeThread(HANDLE thread)
     }
 }
 
-OS_MEMMAP void vApplicationGetIdleTaskMemory(StaticTask_t **task,
-                                             StackType_t **stack,
-                                             configSTACK_DEPTH_TYPE *depth)
+OS_MEMMAP void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer,
+                                             StackType_t **ppxIdleTaskStackBuffer,
+                                             configSTACK_DEPTH_TYPE *puxIdleTaskStackSize)
 {
-    *task = &task_memory[OS_MAX_TASKS + 1u];
-    *stack = task_buffers[OS_MAX_TASKS + 1u];
-    *depth = 512;
+    *ppxIdleTaskTCBBuffer = &task_memory[OS_MAX_TASKS + 1u];
+    *ppxIdleTaskStackBuffer = task_buffers[OS_MAX_TASKS + 1u];
+    *puxIdleTaskStackSize = 512;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
