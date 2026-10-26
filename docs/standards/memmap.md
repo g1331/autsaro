@@ -30,6 +30,14 @@
 
 所用 CDD 指南／COMManager 的 SHA-256 分别为 `8d8318fc…bc8b8f883`／`564560db…cf2ef34`，均与 R24-11 CP 官方清单相符。BSW 的 `00249` 例外不是 MISRA D4.10 例外，也不替代 ADR0023 所需的独立复核或具体记录；当前没有据此添加批准表或 MR12。
 
+### 非默认映射头的输入责任
+
+`00028／00032`（页13–14）区分显式 MEMMAP 依赖与模块默认头名；`00033／00034／00035`（页38–39）进一步把实现的 MemorySection 连到默认头、单个依赖或具体 SectionNamePrefix 的 implementedIn。普通 SWHDR 描述、源码包含和指向另一实现的 generated artifact，不能替代 MEMMAP 类 requiredArtifact。固定 XSD 将 requiredArtifact 放在 Implementation，DependencyOnArtifact 的 category 来自 Identifiable；artifactDescriptor 自身的类别仍为 SWHDR。
+
+实际 ARTI 原生绑定与 Os 共享 `Os_MemMap.h`，不是默认的 `Arti_MemMap.h`；生成描述现以本实现的 MEMMAP requiredArtifact 明确该依赖，并把 OS 资源前缀连接到它。LSduR／PduR 的指针存储和路由函数分别使用自身的 cleared／CODE 段，RTE 生成的路由配置另使用 `Rte_MemMap.h`。两份实现描述分别列出两个依赖和对应前缀，补齐此前只描述配置段的遗漏；不能把 RTE 产生配置对象的事实扩为模块全部实现段的 owner。此处修正描述与实际包含的联系，不改变 C 源码、属性宏或 ABI，也不据此完成逐处 MISRA 批准。
+
+`00045`（页41）另禁止包含其他 BSW／SWC 的段；不能只证明文件名存在就略去这项约束。`00028`后的说明（页13）明确支持多个 BSW 描述贡献到同一文件，因此这里将“其他”按配置关联的贡献者之外理解：ARTI／Os 明确共享 OS 前缀，RTE 头中的 RTE_<scope> 段由 RTE 实现描述；各 SWC 的应用段仍留在各自头中。此判断须在累计复核中连同具体 requiredArtifact、前缀与实际实体核对，不作为把任意模块放进共享头的普遍许可。
+
 ### 规则与冲突条件
 
 MISRA 主文 R20.1（Advisory，印刷页155／PDF163）按预处理前的文件顺序限制 include 之前的内容；R20.5（Advisory，页158／PDF166）限制 undef。AMD2 为两条增加 C11 适用性，不改变本实现 C99 下的上述义务；其他适用 amendment／TC 没有提供 MemMap 例外。
