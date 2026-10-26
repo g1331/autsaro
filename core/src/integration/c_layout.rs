@@ -16,6 +16,17 @@ pub(super) fn section(prefix: &str, module: &str, segment: &str, start: bool) ->
     )
 }
 
+/// Continue an immediately adjacent section; intervening code or directives keep their boundary.
+pub(super) fn begin_section(output: &mut String, prefix: &str, module: &str, segment: &str) {
+    let stop = section(prefix, module, segment, false);
+    let previous = output.trim_end_matches('\n');
+    if let Some(body) = previous.strip_suffix(stop.trim_end_matches('\n')) {
+        output.truncate(body.len());
+    } else {
+        output.push_str(&section(prefix, module, segment, true));
+    }
+}
+
 /// C++ linkage boundaries around C declarations.
 pub(super) fn linkage(start: bool) -> &'static str {
     if start {
@@ -619,6 +630,50 @@ mod tests {
 #define M {value}
 "#
             )
+        );
+    }
+
+    #[test]
+    fn adjacent_sections_keep_memory_class_and_header_boundaries() {
+        let mut source = String::new();
+        begin_section(&mut source, "RTE_Com", "Rte", "CODE");
+        source.push_str("void first(void) {}\n");
+        source.push_str(&section("RTE_Com", "Rte", "CODE", false));
+        source.push('\n');
+        begin_section(&mut source, "RTE_Com", "Rte", "CODE");
+        assert_eq!(source.matches("#define RTE_Com_START_SEC_CODE").count(), 1);
+        source.push_str("void second(void) {}\n");
+        source.push_str(&section("RTE_Com", "Rte", "CODE", false));
+        begin_section(
+            &mut source,
+            "RTE_Com",
+            "Rte",
+            "CONFIG_DATA_PREBUILD_UNSPECIFIED",
+        );
+        assert!(
+            source.contains(&section("RTE_Com", "Rte", "CODE", false)),
+            "memory classes must separate sections"
+        );
+        source.push_str("const int config = 1;\n");
+        source.push_str(&section(
+            "RTE_Com",
+            "Rte",
+            "CONFIG_DATA_PREBUILD_UNSPECIFIED",
+            false,
+        ));
+        begin_section(
+            &mut source,
+            "RTE_Com",
+            "Other",
+            "CONFIG_DATA_PREBUILD_UNSPECIFIED",
+        );
+        assert!(
+            source.contains(&format!(
+                "{}{}",
+                section("RTE_Com", "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", false),
+                section("RTE_Com", "Other", "CONFIG_DATA_PREBUILD_UNSPECIFIED", true)
+            )),
+            "mapping headers must separate sections"
         );
     }
 

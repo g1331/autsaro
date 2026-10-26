@@ -459,14 +459,9 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                     body.push_str(&api_visibility(component, symbol));
                 }
                 if runnable {
-                    body.push_str(&c_layout::section(scope, scope, "CODE", true));
+                    c_layout::begin_section(&mut body, scope, scope, "CODE");
                 } else {
-                    body.push_str(&c_layout::section(
-                        &format!("RTE_{scope}"),
-                        "Rte",
-                        "CODE",
-                        true,
-                    ));
+                    c_layout::begin_section(&mut body, &format!("RTE_{scope}"), "Rte", "CODE");
                 }
                 let parameters = if runnable && symbol.definition_owner.starts_with("application/")
                 {

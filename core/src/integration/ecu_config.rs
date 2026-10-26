@@ -123,22 +123,79 @@ fn config_data(output: &mut String, scope: &str, declaration: &str, items: &[Ite
         &format!("RTE_{scope}_CONFIG_DATA_PREBUILD_UNSPECIFIED"),
         items,
     );
-    output.push_str(&format!(
-        r#"{start_config_data_prebuild_unspecified}{definition}
-{stop_config_data_prebuild_unspecified}"#,
-        start_config_data_prebuild_unspecified = c_layout::section(
-            &format!("RTE_{scope}"),
-            "Rte",
-            "CONFIG_DATA_PREBUILD_UNSPECIFIED",
-            true
-        ),
-        stop_config_data_prebuild_unspecified = c_layout::section(
-            &format!("RTE_{scope}"),
-            "Rte",
-            "CONFIG_DATA_PREBUILD_UNSPECIFIED",
-            false
-        )
-    ));
+    let stop = c_layout::section(
+        &format!("RTE_{scope}"),
+        "Rte",
+        "CONFIG_DATA_PREBUILD_UNSPECIFIED",
+        false,
+    );
+    c_layout::begin_section(
+        output,
+        &format!("RTE_{scope}"),
+        "Rte",
+        "CONFIG_DATA_PREBUILD_UNSPECIFIED",
+    );
+    output.push_str(&definition);
+    output.push('\n');
+    output.push_str(&stop);
+}
+
+#[cfg(test)]
+#[test]
+fn configuration_sections_merge_only_adjacent_objects_of_the_same_scope() {
+    let mut source = String::new();
+    config_data(
+        &mut source,
+        "CanIf",
+        "static const uint8 first[]",
+        &[Item::Value("1u".into())],
+    );
+    config_data(
+        &mut source,
+        "CanIf",
+        "static const uint8 second[]",
+        &[Item::Value("2u".into())],
+    );
+    assert_eq!(
+        source.matches("#define RTE_CanIf_START_SEC_").count(),
+        1,
+        "adjacent CanIf objects need one section"
+    );
+    assert_eq!(source.matches("#define RTE_CanIf_STOP_SEC_").count(), 1);
+    assert!(source.find("first[]").unwrap() < source.find("second[]").unwrap());
+    assert!(source.contains("{1u}") && source.contains("{2u}"));
+    source.push_str("#if SELECTED\n#endif\n");
+    config_data(
+        &mut source,
+        "CanIf",
+        "static const uint8 third[]",
+        &[Item::Value("3u".into())],
+    );
+    assert_eq!(
+        source.matches("#define RTE_CanIf_START_SEC_").count(),
+        2,
+        "preprocessor content must separate sections"
+    );
+    config_data(
+        &mut source,
+        "PduR",
+        "static const uint8 fourth[]",
+        &[Item::Value("4u".into())],
+    );
+    config_data(
+        &mut source,
+        "CanIf",
+        "static const uint8 fifth[]",
+        &[Item::Value("5u".into())],
+    );
+    assert_eq!(
+        source.matches("#define RTE_CanIf_START_SEC_").count(),
+        3,
+        "different scopes must separate sections"
+    );
+    assert_eq!(source.matches("#define RTE_CanIf_STOP_SEC_").count(), 3);
+    assert_eq!(source.matches("#define RTE_PduR_START_SEC_").count(), 1);
+    assert_eq!(source.matches("#define RTE_PduR_STOP_SEC_").count(), 1);
 }
 
 /// The items of a comma-separated list of plain values.
@@ -992,10 +1049,10 @@ pub(super) fn files(
     ] {
         let function =
             c_layout::short_function(&format!("RTE_{scope}_CODE void {symbol}(void)"), body);
+        c_layout::begin_section(&mut config, &format!("RTE_{scope}"), "Rte", "CODE");
         config.push_str(&format!(
-            r#"{start_code}{function}
+            r#"{function}
 {stop_code}"#,
-            start_code = c_layout::section(&format!("RTE_{scope}"), "Rte", "CODE", true),
             stop_code = c_layout::section(&format!("RTE_{scope}"), "Rte", "CODE", false)
         ));
     }
