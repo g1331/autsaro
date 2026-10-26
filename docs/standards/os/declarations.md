@@ -47,6 +47,8 @@ R7.2／R7.4均为Required（主文印刷60、62–63／PDF68、70–71；AMD2追
 
 名称核对使用实际命名空间、作用域和工具链（R5.1–5.4、R5.7／5.8均为Required，主文印刷48–57／PDF56–65；AMD2.33–40）。两个StartScheduleTable实现名字前31字符相同，但已核GCC／ld按完整名字区分，正常ELF中两符号及地址独立，不套用C99最小字符数制造违反。四profile的56／56／58／58个TU额外GCC -Wshadow检查均无拒绝；R5.3仍由Cppcheck core shadowVariable支持，不能写成无checker。宏参数与实际宏名、真实tag与关联typedef例外及其他namespace须分别核对，不能用合成的匿名类型名字或最终宏表替代声明历史。SDK的R5.5分类见上节，其他SDK名字不随之销项。
 
+四profile名字／宏／参数与每程序CTU已另按R5.2／R5.4／R5.8核对：[逐项作者依据](https://github.com/g1331/autsaro/pull/371#issuecomment-6419652534)。所核集合没有63字符截断冲突；外部定义与内部／局部／类型记录的交集只剩从未生效的MPU／多核宏。CTU按名去重不能覆盖完整scope／SDK声明，真实provider及未读名字仍保留责任。
+
 D4.5的同namespace、重叠可见性条件要求区分实际私有名字与不同成员namespace或已结束的原型作用域。CanIf／ComM的controller_mode／allowed及OS的increment／start分别改为canif_controller_state／communication_allowed／advance_counter／activate_schedule_table，保留ControllerMode、Allowed、Increment、Start等标准参数和字段名字。逐token反向映射与原源码一致，不改变值、调用次数或状态次序。标准COM_INIT／Com_Init与COMM_INIT／ComM_Init，以及当前HANDLE／handle、CONTEXT／context、SIZE_T／size_t和采用内核xQUEUE／xQueue仍需按具体合同与风险记录，不能声称本指令全部满足或由ADR0024统一保留。
 
 R5.9为Advisory、System（主文印刷57／PDF65，AMD2追加C11），并不因对象或函数已是static就自动满足；其唯一性条件还涉及其他TU和无链接名字。同一头中定义的内部链接inline函数有明确例外。conditional-kernel标准ECU旧工件的17处报告分别指向六个BSW的configuration、Os_Time／生成配置的alarms、Os_Time／Com的values、Linux／Backend的handles、HostBatch／probe／Backend的control及probe／HostBridge的require。这些是不同实体的真实重名，不是inline例外或跨程序误报；每个程序中均有相应重名对象。当前保留文件私有状态和辅助函数的既有局部命名，理由是模块职责与static边界明确，符号核对使用文件及名字，未借重名共享存储或调用目标。该理由不消除Advisory违反；迁移到同一TU或改变链接边界时须重新命名。上述裁决只覆盖这些报告，不代替其他局部名字、SDK和全部R5.9评估。
