@@ -658,7 +658,21 @@ pub(super) fn files(
             component.header.trim_start_matches("include/")
         ));
     }
-    config.push_str("static Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);\n");
+    config.push_str(&format!(
+        "{}{}\n{}",
+        c_layout::section("RTE_Ecu", "Rte", "CODE", true),
+        c_layout::signature(
+            "static RTE_Ecu_CODE Std_ReturnType",
+            "Ecu_BswMAction",
+            &[
+                "NetworkHandleType channel".into(),
+                "ComM_ModeType requested".into()
+            ],
+            ";",
+            true
+        ),
+        c_layout::section("RTE_Ecu", "Rte", "CODE", false)
+    ));
     config_data(
         &mut config,
         "Ecu",
@@ -878,11 +892,18 @@ pub(super) fn files(
             }
             None => (0, "NULL_PTR".to_string()),
         };
-        config.push_str(
-            r#"static void Ecu_DcmAuthenticationMode(uint8 state);
-
-"#,
-        );
+        config.push_str(&format!(
+            "{}{}\n{}",
+            c_layout::section("RTE_Dcm", "Rte", "CODE", true),
+            c_layout::signature(
+                "static RTE_Dcm_CODE void",
+                "Ecu_DcmAuthenticationMode",
+                &["uint8 state".into()],
+                ";",
+                true
+            ),
+            c_layout::section("RTE_Dcm", "Rte", "CODE", false)
+        ));
         config_data(
             &mut config,
             "Dcm",

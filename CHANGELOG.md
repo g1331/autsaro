@@ -42,7 +42,7 @@
 
 - Share one memory-section pair for adjacent declarations, configuration objects and wrappers of the same class; retain boundaries across conditions, scopes and mapping headers (#371)
 
-- Apply existing BSW and RTE memory classes to function and instance declarations, including standalone component contracts and their release checks (#371)
+- Apply existing BSW and RTE memory classes to function and instance declarations, including private callbacks, lifecycle and configured CDD interfaces, standalone component contracts and their release checks (#371)
 
 - Det's private development-report recursion flag has an explicit per-thread cleared data mapping and appears with its native adapter in the module description. Regenerate deliveries; first-entry, recursive reporting and process termination semantics are preserved (#371)
 

@@ -1107,6 +1107,7 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
         std::fs::write(path, bytes).unwrap();
     }
     for (header, module) in [
+        ("Ecu_HostBusSM.h", "Ecu_HostBusSM"),
         ("BswM.h", "BswM"),
         ("BswM_ComM.h", "BswM"),
         ("CanIf.h", "CanIf"),

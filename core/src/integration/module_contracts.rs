@@ -189,6 +189,7 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
             .trim_start_matches("DET_CODE ")
             .trim_start_matches("LSDUR_CODE ")
             .trim_start_matches("PDUR_CODE ")
+            .trim_start_matches("ECU_HOSTBUSSM_CODE ")
             .trim_start_matches("RTE_Rte_CODE ")
             .trim_start_matches("RTE_CODE ")
             .trim_start_matches("DET_CALLOUT_CODE ")

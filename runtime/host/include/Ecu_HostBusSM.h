@@ -6,12 +6,26 @@
 #ifndef ECU_HOSTBUSSM_H
 #define ECU_HOSTBUSSM_H
 #include "ComM.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(COMM_AR_RELEASE_MAJOR_VERSION) || !defined(COMM_AR_RELEASE_MINOR_VERSION)
+#error "Ecu_HostBusSM.h -> ComM.h: missing AUTOSAR release"
+#elif (COMM_AR_RELEASE_MAJOR_VERSION != 4U) || (COMM_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Ecu_HostBusSM.h -> ComM.h: incompatible AUTOSAR release"
+#endif
 #include "CanIf.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(CANIF_AR_RELEASE_MAJOR_VERSION) || !defined(CANIF_AR_RELEASE_MINOR_VERSION)
+#error "Ecu_HostBusSM.h -> CanIf.h: missing AUTOSAR release"
+#elif (CANIF_AR_RELEASE_MAJOR_VERSION != 4U) || (CANIF_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Ecu_HostBusSM.h -> CanIf.h: incompatible AUTOSAR release"
+#endif
 /** Generated immutable bus_config: the ComM channel and its CanIf controller. */
 typedef struct {
     NetworkHandleType channel; /**< ComM channel (ComMChannelId). */
     uint8 controller;          /**< CanIf controller (CanIfCtrlId). */
 } Ecu_HostBusSM_ConfigType;
+#define ECU_HOSTBUSSM_START_SEC_CODE
+#include "Ecu_HostBusSM_MemMap.h"
 /** Start the provider in requested NO.
  * @param[in] ConfigPtr Configuration whose controller CanIf knows; otherwise no action.
  * @par Return
@@ -21,7 +35,7 @@ typedef struct {
  * Reentrancy: not reentrant. A restart keeps a publication in flight.
  * Ownership: ConfigPtr is retained until the next Init or DeInit.
  */
-void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *ConfigPtr);
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *ConfigPtr);
 /** Stop the provider; later requests and events have no effect.
  * @par Return
  * None.
@@ -30,7 +44,7 @@ void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *ConfigPtr);
  * Reentrancy: not reentrant.
  * Ownership: None.
  */
-void Ecu_HostBusSM_DeInit(void);
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_DeInit(void);
 /** <Bus>SM_RequestComMode for ComM (SWS_ComM_00828). NO stops the controller, SILENT and
  * FULL start it; the mode is indicated to ComM when the controller completes.
  * @param[in] Channel Configured channel.
@@ -42,7 +56,8 @@ void Ecu_HostBusSM_DeInit(void);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType Channel, ComM_ModeType ComMode);
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType Channel,
+                                                               ComM_ModeType ComMode);
 /** <Bus>SM_GetCurrentComMode for ComM (SWS_ComM_00828): NO unless STARTED, settled and
  * not OFFLINE; SILENT for TX_OFFLINE; otherwise FULL.
  * @param[in] Channel Configured channel.
@@ -54,7 +69,8 @@ Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType Channel, ComM_Mode
  * Reentrancy: reentrant.
  * Ownership: no pointer is retained.
  */
-Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleType Channel, ComM_ModeType *ComMode);
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleType Channel,
+                                                                  ComM_ModeType *ComMode);
 /** Actual BswM user-callout action; controls directions, never COM groups.
  * @param[in] Channel Configured channel.
  * @param[in] ComMode NO, SILENT or FULL.
@@ -65,7 +81,8 @@ Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleType Channel, ComM_M
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel, ComM_ModeType ComMode);
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel,
+                                                          ComM_ModeType ComMode);
 /** CanIf controller mode indication (CanIfDispatchUserCtrlModeIndicationName): applies
  * the requested directions on STARTED and indicates the completed mode to ComM.
  * @param[in] ControllerId Configured controller; others are ignored.
@@ -77,8 +94,8 @@ Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel, ComM_ModeType 
  * Reentrancy: reentrant; completed modes reach ComM in order, the latest of several.
  * Ownership: None.
  */
-void Ecu_HostBusSM_ControllerModeIndication(uint8 ControllerId,
-                                            Can_ControllerStateType ControllerMode);
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerModeIndication(
+    uint8 ControllerId, Can_ControllerStateType ControllerMode);
 /** CanIf bus-off indication (CanIfDispatchUserCtrlBusOffName): indicates NO for a stopped
  * controller; a late one after a restart restores the requested directions.
  * @param[in] ControllerId Configured controller; others are ignored.
@@ -89,5 +106,13 @@ void Ecu_HostBusSM_ControllerModeIndication(uint8 ControllerId,
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId);
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId);
+#define ECU_HOSTBUSSM_STOP_SEC_CODE
+#include "Ecu_HostBusSM_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Ecu_HostBusSM.h -> Ecu_HostBusSM_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Ecu_HostBusSM.h -> Ecu_HostBusSM_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

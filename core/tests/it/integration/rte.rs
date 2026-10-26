@@ -653,6 +653,58 @@ fn generated_lifecycle_sections_contain_no_other_preprocessing() {
 }
 
 #[test]
+fn generated_callback_and_lifecycle_declarations_use_their_definition_sections() {
+    // Verifies: SWS_MemMap_00003.
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    for (path, prefix, prototypes) in [
+        (
+            "generated/src/Ecu_RuntimeConfig.c",
+            "RTE_Ecu",
+            &[
+                "static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);",
+            ][..],
+        ),
+        (
+            "generated/src/Ecu_RuntimeConfig.c",
+            "RTE_Dcm",
+            &["static RTE_Dcm_CODE void Ecu_DcmAuthenticationMode(uint8 state);"][..],
+        ),
+        (
+            "generated/include/Ecu_TargetConfig.h",
+            "RTE_Ecu",
+            &[
+                "RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached);",
+                "RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events);",
+                "RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);",
+                "RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc);",
+            ][..],
+        ),
+    ] {
+        let source = files
+            .iter()
+            .find(|(name, _)| name == path)
+            .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
+            .unwrap();
+        let start = format!("#define {prefix}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n");
+        let stop = format!("#define {prefix}_STOP_SEC_CODE");
+        let bodies = source
+            .split(&start)
+            .skip(1)
+            .map(|tail| tail.split_once(&stop).unwrap().0)
+            .map(|body| body.split_whitespace().collect::<String>())
+            .collect::<Vec<_>>();
+        for prototype in prototypes {
+            let expected = prototype.split_whitespace().collect::<String>();
+            assert!(
+                bodies.iter().any(|body| body.contains(&expected)),
+                "{path}: declaration outside its definition section: {prototype}"
+            );
+        }
+    }
+}
+
+#[test]
 fn task_memory_mapping_and_generator_option_scope_are_checked_at_the_source() {
     // Verifies: SWS_Rte_08923, SWS_Rte_04557
     let mut wrong = inputs();
