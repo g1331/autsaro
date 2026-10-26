@@ -86,6 +86,8 @@ Windows的注册记录同样区分预留与发布：stack_count只预留数组�
 
 ## 循环与函数出口
 
+采用内核IDLE名读取的[逐路径裁决](https://github.com/g1331/autsaro/pull/371#issuecomment-6428838743)证明当前索引最多为4；原始越界报告保留，不外推其他配置或整个R18.1。
+
 R15.4／R15.5均为Advisory（主文印刷125–127／PDF133–135，AMD2追加C11）。补丁后xTaskIncrementTick延迟链循环的两个break分别保护空链和未到期队首；这是保留真实违反及读队首／移除前保护的理由，不是采用代码豁免。R15.5同样要求函数末尾单一return，参数guard也不例外。
 
 对ce1d043e及scoped-mapping-final-results的standard-ecu逐字对应源码，先核对以下43个报告位置，均保留真实多出口。Os_Error.c的79／82／92／98属于Os_HookServiceAllowed：仅按本线程phase选择权限，所调用Os_HookQueryContext也是纯查询；没有锁、输出、hook调用或待清理对象。保留各phase的直接返回使权限分支局部可读，不把它判为R15.5满足。
