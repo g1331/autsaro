@@ -75,3 +75,9 @@ R20.3／R20.8／R20.9／R20.13／R20.14均为Required，当前C99适用（主文
 R2.2同为Required（主文印刷41–42／PDF49–50；AMD4.37更新headline），但不能把所有冗余值都按赋值语句裁决。TC1的R2.2 Note（印刷2／PDF8）明确初始化不是赋值操作，不作为dead-code候选；native_task_state的SUSPENDED初始化因而不能仅凭正常case随后写入就判违反。TC2.3–4（印刷3／PDF9）另将结果确实使用的cast排除在dead-code之外；这不豁免其R10／R11类型与限定符义务。显式(void)也只处理有意不用值，不证明底层错误已按D4.7检查。此处区分具体操作种类，没有据此关闭其余可执行但无行为效果的调用、运算或赋值。
 
 Counter的R7.5还可沿实际生成来源核查，不只依赖样本枚举。ScheduleContract的maximum／ticks_per_base／minimum_cycle／tick_ms均为u32；ecu.rs::configure_os先把tick_ms转成u64，再乘1000或1000000，最大结果4294967295000000仍小于UINT64_MAX。三项Counter配置值及换算因子均以Rust十进制整数格式化放入UINT64_C，没有后缀、符号或任意C片段。正常schedule验证又将maximum限定为不超过65535，其余三项为1；1ms下，完整UINT32_MAX ticks的纳秒乘积4294967295000000亦可表示。固定UINT32_C(0)实参满足32位范围，已修的scheduler资源1u不再调用小整数宏。此结论覆盖这些emitter来源的R7.5实参与该换算范围，不声称所有表达式或未来输入均已完成R10／R12／R13评估。
+
+R11.9为Required（主文印刷101–102／PDF109–110，AMD2追加C11）。TC1明确增加aggregate／union的{0}初始化例外（印刷7／PDF13）；Os_HostInstallSignals与Os_StackPrepare的sigaction，以及actor_start的stack_t快照均适用，不能把其中首个指针成员当成新违反而改写SDK布局。实际指针赋值／比较中的整数零仍须来自NULL，(void *)0另按原文允许形式判断；该聚合例外不豁免R11.3／R11.5转换、限定符、资源错误或后续对象生命周期。这里仅裁决所列初始化器，没有从checker零报告推导整条R11.9满足。
+
+R16.6为Required（主文印刷135／PDF143，AMD2追加C11），计算的是switch-clause而非标签数；多个case／default共用一段并只在末尾break，仍是一段。当前四份declaration-consistency分析副本各有13个物理switch：九个共同运行时、一个实际生成BswM动作、内核两个通知及一个排除的统计格式化switch。直接核对case体后，前十二个生效构造各有至少四个独立clause；统计分支仍由configUSE_STATS_FORMATTING_FUNCTIONS=0排除。协程crSTART模板没有进入所选TU，不能用其case数量替代已启用协程的证明。这里支持这些具体switch的R16.6判断；未知生成配置、宏外部调用和SDK不由标签计数批量销项。
+
+R11.2／R11.7也不能仅按指针token判定（均Required；主文印刷95及99–100／PDF103及107–108，AMD2追加C11）。前者明确排除void指针，并由TC1要求按所指未限定类型判断；native上下文接缝中的void视图不因此成为不完整结构转换。FP复制涉及的struct _fpstate及ucontext在相应TU中已有完整定义，实际sizeof约束也依赖其完整性。后者的non-integer arithmetic还明确包括essentially Boolean／character／enum，不能缩成只查浮点。该接缝复制FP表示而非把指针转换成浮点数值；对象地址转uintptr_t仍按R11.4核查，void指针表示的转换另承担R11.6责任。这里没有替其他opaque对象或SDK转换作整体判定。
