@@ -136,12 +136,14 @@ static CANIF_CODE void CanIf_DeliverOwed(void)
         SchM_Enter_CanIf_CANIF_STATE();
         if (configuration != NULL_PTR) {
             uint16 i;
-            for (i = 0u; (i < configuration->transmit_count) && (more == 0u); ++i) {
+            i = 0u;
+            while ((i < configuration->transmit_count) && (more == 0u)) {
                 if (owed[i] != 0u) {
                     --owed[i];
                     id = configuration->transmit[i].pdu;
                     more = 1u;
                 }
+                ++i;
             }
         }
         SchM_Exit_CanIf_CANIF_STATE();

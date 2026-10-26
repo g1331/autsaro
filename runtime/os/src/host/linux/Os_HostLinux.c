@@ -617,12 +617,14 @@ OS_MEMMAP static DWORD wait_any(DWORD count,
     int waiting = 1;
     while (waiting != 0) {
         DWORD index;
-        for (index = 0u; (index < count) && (waiting != 0); ++index) {
+        index = 0u;
+        while ((index < count) && (waiting != 0)) {
             const DWORD waited = WaitForSingleObject(observed[index], 0u);
             if (waited != WAIT_TIMEOUT) {
                 result = (waited == WAIT_OBJECT_0) ? (WAIT_OBJECT_0 + index) : WAIT_FAILED;
                 waiting = 0;
             }
+            ++index;
         }
         if ((waiting != 0) && (milliseconds != INFINITE)) {
             const uint64_t now = monotonic_ms();
@@ -651,7 +653,8 @@ OS_MEMMAP static DWORD wait_all(DWORD count,
 {
     DWORD result = WAIT_OBJECT_0;
     DWORD index;
-    for (index = 0u; (index < count) && (result == WAIT_OBJECT_0); ++index) {
+    index = 0u;
+    while ((index < count) && (result == WAIT_OBJECT_0)) {
         const uint64_t now = monotonic_ms();
         if (now == UINT64_MAX) {
             result = WAIT_FAILED;
@@ -660,6 +663,7 @@ OS_MEMMAP static DWORD wait_all(DWORD count,
                 (milliseconds == INFINITE) ? INFINITE : ((end > now) ? (DWORD)(end - now) : 0u);
             result = WaitForSingleObject(observed[index], remaining);
         }
+        ++index;
     }
     return result;
 }

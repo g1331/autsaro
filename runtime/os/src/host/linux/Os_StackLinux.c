@@ -336,9 +336,9 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
     if ((context == NULL) || (context->ContextFlags != CONTEXT_CONTROL)) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
-                    (index < (LONG)OS_NATIVE_STACKS);
-         ++index) {
+    index = 0;
+    while ((index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
+           (index < (LONG)OS_NATIVE_STACKS)) {
         Os_NativeStackType *record = &stacks[index];
         /* A reservation can belong to another actor still registering. */
         if ((InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) &&
@@ -353,6 +353,7 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
             ++record->observations;
             return;
         }
+        ++index;
     }
     Os_BackendShutdown(E_OS_STATE);
 }
@@ -504,14 +505,15 @@ OS_MEMMAP int Os_StackReport(void)
 {
     int result = 0;
     LONG index;
-    for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
-                    (index < (LONG)OS_NATIVE_STACKS);
-         ++index) {
+    index = 0;
+    while ((index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
+           (index < (LONG)OS_NATIVE_STACKS)) {
         if (InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) {
             if (report_stack(&stacks[index]) == 0) {
                 result = -1;
             }
         }
+        ++index;
     }
     for (index = 0; index < (LONG)OS_NATIVE_STACKS; ++index) {
         if (__atomic_load_n(&fault_records[index].published, __ATOMIC_ACQUIRE) != 0) {

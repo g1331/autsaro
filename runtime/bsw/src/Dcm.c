@@ -490,14 +490,15 @@ static DCM_CODE void Dcm_ReadData(Dcm_WorkType *work)
         } else {
             work->response[0] = DCM_POSITIVE_READ;
             work->message.resDataLen = 0u;
-            for (i = 0u; (i < work->message.reqDataLen) &&
-                         (work->response[0] == DCM_POSITIVE_READ) && (work->cancelled == FALSE);
-                 i += 2u) {
+            i = 0u;
+            while ((i < work->message.reqDataLen) && (work->response[0] == DCM_POSITIVE_READ) &&
+                   (work->cancelled == FALSE)) {
                 const uint16 did =
                     ((uint16)work->message.reqData[i] * 256u) + work->message.reqData[i + 1u];
                 if (Dcm_ReadSize(work, did) != 0u) {
                     Dcm_ReadValue(work, did);
                 }
+                i += 2u;
             }
         }
     }

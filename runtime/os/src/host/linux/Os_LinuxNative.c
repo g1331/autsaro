@@ -189,7 +189,8 @@ OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard
             errno = 0;
             count = read(descriptor, data, sizeof(data));
             if (count > 0) {
-                for (size_t index = 0u; (index < (size_t)count) && (result == 0); ++index) {
+                size_t index = 0u;
+                while ((index < (size_t)count) && (result == 0)) {
                     if (data[index] == '\n') {
                         line[used] = '\0';
                         result =
@@ -201,6 +202,7 @@ OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard
                     } else {
                         /* Only the bounded address/permission prefix is needed. */
                     }
+                    ++index;
                 }
             }
         } while ((result == 0) && ((count > 0) || ((count < 0) && (errno == EINTR))));

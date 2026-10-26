@@ -314,7 +314,8 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
 {
     DWORD id = GetThreadId(thread);
     LONG i;
-    for (i = 0; (i < stack_count) && (i < (LONG)OS_NATIVE_STACKS); ++i) {
+    i = 0;
+    while ((i < stack_count) && (i < (LONG)OS_NATIVE_STACKS)) {
         Os_NativeStackType *record = &stacks[i];
         if (record->thread_id == id) {
             uintptr_t sp = (uintptr_t)context->Rsp;
@@ -336,6 +337,7 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
             ++record->observations;
             return;
         }
+        ++i;
     }
     Os_BackendShutdown(E_OS_STATE);
 }
@@ -461,12 +463,14 @@ OS_MEMMAP int Os_StackReport(void)
 {
     int result = 0;
     LONG index;
-    for (index = 0; (index < stack_count) && (index < (LONG)OS_NATIVE_STACKS); ++index) {
+    index = 0;
+    while ((index < stack_count) && (index < (LONG)OS_NATIVE_STACKS)) {
         if (stacks[index].thread_id != 0u) {
             if (report_stack(&stacks[index]) == 0) {
                 result = -1;
             }
         }
+        ++index;
     }
     for (index = 0; index < (LONG)OS_NATIVE_STACKS; ++index) {
         if (fault_records[index].published != 0) {

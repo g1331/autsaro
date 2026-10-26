@@ -121,17 +121,21 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
          (resource->isr_access != 0u) || (resource->ceiling != highest_task))) {
         status = E_OS_VALUE;
     }
-    for (j = 0u; (status == E_OK) && (j < config->task_count); ++j) {
+    j = 0u;
+    while ((status == E_OK) && (j < config->task_count)) {
         const Os_TaskConfigType *task = &config->tasks[j];
         if ((resource->isr_access == 0u) && ((group_tasks & ((uint32)1u << task->id)) == 0u) &&
             (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
             status = E_OS_VALUE;
         }
+        ++j;
     }
-    for (j = 0u; (status == E_OK) && (j < index); ++j) {
+    j = 0u;
+    while ((status == E_OK) && (j < index)) {
         if (resource->id == config->resources[j].id) {
             status = E_OS_ID;
         }
+        ++j;
     }
     return status;
 }
