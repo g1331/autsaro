@@ -128,7 +128,7 @@ OS_MEMMAP StatusType Os_ScheduleValidate(const Os_TargetConfigType *target)
     return E_OK;
 }
 
-OS_MEMMAP static void start(uint32 index, TickType delay)
+OS_MEMMAP static void activate_schedule_table(uint32 index, TickType delay)
 {
     const Os_ScheduleTableConfigType *table = &Os_Config->timing->schedule_tables[index];
     tables[index].status = SCHEDULETABLE_RUNNING;
@@ -156,8 +156,9 @@ OS_MEMMAP void Os_ScheduleAutostart(AppModeType mode)
             tables[i].next = OS_MAX_SCHEDULE_TABLES;
             tables[i].previous = OS_MAX_SCHEDULE_TABLES;
             if ((table->autostart_modes & mode) != 0u) {
-                start(i,
-                      (table->absolute != 0u) ? absolute_delay(table, table->start) : table->start);
+                activate_schedule_table(
+                    i,
+                    (table->absolute != 0u) ? absolute_delay(table, table->start) : table->start);
             }
         }
     }
@@ -206,9 +207,9 @@ OS_MEMMAP static void process(uint32 initial)
             state->status = SCHEDULETABLE_STOPPED;
             if (next != OS_MAX_SCHEDULE_TABLES) {
                 index = next;
-                start(index, 0u);
+                activate_schedule_table(index, 0u);
             } else if (table->repeating != 0u) {
-                start(index, 0u);
+                activate_schedule_table(index, 0u);
             } else {
                 /* Single-shot final delay completed; no further actions. */
             }
@@ -267,7 +268,7 @@ OS_MEMMAP static StatusType start_table(ScheduleTableType id, TickType value, si
     if (tables[index].status != SCHEDULETABLE_STOPPED) {
         status = E_OS_STATE;
     } else {
-        start(index, (absolute != 0) ? absolute_delay(table, value) : value);
+        activate_schedule_table(index, (absolute != 0) ? absolute_delay(table, value) : value);
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();

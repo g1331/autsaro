@@ -1382,7 +1382,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
     }
 }
 
-OS_MEMMAP void Os_BackendAssert(const void *file, sint32 line)
+OS_MEMMAP void Os_BackendAssert(const char *file, sint32 line)
 {
     (void)file;
     (void)line;

@@ -349,7 +349,7 @@ OS_MEMMAP TickType Os_TimeCounterValue(CounterType counter)
     return values[counter_index(counter)];
 }
 
-OS_MEMMAP static void increment(uint32 counter)
+OS_MEMMAP static void advance_counter(uint32 counter)
 {
     typedef struct {
         uint32 counter;
@@ -413,7 +413,7 @@ OS_MEMMAP static StatusType implementation_IncrementCounter(CounterType CounterI
     }
     taskENTER_CRITICAL();
     Os_BackendGuardService();
-    increment(index);
+    advance_counter(index);
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return E_OK;
@@ -628,10 +628,10 @@ OS_MEMMAP void Os_TimeTick(void)
          * kernel tick ISR. Standard IncrementCounter cannot write them. */
         for (uint32 i = 0u; i < config->counter_count; ++i) {
             if (config->counters[i].software == 0u) {
-                increment(i);
+                advance_counter(i);
             }
         }
-        increment(counter_index(config->system_counter));
+        advance_counter(counter_index(config->system_counter));
         Os_ArtiInternalEnter();
         const StatusType status = SetEvent(config->owner, config->wake_event);
         Os_ArtiInternalLeave();

@@ -36,7 +36,7 @@
 
 ### Fixed
 
-- Kernel trace hooks use one declaration owner and read-only selection addresses; queue capacity and ISR-state queries use const object views. Regenerate deliveries for the updated controlled patch identity; AUTOSAR API types, object layouts and synchronization are unchanged (#371)
+- Kernel trace hooks use one declaration owner, read-only selection addresses and a const character filename parameter for assertions; queue capacity and ISR-state queries use const object views. Regenerate deliveries for the updated controlled patch identity; AUTOSAR API types, object layouts and synchronization are unchanged (#371)
 
 - Native OS startup publishes Task handles before stack registration can fail; controller health and Linux interrupt handoff flags now use atomic accesses throughout, preserving fault shutdown without concurrent publication races (#371)
 

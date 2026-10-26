@@ -36,7 +36,7 @@ void Os_BackendBeforeSelect(const void *current, const void *next);
 #define INCLUDE_xTaskGetCurrentTaskHandle     1
 #define INCLUDE_eTaskGetState                 1
 #define INCLUDE_xTaskGetHandle                1
-void Os_BackendAssert(const void *file, sint32 line) __attribute__((noreturn));
+void Os_BackendAssert(const char *file, sint32 line) __attribute__((noreturn));
 #define configASSERT(x)                                                                            \
     do {                                                                                           \
         if (!(x)) {                                                                                \
