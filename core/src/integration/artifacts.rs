@@ -1487,8 +1487,9 @@ pub(super) fn files(
                 "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS>{sections}</MEMORY-SECTIONS><SECTION-NAME-PREFIXS>{prefixes}</SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if matches!(module, "LSduR" | "PduR") {
+            let prefix = module.to_ascii_uppercase();
             format!(
-                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/RTE_{module}</PREFIX-REF><SYMBOL>CONFIG_DATA_PREBUILD_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>RTE_{module}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/generated_include_Rte_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
+                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>{module}_CODE</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/{prefix}</PREFIX-REF><SYMBOL>CODE</SYMBOL></MEMORY-SECTION><MEMORY-SECTION><SHORT-NAME>{module}_VAR_CLEARED_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/{prefix}</PREFIX-REF><SYMBOL>VAR_CLEARED_UNSPECIFIED</SYMBOL></MEMORY-SECTION><MEMORY-SECTION><SHORT-NAME>{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/RTE_{module}</PREFIX-REF><SYMBOL>CONFIG_DATA_PREBUILD_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>{prefix}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/required_{module}_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX><SECTION-NAME-PREFIX><SHORT-NAME>RTE_{module}</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/{module}HostImplementation/required_Rte_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if matches!(module, "Os" | "Arti") {
             // The native ARTI binding shares the OS mapping header, without owning a second copy.
@@ -1524,8 +1525,13 @@ pub(super) fn files(
                 ]
             };
             let sections: String = sections.iter().map(|section| format!("<MEMORY-SECTION><SHORT-NAME>{module}_{section}</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/{module}HostImplementation/CodeMapping/OS</PREFIX-REF><SYMBOL>{section}</SYMBOL></MEMORY-SECTION>")).collect();
+            let mapping = if module == "Arti" {
+                format!("/{package}/{module}HostImplementation/required_Os_MemMap_h")
+            } else {
+                "/AUTOSAR_Os/OsHostImplementation/generated_include_Os_MemMap_h".into()
+            };
             format!(
-                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS>{sections}</MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>OS</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/AUTOSAR_Os/OsHostImplementation/generated_include_Os_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
+                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS>{sections}</MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>OS</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">{mapping}</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else {
             String::new()
@@ -1562,7 +1568,19 @@ pub(super) fn files(
         } else {
             ""
         };
-        elements.push_str(&format!(r#"<BSW-IMPLEMENTATION><SHORT-NAME>{module}HostImplementation</SHORT-NAME>{revision}<CODE-DESCRIPTORS><CODE><SHORT-NAME>DeliveredCode</SHORT-NAME><ARTIFACT-DESCRIPTORS>{artifacts}</ARTIFACT-DESCRIPTORS></CODE></CODE-DESCRIPTORS>{generated}{mc_support}<PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>{resource}<SW-VERSION>{}</SW-VERSION><USED-CODE-GENERATOR>Autosar host ECU generator</USED-CODE-GENERATOR><VENDOR-ID>{vendor_id}</VENDOR-ID><AR-RELEASE-VERSION>4.10.0</AR-RELEASE-VERSION><BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/{package}/{module}/HostBehavior</BEHAVIOR-REF></BSW-IMPLEMENTATION>"#, version));
+        // A shared header needs a MEMMAP requiredArtifact, not just a generated-file reference.
+        let mapping_owners = match module {
+            "Arti" => vec!["Os"],
+            "LSduR" | "PduR" => vec![module, "Rte"],
+            _ => Vec::new(),
+        };
+        let required = if mapping_owners.is_empty() {
+            String::new()
+        } else {
+            let mappings: String = mapping_owners.iter().map(|owner| format!("<DEPENDENCY-ON-ARTIFACT><SHORT-NAME>required_{owner}_MemMap_h</SHORT-NAME><CATEGORY>MEMMAP</CATEGORY><ARTIFACT-DESCRIPTOR><SHORT-LABEL>{owner}_MemMap.h</SHORT-LABEL><CATEGORY>SWHDR</CATEGORY></ARTIFACT-DESCRIPTOR><USAGES><USAGE>COMPILE</USAGE></USAGES></DEPENDENCY-ON-ARTIFACT>")).collect();
+            format!("<REQUIRED-ARTIFACTS>{mappings}</REQUIRED-ARTIFACTS>")
+        };
+        elements.push_str(&format!(r#"<BSW-IMPLEMENTATION><SHORT-NAME>{module}HostImplementation</SHORT-NAME>{revision}<CODE-DESCRIPTORS><CODE><SHORT-NAME>DeliveredCode</SHORT-NAME><ARTIFACT-DESCRIPTORS>{artifacts}</ARTIFACT-DESCRIPTORS></CODE></CODE-DESCRIPTORS>{generated}{mc_support}<PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>{required}{resource}<SW-VERSION>{}</SW-VERSION><USED-CODE-GENERATOR>Autosar host ECU generator</USED-CODE-GENERATOR><VENDOR-ID>{vendor_id}</VENDOR-ID><AR-RELEASE-VERSION>4.10.0</AR-RELEASE-VERSION><BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/{package}/{module}/HostBehavior</BEHAVIOR-REF></BSW-IMPLEMENTATION>"#, version));
         let body = elements.split_off(module_start);
         let entry_package = if module_entries.is_empty() {
             String::new()

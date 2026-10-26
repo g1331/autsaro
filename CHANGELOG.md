@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- BSW implementation descriptions declare the shared OS mapping required by ARTI and distinguish LSduR/PduR runtime sections from RTE-generated configuration sections. Regenerate deliveries for the corrected MEMMAP dependencies and section references; C bytes and ABI are unchanged (#371)
+
 - Configuration conditionals surround complete memory-mapping pairs in the CAN driver, native adapters and generated lifecycle variants. Regenerate deliveries; polling, queued completion, startup/retirement observations and public signatures are preserved (#371)
 
 - BSW, host, RTE and SWC memory-mapping headers reject missing or simultaneous supported section requests during preprocessing. Regenerate deliveries for the updated header and emitter identities; valid section pairs and placement are unchanged (#371)

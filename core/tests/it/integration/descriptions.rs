@@ -163,7 +163,11 @@ fn os_memory_mapping_description_uses_delivered_sections_and_one_header() {
             .unwrap();
         assert_eq!(
             owner.text(),
-            Some("/AUTOSAR_Os/OsHostImplementation/generated_include_Os_MemMap_h")
+            Some(if module == "Arti" {
+                "/AUTOSAR_Arti/ArtiHostImplementation/required_Os_MemMap_h"
+            } else {
+                "/AUTOSAR_Os/OsHostImplementation/generated_include_Os_MemMap_h"
+            })
         );
     }
     let header = xml
@@ -206,6 +210,113 @@ fn os_memory_mapping_description_uses_delivered_sections_and_one_header() {
             .descendants()
             .any(|node| node.has_tag_name("SHORT-LABEL") && node.text() == Some("Ecu_Config.c"))
     );
+}
+
+#[test]
+fn nondefault_mapping_headers_are_required_artifacts_of_the_using_implementation() {
+    // Verifies: SWS_MemMap_00028, SWS_MemMap_00034, SWS_MemMap_00035.
+    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    let bytes = &files
+        .iter()
+        .find(|(file, _)| file == "generated/descriptions/Host_Implementation.arxml")
+        .unwrap()
+        .1;
+    let document = roxmltree::Document::parse(std::str::from_utf8(bytes).unwrap()).unwrap();
+    for (module, expected) in [
+        ("Arti", vec![("OS", "Os_MemMap.h")]),
+        (
+            "LSduR",
+            vec![("LSDUR", "LSduR_MemMap.h"), ("RTE_LSduR", "Rte_MemMap.h")],
+        ),
+        (
+            "PduR",
+            vec![("PDUR", "PduR_MemMap.h"), ("RTE_PduR", "Rte_MemMap.h")],
+        ),
+    ] {
+        let implementation = document
+            .descendants()
+            .find(|node| {
+                named(
+                    *node,
+                    "BSW-IMPLEMENTATION",
+                    &format!("{module}HostImplementation"),
+                )
+            })
+            .unwrap();
+        let required = implementation
+            .children()
+            .find(|node| node.has_tag_name("REQUIRED-ARTIFACTS"))
+            .unwrap();
+        assert_eq!(
+            required.children().filter(|node| node.is_element()).count(),
+            expected.len()
+        );
+        for (prefix, header) in expected {
+            let dependency = required
+                .children()
+                .find(|node| {
+                    node.descendants().any(|child| {
+                        child.has_tag_name("SHORT-LABEL") && child.text() == Some(header)
+                    })
+                })
+                .unwrap();
+            assert!(
+                dependency
+                    .children()
+                    .any(|node| { node.has_tag_name("CATEGORY") && node.text() == Some("MEMMAP") })
+            );
+            let descriptor = dependency
+                .children()
+                .find(|node| node.has_tag_name("ARTIFACT-DESCRIPTOR"))
+                .unwrap();
+            assert!(
+                descriptor
+                    .children()
+                    .any(|node| { node.has_tag_name("CATEGORY") && node.text() == Some("SWHDR") })
+            );
+            assert!(
+                dependency
+                    .descendants()
+                    .any(|node| { node.has_tag_name("USAGE") && node.text() == Some("COMPILE") })
+            );
+            let name = dependency
+                .children()
+                .find(|node| node.has_tag_name("SHORT-NAME"))
+                .unwrap()
+                .text()
+                .unwrap();
+            let section_prefix = implementation
+                .descendants()
+                .find(|node| named(*node, "SECTION-NAME-PREFIX", prefix))
+                .unwrap();
+            let reference = section_prefix
+                .children()
+                .find(|node| node.has_tag_name("IMPLEMENTED-IN-REF"))
+                .unwrap();
+            assert_eq!(
+                reference.text(),
+                Some(format!("/AUTOSAR_{module}/{module}HostImplementation/{name}").as_str())
+            );
+        }
+        if module != "Arti" {
+            let sections: BTreeSet<_> = implementation
+                .descendants()
+                .filter(|node| node.has_tag_name("MEMORY-SECTION"))
+                .flat_map(|node| node.children().filter(|child| child.has_tag_name("SYMBOL")))
+                .filter_map(|node| node.text())
+                .collect();
+            assert_eq!(
+                sections,
+                [
+                    "CODE",
+                    "VAR_CLEARED_UNSPECIFIED",
+                    "CONFIG_DATA_PREBUILD_UNSPECIFIED"
+                ]
+                .into_iter()
+                .collect()
+            );
+        }
+    }
 }
 
 #[test]
