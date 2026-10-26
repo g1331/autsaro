@@ -1,12 +1,12 @@
 /** @file Flat controlled x64 mapping: code .text, cleared state .bss.
- * Repeated inclusion consumes balanced module markers. Native host TLS remains
- * in the toolchain's TLS sections. This mapping makes no MCU placement claim.
+ * Repeated inclusion consumes balanced module markers. VAR_CLEARED_8 maps the
+ * selected thread-local reporting flag. This mapping makes no MCU placement claim.
  */
 #include "MemMap_Version.h"
 #if defined(DET_START_SEC_VAR_CLEARED_UNSPECIFIED)
 #undef DET_START_SEC_VAR_CLEARED_UNSPECIFIED
 #if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE) ||                           \
-    defined(DET_MEMMAP_CALLOUT_ACTIVE)
+    defined(DET_MEMMAP_CALLOUT_ACTIVE) || defined(DET_MEMMAP_TLS_ACTIVE)
 #error "Nested Det memory section"
 #endif
 #define DET_MEMMAP_VAR_ACTIVE
@@ -18,10 +18,29 @@
 #endif
 #undef DET_MEMMAP_VAR_ACTIVE
 #undef DET_VAR_CLEARED
+#elif defined(DET_START_SEC_VAR_CLEARED_8)
+#undef DET_START_SEC_VAR_CLEARED_8
+#if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE) ||                           \
+    defined(DET_MEMMAP_CALLOUT_ACTIVE) || defined(DET_MEMMAP_TLS_ACTIVE)
+#error "Nested Det memory section"
+#endif
+#define DET_MEMMAP_TLS_ACTIVE
+#if defined(_WIN32)
+#define DET_VAR_CLEARED_8 __attribute__((section(".tls$DET")))
+#else
+#define DET_VAR_CLEARED_8 __attribute__((section(".tbss.det")))
+#endif
+#elif defined(DET_STOP_SEC_VAR_CLEARED_8)
+#undef DET_STOP_SEC_VAR_CLEARED_8
+#ifndef DET_MEMMAP_TLS_ACTIVE
+#error "Unmatched Det thread-variable section"
+#endif
+#undef DET_MEMMAP_TLS_ACTIVE
+#undef DET_VAR_CLEARED_8
 #elif defined(DET_START_SEC_CODE)
 #undef DET_START_SEC_CODE
 #if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE) ||                           \
-    defined(DET_MEMMAP_CALLOUT_ACTIVE)
+    defined(DET_MEMMAP_CALLOUT_ACTIVE) || defined(DET_MEMMAP_TLS_ACTIVE)
 #error "Nested Det memory section"
 #endif
 #define DET_MEMMAP_CODE_ACTIVE
@@ -36,7 +55,7 @@
 #elif defined(DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE)
 #undef DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE
 #if defined(DET_MEMMAP_VAR_ACTIVE) || defined(DET_MEMMAP_CODE_ACTIVE) ||                           \
-    defined(DET_MEMMAP_CALLOUT_ACTIVE)
+    defined(DET_MEMMAP_CALLOUT_ACTIVE) || defined(DET_MEMMAP_TLS_ACTIVE)
 #error "Nested Det memory section"
 #endif
 #define DET_MEMMAP_CALLOUT_ACTIVE
@@ -52,7 +71,8 @@
 #error "Det_MemMap requires exactly one supported marker"
 #endif
 
-#if defined(DET_START_SEC_VAR_CLEARED_UNSPECIFIED) ||                                              \
+#if defined(DET_START_SEC_VAR_CLEARED_8) || defined(DET_STOP_SEC_VAR_CLEARED_8) ||                 \
+    defined(DET_START_SEC_VAR_CLEARED_UNSPECIFIED) ||                                              \
     defined(DET_STOP_SEC_VAR_CLEARED_UNSPECIFIED) || defined(DET_START_SEC_CODE) ||                \
     defined(DET_STOP_SEC_CODE) || defined(DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE) ||             \
     defined(DET_STOP_SEC_ECU_DETRUNTIMECALLOUT_CODE)

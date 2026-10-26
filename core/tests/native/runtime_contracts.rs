@@ -74,7 +74,7 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     if cfg!(target_os = "linux") {
         command.arg("-pthread");
     }
-    let output = command
+    command
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .arg("-I")
         .arg(root.join("runtime/bsw/include"))
@@ -92,9 +92,13 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
         .arg(root.join("runtime/host/src/Det_Host.c"))
         .arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture))
         .arg("-o")
-        .arg(&executable)
-        .output()
-        .unwrap();
+        .arg(&executable);
+    let output = tooling::run_public_command(
+        &mut command,
+        scratch,
+        "compile-det",
+        std::time::Duration::from_secs(30),
+    );
     assert!(
         output.status.success(),
         "{}",
@@ -148,12 +152,71 @@ fn det_standard_consumer_executes_runtime_and_halt_contracts() {
 fn det_reports_concurrently_without_changing_callout_results() {
     let scratch = Scratch::new();
     let executable = det_consumer(&scratch.0, "det_parallel.c");
-    let output = Command::new(executable).output().unwrap();
+    let output = tooling::run_public_command(
+        &mut Command::new(&executable),
+        &scratch.0,
+        "det-runtime-concurrent",
+        std::time::Duration::from_secs(30),
+    );
     assert!(output.status.success(), "{:?}", output);
     assert!(
         output.stdout.is_empty() && output.stderr.is_empty(),
         "{:?}",
         output
+    );
+    let output = tooling::run_public_command(
+        Command::new(&executable).arg("private-state"),
+        &scratch.0,
+        "det-private-thread-state",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n"),
+        "det_tls main=first/repeated actors=first/repeated\n",
+        "{output:?}"
+    );
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let object = scratch.0.join("det-host.o");
+    let mut command = tooling::c_compiler();
+    command
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+        .arg("-I")
+        .arg(root.join("runtime/bsw/include"))
+        .arg("-c")
+        .arg(root.join("runtime/host/src/Det_Host.c"))
+        .arg("-o")
+        .arg(&object);
+    if cfg!(target_os = "linux") {
+        command.arg("-pthread");
+    }
+    let output = tooling::run_public_command(
+        &mut command,
+        &scratch.0,
+        "compile-det-thread-object",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(output.status.success(), "{output:?}");
+    let sections = tooling::symbol_sections(&tooling::execution_settings().objdump, &object);
+    let expected = if cfg!(target_os = "windows") {
+        ".tls$DET"
+    } else {
+        ".tbss.det"
+    };
+    assert!(
+        sections.iter().any(|(symbol, section)| {
+            let symbol = symbol.strip_prefix("__emutls_v.").unwrap_or(symbol);
+            let state = symbol == "reporting_development"
+                || symbol
+                    .strip_prefix("reporting_development.")
+                    .is_some_and(|suffix| {
+                        !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit())
+                    });
+            state && section == expected
+        }),
+        "Det thread state must use {expected}: {sections:?}"
     );
 }
 

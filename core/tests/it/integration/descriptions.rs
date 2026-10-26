@@ -479,6 +479,49 @@ fn module_descriptions_include_delivered_public_entries_and_manuals() {
             .any(|node| node.has_tag_name("BSW-MODULE-ENTRY-REF")
                 && node.text() == Some("/Autsaro_Rte/BswModuleEntrys/Ecu_DetRuntimeCallout"))
     );
+    // Verifies: SWS_MemMap_00026, SWS_MemMap_00033.
+    let implementation = xml
+        .descendants()
+        .find(|node| named(*node, "BSW-IMPLEMENTATION", "DetHostImplementation"))
+        .unwrap();
+    assert!(
+        implementation
+            .descendants()
+            .any(|node| { node.has_tag_name("SHORT-LABEL") && node.text() == Some("Det_Host.c") })
+    );
+    let sections: BTreeSet<_> = implementation
+        .descendants()
+        .filter(|node| node.has_tag_name("MEMORY-SECTION"))
+        .flat_map(|node| node.children().filter(|child| child.has_tag_name("SYMBOL")))
+        .filter_map(|node| node.text())
+        .collect();
+    assert_eq!(
+        sections,
+        [
+            "CODE",
+            "VAR_CLEARED_UNSPECIFIED",
+            "VAR_CLEARED_8",
+            "ECU_DETRUNTIMECALLOUT_CODE"
+        ]
+        .into_iter()
+        .collect()
+    );
+    assert!(
+        !implementation
+            .children()
+            .any(|node| node.has_tag_name("REQUIRED-ARTIFACTS")),
+        "Det uses its default Det_MemMap.h"
+    );
+    let prefix = implementation
+        .descendants()
+        .find(|node| named(*node, "SECTION-NAME-PREFIX", "DET"))
+        .unwrap();
+    assert!(
+        !prefix
+            .children()
+            .any(|node| node.has_tag_name("IMPLEMENTED-IN-REF")),
+        "the implicit default must not point at another module's header"
+    );
     // Verifies: constr_4016, constr_4017, TPS_BSWMDT_04002, TPS_BSWMDT_04130.
     // Callout prototypes remain interfaces; only ordinary/callback or scheduled
     // entries can acquire the corresponding executable entity type.

@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- Det's private development-report recursion flag has an explicit per-thread cleared data mapping and appears with its native adapter in the module description. Regenerate deliveries; first-entry, recursive reporting and process termination semantics are preserved (#371)
+
 - BSW implementation descriptions declare the shared OS mapping required by ARTI and distinguish LSduR/PduR runtime sections from RTE-generated configuration sections. Regenerate deliveries for the corrected MEMMAP dependencies and section references; C bytes and ABI are unchanged (#371)
 
 - Configuration conditionals surround complete memory-mapping pairs in the CAN driver, native adapters and generated lifecycle variants. Regenerate deliveries; polling, queued completion, startup/retirement observations and public signatures are preserved (#371)

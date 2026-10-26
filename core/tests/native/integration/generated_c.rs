@@ -785,6 +785,49 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
                     &diagnostic
                 },
             );
+            if prefix == "DET" {
+                check(
+                    &format!("memmap-DET-thread-paired-{cpp}"),
+                    "#define DET_START_SEC_VAR_CLEARED_8\n#include \"Det_MemMap.h\"\n\
+                     __thread unsigned char mapping_thread_state DET_VAR_CLEARED_8;\n\
+                     #define DET_STOP_SEC_VAR_CLEARED_8\n#include \"Det_MemMap.h\"\n\
+                     #if defined(DET_START_SEC_VAR_CLEARED_8) || defined(DET_STOP_SEC_VAR_CLEARED_8) || defined(DET_VAR_CLEARED_8) || defined(DET_MEMMAP_TLS_ACTIVE)\n\
+                     #error Thread section was not consumed\n#endif\n",
+                    cpp,
+                    true,
+                    "",
+                );
+                for (mode, source, expected) in [
+                    (
+                        "thread-nested",
+                        "#define DET_START_SEC_VAR_CLEARED_8\n#include \"Det_MemMap.h\"\n#define DET_START_SEC_CODE\n#include \"Det_MemMap.h\"\n",
+                        "Nested Det memory section",
+                    ),
+                    (
+                        "thread-mismatch",
+                        "#define DET_START_SEC_VAR_CLEARED_8\n#include \"Det_MemMap.h\"\n#define DET_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Det_MemMap.h\"\n",
+                        "Unmatched Det cleared-variable section",
+                    ),
+                    (
+                        "thread-unmatched",
+                        "#define DET_STOP_SEC_VAR_CLEARED_8\n#include \"Det_MemMap.h\"\n",
+                        "Unmatched Det thread-variable section",
+                    ),
+                    (
+                        "thread-multiple",
+                        "#define DET_START_SEC_VAR_CLEARED_8\n#define DET_START_SEC_CODE\n#include \"Det_MemMap.h\"\n",
+                        "Det_MemMap requires exactly one supported marker",
+                    ),
+                ] {
+                    check(
+                        &format!("memmap-DET-{mode}-{cpp}"),
+                        source,
+                        cpp,
+                        false,
+                        expected,
+                    );
+                }
+            }
         }
     }
     for cpp in [false, true] {

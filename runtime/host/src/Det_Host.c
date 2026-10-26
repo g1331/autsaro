@@ -13,13 +13,17 @@
  * Each reporting thread has its own recursion boundary; independent threads
  * may report concurrently. Development reporting never returns to clear it.
  */
+#define DET_START_SEC_VAR_CLEARED_8
+#include "Det_MemMap.h"
+DET_VAR_CLEARED_8 static __thread boolean
+    reporting_development; /**< Per-thread recursion boundary; never reset. */
+#define DET_STOP_SEC_VAR_CLEARED_8
+#include "Det_MemMap.h"
 
 #define DET_START_SEC_CODE
 #include "Det_MemMap.h"
 DET_CODE boolean Det_HostEnterDevelopmentReport(void)
 {
-    static __thread boolean
-        reporting_development; /**< Per-thread recursion boundary; never reset. */
     boolean entered = FALSE;
     if (reporting_development == FALSE) {
         reporting_development = TRUE;

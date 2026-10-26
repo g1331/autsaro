@@ -1,8 +1,11 @@
 /** Real concurrent reporting with caller-owned, reentrant runtime callouts. */
 #include "Det.h"
+#include "Det_Host.h"
 #include "SchM_Det.h"
 #include <assert.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
 #if defined(_WIN32)
 /* Threads only; skip COM/RPC headers whose boolean clashes with Platform_Types.h. */
 #define WIN32_LEAN_AND_MEAN
@@ -12,6 +15,7 @@
 #endif
 
 static __thread unsigned notifications;
+static boolean private_state;
 static Std_ReturnType observe(uint16 module, uint8 instance, uint8 api, uint8 error)
 {
     assert(module == 60u && instance == 2u && api == 5u && error == 7u);
@@ -33,10 +37,16 @@ static void *report(void *result)
 #endif
     unsigned index;
     unsigned *count = result;
-    for (index = 0u; index < 1000u; ++index) {
-        assert(Det_ReportRuntimeError(60u, 2u, 5u, 7u) == E_OK);
+    if (private_state == TRUE) {
+        boolean first = Det_HostEnterDevelopmentReport();
+        boolean repeated = Det_HostEnterDevelopmentReport();
+        *count = (unsigned)first | ((unsigned)repeated << 1u);
+    } else {
+        for (index = 0u; index < 1000u; ++index) {
+            assert(Det_ReportRuntimeError(60u, 2u, 5u, 7u) == E_OK);
+        }
+        *count = notifications;
     }
-    *count = notifications;
 #if defined(_WIN32)
     return 0u;
 #else
@@ -46,7 +56,7 @@ static void *report(void *result)
 
 /* Verifies: SWS_Det_00039 */
 /* Verifies[Det]: SWS_BSW_00134 */
-int main(void)
+int main(int argc, char **argv)
 {
     unsigned first = 0u;
     unsigned second = 0u;
@@ -56,6 +66,14 @@ int main(void)
     pthread_t threads[2];
 #endif
     Det_Init(&configuration);
+    assert((argc == 1) || ((argc == 2) && (strcmp(argv[1], "private-state") == 0)));
+    private_state = (argc == 2);
+    if (private_state == TRUE) {
+        if (Det_HostEnterDevelopmentReport() != TRUE) {
+            (void)fputs("det_tls main first entry rejected\n", stderr);
+            return 7;
+        }
+    }
 #if defined(_WIN32)
     threads[0] = CreateThread(NULL, 0u, report, &first, 0u, NULL);
     threads[1] = CreateThread(NULL, 0u, report, &second, 0u, NULL);
@@ -68,7 +86,19 @@ int main(void)
     assert(pthread_join(threads[0], NULL) == 0);
     assert(pthread_join(threads[1], NULL) == 0);
 #endif
-    assert(first == 1000u && second == 1000u);
+    if (private_state == TRUE) {
+        if ((first != 1u) || (second != 1u)) {
+            (void)fprintf(stderr, "det_tls actor state first=%u second=%u\n", first, second);
+            return 7;
+        }
+        if (Det_HostEnterDevelopmentReport() != FALSE) {
+            (void)fputs("det_tls main repeated entry accepted\n", stderr);
+            return 7;
+        }
+        (void)fputs("det_tls main=first/repeated actors=first/repeated\n", stdout);
+    } else {
+        assert(first == 1000u && second == 1000u);
+    }
     assert(notifications == 0u);
     return 0;
 }

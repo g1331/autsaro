@@ -1057,7 +1057,8 @@ pub(super) fn files(
                                 | "integration/src/Can_HostLock.c"
                                 | "integration/src/Can_HostLock.h"
                         ))
-                        || (module == "Det" && matches!(name, "Det_Callouts.c" | "Det_Externals.h"))
+                        || (module == "Det"
+                            && matches!(name, "Det_Callouts.c" | "Det_Externals.h" | "Det_Host.c"))
                         || *name == format!("{module}.c")
                         || *name == format!("{module}_PBcfg.c")
                         || *name == format!("{module}_Cfg.h")
@@ -1467,6 +1468,16 @@ pub(super) fn files(
         let resource = if module == "Can" {
             format!(
                 "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS><MEMORY-SECTION><SHORT-NAME>Can_CODE</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>CODE</SYMBOL></MEMORY-SECTION><MEMORY-SECTION><SHORT-NAME>Can_VAR_CLEARED_UNSPECIFIED</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/CanHostImplementation/CodeMapping/CAN</PREFIX-REF><SYMBOL>VAR_CLEARED_UNSPECIFIED</SYMBOL></MEMORY-SECTION></MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>CAN</SHORT-NAME><IMPLEMENTED-IN-REF DEST=\"DEPENDENCY-ON-ARTIFACT\">/{package}/CanHostImplementation/generated_include_Can_MemMap_h</IMPLEMENTED-IN-REF></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
+            )
+        } else if module == "Det" {
+            let sections: String = [
+                "CODE",
+                "VAR_CLEARED_UNSPECIFIED",
+                "VAR_CLEARED_8",
+                "ECU_DETRUNTIMECALLOUT_CODE",
+            ].iter().map(|section| format!("<MEMORY-SECTION><SHORT-NAME>Det_{section}</SHORT-NAME><PREFIX-REF DEST=\"SECTION-NAME-PREFIX\">/{package}/DetHostImplementation/CodeMapping/DET</PREFIX-REF><SYMBOL>{section}</SYMBOL></MEMORY-SECTION>")).collect();
+            format!(
+                "<RESOURCE-CONSUMPTION><SHORT-NAME>CodeMapping</SHORT-NAME><MEMORY-SECTIONS>{sections}</MEMORY-SECTIONS><SECTION-NAME-PREFIXS><SECTION-NAME-PREFIX><SHORT-NAME>DET</SHORT-NAME></SECTION-NAME-PREFIX></SECTION-NAME-PREFIXS></RESOURCE-CONSUMPTION>"
             )
         } else if module == "Rte" {
             let scopes: BTreeSet<_> = super::memmap::rte_sections(plan)?.into_iter().collect();
