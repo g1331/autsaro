@@ -453,6 +453,55 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
                 '# include "Os_MemMap.h" /* MR12 RULE 20.1 VIOLATION: reviewed mapping. */\n', encoding="utf-8")
             self.assertEqual(c_standard.deviation_findings(root), {})
 
+    def test_header_file_scope_is_bound_to_directive_and_first_file_comment(self):
+        with tempfile.TemporaryDirectory(prefix="header-deviation-") as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/include/Test_MemMap.h"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            record = ("| MISRA C:2012 Directive 4.10 | `runtime/os/include/Test_MemMap.h` 中 "
+                      "`@file` | repeated requests | Approved by maintainer |\n")
+            marker = "MR12 DIR 4.10 VIOLATION: repeated mapping requests require re-entry."
+            code = ("/** @file Re-entrant mapping.\n * " + marker + "\n */\n"
+                    "#if defined(START)\n#undef START\n#endif\n")
+            document.write_text(record, encoding="utf-8")
+            source.write_text(code, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            cases = (
+                ("unapproved", record.replace("Approved by maintainer", "Pending"), code,
+                 "deviation-unrecorded"),
+                ("duplicate-record", record + record, code, "deviation-duplicate"),
+                ("duplicate-comment", record, code.replace(marker, marker + "\n * " + marker),
+                 "deviation-duplicate"),
+                ("wrong-file", record.replace("Test_MemMap.h", "Other.h"), code,
+                 "deviation-unrecorded"),
+                ("wrong-rule", record.replace("4.10", "4.8"), code.replace("4.10", "4.8"),
+                 "deviation-unrecorded"),
+                ("wrong-kind", record.replace("Directive", "Rule"), code.replace("DIR", "RULE"),
+                 "deviation-unrecorded"),
+                ("not-file-comment", record, code.replace("@file", "@brief"), "deviation-unrecorded"),
+                ("not-first", record, "#define OTHER 1\n" + code, "deviation-unrecorded"),
+                ("stale", record, code.replace(marker, "No deviation marker."), "deviation-uncommented"),
+            )
+            for name, recorded, text, required in cases:
+                with self.subTest(case=name):
+                    document.write_text(recorded, encoding="utf-8")
+                    source.write_text(text, encoding="utf-8")
+                    if name in {"duplicate-record", "stale"}:
+                        location = ("docs/standards/test.md", recorded.splitlines()[0])
+                    else:
+                        location = ("runtime/os/include/Test_MemMap.h",
+                                    "/** @brief Re-entrant mapping." if name == "not-file-comment"
+                                    else "/** @file Re-entrant mapping.")
+                    self.assertIn((required, *location), c_standard.deviation_findings(root))
+            source.unlink()
+            source = source.with_suffix(".c")
+            source.write_text(code, encoding="utf-8")
+            document.write_text(record.replace("Test_MemMap.h", "Test_MemMap.c"), encoding="utf-8")
+            self.assertIn(("deviation-unrecorded", "runtime/os/include/Test_MemMap.c",
+                           "/** @file Re-entrant mapping."), c_standard.deviation_findings(root))
+
     def test_deviations_match_both_directions_and_exact_symbol(self):
         with tempfile.TemporaryDirectory(prefix="171-") as temporary:
             root = Path(temporary)

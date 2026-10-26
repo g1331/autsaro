@@ -30,6 +30,8 @@
 
 ### Added
 
+- C deviation association checks recognize header-wide Directive 4.10 records at the first `@file` comment, retaining exact file/rule matching and rejection of unapproved, duplicate or stale records (#371)
+
 - Generated ECU deliveries include complete selected BSW entry and area descriptions plus navigable module, API and configuration manuals sharing public headers and validation metadata; regenerate deliveries to receive them (#314)
 
 - Selected ECUC symbolic handles have one provider-owned configuration header, shared naming and collision checks; generated BSW consumers import those symbols while preserving numeric mappings, including decimal values written with leading zeros (#303)

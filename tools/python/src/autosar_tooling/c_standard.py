@@ -86,8 +86,8 @@ def directive_scope(text: str) -> str | None:
 
 
 def record_scope(text: str) -> str | None:
-    """An optional positive occurrence selects a concrete repeated directive."""
-    if IDENTIFIER.fullmatch(text):
+    """Identify a file anchor, symbol, or concrete repeated directive."""
+    if text == "@file" or IDENTIFIER.fullmatch(text):
         return text
     occurrence = re.fullmatch(r"(.+?)\s+\[([1-9][0-9]*)\]", text, re.DOTALL)
     normalized = directive_scope(occurrence[1] if occurrence else text)
@@ -494,14 +494,17 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                 direct = function(declaration)
                 macro = re.match(r"\s*#\s*define\s+(\w+)", words[0]) if words else None
                 included = directive_scope(words[0]) if words else None
-                symbol = included or (
+                file_scoped = (match[1] == "DIR" and match[2] == "4.10" and path.suffix == ".h"
+                               and index == 0 and is_comment(token)
+                               and re.match(r"/\*\*\s*@file(?:\s|$)", token.text))
+                symbol = "@file" if file_scoped else included or (
                     direct[0]
                     if direct
                     else macro[1]
                     if macro
                     else parameter_name(words[:-1])
                 )
-                if included is not None:
+                if included is not None and not file_scoped:
                     numbered = included + " [" + str(directive_numbers[declaration[0].start]) + "]"
                     if (match[1], match[2], name, numbered) in records:
                         symbol = numbered
