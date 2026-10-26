@@ -22,6 +22,18 @@
 
 ## MISRA 预处理布局
 
+### 声明与定义使用同一类别
+
+`SWS_MemMap_00003`（固定原件页36）同时约束代码、变量和常量的声明与定义；定义已有属性、当前链接器恰好放入默认段，均不能替代声明侧的完整 START／include／声明／STOP／include。九个 BSW 模块的公共接口及回调专用头，连同 Can、CanTp、Com、ComM 的私有实现头和 Det_Host 的实现原型，使用各自模块的 CODE 对。类型定义及函数指针 typedef 不作为这些函数对象的声明包围。新增映射依赖的 AUTOSAR major/minor 检查置于完整映射对之后。
+
+生成组件头中，RTE 接口原型使用 `RTE_<component>_CODE`，SWC runnable 原型继续使用 `<component>_CODE`；实例句柄的 extern 声明使用与 Rte.c 定义相同的 `RTE_<component>_CONST_UNSPECIFIED`。Rte_Main 的生命周期接口和配置对象分别对应既有 RTE CODE 与配置类别，COM 回调声明则连接实际分区的 CALLOUT 类别。独立 contract 包交付这些声明需要的 Rte_MemMap.h，不借 ECU 工程外部头补齐。配置条件、API 可见性、C++ linkage 和版本检查均在完整映射对之外。
+
+CanIf／LSduR／PduR 配置头的 extern 对象与各自 PBcfg 定义共用 RTE 配置类别。SchM Enter／Exit 的声明和三个 SchM host 适配文件中的真实定义使用 `RTE_Rte_CODE`；配置生成的 Com／ComM 主函数包装器则使用与 Ecu_RuntimeConfig.c 定义一致的 `RTE_Com_CODE`／`RTE_ComM_CODE`，不能因公开名称或调用模块而误配到模块实现 CODE。Dcm 模式接口的作用域来自实际 diagnostic-session 组件，声明与定义使用同一选定模式类别。此归属不扩到共用锁 provider 的私有状态；RTE 实现描述同时收录真实 SchM 适配源。
+
+00003不要求相邻、同类对象各自重新开闭。`config_data`只在输出恰好结束于相同scope的配置STOP时合并下一对象；不同scope或任何中间内容均建立新对，不跨条件或版本检查移动对象。CanIf的can_rx、can_tx及CanIf_Config等连续配置可因此减少多余include；对象顺序、初始化与属性保持。可合并的边界不作为必要冲突保留，逐处计数绑定合并后的交付源码。
+
+正常消费者以独立配置的 CODE 段编译实际 BSW 头，并检查每个函数定义从先前原型继承的目标文件段；RTE 消费者同时观察真实实例句柄及 Read／Write 接口的段，保留独立签名和链接回归。这里保留新增 include 产生的真实 R20.1 与映射头重入的 D4.10 责任，尚不据此增加批准表或 MR12；既有分析和逐处计数仍绑定其原始源码身份。
+
 ### 所选 CDD 的适用来源
 
 `Ecu_HostBusSM` 不是因目录名、资产的 host 标签或函数前缀而取得 BSW 必要性。`mode.rs` 只接受 `COMM_BUS_TYPE_CDD`，`ecu_config.rs` 将实际 Request／GetCurrentComMode 函数地址交给 ComM；该模块经 CanIf 取得控制器／PDU 模式并向 ComM 发布变化。固定 COMManager 原件的 `SWS_ComM_00957／00958／00963`（页146）与 `ECUC_ComM_00888`（页191） 分别规定所选 CDD 的前缀、请求及查询接缝，没有要求项目必须选择 CDD。

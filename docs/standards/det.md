@@ -20,6 +20,8 @@ Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把�
 
 ## 接口与报告义务
 
+## ECUC 与服务端口
+
 | 内容 | 处置与证据 |
 | --- | --- |
 | 公共头与配置类型 | `Det.h` 自包含，导入 Std_Types，声明标准 Init／Start／开发报告／运行时报告及实现自定义的不可变配置结构，不包含私有主机头。已核对（Det.h 的四个 API 与 Det_ConfigType）：SWS_Det_00037、SWS_Det_91001、SWS_Det_00210 |
@@ -40,6 +42,22 @@ Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把�
 这是实际的R8.9 Advisory文件作用域保留，不能把静态存储期本身当成块作用域不适用的理由。保留理由是该对象的数据映射与00023的函数体限制；普通once guard、把include挪进函数或让工具链隐式选段均不能同时保持该映射协议。现有模块描述补齐私有实现源及CODE、普通cleared、线程cleared和配置callout四类段；默认`Det_MemMap.h`按00033解析，不借另一模块的头冒充自己的默认头。
 
 验证沿现有Det runtime并发入口增加实际私有状态观察：主线程首次进入后，两条真实线程仍各自首次进入成功、重复进入失败，主线程再次进入仍失败；原有runtime通知次数及公开递归／停止场景保持。目标文件另连接精确私有符号与TLS段，头文件的C／C++观察覆盖线程段配对、STOP撤销、嵌套、错配及多请求。结果按PR实际执行记账，不把线程级编译／行为观察外推完整loader／fiber语义或Windows运行。此处尚未增加批准表或MR12，逐处记录和复核仍归#58。
+
+## MemMap 冲突的具体定位
+
+以下技术定位绑定 `declaration-mapping-formatted-samples` 的实际交付字节，尚非批准表。R20.1／R20.5／D4.10 的有效类别、MISRA 修订依据及通用替代排除见 [MemMap 篇](memmap.md#misra-预处理布局)；原始报告保持。普通声明头仍有 once guard，可重入的对象仅是 `Det_MemMap.h` 的分派主体。
+
+| 实际位置 | 实体、请求及必要性 |
+| --- | --- |
+| `runtime/bsw/include/Det.h`，`#include "Det_MemMap.h"` 第1／2次，行28／80 | Det 配置类型之后的公共 Init、Start、ReportRuntimeError、ReportError 原型；对应 `DET_START_SEC_CODE`／STOP。00003 同时要求声明与定义映射，不能以 Det.c 的属性代替头的协议。 |
+| `runtime/bsw/src/Det.c`，同一指令第2–4次，行12／15／104 | 已发布配置指针的 cleared 段关闭，以及 hooks 校验、初始化与报告函数的 CODE 开闭。第一处 include 在本文件对象声明前，不列为 R20.1 违反。 |
+| `runtime/host/src/Det_Host.h`，同一指令第2次，行26 | 私有首次／重复报告入口与不可返回的停止函数原型；开始处在本文件声明前，只有关闭处列为 R20.1。host 路径不取消这个 Det 实现接缝的声明责任。 |
+| `runtime/host/src/Det_Host.c`，同一指令第2–8次，行21／24／35／39／48／51／58 | 同一线程标记的 VAR_CLEARED_8 关闭、报告入口 CODE 对及分别受 Windows／非 Windows 条件围住的完整停止函数 CODE 对。R20.1 按预处理前布局判断，未选平台分支的物理 include 也不能销项；TLS 开始处在本文件声明之前。 |
+| `runtime/ecu/include/Det_Externals.h` → `generated/include/Det_Externals.h`，同一指令第2次，行24；`runtime/ecu/src/Ecu_DetCallout.c` → `generated/src/Det_Callouts.c`，第2次，行18 | `Ecu_DetRuntimeCallout` 的原型和定义分别关闭其独立 `DET_*_ECU_DETRUNTIMECALLOUT_CODE`。定义经 Det 的 runtime hook 到 `Ecu_TargetReportTransportTimeout`，参数筛选无状态；00023 的 callout 说明及 BSW00135 要求独立 callout 类，不改成模块通用函数类。映射来自既有 outputs 资产／交付关联，不能把交付文件名当成 Rust emitter。 |
+
+上述共15个 R20.1 物理报告位置，在已完成 standard-ecu 中均归属 host-batch／probe。`Det_MemMap.h` 第7／15、22／34、41／49、56／64行的八个 START／STOP `#undef` 分别消费普通 cleared、线程 cleared、CODE、指定 callout 请求，直接连接00011；第19／20、38／39、53／54、68／69行的活动状态与属性撤销另按实现控制评估，不把这些内部名字说成 SWS 强制。
+
+D4.10 的具体对象是该头首个 `@file` 及上述请求调用方：只包含一次会吞掉后续 STOP 和新段，失去00003的完整协议；移到函数体又违反00023。非法、多请求、嵌套及错配拒绝、STOP 后属性消失、目标文件 TLS 符号与独立线程首入／重入观察分别控制误配与共享状态风险。`reporting_development` 的 R8.9 保留理由仅限上节的数据映射与函数体限制。原授权来源、完整独立复核及最终注释对应仍须按 ADR0023 连接，此处没有新增 Approved 或 MR12，也不证明所有 provider、平台和配置符合。
 
 ## ECUC 与服务端口
 
