@@ -57,7 +57,7 @@
 | `runtime/bsw/include/Can.h`：第2次，冻结行140 | 关闭标准 Can 服务原型的 CODE 请求；第一处在声明前，不列为违反。 |
 | `runtime/host/include/Can_Host.h`：第1／2次，冻结行14／95 | 先有本头自身类型声明，再围住真实主机转发接口原型；不能凭 host 目录认定全文件为 BSW，也不能从 Can 源文件的首 include 情况推断这两处。这里的接口属于已选择驱动的主机接缝。 |
 | `runtime/host/src/Can_Host.c`：第2次，冻结行31 | 关闭实际调用 Can_Internal* 的转发函数定义。它们是驱动实现接缝，非测试执行代码；首 include 在本文件代码前。 |
-| 生成的 `generated/include/SchM_Can.h`：第2次，冻结行66 | 关闭 CAN_STATE 进入／退出函数声明；生成来源为实际 SchM 契约，闭包连接到 Can 的持区调用。此生成位置不冒充某个 Rust 函数的违反，也不由 runtime 文件关联检查自动覆盖。 |
+| 生成的 `generated/include/SchM_Can.h`：第2次，冻结行66 | 关闭五个 `Can_MainFunction_Read/Write/Wakeup/BusOff/Mode` 原型的 `CAN_CODE` 请求；对应驱动的周期处理接口，不是另由 `RTE_Rte_CODE` 映射的 CAN_STATE 进入／退出声明。此生成位置不冒充某个 Rust 函数的违反，也不由 runtime 文件关联检查自动覆盖。 |
 
 上述共28个物理位置，均归属两个实际程序；Can.c 中新增的20处是让配置选择围住完整段而产生的真实 R20.1，不按格式变化或 checker 误报销项。四 profile 的同类文件字节相同，不能据此声称其他目标或任意配置已经运行。
 
