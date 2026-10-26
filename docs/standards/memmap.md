@@ -22,6 +22,16 @@
 
 ## MISRA 预处理布局
 
+### 所选 CDD 的适用来源
+
+`Ecu_HostBusSM` 不是因目录名、资产的 host 标签或函数前缀而取得 BSW 必要性。`mode.rs` 只接受 `COMM_BUS_TYPE_CDD`，`ecu_config.rs` 将实际 Request／GetCurrentComMode 函数地址交给 ComM；该模块经 CanIf 取得控制器／PDU 模式并向 ComM 发布变化。固定 COMManager 原件的 `SWS_ComM_00957／00958／00963`（页146）与 `ECUC_ComM_00888`（页191） 分别规定所选 CDD 的前缀、请求及查询接缝，没有要求项目必须选择 CDD。
+
+固定 BSWGeneral §1.1（页9）规定无另列条件的条目适用于所有 BSW 模块；`SWS_BSW_00006`（页22）约束其实现源包含模块映射头，`00249`（页28）的普通头保护义务显式排除映射头。CDD 指南 §6.2／6.3.1（页13）要求实现遵守引用的 BSW 通用规格，同时使用“may”描述采用映射机制；不能把后一句独立改写成强制选择 CDD 或强制采用本项目属性策略的理由。这里的必要性连接到已经选定、实际作为 ComM CDD BusSM 集成的 BSW 实现及通用规格，不扩展到任意 host helper。`Ecu_HostBusSM.c` 的 cleared 数据及 CODE 两对请求，与同名映射头的关键词消费和重入主体对应；其余位置仍须逐处核对。
+
+所用 CDD 指南／COMManager 的 SHA-256 分别为 `8d8318fc…bc8b8f883`／`564560db…cf2ef34`，均与 R24-11 CP 官方清单相符。BSW 的 `00249` 例外不是 MISRA D4.10 例外，也不替代 ADR0023 所需的独立复核或具体记录；当前没有据此添加批准表或 MR12。
+
+### 规则与冲突条件
+
 MISRA 主文 R20.1（Advisory，印刷页155／PDF163）按预处理前的文件顺序限制 include 之前的内容；R20.5（Advisory，页158／PDF166）限制 undef。AMD2 为两条增加 C11 适用性，不改变本实现 C99 下的上述义务；其他适用 amendment／TC 没有提供 MemMap 例外。
 
 D4.10为Required（主文印刷32–33／PDF40–41，AMD2追加C11）；TC2.2明确示例的两种保护形式并非穷尽，没有增加MemMap例外。普通声明头仍保护其内容不重复展开，而实际MemMap分派头必须依不同START／STOP请求重入；一次性guard会吞掉后续关闭及重新开启。Os_MemMap.h只对固定属性定义做一次性保护，映射分派主体没有也不能借此声称满足D4.10。该真实冲突应连到实际调用方的重复include及对应头，而非伪装为某个函数违反；非法、嵌套和错配拒绝控制重入风险，不将这些控制当作不存在违反的证明。
