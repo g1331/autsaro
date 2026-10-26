@@ -70,3 +70,21 @@ SWS_CanTp_00229 把超时与协议错误称为开发错误，表 SWS_CanTp_00352
 - 头文件不含软件与规范版本号（#59）。
 - CanTp_Cfg.h 分别导出数据与 flow-control 的 N-SDU／N-PDU 容器符号；当前相同值约束保留，跨模块句柄由提供方配置头导入。
 - 生成 C 的 MISRA 诊断裁决与人工评估未完成（#58）。
+
+## MemMap 的具体责任
+
+本节绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`；主文R20.1／R20.5的Advisory和D4.10的Required及修订、替代边界见[MemMap篇](memmap.md#misra-预处理布局)。以下不是批准表，未新增MR12，也不扩展上节既有R8.7记录。
+
+| R20.1位置、请求与类别 | 具体实体与调用方 |
+| --- | --- |
+| `runtime/bsw/src/CanTp.c`，`#include "CanTp_MemMap.h"` 第2／3／4次，行167／176／929 | 第2次关闭配置指针、Tx／Rx通道、lower-owner／generation、接收队列和runner状态的cleared段；随后完整CODE对包围计时、收发状态推进和公开服务。首处行60在本文件enum／struct及对象之前，不列为R20.1；不能因类型定义位于该段内反向认定首处已有前置声明。 |
+| `runtime/bsw/include/CanTp.h`，同一指令第1／2次，行59／145 | 本头配置类型后全部标准服务／回调原型使用 `CANTP_CODE`，两处都在本头声明后。 |
+| `runtime/bsw/src/CanTp_Internal.h`，同一指令第2次，行14 | 关闭私有 `Ecu_CanTpReceptionBeforeMain` 原型，定义在CanTp.c同类CODE中；真实Ecu_Target输入处理在Can_MainFunction_Read前后提供pending／FALSE顺序提示，不提供新时钟或改变标准回调。首处在本文件声明前，不列为违反。 |
+| `generated/include/SchM_CanTp.h`，`#include "CanTp_MemMap.h"` 第1／2次，行33／45 | 只包围 `CanTp_MainFunction` 原型，类别是 `CANTP_CODE`。此前Enter／Exit已经在另一个RTE_Rte_CODE对中声明，所以这两个CanTp include都位于本头声明后；不能把它们错连到独占区原型。 |
+| `generated/src/Ecu_RuntimeConfig.c`，`RTE_CanTp_START/STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED` 后的Rte_MemMap包含 | standard-ecu／user-application行297／317，component-pipeline行299／319；包围唯一 `tp_config`，初始化／测试初始化分别传给 `CanTp_Init`。其他配置已在前面声明，因此开始和关闭两处都属于R20.1；不同scope不能并入前面的Com配置段。no-diagnostic没有该对象或请求，不虚构其计时及诊断执行证据。 |
+
+前四行共八个CanTp源码／接口位置，三个诊断profile另有两个配置位置；SchM Enter／Exit关闭处属于RTE共享责任，不在八个数内。四profile实际target都编译CanTp.c，即使no-diagnostic未生成tp_config，也不能据此把该源和公共声明的物理位置排除；是否运行某条传输路径另按真实调用判断。`CanTp_Cfg.h`当前只有版本与symbolic常量，没有额外的配置extern或CanTp_PBcfg.c，不能沿其他模块的文件名模式补出不存在的配置文件。
+
+这些对象／原型／定义分别连接固定00003的实际声明与定义机制，配置及生命周期角色来自当前所选传输链。隐式默认段、将全部include提前或仅保留定义侧映射都不能满足同一义务。00023要求映射不在函数体，不能把私有顺序入口的映射挪进函数来避免后置include。
+
+CanTp_MemMap.h由MEMMAP producer保留模板并输出到generated/include。模板行7／14／21／28的四个关键词撤销直接对应00011；内部active／属性清理不被写成标准强制的名字。D4.10关联该头首个@file和cleared／CODE两类重复请求；一次性guard会吞掉STOP。真实C/C++请求拒绝、原型段继承与STOP后清理控制映射风险，真实N_Cr超时／恢复只支持实际诊断消费者，不扩到未选配置、SDK/provider或全部异步语义。后续逐处累计复核及最终BSW00115注释仍待完成，原raw诊断和221项状态保持。
