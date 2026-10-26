@@ -62,7 +62,7 @@ R8.1为Required、R17.3为Mandatory，但两条均仅适用C90（主文印刷63�
 
 ## Advisory出口与可见性
 
-R15.4／R15.5的循环与早退判断见[OS控制流](README.md#循环与函数出口)。此前355处是旧工件计数；新位置、存储期和资源收尾按对应源码重新核对，不能沿用该数字或把guard return统称误报。
+R15.4／R15.5的循环与早退判断见[OS控制流](README.md#循环与函数出口)。fault-publication四profile的328／328／345／340处已按实际guard、持续所有权、critical释放、生成初始化退休及采用代码逐位置核对，见[完整作者依据](https://github.com/g1331/autsaro/pull/371#issuecomment-6419297337)。保留真实Advisory违反及理由，不将guard return统称误报；后续0026删除的一处另构成R2.1死分支，旧摘要不改标新字节。
 
 R5.9为Advisory、System范围，TC1的amplification更正未取消跨TU唯一性建议。当前17个报告声明对应六模块configuration、Time与生成配置的alarms、Time／Com的values、HostLinux／Backend的handles、三份control及两份require，均保留真实私有名字重复；合法内部链接不消除该建议。当前按类型、文件与实际调用目标区分的模块词汇是保留理由，不是整条规则通过。
 

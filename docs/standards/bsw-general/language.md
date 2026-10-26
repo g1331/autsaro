@@ -64,6 +64,8 @@ R2.6、R15.1为Advisory，R15.2／R15.3为Required（主文印刷44、122–123�
 
 R2.1为Required（主文印刷39–41／PDF47–49，AMD2追加C11），其检查还包括函数出口，不限于switch clause。Backend的native_task_start和bootstrap曾在已声明noreturn的Os_BackendShutdown后保留return；control还在report_and_exit及Sleep(INFINITE)之后保留返回。这四句均没有可达的正常路径，现删除。report_and_exit全部路径最终调用ExitProcess，私有定义用既有GNU noreturn属性表达这一事实；没有新增公共签名、错误值、输出或退出期限。属性只是控制流契约，不能代替对函数体和调用者的核查。
 
+采用内核uxTaskCallForEachTask在不可返回configASSERT后重复检查NULL，0026删除这一死分支。修改前后正常遍历及NULL致命退出行为不变；依据见[源码与执行收据](https://github.com/g1331/autsaro/pull/371#issuecomment-6419297337)。不扩到可返回的自定义断言。
+
 Linux的无限Sleep沿现有pause循环，即使信号使pause返回也继续；Windows的[原生Sleep合同](https://learn.microsoft.com/windows/win32/api/synchapi/nf-synchapi-sleep)规定INFINITE不超时，并另以SleepEx提供alertable等待。删除后仍保持原有永久停放，不把函数末尾返回当作平台故障后备。源码属性反例分别恢复四句时必须拒绝；普通原生消费者与严格编译另核对实际运行，不把不可达代码删除称为产生了新的行为差异，也不据此关闭全部R2.1／R17.4。
 
 ## 包含与条件指令
