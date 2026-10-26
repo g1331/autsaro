@@ -60,6 +60,6 @@
     "runtime/os/patches/0022-explicit-function-addresses.patch": "e0d3d5ef9347e0511a5678c7a123945f5f8461e89609e5800a5c97e61d9887fd",
     "runtime/os/patches/0023-preserve-parameter-values.patch": "cf99e9963e017971d04a26ef6dc2c203ece2fdbc01e2d2f10722cc913b1f46a0",
     "runtime/os/patches/0024-conditional-private-definitions.patch": "7b45effaef7fbb001f4a854225248e7c4ead37338e147b7aea370dd2bd33dbb1",
-    "runtime/os/patches/0025-configured-kernel-declarations.patch": "945555d4d2b53c2da2f0c1e8621f690f380c4b1d10efa86b4ac58958edcfe362"
+    "runtime/os/patches/0025-configured-kernel-declarations.patch": "b3ecc7b4f3ef7e185278334bfaaa3fb4808facadaf5ea53273f669b3d8df2acb"
   }
 }

@@ -1,7 +1,23 @@
 diff --git a/include/portable.h b/include/portable.h
 --- a/include/portable.h
 +++ b/include/portable.h
-@@ -175,17 +175,22 @@
+@@ -146,6 +146,7 @@
+ 
+ /* Used by heap_5.c to define the start address and size of each memory region
+  * that together comprise the total FreeRTOS heap space. */
++#if ( configSUPPORT_DYNAMIC_ALLOCATION == 1 )
+ typedef struct HeapRegion
+ {
+     uint8_t * pucStartAddress;
+@@ -163,6 +164,7 @@
+     size_t xNumberOfSuccessfulAllocations;  /* The number of calls to pvPortMalloc() that have returned a valid memory block. */
+     size_t xNumberOfSuccessfulFrees;        /* The number of calls to vPortFree() that has successfully freed a block of memory. */
+ } HeapStats_t;
++#endif
+ 
+ /*
+  * Used to define multiple heap regions for use by heap_5.c.  This function
+@@ -175,17 +177,22 @@
   * terminated by a HeapRegions_t structure that has a size of 0.  The region
   * with the lowest start address must appear first in the array.
   */
@@ -24,7 +40,7 @@ diff --git a/include/portable.h b/include/portable.h
  void * pvPortMalloc( size_t xWantedSize ) PRIVILEGED_FUNCTION;
  void * pvPortCalloc( size_t xNum,
                       size_t xSize ) PRIVILEGED_FUNCTION;
-@@ -194,6 +199,7 @@
+@@ -194,6 +201,7 @@
  size_t xPortGetFreeHeapSize( void ) PRIVILEGED_FUNCTION;
  size_t xPortGetMinimumEverFreeHeapSize( void ) PRIVILEGED_FUNCTION;
  void xPortResetHeapMinimumEverFreeHeapSize( void ) PRIVILEGED_FUNCTION;
@@ -32,7 +48,7 @@ diff --git a/include/portable.h b/include/portable.h
  
  #if ( configSTACK_ALLOCATION_FROM_SEPARATE_HEAP == 1 )
      void * pvPortMallocStack( size_t xSize ) PRIVILEGED_FUNCTION;
-@@ -207,7 +213,9 @@
+@@ -207,7 +215,9 @@
   * This function resets the internal state of the heap module. It must be called
   * by the application before restarting the scheduler.
   */

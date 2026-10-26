@@ -464,16 +464,20 @@ class NativeKernelObjectTests(unittest.TestCase):
             )
             available = ("xTaskCreateStatic", "xQueueGenericCreateStatic", "uxTaskPriorityGet",
                          "vTaskSuspend", "xTaskGetHandle", "xTaskGetTickCount", "xInsideInterrupt")
+            unavailable_types = ("HeapRegion_t", "HeapStats_t")
             command = metadata["command"]
             self.assertEqual(command[-2], "-o")
             flags = [argument for argument in command[:-2]
                      if not argument.endswith(".c") and not argument.startswith("-l")]
-            for label, names in (("available", available), ("unavailable", unavailable)):
+            for label, names in (("available", available), ("unavailable", unavailable),
+                                 ("unavailable-types", unavailable_types)):
                 probe = directory / f"{label}.c"
+                expressions = [f"sizeof({name})" if label == "unavailable-types" else f"&{name}"
+                               for name in names]
                 probe.write_text(
                     '#include "FreeRTOS.h"\n#include "task.h"\n#include "queue.h"\n'
                     "int main(void)\n{\n" +
-                    "".join(f"    (void)&{name};\n" for name in names) +
+                    "".join(f"    (void){expression};\n" for expression in expressions) +
                     "    return 0;\n}\n", encoding="utf-8",
                 )
                 compiled = os_suites.run_native([*flags, "-fsyntax-only", str(probe)], timeout=30)
@@ -483,7 +487,8 @@ class NativeKernelObjectTests(unittest.TestCase):
                     self.assertNotEqual(compiled.returncode, 0, compiled)
                     for name in names:
                         self.assertRegex(compiled.stderr, rf"error:[^\n]*\b{name}\b[^\n]*undeclared")
-            print(f"kernel_declarations available={len(available)} unavailable={len(unavailable)} strict_c99=OK", flush=True)
+            print(f"kernel_declarations available={len(available)} unavailable={len(unavailable)} "
+                  f"unavailable_types={len(unavailable_types)} strict_c99=OK", flush=True)
 
     def test_queue_front_pointer_bounds_and_order_mutations(self):
         import os_suites
