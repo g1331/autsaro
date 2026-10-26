@@ -58,7 +58,7 @@
 | 隐式同步时长 | 不适用（配置：ECUC_Os_00065）：SWS_Os_00440 |
 | 规范附录 | 已核对（规范原文：附录列出不适用于本规范的上游需求，没有实现义务）：SWS_Os_NA_00767 |
 
-中断向量表段（`SWS_Os_00336`）与 OS 声明的 MemMap 包装（`SWS_Os_00815`）随 SchM／MemMap 责任链在 [#191](https://github.com/g1331/autsaro/issues/191) 处置。
+`SWS_Os_00336／00815`的实际向量段／声明包装及#58责任见[OS核算](README.md#核算)；原[#191](https://github.com/g1331/autsaro/issues/191)已完成，不沿用旧未处置计数。
 
 ## C99 数组与回调类型
 
