@@ -186,7 +186,6 @@ OS_MEMMAP void Os_ShutdownHookInvoke(StatusType error);
 void Os_TimeTestDispatchFinishing(void);
 void Os_TimeTestDispatchUnlocked(void);
 void Os_TimeTestOnWaiting(void);
-extern volatile BaseType_t xInsideInterrupt;
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"

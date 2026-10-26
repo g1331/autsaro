@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Controlled kernel headers now expose heap, mutex and optional Task APIs only when their implementations are selected by the matching configuration. Regenerate sealed deliveries and rebuild for the updated patch identity; enabled declarations and function implementations are unchanged (#371)
+
 - Custom OS target configuration member `time` is now `timing`, and COM PDU configuration member `signal` is now `signal_id`, avoiding reserved C library names. Update designated initializers/member access and regenerate deliveries; member order, types, binary layout and values are unchanged (#371)
 
 - Adopted kernel static-event, static-timer, static-stream and MPU-task parameter structures omit four unused tags; use the retained `StaticEventGroup_t`, `StaticTimer_t`, `StaticStreamBuffer_t` and `TaskParameters_t` names. Their members and layouts are unchanged. Regenerate sealed deliveries and rebuild for the updated controlled patch identities (#371)

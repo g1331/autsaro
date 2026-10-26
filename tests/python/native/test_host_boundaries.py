@@ -437,16 +437,53 @@ class NativeKernelObjectTests(unittest.TestCase):
     def test_static_kernel_object_types_and_queue_storage(self):
         import os_suites
 
-        with tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
-            directory = Path(temporary)
-            with os_suites.native_session(directory, "kernel-object-types"):
-                binary, _ = os_suites.build(
-                    directory, str(ROOT / "tests/fixtures/os_kernel_objects.c"),
+        retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
+        output = Path(retained) / "kernel-object-types" if retained else None
+        with (os_suites.retained_workspace(output) as directory, os_suites.host_target(),
+              os_suites.native_session(directory, "kernel-object-types")):
+            binary, metadata = os_suites.build(
+                directory, str(ROOT / "tests/fixtures/os_kernel_objects.c"),
+            )
+            result = os_suites.run_native([str(binary)], timeout=10)
+            self.assertEqual(result.returncode, 0, result)
+            self.assertEqual(result.stdout, "static task and queue types; task stack identity; bounded FIFO/front/overwrite/reset observed\n")
+            self.assertEqual(result.stderr, "")
+
+            # These configured-out definitions must not leave callable declarations.
+            unavailable = (
+                "pvPortCalloc", "pvPortMalloc", "vPortDefineHeapRegions", "vPortFree",
+                "vPortGetHeapStats", "vPortHeapResetState", "vPortInitialiseBlocks",
+                "xPortGetFreeHeapSize", "xPortGetMinimumEverFreeHeapSize",
+                "xPortResetHeapMinimumEverFreeHeapSize", "pvTaskIncrementMutexHeldCount",
+                "uxTaskBasePriorityGet", "uxTaskBasePriorityGetFromISR", "vTaskDelay",
+                "vTaskDelete", "vTaskPlaceOnEventListRestricted",
+                "vTaskPriorityDisinheritAfterTimeout", "xTaskDelayUntil",
+                "xTaskGetSchedulerState", "xTaskPeriodicDelay", "xTaskPriorityDisinherit",
+                "xTaskPriorityInherit", "vQueueWaitForMessageRestricted", "xQueueCreateMutex",
+                "xQueueCreateMutexStatic", "xQueueGiveMutexRecursive", "xQueueTakeMutexRecursive",
+            )
+            available = ("xTaskCreateStatic", "xQueueGenericCreateStatic", "uxTaskPriorityGet",
+                         "vTaskSuspend", "xTaskGetHandle", "xTaskGetTickCount", "xInsideInterrupt")
+            command = metadata["command"]
+            self.assertEqual(command[-2], "-o")
+            flags = [argument for argument in command[:-2]
+                     if not argument.endswith(".c") and not argument.startswith("-l")]
+            for label, names in (("available", available), ("unavailable", unavailable)):
+                probe = directory / f"{label}.c"
+                probe.write_text(
+                    '#include "FreeRTOS.h"\n#include "task.h"\n#include "queue.h"\n'
+                    "int main(void)\n{\n" +
+                    "".join(f"    (void)&{name};\n" for name in names) +
+                    "    return 0;\n}\n", encoding="utf-8",
                 )
-                result = os_suites.run_native([str(binary)], timeout=10)
-                self.assertEqual(result.returncode, 0, result)
-                self.assertEqual(result.stdout, "static task and queue types; task stack identity; bounded FIFO/front/overwrite/reset observed\n")
-                self.assertEqual(result.stderr, "")
+                compiled = os_suites.run_native([*flags, "-fsyntax-only", str(probe)], timeout=30)
+                if label == "available":
+                    self.assertEqual(compiled.returncode, 0, compiled)
+                else:
+                    self.assertNotEqual(compiled.returncode, 0, compiled)
+                    for name in names:
+                        self.assertRegex(compiled.stderr, rf"error:[^\n]*\b{name}\b[^\n]*undeclared")
+            print(f"kernel_declarations available={len(available)} unavailable={len(unavailable)} strict_c99=OK", flush=True)
 
     def test_queue_front_pointer_bounds_and_order_mutations(self):
         import os_suites

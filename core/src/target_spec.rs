@@ -50,6 +50,7 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0022-explicit-function-addresses.patch",
     "runtime/os/patches/0023-preserve-parameter-values.patch",
     "runtime/os/patches/0024-conditional-private-definitions.patch",
+    "runtime/os/patches/0025-configured-kernel-declarations.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",
@@ -63,10 +64,15 @@ const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0022-explicit-function-addresses.patch",
     "runtime/os/patches/0023-preserve-parameter-values.patch",
     "runtime/os/patches/0024-conditional-private-definitions.patch",
+    "runtime/os/patches/0025-configured-kernel-declarations.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
     "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
+    (
+        "runtime/os/patches/0025-configured-kernel-declarations.patch",
+        &["include/portable.h", "include/task.h", "include/queue.h"],
+    ),
     (
         "runtime/os/patches/0024-conditional-private-definitions.patch",
         &["tasks.c", "queue.c"],
