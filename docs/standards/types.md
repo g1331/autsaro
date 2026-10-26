@@ -48,6 +48,14 @@ D4.15（Required、C99，AMD3.10，印刷5–6／PDF13–14）针对可能生成
 
 R8.15／R8.16／R8.17仅适用C11，类别分别为Required／Advisory／Advisory（AMD3.17，印刷10–13／PDF18–21）；本项目C99源码未使用`_Alignas`／`alignas`／`stdalign.h`，三项分别不适用。GNU aligned属性仍按平台扩展和实际布局约束核查。R1.4仅适用C11（AMD2.30，印刷11–12／PDF18–19）；合成AMD3.11–13与AMD4.53–54后不能再沿旧清单批量禁止已另设指导的泛型／noreturn／对齐／线程／原子设施。当前C99不适用本条，Annex K及平台扩展仍按实际接口检查，不能据此升级语言或免除R1.1／R1.3。
 
+## R7.3 的标识符误报
+
+R7.3为Required，当前C99适用（2013主文印刷61／PDF69；AMD2仅追加C11，AMD1／3／4及TC1／2未改变本处字面量后缀对象）。四份已完成 `direct-render-mapping-final-results` 各20条报告逐一按文件、行、列取token核对，实际全部是标识符：`call`四处、`cell`十四处、`all`两处，不是数值literal，因而这20处是误报；不是对任意含小写l名字新增规则例外。
+
+位置属于冻结Os_Backend.c的1413:28／57、1415:28／35；Os_HostServices.c的6:71、8:39、11:75、14:32、17:82、21:39；Linux Os_HostLinux.c的119:58、122:42、128:58／84、677:45、686:19；Os_LinuxNative.c的26:57、31:41、34:58、37:49。它们分别是宏形参／替换中的call、原子与futex接口的cell，以及多对象等待的all；四份分析源码在这些对象上与58fb105a字节一致。每份20个摘要位置都归属host-batch／probe，展开为40次程序报告，不把两种计数混用。
+
+固定addon的misra_7_3对rawTokens使用`(0[xX])?[0-9a-fA-FpP.]+[Uu]*l+[Uu]*`整词正则，却没有先要求token是数值literal；call／cell／all的前缀恰好落在其字符集合内，故末尾l被误认成后缀。没有为这些名字改源码、添加suppression或改检查器。此结论只覆盖这20个报告，其他literal、SDK及采用代码仍按实际构造核查；原raw诊断、passed=false／error=null和221项not_assessed均保留。
+
 ## 未使用声明与真实消费者
 
 公共声明、条件定义及真实使用的判断见[声明用途](types/declarations.md#未使用声明与真实消费者)。
