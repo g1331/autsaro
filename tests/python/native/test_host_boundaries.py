@@ -531,13 +531,12 @@ class NativeFacilityTests(unittest.TestCase):
         import os_suites
 
         retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
-        output = Path(retained) / "startup-gates" if retained else None
-        with os_suites.host_target(), os_suites.retained_workspace(output) as workspace:
+        with os_suites.host_target():
             for operation in ("wait", "publish"):
                 for unchecked in (False, True):
-                    with self.subTest(operation=operation, unchecked=unchecked):
-                        directory = workspace / f"{operation}-{unchecked}"
-                        directory.mkdir(mode=0o700)
+                    output = Path(retained) / "startup-gates" / f"{operation}-{unchecked}" if retained else None
+                    # Subtest failures must leave through the retaining context first.
+                    with self.subTest(operation=operation, unchecked=unchecked), os_suites.retained_workspace(output) as directory:
                         target = directory / "target"
                         shutil.copytree(os_suites.TARGET, target)
                         source = target / "src/Os_Backend.c"
