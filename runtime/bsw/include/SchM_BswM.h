@@ -17,7 +17,7 @@ extern "C" {
  * Reentrancy: reentrant; it has no effect.
  * Ownership: None.
  */
-void BswM_MainFunction(void);
+BSWM_CODE void BswM_MainFunction(void);
 #define BSWM_STOP_SEC_CODE
 #include "BswM_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -26,6 +26,8 @@ void BswM_MainFunction(void);
 #elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
 #error "SchM_BswM.h -> BswM_MemMap.h: incompatible AUTOSAR release"
 #endif
+#define RTE_Rte_START_SEC_CODE
+#include "Rte_MemMap.h"
 /** Enter the BswM state area (SWS_Rte_07250).
  * @par Return
  * None.
@@ -34,7 +36,7 @@ void BswM_MainFunction(void);
  * Reentrancy: not reentrant within one context; concurrent contexts serialize.
  * Ownership: this context holds the area until its matching Exit.
  */
-void SchM_Enter_BswM_BSWM_STATE(void);
+RTE_Rte_CODE void SchM_Enter_BswM_BSWM_STATE(void);
 /** Leave the BswM state area (SWS_Rte_07253).
  * @par Return
  * None.
@@ -43,7 +45,16 @@ void SchM_Enter_BswM_BSWM_STATE(void);
  * Reentrancy: not reentrant within one context.
  * Ownership: releases this context's area.
  */
-void SchM_Exit_BswM_BSWM_STATE(void);
+RTE_Rte_CODE void SchM_Exit_BswM_BSWM_STATE(void);
+#define RTE_Rte_STOP_SEC_CODE
+#include "Rte_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "SchM_BswM.h -> Rte_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "SchM_BswM.h -> Rte_MemMap.h: incompatible AUTOSAR release"
+#endif
+
 #ifdef __cplusplus
 }
 #endif

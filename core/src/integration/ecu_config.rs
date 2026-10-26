@@ -20,15 +20,15 @@ fn schm_header(module: &str, body: &str) -> String {
             r#"#include "SchM_{module}_Type.h"
 {linkage_begin}{body}{memmap_check}
 {linkage_end}"#,
-            memmap_check = if body.contains("_MemMap.h") {
-                c_layout::release_check(
+            memmap_check = [format!("{module}_MemMap.h"), "Rte_MemMap.h".to_owned()]
+                .iter()
+                .filter(|header| body.contains(&format!("\"{header}\"")))
+                .map(|header| c_layout::release_check(
                     &format!("SchM_{module}.h"),
-                    &format!("{module}_MemMap.h"),
-                    "MEMMAP",
-                )
-            } else {
-                String::new()
-            },
+                    header,
+                    "MEMMAP"
+                ))
+                .collect::<String>(),
             linkage_begin = c_layout::linkage(true),
             linkage_end = c_layout::linkage(false)
         ),
@@ -70,7 +70,13 @@ fn area_prototypes(module: &str, area: &str) -> String {
             "releases this context's area.",
         ],
     );
-    format!("{enter}{exit}")
+    format!(
+        "{}{}{}{}",
+        c_layout::section("RTE_Rte", "Rte", "CODE", true),
+        enter.replace("\nvoid ", "\nRTE_Rte_CODE void "),
+        exit.replace("\nvoid ", "\nRTE_Rte_CODE void "),
+        c_layout::section("RTE_Rte", "Rte", "CODE", false)
+    )
 }
 
 fn main_prototype(symbol: &str, purpose: &str) -> String {
@@ -87,13 +93,18 @@ fn main_prototype(symbol: &str, purpose: &str) -> String {
 }
 
 fn code_prototypes(module: &str, declarations: &str) -> String {
-    let prefix = module.to_uppercase();
+    let (prefix, owner) = if matches!(module, "Com" | "ComM") {
+        (format!("RTE_{module}"), "Rte")
+    } else {
+        (module.to_uppercase(), module)
+    };
+    let declarations = declarations.replace("\nvoid ", &format!("\n{prefix}_CODE void "));
     format!(
         r#"
 {start_code}{declarations}
 {stop_code}"#,
-        start_code = c_layout::section(&prefix, module, "CODE", true),
-        stop_code = c_layout::section(&prefix, module, "CODE", false)
+        start_code = c_layout::section(&prefix, owner, "CODE", true),
+        stop_code = c_layout::section(&prefix, owner, "CODE", false)
     )
 }
 
@@ -191,6 +202,37 @@ pub(super) fn files(
         outputs.emit(producer, path, bytes)?;
     }
     outputs.emit_all(super::outputs::RTE, super::rte::files(plan)?)?;
+    let partition = &communication.partition.name;
+    let callbacks = super::outputs::render(
+        super::outputs::trusted_text("runtime/ecu/include/Rte_Com.h")?,
+        "include/Rte_Com.h",
+        &[
+            super::outputs::Edit::Once(
+                "/** Refresh receiver",
+                &format!(
+                    "{}/** Refresh receiver",
+                    c_layout::section(&format!("RTE_{partition}"), "Rte", "CALLOUT_CODE", true)
+                ),
+            ),
+            super::outputs::Edit::Once(
+                "void Rte_COMCbk(",
+                &format!("RTE_{partition}_CALLOUT_CODE void Rte_COMCbk("),
+            ),
+            super::outputs::Edit::Once(
+                "void Rte_COMCbkRxTOut(",
+                &format!("RTE_{partition}_CALLOUT_CODE void Rte_COMCbkRxTOut("),
+            ),
+            super::outputs::Edit::Once(
+                "#ifdef __cplusplus\n}\n",
+                &format!(
+                    "{}{}#ifdef __cplusplus\n}}\n",
+                    c_layout::section(&format!("RTE_{partition}"), "Rte", "CALLOUT_CODE", false),
+                    c_layout::release_check("Rte_Com.h", "Rte_MemMap.h", "MEMMAP")
+                ),
+            ),
+        ],
+    )?;
+    outputs.emit_rendered(super::outputs::RTE, "include/Rte_Com.h", callbacks)?;
     outputs.emit_verbatim(super::outputs::RTE)?;
     outputs.emit_verbatim(super::outputs::MEMMAP)?;
     // The selected authentication group's mode type and SchM declarations
@@ -219,30 +261,58 @@ pub(super) fn files(
 {}
 "#,
             c_layout::signature(
-                "Std_ReturnType",
+                "RTE_CODE Std_ReturnType",
                 &format!("SchM_Switch_Dcm_{authentication_group}"),
                 &[format!("Rte_ModeType_{authentication_group} mode")],
                 ";",
-                false,
+                true,
             ),
             c_layout::signature(
-                &format!("Rte_ModeType_{authentication_group}"),
+                &format!("RTE_CODE Rte_ModeType_{authentication_group}"),
                 &format!("SchM_Mode_Dcm_{authentication_group}"),
                 &["void".to_owned()],
                 ";",
-                false,
+                true,
             )
         ),
     );
     let addition = format!(
-        r#"{linkage_begin}{addition}{linkage_end}"#,
+        r#"{linkage_begin}{start_code}{addition}{stop_code}{linkage_end}"#,
         linkage_begin = c_layout::linkage(true),
-        linkage_end = c_layout::linkage(false)
+        linkage_end = c_layout::linkage(false),
+        start_code = c_layout::section(
+            &format!("RTE_{}", super::memmap::dcm_scope(composition)),
+            "Rte",
+            "CODE",
+            true
+        ),
+        stop_code = c_layout::section(
+            &format!("RTE_{}", super::memmap::dcm_scope(composition)),
+            "Rte",
+            "CODE",
+            false
+        ),
     );
     let text = super::outputs::render(
         outputs.template(super::outputs::DCM_MODES, path)?,
         path,
-        &[super::outputs::Edit::BeforeGuardEnd(&addition)],
+        &[
+            super::outputs::Edit::Token(
+                "RTE_Dcm_START_SEC_CODE",
+                &format!(
+                    "RTE_{}_START_SEC_CODE",
+                    super::memmap::dcm_scope(composition)
+                ),
+            ),
+            super::outputs::Edit::Token(
+                "RTE_Dcm_STOP_SEC_CODE",
+                &format!(
+                    "RTE_{}_STOP_SEC_CODE",
+                    super::memmap::dcm_scope(composition)
+                ),
+            ),
+            super::outputs::Edit::BeforeGuardEnd(&addition),
+        ],
     )?;
     outputs.emit_rendered(super::outputs::DCM_MODES, path, text)?;
     let os = super::ecu::configure_os(description, &mut outputs)?;
@@ -844,7 +914,7 @@ pub(super) fn files(
                 module,
                 &format!("{}_CFG_H", module.to_uppercase()),
                 &format!(
-                    "#include \"{module}.h\"\n{}extern const {ty} {module}_Config;",
+                    "#include \"{module}.h\"\n{}{}extern const {ty} {module}_Config RTE_{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED;\n{}{}",
                     c_layout::commented_defines(
                         symbolic
                             .headers
@@ -852,7 +922,10 @@ pub(super) fn files(
                             .map(Vec::as_slice)
                             .unwrap_or_default(),
                         "Generated handle."
-                    )
+                    ),
+                    c_layout::section(&format!("RTE_{module}"), "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", true),
+                    c_layout::section(&format!("RTE_{module}"), "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", false),
+                    c_layout::release_check(&format!("{module}_Cfg.h"), "Rte_MemMap.h", "MEMMAP")
                 ),
             ),
         )?;

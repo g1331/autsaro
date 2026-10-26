@@ -138,6 +138,25 @@ impl ValidatedIntegrationPlan {
         ));
         let symbolic = super::symbolic_names::Names::new(self.description())?;
         files.extend(self.contract_headers(composition, &symbolic)?);
+        let mut sections = vec![
+            ("Rte".to_owned(), "CODE"),
+            ("Rte".to_owned(), "CONFIG_DATA_PREBUILD_UNSPECIFIED"),
+        ];
+        for component in &composition.components {
+            let scope = super::short_name(&component.component).to_owned();
+            sections.extend([(scope.clone(), "CODE"), (scope, "CONST_UNSPECIFIED")]);
+        }
+        sections.sort();
+        sections.dedup();
+        files.push((
+            "include/Rte_MemMap.h".into(),
+            super::memmap::rte(
+                &sections,
+                Some(".rte_code"),
+                super::memmap::dcm_scope(composition),
+            )
+            .into_bytes(),
+        ));
         files.push((
             "include/Rte_Dcm_Type.h".into(),
             self.dcm_type_header(composition)?.into_bytes(),
@@ -263,6 +282,13 @@ typedef {} {}{suffix};
         ];
         for component in &composition.components {
             let scope = super::short_name(&component.component);
+            let instance = format!("extern const Rte_CDS_{scope} *const Rte_Inst_{scope}");
+            let attribute = format!("RTE_{scope}_CONST_UNSPECIFIED;");
+            let instance = if instance.len() + attribute.len() < 100 {
+                format!("{instance} {attribute}")
+            } else {
+                format!("{instance}\n    {attribute}")
+            };
             let mut body = format!(
                 r#"#include "Rte_{scope}_Type.h"
 #include "Rte_DataHandleType.h"
@@ -277,10 +303,14 @@ typedef struct Rte_CDS_{scope} Rte_CDS_{scope};
 /** Borrowed component instance; immutable for the ECU lifetime. */
 typedef const Rte_CDS_{scope} *Rte_Instance;
 #endif
-extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
-
+{start_const}{instance}
+{stop_const}
 "#,
-                linkage_begin = c_layout::linkage(true)
+                linkage_begin = c_layout::linkage(true),
+                start_const =
+                    c_layout::section(&format!("RTE_{scope}"), "Rte", "CONST_UNSPECIFIED", true),
+                stop_const =
+                    c_layout::section(&format!("RTE_{scope}"), "Rte", "CONST_UNSPECIFIED", false),
             );
             let init_values: Vec<_> = component
                 .data_ports
@@ -430,6 +460,13 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
                 }
                 if runnable {
                     body.push_str(&c_layout::section(scope, scope, "CODE", true));
+                } else {
+                    body.push_str(&c_layout::section(
+                        &format!("RTE_{scope}"),
+                        "Rte",
+                        "CODE",
+                        true,
+                    ));
                 }
                 let parameters = if runnable && symbol.definition_owner.starts_with("application/")
                 {
@@ -450,12 +487,12 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
                     &if runnable {
                         format!("{scope}_CODE {}", symbol.return_type)
                     } else {
-                        symbol.return_type.clone()
+                        format!("RTE_{scope}_CODE {}", symbol.return_type)
                     },
                     &symbol.symbol,
                     &parameters,
                     ";",
-                    runnable,
+                    true,
                 );
                 if unnamed && !symbol.arguments.is_empty() {
                     docs.push_str(" * MR12 RULE 8.2 VIOLATION: SWS_Rte_06705 requires nameless parameters; ordered parameter contracts and typed consumers preserve the interface.\n");
@@ -481,6 +518,13 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
                         r#"{stop_code}
 "#,
                         stop_code = c_layout::section(scope, scope, "CODE", false)
+                    ));
+                } else {
+                    body.push_str(&c_layout::section(
+                        &format!("RTE_{scope}"),
+                        "Rte",
+                        "CODE",
+                        false,
                     ));
                 }
                 if !runnable {
@@ -522,9 +566,16 @@ extern const Rte_CDS_{scope} *const Rte_Inst_{scope};
             if body.contains("_MemMap.h") {
                 body.push_str(&c_layout::release_check(
                     &format!("Rte_{name}.h"),
-                    &format!("{scope}_MemMap.h"),
+                    "Rte_MemMap.h",
                     "MEMMAP",
                 ));
+                if body.contains(&format!("\"{scope}_MemMap.h\"")) {
+                    body.push_str(&c_layout::release_check(
+                        &format!("Rte_{name}.h"),
+                        &format!("{scope}_MemMap.h"),
+                        "MEMMAP",
+                    ));
+                }
             }
             body.push_str(c_layout::linkage(false));
             let guard = format!("RTE_{}_H", name.to_uppercase());

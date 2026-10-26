@@ -66,6 +66,8 @@ typedef struct {
     Com_TransmitType transmit; /**< Required when any Tx PDU exists; called outside COM_STATE. */
 } Com_ConfigType;
 
+#define COM_START_SEC_CODE
+#include "Com_MemMap.h"
 /** Reset COM state and install the selected UINT32 configuration (SWS_Com_00432).
  * @param[in] config Immutable configuration, 1 to 32 PDUs and one Rx group; invalid or NULL leaves
  * COM_UNINIT.
@@ -76,7 +78,7 @@ typedef struct {
  * The configuration, PDU table and callbacks remain valid until DeInit or the next Init; signal
  * data is copied into COM storage.
  */
-void Com_Init(const Com_ConfigType *config);
+COM_CODE void Com_Init(const Com_ConfigType *config);
 /** Reset signal and monitoring state and release the configuration (SWS_Com_00130).
  * @par Return
  * None.
@@ -86,7 +88,7 @@ void Com_Init(const Com_ConfigType *config);
  * Ownership: The configuration pointer is released; a notification already in flight completes
  * outside COM_STATE.
  */
-void Com_DeInit(void);
+COM_CODE void Com_DeInit(void);
 /** Read whether COM has a valid configuration (SWS_Com_00194).
  * @return COM_INIT when configured, COM_UNINIT otherwise.
  * Preconditions: None.
@@ -94,7 +96,7 @@ void Com_DeInit(void);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-Com_StatusType Com_GetStatus(void);
+COM_CODE Com_StatusType Com_GetStatus(void);
 /** Copy one UINT32 Tx signal into COM storage (SWS_Com_00197).
  * @param[in] SignalId A configured Tx signal handle.
  * @param[in] SignalDataPtr Non-NULL caller-owned storage containing four bytes of native UINT32
@@ -105,7 +107,7 @@ Com_StatusType Com_GetStatus(void);
  * not inside an exclusive area. Reentrancy: reentrant. Ownership: Four bytes are copied before
  * return; the pointer is never retained.
  */
-uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);
+COM_CODE uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);
 /** Copy the current UINT32 Rx signal to the caller (SWS_Com_00198).
  * @param[in] SignalId A configured Rx signal handle.
  * @param[out] SignalDataPtr Non-NULL caller-owned four-byte output; receives current/initial data
@@ -116,7 +118,7 @@ uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);
  * area. Reentrancy: reentrant. Ownership: The output is written before return when the configured
  * Rx signal exists, including stopped-group status; it is not retained.
  */
-uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr);
+COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr);
 /** No invalid values are configured, so no signal can be invalidated (SWS_Com_00203/00643).
  * @param[in] SignalId Any signal handle; none has a configured invalid value.
  * @return COM_SERVICE_NOT_AVAILABLE without changing signal data.
@@ -125,7 +127,7 @@ uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-uint8 Com_InvalidateSignal(Com_SignalIdType SignalId);
+COM_CODE uint8 Com_InvalidateSignal(Com_SignalIdType SignalId);
 /** Start the single Rx I-PDU group (SWS_Com_91001). Starting an already started group has no
  * effect; first timeout is zero.
  * @param[in] IpduGroupId The configured Rx group ID; unknown groups are ignored.
@@ -138,7 +140,7 @@ uint8 Com_InvalidateSignal(Com_SignalIdType SignalId);
  * Reentrancy: reentrant for different I-PDU groups; not for the same group.
  * Ownership: None.
  */
-void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initialize);
+COM_CODE void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initialize);
 /** Stop the single Rx I-PDU group (SWS_Com_91002). Retain the current signal values and reset
  * receive deadlines.
  * @param[in] IpduGroupId The configured Rx group ID; unknown groups are ignored.
@@ -149,7 +151,7 @@ void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initialize);
  * Reentrancy: reentrant for different I-PDU groups; not for the same group.
  * Ownership: None.
  */
-void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId);
+COM_CODE void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId);
 /** Enable reception deadline monitoring (SWS_Com_91004). No first timeout runs until a reception;
  * enabling an enabled monitor has no effect.
  * @param[in] IpduGroupId The configured Rx group ID; unknown groups are ignored.
@@ -160,7 +162,7 @@ void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId);
  * Reentrancy: reentrant for different I-PDU groups; not for the same group.
  * Ownership: None.
  */
-void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId);
+COM_CODE void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId);
 /** Disable reception deadline monitoring (SWS_Com_91003). The group start/stop state and current
  * signal values are unchanged.
  * @param[in] IpduGroupId The configured Rx group ID; unknown groups are ignored.
@@ -171,7 +173,7 @@ void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId);
  * Reentrancy: reentrant for different I-PDU groups; not for the same group.
  * Ownership: None.
  */
-void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId);
+COM_CODE void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId);
 /** Update reception timing and unpack a complete four-byte signal (SWS_Com_00123).
  * @param[in] RxPduId A configured Rx I-PDU handle.
  * @param[in] PduInfoPtr Borrowed descriptor and bytes; a short PDU resets deadline monitoring but
@@ -184,7 +186,7 @@ void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId);
  * Ownership: Data is copied before return and not retained; reception notifications run outside
  * COM_STATE in recorded order.
  */
-void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
+COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
 /** Immediately send current data, without storing a deferred trigger (SWS_Com_00348/00840).
  * @param[in] PduId A configured Tx I-PDU handle; selected Tx PDUs have no group and are started by
  * Init.
@@ -194,7 +196,7 @@ void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
  * four-byte snapshot is borrowed by the lower transmit callback only until it returns, outside
  * COM_STATE.
  */
-Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
+COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
 /** Select PERIODIC for TRUE or the absent FALSE mode NONE (SWS_Com_00784).
  * @param[in] PduId A configured Tx I-PDU handle.
  * @param[in] Mode TRUE enables periodic transmission on the next Tx main call; FALSE disables it,
@@ -206,7 +208,7 @@ Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
  * Reentrancy: reentrant for different PDU IDs; not reentrant for the same PDU ID.
  * Ownership: None.
  */
-void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
+COM_CODE void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
 /** Copy the current four-byte Tx PDU into a lower buffer (SWS_Com_00001).
  * @param[in] TxPduId A configured Tx I-PDU handle.
  * @param[in,out] PduInfoPtr Non-NULL caller-owned descriptor and destination; input capacity must
@@ -217,7 +219,7 @@ void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
  * Reentrancy: reentrant for different PDU IDs; not reentrant for the same PDU ID.
  * Ownership: No pointer is retained; all successful output writes occur before return.
  */
-Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr);
+COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr);
 /** Consume the result without Tx ACK/NACK callbacks or Tx deadline monitoring (SWS_Com_00124).
  * @param[in] TxPduId Any Tx I-PDU handle; selected confirmation processing has no state.
  * @param[in] result E_OK or E_NOT_OK; neither suppresses the next periodic request.
@@ -228,5 +230,13 @@ Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr);
  * Reentrancy: reentrant for different PDU IDs; not reentrant for the same PDU ID.
  * Ownership: None.
  */
-void Com_TxConfirmation(PduIdType TxPduId, Std_ReturnType result);
+COM_CODE void Com_TxConfirmation(PduIdType TxPduId, Std_ReturnType result);
+#define COM_STOP_SEC_CODE
+#include "Com_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Com.h -> Com_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Com.h -> Com_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

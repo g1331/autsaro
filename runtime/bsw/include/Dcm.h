@@ -81,6 +81,8 @@ typedef struct {
     Ecu_DcmAuthenticationModeType authentication_mode; /**< Non-NULL mode publisher; state 0. */
     uint16 max_did_to_read; /**< DcmDspMaxDidToRead; 0 means absent, with no count limit. */
 } Dcm_ConfigType;
+#define DCM_START_SEC_CODE
+#include "Dcm_MemMap.h"
 /** Initialize the connection, default session and deauthenticated mode (SWS_Dcm_00037).
  * @param[in] ConfigPtr Immutable selected configuration; NULL or an invalid configuration
  * leaves the module unchanged. Buffers must hold 8..256 bytes representable by PduLengthType,
@@ -95,7 +97,7 @@ typedef struct {
  * Ownership: ConfigPtr and its callbacks are retained; keep old configurations valid
  * until any calls already using them have returned.
  */
-void Dcm_Init(const Dcm_ConfigType *ConfigPtr);
+DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr);
 /** Read the locked security level; SecurityAccess is not selected (SWS_Dcm_00338).
  * @param[out] SecLevel Receives DCM_SEC_LEV_LOCKED when initialized and non-NULL.
  * @return E_OK, including before Init or for NULL (DevErrorDetect is false).
@@ -104,7 +106,7 @@ void Dcm_Init(const Dcm_ConfigType *ConfigPtr);
  * Reentrancy: reentrant.
  * Ownership: output is written before return; no pointer is retained.
  */
-Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel);
+DCM_CODE Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel);
 /** Read the active diagnostic session (SWS_Dcm_00339).
  * @param[out] SesCtrlType Receives session 1 or 3 when initialized and non-NULL.
  * @return E_OK, including before Init or for NULL (DevErrorDetect is false).
@@ -113,7 +115,7 @@ Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel);
  * Reentrancy: reentrant.
  * Ownership: output is written before return; no pointer is retained.
  */
-Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType);
+DCM_CODE Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType);
 /** Reset the session and veto an older request's queued session change (SWS_Dcm_00520).
  * @return E_OK.
  * Preconditions: None; before Init no action is taken.
@@ -121,7 +123,7 @@ Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType);
  * Reentrancy: reentrant; a reentrant mode publication is drained by the active publisher.
  * Ownership: None.
  */
-Std_ReturnType Dcm_ResetToDefaultSession(void);
+DCM_CODE Std_ReturnType Dcm_ResetToDefaultSession(void);
 /** Enable or disable future ComM active-diagnostic notifications (SWS_Dcm_01068).
  * @param[in] active FALSE disables ActiveDiagnostic, TRUE enables it; inactive
  * notifications and the FullCom transmit gate remain effective in either state.
@@ -131,7 +133,7 @@ Std_ReturnType Dcm_ResetToDefaultSession(void);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-Std_ReturnType Dcm_SetActiveDiagnostic(boolean active);
+DCM_CODE Std_ReturnType Dcm_SetActiveDiagnostic(boolean active);
 /** Reserve the connection's receive buffer (SWS_Dcm_00094).
  * @param[in] id The configured Dcm Rx ID.
  * @param[in] info Optional first payload information; NULL is allowed. Metadata must be
@@ -147,10 +149,10 @@ Std_ReturnType Dcm_SetActiveDiagnostic(boolean active);
  * Reentrancy: reentrant; at most one reservation succeeds.
  * Ownership: info is not retained; output changes only on success.
  */
-BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
-                                       const PduInfoType *info,
-                                       PduLengthType TpSduLength,
-                                       PduLengthType *bufferSizePtr);
+DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
+                                                const PduInfoType *info,
+                                                PduLengthType TpSduLength,
+                                                PduLengthType *bufferSizePtr);
 /** Copy the next segment into the reserved Rx buffer (SWS_Dcm_00556).
  * @param[in] id The configured Dcm Rx ID.
  * @param[in] info Non-NULL; SduLength 0 queries capacity and allows NULL SduDataPtr.
@@ -163,9 +165,9 @@ BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
  * Reentrancy: reentrant; the TP orders segments belonging to the same reception.
  * Ownership: source bytes are copied before return; no pointer is retained.
  */
-BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
-                                 const PduInfoType *info,
-                                 PduLengthType *bufferSizePtr);
+DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
+                                          const PduInfoType *info,
+                                          PduLengthType *bufferSizePtr);
 /** Complete the reserved Rx message (SWS_Dcm_00093).
  * @param[in] id The configured Dcm Rx ID; other IDs are ignored.
  * @param[in] result E_OK publishes a complete request; any other value discards it.
@@ -176,7 +178,7 @@ BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
  * Reentrancy: reentrant; application ReadData runs only from Dcm_MainFunction.
  * Ownership: the request stays Dcm-owned until completion; no pointer is retained.
  */
-void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result);
+DCM_CODE void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result);
 /** Copy/retry the immutable response owned by an accepted TP transmission (SWS_Dcm_00092).
  * @param[in] id The configured Dcm confirmation ID.
  * @param[in] info Non-NULL destination description; SduLength 0 allows NULL SduDataPtr.
@@ -190,10 +192,10 @@ void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result);
  * Reentrancy: reentrant; the TP orders copies for the same response.
  * Ownership: no pointer is retained; failed copies preserve data and size outputs.
  */
-BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
-                                 const PduInfoType *info,
-                                 const RetryInfoType *retry,
-                                 PduLengthType *availableDataPtr);
+DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
+                                          const PduInfoType *info,
+                                          const RetryInfoType *retry,
+                                          PduLengthType *availableDataPtr);
 /** Complete the outstanding TP transmission exactly once (SWS_Dcm_00351).
  * @param[in] id The reserved Dcm confirmation ID; other IDs are ignored.
  * @param[in] result E_OK commits an uncancelled session change; other values discard it.
@@ -204,5 +206,13 @@ BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
  * Reentrancy: reentrant; stale admission results cannot change a successor request.
  * Ownership: releases the response buffer; no pointer is retained.
  */
-void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result);
+DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result);
+#define DCM_STOP_SEC_CODE
+#include "Dcm_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Dcm.h -> Dcm_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Dcm.h -> Dcm_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

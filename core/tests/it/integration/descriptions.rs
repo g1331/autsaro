@@ -480,6 +480,21 @@ fn module_descriptions_include_delivered_public_entries_and_manuals() {
                 && node.text() == Some("/Autsaro_Rte/BswModuleEntrys/Ecu_DetRuntimeCallout"))
     );
     // Verifies: SWS_MemMap_00026, SWS_MemMap_00033.
+    let rte = xml
+        .descendants()
+        .find(|node| named(*node, "BSW-IMPLEMENTATION", "RteHostImplementation"))
+        .unwrap();
+    for source in [
+        "SchM_CanIf_Host.c",
+        "SchM_Mode_Host.c",
+        "SchM_Diagnostic_Host.c",
+    ] {
+        assert!(
+            rte.descendants()
+                .any(|node| node.has_tag_name("SHORT-LABEL") && node.text() == Some(source)),
+            "{source}"
+        );
+    }
     let implementation = xml
         .descendants()
         .find(|node| named(*node, "BSW-IMPLEMENTATION", "DetHostImplementation"))

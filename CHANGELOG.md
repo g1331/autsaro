@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- Apply existing BSW and RTE memory classes to function and instance declarations, including standalone component contracts and their release checks (#371)
+
 - Det's private development-report recursion flag has an explicit per-thread cleared data mapping and appears with its native adapter in the module description. Regenerate deliveries; first-entry, recursive reporting and process termination semantics are preserved (#371)
 
 - BSW implementation descriptions declare the shared OS mapping required by ARTI and distinguish LSduR/PduR runtime sections from RTE-generated configuration sections. Regenerate deliveries for the corrected MEMMAP dependencies and section references; C bytes and ABI are unchanged (#371)

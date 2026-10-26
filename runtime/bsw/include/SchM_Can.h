@@ -71,6 +71,8 @@ CAN_CODE void Can_MainFunction_Mode(void);
 #error "SchM_Can.h -> Can_MemMap.h: incompatible AUTOSAR release"
 #endif
 
+#define RTE_Rte_START_SEC_CODE
+#include "Rte_MemMap.h"
 /** Enter the driver state area (SWS_Rte_07250).
  * @par Return
  * None.
@@ -79,7 +81,7 @@ CAN_CODE void Can_MainFunction_Mode(void);
  * Reentrancy: not reentrant within one context; concurrent contexts serialize.
  * Ownership: Held by this context until its matching Exit.
  */
-void SchM_Enter_Can_CAN_STATE(void);
+RTE_Rte_CODE void SchM_Enter_Can_CAN_STATE(void);
 /** Exit the driver state area (SWS_Rte_07253).
  * @par Return
  * None.
@@ -88,7 +90,16 @@ void SchM_Enter_Can_CAN_STATE(void);
  * Reentrancy: not reentrant within one context; concurrent contexts serialize.
  * Ownership: Releases this context's area.
  */
-void SchM_Exit_Can_CAN_STATE(void);
+RTE_Rte_CODE void SchM_Exit_Can_CAN_STATE(void);
+#define RTE_Rte_STOP_SEC_CODE
+#include "Rte_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "SchM_Can.h -> Rte_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "SchM_Can.h -> Rte_MemMap.h: incompatible AUTOSAR release"
+#endif
+
 #ifdef __cplusplus
 }
 #endif

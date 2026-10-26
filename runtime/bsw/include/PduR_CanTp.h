@@ -11,6 +11,8 @@
     (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
 #error "PduR_CanTp.h -> ComStack_Types.h: incompatible AUTOSAR release"
 #endif
+#define PDUR_START_SEC_CODE
+#include "PduR_MemMap.h"
 /** Route reception admission directly to Dcm (SWS_PduR_00507, SWS_Dcm_00642).
  * @param[in] id A configured CanTp Rx N-SDU handle.
  * @param[in] info Borrowed first-frame descriptor, or NULL when no initial data is available;
@@ -24,10 +26,10 @@
  * Ownership: No pointer is retained. Submit the initial bytes through CopyRxData after admission
  * (SWS_Dcm_00556); StartOfReception only reserves the reception state.
  */
-BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
-                                             const PduInfoType *info,
-                                             PduLengthType length,
-                                             PduLengthType *available);
+PDUR_CODE BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
+                                                       const PduInfoType *info,
+                                                       PduLengthType length,
+                                                       PduLengthType *available);
 /** Route the next receive segment to Dcm (SWS_PduR_00512).
  * @param[in] id A configured CanTp Rx N-SDU handle.
  * @param[in] info Borrowed source segment; zero length queries capacity and permits NULL
@@ -39,9 +41,9 @@ BufReq_ReturnType PduR_CanTpStartOfReception(PduIdType id,
  * Reentrancy: reentrant.
  * Ownership: PduR retains no pointer; segment data is consumed synchronously.
  */
-BufReq_ReturnType PduR_CanTpCopyRxData(PduIdType id,
-                                       const PduInfoType *info,
-                                       PduLengthType *available);
+PDUR_CODE BufReq_ReturnType PduR_CanTpCopyRxData(PduIdType id,
+                                                 const PduInfoType *info,
+                                                 PduLengthType *available);
 /** Forward the terminal Rx result to Dcm (SWS_PduR_00375).
  * @param[in] id A configured CanTp Rx N-SDU handle.
  * @param[in] result E_OK for completion, E_NOT_OK for failure.
@@ -52,7 +54,7 @@ BufReq_ReturnType PduR_CanTpCopyRxData(PduIdType id,
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-void PduR_CanTpRxIndication(PduIdType id, Std_ReturnType result);
+PDUR_CODE void PduR_CanTpRxIndication(PduIdType id, Std_ReturnType result);
 /** Route a transmit-buffer request to Dcm (SWS_PduR_00518).
  * @param[in] id A configured CanTp Tx N-SDU handle.
  * @param[in] info Borrowed descriptor naming the writable destination and requested byte count;
@@ -67,10 +69,10 @@ void PduR_CanTpRxIndication(PduIdType id, Std_ReturnType result);
  * Ownership: PduR retains no pointer. Per SWS the descriptor is an input even though its referenced
  * payload is filled on success.
  */
-BufReq_ReturnType PduR_CanTpCopyTxData(PduIdType id,
-                                       const PduInfoType *info,
-                                       const RetryInfoType *retry,
-                                       PduLengthType *available);
+PDUR_CODE BufReq_ReturnType PduR_CanTpCopyTxData(PduIdType id,
+                                                 const PduInfoType *info,
+                                                 const RetryInfoType *retry,
+                                                 PduLengthType *available);
 /** Forward the terminal Tx result to Dcm (SWS_PduR_00381).
  * @param[in] id A configured CanTp Tx N-SDU handle.
  * @param[in] result E_OK for completion, E_NOT_OK for failure.
@@ -81,5 +83,13 @@ BufReq_ReturnType PduR_CanTpCopyTxData(PduIdType id,
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result);
+PDUR_CODE void PduR_CanTpTxConfirmation(PduIdType id, Std_ReturnType result);
+#define PDUR_STOP_SEC_CODE
+#include "PduR_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "PduR_CanTp.h -> PduR_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "PduR_CanTp.h -> PduR_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

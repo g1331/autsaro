@@ -24,6 +24,8 @@ typedef struct {
     uint16 runtime_callout_count;              /**< Number of runtime callouts, 0..65535. */
 } Det_ConfigType;
 
+#define DET_START_SEC_CODE
+#include "Det_MemMap.h"
 /** Reset and select the reporting configuration (SWS_Det_00008/00020).
  * @param[in] ConfigPtr Caller-owned immutable configuration; NULL selects no hooks.
  * @par Return
@@ -33,7 +35,7 @@ typedef struct {
  * Reentrancy: Non-reentrant.
  * Ownership: Keeps ConfigPtr and its referenced arrays; no copies or allocation.
  */
-void Det_Init(const Det_ConfigType *ConfigPtr);
+DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr);
 /** Start reporting; no startup-dependent storage is selected (SWS_Det_00025).
  * @par Return
  * None.
@@ -42,7 +44,7 @@ void Det_Init(const Det_ConfigType *ConfigPtr);
  * Reentrancy: Non-reentrant.
  * Ownership: No parameters or retained storage.
  */
-void Det_Start(void);
+DET_CODE void Det_Start(void);
 /** Notify every runtime callout in order (SWS_Det_01001/00503).
  * @param[in] ModuleId Calling module identifier, 0..65535.
  * @param[in] InstanceId Calling instance, 0..255; 0 for single-instance modules.
@@ -54,10 +56,10 @@ void Det_Start(void);
  * Reentrancy: Concurrent and nested reports are supported; callouts run outside DET_STATE.
  * Ownership: No parameter is retained; the active configuration outlives the report.
  */
-Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId,
-                                      uint8 InstanceId,
-                                      uint8 ApiId,
-                                      uint8 ErrorId);
+DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId,
+                                               uint8 InstanceId,
+                                               uint8 ApiId,
+                                               uint8 ErrorId);
 /** Notify development hooks, then halt execution (SWS_Det_00009/00026/00208).
  * @param[in] ModuleId Calling module identifier, 0..65535.
  * @param[in] InstanceId Calling instance, 0..255; 0 for single-instance modules.
@@ -70,5 +72,16 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId,
  * without invoking the hooks again on that thread.
  * Ownership: No parameter is retained; hooks run outside DET_STATE before host halt.
  */
-Std_ReturnType Det_ReportError(uint16 ModuleId, uint8 InstanceId, uint8 ApiId, uint8 ErrorId);
+DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId,
+                                        uint8 InstanceId,
+                                        uint8 ApiId,
+                                        uint8 ErrorId);
+#define DET_STOP_SEC_CODE
+#include "Det_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Det.h -> Det_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Det.h -> Det_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

@@ -65,6 +65,7 @@ fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatu
             (
                 "process.c",
                 r#"#include "Rte_Process.h"
+const Rte_CDS_Process *const Rte_Inst_Process = NULL_PTR;
 static uint32 written;
 static uint32 pinged;
 void Process_Ping(void) { pinged++; }
@@ -197,6 +198,53 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
+        let object = directory.join("contract.o");
+        let mut compiler = tooling::c_compiler();
+        compiler
+            .current_dir(&directory)
+            .args([
+                "-std=c99",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                "-Iinclude",
+                "-c",
+                "process.c",
+                "-o",
+            ])
+            .arg(&object);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &directory,
+            "typed-contract-object",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(output.status.success(), "{output:?}");
+        let sections = tooling::symbol_sections(&tooling::execution_settings().objdump, &object);
+        let scope = if renamed { "Compute" } else { "Process" };
+        for (symbol, section) in [
+            (
+                format!("Rte_Inst_{scope}"),
+                format!(".data.rel.ro.rte.{scope}.CONST_UNSPECIFIED"),
+            ),
+            (
+                format!(
+                    "Rte_Read_{scope}_{}_Value",
+                    if renamed { "InputValue" } else { "Value" }
+                ),
+                ".rte_code".to_owned(),
+            ),
+            (
+                format!("Rte_Write_{scope}_Result_Value"),
+                ".rte_code".to_owned(),
+            ),
+        ] {
+            assert!(
+                sections.contains(&(symbol.clone(), section.clone())),
+                "{symbol} must use {section}: {sections:?}"
+            );
+        }
         let output = tooling::run_public_command(
             &mut std::process::Command::new(executable),
             &directory,
@@ -1045,4 +1093,182 @@ LSduR_PBConfigIdType (*routing_configuration)(void) = LSduR_GetConfigurationId;
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn bsw_function_declarations_preserve_configured_code_placement() {
+    // Verifies: SWS_MemMap_00003, SWS_MemMap_00018
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    let scratch = Scratch::new();
+    for (path, bytes) in &files {
+        let path = scratch.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    for (header, module) in [
+        ("BswM.h", "BswM"),
+        ("BswM_ComM.h", "BswM"),
+        ("CanIf.h", "CanIf"),
+        ("CanTp.h", "CanTp"),
+        ("Com.h", "Com"),
+        ("ComM.h", "ComM"),
+        ("ComM_BswM.h", "ComM"),
+        ("ComM_Dcm.h", "ComM"),
+        ("ComM_EcuM.h", "ComM"),
+        ("Dcm.h", "Dcm"),
+        ("Dcm_ComM.h", "Dcm"),
+        ("Det.h", "Det"),
+        ("LSduR.h", "LSduR"),
+        ("LSduR_CanIf.h", "LSduR"),
+        ("LSduR_CanTp.h", "LSduR"),
+        ("LSduR_PduR.h", "LSduR"),
+        ("PduR.h", "PduR"),
+        ("PduR_CanIf.h", "PduR"),
+        ("PduR_CanTp.h", "PduR"),
+        ("PduR_Com.h", "PduR"),
+        ("PduR_Dcm.h", "PduR"),
+        ("Can_Internal.h", "Can"),
+        ("CanTp_Internal.h", "CanTp"),
+        ("Com_Internal.h", "Com"),
+        ("ComM_Internal.h", "ComM"),
+        ("Det_Host.h", "Det"),
+        ("SchM_BswM.h", "BswM"),
+        ("SchM_Can.h", "Can"),
+        ("SchM_CanIf.h", "CanIf"),
+        ("SchM_CanTp.h", "CanTp"),
+        ("SchM_Com.h", "Com"),
+        ("SchM_ComM.h", "ComM"),
+        ("SchM_Dcm.h", "Dcm"),
+        ("SchM_Det.h", "Det"),
+        ("SchM_LSduR.h", "LSduR"),
+        ("SchM_PduR.h", "PduR"),
+    ] {
+        let directory = scratch.0.join(header);
+        std::fs::create_dir(&directory).unwrap();
+        let (_, bytes) = files
+            .iter()
+            .find(|(path, _)| path.ends_with(&format!("/{header}")))
+            .unwrap();
+        std::fs::write(directory.join(header), bytes).unwrap();
+        let map_name = format!("{module}_MemMap.h");
+        let (_, map) = files
+            .iter()
+            .find(|(path, _)| path.ends_with(&format!("/{map_name}")))
+            .unwrap();
+        let map = std::str::from_utf8(map).unwrap();
+        assert!(map.contains("section(\".text\")"));
+        std::fs::write(
+            directory.join(map_name),
+            map.replace("section(\".text\")", "section(\".text.header_contract\")"),
+        )
+        .unwrap();
+        if header.starts_with("SchM_") {
+            let (_, map) = files
+                .iter()
+                .find(|(path, _)| path.ends_with("/Rte_MemMap.h"))
+                .unwrap();
+            std::fs::write(
+                directory.join("Rte_MemMap.h"),
+                std::str::from_utf8(map)
+                    .unwrap()
+                    .replace("\".rte_code\"", "\".text.header_contract\""),
+            )
+            .unwrap();
+        }
+        let prefix = format!("{}_CODE ", module.to_uppercase());
+        let mut source = format!(
+            "#include \"{header}\"\n#include \"{header}\"\n#if defined({}_CODE)\n#error Header code section was not consumed\n#endif\n",
+            module.to_uppercase()
+        );
+        let mut symbols = Vec::new();
+        let mut declaration = String::new();
+        for line in std::str::from_utf8(bytes).unwrap().lines() {
+            let function = line.split_once('(').is_some_and(|(head, _)| {
+                head.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+                    && !head.starts_with("typedef ")
+                    && head.split_whitespace().count() >= 2
+                    && head
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b" _*".contains(&byte))
+            });
+            if function
+                || line.starts_with(&prefix)
+                || line.starts_with(&format!("RTE_{module}_CODE "))
+                || line.starts_with("RTE_Rte_CODE ")
+                || line.starts_with("RTE_CODE ")
+                || !declaration.is_empty()
+            {
+                declaration.push_str(line.trim());
+                declaration.push(' ');
+                if declaration.contains(';') {
+                    let prototype = declaration.trim();
+                    let prototype = prototype
+                        .strip_prefix(&prefix)
+                        .unwrap_or(prototype)
+                        .trim_start_matches(&format!("RTE_{module}_CODE "))
+                        .trim_start_matches("RTE_Rte_CODE ")
+                        .trim_start_matches("RTE_CODE ")
+                        .trim_end_matches(';');
+                    let (head, arguments) = prototype.split_once('(').unwrap();
+                    let symbol = head.split_whitespace().last().unwrap();
+                    symbols.push(symbol.to_owned());
+                    source.push_str(prototype);
+                    source.push_str(" { ");
+                    for argument in arguments.trim_end_matches(')').split(',') {
+                        if argument.trim() != "void" {
+                            let argument = argument.split('[').next().unwrap();
+                            let name = argument
+                                .rsplit(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                                .find(|word| !word.is_empty())
+                                .unwrap();
+                            source.push_str(&format!("(void){name}; "));
+                        }
+                    }
+                    source.push_str("__builtin_trap(); }\n");
+                    declaration.clear();
+                }
+            }
+        }
+        assert!(!symbols.is_empty(), "{header}");
+        std::fs::write(directory.join("consumer.c"), source).unwrap();
+        let object = directory.join("consumer.o");
+        let mut compiler = tooling::c_compiler();
+        compiler.current_dir(&directory).args([
+            "-std=c99",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+        ]);
+        for include in [
+            "generated/include",
+            "bsw/include",
+            "integration/include",
+            "os/include",
+        ] {
+            compiler.arg("-I").arg(scratch.0.join(include));
+        }
+        compiler.args(["-c", "consumer.c", "-o"]).arg(&object);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &directory,
+            "compile-header-placement",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(
+            output.status.success(),
+            "{header}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let sections = tooling::symbol_sections(&tooling::execution_settings().objdump, &object);
+        for symbol in symbols {
+            assert!(
+                sections
+                    .iter()
+                    .any(|(name, section)| name == &symbol && section == ".text.header_contract"),
+                "{header}: {symbol}: {sections:?}"
+            );
+        }
+    }
 }

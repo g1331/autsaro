@@ -56,6 +56,8 @@ typedef struct {
         *transmit;         /**< Immutable Tx table; NULL only when transmit_count is zero. */
     uint16 transmit_count; /**< Tx route count, 0..32. */
 } LSduR_PBConfigType;
+#define LSDUR_START_SEC_CODE
+#include "LSduR_MemMap.h"
 /** Publish the first valid immutable route set (CP_SWS_LSduR_91006).
  * @param[in] ConfigPtr Generated configuration and tables; at most 32 routes in each table. NULL or
  * invalid sets are ignored.
@@ -66,7 +68,7 @@ typedef struct {
  * Ownership: The accepted configuration and all referenced tables/callbacks remain valid for the
  * ECU lifetime.
  */
-void LSduR_Init(const LSduR_PBConfigType *ConfigPtr);
+LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr);
 /** Read the published configuration identity (CP_SWS_LSduR_91008).
  * @return The configured ID, or zero before initialization. Zero may also be a valid configured ID.
  * Preconditions: None.
@@ -74,5 +76,13 @@ void LSduR_Init(const LSduR_PBConfigType *ConfigPtr);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-LSduR_PBConfigIdType LSduR_GetConfigurationId(void);
+LSDUR_CODE LSduR_PBConfigIdType LSduR_GetConfigurationId(void);
+#define LSDUR_STOP_SEC_CODE
+#include "LSduR_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "LSduR.h -> LSduR_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "LSduR.h -> LSduR_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif
