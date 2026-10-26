@@ -135,8 +135,16 @@ def coverage(addons: Path) -> dict:
             "basis": "MISRA C:2012 R8.8",
         }, {
             "guideline": "R10.1",
-            "detail": "Pinned misra_10_1 checks shift/bitwise operands, but does not implement the logical-operand restrictions, including the TC1 pointer clarification. Checker availability is partial; manual evaluation remains required.",
+            "detail": "Pinned misra_10_1 checks some shift and character-bitwise operands, but omits signed bitwise operands, unary complement and the logical-operand restrictions, including the TC1 pointer clarification. Checker availability is partial; manual evaluation must follow actual operand types and macro expansions. Raw diagnostics remain unchanged.",
             "basis": "MISRA C:2012 R10.1; TC1 R10.1; AMD3.20",
+        }, {
+            "guideline": "R10.3",
+            "detail": "Pinned misra_10_3 visits assignment operators, but omits function arguments, return conversions and case-label conversions. It also does not diagnose every signed/unsigned category change. Manual evaluation must include these implicit conversions and the applicable constant exceptions. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R10.3; TC1 R10.3; TC2.20",
+        }, {
+            "guideline": "R10.6",
+            "detail": "Pinned misra_10_6 visits simple assignments, but omits function-argument and return conversions. Manual evaluation must include all assigning operations and distinguish constant expressions from composite expressions. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R10.6; section 8.10.3; TC1 section 8.10.3",
         }, {
             "guideline": "R13.5",
             "detail": "Pinned misra_13_5 counts assignments and increment/decrement operations, but omits function calls and volatile reads on logical right-hand operands. Manual evaluation must follow the actual types and call closure. Raw diagnostics remain unchanged.",
