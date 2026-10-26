@@ -41,6 +41,14 @@ R8.5／R8.6均为Required、System范围（主文印刷69–70／PDF77–78；AM
 
 R8.13为Advisory（主文印刷73–74／PDF81–82，AMD2追加C11）。0015对uxQueueSpacesAvailable、uxQueueMessagesWaitingFromISR、xQueueIsQueueEmptyFromISR和xQueueIsQueueFullFromISR的局部Queue_t view加const；四个body只读取字段，volatile计数及原critical边界保持。正常静态queue消费者分别观察空、满及排空后的数量、容量、empty／full。与此不同，pthread／sigaction／unwind callback的可写参数类型由真实接口固定，不能靠const化后cast注册；这类ABI义务仍按原SDK范围核查，不把编译器建议等同于允许修改回调签名。
 
+R8.8为Required（主文印刷70–71／PDF78–79，AMD2追加C11），内部链接的定义及其他声明均须写static；继承前一声明的链接属性并不足够。固定addon只检查全局变量的static／extern组合，未检查函数。现成标准ECU的56份真实GCC展开中，506个内部函数body/TU组合及34个原型/TU组合未发现漏写static；重复头内inline按同一头来源追溯。后续私有重命名不改变这些声明的链接属性，SDK及其他构造另核。
+
+R7.2／R7.4均为Required（主文印刷60、62–63／PDF68、70–71；AMD2追加C11）。整数常量须按实际int／long／long long及预处理intmax_t模型判定，不能要求所有整数都带U；UINTn_C实参还要满足R7.5的无后缀要求。当前自有生产C/H及所选补丁后内核的保守LP64／LLP64候选检查没有发现应为unsigned却缺U的常量，不覆盖SDK。字符串入口则明确保持const char指针：Os_BackendAssert唯一生产调用传入__FILE__，声明owner和定义现使用const char *file，不以const void泛化该入口；原noreturn、位置参数及E_OS_STATE关闭保持。TC2.7的变参列表例外不适用于这个固定形参。
+
+名称核对使用实际命名空间、作用域和工具链（R5.1–5.4、R5.7／5.8均为Required，主文印刷48–57／PDF56–65；AMD2.33–40）。两个StartScheduleTable实现名字前31字符相同，但已核GCC／ld按完整名字区分，正常ELF中两符号及地址独立，不套用C99最小字符数制造违反。四profile的56／56／58／58个TU额外GCC -Wshadow检查均无拒绝；R5.3仍由Cppcheck core shadowVariable支持，不能写成无checker。宏参数与实际宏名、真实tag与关联typedef例外及其他namespace须分别核对，不能用合成的匿名类型名字或最终宏表替代声明历史。SDK的R5.5分类见上节，其他SDK名字不随之销项。
+
+D4.5的同namespace、重叠可见性条件要求区分实际私有名字与不同成员namespace或已结束的原型作用域。CanIf／ComM的controller_mode／allowed及OS的increment／start分别改为canif_controller_state／communication_allowed／advance_counter／activate_schedule_table，保留ControllerMode、Allowed、Increment、Start等标准参数和字段名字。逐token反向映射与原源码一致，不改变值、调用次数或状态次序。标准COM_INIT／Com_Init与COMM_INIT／ComM_Init，以及当前HANDLE／handle、CONTEXT／context、SIZE_T／size_t和采用内核xQUEUE／xQueue仍需按具体合同与风险记录，不能声称本指令全部满足或由ADR0024统一保留。
+
 R5.9为Advisory、System（主文印刷57／PDF65，AMD2追加C11），并不因对象或函数已是static就自动满足；其唯一性条件还涉及其他TU和无链接名字。同一头中定义的内部链接inline函数有明确例外。conditional-kernel标准ECU旧工件的17处报告分别指向六个BSW的configuration、Os_Time／生成配置的alarms、Os_Time／Com的values、Linux／Backend的handles、HostBatch／probe／Backend的control及probe／HostBridge的require。这些是不同实体的真实重名，不是inline例外或跨程序误报；每个程序中均有相应重名对象。当前保留文件私有状态和辅助函数的既有局部命名，理由是模块职责与static边界明确，符号核对使用文件及名字，未借重名共享存储或调用目标。该理由不消除Advisory违反；迁移到同一TU或改变链接边界时须重新命名。上述裁决只覆盖这些报告，不代替其他局部名字、SDK和全部R5.9评估。
 
 R8.6不能由“未调用”或链接成功直接销项。当前实际C99头展开和定义条件核对发现27处仍生效但没有所选定义的接口：portable.h的10个heap声明、task.h的12个接口和queue.h的5个接口。0025让声明与实际定义使用相同的配置条件：动态分配、mutex／recursive mutex、timer受限等待、Delay／Delete，以及scheduler-state组合条件。xQueueCreateMutexStatic保留既有static-allocation外层条件，再检查mutex条件；没有删掉已启用实现、补假定义或增加兼容别名。所有声明的类型、参数及非预处理C token保持，上游原件不改。
