@@ -4,9 +4,7 @@
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if ((previous[i] == SUSPENDED) && (state != SUSPENDED)) {
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if (completed[i] != 0u) {
 clang-analyzer-security.ArrayBound runtime/os/src/Os_Time.c TickType current = values[counter];
-readability-function-size generated/src/Ecu_RuntimeConfig.c RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)
 readability-function-size generated/src/Os_Arti.c OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
-readability-function-size runtime/bsw/src/Can.c CAN_CODE void Can_InternalSetMode(CanMode mode)
 readability-function-size runtime/bsw/src/CanIf.c CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
 readability-function-size runtime/ecu/src/Ecu_HostBatch.c StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 readability-function-size runtime/ecu/src/Ecu_HostBridge.c StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
