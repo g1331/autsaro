@@ -683,6 +683,94 @@ class NativeFacilityTests(unittest.TestCase):
                             self.assertIn("Os_BackendSignalStackFault", observation["stderr"], observation)
                     print(observation, flush=True)
 
+    def test_controller_does_not_read_a_pending_first_fault_snapshot(self):
+        import os_suites
+
+        variants = ("healthy-owner", "global-read") if os.environ.get("AUTOSAR_SANITIZE") == "thread" else ("healthy-owner",)
+        retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
+        helpers = r"""
+static volatile LONG snapshot_phase;
+void Os_TestBeforeFirstSnapshot(void)
+{
+    __atomic_store_n(&snapshot_phase, 1, __ATOMIC_SEQ_CST);
+    while (__atomic_load_n(&snapshot_phase, __ATOMIC_SEQ_CST) < 2) {}
+}
+void Os_TestAfterFirstSnapshot(void)
+{
+    while (__atomic_load_n(&snapshot_phase, __ATOMIC_SEQ_CST) < 3) {}
+}
+void Os_TestBeforeFaultReader(void)
+{
+    if (__atomic_load_n(&snapshot_phase, __ATOMIC_SEQ_CST) != 1) { ExitProcess(91u); }
+    __atomic_store_n(&snapshot_phase, 2, __ATOMIC_SEQ_CST);
+}
+void Os_TestAfterFaultReader(void)
+{
+    const char stage[] = "fault_snapshot reader=healthy first_payload=pending\n";
+    __atomic_store_n(&snapshot_phase, 3, __ATOMIC_SEQ_CST);
+    if (Os_HostWriteBytes(1, stage, sizeof(stage) - 1u) == 0) { ExitProcess(92u); }
+}
+"""
+        with os_suites.host_target():
+            for variant in variants:
+                output = Path(retained) / "fault-snapshot" / variant if retained else None
+                with self.subTest(variant=variant), os_suites.retained_workspace(output) as directory:
+                    target = directory / "target"
+                    shutil.copytree(os_suites.TARGET, target)
+                    stack = target / "src/host/linux/Os_StackLinux.c"
+                    text = stack.read_text()
+                    anchor = '#include "Os_Backend.h"\n'
+                    self.assertEqual(text.count(anchor), 1)
+                    text = text.replace(anchor, anchor + "void Os_TestBeforeFirstSnapshot(void);\nvoid Os_TestAfterFirstSnapshot(void);\n", 1)
+                    before = "        Os_Fault.thread_id = record->thread_id;\n"
+                    after = "        __atomic_store_n(&Os_Fault.published, 1, __ATOMIC_RELEASE);\n"
+                    self.assertEqual((text.count(before), text.count(after)), (1, 1))
+                    stack.write_text(text.replace(before, "        Os_TestBeforeFirstSnapshot();\n" + before)
+                                     .replace(after, "        Os_TestAfterFirstSnapshot();\n" + after))
+                    backend = target / "src/Os_Backend.c"
+                    text = backend.read_text()
+                    anchor = "#include <string.h>\n"
+                    self.assertEqual(text.count(anchor), 1)
+                    text = text.replace(anchor, anchor + "void Os_TestBeforeFaultReader(void);\nvoid Os_TestAfterFaultReader(void);\n", 1)
+                    read = ("                const LONG healthy =\n"
+                            "                    InterlockedCompareExchange(&controller_healthy[controller], 0, 0);\n")
+                    self.assertEqual(text.count(read), 1)
+                    if variant == "global-read":
+                        replacement = "                const LONG healthy = (current->thread_id != Os_Fault.thread_id) ? 1 : 0;\n                (void)controller;\n"
+                    else:
+                        replacement = read
+                    backend.write_text(text.replace(read, "                Os_TestBeforeFaultReader();\n" + replacement
+                                                     + "                Os_TestAfterFaultReader();\n", 1))
+                    fixture = target / "tests/native_stack.c"
+                    text = fixture.read_text()
+                    start = text.index("void Os_StackTestBeforeClose(void)")
+                    stop = text.index("\nvoid StartupHook(void)", start)
+                    # This case deliberately proceeds after the second local fault; the normal suite retains its count==2 oracle.
+                    text = text[:start] + "void Os_StackTestBeforeClose(void) {}\n" + text[stop:]
+                    old = "current->thread_id == Os_Fault.thread_id"
+                    self.assertEqual(text.count(old), 1)
+                    text = text.replace(old, "Os_StackThreadHasFault(current->thread_id) != 0", 1)
+                    fixture.write_text('#include "Os_HostIo.h"\n' + text + helpers)
+                    build = directory / "build"
+                    build.mkdir()
+                    with os_suites.native_session(directory, "fault-snapshot"):
+                        binary, _ = os_suites.build(build, "native_stack.c", target=target)
+                        if variant == "healthy-owner":
+                            observation = os_suites.execute(binary, "concurrent")
+                            self.assertEqual(observation["exit"], 13, observation)
+                            self.assertEqual(observation["stderr"], "fault_snapshot reader=healthy first_payload=pending", observation)
+                            self.assertIn("FAULT role=T ", observation["stdout"], observation)
+                            self.assertIn("FAULT role=D ", observation["stdout"], observation)
+                            self.assertIn("lifecycle=Closed state=Failed reason=13", observation["stdout"], observation)
+                        else:
+                            with self.assertRaises(AssertionError) as rejected:
+                                os_suites.execute(binary, "concurrent")
+                            observation = rejected.exception.args[0]
+                            self.assertEqual(observation["exit"], 13, observation)
+                            for evidence in ("WARNING: ThreadSanitizer: data race", "Os_Fault", "publish_fault", "Os_BackendShutdown"):
+                                self.assertIn(evidence, observation["stderr"], observation)
+                    print(observation, flush=True)
+
     def test_retired_interrupt_snapshot_drops_borrowed_parameters(self):
         import os_suites
 

@@ -45,6 +45,9 @@ OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
+    stack_published[OS_NATIVE_STACKS]; /**< Completed registration publication; no Init reset. */
+
+OS_MEMMAP static volatile Os_Atomic32Type
     stack_count; /**< Atomic native record reservations; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
@@ -284,6 +287,7 @@ OS_MEMMAP int Os_StackRegister(char role)
     record->guarantee = guarantee;
     current_stack = record;
     Os_StackCheck();
+    (void)InterlockedExchange(&stack_published[index], 1);
     return 1;
 }
 
@@ -315,9 +319,10 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
     DWORD id = GetThreadId(thread);
     LONG i;
     i = 0;
-    while ((i < stack_count) && (i < (LONG)OS_NATIVE_STACKS)) {
+    while ((i < InterlockedCompareExchange(&stack_count, 0, 0)) && (i < (LONG)OS_NATIVE_STACKS)) {
         Os_NativeStackType *record = &stacks[i];
-        if (record->thread_id == id) {
+        if ((InterlockedCompareExchange(&stack_published[i], 0, 0) != 0) &&
+            (record->thread_id == id)) {
             uintptr_t sp = (uintptr_t)context->Rsp;
             MEMORY_BASIC_INFORMATION region;
             boolean invalid = (sp < record->reserve_low) || (sp >= record->high);
@@ -384,9 +389,9 @@ OS_MEMMAP void Os_StackFatalExit(void)
         Sleep(INFINITE);
         ExitProcess(E_OS_STACKFAULT);
     }
-    if (fault->published == 0) {
+    if (InterlockedCompareExchange(&Os_Fault.published, 0, 0) == 0) {
         for (i = 0u; i < OS_NATIVE_STACKS; ++i) {
-            if (fault_records[i].published != 0) {
+            if (InterlockedCompareExchange(&fault_records[i].published, 0, 0) != 0) {
                 fault = &fault_records[i];
                 break;
             }
@@ -464,8 +469,9 @@ OS_MEMMAP int Os_StackReport(void)
     int result = 0;
     LONG index;
     index = 0;
-    while ((index < stack_count) && (index < (LONG)OS_NATIVE_STACKS)) {
-        if (stacks[index].thread_id != 0u) {
+    while ((index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
+           (index < (LONG)OS_NATIVE_STACKS)) {
+        if (InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) {
             if (report_stack(&stacks[index]) == 0) {
                 result = -1;
             }
@@ -473,7 +479,7 @@ OS_MEMMAP int Os_StackReport(void)
         ++index;
     }
     for (index = 0; index < (LONG)OS_NATIVE_STACKS; ++index) {
-        if (fault_records[index].published != 0) {
+        if (InterlockedCompareExchange(&fault_records[index].published, 0, 0) != 0) {
             if (report_fault(&fault_records[index]) == 0) {
                 result = -1;
             }

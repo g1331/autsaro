@@ -1354,9 +1354,13 @@ OS_MEMMAP void Os_BackendShutdown(StatusType error)
     const Os_NativeStackType *current = Os_StackCurrent();
     if (error == E_OS_STACKFAULT) {
         if (Os_StackHasFault() != 0) {
-            if ((current != NULL) && ((current->role == 'C') || (current->role == 'D')) &&
-                (current->thread_id != Os_Fault.thread_id)) {
-                report_and_exit();
+            if ((current != NULL) && ((current->role == 'C') || (current->role == 'D'))) {
+                const uint32 controller = (current->role == 'C') ? 0u : 1u;
+                const LONG healthy =
+                    InterlockedCompareExchange(&controller_healthy[controller], 0, 0);
+                if (healthy != 0) {
+                    report_and_exit();
+                }
             }
         }
     }
