@@ -38,6 +38,8 @@
 
 ### Fixed
 
+- Native shutdown reasons use lock-free atomic publication when ordinary closing races a guard fault; ShutdownHook, lifecycle text and exit status consume one captured reason (#371)
+
 - Native OS masks use unsigned operands before conversion to the platform API types; timer state and ARTI atomic constants avoid implicit narrowing on Linux. Signal, mapping, event, futex, unwind and atomic-state values and ABI are unchanged (#371)
 
 - Kernel trace hooks use one declaration owner, read-only selection addresses and a const character filename parameter for assertions; queue capacity and ISR-state queries use const object views. Regenerate deliveries for the updated controlled patch identity; AUTOSAR API types, object layouts and synchronization are unchanged (#371)

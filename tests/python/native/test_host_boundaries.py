@@ -632,6 +632,57 @@ class NativeFacilityTests(unittest.TestCase):
                             self.assertIn(" threads=3 ", observation["stdout"], observation)
                         print(observation, flush=True)
 
+    def test_stack_fault_and_ordinary_close_publish_reason_atomically(self):
+        import os_suites
+
+        variants = ("atomic", "ordinary-write") if os.environ.get("AUTOSAR_SANITIZE") == "thread" else ("atomic",)
+        retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
+        with os_suites.host_target():
+            for variant in variants:
+                output = Path(retained) / "shutdown-reason" / variant if retained else None
+                with self.subTest(variant=variant), os_suites.retained_workspace(output) as directory:
+                    target = directory / "target"
+                    shutil.copytree(os_suites.TARGET, target)
+                    source = target / "src/Os_Backend.c"
+                    text = source.read_text()
+                    anchor = "#include <string.h>\n"
+                    self.assertEqual(text.count(anchor), 1)
+                    text = text.replace(anchor, anchor + "void Os_TestBeforeReasonStore(StatusType value);\n"
+                                        "void Os_TestAfterReasonStore(StatusType value);\n", 1)
+                    pattern = r"(?m)^( +)(__atomic_store_n\(&shutdown_reason, (E_OS_STACKFAULT|error), __ATOMIC_SEQ_CST\);)$"
+                    self.assertEqual(len(re.findall(pattern, text)), 4)
+
+                    def handshake(match, variant=variant):
+                        indent, operation, value = match.groups()
+                        if variant == "ordinary-write":
+                            operation = "shutdown_reason = " + value + ";"
+                        return (indent + "Os_TestBeforeReasonStore(" + value + ");\n"
+                                + indent + operation + "\n" + indent + "Os_TestAfterReasonStore(" + value + ");")
+
+                    source.write_text(re.sub(pattern, handshake, text))
+                    shutil.copy2(ROOT / "tests/fixtures/os_shutdown_reason.c", target / "tests/shutdown_reason.c")
+                    build = directory / "build"
+                    build.mkdir()
+                    with os_suites.native_session(directory, "shutdown-reason"):
+                        binary, _ = os_suites.build(build, "shutdown_reason.c", ("OS_STACK_TESTS",), target=target)
+                        if variant == "atomic":
+                            observation = os_suites.execute(binary, "reason-publication")
+                            self.assertEqual(observation["exit"], 13, observation)
+                            self.assertEqual(observation["stderr"], "reason_publication writers=2 fault=H", observation)
+                            self.assertIn("lifecycle=Closed state=Failed reason=13", observation["stdout"], observation)
+                            self.assertIn("FAULT role=H ", observation["stdout"], observation)
+                            self.assertNotIn("X", observation["stdout"].split("trace=")[1].split()[0], observation)
+                        else:
+                            with self.assertRaises(AssertionError) as rejected:
+                                os_suites.execute(binary, "reason-publication")
+                            observation = rejected.exception.args[0]
+                            self.assertEqual(observation["exit"], 13, observation)
+                            self.assertIn("WARNING: ThreadSanitizer: data race", observation["stderr"], observation)
+                            self.assertIn("shutdown_reason", observation["stderr"], observation)
+                            self.assertIn("Os_BackendRequestShutdown", observation["stderr"], observation)
+                            self.assertIn("Os_BackendSignalStackFault", observation["stderr"], observation)
+                    print(observation, flush=True)
+
     def test_retired_interrupt_snapshot_drops_borrowed_parameters(self):
         import os_suites
 

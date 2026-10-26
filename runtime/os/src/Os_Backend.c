@@ -8,6 +8,10 @@
 #include "Os_PortRestart.h"
 #include <string.h>
 
+#if !defined(__GCC_ATOMIC_CHAR_LOCK_FREE) || (__GCC_ATOMIC_CHAR_LOCK_FREE != 2)
+#error "Native shutdown reason requires always-lock-free byte atomics"
+#endif
+
 #ifdef __linux__
 #define OS_NATIVE_HEAP "hidden=2 controllers=2 heap=posix static=freertos "
 #else
@@ -281,7 +285,7 @@ OS_MEMMAP static volatile Os_Atomic32Type
 #define OS_START_SEC_VAR_CLEARED_8
 #include "Os_MemMap.h"
 OS_MEMMAP static StatusType
-    shutdown_reason; /**< First-close winner reason, atomically published; no Init reset. */
+    shutdown_reason; /**< Atomic close reason; a native stack fault overrides; no Init reset. */
 
 OS_MEMMAP static AppModeType startup_mode; /**< Startup-only selected AppMode; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_8
@@ -1078,9 +1082,10 @@ OS_MEMMAP static void __attribute__((noreturn)) report_and_exit(void)
     sint32 output_failed = 0;
     Os_StackCheck();
     if (Os_StackHasFault() != 0) {
-        shutdown_reason = E_OS_STACKFAULT;
+        __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
     }
-    Os_ShutdownHookInvoke(shutdown_reason);
+    const StatusType reason = __atomic_load_n(&shutdown_reason, __ATOMIC_SEQ_CST);
+    Os_ShutdownHookInvoke(reason);
     observe_shutdown();
     if (Os_StackReport() != 0) {
         output_failed = 1;
@@ -1088,8 +1093,8 @@ OS_MEMMAP static void __attribute__((noreturn)) report_and_exit(void)
     char storage[512];
     Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
     Os_HostTextAppend(&text, "lifecycle=Closed state=");
-    Os_HostTextAppend(&text, (shutdown_reason == E_OK) ? "Ready" : "Failed");
-    Os_HostTextField(&text, " reason=", shutdown_reason);
+    Os_HostTextAppend(&text, (reason == E_OK) ? "Ready" : "Failed");
+    Os_HostTextField(&text, " reason=", reason);
     Os_HostTextAppend(&text, " trace=");
     Os_HostTextAppend(&text, (const char *)trace);
     Os_HostTextField(&text, " threads=", threads);
@@ -1103,7 +1108,7 @@ OS_MEMMAP static void __attribute__((noreturn)) report_and_exit(void)
     if (Os_HostTextWrite(&text) == 0) {
         output_failed = 1;
     }
-    ExitProcess(((output_failed != 0) && (shutdown_reason == E_OK)) ? E_OS_STATE : shutdown_reason);
+    ExitProcess(((output_failed != 0) && (reason == E_OK)) ? E_OS_STATE : reason);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1288,7 +1293,7 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
     Os_MailboxClose();
     (void)InterlockedOr(&activation_admission, 2);
     (void)InterlockedExchange(&ready, 0);
-    shutdown_reason = E_OS_STACKFAULT;
+    __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
     if (failed_role == 'C') {
         (void)InterlockedExchange(&controller_healthy[0], 0);
     } else if (failed_role == 'D') {
@@ -1319,7 +1324,7 @@ OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
 {
     (void)InterlockedOr(&activation_admission, 2);
     (void)InterlockedExchange(&ready, 0);
-    shutdown_reason = E_OS_STACKFAULT;
+    __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
     if (failed_role == 'C') {
         (void)InterlockedExchange(&controller_healthy[0], 0);
     } else if (failed_role == 'D') {
@@ -1365,7 +1370,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
     Os_TimeClose();
     Os_MailboxClose();
     if (((uint32)InterlockedOr(&activation_admission, 2) & 2u) == 0u) {
-        shutdown_reason = error;
+        __atomic_store_n(&shutdown_reason, error, __ATOMIC_SEQ_CST);
         (void)InterlockedExchange(&ready, 0);
         if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
             if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
