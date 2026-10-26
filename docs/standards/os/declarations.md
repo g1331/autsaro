@@ -10,7 +10,7 @@ R5.5为Required（主文印刷53／PDF61，AMD2.27／39追加C11及语言措辞�
 
 现存四份sdk-inline-closure展开保留GCC进入／返回行标记，可区分Os_HostLinux、Os_StackLinux、Os_LinuxNative和Os_PortRestart的实际包含栈。pthread.h的12个枚举、confname.h的302个枚举、eventfd.h的三个枚举、sched_priority成员及两个Linux UAPI typedef，共320个名字的声明和宏由非标准头处理引入；对应宏均是自身名字的替换，实际预处理仍保留同名标识符。标准头处理已结束后出现的这些对象不能据§6.7排除。sched_priority的成员与宏生产者分别为struct_sched_param.h和sched.h:47。
 
-另26个名字的声明来自signal.h处理中的sigaction／siginfo／sigevent头，适用§6.7的头内容边界，不能仅因其为POSIX扩展就把该边界撤销。其中sa_sigaction和si_addr又在项目函数体中展开，最终分别保留同名成员：Os_HostLinux.c:219／230、Os_StackLinux.c:219及:178；这些位于标准头处理之外的接口使用仍受规则约束。其余24个名字在四profile的现成实际TU展开中没有头外出现，不需为这些头内对象申请R5.5保留。由此，本次有依据的分类为320个外部头对象及两个项目接口名字存在R5.5违反、24个仅有§6.7范围内对象；计数按名字去重，不是位置或TU计数，也不表示整条规则已满足。
+另26个名字的声明来自signal.h处理中的sigaction／siginfo／sigevent头，适用§6.7的头内容边界，不能仅因其为POSIX扩展就把该边界撤销。位掩码整改未改变包含链或这些成员名。sa_sigaction和si_addr又在项目函数体中展开，最终分别保留同名成员：Os_HostLinux.c:220／231、Os_StackLinux.c:220及:178；这些位于标准头处理之外的接口使用仍受规则约束。其余24个名字在四profile的现成实际TU展开中没有头外出现，不需为这些头内对象申请R5.5保留。由此，本次有依据的分类为320个外部头对象及两个项目接口名字存在R5.5违反、24个仅有§6.7范围内对象；计数按名字去重，不是位置或TU计数，也不表示整条规则已满足。
 
 固定March 2013第三版主文的R5.5原页没有独立Exception段；其合规宏调用示例以预处理后不再留下同名标识符为条件。已合成AMD1–4／TC1–2，其中AMD2.27／39只增加语言适用性及措辞，未找到为上述自身名字宏、成员别名或typedef另设的一般例外。该判断及§6.7的具体范围纳入本次累计技术复核；若有其他正式例外原文，应按其版次和条件核对，不能用工具解释或后续版次摘要替代固定组合。
 
