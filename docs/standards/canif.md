@@ -41,3 +41,20 @@
 | 配置集名 | 已核对（主线只生成一个配置集：`CanIf_PBcfg.c` 中的 `CanIf_Config` 传给 `CanIf_Init`，集名只作标识）：ECUC_CanIf_00623 |
 | 规范附录 | 已核对（条目只声明所列上游需求不适用于 CanIf，没有实现义务）：SWS_CANIF_NA_00999 |
 | 同一通道混用标准与扩展 ID | 差距 #117：SWS_CANIF_00281 |
+
+## MemMap 的具体责任
+
+以下定位绑定 `58fb105a` 源码与四份 `direct-render-mapping-final-samples`，不是批准表。固定 MISRA 主文 R20.1（Advisory，印刷155／PDF163）、R20.5（Advisory，158／166）及 D4.10（Required，32–33／40–41）的修订与通用替代判断见 [MemMap 篇](memmap.md#misra-预处理布局)。位置按预处理前物理源码判断，不将所属两个程序或四 profile 重复计数。
+
+| 位置、请求与所属 class | 实体及必要性 |
+| --- | --- |
+| `runtime/bsw/src/CanIf.c`，同一 `#include "CanIf_MemMap.h"` 第2／3／4次，行57／65／531 | 第2次关闭配置指针、控制器／PDU模式、四个Tx ledger及三代次计数的 cleared 段；随后完整 CODE 对包围五个私有 helper 和十四个公开服务／回调定义。第一处在这些对象之前，不列为 R20.1。配置与ledger均由 CANIF_STATE 保护，不能把开始／关闭请求搬到文件顶而仍映射相同实体。 |
+| `runtime/bsw/include/CanIf.h`，同一指令第1／2次，行81／235 | 已有配置与路由类型之后，十四个公开函数原型使用 `CANIF_CODE`；两处都在本头声明之后。00003要求声明与定义分别完整映射，定义已有段不能替代原型侧请求。 |
+| `generated/include/CanIf_Cfg.h`，`#include "Rte_MemMap.h"` 第2次，四 profile 均为行15 | 关闭 `CanIf_Config` 的 extern 配置声明，class 为 `RTE_CanIf_CONFIG_DATA_PREBUILD_UNSPECIFIED`。第一处在本文件对象声明前；不把所包含其他头的类型当作此处前置声明。 |
+| `generated/src/CanIf_PBcfg.c`，同一指令第2次，前三 profile 行34、no-diagnostic 行32 | 关闭同类 `can_rx`、`can_tx` 及 `CanIf_Config` 三个连续对象。相邻配对已经合并，不能再沿用旧工程中逐对象重复开闭的五个报告位置。Ecu bootstrap通过 `CanIf_Init(&CanIf_Config)`保存配置，路由数组和实际 BusSM通知地址在该对象整个使用期内有效。 |
+
+上述是七个 CanIf 代码／数据／配置位置的技术判断，未把其他模块文件名中带 CanIf 的报告算入本模块。`SchM_CanIf.h:30`关闭 Enter/Exit 的 `RTE_Rte_CODE` 原型；其真实定义与其他模块的 Enter/Exit 共处 `SchM_CanIf_Host.c`，该文件的 Rte 映射属于共享 SchM 实现，沿 RTE 责任核对，不能冒充 CanIf 实现 CODE。配置声明／定义及 SchM 原型均来自实际生成来源，未假称 runtime 文件路径是其交付原件身份。
+
+`CanIf_MemMap.h`由 `outputs::template_of` 预留给 MEMMAP producer，再经 `emit_verbatim` 输出至 `generated/include`；四份实际输出均与保留模板字节相同，但 `originalBswSources` 不把该 emitter 输出列为直接交付原件。R20.5的模块关键词为模板第7／14／21／28行四个 START／STOP撤销，直接连接 `SWS_MemMap_00011`；第18／19／32／33行的活动状态和属性撤销属于实现控制，不能把内部宏名说成SWS强制。
+
+D4.10对应这个映射头的首个 `@file` 与上述四类实际请求，不对应某个服务函数。一次性guard会吞掉后续STOP及下一段；移到函数体违反00023，靠默认段又不满足00003。现有真实头部段继承、C/C++请求拒绝、STOP后清理、外部版本边及封存ECU协议消费者分别提供风险控制证据，不由符号存在或绿色CI推出整体符合。新增位置尚须连到后续累计复核及最终BSW00115注释；此节未新增Approved／MR12，旧raw状态、严格拒绝和221项人工责任保持。
