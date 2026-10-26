@@ -32,8 +32,6 @@ static int read_byte(char *byte)
 #endif
 }
 
-static Ecu_HostBatch batch; /**< Native control only; HostBatchInitialize zeros before use. */
-
 static void receipt(Os_HostTextType *text, const Ecu_HostBatch *state, StatusType status)
 {
     Os_HostTextAppend(text, (status == E_OK) ? "COMMIT_OK" : "COMMIT_ERROR");
@@ -124,6 +122,7 @@ static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length)
 
 static Os_HostThreadResultType control(void *argument)
 {
+    static Ecu_HostBatch batch; /**< Native control only; HostBatchInitialize zeros before use. */
     uint64_t started = Os_HostMonotonicMs();
     char line[ECU_BATCH_LINE_CAPACITY];
     size_t length;

@@ -2,7 +2,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
 index 2592610..1be0473 100644
 --- a/portable/ThirdParty/GCC/Posix/port.c
 +++ b/portable/ThirdParty/GCC/Posix/port.c
-@@ -23,658 +23,398 @@
+@@ -23,658 +23,397 @@
   *
   * https://www.FreeRTOS.org
   * https://github.com/FreeRTOS
@@ -130,7 +130,6 @@ index 2592610..1be0473 100644
 +static HANDLE interrupt_gate;
 +static HANDLE interrupt_event;
 +static HANDLE dispatcher_registered;
-+static HANDLE dispatcher_thread;
 +static volatile uint32_t pending;
 +static uint32_t disabled_sources;
 +static volatile BaseType_t port_running;
@@ -590,8 +589,8 @@ index 2592610..1be0473 100644
 +    if (interrupt_gate == NULL || interrupt_event == NULL || dispatcher_registered == NULL) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
-+    dispatcher_thread = Os_HostCreateActor(262144u, &dispatcher_start, NULL,
-+                                           STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
++    const HANDLE dispatcher_thread = Os_HostCreateActor(
++        262144u, &dispatcher_start, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
 +    if (dispatcher_thread == NULL ||
 +        WaitForSingleObject(dispatcher_registered, 5000u) != WAIT_OBJECT_0 ||
 +        WaitForSingleObject(dispatcher_thread, INFINITE) != WAIT_OBJECT_0) {

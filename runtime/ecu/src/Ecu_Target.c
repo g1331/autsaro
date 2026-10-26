@@ -51,8 +51,6 @@ typedef struct {
  */
 static volatile Os_Atomic32Type
     lifecycle; /**< Atomic target lifecycle; Prepare claims zero once. */
-static volatile Os_Atomic32Type native_owner; /**< Atomic binding: 0 unbound, 1 writing, 2 ready. */
-static Os_HostThreadIdType native_thread;     /**< Native identity published by native_owner. */
 /* Accessed only by the native producer after its atomic identity publication. */
 static uint64_t native_input_epoch;  /**< Native-only last admitted epoch, ms. */
 static uint64_t native_batch_ticket; /**< Native-only last admitted batch identity. */
@@ -64,21 +62,15 @@ static uint8_t batch_needs_tick; /**< Native-published tick flag; batch_state ha
 static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY]; /**< Payload protected by batch_state. */
 static Ecu_BatchCompletion batch_completion;            /**< Result protected by batch_state. */
 static Os_HostThreadIdType initialization_thread;       /**< Startup writes once before READY. */
-static uint64_t epoch;              /**< Owner-only current logical epoch, ms; initially zero. */
-static uint64_t processed_tick;     /**< Owner-only last processed tick ticket; initially zero. */
-static uint64_t processed_epoch;    /**< Owner-only last processed epoch, ms. */
-static uint64_t next_output_ticket; /**< Owner-only monotonic output identity; initially zero. */
-static unsigned output_write;       /**< Owner-only next publication slot; initially zero. */
-static unsigned output_read;        /**< Native-only next take slot; initially zero. */
-static unsigned output_confirm;     /**< Native-only next confirmation slot; initially zero. */
-static unsigned output_retire;      /**< Owner-only next retirement slot; initially zero. */
-static unsigned output_pending;     /**< Owner-only outstanding output count; initially zero. */
+static uint64_t epoch;           /**< Owner-only current logical epoch, ms; initially zero. */
+static uint64_t processed_tick;  /**< Owner-only last processed tick ticket; initially zero. */
+static uint64_t processed_epoch; /**< Owner-only last processed epoch, ms. */
+static unsigned output_retire;   /**< Owner-only next retirement slot; initially zero. */
+static unsigned output_pending;  /**< Owner-only outstanding output count; initially zero. */
 /* Confirmations taken before their epoch's cycle, retired after it in order. */
 static unsigned output_deferred; /**< Owner-only confirmations deferred until cycle. */
 static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];             /**< Atomic output slots. */
 static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY]; /**< Atomic failure slots. */
-static unsigned protocol_write; /**< Owner-only next failure publication slot; initially zero. */
-static unsigned protocol_read;  /**< Native-only next failure consumption slot; initially zero. */
 /* Highest generated bootstrap stage that began; retirement undoes only those. */
 static uint8 bootstrap_reached; /**< Startup writes; stopped-owner shutdown reads. */
 
@@ -92,6 +84,8 @@ static Os_Atomic32Type load(volatile Os_Atomic32Type *value) { return Os_HostAto
 /* Owner-only writer; a full queue closes the target instead of dropping a record. */
 static void record_protocol_failure(EcuStatus status)
 {
+    static unsigned
+        protocol_write; /**< Owner-only next failure publication slot; initially zero. */
     Ecu_ProtocolSlot *slot = &protocol_failures[protocol_write];
     if (load(&slot->state) != 0) {
         fail();
@@ -154,6 +148,9 @@ uint64_t Ecu_TargetNow(void)
 }
 static StatusType native_context(void)
 {
+    static volatile Os_Atomic32Type
+        native_owner;                         /**< Atomic binding: 0 unbound, 1 writing, 2 ready. */
+    static Os_HostThreadIdType native_thread; /**< Native identity published by native_owner. */
     Os_Atomic32Type owner;
     StatusType status = E_OS_ACCESS;
     if (Ecu_TargetState() != ECU_TARGET_READY) {
@@ -178,6 +175,8 @@ static StatusType native_context(void)
 
 StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record)
 {
+    static unsigned
+        protocol_read; /**< Native-only next failure consumption slot; initially zero. */
     StatusType status;
     Ecu_ProtocolSlot *slot = &protocol_failures[protocol_read];
     if (record == NULL) {
@@ -409,6 +408,9 @@ void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType p
 }
 EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8])
 {
+    static uint64_t
+        next_output_ticket;       /**< Owner-only monotonic output identity; initially zero. */
+    static unsigned output_write; /**< Owner-only next publication slot; initially zero. */
     Ecu_OutputSlot *slot = &outputs[output_write];
     if (Ecu_TargetIsOwner() == 0) {
         return ECU_ERR_IO;
@@ -447,6 +449,7 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, con
 }
 StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record)
 {
+    static unsigned output_read; /**< Native-only next take slot; initially zero. */
     StatusType status;
     Ecu_OutputSlot *slot = &outputs[output_read];
     if (record == NULL) {
@@ -465,6 +468,7 @@ StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record)
 }
 StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu)
 {
+    static unsigned output_confirm; /**< Native-only next confirmation slot; initially zero. */
     Ecu_OutputSlot *slot = &outputs[output_confirm];
     Ecu_Input input = {0};
     uint64_t mailbox_ticket;

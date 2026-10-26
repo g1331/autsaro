@@ -1,6 +1,6 @@
 --- a/portable/ThirdParty/GCC/Posix/port.c
 +++ b/portable/ThirdParty/GCC/Posix/port.c
-@@ -91,13 +91,13 @@
+@@ -90,13 +90,13 @@
  sint32 Os_PortInterruptSourceControl(uint32 interrupt, uint32 operation, boolean clear)
  {
      uint32_t bit;
@@ -18,7 +18,7 @@
          return 2;
      }
      if (operation == 0u) {
-@@ -107,8 +107,10 @@
+@@ -106,8 +106,10 @@
              pending &= ~bit;
          }
          disabled_sources &= ~bit;
@@ -31,7 +31,7 @@
          }
      } else if (operation == 2u) {
          pending &= ~bit;
-@@ -126,13 +128,15 @@
+@@ -125,13 +127,15 @@
      for (index = 0u; index < PORT_INTERRUPT_COUNT; ++index) {
          const uint32_t bit = (uint32_t)1u << index;
          const unsigned candidate = Os_BackendInterruptPriority(index);
@@ -54,7 +54,7 @@
              }
          }
      }
-@@ -158,13 +162,13 @@
+@@ -157,13 +161,13 @@
      const Os_NativeStackType *stack = Os_StackCurrent();
      const unsigned outer = Os_BackendCurrentInterrupt();
      uint32_t seen = 0u;
@@ -71,7 +71,7 @@
                  Os_BackendRequestIsrReschedule();
              }
              interrupt = next_interrupt(seen, Os_BackendInterruptPriority(outer), 1);
-@@ -192,9 +196,14 @@
+@@ -191,9 +195,14 @@
      while (interrupt < PORT_INTERRUPT_COUNT) {
          const uint32_t requested = run_interrupt(interrupt);
          seen |= (uint32_t)1u << interrupt;
@@ -89,7 +89,7 @@
          }
          interrupt = next_interrupt(seen, 0u, 0);
      }
-@@ -227,7 +236,7 @@
+@@ -226,7 +235,7 @@
      }
      for (;;) {
          DWORD ready = WaitForSingleObject(interrupt_event, 100u);
@@ -98,7 +98,7 @@
              Os_BackendShutdown(E_OS_STATE);
          }
          if (port_running == pdFALSE) {
-@@ -267,14 +276,18 @@
+@@ -266,14 +275,18 @@
      interrupt_gate = Os_PortMutex(NULL, FALSE, NULL);
      interrupt_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
      dispatcher_registered = Os_PortEvent(NULL, FALSE, FALSE, NULL);
@@ -106,8 +106,8 @@
 +    if ((interrupt_gate == NULL) || (interrupt_event == NULL) || (dispatcher_registered == NULL)) {
          Os_BackendShutdown(E_OS_STATE);
      }
-     dispatcher_thread = Os_HostCreateActor(262144u, &dispatcher_start, NULL,
-                                            STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
+     const HANDLE dispatcher_thread = Os_HostCreateActor(
+         262144u, &dispatcher_start, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
 -    if (dispatcher_thread == NULL ||
 -        WaitForSingleObject(dispatcher_registered, 5000u) != WAIT_OBJECT_0 ||
 -        WaitForSingleObject(dispatcher_thread, INFINITE) != WAIT_OBJECT_0) {
@@ -121,7 +121,7 @@
          Os_BackendShutdown(E_OS_STATE);
      }
      return pdFALSE;
-@@ -283,16 +296,19 @@
+@@ -282,16 +295,19 @@
  void vPortEndScheduler(void)
  {
      port_running = pdFALSE;
@@ -146,7 +146,7 @@
      }
      ++critical_nesting;
  }
-@@ -306,12 +322,20 @@
+@@ -305,12 +321,20 @@
      --critical_nesting;
      if (port_running != pdFALSE) {
          HANDLE handoff = NULL;
@@ -173,7 +173,7 @@
                  handoff = selected_task().yielded;
                  if (ResetEvent(handoff) == 0) {
                      Os_BackendShutdown(E_OS_STATE);
-@@ -324,8 +348,10 @@
+@@ -323,8 +347,10 @@
          if (ReleaseMutex(interrupt_gate) == 0) {
              Os_BackendShutdown(E_OS_STATE);
          }
@@ -186,7 +186,7 @@
          }
      }
  }
-@@ -339,32 +365,41 @@
+@@ -338,32 +364,41 @@
  
  void vPortClearInterruptMask(UBaseType_t mask)
  {
@@ -236,7 +236,7 @@
              Os_BackendShutdown(E_OS_STATE);
          }
          return;
-@@ -389,19 +424,23 @@
+@@ -388,19 +423,23 @@
      if (interrupt >= PORT_INTERRUPT_COUNT) {
          Os_BackendShutdown(E_OS_ID);
      }
