@@ -42,3 +42,19 @@ LSduR 只在自己的 `LSDUR_STATE` 区内读取已发布的配置指针，离�
 
 - 头文件不含软件与规范版本号（#59）。
 - 生成 C 的 MISRA 诊断裁决与人工评估未完成（#58）。
+
+## MemMap 的具体责任
+
+以下定位绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`；规则类别、修订与不可把内部宏名当SWS强制的限制见[MemMap篇](memmap.md#misra-预处理布局)。这是逐处技术记录，未新增批准表或MR12。自有实现／声明沿 `originalBswSources` 对应，四 profile 字节均与源码一致；映射头由MEMMAP producer保留模板后逐字输出到 `generated/include`，不是该映射中的直接原件身份。
+
+| R20.1位置、请求和类别 | 实体与实际闭包 |
+| --- | --- |
+| `runtime/bsw/src/LSduR.c`，`#include "LSduR_MemMap.h"` 第2／3／4次，行16／18／154 | 第2次关闭唯一配置指针的 `VAR_CLEARED_UNSPECIFIED`；第3／4次为全部验证、配置快照和路由函数的CODE对。指针在LSDUR_STATE内仅首次发布，后续路由持有的是进程期不可变配置；不是借用调用者的临时路由副本。第一处在本文件声明之前，不列为R20.1。 |
+| `runtime/bsw/include/LSduR.h`，同一指令第1／2次，行60／81 | 本头路由与配置类型之后的Init／GetConfigurationId原型使用 `LSDUR_CODE`；两处均在类型声明后。 |
+| `runtime/bsw/include/LSduR_CanIf.h`／`LSduR_CanTp.h`／`LSduR_PduR.h`，各第2次，行44／20／20 | 关闭实际CanIf接收／确认／触发、CanTp发送和PduR发送原型。三个头首个请求前没有本文件C声明，不能因被包含的LSduR.h有类型就把其首处一并列为违反。 |
+| `generated/include/LSduR_Cfg.h`，`#include "Rte_MemMap.h"` 第2次，前三profile行14、no-diagnostic行12 | 关闭 `LSduR_Config` 的extern，类别为 `RTE_LSduR_CONFIG_DATA_PREBUILD_UNSPECIFIED`。 |
+| `generated/src/LSduR_PBcfg.c`，同一指令第2次，前三profile行55、no-diagnostic行43 | 同一配置类中的 `ls_rx`、`ls_tx` 和 `LSduR_Config` 已合成连续配对；两张表把实际CanIf句柄连接到PduR／CanTp及确认函数，初始化后不替换。 |
+
+以上八个自有源码／头位置加两个生成配置位置，共十个物理位置，分别进入host-batch／probe，不按program重复计数。必要性连接固定 `SWS_MemMap_00003` 的声明／定义双侧映射和 `SWS_BSW_00006` 的实现包含责任；移除STOP、把全部include提前或依赖默认段均不保留该机制。SchM_LSduR的Enter／Exit属于共享RTE实现，不混入这里的LSDUR_CODE。
+
+`LSduR_MemMap.h`四个关键词撤销位于模板行7／14／21／28，分别消费cleared与CODE的START／STOP；00011直接要求这四个请求撤销，内部active／属性撤销另按Advisory实现理由判断。D4.10对象是该头首个 `@file` 与实际多次请求：一次性guard会吞掉第二次STOP，函数内映射又违反00023。真实C/C++非法／嵌套／错配拒绝、段继承及STOP后清理控制误配风险；路由调用在独占区外、不可变配置生命周期及真实CAN/DID消费者控制实际借用风险。这些证据不替代当前Windows执行、provider或完整221项判断；后续累计复核与BSW00115逐处注释仍待完成。
