@@ -32,16 +32,11 @@
 #undef COM_MEMMAP_CODE_ACTIVE
 #undef COM_CODE
 #else
-#ifndef COM_MEMMAP_HEADER_CHECK
-#define COM_MEMMAP_HEADER_CHECK
-#include "Std_Types.h"
-/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
-#if !defined(STD_TYPES_AR_RELEASE_MAJOR_VERSION) || !defined(STD_TYPES_AR_RELEASE_MINOR_VERSION)
-#error "Com_MemMap.h -> Std_Types.h: missing AUTOSAR release"
-#elif (STD_TYPES_AR_RELEASE_MAJOR_VERSION != 4U) || (STD_TYPES_AR_RELEASE_MINOR_VERSION != 10U)
-#error "Com_MemMap.h -> Std_Types.h: incompatible AUTOSAR release"
+#error "Com_MemMap requires exactly one supported marker"
 #endif
-/** No-marker header smoke-test token; not an ECU interface type. */
-typedef uint8 Com_MemMap_HeaderCheck;
-#endif
+
+#if defined(COM_START_SEC_VAR_CLEARED_UNSPECIFIED) ||                                              \
+    defined(COM_STOP_SEC_VAR_CLEARED_UNSPECIFIED) || defined(COM_START_SEC_CODE) ||                \
+    defined(COM_STOP_SEC_CODE)
+#error "Com_MemMap requires exactly one supported marker"
 #endif

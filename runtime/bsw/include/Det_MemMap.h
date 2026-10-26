@@ -49,16 +49,12 @@
 #undef DET_MEMMAP_CALLOUT_ACTIVE
 #undef DET_CALLOUT_CODE
 #else
-#ifndef DET_MEMMAP_HEADER_CHECK
-#define DET_MEMMAP_HEADER_CHECK
-#include "Std_Types.h"
-/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
-#if !defined(STD_TYPES_AR_RELEASE_MAJOR_VERSION) || !defined(STD_TYPES_AR_RELEASE_MINOR_VERSION)
-#error "Det_MemMap.h -> Std_Types.h: missing AUTOSAR release"
-#elif (STD_TYPES_AR_RELEASE_MAJOR_VERSION != 4U) || (STD_TYPES_AR_RELEASE_MINOR_VERSION != 10U)
-#error "Det_MemMap.h -> Std_Types.h: incompatible AUTOSAR release"
+#error "Det_MemMap requires exactly one supported marker"
 #endif
-/** No-marker header smoke-test token; not an ECU interface type. */
-typedef uint8 Det_MemMap_HeaderCheck;
-#endif
+
+#if defined(DET_START_SEC_VAR_CLEARED_UNSPECIFIED) ||                                              \
+    defined(DET_STOP_SEC_VAR_CLEARED_UNSPECIFIED) || defined(DET_START_SEC_CODE) ||                \
+    defined(DET_STOP_SEC_CODE) || defined(DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE) ||             \
+    defined(DET_STOP_SEC_ECU_DETRUNTIMECALLOUT_CODE)
+#error "Det_MemMap requires exactly one supported marker"
 #endif

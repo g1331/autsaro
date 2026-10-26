@@ -32,9 +32,11 @@
 #undef ECU_HOSTBUSSM_MEMMAP_CODE_ACTIVE
 #undef ECU_HOSTBUSSM_CODE
 #else
-#ifndef ECU_HOSTBUSSM_MEMMAP_HEADER_CHECK
-#define ECU_HOSTBUSSM_MEMMAP_HEADER_CHECK
-/** Allows the normal standalone public-header compiler check. */
-typedef unsigned char Ecu_HostBusSM_MemMap_HeaderCheck;
+#error "Ecu_HostBusSM_MemMap requires exactly one supported marker"
 #endif
+
+#if defined(ECU_HOSTBUSSM_START_SEC_VAR_CLEARED_UNSPECIFIED) ||                                    \
+    defined(ECU_HOSTBUSSM_STOP_SEC_VAR_CLEARED_UNSPECIFIED) ||                                     \
+    defined(ECU_HOSTBUSSM_START_SEC_CODE) || defined(ECU_HOSTBUSSM_STOP_SEC_CODE)
+#error "Ecu_HostBusSM_MemMap requires exactly one supported marker"
 #endif

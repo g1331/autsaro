@@ -705,6 +705,88 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
             );
         }
     };
+    // Verifies: SWS_MemMap_00003, SWS_MemMap_00007, SWS_MemMap_00011
+    for (header, prefix, code_keyword, variable_keyword) in [
+        ("Can_MemMap.h", "CAN", "CAN_CODE", "CAN_VAR_CLEARED"),
+        ("BswM_MemMap.h", "BSWM", "BSWM_CODE", "BSWM_VAR_CLEARED"),
+        ("CanIf_MemMap.h", "CANIF", "CANIF_CODE", "CANIF_VAR_CLEARED"),
+        ("CanTp_MemMap.h", "CANTP", "CANTP_CODE", "CANTP_VAR_CLEARED"),
+        ("Com_MemMap.h", "COM", "COM_CODE", "COM_VAR_CLEARED"),
+        ("ComM_MemMap.h", "COMM", "COMM_CODE", "COMM_VAR_CLEARED"),
+        ("Dcm_MemMap.h", "DCM", "DCM_CODE", "DCM_VAR_CLEARED"),
+        ("Det_MemMap.h", "DET", "DET_CODE", "DET_VAR_CLEARED"),
+        ("LSduR_MemMap.h", "LSDUR", "LSDUR_CODE", "LSDUR_VAR_CLEARED"),
+        ("PduR_MemMap.h", "PDUR", "PDUR_CODE", "PDUR_VAR_CLEARED"),
+        (
+            "Ecu_HostBusSM_MemMap.h",
+            "ECU_HOSTBUSSM",
+            "ECU_HOSTBUSSM_CODE",
+            "ECU_HOSTBUSSM_VAR_CLEARED",
+        ),
+        ("Os_MemMap.h", "OS", "OS_MEMMAP", "OS_MEMMAP"),
+        (
+            "Rte_MemMap.h",
+            "RTE_Rte",
+            "RTE_Rte_CODE",
+            "RTE_Rte_VAR_CLEARED_UNSPECIFIED",
+        ),
+        (
+            "Ingress_MemMap.h",
+            "Ingress",
+            "Ingress_CODE",
+            "Ingress_VAR_CLEARED_UNSPECIFIED",
+        ),
+    ] {
+        for cpp in [false, true] {
+            check(
+                &format!("memmap-{prefix}-paired-{cpp}"),
+                &format!(
+                    "#define {prefix}_START_SEC_CODE\n#include \"{header}\"\n\
+                     {code_keyword} void mapping_code(void) {{}}\n\
+                     #define {prefix}_STOP_SEC_CODE\n#include \"{header}\"\n\
+                     #if defined({prefix}_START_SEC_CODE) || defined({prefix}_STOP_SEC_CODE) || defined({code_keyword})\n\
+                     #error Code section was not consumed\n#endif\n\
+                     #define {prefix}_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"{header}\"\n\
+                     {variable_keyword} int mapping_state;\n\
+                     #define {prefix}_STOP_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"{header}\"\n\
+                     #if defined({prefix}_START_SEC_VAR_CLEARED_UNSPECIFIED) || defined({prefix}_STOP_SEC_VAR_CLEARED_UNSPECIFIED) || defined({variable_keyword})\n\
+                     #error Variable section was not consumed\n#endif\n"
+                ),
+                cpp,
+                true,
+                "",
+            );
+            let diagnostic = format!(
+                "{} requires exactly one supported marker",
+                header.trim_end_matches(".h")
+            );
+            check(
+                &format!("memmap-{prefix}-missing-{cpp}"),
+                &format!("#include \"{header}\"\nint mapping_control;\n"),
+                cpp,
+                false,
+                if prefix == "OS" {
+                    "Unsupported or missing OS memory mapping marker"
+                } else {
+                    &diagnostic
+                },
+            );
+            check(
+                &format!("memmap-{prefix}-multiple-{cpp}"),
+                &format!(
+                    "#define {prefix}_START_SEC_CODE\n#define {prefix}_STOP_SEC_CODE\n\
+                     #include \"{header}\"\nint mapping_control;\n"
+                ),
+                cpp,
+                false,
+                if prefix == "OS" {
+                    "Conflicting OS memory mapping markers"
+                } else {
+                    &diagnostic
+                },
+            );
+        }
+    }
     for cpp in [false, true] {
         check(
             if cpp { "cpp-contract" } else { "c-contract" },

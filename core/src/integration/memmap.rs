@@ -143,10 +143,19 @@ pub(super) fn rte(
     }
     mapping.push_str(
         r#"#else
-#error "Unknown RTE memory section"
+#error "Unknown RTE memory section; Rte_MemMap requires exactly one supported marker"
 #endif
 "#,
     );
+    let requests = scopes
+        .iter()
+        .flat_map(|(scope, segment)| {
+            ["START", "STOP"]
+                .map(|boundary| format!("defined(RTE_{scope}_{boundary}_SEC_{segment})"))
+        })
+        .collect::<Vec<_>>();
+    mapping.push_str(&c_layout::condition("if", &requests));
+    mapping.push_str("#error \"Rte_MemMap requires exactly one supported marker\"\n#endif\n");
     mapping
 }
 
@@ -174,12 +183,20 @@ pub(super) fn component(scope: &str) -> String {
             "SWC",
         ));
     }
-    output.push_str(
-        r#"#else
-#error "Unknown SWC memory section"
-#endif
-"#,
-    );
+    output.push_str(&format!(
+        "#else\n#error \"Unknown SWC memory section; {scope}_MemMap requires exactly one supported marker\"\n#endif\n"
+    ));
+    let requests = [
+        "START_SEC_CODE",
+        "STOP_SEC_CODE",
+        "START_SEC_VAR_CLEARED_UNSPECIFIED",
+        "STOP_SEC_VAR_CLEARED_UNSPECIFIED",
+    ]
+    .map(|request| format!("defined({scope}_{request})"));
+    output.push_str(&c_layout::condition("if", &requests));
+    output.push_str(&format!(
+        "#error \"{scope}_MemMap requires exactly one supported marker\"\n#endif\n"
+    ));
     output
 }
 
