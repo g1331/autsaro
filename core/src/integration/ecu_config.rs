@@ -36,7 +36,7 @@ fn schm_header(module: &str, body: &str) -> String {
 }
 
 /// Public void declarations use the same four contract fields as runtime headers.
-fn void_prototype(symbol: &str, purpose: &str, conditions: [&str; 4]) -> String {
+fn void_prototype(placement: &str, symbol: &str, purpose: &str, conditions: [&str; 4]) -> String {
     let details = [
         c_layout::ContractLine::Detail("@par Return"),
         c_layout::ContractLine::Detail("None."),
@@ -46,11 +46,21 @@ fn void_prototype(symbol: &str, purpose: &str, conditions: [&str; 4]) -> String 
         .zip(conditions)
         .map(|(field, value)| c_layout::ContractLine::Condition(field, value));
     let comment = c_layout::contract_comment(purpose, details.into_iter().chain(fields), false);
-    format!("{comment}void {symbol}(void);\n")
+    format!(
+        "{comment}{}\n",
+        c_layout::signature(
+            &format!("{placement} void"),
+            symbol,
+            &["void".into()],
+            ";",
+            true
+        )
+    )
 }
 
 fn area_prototypes(module: &str, area: &str) -> String {
     let enter = void_prototype(
+        "RTE_Rte_CODE",
         &format!("SchM_Enter_{module}_{area}_STATE"),
         &format!("Enter {area}_STATE (SWS_Rte_07250); this module's area nests with none."),
         [
@@ -61,6 +71,7 @@ fn area_prototypes(module: &str, area: &str) -> String {
         ],
     );
     let exit = void_prototype(
+        "RTE_Rte_CODE",
         &format!("SchM_Exit_{module}_{area}_STATE"),
         &format!("Leave {area}_STATE (SWS_Rte_07253)."),
         [
@@ -73,14 +84,15 @@ fn area_prototypes(module: &str, area: &str) -> String {
     format!(
         "{}{}{}{}",
         c_layout::section("RTE_Rte", "Rte", "CODE", true),
-        enter.replace("\nvoid ", "\nRTE_Rte_CODE void "),
-        exit.replace("\nvoid ", "\nRTE_Rte_CODE void "),
+        enter,
+        exit,
         c_layout::section("RTE_Rte", "Rte", "CODE", false)
     )
 }
 
-fn main_prototype(symbol: &str, purpose: &str) -> String {
+fn main_prototype(placement: &str, symbol: &str, purpose: &str) -> String {
     void_prototype(
+        placement,
         symbol,
         purpose,
         [
@@ -98,7 +110,6 @@ fn code_prototypes(module: &str, declarations: &str) -> String {
     } else {
         (module.to_uppercase(), module)
     };
-    let declarations = declarations.replace("\nvoid ", &format!("\n{prefix}_CODE void "));
     format!(
         r#"
 {start_code}{declarations}
@@ -412,6 +423,7 @@ pub(super) fn files(
             "CanTp" => code_prototypes(
                 module,
                 &main_prototype(
+                    "CANTP_CODE",
                     "CanTp_MainFunction",
                     "Advance transport timers and pending segmented transfers.",
                 ),
@@ -419,6 +431,7 @@ pub(super) fn files(
             "ComM" => code_prototypes(
                 module,
                 &main_prototype(
+                    "RTE_ComM_CODE",
                     &mode.main_symbol,
                     "Advance the selected channel hold timer and retry pending bus-mode requests.",
                 ),
@@ -441,7 +454,7 @@ pub(super) fn files(
                 area_prototypes("Com", "COM"),
                 code_prototypes(
                     "Com",
-                    &format!("{}{}", main_prototype(&com.receive_main.symbol, "Advance Rx deadlines and publish pending reception/timeout notifications."), main_prototype(&com.transmit_main.symbol, "Snapshot each enabled periodic Tx PDU and request its transmission once."))
+                    &format!("{}{}", main_prototype("RTE_Com_CODE", &com.receive_main.symbol, "Advance Rx deadlines and publish pending reception/timeout notifications."), main_prototype("RTE_Com_CODE", &com.transmit_main.symbol, "Snapshot each enabled periodic Tx PDU and request its transmission once."))
                 )
             ),
         ),
