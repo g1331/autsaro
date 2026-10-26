@@ -58,6 +58,33 @@ fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity
         [("uint32", "IN"), ("uint32 *", "OUT"), ("uint32 *", "INOUT")]
     );
     let files = plan.component_contract_files().unwrap();
+    // Verifies: SWS_Rte_01150, SWS_Rte_02311
+    for component in ["Ingress", "Process", "Observe", "DcmService"] {
+        let name = format!("include/Rte_{component}.h");
+        let header = &files
+            .files()
+            .iter()
+            .find(|(path, _)| path == &name)
+            .unwrap()
+            .1;
+        let header = String::from_utf8_lossy(header);
+        let prototype = format!("typedef const Rte_CDS_{component} *Rte_Instance;");
+        let contract = header
+            .split(&prototype)
+            .next()
+            .unwrap()
+            .rsplit("/**")
+            .next()
+            .unwrap();
+        assert_eq!(
+            contract.contains("MR12 RULE 5.6 VIOLATION"),
+            component != "DcmService",
+            "{name}: only distinct application translation units share the fixed typedef name"
+        );
+        assert_eq!(contract.matches("*/").count(), 1, "{name}");
+        assert!(contract.trim_end().ends_with("*/"), "{name}");
+        assert!(header.contains(&prototype));
+    }
     // Verifies: SWS_Rte_06705
     // These application runnables have neither argument symbols nor a BSW mapping.
     for (path, prototype) in [

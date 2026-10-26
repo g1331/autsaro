@@ -221,6 +221,7 @@ typedef uint8 Rte_ModeType_{group};
         symbolic: &super::symbolic_names::Names,
     ) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         let description = self.description();
+        let application_slots = super::ecu::application_slots(composition, &description.symbols);
         let mut types = String::from("#include \"Rte.h\"\n");
         for datatype in &composition.types {
             if datatype.symbol == datatype.native_type && datatype.array_length.is_none() {
@@ -300,13 +301,22 @@ struct Rte_CDS_{scope} {{
 /** Component data structure for the selected single instance. */
 typedef struct Rte_CDS_{scope} Rte_CDS_{scope};
 #ifndef RTE_CORE
-/** Borrowed component instance; immutable for the ECU lifetime. */
+/** Borrowed component instance; immutable for the ECU lifetime.{instance_disposition} */
 typedef const Rte_CDS_{scope} *Rte_Instance;
 #endif
 {start_const}{instance}
 {stop_const}
 "#,
                 linkage_begin = c_layout::linkage(true),
+                instance_disposition = if application_slots.len() > 1
+                    && application_slots
+                        .iter()
+                        .any(|slot| slot.component_path == component.component)
+                {
+                    "\n * MR12 RULE 5.6 VIOLATION: SWS_Rte_01150 fixes the name for distinct component CDS types.\n * Separate application headers preserve type isolation.\n"
+                } else {
+                    ""
+                },
                 start_const =
                     c_layout::section(&format!("RTE_{scope}"), "Rte", "CONST_UNSPECIFIED", true),
                 stop_const =
