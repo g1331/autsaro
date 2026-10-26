@@ -42,6 +42,10 @@ Os_LinuxNative的sizeof(char[条件?1:-1])使用offsetof／非VLA类型sizeof构
 
 ## 选择体与clause布局
 
+R14.2为Required（主文印刷118／PDF126；TC1印刷8／PDF14修正第一clause，AMD2.27／66／67追加C11及语言措辞）。for第二clause不得有持久副作用；循环体修改的额外控制对象须为essentially Boolean，比较结果是Boolean不使原状态码或响应字节成为Boolean。Os资源校验的两处status、CanIf领取的more、Dcm读取的response[0]、Linux等待的waiting／result和maps解析的result，因此展开为初始化、原条件while、原body及尾部增量。两个平台各有两处栈枚举条件读取原子／volatile计数，也同样改用while，保持查询次数和顺序。
+
+这11处没有continue，提前return保持原位；不增加状态、锁、期限或重试。只读且body不修改的isrs／配置数量不混入此组；FreeRTOS默认configCONTROL_INFINITE_LOOP()为空，实际for(;;)适用例外。完整条件／body／增量token核对、实际消费者与原始零报告限制见[PR调查](https://github.com/g1331/autsaro/pull/371#issuecomment-6409180937)，不外推其他循环或SDK。
+
 R15.6为Required（主文印刷127–128／PDF135–136），只有else紧跟if的特例，不豁免函数式宏内部的选择体。自有FreeRTOSConfig.h的configASSERT在if之后原为单条Os_BackendAssert调用，现只为该调用增加花括号，保留外层do／while FALSE和参数的一次求值。旧／新实际宏的局部严格C99编译控制均观察成功调用一次、失败条件调用一次及原失败出口；除增加一对复合语句括号外，其余宏token相同。没有新增断言开关或生产状态。
 
 R16.2、R16.5–R16.7均为Required（主文印刷131、134–136／PDF139、142–144，AMD2追加C11）。已读九个自有switch的标签均直接属于其switch复合语句，default在末尾且至少两个clause；控制类型分别为状态／发布／ARTI枚举、操作／服务ID及动作整数，没有Boolean控制。生成Ecu_BswMAction的模式是ComM_ModeType整数，同样有三种模式及末尾default；采用内核两个通知switch使用eNotifyAction枚举。统计格式化与协程模板的关闭条件另行保留，不能从未选择语法取得当前程序符合证明。这些是已列switch的布局及类型判断，不销项整个项目的可达性或所有新增配置。

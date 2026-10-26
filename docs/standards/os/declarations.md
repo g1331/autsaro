@@ -2,6 +2,14 @@
 
 本篇承接[OS标准说明](README.md)，区分自有声明整改、按实际配置选择的内核接口，以及仍待决定的SDK义务。
 
+## SDK宏名与实际标识符
+
+R5.5为Required（主文印刷53／PDF61，AMD2.27／39追加C11及语言措辞）。排除分支的宏从未定义，与定义后undef不同：四份declaration-consistency工件各47个报告位置对应45个关闭MPU宏及多核分支的pxCurrentTCB，不据此删除原始报告或关闭整个规则。
+
+真实GCC宏收据与预处理后C标识符另有同名交集：四profile均为相同346个名字，22个TU、2146个名字/TU组合。对象来自固定glibc的pthread／confname／eventfd／sigaction／siginfo／sigevent／sched头和Linux UAPI，分别为331个枚举常量、13个成员和两个typedef；不是新增诊断条数。sched_priority的成员与宏生产者分属struct_sched_param.h和sched.h。实体进入真实TU，不能因未执行使用或SDK身份消除R5.5义务。
+
+libc6-dev 2.39-0ubuntu8.9与linux-libc-dev 6.8.0-147.147的十份相关头已与现存原始来源逐字节对应。全部名字、来源行、头摘要、替代排除和[具体保留提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6407601057)集中PR；目前待决定，不扩ADR0023／0024、不填批准表或MR12。删显式include、后置undef、搬移TU或手写SDK声明均不能证明整改；另换SDK／flags／后端仍需证明现有ABI、信号、线程、计时与unwind合同。这里不覆盖Windows或最终provider语义。
+
 ## 自有接缝的声明一致性
 
 R8.3为Required（主文印刷66–67／PDF74–75，AMD2追加C11）；具名参数及其类型名字／限定符须在同一函数的重复声明中一致。TC2.11–13（印刷5／PDF11）的无名参数例外不允许两组具名参数不同，主文width_t／height_t例子也不允许仅凭相同底层类型销项。Linux的pxPortInitialiseStack现沿portable.h使用pxTopOfStack／pxCode／pvParameters；vPortCloseRunningThread原型沿定义使用pending_yield。共同idle存储回调沿task.h使用ppxIdleTaskTCBBuffer／ppxIdleTaskStackBuffer／puxIdleTaskStackSize。参数顺序、类型与静态存储对象保持。
@@ -12,6 +20,8 @@ R8.3为Required（主文印刷66–67／PDF74–75，AMD2追加C11）；具名�
 
 
 ## 条件接口与声明owner
+
+R18.5为Advisory（主文印刷148–149／PDF156–157，AMD2追加C11），按typedef展开后的连续指针declarator计数，数组／函数declarator会中断连续链；数组形参调整则可能额外增加一级。当前标准ECU的实际补丁后源码中，TaskHandle_t、QueueHandle_t、HANDLE及Rte_Instance等数据指针别名各为一级；SemaphoreHandle_t、MessageBufferHandle_t和Os_HostHandleType分别沿QueueHandle_t、StreamBufferHandle_t、HANDLE承接这一级。所查Task创建输出、HANDLE输出／等待数组为两级，idle存储回调的StaticTask_t**／StackType_t**和maps的const char**也为两级，没有再套数组形参增加第三级。函数指针别名的参数／返回声明分别核对，不把函数两侧的星号累加。这里只完成这些实际声明及别名链判断；没有用搜索不到***替代全部SDK／其他生成配置的类型评估。
 
 R8.5／R8.6均为Required、System范围（主文印刷69–70／PDF77–78；AMD2追加C11，AMD4.42补充R8.15交叉引用）。R8.5只约束非定义声明，不能把实现体的定义另计为重复声明。OS_TIME_TESTS分支曾在Os_Backend.h重复声明xInsideInterrupt；该头已通过FreeRTOS.h取得当前端口portmacro.h的声明，故删除私有重复行，不改对象类型或定义。两个目标的正常编译继续从各自唯一选中的端口头取得名字。
 

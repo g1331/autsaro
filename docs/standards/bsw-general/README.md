@@ -32,6 +32,12 @@ R21.19／R21.20 均为 Mandatory、适用于 C99，分别保护库返回的内�
 
 两个 getenv 消费者均接为 `const char *`，不写内部字符串、不保存其地址。资源失败开关先经 strtoul 转成数值，再检查 errno、首字符、尾部与范围并保存整数；end 仅用于读取解析终点。备用栈开关在长度为一时只复制字符。每处最后一次读取都在 helper 返回前完成，后续启动调用不再使用其指针；核查也包含故障测试开关启用时的真实分支，不能因普通生产构建排除它们就跳过。const 写入反例仅证明编译期保护，调用次序结论来自实际源码闭包；两者均不外推系统库内部的存储或并发契约。
 
+## 标准库释放与流对象
+
+R22.2／R22.4均为Mandatory、当前C99适用（主文印刷174–175／PDF182–183；AMD2追加C11）。前者按free／realloc释放的实际对象及分配／退役历史判断，不能把munmap、pthread退休或关闭句柄直接写成标准库free。四份conditional-kernel工程的项目／采用C和头中，唯一free token在保留的POSIX utils/wait_for_event.c；其event_create先malloc、event_delete再free，但这两函数及该TU不在正常target或分析TU集合，所选端口已删除该头和调用。不能据未选helper销项provider内部TLS的R21.3／R22.1，也不保证任意调用者不会重复释放。
+
+同一语料没有FILE、fopen／freopen／fclose／fdopen的实际token；这里没有项目创建的ISO只读stream写入构造。/proc/self/maps由O_RDONLY取得的descriptor只进入read及close，stdout／stderr写入使用另一组平台句柄。平台错误响应和外部句柄责任仍按D4.1／4.7／4.13与真实provider核查，不把ISO stream构造缺席扩大为全部原生I/O或运行库内部符合。
+
 ## 空载荷与复制长度
 
 R21.18 为 Mandatory、适用于 C99，要求所列 `string.h` 函数的 `size_t` 实参为正，且不超过任何指针实参所指对象的容量（AMD1 印刷页9／PDF17；AMD2 增加 C11 适用性，未改变正值条件）。这比仅检查 C 库是否允许零字节操作更严格，不能以没有越界报告代替此项义务。
