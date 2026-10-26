@@ -85,3 +85,7 @@ R11.9为Required（主文印刷101–102／PDF109–110，AMD2追加C11）。TC1
 R16.6为Required（主文印刷135／PDF143，AMD2追加C11），计算的是switch-clause而非标签数；多个case／default共用一段并只在末尾break，仍是一段。当前四份declaration-consistency分析副本各有13个物理switch：九个共同运行时、一个实际生成BswM动作、内核两个通知及一个排除的统计格式化switch。直接核对case体后，前十二个生效构造各有至少四个独立clause；统计分支仍由configUSE_STATS_FORMATTING_FUNCTIONS=0排除。协程crSTART模板没有进入所选TU，不能用其case数量替代已启用协程的证明。这里支持这些具体switch的R16.6判断；未知生成配置、宏外部调用和SDK不由标签计数批量销项。
 
 R11.2／R11.7也不能仅按指针token判定（均Required；主文印刷95及99–100／PDF103及107–108，AMD2追加C11）。前者明确排除void指针，并由TC1要求按所指未限定类型判断；native上下文接缝中的void视图不因此成为不完整结构转换。FP复制涉及的struct _fpstate及ucontext在相应TU中已有完整定义，实际sizeof约束也依赖其完整性。后者的non-integer arithmetic还明确包括essentially Boolean／character／enum，不能缩成只查浮点。该接缝复制FP表示而非把指针转换成浮点数值；对象地址转uintptr_t仍按R11.4核查，void指针表示的转换另承担R11.6责任。这里没有替其他opaque对象或SDK转换作整体判定。
+
+## 原生位掩码
+
+R10.1（Required，主文印刷82–84／PDF90–92）的位运算要求unsigned操作数；有符号非负常量例外仅适用于移位右侧。当前OS把信号、映射、eventfd、poll、futex、unwind及原子状态的位操作放在无符号域，随后按原生接口转换；调用、标志值与ABI不变。清位常量先按uint32取反，再转LONG；TC1将~加入复合运算符，但整数常量表达式仍非复合表达式。TIME及ARTI原子常量去除Linux上产生64位long的L后缀，避免隐式压窄到32位LONG（R10.3／D.6）。固定addon漏查signed位操作及一元~，零报告不证明满足；Windows实际运行另取证。
