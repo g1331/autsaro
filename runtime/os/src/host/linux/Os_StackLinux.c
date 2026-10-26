@@ -213,7 +213,8 @@ OS_MEMMAP void Os_StackPrepare(void)
     if (Os_HostInstallSignals() == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    const unsigned signal_flags = (unsigned)SA_SIGINFO | (unsigned)SA_ONSTACK;
+    handler.sa_flags = (int)signal_flags;
     errno = 0;
     (void)sigfillset(&handler.sa_mask);
     handler.sa_sigaction = &guard_signal;

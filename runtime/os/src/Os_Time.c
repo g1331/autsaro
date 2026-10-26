@@ -73,14 +73,14 @@ OS_MEMMAP static volatile Os_Atomic32Type
     signal_failed; /**< Atomic host-signal failure latch; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-#define TIME_CLOSED     256L
-#define TIME_RESERVED   1L
-#define TIME_PENDING    2L
-#define TIME_PROCESSING 3L
-#define TIME_DELIVERED  4L
-#define TIME_MARKED     5L
-#define TIME_COMPLETE   6L
-#define TIME_PUBLISHING 7L
+#define TIME_CLOSED     256
+#define TIME_RESERVED   1
+#define TIME_PENDING    2
+#define TIME_PROCESSING 3
+#define TIME_DELIVERED  4
+#define TIME_MARKED     5
+#define TIME_COMPLETE   6
+#define TIME_PUBLISHING 7
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
@@ -727,7 +727,7 @@ OS_MEMMAP StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionTyp
         return status;
     }
     state = InterlockedCompareExchange(&tick_state, 0, 0);
-    if ((state & TIME_CLOSED) != 0) {
+    if (((uint32)state & (uint32)TIME_CLOSED) != 0u) {
         return E_OS_STATE;
     }
     if ((state != 0) && (state != TIME_COMPLETE)) {
@@ -817,7 +817,7 @@ OS_MEMMAP StatusType Os_TargetCurrentTick(uint64 *ticket, uint64 *epoch)
         *ticket = requested_epoch;
         *epoch = requested_epoch;
     } else {
-        status = ((state & TIME_CLOSED) != 0) ? E_OS_STATE : E_OS_NOFUNC;
+        status = (((uint32)state & (uint32)TIME_CLOSED) != 0u) ? E_OS_STATE : E_OS_NOFUNC;
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();

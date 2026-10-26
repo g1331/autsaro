@@ -211,7 +211,8 @@ OS_MEMMAP int Os_HostInstallSignals(void)
 {
     struct sigaction handler = {0};
     const int suspend_signal = SIGRTMIN;
-    handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    const unsigned signal_flags = (unsigned)SA_SIGINFO | (unsigned)SA_ONSTACK;
+    handler.sa_flags = (int)signal_flags;
     errno = 0;
     (void)sigemptyset(&handler.sa_mask);
     errno = 0;
@@ -312,8 +313,9 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         return NULL;
     }
     errno = 0;
-    thread->mapping =
-        mmap(NULL, reserve, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    const unsigned protection = (unsigned)PROT_READ | (unsigned)PROT_WRITE;
+    const unsigned mapping_flags = (unsigned)MAP_PRIVATE | (unsigned)MAP_ANONYMOUS;
+    thread->mapping = mmap(NULL, reserve, (int)protection, (int)mapping_flags, -1, 0);
     if (thread->mapping == MAP_FAILED) {
         thread->mapping = NULL;
         (void)InterlockedExchange(&thread->reserved, 0);
@@ -408,7 +410,8 @@ OS_MEMMAP HANDLE CreateEventA(LPSECURITY_ATTRIBUTES attributes,
     }
     event->manual = manual != 0;
     errno = 0;
-    event->fd = eventfd((initial != 0) ? 1u : 0u, EFD_CLOEXEC | EFD_NONBLOCK);
+    const unsigned event_flags = (unsigned)EFD_CLOEXEC | (unsigned)EFD_NONBLOCK;
+    event->fd = eventfd((initial != 0) ? 1u : 0u, (int)event_flags);
     if (event->fd < 0) {
         (void)InterlockedExchange(&event->reserved, 0);
         return NULL;
@@ -528,9 +531,10 @@ OS_MEMMAP static DWORD wait_event(HANDLE event)
         ready = poll(&observed, 1u, 0);
     } while ((ready < 0) && (errno == EINTR));
     DWORD outcome = WAIT_FAILED;
-    if ((ready >= 0) && ((observed.revents & (POLLERR | POLLHUP | POLLNVAL)) == 0)) {
+    if ((ready >= 0) && (((unsigned)observed.revents &
+                          ((unsigned)POLLERR | (unsigned)POLLHUP | (unsigned)POLLNVAL)) == 0u)) {
         outcome = WAIT_TIMEOUT;
-        if ((ready > 0) && ((observed.revents & POLLIN) != 0)) {
+        if ((ready > 0) && (((unsigned)observed.revents & (unsigned)POLLIN) != 0u)) {
             const int received = (event->manual != 0) ? 1 : read_event(event);
             outcome = (received > 0) ? WAIT_OBJECT_0 : (received == 0) ? WAIT_TIMEOUT : WAIT_FAILED;
         }

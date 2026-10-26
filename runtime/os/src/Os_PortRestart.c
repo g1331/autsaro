@@ -42,9 +42,9 @@ OS_MEMMAP __attribute__((used)) static _Unwind_Reason_Code Os_PortRestartPersona
     _Unwind_Reason_Code result = _URC_CONTINUE_UNWIND;
     if ((version == 1) && (cls == UINT64_C(0x4155544f53525431)) &&
         (exception == &restart_exception)) {
-        if ((actions & _UA_SEARCH_PHASE) != 0) {
+        if (((unsigned)actions & (unsigned)_UA_SEARCH_PHASE) != 0u) {
             result = _URC_HANDLER_FOUND;
-        } else if ((actions & _UA_HANDLER_FRAME) != 0) {
+        } else if (((unsigned)actions & (unsigned)_UA_HANDLER_FRAME) != 0u) {
             _Unwind_SetIP(context, Os_PortRestartAddress());
             result = _URC_INSTALL_CONTEXT;
         } else {
@@ -84,7 +84,7 @@ OS_MEMMAP __attribute__((used)) static EXCEPTION_DISPOSITION Os_PortRestartHandl
 {
     (void)context;
     if ((record->ExceptionCode == 0xE0426001u) &&
-        ((record->ExceptionFlags & EXCEPTION_UNWINDING) == 0)) {
+        ((record->ExceptionFlags & (DWORD)EXCEPTION_UNWINDING) == 0u)) {
         RtlUnwindEx(frame,
                     Os_PortRestartAddress(),
                     record,

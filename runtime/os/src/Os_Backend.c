@@ -603,8 +603,8 @@ OS_MEMMAP void Os_BackendGuardService(void)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
     /* Every shutdown path sets the admission close bit before readiness ends. */
-    if (((InterlockedCompareExchange(&activation_admission, 0, 0) & 2) != 0) && (stack != NULL) &&
-        ((stack->role == 'T') || (stack->role == 'S'))) {
+    if ((((uint32)InterlockedCompareExchange(&activation_admission, 0, 0) & 2u) != 0u) &&
+        (stack != NULL) && ((stack->role == 'T') || (stack->role == 'S'))) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -1363,7 +1363,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
 {
     Os_TimeClose();
     Os_MailboxClose();
-    if ((InterlockedOr(&activation_admission, 2) & 2) == 0) {
+    if (((uint32)InterlockedOr(&activation_admission, 2) & 2u) == 0u) {
         shutdown_reason = error;
         (void)InterlockedExchange(&ready, 0);
         if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
@@ -1956,7 +1956,7 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
     }
     arti_observe_tasks();
     observe_transition();
-    (void)InterlockedAnd(&activation_admission, ~1L);
+    (void)InterlockedAnd(&activation_admission, (LONG) ~(uint32)1u);
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return E_OK;
@@ -2083,7 +2083,7 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
     ready_sequences[index] = (queue->count == 0u) ? 0u : queue->requests[queue->head];
     vTaskOsSetReadySequence(current, ready_sequences[index]);
     observe_finish_boundary(1u);
-    (void)InterlockedAnd(&activation_admission, ~1L);
+    (void)InterlockedAnd(&activation_admission, (LONG) ~(uint32)1u);
     if (queue->count == 0u) {
         vTaskSuspend(NULL);
     } else {

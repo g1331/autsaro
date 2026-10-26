@@ -27,12 +27,14 @@ OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
                                 int32_t expected,
                                 const struct timespec *interval)
 {
-    return (int)native_call(__NR_futex, cell, FUTEX_WAIT_PRIVATE, expected, interval);
+    const unsigned operation = (unsigned)FUTEX_WAIT | (unsigned)FUTEX_PRIVATE_FLAG;
+    return (int)native_call(__NR_futex, cell, (long)operation, expected, interval);
 }
 
 OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell)
 {
-    const long result = native_call(__NR_futex, cell, FUTEX_WAKE_PRIVATE, INT32_MAX, NULL);
+    const unsigned operation = (unsigned)FUTEX_WAKE | (unsigned)FUTEX_PRIVATE_FLAG;
+    const long result = native_call(__NR_futex, cell, (long)operation, INT32_MAX, NULL);
     if (result < 0) {
         ExitProcess(1u);
     }

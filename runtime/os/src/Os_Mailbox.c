@@ -130,7 +130,7 @@ OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 
     write_index = (write_index + 1u) % OS_INPUT_CAPACITY;
     /* Interlocked publication orders the complete copy before consumer reads. */
     (void)InterlockedIncrement(&published);
-    (void)InterlockedAnd(&admission, ~1L);
+    (void)InterlockedAnd(&admission, (LONG) ~(uint32)1u);
     if (Os_TargetReady() != 0) {
         Os_PortPostInterrupt(OS_INPUT_INTERRUPT);
     }
@@ -183,7 +183,7 @@ OS_MEMMAP StatusType Os_BridgeContext(void)
 OS_MEMMAP sint32 Os_MailboxQuiescent(void)
 {
     sint32 quiescent = 0;
-    if ((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) {
+    if (((uint32)InterlockedCompareExchange(&admission, 0, 0) & 1u) == 0u) {
         quiescent = (InterlockedCompareExchange(&published, 0, 0) == 0) ? 1 : 0;
     }
     return quiescent;

@@ -74,7 +74,7 @@ OS_MEMMAP void Arti_Init(void)
     captured_address.valid = 0u;
     captured_address.status_valid = 0u;
     for (size_t i = 0u; i < ARTI_EVENT_CAPACITY; ++i) {
-        Arti_Events[i].published = 0L;
+        Arti_Events[i].published = 0;
     }
 }
 
@@ -102,12 +102,12 @@ OS_MEMMAP void Arti_Record(const char *context,
     /* Slot reservation never waits for an actor that may be preempted or have
      * a damaged native stack. Read the buffer only after OS shutdown/quiescence;
      * the reservation count is not a concurrent publication protocol. */
-    LONG slot = InterlockedCompareExchange(&Arti_EventCount, 0L, 0L);
+    LONG slot = InterlockedCompareExchange(&Arti_EventCount, 0, 0);
     /* Count is monotonic while actors exist, so contention can cause at most
      * ARTI_EVENT_CAPACITY retries; reservation does not overflow or spin on a
      * suspended owner. Reinitializing during execution is outside the API. */
     while (slot < (LONG)ARTI_EVENT_CAPACITY) {
-        const LONG observed = InterlockedCompareExchange(&Arti_EventCount, slot + 1L, slot);
+        const LONG observed = InterlockedCompareExchange(&Arti_EventCount, slot + 1, slot);
         if (observed == slot) {
             break;
         }
@@ -124,13 +124,13 @@ OS_MEMMAP void Arti_Record(const char *context,
         Arti_Events[slot].address_valid = captured_address.valid;
         Arti_Events[slot].service_status = captured_address.service_status;
         Arti_Events[slot].status_valid = captured_address.status_valid;
-        (void)InterlockedExchange(&Arti_Events[slot].published, 1L);
+        (void)InterlockedExchange(&Arti_Events[slot].published, 1);
     } else {
-        LONG dropped = InterlockedCompareExchange(&Arti_EventsDropped, 0L, 0L);
+        LONG dropped = InterlockedCompareExchange(&Arti_EventsDropped, 0, 0);
         /* Saturate the four-byte native cell rather than wrap its drop count. */
         while (dropped < INT32_MAX) {
             const LONG previous =
-                InterlockedCompareExchange(&Arti_EventsDropped, dropped + 1L, dropped);
+                InterlockedCompareExchange(&Arti_EventsDropped, dropped + 1, dropped);
             if (previous == dropped) {
                 break;
             }

@@ -191,7 +191,7 @@ OS_MEMMAP static void read_invalid_guarantee(void) {}
 OS_MEMMAP void Os_StackInit(void)
 {
 
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    SetErrorMode((UINT)SEM_FAILCRITICALERRORS | (UINT)SEM_NOGPFAULTERRORBOX);
     fault_output = GetStdHandle(STD_OUTPUT_HANDLE);
     fault_error = GetStdHandle(STD_ERROR_HANDLE);
     read_invalid_guarantee();
@@ -263,7 +263,7 @@ OS_MEMMAP int Os_StackRegister(char role)
             if (cursor < record->committed_low) {
                 record->committed_low = cursor;
             }
-            if ((region.Protect & PAGE_GUARD) != 0u) {
+            if ((region.Protect & (DWORD)PAGE_GUARD) != 0u) {
                 record->guard += region.RegionSize;
             }
         }
@@ -300,8 +300,8 @@ OS_MEMMAP void Os_StackCheck(void)
         invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);
     }
     if (!invalid) {
-        invalid =
-            (region.State != MEM_COMMIT) || ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u);
+        invalid = (region.State != MEM_COMMIT) ||
+                  ((region.Protect & ((DWORD)PAGE_GUARD | (DWORD)PAGE_NOACCESS)) != 0u);
     }
     if (invalid) {
         publish_fault(current_stack, 0u, sp, sp, 'M');
@@ -326,7 +326,7 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
             }
             if (!invalid) {
                 invalid = (region.State != MEM_COMMIT) ||
-                          ((region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) != 0u);
+                          ((region.Protect & ((DWORD)PAGE_GUARD | (DWORD)PAGE_NOACCESS)) != 0u);
             }
             if (invalid) {
                 publish_fault(record, 0u, sp, sp, 'M');
