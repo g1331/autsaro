@@ -73,3 +73,5 @@ R20.3／R20.8／R20.9／R20.13／R20.14均为Required，当前C99适用（主文
 标准库名字的索引同样需要对照原文：固定addon的C99名字表把mode列在stdio.h项下，但N1256 §7.19.5.3中的mode是fopen形参名，不是R21.1／R21.2引用的标准库文件作用域标识符。当前标准ECU两个实际程序的CTU声明候选中18个同名局部／参数位置不因此成为真实违反；这不是把此前floor参数、time／signal成员的整改反向撤销，也不是整个R21.2或SDK名字空间已满足。该索引只用于定位，实际作用域与标准声明才是依据。
 
 R2.2同为Required（主文印刷41–42／PDF49–50；AMD4.37更新headline），但不能把所有冗余值都按赋值语句裁决。TC1的R2.2 Note（印刷2／PDF8）明确初始化不是赋值操作，不作为dead-code候选；native_task_state的SUSPENDED初始化因而不能仅凭正常case随后写入就判违反。TC2.3–4（印刷3／PDF9）另将结果确实使用的cast排除在dead-code之外；这不豁免其R10／R11类型与限定符义务。显式(void)也只处理有意不用值，不证明底层错误已按D4.7检查。此处区分具体操作种类，没有据此关闭其余可执行但无行为效果的调用、运算或赋值。
+
+Counter的R7.5还可沿实际生成来源核查，不只依赖样本枚举。ScheduleContract的maximum／ticks_per_base／minimum_cycle／tick_ms均为u32；ecu.rs::configure_os先把tick_ms转成u64，再乘1000或1000000，最大结果4294967295000000仍小于UINT64_MAX。三项Counter配置值及换算因子均以Rust十进制整数格式化放入UINT64_C，没有后缀、符号或任意C片段。正常schedule验证又将maximum限定为不超过65535，其余三项为1；1ms下，完整UINT32_MAX ticks的纳秒乘积4294967295000000亦可表示。固定UINT32_C(0)实参满足32位范围，已修的scheduler资源1u不再调用小整数宏。此结论覆盖这些emitter来源的R7.5实参与该换算范围，不声称所有表达式或未来输入均已完成R10／R12／R13评估。
