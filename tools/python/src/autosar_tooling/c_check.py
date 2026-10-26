@@ -118,6 +118,22 @@ def coverage(addons: Path) -> dict:
         "basis": "MISRA C:2012 + AMD1-AMD4 + TC1-TC2; C99",
         "completeCompliance": False,
         "knownCheckerLimitations": [{
+            "guideline": "R5.1",
+            "detail": "Pinned misra_5_1 compares external variable names, but omits function names and does not derive the actual compiler/linker significance limits. Manual evaluation must include external functions and the selected toolchain. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R5.1; AMD2.33-34",
+        }, {
+            "guideline": "R5.5",
+            "detail": "Pinned misra_5_5 collects raw macro directives, including excluded definitions, and compares variables and named scopes rather than every post-preprocessing identifier. Manual evaluation must follow active definitions, actual identifier categories and standard-header scope. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R5.5; section 6.7; AMD2.39",
+        }, {
+            "guideline": "R5.7",
+            "detail": "Pinned misra_5_7 merges tag records by name, but does not compare tags with identifiers in other namespaces. Manual evaluation must distinguish actual tags, associated typedefs and conditional declarations. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R5.7; AMD2.40",
+        }, {
+            "guideline": "R8.8",
+            "detail": "Pinned misra_8_8 checks static/extern redeclarations of global variables, but omits function declarations and definitions. Manual evaluation must check static on each declaration of an internal-linkage function. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R8.8",
+        }, {
             "guideline": "R10.1",
             "detail": "Pinned misra_10_1 checks shift/bitwise operands, but does not implement the logical-operand restrictions, including the TC1 pointer clarification. Checker availability is partial; manual evaluation remains required.",
             "basis": "MISRA C:2012 R10.1; TC1 R10.1; AMD3.20",
