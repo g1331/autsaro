@@ -56,6 +56,14 @@ R7.3为Required，当前C99适用（2013主文印刷61／PDF69；AMD2仅追加C1
 
 固定addon的misra_7_3对rawTokens使用`(0[xX])?[0-9a-fA-FpP.]+[Uu]*l+[Uu]*`整词正则，却没有先要求token是数值literal；call／cell／all的前缀恰好落在其字符集合内，故末尾l被误认成后缀。没有为这些名字改源码、添加suppression或改检查器。此结论只覆盖这20个报告，其他literal、SDK及采用代码仍按实际构造核查；原raw诊断、passed=false／error=null和221项not_assessed均保留。
 
+## 函数指针的显式丢弃
+
+R11.1为Required、当前C99适用（2013主文印刷93–94／PDF101–102）。Exception 2明确允许函数指针转换成void，不能把void与void指针混同。AMD2追加C11，AMD2.58修改Exception 3的隐式转换说明，没有撤销Exception 2；其余相关修订未增加这里的限制。
+
+四份 `direct-render-mapping-final-results` 各有一处R11.1，均为 `generated/src/Ecu_Execution.c:7:5` 的 `(void)sink`，归属host-batch／probe。实际 `Can_TxSinkType` 为返回EcuStatus、接受id／dlc／八字节const数据指针的函数指针；目标类型确为void，没有星号或转成另一函数原型。因此该具体报告适用Exception 2，是误报。这里不调用sink、不保存变换后的地址，实际ECU发送继续进入Ecu_TargetEnqueueTransmit；不由这项判断证明其他callback、参数用途或地址表示符合。
+
+ECU producer从 `runtime/ecu/src/Ecu_Execution.c/.h` 的保留模板交付这些文件，四份分析副本及Can_CfgTypes.h均与实际模板／头字节相等；不假称Emitter输出具有直接原件映射。固定addon的misra_11_1在目标不再是函数指针时报告，该分支未先排除void，解释了这条报告。未改检查器、源码、suppression或baseline；原raw、strict refusal及221项not_assessed保留，不扩为整条R11.1或任意指针转换通过。
+
 ## 未使用声明与真实消费者
 
 公共声明、条件定义及真实使用的判断见[声明用途](types/declarations.md#未使用声明与真实消费者)。
