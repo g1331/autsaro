@@ -256,10 +256,15 @@ pub(super) fn condition(directive: &str, clauses: &[String]) -> String {
     }
     let mut output = String::new();
     let mut line = format!("#{directive} ");
-    for clause in clauses {
+    for (index, clause) in clauses.iter().enumerate() {
+        let limit = if index + 1 == clauses.len() {
+            COLUMNS
+        } else {
+            COLUMNS - 5
+        };
         if line.ends_with(' ') {
             line.push_str(clause);
-        } else if line.len() + 4 + clause.len() <= COLUMNS {
+        } else if line.len() + 4 + clause.len() <= limit {
             line.push_str(&format!(" || {clause}"));
         } else {
             output.push_str(&format!(
@@ -443,6 +448,25 @@ mod tests {
 
     fn strings(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| (*item).to_owned()).collect()
+    }
+
+    #[test]
+    fn conditions_reserve_the_continuation_operator_and_backslash() {
+        let output = condition(
+            "if",
+            &strings(&[
+                "defined(RTE_EchoApplication_STOP_SEC_VAR_INIT_UNSPECIFIED)",
+                "defined(RTE_Ecu_START_SEC_CODE)",
+                "defined(RTE_Ecu_STOP_SEC_CODE)",
+            ]),
+        );
+        assert_eq!(output.lines().count(), 2);
+        assert!(output.lines().all(|line| line.len() <= COLUMNS));
+        assert!(
+            output.ends_with(
+                "    defined(RTE_Ecu_START_SEC_CODE) || defined(RTE_Ecu_STOP_SEC_CODE)\n"
+            )
+        );
     }
 
     #[test]
