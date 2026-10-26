@@ -20,6 +20,20 @@
 
 ## MISRA 偏离
 
+### MemMap 的逐处责任
+
+以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表；[MemMap篇](../memmap.md#misra-预处理布局)给出R20.1／R20.5／D4.10及00003／00011／00023的原文、修订和替代边界。
+
+| 位置及请求 | 实体、class与实际闭包 |
+| --- | --- |
+| `runtime/bsw/src/BswM.c` 的 `#include "BswM_MemMap.h"` 第2／3／4次，行27／35／106 | 关闭配置指针、最新模式、推迟计数及processing的cleared段，再完整包围Init／Deinit／MainFunction、私有Process及ComM输入定义的 `BSWM_CODE`。BSWM_STATE保护数据；Process区外调用实际action，保留在途仲裁与推迟输入的次序。 |
+| `runtime/bsw/include/BswM.h`，同一指令第1／2次，行37／60 | 类型之后的Init／Deinit原型，`BSWM_CODE`。 |
+| `runtime/bsw/include/BswM_ComM.h`，同一指令第2次，行22 | 关闭 `BswM_ComM_CurrentMode` 的 `BSWM_CODE` 声明；实际ComM发布路径传入模式。 |
+| `generated/include/SchM_BswM.h`，同一指令第2次，行22 | 关闭 `BswM_MainFunction` 的 `BSWM_CODE` 声明。当前全IMMEDIATE配置不调度它，不取消标准接口及映射责任；后面的Rte_MemMap两处属于共享Enter/Exit。 |
+| `generated/src/Ecu_RuntimeConfig.c` 紧随 `RTE_BswM_START/STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED` 的 `#include "Rte_MemMap.h"` | 标准／用户行375／381、组件377／383、无诊断316／322，包围bswm_config。Bootstrap交给BswM_Init，其action地址进入实际Ecu_BswMAction，再到CDD BusSM；该action自身属于RTE_Ecu_CODE，不能混算为BswM实现CODE。 |
+
+共九个物理R20.1位置；各头首次include若在其声明前，不重复计入。映射模板第7／14／21／28行的关键词undef连接00011，18／19／32／33行的内部清理另判。D4.10连接可重入映射头及真实请求，一次性guard吞掉STOP；顶部包含、默认段或函数体内包含不能同时保持00003／00023。真实头部段继承、请求拒绝、版本边及模式交错消费者提供风险控制，不构成规范豁免。当前仍须完成最终逐处复核及BSW00115对应，不新增Approved／MR12，不改写原始分析状态。
+
 | 规则 | 范围 | 依据与风险控制 | 批准 |
 | --- | --- | --- | --- |
 | MISRA C:2012 Rule 8.7（advisory） | `runtime/bsw/src/BswM.c` 中 `BswM_MainFunction` 的定义 | `SWS_BswM_00053` 规定该主函数以外部链接提供；所选配置全部输入为 IMMEDIATE，函数体为空，生成的调度不调用它，Cppcheck 因此报告只在一个翻译单元中引用。偏离只影响符号可见性，`mode_contract.c` 断言调用它不重复任何动作；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-15（#45） |
