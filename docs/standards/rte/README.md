@@ -36,4 +36,19 @@ R5.6为Required／System（2013主文印刷54／PDF62，AMD2追加C11）。主�
 
 给名字加组件后缀违反01150；改成宏别名不满足typedef要求；删除未被当前应用直接引用的类型违反01007；使用共同void指针或共同struct又失去01148／02311要求的组件CDS类型。把三个应用拆成不同可执行程序会改变本次单ECU集成合同。这些方案均不能在原所选合同内同时满足R5.6。风险是跨TU阅读时同名指向不同类型；独立应用头、C linkage、仅一个应用头的编译拒绝、CORE分支隔离，以及真实多组件的编译／链接和分发行为控制该风险，不能把这些控制说成R5.6已满足。
 
-原项目授权为[2026-10-17决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)，本项按ADR0023准备逐处技术处置，不需要新增平台保留决定。当前独立复核与最终MR12对应尚未完成，未填批准表或注释，也不授予MISRA合法偏离或符合性结论。变更组件类型、Byps配置、头可见性、实例模型或TU组合时重新核查；R2.3的实际未使用状态另行保留。
+原项目授权为[2026-10-17决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)，本项按ADR0023准备逐处技术处置，不需要新增平台保留决定。该六处类型与替代判断已在 `58fb105a` 累计独立复核中得到支持；最终MR12对应尚未完成，未填批准表或注释，也不授予MISRA合法偏离或符合性结论。变更组件类型、Byps配置、头可见性、实例模型或TU组合时重新核查；R2.3的实际未使用状态另行保留。
+
+## 共享 SchM 段的逐处责任
+
+以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不含各模块周期原型／包装器，不是批准表。固定RTE页914–917的07250／07253规定Enter／Exit接口，07251按实际ExclusiveArea生成；页890的07596连接实体所关联MemorySection的SectionNamePrefix。当前BSWMD把三个真实host适配源登记为Rte实现，并选择 `RTE_Rte` 前缀；标准要求保留已配置前缀，不强制选这个字面拼写，也不把调用模块名字当作实现段owner。
+
+| 文件与 R20.1 位置 | 实体与包含闭包 |
+| --- | --- |
+| `runtime/host/src/SchM_CanIf_Host.c`，`#include "Rte_MemMap.h"` 第2次，行30 | 关闭Can、CanIf、Det、Com、PduR、LSduR、CanTp七组Enter／Exit定义的 `RTE_Rte_CODE`；Can进入既有驱动锁，其余进入相应HostArea。 |
+| `runtime/host/src/SchM_Diagnostic_Host.c`，同一指令第2次，行10 | 关闭Dcm一组Enter／Exit定义。 |
+| `runtime/host/src/SchM_Mode_Host.c`，同一指令第2次，行15 | 关闭ComM、BswM两组Enter／Exit定义。以上各文件第一次包含在本文件定义前，不列为R20.1。 |
+| `generated/include/SchM_CanIf.h`、`SchM_CanTp.h`、`SchM_Com.h`、`SchM_ComM.h`、`SchM_Det.h`、`SchM_LSduR.h`、`SchM_PduR.h`，同一指令第2次，均行30 | 分别关闭相应Enter／Exit原型的 `RTE_Rte_CODE`，与真实定义属性匹配。它们的第一次包含仅在预处理指令后。 |
+| `generated/include/SchM_Can.h`，同一指令第1／2次，行75／95；`SchM_BswM.h`，第1／2次，行30／50 | 此前已有各模块周期原型，故共享Enter／Exit段的两端均为R20.1；前面的Can／BswM映射头仍归各自模块，不重复计入。 |
+| `generated/include/SchM_Dcm.h`，同一指令第2次，行39 | 关闭Dcm共享Enter／Exit原型；随后Dcm_MainFunction及会话／认证服务段另行核对，不混算。 |
+
+上述十五个物理位置在四profile中相同，不按TU／程序重复计数。MemoryMapping00003（页36）要求声明和定义分别完整映射；把这些头都提前一次包含不能保留后续STOP与原型属性。`Rte_MemMap.h`中 `RTE_Rte_START/STOP_SEC_CODE` 的消费连接00011；活动状态及属性撤销是实现清理，另判R20.5。D4.10连接可重入分派主体，普通SchM头仍有guard；一次性保护、移进函数或默认段不能同时保持00003／00023。真实头部属性继承、STOP清理、请求拒绝和现有并发／独占区消费者控制误配及锁边界风险，不扩张为任意嵌套或provider异步证明。最终累计复核与BSW00115对应仍须完成，不新增Approved／MR12；RTE核心、组件、服务和配置段仍各自承担逐处责任。
