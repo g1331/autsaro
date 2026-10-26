@@ -31,6 +31,16 @@ Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把�
 | 版本查询与空指针错误 | 生成前拒绝 DetVersionInfoApi=true；不提供 Det_GetVersionInfo，也不会产生它的 DET_E_PARAM_POINTER。 不适用（配置：ECUC_Det_00003=true）：SWS_Det_00011、SWS_Det_00052、SWS_Det_00301 |
 | 已废弃的 transient fault | 原文及 SpecificationsARXML 都将此服务与 callout 标为 obsolete，主线不提供已废弃接口。 不适用（归属：R24-11 规范维护者已废弃的 transient-fault 服务与 callout）：SWS_Det_01003、SWS_Det_00187 |
 
+## 私有开发报告状态的映射
+
+`reporting_development`只由`Det_ReportError → Det_HostEnterDevelopmentReport`控制开发hooks的同线程递归边界。固定原件的`SWS_Det_00026`要求停止及防止递归，`00039`要求报告可重入；TLS是实现选择，不是SWS规定的设施。这个标记是已选择Det报告实现的数据，不能因其文件位于host目录或BSWMD过滤器漏列`Det_Host.c`就免除模块责任。
+
+旧函数内static TLS虽然具有进程／线程存储期，却没有独立数据映射；外层CODE属性只映射函数。`SWS_MemMap_00003／00018`要求代码及数据按实际类别映射，`00023`（固定MemoryMapping页37）的说明要求需专用映射的函数static移到文件作用域，不能在函数体插入映射include。现将同一个`static __thread boolean`放入完整`DET_START_SEC_VAR_CLEARED_8`／STOP对：受控ELF使用`.tbss.det`，PE使用`.tls$DET`，沿用现有受控TLS目标策略。隐式零初始化、线程独立、首次TRUE／以后FALSE、从不复位及最终退出134保持；不增加对象或运行时状态。
+
+这是实际的R8.9 Advisory文件作用域保留，不能把静态存储期本身当成块作用域不适用的理由。保留理由是该对象的数据映射与00023的函数体限制；普通once guard、把include挪进函数或让工具链隐式选段均不能同时保持该映射协议。现有模块描述补齐私有实现源及CODE、普通cleared、线程cleared和配置callout四类段；默认`Det_MemMap.h`按00033解析，不借另一模块的头冒充自己的默认头。
+
+验证沿现有Det runtime并发入口增加实际私有状态观察：主线程首次进入后，两条真实线程仍各自首次进入成功、重复进入失败，主线程再次进入仍失败；原有runtime通知次数及公开递归／停止场景保持。目标文件另连接精确私有符号与TLS段，头文件的C／C++观察覆盖线程段配对、STOP撤销、嵌套、错配及多请求。结果按PR实际执行记账，不把线程级编译／行为观察外推完整loader／fiber语义或Windows运行。此处尚未增加批准表或MR12，逐处记录和复核仍归#58。
+
 ## ECUC 与服务端口
 
 | 内容 | 处置与证据 |
