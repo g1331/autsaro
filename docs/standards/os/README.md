@@ -84,6 +84,18 @@ shutdown_reason保留StatusType、8位清零段及原有值，全部写入使用
 
 Windows的注册记录同样区分预留与发布：stack_count只预留数组槽，新增的私有stack_published沿用Linux既有模式，在全部范围、guarantee及Os_StackCheck完成后才Interlocked发布。Observe／Report原子读取预留计数，先确认对应槽已发布再读取载荷；注册中途失败的部分记录不再因thread_id非零而被遍历。FatalExit／Report对全局／逐actor故障的published也使用Interlocked读取，与现有发布写配对。公开记录布局、容量、注册返回值及原有停止观察协议不变。这些修改尚缺新字节的真实Windows编译和执行证据；Linux检测器结果不替代它，也不证明外部工具任意并发读取ARTI记录是安全的。
 
+## 循环与函数出口
+
+R15.4／R15.5均为Advisory（主文印刷125–127／PDF133–135，AMD2追加C11）。补丁后xTaskIncrementTick延迟链循环的两个break分别保护空链和未到期队首；这是保留真实违反及读队首／移除前保护的理由，不是采用代码豁免。R15.5同样要求函数末尾单一return，参数guard也不例外。
+
+对ce1d043e及scoped-mapping-final-results的standard-ecu逐字对应源码，先核对以下43个报告位置，均保留真实多出口。Os_Error.c的79／82／92／98属于Os_HookServiceAllowed：仅按本线程phase选择权限，所调用Os_HookQueryContext也是纯查询；没有锁、输出、hook调用或待清理对象。保留各phase的直接返回使权限分支局部可读，不把它判为R15.5满足。
+
+Os_Mailbox.c的13处为101／104／107／110／114／118／121、176、197、216／220／223、235。PostInput的七个拒绝均在成功取得admission之前，不写ticket或记录；成功取得后先完整复制、发布，再清busy位，才返回。BridgeContext拒绝在生产者CAS之前；成功CAS取得的线程绑定是进程期sole-producer责任，后续容量拒绝不承诺撤销它。input_context无资源获取；TakeInput的三个早退发生在复制／推进read_index之前；InputCount的空指针拒绝不写输出。GuardService的终止路径不返回，不是遗漏调用方释放。这些先决条件的相邻拒绝可避免无效地址和未授权访问，不扩为全部Mailbox并发证明。
+
+Os_Schedule.c的26处按实际函数核对：table_index:32、valid_action:58为只读查找；Validate:73／79／85／89／97／105／109／117／125只检查输入，不发布表状态。start_table:253／257／264、Stop:295／299、Next:329／336、GetStatus:364／368／372均在taskENTER_CRITICAL之前；进入后的各路径统一EXIT、GuardService后返回，GetStatus只在成功路径写输出。五个公开wrapper的395／413／429／447／465在内部实现已收尾后跳过递归ErrorHook处理，没有遗留局部参数地址；其他调用仍经Os_ErrorResult完成hook快照恢复。保留先决条件和ErrorHook分支的局部出口，不新增状态或改拒绝优先级。以上仅为这些位置的作者源码判断；standard-ecu其余285处及其他profile的特有位置尚不能由本段销项，原始人工字段不改写。
+
+Os_Time.c的64处另按只读验证、临界区前拒绝、tick预留后的关闭及ErrorHook收尾逐处核对，位置与状态边界见[完整作者依据](https://github.com/g1331/autsaro/pull/371#issuecomment-6417003748)。特别区分ResetEvent失败后的协议关闭与并发关闭导致的末次CAS失败；不把它们当成无副作用的普通guard，仍保留R15.5违反。
+
 ## 栈记录与指针运算
 
 R18.2／R18.3均为Required（主文印刷145–146／PDF153–154，AMD2追加C11）；AMD4.52将R18.3标题的对象改为表达式，没有放宽同对象关系。两个平台的Os_StackSavedContext和publish_fault都通过record与本模块stacks数组的差取得对应saved_contexts／fault_records下标。真实调用方的记录来自成功Os_StackRegister发布的current_stack，或Os_StackObserve在0至OS_NATIVE_STACKS内枚举的stacks元素；Backend只在注册成功之后保存ARTI指针，ARTI消费者读取该已保存记录。数组有21个元素，元素差可由目标ptrdiff_t表示。未发现当前闭包向这些减法传入别的对象或空指针。

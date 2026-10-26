@@ -56,13 +56,13 @@ R2.7为Advisory，当前C99适用（主文印刷44／PDF52；AMD2追加C11）。
 
 ## C90隐式声明规则与当前编译
 
-R8.1为Required、R17.3为Mandatory，但两条均仅适用C90（主文印刷63、137–138／PDF71、145–146；AMD2的Annex H映射也明确R17.3只针对C90）。所选正常编译为-std=c99，当前standard-ecu的63条R17.3原始报告不能成为C99下的Mandatory违反或偏离申请。它们仍保留于原始摘要，不修改工具输出或人工字段。
+R8.1为Required、R17.3为Mandatory，但两条均仅适用C90（主文印刷63、137–138／PDF71、145–146；AMD2的Annex H映射也明确R17.3只针对C90）。所选正常编译为-std=c99，此前standard-ecu的63条R17.3原始报告不能成为C99下的Mandatory违反或偏离申请。fault-publication新standard-ecu又在四个shutdown_reason原子store及一个load处报告五条；它们是GCC内建，同样按所选C99及真实编译接受判断，不能当成漏写普通函数声明。原始摘要和人工字段不修改。
 
 语言适用性不许可隐式声明。实际GCC13正常probe及HostBatch编译／链接使用-Wall、-Wextra、-Werror，当前运行已成功；Det_ValidHooks在Det.c中的调用前已完整定义，Os_BackendBeforeSelect由Os_Backend.h声明，__atomic_*由目标编译器内建契约处理。GNU内建不是漏写普通函数原型的统一理由，SDK自身参数名／restrict、R8.2／R8.4和目标扩展继续独立核查。该编译证据只证明实际TU／参数接受，不能据此声称任意用户代码、Windows当前head或全部声明义务已满足。
 
 ## Advisory出口与可见性
 
-R15.4／R15.5均为Advisory（主文印刷125–127／PDF133–135，AMD2追加C11）。当前补丁后xTaskIncrementTick延迟链循环有两个break：空链先设置portMAX_DELAY，未到期队首先保存其到期时间；只有到期项才移入ready。这是真实R15.4违反。保留两个邻近出口可直接保持读队首／移除项之前的保护，不通过添加持久状态或声称采用代码豁免销项。R15.5也不能把guard return统称误报；当前355处仍须分别核对退出前的锁、资源、输出与失败发布。已有单出口整改不外推余下函数。
+R15.4／R15.5的循环与早退判断见[OS控制流](README.md#循环与函数出口)。此前355处是旧工件计数；新位置、存储期和资源收尾按对应源码重新核对，不能沿用该数字或把guard return统称误报。
 
 R5.9为Advisory、System范围，TC1的amplification更正未取消跨TU唯一性建议。当前17个报告声明对应六模块configuration、Time与生成配置的alarms、Time／Com的values、HostLinux／Backend的handles、三份control及两份require，均保留真实私有名字重复；合法内部链接不消除该建议。当前按类型、文件与实际调用目标区分的模块词汇是保留理由，不是整条规则通过。
 
