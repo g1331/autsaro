@@ -608,6 +608,42 @@
  
      /* RTOS ports that support interrupt nesting have the concept of a maximum
       * system call (or maximum API call) interrupt priority.  Interrupts that are
+@@ -2220,7 +2173,7 @@
+ UBaseType_t uxQueueSpacesAvailable( const QueueHandle_t xQueue )
+ {
+     UBaseType_t uxReturn;
+-    Queue_t * const pxQueue = xQueue;
++    const Queue_t * const pxQueue = xQueue;
+ 
+     traceENTER_uxQueueSpacesAvailable( xQueue );
+ 
+@@ -2241,7 +2194,7 @@
+ UBaseType_t uxQueueMessagesWaitingFromISR( const QueueHandle_t xQueue )
+ {
+     UBaseType_t uxReturn;
+-    Queue_t * const pxQueue = xQueue;
++    const Queue_t * const pxQueue = xQueue;
+ 
+     traceENTER_uxQueueMessagesWaitingFromISR( xQueue );
+ 
+@@ -2640,7 +2593,7 @@
+ BaseType_t xQueueIsQueueEmptyFromISR( const QueueHandle_t xQueue )
+ {
+     BaseType_t xReturn;
+-    Queue_t * const pxQueue = xQueue;
++    const Queue_t * const pxQueue = xQueue;
+ 
+     traceENTER_xQueueIsQueueEmptyFromISR( xQueue );
+ 
+@@ -2685,7 +2638,7 @@
+ BaseType_t xQueueIsQueueFullFromISR( const QueueHandle_t xQueue )
+ {
+     BaseType_t xReturn;
+-    Queue_t * const pxQueue = xQueue;
++    const Queue_t * const pxQueue = xQueue;
+ 
+     traceENTER_xQueueIsQueueFullFromISR( xQueue );
+ 
 --- a/portable/MSVC-MingW/port.c
 +++ b/portable/MSVC-MingW/port.c
 @@ -27,7 +27,8 @@

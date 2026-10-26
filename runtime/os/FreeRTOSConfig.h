@@ -7,7 +7,7 @@
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 0
 #define configOS_REQUEST_FIFO                   1
 void Os_BackendOnSwitch(void);
-void Os_BackendBeforeSelect(void *current, void *next);
+void Os_BackendBeforeSelect(const void *current, const void *next);
 #define traceOS_TASK_SELECTED(current, next) Os_BackendBeforeSelect((current), (next))
 #define traceTASK_SWITCHED_IN()              Os_BackendOnSwitch()
 #define configUSE_IDLE_HOOK                  1

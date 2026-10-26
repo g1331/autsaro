@@ -723,7 +723,7 @@ OS_MEMMAP static void leave_running(uint32 index)
     }
 }
 
-OS_MEMMAP void Os_BackendBeforeSelect(void *current, void *next)
+OS_MEMMAP void Os_BackendBeforeSelect(const void *current, const void *next)
 {
     if (current != next) {
         if (Os_TargetReady() != 0) {

@@ -24,6 +24,19 @@ int8_t *Os_QueueTestPrevious(int8_t *head, int8_t *cursor, size_t size)
 void StartupHook(void) {}
 void ShutdownHook(StatusType reason) { (void)reason; }
 
+static int queue_state(QueueHandle_t queue, UBaseType_t used, UBaseType_t capacity)
+{
+    const UBaseType_t actual_used = uxQueueMessagesWaitingFromISR(queue);
+    const UBaseType_t actual_space = uxQueueSpacesAvailable(queue);
+    const BaseType_t actual_empty = xQueueIsQueueEmptyFromISR(queue);
+    const BaseType_t actual_full = xQueueIsQueueFullFromISR(queue);
+    return ((actual_used == used) && (actual_space == (capacity - used)) &&
+            (actual_empty == ((used == 0u) ? pdTRUE : pdFALSE)) &&
+            (actual_full == ((used == capacity) ? pdTRUE : pdFALSE)))
+               ? 1
+               : 0;
+}
+
 int main(void)
 {
     StaticTask_t first = {0};
@@ -50,16 +63,25 @@ int main(void)
     if (xQueueCreateStatic(2u, sizeof(uint32), (uint8 *)&storage, &queue) != typed_queue) {
         return 3;
     }
+    if (queue_state(typed_queue, 0u, 2u) == 0) {
+        return 21;
+    }
     if ((xQueueSend(typed_queue, &first_value, 0u) != pdPASS) ||
         (xQueueSend(typed_queue, &second_value, 0u) != pdPASS) ||
         (xQueueSend(typed_queue, &first_value, 0u) != errQUEUE_FULL)) {
         return 4;
+    }
+    if (queue_state(typed_queue, 2u, 2u) == 0) {
+        return 22;
     }
     if ((xQueuePeek(typed_queue, &received, 0u) != pdPASS) || (received != first_value) ||
         (xQueueReceive(typed_queue, &received, 0u) != pdPASS) || (received != first_value) ||
         (xQueueReceive(typed_queue, &received, 0u) != pdPASS) || (received != second_value) ||
         (xQueueReceive(typed_queue, &received, 0u) != errQUEUE_EMPTY)) {
         return 5;
+    }
+    if (queue_state(typed_queue, 0u, 2u) == 0) {
+        return 23;
     }
     if ((xQueueSend(typed_queue, &second_value, 0u) != pdPASS) ||
         (xQueueReset(typed_queue) != pdPASS) ||

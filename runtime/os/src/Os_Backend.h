@@ -221,13 +221,7 @@ OS_MEMMAP void Os_BackendInterruptLeave(void);
 
 OS_MEMMAP StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info);
 
-OS_MEMMAP void Os_BackendOnSwitch(void);
-
-OS_MEMMAP void Os_BackendBeforeSelect(void *current, void *next);
-
 OS_MEMMAP sint32 Os_BackendTakeIsrReschedule(void);
-
-OS_MEMMAP void Os_BackendAssert(const void *file, sint32 line);
 
 OS_MEMMAP HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes,
                               BOOL manual,

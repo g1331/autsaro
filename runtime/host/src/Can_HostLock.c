@@ -41,7 +41,8 @@ static void Can_CheckExit(unsigned owner)
     }
 }
 #if defined(_WIN32)
-static CRITICAL_SECTION can_lock; /**< Process lock, once-initialized; no ECU Init reset. */
+static CRITICAL_SECTION
+    driver_state_lock; /**< Process lock, once-initialized; no ECU Init reset. */
 static CRITICAL_SECTION
     area_locks[CAN_HOST_AREA_COUNT]; /**< Once-initialized area mutexes; no ECU Init reset. */
 static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *context)
@@ -49,7 +50,7 @@ static BOOL CALLBACK Can_InitLock(PINIT_ONCE once, PVOID parameter, PVOID *conte
     (void)once;
     (void)parameter;
     (void)context;
-    return InitializeCriticalSectionEx(&can_lock, 0u, 0u);
+    return InitializeCriticalSectionEx(&driver_state_lock, 0u, 0u);
 }
 static BOOL CALLBACK Can_InitAreas(PINIT_ONCE once, PVOID parameter, PVOID *context)
 {
@@ -74,12 +75,12 @@ void Can_Lock(void)
 {
     static INIT_ONCE can_lock_once = INIT_ONCE_STATIC_INIT;
     Can_NoteEnter(CAN_HOST_DRIVER_OWNER);
-    Can_EnterLock(&can_lock_once, &Can_InitLock, &can_lock);
+    Can_EnterLock(&can_lock_once, &Can_InitLock, &driver_state_lock);
 }
 void Can_Unlock(void)
 {
     Can_CheckExit(CAN_HOST_DRIVER_OWNER);
-    LeaveCriticalSection(&can_lock);
+    LeaveCriticalSection(&driver_state_lock);
     strict_held = 0u;
 }
 void Can_HostAreaEnter(Can_HostAreaType area)
@@ -105,7 +106,8 @@ typedef struct {
     pthread_mutex_t mutex;
     int ready;
 } Can_HostLockType;
-static Can_HostLockType can_lock; /**< Process lock, pthread_once-initialized; no ECU Init reset. */
+static Can_HostLockType
+    driver_state_lock; /**< Process lock, pthread_once-initialized; no ECU Init reset. */
 static Can_HostLockType
     area_locks[CAN_HOST_AREA_COUNT]; /**< Once-initialized area mutexes; no ECU Init reset. */
 static void Can_InitMutex(Can_HostLockType *lock)
@@ -113,7 +115,7 @@ static void Can_InitMutex(Can_HostLockType *lock)
     /* Strict ownership rejects recursion before entering the platform mutex. */
     lock->ready = (pthread_mutex_init(&lock->mutex, NULL) == 0) ? 1 : 0;
 }
-static void Can_InitLock(void) { Can_InitMutex(&can_lock); }
+static void Can_InitLock(void) { Can_InitMutex(&driver_state_lock); }
 static void Can_InitAreas(void)
 {
     size_t area;
@@ -141,12 +143,12 @@ void Can_Lock(void)
 {
     static pthread_once_t can_lock_once = PTHREAD_ONCE_INIT;
     Can_NoteEnter(CAN_HOST_DRIVER_OWNER);
-    Can_EnterLock(&can_lock_once, &Can_InitLock, &can_lock);
+    Can_EnterLock(&can_lock_once, &Can_InitLock, &driver_state_lock);
 }
 void Can_Unlock(void)
 {
     Can_CheckExit(CAN_HOST_DRIVER_OWNER);
-    Can_LeaveLock(&can_lock);
+    Can_LeaveLock(&driver_state_lock);
     strict_held = 0u;
 }
 void Can_HostAreaEnter(Can_HostAreaType area)
