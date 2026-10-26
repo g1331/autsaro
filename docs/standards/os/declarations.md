@@ -1,14 +1,20 @@
 # OS声明与SDK接口
 
-本篇承接[OS标准说明](README.md)，区分自有声明整改、按实际配置选择的内核接口，以及仍待决定的SDK义务。
+本篇承接[OS标准说明](README.md)，区分自有声明整改、按实际配置选择的内核接口，以及需要逐构造判断的SDK义务。
 
 ## SDK宏名与实际标识符
 
 R5.5为Required（主文印刷53／PDF61，AMD2.27／39追加C11及语言措辞）。排除分支的宏从未定义，与定义后undef不同：四份declaration-consistency工件各47个报告位置对应45个关闭MPU宏及多核分支的pxCurrentTCB，不据此删除原始报告或关闭整个规则。
 
-真实GCC宏收据与预处理后C标识符另有同名交集：四profile均为相同346个名字，22个TU、2146个名字/TU组合。对象来自固定glibc的pthread／confname／eventfd／sigaction／siginfo／sigevent／sched头和Linux UAPI，分别为331个枚举常量、13个成员和两个typedef；不是新增诊断条数。sched_priority的成员与宏生产者分属struct_sched_param.h和sched.h。实体进入真实TU，不能因未执行使用或SDK身份消除R5.5义务。
+真实GCC宏收据与预处理后C标识符的同名交集，在四profile均为相同346个名字、22个TU、2146个名字/TU组合；这是候选集合，不是346条已确认违反或新增诊断。对象为331个枚举常量、13个成员和两个typedef，来源与宏定义还须连接实际包含时序。主文§6.7（印刷15–16／PDF23–24）区分标准库实现、处理标准头时包含的文件、其他外部代码及集成接口责任；system-header标记、SDK路径或POSIX称呼都不能单独决定豁免或违反。
 
-libc6-dev 2.39-0ubuntu8.9与linux-libc-dev 6.8.0-147.147的十份相关头已与现存原始来源逐字节对应。全部名字、来源行、头摘要、替代排除和[具体保留提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6407601057)集中PR；目前待决定，不扩ADR0023／0024、不填批准表或MR12。删显式include、后置undef、搬移TU或手写SDK声明均不能证明整改；另换SDK／flags／后端仍需证明现有ABI、信号、线程、计时与unwind合同。这里不覆盖Windows或最终provider语义。
+现存四份sdk-inline-closure展开保留GCC进入／返回行标记，可区分Os_HostLinux、Os_StackLinux、Os_LinuxNative和Os_PortRestart的实际包含栈。pthread.h的12个枚举、confname.h的302个枚举、eventfd.h的三个枚举、sched_priority成员及两个Linux UAPI typedef，共320个名字的声明和宏由非标准头处理引入；对应宏均是自身名字的替换，实际预处理仍保留同名标识符。标准头处理已结束后出现的这些对象不能据§6.7排除。sched_priority的成员与宏生产者分别为struct_sched_param.h和sched.h:47。
+
+另26个名字的声明来自signal.h处理中的sigaction／siginfo／sigevent头，适用§6.7的头内容边界，不能仅因其为POSIX扩展就把该边界撤销。其中sa_sigaction和si_addr又在项目函数体中展开，最终分别保留同名成员：Os_HostLinux.c:219／230、Os_StackLinux.c:219及:178；这些位于标准头处理之外的接口使用仍受规则约束。其余24个名字在四profile的现成实际TU展开中没有头外出现，不需为这些头内对象申请R5.5保留。由此，本次有依据的分类为320个外部头对象及两个项目接口名字存在R5.5违反、24个仅有§6.7范围内对象；计数按名字去重，不是位置或TU计数，也不表示整条规则已满足。
+
+固定March 2013第三版主文的R5.5原页没有独立Exception段；其合规宏调用示例以预处理后不再留下同名标识符为条件。已合成AMD1–4／TC1–2，其中AMD2.27／39只增加语言适用性及措辞，未找到为上述自身名字宏、成员别名或typedef另设的一般例外。该判断及§6.7的具体范围纳入本次累计技术复核；若有其他正式例外原文，应按其版次和条件核对，不能用工具解释或后续版次摘要替代固定组合。
+
+libc6-dev 2.39-0ubuntu8.9与linux-libc-dev 6.8.0-147.147的十份相关头已与现存原始来源逐字节对应。[原调查及2026-10-26状态更正](https://github.com/g1331/autsaro/pull/371#issuecomment-6407601057)保留全部名字、来源行和头摘要供追溯；原先整体申请接受346个违反的结论由上述技术分类替代，不再作为等待人类逐名批准事项。普通技术分类由实现者完成并集中复核；确需新的项目取舍时再明确实际对象、合同、风险和替代，不扩ADR0023／0024、不填批准表或MR12。这里不覆盖Windows、其他规则或最终provider语义。
 
 ## 自有接缝的声明一致性
 
@@ -23,7 +29,13 @@ R8.3为Required（主文印刷66–67／PDF74–75，AMD2追加C11）；具名�
 
 R18.5为Advisory（主文印刷148–149／PDF156–157，AMD2追加C11），按typedef展开后的连续指针declarator计数，数组／函数declarator会中断连续链；数组形参调整则可能额外增加一级。当前标准ECU的实际补丁后源码中，TaskHandle_t、QueueHandle_t、HANDLE及Rte_Instance等数据指针别名各为一级；SemaphoreHandle_t、MessageBufferHandle_t和Os_HostHandleType分别沿QueueHandle_t、StreamBufferHandle_t、HANDLE承接这一级。所查Task创建输出、HANDLE输出／等待数组为两级，idle存储回调的StaticTask_t**／StackType_t**和maps的const char**也为两级，没有再套数组形参增加第三级。函数指针别名的参数／返回声明分别核对，不把函数两侧的星号累加。这里只完成这些实际声明及别名链判断；没有用搜索不到***替代全部SDK／其他生成配置的类型评估。
 
+R17.5的有效类别为Required：TC2.31／32（印刷11／PDF17）将主文的Advisory及should分别改为Required及shall，AMD2追加C11。数组形参调整成指针不消除声明容量义务。当前实际Can flush传给sink的payload、Target输入及batch_frames成员均为八字节，沿Can_Inject／内部接收和Ecu_ExecutionTransmit／Target输出的八元素形参承接；DLC为零仍使用该八字节对象。read_line的真实局部数组与ECU_BATCH_LINE_CAPACITY相同。PipelineTest_Copy的十元素观察仅在test分支，不拿它证明正常入口；采用内核的无界名字数组形参另由其NUL协议判断。这里按实际调用对象核对，不把公共API的空指针拒绝测试或未知用户调用改写为全部R17.5满足。
+
 R8.5／R8.6均为Required、System范围（主文印刷69–70／PDF77–78；AMD2追加C11，AMD4.42补充R8.15交叉引用）。R8.5只约束非定义声明，不能把实现体的定义另计为重复声明。OS_TIME_TESTS分支曾在Os_Backend.h重复声明xInsideInterrupt；该头已通过FreeRTOS.h取得当前端口portmacro.h的声明，故删除私有重复行，不改对象类型或定义。两个目标的正常编译继续从各自唯一选中的端口头取得名字。
+
+同一包含链也先取得FreeRTOSConfig.h中三个kernel hook原型；Os_Backend.h不再重复声明Os_BackendOnSwitch／BeforeSelect／Assert。配置头是trace／configASSERT宏所需的唯一声明owner，实际定义仍保留OS_MEMMAP，Assert的noreturn声明保持。BeforeSelect仅比较两个地址，定义与原型统一为const void*，没有把它们注册成可写参数的function pointer。
+
+R8.13为Advisory（主文印刷73–74／PDF81–82，AMD2追加C11）。0015对uxQueueSpacesAvailable、uxQueueMessagesWaitingFromISR、xQueueIsQueueEmptyFromISR和xQueueIsQueueFullFromISR的局部Queue_t view加const；四个body只读取字段，volatile计数及原critical边界保持。正常静态queue消费者分别观察空、满及排空后的数量、容量、empty／full。与此不同，pthread／sigaction／unwind callback的可写参数类型由真实接口固定，不能靠const化后cast注册；这类ABI义务仍按原SDK范围核查，不把编译器建议等同于允许修改回调签名。
 
 R8.6不能由“未调用”或链接成功直接销项。当前实际C99头展开和定义条件核对发现27处仍生效但没有所选定义的接口：portable.h的10个heap声明、task.h的12个接口和queue.h的5个接口。0025让声明与实际定义使用相同的配置条件：动态分配、mutex／recursive mutex、timer受限等待、Delay／Delete，以及scheduler-state组合条件。xQueueCreateMutexStatic保留既有static-allocation外层条件，再检查mutex条件；没有删掉已启用实现、补假定义或增加兼容别名。所有声明的类型、参数及非预处理C token保持，上游原件不改。
 
