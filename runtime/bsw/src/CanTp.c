@@ -33,9 +33,6 @@
 #elif (DET_AR_RELEASE_MAJOR_VERSION != 4U) || (DET_AR_RELEASE_MINOR_VERSION != 10U)
 #error "CanTp.c -> Det.h: incompatible AUTOSAR release"
 #endif
-#define CANTP_START_SEC_VAR_CLEARED_UNSPECIFIED
-#include "CanTp_MemMap.h"
-
 /* Runtime error values (SWS_CanTp_00352); zero means none. */
 #define CANTP_E_PADDING       0x70u
 #define CANTP_E_OPER_NOT_SUPP 0xa0u
@@ -58,6 +55,9 @@
 /* SF, FF and CF waiting while another context makes calls; full means dropped. */
 #define CANTP_RX_QUEUE  4u
 #define CANTP_TIMER_MIN 2u
+
+#define CANTP_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "CanTp_MemMap.h"
 
 typedef enum {
     CANTP_TX_IDLE,

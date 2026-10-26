@@ -128,6 +128,28 @@ class DependencyTests(unittest.TestCase):
                                     name)
                 self.assertEqual(words.count("break"), words.count("case") + words.count("default"), name)
 
+    def test_transport_and_diagnostic_sections_exclude_private_preprocessing(self):
+        # Verifies: SWS_MemMap_00003. Reuse the directive checker, not its OS object-class policy.
+        for module, prefix, constant in (("CanTp", "CANTP", "CANTP_E_PADDING"),
+                                         ("Dcm", "DCM", "DCM_BUFFER_CAPACITY")):
+            with self.subTest(module=module):
+                source = (os_suites.ROOT / "runtime/bsw/src" / (module + ".c")).read_text()
+                directives = "\n".join(token.text for token in os_suites.lex(source)
+                                       if token.text.lstrip().startswith("#"))
+                directives = directives.replace(prefix + "_START_SEC_", "OS_START_SEC_")
+                directives = directives.replace(prefix + "_STOP_SEC_", "OS_STOP_SEC_")
+                directives = directives.replace('"' + module + '_MemMap.h"', '"Os_MemMap.h"')
+                os_suites.verify_memory_mapping_source(directives)
+                # Restoring a real private definition inside the section must fail this same oracle.
+                definition = next(line for line in directives.splitlines()
+                                  if line.startswith("#define " + constant + " "))
+                self.assertEqual(directives.count(definition), 1)
+                mutant = directives.replace(definition + "\n", "", 1)
+                include = '#include "Os_MemMap.h"'
+                mutant = mutant.replace(include, include + "\n" + definition, 1)
+                with self.assertRaisesRegex(AssertionError, "preprocessing inside mapped section"):
+                    os_suites.verify_memory_mapping_source(mutant)
+
     def test_memory_mapping_source_rejects_wrong_classes_and_preprocessing(self):
         def section(kind, body):
             return (f'#define OS_START_SEC_{kind}\n#include "Os_MemMap.h"\n'

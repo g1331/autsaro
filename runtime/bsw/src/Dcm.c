@@ -22,8 +22,6 @@
 #elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
 #error "Dcm.c -> SchM_Dcm.h: incompatible AUTOSAR release"
 #endif
-#define DCM_START_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Dcm_MemMap.h"
 #define DCM_BUFFER_CAPACITY 256u
 #define DCM_SESSION_DID     0xf186u
 #define DCM_OBD_DATA        0xf400u
@@ -43,6 +41,9 @@
 #define DCM_NO_COM          0u
 #define DCM_SILENT_COM      1u
 #define DCM_FULL_COM        2u
+
+#define DCM_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Dcm_MemMap.h"
 
 typedef enum {
     DCM_IDLE,
