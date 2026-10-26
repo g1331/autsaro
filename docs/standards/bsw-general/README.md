@@ -124,3 +124,7 @@ ARTI 工具实现独立发行，初值 **1.0.0**，唯一 owner 为 `Arti_Versio
 注释／字面量、初始化层级与实际求值见[源码语言边界](language.md)。限定的源码、配置与原始分析状态分别保留。
 
 R21.21／R21.24均为Required（AMD2.83印刷18／PDF25；AMD3.50印刷26／PDF34），分别禁止system及rand／srand；当前四份callback-parameter样本与双目标补丁后内核无这些标识符或宏用途。R21.22为Mandatory、R21.23为Required（AMD3.49印刷24–25／PDF32–33），约束tgmath操作数类别及多参数类型；同一语料对固定glibc头的122个公开宏名无普通token或指令用途。四条在当前C99均适用；这里是调用构造缺席，保留SDK展开、provider内部及其他配置边界。
+
+## 库函数输入域
+
+D4.11为Required（主文印刷33–34／PDF41–42），允许调用方、被调方检查或静态值域证明；不只看返回码。D4.14同为Required（AMD1印刷1–2／PDF9–10），包括文件、环境、输入和通信数据。HostBatch保留真实字节数及超长行排空；lexer检查长度、token数、ASCII及数值乘加前界限，Target再检查DLC、容量、epoch和ticket关系。资源注入的getenv／strtoul检查errno、首字符、终点和范围后仅保存整数。正常CAN／DID、仲裁及超时恢复验证不替代受限字符串边界的未执行证据；原生信号帧、FP指针及外部provider域仍有独立责任，不据局部输入检查关闭两项。

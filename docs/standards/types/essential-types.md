@@ -28,6 +28,8 @@ Linux私有`Os_HostLinux.h`不再定义TRUE／FALSE，避免它在Platform_Types
 
 R10.1（Required，主文印刷82–84／PDF90–92）的位运算要求unsigned操作数；有符号非负常量例外仅适用于移位右侧。当前OS把信号、映射、eventfd、poll、futex、unwind及原子状态的位操作放在无符号域，随后按原生接口转换；调用、标志值与ABI不变。清位常量先按uint32取反，再转LONG；TC1将~加入复合运算符，但整数常量表达式仍非复合表达式。TIME及ARTI原子常量去除Linux上产生64位long的L后缀，避免隐式压窄到32位LONG（R10.3／D.6）。固定addon漏查signed位操作及一元~，零报告不证明满足；Windows实际运行另取证。
 
+当前standard-ecu完成结果另外保留三处清位常量cast的R10.8报告。固定misra_10_8没有先排除常量表达式；实际~(uint32)1u没有对象读取或调用，适用§8.10.3的常量边界，不因不同signed类别就成为非恒定复合表达式cast。原始2819条诊断及比较拒绝保留，不靠改写为裸-2常量或增加baseline消除报告。
+
 ## 字符算术与显式转换
 
 R10.2为Required（主文印刷85／PDF93）；TC2.19把另一整数操作数的rank限定为不高于int。HostBatch的digit先将输入字符与十进制／十六进制字符常量分别转int再作差；Os_LinuxNative的map_address在字符范围检查后以char减char得到标准int，再转unsigned。Os_HostTextField／Hex从固定digits数组选取字符，不进行char加uint64算术。这些是实际表达式的不同类型路径，不把所有数字字符处理都当作同一例外。
