@@ -646,6 +646,7 @@ void Ecu_TargetTask(void)
         } else if ((status != E_OK) && (status != E_OS_NOFUNC)) {
             fail();
         } else {
+            /* No new tick; an already processed tick is not run again. */
         }
         if ((status == E_OK) && (output_pending == 0u)) {
             if (Os_TargetCompleteTick(ticket) != E_OK) {

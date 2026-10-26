@@ -656,7 +656,7 @@
       ]
     },
     {
-      "path": "runtime/os/patches/0026-fatal-assertion-boundaries.patch",
+      "path": "runtime/os/patches/0026-explicit-control-flow-boundaries.patch",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

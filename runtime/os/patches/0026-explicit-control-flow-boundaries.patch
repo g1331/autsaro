@@ -1,0 +1,34 @@
+diff --git a/tasks.c b/tasks.c
+--- a/tasks.c
++++ b/tasks.c
+@@ -4320,6 +4320,7 @@
+                     }
+                     else
+                     {
++                        /* Matching nonterminal characters require the next character. */
+                         mtCOVERAGE_TEST_MARKER();
+                     }
+ 
+@@ -4552,11 +4553,6 @@
+         UBaseType_t uxTask;
+ 
+         configASSERT( pxCallbackFunction != NULL );
+-
+-        if( pxCallbackFunction == NULL )
+-        {
+-            return 0;
+-        }
+ 
+         vTaskSuspendAll();
+         {
+diff --git a/queue.c b/queue.c
+--- a/queue.c
++++ b/queue.c
+@@ -1026,6 +1026,7 @@
+                     }
+                     else
+                     {
++                        /* No receiver was unblocked and no yield was requested. */
+                         mtCOVERAGE_TEST_MARKER();
+                     }
+                 }

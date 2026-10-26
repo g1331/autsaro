@@ -102,6 +102,8 @@ int main(int argc, char **argv)
         failure_stage = (unsigned)value;
     } else if (argc != 1) {
         return 98;
+    } else {
+        /* No failure-stage argument keeps the default test selection. */
     }
 #else
     (void)argv;
