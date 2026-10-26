@@ -229,18 +229,35 @@ void StartupHook(void)
     (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_READY);
 }
 
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 void ShutdownHook(StatusType Error)
 {
     Os_Atomic32Type state =
         (Error == E_OK) ? (Os_Atomic32Type)ECU_TARGET_CLOSED : (Os_Atomic32Type)ECU_TARGET_FAILED;
     Ecu_StackRetire(bootstrap_reached);
     (void)Os_HostAtomicExchange(&lifecycle, state);
-#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
     Ecu_TargetTestShutdown(Error);
-#endif
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+void ShutdownHook(StatusType Error)
+{
+    Os_Atomic32Type state =
+        (Error == E_OK) ? (Os_Atomic32Type)ECU_TARGET_CLOSED : (Os_Atomic32Type)ECU_TARGET_FAILED;
+    Ecu_StackRetire(bootstrap_reached);
+    (void)Os_HostAtomicExchange(&lifecycle, state);
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
 StatusType Ecu_TargetPostFrame(
     uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t *ticket)
 {

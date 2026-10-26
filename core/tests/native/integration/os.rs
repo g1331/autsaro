@@ -673,6 +673,11 @@ fn bootstrap_stage_failure_closes_without_output_and_retires_started_stages() {
         let stdout = String::from_utf8(output.stdout)
             .unwrap()
             .replace("\r\n", "\n");
+        assert!(
+            output.stderr.is_empty(),
+            "{name}: stdout={stdout}\nstderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         let lines = stdout
             .lines()
             .filter(|line| line.starts_with("ecu_retire "))

@@ -38,6 +38,8 @@
 
 ### Fixed
 
+- Configuration conditionals surround complete memory-mapping pairs in the CAN driver, native adapters and generated lifecycle variants. Regenerate deliveries; polling, queued completion, startup/retirement observations and public signatures are preserved (#371)
+
 - BSW, host, RTE and SWC memory-mapping headers reject missing or simultaneous supported section requests during preprocessing. Regenerate deliveries for the updated header and emitter identities; valid section pairs and placement are unchanged (#371)
 
 - Native shutdown reasons use lock-free atomic publication when ordinary closing races a guard fault; ShutdownHook, lifecycle text and exit status consume one captured reason (#371)

@@ -150,6 +150,29 @@ class DependencyTests(unittest.TestCase):
                 with self.assertRaisesRegex(AssertionError, "preprocessing inside mapped section"):
                     os_suites.verify_memory_mapping_source(mutant)
 
+    def test_configuration_conditionals_surround_complete_memory_mapping_pairs(self):
+        # Verifies: SWS_MemMap_00003. Configuration selection encloses the complete pair.
+        for name, prefix, header, conditional in (
+            ("runtime/bsw/src/Can.c", "CAN", "Can", "#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)"),
+            ("runtime/host/src/Det_Host.c", "DET", "Det", "#if defined(_WIN32)"),
+            ("runtime/os/src/Os_PortRestart.h", "OS", "Os", "#ifndef _WIN32"),
+            ("runtime/ecu/src/Ecu_Target.c", "OS", "Os",
+             "#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)"),
+        ):
+            with self.subTest(source=name):
+                source = (os_suites.ROOT / name).read_text()
+                directives = "\n".join(token.text for token in os_suites.lex(source)
+                                       if token.text.lstrip().startswith("#"))
+                directives = directives.replace(prefix + "_START_SEC_", "OS_START_SEC_")
+                directives = directives.replace(prefix + "_STOP_SEC_", "OS_STOP_SEC_")
+                directives = directives.replace('"' + header + '_MemMap.h"', '"Os_MemMap.h"')
+                os_suites.verify_memory_mapping_source(directives)
+                self.assertIn(conditional, directives)
+                include = '#include "Os_MemMap.h"'
+                mutant = directives.replace(include, include + "\n" + conditional + "\n#endif", 1)
+                with self.assertRaisesRegex(AssertionError, "preprocessing inside mapped section"):
+                    os_suites.verify_memory_mapping_source(mutant)
+
     def test_memory_mapping_source_rejects_wrong_classes_and_preprocessing(self):
         def section(kind, body):
             return (f'#define OS_START_SEC_{kind}\n#include "Os_MemMap.h"\n'

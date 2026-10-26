@@ -611,26 +611,45 @@ fn generated_callback_values_use_explicit_function_addresses() {
 }
 
 #[test]
-fn generated_schm_lifecycle_section_contains_no_other_preprocessing() {
+fn generated_lifecycle_sections_contain_no_other_preprocessing() {
     // Verifies: SWS_MemMap_00003.
     let plan = build(&inputs()).unwrap();
     let files = prepared_pipeline_files(&plan);
-    let source = files
-        .iter()
-        .find(|(path, _)| path == "generated/src/SchM_Main.c")
-        .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
-        .unwrap();
-    let start = "#define RTE_Rte_START_SEC_VAR_CLEARED_UNSPECIFIED\n#include \"Rte_MemMap.h\"\n";
-    let body = source.split_once(start).unwrap().1;
-    let body = body
-        .split_once("#define RTE_Rte_STOP_SEC_VAR_CLEARED_UNSPECIFIED")
-        .unwrap()
-        .0;
-    assert!(body.contains("schm_lifecycle"), "{body}");
-    assert!(
-        body.lines().all(|line| !line.trim_start().starts_with('#')),
-        "{body}"
-    );
+    for (name, prefix, segment, owned) in [
+        (
+            "SchM_Main.c",
+            "RTE_Rte",
+            "VAR_CLEARED_UNSPECIFIED",
+            "schm_lifecycle",
+        ),
+        (
+            "Ecu_RuntimeConfig.c",
+            "RTE_Ecu",
+            "CODE",
+            "Ecu_StackBootstrap",
+        ),
+    ] {
+        let path = format!("generated/src/{name}");
+        let source = files
+            .iter()
+            .find(|(file, _)| file == &path)
+            .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
+            .unwrap();
+        let start = format!("#define {prefix}_START_SEC_{segment}\n#include \"Rte_MemMap.h\"\n");
+        let stop = format!("#define {prefix}_STOP_SEC_{segment}");
+        let bodies = source
+            .split(&start)
+            .skip(1)
+            .map(|tail| tail.split_once(&stop).unwrap().0)
+            .collect::<Vec<_>>();
+        assert!(bodies.iter().any(|body| body.contains(owned)), "{path}");
+        for body in bodies {
+            assert!(
+                body.lines().all(|line| !line.trim_start().starts_with('#')),
+                "{path}: {body}"
+            );
+        }
+    }
 }
 
 #[test]

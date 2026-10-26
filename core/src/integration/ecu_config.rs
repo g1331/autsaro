@@ -981,21 +981,26 @@ pub(super) fn files(
 }
 "#,
     );
-    // Eight initialization stages; a test build can fail before each one, and
-    // retirement undoes only the stages that began, newest first.
-    let stage = |number: u8| {
-        format!(
-            r#"#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
-    if (Ecu_TargetTestFailStage({number}u) != 0) {{
+    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", false));
+    let lifecycle = |testing: bool| -> Result<String, Vec<PlanDiagnostic>> {
+        let mut config = String::new();
+        // Eight initialization stages; a test build can fail before each one, and
+        // retirement undoes only the stages that began, newest first.
+        let stage = |number: u8| {
+            let mut text = String::new();
+            if testing {
+                text.push_str(&format!(
+                    r#"    if (Ecu_TargetTestFailStage({number}u) != 0) {{
         return E_NOT_OK;
     }}
-#endif
-    *reached = {number}u;
 "#
-        )
-    };
-    config.push_str(
-        r#"RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)
+                ));
+            }
+            text.push_str(&format!("    *reached = {number}u;\n"));
+            text
+        };
+        config.push_str(
+            r#"RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)
 {
     Can_ControllerStateType actual;
     if ((reached == NULL_PTR) || (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK)) {
@@ -1003,61 +1008,61 @@ pub(super) fn files(
     }
     *reached = 0u;
 "#,
-    );
-    config.push_str(&stage(1));
-    config.push_str(
-        r#"    SchM_Init(&Ecu_SchMConfig);
+        );
+        config.push_str(&stage(1));
+        config.push_str(
+            r#"    SchM_Init(&Ecu_SchMConfig);
     SchM_Start();
     if (Ecu_SchMReady() == FALSE) {
         return E_NOT_OK;
     }
 "#,
-    );
-    config.push_str(&stage(2));
-    config.push_str(
-        r#"    Det_Init(&det_config);
+        );
+        config.push_str(&stage(2));
+        config.push_str(
+            r#"    Det_Init(&det_config);
     Det_Start();
 "#,
-    );
-    config.push_str(&stage(3));
-    config.push_str("    Can_Init(&driver);\n");
-    config.push_str(&stage(4));
-    config.push_str(
-        r#"    CanIf_Init(&CanIf_Config);
+        );
+        config.push_str(&stage(3));
+        config.push_str("    Can_Init(&driver);\n");
+        config.push_str(&stage(4));
+        config.push_str(
+            r#"    CanIf_Init(&CanIf_Config);
     Ecu_HostBusSM_Init(&bus_config);
 "#,
-    );
-    config.push_str(&stage(5));
-    config.push_str(
-        r#"    LSduR_Init(&LSduR_Config);
+        );
+        config.push_str(&stage(5));
+        config.push_str(
+            r#"    LSduR_Init(&LSduR_Config);
     PduR_Init(&PduR_Config);
 "#,
-    );
-    config.push_str(&stage(6));
-    config.push_str(
-        r#"    Com_Init(&com_config);
+        );
+        config.push_str(&stage(6));
+        config.push_str(
+            r#"    Com_Init(&com_config);
     Com_IpduGroupStart(com_config.receive_group, TRUE);
     Com_EnableReceptionDM(com_config.receive_group);
     ComM_Init(&comm_config);
     BswM_Init(&bswm_config);
 "#,
-    );
-    // Stage 7 exists only with a diagnostic transport; the numbering stays fixed.
-    if transport.is_some() {
-        config.push_str(&stage(7));
-        config.push_str(
-            r#"    CanTp_Init(&tp_config);
+        );
+        // Stage 7 exists only with a diagnostic transport; the numbering stays fixed.
+        if transport.is_some() {
+            config.push_str(&stage(7));
+            config.push_str(
+                r#"    CanTp_Init(&tp_config);
     Dcm_Init(&dcm_config);
 "#,
-        );
-    }
-    let first_user = mode
-        .users
-        .first()
-        .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.channel))?;
-    config.push_str(&stage(8));
-    config.push_str(&format!(
-        r#"    if (Rte_Start() != E_OK) {{
+            );
+        }
+        let first_user = mode
+            .users
+            .first()
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.channel))?;
+        config.push_str(&stage(8));
+        config.push_str(&format!(
+            r#"    if (Rte_Start() != E_OK) {{
         return E_NOT_OK;
     }}
     ComM_CommunicationAllowed({}, TRUE);
@@ -1074,97 +1079,108 @@ pub(super) fn files(
     return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;
 }}
 "#,
-        name("ComM", "ComMChannel", &mode.channel),
-        name("ComM", "ComMUser", &first_user.path),
-        mode.main_symbol,
-        symbolic.parameter("CanIfCtrlId")?
-    ));
-    config.push_str(
-        r#"RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events)
+            name("ComM", "ComMChannel", &mode.channel),
+            name("ComM", "ComMUser", &first_user.path),
+            mode.main_symbol,
+            symbolic.parameter("CanIfCtrlId")?
+        ));
+        config.push_str(
+            r#"RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events)
 {
     if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) {
         return E_NOT_OK;
     }
 "#,
-    );
-    for entity in &description.schedule.entities {
-        if entity.application {
-            config.push_str(&format!(
-                r#"    if ((events & {}u) != 0u) {{
+        );
+        for entity in &description.schedule.entities {
+            if entity.application {
+                config.push_str(&format!(
+                    r#"    if ((events & {}u) != 0u) {{
         {}();
     }}
 "#,
-                description.event_mask(&entity.os_event)?,
-                entity.symbol
-            ));
-        } else {
-            let symbol = &entity.symbol;
-            config.push_str(&format!(
-                r#"    if ((events & {}u) != 0u) {{
+                    description.event_mask(&entity.os_event)?,
+                    entity.symbol
+                ));
+            } else {
+                let symbol = &entity.symbol;
+                config.push_str(&format!(
+                    r#"    if ((events & {}u) != 0u) {{
         {symbol}();
     }}
 "#,
-                description.event_mask(&entity.os_event)?
-            ));
-            if entity.symbol == com.transmit_main.symbol {
-                config.push_str(
-                    r#"    if (Can_HostFlush() != ECU_OK) {
+                    description.event_mask(&entity.os_event)?
+                ));
+                if entity.symbol == com.transmit_main.symbol {
+                    config.push_str(
+                        r#"    if (Can_HostFlush() != ECU_OK) {
         return E_NOT_OK;
     }
 "#,
-                );
+                    );
+                }
             }
         }
-    }
-    config.push_str(
-        r#"    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;
+        config.push_str(
+            r#"    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;
 }
 RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
 {
 "#,
-    );
-    // Det (2) and the routing tables (5) have no deinitialization service.
-    let mut retired = vec![(8, "(void)Rte_Stop();\n".to_owned())];
-    if transport.is_some() {
-        retired.push((7, "CanTp_Shutdown();\n".to_owned()));
-    }
-    retired.push((
-        6,
-        r#"BswM_Deinit();
+        );
+        // Det (2) and the routing tables (5) have no deinitialization service.
+        let mut retired = vec![(8, "(void)Rte_Stop();\n".to_owned())];
+        if transport.is_some() {
+            retired.push((7, "CanTp_Shutdown();\n".to_owned()));
+        }
+        retired.push((
+            6,
+            r#"BswM_Deinit();
         Com_DeInit();
 "#
-        .to_owned(),
-    ));
-    retired.push((
-        4,
-        r#"Ecu_HostBusSM_DeInit();
+            .to_owned(),
+        ));
+        retired.push((
+            4,
+            r#"Ecu_HostBusSM_DeInit();
         CanIf_DeInit();
 "#
-        .to_owned(),
-    ));
-    retired.push((
-        3,
-        format!(
-            r#"(void)Can_SetControllerMode({}, CAN_CS_STOPPED);
+            .to_owned(),
+        ));
+        retired.push((
+            3,
+            format!(
+                r#"(void)Can_SetControllerMode({}, CAN_CS_STOPPED);
         Can_MainFunction_Mode();
         Can_MainFunction_BusOff();
         Can_DeInit();
 "#,
-            name("Can", "CanController", &can.controller)
-        ),
-    ));
-    retired.push((1, "SchM_Deinit();\n".to_owned()));
-    for (number, body) in retired {
-        config.push_str(&format!(
-            r#"    if (reached >= {number}u) {{
-#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
-        Ecu_TargetTestRetire({number}u);
-#endif
-        {body}    }}
-"#
+                name("Can", "CanController", &can.controller)
+            ),
         ));
+        retired.push((1, "SchM_Deinit();\n".to_owned()));
+        for (number, body) in retired {
+            config.push_str(&format!("    if (reached >= {number}u) {{\n"));
+            if testing {
+                config.push_str(&format!("        Ecu_TargetTestRetire({number}u);\n"));
+            }
+            config.push_str(&format!("        {body}    }}\n"));
+        }
+        config.push_str("}\n");
+        Ok(config)
+    };
+    for testing in [true, false] {
+        config.push_str(if testing {
+            "#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)\n"
+        } else {
+            "#else\n"
+        });
+        config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
+        config.push_str(&lifecycle(testing)?);
+        config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", false));
     }
-    config.push_str("}\n");
+    config.push_str("#endif\n");
+    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
     config.push_str(
         r#"RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc)
 {

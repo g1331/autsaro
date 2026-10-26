@@ -27,16 +27,30 @@ DET_CODE boolean Det_HostEnterDevelopmentReport(void)
     }
     return entered;
 }
+#define DET_STOP_SEC_CODE
+#include "Det_MemMap.h"
+
+#if defined(_WIN32)
+#define DET_START_SEC_CODE
+#include "Det_MemMap.h"
 DET_CODE void Det_HostHalt(void)
 {
     /* Stop the entire ECU without CRT cleanup, locks or buffered output. */
-#if defined(_WIN32)
     (void)TerminateProcess(GetCurrentProcess(), DET_HOST_FATAL_STATUS);
     /* Self-termination never returns on success; trap if the platform refuses it. */
     __builtin_trap();
-#else
-    _exit(DET_HOST_FATAL_STATUS);
-#endif
 }
 #define DET_STOP_SEC_CODE
 #include "Det_MemMap.h"
+#else
+#define DET_START_SEC_CODE
+#include "Det_MemMap.h"
+DET_CODE void Det_HostHalt(void)
+{
+    /* Stop the entire ECU without CRT cleanup, locks or buffered output. */
+    _exit(DET_HOST_FATAL_STATUS);
+}
+#define DET_STOP_SEC_CODE
+#include "Det_MemMap.h"
+
+#endif
