@@ -76,7 +76,7 @@ Windows采用端口在处理器数不满足其既有进入条件时保留pdFAIL�
 
 R10.1（主文页82–84／PDF90–92、TC1逻辑指针补充及AMD3.20表）要求逻辑操作数为essential Boolean；R14.4（页121–122／PDF129–130）也覆盖单次执行宏的循环条件。`0016`将采用内核断言的指针／计数／原生BOOL参数显式比较，tasks／queue／list宏用`false`；自有configASSERT用`FALSE`，OS原生整数返回值显式比较，私有故障谓词采用boolean。参数仍只求值一次，原来的失败／非空／非零含义与全部配置容量保持。实际activation、nested-interrupts、resources、error-hooks及静态对象消费者验证未改变调度／队列行为；固定addon对R10.1逻辑操作数和R14.4的for条件覆盖不足，不能据其无报告判定满足。
 
-R13.3（Advisory，主文页111／PDF119）处置到trace、线程表、mutex mask及两端口故障文本：存储与索引自增分成两个full expression，保留原顺序和容量。R15.7（Required，页129／PDF137、TC1函数调用澄清、TC2.29交叉引用）在ARTI出／入边、故障controller标记和source_control的五处else-if链明确无动作含义。未增加新状态或容错分支。
+R13.3（Advisory，主文页111／PDF119）处置到trace、线程表、mutex mask及两端口故障文本：存储与索引自增分成两个full expression，保留原顺序和容量。R15.7（Required，129／PDF137；TC1、TC2.29）原五处及Target／probe／采用名字查询与队列的最终else均补无动作含义；空coverage宏不算函数调用。未增加状态或容错行为。
 
 采用头`include/deprecated_definitions.h`的15个旧端口文件名通过0017改用`/`分隔符，未删除分支或文件。R20.2（Required，主文页156／PDF164）禁止header-name中的反斜杠，不以所选端口未进入这些分支判为豁免；上游原件不变，补丁与摘要固定交付内容。
 
