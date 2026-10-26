@@ -24,6 +24,8 @@ Linux私有`Os_HostLinux.h`不再定义TRUE／FALSE，避免它在Platform_Types
 
 固定addon未完整保留数值化Boolean宏及嵌套条件式的essential类型；上述位置据实际声明／表达式判为误报。独立只读复核核对18份直接交付源码与冻结Git字节、各自RTE生成来源、补丁端口的Boolean参数及完整seal／补丁来源；未重跑作者对照。完整位置、列与程序索引留在PR #371，原始四份2970／2970／3078／3044条诊断及221个not_assessed保持，不将863条的裁决扩大为R10.3／R10.4全部源码或配置符合。
 
+当前unsigned-masks-final四份完成工件的R10.3／R10.4分别为138／88、138／88、138／94、138／93，共915条摘要、1826次程序归属。相对上述旧工件，新增的九个赋值与四个比较位置来自Backend、Time及生成Os_Arti的valid检查：声明均为boolean，赋值TRUE／FALSE、比较FALSE；Time的两个拒绝分支分别计位置。其余变化是私有名字／循环行和显式函数地址的源码键变化，角色条件式外层char cast不改变分支的character类型。作者逐差异连接实际声明，仍据D.6／D.7判这些位置为Boolean／character同类误报；旧863条的独立复核不冒充本次915条独立执行，原始报告及coverage拒绝均保留。
+
 ## 原生位掩码
 
 R10.1（Required，主文印刷82–84／PDF90–92）的位运算要求unsigned操作数；有符号非负常量例外仅适用于移位右侧。当前OS把信号、映射、eventfd、poll、futex、unwind及原子状态的位操作放在无符号域，随后按原生接口转换；调用、标志值与ABI不变。清位常量先按uint32取反，再转LONG；TC1将~加入复合运算符，但整数常量表达式仍非复合表达式。TIME及ARTI原子常量去除Linux上产生64位long的L后缀，避免隐式压窄到32位LONG（R10.3／D.6）。固定addon漏查signed位操作及一元~，零报告不证明满足；Windows实际运行另取证。
