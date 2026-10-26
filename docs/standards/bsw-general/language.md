@@ -88,4 +88,4 @@ R11.2／R11.7也不能仅按指针token判定（均Required；主文印刷95及9
 
 ## 原生位掩码
 
-R10.1（Required，主文印刷82–84／PDF90–92）的位运算要求unsigned操作数；有符号非负常量例外仅适用于移位右侧。当前OS把信号、映射、eventfd、poll、futex、unwind及原子状态的位操作放在无符号域，随后按原生接口转换；调用、标志值与ABI不变。清位常量先按uint32取反，再转LONG；TC1将~加入复合运算符，但整数常量表达式仍非复合表达式。TIME及ARTI原子常量去除Linux上产生64位long的L后缀，避免隐式压窄到32位LONG（R10.3／D.6）。固定addon漏查signed位操作及一元~，零报告不证明满足；Windows实际运行另取证。
+信号、futex、原子状态及计数常量的[实际类型边界](../types/essential-types.md#原生位掩码)另记；不以固定checker的零报告替代判断。
