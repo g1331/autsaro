@@ -1272,4 +1272,69 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
             );
         }
     }
+
+    // The OS service has ordinary provider prototypes followed by always-inline clients.
+    let directory = scratch.0.join("os-service-provider");
+    std::fs::create_dir(&directory).unwrap();
+    for name in ["Rte_Os.h", "Rte_MemMap.h"] {
+        let (_, bytes) = files
+            .iter()
+            .find(|(path, _)| path.ends_with(&format!("/{name}")))
+            .unwrap();
+        let text = std::str::from_utf8(bytes).unwrap();
+        std::fs::write(
+            directory.join(name),
+            text.replace("\".rte_code\"", "\".text.header_contract\""),
+        )
+        .unwrap();
+    }
+    std::fs::write(
+        directory.join("consumer.c"),
+        r#"#include "Rte_Os.h"
+#include "Rte_Os.h"
+#ifdef RTE_Rte_CODE
+#error Header code section was not consumed
+#endif
+StatusType OsService_SystemCounter_GetCounterValue(CounterType CounterID,
+                                                   TimeInMicrosecondsType *Value)
+{ (void)CounterID; (void)Value; return E_OK; }
+StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
+                                                   TimeInMicrosecondsType *Value,
+                                                   TimeInMicrosecondsType *ElapsedValue)
+{ (void)CounterID; (void)Value; (void)ElapsedValue; return E_OK; }
+"#,
+    )
+    .unwrap();
+    let object = directory.join("consumer.o");
+    let mut compiler = tooling::c_compiler();
+    compiler
+        .current_dir(&directory)
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"]);
+    for include in [
+        "generated/include",
+        "bsw/include",
+        "integration/include",
+        "os/include",
+    ] {
+        compiler.arg("-I").arg(scratch.0.join(include));
+    }
+    let output = tooling::run_public_command(
+        compiler.args(["-c", "consumer.c", "-o"]).arg(&object),
+        &directory,
+        "os-service-provider-placement",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(output.status.success(), "Rte_Os.h: {output:?}");
+    let sections = tooling::symbol_sections(&tooling::execution_settings().objdump, &object);
+    for symbol in [
+        "OsService_SystemCounter_GetCounterValue",
+        "OsService_SystemCounter_GetElapsedValue",
+    ] {
+        assert!(
+            sections
+                .iter()
+                .any(|(name, section)| name == symbol && section == ".text.header_contract"),
+            "Rte_Os.h: {symbol}: {sections:?}"
+        );
+    }
 }

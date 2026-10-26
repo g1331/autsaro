@@ -54,3 +54,29 @@ R5.6为Required／System（2013主文印刷54／PDF62，AMD2追加C11）。主�
 | `generated/include/SchM_Dcm.h`，同一指令第2次，行39 | 关闭Dcm共享Enter／Exit原型；随后Dcm_MainFunction及会话／认证服务段另行核对，不混算。 |
 
 上述十五个物理位置在四profile中相同，不按TU／程序重复计数。MemoryMapping00003（页36）要求声明和定义分别完整映射；把这些头都提前一次包含不能保留后续STOP与原型属性。`Rte_MemMap.h`中 `RTE_Rte_START/STOP_SEC_CODE` 的消费连接00011；活动状态及属性撤销是实现清理，另判R20.5。D4.10连接可重入分派主体，普通SchM头仍有guard；一次性保护、移进函数或默认段不能同时保持00003／00023。真实头部属性继承、STOP清理、请求拒绝和现有并发／独占区消费者控制误配及锁边界风险，不扩张为任意嵌套或provider异步证明。最终累计复核与BSW00115对应仍须完成，不新增Approved／MR12；RTE核心、组件、服务和配置段仍各自承担逐处责任。
+
+## RTE 核心与存储段的具体请求
+
+以下继续绑定 `8a26e3b0` 与同组四样本。方括号为同一文件中完整 `#include "Rte_MemMap.h"` 的物理出现序号，含条件分支，不是TU次数。表中区分实体的必要映射与尚可整改的inline配对；R20.1仍按预处理前布局判断，不因RTE_CORE或运行时未启动而消失。尚未列入本节的组件应用头、SWC实现及ECU配置请求另负逐处责任，不以本节代替全部RTE记录。
+
+| 文件、请求与位置 | 具体实体与class |
+| --- | --- |
+| `generated/src/Rte.c`，[2]：标准／用户行60，组件62，无诊断54 | 关闭 `RTE_Rte_VAR_CLEARED_UNSPECIFIED` 的rte_started／rte_allocated。第一次包含在本文件对象前，不是R20.1；Start校验生命周期并拒绝重复启动，Stop只停止，不把allocated复位。 |
+| 同文件，标准／用户[3]/[4]行62／68、[5]/[6]行70／74、[7]/[8]行76／82 | `RTE_EchoApplication` 的CONST包围静态CDS与公开const句柄，VAR_INIT包围接收值，VAR_CLEARED包围received／expired状态。实际Read／COM通知消费同一对象，不能用句柄未读就声称CDS没有被取址。 |
+| 同文件，标准／用户[9]/[10]行84／89、[11]/[12]行91／113、[13]/[14]行115／158、[15]/[16]行160／180、[17]/[18]行182／213 | 依次为DcmService的CONST CDS／句柄、RTE_Rte的Start／Stop CODE、EchoApplication的Read／Write／状态接口CODE、DcmService的同步client CODE、OwnerPartition的COM回调CALLOUT_CODE。同步client按实际连接调用应用ReadData，通知按句柄更新接收状态，均与已配置前缀及对象一致。 |
+| 同文件，组件与无诊断[3]/[4]、[5]/[6]、[7]/[8] | Ingress的CONST CDS／句柄、VAR_INIT接收值、VAR_CLEARED接收状态。组件行64／68、70／74、76／82；无诊断56／60、62／66、68／74。 |
+| 同文件，组件与无诊断[9]/[10]、[11]/[12]、[13]/[14]、[15]/[16] | Process的CONST CDS／句柄与VAR_INIT接收值，以及Observe的CONST CDS／句柄与VAR_INIT接收值。组件行84／88、90／94、96／100、102／108；无诊断76／80、82／86、88／92、94／100。接收值来自各自ComSpec；同步连接和正常多组件分发消费这些独立对象。 |
+| 同文件，仅组件[17]/[18]行110／115 | DcmService的CONST CDS／句柄；无诊断没有该组件对象，不另造对应位置。 |
+| 同文件，组件[19]/[20]、[21]/[22]、[23]/[24]、[25]/[26]，行117／139、141／196、198／225、227／276 | 依次为RTE_Rte生命周期、Ingress、Process、Observe的CODE；无诊断对应[17]/[18]、[19]/[20]、[21]/[22]、[23]/[24]，行102／124、126／181、183／210、212／261。各应用API进入同一owner下的真实buffer／server路径，不把不同组件前缀合并成一个类型。 |
+| 同文件，仅组件[27]/[28]行278／298；组件[29]/[30]行300／331、无诊断[25]/[26]行263／294 | 前者是DcmService同步client CODE；后者各为OwnerPartition的COM回调CALLOUT_CODE。无诊断没有前者，但仍有实际COM接收／超时通知。 |
+| `generated/src/SchM_Main.c`，[2]行14、[3]/[4]行16／19、[5]/[6]行21／58 | 关闭schm_lifecycle的RTE_Rte cleared段，完整包围Ecu_SchMConfig的prebuild配置段及SchM_Init／Deinit的CODE。ConfigPtr由生命周期入口验证，不凭常量对象存在证明初始化成功。 |
+| 同文件，[7]/[8]行61／67、[9]/[10]行69／104 | 会话／认证两个模式对象的VAR_CLEARED及实际Switch／Mode定义的CODE。前三profile使用RTE_DcmService，无诊断使用fallback前缀RTE_Dcm；来自同一个dcm_scope选择，声明与定义共用它。模式对象以SCHM_MODE保护，不能按模式接口名把这四处算入Dcm.c自身段。 |
+| `generated/include/Rte_Main.h`，[1]/[2]行14／118、[3]/[4]行120／123 | 已有SchM_ConfigType后，分别包围RTE／SchM生命周期CODE原型与Ecu_SchMConfig的prebuild extern；两种声明均须保留自己的完整段，不能由定义侧替代。 |
+| `generated/include/Rte_Os.h`，[1]/[2]行43／73；`generated/src/Rte_OsService.c`，[2]行15 | 冻结头的这两处仅包围始终static inline的client，两个普通provider原型反而位于段外，不能将其记为已满足的必要冲突。00003明确允许始终inline的代码不包装；source行15仍关闭实际provider定义的RTE_Rte_CODE，其第一次包含在定义前。provider调用真实GetCounterValue／GetElapsedValue，输出与失败语义仍按OS契约判断。 |
+| `generated/include/Rte_Com.h`，[2]行49 | 关闭OwnerPartition的接收／超时通知CALLOUT_CODE原型，与Rte.c的真实callback定义相接；第一次包含之前只有指令／注释，不计R20.1。 |
+
+本节Rte.c分别有17／17／29／25个R20.1位置，其余五个文件每profile各合计17个，不与共享SchM十五处或模块配置位置重算。来源是RTE存储／接口emitter、SchM生命周期／模式emitter及OS服务emitter；模板借用、渲染和直接交付身份仍按实际integration元数据区分。
+
+把请求移到文件顶或只保留一个全局CODE段，会丢失所选scope、存储类别、原型继承或CALLOUT归属；一次性guard吞掉后续STOP，函数体内包含违反00023。相同scope／class且真正相邻的对象已经合并，不将可去除的重复配对当必要冲突。生成头部属性继承、真实句柄／对象段检查、正常多组件及生命周期／COM／诊断消费者分别提供静态和行为控制；R20.5关键词消费与内部清理、D4.10重入主体和最终BSW00115对应仍须按各自对象落实，不批量写成已批准或整体符合。
+
+普通OS service原型的遗漏由 `os_service::files` 在原生成点修正：现有同一个CODE START提前到首个provider原型前，两个原型增加与定义一致的RTE_Rte_CODE；inline client、同一STOP及版本检查保留，不增加配对。首个include不再位于普通声明之后，不能继续列为无法整改的R20.1；上表行号与计数仍是8a26e3b0冻结证据，不冒充修复后分析。正常生成的两种Counter名字、真实原型属性继承及OS service成功／拒绝消费者分别验证该修改，原失败和新字节验证按实际收据保留。

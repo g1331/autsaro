@@ -26,10 +26,11 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
 {guard_start}#include "Rte_Version.h"
 #include "Os.h"
 #include "Rte_Os_Type.h"
-{release_check}{linkage_begin}"#,
+{release_check}{linkage_begin}{start_code}"#,
         guard_start = c_layout::header_start("AUTOSAR_GENERATED_RTE_OS_H"),
         release_check = c_layout::release_check("Rte_Os.h", "Os.h", "OS"),
         linkage_begin = c_layout::linkage(true),
+        start_code = c_layout::section("RTE_Rte", "Rte", "CODE", true),
     );
     let mut clients = String::new();
     let mut source = format!(
@@ -83,7 +84,8 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
             .chain(parameters.iter().cloned())
             .collect();
         let forwarded: Vec<String> = forwarded.split(", ").map(str::to_owned).collect();
-        let declaration = c_layout::signature("StatusType", &symbol, &served, ";", false);
+        let declaration =
+            c_layout::signature("RTE_Rte_CODE StatusType", &symbol, &served, ";", false);
         let direction = if operation == "GetElapsedValue" {
             "in,out"
         } else {
@@ -155,9 +157,8 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
 "#
     );
     header.push_str(&format!(
-        r#"{start_code}{clients}{stop_code}{release_check}{linkage_end}#endif
+        r#"{clients}{stop_code}{release_check}{linkage_end}#endif
 "#,
-        start_code = c_layout::section("RTE_Rte", "Rte", "CODE", true),
         stop_code = c_layout::section("RTE_Rte", "Rte", "CODE", false),
         release_check = c_layout::release_check(HEADER, "Rte_MemMap.h", "MEMMAP"),
         linkage_end = c_layout::linkage(false)
