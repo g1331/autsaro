@@ -375,6 +375,7 @@ OS_MEMMAP static volatile Os_Atomic32Type
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 OS_MEMMAP static void task_entry(void *argument);
+OS_MEMMAP static void Os_BackendMissingEnd(void);
 
 OS_MEMMAP static void bootstrap(void *argument);
 
@@ -1437,12 +1438,12 @@ OS_MEMMAP HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCS
 #ifdef __linux__
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
-                               SIZE_T stack,
-                               LPTHREAD_START_ROUTINE start,
-                               LPVOID argument,
-                               DWORD flags,
-                               LPDWORD id)
+OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
+                                      SIZE_T stack,
+                                      LPTHREAD_START_ROUTINE start,
+                                      LPVOID argument,
+                                      DWORD flags,
+                                      LPDWORD id)
 {
     HANDLE result = NULL;
     if (attributes == NULL) {
@@ -1460,12 +1461,12 @@ OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 #else
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
-                               SIZE_T stack,
-                               LPTHREAD_START_ROUTINE start,
-                               LPVOID argument,
-                               DWORD flags,
-                               LPDWORD id)
+OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
+                                      SIZE_T stack,
+                                      LPTHREAD_START_ROUTINE start,
+                                      LPVOID argument,
+                                      DWORD flags,
+                                      LPDWORD id)
 {
     HANDLE result;
     ++resource_calls;
@@ -2098,7 +2099,7 @@ OS_MEMMAP StatusType Os_BackendFinish(void) { return complete_activation(0u, 0, 
 
 OS_MEMMAP StatusType Os_BackendChain(TaskType id) { return complete_activation(id, 1, 0); }
 
-OS_MEMMAP void Os_BackendMissingEnd(void)
+OS_MEMMAP static void Os_BackendMissingEnd(void)
 {
     const Os_ErrorParametersType arguments = {.service_TerminateTask = {0u}};
     Os_StackCheck();

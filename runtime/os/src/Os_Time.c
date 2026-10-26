@@ -615,7 +615,7 @@ OS_MEMMAP sint32 Os_TimeBeginTick(void)
                : 0;
 }
 
-OS_MEMMAP void Os_TimeTick(void)
+OS_MEMMAP static void Os_TimeTick(void)
 {
     const Os_TimeConfigType *config = Os_Config->timing;
     if ((config != NULL) && (config->wake_event != 0u)) {

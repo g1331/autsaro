@@ -73,7 +73,7 @@ OS_MEMMAP sint32 Os_HookQueryContext(void)
     return ((phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST)) ? 1 : 0;
 }
 
-OS_MEMMAP sint32 Os_HookServiceAllowed(OSServiceIdType service)
+OS_MEMMAP static sint32 Os_HookServiceAllowed(OSServiceIdType service)
 {
     if (phase == OS_HOOK_NONE) {
         return 1;

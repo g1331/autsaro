@@ -71,8 +71,6 @@ static inline LONG InterlockedDecrement(volatile LONG *cell)
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP HANDLE Os_HostCurrentThread(void);
-
 OS_MEMMAP HANDLE Os_HostDispatcherThread(void);
 
 OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread);

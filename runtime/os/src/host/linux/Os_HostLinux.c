@@ -886,7 +886,7 @@ OS_MEMMAP void Sleep(DWORD milliseconds)
 
 OS_MEMMAP void ExitProcess(DWORD status) { _exit((int)status); }
 
-OS_MEMMAP HANDLE Os_HostCurrentThread(void)
+OS_MEMMAP static HANDLE Os_HostCurrentThread(void)
 {
     HANDLE thread;
     if (current_thread != NULL) {

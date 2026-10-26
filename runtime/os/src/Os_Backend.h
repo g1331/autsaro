@@ -76,8 +76,6 @@ OS_MEMMAP void Os_TimeClose(void);
 
 OS_MEMMAP sint32 Os_TimeSignalFailed(void);
 
-OS_MEMMAP void Os_TimeTick(void);
-
 OS_MEMMAP void vApplicationTickHook(void);
 
 OS_MEMMAP sint32 Os_TimeBeginTick(void);
@@ -149,8 +147,6 @@ OS_MEMMAP sint32 Os_BackendReady(void);
 
 OS_MEMMAP Os_HookPhaseType Os_HookContext(void);
 
-OS_MEMMAP sint32 Os_HookServiceAllowed(OSServiceIdType service);
-
 OS_MEMMAP StatusType Os_ServiceAccessStatus(OSServiceIdType service);
 
 OS_MEMMAP uint32 Os_BackendCurrentInterrupt(void);
@@ -199,8 +195,6 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id);
 
 OS_MEMMAP StatusType Os_BackendFinish(void);
 
-OS_MEMMAP void Os_BackendMissingEnd(void);
-
 OS_MEMMAP StatusType Os_BackendChain(TaskType id);
 
 OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire);
@@ -229,13 +223,6 @@ OS_MEMMAP HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes,
                               LPCSTR name);
 
 OS_MEMMAP HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name);
-
-OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
-                               SIZE_T stack,
-                               LPTHREAD_START_ROUTINE start,
-                               LPVOID argument,
-                               DWORD flags,
-                               LPDWORD id);
 
 OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
                                    void *argument,
