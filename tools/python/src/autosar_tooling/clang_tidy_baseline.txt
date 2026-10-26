@@ -1,8 +1,6 @@
 # clang-tidy findings accepted when the check was introduced; format: <check> <file> <source line>.
 # `quality --c-samples` fails on findings not listed here and on entries that no longer occur.
 # Remove fixed entries; add one only with a reviewed reason in the PR (C coding standard).
-bugprone-narrowing-conversions runtime/os/src/Arti.c InterlockedCompareExchange(&Arti_EventsDropped, dropped + 1L, dropped);
-bugprone-narrowing-conversions runtime/os/src/Arti.c const LONG observed = InterlockedCompareExchange(&Arti_EventCount, slot + 1L, slot);
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if ((previous[i] == SUSPENDED) && (state != SUSPENDED)) {
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if (completed[i] != 0u) {
 clang-analyzer-security.ArrayBound runtime/os/src/Os_Time.c TickType current = values[counter];
