@@ -981,7 +981,7 @@ OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
                     break;
                 }
                 futex_wait(&thread->acknowledged,
-                                 InterlockedCompareExchange(&thread->acknowledged, 0, 0));
+                           InterlockedCompareExchange(&thread->acknowledged, 0, 0));
             }
             stopped =
                 (InterlockedCompareExchange(&thread->acknowledged, 0, 0) == INT32_MAX) ? 1 : 0;

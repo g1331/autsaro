@@ -40,11 +40,11 @@ typedef uint16 Com_IpduGroupIdType;
  *  * Timer counts are configured Rx main-function periods, not host timestamps.
  */
 typedef struct {
-    PduIdType pdu;           /**< Generated ComIPduHandleId from the referenced route. */
+    PduIdType pdu;              /**< Generated ComIPduHandleId from the referenced route. */
     Com_SignalIdType signal_id; /**< Generated zero-based Com signal handle. */
-    boolean receive;         /**< TRUE for ComIPduDirection RECEIVE, FALSE for SEND. */
-    uint32 initial_value;    /**< Native UINT32 ComSignalInitValue; selected value is zero. */
-    uint32 timeout_ticks;    /**< ComTimeout in Rx-main periods; 0 disables the deadline. */
+    boolean receive;            /**< TRUE for ComIPduDirection RECEIVE, FALSE for SEND. */
+    uint32 initial_value;       /**< Native UINT32 ComSignalInitValue; selected value is zero. */
+    uint32 timeout_ticks;       /**< ComTimeout in Rx-main periods; 0 disables the deadline. */
     CbkHandleIdType callback_handle; /**< ComUserCbkHandleId for Rx; unused for Tx. */
 } Com_PduConfigType;
 /** Generated RTE receive/timeout callback; handle is ComUserCbkHandleId, called outside COM_STATE.
