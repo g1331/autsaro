@@ -24,11 +24,9 @@ R12.3（Advisory，主文页106／PDF114）针对逗号运算符。所选 Linux 
 
 ## 数组初始化与重复指定
 
-R9.3／R9.4均为Required，当前C99适用（主文印刷78–80／PDF86–88；AMD2.27追加C11）。R9.3明确允许`{0}`、仅由指定初始化器组成的稀疏数组和字符串初始化；结构中未写出的成员不能直接当作部分数组初始化。R9.4按AMD4.47–50（印刷33／PDF40）同时检查重复designator，以及指定位置之后的位置初始化是否重新覆盖先前子对象；不能只比较成员名文本。
+R9.3／R9.4的具体初始化闭包见[初始化层级](bsw-general/language.md#初始化层级与实际求值)。补充原文边界：主文印刷78–80／PDF86–88中，R9.3明确允许`{0}`、仅由指定初始化器组成的稀疏数组和字符串初始化；R9.4按AMD4.47–50（印刷33／PDF40）还须检查指定位置之后的位置初始化是否重新覆盖先前子对象，不能只比较成员名文本。两条均为Required、当前C99适用，AMD2.27追加C11。
 
-`f1986d7d`的四份os-aliased-service封存工程中，Os_Time的8×8 increments、Os_Schedule的8项running与32项Os_InterruptVectorTable均用`{0}`；Can的三个8字节payload逐项写齐，CanIf的errors及Os_Time的observed、Os_Error的sources各写齐两项。生成的tasks／counters／alarms、通信路由和users等数组从初始化列表推导长度，不存在声明长度大于列表的尾部；Ecu_Config的32项priorities只指定`[OS_INPUT_INTERRUPT]`，实际索引为30，适用R9.3的稀疏例外。各列表没有重复指定同一子对象，也未在回退designator后继续位置初始化；ErrorHook快照的内层列表属于另一个子对象，不能与外层单项service选择混算。
-
-采用tasks.c的xYieldPendings在所选单核配置只有一个元素，由pdFALSE显式初始化；运行时统计两数组位于关闭分支，cIdleName使用`{0}`。该判断复用已完成os-coalesced分析副本的实际补丁后源码与配置，不把未选多核或任意SDK初始化宏判为满足。上述为具体初始化器的作者判断；R9.2的花括号、R9.6的chained designator、生成输入范围及其他对象继续各按自身条件核查，原始人工状态不变。
+`f1986d7d`四份os-aliased-service工程复核保留同一结论：priorities容量为32、唯一指定索引为30，符合稀疏例外；tasks／counters／alarms及路由等数组由列表推导长度。相应自有源码没有新增重复指定或回退后的位置覆盖；采用tasks.c仍按实际单核及关闭运行时统计的配置判断。不外推SDK初始化宏、多核或任意用户应用，原始人工状态保持。
 
 ## C11 原子对象的适用边界
 
