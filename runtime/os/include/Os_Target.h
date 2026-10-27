@@ -17,6 +17,8 @@
     31u                     /**< Highest application ISR priority; larger values preempt smaller. */
 #define OS_SCHEDULE_FULL 0u /**< Fully preemptable Task scheduling selection. */
 #define OS_SCHEDULE_NON  1u /**< Nonpreemptable Task scheduling selection. */
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Static Category 2 body taking no arguments and returning no value, called by the native
  * dispatcher. */
 typedef void (*Os_IsrEntryType)(void);
@@ -102,8 +104,8 @@ typedef struct {
     TaskType input_task;   /**< Mailbox owner Task; meaningful when input_event is nonzero. */
     EventMaskType
         input_event; /**< Mailbox notification bits; zero disables the native input bridge. */
-    const Os_TimeConfigType
-        *time; /**< Optional static Counter/Alarm/ScheduleTable configuration; NULL disables it. */
+    const Os_TimeConfigType *
+        timing; /**< Optional static Counter/Alarm/ScheduleTable configuration; NULL disables it. */
     const Os_HookConfigType
         *hooks; /**< Optional Error/PreTask/PostTask callbacks; NULL disables those callbacks. */
     /* NULL selects a flat, nonpreempting application ISR configuration. */
@@ -115,8 +117,6 @@ typedef struct {
     uint8 use_res_scheduler; /**< Nonzero reserves RES_SCHEDULER as the global Task scheduler
                                 resource. */
 } Os_TargetConfigType;
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 /** Prepare one process-local target before StartOS.
  * @param[in] config Static configuration retained for the lifetime of the process.
  * @return E_OK or a standard validation error; no threads created on rejection.

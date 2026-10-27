@@ -29,8 +29,8 @@ static unsigned work_count; /**< Work count observations; fixture-owned, no Init
 static unsigned app_count;  /**< App count observations; fixture-owned, no Init reset. */
 static unsigned
     completed_count; /**< Producer-owned accepted completions; producer-owned, no Init reset. */
-static unsigned
-    native_rejects; /**< Producer-owned refused requests; producer-owned, no Init reset. */
+static volatile LONG
+    native_rejects; /**< Atomic requester count observed by shutdown; no Init reset. */
 static TaskHandle_t
     owner_handle; /**< Startup-published owner Task handle; fixture-owned, no Init reset. */
 static uint64_t
@@ -86,7 +86,7 @@ static void native_check(bool condition)
 static void native_refuse(StatusType status, StatusType expected)
 {
     native_check(status == expected);
-    ++native_rejects;
+    (void)InterlockedIncrement(&native_rejects);
 }
 void Os_TimeTestMasked(void)
 {
@@ -613,7 +613,7 @@ void ShutdownHook(StatusType Error)
                completed_count,
                work_count,
                app_count,
-               native_rejects,
+               (unsigned)InterlockedCompareExchange(&native_rejects, 0, 0),
                Error) < 0) {
         ExitProcess(99u);
     }

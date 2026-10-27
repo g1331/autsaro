@@ -4,10 +4,12 @@
 
 OS 是 SC1、单核的 AUTOSAR OS，内核采用固定版本的 FreeRTOS 并打上生产补丁，主机端口在 Linux 与 Windows 的 x64 进程中运行。SWS_OS 用 `StatusType` 与 ErrorHook 报告错误，以 `StartOS`／`ShutdownOS` 管理生命周期，不定义开发错误、版本 API 或安全事件；R24-11 的 OS ECUC 也没有对应的开关。下文的“原文”指 SWS_OS 与 OS ECUC 定义。`Arti.h`／`Arti.c` 是 SWS_ARTI §7 规定的 ARTI 工具绑定文件，不属于 OS 模块文件。
 
+SetEvent沿既有源级别名绑定Os_SetEvent，与Win32同名API分离；Os_ArtiServices的定义再调用Os_Implementation_SetEvent，原参数、返回、ARTI及事件行为保持。普通Os_SetEvent原型现并入Os.h已有第三个CODE对并使用OS_MEMMAP；MemoryMapping00003要求声明侧包装，定义已有属性不能代替它。源码gate显式纳入该实际别名，避免字面SetEvent与Os_SetEvent不一致而漏检；没有新增通用预处理器。独立无属性定义从真实原型继承.os_code，去掉私有复制头的原型属性须先编译／链接成功，再被具体符号段观察拒绝。旧真实头的段外原型则在compiler前被owned-header gate拒绝。段契约与真实events消费者的服务语义分别验证；Windows新字节编译仍不由Linux结果外推。[具体位置与调查](https://github.com/g1331/autsaro/pull/371#issuecomment-6431486628)。
+
 | 分组 | 依据与处置 |
 | --- | --- |
 | 文件与前缀 | 模块缩写与实现前缀为 Os；实现与头文件为 `Os.c`、`Os_*.c`、`Os.h`、`Os_*.h`，RTE 类型头为 `Rte_Os_Type.h`；主机后端为 `host/linux/Os_HostLinux.c` 等；没有仅大小写不同的文件名。`Os.h` 只导出 SWS_OS 的服务、类型与 hook 声明，集成接口在 `Os_Target.h`、`Os_Time.h`、`Os_Mailbox.h` 与 `Os_IntegrationHooks.h`。 已核对（源码）[Os]：SWS_BSW_00101–00105、00170、00171 |
-| 实现源 | 各 `Os_*.c` 直接或经 `Os_Target.h`、私有头 `Os_Backend.h` 间接包含实现头 `Os.h`，`Os_MemMap.h` 目前由 `Os.h` 包裹声明，实现源的直接映射见下文未完成项；内部声明在 `src/` 下的私有头；OS 不使用 SchM、不向 Dem 报告；调用的 hook 与集成钩子都在 OS 自己的头中声明。外部链接的变量都定义在实现源中并以 `Os_` 开头，只读的描述表带 `const`。 已核对（源码）[Os]：SWS_BSW_00004、00005、00007、00008、00010、00060、00129–00131 |
+| 实现源 | 各 `Os_*.c` 直接或经 `Os_Target.h`、私有头 `Os_Backend.h` 间接包含实现头 `Os.h`；实现源及公开／私有声明现各自直接使用完整 `Os_MemMap.h` 配对，不能由 `Os.h` 的声明映射替代定义侧义务。内部声明在 `src/` 下的私有头；OS 不使用 SchM、不向 Dem 报告；调用的 hook 与集成钩子都在 OS 自己的头中声明。外部链接的变量都定义在实现源中并以 `Os_` 开头，只读的描述表带 `const`。 已核对（源码）[Os]：SWS_BSW_00004、00005、00007、00008、00010、00060、00129–00131 |
 | 中断 | OS 依赖处理器，不是平台无关模块。Category 2 ISR 由 `ISR()` 声明，经 `Os_Interrupt.c` 与 `Os_Vector.c` 中的向量表分派（与其余实现分开），Category 1 由 `Os_TargetConfigType.category1_isrs` 选择；从 ISR 到 Task 的转换由 OS 服务完成。主机端口没有硬件中断入口，也就没有 interrupt frame；分派只做有界的优先级与状态更新，应用 ISR 体由集成方提供。主机进程不访问硬件寄存器。 已核对（源码）[Os]：SWS_BSW_00016–00019、00021、00043、00065、00068、00119、00137、00167、00179、00181、00182、00188 |
 | 配置源 | 只有 pre-compile 配置：生成的 `Ecu_Config.c` 定义只读 `Ecu_OsConfig`，经 `Os_TargetPrepare(const Os_TargetConfigType *)` 传入；`Os_Cfg.h` 与 `Os_Counter.h` 给出预编译开关与对象 ID；没有 link-time／post-build 配置文件。 已核对（生成样本）[Os]：SWS_BSW_00013–00015、00056、00057、00063、00117、00158、00160、00184 |
 | 实现头 | `Os.h` 自包含，经 `Os_Types.h` 引入 `Std_Types.h`，声明全部 API 服务；OS 没有主函数；除按段多次包含的 `Os_MemMap.h` 外，每个头都有唯一的 include guard。 已核对（源码）[Os]：SWS_BSW_00020、00024、00048、00110、00210、00249 |
@@ -49,3 +51,16 @@ OS 是 SC1、单核的 AUTOSAR OS，内核采用固定版本的 FreeRTOS 并打�
 | 交付描述 Os 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[Os]：SWS_BSW_00061 |
 | BSWMD 模式组 | OS 的 BSWMD 没有 providedModeGroup。 已核对（BSWMD 生成）[Os]：SWS_BSW_00238 |
 | Symbolic Name Value | Ecu_TargetConfig.h 包含 Os_Cfg.h，owner task 使用该头唯一生产的 OS_TASK_ID_*；计数器继续从 Os_Counter.h 导入。已核对（配置记录与实际生成头／消费者）[Os]：SWS_BSW_00200 |
+
+## Os_MemMap 必需重复处理与请求消费
+
+以下仅执行[原用户决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)及ADR0023，不新增批准人或平台保留。固定主文D4.10为Required（印刷32–33／PDF40–41），R20.5为Advisory（158／166）；TC2.2没有映射头例外，AMD2追加C11不改变当前C99判断。MemoryMapping00003／00011／00023（PDF36、41、37）要求完整配对、消费请求及不在函数体内包含映射头。整头guard会吞掉后续STOP／其他class，固定属性已有独立guard；保留请求会使下次包含重复消费或发生冲突，改成#undef之外的私有状态不能履行00011。
+
+[逐处依据](https://github.com/g1331/autsaro/pull/371#issuecomment-6431995009)固定f1986d7d：36文件、256对及20类实际声明／定义见证，列出81处undef的分支与位置。该头在cf5d6fa1之前与该冻结字节相同。本表只含40个START／STOP请求，另41个内部清理、R20.1布局、SDK／provider及其他平台取舍不在内。独立累计复核6a2b4155已按原文核对该机制、集合和风险；随后a5b3452b定向复核关闭无关P1／P2，不扩大本表。现有20类配对、请求／属性撤销、无效／多请求拒绝与真实段观察控制状态泄漏；改变class、prefix、目标、实体或条件须重评。
+
+| MISRA 条目 | 源码范围 | 必需性与风险控制 | 原授权与技术处置 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Directive 4.10 | `runtime/os/include/Os_MemMap.h` 中 `@file` | 00003／00011的START与STOP必须分别处理；只保护固定属性，逐次检查配对／嵌套。 | 维护者 人类，2026-10-17条件授权；ADR0023；2026-10-27逐处评估与复核，非MISRA符合性批准 |
+| MISRA C:2012 Rule 20.5 | `runtime/os/include/Os_MemMap.h` 中 `#undef OS_START_SEC_CODE`、`#undef OS_STOP_SEC_CODE`、`#undef OS_START_SEC_CONFIG_DATA_PREBUILD_64`、`#undef OS_STOP_SEC_CONFIG_DATA_PREBUILD_64`、`#undef OS_START_SEC_CONFIG_DATA_PREBUILD_8`、`#undef OS_STOP_SEC_CONFIG_DATA_PREBUILD_8`、`#undef OS_START_SEC_CONST_64`、`#undef OS_STOP_SEC_CONST_64`、`#undef OS_START_SEC_CONST_8`、`#undef OS_STOP_SEC_CONST_8`、`#undef OS_START_SEC_CONST_PTR`、`#undef OS_STOP_SEC_CONST_PTR`、`#undef OS_START_SEC_VAR_CLEARED_32`、`#undef OS_STOP_SEC_VAR_CLEARED_32`、`#undef OS_START_SEC_VAR_CLEARED_64`、`#undef OS_STOP_SEC_VAR_CLEARED_64`、`#undef OS_START_SEC_VAR_CLEARED_8`、`#undef OS_STOP_SEC_VAR_CLEARED_8`、`#undef OS_START_SEC_VAR_CLEARED_PTR`、`#undef OS_STOP_SEC_VAR_CLEARED_PTR`、`#undef OS_START_SEC_VAR_CLEARED_TLS_32`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_32`、`#undef OS_START_SEC_VAR_CLEARED_TLS_64`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_64`、`#undef OS_START_SEC_VAR_CLEARED_TLS_8`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_8`、`#undef OS_START_SEC_VAR_CLEARED_TLS_PTR`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_PTR`、`#undef OS_START_SEC_VAR_CLEARED_TLS_UNSPECIFIED`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_UNSPECIFIED`、`#undef OS_START_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef OS_START_SEC_VAR_INIT_32`、`#undef OS_STOP_SEC_VAR_INIT_32`、`#undef OS_START_SEC_VAR_INIT_8`、`#undef OS_STOP_SEC_VAR_INIT_8`、`#undef OS_START_SEC_VAR_INIT_UNSPECIFIED`、`#undef OS_STOP_SEC_VAR_INIT_UNSPECIFIED`、`#undef OS_START_SEC_VAR_INIT_VECTOR_PTR`、`#undef OS_STOP_SEC_VAR_INIT_VECTOR_PTR` | 00011直接要求撤销已处理请求；保留原class、active检查及STOP后的属性清理。 | 维护者 人类，2026-10-17条件授权；ADR0023；2026-10-27逐处评估与复核，非MISRA符合性批准 |
+
+SWS_BSW_00115的就近注释仅标识这两类技术理由，与表中每个字面指令及文件主体对应。当前Linux四profile的源闭包提供上述证据；共享头的注释不宣称Windows执行或其他违反已获准。原始诊断、221项not_assessed、严格比较拒绝及其余00115差距不因此关闭。

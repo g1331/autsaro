@@ -43,6 +43,7 @@ int main(int argc, char **argv)
         return production_main();
     }
     if (strcmp(argv[1], "fields") == 0) {
+        Ecu_HostBatch batch;
         Ecu_OutputRecord output = {0};
         Ecu_HostBatchInitialize(&batch);
         output.dlc = 9u;

@@ -22,6 +22,13 @@ fn single_application_component_is_planned_by_the_mainline() {
             .collect::<Vec<_>>(),
         ["singlecore-ecu-v1:/Application/Pipeline/IngressInstance"]
     );
+    let files = plan.component_contract_files().unwrap();
+    for (name, bytes) in files.files() {
+        assert!(
+            !String::from_utf8_lossy(bytes).contains("MR12 RULE 5.6 VIOLATION"),
+            "{name}: one application translation unit has no cross-component typedef conflict"
+        );
+    }
 }
 
 #[test]

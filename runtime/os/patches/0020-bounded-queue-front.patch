@@ -1,0 +1,20 @@
+diff --git a/queue.c b/queue.c
+--- a/queue.c
++++ b/queue.c
+@@ -2390,14 +2390,13 @@
+     else
+     {
+         ( void ) memcpy( ( void * ) pxQueue->u.xQueue.pcReadFrom, pvItemToQueue, ( size_t ) pxQueue->uxItemSize );
+-        pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
+-
+-        if( pxQueue->u.xQueue.pcReadFrom < pxQueue->pcHead )
++        if( pxQueue->u.xQueue.pcReadFrom == pxQueue->pcHead )
+         {
+             pxQueue->u.xQueue.pcReadFrom = ( pxQueue->u.xQueue.pcTail - pxQueue->uxItemSize );
+         }
+         else
+         {
++            pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
+             mtCOVERAGE_TEST_MARKER();
+         }
+ 

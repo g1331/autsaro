@@ -7,4 +7,4 @@ void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType p
     (void)predicate;
 }
 
-int Os_IntegrationTimingAuthorized(void) { return 1; }
+sint32 Os_IntegrationTimingAuthorized(void) { return 1; }

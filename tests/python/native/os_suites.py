@@ -249,6 +249,19 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
             ("0003-activation-ready-policy.patch", ("tasks.c", "include/task.h", "include/FreeRTOS.h")),
             ("0007-controlled-tick.patch", ("tasks.c",)),
             ("0008-task-hook-boundaries.patch", ("tasks.c",)),
+            ("0015-typed-port-state.patch", ("tasks.c", "include/task.h", "include/FreeRTOS.h", "queue.c", "include/queue.h")),
+            ("0016-essential-boolean-controls.patch", ("tasks.c", "queue.c", "include/list.h", "include/task.h")),
+            ("0017-portable-header-paths.patch", ("include/deprecated_definitions.h",)),
+            ("0020-bounded-queue-front.patch", ("queue.c",)),
+            (
+                "0021-c99-comment-examples.patch",
+                ("include/task.h", "include/queue.h", "include/timers.h"),
+            ),
+            ("0022-explicit-function-addresses.patch", ("tasks.c",)),
+            ("0023-preserve-parameter-values.patch", ("tasks.c",)),
+            ("0024-conditional-private-definitions.patch", ("tasks.c", "queue.c")),
+            ("0025-configured-kernel-declarations.patch", ("include/portable.h", "include/task.h", "include/queue.h")),
+            ("0026-explicit-control-flow-boundaries.patch", ("tasks.c", "queue.c")),
         ):
             patch = target / "patches" / name
             selection = [f"--include={path}" for path in includes]
@@ -380,7 +393,7 @@ def execute(
     capture_output=True,
     text=True,
     check=False,)
-    return {
+    observation = {
         "scenario": scenario,
         "failure": failure,
         "invalid_stack": invalid_stack,
@@ -388,6 +401,12 @@ def execute(
         "stdout": result.stdout.strip(),
         "stderr": result.stderr.strip(),
     }
+    if os.environ.get("AUTOSAR_SANITIZE"):
+        output = observation["stdout"] + "\n" + observation["stderr"]
+        require(not any(marker in output for marker in (
+            "ThreadSanitizer:", "AddressSanitizer:", "LeakSanitizer:", "runtime error:",
+        )), observation)
+    return observation
 
 
 def require(condition: bool, observation: dict) -> None:
@@ -871,6 +890,11 @@ def check_lifecycle(binary: Path) -> list[dict]:
         require(result["exit"] == 0 and f"trace={trace} " in result["stdout"], result)
         require("input_closed=1 tick_closed=1" in result["stdout"], result)
         require("FORBIDDEN" not in result["stdout"], result)
+        resources = re.search(
+            r"threads=(\d+) events=(\d+) mutexes=(\d+) resource_calls=(\d+) ", result["stdout"]
+        )
+        require(resources is not None, result)
+        require(int(resources[4]) == sum(map(int, resources.group(1, 2, 3))), result)
         observations.append(result)
     for scenario, code in [
         ("zero-count", 8),
@@ -1448,7 +1472,23 @@ def check_returned_task(binary: Path) -> list[dict]:
         require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
         result["independent_expected_activation_cleanup"] = [entries, errors, helper, trace]
         observations.append(result)
+    for scenario, context in [("assert-pre", "p"), ("assert-post", "q")]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 7, result)
+        require(result["stderr"] == f"hook_assertion context={context}", result)
+        require("returned scenario=" not in result["stdout"], result)
+        observations.append(result)
     return observations
+
+
+def check_arti_rejection(binary: Path, scenario: str, function_name: str, selector: int) -> dict:
+    result = execute(binary, scenario)
+    marker = f"arti_reject function={function_name} selector={selector}\n"
+    require(result["exit"] == -6 and not result["stdout"]
+            and result["stderr"].startswith(marker)
+            and function_name in result["stderr"][len(marker):]
+            and "Assertion `0' failed." in result["stderr"], result)
+    return result
 
 
 # Verifies: SWS_Os_00843
@@ -1461,6 +1501,10 @@ def check_arti(binary: Path) -> list[dict]:
         expected = "arti buffer=4096 dropped=3 once=1 version=1 error=2 saturated=1" if scenario == "buffer" else f"arti scenario={scenario} transitions="
         require(expected in result["stdout"], result)
         observations.append(result)
+    if _TARGET_ID.get() == "linux-x64-controlled-v1":
+        for scenario, name, selector in [("reject-task", "Os_ArtiTask", 99),
+                                         ("reject-service", "Os_ArtiService", 255)]:
+            observations.append(check_arti_rejection(binary, scenario, name, selector))
     return observations
 
 
@@ -1557,27 +1601,36 @@ def check_arti_native(directory: Path) -> None:
             require(expected in result["stderr"], result)
         if name == "unpublished":
             require("arti_record index=0 published=0 context=" not in result["stderr"], result)
-    faulty = directory / "nested-fixture"
-    faulty.mkdir()
-    target = faulty / "target"
-    shutil.copytree(TARGET, target)
-    fixture = target / "tests/nested_interrupts.c"
-    text = fixture.read_text(encoding="utf-8")
-    original = "check(isr_thread == GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
-    replacement = "check(isr_thread != GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
-    require(text.count(original) == 1, "nested fixture assertion")
-    fixture.write_bytes(text.replace(original, replacement, 1).encode("utf-8"))
-    build_dir = faulty / "build"
-    build_dir.mkdir()
-    damaged, _ = build(build_dir, "arti_nested.c", ("OS_ARTI_TESTS",), target=target)
-    result = execute(damaged, "nested")
-    require(result["exit"] == 7, result)
-    require(re.search(r"nested_interrupts\.c:\d+ invariant=isr_thread !=", result["stderr"]) is not None, result)
-    for expected in ("reason=7", "used=2 starts=2 returns=0 queries=0 hook_errors=0",
-                     "nested_snapshot children=0 grandchildren=0 helpers=0 errors=0 depth=1",
-                     "maximum=1 trace=AP", "arti_stack index=1 isr=6"):
-        require(expected in result["stderr"], result)
-    print("ARTI nested diagnostics PASS: four recorder faults and one fixture fault identified")
+    for defect in ("thread", "stack-pointer"):
+        faulty = directory / ("nested-fixture-" + defect)
+        faulty.mkdir()
+        target = faulty / "target"
+        shutil.copytree(TARGET, target)
+        fixture = target / "tests/nested_interrupts.c"
+        text = fixture.read_text(encoding="utf-8")
+        original = "check(isr_thread == GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
+        replacement = "check(isr_thread != GetCurrentThreadId() && address < stack_marks[depth - 1u]);"
+        if defect == "thread":
+            require(text.count(original) == 1, "nested fixture assertion")
+            text = text.replace(original, replacement, 1)
+        else:
+            anchor = "OS_HOST_STACK_POINTER(marker);"
+            require(text.count(anchor) == 4, "native ISR stack observations")
+            text = text.replace(anchor, "marker = 1u;")
+        fixture.write_bytes(text.encode("utf-8"))
+        build_dir = faulty / "build"
+        build_dir.mkdir()
+        damaged, _ = build(build_dir, "arti_nested.c", ("OS_ARTI_TESTS",), target=target)
+        result = execute(damaged, "nested")
+        require(result["exit"] == 7, result)
+        invariant = "isr_thread !=" if defect == "thread" else "isr_thread =="
+        require(re.search(r"nested_interrupts\.c:\d+ invariant=" + invariant, result["stderr"]) is not None, result)
+        require("address < stack_marks[depth - 1u]" in result["stderr"], result)
+        for expected in ("reason=7", "used=2 starts=2 returns=0 queries=0 hook_errors=0",
+                         "nested_snapshot children=0 grandchildren=0 helpers=0 errors=0 depth=1",
+                         "maximum=1 trace=AP", "arti_stack index=1 isr=6"):
+            require(expected in result["stderr"], result)
+    print("ARTI nested diagnostics PASS: four recorder faults and two fixture faults identified")
     print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; two compiled faults rejected")
 
 
@@ -1603,6 +1656,12 @@ def check_task_hooks(binary: Path) -> list[dict]:
         require(expected in result["stdout"], result)
         require("lifecycle=Closed state=Ready reason=0" in result["stdout"], result)
         result["independent_expected_task_transition_trace"] = trace
+        observations.append(result)
+    for scenario, context in [("assert-pre", "p"), ("assert-post", "q")]:
+        result = execute(binary, scenario)
+        require(result["exit"] == 7, result)
+        require(result["stderr"] == f"hook_assertion context={context}", result)
+        require("task_hooks scenario=" not in result["stdout"], result)
         observations.append(result)
     return observations
 
@@ -1797,6 +1856,13 @@ def check_vector_mutations(directory: Path) -> None:
                     "+static uint32_t (*unbound_handlers[PORT_INTERRUPT_COUNT])(void);\n",
                 )
                 patch.write_text(text, encoding="utf-8")
+                # Keep later patch contexts bound to the same private mutant table.
+                for followup in sorted((target / "patches/linux").glob("*.patch")):
+                    if followup != patch:
+                        source = followup.read_text(encoding="utf-8")
+                        followup.write_text(
+                            source.replace(old, "unbound_handlers[interrupt]"), encoding="utf-8",
+                        )
             else:
                 (target / "patches/0014-relocatable-interrupt-vectors.patch").unlink()
             mutant, _ = build(output, "entry_bodies.c", target=target)
@@ -1816,7 +1882,8 @@ def check_vector_mutations(directory: Path) -> None:
                 raise AssertionError("missing vector section passed its linked contract check")
 
 
-def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
+def verify_code_section(binary: Path, tool: Path, names: list[str],
+                        local_names: tuple[str, ...] = ()) -> None:
     output = run_native([str(tool), "-h", str(binary)], capture_output=True,
                             text=True, check=True).stdout
     code = list(re.finditer(
@@ -1829,10 +1896,11 @@ def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
         raise ValueError("OS entry section must be allocated read-only executable code")
     symbols = run_native([str(tool), "-t", str(binary)], capture_output=True,
                              text=True, check=True).stdout
-    for name in names:
+    for name in (*names, *local_names):
         if _TARGET_ID.get() == "linux-x64-controlled-v1":
+            binding = "l" if name in local_names else "g"
             functions = re.findall(
-                r"^[0-9a-fA-F]+\s+g\s+F\s+\.os_code\s+[0-9a-fA-F]+\s+"
+                r"^[0-9a-fA-F]+\s+" + binding + r"\s+F\s+\.os_code\s+[0-9a-fA-F]+\s+"
                 + re.escape(name) + r"$", symbols, re.MULTILINE,
             )
             if len(functions) != 1:
@@ -1844,6 +1912,8 @@ def verify_code_section(binary: Path, tool: Path, names: list[str]) -> None:
             ))
             if len(functions) != 1 or int(functions[0][1]) != int(code[0][1]) + 1:
                 raise ValueError(f"PE OS entry is outside its code section: {name}")
+            if name in local_names and re.search(r"\(scl\s+3\)", functions[0][0]) is None:
+                raise ValueError(f"PE OS continuation must be local: {name}")
 
 
 def check_counter_service(directory: Path, project: Path, counter: str) -> None:
@@ -1971,12 +2041,19 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
         signature = statement[:words.index("{")] if "{" in words else statement
         declaration = function(signature)
         head = [item.text for item in signature if item.text != "OS_MEMMAP"]
-        type_only = "typedef" in head or (
-            head and head[0] in ("struct", "union", "enum") and
-            (len(head) == 3 or words[-2:] == ["}", ";"])
-        )
+        type_only = "typedef" in head
+        if head and head[0] in ("struct", "union", "enum"):
+            if "{" not in words:
+                type_only = len(head) == 3 and head[-1] == ";"
+            elif len(head) <= 2:
+                braces = 0
+                for end in range(words.index("{"), len(words)):
+                    braces += (words[end] == "{") - (words[end] == "}")
+                    if braces == 0:
+                        break
+                type_only = words[end + 1:] == [";"]
         if type_only:
-            require(active is None, "type-only declaration does not allocate section storage")
+            require("OS_MEMMAP" not in words, "type-only declaration cannot carry a section attribute")
         else:
             if declaration is not None:
                 name = declaration[0]
@@ -2014,7 +2091,8 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
 
 def check_memory_mapping(directory: Path) -> None:
     # These standard callback declarations belong to the OS interface even though RTE owns bodies.
-    owned = {"StartupHook", "ShutdownHook", "ErrorHook", "PreTaskHook", "PostTaskHook"}
+    # SetEvent is spelled literally in its definition, but the public header aliases it.
+    owned = {"StartupHook", "ShutdownHook", "ErrorHook", "PreTaskHook", "PostTaskHook", "Os_SetEvent"}
     for path in sorted((TARGET / "src").rglob("*.c")):
         try:
             owned.update(verify_memory_mapping_source(path.read_text(encoding="utf-8")))
@@ -2041,7 +2119,7 @@ def check_memory_mapping(directory: Path) -> None:
     run_native([*flags, str(source), "-o", str(binary)], check=True, timeout=60)
     names = ["Os_TaskEntry_FirstTask", "Os_TaskEntry_SecondTask", "Os_IsrEntry_FirstISR",
              "Os_IsrEntry_SecondISR", "AlarmBody", "ErrorHook", "PreTaskHook", "PostTaskHook",
-             "StartupHook", "ShutdownHook"]
+             "StartupHook", "ShutdownHook", "Os_SetEvent"]
     verify_code_section(binary, tool, names)
     ran = run_native([str(binary)], capture_output=True, text=True, timeout=5, check=True)
     require(ran.stdout.strip() == "memory_mapping calls=10" and not ran.stderr, ran.stdout)
@@ -2152,7 +2230,8 @@ def check_port_restart(directory: Path) -> None:
             print("port-restart CET PASS: active SSP and actual Task/TCB/stack/ARTI/hooks", flush=True)
 
     tool = Path(shutil.which(cc) or cc).parent / ("objdump" if linux else "objdump.exe")
-    verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartLanding", "Os_PortRestart"])
+    verify_code_section(binary, tool, ["Os_PortTaskLoop", "Os_PortRestartAddress", "Os_PortRestart"],
+                        local_names=("Os_PortRestartLanding",))
     print("port-restart PASS: native unwind; 10000 stable physical-stack entries", flush=True)
 
 
@@ -2165,7 +2244,7 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
             return
         if suite == "memory-mapping":
             check_memory_mapping(Path(temporary))
-            print("memory-mapping PASS: 10 linked entries; 10 rejected compile/link cases")
+            print("memory-mapping PASS: 11 linked entries; 10 rejected compile/link cases")
             return
         if suite == "vector-section":
             check_vector_mutations(Path(temporary))
@@ -2239,6 +2318,8 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
             for failure in ("invalid", 1):
                 observation = execute(production, "normal", failure, invalid_stack="S")
                 require(observation["exit"] == 0 and "trace=ISRAD " in observation["stdout"], observation)
+                calls = observations[0]["stdout"].split("resource_calls=")[1].split()[0]
+                require(f"resource_calls={calls} " in observation["stdout"], observation)
                 observation["production_resource_injection_disabled"] = True
                 observations.append(observation)
         if suite == "stack":

@@ -33,14 +33,7 @@
 #define COMM_E_NO_PNC_ASSIGNED       4u /**< User belongs to no PNC. */
 /* MR12 RULE 2.5 VIOLATION: standard return code (SWS_ComM_91027) without PNC learning in the
  * selected profile; see the ComM deviation record. */
-#define COMM_E_LEARNING_ACTIVE 5u /**< PNC learning phase is active. */
-/** SWS_ComM_00668: initialization status reported by ComM_GetStatus. */
-typedef enum {
-    COMM_UNINIT = 0, /**< Not initialized, or deinitialized. */
-    COMM_INIT = 1    /**< Initialized and usable. */
-} ComM_InitStatusType;
-/** SWS_ComM_00674: channel state and sub-state. NM NONE never enters COMM_SILENT_COM. */
-typedef uint8 ComM_StateType;
+#define COMM_E_LEARNING_ACTIVE          5u /**< PNC learning phase is active. */
 #define COMM_NO_COM_NO_PENDING_REQUEST  0u /**< NO without a pending FULL request. */
 #define COMM_NO_COM_REQUEST_PENDING     1u /**< NO, waiting for CommunicationAllowed. */
 #define COMM_FULL_COM_NETWORK_REQUESTED 2u /**< FULL, requested or minimum duration running. */
@@ -48,6 +41,15 @@ typedef uint8 ComM_StateType;
 /* MR12 RULE 2.5 VIOLATION: standard state (SWS_ComM_00674) that NM NONE never enters; see
  * the ComM deviation record. */
 #define COMM_SILENT_COM 4u /**< SILENT; unused by NM NONE. */
+#define COMM_START_SEC_CODE
+#include "ComM_MemMap.h"
+/** SWS_ComM_00668: initialization status reported by ComM_GetStatus. */
+typedef enum {
+    COMM_UNINIT = 0, /**< Not initialized, or deinitialized. */
+    COMM_INIT = 1    /**< Initialized and usable. */
+} ComM_InitStatusType;
+/** SWS_ComM_00674: channel state and sub-state. NM NONE never enters COMM_SILENT_COM. */
+typedef uint8 ComM_StateType;
 /** <Bus>SM_RequestComMode of the configured CDD bus state manager (SWS_ComM_00828). */
 typedef Std_ReturnType (*ComM_BusRequestType)(NetworkHandleType Channel, ComM_ModeType ComMode);
 /** <Bus>SM_GetCurrentComMode of the configured CDD bus state manager (SWS_ComM_00828). */
@@ -81,7 +83,7 @@ typedef struct {
  * lower request or publication then completes with the new lifetime's state.
  * Ownership: ConfigPtr is retained until the next Init or a successful DeInit.
  */
-void ComM_Init(const ComM_ConfigType *ConfigPtr);
+COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr);
 /** Deinitialize while the channel is in COMM_NO_COM_NO_PENDING_REQUEST and the bus
  * state manager reports actual NO (SWS_ComM_00794); otherwise no action.
  * @par Return
@@ -91,7 +93,7 @@ void ComM_Init(const ComM_ConfigType *ConfigPtr);
  * Reentrancy: not reentrant.
  * Ownership: None.
  */
-void ComM_DeInit(void);
+COMM_CODE void ComM_DeInit(void);
 /** Report COMM_INIT or COMM_UNINIT (SWS_ComM_00242).
  * @param[out] Status Written on E_OK.
  * @return E_OK, or E_NOT_OK for a NULL pointer.
@@ -100,7 +102,7 @@ void ComM_DeInit(void);
  * Reentrancy: reentrant.
  * Ownership: no pointer is retained.
  */
-Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status);
+COMM_CODE Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status);
 /** Report the channel inhibition status; both inhibitions are disabled, so it is 0
  * (SWS_ComM_00619).
  * @param[in] Channel Configured channel.
@@ -111,8 +113,8 @@ Std_ReturnType ComM_GetStatus(ComM_InitStatusType *Status);
  * Reentrancy: reentrant.
  * Ownership: no pointer is retained.
  */
-Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
-                                        ComM_InhibitionStatusType *Status);
+COMM_CODE Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
+                                                  ComM_InhibitionStatusType *Status);
 /** Accept a new ECU group classification (SWS_ComM_00552). With wake-up inhibition and
  * mode limitation disabled, no channel behaviour depends on it.
  * @param[in] Status Any classification mask.
@@ -122,7 +124,7 @@ Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusType Status);
+COMM_CODE Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusType Status);
 /** Record a user's NO or FULL request and evaluate the channel (SWS_ComM_00110).
  * @param[in] User Configured user handle.
  * @param[in] ComMode COMM_NO_COMMUNICATION or COMM_FULL_COMMUNICATION.
@@ -132,7 +134,7 @@ Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusType Status);
  * Reentrancy: reentrant; a bus request it causes is issued by one caller at a time.
  * Ownership: None.
  */
-Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_ModeType ComMode);
+COMM_CODE Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_ModeType ComMode);
 /** Report the user's last recorded request (SWS_ComM_00079).
  * @param[in] User Configured user handle.
  * @param[out] ComMode Written on E_OK.
@@ -142,7 +144,7 @@ Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_ModeType ComMo
  * Reentrancy: reentrant.
  * Ownership: no pointer is retained.
  */
-Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM_ModeType *ComMode);
+COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM_ModeType *ComMode);
 /** Report the actual mode from the bus state manager (SWS_ComM_00083, SWS_ComM_00084).
  * @param[in] User Configured user handle.
  * @param[out] ComMode Written by the bus state manager on E_OK.
@@ -153,7 +155,7 @@ Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM_ModeType 
  * Reentrancy: reentrant.
  * Ownership: no pointer is retained.
  */
-Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_ModeType *ComMode);
+COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_ModeType *ComMode);
 /** PNC support is disabled, so no user has a PNC (SWS_ComM_91002).
  * @param[in] User Configured user handle.
  * @param[out] ComMode COMM_E_NO_PNC_ASSIGNED for a configured user, otherwise not written.
@@ -164,7 +166,8 @@ Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_ModeType *C
  * Reentrancy: reentrant.
  * Ownership: no pointer is retained.
  */
-Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User, ComM_ModeType *ComMode);
+COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User,
+                                                   ComM_ModeType *ComMode);
 /** Report FULL, as no inhibition is selected (SWS_ComM_00085).
  * @param[in] User Configured user handle.
  * @param[out] ComMode Written on E_OK.
@@ -174,7 +177,7 @@ Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User, ComM_ModeType
  * Reentrancy: reentrant.
  * Ownership: no pointer is retained.
  */
-Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeType *ComMode);
+COMM_CODE Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeType *ComMode);
 /** Propagate the actual bus mode to BswM and Dcm (SWS_ComM_00675). The channel state
  * does not follow it: NM NONE has no bus-driven transition (SWS_ComM Figure 7.7).
  * @param[in] Channel Configured channel.
@@ -187,5 +190,13 @@ Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeType *ComMo
  * indication is published after it, and only the latest of several is published.
  * Ownership: None.
  */
-void ComM_BusSM_ModeIndication(NetworkHandleType Channel, ComM_ModeType ComMode);
+COMM_CODE void ComM_BusSM_ModeIndication(NetworkHandleType Channel, ComM_ModeType ComMode);
+#define COMM_STOP_SEC_CODE
+#include "ComM_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "ComM.h -> ComM_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "ComM.h -> ComM_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

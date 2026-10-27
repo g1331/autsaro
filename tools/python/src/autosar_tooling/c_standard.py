@@ -62,6 +62,41 @@ def comment_body(comment: str) -> str:
     return re.sub(r"(?m)^\s*\* ?", "", re.sub(r"/\*+[<!]?|\*/|//[/!]?", "", comment)).strip()
 
 
+def include_scope(text: str) -> str | None:
+    """Normalize directive spacing, retaining the literal header and delimiter."""
+    space = r"(?:[ \t\f\v]|/\*.*?\*/)*"
+    match = re.fullmatch(
+        rf'{space}#{space}include{space}(<[^>\r\n]+>|"[^"\r\n]+")'
+        rf"{space}(?://[^\r\n]*)?",
+        re.sub(r"\\\r?\n", "", text).strip(),
+        re.DOTALL,
+    )
+    return "#include " + match[1] if match else None
+
+
+def directive_scope(text: str) -> str | None:
+    """Identify literal includes and undef targets without accepting record locators as C."""
+    included = include_scope(text)
+    if included is not None:
+        return included
+    text = re.sub(r"\\\r?\n", "", text).strip()
+    text = re.sub(r"/\*.*?\*/|//[^\r\n]*", " ", text, flags=re.DOTALL)
+    match = re.fullmatch(r"\s*#\s*undef\s+([A-Za-z_]\w*)\s*", text)
+    return "#undef " + match[1] if match else None
+
+
+def record_scope(text: str) -> str | None:
+    """Identify a file anchor, symbol, or concrete repeated directive."""
+    if text == "@file" or IDENTIFIER.fullmatch(text):
+        return text
+    occurrence = re.fullmatch(r"(.+?)\s+\[([1-9][0-9]*)\]", text, re.DOTALL)
+    normalized = directive_scope(occurrence[1] if occurrence else text)
+    if normalized is not None:
+        return normalized + (" [" + occurrence[2] + "]" if occurrence else "")
+    # An approved malformed directive must remain unmatched, rather than disappear.
+    return text if text.lstrip().startswith("#") else None
+
+
 def function(tokens: list[Token]) -> tuple[str, list[str]] | None:
     """Recognize direct function declarators, not function pointer objects/types."""
     words = [t.text for t in tokens]
@@ -406,7 +441,10 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
             pieces = re.split(r"(`runtime/[^`]+`)", scope)
             for index in range(1, len(pieces), 2):
                 name = pieces[index].strip("`")
-                for symbol in re.findall(r"`([A-Za-z_]\w*)`", pieces[index + 1]):
+                for item in re.findall(r"`([^`]+)`", pieces[index + 1]):
+                    symbol = record_scope(item)
+                    if symbol is None:
+                        continue
                     key = (kind, rule[2], name, symbol)
                     records[key] += 1
                     locations[key] = (path.relative_to(root).as_posix(), line.strip())
@@ -419,6 +457,13 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
         name = path.relative_to(root).as_posix()
         source = path.read_text(encoding="utf-8")
         tokens = lex(source)
+        directive_counts: collections.Counter[str] = collections.Counter()
+        directive_numbers = {}
+        for token in tokens:
+            scope = directive_scope(token.text) if token.text.lstrip().startswith("#") else None
+            if scope is not None:
+                directive_counts[scope] += 1
+                directive_numbers[token.start] = directive_counts[scope]
         for index, token in enumerate(tokens):
             if not is_comment(token) and not token.text.lstrip().startswith("#"):
                 continue
@@ -448,7 +493,24 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                 words = [t.text for t in declaration]
                 direct = function(declaration)
                 macro = re.match(r"\s*#\s*define\s+(\w+)", words[0]) if words else None
-                symbol = direct[0] if direct else macro[1] if macro else parameter_name(words[:-1])
+                included = directive_scope(words[0]) if words else None
+                file_scoped = (match[1] == "DIR" and match[2] == "4.10" and path.suffix == ".h"
+                               and index == 0 and is_comment(token)
+                               and re.match(r"/\*\*\s*@file(?:\s|$)", token.text))
+                symbol = "@file" if file_scoped else included or (
+                    direct[0]
+                    if direct
+                    else macro[1]
+                    if macro
+                    else parameter_name(words[:-1])
+                )
+                if included is not None and not file_scoped:
+                    numbered = included + " [" + str(directive_numbers[declaration[0].start]) + "]"
+                    if (match[1], match[2], name, numbered) in records:
+                        symbol = numbered
+                    elif directive_counts[included] > 1:
+                        line = source.splitlines()[source.count("\n", 0, token.start)].strip()
+                        result[("deviation-ambiguous", name, line)] += 1
                 key = (match[1], match[2], name, symbol)
                 comments[key] += 1
                 source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())

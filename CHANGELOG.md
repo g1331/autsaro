@@ -4,6 +4,20 @@
 
 ### Breaking
 
+- Native atomic width/alignment checks use C99 constant expressions instead of the `Os_Atomic{32,64}{Width,Alignment}Type`, `ArtiAtomic32IsFourBytes` and `Os_HostLongMustBe32BitsType` guard typedefs. Remove direct uses of these implementation guard names and regenerate deliveries for the new native type headers; atomic storage aliases and service ABI are unchanged (#371)
+
+- Five OS-only helpers now have internal linkage and are omitted from private cross-file headers. Integrations must use the public OS/native wrapper interfaces; regenerate deliveries and rebuild for the updated source identities (#371)
+
+- Controlled kernel headers now expose heap types and heap, mutex and optional Task APIs only when their implementations are selected by the matching configuration. Regenerate sealed deliveries and rebuild for the updated patch identity; enabled declarations and function implementations are unchanged (#371)
+
+- Custom OS target configuration member `time` is now `timing`, and COM PDU configuration member `signal` is now `signal_id`, avoiding reserved C library names. Update designated initializers/member access and regenerate deliveries; member order, types, binary layout and values are unchanged (#371)
+
+- Adopted kernel static-event, static-timer, static-stream and MPU-task parameter structures omit four unused tags; use the retained `StaticEventGroup_t`, `StaticTimer_t`, `StaticStreamBuffer_t` and `TaskParameters_t` names. Their members and layouts are unchanged. Regenerate sealed deliveries and rebuild for the updated controlled patch identities (#371)
+
+- ErrorHook parameter snapshots and native queue/semaphore metadata now use independent fields, changing their concrete storage layout. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed header and controlled patch identity (#58)
+
+- Native OS static task and queue buffers now require task.h/queue.h and use their actual kernel object types, list sentinels use complete list items, and invalid Task/ISR ID constants retain their public identifier types. Regenerate sealed deliveries and rebuild all kernel, application and runtime translation units for the changed headers, list storage and controlled patch identities (#58)
+
 - Native Task activations restart through the sole port's platform unwinder on the same thread and execution stack. Sealed C99 consumers now require exception-unwind metadata, including sanitizer cleanup frames; regenerate deliveries and rebuild all application and runtime translation units (#60)
 
 - HostBatch, probe and OS lifecycle/stack reports use bounded native byte I/O, with complete output required before confirmation. Raw input bytes, partial writes, interrupted calls and closed pipes retain explicit outcomes. CRT stream setup is removed; application hooks using CRT streams must flush their own output. Regenerate sealed deliveries and rebuild consumers for the additive host I/O header and removed stream-mode helper (#60)
@@ -18,6 +32,8 @@
 
 ### Added
 
+- C deviation association checks recognize header-wide Directive 4.10 records at the first `@file` comment, retaining exact file/rule matching and rejection of unapproved, duplicate or stale records (#371)
+
 - Generated ECU deliveries include complete selected BSW entry and area descriptions plus navigable module, API and configuration manuals sharing public headers and validation metadata; regenerate deliveries to receive them (#314)
 
 - Selected ECUC symbolic handles have one provider-owned configuration header, shared naming and collision checks; generated BSW consumers import those symbols while preserving numeric mappings, including decimal values written with leading zeros (#303)
@@ -25,6 +41,71 @@
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
 ### Fixed
+
+- Share one memory-section pair for adjacent declarations, configuration objects, wrappers and OS storage/interfaces of the same class; retain boundaries across conditions, scopes and mapping headers (#371)
+
+- Apply existing BSW and RTE memory classes to function and instance declarations, including private callbacks, lifecycle, OS service providers and host-safe aliases, configured CDD interfaces, standalone component contracts and their release checks (#371)
+
+- Apply component memory sections to the pipeline sample's persistent state and runnable definitions while preserving its owner observations (#371)
+
+- Det's private development-report recursion flag has an explicit per-thread cleared data mapping and appears with its native adapter in the module description. Regenerate deliveries; first-entry, recursive reporting and process termination semantics are preserved (#371)
+
+- BSW implementation descriptions declare the shared OS mapping required by ARTI and distinguish LSduR/PduR runtime sections from RTE-generated configuration sections. Regenerate deliveries for the corrected MEMMAP dependencies and section references; C bytes and ABI are unchanged (#371)
+
+- Configuration conditionals surround complete memory-mapping pairs in the CAN driver, native adapters and generated lifecycle variants. Regenerate deliveries; polling, queued completion, startup/retirement observations and public signatures are preserved (#371)
+
+- BSW, host, RTE and SWC memory-mapping headers reject missing or simultaneous supported section requests during preprocessing. Regenerate deliveries for the updated header and emitter identities; valid section pairs and placement are unchanged (#371)
+
+- Native shutdown reasons use lock-free atomic publication when ordinary closing races a guard fault; ShutdownHook, lifecycle text and exit status consume one captured reason (#371)
+
+- Native stack-fault shutdown checks the existing controller health state before reporting, avoiding a read of the first-fault snapshot before its payload is published (#371)
+
+- Windows native stack observers and reports skip incomplete registrations and acquire published fault records through the existing atomic interface (#371)
+
+- Native OS masks use unsigned operands before conversion to the platform API types; timer state and ARTI atomic constants avoid implicit narrowing on Linux. Signal, mapping, event, futex, unwind and atomic-state values and ABI are unchanged (#371)
+
+- Kernel trace hooks use one declaration owner, read-only selection addresses and a const character filename parameter for assertions; queue capacity and ISR-state queries use const object views. Regenerate deliveries for the updated controlled patch identity; AUTOSAR API types, object layouts and synchronization are unchanged (#371)
+
+- Native OS startup publishes Task handles before stack registration can fail; controller health and Linux interrupt handoff flags now use atomic accesses throughout, preserving fault shutdown without concurrent publication races (#371)
+
+- The sole HostBatch producer reuses process-lifetime watchdog context; disabled ErrorHook parameter access no longer captures pointers, and retired ISR snapshots are cleared after restoration. Regenerate sealed deliveries and rebuild consumers (#371)
+
+- Unexpected Linux futex errors stop native handoff instead of being ignored; faulted-stack parking preserves its stack-fault exit reason. Regenerate sealed deliveries and rebuild consumers (#371)
+
+- Linux context observation copies only the fixed kernel control prefix and separate legacy FP state into an initialized owned snapshot, preserving self-copy without assuming the full glibc ucontext tail belongs to the signal frame. Regenerate sealed deliveries and rebuild consumers (#371)
+
+- Finite Linux host actors restore the thread's prior alternate signal stack before pthread retirement; failed snapshot or restoration stops the process. Regenerate sealed deliveries and rebuild consumers for the private native adapter change (#371)
+
+- Native signal-set operations initialize errno before calls; adopted kernel priority and stack scans preserve parameter values, and callback values use explicit function addresses. Regenerate sealed deliveries for the updated controlled source and patch identities (#371)
+
+- The Linux native OS initializes the GCC unwind register table before creating schedulable threads and rejects initialization errors before Ready, so its first-use initialization cannot depend on a parked Task. Regenerate sealed deliveries for the updated native sources (#371)
+
+- Controlled Windows interrupt selection uses a private parameter name without reusing the standard library `floor` identifier; selection order and ABI are unchanged. Regenerate sealed deliveries for the updated patch identity (#371)
+
+- Adopted kernel API examples use C99 Doxygen line comments instead of nested comment-start sequences, preserving their text and all executable tokens. Regenerate sealed deliveries for the new controlled comment patch identity (#371)
+
+- Dcm negative responses use the generated standard NRC constants directly; Linux private compatibility declarations and unused port aliases are removed, and target initialization uses its named unprepared state (#371)
+
+- Linux native actors stop on failed host-input registration or unavailable requested identity. Joinable supervisors retain ownership until successful wait and close; join/detach failures no longer publish completion or let concurrent waits report it early. Regenerate sealed deliveries for the updated private source (#371)
+
+- Generated scheduler-resource task access masks use an unsigned literal instead of a small integer constant macro; regenerate deliveries to receive the corrected C source (#371)
+
+- Static kernel queues select front-insertion and overwrite wrap positions before subtracting, keeping read cursors within their storage even for one-item queues. Regenerate sealed deliveries and rebuild for the changed controlled kernel patch identity (#371)
+- Zero-DLC CAN output retains its zero-filled record and normal confirmation without calling the payload copy with a zero length. Regenerate sealed deliveries for the updated private source (#371)
+- C analysis compares sealed runtime source edits without treating their content hashes as configuration changes, while retaining source-path, generator, checker, target and tool identity checks. (#371)
+- Linux actor creation stops on a failed mapping rollback before discarding its ownership; ordinary creation failures still return normally after successful cleanup. Regenerate sealed deliveries for the updated private source (#58)
+
+- Linux alternate signal stacks use a single aligned storage block instead of a union, preserving each actor's 64 KiB capacity, alignment and registration behavior. Regenerate sealed deliveries for the updated private source (#58)
+
+- Linux host and controlled POSIX port synchronization now sequence conditional native operations and volatile state reads explicitly; backend startup, readiness and interrupt admission preserve their existing failure and handoff order. Regenerate sealed deliveries for the changed source and selected patch (#58)
+
+- Linux native pause generations now cycle below the reserved terminal-stop value and preserve concurrent stop requests. Long-running actors remain resumable across the generation boundary; regenerate sealed deliveries for the corrected host source (#58)
+
+- Native Task restart uses a typed assembler PC accessor and keeps its continuation private. Linux constructor rollback remains atomic and event waits distinguish clock failures from ordinary timeouts; Windows thread setup and native handoff failures stop before consuming invalid synchronization state. Regenerate sealed deliveries and rebuild native consumers for the changed private ABI and controlled patches (#58)
+
+- Native integer predicates and BOOL flags now stay separate from AUTOSAR Boolean constants; private Linux declarations leave TRUE/FALSE ownership to Platform_Types, independent of include order. Existing public result values and native handle contracts are preserved (#58)
+
+- Linux OS events classify syscall errors, interruptions and incomplete reads; event close errors release descriptor ownership safely, and successfully destroyed mutexes return their fixed handle slots for reuse (#58)
 
 - Dcm and CanTp timing events must match the fixed 1 ms timer base; validation rejects consistently remapped slower schedules at their source events before generation (#57)
 

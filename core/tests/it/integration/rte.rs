@@ -527,6 +527,184 @@ fn unsupported_completion_modes_and_foreign_application_type_owners_are_refused(
 }
 
 #[test]
+fn generated_callback_values_use_explicit_function_addresses() {
+    // MISRA AMD3.37 / R17.12: these interface slots hold addresses, not calls.
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    for (path, callbacks) in [
+        (
+            "generated/src/CanIf_PBcfg.c",
+            &[
+                "Ecu_HostBusSM_ControllerModeIndication",
+                "Ecu_HostBusSM_ControllerBusOff",
+            ][..],
+        ),
+        (
+            "generated/src/LSduR_PBcfg.c",
+            &[
+                "PduR_CanIfRxIndication",
+                "CanTp_RxIndication",
+                "PduR_CanIfTxConfirmation",
+                "PduR_CanIfTriggerTransmit",
+                "CanTp_TxConfirmation",
+            ][..],
+        ),
+        (
+            "generated/src/PduR_PBcfg.c",
+            &[
+                "Com_RxIndication",
+                "LSduR_PduRTransmit",
+                "Com_TxConfirmation",
+                "Com_TriggerTransmit",
+                "CanTp_Transmit",
+                "Dcm_StartOfReception",
+                "Dcm_CopyRxData",
+                "Dcm_TpRxIndication",
+                "Dcm_CopyTxData",
+                "Dcm_TpTxConfirmation",
+            ][..],
+        ),
+        (
+            "generated/src/Ecu_RuntimeConfig.c",
+            &[
+                "Rte_COMCbk",
+                "Rte_COMCbkRxTOut",
+                "PduR_ComTransmit",
+                "DcmService_ReadData",
+                "Ecu_DcmAuthenticationMode",
+                "Ecu_HostBusSM_RequestComMode",
+                "Ecu_HostBusSM_GetCurrentComMode",
+                "Dcm_ComM_NoComModeEntered",
+                "Dcm_ComM_SilentComModeEntered",
+                "Dcm_ComM_FullComModeEntered",
+                "Ecu_BswMAction",
+                "Ecu_DetRuntimeCallout",
+            ][..],
+        ),
+    ] {
+        let source = files.iter().find(|(name, _)| name == path).unwrap();
+        let source = std::str::from_utf8(&source.1).unwrap();
+        for callback in callbacks {
+            let mut values = 0;
+            for (position, _) in source.match_indices(callback) {
+                let following = source[position + callback.len()..].trim_start();
+                if following.starts_with([',', '}']) {
+                    values += 1;
+                    assert!(
+                        source[..position].trim_end().ends_with('&'),
+                        "{path}: {callback}: {source}"
+                    );
+                }
+            }
+            assert!(values > 0, "{path}: missing callback value {callback}");
+        }
+    }
+    let source = files
+        .iter()
+        .find(|(name, _)| name == "generated/src/Ecu_Config.c")
+        .unwrap();
+    assert!(
+        std::str::from_utf8(&source.1)
+            .unwrap()
+            .contains(".entry = &OS_TASK_ENTRY(")
+    );
+}
+
+#[test]
+fn generated_lifecycle_sections_contain_no_other_preprocessing() {
+    // Verifies: SWS_MemMap_00003.
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    for (name, prefix, segment, owned) in [
+        (
+            "SchM_Main.c",
+            "RTE_Rte",
+            "VAR_CLEARED_UNSPECIFIED",
+            "schm_lifecycle",
+        ),
+        (
+            "Ecu_RuntimeConfig.c",
+            "RTE_Ecu",
+            "CODE",
+            "Ecu_StackBootstrap",
+        ),
+    ] {
+        let path = format!("generated/src/{name}");
+        let source = files
+            .iter()
+            .find(|(file, _)| file == &path)
+            .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
+            .unwrap();
+        let start = format!("#define {prefix}_START_SEC_{segment}\n#include \"Rte_MemMap.h\"\n");
+        let stop = format!("#define {prefix}_STOP_SEC_{segment}");
+        let bodies = source
+            .split(&start)
+            .skip(1)
+            .map(|tail| tail.split_once(&stop).unwrap().0)
+            .collect::<Vec<_>>();
+        assert!(bodies.iter().any(|body| body.contains(owned)), "{path}");
+        for body in bodies {
+            assert!(
+                body.lines().all(|line| !line.trim_start().starts_with('#')),
+                "{path}: {body}"
+            );
+        }
+    }
+}
+
+#[test]
+fn generated_callback_and_lifecycle_declarations_use_their_definition_sections() {
+    // Verifies: SWS_MemMap_00003.
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    for (path, prefix, prototypes) in [
+        (
+            "generated/src/Ecu_RuntimeConfig.c",
+            "RTE_Ecu",
+            &[
+                "static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel, ComM_ModeType requested);",
+            ][..],
+        ),
+        (
+            "generated/src/Ecu_RuntimeConfig.c",
+            "RTE_Dcm",
+            &["static RTE_Dcm_CODE void Ecu_DcmAuthenticationMode(uint8 state);"][..],
+        ),
+        (
+            "generated/include/Ecu_TargetConfig.h",
+            "RTE_Ecu",
+            &[
+                "RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached);",
+                "RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events);",
+                "RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);",
+                "RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc);",
+            ][..],
+        ),
+    ] {
+        let source = files
+            .iter()
+            .find(|(name, _)| name == path)
+            .map(|(_, bytes)| std::str::from_utf8(bytes).unwrap())
+            .unwrap();
+        let start = format!("#define {prefix}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n");
+        let stop = format!("#define {prefix}_STOP_SEC_CODE");
+        let bodies = source
+            .split(&start)
+            .skip(1)
+            .map(|tail| tail.split_once(&stop).unwrap().0)
+            .map(|body| body.split_whitespace().collect::<String>())
+            .collect::<Vec<_>>();
+        for prototype in prototypes {
+            let expected = prototype.split_whitespace().collect::<String>();
+            assert!(
+                bodies.iter().any(|body| body.contains(&expected)),
+                "{path}: declaration outside its definition section: {prototype}"
+            );
+        }
+    }
+}
+
+#[test]
 fn task_memory_mapping_and_generator_option_scope_are_checked_at_the_source() {
     // Verifies: SWS_Rte_08923, SWS_Rte_04557
     let mut wrong = inputs();

@@ -112,7 +112,7 @@ Linux 的 `Os_LinuxNative` 按系统 UAPI 调用 futex、gettid 与 alternate-st
 
 默认 pthread mutex 加 owner/depth 保持原生端口递归及跨线程互斥，沿已有信号屏蔽／held-mask 协议运行，不改变汽车 resource 或调度。Windows 用 `VirtualQuery` 枚举当前栈 allocation 的 reserve／commit／guard，保留 StackGuarantee 和故障捕获，替代 StackLimits。项目源码、生成、独立 OS 和分析模型的 feature 定义均已移除；`-pthread` 保留正常线程编译模式，原宏未移至命令行。
 
-FreeRTOS 原件／补丁身份不变。私有 native 源码、编译参数与平台 unwind 依赖须重新生成／编译；其他人工及采用代码评估归 #58。
+FreeRTOS 原件固定；补丁身份随交付记录。私有 native 源码、编译参数与平台 unwind 依赖须重新生成／编译；其他人工及采用代码评估归 #58。
 
 ### 解除条件与验收
 

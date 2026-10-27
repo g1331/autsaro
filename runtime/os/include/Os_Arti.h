@@ -12,6 +12,8 @@
 #include "Os_Host.h"
 #include "Os_Target.h"
 #include "Os_Hooks.h"
+#define OS_START_SEC_VAR_CLEARED_64
+#include "Os_MemMap.h"
 /** Task transition selectors mapped to standard ARTI task events by Os_ArtiTask. */
 typedef enum {
     OS_ARTI_TASK_ACTIVATE, /**< Activation admitted. */
@@ -46,8 +48,6 @@ typedef struct {
 /* Task observations are refreshed from native kernel state while its mutex is
  * owned. None of these cells is consulted by scheduling or public OS services.
  * The other pointers expose the original authoritative storage read-only. */
-#define OS_START_SEC_VAR_CLEARED_64
-#include "Os_MemMap.h"
 OS_MEMMAP extern Os_ArtiTaskStateType Os_ArtiTasks[OS_MAX_TASKS];
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"

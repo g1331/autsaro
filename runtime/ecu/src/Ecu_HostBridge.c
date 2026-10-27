@@ -22,16 +22,16 @@ static Os_HostThreadResultType watch(void *argument)
     return 0u;
 }
 
-static void require(int accepted)
+static void bridge_require(boolean accepted)
 {
-    if (accepted == 0) {
+    if (accepted == FALSE) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
 }
 
 static void sequence(Ecu_HostBatch *batch)
 {
-    require(batch->sequence != UINT64_MAX);
+    bridge_require(batch->sequence != UINT64_MAX);
     ++batch->sequence;
 }
 
@@ -43,12 +43,12 @@ static void pump(Ecu_HostBatch *batch,
     Ecu_OutputRecord output;
     Ecu_ProtocolRecord failure;
     StatusType status;
-    require((Os_HostMonotonicMs() - control->started) < ECU_BATCH_WATCHDOG_MS);
-    require(Ecu_TargetState() == ECU_TARGET_READY);
+    bridge_require((Os_HostMonotonicMs() - control->started) < ECU_BATCH_WATCHDOG_MS);
+    bridge_require(Ecu_TargetState() == ECU_TARGET_READY);
     status = Ecu_TargetTakeProtocolFailure(&failure);
     while (status == E_OK) {
         sequence(batch);
-        require(batch->transport_count != UINT16_MAX);
+        bridge_require(batch->transport_count != (uint16)UINT16_MAX);
         ++batch->transport_count;
         if (batch->transport_status == ECU_OK) {
             batch->transport_status = failure.status;
@@ -56,14 +56,14 @@ static void pump(Ecu_HostBatch *batch,
         }
         status = Ecu_TargetTakeProtocolFailure(&failure);
     }
-    require(status == E_OS_NOFUNC);
+    bridge_require(status == E_OS_NOFUNC);
     status = Ecu_TargetTakeOutput(&output);
     if (status == E_OK) {
         sequence(batch);
-        require(sink(&output, batch, E_OK, context) != 0);
-        require(Ecu_TargetConfirmOutput(output.ticket, output.pdu) == E_OK);
+        bridge_require(sink(&output, batch, E_OK, context) != 0);
+        bridge_require(Ecu_TargetConfirmOutput(output.ticket, output.pdu) == E_OK);
     } else {
-        require(status == E_OS_NOFUNC);
+        bridge_require(status == E_OS_NOFUNC);
     }
 }
 
@@ -75,18 +75,18 @@ static void tick(Ecu_HostBatch *batch,
 {
     uint64_t ticket;
     Os_TickCompletionType result;
-    require(Os_TargetAdvanceOneTick(at, &ticket) == E_OK);
+    bridge_require(Os_TargetAdvanceOneTick(at, &ticket) == E_OK);
     for (;;) {
         StatusType status;
         pump(batch, sink, context, control);
         status = Os_TargetWaitTick(ticket, 1u, &result);
         if (status == E_OK) {
-            require(result.epoch == at);
+            bridge_require(result.epoch == at);
             pump(batch, sink, context, control);
             sequence(batch);
             return;
         }
-        require(status == E_OS_NOFUNC);
+        bridge_require(status == E_OS_NOFUNC);
     }
 }
 
@@ -104,7 +104,7 @@ static StatusType admit_batch(const Ecu_HostBatch *batch)
     if (status == E_OK) {
         const uint64_t span = batch->epoch - batch->completed_epoch;
         const uint64_t transport_frames =
-            ((uint64_t)ECU_MAX_PDU_PAYLOAD + UINT64_C(6)) / UINT64_C(7) + UINT64_C(2);
+            (((uint64_t)ECU_MAX_PDU_PAYLOAD + UINT64_C(6)) / UINT64_C(7)) + UINT64_C(2);
         unsigned diagnostic_inputs = 0u;
         uint16_t index;
         uint64_t required;
@@ -131,7 +131,8 @@ static StatusType admit_batch(const Ecu_HostBatch *batch)
 
 StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
 {
-    Ecu_HostWatch control;
+    /* The sole producer joins its observer before reusing this process-lifetime context. */
+    static Ecu_HostWatch control;
     Os_HostHandleType monitor;
     Os_TickCompletionType previous;
     Ecu_BatchCompletion completed;
@@ -162,7 +163,7 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     control.started = Os_HostMonotonicMs();
-    monitor = Os_HostSpawnObserverThread(watch, &control);
+    monitor = Os_HostSpawnObserverThread(&watch, &control);
     if (monitor == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
@@ -172,10 +173,10 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         tick(batch, at, sink, context, &control);
     }
     batch->first_input_sequence =
-        (batch->count == 0u) ? UINT64_C(0) : batch->sequence + UINT64_C(1);
+        (batch->count == 0u) ? UINT64_C(0) : (batch->sequence + UINT64_C(1));
     batch->sequence += (uint64_t)batch->count;
     batch->input_sequences_reserved = 1u;
-    require(Ecu_TargetPostBatch(batch->epoch, batch->frames, batch->count, &ticket) == E_OK);
+    bridge_require(Ecu_TargetPostBatch(batch->epoch, batch->frames, batch->count, &ticket) == E_OK);
     if (batch->epoch != batch->completed_epoch) {
         tick(batch, batch->epoch, sink, context, &control);
     }
@@ -185,21 +186,21 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         if (status == E_OK) {
             break;
         }
-        require(status == E_OS_NOFUNC);
+        bridge_require(status == E_OS_NOFUNC);
         Os_HostSleepMs(1u);
     }
-    require((completed.epoch == batch->epoch) && (completed.input_count == batch->count));
+    bridge_require((completed.epoch == batch->epoch) && (completed.input_count == batch->count));
     pump(batch, sink, context, &control);
     batch->input_status = completed.input_status;
     status = ((completed.input_status == ECU_OK) && (batch->transport_status == ECU_OK))
                  ? E_OK
                  : E_OS_VALUE;
-    require(Ecu_HostBatchComplete(batch) == E_OK);
-    require((Os_HostMonotonicMs() - control.started) < ECU_BATCH_WATCHDOG_MS);
-    require(sink(NULL, batch, status, context) != 0);
-    require(Os_HostSetEvent(control.cancel) != 0);
-    require(Os_HostWait(monitor, ECU_BATCH_WATCHDOG_MS) != 0);
-    require(Os_HostClose(monitor) != 0);
-    require(Os_HostClose(control.cancel) != 0);
+    bridge_require(Ecu_HostBatchComplete(batch) == E_OK);
+    bridge_require((Os_HostMonotonicMs() - control.started) < ECU_BATCH_WATCHDOG_MS);
+    bridge_require(sink(NULL, batch, status, context) != 0);
+    bridge_require(Os_HostSetEvent(control.cancel) != 0);
+    bridge_require(Os_HostWait(monitor, ECU_BATCH_WATCHDOG_MS) != 0);
+    bridge_require(Os_HostClose(monitor) != 0);
+    bridge_require(Os_HostClose(control.cancel) != 0);
     return E_OK;
 }

@@ -20,6 +20,8 @@
 #endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define PDUR_MODULE_ID 51u
+#define PDUR_START_SEC_CODE
+#include "PduR_MemMap.h"
 /** Configuration identity (SWS_PduR_00771). */
 typedef uint16 PduR_PBConfigIdType;
 /** Routing-path group handle (SWS_PduR_00654); no groups are selected. */
@@ -123,7 +125,7 @@ typedef struct {
  * Ownership: The accepted configuration and all referenced tables/callbacks remain valid for the
  * ECU lifetime.
  */
-void PduR_Init(const PduR_PBConfigType *ConfigPtr);
+PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr);
 /** Read the published configuration identity (SWS_PduR_00341).
  * @return The configured ID, or zero before initialization. Zero may also be a valid configured ID.
  * Preconditions: None.
@@ -131,7 +133,7 @@ void PduR_Init(const PduR_PBConfigType *ConfigPtr);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-PduR_PBConfigIdType PduR_GetConfigurationId(void);
+PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void);
 /** No routing groups are selected, so every request returns without action (SWS_PduR_00615/00647).
  * @param[in] id Any routing-path group ID; no groups are configured.
  * @par Return
@@ -141,7 +143,7 @@ PduR_PBConfigIdType PduR_GetConfigurationId(void);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-void PduR_EnableRouting(PduR_RoutingPathGroupIdType id);
+PDUR_CODE void PduR_EnableRouting(PduR_RoutingPathGroupIdType id);
 /** No routing groups are selected, so every request returns without action (SWS_PduR_00617/00716).
  * @param[in] id Any routing-path group ID; no groups are configured.
  * @param[in] initialize TRUE or FALSE; unused because no routing-path group exists.
@@ -152,5 +154,13 @@ void PduR_EnableRouting(PduR_RoutingPathGroupIdType id);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-void PduR_DisableRouting(PduR_RoutingPathGroupIdType id, boolean initialize);
+PDUR_CODE void PduR_DisableRouting(PduR_RoutingPathGroupIdType id, boolean initialize);
+#define PDUR_STOP_SEC_CODE
+#include "PduR_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "PduR.h -> PduR_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "PduR.h -> PduR_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

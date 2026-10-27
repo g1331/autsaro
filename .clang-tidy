@@ -26,7 +26,8 @@ CheckOptions:
   # <Mip>_<Sn> functions and SchM/Rte macros, <Mip>_<Vn> globals, camel-case SWS parameters
   # and members, OS service and error macros, and FreeRTOS configuration names.
   readability-identifier-naming.MacroDefinitionCase: UPPER_CASE
-  readability-identifier-naming.MacroDefinitionIgnoredRegexp: '((Rte|SchM)_|OSServiceId_|OSError_|Declare[A-Z]|config[A-Z]|INCLUDE_|trace[A-Z]).*|OSErrorGetServiceId|TotalNumberOfCores|_[A-Z]+_SOURCE'
+  # The configured RTE section prefix is case-sensitive (SWS_MemMap_00022).
+  readability-identifier-naming.MacroDefinitionIgnoredRegexp: '((Rte|SchM)_|OSServiceId_|OSError_|Declare[A-Z]|config[A-Z]|INCLUDE_|trace[A-Z]).*|RTE_Rte_(START|STOP)_SEC_CODE|OSErrorGetServiceId|TotalNumberOfCores|_[A-Z]+_SOURCE'
   readability-identifier-naming.EnumConstantCase: UPPER_CASE
   readability-identifier-naming.TypedefSuffix: Type
   readability-identifier-naming.TypedefIgnoredRegexp: 'boolean|u?int(8|16|32|64)(_least)?|sint(8|16|32|64)(_least)?|float(32|64)|BOOL|DWORD|HANDLE|U?LONG|ULONG_PTR|SIZE_T|CONTEXT|LP[A-Z_]+'

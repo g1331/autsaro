@@ -8,6 +8,8 @@
 OS_MEMMAP extern const Os_TargetConfigType Ecu_OsConfig;
 #define OS_STOP_SEC_CONFIG_DATA_PREBUILD_64
 #include "Os_MemMap.h"
+#define RTE_Ecu_START_SEC_CODE
+#include "Rte_MemMap.h"
 /** Initialize the generated communication stack in dependency order.
  * @param[out] reached Non-NULL stage ledger; set to zero, then 1..8 as each stage begins.
  * @return E_OK when all stages and timing start; E_NOT_OK leaves the last begun stage for
@@ -21,7 +23,7 @@ OS_MEMMAP extern const Os_TargetConfigType Ecu_OsConfig;
  *
  * Ownership: No pointer is retained.
  */
-Std_ReturnType Ecu_StackBootstrap(uint8 *reached);
+RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached);
 /** Dispatch the configured owner events and flush outgoing frames.
  * @param[in] events Owner event mask; configured work, application and I/O bits select dispatch.
  * @return E_OK after successful dispatch/flush; E_NOT_OK for invalid context or lower failure.
@@ -34,7 +36,7 @@ Std_ReturnType Ecu_StackBootstrap(uint8 *reached);
  *
  * Ownership: No pointer is retained.
  */
-Std_ReturnType Ecu_StackRunCycle(EventMaskType events);
+RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events);
 /** Retire supported begun stages, newest first; Det and routing tables have no DeInit.
  * @param[in] reached Last stage begun by Bootstrap, 0..8; zero retires none.
  * @par Return
@@ -48,7 +50,7 @@ Std_ReturnType Ecu_StackRunCycle(EventMaskType events);
  *
  * Ownership: No pointer is retained.
  */
-void Ecu_StackRetire(uint8 reached);
+RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);
 /** Validate a host frame against the generated CAN routes.
  * @param[in] id 11-bit CAN identifier, 0..0x7ff.
  * @param[in] dlc Classical CAN payload length, 0..8 bytes.
@@ -63,7 +65,15 @@ void Ecu_StackRetire(uint8 reached);
  *
  * Ownership: No pointer is retained.
  */
-int Ecu_StackFrameShape(uint32 id, uint8 dlc);
+RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc);
+#define RTE_Ecu_STOP_SEC_CODE
+#include "Rte_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Ecu_TargetConfig.h -> Rte_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Ecu_TargetConfig.h -> Rte_MemMap.h: incompatible AUTOSAR release"
+#endif
 #if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
 /** Test provider: select a bootstrap failure at this stage.
  * @param[in] stage Initialization stage, 1..8.

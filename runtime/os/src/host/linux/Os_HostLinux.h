@@ -4,21 +4,20 @@
 #include "Os_Version.h"
 
 #include <pthread.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <ucontext.h>
 
 typedef int32_t LONG;
 typedef uint32_t DWORD;
-typedef uint32_t ULONG;
-typedef uintptr_t ULONG_PTR;
 typedef size_t SIZE_T;
 typedef int BOOL;
 typedef void *LPVOID;
 typedef const char *LPCSTR;
 typedef void *LPSECURITY_ATTRIBUTES;
 typedef DWORD *LPDWORD;
-typedef DWORD (*LPTHREAD_START_ROUTINE)(void *);
+typedef DWORD (*LPTHREAD_START_ROUTINE)(void *argument);
 typedef struct Os_HostHandleType *HANDLE;
 typedef struct {
     ucontext_t native;
@@ -26,20 +25,15 @@ typedef struct {
     DWORD ContextFlags;
 } CONTEXT;
 
-typedef char Os_HostLongMustBe32BitsType[(sizeof(LONG) == 4u) ? 1 : -1];
+enum {
+    OS_HOST_LONG_WIDTH = sizeof(char[(sizeof(LONG) == 4u) ? 1 : -1]), /**< Reject incompatible
+                                                                       Interlocked cells. */
+};
 #if !defined(__GCC_ATOMIC_INT_LOCK_FREE) || (__GCC_ATOMIC_INT_LOCK_FREE != 2)
 #error Linux host requires always-lock-free 32-bit atomics
 #endif
 
 #define WINAPI
-#define CALLBACK
-#define VOID void
-#ifndef TRUE
-#define TRUE 1
-#endif
-#ifndef FALSE
-#define FALSE 0
-#endif
 #define INFINITE                          UINT32_MAX
 #define WAIT_OBJECT_0                     0u
 #define WAIT_TIMEOUT                      258u
@@ -53,7 +47,8 @@ typedef char Os_HostLongMustBe32BitsType[(sizeof(LONG) == 4u) ? 1 : -1];
 
 static inline LONG InterlockedCompareExchange(volatile LONG *cell, LONG desired, LONG expected)
 {
-    __atomic_compare_exchange_n(cell, &expected, desired, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    (void)__atomic_compare_exchange_n(
+        cell, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
     return expected;
 }
 static inline LONG InterlockedExchange(volatile LONG *cell, LONG value)
@@ -79,14 +74,13 @@ static inline LONG InterlockedDecrement(volatile LONG *cell)
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP HANDLE Os_HostCurrentThread(void);
-
 OS_MEMMAP HANDLE Os_HostDispatcherThread(void);
 
 OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread);
 
 OS_MEMMAP int Os_HostInstallSignals(void);
 
+/** Recoverable creation failures return NULL; a failed mapping rollback terminates the process. */
 OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
                                     LPTHREAD_START_ROUTINE start,
                                     LPVOID argument,
@@ -119,7 +113,7 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds);
 OS_MEMMAP DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL alertable);
 
 OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
-                                       const HANDLE *handles,
+                                       const HANDLE *observed,
                                        BOOL all,
                                        DWORD milliseconds);
 

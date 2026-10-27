@@ -9,5 +9,5 @@
 +#define ulIsrHandler Os_InterruptVectorTable
 +/* Category 2 source state; accesses use the existing native interrupt mutex. */
  static uint32_t ulOsDisabledSources;
- int Os_PortInterruptSourceEnabled( uint32_t interrupt )
+ sint32 Os_PortInterruptSourceEnabled( uint32 interrupt )
  {

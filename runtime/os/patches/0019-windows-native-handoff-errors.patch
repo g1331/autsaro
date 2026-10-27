@@ -1,0 +1,230 @@
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -48,6 +48,27 @@
+     #include <mmsystem.h>
+ #endif
+ 
++/* Native ownership and handoff failures stop the OS before protected state is used. */
++static void prvWaitForObject( HANDLE xObject )
++{
++    configASSERT( WaitForSingleObject( xObject, INFINITE ) == WAIT_OBJECT_0 );
++}
++
++static void prvReleaseMutex( HANDLE xMutex )
++{
++    configASSERT( ReleaseMutex( xMutex ) != 0 );
++}
++
++static void prvSignalEvent( HANDLE xEvent )
++{
++    configASSERT( Os_HostSetEvent( xEvent ) != 0 );
++}
++
++static void prvResetEvent( HANDLE xEvent )
++{
++    configASSERT( ResetEvent( xEvent ) != 0 );
++}
++
+ #define portMAX_INTERRUPTS                          ( ( uint32_t ) sizeof( uint32_t ) * 8UL ) /* The number of bits in an uint32_t. */
+ #define portNO_CRITICAL_NESTING                     ( ( uint32_t ) 0 )
+ 
+@@ -458,7 +479,7 @@
+     /* Create a pending tick to ensure the first task is started as soon as
+      * this thread pends. */
+     ulPendingInterrupts |= ( 1UL << portINTERRUPT_YIELD );
+-    Os_HostSetEvent( pvInterruptEvent );
++    prvSignalEvent( pvInterruptEvent );
+ 
+     while( ( xPortRunning == pdTRUE ) && ( InterlockedCompareExchange( &Os_Closing, 0, 0 ) == 0 ) )
+     {
+@@ -470,6 +491,7 @@
+ 
+         if( xWinApiResult != WAIT_TIMEOUT )
+         {
++            configASSERT( xWinApiResult == WAIT_OBJECT_0 );
+             /* Cannot be in a critical section to get here.  Tasks that exit a
+              * critical section will block on a yield mutex to wait for an interrupt to
+              * process if an interrupt was set pending while the task was inside the
+@@ -549,7 +571,7 @@
+              * the task was switched out asynchronously by an interrupt as the event
+              * is reset before the task blocks on it. */
+             xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
+-            Os_HostSetEvent( xThreadState.pvYieldEvent );
++            prvSignalEvent( xThreadState.pvYieldEvent );
+             #ifdef OS_TIME_TESTS
+                 Os_TimeTestDispatchFinishing();
+             #endif
+@@ -557,7 +579,7 @@
+              * Task can acquire it immediately after release, before this actor
+              * reaches the next loop iteration. */
+             xInsideInterrupt = pdFALSE;
+-            ReleaseMutex( pvInterruptEventMutex );
++            prvReleaseMutex( pvInterruptEventMutex );
+             #ifdef OS_TIME_TESTS
+                 Os_TimeTestDispatchUnlocked();
+             #endif
+@@ -583,7 +605,7 @@
+      * different task. */
+     if( xThreadState.pvThread != NULL )
+     {
+-        WaitForSingleObject( pvInterruptEventMutex, INFINITE );
++        prvWaitForObject( pvInterruptEventMutex );
+ 
+         /* !!! This is not a nice way to terminate a thread, and will eventually
+          * result in resources being depleted if tasks frequently delete other
+@@ -595,7 +617,7 @@
+         ulErrorCode = CloseHandle( xThreadState.pvThread );
+         configASSERT( ulErrorCode != 0U );
+ 
+-        ReleaseMutex( pvInterruptEventMutex );
++        prvReleaseMutex( pvInterruptEventMutex );
+     }
+ }
+ /*-----------------------------------------------------------*/
+@@ -653,12 +675,12 @@
+      * when configUSE_PREEMPTION is set to 0. */
+     if( pvInterruptEventMutex != NULL )
+     {
+-        WaitForSingleObject( pvInterruptEventMutex, INFINITE );
++        prvWaitForObject( pvInterruptEventMutex );
+         ulPendingInterrupts |= ( 1UL << portINTERRUPT_YIELD );
+-        ReleaseMutex( pvInterruptEventMutex );
+-    }
+-
+-    CloseHandle( xThreadState.pvYieldEvent );
++        prvReleaseMutex( pvInterruptEventMutex );
++    }
++
++    configASSERT( CloseHandle( xThreadState.pvYieldEvent ) != 0 );
+     ExitThread( 0 );
+ }
+ /*-----------------------------------------------------------*/
+@@ -677,14 +699,14 @@
+ 
+     if( ( ulInterruptNumber < portMAX_INTERRUPTS ) && ( pvInterruptEventMutex != NULL ) )
+     {
+-        WaitForSingleObject( pvInterruptEventMutex, INFINITE );
++        prvWaitForObject( pvInterruptEventMutex );
+         ulPendingInterrupts |= ( 1UL << ulInterruptNumber );
+ 
+         if( xInsideInterrupt != pdFALSE )
+         {
+             Os_PortDispatchNested();
+-            Os_HostSetEvent( pvInterruptEvent );
+-            ReleaseMutex( pvInterruptEventMutex );
++            prvSignalEvent( pvInterruptEvent );
++            prvReleaseMutex( pvInterruptEventMutex );
+             return;
+         }
+ 
+@@ -696,14 +718,14 @@
+          * down to zero. */
+         if( ulCriticalNesting == portNO_CRITICAL_NESTING )
+         {
+-            Os_HostSetEvent( pvInterruptEvent );
++            prvSignalEvent( pvInterruptEvent );
+ 
+             /* Going to wait for an event - make sure the event is not already
+              * signaled. */
+-            ResetEvent( xThreadState.pvYieldEvent );
+-        }
+-
+-        ReleaseMutex( pvInterruptEventMutex );
++            prvResetEvent( xThreadState.pvYieldEvent );
++        }
++
++        prvReleaseMutex( pvInterruptEventMutex );
+ 
+         if( ulCriticalNesting == portNO_CRITICAL_NESTING )
+         {
+@@ -711,7 +733,7 @@
+              * execute.  In most cases the (simulated) interrupt will have
+              * executed before the next line is reached - so this is just to make
+              * sure. */
+-            WaitForSingleObject( xThreadState.pvYieldEvent, INFINITE );
++            prvWaitForObject( xThreadState.pvYieldEvent );
+         }
+     }
+ }
+@@ -723,7 +745,7 @@
+     {
+         /* Can't proceed if in a critical section as pvInterruptEventMutex won't
+          * be available. */
+-        WaitForSingleObject( pvInterruptEventMutex, INFINITE );
++        prvWaitForObject( pvInterruptEventMutex );
+ 
+         /* Pending a user defined interrupt to be handled in simulated interrupt
+          * handler thread. */
+@@ -737,11 +759,11 @@
+                       ( ( Os_StackCurrent() != NULL ) &&
+                         ( Os_StackCurrent()->role == 'S' ) ) );
+         Os_PortDispatchNested();
+-        Os_HostSetEvent( pvInterruptEvent );
++        prvSignalEvent( pvInterruptEvent );
+ 
+         /* Give back the mutex so the simulated interrupt handler unblocks
+          * and can access the interrupt handler variables. */
+-        ReleaseMutex( pvInterruptEventMutex );
++        prvReleaseMutex( pvInterruptEventMutex );
+     }
+ }
+ /*-----------------------------------------------------------*/
+@@ -777,9 +799,9 @@
+     {
+         if( pvInterruptEventMutex != NULL )
+         {
+-            WaitForSingleObject( pvInterruptEventMutex, INFINITE );
++            prvWaitForObject( pvInterruptEventMutex );
+             ulIsrHandler[ ulInterruptNumber ] = pvHandler;
+-            ReleaseMutex( pvInterruptEventMutex );
++            prvReleaseMutex( pvInterruptEventMutex );
+         }
+         else
+         {
+@@ -795,7 +817,7 @@
+     {
+         /* The interrupt event mutex is held for the entire critical section,
+          * effectively disabling (simulated) interrupts. */
+-        WaitForSingleObject( pvInterruptEventMutex, INFINITE );
++        prvWaitForObject( pvInterruptEventMutex );
+     }
+ 
+     ulCriticalNesting++;
+@@ -838,19 +860,19 @@
+                  * interrupt is pended if the interrupt is pended
+                  * from outside a critical section - hence it is set
+                  * here. */
+-                Os_HostSetEvent( pvInterruptEvent );
++                prvSignalEvent( pvInterruptEvent );
+ 
+                 /* The calling task is going to wait for an event to ensure the
+                  * interrupt that is pending executes immediately after the
+                  * critical section is exited - so make sure the event is not
+                  * already signaled. */
+-                ResetEvent( xThreadState.pvYieldEvent );
++                prvResetEvent( xThreadState.pvYieldEvent );
+ 
+                 /* Mutex will be released now so the (simulated) interrupt can
+                  * execute, so does not require releasing on function exit. */
+                 lMutexNeedsReleasing = pdFALSE;
+-                ReleaseMutex( pvInterruptEventMutex );
+-                WaitForSingleObject( xThreadState.pvYieldEvent, INFINITE );
++                prvReleaseMutex( pvInterruptEventMutex );
++                prvWaitForObject( xThreadState.pvYieldEvent );
+             }
+         }
+     }
+@@ -860,8 +882,8 @@
+         if( lMutexNeedsReleasing == pdTRUE )
+         {
+             configASSERT( xPortRunning != pdFALSE );
+-            ReleaseMutex( pvInterruptEventMutex );
+-        }
+-    }
+-}
+-/*-----------------------------------------------------------*/
++            prvReleaseMutex( pvInterruptEventMutex );
++        }
++    }
++}
++/*-----------------------------------------------------------*/

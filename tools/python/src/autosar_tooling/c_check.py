@@ -118,8 +118,48 @@ def coverage(addons: Path) -> dict:
         "basis": "MISRA C:2012 + AMD1-AMD4 + TC1-TC2; C99",
         "completeCompliance": False,
         "knownCheckerLimitations": [{
+            "guideline": "R5.1",
+            "detail": "Pinned misra_5_1 compares external variable names, but omits function names and does not derive the actual compiler/linker significance limits. Manual evaluation must include external functions and the selected toolchain. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R5.1; AMD2.33-34",
+        }, {
+            "guideline": "R5.5",
+            "detail": "Pinned misra_5_5 collects raw macro directives, including excluded definitions, and compares variables and named scopes rather than every post-preprocessing identifier. Manual evaluation must follow active definitions, actual identifier categories and standard-header scope. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R5.5; section 6.7; AMD2.39",
+        }, {
+            "guideline": "R5.7",
+            "detail": "Pinned misra_5_7 merges tag records by name, but does not compare tags with identifiers in other namespaces. Manual evaluation must distinguish actual tags, associated typedefs and conditional declarations. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R5.7; AMD2.40",
+        }, {
+            "guideline": "R8.8",
+            "detail": "Pinned misra_8_8 checks static/extern redeclarations of global variables, but omits function declarations and definitions. Manual evaluation must check static on each declaration of an internal-linkage function. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R8.8",
+        }, {
+            "guideline": "R10.1",
+            "detail": "Pinned misra_10_1 checks some shift and character-bitwise operands, but omits signed bitwise operands, unary complement and the logical-operand restrictions, including the TC1 pointer clarification. Checker availability is partial; manual evaluation must follow actual operand types and macro expansions. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R10.1; TC1 R10.1; AMD3.20",
+        }, {
+            "guideline": "R10.3",
+            "detail": "Pinned misra_10_3 visits assignment operators, but omits function arguments, return conversions and case-label conversions. It also does not diagnose every signed/unsigned category change. Manual evaluation must include these implicit conversions and the applicable constant exceptions. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R10.3; TC1 R10.3; TC2.20",
+        }, {
+            "guideline": "R10.6",
+            "detail": "Pinned misra_10_6 visits simple assignments, but omits function-argument and return conversions. Manual evaluation must include all assigning operations and distinguish constant expressions from composite expressions. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R10.6; section 8.10.3; TC1 section 8.10.3",
+        }, {
+            "guideline": "R13.5",
+            "detail": "Pinned misra_13_5 counts assignments and increment/decrement operations, but omits function calls and volatile reads on logical right-hand operands. Manual evaluation must follow the actual types and call closure. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R13.5; TC1 Appendix J",
+        }, {
+            "guideline": "R14.4",
+            "detail": "Pinned misra_14_4 visits if/while but omits for conditions; its isBoolExpression helper also treats integer literals 0 and 1 as Boolean. This is weaker than the C99 essential-Boolean obligation. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R14.4",
+        }, {
+            "guideline": "R20.1",
+            "detail": "Pinned misra_20_1 derives the first code position from the semantic tokenlist rather than each file's original contents before preprocessing. Typedef-only prefixes and code in excluded branches can be omitted, leaving later includes unreported. Manual evaluation must inspect original directive order, including those prefixes and branches. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R20.1 Amplification; AMD2.27",
+        }, {
             "guideline": "R21.8",
-            "detail": "Pinned addon still reports getenv although AMD1 removed that prohibition; its termination-call list also omits _Exit/quick_exit. Raw diagnostics remain unchanged.",
+            "detail": "Pinned addon still reports getenv although AMD1 removed that prohibition. AMD2.81 defines the termination-call set as abort/exit/_Exit/quick_exit, but the pinned addon omits the latter two. Raw diagnostics remain unchanged.",
             "basis": "https://misra.org.uk/app/uploads/2021/06/MISRA-C-2012-AMD2.pdf",
         }],
         "rules": [{"id": item["id"], "category": item["category"],

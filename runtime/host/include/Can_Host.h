@@ -2,6 +2,8 @@
 #ifndef CAN_HOST_H
 #define CAN_HOST_H
 #include "Can.h"
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
 /** @brief State of the host virtual CAN controller. */
 typedef enum {
     CAN_STOPPED = 0, /**< Controller is stopped. */
@@ -10,8 +12,6 @@ typedef enum {
     CAN_SLEEP = 3    /**< Logical sleep state for the virtual controller. */
 } CanMode;
 
-#define CAN_START_SEC_CODE
-#include "Can_MemMap.h"
 /** @brief Complete the pending host transmission through the configured output callback.
  * @return Host output status, or ECU_OK if no frame is pending.
  * Preconditions: Driver initialized; otherwise ECU_ERR_CONFIG; empty queue succeeds.

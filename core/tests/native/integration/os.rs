@@ -264,6 +264,19 @@ fn scheduler_resource_runs() {
             &root,
             super::tooling::native_target(),
         );
+        let configuration =
+            std::fs::read_to_string(project.join("generated/src/Ecu_Config.c")).unwrap();
+        // MISRA R7.6: both controlled targets have 32-bit int.
+        for small_macro in ["INT8_C", "UINT8_C", "INT16_C", "UINT16_C"] {
+            assert!(
+                !configuration
+                    .split(|character: char| {
+                        !character.is_ascii_alphanumeric() && character != '_'
+                    })
+                    .any(|identifier| identifier == small_macro),
+                "scheduler {value}: small integer constant macro {small_macro}"
+            );
+        }
         let binary = build_ecu(
             &project,
             &root.join("build"),
@@ -660,6 +673,11 @@ fn bootstrap_stage_failure_closes_without_output_and_retires_started_stages() {
         let stdout = String::from_utf8(output.stdout)
             .unwrap()
             .replace("\r\n", "\n");
+        assert!(
+            output.stderr.is_empty(),
+            "{name}: stdout={stdout}\nstderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         let lines = stdout
             .lines()
             .filter(|line| line.starts_with("ecu_retire "))

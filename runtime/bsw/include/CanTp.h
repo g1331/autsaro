@@ -28,6 +28,8 @@
 #define CANTP_SID_RX_INDICATION   0x42u /**< SWS_CanTp_00214: service ID. */
 #define CANTP_SID_CANCEL_TRANSMIT 0x4au /**< SWS_CanTp_00246: service ID. */
 #define CANTP_SID_CANCEL_RECEIVE  0x4cu /**< SWS_CanTp_00257: service ID. */
+#define CANTP_START_SEC_CODE
+#include "CanTp_MemMap.h"
 /** Implementation-defined configuration of the one channel (SWS_CanTp_00340), generated
  * as the read-only tp_config; each member names its ECUC parameter. N-SDU IDs are those
  * CanTp's own API accepts, N-PDU IDs those exchanged with LSduR, and the upper IDs those
@@ -68,7 +70,7 @@ typedef struct {
  * Reentrancy: not reentrant.
  * Ownership: the configuration is kept until CanTp_Shutdown or the next CanTp_Init.
  */
-void CanTp_Init(const CanTp_ConfigType *CfgPtr);
+CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr);
 /** Stop the module and drop all connections without notification (SWS_CanTp_00200).
  * @par Return
  * None.
@@ -77,7 +79,7 @@ void CanTp_Init(const CanTp_ConfigType *CfgPtr);
  * Reentrancy: not reentrant.
  * Ownership: the configuration is released.
  */
-void CanTp_Shutdown(void);
+CANTP_CODE void CanTp_Shutdown(void);
 /** Request transmission of an N-SDU whose data is copied later via PduR (SWS_CanTp_00212).
  * @param[in] TxPduId The configured Tx N-SDU.
  * @param[in] PduInfoPtr Caller-owned; only SduLength (1 to the configured maximum) is read and
@@ -90,7 +92,7 @@ void CanTp_Shutdown(void);
  * Reentrancy: reentrant; of concurrent requests for the N-SDU at most one is accepted.
  * Ownership: PduInfoPtr is not kept; the first frame may be sent before return.
  */
-Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
+CANTP_CODE Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
 /** CanTpTc is false, so no transmission can be cancelled (SWS_CanTp_00242, 00246).
  * @param[in] TxPduId Any ID; the configured Tx N-SDU also reports CANTP_E_OPER_NOT_SUPPORTED
  * as a runtime error.
@@ -100,7 +102,7 @@ Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-Std_ReturnType CanTp_CancelTransmit(PduIdType TxPduId);
+CANTP_CODE Std_ReturnType CanTp_CancelTransmit(PduIdType TxPduId);
 /** Abort the reception of an N-SDU and notify PduR with E_NOT_OK (SWS_CanTp_00257, 00263).
  * @param[in] RxPduId The configured Rx N-SDU.
  * @return E_OK when the reception was aborted. E_NOT_OK for an unknown ID, while an SF or
@@ -112,7 +114,7 @@ Std_ReturnType CanTp_CancelTransmit(PduIdType TxPduId);
  * Reentrancy: reentrant; at most one concurrent call aborts a given reception.
  * Ownership: None; an FC still in flight keeps the Tx N-PDU until its confirmation.
  */
-Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId);
+CANTP_CODE Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId);
 /** Indicate reception of an N-PDU (SWS_CanTp_00214).
  * @param[in] RxPduId The configured Rx N-PDU; other IDs are ignored.
  * @param[in] PduInfoPtr Lower-layer-owned frame of 1 to 8 bytes without metadata; others
@@ -126,7 +128,7 @@ Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId);
  * still unprocessed is dropped with CANTP_E_COM.
  * Ownership: the frame is copied before return and not kept.
  */
-void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
+CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
 /** Confirm transmission of the N-PDU last passed to LSduR_CanTpTransmit (SWS_CanTp_00215).
  * @param[in] TxPduId The configured Tx N-PDU; other IDs are ignored.
  * @param[in] result E_OK when sent; otherwise the connection that sent it is aborted.
@@ -138,5 +140,13 @@ void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result);
+CANTP_CODE void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result);
+#define CANTP_STOP_SEC_CODE
+#include "CanTp_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "CanTp.h -> CanTp_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "CanTp.h -> CanTp_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

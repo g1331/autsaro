@@ -22,6 +22,21 @@ ComM 按 [ADR 0018](../../adr/0018-per-module-exclusive-areas-without-cross-modu
 
 ## MISRA 偏离
 
+### MemMap 的逐处责任
+
+以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表；规则修订、00003／00011／00023及替代判断沿[MemMap篇](../memmap.md#misra-预处理布局)。R20.1按预处理前的本文件内容判断，不把包含头内的声明当作本文件前置声明。
+
+| 位置及请求 | 实体、class与实际闭包 |
+| --- | --- |
+| `runtime/bsw/src/ComM.c` 的 `#include "ComM_MemMap.h"` 第2／3／4次，行76／84／488 | 关闭配置指针、用户请求、通道状态、期限、总线握手和模式发布状态的 cleared 段，随后完整 `COMM_CODE` 对包围校验、状态推进、发布 helper 和服务定义。COMM_STATE保护数据；BusSM请求和通知在区外执行，Init保留仍在途的调用及发布者。 |
+| `runtime/bsw/include/ComM.h`，同一指令第1／2次，行73／195 | 类型之后的公开服务原型；声明与定义均使用 `COMM_CODE`。 |
+| `ComM_BswM.h`／`ComM_Dcm.h`／`ComM_EcuM.h`，同一指令第2次，行21／29／20 | 分别关闭 CommunicationAllowed、Active／InactiveDiagnostic、WakeUpIndication 原型；均为 `COMM_CODE`。第一处在各自声明前。关闭EcuM消费者不消除已提供接口的声明映射责任。 |
+| `runtime/bsw/src/ComM_Internal.h`，同一指令第2次，行13 | 关闭 ComM_RunChannel 的 `COMM_CODE` 私有适配声明；生成周期包装调用它推进真实通道状态。 |
+| `generated/include/SchM_ComM.h` 的 `#include "Rte_MemMap.h"` 第3／4次，行33／45 | 配置周期接口的 `RTE_ComM_CODE` 原型；行30关闭共享 `RTE_Rte_CODE` Enter/Exit，另归RTE。 |
+| `generated/src/Ecu_RuntimeConfig.c` 紧随四个 `RTE_ComM` 请求的同一指令 | 标准／用户行357／373、389／392；组件359／375、391／394；无诊断298／314、330／333。前对包围已合并的 users／comm_config，后对包围周期包装定义。配置保存CDD BusSM与Dcm通知地址，Bootstrap交给ComM_Init；包装器调用ComM_RunChannel。 |
+
+合计十五个物理 R20.1 位置。映射模板第7／14／21／28行撤销模块关键词，连接00011；18／19／32／33行撤销内部active／属性，另属实现清理。映射头经MEMMAP producer交付，D4.10连接其可重入主体与上述请求；普通声明头仍各自有guard。移到文件顶、一次性guard或默认段不能保持同一完整段与原型继承；函数体内映射违反00023。实际头部段继承、请求拒绝、版本边和模式握手消费者控制误配及调用风险，不替代最终逐处复核、BSW00115注释或MISRA允许条件；本节不新增Approved／MR12。
+
 | 规则 | 范围 | 依据与风险控制 | 批准 |
 | --- | --- | --- | --- |
 | MISRA C:2012 Rule 8.7（advisory） | `runtime/bsw/src/ComM.c` 中 `ComM_DeInit`、`ComM_GetStatus`、`ComM_GetInhibitionStatus`、`ComM_SetECUGroupClassification`、`ComM_GetMaxComMode`、`ComM_GetRequestedComMode`、`ComM_GetCurrentComMode`、`ComM_GetCurrentPNCComMode` 与 `ComM_EcuM_WakeUpIndication` 的定义 | `SWS_ComM_00147`、`00242`、`00619`、`00552`、`00085`、`00079`、`00083`、`91002` 与 `00275` 规定这些 API 经 `ComM.h` 以外部链接提供；所选程序没有 SW-C 端口（#195）和 EcuM，没有模块调用它们，Cppcheck 因此报告只在一个翻译单元中引用。偏离只影响符号可见性：这些函数只在 `COMM_STATE` 区内读写本模块数据，行为由 `mode_contract.c` 验证；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-15（#45） |

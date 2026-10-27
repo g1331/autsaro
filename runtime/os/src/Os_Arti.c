@@ -27,7 +27,7 @@ OS_MEMMAP static OS_THREAD_LOCAL StatusType
 #include "Os_MemMap.h"
 OS_MEMMAP void Os_ArtiAccessResult(StatusType status) { access_status = status; }
 
-OS_MEMMAP sint32 Os_ArtiAccessValid(void) { return access_status == E_OK; }
+OS_MEMMAP sint32 Os_ArtiAccessValid(void) { return (access_status == E_OK) ? 1 : 0; }
 
 OS_MEMMAP StatusType Os_ArtiAccessStatus(void) { return access_status; }
 
@@ -59,7 +59,7 @@ OS_MEMMAP void Os_ArtiInternalLeave(void)
 
 OS_MEMMAP sint32 Os_ArtiServiceEnter(void)
 {
-    const sint32 application = (internal_depth == 0u) && (service_depth == 0u);
+    const sint32 application = ((internal_depth == 0u) && (service_depth == 0u)) ? 1 : 0;
     ++service_depth;
     access_status = E_OK;
     return application;
@@ -73,6 +73,7 @@ OS_MEMMAP void Os_ArtiServiceLeave(void)
 
 OS_MEMMAP void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)
 {
+    boolean valid = TRUE;
     switch (event) {
         case OS_ARTI_TASK_ACTIVATE:
             ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Activate, (uint32)task);
@@ -93,8 +94,11 @@ OS_MEMMAP void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)
             ARTI_TRACE(NOSUSP, AR_CP_OS_TASK, Os, 0u, OsTask_Terminate, (uint32)task);
             break;
         default:
-            assert(0);
+            valid = FALSE;
             break;
+    }
+    if (valid == FALSE) {
+        assert(0);
     }
 }
 
@@ -153,6 +157,7 @@ OS_MEMMAP void Os_ArtiHook(Os_HookPhaseType hook, StatusType error, sint32 retur
 
 OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 {
+    boolean valid = TRUE;
     switch (service) {
         case OSServiceId_GetISRID:
             if (returning != 0) {
@@ -820,8 +825,11 @@ OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 
             }
             break;
         default:
-            assert(0);
+            valid = FALSE;
             break;
+    }
+    if (valid == FALSE) {
+        assert(0);
     }
 }
 

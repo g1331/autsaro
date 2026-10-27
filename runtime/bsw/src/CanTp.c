@@ -33,9 +33,6 @@
 #elif (DET_AR_RELEASE_MAJOR_VERSION != 4U) || (DET_AR_RELEASE_MINOR_VERSION != 10U)
 #error "CanTp.c -> Det.h: incompatible AUTOSAR release"
 #endif
-#define CANTP_START_SEC_VAR_CLEARED_UNSPECIFIED
-#include "CanTp_MemMap.h"
-
 /* Runtime error values (SWS_CanTp_00352); zero means none. */
 #define CANTP_E_PADDING       0x70u
 #define CANTP_E_OPER_NOT_SUPP 0xa0u
@@ -58,6 +55,9 @@
 /* SF, FF and CF waiting while another context makes calls; full means dropped. */
 #define CANTP_RX_QUEUE  4u
 #define CANTP_TIMER_MIN 2u
+
+#define CANTP_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "CanTp_MemMap.h"
 
 typedef enum {
     CANTP_TX_IDLE,
@@ -143,9 +143,9 @@ typedef struct {
 
 /* Every variable below is read and written only inside CANTP_STATE. CanTp_Init and
  * CanTp_Shutdown set configuration (NULL after Shutdown) and reset tx and rx as above. */
-static const CanTp_ConfigType *configuration CANTP_VAR_CLEARED; /**< Configuration in use. */
-static CanTp_TxType tx CANTP_VAR_CLEARED;                       /**< Transmission. */
-static CanTp_RxType rx CANTP_VAR_CLEARED;                       /**< Reception. */
+static const CanTp_ConfigType *cantp_configuration CANTP_VAR_CLEARED; /**< Configuration in use. */
+static CanTp_TxType tx CANTP_VAR_CLEARED;                             /**< Transmission. */
+static CanTp_RxType rx CANTP_VAR_CLEARED;                             /**< Reception. */
 /* The direction whose frame occupies the Tx N-PDU, its generation when the frame was claimed,
  * and the N-PDU ID it was sent on; the last two mean nothing while the owner is free, and a
  * confirmation for another ID is ignored. The frame in flight keeps its owner until its actual
@@ -252,7 +252,7 @@ static CANTP_CODE void CanTp_Pad(uint8 *frame)
 {
     uint8 i;
     for (i = 0u; i < CANTP_FRAME_BYTES; ++i) {
-        frame[i] = configuration->padding;
+        frame[i] = cantp_configuration->padding;
     }
 }
 /* Ticks before the next CF: one more than STmin needs, because the first tick may follow
@@ -269,7 +269,8 @@ static CANTP_CODE uint32 CanTp_Separation(uint8 stmin)
     } else {
         /* Whole milliseconds. */
     }
-    ticks = (milliseconds + configuration->main_period_ms - 1u) / configuration->main_period_ms;
+    ticks = (milliseconds + cantp_configuration->main_period_ms - 1u) /
+            cantp_configuration->main_period_ms;
     return (ticks == 0u) ? 0u : (ticks + 1u);
 }
 /* An FC for the transmission (SWS_CanTp_00315, 00309, 00317, 00349); returns the error. */
@@ -289,9 +290,9 @@ static CANTP_CODE uint8 CanTp_ReceiveFlow(const uint8 *data, uint8 length)
         tx.delay = 0u; /* STmin separates CFs; the first follows the FC at once. */
         tx.due = TRUE;
         tx.state = CANTP_TX_COPY;
-        CanTp_StartTimer(&tx.timer, configuration->n_cs);
+        CanTp_StartTimer(&tx.timer, cantp_configuration->n_cs);
     } else if (status == CANTP_FS_WAIT) {
-        CanTp_StartTimer(&tx.timer, configuration->n_bs);
+        CanTp_StartTimer(&tx.timer, cantp_configuration->n_bs);
     } else {
         CanTp_TxFinish(E_NOT_OK);
         error = CANTP_E_COM;
@@ -310,7 +311,7 @@ static CANTP_CODE void CanTp_TxConfirmed(Std_ReturnType result)
         } else if ((first == TRUE) ||
                    ((tx.block_size > 0u) && ((tx.block_sent + 1u) >= tx.block_size))) {
             tx.state = CANTP_TX_FLOW;
-            CanTp_StartTimer(&tx.timer, configuration->n_bs);
+            CanTp_StartTimer(&tx.timer, cantp_configuration->n_bs);
             if (first == FALSE) {
                 tx.sequence = (uint8)((tx.sequence + 1u) % 16u);
             }
@@ -318,7 +319,7 @@ static CANTP_CODE void CanTp_TxConfirmed(Std_ReturnType result)
             ++tx.block_sent;
             tx.sequence = (uint8)((tx.sequence + 1u) % 16u);
             tx.state = CANTP_TX_COPY;
-            CanTp_StartTimer(&tx.timer, configuration->n_cs);
+            CanTp_StartTimer(&tx.timer, cantp_configuration->n_cs);
             tx.delay = tx.separation;
             tx.due = (tx.delay == 0u) ? TRUE : FALSE;
         }
@@ -332,10 +333,10 @@ static CANTP_CODE void CanTp_FlowConfirmed(Std_ReturnType result)
         CanTp_RxFinish(E_NOT_OK);
     } else if (rx.flow == CANTP_FS_WAIT) {
         rx.state = CANTP_RX_BUFFER;
-        CanTp_StartTimer(&rx.timer, configuration->n_br);
+        CanTp_StartTimer(&rx.timer, cantp_configuration->n_br);
     } else {
         rx.state = CANTP_RX_DATA;
-        CanTp_StartTimer(&rx.timer, configuration->n_cr); /* SWS_CanTp_00312 */
+        CanTp_StartTimer(&rx.timer, cantp_configuration->n_cr); /* SWS_CanTp_00312 */
     }
 }
 static CANTP_CODE uint8 CanTp_TxTick(void)
@@ -389,7 +390,7 @@ static CANTP_CODE void CanTp_Claim(CanTp_WorkType *work, CanTp_LowerType directi
     const uint8 *frame = (direction == CANTP_LOWER_TX) ? tx.frame : rx.frame;
     lower_owner = direction;
     lower_generation = (direction == CANTP_LOWER_TX) ? tx.generation : rx.generation;
-    pending_lower_id = configuration->lower_transmit;
+    pending_lower_id = cantp_configuration->lower_transmit;
     for (i = 0u; i < CANTP_FRAME_BYTES; ++i) {
         work->frame[i] = frame[i];
     }
@@ -421,7 +422,7 @@ static CANTP_CODE void CanTp_PrepareCopy(CanTp_WorkType *work)
     tx.due = FALSE;
     work->kind = CANTP_WORK_COPY_TX;
     work->generation = tx.generation;
-    work->id = configuration->upper_transmit;
+    work->id = cantp_configuration->upper_transmit;
 }
 static CANTP_CODE void CanTp_PrepareFlow(CanTp_WorkType *work)
 {
@@ -451,7 +452,7 @@ static CANTP_CODE void CanTp_TakeFrame(CanTp_WorkType *work)
 static CANTP_CODE void CanTp_Next(CanTp_WorkType *work, boolean send)
 {
     work->kind = CANTP_WORK_NONE;
-    if ((configuration != NULL_PTR) && (queue_count > 0u) && (CanTp_Receiving() == TRUE) &&
+    if ((cantp_configuration != NULL_PTR) && (queue_count > 0u) && (CanTp_Receiving() == TRUE) &&
         (CanTp_Starts(queued[queue_head], queued_length[queue_head]) == TRUE)) {
         /* A valid SF or FF ends the reception in progress first (SWS_CanTp_00057 table 1). */
         if (rx.flow == CANTP_FS_OVFLW) {
@@ -460,18 +461,18 @@ static CANTP_CODE void CanTp_Next(CanTp_WorkType *work, boolean send)
             CanTp_RxFinish(E_NOT_OK);
         }
     }
-    if (configuration == NULL_PTR) {
+    if (cantp_configuration == NULL_PTR) {
         /* OFF: nothing is owed (SWS_CanTp_00200). */
     } else if (tx.state == CANTP_TX_DONE) {
         /* Free before the confirmation, which may already request the next N-SDU. */
         tx.state = CANTP_TX_IDLE;
         work->kind = CANTP_WORK_TX_DONE;
-        work->id = configuration->upper_transmit;
+        work->id = cantp_configuration->upper_transmit;
         work->result = tx.result;
     } else if (rx.state == CANTP_RX_DONE) {
         rx.state = CANTP_RX_IDLE;
         work->kind = CANTP_WORK_RX_DONE;
-        work->id = configuration->upper_receive;
+        work->id = cantp_configuration->upper_receive;
         work->result = rx.result;
     } else if (queue_count > 0u) {
         CanTp_TakeFrame(work);
@@ -487,7 +488,7 @@ static CANTP_CODE void CanTp_Next(CanTp_WorkType *work, boolean send)
         rx.due = FALSE;
         work->kind = CANTP_WORK_POLL;
         work->generation = rx.generation;
-        work->id = configuration->upper_receive;
+        work->id = cantp_configuration->upper_receive;
     } else {
         /* Nothing to call now. */
     }
@@ -502,7 +503,7 @@ static CANTP_CODE void CanTp_Copied(const CanTp_WorkType *work, BufReq_ReturnTyp
         if (result == BUFREQ_OK) {
             tx.payload = work->length;
             tx.state = CANTP_TX_SEND;
-            CanTp_StartTimer(&tx.timer, configuration->n_as);
+            CanTp_StartTimer(&tx.timer, cantp_configuration->n_as);
         } else if (result != BUFREQ_E_BUSY) {
             CanTp_TxFinish(E_NOT_OK); /* SWS_CanTp_00087 */
         } else {
@@ -544,14 +545,14 @@ static CANTP_CODE uint8 CanTp_Polled(const CanTp_WorkType *work,
         } else if (available >= (rx.total - rx.position)) {
             rx.flow = CANTP_FS_CTS; /* SWS_CanTp_00224 */
             rx.state = CANTP_RX_FLOW_SEND;
-            CanTp_StartTimer(&rx.timer, configuration->n_ar);
+            CanTp_StartTimer(&rx.timer, cantp_configuration->n_ar);
         } else if (rx.timer.remaining > 0u) {
             /* Keep asking until N_Br expires. */
-        } else if (rx.waits < configuration->wait_frame_max) {
+        } else if (rx.waits < cantp_configuration->wait_frame_max) {
             ++rx.waits; /* Suspend with FC(WAIT). */
             rx.flow = CANTP_FS_WAIT;
             rx.state = CANTP_RX_FLOW_SEND;
-            CanTp_StartTimer(&rx.timer, configuration->n_ar);
+            CanTp_StartTimer(&rx.timer, cantp_configuration->n_ar);
         } else {
             CanTp_RxFinish(E_NOT_OK);
             error = CANTP_E_RX_COM;
@@ -578,7 +579,7 @@ static CANTP_CODE uint8 CanTp_AdmitData(const CanTp_WorkType *work, const PduInf
             if (available >= (rx.total - rx.position)) {
                 rx.flow = CANTP_FS_CTS; /* SWS_CanTp_00224 */
                 rx.state = CANTP_RX_FLOW_SEND;
-                CanTp_StartTimer(&rx.timer, configuration->n_ar);
+                CanTp_StartTimer(&rx.timer, cantp_configuration->n_ar);
             } else {
                 rx.state = CANTP_RX_BUFFER; /* N_Br keeps running (SWS_CanTp_00082). */
             }
@@ -609,7 +610,7 @@ static CANTP_CODE uint8 CanTp_Admit(CanTp_WorkType *work)
         } else if ((result == BUFREQ_E_OVFL) && (first == TRUE)) {
             rx.flow = CANTP_FS_OVFLW;
             rx.state = CANTP_RX_FLOW_SEND;
-            CanTp_StartTimer(&rx.timer, configuration->n_ar);
+            CanTp_StartTimer(&rx.timer, cantp_configuration->n_ar);
         } else {
             CanTp_RxDrop();
         }
@@ -640,7 +641,7 @@ static CANTP_CODE uint8 CanTp_Consecutive(CanTp_WorkType *work)
         if (payload.SduLength > CANTP_CF_DATA) {
             payload.SduLength = CANTP_CF_DATA;
         }
-        work->id = configuration->upper_receive;
+        work->id = cantp_configuration->upper_receive;
         copy = TRUE;
     }
     SchM_Exit_CanTp_CANTP_STATE();
@@ -655,7 +656,7 @@ static CANTP_CODE uint8 CanTp_Consecutive(CanTp_WorkType *work)
             } else {
                 rx.position += payload.SduLength;
                 rx.sequence = (uint8)((rx.sequence + 1u) % 16u);
-                CanTp_StartTimer(&rx.timer, configuration->n_cr);
+                CanTp_StartTimer(&rx.timer, cantp_configuration->n_cr);
                 if (rx.position == rx.total) {
                     CanTp_RxFinish(E_OK);
                 }
@@ -694,11 +695,12 @@ static CANTP_CODE uint8 CanTp_Frame(CanTp_WorkType *work)
                 rx.due = FALSE;
                 rx.flow = CANTP_FS_CTS;
                 CanTp_StartTimer(
-                    &rx.timer, configuration->n_br); /* Before the upper call (SWS_CanTp_00166). */
+                    &rx.timer,
+                    cantp_configuration->n_br); /* Before the upper call (SWS_CanTp_00166). */
                 rx.state = CANTP_RX_START;
                 ++rx.generation;
                 work->generation = rx.generation;
-                work->id = configuration->upper_receive;
+                work->id = cantp_configuration->upper_receive;
                 admit = (boolean)TRUE;
             }
         } else {
@@ -771,7 +773,7 @@ CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr)
         (CfgPtr->n_bs >= CANTP_TIMER_MIN) && (CfgPtr->n_br >= CANTP_TIMER_MIN) &&
         (CfgPtr->n_cr >= CANTP_TIMER_MIN) && (CfgPtr->n_cs >= CANTP_TIMER_MIN) &&
         (CfgPtr->main_period_ms > 0u)) {
-        configuration = CfgPtr;
+        cantp_configuration = CfgPtr;
         CanTp_Reset(); /* All connections are lost without notification (SWS_CanTp_00273). */
     }
     SchM_Exit_CanTp_CANTP_STATE();
@@ -779,7 +781,7 @@ CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr)
 CANTP_CODE void CanTp_Shutdown(void)
 {
     SchM_Enter_CanTp_CANTP_STATE();
-    configuration = NULL_PTR;
+    cantp_configuration = NULL_PTR;
     CanTp_Reset(); /* No notification (SWS_CanTp_00200). */
     SchM_Exit_CanTp_CANTP_STATE();
 }
@@ -788,9 +790,10 @@ CANTP_CODE Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *P
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_CanTp_CANTP_STATE();
     /* Only the length is used (SWS_CanTp_00225, 00299); a busy channel refuses (00123). */
-    if ((configuration != NULL_PTR) && (TxPduId == configuration->transmit) &&
+    if ((cantp_configuration != NULL_PTR) && (TxPduId == cantp_configuration->transmit) &&
         (PduInfoPtr != NULL_PTR) && (PduInfoPtr->MetaDataPtr == NULL_PTR) &&
-        (PduInfoPtr->SduLength > 0u) && (PduInfoPtr->SduLength <= configuration->maximum_length) &&
+        (PduInfoPtr->SduLength > 0u) &&
+        (PduInfoPtr->SduLength <= cantp_configuration->maximum_length) &&
         (tx.state == CANTP_TX_IDLE)) {
         tx.total = PduInfoPtr->SduLength;
         tx.position = 0u;
@@ -801,7 +804,7 @@ CANTP_CODE Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *P
         tx.delay = 0u;
         tx.due = TRUE;
         CanTp_StartTimer(&tx.timer,
-                         configuration->n_cs); /* Before the first copy (SWS_CanTp_00167). */
+                         cantp_configuration->n_cs); /* Before the first copy (SWS_CanTp_00167). */
         tx.state = CANTP_TX_COPY;
         result = E_OK;
     }
@@ -817,7 +820,9 @@ CANTP_CODE Std_ReturnType CanTp_CancelTransmit(PduIdType TxPduId)
 {
     boolean known;
     SchM_Enter_CanTp_CANTP_STATE();
-    known = ((configuration != NULL_PTR) && (TxPduId == configuration->transmit)) ? TRUE : FALSE;
+    known = ((cantp_configuration != NULL_PTR) && (TxPduId == cantp_configuration->transmit))
+                ? TRUE
+                : FALSE;
     SchM_Exit_CanTp_CANTP_STATE();
     /* CanTpTc is false: no transmission of this N-SDU can be cancelled (SWS_CanTp_00242). */
     if (known == TRUE) {
@@ -832,7 +837,7 @@ CANTP_CODE Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId)
     Std_ReturnType result = E_NOT_OK;
     uint8 error = 0u;
     SchM_Enter_CanTp_CANTP_STATE();
-    if ((configuration != NULL_PTR) && (RxPduId == configuration->receive)) {
+    if ((cantp_configuration != NULL_PTR) && (RxPduId == cantp_configuration->receive)) {
         if ((CanTp_Receiving() == TRUE) && (rx.flow != CANTP_FS_OVFLW)) {
             /* Refused while the last CF is awaited (SWS_CanTp_00262). The FC in flight
              * keeps the N-PDU until its own confirmation (SWS_CanTp_00075). */
@@ -864,7 +869,7 @@ CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfo
 {
     uint8 error = 0u;
     SchM_Enter_CanTp_CANTP_STATE();
-    if ((configuration != NULL_PTR) && (RxPduId == configuration->lower_receive) &&
+    if ((cantp_configuration != NULL_PTR) && (RxPduId == cantp_configuration->lower_receive) &&
         (PduInfoPtr != NULL_PTR) && (PduInfoPtr->SduDataPtr != NULL_PTR) &&
         (PduInfoPtr->MetaDataPtr == NULL_PTR) && (PduInfoPtr->SduLength > 0u) &&
         (PduInfoPtr->SduLength <= CANTP_FRAME_BYTES)) {
@@ -916,7 +921,7 @@ CANTP_CODE void CanTp_MainFunction(void)
     uint8 tx_error = 0u;
     uint8 rx_error = 0u;
     SchM_Enter_CanTp_CANTP_STATE();
-    if (configuration != NULL_PTR) {
+    if (cantp_configuration != NULL_PTR) {
         tx_error = CanTp_TxTick();
         rx_error = CanTp_RxTick();
     }

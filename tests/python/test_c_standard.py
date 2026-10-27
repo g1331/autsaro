@@ -269,6 +269,239 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
             (project / "generated/include/Com_Cfg.h").write_text("/** Signal identifier. */ typedef unsigned Com_SignalIdType;", encoding="utf-8")
             self.assertIn("bsw-native-type", {key[0] for key in c_standard.generated_findings(samples)})
 
+    def test_include_deviations_match_file_rule_and_literal_header(self):
+        with tempfile.TemporaryDirectory(prefix="include-scope-") as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/src/Host.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/os.md"
+            document.parent.mkdir(parents=True)
+            marker = (
+                "/* MR12 RULE 21.5 VIOLATION: reviewed fixed platform interface. */\n"
+            )
+            record = (
+                "| MISRA C:2012 Rule 21.5 | `runtime/os/src/Host.c` 中 "
+                "`#include <signal.h>` | fixed platform | Approved by maintainer |\n"
+            )
+            document.write_text(record, encoding="utf-8")
+            for directive in (
+                "#include <signal.h>",
+                "# /* provider */ include /* header */ <signal.h> // spelling",
+                "#include \\\n <signal.h>",
+            ):
+                with self.subTest(directive=directive):
+                    source.write_text(marker + directive + "\n", encoding="utf-8")
+                    self.assertEqual(c_standard.deviation_findings(root), {})
+            source.write_text("#include <signal.h> " + marker, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            for header in ('"private/signal.h"', "<time.h>"):
+                with self.subTest(header=header):
+                    document.write_text(
+                        record.replace("<signal.h>", header), encoding="utf-8"
+                    )
+                    source.write_text(
+                        marker + "# include " + header + "\n", encoding="utf-8"
+                    )
+                    self.assertEqual(c_standard.deviation_findings(root), {})
+            cases = (
+                (
+                    "unapproved",
+                    record.replace("Approved by maintainer", "Pending review"),
+                    marker + "#include <signal.h>\n",
+                    {"deviation-unrecorded"},
+                ),
+                (
+                    "duplicate-record",
+                    record + record,
+                    marker + "#include <signal.h>\n",
+                    {"deviation-duplicate", "deviation-uncommented"},
+                ),
+                (
+                    "wrong-file",
+                    record.replace("Host.c", "Other.c"),
+                    marker + "#include <signal.h>\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "wrong-rule",
+                    record.replace("Rule 21.5", "Rule 21.10"),
+                    marker + "#include <signal.h>\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "wrong-header",
+                    record,
+                    marker + "#include <time.h>\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "wrong-delimiter",
+                    record,
+                    marker + '#include "signal.h"\n',
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "header-spelling",
+                    record,
+                    marker + "#include <sig/**/nal.h>\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                ("stale", record, "#include <signal.h>\n", {"deviation-uncommented"}),
+                (
+                    "macro-include",
+                    record,
+                    marker + "#include SIGNAL_HEADER\n",
+                    {"deviation-unrecorded", "deviation-uncommented"},
+                ),
+                (
+                    "duplicate-site",
+                    record,
+                    (marker + "#include <signal.h>\n") * 2,
+                    {"deviation-duplicate", "deviation-unrecorded", "deviation-ambiguous"},
+                ),
+            )
+            for case, text, code, expected in cases:
+                with self.subTest(case=case):
+                    document.write_text(text, encoding="utf-8")
+                    source.write_text(code, encoding="utf-8")
+                    self.assertEqual(
+                        {key[0] for key in c_standard.deviation_findings(root)},
+                        expected,
+                    )
+
+    def test_repeated_directives_require_exact_occurrences(self):
+        with tempfile.TemporaryDirectory(prefix="directive-scope-") as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/src/Host.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/os.md"
+            document.parent.mkdir(parents=True)
+            included = '#include "Os_MemMap.h"\n'
+            removed = "#undef OS_START_SEC_CODE\n"
+            include_marker = "/* MR12 RULE 20.1 VIOLATION: reviewed mapping boundary. */\n"
+            undef_marker = "/* MR12 RULE 20.5 VIOLATION: reviewed keyword withdrawal. */\n"
+            code = (included + "#if 0\n" + included + "#endif\n" + include_marker + included
+                    + removed + undef_marker + removed)
+            include_record = ('| MISRA C:2012 Rule 20.1 | `runtime/os/src/Host.c` 中 '
+                              '`#include "Os_MemMap.h" [3]` | mapping | Approved by maintainer |\n')
+            undef_record = ('| MISRA C:2012 Rule 20.5 | `runtime/os/src/Host.c` 中 '
+                            '`#undef OS_START_SEC_CODE [2]` | withdrawal | Approved by maintainer |\n')
+            records = include_record + undef_record
+            document.write_text(records, encoding="utf-8")
+            source.write_text(code, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            document.write_text(records.replace("Rule 20.1", "Directive 4.10"), encoding="utf-8")
+            source.write_text(code.replace("RULE 20.1", "DIR 4.10"), encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            document.write_text(records + include_record.replace(" [3]", " [1]"), encoding="utf-8")
+            source.write_text(code.replace(included, include_marker + included, 1), encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            document.write_text(records, encoding="utf-8")
+            source.write_text(code.replace(removed, "# /* marker */ undef \\\n OS_START_SEC_CODE // done\n"), encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            cases = (
+                ("unqualified", records.replace(" [3]", ""), code, "deviation-ambiguous"),
+                ("wrong-position", records.replace(" [3]", " [2]"), code, "deviation-uncommented"),
+                ("out-of-range", records.replace(" [3]", " [9]"), code, "deviation-uncommented"),
+                ("zero", records.replace(" [3]", " [0]"), code, "deviation-uncommented"),
+                ("leading-zero", records.replace(" [3]", " [03]"), code, "deviation-uncommented"),
+                ("negative", records.replace(" [3]", " [-1]"), code, "deviation-uncommented"),
+                ("duplicate-record", records + include_record, code, "deviation-duplicate"),
+                ("duplicate-marker", records, code.replace(include_marker, include_marker * 2),
+                 "deviation-duplicate"),
+                ("wrong-header", records.replace("Os_MemMap.h", "Other_MemMap.h"), code,
+                 "deviation-unrecorded"),
+                ("wrong-file", records.replace("Host.c", "Other.c"), code, "deviation-unrecorded"),
+                ("wrong-rule", records.replace("Rule 20.5", "Rule 20.1"), code,
+                 "deviation-unrecorded"),
+                ("wrong-keyword", records.replace("OS_START_SEC_CODE", "OS_STOP_SEC_CODE"), code,
+                 "deviation-unrecorded"),
+                ("unapproved", records.replace("Approved by maintainer", "Pending review"), code,
+                 "deviation-unrecorded"),
+                ("missing-comment", records, code.replace(undef_marker, ""),
+                 "deviation-uncommented"),
+                ("removed-occurrence", records, code.replace(included, "", 1),
+                 "deviation-uncommented"),
+                ("inserted-occurrence", records, included + code, "deviation-uncommented"),
+                ("mixed-scopes", records + include_record.replace(" [3]", ""), code,
+                 "deviation-uncommented"),
+                ("invalid-approved-only", include_record.replace(" [3]", " [0]"), "",
+                 "deviation-uncommented"),
+            )
+            for name, recorded, text, required in cases:
+                with self.subTest(case=name):
+                    document.write_text(recorded, encoding="utf-8")
+                    source.write_text(text, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    self.assertIn(required, {key[0] for key in findings})
+
+    def test_single_undef_and_qualified_include_keep_literal_identity(self):
+        with tempfile.TemporaryDirectory(prefix="directive-single-") as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/src/Host.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/os.md"
+            document.parent.mkdir(parents=True)
+            document.write_text(
+                '| MISRA C:2012 Rule 20.5 | `runtime/os/src/Host.c` 中 '
+                '`#undef OS_START_SEC_CODE` | withdrawal | Approved by maintainer |\n'
+                '| MISRA C:2012 Rule 20.1 | `runtime/os/src/Host.c` 中 '
+                '`#include "Os_MemMap.h" [1]` | mapping | Approved by maintainer |\n', encoding="utf-8")
+            source.write_text(
+                '/* MR12 RULE 20.5 VIOLATION: reviewed withdrawal. */\n'
+                '#undef OS_START_SEC_CODE\n'
+                '# include "Os_MemMap.h" /* MR12 RULE 20.1 VIOLATION: reviewed mapping. */\n', encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+
+    def test_header_file_scope_is_bound_to_directive_and_first_file_comment(self):
+        with tempfile.TemporaryDirectory(prefix="header-deviation-") as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/include/Test_MemMap.h"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            record = ("| MISRA C:2012 Directive 4.10 | `runtime/os/include/Test_MemMap.h` 中 "
+                      "`@file` | repeated requests | Approved by maintainer |\n")
+            marker = "MR12 DIR 4.10 VIOLATION: repeated mapping requests require re-entry."
+            code = ("/** @file Re-entrant mapping.\n * " + marker + "\n */\n"
+                    "#if defined(START)\n#undef START\n#endif\n")
+            document.write_text(record, encoding="utf-8")
+            source.write_text(code, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            cases = (
+                ("unapproved", record.replace("Approved by maintainer", "Pending"), code,
+                 "deviation-unrecorded"),
+                ("duplicate-record", record + record, code, "deviation-duplicate"),
+                ("duplicate-comment", record, code.replace(marker, marker + "\n * " + marker),
+                 "deviation-duplicate"),
+                ("wrong-file", record.replace("Test_MemMap.h", "Other.h"), code,
+                 "deviation-unrecorded"),
+                ("wrong-rule", record.replace("4.10", "4.8"), code.replace("4.10", "4.8"),
+                 "deviation-unrecorded"),
+                ("wrong-kind", record.replace("Directive", "Rule"), code.replace("DIR", "RULE"),
+                 "deviation-unrecorded"),
+                ("not-file-comment", record, code.replace("@file", "@brief"), "deviation-unrecorded"),
+                ("not-first", record, "#define OTHER 1\n" + code, "deviation-unrecorded"),
+                ("stale", record, code.replace(marker, "No deviation marker."), "deviation-uncommented"),
+            )
+            for name, recorded, text, required in cases:
+                with self.subTest(case=name):
+                    document.write_text(recorded, encoding="utf-8")
+                    source.write_text(text, encoding="utf-8")
+                    if name in {"duplicate-record", "stale"}:
+                        location = ("docs/standards/test.md", recorded.splitlines()[0])
+                    else:
+                        location = ("runtime/os/include/Test_MemMap.h",
+                                    "/** @brief Re-entrant mapping." if name == "not-file-comment"
+                                    else "/** @file Re-entrant mapping.")
+                    self.assertIn((required, *location), c_standard.deviation_findings(root))
+            source.unlink()
+            source = source.with_suffix(".c")
+            source.write_text(code, encoding="utf-8")
+            document.write_text(record.replace("Test_MemMap.h", "Test_MemMap.c"), encoding="utf-8")
+            self.assertIn(("deviation-unrecorded", "runtime/os/include/Test_MemMap.c",
+                           "/** @file Re-entrant mapping."), c_standard.deviation_findings(root))
+
     def test_deviations_match_both_directions_and_exact_symbol(self):
         with tempfile.TemporaryDirectory(prefix="171-") as temporary:
             root = Path(temporary)

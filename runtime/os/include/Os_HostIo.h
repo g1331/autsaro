@@ -4,6 +4,8 @@
 #include "Os_Version.h"
 #include <stddef.h>
 #include <stdint.h>
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 
 /** Caller-owned record; initialize with {storage, sizeof(storage), 0u, 0}. */
 typedef struct {
@@ -13,8 +15,6 @@ typedef struct {
     int failed;      /**< Latched capacity/field error; prevents publishing any prefix. */
 } Os_HostTextType;
 
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 /** Deliver every requested byte to a native standard output handle.
  * @param[in] error_stream 0 selects stdout, 1 selects stderr; other values are refused.
  * @param[in] data Non-NULL readable bytes, borrowed until return.

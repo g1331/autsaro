@@ -22,4 +22,16 @@ DET_CALLOUT_CODE Std_ReturnType Ecu_DetRuntimeCallout(uint16 ModuleId,
                                                       uint8 ErrorId);
 #define DET_STOP_SEC_ECU_DETRUNTIMECALLOUT_CODE
 #include "Det_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(STD_TYPES_AR_RELEASE_MAJOR_VERSION) || !defined(STD_TYPES_AR_RELEASE_MINOR_VERSION)
+#error "Det_Externals.h -> Std_Types.h: missing AUTOSAR release"
+#elif (STD_TYPES_AR_RELEASE_MAJOR_VERSION != 4U) || (STD_TYPES_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Det_Externals.h -> Std_Types.h: incompatible AUTOSAR release"
+#endif
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Det_Externals.h -> Det_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Det_Externals.h -> Det_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

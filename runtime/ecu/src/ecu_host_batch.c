@@ -32,8 +32,6 @@ static int read_byte(char *byte)
 #endif
 }
 
-static Ecu_HostBatch batch; /**< Native control only; HostBatchInitialize zeros before use. */
-
 static void receipt(Os_HostTextType *text, const Ecu_HostBatch *state, StatusType status)
 {
     Os_HostTextAppend(text, (status == E_OK) ? "COMMIT_OK" : "COMMIT_ERROR");
@@ -122,8 +120,9 @@ static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length)
     return 1;
 }
 
-static Os_HostThreadResultType control(void *argument)
+static Os_HostThreadResultType host_batch_control(void *argument)
 {
+    static Ecu_HostBatch batch; /**< Native control only; HostBatchInitialize zeros before use. */
     uint64_t started = Os_HostMonotonicMs();
     char line[ECU_BATCH_LINE_CAPACITY];
     size_t length;
@@ -143,7 +142,7 @@ static Os_HostThreadResultType control(void *argument)
         StatusType status = Ecu_HostBatchParse(&batch, line, length, &command);
         if ((status == E_OK) && (command == ECU_BATCH_COMMIT)) {
             /* E_OK: the receipt is written. Otherwise nothing ran. */
-            status = Ecu_HostBatchExecute(&batch, write_output, NULL);
+            status = Ecu_HostBatchExecute(&batch, &write_output, NULL);
         }
         if (status != E_OK) {
             if (write_rejection(&batch, status) == 0) {
@@ -161,7 +160,7 @@ int main(void)
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;
     }
-    thread = Os_HostSpawnThread(control, NULL);
+    thread = Os_HostSpawnThread(&host_batch_control, NULL);
     if (thread == NULL) {
         return 96;
     }

@@ -66,7 +66,8 @@ int main(int argc, char **argv)
     Os_ExpiryPointType point = {0u, &action, 1u};
     Os_ScheduleTableConfigType table = {
         0u, 0u, 2u, &point, 1u, 0u, OS_SCHEDULE_SYNC_NONE, 0u, 0u, 0u};
-    Os_TimeConfigType time = {&counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, &table, 1u};
+    Os_TimeConfigType time_configuration = {
+        &counter, 1u, &alarm, 1u, 0u, INVALID_TASK, 0u, NULL, &table, 1u};
     Os_ResourceConfigType resource = {0u, 2u, 1u, 0u, 0u, 0u};
     Os_InternalResourceConfigType internal = {1u, 2u};
     AppModeType mode = 1u;
@@ -127,14 +128,14 @@ int main(int argc, char **argv)
         uint32 *counts[] = {&config.task_count,
                             &config.resource_count,
                             &config.internal_resource_count,
-                            &time.counter_count,
-                            &time.alarm_count,
-                            &time.schedule_table_count,
+                            &time_configuration.counter_count,
+                            &time_configuration.alarm_count,
+                            &time_configuration.schedule_table_count,
                             &table.point_count,
                             &point.action_count};
         const char *names[] = {
             "task", "resource", "internal", "counter", "alarm", "table", "point", "action"};
-        config.time = &time;
+        config.timing = &time_configuration;
         config.resources = &resource;
         config.internal_resources = &internal;
         for (size_t i = 0u; i < 8u; ++i) {

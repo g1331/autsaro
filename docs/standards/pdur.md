@@ -69,3 +69,19 @@ PduR 只在自己的 `PDUR_STATE` 区内读取已发布的配置指针，离开�
 
 - 头文件不含软件与规范版本号（#59）。
 - 生成 C 的 MISRA 诊断裁决与人工评估未完成（#58）。
+
+## MemMap 的具体责任
+
+本节绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`，与上节既有R8.7批准分别处理；这里未新增批准或MR12。R20.1／20.5的Advisory、D4.10的Required及固定修订依据见[MemMap篇](memmap.md#misra-预处理布局)。
+
+| R20.1位置、请求和类别 | 实体与实际闭包 |
+| --- | --- |
+| `runtime/bsw/src/PduR.c`，`#include "PduR_MemMap.h"` 第2／3／4次，行28／36／265 | 关闭唯一配置指针的cleared段，然后包围验证、配置快照、传输查找、标准服务与上下层回调的CODE。首次发布后不替换配置，读取指针后在区外同步调用实际route。第一处在本文件对象前，不列为R20.1。 |
+| `runtime/bsw/include/PduR.h`，同一指令第1／2次，行117／159 | 类型之后的Init、GetConfigurationId、EnableRouting、DisableRouting原型；均与实现共用 `PDUR_CODE`，两处均在本头声明后。 |
+| `runtime/bsw/include/PduR_CanIf.h`／`PduR_CanTp.h`／`PduR_Com.h`／`PduR_Dcm.h`，各第2次，行44／88／20／20 | 分别关闭IF回调、五个TP回调、Com发送和Dcm发送原型。前置include或版本检查不是本文件C声明，首个映射请求不在本组违反位置中。 |
+| `generated/include/PduR_Cfg.h`，`#include "Rte_MemMap.h"` 第2次，前三profile行18、no-diagnostic行14 | 关闭 `PduR_Config` extern，类别为 `RTE_PduR_CONFIG_DATA_PREBUILD_UNSPECIFIED`。 |
+| `generated/src/PduR_PBcfg.c`，同一指令第2次，前三profile行125、no-diagnostic行103 | 关闭已合并的同类 `pd_rx`、`pd_tx`、配置对象及仅有诊断时的 `tp_routes`。实际表连接Com到LSduR、诊断路径到CanTp／Dcm，不把no-diagnostic未生成的TP表写成已运行。 |
+
+九个自有源码／头位置和两个生成配置位置合计十一个物理位置，host-batch／probe各自消费，不重复加总。源码与交付沿实际原件映射逐文件相等； `PduR_MemMap.h`则由MEMMAP producer的保留模板逐字输出到 `generated/include`，不据字节相同伪造直接原件映射。00003同时约束声明与定义；公共头的属性不能替代实现对，配置extern也不能由PBcfg属性代替。SchM_PduR原型与共享host定义的类是RTE_Rte_CODE，不归作PDUR_CODE。
+
+模板第7／14／21／28行的四个模块关键词#undef直接连接00011；内部active和属性清理由实际后续配对／段外泄漏控制说明，不借用同一SWS强制宏名。D4.10关联该头首个 `@file` 及真实重复请求：once guard、函数内移动或靠默认段的替代分别丢失STOP、违反00023或不满足00003。真实C/C++请求拒绝、原型段继承、严格配置边与封存协议控制这些局部风险，不替代合法偏离或整体符合。完整逐处独立复核、最终BSW00115注释及原有provider／Windows／221项责任继续保留。

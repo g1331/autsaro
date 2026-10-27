@@ -43,13 +43,9 @@ OS_MEMMAP uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index
                ? root
                : config->resource_count;
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* Highest Task or ISR priority among the accessors of every member of the
  * LINKED group rooted at `root`, and the Tasks among them. Every ISR level is
  * above every Task level on this target. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP static StatusType group_access(const Os_TargetConfigType *config,
                                          uint32 root,
                                          uint32 *tasks,
@@ -66,7 +62,7 @@ OS_MEMMAP static StatusType group_access(const Os_TargetConfigType *config,
         }
     }
     for (i = 0u; (isrs == 0u) && (i < config->task_count); ++i) {
-        if (((*tasks & (1u << config->tasks[i].id)) != 0u) &&
+        if (((*tasks & ((uint32)1u << config->tasks[i].id)) != 0u) &&
             (config->tasks[i].priority > *highest)) {
             *highest = config->tasks[i].priority;
         }
@@ -96,8 +92,9 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
     uint32 group_tasks = 0u;
     uint8 highest_access = 0u;
     uint32 j;
+    StatusType status = E_OK;
     for (j = 0u; j < config->task_count; ++j) {
-        task_mask |= 1u << config->tasks[j].id;
+        task_mask |= (uint32)1u << config->tasks[j].id;
     }
     if ((resource->id >= OS_MAX_RESOURCES) || (resource->ceiling == 0u) ||
         (resource->ceiling > ((resource->isr_access != 0u) ? 31u : OS_MAX_PRIORITY)) ||
@@ -106,29 +103,37 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
         ((config->resources[root].isr_access == 0u) != (resource->isr_access == 0u)) ||
         ((resource->task_access == 0u) && (resource->isr_access == 0u)) ||
         (((uint32)resource->task_access & ~task_mask) != 0u) ||
-        ((resource->isr_access & config->category1_isrs) != 0u) ||
-        (group_access(config, root, &group_tasks, &highest_access) != E_OK) ||
-        (resource->ceiling < highest_access)) {
-        return E_OS_VALUE;
+        ((resource->isr_access & config->category1_isrs) != 0u)) {
+        status = E_OS_VALUE;
     }
-    if ((config->use_res_scheduler != 0u) && (resource->id == RES_SCHEDULER) &&
+    if (status == E_OK) {
+        status = group_access(config, root, &group_tasks, &highest_access);
+    }
+    if ((status == E_OK) && (resource->ceiling < highest_access)) {
+        status = E_OS_VALUE;
+    }
+    if ((status == E_OK) && (config->use_res_scheduler != 0u) && (resource->id == RES_SCHEDULER) &&
         ((resource->linked != 0u) || (resource->task_access != task_mask) ||
          (resource->isr_access != 0u) || (resource->ceiling != highest_task))) {
-        return E_OS_VALUE;
+        status = E_OS_VALUE;
     }
-    for (j = 0u; j < config->task_count; ++j) {
+    j = 0u;
+    while ((status == E_OK) && (j < config->task_count)) {
         const Os_TaskConfigType *task = &config->tasks[j];
-        if ((resource->isr_access == 0u) && ((group_tasks & (1u << task->id)) == 0u) &&
+        if ((resource->isr_access == 0u) && ((group_tasks & ((uint32)1u << task->id)) == 0u) &&
             (task->priority > highest_access) && (task->priority <= resource->ceiling)) {
-            return E_OS_VALUE;
+            status = E_OS_VALUE;
         }
+        ++j;
     }
-    for (j = 0u; j < index; ++j) {
+    j = 0u;
+    while ((status == E_OK) && (j < index)) {
         if (resource->id == config->resources[j].id) {
-            return E_OS_ID;
+            status = E_OS_ID;
         }
+        ++j;
     }
-    return E_OK;
+    return status;
 }
 
 OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
@@ -138,9 +143,9 @@ OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
     if (Os_Config != NULL) {
         return E_OS_STATE;
     }
-    if (config == NULL || config->tasks == NULL || config->task_count == 0u ||
-        config->task_count > OS_MAX_TASKS || config->host_stack_reserve < 65536u ||
-        config->host_stack_reserve > 16777216u || config->host_stack_reserve % 65536u != 0u) {
+    if ((config == NULL) || (config->tasks == NULL) || (config->task_count == 0u) ||
+        (config->task_count > OS_MAX_TASKS) || (config->host_stack_reserve < 65536u) ||
+        (config->host_stack_reserve > 16777216u) || ((config->host_stack_reserve % 65536u) != 0u)) {
         return E_OS_VALUE;
     }
     for (i = 0u; i < config->task_count; ++i) {
@@ -271,7 +276,7 @@ OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
 
 OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
 {
-    InterlockedExchange(&start_called, 1);
+    (void)InterlockedExchange(&start_called, 1);
     Os_StackCheck();
     if (Os_InterruptDisabled() != 0) {
         if (Os_BackendStarted() == 0) {
@@ -279,12 +284,13 @@ OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode)
              * no native scheduler or automotive startup is performed. */
             Os_BackendShutdown(E_OS_DISABLEDINT);
         }
-        return;
+    } else {
+        if (Os_HookContext() == OS_HOOK_NONE) {
+            if (Os_BackendStarted() == 0) {
+                Os_BackendStart(Mode);
+            }
+        }
     }
-    if ((Os_HookContext() != OS_HOOK_NONE) || (Os_BackendStarted() != 0)) {
-        return;
-    }
-    Os_BackendStart(Mode);
 }
 
 OS_MEMMAP boolean Os_Implementation_isOsStarted(void)
@@ -295,7 +301,7 @@ OS_MEMMAP boolean Os_Implementation_isOsStarted(void)
     if (status != E_OK) {
         return FALSE;
     }
-    return InterlockedCompareExchange(&start_called, 0, 0) != 0 ? TRUE : FALSE;
+    return (InterlockedCompareExchange(&start_called, 0, 0) != 0) ? TRUE : FALSE;
 }
 
 OS_MEMMAP CoreIdType Os_Implementation_GetCoreID(void)
@@ -323,7 +329,7 @@ OS_MEMMAP StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeTy
              * is intentionally unchecked as required for single-core OS. */
         }
     }
-    return Os_HookContext() == OS_HOOK_ERROR
+    return (Os_HookContext() == OS_HOOK_ERROR)
                ? status
                : Os_ErrorResult(OSServiceId_ControlIdle, status, &arguments);
 }
@@ -369,9 +375,10 @@ OS_MEMMAP ISRType Os_Implementation_GetISRID(void)
     if (status != E_OK) {
         return INVALID_ISR;
     }
-    return (stack != NULL && stack->role == 'S' && interrupt < 32u &&
-            interrupt != OS_KERNEL_YIELD_INTERRUPT && interrupt != OS_CONTROLLED_TICK_INTERRUPT &&
-            Os_Config != NULL && (Os_Config->category1_isrs & ((uint32)1u << interrupt)) == 0u)
+    return ((stack != NULL) && (stack->role == 'S') && (interrupt < 32u) &&
+            (interrupt != OS_KERNEL_YIELD_INTERRUPT) &&
+            (interrupt != OS_CONTROLLED_TICK_INTERRUPT) && (Os_Config != NULL) &&
+            ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) == 0u))
                ? (ISRType)interrupt
                : INVALID_ISR;
 }

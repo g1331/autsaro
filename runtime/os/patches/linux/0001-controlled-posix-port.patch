@@ -2,7 +2,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/port.c b/portable/ThirdParty/GCC/Posi
 index 2592610..1be0473 100644
 --- a/portable/ThirdParty/GCC/Posix/port.c
 +++ b/portable/ThirdParty/GCC/Posix/port.c
-@@ -23,658 +23,386 @@
+@@ -23,658 +23,397 @@
   *
   * https://www.FreeRTOS.org
   * https://github.com/FreeRTOS
@@ -87,6 +87,7 @@ index 2592610..1be0473 100644
  
 -    return ( Thread_t * ) ( pxTopOfStack + 1 );
 -}
++#include <stddef.h>
 +#include <stdint.h>
 +#include <string.h>
  
@@ -126,11 +127,9 @@ index 2592610..1be0473 100644
 -static BaseType_t prvIsFreeRTOSThread( void );
 -static void prvDestroyThreadKey( void );
 -/*-----------------------------------------------------------*/
-+extern void *volatile pxCurrentTCB;
 +static HANDLE interrupt_gate;
 +static HANDLE interrupt_event;
 +static HANDLE dispatcher_registered;
-+static HANDLE dispatcher_thread;
 +static volatile uint32_t pending;
 +static uint32_t disabled_sources;
 +static volatile BaseType_t port_running;
@@ -138,10 +137,19 @@ index 2592610..1be0473 100644
 +static __thread uint32_t critical_nesting;
  
 -static void prvThreadKeyDestructor( void * pvData )
-+static PortTask *selected_task(void)
- {
+-{
 -    free( pvData );
-+    return (PortTask *)*(size_t *)pxCurrentTCB;
++static PortTask selected_task(void)
++{
++    PortTask state;
++    unsigned char *destination = (unsigned char *)&state;
++    const volatile unsigned char *source =
++        (const volatile unsigned char *)pxTaskOsPortStack(xTaskGetCurrentTaskHandle());
++    size_t index;
++    for (index = 0u; index < sizeof(state); ++index) {
++        destination[index] = source[index];
++    }
++    return state;
  }
 -/*-----------------------------------------------------------*/
  
@@ -195,11 +203,11 @@ index 2592610..1be0473 100644
 -/*-----------------------------------------------------------*/
  
 -static void prvDestroyThreadKey( void )
-+int Os_PortInterruptSourceEnabled(uint32_t interrupt)
++sint32 Os_PortInterruptSourceEnabled(uint32 interrupt)
  {
 -    pthread_key_delete( xThreadKey );
-+    return interrupt < PORT_INTERRUPT_COUNT &&
-+           (disabled_sources & (UINT32_C(1) << interrupt)) == 0u;
++    return ((interrupt < PORT_INTERRUPT_COUNT) &&
++            ((disabled_sources & ((uint32_t)1u << interrupt)) == 0u)) ? 1 : 0;
  }
 -/*-----------------------------------------------------------*/
  
@@ -231,7 +239,7 @@ index 2592610..1be0473 100644
 -                                     StackType_t * pxEndOfStack,
 -                                     TaskFunction_t pxCode,
 -                                     void * pvParameters )
-+int Os_PortInterruptSourceControl(uint32_t interrupt, unsigned operation, boolean clear)
++sint32 Os_PortInterruptSourceControl(uint32 interrupt, uint32 operation, boolean clear)
  {
 -    Thread_t * thread;
 -    pthread_attr_t xThreadAttributes;
@@ -319,7 +327,7 @@ index 2592610..1be0473 100644
 -    while( xSchedulerEnd != pdTRUE )
 -    {
 -        sigwait( &xSignals, &iSignal );
-+    bit = UINT32_C(1) << interrupt;
++    bit = (uint32_t)1u << interrupt;
 +    if ((operation == 0u && (disabled_sources & bit) != 0u) ||
 +        (operation == 1u && (disabled_sources & bit) == 0u)) {
 +        return 2;
@@ -365,13 +373,13 @@ index 2592610..1be0473 100644
 +    return 1;
 +}
 +
-+static uint32_t next_interrupt(uint32_t seen, unsigned floor, int nested)
++static uint32_t next_interrupt(uint32_t seen, unsigned minimum_priority, int nested)
 +{
 +    uint32_t chosen = PORT_INTERRUPT_COUNT;
-+    unsigned priority = floor;
++    unsigned priority = minimum_priority;
 +    uint32_t index;
 +    for (index = 0u; index < PORT_INTERRUPT_COUNT; ++index) {
-+        const uint32_t bit = UINT32_C(1) << index;
++        const uint32_t bit = (uint32_t)1u << index;
 +        const unsigned candidate = Os_BackendInterruptPriority(index);
 +        if ((pending & ~seen & bit) != 0u && Os_BackendInterruptEnabled(index) != 0) {
 +            if (nested == 0 && index == portINTERRUPT_YIELD) {
@@ -412,7 +420,7 @@ index 2592610..1be0473 100644
 -        pxCurrentThread = prvGetThreadFromTask( xTaskGetCurrentTaskHandle() );
 -        event_wait( pxCurrentThread->ev );
 +    uint32_t requested = 0u;
-+    pending &= ~(UINT32_C(1) << interrupt);
++    pending &= ~((uint32_t)1u << interrupt);
 +    if (Os_InterruptVectorTable[interrupt] != NULL) {
 +        Os_StackCheck();
 +        Os_BackendInterruptEnter(interrupt);
@@ -433,7 +441,7 @@ index 2592610..1be0473 100644
 +        uint32_t interrupt = next_interrupt(seen, Os_BackendInterruptPriority(outer), 1);
 +        while (interrupt < PORT_INTERRUPT_COUNT) {
 +            const uint32_t requested = run_interrupt(interrupt);
-+            seen |= UINT32_C(1) << interrupt;
++            seen |= (uint32_t)1u << interrupt;
 +            if (requested != 0u && Os_BackendInterruptMaySchedule(interrupt) != 0) {
 +                Os_BackendRequestIsrReschedule();
 +            }
@@ -454,26 +462,26 @@ index 2592610..1be0473 100644
 +    uint32_t seen = 0u;
 +    uint32_t switched = 0u;
 +    uint32_t interrupt;
-+    PortTask *task = selected_task();
++    PortTask task = selected_task();
 +    CONTEXT context;
-+    if (Os_PortSuspendThread(task->thread) == (DWORD)-1) {
++    if (Os_PortSuspendThread(task.thread) == (DWORD)-1) {
 +        Os_BackendShutdown(E_OS_STATE);
      }
 -
 -    uxCriticalNesting++;
 +    context.ContextFlags = CONTEXT_CONTROL;
-+    if (Os_PortGetThreadContext(task->thread, &context) == FALSE) {
++    if (Os_PortGetThreadContext(task.thread, &context) == FALSE) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
-+    Os_StackObserve(task->thread, &context);
-+    xInsideInterrupt = pdTRUE;
++    Os_StackObserve(task.thread, &context);
++    __atomic_store_n(&xInsideInterrupt, pdTRUE, __ATOMIC_SEQ_CST);
 +    interrupt = next_interrupt(seen, 0u, 0);
 +    while (interrupt < PORT_INTERRUPT_COUNT) {
 +        const uint32_t requested = run_interrupt(interrupt);
-+        seen |= UINT32_C(1) << interrupt;
++        seen |= (uint32_t)1u << interrupt;
 +        if (Os_BackendInterruptMaySchedule(interrupt) != 0 &&
 +            (requested != 0u || Os_BackendTakeIsrReschedule() != 0)) {
-+            switched |= UINT32_C(1) << interrupt;
++            switched |= (uint32_t)1u << interrupt;
 +        }
 +        interrupt = next_interrupt(seen, 0u, 0);
 +    }
@@ -482,15 +490,15 @@ index 2592610..1be0473 100644
 +    }
 +    task = selected_task();
 +    if (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) {
-+        Os_PortResumeThread(task->thread);
-+        if (Os_HostSetEvent(task->yielded) == 0) {
++        Os_PortResumeThread(task.thread);
++        if (Os_HostSetEvent(task.yielded) == 0) {
 +            Os_BackendShutdown(E_OS_STATE);
 +        }
 +    }
 +#ifdef OS_TIME_TESTS
 +    Os_TimeTestDispatchFinishing();
 +#endif
-+    xInsideInterrupt = pdFALSE;
++    __atomic_store_n(&xInsideInterrupt, pdFALSE, __ATOMIC_SEQ_CST);
  }
 -/*-----------------------------------------------------------*/
  
@@ -505,10 +513,10 @@ index 2592610..1be0473 100644
 -        vPortEnableInterrupts();
 +    (void)argument;
 +    Os_BackendSetDispatcher();
-+    vPortSetInterruptHandler(portINTERRUPT_YIELD, yield_interrupt);
-+    vPortSetInterruptHandler(portINTERRUPT_TICK, tick_interrupt);
++    vPortSetInterruptHandler(portINTERRUPT_YIELD, &yield_interrupt);
++    vPortSetInterruptHandler(portINTERRUPT_TICK, &tick_interrupt);
 +    port_running = pdTRUE;
-+    Os_PortResumeThread(selected_task()->thread);
++    Os_PortResumeThread(selected_task().thread);
 +    if (Os_HostSetEvent(dispatcher_registered) == 0) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
@@ -538,7 +546,8 @@ index 2592610..1be0473 100644
 -/*-----------------------------------------------------------*/
  
 -static void prvPortYieldFromISR( void )
-+StackType_t *pxPortInitialiseStack(StackType_t *top, TaskFunction_t code, void *argument)
++StackType_t *pxPortInitialiseStack(
++    StackType_t *pxTopOfStack, TaskFunction_t pxCode, void *pvParameters)
  {
 -    Thread_t * xThreadToSuspend;
 -    Thread_t * xThreadToResume;
@@ -550,11 +559,15 @@ index 2592610..1be0473 100644
 -    xThreadToResume = prvGetThreadFromTask( xTaskGetCurrentTaskHandle() );
 -
 -    prvSwitchThread( xThreadToResume, xThreadToSuspend );
-+    PortTask *state = (PortTask *)((char *)top - sizeof(PortTask));
-+    state->yielded = Os_PortEvent(NULL, FALSE, FALSE, NULL);
-+    state->thread = Os_PortTaskThread(code, argument, top);
-+    configASSERT(state->yielded != NULL && state->thread != NULL);
-+    return (StackType_t *)state;
++    const ptrdiff_t state_words = ((ptrdiff_t)sizeof(PortTask) + (ptrdiff_t)sizeof(StackType_t) - 1) /
++                                 (ptrdiff_t)sizeof(StackType_t);
++    StackType_t *storage = &pxTopOfStack[-state_words];
++    PortTask state;
++    state.yielded = Os_PortEvent(NULL, FALSE, FALSE, NULL);
++    state.thread = Os_PortTaskThread(pxCode, pvParameters, pxTopOfStack);
++    configASSERT((state.yielded != NULL) && (state.thread != NULL));
++    (void)memcpy((unsigned char *)storage, (const unsigned char *)&state, sizeof(state));
++    return storage;
  }
 -/*-----------------------------------------------------------*/
  
@@ -576,8 +589,8 @@ index 2592610..1be0473 100644
 +    if (interrupt_gate == NULL || interrupt_event == NULL || dispatcher_registered == NULL) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
-+    dispatcher_thread = Os_HostCreateActor(262144u, dispatcher_start, NULL,
-+                                           STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
++    const HANDLE dispatcher_thread = Os_HostCreateActor(
++        262144u, &dispatcher_start, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
 +    if (dispatcher_thread == NULL ||
 +        WaitForSingleObject(dispatcher_registered, 5000u) != WAIT_OBJECT_0 ||
 +        WaitForSingleObject(dispatcher_thread, INFINITE) != WAIT_OBJECT_0) {
@@ -621,20 +634,20 @@ index 2592610..1be0473 100644
 -     * handlers). */
 -    return ( UBaseType_t ) 0;
 +    const Os_NativeStackType *actor = Os_StackCurrent();
-+    PortTask *handoff = NULL;
 +    if (critical_nesting == 0u) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
 +    --critical_nesting;
 +    if (port_running != pdFALSE) {
++        HANDLE handoff = NULL;
 +        if (critical_nesting == 0u && xInsideInterrupt != pdFALSE) {
 +            Os_PortDispatchNested();
 +        }
 +        if (critical_nesting == 0u && pending != 0u && xInsideInterrupt == pdFALSE) {
 +            if (actor != NULL &&
 +                (actor->role == 'T' || actor->role == 'I' || actor->role == 'B')) {
-+                handoff = selected_task();
-+                if (ResetEvent(handoff->yielded) == 0) {
++                handoff = selected_task().yielded;
++                if (ResetEvent(handoff) == 0) {
 +                    Os_BackendShutdown(E_OS_STATE);
 +                }
 +            }
@@ -645,7 +658,7 @@ index 2592610..1be0473 100644
 +        if (ReleaseMutex(interrupt_gate) == 0) {
 +            Os_BackendShutdown(E_OS_STATE);
 +        }
-+        if (handoff != NULL && WaitForSingleObject(handoff->yielded, 2000u) != WAIT_OBJECT_0) {
++        if ((handoff != NULL) && (WaitForSingleObject(handoff, 2000u) != WAIT_OBJECT_0)) {
 +            Os_BackendShutdown(E_OS_STATE);
 +        }
 +    }
@@ -698,7 +711,6 @@ index 2592610..1be0473 100644
 -        pthread_kill( thread->pthread, SIGALRM );
 -        usleep( portTICK_RATE_MICROSECONDS );
 +    const Os_NativeStackType *actor = Os_StackCurrent();
-+    PortTask *task;
 +    if (interrupt >= PORT_INTERRUPT_COUNT || port_running == pdFALSE) {
 +        return;
      }
@@ -744,7 +756,7 @@ index 2592610..1be0473 100644
 +    if (WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
 +        Os_BackendShutdown(E_OS_STATE);
 +    }
-+    pending |= UINT32_C(1) << interrupt;
++    pending |= (uint32_t)1u << interrupt;
 +    if (actor != NULL && actor->role == 'S') {
 +        Os_PortDispatchNested();
 +    }
@@ -754,9 +766,9 @@ index 2592610..1be0473 100644
 +    if (wait_for_dispatch != 0 && actor != NULL &&
 +        (actor->role == 'T' || actor->role == 'I' || actor->role == 'B') &&
 +        critical_nesting == 0u) {
-+        task = selected_task();
-+        if (ResetEvent(task->yielded) == 0 || ReleaseMutex(interrupt_gate) == 0 ||
-+            WaitForSingleObject(task->yielded, 2000u) != WAIT_OBJECT_0) {
++        const PortTask task = selected_task();
++        if ((ResetEvent(task.yielded) == 0) || (ReleaseMutex(interrupt_gate) == 0) ||
++            (WaitForSingleObject(task.yielded, 2000u) != WAIT_OBJECT_0)) {
 +            Os_BackendShutdown(E_OS_STATE);
          }
 -
@@ -889,8 +901,8 @@ index 2592610..1be0473 100644
 -    if( pthread_self() != xThreadId->pthread )
 -    {
 -        event_signal( xThreadId->ev );
-+    if ((interrupt == portINTERRUPT_YIELD && handler != yield_interrupt) ||
-+        (interrupt == portINTERRUPT_TICK && handler != tick_interrupt) ||
++    if ((interrupt == portINTERRUPT_YIELD && handler != &yield_interrupt) ||
++        (interrupt == portINTERRUPT_TICK && handler != &tick_interrupt) ||
 +        (interrupt > portINTERRUPT_TICK && Os_BackendInterruptPriority(interrupt) == 0u) ||
 +        Os_MailboxHandlerAllowed(interrupt, handler) == 0 ||
 +        Os_BackendHandlerAllowed(interrupt, handler) == 0) {
@@ -964,7 +976,7 @@ diff --git a/portable/ThirdParty/GCC/Posix/portmacro.h b/portable/ThirdParty/GCC
 index 52a9c0e..880e346 100644
 --- a/portable/ThirdParty/GCC/Posix/portmacro.h
 +++ b/portable/ThirdParty/GCC/Posix/portmacro.h
-@@ -55,94 +55,67 @@
+@@ -55,94 +55,71 @@
  #define portDOUBLE               double
  #define portLONG                 long
  #define portSHORT                short
@@ -972,7 +984,7 @@ index 52a9c0e..880e346 100644
 -#define portBASE_TYPE            long
 -#define portPOINTER_SIZE_TYPE    intptr_t
 +#define portSTACK_TYPE           size_t
-+#define portBASE_TYPE            long long
++
 +#define portPOINTER_SIZE_TYPE    size_t
  
 -typedef portSTACK_TYPE   StackType_t;
@@ -1025,7 +1037,7 @@ index 52a9c0e..880e346 100644
 +/* The single native dispatcher owns all simulated ISR bodies. */
 +#define portINTERRUPT_YIELD                        0u
 +#define portINTERRUPT_TICK                         1u
-+#define portINTERRUPT_APPLICATION_DEFINED_START    2u
++
 +extern volatile BaseType_t xInsideInterrupt;
 +extern void vPortGenerateSimulatedInterrupt(uint32_t interrupt);
 +extern void Os_PosixPostInterrupt(uint32_t interrupt);
@@ -1033,7 +1045,11 @@ index 52a9c0e..880e346 100644
 +#define portYIELD() vPortGenerateSimulatedInterrupt(portINTERRUPT_YIELD)
 +#define portEND_SWITCHING_ISR(requested) return (requested)
 +#define portYIELD_FROM_ISR(requested) portEND_SWITCHING_ISR(requested)
-+#define portSOFTWARE_BARRIER() while (xInsideInterrupt != pdFALSE)
++#define portSOFTWARE_BARRIER() \
++    do { \
++        while (__atomic_load_n(&xInsideInterrupt, __ATOMIC_SEQ_CST) != pdFALSE) { \
++        } \
++    } while (false)
  /*-----------------------------------------------------------*/
  
 -/* Critical section management. */
@@ -1066,7 +1082,7 @@ index 52a9c0e..880e346 100644
 +#define portENTER_CRITICAL() vPortEnterCritical()
 +#define portEXIT_CRITICAL() vPortExitCritical()
 +
-+extern void vPortCloseRunningThread(void *task, volatile BaseType_t *pending);
++extern void vPortCloseRunningThread(void *task, volatile BaseType_t *pending_yield);
 +extern void vPortDeleteThread(void *task);
 +#define portPRE_TASK_DELETE_HOOK(task, pending) vPortCloseRunningThread((task), (pending))
 +#define portCLEAN_UP_TCB(task) vPortDeleteThread(task)

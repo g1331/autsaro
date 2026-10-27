@@ -102,3 +102,4 @@ flowchart LR
 | [0021](../adr/0021-incomplete-configuration-editing.md) | 自动补齐必需结构，允许不完整配置应用与保存 | 已接受 |
 | [0022](../adr/0022-reference-ecu-before-mcu.md) | 先扩大主机工程能力，再接入真实 MCU | 已接受，能力扩展待实施 |
 | [0023](../adr/0023-autosar-required-conflict-disposition.md) | AUTOSAR 必需契约冲突的有界处置 | 已有决定补记，具体裁决待逐项执行 |
+| [0024](../adr/0024-bounded-linux-platform-retention.md) | 受控 Linux 三处标准头违反的有界平台保留 | 项目取舍已接受，三处技术复核完成 |

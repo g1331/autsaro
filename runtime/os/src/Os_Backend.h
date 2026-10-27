@@ -12,14 +12,14 @@
 #include "Os_Arti.h"
 #define OS_KERNEL_YIELD_INTERRUPT    0u
 #define OS_CONTROLLED_TICK_INTERRUPT 1u
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 typedef struct {
     Os_HookPhaseType phase;
     OSServiceIdType service;
     Os_ErrorParametersType parameters;
     Os_ArtiCallerType arti;
 } Os_ErrorContextType;
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP void Os_ErrorContextSave(Os_ErrorContextType *context);
 
 OS_MEMMAP void Os_ErrorContextRestore(const Os_ErrorContextType *context);
@@ -75,8 +75,6 @@ OS_MEMMAP void Os_TimeReportAction(StatusType status);
 OS_MEMMAP void Os_TimeClose(void);
 
 OS_MEMMAP sint32 Os_TimeSignalFailed(void);
-
-OS_MEMMAP void Os_TimeTick(void);
 
 OS_MEMMAP void vApplicationTickHook(void);
 
@@ -135,7 +133,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error);
 #ifdef __linux__
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP void Os_BackendSignalStackFault(char role);
+OS_MEMMAP void Os_BackendSignalStackFault(char failed_role);
 
 OS_MEMMAP void Os_BackendSetDispatcher(void);
 #define OS_STOP_SEC_CODE
@@ -148,8 +146,6 @@ OS_MEMMAP void Os_BackendGuardService(void);
 OS_MEMMAP sint32 Os_BackendReady(void);
 
 OS_MEMMAP Os_HookPhaseType Os_HookContext(void);
-
-OS_MEMMAP sint32 Os_HookServiceAllowed(OSServiceIdType service);
 
 OS_MEMMAP StatusType Os_ServiceAccessStatus(OSServiceIdType service);
 
@@ -186,7 +182,6 @@ OS_MEMMAP void Os_ShutdownHookInvoke(StatusType error);
 void Os_TimeTestDispatchFinishing(void);
 void Os_TimeTestDispatchUnlocked(void);
 void Os_TimeTestOnWaiting(void);
-extern volatile BaseType_t xInsideInterrupt;
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
@@ -199,8 +194,6 @@ OS_MEMMAP AppModeType Os_BackendApplicationMode(void);
 OS_MEMMAP StatusType Os_BackendActivate(TaskType id);
 
 OS_MEMMAP StatusType Os_BackendFinish(void);
-
-OS_MEMMAP void Os_BackendMissingEnd(void);
 
 OS_MEMMAP StatusType Os_BackendChain(TaskType id);
 
@@ -222,13 +215,7 @@ OS_MEMMAP void Os_BackendInterruptLeave(void);
 
 OS_MEMMAP StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info);
 
-OS_MEMMAP void Os_BackendOnSwitch(void);
-
-OS_MEMMAP void Os_BackendBeforeSelect(void *current, void *next);
-
 OS_MEMMAP sint32 Os_BackendTakeIsrReschedule(void);
-
-OS_MEMMAP void Os_BackendAssert(const void *file, sint32 line);
 
 OS_MEMMAP HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes,
                               BOOL manual,
@@ -236,13 +223,6 @@ OS_MEMMAP HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes,
                               LPCSTR name);
 
 OS_MEMMAP HANDLE Os_PortMutex(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name);
-
-OS_MEMMAP HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
-                               SIZE_T stack,
-                               LPTHREAD_START_ROUTINE start,
-                               LPVOID argument,
-                               DWORD flags,
-                               LPDWORD id);
 
 OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
                                    void *argument,
@@ -273,18 +253,10 @@ OS_MEMMAP StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeTy
 OS_MEMMAP boolean Os_Implementation_isOsStarted(void);
 
 OS_MEMMAP CoreIdType Os_Implementation_GetCoreID(void);
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* Index of the configured resource `id`, or resource_count when absent. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id);
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* Index of the STANDARD resource that the LINKED chain from `index` names, or
  * resource_count for a missing or cyclic link. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index);
 
 OS_MEMMAP StatusType Os_Implementation_GetTaskID(TaskRefType TaskID);

@@ -164,12 +164,14 @@ pub(crate) fn native_binary(directory: &std::path::Path, stem: &str) -> PathBuf 
 /// ELF symbol tables name the section; PE/COFF ones give a 1-based
 /// `(sec N)` index into the `objdump -h` section headers.
 pub(crate) fn symbol_sections(objdump: &Path, binary: &Path) -> Vec<(String, String)> {
+    let binary = std::path::absolute(binary).unwrap();
     let run = |flag: &str| {
-        let output = Command::new(objdump)
-            .arg(flag)
-            .arg(binary)
-            .output()
-            .unwrap();
+        let output = run_public_command(
+            Command::new(objdump).arg(flag).arg(&binary),
+            binary.parent().unwrap(),
+            &format!("objdump-{flag}"),
+            std::time::Duration::from_secs(30),
+        );
         assert!(
             output.status.success(),
             "objdump {flag} {}",

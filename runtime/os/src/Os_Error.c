@@ -45,7 +45,7 @@ OS_MEMMAP static const Os_ErrorParametersType empty_parameters = {
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP sint32 Os_HookBlocksCategory2(void) { return hook_depth != 0u; }
+OS_MEMMAP sint32 Os_HookBlocksCategory2(void) { return (hook_depth != 0u) ? 1 : 0; }
 
 OS_MEMMAP void Os_ErrorContextSave(Os_ErrorContextType *context)
 {
@@ -70,35 +70,41 @@ OS_MEMMAP Os_HookPhaseType Os_HookContext(void) { return phase; }
 
 OS_MEMMAP sint32 Os_HookQueryContext(void)
 {
-    return (phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST);
+    return ((phase == OS_HOOK_ERROR) || (phase == OS_HOOK_PRE) || (phase == OS_HOOK_POST)) ? 1 : 0;
 }
 
-OS_MEMMAP sint32 Os_HookServiceAllowed(OSServiceIdType service)
+OS_MEMMAP static sint32 Os_HookServiceAllowed(OSServiceIdType service)
 {
     if (phase == OS_HOOK_NONE) {
         return 1;
     }
     if (Os_HookQueryContext() != 0) {
-        return (service == OSServiceId_GetTaskID) || (service == OSServiceId_GetTaskState) ||
-               (service == OSServiceId_GetEvent) || (service == OSServiceId_GetAlarmBase) ||
-               (service == OSServiceId_GetAlarm) ||
-               (service == OSServiceId_GetActiveApplicationMode) ||
-               ((phase == OS_HOOK_ERROR) &&
-                ((service == OSServiceId_GetISRID) || (service == OSServiceId_ShutdownOS)));
+        return ((service == OSServiceId_GetTaskID) || (service == OSServiceId_GetTaskState) ||
+                (service == OSServiceId_GetEvent) || (service == OSServiceId_GetAlarmBase) ||
+                (service == OSServiceId_GetAlarm) ||
+                (service == OSServiceId_GetActiveApplicationMode) ||
+                ((phase == OS_HOOK_ERROR) &&
+                 ((service == OSServiceId_GetISRID) || (service == OSServiceId_ShutdownOS))))
+                   ? 1
+                   : 0;
     }
     if (phase == OS_HOOK_STARTUP) {
-        return (service == OSServiceId_GetActiveApplicationMode) ||
-               (service == OSServiceId_ShutdownOS);
+        return ((service == OSServiceId_GetActiveApplicationMode) ||
+                (service == OSServiceId_ShutdownOS))
+                   ? 1
+                   : 0;
     }
     if (phase == OS_HOOK_SHUTDOWN) {
-        return service == OSServiceId_GetActiveApplicationMode;
+        return (service == OSServiceId_GetActiveApplicationMode) ? 1 : 0;
     }
     return 0;
 }
 
 OS_MEMMAP sint32 Os_ErrorHookConfigured(void)
 {
-    return (Os_Config != NULL) && (Os_Config->hooks != NULL) && (Os_Config->hooks->error != NULL);
+    return ((Os_Config != NULL) && (Os_Config->hooks != NULL) && (Os_Config->hooks->error != NULL))
+               ? 1
+               : 0;
 }
 
 OS_MEMMAP StatusType Os_ServiceAccessStatus(OSServiceIdType service)
@@ -137,19 +143,24 @@ OS_MEMMAP StatusType Os_ErrorResult(OSServiceIdType service,
                                     StatusType status,
                                     const Os_ErrorParametersType *arguments)
 {
+    boolean invoke = FALSE;
     if ((status != E_OK) && (error_active == 0) && (Os_ErrorHookConfigured() != 0) &&
-        (Os_StackCurrent() != NULL) && (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0)) {
+        (Os_StackCurrent() != NULL)) {
+        invoke = InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
+    }
+    if (invoke) {
         const Os_HookPhaseType previous = phase;
         const Os_NativeStackType *stack = Os_StackCurrent();
-        const sint32 isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
+        const boolean isr = (stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u);
         /* The native ISR dispatcher already owns the interrupt mutex. Do not
          * introduce an extra kernel critical level around an ISR ErrorHook.
          * The Hook gate excludes Cat2; higher priority Cat1 may interrupt it. */
-        if (isr == 0) {
+        if (!isr) {
             taskENTER_CRITICAL();
         }
         Os_BackendGuardService();
-        parameters = *arguments;
+        const Os_ErrorParametersType *const sources[2] = {&empty_parameters, arguments};
+        parameters = *sources[OS_USE_PARAMETER_ACCESS];
         service_id = service;
         phase = OS_HOOK_ERROR;
         ++hook_depth;
@@ -164,7 +175,7 @@ OS_MEMMAP StatusType Os_ErrorResult(OSServiceIdType service,
         phase = previous;
         service_id = OSServiceId_Unknown;
         parameters = empty_parameters;
-        if (isr == 0) {
+        if (!isr) {
             taskEXIT_CRITICAL();
         } else {
             Os_PortDispatchNested();

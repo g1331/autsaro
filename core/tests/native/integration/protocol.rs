@@ -831,6 +831,32 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
+fn host_batch_native_output_backpressure() {
+    let scratch = super::Scratch::new();
+    let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
+    let root = root();
+    let paths = std::env::join_paths([
+        root.join("tools/python/src"),
+        root.join("tests/python/native"),
+    ])
+    .unwrap();
+    let script = "import sys; from pathlib import Path; from test_ecu_build_modes import check_native_output_backpressure; check_native_output_backpressure(Path(sys.argv[1]), Path(sys.argv[2]))";
+    let result = super::tooling::run_public_command(
+        Command::new(super::tooling::execution_settings().python)
+            .args(["-B", "-c", script])
+            .arg(&project)
+            .arg(scratch.0.join("backpressure"))
+            .env("PYTHONPATH", paths),
+        &scratch.0,
+        "native-output-backpressure",
+        Duration::from_secs(180),
+    );
+    require_success(&result);
+    print!("{}", String::from_utf8_lossy(&result.stdout));
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
 fn probe_confirms_only_fully_written_output() {
     let built = host_batch_project();
     let output = build(

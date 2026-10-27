@@ -7,7 +7,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from ecu_tools.build import FILE_HASHES, digest, safe_relative
+from ecu_tools.build import FILE_HASHES, digest, refuse_links, safe_relative
 
 
 def _read(path: Path) -> dict:
@@ -74,6 +74,42 @@ def _semantic(summary: dict) -> dict:
     return identity
 
 
+def _configuration(root: Path) -> dict:
+    refuse_links(root / "meta/integration.json", root)
+    metadata = _read(root / "meta/integration.json")
+    plan = dict(metadata["plan"])
+    if "runtimeSources" not in plan:
+        if metadata.get("format") == "autosar-ecu-integration-v2":
+            raise ValueError("Runtime source provenance missing")
+        return plan
+    sources, origins = plan["runtimeSources"], metadata.get("originalBswSources")
+    if not isinstance(sources, dict) or not isinstance(origins, dict):
+        raise TypeError("Runtime source provenance invalid")
+    records = (root / FILE_HASHES).read_text(encoding="utf-8").splitlines()
+
+    def require_source(name, identity):
+        if not isinstance(name, str) or not safe_relative(name):
+            raise ValueError("Runtime source path invalid")
+        refuse_links(root / name, root)
+        if records.count(f"{identity}  {name}") != 1 or digest(root / name) != identity:
+            raise ValueError(f"Runtime source identity differs: {name}")
+
+    require_source("meta/integration.json", digest(root / "meta/integration.json"))
+    selected = dict(sources)
+    for original, identity in sources.items():
+        if not isinstance(original, str) or not safe_relative(original):
+            raise ValueError("Runtime source origin invalid")
+        if not isinstance(identity, str) or not re.fullmatch(r"[0-9a-f]{64}", identity):
+            raise ValueError("Runtime source identity invalid")
+        if original.startswith("runtime/") and Path(original).suffix in {".c", ".h"} and original in origins:
+            copied = origins[original]
+            require_source(copied, identity)
+            # Delivered bytes may change; their selected source/path binding may not.
+            selected[original] = copied
+    plan["runtimeSources"] = selected
+    return plan
+
+
 def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
     """A baseline is evidence for comparison, never permission to skip analysis."""
     try:
@@ -88,6 +124,9 @@ def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
             raise ValueError("Checker coverage differs")
         if digest(old_root / FILE_HASHES) != previous["sourceSealSha256"]:
             raise ValueError("Baseline source seal identity differs")
+        if any(digest(root / FILE_HASHES) != current["sourceSealSha256"]
+               for root in (project, output / "project")):
+            raise ValueError("Current source seal identity differs")
         # Source bytes may change; the selected target/configuration/link closure may not.
         if _read(project / "target.json") != _read(old_root / "target.json"):
             raise ValueError("Target/sample configuration differs")
@@ -98,7 +137,8 @@ def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
         for root in (project, old_root):
             if not (root / "meta/integration.json").is_file():
                 raise ValueError("Sample generation identity unavailable")
-        if _read(project / "meta/integration.json")["plan"] != _read(old_root / "meta/integration.json")["plan"]:
+        plan = _configuration(project)
+        if plan != _configuration(old_root) or plan != _configuration(output / "project"):
             raise ValueError("Sample generation configuration differs")
         def programs(summary):
             return [(row["name"], row["entry"], row["translationUnits"]) for row in summary["programs"]]

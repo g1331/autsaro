@@ -1,0 +1,271 @@
+--- a/portable/ThirdParty/GCC/Posix/port.c
++++ b/portable/ThirdParty/GCC/Posix/port.c
+@@ -90,13 +90,13 @@
+ sint32 Os_PortInterruptSourceControl(uint32 interrupt, uint32 operation, boolean clear)
+ {
+     uint32_t bit;
+-    if (interrupt <= OS_CONTROLLED_TICK_INTERRUPT || interrupt >= PORT_INTERRUPT_COUNT ||
+-        Os_InterruptVectorTable[interrupt] == NULL) {
++    if ((interrupt <= OS_CONTROLLED_TICK_INTERRUPT) || (interrupt >= PORT_INTERRUPT_COUNT) ||
++        (Os_InterruptVectorTable[interrupt] == NULL)) {
+         return 0;
+     }
+     bit = (uint32_t)1u << interrupt;
+-    if ((operation == 0u && (disabled_sources & bit) != 0u) ||
+-        (operation == 1u && (disabled_sources & bit) == 0u)) {
++    if (((operation == 0u) && ((disabled_sources & bit) != 0u)) ||
++        ((operation == 1u) && ((disabled_sources & bit) == 0u))) {
+         return 2;
+     }
+     if (operation == 0u) {
+@@ -106,8 +106,10 @@
+             pending &= ~bit;
+         }
+         disabled_sources &= ~bit;
+-        if ((pending & bit) != 0u && Os_HostSetEvent(interrupt_event) == 0) {
+-            Os_BackendShutdown(E_OS_STATE);
++        if ((pending & bit) != 0u) {
++            if (Os_HostSetEvent(interrupt_event) == 0) {
++                Os_BackendShutdown(E_OS_STATE);
++            }
+         }
+     } else if (operation == 2u) {
+         pending &= ~bit;
+@@ -125,13 +127,15 @@
+     for (index = 0u; index < PORT_INTERRUPT_COUNT; ++index) {
+         const uint32_t bit = (uint32_t)1u << index;
+         const unsigned candidate = Os_BackendInterruptPriority(index);
+-        if ((pending & ~seen & bit) != 0u && Os_BackendInterruptEnabled(index) != 0) {
+-            if (nested == 0 && index == portINTERRUPT_YIELD) {
+-                return index;
+-            }
+-            if (candidate > priority) {
+-                chosen = index;
+-                priority = candidate;
++        if ((pending & ~seen & bit) != 0u) {
++            if (Os_BackendInterruptEnabled(index) != 0) {
++                if ((nested == 0) && (index == portINTERRUPT_YIELD)) {
++                    return index;
++                }
++                if (candidate > priority) {
++                    chosen = index;
++                    priority = candidate;
++                }
+             }
+         }
+     }
+@@ -157,13 +161,13 @@
+     const Os_NativeStackType *stack = Os_StackCurrent();
+     const unsigned outer = Os_BackendCurrentInterrupt();
+     uint32_t seen = 0u;
+-    if (stack != NULL && stack->role == 'S' && outer < PORT_INTERRUPT_COUNT &&
+-        outer != portINTERRUPT_YIELD && critical_nesting == 0u) {
++    if ((stack != NULL) && (stack->role == 'S') && (outer < PORT_INTERRUPT_COUNT) &&
++        (outer != portINTERRUPT_YIELD) && (critical_nesting == 0u)) {
+         uint32_t interrupt = next_interrupt(seen, Os_BackendInterruptPriority(outer), 1);
+         while (interrupt < PORT_INTERRUPT_COUNT) {
+             const uint32_t requested = run_interrupt(interrupt);
+             seen |= (uint32_t)1u << interrupt;
+-            if (requested != 0u && Os_BackendInterruptMaySchedule(interrupt) != 0) {
++            if ((requested != 0u) && (Os_BackendInterruptMaySchedule(interrupt) != 0)) {
+                 Os_BackendRequestIsrReschedule();
+             }
+             interrupt = next_interrupt(seen, Os_BackendInterruptPriority(outer), 1);
+@@ -191,9 +195,14 @@
+     while (interrupt < PORT_INTERRUPT_COUNT) {
+         const uint32_t requested = run_interrupt(interrupt);
+         seen |= (uint32_t)1u << interrupt;
+-        if (Os_BackendInterruptMaySchedule(interrupt) != 0 &&
+-            (requested != 0u || Os_BackendTakeIsrReschedule() != 0)) {
+-            switched |= (uint32_t)1u << interrupt;
++        if (Os_BackendInterruptMaySchedule(interrupt) != 0) {
++            uint32_t schedule = requested;
++            if (schedule == 0u) {
++                schedule = (uint32_t)Os_BackendTakeIsrReschedule();
++            }
++            if (schedule != 0u) {
++                switched |= (uint32_t)1u << interrupt;
++            }
+         }
+         interrupt = next_interrupt(seen, 0u, 0);
+     }
+@@ -226,7 +235,7 @@
+     }
+     for (;;) {
+         DWORD ready = WaitForSingleObject(interrupt_event, 100u);
+-        if (ready != WAIT_OBJECT_0 && ready != WAIT_TIMEOUT) {
++        if ((ready != WAIT_OBJECT_0) && (ready != WAIT_TIMEOUT)) {
+             Os_BackendShutdown(E_OS_STATE);
+         }
+         if (port_running == pdFALSE) {
+@@ -266,14 +275,18 @@
+     interrupt_gate = Os_PortMutex(NULL, FALSE, NULL);
+     interrupt_event = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+     dispatcher_registered = Os_PortEvent(NULL, FALSE, FALSE, NULL);
+-    if (interrupt_gate == NULL || interrupt_event == NULL || dispatcher_registered == NULL) {
++    if ((interrupt_gate == NULL) || (interrupt_event == NULL) || (dispatcher_registered == NULL)) {
+         Os_BackendShutdown(E_OS_STATE);
+     }
+     const HANDLE dispatcher_thread = Os_HostCreateActor(
+         262144u, &dispatcher_start, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL, 0);
+-    if (dispatcher_thread == NULL ||
+-        WaitForSingleObject(dispatcher_registered, 5000u) != WAIT_OBJECT_0 ||
+-        WaitForSingleObject(dispatcher_thread, INFINITE) != WAIT_OBJECT_0) {
++    if (dispatcher_thread == NULL) {
++        Os_BackendShutdown(E_OS_STATE);
++    }
++    if (WaitForSingleObject(dispatcher_registered, 5000u) != WAIT_OBJECT_0) {
++        Os_BackendShutdown(E_OS_STATE);
++    }
++    if (WaitForSingleObject(dispatcher_thread, INFINITE) != WAIT_OBJECT_0) {
+         Os_BackendShutdown(E_OS_STATE);
+     }
+     return pdFALSE;
+@@ -282,16 +295,19 @@
+ void vPortEndScheduler(void)
+ {
+     port_running = pdFALSE;
+-    if (interrupt_event != NULL && Os_HostSetEvent(interrupt_event) == 0) {
+-        Os_BackendShutdown(E_OS_STATE);
++    if (interrupt_event != NULL) {
++        if (Os_HostSetEvent(interrupt_event) == 0) {
++            Os_BackendShutdown(E_OS_STATE);
++        }
+     }
+ }
+ 
+ void vPortEnterCritical(void)
+ {
+-    if (port_running != pdFALSE &&
+-        WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
+-        Os_BackendShutdown(E_OS_STATE);
++    if (port_running != pdFALSE) {
++        if (WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
++            Os_BackendShutdown(E_OS_STATE);
++        }
+     }
+     ++critical_nesting;
+ }
+@@ -305,12 +321,20 @@
+     --critical_nesting;
+     if (port_running != pdFALSE) {
+         HANDLE handoff = NULL;
+-        if (critical_nesting == 0u && xInsideInterrupt != pdFALSE) {
+-            Os_PortDispatchNested();
+-        }
+-        if (critical_nesting == 0u && pending != 0u && xInsideInterrupt == pdFALSE) {
+-            if (actor != NULL &&
+-                (actor->role == 'T' || actor->role == 'I' || actor->role == 'B')) {
++        if (critical_nesting == 0u) {
++            if (__atomic_load_n(&xInsideInterrupt, __ATOMIC_SEQ_CST) != pdFALSE) {
++                Os_PortDispatchNested();
++            }
++        }
++        bool publish = false;
++        if (critical_nesting == 0u) {
++            if (pending != 0u) {
++                publish = __atomic_load_n(&xInsideInterrupt, __ATOMIC_SEQ_CST) == pdFALSE;
++            }
++        }
++        if (publish) {
++            if ((actor != NULL) &&
++                ((actor->role == 'T') || (actor->role == 'I') || (actor->role == 'B'))) {
+                 handoff = selected_task().yielded;
+                 if (ResetEvent(handoff) == 0) {
+                     Os_BackendShutdown(E_OS_STATE);
+@@ -323,8 +347,10 @@
+         if (ReleaseMutex(interrupt_gate) == 0) {
+             Os_BackendShutdown(E_OS_STATE);
+         }
+-        if ((handoff != NULL) && (WaitForSingleObject(handoff, 2000u) != WAIT_OBJECT_0)) {
+-            Os_BackendShutdown(E_OS_STATE);
++        if (handoff != NULL) {
++            if (WaitForSingleObject(handoff, 2000u) != WAIT_OBJECT_0) {
++                Os_BackendShutdown(E_OS_STATE);
++            }
+         }
+     }
+ }
+@@ -338,32 +364,41 @@
+ 
+ void vPortClearInterruptMask(UBaseType_t mask)
+ {
+-    configASSERT(critical_nesting == mask + 1u);
++    configASSERT(critical_nesting == (mask + 1u));
+     vPortExitCritical();
+ }
+ 
+ static void post_interrupt(uint32_t interrupt, int wait_for_dispatch)
+ {
+     const Os_NativeStackType *actor = Os_StackCurrent();
+-    if (interrupt >= PORT_INTERRUPT_COUNT || port_running == pdFALSE) {
++    bool refused = interrupt >= PORT_INTERRUPT_COUNT;
++    if (!refused) {
++        refused = port_running == pdFALSE;
++    }
++    if (refused) {
+         return;
+     }
+     if (WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
+         Os_BackendShutdown(E_OS_STATE);
+     }
+     pending |= (uint32_t)1u << interrupt;
+-    if (actor != NULL && actor->role == 'S') {
++    if ((actor != NULL) && (actor->role == 'S')) {
+         Os_PortDispatchNested();
+     }
+     if (Os_HostSetEvent(interrupt_event) == 0) {
+         Os_BackendShutdown(E_OS_STATE);
+     }
+-    if (wait_for_dispatch != 0 && actor != NULL &&
+-        (actor->role == 'T' || actor->role == 'I' || actor->role == 'B') &&
+-        critical_nesting == 0u) {
++    if ((wait_for_dispatch != 0) && (actor != NULL) &&
++        ((actor->role == 'T') || (actor->role == 'I') || (actor->role == 'B')) &&
++        (critical_nesting == 0u)) {
+         const PortTask task = selected_task();
+-        if ((ResetEvent(task.yielded) == 0) || (ReleaseMutex(interrupt_gate) == 0) ||
+-            (WaitForSingleObject(task.yielded, 2000u) != WAIT_OBJECT_0)) {
++        if (ResetEvent(task.yielded) == 0) {
++            Os_BackendShutdown(E_OS_STATE);
++        }
++        if (ReleaseMutex(interrupt_gate) == 0) {
++            Os_BackendShutdown(E_OS_STATE);
++        }
++        if (WaitForSingleObject(task.yielded, 2000u) != WAIT_OBJECT_0) {
+             Os_BackendShutdown(E_OS_STATE);
+         }
+         return;
+@@ -388,19 +423,23 @@
+     if (interrupt >= PORT_INTERRUPT_COUNT) {
+         Os_BackendShutdown(E_OS_ID);
+     }
+-    if ((interrupt == portINTERRUPT_YIELD && handler != &yield_interrupt) ||
+-        (interrupt == portINTERRUPT_TICK && handler != &tick_interrupt) ||
+-        (interrupt > portINTERRUPT_TICK && Os_BackendInterruptPriority(interrupt) == 0u) ||
+-        Os_MailboxHandlerAllowed(interrupt, handler) == 0 ||
+-        Os_BackendHandlerAllowed(interrupt, handler) == 0) {
++    if (((interrupt == portINTERRUPT_YIELD) && (handler != &yield_interrupt)) ||
++        ((interrupt == portINTERRUPT_TICK) && (handler != &tick_interrupt)) ||
++        ((interrupt > portINTERRUPT_TICK) && (Os_BackendInterruptPriority(interrupt) == 0u)) ||
++        (Os_MailboxHandlerAllowed(interrupt, handler) == 0) ||
++        (Os_BackendHandlerAllowed(interrupt, handler) == 0)) {
+         Os_BackendShutdown(E_OS_ACCESS);
+     }
+-    if (interrupt_gate != NULL && WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
+-        Os_BackendShutdown(E_OS_STATE);
++    if (interrupt_gate != NULL) {
++        if (WaitForSingleObject(interrupt_gate, 2000u) != WAIT_OBJECT_0) {
++            Os_BackendShutdown(E_OS_STATE);
++        }
+     }
+     Os_InterruptVectorTable[interrupt] = handler;
+-    if (interrupt_gate != NULL && ReleaseMutex(interrupt_gate) == 0) {
+-        Os_BackendShutdown(E_OS_STATE);
++    if (interrupt_gate != NULL) {
++        if (ReleaseMutex(interrupt_gate) == 0) {
++            Os_BackendShutdown(E_OS_STATE);
++        }
+     }
+ }
+ 

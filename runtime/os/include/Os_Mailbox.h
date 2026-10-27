@@ -6,6 +6,8 @@
 #define OS_INPUT_CAPACITY  256u /**< Maximum simultaneously queued input records. */
 #define OS_INPUT_PAYLOAD   32u  /**< Maximum bytes in one input record. */
 #define OS_INPUT_INTERRUPT 30u  /**< Native vector reserved for mailbox notification. */
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Owned mailbox record copied between the native producer and configured automotive owner Task. */
 typedef struct {
     uint64 ticket;                /**< Accepted monotonic input ticket. */
@@ -13,8 +15,6 @@ typedef struct {
     uint8 data[OS_INPUT_PAYLOAD]; /**< Owned payload storage; only length bytes contain the
                                      submitted input. */
 } Os_InputRecordType;
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 /** Copy one input record from the single native bridge producer.
  * @param[in] data Caller-owned bytes, copied before acceptance; never retained.
  * @param[in] length Number of bytes, 1 through OS_INPUT_PAYLOAD.

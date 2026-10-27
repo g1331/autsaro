@@ -6,7 +6,7 @@
 
 #define DET_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Det_MemMap.h"
-static const Det_ConfigType *configuration DET_VAR_CLEARED; /**< DET_STATE; reset by Init. */
+static const Det_ConfigType *det_configuration DET_VAR_CLEARED; /**< DET_STATE; reset by Init. */
 static boolean initialized DET_VAR_CLEARED; /**< DET_STATE; Init publishes configuration first. */
 #define DET_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Det_MemMap.h"
@@ -33,7 +33,7 @@ DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr)
 {
     SchM_Enter_Det_DET_STATE();
     initialized = FALSE;
-    configuration = NULL_PTR;
+    det_configuration = NULL_PTR;
     SchM_Exit_Det_DET_STATE();
     if (ConfigPtr != NULL_PTR) {
         if ((Det_ValidHooks(ConfigPtr->error_hooks, ConfigPtr->error_hook_count) == FALSE) ||
@@ -43,7 +43,7 @@ DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr)
         }
     }
     SchM_Enter_Det_DET_STATE();
-    configuration = ConfigPtr;
+    det_configuration = ConfigPtr;
     initialized = TRUE;
     SchM_Exit_Det_DET_STATE();
 }
@@ -61,7 +61,7 @@ DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId,
     const Det_ConfigType *config = NULL_PTR;
     SchM_Enter_Det_DET_STATE();
     if (initialized == TRUE) {
-        config = configuration;
+        config = det_configuration;
     }
     SchM_Exit_Det_DET_STATE();
     /* Callouts are caller code: they run outside the area, and may report again. */
@@ -82,13 +82,15 @@ DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId,
     const Det_ConfigType *config = NULL_PTR;
     SchM_Enter_Det_DET_STATE();
     if (initialized == TRUE) {
-        config = configuration;
+        config = det_configuration;
     }
     SchM_Exit_Det_DET_STATE();
-    if ((config != NULL_PTR) && (Det_HostEnterDevelopmentReport() == TRUE)) {
-        uint16 index;
-        for (index = 0u; index < config->error_hook_count; ++index) {
-            (void)config->error_hooks[index](ModuleId, InstanceId, ApiId, ErrorId);
+    if (config != NULL_PTR) {
+        if (Det_HostEnterDevelopmentReport() == TRUE) {
+            uint16 index;
+            for (index = 0u; index < config->error_hook_count; ++index) {
+                (void)config->error_hooks[index](ModuleId, InstanceId, ApiId, ErrorId);
+            }
         }
     }
     Det_HostHalt();

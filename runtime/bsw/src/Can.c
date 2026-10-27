@@ -98,13 +98,23 @@ static uint8 tx_length CAN_VAR_CLEARED;                  /**< Length, 0 to 8 byt
 static uint8 tx_payload[8] CAN_VAR_CLEARED;              /**< tx_length bytes valid. */
 static PduIdType tx_handle CAN_VAR_CLEARED;              /**< swPduHandle of the frame. */
 static PduIdType tx_confirmation_handle CAN_VAR_CLEARED; /**< swPduHandle to confirm. */
+#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Can_MemMap.h"
+
 #if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
+#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Can_MemMap.h"
 /* Lifetime tokens are never reset by Init: old physical outputs must not
  * complete a new same-handle request after cancellation or reinitialization. */
 static uint64 host_tx_sequence CAN_VAR_CLEARED;          /**< Token of the last admitted frame. */
 static uint64 host_tx_cancelled_through CAN_VAR_CLEARED; /**< Tokens up to here never complete. */
 static uint64 host_tx_completed_through CAN_VAR_CLEARED; /**< Tokens up to here have completed. */
+#define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Can_MemMap.h"
 #endif
+
+#define CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Can_MemMap.h"
 
 static uint32 interrupt_disable_count CAN_VAR_CLEARED; /**< Disable nesting; Init resets. */
 
@@ -135,6 +145,14 @@ static uint8 rx_overrun_pending CAN_VAR_CLEARED; /**< CAN_E_DATALOST to report; 
 #define CAN_START_SEC_CODE
 #include "Can_MemMap.h"
 
+static CAN_CODE void Can_CancelHostTransmit(void);
+static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu);
+static CAN_CODE void Can_ClearPolledRx(void);
+static CAN_CODE EcuStatus Can_DeliverImmediateRx(void);
+static CAN_CODE void Can_ReadImmediateRx(void);
+static CAN_CODE void Can_ConfirmImmediateTx(void);
+static CAN_CODE void Can_RecordBusOff(void);
+static CAN_CODE void Can_PublishImmediateBusOff(void);
 static CAN_CODE EcuStatus Can_DeliverRx(void);
 /* Scheduled-function bodies, also run on direct (non-polled) events (SWS_BSW_00133). */
 static CAN_CODE void Can_ConfirmTx(void);
@@ -146,9 +164,7 @@ CAN_CODE void Can_Init(const Can_ConfigType *Config)
     if ((can_initialized == 0u) && (Config != NULL_PTR) &&
         ((Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) || (Config->sink != NULL_PTR)) &&
         (driver_lifetime != UINT64_MAX)) {
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-        host_tx_cancelled_through = host_tx_sequence;
-#endif
+        (void)Can_CancelHostTransmit();
         ++driver_lifetime;
         tx_sink = Config->sink;
         can_initialized = 1u;
@@ -169,9 +185,7 @@ CAN_CODE void Can_DeInit(void)
 {
     SchM_Enter_Can_CAN_STATE();
     if ((can_initialized != 0u) && (can_controller_mode != CAN_STARTED)) {
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-        host_tx_cancelled_through = host_tx_sequence;
-#endif
+        (void)Can_CancelHostTransmit();
         can_initialized = 0u;
         tx_cancelled = 1u;
         tx_sink = NULL_PTR;
@@ -203,13 +217,9 @@ CAN_CODE Std_ReturnType Can_SetControllerMode(uint8 Controller, Can_ControllerSt
         } else if (Transition == CAN_CS_STOPPED) {
             /* The state machine also loops STOPPED to STOPPED; SLEEP to STOPPED leaves the
              * logical sleep without touching the already stopped controller (SWS_Can_00267). */
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-            host_tx_cancelled_through = host_tx_sequence;
-#endif
+            (void)Can_CancelHostTransmit();
             can_controller_mode = CAN_STOPPED;
-#if (CAN_RX_POLLING == STD_ON)
-            rx_pending = 0u;
-#endif
+            (void)Can_ClearPolledRx();
             tx_pending = 0u;
             tx_cancelled = 1u;
             tx_confirmation_pending = 0u;
@@ -307,6 +317,19 @@ CAN_CODE Std_ReturnType Can_CheckWakeup(uint8 Controller)
     return E_NOT_OK;
 }
 
+static CAN_CODE EcuStatus Can_StoreTransmit(const Can_PduType *pdu)
+{
+    uint8 i;
+    tx_id = pdu->id & ~CAN_ID_FD_FLAG;
+    tx_handle = pdu->swPduHandle;
+    tx_length = pdu->length;
+    for (i = 0u; i < pdu->length; ++i) {
+        tx_payload[i] = pdu->sdu[i];
+    }
+    tx_pending = 1u;
+    return ECU_OK;
+}
+
 static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu)
 {
     EcuStatus result = ECU_ERR_CONFIG;
@@ -328,23 +351,8 @@ static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType 
         } else if ((tx_pending != 0u) || (tx_in_flight != 0u) || (tx_confirmation_pending != 0u) ||
                    (tx_confirming != 0u)) {
             result = ECU_ERR_CAN_BUSY;
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-        } else if (host_tx_sequence == UINT64_MAX) {
-            result = ECU_ERR_CAN_BUSY;
-#endif
         } else {
-            uint8 i;
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-            ++host_tx_sequence;
-#endif
-            tx_id = pdu->id & ~CAN_ID_FD_FLAG;
-            tx_handle = pdu->swPduHandle;
-            tx_length = pdu->length;
-            for (i = 0u; i < pdu->length; ++i) {
-                tx_payload[i] = pdu->sdu[i];
-            }
-            tx_pending = 1u;
-            result = ECU_OK;
+            result = Can_AdmitTransmit(pdu);
         }
         SchM_Exit_Can_CAN_STATE();
     }
@@ -399,9 +407,7 @@ CAN_CODE EcuStatus Can_InternalHostFlush(void)
         /* No admitted output is ready. */
     }
     SchM_Exit_Can_CAN_STATE();
-#if !(CAN_TX_POLLING == STD_ON)
-    Can_ConfirmTx();
-#endif
+    (void)Can_ConfirmImmediateTx();
     return result;
 }
 
@@ -460,9 +466,7 @@ static CAN_CODE void Can_PublishBusOff(uint8 drain)
 CAN_CODE void Can_InternalSetMode(CanMode mode)
 {
     uint8 notify_mode = 0u;
-#if !(CAN_BUSOFF_POLLING == STD_ON)
     uint8 notify_busoff = 0u;
-#endif
     SchM_Enter_Can_CAN_STATE();
     if (can_initialized == 0u) {
         /* Host mutation requires Can_Init. */
@@ -474,39 +478,23 @@ CAN_CODE void Can_InternalSetMode(CanMode mode)
     } else if ((busoff_notification_pending != 0u) && (mode != CAN_BUS_OFF)) {
         /* Publish the observed bus-off before an explicit host recovery. */
     } else if (mode == CAN_BUS_OFF) {
-#if (CAN_BUSOFF_POLLING == STD_ON)
-        if (bus_off == 0u) {
-            busoff_notification_pending = 1u;
-        }
-#else
-        busoff_notification_pending = 1u;
-#endif
+        (void)Can_RecordBusOff();
         mode_notification_pending = 0u;
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-        host_tx_cancelled_through = host_tx_sequence;
-#endif
+        (void)Can_CancelHostTransmit();
         can_controller_mode = CAN_STOPPED;
-#if (CAN_RX_POLLING == STD_ON)
-        rx_pending = 0u;
-#endif
+        (void)Can_ClearPolledRx();
         bus_off = 1u;
         tx_pending = 0u;
         tx_cancelled = 1u;
         tx_confirmation_pending = 0u;
-#if !(CAN_BUSOFF_POLLING == STD_ON)
         notify_busoff = 1u;
-#endif
     } else {
         mode_notification_pending = 0u;
         can_controller_mode = mode;
         bus_off = 0u;
         if (mode != CAN_STARTED) {
-#if (CAN_RX_POLLING == STD_ON)
-            rx_pending = 0u;
-#endif
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-            host_tx_cancelled_through = host_tx_sequence;
-#endif
+            (void)Can_ClearPolledRx();
+            (void)Can_CancelHostTransmit();
             tx_pending = 0u;
             tx_cancelled = 1u;
             tx_confirmation_pending = 0u;
@@ -528,11 +516,9 @@ CAN_CODE void Can_InternalSetMode(CanMode mode)
     SchM_Exit_Can_CAN_STATE();
     /* The bus-off and mode branches above are exclusive; a polled bus-off is
      * published by Can_MainFunction_BusOff instead. */
-#if !(CAN_BUSOFF_POLLING == STD_ON)
     if (notify_busoff != 0u) {
-        Can_PublishBusOff(1u);
+        (void)Can_PublishImmediateBusOff();
     }
-#endif
     if (notify_mode != 0u) {
         Can_PublishMode(1u);
     }
@@ -580,45 +566,6 @@ CAN_CODE EcuStatus Can_InternalTransmitPdu(PduIdType pdu_id,
     return result;
 }
 
-CAN_CODE uint64 Can_InternalHostTransmitToken(void)
-{
-    uint64 token = UINT64_C(0);
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-    SchM_Enter_Can_CAN_STATE();
-    if ((can_initialized != 0u) && (tx_in_flight != 0u) &&
-        (Ecu_Policy.tx_confirmation == ECU_TX_QUEUED)) {
-        token = host_tx_sequence;
-    }
-    SchM_Exit_Can_CAN_STATE();
-#endif
-    return token;
-}
-
-CAN_CODE Std_ReturnType Can_InternalHostCompleteTransmit(PduIdType handle, uint64 token)
-{
-    Std_ReturnType result = E_NOT_OK;
-#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
-    SchM_Enter_Can_CAN_STATE();
-    if ((can_initialized != 0u) && (Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) &&
-        (token > host_tx_cancelled_through) && (token > host_tx_completed_through) &&
-        (token <= host_tx_sequence)) {
-        if ((tx_confirmation_pending != 0u) || (tx_confirming != 0u)) {
-            result = CAN_BUSY;
-        } else {
-            tx_confirmation_handle = handle;
-            tx_confirmation_pending = 1u;
-            host_tx_completed_through = token;
-            result = E_OK;
-        }
-    }
-    SchM_Exit_Can_CAN_STATE();
-#else
-    (void)handle;
-    (void)token;
-#endif
-    return result;
-}
-
 static CAN_CODE void Can_ConfirmTx(void)
 {
     SchM_Enter_Can_CAN_STATE();
@@ -661,18 +608,12 @@ static CAN_CODE EcuStatus Can_ReceiveHost(uint32 id, uint8 dlc, const uint8 data
             rx_payload[i] = data[i];
         }
         rx_pending = 1u;
-#if !(CAN_RX_POLLING == STD_ON)
-        result = Can_DeliverRx();
-#endif
+        result = Can_DeliverImmediateRx();
     }
     SchM_Exit_Can_CAN_STATE();
-#if !(CAN_RX_POLLING == STD_ON)
     if (lost != 0u) {
-        Can_ReadRx();
+        (void)Can_ReadImmediateRx();
     }
-#else
-    (void)lost;
-#endif
     return result;
 }
 
@@ -744,3 +685,130 @@ CAN_CODE void Can_MainFunction_Read(void) { Can_ReadRx(); }
 
 #define CAN_STOP_SEC_CODE
 #include "Can_MemMap.h"
+
+/* Optional actions are selected around complete mapped definitions. */
+
+#if (CAN_HOST_QUEUED_COMPLETION == STD_ON)
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
+static CAN_CODE void Can_CancelHostTransmit(void) { host_tx_cancelled_through = host_tx_sequence; }
+static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu)
+{
+    EcuStatus result = ECU_ERR_CAN_BUSY;
+    if (host_tx_sequence != UINT64_MAX) {
+        ++host_tx_sequence;
+        result = Can_StoreTransmit(pdu);
+    }
+    return result;
+}
+CAN_CODE uint64 Can_InternalHostTransmitToken(void)
+{
+    uint64 token = UINT64_C(0);
+    SchM_Enter_Can_CAN_STATE();
+    if ((can_initialized != 0u) && (tx_in_flight != 0u) &&
+        (Ecu_Policy.tx_confirmation == ECU_TX_QUEUED)) {
+        token = host_tx_sequence;
+    }
+    SchM_Exit_Can_CAN_STATE();
+    return token;
+}
+
+CAN_CODE Std_ReturnType Can_InternalHostCompleteTransmit(PduIdType handle, uint64 token)
+{
+    Std_ReturnType result = E_NOT_OK;
+    SchM_Enter_Can_CAN_STATE();
+    if ((can_initialized != 0u) && (Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) &&
+        (token > host_tx_cancelled_through) && (token > host_tx_completed_through) &&
+        (token <= host_tx_sequence)) {
+        if ((tx_confirmation_pending != 0u) || (tx_confirming != 0u)) {
+            result = CAN_BUSY;
+        } else {
+            tx_confirmation_handle = handle;
+            tx_confirmation_pending = 1u;
+            host_tx_completed_through = token;
+            result = E_OK;
+        }
+    }
+    SchM_Exit_Can_CAN_STATE();
+    return result;
+}
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"
+#else
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
+static CAN_CODE void Can_CancelHostTransmit(void)
+{
+    /* This configuration has no queued host token to cancel. */
+}
+static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu)
+{
+    return Can_StoreTransmit(pdu);
+}
+CAN_CODE uint64 Can_InternalHostTransmitToken(void) { return UINT64_C(0); }
+CAN_CODE Std_ReturnType Can_InternalHostCompleteTransmit(PduIdType handle, uint64 token)
+{
+    Std_ReturnType result = E_NOT_OK;
+    (void)handle;
+    (void)token;
+    return result;
+}
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"
+#endif
+
+#if (CAN_RX_POLLING == STD_ON)
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
+static CAN_CODE void Can_ClearPolledRx(void) { rx_pending = 0u; }
+static CAN_CODE EcuStatus Can_DeliverImmediateRx(void) { return ECU_OK; }
+static CAN_CODE void Can_ReadImmediateRx(void) { /* Polling owns receive publication. */ }
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"
+#else
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
+static CAN_CODE void Can_ClearPolledRx(void)
+{
+    /* Immediate receive has no polling buffer to retire. */
+}
+static CAN_CODE EcuStatus Can_DeliverImmediateRx(void) { return Can_DeliverRx(); }
+static CAN_CODE void Can_ReadImmediateRx(void) { Can_ReadRx(); }
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"
+#endif
+
+#if (CAN_TX_POLLING == STD_ON)
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
+static CAN_CODE void Can_ConfirmImmediateTx(void) { /* Polling owns transmit confirmation. */ }
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"
+#else
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
+static CAN_CODE void Can_ConfirmImmediateTx(void) { Can_ConfirmTx(); }
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"
+#endif
+
+#if (CAN_BUSOFF_POLLING == STD_ON)
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
+static CAN_CODE void Can_RecordBusOff(void)
+{
+    if (bus_off == 0u) {
+        busoff_notification_pending = 1u;
+    }
+}
+static CAN_CODE void Can_PublishImmediateBusOff(void) { /* Polling owns bus-off publication. */ }
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"
+#else
+#define CAN_START_SEC_CODE
+#include "Can_MemMap.h"
+static CAN_CODE void Can_RecordBusOff(void) { busoff_notification_pending = 1u; }
+static CAN_CODE void Can_PublishImmediateBusOff(void) { Can_PublishBusOff(1u); }
+#define CAN_STOP_SEC_CODE
+#include "Can_MemMap.h"
+#endif

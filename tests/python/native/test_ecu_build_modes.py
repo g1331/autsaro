@@ -16,7 +16,163 @@ from ecu_tools import build as ecu_build
 from ecu_tools.process import OwnedProcess, ProcessSpec
 
 
+def check_native_output_backpressure(project: Path, directory: Path) -> None:
+    """Called by the normal Rust protocol test with its freshly generated project."""
+    fixture = Path(__file__).resolve().parents[3] / "core/tests/fixtures/host-batch/host_batch_faults.c"
+    directory.mkdir()
+    source = directory / "host-batch-faults.c"
+    source.write_text(
+        "#define main production_main\n#define batch production_batch\n#define control production_control\n"
+        + (project / "integration/src/ecu_host_batch.c").read_text()
+        + "\n#undef main\n#undef batch\n#undef control\n" + fixture.read_text(), encoding="utf-8",
+    )
+    original = ecu_build.query
+    before = (project / "meta/files.sha256").read_bytes()
+    host_source = "os/src/host/windows/Os_HostWindows.c" if sys.platform == "win32" else "os/src/host/linux/Os_HostLinux.c"
+    for variant in ("control", "no-observer", "no-exit"):
+        output = directory / variant
+        output.mkdir(mode=0o700)
+        replacements = {}
+        for name in ("integration/src/Ecu_Target.c", "os/src/Os_Backend.c", "integration/src/Ecu_HostBridge.c", host_source):
+            path = project / name
+            text = path.read_text()
+            if name.endswith("Ecu_Target.c"):
+                entry = "StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu)\n{"
+                assert text.count(entry) == 1
+                text = text.replace(entry, entry + "\n    extern void HostFaultConfirm(uint64_t, PduIdType);\n    HostFaultConfirm(ticket, pdu);")
+                if variant == "no-exit":
+                    exit_call = "Os_HostExit((uint32_t)failure);"
+                    assert text.count(exit_call) == 1
+                    text = text.replace(exit_call, "(void)failure;")
+            elif name.endswith("Os_Backend.c"):
+                report = "    if (Os_StackReport() != 0) {"
+                assert text.count(report) == 1
+                text = text.replace(report, "    extern void HostFaultReport(StatusType);\n    HostFaultReport(shutdown_reason);\n" + report)
+            elif name == host_source:
+                if sys.platform == "win32":
+                    call = "            if ((WriteFile(handle, &data[offset], requested, &written, NULL) == 0) ||"
+                    observer = "            extern void HostFaultNativeWrite(int);\n            HostFaultNativeWrite(error_stream);\n"
+                else:
+                    call = "        errno = 0;\n        count = write(descriptor, &data[offset], length - offset);"
+                    observer = "        extern void HostFaultNativeWrite(int);\n        HostFaultNativeWrite(descriptor == STDOUT_FILENO ? 0 : 1);\n"
+                assert text.count(call) == 1
+                text = text.replace(call, observer + call)
+            elif variant == "no-observer":
+                spawn = "monitor = Os_HostSpawnObserverThread(&watch, &control);"
+                assert text.count(spawn) == 1
+                text = text.replace(spawn, "monitor = control.cancel; (void)&watch;")
+            else:
+                continue
+            copy = output / path.name
+            copy.write_text(text, encoding="utf-8")
+            replacements[ecu_build.tool_argument(path)] = ecu_build.tool_argument(copy)
+        commands = []
+
+        def observe(argv, logs, stage, *, replacements=replacements, commands=commands, **options):
+            if stage == "native-c99-build":
+                assert all(argv.count(path) == 1 for path in replacements), argv
+                argv = [replacements.get(argument, argument) for argument in argv]
+                commands.append(argv)
+            return original(argv, logs, stage, **options)
+
+        # Reuse the existing test compiler seam; sealed inputs and build guards are unchanged.
+        with patch.object(ecu_build, "query", side_effect=observe):
+            binary = ecu_build.build(project, output / "build", "probe", source)
+        assert len(commands) == 1
+        receipt = {"observed": commands[0]}
+        kinds = os.environ.get("AUTOSAR_SANITIZE")
+        if kinds in ("thread", "address,undefined"):
+            assert sys.platform == "linux", kinds
+            replay = list(commands[0])
+            binary = output / "sanitized-probe"
+            replay[replay.index("-o") + 1] = str(binary)
+            replay[1:1] = [f"-fsanitize={kinds}", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g"]
+            original(replay, output / "build/logs", "sanitized-c99-build")
+            receipt["sanitized"] = replay
+        (output / "compile-command.json").write_text(json.dumps(receipt, indent=2) + "\n")
+        modes = ("pipe-drain", "pipe-block") if variant == "control" else ("pipe-block",)
+        for mode in modes:
+            result = OwnedProcess(ProcessSpec.seconds(
+                [str(binary), mode], directory, 8, output, mode,
+            )).wait()
+            stdout = result.stdout.read_text()
+            errors = result.stderr.read_text()
+            evidence = f"{variant}/{mode}: {result}\n{stdout}\n{errors}"
+            assert "pipe_full mode=" in errors, evidence
+            tickets = [line.removeprefix("pipe_write_enter stage=output ticket=")
+                       for line in errors.splitlines() if line.startswith("pipe_write_enter stage=output ticket=")]
+            assert tickets and all(int(ticket) > 0 for ticket in tickets), evidence
+            if mode == "pipe-drain":
+                assert result.success, evidence
+                for ticket in tickets:
+                    assert f"pipe_confirm ticket={ticket} pdu=" in errors, evidence
+                assert "written=1\n" in errors, evidence
+                assert "OUT epoch=" in errors and "COMMIT_OK batch=" in errors, evidence
+                assert "pipe_write_complete stage=receipt" in errors, evidence
+            else:
+                assert len(tickets) == 1, evidence
+                assert "pipe_confirm " not in errors and "pipe_write_complete" not in errors, evidence
+                assert "COMMIT_OK" not in errors and "COMMIT_OK" not in stdout, evidence
+                if variant == "no-observer":
+                    assert "pipe_report_enter" not in errors, evidence
+                else:
+                    assert "pipe_report_enter reason=7" in errors, evidence
+                    assert "pipe_report_native_write stream=0" in errors, evidence
+                if variant == "control":
+                    assert result.status == "exited" and result.exit_code == 7, evidence
+                else:
+                    assert result.status == "timeout", evidence
+            print(f"backpressure variant={variant} mode={mode} status={result.status} exit={result.exit_code}\n{errors}", flush=True)
+    assert (project / "meta/files.sha256").read_bytes() == before
+    ecu_build.sealed_sources(project)
+
+
 class EcuBuildModeTests(unittest.TestCase):
+    def test_zero_dlc_output_keeps_library_copy_sizes_positive(self):
+        samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
+        self.assertTrue(samples, "Generate c_analysis samples first")
+        project = (Path(samples) / "standard-ecu").resolve(strict=True)
+        fixture = Path(__file__).resolve().parents[3] / "core/tests/fixtures/host-batch/zero_dlc_output.c"
+        target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+        original = ecu_build.query
+        commands = []
+
+        def observe(argv, logs, stage, **options):
+            if stage == "native-c99-build":
+                argv = [*argv, "-fno-builtin-memcpy", "-Wl,--wrap=memcpy"]
+                if target["target"].startswith("windows"):
+                    argv.append("-Wl,--wrap=__imp_memcpy")
+                else:
+                    argv.append("-Wl,--wrap=__memcpy_chk")
+                commands.append(argv)
+            return original(argv, logs, stage, **options)
+
+        with tempfile.TemporaryDirectory(prefix="autosar-zero-dlc-", delete=False) as temporary:
+            directory = Path(temporary)
+            with patch.object(ecu_build, "query", side_effect=observe):
+                binary = ecu_build.build(project, directory / "build", "test", fixture)
+            self.assertEqual(len(commands), 1)
+            if not target["target"].startswith("windows"):
+                bounds = OwnedProcess(ProcessSpec.seconds(
+                    [str(binary), "fortify"], directory, 10, directory, "copy-bounds",
+                )).wait()
+                self.assertEqual(bounds.exit_code, -6, bounds.stdout.read_text() + bounds.stderr.read_text())
+                self.assertIn("buffer overflow detected", bounds.stderr.read_text())
+            result = OwnedProcess(ProcessSpec.seconds(
+                [str(binary)], directory, 10, directory, "zero-dlc",
+            )).wait()
+            self.assertTrue(result.success,
+                            f"exit_code={result.exit_code}\n" +
+                            result.stdout.read_text() + result.stderr.read_text())
+            self.assertEqual(result.stderr.read_text(), "")
+            self.assertEqual([line for line in result.stdout.read_text().splitlines()
+                              if line.startswith("zero_dlc ")],
+                             ["zero_dlc epoch=1 length=0 confirmed=1",
+                              "zero_dlc epoch=2 length=1 confirmed=1",
+                              "zero_dlc epoch=3 length=8 confirmed=1",
+                              "zero_dlc closed reason=0"], result.stdout.read_text())
+            shutil.rmtree(directory)
+
     def test_one_byte_corruption_after_patching_is_rejected_before_compilation(self):
         samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
         self.assertTrue(samples, "Generate c_analysis samples first")

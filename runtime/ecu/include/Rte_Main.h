@@ -6,6 +6,12 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+/** Immutable SchM partition selection for this generated ECU. */
+typedef struct {
+    uint16 partition; /**< Validated partition handle; no other handle is accepted. */
+} SchM_ConfigType;
+#define RTE_Rte_START_SEC_CODE
+#include "Rte_MemMap.h"
 /** Start the RTE once for this ECU lifetime.
  * @return E_OK after start; RTE_E_LIMIT on an invalid lifecycle context or repeated allocation.
  *
@@ -17,7 +23,7 @@ extern "C" {
  *
  * Ownership: No pointer is retained.
  */
-Std_ReturnType Rte_Start(void);
+RTE_Rte_CODE Std_ReturnType Rte_Start(void);
 /** Stop component execution without permitting another allocation.
  * @return E_OK after stop; RTE_E_LIMIT for an invalid lifecycle context.
  *
@@ -29,11 +35,7 @@ Std_ReturnType Rte_Start(void);
  *
  * Ownership: No pointer is retained.
  */
-Std_ReturnType Rte_Stop(void);
-/** Immutable SchM partition selection for this generated ECU. */
-typedef struct {
-    uint16 partition; /**< Validated partition handle; no other handle is accepted. */
-} SchM_ConfigType;
+RTE_Rte_CODE Std_ReturnType Rte_Stop(void);
 /** Initialize the selected SchM partition once.
  * @param[in] ConfigPtr Non-NULL configuration with the generated partition handle.
  * @par Return
@@ -48,7 +50,7 @@ typedef struct {
  *
  * Ownership: No pointer is retained.
  */
-void SchM_Init(const SchM_ConfigType *ConfigPtr);
+RTE_Rte_CODE void SchM_Init(const SchM_ConfigType *ConfigPtr);
 /** Enable SchM processing after initialization.
  * @par Return
  * None.
@@ -61,7 +63,7 @@ void SchM_Init(const SchM_ConfigType *ConfigPtr);
  *
  * Ownership: No pointer is retained.
  */
-void SchM_Start(void);
+RTE_Rte_CODE void SchM_Start(void);
 /** Enable configured timing after SchM start.
  * @par Return
  * None.
@@ -74,7 +76,7 @@ void SchM_Start(void);
  *
  * Ownership: No pointer is retained.
  */
-void SchM_StartTiming(void);
+RTE_Rte_CODE void SchM_StartTiming(void);
 /** Retire SchM permanently for this ECU lifetime.
  * @par Return
  * None.
@@ -87,8 +89,7 @@ void SchM_StartTiming(void);
  *
  * Ownership: No pointer is retained.
  */
-void SchM_Deinit(void);
-extern const SchM_ConfigType Ecu_SchMConfig;
+RTE_Rte_CODE void SchM_Deinit(void);
 /** Read whether SchM processing has started.
  * @return TRUE in started or timing state; FALSE otherwise.
  *
@@ -100,7 +101,7 @@ extern const SchM_ConfigType Ecu_SchMConfig;
  *
  * Ownership: No pointer is retained.
  */
-boolean Ecu_SchMReady(void);
+RTE_Rte_CODE boolean Ecu_SchMReady(void);
 /** Read whether SchM timing has started.
  * @return TRUE only in timing state; FALSE otherwise.
  *
@@ -112,7 +113,20 @@ boolean Ecu_SchMReady(void);
  *
  * Ownership: No pointer is retained.
  */
-boolean Ecu_SchMTimingActive(void);
+RTE_Rte_CODE boolean Ecu_SchMTimingActive(void);
+#define RTE_Rte_STOP_SEC_CODE
+#include "Rte_MemMap.h"
+#define RTE_Rte_START_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED
+#include "Rte_MemMap.h"
+extern const SchM_ConfigType Ecu_SchMConfig RTE_Rte_CONFIG_DATA_PREBUILD_UNSPECIFIED;
+#define RTE_Rte_STOP_SEC_CONFIG_DATA_PREBUILD_UNSPECIFIED
+#include "Rte_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "Rte_Main.h -> Rte_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Rte_Main.h -> Rte_MemMap.h: incompatible AUTOSAR release"
+#endif
 #ifdef __cplusplus
 }
 #endif

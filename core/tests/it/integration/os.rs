@@ -286,6 +286,23 @@ fn counter_service_description() {
         }
         let scratch = Scratch::new();
         let (_, files) = project(&sources, &scratch.0, BuildTarget::LinuxX64ControlledV1);
+        // Verifies: SWS_MemMap_00003
+        let header = file(&files, "generated/include/Rte_Os.h");
+        let start = header.find("#define RTE_Rte_START_SEC_CODE\n").unwrap();
+        let stop = header.find("#define RTE_Rte_STOP_SEC_CODE\n").unwrap();
+        assert_eq!(
+            header.matches("#define RTE_Rte_START_SEC_CODE\n").count(),
+            1
+        );
+        assert_eq!(header.matches("#define RTE_Rte_STOP_SEC_CODE\n").count(), 1);
+        let declarations = header[start..stop].split_whitespace().collect::<String>();
+        for operation in ["GetCounterValue", "GetElapsedValue"] {
+            let declaration = format!("RTE_Rte_CODEStatusTypeOsService_{counter}_{operation}(");
+            assert!(
+                declarations.contains(&declaration),
+                "Rte_Os.h: unmapped provider declaration: {declaration}"
+            );
+        }
         let xml = file(&files, "generated/descriptions/Os_Service.arxml");
         let doc = roxmltree::Document::parse(xml).unwrap();
         let text = |tag: &str| {

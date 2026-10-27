@@ -42,10 +42,9 @@ static void record(char marker)
     trace[length++] = marker;
     trace[length] = '\0';
 }
-static void enter(unsigned expected, const volatile char *marker)
+static void enter(unsigned expected, uintptr_t address)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
-    const uintptr_t address = (uintptr_t)marker;
     check(stack != NULL && stack->role == 'S');
     check(Os_BackendCurrentInterrupt() == expected);
     if (depth == 0u) {
@@ -97,8 +96,9 @@ void ErrorHook(StatusType error)
 }
 static uint32_t grandchild(void)
 {
-    volatile char marker = 0;
-    enter(4u, &marker);
+    uintptr_t marker;
+    OS_HOST_STACK_POINTER(marker);
+    enter(4u, marker);
     ++grandchildren;
     record('G');
     if (is("priority-order") || is("cat1-outer")) {
@@ -126,8 +126,9 @@ static uint32_t grandchild(void)
 }
 static uint32_t child(void)
 {
-    volatile char marker = 0;
-    enter(6u, &marker);
+    uintptr_t marker;
+    OS_HOST_STACK_POINTER(marker);
+    enter(6u, marker);
     ++children;
     record('C');
     check(GetISRID() == 6u && Os_HookContext() == OS_HOOK_NONE);
@@ -160,8 +161,9 @@ static uint32_t child(void)
 }
 static uint32_t parent(void)
 {
-    volatile char marker = 0;
-    enter(20u, &marker);
+    uintptr_t marker;
+    OS_HOST_STACK_POINTER(marker);
+    enter(20u, marker);
     record('P');
     if (is("priority-order")) {
         leave(20u);
@@ -225,9 +227,10 @@ static uint32_t parent(void)
 }
 static uint32_t deep(void)
 {
-    volatile char marker = 0;
+    uintptr_t marker;
+    OS_HOST_STACK_POINTER(marker);
     const unsigned interrupt = Os_BackendCurrentInterrupt();
-    enter(interrupt, &marker);
+    enter(interrupt, marker);
     check(GetISRID() == interrupt);
     record('<');
     if (interrupt < 31u) {

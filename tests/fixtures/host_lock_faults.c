@@ -79,6 +79,10 @@ int Test_Init(pthread_mutex_t *lock, const pthread_mutexattr_t *attributes)
 }
 int Test_Lock(pthread_mutex_t *lock)
 {
+    if ((strcmp(failure, "once") == 0) || (strcmp(failure, "mutex-init") == 0)) {
+        (void)puts("UNEXPECTED_LOCK");
+        exit(95);
+    }
     return strcmp(failure, "lock") == 0 ? EINVAL : pthread_mutex_lock(lock);
 }
 int Test_Unlock(pthread_mutex_t *lock)

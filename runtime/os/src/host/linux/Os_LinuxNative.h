@@ -9,9 +9,12 @@
 OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
                                 int32_t expected,
                                 const struct timespec *interval);
+/** Wake count is not an error; a negative kernel result stops the native process. */
 OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell);
 OS_MEMMAP DWORD Os_LinuxThreadId(void);
-OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack);
+OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack, stack_t *previous);
+/** Project the fixed x64 signal control prefix and legacy FP into owned storage; supports
+ * self-copy. */
 OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source);
 OS_MEMMAP uintptr_t Os_LinuxSignalSp(const void *context);
 OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard);

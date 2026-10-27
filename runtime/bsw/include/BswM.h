@@ -13,6 +13,8 @@
 #endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define BSWM_MODULE_ID 42u
+#define BSWM_START_SEC_CODE
+#include "BswM_MemMap.h"
 /** SWS_BswM_00214: mode requested by a BswM user. */
 /* MR12 RULE 2.3 VIOLATION: standard type (SWS_BswM_00214) without the generic request that
  * uses it; see the BswM deviation record. */
@@ -43,7 +45,7 @@ typedef struct {
  * running completes.
  * Ownership: ConfigPtr is retained until the next Init or Deinit.
  */
-void BswM_Init(const BswM_ConfigType *ConfigPtr);
+BSWM_CODE void BswM_Init(const BswM_ConfigType *ConfigPtr);
 /** Stop arbitration; later indications have no effect (SWS_BswM_00119, SWS_BswM_00120).
  * @par Return
  * None.
@@ -53,5 +55,13 @@ void BswM_Init(const BswM_ConfigType *ConfigPtr);
  * dropped.
  * Ownership: None.
  */
-void BswM_Deinit(void);
+BSWM_CODE void BswM_Deinit(void);
+#define BSWM_STOP_SEC_CODE
+#include "BswM_MemMap.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(MEMMAP_AR_RELEASE_MAJOR_VERSION) || !defined(MEMMAP_AR_RELEASE_MINOR_VERSION)
+#error "BswM.h -> BswM_MemMap.h: missing AUTOSAR release"
+#elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
+#error "BswM.h -> BswM_MemMap.h: incompatible AUTOSAR release"
+#endif
 #endif

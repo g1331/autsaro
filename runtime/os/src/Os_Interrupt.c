@@ -39,8 +39,8 @@ OS_MEMMAP static Os_InterruptStateType *owner_state(void)
     const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 interrupt = Os_BackendCurrentInterrupt();
     const Os_HookPhaseType phase = Os_HookContext();
-    uint32 index = (stack != NULL && stack->role == 'S' && interrupt < 32u) ? interrupt : 32u;
-    if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
+    uint32 index = ((stack != NULL) && (stack->role == 'S') && (interrupt < 32u)) ? interrupt : 32u;
+    if ((phase >= OS_HOOK_ERROR) && (phase <= OS_HOOK_ALARM)) {
         /* Each Hook has its own mask ownership, including its logical ISR.
          * Queries in ErrorHook do not inherit the failed caller's mask. */
         index += 33u * (uint32)phase;
@@ -51,16 +51,20 @@ OS_MEMMAP static Os_InterruptStateType *owner_state(void)
 OS_MEMMAP sint32 Os_InterruptDisabled(void)
 {
     const Os_InterruptStateType *state = owner_state();
-    return state->disabled != 0u || state->all_depth != 0u || state->os_depth != 0u;
+    return ((state->disabled != 0u) || (state->all_depth != 0u) || (state->os_depth != 0u)) ? 1 : 0;
 }
 
 OS_MEMMAP sint32 Os_InterruptAllows(uint32 interrupt)
 {
     sint32 allowed = 0;
-    if ((interrupt < 32u) && (InterlockedCompareExchange(&all_owners, 0, 0) == 0)) {
-        allowed = (InterlockedCompareExchange(&os_owners, 0, 0) == 0) ||
-                  ((Os_Config != NULL) &&
-                   ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u));
+    if (interrupt < 32u) {
+        if (InterlockedCompareExchange(&all_owners, 0, 0) == 0) {
+            allowed = ((InterlockedCompareExchange(&os_owners, 0, 0) == 0) ||
+                       ((Os_Config != NULL) &&
+                        ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)))
+                          ? 1
+                          : 0;
+        }
     }
     return allowed;
 }
@@ -71,84 +75,95 @@ OS_MEMMAP static sint32 permitted(uint32 operation)
     const Os_NativeStackType *stack = Os_StackCurrent();
     const uint32 group = operation / 2u;
     sint32 allowed = 0;
-    if (phase >= OS_HOOK_ERROR && phase <= OS_HOOK_ALARM) {
+    if ((phase >= OS_HOOK_ERROR) && (phase <= OS_HOOK_ALARM)) {
         /* R24-11 Table 7.1 permits all six primitives from every supported
          * global Hook and Alarm callback, extending the older OSEK table. */
         allowed = 1;
-    } else if (phase == OS_HOOK_NONE && group != 2u &&
-               (Os_BackendStarted() == 0 || InterlockedCompareExchange(&Os_Closing, 0, 0) != 0)) {
-        allowed = 1;
-    } else if (phase == OS_HOOK_NONE && stack != NULL) {
-        allowed = stack->role == 'T' || (stack->role == 'S' && Os_BackendCurrentInterrupt() < 32u);
+    } else if (phase == OS_HOOK_NONE) {
+        if (group != 2u) {
+            allowed = (Os_BackendStarted() == 0) ? 1 : 0;
+            if (allowed == 0) {
+                allowed = (InterlockedCompareExchange(&Os_Closing, 0, 0) != 0) ? 1 : 0;
+            }
+        }
+        if ((allowed == 0) && (stack != NULL)) {
+            allowed = ((stack->role == 'T') ||
+                       ((stack->role == 'S') && (Os_BackendCurrentInterrupt() < 32u)))
+                          ? 1
+                          : 0;
+        }
     } else {
         /* A registered nonautomotive actor is not a Task or active ISR. */
     }
     return allowed;
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* SWS_Os_00367: these services return no StatusType, so a refused call
  * (wrong context, or a saturated nesting counter) is ignored without ErrorHook. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
+OS_MEMMAP static void update_owner_mask(Os_InterruptStateType *state, uint32 operation)
+{
+    switch (operation) {
+        case 0u:
+            if (state->disabled != 0u) {
+                state->disabled = 0u;
+                (void)InterlockedDecrement(&all_owners);
+            }
+            break;
+        case 1u:
+            if (state->disabled == 0u) {
+                state->disabled = 1u;
+                (void)InterlockedIncrement(&all_owners);
+            }
+            break;
+        case 2u:
+            if (state->all_depth != 0u) {
+                --state->all_depth;
+                if (state->all_depth == 0u) {
+                    (void)InterlockedDecrement(&all_owners);
+                }
+            }
+            break;
+        case 3u:
+            if (state->all_depth != UINT32_MAX) {
+                if (state->all_depth == 0u) {
+                    (void)InterlockedIncrement(&all_owners);
+                }
+                ++state->all_depth;
+            }
+            break;
+        case 4u:
+            if (state->os_depth != 0u) {
+                --state->os_depth;
+                if (state->os_depth == 0u) {
+                    (void)InterlockedDecrement(&os_owners);
+                }
+            }
+            break;
+        default:
+            if (state->os_depth != UINT32_MAX) {
+                if (state->os_depth == 0u) {
+                    (void)InterlockedIncrement(&os_owners);
+                }
+                ++state->os_depth;
+            }
+            break;
+    }
+}
+
 OS_MEMMAP static void change(uint32 operation)
 {
     Os_InterruptStateType *state = owner_state();
-    const sint32 running =
-        Os_BackendStarted() != 0 && InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
+    boolean running = FALSE;
+    if (Os_BackendStarted() != 0) {
+        running = InterlockedCompareExchange(&Os_Closing, 0, 0) == 0;
+    }
     Os_StackCheck();
     Os_BackendGuardService();
     if (permitted(operation) != 0) {
-        if (running != 0) {
+        if (running) {
             taskENTER_CRITICAL();
         }
-        switch (operation) {
-            case 0u:
-                if (state->disabled != 0u) {
-                    state->disabled = 0u;
-                    InterlockedDecrement(&all_owners);
-                }
-                break;
-            case 1u:
-                if (state->disabled == 0u) {
-                    state->disabled = 1u;
-                    InterlockedIncrement(&all_owners);
-                }
-                break;
-            case 2u:
-                if (state->all_depth != 0u) {
-                    --state->all_depth;
-                    if (state->all_depth == 0u) {
-                        InterlockedDecrement(&all_owners);
-                    }
-                }
-                break;
-            case 3u:
-                if (state->all_depth != UINT32_MAX) {
-                    if (state->all_depth == 0u) {
-                        InterlockedIncrement(&all_owners);
-                    }
-                    ++state->all_depth;
-                }
-                break;
-            case 4u:
-                if (state->os_depth != 0u) {
-                    --state->os_depth;
-                    if (state->os_depth == 0u) {
-                        InterlockedDecrement(&os_owners);
-                    }
-                }
-                break;
-            default:
-                if (state->os_depth != UINT32_MAX) {
-                    if (state->os_depth == 0u) {
-                        InterlockedIncrement(&os_owners);
-                    }
-                    ++state->os_depth;
-                }
-                break;
-        }
-        if (running != 0) {
+        update_owner_mask(state, operation);
+        if (running) {
             taskEXIT_CRITICAL();
         }
     }
@@ -172,13 +187,13 @@ OS_MEMMAP void Os_InterruptRestoreOwner(void)
     /* Internal exit cleanup is called under the real OS completion critical
      * section, so no ISR can observe partial restoration. */
     if (state->disabled != 0u) {
-        InterlockedDecrement(&all_owners);
+        (void)InterlockedDecrement(&all_owners);
     }
     if (state->all_depth != 0u) {
-        InterlockedDecrement(&all_owners);
+        (void)InterlockedDecrement(&all_owners);
     }
     if (state->os_depth != 0u) {
-        InterlockedDecrement(&os_owners);
+        (void)InterlockedDecrement(&os_owners);
     }
     state->disabled = 0u;
     state->all_depth = 0u;
@@ -194,13 +209,16 @@ OS_MEMMAP static StatusType source_control(ISRType interrupt, uint32 operation, 
     Os_BackendGuardService();
     /* Source operations are interrupt services, so application All/OS masks
      * do not reject them. Hooks and Category 1 callers cannot change sources. */
-    if ((Os_HookContext() != OS_HOOK_NONE) || (Os_BackendServiceContext() == 0) ||
-        ((stack != NULL) && (stack->role == 'S') &&
-         ((current >= 32u) || (current == OS_KERNEL_YIELD_INTERRUPT)))) {
+    sint32 serving = 0;
+    if (Os_HookContext() == OS_HOOK_NONE) {
+        serving = Os_BackendServiceContext();
+    }
+    if ((serving == 0) || ((stack != NULL) && (stack->role == 'S') &&
+                           ((current >= 32u) || (current == OS_KERNEL_YIELD_INTERRUPT)))) {
         result = E_OS_CALLEVEL;
     } else if ((interrupt >= 32u) || (interrupt == OS_KERNEL_YIELD_INTERRUPT) ||
                (interrupt == OS_CONTROLLED_TICK_INTERRUPT) ||
-               ((Os_Config->category1_isrs & (UINT32_C(1) << interrupt)) != 0u)) {
+               ((Os_Config->category1_isrs & ((uint32)1u << interrupt)) != 0u)) {
         result = E_OS_ID;
     } else {
         taskENTER_CRITICAL();
@@ -210,6 +228,8 @@ OS_MEMMAP static StatusType source_control(ISRType interrupt, uint32 operation, 
             result = E_OS_ID;
         } else if (source_result == 2) {
             result = E_OS_NOFUNC;
+        } else {
+            /* Successful source control retains E_OK. */
         }
         taskEXIT_CRITICAL();
         Os_BackendGuardService();

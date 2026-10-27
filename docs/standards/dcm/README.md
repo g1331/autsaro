@@ -22,4 +22,20 @@ OBD mirror 为 false，且参考 ECU 的 DemOBDSupport 为 DEM_OBD_NO_OBD_SUPPOR
 
 ## 剩余差距
 
+### MemMap 的逐处责任
+
+以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表。[MemMap篇](../memmap.md#misra-预处理布局)给出R20.1／R20.5／D4.10的原文和修订，以及00003完整声明／定义配对、00011消费关键词、00023禁止函数体内包含的必要性与替代边界。
+
+| 位置及请求 | 实体、class与实际闭包 |
+| --- | --- |
+| `runtime/bsw/src/Dcm.c` 的 `#include "Dcm_MemMap.h"` 第2／3／4次，行140／148／768 | 关闭配置指针、Rx／Tx缓冲与游标、会话／期限／请求代次及执行／发布状态的cleared段，随后完整包围helper和服务定义的 `DCM_CODE`。DCM_STATE保护数据，应用ReadData及模式发布在区外执行；Init保留仍在途的executor与publisher，避免回调重入或旧模式覆盖新模式。 |
+| `runtime/bsw/include/Dcm.h`，同一指令第1／2次，行85／211 | 类型之后的公开服务及TP回调原型，`DCM_CODE`。 |
+| `runtime/bsw/include/Dcm_ComM.h`，同一指令第2次，行45 | 关闭NoCom／SilentCom／FullCom三个通知原型，`DCM_CODE`；ComM配置保存其真实地址。第一处在本文件声明前，不因被包含头提供类型而计入R20.1。 |
+| `generated/include/SchM_Dcm.h`，同一指令第1／2次，行48／61 | 前有共享独占区声明，故两处均为R20.1；包围Dcm_MainFunction的 `DCM_CODE` 原型。该头Rte_MemMap行39关闭共享Enter/Exit，69／89及97／118包围会话／认证SchM接口的 `RTE_DcmService` 请求与 `RTE_CODE` 属性，分别沿RTE责任判断，不能混入Dcm实现CODE。 |
+| `generated/src/Ecu_RuntimeConfig.c` 紧随六个 `RTE_Dcm` 请求的 `#include "Rte_MemMap.h"` | 标准／用户行324／327、329／346、736／742；组件326／329、331／348、750／756。分别包围Ecu_DcmAuthenticationMode私有原型、dcm_config及该callback定义，class依次为CODE、CONFIG_DATA_PREBUILD_UNSPECIFIED、CODE。Bootstrap将配置交给Dcm_Init，认证发布由配置地址到SchM开关；定义与声明的配对不能互相替代。无诊断profile没有这六处配置／callback。 |
+
+四profile实际都交付并编译Dcm.c及上述头，故自身八个R20.1位置不因关闭诊断配置消失；三个诊断profile各另有六个配置／callback位置，共十四个。上述计数不含RTE服务侧段，也不按两个程序重复计数。生成位置来自原配置／callback emitter，没有对生成C作后处理。
+
+`Dcm_MemMap.h`模板第7／14／21／28行撤销模块START／STOP关键词；18／19／32／33行的内部active／属性撤销另属实现清理，不借00011批量授权。MEMMAP producer交付的可重入主体连接D4.10与这些真实请求；一次性guard吞掉STOP，顶部include、默认段或函数体内include不能保留同一00003／00023合同。头部段继承、请求拒绝、版本边及真实诊断／取消／模式交错消费者提供风险控制，不补齐ISO原件或provider证明。最终逐处复核与BSW00115对应仍须完成，本节不新增Approved／MR12，不改变原始false／refusal／not_assessed。
+
 ISO 14229／15765 的所选物理服务、计时、消息和NRC核对见 [behaviour.md](behaviour.md#跨标准原文与适用闭包)，原件收据由 #57 记录。MISRA固定七份正文已取得，221项人工评估仍由 #58 跟踪；静态分析的执行完整性、原始源码诊断与人工评估分别报告。版本检查由 #59、`DCMServices` 服务端口由 #187 跟踪。

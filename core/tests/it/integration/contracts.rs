@@ -58,6 +58,66 @@ fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity
         [("uint32", "IN"), ("uint32 *", "OUT"), ("uint32 *", "INOUT")]
     );
     let files = plan.component_contract_files().unwrap();
+    // Verifies: SWS_Rte_01150, SWS_Rte_02311
+    for component in ["Ingress", "Process", "Observe", "DcmService"] {
+        let name = format!("include/Rte_{component}.h");
+        let header = &files
+            .files()
+            .iter()
+            .find(|(path, _)| path == &name)
+            .unwrap()
+            .1;
+        let header = String::from_utf8_lossy(header);
+        let prototype = format!("typedef const Rte_CDS_{component} *Rte_Instance;");
+        let contract = header
+            .split(&prototype)
+            .next()
+            .unwrap()
+            .rsplit("/**")
+            .next()
+            .unwrap();
+        assert_eq!(
+            contract.contains("MR12 RULE 5.6 VIOLATION"),
+            component != "DcmService",
+            "{name}: only distinct application translation units share the fixed typedef name"
+        );
+        assert_eq!(contract.matches("*/").count(), 1, "{name}");
+        assert!(contract.trim_end().ends_with("*/"), "{name}");
+        assert!(header.contains(&prototype));
+    }
+    // Verifies: SWS_Rte_06705
+    // These application runnables have neither argument symbols nor a BSW mapping.
+    for (path, prototype) in [
+        (
+            "include/Rte_Process.h",
+            "Process_CODE void Process_Transform(uint32, uint32 *, uint32 *);",
+        ),
+        (
+            "include/Rte_Ingress.h",
+            "Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType);",
+        ),
+    ] {
+        let header = files.files().iter().find(|(name, _)| name == path).unwrap();
+        let header = String::from_utf8_lossy(&header.1);
+        assert!(
+            header.contains(prototype),
+            "{path}: nameless role parameters"
+        );
+        let contract = header
+            .split(prototype)
+            .next()
+            .unwrap()
+            .rsplit("/**")
+            .next()
+            .unwrap();
+        assert!(
+            contract
+                .contains("MR12 RULE 8.2 VIOLATION: SWS_Rte_06705 requires nameless parameters;")
+                && contract.matches("*/").count() == 1
+                && contract.trim_end().ends_with("*/"),
+            "{path}: adjacent source disposition for the required nameless prototype"
+        );
+    }
     let mut reversed = sources.clone();
     reversed.reverse();
     assert_eq!(
@@ -1796,7 +1856,9 @@ fn canif_header_declares_only_standard_services() {
             "#include \"CanIf_Version.h\"",
             "#include \"Std_Types.h\"",
             "#include \"ComStack_Types.h\"",
-            "#include \"Can_GeneralTypes.h\""
+            "#include \"Can_GeneralTypes.h\"",
+            "#include \"CanIf_MemMap.h\"",
+            "#include \"CanIf_MemMap.h\""
         ]
     );
 }
@@ -1848,4 +1910,25 @@ fn dcm_entities_declare_both_modes_for_every_possible_publisher() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn argument_symbols_are_rejected_before_nameless_runnable_disposition() {
+    let mut sources = inputs();
+    change(
+        &mut sources,
+        "process.arxml",
+        "<SHORT-NAME>ServerTransform</SHORT-NAME>",
+        "<SHORT-NAME>ServerTransform</SHORT-NAME><ARGUMENTS><RUNNABLE-ENTITY-ARGUMENT><SYMBOL>sourceValue</SYMBOL></RUNNABLE-ENTITY-ARGUMENT><RUNNABLE-ENTITY-ARGUMENT><SYMBOL>targetValue</SYMBOL></RUNNABLE-ENTITY-ARGUMENT><RUNNABLE-ENTITY-ARGUMENT><SYMBOL>updatedValue</SYMBOL></RUNNABLE-ENTITY-ARGUMENT></ARGUMENTS>",
+    );
+    // A named-argument input must not receive the SWS_Rte_06705 disposition.
+    let issues = build(&sources)
+        .err()
+        .expect("unsupported argument symbols accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "NATIVE_UNSUPPORTED"
+            && issue.file.as_deref() == Some("process.arxml")
+            && issue.object.as_deref() == Some("/Application/Process/Behavior/ServerTransform")),
+        "{issues:#?}"
+    );
 }

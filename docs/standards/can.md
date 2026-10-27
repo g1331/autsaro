@@ -47,6 +47,24 @@
 | 规范附录 | 已核对（条目只声明所列上游需求不适用于 Can，没有实现义务）：SWS_Can_NA |
 | 控制器硬件 | 差距 #170：SWS_Can_00053、00079、00236、00239、00257、00262、00264、00265、00266、00268、00281、00372、00398、00407、00419、00515、00520、ECUC_Can_00005、00073、00074、00075、00113、00313、00382、00383、00471 |
 
+## MemMap 的具体冲突位置
+
+以下为 `9204ed30` 与 `mapping-sequence-final-results/standard-ecu` 对应的技术定位，不是批准表；源码仍未新增 MR12。原件版次、R20.1／R20.5／D4.10 的修订依据和通用替代排除见 [MemMap 篇](memmap.md#misra-预处理布局)。`SWS_BSW_00006`要求所选 Can 实现包含模块映射头，`SWS_MemMap_00003`要求每个实际代码／数据块完整开闭，`00011`要求消费请求。不是每次 include 都违反 R20.1：实际报告按源文件预处理前顺序核定，不能把块首请求一律算作违反。
+
+| R20.1 的实际位置 | 被映射实体与请求 |
+| --- | --- |
+| `runtime/bsw/src/Can.c`：同一 `#include "Can_MemMap.h"` 的第2–24次，冻结行102、106、113、117、137、146、687、693、736、739、757、762、767、770、778、783、786、789、792、797、806、809、813 | 三组 cleared 对象分别是公共驱动／发送槽状态、仅 queued 配置的三个生命周期 token、接收／模式状态；代码块包括共用驱动函数及按 queued、Rx、Tx、bus-off 配置选定的完整私有动作定义。条件指令在块外，不能把后续 START 移到文件顶而仍映射相同实体。第一处 include 在本文件对象声明之前，不列为 R20.1 违反。 |
+| `runtime/bsw/include/Can.h`：第2次，冻结行140 | 关闭标准 Can 服务原型的 CODE 请求；第一处在声明前，不列为违反。 |
+| `runtime/host/include/Can_Host.h`：第1／2次，冻结行14／95 | 先有本头自身类型声明，再围住真实主机转发接口原型；不能凭 host 目录认定全文件为 BSW，也不能从 Can 源文件的首 include 情况推断这两处。这里的接口属于已选择驱动的主机接缝。 |
+| `runtime/host/src/Can_Host.c`：第2次，冻结行31 | 关闭实际调用 Can_Internal* 的转发函数定义。它们是驱动实现接缝，非测试执行代码；首 include 在本文件代码前。 |
+| 生成的 `generated/include/SchM_Can.h`：第2次，冻结行66 | 关闭五个 `Can_MainFunction_Read/Write/Wakeup/BusOff/Mode` 原型的 `CAN_CODE` 请求；对应驱动的周期处理接口。此生成位置不冒充某个 Rust 函数的违反，也不由 runtime 文件关联检查自动覆盖。 |
+
+上述共28个物理位置，均归属两个实际程序；Can.c 中新增的20处是让配置选择围住完整段而产生的真实 R20.1，不按格式变化或 checker 误报销项。四 profile 的同类文件字节相同，不能据此声称其他目标或任意配置已经运行。
+
+`runtime/bsw/include/Can_MemMap.h` 的 R20.5 关键词位置是四个真实分支中的 `#undef CAN_START_SEC_CODE`、`#undef CAN_STOP_SEC_CODE`、`#undef CAN_START_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED`。这些与上表实际 CODE／VAR 请求相连；内部 OPEN 状态及属性撤销另属实现策略的 Advisory 判断，不套用00011的直接义务。
+
+同一头文件的 D4.10 对象是其首个 `@file` 所指的重入分派主体，而不是 Can_Init 等某个函数。完整 once guard 会在第一请求后吞掉 STOP 及后续重新开启；仅保护版本头不能保护分派主体。非法／嵌套／错配检查和 STOP 后请求／属性消失的真实 C／C++ 编译观察控制误配风险；这些控制不把违反改成满足。已有累计复核核对请求机制及 Can 的状态／持区顺序，具体记录、原授权、逐处复核范围与就近注释的最终一一对应仍待完成，不能用本节代替 SWS_BSW_00115。
+
 ## 已知差距
 
 - **Can published information**：项目尚无已分配的 AUTOSAR vendor ID，也无经核对的 R24-11 数字发布宏映射；`CanVersionInfoApi` 只接受 false，`Can.h` 不声明 `Can_GetVersionInfo`。取得正式身份后才能实现 GetVersionInfo 与外部版本交叉检查（#59，见 [runtime/README.md](../../runtime/README.md)）。

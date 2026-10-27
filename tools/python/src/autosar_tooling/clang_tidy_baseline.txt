@@ -1,17 +1,10 @@
 # clang-tidy findings accepted when the check was introduced; format: <check> <file> <source line>.
 # `quality --c-samples` fails on findings not listed here and on entries that no longer occur.
 # Remove fixed entries; add one only with a reviewed reason in the PR (C coding standard).
-bugprone-narrowing-conversions runtime/os/src/Arti.c InterlockedCompareExchange(&Arti_EventsDropped, dropped + 1L, dropped);
-bugprone-narrowing-conversions runtime/os/src/Arti.c const LONG observed = InterlockedCompareExchange(&Arti_EventCount, slot + 1L, slot);
-bugprone-narrowing-conversions runtime/os/src/Os_Backend.c start->role = code == task_entry ? 'T' : (code == bootstrap ? 'B' : 'I');
-bugprone-tagged-union-member-count runtime/os/src/Os_Backend.h typedef struct {
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if ((previous[i] == SUSPENDED) && (state != SUSPENDED)) {
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if (completed[i] != 0u) {
 clang-analyzer-security.ArrayBound runtime/os/src/Os_Time.c TickType current = values[counter];
-clang-analyzer-unix.BlockInCriticalSection runtime/os/src/host/linux/Os_HostLinux.c read(handle->fd, &value, sizeof(value)) == sizeof(value)) {
-readability-function-size generated/src/Ecu_RuntimeConfig.c RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)
 readability-function-size generated/src/Os_Arti.c OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
-readability-function-size runtime/bsw/src/Can.c CAN_CODE void Can_InternalSetMode(CanMode mode)
 readability-function-size runtime/bsw/src/CanIf.c CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
 readability-function-size runtime/ecu/src/Ecu_HostBatch.c StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 readability-function-size runtime/ecu/src/Ecu_HostBridge.c StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
@@ -39,7 +32,6 @@ readability-identifier-naming runtime/ecu/src/Ecu_Target.c } Ecu_OutputSlot;
 readability-identifier-naming runtime/ecu/src/Ecu_Target.c } Ecu_ProtocolSlot;
 readability-identifier-naming runtime/host/include/Can_Host.h } CanMode;
 readability-identifier-naming runtime/host/include/Ecu_Status.h } EcuStatus;
-readability-identifier-naming runtime/os/include/Arti.h typedef char ArtiAtomic32IsFourBytes[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1];
 readability-identifier-naming runtime/os/include/Arti.h typedef int32_t ArtiAtomic32;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_AddressCapture;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_Event;

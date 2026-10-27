@@ -1,0 +1,79 @@
+# OS声明与SDK接口
+
+本篇承接[OS标准说明](README.md)，区分自有声明整改、按实际配置选择的内核接口，以及需要逐构造判断的SDK义务。
+
+## SDK宏名与实际标识符
+
+R5.5为Required（主文印刷53／PDF61，AMD2.27／39追加C11及语言措辞）。排除分支的宏从未定义，与定义后undef不同：四份declaration-consistency工件各47个报告位置对应45个关闭MPU宏及多核分支的pxCurrentTCB，不据此删除原始报告或关闭整个规则。
+
+真实GCC宏收据与预处理后C标识符的同名交集，在四profile均为相同346个名字、22个TU、2146个名字/TU组合；这是候选集合，不是346条已确认违反或新增诊断。对象为331个枚举常量、13个成员和两个typedef，来源与宏定义还须连接实际包含时序。主文§6.7（印刷15–16／PDF23–24）区分标准库实现、处理标准头时包含的文件、其他外部代码及集成接口责任；system-header标记、SDK路径或POSIX称呼都不能单独决定豁免或违反。
+
+现存四份sdk-inline-closure展开保留GCC进入／返回行标记，可区分Os_HostLinux、Os_StackLinux、Os_LinuxNative和Os_PortRestart的实际包含栈。pthread.h的12个枚举、confname.h的302个枚举、eventfd.h的三个枚举、sched_priority成员及两个Linux UAPI typedef，共320个名字的声明和宏由非标准头处理引入；对应宏均是自身名字的替换，实际预处理仍保留同名标识符。标准头处理已结束后出现的这些对象不能据§6.7排除。sched_priority的成员与宏生产者分别为struct_sched_param.h和sched.h:47。
+
+另26个名字的声明来自signal.h处理中的sigaction／siginfo／sigevent头，适用§6.7的头内容边界，不能仅因其为POSIX扩展就把该边界撤销。位掩码整改未改变包含链或这些成员名。sa_sigaction和si_addr又在项目函数体中展开，最终分别保留同名成员：Os_HostLinux.c:220／231、Os_StackLinux.c:220及:178；这些位于标准头处理之外的接口使用仍受规则约束。其余24个名字在四profile的现成实际TU展开中没有头外出现，不需为这些头内对象申请R5.5保留。由此，本次有依据的分类为320个外部头对象及两个项目接口名字存在R5.5违反、24个仅有§6.7范围内对象；计数按名字去重，不是位置或TU计数，也不表示整条规则已满足。
+
+固定March 2013第三版主文的R5.5原页没有独立Exception段；其合规宏调用示例以预处理后不再留下同名标识符为条件。已合成AMD1–4／TC1–2，其中AMD2.27／39只增加语言适用性及措辞，未找到为上述自身名字宏、成员别名或typedef另设的一般例外。该判断及§6.7的具体范围纳入本次累计技术复核；若有其他正式例外原文，应按其版次和条件核对，不能用工具解释或后续版次摘要替代固定组合。
+
+libc6-dev 2.39-0ubuntu8.9与linux-libc-dev 6.8.0-147.147的十份相关头已与现存原始来源逐字节对应。[原调查及2026-10-26状态更正](https://github.com/g1331/autsaro/pull/371#issuecomment-6407601057)保留全部名字、来源行和头摘要供追溯；原先整体申请接受346个违反的结论由上述技术分类替代，不再作为等待人类逐名批准事项。普通技术分类由实现者完成并集中复核；确需新的项目取舍时再明确实际对象、合同、风险和替代，不扩ADR0023／0024、不填批准表或MR12。这里不覆盖Windows、其他规则或最终provider语义。
+
+## 自有接缝的声明一致性
+
+R8.3为Required（主文印刷66–67／PDF74–75，AMD2追加C11）；具名参数及其类型名字／限定符须在同一函数的重复声明中一致。TC2.11–13（印刷5／PDF11）的无名参数例外不允许两组具名参数不同，主文width_t／height_t例子也不允许仅凭相同底层类型销项。Linux的pxPortInitialiseStack现沿portable.h使用pxTopOfStack／pxCode／pvParameters；vPortCloseRunningThread原型沿定义使用pending_yield。共同idle存储回调沿task.h使用ppxIdleTaskTCBBuffer／ppxIdleTaskStackBuffer／puxIdleTaskStackSize。参数顺序、类型与静态存储对象保持。
+
+两个端口的Os_PortInterruptSourceEnabled／Control沿Os_Backend.h统一为sint32返回，interrupt／operation为uint32，clear仍为boolean；Os_IntegrationTimingAuthorized的ECU定义和独立OS夹具同样沿Os_IntegrationHooks.h使用sint32。所选目标上这些别名与原int／unsigned／uint32_t的实际基本类型相同，修改不改变ABI或返回值；它处置的是名字一致性。Windows与Linux完整有序补丁链另行核对，所有后续签名上下文与manifest身份同步，上游原件不改。当前Windows的新编译／执行仍须实际取证，不能从名字映射推出provider行为。
+
+源码属性以真实声明头为预期，对恢复旧名字／旧类型拼写的副本作拒绝；实际编译和原生消费者独立核对。RTE的无名参数不因与具名定义并置而违反R8.3，R8.2及其SWS责任仍另核；函数指针声明也不要求与目标函数使用相同参数名。const TickType_t与TickType_t const只是相同限定的不同顺序，互斥平台分支、不同Task宏实例和关闭的协程实现不能混成同一生效实体。这里没有宣称全部对象、SDK或R8.3已闭合。
+
+
+## 条件接口与声明owner
+
+R18.5为Advisory（主文印刷148–149／PDF156–157，AMD2追加C11），按typedef展开后的连续指针declarator计数，数组／函数declarator会中断连续链；数组形参调整则可能额外增加一级。当前标准ECU的实际补丁后源码中，TaskHandle_t、QueueHandle_t、HANDLE及Rte_Instance等数据指针别名各为一级；SemaphoreHandle_t、MessageBufferHandle_t和Os_HostHandleType分别沿QueueHandle_t、StreamBufferHandle_t、HANDLE承接这一级。所查Task创建输出、HANDLE输出／等待数组为两级，idle存储回调的StaticTask_t**／StackType_t**和maps的const char**也为两级，没有再套数组形参增加第三级。函数指针别名的参数／返回声明分别核对，不把函数两侧的星号累加。这里只完成这些实际声明及别名链判断；没有用搜索不到***替代全部SDK／其他生成配置的类型评估。
+
+R17.5的有效类别为Required：TC2.31／32（印刷11／PDF17）将主文的Advisory及should分别改为Required及shall，AMD2追加C11。数组形参调整成指针不消除声明容量义务。当前实际Can flush传给sink的payload、Target输入及batch_frames成员均为八字节，沿Can_Inject／内部接收和Ecu_ExecutionTransmit／Target输出的八元素形参承接；DLC为零仍使用该八字节对象。read_line的真实局部数组与ECU_BATCH_LINE_CAPACITY相同。PipelineTest_Copy的十元素观察仅在test分支，不拿它证明正常入口；采用内核的无界名字数组形参另由其NUL协议判断。这里按实际调用对象核对，不把公共API的空指针拒绝测试或未知用户调用改写为全部R17.5满足。
+
+R19.1为Mandatory（主文印刷153／PDF161；AMD2追加C11），完全重合且类型兼容的赋值和memmove分别有明确例外，不能把普通memcpy的自复制也算入例外。当前自有生产源码的十二处库复制中，COM两处在私有values数组与调用方对象间复制，数组地址未作为接口返回；Target四处及Mailbox一处在调用方／局部输入、私有staging、输出槽和按值取出的record之间复制，私有记录地址未逃逸到调用方。实际生产调用方使用独立对象，不把未知或失效指针调用算作这些闭包的证明。
+
+LinuxNative另五处先把外部帧复制到独立局部kernel，再复制到局部snapshot；FP内容使用memmove，指针表示来自独立局部copied，最后以完整类型赋给destination->native。SignalSp同样先复制到独立局部kernel。源和destination相同的支持场景不再直接memcpy两者，现有self-copy消费者观察FP内容及目标自有指针。该对象关系支持这些复制位置的R19.1判断；实际信号帧容量／provider合同仍另核，未据此声明所有聚合赋值、SDK或任意应用调用均已评估。
+
+R8.5／R8.6均为Required、System范围（主文印刷69–70／PDF77–78；AMD2追加C11，AMD4.42补充R8.15交叉引用）。R8.5只约束非定义声明，不能把实现体的定义另计为重复声明。OS_TIME_TESTS分支曾在Os_Backend.h重复声明xInsideInterrupt；该头已通过FreeRTOS.h取得当前端口portmacro.h的声明，故删除私有重复行，不改对象类型或定义。两个目标的正常编译继续从各自唯一选中的端口头取得名字。
+
+同一包含链也先取得FreeRTOSConfig.h中三个kernel hook原型；Os_Backend.h不再重复声明Os_BackendOnSwitch／BeforeSelect／Assert。配置头是trace／configASSERT宏所需的唯一声明owner，实际定义仍保留OS_MEMMAP，Assert的noreturn声明保持。BeforeSelect仅比较两个地址，定义与原型统一为const void*，没有把它们注册成可写参数的function pointer。
+
+R8.13为Advisory（主文印刷73–74／PDF81–82，AMD2追加C11）。0015对uxQueueSpacesAvailable、uxQueueMessagesWaitingFromISR、xQueueIsQueueEmptyFromISR和xQueueIsQueueFullFromISR的局部Queue_t view加const；四个body只读取字段，volatile计数及原critical边界保持。正常静态queue消费者分别观察空、满及排空后的数量、容量、empty／full。与此不同，pthread／sigaction／unwind callback的可写参数类型由真实接口固定，不能靠const化后cast注册；这类ABI义务仍按原SDK范围核查，不把编译器建议等同于允许修改回调签名。Os_LinuxAltStack的previous由sigaltstack写回，不能改成const；C函数体没有显式赋值不证明该输出只读。
+
+R8.8为Required（主文印刷70–71／PDF78–79，AMD2追加C11），内部链接的定义及其他声明均须写static；继承前一声明的链接属性并不足够。固定addon只检查全局变量的static／extern组合，未检查函数。现成标准ECU的56份真实GCC展开中，506个内部函数body/TU组合及34个原型/TU组合未发现漏写static；重复头内inline按同一头来源追溯。后续私有重命名不改变这些声明的链接属性，SDK及其他构造另核。
+
+R7.2／R7.4均为Required（主文印刷60、62–63／PDF68、70–71；AMD2追加C11）。整数常量须按实际int／long／long long及预处理intmax_t模型判定，不能要求所有整数都带U；UINTn_C实参还要满足R7.5的无后缀要求。当前自有生产C/H及所选补丁后内核的保守LP64／LLP64候选检查没有发现应为unsigned却缺U的常量，不覆盖SDK。字符串入口则明确保持const char指针：Os_BackendAssert唯一生产调用传入__FILE__，声明owner和定义现使用const char *file，不以const void泛化该入口；原noreturn、位置参数及E_OS_STATE关闭保持。TC2.7的变参列表例外不适用于这个固定形参。
+
+名称核对使用实际命名空间、作用域和工具链（R5.1–5.4、R5.7／5.8均为Required，主文印刷48–57／PDF56–65；AMD2.33–40）。两个StartScheduleTable实现名字前31字符相同，但已核GCC／ld按完整名字区分，正常ELF中两符号及地址独立，不套用C99最小字符数制造违反。四profile的56／56／58／58个TU额外GCC -Wshadow检查均无拒绝；R5.3仍由Cppcheck core shadowVariable支持，不能写成无checker。宏参数与实际宏名、真实tag与关联typedef例外及其他namespace须分别核对，不能用合成的匿名类型名字或最终宏表替代声明历史。SDK的R5.5分类见上节，其他SDK名字不随之销项。
+
+四profile名字／宏／参数与每程序CTU已另按R5.2／R5.4／R5.8核对：[逐项作者依据](https://github.com/g1331/autsaro/pull/371#issuecomment-6419652534)。所核集合没有63字符截断冲突；外部定义与内部／局部／类型记录的交集只剩从未生效的MPU／多核宏。CTU按名去重不能覆盖完整scope／SDK声明，真实provider及未读名字仍保留责任。
+
+D4.5的同namespace、重叠可见性条件要求区分实际私有名字与不同成员namespace或已结束的原型作用域。CanIf／ComM的controller_mode／allowed及OS的increment／start分别改为canif_controller_state／communication_allowed／advance_counter／activate_schedule_table，保留ControllerMode、Allowed、Increment、Start等标准参数和字段名字。逐token反向映射与原源码一致，不改变值、调用次数或状态次序。标准COM_INIT／Com_Init与COMM_INIT／ComM_Init，以及当前HANDLE／handle、CONTEXT／context、SIZE_T／size_t和采用内核xQUEUE／xQueue仍需按具体合同与风险记录，不能声称本指令全部满足或由ADR0024统一保留。
+
+R5.9为Advisory、System（主文印刷57／PDF65，AMD2追加C11），唯一性同时涉及其他TU及无链接名字；同一头定义的内部inline有明确例外。conditional-kernel旧标准ECU的17个位置涉及configuration、alarms、values、handles、control及require，均为真实重名。现以16个内部实体改名消除这组冲突：六模块configuration加前缀；alarm_states／configured_alarms、signal_values、host_handles／task_handles、control_actor／host_batch_control／probe_control及probe_require／bridge_require。Time原values在Com改名后已唯一，保留其原名，避免无必要的第二端改名；局部control保留。生成表直接由原emitter输出新名。公开API、成员timing->alarms、工具const view、类型、存储期、初始化、段class及调用顺序保持，不用宏别名或新偏离。原17处报告按旧身份保留，其他名字、SDK和未选配置不据此销项。调查见[私有重名整改](https://github.com/g1331/autsaro/pull/371#issuecomment-6432143663)。
+
+R8.6不能由“未调用”或链接成功直接销项。当前实际C99头展开和定义条件核对发现27处仍生效但没有所选定义的接口：portable.h的10个heap声明、task.h的12个接口和queue.h的5个接口。0025让声明与实际定义使用相同的配置条件：动态分配、mutex／recursive mutex、timer受限等待、Delay／Delete，以及scheduler-state组合条件。xQueueCreateMutexStatic保留既有static-allocation外层条件，再检查mutex条件；没有删掉已启用实现、补假定义或增加兼容别名。所有声明的类型、参数及非预处理C token保持，上游原件不改。
+
+条件声明整改后，首次标准ECU分析还新增两条R2.3及两条R2.4：HeapRegion_t／HeapStats_t及其HeapRegion／xHeapStats tag不再有已选用途。引用闭包只剩同头中关闭的heap接口，故0025把这两个完整typedef／tag定义也纳入相同动态分配条件；启用分支的字段与类型名字不变。两条均为Advisory，不能仅用关闭功能解释仍然生效的无用途定义；对应2828条原始结果和严格配置拒绝仍按整改前身份保留，不反写为成功。
+
+正常静态对象消费者仍使用真实TCB／Queue布局、Task栈和FIFO；同一构建命令导出的编译参数另检查七个已启用名字可见，以及27个关闭函数名字、两个heap类型各自触发undeclared诊断。只检查共享编译退出码不够：逐个恢复声明的副本还须被对应名字的观察拒绝。该观察证明当前头文件可见性，不声称关闭功能已实现，也不替代函数体及运行时生命周期的验证。Windows实际运行按新head证据另记。
+
+Linux仍实际使用mmap、pthread和TLS，屏蔽heap声明不消除D4.12／R21.3／R22.1的责任。nm只用于交叉核对：有定义但未在符号表单列的九个私有函数不属于这27处；未定义符号表本身也不能证明所有provider或整个R8.6满足。SDK、外部运行库、其他声明和未选配置仍须按各自真实来源核查。
+
+## SDK 声明与常量
+
+当前SDK仍有独立的R8.2缺口：项目私有Os_HostLinux.h直接包含pthread.h，其pthread_create声明的start_routine内层void指针参数未命名；Os_PortRestart.c直接包含GCC13的unwind.h，_Unwind_Trace_Fn、_Unwind_Personality_Fn及_Unwind_Backtrace声明也保留无名参数。主文的函数指针示例明确要求命名；TC2.10只增加交叉引用，TC2.12只澄清R8.3不比较无名参数，没有取消R8.2义务。AMD2追加C11，AMD3.63补充引用，均不提供当前例外。
+
+主文§6.7对ISO标准头内容及处理标准头时包含的文件另有边界；这里两条直接入口分别是POSIX和GNU接口，不能把整个pthread／unwind SDK归入ISO标准库豁免。删除显式包含而保留间接链、手写替代声明或修改本机SDK，均不能证明交付闭包已整改。保留对应SDK声明需新的有界项目取舍或供应方合规材料；当前只记录真实缺口，不套ADR0024、不写MR12，也不将该取舍等同MISRA合法偏离。此处列的是已核具体声明，不是整个SDK的完整违规清单。
+
+R8.14同为Required（主文印刷75／PDF83；AMD2追加C11）。同一pthread.h的pthread_create、pthread_attr_getstack等声明使用__restrict限定参数；这是当前GNU C99下的restrict类型限定，不因拼写有下划线而消失。标准库memcpy的原文示例不提供整个POSIX头豁免。这是独立于R8.2的已确认声明缺口，既有两头文件命名取舍提案尚未覆盖此规则；不扩张原提案、不擅自移除SDK限定或填写批准记录，其他实际SDK构造仍须继续核查。
+
+R7.1为Required（主文印刷59–60／PDF67–68；单个0例外，AMD2.27追加C11）。Os_HostLinux.c经sys/eventfd.h实际包含bits/eventfd.h；其EFD_SEMAPHORE=00000001、EFD_CLOEXEC=02000000、EFD_NONBLOCK=00004000使用八进制，后两项直接用于事件创建。前者虽未选择，枚举声明仍进入TU。stdint.h处理先结束，再包含这些枚举，不能据主文§6.7把整个POSIX头豁免。当前libc6-dev为2.39-0ubuntu8.9，两个已核pthread／eventfd头与该固定源码字节一致；精确身份、替代和[有界SDK取舍补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6397172894)留PR。当前未接受，不填批准表／MR12，不套ADR0023／0024，也不据此声称其余SDK已评估。
+
+R8.10也是独立Required义务（主文印刷71／PDF79，AMD2追加C11）：当前pthread.h:624–630的__pthread_cleanup_routine和:1339–1343的pthread_equal均为生效的extern inline定义。前者由GNU与__EXCEPTIONS选择，后者由__USE_EXTERN_INLINES选择；正常GCC13.3 C99／O1／fexceptions宏收据确认两条条件。没有项目调用不消除已生效定义的义务，自有六个Interlocked辅助函数则均为static inline。固定libc6-dev 2.39-0ubuntu8.9头的身份、包含链及替代排除见[具体SDK补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6402928996)。仅关闭优化不能移除前者，改异常／inline语义会影响既有unwind及供应方接口；当前保留提案仍待决定，不扩ADR0024、不填批准表或MR12。
+
+按四个真实TU原参数预处理后，还确认bits/poll2.h的poll、bits/unistd.h的read／getcwd／confstr／getgroups／ttyname_r／getlogin_r，以及bits/fcntl2.h的open为当前fortify选择下的外部inline，共八个新增R8.10位置；不是前述两个pthread函数提案的自动扩张。按实际包含栈，ISO标准头及处理它们时包含文件的实现内联仍守主文§6.7边界。原_FORTIFY_SOURCE=3、GNU inline及异常选择保持，不通过关闭硬化使这些定义消失。
+
+R17.1同为Required、C99适用：AMD3.65–66禁止stdarg.h包含与其设施，TC2.8的变参声明示例直接标记不满足该规则。当前非ISO SDK有fcntl、open、makecontext、execle／execl／execlp、__open_alias的八个变参声明／定义位置（open在公开声明与fortify定义各一处）；生产只在Os_LinuxMappedStack中以固定O_RDONLY读取/proc/self/maps，不将其他声明记为执行。具体头字节、八个新增inline函数、变参位置、真实包含栈及替代排除见[合并SDK补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6403690524)。保留提案仍待决定，现成TU预处理不是新head完整分析／provider语义或合法偏离证明。
+

@@ -63,7 +63,7 @@ typedef enum {
 static const ComM_ConfigType *comm_configuration COMM_VAR_CLEARED;  /**< NULL when uninitialized. */
 static ComM_ModeType requests[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Per user. */
 static ComM_StateType channel_state COMM_VAR_CLEARED;               /**< Figure 7.7 state. */
-static boolean allowed COMM_VAR_CLEARED;                            /**< CommunicationAllowed. */
+static boolean communication_allowed COMM_VAR_CLEARED;              /**< CommunicationAllowed. */
 static boolean diagnostic COMM_VAR_CLEARED;                         /**< Dcm active diagnostic. */
 static boolean wakeup_pending COMM_VAR_CLEARED;                     /**< Wake-up until FULL. */
 static uint32 minimum_remaining COMM_VAR_CLEARED;                   /**< Minimum FULL periods. */
@@ -149,7 +149,7 @@ static COMM_CODE void ComM_Evaluate(void)
     if (channel_state == COMM_NO_COM_REQUEST_PENDING) {
         if (!demand) {
             channel_state = COMM_NO_COM_NO_PENDING_REQUEST;
-        } else if (allowed) {
+        } else if (communication_allowed) {
             channel_state = COMM_FULL_COM_NETWORK_REQUESTED;
             minimum_remaining = comm_configuration->minimum_full_ticks;
             wakeup_pending = FALSE;
@@ -245,7 +245,7 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
             requests[i] = COMM_NO_COMMUNICATION;
         }
         channel_state = COMM_NO_COM_NO_PENDING_REQUEST;
-        allowed = FALSE;
+        communication_allowed = FALSE;
         diagnostic = FALSE;
         wakeup_pending = FALSE;
         minimum_remaining = 0u;
@@ -407,7 +407,7 @@ COMM_CODE void ComM_CommunicationAllowed(NetworkHandleType Channel, boolean Allo
 {
     SchM_Enter_ComM_COMM_STATE();
     if ((comm_configuration != NULL_PTR) && (Channel == comm_configuration->channel)) {
-        allowed = Allowed;
+        communication_allowed = Allowed;
         ComM_Evaluate();
     }
     SchM_Exit_ComM_COMM_STATE();

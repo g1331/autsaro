@@ -3,27 +3,44 @@
 void PipelineTest_Record(uint8 actor);
 void PipelineTest_CallContext(boolean entered);
 void PipelineTest_Result(uint32 value, uint32 state, uint32 local, Std_ReturnType status);
+static inline void Observe_RecordActor(void) { PipelineTest_Record(2u); }
+static inline void Observe_CallContext(boolean entered) { PipelineTest_CallContext(entered); }
+static inline void Observe_Result(uint32 value, uint32 state, uint32 local, Std_ReturnType status)
+{
+    PipelineTest_Result(value, state, local, status);
+}
+#else
+static inline void Observe_RecordActor(void) {}
+static inline void Observe_CallContext(boolean entered) { (void)entered; }
+static inline void Observe_Result(uint32 value, uint32 state, uint32 local, Std_ReturnType status)
+{
+    (void)value;
+    (void)state;
+    (void)local;
+    (void)status;
+}
 #endif
-static uint32 observed;
-static uint32 service_value;
-static uint32 service_state;
-void Observe_Periodic(void) {
-#ifdef ECU_TARGET_TESTS
-    PipelineTest_Record(2u);
-#endif
+#define Observe_START_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Observe_MemMap.h"
+static uint32 observed Observe_VAR_CLEARED_UNSPECIFIED;
+static uint32 service_value Observe_VAR_CLEARED_UNSPECIFIED;
+static uint32 service_state Observe_VAR_CLEARED_UNSPECIFIED;
+#define Observe_STOP_SEC_VAR_CLEARED_UNSPECIFIED
+#include "Observe_MemMap.h"
+#define Observe_START_SEC_CODE
+#include "Observe_MemMap.h"
+Observe_CODE void Observe_Periodic(void)
+{
+    (void)Observe_RecordActor();
     uint32 value = 0u;
     (void)Rte_Read_Value_Value(&value);
     (void)Rte_Read_Result_Value(&observed);
-#ifdef ECU_TARGET_TESTS
-    PipelineTest_CallContext(TRUE);
-#endif
+    (void)Observe_CallContext(TRUE);
     const Std_ReturnType call_status =
         Rte_Call_ResultService_Transform(value, &service_value, &service_state);
-#ifndef ECU_TARGET_TESTS
-    (void)call_status;
-#endif
-#ifdef ECU_TARGET_TESTS
-    PipelineTest_Result(service_value, service_state, observed, call_status);
-    PipelineTest_CallContext(FALSE);
-#endif
+    (void)Observe_Result(service_value, service_state, observed, call_status);
+    (void)Observe_CallContext(FALSE);
 }
+
+#define Observe_STOP_SEC_CODE
+#include "Observe_MemMap.h"

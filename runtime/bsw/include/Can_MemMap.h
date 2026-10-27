@@ -1,5 +1,6 @@
 /** @file Repeated section protocol for controlled GCC PE/ELF targets.
  * Explicit .text/.bss mapping; no MCU linker placement is implied.
+ * MR12 DIR 4.10 VIOLATION: Process each required pair; guard fixed attributes only.
  */
 #include "MemMap_Version.h"
 #if (defined(CAN_START_SEC_CODE) + defined(CAN_STOP_SEC_CODE) +                                    \
@@ -14,6 +15,7 @@
 #define CAN_MEMMAP_OPEN
 #define CAN_MEMMAP_CODE_OPEN
 #define CAN_CODE __attribute__((section(".text")))
+/* MR12 RULE 20.5 VIOLATION: Clear the handled request; check each later mapping pair. */
 #undef CAN_START_SEC_CODE
 #elif defined(CAN_STOP_SEC_CODE)
 #if !defined(CAN_MEMMAP_CODE_OPEN)
@@ -22,6 +24,7 @@
 #undef CAN_MEMMAP_CODE_OPEN
 #undef CAN_MEMMAP_OPEN
 #undef CAN_CODE
+/* MR12 RULE 20.5 VIOLATION: Clear the handled request; check each later mapping pair. */
 #undef CAN_STOP_SEC_CODE
 #elif defined(CAN_START_SEC_VAR_CLEARED_UNSPECIFIED)
 #if defined(CAN_MEMMAP_OPEN)
@@ -30,6 +33,7 @@
 #define CAN_MEMMAP_OPEN
 #define CAN_MEMMAP_VAR_OPEN
 #define CAN_VAR_CLEARED __attribute__((section(".bss")))
+/* MR12 RULE 20.5 VIOLATION: Clear the handled request; check each later mapping pair. */
 #undef CAN_START_SEC_VAR_CLEARED_UNSPECIFIED
 #elif defined(CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED)
 #if !defined(CAN_MEMMAP_VAR_OPEN)
@@ -38,6 +42,7 @@
 #undef CAN_MEMMAP_VAR_OPEN
 #undef CAN_MEMMAP_OPEN
 #undef CAN_VAR_CLEARED
+/* MR12 RULE 20.5 VIOLATION: Clear the handled request; check each later mapping pair. */
 #undef CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #endif
 #endif

@@ -100,7 +100,7 @@ int main(void) {
         microseconds != UINT64_MAX || TotalNumberOfCores != 1u) {
         return 48;
     }
-    const Os_TimeConfigType *time = Ecu_OsConfig.time;
+    const Os_TimeConfigType *time = Ecu_OsConfig.timing;
     if (time == NULL || time->counter_count != 1u || time->counters == NULL ||
         time->system_counter != 0u || time->counters[0u].id != 0u ||
         time->counters[0u].maximum != UINT64_C(65535) || time->counters[0u].ticks_per_base != 1u ||

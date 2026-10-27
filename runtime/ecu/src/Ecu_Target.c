@@ -51,8 +51,6 @@ typedef struct {
  */
 static volatile Os_Atomic32Type
     lifecycle; /**< Atomic target lifecycle; Prepare claims zero once. */
-static volatile Os_Atomic32Type native_owner; /**< Atomic binding: 0 unbound, 1 writing, 2 ready. */
-static Os_HostThreadIdType native_thread;     /**< Native identity published by native_owner. */
 /* Accessed only by the native producer after its atomic identity publication. */
 static uint64_t native_input_epoch;  /**< Native-only last admitted epoch, ms. */
 static uint64_t native_batch_ticket; /**< Native-only last admitted batch identity. */
@@ -64,21 +62,15 @@ static uint8_t batch_needs_tick; /**< Native-published tick flag; batch_state ha
 static Ecu_BatchFrame batch_frames[ECU_BATCH_CAPACITY]; /**< Payload protected by batch_state. */
 static Ecu_BatchCompletion batch_completion;            /**< Result protected by batch_state. */
 static Os_HostThreadIdType initialization_thread;       /**< Startup writes once before READY. */
-static uint64_t epoch;              /**< Owner-only current logical epoch, ms; initially zero. */
-static uint64_t processed_tick;     /**< Owner-only last processed tick ticket; initially zero. */
-static uint64_t processed_epoch;    /**< Owner-only last processed epoch, ms. */
-static uint64_t next_output_ticket; /**< Owner-only monotonic output identity; initially zero. */
-static unsigned output_write;       /**< Owner-only next publication slot; initially zero. */
-static unsigned output_read;        /**< Native-only next take slot; initially zero. */
-static unsigned output_confirm;     /**< Native-only next confirmation slot; initially zero. */
-static unsigned output_retire;      /**< Owner-only next retirement slot; initially zero. */
-static unsigned output_pending;     /**< Owner-only outstanding output count; initially zero. */
+static uint64_t epoch;           /**< Owner-only current logical epoch, ms; initially zero. */
+static uint64_t processed_tick;  /**< Owner-only last processed tick ticket; initially zero. */
+static uint64_t processed_epoch; /**< Owner-only last processed epoch, ms. */
+static unsigned output_retire;   /**< Owner-only next retirement slot; initially zero. */
+static unsigned output_pending;  /**< Owner-only outstanding output count; initially zero. */
 /* Confirmations taken before their epoch's cycle, retired after it in order. */
 static unsigned output_deferred; /**< Owner-only confirmations deferred until cycle. */
 static Ecu_OutputSlot outputs[ECU_TARGET_OUTPUT_CAPACITY];             /**< Atomic output slots. */
 static Ecu_ProtocolSlot protocol_failures[ECU_TARGET_OUTPUT_CAPACITY]; /**< Atomic failure slots. */
-static unsigned protocol_write; /**< Owner-only next failure publication slot; initially zero. */
-static unsigned protocol_read;  /**< Native-only next failure consumption slot; initially zero. */
 /* Highest generated bootstrap stage that began; retirement undoes only those. */
 static uint8 bootstrap_reached; /**< Startup writes; stopped-owner shutdown reads. */
 
@@ -92,6 +84,8 @@ static Os_Atomic32Type load(volatile Os_Atomic32Type *value) { return Os_HostAto
 /* Owner-only writer; a full queue closes the target instead of dropping a record. */
 static void record_protocol_failure(EcuStatus status)
 {
+    static unsigned
+        protocol_write; /**< Owner-only next failure publication slot; initially zero. */
     Ecu_ProtocolSlot *slot = &protocol_failures[protocol_write];
     if (load(&slot->state) != 0) {
         fail();
@@ -112,17 +106,26 @@ void Ecu_TargetReportTransportTimeout(void)
 uint8_t Ecu_TargetState(void)
 {
     Os_Atomic32Type state = load(&lifecycle);
-    if ((state == (Os_Atomic32Type)ECU_TARGET_READY) && (Os_TargetReady() == 0)) {
-        return ECU_TARGET_INITIALIZING;
+    if (state == (Os_Atomic32Type)ECU_TARGET_READY) {
+        if (Os_TargetReady() == 0) {
+            state = (Os_Atomic32Type)ECU_TARGET_INITIALIZING;
+        }
     }
     return (uint8_t)state;
 }
 int Ecu_TargetIsOwner(void)
 {
+    int owned = 0;
     if (load(&lifecycle) == (Os_Atomic32Type)ECU_TARGET_INITIALIZING) {
-        return (initialization_thread != 0u) && (Os_HostThreadIdentity() == initialization_thread);
+        if (initialization_thread != 0u) {
+            owned = (Os_HostThreadIdentity() == initialization_thread) ? 1 : 0;
+        }
+    } else {
+        if (Ecu_TargetState() == ECU_TARGET_READY) {
+            owned = (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1) ? 1 : 0;
+        }
     }
-    return (Ecu_TargetState() == ECU_TARGET_READY) && (Os_BackendTaskOwner(ECU_TARGET_TASK) == 1);
+    return owned;
 }
 void Ecu_TargetAssertOwner(void)
 {
@@ -145,7 +148,11 @@ uint64_t Ecu_TargetNow(void)
 }
 static StatusType native_context(void)
 {
+    static volatile Os_Atomic32Type
+        native_owner;                         /**< Atomic binding: 0 unbound, 1 writing, 2 ready. */
+    static Os_HostThreadIdType native_thread; /**< Native identity published by native_owner. */
     Os_Atomic32Type owner;
+    StatusType status = E_OS_ACCESS;
     if (Ecu_TargetState() != ECU_TARGET_READY) {
         return E_OS_STATE;
     }
@@ -158,11 +165,18 @@ static StatusType native_context(void)
         (void)Os_HostAtomicExchange(&native_owner, 2);
         return E_OK;
     }
-    return ((owner == 2) && (native_thread == Os_HostThreadIdentity())) ? E_OK : E_OS_ACCESS;
+    if (owner == 2) {
+        if (native_thread == Os_HostThreadIdentity()) {
+            status = E_OK;
+        }
+    }
+    return status;
 }
 
 StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record)
 {
+    static unsigned
+        protocol_read; /**< Native-only next failure consumption slot; initially zero. */
     StatusType status;
     Ecu_ProtocolSlot *slot = &protocol_failures[protocol_read];
     if (record == NULL) {
@@ -183,8 +197,10 @@ StatusType Ecu_TargetTakeProtocolFailure(Ecu_ProtocolRecord *record)
 StatusType Ecu_TargetPrepare(void)
 {
     StatusType status;
-    if (Os_HostAtomicCompareExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_INITIALIZING, 0) !=
-        0) {
+    if (Os_HostAtomicCompareExchange(&lifecycle,
+                                     (Os_Atomic32Type)ECU_TARGET_INITIALIZING,
+                                     (Os_Atomic32Type)ECU_TARGET_UNPREPARED) !=
+        (Os_Atomic32Type)ECU_TARGET_UNPREPARED) {
         return E_OS_STATE;
     }
     status = Os_TargetPrepare(&Ecu_OsConfig);
@@ -212,8 +228,11 @@ void StartupHook(void)
     }
     (void)Os_HostAtomicExchange(&lifecycle, (Os_Atomic32Type)ECU_TARGET_READY);
 }
+
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 void ShutdownHook(StatusType Error)
@@ -222,12 +241,23 @@ void ShutdownHook(StatusType Error)
         (Error == E_OK) ? (Os_Atomic32Type)ECU_TARGET_CLOSED : (Os_Atomic32Type)ECU_TARGET_FAILED;
     Ecu_StackRetire(bootstrap_reached);
     (void)Os_HostAtomicExchange(&lifecycle, state);
-#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
     Ecu_TargetTestShutdown(Error);
-#endif
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+void ShutdownHook(StatusType Error)
+{
+    Os_Atomic32Type state =
+        (Error == E_OK) ? (Os_Atomic32Type)ECU_TARGET_CLOSED : (Os_Atomic32Type)ECU_TARGET_FAILED;
+    Ecu_StackRetire(bootstrap_reached);
+    (void)Os_HostAtomicExchange(&lifecycle, state);
+}
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
 StatusType Ecu_TargetPostFrame(
     uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t *ticket)
 {
@@ -381,23 +411,33 @@ StatusType Ecu_TargetBatchCompletion(uint64_t ticket, Ecu_BatchCompletion *resul
     (void)Os_HostAtomicExchange(&batch_state, 0);
     return E_OK;
 }
-int Os_IntegrationTimingAuthorized(void) { return Ecu_SchMTimingActive() == TRUE; }
+sint32 Os_IntegrationTimingAuthorized(void) { return (Ecu_SchMTimingActive() == TRUE) ? 1 : 0; }
 void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType predicate)
 {
-    if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u) &&
-        (Os_MailboxQuiescent() != 0) && (output_pending == 0u) && (load(&batch_state) == 4) &&
-        ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
-        (void)Os_HostAtomicCompareExchange(&batch_state, 5, 4);
+    if ((id == ECU_TARGET_TASK) && (pending == 0u) && ((predicate & ECU_TARGET_EVENT_IO) != 0u)) {
+        if ((Os_MailboxQuiescent() != 0) && (output_pending == 0u)) {
+            if ((load(&batch_state) == 4) &&
+                ((batch_needs_tick == 0u) || (processed_tick == batch_epoch))) {
+                (void)Os_HostAtomicCompareExchange(&batch_state, 5, 4);
+            }
+        }
     }
 }
 EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8])
 {
+    static uint64_t
+        next_output_ticket;       /**< Owner-only monotonic output identity; initially zero. */
+    static unsigned output_write; /**< Owner-only next publication slot; initially zero. */
     Ecu_OutputSlot *slot = &outputs[output_write];
     if (Ecu_TargetIsOwner() == 0) {
         return ECU_ERR_IO;
     }
-    if ((dlc > 8u) || (data == NULL) || (id > 0x7ffu) || (next_output_ticket == UINT64_MAX) ||
-        (load(&slot->state) != 0)) {
+    boolean writable =
+        (dlc <= 8u) && (data != NULL) && (id <= 0x7ffu) && (next_output_ticket != UINT64_MAX);
+    if (writable) {
+        writable = load(&slot->state) == 0;
+    }
+    if (!writable) {
         fail();
         return ECU_ERR_IO;
     }
@@ -413,7 +453,9 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, con
     slot->record.can_id = id;
     slot->record.dlc = dlc;
     (void)memset(slot->record.data, 0, sizeof(slot->record.data));
-    (void)memcpy(slot->record.data, data, dlc);
+    if (dlc != 0u) {
+        (void)memcpy(slot->record.data, data, dlc);
+    }
     ++output_pending;
     output_write = (output_write + 1u) % ECU_TARGET_OUTPUT_CAPACITY;
     (void)Os_HostAtomicExchange(&slot->state, 1);
@@ -424,6 +466,7 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, con
 }
 StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record)
 {
+    static unsigned output_read; /**< Native-only next take slot; initially zero. */
     StatusType status;
     Ecu_OutputSlot *slot = &outputs[output_read];
     if (record == NULL) {
@@ -442,6 +485,7 @@ StatusType Ecu_TargetTakeOutput(Ecu_OutputRecord *record)
 }
 StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu)
 {
+    static unsigned output_confirm; /**< Native-only next confirmation slot; initially zero. */
     Ecu_OutputSlot *slot = &outputs[output_confirm];
     Ecu_Input input = {0};
     uint64_t mailbox_ticket;
@@ -562,7 +606,11 @@ void Ecu_TargetTask(void)
         unsigned count;
         StatusType status;
         Ecu_TargetAssertOwner();
-        if ((GetEvent(ECU_TARGET_TASK, &events) != E_OK) || (ClearEvent(events & mask) != E_OK)) {
+        status = GetEvent(ECU_TARGET_TASK, &events);
+        if (status == E_OK) {
+            status = ClearEvent(events & mask);
+        }
+        if (status != E_OK) {
             fail();
         }
         status = Os_TargetTakeInput(&record);
@@ -584,9 +632,12 @@ void Ecu_TargetTask(void)
             /* A tick may arrive while this Task drains copied inputs. Its
              * alarm events are published before the delivered ticket, so
              * refresh the hints instead of losing this tick's application. */
-            if ((GetEvent(ECU_TARGET_TASK, &tick_events) != E_OK) ||
-                (ClearEvent(tick_events & (ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP)) !=
-                 E_OK)) {
+            StatusType event_status = GetEvent(ECU_TARGET_TASK, &tick_events);
+            if (event_status == E_OK) {
+                event_status =
+                    ClearEvent(tick_events & (ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP));
+            }
+            if (event_status != E_OK) {
                 fail();
             }
             events |= tick_events;
@@ -612,9 +663,12 @@ void Ecu_TargetTask(void)
         } else if ((status != E_OK) && (status != E_OS_NOFUNC)) {
             fail();
         } else {
+            /* No new tick; an already processed tick is not run again. */
         }
-        if ((status == E_OK) && (output_pending == 0u) && (Os_TargetCompleteTick(ticket) != E_OK)) {
-            fail();
+        if ((status == E_OK) && (output_pending == 0u)) {
+            if (Os_TargetCompleteTick(ticket) != E_OK) {
+                fail();
+            }
         }
         if (Os_TargetInputCount(&count) != E_OK) {
             fail();

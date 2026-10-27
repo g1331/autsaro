@@ -78,6 +78,24 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 
 ## MISRA 偏离
 
+### MemMap 的逐处责任
+
+以下定位绑定 `8a26e3b0` 与四份 `complete-declarations-final-samples`，按物理位置计数，不是批准表。R20.1／R20.5／D4.10 的原文、修订及通用替代判断见 [MemMap 篇](memmap.md#misra-预处理布局)；`SWS_MemMap_00003`（页36）要求声明和定义分别完整映射，00011（页41）要求消费请求关键词，00023（页37）禁止把映射头移进函数。
+
+| 位置、请求与 class | 实际实体与消费者 |
+| --- | --- |
+| `runtime/bsw/src/Com.c` 的 `#include "Com_MemMap.h"` 第2／3／4次，行54／63／443 | 关闭配置指针、信号值、接收期限、待发布通知及状态标志的 cleared 段，再开启／关闭八个私有 helper 和十八个服务／适配定义的 `COM_CODE`。对象受 COM_STATE 保护；发布器在区外调用通知，重新初始化不能提前清除仍在回调中的 publishing。第一处在对象前，不列为 R20.1。 |
+| `runtime/bsw/include/Com.h`，同一指令第1／2次，行70／235 | 配置类型之后的十五个公开服务／回调原型，均为 `COM_CODE`。定义侧的段不替代声明侧的属性和完整请求对。 |
+| `runtime/bsw/src/Com_Internal.h`，同一指令第2次，行13 | 关闭 `Ecu_ComReceptionBeforeMain`、`Ecu_ComMainFunctionRx/Tx` 三个私有适配原型的 `COM_CODE`；生成的周期包装器调用后两者，接收顺序适配调用前者。第一处在本文件声明前。 |
+| `generated/include/SchM_Com.h` 的 `#include "Rte_MemMap.h"` 第3／4次，行33／54 | 两个已配置周期接口原型的 `RTE_Com_CODE`。第2次行30关闭的是共享 Enter/Exit 的 `RTE_Rte_CODE`，另沿 RTE 责任核对，不混算为 COM。 |
+| `generated/src/Ecu_RuntimeConfig.c`，同一指令紧随四个 `RTE_Com` 请求 | 标准／用户样本行279／300开启／关闭配置对，行383／387为周期包装定义的 CODE 对；组件样本为281／302、385／389，无诊断样本为266／287、324／328。配置对包围已合并的 com_pdus／com_config；Bootstrap 将其交给 Com_Init 并启动组及期限监测，周期包装器进入实际 Rx／Tx 实现。 |
+
+上述共十二个真实 R20.1 位置；RuntimeConfig 的配置对已经合并，不再以旧逐对象开闭计数。其生成来源为 `ecu_config::config_data` 及实际主函数 emitter，SchM 原型来自同一配置选择；公共签名、对象顺序和回调地址保持。
+
+`Com_MemMap.h` 的四个关键词撤销位于模板行7／14／21／28，连接00011；行18／19／32／33撤销内部 active／属性宏，属于选定实现的清理，不能冒充标准强制的宏名。模板由 MEMMAP producer 交付到 generated/include，不能因字节相同就称为直接原件映射。D4.10对应该可重入头及上述真实请求：一次性 guard 会吞掉 STOP，顶部一次性 include 或默认段不能保留同一配置与段继承。缺请求／多请求／错配拒绝、真实头部属性继承、版本边和正常 COM 下层消费者分别控制风险；这不等于 MISRA 允许条件或整体符合。最终逐处记录、累计复核及 BSW00115 注释仍须对应，当前不新增 Approved／MR12。
+
+R21.15（AMD1，Required、C99，页6／PDF14；AMD2增加C11适用性）的复制实参类型核查覆盖 `Com_SendSignal`／`Com_ReceiveSignal`：`SWS_Com_00197／00198` 的 `const void *`／`void *` 接口保持，内部 UINT32 状态以 object-to-void 视图与之配对，不将不兼容的原始实参交给库形参自动转换。COM 原文页106–107、109 的 `SWS_Com_00624／00631` 信号复制语义、4字节长度、COM_STATE、返回码及调用者类型／对齐责任不变；生成 RTE 仍传递对应 uint32 对象。该处没有 void-to-object 恢复或新偏离，实参兼容性与实际读写消费者分别核查；其他库、资源及采用代码义务不由此结论代替。
+
 | 规则 | 范围 | 依据与风险控制 | 批准 |
 | --- | --- | --- | --- |
 | MISRA C:2012 Rule 8.7（advisory） | `runtime/bsw/src/Com.c` 中 `Com_InvalidateSignal` 与 `Com_SwitchIpduTxMode` 的定义 | `SWS_Com_00203／00784` 规定这两个 API 经 `Com.h` 以外部链接提供；所选程序没有模块调用它们，Cppcheck 因此报告只在一个翻译单元中引用。偏离只影响符号可见性：两个函数只在 `COM_STATE` 区内读写本模块数据，不调用其他模块，行为由 `com_chain_contract.c` 验证；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-14（#42） |
@@ -88,3 +106,5 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 - 头文件不含软件与规范版本号（#59）。
 - Com_Cfg.h 导出 ComSignal、ComIPdu 与 ComIPduGroup 符号；Tx 配置使用 PduR 提供的源句柄，Rx 回调映射使用 COM 提供的 PDU 句柄。
 - 生成 C 的 MISRA 诊断裁决与人工评估未完成（#58）。
+
+R21.2（Required；主文印刷166–167／PDF174–175，含TC1更正及AMD2适用性扩展）的自有名字核查发现Com_PduConfigType.signal复用C99库函数标识符；现改为signal_id并同步Com查找／重复配置检查。固定SWS_Com_00825原页99的Com_ConfigType元素为implementation specific，没有强制该成员拼写；生成配置仍为同顺序位置初始化，SignalId和PDU的映射、类型／布局及标准函数签名保持，旧具名成员访问须更新。这不批准库标识符保留或改写原始诊断。

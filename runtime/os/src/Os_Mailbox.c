@@ -20,11 +20,7 @@ OS_MEMMAP static uint64 last_ticket; /**< Single-producer accepted ticket; no In
 #include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
     published; /**< Atomic complete-record count; no Init reset. */
-#define OS_STOP_SEC_VAR_CLEARED_32
-#include "Os_MemMap.h"
 /* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
-#define OS_START_SEC_VAR_CLEARED_32
-#include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
     admission; /**< Atomic producer/close bits; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
@@ -62,18 +58,20 @@ OS_MEMMAP static uint32 input_interrupt(void)
 OS_MEMMAP void Os_MailboxInstall(void)
 {
     if (Os_Config->input_event != 0u) {
-        vPortSetInterruptHandler(OS_INPUT_INTERRUPT, input_interrupt);
+        vPortSetInterruptHandler(OS_INPUT_INTERRUPT, &input_interrupt);
     }
 }
 
 OS_MEMMAP sint32 Os_MailboxHandlerAllowed(uint32 interrupt, uint32 (*handler)(void))
 {
-    return Os_BackendHandlerAllowed(interrupt, handler) &&
-           ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
-            (interrupt != OS_INPUT_INTERRUPT) || (handler == input_interrupt));
+    return ((Os_BackendHandlerAllowed(interrupt, handler) != 0) &&
+            ((Os_Config == NULL) || (Os_Config->input_event == 0u) ||
+             (interrupt != OS_INPUT_INTERRUPT) || (handler == &input_interrupt)))
+               ? 1
+               : 0;
 }
 
-OS_MEMMAP void Os_MailboxClose(void) { InterlockedOr(&admission, 2); }
+OS_MEMMAP void Os_MailboxClose(void) { (void)InterlockedOr(&admission, 2); }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #if defined(OS_EVENT_TESTS) && (OS_EVENT_TESTS == STD_ON)
@@ -127,8 +125,8 @@ OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 
     *ticket = last_ticket;
     write_index = (write_index + 1u) % OS_INPUT_CAPACITY;
     /* Interlocked publication orders the complete copy before consumer reads. */
-    InterlockedIncrement(&published);
-    InterlockedAnd(&admission, ~1L);
+    (void)InterlockedIncrement(&published);
+    (void)InterlockedAnd(&admission, (LONG) ~(uint32)1u);
     if (Os_TargetReady() != 0) {
         Os_PortPostInterrupt(OS_INPUT_INTERRUPT);
     }
@@ -142,7 +140,7 @@ OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 
 OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 {
     const Os_NativeStackType *actor = Os_StackCurrent();
-    return actor == NULL || actor->role == 'H';
+    return ((actor == NULL) || (actor->role == 'H')) ? 1 : 0;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -152,7 +150,7 @@ OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 {
     const Os_NativeStackType *actor = Os_StackCurrent();
-    return actor == NULL;
+    return (actor == NULL) ? 1 : 0;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -180,8 +178,11 @@ OS_MEMMAP StatusType Os_BridgeContext(void)
 
 OS_MEMMAP sint32 Os_MailboxQuiescent(void)
 {
-    return ((InterlockedCompareExchange(&admission, 0, 0) & 1) == 0) &&
-           (InterlockedCompareExchange(&published, 0, 0) == 0);
+    sint32 quiescent = 0;
+    if (((uint32)InterlockedCompareExchange(&admission, 0, 0) & 1u) == 0u) {
+        quiescent = (InterlockedCompareExchange(&published, 0, 0) == 0) ? 1 : 0;
+    }
+    return quiescent;
 }
 
 OS_MEMMAP static StatusType input_context(void)
@@ -219,7 +220,7 @@ OS_MEMMAP StatusType Os_TargetTakeInput(Os_InputRecordType *record)
     }
     *record = records[read_index];
     read_index = (read_index + 1u) % OS_INPUT_CAPACITY;
-    InterlockedDecrement(&published);
+    (void)InterlockedDecrement(&published);
     return E_OK;
 }
 

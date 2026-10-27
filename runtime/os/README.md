@@ -1,8 +1,36 @@
 # 受控主机 Automotive OS runtime
 
-内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用十四个受控补丁；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/0001-controlled-posix-port.patch`。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
+内核固定为 FreeRTOS V11.3.1 commit `054e14f3397023aa83813a65aa065fc4597d481b`。Windows GCC 16.1.0 x64 使用受控补丁链；Ubuntu 24.04 x86_64 GCC 13.3.0 的独立 OS 测试程序使用同一内核、适用的公共补丁及 `patches/linux/` 中的受控端口补丁。内核取自 `third_party/freertos/`，原始文件、两份来源摘要和 MIT 许可保留，不在线获取其他版本。`toolchain.json` 与 `toolchain-linux.json` 分别核对编译器和目标身份，以及 objdump/nm 可执行文件的摘要（Windows 为 MSYS2 `mingw-w64-x86_64-binutils` 2.47-4）。本节所述阶段的 Linux 原生验证覆盖独立 OS 测试程序；当时完整 Linux ECU、生成工程和工作台运行仍待后续验证。
 
 配置表的计数及模块索引使用uint32，容量仍由各OS_MAX_*限制；任务名为以NUL结尾的const uint8字节串，调用FreeRTOS时才转到原生字符接口。集成方须用当前头文件重新编译配置与消费者。
+
+Linux 的暂停请求、确认与恢复使用同一代次：普通代次在 1..INT32_MAX-1 循环，0 表示尚未暂停，INT32_MAX 只表示不可逆停止。dispatcher 在既有中断 mutex 下串行提交普通请求；Task 创建的首次暂停先于 dispatcher 启动，独立控制线程仍可并发停止 actor。请求以 CAS 发布，避免覆盖先到的停止；确认与恢复按当前代次相等判断，信号 handler 返回前不清零旧恢复值。`NativeFacilityTests.test_suspend_generation_wrap_preserves_context_and_terminal_stop` 在测试副本中设置近上界初值，检查真实信号回绕、上下文与停止交错，并拒绝无界递增及覆盖停止的变异；这是 D4.1 的算术边界与失败预防证据。
+
+Linux 主机调用、后端启动／关闭及中断准入将有持久副作用的操作放在独立语句或嵌套条件中；受控 POSIX 后续补丁 `linux/0002-sequence-persistent-side-effects.patch` 保留事件发布、mutex 交接与 ISR 重调度请求的原有条件和顺序。R13.5 为 Required、适用 C99（主文页113–114／PDF121–122）；volatile 读取也属于持久副作用（Glossary 页224／PDF232），TC1 Appendix J 页14／PDF20明确函数判断不依赖可能的实参或非局部对象值。因此空句柄保护、已知状态或包装调用不构成 RHS 例外，不能无条件提前执行原来受保护的系统调用或取走请求。本次改写没有增加共享状态、改变公开 ABI 或去掉 volatile；夹具保留普通、失败、容量、已结束线程和停止交错观察。固定 checker 的零条 R13.5 报告不能替代此项源码核查；采用内核及其他模块仍需分别完成处置。
+
+R14.3（Required、C99，主文页119–120／PDF127–128）也覆盖条件运算符的第一操作数；生产配置中的恒假故障桩没有无限循环或 TC2.27–28 的 do-while 例外。backend 按既有 OS_STACK_TESTS／OS_HOST_FAILURE_TESTS 在完整 MemMap 配对外选择实现，生产分支直接执行 suspend／context／resume 和资源创建；测试分支保留一次性故障消费及原生失败检查。资源调用计数仍在每次实际尝试前递增，Linux 的非法 attributes 仍不计为尝试；lifecycle 消费者比较生产与注入构建的正常计数，并验证生产构建中的注入输入不生效。上下文观察仍先于恢复尝试，没有新增状态、配置或 ABI。
+
+资源包装使用文件私有的 OS_RESOURCE_CREATE：测试失败时不求值原生创建表达式，其他路径只求值一次；计数独立于该选择。接收创建结果的普通函数会先执行实参，不能保留这一故障边界，因此不属于 D4.9 的函数／宏可互换条件（Advisory，主文页31–32／PDF39–40；AMD2.26、AMD3.6–8未改变本条件，未援引泛型例外）。两种宏定义都将表达式参数放在括号内，按 R20.7（Required，页159／PDF167）核查。
+
+`SuspendThread` 的混合优先级表达式显式加括号，并只在函数末尾返回结果；依据 R12.1 主文页103–104／PDF111–112（含优先级表与表达式树）、AMD2.62 的前三行表格修订及 R15.5 主文页126／PDF134，两项在 C99 下均为 Advisory。拒绝、已暂停、成功与并发停止仍保留各自结果，未以理由记录代替这两处源码修复。固定 checker 的 R17.3 原始报告仍保留；主文页138／PDF146仅适用C90，C99的声明义务与GCC内建签名另按R1.1／R8.2／R8.4及实际编译核查。
+
+三个 `__atomic_compare_exchange_n` 调用的 `weak` 参数均使用 `stdbool.h` 的 `false`，与 [GCC 原子内建契约](https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html) 的 Boolean 形参一致。R10.3（Required，主文页86–87／PDF94–95，Glossary 的 assignment 含实参传递）不允许把 essentially signed 的整数0作为Boolean实参；TC1的常量例外、TC2.20的case修正和AMD3.27的浮点例外均不提供该转换的例外。这里保留strong CAS语义，修复的是实参的essential type，非新增同步机制。
+
+在[PR #371](https://github.com/g1331/autsaro/pull/371)核验的 `1b4c11ff` 八份双平台四样本中，R5.5 的47个原始位置对应46个名字：tasks.c的29处、queue.c的17处及受控task.h的extern一处。两处是pxCurrentTCB，其余为FreeRTOS API函数；相关tasks／queue／task.h／mpu_wrappers.h／FreeRTOS.h／FreeRTOSConfig.h字节在八样本间相同，所选端口和编译参数不覆盖cores／MPU默认值。configNUMBER_OF_CORES=1排除了pxCurrentTCB的SMP宏定义；portUSING_MPU_WRAPPERS=0排除了45个API的MPU宏别名。Linux标准ECU的实际GCC `-E -dD` 确认全部名字保留为标识符，且从未进入生效的宏定义历史（含后续undef的历史，非仅检查最终宏表）。据R5.5主文页53／PDF61、AMD2.39及Glossary（页223／PDF231）对条件编译排除代码的定义，这47处报告的同名宏条件不成立；不据此判定其他R5.5位置通过。
+
+固定2.21.0 addon的最小对照仍对排除分支中的同名函数式宏报告R5.5；生效的同名宏、定义后undef而标识符继续存在两个真实违反对照也均报告。misra_5_5从directives收集名字时没有区分上述排除定义；因此保留这些原始报告与adopted／patched归属，在人工裁决中说明误报，不改addon、suppression或源码名字。
+
+八份同配置工件中的 `arrayIndexOutOfBounds`（error，tasks.c:3554）均指向 `prvCreateIdleTasks` 的默认 `configIDLE_TASK_NAME="IDLE"`：源对象为5个char，目标 `cIdleName` 为16个char，单核保留1个终止位置，循环上界为15。实际只读取索引0..4；复制索引4的NUL后立即break，再在同一索引写目标终止符，不会读取报告中的索引14。R18.1（Required、C99，主文页143／PDF151）约束实际指针算术和数组索引；AMD2.75–76（页16／PDF23）及TC2.33–34（页11／PDF17）没有把此字符串判断改成无条件扫描到上界，也无需使用其对象表示注释作为例外。
+
+Linux真实scheduler的ASan／UBSan对照正常到达Ready、stderr为空；仅在测试副本移除上述break，UBSan在同一读取行精确报告索引5越过char[5]并以1退出。这支持此报告的边界误报裁决，不是全部R18.1通过。Windows判断依据相同内核、宏配置和源码条件，未作Windows运行声明；保留原始error报告、adopted归属及扫描的passed=false，执行收据见PR #371。
+
+Linux `Os_HostCreateActor` 的 `mmap` 使用 `MAP_PRIVATE | MAP_ANONYMOUS`、fd=-1、offset=0。[Linux mmap 契约](https://www.man7.org/linux/man-pages/man2/mmap.2.html)明确匿名映射忽略 fd，并建议使用 -1；去掉匿名标志后才需要有效文件描述符。固定 Cppcheck 2.21.0 的 posix.cfg 对第五参数无条件限定非负数，不能表达该 flags 条件，因此这里的 `invalidFunctionArg`（error）不构成已证实的无效参数调用。最小真实调用对照中，匿名映射可读写并正常 munmap，去掉匿名标志则以 EBADF 拒绝；固定模型对两者都报告同一诊断。保留原始 error、源码归属与 passed=false，不修改固定模型、调用参数或 suppression；此裁决不解决动态分配、映射失败处理或全部平台调用的人工义务。
+
+同一构造函数在保护设置或 pthread 创建／属性设置失败后，必须检查映射回滚的 `munmap` 结果，再清空 mapping 和释放 reserved。D4.7（Required、C99，主文页30／PDF38；AMD2只增加C11适用性）要求有意义地检查错误信息，其“已证明不能报错”例外不能仅由地址／长度有效推出；Linux 契约还列有 `munmap` 的 ENOMEM。回滚失败时沿现有 Linux 原生致命失败约定 `ExitProcess(1)`，不把仍存活的映射遗失后作为普通 NULL 创建拒绝继续；正常成功及成功回滚的结果不变。实际 errno 夹具分别注入两处失败，检查精确位置回执、退出值和无正常收尾输出，并以恢复各处旧检查的编译副本证伪。此整改只覆盖这两个回滚点，不构成全部D4.7／D4.12处置或符合性结论。
+
+Linux actor的H栈注册失败，以及原生线程已创建后无法发布所请求ID，沿既有native致命退出路径停止，不能让创建方继续使用未初始化actor或遗失仍在运行的callback所有权。D4.13（Advisory，主文印刷35–36／PDF43–44；AMD2增列C11）同时约束join／detach／close顺序：同一原子字段区分未领取、操作中与成功完成，只有真实pthread操作成功才发布完成，失败归还处理权，并发wait不能提前报告完成。Linux joinable supervisor在成功wait前close会拒绝并保留调用方所有权；HostBatch原有signal→wait→close顺序不变。H／Task／controller的进程期栈身份与detach不等于释放仍存活actor，进程终止前的所有权继续保留。实际注册、ID、join／detach失败、活跃／已结束observer提前close及并发wait消费者与逐分支变异收据归PR，不据此宣称全部D4.12／D4.13或provider语义完成。
+
+Linux 原生上下文复制按 R21.15（AMD1，Required，C99，页6／PDF14；AMD2增加C11适用性）逐处配对兼容的实参类型：原生 `const void *` 入口与显式 object-to-void 目标视图复制内核布局及完整 native 快照；FP 内容和内嵌 FP 指针表示写回使用 unsigned-char 对象表示视图。C99 的同型兼容规则见 [WG14 N1256 §6.2.7p1](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1256.pdf)；不是仅因库形参接收 void 就忽略实际实参。这里不把原生 void 指针还原成对象指针，避免新增 R11.5 Advisory 违反；结构、FP 及局部指针对象的字符视图符合 R11.3 主文页96／PDF104及 AMD4.7–9 的非 atomic 对象例外。保留 const、尺寸／偏移约束、自复制的 memmove 语义和自有 FP 存储，未通过不兼容结构指针解引用。真实信号消费者核对准确 RSP、ContextFlags、信号 SP、FP 内容与重定位指针，反例分别破坏这些观察点；这不处置其他模块的 R21.15，也不豁免 signal／time 设施。
 
 Os_TargetConfigType 静态配置汽车 Task、资源、内部资源、Counter、Alarm、ScheduleTable、Hook 和逻辑中断。backend 适配 FreeRTOS，由内核决定 Running 状态、抢占和上下文切换；汽车层维护激活请求 FIFO、事件与资源约束，任务选择交给内核。
 

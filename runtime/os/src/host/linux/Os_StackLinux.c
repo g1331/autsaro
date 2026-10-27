@@ -5,6 +5,8 @@
 
 #include <errno.h>
 #include <linux/futex.h>
+/* MR12 RULE 21.5 VIOLATION: The fixed Linux port retains alternate-stack guard-fault capture,
+ * preallocated fault reporting, actor parking and terminal SIGPIPE protection; see ADR 0024. */
 #include <signal.h>
 #include "Os_HostIo.h"
 #include <stdlib.h>
@@ -45,9 +47,9 @@ OS_MEMMAP const uint64 Os_ArtiNativeContextSize =
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
-OS_MEMMAP static union {
-    long double alignment;
-    unsigned char bytes[OS_ALTSTACK_BYTES];
+OS_MEMMAP static struct {
+    /* Alignment-only backing storage; never read as floating point. */
+    long double storage[OS_ALTSTACK_BYTES / sizeof(long double)];
 } altstacks[OS_NATIVE_STACKS]; /**< Actor-owned alternate signal stacks; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
@@ -101,7 +103,7 @@ OS_MEMMAP Os_StackFaultType
 #include "Os_MemMap.h"
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
-    if (stack < stacks || stack >= stacks + OS_NATIVE_STACKS) {
+    if ((stack < stacks) || (stack >= &stacks[OS_NATIVE_STACKS])) {
         return NULL;
     }
     return &saved_contexts[stack - stacks];
@@ -109,7 +111,10 @@ OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
 
-OS_MEMMAP int Os_StackHasFault(void) { return InterlockedCompareExchange(&fault_count, 0, 0) > 0; }
+OS_MEMMAP int Os_StackHasFault(void)
+{
+    return (InterlockedCompareExchange(&fault_count, 0, 0) > 0) ? 1 : 0;
+}
 
 OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 
@@ -118,8 +123,8 @@ OS_MEMMAP int Os_StackThreadHasFault(DWORD thread_id)
     size_t index;
     for (index = 0u; index < OS_NATIVE_STACKS; ++index) {
         const Os_StackFaultType *fault = &fault_records[index];
-        if (__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0 &&
-            fault->thread_id == thread_id) {
+        if ((__atomic_load_n(&fault->published, __ATOMIC_ACQUIRE) != 0) &&
+            (fault->thread_id == thread_id)) {
             return 1;
         }
     }
@@ -130,7 +135,11 @@ OS_MEMMAP static void fault_park_forever(void)
 {
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = 10000000L};
     for (;;) {
-        (void)Os_LinuxFutexWait(&fault_park, 0, &interval);
+        const int result = Os_LinuxFutexWait(&fault_park, 0, &interval);
+        if ((result != 0) && (result != -EAGAIN) && (result != -EINTR) && (result != -ETIMEDOUT)) {
+            /* The published stack fault cannot return to its interrupted frame. */
+            ExitProcess(E_OS_STACKFAULT);
+        }
     }
 }
 
@@ -138,7 +147,7 @@ OS_MEMMAP static void publish_fault(
     Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
 {
     Os_StackFaultType *local;
-    if (record == NULL || record < stacks || record >= stacks + OS_NATIVE_STACKS) {
+    if ((record == NULL) || (record < stacks) || (record >= &stacks[OS_NATIVE_STACKS])) {
         _exit(E_OS_STATE);
     }
     local = &fault_records[record - stacks];
@@ -167,8 +176,8 @@ OS_MEMMAP static void guard_signal(int signum, siginfo_t *details, void *native_
 {
     Os_NativeStackType *record = current_stack;
     uintptr_t address = (uintptr_t)details->si_addr;
-    if (record == NULL || (signum != SIGSEGV && signum != SIGBUS) ||
-        address < record->reserve_low || address >= record->committed_low) {
+    if ((record == NULL) || ((signum != SIGSEGV) && (signum != SIGBUS)) ||
+        (address < record->reserve_low) || (address >= record->committed_low)) {
         _exit(E_OS_STATE);
     }
     publish_fault(record, (DWORD)signum, Os_LinuxSignalSp(native_context), address, 'E');
@@ -182,7 +191,7 @@ OS_MEMMAP static void guard_signal(int signum, siginfo_t *details, void *native_
 OS_MEMMAP static void read_invalid_altstack(void)
 {
     const char *invalid = getenv("AUTOSAR_OS_BAD_GUARANTEE");
-    if (invalid != NULL && invalid[0] != '\0' && invalid[1] == '\0') {
+    if ((invalid != NULL) && (invalid[0] != '\0') && (invalid[1] == '\0')) {
         invalid_alt_role = invalid[0];
     }
 }
@@ -204,10 +213,17 @@ OS_MEMMAP void Os_StackPrepare(void)
     if (Os_HostInstallSignals() == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
-    sigfillset(&handler.sa_mask);
-    handler.sa_sigaction = guard_signal;
-    if (sigaction(SIGSEGV, &handler, NULL) != 0 || sigaction(SIGBUS, &handler, NULL) != 0) {
+    const unsigned signal_flags = (unsigned)SA_SIGINFO | (unsigned)SA_ONSTACK;
+    handler.sa_flags = (int)signal_flags;
+    errno = 0;
+    (void)sigfillset(&handler.sa_mask);
+    handler.sa_sigaction = &guard_signal;
+    errno = 0;
+    if (sigaction(SIGSEGV, &handler, NULL) != 0) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
+    errno = 0;
+    if (sigaction(SIGBUS, &handler, NULL) != 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -229,7 +245,7 @@ OS_MEMMAP static int registration_stack_range(char role,
                                               uintptr_t *high,
                                               size_t *guard)
 {
-    return role == invalid_alt_role ? 0 : Os_HostCurrentStackRange(low, high, guard);
+    return (role == invalid_alt_role) ? 0 : Os_HostCurrentStackRange(low, high, guard);
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -257,32 +273,34 @@ OS_MEMMAP int Os_StackRegister(char role)
     uintptr_t low = 0u;
     uintptr_t high = 0u;
     size_t guard = 0u;
-    if (index < 0 || index >= (LONG)OS_NATIVE_STACKS ||
-        registration_stack_range(role, &low, &high, &guard) == 0 || low >= high ||
-        guard >= high - low) {
-        return 0;
+    int result = 0;
+    if ((index >= 0) && (index < (LONG)OS_NATIVE_STACKS)) {
+        if (registration_stack_range(role, &low, &high, &guard) != 0) {
+            if ((low < high) && (guard < (high - low))) {
+                record = &stacks[index];
+                alternate.ss_sp = altstacks[index].storage;
+                alternate.ss_size = sizeof(altstacks[index].storage);
+                alternate.ss_flags = 0;
+                if (Os_LinuxAltStack(&alternate, NULL) == 0) {
+                    record->thread_id = GetCurrentThreadId();
+                    record->role = role;
+                    record->reserve_low = low;
+                    record->high = high;
+                    record->reserve = high - low;
+                    record->guard = guard;
+                    record->committed_low = low + guard;
+                    record->committed = high - record->committed_low;
+                    record->altstack_low = (uintptr_t)alternate.ss_sp;
+                    record->altstack_size = alternate.ss_size;
+                    current_stack = record;
+                    Os_StackCheck();
+                    (void)InterlockedExchange(&stack_published[index], 1);
+                    result = 1;
+                }
+            }
+        }
     }
-    record = &stacks[index];
-    alternate.ss_sp = altstacks[index].bytes;
-    alternate.ss_size = sizeof(altstacks[index].bytes);
-    alternate.ss_flags = 0;
-    if (Os_LinuxAltStack(&alternate) != 0) {
-        return 0;
-    }
-    record->thread_id = GetCurrentThreadId();
-    record->role = role;
-    record->reserve_low = low;
-    record->high = high;
-    record->reserve = high - low;
-    record->guard = guard;
-    record->committed_low = low + guard;
-    record->committed = high - record->committed_low;
-    record->altstack_low = (uintptr_t)alternate.ss_sp;
-    record->altstack_size = alternate.ss_size;
-    current_stack = record;
-    Os_StackCheck();
-    (void)InterlockedExchange(&stack_published[index], 1);
-    return 1;
+    return result;
 }
 
 OS_MEMMAP void Os_StackCheck(void)
@@ -292,7 +310,7 @@ OS_MEMMAP void Os_StackCheck(void)
     if (current_stack == NULL) {
         return;
     }
-    if (sp < current_stack->committed_low || sp >= current_stack->high) {
+    if ((sp < current_stack->committed_low) || (sp >= current_stack->high)) {
         publish_fault(current_stack, 0u, sp, sp, 'M');
     }
     current_stack->sp = sp;
@@ -304,10 +322,10 @@ OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
     if (current_stack == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    current_stack->kernel_buffer_high = (uintptr_t)(top + 1);
-    current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - 512u * sizeof(*top);
-    if (current_stack->reserve_low < current_stack->kernel_buffer_high &&
-        current_stack->high > current_stack->kernel_buffer_low) {
+    current_stack->kernel_buffer_high = (uintptr_t)&top[1];
+    current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - (512u * sizeof(*top));
+    if ((current_stack->reserve_low < current_stack->kernel_buffer_high) &&
+        (current_stack->high > current_stack->kernel_buffer_low)) {
         Os_BackendShutdown(E_OS_STATE);
     }
 }
@@ -316,18 +334,18 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
 {
     LONG index;
     const DWORD id = GetThreadId(thread);
-    if (context == NULL || context->ContextFlags != CONTEXT_CONTROL) {
+    if ((context == NULL) || (context->ContextFlags != CONTEXT_CONTROL)) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
-                    (index < (LONG)OS_NATIVE_STACKS);
-         ++index) {
+    index = 0;
+    while ((index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
+           (index < (LONG)OS_NATIVE_STACKS)) {
         Os_NativeStackType *record = &stacks[index];
         /* A reservation can belong to another actor still registering. */
         if ((InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) &&
             (record->thread_id == id)) {
             uintptr_t sp = context->Rsp;
-            if (sp < record->committed_low || sp >= record->high) {
+            if ((sp < record->committed_low) || (sp >= record->high)) {
                 publish_fault(record, 0u, sp, sp, 'M');
             }
             record->sp = sp;
@@ -336,17 +354,20 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
             ++record->observations;
             return;
         }
+        ++index;
     }
     Os_BackendShutdown(E_OS_STATE);
 }
 
 OS_MEMMAP static size_t append_hex(char *output, size_t offset, DWORD value)
 {
+    size_t cursor = offset;
     unsigned index;
     for (index = 0u; index < 8u; ++index) {
-        output[offset++] = "0123456789ABCDEF"[(value >> (28u - index * 4u)) & 15u];
+        output[cursor] = "0123456789ABCDEF"[(value >> (28u - (index * 4u))) & 15u];
+        ++cursor;
     }
-    return offset;
+    return cursor;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -406,15 +427,19 @@ OS_MEMMAP void Os_StackFatalExit(void)
         }
     }
     for (index = 0u; index < sizeof(fatal_prefix) - 1u; ++index) {
-        output[used++] = fatal_prefix[index];
+        output[used] = fatal_prefix[index];
+        ++used;
     }
-    output[used++] = fault->role;
+    output[used] = fault->role;
+    ++used;
     for (index = 0u; index < sizeof(fatal_middle) - 1u; ++index) {
-        output[used++] = fatal_middle[index];
+        output[used] = fatal_middle[index];
+        ++used;
     }
     used = append_hex(output, used, fault->signal_number);
     for (index = 0u; index < sizeof(fatal_suffix) - 1u; ++index) {
-        output[used++] = fatal_suffix[index];
+        output[used] = fatal_suffix[index];
+        ++used;
     }
     /* This terminal path never resumes: block only this thread's SIGPIPE so a
      * closed output can fall back to stderr without replacing the fault status.
@@ -481,14 +506,15 @@ OS_MEMMAP int Os_StackReport(void)
 {
     int result = 0;
     LONG index;
-    for (index = 0; (index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
-                    (index < (LONG)OS_NATIVE_STACKS);
-         ++index) {
+    index = 0;
+    while ((index < InterlockedCompareExchange(&stack_count, 0, 0)) &&
+           (index < (LONG)OS_NATIVE_STACKS)) {
         if (InterlockedCompareExchange(&stack_published[index], 0, 0) != 0) {
             if (report_stack(&stacks[index]) == 0) {
                 result = -1;
             }
         }
+        ++index;
     }
     for (index = 0; index < (LONG)OS_NATIVE_STACKS; ++index) {
         if (__atomic_load_n(&fault_records[index].published, __ATOMIC_ACQUIRE) != 0) {

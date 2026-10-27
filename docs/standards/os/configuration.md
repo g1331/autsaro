@@ -58,4 +58,50 @@
 | 隐式同步时长 | 不适用（配置：ECUC_Os_00065）：SWS_Os_00440 |
 | 规范附录 | 已核对（规范原文：附录列出不适用于本规范的上游需求，没有实现义务）：SWS_Os_NA_00767 |
 
-中断向量表段（`SWS_Os_00336`）与 OS 声明的 MemMap 包装（`SWS_Os_00815`）随 SchM／MemMap 责任链在 [#191](https://github.com/g1331/autsaro/issues/191) 处置。
+`SWS_Os_00336／00815`的实际向量段／声明包装及#58责任见[OS核算](README.md#核算)；原[#191](https://github.com/g1331/autsaro/issues/191)已完成，不沿用旧未处置计数。
+
+## C99 数组与回调类型
+
+R17.6为Mandatory（主文印刷140／PDF148），R18.7为Required（印刷151／PDF159）；AMD2追加C11。当前四份callback-parameter工程与两目标补丁后内核中，没有static数组形参，也没有柔性数组成员。未写边界的声明已分别核对：fatal文本及生成配置表由字符串／初始化列表确定大小，都是完整对象；内核prvSearchForNameWithinSingleList的pcNameToQuery[]是函数参数，不是结构成员。生成Task表中的.entry等designator初始化结构元素，不是给外层数组指定下标；不能仅凭其中出现点号，就按R9.5的数组designator构造裁决。
+
+R18.8为Required，AMD4.25–29将其明确到VLA；新增R18.10为Mandatory（AMD4.31，印刷17／PDF24），约束指向可变修改数组类型的指针。当前声明边界来自整数字面量、固定宏／枚举或非VLA类型的sizeof／对齐表达式：任务缓冲区为512个StackType_t，OS上限、协议容量及本机65536字节备用栈由固定定义决定，CAN_HOST_AREA_COUNT和OS_HOOK_ALARM是枚举常量。编译器实际宏收据确认当前容量；timers、registry、TLS及多核专属声明仍按各自关闭条件判断。没有发现运行值决定的数组声明或指向数组的可变修改指针；局部char条件数组的sizeof／offsetof布局约束是整数常量表达式，不是运行时VLA。此结论只覆盖已核声明、配置和生成来源，不覆盖SDK类型。
+
+R17.13为Required（AMD3.38，印刷20–21／PDF28–29），适用当前C99。已核回调typedef均形成函数指针类型；配置中的const限定指针对象或返回对象，不限定函数类型本身。TaskFunction_t的声明宏同样形成函数指针；私有布局断言的typedef是字符数组。没有以指针对象的const或函数返回类型的const误报函数类型限定，也不从这项判断推导任意外部回调、SDK或其他类型规则已经满足。
+
+R17.3为Mandatory，但主文仅适用C90（印刷138／PDF146）；AMD2的语言表没有为它追加C99／C11。当前真实编译命令为-std=c99，因此原始R17.3报告不能作为本配置的Mandatory违反或偏离记录。C99调用前声明的语言约束仍由R1.1及实际原型／包含链承担；严格C编译通过不替代R8.2命名、R8.4可见声明或跨目标ABI核查，既有62条标准ECU原始报告仍保留。
+
+## 采用内核的私有条件定义
+
+共同0024把定义／包含与真实消费者条件对齐，不改变配置值：tasks.c仅在configUSE_TIMERS==1时包含timers.h；三种分配来源标志受tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE控制，五个状态字符受trace与stats-formatting共同条件控制。运行／待让出状态及idle属性只在多核时定义，affinity字节宽度还要求core-affinity；任务删除专用的RUNNING_OR_SCHEDULED_TO_YIELD在两种核心分支都受INCLUDE_vTaskDelete控制。queue.c的semaphore item length及mutex give timeout分别只在counting semaphore／recursive mutex启用时定义。每个条件对应现有消费者，保留相应功能启用时的原定义，而非用空引用消除R2.5。
+
+公开版本、状态集合、旧API兼容别名及timers.h交付资产保留；没有通过关闭支持能力删掉全部未使用宏。未选择分支只完成源码对应核查，不能当作那些配置已执行。上游原始文件、函数类型、成员布局及运行操作不变；有序补丁、派生内核身份和封存交付物仍按新字节更新。原有条件排除报告和真实未使用公共定义分开处置，不能把加入guard当成Cppcheck原始诊断自动清零或完整R2.5通过。
+
+
+条件整改也不消除公开头中已确认的30个生效但未使用定义：24个backward-compatibility别名，加上空FREERTOS_SYSTEM_CALL、configPRECONDITION_DEFINED、32位pdINTEGRITY_CHECK_VALUE及三个关闭registry时的空API宏。旧有逐定义审查与当前standard-ecu／user-application的56 TU宏记录相互对应，configENABLE_BACKWARD_COMPATIBILITY仍为1；TIMERS_H及所整改私有宏在这些真实TU中均不存在，而原始addon仍报告排除位置。为保留当前采用头的兼容名字、默认配置约定和可选完整性／registry接口，本轮保留这30处Advisory违反及理由；它们不是AUTOSAR强制项，也不因固定上游或没有消费者而成为误报。该判断不替其余未复评宏销项，不改变R2.5原始报告。
+
+## 原生类型表示与封装
+
+D4.6为Advisory（主文印刷28–29／PDF36–37；AMD2.23–25及适用性表）。Platform_Types的sint／uint精确宽度别名来自stdint，least系列仍明确为至少相应宽度，不能混同精确宽度；float32／float64对应当前工具链的4／8字节、24／53位有效尾数和128／1024最大指数记录。TC1明确plain char不是本指令的数值类型，因此文本指针与角色字符不需伪装成数值typedef；main的int返回与argc也有原文例外。
+
+本机边界仍真实保留基本数值类型：例如Linux BOOL为int、syscall结果为long、pthread错误结果为int，备用信号栈存储使用long double取得原生对齐。这里不能仅因ABI宽度已知就宣布D4.6全部满足；原文对标准库／项目控制外接口的衔接给出取舍理由，当前保留原生签名和错误表示，避免把long double的存储大小误命名为浮点有效位数。汽车配置与数值数据继续使用既有宽度类型；本判断不扩大到整个SDK或所有数值声明。
+
+D4.8同为Advisory（主文印刷30–31／PDF38–39），TC1澄清只有某类型在TU中的所有指针均不解引用时才触发隐藏要求。Linux HANDLE在Os_HostLinux.h仅指向不完整Os_HostHandleType，完整定义只在Os_HostLinux.c；Os_HostServices的创建／等待／关闭消费者只传递该指针，不取得字段或sizeof，符合这处封装目的。CONTEXT与公开配置对象则有实际完整对象存储／字段消费者，不能凭单个参数未解引用就批量判为应隐藏；其他结构／TU组合仍须按实际完整集合判断。
+
+
+## 接口宏的实际词法角色
+
+R20.7为Required（主文印刷159／PDF167；AMD2追加C11），只要求宏参数展开所得表达式有括号，不要求给非表达式参数套括号。已核Linux报告中的ALARMCALLBACK(identifier)展开为函数声明及定义头，端口portTASK_FUNCTION_PROTO／portTASK_FUNCTION的function、parameters分别处于函数和形参声明位置，均不是表达式；对应三处不能按缺括号判违反。另两处configINIT_TLS_BLOCK属于未进入实际include闭包的picolibc头，当前关闭runtime TLS的配置下不属于code；不能把这个条件裁决扩为启用TLS后也满足。
+
+Os.h的TASK、OS_TASK_ENTRY、ISR、OS_ISR_ENTRY真实使用##，保留R20.10的Advisory违反（印刷162／PDF170）。实际Task／ISR ID是公共标量宏，入口函数在同一C名字空间须有不同名字；直接以identifier定义函数会遇到ID宏展开及名字冲突。经普通外层宏转交参数还会先展开ID，不能假定可以无损复用一次拼接。当前保留字面配置名到私有入口名的映射与既有ABI，不把具体Os_TaskEntry_／Os_IsrEntry_前缀说成SWS强制；技术理由与必要接口形状、后续独立复核分开记录，不冒称MISRA合法偏离。
+
+R20.11／R20.12均为Required（印刷162–163／PDF170–171，AMD2追加C11）。上述四宏的identifier仅作为##操作数；当前Arti.h的四个文本参数只作#操作数，两个数值参数只作一次普通表达式展开；没有#参数紧接##，也没有同一参数在字符串化／拼接与普通展开之间混用。实际configASSERT只在if中求值x并传递文件／行，不字符串化x。该结论来自全部五个自有操作符宏的替换列表；当前标准工程生成目录及真实编译的补丁后内核未发现其他#／##宏，不替未核SDK及任意应用扩张通过。
+
+## 自动与线程局部对象的借用
+
+R18.6为Required/System（主文印刷150／PDF158；AMD2追加C11），AMD4.24（印刷15／PDF22）扩展到thread-local。不能把正常join、后续不再读取或phase guard直接等同于不存在长寿命地址副本。Os_LinuxCaptureContext先完成局部快照及目标自有FP指针再写目标；复制的是copied中的指针值，不是&copied。此判断只覆盖该具体绑定，不替其他信号帧成员或provider地址证明存储期。
+
+HostBridge以既有sole native producer、同一target不可重入为前提，将watch context改成函数内static。两字段在每次创建observer前写入，上次observer已wait/close；未新增owner状态或锁，目标接口的native_thread绑定不冒充Bridge入口锁。真实静态地址编译属性对照与正常多批次／背压执行分开取证。host/probe入口传NULL，Task启动数据及其指向的task_memory均为静态对象；不把这些实际调用外推为任意外部callback参数均符合。
+
+Os_BackendInterruptLeave在恢复后清空退役error副本，避免继续留存已恢复的参数；父TLS状态和外层interrupt保持。Os_ErrorResult按已校验0/1开关从局部两项const source表选择empty_parameters或arguments，STD_OFF不再捕获指针字段，STD_ON保持getter语义；没有新增恒定控制表达式或宏。当前未使用槽的观察在父参数仍有效时进行，撤销清理和恢复禁用复制须被精确位置拒绝，不以失效地址解引用作反例。
+
+上述清理不把enabled ErrorHook的初始长寿命复制直接记为R18.6满足。OSEK2.2.3 §11.2／13.8.4只明确第一项object identifier的accessor义务及参数命名；固定SWS的ECUC_Os_00048把OsUseParameterAccess定义交给ISO17356，且没有给出默认值。当前generator缺值时STD_ON是项目选择。对应ISO原章及指针参数accessor必要性尚未核定，不能把全部已实现的getter当成已证AUTOSAR强制行，或填ADR0023批准／MR12。实际getter保留和其他TLS／SDK地址流仍分别核查；[来源及整改闭包](https://github.com/g1331/autsaro/pull/371#issuecomment-6399598461)留PR。

@@ -180,6 +180,18 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
             .trim_start_matches("OS_MEMMAP ")
             .trim_start_matches("OS_CODE ")
             .trim_start_matches("CAN_CODE ")
+            .trim_start_matches("BSWM_CODE ")
+            .trim_start_matches("CANIF_CODE ")
+            .trim_start_matches("CANTP_CODE ")
+            .trim_start_matches("COM_CODE ")
+            .trim_start_matches("COMM_CODE ")
+            .trim_start_matches("DCM_CODE ")
+            .trim_start_matches("DET_CODE ")
+            .trim_start_matches("LSDUR_CODE ")
+            .trim_start_matches("PDUR_CODE ")
+            .trim_start_matches("ECU_HOSTBUSSM_CODE ")
+            .trim_start_matches("RTE_Rte_CODE ")
+            .trim_start_matches("RTE_CODE ")
             .trim_start_matches("DET_CALLOUT_CODE ")
             .trim()
             .to_owned();
@@ -265,5 +277,13 @@ OS_MEMMAP void Stop(void);
         assert_eq!(entries[1].name, "Stop");
         assert_eq!(entries[1].result, "void");
         assert!(declarations("void Broken(void (*handler)(void));").is_err());
+        for module in [
+            "BSWM", "CANIF", "CANTP", "COM", "COMM", "DCM", "DET", "LSDUR", "PDUR",
+        ] {
+            let entries =
+                declarations(&format!("{module}_CODE Std_ReturnType Entry(uint8 Value);")).unwrap();
+            assert_eq!(entries[0].result, "Std_ReturnType");
+            assert_eq!(entries[0].arguments[0].native_type, "uint8");
+        }
     }
 }

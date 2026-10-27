@@ -3,42 +3,62 @@
 
 const char *Ecu_StatusName(EcuStatus status)
 {
+    const char *name;
     switch (status) {
         case ECU_OK:
-            return "OK";
+            name = "OK";
+            break;
         case ECU_ERR_CONFIG:
-            return "CONFIG";
+            name = "CONFIG";
+            break;
         case ECU_ERR_SIGNAL_ID:
-            return "SIGNAL_ID";
+            name = "SIGNAL_ID";
+            break;
         case ECU_ERR_SIGNAL_VALUE:
-            return "SIGNAL_VALUE";
+            name = "SIGNAL_VALUE";
+            break;
         case ECU_ERR_DIRECTION:
-            return "DIRECTION";
+            name = "DIRECTION";
+            break;
         case ECU_ERR_FRAME_ID:
-            return "FRAME_ID";
+            name = "FRAME_ID";
+            break;
         case ECU_ERR_FRAME_DLC:
-            return "FRAME_DLC";
+            name = "FRAME_DLC";
+            break;
         case ECU_ERR_CONTROLLER:
-            return "CONTROLLER";
+            name = "CONTROLLER";
+            break;
         case ECU_ERR_TIME:
-            return "TIME";
+            name = "TIME";
+            break;
         case ECU_ERR_TP_SEQUENCE:
-            return "TP_SEQUENCE";
+            name = "TP_SEQUENCE";
+            break;
         case ECU_ERR_TP_TIMEOUT:
-            return "TP_TIMEOUT";
+            name = "TP_TIMEOUT";
+            break;
         case ECU_ERR_TP_LENGTH:
-            return "TP_LENGTH";
+            name = "TP_LENGTH";
+            break;
         case ECU_ERR_TP_FLOW:
-            return "TP_FLOW";
+            name = "TP_FLOW";
+            break;
         case ECU_ERR_TP_BUSY:
-            return "TP_BUSY";
+            name = "TP_BUSY";
+            break;
         case ECU_ERR_IO:
-            return "IO";
+            name = "IO";
+            break;
         case ECU_ERR_NVM:
-            return "NVM";
+            name = "NVM";
+            break;
         case ECU_ERR_CAN_BUSY:
-            return "CAN_BUSY";
+            name = "CAN_BUSY";
+            break;
         default:
-            return "INTERNAL";
+            name = "INTERNAL";
+            break;
     }
+    return name;
 }

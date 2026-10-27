@@ -1,0 +1,42 @@
+--- a/tasks.c
++++ b/tasks.c
+@@ -4566,7 +4566,7 @@
+                 TaskStatusArrayWriterContext_t xContext;
+                 xContext.pxTaskStatusArray = pxTaskStatusArray;
+                 xContext.uxIndex = 0;
+-                uxTask = prvCallForEachTask( prvTaskStatusArrayWriter, &xContext );
++                uxTask = prvCallForEachTask( &prvTaskStatusArrayWriter, &xContext );
+                 prvGetTotalRunTime( pulTotalRunTime );
+             }
+             else
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -372,8 +372,8 @@
+         }
+ 
+         /* Install the interrupt handlers used by the scheduler itself. */
+-        vPortSetInterruptHandler( portINTERRUPT_YIELD, prvProcessYieldInterrupt );
+-        vPortSetInterruptHandler( portINTERRUPT_TICK, prvProcessTickInterrupt );
++        vPortSetInterruptHandler( portINTERRUPT_YIELD, &prvProcessYieldInterrupt );
++        vPortSetInterruptHandler( portINTERRUPT_TICK, &prvProcessTickInterrupt );
+ 
+         /* Create the events and mutexes that are used to synchronise all the
+          * threads. */
+@@ -771,14 +771,14 @@
+ void vPortSetInterruptHandler( uint32_t ulInterruptNumber,
+                                uint32_t ( * pvHandler )( void ) )
+ {
+-    if( ( ( ulInterruptNumber == portINTERRUPT_YIELD ) && ( pvHandler != prvProcessYieldInterrupt ) ) ||
+-        ( ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != prvProcessTickInterrupt ) ) )
++    if( ( ( ulInterruptNumber == portINTERRUPT_YIELD ) && ( pvHandler != &prvProcessYieldInterrupt ) ) ||
++        ( ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != &prvProcessTickInterrupt ) ) )
+     {
+         Os_BackendShutdown( E_OS_ACCESS );
+     }
+ 
+     if( ( Os_Config != NULL ) && ( Os_Config->timing != NULL ) &&
+-        ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != prvProcessTickInterrupt ) )
++        ( ulInterruptNumber == portINTERRUPT_TICK ) && ( pvHandler != &prvProcessTickInterrupt ) )
+     {
+         Os_BackendShutdown( E_OS_ACCESS );
+     }

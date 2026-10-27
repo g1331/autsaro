@@ -1,0 +1,110 @@
+--- a/tasks.c
++++ b/tasks.c
+@@ -39,7 +39,9 @@
+ /* FreeRTOS includes. */
+ #include "FreeRTOS.h"
+ #include "task.h"
++#if ( configUSE_TIMERS == 1 )
+ #include "timers.h"
++#endif
+ #include "stack_macros.h"
+ 
+ /* The default definitions are only available for non-MPU ports. The
+@@ -121,9 +123,11 @@
+ #define tskSTACK_FILL_BYTE                        ( 0xa5U )
+ 
+ /* Bits used to record how a task's stack and TCB were allocated. */
+-#define tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB    ( ( uint8_t ) 0 )
+-#define tskSTATICALLY_ALLOCATED_STACK_ONLY        ( ( uint8_t ) 1 )
+-#define tskSTATICALLY_ALLOCATED_STACK_AND_TCB     ( ( uint8_t ) 2 )
++#if ( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )
++    #define tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB    ( ( uint8_t ) 0 )
++    #define tskSTATICALLY_ALLOCATED_STACK_ONLY        ( ( uint8_t ) 1 )
++    #define tskSTATICALLY_ALLOCATED_STACK_AND_TCB     ( ( uint8_t ) 2 )
++#endif
+ 
+ /* If any of the following are set then task stacks are filled with a known
+  * value so the high water mark can be determined.  If none of the following are
+@@ -137,11 +141,13 @@
+ /*
+  * Macros used by vListTask to indicate which state a task is in.
+  */
+-#define tskRUNNING_CHAR      ( 'X' )
+-#define tskBLOCKED_CHAR      ( 'B' )
+-#define tskREADY_CHAR        ( 'R' )
+-#define tskDELETED_CHAR      ( 'D' )
+-#define tskSUSPENDED_CHAR    ( 'S' )
++#if ( ( configUSE_TRACE_FACILITY == 1 ) && ( configUSE_STATS_FORMATTING_FUNCTIONS > 0 ) )
++    #define tskRUNNING_CHAR      ( 'X' )
++    #define tskBLOCKED_CHAR      ( 'B' )
++    #define tskREADY_CHAR        ( 'R' )
++    #define tskDELETED_CHAR      ( 'D' )
++    #define tskSUSPENDED_CHAR    ( 'S' )
++#endif
+ 
+ /*
+  * Some kernel aware debuggers require the data the debugger needs access to be
+@@ -336,22 +342,30 @@
+ #endif
+ 
+ /* Indicates that the task is not actively running on any core. */
+-#define taskTASK_NOT_RUNNING           ( ( BaseType_t ) ( -1 ) )
++#if ( configNUMBER_OF_CORES > 1 )
++    #define taskTASK_NOT_RUNNING           ( ( BaseType_t ) ( -1 ) )
+ 
+ /* Indicates that the task is actively running but scheduled to yield. */
+-#define taskTASK_SCHEDULED_TO_YIELD    ( ( BaseType_t ) ( -2 ) )
++    #define taskTASK_SCHEDULED_TO_YIELD    ( ( BaseType_t ) ( -2 ) )
++#endif
+ 
+ /* Returns pdTRUE if the task is actively running and not scheduled to yield. */
+ #if ( configNUMBER_OF_CORES == 1 )
+     #define taskTASK_IS_RUNNING( pxTCB )                          ( ( ( pxTCB ) == pxCurrentTCB ) ? ( pdTRUE ) : ( pdFALSE ) )
+-    #define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB )    ( ( ( pxTCB ) == pxCurrentTCB ) ? ( pdTRUE ) : ( pdFALSE ) )
++    #if ( INCLUDE_vTaskDelete == 1 )
++        #define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB )    ( ( ( pxTCB ) == pxCurrentTCB ) ? ( pdTRUE ) : ( pdFALSE ) )
++    #endif
+ #else
+     #define taskTASK_IS_RUNNING( pxTCB )                          ( ( ( ( pxTCB )->xTaskRunState >= ( BaseType_t ) 0 ) && ( ( pxTCB )->xTaskRunState < ( BaseType_t ) configNUMBER_OF_CORES ) ) ? ( pdTRUE ) : ( pdFALSE ) )
+-    #define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB )    ( ( ( pxTCB )->xTaskRunState != taskTASK_NOT_RUNNING ) ? ( pdTRUE ) : ( pdFALSE ) )
++    #if ( INCLUDE_vTaskDelete == 1 )
++        #define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB )    ( ( ( pxTCB )->xTaskRunState != taskTASK_NOT_RUNNING ) ? ( pdTRUE ) : ( pdFALSE ) )
++    #endif
+ #endif
+ 
+ /* Indicates that the task is an Idle task. */
+-#define taskATTRIBUTE_IS_IDLE    ( UBaseType_t ) ( 1U << 0U )
++#if ( configNUMBER_OF_CORES > 1 )
++    #define taskATTRIBUTE_IS_IDLE    ( UBaseType_t ) ( 1U << 0U )
++#endif
+ 
+ #if ( ( configNUMBER_OF_CORES > 1 ) && ( portCRITICAL_NESTING_IN_TCB == 1 ) )
+     #define portGET_CRITICAL_NESTING_COUNT( xCoreID )          ( pxCurrentTCBs[ ( xCoreID ) ]->uxCriticalNesting )
+@@ -360,7 +374,9 @@
+     #define portDECREMENT_CRITICAL_NESTING_COUNT( xCoreID )    ( pxCurrentTCBs[ ( xCoreID ) ]->uxCriticalNesting-- )
+ #endif /* #if ( ( configNUMBER_OF_CORES > 1 ) && ( portCRITICAL_NESTING_IN_TCB == 1 ) ) */
+ 
+-#define taskBITS_PER_BYTE    ( ( size_t ) 8 )
++#if ( ( configUSE_CORE_AFFINITY == 1 ) && ( configNUMBER_OF_CORES > 1 ) )
++    #define taskBITS_PER_BYTE    ( ( size_t ) 8 )
++#endif
+ 
+ #if ( configNUMBER_OF_CORES > 1 )
+ 
+--- a/queue.c
++++ b/queue.c
+@@ -69,8 +69,12 @@
+ 
+ /* Semaphores do not actually store or copy data, so have an item size of
+  * zero. */
+-#define queueSEMAPHORE_QUEUE_ITEM_LENGTH    ( ( UBaseType_t ) 0 )
+-#define queueMUTEX_GIVE_BLOCK_TIME          ( ( TickType_t ) 0U )
++#if ( configUSE_COUNTING_SEMAPHORES == 1 )
++    #define queueSEMAPHORE_QUEUE_ITEM_LENGTH    ( ( UBaseType_t ) 0 )
++#endif
++#if ( configUSE_RECURSIVE_MUTEXES == 1 )
++    #define queueMUTEX_GIVE_BLOCK_TIME          ( ( TickType_t ) 0U )
++#endif
+ 
+ #if ( configUSE_PREEMPTION == 0 )
+ 

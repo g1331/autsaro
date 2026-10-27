@@ -27,12 +27,17 @@ OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
                                 int32_t expected,
                                 const struct timespec *interval)
 {
-    return (int)native_call(__NR_futex, cell, FUTEX_WAIT_PRIVATE, expected, interval);
+    const unsigned operation = (unsigned)FUTEX_WAIT | (unsigned)FUTEX_PRIVATE_FLAG;
+    return (int)native_call(__NR_futex, cell, (long)operation, expected, interval);
 }
 
 OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell)
 {
-    (void)native_call(__NR_futex, cell, FUTEX_WAKE_PRIVATE, INT32_MAX, NULL);
+    const unsigned operation = (unsigned)FUTEX_WAKE | (unsigned)FUTEX_PRIVATE_FLAG;
+    const long result = native_call(__NR_futex, cell, (long)operation, INT32_MAX, NULL);
+    if (result < 0) {
+        ExitProcess(1u);
+    }
 }
 
 OS_MEMMAP DWORD Os_LinuxThreadId(void)
@@ -41,29 +46,57 @@ OS_MEMMAP DWORD Os_LinuxThreadId(void)
     return ((result > 0) && ((uint64_t)result <= UINT32_MAX)) ? (DWORD)result : 0u;
 }
 
-OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack)
+OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack, stack_t *previous)
 {
-    return (int)native_call(__NR_sigaltstack, stack, 0, 0, NULL);
+    long result;
+    __asm__ volatile("syscall"
+                     : "=a"(result)
+                     : "a"(__NR_sigaltstack), "D"(stack), "S"(previous)
+                     : "rcx", "r11", "memory");
+    return (int)result;
 }
 
 OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
 {
     /* C99 compile-time ABI constraints: incompatible platform layouts fail compilation. */
     (void)sizeof(
-        char[offsetof(struct ucontext, uc_mcontext) == offsetof(ucontext_t, uc_mcontext) ? 1 : -1]);
+        char[(offsetof(struct ucontext, uc_mcontext) == offsetof(ucontext_t, uc_mcontext)) ? 1
+                                                                                           : -1]);
     (void)sizeof(
-        char[sizeof(struct _fpstate) == sizeof(destination->native.__fpregs_mem) ? 1 : -1]);
+        char[(sizeof(struct _fpstate) == sizeof(destination->native.__fpregs_mem)) ? 1 : -1]);
+    (void)sizeof(char[(sizeof(struct sigcontext) == sizeof(mcontext_t)) ? 1 : -1]);
+    (void)sizeof(char[((offsetof(struct ucontext, uc_sigmask) == 296u) &&
+                       (offsetof(struct ucontext, uc_mcontext.rsp) == 160u) &&
+                       (offsetof(struct ucontext, uc_mcontext.fpstate) == 224u))
+                          ? 1
+                          : -1]);
+    (void)sizeof(
+        char[(offsetof(struct ucontext, uc_sigmask) == offsetof(ucontext_t, uc_sigmask)) ? 1 : -1]);
+    (void)sizeof(char[(offsetof(struct ucontext, uc_mcontext.fpstate) ==
+                       (offsetof(ucontext_t, uc_mcontext) + sizeof(gregset_t)))
+                          ? 1
+                          : -1]);
+    (void)sizeof(char[((offsetof(struct ucontext, uc_sigmask) + sizeof(uint64_t)) <=
+                       offsetof(ucontext_t, __fpregs_mem))
+                          ? 1
+                          : -1]);
+    /* Linux x64 supplies a 64-bit mask, not glibc's full sigset/FP/SSP tail. */
+    const size_t prefix = offsetof(struct ucontext, uc_sigmask) + sizeof(uint64_t);
     struct ucontext kernel;
-    (void)memcpy(&kernel, source, sizeof(kernel));
-    (void)memmove(&destination->native, source, sizeof(destination->native));
+    ucontext_t snapshot = {0};
+    unsigned char *native = (unsigned char *)&snapshot;
+    (void)memcpy((void *)&kernel, source, prefix);
+    (void)memcpy((void *)&snapshot, (const void *)&kernel, prefix);
     if (kernel.uc_mcontext.fpstate != NULL) {
         void *copied = &destination->native.__fpregs_mem;
-        (void)memmove(copied, kernel.uc_mcontext.fpstate, sizeof(destination->native.__fpregs_mem));
-        (void)memcpy(
-            &((char *)&destination->native)[offsetof(struct ucontext, uc_mcontext.fpstate)],
-            (const void *)&copied,
-            sizeof(copied));
+        (void)memmove((unsigned char *)&snapshot.__fpregs_mem,
+                      (const unsigned char *)kernel.uc_mcontext.fpstate,
+                      sizeof(snapshot.__fpregs_mem));
+        (void)memcpy(&native[offsetof(struct ucontext, uc_mcontext.fpstate)],
+                     (const unsigned char *)&copied,
+                     sizeof(copied));
     }
+    destination->native = snapshot;
     destination->Rsp = kernel.uc_mcontext.rsp;
     destination->ContextFlags = CONTEXT_CONTROL;
 }
@@ -71,7 +104,9 @@ OS_MEMMAP void Os_LinuxCaptureContext(CONTEXT *destination, const void *source)
 OS_MEMMAP uintptr_t Os_LinuxSignalSp(const void *context)
 {
     struct ucontext kernel;
-    (void)memcpy(&kernel, context, sizeof(kernel));
+    (void)memcpy((void *)&kernel,
+                 context,
+                 offsetof(struct ucontext, uc_mcontext.rsp) + sizeof(kernel.uc_mcontext.rsp));
     return kernel.uc_mcontext.rsp;
 }
 
@@ -94,7 +129,7 @@ OS_MEMMAP static int map_address(const char **cursor, uintptr_t *value)
     }
     *cursor = text;
     *value = result;
-    return (valid != 0) && (count != 0u);
+    return ((valid != 0) && (count != 0u)) ? 1 : 0;
 }
 
 OS_MEMMAP static int mapped_line(const char *line,
@@ -156,7 +191,8 @@ OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard
             errno = 0;
             count = read(descriptor, data, sizeof(data));
             if (count > 0) {
-                for (size_t index = 0u; (index < (size_t)count) && (result == 0); ++index) {
+                size_t index = 0u;
+                while ((index < (size_t)count) && (result == 0)) {
                     if (data[index] == '\n') {
                         line[used] = '\0';
                         result =
@@ -168,6 +204,7 @@ OS_MEMMAP int Os_LinuxMappedStack(uintptr_t *low, uintptr_t *high, size_t *guard
                     } else {
                         /* Only the bounded address/permission prefix is needed. */
                     }
+                    ++index;
                 }
             }
         } while ((result == 0) && ((count > 0) || ((count < 0) && (errno == EINTR))));

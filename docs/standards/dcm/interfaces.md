@@ -75,3 +75,17 @@ C/S 表内的写入、条件检查、缩放及异步操作逐项受配置约束�
 | WriteMemory 类型 | 不适用（配置：ECUC_Dcm_00735）：SWS_Dcm_00986 |
 | primitive DID 类型 | 不适用（配置：ECUC_Dcm_00985）：SWS_Dcm_91062 |
 | 外置诊断服务请求数组 | 不适用（配置：ECUC_Dcm_00777）：SWS_Dcm_01165 |
+
+## C99 位域与实际类型
+
+`SWS_Dcm_00992` 的原表（R24-11 页279，已查看渲染表）规定结构体内两个 bit：`reqType` 位于 LSB+0，`suppressPosResponse` 位于 LSB+1；表中没有强制指定 C 位域的整数基类型。当前 `Dcm.h` 用两个具名、宽度为1的 `uint8` 字段表达它们，`Platform_Types.h` 经 stdint.h 将 uint8 定义为所选 GCC x64 的无符号8位整数。
+
+R6.1（Required，MISRA 主文页58／PDF66）在 C99 中允许实现支持的其他显式有符号／无符号整数位域类型，且允许 typedef；AMD2.41–43 仅把该措辞扩展为 C99 and later 并调整示例。所选 [GCC 13.3](https://gcc.gnu.org/onlinedocs/gcc-13.3.0/gcc/Structures-unions-enumerations-and-bit-fields-implementation.html) 与 [GCC 16.1](https://gcc.gnu.org/onlinedocs/gcc-16.1.0/gcc/Structures-unions-enumerations-and-bit-fields-implementation.html) 明确支持其他整数位域类型。因此，这两个 uint8 位域满足所选 C99 实现下的 R6.1 类型条件。R6.2（Required，主文页59／PDF67，AMD2.44–45）要求单 bit 具名位域不采用有符号类型；这两个字段均为无符号。R6.3（Required，AMD3.15 页8–9／PDF16–17）禁止直接声明为 union 成员；这里的直接所属类型为 struct，未依赖其 union 内部子对象例外。
+
+位序另由实际 ABI 和消费者核查，不由 R6.1 的类型许可推定。`dcm_contract.c` 分别检查两种字段组合的低两位；Linux GCC13.3 的普通 native 入口通过，同一严格编译参数与实际生成类型头的对照也通过。只在测试副本交换字段声明，编译仍成功，但消费者在具名赋值后的 LSB 位置断言失败。这验证观察点能拒绝布局变化；Windows 此处依据同一声明及所选 GCC 文档作源码判断，未将 Linux 实验写成 Windows 执行。
+
+## 逻辑右操作数的调用闭包
+
+R13.5（Required，主文页113–114／PDF121–122；TC1 Appendix J 页14／PDF20）按函数可能的持久副作用判断，不能因调用实参已知而豁免。当前 `Dcm.c` 的逻辑右操作数没有 native／SchM 调用、volatile 读取或应用调用：`Dcm_Init` 条件内的 `Dcm_IsAvailability` 只对值参数做位运算与取模；`Dcm_Available` 只调用此前者并读取执行者持有的不可变配置。其余逻辑项读取普通标量、请求／响应边界或执行者私有 work。实际 ReadData 回调位于独立条件中；会进入 SchM 的 `Dcm_Current` 也单独求值，不能把它们当成无副作用函数移入逻辑 RHS。本结论只处置当前 Dcm 源码中的这些表达式，回调实现及其他模块继续按其实际源码核查。
+
+负响应的六个既有值直接消费生成的标准NRC常量，不再维护同值的私有DCM_NRC_*表。已对照SWS_Dcm_00980原表PDF365：DCM_E_GENERALREJECT／SERVICENOTSUPPORTED／SUBFUNCTIONNOTSUPPORTED／INCORRECTMESSAGELENGTHORINVALIDFORMAT／RESPONSETOOLONG／REQUESTOUTOFRANGE分别为0x10／11／12／13／14／31。Dcm.h原有Rte_Dcm_Type.h包含链、Dcm_Negative的uint8参数、响应字节／长度、各拒绝优先级及ReadData调用边界均保持；这是对R2.5未使用公共宏的真实消费者整理，不扩充服务或改变ISO处置。

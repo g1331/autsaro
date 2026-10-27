@@ -40,14 +40,83 @@ const WINDOWS_PATCHES: &[&str] = &[
     "runtime/os/patches/0012-nested-interrupt-dispatch.patch",
     "runtime/os/patches/0013-interrupt-source-repetition.patch",
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch",
+    "runtime/os/patches/0015-typed-port-state.patch",
+    "runtime/os/patches/0016-essential-boolean-controls.patch",
+    "runtime/os/patches/0017-portable-header-paths.patch",
+    "runtime/os/patches/0018-windows-thread-setup-errors.patch",
+    "runtime/os/patches/0019-windows-native-handoff-errors.patch",
+    "runtime/os/patches/0020-bounded-queue-front.patch",
+    "runtime/os/patches/0021-c99-comment-examples.patch",
+    "runtime/os/patches/0022-explicit-function-addresses.patch",
+    "runtime/os/patches/0023-preserve-parameter-values.patch",
+    "runtime/os/patches/0024-conditional-private-definitions.patch",
+    "runtime/os/patches/0025-configured-kernel-declarations.patch",
+    "runtime/os/patches/0026-explicit-control-flow-boundaries.patch",
 ];
 const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0003-activation-ready-policy.patch",
     "runtime/os/patches/0007-controlled-tick.patch",
     "runtime/os/patches/0008-task-hook-boundaries.patch",
+    "runtime/os/patches/0015-typed-port-state.patch",
+    "runtime/os/patches/0016-essential-boolean-controls.patch",
+    "runtime/os/patches/0017-portable-header-paths.patch",
+    "runtime/os/patches/0020-bounded-queue-front.patch",
+    "runtime/os/patches/0021-c99-comment-examples.patch",
+    "runtime/os/patches/0022-explicit-function-addresses.patch",
+    "runtime/os/patches/0023-preserve-parameter-values.patch",
+    "runtime/os/patches/0024-conditional-private-definitions.patch",
+    "runtime/os/patches/0025-configured-kernel-declarations.patch",
+    "runtime/os/patches/0026-explicit-control-flow-boundaries.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
+    "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
+    (
+        "runtime/os/patches/0026-explicit-control-flow-boundaries.patch",
+        &["tasks.c", "queue.c"],
+    ),
+    (
+        "runtime/os/patches/0025-configured-kernel-declarations.patch",
+        &["include/portable.h", "include/task.h", "include/queue.h"],
+    ),
+    (
+        "runtime/os/patches/0024-conditional-private-definitions.patch",
+        &["tasks.c", "queue.c"],
+    ),
+    (
+        "runtime/os/patches/0023-preserve-parameter-values.patch",
+        &["tasks.c"],
+    ),
+    (
+        "runtime/os/patches/0022-explicit-function-addresses.patch",
+        &["tasks.c"],
+    ),
+    (
+        "runtime/os/patches/0021-c99-comment-examples.patch",
+        &["include/task.h", "include/queue.h", "include/timers.h"],
+    ),
+    (
+        "runtime/os/patches/0020-bounded-queue-front.patch",
+        &["queue.c"],
+    ),
+    (
+        "runtime/os/patches/0017-portable-header-paths.patch",
+        &["include/deprecated_definitions.h"],
+    ),
+    (
+        "runtime/os/patches/0016-essential-boolean-controls.patch",
+        &["tasks.c", "queue.c", "include/list.h", "include/task.h"],
+    ),
+    (
+        "runtime/os/patches/0015-typed-port-state.patch",
+        &[
+            "tasks.c",
+            "include/task.h",
+            "include/FreeRTOS.h",
+            "queue.c",
+            "include/queue.h",
+        ],
+    ),
     (
         "runtime/os/patches/0003-activation-ready-policy.patch",
         &["tasks.c", "include/task.h", "include/FreeRTOS.h"],
