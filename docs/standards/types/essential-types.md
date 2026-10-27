@@ -51,3 +51,19 @@ R13.4为Advisory（主文印刷112–113／PDF120–121），包括未求值表�
 `48907b3b`的type-owner标准ECU有40条`duplicateCondition`，按物理位置为Ecu_RuntimeConfig.c的8条及Os_ArtiServices.c的32条。已逐位置核对前后两项条件：前者都是按值传入的events与固定mask比较，后者都是函数内const trace与0比较；两种guard的地址均不逃逸。RunCycle按计划顺序调用不同实体；ARTI分别捕获服务结果与发布完成事件，不能把相同条件下的不同调用判成重复调用而删除。
 
 该报告指出可以合并相邻同条件块的源码冗余，不证明服务执行两次或运行时结果错误。R2.2对有用操作的判断仍须落到具体调用及其结果，不能只凭这一通用style诊断将这些调用视为死代码；本次也不将报告称为检查器误报。保留逐调用guard的当前表达与真实报告，不新增MISRA批准、baseline或suppression；以后合并时仍须保持实体顺序、无条件HostFlush位置以及ARTI的捕获→发布顺序。此判断仅覆盖上述40处，不代表其他重复条件或全部R2.2已核完。
+
+## 内核无符号 tick 回绕的具体报告
+
+complete-guards-final-results的standard-ecu在kernel/tasks.c:4836报告knownConditionTrueFalse，认为xConstTickCount等于零恒假。实际所选portmacro.h将TickType_t定义为uint32_t；tasks.c:4830的xTickCount与加数均在32位unsigned域，UINT32_MAX加一得到零，后续条件可真可假。主文R14.3（Required，印刷119／PDF127；AMD2追加C11）不允许不变控制条件，但这里不是不变条件，不借用无限循环或do/while例外；TC2.27–28修改的do/while例外也不适用。
+
+现有sc1-timing正常入口另编译controlled_time.c的hardware-kernel-wrap消费者：StartupHook用既有测试seed将真实内核tick置于UINT32_MAX减二，随后通过生产tick处理与xTaskIncrementTick推进。Os_TargetWaitTick返回的completion.kernel_tick实际由xTaskGetTickCount读取；独立预期依次为4294967294、4294967295、0，与epoch65535／65536／65537和软件counter1／2／3一起精确比较。type-prefix-os-native本次已有成功收据，不再为此重跑；其host-timer/kernel/tasks.c与上述分析副本摘要同为4ccccb0d…49edf4d。
+
+这是既有seed后的真实回绕观察，不是实际等待2的32次方个tick，也不是SC1软件Counter最大值15的回绕测试。生产状态推进没有规定小于UINT32_MAX的总tick上限；该位置不能据数学整数范围忽略C99无符号模运算。这里只裁决这一条核心报告，不修改原始passed／error／assessment或将其他恒定条件批量判误报；采用内核的两个延迟链break仍另负R15.4真实Advisory责任。
+
+## SDK 整数字面量的实际展开
+
+R7.1（Required，主文印刷59–60／PDF67–68）只对单个数字0给出八进制例外。complete-guards-final标准ECU的Native TU（序号48）在AUTSAR_VALUE探针之前，实际open("/proc/self/maps", O_RDONLY)展开为00；bits/fcntl-linux.h:43的定义确为O_RDONLY 00。因此这里不能按值为零销项，也不能将主文例外扩大为任意零写法。
+
+同一TU的非ISO fcntl.h处理进入bits/fcntl2.h:48，__OPEN_NEEDS_MODE展开O_CREAT及__O_TMPFILE／__O_DIRECTORY，留下0100一次、020000000与0200000各两次。原生参数宏收据为_FORTIFY_SOURCE=3、__USE_FORTIFY_LEVEL=3；源码仍是正常O1／fexceptions／pthread参数，不能把fortify函数体当成未进入的源代码。既有四份带来源标记的sdk-inline-closure给出相同构造，HostLinux的三个eventfd枚举另见OS篇，其他两个样本TU没有八进制候选。这些具体位置保留真实Required缺口；不以改写数字、关闭fortify、换入口或间接include当作整改，也不扩张已接受的三个include范围。
+
+R7.2另覆盖#if／#elif控制表达式及预处理后整数常量（主文印刷60–61／PDF68–69，AMD2.46及语言表）。按既有Linux LP64宽度区分十进制与十六／八进制的候选类型，四份.i的832／455／186／620个实际整数token均未发现缺U而具有unsigned类型的常量，所有数字token均能归入整数形式。这里没有把赋值目标是unsigned误当成literal类型，也没有把R7.1的八进制违反并为R7.2违反；该局部结论不包含已消去的条件控制表达式、其他TU或Windows，不能据此关闭整条R7.2。
