@@ -51,3 +51,16 @@ SetEvent沿既有源级别名绑定Os_SetEvent，与Win32同名API分离；Os_Ar
 | 交付描述 Os 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[Os]：SWS_BSW_00061 |
 | BSWMD 模式组 | OS 的 BSWMD 没有 providedModeGroup。 已核对（BSWMD 生成）[Os]：SWS_BSW_00238 |
 | Symbolic Name Value | Ecu_TargetConfig.h 包含 Os_Cfg.h，owner task 使用该头唯一生产的 OS_TASK_ID_*；计数器继续从 Os_Counter.h 导入。已核对（配置记录与实际生成头／消费者）[Os]：SWS_BSW_00200 |
+
+## Os_MemMap 必需重复处理与请求消费
+
+以下仅执行[原用户决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)及ADR0023，不新增批准人或平台保留。固定主文D4.10为Required（印刷32–33／PDF40–41），R20.5为Advisory（158／166）；TC2.2没有映射头例外，AMD2追加C11不改变当前C99判断。MemoryMapping00003／00011／00023（PDF36、41、37）要求完整配对、消费请求及不在函数体内包含映射头。整头guard会吞掉后续STOP／其他class，固定属性已有独立guard；保留请求会使下次包含重复消费或发生冲突，改成#undef之外的私有状态不能履行00011。
+
+[逐处依据](https://github.com/g1331/autsaro/pull/371#issuecomment-6431995009)固定f1986d7d：36文件、256对及20类实际声明／定义见证，列出81处undef的分支与位置。该头在cf5d6fa1之前与该冻结字节相同。本表只含40个START／STOP请求，另41个内部清理、R20.1布局、SDK／provider及其他平台取舍不在内。独立累计复核6a2b4155已按原文核对该机制、集合和风险；随后a5b3452b定向复核关闭无关P1／P2，不扩大本表。现有20类配对、请求／属性撤销、无效／多请求拒绝与真实段观察控制状态泄漏；改变class、prefix、目标、实体或条件须重评。
+
+| MISRA 条目 | 源码范围 | 必需性与风险控制 | 原授权与技术处置 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Directive 4.10 | `runtime/os/include/Os_MemMap.h` 中 `@file` | 00003／00011的START与STOP必须分别处理；只保护固定属性，逐次检查配对／嵌套。 | 维护者 人类，2026-10-17条件授权；ADR0023；2026-10-27逐处评估与复核，非MISRA符合性批准 |
+| MISRA C:2012 Rule 20.5 | `runtime/os/include/Os_MemMap.h` 中 `#undef OS_START_SEC_CODE`、`#undef OS_STOP_SEC_CODE`、`#undef OS_START_SEC_CONFIG_DATA_PREBUILD_64`、`#undef OS_STOP_SEC_CONFIG_DATA_PREBUILD_64`、`#undef OS_START_SEC_CONFIG_DATA_PREBUILD_8`、`#undef OS_STOP_SEC_CONFIG_DATA_PREBUILD_8`、`#undef OS_START_SEC_CONST_64`、`#undef OS_STOP_SEC_CONST_64`、`#undef OS_START_SEC_CONST_8`、`#undef OS_STOP_SEC_CONST_8`、`#undef OS_START_SEC_CONST_PTR`、`#undef OS_STOP_SEC_CONST_PTR`、`#undef OS_START_SEC_VAR_CLEARED_32`、`#undef OS_STOP_SEC_VAR_CLEARED_32`、`#undef OS_START_SEC_VAR_CLEARED_64`、`#undef OS_STOP_SEC_VAR_CLEARED_64`、`#undef OS_START_SEC_VAR_CLEARED_8`、`#undef OS_STOP_SEC_VAR_CLEARED_8`、`#undef OS_START_SEC_VAR_CLEARED_PTR`、`#undef OS_STOP_SEC_VAR_CLEARED_PTR`、`#undef OS_START_SEC_VAR_CLEARED_TLS_32`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_32`、`#undef OS_START_SEC_VAR_CLEARED_TLS_64`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_64`、`#undef OS_START_SEC_VAR_CLEARED_TLS_8`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_8`、`#undef OS_START_SEC_VAR_CLEARED_TLS_PTR`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_PTR`、`#undef OS_START_SEC_VAR_CLEARED_TLS_UNSPECIFIED`、`#undef OS_STOP_SEC_VAR_CLEARED_TLS_UNSPECIFIED`、`#undef OS_START_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef OS_START_SEC_VAR_INIT_32`、`#undef OS_STOP_SEC_VAR_INIT_32`、`#undef OS_START_SEC_VAR_INIT_8`、`#undef OS_STOP_SEC_VAR_INIT_8`、`#undef OS_START_SEC_VAR_INIT_UNSPECIFIED`、`#undef OS_STOP_SEC_VAR_INIT_UNSPECIFIED`、`#undef OS_START_SEC_VAR_INIT_VECTOR_PTR`、`#undef OS_STOP_SEC_VAR_INIT_VECTOR_PTR` | 00011直接要求撤销已处理请求；保留原class、active检查及STOP后的属性清理。 | 维护者 人类，2026-10-17条件授权；ADR0023；2026-10-27逐处评估与复核，非MISRA符合性批准 |
+
+SWS_BSW_00115的就近注释仅标识这两类技术理由，与表中每个字面指令及文件主体对应。当前Linux四profile的源闭包提供上述证据；共享头的注释不宣称Windows执行或其他违反已获准。原始诊断、221项not_assessed、严格比较拒绝及其余00115差距不因此关闭。

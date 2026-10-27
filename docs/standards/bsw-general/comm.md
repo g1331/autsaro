@@ -40,3 +40,29 @@ ComM 只有一个 CDD 通道（ComMNmVariant 为 NONE），经 Ecu_HostBusSM 请
 | 交付描述 ComM 00061 | 已核对（module_documentation 复用 DefinitionCatalog 的说明、范围、单位及默认值和 PlanDescription 的值／引用；禁用功能复用 native_configuration::DISABLED_FEATURES；selected_configuration_manual_tracks_the_validated_input_value 检查连贯配置变化）[ComM]：SWS_BSW_00061 |
 | BSWMD 模式组 | ComM 的 BSWMD 没有 providedModeGroup，因此没有需要映射的 synchronizedModeGroup；SW-C 模式端口补齐后须重新核对。 已核对（BSWMD 生成）[ComM]：SWS_BSW_00238 |
 | Symbolic Name Value | ComM_Cfg.h 唯一导出所选配置符号；生成配置从实际提供方的配置头导入，symbolic_handles_compile_link_and_run_renamed_nondefault_mapping 编译、链接并运行。已核对（生成头与真实消费者）[ComM]：SWS_BSW_00200 |
+
+## ComM 映射头的必需重复处理
+
+ComM实现的CODE由`bsw/include/ComM_EcuM.h、bsw/include/ComM_BswM.h、bsw/include/ComM.h、bsw/include/ComM_Dcm.h、bsw/src/ComM.c、bsw/src/ComM_Internal.h`消费；VAR_CLEARED_UNSPECIFIED由`bsw/src/ComM.c`消费。这些具体请求与声明／定义的归属沿本模块及对应标准篇核查；不是仅凭头名推定角色。固定MemoryMapping00003／00011／00023（PDF36、41、37）要求完整开闭、撤销请求且不在函数体内包含头。整头guard会吞掉STOP／后续class，保留已处理关键词也违反00011；固定属性仍单独保护，每次检查嵌套／错配及请求／属性撤销。
+
+D4.10为Required（主文32–33／PDF40–41，TC2.2无映射例外），R20.5为Advisory（158／166）；AMD2追加C11不改变当前C99适用性。记录绑定cf5d6fa1的字面指令；本次仅增注释，全部C／预处理token保持。原3ea747fe..9204ed30的请求／头闭包复核及后续对应模块声明映射复核为技术依据；C／C++实际配对、消费、属性撤销和无效／多请求拒绝收据按原head保留。改变类别、前缀、目标、实体或条件须重评。
+
+| MISRA 条目 | 源码范围 | 必需性与风险控制 | 原授权与技术处置 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Directive 4.10 | `runtime/bsw/include/ComM_MemMap.h` 中 `@file` | 00003／00011需逐次处理START／STOP；固定属性guard不遮蔽分派主体。 | 维护者 人类，2026-10-17条件授权；ADR0023；2026-10-27逐处评估，非MISRA符合性批准 |
+| MISRA C:2012 Rule 20.5 | `runtime/bsw/include/ComM_MemMap.h` 中 `#undef COMM_START_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef COMM_STOP_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef COMM_START_SEC_CODE`、`#undef COMM_STOP_SEC_CODE` | 00011要求消费这些请求；保留class／active校验及STOP属性清理。 | 维护者 人类，2026-10-17条件授权；ADR0023；2026-10-27逐处评估，非MISRA符合性批准 |
+
+原授权见[#58决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)。SWS_BSW_00115就近技术注释与上列指令／文件主体对应；内部active／属性清理和R20.1不随之获准。共享源注释不声称新Windows执行、MISRA合法偏离或整体符合；原始诊断、not_assessed、strict refusal及其余00115差距保留。
+
+## Ecu_HostBusSM 映射头的必需重复处理
+
+已选CDD实现的CODE由`integration/include/Ecu_HostBusSM.h、integration/src/Ecu_HostBusSM.c`消费；VAR_CLEARED_UNSPECIFIED由`integration/src/Ecu_HostBusSM.c`消费。这些具体请求与声明／定义的归属沿本模块及对应标准篇核查；不是仅凭头名推定角色。选择CDD并非AUTOSAR强制；这里仅对已选COMM_BUS_TYPE_CDD实现应用共同BSW义务，不扩到其他Host helper。固定MemoryMapping00003／00011／00023（PDF36、41、37）要求完整开闭、撤销请求且不在函数体内包含头。整头guard会吞掉STOP／后续class，保留已处理关键词也违反00011；固定属性仍单独保护，每次检查嵌套／错配及请求／属性撤销。
+
+D4.10为Required（主文32–33／PDF40–41，TC2.2无映射例外），R20.5为Advisory（158／166）；AMD2追加C11不改变当前C99适用性。记录绑定cf5d6fa1的字面指令；本次仅增注释，全部C／预处理token保持。原3ea747fe..9204ed30的请求／头闭包复核及后续对应模块声明映射复核为技术依据；C／C++实际配对、消费、属性撤销和无效／多请求拒绝收据按原head保留。改变类别、前缀、目标、实体或条件须重评。
+
+| MISRA 条目 | 源码范围 | 必需性与风险控制 | 原授权与技术处置 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Directive 4.10 | `runtime/host/include/Ecu_HostBusSM_MemMap.h` 中 `@file` | 00003／00011需逐次处理START／STOP；固定属性guard不遮蔽分派主体。 | 维护者 人类，2026-10-17条件授权；ADR0023；2026-10-27逐处评估，非MISRA符合性批准 |
+| MISRA C:2012 Rule 20.5 | `runtime/host/include/Ecu_HostBusSM_MemMap.h` 中 `#undef ECU_HOSTBUSSM_START_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef ECU_HOSTBUSSM_STOP_SEC_VAR_CLEARED_UNSPECIFIED`、`#undef ECU_HOSTBUSSM_START_SEC_CODE`、`#undef ECU_HOSTBUSSM_STOP_SEC_CODE` | 00011要求消费这些请求；保留class／active校验及STOP属性清理。 | 维护者 人类，2026-10-17条件授权；ADR0023；2026-10-27逐处评估，非MISRA符合性批准 |
+
+原授权见[#58决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)。SWS_BSW_00115就近技术注释与上列指令／文件主体对应；内部active／属性清理和R20.1不随之获准。共享源注释不声称新Windows执行、MISRA合法偏离或整体符合；原始诊断、not_assessed、strict refusal及其余00115差距保留。
