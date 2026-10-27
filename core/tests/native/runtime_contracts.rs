@@ -979,10 +979,10 @@ fn dcm_generated_mode_switch_publishes_from_a_non_owner_context() {
     for (path, bytes) in mainline_generated_headers(&scratch.0) {
         std::fs::write(scratch.0.join(Path::new(&path).file_name().unwrap()), bytes).unwrap();
     }
-    // Resolve the SchM consumer's quoted include beside the generated type header.
+    // Keep Dcm's quoted type import beside the selected generated mode definitions.
     std::fs::copy(
-        root.join("runtime/bsw/include/SchM_Dcm.h"),
-        scratch.0.join("SchM_Dcm.h"),
+        root.join("runtime/bsw/include/Dcm.h"),
+        scratch.0.join("Dcm.h"),
     )
     .unwrap();
     std::fs::write(scratch.0.join("Ecu_Target.h"), "#include \"Std_Types.h\"\nint Ecu_TargetIsOwner(void);\nStd_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting);\n").unwrap();
