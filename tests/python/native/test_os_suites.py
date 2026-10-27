@@ -178,6 +178,8 @@ class DependencyTests(unittest.TestCase):
             return (f'#define OS_START_SEC_{kind}\n#include "Os_MemMap.h"\n'
                     f'{body}\n#define OS_STOP_SEC_{kind}\n#include "Os_MemMap.h"\n')
         for kind, body in [("CODE", "void entry(void) {}"),
+                           ("CODE", "typedef uint32 Count; void entry(Count n) { (void)n; }"),
+                           ("VAR_CLEARED_32", "struct Native { uint32 field; }; static struct Native state;"),
                            ("CODE", "void worker(void) { typedef uint32 Count; Count n = 0u; (void)n; }"),
                            ("VAR_CLEARED_32", "static uint32 state;"),
                            ("VAR_INIT_32", "static uint32 state = 3u;"),
@@ -195,11 +197,33 @@ class DependencyTests(unittest.TestCase):
             (section("VAR_CLEARED_TLS_32", "static uint32 state;"), "TLS"),
             ("static uint32 state;", "unmapped"),
             ("void worker(void) { typedef uint32 Count; Count n = 0u; (void)n; }", "unmapped"),
-            (section("VAR_CLEARED_32", "struct Native { uint32 field; };"), "does not allocate"),
+            (section("VAR_CLEARED_32", "typedef OS_MEMMAP uint32 Count;"), "section attribute"),
             (section("CODE", "void entry(void) {}").replace("STOP_SEC_CODE", "STOP_SEC_CONST_32"), "mismatched"),
         ]:
             with self.subTest(expected=expected), self.assertRaisesRegex(AssertionError, expected):
                 os_suites.verify_memory_mapping_source(source)
+
+    def test_memory_mapping_aggregate_objects_keep_storage_checks(self):
+        def section(kind, body):
+            return (f'#define OS_START_SEC_{kind}\n#include "Os_MemMap.h"\n'
+                    f'{body}\n#define OS_STOP_SEC_{kind}\n#include "Os_MemMap.h"\n')
+
+        for body in ("struct Native { uint32 field; };",
+                     "enum Native { FIRST = 1, LAST = 2 };",
+                     "struct Native { struct { uint32 field; } member; };"):
+            with self.subTest(type=body):
+                self.assertEqual(os_suites.verify_memory_mapping_source(section("CODE", body)), set())
+        for body in ("struct Native state = {0};",
+                     "struct Native { uint32 field; } state = {0};",
+                     "union Native state = {0};"):
+            with self.subTest(object=body):
+                self.assertEqual(os_suites.verify_memory_mapping_source(section("VAR_INIT_32", body)), {"state"})
+            for kind, expected in (("CODE", "code/data"),
+                                   ("VAR_CLEARED_32", "initializer"),
+                                   ("CONST_32", "constant/variable"),
+                                   ("VAR_CLEARED_TLS_32", "TLS")):
+                with self.subTest(object=body, section=kind), self.assertRaisesRegex(AssertionError, expected):
+                    os_suites.verify_memory_mapping_source(section(kind, body))
 
     def test_memory_mapping_owned_headers_require_mapping(self):
         owned = os_suites.verify_memory_mapping_source(

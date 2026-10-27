@@ -33,7 +33,7 @@
 #define COMM_E_NO_PNC_ASSIGNED       4u /**< User belongs to no PNC. */
 /* MR12 RULE 2.5 VIOLATION: standard return code (SWS_ComM_91027) without PNC learning in the
  * selected profile; see the ComM deviation record. */
-#define COMM_E_LEARNING_ACTIVE 5u /**< PNC learning phase is active. */
+#define COMM_E_LEARNING_ACTIVE          5u /**< PNC learning phase is active. */
 #define COMM_NO_COM_NO_PENDING_REQUEST  0u /**< NO without a pending FULL request. */
 #define COMM_NO_COM_REQUEST_PENDING     1u /**< NO, waiting for CommunicationAllowed. */
 #define COMM_FULL_COM_NETWORK_REQUESTED 2u /**< FULL, requested or minimum duration running. */

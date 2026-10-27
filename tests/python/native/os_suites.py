@@ -2041,12 +2041,19 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
         signature = statement[:words.index("{")] if "{" in words else statement
         declaration = function(signature)
         head = [item.text for item in signature if item.text != "OS_MEMMAP"]
-        type_only = "typedef" in head or (
-            head and head[0] in ("struct", "union", "enum") and
-            (len(head) == 3 or words[-2:] == ["}", ";"])
-        )
+        type_only = "typedef" in head
+        if head and head[0] in ("struct", "union", "enum"):
+            if "{" not in words:
+                type_only = len(head) == 3 and head[-1] == ";"
+            elif len(head) <= 2:
+                braces = 0
+                for end in range(words.index("{"), len(words)):
+                    braces += (words[end] == "{") - (words[end] == "}")
+                    if braces == 0:
+                        break
+                type_only = words[end + 1:] == [";"]
         if type_only:
-            require(active is None, "type-only declaration does not allocate section storage")
+            require("OS_MEMMAP" not in words, "type-only declaration cannot carry a section attribute")
         else:
             if declaration is not None:
                 name = declaration[0]
