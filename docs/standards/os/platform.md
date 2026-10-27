@@ -33,7 +33,7 @@
 
 ## 原生设施的源码处置
 
-见[原生设施与资源生命周期](native-facilities.md)：原生错误处理、上下文／布局、实际provider、初始化和所有权。
+见[原生设施与资源生命周期](native-facilities/README.md)：原生错误处理、上下文／布局、实际provider、初始化和所有权。
 
 ## 入口及跟踪宏的实际展开
 

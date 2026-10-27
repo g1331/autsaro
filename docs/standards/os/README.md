@@ -19,7 +19,7 @@ OS-Application、IOC、多核、spinlock、时间／内存保护、ProtectionHoo
 - [SC1 以外的能力](extensions.md)：多核、OS-Application、保护、IOC、外设、调度表同步等由配置拒绝证明不适用的条目。
 - [ARTI](arti.md)：ARTI 描述文件、hook 宏与 `ECUC_Arti_` 条目。
 - [受控主机平台与 MISRA 边界](platform.md)：平台扩展、原生错误处理、三处有界保留及 C11 设施的适用性。
-- [原生设施与资源生命周期](native-facilities.md)：上下文／布局、实际provider、展开初始化及线程所有权。
+- [原生设施与资源生命周期](native-facilities/README.md)：上下文／布局、实际provider、展开初始化及线程所有权。
 
 ## 核算
 

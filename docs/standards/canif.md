@@ -44,7 +44,7 @@
 
 ## MemMap 的具体责任
 
-以下定位绑定 `58fb105a` 源码与四份 `direct-render-mapping-final-samples`，不是批准表。固定 MISRA 主文 R20.1（Advisory，印刷155／PDF163）、R20.5（Advisory，158／166）及 D4.10（Required，32–33／40–41）的修订与通用替代判断见 [MemMap 篇](memmap.md#misra-预处理布局)。位置按预处理前物理源码判断，不将所属两个程序或四 profile 重复计数。
+以下定位绑定 `58fb105a` 源码与四份 `direct-render-mapping-final-samples`，不是批准表。固定 MISRA 主文 R20.1（Advisory，印刷155／PDF163）、R20.5（Advisory，158／166）及 D4.10（Required，32–33／40–41）的修订与通用替代判断见 [MemMap 篇](memmap/README.md#misra-预处理布局)。位置按预处理前物理源码判断，不将所属两个程序或四 profile 重复计数。
 
 | 位置、请求与所属 class | 实体及必要性 |
 | --- | --- |

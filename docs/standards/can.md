@@ -49,7 +49,7 @@
 
 ## MemMap 的具体冲突位置
 
-以下为 `9204ed30` 与 `mapping-sequence-final-results/standard-ecu` 对应的技术定位，不是批准表；源码仍未新增 MR12。原件版次、R20.1／R20.5／D4.10 的修订依据和通用替代排除见 [MemMap 篇](memmap.md#misra-预处理布局)。`SWS_BSW_00006`要求所选 Can 实现包含模块映射头，`SWS_MemMap_00003`要求每个实际代码／数据块完整开闭，`00011`要求消费请求。不是每次 include 都违反 R20.1：实际报告按源文件预处理前顺序核定，不能把块首请求一律算作违反。
+以下为 `9204ed30` 与 `mapping-sequence-final-results/standard-ecu` 对应的技术定位，不是批准表；源码仍未新增 MR12。原件版次、R20.1／R20.5／D4.10 的修订依据和通用替代排除见 [MemMap 篇](memmap/README.md#misra-预处理布局)。`SWS_BSW_00006`要求所选 Can 实现包含模块映射头，`SWS_MemMap_00003`要求每个实际代码／数据块完整开闭，`00011`要求消费请求。不是每次 include 都违反 R20.1：实际报告按源文件预处理前顺序核定，不能把块首请求一律算作违反。
 
 | R20.1 的实际位置 | 被映射实体与请求 |
 | --- | --- |

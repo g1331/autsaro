@@ -45,7 +45,7 @@ LSduR 只在自己的 `LSDUR_STATE` 区内读取已发布的配置指针，离�
 
 ## MemMap 的具体责任
 
-以下定位绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`；规则类别、修订与不可把内部宏名当SWS强制的限制见[MemMap篇](memmap.md#misra-预处理布局)。这是逐处技术记录，未新增批准表或MR12。自有实现／声明沿 `originalBswSources` 对应，四 profile 字节均与源码一致；映射头由MEMMAP producer保留模板后逐字输出到 `generated/include`，不是该映射中的直接原件身份。
+以下定位绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`；规则类别、修订与不可把内部宏名当SWS强制的限制见[MemMap篇](memmap/README.md#misra-预处理布局)。这是逐处技术记录，未新增批准表或MR12。自有实现／声明沿 `originalBswSources` 对应，四 profile 字节均与源码一致；映射头由MEMMAP producer保留模板后逐字输出到 `generated/include`，不是该映射中的直接原件身份。
 
 | R20.1位置、请求和类别 | 实体与实际闭包 |
 | --- | --- |

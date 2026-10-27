@@ -22,7 +22,7 @@
 
 ### MemMap 的逐处责任
 
-以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表；[MemMap篇](../memmap.md#misra-预处理布局)给出R20.1／R20.5／D4.10及00003／00011／00023的原文、修订和替代边界。
+以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表；[MemMap篇](../memmap/README.md#misra-预处理布局)给出R20.1／R20.5／D4.10及00003／00011／00023的原文、修订和替代边界。
 
 | 位置及请求 | 实体、class与实际闭包 |
 | --- | --- |

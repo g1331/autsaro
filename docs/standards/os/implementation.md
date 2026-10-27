@@ -8,7 +8,7 @@ D1.1、D2.1、D3.1均为Required，当前C99适用（主文印刷20–23／PDF28
 
 已核Linux正常编译参数为C99、O1、fexceptions和pthread，编译器发现记录为GCC13.3的x86_64-linux-gnu；CHAR_BIT为8、int为32位、long及指针为64位、字节序为little-endian，属于所选目标的事实。GCC13.3手册§4.1把stderr输出识别为诊断，§4.5明确二进制补码，§4.7描述指针／整数等宽转换的位保留；这些定义不授权越界指针、任意地址解引用或有符号溢出。字符／位域布局仍由目标ABI决定；Dcm的位域契约、原生上下文布局和实际编译断言各自保留，不能用LP64推导Windows的long或位域布局。§4.10也明确volatile访问不保证原子性；句柄、ACK、completion等共享发布依赖实际原子／锁协议，不把volatile当作同步。依据为[GCC13.3固定手册§4](https://gcc.gnu.org/onlinedocs/gcc-13.3.0/gcc.pdf#page=545)及实际编译器发现记录。
 
-GCC手册将main参数、环境与多数库行为交给libc／操作系统。项目的Linux入口是hosted main，不能按freestanding入口作判断；OS_HOST_FAILURE_TESTS选择下的环境开关只按已记录格式解析，不把它们推广为任意环境名语义。pthread的TLS／线程回收、信号frame／UAPI、libgcc展开和Windows实际CRT／DLL的对应责任继续见[原生设施](native-facilities.md)。Linux已有libc6 2.39-0ubuntu8.9、libgcc-s1 14.2.0-4ubuntu2~24.04.1的字节／来源与相关pthread、loader、unwind源码核查，最终程序仍按自身ELF／装载绑定连接这些证据。Windows仍缺实际CRT／启动对象、导入最终解析到的系统DLL版本与映像摘要及对应线程／退出契约；最小补齐材料是相应正常入口的PE、导入／加载身份及配套实现或一手契约。检测器provider的拦截、fiber与异步调用上下文单列，不由普通provider或一次绿色运行代替。
+GCC手册将main参数、环境与多数库行为交给libc／操作系统。项目的Linux入口是hosted main，不能按freestanding入口作判断；OS_HOST_FAILURE_TESTS选择下的环境开关只按已记录格式解析，不把它们推广为任意环境名语义。pthread的TLS／线程回收、信号frame／UAPI、libgcc展开和Windows实际CRT／DLL的对应责任继续见[原生设施](native-facilities/README.md)。Linux已有libc6 2.39-0ubuntu8.9、libgcc-s1 14.2.0-4ubuntu2~24.04.1的字节／来源与相关pthread、loader、unwind源码核查，最终程序仍按自身ELF／装载绑定连接这些证据。Windows仍缺实际CRT／启动对象、导入最终解析到的系统DLL版本与映像摘要及对应线程／退出契约；最小补齐材料是相应正常入口的PE、导入／加载身份及配套实现或一手契约。检测器provider的拦截、fiber与异步调用上下文单列，不由普通provider或一次绿色运行代替。
 
 D2.1按真实TU的编译错误判断。正常c-check先用实际参数逐TU编译检查，封存build随后实际编译／链接目标程序；生成工程成功、解析器退出或旧程序运行不替代这些步骤。GNU扩展按所选编译器及R1.2单独评估，不能把有效目标扩展统称语法错误，也不能把被编译器拒绝的生成代码交给旧绿色结果覆盖。Windows仍须由相应head实际选中的正常编译入口证明。
 

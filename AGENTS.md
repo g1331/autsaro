@@ -52,7 +52,7 @@
 ## C、MISRA 与交付资产
 
 - clang-tidy 按 C 编码规范从 `quality --c-samples` 运行，新结果不能靠加基线条目通过，修好的条目从基线删除。相关改动对实际生成的受影响 profile 运行 `c-check`；本机缺少固定版本 Cppcheck 时按测试说明从官方标签构建后在本地运行，不把 `c-check` 留给 CI。区分分析完整性、源码诊断与人工规范评估，不能用 CI 链路通过替代源码合规结论。现存诊断清零前，按“规则＋文件＋源码行”与基线的同一检查对比受影响样本，新代码不增加诊断。申请偏离前核对适用的 amendment／TC 与实际调用路径（见[标准基线 §3](docs/standards/README.md#3-预期从标准独立定义)）。
-- 已核实且无法同时满足的 AUTOSAR 必需契约优先；按 [ADR 0023](docs/adr/0023-autosar-required-conflict-disposition.md) 执行冲突授权，不重复索批。逐项连接规则、文件／源码行、实际调用闭包、固定 SWS 全文必要性、MISRA 版次及 amendment／TC、风险控制与独立复核，沿模块记录／`SWS_BSW_00115` 注释路径处置；PR 留完整证据，#58 只留结论与链接。缺原文或评估时保持未核查，不把项目授权当作 MISRA 合法偏离或符合；不删除标准义务或隐藏诊断，新例外由用户决定。
+- MISRA 按 [ADR 0025](docs/adr/0025-misra-layered-scope.md)区分自有代码、主机层、SDK／FreeRTOS 采用代码，应用 R15.5 GRP。已核实的 AUTOSAR 必需冲突按 [ADR 0023](docs/adr/0023-autosar-required-conflict-disposition.md)执行；MemMap、主机动态设施、同步嵌套 ISR 引用模块篇类别记录，保留位置与来源，不重复必要性。类别外核对原文、闭包、风险并独立复核；Mandatory 不允许偏离，缺依据保持未核查。不重复索批，新例外由用户决定；原始诊断保留，PR 留证据，#58 留结论链接。
 - 运行时资产摘要由构建计算；使用 `python -m autosar_tooling assets check` 核对清单与文件，`assets update` 只更新独立 seal guard 身份。ABI 与第三方身份单独审阅；交付字节须符合 `.gitattributes` 固定换行，由资产测试核查，见[资产清单维护](docs/maintainers/assets.md)。
 
 ## 工程推进与判断

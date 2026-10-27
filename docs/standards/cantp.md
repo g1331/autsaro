@@ -73,7 +73,7 @@ SWS_CanTp_00229 把超时与协议错误称为开发错误，表 SWS_CanTp_00352
 
 ## MemMap 的具体责任
 
-本节绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`；主文R20.1／R20.5的Advisory和D4.10的Required及修订、替代边界见[MemMap篇](memmap.md#misra-预处理布局)。以下不是批准表，未新增MR12，也不扩展上节既有R8.7记录。
+本节绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`；主文R20.1／R20.5的Advisory和D4.10的Required及修订、替代边界见[MemMap篇](memmap/README.md#misra-预处理布局)。以下不是批准表，未新增MR12，也不扩展上节既有R8.7记录。
 
 | R20.1位置、请求与类别 | 具体实体与调用方 |
 | --- | --- |

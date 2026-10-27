@@ -12,7 +12,7 @@ Linux私有兼容头的ULONG／ULONG_PTR、CALLBACK／VOID没有所选Linux消�
 
 Dcm六个私有NRC重复了已交付的标准常量，实际负响应路径现直接使用生成的DCM_E_*；SWS_Dcm_00980原表PDF365的0x10／11／12／13／14／31分别约束general reject、service、subfunction、format、response too long及range。该头由Dcm.h原有包含链提供，没有新增消警报引用。Ecu_TargetPrepare的初始CAS同样使用已有ECU_TARGET_UNPREPARED，仍表示原子状态0，拒绝顺序不变。
 
-其余所选程序未使用的标准公共类型、版本／状态／NRC常量、RTE句柄／runnable映射、OS访问宏及可选内核接口保留真实未使用状态；固定SWS发布要求、配置／接口稳定性与采用接口的理由不等于实际消费，也不将Advisory违反自动判为不适用。旧MemMap的HEADER_CHECK按#ifndef路径裁决；现随无请求smoke分支删除，不改写旧工件结论，见[请求拒绝](../memmap.md#映射请求的拒绝边界)。完整逐位置的来源、实际消费者／配置条件及仍待处置项集中PR #371；上述删除／误报裁决不关闭整组三条或全部221项。
+其余所选程序未使用的标准公共类型、版本／状态／NRC常量、RTE句柄／runnable映射、OS访问宏及可选内核接口保留真实未使用状态；固定SWS发布要求、配置／接口稳定性与采用接口的理由不等于实际消费，也不将Advisory违反自动判为不适用。旧MemMap的HEADER_CHECK按#ifndef路径裁决；现随无请求smoke分支删除，不改写旧工件结论，见[请求拒绝](../memmap/README.md#映射请求的拒绝边界)。完整逐位置的来源、实际消费者／配置条件及仍待处置项集中PR #371；上述删除／误报裁决不关闭整组三条或全部221项。
 
 条件定义进一步按每个可执行程序的TU集合及定义／撤销时序核对（Glossary code／project，印刷223／225、PDF231／233）：上述四份旧工件的R2.5报告中，前三份各196处、no-diagnostic为194处定义在真实配置下从未发生，包括152个MPU映射、未导入的co-routine／newlib／picolibc、10个MemMap HEADER_CHECK及部分多核／动态创建／tick变体；前三份另有两个被RTE_CORE排除的DcmService别名。不能仅凭最终宏表缺席判定，须同时排除曾定义后#undef的情况。相反，timers头被tasks.c无条件包含；其消费者关闭并不排除宏定义，22个timer宏等61个实际生效定义仍未使用。完整精确位置与有效宏证据归PR，不把条件排除转为整组R2.5通过。
 

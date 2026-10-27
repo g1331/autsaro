@@ -24,6 +24,66 @@ class CStandardTests(unittest.TestCase):
     def rules(self, source, name="runtime/bsw/include/Test.h"):
         return [rule for rule, _, _ in c_standard.findings(name, source)]
 
+    def test_memory_mapping_protocol_and_mutations(self):
+        source = ('#if ENABLED\n#define RTE_Com_START_SEC_CODE\n'
+                  '# include "Rte_MemMap.h" /* mapping */\nvoid run(void) {}\n'
+                  '#define RTE_Com_STOP_SEC_CODE\n#include "Rte_MemMap.h"\n#endif\n')
+        self.assertEqual(c_standard.verify_memory_mapping_pattern(source), 2)
+        start = '#define RTE_Com_START_SEC_CODE'
+        stop = '#define RTE_Com_STOP_SEC_CODE'
+        include = '#include "Rte_MemMap.h"'
+        for label, mutant, reason in (
+            ("missing-stop", source.replace(stop, '// missing STOP'), "unexpected MemMap include"),
+            ("missing-final-include", source.replace(include, ''), "mapping marker must immediately include its header"),
+            ("preprocessing", source.replace('void run', '#if X\n#endif\nvoid run'), "preprocessing inside mapped section"),
+            ("nested", source.replace('void run', start + '\n' + include + '\nvoid run'), "nested mapping"),
+            ("wrong-class", source.replace(stop, stop.replace('CODE', 'CONST_32')), "mismatched mapping"),
+            ("wrong-header", source.replace(include, '#include "Other_MemMap.h"'), "mismatched MemMap header"),
+            ("unrequested", include, "unexpected MemMap include"),
+            ("missing-both", source[:source.index(stop)], "unclosed memory mapping"),
+            ("intervening-code", source.replace(start, start + '\nint x;'), "mapping marker must immediately include its header"),
+        ):
+            with self.subTest(mutation=label):
+                self.assertEqual(c_standard.memory_mapping_findings("test.c", mutant),
+                                 {("memory-mapping", "test.c", reason): 1})
+
+    def test_memory_mapping_comments_follow_c_preprocessing_order(self):
+        source = ('/* request */ #define CAN_START_SEC_CODE\n'
+                  '/* request */ #include "Can_MemMap.h" /* request\n */\n'
+                  'CAN_CODE void run(void) {}\n')
+        self.assertEqual(c_standard.memory_mapping_findings("test.c", source),
+                         {("memory-mapping", "test.c", "unclosed memory mapping"): 1})
+        source += ('/* request */ #define CAN_STOP_SEC_CODE\n'
+                   '/* request */ #include "Can_MemMap.h"\n')
+        self.assertEqual(c_standard.verify_memory_mapping_pattern(source), 2)
+        spliced = source.replace('/* request */', '/\\\n* request *\\\n/')
+        self.assertEqual(c_standard.verify_memory_mapping_pattern(spliced), 2)
+        literals = '\nconst char *text = "/* not a comment */ // literal";\n'
+        self.assertEqual(c_standard.verify_memory_mapping_pattern(source + literals), 2)
+
+    def test_memory_mapping_checks_runtime_and_generated_c_inputs(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = root / "runtime/host/src"
+            runtime.mkdir(parents=True)
+            source = '/* request */ #define TEST_START_SEC_CODE\n/* request */ #include "Test_MemMap.h"\n'
+            (runtime / "Test.c").write_text(source, encoding="utf-8")
+            self.assertIn(("memory-mapping", "runtime/host/src/Test.c", "unclosed memory mapping"),
+                          c_standard.runtime_findings(root))
+            samples = root / "samples"
+            project = samples / "standard-ecu"
+            (project / "meta").mkdir(parents=True)
+            (project / "target.json").write_text("{}", encoding="utf-8")
+            (project / "meta/integration.json").write_text(json.dumps({"originalBswSources": {}}), encoding="utf-8")
+            for directory in ("generated/src", "app", "bsw/src"):
+                path = project / directory / "Test.c"
+                path.parent.mkdir(parents=True)
+                path.write_text(source, encoding="utf-8")
+                self.assertIn(("memory-mapping", "emitted/" + directory + "/Test.c", "unclosed memory mapping"),
+                              c_standard.generated_findings(samples))
+
     def test_det_module_and_service_arguments_require_names(self):
         for report in ("Det_ReportError", "Det_ReportRuntimeError", "Det_ReportTransientFault"):
             for arguments in ("60u, 0u, API, 1u", "MODULE, 0u, (0x49U), 1u",

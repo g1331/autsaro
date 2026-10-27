@@ -10,7 +10,7 @@
 | ECUC 定义 | `AUTOSAR_CP_MOD_ECUConfigurationParameters.zip` | SHA-256 `df1e3bc992e49de6e14e5c1a679d7ce7ca90d2450d66186cea0b4a0f1f6555fb`（`core/resources/official.json`） |
 | XML Schema | `AUTOSAR_FO_MMOD_XMLSchema.zip` | SHA-256 `9db3ab1d2ec4db7cc8ff09f1259ff93a7a5945a9500d4cd3ea4a7090f2a25766`（同上） |
 | C 语言 | **C99** | MISRA 修订支持 C11／C18 不构成升级编译标准的授权 |
-| 编码规范 | **MISRA C:2012 Third Edition＋AMD1–AMD4＋TC1–TC2** | 200 Rules＋21 Directives＝221 项；既有具体批准见 [C 编码规范](../development/c-coding-standard.md#misra-偏离注释)，有界冲突授权见 [ADR 0023](../adr/0023-autosar-required-conflict-disposition.md) |
+| 编码规范 | **MISRA C:2012 Third Edition＋AMD1–AMD4＋TC1–TC2** | 200 Rules＋21 Directives＝221 项；既有具体批准见 [C 编码规范](../development/c-coding-standard.md#misra-偏离注释)，有界冲突见 [ADR 0023](../adr/0023-autosar-required-conflict-disposition.md)，适用分层、类别与 GRP 见 [ADR 0025](../adr/0025-misra-layered-scope.md) |
 | OSEK OS | OSEK/VDX OS 2.2.3 | R24-11 SWS_OS §7.1 引用的 OSEK 基础义务须一并纳入。已核对 NXP 托管副本（SHA-256 `2ec77d3c4259797f4d0190f938131b641d415d8e0a85ce40a72e4201a9114746`）；ISO 17356-3 全文与后续勘误未核对 |
 
 R24-11 中标记为 DRAFT 的条款（例如 LSduR 全文，`SWS_Com_91019／91020`、`SWS_Rte_91123／91127`、`SWS_COMTYPE_91001`、CanIf `91002`）按固定版本原文实现并如实标注，不宣称为成熟标准条款。
@@ -32,7 +32,7 @@ R24-11 中标记为 DRAFT 的条款（例如 LSduR 全文，`SWS_Com_91019／910
 4. 对外使用标准名称的接口须满足标准签名与语义，标准允许实现自定的部分按模块职责设计；改名、typedef 或空壳接口不算对齐。主机注入、时钟、输出和测试控制通过明确的适配接口提供，不侵入标准公开契约。标准整改同步修改生成来源、配置、调用方和交付工件，兼容性变更按 Issue 范围或另行授权处理，不用资产摘要更新追认。
 5. 主机行为、XSD 校验、MISRA 检查都不能代替 AUTOSAR 模块符合性；ECUC metadata 数值范围通过也不等于配置语义合法：接纳 controller／HOH 等身份前核对连续编号及所选实例数量约束，把非等 ID 机制测试与合法 source profile 验收分开。生成器对未消费参数的拒绝按定义成立：同一定义只在部分对象上生效时（如只对 Rx 信号生效的 `ComTimeout`），须对其余对象显式拒绝，并用注入该参数的拒绝测试确认。
 6. 修改或扩展 BSW、RTE、OS、配置模型和 C 生成逻辑前，核对所涉模块在所选配置下的公开接口、类型、配置、状态机、错误与回调义务及上下层接缝；超出当前范围或受目标条件阻塞的差距写明依据、影响与退出条件，不只写“主机专属”。
-7. MISRA：工具可用、扫描完整、源码诊断与人工评估分别证明；原始诊断保留，采用代码不自动排除；按 [ADR 0023](../adr/0023-autosar-required-conflict-disposition.md)执行用户已有有界冲突授权：逐项核对规则／文件／源码行、实际调用闭包、固定 SWS 全文必要性、合法 MISRA 版次及 amendment／TC、风险控制和独立复核，沿模块记录与 SWS_BSW_00115 注释路径处置。项目授权不改变 MISRA 类别、允许条件或符合性；缺原文（#57）或必要人工评估（#58）时保持未核查，不把旧 checker 编号当规范依据。范围外新例外仍由用户决定，既有具体批准的来源和范围不变。
+7. MISRA：先按 [ADR 0025](../adr/0025-misra-layered-scope.md)的四层、类别记录与 R15.5 GRP 分配责任；类别内引用共用依据，不逐处重写必要性。工具可用、扫描完整、源码诊断与人工评估分别证明；原始诊断保留，采用代码不自动排除；按 [ADR 0023](../adr/0023-autosar-required-conflict-disposition.md)执行用户已有有界冲突授权：逐项核对规则／文件／源码行、实际调用闭包、固定 SWS 全文必要性、合法 MISRA 版次及 amendment／TC、风险控制和独立复核，沿模块记录与 SWS_BSW_00115 注释路径处置。项目授权不改变 MISRA 类别、允许条件或符合性；缺原文（#57）或必要人工评估（#58）时保持未核查，不把旧 checker 编号当规范依据。范围外新例外仍由用户决定，既有具体批准的来源和范围不变。
 
 ## 4. 证据分层
 
@@ -61,7 +61,7 @@ uv run --locked python -m autosar_tooling requirements SWS_CANInterface
 | [方法论、输入角色与模板](methodology-and-templates.md) | TR_Methodology、System／SWC／BSWMD 模板与 ECU Configuration |
 | [BSW General](bsw-general/README.md) | 对全部 BSW 模块成立的通用条款 |
 | [类型](types.md) | StandardTypes、PlatformTypes、CommunicationStackTypes |
-| [MemMap](memmap.md) | 内存段映射 |
+| [MemMap](memmap/README.md) | 内存段映射 |
 | [RTE 与 SchM](rte.md) | RTE 契约、映射、生命周期与 SchM |
 | [SchM](schm.md) | BSW Scheduler 生命周期与独占区的逐条处置 |
 | [OS](os/README.md) | AUTOSAR OS 与 OSEK/VDX OS 2.2.3 |
