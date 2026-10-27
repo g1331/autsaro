@@ -488,6 +488,7 @@ fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
         "generated/include/SchM_Can_Type.h",
         "generated/include/SchM_BswM_Type.h",
         "generated/include/SchM_Dcm_Type.h",
+        "generated/include/SchM_Dcm.h",
         "generated/src/Ecu_Execution.h",
         "generated/include/Rte_Main.h",
         "generated/include/Rte_MemMap.h",
@@ -512,9 +513,6 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     let sources = scratch.join("src");
     std::fs::create_dir(&include).unwrap();
     std::fs::create_dir(&sources).unwrap();
-    for (path, bytes) in mainline_generated_headers(scratch) {
-        std::fs::write(scratch.join(path.trim_start_matches("generated/")), bytes).unwrap();
-    }
     for family in ["runtime/bsw/include", "runtime/host/include"] {
         for entry in std::fs::read_dir(root.join(family)).unwrap() {
             let entry = entry.unwrap();
@@ -522,6 +520,9 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
                 std::fs::copy(entry.path(), include.join(entry.file_name())).unwrap();
             }
         }
+    }
+    for (path, bytes) in mainline_generated_headers(scratch) {
+        std::fs::write(scratch.join(path.trim_start_matches("generated/")), bytes).unwrap();
     }
     for name in [
         "ComStack_Cfg.h",
