@@ -45,7 +45,7 @@ Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把�
 
 ## MemMap 冲突的具体定位
 
-以下技术定位绑定 `declaration-mapping-formatted-samples` 的实际交付字节，尚非批准表。R20.1／R20.5／D4.10 的有效类别、MISRA 修订依据及通用替代排除见 [MemMap 篇](memmap.md#misra-预处理布局)；原始报告保持。普通声明头仍有 once guard，可重入的对象仅是 `Det_MemMap.h` 的分派主体。
+以下技术定位绑定 `declaration-mapping-formatted-samples` 的实际交付字节，尚非批准表。R20.1／R20.5／D4.10 的有效类别、MISRA 修订依据及通用替代排除见 [MemMap 篇](memmap/README.md#misra-预处理布局)；原始报告保持。普通声明头仍有 once guard，可重入的对象仅是 `Det_MemMap.h` 的分派主体。
 
 | 实际位置 | 实体、请求及必要性 |
 | --- | --- |

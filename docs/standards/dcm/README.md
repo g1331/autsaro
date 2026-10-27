@@ -24,7 +24,7 @@ OBD mirror 为 false，且参考 ECU 的 DemOBDSupport 为 DEM_OBD_NO_OBD_SUPPOR
 
 ### MemMap 的逐处责任
 
-以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表。[MemMap篇](../memmap.md#misra-预处理布局)给出R20.1／R20.5／D4.10的原文和修订，以及00003完整声明／定义配对、00011消费关键词、00023禁止函数体内包含的必要性与替代边界。
+以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表。[MemMap篇](../memmap/README.md#misra-预处理布局)给出R20.1／R20.5／D4.10的原文和修订，以及00003完整声明／定义配对、00011消费关键词、00023禁止函数体内包含的必要性与替代边界。
 
 | 位置及请求 | 实体、class与实际闭包 |
 | --- | --- |

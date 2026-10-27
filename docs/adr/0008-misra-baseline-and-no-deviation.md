@@ -24,3 +24,5 @@
 已接受（2026-10）；第 4／5 条的批准限制部分由 [ADR 0023](0023-autosar-required-conflict-disposition.md) 承接：执行 2026-10-17 用户已作出的有界冲突授权，其余约束继续有效。以上正文保留原决定历史，不作为否定后继决定的现行限制。2026-10-15 修订第 4 条：PduR、Com 已有维护者批准的偏离，原“当前没有任何已批准的偏离”只是作出决定时的状态。
 
 来源：`planning-archive-2026-10:_bmad-output/planning-artifacts/architecture/epic-9/ARCHITECTURE-SPINE.md`（AD-5）、`planning-archive-2026-10:_bmad-output/planning-artifacts/architecture/epic-9/BASELINE.md`（AUTOSAR 与 MISRA：已确认和未核查）、`planning-archive-2026-10:_bmad-output/specs/spec-runtime-codegen-quality/SPEC.md`（Constraints、CAP-3）、`planning-archive-2026-10:_bmad-output/specs/spec-multi-component-scheduling/compliance-references.md`。
+
+后继：[ADR 0025](0025-misra-layered-scope.md)（2026-10-27）部分取代批准／逐处记录限制：增加适用分层、三项类别记录与 R15.5 GRP；其余限制保持。

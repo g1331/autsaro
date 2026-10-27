@@ -2,7 +2,7 @@
 
 ## 决定与来源
 
-**项目取舍已接受（2026-10-25）；三处技术复核已完成，无新增技术发现。** 人类维护者对[完整提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6391387787)明确回复“接受”，经项目秘书转达；本记录依据项目内的[PR 决定记录](https://github.com/g1331/autsaro/pull/371#issuecomment-6392165780)和[Issue 决定记录](https://github.com/g1331/autsaro/issues/58#issuecomment-6392165958)。接受者是人类维护者，转达和实现不产生新的批准人。
+**项目取舍已接受（2026-10-25）；三处技术复核已完成，无新增技术发现。后继 [ADR 0025](0025-misra-layered-scope.md) 增加主机类别处置；本篇三处范围和技术结论继续有效。** 人类维护者对[完整提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6391387787)明确回复“接受”，经项目秘书转达；本记录依据项目内的[PR 决定记录](https://github.com/g1331/autsaro/pull/371#issuecomment-6392165780)和[Issue 决定记录](https://github.com/g1331/autsaro/issues/58#issuecomment-6392165958)。接受者是人类维护者，转达和实现不产生新的批准人。
 
 本决定独立于 [ADR 0023](0023-autosar-required-conflict-disposition.md)。相关 SWS 要求调度上下文、栈故障处理和软件 Counter 行为，没有指定这三个 POSIX 头；不能把平台实现选择写成 AUTOSAR 不可替代的强制选择。
 

@@ -80,7 +80,7 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 
 ### MemMap 的逐处责任
 
-以下定位绑定 `8a26e3b0` 与四份 `complete-declarations-final-samples`，按物理位置计数，不是批准表。R20.1／R20.5／D4.10 的原文、修订及通用替代判断见 [MemMap 篇](memmap.md#misra-预处理布局)；`SWS_MemMap_00003`（页36）要求声明和定义分别完整映射，00011（页41）要求消费请求关键词，00023（页37）禁止把映射头移进函数。
+以下定位绑定 `8a26e3b0` 与四份 `complete-declarations-final-samples`，按物理位置计数，不是批准表。R20.1／R20.5／D4.10 的原文、修订及通用替代判断见 [MemMap 篇](memmap/README.md#misra-预处理布局)；`SWS_MemMap_00003`（页36）要求声明和定义分别完整映射，00011（页41）要求消费请求关键词，00023（页37）禁止把映射头移进函数。
 
 | 位置、请求与 class | 实际实体与消费者 |
 | --- | --- |

@@ -24,7 +24,7 @@ ComM 按 [ADR 0018](../../adr/0018-per-module-exclusive-areas-without-cross-modu
 
 ### MemMap 的逐处责任
 
-以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表；规则修订、00003／00011／00023及替代判断沿[MemMap篇](../memmap.md#misra-预处理布局)。R20.1按预处理前的本文件内容判断，不把包含头内的声明当作本文件前置声明。
+以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不是批准表；规则修订、00003／00011／00023及替代判断沿[MemMap篇](../memmap/README.md#misra-预处理布局)。R20.1按预处理前的本文件内容判断，不把包含头内的声明当作本文件前置声明。
 
 | 位置及请求 | 实体、class与实际闭包 |
 | --- | --- |

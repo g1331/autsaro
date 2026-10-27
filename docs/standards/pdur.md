@@ -72,7 +72,7 @@ PduR 只在自己的 `PDUR_STATE` 区内读取已发布的配置指针，离开�
 
 ## MemMap 的具体责任
 
-本节绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`，与上节既有R8.7批准分别处理；这里未新增批准或MR12。R20.1／20.5的Advisory、D4.10的Required及固定修订依据见[MemMap篇](memmap.md#misra-预处理布局)。
+本节绑定 `58fb105a` 与四份 `direct-render-mapping-final-samples`，与上节既有R8.7批准分别处理；这里未新增批准或MR12。R20.1／20.5的Advisory、D4.10的Required及固定修订依据见[MemMap篇](memmap/README.md#misra-预处理布局)。
 
 | R20.1位置、请求和类别 | 实体与实际闭包 |
 | --- | --- |

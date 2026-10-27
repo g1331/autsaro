@@ -1,6 +1,6 @@
 # 原生设施与资源生命周期
 
-本篇记录受控OS的原生栈、上下文、展开及线程资源义务；[平台边界](platform.md)连接C99扩展、ADR0024三处include和相关语言设施判断。固定规范、角色与处置方式沿用[OS标准入口](README.md)。
+本篇记录受控OS的原生栈、上下文、展开及线程资源义务；[平台边界](../platform.md)连接C99扩展、ADR0024三处include和相关语言设施判断。固定规范、角色与处置方式沿用[OS标准入口](../README.md)。
 
 ## 源码边界与布局
 
@@ -10,7 +10,7 @@ Windows补丁`0018-windows-thread-setup-errors.patch`按D4.7／R17.7检查Task�
 
 Linux actor的mapping成员按实际用途保存为unsigned char字节区间：guard偏移、ASan fiber底端及一次性栈入口直接在同一映射内计算，不再从void指针反复转换。`Os_HostCurrentStackRange`仍将真实映射地址转为uintptr_t供栈界限／ARTI消费者比较，不隐藏为符合：原R11.6（Required，主文页99／PDF107，TC2.22修正整数到void指针的描述）已随存储类型消除；mmap返回到字节指针的R11.5与地址到整数的R11.4是保留的Advisory违反（页97–98／PDF105–106，TC1限定对象指针、AMD2.60扩充stdint说明）。mmap保证页对齐，偏移和长度来自同一次映射，uintptr_t不截短地址，转换结果只用于数值边界检查，不转换回指针解引用；原生stack／ARTI和errno回收消费者验证这些约束。依据§6.2.3记录建议性违反及理由，不申请新的Required豁免。
 
-`Os_PortRestartLanding`是保留Task-loop帧内的汇编续行点，不是按C原型调用的函数。该符号现在只在本对象内可见；C侧通过真正遵循调用ABI的`Os_PortRestartAddress`取得native PC：Linux为uintptr_t，Windows为RtlUnwindEx要求的void指针表示。叶函数在原`.os_code`内用RIP相对LEA返回RAX，保留其他寄存器及配对call/return，不需要C函数指针转整数或void指针。依据R11.1（Required，主文页93–94／PDF101–102；AMD2.58只修订隐式转换例外说明），不使用该条的新例外；实际native扩展仍按[平台扩展边界](platform.md#c99-平台扩展的使用边界)的R1.2／D4.2／D4.3评估。原生restart验证10000次同一物理栈重入、拒绝与外来异常，并分别检查全局C入口和本地续行点的代码段身份；错误PC变异必须被实际restart成功判据拒绝。该边界仍依赖受控x64 ABI，Windows执行及硬件SHSTK按实际结果记录。
+`Os_PortRestartLanding`是保留Task-loop帧内的汇编续行点，不是按C原型调用的函数。该符号现在只在本对象内可见；C侧通过真正遵循调用ABI的`Os_PortRestartAddress`取得native PC：Linux为uintptr_t，Windows为RtlUnwindEx要求的void指针表示。叶函数在原`.os_code`内用RIP相对LEA返回RAX，保留其他寄存器及配对call/return，不需要C函数指针转整数或void指针。依据R11.1（Required，主文页93–94／PDF101–102；AMD2.58只修订隐式转换例外说明），不使用该条的新例外；实际native扩展仍按[平台扩展边界](../platform.md#c99-平台扩展的使用边界)的R1.2／D4.2／D4.3评估。原生restart验证10000次同一物理栈重入、拒绝与外来异常，并分别检查全局C入口和本地续行点的代码段身份；错误PC变异必须被实际restart成功判据拒绝。该边界仍依赖受控x64 ABI，Windows执行及硬件SHSTK按实际结果记录。
 
 Linux 备用信号栈原匿名 union 仅借 long double 成员取得对齐，实际消费者为 `Os_StackRegister → Os_LinuxAltStack`。R19.2（Advisory、C99，主文页154–155／PDF162–163；AMD2 只增加 C11 适用性及行为索引）直接约束 union 关键字，不因没有交叉成员读取而不适用。现改为仅含 long double 存储数组的 struct，每个 actor 仍取得原来的 65536 字节和原生对齐；C 代码不读取浮点值，不新增平台属性或转换。真实源的编译布局对照检查容量、对齐与槽数，降低对齐和缩短容量的反例分别拒绝；ARTI 消费者另检查发布地址的实际对齐。该整改不改变注册、信号及故障关闭路径。
 
@@ -26,7 +26,7 @@ Linux 备用信号栈原匿名 union 仅借 long double 成员取得对齐，实
 
 Linux返回型停车handler保存并恢复被打断actor的errno；futex／gettid／altstack边界使用既有类型化UAPI，直接保留原生返回信息。`Os_LinuxCaptureContext`只读取截至64位内核mask的304字节前缀及独立512字节传统FP，先构造初始化的局部快照、重定位到目标自有FP，再赋给目标，支持self-copy；SignalSp只读取截至Rsp的168字节。旧ELF的memmove绑定证据不冒充新复制布局的执行证明，停车handler仍使用__errno_location。对应glibc的`manual/string.texi`分别将memcpy／memmove标为AS-Safe，x86 IFUNC选择进入字节复制实现；该次ELF的NOW绑定先于handler使用。此依据与实际地址／长度、发布顺序、信号屏蔽及errno恢复共同支持当前闭包，不把它扩成任意库调用、任意动态加载或全部调度的证明。
 
-guard handler仅对注册actor的实际guard地址发布预分配记录、真实SP及首故障状态，然后永久停车；未识别故障原生退出。该路径没有格式化输出、堆分配或汽车回调。正常关闭报告中的有界字节数／预分配容量、失败回退与任意阻塞输出的时间保证分开；现有HostBatch监督及退出后备的验证边界见[平台记录](platform.md#三处有界-linux-平台保留)，不为probe或所有终止输出新增期限。
+guard handler仅对注册actor的实际guard地址发布预分配记录、真实SP及首故障状态，然后永久停车；未识别故障原生退出。该路径没有格式化输出、堆分配或汽车回调。正常关闭报告中的有界字节数／预分配容量、失败回退与任意阻塞输出的时间保证分开；现有HostBatch监督及退出后备的验证边界见[平台记录](../platform.md#三处有界-linux-平台保留)，不为probe或所有终止输出新增期限。
 
 对应运行内核6.8.0-147-generic的Ubuntu linux 6.8.0-147.147源码及发行补丁也按同一签名Sources核验。x64_setup_rt_frame将第三实参设为frame.uc地址，uc_mcontext.fpstate另指向fpu__alloc_mathframe分配的FP区域；[Linux sigaction接口](https://man7.org/linux/man-pages/man2/sigaction.2.html)将第三实参明确为转成void指针的ucontext_t。实际TU中的UAPI struct ucontext使用ambient glibc sigset_t，sizeof并非内核帧长度。现以固定偏移和布局断言限定读取；glibc完整sigset、内嵌FP及SSP尾部不从信号帧整块复制。
 
@@ -44,25 +44,11 @@ Linux的`prepare_native_runtime`在创建控制器／Task及启动调度器之�
 
 ## 动态存储及回收责任
 
-D4.12为Required、适用C99（主文34–35／PDF42–43），明确覆盖第三方动态分配；AMD2仅扩展C11。`Os_HostCreateActor`的匿名mmap执行栈及guard是真实动态存储，静态handles／TCB／FreeRTOS缓冲／altstack不改变其来源。pthread仅获得bootstrap栈大小而非调用方栈；对应glibc的allocate_stack在缓存不足时mmap，并经_dl_allocate_tls／allocate_dtv分配TLS。Win32创建线程也保留／提交native栈；精确Windows DLL／CRT身份及配套实现证据仍需实际目标材料，不由符号或头声明补写。
-
-D4.13按获取、初始化、使用、释放的实际顺序判断。Linux joinable observer在未结束或未成功join时close返回失败，调用方仍持有所有权；join／detach的0→2→1状态只在真实操作成功后发布完成，失败恢复0，并发wait不把进行中当成完成。HostBatch保留signal→wait→close observer→close event，函数内static control具有进程期存储；sole producer且同一target不可重入，上次observer完成wait／close后才重写其字段；创建或执行失败进入既有进程停止，不返回后继续使用失效上下文。H注册失败及请求ID不可得均原生停止，不能隐藏失败后继续StartOS。
-
-有限H actor在注册前保存线程原备用信号栈，在callback完成后、pthread退休前恢复；查询或恢复失败原生停止，observer不替换备用栈。回调全程保留项目guard／altstack；原生适配器以typed syscall同时支持查询和设置，不通过关闭检测器回避栈所有权。D4.13约束这项临时借用后的归还，实际provider异步语义仍须单独取证。
-
-注册H／Task／dispatcher／controller按当前进程期拥有。detach不终止actor，terminal park不使pthread返回，关闭观察句柄不能写成所有native栈资源均已归还。对应glibc的join／detach回收进入__nptl_deallocate_stack；默认bootstrap栈缓存可保留映射／TLS，缓存再用不同于重新分配，也不同于直接归还系统。项目执行栈的munmap、provider缓存和静态槽位分别核算。同进程重启／返回宿主或不同provider需重新完整证明，不借本项解除#200。
-
-动态设施的[有界平台保留提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6393803857)仍待项目决定；当前不建立Accepted ADR、批准表或MR12。ADR0024仅覆盖三个include，不能扩成D4.12许可；固定上界、只在启动分配或主机角色也不是原文例外。
+原文、调用闭包和已接受的 D4.12＋R21.3／R22.1 类别记录见[动态设施](storage-interrupts.md#主机动态设施类别偏离)。
 
 ## 嵌套中断与递归的实际支持范围
 
-R17.2为Required（主文137／PDF145，AMD2.27增加C11），禁止直接或间接递归；有界深度不构成例外。四个默认生成工程的input／tick优先级均为1，严格更高优先级的nested边在这些工程中不可达；该事实不能代表运行时全部已支持配置。
-
-运行时的较高优先级嵌套ISR确有同步调用环：Linux的run_interrupt→已注册handler→发中断或退出critical→Os_PortDispatchNested→run_interrupt；Windows的prvRunOsInterrupt具有相同闭包。既有nested-interrupts夹具以20→6→4号ISR、优先级3→9→15检查父／子／孙的进入与返回，另覆盖相等／较低优先级延迟、mask、资源ceiling及最大向量。它是实际支持能力，不能为了规则判断把它缩成默认四profile。
-
-OSEK OS2.2.3 §6（25–26页）及§14.2.3.1／Figure14-1（73–74页）描述中断类别、嵌套与调度风险，没有规定必须使用同一C函数递归。当前端口的严格递增优先级、yield排除、32槽frame容量、原生栈／guard及父上下文恢复是风险控制，不能据其把真实R17.2违反判为满足，也不证明任意用户handler的最坏栈用量。
-
-保留当前同步嵌套需要独立于ADR0023／0024的新项目决定；[具体范围、替代及拟议文字](https://github.com/g1331/autsaro/pull/371#issuecomment-6395097006)仍待决定，不填批准表或MR12。改为延迟处理会改变既有抢占合同；仅换helper名称不能消除调用环。独立ISR actor／原生上下文切换是可研究的替代架构，需要重新证明身份、容量、mask、资源、故障、Task返回及检测器合同，不能直接声称不可能或已经等价。具体取舍必须连同这些差异评估，不由默认profile或已有绿色CI代替。
+实际支持配置、风险控制与 R17.2 类别记录见[同步嵌套 ISR](storage-interrupts.md#同步嵌套-isr-类别偏离)。
 
 ## 自有回调声明的参数名
 
@@ -70,7 +56,7 @@ R8.2为Required、当前C99适用（主文64–65／PDF72–73）；命名要求
 
 R8.3（Required，主文66–67／PDF74–75）的参数名比较独立于上述命名义务。实际声明／定义核对发现Os_BackendSignalStackFault的role／failed_role和Linux WaitForMultipleObjects的handles／observed不一致，现只将两个声明统一到定义名字，类型及调用不变。Windows／Linux Can_InitLock／Can_InitAreas的不同签名属于互斥平台分支，两份main属于不同可执行程序，不能作为同一声明链误报；函数指针参数的名字也不要求与所指函数一致。该判断来自具体声明及实际编译边界，不把候选检索或checker零报告扩为全部声明符合。
 
-SDK声明及宏的独立Required缺口见[SDK声明与常量](README.md#sdk-声明与常量)；不随自有声明整改自动通过。
+SDK声明及宏的独立Required缺口见[SDK声明与常量](../README.md#sdk-声明与常量)；不随自有声明整改自动通过。
 
 ## 标准流对象与原生句柄
 
