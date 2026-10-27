@@ -45,3 +45,9 @@ R10.6／R10.7均为Required（主文印刷90–92／PDF98–100；AMD2追加C11�
 实际宽度安排分别为：HostBatch::number在乘法前已有uint64 result，并在减法／加法前把next转uint64；map_address的uintptr_t result在每轮乘16之前已有指针宽度，digit仅作为单值扩展；COM先把字节转uint32再移位打包；Dcm_ReadData的length及Dcm_ReadSize返回值均为Dcm_MsgLenType；Linux monotonic_ms在秒／纳秒换算前选uint64_t；Target复制长度先把元素数转size_t再乘sizeof。上述不是先作窄运算再靠结果cast扩大。futex的unsigned operation和有符号原生参数之间另有命名的中间值，保持系统调用ABI；其原始PRIVATE宏的signed位运算已整改。这里只确认这些实际计算与转换边界，不据若干样例关闭两条规则全部位置。
 
 R13.4为Advisory（主文印刷112–113／PDF120–121），包括未求值表达式里的赋值结果。所读生产函数中的赋值用于独立语句或for初始化／迭代，不由条件、返回、索引或外层赋值消费结果；逻辑判断使用已经取得的变量。采用内核实际使用的listSET_LIST_ITEM_OWNER／VALUE、list插入／移除、queue锁及task选择宏分别检查完整展开，赋值仍为独立语句，不能仅靠宏调用末尾有分号判断。未选协程、TLS、多核及任意SDK宏的展开另负责任；词法候选检查和零诊断不等于整条规则通过。
+
+## 重复条件与有用副作用
+
+`48907b3b`的type-owner标准ECU有40条`duplicateCondition`，按物理位置为Ecu_RuntimeConfig.c的8条及Os_ArtiServices.c的32条。已逐位置核对前后两项条件：前者都是按值传入的events与固定mask比较，后者都是函数内const trace与0比较；两种guard的地址均不逃逸。RunCycle按计划顺序调用不同实体；ARTI分别捕获服务结果与发布完成事件，不能把相同条件下的不同调用判成重复调用而删除。
+
+该报告指出可以合并相邻同条件块的源码冗余，不证明服务执行两次或运行时结果错误。R2.2对有用操作的判断仍须落到具体调用及其结果，不能只凭这一通用style诊断将这些调用视为死代码；本次也不将报告称为检查器误报。保留逐调用guard的当前表达与真实报告，不新增MISRA批准、baseline或suppression；以后合并时仍须保持实体顺序、无条件HostFlush位置以及ARTI的捕获→发布顺序。此判断仅覆盖上述40处，不代表其他重复条件或全部R2.2已核完。

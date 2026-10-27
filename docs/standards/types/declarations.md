@@ -55,3 +55,18 @@ R8.9为Advisory、System（主文印刷71／PDF79；AMD2.27追加C11，AMD4.43�
 其余32个自有／生成对象目前保留真实Advisory违反及映射理由：Can和Com各一个发布状态、八个Ecu_RuntimeConfig配置对象、Rte的rte_allocated、HostBusSM的publication、Backend六个状态／入口记录、Error的TLS guard、Interrupt状态、Mailbox四个函数私有状态、HostLinux句柄池及StackLinux七个altstack／fault／终止文本对象。它们现有数据段属性与CODE区分开；直接把带相同OS_MEMMAP等宏的声明移到CODE函数内会取得不同的活动属性。固定SWS_MemMap_00023（R24-11，PDF37）禁止函数体内包含映射头，并明确说明特殊映射的函数静态变量须移到文件作用域。该义务限制沿现有START／STOP机制收窄这些对象；不能删除映射或在函数内嵌套请求消警报。其他机制仍需另证数据段身份、配置及编译器兼容性，不把GCC局部属性支持当作现成等价替代；逐处ADR0023／00115记录仍另核。
 
 采用内核另三个对象保留明确用途：tasks.c说明xDelayedTaskList1／2的文件级静态符号供kernel-aware debugger定位；uxTopUsedPriority为OpenOCD提供优先级界限，具名C引用用于保留该对象。列表指针逃逸本身并不禁止块内static，调试符号兼容才是这里保留的理由；本仓库没有据此证明OpenOCD实际运行或赋予采用代码普遍豁免。上述11处整改、32处映射理由及三个调试对象是该46处的有界处置；新字节检查与其他未报告构造另核，原始诊断及not_assessed不改写。
+
+## 类型前缀与首次映射请求
+
+`48907b3b` 的自有头文件还有24处首次MemMap包含位于本文件普通内容之后，按R20.1预处理前布局均须保留判断，不能由段属性正确推出规则已满足。其中21处的前置内容是类型声明：
+
+- BSW公共头BswM.h、CanIf.h、CanTp.h、Com.h、ComM.h、Dcm.h、Det.h、LSduR.h、PduR.h；Host公共头Can_Host.h、Ecu_HostBusSM.h。
+- OS公共头Arti.h、Os_Arti.h、Os_Hooks.h、Os_HostIo.h、Os_Mailbox.h、Os_Target.h、Os_Time.h；私有头Os_Backend.h、Os_Stack.h及host/linux/Os_HostLinux.h。
+
+另外三处是SchM_BswM.h、SchM_Can.h、SchM_Dcm.h中条件C++分支的`extern "C" {`。R20.1在预处理前应用，不能只因当前C99配置不选择这个分支而排除该物理布局；C++链接包装与类型定义也不是同一构造。
+
+573df2db将SchM_Dcm.h的Rte_Dcm_Type.h和Rte.h两个普通依赖前移到链接包装之前，版本检查仍跟随真实导入。四份现成Rte_Main.h各自维护C++的C链接包装，独立BSW的Rte.h夹具只含状态宏；未改SchM／Dcm服务自身的链接包装或映射对。这两处普通include不再留在C内容之后，也不据此为首次MemMap位置批准保留。
+
+固定MemoryMapping00003要求声明、定义各自完整包装，并不要求这些类型或链接包装必须放在首次START之前。已经实施的Os_HostTypes／Os_PortTypes分离说明类型owner可以重组；因而“类型必须先声明”不能证明以上21个START位置不可调整。它们不因服务原型必须映射就自动取得ADR0023的不可兼得结论；公开类型/API同头组织只是当前源码组织选择。类型头分离须保持实际类型、依赖版本检查、包含次序、资产及既有C/C++消费者，不以增加一个间接MemMap包含隐藏同一违反。
+
+实体之后消费STOP的包含另有00003第五步的直接依据，不能与首次START共用一个替代排除结论。SchM的三个链接包装还须保持普通C++消费者的C符号绑定；把条件指令搬进映射对会违反00003禁止段内额外预处理的要求，删掉包装或手写替代声明也不是等价整改。这里仅明确具体构造和可行方向，不为24处填批准表、添加MR12或关闭R20.1；既有逐处实体记录和原raw状态继续保留。
