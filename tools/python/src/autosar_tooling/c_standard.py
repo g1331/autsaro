@@ -185,11 +185,15 @@ def verify_memory_mapping_pattern(source: str) -> int:
     expecting = False
     header = None
     count = 0
+    # C removes splices and replaces comments before recognizing preprocessing lines.
+    source = re.sub(r"\\\r?\n", "", source)
+    source = re.sub(
+        r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')|/\*.*?\*/|//[^\n]*',
+        lambda match: match[1] if match[1] is not None else " ",
+        source, flags=re.DOTALL,
+    )
     for token in lex(source):
-        if is_comment(token):
-            continue
-        text = re.sub(r"/\*.*?\*/|//[^\n]*", " ", token.text, flags=re.DOTALL).strip()
-        text = re.sub(r"\\\r?\n", "", text)
+        text = token.text.strip()
         included = include_scope(text)
         if included and re.search(r'_MemMap\.h[">]$', included):
             if not expecting:

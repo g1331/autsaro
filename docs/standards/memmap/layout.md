@@ -53,4 +53,3 @@ Det_Host的Windows／Linux完整Halt定义、Os_PortRestart的Linux声明，各�
 采用内核的可选测试头、MSVC 专属分支、MPU 标记，以及 Windows 名称导入的 undef，分别有自己的条件和消费者，不属于本节的必要映射关键词判断；原始报告及其后续人工评估保留。
 
 逐处评估还须区分00011直接要求的模块START／STOP关键词，与当前属性实现为清除临时OS_MEMMAP／active状态而使用的内部undef。后者不是该SWS直接规定的名字；不能把选定GCC属性策略写成AUTOSAR强制实现。实际替代、接口影响和Advisory保留理由应分别核查，不给全部undef统一授权。当前仅补齐这些规范边界，现按 [类别记录](README.md#memmap-类别偏离)处置 R20.1／R20.5；其他规则仍按 ADR 0023。
-
