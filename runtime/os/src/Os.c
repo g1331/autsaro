@@ -43,13 +43,9 @@ OS_MEMMAP uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index
                ? root
                : config->resource_count;
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* Highest Task or ISR priority among the accessors of every member of the
  * LINKED group rooted at `root`, and the Tasks among them. Every ISR level is
  * above every Task level on this target. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP static StatusType group_access(const Os_TargetConfigType *config,
                                          uint32 root,
                                          uint32 *tasks,

@@ -253,18 +253,10 @@ OS_MEMMAP StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeTy
 OS_MEMMAP boolean Os_Implementation_isOsStarted(void);
 
 OS_MEMMAP CoreIdType Os_Implementation_GetCoreID(void);
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* Index of the configured resource `id`, or resource_count when absent. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id);
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* Index of the STANDARD resource that the LINKED chain from `index` names, or
  * resource_count for a missing or cyclic link. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index);
 
 OS_MEMMAP StatusType Os_Implementation_GetTaskID(TaskRefType TaskID);

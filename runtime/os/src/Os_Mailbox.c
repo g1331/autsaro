@@ -20,11 +20,7 @@ OS_MEMMAP static uint64 last_ticket; /**< Single-producer accepted ticket; no In
 #include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
     published; /**< Atomic complete-record count; no Init reset. */
-#define OS_STOP_SEC_VAR_CLEARED_32
-#include "Os_MemMap.h"
 /* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
-#define OS_START_SEC_VAR_CLEARED_32
-#include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
     admission; /**< Atomic producer/close bits; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32

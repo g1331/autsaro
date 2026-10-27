@@ -32,6 +32,10 @@ CanIf／LSduR／PduR 配置头的 extern 对象与各自 PBcfg 定义共用 RTE 
 
 00003不要求相邻、同类对象各自重新开闭。`config_data`只在输出恰好结束于相同scope的配置STOP时合并下一对象；不同scope或任何中间内容均建立新对，不跨条件或版本检查移动对象。CanIf的can_rx、can_tx及CanIf_Config等连续配置可因此减少多余include；对象顺序、初始化与属性保持。可合并的边界不作为必要冲突保留，逐处计数绑定合并后的交付源码。
 
+同样的原则适用于自有OS源码：`7e1b7c9e` 的注释感知token核对确认八文件有九个同prefix／class边界，中间只有空白或说明。Os_Time的两个事件、Os_Mailbox的发布／接纳原子、Os_Backend的关闭／接纳原子分别合并原cleared类；Os.c、Os_Interrupt.c、Os_Backend.h两处、Os_Stack.h及Linux等待helper合并原CODE类。仅删除九组中间STOP/include/START/include，保留全部注释、非指令token、对象与函数顺序及外层条件；属性宏在原本只有注释的间隔继续有效，没有新增消费者。不同class、条件或实际声明隔开的段不合并。
+
+完整位置与调查见[OS相邻段](https://github.com/g1331/autsaro/pull/371#issuecomment-6430247976)。现有memory-mapping正常入口的六项检查通过，包含真实链接的十个入口及十个编译／链接拒绝案例；源码／class／owned-header检查沿用原入口，没有新增解析器或长期编排。此删除不是新偏离；旧物理行号和诊断仍绑定旧字节，新计数须取自实际重新生成／分析的工件。
+
 正常消费者以独立配置的 CODE 段编译实际 BSW 头，并检查每个函数定义从先前原型继承的目标文件段；RTE 消费者同时观察真实实例句柄及 Read／Write 接口的段，保留独立签名和链接回归。这里保留新增 include 产生的真实 R20.1 与映射头重入的 D4.10 责任，尚不据此增加批准表或 MR12；既有分析和逐处计数仍绑定其原始源码身份。
 
 ### 所选 CDD 的适用来源

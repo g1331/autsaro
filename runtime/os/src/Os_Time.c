@@ -59,11 +59,7 @@ OS_MEMMAP static Os_TickCompletionType
 #define OS_START_SEC_VAR_CLEARED_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP static HANDLE completion_event; /**< Manual event created by TimeInit; then fixed. */
-#define OS_STOP_SEC_VAR_CLEARED_PTR
-#include "Os_MemMap.h"
 /* Auto-reset: one early native wake per notification, never a completion. */
-#define OS_START_SEC_VAR_CLEARED_PTR
-#include "Os_MemMap.h"
 OS_MEMMAP static HANDLE attention_event; /**< Auto-reset event created by TimeInit; then fixed. */
 #define OS_STOP_SEC_VAR_CLEARED_PTR
 #include "Os_MemMap.h"

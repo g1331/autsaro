@@ -97,12 +97,8 @@ OS_MEMMAP static sint32 permitted(uint32 operation)
     }
     return allowed;
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* SWS_Os_00367: these services return no StatusType, so a refused call
  * (wrong context, or a saturated nesting counter) is ignored without ErrorHook. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP static void update_owner_mask(Os_InterruptStateType *state, uint32 operation)
 {
     switch (operation) {

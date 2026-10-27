@@ -271,13 +271,9 @@ OS_MEMMAP const volatile Os_Atomic32Type *const Os_ArtiOsReady =
 #include "Os_MemMap.h"
 OS_MEMMAP volatile Os_Atomic32Type
     Os_Closing; /**< Atomic permanent-close publication; no Init reset. */
-#define OS_STOP_SEC_VAR_CLEARED_32
-#include "Os_MemMap.h"
 /* Bit 0: an accepted activation transaction; bit 1: admission permanently closed.
  * Both admission and close linearize on this atomic word. Close never waits for
  * a transaction or a damaged actor holding the ordinary interrupt mutex. */
-#define OS_START_SEC_VAR_CLEARED_32
-#include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
     activation_admission; /**< Atomic transaction/close bits; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32

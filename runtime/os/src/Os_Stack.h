@@ -70,11 +70,7 @@ OS_MEMMAP int Os_StackRegister(char role);
 OS_MEMMAP void Os_StackCheck(void);
 
 OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context);
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 /* Reports all available records; returns -1 if any stream write fails. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP int Os_StackReport(void);
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void);

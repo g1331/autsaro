@@ -606,12 +606,8 @@ OS_MEMMAP DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL al
     (void)alertable;
     return WaitForSingleObject(handle, milliseconds);
 }
-#define OS_STOP_SEC_CODE
-#include "Os_MemMap.h"
 
 /* Same 1 ms poll as WaitForSingleObject; the first signalled handle wins. */
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP static DWORD wait_any(DWORD count,
                                 const HANDLE *observed,
                                 DWORD milliseconds,

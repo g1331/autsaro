@@ -40,7 +40,7 @@
 
 ### Fixed
 
-- Share one memory-section pair for adjacent declarations, configuration objects and wrappers of the same class; retain boundaries across conditions, scopes and mapping headers (#371)
+- Share one memory-section pair for adjacent declarations, configuration objects, wrappers and OS storage/interfaces of the same class; retain boundaries across conditions, scopes and mapping headers (#371)
 
 - Apply existing BSW and RTE memory classes to function and instance declarations, including private callbacks, lifecycle, OS service providers and configured CDD interfaces, standalone component contracts and their release checks (#371)
 
