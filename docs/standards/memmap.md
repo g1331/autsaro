@@ -24,7 +24,7 @@
 
 ### 声明与定义使用同一类别
 
-`SWS_MemMap_00003`（固定原件页36）同时约束代码、变量和常量的声明与定义；定义已有属性、当前链接器恰好放入默认段，均不能替代声明侧的完整 START／include／声明／STOP／include。九个 BSW 模块的公共接口及回调专用头，连同 Can、CanTp、Com、ComM 的私有实现头和 Det_Host 的实现原型，使用各自模块的 CODE 对。类型定义及函数指针 typedef 不作为这些函数对象的声明包围。已选CDD的Ecu_HostBusSM七个正常接口同样使用其实现的ECU_HOSTBUSSM_CODE；不因host目录给其他无BSW角色的helper套用这一义务。新增映射依赖的 AUTOSAR major/minor 检查置于完整映射对之后。
+`SWS_MemMap_00003`（固定原件页36）同时约束代码、变量和常量的声明与定义；定义已有属性、当前链接器恰好放入默认段，均不能替代声明侧的完整 START／include／声明／STOP／include。九个 BSW 模块的公共接口及回调专用头，连同 Can、CanTp、Com、ComM 的私有实现头和 Det_Host 的实现原型，使用各自模块的 CODE 对。类型定义及函数指针 typedef 自身不分配代码或对象，不附加段属性。已选CDD的Ecu_HostBusSM七个正常接口同样使用其实现的ECU_HOSTBUSSM_CODE；不因host目录给其他无BSW角色的helper套用这一义务。新增映射依赖的 AUTOSAR major/minor 检查置于完整映射对之后。
 
 生成组件头中，RTE 接口原型使用 `RTE_<component>_CODE`，SWC runnable 原型继续使用 `<component>_CODE`；实例句柄的 extern 声明使用与 Rte.c 定义相同的 `RTE_<component>_CONST_UNSPECIFIED`。Rte_Main 的生命周期接口和配置对象分别对应既有 RTE CODE 与配置类别，COM 回调声明则连接实际分区的 CALLOUT 类别。独立 contract 包交付这些声明需要的 Rte_MemMap.h，不借 ECU 工程外部头补齐。Ecu_TargetConfig的四个正常生命周期／帧形状声明对应RTE_Ecu_CODE，测试provider留在该对之外；RuntimeConfig的BswM动作和Dcm模式通知私有前置声明分别对应RTE_Ecu_CODE／RTE_Dcm_CODE，不以定义已映射代替声明侧协议。配置条件、API 可见性、C++ linkage 和版本检查均在完整映射对之外。
 
