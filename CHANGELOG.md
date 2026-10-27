@@ -42,6 +42,8 @@
 
 ### Fixed
 
+- Linux process cancellation recognizes registered sibling session leaders before reading their exiting proc environment, avoiding false cleanup failures while preserving escape refusal and root exit codes; unconfirmed cleanup logs include the responsible group, PID and observation error (#388)
+
 - Share one memory-section pair for adjacent declarations, configuration objects, wrappers and OS storage/interfaces of the same class; retain boundaries across conditions, scopes and mapping headers (#371)
 
 - Apply existing BSW and RTE memory classes to function and instance declarations, including private callbacks, lifecycle, OS service providers and host-safe aliases, configured CDD interfaces, standalone component contracts and their release checks (#371)
