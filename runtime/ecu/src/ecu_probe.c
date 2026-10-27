@@ -41,7 +41,7 @@ void Ecu_TargetTestShutdown(StatusType reason)
     }
 }
 #endif
-static Os_HostThreadResultType control(void *argument)
+static Os_HostThreadResultType probe_control(void *argument)
 {
     uint64_t step;
     uint64_t started = Os_HostMonotonicMs();
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;
     }
-    thread = Os_HostSpawnThread(&control, NULL);
+    thread = Os_HostSpawnThread(&probe_control, NULL);
     if (thread == NULL) {
         return 96;
     }

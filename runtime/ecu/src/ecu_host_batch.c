@@ -120,7 +120,7 @@ static int read_line(char line[ECU_BATCH_LINE_CAPACITY], size_t *length)
     return 1;
 }
 
-static Os_HostThreadResultType control(void *argument)
+static Os_HostThreadResultType host_batch_control(void *argument)
 {
     static Ecu_HostBatch batch; /**< Native control only; HostBatchInitialize zeros before use. */
     uint64_t started = Os_HostMonotonicMs();
@@ -160,7 +160,7 @@ int main(void)
     if (Ecu_TargetPrepare() != E_OK) {
         return 97;
     }
-    thread = Os_HostSpawnThread(&control, NULL);
+    thread = Os_HostSpawnThread(&host_batch_control, NULL);
     if (thread == NULL) {
         return 96;
     }
