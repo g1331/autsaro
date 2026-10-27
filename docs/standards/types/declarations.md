@@ -70,3 +70,11 @@ R8.9为Advisory、System（主文印刷71／PDF79；AMD2.27追加C11，AMD4.43�
 固定MemoryMapping00003要求声明、定义各自完整包装，并不要求这些类型或链接包装必须放在首次START之前。已经实施的Os_HostTypes／Os_PortTypes分离说明类型owner可以重组；因而“类型必须先声明”不能证明以上21个START位置不可调整。它们不因服务原型必须映射就自动取得ADR0023的不可兼得结论；公开类型/API同头组织只是当前源码组织选择。类型头分离须保持实际类型、依赖版本检查、包含次序、资产及既有C/C++消费者，不以增加一个间接MemMap包含隐藏同一违反。
 
 实体之后消费STOP的包含另有00003第五步的直接依据，不能与首次START共用一个替代排除结论。SchM的三个链接包装还须保持普通C++消费者的C符号绑定；把条件指令搬进映射对会违反00003禁止段内额外预处理的要求，删掉包装或手写替代声明也不是等价整改。这里仅明确具体构造和可行方向，不为24处填批准表、添加MR12或关闭R20.1；既有逐处实体记录和原raw状态继续保留。
+
+## SDK typedef与处理来源
+
+R5.6／R5.7的Required义务及关联tag例外分别见主文印刷54／55、PDF62／63。对48907b3b四份type-owner完成工件的逐TU展开，先在AUTSAR_VALUE探针之前截断，再提取typedef候选；不同声明拼写除已记录的多应用Rte_Instance外还有__sighandler_t。候选提取没有源码来源标记，不能据此证明所有同名定义来自同一头，也不把没有其他不同拼写写成整条R5.6通过。
+
+既有四份sdk-inline-closure的来源栈显示：asm-generic/signal-defs.h:83将__signalfn_t指针命名为__sighandler_t；signal.h:72直接声明同一void(int)函数指针。后一个声明位于ISO signal.h处理范围，按主文6.7处理；前一个是非ISO UAPI，不能随之豁免。两个拼写不证明类型不兼容，也不是两个一律待批准的真实R5.6对象。相同材料中的pid_t实际来自sched.h:38，而size_t来自GCC标准stddef.h:214；同名或system标记都不能代替具体定义来源、处理栈及原文例外判断。
+
+UAPI还有独立的R8.2义务：signal-defs.h:82的__signalfn_t(int)缺参数名。尝试移除Os_LinuxNative.h的显式包含后，Native实现语法／展开通过，但HostLinux在使用SA_ONSTACK处编译失败，StackLinux未执行；已恢复原包含。真实宏收据为_POSIX_C_SOURCE=199506L，未启用__USE_XOPEN_EXTENDED或__USE_MISC，而glibc bits/sigaction.h:60–62在这些条件下不提供SA_ONSTACK。不能只因另一个头也写有该宏就判为多余依赖，也不能拿掉备用栈行为、手写数值或定义__ASSEMBLY__来隐藏声明。当前SDK身份、原始失败、替代排除及恢复情况见[调查与更正](https://github.com/g1331/autsaro/pull/371#issuecomment-6434698119)。本项没有接受SDK保留、批准偏离或扩大ADR0024；其他typedef、未命名参数和最终provider责任继续分别核查。
