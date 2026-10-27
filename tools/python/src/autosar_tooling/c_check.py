@@ -154,6 +154,10 @@ def coverage(addons: Path) -> dict:
             "detail": "Pinned misra_14_4 visits if/while but omits for conditions; its isBoolExpression helper also treats integer literals 0 and 1 as Boolean. This is weaker than the C99 essential-Boolean obligation. Raw diagnostics remain unchanged.",
             "basis": "MISRA C:2012 R14.4",
         }, {
+            "guideline": "R20.1",
+            "detail": "Pinned misra_20_1 derives the first code position from the semantic tokenlist rather than each file's original contents before preprocessing. Typedef-only prefixes and code in excluded branches can be omitted, leaving later includes unreported. Manual evaluation must inspect original directive order, including those prefixes and branches. Raw diagnostics remain unchanged.",
+            "basis": "MISRA C:2012 R20.1 Amplification; AMD2.27",
+        }, {
             "guideline": "R21.8",
             "detail": "Pinned addon still reports getenv although AMD1 removed that prohibition. AMD2.81 defines the termination-call set as abort/exit/_Exit/quick_exit, but the pinned addon omits the latter two. Raw diagnostics remain unchanged.",
             "basis": "https://misra.org.uk/app/uploads/2021/06/MISRA-C-2012-AMD2.pdf",
