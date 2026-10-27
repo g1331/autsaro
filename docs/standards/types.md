@@ -22,6 +22,14 @@ R12.3（Advisory，主文页106／PDF114）针对逗号运算符。所选 Linux 
 
 当前standard-ecu的Det.c:16一条R8.2报告也须按真实声明判断：Det_ValidHooks的hooks／count均具名，Det.h中的Det_ErrorHookType四个参数为ModuleId、InstanceId、ApiId、ErrorId，没有省略的参数类型或名字。主文R8.2（Required，印刷64–66／PDF72–74）及适用修订不要求把已具名的函数指针typedef重新内联进形参。本处按源码判为误报，不与生成runnable的真实nameless role冲突、SDK的无名参数或整个R8.2混为同一结论；原始报告保留。
 
+## 数组初始化与重复指定
+
+R9.3／R9.4均为Required，当前C99适用（主文印刷78–80／PDF86–88；AMD2.27追加C11）。R9.3明确允许`{0}`、仅由指定初始化器组成的稀疏数组和字符串初始化；结构中未写出的成员不能直接当作部分数组初始化。R9.4按AMD4.47–50（印刷33／PDF40）同时检查重复designator，以及指定位置之后的位置初始化是否重新覆盖先前子对象；不能只比较成员名文本。
+
+`f1986d7d`的四份os-aliased-service封存工程中，Os_Time的8×8 increments、Os_Schedule的8项running与32项Os_InterruptVectorTable均用`{0}`；Can的三个8字节payload逐项写齐，CanIf的errors及Os_Time的observed、Os_Error的sources各写齐两项。生成的tasks／counters／alarms、通信路由和users等数组从初始化列表推导长度，不存在声明长度大于列表的尾部；Ecu_Config的32项priorities只指定`[OS_INPUT_INTERRUPT]`，实际索引为30，适用R9.3的稀疏例外。各列表没有重复指定同一子对象，也未在回退designator后继续位置初始化；ErrorHook快照的内层列表属于另一个子对象，不能与外层单项service选择混算。
+
+采用tasks.c的xYieldPendings在所选单核配置只有一个元素，由pdFALSE显式初始化；运行时统计两数组位于关闭分支，cIdleName使用`{0}`。该判断复用已完成os-coalesced分析副本的实际补丁后源码与配置，不把未选多核或任意SDK初始化宏判为满足。上述为具体初始化器的作者判断；R9.2的花括号、R9.6的chained designator、生成输入范围及其他对象继续各按自身条件核查，原始人工状态不变。
+
 ## C11 原子对象的适用边界
 
 AMD4 新增的 R9.7（Mandatory，AMD4.6，印刷页10／PDF17）、R11.10（Required，AMD4.15，页12／PDF19）、R12.6（Required，AMD4.16，页13／PDF20）及 R21.25（Required，AMD4.32，页18–19／PDF25–26）均适用于 C11。已核对的双平台四样本及当前四个 Linux 样本，交付 C／头文件与采用内核均没有 `_Atomic`、标准 `atomic_*`／`memory_order*` 标识符或 `stdatomic.h` 入口；逐文件词法收据与冻结源码身份留在 PR #371，不外推系统头的预处理闭包。
