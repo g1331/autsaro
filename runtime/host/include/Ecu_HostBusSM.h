@@ -19,13 +19,13 @@
 #elif (CANIF_AR_RELEASE_MAJOR_VERSION != 4U) || (CANIF_AR_RELEASE_MINOR_VERSION != 10U)
 #error "Ecu_HostBusSM.h -> CanIf.h: incompatible AUTOSAR release"
 #endif
+#define ECU_HOSTBUSSM_START_SEC_CODE
+#include "Ecu_HostBusSM_MemMap.h"
 /** Generated immutable bus_config: the ComM channel and its CanIf controller. */
 typedef struct {
     NetworkHandleType channel; /**< ComM channel (ComMChannelId). */
     uint8 controller;          /**< CanIf controller (CanIfCtrlId). */
 } Ecu_HostBusSM_ConfigType;
-#define ECU_HOSTBUSSM_START_SEC_CODE
-#include "Ecu_HostBusSM_MemMap.h"
 /** Start the provider in requested NO.
  * @param[in] ConfigPtr Configuration whose controller CanIf knows; otherwise no action.
  * @par Return

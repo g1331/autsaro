@@ -28,6 +28,8 @@
 #define CANTP_SID_RX_INDICATION   0x42u /**< SWS_CanTp_00214: service ID. */
 #define CANTP_SID_CANCEL_TRANSMIT 0x4au /**< SWS_CanTp_00246: service ID. */
 #define CANTP_SID_CANCEL_RECEIVE  0x4cu /**< SWS_CanTp_00257: service ID. */
+#define CANTP_START_SEC_CODE
+#include "CanTp_MemMap.h"
 /** Implementation-defined configuration of the one channel (SWS_CanTp_00340), generated
  * as the read-only tp_config; each member names its ECUC parameter. N-SDU IDs are those
  * CanTp's own API accepts, N-PDU IDs those exchanged with LSduR, and the upper IDs those
@@ -55,8 +57,6 @@ typedef struct {
     PduIdType upper_receive;  /**< PduR ID of the Rx N-SDU, from its Pdu reference. */
     PduIdType upper_transmit; /**< PduR ID of the Tx N-SDU, from its Pdu reference. */
 } CanTp_ConfigType;
-#define CANTP_START_SEC_CODE
-#include "CanTp_MemMap.h"
 /** Start the module with a generated configuration and drop all connections without
  * notification (SWS_CanTp_00208, 00273).
  * @param[in] CfgPtr Generated configuration with 8 to 256 bytes per N-SDU, representable by

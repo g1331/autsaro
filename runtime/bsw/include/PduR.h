@@ -20,6 +20,8 @@
 #endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define PDUR_MODULE_ID 51u
+#define PDUR_START_SEC_CODE
+#include "PduR_MemMap.h"
 /** Configuration identity (SWS_PduR_00771). */
 typedef uint16 PduR_PBConfigIdType;
 /** Routing-path group handle (SWS_PduR_00654); no groups are selected. */
@@ -113,8 +115,6 @@ typedef struct {
         *transport;         /**< Immutable TP table; NULL only when transport_count is zero. */
     uint16 transport_count; /**< TP route count, 0..32. */
 } PduR_PBConfigType;
-#define PDUR_START_SEC_CODE
-#include "PduR_MemMap.h"
 /** Publish the first valid immutable route set (SWS_PduR_00334).
  * @param[in] ConfigPtr Generated configuration and tables; at most 32 routes in each table. NULL or
  * invalid sets are ignored.

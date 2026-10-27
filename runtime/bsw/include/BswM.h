@@ -13,6 +13,8 @@
 #endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define BSWM_MODULE_ID 42u
+#define BSWM_START_SEC_CODE
+#include "BswM_MemMap.h"
 /** SWS_BswM_00214: mode requested by a BswM user. */
 /* MR12 RULE 2.3 VIOLATION: standard type (SWS_BswM_00214) without the generic request that
  * uses it; see the BswM deviation record. */
@@ -33,8 +35,6 @@ typedef struct {
     NetworkHandleType channel;  /**< Indicated channel (BswMComMChannelRef). */
     BswM_ModeActionType action; /**< Rule action lists (BswMRuleTrueActionList). */
 } BswM_ConfigType;
-#define BSWM_START_SEC_CODE
-#include "BswM_MemMap.h"
 /** Start arbitrating ComM indications (SWS_BswM_00002).
  * @param[in] ConfigPtr Configuration with an action; otherwise BswM is unchanged.
  * @par Return

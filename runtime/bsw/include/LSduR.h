@@ -6,6 +6,8 @@
 #include "ComStack_Types.h"
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define LSDUR_MODULE_ID 132u
+#define LSDUR_START_SEC_CODE
+#include "LSduR_MemMap.h"
 /** Configuration identity (CP_SWS_LSduR_91004). */
 typedef uint16 LSduR_PBConfigIdType;
 /** Initialization state (CP_SWS_LSduR_91005). */
@@ -56,8 +58,6 @@ typedef struct {
         *transmit;         /**< Immutable Tx table; NULL only when transmit_count is zero. */
     uint16 transmit_count; /**< Tx route count, 0..32. */
 } LSduR_PBConfigType;
-#define LSDUR_START_SEC_CODE
-#include "LSduR_MemMap.h"
 /** Publish the first valid immutable route set (CP_SWS_LSduR_91006).
  * @param[in] ConfigPtr Generated configuration and tables; at most 32 routes in each table. NULL or
  * invalid sets are ignored.

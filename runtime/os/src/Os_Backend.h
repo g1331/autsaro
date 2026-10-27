@@ -12,14 +12,14 @@
 #include "Os_Arti.h"
 #define OS_KERNEL_YIELD_INTERRUPT    0u
 #define OS_CONTROLLED_TICK_INTERRUPT 1u
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 typedef struct {
     Os_HookPhaseType phase;
     OSServiceIdType service;
     Os_ErrorParametersType parameters;
     Os_ArtiCallerType arti;
 } Os_ErrorContextType;
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 OS_MEMMAP void Os_ErrorContextSave(Os_ErrorContextType *context);
 
 OS_MEMMAP void Os_ErrorContextRestore(const Os_ErrorContextType *context);

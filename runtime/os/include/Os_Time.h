@@ -14,6 +14,8 @@
 #define OS_MAX_EXPIRY_POINTS       32u /**< Maximum expiry points in one table. */
 #define OS_MAX_EXPIRY_ACTIONS      16u /**< Maximum actions at one expiry point. */
 #define OS_SCHEDULE_SYNC_NONE      0u  /**< Only supported table synchronization strategy: NONE. */
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Static software/controlled Counter bounds; maximum/minimum values use Counter ticks. */
 typedef struct {
     CounterType id;          /**< Unique configured Counter identifier. */
@@ -97,8 +99,6 @@ typedef struct {
     uint64 alarm_actions; /**< Cumulative Alarm/ScheduleTable action executions. */
     uint64 action_errors; /**< Cumulative non-E_OK action results. */
 } Os_TickCompletionType;
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 /** Accept the next one-millisecond request from the native control producer.
  * @param[in] epoch Exactly the next epoch; the last confirmed epoch is a no-op.
  * @param[out] ticket Accepted ticket, or the existing confirmed ticket on a no-op.

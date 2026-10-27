@@ -34,6 +34,8 @@
 #define CANIF_E_DATA_LENGTH_MISMATCH  62u /**< Transmit length exceeds the CAN frame. */
 #define CANIF_E_STOPPED               70u /**< Transmit requested on an offline PDU channel. */
 #define CANIF_E_TXPDU_LENGTH_EXCEEDED 90u /**< Transmit length exceeds the configured PDU. */
+#define CANIF_START_SEC_CODE
+#include "CanIf_MemMap.h"
 /** Channel activity (SWS_CANIF_00137); TX_OFFLINE_ACTIVE is not selected. */
 typedef enum {
     CANIF_OFFLINE = 0,    /**< Neither transmit nor receive is forwarded. */
@@ -77,8 +79,6 @@ typedef struct {
     Can_HwHandleType
         transmit_hoh; /**< Driver transmit object (CanObjectId via CanIfHthIdSymRef). */
 } CanIf_ConfigType;
-#define CANIF_START_SEC_CODE
-#include "CanIf_MemMap.h"
 /** Initialize the one controller and reset all pending results (SWS_CANIF_00001).
  * @param[in] ConfigPtr Generated immutable configuration; invalid or NULL sets CanIf to UNINIT.
  * @par Return

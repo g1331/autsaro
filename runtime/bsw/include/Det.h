@@ -5,6 +5,8 @@
 #include "Std_Types.h"
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define DET_MODULE_ID 15u
+#define DET_START_SEC_CODE
+#include "Det_MemMap.h"
 
 /** SWS_Det_00180/00181/00184: synchronous, reentrant report notification.
  * Callouts receive the original identity and should return E_OK. Det ignores
@@ -24,8 +26,6 @@ typedef struct {
     uint16 runtime_callout_count;              /**< Number of runtime callouts, 0..65535. */
 } Det_ConfigType;
 
-#define DET_START_SEC_CODE
-#include "Det_MemMap.h"
 /** Reset and select the reporting configuration (SWS_Det_00008/00020).
  * @param[in] ConfigPtr Caller-owned immutable configuration; NULL selects no hooks.
  * @par Return

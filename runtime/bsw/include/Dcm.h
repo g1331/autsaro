@@ -21,6 +21,8 @@
 #include "Rte_Dcm_Type.h"
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define DCM_MODULE_ID 53u
+#define DCM_START_SEC_CODE
+#include "Dcm_MemMap.h"
 /** SWS_Dcm_00989: one diagnostic payload byte. */
 typedef uint8 Dcm_MsgItemType;
 /** SWS_Dcm_00990: mutable diagnostic payload. */
@@ -81,8 +83,6 @@ typedef struct {
     Ecu_DcmAuthenticationModeType authentication_mode; /**< Non-NULL mode publisher; state 0. */
     uint16 max_did_to_read; /**< DcmDspMaxDidToRead; 0 means absent, with no count limit. */
 } Dcm_ConfigType;
-#define DCM_START_SEC_CODE
-#include "Dcm_MemMap.h"
 /** Initialize the connection, default session and deauthenticated mode (SWS_Dcm_00037).
  * @param[in] ConfigPtr Immutable selected configuration; NULL or an invalid configuration
  * leaves the module unchanged. Buffers must hold 8..256 bytes representable by PduLengthType,
