@@ -21,7 +21,12 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
-from autosar_tooling.c_standard import function, is_comment, lex
+from autosar_tooling.c_standard import (
+    function,
+    is_comment,
+    lex,
+    verify_memory_mapping_pattern,
+)
 from autosar_tooling.config import ROOT
 from ecu_tools.build import (
     kernel_patch_environment,
@@ -1997,9 +2002,9 @@ def verify_storage_sections(binary: Path, tool: Path, linux: bool) -> None:
 
 def verify_memory_mapping_source(source: str, owned_names: set[str] | None = None) -> set[str]:
     """Check explicit pairs and object classes independently of compiler attributes."""
+    verify_memory_mapping_pattern(source)
     active = None
     names = set()
-    expecting = False
     statement = []
     depth = 0
     code = False
@@ -2008,25 +2013,16 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
             continue
         text = token.text.strip()
         if text.startswith("#"):
-            if text == '#include "Os_MemMap.h"':
-                require(expecting, "unexpected MemMap include")
-                expecting = False
-                continue
-            require(not expecting, "mapping marker must immediately include its header")
             marker = re.fullmatch(r"#define OS_(START|STOP)_SEC_(\w+)", text)
             if marker:
                 direction, section = marker.groups()
                 if direction == "START":
-                    require(active is None and not statement, "nested mapping or split declaration")
+                    require(not statement, "nested mapping or split declaration")
                     active = section
                 else:
-                    require(active == section and not statement, "mismatched mapping or split definition")
+                    require(not statement, "mismatched mapping or split definition")
                     active = None
-                expecting = True
-            else:
-                require(active is None, "preprocessing inside mapped section")
             continue
-        require(not expecting, "mapping marker must immediately include its header")
         statement.append(token)
         if text == "{":
             if depth == 0:
@@ -2085,7 +2081,7 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
                         f"unmapped owned declaration or definition: {name}")
         statement = []
         code = False
-    require(active is None and not expecting and not statement, "unclosed memory mapping")
+    require(active is None and not statement, "unclosed memory mapping")
     return names
 
 

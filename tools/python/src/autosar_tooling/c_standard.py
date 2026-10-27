@@ -179,6 +179,57 @@ def void_function(tokens: list[Token], name: str) -> bool:
     return "void" in prefix and "*" not in prefix
 
 
+def verify_memory_mapping_pattern(source: str) -> int:
+    """Check the shared START/include/body/STOP/include protocol before class checks."""
+    active = None
+    expecting = False
+    header = None
+    count = 0
+    for token in lex(source):
+        if is_comment(token):
+            continue
+        text = re.sub(r"/\*.*?\*/|//[^\n]*", " ", token.text, flags=re.DOTALL).strip()
+        text = re.sub(r"\\\r?\n", "", text)
+        included = include_scope(text)
+        if included and re.search(r'_MemMap\.h[">]$', included):
+            if not expecting:
+                raise AssertionError("unexpected MemMap include")
+            if header is not None and header != included:
+                raise AssertionError("mismatched MemMap header")
+            header = included if active is not None else None
+            expecting = False
+            count += 1
+            continue
+        if expecting:
+            raise AssertionError("mapping marker must immediately include its header")
+        marker = re.fullmatch(r"#\s*define\s+(\w+)_(START|STOP)_SEC_(\w+)", text)
+        if marker:
+            prefix, direction, section = marker.groups()
+            if direction == "START":
+                if active is not None:
+                    raise AssertionError("nested mapping")
+                active = (prefix, section)
+            else:
+                if active != (prefix, section):
+                    raise AssertionError("mismatched mapping")
+                active = None
+            expecting = True
+        elif text.startswith("#"):
+            if active is not None:
+                raise AssertionError("preprocessing inside mapped section")
+    if active is not None or expecting:
+        raise AssertionError("unclosed memory mapping")
+    return count
+
+
+def memory_mapping_findings(name: str, source: str) -> collections.Counter[Key]:
+    try:
+        verify_memory_mapping_pattern(source)
+    except AssertionError as error:
+        return collections.Counter({("memory-mapping", name, str(error)): 1})
+    return collections.Counter()
+
+
 def findings(name: str, source: str, *, bsw: bool | None = None, known_switches: frozenset[str] = frozenset()) -> collections.Counter[Key]:
     result: collections.Counter[Key] = collections.Counter()
     lines = source.splitlines()
@@ -401,6 +452,7 @@ def runtime_findings(root: Path = ROOT) -> collections.Counter[Key]:
     switches = switch_definitions(list(sources.values()))
     for name, source in sources.items():
         result.update(findings(name, source, known_switches=switches))
+        result.update(memory_mapping_findings(name, source))
     return result
 
 
@@ -547,6 +599,10 @@ def generated_findings(samples: Path) -> collections.Counter[Key]:
                 continue
             if "include" in path.relative_to(project).parts:
                 current.update(findings("emitted/" + relative, source, bsw=path.stem.split("_", 1)[0] in bsw_modules, known_switches=switches))
+        for path in sorted(project.rglob("*")):
+            if path.suffix in {".c", ".h"} and not path.relative_to(project).as_posix().startswith("kernel/"):
+                relative = path.relative_to(project).as_posix()
+                current.update(memory_mapping_findings("emitted/" + relative, path.read_text(encoding="utf-8")))
         result |= current
     return result
 
