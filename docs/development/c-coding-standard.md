@@ -123,11 +123,13 @@ void Server_Run(uint8, uint32 *);
 - 输出参数只在成功时写入，或在说明中写明失败时的值。
 - 不吞错、不伪造成功；无法恢复的主机错误走既有的终止路径，例如 OS 的 `Os_BackendShutdown`。
 
-## AUTOSAR 契约与 MISRA 诊断的冲突
+## MISRA 适用分层与契约冲突
 
-固定版次的 AUTOSAR 必需契约优先。核对原文后，若接口、callout 专用内存段等标准义务与 MISRA 规则或工具诊断无法同时满足，保留正确契约和原始分析结果。对应 PR 逐条列出新增诊断的规则、文件与源码行，以及要求该行的条款编号和必要性（条目多时放折叠块或 PR 评论）；对不上必需条款的诊断不属于冲突，应修改代码消除。Issue 范围内的这类决定由实现者依据上述证据作出，源码诊断裁决的 Issue 只记录结论与链接。不能靠删除标准段标记、停止 include、缩小扫描范围或增加无依据 suppression 来消除诊断。
+[ADR 0025](../adr/0025-misra-layered-scope.md)规定四层责任、类别记录及 GRP：自有平台无关代码和生成 C 完整评估；主机层正常整改并可引用已授权类别；SDK／FreeRTOS 原件按采用代码来源处理，项目补丁仍是自有代码。R15.5 为 Disapplied，其余类别保持。
 
-按 [ADR 0023](../adr/0023-autosar-required-conflict-disposition.md) 执行 [2026-10-17 用户决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)：独立核实必需且无法同时满足的冲突，允许逐项依证据记为偏离，无需用户再次逐条批准。项目授权与 MISRA 规范效力分开记录；合法原件（#57）、适用版次／amendment／TC、类别（包括 Mandatory）、实际调用／包含闭包、风险控制及修改后源码人工评估（#58）与独立复核均是实际处置前提。缺任何依据时保持未核查／待评估，不进入批准表或添加违反注释；不能从用户意图、工具编号或技能摘要推定允许偏离。Mandatory 不允许偏离的限制仍保留，原文确认不能偏离的真实违反保持阻塞。保留必需行本身不构成偏离或符合性结论，`passed=false`、`error` 与人工 `not_assessed` 原样保留。
+固定版次的 AUTOSAR 必需契约优先；核实无法同时满足 MISRA 时保留正确契约和原始结果。PR 记录规则、位置、必需条款和理由；对不上必需条款的诊断不属于 AUTOSAR 冲突，按 ADR 0025 的层次与已授权类别处理，类别外应整改或有据裁决。实现者依证据决定，Issue 只记结论与链接。不能靠删除标准段标记、停止 include、缩小扫描范围或增加无依据 suppression 来消除诊断。
+
+按 [ADR 0023](../adr/0023-autosar-required-conflict-disposition.md) 执行既有 AUTOSAR 冲突授权，按 [ADR 0025](../adr/0025-misra-layered-scope.md)执行类别处置，均无需再次索批。项目授权与 MISRA 规范效力分别记录：核对合法版次／amendment／TC、有效类别和允许条件、实际闭包、风险控制及独立复核；Mandatory 不允许偏离，缺依据保持未核查。原始 `passed=false`、`error` 和人工 `not_assessed` 保持。
 
 ## MISRA 偏离注释
 
@@ -138,7 +140,9 @@ void Server_Run(uint8, uint32 *);
 /* MR12 DIR 4.9 VIOLATION: <理由> */
 ```
 
-注释写在引起违反的语句同一行或上一行，一处违反一条注释。注释只标出位置和理由，不构成批准：
+注释写在引起违反的语句同一行或上一行，说明技术理由和风险控制。逐项记录仍与注释对应；ADR 0025 的类别记录集中共用依据，不逐处重复必要性报告。注释本身不构成批准。
+
+类别引用：[MemMap R20.1／R20.5](../standards/memmap/README.md#memmap-类别偏离)、[主机动态设施 D4.12＋R21.3／R22.1](../standards/os/native-facilities/storage-interrupts.md#主机动态设施类别偏离)、[同步嵌套 ISR R17.2](../standards/os/native-facilities/storage-interrupts.md#同步嵌套-isr-类别偏离)。后续源码整改就近 MR12 只写该位置的机制与约束，记录用来源模式识别实例；既有精确 include／undef 记录仍执行下述双向关联。
 
 直接 include 的记录范围使用文件路径加完整字面指令，例如 `` `runtime/os/src/host/linux/Os_HostLinux.c` 中 `#include <signal.h>` ``；引号形式同样保留为 `#include "private/header.h"`。现有对应检查只归一化指令周围的空白、注释和续行，保留文件、规则、头名及尖括号／引号身份；宏 include 不会冒充字面头。未批准、重复、错文件／规则／头或过期记录仍须拒绝，不能用函数名、新宏或基线代替 include 位置。
 
@@ -146,10 +150,10 @@ void Server_Run(uint8, uint32 *);
 
 Dir4.10仅限`.h`：范围写`@file`，MR12并入首个`/** @file ... */`。
 
-[ADR 0024](../adr/0024-bounded-linux-platform-retention.md) 的三个 Linux 位置是另行接受的有界项目保留，独立于上节 ADR 0023 的 AUTOSAR 必需冲突授权。项目接受、逐处技术复核和 MISRA 规范效力分别记录；仅在前两者具备后写入该决定范围内的技术记录和就近注释，真实违反及其他义务保持。
+[ADR 0024](../adr/0024-bounded-linux-platform-retention.md) 三处 Linux include 保留原范围和记录；ADR 0025 的类别授权不追认其他规则。
 
-- 具体记录位于对应模块的标准篇（`docs/standards/`），沿用现有记录路径；[ADR 0023 的逐项格式](../adr/0023-autosar-required-conflict-disposition.md#逐项记录与复核)连接固定提交／profile／target／program／TU、规则、文件／源码行和符号、实际调用闭包、SWS 全文必要性及替代方案、合法 MISRA 版次／amendment／TC、风险控制与验证、评估和独立复核。原授权来源、评估者及日期、复核 head／发现／处置分开写，不把实现者写成新增批准人；范围外新例外先完成具体文本再由用户决定。
-- 只有具体记录满足原授权范围、规范允许条件与上述全部评估／复核前提后才在源码中加注释，注释中的规则编号与记录一致；Cppcheck 的原始诊断照常保留，注释不是 suppression。本次政策同步不批准具体诊断，不修改既有批准表或源码注释。
+- 记录放在对应 `docs/standards/` 模块篇。类别内使用 [ADR 0025 格式](../adr/0025-misra-layered-scope.md#类别记录格式与引用)，其他使用 [ADR 0023 逐项格式](../adr/0023-autosar-required-conflict-disposition.md#逐项记录与复核)。授权、评估、复核分别写明；新例外由用户决定。
+- 只有具体记录满足原授权范围、规范允许条件与上述全部评估／复核前提后才在源码中加注释，注释中的规则编号与记录一致；Cppcheck 的原始诊断照常保留，注释不是 suppression。类别覆盖条件按 ADR 0025 核查，模式外位置照常整改；已有记录和原始诊断保持。
 - 已批准的偏离：[PduR](../standards/pdur.md#misra-偏离) 的 Rule 8.7，[Com](../standards/com.md#misra-偏离) 的 Rule 8.7 与 2.5，[CanTp](../standards/cantp.md#misra-偏离) 的 Rule 8.7，[ComM](../standards/comm/README.md#misra-偏离) 的 Rule 8.7 与 2.5，[BswM](../standards/bswm/README.md#misra-偏离) 的 Rule 8.7 与 2.3。其余模块整改时补齐所需记录与注释。
 - ADR0023原授权下的具体有界冲突处置见[RTE无名role参数](../standards/rte/contracts.md#无名-role-参数的逐处核查)的Rule 8.2记录；它不改变其他源码点或221项人工评估的状态。
 
@@ -157,6 +161,7 @@ Dir4.10仅限`.h`：范围写`@file`，MR12并入首个`/** @file ... */`。
 
 | 检查 | 范围 | 入口 |
 | --- | --- | --- |
+| MemMap 模式 | runtime 与生成样本的全部自有 C／头，每个包含请求和完整开闭 | `quality`；生成样本由 `--c-samples` 纳入，共用原 memory-mapping 协议检查 |
 | 文件头 | `runtime/` 的 `.c`／`.h` 第一行为 `/** @file` | `quality` |
 | 公开头自包含 | `runtime/{bsw,host,ecu,os}/include` 的全部头文件单独以 C99 编译；MemMap 头按成对段使用 | `quality`：C 文件有改动、`--scope runtime` 或 `--all-format` 时运行 |
 | 契约与可判定源码规则 | runtime 公开头的函数、typedef、成员、枚举值与宏注释，文件状态注释，BSW 原生类型、开关写法及偏离记录双向对应 | 每次 `quality`；`--c-samples` 同时检查实际生成的公开头 |
