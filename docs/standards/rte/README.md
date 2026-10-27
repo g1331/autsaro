@@ -80,3 +80,19 @@ R5.6为Required／System（2013主文印刷54／PDF62，AMD2追加C11）。主�
 把请求移到文件顶或只保留一个全局CODE段，会丢失所选scope、存储类别、原型继承或CALLOUT归属；一次性guard吞掉后续STOP，函数体内包含违反00023。相同scope／class且真正相邻的对象已经合并，不将可去除的重复配对当必要冲突。生成头部属性继承、真实句柄／对象段检查、正常多组件及生命周期／COM／诊断消费者分别提供静态和行为控制；R20.5关键词消费与内部清理、D4.10重入主体和最终BSW00115对应仍须按各自对象落实，不批量写成已批准或整体符合。
 
 普通OS service原型的遗漏由 `os_service::files` 在原生成点修正：现有同一个CODE START提前到首个provider原型前，两个原型增加与定义一致的RTE_Rte_CODE；inline client、同一STOP及版本检查保留，不增加配对。首个include不再位于普通声明之后，不能继续列为无法整改的R20.1；上表行号与计数仍是8a26e3b0冻结证据，不冒充修复后分析。正常生成的两种Counter名字、真实原型属性继承及OS service成功／拒绝消费者分别验证该修改，原失败和新字节验证按实际收据保留。
+
+## 应用头的实体与请求
+
+以下绑定 `ac356523` 的四份 `mapped-os-service-final-samples`；后续OS同类段合并不改变这些头。序号按每个文件中所有映射头include合计，行号包括R5.6的就近说明。各对前一行分别为相应START／STOP；这些位置均在CDS类型声明之后，是真实R20.1，不因RTE_CORE或runnable选择而按布局销项。此处是技术依据，尚非批准表。
+
+| `generated/include/` 下的头及profile | include序号与行；实体／class |
+| --- | --- |
+| `Rte_EchoApplication.h`，标准／用户 | [1]/[2] 29/33：`Rte_Inst_EchoApplication` extern的RTE_EchoApplication_CONST_UNSPECIFIED；[3]/[4] 45/80：Periodic、ReadData两个SWC原型的EchoApplication_CODE；[5]/[6] 86/105：RxValue Read；[7]/[8] 114/133：TxValue Write，后两对为RTE_EchoApplication_CODE。 |
+| `Rte_DcmService.h`，三个诊断profile | [1]/[2] 29/32：`Rte_Inst_DcmService` extern的RTE_DcmService_CONST_UNSPECIFIED；[3]/[4] 41/61：DcmService_ReadData的DcmService_CODE；[5]/[6] 66/87：Rte_Call_DcmService_DataServices_ApplicationValue_ReadData的RTE_DcmService_CODE。无诊断没有该头。 |
+| `Rte_Ingress.h`，组件／无诊断 | [1]/[2] 32/35：`Rte_Inst_Ingress` extern的RTE_Ingress_CONST_UNSPECIFIED；[3]/[4] 48/83：Periodic、ReadData两个Ingress_CODE原型；[5]/[6] 89/108：RxValue Read；[7]/[8] 117/136：TxValue Write；[9]/[10] 145/163：Value Write，后三对为RTE_Ingress_CODE。 |
+| `Rte_Process.h`，组件／无诊断 | [1]/[2] 32/35：`Rte_Inst_Process` extern的RTE_Process_CONST_UNSPECIFIED；[3]/[4] 46/84：Periodic、Transform两个Process_CODE原型；[5]/[6] 90/110：Value Read；[7]/[8] 119/137：Result Write，后两对为RTE_Process_CODE。 |
+| `Rte_Observe.h`，组件／无诊断 | [1]/[2] 32/35：`Rte_Inst_Observe` extern的RTE_Observe_CONST_UNSPECIFIED；[3]/[4] 45/62：Observe_Periodic的Observe_CODE；[5]/[6] 66/90：ResultService Transform client；[7]/[8] 100/120：Result Read；[9]/[10] 127/147：Value Read，后三对为RTE_Observe_CODE。 |
+
+这里分别是14／14／34／28个物理include，不按程序或TU重复计数。`contract_headers`生成CDS与接口，同一生成器通过`api_visibility`按实际runnable选择生成原型；Rte.c提供同scope的实例句柄及RTE函数定义，应用实现提供SWC runnable定义。同步client沿生成连接进入Process_Transform或应用ReadData；COM通知／周期任务分别消费对应Read／Write与runnable，不把外部应用原型误归RTE实现CODE。固定RTE的03711／03712要求CDS实例及其内部名字，03793要求单实例公开句柄名；这些对象与R5.6的typedef是不同实体，不能因类型重名处置而免除其段责任。
+
+MemoryMapping00003要求这些普通声明完整映射；RTE的07596将前缀连到已配置MemorySection，不强制采用本项目字面前缀。不同API段之间有runnable可见性条件及别名定义；把整个条件块移进一对会在段内引入其他预处理指令，而无条件暴露所有原型会改变应用头合同。提前一次包含、默认段或只映射定义均不能保持同一合同。实例CONST、SWC CODE与RTE CODE也不能相互替代。正常37头段继承与STOP清理、应用头唯一性／可见性和实际多组件消费者分别控制属性、声明与分发风险；本表没有把静态观察当作独立运行。关键词撤销连接00011，内部属性撤销仍按实现清理判断，D4.10归实际重入分派头；新增配置、runnable条件、实例模型或前缀时重新评估，最终累计复核及BSW00115对应仍保留。
