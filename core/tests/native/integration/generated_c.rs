@@ -1338,3 +1338,109 @@ StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
         );
     }
 }
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
+fn component_application_definitions_preserve_configured_sections() {
+    // Verifies: SWS_MemMap_00003, SWS_MemMap_00018.
+    let plan = build(&inputs()).unwrap();
+    let scratch = Scratch::new();
+    for (path, bytes) in prepared_pipeline_files_for_target(&plan, tooling::native_target()) {
+        let path = scratch.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    for (component, objects, functions) in [
+        (
+            "Ingress",
+            &["committed"][..],
+            &["Ingress_Periodic", "Ingress_ReadData"][..],
+        ),
+        (
+            "Process",
+            &["committed"][..],
+            &["Process_Periodic", "Process_Transform"][..],
+        ),
+        (
+            "Observe",
+            &["observed", "service_value", "service_state"][..],
+            &["Observe_Periodic"][..],
+        ),
+    ] {
+        let source_path = scratch.0.join(format!("app/{component}/{component}.c"));
+        let source = std::fs::read_to_string(&source_path).unwrap();
+        for (class, names) in [("VAR_CLEARED_UNSPECIFIED", objects), ("CODE", functions)] {
+            let start = format!(
+                "#define {component}_START_SEC_{class}\n#include \"{component}_MemMap.h\"\n"
+            );
+            let stop = format!("#define {component}_STOP_SEC_{class}");
+            let bodies: Vec<_> = source
+                .split(&start)
+                .skip(1)
+                .map(|tail| tail.split_once(&stop).unwrap().0)
+                .collect();
+            for name in names {
+                assert!(
+                    bodies.iter().any(|body| body.contains(*name)),
+                    "{component}: unmapped {name}"
+                );
+            }
+            for body in bodies {
+                assert!(
+                    body.lines().all(|line| !line.trim_start().starts_with('#')),
+                    "{component}: preprocessing inside {class}: {body}"
+                );
+            }
+        }
+        let map_path = scratch
+            .0
+            .join(format!("generated/include/{component}_MemMap.h"));
+        let map = std::fs::read_to_string(&map_path).unwrap();
+        assert!(map.contains("section(\".bss\")") && map.contains("section(\".rte_code\")"));
+        std::fs::write(
+            map_path,
+            map.replace("\".bss\"", "\".bss.application_contract\"")
+                .replace("\".rte_code\"", "\".text.application_contract\""),
+        )
+        .unwrap();
+        let object = scratch.0.join(format!("{component}.o"));
+        let mut compiler = tooling::c_compiler();
+        compiler.current_dir(&scratch.0).args([
+            "-std=c99",
+            "-O0",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+        ]);
+        for include in [
+            "generated/include",
+            "bsw/include",
+            "integration/include",
+            "os/include",
+        ] {
+            compiler.arg("-I").arg(scratch.0.join(include));
+        }
+        let output = tooling::run_public_command(
+            compiler.arg("-c").arg(&source_path).arg("-o").arg(&object),
+            &scratch.0,
+            "component-application-placement",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(output.status.success(), "{component}: {output:?}");
+        let sections = tooling::symbol_sections(&tooling::execution_settings().objdump, &object);
+        for (names, section) in [
+            (objects, ".bss.application_contract"),
+            (functions, ".text.application_contract"),
+        ] {
+            for symbol in names {
+                assert!(
+                    sections
+                        .iter()
+                        .any(|(name, found)| name == *symbol && found == section),
+                    "{component}: {symbol} not in {section}: {sections:?}"
+                );
+            }
+        }
+    }
+}

@@ -96,3 +96,5 @@ R5.6为Required／System（2013主文印刷54／PDF62，AMD2追加C11）。主�
 这里分别是14／14／34／28个物理include，不按程序或TU重复计数。`contract_headers`生成CDS与接口，同一生成器通过`api_visibility`按实际runnable选择生成原型；Rte.c提供同scope的实例句柄及RTE函数定义，应用实现提供SWC runnable定义。同步client沿生成连接进入Process_Transform或应用ReadData；COM通知／周期任务分别消费对应Read／Write与runnable，不把外部应用原型误归RTE实现CODE。固定RTE的03711／03712要求CDS实例及其内部名字，03793要求单实例公开句柄名；这些对象与R5.6的typedef是不同实体，不能因类型重名处置而免除其段责任。
 
 MemoryMapping00003要求这些普通声明完整映射；RTE的07596将前缀连到已配置MemorySection，不强制采用本项目字面前缀。不同API段之间有runnable可见性条件及别名定义；把整个条件块移进一对会在段内引入其他预处理指令，而无条件暴露所有原型会改变应用头合同。提前一次包含、默认段或只映射定义均不能保持同一合同。实例CONST、SWC CODE与RTE CODE也不能相互替代。正常37头段继承与STOP清理、应用头唯一性／可见性和实际多组件消费者分别控制属性、声明与分发风险；本表没有把静态观察当作独立运行。关键词撤销连接00011，内部属性撤销仍按实现清理判断，D4.10归实际重入分派头；新增配置、runnable条件、实例模型或前缀时重新评估，最终累计复核及BSW00115对应仍保留。
+
+定义侧还须检查原样导入的应用：仓库管线fixture的Ingress／Process各一个committed，以及Observe的observed／service_value／service_state现按组件cleared类映射，五个runnable／server定义各在真实CODE对内。测试观察的条件选择移到对外，始终inline的适配沿00003例外；原状态、签名及观察顺序保留。原型继承不替代定义包装，生成器不改写用户输入，未编译的模板也不替实际应用证明。[具体调查与验证边界](https://github.com/g1331/autsaro/pull/371#issuecomment-6430675346)保留各自执行身份。
