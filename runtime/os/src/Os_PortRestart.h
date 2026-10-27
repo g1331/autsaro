@@ -2,14 +2,7 @@
 #ifndef AUTOSAR_OS_PORT_RESTART_H
 #define AUTOSAR_OS_PORT_RESTART_H
 #include "Os_Version.h"
-#include <stdint.h>
-
-/* The native unwinder consumes a PC representation, not a callable C function. */
-#ifdef _WIN32
-typedef void *Os_PortRestartAddressType;
-#else
-typedef uintptr_t Os_PortRestartAddressType;
-#endif
+#include "Os_PortTypes.h"
 
 #ifndef _WIN32
 #define OS_START_SEC_CODE

@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Native atomic width/alignment checks use C99 constant expressions instead of the four `Os_Atomic{32,64}{Width,Alignment}Type` guard typedefs. Remove direct uses of these implementation guard names and regenerate deliveries for the new native type headers; atomic storage aliases and service ABI are unchanged (#371)
+
 - Five OS-only helpers now have internal linkage and are omitted from private cross-file headers. Integrations must use the public OS/native wrapper interfaces; regenerate deliveries and rebuild for the updated source identities (#371)
 
 - Controlled kernel headers now expose heap types and heap, mutex and optional Task APIs only when their implementations are selected by the matching configuration. Regenerate sealed deliveries and rebuild for the updated patch identity; enabled declarations and function implementations are unchanged (#371)

@@ -1,10 +1,9 @@
 /** @file Schedule table validation, start/stop/chain services and expiry-point processing. */
 #include "Os_Backend.h"
 
-typedef Os_ArtiScheduleStateType Os_ScheduleStateType;
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
-OS_MEMMAP static Os_ScheduleStateType
+OS_MEMMAP static Os_ArtiScheduleStateType
     tables[OS_MAX_SCHEDULE_TABLES]; /**< Port-locked table state; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
@@ -189,7 +188,7 @@ OS_MEMMAP static void process(uint32 initial)
     uint32 transitions = 0u;
     while ((tables[index].status == SCHEDULETABLE_RUNNING) && (tables[index].remaining == 0u)) {
         const Os_ScheduleTableConfigType *table = &Os_Config->timing->schedule_tables[index];
-        Os_ScheduleStateType *state = &tables[index];
+        Os_ArtiScheduleStateType *state = &tables[index];
         if (++transitions > (OS_MAX_SCHEDULE_TABLES * (OS_MAX_EXPIRY_POINTS + 1u))) {
             Os_BackendShutdown(E_OS_STATE);
         }

@@ -358,7 +358,7 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
         ("Os_Types.h", "Std_Types.h", "STD_TYPES"),
         ("Os_Vector.c", "Os_MemMap.h", "MEMMAP"),
         ("Os_Vector.h", "Os_MemMap.h", "MEMMAP"),
-        ("Os_Vector.h", "Platform_Types.h", "PLATFORM"),
+        ("Os_PortTypes.h", "Platform_Types.h", "PLATFORM"),
         ("PduR.c", "Det.h", "DET"),
         ("PduR.c", "PduR_MemMap.h", "MEMMAP"),
         ("PduR.c", "SchM_PduR.h", "RTE"),

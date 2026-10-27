@@ -94,4 +94,4 @@ R20.9（Required，印刷161／PDF169）的原文示例明确允许defined(B)与
 
 上述分类不替代逐处记录：真实include需绑定字面头、出现序号、当前START／STOP及被映射实体；关键词需绑定具体分支，D4.10需绑定可重入头及其实际调用方。原有同类连续块已合并的证据保留，不把可删除的多余配对列为必要。累计技术复核前不填批准表／MR12；原始诊断、Required限制及SWS_BSW_00115均保持。
 
-`0d627485`源码还确认四个未报告的R20.1位置：Os_Host.h:59、Os_PortRestart.h:16、Os_Schedule.c:6、Os_Vector.h:17的首次Os_MemMap.h包含。此前分别有原子／句柄typedef、平台PC表示typedef、Schedule状态alias及向量函数指针typedef；主文按预处理前布局判断，typedef不是允许的前置指令或注释。固定addon的misra_20_1以语义tokenlist推导首个代码行，不能代替这个判断。这四处仍是Advisory违反：保留类型在其声明使用之前及原文件的类型责任，后续分别映射Host接口、unwind准备、tables存储和向量extern；不把私有alias或文件划分称为SWS强制。原始报告不增写，不据计数差异关闭人工义务。
+`0d627485`的四个漏报位置仍按旧字节保留：Os_Host.h:59、Os_PortRestart.h:16、Os_Schedule.c:6、Os_Vector.h:17。其typedef属于普通C内容，固定addon的语义tokenlist不能代替预处理前判断。后续[类型归属整改](https://github.com/g1331/autsaro/pull/371#issuecomment-6433452771)将native ABI别名与PC／向量类型放入Os_HostTypes.h／Os_PortTypes.h，两个类型头均在typedef前完成include且无MemMap；原服务／向量声明仍在原映射对。Schedule直接使用既有ARTI状态类型。这是消除实际前置构造，不新增保留；私有别名／文件划分不称为SWS强制，旧计数不改成新head结果。

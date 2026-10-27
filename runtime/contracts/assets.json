@@ -253,6 +253,19 @@
       ]
     },
     {
+      "path": "runtime/os/include/Os_HostTypes.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
       "path": "runtime/os/include/Os_Mailbox.h",
       "license": "Apache-2.0",
       "targets": [
@@ -772,6 +785,19 @@
     },
     {
       "path": "runtime/os/src/Os_PortRestart.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/Os_PortTypes.h",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

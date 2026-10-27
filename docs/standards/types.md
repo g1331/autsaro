@@ -89,3 +89,11 @@ callback-parameter旧7处R2.4均为匿名类型误报；新增xSTATIC_TIMER为�
 ## 单函数对象与存储期
 
 块作用域、静态／TLS存储期与独立MemMap段的关系见[单函数对象](types/declarations.md#单函数对象与存储期)。
+
+## 原生ABI类型与编译约束
+
+Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes.h集中原有PC与向量回调别名；类型头不承载对象／函数映射。LONG在Windows仍为32位long、Linux仍为int32_t；64位存储、HANDLE／DWORD／LPTHREAD_START_ROUTINE、Windows void*／Linux uintptr_t PC以及uint32(void)向量回调均保留。Schedule的私有别名直接使用原有Os_ArtiScheduleStateType，不改tables布局或工具view。
+
+原四个char-array guard typedef的名字没有消费者，约束作用却必须保留。现在匿名枚举的显式值使用sizeof(char[原谓词?1:-1])：受支持目标的界为常量1，失败目标因负数组界在编译期拒绝；不生成状态对象、VLA或运行时分支，Linux always-lock-free拒绝仍独立存在。四个宽度／对齐谓词未放宽，旧实现guard类型名的源码移除已记CHANGELOG。基础存储／回调别名及服务二进制ABI不变。
+
+正常编译控制分别改变32／64位宽度与对齐，拒绝须定位到对应guard表达式；删去同一guard的私有副本必须编译成功，避免把其他检查的失败算作目标证据。sizeof中的Os_Atomic64Type仍是真实类型用途，不能因旧addon遗漏而一同删除。上述只处置类型归属和编译约束，GNU扩展、SDK、provider及实际Windows执行继续单列。

@@ -2,17 +2,10 @@
 #ifndef AUTOSAR_OS_VECTOR_H
 #define AUTOSAR_OS_VECTOR_H
 #include "Os_Version.h"
-#include "Platform_Types.h"
-/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
-#if !defined(PLATFORM_AR_RELEASE_MAJOR_VERSION) || !defined(PLATFORM_AR_RELEASE_MINOR_VERSION)
-#error "Os_Vector.h -> Platform_Types.h: missing AUTOSAR release"
-#elif (PLATFORM_AR_RELEASE_MAJOR_VERSION != 4U) || (PLATFORM_AR_RELEASE_MINOR_VERSION != 10U)
-#error "Os_Vector.h -> Platform_Types.h: incompatible AUTOSAR release"
-#endif
+#include "Os_PortTypes.h"
 /* Private binding of the patched Win64 and POSIX ports, incl. yield/tick and mailbox slots.
  * All access remains under the port's existing interrupt mutex protocol. */
 #define OS_INTERRUPT_VECTOR_COUNT 32u
-typedef uint32 (*Os_InterruptHandlerType)(void);
 #define OS_START_SEC_VAR_INIT_VECTOR_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP extern Os_InterruptHandlerType Os_InterruptVectorTable[OS_INTERRUPT_VECTOR_COUNT];

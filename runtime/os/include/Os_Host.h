@@ -19,41 +19,7 @@
  * Ownership: writes the scalar during expansion; no storage is retained.
  */
 #define OS_HOST_STACK_POINTER(sp) __asm__ volatile("movq %%rsp, %0" : "=r"(sp))
-#if defined(_WIN32)
-#include "Os_Windows.h"
-#elif defined(__linux__)
-#include "Os_HostLinux.h"
-#else
-#error Unsupported native OS host
-#endif
-
-/* Windows Interlocked requires LONG (long on Win64); Linux uses int32_t.
- * Both are exactly four-byte aligned native cells, never Linux long. */
-/** Native four-byte aligned Interlocked publication cell; long on Win64 and int32_t on Linux. */
-typedef LONG Os_Atomic32Type;
-/** Compile-time rejection when a native Interlocked cell has the wrong width. */
-typedef char Os_Atomic32WidthType[(sizeof(Os_Atomic32Type) == sizeof(int32_t)) ? 1 : -1];
-/** Compile-time rejection when a native Interlocked cell lacks four-byte alignment. */
-typedef char
-    Os_Atomic32AlignmentType[(__alignof__(Os_Atomic32Type) >= __alignof__(int32_t)) ? 1 : -1];
-/** Native eight-byte atomic-storage representation; Linux requires always-lock-free operations. */
-typedef uint64_t Os_Atomic64Type;
-/** Compile-time rejection when a native 64-bit publication cell is not eight bytes. */
-typedef char Os_Atomic64WidthType[(sizeof(Os_Atomic64Type) == 8u) ? 1 : -1];
-/** Compile-time rejection when native 64-bit publication storage lacks eight-byte alignment. */
-typedef char Os_Atomic64AlignmentType[(__alignof__(Os_Atomic64Type) >= 8u) ? 1 : -1];
-#if defined(__linux__) && (__GCC_ATOMIC_LLONG_LOCK_FREE != 2)
-#error Linux host requires always-lock-free 64-bit atomics
-#endif
-
-/** Owned native event or thread-observation handle; NULL denotes allocation/creation failure. */
-typedef HANDLE Os_HostHandleType;
-/** Native thread identity, distinct from an automotive Task or ISR identifier. */
-typedef DWORD Os_HostThreadIdType;
-/** Native thread exit code compatible with the controlled platform thread ABI. */
-typedef DWORD Os_HostThreadResultType;
-/** Native callback taking a retained context pointer and returning the native thread exit code. */
-typedef LPTHREAD_START_ROUTINE Os_HostThreadEntryType;
+#include "Os_HostTypes.h"
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
