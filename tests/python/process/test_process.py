@@ -384,6 +384,64 @@ class BoundedProcessTests(unittest.TestCase):
                         _escaped_child("closing", 456, registered), not accepted
                     )
 
+    @unittest.skipUnless(sys.platform == "linux", "Linux diagnostic I/O failures")
+    def test_diagnostic_io_failure_does_not_interrupt_shutdown(self) -> None:
+        from ecu_tools.owner import Registry
+
+        for failure in ("open", "write"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                registry = Registry("token", root / "owner.sock")
+                scopes = []
+                try:
+                    for script in (
+                        "import sys; sys.exit(7)",
+                        "import time; time.sleep(30)",
+                    ):
+                        registration = registry.dispatch(
+                            {
+                                "token": "token",
+                                "op": "reserve",
+                                "argv": [sys.executable, "-I", "-c", script],
+                                "cwd": str(root),
+                                "log_directory": str(root),
+                                "deadline_ns": time.monotonic_ns() + 10_000_000_000,
+                            }
+                        )
+                        registry.dispatch(
+                            {
+                                "token": "token",
+                                "op": "release",
+                                "scope": registration["scope"],
+                            }
+                        )
+                        scopes.append(registry.scopes[registration["scope"]])
+                    first, sibling = scopes
+                    self.assertEqual(first.child.wait(timeout=5), 7)
+                    first.stderr = (
+                        root / "missing" / "stderr"
+                        if failure == "open"
+                        else Path("/dev/full")
+                    )
+                    with patch(
+                        "ecu_tools.owner._escaped_child",
+                        side_effect=lambda scope, *_, identity=first.identity: scope == identity,
+                    ):
+                        response = registry.dispatch(
+                            {"token": "token", "op": "shutdown"}
+                        )
+                    self.assertEqual(response["status"], "cleanup_unconfirmed")
+                    self.assertEqual(first.result["status"], "cleanup_unconfirmed")
+                    self.assertEqual(first.result["exit_code"], 7)
+                    self.assertEqual(sibling.result["status"], "cancelled")
+                    self.assertEqual(sibling.result["exit_code"], -signal.SIGTERM)
+                    self.assertIsNotNone(sibling.child.poll())
+                    self.assertTrue(_gone(sibling.child.pid))
+                finally:
+                    for scope in scopes:
+                        scope.stderr = root / "cleanup.log"
+                        registry._close(scope.identity, "cancelled")
+
     @unittest.skipUnless(sys.platform == "linux", "Linux adopted-child ownership")
     def test_sibling_zombie_is_reaped_without_changing_root_exit_codes(self) -> None:
         with tempfile.TemporaryDirectory() as name, Owner.start() as owner:

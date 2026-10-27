@@ -20,7 +20,7 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self
@@ -345,7 +345,8 @@ class Registry:
         )
         unconfirmed = group_alive or escaped_child
         if unconfirmed:
-            with scope.stderr.open("a", encoding="utf-8") as log:
+            # Diagnostic I/O must not interrupt this or any sibling closure.
+            with suppress(OSError), scope.stderr.open("a", encoding="utf-8") as log:
                 log.write(
                     f"\ncleanup_unconfirmed scope={scope.identity} pgid={scope.pgid} "
                     f"group_alive={group_alive} escaped_child={escaped_child} "
