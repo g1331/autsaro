@@ -106,7 +106,7 @@ void Server_Run(uint8, uint32 *);
 
 ### 文件内顺序
 
-`#include` → 宏 → 类型 → 数据（含 MemMap 段）→ `static` 函数原型 → 实现。不强制分隔横幅；MemMap 段按 `<MIP>_START_SEC_…`／`<MIP>_STOP_SEC_…` 成对出现。
+`#include` → 宏 → 类型 → 数据／函数声明 → 实现。MemMap成对包围代码／对象；头文件可在无其他预处理的辅助类型前开启首次START/include，类型本身不加段属性。
 
 ### 魔数
 
