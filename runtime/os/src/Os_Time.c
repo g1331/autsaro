@@ -98,7 +98,7 @@ OS_MEMMAP static uint32 alarm_index(AlarmType id)
     const Os_TimeConfigType *config = Os_Config->timing;
     if (config != NULL) {
         for (uint32 i = 0u; i < config->alarm_count; ++i) {
-            if (config->alarm_states[i].id == id) {
+            if (config->alarms[i].id == id) {
                 return i;
             }
         }
@@ -141,7 +141,7 @@ OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
     owner = configured_task(target, config->owner);
     if ((config->counter_count == 0u) || (config->counter_count > OS_MAX_COUNTERS) ||
         (config->counters == NULL) || (config->alarm_count > OS_MAX_ALARMS) ||
-        ((config->alarm_count != 0u) && (config->alarm_states == NULL)) ||
+        ((config->alarm_count != 0u) && (config->alarms == NULL)) ||
         ((config->wake_event != 0u) &&
          ((owner == NULL) || (owner->kind != OS_EXTENDED_TASK) || (owner->autostart_modes == 0u) ||
           ((target->category1_isrs & 2u) != 0u))) ||
@@ -172,7 +172,7 @@ OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
         return E_OS_ID;
     }
     for (i = 0u; i < config->alarm_count; ++i) {
-        const Os_AlarmConfigType *alarm = &config->alarm_states[i];
+        const Os_AlarmConfigType *alarm = &config->alarms[i];
         const Os_TaskConfigType *task = configured_task(target, alarm->task);
         const Os_CounterConfigType *counter = NULL;
         for (j = 0u; j < config->counter_count; ++j) {
@@ -216,7 +216,7 @@ OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
             return E_OS_VALUE;
         }
         for (j = 0u; j < i; ++j) {
-            if (alarm->id == config->alarm_states[j].id) {
+            if (alarm->id == config->alarms[j].id) {
                 return E_OS_ID;
             }
         }
@@ -264,7 +264,7 @@ OS_MEMMAP void Os_TimeAutostart(AppModeType mode)
     const Os_TimeConfigType *config = Os_Config->timing;
     if (config != NULL) {
         for (uint32 i = 0u; i < config->alarm_count; ++i) {
-            const Os_AlarmConfigType *alarm = &config->alarm_states[i];
+            const Os_AlarmConfigType *alarm = &config->alarms[i];
             if ((alarm->autostart_modes & mode) != 0u) {
                 uint32 counter = counter_index(alarm->counter);
                 alarm_states[i].active = 1u;
@@ -311,7 +311,7 @@ OS_MEMMAP void Os_TimeReportAction(StatusType status)
 
 OS_MEMMAP static void action(uint32 index)
 {
-    const Os_AlarmConfigType *alarm = &Os_Config->timing->alarm_states[index];
+    const Os_AlarmConfigType *alarm = &Os_Config->timing->alarms[index];
     StatusType status = E_OK;
     boolean valid = TRUE;
     Os_ArtiInternalEnter();
@@ -364,15 +364,15 @@ OS_MEMMAP static void advance_counter(uint32 counter)
         if (current->alarm < config->alarm_count) {
             uint32 i = current->alarm;
             ++current->alarm;
-            if ((config->alarm_states[i].counter == config->counters[current->counter].id) &&
+            if ((config->alarms[i].counter == config->counters[current->counter].id) &&
                 (alarm_states[i].active != 0u)) {
                 configASSERT(alarm_states[i].remaining != 0u);
                 --alarm_states[i].remaining;
                 if (alarm_states[i].remaining == 0u) {
                     alarm_states[i].remaining = alarm_states[i].cycle;
                     alarm_states[i].active = (alarm_states[i].cycle == 0u) ? 0u : 1u;
-                    if (config->alarm_states[i].action == OS_ALARM_INCREMENT_COUNTER) {
-                        uint32 child = counter_index(config->alarm_states[i].increment_counter);
+                    if (config->alarms[i].action == OS_ALARM_INCREMENT_COUNTER) {
+                        uint32 child = counter_index(config->alarms[i].increment_counter);
                         configASSERT(depth < OS_MAX_COUNTERS);
                         work[depth] = (Os_CounterWorkType){child, 0u, 1u};
                         ++depth;
@@ -489,8 +489,7 @@ OS_MEMMAP static StatusType implementation_GetAlarmBase(AlarmType AlarmID, Alarm
     if (index == OS_MAX_ALARMS) {
         return E_OS_ID;
     }
-    counter =
-        &Os_Config->timing->counters[counter_index(Os_Config->timing->alarm_states[index].counter)];
+    counter = &Os_Config->timing->counters[counter_index(Os_Config->timing->alarms[index].counter)];
     Info->maxallowedvalue = counter->maximum;
     Info->ticksperbase = counter->ticks_per_base;
     Info->mincycle = counter->minimum_cycle;
@@ -540,7 +539,7 @@ OS_MEMMAP static StatusType set_alarm(AlarmType id, TickType start, TickType cyc
     if (index == OS_MAX_ALARMS) {
         return E_OS_ID;
     }
-    counter = counter_index(Os_Config->timing->alarm_states[index].counter);
+    counter = counter_index(Os_Config->timing->alarms[index].counter);
     if ((start > Os_Config->timing->counters[counter].maximum) ||
         ((absolute == 0) && (start == 0u)) ||
         (valid_cycle(&Os_Config->timing->counters[counter], cycle) == 0)) {
