@@ -4,9 +4,6 @@
 #define SCHM_DCM_H
 #include "Rte_Version.h"
 #include "SchM_Dcm_Type.h"
-#ifdef __cplusplus
-extern "C" {
-#endif
 #include "Rte_Dcm_Type.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
 #if !defined(DCM_AR_RELEASE_MAJOR_VERSION) || !defined(DCM_AR_RELEASE_MINOR_VERSION)
@@ -15,6 +12,9 @@ extern "C" {
 #error "SchM_Dcm.h -> Rte_Dcm_Type.h: incompatible AUTOSAR release"
 #endif
 #include "Rte.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define RTE_Rte_START_SEC_CODE
 #include "Rte_MemMap.h"
 /** Enter the Dcm state area (SWS_Rte_07250).
