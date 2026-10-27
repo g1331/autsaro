@@ -341,6 +341,107 @@ class BoundedProcessTests(unittest.TestCase):
         ):
             self.assertTrue(_escaped_child("closing", 456, {123}))
 
+    @unittest.skipUnless(sys.platform == "linux", "Linux registered session leaders")
+    def test_only_registered_sibling_session_leaders_bypass_proc_reads(self) -> None:
+        from ecu_tools.owner import _escaped_child
+
+        record = Path("/proc/owner/task/thread/children")
+        for registered, child_pgid, accepted in (
+            ({123}, 123, True),
+            (set(), 123, False),
+            ({123}, 999, False),
+        ):
+            with (
+                self.subTest(registered=registered, pgid=child_pgid),
+                patch.object(Path, "glob", return_value=[record]),
+                patch.object(Path, "read_text", return_value="123"),
+                patch("ecu_tools.owner.os.getpgid", return_value=child_pgid),
+            ):
+                with patch.object(
+                    Path,
+                    "read_bytes",
+                    side_effect=PermissionError(13, "unobservable child"),
+                ) as read:
+                    reasons: list[str] = []
+                    self.assertEqual(
+                        _escaped_child("closing", 456, registered, reasons),
+                        not accepted,
+                    )
+                    if accepted:
+                        read.assert_not_called()
+                        self.assertEqual(reasons, [])
+                    else:
+                        self.assertIn("pid=123 errno=13", reasons[0])
+                with patch.object(
+                    Path,
+                    "read_bytes",
+                    side_effect=[
+                        b"123 (child) R 1 999",
+                        b"ECU_OWNER_SCOPE=closing\0",
+                    ],
+                ):
+                    self.assertEqual(
+                        _escaped_child("closing", 456, registered), not accepted
+                    )
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux diagnostic I/O failures")
+    def test_diagnostic_io_failure_does_not_interrupt_shutdown(self) -> None:
+        from ecu_tools.owner import Registry
+
+        for failure in ("open", "write"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                registry = Registry("token", root / "owner.sock")
+                scopes = []
+                try:
+                    for script in (
+                        "import sys; sys.exit(7)",
+                        "import time; time.sleep(30)",
+                    ):
+                        registration = registry.dispatch(
+                            {
+                                "token": "token",
+                                "op": "reserve",
+                                "argv": [sys.executable, "-I", "-c", script],
+                                "cwd": str(root),
+                                "log_directory": str(root),
+                                "deadline_ns": time.monotonic_ns() + 10_000_000_000,
+                            }
+                        )
+                        registry.dispatch(
+                            {
+                                "token": "token",
+                                "op": "release",
+                                "scope": registration["scope"],
+                            }
+                        )
+                        scopes.append(registry.scopes[registration["scope"]])
+                    first, sibling = scopes
+                    self.assertEqual(first.child.wait(timeout=5), 7)
+                    first.stderr = (
+                        root / "missing" / "stderr"
+                        if failure == "open"
+                        else Path("/dev/full")
+                    )
+                    with patch(
+                        "ecu_tools.owner._escaped_child",
+                        side_effect=lambda scope, *_, identity=first.identity: scope == identity,
+                    ):
+                        response = registry.dispatch(
+                            {"token": "token", "op": "shutdown"}
+                        )
+                    self.assertEqual(response["status"], "cleanup_unconfirmed")
+                    self.assertEqual(first.result["status"], "cleanup_unconfirmed")
+                    self.assertEqual(first.result["exit_code"], 7)
+                    self.assertEqual(sibling.result["status"], "cancelled")
+                    self.assertEqual(sibling.result["exit_code"], -signal.SIGTERM)
+                    self.assertIsNotNone(sibling.child.poll())
+                    self.assertTrue(_gone(sibling.child.pid))
+                finally:
+                    for scope in scopes:
+                        scope.stderr = root / "cleanup.log"
+                        registry._close(scope.identity, "cancelled")
+
     @unittest.skipUnless(sys.platform == "linux", "Linux adopted-child ownership")
     def test_sibling_zombie_is_reaped_without_changing_root_exit_codes(self) -> None:
         with tempfile.TemporaryDirectory() as name, Owner.start() as owner:
@@ -560,8 +661,20 @@ class BoundedProcessTests(unittest.TestCase):
             ):
                 spec, path = self._spec(Path(name), "escape")
                 try:
-                    with self.assertRaisesRegex(OwnershipError, "cleanup_unconfirmed"):
+                    with self.assertRaisesRegex(
+                        OwnershipError, "cleanup_unconfirmed"
+                    ) as failure:
                         run_bounded(replace(spec, completion=completion))
+                    escaped_pid = next(
+                        pid for role, pid, _ in _records(path, 2) if role == "escape"
+                    )
+                    self.assertIn(
+                        "group_alive=False escaped_child=True", str(failure.exception)
+                    )
+                    self.assertIn(
+                        f"escaped_child pid={escaped_pid} scope_marker_present",
+                        str(failure.exception),
+                    )
                 finally:
                     for role, pid, _ in _records(path, 2):
                         if role == "escape":
