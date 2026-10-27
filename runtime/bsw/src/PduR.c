@@ -22,7 +22,7 @@
 #include "PduR_MemMap.h"
 /* PDUR_STATE protects pointer publication and reads. The accepted objects are immutable. Init
  * publishes only while NULL and never resets the published pointer. */
-static const PduR_PBConfigType *configuration
+static const PduR_PBConfigType *pdur_configuration
     PDUR_VAR_CLEARED; /**< First accepted route set; Init never replaces it. */
 #define PDUR_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "PduR_MemMap.h"
@@ -101,7 +101,7 @@ static PDUR_CODE const PduR_PBConfigType *PduR_Configuration(void)
 {
     const PduR_PBConfigType *config;
     SchM_Enter_PduR_PDUR_STATE();
-    config = configuration;
+    config = pdur_configuration;
     SchM_Exit_PduR_PDUR_STATE();
     return config;
 }
@@ -167,8 +167,8 @@ PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr)
 {
     if (PduR_Valid(ConfigPtr) == TRUE) {
         SchM_Enter_PduR_PDUR_STATE();
-        if (configuration == NULL_PTR) {
-            configuration = ConfigPtr;
+        if (pdur_configuration == NULL_PTR) {
+            pdur_configuration = ConfigPtr;
         }
         SchM_Exit_PduR_PDUR_STATE();
     }

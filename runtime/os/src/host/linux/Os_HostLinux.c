@@ -73,7 +73,7 @@ struct Os_HostHandleType {
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
 OS_MEMMAP static struct Os_HostHandleType
-    handles[OS_HOST_HANDLES]; /**< Atomically reserved slots, per-handle
+    host_handles[OS_HOST_HANDLES]; /**< Atomically reserved slots, per-handle
                    synchronization; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
@@ -142,15 +142,15 @@ OS_MEMMAP static HANDLE reserve_handle(Os_HostKindType kind)
     size_t index;
     for (index = 0u; index < OS_HOST_HANDLES; ++index) {
         int32_t expected = 0;
-        if (__atomic_compare_exchange_n(&handles[index].reserved,
+        if (__atomic_compare_exchange_n(&host_handles[index].reserved,
                                         &expected,
                                         1,
                                         false,
                                         __ATOMIC_SEQ_CST,
                                         __ATOMIC_SEQ_CST)) {
-            handles[index].kind = kind;
-            handles[index].fd = -1;
-            return &handles[index];
+            host_handles[index].kind = kind;
+            host_handles[index].fd = -1;
+            return &host_handles[index];
         }
     }
     return NULL;

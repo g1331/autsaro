@@ -39,7 +39,7 @@ OS_MEMMAP static StackType_t
 #define OS_START_SEC_VAR_CLEARED_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP static TaskHandle_t
-    handles[OS_MAX_TASKS]; /**< Bootstrap-published Task handles; no Init reset. */
+    task_handles[OS_MAX_TASKS]; /**< Bootstrap-published Task handles; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_PTR
 #include "Os_MemMap.h"
 typedef struct {
@@ -586,8 +586,8 @@ OS_MEMMAP StatusType Os_BackendTaskId(TaskRefType id)
     Os_BackendGuardService();
     *id = INVALID_TASK;
     for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
-        if (handles[i] == xTaskGetCurrentTaskHandle()) {
-            if (eTaskGetState(handles[i]) == eRunning) {
+        if (task_handles[i] == xTaskGetCurrentTaskHandle()) {
+            if (eTaskGetState(task_handles[i]) == eRunning) {
                 *id = Os_Config->tasks[i].id;
                 break;
             }
@@ -693,7 +693,7 @@ OS_MEMMAP static void rebase_orders(void)
     }
     for (i = 0u; i < Os_Config->task_count; ++i) {
         if (activations[i].count != 0u) {
-            vTaskOsSetReadySequence(handles[i], ready_sequences[i]);
+            vTaskOsSetReadySequence(task_handles[i], ready_sequences[i]);
         }
     }
     request_sequence = rank;
@@ -730,7 +730,7 @@ OS_MEMMAP void Os_BackendBeforeSelect(const void *current, const void *next)
         if (Os_TargetReady() != 0) {
             if (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) {
                 for (uint32 i = 0u; i < Os_Config->task_count; ++i) {
-                    if (handles[i] == current) {
+                    if (task_handles[i] == current) {
                         leave_running(i);
                         break;
                     }
@@ -746,7 +746,7 @@ OS_MEMMAP void Os_BackendOnSwitch(void)
         arti_observe_tasks();
         uint32 i;
         for (i = 0u; i < Os_Config->task_count; ++i) {
-            if (handles[i] == xTaskGetCurrentTaskHandle()) {
+            if (task_handles[i] == xTaskGetCurrentTaskHandle()) {
                 acquire_internal(i);
                 arti_observe_tasks();
                 if (running_hook_task != i) {
@@ -773,7 +773,7 @@ OS_MEMMAP static TaskStateType native_task_state(uint32 index)
     }
     TaskStateType state = SUSPENDED;
     boolean valid = TRUE;
-    switch (eTaskGetState(handles[index])) {
+    switch (eTaskGetState(task_handles[index])) {
         case eRunning:
             state = RUNNING;
             break;
@@ -807,7 +807,7 @@ OS_MEMMAP static void arti_observe_tasks(void)
         completed[i] = arti_completed[i];
         arti_completed[i] = 0u;
         Os_ArtiTasks[i].state = native_task_state(i);
-        Os_ArtiTasks[i].priority = (uint8)uxTaskPriorityGet(handles[i]);
+        Os_ArtiTasks[i].priority = (uint8)uxTaskPriorityGet(task_handles[i]);
         Os_ArtiTasks[i].activations = activations[i].count;
         Os_ArtiTasks[i].events = task_events[i];
         Os_ArtiTasks[i].wait_mask = wait_masks[i];
@@ -902,8 +902,8 @@ OS_MEMMAP static void acquire_internal(uint32 index)
     if ((ceiling != 0u) && (internal_held[index] == 0u)) {
         configASSERT(resource_depth[index] == 0u);
         internal_held[index] = 1u;
-        if (uxTaskPriorityGet(handles[index]) < ceiling) {
-            vTaskPrioritySet(handles[index], ceiling);
+        if (uxTaskPriorityGet(task_handles[index]) < ceiling) {
+            vTaskPrioritySet(task_handles[index], ceiling);
         }
     }
 }
@@ -913,7 +913,7 @@ OS_MEMMAP static void release_internal(uint32 index)
     if (internal_held[index] != 0u) {
         configASSERT(resource_depth[index] == 0u);
         internal_held[index] = 0u;
-        vTaskPrioritySet(handles[index], Os_Config->tasks[index].priority);
+        vTaskPrioritySet(task_handles[index], Os_Config->tasks[index].priority);
     }
 }
 #define OS_STOP_SEC_CODE
@@ -1229,7 +1229,7 @@ OS_MEMMAP static void stop_scheduler_after_actors(void) {}
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static DWORD WINAPI control(void *argument)
+OS_MEMMAP static DWORD WINAPI control_actor(void *argument)
 {
     HANDLE event = (argument == NULL) ? close_event : backup_event;
     uint32 i;
@@ -1658,7 +1658,7 @@ OS_MEMMAP static void bootstrap(void *argument)
     taskENTER_CRITICAL();
     for (i = 0u; i < Os_Config->task_count; ++i) {
         if ((Os_Config->tasks[i].autostart_modes & startup_mode) != 0u) {
-            vTaskResume(handles[i]);
+            vTaskResume(task_handles[i]);
         }
     }
     Os_TimeAutostart(startup_mode);
@@ -1752,9 +1752,13 @@ OS_MEMMAP static void start_controllers(void)
     controller_registered[0] = Os_PortEvent(NULL, 0, 0, NULL);
     controller_registered[1] = Os_PortEvent(NULL, 0, 0, NULL);
     control_thread =
-        Os_PortThread(NULL, 262144u, &control, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
-    backup_thread = Os_PortThread(
-        NULL, 262144u, &control, (void *)&backup_thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        Os_PortThread(NULL, 262144u, &control_actor, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+    backup_thread = Os_PortThread(NULL,
+                                  262144u,
+                                  &control_actor,
+                                  (void *)&backup_thread,
+                                  STACK_SIZE_PARAM_IS_A_RESERVATION,
+                                  NULL);
     if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
@@ -1792,18 +1796,18 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
         if ((Os_Config->tasks[i].autostart_modes & mode) != 0u) {
             append_activation(i);
         }
-        handles[i] = xTaskCreateStatic(&task_entry,
-                                       (const char *)Os_Config->tasks[i].name,
-                                       512,
-                                       &task_memory[i],
-                                       Os_Config->tasks[i].priority,
-                                       task_buffers[i],
-                                       &task_memory[i]);
-        configASSERT(handles[i] != NULL);
+        task_handles[i] = xTaskCreateStatic(&task_entry,
+                                            (const char *)Os_Config->tasks[i].name,
+                                            512,
+                                            &task_memory[i],
+                                            Os_Config->tasks[i].priority,
+                                            task_buffers[i],
+                                            &task_memory[i]);
+        configASSERT(task_handles[i] != NULL);
         vTaskOsSetReadySequence(
-            handles[i],
+            task_handles[i],
             (activations[i].count == 0u) ? 0u : activations[i].requests[activations[i].head]);
-        vTaskSuspend(handles[i]);
+        vTaskSuspend(task_handles[i]);
     }
     configASSERT(xTaskCreateStatic(&bootstrap,
                                    "Os_Bootstrap",
@@ -1851,7 +1855,7 @@ OS_MEMMAP StatusType Os_BackendState(TaskType id, TaskStateRefType state)
             StatusType status = E_OK;
             taskENTER_CRITICAL();
             Os_BackendGuardService();
-            eTaskState actual = eTaskGetState(handles[i]);
+            eTaskState actual = eTaskGetState(task_handles[i]);
             switch (actual) {
                 case eRunning:
                     *state = RUNNING;
@@ -1946,18 +1950,18 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
         rebase_orders();
     }
     if (queue->count == 0u) {
-        configASSERT(eTaskGetState(handles[index]) == eSuspended);
+        configASSERT(eTaskGetState(task_handles[index]) == eSuspended);
     }
     append_activation(index);
     if (queue->count == 1u) {
-        vTaskOsSetReadySequence(handles[index], ready_sequences[index]);
+        vTaskOsSetReadySequence(task_handles[index], ready_sequences[index]);
         if (stack->role == 'S') {
-            BaseType_t wake = xTaskResumeFromISR(handles[index]);
+            BaseType_t wake = xTaskResumeFromISR(task_handles[index]);
             if (wake != pdFALSE) {
                 (void)InterlockedExchange(&isr_reschedule, 1);
             }
         } else {
-            vTaskResume(handles[index]);
+            vTaskResume(task_handles[index]);
         }
     }
     arti_observe_tasks();
@@ -1975,7 +1979,7 @@ OS_MEMMAP static uint32 current_task_index(void)
     if ((stack != NULL) && (stack->role == 'T')) {
         if (Os_BackendReady() != 0) {
             for (uint32 index = 0u; index < Os_Config->task_count; ++index) {
-                if (handles[index] == xTaskGetCurrentTaskHandle()) {
+                if (task_handles[index] == xTaskGetCurrentTaskHandle()) {
                     result = index;
                     break;
                 }
@@ -2014,7 +2018,7 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
     }
     current = xTaskGetCurrentTaskHandle();
     for (index = 0u; index < Os_Config->task_count; ++index) {
-        if (handles[index] == current) {
+        if (task_handles[index] == current) {
             break;
         }
     }
@@ -2066,7 +2070,7 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
         /* Keep the kernel query inside the assertion's evaluation boundary. */
         configASSERT((activations[target].count != 0u)
                          ? TRUE
-                         : (eTaskGetState(handles[target]) == eSuspended));
+                         : (eTaskGetState(task_handles[target]) == eSuspended));
     }
     /* PostTaskHook observes the outgoing activation while still RUNNING,
      * before changing its queue/state or releasing its internal resource. */
@@ -2079,10 +2083,10 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
     if (chain != 0) {
         append_activation(target);
         if (target != index) {
-            vTaskOsSetReadySequence(handles[target],
+            vTaskOsSetReadySequence(task_handles[target],
                                     activations[target].requests[activations[target].head]);
             if (activations[target].count == 1u) {
-                vTaskResume(handles[target]);
+                vTaskResume(task_handles[target]);
             }
         }
     }
@@ -2174,7 +2178,7 @@ OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
             status = E_OS_ACCESS;
         } else {
             saved_priorities[task][depth] =
-                (task >= OS_MAX_TASKS) ? 0u : uxTaskPriorityGet(handles[task]);
+                (task >= OS_MAX_TASKS) ? 0u : uxTaskPriorityGet(task_handles[task]);
             saved_interrupt_ceilings[task][depth] =
                 InterlockedCompareExchange(&interrupt_ceiling, 0, 0);
             owned_resources[task][depth] = resource;
@@ -2184,7 +2188,7 @@ OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
                 const UBaseType_t ceiling =
                     (config->isr_access != 0u) ? (OS_MAX_PRIORITY + 1u) : config->ceiling;
                 if (ceiling > saved_priorities[task][depth]) {
-                    vTaskPrioritySet(handles[task], ceiling);
+                    vTaskPrioritySet(task_handles[task], ceiling);
                 }
             }
             if (config->isr_access != 0u) {
@@ -2203,7 +2207,7 @@ OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
         resource_owner[resource] = 0u;
         (void)InterlockedExchange(&interrupt_ceiling, saved_interrupt_ceilings[task][depth - 1u]);
         if (task < OS_MAX_TASKS) {
-            vTaskPrioritySet(handles[task], saved_priorities[task][depth - 1u]);
+            vTaskPrioritySet(task_handles[task], saved_priorities[task][depth - 1u]);
         }
     }
     arti_observe_tasks();
@@ -2255,7 +2259,7 @@ OS_MEMMAP StatusType Os_BackendWait(EventMaskType mask)
         task_waiting[index] = 1u;
         release_internal(index);
         ready_sequences[index] = 0u;
-        vTaskOsSetReadySequence(handles[index], 0u);
+        vTaskOsSetReadySequence(task_handles[index], 0u);
         /* Native suspended-list membership plus the live activation/wait
          * predicate represents automotive WAITING. The ISR cannot interleave
          * before this complete transaction releases the port critical section. */
@@ -2320,13 +2324,13 @@ OS_MEMMAP StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskR
             ready_sequences[index] = request_sequence;
             task_waiting[index] = 0u;
             wait_masks[index] = 0u;
-            vTaskOsSetReadySequence(handles[index], ready_sequences[index]);
+            vTaskOsSetReadySequence(task_handles[index], ready_sequences[index]);
             if (stack->role == 'S') {
-                if (xTaskResumeFromISR(handles[index]) != pdFALSE) {
+                if (xTaskResumeFromISR(task_handles[index]) != pdFALSE) {
                     (void)InterlockedExchange(&isr_reschedule, 1);
                 }
             } else {
-                vTaskResume(handles[index]);
+                vTaskResume(task_handles[index]);
             }
         }
     }
@@ -2360,9 +2364,9 @@ OS_MEMMAP StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
         snapshot.requests[j] =
             activations[index].requests[(activations[index].head + j) % OS_MAX_ACTIVATIONS];
     }
-    snapshot.kernel_sequence = ullTaskOsReadySequence(handles[index]);
+    snapshot.kernel_sequence = ullTaskOsReadySequence(task_handles[index]);
     snapshot.events = task_events[index];
-    snapshot.effective_priority = (uint8)uxTaskPriorityGet(handles[index]);
+    snapshot.effective_priority = (uint8)uxTaskPriorityGet(task_handles[index]);
     snapshot.resource_count = resource_depth[index];
     snapshot.internal_held = internal_held[index];
     snapshot.internal_ceiling = internal_ceiling(index);

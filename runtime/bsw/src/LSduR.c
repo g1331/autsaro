@@ -10,7 +10,7 @@
 #include "LSduR_MemMap.h"
 /* LSDUR_STATE protects pointer publication and reads. The accepted objects are immutable. Init
  * publishes only while NULL and never resets the published pointer. */
-static const LSduR_PBConfigType *configuration
+static const LSduR_PBConfigType *lsdur_configuration
     LSDUR_VAR_CLEARED; /**< First accepted route set; Init never replaces it. */
 #define LSDUR_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "LSduR_MemMap.h"
@@ -59,7 +59,7 @@ static LSDUR_CODE const LSduR_PBConfigType *LSduR_Configuration(void)
 {
     const LSduR_PBConfigType *config;
     SchM_Enter_LSduR_LSDUR_STATE();
-    config = configuration;
+    config = lsdur_configuration;
     SchM_Exit_LSduR_LSDUR_STATE();
     return config;
 }
@@ -69,8 +69,8 @@ LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr)
 {
     if (LSduR_Valid(ConfigPtr) == TRUE) {
         SchM_Enter_LSduR_LSDUR_STATE();
-        if (configuration == NULL_PTR) {
-            configuration = ConfigPtr;
+        if (lsdur_configuration == NULL_PTR) {
+            lsdur_configuration = ConfigPtr;
         }
         SchM_Exit_LSduR_LSDUR_STATE();
     }

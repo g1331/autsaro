@@ -5,7 +5,7 @@
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 OS_MEMMAP static TickType
-    values[OS_MAX_COUNTERS]; /**< Port-locked Counter ticks; TimeInit does not reset. */
+    counter_values[OS_MAX_COUNTERS]; /**< Port-locked Counter ticks; TimeInit does not reset. */
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -17,20 +17,20 @@ OS_MEMMAP static TickType
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP const TickType *const Os_ArtiCounters =
-    values; /**< Fixed Counter ticks tool view; C init only, never reset. */
+    counter_values; /**< Fixed Counter ticks tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
 #include "Os_MemMap.h"
 typedef Os_ArtiAlarmStateType Os_AlarmStateType;
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 OS_MEMMAP static Os_AlarmStateType
-    alarms[OS_MAX_ALARMS]; /**< Port-locked Alarm state; TimeInit does not reset. */
+    alarm_states[OS_MAX_ALARMS]; /**< Port-locked Alarm state; TimeInit does not reset. */
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP const Os_ArtiAlarmStateType *const Os_ArtiAlarms =
-    alarms; /**< Fixed Alarm state tool view; C init only, never reset. */
+    alarm_states; /**< Fixed Alarm state tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
@@ -98,7 +98,7 @@ OS_MEMMAP static uint32 alarm_index(AlarmType id)
     const Os_TimeConfigType *config = Os_Config->timing;
     if (config != NULL) {
         for (uint32 i = 0u; i < config->alarm_count; ++i) {
-            if (config->alarms[i].id == id) {
+            if (config->alarm_states[i].id == id) {
                 return i;
             }
         }
@@ -141,7 +141,7 @@ OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
     owner = configured_task(target, config->owner);
     if ((config->counter_count == 0u) || (config->counter_count > OS_MAX_COUNTERS) ||
         (config->counters == NULL) || (config->alarm_count > OS_MAX_ALARMS) ||
-        ((config->alarm_count != 0u) && (config->alarms == NULL)) ||
+        ((config->alarm_count != 0u) && (config->alarm_states == NULL)) ||
         ((config->wake_event != 0u) &&
          ((owner == NULL) || (owner->kind != OS_EXTENDED_TASK) || (owner->autostart_modes == 0u) ||
           ((target->category1_isrs & 2u) != 0u))) ||
@@ -172,7 +172,7 @@ OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
         return E_OS_ID;
     }
     for (i = 0u; i < config->alarm_count; ++i) {
-        const Os_AlarmConfigType *alarm = &config->alarms[i];
+        const Os_AlarmConfigType *alarm = &config->alarm_states[i];
         const Os_TaskConfigType *task = configured_task(target, alarm->task);
         const Os_CounterConfigType *counter = NULL;
         for (j = 0u; j < config->counter_count; ++j) {
@@ -216,7 +216,7 @@ OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
             return E_OS_VALUE;
         }
         for (j = 0u; j < i; ++j) {
-            if (alarm->id == config->alarms[j].id) {
+            if (alarm->id == config->alarm_states[j].id) {
                 return E_OS_ID;
             }
         }
@@ -241,7 +241,7 @@ OS_MEMMAP StatusType Os_TimeValidate(const Os_TargetConfigType *target)
 
 OS_MEMMAP static TickType absolute_distance(uint32 counter, TickType start)
 {
-    TickType current = values[counter];
+    TickType current = counter_values[counter];
     TickType modulus = Os_Config->timing->counters[counter].maximum + UINT64_C(1);
     return (start > current) ? (start - current) : (modulus - (current - start));
 }
@@ -264,14 +264,14 @@ OS_MEMMAP void Os_TimeAutostart(AppModeType mode)
     const Os_TimeConfigType *config = Os_Config->timing;
     if (config != NULL) {
         for (uint32 i = 0u; i < config->alarm_count; ++i) {
-            const Os_AlarmConfigType *alarm = &config->alarms[i];
+            const Os_AlarmConfigType *alarm = &config->alarm_states[i];
             if ((alarm->autostart_modes & mode) != 0u) {
                 uint32 counter = counter_index(alarm->counter);
-                alarms[i].active = 1u;
-                alarms[i].cycle = alarm->cycle;
-                alarms[i].remaining = (alarm->absolute != 0u)
-                                          ? absolute_distance(counter, alarm->start)
-                                          : alarm->start;
+                alarm_states[i].active = 1u;
+                alarm_states[i].cycle = alarm->cycle;
+                alarm_states[i].remaining = (alarm->absolute != 0u)
+                                                ? absolute_distance(counter, alarm->start)
+                                                : alarm->start;
             }
         }
     }
@@ -311,7 +311,7 @@ OS_MEMMAP void Os_TimeReportAction(StatusType status)
 
 OS_MEMMAP static void action(uint32 index)
 {
-    const Os_AlarmConfigType *alarm = &Os_Config->timing->alarms[index];
+    const Os_AlarmConfigType *alarm = &Os_Config->timing->alarm_states[index];
     StatusType status = E_OK;
     boolean valid = TRUE;
     Os_ArtiInternalEnter();
@@ -342,7 +342,7 @@ OS_MEMMAP static void action(uint32 index)
 
 OS_MEMMAP TickType Os_TimeCounterValue(CounterType counter)
 {
-    return values[counter_index(counter)];
+    return counter_values[counter_index(counter)];
 }
 
 OS_MEMMAP static void advance_counter(uint32 counter)
@@ -356,29 +356,30 @@ OS_MEMMAP static void advance_counter(uint32 counter)
     uint32 depth = 1u;
     const Os_TimeConfigType *config = Os_Config->timing;
     work[0] = (Os_CounterWorkType){counter, 0u, 0u};
-    values[counter] = (values[counter] == config->counters[counter].maximum)
-                          ? 0u
-                          : (values[counter] + UINT64_C(1));
+    counter_values[counter] = (counter_values[counter] == config->counters[counter].maximum)
+                                  ? 0u
+                                  : (counter_values[counter] + UINT64_C(1));
     while (depth != 0u) {
         Os_CounterWorkType *current = &work[depth - 1u];
         if (current->alarm < config->alarm_count) {
             uint32 i = current->alarm;
             ++current->alarm;
-            if ((config->alarms[i].counter == config->counters[current->counter].id) &&
-                (alarms[i].active != 0u)) {
-                configASSERT(alarms[i].remaining != 0u);
-                --alarms[i].remaining;
-                if (alarms[i].remaining == 0u) {
-                    alarms[i].remaining = alarms[i].cycle;
-                    alarms[i].active = (alarms[i].cycle == 0u) ? 0u : 1u;
-                    if (config->alarms[i].action == OS_ALARM_INCREMENT_COUNTER) {
-                        uint32 child = counter_index(config->alarms[i].increment_counter);
+            if ((config->alarm_states[i].counter == config->counters[current->counter].id) &&
+                (alarm_states[i].active != 0u)) {
+                configASSERT(alarm_states[i].remaining != 0u);
+                --alarm_states[i].remaining;
+                if (alarm_states[i].remaining == 0u) {
+                    alarm_states[i].remaining = alarm_states[i].cycle;
+                    alarm_states[i].active = (alarm_states[i].cycle == 0u) ? 0u : 1u;
+                    if (config->alarm_states[i].action == OS_ALARM_INCREMENT_COUNTER) {
+                        uint32 child = counter_index(config->alarm_states[i].increment_counter);
                         configASSERT(depth < OS_MAX_COUNTERS);
                         work[depth] = (Os_CounterWorkType){child, 0u, 1u};
                         ++depth;
-                        values[child] = (values[child] == config->counters[child].maximum)
-                                            ? 0u
-                                            : (values[child] + UINT64_C(1));
+                        counter_values[child] =
+                            (counter_values[child] == config->counters[child].maximum)
+                                ? 0u
+                                : (counter_values[child] + UINT64_C(1));
                     } else {
                         action(i);
                     }
@@ -432,7 +433,7 @@ OS_MEMMAP static StatusType implementation_GetCounterValue(CounterType CounterID
     }
     taskENTER_CRITICAL();
     Os_BackendGuardService();
-    *Value = values[index];
+    *Value = counter_values[index];
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
     return E_OK;
@@ -461,10 +462,11 @@ OS_MEMMAP static StatusType implementation_GetElapsedValue(CounterType CounterID
     if (*Value > Os_Config->timing->counters[index].maximum) {
         status = E_OS_VALUE;
     } else {
-        *ElapsedValue = (values[index] >= *Value) ? (values[index] - *Value)
-                                                  : (Os_Config->timing->counters[index].maximum -
-                                                     *Value + UINT64_C(1) + values[index]);
-        *Value = values[index];
+        *ElapsedValue = (counter_values[index] >= *Value)
+                            ? (counter_values[index] - *Value)
+                            : (Os_Config->timing->counters[index].maximum - *Value + UINT64_C(1) +
+                               counter_values[index]);
+        *Value = counter_values[index];
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
@@ -487,7 +489,8 @@ OS_MEMMAP static StatusType implementation_GetAlarmBase(AlarmType AlarmID, Alarm
     if (index == OS_MAX_ALARMS) {
         return E_OS_ID;
     }
-    counter = &Os_Config->timing->counters[counter_index(Os_Config->timing->alarms[index].counter)];
+    counter =
+        &Os_Config->timing->counters[counter_index(Os_Config->timing->alarm_states[index].counter)];
     Info->maxallowedvalue = counter->maximum;
     Info->ticksperbase = counter->ticks_per_base;
     Info->mincycle = counter->minimum_cycle;
@@ -513,10 +516,10 @@ OS_MEMMAP static StatusType implementation_GetAlarm(AlarmType AlarmID, TickRefTy
     }
     taskENTER_CRITICAL();
     Os_BackendGuardService();
-    if (alarms[index].active == 0u) {
+    if (alarm_states[index].active == 0u) {
         status = E_OS_NOFUNC;
     } else {
-        *Tick = alarms[index].remaining;
+        *Tick = alarm_states[index].remaining;
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
@@ -537,7 +540,7 @@ OS_MEMMAP static StatusType set_alarm(AlarmType id, TickType start, TickType cyc
     if (index == OS_MAX_ALARMS) {
         return E_OS_ID;
     }
-    counter = counter_index(Os_Config->timing->alarms[index].counter);
+    counter = counter_index(Os_Config->timing->alarm_states[index].counter);
     if ((start > Os_Config->timing->counters[counter].maximum) ||
         ((absolute == 0) && (start == 0u)) ||
         (valid_cycle(&Os_Config->timing->counters[counter], cycle) == 0)) {
@@ -545,12 +548,12 @@ OS_MEMMAP static StatusType set_alarm(AlarmType id, TickType start, TickType cyc
     }
     taskENTER_CRITICAL();
     Os_BackendGuardService();
-    if (alarms[index].active != 0u) {
+    if (alarm_states[index].active != 0u) {
         status = E_OS_STATE;
     } else {
-        alarms[index].remaining = (absolute != 0) ? absolute_distance(counter, start) : start;
-        alarms[index].cycle = cycle;
-        alarms[index].active = 1u;
+        alarm_states[index].remaining = (absolute != 0) ? absolute_distance(counter, start) : start;
+        alarm_states[index].cycle = cycle;
+        alarm_states[index].active = 1u;
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
@@ -586,12 +589,12 @@ OS_MEMMAP static StatusType implementation_CancelAlarm(AlarmType AlarmID)
     }
     taskENTER_CRITICAL();
     Os_BackendGuardService();
-    if (alarms[index].active == 0u) {
+    if (alarm_states[index].active == 0u) {
         status = E_OS_NOFUNC;
     } else {
-        alarms[index].active = 0u;
-        alarms[index].remaining = 0u;
-        alarms[index].cycle = 0u;
+        alarm_states[index].active = 0u;
+        alarm_states[index].remaining = 0u;
+        alarm_states[index].cycle = 0u;
     }
     taskEXIT_CRITICAL();
     Os_BackendGuardService();
@@ -894,7 +897,7 @@ OS_MEMMAP void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskTyp
         completion.epoch = requested_epoch;
         completion.ticket = requested_epoch;
         completion.kernel_tick = (uint32)xTaskGetTickCount();
-        completion.counter = values[counter_index(config->system_counter)];
+        completion.counter = counter_values[counter_index(config->system_counter)];
         completion.alarm_actions = action_count;
         completion.action_errors = error_count;
         if (Os_HostSetEvent(completion_event) == 0) {
@@ -929,7 +932,7 @@ OS_MEMMAP void Os_TimeTestSeed(uint64 epoch, uint32 kernel_tick, TickType value)
         Os_Config->timing->counters[counter_index(Os_Config->timing->system_counter)].maximum);
     configASSERT(InterlockedCompareExchange(&tick_state, 0, 0) == 0);
     vTaskOsTestTick((TickType_t)kernel_tick);
-    values[counter_index(Os_Config->timing->system_counter)] = value;
+    counter_values[counter_index(Os_Config->timing->system_counter)] = value;
     confirmed_epoch = epoch;
     completion.epoch = epoch;
     completion.ticket = epoch;

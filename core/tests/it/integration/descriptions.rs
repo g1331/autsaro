@@ -192,7 +192,7 @@ fn os_memory_mapping_description_uses_delivered_sections_and_one_header() {
     );
     let config = source("generated/src/Ecu_Config.c");
     assert!(config.contains("OS_MEMMAP const Os_TargetConfigType Ecu_OsConfig"));
-    assert!(config.contains("OS_MEMMAP static const Os_AlarmConfigType alarms[]"));
+    assert!(config.contains("OS_MEMMAP static const Os_AlarmConfigType configured_alarms[]"));
     assert!(config.contains("OS_START_SEC_CONFIG_DATA_PREBUILD_8"));
     assert!(config.contains("OS_START_SEC_CONFIG_DATA_PREBUILD_64"));
     let descriptor = xml

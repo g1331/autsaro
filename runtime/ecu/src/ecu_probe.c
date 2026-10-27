@@ -7,7 +7,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
-static void require(boolean condition)
+static void probe_require(boolean condition)
 {
     if (condition == FALSE) {
         ShutdownOS(E_OS_STATE);
@@ -47,13 +47,13 @@ static Os_HostThreadResultType control(void *argument)
     uint64_t started = Os_HostMonotonicMs();
     (void)argument;
     while (Ecu_TargetState() != ECU_TARGET_READY) {
-        require((Os_HostMonotonicMs() - started) < 5000u);
+        probe_require((Os_HostMonotonicMs() - started) < 5000u);
         Os_HostSleepMs(1u);
     }
     for (step = UINT64_C(1); step <= UINT64_C(20); ++step) {
         uint64_t ticket;
         Os_TickCompletionType completion;
-        require(Os_TargetAdvanceOneTick(step, &ticket) == E_OK);
+        probe_require(Os_TargetAdvanceOneTick(step, &ticket) == E_OK);
         started = Os_HostMonotonicMs();
         for (;;) {
             Ecu_OutputRecord output;
@@ -67,23 +67,23 @@ static Os_HostThreadResultType control(void *argument)
                 Os_HostTextField(&text, " id=", output.can_id);
                 Os_HostTextField(&text, " dlc=", output.dlc);
                 Os_HostTextByte(&text, '\n');
-                require(Os_HostTextWrite(&text) != 0);
-                require(Ecu_TargetConfirmOutput(output.ticket, output.pdu) == E_OK);
+                probe_require(Os_HostTextWrite(&text) != 0);
+                probe_require(Ecu_TargetConfirmOutput(output.ticket, output.pdu) == E_OK);
             } else {
-                require(status == E_OS_NOFUNC);
+                probe_require(status == E_OS_NOFUNC);
             }
             status = Os_TargetTickCompletion(ticket, &completion);
             if (status == E_OK) {
                 break;
             }
-            require(status == E_OS_NOFUNC);
-            require((Os_HostMonotonicMs() - started) < 5000u);
+            probe_require(status == E_OS_NOFUNC);
+            probe_require((Os_HostMonotonicMs() - started) < 5000u);
             Os_HostSleepMs(1u);
         }
-        require((completion.epoch == step) && (completion.kernel_tick == (uint32_t)step));
+        probe_require((completion.epoch == step) && (completion.kernel_tick == (uint32_t)step));
     }
-    require(Os_HostWriteBytes(
-                0, "ecu_probe completed=20\n", sizeof("ecu_probe completed=20\n") - 1u) != 0);
+    probe_require(Os_HostWriteBytes(
+                      0, "ecu_probe completed=20\n", sizeof("ecu_probe completed=20\n") - 1u) != 0);
     ShutdownOS(E_OK);
     return 0u;
 }

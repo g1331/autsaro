@@ -636,7 +636,7 @@ pub(super) fn os_configuration(
     let mut objects = Vec::new();
     if !groups.is_empty() {
         objects.push(c_layout::initializer(
-            "OS_MEMMAP static const Os_AlarmConfigType alarms[]",
+            "OS_MEMMAP static const Os_AlarmConfigType configured_alarms[]",
             "",
             &alarms,
         ));
@@ -712,7 +712,12 @@ pub(super) fn os_configuration(
         ("OS_OBJECTS", objects.join("\n")),
         (
             "ALARM_PTR",
-            if groups.is_empty() { "NULL" } else { "alarms" }.to_owned(),
+            if groups.is_empty() {
+                "NULL"
+            } else {
+                "configured_alarms"
+            }
+            .to_owned(),
         ),
         ("ALARM_COUNT", groups.len().to_string()),
         (

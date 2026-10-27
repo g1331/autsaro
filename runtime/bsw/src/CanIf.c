@@ -33,7 +33,7 @@
 /* CANIF_STATE protects every object below. Init and DeInit clear the configuration/controller state
  * and all Tx ledgers; generation and mode_writes advance instead of resetting, and stops is
  * preserved. */
-static const CanIf_ConfigType *configuration
+static const CanIf_ConfigType *canif_configuration
     CANIF_VAR_CLEARED; /**< Init installs or clears; DeInit clears. */
 static Can_ControllerStateType canif_controller_state
     CANIF_VAR_CLEARED; /**< Last indicated mode; Init sets STOPPED or UNINIT. */
@@ -121,7 +121,7 @@ static CANIF_CODE void CanIf_CancelAccepted(void)
 {
     uint16 i;
     ++stops;
-    for (i = 0u; i < configuration->transmit_count; ++i) {
+    for (i = 0u; i < canif_configuration->transmit_count; ++i) {
         owed[i] += accepted[i];
         accepted[i] = 0u;
     }
@@ -134,13 +134,13 @@ static CANIF_CODE void CanIf_DeliverOwed(void)
         PduIdType id = 0u;
         more = 0u;
         SchM_Enter_CanIf_CANIF_STATE();
-        if (configuration != NULL_PTR) {
+        if (canif_configuration != NULL_PTR) {
             uint16 i;
             i = 0u;
-            while ((i < configuration->transmit_count) && (more == 0u)) {
+            while ((i < canif_configuration->transmit_count) && (more == 0u)) {
                 if (owed[i] != 0u) {
                     --owed[i];
-                    id = configuration->transmit[i].pdu;
+                    id = canif_configuration->transmit[i].pdu;
                     more = 1u;
                 }
                 ++i;
@@ -157,10 +157,10 @@ CANIF_CODE void CanIf_Init(const CanIf_ConfigType *ConfigPtr)
 {
     SchM_Enter_CanIf_CANIF_STATE();
     if (CanIf_Valid(ConfigPtr) == TRUE) {
-        configuration = ConfigPtr;
+        canif_configuration = ConfigPtr;
         canif_controller_state = CAN_CS_STOPPED;
     } else {
-        configuration = NULL_PTR;
+        canif_configuration = NULL_PTR;
         canif_controller_state = CAN_CS_UNINIT;
     }
     CanIf_Reset();
@@ -169,7 +169,7 @@ CANIF_CODE void CanIf_Init(const CanIf_ConfigType *ConfigPtr)
 CANIF_CODE void CanIf_DeInit(void)
 {
     SchM_Enter_CanIf_CANIF_STATE();
-    configuration = NULL_PTR;
+    canif_configuration = NULL_PTR;
     canif_controller_state = CAN_CS_UNINIT;
     CanIf_Reset();
     SchM_Exit_CanIf_CANIF_STATE();
@@ -178,8 +178,8 @@ CANIF_CODE void CanIf_DeInit(void)
 static CANIF_CODE uint8 CanIf_Driver(uint8 ControllerId, uint8 *driver)
 {
     uint8 valid = 0u;
-    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller)) {
-        *driver = configuration->driver_controller;
+    if ((canif_configuration != NULL_PTR) && (ControllerId == canif_configuration->controller)) {
+        *driver = canif_configuration->driver_controller;
         valid = 1u;
     }
     return valid;
@@ -314,7 +314,7 @@ CANIF_CODE Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType
 {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
+    if ((canif_configuration != NULL_PTR) && (ControllerId == canif_configuration->controller) &&
         (PduModePtr != NULL_PTR)) {
         *PduModePtr = pdu_mode;
         result = E_OK;
@@ -333,11 +333,11 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
     uint32 lifetime = 0u;
     uint32 stop = 0u;
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
+    if ((canif_configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR)) {
         uint16 i;
-        for (i = 0u; i < configuration->transmit_count; ++i) {
-            const CanIf_TxPduConfigType *route = &configuration->transmit[i];
+        for (i = 0u; i < canif_configuration->transmit_count; ++i) {
+            const CanIf_TxPduConfigType *route = &canif_configuration->transmit[i];
             if (route->pdu == TxPduId) {
                 if (pdu_mode == CANIF_OFFLINE) {
                     errors[0] = CANIF_E_STOPPED;
@@ -354,7 +354,7 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
                     ++writing[i];
                     reserved = 1u;
                     index = i;
-                    hoh = configuration->transmit_hoh;
+                    hoh = canif_configuration->transmit_hoh;
                     pdu.length = (uint8)PduInfoPtr->SduLength;
                     pdu.id = route->can_id;
                     pdu.sdu = PduInfoPtr->SduDataPtr;
@@ -402,10 +402,10 @@ CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId)
 {
     uint8 deliver = 0u;
     SchM_Enter_CanIf_CANIF_STATE();
-    if (configuration != NULL_PTR) {
+    if (canif_configuration != NULL_PTR) {
         uint16 i;
-        for (i = 0u; i < configuration->transmit_count; ++i) {
-            if (configuration->transmit[i].pdu == CanTxPduId) {
+        for (i = 0u; i < canif_configuration->transmit_count; ++i) {
+            if (canif_configuration->transmit[i].pdu == CanTxPduId) {
                 uint8 answered = 1u;
                 if (accepted[i] != 0u) {
                     --accepted[i];
@@ -432,7 +432,7 @@ CANIF_CODE void CanIf_ControllerModeIndication(uint8 ControllerId,
 {
     CanIf_ModeNotificationType notify = NULL_PTR;
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (ControllerId == configuration->controller) &&
+    if ((canif_configuration != NULL_PTR) && (ControllerId == canif_configuration->controller) &&
         ((ControllerMode == CAN_CS_STARTED) || (ControllerMode == CAN_CS_STOPPED) ||
          (ControllerMode == CAN_CS_SLEEP))) {
         canif_controller_state = ControllerMode;
@@ -446,7 +446,7 @@ CANIF_CODE void CanIf_ControllerModeIndication(uint8 ControllerId,
         } else {
             /* STARTED keeps the PDU mode until the upper layer sets it. */
         }
-        notify = configuration->controller_mode;
+        notify = canif_configuration->controller_mode;
     }
     SchM_Exit_CanIf_CANIF_STATE();
     CanIf_DeliverOwed();
@@ -481,7 +481,7 @@ CANIF_CODE void CanIf_ControllerBusOff(uint8 ControllerId)
                 canif_controller_state = CAN_CS_STOPPED;
                 CanIf_CancelAccepted();
             }
-            notify = configuration->bus_off;
+            notify = canif_configuration->bus_off;
         }
         SchM_Exit_CanIf_CANIF_STATE();
     }
@@ -496,16 +496,16 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
     uint8 invalid_length = 0u;
     PduIdType id = 0u;
     SchM_Enter_CanIf_CANIF_STATE();
-    if ((configuration != NULL_PTR) && (Mailbox != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
+    if ((canif_configuration != NULL_PTR) && (Mailbox != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR) &&
-        (Mailbox->ControllerId == configuration->controller) &&
+        (Mailbox->ControllerId == canif_configuration->controller) &&
         /* Standard identifier without FD flag: STANDARD_NO_FD_CAN (SWS_CANIF_00877). */
-        (Mailbox->Hoh == configuration->receive_hoh) && (Mailbox->CanId <= 0x7ffu) &&
+        (Mailbox->Hoh == canif_configuration->receive_hoh) && (Mailbox->CanId <= 0x7ffu) &&
         (canif_controller_state == CAN_CS_STARTED) &&
         ((pdu_mode == CANIF_ONLINE) || (pdu_mode == CANIF_TX_OFFLINE))) {
         uint16 i;
-        for (i = 0u; i < configuration->receive_count; ++i) {
-            const CanIf_RxPduConfigType *route = &configuration->receive[i];
+        for (i = 0u; i < canif_configuration->receive_count; ++i) {
+            const CanIf_RxPduConfigType *route = &canif_configuration->receive[i];
             if (route->can_id == Mailbox->CanId) {
                 if ((PduInfoPtr->SduLength < route->minimum_length) ||
                     (PduInfoPtr->SduLength > 8u)) {
