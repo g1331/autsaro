@@ -94,6 +94,10 @@ callback-parameter旧7处R2.4均为匿名类型误报；新增xSTATIC_TIMER为�
 
 Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes.h集中原有PC与向量回调别名；类型头不承载对象／函数映射。LONG在Windows仍为32位long、Linux仍为int32_t；64位存储、HANDLE／DWORD／LPTHREAD_START_ROUTINE、Windows void*／Linux uintptr_t PC以及uint32(void)向量回调均保留。Schedule的私有别名直接使用原有Os_ArtiScheduleStateType，不改tables布局或工具view。
 
-原四个char-array guard typedef的名字没有消费者，约束作用却必须保留。现在匿名枚举的显式值使用sizeof(char[原谓词?1:-1])：受支持目标的界为常量1，失败目标因负数组界在编译期拒绝；不生成状态对象、VLA或运行时分支，Linux always-lock-free拒绝仍独立存在。四个宽度／对齐谓词未放宽，旧实现guard类型名的源码移除已记CHANGELOG。基础存储／回调别名及服务二进制ABI不变。
+原四个Os_Atomic guard及ArtiAtomic32IsFourBytes／Os_HostLongMustBe32BitsType的char-array typedef名字没有消费者，约束作用却必须保留。现在匿名枚举的显式值使用sizeof(char[原谓词?1:-1])：受支持目标的界为常量1，失败目标因负数组界在编译期拒绝；不生成状态对象、VLA或运行时分支，Linux always-lock-free拒绝仍独立存在。六个宽度／对齐谓词未放宽，旧实现guard类型名的源码移除已记CHANGELOG。基础存储／回调别名及服务二进制ABI不变。
 
-正常编译控制分别改变32／64位宽度与对齐，拒绝须定位到对应guard表达式；删去同一guard的私有副本必须编译成功，避免把其他检查的失败算作目标证据。sizeof中的Os_Atomic64Type仍是真实类型用途，不能因旧addon遗漏而一同删除。上述只处置类型归属和编译约束，GNU扩展、SDK、provider及实际Windows执行继续单列。
+正常编译控制分别改变32／64位宽度与对齐，拒绝须定位到对应guard表达式；将同一guard的检查表达式替为常量1的私有副本必须编译成功，避免把其他检查的失败算作目标证据。sizeof中的Os_Atomic64Type仍是真实类型用途，不能因旧addon遗漏而一同删除。上述只处置类型归属和编译约束，GNU扩展、SDK、provider及实际Windows执行继续单列。
+
+`48907b3b`的type-owner标准ECU完成结果另有三条新增R17.3，位于交付Os_HostTypes.h:23的两次及:30的一次`__alignof__`。同一批原R2.3由60减至56、R5.9由17减至0；R17.3则由71增至74，raw合计2862，不把净减少当作没有新报告。原比较工件为os-aliased-service，具体位置仍按各自字节身份保留。
+
+主文R17.3（Mandatory，印刷138／PDF146）仅适用C90，当前实际TU为C99；三处是编译器对类型的对齐查询，不是遗漏函数原型。这三个GNU运算在旧guard中已经存在，改换常量表达式上下文没有新增一次运行时调用。固定addon的misra_17_3按未关联function／valueType的名字加左括号报告，没有完整建模该扩展。实际C99编译及对应约束拒绝另作证据；不手写内建声明、不新增baseline／suppression，原报告、语言适用性、GNU扩展责任和严格比较拒绝分别保留。

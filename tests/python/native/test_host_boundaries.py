@@ -572,8 +572,7 @@ class NativeFacilityTests(unittest.TestCase):
     def test_native_atomic_storage_constraints(self):
         import os_suites
 
-        original = (os_suites.TARGET / "include/Os_HostTypes.h").read_text(encoding="utf-8")
-        cases = (
+        cases = (("include/Os_HostTypes.h", (
             ("OS_ATOMIC32_WIDTH", "typedef LONG Os_Atomic32Type;",
              "typedef int64_t Os_Atomic32Type;"),
             ("OS_ATOMIC32_ALIGN", "typedef LONG Os_Atomic32Type;",
@@ -582,7 +581,12 @@ class NativeFacilityTests(unittest.TestCase):
              "typedef uint32_t Os_Atomic64Type __attribute__((aligned(8)));"),
             ("OS_ATOMIC64_ALIGN", "typedef uint64_t Os_Atomic64Type;",
              "typedef uint64_t Os_Atomic64Type __attribute__((aligned(1)));"),
-        )
+        )), ("include/Arti.h", (
+            ("ARTI_ATOMIC32_WIDTH", "typedef int32_t ArtiAtomic32;",
+             "typedef int64_t ArtiAtomic32;"),
+        )), ("src/host/linux/Os_HostLinux.h", (
+            ("OS_HOST_LONG_WIDTH", "typedef int32_t LONG;", "typedef int64_t LONG;"),
+        )))
         retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
         output = Path(retained) / "atomic-type-guards" if retained else None
         with (
@@ -598,41 +602,46 @@ class NativeFacilityTests(unittest.TestCase):
                      *([] if os.name == "nt" else ["-I" + str(os_suites.TARGET / "src/host/linux")]),
                      "-I" + str(ROOT / "runtime/bsw/include")]
 
-            def compile_header(label, text):
+            def compile_header(name, label, text):
                 case = directory / label
                 case.mkdir()
-                header = case / "Os_HostTypes.h"
+                header = case / name
                 header.write_text(text, encoding="utf-8")
                 source = case / "types.c"
-                source.write_text('#include "Os_HostTypes.h"\n', encoding="utf-8")
+                source.write_text(f'#include "{name}"\n', encoding="utf-8")
                 return header, os_suites.run_native(
                     [*flags, "-c", str(source), "-o", str(case / "types.o")],
                     timeout=30, env={"LC_ALL": "C"},
                 )
 
-            _, control = compile_header("control", original)
-            self.assertEqual(control.returncode, 0, control)
-            self.assertEqual(control.stderr, "", control)
-            for guard, before, after in cases:
-                with self.subTest(guard=guard):
-                    self.assertEqual(original.count(before), 1)
-                    changed = original.replace(before, after)
-                    pattern = re.compile(r"(?m)^[ \t]*" + guard + r"\s*=\s*[^,]+,")
-                    matches = list(pattern.finditer(changed))
-                    self.assertEqual(len(matches), 1)
-                    match = matches[0]
-                    first = changed.count("\n", 0, match.start()) + 1
-                    last = changed.count("\n", 0, match.end()) + 1
-                    header, rejected = compile_header(guard, changed)
-                    self.assertNotEqual(rejected.returncode, 0, rejected)
-                    diagnostics = rejected.stderr.replace("\\", "/")
-                    lines = re.findall(re.escape(header.as_posix()) + r":(\d+):\d+: error:", diagnostics)
-                    self.assertTrue(any(first <= int(line) <= last for line in lines), rejected)
-                    self.assertIn("negative", diagnostics, rejected)
-                    _, unchecked = compile_header(guard + "-removed", pattern.sub("", changed))
-                    self.assertEqual(unchecked.returncode, 0, unchecked)
-                    self.assertEqual(unchecked.stderr, "", unchecked)
-                    print(f"atomic-guard={guard} invalid=rejected removed=compiled", flush=True)
+            for relative, variants in cases:
+                name = Path(relative).name
+                original = (os_suites.TARGET / relative).read_text(encoding="utf-8")
+                _, control = compile_header(name, name + "-control", original)
+                self.assertEqual(control.returncode, 0, control)
+                self.assertEqual(control.stderr, "", control)
+                for guard, before, after in variants:
+                    with self.subTest(guard=guard):
+                        self.assertEqual(original.count(before), 1)
+                        changed = original.replace(before, after)
+                        pattern = re.compile(r"(?m)^[ \t]*" + guard + r"\s*=\s*[^,]+,")
+                        matches = list(pattern.finditer(changed))
+                        self.assertEqual(len(matches), 1)
+                        match = matches[0]
+                        first = changed.count("\n", 0, match.start()) + 1
+                        last = changed.count("\n", 0, match.end()) + 1
+                        header, rejected = compile_header(name, guard, changed)
+                        self.assertNotEqual(rejected.returncode, 0, rejected)
+                        diagnostics = rejected.stderr.replace("\\", "/")
+                        lines = re.findall(re.escape(header.as_posix()) + r":(\d+):\d+: error:", diagnostics)
+                        self.assertTrue(any(first <= int(line) <= last for line in lines), rejected)
+                        self.assertIn("negative", diagnostics, rejected)
+                        _, unchecked = compile_header(
+                            name, guard + "-disabled", pattern.sub(f"    {guard} = 1,", changed),
+                        )
+                        self.assertEqual(unchecked.returncode, 0, unchecked)
+                        self.assertEqual(unchecked.stderr, "", unchecked)
+                        print(f"atomic-guard={guard} invalid=rejected disabled=compiled", flush=True)
 
     def test_startup_gate_failures_stop_before_continuation(self):
         import os_suites

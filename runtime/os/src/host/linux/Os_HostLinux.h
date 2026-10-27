@@ -25,7 +25,10 @@ typedef struct {
     DWORD ContextFlags;
 } CONTEXT;
 
-typedef char Os_HostLongMustBe32BitsType[(sizeof(LONG) == 4u) ? 1 : -1];
+enum {
+    OS_HOST_LONG_WIDTH = sizeof(char[(sizeof(LONG) == 4u) ? 1 : -1]), /**< Reject incompatible
+                                                                       Interlocked cells. */
+};
 #if !defined(__GCC_ATOMIC_INT_LOCK_FREE) || (__GCC_ATOMIC_INT_LOCK_FREE != 2)
 #error Linux host requires always-lock-free 32-bit atomics
 #endif

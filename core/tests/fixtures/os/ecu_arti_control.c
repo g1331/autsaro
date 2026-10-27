@@ -50,9 +50,9 @@ int Ecu_TargetTestFailStage(unsigned stage) {
         memcpy(&snapshot, &context->native, sizeof(snapshot));
         require(snapshot.uc_mcontext.rip != 0 && Os_ArtiNativeContextSize == sizeof(CONTEXT));
 #endif
-        if (Ecu_OsConfig.time->alarm_count != 0u) {
+        if (Ecu_OsConfig.timing->alarm_count != 0u) {
             static AlarmBaseType base;
-            require(Ecu_OsConfig.time->alarm_count == 2u);
+            require(Ecu_OsConfig.timing->alarm_count == 2u);
             require(Os_ArtiAlarms[0].active == 1u && Os_ArtiAlarms[0].cycle == 10u &&
                     Os_ArtiAlarms[0].remaining == 10u);
             require(Os_ArtiAlarms[1].active == 1u && Os_ArtiAlarms[1].cycle == 1u &&
@@ -62,7 +62,7 @@ int Ecu_TargetTestFailStage(unsigned stage) {
             alarm_base_address = (uintptr_t)&base;
         } else {
             ScheduleTableStatusType status = 99u;
-            require(Ecu_OsConfig.time->schedule_table_count == 2u);
+            require(Ecu_OsConfig.timing->schedule_table_count == 2u);
             require(GetScheduleTableStatus(0u, &status) == E_OK && status == SCHEDULETABLE_RUNNING);
             require(Os_ArtiScheduleTables[0].status == SCHEDULETABLE_RUNNING &&
                     Os_ArtiScheduleTables[0].remaining == 10u);
@@ -155,7 +155,7 @@ void Ecu_TargetTestShutdown(StatusType reason) {
     arti_require(start > 20u && waits >= 20u && releases >= 20u);
     arti_require(errors == 2u && rejected == 2u && getters == 2u);
     arti_require(isr_start > 0u && isr_start == isr_stop);
-    arti_require(alarm_addresses == (Ecu_OsConfig.time->alarm_count != 0u ? 2u : 0u));
+    arti_require(alarm_addresses == (Ecu_OsConfig.timing->alarm_count != 0u ? 2u : 0u));
     printf("arti_consumer os=%s observations=2 getters=2 errors=2 internal_services=0 dropped=0\n",
            expected_os);
     if (fflush(stdout) != 0) {

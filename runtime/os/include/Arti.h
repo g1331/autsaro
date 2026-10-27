@@ -17,8 +17,11 @@ typedef long ArtiAtomic32;
 /** Native four-byte aligned cell type required by the controlled host Interlocked ABI. */
 typedef int32_t ArtiAtomic32;
 #endif
-/** Compile-time rejection when the native ARTI publication cell is not exactly four bytes. */
-typedef char ArtiAtomic32IsFourBytes[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1];
+enum {
+    ARTI_ATOMIC32_WIDTH =
+        sizeof(char[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1]), /**< Reject incompatible
+                                                             publication cells. */
+};
 
 /** @brief Maximum number of retained events; overflow is explicitly counted. */
 #define ARTI_EVENT_CAPACITY                                                                        \

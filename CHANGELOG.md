@@ -4,7 +4,7 @@
 
 ### Breaking
 
-- Native atomic width/alignment checks use C99 constant expressions instead of the four `Os_Atomic{32,64}{Width,Alignment}Type` guard typedefs. Remove direct uses of these implementation guard names and regenerate deliveries for the new native type headers; atomic storage aliases and service ABI are unchanged (#371)
+- Native atomic width/alignment checks use C99 constant expressions instead of the `Os_Atomic{32,64}{Width,Alignment}Type`, `ArtiAtomic32IsFourBytes` and `Os_HostLongMustBe32BitsType` guard typedefs. Remove direct uses of these implementation guard names and regenerate deliveries for the new native type headers; atomic storage aliases and service ABI are unchanged (#371)
 
 - Five OS-only helpers now have internal linkage and are omitted from private cross-file headers. Integrations must use the public OS/native wrapper interfaces; regenerate deliveries and rebuild for the updated source identities (#371)
 
