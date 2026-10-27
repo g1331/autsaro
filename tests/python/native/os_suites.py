@@ -2084,7 +2084,8 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
 
 def check_memory_mapping(directory: Path) -> None:
     # These standard callback declarations belong to the OS interface even though RTE owns bodies.
-    owned = {"StartupHook", "ShutdownHook", "ErrorHook", "PreTaskHook", "PostTaskHook"}
+    # SetEvent is spelled literally in its definition, but the public header aliases it.
+    owned = {"StartupHook", "ShutdownHook", "ErrorHook", "PreTaskHook", "PostTaskHook", "Os_SetEvent"}
     for path in sorted((TARGET / "src").rglob("*.c")):
         try:
             owned.update(verify_memory_mapping_source(path.read_text(encoding="utf-8")))
@@ -2111,7 +2112,7 @@ def check_memory_mapping(directory: Path) -> None:
     run_native([*flags, str(source), "-o", str(binary)], check=True, timeout=60)
     names = ["Os_TaskEntry_FirstTask", "Os_TaskEntry_SecondTask", "Os_IsrEntry_FirstISR",
              "Os_IsrEntry_SecondISR", "AlarmBody", "ErrorHook", "PreTaskHook", "PostTaskHook",
-             "StartupHook", "ShutdownHook"]
+             "StartupHook", "ShutdownHook", "Os_SetEvent"]
     verify_code_section(binary, tool, names)
     ran = run_native([str(binary)], capture_output=True, text=True, timeout=5, check=True)
     require(ran.stdout.strip() == "memory_mapping calls=10" and not ran.stderr, ran.stdout)
@@ -2236,7 +2237,7 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
             return
         if suite == "memory-mapping":
             check_memory_mapping(Path(temporary))
-            print("memory-mapping PASS: 10 linked entries; 10 rejected compile/link cases")
+            print("memory-mapping PASS: 11 linked entries; 10 rejected compile/link cases")
             return
         if suite == "vector-section":
             check_vector_mutations(Path(temporary))

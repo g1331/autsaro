@@ -455,6 +455,8 @@ OS_MEMMAP StatusType ClearEvent(EventMaskType Mask);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #define SetEvent Os_SetEvent /**< Standard name bound to the host-safe OS entry. */
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Set stored event bits of an active Extended task; repeated setting merges bits.
  * @param[in] TaskID Extended task identifier.
  * @param[in] Mask Bits to publish.
@@ -464,9 +466,7 @@ OS_MEMMAP StatusType ClearEvent(EventMaskType Mask);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
+OS_MEMMAP StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
 /** Read the stored events of an active Extended task.
  * @param[in] TaskID Extended task identifier.
  * @param[out] Event Caller-owned non-null output; unchanged on rejection.

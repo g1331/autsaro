@@ -4,6 +4,8 @@
 
 OS 是 SC1、单核的 AUTOSAR OS，内核采用固定版本的 FreeRTOS 并打上生产补丁，主机端口在 Linux 与 Windows 的 x64 进程中运行。SWS_OS 用 `StatusType` 与 ErrorHook 报告错误，以 `StartOS`／`ShutdownOS` 管理生命周期，不定义开发错误、版本 API 或安全事件；R24-11 的 OS ECUC 也没有对应的开关。下文的“原文”指 SWS_OS 与 OS ECUC 定义。`Arti.h`／`Arti.c` 是 SWS_ARTI §7 规定的 ARTI 工具绑定文件，不属于 OS 模块文件。
 
+SetEvent沿既有源级别名绑定Os_SetEvent，与Win32同名API分离；Os_ArtiServices的定义再调用Os_Implementation_SetEvent，原参数、返回、ARTI及事件行为保持。普通Os_SetEvent原型现并入Os.h已有第三个CODE对并使用OS_MEMMAP；MemoryMapping00003要求声明侧包装，定义已有属性不能代替它。源码gate显式纳入该实际别名，避免字面SetEvent与Os_SetEvent不一致而漏检；没有新增通用预处理器。独立无属性定义从真实原型继承.os_code，去掉私有复制头的原型属性须先编译／链接成功，再被具体符号段观察拒绝。旧真实头的段外原型则在compiler前被owned-header gate拒绝。段契约与真实events消费者的服务语义分别验证；Windows新字节编译仍不由Linux结果外推。[具体位置与调查](https://github.com/g1331/autsaro/pull/371#issuecomment-6431486628)。
+
 | 分组 | 依据与处置 |
 | --- | --- |
 | 文件与前缀 | 模块缩写与实现前缀为 Os；实现与头文件为 `Os.c`、`Os_*.c`、`Os.h`、`Os_*.h`，RTE 类型头为 `Rte_Os_Type.h`；主机后端为 `host/linux/Os_HostLinux.c` 等；没有仅大小写不同的文件名。`Os.h` 只导出 SWS_OS 的服务、类型与 hook 声明，集成接口在 `Os_Target.h`、`Os_Time.h`、`Os_Mailbox.h` 与 `Os_IntegrationHooks.h`。 已核对（源码）[Os]：SWS_BSW_00101–00105、00170、00171 |

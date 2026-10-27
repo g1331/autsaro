@@ -61,6 +61,14 @@ void ShutdownHook(StatusType Error)
 #error Memory mapping state leaked from a closed section
 #endif
 
+/* Only the real public prototype supplies this independent definition's attribute. */
+StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask)
+{
+    (void)TaskID;
+    (void)Mask;
+    return E_OK;
+}
+
 int main(void)
 {
     if (mapped_cleared != 0u || mapped_initialized != 0x203u ||

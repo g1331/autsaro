@@ -239,6 +239,16 @@ class DependencyTests(unittest.TestCase):
                   self.assertRaisesRegex(AssertionError, "include/Os_Entry.h: unmapped owned.*Os_Entry")):
                 os_suites.check_memory_mapping(target / "output")
 
+            (target / "src/Os_Entry.c").write_text(
+                '#define OS_START_SEC_CODE\n#include "Os_MemMap.h"\n'
+                'void SetEvent(void) {}\n'
+                '#define OS_STOP_SEC_CODE\n#include "Os_MemMap.h"\n', encoding="utf-8")
+            (target / "include/Os_Entry.h").write_text("void Os_SetEvent(void);\n", encoding="utf-8")
+            with (patch("os_suites.TARGET", target),
+                  patch("os_suites.compiler", side_effect=AssertionError("compiler ran before alias gate")),
+                  self.assertRaisesRegex(AssertionError, "include/Os_Entry.h: unmapped owned.*Os_SetEvent")):
+                os_suites.check_memory_mapping(target / "output")
+
     def test_explicit_output_preserves_success_and_refuses_existing_content(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / 'result'
