@@ -341,6 +341,49 @@ class BoundedProcessTests(unittest.TestCase):
         ):
             self.assertTrue(_escaped_child("closing", 456, {123}))
 
+    @unittest.skipUnless(sys.platform == "linux", "Linux registered session leaders")
+    def test_only_registered_sibling_session_leaders_bypass_proc_reads(self) -> None:
+        from ecu_tools.owner import _escaped_child
+
+        record = Path("/proc/owner/task/thread/children")
+        for registered, child_pgid, accepted in (
+            ({123}, 123, True),
+            (set(), 123, False),
+            ({123}, 999, False),
+        ):
+            with (
+                self.subTest(registered=registered, pgid=child_pgid),
+                patch.object(Path, "glob", return_value=[record]),
+                patch.object(Path, "read_text", return_value="123"),
+                patch("ecu_tools.owner.os.getpgid", return_value=child_pgid),
+            ):
+                with patch.object(
+                    Path,
+                    "read_bytes",
+                    side_effect=PermissionError(13, "unobservable child"),
+                ) as read:
+                    reasons: list[str] = []
+                    self.assertEqual(
+                        _escaped_child("closing", 456, registered, reasons),
+                        not accepted,
+                    )
+                    if accepted:
+                        read.assert_not_called()
+                        self.assertEqual(reasons, [])
+                    else:
+                        self.assertIn("pid=123 errno=13", reasons[0])
+                with patch.object(
+                    Path,
+                    "read_bytes",
+                    side_effect=[
+                        b"123 (child) R 1 999",
+                        b"ECU_OWNER_SCOPE=closing\0",
+                    ],
+                ):
+                    self.assertEqual(
+                        _escaped_child("closing", 456, registered), not accepted
+                    )
+
     @unittest.skipUnless(sys.platform == "linux", "Linux adopted-child ownership")
     def test_sibling_zombie_is_reaped_without_changing_root_exit_codes(self) -> None:
         with tempfile.TemporaryDirectory() as name, Owner.start() as owner:
@@ -560,8 +603,20 @@ class BoundedProcessTests(unittest.TestCase):
             ):
                 spec, path = self._spec(Path(name), "escape")
                 try:
-                    with self.assertRaisesRegex(OwnershipError, "cleanup_unconfirmed"):
+                    with self.assertRaisesRegex(
+                        OwnershipError, "cleanup_unconfirmed"
+                    ) as failure:
                         run_bounded(replace(spec, completion=completion))
+                    escaped_pid = next(
+                        pid for role, pid, _ in _records(path, 2) if role == "escape"
+                    )
+                    self.assertIn(
+                        "group_alive=False escaped_child=True", str(failure.exception)
+                    )
+                    self.assertIn(
+                        f"escaped_child pid={escaped_pid} scope_marker_present",
+                        str(failure.exception),
+                    )
                 finally:
                     for role, pid, _ in _records(path, 2):
                         if role == "escape":

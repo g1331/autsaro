@@ -57,9 +57,13 @@ def _reap_group(pgid: int) -> None:
             return
 
 
-def _escaped_child(scope: str, pgid: int, registered_roots: set[int]) -> bool:
+def _escaped_child(
+    scope: str, pgid: int, registered_roots: set[int], reasons: list[str] | None = None
+) -> bool:
     if sys.platform != "linux":
         return False
+    if reasons is None:
+        reasons = []
     tasks = Path(f"/proc/{os.getpid()}/task")
     pids: set[str] = set()
     try:
@@ -70,14 +74,22 @@ def _escaped_child(scope: str, pgid: int, registered_roots: set[int]) -> bool:
                 # Connection threads can exit after the proc snapshot; a
                 # vanished task is not an unobservable live child.
                 continue
-    except OSError:
+    except OSError as error:
+        reasons.append(f"children path={tasks} errno={error.errno}: {error}")
         return True  # An unobservable adopted child cannot establish clean closure.
     marker = f"ECU_OWNER_SCOPE={scope}".encode()
     for item in pids:
         pid = int(item)
+        operation = "getpgid"
         try:
-            if os.getpgid(pid) == pgid:
+            child_pgid = os.getpgid(pid)
+            if child_pgid == pgid:
                 continue
+            if pid in registered_roots and child_pgid == pid:
+                # A registered session leader belongs to its own sibling scope;
+                # its proc environment can become unreadable while it exits.
+                continue
+            operation = "stat"
             fields = Path(f"/proc/{pid}/stat").read_bytes().rsplit(b")", 1)[-1].split()
             if (
                 fields[0] == b"Z"
@@ -86,15 +98,19 @@ def _escaped_child(scope: str, pgid: int, registered_roots: set[int]) -> bool:
             ):
                 # A subreaper can adopt an exited member of another scope.
                 # Reap that exact child; never steal a launcher's Popen status.
+                operation = "waitpid"
                 reaped, _ = os.waitpid(pid, os.WNOHANG)
                 if reaped == pid:
                     continue
+            operation = "environ"
             if marker in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"):
+                reasons.append(f"escaped_child pid={pid} scope_marker_present")
                 return True
         except (ProcessLookupError, FileNotFoundError):
             # A sibling can exit between the child snapshot and its proc reads.
             continue
-        except OSError:
+        except OSError as error:
+            reasons.append(f"{operation} pid={pid} errno={error.errno}: {error}")
             return True
     return False
 
@@ -322,9 +338,19 @@ class Registry:
             for entry in self.scopes.values()
             if entry.child.poll() is None
         }
-        unconfirmed = _group_alive(scope.pgid) or _escaped_child(
-            scope.identity, scope.pgid, registered_roots
+        reasons: list[str] = []
+        group_alive = _group_alive(scope.pgid)
+        escaped_child = _escaped_child(
+            scope.identity, scope.pgid, registered_roots, reasons
         )
+        unconfirmed = group_alive or escaped_child
+        if unconfirmed:
+            with scope.stderr.open("a", encoding="utf-8") as log:
+                log.write(
+                    f"\ncleanup_unconfirmed scope={scope.identity} pgid={scope.pgid} "
+                    f"group_alive={group_alive} escaped_child={escaped_child} "
+                    f"reasons={reasons!r}\n"
+                )
         status = (
             "cleanup_unconfirmed"
             if unconfirmed
