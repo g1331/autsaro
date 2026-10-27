@@ -1856,7 +1856,9 @@ fn canif_header_declares_only_standard_services() {
             "#include \"CanIf_Version.h\"",
             "#include \"Std_Types.h\"",
             "#include \"ComStack_Types.h\"",
-            "#include \"Can_GeneralTypes.h\""
+            "#include \"Can_GeneralTypes.h\"",
+            "#include \"CanIf_MemMap.h\"",
+            "#include \"CanIf_MemMap.h\""
         ]
     );
 }

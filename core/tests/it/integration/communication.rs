@@ -482,10 +482,9 @@ fn communication_types_and_polling_periods_are_source_derived() {
     assert!(description.contains("Det_ReportRuntimeError"));
     // The CanIf post-build set (Verifies: SWS_CANIF_00144) lives in CanIf_PBcfg.c (SWS_BSW_00015).
     assert!(text("generated/src/CanIf_PBcfg.c").contains("const CanIf_ConfigType CanIf_Config"));
-    assert!(
-        text("generated/include/CanIf_Cfg.h")
-            .contains("extern const CanIf_ConfigType CanIf_Config;")
-    );
+    assert!(text("generated/include/CanIf_Cfg.h").contains(
+        "extern const CanIf_ConfigType CanIf_Config RTE_CanIf_CONFIG_DATA_PREBUILD_UNSPECIFIED;"
+    ));
     for name in [
         "bsw/include/Can.h",
         "integration/include/Can_Host.h",
