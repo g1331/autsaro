@@ -34,13 +34,6 @@
 /* MR12 RULE 2.5 VIOLATION: standard return code (SWS_ComM_91027) without PNC learning in the
  * selected profile; see the ComM deviation record. */
 #define COMM_E_LEARNING_ACTIVE 5u /**< PNC learning phase is active. */
-/** SWS_ComM_00668: initialization status reported by ComM_GetStatus. */
-typedef enum {
-    COMM_UNINIT = 0, /**< Not initialized, or deinitialized. */
-    COMM_INIT = 1    /**< Initialized and usable. */
-} ComM_InitStatusType;
-/** SWS_ComM_00674: channel state and sub-state. NM NONE never enters COMM_SILENT_COM. */
-typedef uint8 ComM_StateType;
 #define COMM_NO_COM_NO_PENDING_REQUEST  0u /**< NO without a pending FULL request. */
 #define COMM_NO_COM_REQUEST_PENDING     1u /**< NO, waiting for CommunicationAllowed. */
 #define COMM_FULL_COM_NETWORK_REQUESTED 2u /**< FULL, requested or minimum duration running. */
@@ -48,6 +41,15 @@ typedef uint8 ComM_StateType;
 /* MR12 RULE 2.5 VIOLATION: standard state (SWS_ComM_00674) that NM NONE never enters; see
  * the ComM deviation record. */
 #define COMM_SILENT_COM 4u /**< SILENT; unused by NM NONE. */
+#define COMM_START_SEC_CODE
+#include "ComM_MemMap.h"
+/** SWS_ComM_00668: initialization status reported by ComM_GetStatus. */
+typedef enum {
+    COMM_UNINIT = 0, /**< Not initialized, or deinitialized. */
+    COMM_INIT = 1    /**< Initialized and usable. */
+} ComM_InitStatusType;
+/** SWS_ComM_00674: channel state and sub-state. NM NONE never enters COMM_SILENT_COM. */
+typedef uint8 ComM_StateType;
 /** <Bus>SM_RequestComMode of the configured CDD bus state manager (SWS_ComM_00828). */
 typedef Std_ReturnType (*ComM_BusRequestType)(NetworkHandleType Channel, ComM_ModeType ComMode);
 /** <Bus>SM_GetCurrentComMode of the configured CDD bus state manager (SWS_ComM_00828). */
@@ -69,8 +71,6 @@ typedef struct {
     ComM_DcmModeType dcm_silent;      /**< Dcm_ComM_SilentComModeEntered or NULL. */
     ComM_DcmModeType dcm_full;        /**< Dcm_ComM_FullComModeEntered or NULL. */
 } ComM_ConfigType;
-#define COMM_START_SEC_CODE
-#include "ComM_MemMap.h"
 /** Start or restart the channel in COMM_NO_COM_NO_PENDING_REQUEST (SWS_ComM_00146).
  * Clears requests, Allowed and diagnostic demand, then requests NO from the bus
  * state manager without notifying the default mode (SWS_ComM_00313).

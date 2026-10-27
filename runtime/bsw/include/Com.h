@@ -20,6 +20,13 @@
 #endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
 #define COM_MODULE_ID 50u
+#define COM_SERVICE_NOT_AVAILABLE 0x80u /**< Service unavailable (SWS_Com_00865). */
+/* MR12 RULE 2.5 VIOLATION: standard return code (SWS_Com_00865) that is never returned,
+ * because the selected profile has no large or TP I-PDUs; see the Com deviation record. */
+#define COM_BUSY 0x81u /**< Large/TP buffer busy (SWS_Com_00865); not returned here. */
+
+#define COM_START_SEC_CODE
+#include "Com_MemMap.h"
 /** COM initialization state (SWS_Com_00819). */
 typedef enum {
     COM_UNINIT = 0, /**< No valid configuration; reset state. */
@@ -29,11 +36,6 @@ typedef enum {
 typedef uint16 Com_SignalIdType;
 /** Zero-based I-PDU group handle (SWS_Com_00822); one Rx group is selected. */
 typedef uint16 Com_IpduGroupIdType;
-#define COM_SERVICE_NOT_AVAILABLE 0x80u /**< Service unavailable (SWS_Com_00865). */
-/* MR12 RULE 2.5 VIOLATION: standard return code (SWS_Com_00865) that is never returned,
- * because the selected profile has no large or TP I-PDUs; see the Com deviation record. */
-#define COM_BUSY 0x81u /**< Large/TP buffer busy (SWS_Com_00865); not returned here. */
-
 /** Generated signal/PDU binding. Counts are Rx-main-function periods and PDU data is four-byte
  * little endian; derived fields are not independent ECUC parameters. One four-byte little-endian
  * signal per PDU, no update bits or metadata.
@@ -66,8 +68,6 @@ typedef struct {
     Com_TransmitType transmit; /**< Required when any Tx PDU exists; called outside COM_STATE. */
 } Com_ConfigType;
 
-#define COM_START_SEC_CODE
-#include "Com_MemMap.h"
 /** Reset COM state and install the selected UINT32 configuration (SWS_Com_00432).
  * @param[in] config Immutable configuration, 1 to 32 PDUs and one Rx group; invalid or NULL leaves
  * COM_UNINIT.

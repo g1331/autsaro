@@ -4,26 +4,6 @@
 #include "Os_Version.h"
 #include "Os_Types.h"
 #include "Os_Cfg.h"
-/** Static optional ErrorHook/Task-hook bindings, retained with Os_TargetConfigType for the process.
- */
-typedef struct {
-    void (*error)(
-        StatusType Error); /**< Optional failed-service callback, valid for the process lifetime. */
-    void (*pre_task)(
-        void); /**< Optional callback before a Task runs, valid for the process lifetime. */
-    void (*post_task)(void); /**< Optional callback before a Task leaves RUNNING, valid for the
-                                process lifetime. */
-} Os_HookConfigType;
-/** Current logical actor hook phase; NONE means ordinary execution, ALARM an AlarmCallback. */
-typedef enum {
-    OS_HOOK_NONE = 0, /**< Ordinary actor execution, outside a hook. */
-    OS_HOOK_ERROR,    /**< Current ErrorHook invocation. */
-    OS_HOOK_PRE,      /**< Current PreTaskHook invocation. */
-    OS_HOOK_POST,     /**< Current PostTaskHook invocation. */
-    OS_HOOK_STARTUP,  /**< Current StartupHook invocation. */
-    OS_HOOK_SHUTDOWN, /**< Current ShutdownHook invocation. */
-    OS_HOOK_ALARM     /**< Current AlarmCallback invocation. */
-} Os_HookPhaseType;
 #define OSServiceId_Unknown                                                                        \
     ((OSServiceIdType)0u) /**< No active failed-service identity. OSEK OS 2.2.3 13.8.3. */
 #define OSServiceId_GetISRID                                                                       \
@@ -143,6 +123,28 @@ typedef enum {
 #define OSServiceId_GetScheduleTableStatus                                                         \
     ((OSServiceIdType)0xeu) /**< Failed-service identity for GetScheduleTableStatus. OSEK          \
                                OS 2.2.3 13.8.3. */
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+/** Static optional ErrorHook/Task-hook bindings, retained with Os_TargetConfigType for the process.
+ */
+typedef struct {
+    void (*error)(
+        StatusType Error); /**< Optional failed-service callback, valid for the process lifetime. */
+    void (*pre_task)(
+        void); /**< Optional callback before a Task runs, valid for the process lifetime. */
+    void (*post_task)(void); /**< Optional callback before a Task leaves RUNNING, valid for the
+                                process lifetime. */
+} Os_HookConfigType;
+/** Current logical actor hook phase; NONE means ordinary execution, ALARM an AlarmCallback. */
+typedef enum {
+    OS_HOOK_NONE = 0, /**< Ordinary actor execution, outside a hook. */
+    OS_HOOK_ERROR,    /**< Current ErrorHook invocation. */
+    OS_HOOK_PRE,      /**< Current PreTaskHook invocation. */
+    OS_HOOK_POST,     /**< Current PostTaskHook invocation. */
+    OS_HOOK_STARTUP,  /**< Current StartupHook invocation. */
+    OS_HOOK_SHUTDOWN, /**< Current ShutdownHook invocation. */
+    OS_HOOK_ALARM     /**< Current AlarmCallback invocation. */
+} Os_HookPhaseType;
 /** Typed failed-service arguments; active only during the matching ErrorHook invocation. */
 typedef struct {
     struct {
@@ -270,8 +272,6 @@ typedef struct {
             ScheduleStatus; /**< Original table-state output pointer; may be NULL on refusal. */
     } service_GetScheduleTableStatus; /**< Failed GetScheduleTableStatus parameter snapshot. */
 } Os_ErrorParametersType;
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 /** Current failed-service snapshot; meaningful only within ErrorHook.
  * @return Current failed-service arguments, or the immutable empty snapshot outside ErrorHook.
  * Preconditions: called while ErrorHook is active; otherwise returns an empty snapshot.

@@ -72,7 +72,7 @@ R8.9为Advisory、System（主文印刷71／PDF79；AMD2.27追加C11，AMD4.43�
 实体之后消费STOP的包含另有00003第五步的直接依据，不能与首次START共用一个替代排除结论。SchM的三个链接包装还须保持普通C++消费者的C符号绑定；把条件指令搬进映射对会违反00003禁止段内额外预处理的要求，删掉包装或手写替代声明也不是等价整改。这里仅明确具体构造和可行方向，不为24处填批准表、添加MR12或关闭R20.1；既有逐处实体记录和原raw状态继续保留。
 
 
-后续正常布局整改将其中15处现有START/include移到首次类型前：上述BSW头除Com／ComM，Host两头，以及Os_Arti／HostIo／Mailbox／Target／Time／Backend。这些前缀没有额外预处理；类型不使用段属性宏，也不分配代码或对象。移除同一START/include后，新旧全文字节相等，类型、实体顺序、类别、STOP及版本检查保持；首次包含不再位于本文件C内容之后。其余九处条件／inline／C++前缀仍分别核查，不据本次移动批准保留或改写旧位置记录。
+后续将其中18处START/include前移：上述BSW九头、Host两头及Os_Arti／Hooks／HostIo／Mailbox／Target／Time／Backend。15处移除同一START/include后全文字节相等；Com／ComM／Hooks另先完整前移既有2／5／44个宏及其注释，C token顺序、指令内容和注释保持。类型不使用段属性宏，不分配代码或对象；新映射区间无额外预处理，实体顺序、类别、STOP及版本检查不变，首次包含不再位于本文件C内容之后。其余六处条件／inline／C++前缀仍分别核查；旧位置记录不改标当前结论。
 
 ## SDK typedef与处理来源
 
