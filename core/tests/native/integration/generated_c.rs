@@ -1343,6 +1343,33 @@ StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
 #[test]
 fn component_application_definitions_preserve_configured_sections() {
     // Verifies: SWS_MemMap_00003, SWS_MemMap_00018.
+    let check_layout = |source: &str, component: &str, class: &str, names: &[&str]| {
+        let start =
+            format!("#define {component}_START_SEC_{class}\n#include \"{component}_MemMap.h\"\n");
+        let stop =
+            format!("#define {component}_STOP_SEC_{class}\n#include \"{component}_MemMap.h\"");
+        let bodies = source
+            .split(&start)
+            .skip(1)
+            .map(|tail| {
+                tail.split_once(&stop)
+                    .map(|(body, _)| body)
+                    .ok_or_else(|| format!("{component}: missing complete {class} STOP/include"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for name in names {
+            if !bodies.iter().any(|body| body.contains(*name)) {
+                return Err(format!("{component}: unmapped {name}"));
+            }
+        }
+        if bodies
+            .iter()
+            .any(|body| body.lines().any(|line| line.trim_start().starts_with('#')))
+        {
+            return Err(format!("{component}: preprocessing inside {class}"));
+        }
+        Ok(())
+    };
     let plan = build(&inputs()).unwrap();
     let scratch = Scratch::new();
     for (path, bytes) in prepared_pipeline_files_for_target(&plan, tooling::native_target()) {
@@ -1370,27 +1397,8 @@ fn component_application_definitions_preserve_configured_sections() {
         let source_path = scratch.0.join(format!("app/{component}/{component}.c"));
         let source = std::fs::read_to_string(&source_path).unwrap();
         for (class, names) in [("VAR_CLEARED_UNSPECIFIED", objects), ("CODE", functions)] {
-            let start = format!(
-                "#define {component}_START_SEC_{class}\n#include \"{component}_MemMap.h\"\n"
-            );
-            let stop = format!("#define {component}_STOP_SEC_{class}");
-            let bodies: Vec<_> = source
-                .split(&start)
-                .skip(1)
-                .map(|tail| tail.split_once(&stop).unwrap().0)
-                .collect();
-            for name in names {
-                assert!(
-                    bodies.iter().any(|body| body.contains(*name)),
-                    "{component}: unmapped {name}"
-                );
-            }
-            for body in bodies {
-                assert!(
-                    body.lines().all(|line| !line.trim_start().starts_with('#')),
-                    "{component}: preprocessing inside {class}: {body}"
-                );
-            }
+            check_layout(&source, component, class, names)
+                .unwrap_or_else(|error| panic!("{error}"));
         }
         let map_path = scratch
             .0
@@ -1403,30 +1411,33 @@ fn component_application_definitions_preserve_configured_sections() {
                 .replace("\".rte_code\"", "\".text.application_contract\""),
         )
         .unwrap();
+        let compile = |input: &Path, object: &Path| {
+            let mut compiler = tooling::c_compiler();
+            compiler.current_dir(&scratch.0).args([
+                "-std=c99",
+                "-O0",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+            ]);
+            for include in [
+                "generated/include",
+                "bsw/include",
+                "integration/include",
+                "os/include",
+            ] {
+                compiler.arg("-I").arg(scratch.0.join(include));
+            }
+            tooling::run_public_command(
+                compiler.arg("-c").arg(input).arg("-o").arg(object),
+                &scratch.0,
+                "component-application-placement",
+                std::time::Duration::from_secs(30),
+            )
+        };
         let object = scratch.0.join(format!("{component}.o"));
-        let mut compiler = tooling::c_compiler();
-        compiler.current_dir(&scratch.0).args([
-            "-std=c99",
-            "-O0",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-pedantic",
-        ]);
-        for include in [
-            "generated/include",
-            "bsw/include",
-            "integration/include",
-            "os/include",
-        ] {
-            compiler.arg("-I").arg(scratch.0.join(include));
-        }
-        let output = tooling::run_public_command(
-            compiler.arg("-c").arg(&source_path).arg("-o").arg(&object),
-            &scratch.0,
-            "component-application-placement",
-            std::time::Duration::from_secs(30),
-        );
+        let output = compile(&source_path, &object);
         assert!(output.status.success(), "{component}: {output:?}");
         let sections = tooling::symbol_sections(&tooling::execution_settings().objdump, &object);
         for (names, section) in [
@@ -1442,5 +1453,26 @@ fn component_application_definitions_preserve_configured_sections() {
                 );
             }
         }
+        let include = format!("#include \"{component}_MemMap.h\"\n");
+        let last = source.rfind(&include).unwrap();
+        assert!(source[..last].ends_with(&format!("#define {component}_STOP_SEC_CODE\n")));
+        let mut missing_stop = source.clone();
+        missing_stop.replace_range(last..last + include.len(), "");
+        let input = source_path.with_file_name(format!("{component}-missing-stop.c"));
+        std::fs::write(&input, &missing_stop).unwrap();
+        let object = scratch.0.join(format!("{component}-missing-stop.o"));
+        let output = compile(&input, &object);
+        assert!(
+            output.status.success(),
+            "{component}: missing STOP include: {output:?}"
+        );
+        let problem = check_layout(&missing_stop, component, "CODE", functions);
+        assert_eq!(
+            problem,
+            Err(format!("{component}: missing complete CODE STOP/include"))
+        );
+        println!(
+            "{component}: missing STOP include compiled successfully; exact structure rejection"
+        );
     }
 }
