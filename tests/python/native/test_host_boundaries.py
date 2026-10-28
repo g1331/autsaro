@@ -691,7 +691,7 @@ class NativeFacilityTests(unittest.TestCase):
                             )
                             fatal = "ExitProcess(E_OS_STATE);"
                         elif operation == "wait":
-                            old = ("    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {\n"
+                            old = ("    if (WaitForSingleObject(start->gate, INFINITE) != (DWORD)WAIT_OBJECT_0) {\n"
                                    "        ExitProcess(E_OS_STATE);\n    }\n")
                             new = old.replace("WaitForSingleObject", "startup_gate_failure")
                             fatal = "ExitProcess(E_OS_STATE);"
