@@ -415,7 +415,14 @@ static DWORD WINAPI requester(void *argument)
         native_check(Os_TargetWaitTick(ticket, 4000u, &record) == E_OK);
         native_check((record.epoch == epoch) && (record.ticket == epoch));
         native_check(record.kernel_tick == (initial_kernel + (uint32_t)i));
-        native_check(record.counter == (epoch % UINT64_C(65536)));
+        if (record.counter != (epoch % UINT64_C(65536))) {
+            (void)fprintf(stderr,
+                          "tick_counter epoch=%llu expected=%llu actual=%llu\n",
+                          (unsigned long long)epoch,
+                          (unsigned long long)(epoch % UINT64_C(65536)),
+                          (unsigned long long)record.counter);
+            ExitProcess(99u);
+        }
         native_check(record.alarm_actions == (UINT64_C(1) + (((epoch % 10u) == 0u) ? 1u : 0u)));
         native_check(record.action_errors == 0u);
         if (i <= 3u) {
@@ -656,6 +663,14 @@ int main(int argc, char **argv)
         tasks, 3u, 262144u, NULL, 0u, NULL, 0u, 0u, 0u, 0u, &time, NULL, NULL, 0u};
     scenario = (argc == 2) ? argv[1] : "thousand";
     steps = (strcmp(scenario, "thousand") == 0) ? 1000u : 1u;
+    if (strcmp(scenario, "counter-order") == 0) {
+        const Os_CounterConfigType first = counters[0];
+        counters[0] = counters[1];
+        counters[1] = first;
+        counters[0].software = 1u;
+        time.counter_count = 2u;
+        steps = 3u;
+    }
     if (strncmp(scenario, "hardware-", 9u) == 0) {
         steps = 20u;
         time.counter_count = 2u;

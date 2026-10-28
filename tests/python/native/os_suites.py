@@ -489,6 +489,7 @@ def check_time(binary: Path) -> list[dict]:
     records = []
     for case, ticks, work, app, rejected, expected in [
         ("thousand", 1000, 1000, 100, 2, [(1, 1, 1, 1), (2, 2, 2, 1), (3, 3, 3, 1)]),
+        ("counter-order", 3, 3, 0, 2, [(1, 1, 1, 1), (2, 2, 2, 1), (3, 3, 3, 1)]),
         (
             "wrap",
             3,
@@ -2368,6 +2369,23 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
                 require(f"resource_calls={calls} " in observation["stdout"], observation)
                 observation["production_resource_injection_disabled"] = True
                 observations.append(observation)
+        if suite == "time":
+            for label, before, after in (
+                ("value", "result = values[index];", "result = 0u;"),
+                ("identifier", "config->counters[index].id == counter", "((void)counter, index == 0u)"),
+            ):
+                variant_dir = Path(temporary) / ("counter-query-" + label)
+                variant_dir.mkdir()
+                target = variant_dir / "target"
+                shutil.copytree(TARGET, target)
+                source = target / "src/Os_Time.c"
+                original = source.read_text(encoding="utf-8")
+                require(original.count(before) == 1, f"Counter query mutation anchor: {label}")
+                source.write_text(original.replace(before, after), encoding="utf-8")
+                variant, _ = build(variant_dir, "controlled_time.c", target=target)
+                refused = execute(variant, "counter-order")
+                require(refused["exit"] == 99 and not refused["stdout"]
+                        and refused["stderr"] == "tick_counter epoch=1 expected=1 actual=0", refused)
         if suite == "stack":
             check_arti_native(Path(temporary) / "arti-consumers")
         if suite == "counter-types":

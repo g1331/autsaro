@@ -342,7 +342,15 @@ OS_MEMMAP static void action(uint32 index)
 
 OS_MEMMAP TickType Os_TimeCounterValue(CounterType counter)
 {
-    return values[counter_index(counter)];
+    const Os_TimeConfigType *config = Os_Config->timing;
+    TickType result = 0u;
+    for (uint32 index = 0u; (index < OS_MAX_COUNTERS) && (index < config->counter_count); ++index) {
+        if (config->counters[index].id == counter) {
+            result = values[index];
+            break;
+        }
+    }
+    return result;
 }
 
 OS_MEMMAP static void advance_counter(uint32 counter)
@@ -894,7 +902,7 @@ OS_MEMMAP void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskTyp
         completion.epoch = requested_epoch;
         completion.ticket = requested_epoch;
         completion.kernel_tick = (uint32)xTaskGetTickCount();
-        completion.counter = values[counter_index(config->system_counter)];
+        completion.counter = Os_TimeCounterValue(config->system_counter);
         completion.alarm_actions = action_count;
         completion.action_errors = error_count;
         if (Os_HostSetEvent(completion_event) == 0) {
