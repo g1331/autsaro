@@ -84,8 +84,8 @@ pub(super) fn native_bits(
 }
 
 /// This is the deliberately small declaration vocabulary used by our public headers,
-/// not a C preprocessor. Function-pointer typedefs, inline bodies and macro APIs are
-/// skipped; explicit inline prototypes retain their public service contract.
+/// not a C preprocessor. Function-pointer typedefs, undocumented inline bodies and
+/// macro APIs are skipped; documented inline definitions retain their service contract.
 /// Unsupported declarations fail closed.
 pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnostic>> {
     let mut code = String::new();
@@ -133,6 +133,8 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
             code.clear();
             continue;
         }
+        let inline_definition =
+            c == '{' && depth == 0 && code.contains("static inline") && !comment.is_empty();
         if c == '{' {
             // extern "C" wrappers do not hide their public declarations.
             if code.trim() == "extern \"C\"" {
@@ -149,10 +151,10 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
             }
             continue;
         }
-        if depth != 0 {
+        if depth != 0 && !inline_definition {
             continue;
         }
-        if c != ';' {
+        if c != ';' && !inline_definition {
             code.push(c);
             continue;
         }
@@ -306,6 +308,16 @@ OS_MEMMAP void Stop(void);
         assert_eq!(inline[0].result, "void");
         assert!(inline[0].inline_implementation);
         assert_eq!(inline[0].arguments[0].native_type, "uint8 *");
+        let definition = declarations(
+            "/** Read a version.\n * @param[out] value Version output.\n */\n\
+             OS_MEMMAP static inline void Version(uint8 *value) { *value = 1u; }",
+        )
+        .unwrap();
+        assert_eq!(definition.len(), 1);
+        assert_eq!(definition[0].name, "Version");
+        assert_eq!(definition[0].result, "void");
+        assert_eq!(definition[0].arguments[0].direction, "OUT");
+        assert!(definition[0].inline_implementation);
         assert!(declarations("void Broken(void (*handler)(void));").is_err());
         for module in [
             "BSWM", "CANIF", "CANTP", "COM", "COMM", "DCM", "DET", "LSDUR", "PDUR",

@@ -144,8 +144,6 @@ OS_MEMMAP void Arti_Init(void);
  * Reentrancy: reentrant with separate outputs; the development-error publication is atomic.
  * Ownership: borrows versioninfo only until return, writes it when non-NULL and retains no pointer.
  */
-OS_MEMMAP static inline void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
-
 OS_MEMMAP static inline void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
 {
     if (versioninfo != NULL) {
