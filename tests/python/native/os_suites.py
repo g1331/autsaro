@@ -2371,8 +2371,9 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
                 observations.append(observation)
         if suite == "time":
             for label, before, after in (
-                ("value", "result = values[index];", "result = 0u;"),
-                ("identifier", "config->counters[index].id == counter", "((void)counter, index == 0u)"),
+                ("value", "return values[configured_counter_index(counter)];", "(void)counter; return 0u;"),
+                ("identifier", "return values[configured_counter_index(counter)];",
+                 "(void)counter; return values[0];"),
             ):
                 variant_dir = Path(temporary) / ("counter-query-" + label)
                 variant_dir.mkdir()
@@ -2386,6 +2387,47 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
                 refused = execute(variant, "counter-order")
                 require(refused["exit"] == 99 and not refused["stdout"]
                         and refused["stderr"] == "tick_counter epoch=1 expected=1 actual=0", refused)
+            for relaxed in (False, True):
+                variant_dir = Path(temporary) / ("counter-index-relaxed" if relaxed else "counter-index-refused")
+                variant_dir.mkdir()
+                target = variant_dir / "target"
+                shutil.copytree(TARGET, target)
+                source = target / "src/Os_Time.c"
+                original = source.read_text(encoding="utf-8")
+                declaration = "OS_MEMMAP static uint32 configured_counter_index(CounterType id)"
+                lookup = "const uint32 index = counter_index(id);"
+                guard = "configASSERT(index < OS_MAX_COUNTERS);"
+                require(all(original.count(anchor) == 1 for anchor in (declaration, lookup, guard)),
+                        "Counter invariant fault anchors changed")
+                original = original.replace(declaration, "uint32 Os_TestCounterIndex(uint32 actual);\n" + declaration)
+                original = original.replace(lookup, "const uint32 index = Os_TestCounterIndex(counter_index(id));")
+                expected_line = next(i for i, line in enumerate(original.splitlines(), 1) if guard in line)
+                if relaxed:
+                    original = original.replace(guard, '(void)fprintf(stderr, "counter_lookup_continued=0\\n"); (void)fflush(stderr);')
+                    start = original.index(declaration)
+                    end = original.index("\n}", start)
+                    body = original[start:end]
+                    require(body.count("return index;") == 1, "Counter invariant return anchor changed")
+                    original = original[:start] + body.replace("return index;", "(void)index; return 0u;") + original[end:]
+                    original = '#include <stdio.h>\n' + original
+                source.write_text(original, encoding="utf-8")
+                provider = variant_dir / "counter-index-fault.c"
+                provider.write_text(
+                    '#include "Os_Backend.h"\n#include <stdio.h>\n#include <string.h>\n'
+                    'uint32 Os_TestCounterIndex(uint32 actual) { (void)actual; return OS_MAX_COUNTERS; }\n'
+                    'void __real_Os_BackendAssert(const char *file, sint32 line) __attribute__((noreturn));\n'
+                    'void __wrap_Os_BackendAssert(const char *file, sint32 line) {\n'
+                    f'  (void)fputs((strstr(file, "Os_Time.c") != NULL && line == {expected_line}) ? '
+                    '"counter_lookup_guard\\n" : "counter_lookup_wrong_assert\\n", stderr);\n'
+                    '  (void)fflush(stderr); __real_Os_BackendAssert(file, line);\n}\n', encoding="utf-8")
+                variant, _ = build(variant_dir, "controlled_time.c", target=target,
+                                   extra_sources=(provider,), link_flags=("-Wl,--wrap=Os_BackendAssert",))
+                refused = execute(variant, "counter-order")
+                if relaxed:
+                    require("counter_lookup_continued=0" in refused["stderr"]
+                            and "counter_lookup_guard" not in refused["stderr"], refused)
+                else:
+                    require(refused["exit"] == 7 and refused["stderr"] == "counter_lookup_guard", refused)
         if suite == "stack":
             check_arti_native(Path(temporary) / "arti-consumers")
         if suite == "counter-types":
