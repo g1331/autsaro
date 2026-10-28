@@ -481,8 +481,8 @@ def baseline_errors(current: collections.Counter[Key], baseline: Path = BASELINE
 
 
 def host_address_instances(root: Path) -> tuple[dict, collections.Counter[Key]]:
-    """Identify the three reviewed Linux expressions, without accepting other conversions."""
-    document = "docs/standards/os/native-facilities/README.md"
+    """Identify reviewed native address expressions without accepting other conversions."""
+    document = "docs/standards/os/native-facilities/addresses.md"
     title = "## 主机地址表示类别处置"
     patterns = (
         ("runtime/os/src/host/linux/Os_HostLinux.c", "11.5", "Os_HostCreateActor",
@@ -491,6 +491,18 @@ def host_address_instances(root: Path) -> tuple[dict, collections.Counter[Key]]:
          "*low = (uintptr_t)thread->mapping;"),
         ("runtime/os/src/host/linux/Os_StackLinux.c", "11.4", "Os_StackRecordBuffer",
          "current_stack->kernel_buffer_high = (uintptr_t)&top[1];"),
+        ("runtime/os/src/Os_Stack.c", "11.4", "Os_StackRecordBuffer",
+         "current_stack->kernel_buffer_high = (uintptr_t)&top[1];"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
+         "record->reserve_low = (uintptr_t)region.AllocationBase;"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
+         "if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
+         "if ((uintptr_t)region.AllocationBase != record->reserve_low) {"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackCheck",
+         "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackObserve",
+         "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);"),
     )
     instances = {}
     errors: collections.Counter[Key] = collections.Counter()
@@ -531,7 +543,7 @@ def host_address_instances(root: Path) -> tuple[dict, collections.Counter[Key]]:
         elif not (root / document).is_file() or title not in (root / document).read_text(encoding="utf-8"):
             errors[("deviation-category-record", name, owner)] += 1
         else:
-            instances[(name, matches[0])] = (rule, "host-address:" + owner, document, title)
+            instances[(name, matches[0])] = (rule, "host-address:" + owner + ":" + " ".join(expected), document, title)
     return instances, errors
 
 

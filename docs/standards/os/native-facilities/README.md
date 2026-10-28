@@ -73,42 +73,7 @@ R21.8的有效Required文本禁止abort／exit／_Exit／quick_exit（AMD2.81，
 
 ## 主机地址表示类别处置
 
-规则 R11.4、R11.5 均为 Advisory（主文印刷97–98／PDF105–106；
-TC1 将 R11.4 限定到对象指针，AMD2.60 扩充 stdint 说明）。
-uintptr_t 的可表示性没有构成 R11.4 例外，R11.5 同时覆盖显式 cast 与隐式赋值。
-依 [ADR 0025](../../../adr/0025-misra-layered-scope.md) 的自有主机适配层及
-[项目决定第1节](https://github.com/g1331/autsaro/issues/58#issuecomment-6437338057)，
-以下记录限宿主接口决定的地址表示，不借用动态设施的 Required 类别授权。
-
-范围仅 linux-x64-controlled-v1、四 profile 的原生 OS／HostBatch／probe 与相同实现的
-native 消费者：`Os_HostCreateActor` 将 mmap 返回的 void 指针保存为 unsigned char 映射；
-`Os_HostStackRange` 将该映射地址转为 uintptr_t；`Os_StackRecordBuffer` 将静态内核缓冲的
-one-past 地址转为 uintptr_t。均由自有代码实施，不能整体移交 SDK 来源责任。
-
-mmap 的固定 ABI 返回 void 指针；guard、ASan fiber 和实际栈入口需要同一映射内的字节偏移。
-改成整数搬运、memcpy 指针表示或换一层 helper 不消除该转换。
-栈保护比较的是来自不同存储对象的 native 地址区间（包括真实 RSP 和静态内核缓冲），
-不能用 C 对同一数组内指针的大小比较替代。数值区间是既有 ARTI／原生栈合同的输入，
-在受控 x64 上 uintptr_t 完整容纳地址；结果不转换回对象指针解引用。
-
-风险是错误对齐、截短、溢出及跨对象计算错误。mmap 保证页对齐，映射长度与 guard
-来自同一次成功创建，失败和回滚保持所有权；字节偏移限该映射，内核缓冲由实际静态
-Task 存储提供。既有 native_stack／ARTI 消费者观察物理栈、注册区间和汽车缓冲不重叠，
-host boundary 检查创建、errno、失败回收和句柄复用；检测器与目标 CI 另按实际运行留证。
-可修复的 watch／Task／Linux actor 回调参数不在此类别：它们使用既有静态对象或按地址
-匹配固定 typed 槽，消除反向 void 转换，并保留异常参数拒绝的反例。
-
-重评条件为目标 ABI／地址宽度、provider、mmap flags／容量、栈布局／guard、ARTI
-数值合同或缓冲所有权变化；Windows 地址转换不由这份 Linux 证据代为覆盖。
-保留原始诊断和分析身份，类别处置不表示源码符合这两条规则。
-
-
-类别实例由 `c_standard.host_address_instances` 逐源码确认：仅在上述三个命名函数体内，
-匹配固定的 mmap 赋值、映射地址转换和 one-past 缓冲地址转换；文件、函数或表达式改变、
-缺失／重复实例均拒绝，MR12 规则及就近注释双向关联。类别文档缺失同样拒绝。
-`test_host_address_category_requires_exact_owner_expression_and_annotation` 检查正常实例、
-缺注释、错规则、错表达式／函数、函数体外、重复及缺记录反例。
-这些项目检查只识别已审阅的来源模式，不替代 C 类型／行为分析、调用合同或 MISRA 判断。
+Linux 与 Windows 的接口、精确范围、风险控制和模式检查见[地址表示记录](addresses.md)。
 
 ## 原生记录的身份索引
 

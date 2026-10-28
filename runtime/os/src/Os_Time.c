@@ -755,7 +755,6 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
         const DWORD started_at = GetTickCount();
         boolean waiting = TRUE;
         while (waiting) {
-            const HANDLE observed[2] = {completion_event, attention_event};
             status = Os_TargetTickCompletion(ticket, record);
             if (status != E_OS_NOFUNC) {
                 waiting = FALSE;
@@ -766,9 +765,11 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
                 } else {
                     /* Native timed waits can round up to the host timer period;
                      * pending native work wakes this producer explicitly. */
+                    const HANDLE observed[2] = {completion_event, attention_event};
                     const DWORD waited =
                         WaitForMultipleObjects(2u, observed, 0, timeout_ms - elapsed);
-                    if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
+                    /* A successful wait-any returns the zero-based handle index. */
+                    if ((waited == (DWORD)WAIT_TIMEOUT) || (waited == 1u)) {
                         /* A simultaneous close wins over timeout or attention. */
                         status = Os_TargetTickCompletion(ticket, record);
                         if (status == E_OS_NOFUNC) {
@@ -777,7 +778,7 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
                             }
                         }
                         waiting = FALSE;
-                    } else if (waited != WAIT_OBJECT_0) {
+                    } else if (waited != (DWORD)WAIT_OBJECT_0) {
                         (void)InterlockedExchange(&signal_failed, 1);
                         Os_BackendRequestShutdown(E_OS_STATE);
                         status = E_OS_STATE;

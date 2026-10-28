@@ -28,7 +28,7 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 按 [ADR 0023](../../adr/0023-autosar-required-conflict-disposition.md)执行，不是实现者新增批准。
 下表逐项列出当前映射及消费闭包；共同不可兼得依据均为上述 00023。
 独立复核及各 profile／源码键身份集中 [PR #389](https://github.com/g1331/autsaro/pull/389)。
-22个对象的映射必要性及声明关联已在 PR 的集中独立复核中确认；三处段类别与条件 setter 描述更正后实施 MR12，不据此声称源码符合或改写原始分析。
+最初22个对象的映射必要性及声明关联已在 PR 的集中独立复核中确认；三处段类别与条件 setter 描述更正后实施 MR12，不据此声称源码符合或改写原始分析。
 
 | 规则 | 精确范围 | 映射及消费／控制 | 原授权 |
 | --- | --- | --- | --- |
@@ -54,6 +54,12 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_prefix` | CONST_8；Os_StackFatalExit 的不可变报告前缀字节。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_middle` | CONST_8；Os_StackFatalExit 的不可变报告分隔字节。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_suffix` | CONST_8；Os_StackFatalExit 的不可变报告后缀字节。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fault_claimed` | VAR_CLEARED_32；publish_fault 的原子 first-fault winner；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_claimed` | VAR_CLEARED_32；Os_StackFatalExit 的原子 terminal-report winner；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_text` | VAR_CLEARED_8；Os_StackFatalExit 的 winner 独占256字节格式缓冲；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_prefix` | CONST_8；Os_StackFatalExit 的不可变报告前缀；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_middle` | CONST_8；Os_StackFatalExit 的不可变异常字段分隔；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_suffix` | CONST_8；Os_StackFatalExit 的不可变报告尾部；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
 
 ## 历史源码与收据边界
 

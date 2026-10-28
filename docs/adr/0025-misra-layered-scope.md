@@ -21,7 +21,7 @@
 
 每项在既有模块标准篇中用稳定标题记录：规则与有效类别；文件／来源模式、平台及配置／程序范围；共用机制与理由、实际调用或包含闭包；风险及控制／验证入口；重评条件；原决定和提案链接。一次独立审查覆盖完整类别记录与检查机制，PR 写审查 head、发现与处置。具体分析在 #381–#385 引用“模块篇路径＋标题＋实际源码身份／profile／target”，并保留可追溯诊断位置；不逐行重写相同必要性，不新增台账。
 
-现有记录为 [MemMap R20.1／R20.5](../standards/memmap/README.md#memmap-类别偏离)、[主机动态设施与同步嵌套 ISR](../standards/os/native-facilities/storage-interrupts.md)，以及[主机地址表示 R11.4／R11.5](../standards/os/native-facilities/README.md#主机地址表示类别处置)。主机地址类别落实原项目决定的宿主接口原则；不扩大动态设施或 AUTOSAR 必需冲突类别。类别仅覆盖满足所列模式和条件的位置。MemMap 由现有 memory-mapping 检查器的共用协议检查逐包含确认 START→include→内容→STOP→include；不符合即报错。检查器不替代段归属、最终 ELF／PE 放置或任意 C 语义核查。
+现有记录为 [MemMap R20.1／R20.5](../standards/memmap/README.md#memmap-类别偏离)、[主机动态设施与同步嵌套 ISR](../standards/os/native-facilities/storage-interrupts.md)，以及[主机地址表示 R11.4／R11.5／R11.6](../standards/os/native-facilities/addresses.md#主机地址表示类别处置)。主机地址类别落实原项目决定的宿主接口原则；不扩大动态设施或 AUTOSAR 必需冲突类别。类别仅覆盖满足所列模式和条件的位置。MemMap 由现有 memory-mapping 检查器的共用协议检查逐包含确认 START→include→内容→STOP→include；不符合即报错。检查器不替代段归属、最终 ELF／PE 放置或任意 C 语义核查。
 
 源码注释沿 [C 编码规范](../development/c-coding-standard.md#misra-偏离注释) 与 SWS_BSW_00115 的 MR12 技术理由路径，类别记录集中共用依据，后续整改在实际违反位置写简短技术理由；不要求逐处另写必要性报告。现有精确偏离记录／注释关联继续约束已有记录；本次不批量写入源码注释或裁决诊断。类别外仍按 ADR 0023 的逐项格式，新例外由用户决定，Mandatory 不允许偏离。
 

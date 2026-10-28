@@ -1253,8 +1253,8 @@ OS_MEMMAP static DWORD WINAPI control_actor(void *argument)
     }
     do {
         waited = WaitForSingleObjectEx(event, INFINITE, 1);
-    } while (waited == WAIT_IO_COMPLETION);
-    if (waited != WAIT_OBJECT_0) {
+    } while (waited == (DWORD)WAIT_IO_COMPLETION);
+    if (waited != (DWORD)WAIT_OBJECT_0) {
         ExitProcess(E_OS_STATE);
     }
     /* The requester may be stopped between its wake-up and its own publication. */
@@ -1507,7 +1507,7 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
         ExitProcess(E_OS_STATE);
     }
     /* Creation publishes the handle and accounting before registration may fail. */
-    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
+    if (WaitForSingleObject(start->gate, INFINITE) != (DWORD)WAIT_OBJECT_0) {
         ExitProcess(E_OS_STATE);
     }
     if (Os_StackRegister(start->role) == 0) {
@@ -1523,7 +1523,7 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
     if (Os_HostSetEvent(start->registered) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
+    if (WaitForSingleObject(start->gate, INFINITE) != (DWORD)WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if (start->entry == &task_entry) {
@@ -1561,7 +1561,7 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
     if (Os_HostSetEvent(start->gate) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (WaitForSingleObject(start->registered, 5000u) != WAIT_OBJECT_0) {
+    if (WaitForSingleObject(start->registered, 5000u) != (DWORD)WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if (SuspendThread(thread) == (DWORD)-1) {
@@ -1775,7 +1775,7 @@ OS_MEMMAP static void start_controllers(void)
                                   (void *)&backup_thread,
                                   STACK_SIZE_PARAM_IS_A_RESERVATION,
                                   NULL);
-    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0) {
+    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != (DWORD)WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {

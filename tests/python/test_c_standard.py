@@ -590,7 +590,7 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
             root = Path(temporary)
             directory = root / "runtime/os/src/host/linux"
             directory.mkdir(parents=True)
-            document = root / "docs/standards/os/native-facilities/README.md"
+            document = root / "docs/standards/os/native-facilities/addresses.md"
             document.parent.mkdir(parents=True)
             document.write_text("## 主机地址表示类别处置\n", encoding="utf-8")
             host = directory / "Os_HostLinux.c"
@@ -641,6 +641,52 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
                 ("deviation-category-record", "runtime/os/src/host/linux/Os_HostLinux.c", "Os_HostCreateActor"),
                 c_standard.deviation_findings(root),
             )
+
+    def test_windows_address_category_keeps_each_expression_bounded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/src/Os_Stack.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/os/native-facilities/addresses.md"
+            document.parent.mkdir(parents=True)
+            document.write_text("## 主机地址表示类别处置\n", encoding="utf-8")
+            marker = "/* MR12 RULE 11.6 VIOLATION: native address metadata only. */\n"
+            bounds = "record->reserve_low = (uintptr_t)region.AllocationBase;"
+            original = (
+                "void Os_StackRecordBuffer(void) {\n"
+                "/* MR12 RULE 11.4 VIOLATION: disjoint numeric stack bounds. */\n"
+                "current_stack->kernel_buffer_high = (uintptr_t)&top[1];\n}\n"
+                "int Os_StackRegister(void) {\n" + marker + bounds + "\n"
+                + marker + "if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||\n"
+                "(region.RegionSize == 0u)) { return 0; }\n"
+                + marker + "if ((uintptr_t)region.AllocationBase != record->reserve_low) { break; }\n}\n"
+                "void Os_StackCheck(void) {\n" + marker
+                + "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);\n}\n"
+                "void Os_StackObserve(void) {\n" + marker
+                + "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);\n}\n"
+            )
+            for label, changed, expected in (
+                ("accepted-six", original, None),
+                ("missing-comment", original.replace(marker + bounds, bounds), "deviation-uncommented"),
+                ("wrong-rule", original.replace("RULE 11.6", "RULE 11.4", 1), "deviation-unrecorded"),
+                ("outside-category", original.replace("(uintptr_t)region.AllocationBase;", "(uintptr_t)region.BaseAddress;"),
+                 "deviation-category-pattern"),
+                ("wrong-owner", original.replace("Os_StackObserve", "OtherObserver"), "deviation-category-pattern"),
+                ("duplicate-expression", original.replace(bounds, bounds + bounds), "deviation-category-pattern"),
+                ("extra-conversion", original + "void Other(void) {\n" + marker + bounds + "\n}\n",
+                 "deviation-unrecorded"),
+            ):
+                with self.subTest(case=label):
+                    source.write_text(changed, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    if expected is None:
+                        self.assertEqual(findings, {})
+                        instances, errors = c_standard.host_address_instances(root)
+                        self.assertEqual(len(instances), 6)
+                        self.assertEqual(errors, {})
+                        self.assertEqual(len({entry[1] for entry in instances.values()}), 6)
+                    else:
+                        self.assertTrue(any(rule == expected for rule, _, _ in findings), findings)
 
     def test_object_deviations_bind_declarators_instead_of_members_or_attributes(self):
         with tempfile.TemporaryDirectory() as temporary:
