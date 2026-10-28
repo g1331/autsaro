@@ -109,3 +109,20 @@ host boundary 检查创建、errno、失败回收和句柄复用；检测器与�
 `test_host_address_category_requires_exact_owner_expression_and_annotation` 检查正常实例、
 缺注释、错规则、错表达式／函数、函数体外、重复及缺记录反例。
 这些项目检查只识别已审阅的来源模式，不替代 C 类型／行为分析、调用合同或 MISRA 判断。
+
+## 原生记录的身份索引
+
+`Os_StackSavedContext` 与 fault publication 原来以 `stack - stacks` 或 `record - stacks`
+选择并行数组槽。这些是自有指针算术，R18.4 为 Advisory，不能移交 SDK 或套用主机地址转换类别。
+两目标现复用 Os_Stack.h 的有界身份查找：只比较静态21槽的地址，命中后返回下标；
+NULL、外来对象和one-past地址返回容量哨兵。两个后端的上下文查询在取数组元素前拒绝哨兵；
+故障发布在读取record字段前原生停止。没有新增owner状态、存储或指针到整数转换。
+
+Os_ArtiStacks在两个后端均由静态C初始化绑定自己的stacks数组，地址在进程期不变；
+查找不读取可能尚未发布的record内容，原有注册、观察、故障发布的同步责任保持。
+这把索引职责留在原记录owner，不从新getter或额外业务调用制造用途。
+代价是至多21次地址比较，不声称硬实时预算或任意信号provider均已取证。
+
+实际ARTI消费者验证合法上下文的SP属于对应actor，并检查NULL、独立自动对象及one-past拒绝。
+现有变异入口增加错误接纳槽0与错误相邻槽两个对照，要求先编译成功，再由运行期身份观察拒绝；
+普通、检测器和Windows结果按各自源码身份在PR记录。旧分析的两处Linux R18.4及其他平台原始结果不改写。

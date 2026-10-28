@@ -44,6 +44,22 @@ OS_MEMMAP int Os_StackReport(void);
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void);
 
+/** Resolve an owned record by identity; OS_NATIVE_STACKS denotes any other address.
+ * @param[in] stack Borrowed address; never dereferenced by this lookup.
+ * @return Matching static slot, or OS_NATIVE_STACKS for NULL, foreign or one-past addresses.
+ * Context: any native actor or signal handler; bounded and allocation free.
+ * Ownership: does not retain the address or mutate the static records.
+ */
+OS_MEMMAP static inline unsigned Os_StackIndex(const Os_NativeStackType *stack)
+{
+    for (unsigned index = 0u; index < OS_NATIVE_STACKS; ++index) {
+        if (stack == &Os_ArtiStacks[index]) {
+            return index;
+        }
+    }
+    return OS_NATIVE_STACKS;
+}
+
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack);
 
 OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top);

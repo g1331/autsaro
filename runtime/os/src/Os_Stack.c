@@ -37,8 +37,8 @@ OS_MEMMAP const uint64 Os_ArtiNativeContextSize =
 #include "Os_MemMap.h"
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
-    /* The caller supplies a record obtained from this module's own array. */
-    return &saved_contexts[stack - stacks];
+    const unsigned index = Os_StackIndex(stack);
+    return (index < OS_NATIVE_STACKS) ? &saved_contexts[index] : NULL;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -126,7 +126,11 @@ OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
 OS_MEMMAP static void publish_fault(
     Os_NativeStackType *record, DWORD code, uintptr_t sp, uintptr_t address, char origin)
 {
-    Os_StackFaultType *local = &fault_records[record - stacks];
+    const unsigned index = Os_StackIndex(record);
+    if (index >= OS_NATIVE_STACKS) {
+        ExitProcess(E_OS_STATE);
+    }
+    Os_StackFaultType *local = &fault_records[index];
     local->thread_id = record->thread_id;
     local->role = record->role;
     local->exception = code;

@@ -111,10 +111,11 @@ OS_MEMMAP Os_StackFaultType
 #include "Os_MemMap.h"
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
-    if ((stack < stacks) || (stack >= &stacks[OS_NATIVE_STACKS])) {
+    const unsigned index = Os_StackIndex(stack);
+    if (index >= OS_NATIVE_STACKS) {
         return NULL;
     }
-    return &saved_contexts[stack - stacks];
+    return &saved_contexts[index];
 }
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
@@ -155,10 +156,11 @@ OS_MEMMAP static void publish_fault(
     Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
 {
     Os_StackFaultType *local;
-    if ((record == NULL) || (record < stacks) || (record >= &stacks[OS_NATIVE_STACKS])) {
+    const unsigned index = Os_StackIndex(record);
+    if (index >= OS_NATIVE_STACKS) {
         _exit(E_OS_STATE);
     }
-    local = &fault_records[record - stacks];
+    local = &fault_records[index];
     local->thread_id = record->thread_id;
     local->role = record->role;
     local->signal_number = signum;

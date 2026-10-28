@@ -1554,6 +1554,9 @@ def check_arti_native(directory: Path) -> None:
     for name, source, old, new, compile_failure in [
         ("missing-start", "Os_Arti.c", "0u, OsTask_Start,", "0u, OsTask_Activate,", False),
         ("wrong-signature", "Arti.c", "uint32_t event_parameter)\n", "uint16_t event_parameter)\n", True),
+        ("foreign-stack-slot", "Os_Stack.h", "return OS_NATIVE_STACKS;", "return 0u;", False),
+        ("wrong-stack-slot", "Os_Stack.h", "return index;",
+         "return (index + 1u) % OS_NATIVE_STACKS;", False),
     ]:
         faulty = directory / name
         faulty.mkdir()
@@ -1637,7 +1640,7 @@ def check_arti_native(directory: Path) -> None:
                          "maximum=1 trace=AP", "arti_stack index=1 isr=6"):
             require(expected in result["stderr"], result)
     print("ARTI nested diagnostics PASS: four recorder faults and two fixture faults identified")
-    print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; two compiled faults rejected")
+    print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; one signature conflict and three compiled behavior faults rejected")
 
 
 # Verifies: SWS_Os_00071

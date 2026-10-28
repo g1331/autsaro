@@ -52,6 +52,8 @@
 
 ### Fixed
 
+- Native stack context and fault-slot selection uses bounded record identity on both host targets, rejecting NULL, foreign and one-past records before indexing; ARTI consumers verify saved stack identity and compiled rejection controls (#389)
+
 - Linux process cancellation recognizes registered sibling session leaders before reading their exiting proc environment, avoiding false cleanup failures while preserving escape refusal and root exit codes; unconfirmed cleanup logs include the responsible group, PID and observation error (#388)
 
 - Share one memory-section pair for adjacent declarations, configuration objects, wrappers and OS storage/interfaces of the same class; retain boundaries across conditions, scopes and mapping headers (#371)
