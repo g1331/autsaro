@@ -188,6 +188,19 @@
       ]
     },
     {
+      "path": "runtime/os/include/Arti_Types.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
       "path": "runtime/os/include/Os.h",
       "license": "Apache-2.0",
       "targets": [
@@ -913,6 +926,19 @@
       ]
     },
     {
+      "path": "runtime/os/src/Os_StackTypes.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
       "path": "runtime/os/src/Os_Time.c",
       "license": "Apache-2.0",
       "targets": [
@@ -1001,6 +1027,18 @@
     },
     {
       "path": "runtime/os/src/host/linux/Os_HostLinux.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/host/linux/Os_HostLinuxTypes.h",
       "license": "Apache-2.0",
       "targets": [
         "linux-x64-controlled-v1"

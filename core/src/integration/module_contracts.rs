@@ -177,6 +177,9 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
         }
         let result = format!("{}{}", result, "*".repeat(stars));
         let result = result
+            .trim_start_matches("SCHM_CAN_LINKAGE ")
+            .trim_start_matches("SCHM_BSWM_LINKAGE ")
+            .trim_start_matches("SCHM_DCM_LINKAGE ")
             .trim_start_matches("OS_MEMMAP ")
             .trim_start_matches("OS_CODE ")
             .trim_start_matches("CAN_CODE ")
@@ -276,6 +279,19 @@ OS_MEMMAP void Stop(void);
         assert!(entries[0].documentation.contains("Fetch a value."));
         assert_eq!(entries[1].name, "Stop");
         assert_eq!(entries[1].result, "void");
+        for (linkage, section) in [
+            ("SCHM_CAN_LINKAGE", "CAN_CODE"),
+            ("SCHM_DCM_LINKAGE", "RTE_Rte_CODE"),
+            ("SCHM_BSWM_LINKAGE", "BSWM_CODE"),
+        ] {
+            let entries = declarations(&format!(
+                "/** Poll the module. */\n{linkage} {section} void Poll(void);"
+            ))
+            .unwrap();
+            assert_eq!(entries[0].result, "void");
+            assert_eq!(entries[0].name, "Poll");
+            assert!(entries[0].documentation.contains("Poll the module."));
+        }
         assert!(declarations("void Broken(void (*handler)(void));").is_err());
         for module in [
             "BSWM", "CANIF", "CANTP", "COM", "COMM", "DCM", "DET", "LSDUR", "PDUR",

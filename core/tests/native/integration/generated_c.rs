@@ -701,6 +701,81 @@ fn generated_rte_unconnected_and_first_publication_preserve_values_and_outputs()
 }
 
 #[test]
+fn schm_headers_preserve_c_linkage_for_cpp_consumers() {
+    let scratch = Scratch::new();
+    for (path, bytes) in prepared_pipeline_files(&build(&inputs()).unwrap()) {
+        let path = scratch.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    let headers = "#include \"SchM_Can.h\"\n#include \"SchM_Dcm.h\"\n#include \"SchM_BswM.h\"\n";
+    let consumer = scratch.0.join("schm-consumer.cpp");
+    let provider = scratch.0.join("schm-provider.c");
+    std::fs::write(
+        &consumer,
+        format!("{headers}{headers}extern \"C\" int observed;\nint main() {{ Can_MainFunction_Read(); SchM_Enter_Dcm_DCM_STATE(); BswM_MainFunction(); return observed == 7 ? 0 : 1; }}\n"),
+    )
+    .unwrap();
+    std::fs::write(
+        &provider,
+        format!("{headers}int observed;\nvoid Can_MainFunction_Read(void) {{ observed |= 1; }}\nvoid SchM_Enter_Dcm_DCM_STATE(void) {{ observed |= 2; }}\nvoid BswM_MainFunction(void) {{ observed |= 4; }}\n"),
+    )
+    .unwrap();
+    let mut objects = Vec::new();
+    for (source, language, standard) in [
+        (&provider, "c", "-std=c99"),
+        (&consumer, "c++", "-std=c++11"),
+    ] {
+        let object = source.with_extension("o");
+        let mut compiler = tooling::c_compiler();
+        compiler
+            .current_dir(&scratch.0)
+            .args([
+                "-x",
+                language,
+                standard,
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                "-Igenerated/include",
+                "-Ibsw/include",
+                "-Iintegration/include",
+                "-Ios/include",
+                "-c",
+            ])
+            .arg(source)
+            .arg("-o")
+            .arg(&object);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            "compile-schm-linkage",
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{output:?}");
+        objects.push(object);
+    }
+    let executable = tooling::native_binary(&scratch.0, "schm-linkage");
+    let mut compiler = tooling::c_compiler();
+    compiler.args(&objects).arg("-o").arg(&executable);
+    let output = tooling::run_public_command(
+        &mut compiler,
+        &scratch.0,
+        "link-schm-linkage",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(output.status.success(), "{output:?}");
+    let output = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        &scratch.0,
+        "run-schm-linkage",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(output.status.success(), "{output:?}");
+}
+
+#[test]
 fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases() {
     // Verifies: SWS_Rte_01005, SWS_Rte_01006, SWS_Rte_02751, SWS_Rte_05078
     // Verifies: SWS_Rte_06713, SWS_Rte_07120, SWS_Rte_07124, SWS_Rte_07194
@@ -1203,7 +1278,11 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
                 declaration.push_str(line.trim());
                 declaration.push(' ');
                 if declaration.contains(';') {
-                    let prototype = declaration.trim();
+                    let prototype = declaration
+                        .trim()
+                        .trim_start_matches("SCHM_CAN_LINKAGE ")
+                        .trim_start_matches("SCHM_DCM_LINKAGE ")
+                        .trim_start_matches("SCHM_BSWM_LINKAGE ");
                     let prototype = prototype
                         .strip_prefix(&prefix)
                         .unwrap_or(prototype)

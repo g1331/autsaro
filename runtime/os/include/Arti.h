@@ -10,22 +10,12 @@
 #error "Arti.h -> Std_Types.h: incompatible AUTOSAR release"
 #endif
 #include <stddef.h>
-#ifdef _WIN32
-/** Native four-byte aligned cell type required by the controlled host Interlocked ABI. */
-typedef long ArtiAtomic32;
-#else
-/** Native four-byte aligned cell type required by the controlled host Interlocked ABI. */
-typedef int32_t ArtiAtomic32;
-#endif
-enum {
-    ARTI_ATOMIC32_WIDTH =
-        sizeof(char[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1]), /**< Reject incompatible
-                                                             publication cells. */
-};
-
 /** @brief Maximum number of retained events; overflow is explicitly counted. */
 #define ARTI_EVENT_CAPACITY                                                                        \
     4096u /**< Maximum retained tool events; excess reservations are counted as dropped. */
+#include "Arti_Types.h"
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Retained tool event; read payloads only after OS shutdown/quiescence, not from reservation
  * count. */
 typedef struct {
@@ -39,7 +29,7 @@ typedef struct {
     uint8_t address_valid; /**< Nonzero when event_address carries captured native address bits. */
     uint32_t service_status; /**< Captured service result when status_valid is nonzero. */
     uint8_t status_valid; /**< Nonzero when service_status distinguishes a result from an error. */
-    volatile ArtiAtomic32
+    volatile Arti_Atomic32Type
         published; /**< Atomic publication flag, zero until all slot payload fields are written. */
 } Arti_Event;
 /** Actor-local lossless native address and service-status side data for standard uint32 event
@@ -50,8 +40,6 @@ typedef struct {
     uint32_t service_status; /**< Captured service result for the next recorded event. */
     uint8_t status_valid;    /**< Nonzero when service_status is meaningful. */
 } Arti_AddressCapture;
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 /** @brief Lossless x64 side data for standard uint32 pointer payloads.
  * @param[in] address Native address bits captured without dereferencing the address.
  * @par Return
@@ -113,11 +101,11 @@ OS_MEMMAP extern Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
 /* Native atomics require the host ABI's four-byte cell type. */
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-OS_MEMMAP extern volatile ArtiAtomic32 Arti_EventCount;
+OS_MEMMAP extern volatile Arti_Atomic32Type Arti_EventCount;
 
-OS_MEMMAP extern volatile ArtiAtomic32 Arti_EventsDropped;
+OS_MEMMAP extern volatile Arti_Atomic32Type Arti_EventsDropped;
 
-OS_MEMMAP extern volatile ArtiAtomic32 Arti_DevelopmentError;
+OS_MEMMAP extern volatile Arti_Atomic32Type Arti_DevelopmentError;
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 #define ARTI_E_INIT_FAILED   0x01u /**< SWS_Arti_91002: ARTI initialization failure. */

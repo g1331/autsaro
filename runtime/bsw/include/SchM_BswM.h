@@ -4,8 +4,11 @@
 #define SCHM_BSWM_H
 #include "Rte_Version.h"
 #include "SchM_BswM_Type.h"
+/** Preserve the C ABI for C++ consumers without conditional directives in mapped sections. */
 #ifdef __cplusplus
-extern "C" {
+#define SCHM_BSWM_LINKAGE extern "C" /**< C ABI for C++ consumers. */
+#else
+#define SCHM_BSWM_LINKAGE /**< C declarations already have C linkage. */
 #endif
 #define BSWM_START_SEC_CODE
 #include "BswM_MemMap.h"
@@ -17,7 +20,7 @@ extern "C" {
  * Reentrancy: reentrant; it has no effect.
  * Ownership: None.
  */
-BSWM_CODE void BswM_MainFunction(void);
+SCHM_BSWM_LINKAGE BSWM_CODE void BswM_MainFunction(void);
 #define BSWM_STOP_SEC_CODE
 #include "BswM_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -36,7 +39,7 @@ BSWM_CODE void BswM_MainFunction(void);
  * Reentrancy: not reentrant within one context; concurrent contexts serialize.
  * Ownership: this context holds the area until its matching Exit.
  */
-RTE_Rte_CODE void SchM_Enter_BswM_BSWM_STATE(void);
+SCHM_BSWM_LINKAGE RTE_Rte_CODE void SchM_Enter_BswM_BSWM_STATE(void);
 /** Leave the BswM state area (SWS_Rte_07253).
  * @par Return
  * None.
@@ -45,7 +48,7 @@ RTE_Rte_CODE void SchM_Enter_BswM_BSWM_STATE(void);
  * Reentrancy: not reentrant within one context.
  * Ownership: releases this context's area.
  */
-RTE_Rte_CODE void SchM_Exit_BswM_BSWM_STATE(void);
+SCHM_BSWM_LINKAGE RTE_Rte_CODE void SchM_Exit_BswM_BSWM_STATE(void);
 #define RTE_Rte_STOP_SEC_CODE
 #include "Rte_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -55,7 +58,4 @@ RTE_Rte_CODE void SchM_Exit_BswM_BSWM_STATE(void);
 #error "SchM_BswM.h -> Rte_MemMap.h: incompatible AUTOSAR release"
 #endif
 
-#ifdef __cplusplus
-}
-#endif
 #endif

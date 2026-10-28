@@ -22,12 +22,13 @@ OS_MEMMAP Arti_Event Arti_Events[ARTI_EVENT_CAPACITY]; /**< Reserved slots, atom
 #endif
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-OS_MEMMAP volatile ArtiAtomic32 Arti_EventCount; /**< Atomic slot reservations; Arti_Init resets. */
+OS_MEMMAP volatile Arti_Atomic32Type
+    Arti_EventCount; /**< Atomic slot reservations; Arti_Init resets. */
 
-OS_MEMMAP volatile ArtiAtomic32
+OS_MEMMAP volatile Arti_Atomic32Type
     Arti_EventsDropped; /**< Atomic saturated drop count; Arti_Init resets. */
 
-OS_MEMMAP volatile ArtiAtomic32
+OS_MEMMAP volatile Arti_Atomic32Type
     Arti_DevelopmentError; /**< Atomic latest tool error; Arti_Init resets. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"

@@ -581,10 +581,10 @@ class NativeFacilityTests(unittest.TestCase):
              "typedef uint32_t Os_Atomic64Type __attribute__((aligned(8)));"),
             ("OS_ATOMIC64_ALIGN", "typedef uint64_t Os_Atomic64Type;",
              "typedef uint64_t Os_Atomic64Type __attribute__((aligned(1)));"),
-        )), ("include/Arti.h", (
-            ("ARTI_ATOMIC32_WIDTH", "typedef int32_t ArtiAtomic32;",
-             "typedef int64_t ArtiAtomic32;"),
-        )), ("src/host/linux/Os_HostLinux.h", (
+        )), ("include/Arti_Types.h", (
+            ("ARTI_ATOMIC32_WIDTH", "typedef int32_t Arti_Atomic32Type;",
+             "typedef int64_t Arti_Atomic32Type;"),
+        )), ("src/host/linux/Os_HostLinuxTypes.h", (
             ("OS_HOST_LONG_WIDTH", "typedef int32_t LONG;", "typedef int64_t LONG;"),
         )))
         retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")

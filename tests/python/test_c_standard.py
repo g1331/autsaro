@@ -24,6 +24,29 @@ class CStandardTests(unittest.TestCase):
     def rules(self, source, name="runtime/bsw/include/Test.h"):
         return [rule for rule, _, _ in c_standard.findings(name, source)]
 
+    def test_owned_headers_begin_mapping_before_c_declarations(self):
+        from autosar_tooling.config import ROOT
+
+        for relative in (
+            "runtime/os/include/Arti.h",
+            "runtime/os/src/Os_Stack.h",
+            "runtime/os/src/host/linux/Os_HostLinux.h",
+            "runtime/bsw/include/SchM_Can.h",
+            "runtime/bsw/include/SchM_Dcm.h",
+            "runtime/bsw/include/SchM_BswM.h",
+        ):
+            source = (ROOT / relative).read_text(encoding="utf-8")
+            tokens = c_standard.lex(source)
+            for token in tokens:
+                if c_standard.is_comment(token):
+                    continue
+                self.assertTrue(token.text.lstrip().startswith("#"), (relative, token.text))
+                if "_MemMap.h" in token.text:
+                    break
+            else:
+                self.fail(f"{relative}: no memory mapping include")
+            c_standard.verify_memory_mapping_pattern(source)
+
     def test_memory_mapping_protocol_and_mutations(self):
         source = ('#if ENABLED\n#define RTE_Com_START_SEC_CODE\n'
                   '# include "Rte_MemMap.h" /* mapping */\nvoid run(void) {}\n'
