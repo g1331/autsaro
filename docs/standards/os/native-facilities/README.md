@@ -126,3 +126,5 @@ Os_ArtiStacks在两个后端均由静态C初始化绑定自己的stacks数组，
 实际ARTI消费者验证合法上下文的SP属于对应actor，并检查NULL、独立自动对象及one-past拒绝。
 现有变异入口增加错误接纳槽0与错误相邻槽两个对照，要求先编译成功，再由运行期身份观察拒绝；
 普通、检测器和Windows结果按各自源码身份在PR记录。旧分析的两处Linux R18.4及其他平台原始结果不改写。
+
+R22.10据AMD1的R22.8定义也涵盖用errno返回错误的非ISO函数。当前read／write／poll／nanosleep／sigtimedwait及write_bytes的errno检查均紧随失败返回，无中间调用；mapped_line只在read成功分支调用。固定addon未识别这些errno-setting接口，11处报告按实际调用闭包判误报；位置与原始身份留PR #389，不扩至其他errno使用。
