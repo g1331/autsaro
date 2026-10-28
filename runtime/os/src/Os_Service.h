@@ -82,8 +82,6 @@ OS_MEMMAP ISRType Os_Implementation_GetISRID(void);
 
 OS_MEMMAP StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
 
-OS_MEMMAP boolean Os_Implementation_isOsStarted(void);
-
 OS_MEMMAP CoreIdType Os_Implementation_GetCoreID(void);
 
 OS_MEMMAP StatusType Os_Implementation_GetTaskID(TaskRefType TaskID);
@@ -91,8 +89,6 @@ OS_MEMMAP StatusType Os_Implementation_GetTaskID(TaskRefType TaskID);
 OS_MEMMAP StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State);
 
 OS_MEMMAP StatusType Os_Implementation_ActivateTask(TaskType TaskID);
-
-OS_MEMMAP StatusType Os_Implementation_TerminateTask(void);
 
 OS_MEMMAP StatusType Os_Implementation_ChainTask(TaskType TaskID);
 
@@ -145,9 +141,6 @@ OS_MEMMAP StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType S
                                                              TickType Start);
 
 OS_MEMMAP StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID);
-
-OS_MEMMAP StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                                                         ScheduleTableType ScheduleTableID_To);
 
 OS_MEMMAP StatusType Os_Implementation_GetScheduleTableStatus(
     ScheduleTableType ScheduleTableID, ScheduleTableStatusRefType ScheduleStatus);

@@ -243,6 +243,14 @@ OS_MEMMAP void Os_StackTestTriggerBackupFault(void);
 #include "Os_MemMap.h"
 #endif
 
+/* Private implementations for the service entries that remain out of line. */
+OS_MEMMAP boolean Os_Implementation_isOsStarted(void);
+
+OS_MEMMAP StatusType Os_Implementation_TerminateTask(void);
+
+OS_MEMMAP StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                                                         ScheduleTableType ScheduleTableID_To);
+
 /* Resource lookup shared across the OS implementation units. */
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
