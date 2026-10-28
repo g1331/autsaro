@@ -85,3 +85,8 @@ UAPI还有独立的R8.2义务：signal-defs.h:82的__signalfn_t(int)缺参数名
 进一步核对现成四份.i的进入／返回标记，pthread.h:161、204、559、1298中的四个回调类型，其内层void *参数均未命名；分别属于cleanup buffer、pthread_create、cleanup frame和pthread_key_create。外层__start_routine／__destr_function有名字不满足内层函数类型的R8.2；(void)的无参数原型不在此列。四份TU各出现这四处，且均不在ISO标准头处理栈内。linux/posix_types.h:30的__kernel_sighandler_t(int)和signal-defs.h:82另在HostLinux、StackLinux、LinuxNative三份出现；PortRestart没有这两个UAPI声明。因此本子集是六个物理声明、22次TU出现，不是六种产品运行失败或整个SDK的穷尽计数。
 
 依据为主文R8.2（Required，印刷64–66／PDF72–74）及6.7；AMD2追加C11，TC2.10与AMD3.63只更新交叉引用，没有取消内层参数命名。pthread.h及linux/posix_types.h实读摘要分别为26eb5331…98dc22b／bc68636a…b196f；材料仍绑定sdk-inline-closure原字节，不冒充当前head的重新展开。项目实际调用pthread_create，其他声明即使没有运行调用仍已进入该TU；通过包装调用或仅删除未调用声明的消费者不能消除头内构造。更换feature flags、私改已安装SDK或手写替代原型均不是本次已验证整改。受控SDK来源补丁只补参数名可保持函数类型，但仍须核定来源、交付、许可和实际包含次序；当前保留真实Required缺口，不填批准表或MR12。
+
+
+## 剩余首次映射位置的整改
+
+六头的类型归属、C++ linkage 与直接验证见[首次映射布局](mapping.md)。
