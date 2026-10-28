@@ -642,6 +642,33 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
                 c_standard.deviation_findings(root),
             )
 
+    def test_object_deviations_bind_declarators_instead_of_members_or_attributes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "runtime/bsw/src/Test.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            marker = "/* MR12 RULE 8.9 VIOLATION: mapped storage must remain file static. */\n"
+            source.write_text(
+                marker + "static struct { int member; } state TEST_VAR_CLEARED;\n"
+                + marker + 'OS_MEMMAP static const char bytes[] = "state";\n'
+                + marker + "OS_MEMMAP static int counter;\n", encoding="utf-8",
+            )
+            record = (
+                "| MISRA C:2012 Rule 8.9 | `runtime/bsw/src/Test.c` 中 `state`、`bytes`、`counter` | "
+                "mapped objects | Approved by maintainer |\n"
+            )
+            document.write_text(record, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            for wrong in ("member", "TEST_VAR_CLEARED"):
+                with self.subTest(wrong=wrong):
+                    document.write_text(record.replace("`state`", f"`{wrong}`"), encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    self.assertEqual({key[0] for key in findings},
+                                     {"deviation-unrecorded", "deviation-uncommented"})
+                    self.assertIn(("deviation-unrecorded", "runtime/bsw/src/Test.c", marker.strip()), findings)
+
     def test_deviations_match_both_directions_and_exact_symbol(self):
         with tempfile.TemporaryDirectory(prefix="171-") as temporary:
             root = Path(temporary)

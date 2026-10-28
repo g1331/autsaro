@@ -601,12 +601,30 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                 following = ([token] if token.text.lstrip().startswith("#") else preceding
                              or [t for t in tokens[index + 1:] if not is_comment(t)])
                 declaration = []
+                depth = 0
                 for item in following:
                     declaration.append(item)
-                    if item.text in {";", "{"} or item.text.lstrip().startswith("#"):
+                    if item.text == "{":
+                        if depth == 0 and function(declaration):
+                            break
+                        depth += 1
+                    elif item.text == "}":
+                        depth -= 1
+                    if (item.text == ";" and depth == 0) or item.text.lstrip().startswith("#"):
                         break
-                words = [t.text for t in declaration]
-                direct = function(declaration)
+                declarator = declaration
+                words = [t.text for t in declarator]
+                if "{" in words and not function(declarator[:words.index("{")]):
+                    # Aggregate members and initializer values do not name the owning object.
+                    opening = words.index("{")
+                    depth = 1
+                    closing = opening + 1
+                    while closing < len(words) and depth:
+                        depth += (words[closing] == "{") - (words[closing] == "}")
+                        closing += 1
+                    declarator = declarator[:opening] + declarator[closing:]
+                    words = [t.text for t in declarator]
+                direct = function(declarator)
                 macro = re.match(r"\s*#\s*define\s+(\w+)", words[0]) if words else None
                 included = directive_scope(words[0]) if words else None
                 file_scoped = (match[1] == "DIR" and match[2] == "4.10" and path.suffix == ".h"
@@ -617,7 +635,10 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                     if direct
                     else macro[1]
                     if macro
-                    else parameter_name(words[:-1])
+                    else parameter_name([
+                        word for word in (words[:words.index("=")] if "=" in words else words[:-1])
+                        if not re.fullmatch(r"[A-Z][A-Z0-9_]*(?:_MEMMAP|_VAR_[A-Z0-9_]+)", word)
+                    ])
                 )
                 instance = instances.get((name, declaration[0].start)) if declaration else None
                 if instance and match[1] == "RULE" and match[2] == instance[0]:
