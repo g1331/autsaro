@@ -4,7 +4,7 @@
 
 生成器为每个工程写出 `Os_Arti.arxml`：ArtiHardware 的核类与核实例、ArtiOs 的 OS、任务、ISR、闹钟、调度表、资源、栈与上下文的类和实例，以及引用的值表达式与类型映射。`Os_Arti.c` 把内核事件转成标准 `ARTI_TRACE` 调用，工具提供的 `Arti.h` 决定宏展开。官方套件对四个生成变体（闹钟、改名 OS、调度表、RES_SCHEDULER）检查 schema、按官方 MOD 检查每个容器的重数与引用，并用独立的表达式探针编译核对；生成描述中出现的 `ECUC_Arti_` 条目由该测试的 `Verifies:` 处置。
 
-工具绑定的 `ARTI_MODULE_ID` 与 `Arti_GetVersionInfo` 返回 module5（BSWGeneral 附录 A.2 p95）；既有 catalog／BSWMD 已为5，独立 consumer 从哨兵值断言返回字段。软件版本初值保持1.0.0，唯一数值 owner 为 `Arti_Version.h`，API、BSWMD 与模块手册均从它取得三个分量；`release_contracts::arti_software_api_observes_each_owner_component_and_each_assignment` 独立修改每个分量观察返回值，并删除每个源赋值验证哨兵拒绝。vendor0仍是未分配占位。正式身份与其他 ARTI 义务不由此修复推定完成。
+工具绑定的 `ARTI_MODULE_ID` 与 `Arti_GetVersionInfo` 返回 module5（BSWGeneral 附录 A.2 p95）；既有 catalog／BSWMD 已为5，独立 consumer 从哨兵值断言返回字段。软件版本初值保持1.0.0，唯一数值 owner 为 `Arti_Version.h`，API、BSWMD 与模块手册均从它取得三个分量；`Arti_GetVersionInfo` 采用带显式原型的头内 inline 实现（BSWGeneral §7.1.10），保留类型检查、函数指针调用和相同原子错误写入；不再导出该函数的外部定义。`release_contracts::arti_software_api_observes_each_owner_component_and_each_assignment` 独立修改每个分量观察返回值，并删除每个源赋值验证哨兵拒绝。vendor0仍是未分配占位。正式身份与其他 ARTI 义务不由此修复推定完成。
 
 ## SWS_OS 中的 ARTI 条款
 

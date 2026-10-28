@@ -810,7 +810,9 @@ pub(super) fn files(
                 return_type: declaration.result.clone(),
                 arguments: declaration.arguments.clone(),
                 declaration_owner: path.into(),
-                definition_owner: if os_hook(&name) {
+                definition_owner: if declaration.inline_implementation {
+                    path.into()
+                } else if os_hook(&name) {
                     if name == "ShutdownHook" {
                         "integration/src/Ecu_Target.c".into()
                     } else {
@@ -827,6 +829,9 @@ pub(super) fn files(
                 existing.return_type = signature.return_type;
                 existing.arguments = signature.arguments;
                 existing.declaration_owner = signature.declaration_owner;
+                if declaration.inline_implementation {
+                    existing.definition_owner = signature.definition_owner;
+                }
             } else {
                 contract.push(signature);
             }

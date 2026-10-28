@@ -7,6 +7,7 @@ pub(super) struct Entry {
     pub result: String,
     pub arguments: Vec<ContractArgument>,
     pub documentation: String,
+    pub inline_implementation: bool,
 }
 
 fn identifier(value: &str) -> bool {
@@ -84,7 +85,8 @@ pub(super) fn native_bits(
 
 /// This is the deliberately small declaration vocabulary used by our public headers,
 /// not a C preprocessor. Function-pointer typedefs, inline bodies and macro APIs are
-/// not external module entries. Unsupported external declarations fail closed.
+/// skipped; explicit inline prototypes retain their public service contract.
+/// Unsupported declarations fail closed.
 pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnostic>> {
     let mut code = String::new();
     let mut comment = String::new();
@@ -156,7 +158,7 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
         }
         let declaration = code.split_whitespace().collect::<Vec<_>>().join(" ");
         code.clear();
-        if declaration.starts_with("typedef ") || declaration.contains("static inline") {
+        if declaration.starts_with("typedef ") {
             comment.clear();
             continue;
         }
@@ -181,6 +183,7 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
             .trim_start_matches("SCHM_BSWM_LINKAGE ")
             .trim_start_matches("SCHM_DCM_LINKAGE ")
             .trim_start_matches("OS_MEMMAP ")
+            .trim_start_matches("static inline ")
             .trim_start_matches("OS_CODE ")
             .trim_start_matches("CAN_CODE ")
             .trim_start_matches("BSWM_CODE ")
@@ -234,6 +237,7 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
             }
         }
         entries.push(Entry {
+            inline_implementation: declaration.contains("static inline"),
             name: name.into(),
             result,
             arguments,
@@ -292,6 +296,16 @@ OS_MEMMAP void Stop(void);
             assert_eq!(entries[0].name, "Poll");
             assert!(entries[0].documentation.contains("Poll the module."));
         }
+        let inline = declarations(
+            "/** Read a version. */\nOS_MEMMAP static inline void Version(uint8 *value);\n\
+             OS_MEMMAP static inline void Version(uint8 *value) { *value = 1u; }",
+        )
+        .unwrap();
+        assert_eq!(inline.len(), 1);
+        assert_eq!(inline[0].name, "Version");
+        assert_eq!(inline[0].result, "void");
+        assert!(inline[0].inline_implementation);
+        assert_eq!(inline[0].arguments[0].native_type, "uint8 *");
         assert!(declarations("void Broken(void (*handler)(void));").is_err());
         for module in [
             "BSWM", "CANIF", "CANTP", "COM", "COMM", "DCM", "DET", "LSDUR", "PDUR",

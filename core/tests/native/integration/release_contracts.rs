@@ -760,7 +760,8 @@ fn arti_software_api_observes_each_owner_component_and_each_assignment() {
         prepared_pipeline_files_for_target(&build(&inputs()).unwrap(), tooling::native_target());
     let scratch = Scratch::new();
     install(&files, &scratch.0);
-    let source_path = scratch.0.join("os/src/Arti.c");
+    let implementation_path = scratch.0.join("os/src/Arti.c");
+    let source_path = scratch.0.join("os/include/Arti.h");
     let source = std::fs::read_to_string(&source_path).unwrap();
     let header_path = scratch.0.join("os/include/Arti_Version.h");
     let header = std::fs::read_to_string(&header_path).unwrap();
@@ -801,7 +802,7 @@ int main(void) {{
             command.arg("-I").arg(path.as_str().unwrap());
         }
         command
-            .arg(&source_path)
+            .arg(&implementation_path)
             .arg(&consumer)
             .arg("-o")
             .arg(&executable);

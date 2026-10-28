@@ -79,20 +79,6 @@ OS_MEMMAP void Arti_Init(void)
     }
 }
 
-OS_MEMMAP void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
-{
-    if (versioninfo != NULL) {
-        versioninfo->vendorID = 0u;
-        /* BSWGeneral Appendix A.2 fixes the module ID; vendor identity is unassigned. */
-        versioninfo->moduleID = ARTI_MODULE_ID;
-        versioninfo->sw_major_version = ARTI_SW_MAJOR_VERSION;
-        versioninfo->sw_minor_version = ARTI_SW_MINOR_VERSION;
-        versioninfo->sw_patch_version = ARTI_SW_PATCH_VERSION;
-    } else {
-        (void)InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);
-    }
-}
-
 OS_MEMMAP void Arti_Record(const char *context,
                            const char *class_name,
                            const char *instance,

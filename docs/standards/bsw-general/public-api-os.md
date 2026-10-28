@@ -11,7 +11,6 @@
 
 | 规则 | 精确范围 | 固定原文及公开合同 | 原授权 |
 | --- | --- | --- | --- |
-| MISRA C:2012 Rule 8.7 | `runtime/os/src/Arti.c` 中 `Arti_GetVersionInfo` | SWS_Arti_91005；Arti.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
 | MISRA C:2012 Rule 8.7 | `runtime/os/src/Os_ArtiServices.c` 中 `GetISRID` | SWS_Os_00511；Os.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
 | MISRA C:2012 Rule 8.7 | `runtime/os/src/Os_ArtiServices.c` 中 `ControlIdle` | SWS_Os_00769；Os.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
 | MISRA C:2012 Rule 8.7 | `runtime/os/src/Os_ArtiServices.c` 中 `isOsStarted` | SWS_Os_91034；Os.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
@@ -46,3 +45,5 @@
 | MISRA C:2012 Rule 8.7 | `runtime/os/src/Os_ArtiServices.c` 中 `SuspendOSInterrupts` | OSEK OS 2.2.3 §13.3.2.6；Syntax:            void SuspendOSInterrupts ( void )；Conformance:       BCC1, BCC2, ECC1, ECC2。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
 
 独立复核指出，BSWGeneral 允许适当的宏／inline 实现；OS Programming Language、GetCoreID 与 SWS_Os_91034 也允许或建议宏形式。现有 ABI 清单和函数式测试不能替代规范必要性。后续须证明具体替代不成立，或完成保留全部可观察行为的实现调整，或取得明确的新项目处置；不能仅凭标准服务存在将本表转为批准记录。
+
+`Arti_GetVersionInfo` 已按 BSWGeneral §7.1.10 的类型检查 inline 形式整改，保留显式服务原型和函数指针调用。函数体移入 Arti.h，继续使用相同 Interlocked 原子错误写入；版本字段独立变异消费者同步实际实现 owner，不再保留原外部定义的 R8.7 待决项。

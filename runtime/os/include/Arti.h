@@ -14,6 +14,7 @@
 #define ARTI_EVENT_CAPACITY                                                                        \
     4096u /**< Maximum retained tool events; excess reservations are counted as dropped. */
 #include "Arti_Types.h"
+#include "Os_HostTypes.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 /** Retained tool event; read payloads only after OS shutdown/quiescence, not from reservation
@@ -137,7 +138,21 @@ OS_MEMMAP void Arti_Init(void);
  * Reentrancy: reentrant with separate outputs; the development-error publication is atomic.
  * Ownership: borrows versioninfo only until return, writes it when non-NULL and retains no pointer.
  */
-OS_MEMMAP void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
+OS_MEMMAP static inline void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
+
+OS_MEMMAP static inline void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
+{
+    if (versioninfo != NULL) {
+        versioninfo->vendorID = 0u;
+        /* BSWGeneral Appendix A.2 fixes the module ID; vendor identity is unassigned. */
+        versioninfo->moduleID = ARTI_MODULE_ID;
+        versioninfo->sw_major_version = ARTI_SW_MAJOR_VERSION;
+        versioninfo->sw_minor_version = ARTI_SW_MINOR_VERSION;
+        versioninfo->sw_patch_version = ARTI_SW_PATCH_VERSION;
+    } else {
+        (void)InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);
+    }
+}
 
 /** @brief Tool callback; arguments contain only captured values and literals.
  * @param[in] context Literal ARTI execution context.
