@@ -287,7 +287,10 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "<SHORT-NAME>{partition}_CALLOUT_CODE</SHORT-NAME>"
         )));
         for (file, bytes) in produced {
-            // Static BSW and host headers come from the repository runtime below.
+            let installed = directory.join(&file);
+            std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
+            std::fs::write(installed, &bytes).unwrap();
+            // Keep the independent producer source path alongside the actual delivery.
             if let Some(file) = file
                 .strip_prefix("generated/")
                 .filter(|file| file.starts_with("include/") || *file == "src/Rte.c")
@@ -297,9 +300,6 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
                 std::fs::write(target, bytes).unwrap();
             }
         }
-        let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap();
         let settings = tooling::execution_settings();
         let mut compiler = std::process::Command::new(&settings.compiler);
         compiler.current_dir(&directory).args([
@@ -310,14 +310,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "-pedantic",
             "-Iinclude",
         ]);
-        for include in [
-            "runtime/ecu/include",
-            "runtime/os/include",
-            "runtime/bsw/include",
-            "runtime/host/include",
-        ] {
-            compiler.arg("-I").arg(repository.join(include));
-        }
+        tooling::project_includes(&mut compiler, &directory);
         compiler.args(["-c", "src/Rte.c", "-o", "Rte.o"]);
         let output = tooling::run_public_command(
             &mut compiler,
@@ -397,6 +390,7 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let executable = tooling::native_binary(&scratch.0, "rte-com-consumer");
     let mut compiler = tooling::c_compiler();
+    tooling::project_includes(&mut compiler, &scratch.0);
     compiler
         .current_dir(&scratch.0)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
@@ -456,6 +450,7 @@ fn generated_schm_lifecycle_refuses_misordered_repeated_and_foreign_calls() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let executable = tooling::native_binary(&scratch.0, "schm-lifecycle");
     let mut compiler = tooling::c_compiler();
+    tooling::project_includes(&mut compiler, &scratch.0);
     compiler
         .current_dir(&scratch.0)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
@@ -661,6 +656,7 @@ fn generated_rte_unconnected_and_first_publication_preserve_values_and_outputs()
         );
         assert!(output.status.success(), "{output:?}");
         let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
         compiler
             .current_dir(&scratch.0)
             .args([
@@ -796,6 +792,7 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
         let path = scratch.0.join(format!("{label}.c"));
         std::fs::write(&path, source).unwrap();
         let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
         compiler
             .current_dir(&scratch.0)
             .args([
@@ -1334,6 +1331,7 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
         std::fs::write(directory.join("consumer.c"), source).unwrap();
         let object = directory.join("consumer.o");
         let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
         compiler.current_dir(&directory).args([
             "-std=c99",
             "-Wall",
@@ -1406,6 +1404,7 @@ StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
     .unwrap();
     let object = directory.join("consumer.o");
     let mut compiler = tooling::c_compiler();
+    tooling::project_includes(&mut compiler, &scratch.0);
     compiler
         .current_dir(&directory)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"]);

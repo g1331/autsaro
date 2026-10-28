@@ -65,6 +65,7 @@ fn counter_header_oracles() {
     let scratch = Scratch::new();
     let compile = |project: &Path, binary: &Path, renamed: bool, maximum: u32| {
         let mut command = super::tooling::c_compiler();
+        super::tooling::project_includes(&mut command, project);
         command
             .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-I"])
             .arg(project.join("os/include"))
@@ -204,7 +205,8 @@ fn standard_status_build() {
     let (original, _) = project(&sources, &scratch.0, super::tooling::native_target());
     let moved = scratch.0.join("moved standard target");
     std::fs::rename(&original, &moved).unwrap();
-    let mut conflict = std::process::Command::new("gcc");
+    let mut conflict = std::process::Command::new(super::tooling::execution_settings().compiler);
+    super::tooling::project_includes(&mut conflict, &moved);
     conflict
         .args(["-std=c99", "-E", "-x", "c", "-DOS_STATUS_EXTENDED=1", "-I"])
         .arg(moved.join("os/include"))
@@ -501,6 +503,7 @@ fn delivery_and_independent_control() {
     // No repository header path and no OS object: only the moved delivery.
     let public = super::tooling::native_binary(&scratch.0, "public_compatibility");
     let mut compile = super::tooling::c_compiler();
+    super::tooling::project_includes(&mut compile, &moved);
     compile
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-I"])
         .arg(moved.join("os/include"))

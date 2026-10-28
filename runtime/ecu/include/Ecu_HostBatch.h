@@ -4,7 +4,7 @@
 #ifndef ECU_HOST_BATCH_H
 #define ECU_HOST_BATCH_H
 
-#include "Os.h"
+#include "Os_Types.h"
 #include "Ecu_Status.h"
 #include <stddef.h>
 #include <stdint.h>

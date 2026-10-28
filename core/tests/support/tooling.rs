@@ -63,6 +63,17 @@ pub(crate) fn c_compiler() -> Command {
     command
 }
 
+/// Use the generated delivery's complete include closure, including native providers.
+pub(crate) fn project_includes(command: &mut Command, project: &Path) {
+    let target: serde_json::Value =
+        serde_json::from_slice(&fs::read(project.join("target.json")).unwrap()).unwrap();
+    for include in target["includePaths"].as_array().unwrap() {
+        command
+            .arg("-I")
+            .arg(project.join(include.as_str().unwrap()));
+    }
+}
+
 pub(crate) fn ecu_build_command(
     project: &std::path::Path,
     output: &std::path::Path,
