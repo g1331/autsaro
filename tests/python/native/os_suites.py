@@ -1758,8 +1758,7 @@ def check_capacity(binary: Path) -> list[dict]:
     return observations
 
 
-# Verifies: SWS_Os_00772, 00773, 00774, 00775, 00776, 00777, 00778, 00779, 00780, 00781, 00782,
-# 00786, 00787, 00788, 00789, 00790, 00791, 00792, 00793, 00794, 91000, 91002, 91007
+# Verifies: SWS_Os_00782, 00786, 00789, 00790, 00793, 00794, 91002, 91007
 def check_public_types(directory: Path) -> None:
     # Verifies[Os]: SWS_BSW_00120. Independent C99 widths; 256/UINT32_MAX refusal vectors run in lifecycle.
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
@@ -1771,7 +1770,7 @@ def check_public_types(directory: Path) -> None:
         "-I" + str(ROOT / "runtime/bsw/include"), "-I" + str(ROOT / "runtime/host/include"),
         "-o", str(binary),
     ]
-    expected = "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    expected = "public_types sc1_range_and_pointer_contracts=pass\n"
     for name, extra in [
         ("header-only", []),
         ("host-before", ["-DOS_PUBLIC_TYPES_HOST_BEFORE"]),
@@ -1787,6 +1786,29 @@ def check_public_types(directory: Path) -> None:
         result = run_native([str(binary)], capture_output=True, text=True, timeout=5)
         require(result.returncode == 0 and result.stdout == expected and not result.stderr,
                 {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
+
+
+    unsupported = (
+        "ApplicationType", "ApplicationStateType", "ApplicationStateRefType",
+        "TrustedFunctionIndexType", "TrustedFunctionParameterRefType", "AccessType",
+        "ObjectAccessType", "ObjectTypeType", "MemoryStartAddressType", "MemorySizeType",
+        "ProtectionReturnType", "RestartType", "SpinlockIdType", "TryToGetSpinlockType",
+        "AreaIdType",
+    )
+    source = directory / "unsupported-sc1-type.c"
+    flags = [argument for argument in command[:-2]
+             if argument != str(TARGET / "tests/public_types.c")]
+    flags += ["-I" + str(TARGET / "src")] + (
+        ["-I" + str(TARGET / "src/host/linux")] if linux else []
+    )
+    for name in unsupported:
+        source.write_text('#include "Os.h"\n' + name + ' *unsupported;\n', encoding="utf-8")
+        result = run_native([*flags, "-fsyntax-only", str(source)], capture_output=True, text=True)
+        errors = [line for line in result.stderr.splitlines() if "error:" in line]
+        require(result.returncode != 0 and len(errors) == 1 and
+                "unknown type name" in errors[0] and name in errors[0] and
+                str(source) + ":2:" in errors[0],
+                {"type": name, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
 
 
 # Verifies: SWS_Os_91025
