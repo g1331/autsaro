@@ -35,3 +35,35 @@ SWS_BSW_00059 要求所有模块头提供受多重定义保护的发布信息 #d
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Std_Types.h` 中 `STD_TYPES_AR_RELEASE_REVISION_VERSION`、`STD_TYPES_SW_MAJOR_VERSION`、`STD_TYPES_SW_MINOR_VERSION`、`STD_TYPES_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/os/include/Arti_Version.h` 中 `ARTI_AR_RELEASE_REVISION_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Version.h` 中 `OS_AR_RELEASE_REVISION_VERSION`、`OS_SW_MAJOR_VERSION`、`OS_SW_MINOR_VERSION`、`OS_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
+
+## 必需预处理常量与构造宏（待复核）
+
+以下26个现存 R2.5 位置单独核对，不继承前述68项的独立复核结论。
+它们尚未添加 MR12，待本批限定技术复核后才进入批准关联。
+PlatformTypes §7.2/7.3、8.3.1–3 明确要求三个平台选择符以 `#define` 发布；
+StandardTypes §8.2.2/3 明列四个状态宏的 `#define` 形式。
+把它们改成 enum、私有常量或删除未消费的名字，不能保留同一预处理接口。
+这里没有据此批准全部 CPU 枚举值或其他公共状态名字的宏形式。
+
+OSEK OS 2.2.3 §11.2（印刷41页）明确要求服务标识 accessor，以及第一参数为 object identifier 的服务 accessor；
+§13.8.4 把访问限制在 ErrorHook。下表只包括 OSEK 本身定义的12个首对象参数，不把其他参数、
+输出指针或 AUTOSAR 扩展服务一起推定为必需。
+四个 DeclareX 构造按 §13.2.2.1、13.4.2.1、13.5.2.1、13.6.2.1 及 §14.2.7 保留兼容语法；
+ISR 与 ALARMCALLBACK 分别按 SWS_Os_00815、OSEK §13.6.5 保留定义形式。
+构造参数位于声明/定义位置，不能替换成 enum 或有运行效果的函数调用。
+
+R2.5 为 Advisory/System；主文印刷44/PDF52，TC1 将撤销计作用途，TC2.5/6 明确对象为宏定义。
+这里承认当前程序中的真实未使用，不以公开可见或测试中的使用改写生产程序结果。
+风险为公开预处理面；数值/展开式和原有消费者保持。类型、所选功能、宏展开、标准版次或包含闭包变化时重评。
+授权拟按 ADR0023 的既有 AUTOSAR/OSEK 必需冲突处理，不请求新项目例外；技术必要性仍须独立复核。
+ErrorHook 这里只处置宏发布的 R2.5，明确不批准参数副本的 R18.6，后者继续引用既有待决提案。
+
+| 规则 | 精确范围 | 原文及控制 | 原授权 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Platform_Types.h` 中 `CPU_TYPE`、`CPU_BIT_ORDER`、`CPU_BYTE_ORDER` | SWS_Platform_00044/00045/00064、00043/00038、00046/00039；固定x64选择不变，公开预处理值保持。 | 待独立复核；ADR0023原授权范围 |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Std_Types.h` 中 `STD_HIGH`、`STD_LOW`、`STD_ACTIVE`、`STD_IDLE` | SWS_Std_00007/00013 明列四个define及数值；保留头内常量表达式。 | 待独立复核；ADR0023原授权范围 |
+| MISRA C:2012 Rule 2.5 | `runtime/os/include/Os.h` 中 `DeclareTask`、`DeclareResource`、`DeclareEvent`、`DeclareAlarm` | OSEK §13.2.2.1/13.4.2.1/13.5.2.1/13.6.2.1、§14.2.7；public-compatibility保持文件/块作用域声明及参数零求值。 | 待独立复核；ADR0023原授权范围 |
+| MISRA C:2012 Rule 2.5 | `runtime/os/include/Os.h` 中 `ISR`、`ALARMCALLBACK` | SWS_Os_00815、OSEK §13.6.5；entry-bodies实际定义并运行入口，函数/ID绑定保持。 | 待独立复核；ADR0023原授权范围 |
+| MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Hooks.h` 中 `OSErrorGetServiceId` | OSEK §11.2、13.8.4；error-hooks观察实际失败服务标识。 | 待独立复核；ADR0023原授权范围 |
+| MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Hooks.h` 中 `OSError_GetTaskState_TaskID`、`OSError_ActivateTask_TaskID`、`OSError_ChainTask_TaskID`、`OSError_GetResource_ResID`、`OSError_ReleaseResource_ResID`、`OSError_SetEvent_TaskID`、`OSError_GetEvent_TaskID` | OSEK §11.2，§13.2/13.4/13.5 的首对象参数；现有error-hooks的服务/参数绑定保持。 | 待独立复核；ADR0023原授权范围 |
+| MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Hooks.h` 中 `OSError_GetAlarmBase_AlarmID`、`OSError_GetAlarm_AlarmID`、`OSError_SetRelAlarm_AlarmID`、`OSError_SetAbsAlarm_AlarmID`、`OSError_CancelAlarm_AlarmID` | OSEK §11.2、13.6 的首AlarmID；不把后续参数/输出指针纳入。 | 待独立复核；ADR0023原授权范围 |
