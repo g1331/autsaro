@@ -1289,34 +1289,6 @@ OS_MEMMAP static DWORD WINAPI control_actor(void *argument)
     report_and_exit();
 }
 
-OS_MEMMAP void Os_BackendStackFault(char failed_role)
-{
-    Os_TimeClose();
-    Os_MailboxClose();
-    (void)InterlockedOr(&activation_admission, 2);
-    (void)InterlockedExchange(&ready, 0);
-    __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
-    if (failed_role == 'C') {
-        (void)InterlockedExchange(&controller_healthy[0], 0);
-    } else if (failed_role == 'D') {
-        (void)InterlockedExchange(&controller_healthy[1], 0);
-    } else {
-        /* A Task, ISR or startup fault leaves both controller health states intact. */
-    }
-    if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
-        if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
-            Os_StackFatalExit();
-        }
-    }
-    if (Os_HostSetEvent((InterlockedCompareExchange(&controller_healthy[0], 0, 0) != 0)
-                            ? close_event
-                            : backup_event) == 0) {
-        ExitProcess(E_OS_STACKFAULT);
-    }
-    (void)InterlockedExchange(&Os_Closing, 1);
-    Sleep(INFINITE);
-    ExitProcess(E_OS_STACKFAULT);
-}
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #ifdef __linux__
@@ -1472,6 +1444,35 @@ OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 #else
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+OS_MEMMAP void Os_BackendStackFault(char failed_role)
+{
+    Os_TimeClose();
+    Os_MailboxClose();
+    (void)InterlockedOr(&activation_admission, 2);
+    (void)InterlockedExchange(&ready, 0);
+    __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
+    if (failed_role == 'C') {
+        (void)InterlockedExchange(&controller_healthy[0], 0);
+    } else if (failed_role == 'D') {
+        (void)InterlockedExchange(&controller_healthy[1], 0);
+    } else {
+        /* A Task, ISR or startup fault leaves both controller health states intact. */
+    }
+    if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
+        if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
+            Os_StackFatalExit();
+        }
+    }
+    if (Os_HostSetEvent((InterlockedCompareExchange(&controller_healthy[0], 0, 0) != 0)
+                            ? close_event
+                            : backup_event) == 0) {
+        ExitProcess(E_OS_STACKFAULT);
+    }
+    (void)InterlockedExchange(&Os_Closing, 1);
+    Sleep(INFINITE);
+    ExitProcess(E_OS_STACKFAULT);
+}
+
 OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
                                       SIZE_T stack,
                                       LPTHREAD_START_ROUTINE start,

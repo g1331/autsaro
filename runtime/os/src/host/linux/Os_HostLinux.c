@@ -941,11 +941,6 @@ OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
     return 1;
 }
 
-OS_MEMMAP HANDLE Os_HostDispatcherThread(void)
-{
-    return __atomic_load_n(&dispatcher, __ATOMIC_ACQUIRE);
-}
-
 OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread)
 {
     __atomic_store_n(&dispatcher, thread, __ATOMIC_RELEASE);
