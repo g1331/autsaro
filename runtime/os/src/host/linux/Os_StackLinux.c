@@ -184,7 +184,7 @@ OS_MEMMAP static void publish_fault(
 
 OS_MEMMAP static void guard_signal(int signum, siginfo_t *details, void *native_context)
 {
-    Os_NativeStackType *record = current_stack;
+    const Os_NativeStackType *record = current_stack;
     uintptr_t address = (uintptr_t)details->si_addr;
     if ((record == NULL) || ((signum != SIGSEGV) && (signum != SIGBUS)) ||
         (address < record->reserve_low) || (address >= record->committed_low)) {
