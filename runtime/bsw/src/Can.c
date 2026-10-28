@@ -108,6 +108,8 @@ static PduIdType tx_confirmation_handle CAN_VAR_CLEARED; /**< swPduHandle to con
  * complete a new same-handle request after cancellation or reinitialization. */
 static uint64 host_tx_sequence CAN_VAR_CLEARED;          /**< Token of the last admitted frame. */
 static uint64 host_tx_cancelled_through CAN_VAR_CLEARED; /**< Tokens up to here never complete. */
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 static uint64 host_tx_completed_through CAN_VAR_CLEARED; /**< Tokens up to here have completed. */
 #define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"

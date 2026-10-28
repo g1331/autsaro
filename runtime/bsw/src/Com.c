@@ -49,6 +49,8 @@ static boolean monitoring COM_VAR_CLEARED; /**< Rx deadline monitoring enabled; 
 static boolean reception_before_main
     COM_VAR_CLEARED; /**< Receive precedes this main tick; Init resets. */
 /* A context is delivering a notification; never reset, so it outlives a reinitialization. */
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 static boolean publishing COM_VAR_CLEARED; /**< Callback in flight; Init preserves. */
 #define COM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Com_MemMap.h"

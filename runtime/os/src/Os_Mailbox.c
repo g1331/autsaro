@@ -7,6 +7,8 @@
 OS_MEMMAP static Os_InputRecordType
     records[OS_INPUT_CAPACITY]; /**< SPSC-owned ring slots, atomic publication; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static uint64 last_ticket; /**< Single-producer accepted ticket; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
@@ -83,6 +85,8 @@ OS_MEMMAP void Os_TestInputLastTicket(uint64 ticket) { last_ticket = ticket; }
 #endif
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static uint32 write_index; /**< Persistent function-owned state; existing caller/port
                                         synchronization; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
@@ -157,6 +161,8 @@ OS_MEMMAP sint32 Os_BridgeActorAllowed(void)
 #endif
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static volatile Os_Atomic32Type
     producer; /**< Persistent function-owned state; existing caller/port synchronization; no Init
                  reset. */
@@ -199,6 +205,8 @@ OS_MEMMAP static StatusType input_context(void)
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static uint32 read_index; /**< Persistent function-owned state; existing caller/port
                                        synchronization; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32

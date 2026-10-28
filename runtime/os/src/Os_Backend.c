@@ -294,6 +294,8 @@ OS_MEMMAP const AppModeType *const Os_ArtiAppMode =
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static uint32
     resource_owner[OS_MAX_RESOURCES]; /**< Resource owners; OS port lock; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
@@ -343,6 +345,8 @@ OS_MEMMAP static uint8 trace[128]; /**< Caller-serialized trace prefix bytes; no
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static uint32 trace_length; /**< Caller-serialized used trace bytes; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
@@ -644,6 +648,8 @@ OS_MEMMAP sint32 Os_BackendReady(void)
  * the existing kernel ready-list policy remains the only selector. */
 #define OS_START_SEC_VAR_CLEARED_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static Os_OrderReferenceType
     rebase_entries[OS_MAX_TASKS *
                    (OS_MAX_ACTIVATIONS + 1u)]; /**< Persistent function-owned state; existing
@@ -2131,6 +2137,8 @@ OS_MEMMAP static void Os_BackendMissingEnd(void)
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static UBaseType_t
     saved_priorities[OS_RESOURCE_ACTORS]
                     [OS_MAX_RESOURCES]; /**< Persistent function-owned state; existing caller/port
@@ -2139,6 +2147,8 @@ OS_MEMMAP static UBaseType_t
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static LONG
     saved_interrupt_ceilings[OS_RESOURCE_ACTORS]
                             [OS_MAX_RESOURCES]; /**< Persistent function-owned state; existing

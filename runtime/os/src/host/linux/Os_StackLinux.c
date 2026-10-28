@@ -47,6 +47,8 @@ OS_MEMMAP const uint64 Os_ArtiNativeContextSize =
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static struct {
     /* Alignment-only backing storage; never read as floating point. */
     long double storage[OS_ALTSTACK_BYTES / sizeof(long double)];
@@ -61,15 +63,21 @@ OS_MEMMAP static volatile Os_Atomic32Type
 OS_MEMMAP static volatile Os_Atomic32Type
     stack_count; /**< Atomic native record reservations; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static volatile Os_Atomic32Type
     fault_claimed; /**< Atomic first-fault winner latch; no Init reset. */
 
 OS_MEMMAP static volatile Os_Atomic32Type
     fault_count; /**< Atomic fault claim/count state; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static volatile Os_Atomic32Type
     fatal_claimed; /**< Atomic terminal-report winner latch; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static volatile int32_t fault_park; /**< Constant-zero futex park cell; no Init writes. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
@@ -375,14 +383,20 @@ OS_MEMMAP static size_t append_hex(char *output, size_t offset, DWORD value)
 
 #define OS_START_SEC_CONST_8
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit CONST mapping requires file-static scope under
+ * SWS_MemMap_00023. */
 OS_MEMMAP static const char fatal_prefix[] =
     "FATAL state=Failed reason=13 controllers_exhausted=1\nFAULT role="; /**< Immutable native
                                                                             fatal-report bytes;
                                                                             process lifetime. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit CONST mapping requires file-static scope under
+ * SWS_MemMap_00023. */
 OS_MEMMAP static const char fatal_middle[] =
     " signal="; /**< Immutable native fatal-report bytes; process lifetime. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit CONST mapping requires file-static scope under
+ * SWS_MemMap_00023. */
 OS_MEMMAP static const char fatal_suffix[] =
     " captured=1 record_complete=1\n"; /**< Immutable native fatal-report bytes; process lifetime.
                                         */

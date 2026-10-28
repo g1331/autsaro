@@ -28,7 +28,7 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 按 [ADR 0023](../../adr/0023-autosar-required-conflict-disposition.md)执行，不是实现者新增批准。
 下表逐项列出当前映射及消费闭包；共同不可兼得依据均为上述 00023。
 独立复核及各 profile／源码键身份集中 [PR #389](https://github.com/g1331/autsaro/pull/389)。
-当前记录待独立复核，完成后才实施 MR12；不据本表声称源码符合或改写原始分析。
+22个对象的映射必要性及声明关联已在 PR 的集中独立复核中确认；三处段类别与条件 setter 描述更正后实施 MR12，不据此声称源码符合或改写原始分析。
 
 | 规则 | 精确范围 | 映射及消费／控制 | 原授权 |
 | --- | --- | --- | --- |
@@ -38,12 +38,12 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 | MISRA C:2012 Rule 8.9 | `runtime/host/src/Ecu_HostBusSM.c` 中 `bussm_publication` | VAR_CLEARED_UNSPECIFIED；Ecu_HostBusSM_Publish 的待发布／在途状态，BUSSM 区保护。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `resource_owner` | VAR_CLEARED_32；Os_BackendResource 在 port 锁下维护；ARTI view 也指向该数组。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `trace_length` | VAR_CLEARED_32；Os_TargetTrace 的调用方串行化长度，配合既有 trace 缓冲。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `rebase_entries` | VAR_CLEARED_64；rebase_orders 的有界重排暂存，元素类型和容量保持。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `saved_priorities` | VAR_CLEARED_32；Os_BackendResource 按 actor／资源保存 Task 优先级。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `rebase_entries` | VAR_CLEARED_PTR；rebase_orders 的有界重排暂存，元素类型和容量保持。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `saved_priorities` | VAR_CLEARED_64；Os_BackendResource 按 actor／资源保存 Task 优先级。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `saved_interrupt_ceilings` | VAR_CLEARED_32；Os_BackendResource 按资源层级保存并恢复 ISR ceiling。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Error.c` 中 `error_active` | VAR_CLEARED_TLS_32；Os_ErrorResult 的 actor 递归保护；不处置参数地址的 R18.6。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Interrupt.c` 中 `states` | VAR_CLEARED_TLS_64；owner_state 返回逻辑调用方的 actor 自有深度对象。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Mailbox.c` 中 `last_ticket` | VAR_CLEARED_64；Os_TargetPostInput 的单生产者 ticket；测试配置另有只读 accessor。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Interrupt.c` 中 `states` | VAR_CLEARED_TLS_32；owner_state 返回逻辑调用方的 actor 自有深度对象。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Mailbox.c` 中 `last_ticket` | VAR_CLEARED_64；Os_TargetPostInput 的单生产者 ticket；OS_EVENT_TESTS=STD_ON 另由 Os_TestInputLastTicket 条件 setter 写入；生产配置仍为单生产者。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Mailbox.c` 中 `write_index` | VAR_CLEARED_32；Os_TargetPostInput 的单生产者发布索引。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Mailbox.c` 中 `producer` | VAR_CLEARED_32；Os_BridgeContext 原子发布唯一生产者身份。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Mailbox.c` 中 `read_index` | VAR_CLEARED_32；Os_TargetTakeInput 的单消费者读取索引。 | 维护者 原用户决定，ADR 0023 |

@@ -33,6 +33,8 @@ OS_MEMMAP static OS_THREAD_LOCAL Os_ErrorParametersType
 OS_MEMMAP static OS_THREAD_LOCAL uint32
     hook_depth; /**< Actor TLS hook nesting count; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit TLS mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static OS_THREAD_LOCAL sint32
     error_active; /**< Actor TLS ErrorHook recursion guard; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_TLS_32

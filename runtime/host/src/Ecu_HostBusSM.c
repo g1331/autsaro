@@ -16,6 +16,8 @@ static ComM_ModeType requested_mode ECU_HOSTBUSSM_VAR_CLEARED; /**< Last accepte
 static boolean transition_pending ECU_HOSTBUSSM_VAR_CLEARED;   /**< Controller transition. */
 static uint32 revision ECU_HOSTBUSSM_VAR_CLEARED; /**< Transition events; never reset. */
 /* Completions awaiting Ecu_HostBusSM_Publish; Init keeps a running publisher. */
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 static struct {
     boolean due;     /**< A completion is unpublished. */
     boolean running; /**< A publisher is running. */
