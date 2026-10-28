@@ -782,6 +782,9 @@ int main(void) {{
     if (result.sw_major_version != {}u) {{ return 11; }}
     if (result.sw_minor_version != {}u) {{ return 12; }}
     if (result.sw_patch_version != {}u) {{ return 13; }}
+    Arti_DevelopmentError = 0;
+    get_version(NULL);
+    if (Arti_DevelopmentError != ARTI_E_PARAM_POINTER) {{ return 14; }}
     return 0;
 }}
 "#,
@@ -854,6 +857,12 @@ int main(void) {{
         assert_eq!(run([1, 0, 0], false), Some(11 + index as i32));
         std::fs::write(&source_path, &source).unwrap();
     }
+    let error_write =
+        "(void)InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);";
+    assert_eq!(source.matches(error_write).count(), 1);
+    std::fs::write(&source_path, source.replace(error_write, "")).unwrap();
+    assert_eq!(run([1, 0, 0], false), Some(14));
+    std::fs::write(&source_path, &source).unwrap();
 }
 
 #[test]
