@@ -33,8 +33,6 @@ OS_MEMMAP static inline LONG InterlockedDecrement(volatile LONG *cell)
     return __atomic_sub_fetch(cell, 1, __ATOMIC_SEQ_CST);
 }
 
-OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread);
-
 OS_MEMMAP int Os_HostInstallSignals(void);
 
 /** Recoverable creation failures return NULL; a failed mapping rollback terminates the process. */

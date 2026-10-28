@@ -1851,7 +1851,6 @@ OS_MEMMAP void Os_BackendSetDispatcher(void)
                         DUPLICATE_SAME_ACCESS) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    Os_HostSetDispatcher(main_thread);
     Os_StackInit();
 }
 #define OS_STOP_SEC_CODE

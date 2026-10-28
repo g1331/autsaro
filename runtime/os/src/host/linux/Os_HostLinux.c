@@ -90,11 +90,6 @@ OS_MEMMAP static struct Os_HostHandleType process_handle = {
     .kind = OS_HOST_PROCESS}; /**< C-initialized immutable process pseudo-handle; no Init writes. */
 #define OS_STOP_SEC_VAR_INIT_UNSPECIFIED
 #include "Os_MemMap.h"
-#define OS_START_SEC_VAR_CLEARED_PTR
-#include "Os_MemMap.h"
-OS_MEMMAP static HANDLE dispatcher; /**< Atomic dispatcher-handle publication; no Init reset. */
-#define OS_STOP_SEC_VAR_CLEARED_PTR
-#include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_TLS_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP static OS_HOST_THREAD_LOCAL HANDLE
@@ -939,11 +934,6 @@ OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
     *code =
         (__atomic_load_n(&thread->ended, __ATOMIC_ACQUIRE) != 0) ? thread->exit_code : STILL_ACTIVE;
     return 1;
-}
-
-OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread)
-{
-    __atomic_store_n(&dispatcher, thread, __ATOMIC_RELEASE);
 }
 
 OS_MEMMAP int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard)
