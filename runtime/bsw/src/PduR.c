@@ -37,12 +37,12 @@ static const PduR_PBConfigType *pdur_configuration
 static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config)
 {
     boolean valid = FALSE;
-    uint16 i;
     if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
         ((config->receive_count == 0u) || (config->receive != NULL_PTR)) &&
         ((config->transmit_count == 0u) || (config->transmit != NULL_PTR)) &&
         (config->transport_count <= 32u) &&
         ((config->transport_count == 0u) || (config->transport != NULL_PTR))) {
+        uint16 i;
         valid = TRUE;
         for (i = 0u; i < config->receive_count; ++i) {
             uint16 j;

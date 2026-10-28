@@ -12,8 +12,6 @@ OS_MEMMAP ISRType GetISRID(void)
     const ISRType result = Os_Implementation_GetISRID();
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)Os_ArtiAccessStatus());
-    }
-    if (trace != 0) {
         Os_ArtiService(
             OSServiceId_GetISRID, (Os_ArtiAccessValid() != 0) ? (uint32)result : UINT32_MAX, 1);
     }
@@ -30,8 +28,6 @@ OS_MEMMAP StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
     const StatusType result = Os_Implementation_ControlIdle(CoreID, IdleMode);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_ControlIdle, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -47,8 +43,6 @@ OS_MEMMAP boolean isOsStarted(void)
     const boolean result = Os_Implementation_isOsStarted();
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)Os_ArtiAccessStatus());
-    }
-    if (trace != 0) {
         const uint32 started = result ? 1u : 0u;
         Os_ArtiService(
             OSServiceId_isOsStarted, (Os_ArtiAccessValid() != 0) ? started : UINT32_MAX, 1);
@@ -81,8 +75,6 @@ OS_MEMMAP StatusType GetTaskID(TaskRefType TaskID)
     const StatusType result = Os_Implementation_GetTaskID(TaskID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_GetTaskID, (result == E_OK) ? (uint32)*TaskID : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
@@ -98,8 +90,6 @@ OS_MEMMAP StatusType GetTaskState(TaskType TaskID, TaskStateRefType State)
     const StatusType result = Os_Implementation_GetTaskState(TaskID, State);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_GetTaskState, (result == E_OK) ? (uint32)*State : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
@@ -115,8 +105,6 @@ OS_MEMMAP StatusType ActivateTask(TaskType TaskID)
     const StatusType result = Os_Implementation_ActivateTask(TaskID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_ActivateTask, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -135,8 +123,6 @@ OS_MEMMAP StatusType TerminateTask(void)
     const StatusType result = Os_Implementation_TerminateTask();
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_TerminateTask, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -152,8 +138,6 @@ OS_MEMMAP StatusType ChainTask(TaskType TaskID)
     const StatusType result = Os_Implementation_ChainTask(TaskID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_ChainTask, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -169,8 +153,6 @@ OS_MEMMAP StatusType GetResource(ResourceType ResID)
     const StatusType result = Os_Implementation_GetResource(ResID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_GetResource, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -186,8 +168,6 @@ OS_MEMMAP StatusType ReleaseResource(ResourceType ResID)
     const StatusType result = Os_Implementation_ReleaseResource(ResID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_ReleaseResource, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -203,8 +183,6 @@ OS_MEMMAP StatusType Schedule(void)
     const StatusType result = Os_Implementation_Schedule();
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_Schedule, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -220,8 +198,6 @@ OS_MEMMAP StatusType WaitEvent(EventMaskType Mask)
     const StatusType result = Os_Implementation_WaitEvent(Mask);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_WaitEvent, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -237,8 +213,6 @@ OS_MEMMAP StatusType ClearEvent(EventMaskType Mask)
     const StatusType result = Os_Implementation_ClearEvent(Mask);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_ClearEvent, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -254,8 +228,6 @@ OS_MEMMAP StatusType SetEvent(TaskType TaskID, EventMaskType Mask)
     const StatusType result = Os_Implementation_SetEvent(TaskID, Mask);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_SetEvent, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -271,8 +243,6 @@ OS_MEMMAP StatusType GetEvent(TaskType TaskID, EventMaskRefType Event)
     const StatusType result = Os_Implementation_GetEvent(TaskID, Event);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_GetEvent, (result == E_OK) ? (uint32)*Event : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
@@ -308,8 +278,6 @@ OS_MEMMAP AppModeType GetActiveApplicationMode(void)
     const AppModeType result = Os_Implementation_GetActiveApplicationMode();
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)Os_ArtiAccessStatus());
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_GetActiveApplicationMode,
                        (Os_ArtiAccessValid() != 0) ? (uint32)result : UINT32_MAX,
                        1);
@@ -327,8 +295,6 @@ OS_MEMMAP StatusType IncrementCounter(CounterType CounterID)
     const StatusType result = Os_Implementation_IncrementCounter(CounterID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_IncrementCounter, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -344,8 +310,6 @@ OS_MEMMAP StatusType GetCounterValue(CounterType CounterID, TickRefType Value)
     const StatusType result = Os_Implementation_GetCounterValue(CounterID, Value);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(
             OSServiceId_GetCounterValue, (result == E_OK) ? (uint32)*Value : UINT32_MAX, 1);
     }
@@ -364,8 +328,6 @@ OS_MEMMAP StatusType GetElapsedValue(CounterType CounterID,
     const StatusType result = Os_Implementation_GetElapsedValue(CounterID, Value, ElapsedValue);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(
             OSServiceId_GetElapsedValue, (result == E_OK) ? (uint32)*ElapsedValue : UINT32_MAX, 1);
     }
@@ -382,8 +344,6 @@ OS_MEMMAP StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
     const StatusType result = Os_Implementation_GetAlarmBase(AlarmID, Info);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         if (result == E_OK) {
             Os_ArtiAlarmBaseReturn(Info);
         } else {
@@ -403,8 +363,6 @@ OS_MEMMAP StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick)
     const StatusType result = Os_Implementation_GetAlarm(AlarmID, Tick);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_GetAlarm, (result == E_OK) ? (uint32)*Tick : UINT32_MAX, 1);
     }
     Os_ArtiServiceLeave();
@@ -420,8 +378,6 @@ OS_MEMMAP StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType
     const StatusType result = Os_Implementation_SetRelAlarm(AlarmID, Increment, Cycle);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_SetRelAlarm, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -437,8 +393,6 @@ OS_MEMMAP StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cyc
     const StatusType result = Os_Implementation_SetAbsAlarm(AlarmID, Start, Cycle);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_SetAbsAlarm, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -454,8 +408,6 @@ OS_MEMMAP StatusType CancelAlarm(AlarmType AlarmID)
     const StatusType result = Os_Implementation_CancelAlarm(AlarmID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_CancelAlarm, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -471,8 +423,6 @@ OS_MEMMAP StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, Ti
     const StatusType result = Os_Implementation_StartScheduleTableRel(ScheduleTableID, Offset);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_StartScheduleTableRel, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -488,8 +438,6 @@ OS_MEMMAP StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, Ti
     const StatusType result = Os_Implementation_StartScheduleTableAbs(ScheduleTableID, Start);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_StartScheduleTableAbs, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -505,8 +453,6 @@ OS_MEMMAP StatusType StopScheduleTable(ScheduleTableType ScheduleTableID)
     const StatusType result = Os_Implementation_StopScheduleTable(ScheduleTableID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_StopScheduleTable, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -524,8 +470,6 @@ OS_MEMMAP StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
         Os_Implementation_NextScheduleTable(ScheduleTableID_From, ScheduleTableID_To);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_NextScheduleTable, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -543,8 +487,6 @@ OS_MEMMAP StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
         Os_Implementation_GetScheduleTableStatus(ScheduleTableID, ScheduleStatus);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_GetScheduleTableStatus,
                        (result == E_OK) ? (uint32)*ScheduleStatus : UINT32_MAX,
                        1);
@@ -562,8 +504,6 @@ OS_MEMMAP StatusType DisableInterruptSource(ISRType ISRID)
     const StatusType result = Os_Implementation_DisableInterruptSource(ISRID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_DisableInterruptSource, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -579,8 +519,6 @@ OS_MEMMAP StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending)
     const StatusType result = Os_Implementation_EnableInterruptSource(ISRID, ClearPending);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_EnableInterruptSource, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();
@@ -596,8 +534,6 @@ OS_MEMMAP StatusType ClearPendingInterrupt(ISRType ISRID)
     const StatusType result = Os_Implementation_ClearPendingInterrupt(ISRID);
     if (trace != 0) {
         Arti_CaptureServiceStatus((uint32)result);
-    }
-    if (trace != 0) {
         Os_ArtiService(OSServiceId_ClearPendingInterrupt, (uint32)result, 1);
     }
     Os_ArtiServiceLeave();

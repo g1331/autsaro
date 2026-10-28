@@ -171,11 +171,10 @@ static COM_CODE void Com_Publish(void)
 static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
 {
     boolean valid = FALSE;
-    uint16 index;
     if ((config != NULL_PTR) && (config->pdus != NULL_PTR) && (config->pdu_count > 0u) &&
         (config->pdu_count <= COM_MAX_PDUS)) {
         valid = TRUE;
-        for (index = 0u; index < config->pdu_count; ++index) {
+        for (uint16 index = 0u; index < config->pdu_count; ++index) {
             uint16 previous;
             const Com_PduConfigType *pdu = &config->pdus[index];
             if (((pdu->receive == TRUE) && ((config->receive_notification == NULL_PTR) ||
@@ -198,12 +197,11 @@ static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
 COM_CODE void Com_Init(const Com_ConfigType *config)
 {
     const boolean valid = Com_ValidConfig(config);
-    uint16 index;
     SchM_Enter_Com_COM_STATE();
     Com_Reset();
     if (valid == TRUE) {
         com_configuration = config;
-        for (index = 0u; index < config->pdu_count; ++index) {
+        for (uint16 index = 0u; index < config->pdu_count; ++index) {
             signal_values[index] = config->pdus[index].initial_value;
         }
     }
