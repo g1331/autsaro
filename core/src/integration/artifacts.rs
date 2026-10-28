@@ -1011,15 +1011,20 @@ pub(super) fn files(
                 if name == "Autsaro_Version.h" {
                     module != "Arti"
                 } else if module == "Os" {
-                    (os && !matches!(name, "Arti.c" | "Arti.h" | "Arti_Version.h"))
-                        || (generated
-                            && (name.starts_with("Os_")
-                                || matches!(
-                                    name,
-                                    "Rte_Os_Type.h" | "Ecu_Config.c" | "Ecu_TargetConfig.h"
-                                )))
+                    (os && !matches!(
+                        name,
+                        "Arti.c" | "Arti.h" | "Arti_Types.h" | "Arti_Version.h"
+                    )) || (generated
+                        && (name.starts_with("Os_")
+                            || matches!(
+                                name,
+                                "Rte_Os_Type.h" | "Ecu_Config.c" | "Ecu_TargetConfig.h"
+                            )))
                 } else if module == "Arti" {
-                    os && matches!(name, "Arti.c" | "Arti.h" | "Arti_Version.h")
+                    os && matches!(
+                        name,
+                        "Arti.c" | "Arti.h" | "Arti_Types.h" | "Arti_Version.h"
+                    )
                 } else if module == "Rte" {
                     name == "Rte_Version.h"
                         || (generated && (name.starts_with("Rte") || name.starts_with("SchM_")))
