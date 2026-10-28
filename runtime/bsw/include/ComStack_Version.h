@@ -3,8 +3,8 @@
 #define COMSTACK_VERSION_H
 #include "Autsaro_Version.h"
 /** Published information (SWS_BSW_00059): fixed R24-11 interface release, 4.10.0. */
-#define COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION    4U
-#define COMSTACKTYPE_AR_RELEASE_MINOR_VERSION    10U
+#define COMSTACKTYPE_AR_RELEASE_MAJOR_VERSION 4U
+#define COMSTACKTYPE_AR_RELEASE_MINOR_VERSION 10U
 /* MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
  */
 #define COMSTACKTYPE_AR_RELEASE_REVISION_VERSION 0U

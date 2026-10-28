@@ -4,8 +4,8 @@
 #include "Autsaro_Version.h"
 /* R24-11 MOD DOC-REVISION; SWS_BSW_00059/00256 release identity.
  * Formal vendor identity remains unassigned. */
-#define MEMMAP_AR_RELEASE_MAJOR_VERSION    4U
-#define MEMMAP_AR_RELEASE_MINOR_VERSION    10U
+#define MEMMAP_AR_RELEASE_MAJOR_VERSION 4U
+#define MEMMAP_AR_RELEASE_MINOR_VERSION 10U
 /* MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
  */
 #define MEMMAP_AR_RELEASE_REVISION_VERSION 0U

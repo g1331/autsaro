@@ -3,8 +3,8 @@
 #define PLATFORM_TYPES_H
 #include "Autsaro_Version.h"
 /** Published information (SWS_BSW_00059): fixed R24-11 interface release, 4.10.0. */
-#define PLATFORM_AR_RELEASE_MAJOR_VERSION    4U
-#define PLATFORM_AR_RELEASE_MINOR_VERSION    10U
+#define PLATFORM_AR_RELEASE_MAJOR_VERSION 4U
+#define PLATFORM_AR_RELEASE_MINOR_VERSION 10U
 /* MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
  */
 #define PLATFORM_AR_RELEASE_REVISION_VERSION 0U
