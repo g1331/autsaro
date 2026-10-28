@@ -659,14 +659,14 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
                 "int Os_StackRegister(void) {\n" + marker + bounds + "\n"
                 + marker + "if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||\n"
                 "(region.RegionSize == 0u)) { return 0; }\n"
-                + marker + "if ((uintptr_t)region.AllocationBase != record->reserve_low) { break; }\n}\n"
+                "if (region.AllocationBase != allocation_base) { break; }\n}\n"
                 "void Os_StackCheck(void) {\n" + marker
                 + "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);\n}\n"
                 "void Os_StackObserve(void) {\n" + marker
                 + "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);\n}\n"
             )
             for label, changed, expected in (
-                ("accepted-six", original, None),
+                ("accepted-five", original, None),
                 ("missing-comment", original.replace(marker + bounds, bounds), "deviation-uncommented"),
                 ("wrong-rule", original.replace("RULE 11.6", "RULE 11.4", 1), "deviation-unrecorded"),
                 ("outside-category", original.replace("(uintptr_t)region.AllocationBase;", "(uintptr_t)region.BaseAddress;"),
@@ -675,6 +675,10 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
                 ("duplicate-expression", original.replace(bounds, bounds + bounds), "deviation-category-pattern"),
                 ("extra-conversion", original + "void Other(void) {\n" + marker + bounds + "\n}\n",
                  "deviation-unrecorded"),
+                ("allocation-identity-not-authorized", original.replace(
+                    "if (region.AllocationBase != allocation_base)",
+                    marker + "if ((uintptr_t)region.AllocationBase != record->reserve_low)"),
+                 "deviation-unrecorded"),
             ):
                 with self.subTest(case=label):
                     source.write_text(changed, encoding="utf-8")
@@ -682,9 +686,9 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
                     if expected is None:
                         self.assertEqual(findings, {})
                         instances, errors = c_standard.host_address_instances(root)
-                        self.assertEqual(len(instances), 6)
+                        self.assertEqual(len(instances), 5)
                         self.assertEqual(errors, {})
-                        self.assertEqual(len({entry[1] for entry in instances.values()}), 6)
+                        self.assertEqual(len({entry[1] for entry in instances.values()}), 5)
                     else:
                         self.assertTrue(any(rule == expected for rule, _, _ in findings), findings)
 

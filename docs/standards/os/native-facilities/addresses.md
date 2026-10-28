@@ -46,7 +46,7 @@ host boundary 检查创建、errno、失败回收和句柄复用；检测器与�
 | 文件与函数 | 规则 | 精确构造／用途 |
 | --- | --- | --- |
 | Os_Stack.c / Os_StackRecordBuffer | R11.4 | 静态内核缓冲 top 的 one-past 对象地址转为 kernel_buffer_high。 |
-| Os_Stack.c / Os_StackRegister | R11.6 | AllocationBase 转为 reserve_low；VirtualQuery 的 cursor 整数转为 const void 指针；再次查询的 AllocationBase 转整数比较同一分配。 |
+| Os_Stack.c / Os_StackRegister | R11.6 | AllocationBase 转为 reserve_low；VirtualQuery 的 cursor 整数转为 const void 指针。 |
 | Os_Stack.c / Os_StackCheck | R11.6 | 真实 RSP 转为 VirtualQuery 地址参数。 |
 | Os_Stack.c / Os_StackObserve | R11.6 | 被观察线程的 CONTEXT.Rsp 转为 VirtualQuery 地址参数。 |
 
@@ -57,6 +57,7 @@ host boundary 检查创建、errno、失败回收和句柄复用；检测器与�
 的内核栈缓冲；同数组内指针算术不能表达该跨对象区间。包装、整数搬运或复制指针表示
 不消除转换；删除查询会丢失实际页保护与 guard 检查，改为本地对象只检查另一地址。
 
+分配身份直接以首次查询保留的 AllocationBase 指针作相等比较，不纳入地址转换类别。
 受控 x64 的 uintptr_t 容纳本机地址；VirtualQuery 返回大小必须等于结构大小，枚举要求
 RegionSize 非零且不溢出 UINTPTR_MAX，运行检查先验证 RSP 在已注册区间，再检查 MEM_COMMIT
 及 PAGE_GUARD／PAGE_NOACCESS。重构的指针只交给元数据查询，应用不经它解引用；页对齐由
@@ -71,9 +72,9 @@ foreign／one-past／wrong-slot 反例保持身份拒绝。实际平台行为与
 
 ## 类别实例检查
 
-`c_standard.host_address_instances` 仅在上述命名函数体内匹配九个固定表达式：三个 Linux、
-六个 Windows。同一函数内的不同表达式保持独立身份；文件、规则、函数或表达式改变、
+`c_standard.host_address_instances` 仅在上述命名函数体内匹配八个固定表达式：三个 Linux、
+五个 Windows。同一函数内的不同表达式保持独立身份；文件、规则、函数或表达式改变、
 缺失／重复实例均拒绝，MR12 与记录双向关联；类别文档缺失同样拒绝。
 `test_host_address_category_requires_exact_owner_expression_and_annotation` 检查既有 Linux
-正反例；`test_windows_address_category_keeps_each_expression_bounded` 验证 Windows 的全部六实例、同函数三实例、缺注释、错规则、越界表达式、
+正反例；`test_windows_address_category_keeps_each_expression_bounded` 验证 Windows 的全部五实例、同函数双实例、缺注释、错规则、越界表达式、
 错误函数及重复表达式。项目检查识别来源模式，不替代类型／行为分析、调用合同或规范判断。

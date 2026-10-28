@@ -497,8 +497,6 @@ def host_address_instances(root: Path) -> tuple[dict, collections.Counter[Key]]:
          "record->reserve_low = (uintptr_t)region.AllocationBase;"),
         ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
          "if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||"),
-        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
-         "if ((uintptr_t)region.AllocationBase != record->reserve_low) {"),
         ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackCheck",
          "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);"),
         ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackObserve",

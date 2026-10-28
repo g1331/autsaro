@@ -257,6 +257,7 @@ OS_MEMMAP int Os_StackRegister(char role)
     if (VirtualQuery((const void *)&cursor, &region, sizeof(region)) != sizeof(region)) {
         return 0;
     }
+    const void *const allocation_base = region.AllocationBase;
     record->thread_id = GetCurrentThreadId();
     record->role = role;
     /* MR12 RULE 11.6 VIOLATION: VirtualQuery allocation addresses form the native numeric stack
@@ -271,9 +272,7 @@ OS_MEMMAP int Os_StackRegister(char role)
             (region.RegionSize == 0u) || (region.RegionSize > (UINTPTR_MAX - cursor))) {
             return 0;
         }
-        /* MR12 RULE 11.6 VIOLATION: VirtualQuery allocation identity is compared in the native
-         * numeric address domain. */
-        if ((uintptr_t)region.AllocationBase != record->reserve_low) {
+        if (region.AllocationBase != allocation_base) {
             break;
         }
         if (region.State == MEM_COMMIT) {
