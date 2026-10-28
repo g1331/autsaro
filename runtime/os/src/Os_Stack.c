@@ -73,7 +73,8 @@ OS_MEMMAP Os_StackFaultType
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 /* MR12 RULE 8.9 VIOLATION: the first-fault latch requires its own mapped VAR section. */
-OS_MEMMAP static volatile Os_Atomic32Type fault_claimed;
+OS_MEMMAP static volatile Os_Atomic32Type
+    fault_claimed; /**< Atomic first-fault claim; no Init reset. */
 OS_MEMMAP static volatile Os_Atomic32Type fault_count; /**< Atomic fault count; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
