@@ -36,17 +36,17 @@ typedef struct {
     uint8 sw_minor_version; /**< Software minor version. */
     uint8 sw_patch_version; /**< Software patch version. */
 } Std_VersionInfoType;
-#define NULL_PTR   ((void *)0) /**< SWS_Std_00031: null void pointer. */
-#define E_OK       0x00u       /**< SWS_Std_00006: operation succeeded. */
-#define E_NOT_OK   0x01u       /**< SWS_Std_00006: operation failed. */
+#define NULL_PTR ((void *)0) /**< SWS_Std_00031: null void pointer. */
+#define E_OK     0x00u       /**< SWS_Std_00006: operation succeeded. */
+#define E_NOT_OK 0x01u       /**< SWS_Std_00006: operation failed. */
 /* MR12 RULE 2.5 VIOLATION: SWS_Std_00007/00013 requires these public state macros and values. */
-#define STD_HIGH   0x01u       /**< SWS_Std_00007: physical high level. */
+#define STD_HIGH 0x01u /**< SWS_Std_00007: physical high level. */
 /* MR12 RULE 2.5 VIOLATION: SWS_Std_00007/00013 requires these public state macros and values. */
-#define STD_LOW    0x00u       /**< SWS_Std_00007: physical low level. */
+#define STD_LOW 0x00u /**< SWS_Std_00007: physical low level. */
 /* MR12 RULE 2.5 VIOLATION: SWS_Std_00007/00013 requires these public state macros and values. */
-#define STD_ACTIVE 0x01u       /**< SWS_Std_00013: logical active state. */
+#define STD_ACTIVE 0x01u /**< SWS_Std_00013: logical active state. */
 /* MR12 RULE 2.5 VIOLATION: SWS_Std_00007/00013 requires these public state macros and values. */
-#define STD_IDLE   0x00u       /**< SWS_Std_00013: logical idle state. */
-#define STD_ON     0x01u       /**< SWS_Std_00010: enabled configuration value. */
-#define STD_OFF    0x00u       /**< SWS_Std_00010: disabled configuration value. */
+#define STD_IDLE 0x00u /**< SWS_Std_00013: logical idle state. */
+#define STD_ON   0x01u /**< SWS_Std_00010: enabled configuration value. */
+#define STD_OFF  0x00u /**< SWS_Std_00010: disabled configuration value. */
 #endif

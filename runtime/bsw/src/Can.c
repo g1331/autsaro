@@ -313,7 +313,6 @@ CAN_CODE void Can_EnableControllerInterrupts(uint8 Controller)
     SchM_Exit_Can_CAN_STATE();
 }
 
-
 static CAN_CODE EcuStatus Can_StoreTransmit(const Can_PduType *pdu)
 {
     uint8 i;

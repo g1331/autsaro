@@ -62,7 +62,6 @@ static StatusType reject(Ecu_HostBatch *batch, StatusType status)
     return status;
 }
 
-
 StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
                               const char *line,
                               size_t length,
