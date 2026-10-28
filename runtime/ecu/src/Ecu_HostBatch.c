@@ -62,12 +62,6 @@ static StatusType reject(Ecu_HostBatch *batch, StatusType status)
     return status;
 }
 
-void Ecu_HostBatchInitialize(Ecu_HostBatch *batch)
-{
-    if (batch != NULL) {
-        (void)memset(batch, 0, sizeof(*batch));
-    }
-}
 
 StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
                               const char *line,

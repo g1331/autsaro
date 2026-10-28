@@ -8,6 +8,7 @@
 #include "Ecu_Status.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #define ECU_BATCH_CAPACITY      256u           /**< Maximum staged input frames. */
 #define ECU_BATCH_MAX_SPAN      UINT64_C(1000) /**< Maximum batch time advance, ms. */
@@ -58,7 +59,12 @@ typedef struct {
  * Reentrancy: Not concurrent with another operation on the same staging object.
  * Ownership: Writes the complete object during the call; retains no pointer.
  */
-void Ecu_HostBatchInitialize(Ecu_HostBatch *batch);
+static inline void Ecu_HostBatchInitialize(Ecu_HostBatch *batch)
+{
+    if (batch != NULL) {
+        (void)memset(batch, 0, sizeof(*batch));
+    }
+}
 /** Decode one exact ASCII command without executing automotive work.
  * @param[in,out] batch Single native producer's initialized staging.
  * @param[in] line Complete caller-owned line, without CR/LF terminators.

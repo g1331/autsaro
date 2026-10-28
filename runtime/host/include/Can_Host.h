@@ -12,6 +12,41 @@ typedef enum {
     CAN_SLEEP = 3    /**< Logical sleep state for the virtual controller. */
 } CanMode;
 
+/* Private driver operations used by the typed host forwarding definitions. */
+/** @brief Driver implementation: Change the virtual controller state.
+ * @param[in] mode New controller state.
+ * @par Return
+ * None.
+ * Preconditions: Driver initialized and supported transition; otherwise no state change.
+ * Context: Host control, outside exclusive areas.
+ * Reentrancy: State serialized by CAN_STATE; indications serialized outside the area.
+ * Ownership: No pointer retained; may publish mode/bus-off callbacks after unlocking.
+ */
+CAN_CODE void Can_InternalSetMode(CanMode mode);
+/** @brief Driver implementation: Read the virtual controller state.
+ * @return Current controller state.
+ * Preconditions: None; before initialization returns CAN_STOPPED.
+ * Context: Any caller, outside exclusive areas.
+ * Reentrancy: Reentrant read serialized by CAN_STATE; do not call while holding another area.
+ * Ownership: Returns a value; no pointer retained.
+ */
+CAN_CODE CanMode Can_InternalGetMode(void);
+/** @brief Driver implementation: Send a host frame while retaining its generated CanIf PDU handle.
+ * @param[in] pdu_id Generated CanIf transmit PDU identifier.
+ * @param[in] id Standard CAN identifier.
+ * @param[in] dlc Number of valid payload bytes, 0..8.
+ * @param[in] data Nonnull caller-owned payload; copied before return.
+ * @return Host transmission status.
+ * Preconditions: Initialized started driver, valid identifier/DLC and nonnull data; else refuses.
+ * Context: Host transmit owner, outside exclusive areas.
+ * Reentrancy: Driver serializes admission; pending/in-flight frame returns ECU_ERR_CAN_BUSY.
+ * Ownership: Copies payload; physical sink borrows the driver snapshot until its return.
+ */
+CAN_CODE EcuStatus Can_InternalTransmitPdu(PduIdType pdu_id,
+                                           uint32 id,
+                                           uint8 dlc,
+                                           const uint8 data[8]);
+
 /** @brief Complete the pending host transmission through the configured output callback.
  * @return Host output status, or ECU_OK if no frame is pending.
  * Preconditions: Driver initialized; otherwise ECU_ERR_CONFIG; empty queue succeeds.
@@ -52,7 +87,7 @@ CAN_CODE Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t toke
  * Reentrancy: State serialized by CAN_STATE; indications serialized outside the area.
  * Ownership: No pointer retained; may publish mode/bus-off callbacks after unlocking.
  */
-CAN_CODE void Can_SetMode(CanMode mode);
+CAN_CODE static inline void Can_SetMode(CanMode mode) { Can_InternalSetMode(mode); }
 /** @brief Read the virtual controller state.
  * @return Current controller state.
  * Preconditions: None; before initialization returns CAN_STOPPED.
@@ -60,7 +95,7 @@ CAN_CODE void Can_SetMode(CanMode mode);
  * Reentrancy: Reentrant read serialized by CAN_STATE; do not call while holding another area.
  * Ownership: Returns a value; no pointer retained.
  */
-CAN_CODE CanMode Can_GetMode(void);
+CAN_CODE static inline CanMode Can_GetMode(void) { return Can_InternalGetMode(); }
 /** @brief Send a host frame while retaining its generated CanIf PDU handle.
  * @param[in] pdu_id Generated CanIf transmit PDU identifier.
  * @param[in] id Standard CAN identifier.
@@ -72,10 +107,13 @@ CAN_CODE CanMode Can_GetMode(void);
  * Reentrancy: Driver serializes admission; pending/in-flight frame returns ECU_ERR_CAN_BUSY.
  * Ownership: Copies payload; physical sink borrows the driver snapshot until its return.
  */
-CAN_CODE EcuStatus Can_TransmitPdu(PduIdType pdu_id,
-                                   uint32_t id,
-                                   uint8_t dlc,
-                                   const uint8_t data[8]);
+CAN_CODE static inline EcuStatus Can_TransmitPdu(PduIdType pdu_id,
+                                                 uint32_t id,
+                                                 uint8_t dlc,
+                                                 const uint8_t data[8])
+{
+    return Can_InternalTransmitPdu(pdu_id, id, dlc, data);
+}
 /** @brief Inject one received frame into the host CAN stack.
  * @param[in] id Standard CAN identifier.
  * @param[in] dlc Number of valid payload bytes, 0..8.

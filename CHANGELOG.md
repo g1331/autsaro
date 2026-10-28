@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Host CAN mode/transmit forwarding, status-name conversion and batch initialization now have typed header definitions instead of external symbols. Regenerate and rebuild consumers; function addresses and status string storage belong to each translation unit (#389)
+
 - The disabled-wakeup `Can_CheckWakeup` entry is now defined inline in `Can.h`, preserving its typed calls and rejection result while removing the external symbol. Regenerate and rebuild all consumers; function addresses belong to each translation unit (#389)
 
 - The controlled C99 OS now defines 38 service entries inline in `Os.h`. Regenerate and rebuild all consumers; their former external function definitions are removed. Typed calls, function pointers and ARTI ordering remain available; `TerminateTask`, `isOsStarted` and `NextScheduleTable` retain their external definitions (#389)

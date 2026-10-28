@@ -92,7 +92,7 @@ class HostBoundaryTests(unittest.TestCase):
         binary = self.directory / ("status-names.exe" if os.name == "nt" else "status-names")
         result = self.execute([self.compiler, *self.flags,
                                str(ROOT / "tests/fixtures/host_status_names.c"),
-                               str(ROOT / "runtime/host/src/Ecu_Status.c"), "-o", str(binary)],
+                               "-o", str(binary)],
                               "status-names-build")
         self.assertEqual(result.exit_code, 0, (result.stdout.read_text(), result.stderr.read_text()))
         result = self.execute([str(binary)], "status-names-run")

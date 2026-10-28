@@ -1124,19 +1124,6 @@
       ]
     },
     {
-      "path": "runtime/host/src/Ecu_Status.c",
-      "license": "Apache-2.0",
-      "targets": [
-        "windows-x64-controlled-v1",
-        "linux-x64-controlled-v1"
-      ],
-      "role": "host",
-      "responsibility": "workbench",
-      "profiles": [
-        "ecu"
-      ]
-    },
-    {
       "path": "tools/python/src/ecu_tools/__init__.py",
       "license": "Apache-2.0",
       "targets": [

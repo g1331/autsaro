@@ -206,15 +206,15 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
         ("#include \"Can.h\"\n", true),
         ("#include \"Can.h\"\nCanMode leaked;\n", false),
         (
-            "#include \"Can.h\"\nvoid (*leaked)(CanMode) = Can_SetMode;\n",
+            "#include \"Can.h\"\nvoid probe(void) { (void)Can_SetMode; }\n",
             false,
         ),
         (
-            "#include \"Can.h\"\nvoid *leaked = (void *)&Can_HostFlush;\n",
+            "#include \"Can.h\"\nvoid probe(void) { (void)Can_HostFlush; }\n",
             false,
         ),
         (
-            "#include \"Can.h\"\nvoid *leaked = (void *)&Can_InternalInject;\n",
+            "#include \"Can.h\"\nvoid probe(void) { (void)Can_InternalInject; }\n",
             false,
         ),
         ("#include \"Can.h\"\n#include \"Can_Host.h\"\n", true),
