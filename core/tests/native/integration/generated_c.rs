@@ -758,7 +758,12 @@ fn schm_headers_preserve_c_linkage_for_cpp_consumers() {
     }
     let executable = tooling::native_binary(&scratch.0, "schm-linkage");
     let mut compiler = tooling::c_compiler();
-    compiler.args(&objects).arg("-o").arg(&executable);
+    // TSan C++ call cleanup requires the C++ personality runtime.
+    compiler
+        .args(&objects)
+        .arg("-lstdc++")
+        .arg("-o")
+        .arg(&executable);
     let output = tooling::run_public_command(
         &mut compiler,
         &scratch.0,
@@ -1269,6 +1274,9 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
                         .all(|byte| byte.is_ascii_alphanumeric() || b" _*".contains(&byte))
             });
             if function
+                || line.starts_with("SCHM_CAN_LINKAGE ")
+                || line.starts_with("SCHM_DCM_LINKAGE ")
+                || line.starts_with("SCHM_BSWM_LINKAGE ")
                 || line.starts_with(&prefix)
                 || line.starts_with(&format!("RTE_{module}_CODE "))
                 || line.starts_with("RTE_Rte_CODE ")
@@ -1308,6 +1316,17 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
                     source.push_str("__builtin_trap(); }\n");
                     declaration.clear();
                 }
+            }
+        }
+        if header == "SchM_Dcm.h" {
+            for symbol in [
+                "SchM_Switch_Dcm_DcmDiagnosticSessionControl",
+                "SchM_Mode_Dcm_DcmDiagnosticSessionControl",
+            ] {
+                assert!(
+                    symbols.iter().any(|found| found == symbol),
+                    "{header}: missing {symbol}"
+                );
             }
         }
         assert!(!symbols.is_empty(), "{header}");
