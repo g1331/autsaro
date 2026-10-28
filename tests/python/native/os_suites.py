@@ -1980,8 +1980,6 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
         ("disconnected", original,
          re.sub(r"\bRte_Call_OsService_GetCounterValue\b", "Disconnected_GetCounterValue", original_header),
          "Rte_Call_OsService_GetCounterValue"),
-        ("wrong-signature", original.replace("TimeInMicrosecondsType *Value", "uint32_t *Value"),
-         original_header, "conflicting types"),
     ]:
         require(mutant != original or client != original_header, "service signature mutation did not apply")
         source.write_text(mutant, encoding="utf-8")
@@ -1994,6 +1992,24 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
             require(expected in str(error), str(error))
         else:
             raise AssertionError(f"{name} Counter client linked successfully")
+    source.write_text(original, encoding="utf-8")
+    header.write_text(original_header, encoding="utf-8")
+    # A signature conflict belongs to this translation unit; no kernel link is needed.
+    signature_command = [
+        compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", *sanitizer_flags(), "-fsyntax-only",
+        "-I", str(target / "include"), "-I", str(target / "src"),
+        *(["-I", str(target / "src/host/linux")]
+          if _TARGET_ID.get() == "linux-x64-controlled-v1" else []),
+        "-I", str(ROOT / "runtime/bsw/include"),
+        "-I", str(ROOT / "runtime/host/include"), str(source),
+    ]
+    run_native(signature_command, check=True)
+    source.write_text(original.replace("TimeInMicrosecondsType *Value", "uint32_t *Value"),
+                      encoding="utf-8")
+    signature = run_native(signature_command)
+    require(signature.returncode != 0 and "conflicting types" in signature.stderr
+            and f"OsService_{counter}_GetCounterValue" in signature.stderr
+            and "Rte_OsService.c:4:" in signature.stderr, signature)
 
 
 # Task, ISR, alarm callback and hook declarations sit inside OS_START/STOP_SEC_CODE.
