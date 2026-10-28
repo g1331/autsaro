@@ -15,6 +15,12 @@
     4096u /**< Maximum retained tool events; excess reservations are counted as dropped. */
 #include "Arti_Types.h"
 #include "Os_HostTypes.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(OS_AR_RELEASE_MAJOR_VERSION) || !defined(OS_AR_RELEASE_MINOR_VERSION)
+#error "Arti.h -> Os_HostTypes.h: missing AUTOSAR release"
+#elif (OS_AR_RELEASE_MAJOR_VERSION != 4U) || (OS_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Arti.h -> Os_HostTypes.h: incompatible AUTOSAR release"
+#endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 /** Retained tool event; read payloads only after OS shutdown/quiescence, not from reservation
