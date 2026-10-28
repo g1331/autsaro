@@ -67,3 +67,24 @@ ErrorHook 这里只处置宏发布的 R2.5，明确不批准参数副本的 R18.
 | MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Hooks.h` 中 `OSErrorGetServiceId` | OSEK §11.2、13.8.4；error-hooks观察实际失败服务标识。 | 待独立复核；ADR0023原授权范围 |
 | MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Hooks.h` 中 `OSError_GetTaskState_TaskID`、`OSError_ActivateTask_TaskID`、`OSError_ChainTask_TaskID`、`OSError_GetResource_ResID`、`OSError_ReleaseResource_ResID`、`OSError_SetEvent_TaskID`、`OSError_GetEvent_TaskID` | OSEK §11.2，§13.2/13.4/13.5 的首对象参数；现有error-hooks的服务/参数绑定保持。 | 待独立复核；ADR0023原授权范围 |
 | MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Hooks.h` 中 `OSError_GetAlarmBase_AlarmID`、`OSError_GetAlarm_AlarmID`、`OSError_SetRelAlarm_AlarmID`、`OSError_SetAbsAlarm_AlarmID`、`OSError_CancelAlarm_AlarmID` | OSEK §11.2、13.6 的首AlarmID；不把后续参数/输出指针纳入。 | 待独立复核；ADR0023原授权范围 |
+
+## 构造宏的字面入口绑定（待复核）
+
+Os.h 的 TASK/ISR 同时生成私有包装入口和用户函数体，OS_TASK_ENTRY/OS_ISR_ENTRY 在其他TU绑定同一入口。
+现有标准ID为公开标量名字，`TASK(配置名)`、`ISR(配置名)`与服务调用共享配置短名；
+直接以参数展开结果作函数名，会展开成ID数值；保留未展开的名字又会与该ID占用同一个C普通名字空间。
+四个位置用 `##` 把字面配置名映射到不同函数名。普通外层宏转交会先展开ID，不能作为等价修复。
+把构造改成普通函数、统一一个包装名字或按调用点生成任意计数名，不能保留多入口及跨TU绑定。
+私有前缀本身不是SWS要求；候选必要性是固定C99标量ID和标准构造语法之间需要一一命名绑定。
+改变ID表示/公开短名或给每个工程生成另一套绑定属于可研究的交付合同变更，不能当成已经等价。
+
+R20.10为Advisory（主文印刷162/PDF170）；这里承认真实拼接，尚不添加MR12。
+请在本批限定复核中核对SWS_Os_00815、OSEK §13.2.5/13.3及实际C名字空间/宏展开与替代边界；
+若必需冲突推导不足，继续未闭合，不沿用R2.5发布义务代替这项判断。
+既有entry-bodies、public-compatibility和完整映射消费者提供多入口、单次定义、身份及跨TU观察；
+配置命名、ID表示、包装ABI、支持宏或预处理器变化时重评。
+ARTI_TRACE的字符串化另属当前跟踪表示，不在这四项候选中，也不由此批准。
+
+| 规则 | 精确范围 | 原文及控制 | 原授权 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `TASK`、`OS_TASK_ENTRY`、`ISR`、`OS_ISR_ENTRY` | OSEK任务/ISR构造及SWS_Os_00815；固定C99公共标量ID与字面配置名到不同入口的一一绑定，真实entry-bodies及跨TU消费者保持。 | 待独立复核；ADR0023是否覆盖须由必要性推导决定 |
