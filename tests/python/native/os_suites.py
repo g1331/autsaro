@@ -1792,15 +1792,6 @@ def check_public_types(directory: Path) -> None:
                 {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
 
 
-    for name in ("DONOTCARE", "TotalNumberOfCores"):
-        result = run_native(actual_command + ["-D" + name + "=1u", "-fsyntax-only"],
-                            capture_output=True, text=True)
-        errors = [line for line in result.stderr.splitlines() if "error:" in line]
-        require(result.returncode != 0 and len(errors) == 1 and
-                "#error OS_SC1_UNSUPPORTED_" + name in errors[0] and
-                "public_types.c:" in errors[0],
-                {"macro": name, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
-
     unsupported = (
         "ApplicationType", "ApplicationStateType", "ApplicationStateRefType",
         "TrustedFunctionIndexType", "TrustedFunctionParameterRefType", "AccessType",
@@ -1814,6 +1805,17 @@ def check_public_types(directory: Path) -> None:
     flags += ["-I" + str(TARGET / "src")] + (
         ["-I" + str(TARGET / "src/host/linux")] if linux else []
     )
+    for name, value in (("DONOTCARE", "255u"), ("TotalNumberOfCores", "1u")):
+        source.write_text('#include "Os.h"\nuint32 unsupported = ' + name + ';\n', encoding="utf-8")
+        result = run_native([*flags, "-fsyntax-only", str(source)], capture_output=True, text=True)
+        errors = [line for line in result.stderr.splitlines() if "error:" in line]
+        require(result.returncode != 0 and len(errors) == 1 and
+                "undeclared" in errors[0] and name in errors[0] and str(source) + ":2:" in errors[0],
+                {"macro": name, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
+        restored = run_native([*flags, "-D" + name + "=" + value, "-fsyntax-only", str(source)],
+                              capture_output=True, text=True)
+        require(restored.returncode == 0, {"macro": name, "stderr": restored.stderr})
+
     for name in unsupported:
         source.write_text('#include "Os.h"\n' + name + ' *unsupported;\n', encoding="utf-8")
         result = run_native([*flags, "-fsyntax-only", str(source)], capture_output=True, text=True)

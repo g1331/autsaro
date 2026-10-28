@@ -17,12 +17,6 @@
 #include "Os_Target.h"
 #include <stdio.h>
 
-#if defined(DONOTCARE)
-#error OS_SC1_UNSUPPORTED_DONOTCARE
-#endif
-#if defined(TotalNumberOfCores)
-#error OS_SC1_UNSUPPORTED_TotalNumberOfCores
-#endif
 
 /* Independent SC1 consumer constraints from R24-11 and the inherited OSEK services. */
 typedef char CoreRange[(sizeof(CoreIdType) >= 2u) ? 1 : -1];
