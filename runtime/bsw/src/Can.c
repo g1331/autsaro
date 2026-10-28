@@ -313,11 +313,6 @@ CAN_CODE void Can_EnableControllerInterrupts(uint8 Controller)
     SchM_Exit_Can_CAN_STATE();
 }
 
-CAN_CODE Std_ReturnType Can_CheckWakeup(uint8 Controller)
-{
-    (void)Controller;
-    return E_NOT_OK;
-}
 
 static CAN_CODE EcuStatus Can_StoreTransmit(const Can_PduType *pdu)
 {

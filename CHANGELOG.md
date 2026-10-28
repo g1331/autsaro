@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- The disabled-wakeup `Can_CheckWakeup` entry is now defined inline in `Can.h`, preserving its typed calls and rejection result while removing the external symbol. Regenerate and rebuild all consumers; function addresses belong to each translation unit (#389)
+
 - The controlled C99 OS now defines 38 service entries inline in `Os.h`. Regenerate and rebuild all consumers; their former external function definitions are removed. Typed calls, function pointers and ARTI ordering remain available; `TerminateTask`, `isOsStarted` and `NextScheduleTable` retain their external definitions (#389)
 
 - `Arti_GetVersionInfo` is now a typed header inline service; regenerate and rebuild consumers instead of linking to its former exported definition. Version fields, function-pointer calls and atomic null-pointer error reporting are preserved (#389)

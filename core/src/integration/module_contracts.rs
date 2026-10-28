@@ -185,7 +185,6 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
             .trim_start_matches("SCHM_BSWM_LINKAGE ")
             .trim_start_matches("SCHM_DCM_LINKAGE ")
             .trim_start_matches("OS_MEMMAP ")
-            .trim_start_matches("static inline ")
             .trim_start_matches("OS_CODE ")
             .trim_start_matches("CAN_CODE ")
             .trim_start_matches("BSWM_CODE ")
@@ -201,6 +200,7 @@ pub(super) fn declarations(source: &str) -> Result<Vec<Entry>, Vec<PlanDiagnosti
             .trim_start_matches("RTE_Rte_CODE ")
             .trim_start_matches("RTE_CODE ")
             .trim_start_matches("DET_CALLOUT_CODE ")
+            .trim_start_matches("static inline ")
             .trim()
             .to_owned();
         let mut arguments = Vec::new();
@@ -318,6 +318,17 @@ OS_MEMMAP void Stop(void);
         assert_eq!(definition[0].result, "void");
         assert_eq!(definition[0].arguments[0].direction, "OUT");
         assert!(definition[0].inline_implementation);
+        for section in ["OS_MEMMAP", "CAN_CODE", "RTE_CODE", "DET_CALLOUT_CODE"] {
+            let definition = declarations(&format!(
+                "/** Check wakeup.\n * @param[in] Controller Controller identifier.\n */\n\
+                 {section} static inline Std_ReturnType Check(uint8 Controller) {{ return 1u; }}"
+            ))
+            .unwrap();
+            assert_eq!(definition.len(), 1);
+            assert_eq!(definition[0].result, "Std_ReturnType");
+            assert_eq!(definition[0].arguments[0].native_type, "uint8");
+            assert!(definition[0].inline_implementation);
+        }
         assert!(declarations("void Broken(void (*handler)(void));").is_err());
         for module in [
             "BSWM", "CANIF", "CANTP", "COM", "COMM", "DCM", "DET", "LSDUR", "PDUR",

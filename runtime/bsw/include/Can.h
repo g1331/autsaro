@@ -123,7 +123,11 @@ CAN_CODE void Can_EnableControllerInterrupts(uint8 Controller);
  * Reentrancy: non reentrant.
  * Ownership: none.
  */
-CAN_CODE Std_ReturnType Can_CheckWakeup(uint8 Controller);
+CAN_CODE static inline Std_ReturnType Can_CheckWakeup(uint8 Controller)
+{
+    (void)Controller;
+    return E_NOT_OK;
+}
 /** Copy one L-PDU into the transmit object without waiting for output (SWS_Can_00212).
  * @param[in] Hth Configured hardware transmit handle.
  * @param[in] PduInfo Caller-owned L-SDU of 0 to 8 bytes; the CAN FD bit of the identifier is

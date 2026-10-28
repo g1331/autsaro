@@ -13,7 +13,6 @@
 | --- | --- | --- | --- |
 | MISRA C:2012 Rule 8.7 | `runtime/bsw/src/Can.c` 中 `Can_DisableControllerInterrupts` | SWS_Can_00231；Can.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
 | MISRA C:2012 Rule 8.7 | `runtime/bsw/src/Can.c` 中 `Can_EnableControllerInterrupts` | SWS_Can_00232；Can.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
-| MISRA C:2012 Rule 8.7 | `runtime/bsw/src/Can.c` 中 `Can_CheckWakeup` | SWS_Can_00360；Can.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
 | MISRA C:2012 Rule 8.7 | `runtime/bsw/src/CanIf.c` 中 `CanIf_GetControllerRxErrorCounter` | SWS_CANIF_91003；CanIf.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
 | MISRA C:2012 Rule 8.7 | `runtime/bsw/src/CanIf.c` 中 `CanIf_GetControllerTxErrorCounter` | SWS_CANIF_91004；CanIf.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
 | MISRA C:2012 Rule 8.7 | `runtime/bsw/src/Com.c` 中 `Com_GetStatus` | SWS_Com_00194；Com.h。保留所选实现的公开 C 服务；具体条件见本节。 | 未闭合：外部链接的不可替代性未证明 |
@@ -31,4 +30,4 @@
 
 独立复核指出，BSWGeneral 允许适当的宏／inline 实现；OS Programming Language、GetCoreID 与 SWS_Os_91034 也允许或建议宏形式。现有 ABI 清单和函数式测试不能替代规范必要性。后续须证明具体替代不成立，或完成保留全部可观察行为的实现调整，或取得明确的新项目处置；不能仅凭标准服务存在将本表转为批准记录。
 
-Can_CheckWakeup 的当前 CanWakeupSupport=false；LSduR_CanIfTriggerTransmit 须连接真实下层函数指针选择，Com route 的 trigger 指向 PduR_CanIfTriggerTransmit 不单独证明该 L-SDU Router 外部入口不可省略。
+`Can_CheckWakeup` 在当前 CanWakeupSupport=false 下已迁入 Can.h 的现有 CODE 段，保留原函数体、签名和函数指针调用，不以关闭 wakeup 删除公开拒绝入口；它不再属于外部链接待决项。LSduR_CanIfTriggerTransmit 须连接真实下层函数指针选择，Com route 的 trigger 指向 PduR_CanIfTriggerTransmit 不单独证明该 L-SDU Router 外部入口不可省略。
