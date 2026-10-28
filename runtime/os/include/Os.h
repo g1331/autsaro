@@ -16,6 +16,7 @@
  * deliberately consumes a legacy file-scope semicolon in strict C99. It has
  * no object, function, configuration or argument-evaluation effect. R2.4
  * Advisory: this incomplete tag exists solely for the required interface. */
+/* MR12 RULE 2.5 VIOLATION: OS 7.1.2.1 requires this no-effect compatibility construction macro. */
 /** Declare the standard Task spelling (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured Task C identifier; not evaluated.
  * @return An incomplete compatibility tag declaration, with no runtime object or evaluation.
@@ -24,6 +25,7 @@
  * applicable; no runtime operation. Ownership: declares no storage and retains no pointer.
  */
 #define DeclareTask(identifier) struct Os_DeclarationCompatibility
+/* MR12 RULE 2.5 VIOLATION: OS 7.1.2.1 requires this no-effect compatibility construction macro. */
 /** Declare the standard resource spelling (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured resource C identifier; not evaluated.
  * @return An incomplete compatibility tag declaration, with no runtime object or evaluation.
@@ -32,6 +34,7 @@
  * applicable; no runtime operation. Ownership: declares no storage and retains no pointer.
  */
 #define DeclareResource(identifier) struct Os_DeclarationCompatibility
+/* MR12 RULE 2.5 VIOLATION: OS 7.1.2.1 requires this no-effect compatibility construction macro. */
 /** Declare the standard event spelling (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured event C identifier; not evaluated.
  * @return An incomplete compatibility tag declaration, with no runtime object or evaluation.
@@ -40,6 +43,7 @@
  * applicable; no runtime operation. Ownership: declares no storage and retains no pointer.
  */
 #define DeclareEvent(identifier) struct Os_DeclarationCompatibility
+/* MR12 RULE 2.5 VIOLATION: OS 7.1.2.1 requires this no-effect compatibility construction macro. */
 /** Declare the standard Alarm spelling (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured Alarm C identifier; not evaluated.
  * @return An incomplete compatibility tag declaration, with no runtime object or evaluation.
@@ -72,6 +76,8 @@
  * Ownership: does not invoke the body or transfer pointer ownership.
  */
 #define OS_TASK_ENTRY(identifier) Os_TaskEntry_##identifier
+/* MR12 RULE 2.5 VIOLATION: OSEK 13.3.3 requires the ISR definition macro; its mapping remains
+ * intact. */
 /** Define a standard Category 2 ISR entry body (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured entry C identifier; not evaluated at runtime.
  * @return A void entry prototype and definition head; follow it with the function body.
@@ -92,6 +98,7 @@
  * Ownership: does not invoke the body or transfer pointer ownership.
  */
 #define OS_ISR_ENTRY(identifier) Os_IsrEntry_##identifier
+/* MR12 RULE 2.5 VIOLATION: OSEK 13.6.5 requires this alarm-callback definition macro. */
 /** Define a standard Alarm callback entry body (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured entry C identifier; not evaluated at runtime.
  * @return A void entry prototype and definition head; follow it with the function body.
