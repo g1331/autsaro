@@ -1076,7 +1076,7 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
 #[test]
 fn bsw_description_native_widths_and_added_api_signatures_match_public_headers() {
     let plan = build(&inputs()).unwrap();
-    let files = prepared_pipeline_files(&plan);
+    let files = prepared_pipeline_files_for_target(&plan, tooling::native_target());
     let scratch = Scratch::new();
     for (path, bytes) in &files {
         let target = scratch.0.join(path);
@@ -1153,15 +1153,16 @@ LSduR_PBConfigIdType (*routing_configuration)(void) = LSduR_GetConfigurationId;
         "-Wextra",
         "-Werror",
         "-pedantic",
-        "-Igenerated/include",
-        "-Ibsw/include",
-        "-Ios/include",
-        "-Iintegration/include",
         "-c",
         "consumer.c",
         "-o",
         "consumer.o",
     ]);
+    let target: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(scratch.0.join("target.json")).unwrap()).unwrap();
+    for path in target["includePaths"].as_array().unwrap() {
+        compiler.arg("-I").arg(path.as_str().unwrap());
+    }
     let output = tooling::run_public_command(
         &mut compiler,
         &scratch.0,
