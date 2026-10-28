@@ -8,7 +8,9 @@ Windows补丁`0018-windows-thread-setup-errors.patch`按D4.7／R17.7检查Task�
 
 补丁`0019-windows-native-handoff-errors.patch`继续处置相同D4.7／R17.7义务：Task critical／yield、host中断发布、dispatcher及handler安装共同使用四个端口私有检查函数，验证mutex获取／释放、event发布／复位及无限yield等待；不改变锁或操作顺序。dispatcher的多对象WAIT_TIMEOUT继续等待，只有WAIT_OBJECT_0才能使用受保护状态；失败或abandoned结果停止OS，不能靠后续GetThreadContext成功冒充已取得mutex。现有控制线程承担停止，不新增状态／锁／分配。Windows回归保留真实正常／超时对照，逐类注入失败并与移除0019的变异比较；失败后同一actor继续调用原生端口时有独立终止哨兵，避免后续无关错误碰巧返回相同错误码。删除路径未启用的close／wait调用只作源码检查，不据此宣称运行验证。
 
-Linux actor的mapping成员按实际用途保存为unsigned char字节区间：guard偏移、ASan fiber底端及一次性栈入口直接在同一映射内计算，不再从void指针反复转换。`Os_HostCurrentStackRange`仍将真实映射地址转为uintptr_t供栈界限／ARTI消费者比较，不隐藏为符合：原R11.6（Required，主文页99／PDF107，TC2.22修正整数到void指针的描述）已随存储类型消除；mmap返回到字节指针的R11.5与地址到整数的R11.4是保留的Advisory违反（页97–98／PDF105–106，TC1限定对象指针、AMD2.60扩充stdint说明）。mmap保证页对齐，偏移和长度来自同一次映射，uintptr_t不截短地址，转换结果只用于数值边界检查，不转换回指针解引用；原生stack／ARTI和errno回收消费者验证这些约束。依据§6.2.3记录建议性违反及理由，不申请新的Required豁免。
+Linux actor 的字节映射与数值栈界限保留真实 R11.4／R11.5 Advisory 违反，
+其来源、限制与风险控制见[主机地址表示类别处置](#主机地址表示类别处置)。
+原 void mapping 引出的 R11.6 已随字节存储类型消除，不能将它与余下转换混同。
 
 `Os_PortRestartLanding`是保留Task-loop帧内的汇编续行点，不是按C原型调用的函数。该符号现在只在本对象内可见；C侧通过真正遵循调用ABI的`Os_PortRestartAddress`取得native PC：Linux为uintptr_t，Windows为RtlUnwindEx要求的void指针表示。叶函数在原`.os_code`内用RIP相对LEA返回RAX，保留其他寄存器及配对call/return，不需要C函数指针转整数或void指针。依据R11.1（Required，主文页93–94／PDF101–102；AMD2.58只修订隐式转换例外说明），不使用该条的新例外；实际native扩展仍按[平台扩展边界](../platform.md#c99-平台扩展的使用边界)的R1.2／D4.2／D4.3评估。原生restart验证10000次同一物理栈重入、拒绝与外来异常，并分别检查全局C入口和本地续行点的代码段身份；错误PC变异必须被实际restart成功判据拒绝。该边界仍依赖受控x64 ABI，Windows执行及硬件SHSTK按实际结果记录。
 
@@ -67,3 +69,35 @@ R21.6为Required；R22.5／R22.6为Mandatory（主文印刷176–177／PDF184–
 HostBatch读取STDIN_FILENO，HostIo及故障输出写STDOUT_FILENO／STDERR_FILENO；Linux事件由单个eventfd读写，栈范围查询只以O_RDONLY打开/proc/self/maps，Windows使用原生句柄。它们不构成FILE对象，也不能因此免除D4.7／D4.13及平台资源契约。R22.3明确指出相似执行环境设施可能适用；将其完整结论扩展到任意外部启动方式，仍需知道实际继承的输入／输出对象、访问模式与是否别名，不能由没有fopen或绿色CI推出。既有受管测试使用分离管道的证据只覆盖那些具体启动，不新增用户输出期限或任意文件重定向保证。
 
 R21.8的有效Required文本禁止abort／exit／_Exit／quick_exit（AMD2.81，印刷16／PDF23），当前C99适用。四份callback-role语料及双目标补丁后内核没有这些标识符或宏用途；ExitProcess最终走POSIX _exit或Win32入口，不能按名称相似冒充标准库函数，也不因此证明provider内部或任意退出路径符合。
+
+
+## 主机地址表示类别处置
+
+规则 R11.4、R11.5 均为 Advisory（主文印刷97–98／PDF105–106；
+TC1 将 R11.4 限定到对象指针，AMD2.60 扩充 stdint 说明）。
+uintptr_t 的可表示性没有构成 R11.4 例外，R11.5 同时覆盖显式 cast 与隐式赋值。
+依 [ADR 0025](../../../adr/0025-misra-layered-scope.md) 的自有主机适配层及
+[项目决定第1节](https://github.com/g1331/autsaro/issues/58#issuecomment-6437338057)，
+以下记录限宿主接口决定的地址表示，不借用动态设施的 Required 类别授权。
+
+范围仅 linux-x64-controlled-v1、四 profile 的原生 OS／HostBatch／probe 与相同实现的
+native 消费者：`Os_HostCreateActor` 将 mmap 返回的 void 指针保存为 unsigned char 映射；
+`Os_HostStackRange` 将该映射地址转为 uintptr_t；`Os_StackRecordBuffer` 将静态内核缓冲的
+one-past 地址转为 uintptr_t。均由自有代码实施，不能整体移交 SDK 来源责任。
+
+mmap 的固定 ABI 返回 void 指针；guard、ASan fiber 和实际栈入口需要同一映射内的字节偏移。
+改成整数搬运、memcpy 指针表示或换一层 helper 不消除该转换。
+栈保护比较的是来自不同存储对象的 native 地址区间（包括真实 RSP 和静态内核缓冲），
+不能用 C 对同一数组内指针的大小比较替代。数值区间是既有 ARTI／原生栈合同的输入，
+在受控 x64 上 uintptr_t 完整容纳地址；结果不转换回对象指针解引用。
+
+风险是错误对齐、截短、溢出及跨对象计算错误。mmap 保证页对齐，映射长度与 guard
+来自同一次成功创建，失败和回滚保持所有权；字节偏移限该映射，内核缓冲由实际静态
+Task 存储提供。既有 native_stack／ARTI 消费者观察物理栈、注册区间和汽车缓冲不重叠，
+host boundary 检查创建、errno、失败回收和句柄复用；检测器与目标 CI 另按实际运行留证。
+可修复的 watch／Task／Linux actor 回调参数不在此类别：它们使用既有静态对象或按地址
+匹配固定 typed 槽，消除反向 void 转换，并保留异常参数拒绝的反例。
+
+重评条件为目标 ABI／地址宽度、provider、mmap flags／容量、栈布局／guard、ARTI
+数值合同或缓冲所有权变化；Windows 地址转换不由这份 Linux 证据代为覆盖。
+保留原始诊断和分析身份，类别处置不表示源码符合这两条规则。

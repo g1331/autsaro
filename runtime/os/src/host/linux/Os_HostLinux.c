@@ -267,7 +267,16 @@ OS_MEMMAP static DWORD actor_body(void *argument)
 
 OS_MEMMAP static void *actor_start(void *argument)
 {
-    HANDLE thread = argument;
+    HANDLE thread = NULL;
+    for (size_t index = 0u; index < OS_HOST_HANDLES; ++index) {
+        if (argument == &host_handles[index]) {
+            thread = &host_handles[index];
+            break;
+        }
+    }
+    if (thread == NULL) {
+        ExitProcess(1u);
+    }
     current_thread = thread;
     OS_LINUX_STACK_START(&thread->bootstrap_fake,
                          thread->mapping + thread->guard_size,

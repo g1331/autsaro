@@ -648,7 +648,7 @@ class NativeFacilityTests(unittest.TestCase):
 
         retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
         with os_suites.host_target():
-            for operation in ("wait", "publish"):
+            for operation in ("wait", "publish", "context"):
                 for unchecked in (False, True):
                     output = Path(retained) / "startup-gates" / f"{operation}-{unchecked}" if retained else None
                     # Subtest failures must leave through the retaining context first.
@@ -673,10 +673,24 @@ class NativeFacilityTests(unittest.TestCase):
                             f'    (void)Os_HostWriteBytes(1, "startup_gate_continued={operation}\\n", {len(continued)}u);\n'
                             "    ExitProcess(91u);\n}\n"
                         )
+                        if operation == "context":
+                            helper = helper[helper.index("OS_MEMMAP static void"):]
                         anchor = "OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)"
                         self.assertEqual(text.count(anchor), 1)
                         text = text.replace(anchor, helper + anchor)
-                        if operation == "wait":
+                        if operation == "context":
+                            text = text.replace(
+                                anchor + "\n{", anchor + "\n{\n    argument = NULL;"
+                            )
+                            old = ("    if (start == NULL) {\n"
+                                   "        ExitProcess(E_OS_STATE);\n    }\n")
+                            new = old.replace(
+                                "        ExitProcess(E_OS_STATE);",
+                                f'        (void)Os_HostWriteBytes(1, "startup_gate_failure=context\\n", {len(stage)}u);\n'
+                                "        ExitProcess(E_OS_STATE);",
+                            )
+                            fatal = "ExitProcess(E_OS_STATE);"
+                        elif operation == "wait":
                             old = ("    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {\n"
                                    "        ExitProcess(E_OS_STATE);\n    }\n")
                             new = old.replace("WaitForSingleObject", "startup_gate_failure")
@@ -699,7 +713,7 @@ class NativeFacilityTests(unittest.TestCase):
                             observation = os_suites.execute(binary, "normal")
                         self.assertEqual(observation["exit"], 91 if unchecked else 7, observation)
                         self.assertEqual(observation["stderr"], (stage + (continued if unchecked else "")).strip(), observation)
-                        if unchecked or operation == "wait":
+                        if unchecked or operation in {"wait", "context"}:
                             self.assertEqual(observation["stdout"], "", observation)
                         else:
                             self.assertIn("lifecycle=Closed state=Failed reason=7", observation["stdout"], observation)
@@ -1517,6 +1531,7 @@ void Os_TestAfterFaultReader(void)
                     "registered-normal",
                     "registration-error",
                     "identity-error",
+                    "context-error",
                     "close-live",
                     "close-ended",
                     "join-error",
@@ -1527,11 +1542,12 @@ void Os_TestAfterFaultReader(void)
                         result = os_suites.run_native(
                             [str(binary), scenario], timeout=10
                         )
-                        fatal = scenario in {"registration-error", "identity-error"}
+                        fatal = scenario in {"registration-error", "identity-error", "context-error"}
                         self.assertEqual(result.returncode, 1 if fatal else 0, result)
                         expected = {
                             "registration-error": "registration_rejected role=H\n",
                             "identity-error": "identity_requested\n",
+                            "context-error": "actor_context_rejected\n",
                             "join-error": "join_rejected attempt=1\n",
                             "detach-error": "detach_rejected attempt=1\n",
                         }.get(scenario, "")
@@ -1548,6 +1564,12 @@ void Os_TestAfterFaultReader(void)
                             result,
                         )
             mutations = (
+                (
+                    "context",
+                    "if (thread == NULL) {\n        ExitProcess(1u);\n    }\n    current_thread = thread;",
+                    "if (thread == NULL) {\n        thread = &host_handles[0];\n    }\n    current_thread = thread;",
+                    (("context-error", 0, "actor_context_rejected\n"),),
+                ),
                 (
                     "registration",
                     "if (registered == 0) {\n        ExitProcess(1u);",
@@ -1648,6 +1670,11 @@ void Os_TestAfterFaultReader(void)
                             )
                             self.assertEqual(
                                 (result.returncode, result.stdout, result.stderr),
-                                (code, "", errors),
+                                (
+                                    code,
+                                    "registered_actor entry=completed identity=published\n"
+                                    if name == "context" else "",
+                                    errors,
+                                ),
                                 result,
                             )

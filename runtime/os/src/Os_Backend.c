@@ -1489,7 +1489,16 @@ OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 #include "Os_MemMap.h"
 OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
 {
-    Os_NativeTaskStartType *start = argument;
+    Os_NativeTaskStartType *start = NULL;
+    for (uint32 index = 0u; index < (OS_MAX_TASKS + 2u); ++index) {
+        if (argument == &native_starts[index]) {
+            start = &native_starts[index];
+            break;
+        }
+    }
+    if (start == NULL) {
+        ExitProcess(E_OS_STATE);
+    }
     /* Creation publishes the handle and accounting before registration may fail. */
     if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
         ExitProcess(E_OS_STATE);

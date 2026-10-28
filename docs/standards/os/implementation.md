@@ -34,7 +34,7 @@ R21.3与R22.1均为Required，C99适用（主文印刷167、172／PDF175、180�
 
 非user_stack线程的__nptl_deallocate_stack走queue_stack；缓存回收才经__nptl_free_stacks／_dl_deallocate_tls释放DTV。源码默认阈值40MiB可调，不是运行峰值保证。join和项目执行栈munmap不等于已free全部bootstrap／TLS；当前进程期Task／controller／dispatcher永久停车后由_exit结束，操作系统回收地址空间不等于R22.1的显式释放。因此R21.3的实际用途及这条R22.1释放差距仍需处置；不能由正确的observer wait→close或D4.13顺序结论覆盖。
 
-已有正常ELF没有直接calloc/malloc导入；LD_DEBUG以ecu_probe为reference打印的分配器binding来自lookup_malloc_symbol(main_map,...)，不作为项目直接调用或每次分配事件证明。需区分exec之前的owner Python与之后的实际ELF，源码闭包和真实绑定共同使用；普通／检测器各守自己的身份。原D4.12提案明确不扩其他规则，[针对Linux这两条的具体补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6401003340)仍待人类项目决定，不建Accepted ADR、批准表或MR12，不外推Windows。给actor静态汽车缓冲、只设bootstrap大小或等进程退出都不能消除这里的calloc／释放义务；真正改为调用方栈并退休所有相关线程还须重证guard、信号、restart及关闭合同。
+已有正常ELF没有直接calloc/malloc导入；LD_DEBUG以ecu_probe为reference打印的分配器binding来自lookup_malloc_symbol(main_map,...)，不作为项目直接调用或每次分配事件证明。需区分exec之前的owner Python与之后的实际ELF，源码闭包和真实绑定共同使用；普通／检测器各守自己的身份。原 D4.12 提案及[Linux 两条的补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6401003340)现由 [ADR 0025 的主机动态设施类别](native-facilities/storage-interrupts.md#主机动态设施类别偏离)接受；按其目标、来源和生命周期范围保留真实违反，不外推 Windows provider 内部。给actor静态汽车缓冲、只设bootstrap大小或等进程退出都不能消除这里的calloc／释放义务；真正改为调用方栈并退休所有相关线程还须重证guard、信号、restart及关闭合同。
 
 ## 声明宏与表达式参数
 
