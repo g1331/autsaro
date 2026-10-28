@@ -35,8 +35,7 @@ SWS_Platform_00002 明确要求平台抽象类型与符号在 Platform_Types.h �
 这些类型的义务。原声明只有 public_types.c 的清单消费者，已移除15个 typedef 及专用宏，
 不新增虚假功能开关。支持功能的类型／服务签名和对象布局保持；源码合同变化见 CHANGELOG。
 
-不适用（单核 SC1，所列功能未选择且配置入口拒绝，Os_Types.h 不发布其声明）：
-SWS_Os_00772、SWS_Os_00773、SWS_Os_00774、SWS_Os_00775、SWS_Os_00776、
+不适用（配置：ECUC_Os_00259 只接受 SC1、目标固定单核，所列功能未选择且配置入口拒绝，Os_Types.h 不发布其声明）：SWS_Os_00772、SWS_Os_00773、SWS_Os_00774、SWS_Os_00775、SWS_Os_00776、
 SWS_Os_00777、SWS_Os_00778、SWS_Os_00779、SWS_Os_00780、SWS_Os_00781、
 SWS_Os_00787、SWS_Os_00788、SWS_Os_00791、SWS_Os_00792、SWS_Os_91000。
 
