@@ -17,6 +17,13 @@
 #include "Os_Target.h"
 #include <stdio.h>
 
+#if defined(DONOTCARE)
+#error OS_SC1_UNSUPPORTED_DONOTCARE
+#endif
+#if defined(TotalNumberOfCores)
+#error OS_SC1_UNSUPPORTED_TotalNumberOfCores
+#endif
+
 /* Independent SC1 consumer constraints from R24-11 and the inherited OSEK services. */
 typedef char CoreRange[(sizeof(CoreIdType) >= 2u) ? 1 : -1];
 typedef char CounterRange[(sizeof(CounterType) == 4u) ? 1 : -1];
@@ -60,7 +67,6 @@ int main(void)
     boolean clear_pending = TRUE;
     CounterType counter = UINT32_MAX;
     TimeInMicrosecondsType microseconds = UINT64_MAX;
-    AppModeType inherited = DONOTCARE;
     *task_ref = 0u;
     *state_ref = SUSPENDED;
     *event_ref = UINT32_C(0x80000000);
@@ -69,9 +75,8 @@ int main(void)
         (events != UINT32_C(0x80000000)) || (tick != 1u) || (interrupt != INVALID_ISR) ||
         (time != UINT64_C(4294967295000000)) || (idle != IDLE_NO_HALT) || (service != 0x36u) ||
         (sizeof(boolean) != 1u) || (clear_pending != TRUE) || (TRUE == FALSE) ||
-        (counter != UINT32_MAX) || (microseconds != UINT64_MAX) || (inherited == 1u) ||
-        (inherited == 2u) || (TotalNumberOfCores != 1u) || (OS_CORE_ID_MASTER != 0u) ||
-        (OSDEFAULTAPPMODE == DONOTCARE) || (OSDEFAULTAPPMODE == 0u)) {
+        (counter != UINT32_MAX) || (microseconds != UINT64_MAX) || (OS_CORE_ID_MASTER != 0u) ||
+        (OSDEFAULTAPPMODE == 0u)) {
         return 1;
     }
     puts("public_types sc1_range_and_pointer_contracts=pass");

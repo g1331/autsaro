@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Single-core SC1 deliveries no longer publish the multicore-only `DONOTCARE` and `TotalNumberOfCores` macros. Remove these uses and regenerate consumers; the supported application modes and core identity services are unchanged (#389)
+
 - Host CAN mode/transmit forwarding, status-name conversion and batch initialization now have typed header definitions instead of external symbols. Regenerate and rebuild consumers; function addresses and status string storage belong to each translation unit (#389)
 
 - The disabled-wakeup `Can_CheckWakeup` entry is now defined inline in `Can.h`, preserving its typed calls and rejection result while removing the external symbol. Regenerate and rebuild all consumers; function addresses belong to each translation unit (#389)

@@ -28,17 +28,12 @@ typedef TaskType *TaskRefType;
 typedef uint8 TaskStateType;
 /** OSEK OS 2.2.3 13.2.1 pointer to caller-owned Task-state output. */
 typedef TaskStateType *TaskStateRefType;
-/** SWS_Os_91007 application mode; this target uses mode bits 1 and 2, not multicore inheritance. */
+/** OSEK OS 2.2.3 13.7.2 application mode; this target uses mode bits 1 and 2. */
 typedef uint8 AppModeType;
 /** OSEK OS 2.2.3 13.7.3 default application mode, always valid for StartOS;
  * the generated configuration requires the OsAppMode of this name (ECUC_Os_00022). */
 #define OSDEFAULTAPPMODE                                                                           \
     ((AppModeType)1u) /**< OSEK OS 2.2.3 13.7.3 and ECUC_Os_00022: valid default startup mode. */
-/* Public R24-11 constants; this selected target has one logical core. Their
- * declarations do not enable multicore startup or mode inheritance. */
-#define DONOTCARE                                                                                  \
-    UINT8_MAX /**< SWS_Os_91007: unspecified AppMode; multicore inheritance is not selected. */
-#define TotalNumberOfCores 1u /**< SWS_Os_91002: one controlled logical core. */
 /** OSEK OS 2.2.3 13.4.1 external-resource identifier below OS_MAX_RESOURCES. */
 typedef uint8 ResourceType;
 /** OSEK OS 2.2.3 13.5.1 bit set of Task events; zero contains no events. */

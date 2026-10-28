@@ -26,7 +26,7 @@ SC1 的任务、事件、资源、计数器、闹钟、调度表、中断、hook
 | 调度表类型 | 已核对（`Os_Types.h`：`ScheduleTableType`、`ScheduleTableStatusType` 及 STOPPED／NEXT／WAITING／RUNNING／RUNNING_AND_SYNCHRONOUS、`ScheduleTableStatusRefType`；`sc1_timing` 经 GetScheduleTableStatus 使用）：SWS_Os_00783、00784、00785 |
 | ControlIdle | 已核对（`Os.h` 按条款签名声明，`Os.c` `Os_Implementation_ControlIdle` 单核下不检查 CoreID；只支持 IDLE_NO_HALT，它已经生效，因此不存在待切换的空闲模式；`idle_state` 断言返回值）：SWS_Os_00769、00802 |
 | EnableInterruptSource 的挂起标志 | 已核对（取舍：与 `SWS_Os_91020` 的 ClearPending 参数冲突时按参数处理，见上文；`Os_Interrupt.c` 在 ClearPending 为 TRUE 时清除挂起标志，`interrupt_pairing` 的 `source-enable-clear` 断言清除、`source-retain` 断言保留并在使能后递送）：SWS_Os_00811 |
-| 核编号 | 已核对（`Os_Types.h`：唯一核 `OS_CORE_ID_0` 为 0，`TotalNumberOfCores` 为 1；GetCoreID 返回 0，`calling_context` 断言）：SWS_Os_00825 |
+| 核编号 | 已核对（`Os_Types.h`：唯一核 `OS_CORE_ID_0` 为 0；GetCoreID 返回 0，`calling_context` 断言）：SWS_Os_00825 |
 
 ## 主机事件的错误信息
 

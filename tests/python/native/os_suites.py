@@ -1762,7 +1762,7 @@ def check_capacity(binary: Path) -> list[dict]:
     return observations
 
 
-# Verifies: SWS_Os_00782, 00786, 00789, 00790, 00793, 00794, 91002, 91007
+# Verifies: SWS_Os_00782, 00786, 00789, 00790, 00793, 00794
 def check_public_types(directory: Path) -> None:
     # Verifies[Os]: SWS_BSW_00120. Independent C99 widths; 256/UINT32_MAX refusal vectors run in lifecycle.
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
@@ -1791,6 +1791,15 @@ def check_public_types(directory: Path) -> None:
         require(result.returncode == 0 and result.stdout == expected and not result.stderr,
                 {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
 
+
+    for name in ("DONOTCARE", "TotalNumberOfCores"):
+        result = run_native(actual_command + ["-D" + name + "=1u", "-fsyntax-only"],
+                            capture_output=True, text=True)
+        errors = [line for line in result.stderr.splitlines() if "error:" in line]
+        require(result.returncode != 0 and len(errors) == 1 and
+                "#error OS_SC1_UNSUPPORTED_" + name in errors[0] and
+                "public_types.c:" in errors[0],
+                {"macro": name, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
 
     unsupported = (
         "ApplicationType", "ApplicationStateType", "ApplicationStateRefType",
