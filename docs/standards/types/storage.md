@@ -54,3 +54,20 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_prefix` | CONST_8；Os_StackFatalExit 的不可变报告前缀字节。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_middle` | CONST_8；Os_StackFatalExit 的不可变报告分隔字节。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_suffix` | CONST_8；Os_StackFatalExit 的不可变报告后缀字节。 | 维护者 原用户决定，ADR 0023 |
+
+## 历史源码与收据边界
+
+以下保留原冻结身份下的整改收据，不把其中数量或旧函数消费者作为当前结论。
+
+R8.9为Advisory、System（主文印刷71／PDF79；AMD2.27追加C11，AMD4.43–46／印刷32／PDF39将defined改为declared）。只有一个函数出现的标识符应优先收窄到块作用域；静态存储期不是保留文件作用域的充分理由，主文的调用计数示例本身就使用函数内static。地址被异步消费者借用时也须分别核对对象存储期与标识符可见范围，不能把二者混同。
+
+55077f87四profile分析中的standard-ecu有46个报告对象，不按TU／程序重复计数。十个无独立MemMap数据段属性的私有对象已保留原类型／限定符、静态或TLS存储期并移入唯一消费函数：Target的native_owner／native_thread、protocol_write／read、next_output_ticket及三个output索引，Det_Host的reporting_development，以及HostBatch输入control的batch。Target仍以同一原子发布身份，队列索引及ticket不随调用重置；Det仍每个原生线程首次进入后保持递归边界；batch仍是H控制线程借用的进程期对象，执行／observer回收协议不变。除这些声明位置，三个文件的其他非注释C token不变。
+
+另一个已收窄对象是Linux端口dispatcher_thread：在xPortStartScheduler原创建点定义const HANDLE，保留创建、注册等待和永久等待的原顺序。只是句柄值的局部副本，不把actor、映射或回调上下文的所有权改为自动存储期；后续有序补丁上下文和manifest一并同步。Windows不选择这两份Linux补丁。
+
+上述十个对象的记录固定于当时的源码；后续逐处映射核查将Det的reporting_development恢复为文件作用域的显式TLS数据段，见[Det私有状态](../det.md#私有开发报告状态的映射)。该处R8.9真实Advisory保留重新成立，不把早期局部化收据改成当前状态，也不重写原工件的46项计数。
+
+其余32个自有／生成对象目前保留真实Advisory违反及映射理由：Can和Com各一个发布状态、八个Ecu_RuntimeConfig配置对象、Rte的rte_allocated、HostBusSM的publication、Backend六个状态／入口记录、Error的TLS guard、Interrupt状态、Mailbox四个函数私有状态、HostLinux句柄池及StackLinux七个altstack／fault／终止文本对象。它们现有数据段属性与CODE区分开；直接把带相同OS_MEMMAP等宏的声明移到CODE函数内会取得不同的活动属性。固定SWS_MemMap_00023（R24-11，PDF37）禁止函数体内包含映射头，并明确说明特殊映射的函数静态变量须移到文件作用域。该义务限制沿现有START／STOP机制收窄这些对象；不能删除映射或在函数内嵌套请求消警报。其他机制仍需另证数据段身份、配置及编译器兼容性，不把GCC局部属性支持当作现成等价替代；逐处ADR0023／00115记录仍另核。
+
+采用内核另三个对象保留明确用途：tasks.c说明xDelayedTaskList1／2的文件级静态符号供kernel-aware debugger定位；uxTopUsedPriority为OpenOCD提供优先级界限，具名C引用用于保留该对象。列表指针逃逸本身并不禁止块内static，调试符号兼容才是这里保留的理由；本仓库没有据此证明OpenOCD实际运行或赋予采用代码普遍豁免。上述11处整改、32处映射理由及三个调试对象是该46处的有界处置；新字节检查与其他未报告构造另核，原始诊断及not_assessed不改写。
+
