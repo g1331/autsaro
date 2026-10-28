@@ -5,14 +5,18 @@
 /** Published information (SWS_BSW_00059): fixed R24-11 interface release, 4.10.0. */
 #define PLATFORM_AR_RELEASE_MAJOR_VERSION    4U
 #define PLATFORM_AR_RELEASE_MINOR_VERSION    10U
-/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
+/* MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
 #define PLATFORM_AR_RELEASE_REVISION_VERSION 0U
-/** SWS_BSW_00059/00256: project implementation software release. */
-/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
+/** SWS_BSW_00059/00256: project implementation software release.
+ * MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
 #define PLATFORM_SW_MAJOR_VERSION AUTSARO_SW_MAJOR_VERSION
-/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
+/* MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
 #define PLATFORM_SW_MINOR_VERSION AUTSARO_SW_MINOR_VERSION
-/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
+/* MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
 #define PLATFORM_SW_PATCH_VERSION AUTSARO_SW_PATCH_VERSION
 #include <stdbool.h>
 #include <stdint.h>

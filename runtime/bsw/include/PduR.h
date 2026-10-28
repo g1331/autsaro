@@ -18,8 +18,9 @@
     (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
 #error "PduR.h -> ComStack_Types.h: incompatible AUTOSAR release"
 #endif
-/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
-/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate.
+ * MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
 #define PDUR_MODULE_ID 51u
 #define PDUR_START_SEC_CODE
 #include "PduR_MemMap.h"

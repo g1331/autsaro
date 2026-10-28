@@ -11,8 +11,9 @@
 #elif (COMM_AR_RELEASE_MAJOR_VERSION != 4U) || (COMM_AR_RELEASE_MINOR_VERSION != 10U)
 #error "BswM.h -> ComM.h: incompatible AUTOSAR release"
 #endif
-/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
-/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate.
+ * MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
 #define BSWM_MODULE_ID 42u
 #define BSWM_START_SEC_CODE
 #include "BswM_MemMap.h"
