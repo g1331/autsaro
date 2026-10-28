@@ -336,6 +336,8 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
         ("Os_Arti.h", "Arti.h", "ARTI"),
         ("Os_Arti.h", "Os_MemMap.h", "MEMMAP"),
         ("Os_ArtiServices.c", "Os_MemMap.h", "MEMMAP"),
+        ("Os_Service.h", "Arti.h", "ARTI"),
+        ("Os_Service.h", "Os_MemMap.h", "MEMMAP"),
         ("Os_Backend.c", "Os_MemMap.h", "MEMMAP"),
         ("Os_Backend.h", "Os_MemMap.h", "MEMMAP"),
         ("Os_Cfg.h", "Std_Types.h", "STD_TYPES"),

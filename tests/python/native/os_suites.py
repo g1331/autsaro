@@ -2109,7 +2109,7 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
 
 def check_memory_mapping(directory: Path) -> None:
     # These standard callback declarations belong to the OS interface even though RTE owns bodies.
-    # SetEvent is spelled literally in its definition, but the public header aliases it.
+    # The public SetEvent alias names the real header-inline Os_SetEvent implementation.
     owned = {"StartupHook", "ShutdownHook", "ErrorHook", "PreTaskHook", "PostTaskHook", "Os_SetEvent"}
     for path in sorted((TARGET / "src").rglob("*.c")):
         try:
@@ -2128,6 +2128,8 @@ def check_memory_mapping(directory: Path) -> None:
     headers = directory / "include"
     shutil.copytree(TARGET / "include", headers)
     flags = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I", str(headers),
+             "-I", str(TARGET / "src"),
+             *(["-I", str(TARGET / "src/host/linux")] if linux else []),
              "-I", str(ROOT / "runtime/bsw/include"), "-I", str(ROOT / "runtime/host/include")]
     source = TARGET / "tests/memory_mapping.c"
     object_file = directory / "memory_mapping.o"
@@ -2137,8 +2139,9 @@ def check_memory_mapping(directory: Path) -> None:
     run_native([*flags, str(source), "-o", str(binary)], check=True, timeout=60)
     names = ["Os_TaskEntry_FirstTask", "Os_TaskEntry_SecondTask", "Os_IsrEntry_FirstISR",
              "Os_IsrEntry_SecondISR", "AlarmBody", "ErrorHook", "PreTaskHook", "PostTaskHook",
-             "StartupHook", "ShutdownHook", "Os_SetEvent"]
-    verify_code_section(binary, tool, names)
+             "StartupHook", "ShutdownHook"]
+    local_names = ("Os_SetEvent",)
+    verify_code_section(binary, tool, names, local_names)
     ran = run_native([str(binary)], capture_output=True, text=True, timeout=5, check=True)
     require(ran.stdout.strip() == "memory_mapping calls=10" and not ran.stderr, ran.stdout)
     for name, markers, expected in [
@@ -2183,11 +2186,36 @@ def check_memory_mapping(directory: Path) -> None:
     mutant = directory / ("missing-code-section" if linux else "missing-code-section.exe")
     run_native([*flags, str(source), "-o", str(mutant)], check=True, timeout=60)
     try:
-        verify_code_section(mutant, tool, names)
+        verify_code_section(mutant, tool, names, local_names)
     except ValueError as error:
         require("code section is missing" in str(error), str(error))
     else:
         raise AssertionError("unmapped entry definitions passed the linked section check")
+    header.write_text(original, encoding="utf-8")
+    interface = headers / "Os.h"
+    original_interface = interface.read_text(encoding="utf-8")
+    service = re.search(r"OS_MEMMAP static inline StatusType Os_SetEvent\([^;{}]+\)\n\{.*?\n\}",
+                        original_interface, re.DOTALL)
+    require(service is not None, "missing real inline SetEvent consumer")
+    body = service.group()
+    for label, before, after in (
+        ("enter", "Os_ArtiServiceEnter()", "0"),
+        ("entry-event", "Os_ArtiService(OSServiceId_SetEvent, (uint32)TaskID, 0);", ""),
+        ("implementation", "Os_Implementation_SetEvent(TaskID, Mask)",
+         "((void)TaskID, (void)Mask, (StatusType)E_OK)"),
+        ("capture", "Arti_CaptureServiceStatus((uint32)result);", ""),
+        ("return-event", "Os_ArtiService(OSServiceId_SetEvent, (uint32)result, 1);", ""),
+        ("leave", "Os_ArtiServiceLeave();", ""),
+    ):
+        require(body.count(before) == 1, f"SetEvent mutation anchor mismatch: {label}")
+        interface.write_text(original_interface.replace(body, body.replace(before, after)),
+                             encoding="utf-8")
+        mutant = directory / ("missing-service-" + label + (".exe" if not linux else ""))
+        run_native([*flags, str(source), "-o", str(mutant)], check=True, timeout=60)
+        rejected = run_native([str(mutant)], capture_output=True, text=True, timeout=5, check=False)
+        require(rejected.returncode == 4 and not rejected.stdout and not rejected.stderr,
+                f"missing inline service effect accepted: {label}: {rejected}")
+    interface.write_text(original_interface, encoding="utf-8")
 
 
 def check_port_restart(directory: Path) -> None:
