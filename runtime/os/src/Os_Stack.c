@@ -124,7 +124,7 @@ OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
 }
 
 OS_MEMMAP static void publish_fault(
-    Os_NativeStackType *record, DWORD code, uintptr_t sp, uintptr_t address, char origin)
+    const Os_NativeStackType *record, DWORD code, uintptr_t sp, uintptr_t address, char origin)
 {
     const unsigned index = Os_StackIndex(record);
     if (index >= OS_NATIVE_STACKS) {

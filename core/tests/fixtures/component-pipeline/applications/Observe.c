@@ -20,19 +20,16 @@ static inline void Observe_Result(uint32 value, uint32 state, uint32 local, Std_
     (void)status;
 }
 #endif
-#define Observe_START_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Observe_MemMap.h"
-static uint32 observed Observe_VAR_CLEARED_UNSPECIFIED;
-static uint32 service_value Observe_VAR_CLEARED_UNSPECIFIED;
-static uint32 service_state Observe_VAR_CLEARED_UNSPECIFIED;
-#define Observe_STOP_SEC_VAR_CLEARED_UNSPECIFIED
-#include "Observe_MemMap.h"
 #define Observe_START_SEC_CODE
 #include "Observe_MemMap.h"
 Observe_CODE void Observe_Periodic(void)
 {
     (void)Observe_RecordActor();
+    /* The connected synchronous accesses only borrow these invocation-local outputs. */
     uint32 value = 0u;
+    uint32 observed = 0u;
+    uint32 service_value = 0u;
+    uint32 service_state = 0u;
     (void)Rte_Read_Value_Value(&value);
     (void)Rte_Read_Result_Value(&observed);
     (void)Observe_CallContext(TRUE);

@@ -1478,19 +1478,15 @@ fn component_application_definitions_preserve_configured_sections() {
     for (component, objects, functions) in [
         (
             "Ingress",
-            &["committed"][..],
+            &["ingress_committed"][..],
             &["Ingress_Periodic", "Ingress_ReadData"][..],
         ),
         (
             "Process",
-            &["committed"][..],
+            &["process_committed"][..],
             &["Process_Periodic", "Process_Transform"][..],
         ),
-        (
-            "Observe",
-            &["observed", "service_value", "service_state"][..],
-            &["Observe_Periodic"][..],
-        ),
+        ("Observe", &[][..], &["Observe_Periodic"][..]),
     ] {
         let source_path = scratch.0.join(format!("app/{component}/{component}.c"));
         let source = std::fs::read_to_string(&source_path).unwrap();
@@ -1538,6 +1534,14 @@ fn component_application_definitions_preserve_configured_sections() {
         let output = compile(&source_path, &object);
         assert!(output.status.success(), "{component}: {output:?}");
         let sections = tooling::symbol_sections(&tooling::execution_settings().objdump, &object);
+        if objects.is_empty() {
+            assert!(
+                !sections
+                    .iter()
+                    .any(|(_, section)| section == ".bss.application_contract"),
+                "{component}: scratch outputs must not allocate persistent mapped storage: {sections:?}"
+            );
+        }
         for (names, section) in [
             (objects, ".bss.application_contract"),
             (functions, ".text.application_contract"),

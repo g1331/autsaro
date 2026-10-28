@@ -153,7 +153,7 @@ OS_MEMMAP static void fault_park_forever(void)
 }
 
 OS_MEMMAP static void publish_fault(
-    Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
+    const Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
 {
     Os_StackFaultType *local;
     const unsigned index = Os_StackIndex(record);
