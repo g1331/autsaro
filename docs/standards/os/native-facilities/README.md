@@ -101,3 +101,11 @@ host boundary 检查创建、errno、失败回收和句柄复用；检测器与�
 重评条件为目标 ABI／地址宽度、provider、mmap flags／容量、栈布局／guard、ARTI
 数值合同或缓冲所有权变化；Windows 地址转换不由这份 Linux 证据代为覆盖。
 保留原始诊断和分析身份，类别处置不表示源码符合这两条规则。
+
+
+类别实例由 `c_standard.host_address_instances` 逐源码确认：仅在上述三个命名函数体内，
+匹配固定的 mmap 赋值、映射地址转换和 one-past 缓冲地址转换；文件、函数或表达式改变、
+缺失／重复实例均拒绝，MR12 规则及就近注释双向关联。类别文档缺失同样拒绝。
+`test_host_address_category_requires_exact_owner_expression_and_annotation` 检查正常实例、
+缺注释、错规则、错表达式／函数、函数体外、重复及缺记录反例。
+这些项目检查只识别已审阅的来源模式，不替代 C 类型／行为分析、调用合同或 MISRA 判断。

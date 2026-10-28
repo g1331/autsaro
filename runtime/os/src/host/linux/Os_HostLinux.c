@@ -324,6 +324,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     errno = 0;
     const unsigned protection = (unsigned)PROT_READ | (unsigned)PROT_WRITE;
     const unsigned mapping_flags = (unsigned)MAP_PRIVATE | (unsigned)MAP_ANONYMOUS;
+    /* MR12 RULE 11.5 VIOLATION: mmap returns page-aligned bytes within the reviewed mapping. */
     thread->mapping = mmap(NULL, reserve, (int)protection, (int)mapping_flags, -1, 0);
     if (thread->mapping == MAP_FAILED) {
         thread->mapping = NULL;
@@ -956,6 +957,7 @@ OS_MEMMAP int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, 
         (guard == NULL)) {
         return 0;
     }
+    /* MR12 RULE 11.4 VIOLATION: Full-width native bounds are compared, never dereferenced. */
     *low = (uintptr_t)thread->mapping;
     *high = *low + thread->mapping_size;
     *guard = thread->guard_size;

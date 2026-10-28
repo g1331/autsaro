@@ -322,6 +322,7 @@ OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
     if (current_stack == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
+    /* MR12 RULE 11.4 VIOLATION: Numeric bounds compare distinct native and static stack regions. */
     current_stack->kernel_buffer_high = (uintptr_t)&top[1];
     current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - (512u * sizeof(*top));
     if ((current_stack->reserve_low < current_stack->kernel_buffer_high) &&

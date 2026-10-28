@@ -585,6 +585,63 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
             self.assertIn(("deviation-unrecorded", "runtime/os/include/Test_MemMap.c",
                            "/** @file Re-entrant mapping."), c_standard.deviation_findings(root))
 
+    def test_host_address_category_requires_exact_owner_expression_and_annotation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = root / "runtime/os/src/host/linux"
+            directory.mkdir(parents=True)
+            document = root / "docs/standards/os/native-facilities/README.md"
+            document.parent.mkdir(parents=True)
+            document.write_text("## 主机地址表示类别处置\n", encoding="utf-8")
+            host = directory / "Os_HostLinux.c"
+            stack = directory / "Os_StackLinux.c"
+            mapping = "thread->mapping = mmap(NULL, reserve, (int)protection, (int)mapping_flags, -1, 0);"
+            bounds = "*low = (uintptr_t)thread->mapping;"
+            marker = "/* MR12 RULE 11.5 VIOLATION: page-aligned mapping bytes. */\n"
+            original = (
+                "HANDLE Os_HostCreateActor(void) {\n" + marker + mapping + "\n}\n"
+                "int Os_HostStackRange(void) {\n"
+                "/* MR12 RULE 11.4 VIOLATION: numeric bounds only. */\n" + bounds + "\n}\n"
+            )
+            stack.write_text(
+                "void Os_StackRecordBuffer(void) {\n"
+                "/* MR12 RULE 11.4 VIOLATION: disjoint stack regions. */\n"
+                "current_stack->kernel_buffer_high = (uintptr_t)&top[1];\n}\n",
+                encoding="utf-8",
+            )
+            for label, changed, expected_rule, expected_file in (
+                ("accepted", original, None, None),
+                ("missing-comment", original.replace(marker, ""), "deviation-uncommented", document),
+                ("wrong-rule", original.replace("RULE 11.5", "RULE 11.4"), "deviation-unrecorded", host),
+                ("wrong-expression", original.replace(bounds, "*low = (uintptr_t)thread->argument;"),
+                 "deviation-category-pattern", host),
+                ("wrong-owner", original.replace("Os_HostStackRange", "OtherStackRange"),
+                 "deviation-category-pattern", host),
+                ("outside-owner", original.replace(bounds, "") + bounds,
+                 "deviation-category-pattern", host),
+                ("duplicate", original.replace(bounds, bounds + bounds), "deviation-category-pattern", host),
+                ("comment-owner", original.replace("int Os_HostStackRange(void) {", "/* Os_HostStackRange(void) { */ int Other(void) {"),
+                 "deviation-category-pattern", host),
+                ("extra-conversion", original + "void Other(void) {\n" + marker + mapping + "\n}\n",
+                 "deviation-unrecorded", host),
+            ):
+                with self.subTest(case=label):
+                    host.write_text(changed, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    if expected_rule is None:
+                        self.assertEqual(findings, {})
+                    else:
+                        self.assertTrue(any(
+                            rule == expected_rule and name == expected_file.relative_to(root).as_posix()
+                            for rule, name, _ in findings
+                        ), findings)
+            host.write_text(original, encoding="utf-8")
+            document.unlink()
+            self.assertIn(
+                ("deviation-category-record", "runtime/os/src/host/linux/Os_HostLinux.c", "Os_HostCreateActor"),
+                c_standard.deviation_findings(root),
+            )
+
     def test_deviations_match_both_directions_and_exact_symbol(self):
         with tempfile.TemporaryDirectory(prefix="171-") as temporary:
             root = Path(temporary)

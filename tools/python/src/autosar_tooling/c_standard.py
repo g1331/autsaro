@@ -480,6 +480,61 @@ def baseline_errors(current: collections.Counter[Key], baseline: Path = BASELINE
     ]
 
 
+def host_address_instances(root: Path) -> tuple[dict, collections.Counter[Key]]:
+    """Identify the three reviewed Linux expressions, without accepting other conversions."""
+    document = "docs/standards/os/native-facilities/README.md"
+    title = "## 主机地址表示类别处置"
+    patterns = (
+        ("runtime/os/src/host/linux/Os_HostLinux.c", "11.5", "Os_HostCreateActor",
+         "thread->mapping = mmap(NULL, reserve, (int)protection, (int)mapping_flags, -1, 0);"),
+        ("runtime/os/src/host/linux/Os_HostLinux.c", "11.4", "Os_HostStackRange",
+         "*low = (uintptr_t)thread->mapping;"),
+        ("runtime/os/src/host/linux/Os_StackLinux.c", "11.4", "Os_StackRecordBuffer",
+         "current_stack->kernel_buffer_high = (uintptr_t)&top[1];"),
+    )
+    instances = {}
+    errors: collections.Counter[Key] = collections.Counter()
+    for name, rule, owner, expression in patterns:
+        path = root / name
+        if not path.is_file():
+            continue
+        source = path.read_text(encoding="utf-8")
+        tokens = [token for token in lex(source) if not is_comment(token)]
+        expected = [token.text for token in lex(expression)]
+        bodies = []
+        for index, token in enumerate(tokens[:-1]):
+            if token.text != owner or tokens[index + 1].text != "(":
+                continue
+            depth = 1
+            cursor = index + 2
+            while cursor < len(tokens) and depth:
+                depth += (tokens[cursor].text == "(") - (tokens[cursor].text == ")")
+                cursor += 1
+            if cursor == len(tokens) or tokens[cursor].text != "{":
+                continue
+            start = cursor + 1
+            depth = 1
+            cursor += 1
+            while cursor < len(tokens) and depth:
+                depth += (tokens[cursor].text == "{") - (tokens[cursor].text == "}")
+                cursor += 1
+            if depth == 0:
+                bodies.append(tokens[start:cursor - 1])
+        matches = []
+        if len(bodies) == 1:
+            body = bodies[0]
+            for index, token in enumerate(body):
+                if [item.text for item in body[index:index + len(expected)]] == expected:
+                    matches.append(token.start)
+        if len(matches) != 1:
+            errors[("deviation-category-pattern", name, owner)] += 1
+        elif not (root / document).is_file() or title not in (root / document).read_text(encoding="utf-8"):
+            errors[("deviation-category-record", name, owner)] += 1
+        else:
+            instances[(name, matches[0])] = (rule, "host-address:" + owner, document, title)
+    return instances, errors
+
+
 def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
     """Match approved table scopes to adjacent source locations, without approving them."""
     records: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
@@ -504,8 +559,12 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                     key = (kind, rule[2], name, symbol)
                     records[key] += 1
                     locations[key] = (path.relative_to(root).as_posix(), line.strip())
+    instances, result = host_address_instances(root)
+    for (name, _), (rule, symbol, document, title) in instances.items():
+        key = ("RULE", rule, name, symbol)
+        records[key] += 1
+        locations[key] = (document, title)
     comments: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
-    result: collections.Counter[Key] = collections.Counter()
     source_locations = {}
     for path in sorted((root / "runtime").rglob("*")):
         if path.suffix not in {".c", ".h"}:
@@ -560,6 +619,9 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                     if macro
                     else parameter_name(words[:-1])
                 )
+                instance = instances.get((name, declaration[0].start)) if declaration else None
+                if instance and match[1] == "RULE" and match[2] == instance[0]:
+                    symbol = instance[1]
                 if included is not None and not file_scoped:
                     numbered = included + " [" + str(directive_numbers[declaration[0].start]) + "]"
                     if (match[1], match[2], name, numbered) in records:
