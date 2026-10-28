@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- The controlled C99 OS now defines 38 service entries inline in `Os.h`. Regenerate and rebuild all consumers; their former external function definitions are removed. Typed calls, function pointers and ARTI ordering remain available; `TerminateTask`, `isOsStarted` and `NextScheduleTable` retain their external definitions (#389)
+
 - `Arti_GetVersionInfo` is now a typed header inline service; regenerate and rebuild consumers instead of linking to its former exported definition. Version fields, function-pointer calls and atomic null-pointer error reporting are preserved (#389)
 
 - The controlled single-core SC1 OS header no longer publishes types and access macros for unsupported OS-Applications, trusted calls, protection, spinlocks or peripheral areas. Remove uses of these unsupported declarations and regenerate deliveries; supported Task, ISR, resource, event, Counter, Alarm, schedule-table and core service contracts remain available (#389)
