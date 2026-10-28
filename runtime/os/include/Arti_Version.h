@@ -5,6 +5,7 @@
  * Formal vendor identity remains unassigned. */
 #define ARTI_AR_RELEASE_MAJOR_VERSION    4U
 #define ARTI_AR_RELEASE_MINOR_VERSION    10U
+/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
 #define ARTI_AR_RELEASE_REVISION_VERSION 0U
 /** SWS_BSW_00059/00256: independently released ARTI tool implementation. */
 #define ARTI_SW_MAJOR_VERSION 1U

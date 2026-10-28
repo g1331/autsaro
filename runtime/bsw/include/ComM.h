@@ -22,6 +22,7 @@
 #error "ComM.h -> Rte_ComM_Type.h: incompatible AUTOSAR release"
 #endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
 #define COMM_MODULE_ID 12u
 /** SWS_ComM_91027: Std_ReturnType extension of ComM. */
 /* MR12 RULE 2.5 VIOLATION: standard return code (SWS_ComM_91027) without mode limitation in

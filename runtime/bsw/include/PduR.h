@@ -19,6 +19,7 @@
 #error "PduR.h -> ComStack_Types.h: incompatible AUTOSAR release"
 #endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
 #define PDUR_MODULE_ID 51u
 #define PDUR_START_SEC_CODE
 #include "PduR_MemMap.h"
@@ -26,7 +27,9 @@
 typedef uint16 PduR_PBConfigIdType;
 /** Routing-path group handle (SWS_PduR_00654); no groups are selected. */
 typedef uint16 PduR_RoutingPathGroupIdType;
-/** Initialization state (SWS_PduR_00742). */
+/** Initialization state (SWS_PduR_00742).
+ * MR12 RULE 2.3 VIOLATION: Required public declaration remains available even when unused here.
+ */
 typedef enum {
     PDUR_UNINIT = 0, /**< No valid route set has been published. */
     PDUR_ONLINE = 1  /**< The first valid route set remains published. */

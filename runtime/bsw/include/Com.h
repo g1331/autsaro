@@ -19,6 +19,7 @@
 #error "Com.h -> ComStack_Types.h: incompatible AUTOSAR release"
 #endif
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
 #define COM_MODULE_ID             50u
 #define COM_SERVICE_NOT_AVAILABLE 0x80u /**< Service unavailable (SWS_Com_00865). */
 /* MR12 RULE 2.5 VIOLATION: standard return code (SWS_Com_00865) that is never returned,

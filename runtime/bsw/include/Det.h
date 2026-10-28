@@ -4,6 +4,7 @@
 #include "Det_Version.h"
 #include "Std_Types.h"
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
 #define DET_MODULE_ID 15u
 #define DET_START_SEC_CODE
 #include "Det_MemMap.h"

@@ -5,12 +5,15 @@
 #include "Std_Types.h"
 #include "ComStack_Types.h"
 /* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+/* MR12 RULE 2.5 VIOLATION: Required public declaration remains available even when unused here. */
 #define LSDUR_MODULE_ID 132u
 #define LSDUR_START_SEC_CODE
 #include "LSduR_MemMap.h"
 /** Configuration identity (CP_SWS_LSduR_91004). */
 typedef uint16 LSduR_PBConfigIdType;
-/** Initialization state (CP_SWS_LSduR_91005). */
+/** Initialization state (CP_SWS_LSduR_91005).
+ * MR12 RULE 2.3 VIOLATION: Required public declaration remains available even when unused here.
+ */
 typedef enum {
     LSDUR_UNINIT = 0, /**< No valid route set has been published. */
     LSDUR_ONLINE = 1  /**< The first valid route set remains published. */
