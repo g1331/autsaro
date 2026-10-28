@@ -1,6 +1,7 @@
 /** @file Native ARTI publication cells types. */
 #ifndef AUTOSAR_ARTI_TYPES_H
 #define AUTOSAR_ARTI_TYPES_H
+#include "Arti_Version.h"
 #include "Std_Types.h"
 #include <stddef.h>
 #ifdef _WIN32
