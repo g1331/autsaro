@@ -330,9 +330,12 @@ pub(super) fn required_defines<N: AsRef<str>, V: AsRef<str>>(
     let mut output = String::new();
     for (name, value) in entries {
         output.push_str(&format!(
-            "/** {purpose}\n * MR12 RULE 2.5 VIOLATION: {requirement} requires this macro even when unused.\n */\n"
+            "/** MR12 RULE 2.5 VIOLATION: {requirement} requires this macro even when unused. */\n"
         ));
-        output.push_str(&defines(&[(name.as_ref(), value.as_ref())]));
+        output.push_str(&commented_defines(
+            &[(name.as_ref(), value.as_ref())],
+            purpose,
+        ));
     }
     output
 }

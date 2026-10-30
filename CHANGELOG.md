@@ -42,9 +42,9 @@
 
 ### Fixed
 
-- Generated RTE type headers include Rte.h before type declarations, adjacent owner events share guards without changing dispatch or flush order, and the RTE allocation lifecycle has one described state; regenerate sealed deliveries for the updated source and BSWMD identities (#382)
+- Generated RTE type headers include Rte.h before type declarations, adjacent owner events share guards without changing dispatch or flush order, and the RTE allocation lifecycle has one described state; regenerate sealed deliveries for the updated source and BSWMD identities (#393)
 
-- Generated ECU private execution glue omits the unused Ecu_ExecutionNow wrapper; integrations use the controlled target clock interface and regenerate deliveries (#382)
+- Generated ECU private execution glue omits the unused Ecu_ExecutionNow wrapper; integrations use the controlled target clock interface and regenerate deliveries (#393)
 
 - Linux process cancellation recognizes registered sibling session leaders before reading their exiting proc environment, avoiding false cleanup failures while preserving escape refusal and root exit codes; unconfirmed cleanup logs include the responsible group, PID and observation error (#388)
 
