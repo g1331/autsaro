@@ -12,7 +12,7 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，unittest 按 suite 保存到该目录。已有目录不会被覆盖；未指定时仍只保留失败现场。
 
-`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件（Windows 按测试名把最慢的几个模块分到第二个 runner，同一名单在另一半用 `--skip` 排除，每个测试只运行一次），工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。失败的测试保留自己的 scratch 目录（输出 `scratch retained at …`），独立 ECU 校验器保留其诊断目录，失败消息附带子进程输出末尾；该任务把临时根目录作为 `native-scratch-*` artifact 在失败时上传（保留 14 天），与 OS suites 的 `os-suites-*` 相同；`native-os` 任务在两个平台运行 27 个 OS suites 和主机锁错误边界测试，Windows 用 `AUTOSAR_OS_SHARD=k/n` 把 suite 按序号分到两个 runner，每个 suite 仍单独串行运行。`native-delivery` 任务下载准备任务发布的样本，与样本分析并行运行封存工程构建模式和 CMake 构建，再把样本移到新目录：Python 3.11 运行全部四个样本，Extended 在两平台运行完整版本与样本矩阵。用 uv 管理的接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制（`acceptance.yml`，见[官方对照](official.md)）与桌面场景（`desktop.yml`，见[桌面场景](desktop.md)）由不属于必需检查的 `Extended checks` 按改动路径调用（见 [CI](README.md#ci)）；PR 检查通过不代表这些检查通过。
+`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件（Windows 按测试名把最慢的几个模块分到第二个 runner，同一名单在另一半用 `--skip` 排除，每个测试只运行一次），工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。失败的测试保留自己的 scratch 目录（输出 `scratch retained at …`），独立 ECU 校验器保留其诊断目录，失败消息附带子进程输出末尾；该任务把临时根目录作为 `native-scratch-*` artifact 在失败时上传（保留 14 天），与 OS suites 的 `os-suites-*` 相同；`native-os` 任务在两个平台运行 27 个 OS suites 和主机锁错误边界测试，Windows 用 `AUTOSAR_OS_SHARD=k/n` 把 suite 按序号分到两个 runner，每个 suite 仍单独串行运行。`native-delivery` 任务下载准备任务发布的样本，与样本分析并行运行封存工程构建模式和 CMake 构建，再把样本移到新目录：Python 3.11 运行全部四个样本，Extended 在两平台运行完整版本与样本矩阵；Windows 把接收端步骤放到第二个 runner，与构建模式和 CMake 并行。用 uv 管理的接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制（`acceptance.yml`，见[官方对照](official.md)）与桌面场景（`desktop.yml`，见[桌面场景](desktop.md)）由不属于必需检查的 `Extended checks` 按改动路径调用（见 [CI](README.md#ci)）；PR 检查通过不代表这些检查通过。
 
 ## 检测器构建
 
@@ -41,7 +41,7 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 
 `port-restart` suite 直接验证原生展开的有界重入、未处理／无关异常，以及检测器对丢弃调用帧的处理；Linux 具备内核 SHSTK 时还执行实际启用的正反对照和真实 Task／ARTI 消费者，不具备时保留 `not_assessed`。全部被展开的 C 单元（含应用与检测器构建）使用交付清单中的 `-fexceptions`，不能只为端口单元添加该选项。
 
-必需 CI 的 `native-sanitizers` 任务在 Linux 上按 `thread` 与 `address,undefined` 各用一个 runner 运行上述命令；与 `native`、`native-os` 并行。
+必需 CI 的 `native-sanitizers` 任务在 Linux 上运行上述命令：`address,undefined` 用一个 runner；`thread` 把 Cargo 插桩程序与串行的 OS suites 分到两个 runner，每个步骤仍只运行一次；与 `native`、`native-os` 并行。
 
 ## 平台与路径
 

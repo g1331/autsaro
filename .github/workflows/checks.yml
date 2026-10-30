@@ -29,8 +29,8 @@ jobs:
     steps:
       # Pull requests touching only reader documentation and design records
       # skip build and test jobs; pushes keep the full non-GUI checks.
-      # Pull requests that otherwise change only ui/ also skip the native, C analysis and
-      # process jobs: none of their inputs is under ui/ (tests/python/test_ci_selection.py).
+      # Pull requests that otherwise change only ui/ also skip the core, native and C analysis
+      # jobs: none of their inputs is under ui/ (tests/python/test_ci_selection.py).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -132,6 +132,10 @@ jobs:
       - run: uv sync --locked
       - run: uv run --locked ruff check tools tests/python scripts
       - run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python
+      # Managed process tests once per platform, without a runner of their own.
+      - name: Managed process tests
+        if: matrix.python == '3.12' || runner.os == 'Windows'
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/process
       - run: uv build --out-dir build/python
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -189,22 +193,6 @@ jobs:
       - run: cargo build --locked -p autosar-config-desktop
       - if: runner.os == 'Linux'
         run: cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
-  process:
-    needs: changes
-    if: needs.changes.outputs.native == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-      - run: uv sync --locked
-      - run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/process
   native:
     # Native suites that need GCC but no licensed archive; the rest stay in acceptance.yml.
     needs: changes
@@ -327,8 +315,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitize: [thread, 'address,undefined']
-    name: native-sanitizers (${{ matrix.sanitize }})
+        # TSan runs the serial OS suites on a second runner; ASan/UBSan keeps one job.
+        include:
+          - sanitize: thread
+            part: programs
+          - sanitize: thread
+            part: os
+          - sanitize: 'address,undefined'
+            part: all
+    name: native-sanitizers (${{ matrix.sanitize }}, ${{ matrix.part }})
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -342,14 +337,17 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - run: uv sync --locked
       - uses: ./.github/actions/core-build-dependencies
+        if: matrix.part != 'os'
       - uses: ./.github/actions/native-analysis-compiler
       - name: Identify native build cache inputs
+        if: matrix.part != 'os'
         shell: python
         run: |
           import os
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: matrix.part != 'os'
         with:
           path: |
             ~/.cargo/registry
@@ -373,11 +371,13 @@ jobs:
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       # setarch -R disables ASLR, which GCC 13's TSan needs on this runner.
       - name: Instrumented native programs
+        if: matrix.part != 'os'
         run: >-
           setarch x86_64 -R python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --features native-tests --test native
           --no-fail-fast -- 'runtime_contracts::' 'host::' 'integration::generated_c::'
           'integration::os::counter_header_oracles' 'sanitizers::sanitizer_lane_reports_deliberate_faults'
       - name: Instrumented sealed ECU protocols
+        if: matrix.part != 'os'
         shell: python
         run: |
           import os, subprocess, sys
@@ -388,20 +388,22 @@ jobs:
               'cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests', '--test', 'native',
               '--no-fail-fast', '--', 'integration::protocol::', 'integration::sealed_projects::', 'integration::sealed_sanitizers::'], env=env).returncode)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
+        if: failure() && matrix.part != 'os'
         with:
           name: sanitizer-scratch-${{ strategy.job-index }}
           path: ${{ runner.temp }}/sanitizer-scratch
           if-no-files-found: ignore
           retention-days: 14
       - name: Instrumented OS suites
+        if: matrix.part != 'programs'
         env:
           AUTOSAR_OS_OUTPUT_DIRECTORY: ${{ runner.temp }}/os-suites
         run: setarch x86_64 -R python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_os_suites.py
       - name: Check concurrent native constructor rollback
+        if: matrix.part != 'programs'
         run: setarch x86_64 -R python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py -k concurrent_event_construction_and_rollback
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
+        if: failure() && matrix.part != 'programs'
         with:
           name: os-suites-sanitizer-${{ strategy.job-index }}
           path: ${{ runner.temp }}/os-suites
@@ -596,11 +598,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Windows builds take about three times longer, so its receiver runs on a second runner.
         include:
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
+            part: all
           - os: windows-latest
             target: windows-x64-controlled-v1
+            part: builds
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            part: receiver
+    name: native-delivery (${{ matrix.os }}, ${{ matrix.part }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -631,12 +640,15 @@ jobs:
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Sealed ECU build mode fault isolation
+        if: matrix.part != 'receiver'
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py
       # The generated CMake build (uv-locked CMake and Ninja) compiles the target.json closure.
       - name: CMake build matches the sealed ECU build
+        if: matrix.part != 'receiver'
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_cmake_build.py
       # Oldest supported receiver runs every sample; Extended covers the full interpreter matrix.
       - name: All moved samples build and run with receiver Python 3.11
+        if: matrix.part != 'builds'
         shell: python
         run: |
           import os, subprocess, sys
@@ -841,7 +853,7 @@ jobs:
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
     name: CI required
-    needs: [changes, desktop-scenarios, ui, python, core, desktop, process, native, native-os, native-sanitizers, native-delivery, quality, c-analysis]
+    needs: [changes, desktop-scenarios, ui, python, core, desktop, native, native-os, native-sanitizers, native-delivery, quality, c-analysis]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -856,7 +868,7 @@ jobs:
           outputs = needs['changes']['outputs'] if needs['changes']['result'] == 'success' else {}
           code, native = outputs.get('code') != 'false', outputs.get('native') != 'false'
           # The jobs gated on the native output; tests/python/test_ci_selection.py keeps both lists equal.
-          UI_INDEPENDENT = {'core', 'process', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'c-analysis'}
+          UI_INDEPENDENT = {'core', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'c-analysis'}
           # Skips are accepted only where the change detection selected them.
           def accepted(name):
               if name == 'desktop-scenarios':

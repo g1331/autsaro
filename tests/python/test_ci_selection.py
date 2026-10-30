@@ -18,7 +18,7 @@ WORKFLOW = ROOT / ".github/workflows/checks.yml"
 # What the skipped jobs build, run or analyse. Tooling modules that no skipped job relies on
 # for ui/ content are exempt: quality runs in full (--scope all) in the always-run quality job,
 # and verify, doctor and the CLI argument lists are not run by these jobs.
-INPUTS = ("core/", "runtime/", "tools/python/src/", "tests/python/native/", "tests/python/process/")
+INPUTS = ("core/", "runtime/", "tools/python/src/", "tests/python/native/")
 EXEMPT = {
     "tools/python/src/autosar_tooling/quality.py",
     "tools/python/src/autosar_tooling/verify.py",
@@ -137,6 +137,27 @@ class CiSelectionTests(unittest.TestCase):
                     run.return_value = subprocess.CompletedProcess([], 0, ".github/workflows/extended.yml\n")
                     runpy.run_path(str(source))
                 self.assertIn("desktop=" + str(event == "workflow_dispatch").lower() + "\n", output.read_text())
+
+    def test_split_jobs_run_every_step_once_per_platform_or_sanitizer(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        for job, key, names in (
+            ("native-delivery", "os", ("Sealed ECU build mode fault isolation",
+                                       "CMake build matches the sealed ECU build",
+                                       "All moved samples build and run with receiver Python 3.11")),
+            ("native-sanitizers", "sanitize", ("Instrumented native programs", "Instrumented sealed ECU protocols",
+                                               "Instrumented OS suites", "Check concurrent native constructor rollback")),
+        ):
+            entries = workflow["jobs"][job]["strategy"]["matrix"]["include"]
+            steps = {step["name"]: step for step in workflow["jobs"][job]["steps"] if "name" in step}
+            for value in {entry[key] for entry in entries}:
+                parts = [entry["part"] for entry in entries if entry[key] == value]
+                for name in names:
+                    condition = steps[name].get("if", "")
+                    # Only part exclusions select these steps, so the count below is exact.
+                    self.assertRegex(condition, r"^(matrix\.part != '[a-z]+')?$")
+                    excluded = re.findall(r"'([a-z]+)'", condition)
+                    with self.subTest(job=job, value=value, step=name):
+                        self.assertEqual(sum(part not in excluded for part in parts), 1)
 
     def test_receiver_sample_selection_defaults_restricts_and_refuses_unknown_names(self):
         module = runpy.run_path(str(ROOT / "tests/python/native/test_offline_delivery.py"))
