@@ -453,8 +453,8 @@ def classify(
                         o
                         for o in origins
                         if o["kind"] == "macro-input"
-                        and re.fullmatch(r"0[xX][0-9a-fA-F]+|[0-9]+", o["value"])
-                        and integer_value(o["value"]) == integer_value(token["literal"])
+                        and integer_value(token["literal"])
+                        in integer_literals(o["value"])
                     ]
                     if (
                         len(tokens) == 1

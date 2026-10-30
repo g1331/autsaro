@@ -318,6 +318,42 @@ class SdkSourceTests(unittest.TestCase):
                             )
                         )
 
+    def test_typed_sdk_exception_alias_retains_the_original_unsigned_literal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, header, _packages, record = self.fixture(Path(temporary).resolve())
+            source = root / "kernel/port.c"
+            source.parent.mkdir()
+            source.write_text("\n" * 53 + "consume(EXCEPTION_ACCESS_VIOLATION);\n")
+            text = (
+                f'# 1 "{header.as_posix()}"\n'
+                "#define STATUS_ACCESS_VIOLATION ((DWORD)0xC0000005)\n"
+                "#define EXCEPTION_ACCESS_VIOLATION STATUS_ACCESS_VIOLATION\n"
+                f'# 54 "{source.as_posix()}"\nconsume(((DWORD)0xC0000005));\n'
+            )
+            inputs = c_sdk.preprocessing(text, root, {"EXCEPTION_ACCESS_VIOLATION"})
+            rows = [self.diagnostic()]
+            token = {
+                "file": "kernel/port.c",
+                "line": 54,
+                "column": 5,
+                "literal": "3221225477",
+            }
+            result = c_sdk.classify(
+                rows,
+                {"sdkHeaders": [record], "sdkMacroInputs": {"kernel/port.c": inputs}},
+                [token],
+            )
+            self.assertTrue(result["complete"])
+            self.assertEqual(rows[0]["sourceCategory"], "sdk")
+            origin = next(
+                o for o in rows[0]["sourceOrigins"] if o["kind"] == "unsigned-literal"
+            )
+            self.assertEqual(
+                (origin["macro"], origin["value"]),
+                ("STATUS_ACCESS_VIOLATION", "((DWORD)0xC0000005)"),
+            )
+            self.assertTrue(rows[0]["patched"])
+
     def test_verified_compiler_predefines_are_separate_from_sdk_and_project_macros(
         self,
     ):

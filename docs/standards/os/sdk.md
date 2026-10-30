@@ -9,7 +9,7 @@
 
 现有 `c-check` 先核实 sealed target/ABI，再以同一 GCC、flags 和 include 顺序对每个真实 TU 编译、取宏值并运行带行标记的 `-E -dD`，同次 `-MD` 依赖输出确认真正打开的文件，避免把行标记或搜索目录本身当成原头消费证据。`scope.sdkTranslationUnits` 记录真实包含闭包，`sdkHeaders` 记录路径、包版本、包内名字、原件校验与内容摘要，`sdkMacroInputs` 记录项目报告行当时生效的定义位置和值。Linux 对已安装 dpkg 的受支持开发包原件清单校验，Windows 对所选 compiler 安装的 MSYS2 pacman `desc/mtree` 校验；这是安装来源／字节证据，不是重新认证软件包发行签名或供应方符合性。最终运行库不等于开发头包：历史真实 libc/libgcc 绑定见[实际 provider](native-facilities/README.md#实际provider及异步调用)，不能用 GCC 版本替代库版本，亦不据 MinGW 名称猜测 UCRT 或专有 Windows SDK。
 
-`diagnostics.sourceOrigins` 只附加来源，保留原始 id、severity、message、locations、程序出现次数与 `patched/adopted`。`macro-input` 说明该行使用了 SDK 定义，`macro-reference` 只表示未展开的宏替换列表引用，二者均不单凭同一行就判定全部违反来自 SDK；R7.2 另连接固定 addon 实际观察的 unsigned 无 U 操作数，只在实际活动对象宏和值无歧义时标为 `unsigned-literal`／`sourceCategory=sdk`。例如 Windows `kernel/portable/MSVC-MingW/port.c:54` 的等待断言使用 SDK `INFINITE=0xffffffff`：保留真实 Required R7.2 和项目 patch 标记；DWORD 实参、返回值及失败行为继续由[内核采用与 patch](adoption.md)及 #383 的真实双平台消费者负责。
+`diagnostics.sourceOrigins` 只附加来源，保留原始 id、severity、message、locations、程序出现次数与 `patched/adopted`。`macro-input` 说明该行使用了 SDK 定义，`macro-reference` 只表示未展开的宏替换列表引用，二者均不单凭同一行就判定全部违反来自 SDK；R7.2 另连接固定 addon 实际观察的 unsigned 无 U 操作数与原宏中的整数字面量（包括 SDK cast 壳及异常常量别名链），只在实际活动对象宏和值无歧义时标为 `unsigned-literal`／`sourceCategory=sdk`。例如 Windows `kernel/portable/MSVC-MingW/port.c:54` 的等待断言使用 SDK `INFINITE=0xffffffff`：保留真实 Required R7.2 和项目 patch 标记；DWORD 实参、返回值及失败行为继续由[内核采用与 patch](adoption.md)及 #383 的真实双平台消费者负责。
 
 编译器预定义不冒充 SDK 原头：仅当活动定义来自 `<built-in>` 且名字、值和函数宏形式与该目标实际编译器的完整预定义收据一致时，记录 `compiler-predefine` 及独立 `compilerKey`；`compilerPredefineDiagnosticKeys` 单列这些来源键。项目重定义、同名前缀或值不匹配不取得该身份，调用方责任及原始规则状态不变。
 

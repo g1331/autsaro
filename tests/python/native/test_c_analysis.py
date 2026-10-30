@@ -181,7 +181,8 @@ class ActualCAnalysisTests(unittest.TestCase):
     def test_actual_sdk_headers_and_unsigned_macro_have_verified_provider_origins(self):
         windows = platform.system() == "Windows"
         source = ("#include <windows.h>\nunsigned long timeout(void) { return INFINITE; }\n"
-                  "int main(void) { return timeout() == INFINITE ? 0 : 1; }\n" if windows else
+                  "unsigned long status(void) { return EXCEPTION_ACCESS_VIOLATION; }\n"
+                  "int main(void) { return timeout() == INFINITE && status() != 0U ? 0 : 1; }\n" if windows else
                   "#include <pthread.h>\n#include <unwind.h>\nint main(void) { return 0; }\n")
         summary = self.analyze(source, cli=True)
         origins = summary["scope"]["sdkHeaders"]
@@ -195,9 +196,14 @@ class ActualCAnalysisTests(unittest.TestCase):
             for row in diagnostics:
                 self.assertEqual(row["sourceCategory"], "sdk", row)
                 literal = next(origin for origin in row["sourceOrigins"] if origin["kind"] == "unsigned-literal")
-                self.assertEqual((literal["macro"], literal["value"]), ("INFINITE", "0xffffffff"))
+                self.assertIn(literal["macro"], {"INFINITE", "STATUS_ACCESS_VIOLATION"})
+                if literal["macro"] == "INFINITE":
+                    self.assertEqual(literal["value"], "0xffffffff")
                 header = next(header for header in origins if header["key"] == literal["headerKey"])
                 self.assertEqual(header["provider"], "mingw-w64-x86_64-headers")
+            for macro in ("INFINITE", "STATUS_ACCESS_VIOLATION"):
+                self.assertTrue(any(origin.get("macro") == macro and origin["kind"] == "unsigned-literal"
+                                    for row in diagnostics for origin in row["sourceOrigins"]), macro)
         else:
             self.assertTrue(any(row["header"].endswith("/pthread.h") and row["provider"] == "libc6-dev" for row in origins))
             self.assertTrue(any(row["header"].endswith("/unwind.h") and row["provider"].startswith("libgcc-") for row in origins))
