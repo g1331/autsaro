@@ -41,14 +41,32 @@ Os_LinuxAltStack 的 previous 和 native_call 输入由汇编约束实际读写�
 Advisory仍尽合理可行遵循；主文§6.2.3（印刷13／PDF21）允许用替代安排记录不符合，而非必须走正式偏离。
 本轮的有界工程选择只保留下列明确机制及真实违反，不改变类别或R15.5以外的GRP，不借 #381 的124键扩大授权。
 
+D4.9的宏与底层函数分开判断。固定SpecificationsARXML的SWS_Rte_07404/07405/07406
+分别给出Rte_IsInfrastructureError、Rte_HasOverlayedError、Rte_ApplicationError的函数式宏，
+SWS_Os_00393要求生成OS_TICKS2NS/US/MS/SEC_<Counter>(ticks)。当前SystemCounter四宏转发
+类型化inline转换；三RTE宏的实参各出现一次，保留128/64/63掩码及表达式结果。
+这些公开宏不因正常程序未使用或底层有函数而成为D4.9满足。OSEK OS2.2.3 §11.2及§13.8.4
+明确OSErrorGetServiceId及所选OSError_<service>_<parameter>访问宏；原件摘要
+2ec77d3c4259797f4d0190f938131b641d415d8e0a85ce40a72e4201a9114746已核，
+实际Os_Hooks.h按当前SC1接口集合发布，闭包见[OS兼容契约](../os/kernel.md#审阅确认的条目)。
+本条独立保留这些宏接口的真实形式；风险为宏类型/求值差异，控制为单次实参使用、类型化底层函数、
+[独立RTE状态向量](../rte/contracts.md#输入状态和执行)及正常OS转换/ErrorHook消费者。
+标准改名、位值、计时类型、接口集合、上下文或目标变化时重评，不由旧R2.5/R8.7记录授权新D4.9位置。
+
+其余自有宏按实际语言角色区分：TASK/ISR/ALARMCALLBACK/Declare*生成声明或拼接名字，ARTI_TRACE保存
+调用点字面身份，STACK_POINTER取得调用点RSP，不能以普通函数保持同一展开合同。
+FreeRTOSConfig.h的两个trace宏沿内核配置宏入口绑定Backend；OS_RESOURCE_CREATE的失败注入分支
+必须能不求值call，不能改为先求值的函数实参；Linux sanitizer START/FINISH还在调用点借用fake栈槽。
+这些精确冻结定义的保留理由是现有配置/调用点语义，不把“宏通常更快”作为全部函数式宏的通用例外。
+
 <!-- misra-manual-begin -->
 | 指南 | 有效类别 | 分析范围／语言 | 状态 | 义务、限定结论与证据 |
 | --- | --- | --- | --- | --- |
 | D4.4 | Advisory | 指令／C99 | satisfied | 不以注释停用实现（主文27；AMD2扩展语言）。[实际词法边界](language.md#注释与字面量的实际词法边界)中的Doxygen示例是说明而非停用实现；commented_defines输出生效define，未选择功能以条件编译表达。所选307种交付文件字节与正常producer没有另发现注释停用实现。 |
 | D4.5 | Advisory | 指令／C99 | retained | 同namespace且重叠可见的名字应避免字形歧义（主文27–28）。[既有重名整改](../os/declarations.md#条件接口与声明owner)保留标准COM_INIT/Com_Init、COMM_INIT/ComM_Init及本机HANDLE/handle、CONTEXT/context、SIZE_T/size_t；标准发布名/原生类型与项目局部角色有类型和模块前缀区分。仅这些实际名字选择保留，理由是避免改变标准/原生接缝和既有调用合同；风险为读错名字，控制为类型检查、声明契约和真实双平台消费者。新增同形私有名字须整改，不将不同成员namespace或已结束原型作用域并入。 |
 | D4.6 | Advisory | 指令／C99 | retained | 数值类型使用宽度/符号typedef（主文28–29；TC1排除plain char，AMD2.23–25）。汽车值沿Platform_Types/stdint；仅[原生表示](../os/configuration.md#原生类型表示与封装)的BOOL/int、pthread错误int、syscall long及altstack long-double存储保留ABI类型及自然对齐。主文允许为控制外接口作取舍，typedef/main例外不扩至任意局部数值；平台/ABI变化重评，已知宽度本身不消除违反。 |
-| D4.8 | Advisory | 指令／C99 | not_assessed | 仅某类型在一个TU中的全部指针都不解引用时，应隐藏完整布局（主文30–31，TC1澄清）。[HANDLE不完整类型](../os/configuration.md#原生类型表示与封装)成立；公开配置/CONTEXT有完整存储及字段消费者，但这不能代替每一类型/TU组合的全部指针闭包。尚缺该集合与必要公开表示的逐对象依据，不能把一个未解引用参数或公开ABI概括成全项满足/类别保留。 |
-| D4.9 | Advisory | 指令／C99 | satisfied | 仅普通函数在语法/约束上可互换时优先函数（主文31–32；AMD2.26，AMD3.6增加_Generic例外）。[声明宏](../os/implementation.md#声明宏与表达式参数)与[入口/跟踪宏](../os/platform.md#入口及跟踪宏的实际展开)承担声明符、拼接/字符串化、调用点文件行及当前RSP身份，不能由普通调用替代；其余服务包装/计时转换沿实际static inline。没有使用_Generic例外来覆盖普通表达式宏。 |
+| D4.8 | Advisory | 指令／C99 | not_assessed | 仅某类型在一个TU中的全部指针都不解引用时，应隐藏完整布局（主文30–31，TC1澄清）。[HANDLE封装](../os/configuration.md#原生类型表示与封装)成立；Can_ConfigType经Can.h公开，Ecu_RuntimeConfig.c实例化driver并传址，公开配置/CONTEXT亦有字段消费者。[仍缺的类型/声明owner/全部指针/TU集合及解除条件](https://github.com/g1331/autsaro/issues/385#issuecomment-6521291436)不能由单个参数或ABI概括替代，保持未评估。 |
+| D4.9 | Advisory | 指令／C99 | retained | 可互换时优先函数（主文31–32；AMD2.26，AMD3.6增加_Generic例外）。本节独立记录三RTE错误宏、四OS tick宏、所选OSError访问宏及实际配置/调用点宏的范围、原文、类型/求值控制；[声明宏](../os/implementation.md#声明宏与表达式参数)不属普通函数可替代语法。保留真实宏形式，不由底层inline、旧诊断选择或_Generic例外宣布全项满足。 |
 | R1.1 | Required | TU／C99 | satisfied | 不违反C语法/约束/实现翻译上限（主文37–38；AMD2.27）。正常入口逐TU的-Wall/-Wextra/-Werror编译与真实链接/运行覆盖所列封存源码；[受控扩展](../os/platform.md#c99-平台扩展的使用边界)由所选GCC接受，原文明确允许实现支持的扩展。扩展的R1.2建议和ABI/运行语义另核，不以生成成功代替编译。 |
 | R1.5 | Required | System／C99 | satisfied | 不使用所选C版次的过时特性（AMD3.14、60及Appendix F）。[C99构造检查](../types.md#c99过时形式与名称有效长度)无K&R/空参数/gets等；[Windows实际ld](../os/implementation.md#windows-外部名字与所选工具)的2.47.20260726字节与已核发行包一致，COFF/hash链按完整名字处理。Linux已核ELF/hash链同样不截短至255以下；不靠当前名字短、编译成功或版本推出实现上限。 |
 | R3.2 | Required | TU／C99 | satisfied | 行注释内不可反斜杠续行（主文46；AMD2.31删除说明Note）。所列双平台两组八份C/H原始物理行及307种文件字节的续行候选为空；[Doxygen转换及宏续行](language.md#注释与字面量的实际词法边界)逐构造区分，宏指令/完整块注释中的续行不属行注释。 |

@@ -935,6 +935,14 @@ class ManualAssessmentTests(unittest.TestCase):
         self.assertEqual(before["selectionSha256"], after["selectionSha256"])
         self.assertRegex(after["parserSha256"], r"^[0-9a-f]{64}$")
 
+    def test_record_line_endings_preserve_conclusions_but_change_byte_identity(self):
+        before = self.summary()
+        path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[2]
+        path.write_bytes(path.read_text().replace("\n", "\r\n").encode("utf-8"))
+        after = self.summary()
+        self.assertEqual(before["checkerUncovered"], after["checkerUncovered"])
+        self.assertNotEqual(before["inputIdentity"]["documents"], after["inputIdentity"]["documents"])
+
 
 if __name__ == "__main__":
     unittest.main()
