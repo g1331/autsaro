@@ -178,6 +178,49 @@ class ActualCAnalysisTests(unittest.TestCase):
     def test_clean_main_passes(self):
         self.assertTrue(self.analyze("int main(void) { return 0; }\n")["passed"])
 
+    def test_actual_sdk_headers_and_unsigned_macro_have_verified_provider_origins(self):
+        windows = platform.system() == "Windows"
+        source = ("#include <windows.h>\nunsigned long timeout(void) { return INFINITE; }\n"
+                  "unsigned long status(void) { return EXCEPTION_ACCESS_VIOLATION; }\n"
+                  "int main(void) { return timeout() == INFINITE && status() != 0U ? 0 : 1; }\n" if windows else
+                  "#include <pthread.h>\n#include <unwind.h>\nint main(void) { return 0; }\n")
+        summary = self.analyze(source, cli=True)
+        origins = summary["scope"]["sdkHeaders"]
+        self.assertTrue(summary["sourceClassification"]["complete"], origins)
+        self.assertEqual(summary["sourceClassification"]["unclassifiedDiagnosticKeys"], 0)
+        self.assertTrue(all(row["category"] == "sdk" for row in origins))
+        if windows:
+            diagnostics = [row for row in summary["diagnostics"] if row["id"] == "misra-c2012-7.2"]
+            self.assertTrue(diagnostics)
+            self.assertFalse(summary["passed"])
+            for row in diagnostics:
+                self.assertEqual(row["sourceCategory"], "sdk", row)
+                literal = next(origin for origin in row["sourceOrigins"] if origin["kind"] == "unsigned-literal")
+                self.assertIn(literal["macro"], {"INFINITE", "STATUS_ACCESS_VIOLATION"})
+                if literal["macro"] == "INFINITE":
+                    self.assertEqual(literal["value"], "0xffffffff")
+                header = next(header for header in origins if header["key"] == literal["headerKey"])
+                self.assertEqual(header["provider"], "mingw-w64-x86_64-headers")
+            for macro in ("INFINITE", "STATUS_ACCESS_VIOLATION"):
+                self.assertTrue(any(origin.get("macro") == macro and origin["kind"] == "unsigned-literal"
+                                    for row in diagnostics for origin in row["sourceOrigins"]), macro)
+        else:
+            self.assertTrue(any(row["header"].endswith("/pthread.h") and row["provider"] == "libc6-dev" for row in origins))
+            self.assertTrue(any(row["header"].endswith("/unwind.h") and row["provider"].startswith("libgcc-") for row in origins))
+
+    def test_builtin_constants_and_macro_references_keep_project_responsibility(self):
+        summary = self.analyze("#include <stdint.h>\n#define FIXTURE_LIMIT UINT64_C(1)\n"
+                               "int main(void) { unsigned value = 0U; return (int)__atomic_load_n(&value, __ATOMIC_ACQUIRE); }\n", cli=True)
+        self.assertTrue(summary["sourceClassification"]["complete"], summary["sourceClassification"])
+        self.assertFalse(summary["passed"])
+        references = [row for row in summary["diagnostics"] if any(
+            origin["kind"] == "macro-reference" and origin.get("macro") == "UINT64_C" for origin in row["sourceOrigins"])]
+        builtins = [row for row in summary["diagnostics"] if any(
+            origin["kind"] == "compiler-predefine" and origin.get("macro") == "__ATOMIC_ACQUIRE" for origin in row["sourceOrigins"])]
+        self.assertTrue(references)
+        self.assertTrue(builtins)
+        self.assertTrue(all(row["sourceCategory"] == "project" for row in references + builtins))
+
     def test_misra_violation_fails_through_the_real_entry(self):
         summary = self.analyze("int main(void) { int value = 1; if (value) { return 1; } return 0; }\n", cli=True)
         self.assertFalse(summary["passed"])
@@ -290,7 +333,7 @@ class ActualCAnalysisTests(unittest.TestCase):
                     self.assertIn("exit_code=1", summary["error"])
                 else:
                     self.assertIsNone(summary["error"])
-                    self.assertEqual(summary["scope"]["compilerWorkers"], 4)
+                    self.assertEqual(summary["scope"]["compilerWorkers"], min(4, int(c_check.os.environ.get("CARGO_BUILD_JOBS", "4"))))
                     self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"bsw/src/main.c", "bsw/src/helper.c", "bsw/src/second.c", "bsw/src/third.c"})
                     for definitions in summary["scope"]["compilerDiscoveredDefines"].values():
                         self.assertTrue(any(value.startswith("-DUINT32_C(") for value in definitions))

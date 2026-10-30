@@ -67,7 +67,7 @@ def _gone(pid: int) -> bool:
             # subreaper; a zombie cannot execute and is reaped at root close.
             if status.read_text().rsplit(")", 1)[-1].split()[0] == "Z":
                 return True
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
             return True
     try:
         os.kill(pid, 0)
@@ -87,6 +87,24 @@ def _assert_closed(
 
 
 class BoundedProcessTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux", "Linux proc status observation")
+    def test_proc_status_disappearance_is_gone_but_other_errors_remain_visible(self):
+        for failure in (FileNotFoundError(), ProcessLookupError()):
+            with (
+                self.subTest(failure=type(failure).__name__),
+                patch.object(Path, "read_text", side_effect=failure),
+                patch("os.kill") as kill,
+            ):
+                self.assertTrue(_gone(12345))
+                kill.assert_not_called()
+        for failure in (PermissionError(), OSError("proc read failed")):
+            with (
+                self.subTest(failure=type(failure).__name__),
+                patch.object(Path, "read_text", side_effect=failure),
+                self.assertRaises(type(failure)),
+            ):
+                _gone(12345)
+
     @unittest.skipUnless(os.name == "posix", "Unix supervisor readiness")
     def test_owner_start_waits_for_listening_authenticated_supervisor(self):
         actual_popen = subprocess.Popen

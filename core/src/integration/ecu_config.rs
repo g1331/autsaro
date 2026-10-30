@@ -129,6 +129,21 @@ fn failure() -> Vec<PlanDiagnostic> {
 
 /// Writes one constant in its module's pre-build configuration data section.
 fn config_data(output: &mut String, scope: &str, declaration: &str, items: &[Item]) {
+    config_data_with_reason(output, scope, declaration, items, false);
+}
+
+/// Init-only configuration objects keep their required file-scope mapping.
+fn init_data(output: &mut String, scope: &str, declaration: &str, items: &[Item]) {
+    config_data_with_reason(output, scope, declaration, items, true);
+}
+
+fn config_data_with_reason(
+    output: &mut String,
+    scope: &str,
+    declaration: &str,
+    items: &[Item],
+    init_only: bool,
+) {
     let definition = c_layout::initializer(
         declaration,
         &format!("RTE_{scope}_CONFIG_DATA_PREBUILD_UNSPECIFIED"),
@@ -146,6 +161,12 @@ fn config_data(output: &mut String, scope: &str, declaration: &str, items: &[Ite
         "Rte",
         "CONFIG_DATA_PREBUILD_UNSPECIFIED",
     );
+    if init_only {
+        output.push_str(
+            "/* MR12 RULE 8.9 VIOLATION: retained Init configuration keeps its own mapped section.\n \
+             * SWS_MemMap_00023 forbids including mapping headers inside the function body. */\n",
+        );
+    }
     output.push_str(&definition);
     output.push('\n');
     output.push_str(&stop);
@@ -406,7 +427,7 @@ pub(super) fn files(
             header(
                 module,
                 &format!("{}_CFG_H", module.to_uppercase()),
-                &c_layout::commented_defines(definitions, "Generated handle."),
+                &c_layout::required_defines(definitions, "Generated handle.", "TPS_ECUC_02108"),
             ),
         )?;
     }
@@ -679,7 +700,7 @@ pub(super) fn files(
         "const EcuPolicyConfig Ecu_Policy",
         &values("ECU_TX_QUEUED"),
     );
-    config_data(
+    init_data(
         &mut config,
         "Can",
         "static const Can_ConfigType driver",
@@ -811,7 +832,7 @@ pub(super) fn files(
         "static const Com_PduConfigType com_pdus[]",
         &pdus,
     );
-    config_data(
+    init_data(
         &mut config,
         "Com",
         "static const Com_ConfigType com_config",
@@ -865,7 +886,7 @@ pub(super) fn files(
         );
         let period = description.schedule.counter_tick_ms;
         let ticks = |value| periods(value, period, &description.schedule.counter);
-        config_data(
+        init_data(
             &mut config,
             "CanTp",
             "static const CanTp_ConfigType tp_config",
@@ -904,7 +925,7 @@ pub(super) fn files(
             ),
             c_layout::section("RTE_Dcm", "Rte", "CODE", false)
         ));
-        config_data(
+        init_data(
             &mut config,
             "Dcm",
             "static const Dcm_ConfigType dcm_config",
@@ -1006,14 +1027,18 @@ pub(super) fn files(
                 &format!("{}_CFG_H", module.to_uppercase()),
                 &format!(
                     "#include \"{module}.h\"\n{}{}extern const {ty} {module}_Config RTE_{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED;\n{}{}",
-                    c_layout::commented_defines(
-                        symbolic
-                            .headers
-                            .get(module)
-                            .map(Vec::as_slice)
-                            .unwrap_or_default(),
-                        "Generated handle."
-                    ),
+                    if module == "LSduR" {
+                        c_layout::commented_defines(
+                            symbolic.headers.get(module).map(Vec::as_slice).unwrap_or_default(),
+                            "Generated handle.",
+                        )
+                    } else {
+                        c_layout::required_defines(
+                            symbolic.headers.get(module).map(Vec::as_slice).unwrap_or_default(),
+                            "Generated handle.",
+                            "TPS_ECUC_02108",
+                        )
+                    },
                     c_layout::section(&format!("RTE_{module}"), "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", true),
                     c_layout::section(&format!("RTE_{module}"), "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", false),
                     c_layout::release_check(&format!("{module}_Cfg.h"), "Rte_MemMap.h", "MEMMAP")
@@ -1031,7 +1056,7 @@ pub(super) fn files(
         outputs.emit(ECU, format!("src/{module}_PBcfg.c"), source)?;
     }
 
-    config_data(
+    init_data(
         &mut config,
         "Ecu_HostBusSM",
         "static const Ecu_HostBusSM_ConfigType bus_config",
@@ -1051,7 +1076,7 @@ pub(super) fn files(
             .map(|user| Item::Value(name("ComM", "ComMUser", &user.path)))
             .collect::<Vec<_>>(),
     );
-    config_data(
+    init_data(
         &mut config,
         "ComM",
         "static const ComM_ConfigType comm_config",
@@ -1067,7 +1092,7 @@ pub(super) fn files(
             }
         )),
     );
-    config_data(
+    init_data(
         &mut config,
         "BswM",
         "static const BswM_ConfigType bswm_config",
@@ -1098,7 +1123,7 @@ pub(super) fn files(
         "static const Det_ErrorHookType det_runtime_callouts[1]",
         &values("&Ecu_DetRuntimeCallout"),
     );
-    config_data(
+    init_data(
         &mut config,
         "Det",
         "static const Det_ConfigType det_config",
@@ -1256,34 +1281,31 @@ pub(super) fn files(
     }
 "#,
         );
+        let mut active_mask = None;
         for entity in &description.schedule.entities {
-            if entity.application {
-                config.push_str(&format!(
-                    r#"    if ((events & {}u) != 0u) {{
-        {}();
-    }}
-"#,
-                    description.event_mask(&entity.os_event)?,
-                    entity.symbol
-                ));
-            } else {
-                let symbol = &entity.symbol;
-                config.push_str(&format!(
-                    r#"    if ((events & {}u) != 0u) {{
-        {symbol}();
-    }}
-"#,
-                    description.event_mask(&entity.os_event)?
-                ));
-                if entity.symbol == com.transmit_main.symbol {
-                    config.push_str(
-                        r#"    if (Can_HostFlush() != ECU_OK) {
+            let mask = description.event_mask(&entity.os_event)?;
+            if active_mask != Some(mask) {
+                if active_mask.is_some() {
+                    config.push_str("    }\n");
+                }
+                config.push_str(&format!("    if ((events & {mask}u) != 0u) {{\n"));
+                active_mask = Some(mask);
+            }
+            config.push_str(&format!("        {}();\n", entity.symbol));
+            if !entity.application && entity.symbol == com.transmit_main.symbol {
+                // Flush remains unconditional and before the next scheduled entity.
+                config.push_str(
+                    r#"    }
+    if (Can_HostFlush() != ECU_OK) {
         return E_NOT_OK;
     }
 "#,
-                    );
-                }
+                );
+                active_mask = None;
             }
+        }
+        if active_mask.is_some() {
+            config.push_str("    }\n");
         }
         config.push_str(
             r#"    return (Can_HostFlush() == ECU_OK) ? E_OK : E_NOT_OK;
@@ -1519,15 +1541,28 @@ fn mode_switches(mode_scope: &str, authentication_group: &str) -> String {
             "",
             true,
         );
+        let retained_switch = if group == "DcmAuthenticationState_Physical" {
+            "/* MR12 RULE 8.7 VIOLATION: retain this public mode publisher's C linkage. */\n"
+        } else {
+            ""
+        };
+        let retained_mode = if matches!(
+            group,
+            "DcmAuthenticationState_Physical" | "DcmDiagnosticSessionControl"
+        ) {
+            "/* MR12 RULE 8.7 VIOLATION: retain this public mode observer's C linkage. */\n"
+        } else {
+            ""
+        };
         modes.push_str(&format!(
-            r#"{switch}
+            r#"{retained_switch}{switch}
 {{
     Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);
     {variable} = mode;
     Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);
     return SCHM_E_OK;
 }}
-{mode}
+{retained_mode}{mode}
 {{
     Rte_ModeType_{group} mode;
     Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);

@@ -60,6 +60,9 @@ int Ecu_TargetTestFailStage(unsigned stage) {
             require(GetAlarmBase(0u, &base) == E_OK && base.maxallowedvalue == 65535u &&
                     base.ticksperbase == 1u && base.mincycle == 1u);
             alarm_base_address = (uintptr_t)&base;
+#ifdef ARTI_REQUIRE_FULL_ADDRESS
+            require(alarm_base_address > UINT32_MAX);
+#endif
         } else {
             ScheduleTableStatusType status = 99u;
             require(Ecu_OsConfig.timing->schedule_table_count == 2u);

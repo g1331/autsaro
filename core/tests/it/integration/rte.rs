@@ -315,8 +315,7 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
             (
                 "STATIC-MEMORYS",
                 &[
-                    "rte_started",
-                    "rte_allocated",
+                    "rte_lifecycle",
                     "rte_value_0",
                     "rte_value_0_received",
                     "rte_value_0_expired",
@@ -415,6 +414,8 @@ fn all_rte_owned_input_types_have_one_declaration_and_external_emitters_stay_ext
         .unwrap()
     };
     let types = header("include/Rte_Type.h");
+    assert_eq!(types.matches("#include \"Rte.h\"").count(), 1);
+    assert!(types.find("#include \"Rte.h\"").unwrap() < types.find("typedef ").unwrap());
     // Verifies[Os]: SWS_BSW_00147.
     // Verifies: SWS_Os_00786, SWS_Os_00794.
     assert_eq!(types.matches("typedef uint32 CounterType;").count(), 1);

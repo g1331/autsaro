@@ -5,5 +5,4 @@
 #include "Can_Host.h"
 EcuStatus Ecu_ExecutionTransmit(
     Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8]);
-uint64_t Ecu_ExecutionNow(void);
 #endif

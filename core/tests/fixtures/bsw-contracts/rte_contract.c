@@ -76,7 +76,9 @@ int main(void)
     uint32 output = 91u;
     uint32 state = 92u;
     uint32 network = 99u;
+    assert(Rte_Stop() == RTE_E_OK);
     assert(Rte_Start() == RTE_E_OK);
+    assert(Rte_Start() == RTE_E_LIMIT);
     assert(Rte_Inst_Ingress != NULL_PTR);
     assert(Rte_Inst_Process != NULL_PTR);
     assert(Rte_Inst_Observe != NULL_PTR);
@@ -118,5 +120,11 @@ int main(void)
     assert(!Rte_IsInfrastructureError(RTE_E_INVALID));
     assert(Rte_HasOverlayedError(RTE_E_MAX_AGE_EXCEEDED));
     assert(Rte_ApplicationError(RTE_E_MAX_AGE_EXCEEDED | 3u) == 3u);
+    assert(Rte_Stop() == RTE_E_OK);
+    assert(Rte_Stop() == RTE_E_OK);
+    assert(Rte_Start() == RTE_E_LIMIT);
+    network = 99u;
+    assert(Rte_Read_Ingress_RxValue_Value(&network) == RTE_E_COM_STOPPED);
+    assert(network == 99u);
     return 0;
 }

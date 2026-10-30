@@ -299,7 +299,7 @@ fn scheduler_resource_runs() {
 /// The debugger expressions of an ARTI description as an independent C probe
 /// (`arti_reader.py` writes the same probe after its official checks).
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
-fn arti_expression_probe(project: &Path, header: &Path) {
+pub(super) fn arti_expression_probe(project: &Path, header: &Path) {
     let xml =
         std::fs::read_to_string(project.join("generated/descriptions/Os_Arti.arxml")).unwrap();
     let doc = roxmltree::Document::parse(&xml).unwrap();
