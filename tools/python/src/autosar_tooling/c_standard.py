@@ -545,10 +545,41 @@ def host_address_instances(root: Path) -> tuple[dict, collections.Counter[Key]]:
     return instances, errors
 
 
+def code_words(source: str) -> list[str]:
+    """Normalize comments and continued directives, retaining replacement tokens."""
+    words = []
+    for token in lex(re.sub(r"\\\r?\n", "", source)):
+        if is_comment(token):
+            continue
+        if token.text.lstrip().startswith("#"):
+            words.append("#")
+            inner = [item for item in lex(token.text.lstrip()[1:]) if not is_comment(item)]
+            if len(inner) > 1 and inner[0].text == "define":
+                function_macro = len(inner) > 2 and inner[2].text == "(" and inner[2].start == inner[1].end
+                words.append("<function-macro>" if function_macro else "<object-macro>")
+            index = 0
+            while index < len(inner):
+                if (index + 1 < len(inner) and inner[index].text == inner[index + 1].text == "#"
+                        and inner[index].end == inner[index + 1].start):
+                    words.append("##")
+                    index += 2
+                else:
+                    words.append(inner[index].text)
+                    index += 1
+        else:
+            words.append(token.text)
+    return words
+
+
+RETAINED_APPLICATION = "core/tests/fixtures/component-pipeline/applications/Ingress.c"
+
+
 def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
     """Match approved table scopes to adjacent source locations, without approving them."""
     records: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
     locations: dict[tuple[str, str, str, str], tuple[str, str]] = {}
+    shapes = {}
+    record_errors: collections.Counter[Key] = collections.Counter()
     for path in sorted((root / "docs/standards").rglob("*.md")):
         for line in path.read_text(encoding="utf-8").splitlines():
             cells = line.split("|")
@@ -557,9 +588,11 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
             rule = re.search(r"MISRA C:2012 (Rule|Directive) (\d+\.\d+)", cells[1])
             if not rule or not re.match(r"(?:维护者\s+\S|Approved\s+by\s+\S)", cells[4].strip(), re.IGNORECASE):
                 continue
+            if "精确124键决定" in cells[4] and not re.search(r"shape=`([^`]+)`", cells[3]):
+                record_errors[("deviation-shape-record", path.relative_to(root).as_posix(), line.strip())] += 1
             kind = "RULE" if rule[1] == "Rule" else "DIR"
             scope = cells[2]
-            pieces = re.split(r"(`runtime/[^`]+`)", scope)
+            pieces = re.split(r"(`(?:runtime/[^`]+|" + re.escape(RETAINED_APPLICATION) + r")`)", scope)
             for index in range(1, len(pieces), 2):
                 name = pieces[index].strip("`")
                 for item in re.findall(r"`([^`]+)`", pieces[index + 1]):
@@ -569,14 +602,19 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                     key = (kind, rule[2], name, symbol)
                     records[key] += 1
                     locations[key] = (path.relative_to(root).as_posix(), line.strip())
+                    shape = re.search(r"shape=`([^`]+)`", cells[3])
+                    if shape:
+                        shapes[key] = code_words(shape[1].replace("&#124;", "|"))
     instances, result = host_address_instances(root)
+    result.update(record_errors)
     for (name, _), (rule, symbol, document, title) in instances.items():
         key = ("RULE", rule, name, symbol)
         records[key] += 1
         locations[key] = (document, title)
     comments: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
     source_locations = {}
-    for path in sorted((root / "runtime").rglob("*")):
+    paths = set((root / "runtime").rglob("*")) | {root / RETAINED_APPLICATION}
+    for path in sorted(path for path in paths if path.is_file()):
         if path.suffix not in {".c", ".h"}:
             continue
         name = path.relative_to(root).as_posix()
@@ -661,6 +699,11 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                         line = source.splitlines()[source.count("\n", 0, token.start)].strip()
                         result[("deviation-ambiguous", name, line)] += 1
                 key = (match[1], match[2], name, symbol)
+                if key in shapes and declaration:
+                    actual = code_words(" ".join(item.text for item in declaration))
+                    if actual != shapes[key]:
+                        line = source.splitlines()[source.count("\n", 0, token.start)].strip()
+                        result[("deviation-shape", name, line)] += 1
                 comments[key] += 1
                 source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())
     for entries, positions in ((records, locations), (comments, source_locations)):

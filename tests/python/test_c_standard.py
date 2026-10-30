@@ -452,6 +452,107 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
                         expected,
                     )
 
+    def test_retained_macro_shapes_preserve_replacement_tokens_and_legacy_records(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "runtime/bsw/include/Test.h"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            marker = "/* MR12 RULE 2.5 VIOLATION: retain the approved preprocessing contract. */\n"
+            original = marker + "#define API(value) \\\n    ((value) | 7u)\n"
+            record = (
+                "| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Test.h` 中 `API` | "
+                "shape=`#define API(value) ((value) &#124; 7u)` | 维护者 2026-10-30精确124键决定 |\n"
+            )
+            legacy = "/* MR12 RULE 2.5 VIOLATION: original name-bound approval. */\n#define LEGACY 9u\n"
+            legacy_record = "| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Test.h` 中 `LEGACY` | old exact name | 维护者 原ADR0023 |\n"
+            for label, changed, table, expected in (
+                ("continued-and-bar", original, record, None),
+                ("comments-and-spacing", original.replace("| 7u", "| /* note */ 7u"), record, None),
+                ("changed-body", original.replace("7u", "8u"), record, "deviation-shape"),
+                ("changed-macro-kind", original.replace("API(value)", "API (value)"), record, "deviation-shape"),
+                ("missing-shape", original, record.replace("shape=", "former="), "deviation-shape-record"),
+                ("missing-comment", original.replace(marker, ""), record, "deviation-uncommented"),
+                ("wrong-rule", original.replace("RULE 2.5", "RULE 20.10"), record, "deviation-unrecorded"),
+                ("wrong-owner", original.replace("API(value)", "OTHER(value)"), record, "deviation-unrecorded"),
+                ("outside-approval", original + marker + "#define EXTRA 7u\n", record, "deviation-unrecorded"),
+            ):
+                with self.subTest(case=label):
+                    source.write_text(changed + legacy, encoding="utf-8")
+                    document.write_text(table + legacy_record, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    if expected is None:
+                        self.assertEqual(findings, {})
+                    else:
+                        self.assertTrue(any(rule == expected for rule, _, _ in findings), findings)
+            source.write_text(original + legacy.replace("9u", "12u"), encoding="utf-8")
+            document.write_text(record + legacy_record, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            paste = marker + "/* MR12 RULE 20.10 VIOLATION: retain the approved entry binding. */\n#define ENTRY(id) Task_##id\n"
+            table = "".join(
+                f"| MISRA C:2012 Rule {rule} | `runtime/bsw/include/Test.h` 中 `ENTRY` | "
+                "shape=`#define ENTRY(id) Task_##id` | 维护者 2026-10-30精确124键决定 |\n"
+                for rule in ("2.5", "20.10")
+            )
+            source.write_text(paste, encoding="utf-8")
+            document.write_text(table, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            source.write_text(paste.replace("##", "# #"), encoding="utf-8")
+            self.assertTrue(any(rule == "deviation-shape" for rule, _, _ in c_standard.deviation_findings(root)))
+
+    def test_retained_multiline_object_checks_its_complete_declaration(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/src/Os_Backend.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            marker = "/* MR12 RULE 8.7 VIOLATION: retain the observed context array. */\n"
+            original = marker + "OS_MEMMAP void *\n    *Os_ArtiTaskContexts[32u];\n"
+            document.write_text(
+                "| MISRA C:2012 Rule 8.7 | `runtime/os/src/Os_Backend.c` 中 `Os_ArtiTaskContexts` | "
+                "shape=`OS_MEMMAP void * *Os_ArtiTaskContexts[32u];` | 维护者 2026-10-30精确124键决定 |\n",
+                encoding="utf-8",
+            )
+            source.write_text(original, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            source.write_text(original.replace("32u", "16u"), encoding="utf-8")
+            self.assertTrue(any(rule == "deviation-shape" for rule, _, _ in c_standard.deviation_findings(root)))
+
+    def test_retained_application_is_exact_and_both_sides_are_checked(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "core/tests/fixtures/component-pipeline/applications/Ingress.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            marker = "/* MR12 RULE 8.7 VIOLATION: retain the approved provided runnable. */\n"
+            original = marker + "/** Existing API contract. */\nAPP_CODE int Ingress_ReadData(int value) { return value; }\n"
+            record = (
+                "| MISRA C:2012 Rule 8.7 | `core/tests/fixtures/component-pipeline/applications/Ingress.c` 中 `Ingress_ReadData` | "
+                "shape=`APP_CODE int Ingress_ReadData(int value) {` | 维护者 2026-10-30精确124键决定 |\n"
+            )
+            # An unrelated fixture remains outside this narrow source checker.
+            source.with_name("Other.c").write_text("/* MR12 unreviewed test text */\n", encoding="utf-8")
+            for label, code, table, expected in (
+                ("accepted", original, record, None),
+                ("missing-comment", original.replace(marker, ""), record, "deviation-uncommented"),
+                ("missing-record", original, "", "deviation-unrecorded"),
+                ("wrong-rule", original.replace("RULE 8.7", "RULE 8.9"), record, "deviation-unrecorded"),
+                ("wrong-owner", original.replace("Ingress_ReadData", "OtherRunnable"), record, "deviation-unrecorded"),
+                ("wrong-file", original, record.replace("Ingress.c", "Other.c"), "deviation-unrecorded"),
+                ("outside-entity", original + marker + "int Extra(void) { return 0; }\n", record, "deviation-unrecorded"),
+            ):
+                with self.subTest(case=label):
+                    source.write_text(code, encoding="utf-8")
+                    document.write_text(table, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    if expected is None:
+                        self.assertEqual(findings, {})
+                    else:
+                        self.assertTrue(any(rule == expected for rule, _, _ in findings), findings)
+
     def test_repeated_directives_require_exact_occurrences(self):
         with tempfile.TemporaryDirectory(prefix="directive-scope-") as temporary:
             root = Path(temporary)
