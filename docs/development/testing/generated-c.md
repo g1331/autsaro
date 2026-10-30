@@ -18,7 +18,7 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_
 uv run --locked python -m autosar_tooling c-check --target windows-x64-controlled-v1 --project build/c-analysis-samples/standard-ecu --output-directory build/c-analysis-results/standard-ecu
 ```
 
-Linux 使用 `linux-x64-controlled-v1` 和对应主机 GCC。WSL 的结果目录应放在 Linux 文件系统中；未启用 Unix 元数据的 Windows 挂载目录无法满足受管进程日志的私有目录权限要求。生成目录必须不存在，结果目录必须新建或为空，并与封存工程分离。分析在副本上应用原有内核补丁，检查构建清单、主机入口和补充 C 文件，原始工程不会被修改。
+Linux 使用 `linux-x64-controlled-v1` 和对应主机 GCC。共享主机需要串行窗口时，任务局部设置 `CARGO_BUILD_JOBS=1`，同时限制 c-check 编译器探针与程序分析并发为 1；不改变 TU、程序、规则或期限。WSL 的结果目录应放在 Linux 文件系统中；未启用 Unix 元数据的 Windows 挂载目录无法满足受管进程日志的私有目录权限要求。生成目录必须不存在，结果目录必须新建或为空，并与封存工程分离。分析在副本上应用原有内核补丁，检查构建清单、主机入口和补充 C 文件，原始工程不会被修改。
 
 四样本同时选择实际支持的通信类型分支：`standard-ecu`／`user-application` 使用 EcuC 的 `PduIdTypeEnum=UINT16`、`PduLengthTypeEnum=UINT16`；`component-pipeline` 使用 `UINT8`／`UINT32`，保留移动交付包后的导入往返；`no-diagnostic` 使用 `UINT8`／`UINT8`，保留无应用 DID 和诊断路由的配置。`it` 的 `c_analysis::` 固定每个样本的配置预期，`native` 的同名模块用交付 include 路径编译并运行 `ComStack_Types.h` 消费者，按独立数值核对宽度、无符号值域和 `PduInfoType.SduLength`；设置 `AUTOSAR_C_ANALYSIS_SAMPLES` 时复用已生成样本，未设置时在临时目录重新生成。正常 `c-check` 继续扫描这些头经 CanIf／CanTp／PduR／Com／Dcm 等 TU 进入的真实程序；不向交付程序加入测试定义或模板骨架。这覆盖可构建配置的 ID 8／16 位与长度 8／16／32 位分支，不代表所有合法配置组合均已分析。Dcm 配置容量独立于通信长度类型，初始化检查可表示性；CanTp 先解码完整首帧长度再转换。无诊断样本仍编译交付中的 Dcm TU。样本参数改变会改变 plan／分析身份，旧配置的 CI 工件不能作为严格可比较基线。
 
@@ -69,9 +69,9 @@ uv run --locked python -m autosar_tooling c-check --target linux-x64-controlled-
 
 其他样本按同样方式下载 `c-analysis-<target>-<group>`，各次下载和分析使用新的目录。工件保留 14 天。`c-analysis-summaries-*` 只有摘要，没有诊断对应的源码文本，不能单独用于比较。
 
-`--baseline` 指向含 `summary.json` 和 `project/` 的样本目录。完整本地扫描后，入口核对 Cppcheck 版本、源码 revision 与三个 addon 摘要、checker coverage、目标、样本的完整 `target.json` 与生成计划和全部 TU／程序范围，以及基线源清单摘要。`semanticIdentity.version=1` 另核对实际 GCC 目标与数值 release、完整预定义行、有效 builtin／逐 TU 宏定义、平台模型头／库内容、实际显式加载的 Cppcheck std／POSIX 或 Windows cfg、按正常查找顺序隐式加载的 std.cfg、实际 addon runner 及其 cppcheck／cppcheckdata 辅助文件，以及项目分析驱动、addon 和直接构建／进程辅助源码（含 POSIX launch 与 Windows Job）的内容摘要。文本摘要统一换行；预定义与宏定义排序，安装路径、结果目录、并发数及编译器／Cppcheck 二进制载体摘要仅作追溯，不决定等价。相同目标、版本、有效输入和分析代码可跨主机比较；版本字符串单独相同不足以证明等价，改变这些内容需要同配置重新扫描基线。驱动源码使用保守字节身份，注释变化也可能要求新基线。
+`--baseline` 指向含 `summary.json` 和 `project/` 的样本目录。完整本地扫描后，入口核对 Cppcheck 版本、源码 revision 与三个 addon 摘要、checker coverage、目标、样本的完整 `target.json` 与生成计划和全部 TU／程序范围，以及基线源清单摘要。`semanticIdentity.version=2` 另核对实际 GCC 目标与数值 release、完整预定义行、有效 builtin／逐 TU 宏定义、平台模型头／库内容、实际显式加载的 Cppcheck std／POSIX 或 Windows cfg、按正常查找顺序隐式加载的 std.cfg、实际 addon runner 及其 cppcheck／cppcheckdata 辅助文件，以及项目分析驱动、addon 和直接构建／进程辅助源码（含 POSIX launch 与 Windows Job）的内容摘要。文本摘要统一换行；预定义与宏定义排序，安装路径、结果目录、并发数及编译器／Cppcheck 二进制载体摘要仅作追溯，不决定等价。相同目标、版本、有效输入和分析代码可跨主机比较；版本字符串单独相同不足以证明等价，改变这些内容需要同配置重新扫描基线。驱动源码使用保守字节身份，注释变化也可能要求新基线。
 
-缺失、旧版本或不完整语义身份明确拒绝，旧工件保持原样；结果身份版本不代表工具来源证明或 MISRA 评估状态。正常入口在扫描前捕获身份并在扫描后检查内容未变化。隐式路径按固定版本的实际规则及程序工作目录解析，不能由 CPPCHECK_ADDON_DIR 推定 runner；隐式 cppcheck.cfg 额外引入 addon、suppression 或 safety 覆盖时明确拒绝，纯展示元数据不影响等价。不同主机编译的 Cppcheck 二进制 SHA-256 可不同，版本和 addon 必须一致。任何身份不同、工件缺失或分析不完整都明确拒绝：在对应基线检出，用相同配置和工具通过正常 c-check 命令本地计算基线。配置本身改变时也需重新确定可比较的同配置基线，不能强行接受不相符的 CI 样本。
+缺失、旧版本或不完整语义身份明确拒绝，旧工件保持原样；结果身份版本不代表工具来源证明或 MISRA 评估状态。 SDK 来源另外按实际 TU 的带行标记预处理、活动宏定义、所选安装包版本及原头摘要保存于现有摘要；`semanticIdentity.sdk` 封存这份来源输入，`analysisCode` 包含 `c_sdk.py`。包外／未知／修改过的头及多义宏明确保留未分类或未解析状态，不能按路径前缀当作 SDK。受支持 CI 的八份结果要求来源完整，Windows 真实等待宏还须保留无 U 的 R7.2 及对应原头证据；这不改写原始分析状态。来源责任和回退见 [SDK 原头来源类别](../../standards/os/sdk.md#sdk-原头来源类别)。正常入口在扫描前捕获身份并在扫描后检查内容未变化。隐式路径按固定版本的实际规则及程序工作目录解析，不能由 CPPCHECK_ADDON_DIR 推定 runner；隐式 cppcheck.cfg 额外引入 addon、suppression 或 safety 覆盖时明确拒绝，纯展示元数据不影响等价。不同主机编译的 Cppcheck 二进制 SHA-256 可不同，版本和 addon 必须一致。任何身份不同、工件缺失或分析不完整都明确拒绝：在对应基线检出，用相同配置和工具通过正常 c-check 命令本地计算基线。配置本身改变时也需重新确定可比较的同配置基线，不能强行接受不相符的 CI 样本。
 
 生成计划的 `runtimeSources` 同时保存交付源码与生成器／模板摘要。由 `originalBswSources` 定位到直接交付的 runtime C／头文件条目，分别核对实际字节、原始封存记录和元数据身份后，允许源码摘要随整改变化；原始到交付路径绑定、成员集合及其他生成计划字段仍须相等。没有直接交付来源的生成器／模板摘要不放宽。当前输入与分析副本、基线各自的 seal 必须匹配各自 summary，不能修改旧摘要或来源映射来追认比较；比较器自身代码身份的变化也照常要求匹配的实际分析。
 
