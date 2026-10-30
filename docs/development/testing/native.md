@@ -12,7 +12,7 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，unittest 按 suite 保存到该目录。已有目录不会被覆盖；未指定时仍只保留失败现场。
 
-`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件（Windows 按测试名把最慢的几个模块分到第二个 runner，同一名单在另一半用 `--skip` 排除，每个测试只运行一次），工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。失败的测试保留自己的 scratch 目录（输出 `scratch retained at …`），独立 ECU 校验器保留其诊断目录，失败消息附带子进程输出末尾；该任务把临时根目录作为 `native-scratch-*` artifact 在失败时上传（保留 14 天），与 OS suites 的 `os-suites-*` 相同；`native-os` 任务在两个平台运行 27 个 OS suites 和主机锁错误边界测试，Windows 用 `AUTOSAR_OS_SHARD=k/n` 把 suite 按序号分到两个 runner，每个 suite 仍单独串行运行。`native-delivery` 任务下载准备任务发布的样本，与样本分析并行运行封存工程构建模式和 CMake 构建，再把样本移到新目录：Python 3.11 运行全部四个样本，Extended 在两平台运行完整版本与样本矩阵。用 uv 管理的接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制（`acceptance.yml`，见[官方对照](official.md)）与桌面场景（`desktop.yml`，见[桌面场景](desktop.md)）由不属于必需检查的 `Extended checks` 按改动路径调用（见 [CI](README.md#ci)）；PR 检查通过不代表这些检查通过。
+`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件（Windows 按测试名把最慢的几个模块分到第二个 runner，同一名单在另一半用 `--skip` 排除，每个测试只运行一次），工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。失败的测试保留自己的 scratch 目录（输出 `scratch retained at …`），独立 ECU 校验器保留其诊断目录，失败消息附带子进程输出末尾；该任务把临时根目录作为 `native-scratch-*` artifact 在失败时上传（保留 14 天），与 OS suites 的 `os-suites-*` 相同；`native-os` 任务在两个平台运行 27 个 OS suites 和主机锁错误边界测试，Windows 用 `AUTOSAR_OS_SHARD=k/n` 把 suite 按序号分到两个 runner，每个 suite 仍单独串行运行。`native-delivery` 任务下载准备任务发布的样本，与样本分析并行运行封存工程构建模式和 CMake 构建，再把样本移到新目录：Python 3.11 运行全部四个样本，Extended 在两平台运行完整版本与样本矩阵；Windows 把接收端步骤放到第二个 runner，与构建模式和 CMake 并行。用 uv 管理的接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制（`acceptance.yml`，见[官方对照](official.md)）与桌面场景（`desktop.yml`，见[桌面场景](desktop.md)）由不属于必需检查的 `Extended checks` 按改动路径调用（见 [CI](README.md#ci)）；PR 检查通过不代表这些检查通过。
 
 ## 检测器构建
 
@@ -37,11 +37,12 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - 观察 pthread 生命周期时遵守被调用 API 的前置条件，不用 join 已 detach 线程来推断状态：普通 libc 的错误返回不保证检测器接受该探针。需要观察平台调用时，沿现有测试链接观察器保留真实调用、返回值与检测器拦截，并核对目标线程身份；生产／插桩记录须显式包含相同观察选项，移除实际调用的变异须失败。
 - libc 强化或检测器改变调用入口时，故障注入须覆盖实际编译出的符号（如 glibc 的 checked 入口），保留真实边界检查；不能通过关闭强化选项或放宽断言修补观察盲点。
 - 在测试副本中替换源码以注入边界或变异时，锚点须断言唯一命中并锁定目标操作、参数和顺序；允许无语义影响的空白变化。源码调整后同步核对注入位置，不能因锚点未命中而跳过场景或变异。通过前置补丁改变符号的变异须同步后续补丁的上下文，先证明完整补丁序列可应用且变异可编译；补丁准备失败不计为行为拒绝。
+- 已确认发生于编译阶段的拒绝，用相同参数先编译正常消费者 TU，再要求反例命中具体文件、行及诊断；不为该拒绝重复构建无关内核。正常行为与运行期反例仍完整构建、链接和执行；多阶段消费者及时刷新阶段进度，保留外层超时时的最后完成位置。
 - Hook／ISR 等受限上下文中的测试断言，失败出口须独立于被测服务的调用权限，并以实际假条件验证终止；例如从 Pre/PostTaskHook 调用 ShutdownOS 会被 OS 合法拒绝，不能用它保证测试失败。
 
 `port-restart` suite 直接验证原生展开的有界重入、未处理／无关异常，以及检测器对丢弃调用帧的处理；Linux 具备内核 SHSTK 时还执行实际启用的正反对照和真实 Task／ARTI 消费者，不具备时保留 `not_assessed`。全部被展开的 C 单元（含应用与检测器构建）使用交付清单中的 `-fexceptions`，不能只为端口单元添加该选项。
 
-必需 CI 的 `native-sanitizers` 任务在 Linux 上按 `thread` 与 `address,undefined` 各用一个 runner 运行上述命令；与 `native`、`native-os` 并行。
+必需 CI 的 `native-sanitizers` 任务在 Linux 上运行上述命令：`address,undefined` 用一个 runner；`thread` 把 Cargo 插桩程序与串行的 OS suites 分到两个 runner，每个步骤仍只运行一次；与 `native`、`native-os` 并行。
 
 ## 平台与路径
 
@@ -58,6 +59,7 @@ Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元�
 
 - 给运行时配置结构（如 `Os_TargetConfigType`、`Os_ResourceConfigType`）加字段时放在末尾，并更新全部位置式初始化：`runtime/*/tests/*.c`、生成器按位置输出的 `c_layout::initializer` 与模板。这些单元以 `-Werror=missing-field-initializers` 编译，生成工程只在 `--features native-tests` 的原生套件中编译，`it` 通过不能证明。测试用 `#define` 给 hook 改名再包含另一个 harness 时，宏也会改写被包含文件里对该 hook 的取址；改由 harness 提供显式观察点。
 - 在 runtime 目录之间迁移 C 源文件或头文件时，从生成样本按每个实际 main 用 `gcc -MM` 列出编译闭包，并与 `integration.json`、ownership ledger 和交付字节逐项核对。GCC 的引号 include 优先查找同目录，迁移使不同目录出现同名头文件时，其解析结果可能改变：交付工程是扁平 include，仓库内按目录拼路径的夹具、工具和 `quality` 检查则不同，要逐个复核；也要检查按目录 glob 的检查是否悄悄漏掉了迁出的文件。原生测试的生成头文件通过实际消费者包含，不用全局 `-include` 注入宿主适配编译单元，避免改变 Windows 系统类型与平台特性宏的包含顺序。
+- 编译生成头的原生消费者使用实际宿主目标，并从该交付的 `target.json` 取完整 `includePaths`；修改头依赖时同步复核全部共用消费者。
 - 改动交付文件布局（如头文件移入子目录）、原生 fixture 或其共用辅助，重排运行时源码或改变 emitter 排版时，推送前在本地以 `--features native-tests` 运行受影响原生套件，并运行 OS suites、`test_host_boundaries.py` 和带改名变体（如 `OsAlt`）的原生套件。修改 OS 或 BSW 运行时 C 后，推送前也按[检测器构建](#检测器构建)运行受影响套件：插桩改变寄存器分配与展开清理路径，普通构建不能替代检测器构建的编译与行为检查。
 
 ## 主机时序与间歇失败

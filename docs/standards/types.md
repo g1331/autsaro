@@ -8,6 +8,8 @@
 | `AUTOSAR_CP_SWS_PlatformTypes.pdf`（`c0e4b1b97900ebea81d701542e55de05326fe18e245cfb81dbe9c154c493e78b`） | — | 公共整型、boolean 及受控目标 CPU／位序／字节序；只按实际受控 x64 C99 profile 核定 |
 | `AUTOSAR_CP_SWS_CommunicationStackTypes.pdf`（`31f62487c5e27ec1863b3febc79e336ef42eb4a50f2dc52776518d92741a7786`） | `SWS_COMTYPE_00005／00008／00011／00012／00027／00037／91001` | PduId／Length／Info、BufReq、Retry、Cbk handle 类型；`PduIdType`／`PduLengthType` 由真实 EcuC 最大值派生 `ComStack_Cfg.h` |
 
+公开类型的 R2.3 处置提案见[标准类型声明](types/public-types.md)，其独立复核状态与源码注释阶段分开记录。
+
 ## C99 essential type 与实际常量
 
 Boolean／character诊断、原生位掩码及复合表达式的具体判断见[essential type与表达式](types/essential-types.md)。
@@ -101,3 +103,5 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 `48907b3b`的type-owner标准ECU完成结果另有三条新增R17.3，位于交付Os_HostTypes.h:23的两次及:30的一次`__alignof__`。同一批原R2.3由60减至56、R5.9由17减至0；R17.3则由71增至74，raw合计2862，不把净减少当作没有新报告。原比较工件为os-aliased-service，具体位置仍按各自字节身份保留。
 
 主文R17.3（Mandatory，印刷138／PDF146）仅适用C90，当前实际TU为C99；三处是编译器对类型的对齐查询，不是遗漏函数原型。这三个GNU运算在旧guard中已经存在，改换常量表达式上下文没有新增一次运行时调用。固定addon的misra_17_3按未关联function／valueType的名字加左括号报告，没有完整建模该扩展。实际C99编译及对应约束拒绝另作证据；不手写内建声明、不新增baseline／suppression，原报告、语言适用性、GNU扩展责任和严格比较拒绝分别保留。
+
+维护者接受的平台／OS宏形式见[精确预处理记录](types/retained-platform.md)，不扩大所选配置的运行能力。

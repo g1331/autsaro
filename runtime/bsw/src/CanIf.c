@@ -66,11 +66,11 @@ static uint32 mode_writes CANIF_VAR_CLEARED; /**< PDU-mode generation; Init incr
 static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)
 {
     boolean valid = FALSE;
-    uint16 i;
     if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
         ((config->receive_count == 0u) || (config->receive != NULL_PTR)) &&
         ((config->transmit_count == 0u) || (config->transmit != NULL_PTR)) &&
         (config->controller_mode != NULL_PTR) && (config->bus_off != NULL_PTR)) {
+        uint16 i;
         valid = TRUE;
         for (i = 0u; i < config->receive_count; ++i) {
             uint16 j;
@@ -244,6 +244,8 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId,
     }
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 CANIF_CODE Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId,
                                                             uint8 *RxErrorCounterPtr)
 {
@@ -258,6 +260,8 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId,
     }
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 CANIF_CODE Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId,
                                                             uint8 *TxErrorCounterPtr)
 {

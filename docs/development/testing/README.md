@@ -6,6 +6,7 @@
 | --- | --- |
 | [覆盖率报告](coverage.md) | Rust、Vitest V8 与 Python 的本地测量、CI 工件与范围 |
 | [生成 C 的静态检查](generated-c.md) | Cppcheck／MISRA 分析、格式检查、clang 编译、封存构建模式与 CMake 构建 |
+| [日常修改的最小有效反馈](feedback.md) | 按修改落点选择的最快有意义测试命令、同机实测耗时与升级条件 |
 | [进程与原生行为](native.md) | 受管进程、原生 Rust 套件、OS suites、检测器构建、原生 CI 任务，以及平台路径、运行时文件迁移、主机时序与 Windows 进程的注意事项 |
 | [官方对照](official.md) | 官方档案下载与对照、条款处置核算 |
 | [桌面场景](desktop.md) | Tauri WebDriver 驱动的真实应用与 IPC 场景 |
@@ -25,7 +26,7 @@ uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
 ```
 
-仓库根目录是 Cargo workspace（成员 `core` 与 `src-tauri`），共用根目录的 `Cargo.lock` 与 `target/`；`cargo test --locked --workspace` 一次运行两个 crate 的默认测试，需先准备桌面平台依赖。前端使用 Vitest；`npm run test:watch --prefix ui` 用于开发。Python 普通测试位于 `tests/python`，进程和平台测试独立选择。默认 Rust 测试不需要外部 Python 或官方档案。
+仓库根目录是 Cargo workspace（成员 `core` 与 `src-tauri`），共用根目录的 `Cargo.lock` 与 `target/`。根 `Cargo.toml` 的测试 profile 把依赖按 `opt-level = 2`、core 按 `opt-level = 1` 编译，保留 debug 断言与溢出检查：首次编译变慢，解析、校验与生成为主的套件快数倍（core `it` 同机 515 秒降到 69 秒）；`cargo test --locked --workspace` 一次运行两个 crate 的默认测试，需先准备桌面平台依赖。前端使用 Vitest；`npm run test:watch --prefix ui` 用于开发。Python 普通测试位于 `tests/python`，进程和平台测试独立选择。默认 Rust 测试不需要外部 Python 或官方档案。
 
 core 的集成测试分为三个二进制，按能力模块组织，共用 `core/tests/support/`：
 
@@ -68,8 +69,8 @@ uv run --locked --group workflows zizmor .github
 
 CI 分两层：
 
-- **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。真实桌面 GUI／IPC 场景由 `desktop-scenarios` 复用共享构建和五分片，PR／master 按应用、运行时、工具和构建输入路径选择；只有明确未选择时汇总接受跳过，失败与取消阻塞合并。原生、OS、检测器、交付与生成 C 分析在 Windows 和 Linux 上完整运行；离线接收端在两平台用 Python 3.11 运行全部四个样本（含多组件独立 HostBatch 期望）。新版解释器的必需层覆盖由 Python 开发测试承担（含 ecu_tools 单元测试与 `test_sealed_sources`），运行 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改根目录指南、`docs/`、代理说明或配置（含 `.codex/` hooks）或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。除这些文档外只改 `ui/` 的 PR（如前端依赖更新）只运行 `ui`、`python`、`desktop` 与 `quality`，跳过 core、原生、OS、检测器、交付、生成 C 分析与进程任务：这些任务的输入都不在 `ui/` 下，`tests/python/test_ci_selection.py` 检查它们的源码不引用 `ui/`，并核对跳过的任务与 `CI required` 接受跳过的名单一致。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
-- **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：离线接收端 Python 3.11–3.14 × 四样本的 Linux／Windows 完整矩阵、其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[官方对照](official.md)和[模糊测试](fuzzing.md)（PR 与 master 均按路径运行）。master 每次推送都运行它，接收端矩阵按 core／runtime／工具／测试与构建配置路径选择；桌面场景已由必需层负责，扩展层不重复自动执行；手动 Extended 仍运行桌面全量。PR 改动官方对照相关路径时运行官方对照。PR 加 `full-ci` 标签后运行其余扩展检查；手动运行全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
+- **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。真实桌面 GUI／IPC 场景由 `desktop-scenarios` 复用共享构建和五分片，PR／master 按应用、运行时、工具和构建输入路径选择；只有明确未选择时汇总接受跳过，失败与取消阻塞合并。原生、OS、检测器、交付与生成 C 分析在 Windows 和 Linux 上完整运行；离线接收端在两平台用 Python 3.11 运行全部四个样本（含多组件独立 HostBatch 期望）。新版解释器的必需层覆盖由 Python 开发测试承担（含 ecu_tools 单元测试与 `test_sealed_sources`），运行 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改根目录指南、`docs/`、代理说明或配置（含 `.codex/` hooks）或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。除这些文档外只改 `ui/` 的 PR（如前端依赖更新）只运行 `ui`、`python`（含受管进程测试）、`desktop` 与 `quality`，跳过 core、原生、OS、检测器、交付与生成 C 分析任务：这些任务的输入都不在 `ui/` 下，`tests/python/test_ci_selection.py` 检查它们的源码不引用 `ui/`，并核对跳过的任务与 `CI required` 接受跳过的名单一致。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
+- **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：离线接收端 Python 3.11–3.14 × 四样本的 Linux／Windows 完整矩阵、其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[官方对照](official.md)和[模糊测试](fuzzing.md)（官方对照在 PR 与 master 均按路径运行；模糊测试在 PR 上只随目标直接消费的源码运行，master 按完整输入路径运行）。master 每次推送都运行它，接收端矩阵按 core／runtime／工具／测试与构建配置路径选择；桌面场景已由必需层负责，扩展层不重复自动执行；手动 Extended 仍运行桌面全量。PR 改动官方对照相关路径时运行官方对照。PR 加 `full-ci` 标签后运行其余扩展检查；手动运行全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
 
 自动合并在检查通过后仍为 `BLOCKED` 时，应处理保护或讨论阻塞，不等 watcher 提醒。存量诊断先回复依据再解决，保留告警。
 
@@ -105,21 +106,3 @@ Cppcheck 展示层尝试下载比较基准提交上成功的 master 检查工件
 ## 离线 ECU 包
 
 离线 ECU 包可由 Python 3.11 或更新版本运行自带 `tools/ecu-tool.py`，不需要 uv、Rust、Node 或源 checkout。构建和验证仍检查封存内容与目标工具链。`test_offline_delivery.py` 本地默认运行全部四个样本；`AUTOSAR_RECEIVER_PYTHON` 选择接收者解释器，`AUTOSAR_RECEIVER_SAMPLES` 用空格分隔样本名（例如 `standard-ecu`）以缩小样本集，空集或未知名称直接失败。支持版本的 Windows/Linux 实际构建由受控验收验证，未运行的平台或版本不宣称通过。
-
-## 日常修改的最小有效反馈
-
-先准备锁定依赖与[原生工具](../environment.md)，核对 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON`；检查共享类型／段符号还需 `AUTOSAR_NM`。缺工具先运行 `uv run --locked python -m autosar_tooling doctor --role native --target linux-x64-controlled-v1`，再检查所选测试的额外工具。下表是 Linux、GCC 13、已准备依赖的同机墙钟实测；首次／重复指该命令第一次及紧接着运行，未清操作系统页缓存。首次无 Cargo 构建产物的配置检查另需编译约 47 秒；首次启用 native feature 的 Det 检查为 29.3 秒，不能把准备成本算成行为检查耗时。
-
-以下命令均以 `cargo test --locked -p autosar-config-core` 开头，再接表中参数；测试输出须确认实际运行目标用例，不能把零匹配当作通过。
-
-| 真实修改与落点 | 最快有意义的参数 | 首次／重复 | 升级条件 |
-| --- | --- | --- | --- |
-| RTE 生成配置：`core/src/integration/rte_configuration.rs`、`contracts.rs`、ECUC 模板（#213） | `--test it -- integration::rte::rte_generation_options_are_explicit_and_unsupported_values_are_refused` | 12.367／11.661 秒 | 输出改变：受影响生成／原生消费者及 c-check；共同计划、命名或类型改变：对应完整模块 |
-| Det 状态：`runtime/bsw/src/Det.c`、`runtime/host/src/Det_Host.c`（#205） | `--features native-tests --test native -- runtime_contracts::det_standard_consumer_executes_runtime_and_halt_contracts` | 1.822／1.822 秒 | 并发／callout 改变：Det 并发用例与[检测器](native.md#检测器构建)；配置接缝改变：生成消费者；C 改动仍须受影响样本 c-check |
-| 共享类型：`runtime/bsw/include/` 的 Platform／Std／ComStack 类型、`core/src/integration/rte_types.rs`（#213） | `--features native-tests --test native -- integration::generated_c::generated_headers_compile_and_link_independent_scalar_and_void_server_signatures` | 6.405／6.139 秒 | ABI、宽度、include 改变：全部直接消费者、全部受影响样本 c-check；双目标完整矩阵交必需 CI |
-
-它们分别提供配置对象的接受／拒绝、独立 C 状态向量，以及共享头的编译／链接／执行与改名变体反馈。按实际模块替换 filter；它们是修改过程中的第一轮反馈，交付前仍完成该改动要求的受影响检查。UI 使用现有 Vitest filter／watch、lint 和 build；涉及原生异步操作时执行[隔离桌面场景](desktop.md)，浏览器检查不能替代 IPC。
-
-本地只运行受影响套件，完整双平台矩阵交给必需 CI；改变共享测试辅助或进程 owner 时，扩大到它的全部直接消费者。互不依赖的检查可在资源允许时并行运行；同一 Cargo target 的构建会等待锁，应先完成共同构建，检查之间也不能同时改写相同输入或输出。失败先读源对象、阶段、命令、原始 exit 和输出末尾；需要现场时使用既有 scratch／artifact，不通过重试或放宽期限隐藏问题。
-
-实测与后续可比结果保存在 [#53](https://github.com/g1331/autsaro/issues/53) 对应 PR；这里的数值用于选择反馈层，不是耗时上限。没有证明风险覆盖相同的测试／步骤不删除。

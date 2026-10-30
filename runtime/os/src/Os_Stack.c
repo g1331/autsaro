@@ -37,8 +37,8 @@ OS_MEMMAP const uint64 Os_ArtiNativeContextSize =
 #include "Os_MemMap.h"
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
-    /* The caller supplies a record obtained from this module's own array. */
-    return &saved_contexts[stack - stacks];
+    const unsigned index = Os_StackIndex(stack);
+    return (index < OS_NATIVE_STACKS) ? &saved_contexts[index] : NULL;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -72,8 +72,10 @@ OS_MEMMAP Os_StackFaultType
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-OS_MEMMAP static volatile Os_Atomic32Type fault_claimed,
-    fault_count; /**< Atomic fault claim/count state; no Init reset. */
+/* MR12 RULE 8.9 VIOLATION: the first-fault latch requires its own mapped VAR section. */
+OS_MEMMAP static volatile Os_Atomic32Type
+    fault_claimed; /**< Atomic first-fault claim; no Init reset. */
+OS_MEMMAP static volatile Os_Atomic32Type fault_count; /**< Atomic fault count; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_PTR
@@ -87,11 +89,13 @@ OS_MEMMAP static HANDLE
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_8
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: the fatal winner buffer requires its mapped byte storage. */
 OS_MEMMAP static char fatal_text[256]; /**< Fatal-path winner owns this buffer; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_8
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: the terminal-report latch requires its mapped atomic storage. */
 OS_MEMMAP static volatile Os_Atomic32Type
     fatal_claimed; /**< Atomic terminal-report winner latch; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
@@ -109,12 +113,14 @@ OS_MEMMAP int Os_StackHasFault(void)
     return (InterlockedCompareExchange(&fault_count, 0, 0) > 0) ? 1 : 0;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the native fault-counter observation export retains its target ABI. */
 OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
 
 OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
 {
+    /* MR12 RULE 11.4 VIOLATION: numeric bounds compare disjoint native and kernel stack storage. */
     current_stack->kernel_buffer_high = (uintptr_t)&top[1];
     current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - (512u * sizeof(*top));
     if ((current_stack->reserve_low < current_stack->kernel_buffer_high) &&
@@ -124,9 +130,13 @@ OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
 }
 
 OS_MEMMAP static void publish_fault(
-    Os_NativeStackType *record, DWORD code, uintptr_t sp, uintptr_t address, char origin)
+    const Os_NativeStackType *record, DWORD code, uintptr_t sp, uintptr_t address, char origin)
 {
-    Os_StackFaultType *local = &fault_records[record - stacks];
+    const unsigned index = Os_StackIndex(record);
+    if (index >= OS_NATIVE_STACKS) {
+        ExitProcess(E_OS_STATE);
+    }
+    Os_StackFaultType *local = &fault_records[index];
     local->thread_id = record->thread_id;
     local->role = record->role;
     local->exception = code;
@@ -248,17 +258,22 @@ OS_MEMMAP int Os_StackRegister(char role)
     if (VirtualQuery((const void *)&cursor, &region, sizeof(region)) != sizeof(region)) {
         return 0;
     }
+    const void *const allocation_base = region.AllocationBase;
     record->thread_id = GetCurrentThreadId();
     record->role = role;
+    /* MR12 RULE 11.6 VIOLATION: VirtualQuery allocation addresses form the native numeric stack
+     * bounds. */
     record->reserve_low = (uintptr_t)region.AllocationBase;
     cursor = record->reserve_low;
     record->committed_low = UINTPTR_MAX;
     for (;;) {
+        /* MR12 RULE 11.6 VIOLATION: VirtualQuery consumes a checked numeric page address without
+         * dereferencing it. */
         if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||
             (region.RegionSize == 0u) || (region.RegionSize > (UINTPTR_MAX - cursor))) {
             return 0;
         }
-        if ((uintptr_t)region.AllocationBase != record->reserve_low) {
+        if (region.AllocationBase != allocation_base) {
             break;
         }
         if (region.State == MEM_COMMIT) {
@@ -301,6 +316,8 @@ OS_MEMMAP void Os_StackCheck(void)
     }
     boolean invalid = (sp < current_stack->reserve_low) || (sp >= current_stack->high);
     if (!invalid) {
+        /* MR12 RULE 11.6 VIOLATION: VirtualQuery checks native RSP metadata without dereferencing
+         * the reconstructed pointer. */
         invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);
     }
     if (!invalid) {
@@ -327,6 +344,8 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
             MEMORY_BASIC_INFORMATION region;
             boolean invalid = (sp < record->reserve_low) || (sp >= record->high);
             if (!invalid) {
+                /* MR12 RULE 11.6 VIOLATION: VirtualQuery checks native RSP metadata without
+                 * dereferencing the reconstructed pointer. */
                 invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);
             }
             if (!invalid) {
@@ -350,14 +369,17 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_8
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: the fatal prefix requires its own mapped CONST section. */
 OS_MEMMAP static const char fatal_prefix[] =
     "FATAL state=Failed reason=13 controllers_exhausted=1\nFAULT role="; /**< Immutable native
                                                                             fatal-report bytes;
                                                                             process lifetime. */
 
+/* MR12 RULE 8.9 VIOLATION: the fatal middle requires its own mapped CONST section. */
 OS_MEMMAP static const char fatal_middle[] =
     " exception="; /**< Immutable native fatal-report bytes; process lifetime. */
 
+/* MR12 RULE 8.9 VIOLATION: the fatal suffix requires its own mapped CONST section. */
 OS_MEMMAP static const char fatal_suffix[] =
     " captured=1 record_complete=1\n"; /**< Immutable native fatal-report bytes; process lifetime.
                                         */

@@ -16,6 +16,8 @@ OS_MEMMAP static TickType
 #endif
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const TickType *const Os_ArtiCounters =
     values; /**< Fixed Counter ticks tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
@@ -29,6 +31,8 @@ OS_MEMMAP static Os_AlarmStateType
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const Os_ArtiAlarmStateType *const Os_ArtiAlarms =
     alarm_states; /**< Fixed Alarm state tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
@@ -84,13 +88,21 @@ OS_MEMMAP static uint32 counter_index(CounterType id)
 {
     const Os_TimeConfigType *config = Os_Config->timing;
     if (config != NULL) {
-        for (uint32 i = 0u; i < config->counter_count; ++i) {
+        for (uint32 i = 0u; (i < OS_MAX_COUNTERS) && (i < config->counter_count); ++i) {
             if (config->counters[i].id == id) {
                 return i;
             }
         }
     }
     return OS_MAX_COUNTERS;
+}
+
+/* Configuration references have already passed Os_TimeValidate. */
+OS_MEMMAP static uint32 configured_counter_index(CounterType id)
+{
+    const uint32 index = counter_index(id);
+    configASSERT(index < OS_MAX_COUNTERS);
+    return index;
 }
 
 OS_MEMMAP static uint32 alarm_index(AlarmType id)
@@ -266,7 +278,7 @@ OS_MEMMAP void Os_TimeAutostart(AppModeType mode)
         for (uint32 i = 0u; i < config->alarm_count; ++i) {
             const Os_AlarmConfigType *alarm = &config->alarms[i];
             if ((alarm->autostart_modes & mode) != 0u) {
-                uint32 counter = counter_index(alarm->counter);
+                uint32 counter = configured_counter_index(alarm->counter);
                 alarm_states[i].active = 1u;
                 alarm_states[i].cycle = alarm->cycle;
                 alarm_states[i].remaining = (alarm->absolute != 0u)
@@ -342,7 +354,7 @@ OS_MEMMAP static void action(uint32 index)
 
 OS_MEMMAP TickType Os_TimeCounterValue(CounterType counter)
 {
-    return values[counter_index(counter)];
+    return values[configured_counter_index(counter)];
 }
 
 OS_MEMMAP static void advance_counter(uint32 counter)
@@ -372,7 +384,8 @@ OS_MEMMAP static void advance_counter(uint32 counter)
                     alarm_states[i].remaining = alarm_states[i].cycle;
                     alarm_states[i].active = (alarm_states[i].cycle == 0u) ? 0u : 1u;
                     if (config->alarms[i].action == OS_ALARM_INCREMENT_COUNTER) {
-                        uint32 child = counter_index(config->alarms[i].increment_counter);
+                        uint32 child =
+                            configured_counter_index(config->alarms[i].increment_counter);
                         configASSERT(depth < OS_MAX_COUNTERS);
                         work[depth] = (Os_CounterWorkType){child, 0u, 1u};
                         ++depth;
@@ -487,7 +500,8 @@ OS_MEMMAP static StatusType implementation_GetAlarmBase(AlarmType AlarmID, Alarm
     if (index == OS_MAX_ALARMS) {
         return E_OS_ID;
     }
-    counter = &Os_Config->timing->counters[counter_index(Os_Config->timing->alarms[index].counter)];
+    counter = &Os_Config->timing
+                   ->counters[configured_counter_index(Os_Config->timing->alarms[index].counter)];
     Info->maxallowedvalue = counter->maximum;
     Info->ticksperbase = counter->ticks_per_base;
     Info->mincycle = counter->minimum_cycle;
@@ -537,7 +551,7 @@ OS_MEMMAP static StatusType set_alarm(AlarmType id, TickType start, TickType cyc
     if (index == OS_MAX_ALARMS) {
         return E_OS_ID;
     }
-    counter = counter_index(Os_Config->timing->alarms[index].counter);
+    counter = configured_counter_index(Os_Config->timing->alarms[index].counter);
     if ((start > Os_Config->timing->counters[counter].maximum) ||
         ((absolute == 0) && (start == 0u)) ||
         (valid_cycle(&Os_Config->timing->counters[counter], cycle) == 0)) {
@@ -622,12 +636,12 @@ OS_MEMMAP static void Os_TimeTick(void)
         error_count = 0u;
         /* Host timer counters are registers driven by the actual controlled
          * kernel tick ISR. Standard IncrementCounter cannot write them. */
-        for (uint32 i = 0u; i < config->counter_count; ++i) {
+        for (uint32 i = 0u; (i < OS_MAX_COUNTERS) && (i < config->counter_count); ++i) {
             if (config->counters[i].software == 0u) {
                 advance_counter(i);
             }
         }
-        advance_counter(counter_index(config->system_counter));
+        advance_counter(configured_counter_index(config->system_counter));
         Os_ArtiInternalEnter();
         const StatusType status = SetEvent(config->owner, config->wake_event);
         Os_ArtiInternalLeave();
@@ -745,7 +759,6 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
         const DWORD started_at = GetTickCount();
         boolean waiting = TRUE;
         while (waiting) {
-            const HANDLE observed[2] = {completion_event, attention_event};
             status = Os_TargetTickCompletion(ticket, record);
             if (status != E_OS_NOFUNC) {
                 waiting = FALSE;
@@ -756,9 +769,11 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
                 } else {
                     /* Native timed waits can round up to the host timer period;
                      * pending native work wakes this producer explicitly. */
+                    const HANDLE observed[2] = {completion_event, attention_event};
                     const DWORD waited =
                         WaitForMultipleObjects(2u, observed, 0, timeout_ms - elapsed);
-                    if ((waited == WAIT_TIMEOUT) || (waited == (WAIT_OBJECT_0 + 1u))) {
+                    /* A successful wait-any returns the zero-based handle index. */
+                    if ((waited == (DWORD)WAIT_TIMEOUT) || (waited == 1u)) {
                         /* A simultaneous close wins over timeout or attention. */
                         status = Os_TargetTickCompletion(ticket, record);
                         if (status == E_OS_NOFUNC) {
@@ -767,7 +782,7 @@ OS_MEMMAP StatusType Os_TargetWaitTick(uint64 ticket,
                             }
                         }
                         waiting = FALSE;
-                    } else if (waited != WAIT_OBJECT_0) {
+                    } else if (waited != (DWORD)WAIT_OBJECT_0) {
                         (void)InterlockedExchange(&signal_failed, 1);
                         Os_BackendRequestShutdown(E_OS_STATE);
                         status = E_OS_STATE;
@@ -894,7 +909,7 @@ OS_MEMMAP void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskTyp
         completion.epoch = requested_epoch;
         completion.ticket = requested_epoch;
         completion.kernel_tick = (uint32)xTaskGetTickCount();
-        completion.counter = values[counter_index(config->system_counter)];
+        completion.counter = Os_TimeCounterValue(config->system_counter);
         completion.alarm_actions = action_count;
         completion.action_errors = error_count;
         if (Os_HostSetEvent(completion_event) == 0) {
@@ -926,10 +941,11 @@ OS_MEMMAP void Os_TimeTestSeed(uint64 epoch, uint32 kernel_tick, TickType value)
     configASSERT(Os_Config->timing != NULL);
     configASSERT(
         value <=
-        Os_Config->timing->counters[counter_index(Os_Config->timing->system_counter)].maximum);
+        Os_Config->timing->counters[configured_counter_index(Os_Config->timing->system_counter)]
+            .maximum);
     configASSERT(InterlockedCompareExchange(&tick_state, 0, 0) == 0);
     vTaskOsTestTick((TickType_t)kernel_tick);
-    values[counter_index(Os_Config->timing->system_counter)] = value;
+    values[configured_counter_index(Os_Config->timing->system_counter)] = value;
     confirmed_epoch = epoch;
     completion.epoch = epoch;
     completion.ticket = epoch;

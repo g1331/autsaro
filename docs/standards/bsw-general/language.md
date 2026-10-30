@@ -93,3 +93,8 @@ R11.2／R11.7也不能仅按指针token判定（均Required；主文印刷95及9
 ## 原生位掩码
 
 信号、futex、原子状态及计数常量的[实际类型边界](../types/essential-types.md#原生位掩码)另记；不以固定checker的零报告替代判断。
+
+
+## 语法诊断
+
+限定裁决见[语法与原始诊断](language-tokens.md)。

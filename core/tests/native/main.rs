@@ -9,6 +9,13 @@ mod support;
 use support::*;
 use support::{mainline::*, os_variants::*, workspace::Scratch};
 
+// Native consumers must use the delivery for the executing compiler's target.
+fn prepared_pipeline_files(
+    plan: &autosar_config_core::integration::ValidatedIntegrationPlan,
+) -> Vec<(String, Vec<u8>)> {
+    support::mainline::prepared_pipeline_files_for_target(plan, tooling::native_target())
+}
+
 mod c_analysis;
 mod delivery;
 mod host;

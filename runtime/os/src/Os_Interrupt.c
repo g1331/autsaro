@@ -11,6 +11,8 @@ typedef struct {
  * the native ISR thread. This preserves ownership across interrupted actors. */
 #define OS_START_SEC_VAR_CLEARED_TLS_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit TLS mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static OS_THREAD_LOCAL Os_InterruptStateType
     states[33u * ((uint32)OS_HOOK_ALARM +
                   1u)]; /**< Actor TLS logical-caller mask depths; no Init reset. */

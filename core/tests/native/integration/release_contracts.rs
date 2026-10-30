@@ -2,8 +2,9 @@
 use super::*;
 use std::path::Path;
 
+// Each label owns its input and logs, so checks with distinct labels can run concurrently.
 fn compile(root: &Path, original: &Path, source: &str, label: &str, accepted: bool, error: &str) {
-    let input = root.join("release-consumer.c");
+    let input = root.join(format!("{label}.c"));
     std::fs::write(&input, source).unwrap();
     let mut command = tooling::c_compiler();
     command
@@ -233,6 +234,7 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
         ("Arti.c", "Os_MemMap.h", "MEMMAP"),
         ("Arti.h", "Os_MemMap.h", "MEMMAP"),
         ("Arti.h", "Std_Types.h", "STD_TYPES"),
+        ("Arti.h", "Os_HostTypes.h", "OS"),
         ("BswM.c", "BswM_MemMap.h", "MEMMAP"),
         ("BswM.c", "SchM_BswM.h", "RTE"),
         ("BswM.h", "ComM.h", "COMM"),
@@ -335,6 +337,8 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
         ("Os_Arti.h", "Arti.h", "ARTI"),
         ("Os_Arti.h", "Os_MemMap.h", "MEMMAP"),
         ("Os_ArtiServices.c", "Os_MemMap.h", "MEMMAP"),
+        ("Os_Service.h", "Arti.h", "ARTI"),
+        ("Os_Service.h", "Os_MemMap.h", "MEMMAP"),
         ("Os_Backend.c", "Os_MemMap.h", "MEMMAP"),
         ("Os_Backend.h", "Os_MemMap.h", "MEMMAP"),
         ("Os_Cfg.h", "Std_Types.h", "STD_TYPES"),
@@ -384,7 +388,9 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
         ("SchM_Dcm_Type.h", "Rte_Dcm_Type.h", "DCM"),
         ("Std_Types.h", "Platform_Types.h", "PLATFORM"),
     ];
-    for (consumer, dependency, prefix) in edges {
+    // (original, source, label, accepted, diagnostic) for every edge and variant.
+    let mut checks = Vec::new();
+    for (index, (consumer, dependency, prefix)) in edges.into_iter().enumerate() {
         if cfg!(windows)
             && ["Os_HostLinux.h", "Os_HostLinux.c", "Os_StackLinux.c"].contains(&consumer)
         {
@@ -399,6 +405,7 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
             .find(|(path, _)| path.ends_with(&format!("/{consumer}")))
             .unwrap_or_else(|| panic!("missing consumer {consumer}"));
         let text = std::str::from_utf8(bytes).unwrap();
+        let original = scratch.0.join(path);
         for part in ["MAJOR", "MINOR"] {
             for absent in [true, false] {
                 let name = format!("{prefix}_AR_RELEASE_{part}_VERSION");
@@ -407,32 +414,43 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
                 } else {
                     format!("#undef {name}\n#define {name} 99U\n")
                 };
-                let source = isolated(text, consumer, dependency, prefix, &poison);
-                let label = format!("{consumer}-{dependency}-{part}-{absent}");
-                let diagnostic = import_diagnostic(consumer, dependency, absent);
-                compile(
-                    &scratch.0,
-                    &scratch.0.join(path),
-                    &source,
-                    &label,
+                checks.push((
+                    original.clone(),
+                    isolated(text, consumer, dependency, prefix, &poison),
+                    format!("{index}-{consumer}-{dependency}-{part}-{absent}"),
                     false,
-                    &diagnostic,
-                );
+                    import_diagnostic(consumer, dependency, absent),
+                ));
             }
         }
         let poison = format!(
             "#undef {prefix}_AR_RELEASE_REVISION_VERSION\n#define {prefix}_AR_RELEASE_REVISION_VERSION 99U\n#undef {prefix}_VENDOR_ID\n#define {prefix}_VENDOR_ID 43U\n#undef {prefix}_SW_MAJOR_VERSION\n#define {prefix}_SW_MAJOR_VERSION 7U\n"
         );
-        let source = isolated(text, consumer, dependency, prefix, &poison);
-        compile(
-            &scratch.0,
-            &scratch.0.join(path),
-            &source,
-            "compatible-external-revision-vendor-software",
+        checks.push((
+            original,
+            isolated(text, consumer, dependency, prefix, &poison),
+            format!("{index}-{consumer}-{dependency}-compatible-external-revision-vendor-software"),
             true,
-            "",
-        );
+            String::new(),
+        ));
     }
+    // About 800 independent syntax checks; serially they dominate the native suite on Windows.
+    let pending = std::sync::Mutex::new(checks.iter());
+    let workers = std::thread::available_parallelism().map_or(1, usize::from);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                loop {
+                    // Release the queue before compiling.
+                    let next = pending.lock().unwrap().next();
+                    let Some((original, source, label, accepted, diagnostic)) = next else {
+                        break;
+                    };
+                    compile(&scratch.0, original, source, label, *accepted, diagnostic);
+                }
+            });
+        }
+    });
 }
 
 #[test]
@@ -760,7 +778,8 @@ fn arti_software_api_observes_each_owner_component_and_each_assignment() {
         prepared_pipeline_files_for_target(&build(&inputs()).unwrap(), tooling::native_target());
     let scratch = Scratch::new();
     install(&files, &scratch.0);
-    let source_path = scratch.0.join("os/src/Arti.c");
+    let implementation_path = scratch.0.join("os/src/Arti.c");
+    let source_path = scratch.0.join("os/include/Arti.h");
     let source = std::fs::read_to_string(&source_path).unwrap();
     let header_path = scratch.0.join("os/include/Arti_Version.h");
     let header = std::fs::read_to_string(&header_path).unwrap();
@@ -780,6 +799,9 @@ int main(void) {{
     if (result.sw_major_version != {}u) {{ return 11; }}
     if (result.sw_minor_version != {}u) {{ return 12; }}
     if (result.sw_patch_version != {}u) {{ return 13; }}
+    Arti_DevelopmentError = 0;
+    get_version(NULL);
+    if (Arti_DevelopmentError != ARTI_E_PARAM_POINTER) {{ return 14; }}
     return 0;
 }}
 "#,
@@ -801,7 +823,7 @@ int main(void) {{
             command.arg("-I").arg(path.as_str().unwrap());
         }
         command
-            .arg(&source_path)
+            .arg(&implementation_path)
             .arg(&consumer)
             .arg("-o")
             .arg(&executable);
@@ -852,6 +874,12 @@ int main(void) {{
         assert_eq!(run([1, 0, 0], false), Some(11 + index as i32));
         std::fs::write(&source_path, &source).unwrap();
     }
+    let error_write =
+        "(void)InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);";
+    assert_eq!(source.matches(error_write).count(), 1);
+    std::fs::write(&source_path, source.replace(error_write, "")).unwrap();
+    assert_eq!(run([1, 0, 0], false), Some(14));
+    std::fs::write(&source_path, &source).unwrap();
 }
 
 #[test]

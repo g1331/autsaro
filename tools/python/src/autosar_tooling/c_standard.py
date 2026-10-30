@@ -480,10 +480,106 @@ def baseline_errors(current: collections.Counter[Key], baseline: Path = BASELINE
     ]
 
 
+def host_address_instances(root: Path) -> tuple[dict, collections.Counter[Key]]:
+    """Identify reviewed native address expressions without accepting other conversions."""
+    document = "docs/standards/os/native-facilities/addresses.md"
+    title = "## 主机地址表示类别处置"
+    patterns = (
+        ("runtime/os/src/host/linux/Os_HostLinux.c", "11.5", "Os_HostCreateActor",
+         "thread->mapping = mmap(NULL, reserve, (int)protection, (int)mapping_flags, -1, 0);"),
+        ("runtime/os/src/host/linux/Os_HostLinux.c", "11.4", "Os_HostStackRange",
+         "*low = (uintptr_t)thread->mapping;"),
+        ("runtime/os/src/host/linux/Os_StackLinux.c", "11.4", "Os_StackRecordBuffer",
+         "current_stack->kernel_buffer_high = (uintptr_t)&top[1];"),
+        ("runtime/os/src/Os_Stack.c", "11.4", "Os_StackRecordBuffer",
+         "current_stack->kernel_buffer_high = (uintptr_t)&top[1];"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
+         "record->reserve_low = (uintptr_t)region.AllocationBase;"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
+         "if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackCheck",
+         "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);"),
+        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackObserve",
+         "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);"),
+    )
+    instances = {}
+    errors: collections.Counter[Key] = collections.Counter()
+    for name, rule, owner, expression in patterns:
+        path = root / name
+        if not path.is_file():
+            continue
+        source = path.read_text(encoding="utf-8")
+        tokens = [token for token in lex(source) if not is_comment(token)]
+        expected = [token.text for token in lex(expression)]
+        bodies = []
+        for index, token in enumerate(tokens[:-1]):
+            if token.text != owner or tokens[index + 1].text != "(":
+                continue
+            depth = 1
+            cursor = index + 2
+            while cursor < len(tokens) and depth:
+                depth += (tokens[cursor].text == "(") - (tokens[cursor].text == ")")
+                cursor += 1
+            if cursor == len(tokens) or tokens[cursor].text != "{":
+                continue
+            start = cursor + 1
+            depth = 1
+            cursor += 1
+            while cursor < len(tokens) and depth:
+                depth += (tokens[cursor].text == "{") - (tokens[cursor].text == "}")
+                cursor += 1
+            if depth == 0:
+                bodies.append(tokens[start:cursor - 1])
+        matches = []
+        if len(bodies) == 1:
+            body = bodies[0]
+            for index, token in enumerate(body):
+                if [item.text for item in body[index:index + len(expected)]] == expected:
+                    matches.append(token.start)
+        if len(matches) != 1:
+            errors[("deviation-category-pattern", name, owner)] += 1
+        elif not (root / document).is_file() or title not in (root / document).read_text(encoding="utf-8"):
+            errors[("deviation-category-record", name, owner)] += 1
+        else:
+            instances[(name, matches[0])] = (rule, "host-address:" + owner + ":" + " ".join(expected), document, title)
+    return instances, errors
+
+
+def code_words(source: str) -> list[str]:
+    """Normalize comments and continued directives, retaining replacement tokens."""
+    words = []
+    for token in lex(re.sub(r"\\\r?\n", "", source)):
+        if is_comment(token):
+            continue
+        if token.text.lstrip().startswith("#"):
+            words.append("#")
+            inner = [item for item in lex(token.text.lstrip()[1:]) if not is_comment(item)]
+            if len(inner) > 1 and inner[0].text == "define":
+                function_macro = len(inner) > 2 and inner[2].text == "(" and inner[2].start == inner[1].end
+                words.append("<function-macro>" if function_macro else "<object-macro>")
+            index = 0
+            while index < len(inner):
+                if (index + 1 < len(inner) and inner[index].text == inner[index + 1].text == "#"
+                        and inner[index].end == inner[index + 1].start):
+                    words.append("##")
+                    index += 2
+                else:
+                    words.append(inner[index].text)
+                    index += 1
+        else:
+            words.append(token.text)
+    return words
+
+
+RETAINED_APPLICATION = "core/tests/fixtures/component-pipeline/applications/Ingress.c"
+
+
 def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
     """Match approved table scopes to adjacent source locations, without approving them."""
     records: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
     locations: dict[tuple[str, str, str, str], tuple[str, str]] = {}
+    shapes = {}
+    record_errors: collections.Counter[Key] = collections.Counter()
     for path in sorted((root / "docs/standards").rglob("*.md")):
         for line in path.read_text(encoding="utf-8").splitlines():
             cells = line.split("|")
@@ -492,9 +588,11 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
             rule = re.search(r"MISRA C:2012 (Rule|Directive) (\d+\.\d+)", cells[1])
             if not rule or not re.match(r"(?:维护者\s+\S|Approved\s+by\s+\S)", cells[4].strip(), re.IGNORECASE):
                 continue
+            if "精确124键决定" in cells[4] and not re.search(r"shape=`([^`]+)`", cells[3]):
+                record_errors[("deviation-shape-record", path.relative_to(root).as_posix(), line.strip())] += 1
             kind = "RULE" if rule[1] == "Rule" else "DIR"
             scope = cells[2]
-            pieces = re.split(r"(`runtime/[^`]+`)", scope)
+            pieces = re.split(r"(`(?:runtime/[^`]+|" + re.escape(RETAINED_APPLICATION) + r")`)", scope)
             for index in range(1, len(pieces), 2):
                 name = pieces[index].strip("`")
                 for item in re.findall(r"`([^`]+)`", pieces[index + 1]):
@@ -504,10 +602,19 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                     key = (kind, rule[2], name, symbol)
                     records[key] += 1
                     locations[key] = (path.relative_to(root).as_posix(), line.strip())
+                    shape = re.search(r"shape=`([^`]+)`", cells[3])
+                    if shape:
+                        shapes[key] = code_words(shape[1].replace("&#124;", "|"))
+    instances, result = host_address_instances(root)
+    result.update(record_errors)
+    for (name, _), (rule, symbol, document, title) in instances.items():
+        key = ("RULE", rule, name, symbol)
+        records[key] += 1
+        locations[key] = (document, title)
     comments: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
-    result: collections.Counter[Key] = collections.Counter()
     source_locations = {}
-    for path in sorted((root / "runtime").rglob("*")):
+    paths = set((root / "runtime").rglob("*")) | {root / RETAINED_APPLICATION}
+    for path in sorted(path for path in paths if path.is_file()):
         if path.suffix not in {".c", ".h"}:
             continue
         name = path.relative_to(root).as_posix()
@@ -542,12 +649,30 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                 following = ([token] if token.text.lstrip().startswith("#") else preceding
                              or [t for t in tokens[index + 1:] if not is_comment(t)])
                 declaration = []
+                depth = 0
                 for item in following:
                     declaration.append(item)
-                    if item.text in {";", "{"} or item.text.lstrip().startswith("#"):
+                    if item.text == "{":
+                        if depth == 0 and function(declaration):
+                            break
+                        depth += 1
+                    elif item.text == "}":
+                        depth -= 1
+                    if (item.text == ";" and depth == 0) or item.text.lstrip().startswith("#"):
                         break
-                words = [t.text for t in declaration]
-                direct = function(declaration)
+                declarator = declaration
+                words = [t.text for t in declarator]
+                if "{" in words and not function(declarator[:words.index("{")]):
+                    # Aggregate members and initializer values do not name the owning object.
+                    opening = words.index("{")
+                    depth = 1
+                    closing = opening + 1
+                    while closing < len(words) and depth:
+                        depth += (words[closing] == "{") - (words[closing] == "}")
+                        closing += 1
+                    declarator = declarator[:opening] + declarator[closing:]
+                    words = [t.text for t in declarator]
+                direct = function(declarator)
                 macro = re.match(r"\s*#\s*define\s+(\w+)", words[0]) if words else None
                 included = directive_scope(words[0]) if words else None
                 file_scoped = (match[1] == "DIR" and match[2] == "4.10" and path.suffix == ".h"
@@ -558,8 +683,14 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                     if direct
                     else macro[1]
                     if macro
-                    else parameter_name(words[:-1])
+                    else parameter_name([
+                        word for word in (words[:words.index("=")] if "=" in words else words[:-1])
+                        if not re.fullmatch(r"[A-Z][A-Z0-9_]*(?:_MEMMAP|_VAR_[A-Z0-9_]+)", word)
+                    ])
                 )
+                instance = instances.get((name, declaration[0].start)) if declaration else None
+                if instance and match[1] == "RULE" and match[2] == instance[0]:
+                    symbol = instance[1]
                 if included is not None and not file_scoped:
                     numbered = included + " [" + str(directive_numbers[declaration[0].start]) + "]"
                     if (match[1], match[2], name, numbered) in records:
@@ -568,6 +699,11 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                         line = source.splitlines()[source.count("\n", 0, token.start)].strip()
                         result[("deviation-ambiguous", name, line)] += 1
                 key = (match[1], match[2], name, symbol)
+                if key in shapes and declaration:
+                    actual = code_words(" ".join(item.text for item in declaration))
+                    if actual != shapes[key]:
+                        line = source.splitlines()[source.count("\n", 0, token.start)].strip()
+                        result[("deviation-shape", name, line)] += 1
                 comments[key] += 1
                 source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())
     for entries, positions in ((records, locations), (comments, source_locations)):

@@ -64,7 +64,7 @@ OS_MEMMAP Os_HostHandleType Os_HostSpawnObserverThread(Os_HostThreadEntryType en
 #include "Os_MemMap.h"
 OS_MEMMAP int Os_HostWait(Os_HostHandleType handle, uint32_t milliseconds)
 {
-    return (WaitForSingleObject(handle, milliseconds) == WAIT_OBJECT_0) ? 1 : 0;
+    return (WaitForSingleObject(handle, milliseconds) == (DWORD)WAIT_OBJECT_0) ? 1 : 0;
 }
 
 OS_MEMMAP int Os_HostClose(Os_HostHandleType handle) { return (CloseHandle(handle) != 0) ? 1 : 0; }

@@ -128,3 +128,7 @@ R21.21／R21.24均为Required（AMD2.83印刷18／PDF25；AMD3.50印刷26／PDF3
 ## 库函数输入域
 
 D4.11为Required（主文印刷33–34／PDF41–42），允许调用方、被调方检查或静态值域证明；不只看返回码。D4.14同为Required（AMD1印刷1–2／PDF9–10），包括文件、环境、输入和通信数据。HostBatch保留真实字节数及超长行排空；lexer检查长度、token数、ASCII及数值乘加前界限，Target再检查DLC、容量、epoch和ticket关系。资源注入的getenv／strtoul检查errno、首字符、终点和范围后仅保存整数。正常CAN／DID、仲裁及超时恢复验证不替代受限字符串边界的未执行证据；原生信号帧、FP指针及外部provider域仍有独立责任，不据局部输入检查关闭两项。
+
+公共声明的具体诊断记录见[发布信息](published-information.md)、[BSW 服务](public-api-bsw.md)及[OS 服务](public-api-os.md)；各篇明确区分待复核记录和已完成处置，不代替模块行为核对。
+
+精确交付保留：[BSW服务](public-api-bsw.md)、[OS服务](public-api-os.md)、[ND库／runnable](retained-library.md)。

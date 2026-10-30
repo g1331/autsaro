@@ -5,8 +5,11 @@
 #define SCHM_CAN_H
 #include "Rte_Version.h"
 #include "SchM_Can_Type.h"
+/** Preserve the C ABI for C++ consumers without conditional directives in mapped sections. */
 #ifdef __cplusplus
-extern "C" {
+#define SCHM_CAN_LINKAGE extern "C" /**< C ABI for C++ consumers. */
+#else
+#define SCHM_CAN_LINKAGE /**< C declarations already have C linkage. */
 #endif
 
 #define CAN_START_SEC_CODE
@@ -20,7 +23,7 @@ extern "C" {
  * Reentrancy: not reentrant.
  * Ownership: Callbacks run outside CAN_STATE; no pointer is retained.
  */
-CAN_CODE void Can_MainFunction_Read(void);
+SCHM_CAN_LINKAGE CAN_CODE void Can_MainFunction_Read(void);
 
 /** Publish a pending transmit confirmation to CanIf.
  * @par Return
@@ -30,7 +33,7 @@ CAN_CODE void Can_MainFunction_Read(void);
  * Reentrancy: not reentrant.
  * Ownership: Callbacks run outside CAN_STATE; no pointer is retained.
  */
-CAN_CODE void Can_MainFunction_Write(void);
+SCHM_CAN_LINKAGE CAN_CODE void Can_MainFunction_Write(void);
 
 /** Publish a pending controller mode transition to CanIf.
  * @par Return
@@ -40,7 +43,7 @@ CAN_CODE void Can_MainFunction_Write(void);
  * Reentrancy: not reentrant.
  * Ownership: Callbacks run outside CAN_STATE; no pointer is retained.
  */
-CAN_CODE void Can_MainFunction_Wakeup(void);
+SCHM_CAN_LINKAGE CAN_CODE void Can_MainFunction_Wakeup(void);
 
 /** Publish a pending bus-off event once to CanIf.
  * @par Return
@@ -50,7 +53,7 @@ CAN_CODE void Can_MainFunction_Wakeup(void);
  * Reentrancy: not reentrant.
  * Ownership: Callbacks run outside CAN_STATE; no pointer is retained.
  */
-CAN_CODE void Can_MainFunction_BusOff(void);
+SCHM_CAN_LINKAGE CAN_CODE void Can_MainFunction_BusOff(void);
 
 /** Publish a pending controller mode transition to CanIf.
  * @par Return
@@ -60,7 +63,7 @@ CAN_CODE void Can_MainFunction_BusOff(void);
  * Reentrancy: not reentrant.
  * Ownership: Callbacks run outside CAN_STATE; no pointer is retained.
  */
-CAN_CODE void Can_MainFunction_Mode(void);
+SCHM_CAN_LINKAGE CAN_CODE void Can_MainFunction_Mode(void);
 
 #define CAN_STOP_SEC_CODE
 #include "Can_MemMap.h"
@@ -81,7 +84,7 @@ CAN_CODE void Can_MainFunction_Mode(void);
  * Reentrancy: not reentrant within one context; concurrent contexts serialize.
  * Ownership: Held by this context until its matching Exit.
  */
-RTE_Rte_CODE void SchM_Enter_Can_CAN_STATE(void);
+SCHM_CAN_LINKAGE RTE_Rte_CODE void SchM_Enter_Can_CAN_STATE(void);
 /** Exit the driver state area (SWS_Rte_07253).
  * @par Return
  * None.
@@ -90,7 +93,7 @@ RTE_Rte_CODE void SchM_Enter_Can_CAN_STATE(void);
  * Reentrancy: not reentrant within one context; concurrent contexts serialize.
  * Ownership: Releases this context's area.
  */
-RTE_Rte_CODE void SchM_Exit_Can_CAN_STATE(void);
+SCHM_CAN_LINKAGE RTE_Rte_CODE void SchM_Exit_Can_CAN_STATE(void);
 #define RTE_Rte_STOP_SEC_CODE
 #include "Rte_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -100,7 +103,4 @@ RTE_Rte_CODE void SchM_Exit_Can_CAN_STATE(void);
 #error "SchM_Can.h -> Rte_MemMap.h: incompatible AUTOSAR release"
 #endif
 
-#ifdef __cplusplus
-}
-#endif
 #endif

@@ -489,6 +489,7 @@ def check_time(binary: Path) -> list[dict]:
     records = []
     for case, ticks, work, app, rejected, expected in [
         ("thousand", 1000, 1000, 100, 2, [(1, 1, 1, 1), (2, 2, 2, 1), (3, 3, 3, 1)]),
+        ("counter-order", 3, 3, 0, 2, [(1, 1, 1, 1), (2, 2, 2, 1), (3, 3, 3, 1)]),
         (
             "wrap",
             3,
@@ -1553,6 +1554,9 @@ def check_arti_native(directory: Path) -> None:
     for name, source, old, new, compile_failure in [
         ("missing-start", "Os_Arti.c", "0u, OsTask_Start,", "0u, OsTask_Activate,", False),
         ("wrong-signature", "Arti.c", "uint32_t event_parameter)\n", "uint16_t event_parameter)\n", True),
+        ("foreign-stack-slot", "Os_Stack.h", "return OS_NATIVE_STACKS;", "return 0u;", False),
+        ("wrong-stack-slot", "Os_Stack.h", "return index;",
+         "return (index + 1u) % OS_NATIVE_STACKS;", False),
     ]:
         faulty = directory / name
         faulty.mkdir()
@@ -1636,7 +1640,7 @@ def check_arti_native(directory: Path) -> None:
                          "maximum=1 trace=AP", "arti_stack index=1 isr=6"):
             require(expected in result["stderr"], result)
     print("ARTI nested diagnostics PASS: four recorder faults and two fixture faults identified")
-    print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; two compiled faults rejected")
+    print(f"ARTI native PASS: {len(observations)} task/tool and {len(nested_observations)} nested/rejection vectors; one signature conflict and three compiled behavior faults rejected")
 
 
 # Verifies: SWS_Os_00071
@@ -1758,8 +1762,7 @@ def check_capacity(binary: Path) -> list[dict]:
     return observations
 
 
-# Verifies: SWS_Os_00772, 00773, 00774, 00775, 00776, 00777, 00778, 00779, 00780, 00781, 00782,
-# 00786, 00787, 00788, 00789, 00790, 00791, 00792, 00793, 00794, 91000, 91002, 91007
+# Verifies: SWS_Os_00782, 00786, 00789, 00790, 00793, 00794
 def check_public_types(directory: Path) -> None:
     # Verifies[Os]: SWS_BSW_00120. Independent C99 widths; 256/UINT32_MAX refusal vectors run in lifecycle.
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
@@ -1771,7 +1774,7 @@ def check_public_types(directory: Path) -> None:
         "-I" + str(ROOT / "runtime/bsw/include"), "-I" + str(ROOT / "runtime/host/include"),
         "-o", str(binary),
     ]
-    expected = "public_types range_and_pointer_contracts=pass access_truth_table=16\n"
+    expected = "public_types sc1_range_and_pointer_contracts=pass\n"
     for name, extra in [
         ("header-only", []),
         ("host-before", ["-DOS_PUBLIC_TYPES_HOST_BEFORE"]),
@@ -1787,6 +1790,40 @@ def check_public_types(directory: Path) -> None:
         result = run_native([str(binary)], capture_output=True, text=True, timeout=5)
         require(result.returncode == 0 and result.stdout == expected and not result.stderr,
                 {"exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
+
+
+    unsupported = (
+        "ApplicationType", "ApplicationStateType", "ApplicationStateRefType",
+        "TrustedFunctionIndexType", "TrustedFunctionParameterRefType", "AccessType",
+        "ObjectAccessType", "ObjectTypeType", "MemoryStartAddressType", "MemorySizeType",
+        "ProtectionReturnType", "RestartType", "SpinlockIdType", "TryToGetSpinlockType",
+        "AreaIdType",
+    )
+    source = directory / "unsupported-sc1-type.c"
+    flags = [argument for argument in command[:-2]
+             if argument != str(TARGET / "tests/public_types.c")]
+    flags += ["-I" + str(TARGET / "src")] + (
+        ["-I" + str(TARGET / "src/host/linux")] if linux else []
+    )
+    for name, value in (("DONOTCARE", "255u"), ("TotalNumberOfCores", "1u")):
+        source.write_text('#include "Os.h"\nuint32 unsupported = ' + name + ';\n', encoding="utf-8")
+        result = run_native([*flags, "-fsyntax-only", str(source)], capture_output=True, text=True)
+        errors = [line for line in result.stderr.splitlines() if "error:" in line]
+        require(result.returncode != 0 and len(errors) == 1 and
+                "undeclared" in errors[0] and name in errors[0] and str(source) + ":2:" in errors[0],
+                {"macro": name, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
+        restored = run_native([*flags, "-D" + name + "=" + value, "-fsyntax-only", str(source)],
+                              capture_output=True, text=True)
+        require(restored.returncode == 0, {"macro": name, "stderr": restored.stderr})
+
+    for name in unsupported:
+        source.write_text('#include "Os.h"\n' + name + ' *unsupported;\n', encoding="utf-8")
+        result = run_native([*flags, "-fsyntax-only", str(source)], capture_output=True, text=True)
+        errors = [line for line in result.stderr.splitlines() if "error:" in line]
+        require(result.returncode != 0 and len(errors) == 1 and
+                "unknown type name" in errors[0] and name in errors[0] and
+                str(source) + ":2:" in errors[0],
+                {"type": name, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
 
 
 # Verifies: SWS_Os_91025
@@ -1948,29 +1985,53 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
         header.write_text(client, encoding="utf-8")
         stage = directory / name
         stage.mkdir()
+        print(f"counter_service counter={counter} stage={name} build", flush=True)
         binary, _ = build(stage, "counter_service.c", defines, target, (source,))
+        print(f"counter_service counter={counter} stage={name} run", flush=True)
         result = execute(binary, name)
         require(result["exit"] == exit_code and not result["stderr"], result)
         if name == "actual":
             require("counter_service ticks=0 wrap=2 errors=7 reason=0" in result["stdout"], result)
-    for name, mutant, client, expected in [
-        ("disconnected", original,
-         re.sub(r"\bRte_Call_OsService_GetCounterValue\b", "Disconnected_GetCounterValue", original_header),
-         "Rte_Call_OsService_GetCounterValue"),
-        ("wrong-signature", original.replace("TimeInMicrosecondsType *Value", "uint32_t *Value"),
-         original_header, "conflicting types"),
-    ]:
-        require(mutant != original or client != original_header, "service signature mutation did not apply")
-        source.write_text(mutant, encoding="utf-8")
-        header.write_text(client, encoding="utf-8")
-        stage = directory / name
-        stage.mkdir()
-        try:
-            build(stage, "counter_service.c", defines, target, (source,))
-        except RuntimeError as error:
-            require(expected in str(error), str(error))
-        else:
-            raise AssertionError(f"{name} Counter client linked successfully")
+        print(f"counter_service counter={counter} stage={name} complete", flush=True)
+    source.write_text(original, encoding="utf-8")
+    header.write_text(original_header, encoding="utf-8")
+    # These rejection paths fail while compiling their own TU, before any link.
+    # Normal and both behavioral variants above still build and run the kernel.
+    signature_command = [
+        compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", *sanitizer_flags(), "-fsyntax-only",
+        "-I", str(target / "include"), "-I", str(target / "src"),
+        *(["-I", str(target / "src/host/linux")]
+          if _TARGET_ID.get() == "linux-x64-controlled-v1" else []),
+        "-I", str(ROOT / "runtime/bsw/include"),
+        "-I", str(ROOT / "runtime/host/include"), str(source),
+    ]
+    client = directory / "counter_client.c"
+    client.write_text('#include "Rte_Os.h"\n'
+                     "StatusType CounterClient(TimeInMicrosecondsType *value)\n{\n"
+                     "    return Rte_Call_OsService_GetCounterValue(value);\n}\n", encoding="utf-8")
+    client_command = [*signature_command[:-1], str(client)]
+    print(f"counter_service counter={counter} stage=client-positive compile", flush=True)
+    run_native(client_command, check=True)
+    disconnected = re.sub(r"\bRte_Call_OsService_GetCounterValue\b",
+                          "Disconnected_GetCounterValue", original_header)
+    require(disconnected != original_header, "service client mutation did not apply")
+    header.write_text(disconnected, encoding="utf-8")
+    print(f"counter_service counter={counter} stage=disconnected compile", flush=True)
+    rejected = run_native(client_command)
+    require(rejected.returncode != 0 and "implicit declaration" in rejected.stderr
+            and "Rte_Call_OsService_GetCounterValue" in rejected.stderr
+            and "counter_client.c:4:" in rejected.stderr, rejected)
+    header.write_text(original_header, encoding="utf-8")
+    print(f"counter_service counter={counter} stage=signature-positive compile", flush=True)
+    run_native(signature_command, check=True)
+    source.write_text(original.replace("TimeInMicrosecondsType *Value", "uint32_t *Value"),
+                      encoding="utf-8")
+    print(f"counter_service counter={counter} stage=signature-negative compile", flush=True)
+    signature = run_native(signature_command)
+    require(signature.returncode != 0 and "conflicting types" in signature.stderr
+            and f"OsService_{counter}_GetCounterValue" in signature.stderr
+            and "Rte_OsService.c:4:" in signature.stderr, signature)
+    print(f"counter_service counter={counter} stage=complete", flush=True)
 
 
 # Task, ISR, alarm callback and hook declarations sit inside OS_START/STOP_SEC_CODE.
@@ -2087,7 +2148,7 @@ def verify_memory_mapping_source(source: str, owned_names: set[str] | None = Non
 
 def check_memory_mapping(directory: Path) -> None:
     # These standard callback declarations belong to the OS interface even though RTE owns bodies.
-    # SetEvent is spelled literally in its definition, but the public header aliases it.
+    # The public SetEvent alias names the real header-inline Os_SetEvent implementation.
     owned = {"StartupHook", "ShutdownHook", "ErrorHook", "PreTaskHook", "PostTaskHook", "Os_SetEvent"}
     for path in sorted((TARGET / "src").rglob("*.c")):
         try:
@@ -2106,6 +2167,8 @@ def check_memory_mapping(directory: Path) -> None:
     headers = directory / "include"
     shutil.copytree(TARGET / "include", headers)
     flags = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I", str(headers),
+             "-I", str(TARGET / "src"),
+             *(["-I", str(TARGET / "src/host/linux")] if linux else []),
              "-I", str(ROOT / "runtime/bsw/include"), "-I", str(ROOT / "runtime/host/include")]
     source = TARGET / "tests/memory_mapping.c"
     object_file = directory / "memory_mapping.o"
@@ -2115,8 +2178,9 @@ def check_memory_mapping(directory: Path) -> None:
     run_native([*flags, str(source), "-o", str(binary)], check=True, timeout=60)
     names = ["Os_TaskEntry_FirstTask", "Os_TaskEntry_SecondTask", "Os_IsrEntry_FirstISR",
              "Os_IsrEntry_SecondISR", "AlarmBody", "ErrorHook", "PreTaskHook", "PostTaskHook",
-             "StartupHook", "ShutdownHook", "Os_SetEvent"]
-    verify_code_section(binary, tool, names)
+             "StartupHook", "ShutdownHook"]
+    local_names = ("Os_SetEvent",)
+    verify_code_section(binary, tool, names, local_names)
     ran = run_native([str(binary)], capture_output=True, text=True, timeout=5, check=True)
     require(ran.stdout.strip() == "memory_mapping calls=10" and not ran.stderr, ran.stdout)
     for name, markers, expected in [
@@ -2161,11 +2225,36 @@ def check_memory_mapping(directory: Path) -> None:
     mutant = directory / ("missing-code-section" if linux else "missing-code-section.exe")
     run_native([*flags, str(source), "-o", str(mutant)], check=True, timeout=60)
     try:
-        verify_code_section(mutant, tool, names)
+        verify_code_section(mutant, tool, names, local_names)
     except ValueError as error:
         require("code section is missing" in str(error), str(error))
     else:
         raise AssertionError("unmapped entry definitions passed the linked section check")
+    header.write_text(original, encoding="utf-8")
+    interface = headers / "Os.h"
+    original_interface = interface.read_text(encoding="utf-8")
+    service = re.search(r"OS_MEMMAP static inline StatusType Os_SetEvent\([^;{}]+\)\n\{.*?\n\}",
+                        original_interface, re.DOTALL)
+    require(service is not None, "missing real inline SetEvent consumer")
+    body = service.group()
+    for label, before, after in (
+        ("enter", "Os_ArtiServiceEnter()", "0"),
+        ("entry-event", "Os_ArtiService(OSServiceId_SetEvent, (uint32)TaskID, 0);", ""),
+        ("implementation", "Os_Implementation_SetEvent(TaskID, Mask)",
+         "((void)TaskID, (void)Mask, (StatusType)E_OK)"),
+        ("capture", "Arti_CaptureServiceStatus((uint32)result);", ""),
+        ("return-event", "Os_ArtiService(OSServiceId_SetEvent, (uint32)result, 1);", ""),
+        ("leave", "Os_ArtiServiceLeave();", ""),
+    ):
+        require(body.count(before) == 1, f"SetEvent mutation anchor mismatch: {label}")
+        interface.write_text(original_interface.replace(body, body.replace(before, after)),
+                             encoding="utf-8")
+        mutant = directory / ("missing-service-" + label + (".exe" if not linux else ""))
+        run_native([*flags, str(source), "-o", str(mutant)], check=True, timeout=60)
+        rejected = run_native([str(mutant)], capture_output=True, text=True, timeout=5, check=False)
+        require(rejected.returncode == 4 and not rejected.stdout and not rejected.stderr,
+                f"missing inline service effect accepted: {label}: {rejected}")
+    interface.write_text(original_interface, encoding="utf-8")
 
 
 def check_port_restart(directory: Path) -> None:
@@ -2318,6 +2407,65 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
                 require(f"resource_calls={calls} " in observation["stdout"], observation)
                 observation["production_resource_injection_disabled"] = True
                 observations.append(observation)
+        if suite == "time":
+            for label, before, after in (
+                ("value", "return values[configured_counter_index(counter)];", "(void)counter; return 0u;"),
+                ("identifier", "return values[configured_counter_index(counter)];",
+                 "(void)counter; return values[0];"),
+            ):
+                variant_dir = Path(temporary) / ("counter-query-" + label)
+                variant_dir.mkdir()
+                target = variant_dir / "target"
+                shutil.copytree(TARGET, target)
+                source = target / "src/Os_Time.c"
+                original = source.read_text(encoding="utf-8")
+                require(original.count(before) == 1, f"Counter query mutation anchor: {label}")
+                source.write_text(original.replace(before, after), encoding="utf-8")
+                variant, _ = build(variant_dir, "controlled_time.c", target=target)
+                refused = execute(variant, "counter-order")
+                require(refused["exit"] == 99 and not refused["stdout"]
+                        and refused["stderr"] == "tick_counter epoch=1 expected=1 actual=0", refused)
+            for relaxed in (False, True):
+                variant_dir = Path(temporary) / ("counter-index-relaxed" if relaxed else "counter-index-refused")
+                variant_dir.mkdir()
+                target = variant_dir / "target"
+                shutil.copytree(TARGET, target)
+                source = target / "src/Os_Time.c"
+                original = source.read_text(encoding="utf-8")
+                declaration = "OS_MEMMAP static uint32 configured_counter_index(CounterType id)"
+                lookup = "const uint32 index = counter_index(id);"
+                guard = "configASSERT(index < OS_MAX_COUNTERS);"
+                require(all(original.count(anchor) == 1 for anchor in (declaration, lookup, guard)),
+                        "Counter invariant fault anchors changed")
+                original = original.replace(declaration, "uint32 Os_TestCounterIndex(uint32 actual);\n" + declaration)
+                original = original.replace(lookup, "const uint32 index = Os_TestCounterIndex(counter_index(id));")
+                expected_line = next(i for i, line in enumerate(original.splitlines(), 1) if guard in line)
+                if relaxed:
+                    original = original.replace(guard, '(void)fprintf(stderr, "counter_lookup_continued=0\\n"); (void)fflush(stderr);')
+                    start = original.index(declaration)
+                    end = original.index("\n}", start)
+                    body = original[start:end]
+                    require(body.count("return index;") == 1, "Counter invariant return anchor changed")
+                    original = original[:start] + body.replace("return index;", "(void)index; return 0u;") + original[end:]
+                    original = '#include <stdio.h>\n' + original
+                source.write_text(original, encoding="utf-8")
+                provider = variant_dir / "counter-index-fault.c"
+                provider.write_text(
+                    '#include "Os_Backend.h"\n#include <stdio.h>\n#include <string.h>\n'
+                    'uint32 Os_TestCounterIndex(uint32 actual) { (void)actual; return OS_MAX_COUNTERS; }\n'
+                    'void __real_Os_BackendAssert(const char *file, sint32 line) __attribute__((noreturn));\n'
+                    'void __wrap_Os_BackendAssert(const char *file, sint32 line) {\n'
+                    f'  (void)fputs((strstr(file, "Os_Time.c") != NULL && line == {expected_line}) ? '
+                    '"counter_lookup_guard\\n" : "counter_lookup_wrong_assert\\n", stderr);\n'
+                    '  (void)fflush(stderr); __real_Os_BackendAssert(file, line);\n}\n', encoding="utf-8")
+                variant, _ = build(variant_dir, "controlled_time.c", target=target,
+                                   extra_sources=(provider,), link_flags=("-Wl,--wrap=Os_BackendAssert",))
+                refused = execute(variant, "counter-order")
+                if relaxed:
+                    require("counter_lookup_continued=0" in refused["stderr"]
+                            and "counter_lookup_guard" not in refused["stderr"], refused)
+                else:
+                    require(refused["exit"] == 7 and refused["stderr"] == "counter_lookup_guard", refused)
         if suite == "stack":
             check_arti_native(Path(temporary) / "arti-consumers")
         if suite == "counter-types":

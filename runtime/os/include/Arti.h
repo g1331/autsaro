@@ -10,22 +10,19 @@
 #error "Arti.h -> Std_Types.h: incompatible AUTOSAR release"
 #endif
 #include <stddef.h>
-#ifdef _WIN32
-/** Native four-byte aligned cell type required by the controlled host Interlocked ABI. */
-typedef long ArtiAtomic32;
-#else
-/** Native four-byte aligned cell type required by the controlled host Interlocked ABI. */
-typedef int32_t ArtiAtomic32;
-#endif
-enum {
-    ARTI_ATOMIC32_WIDTH =
-        sizeof(char[(sizeof(ArtiAtomic32) == 4u) ? 1 : -1]), /**< Reject incompatible
-                                                             publication cells. */
-};
-
 /** @brief Maximum number of retained events; overflow is explicitly counted. */
 #define ARTI_EVENT_CAPACITY                                                                        \
     4096u /**< Maximum retained tool events; excess reservations are counted as dropped. */
+#include "Arti_Types.h"
+#include "Os_HostTypes.h"
+/* SWS_BSW_00036: imported AUTOSAR major/minor release. */
+#if !defined(OS_AR_RELEASE_MAJOR_VERSION) || !defined(OS_AR_RELEASE_MINOR_VERSION)
+#error "Arti.h -> Os_HostTypes.h: missing AUTOSAR release"
+#elif (OS_AR_RELEASE_MAJOR_VERSION != 4U) || (OS_AR_RELEASE_MINOR_VERSION != 10U)
+#error "Arti.h -> Os_HostTypes.h: incompatible AUTOSAR release"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 /** Retained tool event; read payloads only after OS shutdown/quiescence, not from reservation
  * count. */
 typedef struct {
@@ -39,7 +36,7 @@ typedef struct {
     uint8_t address_valid; /**< Nonzero when event_address carries captured native address bits. */
     uint32_t service_status; /**< Captured service result when status_valid is nonzero. */
     uint8_t status_valid; /**< Nonzero when service_status distinguishes a result from an error. */
-    volatile ArtiAtomic32
+    volatile Arti_Atomic32Type
         published; /**< Atomic publication flag, zero until all slot payload fields are written. */
 } Arti_Event;
 /** Actor-local lossless native address and service-status side data for standard uint32 event
@@ -50,8 +47,6 @@ typedef struct {
     uint32_t service_status; /**< Captured service result for the next recorded event. */
     uint8_t status_valid;    /**< Nonzero when service_status is meaningful. */
 } Arti_AddressCapture;
-#define OS_START_SEC_CODE
-#include "Os_MemMap.h"
 /** @brief Lossless x64 side data for standard uint32 pointer payloads.
  * @param[in] address Native address bits captured without dereferencing the address.
  * @par Return
@@ -113,16 +108,22 @@ OS_MEMMAP extern Arti_Event Arti_Events[ARTI_EVENT_CAPACITY];
 /* Native atomics require the host ABI's four-byte cell type. */
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-OS_MEMMAP extern volatile ArtiAtomic32 Arti_EventCount;
+OS_MEMMAP extern volatile Arti_Atomic32Type Arti_EventCount;
 
-OS_MEMMAP extern volatile ArtiAtomic32 Arti_EventsDropped;
+OS_MEMMAP extern volatile Arti_Atomic32Type Arti_EventsDropped;
 
-OS_MEMMAP extern volatile ArtiAtomic32 Arti_DevelopmentError;
+OS_MEMMAP extern volatile Arti_Atomic32Type Arti_DevelopmentError;
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 2.5 VIOLATION: published ARTI selectors retain their recorder-facing numeric
+ * representation. */
 #define ARTI_E_INIT_FAILED   0x01u /**< SWS_Arti_91002: ARTI initialization failure. */
 #define ARTI_E_PARAM_POINTER 0x02u /**< SWS_Arti_91002: invalid API output pointer. */
-#define ARTI_STOPWATCH_FLAT  0x00u /**< SWS_Arti_91000: stopwatch evaluation ignores nesting. */
+/* MR12 RULE 2.5 VIOLATION: published ARTI selectors retain their recorder-facing numeric
+ * representation. */
+#define ARTI_STOPWATCH_FLAT 0x00u /**< SWS_Arti_91000: stopwatch evaluation ignores nesting. */
+/* MR12 RULE 2.5 VIOLATION: published ARTI selectors retain their recorder-facing numeric
+ * representation. */
 #define ARTI_STOPWATCH_NESTED                                                                      \
     0x01u /**< SWS_Arti_91000: stopwatch evaluation accounts for nesting. */
 
@@ -149,7 +150,19 @@ OS_MEMMAP void Arti_Init(void);
  * Reentrancy: reentrant with separate outputs; the development-error publication is atomic.
  * Ownership: borrows versioninfo only until return, writes it when non-NULL and retains no pointer.
  */
-OS_MEMMAP void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo);
+OS_MEMMAP static inline void Arti_GetVersionInfo(Std_VersionInfoType *versioninfo)
+{
+    if (versioninfo != NULL) {
+        versioninfo->vendorID = 0u;
+        /* BSWGeneral Appendix A.2 fixes the module ID; vendor identity is unassigned. */
+        versioninfo->moduleID = ARTI_MODULE_ID;
+        versioninfo->sw_major_version = ARTI_SW_MAJOR_VERSION;
+        versioninfo->sw_minor_version = ARTI_SW_MINOR_VERSION;
+        versioninfo->sw_patch_version = ARTI_SW_PATCH_VERSION;
+    } else {
+        (void)InterlockedExchange(&Arti_DevelopmentError, (LONG)ARTI_E_PARAM_POINTER);
+    }
+}
 
 /** @brief Tool callback; arguments contain only captured values and literals.
  * @param[in] context Literal ARTI execution context.
@@ -178,6 +191,7 @@ OS_MEMMAP void Arti_Record(const char *context,
 /* The standard contract requires literal tokens here. Stringification retains
  * those identities without expanding a caller's unrelated macro definitions.
  * Each numeric argument is evaluated exactly once. */
+/* MR12 RULE 20.10 VIOLATION: trace emission retains class and event name construction. */
 /** Record standard literal ARTI identities with captured scalar payloads.
  * @param[in] context Literal execution-context token; stringified without evaluation.
  * @param[in] class_name Literal ARTI class token; stringified without evaluation.

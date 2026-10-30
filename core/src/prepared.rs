@@ -1041,9 +1041,12 @@ mod delivery_path_tests {
                 checked += 1;
             }
         }
-        assert_eq!(checked, 93);
+        assert_eq!(checked, 92);
         assert_eq!(seen, generated.keys().copied().collect());
         for original in &originals {
+            let status = original.get("integration/include/Ecu_Status.h").unwrap();
+            assert_eq!(status.relative_path, "runtime/host/include/Ecu_Status.h");
+            assert!(!original.contains_key("integration/src/Ecu_Status.c"));
             let version = original.get("bsw/include/Autsaro_Version.h").unwrap();
             assert_eq!(
                 version.relative_path,

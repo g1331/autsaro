@@ -15,6 +15,8 @@ OS_MEMMAP static Os_ArtiScheduleStateType
 #endif
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const Os_ArtiScheduleStateType *const Os_ArtiScheduleTables =
     tables; /**< Fixed table state tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR

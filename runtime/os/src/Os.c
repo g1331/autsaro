@@ -466,6 +466,8 @@ OS_MEMMAP static StatusType implementation_GetEvent(TaskType TaskID, EventMaskRe
     return Os_BackendEvent(TaskID, 0u, Event);
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP StatusType Os_TargetInspectActivation(TaskType id, Os_ActivationInfoType *info)
 {
     Os_StackCheck();

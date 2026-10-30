@@ -78,6 +78,16 @@ fn software_versions_are_published_by_the_selected_description_and_manual() {
             manual.contains(owner),
             "{module}: missing owner documentation"
         );
+        if matches!(module, "Arti" | "Os") {
+            let owns_arti_types = implementation.descendants().any(|node| {
+                node.has_tag_name("SHORT-LABEL") && node.text() == Some("Arti_Types.h")
+            });
+            assert_eq!(
+                owns_arti_types,
+                module == "Arti",
+                "{module}: ARTI type owner"
+            );
+        }
         assert!(
             manual.contains(&format!("Implementation version: `{expected}`")),
             "{module}"

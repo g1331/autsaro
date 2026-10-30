@@ -15,6 +15,8 @@
  */
 #define DET_START_SEC_VAR_CLEARED_8
 #include "Det_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit TLS mapping requires file-static scope under SWS_MemMap_00023.
+ */
 DET_VAR_CLEARED_8 static __thread boolean
     reporting_development; /**< Per-thread recursion boundary; never reset. */
 #define DET_STOP_SEC_VAR_CLEARED_8

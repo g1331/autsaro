@@ -49,6 +49,8 @@ static boolean monitoring COM_VAR_CLEARED; /**< Rx deadline monitoring enabled; 
 static boolean reception_before_main
     COM_VAR_CLEARED; /**< Receive precedes this main tick; Init resets. */
 /* A context is delivering a notification; never reset, so it outlives a reinitialization. */
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 static boolean publishing COM_VAR_CLEARED; /**< Callback in flight; Init preserves. */
 #define COM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Com_MemMap.h"
@@ -171,11 +173,10 @@ static COM_CODE void Com_Publish(void)
 static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
 {
     boolean valid = FALSE;
-    uint16 index;
     if ((config != NULL_PTR) && (config->pdus != NULL_PTR) && (config->pdu_count > 0u) &&
         (config->pdu_count <= COM_MAX_PDUS)) {
         valid = TRUE;
-        for (index = 0u; index < config->pdu_count; ++index) {
+        for (uint16 index = 0u; index < config->pdu_count; ++index) {
             uint16 previous;
             const Com_PduConfigType *pdu = &config->pdus[index];
             if (((pdu->receive == TRUE) && ((config->receive_notification == NULL_PTR) ||
@@ -198,12 +199,11 @@ static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
 COM_CODE void Com_Init(const Com_ConfigType *config)
 {
     const boolean valid = Com_ValidConfig(config);
-    uint16 index;
     SchM_Enter_Com_COM_STATE();
     Com_Reset();
     if (valid == TRUE) {
         com_configuration = config;
-        for (index = 0u; index < config->pdu_count; ++index) {
+        for (uint16 index = 0u; index < config->pdu_count; ++index) {
             signal_values[index] = config->pdus[index].initial_value;
         }
     }
@@ -215,6 +215,8 @@ COM_CODE void Com_DeInit(void)
     Com_Reset();
     SchM_Exit_Com_COM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 COM_CODE Com_StatusType Com_GetStatus(void)
 {
     Com_StatusType status;
@@ -275,6 +277,8 @@ COM_CODE void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initia
     }
     SchM_Exit_Com_COM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 COM_CODE void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId)
 {
     SchM_Enter_Com_COM_STATE();
@@ -294,6 +298,8 @@ COM_CODE void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId)
     }
     SchM_Exit_Com_COM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 COM_CODE void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId)
 {
     SchM_Enter_Com_COM_STATE();
@@ -368,6 +374,8 @@ COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduI
     SchM_Exit_Com_COM_STATE();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId)
 {
     uint8 bytes[COM_PDU_BYTES];

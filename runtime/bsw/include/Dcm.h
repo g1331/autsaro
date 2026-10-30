@@ -19,7 +19,9 @@
 #error "Dcm.h -> ComStack_Types.h: incompatible AUTOSAR release"
 #endif
 #include "Rte_Dcm_Type.h"
-/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate.
+ * MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
 #define DCM_MODULE_ID 53u
 #define DCM_START_SEC_CODE
 #include "Dcm_MemMap.h"

@@ -34,7 +34,7 @@ R21.3与R22.1均为Required，C99适用（主文印刷167、172／PDF175、180�
 
 非user_stack线程的__nptl_deallocate_stack走queue_stack；缓存回收才经__nptl_free_stacks／_dl_deallocate_tls释放DTV。源码默认阈值40MiB可调，不是运行峰值保证。join和项目执行栈munmap不等于已free全部bootstrap／TLS；当前进程期Task／controller／dispatcher永久停车后由_exit结束，操作系统回收地址空间不等于R22.1的显式释放。因此R21.3的实际用途及这条R22.1释放差距仍需处置；不能由正确的observer wait→close或D4.13顺序结论覆盖。
 
-已有正常ELF没有直接calloc/malloc导入；LD_DEBUG以ecu_probe为reference打印的分配器binding来自lookup_malloc_symbol(main_map,...)，不作为项目直接调用或每次分配事件证明。需区分exec之前的owner Python与之后的实际ELF，源码闭包和真实绑定共同使用；普通／检测器各守自己的身份。原D4.12提案明确不扩其他规则，[针对Linux这两条的具体补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6401003340)仍待人类项目决定，不建Accepted ADR、批准表或MR12，不外推Windows。给actor静态汽车缓冲、只设bootstrap大小或等进程退出都不能消除这里的calloc／释放义务；真正改为调用方栈并退休所有相关线程还须重证guard、信号、restart及关闭合同。
+已有正常ELF没有直接calloc/malloc导入；LD_DEBUG以ecu_probe为reference打印的分配器binding来自lookup_malloc_symbol(main_map,...)，不作为项目直接调用或每次分配事件证明。需区分exec之前的owner Python与之后的实际ELF，源码闭包和真实绑定共同使用；普通／检测器各守自己的身份。原 D4.12 提案及[Linux 两条的补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6401003340)现由 [ADR 0025 的主机动态设施类别](native-facilities/storage-interrupts.md#主机动态设施类别偏离)接受；按其目标、来源和生命周期范围保留真实违反，不外推 Windows provider 内部。给actor静态汽车缓冲、只设bootstrap大小或等进程退出都不能消除这里的calloc／释放义务；真正改为调用方栈并退休所有相关线程还须重证guard、信号、restart及关闭合同。
 
 ## 声明宏与表达式参数
 
@@ -87,3 +87,7 @@ Os_BackendState的未知内核状态仍返回E_OS_STATE且不写调用方输出�
 R16.4的default还须在break前有语句或说明注释（主文印刷132／PDF140）。Ecu_StatusName的INTERNAL预置在switch外，单独空break不满足该要求；default现显式赋值INTERNAL，编码属性另拒绝无说明的空default。此赋值位置保持实际映射，不能以名字行为测试通过代替布局核查。
 
 R2.1还须与上述clause终结同时满足（Required，主文印刷39–41／PDF47–49，AMD2追加C11）。native_task_state、Os_ArtiTask／Service的无条件失败断言，以及Os_Time动作分派中的致命关闭，原来使其后的break不可达；当前clause只记录valid为FALSE并break，switch后才执行原断言／关闭。正常事件、服务调用和动作顺序不变，失败仍在后续观察／报告之前停止；断言返回时的SUSPENDED后备保留。Os_ArtiService中StartOS／ShutdownOS的条件断言后仍有正常分支，因此其共同break可达，不能用过宽词法判据一并改写。源属性仅拒绝clause内紧邻break的无条件致命调用；Linux非法Task／service选择另由真实glibc断言和移除断言的副本观察，不扩张为Windows断言provider或整个R2.1完成。
+
+## 回调的 const 建议
+
+实际回调 ABI 与汇编参数的限定裁决见[语法与原始诊断](../bsw-general/language-tokens.md)。

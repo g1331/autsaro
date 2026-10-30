@@ -243,6 +243,7 @@ static DCM_CODE boolean Dcm_IsAvailability(uint16 did)
     return (((did & DCM_DID_FAMILY) == DCM_OBD_DATA) || ((did & DCM_DID_FAMILY) == DCM_OBD_INFO)) &&
            ((did % DCM_OBD_BLOCK) == 0u);
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
 {
     SchM_Enter_Dcm_DCM_STATE();
@@ -277,6 +278,8 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
     SchM_Exit_Dcm_DCM_STATE();
     Dcm_Publish();
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 DCM_CODE Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel)
 {
     SchM_Enter_Dcm_DCM_STATE();
@@ -286,6 +289,8 @@ DCM_CODE Std_ReturnType Dcm_GetSecurityLevel(Dcm_SecLevelType *SecLevel)
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 DCM_CODE Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType)
 {
     SchM_Enter_Dcm_DCM_STATE();
@@ -295,6 +300,8 @@ DCM_CODE Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType)
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 DCM_CODE Std_ReturnType Dcm_ResetToDefaultSession(void)
 {
     SchM_Enter_Dcm_DCM_STATE();
@@ -311,6 +318,8 @@ DCM_CODE Std_ReturnType Dcm_ResetToDefaultSession(void)
     Dcm_Publish();
     return E_OK;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 DCM_CODE Std_ReturnType Dcm_SetActiveDiagnostic(boolean active)
 {
     SchM_Enter_Dcm_DCM_STATE();
@@ -320,6 +329,7 @@ DCM_CODE Std_ReturnType Dcm_SetActiveDiagnostic(boolean active)
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
                                                 const PduInfoType *info,
                                                 PduLengthType TpSduLength,
@@ -352,6 +362,7 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
     SchM_Exit_Dcm_DCM_STATE();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
                                           const PduInfoType *info,
                                           PduLengthType *bufferSizePtr)
@@ -376,6 +387,7 @@ DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
     SchM_Exit_Dcm_DCM_STATE();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result)
 {
     SchM_Enter_Dcm_DCM_STATE();
@@ -655,6 +667,7 @@ static DCM_CODE void Dcm_TransmitResponse(void)
         SchM_Exit_Dcm_DCM_STATE();
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE void Dcm_MainFunction(void)
 {
     boolean owner = FALSE;
@@ -687,6 +700,7 @@ DCM_CODE void Dcm_MainFunction(void)
         Dcm_Publish();
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
                                           const PduInfoType *info,
                                           const RetryInfoType *retry,
@@ -735,6 +749,7 @@ DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
     SchM_Exit_Dcm_DCM_STATE();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result)
 {
     SchM_Enter_Dcm_DCM_STATE();
@@ -758,11 +773,14 @@ static DCM_CODE void Dcm_Mode(uint8 NetworkId, uint8 mode)
     }
     SchM_Exit_Dcm_DCM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE void Dcm_ComM_NoComModeEntered(uint8 NetworkId) { Dcm_Mode(NetworkId, DCM_NO_COM); }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE void Dcm_ComM_SilentComModeEntered(uint8 NetworkId)
 {
     Dcm_Mode(NetworkId, DCM_SILENT_COM);
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE void Dcm_ComM_FullComModeEntered(uint8 NetworkId) { Dcm_Mode(NetworkId, DCM_FULL_COM); }
 #define DCM_STOP_SEC_CODE
 #include "Dcm_MemMap.h"

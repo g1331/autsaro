@@ -287,7 +287,10 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "<SHORT-NAME>{partition}_CALLOUT_CODE</SHORT-NAME>"
         )));
         for (file, bytes) in produced {
-            // Static BSW and host headers come from the repository runtime below.
+            let installed = directory.join(&file);
+            std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
+            std::fs::write(installed, &bytes).unwrap();
+            // Keep the independent producer source path alongside the actual delivery.
             if let Some(file) = file
                 .strip_prefix("generated/")
                 .filter(|file| file.starts_with("include/") || *file == "src/Rte.c")
@@ -297,9 +300,6 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
                 std::fs::write(target, bytes).unwrap();
             }
         }
-        let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap();
         let settings = tooling::execution_settings();
         let mut compiler = std::process::Command::new(&settings.compiler);
         compiler.current_dir(&directory).args([
@@ -310,14 +310,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "-pedantic",
             "-Iinclude",
         ]);
-        for include in [
-            "runtime/ecu/include",
-            "runtime/os/include",
-            "runtime/bsw/include",
-            "runtime/host/include",
-        ] {
-            compiler.arg("-I").arg(repository.join(include));
-        }
+        tooling::project_includes(&mut compiler, &directory);
         compiler.args(["-c", "src/Rte.c", "-o", "Rte.o"]);
         let output = tooling::run_public_command(
             &mut compiler,
@@ -397,6 +390,7 @@ fn generated_rte_com_header_links_independent_handle_callbacks_and_real_dispatch
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let executable = tooling::native_binary(&scratch.0, "rte-com-consumer");
     let mut compiler = tooling::c_compiler();
+    tooling::project_includes(&mut compiler, &scratch.0);
     compiler
         .current_dir(&scratch.0)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
@@ -456,6 +450,7 @@ fn generated_schm_lifecycle_refuses_misordered_repeated_and_foreign_calls() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let executable = tooling::native_binary(&scratch.0, "schm-lifecycle");
     let mut compiler = tooling::c_compiler();
+    tooling::project_includes(&mut compiler, &scratch.0);
     compiler
         .current_dir(&scratch.0)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
@@ -661,6 +656,7 @@ fn generated_rte_unconnected_and_first_publication_preserve_values_and_outputs()
         );
         assert!(output.status.success(), "{output:?}");
         let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
         compiler
             .current_dir(&scratch.0)
             .args([
@@ -701,6 +697,86 @@ fn generated_rte_unconnected_and_first_publication_preserve_values_and_outputs()
 }
 
 #[test]
+fn schm_headers_preserve_c_linkage_for_cpp_consumers() {
+    let scratch = Scratch::new();
+    for (path, bytes) in prepared_pipeline_files(&build(&inputs()).unwrap()) {
+        let path = scratch.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    let headers = "#include \"SchM_Can.h\"\n#include \"SchM_Dcm.h\"\n#include \"SchM_BswM.h\"\n";
+    let consumer = scratch.0.join("schm-consumer.cpp");
+    let provider = scratch.0.join("schm-provider.c");
+    std::fs::write(
+        &consumer,
+        format!("{headers}{headers}extern \"C\" int observed;\nint main() {{ Can_MainFunction_Read(); SchM_Enter_Dcm_DCM_STATE(); BswM_MainFunction(); return observed == 7 ? 0 : 1; }}\n"),
+    )
+    .unwrap();
+    std::fs::write(
+        &provider,
+        format!("{headers}int observed;\nvoid Can_MainFunction_Read(void) {{ observed |= 1; }}\nvoid SchM_Enter_Dcm_DCM_STATE(void) {{ observed |= 2; }}\nvoid BswM_MainFunction(void) {{ observed |= 4; }}\n"),
+    )
+    .unwrap();
+    let mut objects = Vec::new();
+    for (source, language, standard) in [
+        (&provider, "c", "-std=c99"),
+        (&consumer, "c++", "-std=c++11"),
+    ] {
+        let object = source.with_extension("o");
+        let mut compiler = tooling::c_compiler();
+        compiler
+            .current_dir(&scratch.0)
+            .args([
+                "-x",
+                language,
+                standard,
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                "-Igenerated/include",
+                "-Ibsw/include",
+                "-Iintegration/include",
+                "-Ios/include",
+                "-c",
+            ])
+            .arg(source)
+            .arg("-o")
+            .arg(&object);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            "compile-schm-linkage",
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{output:?}");
+        objects.push(object);
+    }
+    let executable = tooling::native_binary(&scratch.0, "schm-linkage");
+    let mut compiler = tooling::c_compiler();
+    // TSan C++ call cleanup requires the C++ personality runtime.
+    compiler
+        .args(&objects)
+        .arg("-lstdc++")
+        .arg("-o")
+        .arg(&executable);
+    let output = tooling::run_public_command(
+        &mut compiler,
+        &scratch.0,
+        "link-schm-linkage",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(output.status.success(), "{output:?}");
+    let output = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        &scratch.0,
+        "run-schm-linkage",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(output.status.success(), "{output:?}");
+}
+
+#[test]
 fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases() {
     // Verifies: SWS_Rte_01005, SWS_Rte_01006, SWS_Rte_02751, SWS_Rte_05078
     // Verifies: SWS_Rte_06713, SWS_Rte_07120, SWS_Rte_07124, SWS_Rte_07194
@@ -716,6 +792,7 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
         let path = scratch.0.join(format!("{label}.c"));
         std::fs::write(&path, source).unwrap();
         let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
         compiler
             .current_dir(&scratch.0)
             .args([
@@ -996,7 +1073,7 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
 #[test]
 fn bsw_description_native_widths_and_added_api_signatures_match_public_headers() {
     let plan = build(&inputs()).unwrap();
-    let files = prepared_pipeline_files(&plan);
+    let files = prepared_pipeline_files_for_target(&plan, tooling::native_target());
     let scratch = Scratch::new();
     for (path, bytes) in &files {
         let target = scratch.0.join(path);
@@ -1073,15 +1150,16 @@ LSduR_PBConfigIdType (*routing_configuration)(void) = LSduR_GetConfigurationId;
         "-Wextra",
         "-Werror",
         "-pedantic",
-        "-Igenerated/include",
-        "-Ibsw/include",
-        "-Ios/include",
-        "-Iintegration/include",
         "-c",
         "consumer.c",
         "-o",
         "consumer.o",
     ]);
+    let target: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(scratch.0.join("target.json")).unwrap()).unwrap();
+    for path in target["includePaths"].as_array().unwrap() {
+        compiler.arg("-I").arg(path.as_str().unwrap());
+    }
     let output = tooling::run_public_command(
         &mut compiler,
         &scratch.0,
@@ -1194,6 +1272,9 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
                         .all(|byte| byte.is_ascii_alphanumeric() || b" _*".contains(&byte))
             });
             if function
+                || line.starts_with("SCHM_CAN_LINKAGE ")
+                || line.starts_with("SCHM_DCM_LINKAGE ")
+                || line.starts_with("SCHM_BSWM_LINKAGE ")
                 || line.starts_with(&prefix)
                 || line.starts_with(&format!("RTE_{module}_CODE "))
                 || line.starts_with("RTE_Rte_CODE ")
@@ -1203,7 +1284,11 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
                 declaration.push_str(line.trim());
                 declaration.push(' ');
                 if declaration.contains(';') {
-                    let prototype = declaration.trim();
+                    let prototype = declaration
+                        .trim()
+                        .trim_start_matches("SCHM_CAN_LINKAGE ")
+                        .trim_start_matches("SCHM_DCM_LINKAGE ")
+                        .trim_start_matches("SCHM_BSWM_LINKAGE ");
                     let prototype = prototype
                         .strip_prefix(&prefix)
                         .unwrap_or(prototype)
@@ -1231,10 +1316,22 @@ fn bsw_function_declarations_preserve_configured_code_placement() {
                 }
             }
         }
+        if header == "SchM_Dcm.h" {
+            for symbol in [
+                "SchM_Switch_Dcm_DcmDiagnosticSessionControl",
+                "SchM_Mode_Dcm_DcmDiagnosticSessionControl",
+            ] {
+                assert!(
+                    symbols.iter().any(|found| found == symbol),
+                    "{header}: missing {symbol}"
+                );
+            }
+        }
         assert!(!symbols.is_empty(), "{header}");
         std::fs::write(directory.join("consumer.c"), source).unwrap();
         let object = directory.join("consumer.o");
         let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
         compiler.current_dir(&directory).args([
             "-std=c99",
             "-Wall",
@@ -1307,6 +1404,7 @@ StatusType OsService_SystemCounter_GetElapsedValue(CounterType CounterID,
     .unwrap();
     let object = directory.join("consumer.o");
     let mut compiler = tooling::c_compiler();
+    tooling::project_includes(&mut compiler, &scratch.0);
     compiler
         .current_dir(&directory)
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"]);
@@ -1380,19 +1478,15 @@ fn component_application_definitions_preserve_configured_sections() {
     for (component, objects, functions) in [
         (
             "Ingress",
-            &["committed"][..],
+            &["ingress_committed"][..],
             &["Ingress_Periodic", "Ingress_ReadData"][..],
         ),
         (
             "Process",
-            &["committed"][..],
+            &["process_committed"][..],
             &["Process_Periodic", "Process_Transform"][..],
         ),
-        (
-            "Observe",
-            &["observed", "service_value", "service_state"][..],
-            &["Observe_Periodic"][..],
-        ),
+        ("Observe", &[][..], &["Observe_Periodic"][..]),
     ] {
         let source_path = scratch.0.join(format!("app/{component}/{component}.c"));
         let source = std::fs::read_to_string(&source_path).unwrap();
@@ -1440,6 +1534,14 @@ fn component_application_definitions_preserve_configured_sections() {
         let output = compile(&source_path, &object);
         assert!(output.status.success(), "{component}: {output:?}");
         let sections = tooling::symbol_sections(&tooling::execution_settings().objdump, &object);
+        if objects.is_empty() {
+            assert!(
+                !sections
+                    .iter()
+                    .any(|(_, section)| section == ".bss.application_contract"),
+                "{component}: scratch outputs must not allocate persistent mapped storage: {sections:?}"
+            );
+        }
         for (names, section) in [
             (objects, ".bss.application_contract"),
             (functions, ".text.application_contract"),

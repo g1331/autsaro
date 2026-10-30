@@ -61,16 +61,67 @@ void ShutdownHook(StatusType Error)
 #error Memory mapping state leaked from a closed section
 #endif
 
-/* Only the real public prototype supplies this independent definition's attribute. */
-StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask)
+static uint32 service_step;  /**< Independent observation of the inline service call order. */
+static uint32 service_error; /**< Sticky fixture mismatch; checked before successful exit. */
+
+sint32 Os_ArtiServiceEnter(void)
 {
-    (void)TaskID;
-    (void)Mask;
+    if (service_step != 0u) {
+        service_error = 1u;
+    }
+    service_step = 1u;
+    return 1;
+}
+
+void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
+{
+    if (service != OSServiceId_SetEvent) {
+        service_error = 1u;
+    }
+    if (returning == 0) {
+        if ((service_step != 1u) || (parameter != 3u)) {
+            service_error = 1u;
+        }
+        service_step = 2u;
+    } else {
+        if ((service_step != 4u) || (parameter != E_OK)) {
+            service_error = 1u;
+        }
+        service_step = 5u;
+    }
+}
+
+StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask)
+{
+    if ((service_step != 2u) || (TaskID != 3u) || (Mask != 0x10u)) {
+        service_error = 1u;
+    }
+    service_step = 3u;
     return E_OK;
+}
+
+void Arti_CaptureServiceStatus(uint32_t status)
+{
+    if ((service_step != 3u) || (status != E_OK)) {
+        service_error = 1u;
+    }
+    service_step = 4u;
+}
+
+void Os_ArtiServiceLeave(void)
+{
+    if (service_step != 5u) {
+        service_error = 1u;
+    }
+    service_step = 6u;
 }
 
 int main(void)
 {
+    StatusType (*volatile set_event)(TaskType, EventMaskType) = &SetEvent;
+    if ((set_event(3u, 0x10u) != E_OK) || (service_step != 6u) || (service_error != 0u)) {
+        return 4;
+    }
     if (mapped_cleared != 0u || mapped_initialized != 0x203u ||
         mapped_reference != &mapped_initialized || *mapped_reference != 0x203u ||
         mapped_actor != 0u) {

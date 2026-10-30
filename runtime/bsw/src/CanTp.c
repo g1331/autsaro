@@ -761,6 +761,7 @@ static CANTP_CODE void CanTp_Run(boolean send)
         }
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr)
 {
     SchM_Enter_CanTp_CANTP_STATE();
@@ -778,6 +779,7 @@ CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr)
     }
     SchM_Exit_CanTp_CANTP_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 CANTP_CODE void CanTp_Shutdown(void)
 {
     SchM_Enter_CanTp_CANTP_STATE();
@@ -785,6 +787,7 @@ CANTP_CODE void CanTp_Shutdown(void)
     CanTp_Reset(); /* No notification (SWS_CanTp_00200). */
     SchM_Exit_CanTp_CANTP_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 CANTP_CODE Std_ReturnType CanTp_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -865,6 +868,7 @@ CANTP_CODE void Ecu_CanTpReceptionBeforeMain(boolean pending)
     receive_order = pending ? CANTP_RECEIVE_BEFORE_MAIN : CANTP_RECEIVE_AFTER_MAIN;
     SchM_Exit_CanTp_CANTP_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
 {
     uint8 error = 0u;
@@ -895,6 +899,7 @@ CANTP_CODE void CanTp_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfo
     CanTp_Report(CANTP_SID_RX_INDICATION, error);
     CanTp_Run(TRUE);
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 CANTP_CODE void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result)
 {
     SchM_Enter_CanTp_CANTP_STATE();
@@ -916,6 +921,7 @@ CANTP_CODE void CanTp_TxConfirmation(PduIdType TxPduId, Std_ReturnType result)
      * waits for the main function, as STmin 0 allows. */
     CanTp_Run(FALSE);
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 CANTP_CODE void CanTp_MainFunction(void)
 {
     uint8 tx_error = 0u;

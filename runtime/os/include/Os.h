@@ -5,6 +5,7 @@
 #include "Os_Types.h"
 #include "Rte_Os_Type.h"
 #include "Os_Hooks.h"
+#include "Os_Service.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
 #if !defined(RTE_AR_RELEASE_MAJOR_VERSION) || !defined(RTE_AR_RELEASE_MINOR_VERSION)
 #error "Os.h -> Rte_Os_Type.h: missing AUTOSAR release"
@@ -15,6 +16,7 @@
  * deliberately consumes a legacy file-scope semicolon in strict C99. It has
  * no object, function, configuration or argument-evaluation effect. R2.4
  * Advisory: this incomplete tag exists solely for the required interface. */
+/* MR12 RULE 2.5 VIOLATION: OS 7.1.2.1 requires this no-effect compatibility construction macro. */
 /** Declare the standard Task spelling (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured Task C identifier; not evaluated.
  * @return An incomplete compatibility tag declaration, with no runtime object or evaluation.
@@ -23,6 +25,7 @@
  * applicable; no runtime operation. Ownership: declares no storage and retains no pointer.
  */
 #define DeclareTask(identifier) struct Os_DeclarationCompatibility
+/* MR12 RULE 2.5 VIOLATION: OS 7.1.2.1 requires this no-effect compatibility construction macro. */
 /** Declare the standard resource spelling (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured resource C identifier; not evaluated.
  * @return An incomplete compatibility tag declaration, with no runtime object or evaluation.
@@ -31,6 +34,7 @@
  * applicable; no runtime operation. Ownership: declares no storage and retains no pointer.
  */
 #define DeclareResource(identifier) struct Os_DeclarationCompatibility
+/* MR12 RULE 2.5 VIOLATION: OS 7.1.2.1 requires this no-effect compatibility construction macro. */
 /** Declare the standard event spelling (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured event C identifier; not evaluated.
  * @return An incomplete compatibility tag declaration, with no runtime object or evaluation.
@@ -39,6 +43,7 @@
  * applicable; no runtime operation. Ownership: declares no storage and retains no pointer.
  */
 #define DeclareEvent(identifier) struct Os_DeclarationCompatibility
+/* MR12 RULE 2.5 VIOLATION: OS 7.1.2.1 requires this no-effect compatibility construction macro. */
 /** Declare the standard Alarm spelling (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured Alarm C identifier; not evaluated.
  * @return An incomplete compatibility tag declaration, with no runtime object or evaluation.
@@ -51,6 +56,8 @@
  * when its generated identifier is a numeric macro (R20.10 Advisory: source
  * compatibility requires the same identifier for the body and its binding).
  * A preceding prototype also covers the normal definition-only use. */
+/* MR12 RULE 20.10 VIOLATION: configured task or ISR identifiers retain stable body symbols across
+ * translation units. */
 /** Define a standard Task entry body (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured entry C identifier; not evaluated at runtime.
  * @return A void entry prototype and definition head; follow it with the function body.
@@ -62,6 +69,8 @@
 #define TASK(identifier)                                                                           \
     OS_CODE void Os_TaskEntry_##identifier(void);                                                  \
     OS_CODE void Os_TaskEntry_##identifier(void)
+/* MR12 RULE 20.10 VIOLATION: configured task or ISR identifiers retain stable body symbols across
+ * translation units. */
 /** Refer to the native body for a configured Task.
  * @param[in] identifier Same configured C identifier used by the entry body macro.
  * @return Function designator for the corresponding native entry.
@@ -71,6 +80,10 @@
  * Ownership: does not invoke the body or transfer pointer ownership.
  */
 #define OS_TASK_ENTRY(identifier) Os_TaskEntry_##identifier
+/* MR12 RULE 2.5 VIOLATION: OSEK 13.3.3 requires the ISR definition macro; its mapping remains
+ * intact. */
+/* MR12 RULE 20.10 VIOLATION: configured task or ISR identifiers retain stable body symbols across
+ * translation units. */
 /** Define a standard Category 2 ISR entry body (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured entry C identifier; not evaluated at runtime.
  * @return A void entry prototype and definition head; follow it with the function body.
@@ -82,6 +95,10 @@
 #define ISR(identifier)                                                                            \
     OS_CODE void Os_IsrEntry_##identifier(void);                                                   \
     OS_CODE void Os_IsrEntry_##identifier(void)
+/* MR12 RULE 2.5 VIOLATION: the published ISR entry designator retains its configured body binding.
+ */
+/* MR12 RULE 20.10 VIOLATION: configured task or ISR identifiers retain stable body symbols across
+ * translation units. */
 /** Refer to the native body for a configured ISR.
  * @param[in] identifier Same configured C identifier used by the entry body macro.
  * @return Function designator for the corresponding native entry.
@@ -91,6 +108,7 @@
  * Ownership: does not invoke the body or transfer pointer ownership.
  */
 #define OS_ISR_ENTRY(identifier) Os_IsrEntry_##identifier
+/* MR12 RULE 2.5 VIOLATION: OSEK 13.6.5 requires this alarm-callback definition macro. */
 /** Define a standard Alarm callback entry body (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured entry C identifier; not evaluated at runtime.
  * @return A void entry prototype and definition head; follow it with the function body.
@@ -113,7 +131,20 @@
  * Reentrancy: non-reentrant (SWS_Os_00769); callers serialize mode selection.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
+OS_MEMMAP static inline StatusType ControlIdle(CoreIdType CoreID, IdleModeType IdleMode)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ControlIdle, (uint32)IdleMode, 0);
+    }
+    const StatusType result = Os_Implementation_ControlIdle(CoreID, IdleMode);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_ControlIdle, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** @brief R24-11 DRAFT query of whether StartOS has been called.
  * @return TRUE after entry to StartOS; FALSE before it or when the call is ignored.
@@ -133,7 +164,20 @@ OS_MEMMAP boolean isOsStarted(void);
  * Reentrancy: reentrant.
  * Ownership: none.
  */
-OS_MEMMAP CoreIdType GetCoreID(void);
+OS_MEMMAP static inline CoreIdType GetCoreID(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetCoreID, (uint32)0u, 0);
+    }
+    const CoreIdType result = Os_Implementation_GetCoreID();
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)E_OK);
+        Os_ArtiService(OSServiceId_GetCoreID, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -153,7 +197,18 @@ OS_MEMMAP CoreIdType GetCoreID(void);
  * different logical callers have separate nesting; same-caller pairs must remain balanced.
  * Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-OS_MEMMAP void EnableAllInterrupts(void);
+OS_MEMMAP static inline void EnableAllInterrupts(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_EnableAllInterrupts, (uint32)0u, 0);
+    }
+    Os_Implementation_EnableAllInterrupts();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_EnableAllInterrupts, 0u, 1);
+    }
+    Os_ArtiServiceLeave();
+}
 
 /** Mask all application interrupts. This pair does not support nesting.
  * @par Return
@@ -164,7 +219,18 @@ OS_MEMMAP void EnableAllInterrupts(void);
  * different logical callers have separate nesting; same-caller pairs must remain balanced.
  * Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-OS_MEMMAP void DisableAllInterrupts(void);
+OS_MEMMAP static inline void DisableAllInterrupts(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_DisableAllInterrupts, (uint32)0u, 0);
+    }
+    Os_Implementation_DisableAllInterrupts();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_DisableAllInterrupts, 0u, 1);
+    }
+    Os_ArtiServiceLeave();
+}
 
 /** Restore one nesting level of the caller's all-interrupt suspension.
  * @par Return
@@ -175,7 +241,18 @@ OS_MEMMAP void DisableAllInterrupts(void);
  * different logical callers have separate nesting; same-caller pairs must remain balanced.
  * Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-OS_MEMMAP void ResumeAllInterrupts(void);
+OS_MEMMAP static inline void ResumeAllInterrupts(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ResumeAllInterrupts, (uint32)0u, 0);
+    }
+    Os_Implementation_ResumeAllInterrupts();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ResumeAllInterrupts, 0u, 1);
+    }
+    Os_ArtiServiceLeave();
+}
 
 /** Mask all application interrupts; nesting with the All/OS suspend pairs is supported.
  * @par Return
@@ -186,7 +263,18 @@ OS_MEMMAP void ResumeAllInterrupts(void);
  * different logical callers have separate nesting; same-caller pairs must remain balanced.
  * Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-OS_MEMMAP void SuspendAllInterrupts(void);
+OS_MEMMAP static inline void SuspendAllInterrupts(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_SuspendAllInterrupts, (uint32)0u, 0);
+    }
+    Os_Implementation_SuspendAllInterrupts();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_SuspendAllInterrupts, 0u, 1);
+    }
+    Os_ArtiServiceLeave();
+}
 
 /** Restore one nesting level of the caller's Category 2 interrupt suspension.
  * @par Return
@@ -196,7 +284,18 @@ OS_MEMMAP void SuspendAllInterrupts(void);
  * masks. Reentrancy: different logical callers have separate nesting; same-caller pairs must remain
  * balanced. Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-OS_MEMMAP void ResumeOSInterrupts(void);
+OS_MEMMAP static inline void ResumeOSInterrupts(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ResumeOSInterrupts, (uint32)0u, 0);
+    }
+    Os_Implementation_ResumeOSInterrupts();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ResumeOSInterrupts, 0u, 1);
+    }
+    Os_ArtiServiceLeave();
+}
 
 /** Mask Category 2 application interrupts, preserving Category 1 delivery.
  * @par Return
@@ -206,7 +305,18 @@ OS_MEMMAP void ResumeOSInterrupts(void);
  * masks. Reentrancy: different logical callers have separate nesting; same-caller pairs must remain
  * balanced. Ownership: no pointer arguments; mask ownership stays with the logical caller.
  */
-OS_MEMMAP void SuspendOSInterrupts(void);
+OS_MEMMAP static inline void SuspendOSInterrupts(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_SuspendOSInterrupts, (uint32)0u, 0);
+    }
+    Os_Implementation_SuspendOSInterrupts();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_SuspendOSInterrupts, 0u, 1);
+    }
+    Os_ArtiServiceLeave();
+}
 
 /** Read the active logical Category 2 ISR, including its ErrorHook.
  * @return ISR vector identifier, or INVALID_ISR outside a Category 2 ISR.
@@ -215,7 +325,21 @@ OS_MEMMAP void SuspendOSInterrupts(void);
  * Reentrancy: reentrant; observes the active logical ISR.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP ISRType GetISRID(void);
+OS_MEMMAP static inline ISRType GetISRID(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetISRID, (uint32)0u, 0);
+    }
+    const ISRType result = Os_Implementation_GetISRID();
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)Os_ArtiAccessStatus());
+        Os_ArtiService(
+            OSServiceId_GetISRID, (Os_ArtiAccessValid() != 0) ? (uint32)result : UINT32_MAX, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Enable a known Category 2 source; optionally clear its real pending bit.
  * @param[in] ISRID Logical source/vector identifier.
@@ -228,7 +352,20 @@ OS_MEMMAP ISRType GetISRID(void);
  * Category 2 ISRs; mutations use the OS critical section. Ownership: scalar arguments are copied;
  * no application storage is retained.
  */
-OS_MEMMAP StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
+OS_MEMMAP static inline StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_EnableInterruptSource, (uint32)ISRID, 0);
+    }
+    const StatusType result = Os_Implementation_EnableInterruptSource(ISRID, ClearPending);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_EnableInterruptSource, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Disable a known Category 2 source, retaining any real pending edge.
  * @param[in] ISRID Logical source/vector identifier.
@@ -239,7 +376,20 @@ OS_MEMMAP StatusType EnableInterruptSource(ISRType ISRID, boolean ClearPending);
  * Category 2 ISRs; mutations use the OS critical section. Ownership: scalar arguments are copied;
  * no application storage is retained.
  */
-OS_MEMMAP StatusType DisableInterruptSource(ISRType ISRID);
+OS_MEMMAP static inline StatusType DisableInterruptSource(ISRType ISRID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_DisableInterruptSource, (uint32)ISRID, 0);
+    }
+    const StatusType result = Os_Implementation_DisableInterruptSource(ISRID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_DisableInterruptSource, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Clear a known Category 2 source's real pending bit without enabling it.
  * @param[in] ISRID Logical source/vector identifier.
@@ -250,7 +400,20 @@ OS_MEMMAP StatusType DisableInterruptSource(ISRType ISRID);
  * Category 2 ISRs; mutations use the OS critical section. Ownership: scalar arguments are copied;
  * no application storage is retained.
  */
-OS_MEMMAP StatusType ClearPendingInterrupt(ISRType ISRID);
+OS_MEMMAP static inline StatusType ClearPendingInterrupt(ISRType ISRID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ClearPendingInterrupt, (uint32)ISRID, 0);
+    }
+    const StatusType result = Os_Implementation_ClearPendingInterrupt(ISRID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_ClearPendingInterrupt, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Start a NONE-synchronized table at a positive relative delay.
  * @param[in] ScheduleTableID Configured table identifier.
@@ -261,7 +424,21 @@ OS_MEMMAP StatusType ClearPendingInterrupt(ISRType ISRID);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, TickType Offset);
+OS_MEMMAP static inline StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID,
+                                                         TickType Offset)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_StartScheduleTableRel, (uint32)ScheduleTableID, 0);
+    }
+    const StatusType result = Os_Implementation_StartScheduleTableRel(ScheduleTableID, Offset);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_StartScheduleTableRel, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Start at the next occurrence of an absolute counter value.
  * @param[in] ScheduleTableID Configured table identifier.
@@ -272,7 +449,21 @@ OS_MEMMAP StatusType StartScheduleTableRel(ScheduleTableType ScheduleTableID, Ti
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, TickType Start);
+OS_MEMMAP static inline StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
+                                                         TickType Start)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_StartScheduleTableAbs, (uint32)ScheduleTableID, 0);
+    }
+    const StatusType result = Os_Implementation_StartScheduleTableAbs(ScheduleTableID, Start);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_StartScheduleTableAbs, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Stop a running or reserved NEXT table and detach its successor.
  * @param[in] ScheduleTableID Configured table identifier.
@@ -282,7 +473,20 @@ OS_MEMMAP StatusType StartScheduleTableAbs(ScheduleTableType ScheduleTableID, Ti
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType StopScheduleTable(ScheduleTableType ScheduleTableID);
+OS_MEMMAP static inline StatusType StopScheduleTable(ScheduleTableType ScheduleTableID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_StopScheduleTable, (uint32)ScheduleTableID, 0);
+    }
+    const StatusType result = Os_Implementation_StopScheduleTable(ScheduleTableID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_StopScheduleTable, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Reserve a stopped table to follow the running source's final delay.
  * @param[in] ScheduleTableID_From Running source table.
@@ -305,8 +509,24 @@ OS_MEMMAP StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: caller retains output storage, borrowed until return and written only on success.
  */
-OS_MEMMAP StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
-                                            ScheduleTableStatusRefType ScheduleStatus);
+OS_MEMMAP static inline StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
+                                                          ScheduleTableStatusRefType ScheduleStatus)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetScheduleTableStatus, (uint32)ScheduleTableID, 0);
+    }
+    const StatusType result =
+        Os_Implementation_GetScheduleTableStatus(ScheduleTableID, ScheduleStatus);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_GetScheduleTableStatus,
+                       (result == E_OK) ? (uint32)*ScheduleStatus : UINT32_MAX,
+                       1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Start the configured OS in mode; successful startup never returns.
  * @param[in] Mode Static application mode (1 or 2).
@@ -318,7 +538,15 @@ OS_MEMMAP StatusType GetScheduleTableStatus(ScheduleTableType ScheduleTableID,
  * OS startup. Ownership: retains the configuration already published by Os_TargetPrepare; scalar
  * Mode is copied.
  */
-OS_MEMMAP void StartOS(AppModeType Mode);
+OS_MEMMAP static inline void StartOS(AppModeType Mode)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_StartOS, (uint32)Mode, 0);
+    }
+    Os_Implementation_StartOS(Mode);
+    Os_ArtiServiceLeave();
+}
 
 /** Close irreversibly; invoke ShutdownHook on the established control stack,
  * or on the startup caller before control resources exist.
@@ -330,7 +558,15 @@ OS_MEMMAP void StartOS(AppModeType Mode);
  * Reentrancy: shutdown admission is atomic; the first accepted close wins.
  * Ownership: no caller pointer is retained; accepted shutdown does not return.
  */
-OS_MEMMAP void ShutdownOS(StatusType Error);
+OS_MEMMAP static inline void ShutdownOS(StatusType Error)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ShutdownOS, (uint32)Error, 0);
+    }
+    Os_Implementation_ShutdownOS(Error);
+    Os_ArtiServiceLeave();
+}
 
 /** Read the automotive task selected by the actual kernel.
  * @param[out] TaskID Nonnull caller-owned output; INVALID_TASK if none is selected.
@@ -341,7 +577,20 @@ OS_MEMMAP void ShutdownOS(StatusType Error);
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-OS_MEMMAP StatusType GetTaskID(TaskRefType TaskID);
+OS_MEMMAP static inline StatusType GetTaskID(TaskRefType TaskID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetTaskID, (uint32)0u, 0);
+    }
+    const StatusType result = Os_Implementation_GetTaskID(TaskID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_GetTaskID, (result == E_OK) ? (uint32)*TaskID : UINT32_MAX, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Read the application mode selected by StartOS, including in global hooks.
  * @return Selected mode; zero before StartOS has selected a mode.
@@ -350,7 +599,22 @@ OS_MEMMAP StatusType GetTaskID(TaskRefType TaskID);
  * Reentrancy: reentrant; reads the selected startup mode.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP AppModeType GetActiveApplicationMode(void);
+OS_MEMMAP static inline AppModeType GetActiveApplicationMode(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetActiveApplicationMode, (uint32)0u, 0);
+    }
+    const AppModeType result = Os_Implementation_GetActiveApplicationMode();
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)Os_ArtiAccessStatus());
+        Os_ArtiService(OSServiceId_GetActiveApplicationMode,
+                       (Os_ArtiAccessValid() != 0) ? (uint32)result : UINT32_MAX,
+                       1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Query actual backend task state.
  * @param[in] TaskID Configured task identifier.
@@ -362,7 +626,20 @@ OS_MEMMAP AppModeType GetActiveApplicationMode(void);
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-OS_MEMMAP StatusType GetTaskState(TaskType TaskID, TaskStateRefType State);
+OS_MEMMAP static inline StatusType GetTaskState(TaskType TaskID, TaskStateRefType State)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetTaskState, (uint32)TaskID, 0);
+    }
+    const StatusType result = Os_Implementation_GetTaskState(TaskID, State);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_GetTaskState, (result == E_OK) ? (uint32)*State : UINT32_MAX, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Accept one activation request in Task or Category 2 ISR context.
  * @param[in] TaskID Configured task identifier.
@@ -372,7 +649,20 @@ OS_MEMMAP StatusType GetTaskState(TaskType TaskID, TaskStateRefType State);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType ActivateTask(TaskType TaskID);
+OS_MEMMAP static inline StatusType ActivateTask(TaskType TaskID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ActivateTask, (uint32)TaskID, 0);
+    }
+    const StatusType result = Os_Implementation_ActivateTask(TaskID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_ActivateTask, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Complete the current activation. Success never returns to the application.
  * @return E_OS_CALLEVEL, E_OS_RESOURCE or E_OS_STATE on rejection; success never returns.
@@ -394,7 +684,20 @@ OS_MEMMAP StatusType TerminateTask(void);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType ChainTask(TaskType TaskID);
+OS_MEMMAP static inline StatusType ChainTask(TaskType TaskID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ChainTask, (uint32)TaskID, 0);
+    }
+    const StatusType result = Os_Implementation_ChainTask(TaskID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_ChainTask, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Acquire a configured external resource using its static priority ceiling.
  * @param[in] ResID Resource accessible to this logical Task/ISR caller.
@@ -406,7 +709,20 @@ OS_MEMMAP StatusType ChainTask(TaskType TaskID);
  * Ownership: resource ownership belongs to the logical Task/ISR until matching release; no pointer
  * retained.
  */
-OS_MEMMAP StatusType GetResource(ResourceType ResID);
+OS_MEMMAP static inline StatusType GetResource(ResourceType ResID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetResource, (uint32)ResID, 0);
+    }
+    const StatusType result = Os_Implementation_GetResource(ResID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_GetResource, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Release the last external resource acquired by this logical Task/ISR caller.
  * @param[in] ResID Last owned resource, in LIFO order.
@@ -418,7 +734,20 @@ OS_MEMMAP StatusType GetResource(ResourceType ResID);
  * Ownership: resource ownership belongs to the logical Task/ISR until matching release; no pointer
  * retained.
  */
-OS_MEMMAP StatusType ReleaseResource(ResourceType ResID);
+OS_MEMMAP static inline StatusType ReleaseResource(ResourceType ResID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ReleaseResource, (uint32)ResID, 0);
+    }
+    const StatusType result = Os_Implementation_ReleaseResource(ResID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_ReleaseResource, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Explicitly release/reacquire the current task's internal resource.
  * @return E_OK, E_OS_CALLEVEL or E_OS_RESOURCE; no effect for a FULL task without an internal
@@ -429,7 +758,20 @@ OS_MEMMAP StatusType ReleaseResource(ResourceType ResID);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType Schedule(void);
+OS_MEMMAP static inline StatusType Schedule(void)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_Schedule, (uint32)0u, 0);
+    }
+    const StatusType result = Os_Implementation_Schedule();
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_Schedule, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Wait until any requested stored event is set; the current instance is retained.
  * @param[in] Mask Event predicate, including zero for an indefinite wait.
@@ -440,7 +782,20 @@ OS_MEMMAP StatusType Schedule(void);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType WaitEvent(EventMaskType Mask);
+OS_MEMMAP static inline StatusType WaitEvent(EventMaskType Mask)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_WaitEvent, (uint32)Mask, 0);
+    }
+    const StatusType result = Os_Implementation_WaitEvent(Mask);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_WaitEvent, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Clear stored bits owned by the current Extended task.
  * @param[in] Mask Bits to clear.
@@ -451,7 +806,20 @@ OS_MEMMAP StatusType WaitEvent(EventMaskType Mask);
  * Reentrancy: per-Task operation; independent Tasks may call concurrently, serialized by the OS.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType ClearEvent(EventMaskType Mask);
+OS_MEMMAP static inline StatusType ClearEvent(EventMaskType Mask)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_ClearEvent, (uint32)Mask, 0);
+    }
+    const StatusType result = Os_Implementation_ClearEvent(Mask);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_ClearEvent, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #define SetEvent Os_SetEvent /**< Standard name bound to the host-safe OS entry. */
@@ -466,7 +834,20 @@ OS_MEMMAP StatusType ClearEvent(EventMaskType Mask);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
+OS_MEMMAP static inline StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_SetEvent, (uint32)TaskID, 0);
+    }
+    const StatusType result = Os_Implementation_SetEvent(TaskID, Mask);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_SetEvent, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 /** Read the stored events of an active Extended task.
  * @param[in] TaskID Extended task identifier.
  * @param[out] Event Caller-owned non-null output; unchanged on rejection.
@@ -477,7 +858,20 @@ OS_MEMMAP StatusType Os_SetEvent(TaskType TaskID, EventMaskType Mask);
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-OS_MEMMAP StatusType GetEvent(TaskType TaskID, EventMaskRefType Event);
+OS_MEMMAP static inline StatusType GetEvent(TaskType TaskID, EventMaskRefType Event)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetEvent, (uint32)TaskID, 0);
+    }
+    const StatusType result = Os_Implementation_GetEvent(TaskID, Event);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_GetEvent, (result == E_OK) ? (uint32)*Event : UINT32_MAX, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Increment a software Counter and execute due Alarm actions.
  * @param[in] CounterID Configured software Counter.
@@ -487,7 +881,20 @@ OS_MEMMAP StatusType GetEvent(TaskType TaskID, EventMaskRefType Event);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType IncrementCounter(CounterType CounterID);
+OS_MEMMAP static inline StatusType IncrementCounter(CounterType CounterID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_IncrementCounter, (uint32)CounterID, 0);
+    }
+    const StatusType result = Os_Implementation_IncrementCounter(CounterID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_IncrementCounter, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Read a Counter's current modular value.
  * @param[in] CounterID Configured Counter.
@@ -498,7 +905,21 @@ OS_MEMMAP StatusType IncrementCounter(CounterType CounterID);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: caller retains result storage; borrowed until return, updated only on success.
  */
-OS_MEMMAP StatusType GetCounterValue(CounterType CounterID, TickRefType Value);
+OS_MEMMAP static inline StatusType GetCounterValue(CounterType CounterID, TickRefType Value)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetCounterValue, (uint32)CounterID, 0);
+    }
+    const StatusType result = Os_Implementation_GetCounterValue(CounterID, Value);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(
+            OSServiceId_GetCounterValue, (result == E_OK) ? (uint32)*Value : UINT32_MAX, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Read a modular elapsed value and update the prior sample.
  * @param[in] CounterID Configured Counter.
@@ -510,9 +931,23 @@ OS_MEMMAP StatusType GetCounterValue(CounterType CounterID, TickRefType Value);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: caller retains result storage; borrowed until return, updated only on success.
  */
-OS_MEMMAP StatusType GetElapsedValue(CounterType CounterID,
-                                     TickRefType Value,
-                                     TickRefType ElapsedValue);
+OS_MEMMAP static inline StatusType GetElapsedValue(CounterType CounterID,
+                                                   TickRefType Value,
+                                                   TickRefType ElapsedValue)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetElapsedValue, (uint32)CounterID, 0);
+    }
+    const StatusType result = Os_Implementation_GetElapsedValue(CounterID, Value, ElapsedValue);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(
+            OSServiceId_GetElapsedValue, (result == E_OK) ? (uint32)*ElapsedValue : UINT32_MAX, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Read immutable Alarm Counter properties.
  * @param[in] AlarmID Configured Alarm.
@@ -524,7 +959,24 @@ OS_MEMMAP StatusType GetElapsedValue(CounterType CounterID,
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-OS_MEMMAP StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
+OS_MEMMAP static inline StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetAlarmBase, (uint32)AlarmID, 0);
+    }
+    const StatusType result = Os_Implementation_GetAlarmBase(AlarmID, Info);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        if (result == E_OK) {
+            Os_ArtiAlarmBaseReturn(Info);
+        } else {
+            Os_ArtiService(OSServiceId_GetAlarmBase, UINT32_MAX, 1);
+        }
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Read ticks remaining until the active Alarm expires.
  * @param[in] AlarmID Configured Alarm.
@@ -536,7 +988,20 @@ OS_MEMMAP StatusType GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
  * critical section. Ownership: caller retains writable output storage; borrowed only until return
  * and unchanged on refusal.
  */
-OS_MEMMAP StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
+OS_MEMMAP static inline StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_GetAlarm, (uint32)AlarmID, 0);
+    }
+    const StatusType result = Os_Implementation_GetAlarm(AlarmID, Tick);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_GetAlarm, (result == E_OK) ? (uint32)*Tick : UINT32_MAX, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Start a relative Alarm.
  * @param[in] AlarmID Configured Alarm.
@@ -548,7 +1013,22 @@ OS_MEMMAP StatusType GetAlarm(AlarmType AlarmID, TickRefType Tick);
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType Cycle);
+OS_MEMMAP static inline StatusType SetRelAlarm(AlarmType AlarmID,
+                                               TickType Increment,
+                                               TickType Cycle)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_SetRelAlarm, (uint32)AlarmID, 0);
+    }
+    const StatusType result = Os_Implementation_SetRelAlarm(AlarmID, Increment, Cycle);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_SetRelAlarm, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Start an absolute Alarm; the current value expires only after a complete modulus.
  * @param[in] AlarmID Configured Alarm.
@@ -560,7 +1040,20 @@ OS_MEMMAP StatusType SetRelAlarm(AlarmType AlarmID, TickType Increment, TickType
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle);
+OS_MEMMAP static inline StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cycle)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_SetAbsAlarm, (uint32)AlarmID, 0);
+    }
+    const StatusType result = Os_Implementation_SetAbsAlarm(AlarmID, Start, Cycle);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_SetAbsAlarm, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Cancel an active Alarm.
  * @param[in] AlarmID Configured Alarm.
@@ -570,7 +1063,20 @@ OS_MEMMAP StatusType SetAbsAlarm(AlarmType AlarmID, TickType Start, TickType Cyc
  * Reentrancy: reentrant across Tasks and Category 2 ISRs; mutations use the OS critical section.
  * Ownership: scalar arguments are copied; no application storage is retained.
  */
-OS_MEMMAP StatusType CancelAlarm(AlarmType AlarmID);
+OS_MEMMAP static inline StatusType CancelAlarm(AlarmType AlarmID)
+{
+    const sint32 service_scope = Os_ArtiServiceEnter();
+    if (service_scope != 0) {
+        Os_ArtiService(OSServiceId_CancelAlarm, (uint32)AlarmID, 0);
+    }
+    const StatusType result = Os_Implementation_CancelAlarm(AlarmID);
+    if (service_scope != 0) {
+        Arti_CaptureServiceStatus((uint32)result);
+        Os_ArtiService(OSServiceId_CancelAlarm, (uint32)result, 1);
+    }
+    Os_ArtiServiceLeave();
+    return result;
+}
 
 /** Initialize application services during OS startup (OSEK OS 2.2.3 13.8.2.4).
  * @par Return

@@ -85,14 +85,13 @@ static boolean comm_publishing COMM_VAR_CLEARED;      /**< Publisher; Init prese
 static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config)
 {
     boolean valid = FALSE;
-    uint16 i;
     if ((config != NULL_PTR) && (config->users != NULL_PTR) && (config->user_count > 0u) &&
         (config->user_count <= COMM_USER_CAPACITY) && (config->request != NULL_PTR) &&
         (config->current != NULL_PTR) &&
         ((config->dcm_no == NULL_PTR) == (config->dcm_silent == NULL_PTR)) &&
         ((config->dcm_no == NULL_PTR) == (config->dcm_full == NULL_PTR))) {
         valid = TRUE;
-        for (i = 0u; i < config->user_count; ++i) {
+        for (uint16 i = 0u; i < config->user_count; ++i) {
             uint16 j;
             if (config->users[i] == COMM_NOT_USED_USER_ID) {
                 valid = FALSE;

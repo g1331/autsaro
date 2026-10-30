@@ -8,7 +8,9 @@ Windows补丁`0018-windows-thread-setup-errors.patch`按D4.7／R17.7检查Task�
 
 补丁`0019-windows-native-handoff-errors.patch`继续处置相同D4.7／R17.7义务：Task critical／yield、host中断发布、dispatcher及handler安装共同使用四个端口私有检查函数，验证mutex获取／释放、event发布／复位及无限yield等待；不改变锁或操作顺序。dispatcher的多对象WAIT_TIMEOUT继续等待，只有WAIT_OBJECT_0才能使用受保护状态；失败或abandoned结果停止OS，不能靠后续GetThreadContext成功冒充已取得mutex。现有控制线程承担停止，不新增状态／锁／分配。Windows回归保留真实正常／超时对照，逐类注入失败并与移除0019的变异比较；失败后同一actor继续调用原生端口时有独立终止哨兵，避免后续无关错误碰巧返回相同错误码。删除路径未启用的close／wait调用只作源码检查，不据此宣称运行验证。
 
-Linux actor的mapping成员按实际用途保存为unsigned char字节区间：guard偏移、ASan fiber底端及一次性栈入口直接在同一映射内计算，不再从void指针反复转换。`Os_HostCurrentStackRange`仍将真实映射地址转为uintptr_t供栈界限／ARTI消费者比较，不隐藏为符合：原R11.6（Required，主文页99／PDF107，TC2.22修正整数到void指针的描述）已随存储类型消除；mmap返回到字节指针的R11.5与地址到整数的R11.4是保留的Advisory违反（页97–98／PDF105–106，TC1限定对象指针、AMD2.60扩充stdint说明）。mmap保证页对齐，偏移和长度来自同一次映射，uintptr_t不截短地址，转换结果只用于数值边界检查，不转换回指针解引用；原生stack／ARTI和errno回收消费者验证这些约束。依据§6.2.3记录建议性违反及理由，不申请新的Required豁免。
+Linux actor 的字节映射与数值栈界限保留真实 R11.4／R11.5 Advisory 违反，
+其来源、限制与风险控制见[主机地址表示类别处置](#主机地址表示类别处置)。
+原 void mapping 引出的 R11.6 已随字节存储类型消除，不能将它与余下转换混同。
 
 `Os_PortRestartLanding`是保留Task-loop帧内的汇编续行点，不是按C原型调用的函数。该符号现在只在本对象内可见；C侧通过真正遵循调用ABI的`Os_PortRestartAddress`取得native PC：Linux为uintptr_t，Windows为RtlUnwindEx要求的void指针表示。叶函数在原`.os_code`内用RIP相对LEA返回RAX，保留其他寄存器及配对call/return，不需要C函数指针转整数或void指针。依据R11.1（Required，主文页93–94／PDF101–102；AMD2.58只修订隐式转换例外说明），不使用该条的新例外；实际native扩展仍按[平台扩展边界](../platform.md#c99-平台扩展的使用边界)的R1.2／D4.2／D4.3评估。原生restart验证10000次同一物理栈重入、拒绝与外来异常，并分别检查全局C入口和本地续行点的代码段身份；错误PC变异必须被实际restart成功判据拒绝。该边界仍依赖受控x64 ABI，Windows执行及硬件SHSTK按实际结果记录。
 
@@ -67,3 +69,29 @@ R21.6为Required；R22.5／R22.6为Mandatory（主文印刷176–177／PDF184–
 HostBatch读取STDIN_FILENO，HostIo及故障输出写STDOUT_FILENO／STDERR_FILENO；Linux事件由单个eventfd读写，栈范围查询只以O_RDONLY打开/proc/self/maps，Windows使用原生句柄。它们不构成FILE对象，也不能因此免除D4.7／D4.13及平台资源契约。R22.3明确指出相似执行环境设施可能适用；将其完整结论扩展到任意外部启动方式，仍需知道实际继承的输入／输出对象、访问模式与是否别名，不能由没有fopen或绿色CI推出。既有受管测试使用分离管道的证据只覆盖那些具体启动，不新增用户输出期限或任意文件重定向保证。
 
 R21.8的有效Required文本禁止abort／exit／_Exit／quick_exit（AMD2.81，印刷16／PDF23），当前C99适用。四份callback-role语料及双目标补丁后内核没有这些标识符或宏用途；ExitProcess最终走POSIX _exit或Win32入口，不能按名称相似冒充标准库函数，也不因此证明provider内部或任意退出路径符合。
+
+
+## 主机地址表示类别处置
+
+Linux 与 Windows 的接口、精确范围、风险控制和模式检查见[地址表示记录](addresses.md)。
+
+## 原生记录的身份索引
+
+`Os_StackSavedContext` 与 fault publication 原来以 `stack - stacks` 或 `record - stacks`
+选择并行数组槽。这些是自有指针算术，R18.4 为 Advisory，不能移交 SDK 或套用主机地址转换类别。
+两目标现复用 Os_Stack.h 的有界身份查找：只比较静态21槽的地址，命中后返回下标；
+NULL、外来对象和one-past地址返回容量哨兵。两个后端的上下文查询在取数组元素前拒绝哨兵；
+故障发布在读取record字段前原生停止。没有新增owner状态、存储或指针到整数转换。
+
+Os_ArtiStacks在两个后端均由静态C初始化绑定自己的stacks数组，地址在进程期不变；
+查找不读取可能尚未发布的record内容，原有注册、观察、故障发布的同步责任保持。
+这把索引职责留在原记录owner，不从新getter或额外业务调用制造用途。
+代价是至多21次地址比较，不声称硬实时预算或任意信号provider均已取证。
+
+实际ARTI消费者验证合法上下文的SP属于对应actor，并检查NULL、独立自动对象及one-past拒绝。
+现有变异入口增加错误接纳槽0与错误相邻槽两个对照，要求先编译成功，再由运行期身份观察拒绝；
+普通、检测器和Windows结果按各自源码身份在PR记录。旧分析的两处Linux R18.4及其他平台原始结果不改写。
+
+R22.10据AMD1的R22.8定义也涵盖用errno返回错误的非ISO函数。当前read／write／poll／nanosleep／sigtimedwait及write_bytes的errno检查均紧随失败返回，无中间调用；mapped_line只在read成功分支调用。固定addon未识别这些errno-setting接口，11处报告按实际调用闭包判误报；位置与原始身份留PR #389，不扩至其他errno使用。
+
+2026-10-30精确项目选择分别见[库／ARTI出口](retained-exports.md)、[OS预处理接口](retained-preprocessing.md)与[SDK名字恢复](retained-constructs.md)及[入口／trace构造](../../bsw-general/published-information.md#构造宏的字面入口绑定)。这些表不批准ErrorHook R18.6，亦不扩张既有宿主接口类别。

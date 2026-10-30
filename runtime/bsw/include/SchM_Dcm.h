@@ -12,8 +12,11 @@
 #error "SchM_Dcm.h -> Rte_Dcm_Type.h: incompatible AUTOSAR release"
 #endif
 #include "Rte.h"
+/** Preserve the C ABI for C++ consumers without conditional directives in mapped sections. */
 #ifdef __cplusplus
-extern "C" {
+#define SCHM_DCM_LINKAGE extern "C" /**< C ABI for C++ consumers. */
+#else
+#define SCHM_DCM_LINKAGE /**< C declarations already have C linkage. */
 #endif
 #define RTE_Rte_START_SEC_CODE
 #include "Rte_MemMap.h"
@@ -25,7 +28,7 @@ extern "C" {
  * Reentrancy: not reentrant within one context; concurrent contexts serialize.
  * Ownership: this context holds the area until its matching Exit.
  */
-RTE_Rte_CODE void SchM_Enter_Dcm_DCM_STATE(void);
+SCHM_DCM_LINKAGE RTE_Rte_CODE void SchM_Enter_Dcm_DCM_STATE(void);
 /** Leave the Dcm state area (SWS_Rte_07253).
  * @par Return
  * None.
@@ -34,7 +37,7 @@ RTE_Rte_CODE void SchM_Enter_Dcm_DCM_STATE(void);
  * Reentrancy: not reentrant within one context.
  * Ownership: releases this context's area.
  */
-RTE_Rte_CODE void SchM_Exit_Dcm_DCM_STATE(void);
+SCHM_DCM_LINKAGE RTE_Rte_CODE void SchM_Exit_Dcm_DCM_STATE(void);
 #define RTE_Rte_STOP_SEC_CODE
 #include "Rte_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -56,7 +59,7 @@ RTE_Rte_CODE void SchM_Exit_Dcm_DCM_STATE(void);
  * Ownership: application callbacks use call-local buffers, never live Rx/Tx
  * storage.
  */
-DCM_CODE void Dcm_MainFunction(void);
+SCHM_DCM_LINKAGE DCM_CODE void Dcm_MainFunction(void);
 #define DCM_STOP_SEC_CODE
 #include "Dcm_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -75,7 +78,7 @@ DCM_CODE void Dcm_MainFunction(void);
  * Reentrancy: reentrant; the Dcm publisher orders updates.
  * Ownership: None.
  */
-RTE_CODE Std_ReturnType
+SCHM_DCM_LINKAGE RTE_CODE Std_ReturnType
 SchM_Switch_Dcm_DcmDiagnosticSessionControl(Rte_ModeType_DcmDiagnosticSessionControl mode);
 /** Read the selected session mode.
  * @return Current mode.
@@ -84,10 +87,8 @@ SchM_Switch_Dcm_DcmDiagnosticSessionControl(Rte_ModeType_DcmDiagnosticSessionCon
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-RTE_CODE Rte_ModeType_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl(void);
+SCHM_DCM_LINKAGE RTE_CODE Rte_ModeType_DcmDiagnosticSessionControl
+SchM_Mode_Dcm_DcmDiagnosticSessionControl(void);
 #define RTE_Dcm_STOP_SEC_CODE
 #include "Rte_MemMap.h"
-#ifdef __cplusplus
-}
-#endif
 #endif

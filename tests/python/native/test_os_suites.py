@@ -100,7 +100,7 @@ class DependencyTests(unittest.TestCase):
 
     def test_status_switch_clauses_use_break_termination(self):
         for relative, name in [
-            ("runtime/host/src/Ecu_Status.c", "Ecu_StatusName"),
+            ("runtime/host/include/Ecu_Status.h", "Ecu_StatusName"),
             ("runtime/os/src/Os_Backend.c", "native_task_state"),
             ("runtime/os/src/Os_Backend.c", "Os_BackendState"),
             ("runtime/os/src/Os_Arti.c", "Os_ArtiTask"),

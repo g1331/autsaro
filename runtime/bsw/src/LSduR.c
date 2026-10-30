@@ -19,10 +19,10 @@ static const LSduR_PBConfigType *lsdur_configuration
 static LSDUR_CODE boolean LSduR_Valid(const LSduR_PBConfigType *config)
 {
     boolean valid = FALSE;
-    uint16 i;
     if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
         ((config->receive_count == 0u) || (config->receive != NULL_PTR)) &&
         ((config->transmit_count == 0u) || (config->transmit != NULL_PTR))) {
+        uint16 i;
         valid = TRUE;
         for (i = 0u; i < config->receive_count; ++i) {
             uint16 j;
@@ -75,6 +75,8 @@ LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr)
         SchM_Exit_LSduR_LSDUR_STATE();
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 LSDUR_CODE LSduR_PBConfigIdType LSduR_GetConfigurationId(void)
 {
     const LSduR_PBConfigType *config = LSduR_Configuration();
@@ -134,6 +136,8 @@ LSDUR_CODE void LSduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType resu
         }
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 LSDUR_CODE Std_ReturnType LSduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
 {
     const LSduR_PBConfigType *config = LSduR_Configuration();

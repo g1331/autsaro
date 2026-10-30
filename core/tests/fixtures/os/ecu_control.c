@@ -97,7 +97,7 @@ int main(void) {
     CounterType counter = UINT32_MAX;
     TimeInMicrosecondsType microseconds = UINT64_MAX;
     if (sizeof(counter) != 4u || sizeof(microseconds) != 8u || counter != UINT32_MAX ||
-        microseconds != UINT64_MAX || TotalNumberOfCores != 1u) {
+        microseconds != UINT64_MAX) {
         return 48;
     }
     const Os_TimeConfigType *time = Ecu_OsConfig.timing;

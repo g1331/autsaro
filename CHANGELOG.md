@@ -4,6 +4,20 @@
 
 ### Breaking
 
+- Single-core SC1 deliveries no longer publish the multicore-only `DONOTCARE` and `TotalNumberOfCores` macros. Remove these uses and regenerate consumers; the supported application modes and core identity services are unchanged (#389)
+
+- Host CAN mode/transmit forwarding, status-name conversion and batch initialization now have typed header definitions instead of external symbols. Regenerate and rebuild consumers; function addresses and status string storage belong to each translation unit (#389)
+
+- The disabled-wakeup `Can_CheckWakeup` entry is now defined inline in `Can.h`, preserving its typed calls and rejection result while removing the external symbol. Regenerate and rebuild all consumers; function addresses belong to each translation unit (#389)
+
+- The controlled C99 OS now defines 38 service entries inline in `Os.h`. Regenerate and rebuild all consumers; their former external function definitions are removed. Typed calls, function pointers and ARTI ordering remain available; `TerminateTask`, `isOsStarted` and `NextScheduleTable` retain their external definitions (#389)
+
+- `Arti_GetVersionInfo` is now a typed header inline service; regenerate and rebuild consumers instead of linking to its former exported definition. Version fields, function-pointer calls and atomic null-pointer error reporting are preserved (#389)
+
+- The controlled single-core SC1 OS header no longer publishes types and access macros for unsupported OS-Applications, trusted calls, protection, spinlocks or peripheral areas. Remove uses of these unsupported declarations and regenerate deliveries; supported Task, ISR, resource, event, Counter, Alarm, schedule-table and core service contracts remain available (#389)
+
+- ARTI native atomic storage now uses `Arti_Atomic32Type` instead of `ArtiAtomic32`. Update direct uses, regenerate deliveries to include the new native type headers, and rebuild; public service signatures and object layouts are unchanged (#389)
+
 - Native atomic width/alignment checks use C99 constant expressions instead of the `Os_Atomic{32,64}{Width,Alignment}Type`, `ArtiAtomic32IsFourBytes` and `Os_HostLongMustBe32BitsType` guard typedefs. Remove direct uses of these implementation guard names and regenerate deliveries for the new native type headers; atomic storage aliases and service ABI are unchanged (#371)
 
 - Five OS-only helpers now have internal linkage and are omitted from private cross-file headers. Integrations must use the public OS/native wrapper interfaces; regenerate deliveries and rebuild for the updated source identities (#371)
@@ -45,6 +59,8 @@
 - Generated RTE type headers include Rte.h before type declarations, adjacent owner events share guards without changing dispatch or flush order, and the RTE allocation lifecycle has one described state; regenerate sealed deliveries for the updated source and BSWMD identities (#393)
 
 - Generated ECU private execution glue omits the unused Ecu_ExecutionNow wrapper; integrations use the controlled target clock interface and regenerate deliveries (#393)
+
+- Native stack context and fault-slot selection uses bounded record identity on both host targets, rejecting NULL, foreign and one-past records before indexing; ARTI consumers verify saved stack identity and compiled rejection controls (#389)
 
 - Linux process cancellation recognizes registered sibling session leaders before reading their exiting proc environment, avoiding false cleanup failures while preserving escape refusal and root exit codes; unconfirmed cleanup logs include the responsible group, PID and observation error (#388)
 

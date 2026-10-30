@@ -54,11 +54,13 @@ ReadData 保留请求顺序、重复DID、`0xF186`及不可读/unsupported DID�
 
 ## CAN 驱动边界
 
+`Can_SetMode`、`Can_GetMode`、`Can_TransmitPdu`、`Ecu_StatusName` 与 `Ecu_HostBatchInitialize` 是类型检查的头内定义，不再提供原外部符号；全部消费者须重新生成并编译，不承诺跨 TU 函数地址或状态字符串地址相等。
+
 标准调用方使用 `#include "Can.h"`；主机输出、状态注入和接收注入显式使用 `Can_Host.h`。`Can_CfgTypes.h` 的单 sink 配置是本目标的硬件专用配置，标准允许目标自定布局。Id 保持 32 位、HOH 保持 16 位，PDU 句柄／长度使用 `ComStack_Types.h`。`Can.h` 的服务都具有 R24-11 的公开签名并使用 AUTOSAR 类型；`CanSetBaudrateApi` 不提供，因此没有 `Can_SetBaudrate`。`Can_Write` 接纳 0–8 字节，不解析 CAN FD 标志位（控制器没有 FD 配置），一个发送槽占用时立即返回 `CAN_BUSY`。控制器状态机按规范图：STARTED 只能从 STOPPED 进入，STOPPED 可从任何已初始化状态进入（含自环），SLEEP 是逻辑睡眠。`SWS_CANDriver` 的条目已逐条处置（见 [Can](../docs/standards/can.md)）；尚缺已分配 vendor 身份、完整 MISRA 人工评估和硬件互操作证据，控制器硬件义务由 R10 目标验收（#170），不声明完整标准 Can Driver。虚拟控制器不模拟位级仲裁、电气错误计数器和真实中断。
 
 `Can.c` 的 CODE 和 VAR_CLEARED_UNSPECIFIED 通过 `Can_MemMap.h` 显式映射至受控 GCC PE/ELF 的 `.text`／`.bss`，由链接器及进程装载器提供代码和清零存储；BSWMD 记录对应标记及头文件。重复 include 必须带单一合法 marker，禁止嵌套和错配。该映射不定义 MCU linker 布局。
 
-`Can.c` 唯一管理发送、接收快照和生命周期，`Can_Host.c` 只转发主机操作；CanIf、CanTp、Dcm、ComM 与 BswM 使用各自独立的独占区。Dcm 在区外调用 PduR、ComM 与应用；单飞执行／发布协议保护回调、模式顺序与重启身份。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后执行同一接收处理）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
+`Can.c` 唯一管理发送、接收快照和生命周期；`Can_Host.h` 的 mode/transmit 头内定义调用三个既有 driver 操作声明，其余主机转发保留在 `Can_Host.c`。这些声明不暴露 driver 存储，标准 `Can.h` 仍不导入主机接缝。CanIf、CanTp、Dcm、ComM 与 BswM 使用各自独立的独占区。Dcm 在区外调用 PduR、ComM 与应用；单飞执行／发布协议保护回调、模式顺序与重启身份。driver 在调用 sink、CanIf 和 Det 前释放自己的锁，在途槽继续拒绝同 HTH 的新请求。STOP、BUS_OFF 和 DeInit 取消未确认工作；STOPPED／SLEEP 的 DeInit 同步清理，不等待模式通知。未初始化的主机业务被拒绝，主机 `Can_GetMode` 查询保留。已由平台接纳后发生的接收 shadow overrun 经私有接缝记录 overrun，并由实际 `Can_MainFunction_Read` 接收服务报告 `Det_ReportRuntimeError(80, 0, 0x08, 0x01)`（polling 在下一次 Read 消费，即时接收在检测后执行同一接收处理）；可重试的主机 BUSY 不报告丢帧。当前主机没有硬件 overwrite 事件源或 wakeup IRQ；两个模式轮询入口是同一消费路径的兼容别名。
 
 `CanVersionInfoApi` 缺失（`MULTIPLICITY`）或为 true（`CAN_FEATURE_UNSUPPORTED`）时在生成前拒绝，`Can.h` 不声明 `Can_GetVersionInfo`，也不提供版本信息开关宏。`CAN_MODULE_ID` 为 80，软件版本与项目 `0.1.0` 一致。R24-11 MOD 的模块 DOC-REVISION 固定为 4.10.0；模块的 `_Version.h` 是所属公共／配置头的 release 来源，适用的直接外部头检查 major/minor，允许 revision 差异。MemMap 身份头不保护重复 START/STOP 处理。项目尚无已分配的 AUTOSAR vendor ID，正式供应方／代码使用方身份、软件版本政策与 API 启用仍由 #59 承接。ComM 源／头另校验 release 三分量一致，软件一致性仍待该政策。
 

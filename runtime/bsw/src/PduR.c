@@ -37,12 +37,12 @@ static const PduR_PBConfigType *pdur_configuration
 static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config)
 {
     boolean valid = FALSE;
-    uint16 i;
     if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
         ((config->receive_count == 0u) || (config->receive != NULL_PTR)) &&
         ((config->transmit_count == 0u) || (config->transmit != NULL_PTR)) &&
         (config->transport_count <= 32u) &&
         ((config->transport_count == 0u) || (config->transport != NULL_PTR))) {
+        uint16 i;
         valid = TRUE;
         for (i = 0u; i < config->receive_count; ++i) {
             uint16 j;
@@ -173,6 +173,8 @@ PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr)
         SchM_Exit_PduR_PDUR_STATE();
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void)
 {
     const PduR_PBConfigType *config = PduR_Configuration();
