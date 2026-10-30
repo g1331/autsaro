@@ -117,7 +117,7 @@ Stale citations (not an official item of R24-11):
             data = {
                 "passed": False,
                 "error": None,
-                "sourceClassification": {"complete": False, "sdkDiagnosticKeys": 2,
+                "sourceClassification": {"complete": False, "sdkDiagnosticKeys": 2, "compilerPredefineDiagnosticKeys": 3,
                                          "unclassifiedDiagnosticKeys": 1, "unclassifiedHeaders": 1,
                                          "unresolvedMacroDiagnostics": 1},
                 "diagnostics": [
@@ -135,6 +135,7 @@ Stale citations (not an official item of R24-11):
                 self.assertIn("New diagnostics: unknown", output.read_text())
                 self.assertIn("SDK source provenance: complete=False", output.read_text())
                 self.assertIn("unclassified keys=1", output.read_text())
+                self.assertIn("compiler predefine keys=3", output.read_text())
                 self.assertIn("source passed=False", output.read_text())
                 self.assertEqual(rows[0]["file"], "runtime/test.c")
                 self.assertEqual(rows[0]["line"], 1)

@@ -152,7 +152,7 @@
 
 ### Changed
 
-- C analysis summaries trace verified SDK header/provider and macro origins, expose incomplete provenance, and reject baselines with incompatible SDK identities while preserving source diagnostics and assessment status (#398)
+- C analysis summaries trace verified SDK header/provider, compiler predefine and macro origins, expose incomplete provenance, and reject baselines with incompatible SDK identities while preserving source diagnostics and assessment status (#398)
 
 - Replace OS project feature-macro dependencies with typed Linux kernel/context and owned-stack entry facilities and Windows allocation-based stack queries. Preserve native actor identities, guards, terminal parking and detector lifecycle; regenerate sealed deliveries (#60)
 

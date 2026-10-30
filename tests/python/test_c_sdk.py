@@ -318,6 +318,177 @@ class SdkSourceTests(unittest.TestCase):
                             )
                         )
 
+    def test_verified_compiler_predefines_are_separate_from_sdk_and_project_macros(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, _header, _packages, record = self.fixture(Path(temporary).resolve())
+            source = root / "kernel/port.c"
+            source.parent.mkdir()
+            source.write_text("\n" * 53 + "store(cell, value, __ATOMIC_SEQ_CST);\n")
+            text = (
+                '# 0 "<built-in>"\n#define __ATOMIC_SEQ_CST 5\n'
+                f'# 54 "{source.as_posix()}"\nstore(cell, value, 5);\n'
+            )
+            inputs = c_sdk.preprocessing(text, root, {"__ATOMIC_SEQ_CST"})
+            scope = {
+                "target": TARGET,
+                "sdkHeaders": [record],
+                "sdkMacroInputs": {"kernel/port.c": inputs},
+                "compilerDiscoveredDefines": {
+                    "kernel/port.c": ["-D__ATOMIC_SEQ_CST=5"]
+                },
+                "compilerSemanticInputs": {
+                    "machine": "x86_64-w64-mingw32",
+                    "release": "16.1.0",
+                    "predefines": ["#define __ATOMIC_SEQ_CST 5"],
+                },
+            }
+            rows = [self.diagnostic()]
+            rows[0]["id"] = "misra-c2012-17.3"
+            raw = deepcopy(rows[0])
+            result = c_sdk.classify(rows, scope, [], root)
+            self.assertTrue(result["complete"])
+            self.assertEqual(result["sdkDiagnosticKeys"], 0)
+            self.assertEqual(result["compilerPredefineDiagnosticKeys"], 1)
+            self.assertEqual(rows[0]["sourceCategory"], "project-patch")
+            self.assertEqual(
+                rows[0]["sourceOrigins"][0]["category"], "compiler-predefine"
+            )
+            self.assertNotIn("headerKey", rows[0]["sourceOrigins"][0])
+            self.assertEqual(
+                {
+                    k: v
+                    for k, v in rows[0].items()
+                    if k not in {"sourceOrigins", "sourceCategory"}
+                },
+                raw,
+            )
+            # Neither a familiar prefix nor an identical project definition is evidence.
+            for definitions, origin in (
+                ([], "<built-in>"),
+                (["#define __ATOMIC_SEQ_CST 7"], "<built-in>"),
+                (["#define __ATOMIC_SEQ_CST 5"], "kernel/port.c"),
+            ):
+                scope["compilerSemanticInputs"]["predefines"] = definitions
+                inputs["kernel/port.c:54"]["__ATOMIC_SEQ_CST"]["file"] = origin
+                result = c_sdk.classify(rows, scope, [], root)
+                self.assertFalse(result["complete"])
+                self.assertEqual(result["compilerPredefineDiagnosticKeys"], 0)
+                self.assertEqual(result["unclassifiedDiagnosticKeys"], 1)
+
+    def test_macro_replacement_references_are_not_claimed_as_expansions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, header, _packages, record = self.fixture(Path(temporary).resolve())
+            source = root / "kernel/port.c"
+            source.parent.mkdir()
+            source.write_text("#define LIMIT UINT64_C(1)\n")
+            text = (
+                f'# 1 "{header.as_posix()}" 1\n#define UINT64_C(c) c ## UL\n'
+                f'# 1 "{source.as_posix()}" 2\n#define LIMIT UINT64_C(1)\n'
+            )
+            inputs = c_sdk.preprocessing(text, root, {"LIMIT", "UINT64_C"})
+            self.assertTrue(inputs["kernel/port.c:1"]["UINT64_C"]["reference"])
+            self.assertNotIn("LIMIT", inputs["kernel/port.c:1"])
+            row = self.diagnostic()
+            row.update(id="misra-c2012-2.5", patched=False)
+            row["locations"][0].update(line="1", column="0")
+            rows = [row]
+            result = c_sdk.classify(
+                rows,
+                {"sdkHeaders": [record], "sdkMacroInputs": {"kernel/port.c": inputs}},
+                [],
+            )
+            self.assertTrue(result["complete"])
+            self.assertEqual(rows[0]["sourceCategory"], "project")
+            self.assertEqual(rows[0]["sourceOrigins"][0]["kind"], "macro-reference")
+            # Reference evidence cannot prove which expanded R7.2 operand caused a report.
+            row["id"] = "misra-c2012-7.2"
+            token = {
+                "file": "kernel/port.c",
+                "line": 1,
+                "column": 0,
+                "literal": "0xffffffff",
+            }
+            result = c_sdk.classify(
+                rows,
+                {"sdkHeaders": [record], "sdkMacroInputs": {"kernel/port.c": inputs}},
+                [token],
+            )
+            self.assertFalse(result["complete"])
+            self.assertEqual(rows[0]["sourceCategory"], "unclassified")
+
+    def test_integer_operand_proof_excludes_string_char_and_floating_tokens(self):
+        self.assertEqual(
+            c_sdk.integer_literals("0xffffffff 4294967295U 077L"), {4294967295, 63}
+        )
+        self.assertEqual(
+            c_sdk.integer_literals(
+                "\"4294967295\" '1' 4294967295.0 1e+4294967295 0x1p+4294967295"
+            ),
+            set(),
+        )
+
+    def test_multiline_macro_argument_without_operand_origin_is_explicitly_unresolved(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, header, _packages, record = self.fixture(Path(temporary).resolve())
+            source = root / "kernel/port.c"
+            source.parent.mkdir()
+            for use, expected in [
+                ("configASSERT(\n    INFINITE == 0U);", "unclassified"),
+                ("configASSERT(0xffffffff);", "project-patch"),
+            ]:
+                source.write_text("\n" * 53 + use + "\n")
+                text = (
+                    f'# 1 "{header.as_posix()}" 1\n#define INFINITE 0xffffffff\n'
+                    f'# 1 "{source.as_posix()}"\n#define configASSERT(x) if (!(x)) stop()\n'
+                    f'# 54 "{source.as_posix()}"\nexpanded;\n'
+                )
+                inputs = c_sdk.preprocessing(text, root, {"configASSERT", "INFINITE"})
+                rows = [self.diagnostic()]
+                token = {
+                    "file": "kernel/port.c",
+                    "line": 54,
+                    "column": 5,
+                    "literal": "0xffffffff",
+                }
+                result = c_sdk.classify(
+                    rows,
+                    {
+                        "sdkHeaders": [record],
+                        "sdkMacroInputs": {"kernel/port.c": inputs},
+                    },
+                    [token],
+                )
+                self.assertEqual(rows[0]["sourceCategory"], expected)
+                self.assertEqual(result["complete"], expected != "unclassified")
+                self.assertEqual(rows[0]["sourceOrigins"], [])
+
+    def test_multiline_replacement_reference_uses_actual_logical_definition(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, header, _packages, record = self.fixture(Path(temporary).resolve())
+            source = root / "kernel/port.c"
+            source.parent.mkdir()
+            source.write_text("#define LIMIT \\\n    UINT64_C(1)\n")
+            text = (
+                f'# 1 "{header.as_posix()}" 1\n#define UINT64_C(c) c ## UL\n'
+                f'# 1 "{source.as_posix()}"\n#define LIMIT UINT64_C(1)\n'
+            )
+            inputs = c_sdk.preprocessing(text, root, {"LIMIT", "UINT64_C"})
+            self.assertIn("UINT64_C", inputs["kernel/port.c:1"])
+            row = self.diagnostic()
+            row.update(id="misra-c2012-2.5", patched=False)
+            row["locations"][0].update(line="1", column="0")
+            result = c_sdk.classify(
+                [row],
+                {"sdkHeaders": [record], "sdkMacroInputs": {"kernel/port.c": inputs}},
+                [],
+            )
+            self.assertTrue(result["complete"])
+            self.assertEqual(row["sourceOrigins"][0]["kind"], "macro-reference")
+
     def test_missing_macro_trace_cannot_claim_complete_coverage(self):
         with tempfile.TemporaryDirectory() as temporary:
             root, _header, _packages, record = self.fixture(Path(temporary).resolve())

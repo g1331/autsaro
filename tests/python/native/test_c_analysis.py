@@ -202,6 +202,19 @@ class ActualCAnalysisTests(unittest.TestCase):
             self.assertTrue(any(row["header"].endswith("/pthread.h") and row["provider"] == "libc6-dev" for row in origins))
             self.assertTrue(any(row["header"].endswith("/unwind.h") and row["provider"].startswith("libgcc-") for row in origins))
 
+    def test_builtin_constants_and_macro_references_keep_project_responsibility(self):
+        summary = self.analyze("#include <stdint.h>\n#define FIXTURE_LIMIT UINT64_C(1)\n"
+                               "int main(void) { unsigned value = 0U; return (int)__atomic_load_n(&value, __ATOMIC_ACQUIRE); }\n", cli=True)
+        self.assertTrue(summary["sourceClassification"]["complete"], summary["sourceClassification"])
+        self.assertFalse(summary["passed"])
+        references = [row for row in summary["diagnostics"] if any(
+            origin["kind"] == "macro-reference" and origin.get("macro") == "UINT64_C" for origin in row["sourceOrigins"])]
+        builtins = [row for row in summary["diagnostics"] if any(
+            origin["kind"] == "compiler-predefine" and origin.get("macro") == "__ATOMIC_ACQUIRE" for origin in row["sourceOrigins"])]
+        self.assertTrue(references)
+        self.assertTrue(builtins)
+        self.assertTrue(all(row["sourceCategory"] == "project" for row in references + builtins))
+
     def test_misra_violation_fails_through_the_real_entry(self):
         summary = self.analyze("int main(void) { int value = 1; if (value) { return 1; } return 0; }\n", cli=True)
         self.assertFalse(summary["passed"])

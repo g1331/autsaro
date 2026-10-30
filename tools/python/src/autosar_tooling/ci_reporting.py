@@ -198,6 +198,7 @@ def cppcheck(
             details.append(
                 f"SDK source provenance: complete={classification['complete']}; "
                 f"SDK diagnostic keys={classification['sdkDiagnosticKeys']}; "
+                f"compiler predefine keys={classification.get('compilerPredefineDiagnosticKeys', 'unknown')}; "
                 f"unclassified keys={classification['unclassifiedDiagnosticKeys']}; "
                 f"unclassified headers={classification['unclassifiedHeaders']}; "
                 f"unresolved macro diagnostics={classification['unresolvedMacroDiagnostics']}. "

@@ -151,15 +151,18 @@ def header_identity(
     return record
 
 
-def source_lines(path: Path) -> list[str]:
+def source_code(text: str) -> str:
     # Keep physical line numbers while excluding comments and string/character data.
-    text = re.sub(
+    return re.sub(
         r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|/\*.*?\*/|//[^\n]*',
         lambda match: re.sub(r"[^\n]", " ", match[0]),
-        path.read_text(encoding="utf-8"),
+        text,
         flags=re.DOTALL,
     )
-    return text.splitlines()
+
+
+def source_lines(path: Path) -> list[str]:
+    return source_code(path.read_text(encoding="utf-8")).splitlines()
 
 
 def dependency_paths(text: str) -> list[str]:
@@ -263,16 +266,33 @@ def preprocessing(text: str, root: Path, candidates: set[str]) -> dict:
             }
         elif line.startswith("#undef "):
             definitions.pop(line[7:].strip(), None)
-        elif owned and 1 <= number <= len(contents[owned]):
+        if (
+            owned
+            and not line.startswith("#undef ")
+            and 1 <= number <= len(contents[owned])
+        ):
             original = contents[owned][number - 1]
             names = (
-                set(re.findall(r"\b[A-Za-z_]\w*\b", original))
+                set(
+                    re.findall(
+                        r"\b[A-Za-z_]\w*\b", definition[2] if definition else original
+                    )
+                )
                 & candidates
                 & definitions.keys()
             )
+            if definition:
+                names.discard(definition[1])
+                if definitions[definition[1]]["function"]:
+                    signature = re.match(r"\(([^)]*)\)", definition[2])
+                    if signature:
+                        names -= set(re.findall(r"\b[A-Za-z_]\w*\b", signature[1]))
             if names:
                 key = owned.relative_to(root).as_posix() + ":" + str(number)
                 inputs[key] = macro_closure(names, definitions, original)
+                if definition:
+                    for value in inputs[key].values():
+                        value["reference"] = True
         number += 1
     return inputs
 
@@ -289,12 +309,32 @@ def integer_value(literal: str) -> int:
     )
 
 
+def integer_literals(text: str) -> set[int]:
+    numbers = re.findall(
+        r"(?<![\w.])(?:\.[0-9]|[0-9])(?:[0-9A-Za-z_.]|(?<=[eEpP])[+-])*",
+        source_code(text),
+    )
+    return {
+        integer_value(literal)
+        for literal in numbers
+        if re.fullmatch(r"(?:0[xX][0-9a-fA-F]+|[0-9]+)[uUlL]*", literal)
+    }
+
+
 def classify(
     diagnostics: list[dict], scope: dict, unsigned: list[dict], root: Path | None = None
 ) -> dict:
     """Attach evidence without altering raw diagnostics or project/patch responsibility."""
     headers = {row["path"]: row for row in scope.get("sdkHeaders", [])}
     per_unit = scope.get("sdkMacroInputs", {})
+    compiler = scope.get("compilerSemanticInputs", {})
+    predefines = {}
+    for line in compiler.get("predefines", []):
+        if match := re.fullmatch(r"#define (\w+)(.*)", line):
+            predefines[match[1]] = (match[2].strip(), match[2].startswith("("))
+    compiler_key = hashlib.sha256(
+        json.dumps(compiler, sort_keys=True).encode()
+    ).hexdigest()
     discovered = {
         value[2:].split("=", 1)[0].split("(", 1)[0]
         for values in scope.get("compilerDiscoveredDefines", {}).values()
@@ -342,12 +382,26 @@ def classify(
                     source = headers.get(Path(definition["file"]).as_posix())
                     if source:
                         origin = {
-                            "kind": "macro-input",
+                            "kind": "macro-reference"
+                            if definition.get("reference")
+                            else "macro-input",
                             "macro": name,
                             "definitionLine": definition["line"],
                             "value": definition["value"],
                             "category": source["category"],
                             "headerKey": source["key"],
+                        }
+                        if origin not in origins:
+                            origins.append(origin)
+                    elif definition["file"] == "<built-in>" and predefines.get(
+                        name
+                    ) == (definition["value"], definition["function"]):
+                        origin = {
+                            "kind": "compiler-predefine",
+                            "macro": name,
+                            "value": definition["value"],
+                            "category": "compiler-predefine",
+                            "compilerKey": compiler_key,
                         }
                         if origin not in origins:
                             origins.append(origin)
@@ -421,24 +475,14 @@ def classify(
                                 for name, definition in values.items()
                             )
                             and not any(
-                                integer_value(literal)
-                                == integer_value(token["literal"])
+                                integer_value(token["literal"])
+                                in integer_literals(definition.get("use", ""))
                                 for definition in values.values()
-                                for literal in re.findall(
-                                    r"\b(?:0[xX][0-9a-fA-F]+|[0-9]+)[uUlL]*\b",
-                                    definition.get("use", ""),
-                                )
                             )
                             and not any(
                                 name != matches[0]["macro"]
-                                and any(
-                                    integer_value(literal)
-                                    == integer_value(token["literal"])
-                                    for literal in re.findall(
-                                        r"\b(?:0[xX][0-9a-fA-F]+|[0-9]+)[uUlL]*\b",
-                                        definition["value"],
-                                    )
-                                )
+                                and integer_value(token["literal"])
+                                in integer_literals(definition["value"])
                                 for name, definition in values.items()
                             )
                             for values in inputs
@@ -456,6 +500,31 @@ def classify(
                         )
                         else "unclassified"
                     )
+                elif (
+                    tokens
+                    and inputs
+                    and not all(
+                        not any(
+                            definition.get("unresolved", False)
+                            for definition in values.values()
+                        )
+                        and all(
+                            any(
+                                integer_value(token["literal"])
+                                in integer_literals(
+                                    definition.get("use", "")
+                                    + " "
+                                    + definition["value"]
+                                )
+                                for definition in values.values()
+                            )
+                            for token in tokens
+                        )
+                        for values in inputs
+                    )
+                ):
+                    # A wrapper's later-line arguments are not proved by its first line.
+                    category = "unclassified"
         diagnostic["sourceOrigins"] = origins
         if scope.get("sdkLineDirectives") and origins:
             for origin in origins:
@@ -475,17 +544,23 @@ def classify(
 def summary(
     diagnostics: list[dict], headers: list[dict], macro_trace_complete: bool = True
 ) -> dict:
-    sdk_keys, unclassified = set(), set()
+    sdk_keys, compiler_keys, unclassified = set(), set(), set()
     for row in diagnostics:
         for origin in row.get("sourceOrigins", []):
             key = (
                 row["id"],
                 tuple((p["file"], p["line"], p["column"]) for p in row["locations"]),
-                origin["headerKey"],
+                origin.get("headerKey", origin.get("compilerKey")),
             )
-            (sdk_keys if origin["category"] == "sdk" else unclassified).add(key)
+            if origin["category"] == "sdk":
+                sdk_keys.add(key)
+            elif origin["category"] == "compiler-predefine":
+                compiler_keys.add(key)
+            else:
+                unclassified.add(key)
     return {
         "sdkDiagnosticKeys": len(sdk_keys),
+        "compilerPredefineDiagnosticKeys": len(compiler_keys),
         "unclassifiedDiagnosticKeys": len(unclassified),
         "unresolvedMacroDiagnostics": sum(
             row.get("sourceCategory") == "unclassified" for row in diagnostics
