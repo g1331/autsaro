@@ -190,11 +190,23 @@ This delivery contains component-level declarations and selected relationships f
 typedef uint8 Rte_ModeType_{group};
 /** Connection authentication modes and transition sentinel (SWS_Dcm_91067). */
 {}"#,
-            c_layout::defines(&[
-                (format!("RTE_MODE_{group}_DCM_DEAUTHENTICATED"), "0u"),
-                (format!("RTE_MODE_{group}_DCM_AUTHENTICATED"), "1u"),
-                (format!("RTE_TRANSITION_{group}"), "255u"),
-            ])
+            c_layout::retained_defines(
+                &[
+                    (format!("RTE_MODE_{group}_DCM_DEAUTHENTICATED"), "0u"),
+                    (format!("RTE_MODE_{group}_DCM_AUTHENTICATED"), "1u"),
+                    (format!("RTE_TRANSITION_{group}"), "255u"),
+                ],
+                "Connection authentication mode.",
+                if group == "DcmAuthenticationState_Physical" {
+                    &[
+                        "RTE_MODE_DcmAuthenticationState_Physical_DCM_DEAUTHENTICATED",
+                        "RTE_MODE_DcmAuthenticationState_Physical_DCM_AUTHENTICATED",
+                        "RTE_TRANSITION_DcmAuthenticationState_Physical",
+                    ]
+                } else {
+                    &[]
+                }
+            )
         );
         let asset = super::outputs::trusted_asset("runtime/bsw/include/Rte_Dcm_Type.h")?;
         super::outputs::render(
@@ -382,9 +394,14 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                 .filter_map(|operation| operation.application_error.as_ref())
                 .collect();
             let errors: Vec<_> = errors.iter().map(|error| (error.as_str(), "1U")).collect();
-            body.push_str(&c_layout::commented_defines(
+            body.push_str(&c_layout::retained_defines(
                 &errors,
                 "Selected application error.",
+                if scope == "Ingress" {
+                    &["RTE_E_DataServices_ApplicationValue_E_NOT_OK"]
+                } else {
+                    &[]
+                },
             ));
             for symbol in description
                 .symbols
@@ -577,9 +594,14 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                             r#"#ifndef RTE_CORE
 {}#endif
 "#,
-                            c_layout::commented_defines(
+                            c_layout::retained_defines(
                                 &[(alias, symbol.symbol.as_str())],
-                                "API alias."
+                                "API alias.",
+                                if scope == "DcmService"
+                                    && symbol.symbol == "Rte_Call_DcmService_DataServices_ApplicationValue_ReadData"
+                                {
+                                    &["Rte_Call_DataServices_ApplicationValue_ReadData"]
+                                } else { &[] },
                             )
                         ));
                     }

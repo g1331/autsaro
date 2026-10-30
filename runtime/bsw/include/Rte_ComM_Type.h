@@ -20,8 +20,7 @@ typedef uint16 ComM_UserHandleType;
 #define COMM_NO_COMMUNICATION     0u /**< Neither receive nor transmit is allowed. */
 #define COMM_SILENT_COMMUNICATION 1u /**< Receive only; transmission is disabled. */
 #define COMM_FULL_COMMUNICATION   2u /**< Receive and transmit are enabled. */
-/* MR12 RULE 2.5 VIOLATION: standard mode (SWS_ComM_00672) that the selected
- * profile never requests; see the ComM deviation record. */
+/* MR12 RULE 2.5 VIOLATION: retain this numeric preprocessing interface when unused. */
 #define COMM_FULL_COMMUNICATION_WITH_WAKEUP_REQUEST                                                \
     3u /**< Internal full-communication wakeup mode; not selected here. */
 #define COMM_NOT_USED_USER_ID 65535u /**< Reserved value; never a generated user handle. */

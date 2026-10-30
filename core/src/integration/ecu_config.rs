@@ -1541,15 +1541,28 @@ fn mode_switches(mode_scope: &str, authentication_group: &str) -> String {
             "",
             true,
         );
+        let retained_switch = if group == "DcmAuthenticationState_Physical" {
+            "/* MR12 RULE 8.7 VIOLATION: retain this public mode publisher's C linkage. */\n"
+        } else {
+            ""
+        };
+        let retained_mode = if matches!(
+            group,
+            "DcmAuthenticationState_Physical" | "DcmDiagnosticSessionControl"
+        ) {
+            "/* MR12 RULE 8.7 VIOLATION: retain this public mode observer's C linkage. */\n"
+        } else {
+            ""
+        };
         modes.push_str(&format!(
-            r#"{switch}
+            r#"{retained_switch}{switch}
 {{
     Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);
     {variable} = mode;
     Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);
     return SCHM_E_OK;
 }}
-{mode}
+{retained_mode}{mode}
 {{
     Rte_ModeType_{group} mode;
     Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);

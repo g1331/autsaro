@@ -142,6 +142,14 @@ static uint8 rte_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;
         ));
         source.push('\n');
         let declaration = format!("const Rte_CDS_{scope} *const Rte_Inst_{scope}");
+        if matches!(
+            scope,
+            "EchoApplication" | "DcmService" | "Ingress" | "Process" | "Observe"
+        ) {
+            source.push_str(
+                "/* MR12 RULE 8.7 VIOLATION: retain this immutable public instance handle. */\n",
+            );
+        }
         let attribute = format!("RTE_{scope}_CONST_UNSPECIFIED");
         let value = format!("&Rte_Instance_{scope};");
         let assignment = format!("{declaration} {attribute} = {value}");

@@ -435,7 +435,28 @@ pub(super) fn configure_os(
         "OSTICKDURATION".to_owned(),
         format!("UINT64_C({})", tick_ms * 1_000_000),
     ));
-    let macros = c_layout::commented_defines(&macros, "Generated Counter configuration.");
+    let retained = if counter_name == "SystemCounter"
+        && plan.schedule.counter_maximum == 65535
+        && plan.schedule.counter_ticks_per_base == 1
+        && plan.schedule.counter_minimum_cycle == 1
+        && tick_ms == 1
+    {
+        &[
+            "OSMAXALLOWEDVALUE_SystemCounter",
+            "OSTICKSPERBASE_SystemCounter",
+            "OSMINCYCLE_SystemCounter",
+            "OSMAXALLOWEDVALUE_OS_COUNTER_ID_SystemCounter",
+            "OSTICKSPERBASE_OS_COUNTER_ID_SystemCounter",
+            "OSMINCYCLE_OS_COUNTER_ID_SystemCounter",
+            "OSMAXALLOWEDVALUE",
+            "OSTICKSPERBASE",
+            "OSMINCYCLE",
+            "OSTICKDURATION",
+        ][..]
+    } else {
+        &[][..]
+    };
+    let macros = c_layout::retained_defines(&macros, "Generated Counter configuration.", retained);
     let counter_header = format!(
         r#"/** @file Generated Counter time conversions (SWS_Os_00393).
  * Argument: a TickType value in 0..UINT32_MAX; evaluated once.

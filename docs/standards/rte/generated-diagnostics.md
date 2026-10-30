@@ -1,6 +1,8 @@
 # 生成 C 的诊断责任与处置
 
-本篇属于 [RTE 与生成契约](README.md)，承接 #382。只覆盖四个正常分析 profile 的 emitter／模板输出，目标为 controlled Linux／Windows x64、C99、HostBatch 与 probe。直接拷贝的 runtime、内核／补丁、SDK 和无 checker 人工项分别由 #381／#383／#384／#385 承接；模板原行仍属本项，已有精确裁决可以引用；原始分析、程序归属、`passed=false`、`not_assessed` 和比较拒绝保持。
+本篇属于 [RTE 与生成契约](README.md)，承接 #382。
+
+当前：[PM具体决定](https://github.com/g1331/autsaro/pull/393#issuecomment-6516977768)已接受冻结159键的有界项目保留，见[完整形态与范围记录](generated-retention/README.md)。这解除项目选择前置；源码/MR12、反例、影响范围独立复核及真实集合出口仍须验证。下文历史未决段描述7ee决定前状态，不代表当前仍缺项目选择。只覆盖四个正常分析 profile 的 emitter／模板输出，目标为 controlled Linux／Windows x64、C99、HostBatch 与 probe。直接拷贝的 runtime、内核／补丁、SDK 和无 checker 人工项分别由 #381／#383／#384／#385 承接；模板原行仍属本项，已有精确裁决可以引用；原始分析、程序归属、`passed=false`、`not_assessed` 和比较拒绝保持。
 
 ## 来源与字节身份
 
@@ -62,12 +64,12 @@ R8.9 是 Advisory、System（2013主文印刷71／PDF79）。它按标识符出�
 - R15.5：引用 ADR0025 的既有 Advisory GRP disapply，仍检查拒绝路径、资源和输出。
 - 无名 role 参数 R8.2、组件实例类型 R5.6：分别沿 [role 参数](contracts.md#无名-role-参数的逐处核查)与[实例类型](README.md#组件实例类型的同名冲突)的已有精确记录，不扩大到其他声明。
 - Boolean R10.3／R10.4：连接实际 `_Bool`、`TRUE`／`FALSE` 展开，沿[essential type](../types/essential-types.md#boolean与character)的 D.6／D.7 依据逐表达式核对，不因工具模型把所有整数常量归为 Boolean。
-- R2.3／R2.5／R8.7：标准强制发布与当前程序未使用是两个事实。固定名字、typedef、宏形式及完整接口要求须分别核对；仅有外部 ABI 或既有交付形状不能自动获得 ADR0023 授权。类别外的具体保留须先形成可审阅提案，由用户决定，未决键继续计为未分类。
+- R2.3／R2.5／R8.7：标准强制发布与当前程序未使用是两个事实。固定名字、typedef、宏形式及完整接口要求须分别核对；仅有外部 ABI 或既有交付形状不能自动获得 ADR0023 授权。类别外的具体保留须先形成可审阅提案，由当前授权的权限方作具体决定，未决键继续计为未分类。
 
 原始记录数、物理位置、规则＋文件＋源码行文本键以及两程序出现次数分别保留。最终四 profile 的分类与尚未闭合集合由 PR 按封存身份给出；本文不预先声明零未分类、完整221项评估或 Windows 实际执行通过。
 
 
-## 尚未接受的保留候选
+## 7ee冻结时的未决状态（历史）
 
 `Os_ArtiAlarmBaseReturn` 的 `const uint64 native_address = (uint64)address;` 是 R11.4（Advisory，2013主文印刷97／PDF105）的真实指针到整数转换。producer 是 `arti::files` 渲染 `runtime/os/src/Os_Arti.c`，不是 SDK 或 #381 的八个已记录主机地址实例。GetAlarmBase 的真实返回经过本函数，把完整受控 x64 数值交给 `Arti_CaptureAddress`，低32位交给 ARTI trace；`ecu_arti_control.c` 分别检查两者。没有从 trace token 恢复指针或解引用捕获值。uintptr_t 改写仍属 R11.4；删除完整捕获会破坏现有工具观察合同。新增保留未获具体决定，维持未分类，不添加 MR12 或批准表。
 
