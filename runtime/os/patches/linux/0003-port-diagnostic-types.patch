@@ -52,7 +52,7 @@
      }
  }
  
-+/* MR12 RULE 8.7 VIOLATION: External port lifecycle entry is consumed by the selected kernel task implementation. */
++/* MR12 RULE 8.7 VIOLATION: Retain the fixed kernel lifecycle hook; unsupported task deletion stops the OS. */
  void vPortCloseRunningThread(void *task, volatile BaseType_t *pending_yield)
  {
      (void)task;
@@ -60,7 +60,7 @@
      Os_BackendShutdown(E_OS_STATE); /* Dynamic task deletion is not configured. */
  }
  
-+/* MR12 RULE 8.7 VIOLATION: External port lifecycle entry is consumed by the selected kernel task implementation. */
++/* MR12 RULE 8.7 VIOLATION: Retain the fixed kernel lifecycle hook; unsupported task deletion stops the OS. */
  void vPortDeleteThread(void *task)
  {
      (void)task;
