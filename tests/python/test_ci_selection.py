@@ -138,6 +138,34 @@ class CiSelectionTests(unittest.TestCase):
                     runpy.run_path(str(source))
                 self.assertIn("desktop=" + str(event == "workflow_dispatch").lower() + "\n", output.read_text())
 
+    def test_pull_requests_fuzz_direct_inputs_and_pushes_fuzz_every_input(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text(encoding="utf-8"))
+        script = workflow["jobs"]["changes"]["steps"][1]["run"]
+        for path, pull_request, push in (
+            ("fuzz/fuzz_targets/dcm_request.rs", True, True),
+            ("core/src/arxml/projection.rs", True, True),
+            ("core/src/definitions/extension.rs", True, True),
+            ("runtime/bsw/src/Dcm.c", True, True),
+            ("runtime/host/src/SchM_Diagnostic_Host.c", True, True),
+            ("core/src/integration/rte.rs", False, True),
+            ("core/resources/templates/standard-ecu.arxml", False, True),
+            ("runtime/bsw/include/ComStack_Types.h", False, True),
+            ("runtime/host/src/Os_Host.c", False, True),
+            ("core/src/generator.rs", False, False),
+            ("docs/guide.md", False, False),
+        ):
+            for event, expected in (("pull_request", pull_request), ("push", push)):
+                with self.subTest(path=path, event=event), tempfile.TemporaryDirectory() as directory:
+                    output = Path(directory) / "output"
+                    source = Path(directory) / "select.py"
+                    source.write_text(script, encoding="utf-8")
+                    env = {"GITHUB_EVENT_NAME": event, "BASE": "base", "FULL": "false",
+                           "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
+                    with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
+                        run.return_value = subprocess.CompletedProcess([], 0, path + "\n")
+                        runpy.run_path(str(source))
+                    self.assertIn("fuzz=" + str(expected).lower() + "\n", output.read_text())
+
     def test_split_jobs_run_every_step_once_per_platform_or_sanitizer(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         for job, key, names in (
