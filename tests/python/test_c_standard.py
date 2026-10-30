@@ -956,12 +956,17 @@ class ManualAssessmentTests(unittest.TestCase):
         self.assertRegex(after["parserSha256"], r"^[0-9a-f]{64}$")
 
     def test_record_line_endings_preserve_conclusions_but_change_byte_identity(self):
-        before = self.summary()
         path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[2]
-        path.write_bytes(path.read_text().replace("\n", "\r\n").encode("utf-8"))
-        after = self.summary()
-        self.assertEqual(before["checkerUncovered"], after["checkerUncovered"])
-        self.assertNotEqual(before["inputIdentity"]["documents"], after["inputIdentity"]["documents"])
+        text = path.read_text(encoding="utf-8")
+        for original, changed in (("\n", "\r\n"), ("\r\n", "\n")):
+            with self.subTest(original=repr(original), changed=repr(changed)):
+                # Establish both byte inputs explicitly, independent of checkout defaults.
+                path.write_bytes(text.replace("\n", original).encode("utf-8"))
+                before = self.summary()
+                path.write_bytes(text.replace("\n", changed).encode("utf-8"))
+                after = self.summary()
+                self.assertEqual(before["checkerUncovered"], after["checkerUncovered"])
+                self.assertNotEqual(before["inputIdentity"]["documents"], after["inputIdentity"]["documents"])
 
 
 if __name__ == "__main__":
