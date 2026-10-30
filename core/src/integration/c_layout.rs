@@ -355,13 +355,8 @@ pub(super) fn retained_defines<N: AsRef<str>, V: AsRef<str>>(
             output.push_str(
                 "/* MR12 RULE 2.5 VIOLATION: retain the public preprocessing contract when unused. */\n",
             );
-            output.push_str(&commented_defines(
-                &[(name.as_ref(), value.as_ref())],
-                purpose,
-            ));
-        } else {
-            run.push((name.as_ref(), value.as_ref()));
         }
+        run.push((name.as_ref(), value.as_ref()));
     }
     output.push_str(&commented_defines(&run, purpose));
     output

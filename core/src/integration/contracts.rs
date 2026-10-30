@@ -196,7 +196,7 @@ typedef uint8 Rte_ModeType_{group};
                     (format!("RTE_MODE_{group}_DCM_AUTHENTICATED"), "1u"),
                     (format!("RTE_TRANSITION_{group}"), "255u"),
                 ],
-                "Connection authentication mode.",
+                "Authentication mode.",
                 if group == "DcmAuthenticationState_Physical" {
                     &[
                         "RTE_MODE_DcmAuthenticationState_Physical_DCM_DEAUTHENTICATED",

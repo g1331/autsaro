@@ -186,6 +186,7 @@ def check_project(
 
 
 def execute(argv: list[str], directory: Path, label: str, timeout: int = 60):
+    (directory / "logs").mkdir(mode=0o700, exist_ok=True)
     result = OwnedProcess(
         ProcessSpec.seconds(argv, directory, timeout, directory / "logs", label)
     ).wait()
@@ -287,10 +288,12 @@ def export_interfaces(project: Path, directory: Path, profile: str) -> None:
     headers = "#define RTE_CORE\n" + "".join(
         f'#include "Rte_{scope}.h"\n' for scope in scopes
     )
-    headers += '#include "Rte_Main.h"\n#include "SchM_Dcm.h"\n#include "Ecu_Target.h"\n#include "Com.h"\n'
+    headers += '#include "Rte_Main.h"\n#include "SchM_Dcm.h"\n'
     provider = (
         headers
-        + """#include "Can_HostLock.h"
+        + """#include "Ecu_Target.h"
+#include "Com.h"
+#include "Can_HostLock.h"
 int Ecu_TargetIsOwner(void) { return 1; }
 Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting) { (void)starting; return E_OK; }
 uint8 Com_SendSignal(Com_SignalIdType signal, const void *data) { (void)signal; (void)data; return E_OK; }
@@ -542,6 +545,9 @@ class GeneratedRetentionTests(unittest.TestCase):
 
 def check_arti_address(project: Path, directory: Path, control: Path) -> None:
     """Use the actual GetAlarmBase consumer; only the compiler input is mutated."""
+    project = project.resolve()
+    directory = directory.resolve()
+    control = control.resolve()
     original_query = ecu_build.query
     original = project / "generated/src/Os_Arti.c"
     source = original.read_text()
