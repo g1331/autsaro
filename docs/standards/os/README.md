@@ -30,6 +30,8 @@ OS-Application、IOC、多核、spinlock、时间／内存保护、ProtectionHoo
 - 引用的 OSEK 版本 ISO 17356-3 全文未取得，严格 ISO 条款由 [#57](https://github.com/g1331/autsaro/issues/57) 跟踪；固定 FreeRTOS 内核（[ADR 0004](../../adr/0004-freertos-kernel-with-own-os-semantics.md)）的上游代码诊断标记为 `adopted` 但不排除（[ADR 0008](../../adr/0008-misra-baseline-and-no-deviation.md)），由 [#58](https://github.com/g1331/autsaro/issues/58) 跟踪。
 - Windows 实际交接运行只在 CI 的 Windows 套件中执行。
 
+固定内核原件、上游MISRA说明、有序补丁与诊断责任见[采用边界](adoption.md)。
+
 ## SDK 声明与常量
 
 非ISO头的参数、限定符、常量、inline和变参义务及待决定边界见[声明与SDK接口](declarations.md#sdk-声明与常量)。

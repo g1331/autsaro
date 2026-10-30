@@ -1,0 +1,187 @@
+--- a/tasks.c
++++ b/tasks.c
+@@ -124,8 +124,11 @@
+ 
+ /* Bits used to record how a task's stack and TCB were allocated. */
+ #if ( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB    ( ( uint8_t ) 0 )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define tskSTATICALLY_ALLOCATED_STACK_ONLY        ( ( uint8_t ) 1 )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define tskSTATICALLY_ALLOCATED_STACK_AND_TCB     ( ( uint8_t ) 2 )
+ #endif
+ 
+@@ -142,10 +145,15 @@
+  * Macros used by vListTask to indicate which state a task is in.
+  */
+ #if ( ( configUSE_TRACE_FACILITY == 1 ) && ( configUSE_STATS_FORMATTING_FUNCTIONS > 0 ) )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define tskRUNNING_CHAR      ( 'X' )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define tskBLOCKED_CHAR      ( 'B' )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define tskREADY_CHAR        ( 'R' )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define tskDELETED_CHAR      ( 'D' )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define tskSUSPENDED_CHAR    ( 'S' )
+ #endif
+ 
+@@ -343,9 +351,11 @@
+ 
+ /* Indicates that the task is not actively running on any core. */
+ #if ( configNUMBER_OF_CORES > 1 )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define taskTASK_NOT_RUNNING           ( ( BaseType_t ) ( -1 ) )
+ 
+ /* Indicates that the task is actively running but scheduled to yield. */
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define taskTASK_SCHEDULED_TO_YIELD    ( ( BaseType_t ) ( -2 ) )
+ #endif
+ 
+@@ -358,12 +368,14 @@
+ #else
+     #define taskTASK_IS_RUNNING( pxTCB )                          ( ( ( ( pxTCB )->xTaskRunState >= ( BaseType_t ) 0 ) && ( ( pxTCB )->xTaskRunState < ( BaseType_t ) configNUMBER_OF_CORES ) ) ? ( pdTRUE ) : ( pdFALSE ) )
+     #if ( INCLUDE_vTaskDelete == 1 )
++        /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+         #define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB )    ( ( ( pxTCB )->xTaskRunState != taskTASK_NOT_RUNNING ) ? ( pdTRUE ) : ( pdFALSE ) )
+     #endif
+ #endif
+ 
+ /* Indicates that the task is an Idle task. */
+ #if ( configNUMBER_OF_CORES > 1 )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define taskATTRIBUTE_IS_IDLE    ( UBaseType_t ) ( 1U << 0U )
+ #endif
+ 
+@@ -375,6 +387,7 @@
+ #endif /* #if ( ( configNUMBER_OF_CORES > 1 ) && ( portCRITICAL_NESTING_IN_TCB == 1 ) ) */
+ 
+ #if ( ( configUSE_CORE_AFFINITY == 1 ) && ( configNUMBER_OF_CORES > 1 ) )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define taskBITS_PER_BYTE    ( ( size_t ) 8 )
+ #endif
+ 
+@@ -6452,7 +6465,7 @@
+ 
+         while( *pucCursor == ( uint8_t ) tskSTACK_FILL_BYTE )
+         {
+-            pucCursor -= portSTACK_GROWTH;
++            pucCursor = &pucCursor[-portSTACK_GROWTH];
+             uxCount++;
+         }
+ 
+--- a/queue.c
++++ b/queue.c
+@@ -26,6 +26,7 @@
+  *
+  */
+ 
++#include <stddef.h>
+ #include <stdlib.h>
+ #include <string.h>
+ 
+@@ -70,9 +71,11 @@
+ /* Semaphores do not actually store or copy data, so have an item size of
+  * zero. */
+ #if ( configUSE_COUNTING_SEMAPHORES == 1 )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define queueSEMAPHORE_QUEUE_ITEM_LENGTH    ( ( UBaseType_t ) 0 )
+ #endif
+ #if ( configUSE_RECURSIVE_MUTEXES == 1 )
++    /* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+     #define queueMUTEX_GIVE_BLOCK_TIME          ( ( TickType_t ) 0U )
+ #endif
+ 
+@@ -2401,7 +2404,7 @@
+         }
+         else
+         {
+-            pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
++            pxQueue->u.xQueue.pcReadFrom = &pxQueue->u.xQueue.pcReadFrom[-(ptrdiff_t)pxQueue->uxItemSize];
+             mtCOVERAGE_TEST_MARKER();
+         }
+ 
+--- a/portable/MSVC-MingW/port.c
++++ b/portable/MSVC-MingW/port.c
+@@ -51,7 +51,7 @@
+ /* Native ownership and handoff failures stop the OS before protected state is used. */
+ static void prvWaitForObject( HANDLE xObject )
+ {
+-    configASSERT( WaitForSingleObject( xObject, INFINITE ) == WAIT_OBJECT_0 );
++    configASSERT( WaitForSingleObject( xObject, INFINITE ) == 0U );
+ }
+ 
+ static void prvReleaseMutex( HANDLE xMutex )
+@@ -75,6 +75,7 @@
+ /* The priorities at which the various components of the simulation execute. */
+ #define portDELETE_SELF_THREAD_PRIORITY             THREAD_PRIORITY_ABOVE_NORMAL /* Must be highest. */
+ #define portSIMULATED_INTERRUPTS_THREAD_PRIORITY    THREAD_PRIORITY_ABOVE_NORMAL
++/* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+ #define portSIMULATED_TIMER_THREAD_PRIORITY         THREAD_PRIORITY_NORMAL
+ #define portTASK_THREAD_PRIORITY                    THREAD_PRIORITY_NORMAL
+ 
+@@ -187,7 +188,7 @@
+     }
+     else if( operation == 1U )
+     {
+-        if( clear != FALSE )
++        if( clear )
+         {
+             ulPendingInterrupts &= ~bit;
+         }
+@@ -256,12 +257,12 @@
+ {
+     const Os_NativeStackType * stack = Os_StackCurrent();
+     const unsigned current = Os_BackendCurrentInterrupt();
+-    uint32_t seen = 0U;
+     if( ( stack != NULL ) && ( stack->role == 'S' ) &&
+         ( current < portMAX_INTERRUPTS ) &&
+         ( current != portINTERRUPT_YIELD ) &&
+         ( ulCriticalNesting == portNO_CRITICAL_NESTING ) )
+     {
++        uint32_t seen = 0U;
+         uint32_t interrupt = prvNextOsInterrupt( seen, Os_BackendInterruptPriority( current ), 1 );
+         while( interrupt < portMAX_INTERRUPTS )
+         {
+@@ -347,8 +348,7 @@
+ BaseType_t xPortStartScheduler( void )
+ {
+     void * pvHandle = NULL;
+-    int32_t lSuccess;
+-    ThreadState_t xThreadState;
++    BaseType_t lSuccess;
+     SYSTEM_INFO xSystemInfo;
+ 
+     /* This port runs windows threads with extremely high priority.  All the
+@@ -413,6 +413,7 @@
+ 
+     if( lSuccess == pdPASS )
+     {
++        ThreadState_t xThreadState;
+         /* Start the highest priority task by obtaining its associated thread
+          * state structure, in which is stored the thread handle. */
+         xThreadState = prvTaskThreadState( xTaskGetCurrentTaskHandle() );
+@@ -489,9 +490,9 @@
+          * the scheduler is stopped by calling vPortEndScheduler. */
+         xWinApiResult = WaitForMultipleObjects( sizeof( pvObjectList ) / sizeof( void * ), pvObjectList, 1, xTimeoutMilliseconds );
+ 
+-        if( xWinApiResult != WAIT_TIMEOUT )
+-        {
+-            configASSERT( xWinApiResult == WAIT_OBJECT_0 );
++        if( xWinApiResult != ( DWORD ) WAIT_TIMEOUT )
++        {
++            configASSERT( xWinApiResult == 0U );
+             /* Cannot be in a critical section to get here.  Tasks that exit a
+              * critical section will block on a yield mutex to wait for an interrupt to
+              * process if an interrupt was set pending while the task was inside the
+@@ -535,7 +536,7 @@
+                     if( Os_BackendInterruptMaySchedule( i ) != 0 )
+                     {
+                         const int serviceRequested = Os_BackendTakeIsrReschedule();
+-                        if( ( requested != pdFALSE ) || ( serviceRequested != 0 ) )
++                        if( ( requested != 0U ) || ( serviceRequested != 0 ) )
+                         {
+                             ulSwitchRequired |= ( ( uint32_t ) 1U ) << i;
+                         }
