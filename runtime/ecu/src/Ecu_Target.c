@@ -142,7 +142,7 @@ Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting)
                : E_NOT_OK;
 }
 /* MR12 RULE 8.7 VIOLATION: Retain the owner-checked clock export for delivered control programs;
- * sample programs without the unused execution wrapper still report it. See retained-clock.md. */
+ * callers must own this target; the private logical epoch remains owner-only. */
 uint64_t Ecu_TargetNow(void)
 {
     Ecu_TargetAssertOwner();
