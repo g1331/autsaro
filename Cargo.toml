@@ -2,6 +2,14 @@
 members = ["core", "src-tauri"]
 resolver = "3"
 
+# Test binaries spend their time in parsing, validation and generation; unoptimized they
+# take minutes per suite. Debug assertions and overflow checks stay enabled.
+[profile.test.package.autosar-config-core]
+opt-level = 1
+
+[profile.test.package."*"]
+opt-level = 2
+
 [profile.desktop-test]
 inherits = "dev"
 debug-assertions = true

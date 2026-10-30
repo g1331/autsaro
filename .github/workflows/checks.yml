@@ -243,7 +243,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Select native contract tools
         shell: python
         run: |
@@ -355,7 +355,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Select native contract tools
         shell: python
         run: |
@@ -545,7 +545,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Analyzer behavior tests
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Generate complete analysis samples

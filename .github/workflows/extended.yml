@@ -145,7 +145,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: receiver-cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+          key: receiver-cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Select native contract tools
         shell: python
         run: |
