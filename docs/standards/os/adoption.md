@@ -51,7 +51,11 @@ boolean clear直接作条件，uint32请求与0U比较；调度启动结果及mu
 R18.4（Advisory，主文147／PDF155）两处指针-=改为下标取址。栈填充值游标仍按
 `-portSTACK_GROWTH`推进；队列只在readFrom不等于head时退一个item，先转ptrdiff_t再
 取负，避免无符号取负回绕。所选静态队列容量与itemSize在PTRDIFF_MAX以内，原来的
-head→tail-item保护保持。R18.1的同数组边界义务及真实队列／栈消费者仍须成立。
+head→tail-item保护保持。R18.1的同数组边界义务保持。
+既有public-types实际执行FIFO／front／overwrite／reset与零item队列，
+`test_queue_front_pointer_bounds_and_order_mutations`继续拒绝先减后判、丢失步进及错误wrap。
+`test_patched_kernel_stack_scan_uses_each_byte`从封存构建包含真实tasks.c，观察整word／
+不足一个word的扫描结果；加倍步进的可编译变异须在行为断言失败，检测器同样执行。
 
 | 原始报告 | 所选配置下的依据 | 处置 |
 | --- | --- | --- |

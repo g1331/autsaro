@@ -505,7 +505,7 @@ class NativeKernelObjectTests(unittest.TestCase):
         }
         else
         {
-            pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
+            pxQueue->u.xQueue.pcReadFrom = &pxQueue->u.xQueue.pcReadFrom[-(ptrdiff_t)pxQueue->uxItemSize];
             mtCOVERAGE_TEST_MARKER();
         }"""
         old = """        pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
@@ -519,6 +519,7 @@ class NativeKernelObjectTests(unittest.TestCase):
             mtCOVERAGE_TEST_MARKER();
         }"""
         decrement = "pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;"
+        indexed = "pxQueue->u.xQueue.pcReadFrom = &pxQueue->u.xQueue.pcReadFrom[-(ptrdiff_t)pxQueue->uxItemSize];"
         observed = ("pxQueue->u.xQueue.pcReadFrom = Os_QueueTestPrevious("
                     "pxQueue->pcHead, pxQueue->u.xQueue.pcReadFrom, pxQueue->uxItemSize);")
         for mutant, code, error in (
@@ -539,8 +540,9 @@ class NativeKernelObjectTests(unittest.TestCase):
                         self.assertEqual(text.count(candidate), 1)
                         if mutant == "old-subtract":
                             text = text.replace(candidate, old)
-                        self.assertEqual(text.count(decrement), 1)
-                        text = text.replace(decrement, observed)
+                        step = decrement if mutant == "old-subtract" else indexed
+                        self.assertEqual(text.count(step), 1)
+                        text = text.replace(step, observed)
                         if mutant == "no-step":
                             text = text.replace(observed, "(void)pxQueue;")
                         elif mutant == "wrong-wrap":
