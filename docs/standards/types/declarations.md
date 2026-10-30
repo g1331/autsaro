@@ -97,9 +97,9 @@ R2.8仍真实未满足，未重分类、未disapply，也不称MISRA总体符合
 | component-pipeline | Rte_Inst_Ingress:68、Rte_Inst_Process:89、Rte_Inst_Observe:102、Rte_Inst_DcmService:117 | 三应用头:34；DcmService头:32 |
 | no-diagnostic | Rte_Inst_Ingress:60、Rte_Inst_Process:81、Rte_Inst_Observe:94 | 三应用头:34 |
 
-每对象去注释后只有extern与定义两处引用；host-batch/probe不读取，ABI测试读取不改变此结论。
-私有Rte_Instance_* CDS的初始化引用不是公开指针的用途。producer为 `core/src/integration/rte/`；
-实际字节/程序和ABI消费者见
+去注释后每对象仅extern/定义两处引用；host-batch/probe无读取，ABI测试不改变此事实。
+私有CDS初始化不构成公开指针用途。定义由`core/src/integration/rte.rs`生成，
+头声明由`core/src/integration/contracts.rs`生成；交付证据见
 [#393冻结收据](https://github.com/g1331/autsaro/pull/393#issuecomment-6518916990)。
 
 SWS_Rte_03711/03712/03715/03793只分别规定CDS、私有前缀、const及单实例handle名；
