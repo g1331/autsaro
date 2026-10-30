@@ -1,6 +1,9 @@
 """C coding checks inspect declarations, not keyword counts."""
 
 import collections
+import copy
+import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -847,6 +850,123 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
             document.write_text(approved, encoding="utf-8")
             document.write_text(document.read_text().replace("Test_Run", "Test_Other"), encoding="utf-8")
             self.assertEqual({key[0] for key in c_standard.deviation_findings(root)}, {"deviation-unrecorded", "deviation-uncommented"})
+
+
+class ManualAssessmentTests(unittest.TestCase):
+    # Derived from the hash-matched 2.21.0 addon/core checker catalog, not from
+    # the documents under test. Production grouping uses coverage.rules.
+    UNCOVERED = frozenset([
+        "D1.1", "D2.1", "D3.1", "D4.1", "D4.2", "D4.3", "D4.4", "D4.5", "D4.6", "D4.7", "D4.8", "D4.9",
+        "D4.10", "D4.11", "D4.12", "D4.13", "D4.14", "D4.15", "D5.1", "D5.2", "D5.3",
+        "R1.1", "R1.5", "R2.8", "R3.2", "R6.3", "R7.5", "R7.6", "R8.15", "R8.16", "R8.17", "R9.6", "R9.7",
+        "R11.10", "R12.5", "R12.6", "R17.9", "R17.10", "R17.11", "R17.12", "R17.13", "R18.9", "R18.10",
+        "R21.22", "R21.23", "R21.24", "R21.25", "R21.26", "R22.11", "R22.12", "R22.13", "R22.14",
+        "R22.15", "R22.16", "R22.17", "R22.18", "R22.19", "R22.20",
+        "R23.1", "R23.2", "R23.3", "R23.4", "R23.5", "R23.6", "R23.7", "R23.8",
+    ])
+
+    def setUp(self):
+        inventory = c_standard.ROOT / ".agents/skills/misra-c2012/references/baseline-index.json"
+        self.rules = [{"id": row["id"], "category": row["category"],
+                       "automaticChecker": row["id"] not in self.UNCOVERED,
+                       "assessment": "not_assessed"}
+                      for row in json.loads(inventory.read_text())["guideline_metadata"]]
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        for name in c_standard.MANUAL_ASSESSMENT_SOURCES:
+            destination = self.root / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(c_standard.ROOT / name, destination)
+
+    def summary(self):
+        return c_standard.manual_assessment(self.rules, self.root)
+
+    def test_catalog_partition_and_raw_status_are_preserved(self):
+        original = copy.deepcopy(self.rules)
+        result = self.summary()
+        manual = result["checkerUncovered"]
+        self.assertEqual((manual["total"], result["checkerCovered"]["total"]), (66, 155))
+        self.assertEqual({row["id"] for row in manual["records"]}, self.UNCOVERED)
+        self.assertEqual(manual["classified"] + manual["unclassified"], 66)
+        self.assertGreater(manual["unclassified"], 0)
+        self.assertFalse(manual["classificationComplete"])
+        self.assertEqual(result["conformanceAssessment"], "not_established")
+        self.assertEqual(self.rules, original)
+
+    def test_normal_coverage_entry_connects_records_without_assessing_raw_catalog(self):
+        from autosar_tooling.c_check import coverage
+
+        with tempfile.TemporaryDirectory() as temporary:
+            addons = Path(temporary)
+            available = [row["id"][1:] for row in self.rules if row["automaticChecker"]]
+            (addons / "misra.py").write_text(
+                "def getAddonRules(): return " + repr(available) + "\ndef getCppcheckRules(): return []\n"
+            )
+            result = coverage(addons)
+        self.assertEqual(len(result["rules"]), 221)
+        self.assertTrue(all(row["assessment"] == "not_assessed" for row in result["rules"]))
+        self.assertFalse(result["completeCompliance"])
+        manual = result["manualAssessment"]
+        self.assertEqual(manual["format"], "misra-manual-assessment-v1")
+        self.assertEqual(manual["checkerCovered"]["total"], 155)
+        self.assertEqual(manual["checkerUncovered"]["total"], 66)
+        self.assertFalse(manual["checkerUncovered"]["classificationComplete"])
+        self.assertTrue(result["knownCheckerLimitations"])
+
+    def test_missing_record_remains_unclassified(self):
+        name = c_standard.MANUAL_ASSESSMENT_SOURCES[2]
+        path = self.root / name
+        before = self.summary()
+        text = path.read_text()
+        row = next(line for line in text.splitlines() if line.startswith("| R7.5 |"))
+        path.write_text(text.replace(row + "\n", ""))
+        after = self.summary()
+        self.assertEqual(after["checkerUncovered"]["unclassified"], before["checkerUncovered"]["unclassified"] + 1)
+        missing = next(row for row in after["checkerUncovered"]["records"] if row["id"] == "R7.5")
+        self.assertEqual(missing["status"], "not_assessed")
+
+    def test_duplicate_covered_category_status_and_block_controls(self):
+        path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[2]
+        text = path.read_text()
+        row = next(line for line in text.splitlines() if line.startswith("| R7.5 |"))
+        mutations = (
+            (text.replace(row, row + "\n" + row), "duplicate manual"),
+            (text.replace("| R7.5 |", "| R7.4 |"), "checker-covered or unknown"),
+            (text.replace("| R7.5 | Mandatory |", "| R7.5 | Advisory |"), "category differs"),
+            (text.replace(row, row.replace("satisfied", "retained")), "Invalid or duplicate"),
+            (text.replace(row, row.replace("satisfied", "approved")), "Invalid or duplicate"),
+            (text.replace("<!-- misra-manual-end -->", ""), "Unclosed manual"),
+        )
+        for mutant, message in mutations:
+            with self.subTest(message=message):
+                path.write_text(mutant)
+                with self.assertRaisesRegex(ValueError, message):
+                    self.summary()
+        path.write_text(text)
+
+    def test_record_bytes_and_selection_have_reproducible_identity(self):
+        before = self.summary()["inputIdentity"]
+        self.assertEqual(before, self.summary()["inputIdentity"])
+        path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[2]
+        path.write_text(path.read_text() + "\nChanged explanatory input.\n")
+        after = self.summary()["inputIdentity"]
+        self.assertNotEqual(before["documents"], after["documents"])
+        self.assertEqual(before["selectionSha256"], after["selectionSha256"])
+        self.assertRegex(after["parserSha256"], r"^[0-9a-f]{64}$")
+
+    def test_record_line_endings_preserve_conclusions_but_change_byte_identity(self):
+        path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[2]
+        text = path.read_text(encoding="utf-8")
+        for original, changed in (("\n", "\r\n"), ("\r\n", "\n")):
+            with self.subTest(original=repr(original), changed=repr(changed)):
+                # Establish both byte inputs explicitly, independent of checkout defaults.
+                path.write_bytes(text.replace("\n", original).encode("utf-8"))
+                before = self.summary()
+                path.write_bytes(text.replace("\n", changed).encode("utf-8"))
+                after = self.summary()
+                self.assertEqual(before["checkerUncovered"], after["checkerUncovered"])
+                self.assertNotEqual(before["inputIdentity"]["documents"], after["inputIdentity"]["documents"])
 
 
 if __name__ == "__main__":

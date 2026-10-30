@@ -1,5 +1,6 @@
 """CI baselines retain source occurrences and refuse incompatible evidence."""
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -7,6 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from autosar_tooling.c_comparison import compare
+from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
 from ecu_tools.build import digest
 
 
@@ -24,7 +26,13 @@ class CComparisonTests(unittest.TestCase):
         summary = {
             "error": None, "passed": False,
             "tool": {"version": "2.21.0", "expectedSourceRevision": "revision", "addons": {"misra.py": "hash"}, "binarySha256": "host-specific"},
-            "coverage": {"rules": ["R1"]},
+            "coverage": {"rules": ["R1"], "manualAssessment": {
+                "format": "misra-manual-assessment-v1",
+                "inputIdentity": {
+                    "parserSha256": "e" * 64,
+                    "selectionSha256": hashlib.sha256("\n".join(MANUAL_ASSESSMENT_SOURCES).encode()).hexdigest(),
+                    "documents": {name: "a" * 64 for name in MANUAL_ASSESSMENT_SOURCES},
+                }}},
             "sourceSealSha256": digest(baseline / "project/meta/files.sha256"),
             "scope": {"target": "linux", "profile": "ecu", "entries": {"target": "main.c"}, "compilerFlags": ["-std=c99"],
                       "includePaths": ["."], "translationUnits": ["main.c"], "supplemental": [], "patchedKernel": []},
@@ -42,7 +50,7 @@ class CComparisonTests(unittest.TestCase):
             "addonRuntime": {"runaddon.py": "d" * 64, "cppcheck.py": "d" * 64,
                              "cppcheckdata.py": "d" * 64},
             "analysisCode": {name: "b" * 64 for name in
-                             ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
+                             ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
         }
         self.write(baseline, summary)
         return summary, project, output, baseline
@@ -276,3 +284,32 @@ class CComparisonTests(unittest.TestCase):
                         change(current)
                     with self.assertRaisesRegex(ValueError, "Semantic identity missing, unsupported or incomplete"):
                         compare(current, project, output, baseline)
+
+
+    def test_manual_record_parser_and_selection_changes_refuse_without_changing_raw_evidence(self):
+        for field in ("parserSha256", "selectionSha256", "documents"):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                current, project, output, baseline = self.fixture(Path(temporary))
+                before = (baseline / "summary.json").read_bytes()
+                identity = current["coverage"]["manualAssessment"]["inputIdentity"]
+                if field == "documents":
+                    identity[field][MANUAL_ASSESSMENT_SOURCES[0]] = "f" * 64
+                else:
+                    identity[field] = "f" * 64
+                with self.assertRaisesRegex(ValueError, "Checker coverage differs"):
+                    compare(current, project, output, baseline)
+                self.assertFalse(current["passed"])
+                self.assertEqual((baseline / "summary.json").read_bytes(), before)
+
+    def test_matching_incomplete_manual_identities_still_refuse(self):
+        for field in ("format", "parserSha256", "selectionSha256", "documents"):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                current, project, output, baseline = self.fixture(Path(temporary))
+                assessment = current["coverage"]["manualAssessment"]
+                if field == "format":
+                    assessment[field] = "unknown"
+                else:
+                    assessment["inputIdentity"][field] = {} if field == "documents" else "invalid"
+                self.write(baseline, current)
+                with self.assertRaisesRegex(ValueError, "Semantic identity missing, unsupported or incomplete"):
+                    compare(current, project, output, baseline)

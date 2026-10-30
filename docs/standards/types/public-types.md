@@ -42,3 +42,111 @@ SWS_Os_00787、SWS_Os_00788、SWS_Os_00791、SWS_Os_00792、SWS_Os_91000。
 public-types 正常入口继续按六种头顺序编译／运行 SC1 的独立范围及指针消费者；
 另逐个编译15个未支持类型的引用，拒绝必须定位到输入第2行和对应类型名。
 恢复一个类型声明会使该项拒绝断言失败，不能由其他头错误冒充。
+
+## 类型与初始化的人工评估
+
+使用[共同配置、原件与冻结证据](../os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)；
+本节不扩大上表R2.3的范围。`TU`为Single Translation Unit，`System`须核对跨TU身份；
+C11条目逐项按规定对象和当前C99源码构造判断，不豁免GNU扩展及自有调用方。
+
+<!-- misra-manual-begin -->
+| 指南 | 有效类别 | 分析范围／语言 | 状态 | 义务、限定结论与证据 |
+| --- | --- | --- | --- | --- |
+| R6.3 | Required | TU／C99 | satisfied | 位域不能直接为union成员，union内struct子对象不在禁止集合（AMD3.15，8–9）。实际Dcm_MsgAddInfoType的两个uint8位域直接属于struct；[类型/位域依据](../dcm/interfaces.md)及双平台所选项目/补丁声明没有直接union位域，SDK原件不改归自有。 |
+| R7.5 | Mandatory | TU／C99 | satisfied | 整数常量宏实参为单个无后缀literal且在相应exact-width范围（AMD3.16，9–10；AMD4.55仅交叉引用）。[整数常量闭包](../types.md#整数常量初始化与浮点构造)及本轮两组八份交付分别28/26组实参均合法，最大restart值0x4155544f53525431。ecu.rs::configure_os把u32配置转u64后以十进制输出，tick_ms乘1000000不超u64；非负有界输入不产生符号/后缀/表达式实参。 |
+| R7.6 | Required | TU／C99 | satisfied | 不用宽度小于int的minimum-width常量宏（AMD4.4，7–8；正文/AMD4.64为Required，AMD4.65表冲突不降级）。两目标int32；[启用RES_SCHEDULER路径](../types.md#整数常量初始化与浮点构造)已以1u替换UINT16_C(1)，实际producer及两组交付没有INT8/UINT8/INT16/UINT16_C用途。无诊断并非证据。 |
+| R8.15 | Required | System／C11 | not_applicable | 同一对象各声明的显式alignment须在宏展开后词法相同（AMD3.17，10–11）。所选自有/补丁源码无_Alignas/alignas/stdalign.h；[对齐边界](../types.md#整数常量初始化与浮点构造)中的GNU aligned另按ABI与实际对象布局核查。 |
+| R8.16 | Advisory | TU／C11 | not_applicable | alignment表达式不能取零（AMD3.17，12）。同一源码集合没有C11 alignment说明符；不把GNU对齐参数或没有alignment说明符当作显式零。 |
+| R8.17 | Advisory | TU／C11 | not_applicable | 一个声明至多一个显式alignment说明符（AMD3.17，12–13）。同一源码没有该说明符，故没有需要合并的多个alignment；平台属性仍守实际ABI约束。 |
+| R9.6 | Required | TU／C99 | not_applicable | chained designator所在initializer list要求各项显式指定，内层独立花括号有原文例外（AMD4.5，8–9）。[初始化构造](../types.md#整数常量初始化与浮点构造)中.priorities={[OS_INPUT_INTERRUPT]=1u}是两层列表，当前无混用chained/隐式位置项；sigaction SDK宏用于赋值，不是chained initializer。 |
+| R9.7 | Mandatory | System／C11 | not_applicable | 原子对象先初始化后访问；静态默认初始化有效，非静态用声明初始化或atomic_init（AMD4.6，10–11）。[原子对象边界](../types.md#c11-原子对象的适用边界)及当前交付无_Atomic/stdatomic.h/标准atomic入口；GNU__atomic不是C11原子对象初始化。 |
+| R11.10 | Required | TU／C11 | not_applicable | 不能把_Atomic施加于不完整void（AMD4.15，12）。同一有限源码无该类型；普通void指针转换仍受R11系列及[精确地址类别](../os/native-facilities/addresses.md)约束。 |
+| R12.6 | Required | TU／C11 | not_applicable | 不可直接访问原子struct/union成员，应以整个对象的原子操作处理（AMD4.16，13）。同一源码无原子聚合对象，CONTEXT的FP/字节复制不是原子成员访问。 |
+| R17.13 | Required | TU／C99 | satisfied | 不能限定函数类型；限定返回类型/函数指针对象不违反本条（AMD3.38，20–21）。[真实callback typedef](../os/configuration.md#c99-数组与回调类型)均为函数指针，配置const限定指针或数据对象；Task声明宏形成函数入口，没有const/volatile/restrict限定的函数typedef。 |
+| R23.1 | Advisory | TU／C11 | not_applicable | generic selection只应从函数式宏展开，控制表达式取宏实参（AMD3.51，27–28）。[泛型边界](../types.md#泛型选择的适用边界)及当前所选C/H无_Generic；未用宏例外来批准普通重复求值。 |
+| R23.2 | Required | TU／C11 | not_applicable | 非宏generic控制表达式不得有潜在副作用，函数调用也计入（AMD3.51，28–29）。同一源码无generic选择，因而无待核控制表达式；普通sizeof/逻辑表达式仍独立评估。 |
+| R23.3 | Advisory | TU／C11 | not_applicable | generic至少一个非default association（AMD3.51，29–30）。同一源码没有association，不由C99标签推定已有列表合法。 |
+| R23.4 | Required | TU／C11 | not_applicable | association类型不能是会经lvalue转换消失的顶层限定、原子、数组、函数或匿名struct/union定义（AMD3.51，30–31）。同一源码无association；不混淆指向限定对象的指针类型。 |
+| R23.5 | Advisory | TU／C11 | not_applicable | 指针generic选择不依赖隐式指针转换决定default（AMD3.51，32–33）。同一源码没有指针选择，算术选择本身也不触发本条。 |
+| R23.6 | Required | TU／C11 | not_applicable | controlling expression的essential/standard type须匹配，特定非char/非Boolean整数常量表达式有例外（AMD3.51，33–35）。同一源码没有该表达式，未借常量例外扩大普通转换许可。 |
+| R23.7 | Advisory | TU／C11 | not_applicable | generic宏实参应在整个展开中恰求值一次；各association均为整数常量表达式的type query有例外（AMD3.51，35–36）。同一源码无generic宏，没有以宏名或无副作用推定任意重复求值可接受。 |
+| R23.8 | Required | TU／C11 | not_applicable | 有default时须在association首或尾（AMD3.51，36–37）。同一源码没有association/default；没有default本身不违反此条。 |
+<!-- misra-manual-end -->
+
+## D4.8的内核类型别名与对象边界
+
+本节补充[逐程序/TU的类型范围](../bsw-general/language-tokens.md#d48完整表示与隐藏边界)，不把typedef可见/used标记当成解引用证明。
+#397实际CTU记录中，两平台S/U/C/N的内核别名集合相同；StackLinux/Stack分别属于各target。
+TaskHandle_t/ConstTaskHandle_t、tskTCB/TCB_t由task.h声明，完整struct tskTaskControlBlock也在task.h；
+StaticTask_t的**别名声明在FreeRTOS.h**，不是另一个静态surrogate结构。
+QueueHandle_t/QueueSetHandle_t/QueueSetMemberHandle_t及xQUEUE/Queue_t由queue.h声明；
+StaticQueue_t的别名在FreeRTOS.h，完整struct QueueDefinition在queue.h。
+这些完整定义及静态别名的统一由0015-typed-port-state项目补丁实施，不能因带FreeRTOS版权头就把移入头的项目变更归为采用原件。
+
+- tasks.c的TCB_t指针有真实任务字段读写；queue.c中的TaskHandle_t来自mutex holder，传入任务优先级API，不读取TCB字段；
+  两端口把任务句柄传给pxTaskOsPortStack取得StackType_t字节存储，不通过TCB指针读取字段。
+  Backend的task_handles数组、task_memory/idle缓冲、task_slot比较/索引、idle回调二级指针和任务创建调用须合并看；
+  task_slot没有字段访问，静态完整对象/数组需要当前表示。其余Os_Backend.h包含者可见完整TCB不等于各TU有真实TCB字段消费者。
+- QueueHandle_t/Queue_t/StaticQueue_t在这两target八份CTU的used记录均只落到queue.c；
+  QueueSetHandle_t/QueueSetMemberHandle_t/StaticSemaphore_t/SemaphoreHandle_t均无used记录。
+  queue.c的pxQueue指针读写QueueDefinition字段；嵌套QueuePointers_t/SemaphoreData_t为u成员的完整子对象。
+  不把存在未激活的API原型当作已交付配置真正创建了QueueSet或semaphore。
+- List_t/ListItem_t/MiniListItem_t的完整owner为list.h，静态别名在FreeRTOS.h；tasks/queue/list实际维护列表/节点。
+  TCB/QueueDefinition内嵌的完整列表使其在包含者CTU也被标记used，**不是**这些包含者均有独立列表指针或解引用。
+  0015/0016补丁中修改的节点owner/布尔表示保留项目责任，未修改原件继续按采用层记录。
+- PortTask仅在Linux port.c定义并以局部对象/返回值和字节复制承载两个HANDLE；Windows ThreadState_t仅在该port.c定义，
+  prvTaskThreadState按任务句柄取得字节存储并复制成局部对象。两个私有类型没有借公共头发布完整布局。
+
+另核对没有独立类型化指针的自有聚合：Os_ArtiTaskStateType/Os_ArtiCallerType（Os_Arti.h）、
+Arti_Event/Arti_AddressCapture（Arti.h）、Os_InterruptFrameType/Os_OrderReferenceType（Backend.c）、
+Ecu_BatchToken（HostBatch.c）、EcuPolicyConfig（Ecu_Config.h）、Dcm_MsgAddInfoType/Dcm_MsgContextType（Dcm.h）、
+CanTp_TxType/CanTp_RxType（CanTp.c）、Dcm_PublicationType/Dcm_ActorsType（Dcm.c）。
+实际用途是数组/嵌入成员/局部对象或按值传参返回，不能因索引器没列出“类型名 *”就声称这些类型没使用。
+AlarmBaseType则有AlarmBaseRefType指针别名，已纳入Time/Service/ARTI核对，不能遗漏。
+以上细化owner和用途，不解除D4.8尚未闭合的SDK/逐TU全部指针事实，也不自动保留所有公开完整表示。
+
+## D4.8的SDK指针接缝
+
+这里核对自有调用方实际使用的供应方类型，不评估SDK内部全部函数。Linux对应已生成的standard-ecu来源收据，
+sourceSeal为6091d3fe8e4d2ce3dffe51de43885012340658b98071c5e317be19cd17b7bcea；
+原头与收据SHA逐字节相等：libc6-dev 2.39-0ubuntu8.9的pthread.h
+26eb5331384b27347c5d60d466c82e4fbbf91d920383ecddc479b29fd98dc22b、signal.h
+a79456587f504ae8020ab7f46aceaf5859d419c003e051c8cd2d067e64f25856、sys/ucontext.h
+4485d0daa586733fd121554bf5eef304076cc01b3bd59c9df8bb35d3d067ae84；libgcc-13-dev 13.3.0-6ubuntu2~24.04.1的unwind.h
+d42912846d21a01d15717f71934c5f8c0f6d290d08aaf4052ca00cc7b8cfa174。
+
+- Os_PortRestart.c的prepare_trace不使用_Unwind_Context参数；Os_PortRestartPersonality将其交给_Unwind_SetIP。unwind.h只给不完整struct，已隐藏。
+  _Unwind_Exception另有完整定义；restart_exception是线程局部完整对象，代码设置exception_class并核对回调的对象身份，不能同前者合并。
+- Os_HostLinux.c的park_signal/fault_stop_signal均不解引用siginfo_t；Os_StackLinux.c的guard_signal才读取details->si_addr。
+  两个TU须分别判断：后者字段访问不能消除前者保留完整SDK声明的Advisory边界，回调签名也不能自行改为void*。
+- Os_LinuxNative.c的timespec/stack_t指针仅供typed syscall输入/输出借用；对应完整对象在HostLinux/StackLinux创建，
+  timespec的tv_sec/tv_nsec、stack_t的ss_sp/ss_size/ss_flags按供应方布局构造。HostLinux中的previous仅保存和归还旧altstack，
+  不伪称已通过C字段解引用。该TU还以pthread_attr_t对象调用attr API，以sigset_t对象调用mask API，
+  以pollfd完整对象检查revents；pthread_mutex_t是私有handle内嵌对象，只由pthread API操作。
+  pthread_attr_t/pthread_mutex_t/sigset_t的供应方定义、完整存储需求和实际C解引用是三个不同事实。
+- LinuxNative实际复制ucontext_t/内核ucontext，检查sigcontext/_fpstate偏移和大小，
+  CONTEXT.destination的native.__fpregs_mem与uc_mcontext字段链均有实际对象/字段用途；
+  原SDK内的uc_link/fpregset_t声明不因此转成项目自有实现。
+
+Windows证据来自[d58d423344264158337fd770c753af97bb72e188的既有运行](https://github.com/g1331/autsaro/actions/runs/41045733576)
+（整次运行failure，不能写成通过或新head验证）。artifact 12973895611的下载字节SHA为
+21b7317ef8af805a3bb1210c4effa723482ccf5bff60d21f0c5d765e074677c2，与GitHub摘要相等。
+只提取compiler-origins-36/42/44的.d与stdout，分别对应Backend/PortRestart/Stack；
+42.stdout原始字节SHA为d06e67b62ab6cc99cf161dabf27bfbb0f4e84381c76361053aabbbd765faa5ff。
+这是实际预处理定义及包含来源证据，本机没有原winnt.h全文副本，不把收据当成原头全文已读。
+实际包为mingw-w64-x86_64-headers 14.0.0.r569.g34eeafb7d-1，收据中的winnt.h原头SHA为
+bc318d60f2c55e8cc39bf2c207fb0fa688ac6c4e5eb8d854d7545ae9802a4321。
+
+- 实际x64展开的winnt.h:1839给出16字节对齐CONTEXT；3044的EXCEPTION_RECORD有ExceptionCode/Flags/NumberParameters/ExceptionInformation；
+  3074的EXCEPTION_POINTERS由PEXCEPTION_RECORD和PCONTEXT构成；3095的DISPATCHER_CONTEXT含ContextRecord和HistoryTable；
+  5836的MEMORY_BASIC_INFORMATION含BaseAddress/RegionSize/State/Protect等，均已在展开正文核对。
+- Os_PortRestartHandler读取record的Code/Flags，转交dispatch->ContextRecord/HistoryTable给RtlUnwindEx；context参数本身不用，
+  同TU的其它CONTEXT用途不能由这个参数单独判定。Os_Stack.stack_exception实际沿ExceptionRecord读异常信息、沿ContextRecord读Rsp；
+  Os_StackObserve读context->Rsp并以*context保存整个上下文。VirtualQuery写入region，调用方随后检查State/Protect等字段。
+  Backend有完整CONTEXT对象供GetThreadContext写入并交给栈观察；这条转发链要与Stack TU的字段读写分别记录。
+- minwinbase.h:13的SECURITY_ATTRIBUTES/LPSECURITY_ATTRIBUTES为完整结构/指针别名；Backend的Os_PortEvent/Mutex/Thread只转交attributes给创建API，没有字段访问。Linux同名LPSECURITY_ATTRIBUTES是项目void*，不得跨target合并成SDK结构指针。
+
+这些精确使用仍不足以把整个D4.8记为满足；公开配置、CDS及仅传递SDK指针TU各有独立隐藏边界。
+保留原SDK定义与ABI的工程理由不能当作AUTOSAR强制完整表示或正式符合。
+本段Windows展开只绑定d58的user-application，Linux原头绑定所列standard-ecu收据；其余配置不能借同名类型推成已核SDK闭包。
+最终接入#398时核对全部实际来源身份与逐TU指针选择；对变化的源码/宏/类型集合重评，不把这两份收据外推到新seal。

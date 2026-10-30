@@ -31,7 +31,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessSpec, run_bounded
 
-from autosar_tooling import c_sdk
+from autosar_tooling import c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 CPPCHECK_VERSION = "2.21.0"
@@ -116,7 +116,7 @@ def coverage(addons: Path) -> dict:
     # The locked repository inventory includes directives and amendment guidance.
     items = inventory["guideline_metadata"]
     available = {f"R{value}" for value in [*addon_rules, *core_rules]}
-    return {
+    result = {
         "basis": "MISRA C:2012 + AMD1-AMD4 + TC1-TC2; C99",
         "completeCompliance": False,
         "knownCheckerLimitations": [{
@@ -170,6 +170,9 @@ def coverage(addons: Path) -> dict:
         "projectChecks": {"autsaro-dynamicAllocation": "Direct calls only; partial Dir 4.12 check",
                           "autsaro-hostThreadInBsw": "Project adapter boundary; not complete Dir 5.3"},
     }
+
+    result["manualAssessment"] = c_standard.manual_assessment(result["rules"])
+    return result
 
 
 def compiler_include_paths(header_log: str, directory: Path) -> list[str]:
@@ -495,7 +498,7 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     if cfg is None:
         raise ValueError("Cppcheck analysis library contents unavailable")
     scope["cppcheckLibraries"] = {name: str((cfg / (name + ".cfg")).resolve()) for name in libraries}
-    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__)]
+    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__), Path(c_standard.__file__)]
     # Build/owner helpers determine selected inputs, patching and executed processes.
     import ecu_tools.build
     import ecu_tools.owner
