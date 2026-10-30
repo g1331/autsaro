@@ -38,9 +38,12 @@ refusal保持；分析驱动或patch链变化仍按原比较器身份拒绝旧�
 ## 补丁诊断的具体处置
 
 正常整改以 `0027-port-diagnostic-types.patch` 及 Linux `0003-port-diagnostic-types.patch`
-追加在各自既有链末尾。Windows等待返回值按DWORD比较，等待成功零下标用0U；
+追加在既有公共链及Linux端口链末尾。Windows等待返回值按DWORD比较，等待成功零下标用0U；
 boolean clear直接作条件，uint32请求与0U比较；调度启动结果使用其真实BaseType_t。
-分支局部seen及xThreadState移入唯一消费分支。R7.2／R10.3／R10.4的Required义务
+分支局部seen及xThreadState移入唯一消费分支。
+等待值依据Microsoft的[单对象](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject)
+与[多对象](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitformultipleobjects)契约；
+原等待对象、wait-all选择、超时／abandoned／失败拒绝保持。R7.2／R10.3／R10.4的Required义务
 按主文印刷60、86–88／PDF68、94–96及AMD2相应C11扩充核对；不改变失败与成功路径。
 
 R18.4（Advisory，主文147／PDF155）两处指针-=改为下标取址。栈填充值游标仍按

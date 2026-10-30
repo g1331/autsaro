@@ -336,6 +336,12 @@ class NativeKernelObjectTests(unittest.TestCase):
         shutil.copytree(os_suites.TARGET, target)
         if omitted_patch:
             (target / "patches" / omitted_patch).unlink()
+            # The type-only tail also touches the guards removed by these mutants.
+            # Keep its independent kernel edits; mutate the original guard behavior.
+            tail = target / "patches/0027-port-diagnostic-types.patch"
+            common, separator, _ = tail.read_text(encoding="utf-8").partition("--- a/portable/MSVC-MingW/port.c\n")
+            self.assertTrue(separator, "Expected the reviewed Windows type-only patch section")
+            tail.write_text(common, encoding="utf-8")
         # Redirect only the adopted port, after real platform declarations.
         anchor = '#include "Os_Backend.h"\n'
         before = ('/* Scheduler includes. */\n#include "FreeRTOS.h"\n#include "task.h"\n' + anchor +

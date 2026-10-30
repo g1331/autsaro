@@ -68,9 +68,9 @@ const LINUX_PATCHES: &[&str] = &[
     "runtime/os/patches/0024-conditional-private-definitions.patch",
     "runtime/os/patches/0025-configured-kernel-declarations.patch",
     "runtime/os/patches/0026-explicit-control-flow-boundaries.patch",
+    "runtime/os/patches/0027-port-diagnostic-types.patch",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch",
     "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch",
-    "runtime/os/patches/0027-port-diagnostic-types.patch",
     "runtime/os/patches/linux/0003-port-diagnostic-types.patch",
 ];
 const LINUX_PATCH_INCLUDES: &[(&str, &[&str])] = &[
