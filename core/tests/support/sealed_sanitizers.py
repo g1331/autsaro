@@ -14,10 +14,12 @@ def main() -> None:
     mode = sys.argv[3]
     control = Path(sys.argv[4]).resolve() if len(sys.argv) >= 5 else None
     link_flags = sys.argv[5:]
-    if link_flags not in ([], ["-Wl,--wrap=pthread_detach"]):
+    if link_flags not in ([], ["-Wl,--wrap=pthread_detach"],
+                          ["-Wl,--wrap=Os_TargetTakeInput", "-Wl,--wrap=Os_TargetPostInput",
+                           "-Wl,--wrap=vApplicationTickHook"]):
         raise ValueError("Unsupported test linker observer")
-    kinds = os.environ["AUTOSAR_SANITIZE"]
-    if sys.platform != "linux" or kinds not in ("thread", "address,undefined"):
+    kinds = os.environ.get("AUTOSAR_SANITIZE", "")
+    if kinds and (sys.platform != "linux" or kinds not in ("thread", "address,undefined")):
         raise ValueError("Sealed ECU sanitizer tests require Linux thread or address,undefined")
     # Let the seal guard establish import paths after its standard-library imports.
     sys.dont_write_bytecode = True
@@ -64,6 +66,9 @@ def main() -> None:
     if len(commands) != 1:
         raise ValueError("Expected exactly one sealed native compilation")
     original = commands[0]
+    if not kinds:
+        # Normal observer controls use the same verified production build.
+        return
     instrumented = list(original)
     binary = output / Path(original[original.index("-o") + 1]).name
     instrumented[instrumented.index("-o") + 1] = str(binary)

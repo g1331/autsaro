@@ -121,6 +121,113 @@ fn field<'a>(line: &'a str, key: &str) -> &'a str {
         .unwrap_or_else(|| panic!("missing {key}: {line}"))
 }
 
+/// A real batch published after NOFUNC must precede its delivered tick's cycle.
+#[test]
+fn host_batch_input_precedes_tick_across_empty_drain_window() {
+    let scratch = super::Scratch::new();
+    let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
+    assert_eq!(
+        fs::read(project.join("integration/src/Ecu_Target.c")).unwrap(),
+        fs::read(root().join("runtime/ecu/src/Ecu_Target.c")).unwrap()
+    );
+    let before = super::packages::package_tree(&project);
+    let control = scratch.0.join("input-tick-window.c");
+    fs::write(
+        &control,
+        format!(
+            "{}\n{}",
+            fs::read_to_string(project.join("integration/src/ecu_host_batch.c")).unwrap(),
+            fs::read_to_string(root().join("core/tests/fixtures/host-batch/input_tick_window.c"))
+                .unwrap()
+        ),
+    )
+    .unwrap();
+    let output = scratch.0.join("window-build");
+    let kinds = std::env::var_os("AUTOSAR_SANITIZE").unwrap_or_default();
+    let mut command = super::tooling::ecu_sanitizer_build_command(
+        &project,
+        &output,
+        "probe",
+        Some(&control),
+        &kinds,
+    );
+    command.args([
+        "-Wl,--wrap=Os_TargetTakeInput",
+        "-Wl,--wrap=Os_TargetPostInput",
+        "-Wl,--wrap=vApplicationTickHook",
+    ]);
+    require_success(&super::tooling::run_public_command(
+        &mut command,
+        &scratch.0,
+        "window-build",
+        Duration::from_secs(180),
+    ));
+    let directory = if kinds.is_empty() {
+        output.join("production")
+    } else {
+        output
+    };
+    let text = run(
+        &super::tooling::native_binary(&directory, "ecu_probe"),
+        &scratch.0.join("window"),
+        script(&[
+            (1, &[(REQUEST, "0227010000000000")]),
+            (2, &[(REQUEST, READ)]),
+            (10, &[(RECEIVE, "78563412")]),
+            (10, &[(RECEIVE, "44332211")]),
+            (20, &[]),
+        ])
+        .as_bytes(),
+    );
+    assert!(
+        text.contains("WINDOW input=published tick=delivered\n"),
+        "{text}"
+    );
+    assert_eq!(
+        frames(&text, RESPONSE),
+        owned(&[(1, "037F271100000000"), (2, "0762123400000000")]),
+        "{text}"
+    );
+    assert_eq!(
+        frames(&text, TRANSMIT),
+        owned(&[(10, "78563412"), (20, "44332211")]),
+        "same-epoch batch reran periodic work: {text}"
+    );
+    assert_eq!(text.matches("COMMIT_OK ").count(), 5, "{text}");
+    assert!(!text.contains("COMMIT_ERROR "), "{text}");
+    for line in text.lines().filter(|line| line.starts_with("COMMIT_OK ")) {
+        assert!(
+            line.ends_with(
+                "status=0 input_status=0 transport_status=0 transport_epoch=0 transport_count=0"
+            ),
+            "{text}"
+        );
+    }
+    for at in [1, 2] {
+        let sent = text.find(&format!("OUT epoch={at} ")).unwrap();
+        let committed = text
+            .lines()
+            .find(|line| line.starts_with(&format!("COMMIT_OK batch={at} ")))
+            .unwrap();
+        assert!(
+            sent < text.find(committed).unwrap(),
+            "undrained receipt: {text}"
+        );
+    }
+    assert!(
+        fs::read(scratch.0.join("window/stderr"))
+            .unwrap()
+            .is_empty(),
+        "{text}"
+    );
+    assert!(text.contains("trace_dropped=0"), "{text}");
+    assert!(
+        text.contains("input_closed=1 tick_closed=1 time_signal_failed=0"),
+        "{text}"
+    );
+    assert_eq!(super::packages::package_tree(&project), before);
+}
+
 fn frames(text: &str, id: u64) -> Vec<(u64, String)> {
     text.lines()
         .filter(|line| line.starts_with("OUT "))
