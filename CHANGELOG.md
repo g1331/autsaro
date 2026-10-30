@@ -56,6 +56,8 @@
 
 ### Fixed
 
+- HostBatch now observes the delivered tick before draining its input mailbox, so a newly published batch cannot be overtaken by its own periodic cycle. Exact response epochs, same-epoch submissions and drained completion receipts are preserved (#396)
+
 - Native stack context and fault-slot selection uses bounded record identity on both host targets, rejecting NULL, foreign and one-past records before indexing; ARTI consumers verify saved stack identity and compiled rejection controls (#389)
 
 - Linux process cancellation recognizes registered sibling session leaders before reading their exiting proc environment, avoiding false cleanup failures while preserving escape refusal and root exit codes; unconfirmed cleanup logs include the responsible group, PID and observation error (#388)

@@ -609,6 +609,7 @@ void Ecu_TargetTask(void)
         uint64_t delivered;
         unsigned count;
         StatusType status;
+        StatusType input_status;
         Ecu_TargetAssertOwner();
         status = GetEvent(ECU_TARGET_TASK, &events);
         if (status == E_OK) {
@@ -617,25 +618,26 @@ void Ecu_TargetTask(void)
         if (status != E_OK) {
             fail();
         }
-        status = Os_TargetTakeInput(&record);
-        while (status == E_OK) {
+        /* Observe the delivered tick before draining: its producer published
+         * this epoch's input first. A later tick belongs to the next iteration. */
+        status = Os_TargetCurrentTick(&ticket, &delivered);
+        input_status = Os_TargetTakeInput(&record);
+        while (input_status == E_OK) {
             Ecu_MailboxInput input;
             if (record.length != sizeof(input[0])) {
                 fail();
             }
             (void)memcpy((void *)&input[0], (const void *)record.data, sizeof(input[0]));
             consume(&input[0]);
-            status = Os_TargetTakeInput(&record);
+            input_status = Os_TargetTakeInput(&record);
         }
-        if (status != E_OS_NOFUNC) {
+        if (input_status != E_OS_NOFUNC) {
             fail();
         }
-        status = Os_TargetCurrentTick(&ticket, &delivered);
         if ((status == E_OK) && (ticket != processed_tick)) {
             EventMaskType tick_events;
-            /* A tick may arrive while this Task drains copied inputs. Its
-             * alarm events are published before the delivered ticket, so
-             * refresh the hints instead of losing this tick's application. */
+            /* The captured tick may follow the initial event snapshot. Its
+             * alarm events precede delivery; refresh them before the cycle. */
             StatusType event_status = GetEvent(ECU_TARGET_TASK, &tick_events);
             if (event_status == E_OK) {
                 event_status =
