@@ -181,7 +181,7 @@ class EcuBuildModeTests(unittest.TestCase):
         project = (Path(samples) / "standard-ecu").resolve(strict=True)
         original = ecu_build.query
         with tempfile.TemporaryDirectory(prefix="autosar-kernel-cursors-") as temporary:
-            directory = Path(temporary)
+            directory = Path(temporary).resolve()
             for variant in ("control", "stack-step"):
                 output = directory / variant
                 source = directory / (variant + ".c")
