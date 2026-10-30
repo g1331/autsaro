@@ -435,8 +435,9 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
         ));
     }
     // About 800 independent syntax checks; serially they dominate the native suite on Windows.
+    // Half the cores: libtest runs other compiling and time-bounded tests beside this one.
     let pending = std::sync::Mutex::new(checks.iter());
-    let workers = std::thread::available_parallelism().map_or(1, usize::from);
+    let workers = std::thread::available_parallelism().map_or(1, |cores| (cores.get() / 2).max(1));
     std::thread::scope(|scope| {
         for _ in 0..workers {
             scope.spawn(|| {
