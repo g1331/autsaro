@@ -321,6 +321,47 @@ pub(super) fn defines<N: AsRef<str>, V: AsRef<str>>(entries: &[(N, V)]) -> Strin
     text
 }
 
+/// Required preprocessor interfaces remain published even when a consumer leaves them unused.
+pub(super) fn required_defines<N: AsRef<str>, V: AsRef<str>>(
+    entries: &[(N, V)],
+    purpose: &str,
+    requirement: &str,
+) -> String {
+    let mut output = String::new();
+    for (name, value) in entries {
+        output.push_str(&format!(
+            "/** MR12 RULE 2.5 VIOLATION: {requirement} requires this macro even when unused. */\n"
+        ));
+        output.push_str(&commented_defines(
+            &[(name.as_ref(), value.as_ref())],
+            purpose,
+        ));
+    }
+    output
+}
+
+/// Keep selected public preprocessing interfaces without inventing a use.
+pub(super) fn retained_defines<N: AsRef<str>, V: AsRef<str>>(
+    entries: &[(N, V)],
+    purpose: &str,
+    retained: &[&str],
+) -> String {
+    let mut output = String::new();
+    let mut run = Vec::new();
+    for (name, value) in entries {
+        if retained.contains(&name.as_ref()) {
+            output.push_str(&commented_defines(&run, purpose));
+            run.clear();
+            output.push_str(
+                "/* MR12 RULE 2.5 VIOLATION: retain the public preprocessing contract when unused. */\n",
+            );
+        }
+        run.push((name.as_ref(), value.as_ref()));
+    }
+    output.push_str(&commented_defines(&run, purpose));
+    output
+}
+
 /// Constants sharing a short purpose, with aligned Doxygen trailing comments.
 pub(super) fn commented_defines<N: AsRef<str>, V: AsRef<str>>(
     entries: &[(N, V)],

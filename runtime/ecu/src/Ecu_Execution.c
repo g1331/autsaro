@@ -1,4 +1,4 @@
-/** @file Forward ECU transmission and clock access to the controlled target. */
+/** @file Forward ECU transmission to the controlled target. */
 #include "Ecu_Execution.h"
 #include "Ecu_Target.h"
 EcuStatus Ecu_ExecutionTransmit(
@@ -7,4 +7,3 @@ EcuStatus Ecu_ExecutionTransmit(
     (void)sink;
     return Ecu_TargetEnqueueTransmit(handle, id, dlc, data);
 }
-uint64_t Ecu_ExecutionNow(void) { return Ecu_TargetNow(); }

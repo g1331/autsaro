@@ -835,6 +835,8 @@ OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 
 
 OS_MEMMAP void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address)
 {
+    /* MR12 RULE 11.4 VIOLATION: observe the full address bits on the controlled x64 targets.
+     * The integer is never restored to a pointer or used to access the object. */
     const uint64 native_address = (uint64)address;
     const uint32 token = (uint32)native_address;
     Arti_CaptureAddress(native_address);

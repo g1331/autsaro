@@ -5,6 +5,7 @@
 主线选择单核、单 owner、源码 SWC 每类型单实例、显式非队列 uint32 S/R、同步直接 C/S、固定四字节 OUT 数组、TimingEvent 与预编译配置。契约阶段与 ECU 阶段消费同一个已验证 `CompositionContract`；普通生成不需要编译器或官方档案。原文的工具能力要求与某次配置的运行义务分开：未支持的其他机制保留在 [#212](https://github.com/g1331/autsaro/issues/212)，不把拒绝某个可选配置等同于实现该机制。
 
 - [接口、状态与输入](contracts.md)：当前主线的接口、类型、初始化与生成阶段。
+- [生成 C 诊断](generated-diagnostics.md)：producer、分类依据与未决边界。
 - [其他通信机制](communication.md)、[其他生成能力](generator.md)、[其他执行与配置](execution.md)：非主线能力与进入条件。
 - [测量、标定与生成开关](optional-generation.md)、[Implementation Plug-In](plugins.md)：按原文条件区分已关闭配置和未提供的工具能力。
 - [SchM](../schm.md)：BSW Scheduler 生命周期和独占区。
@@ -61,7 +62,7 @@ R5.6为Required／System（2013主文印刷54／PDF62，AMD2追加C11）。主�
 
 | 文件、请求与位置 | 具体实体与class |
 | --- | --- |
-| `generated/src/Rte.c`，[2]：标准／用户行60，组件62，无诊断54 | 关闭 `RTE_Rte_VAR_CLEARED_UNSPECIFIED` 的rte_started／rte_allocated。第一次包含在本文件对象前，不是R20.1；Start校验生命周期并拒绝重复启动，Stop只停止，不把allocated复位。 |
+| `generated/src/Rte.c`，[2]：标准／用户行60，组件62，无诊断54 | 关闭 `RTE_Rte_VAR_CLEARED_UNSPECIFIED` 的rte_lifecycle。第一次包含在本文件对象前，不是R20.1；Start校验生命周期并拒绝重复启动，Stop保留已分配状态，不允许再次Start。 |
 | 同文件，标准／用户[3]/[4]行62／68、[5]/[6]行70／74、[7]/[8]行76／82 | `RTE_EchoApplication` 的CONST包围静态CDS与公开const句柄，VAR_INIT包围接收值，VAR_CLEARED包围received／expired状态。实际Read／COM通知消费同一对象，不能用句柄未读就声称CDS没有被取址。 |
 | 同文件，标准／用户[9]/[10]行84／89、[11]/[12]行91／113、[13]/[14]行115／158、[15]/[16]行160／180、[17]/[18]行182／213 | 依次为DcmService的CONST CDS／句柄、RTE_Rte的Start／Stop CODE、EchoApplication的Read／Write／状态接口CODE、DcmService的同步client CODE、OwnerPartition的COM回调CALLOUT_CODE。同步client按实际连接调用应用ReadData，通知按句柄更新接收状态，均与已配置前缀及对象一致。 |
 | 同文件，组件与无诊断[3]/[4]、[5]/[6]、[7]/[8] | Ingress的CONST CDS／句柄、VAR_INIT接收值、VAR_CLEARED接收状态。组件行64／68、70／74、76／82；无诊断56／60、62／66、68／74。 |

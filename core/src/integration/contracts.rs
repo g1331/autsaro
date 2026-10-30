@@ -190,11 +190,23 @@ This delivery contains component-level declarations and selected relationships f
 typedef uint8 Rte_ModeType_{group};
 /** Connection authentication modes and transition sentinel (SWS_Dcm_91067). */
 {}"#,
-            c_layout::defines(&[
-                (format!("RTE_MODE_{group}_DCM_DEAUTHENTICATED"), "0u"),
-                (format!("RTE_MODE_{group}_DCM_AUTHENTICATED"), "1u"),
-                (format!("RTE_TRANSITION_{group}"), "255u"),
-            ])
+            c_layout::retained_defines(
+                &[
+                    (format!("RTE_MODE_{group}_DCM_DEAUTHENTICATED"), "0u"),
+                    (format!("RTE_MODE_{group}_DCM_AUTHENTICATED"), "1u"),
+                    (format!("RTE_TRANSITION_{group}"), "255u"),
+                ],
+                "Authentication mode.",
+                if group == "DcmAuthenticationState_Physical" {
+                    &[
+                        "RTE_MODE_DcmAuthenticationState_Physical_DCM_DEAUTHENTICATED",
+                        "RTE_MODE_DcmAuthenticationState_Physical_DCM_AUTHENTICATED",
+                        "RTE_TRANSITION_DcmAuthenticationState_Physical",
+                    ]
+                } else {
+                    &[]
+                }
+            )
         );
         let asset = super::outputs::trusted_asset("runtime/bsw/include/Rte_Dcm_Type.h")?;
         super::outputs::render(
@@ -207,6 +219,18 @@ typedef uint8 Rte_ModeType_{group};
                         "\"Std_Types.h\"\n#include \"Rte_Type.h\"\n{}",
                         c_layout::release_check("Rte_Dcm_Type.h", "Rte_Type.h", "RTE")
                     ),
+                ),
+                super::outputs::Edit::Once(
+                    "/** SWS_Dcm_00984: standard public Dcm_OpStatusType. */",
+                    "/** SWS_Dcm_00984: standard public Dcm_OpStatusType.\n * MR12 RULE 2.3 VIOLATION: publish the required type even when unused by this application.\n */",
+                ),
+                super::outputs::Edit::Once(
+                    "/** SWS_Dcm_00983: standard public Dcm_ConfirmationStatusType. */",
+                    "/** SWS_Dcm_00983: standard public Dcm_ConfirmationStatusType.\n * MR12 RULE 2.3 VIOLATION: publish the required type even when unused by this application.\n */",
+                ),
+                super::outputs::Edit::Once(
+                    "/** SWS_Dcm_00979: standard public Dcm_ProtocolType. */",
+                    "/** SWS_Dcm_00979: standard public Dcm_ProtocolType.\n * MR12 RULE 2.3 VIOLATION: publish the required type even when unused by this application.\n */",
                 ),
                 super::outputs::Edit::BeforeGuardEnd(&addition),
             ],
@@ -222,7 +246,7 @@ typedef uint8 Rte_ModeType_{group};
     ) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         let description = self.description();
         let application_slots = super::ecu::application_slots(composition, &description.symbols);
-        let mut types = String::from("#include \"Rte.h\"\n");
+        let mut types = String::new();
         for datatype in &composition.types {
             if datatype.symbol == datatype.native_type && datatype.array_length.is_none() {
                 continue;
@@ -260,7 +284,13 @@ typedef {} {}{suffix};
                 super::outputs::render(
                     super::outputs::trusted_text("runtime/os/include/Rte_Type.h")?,
                     "include/Rte_Type.h",
-                    &[super::outputs::Edit::BeforeGuardEnd(&types)],
+                    &[
+                        super::outputs::Edit::Once(
+                            "#include \"Std_Types.h\"",
+                            "#include \"Std_Types.h\"\n#include \"Rte.h\"",
+                        ),
+                        super::outputs::Edit::BeforeGuardEnd(&types),
+                    ],
                 )?
                 .into_bytes(),
             ),
@@ -301,7 +331,9 @@ struct Rte_CDS_{scope} {{
 /** Component data structure for the selected single instance. */
 typedef struct Rte_CDS_{scope} Rte_CDS_{scope};
 #ifndef RTE_CORE
-/** Borrowed component instance; immutable for the ECU lifetime.{instance_disposition} */
+/** Borrowed component instance; immutable for the ECU lifetime.
+ * MR12 RULE 2.3 VIOLATION: SWS_Rte_01007 requires this type even when unused.
+{instance_disposition} */
 typedef const Rte_CDS_{scope} *Rte_Instance;
 #endif
 {start_const}{instance}
@@ -313,7 +345,7 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                         .iter()
                         .any(|slot| slot.component_path == component.component)
                 {
-                    "\n * MR12 RULE 5.6 VIOLATION: SWS_Rte_01150 fixes the name for distinct component CDS types.\n * Separate application headers preserve type isolation.\n"
+                    " * MR12 RULE 5.6 VIOLATION: SWS_Rte_01150 fixes the name for distinct component CDS types.\n * Separate application headers preserve type isolation.\n"
                 } else {
                     ""
                 },
@@ -333,9 +365,10 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                 })
                 .collect();
             body.push_str("#ifndef RTE_CORE\n");
-            body.push_str(&c_layout::commented_defines(
+            body.push_str(&c_layout::required_defines(
                 &init_values,
                 "Initial data element value.",
+                "SWS_Rte_05078",
             ));
             body.push('\n');
             let runnables: Vec<_> = component
@@ -348,9 +381,10 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                     )
                 })
                 .collect();
-            body.push_str(&c_layout::commented_defines(
+            body.push_str(&c_layout::required_defines(
                 &runnables,
                 "Runnable symbol alias.",
+                "SWS_Rte_06713",
             ));
             body.push('\n');
             body.push_str("#endif\n");
@@ -360,9 +394,14 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                 .filter_map(|operation| operation.application_error.as_ref())
                 .collect();
             let errors: Vec<_> = errors.iter().map(|error| (error.as_str(), "1U")).collect();
-            body.push_str(&c_layout::commented_defines(
+            body.push_str(&c_layout::retained_defines(
                 &errors,
                 "Selected application error.",
+                if scope == "Ingress" {
+                    &["RTE_E_DataServices_ApplicationValue_E_NOT_OK"]
+                } else {
+                    &[]
+                },
             ));
             for symbol in description
                 .symbols
@@ -555,9 +594,14 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                             r#"#ifndef RTE_CORE
 {}#endif
 "#,
-                            c_layout::commented_defines(
+                            c_layout::retained_defines(
                                 &[(alias, symbol.symbol.as_str())],
-                                "API alias."
+                                "API alias.",
+                                if scope == "DcmService"
+                                    && symbol.symbol == "Rte_Call_DcmService_DataServices_ApplicationValue_ReadData"
+                                {
+                                    &["Rte_Call_DataServices_ApplicationValue_ReadData"]
+                                } else { &[] },
                             )
                         ));
                     }

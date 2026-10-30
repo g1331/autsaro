@@ -40,7 +40,9 @@ ComM 按 [ADR 0018](../../adr/0018-per-module-exclusive-areas-without-cross-modu
 | 规则 | 范围 | 依据与风险控制 | 批准 |
 | --- | --- | --- | --- |
 | MISRA C:2012 Rule 8.7（advisory） | `runtime/bsw/src/ComM.c` 中 `ComM_DeInit`、`ComM_GetStatus`、`ComM_GetInhibitionStatus`、`ComM_SetECUGroupClassification`、`ComM_GetMaxComMode`、`ComM_GetRequestedComMode`、`ComM_GetCurrentComMode`、`ComM_GetCurrentPNCComMode` 与 `ComM_EcuM_WakeUpIndication` 的定义 | `SWS_ComM_00147`、`00242`、`00619`、`00552`、`00085`、`00079`、`00083`、`91002` 与 `00275` 规定这些 API 经 `ComM.h` 以外部链接提供；所选程序没有 SW-C 端口（#195）和 EcuM，没有模块调用它们，Cppcheck 因此报告只在一个翻译单元中引用。偏离只影响符号可见性：这些函数只在 `COMM_STATE` 区内读写本模块数据，行为由 `mode_contract.c` 验证；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-15（#45） |
-| MISRA C:2012 Rule 2.5（advisory） | `runtime/bsw/include/ComM.h` 中的 `COMM_E_MODE_LIMITATION`、`COMM_E_MULTIPLE_PNC_ASSIGNED`、`COMM_E_LEARNING_ACTIVE` 与 `COMM_SILENT_COM`；`runtime/bsw/include/Rte_ComM_Type.h` 中的 `COMM_FULL_COMMUNICATION_WITH_WAKEUP_REQUEST` | `SWS_ComM_91027`、`00674` 与 `00672` 规定这些公开常量；所选配置没有模式抑制、PNC，NM NONE 不进入 SILENT 子状态，也不请求带唤醒的 Full，因此没有代码引用它们。它们只是公开常量，取值由 `mode_contract.c` 断言，不影响行为；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-15（#45） |
+| MISRA C:2012 Rule 2.5（advisory） | `runtime/bsw/include/ComM.h` 中的 `COMM_E_MODE_LIMITATION`、`COMM_E_MULTIPLE_PNC_ASSIGNED`、`COMM_E_LEARNING_ACTIVE` 与 `COMM_SILENT_COM` | `SWS_ComM_91027`、`00674` 与 `00672` 规定这些公开常量；所选配置没有模式抑制、PNC，NM NONE 不进入 SILENT 子状态，因此没有代码引用它们。它们只是公开常量，取值由 `mode_contract.c` 断言，不影响行为；原始诊断保留，不加 suppression | 维护者 Umaru，2026-10-15（#45） |
+
+Rte_ComM_Type的唤醒常量由[生成接口精确保留](../rte/generated-retention/preprocessing.md)承接本次PM决定，避免对同一源码标记重复关联；其原始未使用报告保持。
 
 ## 剩余差距
 
