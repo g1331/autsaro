@@ -156,6 +156,8 @@
 
 ### Changed
 
+- The frozen manual D4.8 record now identifies per-translation-unit pointer, object and SDK boundaries and retains the scoped Advisory noncompliances; D4.7 remains unassessed with its consumer-contract gap tracked separately (#385)
+
 - C analysis summaries separately expose the 66 checker-uncovered manual records and 155 checker-covered guidelines, binding parser, record bytes and selection identities while preserving raw not-assessed states and strict baseline refusal (#385)
 
 - C analysis summaries trace verified SDK header/provider, compiler predefine and macro origins, expose incomplete provenance, and reject baselines with incompatible SDK identities while preserving source diagnostics and assessment status (#398)
