@@ -2539,6 +2539,31 @@
       ],
       "role": "os",
       "responsibility": "workbench"
+    },
+    {
+      "path": "runtime/os/patches/0027-port-diagnostic-types.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "patch",
+      "responsibility": "Project-owned port diagnostic type and scope corrections over the fixed adopted kernel."
+    },
+    {
+      "path": "runtime/os/patches/linux/0003-port-diagnostic-types.patch",
+      "license": "Apache-2.0",
+      "targets": [
+        "linux-x64-controlled-v1"
+      ],
+      "profiles": [
+        "ecu"
+      ],
+      "role": "patch",
+      "responsibility": "Project-owned port diagnostic type and scope corrections over the fixed adopted kernel."
     }
   ]
 }

@@ -336,6 +336,12 @@ class NativeKernelObjectTests(unittest.TestCase):
         shutil.copytree(os_suites.TARGET, target)
         if omitted_patch:
             (target / "patches" / omitted_patch).unlink()
+            # The type-only tail also touches the guards removed by these mutants.
+            # Keep its independent kernel edits; mutate the original guard behavior.
+            tail = target / "patches/0027-port-diagnostic-types.patch"
+            common, separator, _ = tail.read_text(encoding="utf-8").partition("--- a/portable/MSVC-MingW/port.c\n")
+            self.assertTrue(separator, "Expected the reviewed Windows type-only patch section")
+            tail.write_text(common, encoding="utf-8")
         # Redirect only the adopted port, after real platform declarations.
         anchor = '#include "Os_Backend.h"\n'
         before = ('/* Scheduler includes. */\n#include "FreeRTOS.h"\n#include "task.h"\n' + anchor +
@@ -499,7 +505,7 @@ class NativeKernelObjectTests(unittest.TestCase):
         }
         else
         {
-            pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
+            pxQueue->u.xQueue.pcReadFrom = &pxQueue->u.xQueue.pcReadFrom[-(ptrdiff_t)pxQueue->uxItemSize];
             mtCOVERAGE_TEST_MARKER();
         }"""
         old = """        pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;
@@ -513,6 +519,7 @@ class NativeKernelObjectTests(unittest.TestCase):
             mtCOVERAGE_TEST_MARKER();
         }"""
         decrement = "pxQueue->u.xQueue.pcReadFrom -= pxQueue->uxItemSize;"
+        indexed = "pxQueue->u.xQueue.pcReadFrom = &pxQueue->u.xQueue.pcReadFrom[-(ptrdiff_t)pxQueue->uxItemSize];"
         observed = ("pxQueue->u.xQueue.pcReadFrom = Os_QueueTestPrevious("
                     "pxQueue->pcHead, pxQueue->u.xQueue.pcReadFrom, pxQueue->uxItemSize);")
         for mutant, code, error in (
@@ -533,8 +540,9 @@ class NativeKernelObjectTests(unittest.TestCase):
                         self.assertEqual(text.count(candidate), 1)
                         if mutant == "old-subtract":
                             text = text.replace(candidate, old)
-                        self.assertEqual(text.count(decrement), 1)
-                        text = text.replace(decrement, observed)
+                        step = decrement if mutant == "old-subtract" else indexed
+                        self.assertEqual(text.count(step), 1)
+                        text = text.replace(step, observed)
                         if mutant == "no-step":
                             text = text.replace(observed, "(void)pxQueue;")
                         elif mutant == "wrong-wrap":
