@@ -65,7 +65,7 @@ FreeRTOSConfig.h的两个trace宏沿内核配置宏入口绑定Backend；OS_RESO
 | D4.4 | Advisory | 指令／C99 | satisfied | 不以注释停用实现（主文27；AMD2扩展语言）。[实际词法边界](language.md#注释与字面量的实际词法边界)中的Doxygen示例是说明而非停用实现；commented_defines输出生效define，未选择功能以条件编译表达。所选307种交付文件字节与正常producer没有另发现注释停用实现。 |
 | D4.5 | Advisory | 指令／C99 | retained | 同namespace且重叠可见的名字应避免字形歧义（主文27–28）。[既有重名整改](../os/declarations.md#条件接口与声明owner)保留标准COM_INIT/Com_Init、COMM_INIT/ComM_Init及本机HANDLE/handle、CONTEXT/context、SIZE_T/size_t；标准发布名/原生类型与项目局部角色有类型和模块前缀区分。仅这些实际名字选择保留，理由是避免改变标准/原生接缝和既有调用合同；风险为读错名字，控制为类型检查、声明契约和真实双平台消费者。新增同形私有名字须整改，不将不同成员namespace或已结束原型作用域并入。 |
 | D4.6 | Advisory | 指令／C99 | retained | 数值类型使用宽度/符号typedef（主文28–29；TC1排除plain char，AMD2.23–25）。汽车值沿Platform_Types/stdint；仅[原生表示](../os/configuration.md#原生类型表示与封装)的BOOL/int、pthread错误int、syscall long及altstack long-double存储保留ABI类型及自然对齐。主文允许为控制外接口作取舍，typedef/main例外不扩至任意局部数值；平台/ABI变化重评，已知宽度本身不消除违反。 |
-| D4.8 | Advisory | 指令／C99 | not_assessed | 仅某类型在一个TU中的全部指针都不解引用时，应隐藏完整布局（主文30–31，TC1澄清）。[类型owner、对象用途及两target四profile程序/TU集合](#d48完整表示与隐藏边界)分别记录私有实现、不完整句柄、静态配置/整对象需求及公开CDS不符合边界。补丁与SDK的逐TU全部指针链仍须闭合；单字段消费者、泛ABI或159/124保留不能替代。 |
+| D4.8 | Advisory | 指令／C99 | retained | 按TC1逐TU合并同一底层结构/联合的全部指针后判断（主文30–31；TC1印刷1）。[实际声明/对象/回调与TU闭包](#d48完整表示与隐藏边界)区分隐藏、实质访问及完整表示需要，按§6.2.3独立保留所列共享配置/协议包、native/kernel/SDK表示和五CDS的真实Advisory不符合；不是满足，不外推159/124或任意新源码。 |
 | D4.9 | Advisory | 指令／C99 | retained | 可互换时优先函数（主文31–32；AMD2.26，AMD3.6增加_Generic例外）。本节独立记录三RTE错误宏、四OS tick宏、所选OSError访问宏及实际配置/调用点宏的范围、原文、类型/求值控制；[声明宏](../os/implementation.md#声明宏与表达式参数)不属普通函数可替代语法。保留真实宏形式，不由底层inline、旧诊断选择或_Generic例外宣布全项满足。 |
 | R1.1 | Required | TU／C99 | satisfied | 不违反C语法/约束/实现翻译上限（主文37–38；AMD2.27）。正常入口逐TU的-Wall/-Wextra/-Werror编译与真实链接/运行覆盖所列封存源码；[受控扩展](../os/platform.md#c99-平台扩展的使用边界)由所选GCC接受，原文明确允许实现支持的扩展。扩展的R1.2建议和ABI/运行语义另核，不以生成成功代替编译。 |
 | R1.5 | Required | System／C99 | satisfied | 不使用所选C版次的过时特性（AMD3.14、60及Appendix F）。[C99构造检查](../types.md#c99过时形式与名称有效长度)无K&R/空参数/gets等；[Windows实际ld](../os/implementation.md#windows-外部名字与所选工具)的2.47.20260726字节与已核发行包一致，COFF/hash链按完整名字处理。Linux已核ELF/hash链同样不截短至255以下；不靠当前名字短、编译成功或版本推出实现上限。 |
@@ -78,57 +78,73 @@ FreeRTOSConfig.h的两个trace宏沿内核配置宏入口绑定Backend；OS_RESO
 
 ## D4.8：完整表示与隐藏边界
 
-D4.8 为 Advisory（主文印刷30–31／PDF38–39）；TC1把前提明确为**同一TU中该类型的全部指针均未解引用**。
-指令没有规则的System/TU Analysis属性，但这个前提仍须逐TU判断。下列核对不能用某个函数读过一个字段，
-推成其他TU也满足。完整对象定义、数组步长、sizeof、整对象赋值和字段访问分别记录；
-其中“需要完整类型来分配对象”是当前表示的工程需要，不是指令提供的豁免。
+D4.8为Advisory（主文印刷30–31／PDF38–39）。TC1印刷1／PDF7将前提限定为：同一TU中，
+**同一底层struct/union的全部指针均未解引用**。先合并typedef、const/volatile、二级指针、成员及返回值的类型关系，
+再逐TU判断；别的TU读过字段不能替本TU销项。以下D表示展开源中有实质字段/下标/整对象访问，
+O表示完整对象、初始化、sizeof或步长需要；O不充当规范例外，sizeof(*p)、&array[i]和写出二级指针不冒充读取结构。
+仅在实现.c定义的类型对外隐藏；Linux不完整HANDLE和原生_Unwind_Context保持隐藏。
 
-源集合绑定上文引用的#397最终收据和#393的1306冻结交付，不推广到后续head。
-每份summary.programs[].translationUnits给出两个独立程序的实际TU集合：Linux S/U各54、C/N各56；
-Windows S/U各53、C/N各55。S/U指standard-ecu、user-application，C/N指component-pipeline、no-diagnostic。
-两个程序仅入口分别为integration/src/ecu_host_batch.c、ecu_probe.c；S/U应用TU为app/EchoApplication/EchoApplication.c，
-C/N替换为app/{Ingress,Process,Observe}/同名.c，DcmService没有独立app TU。
-公共TU是bsw/src/{BswM,Can,CanIf,CanTp,Com,ComM,Dcm,Det,LSduR,PduR}.c，
-generated/src/{CanIf_PBcfg,Det_Callouts,Ecu_Config,Ecu_Execution,Ecu_RuntimeConfig,LSduR_PBcfg,Os_Arti,PduR_PBcfg,Rte,Rte_OsService,SchM_Main}.c，
-integration/src/{Can_Host,Can_HostLock,Det_Host,Ecu_HostBatch,Ecu_HostBridge,Ecu_HostBusSM,Ecu_OsHooks,Ecu_Target,SchM_CanIf_Host,SchM_Diagnostic_Host,SchM_Mode_Host}.c，
-os/src/{Arti,Os,Os_ArtiServices,Os_Backend,Os_Error,Os_HostIo,Os_HostServices,Os_Interrupt,Os_Mailbox,Os_PortRestart,Os_Schedule,Os_Time,Os_Vector}.c，
-及kernel/{tasks,list,queue}.c。Linux另有os/src/host/linux/{Os_HostLinux,Os_LinuxNative,Os_StackLinux}.c与
-kernel/portable/ThirdParty/GCC/Posix/port.c；Windows另有os/src/Os_Stack.c、os/src/host/windows/Os_HostWindows.c、
-kernel/portable/MSVC-MingW/port.c。头内声明只归入实际包含它的TU，不能另算一个程序或把未激活的#ifdef分支当消费者。
+源证据仍绑定[共同冻结范围](../os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，不自动评估新seal。
+Linux四profile逐份读取已有有效compiler-origins展开（component-pipeline取实际完成输出）；其C/H与#397输入逐字节相同。
+Windows读取d58的54份实际展开，其219份C/H与#397 user-application逐字节相同。
+两target各四profile间仅36个C/H路径不同：四应用/模板、生成配置/路由、RTE/SchM头和源；这些路径按同profile跨target逐字节相同，且没有target条件分支。
+故Windows的公共native/kernel展开复用已核输入，profile差异逐一按Linux四份展开和这36路径核对；没有把Linux端口当作Windows端口。
+变化包括ECU_MAX_PDU_PAYLOAD的64/4及组件CDS集合，均保留具体配置，不假定全部宏相等。
+#401八份实际summary的目标/预定义、逐TU纳入集合及SDK原头集合另行相连；每target四份原头SHA映射相同，Windows284份与d58全相同。
+这里只核对已有原始输入/展开和来源，没有新编译或扫描；typedef used和定位索引均不作为解引用证明。
 
-交付名不是源码owner：generated/src/Os_Arti.c来自runtime/os，Ecu_RuntimeConfig/配置表及Rte来自core/src/integration的producer，
-其它bsw/os/integration副本按交付manifest追溯runtime。内核原件、每个有序补丁及补丁后字节分开核对。
-#393各target四profile的kernelPatches、补丁字节和kernelSha256一致；按正常git apply包含集合在临时副本重放后核验全部摘要。
-其include/task.h、queue.h及FreeRTOS.h与#397相同；tasks.c、queue.c和端口实现有差异，不以类型头相同宣称两个交付完整等同。
+每份程序的TU集合来自summary.programs：Linux S/U各54、C/N各56，Windows S/U各53、C/N各55；
+两个程序仅入口分别为integration/src/ecu_host_batch.c、ecu_probe.c。S/U应用为app/EchoApplication/EchoApplication.c；
+C/N替换为app/{Ingress,Process,Observe}/同名.c；DcmService没有独立app TU。下文T为两程序TU并集：
 
-| 类型集合／完整定义owner | 实际对象、指针用途与结论边界 |
-| --- | --- |
-| CanTp_TimerType、CanTp_WorkType：bsw/src/CanTp.c；Dcm_WorkType：Dcm.c；Can_HostLockType：integration/src/Can_HostLock.c | 完整定义留在各自实现TU；本地状态/锁对象及其指针不向公共头发布完整布局。 |
-| Ecu_HostWatch：Ecu_HostBridge.c；Ecu_Input、Ecu_OutputSlot、Ecu_ProtocolSlot：Ecu_Target.c | 实现TU内的observer上下文、输入/输出队列槽；结构定义私有，回调借用按真实生命周期，未把void*转换视为新的公开结构。 |
-| Os_ActivationQueueType、Os_NativeTaskStartType：Os_Backend.c；Os_CounterWorkType：Os_Time.c；Os_InterruptStateType：Os_Interrupt.c | 队列/启动参数/计数器/中断状态对象及字段操作在定义TU，头不暴露完整表示。Linux PortTask和Windows ThreadState_t亦仅各自port.c定义，按补丁归属核对，未把所有port行归为采用原件。 |
-| Linux struct Os_HostHandleType：Os_HostLinux.c；HANDLE/Os_HostHandleType指针别名：Os_HostLinuxTypes.h/Os_HostTypes.h | Backend、Time、StackLinux、HostServices、HostBridge及两个入口传递/比较句柄；这些TU只见不完整类型。实际成员访问在定义TU。Windows HANDLE是SDK void*，不是这个Linux结构。 |
-| BswM_ConfigType、CanIf_ConfigType/RxPduConfigType/TxPduConfigType、CanTp_ConfigType、Com_ConfigType/Com_PduConfigType、ComM_ConfigType、Dcm_ConfigType、Det_ConfigType、LSduR_PBConfigType/RxRouteType/TxRouteType、PduR_PBConfigType/RxRouteType/TxRouteType/TpRouteType | 完整定义各在bsw/include/同模块.h；模块实现保存const配置指针并访问表/路由字段。Ecu_RuntimeConfig及各PBcfg实际定义配置对象/数组；Ecu_Target等传址不因此成为字段消费者。保留公开完整配置是现有静态配置表示，转发TU的隐藏建议不能由模块内部字段访问销项。 |
-| Can_ConfigType：Can_CfgTypes.h；Can_HwType/Can_PduType：Can_GeneralTypes.h；PduInfoType/RetryInfoType：ComStack_Types.h；Std_VersionInfoType：Std_Types.h | Can读取配置/发送描述符；CanIf读取硬件/PDU描述符；CanIf/CanTp/Com/Dcm/LSduR/PduR按各API访问PduInfo，Dcm/PduR处理RetryInfo；生成配置实例化driver。Arti的VersionInfo指针原型仍须与实际程序用途区分，公开声明本身不证明读写。 |
-| Ecu_BatchFrame/Ecu_HostBatch：Ecu_HostBatch.h；Ecu_BatchCompletion/Ecu_OutputRecord/Ecu_ProtocolRecord：Ecu_Target.h；Ecu_HostBusSM_ConfigType：Ecu_HostBusSM.h | HostBatch解析和入口有实际帧/批对象，HostBridge访问批字段，Target访问帧并以*record赋值输出/协议记录，以*result复制完成结果；HostBusSM读配置。仅HostBridge转交output指针的路径不借Target的解引用宣称满足。 |
-| Os_TargetConfigType/TaskConfigType/ResourceConfigType/InternalResourceConfigType/IsrConfigType/ActivationInfoType：Os_Target.h；Os_HookConfigType/ErrorParametersType：Os_Hooks.h；Os_ErrorContextType：Os_Backend.h | Ecu_RuntimeConfig定义const对象，Os_Config的嵌套tasks/resources/internal_resources/hooks/interrupts指针由Os/Backend实际索引/访问；Error保存/恢复上下文及整个参数对象。Os_TargetInspectActivation在Os.c仅转交info，BackendInspect才以*info=snapshot写整个对象，不能把前者判成已有解引用。 |
-| Os_CounterConfigType/AlarmConfigType/ExpiryActionType/ExpiryPointType/ScheduleTableConfigType/TimeConfigType/TickCompletionType：Os_Time.h | 配置/到期点静态对象来自producer；Time/Schedule访问对应层级字段。Time以*record复制tick完成结果，Target有实际局部结果对象及转发。须检查同类型所有参数/成员/别名，不能只搜箭头。 |
-| AlarmBaseType/AlarmBaseRefType：Os_Types.h；Os_ArtiAlarmStateType/Os_ArtiScheduleStateType：Os_Arti.h | Time的GetAlarmBase写Info三个字段；Os_Service包装与Os_Arti地址捕获仅转发。Time/Schedule的状态数组及别名有真实读写；工具view指针的只读捕获不等于该指针已解引用，也不承接R18或159/124的其它批准。 |
-| Os_NativeStackType/Os_StackFaultType：Os_StackTypes.h；Os_HostTextType：Os_HostIo.h；Os_InputRecordType：Os_Mailbox.h | Backend/各target栈实现的数组、sizeof/offsetof/字段，HostIo与host-batch文本缓冲，Mailbox与Target输入对象需要当前完整表示。Os_StackIndex通过&array[index]取得地址需要元素大小；不把它描述成字段读取。 |
-| Linux CONTEXT：Os_HostLinuxTypes.h；TCB完整定义：kernel/include/task.h；[各别名声明及队列](../types/public-types.md#d48的内核类型别名与对象边界) | CONTEXT含完整ucontext，Backend/PortRestart/LinuxNative/HostLinux/StackLinux有实际字段或对象。TCB完整定义由项目补丁移入task.h；Backend的task_memory静态数组及task_slot地址/步长，idle回调输出StaticTask_t**，内核任务字段访问均保留来源。Backend不读TCB字段，不把其完整类型需要等同隐藏建议已满足。 |
-| Rte_CDS_EchoApplication/DcmService/Ingress/Process/Observe：各Rte_组件.h；Rte_Instance是各组件独立别名；SchM_ConfigType：Rte_Main.h | Rte.c定义私有const CDS对象并初始化五个公开const指针；各profile精确对象见[R2.8](../types/declarations.md#单实例对象与函数地址的人工评估)。没有production解引用公开指针；组件头仍暴露Rte_Dummy。SchM_Main访问SchM配置。Rte_Instance不能因同名合并成一个类型。 |
+- bsw/src/{BswM,Can,CanIf,CanTp,Com,ComM,Dcm,Det,LSduR,PduR}.c；
+- generated/src/{CanIf_PBcfg,Det_Callouts,Ecu_Config,Ecu_Execution,Ecu_RuntimeConfig,LSduR_PBcfg,Os_Arti,PduR_PBcfg,Rte,Rte_OsService,SchM_Main}.c；
+- integration/src/{Can_Host,Can_HostLock,Det_Host,Ecu_HostBatch,Ecu_HostBridge,Ecu_HostBusSM,Ecu_OsHooks,Ecu_Target,SchM_CanIf_Host,SchM_Diagnostic_Host,SchM_Mode_Host,ecu_host_batch,ecu_probe}.c；
+- os/src/{Arti,Os,Os_ArtiServices,Os_Backend,Os_Error,Os_HostIo,Os_HostServices,Os_Interrupt,Os_Mailbox,Os_PortRestart,Os_Schedule,Os_Time,Os_Vector}.c；kernel/{tasks,list,queue}.c；
+- Linux另含os/src/host/linux/{Os_HostLinux,Os_LinuxNative,Os_StackLinux}.c及kernel/portable/ThirdParty/GCC/Posix/port.c；Windows另含os/src/Os_Stack.c、os/src/host/windows/Os_HostWindows.c及kernel/portable/MSVC-MingW/port.c；以及上述应用TU。
 
-最后一行的完整CDS表示是明确的Advisory不符合边界：SWS_Rte_02311要求应用头中的type declaration，
-03711/03712/03715/03793规定CDS、私有实例命名、const及handle命名，03724约束空CDS内容；
-它们没有证明完整struct必须在应用头定义。当前保留头布局属于工程取舍，ABI probe只是回归证据，
-不是D4.8满足或AUTOSAR必需冲突。隐藏布局需连同实际producer/组件头/配置消费者评估，不在#382冻结范围竞争改写。
+下表basename均按此展开；S为相应Os_StackLinux/Os_Stack，P为相应port，R为Ecu_RuntimeConfig。
+B={Ecu_Target,Os,Os_ArtiServices,Os_Backend,Os_Error,Os_Interrupt,Os_Mailbox,Os_PortRestart,Os_Schedule,S,Os_Time,P}；
+A=B∪{Det_Callouts,Ecu_Config,Ecu_Execution,R,Os_Arti,Rte,Rte_OsService,SchM_Main,Ecu_HostBridge,Ecu_OsHooks,ecu_host_batch,ecu_probe}；
+G=A\{Rte_OsService}；E={Det_Callouts,Ecu_Config,Ecu_Execution,R,Rte,SchM_Main,Ecu_HostBridge,Ecu_Target,ecu_host_batch,ecu_probe}。
+“声明TU”含实际激活的原型、成员及返回指针；它不是实际运行调用的声明。D/O另核全部对象、取址、数组退化、强转和间接调用，未造新用途。
+完整定义按下列header及[OS/内核/SDK接缝](../types/public-types.md#d48的内核类型别名与对象边界)追溯；生成副本按manifest追到runtime或core producer，不按目录重定owner。
 
-SDK来源另算：Linux Os_PortRestart使用原生_Unwind_Context不完整指针和_Unwind_Exception对象/指针；
-LinuxNative的timespec指针直接传futex，stack_t输入/输出通过syscall借用，ucontext/sigcontext/_fpstate涉及真实布局检查与复制。
-Windows PortRestart的EXCEPTION_RECORD/DISPATCHER_CONTEXT指针访问异常字段/上下文，CONTEXT参数按回调合同保留；
-Os_Stack的EXCEPTION_POINTERS访问两层记录，MEMORY_BASIC_INFORMATION对象供VirtualQuery写入。
-这些SDK原始定义保持采用边界，自有调用仍负责，不能按调用方目录重定owner；原生API要求完整对象也不自动豁免所有转发TU。
+| 类型／完整定义owner | 声明TU（均省略.c） | D及O；其他声明/转发TU保留完整表示 |
+| --- | --- | --- |
+| BswM_ConfigType：BswM.h | BswM,ComM,R | D:BswM；O:R静态配置。 |
+| ComM_ConfigType：ComM.h | BswM,ComM,Dcm,CanIf_PBcfg,R,Ecu_HostBusSM | D:ComM；O:R。 |
+| Can_ConfigType、Can_PduType：Can_CfgTypes.h、Can_GeneralTypes.h | Can,CanIf,Can_Host,Ecu_Execution,R,Ecu_Target | D:Can；O:R的driver及CanIf的发送描述符。 |
+| CanIf_{Config,RxPduConfig,TxPduConfig}Type：CanIf.h；Can_HwType：Can_GeneralTypes.h | Can,CanIf,LSduR,CanIf_PBcfg,Ecu_Config,R,LSduR_PBcfg,PduR_PBcfg,Ecu_HostBridge,Ecu_HostBusSM,Ecu_Target,ecu_probe | D:CanIf；O:PBcfg路由数组/R配置，Can.c的硬件描述符。 |
+| CanTp_ConfigType：CanTp.h | CanTp,R,LSduR_PBcfg,PduR_PBcfg,Ecu_Target | D:CanTp；O:R。 |
+| Dcm_ConfigType：Dcm.h | Dcm,R,LSduR_PBcfg,PduR_PBcfg,Ecu_Target | D:Dcm；O:R。 |
+| Com_ConfigType/Com_PduConfigType：Com.h | Com,R,LSduR_PBcfg,PduR_PBcfg,Rte,Ecu_Target | D:Com；O:R的PDU表/配置。 |
+| Det_ConfigType：Det.h | Can,CanIf,CanTp,Det,LSduR,PduR,R | D:Det；O:R。 |
+| LSduR_{PBConfig,RxRoute,TxRoute}Type：LSduR.h | CanIf,CanTp,LSduR,R,LSduR_PBcfg,PduR_PBcfg,Ecu_Target | D:LSduR；O:LSduR_PBcfg及R。 |
+| PduR_{PBConfig,RxRoute,TxRoute,TpRoute}Type：PduR.h | Dcm,PduR,R,LSduR_PBcfg,PduR_PBcfg,Ecu_Target | D:PduR；O:PduR_PBcfg及R。 |
+| PduInfoType：ComStack_Types.h | Can,CanIf,CanTp,Com,Dcm,LSduR,PduR,CanIf_PBcfg,Ecu_Config,R,LSduR_PBcfg,PduR_PBcfg,Rte,Ecu_HostBridge,Ecu_HostBusSM,Ecu_Target,ecu_probe | D:CanIf/CanTp/Com/Dcm；O:Can的Rx info。PduR和LSduR所有info参数只判空/转交，回调在下游解引用不计入本TU。 |
+| RetryInfoType：ComStack_Types.h | CanTp,Dcm,PduR,R,LSduR_PBcfg,PduR_PBcfg,Ecu_Target | D:Dcm；PduR的retry只沿CopyTxData回调转交。 |
+| SchM_ConfigType：Rte_Main.h | T除CanIf_PBcfg,Can_Host,Can_HostLock,Det_Host,Ecu_HostBusSM,list,queue,tasks,Arti,Os_HostIo,Os_HostServices,Os_Vector及各target的Host适配TU | D:SchM_Main；O:R；Linux的Host适配TU为Os_HostLinux/Os_LinuxNative，Windows为Os_HostWindows，S仍在集合中。 |
+| Ecu_HostBusSM_ConfigType：Ecu_HostBusSM.h | CanIf_PBcfg,R,Ecu_HostBusSM | D:Ecu_HostBusSM；O:R。 |
+| Os_TargetConfigType、Os_TaskConfigType、Os_ResourceConfigType、Os_InternalResourceConfigType、Os_IsrConfigType、Os_ActivationInfoType：Os_Target.h | G | TargetConfig在{Os,Backend,Error,Interrupt,Mailbox,Schedule,Time}读Os_Config成员，Windows另有P；Task在{Os,Backend,Schedule,Time}，Resource/InternalResource/Isr在{Os,Backend}。ActivationInfo仅Backend的*info=snapshot，Os.c只转交；R构造const配置，Target借用Ecu_OsConfig。Os即Os.c，其余简称省略Os_前缀。 |
+| Os_TimeConfigType、Os_CounterConfigType、Os_AlarmConfigType、Os_ExpiryActionType、Os_ExpiryPointType、Os_ScheduleTableConfigType、Os_TickCompletionType：Os_Time.h；Os_HookConfigType：Os_Hooks.h | G | Time/Counter在{Os_Time,Os_Schedule}读字段；Alarm在Time；ExpiryAction/Point/ScheduleTable在Schedule；Hook在{Backend,Error}。TickCompletion仅Time的*record=completion；Target.batch_time只转交，Target/Bridge/probe另有完整局部对象。R定义静态配置/到期点数组。 |
+| Ecu_HostBatch：Ecu_HostBatch.h | E∪{Ecu_HostBatch} | D:Ecu_HostBatch/Ecu_HostBridge/ecu_host_batch；其他TU见既有inline Initialize的memset/sizeof，不借它称运行时解引用。 |
+| Ecu_BatchFrame：Ecu_HostBatch.h；Ecu_OutputRecord/ProtocolRecord/BatchCompletion：Ecu_Target.h | Frame为E∪{Ecu_HostBatch}；其余E | Frame在HostBatch整元素赋值、HostBridge及Target字段/下标访问；Output在Target整写和host-batch字段读；Protocol/Completion在Target整写。O:HostBridge局部记录，Probe的output/tick存储；不把这些借用当本TU指针解引用。 |
 
-本节已固定program/TU集合、直接类型/声明owner及上述对象用途；词法索引与CTU typedef可见性仅辅助定位，
-不证明全部指针均未解引用。D4.8整体仍not_assessed：还须逐TU完成补丁内TCB/队列/端口别名及SDK来源指针的全部成员链、
-整对象/间接调用用途核对，结合最终SDK取证身份，把每个转发TU明确分入已隐藏、完整表示需要但保留不符合、或实际解引用。
-现有实例/字段证据不外推尚未闭合的全部指针集合；#398最终来源取证集成后复核这部分身份，不重新扫描已有效冻结样本。
+CanTp_TimerType/WorkType、Dcm_WorkType、Can_HostLockType分别仅在CanTp.c、Dcm.c、Can_HostLock.c定义并访问；
+Ecu_Input/OutputSlot/ProtocolSlot仅在Target，Ecu_HostWatch仅在Bridge，完整定义不向别的TU发布。
+PortTask仅Linux port.c、ThreadState_t仅Windows port.c：完整局部对象由字节复制与按值返回承载原生句柄，保持实现私有。
+Os_ActivationQueueType/Os_NativeTaskStartType、Os_CounterWorkType、Os_InterruptStateType的完整定义分别在Backend/Time/Interrupt；registered/gate两个HANDLE成员均已纳入，未遗漏逗号后的声明。
+Std_VersionInfoType定义在Std_Types.h；Arti.h已有inline GetVersionInfo在A∪{Arti}确实通过指针写字段，
+这属于该TU源代码事实，不宣称每个程序轨迹都调用它，也不扩大供应商身份结论。
+
+五个Rte_CDS类型完整定义在各组件头，Rte.c定义私有const实例和Rte_Inst_*；Rte_Instance按组件解析，不合并同名别名。
+Echo的声明TU为{EchoApplication,R,Rte}；DcmService为{R,Rte}；C/N的Ingress/Process/Observe分别为{同名应用,R,Rte}，N没有DcmService。
+这些TU均无CDS指针解引用；Rte.c有实际完整对象/初始化需要，其余仅声明/传递。五实体/11处定义与[R2.8](../types/declarations.md#单实例对象与函数地址的人工评估)分别处置。
+SWS_Rte_02311/03711/03712/03715/03793/03724没有强制应用头暴露完整struct，ABI probe不是生产用途或D4.8满足。
+
+本轮按主文§6.2.3作**精确Advisory保留**：保留表内共享完整配置/协议表示、上述仅转交端点和五CDS头布局；不声称AUTOSAR唯一要求此表示。
+替代为分离完整定义/不完整接口头、为调用方对象另设构造与存储接口、或改变CDS/静态配置交付；它们会改变这些实际header依赖、初始化/借用或生成合同，不能只删一个字段/加一个假读取。
+当前选择保持已受验的静态const配置、类型化回调/输出、原有布局及局部对象生命周期。风险是转发TU可见不需要的布局并可能误改字段；
+控制为const配置/const CDS、既有配置拒绝、单owner与借用期、正常公开消费者/字节seal及原始诊断。可隐藏的Linux句柄/私有实现不扩展此保留。
+新增字段/指针、回调、调用TU、初始化/重启/存储、宏边界、provider或target变化时重评；不借159/124、R18或旧R2.8决定授权D4.8，不宣称总体符合。

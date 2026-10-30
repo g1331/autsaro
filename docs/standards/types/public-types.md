@@ -75,78 +75,60 @@ C11条目逐项按规定对象和当前C99源码构造判断，不豁免GNU扩�
 
 ## D4.8的内核类型别名与对象边界
 
-本节补充[逐程序/TU的类型范围](../bsw-general/language-tokens.md#d48完整表示与隐藏边界)，不把typedef可见/used标记当成解引用证明。
-#397实际CTU记录中，两平台S/U/C/N的内核别名集合相同；StackLinux/Stack分别属于各target。
-TaskHandle_t/ConstTaskHandle_t、tskTCB/TCB_t由task.h声明，完整struct tskTaskControlBlock也在task.h；
-StaticTask_t的**别名声明在FreeRTOS.h**，不是另一个静态surrogate结构。
-QueueHandle_t/QueueSetHandle_t/QueueSetMemberHandle_t及xQUEUE/Queue_t由queue.h声明；
-StaticQueue_t的别名在FreeRTOS.h，完整struct QueueDefinition在queue.h。
-这些完整定义及静态别名的统一由0015-typed-port-state项目补丁实施，不能因带FreeRTOS版权头就把移入头的项目变更归为采用原件。
+沿用[完整TU集合及记号](../bsw-general/language-tokens.md#d48完整表示与隐藏边界)；其余声明/转交TU保留完整表示，不计作满足。
 
-- tasks.c的TCB_t指针有真实任务字段读写；queue.c中的TaskHandle_t来自mutex holder，传入任务优先级API，不读取TCB字段；
-  两端口把任务句柄传给pxTaskOsPortStack取得StackType_t字节存储，不通过TCB指针读取字段。
-  Backend的task_handles数组、task_memory/idle缓冲、task_slot比较/索引、idle回调二级指针和任务创建调用须合并看；
-  task_slot没有字段访问，静态完整对象/数组需要当前表示。其余Os_Backend.h包含者可见完整TCB不等于各TU有真实TCB字段消费者。
-- QueueHandle_t/Queue_t/StaticQueue_t在这两target八份CTU的used记录均只落到queue.c；
-  QueueSetHandle_t/QueueSetMemberHandle_t/StaticSemaphore_t/SemaphoreHandle_t均无used记录。
-  queue.c的pxQueue指针读写QueueDefinition字段；嵌套QueuePointers_t/SemaphoreData_t为u成员的完整子对象。
-  不把存在未激活的API原型当作已交付配置真正创建了QueueSet或semaphore。
-- List_t/ListItem_t/MiniListItem_t的完整owner为list.h，静态别名在FreeRTOS.h；tasks/queue/list实际维护列表/节点。
-  TCB/QueueDefinition内嵌的完整列表使其在包含者CTU也被标记used，**不是**这些包含者均有独立列表指针或解引用。
-  0015/0016补丁中修改的节点owner/布尔表示保留项目责任，未修改原件继续按采用层记录。
-- PortTask仅在Linux port.c定义并以局部对象/返回值和字节复制承载两个HANDLE；Windows ThreadState_t仅在该port.c定义，
-  prvTaskThreadState按任务句柄取得字节存储并复制成局部对象。两个私有类型没有借公共头发布完整布局。
+| 类型／完整定义owner | 声明/派生指针TU | D与完整表示O |
+| --- | --- | --- |
+| AlarmBaseType/AlarmBaseRefType、Os_ErrorParametersType：Os_Types.h、Os_Hooks.h | A | Time.GetAlarmBase写Info三个字段；所有其它Info只包装/捕获地址/保存为service_GetAlarmBase.Info。Error整体读取sources[]的对应服务对象；Os/Backend/Interrupt/Schedule/Time在栈上构造const arguments，调用时借用并由Error复制，不读被指向AlarmBase。地址捕获不等于结构访问，不外推R18批准。 |
+| Os_ErrorContextType：Os_Backend.h | B | Error读写context字段；Backend创建完整局部context供保存/恢复。其它TU仅见协议声明。隐藏需改变这类调用方栈存储或分离完整/不完整接口。 |
+| Os_ArtiAlarmStateType/Os_AlarmStateType、Os_ArtiScheduleStateType：Os_Arti.h | B∪{Os_Arti} | 两个名字解析到同一Alarm底层类型；Time读写alarm_states[i]，Schedule访问schedule_states/target指针。全局tool view指针/其它TU不借这两个TU的访问称满足。 |
+| Os_NativeStackType：Os_StackTypes.h | B∪{Os_Arti}，Linux另加Os_HostLinux | D:{Os,Os_ArtiServices,Backend,Error,Interrupt,S,P}，Linux另有Mailbox读actor->role；Windows Mailbox仅判NULL。其它TU的Os_StackIndex只比较&Os_ArtiStacks[i]，需要元素步长而不读字段。原21槽及地址/只读工具视图保持，移出inline需新的链接/包含闭包复核。 |
+| Os_InputRecordType：Os_Mailbox.h | B∪{Ecu_Config} | Mailbox以*record=records[read_index]复制；Target有局部record借出供写入。 |
+| Os_HostTextType：Os_HostIo.h | {ecu_host_batch,ecu_probe,Backend,Os_HostIo,S}，Linux另加Os_HostLinux | 只有HostIo指针读写length/capacity/failed；其余创建caller-owned storage/text或只见声明，转交Append/Write。完整对象及容量不是指令例外。 |
 
-另核对没有独立类型化指针的自有聚合：Os_ArtiTaskStateType/Os_ArtiCallerType（Os_Arti.h）、
-Arti_Event/Arti_AddressCapture（Arti.h）、Os_InterruptFrameType/Os_OrderReferenceType（Backend.c）、
-Ecu_BatchToken（HostBatch.c）、EcuPolicyConfig（Ecu_Config.h）、Dcm_MsgAddInfoType/Dcm_MsgContextType（Dcm.h）、
-CanTp_TxType/CanTp_RxType（CanTp.c）、Dcm_PublicationType/Dcm_ActorsType（Dcm.c）。
-实际用途是数组/嵌入成员/局部对象或按值传参返回，不能因索引器没列出“类型名 *”就声称这些类型没使用。
-AlarmBaseType则有AlarmBaseRefType指针别名，已纳入Time/Service/ARTI核对，不能遗漏。
-以上细化owner和用途，不解除D4.8尚未闭合的SDK/逐TU全部指针事实，也不自动保留所有公开完整表示。
+上述缩写Backend/Error/Interrupt/Mailbox/Schedule/Time分别指Os_同名文件；R为Ecu_RuntimeConfig。
+源码还逐条核对了间接路径：Os_Config->{tasks,resources,internal_resources,interrupts,timing,hooks}，timing->{counters,alarms,schedule_tables}，
+Schedule的expiry_points/actions，Error的sources[]及嵌套service指针；不能只搜局部变量名或箭头。
+配置/数组和成员的完整owner仍是表中header，R的实例不改归emitter之外的SDK。
+
+内核的TaskHandle_t/ConstTaskHandle_t、tskTCB/TCB_t声明在task.h；StaticTask_t别名在FreeRTOS.h，
+它们指向task.h的同一struct tskTaskControlBlock，不能把StaticTask_t另当一个surrogate。
+QueueHandle_t/QueueSetHandle_t/QueueSetMemberHandle_t、xQUEUE/Queue_t在queue.h，StaticQueue_t/StaticSemaphore_t在FreeRTOS.h；
+完整QueueDefinition也在queue.h。完整TCB/Queue及静态别名的统一来自项目0015-typed-port-state补丁，保持逐行原件/补丁归属。
+
+- TCB/TaskStatus_t/TimeOut_t声明闭包为K=B∪{tasks,queue}；List_t/ListItem_t/MiniListItem_t为K∪{list}。
+  tasks实际读写TCB、TaskStatus/TimeOut；queue仅转交mutex holder的TaskHandle_t，另创建TimeOut局部对象交给任务API。
+  list/tasks/queue真实访问List/Item字段；其它仅见嵌套成员/声明。Backend的task_handles数组只传递/比较，task_slot比较&task_memory[i]；
+  idle回调*ppxIdleTaskTCBBuffer只写出指针，不读取TCB。完整task_memory/idle缓冲是本TU静态存储需要。
+- Queue各别名的实际值操作仅queue.c，pxQueue及强转后的返回表达式访问字段；QueuePointers_t/SemaphoreData_t为u的完整子对象。
+  QueueSet/StaticSemaphore/ConstTaskHandle别名存在不等于当前配置实际创建对象。MemoryRegion_t的唯一实际指针参数为tasks.prvInitialiseNewTask.xRegions，
+  当前MPU关闭分支仅(void)xRegions；完整定义是task.h原件部分，不伪称字段消费者或改归项目TCB补丁。
+- tasks/list/queue的同型别名、sentinel和TaskStatusArrayWriterContext_t转换逐位置核对；NativeTaskStart.argument→task_slot及路由回调只传递，不冒充调用者解引用。
+
+
+数组和整对象另外核对：Arti_Event在Arti、Os_ArtiTaskStateType在Backend、Os_InterruptFrameType/Os_OrderReferenceType在Backend、
+Ecu_BatchToken在HostBatch、CanTp_TxType/RxType在CanTp、Dcm_PublicationType/Dcm_ActorsType在Dcm，以及Linux S的匿名altstacks结构；
+取址/数组指针和整元素读写追到本地实现。EcuPolicyConfig、Dcm_MsgAddInfoType/MsgContextType、Arti_AddressCapture/Os_ArtiCallerType仅按值/嵌入成员使用，不误写成“没用”。
+
+这些声明/转交TU按[共同保留理由、替代、风险和重评条件](../bsw-general/language-tokens.md#d48完整表示与隐藏边界)处理，
+不把栈存储、inline步长或类型化保存当作规范例外。const配置、显式复制、actor/owner和容量约束保持，新增实体不自动承接本记录。
 
 ## D4.8的SDK指针接缝
 
-这里核对自有调用方实际使用的供应方类型，不评估SDK内部全部函数。Linux对应已生成的standard-ecu来源收据，
-sourceSeal为6091d3fe8e4d2ce3dffe51de43885012340658b98071c5e317be19cd17b7bcea；
-原头与收据SHA逐字节相等：libc6-dev 2.39-0ubuntu8.9的pthread.h
-26eb5331384b27347c5d60d466c82e4fbbf91d920383ecddc479b29fd98dc22b、signal.h
-a79456587f504ae8020ab7f46aceaf5859d419c003e051c8cd2d067e64f25856、sys/ucontext.h
-4485d0daa586733fd121554bf5eef304076cc01b3bd59c9df8bb35d3d067ae84；libgcc-13-dev 13.3.0-6ubuntu2~24.04.1的unwind.h
-d42912846d21a01d15717f71934c5f8c0f6d290d08aaf4052ca00cc7b8cfa174。
+SDK字段正文、provider及原头摘要沿用[#401冻结SDK记录](https://github.com/g1331/autsaro/blob/a93fb32acabcf35286ebf7fe713934b35671e2c9/docs/standards/types/public-types.md#d48的sdk指针接缝)。
+本轮逐SHA核对[#401八份实际摘要](https://github.com/g1331/autsaro/pull/401#issuecomment-6524748476)的scope.sdkHeaders和sdkTranslationUnits：
+每target四profile原头集合相同，Windows284份与d58实际展开全相同。Windows正文仍是d58展开（原运行failure），不是原头全文或新head成功；Linux原头与有效收据匹配。
+只补调用方/成员链；原件不改归项目，来源complete不代表人工完成。
 
-- Os_PortRestart.c的prepare_trace不使用_Unwind_Context参数；Os_PortRestartPersonality将其交给_Unwind_SetIP。unwind.h只给不完整struct，已隐藏。
-  _Unwind_Exception另有完整定义；restart_exception是线程局部完整对象，代码设置exception_class并核对回调的对象身份，不能同前者合并。
-- Os_HostLinux.c的park_signal/fault_stop_signal均不解引用siginfo_t；Os_StackLinux.c的guard_signal才读取details->si_addr。
-  两个TU须分别判断：后者字段访问不能消除前者保留完整SDK声明的Advisory边界，回调签名也不能自行改为void*。
-- Os_LinuxNative.c的timespec/stack_t指针仅供typed syscall输入/输出借用；对应完整对象在HostLinux/StackLinux创建，
-  timespec的tv_sec/tv_nsec、stack_t的ss_sp/ss_size/ss_flags按供应方布局构造。HostLinux中的previous仅保存和归还旧altstack，
-  不伪称已通过C字段解引用。该TU还以pthread_attr_t对象调用attr API，以sigset_t对象调用mask API，
-  以pollfd完整对象检查revents；pthread_mutex_t是私有handle内嵌对象，只由pthread API操作。
-  pthread_attr_t/pthread_mutex_t/sigset_t的供应方定义、完整存储需求和实际C解引用是三个不同事实。
-- LinuxNative实际复制ucontext_t/内核ucontext，检查sigcontext/_fpstate偏移和大小，
-  CONTEXT.destination的native.__fpregs_mem与uc_mcontext字段链均有实际对象/字段用途；
-  原SDK内的uc_link/fpregset_t声明不因此转成项目自有实现。
+| 实际结构指针/对象边界 | TU内用途与处置 |
+| --- | --- |
+| Linux HANDLE/Os_HostHandleType | 自有完整struct仅HostLinux.c，H=A∪{Arti,Os_HostServices,Os_HostLinux,Os_LinuxNative}的其余TU见不完整类型，已隐藏；Windows同名HANDLE是SDK void*，不混合。 |
+| Linux自有CONTEXT | 声明闭包H；Native/StackLinux指针访问字段，Backend与HostLinux仅转交context。Backend、HostLinux、S、P另有完整对象/嵌入captured.native。GetThreadContext只转给CaptureContext，不冒充本TU结构解引用。 |
+| Linux_Unwind_Context / _Unwind_Exception | PortRestart的前者在unwind.h不完整，prepare_trace不用、Personality借给SetIP；后者是完整TLS restart_exception，按对象身份核回调并写exception_class，再借给原生unwinder，不将两个类型合并。 |
+| Linuxsiginfo_t/stack_t/timespec | siginfo仅HostLinux/StackLinux；只有guard_signal读si_addr（实际展开为_sifields._sigfault.si_addr），park/fault_stop不读。stack/timespec在Native只给syscall，HostLinux/StackLinux有完整对象和字段构造，保持这三个TU的分别判断。 |
+| Linuxpthread_attr_t/pthread_mutex_t/sigset_t、sigaction/pollfd、ucontext_t/mcontext_t及_fpstate/_libc_fpstate | HostLinux的attr、mutex、mask、poll对象；Can_HostLock的mutex；StackLinux的mask/signal/altstack；Native的ucontext及FP复制/offsetof/sizeof。native.uc_link/fpregset_t等原头内部指针随快照借用/复制，字段/值由布局断言及原头身份约束。 |
+| WindowsCONTEXT、EXCEPTION_RECORD/POINTERS、DISPATCHER_CONTEXT、UNWIND_HISTORY_TABLE | Backend/P有完整CONTEXT；PortRestart.context和dispatch->ContextRecord只借给RtlUnwindEx，S读取Rsp并以*context复制；异常记录在PortRestart和S读字段，异常双指针在S读两层。dispatch->HistoryTable也只转交：winnt.h:9111是完整表，Entry的FunctionEntry留在provider边界。 |
+| WindowsSECURITY_ATTRIBUTES/LPSECURITY_ATTRIBUTES、MEMORY_BASIC_INFORMATION | 前者在minwinbase.h:13，Backend的PortEvent/Mutex/Thread仅转交；Linux同名别名为项目void*。后者在winnt.h:5836，S创建region交给VirtualQuery，并读State/Protect等；分清完整存储与SDK中的写入。 |
 
-Windows证据来自[d58d423344264158337fd770c753af97bb72e188的既有运行](https://github.com/g1331/autsaro/actions/runs/41045733576)
-（整次运行failure，不能写成通过或新head验证）。artifact 12973895611的下载字节SHA为
-21b7317ef8af805a3bb1210c4effa723482ccf5bff60d21f0c5d765e074677c2，与GitHub摘要相等。
-只提取compiler-origins-36/42/44的.d与stdout，分别对应Backend/PortRestart/Stack；
-42.stdout原始字节SHA为d06e67b62ab6cc99cf161dabf27bfbb0f4e84381c76361053aabbbd765faa5ff。
-这是实际预处理定义及包含来源证据，本机没有原winnt.h全文副本，不把收据当成原头全文已读。
-实际包为mingw-w64-x86_64-headers 14.0.0.r569.g34eeafb7d-1，收据中的winnt.h原头SHA为
-bc318d60f2c55e8cc39bf2c207fb0fa688ac6c4e5eb8d854d7545ae9802a4321。
-
-- 实际x64展开的winnt.h:1839给出16字节对齐CONTEXT；3044的EXCEPTION_RECORD有ExceptionCode/Flags/NumberParameters/ExceptionInformation；
-  3074的EXCEPTION_POINTERS由PEXCEPTION_RECORD和PCONTEXT构成；3095的DISPATCHER_CONTEXT含ContextRecord和HistoryTable；
-  5836的MEMORY_BASIC_INFORMATION含BaseAddress/RegionSize/State/Protect等，均已在展开正文核对。
-- Os_PortRestartHandler读取record的Code/Flags，转交dispatch->ContextRecord/HistoryTable给RtlUnwindEx；context参数本身不用，
-  同TU的其它CONTEXT用途不能由这个参数单独判定。Os_Stack.stack_exception实际沿ExceptionRecord读异常信息、沿ContextRecord读Rsp；
-  Os_StackObserve读context->Rsp并以*context保存整个上下文。VirtualQuery写入region，调用方随后检查State/Protect等字段。
-  Backend有完整CONTEXT对象供GetThreadContext写入并交给栈观察；这条转发链要与Stack TU的字段读写分别记录。
-- minwinbase.h:13的SECURITY_ATTRIBUTES/LPSECURITY_ATTRIBUTES为完整结构/指针别名；Backend的Os_PortEvent/Mutex/Thread只转交attributes给创建API，没有字段访问。Linux同名LPSECURITY_ATTRIBUTES是项目void*，不得跨target合并成SDK结构指针。
-
-这些精确使用仍不足以把整个D4.8记为满足；公开配置、CDS及仅传递SDK指针TU各有独立隐藏边界。
-保留原SDK定义与ABI的工程理由不能当作AUTOSAR强制完整表示或正式符合。
-本段Windows展开只绑定d58的user-application，Linux原头绑定所列standard-ecu收据；其余配置不能借同名类型推成已核SDK闭包。
-最终接入#398时核对全部实际来源身份与逐TU指针选择；对变化的源码/宏/类型集合重评，不把这两份收据外推到新seal。
+原头同时发布所需完整类型，本轮保持原件/当次借用；隐藏需窄适配或typed存储重构，不重声明SDK。
+控制和重评沿共同记录，不推定SDK内部符合/资格。

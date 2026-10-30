@@ -78,7 +78,7 @@ uv run --locked python -m autosar_tooling requirements SWS_CANInterface
 
 - **逐条全文审计未完成。** 除 Can、CanIf、CanTp、Dcm、LSduR、PduR、Com、ComM 与 BswM 已逐条处置外，各模块篇中的条款是已定位条款，不是完整适用矩阵；各模块全部必需 API、状态、错误、回调、BSWMD、配置语义与可选条件须在模块整改时闭合，未处置条目以 [§5](#5-条款处置与核算) 的核算命令为准。
 - **Dem／NvM／Security**：不在主线程序中，已随旧链路删除（[ADR 0013](../adr/0013-remove-frame-signal-host-chain.md)）；以后加入主线时须先核定标准公共面、存储链与 Security 的项目责任。
-- **MISRA**：221 项 assessment 当前均为 `not_assessed`，生成工程源码分析 `passed=false`；固定 addon 的已知限制（R21.8 仍报告 `getenv`，终止函数清单缺 `_Exit`／`quick_exit`，errno／mmap 模型差异）只作核查线索。另见[未覆盖66项的冻结人工记录](os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，与有checker的155项独立汇总；当前两项仍未评估，不自动评估当前seal，分类不代表规则满足、正式偏离完成或总体符合性。
+- **MISRA**：221 项 assessment 当前均为 `not_assessed`，生成工程源码分析 `passed=false`；固定 addon 的已知限制（R21.8 仍报告 `getenv`，终止函数清单缺 `_Exit`／`quick_exit`，errno／mmap 模型差异）只作核查线索。另见[未覆盖66项的冻结人工记录](os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，与有checker的155项独立汇总；当前D4.7仍未评估，不自动评估当前seal，分类不代表规则满足、正式偏离完成或总体符合性。
 - **资料可用性**：部分工作树只有官方资料索引而无原件；R24-11 `TR_ChangeDocumentation.zip` 不在官方清单内且未取得；`AUTOSAR_CP_TR_ModelingShowCases.pdf` 已引用（跨源 ARPackage 片段合法）但未加入已匹配 SHA-256 的文件身份声明。
 
 单个模块的差距写在该模块篇的“已知差距”中。
