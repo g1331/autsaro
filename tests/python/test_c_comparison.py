@@ -32,7 +32,8 @@ class CComparisonTests(unittest.TestCase):
             "diagnostics": [self.diagnostic("rule", 1), self.diagnostic("rule", 2)],
         }
         summary["semanticIdentity"] = {
-            "version": 1,
+            "version": 2,
+            "sdk": "f" * 64,
             "compiler": {"machine": "x86_64-linux-gnu", "release": "13.3.0",
                          "predefines": ["#define __GNUC__ 13"], "builtins": ["-D__GNUC__=13"]},
             "defines": {"main.c": []},
@@ -41,7 +42,7 @@ class CComparisonTests(unittest.TestCase):
             "addonRuntime": {"runaddon.py": "d" * 64, "cppcheck.py": "d" * 64,
                              "cppcheckdata.py": "d" * 64},
             "analysisCode": {name: "b" * 64 for name in
-                             ("c_check.py", "c_addon.py", "c_comparison.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
+                             ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
         }
         self.write(baseline, summary)
         return summary, project, output, baseline
@@ -246,6 +247,7 @@ class CComparisonTests(unittest.TestCase):
             "models": lambda x: x["models"].update(platformModel="c" * 64),
             "libraries": lambda x: x["libraries"].update(posix="c" * 64),
             "addonRuntime": lambda x: x["addonRuntime"].update({"runaddon.py": "c" * 64}),
+            "sdk": lambda x: x.update(sdk="e" * 64),
             "analysisCode": lambda x: x["analysisCode"].update({"c_addon.py": "c" * 64}),
         }
         for field, change in changes.items():
@@ -258,7 +260,7 @@ class CComparisonTests(unittest.TestCase):
     def test_missing_old_and_incomplete_identity_refuse_on_either_side(self):
         changes = [lambda x: x.pop("semanticIdentity"),
                    lambda x: x.update(semanticIdentity=None),
-                   lambda x: x["semanticIdentity"].update(version=0)]
+                   lambda x: x["semanticIdentity"].update(version=1)]
         for field in ("compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime"):
             changes.append(lambda x, field=field: x["semanticIdentity"].update({field: {}}))
         changes.append(lambda x: x["semanticIdentity"]["models"].update(platformModel="broken"))

@@ -848,6 +848,17 @@ jobs:
               pair = (summary['scope']['target'], path.parent.name)
               if pair in found or summary['error'] is not None:
                   raise RuntimeError('Duplicate or incomplete analysis result: ' + str(path))
+              classification = summary['sourceClassification']
+              if not classification['complete'] or classification['unclassifiedDiagnosticKeys']:
+                  raise RuntimeError('Incomplete SDK source provenance: ' + str(path))
+              if pair[0].startswith('windows'):
+                  waits = [row for row in summary['diagnostics'] if row['id'] == 'misra-c2012-7.2'
+                           and any(loc['file'] == 'kernel/portable/MSVC-MingW/port.c' for loc in row['locations'])]
+                  if len(waits) != 1 or waits[0]['sourceCategory'] != 'sdk' or not any(
+                      origin['kind'] == 'unsigned-literal' and origin['macro'] == 'INFINITE'
+                      and origin['value'] == '0xffffffff' for origin in waits[0]['sourceOrigins']
+                  ):
+                      raise RuntimeError('Missing original SDK unsigned wait literal evidence: ' + str(path))
               found.add(pair)
           if found != expected:
               raise RuntimeError('Expected all eight platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))

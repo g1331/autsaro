@@ -34,7 +34,7 @@ OS-Application、IOC、多核、spinlock、时间／内存保护、ProtectionHoo
 
 ## SDK 声明与常量
 
-非ISO头的参数、限定符、常量、inline和变参义务及待决定边界见[声明与SDK接口](declarations.md#sdk-声明与常量)。
+非 ISO 头的来源类别、宏诊断归属、保守回退及参数、限定符、常量、inline 和变参义务见 [SDK 原头来源与接口责任](sdk.md)。
 
 ## futex 返回信息
 

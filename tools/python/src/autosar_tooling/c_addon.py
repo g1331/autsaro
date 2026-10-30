@@ -52,17 +52,25 @@ def main() -> int:
         data = cppcheckdata.CppcheckData(dump)
         configurations = 0
         units = set()
+        unsigned = []
         for configuration in data.iterconfigurations():
             configurations += 1
             units.update(str(Path(token.file).resolve()) for token in configuration.tokenlist
                          if token.file.endswith(".c") and Path(token.file).resolve().is_relative_to(root))
+            for token in configuration.tokenlist:
+                # Same operands as the pinned R7.2 checker; evidence only, no report filtering.
+                if token.isInt and 'U' not in token.str.upper() and token.valueType and token.valueType.sign == 'unsigned':
+                    path = Path(token.file).resolve()
+                    unsigned.append({'file': path.relative_to(root).as_posix() if path.is_relative_to(root) else path.as_posix(),
+                                     'line': token.linenr, 'column': token.column, 'literal': token.str})
             for token, identifier, message in findings(configuration, root):
                 cppcheckdata.reportError(token, "warning", message, "autsaro", identifier)
         if configurations == 0:
             raise ValueError("Project addon received no parsed configurations")
         args.receipt_directory.mkdir(exist_ok=True)
         receipt = args.receipt_directory / (hashlib.sha256(str(dump).encode()).hexdigest() + ".json")
-        receipt.write_text(json.dumps({"units": sorted(units), "configurations": configurations}), encoding="utf-8")
+        receipt.write_text(json.dumps({"units": sorted(units), "configurations": configurations,
+                                      "unsignedLiterals": unsigned}), encoding="utf-8")
     return cppcheckdata.EXIT_CODE
 
 
