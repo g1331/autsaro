@@ -58,9 +58,9 @@ def check_native_output_backpressure(project: Path, directory: Path) -> None:
                 assert text.count(call) == 1
                 text = text.replace(call, observer + call)
             elif variant == "no-observer":
-                spawn = "monitor = Os_HostSpawnObserverThread(&watch, &control);"
+                spawn = "monitor = Os_HostSpawnObserverThread(&watch, NULL);"
                 assert text.count(spawn) == 1
-                text = text.replace(spawn, "monitor = control.cancel; (void)&watch;")
+                text = text.replace(spawn, "monitor = host_watch.cancel; (void)&watch;")
             else:
                 continue
             copy = output / path.name

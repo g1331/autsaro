@@ -47,6 +47,8 @@ OS_MEMMAP const uint64 Os_ArtiNativeContextSize =
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static struct {
     /* Alignment-only backing storage; never read as floating point. */
     long double storage[OS_ALTSTACK_BYTES / sizeof(long double)];
@@ -61,15 +63,21 @@ OS_MEMMAP static volatile Os_Atomic32Type
 OS_MEMMAP static volatile Os_Atomic32Type
     stack_count; /**< Atomic native record reservations; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static volatile Os_Atomic32Type
     fault_claimed; /**< Atomic first-fault winner latch; no Init reset. */
 
 OS_MEMMAP static volatile Os_Atomic32Type
     fault_count; /**< Atomic fault claim/count state; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static volatile Os_Atomic32Type
     fatal_claimed; /**< Atomic terminal-report winner latch; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static volatile int32_t fault_park; /**< Constant-zero futex park cell; no Init writes. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
@@ -103,10 +111,11 @@ OS_MEMMAP Os_StackFaultType
 #include "Os_MemMap.h"
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack)
 {
-    if ((stack < stacks) || (stack >= &stacks[OS_NATIVE_STACKS])) {
+    const unsigned index = Os_StackIndex(stack);
+    if (index >= OS_NATIVE_STACKS) {
         return NULL;
     }
-    return &saved_contexts[stack - stacks];
+    return &saved_contexts[index];
 }
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }
@@ -116,6 +125,7 @@ OS_MEMMAP int Os_StackHasFault(void)
     return (InterlockedCompareExchange(&fault_count, 0, 0) > 0) ? 1 : 0;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the native fault-counter observation export retains its target ABI. */
 OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 
 OS_MEMMAP int Os_StackThreadHasFault(DWORD thread_id)
@@ -144,13 +154,14 @@ OS_MEMMAP static void fault_park_forever(void)
 }
 
 OS_MEMMAP static void publish_fault(
-    Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
+    const Os_NativeStackType *record, DWORD signum, uintptr_t sp, uintptr_t address, char origin)
 {
     Os_StackFaultType *local;
-    if ((record == NULL) || (record < stacks) || (record >= &stacks[OS_NATIVE_STACKS])) {
+    const unsigned index = Os_StackIndex(record);
+    if (index >= OS_NATIVE_STACKS) {
         _exit(E_OS_STATE);
     }
-    local = &fault_records[record - stacks];
+    local = &fault_records[index];
     local->thread_id = record->thread_id;
     local->role = record->role;
     local->signal_number = signum;
@@ -174,7 +185,7 @@ OS_MEMMAP static void publish_fault(
 
 OS_MEMMAP static void guard_signal(int signum, siginfo_t *details, void *native_context)
 {
-    Os_NativeStackType *record = current_stack;
+    const Os_NativeStackType *record = current_stack;
     uintptr_t address = (uintptr_t)details->si_addr;
     if ((record == NULL) || ((signum != SIGSEGV) && (signum != SIGBUS)) ||
         (address < record->reserve_low) || (address >= record->committed_low)) {
@@ -322,6 +333,7 @@ OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top)
     if (current_stack == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
+    /* MR12 RULE 11.4 VIOLATION: Numeric bounds compare distinct native and static stack regions. */
     current_stack->kernel_buffer_high = (uintptr_t)&top[1];
     current_stack->kernel_buffer_low = current_stack->kernel_buffer_high - (512u * sizeof(*top));
     if ((current_stack->reserve_low < current_stack->kernel_buffer_high) &&
@@ -374,14 +386,20 @@ OS_MEMMAP static size_t append_hex(char *output, size_t offset, DWORD value)
 
 #define OS_START_SEC_CONST_8
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit CONST mapping requires file-static scope under
+ * SWS_MemMap_00023. */
 OS_MEMMAP static const char fatal_prefix[] =
     "FATAL state=Failed reason=13 controllers_exhausted=1\nFAULT role="; /**< Immutable native
                                                                             fatal-report bytes;
                                                                             process lifetime. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit CONST mapping requires file-static scope under
+ * SWS_MemMap_00023. */
 OS_MEMMAP static const char fatal_middle[] =
     " signal="; /**< Immutable native fatal-report bytes; process lifetime. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit CONST mapping requires file-static scope under
+ * SWS_MemMap_00023. */
 OS_MEMMAP static const char fatal_suffix[] =
     " captured=1 record_complete=1\n"; /**< Immutable native fatal-report bytes; process lifetime.
                                         */

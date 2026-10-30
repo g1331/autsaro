@@ -32,6 +32,8 @@ ECU 的 HostBatch 与 probe 是两个独立可执行程序，跨翻译单元检�
 
 生成的 C 与运行时源码使用同一 `.clang-format`：emitter 直接写出该排版（规则在 `core/src/integration/c_layout.rs`），生成时不调用格式化工具（ADR 0014）。生成样本后，`uv run --locked python -B -m unittest discover -s tests/python/native -p test_generated_format.py` 用 uv 固定的 clang-format 检查样本中除 `kernel/`（FreeRTOS）和 `app/`（用户源码）外的 C 与头文件，必需 CI 在两个平台的 `c-analysis-prepare` 中运行。过长函数头的断行由 clang-format 按惩罚值择优，emitter 只复现常见选择，超长的用户名称可能排版不同。
 
+运行时头与源码会原样交付；增删注释、宏或函数也可能改变相邻未改动行的宏对齐和空行。这类修改须重新生成受影响样本并运行上述整份格式检查，不能用 `quality` 的改动行检查代替。
+
 同一批样本还用 clang-tidy 按[C 编码规范](../c-coding-standard.md#自动检查)与基线比较：`uv run --locked python -m autosar_tooling quality --scope runtime --c-samples build/c-analysis-samples`，必需 CI 在 Linux 的 `c-analysis-prepare` 中运行。
 
 clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py` 把样本内核按 `target.json` 打上补丁，再用样本自身的编译选项（含 `-Werror`）分别以正式与 test 模式（`-DECU_TARGET_TESTS -DOS_HOST_FAILURE_TESTS`）编译除 `kernel/`、`app/` 外的全部编译单元，另开启 `-Wshadow`、`-Wmissing-prototypes`、`-Wstrict-prototypes`、`-Wcast-qual`、`-Wextra-semi`、`-Wformat=2`、`-Wdocumentation`。与 MISRA 重复的诊断不加入（如 `-Wunused-macros`、`-Wvla`、`-Wsign-conversion`、`-Wcomma`、`-Wswitch-enum`）。`-Wdocumentation` 的存量警告按 C 规范源码基线逐项比较：只对这一组用 `-Wno-error=documentation` 保留警告输出，再拒绝新增或修好未移除的条目；其他编译错误仍直接失败。`void` 函数使用 `@par Return`／`None.`，AUTOSAR 强制无名的 role 参数使用按位置和方向说明的 `@par Parameters`；写法与校验见 C 编码规范。现存文档诊断仍随模块回填从基线删除，新增代码不能增加警告。clang 取自 `AUTOSAR_CLANG` 或 PATH，必需 CI 在 Linux 的 `c-analysis-prepare` 中运行；它只编译不链接，不替代受锁定的 GCC 构建。

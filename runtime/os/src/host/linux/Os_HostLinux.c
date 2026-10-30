@@ -90,11 +90,6 @@ OS_MEMMAP static struct Os_HostHandleType process_handle = {
     .kind = OS_HOST_PROCESS}; /**< C-initialized immutable process pseudo-handle; no Init writes. */
 #define OS_STOP_SEC_VAR_INIT_UNSPECIFIED
 #include "Os_MemMap.h"
-#define OS_START_SEC_VAR_CLEARED_PTR
-#include "Os_MemMap.h"
-OS_MEMMAP static HANDLE dispatcher; /**< Atomic dispatcher-handle publication; no Init reset. */
-#define OS_STOP_SEC_VAR_CLEARED_PTR
-#include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_TLS_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP static OS_HOST_THREAD_LOCAL HANDLE
@@ -267,7 +262,16 @@ OS_MEMMAP static DWORD actor_body(void *argument)
 
 OS_MEMMAP static void *actor_start(void *argument)
 {
-    HANDLE thread = argument;
+    HANDLE thread = NULL;
+    for (size_t index = 0u; index < OS_HOST_HANDLES; ++index) {
+        if (argument == &host_handles[index]) {
+            thread = &host_handles[index];
+            break;
+        }
+    }
+    if (thread == NULL) {
+        ExitProcess(1u);
+    }
     current_thread = thread;
     OS_LINUX_STACK_START(&thread->bootstrap_fake,
                          thread->mapping + thread->guard_size,
@@ -315,6 +319,7 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
     errno = 0;
     const unsigned protection = (unsigned)PROT_READ | (unsigned)PROT_WRITE;
     const unsigned mapping_flags = (unsigned)MAP_PRIVATE | (unsigned)MAP_ANONYMOUS;
+    /* MR12 RULE 11.5 VIOLATION: mmap returns page-aligned bytes within the reviewed mapping. */
     thread->mapping = mmap(NULL, reserve, (int)protection, (int)mapping_flags, -1, 0);
     if (thread->mapping == MAP_FAILED) {
         thread->mapping = NULL;
@@ -921,6 +926,8 @@ OS_MEMMAP BOOL DuplicateHandle(HANDLE source_process,
     return 1;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
 {
     if ((thread == NULL) || (code == NULL) || (thread->kind != OS_HOST_THREAD)) {
@@ -931,22 +938,13 @@ OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
     return 1;
 }
 
-OS_MEMMAP HANDLE Os_HostDispatcherThread(void)
-{
-    return __atomic_load_n(&dispatcher, __ATOMIC_ACQUIRE);
-}
-
-OS_MEMMAP void Os_HostSetDispatcher(HANDLE thread)
-{
-    __atomic_store_n(&dispatcher, thread, __ATOMIC_RELEASE);
-}
-
 OS_MEMMAP int Os_HostStackRange(HANDLE thread, uintptr_t *low, uintptr_t *high, size_t *guard)
 {
     if ((thread == NULL) || (thread->mapping == NULL) || (low == NULL) || (high == NULL) ||
         (guard == NULL)) {
         return 0;
     }
+    /* MR12 RULE 11.4 VIOLATION: Full-width native bounds are compared, never dereferenced. */
     *low = (uintptr_t)thread->mapping;
     *high = *low + thread->mapping_size;
     *guard = thread->guard_size;

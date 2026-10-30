@@ -58,7 +58,7 @@ static inline void Ingress_RecordActor(void) {}
 #endif
 #define Ingress_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Ingress_MemMap.h"
-static uint32 committed Ingress_VAR_CLEARED_UNSPECIFIED;
+static uint32 ingress_committed Ingress_VAR_CLEARED_UNSPECIFIED;
 #define Ingress_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Ingress_MemMap.h"
 #define Ingress_START_SEC_CODE
@@ -66,20 +66,21 @@ static uint32 committed Ingress_VAR_CLEARED_UNSPECIFIED;
 Ingress_CODE void Ingress_Periodic(void)
 {
     (void)Ingress_RecordActor();
-    uint32 value = committed;
+    uint32 value = ingress_committed;
     const Std_ReturnType status = Rte_Read_RxValue_Value(&value);
     if ((status == E_OK) || (status == RTE_E_MAX_AGE_EXCEEDED)) {
-        committed = value;
+        ingress_committed = value;
         (void)Rte_Write_TxValue_Value(value);
         (void)Rte_Write_Value_Value(value);
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic delivery retains the provided application runnable. */
 Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType Data)
 {
-    Data[0] = (uint8)(committed >> 24u);
-    Data[1] = (uint8)(committed >> 16u);
-    Data[2] = (uint8)(committed >> 8u);
-    Data[3] = (uint8)committed;
+    Data[0] = (uint8)(ingress_committed >> 24u);
+    Data[1] = (uint8)(ingress_committed >> 16u);
+    Data[2] = (uint8)(ingress_committed >> 8u);
+    Data[3] = (uint8)ingress_committed;
     return E_OK;
 }
 

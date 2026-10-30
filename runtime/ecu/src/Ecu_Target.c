@@ -141,6 +141,8 @@ Std_ReturnType Ecu_TargetCheckLifecycleContext(boolean starting)
                ? E_OK
                : E_NOT_OK;
 }
+/* MR12 RULE 8.7 VIOLATION: Retain the owner-checked clock export for delivered control programs;
+ * callers must own this target; the private logical epoch remains owner-only. */
 uint64_t Ecu_TargetNow(void)
 {
     Ecu_TargetAssertOwner();
@@ -258,6 +260,8 @@ void ShutdownHook(StatusType Error)
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #endif
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 StatusType Ecu_TargetPostFrame(
     uint64_t at, uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t *ticket)
 {

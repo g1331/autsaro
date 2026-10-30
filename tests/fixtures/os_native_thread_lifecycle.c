@@ -53,6 +53,10 @@ int __wrap_pthread_create(pthread_t *thread,
                           void *(*entry)(void *),
                           void *argument)
 {
+    if (strcmp(scenario, "context-error") == 0) {
+        (void)fputs("actor_context_rejected\n", stderr);
+        argument = &created_threads;
+    }
     const int result = __real_pthread_create(thread, attributes, entry, argument);
     if (result == 0) {
         if (created_threads == 0u) {
@@ -164,7 +168,8 @@ int main(int argc, char **argv)
     scenario = argv[1];
     Os_StackPrepare();
     if ((strcmp(scenario, "registration-error") == 0) ||
-        (strcmp(scenario, "identity-error") == 0) || (strcmp(scenario, "registered-normal") == 0)) {
+        (strcmp(scenario, "identity-error") == 0) || (strcmp(scenario, "context-error") == 0) ||
+        (strcmp(scenario, "registered-normal") == 0)) {
         if (strcmp(scenario, "identity-error") == 0) {
             gate = CreateEventA(NULL, 1, 0, NULL);
             if (gate == NULL) {

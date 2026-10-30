@@ -8,9 +8,10 @@
 #define OS_MAX_TASKS    16u /**< Maximum configured automotive Tasks; also bounds Task ID masks. */
 #define OS_MAX_PRIORITY 30u /**< Highest application Task base priority. */
 #define OS_MAX_ACTIVATIONS 32u /**< Maximum queued activations of one Basic Task. */
-#define OS_BASIC_TASK      0u  /**< Basic Task kind; no event wait. */
-#define OS_EXTENDED_TASK   1u  /**< Extended Task kind; exactly one activation, with event wait. */
-#define OS_MAX_RESOURCES   8u /**< Maximum external resource descriptors and held-resource depth. */
+/* MR12 RULE 2.5 VIOLATION: the task-class selector retains its existing preprocessing contract. */
+#define OS_BASIC_TASK    0u /**< Basic Task kind; no event wait. */
+#define OS_EXTENDED_TASK 1u /**< Extended Task kind; exactly one activation, with event wait. */
+#define OS_MAX_RESOURCES 8u /**< Maximum external resource descriptors and held-resource depth. */
 #define OS_MAX_INTERNAL_RESOURCES 2u  /**< Maximum internal resource descriptors. */
 #define OS_MAX_INTERRUPTS         32u /**< Native vector slots including reserved kernel vectors. */
 #define OS_MAX_ISR_PRIORITY                                                                        \

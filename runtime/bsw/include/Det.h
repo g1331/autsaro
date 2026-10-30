@@ -3,7 +3,9 @@
 #define DET_H
 #include "Det_Version.h"
 #include "Std_Types.h"
-/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate.
+ * MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
 #define DET_MODULE_ID 15u
 #define DET_START_SEC_CODE
 #include "Det_MemMap.h"

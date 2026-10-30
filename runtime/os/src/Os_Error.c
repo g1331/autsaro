@@ -33,6 +33,8 @@ OS_MEMMAP static OS_THREAD_LOCAL Os_ErrorParametersType
 OS_MEMMAP static OS_THREAD_LOCAL uint32
     hook_depth; /**< Actor TLS hook nesting count; no Init reset. */
 
+/* MR12 RULE 8.9 VIOLATION: Explicit TLS mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static OS_THREAD_LOCAL sint32
     error_active; /**< Actor TLS ErrorHook recursion guard; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_TLS_32
@@ -47,6 +49,8 @@ OS_MEMMAP static const Os_ErrorParametersType empty_parameters = {
 #include "Os_MemMap.h"
 OS_MEMMAP sint32 Os_HookBlocksCategory2(void) { return (hook_depth != 0u) ? 1 : 0; }
 
+/* MR12 RULE 18.6 VIOLATION: The bounded synchronous ISR snapshot borrows live caller outputs;
+ * restore and retired-slot clearing bound access. */
 OS_MEMMAP void Os_ErrorContextSave(Os_ErrorContextType *context)
 {
     context->phase = phase;
@@ -58,6 +62,8 @@ OS_MEMMAP void Os_ErrorContextSave(Os_ErrorContextType *context)
     parameters = empty_parameters;
 }
 
+/* MR12 RULE 18.6 VIOLATION: Restore the same live parent's typed snapshot before its Hook resumes;
+ * no pointee lifetime extension. */
 OS_MEMMAP void Os_ErrorContextRestore(const Os_ErrorContextType *context)
 {
     phase = context->phase;
@@ -129,16 +135,22 @@ OS_MEMMAP StatusType Os_ServiceAccessStatus(OSServiceIdType service)
     return result;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP const Os_ErrorParametersType *Os_ErrorParametersCurrent(void)
 {
     return (phase == OS_HOOK_ERROR) ? &parameters : &empty_parameters;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void)
 {
     return (phase == OS_HOOK_ERROR) ? service_id : OSServiceId_Unknown;
 }
 
+/* MR12 RULE 18.6 VIOLATION: Enabled ErrorHook borrows outputs only within the failing service call;
+ * recursion guard and exit clearing preserve that bound. */
 OS_MEMMAP StatusType Os_ErrorResult(OSServiceIdType service,
                                     StatusType status,
                                     const Os_ErrorParametersType *arguments)

@@ -62,13 +62,7 @@ static StatusType reject(Ecu_HostBatch *batch, StatusType status)
     return status;
 }
 
-void Ecu_HostBatchInitialize(Ecu_HostBatch *batch)
-{
-    if (batch != NULL) {
-        (void)memset(batch, 0, sizeof(*batch));
-    }
-}
-
+/* MR12 RULE 8.7 VIOLATION: the probe delivery retains the host-batch library export. */
 StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
                               const char *line,
                               size_t length,

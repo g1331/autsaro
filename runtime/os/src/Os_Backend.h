@@ -243,105 +243,24 @@ OS_MEMMAP void Os_StackTestTriggerBackupFault(void);
 #include "Os_MemMap.h"
 #endif
 
-/* Private implementations behind application-only ARTI service wrappers. */
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP ISRType Os_Implementation_GetISRID(void);
-
-OS_MEMMAP StatusType Os_Implementation_ControlIdle(CoreIdType CoreID, IdleModeType IdleMode);
-
+/* Private implementations for the service entries that remain out of line. */
 OS_MEMMAP boolean Os_Implementation_isOsStarted(void);
 
-OS_MEMMAP CoreIdType Os_Implementation_GetCoreID(void);
+OS_MEMMAP StatusType Os_Implementation_TerminateTask(void);
+
+OS_MEMMAP StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
+                                                         ScheduleTableType ScheduleTableID_To);
+
+/* Resource lookup shared across the OS implementation units. */
+
 /* Index of the configured resource `id`, or resource_count when absent. */
 OS_MEMMAP uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id);
 /* Index of the STANDARD resource that the LINKED chain from `index` names, or
  * resource_count for a missing or cyclic link. */
 OS_MEMMAP uint32 Os_ResourceRoot(const Os_TargetConfigType *config, uint32 index);
 
-OS_MEMMAP StatusType Os_Implementation_GetTaskID(TaskRefType TaskID);
-
-OS_MEMMAP StatusType Os_Implementation_GetTaskState(TaskType TaskID, TaskStateRefType State);
-
-OS_MEMMAP StatusType Os_Implementation_ActivateTask(TaskType TaskID);
-
-OS_MEMMAP StatusType Os_Implementation_TerminateTask(void);
-
-OS_MEMMAP StatusType Os_Implementation_ChainTask(TaskType TaskID);
-
-OS_MEMMAP StatusType Os_Implementation_GetResource(ResourceType ResID);
-
-OS_MEMMAP StatusType Os_Implementation_ReleaseResource(ResourceType ResID);
-
-OS_MEMMAP StatusType Os_Implementation_Schedule(void);
-
-OS_MEMMAP StatusType Os_Implementation_WaitEvent(EventMaskType Mask);
-
-OS_MEMMAP StatusType Os_Implementation_ClearEvent(EventMaskType Mask);
-
-OS_MEMMAP StatusType Os_Implementation_SetEvent(TaskType TaskID, EventMaskType Mask);
-
-OS_MEMMAP StatusType Os_Implementation_GetEvent(TaskType TaskID, EventMaskRefType Event);
-
-OS_MEMMAP void Os_Implementation_ShutdownOS(StatusType Error);
-
-OS_MEMMAP void Os_Implementation_StartOS(AppModeType Mode);
-
-OS_MEMMAP AppModeType Os_Implementation_GetActiveApplicationMode(void);
-
-OS_MEMMAP StatusType Os_Implementation_IncrementCounter(CounterType CounterID);
-
-OS_MEMMAP StatusType Os_Implementation_GetCounterValue(CounterType CounterID, TickRefType Value);
-
-OS_MEMMAP StatusType Os_Implementation_GetElapsedValue(CounterType CounterID,
-                                                       TickRefType Value,
-                                                       TickRefType ElapsedValue);
-
-OS_MEMMAP StatusType Os_Implementation_GetAlarmBase(AlarmType AlarmID, AlarmBaseRefType Info);
-
-OS_MEMMAP StatusType Os_Implementation_GetAlarm(AlarmType AlarmID, TickRefType Tick);
-
-OS_MEMMAP StatusType Os_Implementation_SetRelAlarm(AlarmType AlarmID,
-                                                   TickType Increment,
-                                                   TickType Cycle);
-
-OS_MEMMAP StatusType Os_Implementation_SetAbsAlarm(AlarmType AlarmID,
-                                                   TickType Start,
-                                                   TickType Cycle);
-
-OS_MEMMAP StatusType Os_Implementation_CancelAlarm(AlarmType AlarmID);
-
-OS_MEMMAP StatusType Os_Implementation_StartScheduleTableRel(ScheduleTableType ScheduleTableID,
-                                                             TickType Offset);
-
-OS_MEMMAP StatusType Os_Implementation_StartScheduleTableAbs(ScheduleTableType ScheduleTableID,
-                                                             TickType Start);
-
-OS_MEMMAP StatusType Os_Implementation_StopScheduleTable(ScheduleTableType ScheduleTableID);
-
-OS_MEMMAP StatusType Os_Implementation_NextScheduleTable(ScheduleTableType ScheduleTableID_From,
-                                                         ScheduleTableType ScheduleTableID_To);
-
-OS_MEMMAP StatusType Os_Implementation_GetScheduleTableStatus(
-    ScheduleTableType ScheduleTableID, ScheduleTableStatusRefType ScheduleStatus);
-
-OS_MEMMAP StatusType Os_Implementation_DisableInterruptSource(ISRType ISRID);
-
-OS_MEMMAP StatusType Os_Implementation_EnableInterruptSource(ISRType ISRID, boolean ClearPending);
-
-OS_MEMMAP StatusType Os_Implementation_ClearPendingInterrupt(ISRType ISRID);
-
-OS_MEMMAP void Os_Implementation_EnableAllInterrupts(void);
-
-OS_MEMMAP void Os_Implementation_DisableAllInterrupts(void);
-
-OS_MEMMAP void Os_Implementation_ResumeAllInterrupts(void);
-
-OS_MEMMAP void Os_Implementation_SuspendAllInterrupts(void);
-
-OS_MEMMAP void Os_Implementation_ResumeOSInterrupts(void);
-
-OS_MEMMAP void Os_Implementation_SuspendOSInterrupts(void);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_PTR

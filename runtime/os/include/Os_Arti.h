@@ -12,6 +12,7 @@
 #include "Os_Host.h"
 #include "Os_Target.h"
 #include "Os_Hooks.h"
+#include "Os_Service.h"
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 /** Task transition selectors mapped to standard ARTI task events by Os_ArtiTask. */
@@ -136,34 +137,6 @@ OS_MEMMAP void Os_ArtiIsr(ISRType isr, sint32 returning);
  */
 OS_MEMMAP void Os_ArtiHook(Os_HookPhaseType hook, StatusType error, sint32 returning);
 
-/** @brief Emit an application service event with an already captured payload.
- * @param[in] service Captured OS service identifier.
- * @param[in] parameter Already captured scalar service event payload.
- * @param[in] returning Zero for entry, nonzero for return.
- * @par Return
- * None.
- * Preconditions: ARTI initialized before actors; arguments are already captured for the current
- * logical caller. Context: service wrapper entry/return on its Task, ISR, Hook or initialized-C
- * caller, including refused calls; no native critical section is required, outside BSW areas.
- * Reentrancy: reentrant across native actors; logical caller scopes preserve TLS side data, and
- * atomic slot reservation/publication protects the tool buffer. Ownership: event payloads are
- * copied; native addresses are recorded as bits without retaining or dereferencing pointed-to
- * storage.
- */
-OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning);
-
-/** @brief Preserve the complete native pointer alongside its standard uint32 token.
- * @param[in] address Native AlarmBase result address, captured as bits without dereferencing.
- * @par Return
- * None.
- * Preconditions: ARTI initialized before actors; arguments are already captured for the current
- * logical caller. Context: successful GetAlarmBase wrapper return after the implementation has
- * returned; no native critical section is guaranteed, outside BSW areas. Reentrancy: reentrant
- * across native actors; logical caller scopes preserve TLS side data, and atomic slot
- * reservation/publication protects the tool buffer. Ownership: event payloads are copied; native
- * addresses are recorded as bits without retaining or dereferencing pointed-to storage.
- */
-OS_MEMMAP void Os_ArtiAlarmBaseReturn(AlarmBaseRefType address);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 /** @brief Caller classification scopes; save/restore when entering logical actors. */
@@ -216,25 +189,6 @@ OS_MEMMAP void Os_ArtiInternalEnter(void);
  */
 OS_MEMMAP void Os_ArtiInternalLeave(void);
 
-/** Enter a service scope and reset its captured access result.
- * @return Nonzero only for an outermost application-origin service call.
- * Preconditions: service nesting depth remains below UINT32_MAX.
- * Context: current native OS actor, including its existing critical section; no blocking or BSW
- * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
- * Ownership: copies scalar/capture state; no application object pointer is retained.
- */
-OS_MEMMAP sint32 Os_ArtiServiceEnter(void);
-
-/** Leave the matching service scope.
- * @par Return
- * None.
- * Preconditions: an unmatched leave asserts; service depth must be nonzero.
- * Context: current native OS actor, including its existing critical section; no blocking or BSW
- * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
- * Ownership: copies scalar/capture state; no application object pointer is retained.
- */
-OS_MEMMAP void Os_ArtiServiceLeave(void);
-
 /** Capture the current service access result.
  * @param[in] status Result of the service access/context guard.
  * @par Return
@@ -246,23 +200,6 @@ OS_MEMMAP void Os_ArtiServiceLeave(void);
  */
 OS_MEMMAP void Os_ArtiAccessResult(StatusType status);
 
-/** Test whether the last captured service access was accepted.
- * @return Nonzero for E_OK; zero for a refused access.
- * Preconditions: current logical service access result has been captured.
- * Context: current native OS actor, including its existing critical section; no blocking or BSW
- * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
- * Ownership: copies scalar/capture state; no application object pointer is retained.
- */
-OS_MEMMAP sint32 Os_ArtiAccessValid(void);
-
-/** Read the last captured service access result.
- * @return Current logical caller access status.
- * Preconditions: current logical service access result has been captured.
- * Context: current native OS actor, including its existing critical section; no blocking or BSW
- * area entry. Reentrancy: actor-local TLS; interrupt/hook nesting uses matching save/restore.
- * Ownership: copies scalar/capture state; no application object pointer is retained.
- */
-OS_MEMMAP StatusType Os_ArtiAccessStatus(void);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #endif

@@ -24,6 +24,29 @@ class CStandardTests(unittest.TestCase):
     def rules(self, source, name="runtime/bsw/include/Test.h"):
         return [rule for rule, _, _ in c_standard.findings(name, source)]
 
+    def test_owned_headers_begin_mapping_before_c_declarations(self):
+        from autosar_tooling.config import ROOT
+
+        for relative in (
+            "runtime/os/include/Arti.h",
+            "runtime/os/src/Os_Stack.h",
+            "runtime/os/src/host/linux/Os_HostLinux.h",
+            "runtime/bsw/include/SchM_Can.h",
+            "runtime/bsw/include/SchM_Dcm.h",
+            "runtime/bsw/include/SchM_BswM.h",
+        ):
+            source = (ROOT / relative).read_text(encoding="utf-8")
+            tokens = c_standard.lex(source)
+            for token in tokens:
+                if c_standard.is_comment(token):
+                    continue
+                self.assertTrue(token.text.lstrip().startswith("#"), (relative, token.text))
+                if "_MemMap.h" in token.text:
+                    break
+            else:
+                self.fail(f"{relative}: no memory mapping include")
+            c_standard.verify_memory_mapping_pattern(source)
+
     def test_memory_mapping_protocol_and_mutations(self):
         source = ('#if ENABLED\n#define RTE_Com_START_SEC_CODE\n'
                   '# include "Rte_MemMap.h" /* mapping */\nvoid run(void) {}\n'
@@ -429,6 +452,107 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
                         expected,
                     )
 
+    def test_retained_macro_shapes_preserve_replacement_tokens_and_legacy_records(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "runtime/bsw/include/Test.h"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            marker = "/* MR12 RULE 2.5 VIOLATION: retain the approved preprocessing contract. */\n"
+            original = marker + "#define API(value) \\\n    ((value) | 7u)\n"
+            record = (
+                "| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Test.h` 中 `API` | "
+                "shape=`#define API(value) ((value) &#124; 7u)` | 维护者 2026-10-30精确124键决定 |\n"
+            )
+            legacy = "/* MR12 RULE 2.5 VIOLATION: original name-bound approval. */\n#define LEGACY 9u\n"
+            legacy_record = "| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Test.h` 中 `LEGACY` | old exact name | 维护者 原ADR0023 |\n"
+            for label, changed, table, expected in (
+                ("continued-and-bar", original, record, None),
+                ("comments-and-spacing", original.replace("| 7u", "| /* note */ 7u"), record, None),
+                ("changed-body", original.replace("7u", "8u"), record, "deviation-shape"),
+                ("changed-macro-kind", original.replace("API(value)", "API (value)"), record, "deviation-shape"),
+                ("missing-shape", original, record.replace("shape=", "former="), "deviation-shape-record"),
+                ("missing-comment", original.replace(marker, ""), record, "deviation-uncommented"),
+                ("wrong-rule", original.replace("RULE 2.5", "RULE 20.10"), record, "deviation-unrecorded"),
+                ("wrong-owner", original.replace("API(value)", "OTHER(value)"), record, "deviation-unrecorded"),
+                ("outside-approval", original + marker + "#define EXTRA 7u\n", record, "deviation-unrecorded"),
+            ):
+                with self.subTest(case=label):
+                    source.write_text(changed + legacy, encoding="utf-8")
+                    document.write_text(table + legacy_record, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    if expected is None:
+                        self.assertEqual(findings, {})
+                    else:
+                        self.assertTrue(any(rule == expected for rule, _, _ in findings), findings)
+            source.write_text(original + legacy.replace("9u", "12u"), encoding="utf-8")
+            document.write_text(record + legacy_record, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            paste = marker + "/* MR12 RULE 20.10 VIOLATION: retain the approved entry binding. */\n#define ENTRY(id) Task_##id\n"
+            table = "".join(
+                f"| MISRA C:2012 Rule {rule} | `runtime/bsw/include/Test.h` 中 `ENTRY` | "
+                "shape=`#define ENTRY(id) Task_##id` | 维护者 2026-10-30精确124键决定 |\n"
+                for rule in ("2.5", "20.10")
+            )
+            source.write_text(paste, encoding="utf-8")
+            document.write_text(table, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            source.write_text(paste.replace("##", "# #"), encoding="utf-8")
+            self.assertTrue(any(rule == "deviation-shape" for rule, _, _ in c_standard.deviation_findings(root)))
+
+    def test_retained_multiline_object_checks_its_complete_declaration(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/src/Os_Backend.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            marker = "/* MR12 RULE 8.7 VIOLATION: retain the observed context array. */\n"
+            original = marker + "OS_MEMMAP void *\n    *Os_ArtiTaskContexts[32u];\n"
+            document.write_text(
+                "| MISRA C:2012 Rule 8.7 | `runtime/os/src/Os_Backend.c` 中 `Os_ArtiTaskContexts` | "
+                "shape=`OS_MEMMAP void * *Os_ArtiTaskContexts[32u];` | 维护者 2026-10-30精确124键决定 |\n",
+                encoding="utf-8",
+            )
+            source.write_text(original, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            source.write_text(original.replace("32u", "16u"), encoding="utf-8")
+            self.assertTrue(any(rule == "deviation-shape" for rule, _, _ in c_standard.deviation_findings(root)))
+
+    def test_retained_application_is_exact_and_both_sides_are_checked(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "core/tests/fixtures/component-pipeline/applications/Ingress.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            marker = "/* MR12 RULE 8.7 VIOLATION: retain the approved provided runnable. */\n"
+            original = marker + "/** Existing API contract. */\nAPP_CODE int Ingress_ReadData(int value) { return value; }\n"
+            record = (
+                "| MISRA C:2012 Rule 8.7 | `core/tests/fixtures/component-pipeline/applications/Ingress.c` 中 `Ingress_ReadData` | "
+                "shape=`APP_CODE int Ingress_ReadData(int value) {` | 维护者 2026-10-30精确124键决定 |\n"
+            )
+            # An unrelated fixture remains outside this narrow source checker.
+            source.with_name("Other.c").write_text("/* MR12 unreviewed test text */\n", encoding="utf-8")
+            for label, code, table, expected in (
+                ("accepted", original, record, None),
+                ("missing-comment", original.replace(marker, ""), record, "deviation-uncommented"),
+                ("missing-record", original, "", "deviation-unrecorded"),
+                ("wrong-rule", original.replace("RULE 8.7", "RULE 8.9"), record, "deviation-unrecorded"),
+                ("wrong-owner", original.replace("Ingress_ReadData", "OtherRunnable"), record, "deviation-unrecorded"),
+                ("wrong-file", original, record.replace("Ingress.c", "Other.c"), "deviation-unrecorded"),
+                ("outside-entity", original + marker + "int Extra(void) { return 0; }\n", record, "deviation-unrecorded"),
+            ):
+                with self.subTest(case=label):
+                    source.write_text(code, encoding="utf-8")
+                    document.write_text(table, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    if expected is None:
+                        self.assertEqual(findings, {})
+                    else:
+                        self.assertTrue(any(rule == expected for rule, _, _ in findings), findings)
+
     def test_repeated_directives_require_exact_occurrences(self):
         with tempfile.TemporaryDirectory(prefix="directive-scope-") as temporary:
             root = Path(temporary)
@@ -561,6 +685,140 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
             document.write_text(record.replace("Test_MemMap.h", "Test_MemMap.c"), encoding="utf-8")
             self.assertIn(("deviation-unrecorded", "runtime/os/include/Test_MemMap.c",
                            "/** @file Re-entrant mapping."), c_standard.deviation_findings(root))
+
+    def test_host_address_category_requires_exact_owner_expression_and_annotation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = root / "runtime/os/src/host/linux"
+            directory.mkdir(parents=True)
+            document = root / "docs/standards/os/native-facilities/addresses.md"
+            document.parent.mkdir(parents=True)
+            document.write_text("## 主机地址表示类别处置\n", encoding="utf-8")
+            host = directory / "Os_HostLinux.c"
+            stack = directory / "Os_StackLinux.c"
+            mapping = "thread->mapping = mmap(NULL, reserve, (int)protection, (int)mapping_flags, -1, 0);"
+            bounds = "*low = (uintptr_t)thread->mapping;"
+            marker = "/* MR12 RULE 11.5 VIOLATION: page-aligned mapping bytes. */\n"
+            original = (
+                "HANDLE Os_HostCreateActor(void) {\n" + marker + mapping + "\n}\n"
+                "int Os_HostStackRange(void) {\n"
+                "/* MR12 RULE 11.4 VIOLATION: numeric bounds only. */\n" + bounds + "\n}\n"
+            )
+            stack.write_text(
+                "void Os_StackRecordBuffer(void) {\n"
+                "/* MR12 RULE 11.4 VIOLATION: disjoint stack regions. */\n"
+                "current_stack->kernel_buffer_high = (uintptr_t)&top[1];\n}\n",
+                encoding="utf-8",
+            )
+            for label, changed, expected_rule, expected_file in (
+                ("accepted", original, None, None),
+                ("missing-comment", original.replace(marker, ""), "deviation-uncommented", document),
+                ("wrong-rule", original.replace("RULE 11.5", "RULE 11.4"), "deviation-unrecorded", host),
+                ("wrong-expression", original.replace(bounds, "*low = (uintptr_t)thread->argument;"),
+                 "deviation-category-pattern", host),
+                ("wrong-owner", original.replace("Os_HostStackRange", "OtherStackRange"),
+                 "deviation-category-pattern", host),
+                ("outside-owner", original.replace(bounds, "") + bounds,
+                 "deviation-category-pattern", host),
+                ("duplicate", original.replace(bounds, bounds + bounds), "deviation-category-pattern", host),
+                ("comment-owner", original.replace("int Os_HostStackRange(void) {", "/* Os_HostStackRange(void) { */ int Other(void) {"),
+                 "deviation-category-pattern", host),
+                ("extra-conversion", original + "void Other(void) {\n" + marker + mapping + "\n}\n",
+                 "deviation-unrecorded", host),
+            ):
+                with self.subTest(case=label):
+                    host.write_text(changed, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    if expected_rule is None:
+                        self.assertEqual(findings, {})
+                    else:
+                        self.assertTrue(any(
+                            rule == expected_rule and name == expected_file.relative_to(root).as_posix()
+                            for rule, name, _ in findings
+                        ), findings)
+            host.write_text(original, encoding="utf-8")
+            document.unlink()
+            self.assertIn(
+                ("deviation-category-record", "runtime/os/src/host/linux/Os_HostLinux.c", "Os_HostCreateActor"),
+                c_standard.deviation_findings(root),
+            )
+
+    def test_windows_address_category_keeps_each_expression_bounded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "runtime/os/src/Os_Stack.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/os/native-facilities/addresses.md"
+            document.parent.mkdir(parents=True)
+            document.write_text("## 主机地址表示类别处置\n", encoding="utf-8")
+            marker = "/* MR12 RULE 11.6 VIOLATION: native address metadata only. */\n"
+            bounds = "record->reserve_low = (uintptr_t)region.AllocationBase;"
+            original = (
+                "void Os_StackRecordBuffer(void) {\n"
+                "/* MR12 RULE 11.4 VIOLATION: disjoint numeric stack bounds. */\n"
+                "current_stack->kernel_buffer_high = (uintptr_t)&top[1];\n}\n"
+                "int Os_StackRegister(void) {\n" + marker + bounds + "\n"
+                + marker + "if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||\n"
+                "(region.RegionSize == 0u)) { return 0; }\n"
+                "if (region.AllocationBase != allocation_base) { break; }\n}\n"
+                "void Os_StackCheck(void) {\n" + marker
+                + "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);\n}\n"
+                "void Os_StackObserve(void) {\n" + marker
+                + "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);\n}\n"
+            )
+            for label, changed, expected in (
+                ("accepted-five", original, None),
+                ("missing-comment", original.replace(marker + bounds, bounds), "deviation-uncommented"),
+                ("wrong-rule", original.replace("RULE 11.6", "RULE 11.4", 1), "deviation-unrecorded"),
+                ("outside-category", original.replace("(uintptr_t)region.AllocationBase;", "(uintptr_t)region.BaseAddress;"),
+                 "deviation-category-pattern"),
+                ("wrong-owner", original.replace("Os_StackObserve", "OtherObserver"), "deviation-category-pattern"),
+                ("duplicate-expression", original.replace(bounds, bounds + bounds), "deviation-category-pattern"),
+                ("extra-conversion", original + "void Other(void) {\n" + marker + bounds + "\n}\n",
+                 "deviation-unrecorded"),
+                ("allocation-identity-not-authorized", original.replace(
+                    "if (region.AllocationBase != allocation_base)",
+                    marker + "if ((uintptr_t)region.AllocationBase != record->reserve_low)"),
+                 "deviation-unrecorded"),
+            ):
+                with self.subTest(case=label):
+                    source.write_text(changed, encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    if expected is None:
+                        self.assertEqual(findings, {})
+                        instances, errors = c_standard.host_address_instances(root)
+                        self.assertEqual(len(instances), 5)
+                        self.assertEqual(errors, {})
+                        self.assertEqual(len({entry[1] for entry in instances.values()}), 5)
+                    else:
+                        self.assertTrue(any(rule == expected for rule, _, _ in findings), findings)
+
+    def test_object_deviations_bind_declarators_instead_of_members_or_attributes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "runtime/bsw/src/Test.c"
+            source.parent.mkdir(parents=True)
+            document = root / "docs/standards/test.md"
+            document.parent.mkdir(parents=True)
+            marker = "/* MR12 RULE 8.9 VIOLATION: mapped storage must remain file static. */\n"
+            source.write_text(
+                marker + "static struct { int member; } state TEST_VAR_CLEARED;\n"
+                + marker + 'OS_MEMMAP static const char bytes[] = "state";\n'
+                + marker + "OS_MEMMAP static int counter;\n", encoding="utf-8",
+            )
+            record = (
+                "| MISRA C:2012 Rule 8.9 | `runtime/bsw/src/Test.c` 中 `state`、`bytes`、`counter` | "
+                "mapped objects | Approved by maintainer |\n"
+            )
+            document.write_text(record, encoding="utf-8")
+            self.assertEqual(c_standard.deviation_findings(root), {})
+            for wrong in ("member", "TEST_VAR_CLEARED"):
+                with self.subTest(wrong=wrong):
+                    document.write_text(record.replace("`state`", f"`{wrong}`"), encoding="utf-8")
+                    findings = c_standard.deviation_findings(root)
+                    self.assertEqual({key[0] for key in findings},
+                                     {"deviation-unrecorded", "deviation-uncommented"})
+                    self.assertIn(("deviation-unrecorded", "runtime/bsw/src/Test.c", marker.strip()), findings)
 
     def test_deviations_match_both_directions_and_exact_symbol(self):
         with tempfile.TemporaryDirectory(prefix="171-") as temporary:

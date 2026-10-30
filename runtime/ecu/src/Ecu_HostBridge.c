@@ -9,14 +9,17 @@ typedef struct {
     uint64_t started;
 } Ecu_HostWatch;
 
+static Ecu_HostWatch
+    host_watch; /**< Sole producer joins its observer before reuse; no Init reset. */
+
 static Os_HostThreadResultType watch(void *argument)
 {
-    const Ecu_HostWatch *control = (const Ecu_HostWatch *)argument;
-    uint64_t elapsed = Os_HostMonotonicMs() - control->started;
+    uint64_t elapsed = Os_HostMonotonicMs() - host_watch.started;
+    (void)argument;
     if (elapsed >= ECU_BATCH_WATCHDOG_MS) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
-    if (Os_HostWait(control->cancel, ECU_BATCH_WATCHDOG_MS - (uint32_t)elapsed) == 0) {
+    if (Os_HostWait(host_watch.cancel, ECU_BATCH_WATCHDOG_MS - (uint32_t)elapsed) == 0) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     return 0u;
@@ -129,10 +132,9 @@ static StatusType admit_batch(const Ecu_HostBatch *batch)
     return status;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the probe delivery retains the host-batch library export. */
 StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
 {
-    /* The sole producer joins its observer before reusing this process-lifetime context. */
-    static Ecu_HostWatch control;
     Os_HostHandleType monitor;
     Os_TickCompletionType previous;
     Ecu_BatchCompletion completed;
@@ -158,19 +160,19 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     batch->transport_status = ECU_OK;
     batch->transport_epoch = UINT64_C(0);
     batch->transport_count = 0u;
-    control.cancel = Os_HostOpenManualEvent();
-    if (control.cancel == NULL) {
+    host_watch.cancel = Os_HostOpenManualEvent();
+    if (host_watch.cancel == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
-    control.started = Os_HostMonotonicMs();
-    monitor = Os_HostSpawnObserverThread(&watch, &control);
+    host_watch.started = Os_HostMonotonicMs();
+    monitor = Os_HostSpawnObserverThread(&watch, NULL);
     if (monitor == NULL) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     at = batch->completed_epoch;
     while ((batch->epoch - at) > UINT64_C(1)) {
         ++at;
-        tick(batch, at, sink, context, &control);
+        tick(batch, at, sink, context, &host_watch);
     }
     batch->first_input_sequence =
         (batch->count == 0u) ? UINT64_C(0) : (batch->sequence + UINT64_C(1));
@@ -178,10 +180,10 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
     batch->input_sequences_reserved = 1u;
     bridge_require(Ecu_TargetPostBatch(batch->epoch, batch->frames, batch->count, &ticket) == E_OK);
     if (batch->epoch != batch->completed_epoch) {
-        tick(batch, batch->epoch, sink, context, &control);
+        tick(batch, batch->epoch, sink, context, &host_watch);
     }
     for (;;) {
-        pump(batch, sink, context, &control);
+        pump(batch, sink, context, &host_watch);
         status = Ecu_TargetBatchCompletion(ticket, &completed);
         if (status == E_OK) {
             break;
@@ -190,17 +192,17 @@ StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *c
         Os_HostSleepMs(1u);
     }
     bridge_require((completed.epoch == batch->epoch) && (completed.input_count == batch->count));
-    pump(batch, sink, context, &control);
+    pump(batch, sink, context, &host_watch);
     batch->input_status = completed.input_status;
     status = ((completed.input_status == ECU_OK) && (batch->transport_status == ECU_OK))
                  ? E_OK
                  : E_OS_VALUE;
     bridge_require(Ecu_HostBatchComplete(batch) == E_OK);
-    bridge_require((Os_HostMonotonicMs() - control.started) < ECU_BATCH_WATCHDOG_MS);
+    bridge_require((Os_HostMonotonicMs() - host_watch.started) < ECU_BATCH_WATCHDOG_MS);
     bridge_require(sink(NULL, batch, status, context) != 0);
-    bridge_require(Os_HostSetEvent(control.cancel) != 0);
+    bridge_require(Os_HostSetEvent(host_watch.cancel) != 0);
     bridge_require(Os_HostWait(monitor, ECU_BATCH_WATCHDOG_MS) != 0);
     bridge_require(Os_HostClose(monitor) != 0);
-    bridge_require(Os_HostClose(control.cancel) != 0);
+    bridge_require(Os_HostClose(host_watch.cancel) != 0);
     return E_OK;
 }

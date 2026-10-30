@@ -48,6 +48,10 @@ static void observed_body(void)
     const DWORD thread = GetCurrentThreadId();
     const Os_NativeStackType *stack = Os_StackCurrent();
     check(stack != NULL && Os_ArtiTaskStacks[id] == stack);
+    const Os_NativeStackType foreign = {0};
+    check(Os_StackSavedContext(NULL) == NULL);
+    check(Os_StackSavedContext(&foreign) == NULL);
+    check(Os_StackSavedContext(&Os_ArtiStacks[OS_NATIVE_STACKS]) == NULL);
     check(stack->thread_id == thread && sp >= stack->committed_low && sp < stack->high);
     check(Os_ArtiTaskContexts[id] == Os_StackSavedContext(stack));
     if (body_observations[id] == 0u) {
@@ -82,17 +86,18 @@ static void observed_hook(void)
     check(Os_ArtiTaskStacks[id]->sp >= Os_ArtiTaskStacks[id]->reserve_low);
     check(Os_ArtiTaskStacks[id]->sp < Os_ArtiTaskStacks[id]->high);
     check(Os_ArtiTaskContexts[id] != NULL && Os_ArtiNativeContextSize == sizeof(CONTEXT));
+    const CONTEXT *saved = Os_ArtiTaskContexts[id];
+    check(saved->Rsp >= Os_ArtiTaskStacks[id]->committed_low &&
+          saved->Rsp < Os_ArtiTaskStacks[id]->high);
 #ifdef __linux__
     {
         const Os_NativeStackType *native = Os_ArtiTaskStacks[id];
-        const CONTEXT *saved = Os_ArtiTaskContexts[id];
         check(native->context_valid == 1u && native->altstack_size >= 65536u);
         check((native->altstack_low % __alignof__(long double)) == 0u);
         check(native->kernel_buffer_low < native->kernel_buffer_high);
         check(native->kernel_buffer_high <= native->reserve_low ||
               native->kernel_buffer_low >= native->high);
-        check(saved->ContextFlags == CONTEXT_CONTROL && saved->Rsp >= native->committed_low &&
-              saved->Rsp < native->high);
+        check(saved->ContextFlags == CONTEXT_CONTROL);
         struct ucontext snapshot;
         memcpy(&snapshot, &saved->native, sizeof(snapshot));
         check(snapshot.uc_mcontext.rsp == saved->Rsp);

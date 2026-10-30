@@ -28,17 +28,12 @@ typedef TaskType *TaskRefType;
 typedef uint8 TaskStateType;
 /** OSEK OS 2.2.3 13.2.1 pointer to caller-owned Task-state output. */
 typedef TaskStateType *TaskStateRefType;
-/** SWS_Os_91007 application mode; this target uses mode bits 1 and 2, not multicore inheritance. */
+/** OSEK OS 2.2.3 13.7.2 application mode; this target uses mode bits 1 and 2. */
 typedef uint8 AppModeType;
 /** OSEK OS 2.2.3 13.7.3 default application mode, always valid for StartOS;
  * the generated configuration requires the OsAppMode of this name (ECUC_Os_00022). */
 #define OSDEFAULTAPPMODE                                                                           \
     ((AppModeType)1u) /**< OSEK OS 2.2.3 13.7.3 and ECUC_Os_00022: valid default startup mode. */
-/* Public R24-11 constants; this selected target has one logical core. Their
- * declarations do not enable multicore startup or mode inheritance. */
-#define DONOTCARE                                                                                  \
-    UINT8_MAX /**< SWS_Os_91007: unspecified AppMode; multicore inheritance is not selected. */
-#define TotalNumberOfCores 1u /**< SWS_Os_91002: one controlled logical core. */
 /** OSEK OS 2.2.3 13.4.1 external-resource identifier below OS_MAX_RESOURCES. */
 typedef uint8 ResourceType;
 /** OSEK OS 2.2.3 13.5.1 bit set of Task events; zero contains no events. */
@@ -47,119 +42,23 @@ typedef uint32 EventMaskType;
 typedef EventMaskType *EventMaskRefType;
 /** OSEK OS 2.2.3 13.6.1 Alarm identifier below OS_MAX_ALARMS. */
 typedef uint8 AlarmType;
-/* R24-11 public type definitions remain available independently of whether
- * their conditional runtime services are selected in this SC1 configuration. */
-/** SWS_Os_00772 OS-Application identifier; no OS-Application runtime services selected here. */
-typedef uint32 ApplicationType;
-#define INVALID_OSAPPLICATION UINT32_MAX /**< SWS_Os_00772: invalid OS-Application identifier. */
-/** SWS_Os_00773 application state; declaration does not enable OS-Application support. */
-typedef uint8 ApplicationStateType;
-/** SWS_Os_00774 pointer to application-state output owned by the caller. */
-typedef ApplicationStateType *ApplicationStateRefType;
-#define APPLICATION_ACCESSIBLE                                                                     \
-    0u /**< SWS_Os_00773: application accessible state; runtime services not selected. */
-#define APPLICATION_TERMINATED                                                                     \
-    1u /**< SWS_Os_00773: application terminated state; runtime services not selected. */
-/** SWS_Os_00775 trusted-function index; trusted-function services are not selected. */
-typedef uint32 TrustedFunctionIndexType;
-/** SWS_Os_00776 opaque parameter storage for a trusted function; no ownership transfer. */
-typedef void *TrustedFunctionParameterRefType;
-/** SWS_Os_00777 integral access-rights mask tested by OSMEMORY_IS_* macros. */
-typedef uint32 AccessType;
-/** Test the read property of AccessType (SWS_Os_00777).
- * @param[in] access Integral access-rights mask, evaluated once.
- * @return Nonzero when the selected access bit is set; zero otherwise.
- * Preconditions: integral AccessType-compatible argument.
- * Context: any expression context, including existing critical/exclusive areas.
- * Reentrancy: reentrant; no state is read or written.
- * Ownership: copies the mask value; no pointer is dereferenced or retained.
- */
-#define OSMEMORY_IS_READABLE(access) (((access) & UINT32_C(1)) != 0u)
-/** Test the write property of AccessType (SWS_Os_00777).
- * @param[in] access Integral access-rights mask, evaluated once.
- * @return Nonzero when the selected access bit is set; zero otherwise.
- * Preconditions: integral AccessType-compatible argument.
- * Context: any expression context, including existing critical/exclusive areas.
- * Reentrancy: reentrant; no state is read or written.
- * Ownership: copies the mask value; no pointer is dereferenced or retained.
- */
-#define OSMEMORY_IS_WRITEABLE(access) (((access) & UINT32_C(2)) != 0u)
-/** Test the execute property of AccessType (SWS_Os_00777).
- * @param[in] access Integral access-rights mask, evaluated once.
- * @return Nonzero when the selected access bit is set; zero otherwise.
- * Preconditions: integral AccessType-compatible argument.
- * Context: any expression context, including existing critical/exclusive areas.
- * Reentrancy: reentrant; no state is read or written.
- * Ownership: copies the mask value; no pointer is dereferenced or retained.
- */
-#define OSMEMORY_IS_EXECUTABLE(access) (((access) & UINT32_C(4)) != 0u)
-/** Test the stack-space property of AccessType (SWS_Os_00777).
- * @param[in] access Integral access-rights mask, evaluated once.
- * @return Nonzero when the selected access bit is set; zero otherwise.
- * Preconditions: integral AccessType-compatible argument.
- * Context: any expression context, including existing critical/exclusive areas.
- * Reentrancy: reentrant; no state is read or written.
- * Ownership: copies the mask value; no pointer is dereferenced or retained.
- */
-#define OSMEMORY_IS_STACKSPACE(access) (((access) & UINT32_C(8)) != 0u)
-/** SWS_Os_00778 object-access decision, ACCESS or NO_ACCESS. */
-typedef uint8 ObjectAccessType;
-#define ACCESS    1u /**< SWS_Os_00778: access to the object is permitted. */
-#define NO_ACCESS 0u /**< SWS_Os_00778: access to the object is denied. */
-/** SWS_Os_00779 kind of an OS object, represented by OBJECT_* constants. */
-typedef uint8 ObjectTypeType;
-#define OBJECT_TASK          0u /**< SWS_Os_00779: task object kind. */
-#define OBJECT_ISR           1u /**< SWS_Os_00779: isr object kind. */
-#define OBJECT_ALARM         2u /**< SWS_Os_00779: alarm object kind. */
-#define OBJECT_RESOURCE      3u /**< SWS_Os_00779: resource object kind. */
-#define OBJECT_COUNTER       4u /**< SWS_Os_00779: counter object kind. */
-#define OBJECT_SCHEDULETABLE 5u /**< SWS_Os_00779: ScheduleTable object kind. */
-/** SWS_Os_00780 native address of a memory region; does not own that region. */
-typedef void *MemoryStartAddressType;
-/** SWS_Os_00781 size of a memory region in bytes; uint64 preserves the controlled x64 address
- * width. */
-typedef uint64 MemorySizeType;
 /** SWS_Os_00782 logical ISR identifier; INVALID_ISR means no active Category 2 ISR. */
 typedef uint8 ISRType;
 #define INVALID_ISR ((ISRType)UINT8_MAX) /**< SWS_Os_00782: no active Category 2 ISR. */
 #define INVALID_TASK                                                                               \
     ((TaskType)UINT8_MAX) /**< OSEK OS 2.2.3 13.2.3.5: no currently running Task. */
-/** SWS_Os_00787 protection decision; protection services are not selected in SC1. */
-typedef uint8 ProtectionReturnType;
-#define PRO_IGNORE                                                                                 \
-    0u /**< SWS_Os_00787: ignore a protection error; protection services not selected. */
-#define PRO_TERMINATETASKISR                                                                       \
-    1u /**< SWS_Os_00787: terminate offending Task/ISR; protection not selected. */
-#define PRO_TERMINATEAPPL                                                                          \
-    2u /**< SWS_Os_00787: terminate offending application; protection not selected. */
-#define PRO_SHUTDOWN 3u /**< SWS_Os_00787: request OS shutdown after a protection error. */
-#define PRO_PREVENT_ARRIVAL_RATE                                                                   \
-    4u /**< SWS_Os_00787: reject excessive arrival; protection not selected. */
-/** SWS_Os_00788 OS-Application restart choice; restart services are not selected. */
-typedef uint8 RestartType;
-#define OS_OSAPPLICATION_RESTART                                                                   \
-    1u /**< SWS_Os_00788: restart selection; OS-Application services not selected. */
 /** SWS_Os_00789 unsigned physical conversion result; the conversion macro determines its unit. */
 typedef uint64 PhysicalTimeType;
 /** SWS_Os_00790 core identifier; this target exposes only OS_CORE_ID_0. */
 typedef uint16 CoreIdType;
 #define OS_CORE_ID_0 0u /**< SWS_Os_00790: identity of this target only logical core. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define OS_CORE_ID_MASTER                                                                          \
     OS_CORE_ID_0 /**< SWS_Os_00790: master core alias; this target uses core zero. */
-/** SWS_Os_00791 spinlock identifier; declaration does not select multicore spinlocks. */
-typedef uint16 SpinlockIdType;
-#define INVALID_SPINLOCK                                                                           \
-    0u /**< Zero invalid spinlock identifier; spinlock services are not selected. */
-/** SWS_Os_00792 success indication for a spinlock attempt; spinlocks are not selected. */
-typedef enum {
-    TRYTOGETSPINLOCK_NOSUCCESS = 0, /**< Spinlock not acquired. */
-    TRYTOGETSPINLOCK_SUCCESS = 1    /**< Spinlock acquired. */
-} TryToGetSpinlockType;
 /** SWS_Os_00793 idle mode; only IDLE_NO_HALT is supported by the controlled host. */
 typedef uint8 IdleModeType;
 #define IDLE_NO_HALT 0u /**< SWS_Os_00793: keep the controlled host core running during idle. */
-/** SWS_Os_91000 peripheral-area identifier, with standard range 0 through 65534. */
-typedef uint16 AreaIdType;
 /** OSEK OS 2.2.3 13.8.1 identity of a failed service exposed through ErrorHook accessors. */
 typedef uint8 OSServiceIdType;
 /** SWS_Os_00783 configured ScheduleTable identifier below OS_MAX_SCHEDULE_TABLES. */
@@ -170,8 +69,12 @@ typedef uint8 ScheduleTableStatusType;
 typedef ScheduleTableStatusType *ScheduleTableStatusRefType;
 #define SCHEDULETABLE_STOPPED 0u /**< SWS_Os_00784: inactive table. */
 #define SCHEDULETABLE_NEXT    1u /**< SWS_Os_00784: reserved successor table. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define SCHEDULETABLE_WAITING 2u /**< SWS_Os_00784: waiting for synchronization, not selected. */
 #define SCHEDULETABLE_RUNNING 3u /**< SWS_Os_00784: running unsynchronized table. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define SCHEDULETABLE_RUNNING_AND_SYNCHRONOUS                                                      \
     4u /**< SWS_Os_00784: running synchronized table, not selected. */
 /* Automotive Counter values are independent of FreeRTOS's 32-bit tick ABI. */
@@ -206,6 +109,8 @@ typedef AlarmBaseType *AlarmBaseRefType;
 #define E_OS_MISSINGEND                                                                            \
     11u /**< AUTOSAR OS 7.15: Task returned without TerminateTask/ChainTask.                       \
          */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_MEMORY                                                                     \
     12u /**< AUTOSAR OS 7.15: memory protection failure; protection not selected. */
 #define E_OS_STACKFAULT                                                                            \
@@ -213,21 +118,39 @@ typedef AlarmBaseType *AlarmBaseRefType;
          */
 /* R24-11 section 7.15 assigns numeric values to the implementation. These
  * public names do not select protection, spinlocks or multicore services. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_CORE                                                                                  \
     14u /**< AUTOSAR OS 7.15: invalid core access; multicore services not selected.                \
          */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_NESTING_DEADLOCK                                                                      \
     15u /**< AUTOSAR OS 7.15: spinlock nesting deadlock; spinlocks not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_LOCKED                                                                     \
     16u /**< AUTOSAR OS 7.15: protection lock-time failure; protection not selected. */
-#define E_OS_SPINLOCK  17u /**< AUTOSAR OS 7.15: invalid spinlock use; spinlocks not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
+#define E_OS_SPINLOCK 17u /**< AUTOSAR OS 7.15: invalid spinlock use; spinlocks not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_SERVICEID 18u /**< AUTOSAR OS 7.15: unsupported service identity. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_EXCEPTION                                                                  \
     19u /**< AUTOSAR OS 7.15: protection exception; protection not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_INTERFERENCE_DEADLOCK                                                                 \
     20u /**< AUTOSAR OS 7.15: interference deadlock; spinlocks not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_TIME                                                                       \
     21u /**< AUTOSAR OS 7.15: execution-time protection failure; protection not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_ARRIVAL                                                                    \
     22u /**< AUTOSAR OS 7.15: arrival-rate protection failure; protection not selected. */
 #define RUNNING   0u /**< OSEK OS 2.2.3 13.2.1: Task currently executing. */

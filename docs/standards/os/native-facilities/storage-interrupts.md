@@ -4,7 +4,7 @@
 
 D4.12为Required、适用C99（主文34–35／PDF42–43），明确覆盖第三方动态分配；AMD2仅扩展C11。`Os_HostCreateActor`的匿名mmap执行栈及guard是真实动态存储，静态handles／TCB／FreeRTOS缓冲／altstack不改变其来源。pthread仅获得bootstrap栈大小而非调用方栈；对应glibc的allocate_stack在缓存不足时mmap，并经_dl_allocate_tls／allocate_dtv分配TLS。Win32创建线程也保留／提交native栈；精确Windows DLL／CRT身份及配套实现证据仍需实际目标材料，不由符号或头声明补写。
 
-D4.13按获取、初始化、使用、释放的实际顺序判断。Linux joinable observer在未结束或未成功join时close返回失败，调用方仍持有所有权；join／detach的0→2→1状态只在真实操作成功后发布完成，失败恢复0，并发wait不把进行中当成完成。HostBatch保留signal→wait→close observer→close event，函数内static control具有进程期存储；sole producer且同一target不可重入，上次observer完成wait／close后才重写其字段；创建或执行失败进入既有进程停止，不返回后继续使用失效上下文。H注册失败及请求ID不可得均原生停止，不能隐藏失败后继续StartOS。
+D4.13按获取、初始化、使用、释放的实际顺序判断。Linux joinable observer在未结束或未成功join时close返回失败，调用方仍持有所有权；join／detach的0→2→1状态只在真实操作成功后发布完成，失败恢复0，并发wait不把进行中当成完成。HostBatch保留signal→wait→close observer→close event，文件内static host_watch具有进程期存储；sole producer且同一target不可重入，上次observer完成wait／close后才重写其字段；创建或执行失败进入既有进程停止，不返回后继续使用失效上下文。H注册失败及请求ID不可得均原生停止，不能隐藏失败后继续StartOS。
 
 有限H actor在注册前保存线程原备用信号栈，在callback完成后、pthread退休前恢复；查询或恢复失败原生停止，observer不替换备用栈。回调全程保留项目guard／altstack；原生适配器以typed syscall同时支持查询和设置，不通过关闭检测器回避栈所有权。D4.13约束这项临时借用后的归还，实际provider异步语义仍须单独取证。
 

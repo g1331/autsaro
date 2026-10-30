@@ -1,26 +1,7 @@
 /** @file Private native stack and fault records; Linux adds signal-stack fields. */
 #ifndef AUTOSAR_OS_STACK_H
 #define AUTOSAR_OS_STACK_H
-#include "Os_Version.h"
-#include "Os_Host.h"
-#include <stdint.h>
-#include "FreeRTOS.h"
-#define OS_NATIVE_STACKS 21u
-typedef struct Os_NativeStackType {
-    DWORD thread_id;
-    char role;
-    uintptr_t reserve_low, high, committed_low, sp;
-    uintptr_t kernel_buffer_low, kernel_buffer_high;
-    SIZE_T reserve, committed, guard;
-#ifdef _WIN32
-    ULONG guarantee;
-#else
-    uintptr_t altstack_low;
-    SIZE_T altstack_size;
-#endif
-    unsigned observations;
-    uint8_t context_valid;
-} Os_NativeStackType;
+#include "Os_StackTypes.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP extern const Os_NativeStackType *const Os_ArtiStacks;
@@ -32,18 +13,6 @@ OS_MEMMAP extern const Os_NativeStackType *const Os_ArtiStacks;
 #elif (MEMMAP_AR_RELEASE_MAJOR_VERSION != 4U) || (MEMMAP_AR_RELEASE_MINOR_VERSION != 10U)
 #error "Os_Stack.h -> Os_MemMap.h: incompatible AUTOSAR release"
 #endif
-typedef struct {
-    volatile Os_Atomic32Type published;
-    DWORD thread_id;
-#ifdef _WIN32
-    DWORD exception;
-#else
-    DWORD signal_number;
-#endif
-    uintptr_t sp, address;
-    char role;
-    char origin;
-} Os_StackFaultType;
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 OS_MEMMAP extern Os_StackFaultType Os_Fault;
@@ -74,6 +43,22 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context);
 OS_MEMMAP int Os_StackReport(void);
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void);
+
+/** Resolve an owned record by identity; OS_NATIVE_STACKS denotes any other address.
+ * @param[in] stack Borrowed address; never dereferenced by this lookup.
+ * @return Matching static slot, or OS_NATIVE_STACKS for NULL, foreign or one-past addresses.
+ * Context: any native actor or signal handler; bounded and allocation free.
+ * Ownership: does not retain the address or mutate the static records.
+ */
+OS_MEMMAP static inline unsigned Os_StackIndex(const Os_NativeStackType *stack)
+{
+    for (unsigned index = 0u; index < OS_NATIVE_STACKS; ++index) {
+        if (stack == &Os_ArtiStacks[index]) {
+            return index;
+        }
+    }
+    return OS_NATIVE_STACKS;
+}
 
 OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack);
 

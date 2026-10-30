@@ -16,11 +16,10 @@ static boolean initialized DET_VAR_CLEARED; /**< DET_STATE; Init publishes confi
 static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16 count)
 {
     boolean valid = TRUE;
-    uint16 index;
     if ((count != 0u) && (hooks == NULL)) {
         valid = FALSE;
     } else {
-        for (index = 0u; index < count; ++index) {
+        for (uint16 index = 0u; index < count; ++index) {
             if (hooks[index] == NULL_PTR) {
                 valid = FALSE;
             }
@@ -74,6 +73,8 @@ DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId,
     return E_OK;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId,
                                         uint8 InstanceId,
                                         uint8 ApiId,

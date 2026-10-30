@@ -299,6 +299,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
 #error "Os_Hooks.h -> Os_MemMap.h: incompatible AUTOSAR release"
 #endif
 #if (OS_USE_GET_SERVICE_ID == STD_ON)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this service-id macro, restricted to ErrorHook. */
 /** Read the captured service identifier of failed OS service (OSEK OS 2.2.3 13.8.4).
  * @return Captured service identifier value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -310,6 +311,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
 #define OSErrorGetServiceId() Os_ErrorServiceId()
 #endif
 #if (OS_USE_PARAMETER_ACCESS == STD_ON)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured CoreID of ControlIdle (OSEK OS 2.2.3 13.8.4).
  * @return Captured CoreID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -319,6 +321,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_ControlIdle_CoreID() (Os_ErrorParametersCurrent()->service_ControlIdle.CoreID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured IdleMode of ControlIdle (OSEK OS 2.2.3 13.8.4).
  * @return Captured IdleMode value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -328,6 +331,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_ControlIdle_IdleMode() (Os_ErrorParametersCurrent()->service_ControlIdle.IdleMode)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ISRID of EnableInterruptSource (OSEK OS 2.2.3 13.8.4).
  * @return Captured ISRID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -338,6 +342,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_EnableInterruptSource_ISRID()                                                      \
     (Os_ErrorParametersCurrent()->service_EnableInterruptSource.ISRID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ClearPending of EnableInterruptSource (OSEK OS 2.2.3 13.8.4).
  * @return Captured ClearPending value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -348,6 +353,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_EnableInterruptSource_ClearPending()                                               \
     (Os_ErrorParametersCurrent()->service_EnableInterruptSource.ClearPending)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ISRID of DisableInterruptSource (OSEK OS 2.2.3 13.8.4).
  * @return Captured ISRID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -358,6 +364,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_DisableInterruptSource_ISRID()                                                     \
     (Os_ErrorParametersCurrent()->service_DisableInterruptSource.ISRID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ISRID of ClearPendingInterrupt (OSEK OS 2.2.3 13.8.4).
  * @return Captured ISRID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -368,6 +375,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_ClearPendingInterrupt_ISRID()                                                      \
     (Os_ErrorParametersCurrent()->service_ClearPendingInterrupt.ISRID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Mode of StartOS (OSEK OS 2.2.3 13.8.4).
  * @return Captured Mode value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -377,6 +385,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_StartOS_Mode() (Os_ErrorParametersCurrent()->service_StartOS.Mode)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Error of ShutdownOS (OSEK OS 2.2.3 13.8.4).
  * @return Captured Error value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -386,6 +395,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_ShutdownOS_Error() (Os_ErrorParametersCurrent()->service_ShutdownOS.Error)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured TaskID of GetTaskID (OSEK OS 2.2.3 13.8.4).
  * @return Captured TaskID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -395,6 +405,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetTaskID_TaskID() (Os_ErrorParametersCurrent()->service_GetTaskID.TaskID)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured TaskID of GetTaskState (OSEK OS 2.2.3 13.8.4).
  * @return Captured TaskID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -404,6 +416,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetTaskState_TaskID() (Os_ErrorParametersCurrent()->service_GetTaskState.TaskID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured State of GetTaskState (OSEK OS 2.2.3 13.8.4).
  * @return Captured State value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -413,6 +426,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetTaskState_State() (Os_ErrorParametersCurrent()->service_GetTaskState.State)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured TaskID of ActivateTask (OSEK OS 2.2.3 13.8.4).
  * @return Captured TaskID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -422,6 +437,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_ActivateTask_TaskID() (Os_ErrorParametersCurrent()->service_ActivateTask.TaskID)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured TaskID of ChainTask (OSEK OS 2.2.3 13.8.4).
  * @return Captured TaskID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -431,6 +448,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_ChainTask_TaskID() (Os_ErrorParametersCurrent()->service_ChainTask.TaskID)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured ResID of GetResource (OSEK OS 2.2.3 13.8.4).
  * @return Captured ResID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -440,6 +459,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetResource_ResID() (Os_ErrorParametersCurrent()->service_GetResource.ResID)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured ResID of ReleaseResource (OSEK OS 2.2.3 13.8.4).
  * @return Captured ResID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -449,6 +470,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_ReleaseResource_ResID() (Os_ErrorParametersCurrent()->service_ReleaseResource.ResID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Mask of WaitEvent (OSEK OS 2.2.3 13.8.4).
  * @return Captured Mask value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -458,6 +480,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_WaitEvent_Mask() (Os_ErrorParametersCurrent()->service_WaitEvent.Mask)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Mask of ClearEvent (OSEK OS 2.2.3 13.8.4).
  * @return Captured Mask value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -467,6 +490,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_ClearEvent_Mask() (Os_ErrorParametersCurrent()->service_ClearEvent.Mask)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured TaskID of SetEvent (OSEK OS 2.2.3 13.8.4).
  * @return Captured TaskID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -476,6 +501,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_SetEvent_TaskID() (Os_ErrorParametersCurrent()->service_SetEvent.TaskID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Mask of SetEvent (OSEK OS 2.2.3 13.8.4).
  * @return Captured Mask value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -485,6 +511,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_SetEvent_Mask() (Os_ErrorParametersCurrent()->service_SetEvent.Mask)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured TaskID of GetEvent (OSEK OS 2.2.3 13.8.4).
  * @return Captured TaskID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -494,6 +522,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetEvent_TaskID() (Os_ErrorParametersCurrent()->service_GetEvent.TaskID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Event of GetEvent (OSEK OS 2.2.3 13.8.4).
  * @return Captured Event value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -503,6 +532,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetEvent_Event() (Os_ErrorParametersCurrent()->service_GetEvent.Event)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured CounterID of IncrementCounter (OSEK OS 2.2.3 13.8.4).
  * @return Captured CounterID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -513,6 +543,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_IncrementCounter_CounterID()                                                       \
     (Os_ErrorParametersCurrent()->service_IncrementCounter.CounterID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured CounterID of GetCounterValue (OSEK OS 2.2.3 13.8.4).
  * @return Captured CounterID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -523,6 +554,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_GetCounterValue_CounterID()                                                        \
     (Os_ErrorParametersCurrent()->service_GetCounterValue.CounterID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Value of GetCounterValue (OSEK OS 2.2.3 13.8.4).
  * @return Captured Value value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -532,6 +564,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetCounterValue_Value() (Os_ErrorParametersCurrent()->service_GetCounterValue.Value)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured CounterID of GetElapsedValue (OSEK OS 2.2.3 13.8.4).
  * @return Captured CounterID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -542,6 +575,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_GetElapsedValue_CounterID()                                                        \
     (Os_ErrorParametersCurrent()->service_GetElapsedValue.CounterID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Value of GetElapsedValue (OSEK OS 2.2.3 13.8.4).
  * @return Captured Value value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -551,6 +585,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetElapsedValue_Value() (Os_ErrorParametersCurrent()->service_GetElapsedValue.Value)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ElapsedValue of GetElapsedValue (OSEK OS 2.2.3 13.8.4).
  * @return Captured ElapsedValue value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -561,6 +596,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_GetElapsedValue_ElapsedValue()                                                     \
     (Os_ErrorParametersCurrent()->service_GetElapsedValue.ElapsedValue)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured AlarmID of GetAlarmBase (OSEK OS 2.2.3 13.8.4).
  * @return Captured AlarmID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -570,6 +607,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetAlarmBase_AlarmID() (Os_ErrorParametersCurrent()->service_GetAlarmBase.AlarmID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Info of GetAlarmBase (OSEK OS 2.2.3 13.8.4).
  * @return Captured Info value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -579,6 +617,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetAlarmBase_Info() (Os_ErrorParametersCurrent()->service_GetAlarmBase.Info)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured AlarmID of GetAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured AlarmID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -588,6 +628,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetAlarm_AlarmID() (Os_ErrorParametersCurrent()->service_GetAlarm.AlarmID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Tick of GetAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured Tick value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -597,6 +638,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_GetAlarm_Tick() (Os_ErrorParametersCurrent()->service_GetAlarm.Tick)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured AlarmID of SetRelAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured AlarmID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -606,6 +649,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_SetRelAlarm_AlarmID() (Os_ErrorParametersCurrent()->service_SetRelAlarm.AlarmID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Increment of SetRelAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured Increment value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -615,6 +659,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_SetRelAlarm_Increment() (Os_ErrorParametersCurrent()->service_SetRelAlarm.Increment)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Cycle of SetRelAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured Cycle value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -624,6 +669,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_SetRelAlarm_Cycle() (Os_ErrorParametersCurrent()->service_SetRelAlarm.Cycle)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured AlarmID of SetAbsAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured AlarmID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -633,6 +680,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_SetAbsAlarm_AlarmID() (Os_ErrorParametersCurrent()->service_SetAbsAlarm.AlarmID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Start of SetAbsAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured Start value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -642,6 +690,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_SetAbsAlarm_Start() (Os_ErrorParametersCurrent()->service_SetAbsAlarm.Start)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Cycle of SetAbsAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured Cycle value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -651,6 +700,8 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_SetAbsAlarm_Cycle() (Os_ErrorParametersCurrent()->service_SetAbsAlarm.Cycle)
+/* MR12 RULE 2.5 VIOLATION: OSEK 11.2 requires this first-object-id macro, restricted to ErrorHook.
+ */
 /** Read the captured AlarmID of CancelAlarm (OSEK OS 2.2.3 13.8.4).
  * @return Captured AlarmID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -660,6 +711,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  * pointed-to storage.
  */
 #define OSError_CancelAlarm_AlarmID() (Os_ErrorParametersCurrent()->service_CancelAlarm.AlarmID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ScheduleTableID of StartScheduleTableRel (OSEK OS 2.2.3 13.8.4).
  * @return Captured ScheduleTableID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -670,6 +722,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_StartScheduleTableRel_ScheduleTableID()                                            \
     (Os_ErrorParametersCurrent()->service_StartScheduleTableRel.ScheduleTableID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Offset of StartScheduleTableRel (OSEK OS 2.2.3 13.8.4).
  * @return Captured Offset value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -680,6 +733,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_StartScheduleTableRel_Offset()                                                     \
     (Os_ErrorParametersCurrent()->service_StartScheduleTableRel.Offset)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ScheduleTableID of StartScheduleTableAbs (OSEK OS 2.2.3 13.8.4).
  * @return Captured ScheduleTableID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -690,6 +744,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_StartScheduleTableAbs_ScheduleTableID()                                            \
     (Os_ErrorParametersCurrent()->service_StartScheduleTableAbs.ScheduleTableID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured Start of StartScheduleTableAbs (OSEK OS 2.2.3 13.8.4).
  * @return Captured Start value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -700,6 +755,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_StartScheduleTableAbs_Start()                                                      \
     (Os_ErrorParametersCurrent()->service_StartScheduleTableAbs.Start)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ScheduleTableID of StopScheduleTable (OSEK OS 2.2.3 13.8.4).
  * @return Captured ScheduleTableID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -710,6 +766,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_StopScheduleTable_ScheduleTableID()                                                \
     (Os_ErrorParametersCurrent()->service_StopScheduleTable.ScheduleTableID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured From of NextScheduleTable_ScheduleTableID (OSEK OS 2.2.3 13.8.4).
  * @return Captured From value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -720,6 +777,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_NextScheduleTable_ScheduleTableID_From()                                           \
     (Os_ErrorParametersCurrent()->service_NextScheduleTable.ScheduleTableID_From)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured To of NextScheduleTable_ScheduleTableID (OSEK OS 2.2.3 13.8.4).
  * @return Captured To value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -730,6 +788,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_NextScheduleTable_ScheduleTableID_To()                                             \
     (Os_ErrorParametersCurrent()->service_NextScheduleTable.ScheduleTableID_To)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ScheduleTableID of GetScheduleTableStatus (OSEK OS 2.2.3 13.8.4).
  * @return Captured ScheduleTableID value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature
@@ -740,6 +799,7 @@ OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void);
  */
 #define OSError_GetScheduleTableStatus_ScheduleTableID()                                           \
     (Os_ErrorParametersCurrent()->service_GetScheduleTableStatus.ScheduleTableID)
+/* MR12 RULE 2.5 VIOLATION: the named ErrorHook getter retains its exact service-field binding. */
 /** Read the captured ScheduleStatus of GetScheduleTableStatus (OSEK OS 2.2.3 13.8.4).
  * @return Captured ScheduleStatus value, including its original pointer value when applicable.
  * Preconditions: active ErrorHook for the matching failed service; required accessor feature

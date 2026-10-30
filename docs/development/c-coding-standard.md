@@ -140,7 +140,7 @@ void Server_Run(uint8, uint32 *);
 /* MR12 DIR 4.9 VIOLATION: <理由> */
 ```
 
-注释写在引起违反的语句同一行或上一行，说明技术理由和风险控制。逐项记录仍与注释对应；ADR 0025 的类别记录集中共用依据，不逐处重复必要性报告。注释本身不构成批准。
+MR12 就近说明理由与风险控制；已有 API 文档时放在文档前，保持文档紧邻声明／宏并验证关联。逐项记录与注释对应；ADR 0025 类别共用依据，不重复必要性。注释不构成批准。
 
 类别引用：[MemMap R20.1／R20.5](../standards/memmap/README.md#memmap-类别偏离)、[主机动态设施 D4.12＋R21.3／R22.1](../standards/os/native-facilities/storage-interrupts.md#主机动态设施类别偏离)、[同步嵌套 ISR R17.2](../standards/os/native-facilities/storage-interrupts.md#同步嵌套-isr-类别偏离)。后续源码整改就近 MR12 只写该位置的机制与约束，记录用来源模式识别实例；既有精确 include／undef 记录仍执行下述双向关联。
 

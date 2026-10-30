@@ -108,6 +108,8 @@ static PduIdType tx_confirmation_handle CAN_VAR_CLEARED; /**< swPduHandle to con
  * complete a new same-handle request after cancellation or reinitialization. */
 static uint64 host_tx_sequence CAN_VAR_CLEARED;          /**< Token of the last admitted frame. */
 static uint64 host_tx_cancelled_through CAN_VAR_CLEARED; /**< Tokens up to here never complete. */
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 static uint64 host_tx_completed_through CAN_VAR_CLEARED; /**< Tokens up to here have completed. */
 #define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"
@@ -291,6 +293,8 @@ CAN_CODE Std_ReturnType Can_GetControllerTxErrorCounter(uint8 ControllerId,
     return E_NOT_OK;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 CAN_CODE void Can_DisableControllerInterrupts(uint8 Controller)
 {
     SchM_Enter_Can_CAN_STATE();
@@ -301,6 +305,8 @@ CAN_CODE void Can_DisableControllerInterrupts(uint8 Controller)
     SchM_Exit_Can_CAN_STATE();
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 CAN_CODE void Can_EnableControllerInterrupts(uint8 Controller)
 {
     SchM_Enter_Can_CAN_STATE();
@@ -309,12 +315,6 @@ CAN_CODE void Can_EnableControllerInterrupts(uint8 Controller)
         --interrupt_disable_count;
     }
     SchM_Exit_Can_CAN_STATE();
-}
-
-CAN_CODE Std_ReturnType Can_CheckWakeup(uint8 Controller)
-{
-    (void)Controller;
-    return E_NOT_OK;
 }
 
 static CAN_CODE EcuStatus Can_StoreTransmit(const Can_PduType *pdu)
@@ -623,6 +623,8 @@ CAN_CODE EcuStatus Can_InternalInject(uint32 id, uint8 dlc, const uint8 data[8],
     return Can_ReceiveHost(id, dlc, data, 0u);
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 CAN_CODE EcuStatus Can_InternalRxIndication(uint32 id,
                                             uint8 dlc,
                                             const uint8 data[8],

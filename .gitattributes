@@ -31,7 +31,6 @@
 /runtime/host/include/Ecu_Status.h text eol=crlf
 /runtime/host/src/Can_HostLock.c text eol=crlf
 /runtime/host/src/Can_HostLock.h text eol=crlf
-/runtime/host/src/Ecu_Status.c text eol=crlf
 
 # Fuzz corpus and reproducers are byte-exact inputs.
 /fuzz/corpus/** -text

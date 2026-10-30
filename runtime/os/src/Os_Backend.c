@@ -105,6 +105,8 @@ OS_MEMMAP static uint32 current_interrupt =
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const uint32 *const Os_ArtiCurrentIsr =
     &current_interrupt; /**< Fixed ISR identity tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
@@ -288,18 +290,24 @@ OS_MEMMAP static AppModeType startup_mode; /**< Startup-only selected AppMode; n
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const AppModeType *const Os_ArtiAppMode =
     &startup_mode; /**< Fixed AppMode tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static uint32
     resource_owner[OS_MAX_RESOURCES]; /**< Resource owners; OS port lock; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const uint32 *const Os_ArtiResourceOwners =
     resource_owner; /**< Fixed resource owners tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
@@ -321,6 +329,8 @@ OS_MEMMAP TaskType Os_ArtiRunningTask =
 OS_MEMMAP const Os_NativeStackType
     *Os_ArtiTaskStacks[OS_MAX_TASKS]; /**< Observed stack pointers; port lock; no Init reset. */
 
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const void
     *Os_ArtiTaskContexts[OS_MAX_TASKS]; /**< Observed context pointers; port lock; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_PTR
@@ -343,6 +353,8 @@ OS_MEMMAP static uint8 trace[128]; /**< Caller-serialized trace prefix bytes; no
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static uint32 trace_length; /**< Caller-serialized used trace bytes; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
@@ -644,6 +656,8 @@ OS_MEMMAP sint32 Os_BackendReady(void)
  * the existing kernel ready-list policy remains the only selector. */
 #define OS_START_SEC_VAR_CLEARED_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static Os_OrderReferenceType
     rebase_entries[OS_MAX_TASKS *
                    (OS_MAX_ACTIVATIONS + 1u)]; /**< Persistent function-owned state; existing
@@ -1247,8 +1261,8 @@ OS_MEMMAP static DWORD WINAPI control_actor(void *argument)
     }
     do {
         waited = WaitForSingleObjectEx(event, INFINITE, 1);
-    } while (waited == WAIT_IO_COMPLETION);
-    if (waited != WAIT_OBJECT_0) {
+    } while (waited == (DWORD)WAIT_IO_COMPLETION);
+    if (waited != (DWORD)WAIT_OBJECT_0) {
         ExitProcess(E_OS_STATE);
     }
     /* The requester may be stopped between its wake-up and its own publication. */
@@ -1283,34 +1297,6 @@ OS_MEMMAP static DWORD WINAPI control_actor(void *argument)
     report_and_exit();
 }
 
-OS_MEMMAP void Os_BackendStackFault(char failed_role)
-{
-    Os_TimeClose();
-    Os_MailboxClose();
-    (void)InterlockedOr(&activation_admission, 2);
-    (void)InterlockedExchange(&ready, 0);
-    __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
-    if (failed_role == 'C') {
-        (void)InterlockedExchange(&controller_healthy[0], 0);
-    } else if (failed_role == 'D') {
-        (void)InterlockedExchange(&controller_healthy[1], 0);
-    } else {
-        /* A Task, ISR or startup fault leaves both controller health states intact. */
-    }
-    if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
-        if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
-            Os_StackFatalExit();
-        }
-    }
-    if (Os_HostSetEvent((InterlockedCompareExchange(&controller_healthy[0], 0, 0) != 0)
-                            ? close_event
-                            : backup_event) == 0) {
-        ExitProcess(E_OS_STACKFAULT);
-    }
-    (void)InterlockedExchange(&Os_Closing, 1);
-    Sleep(INFINITE);
-    ExitProcess(E_OS_STACKFAULT);
-}
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 #ifdef __linux__
@@ -1466,6 +1452,35 @@ OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 #else
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+OS_MEMMAP void Os_BackendStackFault(char failed_role)
+{
+    Os_TimeClose();
+    Os_MailboxClose();
+    (void)InterlockedOr(&activation_admission, 2);
+    (void)InterlockedExchange(&ready, 0);
+    __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
+    if (failed_role == 'C') {
+        (void)InterlockedExchange(&controller_healthy[0], 0);
+    } else if (failed_role == 'D') {
+        (void)InterlockedExchange(&controller_healthy[1], 0);
+    } else {
+        /* A Task, ISR or startup fault leaves both controller health states intact. */
+    }
+    if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
+        if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
+            Os_StackFatalExit();
+        }
+    }
+    if (Os_HostSetEvent((InterlockedCompareExchange(&controller_healthy[0], 0, 0) != 0)
+                            ? close_event
+                            : backup_event) == 0) {
+        ExitProcess(E_OS_STACKFAULT);
+    }
+    (void)InterlockedExchange(&Os_Closing, 1);
+    Sleep(INFINITE);
+    ExitProcess(E_OS_STACKFAULT);
+}
+
 OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
                                       SIZE_T stack,
                                       LPTHREAD_START_ROUTINE start,
@@ -1489,9 +1504,18 @@ OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 #include "Os_MemMap.h"
 OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
 {
-    Os_NativeTaskStartType *start = argument;
+    Os_NativeTaskStartType *start = NULL;
+    for (uint32 index = 0u; index < (OS_MAX_TASKS + 2u); ++index) {
+        if (argument == &native_starts[index]) {
+            start = &native_starts[index];
+            break;
+        }
+    }
+    if (start == NULL) {
+        ExitProcess(E_OS_STATE);
+    }
     /* Creation publishes the handle and accounting before registration may fail. */
-    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
+    if (WaitForSingleObject(start->gate, INFINITE) != (DWORD)WAIT_OBJECT_0) {
         ExitProcess(E_OS_STATE);
     }
     if (Os_StackRegister(start->role) == 0) {
@@ -1507,7 +1531,7 @@ OS_MEMMAP static DWORD WINAPI native_task_start(void *argument)
     if (Os_HostSetEvent(start->registered) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (WaitForSingleObject(start->gate, INFINITE) != WAIT_OBJECT_0) {
+    if (WaitForSingleObject(start->gate, INFINITE) != (DWORD)WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if (start->entry == &task_entry) {
@@ -1545,7 +1569,7 @@ OS_MEMMAP HANDLE Os_PortTaskThread(TaskFunction_t code,
     if (Os_HostSetEvent(start->gate) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    if (WaitForSingleObject(start->registered, 5000u) != WAIT_OBJECT_0) {
+    if (WaitForSingleObject(start->registered, 5000u) != (DWORD)WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if (SuspendThread(thread) == (DWORD)-1) {
@@ -1759,7 +1783,7 @@ OS_MEMMAP static void start_controllers(void)
                                   (void *)&backup_thread,
                                   STACK_SIZE_PARAM_IS_A_RESERVATION,
                                   NULL);
-    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != WAIT_OBJECT_0) {
+    if (WaitForMultipleObjects(2u, controller_registered, 1, 5000u) != (DWORD)WAIT_OBJECT_0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
@@ -1835,7 +1859,6 @@ OS_MEMMAP void Os_BackendSetDispatcher(void)
                         DUPLICATE_SAME_ACCESS) == 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    Os_HostSetDispatcher(main_thread);
     Os_StackInit();
 }
 #define OS_STOP_SEC_CODE
@@ -2122,6 +2145,8 @@ OS_MEMMAP static void Os_BackendMissingEnd(void)
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static UBaseType_t
     saved_priorities[OS_RESOURCE_ACTORS]
                     [OS_MAX_RESOURCES]; /**< Persistent function-owned state; existing caller/port
@@ -2130,6 +2155,8 @@ OS_MEMMAP static UBaseType_t
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
+ */
 OS_MEMMAP static LONG
     saved_interrupt_ceilings[OS_RESOURCE_ACTORS]
                             [OS_MAX_RESOURCES]; /**< Persistent function-owned state; existing

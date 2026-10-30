@@ -98,10 +98,4 @@ R20.11／R20.12均为Required（印刷162–163／PDF170–171，AMD2追加C11�
 
 ## 自动与线程局部对象的借用
 
-R18.6为Required/System（主文印刷150／PDF158；AMD2追加C11），AMD4.24（印刷15／PDF22）扩展到thread-local。不能把正常join、后续不再读取或phase guard直接等同于不存在长寿命地址副本。Os_LinuxCaptureContext先完成局部快照及目标自有FP指针再写目标；复制的是copied中的指针值，不是&copied。此判断只覆盖该具体绑定，不替其他信号帧成员或provider地址证明存储期。
-
-HostBridge以既有sole native producer、同一target不可重入为前提，将watch context改成函数内static。两字段在每次创建observer前写入，上次observer已wait/close；未新增owner状态或锁，目标接口的native_thread绑定不冒充Bridge入口锁。真实静态地址编译属性对照与正常多批次／背压执行分开取证。host/probe入口传NULL，Task启动数据及其指向的task_memory均为静态对象；不把这些实际调用外推为任意外部callback参数均符合。
-
-Os_BackendInterruptLeave在恢复后清空退役error副本，避免继续留存已恢复的参数；父TLS状态和外层interrupt保持。Os_ErrorResult按已校验0/1开关从局部两项const source表选择empty_parameters或arguments，STD_OFF不再捕获指针字段，STD_ON保持getter语义；没有新增恒定控制表达式或宏。当前未使用槽的观察在父参数仍有效时进行，撤销清理和恢复禁用复制须被精确位置拒绝，不以失效地址解引用作反例。
-
-上述清理不把enabled ErrorHook的初始长寿命复制直接记为R18.6满足。OSEK2.2.3 §11.2／13.8.4只明确第一项object identifier的accessor义务及参数命名；固定SWS的ECUC_Os_00048把OsUseParameterAccess定义交给ISO17356，且没有给出默认值。当前generator缺值时STD_ON是项目选择。对应ISO原章及指针参数accessor必要性尚未核定，不能把全部已实现的getter当成已证AUTOSAR强制行，或填ADR0023批准／MR12。实际getter保留和其他TLS／SDK地址流仍分别核查；[来源及整改闭包](https://github.com/g1331/autsaro/pull/371#issuecomment-6399598461)留PR。
+指针保存、嵌套恢复与 ErrorHook 的 OSEK 依据见[ErrorHook 参数存储期](native-facilities/error-context.md)。

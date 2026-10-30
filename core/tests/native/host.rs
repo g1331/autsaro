@@ -206,15 +206,15 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
         ("#include \"Can.h\"\n", true),
         ("#include \"Can.h\"\nCanMode leaked;\n", false),
         (
-            "#include \"Can.h\"\nvoid (*leaked)(CanMode) = Can_SetMode;\n",
+            "#include \"Can.h\"\nvoid probe(void) { (void)Can_SetMode; }\n",
             false,
         ),
         (
-            "#include \"Can.h\"\nvoid *leaked = (void *)&Can_HostFlush;\n",
+            "#include \"Can.h\"\nvoid probe(void) { (void)Can_HostFlush; }\n",
             false,
         ),
         (
-            "#include \"Can.h\"\nvoid *leaked = (void *)&Can_InternalInject;\n",
+            "#include \"Can.h\"\nvoid probe(void) { (void)Can_InternalInject; }\n",
             false,
         ),
         ("#include \"Can.h\"\n#include \"Can_Host.h\"\n", true),
@@ -224,7 +224,14 @@ Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
     .enumerate()
     {
         let source = temp.0.join(format!("view-{index}.c"));
-        fs::write(&source, format!("{includes}{layout}")).unwrap();
+        let host_bindings = if includes.contains("Can_Host.h") {
+            "void (*set_mode)(CanMode) = Can_SetMode;\n\
+             CanMode (*get_mode)(void) = Can_GetMode;\n\
+             EcuStatus (*transmit_pdu)(PduIdType, uint32_t, uint8_t, const uint8_t[8]) = Can_TransmitPdu;\n"
+        } else {
+            ""
+        };
+        fs::write(&source, format!("{includes}{layout}{host_bindings}")).unwrap();
         let output = Command::new(&identity.compiler)
             .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-c"])
             .arg("-I")

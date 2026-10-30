@@ -3,7 +3,6 @@
 # Remove fixed entries; add one only with a reviewed reason in the PR (C coding standard).
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if ((previous[i] == SUSPENDED) && (state != SUSPENDED)) {
 clang-analyzer-core.UndefinedBinaryOperatorResult runtime/os/src/Os_Backend.c if (completed[i] != 0u) {
-clang-analyzer-security.ArrayBound runtime/os/src/Os_Time.c TickType current = values[counter];
 readability-function-size generated/src/Os_Arti.c OS_MEMMAP void Os_ArtiService(OSServiceIdType service, uint32 parameter, sint32 returning)
 readability-function-size runtime/bsw/src/CanIf.c CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
 readability-function-size runtime/ecu/src/Ecu_HostBatch.c StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
@@ -32,7 +31,6 @@ readability-identifier-naming runtime/ecu/src/Ecu_Target.c } Ecu_OutputSlot;
 readability-identifier-naming runtime/ecu/src/Ecu_Target.c } Ecu_ProtocolSlot;
 readability-identifier-naming runtime/host/include/Can_Host.h } CanMode;
 readability-identifier-naming runtime/host/include/Ecu_Status.h } EcuStatus;
-readability-identifier-naming runtime/os/include/Arti.h typedef int32_t ArtiAtomic32;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_AddressCapture;
 readability-identifier-naming runtime/os/include/Arti.h } Arti_Event;
 readability-identifier-naming runtime/os/include/Os.h #define SetEvent Os_SetEvent

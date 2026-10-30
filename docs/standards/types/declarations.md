@@ -44,17 +44,7 @@ R8.7为Advisory（主文印刷70／PDF78；TC2.15印刷6／PDF12）。定义在�
 
 ## 单函数对象与存储期
 
-R8.9为Advisory、System（主文印刷71／PDF79；AMD2.27追加C11，AMD4.43–46／印刷32／PDF39将defined改为declared）。只有一个函数出现的标识符应优先收窄到块作用域；静态存储期不是保留文件作用域的充分理由，主文的调用计数示例本身就使用函数内static。地址被异步消费者借用时也须分别核对对象存储期与标识符可见范围，不能把二者混同。
-
-55077f87四profile分析中的standard-ecu有46个报告对象，不按TU／程序重复计数。十个无独立MemMap数据段属性的私有对象已保留原类型／限定符、静态或TLS存储期并移入唯一消费函数：Target的native_owner／native_thread、protocol_write／read、next_output_ticket及三个output索引，Det_Host的reporting_development，以及HostBatch输入control的batch。Target仍以同一原子发布身份，队列索引及ticket不随调用重置；Det仍每个原生线程首次进入后保持递归边界；batch仍是H控制线程借用的进程期对象，执行／observer回收协议不变。除这些声明位置，三个文件的其他非注释C token不变。
-
-另一个已收窄对象是Linux端口dispatcher_thread：在xPortStartScheduler原创建点定义const HANDLE，保留创建、注册等待和永久等待的原顺序。只是句柄值的局部副本，不把actor、映射或回调上下文的所有权改为自动存储期；后续有序补丁上下文和manifest一并同步。Windows不选择这两份Linux补丁。
-
-上述十个对象的记录固定于当时的源码；后续逐处映射核查将Det的reporting_development恢复为文件作用域的显式TLS数据段，见[Det私有状态](../det.md#私有开发报告状态的映射)。该处R8.9真实Advisory保留重新成立，不把早期局部化收据改成当前状态，也不重写原工件的46项计数。
-
-其余32个自有／生成对象目前保留真实Advisory违反及映射理由：Can和Com各一个发布状态、八个Ecu_RuntimeConfig配置对象、Rte的rte_allocated、HostBusSM的publication、Backend六个状态／入口记录、Error的TLS guard、Interrupt状态、Mailbox四个函数私有状态、HostLinux句柄池及StackLinux七个altstack／fault／终止文本对象。它们现有数据段属性与CODE区分开；直接把带相同OS_MEMMAP等宏的声明移到CODE函数内会取得不同的活动属性。固定SWS_MemMap_00023（R24-11，PDF37）禁止函数体内包含映射头，并明确说明特殊映射的函数静态变量须移到文件作用域。该义务限制沿现有START／STOP机制收窄这些对象；不能删除映射或在函数内嵌套请求消警报。其他机制仍需另证数据段身份、配置及编译器兼容性，不把GCC局部属性支持当作现成等价替代；逐处ADR0023／00115记录仍另核。
-
-采用内核另三个对象保留明确用途：tasks.c说明xDelayedTaskList1／2的文件级静态符号供kernel-aware debugger定位；uxTopUsedPriority为OpenOCD提供优先级界限，具名C引用用于保留该对象。列表指针逃逸本身并不禁止块内static，调试符号兼容才是这里保留的理由；本仓库没有据此证明OpenOCD实际运行或赋予采用代码普遍豁免。上述11处整改、32处映射理由及三个调试对象是该46处的有界处置；新字节检查与其他未报告构造另核，原始诊断及not_assessed不改写。
+原文、历史收据及当前22个自有对象的逐项冲突记录见[显式映射对象](storage.md)。
 
 ## 类型前缀与首次映射请求
 
@@ -85,3 +75,8 @@ UAPI还有独立的R8.2义务：signal-defs.h:82的__signalfn_t(int)缺参数名
 进一步核对现成四份.i的进入／返回标记，pthread.h:161、204、559、1298中的四个回调类型，其内层void *参数均未命名；分别属于cleanup buffer、pthread_create、cleanup frame和pthread_key_create。外层__start_routine／__destr_function有名字不满足内层函数类型的R8.2；(void)的无参数原型不在此列。四份TU各出现这四处，且均不在ISO标准头处理栈内。linux/posix_types.h:30的__kernel_sighandler_t(int)和signal-defs.h:82另在HostLinux、StackLinux、LinuxNative三份出现；PortRestart没有这两个UAPI声明。因此本子集是六个物理声明、22次TU出现，不是六种产品运行失败或整个SDK的穷尽计数。
 
 依据为主文R8.2（Required，印刷64–66／PDF72–74）及6.7；AMD2追加C11，TC2.10与AMD3.63只更新交叉引用，没有取消内层参数命名。pthread.h及linux/posix_types.h实读摘要分别为26eb5331…98dc22b／bc68636a…b196f；材料仍绑定sdk-inline-closure原字节，不冒充当前head的重新展开。项目实际调用pthread_create，其他声明即使没有运行调用仍已进入该TU；通过包装调用或仅删除未调用声明的消费者不能消除头内构造。更换feature flags、私改已安装SDK或手写替代原型均不是本次已验证整改。受控SDK来源补丁只补参数名可保持函数类型，但仍须核定来源、交付、许可和实际包含次序；当前保留真实Required缺口，不填批准表或MR12。
+
+
+## 剩余首次映射位置的整改
+
+六头的类型归属、C++ linkage 与直接验证见[首次映射布局](mapping.md)。
