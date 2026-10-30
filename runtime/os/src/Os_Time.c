@@ -16,6 +16,8 @@ OS_MEMMAP static TickType
 #endif
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const TickType *const Os_ArtiCounters =
     values; /**< Fixed Counter ticks tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
@@ -29,6 +31,8 @@ OS_MEMMAP static Os_AlarmStateType
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const Os_ArtiAlarmStateType *const Os_ArtiAlarms =
     alarm_states; /**< Fixed Alarm state tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR

@@ -93,3 +93,5 @@ Os_ArtiStacks在两个后端均由静态C初始化绑定自己的stacks数组，
 普通、检测器和Windows结果按各自源码身份在PR记录。旧分析的两处Linux R18.4及其他平台原始结果不改写。
 
 R22.10据AMD1的R22.8定义也涵盖用errno返回错误的非ISO函数。当前read／write／poll／nanosleep／sigtimedwait及write_bytes的errno检查均紧随失败返回，无中间调用；mapped_line只在read成功分支调用。固定addon未识别这些errno-setting接口，11处报告按实际调用闭包判误报；位置与原始身份留PR #389，不扩至其他errno使用。
+
+2026-10-30精确项目选择分别见[库／ARTI出口](retained-exports.md)、[OS预处理接口](retained-preprocessing.md)与[SDK名字恢复](retained-constructs.md)及[入口／trace构造](../../bsw-general/published-information.md#构造宏的字面入口绑定)。这些表不批准ErrorHook R18.6，亦不扩张既有宿主接口类别。

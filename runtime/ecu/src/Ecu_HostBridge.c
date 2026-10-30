@@ -132,6 +132,7 @@ static StatusType admit_batch(const Ecu_HostBatch *batch)
     return status;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the probe delivery retains the host-batch library export. */
 StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
 {
     Os_HostHandleType monitor;

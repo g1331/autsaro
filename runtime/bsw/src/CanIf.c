@@ -244,6 +244,8 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId,
     }
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 CANIF_CODE Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId,
                                                             uint8 *RxErrorCounterPtr)
 {
@@ -258,6 +260,8 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId,
     }
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 CANIF_CODE Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId,
                                                             uint8 *TxErrorCounterPtr)
 {

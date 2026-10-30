@@ -115,9 +115,15 @@ OS_MEMMAP extern volatile Arti_Atomic32Type Arti_EventsDropped;
 OS_MEMMAP extern volatile Arti_Atomic32Type Arti_DevelopmentError;
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+/* MR12 RULE 2.5 VIOLATION: published ARTI selectors retain their recorder-facing numeric
+ * representation. */
 #define ARTI_E_INIT_FAILED   0x01u /**< SWS_Arti_91002: ARTI initialization failure. */
 #define ARTI_E_PARAM_POINTER 0x02u /**< SWS_Arti_91002: invalid API output pointer. */
-#define ARTI_STOPWATCH_FLAT  0x00u /**< SWS_Arti_91000: stopwatch evaluation ignores nesting. */
+/* MR12 RULE 2.5 VIOLATION: published ARTI selectors retain their recorder-facing numeric
+ * representation. */
+#define ARTI_STOPWATCH_FLAT 0x00u /**< SWS_Arti_91000: stopwatch evaluation ignores nesting. */
+/* MR12 RULE 2.5 VIOLATION: published ARTI selectors retain their recorder-facing numeric
+ * representation. */
 #define ARTI_STOPWATCH_NESTED                                                                      \
     0x01u /**< SWS_Arti_91000: stopwatch evaluation accounts for nesting. */
 
@@ -185,6 +191,7 @@ OS_MEMMAP void Arti_Record(const char *context,
 /* The standard contract requires literal tokens here. Stringification retains
  * those identities without expanding a caller's unrelated macro definitions.
  * Each numeric argument is evaluated exactly once. */
+/* MR12 RULE 20.10 VIOLATION: trace emission retains class and event name construction. */
 /** Record standard literal ARTI identities with captured scalar payloads.
  * @param[in] context Literal execution-context token; stringified without evaluation.
  * @param[in] class_name Literal ARTI class token; stringified without evaluation.

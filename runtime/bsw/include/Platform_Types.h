@@ -21,18 +21,34 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CPU_TYPE_8  8u  /**< SWS_Platform_00064: 8-bit register width. */
+/* MR12 RULE 2.5 VIOLATION: published platform selectors retain their numeric preprocessing
+ * contract. */
+#define CPU_TYPE_8 8u /**< SWS_Platform_00064: 8-bit register width. */
+/* MR12 RULE 2.5 VIOLATION: published platform selectors retain their numeric preprocessing
+ * contract. */
 #define CPU_TYPE_16 16u /**< SWS_Platform_00064: 16-bit register width. */
+/* MR12 RULE 2.5 VIOLATION: published platform selectors retain their numeric preprocessing
+ * contract. */
 #define CPU_TYPE_32 32u /**< SWS_Platform_00064: 32-bit register width. */
+/* MR12 RULE 2.5 VIOLATION: published platform selectors retain their numeric preprocessing
+ * contract. */
 #define CPU_TYPE_64 64u /**< SWS_Platform_00064: 64-bit register width. */
 /* MR12 RULE 2.5 VIOLATION: PlatformTypes requires this published platform-selection macro. */
-#define CPU_TYPE  CPU_TYPE_64 /**< SWS_Platform_00064: controlled x64 CPU width. */
-#define MSB_FIRST 0u          /**< SWS_Platform_00038: most significant bit first. */
-#define LSB_FIRST 1u          /**< SWS_Platform_00038: least significant bit first. */
+#define CPU_TYPE CPU_TYPE_64 /**< SWS_Platform_00064: controlled x64 CPU width. */
+/* MR12 RULE 2.5 VIOLATION: published platform selectors retain their numeric preprocessing
+ * contract. */
+#define MSB_FIRST 0u /**< SWS_Platform_00038: most significant bit first. */
+/* MR12 RULE 2.5 VIOLATION: published platform selectors retain their numeric preprocessing
+ * contract. */
+#define LSB_FIRST 1u /**< SWS_Platform_00038: least significant bit first. */
 /* MR12 RULE 2.5 VIOLATION: PlatformTypes requires this published platform-selection macro. */
-#define CPU_BIT_ORDER   LSB_FIRST /**< SWS_Platform_00038: little-endian bits. */
-#define HIGH_BYTE_FIRST 0u        /**< SWS_Platform_00039: high byte at lower address. */
-#define LOW_BYTE_FIRST  1u        /**< SWS_Platform_00039: low byte at lower address. */
+#define CPU_BIT_ORDER LSB_FIRST /**< SWS_Platform_00038: little-endian bits. */
+/* MR12 RULE 2.5 VIOLATION: published platform selectors retain their numeric preprocessing
+ * contract. */
+#define HIGH_BYTE_FIRST 0u /**< SWS_Platform_00039: high byte at lower address. */
+/* MR12 RULE 2.5 VIOLATION: published platform selectors retain their numeric preprocessing
+ * contract. */
+#define LOW_BYTE_FIRST 1u /**< SWS_Platform_00039: low byte at lower address. */
 /* MR12 RULE 2.5 VIOLATION: PlatformTypes requires this published platform-selection macro. */
 #define CPU_BYTE_ORDER LOW_BYTE_FIRST /**< SWS_Platform_00039: little-endian bytes. */
 #ifndef TRUE

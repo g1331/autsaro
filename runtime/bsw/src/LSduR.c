@@ -75,6 +75,8 @@ LSDUR_CODE void LSduR_Init(const LSduR_PBConfigType *ConfigPtr)
         SchM_Exit_LSduR_LSDUR_STATE();
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 LSDUR_CODE LSduR_PBConfigIdType LSduR_GetConfigurationId(void)
 {
     const LSduR_PBConfigType *config = LSduR_Configuration();
@@ -134,6 +136,8 @@ LSDUR_CODE void LSduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType resu
         }
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 LSDUR_CODE Std_ReturnType LSduR_CanIfTriggerTransmit(PduIdType TxPduId, PduInfoType *PduInfoPtr)
 {
     const LSduR_PBConfigType *config = LSduR_Configuration();

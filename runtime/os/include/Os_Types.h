@@ -52,6 +52,8 @@ typedef uint64 PhysicalTimeType;
 /** SWS_Os_00790 core identifier; this target exposes only OS_CORE_ID_0. */
 typedef uint16 CoreIdType;
 #define OS_CORE_ID_0 0u /**< SWS_Os_00790: identity of this target only logical core. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define OS_CORE_ID_MASTER                                                                          \
     OS_CORE_ID_0 /**< SWS_Os_00790: master core alias; this target uses core zero. */
 /** SWS_Os_00793 idle mode; only IDLE_NO_HALT is supported by the controlled host. */
@@ -67,8 +69,12 @@ typedef uint8 ScheduleTableStatusType;
 typedef ScheduleTableStatusType *ScheduleTableStatusRefType;
 #define SCHEDULETABLE_STOPPED 0u /**< SWS_Os_00784: inactive table. */
 #define SCHEDULETABLE_NEXT    1u /**< SWS_Os_00784: reserved successor table. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define SCHEDULETABLE_WAITING 2u /**< SWS_Os_00784: waiting for synchronization, not selected. */
 #define SCHEDULETABLE_RUNNING 3u /**< SWS_Os_00784: running unsynchronized table. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define SCHEDULETABLE_RUNNING_AND_SYNCHRONOUS                                                      \
     4u /**< SWS_Os_00784: running synchronized table, not selected. */
 /* Automotive Counter values are independent of FreeRTOS's 32-bit tick ABI. */
@@ -103,6 +109,8 @@ typedef AlarmBaseType *AlarmBaseRefType;
 #define E_OS_MISSINGEND                                                                            \
     11u /**< AUTOSAR OS 7.15: Task returned without TerminateTask/ChainTask.                       \
          */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_MEMORY                                                                     \
     12u /**< AUTOSAR OS 7.15: memory protection failure; protection not selected. */
 #define E_OS_STACKFAULT                                                                            \
@@ -110,21 +118,39 @@ typedef AlarmBaseType *AlarmBaseRefType;
          */
 /* R24-11 section 7.15 assigns numeric values to the implementation. These
  * public names do not select protection, spinlocks or multicore services. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_CORE                                                                                  \
     14u /**< AUTOSAR OS 7.15: invalid core access; multicore services not selected.                \
          */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_NESTING_DEADLOCK                                                                      \
     15u /**< AUTOSAR OS 7.15: spinlock nesting deadlock; spinlocks not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_LOCKED                                                                     \
     16u /**< AUTOSAR OS 7.15: protection lock-time failure; protection not selected. */
-#define E_OS_SPINLOCK  17u /**< AUTOSAR OS 7.15: invalid spinlock use; spinlocks not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
+#define E_OS_SPINLOCK 17u /**< AUTOSAR OS 7.15: invalid spinlock use; spinlocks not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_SERVICEID 18u /**< AUTOSAR OS 7.15: unsupported service identity. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_EXCEPTION                                                                  \
     19u /**< AUTOSAR OS 7.15: protection exception; protection not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_INTERFERENCE_DEADLOCK                                                                 \
     20u /**< AUTOSAR OS 7.15: interference deadlock; spinlocks not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_TIME                                                                       \
     21u /**< AUTOSAR OS 7.15: execution-time protection failure; protection not selected. */
+/* MR12 RULE 2.5 VIOLATION: published OS status and state constants retain their preprocessing
+ * representation. */
 #define E_OS_PROTECTION_ARRIVAL                                                                    \
     22u /**< AUTOSAR OS 7.15: arrival-rate protection failure; protection not selected. */
 #define RUNNING   0u /**< OSEK OS 2.2.3 13.2.1: Task currently executing. */

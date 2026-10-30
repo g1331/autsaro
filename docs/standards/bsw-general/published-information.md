@@ -69,24 +69,22 @@ ErrorHook 这里只处置宏发布的 R2.5，明确不批准参数副本的 R18.
 | MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Hooks.h` 中 `OSError_GetTaskState_TaskID`、`OSError_ActivateTask_TaskID`、`OSError_ChainTask_TaskID`、`OSError_GetResource_ResID`、`OSError_ReleaseResource_ResID`、`OSError_SetEvent_TaskID`、`OSError_GetEvent_TaskID` | OSEK §11.2，§13.2/13.4/13.5 的首对象参数；现有error-hooks的服务/参数绑定保持。 | 维护者 原用户决定，ADR0023；独立复核9b507f61支持，引用已更正 |
 | MISRA C:2012 Rule 2.5 | `runtime/os/include/Os_Hooks.h` 中 `OSError_GetAlarmBase_AlarmID`、`OSError_GetAlarm_AlarmID`、`OSError_SetRelAlarm_AlarmID`、`OSError_SetAbsAlarm_AlarmID`、`OSError_CancelAlarm_AlarmID` | OSEK §11.2、13.6 的首AlarmID；不把后续参数/输出指针纳入。 | 维护者 原用户决定，ADR0023；独立复核9b507f61支持，引用已更正 |
 
-## 构造宏的字面入口绑定（未闭合）
+## 构造宏的字面入口绑定
 
-Os.h 的 TASK/ISR 同时生成私有包装入口和用户函数体，OS_TASK_ENTRY/OS_ISR_ENTRY 在其他TU绑定同一入口。
-现有标准ID为公开标量名字，`TASK(配置名)`、`ISR(配置名)`与服务调用共享配置短名；
-直接以参数展开结果作函数名，会展开成ID数值；保留未展开的名字又会与该ID占用同一个C普通名字空间。
-四个位置用 `##` 把字面配置名映射到不同函数名。普通外层宏转交会先展开ID，不能作为等价修复。
-把构造改成普通函数、统一一个包装名字或按调用点生成任意计数名，不能保留多入口及跨TU绑定。
-私有前缀本身不是SWS要求；候选必要性是固定C99标量ID和标准构造语法之间需要一一命名绑定。
-改变ID表示/公开短名或给每个工程生成另一套绑定属于可研究的交付合同变更，不能当成已经等价。
+R20.10为Advisory/Single Translation Unit（主文印刷162/PDF170）。本节按2026-10-30精确决定保留四个入口宏和ARTI_TRACE的当前内容，不把项目选用的数字ID／私有前缀或字符串化说成标准唯一形式。OSEK §12.1允许对象表示由实现选择，SWS_Os_00815只约束MemMap；其他ID表示、生成绑定或显式trace名字仍是可行替代。
 
-R20.10为Advisory（主文印刷162/PDF170）；这里承认真实拼接，尚不添加MR12。
-限定独立复核不支持将这四处直接转为ADR0023必需冲突。OSEK §12.1允许对象内部表示由实现选择，
-AUTOSAR ISRType也为implementation-specific；当前尚未排除其他ID表示或生成绑定方案。
-SWS_Os_00815只约束MemMap，不能证明拼接必要性；宏发布义务也不能代替R20.10判断，四处继续未闭合。
-既有entry-bodies、public-compatibility和完整映射消费者提供多入口、单次定义、身份及跨TU观察；
-配置命名、ID表示、包装ABI、支持宏或预处理器变化时重评。
-ARTI_TRACE的字符串化另属当前跟踪表示，不在这四项候选中，也不由此批准。
+TASK／ISR构造、OS_TASK_ENTRY／OS_ISR_ENTRY设计符继续提供同一跨TU入口；ARTI_TRACE保持class／event命名。既有entry-bodies、public-compatibility、真实ARTI及完整映射消费者约束多入口、单次定义、身份与代码段；配置命名、ID表示、包装ABI、宏内容、目标或程序改变时重评。
 
-| 规则 | 精确范围 | 原文及控制 | 原授权 |
+授权来自[2026-10-30维护者决定](https://github.com/g1331/autsaro/pull/389#issuecomment-6513137017)，仅覆盖提案6481577012在879f3962的精确实体及原展开／声明；不是ADR0023的规范不可替代性结论。保留真实违反、raw、not_assessed及refusal，不改变规则类别、不增加baseline或suppression。
+
+表中 `All` 为 standard-ecu／user-application／component-pipeline／no-diagnostic，`ND` 仅 no-diagnostic；目标 `Both` 为 linux-x64-controlled-v1／windows-x64-controlled-v1，Linux／Windows 只选对应受控目标；程序 `Both` 仅 host-batch／probe。范围顺序为 profile／目标／程序，各表行分别限定。两份879f3962平台工件的实际程序集合已核对，不按程序数量推定集合相同；该范围是人工源与raw核对结果，c_standard 不替代程序使用分析或严格比较。
+
+`shape` 是去注释及续行后的实际声明／宏定义／undef；表内 `&#124;` 表示C的竖线。现有c_standard双向关联并对本批shape作token核对，保留函数式宏的名字与左括号相邻关系及##操作符。缺注释、错规则／owner、改body及类别外MR12均拒绝；未带shape的原ADR0023按名记录保持原语义。签名、实体、宏body、程序／目标／profile或包含闭包改变时，须重评，不按规则／文件／前缀授权新位置。源码关联不授予新的项目批准。
+
+| 规则 | 精确范围 | 形态、范围及技术理由 | 原授权 |
 | --- | --- | --- | --- |
-| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `TASK`、`OS_TASK_ENTRY`、`ISR`、`OS_ISR_ENTRY` | OSEK任务/ISR构造；SWS_Os_00815仅约束映射；固定C99公共标量ID与字面配置名到不同入口的一一绑定，真实entry-bodies及跨TU消费者保持。 | 未闭合；独立复核不支持现有不可兼得推导，无新增项目授权 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Arti.h` 中 `ARTI_TRACE` | shape=`#define ARTI_TRACE(context, class_name, instance, instance_parameter, event, event_parameter) Arti_Record(#context, #class_name, #instance, #event, (instance_parameter), (event_parameter))`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `TASK` | shape=`#define TASK(identifier) OS_CODE void Os_TaskEntry_##identifier(void); OS_CODE void Os_TaskEntry_##identifier(void)`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `OS_TASK_ENTRY` | shape=`#define OS_TASK_ENTRY(identifier) Os_TaskEntry_##identifier`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `ISR` | shape=`#define ISR(identifier) OS_CODE void Os_IsrEntry_##identifier(void); OS_CODE void Os_IsrEntry_##identifier(void)`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `OS_ISR_ENTRY` | shape=`#define OS_ISR_ENTRY(identifier) Os_IsrEntry_##identifier`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |

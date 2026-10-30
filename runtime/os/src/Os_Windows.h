@@ -13,6 +13,8 @@
  * Windows declarations without the owned public OS macro, then restore it.
  * Native users call the separately compiled adapter; apps keep the OS macro. */
 #ifdef SetEvent
+/* MR12 RULE 20.5 VIOLATION: the SDK import temporarily withdraws the OS service macro before
+ * restoring it. */
 #undef SetEvent
 #define OS_RESTORE_EVENT_SERVICE STD_ON
 #endif
@@ -21,7 +23,11 @@
 #define ApplicationType Os_Win32ApplicationType
 #define boolean         Os_Win32Boolean
 #include <windows.h>
+/* MR12 RULE 20.5 VIOLATION: the isolated SDK type alias is withdrawn after importing the native
+ * declarations. */
 #undef boolean
+/* MR12 RULE 20.5 VIOLATION: the isolated SDK type alias is withdrawn after importing the native
+ * declarations. */
 #undef ApplicationType
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
@@ -36,6 +42,8 @@ OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event);
 #endif
 #if defined(OS_RESTORE_EVENT_SERVICE) && (OS_RESTORE_EVENT_SERVICE == STD_ON)
 #define SetEvent Os_SetEvent
+/* MR12 RULE 20.5 VIOLATION: the private restore flag is retired after the OS namespace is restored.
+ */
 #undef OS_RESTORE_EVENT_SERVICE
 #endif
 #endif

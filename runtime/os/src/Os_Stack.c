@@ -113,6 +113,7 @@ OS_MEMMAP int Os_StackHasFault(void)
     return (InterlockedCompareExchange(&fault_count, 0, 0) > 0) ? 1 : 0;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the native fault-counter observation export retains its target ABI. */
 OS_MEMMAP LONG Os_StackFaultCount(void) { return InterlockedCompareExchange(&fault_count, 0, 0); }
 
 OS_MEMMAP const Os_NativeStackType *Os_StackCurrent(void) { return current_stack; }

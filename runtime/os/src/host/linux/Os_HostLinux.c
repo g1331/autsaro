@@ -926,6 +926,8 @@ OS_MEMMAP BOOL DuplicateHandle(HANDLE source_process,
     return 1;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP BOOL GetExitCodeThread(HANDLE thread, DWORD *code)
 {
     if ((thread == NULL) || (code == NULL) || (thread->kind != OS_HOST_THREAD)) {

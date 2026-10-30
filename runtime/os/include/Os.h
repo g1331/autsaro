@@ -56,6 +56,8 @@
  * when its generated identifier is a numeric macro (R20.10 Advisory: source
  * compatibility requires the same identifier for the body and its binding).
  * A preceding prototype also covers the normal definition-only use. */
+/* MR12 RULE 20.10 VIOLATION: configured task or ISR identifiers retain stable body symbols across
+ * translation units. */
 /** Define a standard Task entry body (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured entry C identifier; not evaluated at runtime.
  * @return A void entry prototype and definition head; follow it with the function body.
@@ -67,6 +69,8 @@
 #define TASK(identifier)                                                                           \
     OS_CODE void Os_TaskEntry_##identifier(void);                                                  \
     OS_CODE void Os_TaskEntry_##identifier(void)
+/* MR12 RULE 20.10 VIOLATION: configured task or ISR identifiers retain stable body symbols across
+ * translation units. */
 /** Refer to the native body for a configured Task.
  * @param[in] identifier Same configured C identifier used by the entry body macro.
  * @return Function designator for the corresponding native entry.
@@ -78,6 +82,8 @@
 #define OS_TASK_ENTRY(identifier) Os_TaskEntry_##identifier
 /* MR12 RULE 2.5 VIOLATION: OSEK 13.3.3 requires the ISR definition macro; its mapping remains
  * intact. */
+/* MR12 RULE 20.10 VIOLATION: configured task or ISR identifiers retain stable body symbols across
+ * translation units. */
 /** Define a standard Category 2 ISR entry body (OSEK OS 2.2.3 chapter 13).
  * @param[in] identifier Configured entry C identifier; not evaluated at runtime.
  * @return A void entry prototype and definition head; follow it with the function body.
@@ -89,6 +95,10 @@
 #define ISR(identifier)                                                                            \
     OS_CODE void Os_IsrEntry_##identifier(void);                                                   \
     OS_CODE void Os_IsrEntry_##identifier(void)
+/* MR12 RULE 2.5 VIOLATION: the published ISR entry designator retains its configured body binding.
+ */
+/* MR12 RULE 20.10 VIOLATION: configured task or ISR identifiers retain stable body symbols across
+ * translation units. */
 /** Refer to the native body for a configured ISR.
  * @param[in] identifier Same configured C identifier used by the entry body macro.
  * @return Function designator for the corresponding native entry.

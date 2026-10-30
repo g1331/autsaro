@@ -3,6 +3,8 @@
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP boolean isOsStarted(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
@@ -20,6 +22,8 @@ OS_MEMMAP boolean isOsStarted(void)
     return result;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP StatusType TerminateTask(void)
 {
     const sint32 trace = Os_ArtiServiceEnter();
@@ -38,6 +42,8 @@ OS_MEMMAP StatusType TerminateTask(void)
     return result;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP StatusType NextScheduleTable(ScheduleTableType ScheduleTableID_From,
                                        ScheduleTableType ScheduleTableID_To)
 {

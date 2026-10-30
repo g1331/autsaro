@@ -131,11 +131,15 @@ OS_MEMMAP StatusType Os_ServiceAccessStatus(OSServiceIdType service)
     return result;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP const Os_ErrorParametersType *Os_ErrorParametersCurrent(void)
 {
     return (phase == OS_HOOK_ERROR) ? &parameters : &empty_parameters;
 }
 
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 OS_MEMMAP OSServiceIdType Os_ErrorServiceId(void)
 {
     return (phase == OS_HOOK_ERROR) ? service_id : OSServiceId_Unknown;

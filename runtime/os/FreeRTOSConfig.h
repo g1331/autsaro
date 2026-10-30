@@ -12,11 +12,13 @@ void Os_BackendBeforeSelect(const void *current, const void *next);
 #define traceTASK_SWITCHED_IN()              Os_BackendOnSwitch()
 #define configUSE_IDLE_HOOK                  1
 #define configUSE_TICK_HOOK                  1
-#define configTICK_RATE_HZ                   1000
-#define configMAX_PRIORITIES                 32u
-#define configMINIMAL_STACK_SIZE             512
-#define configMAX_TASK_NAME_LEN              16u
-#define configTICK_TYPE_WIDTH_IN_BITS        TICK_TYPE_WIDTH_32_BITS
+/* MR12 RULE 2.5 VIOLATION: the native configuration retains its published kernel tick-rate macro.
+ */
+#define configTICK_RATE_HZ            1000
+#define configMAX_PRIORITIES          32u
+#define configMINIMAL_STACK_SIZE      512
+#define configMAX_TASK_NAME_LEN       16u
+#define configTICK_TYPE_WIDTH_IN_BITS TICK_TYPE_WIDTH_32_BITS
 /* List sentinels have the same complete type as every traversed list item. */
 #define configUSE_MINI_LIST_ITEM              0
 #define configSUPPORT_STATIC_ALLOCATION       1

@@ -105,6 +105,8 @@ OS_MEMMAP static uint32 current_interrupt =
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const uint32 *const Os_ArtiCurrentIsr =
     &current_interrupt; /**< Fixed ISR identity tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
@@ -288,6 +290,8 @@ OS_MEMMAP static AppModeType startup_mode; /**< Startup-only selected AppMode; n
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const AppModeType *const Os_ArtiAppMode =
     &startup_mode; /**< Fixed AppMode tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
@@ -302,6 +306,8 @@ OS_MEMMAP static uint32
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const uint32 *const Os_ArtiResourceOwners =
     resource_owner; /**< Fixed resource owners tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
@@ -323,6 +329,8 @@ OS_MEMMAP TaskType Os_ArtiRunningTask =
 OS_MEMMAP const Os_NativeStackType
     *Os_ArtiTaskStacks[OS_MAX_TASKS]; /**< Observed stack pointers; port lock; no Init reset. */
 
+/* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
+ * publication controls. */
 OS_MEMMAP const void
     *Os_ArtiTaskContexts[OS_MAX_TASKS]; /**< Observed context pointers; port lock; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_PTR

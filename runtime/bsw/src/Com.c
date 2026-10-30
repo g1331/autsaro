@@ -215,6 +215,8 @@ COM_CODE void Com_DeInit(void)
     Com_Reset();
     SchM_Exit_Com_COM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 COM_CODE Com_StatusType Com_GetStatus(void)
 {
     Com_StatusType status;
@@ -275,6 +277,8 @@ COM_CODE void Com_IpduGroupStart(Com_IpduGroupIdType IpduGroupId, boolean Initia
     }
     SchM_Exit_Com_COM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 COM_CODE void Com_IpduGroupStop(Com_IpduGroupIdType IpduGroupId)
 {
     SchM_Enter_Com_COM_STATE();
@@ -294,6 +298,8 @@ COM_CODE void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId)
     }
     SchM_Exit_Com_COM_STATE();
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 COM_CODE void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId)
 {
     SchM_Enter_Com_COM_STATE();
@@ -368,6 +374,8 @@ COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduI
     SchM_Exit_Com_COM_STATE();
     return result;
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId)
 {
     uint8 bytes[COM_PDU_BYTES];

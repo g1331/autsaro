@@ -74,6 +74,7 @@ Ingress_CODE void Ingress_Periodic(void)
         (void)Rte_Write_Value_Value(value);
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the no-diagnostic delivery retains the provided application runnable. */
 Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType Data)
 {
     Data[0] = (uint8)(ingress_committed >> 24u);

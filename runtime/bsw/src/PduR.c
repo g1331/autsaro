@@ -173,6 +173,8 @@ PDUR_CODE void PduR_Init(const PduR_PBConfigType *ConfigPtr)
         SchM_Exit_PduR_PDUR_STATE();
     }
 }
+/* MR12 RULE 8.7 VIOLATION: the library export retains its original interface, state owner and error
+ * controls. */
 PDUR_CODE PduR_PBConfigIdType PduR_GetConfigurationId(void)
 {
     const PduR_PBConfigType *config = PduR_Configuration();
