@@ -92,6 +92,23 @@ class SdkSourceTests(unittest.TestCase):
             self.assertIn("differs", changed["reason"])
             self.assertNotEqual(changed["key"], record["key"])
 
+    def test_make_dependencies_preserve_real_windows_paths_and_escape_spaces(self):
+        text = (
+            r"autsaro-tu: C:\Users\runneradmin\AppData\Local\Temp\project\main.c "
+            r"D:/a/_temp/msys64/mingw64/include/winbase.h C\:/Program\ Files/sdk.h "
+            "\\\n" + r" /opt/provider\ space/header.h /opt/hash\#and$$name.h"
+        )
+        self.assertEqual(
+            c_sdk.dependency_paths(text),
+            [
+                r"C:\Users\runneradmin\AppData\Local\Temp\project\main.c",
+                "D:/a/_temp/msys64/mingw64/include/winbase.h",
+                "C:/Program Files/sdk.h",
+                "/opt/provider space/header.h",
+                "/opt/hash#and$name.h",
+            ],
+        )
+
     def test_actual_dependency_closure_does_not_trust_line_markers_or_search_paths(
         self,
     ):
@@ -379,8 +396,13 @@ class SdkSourceTests(unittest.TestCase):
                     "a" * 32 + "  usr/include/pthread.h\n"
                 )
             records = c_sdk.debian_headers(status, info)
-            self.assertEqual(records["/usr/include/pthread.h"]["provider"], "libc6-dev")
-            self.assertEqual(records["/usr/include/pthread.h"]["version"], "2.39-1")
+            self.assertEqual(
+                records[str(Path("/") / "usr/include/pthread.h")]["provider"],
+                "libc6-dev",
+            )
+            self.assertEqual(
+                records[str(Path("/") / "usr/include/pthread.h")]["version"], "2.39-1"
+            )
             status.write_text(status.read_text().replace("amd64", "arm64"))
             self.assertEqual(c_sdk.debian_headers(status, info), {})
 

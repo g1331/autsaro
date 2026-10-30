@@ -162,12 +162,20 @@ def source_lines(path: Path) -> list[str]:
     return text.splitlines()
 
 
-def dependency_headers(text: str, root: Path) -> set[Path]:
-    """The compiler's dependency output proves which files were actually opened."""
-    target, colon, names = text.replace("\\\n", "").partition(":")
+def dependency_paths(text: str) -> list[str]:
+    """Decode Make escapes, retaining Windows separators that are not escapes."""
+    target, colon, names = text.replace("\\\n", " ").partition(":")
     if target != "autsaro-tu" or not colon:
         raise ValueError("Compiler header dependency inventory missing")
-    paths = {Path(name).resolve() for name in shlex.split(names)}
+    return [
+        re.sub(r"\\([ \t#:\\])", r"\1", name).replace("$$", "$")
+        for name in re.findall(r"(?:\\[ \t#:\\]|[^\s])+", names)
+    ]
+
+
+def dependency_headers(text: str, root: Path) -> set[Path]:
+    """The compiler's dependency output proves which files were actually opened."""
+    paths = {Path(name).resolve() for name in dependency_paths(text)}
     if not paths:
         raise ValueError("Compiler header dependency inventory empty")
     return {path for path in paths if not path.is_relative_to(root)}
