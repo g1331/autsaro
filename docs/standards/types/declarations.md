@@ -80,3 +80,37 @@ UAPI还有独立的R8.2义务：signal-defs.h:82的__signalfn_t(int)缺参数名
 ## 剩余首次映射位置的整改
 
 六头的类型归属、C++ linkage 与直接验证见[首次映射布局](mapping.md)。
+
+## 单实例对象与函数地址的人工评估
+
+沿用[共同配置及冻结证据](../os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)。
+本轮按主文§6.2.3的Advisory替代记录方式，对以下R2.8实体选择保留现有表示：
+保持逐组件独立const指针对象，避免在本项文档/评估入口工作中改变公开符号、对象地址/存储及组件头合同。
+这是本轮有界风险委托下的新选择；不是 #382 的159键、#381的124键或R8.7记录所批准的内容。
+R2.8仍真实未满足，未重分类、未disapply，也不称MISRA总体符合。
+
+冻结 `1306e32a` 的五个唯一名字、11个物理定义如下（两目标交付字节相同）：
+
+| profile | Rte.c中的独立指针定义 | extern位置 |
+| --- | --- | --- |
+| standard-ecu、user-application | Rte_Inst_EchoApplication:67、Rte_Inst_DcmService:89 | 各自Rte_EchoApplication.h、Rte_DcmService.h:32 |
+| component-pipeline | Rte_Inst_Ingress:68、Rte_Inst_Process:89、Rte_Inst_Observe:102、Rte_Inst_DcmService:117 | 三应用头:34；DcmService头:32 |
+| no-diagnostic | Rte_Inst_Ingress:60、Rte_Inst_Process:81、Rte_Inst_Observe:94 | 三应用头:34 |
+
+每对象去注释后只有extern与定义两处引用；host-batch/probe不读取，ABI测试读取不改变此结论。
+私有Rte_Instance_* CDS的初始化引用不是公开指针的用途。producer为 `core/src/integration/rte/`；
+实际字节/程序和ABI消费者见
+[#393冻结收据](https://github.com/g1331/autsaro/pull/393#issuecomment-6518916990)。
+
+SWS_Rte_03711/03712/03715/03793只分别规定CDS、私有前缀、const及单实例handle名；
+[既有RTE原文说明](../rte/README.md#单实例句柄的实际用途)没有把独立指针对象说成唯一合法表示。
+宏/别名或删除会改变当前对象合同，编译成功不足以证明等价。风险为多余只读存储/符号及未来误用；
+既有C99/C++11消费者约束类型/值/链接，不证明生产必要性。配置、表示、CDS、目标、消费者或合同变化即重评。
+Required正式偏离及SWS_BSW_00115等独立义务不由本条Advisory取舍代替；缺失证据仍须显式保留。
+
+<!-- misra-manual-begin -->
+| 指南 | 有效类别 | 分析范围／语言 | 状态 | 义务、限定结论与证据 |
+| --- | --- | --- | --- | --- |
+| R2.8 | Advisory | System／C99 | retained | 对象定义/声明可删除而程序仍编译即为未使用（AMD4.3，7／PDF14）。仅上列5实体/11定义保持真实违反，按本节理由和§6.2.3替代记录保留现有ABI；[producer/实际程序/回归边界](../rte/README.md#单实例句柄的实际用途)分开。其它静态配置通过初始化借用、读写状态或明确工具消费者实际使用，不因R8.7保留便获得R2.8豁免。 |
+| R17.12 | Advisory | TU／C99 | satisfied | 函数标识符只用于调用或前置&（AMD3.37，19–20）。[入口/跟踪宏闭包](../os/platform.md#入口及跟踪宏的实际展开)连接实际中断绑定/比较、线程/信号入口、once初始化、HostBatch回调及生成通信/诊断/Task配置；0022和平台补丁覆盖采用接缝。函数指针对象、声明符和汇编字符串内符号不是函数designator值，不机械加&。 |
+<!-- misra-manual-end -->

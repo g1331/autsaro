@@ -76,3 +76,31 @@ R8.9为Advisory、System（主文印刷71／PDF79；AMD2.27追加C11，AMD4.43�
 其余32个自有／生成对象目前保留真实Advisory违反及映射理由：Can和Com各一个发布状态、八个Ecu_RuntimeConfig配置对象、Rte的rte_allocated、HostBusSM的publication、Backend六个状态／入口记录、Error的TLS guard、Interrupt状态、Mailbox四个函数私有状态、HostLinux句柄池及StackLinux七个altstack／fault／终止文本对象。它们现有数据段属性与CODE区分开；直接把带相同OS_MEMMAP等宏的声明移到CODE函数内会取得不同的活动属性。固定SWS_MemMap_00023（R24-11，PDF37）禁止函数体内包含映射头，并明确说明特殊映射的函数静态变量须移到文件作用域。该义务限制沿现有START／STOP机制收窄这些对象；不能删除映射或在函数内嵌套请求消警报。其他机制仍需另证数据段身份、配置及编译器兼容性，不把GCC局部属性支持当作现成等价替代；逐处ADR0023／00115记录仍另核。
 
 采用内核另三个对象保留明确用途：tasks.c说明xDelayedTaskList1／2的文件级静态符号供kernel-aware debugger定位；uxTopUsedPriority为OpenOCD提供优先级界限，具名C引用用于保留该对象。列表指针逃逸本身并不禁止块内static，调试符号兼容才是这里保留的理由；本仓库没有据此证明OpenOCD实际运行或赋予采用代码普遍豁免。上述11处整改、32处映射理由及三个调试对象是该46处的有界处置；新字节检查与其他未报告构造另核，原始诊断及not_assessed不改写。
+
+## 对象生命周期与标准线程的人工评估
+
+沿用[共同配置及冻结证据](../os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)。
+当前C99源码使用pthread/Win32/FreeRTOS及GNU原子，不使用C11线程/原子对象；
+逐项不适用不豁免真实平台上的并发、锁顺序、所有权和失败清理。
+
+<!-- misra-manual-begin -->
+| 指南 | 有效类别 | 分析范围／语言 | 状态 | 义务、限定结论与证据 |
+| --- | --- | --- | --- | --- |
+| R17.9 | Mandatory | System／C11 | not_applicable | _Noreturn函数不得返回调用者（AMD3.36，17–18）。[无返回说明符边界](../os/platform.md#c11-无返回说明符的适用边界)及当前两组交付无_Noreturn/stdnoreturn.h；GNU noreturn及真实终止路径另核，不以语言不适用掩盖返回。 |
+| R17.10 | Required | TU／C11 | not_applicable | _Noreturn函数返回类型必须void（AMD3.36，18）。同一有限源码没有该说明符，故无待裁决的返回类型；不是允许任意非void致命函数返回。 |
+| R17.11 | Advisory | System／C11 | not_applicable | 不返回函数宜声明_Noreturn，main有明确例外（AMD3.36，19）。当前C99没有该C11设施，未借main例外覆盖普通函数；平台noreturn保持真实属性和消费者。 |
+| R18.9 | Required | TU／C99 | satisfied | 临时生命周期数组不可衰变为指针；只允许立即下标且不可产生可修改左值（AMD3.39，21–22）。[聚合返回闭包](../os/implementation.md#非左值聚合与临时数组)中的Dcm_NextPublication、Arti_SaveAddressCapture、Os_ArtiCallerSave和selected_task结果无数组子对象；CONTEXT先保存至具名对象再复制，不借此批准ErrorHook普通自动对象地址外逃。 |
+| R18.10 | Mandatory | TU／C99 | not_applicable | 不声明指向可变修改数组类型的对象/参数，普通一维数组形参重写不等于pointer-to-array（AMD4.31，17；并合成AMD4.25–30对R18.8的区分）。[数组声明边界](../os/configuration.md#c99-数组与回调类型)的OS容量、512栈、65536备用栈及sizeof/offsetof条件数组都是常量表达式，当前无该可变修改指针。 |
+| R21.25 | Required | TU／C11 | not_applicable | 标准原子同步仅用seq_cst，所有_explicit/fence接口也须此内存序（AMD4.32，18–19）。[原子对象边界](../types.md#c11-原子对象的适用边界)没有标准atomic/memory_order用途；GNU__atomic的acquire/release不冒称满足本条，而按平台契约证明。 |
+| R21.26 | Required | System／C11 | not_applicable | mtx_timedlock只作用于mtx_timed或mtx_timed与mtx_recursive组合的mutex（AMD4.33，19–20）。[标准线程边界](../os/platform.md#c11-标准线程规则的适用边界)无该函数/对象；原生有界等待的错误/类型语义另核。 |
+| R22.11 | Required | System／C11 | not_applicable | 已join或detach的C11线程不能再次join/detach（AMD4.34，20–21）。当前无thrd_*对象；原生observer并发join/detach的0→2→1状态及失败回滚见[动态设施](../os/native-facilities/storage-interrupts.md)，不能由本条不适用跳过。 |
+| R22.12 | Mandatory | System／C11 | not_applicable | C11线程/同步/TSS对象仅由指定标准库函数访问（AMD4.34，21–22）。当前无thrd_t/mtx_t/cnd_t/tss_t；pthread句柄或Win32 HANDLE不伪装成这些类型。 |
+| R22.13 | Required | TU／C11 | not_applicable | thrd_t/mtx_t/cnd_t/tss_t不可有自动或线程存储期（AMD4.34，22–23）。同一源码没有四类C11对象；原生静态槽、TLS及callback借用仍守各自真实存储期。 |
+| R22.14 | Mandatory | System／C11 | not_applicable | mutex/condition先经mtx_init/cnd_init初始化，mutex类型限原文四个组合（AMD4.34，23–24）。当前无C11初始化对象；不是对未初始化原生事件/锁的豁免。 |
+| R22.15 | Required | System／C11 | not_applicable | 访问资源的线程全部终止后才销毁同步对象/TSS，或不销毁（AMD4.34，24–26）。当前无C11销毁入口；本机park/detach不算终止，按D4.13实际生命周期判断。 |
+| R22.16 | Required | System／C11 | not_applicable | C11 mutex锁定后至线程退出的所有可达路径须由同一线程显式解锁（AMD4.34，26–27）。同一源码无标准mutex；实际独占区正常/失败出口沿[独占区协议](../../architecture/runtime.md#独占区协议)约束。 |
+| R22.17 | Required | System／C11 | not_applicable | 只有先锁定mutex的线程可解锁或以其调用cnd_wait/cnd_timedwait（AMD4.34，27–28）。同一源码没有这些函数；POSIX owner身份及重入风险独立保留。 |
+| R22.18 | Required | System／C11 | not_applicable | 非递归mutex不能由已持有它的线程再次锁定（AMD4.34，28–29）。同一源码无C11 mutex；FreeRTOS critical/模块锁的真实嵌套规则不因此消失。 |
+| R22.19 | Required | System／C11 | not_applicable | 一个C11 condition variable至多关联一个mutex（AMD4.34，29）。同一源码没有cnd_*；pthread条件变量按原生对象身份和锁协议核查，不作C11对象满足声明。 |
+| R22.20 | Mandatory | System／C11 | not_applicable | TSS指针先经tss_create创建才访问（AMD4.34，29–30）。同一源码没有tss_t/tss_*；glibc TLS分配及Windows线程存储仍按采用责任、D4.12和R22.1处理。 |
+<!-- misra-manual-end -->

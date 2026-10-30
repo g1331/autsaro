@@ -7,6 +7,7 @@ Compiler/MISRA checks remain responsible for C validity and normative semantics.
 from __future__ import annotations
 
 import collections
+import hashlib
 import itertools
 import json
 import re
@@ -16,6 +17,13 @@ from pathlib import Path
 from autosar_tooling.config import ROOT
 
 BASELINE = Path(__file__).with_name("c_standard_baseline.txt")
+MANUAL_ASSESSMENT_SOURCES = (
+    "docs/standards/os/native-facilities/storage-interrupts.md",
+    "docs/standards/bsw-general/language-tokens.md",
+    "docs/standards/types/public-types.md",
+    "docs/standards/types/storage.md",
+    "docs/standards/types/declarations.md",
+)
 Key = tuple[str, str, str]
 TOKEN = re.compile(
     r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|'
@@ -42,6 +50,70 @@ def lex(source: str) -> list[Token]:
 
 def is_comment(token: Token) -> bool:
     return token.text.startswith(("/*", "//"))
+
+
+def _manual_records(root: Path) -> tuple[dict, dict]:
+    records = {}
+    identities = {}
+    for name in MANUAL_ASSESSMENT_SOURCES:
+        data = (root / name).read_bytes()
+        identities[name] = hashlib.sha256(data).hexdigest()
+        active = False
+        for line, text in enumerate(data.decode("utf-8").splitlines(), 1):
+            if text == "<!-- misra-manual-begin -->":
+                if active:
+                    raise ValueError(f"Nested manual assessment block: {name}:{line}")
+                active = True
+            elif text == "<!-- misra-manual-end -->":
+                if not active:
+                    raise ValueError(f"Unopened manual assessment block: {name}:{line}")
+                active = False
+            elif active and re.match(r"\| [DR]\d+\.", text):
+                cells = [cell.strip() for cell in text.split("|")[1:-1]]
+                if len(cells) != 5 or not re.fullmatch(r"[DR]\d+\.\d+", cells[0]):
+                    raise ValueError(f"Malformed manual assessment: {name}:{line}")
+                guideline, category, scope, status, conclusion = cells
+                if (guideline in records or not scope or not conclusion or (category == "Mandatory" and status == "retained")
+                        or status not in {"satisfied", "not_applicable", "retained", "not_assessed"}):
+                    raise ValueError(f"Invalid or duplicate manual assessment: {name}:{line}")
+                records[guideline] = {"id": guideline, "category": category, "analysisScope": scope,
+                                      "status": status, "conclusion": conclusion,
+                                      "source": {"file": name, "line": line}}
+        if active:
+            raise ValueError(f"Unclosed manual assessment block: {name}")
+    return records, identities
+
+
+def manual_assessment(rules: list[dict], root: Path = ROOT) -> dict:
+    """Summarize documented frozen evidence; never assess the current source seal."""
+    records, identities = _manual_records(root)
+    uncovered = {row["id"]: row for row in rules if not row["automaticChecker"]}
+    if len({row["id"] for row in rules}) != len(rules):
+        raise ValueError("Duplicate checker catalog guideline")
+    if set(records) - set(uncovered):
+        raise ValueError("Manual assessment contains checker-covered or unknown guidelines")
+    if any(row["category"] != uncovered[key]["category"] for key, row in records.items()):
+        raise ValueError("Manual assessment category differs from the fixed catalog")
+    rows = [records.get(key, {"id": key, "category": row["category"], "status": "not_assessed",
+                              "conclusion": "Manual record missing"}) for key, row in uncovered.items()]
+    counts = collections.Counter(row["status"] for row in rows)
+    unclassified = counts["not_assessed"]
+    return {
+        "scope": "Frozen configurations and sources cited by the records; not the current analyzed source seal",
+        "inputIdentity": {
+            "parserSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "selectionSha256": hashlib.sha256("\n".join(MANUAL_ASSESSMENT_SOURCES).encode()).hexdigest(),
+            "documents": identities,
+        },
+        "checkerUncovered": {"total": len(uncovered), "classified": len(rows) - unclassified,
+                             "unclassified": unclassified, "classificationComplete": unclassified == 0,
+                             "statusCounts": dict(sorted(counts.items())), "records": rows},
+        "checkerCovered": {"total": len(rules) - len(uncovered),
+                           "ids": [row["id"] for row in rules if row["automaticChecker"]],
+                           "assessment": "not_assessed",
+                           "limitations": "coverage.knownCheckerLimitations remain applicable"},
+        "conformanceAssessment": "not_established",
+    }
 
 
 def adjacent(source: str, tokens: list[Token], start: int) -> str:

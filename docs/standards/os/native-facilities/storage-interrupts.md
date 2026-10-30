@@ -42,3 +42,52 @@ OSEK OS2.2.3 §6（25–26页）及§14.2.3.1／Figure14-1（73–74页）描述
 理由：子 ISR 必须在父 handler 继续前完成；改为父返回后排队会改变已有抢占语义。OSEK 并不强制 C 递归，故属于平台类别取舍。风险为栈耗尽、父身份或 mask／ErrorHook 状态损坏。控制是优先级在 1..31 严格递增、排除 yield、32 槽 frame、同一 S actor／原生栈与 guard、父上下文／ErrorHook 快照恢复及资源 ceiling。`nested_interrupts.c` 的 ISR20→6→4（优先级3→9→15）检查同步顺序；默认样本相同优先级不能代替此证据。任意应用 handler 的最坏栈用量仍须按其配置核定。
 
 provider／ABI、优先级范围、frame 容量、handler、mask、资源或调度合同变化即重评；不覆盖任意递归、用户回调环或新增平台。
+
+## 人工评估的配置与证据范围
+
+#385 的人工记录只覆盖固定 checker 不覆盖的 66 项；有 checker 的 155 项仍包含部分能力限制。
+正常 `c_check.coverage` 的 `rules[].assessment=not_assessed` 是原始目录状态；独立的人工记录汇总不改写它。
+`satisfied`、`not_applicable`、`retained`、`not_assessed` 分别表示限定范围已核对、条件不成立、保留真实违反及理由、仍有具体缺口。
+`retained` 不计作满足；Required 的正式偏离义务与项目风险选择分别保留。尚未核实的记录不计入已分类数。
+规则的 TU／System 属性取原文；指令没有 Analysis 属性（主文§6.5–6.6），表中“指令”表示须结合项目设计与实际跨 TU 闭包评估。
+
+配置为 `linux-x64-controlled-v1`／`windows-x64-controlled-v1`、C99、四 profile
+standard-ecu／user-application／component-pipeline／no-diagnostic、各自 host-batch／probe。
+自有平台无关源码、主机适配和项目有序补丁分别核查；原始 SDK 与固定 FreeRTOS 原件沿
+[ADR0025](../../../adr/0025-misra-layered-scope.md)及[采用责任](../adoption.md)处理，以下结论不逐条认证供应方内部。
+自有调用、宏用途和系统交互不因采用来源免除。人员培训／资质记录按 #385 的明确排除不在此范围。
+
+源码冻结为已合并 #397 的 `e8c6bf7696bbb71721443c2234f894277e80ce42`（master `6c59ba235548e848852b0ae3940d160e1d87972f`），
+以及独立核对的 #393 `1306e32a7352f545006aab7d942c19b47046400b`；后者不是合并后的组合验证。
+两组各八份实际封存源码／summary逐记录核对，补丁后内核与输入原件分开；原始 exit1、passed=false、error=null、refusal和全部源身份保留。
+实际编译／行为与变异证据分别见[#397最终收据](https://github.com/g1331/autsaro/pull/397#issuecomment-6520362578)、
+[#393八份交付](https://github.com/g1331/autsaro/pull/393#issuecomment-6518916990)、
+[#381精确收据](https://github.com/g1331/autsaro/pull/389#issuecomment-6471535155)和
+[#383采用／补丁收据](https://github.com/g1331/autsaro/pull/395#issuecomment-6519130040)。
+新 head、target、profile、程序、producer或实际构造改变时重评；记录不自动评估未来生成物或任意外部应用。
+
+原文为 March2013 主文＋AMD1–4／TC1–2，七份收到字节均已通过 SHA256SUMS；身份入口见
+[规范来源](../../../../.agents/skills/misra-c2012/references/standard-baseline.md#原文定位与身份)。
+下表主文页为印刷页，PDF页加8；AMD1／AMD3加8，AMD2／AMD4加7，TC1／TC2加6。
+AMD2.14／27的语言扩展不改变 C99 义务；每项另列实质修订。表格是既有主题的人工结论，不是新的诊断基线或偏离审批表。
+
+<!-- misra-manual-begin -->
+| 指南 | 有效类别 | 分析范围／语言 | 状态 | 义务、限定结论与证据 |
+| --- | --- | --- | --- | --- |
+| D1.1 | Required | 指令／C99 | satisfied | 记录并理解影响输出的实现定义行为（主文21–23，AMD2.15–18、101–103）。[实现依赖](../implementation.md#实现依赖编译与需求追溯)给出整数、ABI、volatile、字符及库边界；[Windows所选ld身份](../implementation.md#windows-外部名字与所选工具)已连接固定包及完整字符串处理材料。库内部沿ADR0025，不把GCC版本或静态断言单独视为全部证明。 |
+| D2.1 | Required | 指令／C99 | satisfied | 全部实际源文件无编译错误（主文23；AMD2.19）。上述双平台四profile的真实TU编译、封存build及host-batch/probe消费者成功；此结论取编译日志及实际源集合，不取外层分析exit0或绿色摘要。 |
+| D3.1 | Required | 指令／C99 | satisfied | 代码追溯至书面需求（主文23）。[实现与需求连接](../implementation.md#实现依赖编译与需求追溯)、[运行时架构](../../../architecture/runtime.md)、各模块标准篇将BSW/OS服务、配置producer、RTE通信、HostBatch监督、guard/restart及失败响应连接至所选SWS或项目合同；seal只证明身份，供应方内部沿ADR0025。未处置AUTOSAR条款不因此变成已实现。 |
+| D4.1 | Required | 指令／C99 | satisfied | 以设计、值域和动态检查减少运行失败（主文24–25；AMD2.20），并非保证不会失败。实际容量/索引、空指针、配置关系、分配回滚、guard及停止路径见[原生设施](README.md)与[输入先于tick修复](https://github.com/g1331/autsaro/pull/397)的成功/交错反例；任意阻塞输出没有新增完成期限。 |
+| D4.2 | Advisory | 指令／C99 | satisfied | 文档说明汇编理由及C接口（主文26）。[平台扩展](../platform.md#c99-平台扩展的使用边界)和[restart架构](../../../architecture/runtime.md#激活重启e4-host-restart)连接RSP读取、Linux typed syscall、CallOnStack及两端restart的寄存器/clobber、对齐、CFA/unwind和实际消费者；不是“主机所以不适用”。 |
+| D4.3 | Required | 指令／C99 | satisfied | 汇编隔离在汇编函数/C函数/宏内（主文26；AMD2.21–22）。Os_LinuxNative的native_call/Os_LinuxAltStack和独立Os_LinuxCallOnStack汇编函数、OS_HOST_STACK_POINTER宏及Os_PortRestart平台函数为实际边界；文件作用域定义汇编函数不等于业务语句散布汇编。 |
+| D4.7 | Required | 指令／C99 | not_assessed | 有错误信息的返回须有意义地检查，只有证明实际实参不可能失败才适用例外（主文30）。原生失败/回滚及[errno实参依据](../platform.md#errno-的错误来源与诊断裁决)有效；Com.c的Com_TriggerIPDUSend和Com_MainFunctionTx仍显式丢弃可能拒绝的transmit返回。无重试配置不自行取消本指令，须核清必需合同并整改或形成有原文的精确处置；不能由(void)或其它错误处理销项。 |
+| D4.10 | Required | 指令／C99 | retained | 防止头内容重复纳入（主文32–33；TC2.2只说明保护形式非穷举）。普通头有唯一guard；重复包含MemMap依[既有D4.10精确记录](../../memmap/README.md)保留START/include→STOP/include契约，复用完整配对/缺STOP/段属性消费者。项目冲突处置不等于正式Required偏离完成。 |
+| D4.11 | Required | 指令／C99 | satisfied | 进入受限定义域库函数前验证参数（主文33–34；TC1更正J.3.12，AMD3.7–9补浮点域）。[字符串/复制容量](../implementation.md#字符串终止与复制容量)、[native上下文与实际provider](README.md)连接有界memcpy、终止串、格式、句柄、signal集合和上下文容量；实际接口不使用math/ctype域。供应方内部不逐条复评，外部应用调用前提仍有效。 |
+| D4.12 | Required | 指令／C99 | retained | 动态分配包括第三方设施（主文34–35），固定上界/只启动分配不是例外。仅[既有主机动态设施类别](#主机动态设施类别偏离)的mmap、pthread/Win32栈及Linux TLS路径保留；静态汽车配置、采用原件与自有补丁分开。保留真实违反、分配失败控制和正式Required义务。 |
+| D4.13 | Advisory | 指令／C99 | satisfied | 资源操作顺序正确（主文35–36）。本篇实际observer signal→wait→close、失败恢复所有权、altstack借用/恢复及[HostBatch生命周期](README.md)为证据；detach/永久park不是线程已结束或全部TLS已释放，后者仍由D4.12/R22.1处理。 |
+| D4.14 | Required | 指令／C99 | satisfied | 外部值先验证有效性（AMD1§1.1，1–2）。Ecu_HostBatch的number/command检查溢出、token、ID/DLC/长度、epoch/容量及顺序，Ecu_HostBridge验证发布容量，公开BSW/OS接口先验证配置/ID/指针；[协议真实消费者及交错反例](https://github.com/g1331/autsaro/pull/397)覆盖拒绝和状态保护，不把内部可信配置等同任意外部输入。 |
+| D4.15 | Required | 指令／C99 | not_applicable | 可能产生NaN/Inf的浮点运算须检测，可按传播语义延后但不可流入未设计处理的代码（AMD3.10，5–6）。所选自有/补丁源码仅有float32/64和port类型定义、long-double对齐存储/sizeof，无浮点算术或math入口；[具体构造依据](../../types.md#整数常量初始化与浮点构造)。 |
+| D5.1 | Required | 指令／C11 | not_applicable | AMD4.2（2–4）限制线程间数据竞争，仅适用C11；当前C99使用GNU原子/pthread/Win32，非C11原子或threads.h。实际并发风险仍按[平台扩展](../platform.md#c99-平台扩展的使用边界)、D4.1与独占区协议核查，不称没有并发。 |
+| D5.2 | Required | 指令／C11 | not_applicable | AMD4.2（4–5）禁止线程死锁，仅适用C11；所选源码没有C11线程/锁对象。POSIX/Win32的实际锁序、回调边界与等待仍受[独占区协议](../../../architecture/runtime.md#独占区协议)和D4.1约束。 |
+| D5.3 | Required | 指令／C11 | not_applicable | AMD4.2（5–6）只允许明确启动阶段创建线程，仅适用C11；无C11线程入口。HostBatch每批创建observer，不能写成只在启动创建；其真实生命周期沿本篇D4.12/13控制。 |
+<!-- misra-manual-end -->
