@@ -21,6 +21,7 @@ from ecu_tools.build import (
     kernel_patch_environment,
     kernel_patch_targets,
     refuse_links,
+    require_kernel_identity,
     require_kernel_patch_applied,
     safe_relative,
     sealed_sources,
@@ -246,6 +247,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                 cwd=root / "kernel", env=kernel_patch_environment(root / "kernel"))
             require_kernel_patch_applied(root / patch_path, before)
             patched_lines = kernel_patched_lines(before, root, patched_lines)
+        require_kernel_identity(root / "kernel", target.get("kernelSha256"))
         sources.extend("kernel/" + name for name in kernel_sources)
         sources.extend(target_entry(names, target, mode) for mode in ("host-batch", "probe"))
     elif target.get("profile") != "host":  # plain sealed C project, used by analyzer fixtures; deliveries are always "ecu"

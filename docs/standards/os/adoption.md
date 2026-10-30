@@ -20,13 +20,21 @@ V11.3.1 的 `054e14f3397023aa83813a65aa065fc4597d481b` 是 annotated tag 对象�
 该说明不证明本项目的主机端口、配置、补丁或全部 AMD／TC 已符合；不采用其 suppression，
 不把其动态分配／标准I/O说明当成本项目批准，也不把供应方说明转成 Mandatory 偏离。
 
+采用分类仍需检查自有配置的接缝。例如旧双平台工件的IDLE名字越界报告位于未改动的
+任务循环；真实-dM固定configIDLE_TASK_NAME为"IDLE"、configMAX_TASK_NAME_LEN为16u，
+复制到索引4的终止NUL后即break，不读取字符串之外的索引。固定上游说明的R18.1节
+描述同一边界。它不需要项目偏离，也不允许把别的缓冲区／配置一并判为安全。
+
 ## 原件到实际消费者
 
 `source-manifest.json`／`posix-source-manifest.json` 固定原件及有序补丁字节，
 `target_spec.rs` 选择平台顺序及文件子集，`core/build.rs` 在副本中应用并计算最终
 `kernelSha256`。生成包的 `target.json`、资产来源和 files seal 保留各自身份。
 离线工具及 CMake 使用同一选择并在编译前核对最终内核；c-check 在自己的副本应用
-相同链，记录实际 TU／程序、编译数据库和诊断。每个补丁必须实际改变其选择文件。
+相同链，复用`require_kernel_identity`核对同一最终map，再验证C99翻译单元，
+记录实际TU／程序、编译数据库和诊断。每个补丁必须实际改变其选择文件。
+`test_ecu_analysis_requires_the_same_patched_kernel_bytes_as_builds`以正常分析及补丁后
+额外一个换行的有效C副本证明身份不符会在TU编译／分析前拒绝，保留passed=false及具体文件。
 
 项目补丁始终是自有代码，包括从上游文本出发的类型修复。分析逐补丁传递行归属，
 后续补丁恢复成原件文本也不把责任退回上游；未改动行随插删搬移。
