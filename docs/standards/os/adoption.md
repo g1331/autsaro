@@ -41,7 +41,7 @@ refusal保持；分析驱动或patch链变化仍按原比较器身份拒绝旧�
 追加在各自既有链末尾。Windows等待返回值按DWORD比较，等待成功零下标用0U；
 boolean clear直接作条件，uint32请求与0U比较；调度启动结果使用其真实BaseType_t。
 分支局部seen及xThreadState移入唯一消费分支。R7.2／R10.3／R10.4的Required义务
-按主文印刷52、86–89／PDF60、94–97及AMD2相应C11扩充核对；不改变失败与成功路径。
+按主文印刷60、86–88／PDF68、94–96及AMD2相应C11扩充核对；不改变失败与成功路径。
 
 R18.4（Advisory，主文147／PDF155）两处指针-=改为下标取址。栈填充值游标仍按
 `-portSTACK_GROWTH`推进；队列只在readFrom不等于head时退一个item，先转ptrdiff_t再
@@ -50,7 +50,7 @@ head→tail-item保护保持。R18.1的同数组边界义务及真实队列／�
 
 | 原始报告 | 所选配置下的依据 | 处置 |
 | --- | --- | --- |
-| R5.5，task.h的pxCurrentTCB声明 | configNUMBER_OF_CORES=1；tasks.c同名宏仅位于多核else分支。实际预处理保留单核对象，不定义该宏。主文57／PDF65、AMD2.39及§6.7要求按实际宏集合和预处理后标识符判断。 | 此精确报告为误报；不外推多核。 |
+| R5.5，task.h的pxCurrentTCB声明 | configNUMBER_OF_CORES=1；tasks.c同名宏仅位于多核else分支。实际预处理保留单核对象，不定义该宏。主文53／PDF61、AMD2.39及§6.7要求按实际宏集合和预处理后标识符判断。 | 此精确报告为误报；不外推多核。 |
 | R20.7，POSIX portTASK_FUNCTION_PROTO／portTASK_FUNCTION | 参数形成函数名／形参声明符，没有形成缺括号表达式；主文159–160／PDF167–168。 | 两处误报，复用[声明宏核查](implementation.md#声明宏与表达式参数)。 |
 | R17.3，POSIX四个__atomic_*及Windows平台调用 | 主文137–138／PDF145–146及AMD2附录H仅适用C90；实际编译C99且使用真实声明／GCC builtin。 | 语言不适用，复用[C99声明核查](implementation.md#c90隐式声明规则与当前编译)；不免除R1.1／R8.2／R8.4。 |
 | R15.5，两个自有端口的早返回 | ADR0025的自有主机层GRP；仍审阅退出、状态和资源。 | Disapplied；不是逐条偏离或删除报告。 |
@@ -58,7 +58,7 @@ head→tail-item保护保持。R18.1的同数组边界义务及真实队列／�
 ## 精确补丁接口的 Advisory 保留
 
 本节是在当前工程委托下作出的独立有界项目选择，未借用或扩展其他实体的精确124键
-批准、ErrorHook R18.6或SDK来源责任。R2.5为Advisory/System（主文45／PDF53；
+批准、ErrorHook R18.6或SDK来源责任。R2.5为Advisory/System（主文44／PDF52；
 TC2.5／TC2.39修订术语），R8.7为Advisory/System（主文70／PDF78，TC2.15区分调用TU）。
 下面保留真实报告与就近MR12理由，不声明MISRA符合或正式法律意义上的偏离完成。
 
