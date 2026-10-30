@@ -234,20 +234,18 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         git = shutil.which("git")
         if not git:
             raise ValueError("Git is required to prepare the reviewed kernel patches")
-        touched = set()
         for index, patch in enumerate(target["kernelPatches"]):
             patch_path = patch["path"].removeprefix("runtime/")
             if patch_path not in names:
                 raise ValueError("Pinned kernel patch is outside the sealed inventory")
             before = kernel_patch_targets(root / "kernel", root / patch_path, patch["includes"])
-            touched.update(before)
             argv = [str(Path(git).resolve()), "-c", "core.autocrlf=false", "apply", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]), str(root / patch_path)]
             # Apply only inside the copied kernel, never the authoritative source.
             run(argv, output, f"patch-{index}", 30, context=f"Kernel patch {index} failed",
                 cwd=root / "kernel", env=kernel_patch_environment(root / "kernel"))
             require_kernel_patch_applied(root / patch_path, before)
-        patched_lines = kernel_patched_lines(project, root, touched)
+            patched_lines = kernel_patched_lines(before, root, patched_lines)
         sources.extend("kernel/" + name for name in kernel_sources)
         sources.extend(target_entry(names, target, mode) for mode in ("host-batch", "probe"))
     elif target.get("profile") != "host":  # plain sealed C project, used by analyzer fixtures; deliveries are always "ecu"
@@ -376,16 +374,19 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                    "patchedLines": patched_lines}
 
 
-def kernel_patched_lines(project: Path, root: Path, touched: set[Path]) -> dict[str, list[int]]:
-    """Lines of the patched kernel copy that the pinned patches added or changed."""
-    lines = {}
-    for path in sorted(touched):
+def kernel_patched_lines(before: dict[Path, bytes], root: Path,
+                         previous: dict[str, list[int]]) -> dict[str, list[int]]:
+    """Carry project ownership through the ordered patches, including reversions."""
+    lines = dict(previous)
+    for path, data in sorted(before.items()):
         name = path.relative_to(root).as_posix()
-        upstream = (project / name).read_text(encoding="utf-8").split("\n")  # as Cppcheck counts lines
+        upstream = data.decode("utf-8").replace("\r\n", "\n").split("\n")  # as Cppcheck counts lines
         patched = path.read_text(encoding="utf-8").split("\n")
         matcher = difflib.SequenceMatcher(None, upstream, patched, autojunk=False)
-        lines[name] = [line + 1 for tag, _, _, start, end in matcher.get_opcodes()
-                       if tag in ("replace", "insert") for line in range(start, end)]
+        owned = set(previous.get(name, ()))
+        lines[name] = [line + 1 for tag, old, _, start, end in matcher.get_opcodes()
+                       for line in range(start, end)
+                       if tag != "equal" or old + line - start + 1 in owned]
     return lines
 
 

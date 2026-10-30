@@ -104,8 +104,20 @@ class CAnalysisTests(unittest.TestCase):
             for side, text in (("project", "a\nb\nc\n"), ("root", "a\nB\nc\nd\n")):
                 (base / side / "kernel").mkdir(parents=True)
                 (base / side / "kernel/tasks.c").write_text(text)
-            lines = c_check.kernel_patched_lines(base / "project", base / "root", {base / "root/kernel/tasks.c"})
+            path = base / "root/kernel/tasks.c"
+            lines = c_check.kernel_patched_lines({path: (base / "project/kernel/tasks.c").read_bytes()},
+                                                base / "root", {})
             self.assertEqual(lines, {"kernel/tasks.c": [2, 4]})
+            # A later patch restores upstream text and inserts a line above it.
+            # Final upstream-vs-delivery diff alone would lose ownership of b.
+            before = {path: path.read_bytes()}
+            path.write_bytes(b"a\r\ninserted\r\nb\r\nc\r\n")
+            lines = c_check.kernel_patched_lines(before, base / "root", lines)
+            self.assertEqual(lines, {"kernel/tasks.c": [2, 3]})
+            xml = '<results><errors><error id="style"><location file="kernel/tasks.c" line="3"/></error></errors></results>'
+            diagnostic = c_check.parse_diagnostics(xml, base / "root", lines)[0]
+            self.assertTrue(diagnostic["patched"])
+            self.assertFalse(diagnostic["adopted"])
         for xml in ("", "<results/>", "<wrong><errors/></wrong>"):
             with self.subTest(xml=xml), self.assertRaises((ValueError, c_check.ET.ParseError)):
                 c_check.parse_diagnostics(xml, Path.cwd())
