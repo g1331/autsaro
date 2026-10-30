@@ -1,0 +1,66 @@
+--- a/portable/ThirdParty/GCC/Posix/portmacro.h
++++ b/portable/ThirdParty/GCC/Posix/portmacro.h
+@@ -74,6 +74,7 @@
+ 
+ /* Architecture specifics. */
+ #define portSTACK_GROWTH                   ( -1 )
++/* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+ #define portTICK_PERIOD_MS                 ((TickType_t)1000u / configTICK_RATE_HZ)
+ #define portBYTE_ALIGNMENT                 8
+ /*-----------------------------------------------------------*/
+@@ -87,7 +88,9 @@
+ extern void Os_PosixPostInterrupt(uint32_t interrupt);
+ extern void vPortSetInterruptHandler(uint32_t interrupt, uint32_t (*handler)(void));
+ #define portYIELD() vPortGenerateSimulatedInterrupt(portINTERRUPT_YIELD)
++/* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+ #define portEND_SWITCHING_ISR(requested) return (requested)
++/* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+ #define portYIELD_FROM_ISR(requested) portEND_SWITCHING_ISR(requested)
+ #define portSOFTWARE_BARRIER() \
+     do { \
+@@ -104,6 +107,7 @@
+ #define portSET_INTERRUPT_MASK_FROM_ISR() xPortSetInterruptMask()
+ #define portCLEAR_INTERRUPT_MASK_FROM_ISR(mask) vPortClearInterruptMask(mask)
+ #define portDISABLE_INTERRUPTS() vPortEnterCritical()
++/* MR12 RULE 2.5 VIOLATION: Retain the fixed kernel/port selection interface; optional consumers vary by program. */
+ #define portENABLE_INTERRUPTS() vPortExitCritical()
+ #define portENTER_CRITICAL() vPortEnterCritical()
+ #define portEXIT_CRITICAL() vPortExitCritical()
+--- a/portable/ThirdParty/GCC/Posix/port.c
++++ b/portable/ThirdParty/GCC/Posix/port.c
+@@ -102,7 +102,7 @@
+     if (operation == 0u) {
+         disabled_sources |= bit;
+     } else if (operation == 1u) {
+-        if (clear != FALSE) {
++        if (clear) {
+             pending &= ~bit;
+         }
+         disabled_sources &= ~bit;
+@@ -160,9 +160,9 @@
+ {
+     const Os_NativeStackType *stack = Os_StackCurrent();
+     const unsigned outer = Os_BackendCurrentInterrupt();
+-    uint32_t seen = 0u;
+     if ((stack != NULL) && (stack->role == 'S') && (outer < PORT_INTERRUPT_COUNT) &&
+         (outer != portINTERRUPT_YIELD) && (critical_nesting == 0u)) {
++        uint32_t seen = 0u;
+         uint32_t interrupt = next_interrupt(seen, Os_BackendInterruptPriority(outer), 1);
+         while (interrupt < PORT_INTERRUPT_COUNT) {
+             const uint32_t requested = run_interrupt(interrupt);
+@@ -444,6 +444,7 @@
+     }
+ }
+ 
++/* MR12 RULE 8.7 VIOLATION: Retain the fixed kernel lifecycle hook; unsupported task deletion stops the OS. */
+ void vPortCloseRunningThread(void *task, volatile BaseType_t *pending_yield)
+ {
+     (void)task;
+@@ -451,6 +452,7 @@
+     Os_BackendShutdown(E_OS_STATE); /* Dynamic task deletion is not configured. */
+ }
+ 
++/* MR12 RULE 8.7 VIOLATION: Retain the fixed kernel lifecycle hook; unsupported task deletion stops the OS. */
+ void vPortDeleteThread(void *task)
+ {
+     (void)task;

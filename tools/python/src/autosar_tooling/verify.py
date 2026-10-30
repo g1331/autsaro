@@ -69,7 +69,7 @@ def commands(scope: str, base: str | None) -> list[tuple[str, list[str], int]]:
     desktop = [
         (
             "desktop:test",
-            ["cargo", "test", "--locked", "-p", "autosar-config-desktop"],
+            ["cargo", "test", "--locked", "--profile", "dev", "-p", "autosar-config-desktop"],
             1800,
         ),
         (

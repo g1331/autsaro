@@ -188,7 +188,9 @@ jobs:
           linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
-      - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-desktop
+      # Desktop tests are compile-bound: the dev profile keeps the GUI dependencies unoptimized
+      # and shared with the build below.
+      - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked --profile dev -p autosar-config-desktop
       - run: npm run ipc:check --prefix ui
       - run: cargo build --locked -p autosar-config-desktop
       - if: runner.os == 'Linux'

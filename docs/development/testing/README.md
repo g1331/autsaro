@@ -19,14 +19,14 @@ npm run lint --prefix ui
 npm run test --prefix ui
 npm run build --prefix ui
 cargo test --locked -p autosar-config-core
-cargo test --locked -p autosar-config-desktop
+cargo test --locked --profile dev -p autosar-config-desktop
 cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
 cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
 ```
 
-仓库根目录是 Cargo workspace（成员 `core` 与 `src-tauri`），共用根目录的 `Cargo.lock` 与 `target/`。根 `Cargo.toml` 的测试 profile 把依赖按 `opt-level = 2`、core 按 `opt-level = 1` 编译，保留 debug 断言与溢出检查：首次编译变慢，解析、校验与生成为主的套件快数倍（core `it` 同机 515 秒降到 69 秒）；`cargo test --locked --workspace` 一次运行两个 crate 的默认测试，需先准备桌面平台依赖。前端使用 Vitest；`npm run test:watch --prefix ui` 用于开发。Python 普通测试位于 `tests/python`，进程和平台测试独立选择。默认 Rust 测试不需要外部 Python 或官方档案。
+仓库根目录是 Cargo workspace（成员 `core` 与 `src-tauri`），共用根目录的 `Cargo.lock` 与 `target/`。根 `Cargo.toml` 的测试 profile 把依赖按 `opt-level = 2`、core 按 `opt-level = 1` 编译，保留 debug 断言与溢出检查：首次编译变慢，解析、校验与生成为主的套件快数倍（core `it` 同机 515 秒降到 69 秒）。desktop 测试以编译为主，CI、`verify`、`ipc:check` 与 `ipc:generate` 都用 `--profile dev` 运行，界面依赖保持不优化，并与 debug 构建共用产物；`cargo test --locked --workspace` 一次运行两个 crate 的默认测试，会按测试 profile 优化界面依赖，需先准备桌面平台依赖。前端使用 Vitest；`npm run test:watch --prefix ui` 用于开发。Python 普通测试位于 `tests/python`，进程和平台测试独立选择。默认 Rust 测试不需要外部 Python 或官方档案。
 
 core 的集成测试分为三个二进制，按能力模块组织，共用 `core/tests/support/`：
 

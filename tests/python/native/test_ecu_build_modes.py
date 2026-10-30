@@ -173,6 +173,59 @@ class EcuBuildModeTests(unittest.TestCase):
                               "zero_dlc closed reason=0"], result.stdout.read_text())
             shutil.rmtree(directory)
 
+    def test_patched_kernel_stack_scan_uses_each_byte(self):
+        from os_suites import sanitizer_flags
+
+        samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
+        self.assertTrue(samples, "Generate c_analysis samples first")
+        project = (Path(samples) / "standard-ecu").resolve(strict=True)
+        original = ecu_build.query
+        with tempfile.TemporaryDirectory(prefix="autosar-kernel-cursors-") as temporary:
+            directory = Path(temporary).resolve()
+            for variant in ("control", "stack-step"):
+                output = directory / variant
+                source = directory / (variant + ".c")
+                # Include the real task TU to observe its private stack scanner;
+                # the build seam below removes only its duplicate compiler input.
+                source.write_text('#include "' + (output / "kernel/tasks.c").as_posix() + '"\n' + r'''
+int main(void)
+{
+    StackType_t stack[3];
+    uint8_t * bytes = (uint8_t *)stack;
+    size_t index;
+    /* One complete free stack word followed by a non-fill sentinel. */
+    for (index = 0U; index < sizeof(stack); index++) {
+        bytes[index] = index < sizeof(StackType_t) ? (uint8_t)0xa5U : (uint8_t)0U;
+    }
+    if (prvTaskCheckFreeStackSpace(bytes) != 1U) {
+        return 1;
+    }
+    if (prvTaskCheckFreeStackSpace(&bytes[1]) != 0U) {
+        return 2;
+    }
+    return 0;
+}
+''', encoding="utf-8")
+
+                def compile_cursor(argv, logs, stage, *, output=output, variant=variant, **options):
+                    if stage == "native-c99-build":
+                        task = output / "kernel/tasks.c"
+                        self.assertEqual(argv.count(ecu_build.tool_argument(task)), 1)
+                        argv = [argument for argument in argv if argument != ecu_build.tool_argument(task)]
+                        argv = [argv[0], *sanitizer_flags(), *argv[1:]]
+                        if variant == "stack-step":
+                            before = "&pucCursor[-portSTACK_GROWTH]"
+                            text = task.read_text(encoding="utf-8")
+                            self.assertEqual(text.count(before), 1)
+                            task.write_text(text.replace(before, "&pucCursor[-portSTACK_GROWTH + 1]"), encoding="utf-8")
+                    return original(argv, logs, stage, **options)
+
+                with patch.object(ecu_build, "query", side_effect=compile_cursor):
+                    binary = ecu_build.build(project, output, "probe", source)
+                result = OwnedProcess(ProcessSpec.seconds([str(binary)], directory, 10, directory, variant)).wait()
+                self.assertEqual(result.exit_code, 0 if variant == "control" else 1)
+                self.assertEqual(result.stderr.read_bytes(), b"")
+
     def test_one_byte_corruption_after_patching_is_rejected_before_compilation(self):
         samples = os.environ.get("AUTOSAR_C_ANALYSIS_SAMPLES")
         self.assertTrue(samples, "Generate c_analysis samples first")
