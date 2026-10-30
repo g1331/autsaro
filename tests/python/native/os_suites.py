@@ -1985,30 +1985,18 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
         header.write_text(client, encoding="utf-8")
         stage = directory / name
         stage.mkdir()
+        print(f"counter_service counter={counter} stage={name} build", flush=True)
         binary, _ = build(stage, "counter_service.c", defines, target, (source,))
+        print(f"counter_service counter={counter} stage={name} run", flush=True)
         result = execute(binary, name)
         require(result["exit"] == exit_code and not result["stderr"], result)
         if name == "actual":
             require("counter_service ticks=0 wrap=2 errors=7 reason=0" in result["stdout"], result)
-    for name, mutant, client, expected in [
-        ("disconnected", original,
-         re.sub(r"\bRte_Call_OsService_GetCounterValue\b", "Disconnected_GetCounterValue", original_header),
-         "Rte_Call_OsService_GetCounterValue"),
-    ]:
-        require(mutant != original or client != original_header, "service signature mutation did not apply")
-        source.write_text(mutant, encoding="utf-8")
-        header.write_text(client, encoding="utf-8")
-        stage = directory / name
-        stage.mkdir()
-        try:
-            build(stage, "counter_service.c", defines, target, (source,))
-        except RuntimeError as error:
-            require(expected in str(error), str(error))
-        else:
-            raise AssertionError(f"{name} Counter client linked successfully")
+        print(f"counter_service counter={counter} stage={name} complete", flush=True)
     source.write_text(original, encoding="utf-8")
     header.write_text(original_header, encoding="utf-8")
-    # A signature conflict belongs to this translation unit; no kernel link is needed.
+    # These rejection paths fail while compiling their own TU, before any link.
+    # Normal and both behavioral variants above still build and run the kernel.
     signature_command = [
         compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", *sanitizer_flags(), "-fsyntax-only",
         "-I", str(target / "include"), "-I", str(target / "src"),
@@ -2017,13 +2005,33 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
         "-I", str(ROOT / "runtime/bsw/include"),
         "-I", str(ROOT / "runtime/host/include"), str(source),
     ]
+    client = directory / "counter_client.c"
+    client.write_text('#include "Rte_Os.h"\n'
+                     "StatusType CounterClient(TimeInMicrosecondsType *value)\n{\n"
+                     "    return Rte_Call_OsService_GetCounterValue(value);\n}\n", encoding="utf-8")
+    client_command = [*signature_command[:-1], str(client)]
+    print(f"counter_service counter={counter} stage=client-positive compile", flush=True)
+    run_native(client_command, check=True)
+    disconnected = re.sub(r"\bRte_Call_OsService_GetCounterValue\b",
+                          "Disconnected_GetCounterValue", original_header)
+    require(disconnected != original_header, "service client mutation did not apply")
+    header.write_text(disconnected, encoding="utf-8")
+    print(f"counter_service counter={counter} stage=disconnected compile", flush=True)
+    rejected = run_native(client_command)
+    require(rejected.returncode != 0 and "implicit declaration" in rejected.stderr
+            and "Rte_Call_OsService_GetCounterValue" in rejected.stderr
+            and "counter_client.c:4:" in rejected.stderr, rejected)
+    header.write_text(original_header, encoding="utf-8")
+    print(f"counter_service counter={counter} stage=signature-positive compile", flush=True)
     run_native(signature_command, check=True)
     source.write_text(original.replace("TimeInMicrosecondsType *Value", "uint32_t *Value"),
                       encoding="utf-8")
+    print(f"counter_service counter={counter} stage=signature-negative compile", flush=True)
     signature = run_native(signature_command)
     require(signature.returncode != 0 and "conflicting types" in signature.stderr
             and f"OsService_{counter}_GetCounterValue" in signature.stderr
             and "Rte_OsService.c:4:" in signature.stderr, signature)
+    print(f"counter_service counter={counter} stage=complete", flush=True)
 
 
 # Task, ISR, alarm callback and hook declarations sit inside OS_START/STOP_SEC_CODE.
