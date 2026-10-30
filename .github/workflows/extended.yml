@@ -73,10 +73,13 @@ jobs:
                       'tools/python/src/autosar_tooling/official.py', 'tools/python/src/autosar_tooling/requirements.py',
                       'docs/standards/', '.github/workflows/acceptance.yml'),
                   # The fuzz targets' inputs and build: ARXML parsing, import and validation, definitions, CanTp, Dcm
-                  # and their host areas.
-                  'fuzz': touched('fuzz/', 'core/src/arxml', 'core/src/integration/', 'core/src/definitions', 'core/src/rules',
-                      'core/src/xml_paths.rs', 'core/src/project_model.rs', 'core/resources/', 'core/Cargo.toml', 'core/build.rs',
-                      'runtime/bsw/include/', 'runtime/bsw/src/CanTp', 'runtime/bsw/src/Dcm', 'runtime/host/',
+                  # and their host areas. Pull requests fuzz only the harness, parsers and receive paths themselves;
+                  # the generator, templates and shared headers the targets build on are fuzzed after merging.
+                  'fuzz': touched('fuzz/', 'core/src/arxml', 'core/src/definitions', 'core/src/xml_paths.rs',
+                      'core/src/project_model.rs', 'runtime/bsw/src/CanTp', 'runtime/bsw/src/Dcm',
+                      'runtime/host/src/SchM_Diagnostic_Host.c', 'runtime/host/src/SchM_CanIf_Host.c',
+                      'runtime/host/src/Can_HostLock.c') or push and touched('core/src/integration/', 'core/src/rules',
+                      'core/resources/', 'core/Cargo.toml', 'core/build.rs', 'runtime/bsw/include/', 'runtime/host/',
                       'core/tests/fixtures/bsw-contracts/', '.github/actions/core-build-dependencies/'),
               }
           # Automatic desktop coverage belongs to CI required; manual Extended remains available.
@@ -145,7 +148,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: receiver-cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+          key: receiver-cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Select native contract tools
         shell: python
         run: |

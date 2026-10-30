@@ -2,8 +2,9 @@
 use super::*;
 use std::path::Path;
 
+// Each label owns its input and logs, so checks with distinct labels can run concurrently.
 fn compile(root: &Path, original: &Path, source: &str, label: &str, accepted: bool, error: &str) {
-    let input = root.join("release-consumer.c");
+    let input = root.join(format!("{label}.c"));
     std::fs::write(&input, source).unwrap();
     let mut command = tooling::c_compiler();
     command
@@ -384,7 +385,9 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
         ("SchM_Dcm_Type.h", "Rte_Dcm_Type.h", "DCM"),
         ("Std_Types.h", "Platform_Types.h", "PLATFORM"),
     ];
-    for (consumer, dependency, prefix) in edges {
+    // (original, source, label, accepted, diagnostic) for every edge and variant.
+    let mut checks = Vec::new();
+    for (index, (consumer, dependency, prefix)) in edges.into_iter().enumerate() {
         if cfg!(windows)
             && ["Os_HostLinux.h", "Os_HostLinux.c", "Os_StackLinux.c"].contains(&consumer)
         {
@@ -399,6 +402,7 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
             .find(|(path, _)| path.ends_with(&format!("/{consumer}")))
             .unwrap_or_else(|| panic!("missing consumer {consumer}"));
         let text = std::str::from_utf8(bytes).unwrap();
+        let original = scratch.0.join(path);
         for part in ["MAJOR", "MINOR"] {
             for absent in [true, false] {
                 let name = format!("{prefix}_AR_RELEASE_{part}_VERSION");
@@ -407,32 +411,43 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
                 } else {
                     format!("#undef {name}\n#define {name} 99U\n")
                 };
-                let source = isolated(text, consumer, dependency, prefix, &poison);
-                let label = format!("{consumer}-{dependency}-{part}-{absent}");
-                let diagnostic = import_diagnostic(consumer, dependency, absent);
-                compile(
-                    &scratch.0,
-                    &scratch.0.join(path),
-                    &source,
-                    &label,
+                checks.push((
+                    original.clone(),
+                    isolated(text, consumer, dependency, prefix, &poison),
+                    format!("{index}-{consumer}-{dependency}-{part}-{absent}"),
                     false,
-                    &diagnostic,
-                );
+                    import_diagnostic(consumer, dependency, absent),
+                ));
             }
         }
         let poison = format!(
             "#undef {prefix}_AR_RELEASE_REVISION_VERSION\n#define {prefix}_AR_RELEASE_REVISION_VERSION 99U\n#undef {prefix}_VENDOR_ID\n#define {prefix}_VENDOR_ID 43U\n#undef {prefix}_SW_MAJOR_VERSION\n#define {prefix}_SW_MAJOR_VERSION 7U\n"
         );
-        let source = isolated(text, consumer, dependency, prefix, &poison);
-        compile(
-            &scratch.0,
-            &scratch.0.join(path),
-            &source,
-            "compatible-external-revision-vendor-software",
+        checks.push((
+            original,
+            isolated(text, consumer, dependency, prefix, &poison),
+            format!("{index}-{consumer}-{dependency}-compatible-external-revision-vendor-software"),
             true,
-            "",
-        );
+            String::new(),
+        ));
     }
+    // About 800 independent syntax checks; serially they dominate the native suite on Windows.
+    let pending = std::sync::Mutex::new(checks.iter());
+    let workers = std::thread::available_parallelism().map_or(1, usize::from);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                loop {
+                    // Release the queue before compiling.
+                    let next = pending.lock().unwrap().next();
+                    let Some((original, source, label, accepted, diagnostic)) = next else {
+                        break;
+                    };
+                    compile(&scratch.0, original, source, label, *accepted, diagnostic);
+                }
+            });
+        }
+    });
 }
 
 #[test]

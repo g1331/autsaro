@@ -36,7 +36,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target/llvm-cov-target
-          key: coverage-rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-v1
+          key: coverage-rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - run: npm ci --prefix ui
       - run: npm run build --prefix ui
       - name: Start an independent measurement

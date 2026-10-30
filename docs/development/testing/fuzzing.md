@@ -55,7 +55,7 @@ cargo fuzz run cantp_receive ../build/fuzz-min ../build/fuzz-corpus/cantp_receiv
 
 ## CI
 
-必需检查的 `core` 任务运行上述重放测试和 fuzz crate 的 Clippy；原生与检测器任务运行 C 驱动重放。`Extended checks` 的 `fuzz` 任务按路径选择（`fuzz/`、ARXML 解析、导入与规则校验、定义、内置模板、core 构建与构建依赖、CanTp／Dcm 及其主机区），PR 与 master 推送都运行，每个目标一个作业：PR 运行 180 秒，master 运行 900 秒。master 运行积累的语料按覆盖取最小集合后保存在 Actions 缓存，后续运行从中恢复；失败时上传 `fuzz/artifacts/<target>`。
+必需检查的 `core` 任务运行上述重放测试和 fuzz crate 的 Clippy；原生与检测器任务运行 C 驱动重放。`Extended checks` 的 `fuzz` 任务按路径选择，每个目标一个作业：PR 只在目标直接消费的源码改动时运行 180 秒（`fuzz/`、ARXML 解析、定义、XML 路径与工程模型、CanTp／Dcm 及驱动编译的主机源文件）；master 推送另按导入与规则校验、生成器、内置模板、共享头、主机区、core 构建与构建依赖选择，运行 900 秒。PR 不运行间接输入，避免几乎每个 PR 都占用四个 runner；这些改动合并后由 master 运行覆盖，失败按 [CI](README.md#ci) 的 Extended 规则处理。master 运行积累的语料按覆盖取最小集合后保存在 Actions 缓存，后续运行从中恢复；失败时上传 `fuzz/artifacts/<target>`。
 
 ## 限制
 
