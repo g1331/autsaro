@@ -104,3 +104,49 @@ CanTp_TxType/CanTp_RxType（CanTp.c）、Dcm_PublicationType/Dcm_ActorsType（Dc
 实际用途是数组/嵌入成员/局部对象或按值传参返回，不能因索引器没列出“类型名 *”就声称这些类型没使用。
 AlarmBaseType则有AlarmBaseRefType指针别名，已纳入Time/Service/ARTI核对，不能遗漏。
 以上细化owner和用途，不解除D4.8尚未闭合的SDK/逐TU全部指针事实，也不自动保留所有公开完整表示。
+
+## D4.8的SDK指针接缝
+
+这里核对自有调用方实际使用的供应方类型，不评估SDK内部全部函数。Linux对应已生成的standard-ecu来源收据，
+sourceSeal为6091d3fe8e4d2ce3dffe51de43885012340658b98071c5e317be19cd17b7bcea；
+原头与收据SHA逐字节相等：libc6-dev 2.39-0ubuntu8.9的pthread.h
+26eb5331384b27347c5d60d466c82e4fbbf91d920383ecddc479b29fd98dc22b、signal.h
+a79456587f504ae8020ab7f46aceaf5859d419c003e051c8cd2d067e64f25856、sys/ucontext.h
+4485d0daa586733fd121554bf5eef304076cc01b3bd59c9df8bb35d3d067ae84；libgcc-13-dev 13.3.0-6ubuntu2~24.04.1的unwind.h
+d42912846d21a01d15717f71934c5f8c0f6d290d08aaf4052ca00cc7b8cfa174。
+
+- Os_PortRestart.c的prepare_trace不使用_Unwind_Context参数；Os_PortRestartPersonality将其交给_Unwind_SetIP。unwind.h只给不完整struct，已隐藏。
+  _Unwind_Exception另有完整定义；restart_exception是线程局部完整对象，代码设置exception_class并核对回调的对象身份，不能同前者合并。
+- Os_HostLinux.c的park_signal/fault_stop_signal均不解引用siginfo_t；Os_StackLinux.c的guard_signal才读取details->si_addr。
+  两个TU须分别判断：后者字段访问不能消除前者保留完整SDK声明的Advisory边界，回调签名也不能自行改为void*。
+- Os_LinuxNative.c的timespec/stack_t指针仅供typed syscall输入/输出借用；对应完整对象在HostLinux/StackLinux创建，
+  timespec的tv_sec/tv_nsec、stack_t的ss_sp/ss_size/ss_flags按供应方布局构造。HostLinux中的previous仅保存和归还旧altstack，
+  不伪称已通过C字段解引用。该TU还以pthread_attr_t对象调用attr API，以sigset_t对象调用mask API，
+  以pollfd完整对象检查revents；pthread_mutex_t是私有handle内嵌对象，只由pthread API操作。
+  pthread_attr_t/pthread_mutex_t/sigset_t的供应方定义、完整存储需求和实际C解引用是三个不同事实。
+- LinuxNative实际复制ucontext_t/内核ucontext，检查sigcontext/_fpstate偏移和大小，
+  CONTEXT.destination的native.__fpregs_mem与uc_mcontext字段链均有实际对象/字段用途；
+  原SDK内的uc_link/fpregset_t声明不因此转成项目自有实现。
+
+Windows证据来自[d58d423344264158337fd770c753af97bb72e188的既有运行](https://github.com/g1331/autsaro/actions/runs/41045733576)
+（整次运行failure，不能写成通过或新head验证）。artifact 12973895611的下载字节SHA为
+21b7317ef8af805a3bb1210c4effa723482ccf5bff60d21f0c5d765e074677c2，与GitHub摘要相等。
+只提取compiler-origins-36/42/44的.d与stdout，分别对应Backend/PortRestart/Stack；
+42.stdout原始字节SHA为d06e67b62ab6cc99cf161dabf27bfbb0f4e84381c76361053aabbbd765faa5ff。
+这是实际预处理定义及包含来源证据，本机没有原winnt.h全文副本，不把收据当成原头全文已读。
+实际包为mingw-w64-x86_64-headers 14.0.0.r569.g34eeafb7d-1，收据中的winnt.h原头SHA为
+bc318d60f2c55e8cc39bf2c207fb0fa688ac6c4e5eb8d854d7545ae9802a4321。
+
+- 实际x64展开的winnt.h:1839给出16字节对齐CONTEXT；3044的EXCEPTION_RECORD有ExceptionCode/Flags/NumberParameters/ExceptionInformation；
+  3074的EXCEPTION_POINTERS由PEXCEPTION_RECORD和PCONTEXT构成；3095的DISPATCHER_CONTEXT含ContextRecord和HistoryTable；
+  5836的MEMORY_BASIC_INFORMATION含BaseAddress/RegionSize/State/Protect等，均已在展开正文核对。
+- Os_PortRestartHandler读取record的Code/Flags，转交dispatch->ContextRecord/HistoryTable给RtlUnwindEx；context参数本身不用，
+  同TU的其它CONTEXT用途不能由这个参数单独判定。Os_Stack.stack_exception实际沿ExceptionRecord读异常信息、沿ContextRecord读Rsp；
+  Os_StackObserve读context->Rsp并以*context保存整个上下文。VirtualQuery写入region，调用方随后检查State/Protect等字段。
+  Backend有完整CONTEXT对象供GetThreadContext写入并交给栈观察；这条转发链要与Stack TU的字段读写分别记录。
+- minwinbase.h:13的SECURITY_ATTRIBUTES/LPSECURITY_ATTRIBUTES为完整结构/指针别名；Backend的Os_PortEvent/Mutex/Thread只转交attributes给创建API，没有字段访问。Linux同名LPSECURITY_ATTRIBUTES是项目void*，不得跨target合并成SDK结构指针。
+
+这些精确使用仍不足以把整个D4.8记为满足；公开配置、CDS及仅传递SDK指针TU各有独立隐藏边界。
+保留原SDK定义与ABI的工程理由不能当作AUTOSAR强制完整表示或正式符合。
+本段Windows展开只绑定d58的user-application，Linux原头绑定所列standard-ecu收据；其余配置不能借同名类型推成已核SDK闭包。
+最终接入#398时核对全部实际来源身份与逐TU指针选择；对变化的源码/宏/类型集合重评，不把这两份收据外推到新seal。
