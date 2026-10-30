@@ -32,14 +32,16 @@ V11.3.1 的 `054e14f3397023aa83813a65aa065fc4597d481b` 是 annotated tag 对象�
 后续补丁恢复成原件文本也不把责任退回上游；未改动行随插删搬移。
 `patched`／`adopted` 是来源标记，不是评估结果。宏展开及多位置诊断还需追到实际定义／
 实参与调用方，不能只看报告首个文件名；项目 FreeRTOSConfig 和适配代码不因展开进入
-kernel 而成为上游代码。原始退出码、passed=false、221项not_assessed、seal及严格比较
+kernel 而成为上游代码。Windows旧工件的lSuccess赋值、ulSwitchRequired清零／比较及
+lMutexNeedsReleasing赋值虽落在未改动行，根因包括项目0015修改的类型声明／BaseType_t；
+本次按自有因果一并整改，旧adopted标记及原始报告不改写。原始退出码、passed=false、221项not_assessed、seal及严格比较
 refusal保持；分析驱动或patch链变化仍按原比较器身份拒绝旧基线，不重盖旧seal。
 
 ## 补丁诊断的具体处置
 
 正常整改以 `0027-port-diagnostic-types.patch` 及 Linux `0003-port-diagnostic-types.patch`
 追加在既有公共链及Linux端口链末尾。Windows等待返回值按DWORD比较，等待成功零下标用0U；
-boolean clear直接作条件，uint32请求与0U比较；调度启动结果使用其真实BaseType_t。
+boolean clear直接作条件，uint32请求与0U比较；调度启动结果及mutex释放标志使用其真实BaseType_t，uint32切换位图以0U清零／比较。
 分支局部seen及xThreadState移入唯一消费分支。
 等待值依据Microsoft的[单对象](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject)
 与[多对象](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitformultipleobjects)契约；
@@ -53,7 +55,7 @@ head→tail-item保护保持。R18.1的同数组边界义务及真实队列／�
 
 | 原始报告 | 所选配置下的依据 | 处置 |
 | --- | --- | --- |
-| R5.5，task.h的pxCurrentTCB声明 | configNUMBER_OF_CORES=1；tasks.c同名宏仅位于多核else分支。实际预处理保留单核对象，不定义该宏。主文53／PDF61、AMD2.39及§6.7要求按实际宏集合和预处理后标识符判断。 | 此精确报告为误报；不外推多核。 |
+| R5.5，task.h的pxCurrentTCB声明 | configNUMBER_OF_CORES=1；tasks.c同名宏仅位于多核else分支。实际预处理保留单核对象，不定义该宏。主文53／PDF61、AMD2.39要求按实际宏集合和预处理后标识符判断。 | 此精确报告为误报；不外推多核。 |
 | R20.7，POSIX portTASK_FUNCTION_PROTO／portTASK_FUNCTION | 参数形成函数名／形参声明符，没有形成缺括号表达式；主文159–160／PDF167–168。 | 两处误报，复用[声明宏核查](implementation.md#声明宏与表达式参数)。 |
 | R17.3，POSIX四个__atomic_*及Windows平台调用 | 主文137–138／PDF145–146及AMD2附录H仅适用C90；实际编译C99且使用真实声明／GCC builtin。 | 语言不适用，复用[C99声明核查](implementation.md#c90隐式声明规则与当前编译)；不免除R1.1／R8.2／R8.4。 |
 | R15.5，两个自有端口的早返回 | ADR0025的自有主机层GRP；仍审阅退出、状态和资源。 | Disapplied；不是逐条偏离或删除报告。 |
@@ -63,7 +65,7 @@ head→tail-item保护保持。R18.1的同数组边界义务及真实队列／�
 本节是在当前工程委托下作出的独立有界项目选择，未借用或扩展其他实体的精确124键
 批准、ErrorHook R18.6或SDK来源责任。R2.5为Advisory/System（主文44／PDF52；
 TC2.5／TC2.39修订术语），R8.7为Advisory/System（主文70／PDF78，TC2.15区分调用TU）。
-下面保留真实报告与就近MR12理由，不声明MISRA符合或正式法律意义上的偏离完成。
+下面保留原始报告与就近MR12理由，不声明MISRA符合或正式法律意义上的偏离完成。
 
 | 规则 | 补丁后kernel路径 | 精确实体 | 选择及控制 |
 | --- | --- | --- | --- |
@@ -91,7 +93,10 @@ TC2.5／TC2.39修订术语），R8.7为Advisory/System（主文70／PDF78，TC2.
 | 2.5 | `portable/MSVC-MingW/port.c` | `portSIMULATED_TIMER_THREAD_PRIORITY` | 保持下述固定内核选择接口与原值；不制造使用点。 |
 
 R2.5表内tasks.c／queue.c常量支撑静态／动态分配标记、统计字符、单核／多核状态及队列
-接口的既有条件分支；当前程序不使用仍是真实Advisory报告。项目早前给这些常量加类型
+接口的既有条件分支。分配组合、统计格式化、多核／delete、计数／递归信号量分支由当前
+配置排除，实际-dM输出中没有这些定义。这里保守记录保留源定义及原始Advisory报告，
+不把每条都称为当前程序执行中的真实违反，也不只凭-dM缺席宣称R2.5通过。
+项目早前给这些常量加类型
 的补丁不把它们变成上游责任。可按当前profile删除／包围定义或改为enum，但会扩大本次
 对固定内核可选分支的改造；保留有限既有实体及数值，使采用差异和上游更新更易核对。
 POSIX四宏保持tick单位、ISR请求返回／转发及critical解除接口，Windows一个宏保持

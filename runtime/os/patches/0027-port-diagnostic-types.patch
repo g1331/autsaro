@@ -176,6 +176,15 @@
              /* Cannot be in a critical section to get here.  Tasks that exit a
               * critical section will block on a yield mutex to wait for an interrupt to
               * process if an interrupt was set pending while the task was inside the
+@@ -518,7 +519,7 @@
+ 
+             /* Used to indicate whether the simulated interrupt processing has
+              * necessitated a context switch to another task/thread. */
+-            ulSwitchRequired = pdFALSE;
++            ulSwitchRequired = 0U;
+ 
+             /* One dispatch per source per pass. Equal priorities use the
+              * stable source ID order; re-pended edges survive for a later pass. */
 @@ -535,7 +536,7 @@
                      if( Os_BackendInterruptMaySchedule( i ) != 0 )
                      {
@@ -185,3 +194,21 @@
                          {
                              ulSwitchRequired |= ( ( uint32_t ) 1U ) << i;
                          }
+@@ -544,7 +545,7 @@
+                 }
+             }
+ 
+-            if( ulSwitchRequired != pdFALSE )
++            if( ulSwitchRequired != 0U )
+             {
+                 /* Select the next task to run. */
+                 vTaskSwitchContext();
+@@ -826,7 +827,7 @@
+ 
+ void vPortExitCritical( void )
+ {
+-    int32_t lMutexNeedsReleasing;
++    BaseType_t lMutexNeedsReleasing;
+ 
+     /* The interrupt event mutex should already be held by this thread as it was
+      * obtained on entry to the critical section. */
