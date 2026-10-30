@@ -114,7 +114,12 @@ class CAnalysisTests(unittest.TestCase):
             path.write_bytes(b"a\r\ninserted\r\nb\r\nc\r\n")
             lines = c_check.kernel_patched_lines(before, base / "root", lines)
             self.assertEqual(lines, {"kernel/tasks.c": [2, 3]})
-            xml = '<results><errors><error id="style"><location file="kernel/tasks.c" line="3"/></error></errors></results>'
+            # Delete only the insertion: the untouched restored line stays owned.
+            before = {path: path.read_bytes()}
+            path.write_text("a\nb\nc\n")
+            lines = c_check.kernel_patched_lines(before, base / "root", lines)
+            self.assertEqual(lines, {"kernel/tasks.c": [2]})
+            xml = '<results><errors><error id="style"><location file="kernel/tasks.c" line="2"/></error></errors></results>'
             diagnostic = c_check.parse_diagnostics(xml, base / "root", lines)[0]
             self.assertTrue(diagnostic["patched"])
             self.assertFalse(diagnostic["adopted"])
