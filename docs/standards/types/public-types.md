@@ -72,3 +72,35 @@ C11条目逐项按规定对象和当前C99源码构造判断，不豁免GNU扩�
 | R23.7 | Advisory | TU／C11 | not_applicable | generic宏实参应在整个展开中恰求值一次；各association均为整数常量表达式的type query有例外（AMD3.51，35–36）。同一源码无generic宏，没有以宏名或无副作用推定任意重复求值可接受。 |
 | R23.8 | Required | TU／C11 | not_applicable | 有default时须在association首或尾（AMD3.51，36–37）。同一源码没有association/default；没有default本身不违反此条。 |
 <!-- misra-manual-end -->
+
+## D4.8的内核类型别名与对象边界
+
+本节补充[逐程序/TU的类型范围](../bsw-general/language-tokens.md#d48完整表示与隐藏边界)，不把typedef可见/used标记当成解引用证明。
+#397实际CTU记录中，两平台S/U/C/N的内核别名集合相同；StackLinux/Stack分别属于各target。
+TaskHandle_t/ConstTaskHandle_t、tskTCB/TCB_t由task.h声明，完整struct tskTaskControlBlock也在task.h；
+StaticTask_t的**别名声明在FreeRTOS.h**，不是另一个静态surrogate结构。
+QueueHandle_t/QueueSetHandle_t/QueueSetMemberHandle_t及xQUEUE/Queue_t由queue.h声明；
+StaticQueue_t的别名在FreeRTOS.h，完整struct QueueDefinition在queue.h。
+这些完整定义及静态别名的统一由0015-typed-port-state项目补丁实施，不能因带FreeRTOS版权头就把移入头的项目变更归为采用原件。
+
+- tasks.c的TCB_t指针有真实任务字段读写；queue.c中的TaskHandle_t来自mutex holder，传入任务优先级API，不读取TCB字段；
+  两端口把任务句柄传给pxTaskOsPortStack取得StackType_t字节存储，不通过TCB指针读取字段。
+  Backend的task_handles数组、task_memory/idle缓冲、task_slot比较/索引、idle回调二级指针和任务创建调用须合并看；
+  task_slot没有字段访问，静态完整对象/数组需要当前表示。其余Os_Backend.h包含者可见完整TCB不等于各TU有真实TCB字段消费者。
+- QueueHandle_t/Queue_t/StaticQueue_t在这两target八份CTU的used记录均只落到queue.c；
+  QueueSetHandle_t/QueueSetMemberHandle_t/StaticSemaphore_t/SemaphoreHandle_t均无used记录。
+  queue.c的pxQueue指针读写QueueDefinition字段；嵌套QueuePointers_t/SemaphoreData_t为u成员的完整子对象。
+  不把存在未激活的API原型当作已交付配置真正创建了QueueSet或semaphore。
+- List_t/ListItem_t/MiniListItem_t的完整owner为list.h，静态别名在FreeRTOS.h；tasks/queue/list实际维护列表/节点。
+  TCB/QueueDefinition内嵌的完整列表使其在包含者CTU也被标记used，**不是**这些包含者均有独立列表指针或解引用。
+  0015/0016补丁中修改的节点owner/布尔表示保留项目责任，未修改原件继续按采用层记录。
+- PortTask仅在Linux port.c定义并以局部对象/返回值和字节复制承载两个HANDLE；Windows ThreadState_t仅在该port.c定义，
+  prvTaskThreadState按任务句柄取得字节存储并复制成局部对象。两个私有类型没有借公共头发布完整布局。
+
+另核对没有独立类型化指针的自有聚合：Os_ArtiTaskStateType/Os_ArtiCallerType（Os_Arti.h）、
+Arti_Event/Arti_AddressCapture（Arti.h）、Os_InterruptFrameType/Os_OrderReferenceType（Backend.c）、
+Ecu_BatchToken（HostBatch.c）、EcuPolicyConfig（Ecu_Config.h）、Dcm_MsgAddInfoType/Dcm_MsgContextType（Dcm.h）、
+CanTp_TxType/CanTp_RxType（CanTp.c）、Dcm_PublicationType/Dcm_ActorsType（Dcm.c）。
+实际用途是数组/嵌入成员/局部对象或按值传参返回，不能因索引器没列出“类型名 *”就声称这些类型没使用。
+AlarmBaseType则有AlarmBaseRefType指针别名，已纳入Time/Service/ARTI核对，不能遗漏。
+以上细化owner和用途，不解除D4.8尚未闭合的SDK/逐TU全部指针事实，也不自动保留所有公开完整表示。
