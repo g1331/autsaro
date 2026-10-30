@@ -10,7 +10,7 @@
 | 当前通信与生命周期语义 | 初值、首次发布、0 值发布、扇出、未连接及 C/S 输出保护由 `rte_contract.c` 独立消费者验证；网络两接收者与超时由 `rte_com_contract.c` 及 `owner_probe.c` 验证；生命周期由 `schm_contract.c` 与启动失败测试验证，不能以 CAN 驱动写失败推导 COM_STOPPED。已核对（源码：rte::files 的 receiver/received/expired 与 COM 回调闭包）：SWS_Rte_06008、06009、06010、04501、04502、02515–02520、04527、03514、05021、08061、08062、08103、08104、07643、07384、08934、08592 |
 | 同步直接 C/S | 参数按原顺序直接传递；无 possibleErrors 的 server 返回 void，client 返回 Std_ReturnType。单 owner、同一任务的执行闭包和 recursion 拒绝保证串行化；不为直接调用增加队列、锁或 busy 状态。已核对（源码：composition 的 callers、event 与 recursion 检查，rte 的直接调用）：SWS_Rte_06019、04515–04519、07008、07409、01017、01019、01020、06806、05108、01102、01293、01103、01104、02577、08594、01126、01132、01166、07023、07024、08913 |
 | 显式非阻塞访问 | Read 使用 OUT 指针，Write 在返回前完成所有本地 receiver 的复制；网络与本地双重 producer 仍拒绝，纯本地复制没有独立的可失败服务。已核对（源码：rte 的 Read/Write 与 composition 的 endpoint 排他校验）：SWS_Rte_01091、01289、01093、01071、01280、02635、07820、01082、08413 |
-| 启动与停止 | Rte_Start/Stop 始终声明并定义，只做有界条件判断。StartupHook 中先 SchM_Init/Start、后 Rte_Start、最后 SchM_StartTiming；ShutdownHook 中先 Rte_Stop，最后 SchM_Deinit。`rte_allocated` 防止同一进程重新分配；停止路径不能再次分派 runnable。已核对（源码：Rte.c、SchM_Main.c、Ecu_StackBootstrap/Retire 的真实调用闭包）：SWS_Rte_91137、91138、02569、01309、02585、01261、02570、01310、02584、01259、07574、07575、07580、07615、07616、02538、02535、02536、07586、04552、SWS_Rte_CONSTR_09035–09038 |
+| 启动与停止 | Rte_Start/Stop 始终声明并定义，只做有界条件判断。StartupHook 中先 SchM_Init/Start、后 Rte_Start、最后 SchM_StartTiming；ShutdownHook 中先 Rte_Stop，最后 SchM_Deinit。`rte_lifecycle` 区分未分配、运行与停止；停止后拒绝再次分配及 runnable 分派。已核对（源码：Rte.c、SchM_Main.c、Ecu_StackBootstrap/Retire 的真实调用闭包）：SWS_Rte_91137、91138、02569、01309、02585、01261、02570、01310、02584、01259、07574、07575、07580、07615、07616、02538、02535、02536、07586、04552、SWS_Rte_CONSTR_09035–09038 |
 | 事件映射 | 直接 server 仍显式配置 EventToTaskMapping，但不带 TaskRef/Position；TimingEvent 的时间源、task、position 与 event 关系由 schedule 校验。同一 event 只能映射一次，同一 task 的 position 唯一；同 OS event bit 的实体具有相同周期与相位。已核对（源码：schedule::inspect 及 Ecu_StackRunCycle 的 source-derived 排序）：SWS_Rte_06798、06799、07843、04641、08939、07801、07806–07809、06728、06729、80076、SWS_Rte_CONSTR_08935–08938、SWS_Rte_CONSTR_09082、ECUC_Rte_09018、09019、09020、09021、09023、09024、09025、09026、09221 |
 | 单实例源码组件 | 不支持多实例的输入必须显式声明 false；instance 参数从 API 和 runnable 签名省略。空 CDS 保留标准 dummy 成员，实例和 handle 为 const；兼容模式不要求为无 indirect API 的源码组件额外分配全部 PDS。已核对（源码：composition、contracts、Rte.c；PDF p551 的源码组件优化条件）：SWS_Rte_02008、02009、03806、01016、02310、02311、01007、01148、01150、06810、03724、03711、03712、03715、03793、03799、07138、06213、03723、08785 |
 | 模型约束 | 每个 atomic SWC 必须有唯一 InternalBehavior；entry producer 与跨包组件名统一检查，PPort 的服务必须有 OperationInvokedEvent，调用点归属于实际 runnable。当前只接受同步 client、非并发 runnable、minimumStartInterval=0。已核对（源码：composition 的 runnable、operation、namespace 与 source object 检查）：SWS_Rte_07686、03527、07190、07191、07845、05083、08612、02733、03014 |
@@ -50,7 +50,7 @@ SchM_GetVersionInfo 只在 RteSchMVersionInfoApi=true 时存在；当前目标�
 
 Rte_Init/StartTiming 只在配置 InitializationRunnableBatch 时生成；当前主线没有初始化 batch，不能增加两个无输入的空壳接口。未来开放此配置与其他执行机制见 [其他执行与配置](execution.md)。
 
-标准要求的 nameless runnable role prototype、固定状态/初值/runnable 宏、const CDS/handle 和 MemMap 重复包含会产生 MISRA 8.2、2.3/2.5、5.6、8.7、20.1/20.5 等诊断。保留必需契约与原始诊断；下文只逐处处置R8.2，其他诊断与221项必要人工评估仍归#58。
+标准要求的 nameless runnable role prototype、固定状态/初值/runnable 宏、const CDS/handle 和 MemMap 重复包含会产生 MISRA 8.2、2.3/2.5、5.6、8.7、20.1/20.5 等诊断。保留必需契约与原始诊断；下文只逐处处置R8.2，其他生成诊断见[具体分类](generated-diagnostics.md)，221项必要人工评估仍归#58。
 
 ### 无名 role 参数的逐处核查
 
