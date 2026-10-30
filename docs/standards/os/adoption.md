@@ -67,6 +67,7 @@ head→tail-item保护保持。R18.1的同数组边界义务保持。
 
 | 原始报告 | 所选配置下的依据 | 处置 |
 | --- | --- | --- |
+| R7.2，Windows prvWaitForObject中的INFINITE | 实际TU的-dM收据为`#define INFINITE 0xffffffff`；项目及内核源码未定义该宏，编译器内建宏亦无该定义。它由所选MinGW SDK头展开，整改前已有同一报告。主文60／PDF68要求预处理后unsigned常量带U后缀。 | 保留真实Required诊断及未评估状态，归SDK来源责任（#384）；不因调用行标为patched而改称自有常量，也不声明通过或偏离完成。自有等待参数及失败语义仍由本篇负责。 |
 | R5.5，task.h的pxCurrentTCB声明 | configNUMBER_OF_CORES=1；tasks.c同名宏仅位于多核else分支。实际预处理保留单核对象，不定义该宏。主文53／PDF61、AMD2.39要求按实际宏集合和预处理后标识符判断。 | 此精确报告为误报；不外推多核。 |
 | R20.7，POSIX portTASK_FUNCTION_PROTO／portTASK_FUNCTION | 参数形成函数名／形参声明符，没有形成缺括号表达式；主文159–160／PDF167–168。 | 两处误报，复用[声明宏核查](implementation.md#声明宏与表达式参数)。 |
 | R17.3，POSIX四个__atomic_*及Windows平台调用 | 主文137–138／PDF145–146及AMD2附录H仅适用C90；实际编译C99且使用真实声明／GCC builtin。 | 语言不适用，复用[C99声明核查](implementation.md#c90隐式声明规则与当前编译)；不免除R1.1／R8.2／R8.4。 |
