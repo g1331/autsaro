@@ -903,6 +903,133 @@ void Os_TestAfterFaultReader(void)
                 self.assertIn("nested scenario=hook " + expected, result["stdout"])
                 print(f"retired-error retained={retained} exit={result['exit']}", flush=True)
 
+    def test_error_hook_borrow_lifetime_controls(self):
+        import os_suites
+
+        for variant in ("control", "clear", "phase"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/Os_Error.c"
+                text = source.read_text(encoding="utf-8")
+                if variant == "clear":
+                    anchor = "        parameters = empty_parameters;"
+                    self.assertEqual(text.count(anchor), 1)
+                    text = text.replace(anchor, "")
+                elif variant == "phase":
+                    anchor = "return (phase == OS_HOOK_ERROR) ? &parameters : &empty_parameters;"
+                    self.assertEqual(text.count(anchor), 1)
+                    text = text.replace(anchor, "return &parameters;")
+                anchor = "#define OS_STOP_SEC_CODE"
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor,
+                    "OS_MEMMAP const void *Os_TestStoredErrorPointer(void) {\n"
+                    "    return parameters.service_GetTaskState.State;\n}\n" + anchor)
+                source.write_text(text, encoding="utf-8")
+                fixture = target / "tests/error_hooks.c"
+                text = fixture.read_text(encoding="utf-8")
+                anchor = "static void check(bool condition)"
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor,
+                    "const void *Os_TestStoredErrorPointer(void);\n"
+                    "static unsigned error_depth;\n"
+                    "static TaskStateType *expected_state = &state;\n"
+                    "static void borrow_check(bool condition, const char *stage) {\n"
+                    "    if (!condition) {\n"
+                    '        if (fprintf(stderr, "error_borrow rejected %s\\n", stage) < 0 || fflush(stderr) != 0) { ExitProcess(97u); }\n'
+                    "        ExitProcess(73u);\n    }\n}\n" + anchor)
+                text = text.replace("OSError_GetTaskState_State() == &state", "OSError_GetTaskState_State() == expected_state")
+                anchor = "void ErrorHook(StatusType Error)\n{"
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor, anchor + '\n    borrow_check(error_depth++ == 0u, "recursion");')
+                anchor = "    records[count++] = (Record){vector, Error, service, caller, checked, Os_StackCurrent()->role};"
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor, anchor + "\n    --error_depth;")
+                anchor = "        case 4u:\n            result = GetTaskState(99u, &state);\n            break;"
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor,
+                    "        case 4u: {\n"
+                    "            TaskStateType local_state = 99u;\n"
+                    "            expected_state = &local_state;\n"
+                    "            result = GetTaskState(99u, &local_state);\n"
+                    '            borrow_check(local_state == 99u, "pointee");\n'
+                    '            borrow_check(Os_TestStoredErrorPointer() == NULL, "clear");\n'
+                    "            Os_ErrorContextType saved;\n"
+                    "            Os_ErrorContextSave(&saved);\n"
+                    "            const Os_ErrorContextType outside = {.phase = OS_HOOK_PRE,\n"
+                    "                .service = OSServiceId_GetTaskState,\n"
+                    "                .parameters = {.service_GetTaskState = {99u, &local_state}}};\n"
+                    "            Os_ErrorContextRestore(&outside);\n"
+                    '            borrow_check(Os_ErrorParametersCurrent()->service_GetTaskState.State == NULL, "phase");\n'
+                    "            Os_ErrorContextRestore(&saved);\n"
+                    "            expected_state = &state;\n"
+                    "            break;\n        }")
+                fixture.write_text(text, encoding="utf-8")
+                with os_suites.native_session(directory, "error-borrow-" + variant):
+                    binary, _ = os_suites.build(directory, "error_hooks.c", target=target)
+                    result = os_suites.execute(binary, "configured")
+                self.assertEqual(result["exit"], 0 if variant == "control" else 73, result)
+                if variant == "control":
+                    self.assertIn("errors calls=31 service_access=1 parameter_access=1 configured=1 reason=0", result["stdout"], result)
+                    self.assertEqual(result["stderr"], "", result)
+                else:
+                    self.assertEqual(result["stdout"], "", result)
+                    self.assertEqual(result["stderr"], "error_borrow rejected " + variant, result)
+
+    def test_nested_error_hook_restores_automatic_borrow(self):
+        import os_suites
+
+        for variant in ("control", "save", "restore", "recursion"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temporary, os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                if variant in {"save", "restore", "recursion"}:
+                    source = target / "src/Os_Error.c"
+                    text = source.read_text(encoding="utf-8")
+                    anchor = ("context->parameters = parameters;" if variant == "save" else
+                              "parameters = context->parameters;")
+                    replacement = anchor + ("\n    context->parameters.service_GetTaskState.State = NULL;"
+                        if variant == "save" else "\n    parameters.service_GetTaskState.State = NULL;")
+                    if variant == "recursion":
+                        anchor, replacement = "(error_active == 0) && ", ""
+                    self.assertEqual(text.count(anchor), 1)
+                    source.write_text(text.replace(anchor, replacement), encoding="utf-8")
+                fixture = target / "tests/nested_interrupts.c"
+                text = fixture.read_text(encoding="utf-8")
+                anchor = ("static TaskStateType parent_state =\n"
+                          "    77u; /**< Task-state output sentinel; fixture-owned, no Init reset. */")
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor, "static TaskStateType *expected_parent_state;")
+                text = text.replace("== &parent_state && parent_state == 77u",
+                                    "== expected_parent_state && *expected_parent_state == 77u")
+                anchor = "        check(GetTaskState(99u, &parent_state) == 3u && parent_state == 77u);"
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor, "        TaskStateType parent_state = 77u;\n"
+                    "        expected_parent_state = &parent_state;\n" + anchor)
+                invariant = "OSError_GetTaskState_State() == expected_parent_state && *expected_parent_state == 77u"
+                lines = [i for i, line in enumerate(text.splitlines(), 1) if "check(" + invariant + ");" in line]
+                self.assertEqual(len(lines), 2)
+                anchor = "void ErrorHook(StatusType error)\n{"
+                self.assertEqual(text.count(anchor), 1)
+                text = text.replace(anchor, anchor +
+                    '\n    if (errors != 0u) {\n'
+                    '        if (fprintf(stderr, "nested_error recursion\\n") < 0 || fflush(stderr) != 0) { ExitProcess(97u); }\n'
+                    '        ExitProcess(73u);\n    }')
+                lines = [i for i, line in enumerate(text.splitlines(), 1) if "check(" + invariant + ");" in line]
+                fixture.write_text(text, encoding="utf-8")
+                with os_suites.native_session(directory, "nested-error-borrow-" + variant):
+                    binary, _ = os_suites.build(directory, "nested_interrupts.c", target=target)
+                    result = os_suites.execute(binary, "hook")
+                self.assertEqual(result["exit"], {"control": 0, "recursion": 73}.get(variant, 7), result)
+                expected_error = ("" if variant == "control" else "nested_error recursion"
+                    if variant == "recursion" else
+                    f"nested assertion failed: {fixture}:{lines[1]} invariant={invariant} reason=7")
+                self.assertEqual(result["stderr"], expected_error, result)
+                if variant == "control":
+                    self.assertIn("trace=APEGeCcpHB reason=0", result["stdout"], result)
+
     def test_disabled_error_parameter_access_retains_no_pointer_fields(self):
         import os_suites
 
