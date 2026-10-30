@@ -2,7 +2,7 @@
 
 本篇属于 [RTE 与生成契约](README.md)，承接 #382。
 
-当前：[PM具体决定](https://github.com/g1331/autsaro/pull/393#issuecomment-6516977768)已接受冻结159键的有界项目保留，见[完整形态与范围记录](generated-retention/README.md)。这解除项目选择前置；源码/MR12、反例、影响范围独立复核及真实集合出口仍须验证。下文历史未决段描述7ee决定前状态，不代表当前仍缺项目选择。只覆盖四个正常分析 profile 的 emitter／模板输出，目标为 controlled Linux／Windows x64、C99、HostBatch 与 probe。直接拷贝的 runtime、内核／补丁、SDK 和无 checker 人工项分别由 #381／#383／#384／#385 承接；模板原行仍属本项，已有精确裁决可以引用；原始分析、程序归属、`passed=false`、`not_assessed` 和比较拒绝保持。
+当前：[PM具体决定](https://github.com/g1331/autsaro/pull/393#issuecomment-6516977768)已接受冻结159键的有界项目保留，见[完整形态与范围记录](generated-retention/README.md)。这解除项目选择前置；源码/MR12、反例、影响范围独立复核与真实集合核对的实施证据归PR。下文历史未决段描述7ee决定前状态，不代表当前仍缺项目选择。只覆盖四个正常分析 profile 的 emitter／模板输出，目标为 controlled Linux／Windows x64、C99、HostBatch 与 probe。直接拷贝的 runtime、内核／补丁、SDK 和无 checker 人工项分别由 #381／#383／#384／#385 承接；模板原行仍属本项，已有精确裁决可以引用；原始分析、程序归属、`passed=false`、`not_assessed` 和比较拒绝保持。
 
 ## 来源与字节身份
 
