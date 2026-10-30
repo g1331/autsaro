@@ -37,10 +37,21 @@ pub(super) fn standard() -> Result<String, Vec<super::PlanDiagnostic>> {
     super::outputs::render(
         super::outputs::trusted_text(path)?,
         path,
-        &[super::outputs::Edit::Once(
-            "@STATUSES@",
-            &c_layout::defines(STATUSES),
-        )],
+        &[
+            super::outputs::Edit::Once("@STATUSES@", &c_layout::defines(STATUSES)),
+            super::outputs::Edit::Once(
+                "/** Test the infrastructure bit (SWS_Rte_07404); the argument is evaluated once.",
+                "/** Test the infrastructure bit (SWS_Rte_07404); the argument is evaluated once.\n * MR12 RULE 2.5 VIOLATION: SWS_Rte_07404 publishes this macro even when unused.",
+            ),
+            super::outputs::Edit::Once(
+                "/** Test the overlay bit (SWS_Rte_07405); the argument is evaluated once.",
+                "/** Test the overlay bit (SWS_Rte_07405); the argument is evaluated once.\n * MR12 RULE 2.5 VIOLATION: SWS_Rte_07405 publishes this macro even when unused.",
+            ),
+            super::outputs::Edit::Once(
+                "/** Read the application error (SWS_Rte_07406); the argument is evaluated once.",
+                "/** Read the application error (SWS_Rte_07406); the argument is evaluated once.\n * MR12 RULE 2.5 VIOLATION: SWS_Rte_07406 publishes this macro even when unused.",
+            ),
+        ],
     )
 }
 

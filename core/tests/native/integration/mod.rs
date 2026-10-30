@@ -1,6 +1,7 @@
 //! Generated mainline projects built and run natively.
 use super::*;
 
+mod dispatch;
 mod generated_c;
 mod os;
 mod protocol;

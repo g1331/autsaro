@@ -392,6 +392,7 @@ pub(super) fn configure_os(
         ));
         conversion_macros.push_str(&format!(
             r#"/** Convert ticks to {unit} (SWS_Os_00393); argument evaluated once.
+ * MR12 RULE 2.5 VIOLATION: SWS_Os_00393 requires this macro even when unused.
  * @param[in] ticks Tick count from zero through UINT32_MAX.
  * @return PhysicalTimeType in {unit}; integer seconds truncate toward zero.
  * Preconditions: None; the validated resolution prevents overflow.

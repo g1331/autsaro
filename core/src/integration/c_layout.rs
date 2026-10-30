@@ -321,6 +321,22 @@ pub(super) fn defines<N: AsRef<str>, V: AsRef<str>>(entries: &[(N, V)]) -> Strin
     text
 }
 
+/// Required preprocessor interfaces remain published even when a consumer leaves them unused.
+pub(super) fn required_defines<N: AsRef<str>, V: AsRef<str>>(
+    entries: &[(N, V)],
+    purpose: &str,
+    requirement: &str,
+) -> String {
+    let mut output = String::new();
+    for (name, value) in entries {
+        output.push_str(&format!(
+            "/** {purpose}\n * MR12 RULE 2.5 VIOLATION: {requirement} requires this macro even when unused.\n */\n"
+        ));
+        output.push_str(&defines(&[(name.as_ref(), value.as_ref())]));
+    }
+    output
+}
+
 /// Constants sharing a short purpose, with aligned Doxygen trailing comments.
 pub(super) fn commented_defines<N: AsRef<str>, V: AsRef<str>>(
     entries: &[(N, V)],

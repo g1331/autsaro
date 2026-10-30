@@ -110,10 +110,11 @@ pub(super) fn files(
         ));
     }
     source.push_str(&format!(
-        r#"{start_var_cleared_unspecified}/* Owner only; cleared at Stop. */
-static boolean rte_started RTE_Rte_VAR_CLEARED_UNSPECIFIED;
-/* Owner only; allocated once. */
-static boolean rte_allocated RTE_Rte_VAR_CLEARED_UNSPECIFIED;
+        r#"#define RTE_LIFECYCLE_UNALLOCATED 0u
+#define RTE_LIFECYCLE_STARTED     1u
+#define RTE_LIFECYCLE_STOPPED     2u
+{start_var_cleared_unspecified}/* Owner only; Stop cannot permit a second allocation. */
+static uint8 rte_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;
 "#,
         start_var_cleared_unspecified =
             c_layout::section("RTE_Rte", "Rte", "VAR_CLEARED_UNSPECIFIED", true)
@@ -201,15 +202,14 @@ static boolean {name}_expired RTE_{scope}_VAR_CLEARED_UNSPECIFIED;
     if (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK) {{
         return RTE_E_LIMIT;
     }}
-    if (rte_allocated == TRUE) {{
+    if (rte_lifecycle != RTE_LIFECYCLE_UNALLOCATED) {{
         return RTE_E_LIMIT;
     }}
 "#,
         start_code = c_layout::section("RTE_Rte", "Rte", "CODE", true)
     ));
     source.push_str(
-        r#"    rte_allocated = TRUE;
-    rte_started = TRUE;
+        r#"    rte_lifecycle = RTE_LIFECYCLE_STARTED;
     return E_OK;
 }
 RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
@@ -217,7 +217,9 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
     if (Ecu_TargetCheckLifecycleContext(FALSE) != E_OK) {
         return RTE_E_LIMIT;
     }
-    rte_started = FALSE;
+    if (rte_lifecycle != RTE_LIFECYCLE_UNALLOCATED) {
+        rte_lifecycle = RTE_LIFECYCLE_STOPPED;
+    }
     return E_OK;
 }
 "#,
@@ -249,7 +251,7 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
     if (data == NULL_PTR) {{
         return E_NOT_OK;
     }}
-    if (rte_started == FALSE) {{
+    if (rte_lifecycle != RTE_LIFECYCLE_STARTED) {{
         return RTE_E_COM_STOPPED;
     }}
     if (Ecu_TargetIsOwner() == 0) {{
@@ -302,7 +304,7 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
                 source.push_str(&format!(
                     r#"{head}
 {{
-    if (rte_started == FALSE) {{
+    if (rte_lifecycle != RTE_LIFECYCLE_STARTED) {{
         return RTE_E_COM_STOPPED;
     }}
     if (Ecu_TargetIsOwner() == 0) {{
@@ -399,7 +401,7 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
             source.push_str(&format!(
                 r#"{head}
 {{
-    if (rte_started == FALSE) {{
+    if (rte_lifecycle != RTE_LIFECYCLE_STARTED) {{
         return RTE_E_COM_STOPPED;
     }}
     if (Ecu_TargetIsOwner() == 0) {{
@@ -479,7 +481,7 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
         source.push_str(&format!(
             r#"RTE_{partition}_CALLOUT_CODE void {callback}(CbkHandleIdType handle)
 {{
-    if (rte_started == FALSE) {{
+    if (rte_lifecycle != RTE_LIFECYCLE_STARTED) {{
         return;
     }}
     if (Ecu_TargetIsOwner() == 0) {{

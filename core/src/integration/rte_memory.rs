@@ -65,8 +65,7 @@ pub(super) fn description(
         )
     };
     for (name, datatype) in [
-        ("rte_started", "RteMemory_boolean"),
-        ("rte_allocated", "RteMemory_boolean"),
+        ("rte_lifecycle", "RteMemory_uint8"),
         ("schm_lifecycle", "RteMemory_uint8"),
     ] {
         variables.push_str(&object("VARIABLE-DATA-PROTOTYPE", name, datatype));
