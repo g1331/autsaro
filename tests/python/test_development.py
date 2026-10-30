@@ -439,7 +439,7 @@ class QualityScopeTests(unittest.TestCase):
 
 class VerificationTests(unittest.TestCase):
     def test_desktop_and_all_scopes_stop_on_backend_test_failure(self):
-        expected = ["cargo", "test", "--locked", "-p", "autosar-config-desktop"]
+        expected = ["cargo", "test", "--locked", "--profile", "dev", "-p", "autosar-config-desktop"]
         for scope in ("desktop", "all"):
             with self.subTest(scope=scope):
                 calls = []
