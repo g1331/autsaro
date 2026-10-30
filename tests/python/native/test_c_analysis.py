@@ -176,7 +176,25 @@ class ActualCAnalysisTests(unittest.TestCase):
                     self.assertIn(evidence, error)
 
     def test_clean_main_passes(self):
-        self.assertTrue(self.analyze("int main(void) { return 0; }\n")["passed"])
+        from autosar_tooling import c_standard
+
+        summary = self.analyze("int main(void) { return 0; }\n", cli=True)
+        self.assertTrue(summary["passed"])
+        self.assertFalse(summary["coverage"]["completeCompliance"])
+        self.assertEqual(len(summary["coverage"]["rules"]), 221)
+        self.assertTrue(all(row["assessment"] == "not_assessed" for row in summary["coverage"]["rules"]))
+        manual = summary["coverage"]["manualAssessment"]
+        self.assertEqual(manual["checkerCovered"]["total"], 155)
+        self.assertEqual(manual["checkerUncovered"]["total"], 66)
+        self.assertFalse(manual["checkerUncovered"]["classificationComplete"])
+        self.assertEqual(summary["semanticIdentity"]["analysisCode"]["c_standard.py"],
+                         hashlib.sha256(Path(c_standard.__file__).read_text().encode()).hexdigest())
+        self.assertEqual(manual["inputIdentity"]["parserSha256"],
+                         hashlib.sha256(Path(c_standard.__file__).read_bytes()).hexdigest())
+        self.assertEqual(manual["inputIdentity"]["documents"], {
+            name: hashlib.sha256((c_standard.ROOT / name).read_bytes()).hexdigest()
+            for name in c_standard.MANUAL_ASSESSMENT_SOURCES
+        })
 
     def test_actual_sdk_headers_and_unsigned_macro_have_verified_provider_origins(self):
         windows = platform.system() == "Windows"

@@ -894,6 +894,26 @@ class ManualAssessmentTests(unittest.TestCase):
         self.assertEqual(result["conformanceAssessment"], "not_established")
         self.assertEqual(self.rules, original)
 
+    def test_normal_coverage_entry_connects_records_without_assessing_raw_catalog(self):
+        from autosar_tooling.c_check import coverage
+
+        with tempfile.TemporaryDirectory() as temporary:
+            addons = Path(temporary)
+            available = [row["id"][1:] for row in self.rules if row["automaticChecker"]]
+            (addons / "misra.py").write_text(
+                "def getAddonRules(): return " + repr(available) + "\ndef getCppcheckRules(): return []\n"
+            )
+            result = coverage(addons)
+        self.assertEqual(len(result["rules"]), 221)
+        self.assertTrue(all(row["assessment"] == "not_assessed" for row in result["rules"]))
+        self.assertFalse(result["completeCompliance"])
+        manual = result["manualAssessment"]
+        self.assertEqual(manual["format"], "misra-manual-assessment-v1")
+        self.assertEqual(manual["checkerCovered"]["total"], 155)
+        self.assertEqual(manual["checkerUncovered"]["total"], 66)
+        self.assertFalse(manual["checkerUncovered"]["classificationComplete"])
+        self.assertTrue(result["knownCheckerLimitations"])
+
     def test_missing_record_remains_unclassified(self):
         name = c_standard.MANUAL_ASSESSMENT_SOURCES[2]
         path = self.root / name

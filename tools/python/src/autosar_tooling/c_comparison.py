@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections import Counter
 from pathlib import Path
 
 from ecu_tools.build import FILE_HASHES, digest, refuse_links, safe_relative
+
+from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
 
 
 def _read(path: Path) -> dict:
@@ -69,8 +72,15 @@ def _semantic(summary: dict) -> dict:
     require(all(strings(value) for value in defines.values()))
     hashes(identity["models"], ("platformModel", "platformLibrary"), True)
     hashes(identity["libraries"], ("std", "windows" if summary["scope"]["target"].startswith("windows") else "posix", "implicitStd"))
-    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py"))
+    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py"))
     hashes(identity["addonRuntime"], ("runaddon.py", "cppcheck.py", "cppcheckdata.py"))
+    assessment = summary["coverage"]["manualAssessment"]
+    require(assessment["format"] == "misra-manual-assessment-v1")
+    manual = assessment["inputIdentity"]
+    require(set(manual) == {"parserSha256", "selectionSha256", "documents"})
+    hashes(manual["documents"], MANUAL_ASSESSMENT_SOURCES)
+    require(isinstance(manual["parserSha256"], str) and bool(re.fullmatch("[0-9a-f]{64}", manual["parserSha256"])))
+    require(manual["selectionSha256"] == hashlib.sha256("\n".join(MANUAL_ASSESSMENT_SOURCES).encode()).hexdigest())
     require(isinstance(identity["sdk"], str) and bool(re.fullmatch("[0-9a-f]{64}", identity["sdk"])))
     return identity
 

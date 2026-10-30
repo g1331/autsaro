@@ -99,6 +99,7 @@ def manual_assessment(rules: list[dict], root: Path = ROOT) -> dict:
     counts = collections.Counter(row["status"] for row in rows)
     unclassified = counts["not_assessed"]
     return {
+        "format": "misra-manual-assessment-v1",
         "scope": "Frozen configurations and sources cited by the records; not the current analyzed source seal",
         "inputIdentity": {
             "parserSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
