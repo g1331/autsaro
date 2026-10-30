@@ -173,6 +173,48 @@ def dependency_headers(text: str, root: Path) -> set[Path]:
     return {path for path in paths if not path.is_relative_to(root)}
 
 
+def macro_closure(names: set[str], definitions: dict, original: str) -> dict:
+    """Snapshot transitive active replacements; cycles and unresolved aliases are unsafe."""
+    selected = {}
+    visiting = set()
+
+    def visit(name):
+        if name in visiting:
+            return True
+        if name in selected:
+            return selected[name]["unresolved"]
+        definition = definitions[name]
+        body = definition["value"]
+        parameters = set()
+        if definition["function"]:
+            signature = re.match(r"\(([^)]*)\)(.*)", body)
+            if signature is None:
+                selected[name] = {**definition, "use": original, "unresolved": True}
+                return True
+            parameters = set(re.findall(r"\b[A-Za-z_]\w*\b", signature[1]))
+            body = signature[2]
+        identifiers = set(re.findall(r"\b[A-Za-z_]\w*\b", body)) - parameters
+        alias = body.strip()
+        while alias.startswith("(") and alias.endswith(")"):
+            alias = alias[1:-1].strip()
+        unresolved = "#" in body or (
+            not definition["function"]
+            and bool(re.fullmatch(r"[A-Za-z_]\w*", alias))
+            and alias not in definitions
+        )
+        selected[name] = {**definition, "use": original, "unresolved": unresolved}
+        visiting.add(name)
+        for dependency in sorted(identifiers & definitions.keys()):
+            unresolved = visit(dependency) or unresolved
+        visiting.remove(name)
+        selected[name]["unresolved"] = unresolved
+        return unresolved
+
+    for name in sorted(names):
+        visit(name)
+    return selected
+
+
 def preprocessing(text: str, root: Path, candidates: set[str]) -> dict:
     """Track active definitions at emitted project lines; unknown expansions stay unknown."""
     definitions = {}
@@ -194,7 +236,7 @@ def preprocessing(text: str, root: Path, candidates: set[str]) -> dict:
                         contents[path] = source_lines(path)
             continue
         definition = re.match(r"#define (\w+)(.*)", line)
-        if definition and definition[1] in candidates:
+        if definition:
             source = (
                 Path(filename).resolve()
                 if filename and not filename.startswith("<")
@@ -215,13 +257,14 @@ def preprocessing(text: str, root: Path, candidates: set[str]) -> dict:
             definitions.pop(line[7:].strip(), None)
         elif owned and 1 <= number <= len(contents[owned]):
             original = contents[owned][number - 1]
-            names = set(re.findall(r"\b[A-Za-z_]\w*\b", original)) & definitions.keys()
+            names = (
+                set(re.findall(r"\b[A-Za-z_]\w*\b", original))
+                & candidates
+                & definitions.keys()
+            )
             if names:
                 key = owned.relative_to(root).as_posix() + ":" + str(number)
-                inputs[key] = {
-                    name: {**definitions[name], "use": original}
-                    for name in sorted(names)
-                }
+                inputs[key] = macro_closure(names, definitions, original)
         number += 1
     return inputs
 
@@ -355,7 +398,11 @@ def classify(
                         len(tokens) == 1
                         and len(matches) == 1
                         and all(
-                            any(
+                            not any(
+                                definition.get("unresolved", False)
+                                for definition in values.values()
+                            )
+                            and any(
                                 name == matches[0]["macro"]
                                 and "use" in definition
                                 and definition["value"] == matches[0]["value"]

@@ -11,7 +11,7 @@
 
 `diagnostics.sourceOrigins` 只附加来源，保留原始 id、severity、message、locations、程序出现次数与 `patched/adopted`。`macro-input` 说明该行使用了 SDK 定义，不单凭同一行就判定全部违反来自 SDK；R7.2 另连接固定 addon 实际观察的 unsigned 无 U 操作数，只在实际活动对象宏和值无歧义时标为 `unsigned-literal`／`sourceCategory=sdk`。例如 Windows `kernel/portable/MSVC-MingW/port.c:54` 的等待断言使用 SDK `INFINITE=0xffffffff`：保留真实 Required R7.2 和项目 patch 标记；DWORD 实参、返回值及失败行为继续由[内核采用与 patch](adoption.md)及 #383 的真实双平台消费者负责。
 
-包外头、未知 provider、错误目标／包关系、缺原件清单或自有修改的字节均为 `unclassified` 并保留原因。项目 `#line` 可改变报告路径，此时 `macroTraceComplete=false`，物理宏归属明确回退为未解析；不借行标记冒充 SDK 原件。缺失／多义宏操作数证据保留 `macro-input` 和未解析计数，不按文件前缀补造归属；函数宏、复杂宏链和其他规则的因果裁决不由对象常量匹配推定。`sourceClassification` 分开给出 SDK 来源键、未分类键、未分类原头及未解析宏诊断，任何一项缺口不能记为完整覆盖。当前受支持双平台四 profile 的完整来源要求由既有 CI 汇总检查；零未分类只表示这些实际输入已归属，不表示对所有 SDK 声明做过完整 MISRA 分析。Cppcheck 仍消费既有编译器宏模型，真实 GCC 展开不是另一轮完整 SDK MISRA 扫描。
+包外头、未知 provider、错误目标／包关系、缺原件清单或自有修改的字节均为 `unclassified` 并保留原因。项目 `#line` 可改变报告路径，此时 `macroTraceComplete=false`，物理宏归属明确回退为未解析；不借行标记冒充 SDK 原件。活动定义按使用时刻追到传递替换依赖；其他项目宏经别名产生同值字面量、依赖缺失或循环时，归属必须回退，同一行的数值匹配不足以转移责任。缺失／多义宏操作数证据保留 `macro-input` 和未解析计数，不按文件前缀补造归属；函数宏、复杂宏链和其他规则的因果裁决不由对象常量匹配推定。`sourceClassification` 分开给出 SDK 来源键、未分类键、未分类原头及未解析宏诊断，任何一项缺口不能记为完整覆盖。当前受支持双平台四 profile 的完整来源要求由既有 CI 汇总检查；零未分类只表示这些实际输入已归属，不表示对所有 SDK 声明做过完整 MISRA 分析。Cppcheck 仍消费既有编译器宏模型，真实 GCC 展开不是另一轮完整 SDK MISRA 扫描。
 
 风险控制为同一实际 TU 编译、原件摘要匹配、宏生效位置追踪、正常 c-check 回归和同名自有头／未知 provider／错误目标／原件修改／项目重定义反例。原头和 provider 内部实现不修改、不逐项审计，不写替代声明。目标、provider、头字节、编译选项或采用边界改变时重新分类；严格比较的 `semanticIdentity.version=2` 加入 SDK 身份及分析代码，旧工件和真实身份不符仍拒绝，不重写旧分析。原始退出、`passed=false`、`completeCompliance=false`、`not_assessed` 与 refusal 全部保留；来源类别不构成规则满足、正式偏离、供应方或项目符合性。
 

@@ -140,6 +140,7 @@ class SdkSourceTests(unittest.TestCase):
                     "value": "0xffffffff",
                     "function": False,
                     "use": "wait(INFINITE);",
+                    "unresolved": False,
                 },
             )
             self.assertEqual(inputs["port.c:2"]["INFINITE"]["file"], "port.c")
@@ -208,6 +209,97 @@ class SdkSourceTests(unittest.TestCase):
             result = c_sdk.classify(rows, scope, [token])
             self.assertEqual(result["unclassifiedDiagnosticKeys"], 1)
             self.assertFalse(result["complete"])
+
+    def test_transitive_project_macro_competitors_fall_back_but_real_wait_stays_precise(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, header, _packages, record = self.fixture(Path(temporary).resolve())
+            source = root / "kernel/port.c"
+            source.parent.mkdir()
+            cases = [
+                (
+                    "#define OWN_LITERAL 0xffffffff\n#define OWN_ALIAS OWN_LITERAL\n",
+                    "consume(INFINITE, OWN_ALIAS);",
+                    "OWN_ALIAS",
+                    "unclassified",
+                ),
+                (
+                    "#define OWN_ALIAS ((MISSING_LITERAL))\n",
+                    "consume(INFINITE, OWN_ALIAS);",
+                    "OWN_ALIAS",
+                    "unclassified",
+                ),
+                (
+                    "#define OWN_ALIAS MISSING_LITERAL\n",
+                    "consume(INFINITE, OWN_ALIAS);",
+                    "OWN_ALIAS",
+                    "unclassified",
+                ),
+                (
+                    "#define OWN_ALIAS OWN_CYCLE\n#define OWN_CYCLE OWN_ALIAS\n",
+                    "consume(INFINITE, OWN_ALIAS);",
+                    "OWN_ALIAS",
+                    "unclassified",
+                ),
+                (
+                    "#define OWN_LITERAL 3U\n#define OWN_ALIAS OWN_LITERAL\n",
+                    "consume(INFINITE, OWN_ALIAS);",
+                    "INFINITE",
+                    "sdk",
+                ),
+                (
+                    "#define configASSERT(x) if (!(x)) Os_HostAssertFailed(__FILE__, __LINE__)\n",
+                    "configASSERT( WaitForSingleObject( xObject, INFINITE ) == 0U );",
+                    "configASSERT",
+                    "sdk",
+                ),
+            ]
+            for definitions, use, operand, expected in cases:
+                with self.subTest(use=use, definitions=definitions):
+                    source.write_text("\n" * 53 + use + "\n")
+                    text = (
+                        f'# 1 "{header.as_posix()}" 1\n#define INFINITE 0xffffffff\n'
+                        f'# 1 "{source.as_posix()}" 2\n'
+                        + definitions
+                        + f'# 54 "{source.as_posix()}"\nexpanded;\n'
+                    )
+                    inputs = c_sdk.preprocessing(
+                        text, root, {"INFINITE", "OWN_ALIAS", "configASSERT"}
+                    )
+                    scope = {
+                        "sdkHeaders": [record],
+                        "sdkMacroInputs": {"kernel/port.c": inputs},
+                    }
+                    raw = self.diagnostic()
+                    raw["locations"][0]["column"] = str(use.index(operand) + 1)
+                    rows = [deepcopy(raw)]
+                    token = {
+                        "file": "kernel/port.c",
+                        "line": 54,
+                        "column": use.index(operand) + 1,
+                        "literal": "0xffffffff",
+                    }
+                    result = c_sdk.classify(rows, scope, [token])
+                    self.assertEqual(rows[0]["sourceCategory"], expected, rows)
+                    self.assertEqual(result["complete"], expected == "sdk")
+                    self.assertEqual(
+                        {
+                            k: v
+                            for k, v in rows[0].items()
+                            if k not in {"sourceOrigins", "sourceCategory"}
+                        },
+                        raw,
+                    )
+                    if "OWN_LITERAL" in definitions:
+                        self.assertIn("OWN_LITERAL", inputs["kernel/port.c:54"])
+                    if expected == "unclassified":
+                        self.assertFalse(
+                            any(
+                                origin["kind"] == "unsigned-literal"
+                                for origin in rows[0]["sourceOrigins"]
+                            )
+                        )
 
     def test_missing_macro_trace_cannot_claim_complete_coverage(self):
         with tempfile.TemporaryDirectory() as temporary:
