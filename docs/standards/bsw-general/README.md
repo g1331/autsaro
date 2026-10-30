@@ -131,4 +131,4 @@ D4.11为Required（主文印刷33–34／PDF41–42），允许调用方、被�
 
 公共声明的具体诊断记录见[发布信息](published-information.md)、[BSW 服务](public-api-bsw.md)及[OS 服务](public-api-os.md)；各篇明确区分待复核记录和已完成处置，不代替模块行为核对。
 
-精确项目交付形式的有界记录见[BSW外部服务](public-api-bsw.md)、[OS外部服务](public-api-os.md)与[ND库服务／提供runnable](retained-library.md)；授权来源与原始分析状态分别记录，不据此声明规范强制或符合。
+精确交付保留：[BSW服务](public-api-bsw.md)、[OS服务](public-api-os.md)、[ND库／runnable](retained-library.md)。
