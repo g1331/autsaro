@@ -599,6 +599,40 @@ static void consume(const Ecu_Input *input)
         fail();
     }
 }
+static void run_cycle(EventMaskType hints, uint64_t ticket, uint64_t delivered)
+{
+    EventMaskType events = hints;
+    EventMaskType tick_events;
+    /* The captured tick may follow the initial event snapshot. Its
+     * alarm events precede delivery; refresh them before the cycle. */
+    StatusType event_status = GetEvent(ECU_TARGET_TASK, &tick_events);
+    if (event_status == E_OK) {
+        event_status = ClearEvent(tick_events & (ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP));
+    }
+    if (event_status != E_OK) {
+        fail();
+    }
+    events |= tick_events;
+    if (delivered < epoch) {
+        fail();
+    }
+    epoch = delivered;
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
+    stage(9u);
+#endif
+    if (Ecu_StackRunCycle(events) != E_OK) {
+        fail();
+    }
+#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
+    stage(10u);
+#endif
+    processed_tick = ticket;
+    processed_epoch = delivered;
+    while (output_deferred > 0u) {
+        --output_deferred;
+        retire_output();
+    }
+}
 void Ecu_TargetTask(void)
 {
     const EventMaskType mask = ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP | ECU_TARGET_EVENT_IO;
@@ -635,37 +669,7 @@ void Ecu_TargetTask(void)
             fail();
         }
         if ((status == E_OK) && (ticket != processed_tick)) {
-            EventMaskType tick_events;
-            /* The captured tick may follow the initial event snapshot. Its
-             * alarm events precede delivery; refresh them before the cycle. */
-            StatusType event_status = GetEvent(ECU_TARGET_TASK, &tick_events);
-            if (event_status == E_OK) {
-                event_status =
-                    ClearEvent(tick_events & (ECU_TARGET_EVENT_WORK | ECU_TARGET_EVENT_APP));
-            }
-            if (event_status != E_OK) {
-                fail();
-            }
-            events |= tick_events;
-            if (delivered < epoch) {
-                fail();
-            }
-            epoch = delivered;
-#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
-            stage(9u);
-#endif
-            if (Ecu_StackRunCycle(events) != E_OK) {
-                fail();
-            }
-#if defined(ECU_TARGET_TESTS) && (ECU_TARGET_TESTS == STD_ON)
-            stage(10u);
-#endif
-            processed_tick = ticket;
-            processed_epoch = delivered;
-            while (output_deferred > 0u) {
-                --output_deferred;
-                retire_output();
-            }
+            run_cycle(events, ticket, delivered);
         } else if ((status != E_OK) && (status != E_OS_NOFUNC)) {
             fail();
         } else {

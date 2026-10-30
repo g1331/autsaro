@@ -8,7 +8,6 @@ readability-function-size runtime/bsw/src/CanIf.c CANIF_CODE Std_ReturnType CanI
 readability-function-size runtime/ecu/src/Ecu_HostBatch.c StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
 readability-function-size runtime/ecu/src/Ecu_HostBridge.c StatusType Ecu_HostBatchExecute(Ecu_HostBatch *batch, Ecu_HostSink sink, void *context)
 readability-function-size runtime/ecu/src/Ecu_Target.c static void consume(const Ecu_Input *input)
-readability-function-size runtime/ecu/src/Ecu_Target.c void Ecu_TargetTask(void)
 readability-function-size runtime/os/src/Os.c OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
 readability-function-size runtime/os/src/Os_Backend.c OS_MEMMAP StatusType Os_BackendResource(ResourceType id, sint32 acquire)
 readability-function-size runtime/os/src/Os_Backend.c OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint32 returned)
