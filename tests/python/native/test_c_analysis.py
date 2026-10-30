@@ -178,6 +178,30 @@ class ActualCAnalysisTests(unittest.TestCase):
     def test_clean_main_passes(self):
         self.assertTrue(self.analyze("int main(void) { return 0; }\n")["passed"])
 
+    def test_actual_sdk_headers_and_unsigned_macro_have_verified_provider_origins(self):
+        windows = platform.system() == "Windows"
+        source = ("#include <windows.h>\nunsigned long timeout(void) { return INFINITE; }\n"
+                  "int main(void) { return timeout() == INFINITE ? 0 : 1; }\n" if windows else
+                  "#include <pthread.h>\n#include <unwind.h>\nint main(void) { return 0; }\n")
+        summary = self.analyze(source, cli=True)
+        origins = summary["scope"]["sdkHeaders"]
+        self.assertTrue(summary["sourceClassification"]["complete"], origins)
+        self.assertEqual(summary["sourceClassification"]["unclassifiedDiagnosticKeys"], 0)
+        self.assertTrue(all(row["category"] == "sdk" for row in origins))
+        if windows:
+            diagnostics = [row for row in summary["diagnostics"] if row["id"] == "misra-c2012-7.2"]
+            self.assertTrue(diagnostics)
+            self.assertFalse(summary["passed"])
+            for row in diagnostics:
+                self.assertEqual(row["sourceCategory"], "sdk", row)
+                literal = next(origin for origin in row["sourceOrigins"] if origin["kind"] == "unsigned-literal")
+                self.assertEqual((literal["macro"], literal["value"]), ("INFINITE", "0xffffffff"))
+                header = next(header for header in origins if header["key"] == literal["headerKey"])
+                self.assertEqual(header["provider"], "mingw-w64-x86_64-headers")
+        else:
+            self.assertTrue(any(row["header"].endswith("/pthread.h") and row["provider"] == "libc6-dev" for row in origins))
+            self.assertTrue(any(row["header"].endswith("/unwind.h") and row["provider"].startswith("libgcc-") for row in origins))
+
     def test_misra_violation_fails_through_the_real_entry(self):
         summary = self.analyze("int main(void) { int value = 1; if (value) { return 1; } return 0; }\n", cli=True)
         self.assertFalse(summary["passed"])
@@ -290,7 +314,7 @@ class ActualCAnalysisTests(unittest.TestCase):
                     self.assertIn("exit_code=1", summary["error"])
                 else:
                     self.assertIsNone(summary["error"])
-                    self.assertEqual(summary["scope"]["compilerWorkers"], 4)
+                    self.assertEqual(summary["scope"]["compilerWorkers"], min(4, int(c_check.os.environ.get("CARGO_BUILD_JOBS", "4"))))
                     self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"bsw/src/main.c", "bsw/src/helper.c", "bsw/src/second.c", "bsw/src/third.c"})
                     for definitions in summary["scope"]["compilerDiscoveredDefines"].values():
                         self.assertTrue(any(value.startswith("-DUINT32_C(") for value in definitions))

@@ -31,6 +31,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessSpec, run_bounded
 
+from autosar_tooling import c_sdk
 from autosar_tooling.config import ROOT
 
 CPPCHECK_VERSION = "2.21.0"
@@ -286,6 +287,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         run([compiler, *flags, *("-I" + path for path in includes), "-fsyntax-only", str(validation)], output, "platform-model-check", 30,
                 context="Linux library analysis model differs from the actual compiler headers")
     per_unit_macros = {}
+    sdk_units = {}
+    sdk_inputs = {}
     stdio_modes = {}
     mode_names = {"_IOFBF", "_IOLBF", "_IONBF"} if "setvbuf" in identifiers else set()
     # Build the lookup sets once: per-line set arithmetic over every compiler
@@ -304,6 +307,10 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         _, definitions, _ = run([compiler, *flags, *("-I" + path for path in includes),
                                     "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60,
                                     context=f"Compiler preprocessing failed for {name}")
+        _, provenance, _ = run([compiler, *flags, *("-I" + path for path in includes),
+                                    "-E", "-dD", str(root / name)], output, f"compiler-origins-{index}", 60,
+                                    context=f"Compiler source tracing failed for {name}")
+        headers, inputs = c_sdk.preprocessing(provenance, root, identifiers)
         function_macros = ["-D" + line[8:].replace(" ", "=", 1)
                            for line in definitions.splitlines() if line.startswith("#define ")
                            and line[8:].split("(", 1)[0] in function_macro_names]
@@ -334,15 +341,17 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                         raise ValueError(f"Unsupported stdio mode expansion: {macro}") from error
             elif model is not None and macro in {"SIGRTMIN", "PTHREAD_STACK_MIN"}:
                 raise ValueError(f"Unsupported Linux system macro expansion: {macro}")
-        return name, unit_macros, unit_modes
+        return name, unit_macros, unit_modes, headers, inputs
 
     # Each TU owns distinct probe/log paths; collect in declared source order.
     # Use available CPUs while bounding native compiler memory/process fan-out.
-    compiler_workers = min(4, os.cpu_count() or 1)
+    compiler_workers = min(4, os.cpu_count() or 1, int(os.environ.get("CARGO_BUILD_JOBS", "4")))
     with ThreadPoolExecutor(max_workers=compiler_workers) as executor:
         try:
-            for name, macros, modes in executor.map(compiler_unit, enumerate(sources)):
+            for name, macros, modes, headers, inputs in executor.map(compiler_unit, enumerate(sources)):
                 per_unit_macros[name] = macros
+                sdk_units[name] = sorted(path.as_posix() for path in headers)
+                sdk_inputs[name] = inputs
                 for mode, value in modes.items():
                     if mode in stdio_modes and stdio_modes[mode] != value:
                         raise ValueError(f"Inconsistent compiler stdio mode: {mode}")
@@ -361,10 +370,15 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     database = [{"directory": tool_argument(root), "file": tool_argument(root / name),
                  "arguments": ["gcc", *flags, *builtins, *per_unit_macros[name], *("-I" + path for path in includes),
                                "-c", tool_argument(root / name)]} for name in sources]
+    packages = c_sdk.msys_headers(Path(compiler)) if target_id.startswith("windows") else c_sdk.debian_headers()
+    sdk_headers = [c_sdk.header_identity(Path(path), root, target_id, machine.strip(), packages)
+                   for path in sorted({path for paths in sdk_units.values() for path in paths})]
     return root, sources, database, {"target": target_id, "profile": target["profile"], "entries": target.get("entries"),
                                    "compilerFlags": flags, "compilerWorkers": compiler_workers, "includePaths": target["includePaths"],
                                    "systemIncludePaths": system_includes, "diagnosticCompiler": {"path": compiler, "version": compiler_version, "sha256": digest(Path(compiler))},
                                    "compilerDiscoveredDefines": per_unit_macros,
+                                   "sdkHeaders": sdk_headers, "sdkTranslationUnits": sdk_units,
+                                   "sdkMacroInputs": sdk_inputs,
                                    "compilerSemanticInputs": {"machine": machine.strip(), "release": compiler_release.strip(),
                                                               "predefines": sorted(predefines.read_text(encoding="utf-8").splitlines()),
                                                               "builtins": sorted(builtins)},
@@ -450,6 +464,7 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
         raise ValueError("Cppcheck translation-unit inventory differs from requested sources")
     receipts = list((output / "addon-receipts").glob("*.json"))
     addon_units = set()
+    unsigned = []
     for receipt in receipts:
         data = json.loads(receipt.read_text(encoding="utf-8"))
         if (not isinstance(data, dict) or not isinstance(data.get("units"), list)
@@ -457,8 +472,10 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
                 or type(data.get("configurations")) is not int or data["configurations"] < 1):
             raise ValueError("Invalid project addon receipt structure")
         addon_units.update(Path(unit).resolve() for unit in data["units"])
+        unsigned.extend(data.get("unsignedLiterals", []))
     if addon_units != parsed or len(receipts) != len(sources):
         raise ValueError("Project addon did not analyze every translation unit")
+    c_sdk.classify(diagnostics, scope, unsigned, root)
     incomplete = {"misra-config", "syntaxError", "preprocessorErrorDirective", "internalError",
                   "cppcheckError", "addonError", "missingInclude", "missingIncludeSystem", "toomanyconfigs"}
     if any(row["id"] in incomplete for row in diagnostics):
@@ -475,7 +492,7 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     if cfg is None:
         raise ValueError("Cppcheck analysis library contents unavailable")
     scope["cppcheckLibraries"] = {name: str((cfg / (name + ".cfg")).resolve()) for name in libraries}
-    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py")]
+    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__)]
     # Build/owner helpers determine selected inputs, patching and executed processes.
     import ecu_tools.build
     import ecu_tools.owner
@@ -515,7 +532,8 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     scope["implicitStdLibrary"] = str(implicit[0])
     scope["addonRuntime"] = runtimes[0]
     return {
-        "version": 1,
+        "version": 2,
+        "sdk": c_sdk.semantic(scope),
         "compiler": scope["compilerSemanticInputs"],
         "defines": {name: sorted(values) for name, values in scope["compilerDiscoveredDefines"].items()},
         "models": {name: text_hash(Path(scope[name]["path"])) if scope[name] else None
@@ -565,7 +583,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         summary["semanticIdentity"] = semantic_identity(executable, scope, directories)
         # Each program keeps its own CTU, build directory and receipts, so the
         # single-threaded analyzer runs concurrently; results merge in declared order.
-        with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
+        with ThreadPoolExecutor(max_workers=min(len(jobs), int(os.environ.get("CARGO_BUILD_JOBS", str(len(jobs)))))) as executor:
             results = [executor.submit(analyze_program, executable, addons, root, units, commands, scope, target_id, directory)
                        for _, _, units, commands, directory in jobs]
         for (program, entry, units, _, _), result in zip(jobs, results):
@@ -581,6 +599,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
                     summary["diagnostics"].append(row)
                 seen[key]["programs"].append(program)
         diagnostics = summary["diagnostics"]
+        summary["sourceClassification"] = c_sdk.summary(diagnostics, scope.get("sdkHeaders", []))
         sealed_sources(project)
         if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:
             raise ValueError("Source seal changed during analysis")

@@ -194,6 +194,15 @@ def cppcheck(
         details.append(
             f"{path.parent.name}: source passed={data['passed']}; analysis error={data['error']}"
         )
+        if classification := data.get("sourceClassification"):
+            details.append(
+                f"SDK source provenance: complete={classification['complete']}; "
+                f"SDK diagnostic keys={classification['sdkDiagnosticKeys']}; "
+                f"unclassified keys={classification['unclassifiedDiagnosticKeys']}; "
+                f"unclassified headers={classification['unclassifiedHeaders']}; "
+                f"unresolved macro diagnostics={classification['unresolvedMacroDiagnostics']}. "
+                "Source classification does not assess rule satisfaction or provider conformance."
+            )
         comparison = data.get("comparison")
         if comparison is None and baseline is not None:
             from autosar_tooling.c_comparison import compare
