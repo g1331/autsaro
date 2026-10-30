@@ -82,6 +82,54 @@ class ActualCAnalysisTests(unittest.TestCase):
             self.assertIn("compiler-unit-0", summary["error"])
             self.assertNotIn("comparison", summary)
 
+    def test_ecu_analysis_requires_the_same_patched_kernel_bytes_as_builds(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            delivered = "int kernel(void) { return 1; }\n"
+            project = self.project(root, "int application(void) { return 0; }\n", extra_files={
+                "kernel/unit.c": "int kernel(void) { return 0; }\n",
+                "host.c": "int main(void) { return 0; }\n",
+                "probe.c": "int main(void) { return 0; }\n",
+                "patch.diff": "--- a/unit.c\n+++ b/unit.c\n@@ -1 +1 @@\n-int kernel(void) { return 0; }\n+" + delivered,
+            })
+            target = json.loads((project / "target.json").read_text())
+            target.update(profile="ecu", sources=["bsw/src/main.c"], kernelSources=["unit.c"],
+                          entries={"host-batch": "host.c", "probe": "probe.c"},
+                          kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}],
+                          kernelSha256={"unit.c": hashlib.sha256(delivered.encode()).hexdigest()})
+            target["compilerFlags"].append("-fexceptions")
+            (project / "target.json").write_text(json.dumps(target))
+            # Match the LF bytes of controlled kernel sources and patches on both hosts.
+            for name in ("kernel/unit.c", "patch.diff"):
+                path = project / name
+                path.write_bytes(path.read_text(encoding="utf-8").encode("utf-8"))
+            seal = project / "meta/files.sha256"
+            names = (project / "meta/files.list").read_text().splitlines() + ["meta/files.list"]
+            seal.write_text("".join(f"{hashlib.sha256((project / name).read_bytes()).hexdigest()}  {name}\n"
+                                    for name in names))
+            for corrupt in (False, True):
+                output = root / ("corrupt" if corrupt else "control")
+                original = c_check.require_kernel_patch_applied
+
+                def after_patch(path, before, *, corrupt=corrupt, original=original):
+                    original(path, before)
+                    if corrupt:
+                        kernel = next(iter(before))
+                        kernel.write_bytes(kernel.read_bytes() + b"\n")  # Valid C, different pinned bytes.
+
+                with patch.object(c_check, "require_kernel_patch_applied", side_effect=after_patch):
+                    code = c_check.check(project, target["target"], output)
+                summary = json.loads((output / "summary.json").read_text())
+                if corrupt:
+                    self.assertEqual(code, 1)
+                    self.assertFalse(summary["passed"])
+                    self.assertEqual(summary["error"], "Kernel identity mismatch: kernel/unit.c")
+                    self.assertEqual(list(output.glob("compiler-unit-*.log")), [])
+                else:
+                    self.assertIn(code, (0, 1))
+                    self.assertIsNone(summary["error"], summary)
+                    self.assertEqual(len(summary["programs"]), 2)
+
     def test_prepare_failures_keep_context_and_raw_windows_evidence(self):
         stages = [
             ("compiler-target", "Cannot identify diagnostic compiler target"),

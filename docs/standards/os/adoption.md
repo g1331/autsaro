@@ -1,0 +1,130 @@
+# 固定 FreeRTOS 采用与补丁责任
+
+## 原件身份与上游说明
+
+依据[ADR 0025](../../adr/0025-misra-layered-scope.md)，以下来源整体分类一次为采用代码，
+并非逐项规范评估或供应方符合性证明。范围为两个既有 controlled x64 C99 目标、四个分析
+profile 的 HostBatch／probe、直接 native 与 OS 消费者，原件集合取两份 source manifest。
+
+V11.3.1 的 `054e14f3397023aa83813a65aa065fc4597d481b` 是 annotated tag 对象，
+指向 commit `3a22924e0a9ddbbc8b0758881c33b3422a5cc20d`。
+清单历史字段名 `commit` 保存的是前者；下载引用及 archive SHA256
+`dd832f699e6ebee00366d7c737e259860d9d1fd5f2c2311c90dff16e8cfbcf61` 保持。
+两份清单共31个原件与该档案逐字节相同；本记录不升级采用版本。
+
+该提交发布的[MISRA.md](https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/3a22924e0a9ddbbc8b0758881c33b3422a5cc20d/MISRA.md)
+（SHA256 `6c0553a54fb8566b4ab2ef9bab73df0f22a431faea59292bde636b107658b207`）
+说明使用 Coverity 2023.6.1 检查 MISRA C:2012，并列出源码注释内及
+[Coverity配置](https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/3a22924e0a9ddbbc8b0758881c33b3422a5cc20d/examples/coverity/coverity_misra.config)
+中的处置。其 unsuppressed 部分区分示例、验证 port 缺项和实际集成义务。
+该说明不证明本项目的主机端口、配置、补丁或全部 AMD／TC 已符合；不采用其 suppression，
+不把其动态分配／标准I/O说明当成本项目批准，也不把供应方说明转成 Mandatory 偏离。
+
+采用分类仍需检查自有配置的接缝。例如旧双平台工件的IDLE名字越界报告位于未改动的
+任务循环；真实-dM固定configIDLE_TASK_NAME为"IDLE"、configMAX_TASK_NAME_LEN为16u，
+复制到索引4的终止NUL后即break，不读取字符串之外的索引。固定上游说明的R18.1节
+描述同一边界。它不需要项目偏离，也不允许把别的缓冲区／配置一并判为安全。
+
+## 原件到实际消费者
+
+`source-manifest.json`／`posix-source-manifest.json` 固定原件及有序补丁字节，
+`target_spec.rs` 选择平台顺序及文件子集，`core/build.rs` 在副本中应用并计算最终
+`kernelSha256`。生成包的 `target.json`、资产来源和 files seal 保留各自身份。
+离线工具及 CMake 使用同一选择并在编译前核对最终内核；c-check 在自己的副本应用
+相同链，复用`require_kernel_identity`核对同一最终map，再验证C99翻译单元，
+记录实际TU／程序、编译数据库和诊断。每个补丁必须实际改变其选择文件。
+`test_ecu_analysis_requires_the_same_patched_kernel_bytes_as_builds`以正常分析及补丁后
+额外一个换行的有效C副本证明身份不符会在TU编译／分析前拒绝，保留passed=false及具体文件。
+
+项目补丁始终是自有代码，包括从上游文本出发的类型修复。分析逐补丁传递行归属，
+后续补丁恢复成原件文本也不把责任退回上游；未改动行随插删搬移。
+`patched`／`adopted` 是来源标记，不是评估结果。宏展开及多位置诊断还需追到实际定义／
+实参与调用方，不能只看报告首个文件名；项目 FreeRTOSConfig 和适配代码不因展开进入
+kernel 而成为上游代码。Windows旧工件的lSuccess赋值、ulSwitchRequired清零／比较及
+lMutexNeedsReleasing赋值虽落在未改动行，根因包括项目0015修改的类型声明／BaseType_t；
+本次按自有因果一并整改，旧adopted标记及原始报告不改写。原始退出码、passed=false、221项not_assessed、seal及严格比较
+refusal保持；分析驱动或patch链变化仍按原比较器身份拒绝旧基线，不重盖旧seal。
+
+## 补丁诊断的具体处置
+
+正常整改以 `0027-port-diagnostic-types.patch` 及 Linux `0003-port-diagnostic-types.patch`
+追加在既有公共链及Linux端口链末尾。Windows等待返回值按DWORD比较，等待成功零下标用0U；
+boolean clear直接作条件，uint32请求与0U比较；调度启动结果及mutex释放标志使用其真实BaseType_t，uint32切换位图以0U清零／比较。
+分支局部seen及xThreadState移入唯一消费分支。
+等待值依据Microsoft的[单对象](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject)
+与[多对象](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitformultipleobjects)契约；
+原等待对象、wait-all选择、超时／abandoned／失败拒绝保持。R7.2／R10.3／R10.4的Required义务
+按主文印刷60、86–88／PDF68、94–96及AMD2相应C11扩充核对；不改变失败与成功路径。
+
+R18.4（Advisory，主文147／PDF155）两处指针-=改为下标取址。栈填充值游标仍按
+`-portSTACK_GROWTH`推进；队列只在readFrom不等于head时退一个item，先转ptrdiff_t再
+取负，避免无符号取负回绕。所选静态队列容量与itemSize在PTRDIFF_MAX以内，原来的
+head→tail-item保护保持。R18.1的同数组边界义务保持。
+既有public-types实际执行FIFO／front／overwrite／reset与零item队列，
+`test_queue_front_pointer_bounds_and_order_mutations`继续拒绝先减后判、丢失步进及错误wrap。
+`test_patched_kernel_stack_scan_uses_each_byte`从封存构建包含真实tasks.c，观察整word／
+不足一个word的扫描结果；加倍步进的可编译变异须在行为断言失败，检测器同样执行。
+
+| 原始报告 | 所选配置下的依据 | 处置 |
+| --- | --- | --- |
+| R7.2，Windows prvWaitForObject中的INFINITE | 实际TU的-dM收据为`#define INFINITE 0xffffffff`；项目及内核源码未定义该宏，编译器内建宏亦无该定义。它由所选MinGW SDK头展开，整改前已有同一报告。主文60／PDF68要求预处理后unsigned常量带U后缀。 | 保留真实Required诊断及未评估状态，归SDK来源责任（#384）；不因调用行标为patched而改称自有常量，也不声明通过或偏离完成。自有等待参数及失败语义仍由本篇负责。 |
+| R5.5，task.h的pxCurrentTCB声明 | configNUMBER_OF_CORES=1；tasks.c同名宏仅位于多核else分支。实际预处理保留单核对象，不定义该宏。主文53／PDF61、AMD2.39要求按实际宏集合和预处理后标识符判断。 | 此精确报告为误报；不外推多核。 |
+| R20.7，POSIX portTASK_FUNCTION_PROTO／portTASK_FUNCTION | 参数形成函数名／形参声明符，没有形成缺括号表达式；主文159–160／PDF167–168。 | 两处误报，复用[声明宏核查](implementation.md#声明宏与表达式参数)。 |
+| R17.3，POSIX四个__atomic_*及Windows平台调用 | 主文137–138／PDF145–146及AMD2附录H仅适用C90；实际编译C99且使用真实声明／GCC builtin。 | 语言不适用，复用[C99声明核查](implementation.md#c90隐式声明规则与当前编译)；不免除R1.1／R8.2／R8.4。 |
+| R15.5，两个自有端口的早返回 | ADR0025的自有主机层GRP；仍审阅退出、状态和资源。 | Disapplied；不是逐条偏离或删除报告。 |
+
+## 精确补丁接口的 Advisory 保留
+
+本节是在当前工程委托下作出的独立有界项目选择，未借用或扩展其他实体的精确124键
+批准、ErrorHook R18.6或SDK来源责任。R2.5为Advisory/System（主文44／PDF52；
+TC2.5／TC2.39修订术语），R8.7为Advisory/System（主文70／PDF78，TC2.15区分调用TU）。
+下面保留原始报告与就近MR12理由，不声明MISRA符合或正式法律意义上的偏离完成。
+
+| 规则 | 补丁后kernel路径 | 精确实体 | 选择及控制 |
+| --- | --- | --- | --- |
+| 2.5 | `portable/ThirdParty/GCC/Posix/portmacro.h` | `portTICK_PERIOD_MS` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `portable/ThirdParty/GCC/Posix/portmacro.h` | `portEND_SWITCHING_ISR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `portable/ThirdParty/GCC/Posix/portmacro.h` | `portYIELD_FROM_ISR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `portable/ThirdParty/GCC/Posix/portmacro.h` | `portENABLE_INTERRUPTS` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `tskSTATICALLY_ALLOCATED_STACK_ONLY` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `tskSTATICALLY_ALLOCATED_STACK_AND_TCB` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `tskRUNNING_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `tskBLOCKED_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `tskREADY_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `tskDELETED_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `tskSUSPENDED_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `taskTASK_NOT_RUNNING` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `taskTASK_SCHEDULED_TO_YIELD` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `taskATTRIBUTE_IS_IDLE` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `tasks.c` | `taskBITS_PER_BYTE` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `queue.c` | `queueSEMAPHORE_QUEUE_ITEM_LENGTH` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 2.5 | `queue.c` | `queueMUTEX_GIVE_BLOCK_TIME` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| 8.7 | `portable/ThirdParty/GCC/Posix/port.c` | `vPortCloseRunningThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 |
+| 8.7 | `portable/ThirdParty/GCC/Posix/port.c` | `vPortDeleteThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 |
+| 2.5 | `portable/MSVC-MingW/port.c` | `portSIMULATED_TIMER_THREAD_PRIORITY` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+
+R2.5表内tasks.c／queue.c常量支撑静态／动态分配标记、统计字符、单核／多核状态及队列
+接口的既有条件分支。分配组合、统计格式化、多核／delete、计数／递归信号量分支由当前
+配置排除，实际-dM输出中没有这些定义。这里保守记录保留源定义及原始Advisory报告，
+不把每条都称为当前程序执行中的真实违反，也不只凭-dM缺席宣称R2.5通过。
+项目早前给这些常量加类型的补丁不把它们变成上游责任。
+可按当前profile物理裁剪定义或改为enum，但会扩大本次
+对固定内核可选分支的改造；保留有限既有实体及数值，使采用差异和上游更新更易核对。
+POSIX四宏保持tick单位、ISR请求返回／转发及critical解除接口，Windows一个宏保持
+既有模拟timer优先级常量；它们不宣称开启未支持运行能力。风险是失效宏与名字污染，
+由固定版本、目标选择、精确表列实体、就近说明及实际预处理／消费者限制。
+
+Linux两个R8.7接口分别连接tasks.c中受INCLUDE_vTaskDelete控制的
+portCLEAN_UP_TCB／portPRE_TASK_DELETE_HOOK入口。当前该开关为0，本批程序没有这些
+跨TU调用，保留真实R8.7报告；不能用另一个TU中的声明或条件源码调用反写为误报。
+保持既有private port链接合同，避免为当前样本裁剪内核／端口接缝；物理删除或把实现及
+私有状态移入头文件是另外的设计取舍。本次不开放删除能力，不制造调用；两个hook如被
+调用均走既有E_OS_STATE终止。风险由固定私有头／实体、fail-fast函数体及配置范围限制，
+task身份／关闭回归用于确认整体协议未变，不据此证明可选动态删除能力。
+
+目标ABI、配置、上游版本、patch顺序、宏body、实体、程序组成或调用方变化时重评。
+表外任何新键均不由本节分类；同名不同表达式／位置也须重新核查。完整诊断位置、
+源码行与程序出现次数及独立审查head／发现／处置归实施PR，不在这里复制每轮报告。
+来源分类不覆盖自有系统交互，66项无checker评估继续沿独立责任范围进行。

@@ -58,6 +58,8 @@
 
 - HostBatch now observes the delivered tick before draining its input mailbox, so a newly published batch cannot be overtaken by its own periodic cycle. Exact response epochs, same-epoch submissions and drained completion receipts are preserved (#396)
 
+- Controlled FreeRTOS ports use consistent diagnostic types and bounded stack/queue cursors. Analysis verifies the final pinned kernel bytes and preserves project ownership through ordered patch reversions; regenerate sealed deliveries for the updated patch identities (#395)
+
 - Native stack context and fault-slot selection uses bounded record identity on both host targets, rejecting NULL, foreign and one-past records before indexing; ARTI consumers verify saved stack identity and compiled rejection controls (#389)
 
 - Linux process cancellation recognizes registered sibling session leaders before reading their exiting proc environment, avoiding false cleanup failures while preserving escape refusal and root exit codes; unconfirmed cleanup logs include the responsible group, PID and observation error (#388)

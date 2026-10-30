@@ -61,6 +61,8 @@
     "runtime/os/patches/0023-preserve-parameter-values.patch": "cf99e9963e017971d04a26ef6dc2c203ece2fdbc01e2d2f10722cc913b1f46a0",
     "runtime/os/patches/0024-conditional-private-definitions.patch": "7b45effaef7fbb001f4a854225248e7c4ead37338e147b7aea370dd2bd33dbb1",
     "runtime/os/patches/0025-configured-kernel-declarations.patch": "b3ecc7b4f3ef7e185278334bfaaa3fb4808facadaf5ea53273f669b3d8df2acb",
-    "runtime/os/patches/0026-explicit-control-flow-boundaries.patch": "24fa489d956b420b3b92bc04addd6e85515fee1f80ce19bf9dc856d2bf4e0cc3"
+    "runtime/os/patches/0026-explicit-control-flow-boundaries.patch": "24fa489d956b420b3b92bc04addd6e85515fee1f80ce19bf9dc856d2bf4e0cc3",
+    "runtime/os/patches/0027-port-diagnostic-types.patch": "c6081e2f1f48f3687d28bf18c69a0b53bac5331053f15d7b7eb929bc80e2cfa1",
+    "runtime/os/patches/linux/0003-port-diagnostic-types.patch": "e090fc9ac6a36654ab34c0196c27e9dbe2a990adeac00d9fc70b5ed25a376b69"
   }
 }
