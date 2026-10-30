@@ -162,11 +162,19 @@ def source_lines(path: Path) -> list[str]:
     return text.splitlines()
 
 
-def preprocessing(
-    text: str, root: Path, candidates: set[str]
-) -> tuple[set[Path], dict]:
+def dependency_headers(text: str, root: Path) -> set[Path]:
+    """The compiler's dependency output proves which files were actually opened."""
+    target, colon, names = text.replace("\\\n", "").partition(":")
+    if target != "autsaro-tu" or not colon:
+        raise ValueError("Compiler header dependency inventory missing")
+    paths = {Path(name).resolve() for name in shlex.split(names)}
+    if not paths:
+        raise ValueError("Compiler header dependency inventory empty")
+    return {path for path in paths if not path.is_relative_to(root)}
+
+
+def preprocessing(text: str, root: Path, candidates: set[str]) -> dict:
     """Track active definitions at emitted project lines; unknown expansions stay unknown."""
-    headers = set()
     definitions = {}
     inputs = {}
     contents = {}
@@ -180,9 +188,7 @@ def preprocessing(
             owned = None
             if not filename.startswith("<"):
                 path = Path(filename).resolve()
-                if not path.is_relative_to(root):
-                    headers.add(path)
-                elif path.is_file():
+                if path.is_relative_to(root) and path.is_file():
                     owned = path
                     if path not in contents:
                         contents[path] = source_lines(path)
@@ -217,7 +223,7 @@ def preprocessing(
                     for name in sorted(names)
                 }
         number += 1
-    return headers, inputs
+    return inputs
 
 
 def integer_value(literal: str) -> int:
@@ -266,6 +272,18 @@ def classify(
                     }
                 )
                 category = header["category"]
+            elif Path(location["file"]).is_absolute():
+                origins.append(
+                    {
+                        "kind": "header",
+                        "category": "unclassified",
+                        "reason": "diagnostic file is outside actual compiler header closure",
+                        "headerKey": hashlib.sha256(
+                            location["file"].encode()
+                        ).hexdigest(),
+                    }
+                )
+                category = "unclassified"
             inputs = [values[key] for values in per_unit.values() if key in values]
             # A shared header may have different active definitions in different TUs.
             for values in inputs:
@@ -384,13 +402,24 @@ def classify(
                         else "unclassified"
                     )
         diagnostic["sourceOrigins"] = origins
+        if scope.get("sdkLineDirectives") and origins:
+            for origin in origins:
+                origin.update(
+                    category="unclassified",
+                    reason="project line directives prevent physical source attribution",
+                )
+            category = "unclassified"
         if len(diagnostic["locations"]) > 1 and category == "sdk":
             category = "mixed"
         diagnostic["sourceCategory"] = category
-    return summary(diagnostics, list(headers.values()))
+    return summary(
+        diagnostics, list(headers.values()), not scope.get("sdkLineDirectives", False)
+    )
 
 
-def summary(diagnostics: list[dict], headers: list[dict]) -> dict:
+def summary(
+    diagnostics: list[dict], headers: list[dict], macro_trace_complete: bool = True
+) -> dict:
     sdk_keys, unclassified = set(), set()
     for row in diagnostics:
         for origin in row.get("sourceOrigins", []):
@@ -407,7 +436,9 @@ def summary(diagnostics: list[dict], headers: list[dict]) -> dict:
             row.get("sourceCategory") == "unclassified" for row in diagnostics
         ),
         "unclassifiedHeaders": sum(row["category"] != "sdk" for row in headers),
+        "macroTraceComplete": macro_trace_complete,
         "complete": bool(headers)
+        and macro_trace_complete
         and not unclassified
         and not any(row.get("sourceCategory") == "unclassified" for row in diagnostics)
         and all(row["category"] == "sdk" for row in headers),
@@ -435,6 +466,7 @@ def semantic(scope: dict) -> str:
             raise ValueError("SDK source/provider identity changed during analysis")
     keys = {row["path"]: row["key"] for row in headers}
     identity = {
+        "lineDirectives": scope.get("sdkLineDirectives", False),
         "headers": sorted(
             (
                 {k: v for k, v in row.items() if k not in {"path", "reason"}}

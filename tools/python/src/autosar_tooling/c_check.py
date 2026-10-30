@@ -308,9 +308,11 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                     "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60,
                                     context=f"Compiler preprocessing failed for {name}")
         _, provenance, _ = run([compiler, *flags, *("-I" + path for path in includes),
-                                    "-E", "-dD", str(root / name)], output, f"compiler-origins-{index}", 60,
+                                    "-E", "-dD", "-MD", "-MF", str(output / f"compiler-origins-{index}.d"),
+                                    "-MT", "autsaro-tu", str(root / name)], output, f"compiler-origins-{index}", 60,
                                     context=f"Compiler source tracing failed for {name}")
-        headers, inputs = c_sdk.preprocessing(provenance, root, identifiers)
+        inputs = c_sdk.preprocessing(provenance, root, identifiers)
+        headers = c_sdk.dependency_headers((output / f"compiler-origins-{index}.d").read_text(encoding="utf-8"), root)
         function_macros = ["-D" + line[8:].replace(" ", "=", 1)
                            for line in definitions.splitlines() if line.startswith("#define ")
                            and line[8:].split("(", 1)[0] in function_macro_names]
@@ -379,6 +381,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                    "compilerDiscoveredDefines": per_unit_macros,
                                    "sdkHeaders": sdk_headers, "sdkTranslationUnits": sdk_units,
                                    "sdkMacroInputs": sdk_inputs,
+                                   "sdkLineDirectives": bool(re.search(r"(?m)^\s*#\s*(?:line\b|[0-9])", owned_text)),
                                    "compilerSemanticInputs": {"machine": machine.strip(), "release": compiler_release.strip(),
                                                               "predefines": sorted(predefines.read_text(encoding="utf-8").splitlines()),
                                                               "builtins": sorted(builtins)},
@@ -599,7 +602,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
                     summary["diagnostics"].append(row)
                 seen[key]["programs"].append(program)
         diagnostics = summary["diagnostics"]
-        summary["sourceClassification"] = c_sdk.summary(diagnostics, scope.get("sdkHeaders", []))
+        summary["sourceClassification"] = c_sdk.summary(diagnostics, scope.get("sdkHeaders", []), not scope.get("sdkLineDirectives", False))
         sealed_sources(project)
         if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:
             raise ValueError("Source seal changed during analysis")

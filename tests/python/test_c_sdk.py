@@ -92,6 +92,33 @@ class SdkSourceTests(unittest.TestCase):
             self.assertIn("differs", changed["reason"])
             self.assertNotEqual(changed["key"], record["key"])
 
+    def test_actual_dependency_closure_does_not_trust_line_markers_or_search_paths(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            root = base / "project"
+            root.mkdir()
+            header = base / "provider space/include/winbase.h"
+
+            def escaped(path):
+                return path.as_posix().replace(":", "\\:").replace(" ", "\\ ")
+
+            deps = (
+                "autsaro-tu: "
+                + escaped(root / "main.c")
+                + " \\\n "
+                + escaped(header)
+                + "\n"
+            )
+            self.assertEqual(c_sdk.dependency_headers(deps, root), {header})
+            for invalid in ("", "other: one.h", "autsaro-tu:"):
+                with (
+                    self.subTest(invalid=invalid),
+                    self.assertRaisesRegex(ValueError, "dependency inventory"),
+                ):
+                    c_sdk.dependency_headers(invalid, root)
+
     def test_line_markers_bind_active_definition_and_project_redefinition(self):
         with tempfile.TemporaryDirectory() as temporary:
             root, header, _, _ = self.fixture(Path(temporary).resolve())
@@ -104,8 +131,7 @@ class SdkSourceTests(unittest.TestCase):
                 f'# 2 "{source.as_posix()}"\nwait(3U);\n#undef INFINITE\n'
                 f'# 3 "{source.as_posix()}"\nwait(INFINITE);\n'
             )
-            headers, inputs = c_sdk.preprocessing(text, root, {"INFINITE"})
-            self.assertEqual(headers, {header})
+            inputs = c_sdk.preprocessing(text, root, {"INFINITE"})
             self.assertEqual(
                 inputs["port.c:1"]["INFINITE"],
                 {
@@ -157,6 +183,13 @@ class SdkSourceTests(unittest.TestCase):
             self.assertEqual(result["unclassifiedDiagnosticKeys"], 0)
             self.assertEqual(result["sdkDiagnosticKeys"], 1)
             self.assertTrue(result["complete"])
+            # A project #line can spoof an SDK path; retain unresolved attribution.
+            scope["sdkLineDirectives"] = True
+            result = c_sdk.classify(rows, scope, [token])
+            self.assertFalse(result["macroTraceComplete"])
+            self.assertFalse(result["complete"])
+            self.assertEqual(rows[0]["sourceCategory"], "unclassified")
+            scope.pop("sdkLineDirectives")
             # An identical project literal on the report line cannot be blamed on SDK.
             definition["use"] = "configASSERT(INFINITE == 0xffffffff);"
             c_sdk.classify(rows, scope, [token])
