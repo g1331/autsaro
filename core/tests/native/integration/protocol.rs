@@ -214,10 +214,9 @@ fn host_batch_input_precedes_tick_across_empty_drain_window() {
             "undrained receipt: {text}"
         );
     }
-    assert!(
-        fs::read(scratch.0.join("window/stderr"))
-            .unwrap()
-            .is_empty(),
+    assert_eq!(
+        fs::read(scratch.0.join("window/stderr")).unwrap(),
+        b"COM_TX_REJECT_END count=0\n",
         "{text}"
     );
     assert!(text.contains("trace_dropped=0"), "{text}");
@@ -998,7 +997,7 @@ fn probe_confirms_only_fully_written_output() {
             assert!(text.is_empty() && errors.is_empty(), "{text}{errors}");
         } else {
             assert_eq!(text.matches("ecu_output epoch=").count(), 2, "{text}");
-            assert_eq!(errors, "confirmed\nconfirmed\n");
+            assert_eq!(errors, "confirmed\nconfirmed\nCOM_TX_REJECT_END count=0\n");
             assert!(text.contains("ecu_probe completed=20"), "{text}");
         }
     }
@@ -1025,7 +1024,14 @@ fn host_batch_refuses_invalid_output_fields_and_distinguishes_read_errors() {
         );
         let text = String::from_utf8_lossy(&result.stdout);
         let errors = String::from_utf8_lossy(&result.stderr);
-        assert!(errors.is_empty(), "{errors}");
+        assert_eq!(
+            errors,
+            if mode == "read-eof" {
+                "COM_TX_REJECT_END count=0\n"
+            } else {
+                ""
+            }
+        );
         if mode == "fields" {
             assert!(result.status.success(), "{text}{errors}");
             assert_eq!(text.lines().count(), 2, "{text}");
