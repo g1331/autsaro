@@ -126,7 +126,13 @@ static const Det_ErrorHookType hooks[] = {error};
 static const Det_ConfigType det = {NULL_PTR, 0u, hooks, 1u};
 static const Com_PduConfigType com_pdus[] = {{1u, 11u, FALSE, 0u, 0u, 0u},
                                              {2u, 12u, FALSE, 0u, 0u, 0u}};
-static const Com_ConfigType com = {com_pdus, 2u, 0u, NULL_PTR, NULL_PTR, PduR_ComTransmit};
+static void rejection(PduIdType id, Std_ReturnType result)
+{
+    (void)id;
+    (void)result;
+}
+static const Com_ConfigType com = {
+    com_pdus, 2u, 0u, NULL_PTR, NULL_PTR, PduR_ComTransmit, rejection};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 1u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit},
     {PDUR_UP_COM, 2u, PDUR_LO_LSDUR, 42u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit}};

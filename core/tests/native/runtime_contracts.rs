@@ -1057,3 +1057,11 @@ int main(void) {
     let output = Command::new(binary).output().unwrap();
     assert!(output.status.success(), "{output:?}");
 }
+
+#[test]
+fn com_lower_refusal_preserves_other_pdus_returns_and_periodic_execution() {
+    let scratch = Scratch::new();
+    let executable = chain_consumer(&scratch.0, "com_rejection_contract.c", &[]);
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+}

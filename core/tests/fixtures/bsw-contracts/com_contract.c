@@ -31,7 +31,7 @@ static void receive(CbkHandleIdType handle) { ++acknowledgments[handle_index(han
 static void timeout(CbkHandleIdType handle) { ++timeouts[handle_index(handle)]; }
 static const Com_PduConfigType pdus[] = {
     {0u, 10u, TRUE, 7u, 30u, 17u}, {1u, 11u, TRUE, 9u, 50u, 43u}, {2u, 12u, TRUE, 1u, 0u, 59u}};
-static const Com_ConfigType configuration = {pdus, 3u, 0u, receive, timeout, NULL_PTR};
+static const Com_ConfigType configuration = {pdus, 3u, 0u, receive, timeout, NULL_PTR, NULL_PTR};
 static void periods(unsigned count)
 {
     unsigned index;
