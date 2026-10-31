@@ -1041,9 +1041,21 @@ mod delivery_path_tests {
                 checked += 1;
             }
         }
-        assert_eq!(checked, 92);
+        assert_eq!(checked, 94);
         assert_eq!(seen, generated.keys().copied().collect());
         for original in &originals {
+            for (delivered, source) in [
+                (
+                    "integration/include/Ecu_ComRejection.h",
+                    "runtime/ecu/include/Ecu_ComRejection.h",
+                ),
+                (
+                    "integration/src/Ecu_ComRejection.c",
+                    "runtime/ecu/src/Ecu_ComRejection.c",
+                ),
+            ] {
+                assert_eq!(original.get(delivered).unwrap().relative_path, source);
+            }
             let status = original.get("integration/include/Ecu_Status.h").unwrap();
             assert_eq!(status.relative_path, "runtime/host/include/Ecu_Status.h");
             assert!(!original.contains_key("integration/src/Ecu_Status.c"));

@@ -186,7 +186,9 @@ class ActualCAnalysisTests(unittest.TestCase):
         manual = summary["coverage"]["manualAssessment"]
         self.assertEqual(manual["checkerCovered"]["total"], 155)
         self.assertEqual(manual["checkerUncovered"]["total"], 66)
-        self.assertFalse(manual["checkerUncovered"]["classificationComplete"])
+        self.assertTrue(manual["checkerUncovered"]["classificationComplete"])
+        self.assertEqual(manual["checkerUncovered"]["unclassified"], 0)
+        self.assertEqual(manual["conformanceAssessment"], "not_established")
         self.assertEqual(summary["semanticIdentity"]["analysisCode"]["c_standard.py"],
                          hashlib.sha256(Path(c_standard.__file__).read_text().encode()).hexdigest())
         self.assertEqual(manual["inputIdentity"]["parserSha256"],
