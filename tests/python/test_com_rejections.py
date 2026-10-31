@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from ecu_tools.build import query
+from ecu_tools.build import com_rejections, query
 from ecu_tools.process import ProcessResult
 
 
@@ -37,3 +37,15 @@ class ComToolTests(unittest.TestCase):
                                 ("COM_TX_REJECT_END count=0\n", False)]:
             with self.subTest(stream=stream, success=success), self.assertRaises(RuntimeError):
                 self.invoke(stream, success=success)
+
+    def test_parser_requires_normal_end_and_preserves_exact_records(self):
+        stream = "COM_TX_REJECT pdu=17 result=3\nCOM_TX_REJECT pdu=17 result=3\nCOM_TX_REJECT_END count=2\n"
+        self.assertEqual(com_rejections(stream, success=True), {
+            "records": [{"pdu": 17, "result": 3}, {"pdu": 17, "result": 3}], "complete": True})
+        self.assertFalse(com_rejections(stream, success=False)["complete"])
+        self.assertFalse(com_rejections(stream.split("COM_TX_REJECT_END")[0], success=True)["complete"])
+        self.assertFalse(com_rejections("COM_TX_REJECT_INCOMPLETE\nCOM_TX_REJECT_END count=0\n", success=True)["complete"])
+        for bad in (stream.replace("count=2", "count=1"), stream + "COM_TX_REJECT pdu=0 result=1\n",
+                    stream.replace("result=3", "result=0"), "COM_TX_REJECT pdu=broken\n"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                com_rejections(bad, success=True)

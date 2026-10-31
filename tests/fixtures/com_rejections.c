@@ -17,6 +17,8 @@ static unsigned lines;
 static unsigned markers;
 static unsigned ends;
 static unsigned seen[256];
+static volatile Os_Atomic32Type writers_start;
+static volatile Os_Atomic32Type writers_done;
 Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *cell)
 {
     return __atomic_load_n(cell, __ATOMIC_SEQ_CST);
@@ -71,9 +73,12 @@ static THREAD_RETURN writer(void *argument)
 {
     unsigned index;
     unsigned id = (unsigned)(uintptr_t)argument;
+    while (Os_HostAtomicLoad(&writers_start) == 0) {
+    }
     for (index = 0u; index < 256u; ++index) {
         Ecu_ComRecordRejection((PduIdType)id, 3u);
     }
+    (void)__atomic_add_fetch(&writers_done, 1, __ATOMIC_SEQ_CST);
     return 0;
 }
 int main(int argc, char **argv)
@@ -112,6 +117,10 @@ int main(int argc, char **argv)
             threads[index] = CreateThread(NULL, 0, writer, (void *)(uintptr_t)index, 0, NULL);
             assert(threads[index] != NULL);
         }
+        (void)Os_HostAtomicExchange(&writers_start, 1);
+        while (Os_HostAtomicLoad(&writers_done) != 8) {
+            assert(Ecu_ComDrainRejections(FALSE) == 1);
+        }
         for (index = 0; index < 8; ++index) {
             assert(WaitForSingleObject(threads[index], INFINITE) == WAIT_OBJECT_0);
             assert(CloseHandle(threads[index]));
@@ -120,6 +129,10 @@ int main(int argc, char **argv)
         pthread_t threads[8];
         for (index = 0; index < 8; ++index) {
             assert(pthread_create(&threads[index], NULL, writer, (void *)(uintptr_t)index) == 0);
+        }
+        (void)Os_HostAtomicExchange(&writers_start, 1);
+        while (Os_HostAtomicLoad(&writers_done) != 8) {
+            assert(Ecu_ComDrainRejections(FALSE) == 1);
         }
         for (index = 0; index < 8; ++index) {
             assert(pthread_join(threads[index], NULL) == 0);

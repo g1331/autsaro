@@ -1065,3 +1065,60 @@ fn com_lower_refusal_preserves_other_pdus_returns_and_periodic_execution() {
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
 }
+
+#[test]
+fn com_append_only_publication_is_bounded_and_concurrent() {
+    let scratch = Scratch::new();
+    let project = scratch.0.join("project");
+    let files = prepared_pipeline_files(&build(&inputs()).unwrap());
+    write_files(&project, &files);
+    let target: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(project.join("target.json")).unwrap()).unwrap();
+    let executable = tooling::native_binary(&scratch.0, "com-publication");
+    let mut compiler = tooling::c_compiler();
+    compiler.current_dir(&project);
+    for flag in target["compilerFlags"].as_array().unwrap() {
+        compiler.arg(flag.as_str().unwrap());
+    }
+    for include in target["includePaths"].as_array().unwrap() {
+        compiler.arg("-I").arg(include.as_str().unwrap());
+    }
+    if cfg!(target_os = "linux") {
+        compiler.arg("-pthread");
+    }
+    compiler.args(["integration/src/Ecu_ComRejection.c", "os/src/Os_HostIo.c"]);
+    compiler.arg(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("tests/fixtures/com_rejections.c"),
+    );
+    let output = compiler.arg("-o").arg(&executable).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let owner = tooling::execution_owner();
+    for case in [
+        "preempt",
+        "pending",
+        "capacity",
+        "multiwriter",
+        "output",
+        "end-output",
+    ] {
+        let logs = scratch.0.join(case);
+        std::fs::create_dir(&logs).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let spec = autosar_config_core::execution::ProcessSpec::for_duration(
+            vec![executable.clone().into_os_string(), case.into()],
+            project.clone(),
+            vec![],
+            std::time::Duration::from_secs(30),
+            logs,
+        )
+        .unwrap();
+        tooling::wait_success(owner.spawn(spec, None).unwrap(), "COM publication");
+    }
+}
