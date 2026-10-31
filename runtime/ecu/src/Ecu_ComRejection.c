@@ -7,9 +7,9 @@ typedef struct {
     volatile Os_Atomic32Type published;
     PduIdType id;
     Std_ReturnType result;
-} Ecu_ComRejectionSlot;
+} Ecu_ComRejectionSlotType;
 
-static Ecu_ComRejectionSlot
+static Ecu_ComRejectionSlotType
     rejection_records[ECU_COM_REJECTION_CAPACITY]; /**< Per-slot atomic publication. */
 static volatile Os_Atomic32Type reserved;   /**< Atomic bounded reservation count; never reset. */
 static volatile Os_Atomic32Type incomplete; /**< Atomic sticky capacity loss; never reset. */
@@ -31,7 +31,7 @@ void Ecu_ComRecordRejection(PduIdType id, Std_ReturnType result)
     (void)Os_HostAtomicExchange(&incomplete, 1);
 }
 
-static int write_record(const Ecu_ComRejectionSlot *record)
+static int write_record(const Ecu_ComRejectionSlotType *record)
 {
     char storage[96];
     Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
