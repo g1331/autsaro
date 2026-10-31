@@ -1,7 +1,10 @@
 """Protect the incremental format gate from hiding changed-line violations."""
 
 import json
+import os
+import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -130,6 +133,98 @@ class QualityTests(unittest.TestCase):
                 errors = quality.hygiene_errors(path)
         self.assertTrue(any("trailing whitespace" in error for error in errors))
         self.assertTrue(any("Python syntax error" in error for error in errors))
+
+    def test_real_git_worktree_content_and_installed_pre_push_wrapper(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "source"
+            remote = Path(temporary) / "remote.git"
+            subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+            subprocess.run(["git", "init", "--quiet", "--bare", str(remote)], check=True)
+
+            def git(*args, check=True):
+                return subprocess.run(
+                    ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                    cwd=root, check=check, capture_output=True, text=True,
+                )
+
+            path = Path("scripts/source.py")
+            target = root / path
+            target.parent.mkdir()
+            clean, invalid = b"value = 1\n", b"value = 1 \n"
+            target.write_bytes(clean)
+            # Exercise the installed pre-push wrapper with the real source-selection,
+            # byte-reading and hygiene chain, without running unrelated C checks.
+            probe = root / ".git" / "quality_probe.py"
+            probe.write_text(
+                "import json\nfrom pathlib import Path\n"
+                f"import sys\nsys.path.insert(0, {str(quality.ROOT / 'tools/python/src')!r})\n"
+                "from autosar_tooling import quality\nquality.ROOT = Path.cwd()\n"
+                "errors = [e for p in quality.scoped_paths('all') for e in quality.hygiene_errors(p)]\n"
+                "print('HYGIENE=' + json.dumps(errors))\nraise SystemExit(bool(errors))\n",
+                encoding="utf-8",
+            )
+            config = {
+                "repos": [{"repo": "local", "hooks": [{
+                    "id": "quality", "name": "quality", "language": "system",
+                    "entry": shlex.join([sys.executable, str(probe)]),
+                    "pass_filenames": False, "always_run": True,
+                    "verbose": True, "stages": ["pre-push"],
+                }]}],
+            }
+            (root / ".pre-commit-config.yaml").write_text(json.dumps(config), encoding="utf-8")
+            git("add", ".")
+            git("commit", "--quiet", "-m", "clean source")
+            clean_head = git("rev-parse", "HEAD").stdout.strip()
+            git("remote", "add", "origin", str(remote))
+            environment = {**os.environ, "PRE_COMMIT_HOME": str(Path(temporary) / "hooks")}
+            subprocess.run(
+                [sys.executable, "-m", "pre_commit", "install", "--hook-type", "pre-push"],
+                cwd=root, env=environment, check=True, capture_output=True,
+            )
+            expected = ["scripts/source.py:1: trailing whitespace"]
+            cases = (
+                ("clean", clean, clean, [], []),
+                ("unstaged", clean, invalid, expected, []),
+                ("staged_masked", invalid, clean, [], expected),
+                ("committed_invalid", invalid, invalid, expected, expected),
+                ("staged_fix", clean, invalid, expected, []),
+                ("untracked", clean, clean, ["scripts/local.py:1: trailing whitespace"],
+                 ["scripts/local.py:1: trailing whitespace"]),
+            )
+            for name, indexed, working, direct_errors, hook_errors in cases:
+                with self.subTest(name=name):
+                    git("reset", "--hard", clean_head)
+                    git("commit", "--quiet", "--allow-empty", "-m", name)
+                    if name in {"committed_invalid", "staged_fix"}:
+                        target.write_bytes(invalid)
+                        git("add", path.as_posix())
+                        git("commit", "--quiet", "-m", "invalid committed source")
+                    target.write_bytes(indexed)
+                    git("add", path.as_posix())
+                    target.write_bytes(working)
+                    local = root / "scripts/local.py"
+                    if name == "untracked":
+                        local.write_bytes(invalid)
+                    with patch.object(quality, "ROOT", root):
+                        paths = quality.scoped_paths("all")
+                        self.assertEqual(paths, [Path("scripts/local.py"), path] if local.exists() else [path])
+                        self.assertEqual(
+                            [e for p in paths for e in quality.hygiene_errors(p)], direct_errors,
+                        )
+                        if name == "unstaged":
+                            self.assertEqual(quality.changed_lines(path, "HEAD", set()), {1})
+                        if name == "untracked":
+                            self.assertEqual(quality.source_paths(untracked_only=True), [Path("scripts/local.py")])
+                    before = git("status", "--porcelain").stdout
+                    result = subprocess.run(
+                        ["git", "push", "origin", f"HEAD:refs/heads/{name}"],
+                        cwd=root, env=environment, capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, 1 if hook_errors else 0, result.stdout + result.stderr)
+                    self.assertIn("HYGIENE=" + json.dumps(hook_errors), result.stdout + result.stderr)
+                    self.assertEqual(git("status", "--porcelain").stdout, before)
+                    self.assertEqual(target.read_bytes(), working)
+                    self.assertEqual(git("show", f":{path.as_posix()}").stdout.encode(), indexed)
 
     def test_plan_numbers_in_names_and_text_fail_outside_exempt_records(self):
         # Assembled so this test file does not contain the numbers it rejects.
