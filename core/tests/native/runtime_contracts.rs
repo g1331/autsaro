@@ -1103,6 +1103,7 @@ fn com_append_only_publication_is_bounded_and_concurrent() {
         "multiwriter",
         "output",
         "end-output",
+        "incomplete-output",
     ] {
         let logs = scratch.0.join(case);
         std::fs::create_dir(&logs).unwrap();

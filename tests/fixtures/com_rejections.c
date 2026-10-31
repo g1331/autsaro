@@ -56,6 +56,9 @@ int Os_HostWriteBytes(int error_stream, const char *data, size_t length)
     }
     memcpy(text, data, length);
     text[length] = '\0';
+    if (output_failed == 3 && strcmp(text, "COM_TX_REJECT_INCOMPLETE\n") == 0) {
+        return 0;
+    }
     if (sscanf(text, "COM_TX_REJECT pdu=%u result=%u", &id, &result) == 2) {
         assert(id < 256u && result == 3u);
         ++seen[id];
@@ -102,12 +105,17 @@ int main(int argc, char **argv)
         output_failed = 0;
         assert(Ecu_ComDrainRejections(FALSE) == 1 && lines == 1u && seen[8] == 1u);
         assert(Ecu_ComDrainRejections(TRUE) == 1 && ends == 1u);
-    } else if (strcmp(argv[1], "capacity") == 0) {
+    } else if (strcmp(argv[1], "capacity") == 0 || strcmp(argv[1], "incomplete-output") == 0) {
         for (index = 0u; index < 4096u; ++index) {
             Ecu_ComRecordRejection(9u, 3u);
         }
         assert(Ecu_ComDrainRejections(FALSE) == 1 && lines == 4096u && markers == 0u);
         Ecu_ComRecordRejection(10u, 3u);
+        if (strcmp(argv[1], "incomplete-output") == 0) {
+            output_failed = 3;
+            assert(Ecu_ComDrainRejections(TRUE) == 0 && markers == 0u && ends == 0u);
+            output_failed = 0;
+        }
         assert(Ecu_ComDrainRejections(FALSE) == 1 && lines == 4096u && markers == 1u);
         assert(Ecu_ComDrainRejections(TRUE) == 1 && markers == 1u && ends == 1u);
     } else {
