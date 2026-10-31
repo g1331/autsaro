@@ -32,7 +32,7 @@ fn overview(module: &str) -> (&'static str, &'static str) {
         ),
         "Com" => (
             "Configured signal packing, reception, deadline monitoring and periodic transmission.",
-            "Signal widths, positions, endianness, initial values and I-PDU lengths must fit and agree with the system mappings. Reception deadlines apply only to Rx signals. The selected periodic Tx and Rx mains have explicit task/period mappings; unsupported transfer modes are rejected.",
+            "Signal widths, positions, endianness, initial values and I-PDU lengths must fit and agree with the system mappings. Reception deadlines apply only to Rx signals. The selected periodic Tx and Rx mains have explicit task/period mappings; unsupported transfer modes are rejected. Tx configurations require a synchronous typed lower-refusal observer, snapshotted with transmit and called outside COM_STATE after a non-E_OK result. ECU stores up to 4096 immutable process-lifetime records; both native mains drain to stderr and delivered tools preserve records and completeness. Trigger returns, periodic continuation and no-retry policy remain unchanged.",
         ),
         "Dcm" => (
             "Bounded DoCAN session control, TesterPresent and configured ReadDataByIdentifier services.",

@@ -56,6 +56,10 @@ typedef struct {
 typedef void (*Com_NotificationType)(CbkHandleIdType handle);
 /** Generated PduR transmit binding; borrows the four-byte COM snapshot only until return. */
 typedef Std_ReturnType (*Com_TransmitType)(PduIdType id, const PduInfoType *info);
+/** Synchronous lower-refusal observer; called once per non-E_OK transmit result, outside
+ * COM_STATE, after lower return. Task/ISR safe, no retry or synchronous I/O. Values are copied;
+ * callback code remains valid for the process lifetime, including in-flight reinitialization. */
+typedef void (*Com_TxRejectionType)(PduIdType id, Std_ReturnType result);
 /** Implementation configuration (SWS_Com_00825); counts and callback bindings are derived from the
  * validated COM/PduR plan, not independent ECUC parameters. */
 typedef struct {
@@ -68,6 +72,7 @@ typedef struct {
     Com_NotificationType
         timeout_notification;  /**< Required when any Rx PDU exists; called outside COM_STATE. */
     Com_TransmitType transmit; /**< Required when any Tx PDU exists; called outside COM_STATE. */
+    Com_TxRejectionType tx_rejection; /**< Required for Tx; snapshots with transmit. */
 } Com_ConfigType;
 
 /** Reset COM state and install the selected UINT32 configuration (SWS_Com_00432).
@@ -77,8 +82,8 @@ typedef struct {
  * None.
  * Preconditions: None; reinitialization replaces the previous configuration and restarts reception
  * state. Context: startup task; not inside an exclusive area. Reentrancy: not reentrant. Ownership:
- * The configuration, PDU table and callbacks remain valid until DeInit or the next Init; signal
- * data is copied into COM storage.
+ * The configuration and PDU table remain valid until DeInit or the next Init; callback code
+ * remains valid for the process lifetime; signal data is copied into COM storage.
  */
 COM_CODE void Com_Init(const Com_ConfigType *config);
 /** Reset signal and monitoring state and release the configuration (SWS_Com_00130).
@@ -94,7 +99,7 @@ COM_CODE void Com_DeInit(void);
 /** Read whether COM has a valid configuration (SWS_Com_00194).
  * @return COM_INIT when configured, COM_UNINIT otherwise.
  * Preconditions: None.
- * Context: task or upper-layer callback; not inside an exclusive area.
+ * Context: task, interrupt or upper-layer callback; not inside an exclusive area.
  * Reentrancy: reentrant.
  * Ownership: None.
  */
@@ -193,10 +198,11 @@ COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
  * @param[in] PduId A configured Tx I-PDU handle; selected Tx PDUs have no group and are started by
  * Init.
  * @return E_OK for an initialized Tx PDU; E_NOT_OK otherwise. The lower refusal is not reported
- * here because retry is disabled. Preconditions: Initialized; otherwise E_NOT_OK. Context: task or
- * upper-layer callback; not inside an exclusive area. Reentrancy: not reentrant. Ownership: The
- * four-byte snapshot is borrowed by the lower transmit callback only until it returns, outside
- * COM_STATE.
+ * here because retry is disabled. Preconditions: Initialized; otherwise E_NOT_OK. Context: task,
+ * interrupt or upper-layer callback; not inside an exclusive area. Reentrancy: not reentrant.
+ * Ownership: The four-byte snapshot is borrowed by the lower transmit callback only until it
+ * returns, outside COM_STATE. Each non-E_OK lower result is synchronously observed after lower
+ * return.
  */
 COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
 /** Select PERIODIC for TRUE or the absent FALSE mode NONE (SWS_Com_00784).

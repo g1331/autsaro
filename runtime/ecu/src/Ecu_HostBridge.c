@@ -1,6 +1,7 @@
 /** @file HostBatchV1 execution: admits a batch, drives ticks and writes the receipt. */
 #include "Ecu_HostBridge.h"
 #include "Ecu_TargetConfig.h"
+#include "Ecu_ComRejection.h"
 #include "Ecu_Config.h"
 #include "Os_Host.h"
 
@@ -43,6 +44,7 @@ static void pump(Ecu_HostBatch *batch,
                  void *context,
                  const Ecu_HostWatch *control)
 {
+    bridge_require(Ecu_ComDrainRejections(FALSE) != 0);
     Ecu_OutputRecord output;
     Ecu_ProtocolRecord failure;
     StatusType status;

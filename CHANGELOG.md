@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- `Com_ConfigType` now requires a typed lower-refusal observer for Tx configurations. Regenerate and rebuild all consumers; both native entries and delivered tools expose bounded COM refusal records on stderr, with explicit incomplete/end receipts and truthful output failure exits (#399)
+
 - Single-core SC1 deliveries no longer publish the multicore-only `DONOTCARE` and `TotalNumberOfCores` macros. Remove these uses and regenerate consumers; the supported application modes and core identity services are unchanged (#389)
 
 - Host CAN mode/transmit forwarding, status-name conversion and batch initialization now have typed header definitions instead of external symbols. Regenerate and rebuild consumers; function addresses and status string storage belong to each translation unit (#389)

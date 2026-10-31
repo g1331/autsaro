@@ -1,6 +1,7 @@
 /** @file Host probe executable that runs 20 ticks and confirms every output. */
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
+#include "Ecu_ComRejection.h"
 #include "Os_Host.h"
 #include "Rte_Main.h"
 #include "Os_HostIo.h"
@@ -56,6 +57,7 @@ static Os_HostThreadResultType probe_control(void *argument)
         probe_require(Os_TargetAdvanceOneTick(step, &ticket) == E_OK);
         started = Os_HostMonotonicMs();
         for (;;) {
+            probe_require(Ecu_ComDrainRejections(FALSE) != 0);
             Ecu_OutputRecord output;
             StatusType status = Ecu_TargetTakeOutput(&output);
             if (status == E_OK) {
@@ -82,6 +84,7 @@ static Os_HostThreadResultType probe_control(void *argument)
         }
         probe_require((completion.epoch == step) && (completion.kernel_tick == (uint32_t)step));
     }
+    probe_require(Ecu_ComDrainRejections(TRUE) != 0);
     probe_require(Os_HostWriteBytes(
                       0, "ecu_probe completed=20\n", sizeof("ecu_probe completed=20\n") - 1u) != 0);
     ShutdownOS(E_OK);
