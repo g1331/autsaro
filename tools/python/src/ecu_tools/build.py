@@ -184,7 +184,7 @@ def query(argv: list[str], logs: Path, stage: str, *, stdin_file: Path | None = 
         (logs / f"{stage}-com-rejections.json").write_text(
             json.dumps(diagnostics, indent=2) + "\n", encoding="utf-8")
         if result.success and not diagnostics["complete"]:
-            raise RuntimeError(f"{stage}: COM refusal diagnostics incomplete; logs={logs}")
+            raise RuntimeError(f"{stage}: COM refusal diagnostics incomplete\n{stdout}\n{stderr}\nlogs={logs}")
     if not result.success:
         raise RuntimeError(f"{stage}: status={result.status} exit={result.exit_code}\n{stdout}\n{stderr}\nlogs={logs}")
     return stdout
