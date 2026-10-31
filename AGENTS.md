@@ -8,7 +8,7 @@
 - `runtime/`：交付的 C99 运行时；`tools/python/src/`：开发工具与离线 ECU 工具；`tests/`：Python 与桌面测试。
 - `scripts/`：官方资料收集；`docs/development/` 与 `docs/maintainers/`：开发与发行说明。
 
-采用 npm、Cargo、uv 和正常测试运行器，不新增代理专用编排、报告或状态系统。格式按修改范围检查，不全仓重排：推送前运行必需检查的 `quality --scope all --merge-base origin/<目标分支>`（按 CONTRIBUTING 安装 pre-push 钩子后自动运行，只检查已提交和已暂存的内容），它按配置的格式化工具检查全部改动行，测试夹具与 Rust 测试也在内。自动 GUI 验收使用隔离入口，不占用用户桌面。
+采用 npm、Cargo、uv 和正常测试运行器，不新增代理专用编排、报告或状态系统。格式检查不全仓重排：推送前运行 `quality --scope all --merge-base origin/<目标分支>`，按配置工具检查全部改动行（含夹具与 Rust 测试）。它读取工作区，包含未暂存和未跟踪文件；基准只选改动行，卫生检查先于行过滤。pre-push 包装与干净检出做法见 CONTRIBUTING。自动 GUI 验收用隔离入口，不占用户桌面。
 
 ## 按任务先读
 

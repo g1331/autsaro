@@ -34,6 +34,21 @@ uv run --locked python -m autosar_tooling quality --merge-base origin/master
 
 执行一次 `uv run --locked pre-commit install --allow-missing-config`，之后每次推送前自动运行上面最后一条 `quality`，未通过时阻止推送；它不替代 CI 的同一检查。`--allow-missing-config` 让尚无该配置的旧分支（共用同一 `.git/hooks` 的工作树也在内）照常推送。
 
+`quality` 按索引及未被忽略的未跟踪路径读取工作区内容，包括未暂存修改。卫生检查先于改动行过滤；`--base` 和 `--merge-base` 只选比较基准，不选择源码快照。已安装的 pre-push 钩子通过 pre-commit 临时收起已跟踪文件的未暂存修改，完成后恢复；未跟踪文件仍参与检查。直接运行时，合法工作区内容可能遮蔽索引违规；暂存修复也可能遮蔽待推送提交中的违规。验证推送前先提交需要交付的修复。
+
+必须原样保留本地修改时，从待推送的准确提交建立干净检出，在其中检查并推送。例如，在主题分支提交预期修改后，从原检出运行下列命令，将目标目录替换为检出之外尚未使用的目录：
+
+```sh
+git worktree add --detach ../autsaro-quality-check HEAD
+cd ../autsaro-quality-check
+uv sync --locked
+npm ci --prefix ui
+uv run --locked python -m autosar_tooling quality --scope all --merge-base origin/master
+git push origin HEAD:refs/heads/<topic-branch>
+```
+
+保留正常 pre-push 钩子；关联工作树共用 Git hooks。此检出只含提交字节，既不带本地暂存修复，也不带无关修改，待推送提交中的违规仍会暴露。推送成功后回到原检出，执行 `git worktree remove ../autsaro-quality-check` 清理临时工作树。
+
 IPC 声明从 Rust 命令签名及实际序列化 DTO 生成。修改后运行 `npm run ipc:generate --prefix ui`，提交 `ui/src/ipc/` 下两份生成绑定；`npm run ipc:check --prefix ui` 重新生成并逐字比较，不修改已跟踪文件。命令使用锁定的 Cargo 生成器和项目 Prettier，先执行 `npm ci --prefix ui`。默认与 `native-webdriver` 签名分别检查；正常 TypeScript 构建还验证错误命令名、payload 和返回值假设会被拒绝。类型导出须保持 Serde 属性及原生 transport 不变。
 
 默认 Cargo 测试不要求官方资源或受控原生工具。真实进程、官方对照和桌面验收见[测试说明](docs/development/testing/README.md)。格式检查针对修改行，不整体重排历史代码。运行时 C 已整体符合 `.clang-format`；执行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，`git blame` 即跳过那次全量重排。生成的 C 由 emitter 直接写成同一排版，必需检查核对生成样本。

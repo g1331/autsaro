@@ -82,6 +82,7 @@ def run(
 
 
 def repository_paths(*, untracked_only: bool = False) -> list[Path]:
+    """List index and non-ignored untracked paths; consumers read working-tree bytes."""
     command = ["git", "ls-files", "-z"]
     if untracked_only:
         command.extend(["--others", "--exclude-standard"])
@@ -623,7 +624,7 @@ def main(argv: list[str] | None = None) -> int:
     baseline = parser.add_mutually_exclusive_group()
     baseline.add_argument(
         "--base",
-        help="Compare source lines against this commit (default: HEAD for pending edits)",
+        help="Compare working-tree source lines against this commit (default: HEAD for pending edits)",
     )
     baseline.add_argument(
         "--merge-base",

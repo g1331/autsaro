@@ -44,6 +44,8 @@ Clippy 以默认规则集加 `-D warnings` 检查两个 crate，本地 `verify` 
 
 ## 文档检查
 
+`quality` 从工作区读取索引路径与未忽略的未跟踪文件；`--base`／`--merge-base` 只选比较基准。卫生检查先于改动行过滤，未暂存内容也会影响结果。pre-push 的 pre-commit 包装会临时收起已跟踪文件的未暂存差异；需验证准确提交且保留本地修改时，按 [CONTRIBUTING](../../../CONTRIBUTING.zh-CN.md#检查改动) 在干净检出中检查并推送。
+
 `uv run --locked python -m autosar_tooling quality --merge-base origin/master` 离线检查仓库 Markdown 的相对链接、图片和锚点（含引用式链接与显式 HTML ID），排除 `docs/project/archive/` 与 `third_party/`。链接目标必须来自 Git 文件集，不能依赖本机忽略的下载；官方 PDF 引用使用官方发布 URL。外部 URL 不发起网络检查。
 
 同一命令按 PR 分叉点检查根目录 `X.md`／`X.zh-CN.md` 是否成对修改，以及本次新增的 CHANGELOG 行是否为 `Breaking`／`Added`／`Changed`／`Fixed` 三级标题下、以 `(#N)` 结束的单行条目；双语内容仍由审阅核对。存量 CHANGELOG 条目留到发版整理。官方清单登记的文件名、`AUTOSAR_CP/FO/AP_*.pdf/zip` 和 `docs/official/` 下非 Markdown 文件不能提交，强制添加也会被检查。
