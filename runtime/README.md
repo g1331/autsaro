@@ -23,7 +23,7 @@ cmake --build <outside-build-directory>
 
 CMake 不核对固定工具链身份和目标段，也不运行 `verify`；这两项仍由 `ecu-tool` 负责。调用方设置的 `CMAKE_C_FLAGS`／`CFLAGS` 会叠加在清单参数之上。
 
-集成工程的独立行为入口为 `tools/ecu-tool.py verify --project <sealed-source-directory> --build-directory <new-empty-outside-directory>`：重建实际生产binary，检查 CAN/DID、至多两个DID、N_Cr超时恢复和非法批次，预期不由生成配置回显提供。离线接收者不需要 checkout、uv、Rust 或 Node。工作台暂不提供交互式运行生成 ECU 的页面（[#65](https://github.com/g1331/autsaro/issues/65)），主机行为以此入口和原生测试验证。
+集成工程的独立行为入口为 `tools/ecu-tool.py verify --project <sealed-source-directory> --build-directory <new-empty-outside-directory>`：重建生产 HostBatch 和正常20 tick probe，解析保存两者的COM诊断，检查 CAN/DID、至多两个DID、N_Cr超时恢复和非法批次，预期不由生成配置回显提供。离线接收者不需要 checkout、uv、Rust 或 Node。工作台暂不提供交互式运行生成 ECU 的页面（[#65](https://github.com/g1331/autsaro/issues/65)），主机行为以此入口和原生测试验证。
 
 发行工作台从内嵌可信资源生成同一封存工程；源码及其全部 stdlib 工具随工程交付，后续离线 build/verify 不回读工作台安装目录或原构建 checkout。配置交接（`autosar-workbench-handoff-v4`）不依赖官方 XSD/MOD；旧 host／单组件交付包在打开时被拒绝。CPython/GCC/binutils/Git 不随工作台或 ECU 包分发。工作台启动依赖与原生发行包后台复验入口见docs/development/testing/ 与 docs/maintainers/releasing.md。
 

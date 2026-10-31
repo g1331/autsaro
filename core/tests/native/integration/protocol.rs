@@ -1358,3 +1358,20 @@ fn com_lower_refusals_reach_both_normal_consumers_and_kill_compiled_mutations() 
         Duration::from_secs(900),
     ));
 }
+
+#[test]
+fn normal_verify_consumes_both_native_diagnostic_streams() {
+    let scratch = super::Scratch::new();
+    let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
+    let mut command = super::tooling::python_command();
+    command
+        .arg(root().join("core/tests/fixtures/com-rejection/normal_verify.py"))
+        .arg(&project)
+        .arg(scratch.0.join("verification"));
+    require_success(&super::tooling::run_public_command(
+        &mut command,
+        &scratch.0,
+        "normal-com-refusal-verification",
+        Duration::from_secs(360),
+    ));
+}

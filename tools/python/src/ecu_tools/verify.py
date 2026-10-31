@@ -1,4 +1,4 @@
-"""Independent CAN/DID and refusal oracle for the real production HostBatch."""
+"""Independent protocol and diagnostic consumers of the two normal native entries."""
 from __future__ import annotations
 
 import json
@@ -160,5 +160,12 @@ def verify(project: Path, build_directory: Path) -> None:
         (recovery + 1, [rx, diagnostic(request)], "78563412", [response], False),
     ])
     actor("malformed", [], malformed=True)
+    probe = build(project, build_directory / "probe", "probe")
+    probe_output = query([str(probe)], logs, "probe", timeout=60)
+    probe_lines = probe_output.splitlines()
+    if ("ecu_probe completed=20" not in probe_lines
+            or not any(line.startswith("lifecycle=Closed state=Ready reason=0 ") for line in probe_lines)):
+        raise AssertionError(f"Normal probe did not complete: {probe_output}")
+    print("probe=normal PASS ticks=20 COM diagnostics parsed")
     sealed_sources(project)
     print("ECU_HANDOFF_VERIFY PASS: CAN/DID echo, single-HOH arbitration, two-DID boundary, real N_Cr timeout/recovery, malformed admission; host behavior only.")
