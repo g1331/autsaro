@@ -946,19 +946,23 @@ fn host_batch_native_output_backpressure() {
         root.join("tests/python/native"),
     ])
     .unwrap();
-    let script = "import sys; from pathlib import Path; from test_ecu_build_modes import check_native_output_backpressure; check_native_output_backpressure(Path(sys.argv[1]), Path(sys.argv[2]))";
-    let result = super::tooling::run_public_command(
-        Command::new(super::tooling::execution_settings().python)
-            .args(["-B", "-c", script])
-            .arg(&project)
-            .arg(scratch.0.join("backpressure"))
-            .env("PYTHONPATH", paths),
-        &scratch.0,
-        "native-output-backpressure",
-        Duration::from_secs(180),
-    );
-    require_success(&result);
-    print!("{}", String::from_utf8_lossy(&result.stdout));
+    let script = "import sys; from pathlib import Path; from test_ecu_build_modes import check_native_output_backpressure; check_native_output_backpressure(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3])";
+    for variant in ["control", "no-observer", "no-exit"] {
+        let name = format!("native-output-backpressure-{variant}");
+        let result = super::tooling::run_public_command(
+            Command::new(super::tooling::execution_settings().python)
+                .args(["-B", "-c", script])
+                .arg(&project)
+                .arg(scratch.0.join(&name))
+                .arg(variant)
+                .env("PYTHONPATH", &paths),
+            &scratch.0,
+            &name,
+            Duration::from_secs(180),
+        );
+        require_success(&result);
+        print!("{}", String::from_utf8_lossy(&result.stdout));
+    }
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
