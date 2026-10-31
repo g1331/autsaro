@@ -36,7 +36,8 @@ static unsigned bus_offs;
  * This verifies PERIODIC COM continues while driver acceptance is possible.
  */
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_QUEUED};
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     assert(id == 0x456u && length == 4u && frames < 12u);
     emitted_tokens[frames] = Can_HostTransmitToken();
     assert(emitted_tokens[frames] != UINT64_C(0));
@@ -44,24 +45,29 @@ static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
                         ((uint32)data[3] << 24u);
     return ECU_OK;
 }
-static void receive(CbkHandleIdType handle) {
+static void receive(CbkHandleIdType handle)
+{
     assert(handle == 17u);
     ++acknowledgments;
 }
-static void timeout(CbkHandleIdType handle) {
+static void timeout(CbkHandleIdType handle)
+{
     assert(handle == 17u);
     ++timeouts;
 }
-static void mode(uint8 controller, Can_ControllerStateType state) {
+static void mode(uint8 controller, Can_ControllerStateType state)
+{
     assert(controller == 0u);
     assert(state == CAN_CS_STARTED || state == CAN_CS_STOPPED || state == CAN_CS_SLEEP);
     ++modes;
 }
-static void bus_off(uint8 controller) {
+static void bus_off(uint8 controller)
+{
     assert(controller == 0u);
     ++bus_offs;
 }
-static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
+static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code)
+{
     assert(module == 60u && instance == 0u);
     last_api = api;
     previous_error = last_error;
@@ -70,7 +76,8 @@ static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code
     return E_NOT_OK; /* DET runtime return remains E_OK and does not halt. */
 }
 /* Observe the actual upper callback without replacing its implementation. */
-static void confirmed(PduIdType id, Std_ReturnType result) {
+static void confirmed(PduIdType id, Std_ReturnType result)
+{
     assert(id == 2u);
     Com_TxConfirmation(id, result);
     if (result == E_OK) {
@@ -80,11 +87,27 @@ static void confirmed(PduIdType id, Std_ReturnType result) {
         ++failures;
     }
 }
+static unsigned rejections;
+static unsigned lower_returned;
+static Std_ReturnType lower(PduIdType id, const PduInfoType *info)
+{
+    Std_ReturnType result;
+    lower_returned = 0u;
+    result = PduR_ComTransmit(id, info);
+    lower_returned = 1u;
+    return result;
+}
+static void rejection(PduIdType id, Std_ReturnType result)
+{
+    assert(Com_GetStatus() == COM_INIT);
+    assert(lower_returned == 1u && id == 2u && result == E_NOT_OK);
+    ++rejections;
+}
 static const Det_ErrorHookType error_hooks[] = {error};
 static const Det_ConfigType det_config = {NULL_PTR, 0u, error_hooks, 1u};
 static const Com_PduConfigType pdus[] = {{1u, 10u, TRUE, 7u, 30u, 17u},
                                          {2u, 11u, FALSE, 9u, 0u, 0u}};
-static const Com_ConfigType com_config = {pdus, 2u, 0u, receive, timeout, PduR_ComTransmit};
+static const Com_ConfigType com_config = {pdus, 2u, 0u, receive, timeout, lower, rejection};
 static const PduR_RxRouteType pdur_rx[] = {{31u, 1u, Com_RxIndication}};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 2u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit}};
@@ -95,10 +118,11 @@ static const LSduR_TxRouteType ls_tx[] = {
 static const LSduR_PBConfigType ls_config = {29u, ls_rx, 1u, ls_tx, 1u};
 static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u}};
 static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u}};
-static const CanIf_ConfigType canif_config = {canif_rx, 1u, canif_tx, 1u, mode,
-                                              bus_off,  0u, 0u,       0u, 0u};
+static const CanIf_ConfigType canif_config = {
+    canif_rx, 1u, canif_tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
 static const Can_ConfigType can_config = {sink};
-int main(void) {
+int main(void)
+{
     /* Fixed signatures are independent of the implementation/inventory. */
     void (*pdur_init)(const PduR_PBConfigType *) = PduR_Init;
     void (*ls_init)(const LSduR_PBConfigType *) = LSduR_Init;
@@ -168,8 +192,10 @@ int main(void) {
     value = 43u;
     assert(Com_SendSignal(11u, &value) == E_OK);
     Ecu_ComMainFunctionTx(); /* Actual BUSY must preserve the first copied request. */
+    assert(rejections == 1u);
     assert(Can_HostFlush() == ECU_OK && frames == 1u && emitted[0] == 0x12345678u);
     Ecu_ComMainFunctionTx(); /* Queued confirmation is still outstanding. */
+    assert(rejections == 1u);
     assert(Can_HostFlush() == ECU_OK && frames == 2u && emitted[1] == 43u);
     assert(Can_HostCompleteTransmit(51u, emitted_tokens[0]) == E_OK);
     assert(successes == 0u);
@@ -246,6 +272,7 @@ int main(void) {
     assert(Com_TriggerIPDUSend(99u) == E_NOT_OK);
     /* Started I-PDU: triggered although the offline lower rejects it, never retried. */
     assert(Com_TriggerIPDUSend(2u) == E_OK);
+    assert(rejections == 2u);
     assert(CanIf_SetPduMode(0u, CANIF_ONLINE) == E_OK);
     assert(Can_HostFlush() == ECU_OK && frames == 5u); /* No deferred manual trigger. */
     Com_IpduGroupStop(0u); /* Selected group contains Rx only; ungrouped Tx stays started. */
@@ -253,6 +280,7 @@ int main(void) {
     value = 44u;
     assert(Com_SendSignal(11u, &value) == E_OK);
     assert(Com_TriggerIPDUSend(2u) == E_OK); /* Actual lower BUSY, no queue. */
+    assert(rejections == 3u);
     assert(Can_HostFlush() == ECU_OK && frames == 6u && emitted[5] == 43u);
     /* Old STOP/bus-off outputs cannot consume the recovered same-ID request. */
     assert(Can_HostCompleteTransmit(51u, emitted_tokens[3]) == E_NOT_OK);

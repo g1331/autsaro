@@ -53,7 +53,10 @@ class VerifierTests(unittest.TestCase):
             "malformed": [],
         }
 
-        def query(command, logs, label, *, stdin_file, timeout):
+        def query(command, logs, label, *, stdin_file=None, timeout):
+            if label == "probe":
+                self.assertIsNone(stdin_file)
+                return "ecu_probe completed=20\nlifecycle=Closed state=Ready reason=0 "
             name = label.removeprefix("protocol-")
             commands = []
             records = ["READY HostBatchV1"]
@@ -103,7 +106,8 @@ class VerifierTests(unittest.TestCase):
                   patch("ecu_tools.verify.query", side_effect=query) as observed,
                   contextlib.redirect_stdout(io.StringIO()) as output):
                 verify(project, project / "build")
-                self.assertEqual(observed.call_count, 4)
+                self.assertEqual(observed.call_count, 5)
+                self.assertIn("probe=normal PASS ticks=20", output.getvalue())
                 self.assertIn("protocol=arbitration PASS batches=6", output.getvalue())
                 self.assertIn("ECU_HANDOFF_VERIFY PASS:", output.getvalue())
 

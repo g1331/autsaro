@@ -181,7 +181,8 @@ static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
             const Com_PduConfigType *pdu = &config->pdus[index];
             if (((pdu->receive == TRUE) && ((config->receive_notification == NULL_PTR) ||
                                             (config->timeout_notification == NULL_PTR))) ||
-                ((pdu->receive == FALSE) && (config->transmit == NULL_PTR))) {
+                ((pdu->receive == FALSE) &&
+                 ((config->transmit == NULL_PTR) || (config->tx_rejection == NULL_PTR)))) {
                 valid = FALSE;
             }
             for (previous = 0u; previous < index; ++previous) {
@@ -381,19 +382,24 @@ COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId)
     uint8 bytes[COM_PDU_BYTES];
     const PduInfoType info = {bytes, NULL_PTR, COM_PDU_BYTES};
     Com_TransmitType transmit = NULL_PTR;
+    Com_TxRejectionType observer = NULL_PTR;
     SchM_Enter_Com_COM_STATE();
     if (com_configuration != NULL_PTR) {
         const uint16 index = Com_FindPdu(PduId);
         if ((index < com_configuration->pdu_count) &&
             (com_configuration->pdus[index].receive == FALSE)) {
             transmit = com_configuration->transmit;
+            observer = com_configuration->tx_rejection;
             Com_Pack(index, bytes);
         }
     }
     SchM_Exit_Com_COM_STATE();
     /* Started I-PDUs are triggered; without retry a lower rejection is not a stop (00348). */
     if (transmit != NULL_PTR) {
-        (void)transmit(PduId, &info);
+        const Std_ReturnType result = transmit(PduId, &info);
+        if (result != E_OK) {
+            observer(PduId, result);
+        }
     }
     return (transmit != NULL_PTR) ? E_OK : E_NOT_OK;
 }
@@ -438,6 +444,7 @@ COM_CODE void Ecu_ComMainFunctionTx(void)
         const PduInfoType info = {bytes, NULL_PTR, COM_PDU_BYTES};
         PduIdType id = 0u;
         Com_TransmitType transmit = NULL_PTR;
+        Com_TxRejectionType observer = NULL_PTR;
         SchM_Enter_Com_COM_STATE();
         more = ((com_configuration != NULL_PTR) && (index < com_configuration->pdu_count)) ? TRUE
                                                                                            : FALSE;
@@ -445,12 +452,16 @@ COM_CODE void Ecu_ComMainFunctionTx(void)
             (tx_mode_false[index] == FALSE)) {
             id = com_configuration->pdus[index].pdu;
             transmit = com_configuration->transmit;
+            observer = com_configuration->tx_rejection;
             Com_Pack(index, bytes);
         }
         SchM_Exit_Com_COM_STATE();
         /* Without ComRetryFailedTransmitRequests a rejected PERIODIC request is not retried. */
         if (transmit != NULL_PTR) {
-            (void)transmit(id, &info);
+            const Std_ReturnType result = transmit(id, &info);
+            if (result != E_OK) {
+                observer(id, result);
+            }
         }
         ++index;
     }

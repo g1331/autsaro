@@ -990,8 +990,9 @@ pub(crate) fn verify_production_owner_binary(
             .any(|line| line.starts_with("REJECT ") || line.starts_with("COMMIT_ERROR ")),
         "{text}"
     );
-    assert!(
-        std::fs::read(&result.stderr).unwrap().is_empty(),
+    assert_eq!(
+        std::fs::read(&result.stderr).unwrap(),
+        b"COM_TX_REJECT_END count=0\n",
         "{result:?}"
     );
 }

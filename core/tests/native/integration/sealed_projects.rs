@@ -468,7 +468,10 @@ fn sealed_optional_did_and_network_only_routes_use_real_producers() {
                 .any(|line| line.starts_with("REJECT ") || line.starts_with("COMMIT_ERROR ")),
             "{text}"
         );
-        assert!(std::fs::read(&result.stderr).unwrap().is_empty());
+        assert_eq!(
+            std::fs::read(&result.stderr).unwrap(),
+            b"COM_TX_REJECT_END count=0\n"
+        );
         let config =
             std::fs::read_to_string(project.join("generated/src/Ecu_RuntimeConfig.c")).unwrap();
         let metadata = std::fs::read_to_string(

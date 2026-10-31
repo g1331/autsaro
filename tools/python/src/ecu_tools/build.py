@@ -144,11 +144,47 @@ def executable(name: str, variable: str) -> Path:
     return path.resolve(strict=True)
 
 
+def com_rejections(stderr: str, *, success: bool) -> dict:
+    """Parse the native COM diagnostic stream; a normal END and exit are both required."""
+    records = []
+    incomplete = False
+    ended = False
+    count = None
+    for line in stderr.splitlines():
+        if not line.startswith("COM_TX_REJECT"):
+            continue
+        if ended:
+            raise ValueError("COM refusal record after END")
+        match = re.fullmatch(r"COM_TX_REJECT pdu=(\d+) result=(\d+)", line, flags=re.ASCII)
+        if match:
+            pdu, result = map(int, match.groups())
+            if pdu > 65535 or not 1 <= result <= 255:
+                raise ValueError(f"Invalid COM refusal values: {line}")
+            records.append({"pdu": pdu, "result": result})
+        elif line == "COM_TX_REJECT_INCOMPLETE" and not incomplete:
+            incomplete = True
+        else:
+            match = re.fullmatch(r"COM_TX_REJECT_END count=(\d+)", line, flags=re.ASCII)
+            if not match:
+                raise ValueError(f"Malformed COM refusal record: {line}")
+            count = int(match[1])
+            ended = True
+    if ended and count != len(records):
+        raise ValueError("COM refusal END count differs from delivered records")
+    return {"records": records, "complete": success and ended and not incomplete}
+
+
 def query(argv: list[str], logs: Path, stage: str, *, stdin_file: Path | None = None,
           timeout: int = 180) -> str:
     result = OwnedProcess(ProcessSpec.seconds(argv, logs, timeout, logs, stage, stdin_file=stdin_file)).wait()
     stdout = result.stdout.read_text(encoding="utf-8", errors="replace")
     stderr = result.stderr.read_text(encoding="utf-8", errors="replace")
+    if Path(argv[0]).stem in ("ecu_host_batch", "ecu_probe"):
+        diagnostics = com_rejections(stderr, success=result.success)
+        (logs / f"{stage}-com-rejections.json").write_text(
+            json.dumps(diagnostics, indent=2) + "\n", encoding="utf-8")
+        if result.success and not diagnostics["complete"]:
+            raise RuntimeError(f"{stage}: COM refusal diagnostics incomplete\n{stdout}\n{stderr}\nlogs={logs}")
     if not result.success:
         raise RuntimeError(f"{stage}: status={result.status} exit={result.exit_code}\n{stdout}\n{stderr}\nlogs={logs}")
     return stdout

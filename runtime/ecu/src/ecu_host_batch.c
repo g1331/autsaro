@@ -1,5 +1,6 @@
 /** @file Host batch ECU executable speaking HostBatchV1 over standard streams. */
 #include "Ecu_HostBridge.h"
+#include "Ecu_ComRejection.h"
 #include "Os_Host.h"
 #include "Os_HostIo.h"
 
@@ -149,6 +150,9 @@ static Os_HostThreadResultType host_batch_control(void *argument)
                 Ecu_TargetAbortNative(E_OS_STATE);
             }
         }
+    }
+    if (Ecu_ComDrainRejections(TRUE) == 0) {
+        Ecu_TargetAbortNative(E_OS_STATE);
     }
     ShutdownOS((batch.open == 0u) ? E_OK : E_OS_VALUE);
     return 0u;

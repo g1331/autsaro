@@ -214,10 +214,9 @@ fn host_batch_input_precedes_tick_across_empty_drain_window() {
             "undrained receipt: {text}"
         );
     }
-    assert!(
-        fs::read(scratch.0.join("window/stderr"))
-            .unwrap()
-            .is_empty(),
+    assert_eq!(
+        fs::read(scratch.0.join("window/stderr")).unwrap(),
+        b"COM_TX_REJECT_END count=0\n",
         "{text}"
     );
     assert!(text.contains("trace_dropped=0"), "{text}");
@@ -947,19 +946,23 @@ fn host_batch_native_output_backpressure() {
         root.join("tests/python/native"),
     ])
     .unwrap();
-    let script = "import sys; from pathlib import Path; from test_ecu_build_modes import check_native_output_backpressure; check_native_output_backpressure(Path(sys.argv[1]), Path(sys.argv[2]))";
-    let result = super::tooling::run_public_command(
-        Command::new(super::tooling::execution_settings().python)
-            .args(["-B", "-c", script])
-            .arg(&project)
-            .arg(scratch.0.join("backpressure"))
-            .env("PYTHONPATH", paths),
-        &scratch.0,
-        "native-output-backpressure",
-        Duration::from_secs(180),
-    );
-    require_success(&result);
-    print!("{}", String::from_utf8_lossy(&result.stdout));
+    let script = "import sys; from pathlib import Path; from test_ecu_build_modes import check_native_output_backpressure; check_native_output_backpressure(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3])";
+    for variant in ["control", "no-observer", "no-exit"] {
+        let name = format!("native-output-backpressure-{variant}");
+        let result = super::tooling::run_public_command(
+            Command::new(super::tooling::execution_settings().python)
+                .args(["-B", "-c", script])
+                .arg(&project)
+                .arg(scratch.0.join(&name))
+                .arg(variant)
+                .env("PYTHONPATH", &paths),
+            &scratch.0,
+            &name,
+            Duration::from_secs(180),
+        );
+        require_success(&result);
+        print!("{}", String::from_utf8_lossy(&result.stdout));
+    }
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
@@ -998,7 +1001,7 @@ fn probe_confirms_only_fully_written_output() {
             assert!(text.is_empty() && errors.is_empty(), "{text}{errors}");
         } else {
             assert_eq!(text.matches("ecu_output epoch=").count(), 2, "{text}");
-            assert_eq!(errors, "confirmed\nconfirmed\n");
+            assert_eq!(errors, "confirmed\nconfirmed\nCOM_TX_REJECT_END count=0\n");
             assert!(text.contains("ecu_probe completed=20"), "{text}");
         }
     }
@@ -1025,7 +1028,14 @@ fn host_batch_refuses_invalid_output_fields_and_distinguishes_read_errors() {
         );
         let text = String::from_utf8_lossy(&result.stdout);
         let errors = String::from_utf8_lossy(&result.stderr);
-        assert!(errors.is_empty(), "{errors}");
+        assert_eq!(
+            errors,
+            if mode == "read-eof" {
+                "COM_TX_REJECT_END count=0\n"
+            } else {
+                ""
+            }
+        );
         if mode == "fields" {
             assert!(result.status.success(), "{text}{errors}");
             assert_eq!(text.lines().count(), 2, "{text}");
@@ -1339,4 +1349,39 @@ fn shared_host_batch_builds_isolate_mutating_consumers() {
         !super::tooling::native_binary(&first.scratch.0.join("changed-build"), "ecu_host_batch")
             .exists()
     );
+}
+
+/// Both delivered mains consume actual COM/PduR/CanIf refusals through the delivered tool.
+#[test]
+fn com_lower_refusals_reach_both_normal_consumers_and_kill_compiled_mutations() {
+    let scratch = super::Scratch::new();
+    let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
+    let mut command = super::tooling::python_command();
+    command
+        .arg(root().join("core/tests/fixtures/com-rejection/consumers.py"))
+        .arg(&project)
+        .arg(scratch.0.join("observations"));
+    require_success(&super::tooling::run_public_command(
+        &mut command,
+        &scratch.0,
+        "com-refusal-consumers",
+        Duration::from_secs(900),
+    ));
+}
+
+#[test]
+fn normal_verify_consumes_both_native_diagnostic_streams() {
+    let scratch = super::Scratch::new();
+    let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
+    let mut command = super::tooling::python_command();
+    command
+        .arg(root().join("core/tests/fixtures/com-rejection/normal_verify.py"))
+        .arg(&project)
+        .arg(scratch.0.join("verification"));
+    require_success(&super::tooling::run_public_command(
+        &mut command,
+        &scratch.0,
+        "normal-com-refusal-verification",
+        Duration::from_secs(360),
+    ));
 }

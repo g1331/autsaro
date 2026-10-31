@@ -23,7 +23,7 @@ cmake --build <outside-build-directory>
 
 CMake 不核对固定工具链身份和目标段，也不运行 `verify`；这两项仍由 `ecu-tool` 负责。调用方设置的 `CMAKE_C_FLAGS`／`CFLAGS` 会叠加在清单参数之上。
 
-集成工程的独立行为入口为 `tools/ecu-tool.py verify --project <sealed-source-directory> --build-directory <new-empty-outside-directory>`：重建实际生产binary，检查 CAN/DID、至多两个DID、N_Cr超时恢复和非法批次，预期不由生成配置回显提供。离线接收者不需要 checkout、uv、Rust 或 Node。工作台暂不提供交互式运行生成 ECU 的页面（[#65](https://github.com/g1331/autsaro/issues/65)），主机行为以此入口和原生测试验证。
+集成工程的独立行为入口为 `tools/ecu-tool.py verify --project <sealed-source-directory> --build-directory <new-empty-outside-directory>`：重建生产 HostBatch 和正常20 tick probe，解析保存两者的COM诊断，检查 CAN/DID、至多两个DID、N_Cr超时恢复和非法批次，预期不由生成配置回显提供。离线接收者不需要 checkout、uv、Rust 或 Node。工作台暂不提供交互式运行生成 ECU 的页面（[#65](https://github.com/g1331/autsaro/issues/65)），主机行为以此入口和原生测试验证。
 
 发行工作台从内嵌可信资源生成同一封存工程；源码及其全部 stdlib 工具随工程交付，后续离线 build/verify 不回读工作台安装目录或原构建 checkout。配置交接（`autosar-workbench-handoff-v4`）不依赖官方 XSD/MOD；旧 host／单组件交付包在打开时被拒绝。CPython/GCC/binutils/Git 不随工作台或 ECU 包分发。工作台启动依赖与原生发行包后台复验入口见docs/development/testing/ 与 docs/maintainers/releasing.md。
 
@@ -73,3 +73,7 @@ BSW 通过 `Det_ReportRuntimeError` 报告运行时错误，配置通知按顺�
 ## 许可证
 
 项目原创运行时、工具及生成模板采用 [Apache-2.0](../LICENSE)。交付工程附带 LICENSE/NOTICE，FreeRTOS 保留独立 MIT 声明，用户配置与应用代码由其权利人决定许可。详见 [许可说明](../docs/maintainers/licensing.md)。
+
+COM 的显式触发与周期发送在真实下层非 `E_OK` 返回后，同步向类型化 observer 交付原始 PDU/result；回调在 `COM_STATE` 外，不重试、不改变 Trigger 返回或下一周期。Tx 配置必须提供 observer，配置布局改变后须重新生成并整体重编。
+
+ECU 使用4096条进程期只追加记录，复用既有原子操作支持 Task/ISR 并发写入。每槽独立发布，两个程序的唯一 native control 在循环与正常退出前输出 stderr `COM_TX_REJECT pdu=<十进制> result=<十进制>`；不等待未发布 writer，不重复交付。容量丢失或最终未发布记录输出 sticky `COM_TX_REJECT_INCOMPLETE`；最终 `COM_TX_REJECT_END count=<已交付数>` 只有与成功退出、完整数量且无 incomplete 联合成立时表示诊断完整。stdout HostBatchV1 与 transport 收据保持原义。输出失败沿既有 native 错误退出，异常结束不称完整。工具 query 实际解析保存日志旁 `*-com-rejections.json`；拒绝记录不等于发送确认，旧包不可重封存升级。

@@ -102,8 +102,9 @@ fn sealed_probe_and_test_modes_preserve_closure_and_runtime_protocol() {
             stdout.contains("lifecycle=Closed state=Ready reason=0"),
             "{stdout}"
         );
-        assert!(
-            run.stderr.is_empty(),
+        assert_eq!(
+            run.stderr,
+            b"COM_TX_REJECT_END count=0\n",
             "{}",
             String::from_utf8_lossy(&run.stderr)
         );

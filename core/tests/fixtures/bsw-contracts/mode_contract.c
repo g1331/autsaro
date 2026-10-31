@@ -79,7 +79,12 @@ static const Det_ErrorHookType error_hooks[] = {error};
 static const Det_ConfigType det = {NULL_PTR, 0u, error_hooks, 1u};
 static const Com_PduConfigType pdus[] = {{1u, 10u, TRUE, 7u, 30u, 17u},
                                          {2u, 11u, FALSE, 9u, 0u, 0u}};
-static const Com_ConfigType com = {pdus, 2u, 0u, receive, timeout, PduR_ComTransmit};
+static void rejection(PduIdType id, Std_ReturnType result)
+{
+    (void)id;
+    (void)result;
+}
+static const Com_ConfigType com = {pdus, 2u, 0u, receive, timeout, PduR_ComTransmit, rejection};
 static const PduR_RxRouteType pdur_rx[] = {{31u, 1u, Com_RxIndication}};
 static const PduR_TxRouteType pdur_tx[] = {{PDUR_UP_COM,
                                             2u,

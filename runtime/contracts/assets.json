@@ -2564,6 +2564,32 @@
       ],
       "role": "patch",
       "responsibility": "Project-owned port diagnostic type and scope corrections over the fixed adopted kernel."
+    },
+    {
+      "path": "runtime/ecu/src/Ecu_ComRejection.c",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/ecu/include/Ecu_ComRejection.h",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1",
+        "linux-x64-controlled-v1"
+      ],
+      "role": "delivery",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
     }
   ]
 }

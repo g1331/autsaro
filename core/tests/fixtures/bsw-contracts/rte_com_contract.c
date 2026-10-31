@@ -73,7 +73,7 @@ int main(void)
     /* 两条接收 PDU 的超时分别为 30 与 50 个 Rx 主函数周期；PDU/信号编号按配置容器名排序。 */
     static const Com_PduConfigType pdus[2] = {{0u, 1u, TRUE, 0u, 30u, FIRST_HANDLE},
                                               {4u, 0u, TRUE, 0u, 50u, SECOND_HANDLE}};
-    const Com_ConfigType configuration = {pdus, 2u, 0u, receive, timeout, NULL_PTR};
+    const Com_ConfigType configuration = {pdus, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR};
     uint8 first_payload[4] = {21u, 0u, 0u, 0u};
     uint8 second_payload[4] = {33u, 0u, 0u, 0u};
     const PduInfoType first_info = {first_payload, NULL_PTR, 4u};

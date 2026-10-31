@@ -32,7 +32,7 @@ static void wait(void) { assert(pthread_cond_wait(&changed, &handshake) == 0); }
 static int dispatch_thread(void) { return pthread_equal(pthread_self(), dispatcher); }
 #endif
 
-enum { RECEIVE, MAIN_RX, MAIN_TX };
+enum { RECEIVE, MAIN_RX, MAIN_TX, TRIGGER };
 enum { ACK = 1, TOUT = 2 };
 /* Number of the dispatcher's COM_STATE exit to stop after; zero when disarmed. */
 static unsigned armed;
@@ -62,17 +62,31 @@ static void timeout(CbkHandleIdType handle)
     seen[event_count] = 0u;
     events[event_count++] = TOUT;
 }
+static unsigned rejected;
+static Std_ReturnType lower_result = E_OK;
+static void rejection(PduIdType id, Std_ReturnType result)
+{
+    assert(Com_GetStatus() == COM_INIT);
+    assert(id == 1u && result == 3u && sent_count == 1u);
+    ++rejected;
+}
+static void replacement_rejection(PduIdType id, Std_ReturnType result)
+{
+    (void)id;
+    (void)result;
+    assert(0); /* An in-flight lower call must retain its original observer. */
+}
 static Std_ReturnType transmit(PduIdType id, const PduInfoType *pdu)
 {
     assert(sent_count < 4u && pdu->SduLength == 4u);
     (void)Com_GetStatus();
     sent_ids[sent_count] = id;
     sent_values[sent_count++] = (uint32)pdu->SduDataPtr[0] | ((uint32)pdu->SduDataPtr[1] << 8u);
-    return E_OK;
+    return lower_result;
 }
 static const Com_PduConfigType pdus[] = {{0u, 10u, TRUE, 7u, 30u, 17u},
                                          {1u, 11u, FALSE, 9u, 0u, 0u}};
-static const Com_ConfigType configuration = {pdus, 2u, 0u, receive, timeout, transmit};
+static const Com_ConfigType configuration = {pdus, 2u, 0u, receive, timeout, transmit, rejection};
 
 void __real_SchM_Exit_Com_COM_STATE(void);
 void __wrap_SchM_Exit_Com_COM_STATE(void)
@@ -98,8 +112,10 @@ static void dispatch(void)
         Com_RxIndication(0u, &info);
     } else if (operation == MAIN_RX) {
         Ecu_ComMainFunctionRx();
-    } else {
+    } else if (operation == MAIN_TX) {
         Ecu_ComMainFunctionTx();
+    } else {
+        assert(Com_TriggerIPDUSend(1u) == E_OK);
     }
 }
 #if defined(_WIN32)
@@ -214,6 +230,14 @@ static void update_and_stop_while_sending(void)
     assert(sent_count == 0u);
 }
 
+static void replace_observer_while_sending(void)
+{
+    static const Com_ConfigType replacement = {
+        pdus, 2u, 0u, receive, timeout, transmit, replacement_rejection};
+    Com_Init(&replacement);
+    assert(Com_GetStatus() == COM_INIT && sent_count == 0u);
+}
+
 int main(void)
 {
 #if defined(_WIN32)
@@ -263,6 +287,13 @@ int main(void)
     start();
     Ecu_ComMainFunctionTx();
     assert(sent_count == 1u && sent_values[0] == 9u);
+    lower_result = 3u;
+    start();
+    window(2u, MAIN_TX, replace_observer_while_sending);
+    assert(rejected == 1u && sent_count == 1u);
+    start();
+    window(1u, TRIGGER, replace_observer_while_sending);
+    assert(rejected == 2u && sent_count == 1u);
 #if defined(_WIN32)
     DeleteCriticalSection(&handshake);
 #endif

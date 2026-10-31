@@ -586,6 +586,7 @@ pub(super) fn files(
 #include "Det_Externals.h"
 #include "CanTp.h"
 #include "Com.h"
+#include "Ecu_ComRejection.h"
 #include "Com_Internal.h"
 #include "Com_Cfg.h"
 #include "Rte_Cfg.h"
@@ -713,6 +714,7 @@ pub(super) fn files(
 #include "LSduR_Cfg.h"
 #include "PduR_Cfg.h"
 #include "Com.h"
+#include "Ecu_ComRejection.h"
 #include "Dcm.h"
 #include "CanTp.h"
 #include "PduR.h"
@@ -837,7 +839,7 @@ pub(super) fn files(
         "Com",
         "static const Com_ConfigType com_config",
         &values(&format!(
-            "com_pdus, {}u, {}, &Rte_COMCbk, &Rte_COMCbkRxTOut, &PduR_ComTransmit",
+            "com_pdus, {}u, {}, &Rte_COMCbk, &Rte_COMCbkRxTOut, &PduR_ComTransmit, &Ecu_ComRecordRejection",
             description.signals.len(),
             name("Com", "ComIPduGroup", &com.receive_group.path)
         )),
@@ -1451,6 +1453,8 @@ From this directory run `python tools/ecu-tool.py build --project . --output <ne
 
 `CMakeLists.txt` builds the same sources with the same flags, kernel patches and libraries from `target.json` for IDEs and CI: run `cmake -S . -B <outside-build-directory> -G Ninja -DCMAKE_C_COMPILER=<gcc>` and `cmake --build <outside-build-directory>`. CMake neither checks the pinned toolchain identity and target sections nor runs `verify`; `tools/ecu-tool.py` does.
 
+COM lower refusals preserve Trigger returns, other PDUs and the next periodic execution without retries. Both native entries publish `COM_TX_REJECT pdu=<decimal> result=<decimal>` on stderr. Their 4096 process-lifetime append-only records support concurrent Task/ISR writers; capacity loss or an unpublished final record emits `COM_TX_REJECT_INCOMPLETE`. Native control drains during execution and before normal shutdown, then writes `COM_TX_REJECT_END count=<delivered>`. Output failure follows the normal native failure exit. A complete stream requires a matching END, no incomplete marker and successful process exit. The delivered tool query parses and saves these records beside its logs as `*-com-rejections.json`; a refusal is an observation, not a transmission confirmation. Regenerate and rebuild all configurations after the COM callback layout change; do not reseal old packages.
+
 ## Layout
 
 The [module manuals](generated/descriptions/MODULES.md) describe delivered BSW interfaces, exclusive areas, scheduling, selected configuration and integration limits. The selected implementation description is [Host_Implementation.arxml](generated/descriptions/Host_Implementation.arxml); input BSW descriptions remain source provenance.
@@ -1465,7 +1469,7 @@ The [module manuals](generated/descriptions/MODULES.md) describe delivered BSW i
             r#"
 ## Reference behaviour verification
 
-This configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit signal and an application DID, so `meta/verification-inputs.json` records their configured endpoints. `python tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>` builds HostBatch and checks the reference echo application: the transmit signal repeats the last received value, the DID returns it big-endian, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission. Other application behaviour fails this check by design; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.
+This configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit signal and an application DID, so `meta/verification-inputs.json` records their configured endpoints. `python tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>` builds HostBatch and the normal 20-tick probe, parses and saves COM diagnostics from both, and checks the reference echo application: the transmit signal repeats the last received value, the DID returns it big-endian, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission. Other application behaviour fails this check by design; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.
 "#
         }
     );
