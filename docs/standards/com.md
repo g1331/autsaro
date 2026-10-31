@@ -104,7 +104,7 @@ R21.15（AMD1，Required、C99，页6／PDF14；AMD2增加C11适用性）的复�
 ## 已知差距
 
 - Com_Version.h 已发布规范与软件版本；正式供应商身份仍由 #59 承接。
-- D4.7（Required）：Com_TriggerIPDUSend／Ecu_ComMainFunctionTx 丢弃 PduR→CanIf 的真实拒绝。当前 PERIODIC、无重试、Tx 不属于 group；SWS_Com_00773／00863／00479／91017 不提供通用拒绝通知。保留现有返回与调度，[#399](https://github.com/g1331/autsaro/issues/399#issuecomment-6527462494)记录Det/协议队列/ARTI/双程序输出闭包及新观察合同提案；未实现，正式偏离义务未完成。
+- D4.7：Com_TriggerIPDUSend／Ecu_ComMainFunctionTx 在真实非E_OK返回后、COM_STATE外通知同次快照的类型化observer；ECU逐槽发布给两个正常程序与工具，保留返回、周期和无重试。4096条容量、incomplete／END及输出失败合同与具体证据见[人工记录](os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)及[#399](https://github.com/g1331/autsaro/issues/399)。这不是标准COM错误callback或整体符合性声明。
 - Com_Cfg.h 导出 ComSignal、ComIPdu 与 ComIPduGroup 符号；Tx 配置使用 PduR 提供的源句柄，Rx 回调映射使用 COM 提供的 PDU 句柄。
 - 生成 C 的 MISRA 诊断裁决与人工评估未完成（#58）。
 

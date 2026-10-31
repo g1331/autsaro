@@ -889,8 +889,9 @@ class ManualAssessmentTests(unittest.TestCase):
         self.assertEqual((manual["total"], result["checkerCovered"]["total"]), (66, 155))
         self.assertEqual({row["id"] for row in manual["records"]}, self.UNCOVERED)
         self.assertEqual(manual["classified"] + manual["unclassified"], 66)
-        self.assertGreater(manual["unclassified"], 0)
-        self.assertFalse(manual["classificationComplete"])
+        self.assertEqual(manual["unclassified"], 0)
+        self.assertTrue(manual["classificationComplete"])
+        self.assertEqual(next(row for row in manual["records"] if row["id"] == "D4.7")["status"], "satisfied")
         self.assertEqual(result["conformanceAssessment"], "not_established")
         self.assertEqual(self.rules, original)
 
@@ -911,7 +912,7 @@ class ManualAssessmentTests(unittest.TestCase):
         self.assertEqual(manual["format"], "misra-manual-assessment-v1")
         self.assertEqual(manual["checkerCovered"]["total"], 155)
         self.assertEqual(manual["checkerUncovered"]["total"], 66)
-        self.assertFalse(manual["checkerUncovered"]["classificationComplete"])
+        self.assertTrue(manual["checkerUncovered"]["classificationComplete"])
         self.assertTrue(result["knownCheckerLimitations"])
 
     def test_missing_record_remains_unclassified(self):
