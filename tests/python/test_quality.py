@@ -172,6 +172,7 @@ class QualityTests(unittest.TestCase):
                 }]}],
             }
             (root / ".pre-commit-config.yaml").write_text(json.dumps(config), encoding="utf-8")
+            (root / ".gitattributes").write_text("*.py text eol=lf\n", encoding="utf-8")
             git("add", ".")
             git("commit", "--quiet", "-m", "clean source")
             clean_head = git("rev-parse", "HEAD").stdout.strip()
