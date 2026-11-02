@@ -58,6 +58,8 @@
 
 ### Fixed
 
+- Sealed ECU kernel patch failures now report the check/apply phase, command, owned process status, exit and descendant cleanup result, with captured output for diagnosis (#413)
+
 - Generated RTE type headers include Rte.h before type declarations, adjacent owner events share guards without changing dispatch or flush order, and the RTE allocation lifecycle has one described state; regenerate sealed deliveries for the updated source and BSWMD identities (#393)
 
 - Generated ECU private execution glue omits the unused Ecu_ExecutionNow wrapper; integrations use the controlled target clock interface and regenerate deliveries (#393)
