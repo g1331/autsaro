@@ -1392,9 +1392,9 @@ OS_MEMMAP static boolean fail_next(void)
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
 /* Defer the native call until after injection; a function argument would run it first. */
-#define OS_RESOURCE_CREATE(call) (fail_next() ? NULL : (call))
+#define OS_RESOURCE_CREATE(expression) (fail_next() ? NULL : (expression))
 #else
-#define OS_RESOURCE_CREATE(call) (call)
+#define OS_RESOURCE_CREATE(expression) (expression)
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"

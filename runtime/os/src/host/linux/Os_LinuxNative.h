@@ -6,11 +6,11 @@
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *cell,
+OS_MEMMAP int Os_LinuxFutexWait(const volatile int32_t *address,
                                 int32_t expected,
                                 const struct timespec *interval);
 /** Wake count is not an error; a negative kernel result stops the native process. */
-OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *cell);
+OS_MEMMAP void Os_LinuxFutexWake(const volatile int32_t *address);
 OS_MEMMAP DWORD Os_LinuxThreadId(void);
 OS_MEMMAP int Os_LinuxAltStack(const stack_t *stack, stack_t *previous);
 /** Project the fixed x64 signal control prefix and legacy FP into owned storage; supports

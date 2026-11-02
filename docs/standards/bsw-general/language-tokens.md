@@ -2,13 +2,12 @@
 
 ## 原始 token 分类的具体误报
 
-当前 master `3e93e436` 的 Linux standard-ecu 工件保留 20 条 R7.3：
-Os_Backend 的 `OS_RESOURCE_CREATE(call)` 四处，Os_HostServices 的 `cell` 六处，
-Os_HostLinux 的 `cell` 四处及 `all` 两处，Os_LinuxNative 的 `cell` 四处。
-逐列回到原源码均为标识符；固定 2.21.0 的 `misra_7_3` 使用十六进制字符集合加小写 l
-后缀的正则，未先确认 token 是数字，故这些名字恰好匹配。
-R7.3（Required，主文印刷61／PDF69）约束数字字面量后缀，不约束这些标识符。
-不能为了消除误报更名真实参数、改 addon 或删除原始记录。
+`3e93e436` Linux standard-ecu 的20条R7.3均为标识符：Backend `call`四处、
+HostServices `cell`六处、HostLinux `cell/all`六处、LinuxNative `cell`四处。
+固定2.21.0正则未先确认数字token；R7.3（Required，主文61／PDF69）仅约束字面量后缀。
+当前私有形参分别改为`expression`、`address`、`wait_for_all`，同步私有声明；
+公开Os_Host.h／HostServices的`cell`保持。宏延迟求值、ABI及原行为不变。
+历史报告、固定addon、raw语义及剩余诊断保留；改名不替代误报裁决。
 
 同一工件的 12 条 R12.3 位于 Os_Stack.h 的七个成员声明分隔符、Os.c 的 i/j
 声明、Os_Backend 的四个计数器声明和 registered/gate 成员声明。
@@ -56,7 +55,7 @@ SWS_Os_00393要求生成OS_TICKS2NS/US/MS/SEC_<Counter>(ticks)。当前SystemCou
 其余自有宏按实际语言角色区分：TASK/ISR/ALARMCALLBACK/Declare*生成声明或拼接名字，ARTI_TRACE保存
 调用点字面身份，STACK_POINTER取得调用点RSP，不能以普通函数保持同一展开合同。
 FreeRTOSConfig.h的两个trace宏沿内核配置宏入口绑定Backend；OS_RESOURCE_CREATE的失败注入分支
-必须能不求值call，不能改为先求值的函数实参；Linux sanitizer START/FINISH还在调用点借用fake栈槽。
+必须能不求值expression，不能改为先求值的函数实参；Linux sanitizer START/FINISH还在调用点借用fake栈槽。
 这些精确冻结定义的保留理由是现有配置/调用点语义，不把“宏通常更快”作为全部函数式宏的通用例外。
 
 <!-- misra-manual-begin -->
