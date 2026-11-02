@@ -210,7 +210,7 @@ fn generated_lsdur_off_consumers_and_startup() {
             manual.contains("LSDUR_VERSION_INFO_API=STD_OFF"),
             "{case}: {manual}"
         );
-        let consumer = scratch.0.join(case);
+        let consumer = scratch.0.join(format!("consumer-{case}"));
         fs::create_dir(&consumer).unwrap();
         for header in [
             "LSduR_Cfg.h",
