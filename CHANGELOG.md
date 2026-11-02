@@ -58,6 +58,8 @@
 
 ### Fixed
 
+- Derived LSduR deliveries now publish `LSDUR_VERSION_INFO_API=STD_OFF` and document the selected disabled API profile; standalone LSduR ECUC modules remain unsupported (#411)
+
 - Generated RTE type headers include Rte.h before type declarations, adjacent owner events share guards without changing dispatch or flush order, and the RTE allocation lifecycle has one described state; regenerate sealed deliveries for the updated source and BSWMD identities (#393)
 
 - Generated ECU private execution glue omits the unused Ecu_ExecutionNow wrapper; integrations use the controlled target clock interface and regenerate deliveries (#393)

@@ -2,7 +2,7 @@
 
 本篇属于 [BSW General](README.md)，标记与核算方法见[标准与规范基线 §5](../README.md#5-条款处置与核算)。
 
-`SWS_BSWGeneral` 的全部 150 条按模块分别处置，标记带 `[LSduR]` 或 `[PduR]`。由测试验证的条目见 `core/tests/fixtures/bsw-contracts/routing_contract.c`（`SWS_BSW_00186` 输入指针为 const、`00071` Init 结束时进入 ONLINE）与 `routing_parallel.c`（`00134` 独占区只保护模块数据）。“配置”类的依据与 [PduR](../pdur.md)、[LSduR](../lsdur.md) 篇相同：LSduR 模块整体不被接受，PduR 的对应参数在生成前被拒绝。
+`SWS_BSWGeneral` 的全部 150 条按模块分别处置，标记带 `[LSduR]` 或 `[PduR]`。由测试验证的条目见 `core/tests/fixtures/bsw-contracts/routing_contract.c`（`SWS_BSW_00186` 输入指针为 const、`00071` Init 结束时进入 ONLINE）与 `routing_parallel.c`（`00134` 独占区只保护模块数据）。“配置”类的依据与 [PduR](../pdur.md)、[LSduR](../lsdur.md) 篇相同：LSduR 独立源模块整体不被接受，PduR 的对应参数在生成前被拒绝；LSduR 版本 API 的派生 OFF 选择及 NA 追溯另见版本信息行。
 
 | 分组 | 依据 | 处置 |
 | --- | --- | --- |
@@ -14,7 +14,7 @@
 | 实现头文件 | `<Mip>.h` 与按调用方分开的接口头声明全部 API，带 include 保护并直接包含 `Std_Types.h`；模块不提供 AUTOSAR Service、MainFunction 或 callout | 已核对（源码）[LSduR]：SWS_BSW_00020、00110、00023、00024、00048、00254、00210、00249、00025、00069、00040、00180、00218、00238、00135、00136；已核对（源码）[PduR]：SWS_BSW_00020、00110、00023、00024、00048、00254、00210、00249、00025、00069、00040、00180、00218、00238、00135、00136 |
 | 编码约束 | 只用 AUTOSAR 整数类型与 `boolean` 的赋值、返回和相等比较；不直接用编译器关键字；没有编译开关；枚举与宏按 `<MIP>_` 大写命名，类型按 `<Ma>_<Tn>Type` 命名；外部链接的全局量只有生成的只读 `<Mip>_Config`；不调用调度函数，也不使用 OS 服务 | 已核对（源码）[LSduR]：SWS_BSW_00120、00142、00121、00123、00124、00146、00127、00129、00130、00131、00133、00138、00257、00147；已核对（源码）[PduR]：SWS_BSW_00120、00142、00121、00123、00124、00146、00127、00129、00130、00131、00133、00138、00257、00147 |
 | C 标准 | 交付源码与契约夹具以 `-std=c99 -pedantic -Werror` 编译，外部标识符在 31 个字符以内 | 已核对（构建）[LSduR]：SWS_BSW_00234；已核对（构建）[PduR]：SWS_BSW_00234 |
-| 配置方式 | 由工具从 ECUC 生成人可读的 C 配置，只提供 VARIANT-PRE-COMPILE，可选功能不实现，对应参数只接受 `false`；参数名沿用 ECUC 定义 | 已核对（配置模型）[LSduR]：SWS_BSW_00116、00029、00126、00237、00157、00183；已核对（配置模型）[PduR]：SWS_BSW_00116、00029、00126、00237、00157、00183 |
+| 配置方式 | 由工具从 ECUC 生成人可读的 C 配置，只提供 VARIANT-PRE-COMPILE；PduR 的可选参数只接受 false，LSduR 拒绝独立源模块并从路由配置派生版本 API=false；参数名沿用 ECUC 定义 | 已核对（配置模型）[LSduR]：SWS_BSW_00116、00029、00126、00237、00157、00183；已核对（配置模型）[PduR]：SWS_BSW_00116、00029、00126、00237、00157、00183 |
 | 配置指针 | 只有生成的启动序列把 `&<Mip>_Config` 传给 `<Mip>_Init` | 已核对（生成样本）[LSduR]：SWS_BSW_00158；已核对（生成样本）[PduR]：SWS_BSW_00158 |
 | 调度函数 | 模块没有调度函数 | 已核对（源码）[LSduR]：SWS_BSW_00054、00037、00153、00154、00156；已核对（源码）[PduR]：SWS_BSW_00054、00037、00153、00154、00156 |
 | 初始化 | 启动序列在 Com 与 CanTp 之前各调用一次 `<Mip>_Init`；再次调用被忽略 | 已核对（生成样本）[LSduR]：SWS_BSW_00230、00231；已核对（生成样本）[PduR]：SWS_BSW_00230、00231 |
@@ -39,7 +39,7 @@
 | 开发错误 |  | 不适用（配置：ECUC_PduR_00302=true）[PduR]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00255、00201、00203、00045、00243、00049、00212、00050 |
 | 运行时错误 |  | 不适用（配置：ECUC_PduR_00291、ECUC_PduR_00356）[PduR]：SWS_BSW_00219、00222；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00219、00222 |
 | 生产错误 | LSduR SWS 没有定义生产错误 | 不适用（配置：ECUC_PduR_00365）[PduR]：SWS_BSW_00204、00205、00143、00046、00066、00206、00207、00208；已核对（规范原文）[LSduR]：SWS_BSW_00204、00205、00143、00046、00066、00206、00207、00208 |
-| 版本信息 API | `PduRVersionInfoApi` 在预编译期配置、只接受默认值 `false` | 已核对（配置模型）[PduR]：SWS_BSW_00051、00236；不适用（配置：ECUC_PduR_00316=true）[PduR]：SWS_BSW_00064、00052、00164；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00051、00236、00064、00052、00164 |
+| 版本信息 API | PduR 只接受默认 false；LSduR 由现有 producer 派生 false，独立源模块 false／true 均在模块对象处拒绝 | 已核对（配置模型）[PduR]：SWS_BSW_00051、00236；不适用（配置：ECUC_PduR_00316=true）[PduR]：SWS_BSW_00064、00052、00164；已核对（`LSduR_Cfg.h` 派生发布 00004=false／STD_OFF，`generated_lsdur_off_consumers_and_startup` 从四 profile 编译／链接及实际启动验证）[LSduR]：SWS_BSW_00051、00236；不适用（归属：模块 `SWS_LSduR_NA` 排除 SRS_BSW_00407 的通用追溯；模块自身 91007 仍按所选 OFF 处理，启用签名差距见 [LSduR](../lsdur.md#已知差距)）[LSduR]：SWS_BSW_00064、00052、00164 |
 | metadata |  | 不适用（配置：ECUC_PduR_00347=true）[PduR]：SWS_BSW_00239、00240、00241、00242；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00239、00240、00241、00242 |
 | post-build 多变体 |  | 不适用（配置：ECUC_PduR_00293 声明 VARIANT-POST-BUILD）[PduR]：SWS_BSW_00226、00227、00228；不适用（配置：ECUC_LSduR_00001）[LSduR]：SWS_BSW_00226、00227、00228 |
 

@@ -10,7 +10,7 @@
 
 - 上层为 PduR 与 CanTp，下层为 CanIf；
 - 路由一对一、同一分区，不带 metadata；
-- 不做开发错误检测，不提供版本信息 API；
+- 不做开发错误检测；版本 API 选为 `ECUC_LSduR_00004=false`，由现有 `LSduR_Cfg.h` producer 发布 `LSDUR_VERSION_INFO_API=STD_OFF`，不交付 `LSduR_GetVersionInfo`；
 - 不提供 ReleaseRxBuffer 与 CancelTransmit，也不支持 zero cost operation；
 - 只有预编译配置，没有 post-build 更新。
 
@@ -18,7 +18,7 @@ LSduR 只在自己的 `LSDUR_STATE` 区内读取已发布的配置指针，离�
 
 ## 条款处置
 
-由测试验证的条目见 `core/tests/fixtures/bsw-contracts/routing_contract.c`、`routing_parallel.c` 与 `com_chain_contract.c` 中的 `Verifies:`。下表处置其余条目。“配置”类的依据是 LSduR 模块整体不被接受，`Rejects: ECUC_LSduR_00001` 的测试证明这一点。
+由测试验证的条目见 `core/tests/fixtures/bsw-contracts/routing_contract.c`、`routing_parallel.c` 与 `com_chain_contract.c` 中的 `Verifies:`。下表处置其余条目。独立源模块的拒绝由 `lsdur_module_configuration_is_refused_at_the_module` 的完整 false／true 输入在 `/Configuration/LSduR` 验证；这是模块拒绝，不是参数级 true 拒绝。版本 API 的关闭选择另由 `generated_lsdur_off_consumers_and_startup` 从普通四 profile 的真实交付验证，不以源模块拒绝替代。
 
 | 分组 | 处置与条目 |
 | --- | --- |
@@ -34,14 +34,17 @@ LSduR 只在自己的 `LSDUR_STATE` 区内读取已发布的配置指针，离�
 | CDD 接口 | 不适用（配置：ECUC_LSduR_00001）：CP_SWS_LSduR_00033 |
 | 多分区 | 不适用（配置：ECUC_LSduR_00001）：CP_SWS_LSduR_00044、00045、00046、00047、00048、00049、00050、00051、00052、00053、00054、00055、00056 |
 | post-build 与配置标识 | 不适用（配置：ECUC_LSduR_00001）：CP_SWS_LSduR_00037、00038、00039 |
-| 版本信息 | 不适用（配置：ECUC_LSduR_00001）：CP_SWS_LSduR_91007 |
-| ECUC 定义 | 不适用（配置：ECUC_LSduR_00001）：ECUC_LSduR_00001–00024 |
-| 头文件版本号 | 差距 #59：CP_SWS_LSduR_00003 |
+| 版本信息 | 已核对（`LSduR_Cfg.h` 发布 false；`generated_lsdur_off_consumers_and_startup` 独立编译／链接五个公共头入口与真实 LSduR 源，确认所选关闭配置不交付 API）：ECUC_LSduR_00004；已核对（同一消费者验证所选 00004=false 下 API 不可用；启用时的签名歧义见下文）：CP_SWS_LSduR_91007 |
+| ECUC 定义 | 不适用（配置：ECUC_LSduR_00001）：ECUC_LSduR_00001–00003、00005–00024 |
+| 头文件版本号 | 已核对（`LSduR_Version.h` 发布 AR=4/10/0，并从 `Autsaro_Version.h` 取得 SW=0/1/0；主头、三个调用方头及生成 Cfg 通过原有 include 链取得版本；MemMap 保持其独立 producer 的真实版本）：CP_SWS_LSduR_00003 |
 
 ## 已知差距
 
-- 头文件不含软件与规范版本号（#59）。
+- 正式供应方 vendor 身份尚未申请／分配；AR／SW 已发布不等于完整发布身份已闭合，LSduR BSWMD 的现有 0 不是正式分配值（#59）。
+- `ECUC_LSduR_00004=true` 仍不在支持范围。R24-11 PDF p39 与 SpecificationsARXML 的 `CP_SWS_LSduR_91007` Syntax 均为按值 `Std_VersionInfoType versionInfo`，同条 out 栏却要求输出存储指针；`SWS_Std_00015` 将该类型定义为结构体。将来启用前须取得可核验的权威更正／说明并闭合真实 vendor 输出，不能改标准类型或用占位身份绕过（#59）。
 - 生成 C 的 MISRA 诊断裁决与人工评估未完成（#58）。
+
+BSWGeneral §6 p31 的 NA 追溯规则允许忽略被模块排除 SRS 所对应的通用义务，但不删除模块正文。`SWS_LSduR_NA` 的 SRS_BSW_00407 不使 91007 消失；00004 的 MOD 定义、PDF p51 图10.2／p53 与通用 00051／00236 支持当前预编译默认关闭选择。SRS_BSW_00003 未被排除，模块 00003 的头文件版本及仍适用的发布身份义务继续成立。关闭配置的可用性证据不裁定启用 API 的原型。
 
 ## MemMap 的具体责任
 
