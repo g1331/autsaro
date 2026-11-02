@@ -227,6 +227,8 @@ def run_bounded(
         raise OwnershipError(
             f"{spec.stage}: argv={list(spec.argv)!r} deadline_ns={spec.deadline_ns} "
             f"status={result.status} exit_code={result.exit_code} "
+            f"scope={result.scope} pid={result.pid} pgid={result.pgid} "
+            f"descendants_reclaimed={result.descendants_reclaimed} "
             f"stdout={result.stdout} stderr={result.stderr}\n"
             f"stdout:\n{_tail(result.stdout)}\nstderr:\n{_tail(result.stderr)}"
         )
