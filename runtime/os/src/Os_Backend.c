@@ -366,8 +366,10 @@ OS_MEMMAP static uint64
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-OS_MEMMAP static uint32 resource_calls, threads, events,
-    mutexes; /**< Bootstrap-owned allocation/call totals; no Init reset. */
+OS_MEMMAP static uint32 resource_calls; /**< Bootstrap-owned acquisition count; no Init reset. */
+OS_MEMMAP static uint32 threads;        /**< Bootstrap-owned thread count; no Init reset. */
+OS_MEMMAP static uint32 events;         /**< Bootstrap-owned event count; no Init reset. */
+OS_MEMMAP static uint32 mutexes;        /**< Bootstrap-owned mutex count; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
@@ -956,7 +958,8 @@ OS_MEMMAP uint32 Os_TargetTestPending(TaskType id)
 typedef struct {
     TaskFunction_t entry;
     void *argument;
-    HANDLE registered, gate;
+    HANDLE registered;
+    HANDLE gate;
     char role;
     const StackType_t *buffer_top;
 } Os_NativeTaskStartType;

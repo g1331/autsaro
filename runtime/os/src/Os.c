@@ -138,7 +138,8 @@ OS_MEMMAP static StatusType validate_resource(const Os_TargetConfigType *config,
 
 OS_MEMMAP StatusType Os_TargetPrepare(const Os_TargetConfigType *config)
 {
-    uint32 i, j;
+    uint32 i;
+    uint32 j;
     uint8 highest_task = 0u;
     if (Os_Config != NULL) {
         return E_OS_STATE;

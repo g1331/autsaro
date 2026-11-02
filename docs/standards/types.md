@@ -18,7 +18,7 @@ Boolean／character诊断、原生位掩码及复合表达式的具体判断见[
 
 R7.3（Required，主文页61–62／PDF69–70）禁止字面量后缀中的小写 l。历史 Linux 样本报告中的 cell／all 是变量或参数标识符，不是字面量；固定 addon 的正则未先要求数字 token，能同时匹配这些名字与真正的 `1l`。`OS_RESOURCE_CREATE` 原形参 call 同样不是带后缀的字面量。当前私有及公开参数改名范围见[原始 token 分类](bsw-general/language-tokens.md#原始-token-分类的具体误报)；宏两个替换列表的括号及延迟求值不变。历史原始报告保留，不以重命名代替裁决；此结论不覆盖其他字面量。
 
-R12.3（Advisory，主文页106／PDF114）针对逗号运算符。所选 Linux 样本报告的 OS 字段／局部变量及采用内核局部变量均为声明中的 declarator 分隔符，不求值逗号表达式；固定 addon 对拆分声明标记直接报告。最小声明对照有报告，真实逗号运算符置于 return 表达式的对照却没有，故同时存在误报与漏报边界。两项规则在 AMD2 中增加 C11 适用性，不改变这些 C99 语法条件；完整位置、原始输出及对照收据见 PR #371。
+R12.3（Advisory，主文页106／PDF114）针对逗号运算符。PR #371 所选 Linux 样本报告的 OS 字段／局部变量及采用内核局部变量均为声明中的 declarator 分隔符，不求值逗号表达式；固定 addon 对拆分声明标记直接报告。Os_StackTypes.h 的栈／故障字段、Os_TargetPrepare 的索引、Os_Backend.c 的资源计数与线程启动句柄现使用单对象声明，保留类型、成员顺序、存储期与映射属性；原多声明形式的误报裁决仍成立，采用内核的声明保持原样。最小声明对照有报告，真实逗号运算符置于 return 表达式的对照却没有，故同时存在误报与漏报边界。两项规则在 AMD2 中增加 C11 适用性，不改变这些 C99 语法条件；完整位置、原始输出及对照收据见 PR #371。
 
 `Ecu_ExecutionTransmit` 的 sink 为 `Can_TxSinkType` 函数指针，`(void)sink` 只显式丢弃此参数；实际发送沿 Can 的 flush → Ecu_ExecutionTransmit → Ecu_TargetEnqueueTransmit 进入受控队列。R11.1（Required，主文页93–94／PDF101–102）的例外2明确允许函数指针转 void，此处没有转成 void 指针、整数或其他函数指针类型；AMD2.58 只修订例外3的说明，不撤销例外2。固定 addon 对丢弃函数指针与改成不兼容函数指针的对照均报告；只对前者按既有原文例外裁决，不扩大为通用指针转换许可。
 
