@@ -58,7 +58,7 @@
 
 ### Fixed
 
-- Derived LSduR deliveries now publish `LSDUR_VERSION_INFO_API=STD_OFF` and document the selected disabled API profile; standalone LSduR ECUC modules remain unsupported (#411)
+- Derived LSduR deliveries now publish `LSDUR_VERSION_INFO_API=STD_OFF` and document the selected disabled API profile; standalone LSduR ECUC modules remain unsupported. Conflicting runnable/type names are rejected at their source objects; rename them and regenerate deliveries (#411)
 
 - Generated RTE type headers include Rte.h before type declarations, adjacent owner events share guards without changing dispatch or flush order, and the RTE allocation lifecycle has one described state; regenerate sealed deliveries for the updated source and BSWMD identities (#393)
 
