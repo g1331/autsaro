@@ -16,7 +16,7 @@ Boolean／character诊断、原生位掩码及复合表达式的具体判断见[
 
 ## 源码诊断的语法边界
 
-R7.3（Required，主文页61–62／PDF69–70）禁止字面量后缀中的小写 l。历史 Linux 样本报告中的 cell／all 是变量或参数标识符，不是字面量；固定 addon 的正则未先要求数字 token，能同时匹配这些名字与真正的 `1l`。`OS_RESOURCE_CREATE` 原形参 call 同样不是带后缀的字面量。当前私有改名及公开参数保留范围见[原始 token 分类](bsw-general/language-tokens.md#原始-token-分类的具体误报)；宏两个替换列表的括号及延迟求值不变。历史原始报告保留，不以重命名代替裁决；此结论不覆盖其他字面量。
+R7.3（Required，主文页61–62／PDF69–70）禁止字面量后缀中的小写 l。历史 Linux 样本报告中的 cell／all 是变量或参数标识符，不是字面量；固定 addon 的正则未先要求数字 token，能同时匹配这些名字与真正的 `1l`。`OS_RESOURCE_CREATE` 原形参 call 同样不是带后缀的字面量。当前私有及公开参数改名范围见[原始 token 分类](bsw-general/language-tokens.md#原始-token-分类的具体误报)；宏两个替换列表的括号及延迟求值不变。历史原始报告保留，不以重命名代替裁决；此结论不覆盖其他字面量。
 
 R12.3（Advisory，主文页106／PDF114）针对逗号运算符。所选 Linux 样本报告的 OS 字段／局部变量及采用内核局部变量均为声明中的 declarator 分隔符，不求值逗号表达式；固定 addon 对拆分声明标记直接报告。最小声明对照有报告，真实逗号运算符置于 return 表达式的对照却没有，故同时存在误报与漏报边界。两项规则在 AMD2 中增加 C11 适用性，不改变这些 C99 语法条件；完整位置、原始输出及对照收据见 PR #371。
 
@@ -62,7 +62,7 @@ R7.3为Required，当前C99适用（2013主文印刷61／PDF69；AMD2仅追加C1
 
 位置属于冻结Os_Backend.c的1413:28／57、1415:28／35；Os_HostServices.c的6:71、8:39、11:75、14:32、17:82、21:39；Linux Os_HostLinux.c的119:58、122:42、128:58／84、677:45、686:19；Os_LinuxNative.c的26:57、31:41、34:58、37:49。它们分别是宏形参／替换中的call、原子与futex接口的cell，以及多对象等待的all；四份分析源码在这些对象上与58fb105a字节一致。每份20个摘要位置都归属host-batch／probe，展开为40次程序报告，不把两种计数混用。
 
-固定addon的misra_7_3对rawTokens使用`(0[xX])?[0-9a-fA-FpP.]+[Uu]*l+[Uu]*`整词正则，却没有先要求token是数值literal；call／cell／all的前缀恰好落在其字符集合内，故末尾l被误认成后缀。没有为这些名字改源码、添加suppression或改检查器。此结论只覆盖这20个报告，其他literal、SDK及采用代码仍按实际构造核查；原raw诊断、passed=false／error=null和221项not_assessed均保留。
+固定addon的misra_7_3对rawTokens使用`(0[xX])?[0-9a-fA-FpP.]+[Uu]*l+[Uu]*`整词正则，却没有先要求token是数值literal；call／cell／all的前缀恰好落在其字符集合内，故末尾l被误认成后缀。此处记录历史裁决；后续普通参数改名见[原始 token 分类](bsw-general/language-tokens.md#原始-token-分类的具体误报)，没有添加suppression或改检查器。此结论只覆盖这20个报告，其他literal、SDK及采用代码仍按实际构造核查；原raw诊断、passed=false／error=null和221项not_assessed均保留。
 
 ## 函数指针的显式丢弃
 

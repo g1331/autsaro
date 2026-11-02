@@ -6,7 +6,8 @@
 HostServices `cell`六处、HostLinux `cell/all`六处、LinuxNative `cell`四处。
 固定2.21.0正则未先确认数字token；R7.3（Required，主文61／PDF69）仅约束字面量后缀。
 当前私有形参分别改为`expression`、`address`、`wait_for_all`，同步私有声明；
-公开Os_Host.h／HostServices的`cell`保持。宏延迟求值、ABI及原行为不变。
+公开Os_Host.h／HostServices的原子接口形参`cell`同步改为`address`，
+对应参数文档与测试替身一致；宏延迟求值、函数类型、ABI及原行为不变。
 历史报告、固定addon、raw语义及剩余诊断保留；改名不替代误报裁决。
 
 同一工件的 12 条 R12.3 位于 Os_Stack.h 的七个成员声明分隔符、Os.c 的 i/j

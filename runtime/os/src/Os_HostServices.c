@@ -3,22 +3,22 @@
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *cell)
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *address)
 {
-    return InterlockedCompareExchange(cell, 0, 0);
+    return InterlockedCompareExchange(address, 0, 0);
 }
 
-OS_MEMMAP Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *cell,
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *address,
                                                 Os_Atomic32Type value)
 {
-    return InterlockedExchange(cell, value);
+    return InterlockedExchange(address, value);
 }
 
-OS_MEMMAP Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *cell,
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *address,
                                                        Os_Atomic32Type desired,
                                                        Os_Atomic32Type expected)
 {
-    return InterlockedCompareExchange(cell, desired, expected);
+    return InterlockedCompareExchange(address, desired, expected);
 }
 
 OS_MEMMAP Os_HostThreadIdType Os_HostThreadIdentity(void) { return GetCurrentThreadId(); }

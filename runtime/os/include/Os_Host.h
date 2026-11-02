@@ -24,39 +24,39 @@
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 /** Load one initialized, aligned 32-bit publication cell atomically.
- * @param[in,out] cell Initialized writable aligned cell; atomic read-modify-write preserves its
+ * @param[in,out] address Initialized writable aligned cell; atomic read-modify-write preserves its
  * value.
  * @return Atomically observed value.
- * Preconditions: cell is non-NULL, writable and naturally aligned; invalid storage is outside the
- * contract. Context: any native actor, including an existing OS critical section; no blocking.
+ * Preconditions: address is non-NULL, writable and naturally aligned; invalid storage is outside
+ * the contract. Context: any native actor, including an existing OS critical section; no blocking.
  * Reentrancy: reentrant for the same or different cells; Interlocked provides atomic ordering.
- * Ownership: borrows cell for the call only; no address is retained.
+ * Ownership: borrows address for the call only; no address is retained.
  */
-OS_MEMMAP Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *cell);
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *address);
 
 /** Replace a publication cell and return its prior value.
- * @param[in,out] cell Initialized writable aligned publication cell.
+ * @param[in,out] address Initialized writable aligned publication cell.
  * @param[in] value Replacement cell value.
  * @return Value preceding the exchange.
- * Preconditions: cell is non-NULL, writable and naturally aligned; invalid storage is outside the
- * contract. Context: any native actor, including an existing OS critical section; no blocking.
+ * Preconditions: address is non-NULL, writable and naturally aligned; invalid storage is outside
+ * the contract. Context: any native actor, including an existing OS critical section; no blocking.
  * Reentrancy: reentrant for the same or different cells; Interlocked provides atomic ordering.
- * Ownership: borrows cell for the call only; no address is retained.
+ * Ownership: borrows address for the call only; no address is retained.
  */
-OS_MEMMAP Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *cell,
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *address,
                                                 Os_Atomic32Type value);
 
 /** Compare with expected, publish desired on equality, and return prior value.
- * @param[in,out] cell Initialized writable aligned publication cell.
+ * @param[in,out] address Initialized writable aligned publication cell.
  * @param[in] desired Value written when the comparison matches.
  * @param[in] expected Value required for replacement.
  * @return Prior value, whether or not it matched expected.
- * Preconditions: cell is non-NULL, writable and naturally aligned; invalid storage is outside the
- * contract. Context: any native actor, including an existing OS critical section; no blocking.
+ * Preconditions: address is non-NULL, writable and naturally aligned; invalid storage is outside
+ * the contract. Context: any native actor, including an existing OS critical section; no blocking.
  * Reentrancy: reentrant for the same or different cells; Interlocked provides atomic ordering.
- * Ownership: borrows cell for the call only; no address is retained.
+ * Ownership: borrows address for the call only; no address is retained.
  */
-OS_MEMMAP Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *cell,
+OS_MEMMAP Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *address,
                                                        Os_Atomic32Type desired,
                                                        Os_Atomic32Type expected);
 

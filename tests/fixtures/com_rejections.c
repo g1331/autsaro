@@ -19,20 +19,20 @@ static unsigned ends;
 static unsigned seen[256];
 static volatile Os_Atomic32Type writers_start;
 static volatile Os_Atomic32Type writers_done;
-Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *cell)
+Os_Atomic32Type Os_HostAtomicLoad(volatile Os_Atomic32Type *address)
 {
-    return __atomic_load_n(cell, __ATOMIC_SEQ_CST);
+    return __atomic_load_n(address, __ATOMIC_SEQ_CST);
 }
-Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *cell, Os_Atomic32Type value)
+Os_Atomic32Type Os_HostAtomicExchange(volatile Os_Atomic32Type *address, Os_Atomic32Type value)
 {
-    return __atomic_exchange_n(cell, value, __ATOMIC_SEQ_CST);
+    return __atomic_exchange_n(address, value, __ATOMIC_SEQ_CST);
 }
-Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *cell,
+Os_Atomic32Type Os_HostAtomicCompareExchange(volatile Os_Atomic32Type *address,
                                              Os_Atomic32Type desired,
                                              Os_Atomic32Type expected)
 {
     Os_Atomic32Type prior = expected;
-    __atomic_compare_exchange_n(cell, &prior, desired, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    __atomic_compare_exchange_n(address, &prior, desired, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
     if ((preempt != 0) && (prior == expected)) {
         preempt = 0;
         /* Writer owns slot zero but has not copied or published; another ISR/Task may run. */
