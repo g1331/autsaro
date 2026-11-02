@@ -10,6 +10,11 @@ use std::time::{Duration, Instant};
 
 mod evidence;
 
+#[cfg(test)]
+pub(super) fn inspect_identity(pid: u32) -> serde_json::Value {
+    evidence::member(pid, std::ptr::null_mut())
+}
+
 #[repr(C)]
 #[derive(Default)]
 struct BasicLimits {

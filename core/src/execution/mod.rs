@@ -131,19 +131,27 @@ impl ProcessResult {
         self.status == ProcessStatus::Exited && self.exit_code == Some(0)
     }
 
-    /// The end of both captured streams. The logs usually live in a scratch
-    /// directory that is gone by the time anyone reads a bare path.
+    /// Independent tails of both streams and any Windows Job evidence. Logs
+    /// usually live in scratch that is gone before a bare path can be read.
     pub fn output_tail(&self) -> String {
-        fn tail(path: &std::path::Path) -> String {
-            const LIMIT: usize = 8 * 1024;
+        fn tail(path: &std::path::Path, limit: usize) -> String {
             let bytes = std::fs::read(path).unwrap_or_default();
-            String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(LIMIT)..]).into_owned()
+            String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(limit)..]).into_owned()
         }
-        format!(
+        let mut output = format!(
             "stdout:\n{}\nstderr:\n{}",
-            tail(&self.stdout),
-            tail(&self.stderr)
-        )
+            tail(&self.stdout, 8 * 1024),
+            tail(&self.stderr, 8 * 1024)
+        );
+        let evidence = self.stderr.with_file_name("windows-job.jsonl");
+        if evidence.is_file() {
+            output.push_str(&format!(
+                "\nWindows Job evidence tail:\n{}\nFull Windows Job evidence: {}",
+                tail(&evidence, 4 * 1024),
+                evidence.display()
+            ));
+        }
+        output
     }
 }
 

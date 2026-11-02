@@ -64,14 +64,26 @@ fn cpu_model() -> Option<String> {
 }
 
 fn process(handle: *mut c_void, pid: u32, job: *mut c_void) -> Value {
+    process_observed(handle, pid, job, || {})
+}
+
+fn process_observed(
+    handle: *mut c_void,
+    pid: u32,
+    job: *mut c_void,
+    before_times: impl FnOnce(),
+) -> Value {
+    // A signaled process stays signaled. Query times only after this observation,
+    // so a live-to-exited transition cannot publish an undefined exit timestamp.
+    let wait = unsafe { WaitForSingleObject(handle, 0) };
+    let wait_error = (wait == u32::MAX).then(|| io::Error::last_os_error().raw_os_error());
+    before_times();
     let mut times: [FileTime; 4] = std::array::from_fn(|_| FileTime::default());
     let [created, exited, kernel, user] = &mut times;
     // SAFETY: the borrowed process/job handles are live; all outputs are writable.
     let times_error = error(unsafe { GetProcessTimes(handle, created, exited, kernel, user) });
     let mut member = 0;
     let membership_error = error(unsafe { IsProcessInJob(handle, job, &mut member) });
-    let wait = unsafe { WaitForSingleObject(handle, 0) };
-    let wait_error = (wait == u32::MAX).then(|| io::Error::last_os_error().raw_os_error());
     let mut code = 0;
     let exit_error = error(unsafe { GetExitCodeProcess(handle, &mut code) });
     let mut image = [0u16; 32768];
@@ -95,7 +107,7 @@ fn process(handle: *mut c_void, pid: u32, job: *mut c_void) -> Value {
     })
 }
 
-fn member(pid: u32, job: *mut c_void) -> Value {
+pub(super) fn member(pid: u32, job: *mut c_void) -> Value {
     // SAFETY: query-only access plus SYNCHRONIZE; no inheritance or mutation.
     let raw = unsafe { OpenProcess(0x0010_1000, 0, pid) };
     if raw.is_null() {
@@ -220,29 +232,63 @@ impl Evidence {
     }
 
     pub(super) fn result(&self, result: &super::super::ProcessResult) {
+        let before = self.before_stop.lock();
+        let summary = before.as_ref().map(|record| {
+            let members: Vec<_> = record["members"].as_array().into_iter().flatten().take(4)
+                .map(|member| json!({"pid": member["pid"], "created_100ns": member["created_100ns"],
+                    "wait": member["wait"], "in_job": member["in_job"], "exit_code": member["exit_code"]})).collect();
+            json!({"accounting": record["accounting"], "list_complete": record["list_complete"],
+                "listed": record["listed"], "members_first_four": members, "cpu": record["cpu"]})
+        });
         self.append(
             json!({"phase": "result", "elapsed_us": self.started.elapsed().as_micros(),
             "scope": result.scope, "pid": result.pid, "pgid": result.pgid,
             "status": format!("{:?}", result.status), "exit_code": result.exit_code,
             "descendants_reclaimed": result.descendants_reclaimed,
-            "stdout": result.stdout, "stderr": result.stderr}),
+            "stdout": result.stdout, "stderr": result.stderr, "before_cleanup": summary}),
         );
-        if !result.success() {
-            // Existing failure tails carry the pre-cleanup identities as well as the full-log path.
-            let _ = (|| -> io::Result<()> {
-                let mut stderr = std::fs::OpenOptions::new()
-                    .append(true)
-                    .open(&result.stderr)?;
-                writeln!(stderr, "\nWindows Job evidence: {}", self.path.display())?;
-                if let Some(record) = &*self.before_stop.lock() {
-                    writeln!(stderr, "Windows Job before cleanup: {record}")?;
-                }
-                Ok(())
-            })();
-        }
     }
 }
 
 pub(super) fn result_path(stderr: &Path) -> PathBuf {
     stderr.with_file_name("windows-job.jsonl")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exit_between_wait_and_times_keeps_the_live_observation_without_exit_time() {
+        let scratch = crate::generator::output::reserve_directory(
+            &std::env::temp_dir(),
+            "job-times",
+            std::ffi::OsStr::new("transition"),
+        )
+        .unwrap();
+        let mut command = Command::new(std::env::var_os("AUTOSAR_PYTHON").unwrap());
+        command
+            .args(["-I", "-S", "-c", "import sys; sys.stdin.buffer.read()"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        let mut tree = ProcessTree::spawn(&mut command, &scratch.join("stderr.log")).unwrap();
+        let raw = tree.child.as_raw_handle();
+        let observed = process_observed(raw, tree.id(), tree.job.as_raw_handle(), || {
+            tree.close_stdin();
+            let end = Instant::now() + Duration::from_secs(8);
+            while tree.try_wait().unwrap().is_none() {
+                assert!(Instant::now() < end, "stdin probe did not exit");
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        });
+        assert_eq!(observed["wait"], 258);
+        assert_eq!(observed["exited_100ns"], Value::Null);
+        let exited = process(raw, tree.id(), tree.job.as_raw_handle());
+        assert_eq!(exited["wait"], 0);
+        assert_eq!(exited["exit_code"], 0);
+        assert!(exited["exited_100ns"].as_u64().unwrap() > 0);
+        drop(tree);
+        std::fs::remove_dir_all(scratch).unwrap();
+    }
 }

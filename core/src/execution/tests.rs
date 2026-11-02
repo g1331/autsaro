@@ -212,7 +212,9 @@ fn assert_job_evidence(result: &super::ProcessResult, orphan_pids: &[u32]) {
         .find(|record| record["phase"] == "before_stop")
         .unwrap();
     assert_eq!(before["list_complete"], true);
-    for pid in orphan_pids.iter().filter(|&&pid| pid != result.pid) {
+    // The probe parent has exited; on Windows its venv launcher can be a
+    // separate root PID. Only the recorded child and leaf are live orphans.
+    for pid in orphan_pids.iter().skip(1) {
         let member = before["members"]
             .as_array()
             .unwrap()
@@ -230,13 +232,27 @@ fn assert_job_evidence(result: &super::ProcessResult, orphan_pids: &[u32]) {
     assert_eq!(stopped["accounting"]["active"], 0);
     assert_eq!(stopped["list_complete"], true);
     assert!(stopped["members"].as_array().unwrap().is_empty());
+    // The historical stopped sample may precede process signaling. Confirm
+    // final reclamation in the existing two-second window, excluding PID reuse.
+    let end = std::time::Instant::now() + Duration::from_secs(2);
     for identity in stopped["previously_observed"].as_array().unwrap() {
-        assert!(
-            identity["current"]["open_error"] == 87
-                || identity["same_identity"] == false
-                || identity["current"]["wait"] == 0,
-            "observed member remains live: {identity}"
-        );
+        loop {
+            let current =
+                super::windows_job::inspect_identity(identity["pid"].as_u64().unwrap() as u32);
+            if current["open_error"] == 87
+                || current["created_100ns"].as_u64().is_some_and(|created| {
+                    Some(created) != identity["expected_created_100ns"].as_u64()
+                })
+                || current["wait"] == 0
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < end,
+                "observed identity remains live: {identity}; {current}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
     let completed = records.last().unwrap();
     assert_eq!(completed["phase"], "result");
@@ -591,4 +607,39 @@ fn job_evidence_write_failure_preserves_orphan_rejection_and_reaping() {
     assert_eq!(result.exit_code, Some(0));
     assert!(result.descendants_reclaimed);
     assert_descendants_gone(&fixture, 3);
+}
+
+#[test]
+fn job_evidence_tail_keeps_separate_stream_budgets_and_the_full_path() {
+    let fixture = Fixture::new();
+    let stdout = fixture.0.join("stdout.log");
+    let stderr = fixture.0.join("stderr.log");
+    std::fs::write(&stdout, "original stdout marker").unwrap();
+    std::fs::write(&stderr, "original stderr marker").unwrap();
+    let evidence = fixture.0.join("windows-job.jsonl");
+    std::fs::write(
+        &evidence,
+        format!("{}\nfinal evidence marker", "x".repeat(16 * 1024)),
+    )
+    .unwrap();
+    let result = super::ProcessResult {
+        scope: "budget-test".into(),
+        pid: 1,
+        pgid: None,
+        status: ProcessStatus::OrphanedMembers,
+        exit_code: Some(0),
+        descendants_reclaimed: true,
+        stdout,
+        stderr: stderr.clone(),
+    };
+    let tail = result.output_tail();
+    assert!(tail.contains("original stdout marker"));
+    assert!(tail.contains("original stderr marker"));
+    assert!(tail.contains("final evidence marker"));
+    assert!(tail.ends_with(&evidence.display().to_string()));
+    assert!(tail.len() < 5 * 1024);
+    assert_eq!(
+        std::fs::read_to_string(stderr).unwrap(),
+        "original stderr marker"
+    );
 }
