@@ -249,7 +249,7 @@ impl ProcessOwner {
                     .open(&stderr)
                     .map_err(|error| error.to_string())?,
             ));
-            let tree = ProcessTree::spawn(&mut command)?;
+            let tree = ProcessTree::spawn(&mut command, &stderr)?;
             jobs.push(tree.job());
             let pid = tree.id();
             Ok(OwnedProcess {
@@ -386,7 +386,9 @@ impl OwnedProcess {
                 if let Some(status) = tree.try_wait().map_err(|error| error.to_string())? {
                     // The Job's active count may lag a just-reaped cooperative exit.
                     let grace = std::time::Instant::now() + Duration::from_millis(200);
+                    tree.observe("root_exited");
                     while tree.active()? != 0 && std::time::Instant::now() < grace {
+                        tree.observe("grace");
                         std::thread::sleep(Duration::from_millis(10));
                     }
                     let orphaned = tree.active()? != 0;
@@ -412,7 +414,7 @@ impl OwnedProcess {
                 std::thread::sleep(Duration::from_millis(20));
             };
             *finished = true;
-            Ok(ProcessResult {
+            let result = ProcessResult {
                 scope: format!("windows-job-{pid}"),
                 pid: *pid,
                 pgid: None,
@@ -421,7 +423,9 @@ impl OwnedProcess {
                 stdout: stdout.clone(),
                 stderr: stderr.clone(),
                 descendants_reclaimed: status.2,
-            })
+            };
+            tree.record_result(&result);
+            Ok(result)
         }
     }
 
@@ -448,7 +452,7 @@ impl OwnedProcess {
             }
             tree.stop()?;
             *finished = true;
-            Ok(ProcessResult {
+            let result = ProcessResult {
                 scope: format!("windows-job-{pid}"),
                 pid: *pid,
                 pgid: None,
@@ -460,7 +464,9 @@ impl OwnedProcess {
                 stdout: stdout.clone(),
                 stderr: stderr.clone(),
                 descendants_reclaimed: false,
-            })
+            };
+            tree.record_result(&result);
+            Ok(result)
         }
     }
 }
