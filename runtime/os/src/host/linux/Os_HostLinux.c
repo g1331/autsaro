@@ -111,16 +111,16 @@ OS_MEMMAP static OS_HOST_THREAD_LOCAL unsigned
 
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static void futex_wait(const volatile int32_t *cell, int32_t expected)
+OS_MEMMAP static void futex_wait(const volatile int32_t *address, int32_t expected)
 {
     const struct timespec interval = {.tv_sec = 0, .tv_nsec = OS_HOST_WAIT_SLICE_NS};
-    const int result = Os_LinuxFutexWait(cell, expected, &interval);
+    const int result = Os_LinuxFutexWait(address, expected, &interval);
     if ((result != 0) && (result != -EAGAIN) && (result != -EINTR) && (result != -ETIMEDOUT)) {
         ExitProcess(1u);
     }
 }
 
-OS_MEMMAP static void futex_wake(const volatile int32_t *cell) { Os_LinuxFutexWake(cell); }
+OS_MEMMAP static void futex_wake(const volatile int32_t *address) { Os_LinuxFutexWake(address); }
 
 OS_MEMMAP static uint64_t monotonic_ms(void)
 {
@@ -675,7 +675,7 @@ OS_MEMMAP static DWORD wait_all(DWORD count,
 
 OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
                                        const HANDLE *observed,
-                                       BOOL all,
+                                       BOOL wait_for_all,
                                        DWORD milliseconds)
 {
     DWORD result = WAIT_FAILED;
@@ -684,8 +684,8 @@ OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
         if (milliseconds != INFINITE) {
             end += milliseconds;
         }
-        result = (all == 0) ? wait_any(count, observed, milliseconds, end)
-                            : wait_all(count, observed, milliseconds, end);
+        result = (wait_for_all == 0) ? wait_any(count, observed, milliseconds, end)
+                                     : wait_all(count, observed, milliseconds, end);
     }
     return result;
 }

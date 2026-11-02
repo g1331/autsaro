@@ -69,7 +69,7 @@ OS_MEMMAP DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL al
 
 OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
                                        const HANDLE *observed,
-                                       BOOL all,
+                                       BOOL wait_for_all,
                                        DWORD milliseconds);
 
 OS_MEMMAP BOOL ResetEvent(HANDLE event);
