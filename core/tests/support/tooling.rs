@@ -286,9 +286,8 @@ pub(crate) fn run_public_command(
     assert_eq!(
         result.status,
         ProcessStatus::Exited,
-        "{name} exceeded host watchdog or scope closure failed: {result:?}; {}{}",
-        String::from_utf8_lossy(&stdout),
-        String::from_utf8_lossy(&stderr),
+        "{name} exceeded host watchdog or scope closure failed: {result:?}; {}",
+        result.output_tail(),
     );
     let exit_code = result
         .exit_code

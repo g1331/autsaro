@@ -80,7 +80,7 @@ Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元�
 
 ## Windows 进程
 
-受管 supervisor 启动以期限内的认证就绪响应为准，不能将 socket 文件出现当作已开始监听。Windows 上 Job 活动计数归零与进程对象进入已退出状态之间可能有窗口，关闭后的 PID 也会很快被复用：检查进程已关闭时按创建时间排除复用的 PID，并有界等待真实退出事件，不用零超时探测 PID 存活；Windows 的父 PID 在父进程退出后不更新，按父 PID 归属进程树时要求子进程创建时间不早于父进程。
+supervisor 启动须收到期限内的认证就绪响应。Windows Job 归零与进程退出可能有窗口，检查已关闭须按创建时间排除 PID 复用并有界等待退出事件；按父 PID 归属时要求子进程创建不早于父进程。root exit=0 不证明整树退出；诊断先保存清理前的成员身份、归属、退出与 CPU 采样，随即释放观察句柄；写入失败不得阻断清理。`windows-job.jsonl` 随 owned capture 保存阶段与完整结果；查询错误或截断标为不完整。
 
 ## 封存构建复用
 
