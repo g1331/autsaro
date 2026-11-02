@@ -1132,3 +1132,25 @@ fn version_assets_reserve_public_files_guards_and_macros_at_the_source_object() 
             .contains("Control_ReleaseVersion")
     }));
 }
+
+#[test]
+fn derived_lsdur_configuration_macro_cannot_be_shadowed() {
+    for (before, code, file, object) in [
+        (
+            "Ingress_Periodic",
+            "SYMBOL_PRODUCER_DUPLICATE",
+            "ingress.arxml",
+            "/Application/Ingress/Behavior/Periodic",
+        ),
+        (
+            "Dcm_DataElement_ApplicationValueType",
+            "CONTRACT_NAME_COLLISION",
+            "types.arxml",
+            "/Types/LSDUR_VERSION_INFO_API",
+        ),
+    ] {
+        let mut sources = inputs();
+        replace_all(&mut sources, before, "LSDUR_VERSION_INFO_API");
+        rejected_at(&sources, code, file, object);
+    }
+}

@@ -1799,6 +1799,7 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             names.insert(format!("{module}_AR_RELEASE_{field}_VERSION"));
         }
     }
+    names.insert("LSDUR_VERSION_INFO_API".to_owned());
     for module in ["CANIF", "PDUR", "LSDUR"] {
         names.insert(format!("{module}_CFG_H"));
     }

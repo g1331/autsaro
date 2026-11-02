@@ -58,6 +58,8 @@
 
 ### Fixed
 
+- Derived LSduR deliveries now publish `LSDUR_VERSION_INFO_API=STD_OFF` and document the selected disabled API profile; standalone LSduR ECUC modules remain unsupported. Conflicting runnable/type names are rejected at their source objects; rename them and regenerate deliveries (#411)
+
 - Windows owned commands retain Job member identities, exit transitions and CPU samples beside captured output, including pre-cleanup evidence on abnormal completion; closure policies and failure statuses are unchanged (#415)
 
 - Sealed ECU kernel patch failures now report the check/apply phase, command, owned process status, exit and descendant cleanup result, with captured output for diagnosis (#413)

@@ -52,7 +52,7 @@ fn overview(module: &str) -> (&'static str, &'static str) {
         ),
         "LSduR" => (
             "Fixed target lower-layer dispatch between CanIf, PduR and CanTp.",
-            "LSduR has a fixed target implementation contract derived from the validated route graph; an independent LSduR ECUC module is rejected. Its immutable route tables are generated with PduR.",
+            "LSduR has a fixed target implementation contract derived from the validated route graph; an independent LSduR ECUC module is rejected. Its immutable route tables are generated with PduR. LSduR_Cfg.h publishes the derived pre-compile LSduRVersionInfoApi=false selection (ECUC_LSduR_00004) as LSDUR_VERSION_INFO_API=STD_OFF; LSduR_GetVersionInfo is unavailable.",
         ),
         "Det" => (
             "Development/runtime error hooks and the configured runtime callout.",
