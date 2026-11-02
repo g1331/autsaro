@@ -1030,9 +1030,16 @@ pub(super) fn files(
                 &format!(
                     "#include \"{module}.h\"\n{}{}extern const {ty} {module}_Config RTE_{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED;\n{}{}",
                     if module == "LSduR" {
-                        c_layout::commented_defines(
+                        format!(
+                            "/* ECUC_LSduR_00004: fixed derived pre-compile selection. */\n{}\n{}",
+                            c_layout::commented_defines(
+                                &[("LSDUR_VERSION_INFO_API", "STD_OFF")],
+                                "Version information API disabled.",
+                            ),
+                            c_layout::commented_defines(
                             symbolic.headers.get(module).map(Vec::as_slice).unwrap_or_default(),
-                            "Generated handle.",
+                                "Generated handle.",
+                            )
                         )
                     } else {
                         c_layout::required_defines(

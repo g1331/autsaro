@@ -177,3 +177,151 @@ int main(void) {{
         result
     );
 }
+
+/// The OFF selection belongs to the derived delivery, independently of source-module refusal.
+#[test]
+fn generated_lsdur_off_consumers_and_startup() {
+    // Verifies: ECUC_LSduR_00004
+    // Verifies[LSduR]: SWS_BSW_00051、00236
+    let scratch = Scratch::new();
+    let samples = match std::env::var_os("AUTOSAR_C_ANALYSIS_SAMPLES") {
+        Some(path) => std::path::absolute(std::path::PathBuf::from(path)).unwrap(),
+        None => {
+            let output = scratch.0.join("samples");
+            analysis_samples::generate(&output, &scratch);
+            output
+        }
+    };
+    for case in [
+        "standard-ecu",
+        "user-application",
+        "component-pipeline",
+        "no-diagnostic",
+    ] {
+        let project = samples.join(case);
+        let manual =
+            fs::read_to_string(project.join("generated/descriptions/modules/LSduR/README.md"))
+                .unwrap();
+        assert!(
+            manual.contains("LSduRVersionInfoApi=false"),
+            "{case}: {manual}"
+        );
+        assert!(
+            manual.contains("LSDUR_VERSION_INFO_API=STD_OFF"),
+            "{case}: {manual}"
+        );
+        let consumer = scratch.0.join(case);
+        fs::create_dir(&consumer).unwrap();
+        for header in [
+            "LSduR_Cfg.h",
+            "LSduR.h",
+            "LSduR_CanIf.h",
+            "LSduR_CanTp.h",
+            "LSduR_PduR.h",
+        ] {
+            lsdur_off_consumer(&project, &consumer, header);
+        }
+        let source = consumer.join("startup.c");
+        fs::write(
+            &source,
+            include_str!("../fixtures/bsw-contracts/lsdur_startup.c"),
+        )
+        .unwrap();
+        let build = consumer.join("build");
+        let mut command = tooling::ecu_build_command(&project, &build, "probe", Some(&source));
+        let result = tooling::run_public_command(
+            &mut command,
+            &consumer,
+            "lsdur-build",
+            std::time::Duration::from_secs(180),
+        );
+        assert!(
+            result.status.success(),
+            "{case}: {}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let result = tooling::run_public_command(
+            &mut std::process::Command::new(tooling::native_binary(&build, "ecu_probe")),
+            &consumer,
+            "lsdur-startup",
+            std::time::Duration::from_secs(30),
+        );
+        assert!(
+            result.status.success(),
+            "{case}: {}\n{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+}
+
+fn lsdur_off_consumer(project: &Path, consumer: &Path, header: &str) {
+    let source = consumer.join(format!("{header}.c"));
+    fs::write(
+        &source,
+        format!(
+            r#"#include "{header}"
+#include "LSduR_Cfg.h"
+#include "CanIf.h"
+#include "SchM_LSduR.h"
+#ifdef LSduR_GetVersionInfo
+#error LSduR version API macro must be unavailable
+#endif
+#ifndef LSDUR_VERSION_INFO_API
+#error Missing derived LSduR version API selection
+#endif
+#if LSDUR_VERSION_INFO_API != STD_OFF
+#error LSduR version API must be disabled
+#endif
+/* A strong object of the API name conflicts with any public declaration or
+ * linked external implementation, regardless of the disputed API signature. */
+int LSduR_GetVersionInfo = 7;
+void SchM_Enter_LSduR_LSDUR_STATE(void) {{}}
+void SchM_Exit_LSduR_LSDUR_STATE(void) {{}}
+Std_ReturnType CanIf_Transmit(PduIdType id, const PduInfoType *info)
+{{ (void)id; (void)info; return E_NOT_OK; }}
+int main(void) {{ return LSduR_GetVersionInfo != 7; }}
+"#
+        ),
+    )
+    .unwrap();
+    let executable = tooling::native_binary(consumer, &format!("consumer-{header}"));
+    let target: serde_json::Value =
+        serde_json::from_slice(&fs::read(project.join("target.json")).unwrap()).unwrap();
+    let mut command = tooling::c_compiler();
+    command.current_dir(project);
+    for flag in target["compilerFlags"].as_array().unwrap() {
+        command.arg(flag.as_str().unwrap());
+    }
+    tooling::project_includes(&mut command, project);
+    command
+        .arg(&source)
+        .arg(project.join("bsw/src/LSduR.c"))
+        .arg("-o")
+        .arg(&executable);
+    let result = tooling::run_public_command(
+        &mut command,
+        consumer,
+        &format!("compile-{header}"),
+        std::time::Duration::from_secs(30),
+    );
+    assert!(
+        result.status.success(),
+        "{header}: {}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let result = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        consumer,
+        &format!("run-{header}"),
+        std::time::Duration::from_secs(30),
+    );
+    assert!(
+        result.status.success(),
+        "{header}: {}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+}

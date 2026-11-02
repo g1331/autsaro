@@ -2091,19 +2091,23 @@ fn link_time_and_post_build_variants_are_refused_at_the_module() {
 #[test]
 fn lsdur_module_configuration_is_refused_at_the_module() {
     // Rejects: ECUC_LSduR_00001
-    let mut sources = single_component_sources();
-    change(
-        &mut sources,
-        "ecuc.arxml",
-        "<ECUC-MODULE-CONFIGURATION-VALUES>",
-        "<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>LSduR</SHORT-NAME><DEFINITION-REF DEST=\"ECUC-MODULE-DEF\">/AUTOSAR/EcucDefs/LSduR</DEFINITION-REF></ECUC-MODULE-CONFIGURATION-VALUES><ECUC-MODULE-CONFIGURATION-VALUES>",
-    );
-    rejected_at(
-        &sources,
-        "MODULE_UNSUPPORTED",
-        "ecuc.arxml",
-        "/Configuration/LSduR",
-    );
+    for value in ["false", "true"] {
+        let mut sources = single_component_sources();
+        let module =
+            include_str!("../../fixtures/lsdur-module.xml").replace("@VERSION_INFO_API@", value);
+        change(
+            &mut sources,
+            "ecuc.arxml",
+            "<ECUC-MODULE-CONFIGURATION-VALUES>",
+            &format!("{module}<ECUC-MODULE-CONFIGURATION-VALUES>"),
+        );
+        rejected_at(
+            &sources,
+            "MODULE_UNSUPPORTED",
+            "ecuc.arxml",
+            "/Configuration/LSduR",
+        );
+    }
 }
 
 /// PduR features outside one-to-one IF and TP routing between the selected modules
