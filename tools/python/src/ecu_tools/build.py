@@ -12,7 +12,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path, PurePosixPath
 
-from ecu_tools.process import OwnedProcess, ProcessSpec
+from ecu_tools.process import OwnedProcess, ProcessSpec, run_bounded
 
 TARGETS = {"windows-x64-controlled-v1": "Windows", "linux-x64-controlled-v1": "Linux"}
 
@@ -349,10 +349,9 @@ def build(project: Path, output: Path, mode: str, control_source: Path | None = 
         for checked in (True, False):
             argv = [str(git), "-c", "core.autocrlf=false", "apply", "--ignore-space-change", *patch_flags,
                     *(["--check"] if checked else []), tool_argument(project / relative)]
-            result = OwnedProcess(ProcessSpec.seconds(argv, kernel, 30, logs, "kernel-patch",
-                                  env=kernel_patch_environment(kernel))).wait()
-            if not result.success:
-                raise RuntimeError(f"Kernel patch failed: {relative}; logs={logs}")
+            phase = "check" if checked else "apply"
+            run_bounded(ProcessSpec.seconds(argv, kernel, 30, logs, f"Kernel patch {relative} ({phase})",
+                        env=kernel_patch_environment(kernel)))
         require_kernel_patch_applied(project / relative, before)
     require_kernel_identity(kernel, target.get("kernelSha256"))
     sources = [tool_argument(project / name) for name in source_map]
