@@ -164,13 +164,117 @@ fn assert_pids_gone(pids: &[u32]) {
     }
 }
 
+#[cfg(windows)]
+fn job_evidence(result: &super::ProcessResult) -> Vec<serde_json::Value> {
+    std::fs::read_to_string(result.stderr.with_file_name("windows-job.jsonl"))
+        .expect("Job evidence in the ordinary owned capture")
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("complete evidence record"))
+        .collect()
+}
+
+#[cfg(windows)]
+fn assert_job_evidence(result: &super::ProcessResult, orphan_pids: &[u32]) {
+    let records = job_evidence(result);
+    let assigned = &records[0];
+    assert_eq!(assigned["phase"], "assigned");
+    assert_eq!(assigned["owner_pid"], std::process::id());
+    assert_eq!(assigned["root_pid"], result.pid);
+    assert_eq!(assigned["root"]["in_job"], true);
+    assert_eq!(assigned["root"]["wait"], 258); // still suspended, never executed
+    assert!(assigned["root"]["created_100ns"].as_u64().unwrap() > 0);
+    assert!(
+        assigned["root"]["image"]
+            .as_str()
+            .unwrap()
+            .contains("python")
+    );
+    assert_eq!(assigned["cpu"]["error"], serde_json::Value::Null);
+    assert!(
+        assigned["cpu"]["idle_kernel_user_100ns"][1]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    let root_exit = records
+        .iter()
+        .find(|record| record["phase"] == "root_exited")
+        .unwrap();
+    assert_eq!(root_exit["root"]["wait"], 0);
+    assert_eq!(root_exit["root"]["exit_code"], result.exit_code.unwrap());
+    assert!(root_exit["root"]["exited_100ns"].as_u64().unwrap() > 0);
+    assert_eq!(
+        root_exit["root"]["created_100ns"],
+        assigned["root"]["created_100ns"]
+    );
+    let before = records
+        .iter()
+        .find(|record| record["phase"] == "before_stop")
+        .unwrap();
+    assert_eq!(before["list_complete"], true);
+    // The probe parent has exited; on Windows its venv launcher can be a
+    // separate root PID. Only the recorded child and leaf are live orphans.
+    for pid in orphan_pids.iter().skip(1) {
+        let member = before["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|member| member["pid"] == *pid)
+            .expect("live orphan identity before cleanup");
+        assert_eq!(member["in_job"], true);
+        assert_eq!(member["wait"], 258);
+        assert!(member["created_100ns"].as_u64().unwrap() > 0);
+    }
+    let stopped = records
+        .iter()
+        .find(|record| record["phase"] == "stopped")
+        .unwrap();
+    assert_eq!(stopped["accounting"]["active"], 0);
+    assert_eq!(stopped["list_complete"], true);
+    assert!(stopped["members"].as_array().unwrap().is_empty());
+    // The historical stopped sample may precede process signaling. Confirm
+    // final reclamation in the existing two-second window, excluding PID reuse.
+    let end = std::time::Instant::now() + Duration::from_secs(2);
+    for identity in stopped["previously_observed"].as_array().unwrap() {
+        loop {
+            let current =
+                super::windows_job::inspect_identity(identity["pid"].as_u64().unwrap() as u32);
+            if current["open_error"] == 87
+                || current["created_100ns"].as_u64().is_some_and(|created| {
+                    Some(created) != identity["expected_created_100ns"].as_u64()
+                })
+                || current["wait"] == 0
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < end,
+                "observed identity remains live: {identity}; {current}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+    let completed = records.last().unwrap();
+    assert_eq!(completed["phase"], "result");
+    assert_eq!(completed["scope"], result.scope);
+    assert_eq!(completed["status"], format!("{:?}", result.status));
+    assert_eq!(completed["exit_code"], result.exit_code.unwrap());
+    assert_eq!(
+        completed["descendants_reclaimed"],
+        result.descendants_reclaimed
+    );
+}
+
 #[test]
 fn normal_and_nonzero_preserve_logs_and_exit_code() {
     let fixture = Fixture::new();
     let result = run_bounded(fixture.spec("normal", Duration::from_secs(8))).unwrap();
     assert_eq!(result.status, ProcessStatus::Exited);
     assert_eq!(result.exit_code, Some(0));
+    assert!(!result.descendants_reclaimed);
     assert_descendants_gone(&fixture, 3);
+    #[cfg(windows)]
+    assert_job_evidence(&result, &[]);
 
     let result = run_bounded(fixture.spec("fail", Duration::from_secs(8))).unwrap_err();
     assert!(result.to_string().contains("exit_code=Some(7)"), "{result}");
@@ -218,6 +322,12 @@ fn parent_first_and_timeout_close_the_registered_tree() {
         let mut process = owner.spawn(fixture.spec(kind, duration), None).unwrap();
         let result = process.wait().unwrap();
         assert_eq!(result.status, expected, "{kind}");
+        if kind == "parent-first" {
+            assert_eq!(result.exit_code, Some(0));
+            assert!(result.descendants_reclaimed);
+            #[cfg(windows)]
+            assert_job_evidence(&result, &fixture.descendants());
+        }
         assert_descendants_gone(&fixture, 3);
     }
 }
@@ -245,6 +355,20 @@ fn tool_completion_reclaims_members_preserves_exit_and_keeps_sibling_alive() {
         assert_eq!(result.exit_code, Some(exit_code));
         assert_eq!(result.success(), exit_code == 0);
         assert!(result.descendants_reclaimed);
+        #[cfg(windows)]
+        {
+            assert_job_evidence(&result, &fixture.descendants());
+            let sibling_records: Vec<serde_json::Value> =
+                std::fs::read_to_string(sibling.stdout_path().with_file_name("windows-job.jsonl"))
+                    .unwrap()
+                    .lines()
+                    .map(|line| serde_json::from_str(line).unwrap())
+                    .collect();
+            assert_ne!(
+                job_evidence(&result)[0]["job_handle"],
+                sibling_records[0]["job_handle"]
+            );
+        }
         assert_descendants_gone(&fixture, 3);
         assert!(sibling_pids.iter().all(|&pid| alive(pid)));
         assert_eq!(sibling.cancel().unwrap().status, ProcessStatus::Cancelled);
@@ -465,4 +589,57 @@ fn blocked_interactive_stdin_obeys_the_absolute_deadline_and_closes_its_pid() {
         .parse::<u32>()
         .unwrap();
     assert_pids_gone(&[pid, result.pid]);
+}
+
+#[cfg(windows)]
+#[test]
+fn job_evidence_write_failure_preserves_orphan_rejection_and_reaping() {
+    let fixture = Fixture::new();
+    let owner = ProcessOwner::new().unwrap();
+    let mut process = owner
+        .spawn(fixture.spec("parent-first", Duration::from_secs(8)), None)
+        .unwrap();
+    let evidence = process.stdout_path().with_file_name("windows-job.jsonl");
+    std::fs::remove_file(&evidence).unwrap();
+    std::fs::create_dir(&evidence).unwrap();
+    let result = process.wait().unwrap();
+    assert_eq!(result.status, ProcessStatus::OrphanedMembers);
+    assert_eq!(result.exit_code, Some(0));
+    assert!(result.descendants_reclaimed);
+    assert_descendants_gone(&fixture, 3);
+}
+
+#[test]
+fn job_evidence_tail_keeps_separate_stream_budgets_and_the_full_path() {
+    let fixture = Fixture::new();
+    let stdout = fixture.0.join("stdout.log");
+    let stderr = fixture.0.join("stderr.log");
+    std::fs::write(&stdout, "original stdout marker").unwrap();
+    std::fs::write(&stderr, "original stderr marker").unwrap();
+    let evidence = fixture.0.join("windows-job.jsonl");
+    std::fs::write(
+        &evidence,
+        format!("{}\nfinal evidence marker", "x".repeat(16 * 1024)),
+    )
+    .unwrap();
+    let result = super::ProcessResult {
+        scope: "budget-test".into(),
+        pid: 1,
+        pgid: None,
+        status: ProcessStatus::OrphanedMembers,
+        exit_code: Some(0),
+        descendants_reclaimed: true,
+        stdout,
+        stderr: stderr.clone(),
+    };
+    let tail = result.output_tail();
+    assert!(tail.contains("original stdout marker"));
+    assert!(tail.contains("original stderr marker"));
+    assert!(tail.contains("final evidence marker"));
+    assert!(tail.ends_with(&evidence.display().to_string()));
+    assert!(tail.len() < 5 * 1024);
+    assert_eq!(
+        std::fs::read_to_string(stderr).unwrap(),
+        "original stderr marker"
+    );
 }

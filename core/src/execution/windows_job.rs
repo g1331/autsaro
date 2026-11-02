@@ -8,6 +8,13 @@ use std::process::{Child, Command, ExitStatus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod evidence;
+
+#[cfg(test)]
+pub(super) fn inspect_identity(pid: u32) -> serde_json::Value {
+    evidence::member(pid, std::ptr::null_mut())
+}
+
 #[repr(C)]
 #[derive(Default)]
 struct BasicLimits {
@@ -175,9 +182,13 @@ fn resume_primary(process: u32) -> Result<(), LocalizedText> {
 pub(crate) struct ProcessTree {
     child: Child,
     job: Arc<OwnedHandle>,
+    evidence: Option<evidence::Evidence>,
 }
 impl ProcessTree {
-    pub(crate) fn spawn(command: &mut Command) -> Result<Self, LocalizedText> {
+    pub(crate) fn spawn(
+        command: &mut Command,
+        stderr: &std::path::Path,
+    ) -> Result<Self, LocalizedText> {
         // SAFETY: null attributes produce a private, non-inheritable job handle.
         let job = owned(
             unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) },
@@ -197,9 +208,13 @@ impl ProcessTree {
             },
             crate::product_message!("backend.execution.configure_job"),
         )?;
-        Self::spawn_in_job(command, job)
+        Self::spawn_in_job(command, job, Some(stderr))
     }
-    fn spawn_in_job(command: &mut Command, job: OwnedHandle) -> Result<Self, LocalizedText> {
+    fn spawn_in_job(
+        command: &mut Command,
+        job: OwnedHandle,
+        stderr: Option<&std::path::Path>,
+    ) -> Result<Self, LocalizedText> {
         let child = command
             .creation_flags(0x08000004)
             .spawn()
@@ -207,6 +222,7 @@ impl ProcessTree {
         let mut tree = Self {
             child,
             job: Arc::new(job),
+            evidence: None,
         };
         // SAFETY: both handles are live; the child's primary thread is suspended.
         if let Err(error) = checked(
@@ -223,6 +239,9 @@ impl ProcessTree {
                 .map_err(|cleanup| LocalizedText::messages([error.clone(), crate::product_message!("backend.execution.parent_wait_failed", "error" => cleanup)]))?;
             return Err(error);
         }
+        if let Some(stderr) = stderr {
+            tree.record_start(stderr);
+        }
         if let Err(error) = resume_primary(tree.child.id()) {
             tree.stop()
                 .map_err(|cleanup| LocalizedText::messages([error.clone(), cleanup]))?;
@@ -232,6 +251,20 @@ impl ProcessTree {
     }
     pub(super) fn job(&self) -> Arc<OwnedHandle> {
         Arc::clone(&self.job)
+    }
+    pub(super) fn record_start(&mut self, stderr: &std::path::Path) {
+        self.evidence = Some(evidence::Evidence::new(evidence::result_path(stderr)));
+        self.observe("assigned");
+    }
+    pub(super) fn observe(&self, phase: &str) {
+        if let Some(evidence) = &self.evidence {
+            evidence.observe(phase, &self.child, &self.job);
+        }
+    }
+    pub(super) fn record_result(&self, result: &super::ProcessResult) {
+        if let Some(evidence) = &self.evidence {
+            evidence.result(result);
+        }
     }
     pub(crate) fn close_stdin(&mut self) {
         drop(self.child.stdin.take());
@@ -294,6 +327,7 @@ impl ProcessTree {
         job_active(&self.job)
     }
     pub(crate) fn stop(&mut self) -> Result<(), LocalizedText> {
+        self.observe("before_stop");
         if self.active()? != 0 {
             // SAFETY: the private job contains only this command and its descendants.
             checked(
@@ -307,9 +341,11 @@ impl ProcessTree {
                 self.child
                     .wait()
                     .map_err(|e| crate::product_message!("backend.execution.wait_closed_failed", "error" => e))?;
+                self.observe("stopped");
                 return Ok(());
             }
             if started.elapsed() >= Duration::from_secs(5) {
+                self.observe("stop_unconfirmed");
                 return Err(crate::product_message!(
                     "backend.execution.shutdown_unconfirmed"
                 ));
@@ -439,7 +475,7 @@ mod tests {
                 marker.display().to_string().replace('\'', "''")
             ),
         ]);
-        let error = ProcessTree::spawn_in_job(&mut command, limited)
+        let error = ProcessTree::spawn_in_job(&mut command, limited, None)
             .err()
             .unwrap();
         assert!(
