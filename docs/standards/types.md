@@ -16,9 +16,7 @@ Boolean／character诊断、原生位掩码及复合表达式的具体判断见[
 
 ## 源码诊断的语法边界
 
-R7.3（Required，主文页61–62／PDF69–70）禁止字面量后缀中的小写 l。历史 Linux 样本报告中的 cell／all 是变量或参数标识符，不是字面量；固定 addon 的正则未先要求数字 token，能同时匹配这些名字与真正的 `1l`。`OS_RESOURCE_CREATE` 原形参 call 同样不是带后缀的字面量。当前私有及公开参数改名范围见[原始 token 分类](bsw-general/language-tokens.md#原始-token-分类的具体误报)；宏两个替换列表的括号及延迟求值不变。历史原始报告保留，不以重命名代替裁决；此结论不覆盖其他字面量。
-
-R12.3（Advisory，主文页106／PDF114）针对逗号运算符。PR #371 所选 Linux 样本报告的 OS 字段／局部变量及采用内核局部变量均为声明中的 declarator 分隔符，不求值逗号表达式；固定 addon 对拆分声明标记直接报告。Os_StackTypes.h 的栈／故障字段、Os_TargetPrepare 的索引、Os_Backend.c 的资源计数与线程启动句柄现使用单对象声明，保留类型、成员顺序、存储期与映射属性；原多声明形式的误报裁决仍成立，采用内核的声明保持原样。最小声明对照有报告，真实逗号运算符置于 return 表达式的对照却没有，故同时存在误报与漏报边界。两项规则在 AMD2 中增加 C11 适用性，不改变这些 C99 语法条件；完整位置、原始输出及对照收据见 PR #371。
+R7.3／R12.3 的历史报告裁决与选定源码的人工证据见[下文](#r73-的标识符误报)。局部误报、源码修正和规则评估分别成立，不能用报告消失替代后者。
 
 `Ecu_ExecutionTransmit` 的 sink 为 `Can_TxSinkType` 函数指针，`(void)sink` 只显式丢弃此参数；实际发送沿 Can 的 flush → Ecu_ExecutionTransmit → Ecu_TargetEnqueueTransmit 进入受控队列。R11.1（Required，主文页93–94／PDF101–102）的例外2明确允许函数指针转 void，此处没有转成 void 指针、整数或其他函数指针类型；AMD2.58 只修订例外3的说明，不撤销例外2。固定 addon 对丢弃函数指针与改成不兼容函数指针的对照均报告；只对前者按既有原文例外裁决，不扩大为通用指针转换许可。
 
@@ -58,11 +56,27 @@ R8.15／R8.16／R8.17仅适用C11，类别分别为Required／Advisory／Advisor
 
 ## R7.3 的标识符误报
 
-R7.3为Required，当前C99适用（2013主文印刷61／PDF69；AMD2仅追加C11，AMD1／3／4及TC1／2未改变本处字面量后缀对象）。四份已完成 `direct-render-mapping-final-results` 各20条报告逐一按文件、行、列取token核对，实际全部是标识符：`call`四处、`cell`十四处、`all`两处，不是数值literal，因而这20处是误报；不是对任意含小写l名字新增规则例外。
+PR #371 的四份 `direct-render-mapping-final-results` 各20个位置为标识符：call四处、cell十四处、all两处，分别属于资源宏、原子／futex及多对象等待；两个程序共40次报告。固定addon未先要求数字token，误认名字末尾的l；仅裁决这些位置。后续[参数名修正](bsw-general/language-tokens.md#原始-token-分类的具体误报)及 #420 的声明修正保留既有语义；历史误报裁决仍成立。固定R12.3还漏报过return中的真实逗号运算符，不能从报告减少推定通过。
 
-位置属于冻结Os_Backend.c的1413:28／57、1415:28／35；Os_HostServices.c的6:71、8:39、11:75、14:32、17:82、21:39；Linux Os_HostLinux.c的119:58、122:42、128:58／84、677:45、686:19；Os_LinuxNative.c的26:57、31:41、34:58、37:49。它们分别是宏形参／替换中的call、原子与futex接口的cell，以及多对象等待的all；四份分析源码在这些对象上与58fb105a字节一致。每份20个摘要位置都归属host-batch／probe，展开为40次程序报告，不把两种计数混用。
+### R7.3／R12.3：四 profile 的有界人工证据
 
-固定addon的misra_7_3对rawTokens使用`(0[xX])?[0-9a-fA-FpP.]+[Uu]*l+[Uu]*`整词正则，却没有先要求token是数值literal；call／cell／all的前缀恰好落在其字符集合内，故末尾l被误认成后缀。此处记录历史裁决；后续普通参数改名见[原始 token 分类](bsw-general/language-tokens.md#原始-token-分类的具体误报)，没有添加suppression或改检查器。此结论只覆盖这20个报告，其他literal、SDK及采用代码仍按实际构造核查；原raw诊断、passed=false／error=null和221项not_assessed均保留。
+冻结基线为 #420 合并的 `8bdb1c7f4190764fa27f49a54c5779ccbfe371fb`，范围为 standard-ecu、user-application、component-pipeline、no-diagnostic 的 C99 HostBatch／probe。PDU ID／长度依次为16／16、16／16、8／32、8／8位；末项无应用DID／诊断路由，仍纳入Dcm TU。
+
+持久原件的七份SHA256SUMS均已核：2013主文R7.3为Required（印刷61–62／PDF69–70），对象为数值literal后缀的小写l；R12.3为Advisory（印刷106／PDF114），对象为逗号运算符，包含for初值／增量及嵌套实参中的表达式。AMD2.27仅追加C11适用性，AMD1／3／4与TC1／2未改变这两条的对象、类别或例外；当前仍为C99。
+
+证据复用 Linux decl58 四份完整扫描及 [#420 精确head运行](https://github.com/g1331/autsaro/actions/runs/41549133111) 的 Windows 四份完整分析与输入工件。逐份核对seal、非内核副本、target／程序及当前originalBswSources的C／头／补丁字节，顺序重建内核并逐字节比较。Linux的92项runtimeSources摘要与基线一致；精确身份及核查收据归 #58 本阶段PR。
+
+责任沿[ADR 0025](../adr/0025-misra-layered-scope.md)区分：originalBswSources映射自有runtime；其余生成／应用C由实际producer负责；FreeRTOS V11.3.1的`054e14f3397023aa83813a65aa065fc4597d481b`原件与生产patch分开，以scope.patchedLines判断改动行，不把整个kernel算作采用原件。SDK依[原头来源](os/sdk.md#sdk-原头来源类别)绑定实际包、头摘要、TU及活动宏；路径或来源分类本身不是满足。
+
+R7.3：两平台四份交付C／头（含未激活分支、补丁后内核）逐token核对，没有小写l数值后缀或追加小写l的token拼接；call／cell／all、注释和字符串不算literal。Linux四份实际GCC展开也无此后缀。Windows每份展开有八处：Backend三处CONTEXT_CONTROL、Time一处WAIT_TIMEOUT、项目patch后的MSVC-MingW port各一处WAIT_TIMEOUT／CONTEXT_CONTROL、HostBatch一处ERROR_BROKEN_PIPE，以及采用queue.c的一处SIZE_MAX。前七处由`__MSABI_LONG(x)=x ## l`产生0x1l／258l／109l；末处沿SIZE_MAX→_UI64_MAX产生0xffffffffffffffffull。源码未手写后缀不代表展开满足。
+
+Windows头包为mingw-w64-x86_64-headers `14.0.0.r569.g34eeafb7d-1`，编译器GCC `16.1.0-5`；活动定义分别见winnt.h:1795、winerror.h:356／248、limits.h:76及_mingw_mac.h。主文§6.7（印刷15–16／PDF23–24）区分ISO标准库实现与调用方义务。SIZE_MAX是ISO C99标准接口，其内部后缀按此边界处理；不扩及非ISO Windows接口。上述七处非ISO展开的R7.3责任仍由 #58 承接，尚未完成满足／合法处置，不新增偏离。
+
+R12.3：Linux四份实际GCC展开的56／56／58／58个TU由Clang18.1.3完整解析，无逗号运算符。Windows的55／55／57／57个TU另按行标记保留项目／采用／patch源码及使用点宏展开，C语法解析无错误；GNU属性另核为段、对齐、调用约定及noreturn／used标记，无逗号运算符。每份仅六处真实逗号表达式，均是生成Os_Arti.c的assert在标准assert.h:46展开的`(_assert(...),0)`，按§6.7归标准库内部语法；条件仍为计数非零或0。未发现该活动语法中的其他逗号运算符。声明成员、函数调用、数组初始化和宏参数均按实际语法区分，不从checker零报告推定。
+
+消费者为资源宏、原子／等待、栈／故障、资源计数及native_starts；采用tasks／list／queue、所选port与生成配置／RTE／ARTI进入两个程序。对照识别小写后缀、return／for逗号运算符，排除大写后缀与分隔符。
+
+Windows完整SDK内部、未展开宏的其他实例及供应方实现仍未评估。Clang的GCC16头错误不作阴性证据。新增源码／宏用途、配置、补丁、provider或target时重评。#381／#382的诊断分类及#385的66项记录不重做；155项checker-covered与raw221项仍not_assessed，passed=false／error、completeCompliance=false、retention键／形状及strict refusal不由本文改写，不声称总体符合性。
 
 ## 函数指针的显式丢弃
 
