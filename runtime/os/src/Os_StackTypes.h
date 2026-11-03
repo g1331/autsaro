@@ -9,9 +9,15 @@
 typedef struct Os_NativeStackType {
     DWORD thread_id;
     char role;
-    uintptr_t reserve_low, high, committed_low, sp;
-    uintptr_t kernel_buffer_low, kernel_buffer_high;
-    SIZE_T reserve, committed, guard;
+    uintptr_t reserve_low;
+    uintptr_t high;
+    uintptr_t committed_low;
+    uintptr_t sp;
+    uintptr_t kernel_buffer_low;
+    uintptr_t kernel_buffer_high;
+    SIZE_T reserve;
+    SIZE_T committed;
+    SIZE_T guard;
 #ifdef _WIN32
     ULONG guarantee;
 #else
@@ -29,7 +35,8 @@ typedef struct {
 #else
     DWORD signal_number;
 #endif
-    uintptr_t sp, address;
+    uintptr_t sp;
+    uintptr_t address;
     char role;
     char origin;
 } Os_StackFaultType;
