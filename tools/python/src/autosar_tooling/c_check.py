@@ -378,7 +378,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     packages = c_sdk.msys_headers(Path(compiler)) if target_id.startswith("windows") else c_sdk.debian_headers()
     sdk_headers = [c_sdk.header_identity(Path(path), root, target_id, machine.strip(), packages)
                    for path in sorted({path for paths in sdk_units.values() for path in paths})]
-    return root, sources, database, {"target": target_id, "profile": target["profile"], "entries": target.get("entries"),
+    scope = {"target": target_id, "profile": target["profile"], "entries": target.get("entries"),
                                    "compilerFlags": flags, "compilerWorkers": compiler_workers, "includePaths": target["includePaths"],
                                    "systemIncludePaths": system_includes, "diagnosticCompiler": {"path": compiler, "version": compiler_version, "sha256": digest(Path(compiler))},
                                    "compilerDiscoveredDefines": per_unit_macros,
@@ -394,6 +394,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                    "adoptedSources": [name for name in sources if name.startswith("kernel/")],
                                    "patchedKernel": target.get("kernelPatches", []),
                                    "patchedLines": patched_lines}
+    c_sdk.bind_wait_definitions(scope)
+    return root, sources, database, scope
 
 
 def kernel_patched_lines(before: dict[Path, bytes], root: Path,

@@ -575,6 +575,145 @@ def summary(
     }
 
 
+def bind_wait_definitions(scope: dict) -> None:
+    """Bind captured wait definitions to actual provider bytes before publishing receipts."""
+    headers = {row["path"]: row for row in scope["sdkHeaders"]}
+    for locations in scope["sdkMacroInputs"].values():
+        for values in locations.values():
+            if "INFINITE" not in values:
+                continue
+            for definition in values.values():
+                if definition["file"] not in headers:
+                    continue
+                path = Path(definition["file"])
+                lines = path.read_text(encoding="utf-8").splitlines()
+                index = definition["line"] - 1
+                original = lines[index] if 0 <= index < len(lines) else ""
+                while original.endswith("\\") and index + 1 < len(lines):
+                    index += 1
+                    original = original[:-1] + lines[index]
+                definition["original"] = source_code(original).strip()
+                definition["headerKey"] = headers[definition["file"]]["key"]
+
+
+def validate_sources(data: dict) -> None:
+    """Validate normal SDK receipts, independently of diagnostic presence or spelling."""
+    scope = data["scope"]
+    classification = data["sourceClassification"]
+    if not classification["complete"] or classification["unclassifiedDiagnosticKeys"]:
+        raise ValueError("Incomplete SDK source provenance")
+    target = scope["target"]
+    windows = target.startswith("windows")
+    headers = {}
+    for row in scope["sdkHeaders"]:
+        label = "SDK header " + row["path"]
+        if row["path"] in headers:
+            raise ValueError(label + ": duplicate identity")
+        if row["target"] != target or row["category"] != "sdk":
+            raise ValueError(label + ": target/category mismatch")
+        if (
+            not provider_supported(row.get("provider", ""), windows)
+            or not row.get("version")
+            or not row.get("header")
+        ):
+            raise ValueError(label + ": missing or unsupported package identity")
+        if not re.fullmatch(r"[0-9a-f]{64}", row.get("sha256", "")):
+            raise ValueError(label + ": missing original digest")
+        algorithm = "sha256" if windows else "md5"
+        if (
+            row.get("algorithm") != algorithm
+            or not re.fullmatch(
+                r"[0-9a-f]{64}" if windows else r"[0-9a-f]{32}", row.get("expected", "")
+            )
+            or windows
+            and row["sha256"] != row["expected"]
+        ):
+            raise ValueError(label + ": original/package digest mismatch")
+        key = hashlib.sha256(
+            json.dumps(
+                {k: v for k, v in row.items() if k not in {"path", "reason", "key"}},
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        if row.get("key") != key:
+            raise ValueError(label + ": identity key mismatch")
+        headers[row["path"]] = row
+    units = scope["translationUnits"]
+    dependencies = scope["sdkTranslationUnits"]
+    inputs = scope["sdkMacroInputs"]
+    if not headers or set(dependencies) != set(units) or set(inputs) != set(units):
+        raise ValueError("SDK translation units: incomplete dependency/macro inventory")
+    if set(headers) != {path for paths in dependencies.values() for path in paths}:
+        raise ValueError("SDK headers: dependency inventory mismatch")
+    if not windows:
+        return
+    if scope["compilerSemanticInputs"]["machine"] != "x86_64-w64-mingw32" or scope.get(
+        "sdkLineDirectives", False
+    ):
+        raise ValueError("SDK wait: target or source tracing mismatch")
+    port = "kernel/portable/MSVC-MingW/port.c"
+    port_wait = False
+    for unit, locations in inputs.items():
+        for location, values in locations.items():
+            if "INFINITE" not in values:
+                continue
+            label = "SDK wait " + unit + ":" + location
+            definition = values["INFINITE"]
+            use = definition["use"]
+            filename, _, line = location.rpartition(":")
+            if (
+                not line.isdecimal()
+                or int(line) < 1
+                or not re.search(r"\bINFINITE\b", use)
+            ):
+                raise ValueError(label + ": missing call source")
+            for name, item in values.items():
+                if item["unresolved"] or item["use"] != use:
+                    raise ValueError(
+                        label + ": unresolved or inconsistent active closure"
+                    )
+                header = headers.get(item["file"])
+                if header is None:
+                    continue  # Project wrappers remain project-owned.
+                if (
+                    item["file"] not in dependencies[unit]
+                    or item.get("headerKey") != header["key"]
+                ):
+                    raise ValueError(label + ": definition/header dependency mismatch")
+                match = re.fullmatch(
+                    r"#\s*define\s+(\w+)(.*)", item.get("original", "")
+                )
+                if (
+                    not match
+                    or match[1] != name
+                    or item["line"] < 1
+                    or match[2].startswith("(") != item["function"]
+                    or re.sub(r"\s+", "", match[2]) != re.sub(r"\s+", "", item["value"])
+                ):
+                    raise ValueError(
+                        label + ": active definition differs from original"
+                    )
+            if (
+                definition["file"] not in headers
+                or definition["function"]
+                or definition.get("reference", False)
+            ):
+                raise ValueError(
+                    label + ": INFINITE is not an active provider object macro"
+                )
+            closure = macro_closure({"INFINITE"}, values, use)
+            if any(item["unresolved"] for item in closure.values()):
+                raise ValueError(label + ": unresolved INFINITE definition")
+            if (
+                unit == port
+                and filename == port
+                and re.search(r"\bWaitForSingleObject\s*\([^;]*\bINFINITE\b", use)
+            ):
+                port_wait = True
+    if not port_wait:
+        raise ValueError("SDK wait " + port + ": missing active wait call source")
+
+
 def semantic(scope: dict) -> str:
     """Paths are provenance; provider/header bytes and active definitions are semantic."""
     headers = scope.get("sdkHeaders", [])
