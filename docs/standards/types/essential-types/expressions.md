@@ -67,5 +67,3 @@ R7.1（Required，主文印刷59–60／PDF67–68）只对单个数字0给出�
 同一TU的非ISO fcntl.h处理进入bits/fcntl2.h:48，__OPEN_NEEDS_MODE展开O_CREAT及__O_TMPFILE／__O_DIRECTORY，留下0100一次、020000000与0200000各两次。原生参数宏收据为_FORTIFY_SOURCE=3、__USE_FORTIFY_LEVEL=3；源码仍是正常O1／fexceptions／pthread参数，不能把fortify函数体当成未进入的源代码。既有四份带来源标记的sdk-inline-closure给出相同构造，HostLinux的三个eventfd枚举另见OS篇，其他两个样本TU没有八进制候选。这些具体位置保留真实Required缺口；不以改写数字、关闭fortify、换入口或间接include当作整改，也不扩张已接受的三个include范围。
 
 R7.2另覆盖#if／#elif控制表达式及预处理后整数常量（主文印刷60–61／PDF68–69，AMD2.46及语言表）。按既有Linux LP64宽度区分十进制与十六／八进制的候选类型，四份.i的832／455／186／620个实际整数token均未发现缺U而具有unsigned类型的常量，所有数字token均能归入整数形式。这里没有把赋值目标是unsigned误当成literal类型，也没有把R7.1的八进制违反并为R7.2违反；该局部结论不包含已消去的条件控制表达式、其他TU或Windows，不能据此关闭整条R7.2。
-
-
