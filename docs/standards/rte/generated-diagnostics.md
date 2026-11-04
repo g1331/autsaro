@@ -63,7 +63,7 @@ R8.9 是 Advisory、System（2013主文印刷71／PDF79）。它按标识符出�
 - MemMap R20.1／R20.5：逐包含请求与真实 undef 引用[既有类别](../memmap/README.md#memmap-类别偏离)，普通包含不借用此类别。
 - R15.5：引用 ADR0025 的既有 Advisory GRP disapply，仍检查拒绝路径、资源和输出。
 - 无名 role 参数 R8.2、组件实例类型 R5.6：分别沿 [role 参数](contracts.md#无名-role-参数的逐处核查)与[实例类型](README.md#组件实例类型的同名冲突)的已有精确记录，不扩大到其他声明。
-- Boolean R10.3／R10.4：连接实际 `_Bool`、`TRUE`／`FALSE` 展开，沿[essential type](../types/essential-types.md#boolean与character)的 D.6／D.7 依据逐表达式核对，不因工具模型把所有整数常量归为 Boolean。
+- Boolean R10.3／R10.4：连接实际 `_Bool`、`TRUE`／`FALSE` 展开，沿[essential type](../types/essential-types/expressions.md#boolean与character)的 D.6／D.7 依据逐表达式核对，不因工具模型把所有整数常量归为 Boolean。
 - R2.3／R2.5／R8.7：标准强制发布与当前程序未使用是两个事实。固定名字、typedef、宏形式及完整接口要求须分别核对；仅有外部 ABI 或既有交付形状不能自动获得 ADR0023 授权。类别外的具体保留须先形成可审阅提案，由当前授权的权限方作具体决定，未决键继续计为未分类。
 
 原始记录数、物理位置、规则＋文件＋源码行文本键以及两程序出现次数分别保留。最终四 profile 的分类与尚未闭合集合由 PR 按封存身份给出；本文不预先声明零未分类、完整221项评估或 Windows 实际执行通过。
