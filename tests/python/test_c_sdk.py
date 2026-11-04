@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import json
+import runpy
 import tempfile
 import unittest
 from copy import deepcopy
@@ -45,6 +47,199 @@ class SdkSourceTests(unittest.TestCase):
             "adopted": False,
             "programs": ["host-batch", "probe"],
         }
+
+    def wait_receipt(self, directory, suffix=""):
+        root, header, packages, _ = self.fixture(directory)
+        header.write_text("#define INFINITE 0xffffffff" + suffix + "\n")
+        packages[str(header)]["expected"] = hashlib.sha256(
+            header.read_bytes()
+        ).hexdigest()
+        record = c_sdk.header_identity(
+            header, root, TARGET, "x86_64-w64-mingw32", packages
+        )
+        port = "kernel/portable/MSVC-MingW/port.c"
+        source = root / port
+        source.parent.mkdir(parents=True)
+        source.write_text(
+            "configASSERT( WaitForSingleObject( xObject, INFINITE ) == 0U );\n"
+        )
+        inputs = c_sdk.preprocessing(
+            f'# 1 "{header.as_posix()}"\n#define INFINITE 0xffffffff{suffix}\n'
+            f'# 1 "{source.as_posix()}"\nexpanded;\n',
+            root,
+            {"INFINITE", "configASSERT"},
+        )
+        scope = {
+            "target": TARGET,
+            "sdkHeaders": [record],
+            "translationUnits": [port],
+            "sdkTranslationUnits": {port: [header.as_posix()]},
+            "sdkMacroInputs": {port: inputs},
+            "compilerSemanticInputs": {"machine": "x86_64-w64-mingw32"},
+        }
+        c_sdk.bind_wait_definitions(scope)
+        rows = (
+            []
+            if suffix
+            else [
+                {
+                    **self.diagnostic(),
+                    "locations": [{"file": port, "line": "1", "column": "5"}],
+                }
+            ]
+        )
+        raw = deepcopy(rows)
+        classification = c_sdk.classify(
+            rows,
+            scope,
+            []
+            if suffix
+            else [{"file": port, "line": 1, "column": 5, "literal": "0xffffffff"}],
+        )
+        self.assertEqual(
+            [
+                {
+                    k: v
+                    for k, v in row.items()
+                    if k not in {"sourceCategory", "sourceOrigins"}
+                }
+                for row in rows
+            ],
+            raw,
+        )
+        return {
+            "scope": scope,
+            "sourceClassification": classification,
+            "diagnostics": rows,
+            "error": None,
+        }
+
+    def test_wait_provenance_accepts_original_with_or_without_diagnostic(self):
+        for suffix in ("", "U"):
+            with (
+                self.subTest(suffix=suffix),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                data = self.wait_receipt(Path(temporary).resolve(), suffix)
+                c_sdk.validate_sources(data)
+                if not suffix:
+                    self.assertEqual(data["diagnostics"][0]["sourceCategory"], "sdk")
+                    self.assertEqual(
+                        data["diagnostics"][0]["sourceOrigins"][0]["macro"], "INFINITE"
+                    )
+                else:
+                    self.assertEqual(data["diagnostics"], [])
+
+    def test_wait_provenance_rejects_specific_broken_receipts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = self.wait_receipt(Path(temporary).resolve(), "U")
+            port = data["scope"]["translationUnits"][0]
+            cases = [
+                (lambda s: s["sdkHeaders"][0].pop("sha256"), "missing original digest"),
+                (
+                    lambda s: s["sdkHeaders"][0].update(target="linux"),
+                    "target/category mismatch",
+                ),
+                (
+                    lambda s: s["sdkHeaders"][0].update(provider="fake"),
+                    "package identity",
+                ),
+                (
+                    lambda s: s["sdkHeaders"][0].update(expected="0" * 64),
+                    "original/package digest mismatch",
+                ),
+                (
+                    lambda s: s["sdkHeaders"][0].update(key="0" * 64),
+                    "identity key mismatch",
+                ),
+                (lambda s: s["sdkTranslationUnits"].clear(), "translation units"),
+                (
+                    lambda s: s["sdkMacroInputs"][port].clear(),
+                    "missing active wait call source",
+                ),
+                (
+                    lambda s: s["compilerSemanticInputs"].update(machine="other"),
+                    "target or source tracing",
+                ),
+            ]
+            for mutate, reason in cases:
+                with self.subTest(reason=reason):
+                    broken = deepcopy(data)
+                    mutate(broken["scope"])
+                    with self.assertRaisesRegex(ValueError, reason):
+                        c_sdk.validate_sources(broken)
+            for field, value, reason in [
+                ("value", "0U", "active definition differs"),
+                ("original", "", "active definition differs"),
+                ("headerKey", "fake", "definition/header dependency mismatch"),
+                ("use", "WaitForSingleObject(x, 0U);", "missing call source"),
+                ("unresolved", True, "unresolved or inconsistent"),
+                ("file", "project.h", "not an active provider"),
+            ]:
+                with self.subTest(field=field):
+                    broken = deepcopy(data)
+                    broken["scope"]["sdkMacroInputs"][port][port + ":1"]["INFINITE"][
+                        field
+                    ] = value
+                    with self.assertRaisesRegex(ValueError, reason):
+                        c_sdk.validate_sources(broken)
+
+    def test_normal_workflow_consumes_wait_receipts_without_requiring_diagnostics(self):
+        import yaml
+
+        workflow = Path(__file__).resolve().parents[2] / ".github/workflows/checks.yml"
+        job = yaml.safe_load(workflow.read_text())["jobs"]["c-analysis"]
+        step = next(
+            step
+            for step in job["steps"]
+            if step.get("name") == "Require eight complete sample results"
+        )
+        self.assertEqual(step["env"]["PYTHONPATH"], "tools/python/src")
+        self.assertIn("actions/checkout@", job["steps"][0]["uses"])
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve()
+            data = self.wait_receipt(directory, "U")
+            paths = []
+            for target in (TARGET, "linux-x64-controlled-v1"):
+                for sample in (
+                    "standard-ecu",
+                    "user-application",
+                    "component-pipeline",
+                    "no-diagnostic",
+                ):
+                    receipt = deepcopy(data)
+                    if target.startswith("linux"):
+                        row = receipt["scope"]["sdkHeaders"][0]
+                        row.update(
+                            target=target,
+                            provider="libc6-dev",
+                            algorithm="md5",
+                            expected="0" * 32,
+                        )
+                        row["key"] = hashlib.sha256(
+                            json.dumps(
+                                {
+                                    k: v
+                                    for k, v in row.items()
+                                    if k not in {"path", "reason", "key"}
+                                },
+                                sort_keys=True,
+                            ).encode()
+                        ).hexdigest()
+                    receipt["scope"]["target"] = target
+                    path = directory / target / sample / "summary.json"
+                    path.parent.mkdir(parents=True)
+                    path.write_text(json.dumps(receipt))
+                    paths.append(path)
+            script = directory / "aggregate.py"
+            script.write_text(step["run"])
+            with patch.object(Path, "glob", return_value=paths):
+                runpy.run_path(str(script))
+                broken = json.loads(paths[0].read_text())
+                broken["scope"]["sdkMacroInputs"].clear()
+                paths[0].write_text(json.dumps(broken))
+                with self.assertRaisesRegex(ValueError, "translation units"):
+                    runpy.run_path(str(script))
 
     def test_original_identity_is_required_not_a_directory_or_basename(self):
         with tempfile.TemporaryDirectory() as temporary:
