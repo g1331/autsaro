@@ -825,6 +825,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: c-analysis-summaries-*
@@ -835,10 +838,13 @@ jobs:
           ANALYSIS_RESULT: ${{ needs.c-analysis-samples.result }}
         run: test "$PREPARE_RESULT" = success && test "$ANALYSIS_RESULT" = success
       - name: Require eight complete sample results
+        env:
+          PYTHONPATH: tools/python/src
         shell: python
         run: |
           import json
           from pathlib import Path
+          from autosar_tooling.c_sdk import validate_sources
           targets = {'linux-x64-controlled-v1', 'windows-x64-controlled-v1'}
           samples = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
           expected = {(target, sample) for target in targets for sample in samples}
@@ -848,17 +854,7 @@ jobs:
               pair = (summary['scope']['target'], path.parent.name)
               if pair in found or summary['error'] is not None:
                   raise RuntimeError('Duplicate or incomplete analysis result: ' + str(path))
-              classification = summary['sourceClassification']
-              if not classification['complete'] or classification['unclassifiedDiagnosticKeys']:
-                  raise RuntimeError('Incomplete SDK source provenance: ' + str(path))
-              if pair[0].startswith('windows'):
-                  waits = [row for row in summary['diagnostics'] if row['id'] == 'misra-c2012-7.2'
-                           and any(loc['file'] == 'kernel/portable/MSVC-MingW/port.c' for loc in row['locations'])]
-                  if len(waits) != 1 or waits[0]['sourceCategory'] != 'sdk' or not any(
-                      origin['kind'] == 'unsigned-literal' and origin['macro'] == 'INFINITE'
-                      and origin['value'] == '0xffffffff' for origin in waits[0]['sourceOrigins']
-                  ):
-                      raise RuntimeError('Missing original SDK unsigned wait literal evidence: ' + str(path))
+              validate_sources(summary)
               found.add(pair)
           if found != expected:
               raise RuntimeError('Expected all eight platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
