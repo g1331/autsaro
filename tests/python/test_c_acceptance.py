@@ -351,7 +351,7 @@ class AcceptanceTests(unittest.TestCase):
             c_acceptance.require_accepted([(accepted, self.project), (accepted, self.project)], [(TARGET, CASE)],
                                          {"prepare": "success", "analysis": "success"}, root=self.root)
         self.assertEqual(self.tool_probe.call_count, 1)
-        self.assertEqual(self.semantic_probe.call_args.args[2], (self.project.parent / "host-batch", self.project.parent / "probe"))
+        self.assertEqual(self.semantic_probe.call_args.args[2], (self.project.parent.resolve() / "host-batch", self.project.parent.resolve() / "probe"))
         with patch.object(c_check.platform, "system", return_value="Windows"), self.assertRaisesRegex(ValueError, "analysis target"):
             self.require(accepted)
 
@@ -399,7 +399,7 @@ class AcceptanceTests(unittest.TestCase):
         drivers.mkdir()
         for name in ("c_check.py", "c_addon.py", "c_comparison.py"):
             (drivers / name).write_bytes(b"fixture analysis driver\n")
-        header = self.directory / "provider/sdk.h"
+        header = (self.directory / "provider/sdk.h").resolve()
         header.parent.mkdir()
         header.write_bytes(b"#define SDK_VALUE 1U\n")
         package = {"provider": "libc6-dev", "version": "fixture", "header": "usr/include/sdk.h",
@@ -623,11 +623,11 @@ class AcceptanceTests(unittest.TestCase):
     def test_strict_consumer_rechecks_the_recorded_context_not_just_the_verdict(self):
         accepted = self.receipt()
         context_path = self.root / accepted["projectAcceptance"]["contexts"][0]["source"]
-        saved = context_path.read_text(encoding="utf-8")
+        saved = context_path.read_bytes().decode("utf-8")
         for text, reason in ((saved.replace('"approved"', '"pending"'), "formal_deviation_pending"),
                              (saved.replace(accepted["projectAcceptance"]["inputIdentity"], "f" * 64), "input_context_unbound_or_stale"),
                              (saved.split(c_acceptance.BEGIN)[0], "input_context_unbound_or_stale")):
-            context_path.write_text(text, encoding="utf-8")
+            context_path.write_bytes(text.encode("utf-8"))
             with self.subTest(text=text[-80:]), self.assertRaisesRegex(ValueError, reason):
                 self.require(accepted)
 
@@ -642,17 +642,48 @@ class AcceptanceTests(unittest.TestCase):
         accepted = self.receipt()
         reference = next(row for row in accepted["projectAcceptance"]["contexts"] if row["records"]["kind"] == "manual-assessment")
         path = self.root / reference["source"]
-        text = path.read_text(encoding="utf-8")
+        text = path.read_bytes().decode("utf-8")
         blocks = c_acceptance._blocks(text)
         for block in blocks:
             context = json.loads(block)
             if context["id"] == reference["id"]:
                 context["formalStatus"] = "pending"
                 text = text.replace(block, json.dumps(context) + "\n")
-        path.write_text(text, encoding="utf-8")
+        path.write_bytes(text.encode("utf-8"))
         accepted["coverage"]["manualAssessment"] = c_standard.manual_assessment(self.rules, self.root)
         with self.assertRaisesRegex(ValueError, "formal_assessment_pending"):
             self.require(accepted)
+
+    def test_pending_context_edits_preserve_explicit_lf_and_crlf_assessment_bytes(self):
+        identities = []
+        for newline in (b"\n", b"\r\n"):
+            with self.subTest(newline=newline):
+                self.synthetic_complete_inputs()
+                path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[0]
+                body = path.read_bytes().split(c_acceptance.BEGIN.encode())[0]
+                body = body.replace(b"\r\n", b"\n").replace(b"\n", newline)
+                path.write_bytes(body)
+                identity = self.identity()
+                identities.append(identity)
+                for group in c_acceptance.GROUPS:
+                    self.bind(self.context(identity=identity, status="approved", group=group))
+                accepted = copy.deepcopy(self.summary)
+                accepted["projectAcceptance"] = self.evaluate()
+                self.assertEqual(accepted["projectAcceptance"]["status"], "accepted")
+                self.require(accepted)
+                data = path.read_bytes()
+                for block in c_acceptance._blocks(data.decode("utf-8")):
+                    context = json.loads(block)
+                    if context["records"]["kind"] == "manual-assessment":
+                        context["formalStatus"] = "pending"
+                        data = data.replace(block.encode(), (json.dumps(context) + "\n").encode())
+                path.write_bytes(data)
+                self.assertTrue(path.read_bytes().startswith(body))
+                self.assertEqual(identity, self.identity())
+                accepted["coverage"]["manualAssessment"] = c_standard.manual_assessment(self.rules, self.root)
+                with self.assertRaisesRegex(ValueError, "formal_assessment_pending"):
+                    self.require(accepted)
+        self.assertNotEqual(*identities)
 
     def test_strict_consumer_rejects_changed_supplementary_evidence(self):
         accepted = self.receipt()
