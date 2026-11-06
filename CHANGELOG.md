@@ -63,6 +63,7 @@
 ### Fixed
 
 - C-analysis comparisons preserve program identity before counting changes, so a finding removed from HostBatch cannot conceal the same finding newly reported in probe; malformed retention records report their field and source location as analysis errors (#426)
+- Project source acceptance pins the fixed guideline categories independently of summary and catalog metadata, rejecting coordinated category redefinition (#428)
 
 - Derived LSduR deliveries now publish `LSDUR_VERSION_INFO_API=STD_OFF` and document the selected disabled API profile; standalone LSduR ECUC modules remain unsupported. Conflicting runnable/type names are rejected at their source objects; rename them and regenerate deliveries (#411)
 

@@ -27,6 +27,7 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 INCOMPLETE = {"misra-config", "syntaxError", "preprocessorErrorDirective", "internalError",
               "cppcheckError", "addonError", "missingInclude", "missingIncludeSystem", "toomanyconfigs"}
 GROUPS = ("generated-retention", "manual-assessment", "checker-limitations")
+GUIDELINE_CATEGORIES_SHA256 = "ef484316b09af067e673521476fd7a70f5757646e9c7e3918cdacef75a34bf66"
 
 
 def _hash(value: object) -> str:
@@ -234,6 +235,8 @@ def _catalog(summary: dict, root: Path) -> list[dict]:
     from autosar_tooling import c_check
 
     catalog = json.loads((root / ".agents/skills/misra-c2012/references/baseline-index.json").read_text(encoding="utf-8"))["guideline_metadata"]
+    if len(catalog) != 221 or _hash({row["id"]: row["category"] for row in catalog}) != GUIDELINE_CATEGORIES_SHA256:
+        raise ValueError("Unsupported fixed guideline categories")
     rules = summary["coverage"]["rules"]
     if (len(rules) != 221 or len({row["id"] for row in rules}) != 221
             or {(row["id"], row["category"]) for row in rules} != {(row["id"], row["category"]) for row in catalog}

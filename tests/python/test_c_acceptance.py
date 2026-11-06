@@ -385,6 +385,17 @@ class AcceptanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "66 uncovered guidelines"):
             self.require(forged)
 
+    def test_fixed_guideline_categories_cannot_be_redefined_by_input_metadata(self):
+        self.synthetic_complete_inputs()
+        path = self.root / ".agents/skills/misra-c2012/references/baseline-index.json"
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+        next(row for row in catalog["guideline_metadata"] if row["id"] == "R2.5")["category"] = "Mandatory"
+        path.write_text(json.dumps(catalog), encoding="utf-8")
+        next(row for row in self.summary["coverage"]["rules"] if row["id"] == "R2.5")["category"] = "Mandatory"
+        result = self.evaluate()
+        self.assertEqual(result["status"], "error")
+        self.assertIn("fixed guideline categories", result["objects"][-1]["reason"])
+
     def test_strict_replay_uses_real_semantic_sdk_provider_and_driver_byte_checks(self):
         self.synthetic_complete_inputs()
         tool_directory = self.directory / "semantic-tool"
