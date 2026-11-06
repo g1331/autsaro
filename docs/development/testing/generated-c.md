@@ -54,6 +54,8 @@ CI 每个平台先验证检查器、生成四类完整样本并发布本轮工�
 
 正常摘要的`coverage.manualAssessment`仅汇总[既有66项人工记录](../../standards/os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，按实际`automaticChecker`与155项分开；`retained`不是满足，未评估项继续计入unclassified。它不评估当前source seal，也不改写221项`assessment=not_assessed`或`completeCompliance=false`。`misra-manual-assessment-v1`绑定解析器原始字节、五篇记录全文原始字节和固定路径选集摘要；analysisCode另含解析器的规范化文本摘要。两层换行身份分别保留，coverage或任一分析身份变化仍明确拒绝旧基线。跨平台换行反例须用原始字节显式建立LF和CRLF两个输入，再断言结论相同、摘要不同；不能假定checkout为LF，或把已为CRLF的输入再写成CRLF当作变化。
 
+正常 ECU 检查另由 `c_retention.py` 消费合并后的全部原始诊断，`generatedRetention.occurrences` 按诊断索引、每个位置及完整程序名集合记录 `record_matched`／`unmatched`、实体、记录来源与理由。匹配只限[既有 159 键](../../standards/rte/generated-retention/README.md)的固定 cohort、目标、程序、完整声明／宏替换列表及相邻规则标记，局部地址转换还核对所属函数；无位置和未知诊断同样保留。正常检查不按目录名识别四样本，`scope.profile=ecu` 也不能证明它们的身份；当前记录尚未绑定本次样本配置、producer 与包含／源闭包，整体仍为 `partial`、`evidenceClosure=not_established`。`record_matched` 只表示形态与标记引用匹配，不是正式偏离或满足义务，不改写原始诊断、`passed`、`error`、程序退出码、221 项人工状态或严格比较。原 native 消费者与反例测试复用同一生产解析器，不能借更新摘要自动批准新键。
+
 ## 改动生成 C 时的比较
 
 - 重组生成代码后按 ADR 0014 比较主线样本时，在改动前后分别用 `AUTOSAR_C_ANALYSIS_SAMPLES` 生成全部样本逐文件比较。规则集身份与 `integration.json` 的生成器摘要按 core 实现源码字节计算，任何源码改动都会改变各元数据文件和 `tools/ecu-tool.py` 中的哈希：元数据把 64 位十六进制哈希归一化后比较，生成的 C、头文件与 README 必须原样相同，其余差异逐项归因。
@@ -77,4 +79,4 @@ uv run --locked python -m autosar_tooling c-check --target linux-x64-controlled-
 
 生成计划的 `runtimeSources` 同时保存交付源码与生成器／模板摘要。由 `originalBswSources` 定位到直接交付的 runtime C／头文件条目，分别核对实际字节、原始封存记录和元数据身份后，允许源码摘要随整改变化；原始到交付路径绑定、成员集合及其他生成计划字段仍须相等。没有直接交付来源的生成器／模板摘要不放宽。当前输入与分析副本、基线各自的 seal 必须匹配各自 summary，不能修改旧摘要或来源映射来追认比较；比较器自身代码身份的变化也照常要求匹配的实际分析。
 
-比较按每个诊断位置的“规则＋相对文件＋源码行文本”及程序出现次数计数，源码移动不算新增；新增和移除分别输出，不能用净差抵消，完整条目保存在现有 `summary.json` 的 `comparison.new`／`removed`。本地扫描与基线比较各自保留事实：零新增不改变 `passed=false`，现存违规仍返回非零；身份拒绝也返回非零。它不是扫描通过缓存，不减少样本、规则或比较粒度。严格源码门的启用与实际阻断证据由 [#55](https://github.com/g1331/autsaro/issues/55) 承接。
+比较按每个诊断位置的“规则＋相对文件＋源码行文本＋程序名称”计数，先逐程序分别计算新增与移除，再汇总为位置计数。源码移动和程序列表顺序变化不算新增；HostBatch 的移除不能抵消 probe 的新增。完整条目保存在现有 `summary.json` 的 `comparison.new`／`removed`。本地扫描与基线比较各自保留事实：零新增不改变 `passed=false`，现存违规仍返回非零；身份拒绝也返回非零。它不是扫描通过缓存，不减少样本、规则或比较粒度。严格源码门按 [ADR 0026](../../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 分离原始分析与项目验收，启用与实际阻断证据由 [#55](https://github.com/g1331/autsaro/issues/55) 承接。

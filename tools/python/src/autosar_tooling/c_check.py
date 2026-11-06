@@ -31,7 +31,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessSpec, run_bounded
 
-from autosar_tooling import c_sdk, c_standard
+from autosar_tooling import c_retention, c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 CPPCHECK_VERSION = "2.21.0"
@@ -500,7 +500,7 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     if cfg is None:
         raise ValueError("Cppcheck analysis library contents unavailable")
     scope["cppcheckLibraries"] = {name: str((cfg / (name + ".cfg")).resolve()) for name in libraries}
-    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__), Path(c_standard.__file__)]
+    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__), Path(c_standard.__file__), Path(c_retention.__file__)]
     # Build/owner helpers determine selected inputs, patching and executed processes.
     import ecu_tools.build
     import ecu_tools.owner
@@ -607,6 +607,8 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
                     summary["diagnostics"].append(row)
                 seen[key]["programs"].append(program)
         diagnostics = summary["diagnostics"]
+        if scope.get("profile") == "ecu":
+            summary["generatedRetention"] = c_retention.analyze(diagnostics, root, target_id)
         summary["sourceClassification"] = c_sdk.summary(diagnostics, scope.get("sdkHeaders", []), not scope.get("sdkLineDirectives", False))
         sealed_sources(project)
         if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:

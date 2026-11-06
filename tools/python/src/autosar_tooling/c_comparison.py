@@ -33,7 +33,8 @@ def _counts(summary: dict, root: Path) -> Counter:
             line = int(location["line"])
             if not 1 <= line <= len(lines):
                 raise ValueError(f"Diagnostic source line unavailable: {name}:{line}")
-            counts[diagnostic["id"], name, lines[line - 1]] += len(diagnostic["programs"])
+            for program in diagnostic["programs"]:
+                counts[diagnostic["id"], name, lines[line - 1], program] += 1
     return counts
 
 
@@ -72,7 +73,7 @@ def _semantic(summary: dict) -> dict:
     require(all(strings(value) for value in defines.values()))
     hashes(identity["models"], ("platformModel", "platformLibrary"), True)
     hashes(identity["libraries"], ("std", "windows" if summary["scope"]["target"].startswith("windows") else "posix", "implicitStd"))
-    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py"))
+    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "c_retention.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py"))
     hashes(identity["addonRuntime"], ("runaddon.py", "cppcheck.py", "cppcheckdata.py"))
     assessment = summary["coverage"]["manualAssessment"]
     require(assessment["format"] == "misra-manual-assessment-v1")
@@ -162,8 +163,11 @@ def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
         now = _counts(current, output / "project")
         before = _counts(previous, old_root)
         def rows(counts):
+            locations = Counter()
+            for (rule, name, source, _program), count in counts.items():
+                locations[rule, name, source] += count
             return [{"rule": rule, "file": name, "source": source, "count": count}
-                    for (rule, name, source), count in sorted(counts.items())]
+                    for (rule, name, source), count in sorted(locations.items())]
         return {"new": rows(now - before), "removed": rows(before - now)}
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise ValueError(
