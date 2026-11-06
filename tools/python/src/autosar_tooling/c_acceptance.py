@@ -307,7 +307,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         for group, kind, rows in (("manual-assessment", "manual", manual["checkerUncovered"]["records"]),
                                   ("checker-limitations", "checker-limitation", supplementary["records"])):
             for row in rows:
-                reason = kind + "_" + row["status"] if row["status"] not in {"satisfied", "not_applicable"} else group_reasons.get(group)
+                reason = kind + "_" + row["status"] if row["status"] not in {"satisfied", "not_applicable", "retained"} else group_reasons.get(group)
                 if reason:
                     add(kind, row["id"], reason, source=row.get("source"))
         if summary.get("sourceClassification", {}).get("complete") is not True:

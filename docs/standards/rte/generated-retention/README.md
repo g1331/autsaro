@@ -33,49 +33,49 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 {
   "id": "generated-retention-428-inputs",
   "evidence": {
-    "head": "cfeec9e03e6d74b363a3823e3114354b9f819f7f",
-    "receipt": "https://github.com/g1331/autsaro/pull/429#issuecomment-6685338189"
+    "head": "28c41e2c9f11bdb43170a7ffc29c6262a1c32795",
+    "receipt": "https://github.com/g1331/autsaro/pull/430#issuecomment-6687805826"
   },
   "cases": [
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "ab15a38483072a1d4b493373b9899939d8963da2d93439da1e666aed3267d235"
+      "inputIdentity": "ff8fa0ec73b71c61d6e19d67b982e9ed6e4398e01ed09824e38a2ba12ac39f77"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "01011f1c41c058bd7034a89ec402e7515f21686769d5923574115cd891618926"
+      "inputIdentity": "759483a832b5de2b7da1176c9140929164611cb838bb6317ee1511ee00845ba2"
     },
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "0c6bcfa20ff5b9c4f08b05d732d8eea003df15fa382c59d6bbbd034849753d01"
+      "inputIdentity": "4c42d7de462e53be755de1a15f2816f02b9f2fe11a0f5decfb063c89e3ebbf97"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "74d3b0e546fd4b6f3e06665dd5c8f81bb359117350e003b316fddd45b71bcb74"
+      "inputIdentity": "84a02e1f88bce88d60835d9dc7087b5c0031daee9d83f30af19fd0c75813bcfd"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "de4b72bda2a588de194eaaf6ad52b7bfa9b7c5d24166bac2321aa43cc29daa46"
+      "inputIdentity": "57fa583045fbc61745816ed321248ac8ec3e7edfcfee300fa973aec3ecea27a5"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "a6729dc470a9b696153bbad72fd5e49a379e81fcab3a16668b223ad88365fb8c"
+      "inputIdentity": "947d833e8734472d88baf21da08683fb3ab7e3c59316f8048d8c6d6dd4792ae8"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "d0faa48068fa1c8baac74f233f2732c26a09b6dcbdfe4d1457cf4fbb75372c2c"
+      "inputIdentity": "036f0ed267f2f7f730c0331035ad6fe08f2da43b4950a2c9955adf00716bc467"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "32c268b630ab625f0088d9ec2ab87d1e1d2d0d69fd7108bdc7309704ce1d05e7"
+      "inputIdentity": "74122a0a8154d9650ecc3638fc13a723ab5b843167706e212891004d70f8ff2c"
     }
   ],
   "records": {
