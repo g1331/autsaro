@@ -25,3 +25,7 @@
 R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真实有效对象地址经此转换进入Arti_CaptureAddress，再复制到事件event_address/address_valid；trace只取其低32位。两个受控x64 ABI下指针和uint64为64位，真实高位对象观察及高位截断反例约束完整位保留。没有整数到指针恢复、解引用、伪造所有权或延长pointee存储期，也不扩大现有事件观察生命周期。单处转换仍是实现相关的真实违反；新handle协议是可行替代。源码标记绑定局部native_address，不新增通用地址类别。
 
 源码只补精确说明，不更改非注释C/预处理token或宏种类。模板静态实体由现有双向关联检查核对，emitter输出由正常native套件对本表完整shape、闭合集合及来源核对。集合摘要只冻结这次决定的实体/body/profile证据，不是诊断baseline或suppression；当前raw逐项核对及零未分类结论归实施PR，不能只改文档状态即宣称完成。
+
+## 当前输入绑定
+
+正常源码检查按[项目源码验收格式](../../../development/testing/source-acceptance.md)消费本组冻结上下文。输入覆盖应用字节、实际配置、producer、交付与包含／程序闭包及评估材料，不以目录名认定 S/U/C/N。上下文只关联本组原表，不授权其他人工记录；缺失、变化或 `formalStatus=pending` 均保持阻塞。本组正式记录义务尚未因 #426 的形态关联而完成，不能将采集到的当前输入摘要自动升级为批准。
