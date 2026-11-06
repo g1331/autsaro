@@ -133,9 +133,9 @@ class RetentionTests(unittest.TestCase):
             source = "`source` `Name`" if missing != "source/entity" else "`Name`"
             details = "; ".join(value for key, value in fields.items() if key != missing)
             path.write_text(f"heading\n| MISRA C:2012 Rule 2.5 | {source} | {details} | decision |\n")
-            with self.subTest(field=missing), patch.object(c_retention, "ROOT", self.project):
-                with self.assertRaisesRegex(ValueError, f"Invalid retention {missing}: .*records.md:2"):
-                    c_retention.records()
+            with self.subTest(field=missing), patch.object(c_retention, "ROOT", self.project), \
+                    self.assertRaisesRegex(ValueError, f"Invalid retention {missing}: .*records.md:2"):
+                c_retention.records()
 
     def test_normal_check_consumes_xml_and_preserves_raw_failure(self):
         self.check_xml()
