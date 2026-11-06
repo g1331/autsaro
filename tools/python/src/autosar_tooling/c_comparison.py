@@ -73,7 +73,7 @@ def _semantic(summary: dict) -> dict:
     require(all(strings(value) for value in defines.values()))
     hashes(identity["models"], ("platformModel", "platformLibrary"), True)
     hashes(identity["libraries"], ("std", "windows" if summary["scope"]["target"].startswith("windows") else "posix", "implicitStd"))
-    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "c_retention.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py"))
+    hashes(identity["analysisCode"], ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "c_retention.py", "c_acceptance.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py"))
     hashes(identity["addonRuntime"], ("runaddon.py", "cppcheck.py", "cppcheckdata.py"))
     assessment = summary["coverage"]["manualAssessment"]
     require(assessment["format"] == "misra-manual-assessment-v1")

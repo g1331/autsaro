@@ -82,6 +82,7 @@ class CAnalysisTests(unittest.TestCase):
                 summary = json.loads((output / "summary.json").read_text())
                 self.assertFalse(summary["passed"])
                 self.assertEqual(summary["error"], str(error))
+                self.assertEqual(summary["projectAcceptance"]["status"], "error")
                 self.assertEqual(list(project.iterdir()), [])
 
     def test_xml_preserves_rule_locations_and_separates_adopted_code(self):
@@ -220,6 +221,7 @@ class CAnalysisTests(unittest.TestCase):
             summary = json.loads((output / "summary.json").read_text())
             self.assertFalse(summary["passed"])
             self.assertEqual(summary["error"], "Invalid project addon receipt structure")
+            self.assertEqual(summary["projectAcceptance"]["status"], "error")
             self.assertTrue(summary["programs"][0]["passed"])
 
     def test_changed_semantic_inputs_during_scan_cannot_leave_green_summary(self):
@@ -240,3 +242,38 @@ class CAnalysisTests(unittest.TestCase):
             self.assertEqual(summary["error"], "Semantic inputs changed during analysis")
             self.assertFalse(summary["passed"])
             self.assertTrue(summary["programs"][0]["passed"])
+
+    def test_project_acceptance_follows_rechecks_and_does_not_replace_raw_success(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = directory / "source"
+            (source / "meta").mkdir(parents=True)
+            (source / "meta/files.sha256").write_text("seal")
+            output = directory / "analysis"
+            events = []
+
+            def semantic(*args):
+                events.append("semantic")
+                return {"version": 2}
+
+            def acceptance(summary, project):
+                events.append("acceptance")
+                self.assertTrue(summary["passed"])
+                self.assertEqual(summary["programs"][0]["exitCode"], 0)
+                self.assertEqual(project, output / "project")
+                return {"status": "blocked", "objects": [{"reason": "unassessed"}]}
+
+            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), \
+                    patch.object(c_check, "coverage", return_value={"completeCompliance": False}), \
+                    patch.object(c_check, "prepare", return_value=(output / "project", ["main.c"], [], {})), \
+                    patch.object(c_check, "semantic_identity", side_effect=semantic), \
+                    patch.object(c_check, "analyze_program", return_value=(0, True, [], [])), \
+                    patch.object(c_check, "sealed_sources", side_effect=lambda *args: events.append("seal")), \
+                    patch.object(c_check.c_acceptance, "evaluate", side_effect=acceptance):
+                self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 0)
+            self.assertEqual(events, ["semantic", "seal", "semantic", "acceptance"])
+            summary = json.loads((output / "summary.json").read_text())
+            self.assertTrue(summary["passed"])
+            self.assertIsNone(summary["error"])
+            self.assertFalse(summary["coverage"]["completeCompliance"])
+            self.assertEqual(summary["projectAcceptance"]["status"], "blocked")

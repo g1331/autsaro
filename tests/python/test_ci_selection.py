@@ -42,6 +42,33 @@ def jobs() -> dict[str, dict[str, object]]:
 
 
 class CiSelectionTests(unittest.TestCase):
+    def test_analysis_readiness_rejects_acceptance_errors_but_not_known_blockers(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        step = next(row for row in workflow["jobs"]["c-analysis-samples"]["steps"]
+                    if row.get("name") == "Verify complete generated-project analysis")
+        for status in ("accepted", "blocked", "error", "unknown", None):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                output = root / "build/c-analysis-results/standard-ecu/summary.json"
+                output.parent.mkdir(parents=True)
+                data = {"error": None, "passed": False}
+                if status is not None:
+                    data["projectAcceptance"] = {"status": status}
+                output.write_text(json.dumps(data), encoding="utf-8")
+                script = root / "readiness.py"
+                script.write_text(step["run"], encoding="utf-8")
+                env = {"AUTOSAR_C_ANALYSIS_SAMPLES": str(root / "samples"), "ANALYSIS_TARGET": "linux-x64-controlled-v1",
+                       "ANALYSIS_SAMPLES": "standard-ecu"}
+                previous = Path.cwd()
+                try:
+                    os.chdir(root)
+                    with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 1)), \
+                            self.assertRaises(SystemExit) as exit_:
+                        runpy.run_path(str(script))
+                finally:
+                    os.chdir(previous)
+                self.assertEqual(exit_.exception.code == 0, status in {"accepted", "blocked"})
+
     def test_desktop_gate_selection_and_failure_propagation(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         detect = workflow["jobs"]["changes"]["steps"][1]["run"]

@@ -12,6 +12,7 @@ import shutil
 import sys
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from pathlib import Path
 
 from ecu_tools.build import (
@@ -31,7 +32,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessSpec, run_bounded
 
-from autosar_tooling import c_retention, c_sdk, c_standard
+from autosar_tooling import c_acceptance, c_retention, c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 CPPCHECK_VERSION = "2.21.0"
@@ -500,7 +501,7 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     if cfg is None:
         raise ValueError("Cppcheck analysis library contents unavailable")
     scope["cppcheckLibraries"] = {name: str((cfg / (name + ".cfg")).resolve()) for name in libraries}
-    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__), Path(c_standard.__file__), Path(c_retention.__file__)]
+    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__), Path(c_standard.__file__), Path(c_retention.__file__), Path(c_acceptance.__file__)]
     # Build/owner helpers determine selected inputs, patching and executed processes.
     import ecu_tools.build
     import ecu_tools.owner
@@ -551,6 +552,26 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
         "addonRuntime": runtime_hashes[0],
         "analysisCode": {path.name: text_hash(path) for path in drivers},
     }
+
+
+def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path, dict]) -> None:
+    """Reuse actual SDK/provider, implicit-runner and driver checks on this host."""
+    executable, _addons, identity = tool
+    scope = deepcopy(summary["scope"])
+    if TARGETS[scope["target"]] != platform.system():
+        raise ValueError("Strict acceptance must run on the analysis target's Windows/Linux host")
+    for field in ("version", "expectedSourceRevision", "addons"):
+        if identity[field] != summary["tool"][field]:
+            raise ValueError(f"Analysis tool identity changed: {field}")
+    refuse_links(project)
+    project = project.resolve(strict=True)
+    names = [row["name"] for row in summary["programs"]]
+    if any(name not in {"target", "host-batch", "probe"} for name in names):
+        raise ValueError("Unsupported analysis program directory")
+    directories = (project.parent,) if len(names) == 1 else tuple(project.parent / name for name in names)
+    scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
+    if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
+        raise ValueError("Actual semantic inputs changed since analysis")
 
 
 def check(project: Path, target_id: str, output: Path, baseline: Path | None = None) -> int:
@@ -616,6 +637,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
             raise ValueError("Semantic inputs changed during analysis")
         summary["passed"] = all_passed
+        summary["projectAcceptance"] = c_acceptance.evaluate(summary, root)
         if baseline is not None:
             from autosar_tooling.c_comparison import compare
             summary["comparison"] = compare(summary, project, output, baseline)
@@ -625,9 +647,13 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
                     print(f"  {row['rule']} {row['file']} x{row['count']}: {row['source']}")
         print(f"C analysis {target_id}: {len(sources)} units, {len(diagnostics)} diagnostics; passed={summary['passed']}")
         return 0 if summary["passed"] else 1
-    except (ValueError, RuntimeError, OSError, ET.ParseError, KeyError, ImportError) as error:
+    except (ValueError, RuntimeError, OSError, ET.ParseError, KeyError, TypeError, ImportError) as error:
         summary["passed"] = False
         summary["error"] = str(error)
+        summary["projectAcceptance"] = {"format": c_acceptance.FORMAT, "status": "error",
+                                        "target": target_id, "caseId": None, "inputIdentity": None,
+                                        "contexts": [], "assessmentInputs": None, "occurrences": [],
+                                        "objects": [{"kind": "execution", "id": "analysis", "reason": str(error)}]}
         print(f"C analysis failed: {error}", file=sys.stderr)
         return 1
     finally:

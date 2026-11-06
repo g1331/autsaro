@@ -734,6 +734,7 @@ jobs:
               output.write('CPPCHECK=' + str(executable) + '\n')
               output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
       - name: Verify complete generated-project analysis
+        id: analyze
         shell: python
         env:
           ANALYSIS_TARGET: ${{ matrix.target }}
@@ -751,7 +752,8 @@ jobs:
                   '--output-directory', str(output)])
               try:
                   summary = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
-                  complete = summary['error'] is None and result.returncode == (0 if summary['passed'] else 1)
+                  complete = (summary['error'] is None and result.returncode == (0 if summary['passed'] else 1)
+                      and summary['projectAcceptance']['status'] in ('accepted', 'blocked'))
                   print(name, 'analysis_complete=' + str(complete), 'source_passed=' + str(summary['passed']))
                   failed = not complete or failed
               except (OSError, ValueError, KeyError) as error:
@@ -794,13 +796,22 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         shell: python
         env:
+          ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLES: ${{ matrix.samples }}
+          PREPARE_RESULT: ${{ needs.c-analysis-prepare.result }}
+          ANALYSIS_RESULT: ${{ steps.analyze.outcome }}
         run: |
-          import json, os, sys
+          import os, subprocess, sys
           from pathlib import Path
           summaries = list(Path('build/c-analysis-results').glob('*/summary.json'))
-          passed = len(summaries) == len(os.environ['ANALYSIS_SAMPLES'].split(',')) and all(json.loads(p.read_text(encoding='utf-8'))['passed'] for p in summaries)
-          sys.exit(0 if passed else 1)
+          command = ['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling', 'c-acceptance']
+          for path in summaries:
+              command.extend(['--analysis', str(path.parent)])
+          for name in os.environ['ANALYSIS_SAMPLES'].split(','):
+              command.extend(['--expected', os.environ['ANALYSIS_TARGET'] + '=' + name])
+          command.extend(['--upstream', 'prepare=' + os.environ['PREPARE_RESULT'],
+                          '--upstream', 'analysis=' + os.environ['ANALYSIS_RESULT']])
+          sys.exit(subprocess.run(command).returncode)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
