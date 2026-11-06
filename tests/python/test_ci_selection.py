@@ -276,6 +276,9 @@ class CiSelectionTests(unittest.TestCase):
             ([".codex/hooks.json", "ui/src/App.tsx"], True, False),
             ([".codex/hooks.json", "runtime/bsw/src/Can.c"], True, True),
             ([".codex-extra/hooks.json"], True, True),
+            (["docs/standards/rte/generated-retention/README.md"], True, True),
+            (["docs/standards/types/declarations.md"], True, True),
+            ([".agents/skills/misra-c2012/references/baseline-index.json"], True, True),
         )
         for paths, code, native in cases:
             with self.subTest(paths=paths), tempfile.TemporaryDirectory() as directory:

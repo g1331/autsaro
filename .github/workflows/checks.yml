@@ -27,6 +27,7 @@ jobs:
       native: ${{ steps.detect.outputs.native }}
       desktop: ${{ steps.detect.outputs.desktop }}
     steps:
+      # Standards records and the fixed guideline index are consumed analysis inputs.
       # Pull requests touching only reader documentation and design records
       # skip build and test jobs; pushes keep the full non-GUI checks.
       # Pull requests that otherwise change only ui/ also skip the core, native and C analysis
@@ -45,6 +46,8 @@ jobs:
           import os, subprocess
           documentation = ('docs/', '.agents/', '.claude/', '.codex/', '.impeccable/', '.github/ISSUE_TEMPLATE/')
           def is_documentation(path):
+              if path.startswith('docs/standards/') or path == '.agents/skills/misra-c2012/references/baseline-index.json':
+                  return False
               if path.startswith(documentation) or path in {'LICENSE', 'NOTICE', '.github/PULL_REQUEST_TEMPLATE.md'}:
                   return True
               # Root guides only; nested Markdown such as runtime/README.md ships with generated projects.
