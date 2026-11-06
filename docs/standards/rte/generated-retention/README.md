@@ -29,3 +29,59 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 ## 当前输入绑定
 
 正常源码检查按[项目源码验收格式](../../../development/testing/source-acceptance.md)消费本组冻结上下文。输入覆盖应用字节、实际配置、producer、交付与包含／程序闭包及评估材料，不以目录名认定 S/U/C/N。上下文只关联本组原表，不授权其他人工记录；缺失、变化或 `formalStatus=pending` 均保持阻塞。本组正式记录义务尚未因 #426 的形态关联而完成，不能将采集到的当前输入摘要自动升级为批准。
+<!-- source-assessment-context-begin -->
+{
+  "id": "generated-retention-428-inputs",
+  "evidence": {
+    "head": "425c126bb67855fe58a5ee87fd66cfeb3a245103",
+    "receipt": "https://github.com/g1331/autsaro/pull/428#issuecomment-6682908054"
+  },
+  "cases": [
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "9a49a53d4d3d5cda22369d84bbc5399812fad075511810477cec89483a0cbf11"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "0e5cbb65e76e56383c1fae6e2841584db0e3061c27e6616426680bcc65852228"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "d5b4366d12638b4e85930a25301216087644f2bdf5a405f2aee3be571be370e0"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "68929e641d0146dbd96d9ddda5722b9570edace831aa769e663b8353f262b1af"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "ab97dddadeb63de82f793e82ab15a084bbdc5c86fc0a2eb8242d0b3df10bacd1"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "cd5b994382b97b616287410f07cac4489b4faec62e17835c922af6298bf4fdf4"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "0632d7e5a0a57bf275e6104691af04ccbe636c8403895d976eb2e72f719ca819"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "06a7a868ecfc5d6bc5d341a17151a3715f6d1a0863bd8d5534727ec436151b55"
+    }
+  ],
+  "records": {
+    "kind": "generated-retention",
+    "cohortSha256": "10bcb694c9a0a2424b33513927e1e9f99251a0ab60e09b4af15329497cc843a5"
+  },
+  "formalStatus": "pending"
+}
+<!-- source-assessment-context-end -->
