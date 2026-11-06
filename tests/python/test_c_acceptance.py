@@ -410,7 +410,9 @@ class AcceptanceTests(unittest.TestCase):
         scope = self.summary["scope"]
         scope.update(compilerSemanticInputs={"machine": "x86_64-linux-gnu", "release": "12"},
                      compilerDiscoveredDefines={"main.c": []}, platformModel=None, platformLibrary=None,
-                     sdkHeaders=[record], sdkTranslationUnits={"main.c": [str(header)]}, sdkMacroInputs={})
+                      sdkHeaders=[record], sdkTranslationUnits={"main.c": [record["path"]]}, sdkMacroInputs={})
+        self.assertEqual({path for paths in scope["sdkTranslationUnits"].values() for path in paths},
+                         {row["path"] for row in scope["sdkHeaders"]})
         self.tool_probe.return_value = (executable, tool_directory, self.actual_tool)
         directories = (self.project.parent / "host-batch", self.project.parent / "probe")
         # Only tool/package discovery is a fixture here. Both semantic consumers
