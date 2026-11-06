@@ -63,6 +63,8 @@ MCU 前最低范围见[参考工程要求](reference-ecu.md)，包括已调查�
 
 Epic 9 出口前，R11 只允许需求与规范研究，消费者实施须等待出口。
 
+严格源码门按 [ADR 0026](../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 区分原始分析与项目验收；局部记录匹配、绿色链路及历史分类不能替代完整证据和真实保护出口。
+
 ### 2. R11：扩大 CAN 工程范围
 
 29 位 ID、CAN FD、信号类型／布局、多通道及所需路由，闭合控制器—HOH—PDU—信号—应用关系，覆盖 2～4 路配置、通道隔离和真实布局组合。首个多项目消费者前固定基座／覆盖／变体与差异语义，随配置入口交付。放在诊断与网络管理之前；R11 的通信闭环不以 R7／R8 为前置。
@@ -142,4 +144,3 @@ IoHwAb、所选 MCAL 的配置／软件接口与主机模型，SPI／IPC、PM �
 - 改变路线顺序、产品契约或支持边界的决定写入 [docs/adr/](../adr/)，并在本文更新。
 - 主机功能最低基线按 [ADR 0022](../adr/0022-reference-ecu-before-mcu.md)执行；参数、规模与归属在[参考工程要求](reference-ecu.md)维护，运行／仿真／可视化在 [R30](host-simulation.md)维护。输入适配和受管生成采用有界能力，保持同一模型及生成主线。
 - 已完成阶段的历史证据保留在 Git 历史和已合并 PR 中，不在本文复述。2026-10 之前的产品简述、PRD、Epic／Story 规格与回顾保存在归档标签 `planning-archive-2026-10` 的 `_bmad-output/` 下，可用 `git show planning-archive-2026-10:<路径>` 或在 GitHub 上按该标签浏览。
-
