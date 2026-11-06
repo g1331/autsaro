@@ -48,6 +48,8 @@
 
 ### Added
 
+- ECU C-analysis summaries link diagnostics to exact generated-interface retention records while explicitly retaining incomplete evidence and raw analysis failures; these references do not authorize acceptance or establish MISRA conformance (#426)
+
 - C deviation association checks recognize header-wide Directive 4.10 records at the first `@file` comment, retaining exact file/rule matching and rejection of unapproved, duplicate or stale records (#371)
 
 - Generated ECU deliveries include complete selected BSW entry and area descriptions plus navigable module, API and configuration manuals sharing public headers and validation metadata; regenerate deliveries to receive them (#314)
@@ -57,6 +59,8 @@
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
 ### Fixed
+
+- C-analysis comparisons preserve program identity before counting changes, so a finding removed from HostBatch cannot conceal the same finding newly reported in probe; malformed retention records report their field and source location as analysis errors (#426)
 
 - Derived LSduR deliveries now publish `LSDUR_VERSION_INFO_API=STD_OFF` and document the selected disabled API profile; standalone LSduR ECUC modules remain unsupported. Conflicting runnable/type names are rejected at their source objects; rename them and regenerate deliveries (#411)
 
