@@ -65,7 +65,7 @@
 - C-analysis comparisons preserve program identity before counting changes, so a finding removed from HostBatch cannot conceal the same finding newly reported in probe; malformed retention records report their field and source location as analysis errors (#426)
 - Project source acceptance pins the fixed guideline categories independently of summary and catalog metadata, rejecting coordinated category redefinition (#428)
 - Project source acceptance recognizes documented Advisory retention for generated interfaces while preserving raw analysis and outstanding blockers (#429)
-- Project source acceptance consumes retained manual assessments through their existing current-scope approval checks (#55)
+- Project source acceptance consumes retained manual assessments through their existing current-scope approval checks (#430)
 - Standards records and the fixed guideline index trigger code, native and C-analysis checks instead of being treated as reader documentation (#428)
 
 - Derived LSduR deliveries now publish `LSDUR_VERSION_INFO_API=STD_OFF` and document the selected disabled API profile; standalone LSduR ECUC modules remain unsupported. Conflicting runnable/type names are rejected at their source objects; rename them and regenerate deliveries (#411)
