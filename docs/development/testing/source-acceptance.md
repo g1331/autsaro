@@ -51,6 +51,8 @@ uv run --locked python -m autosar_tooling c-acceptance \
 
 三个记录组分别为 `generated-retention`、`manual-assessment`、`checker-limitations`。后两组的 `records` 只包含 `kind`。每组必须有自己的适用上下文；一个组的批准不授权其他组。同组不能重复绑定同一输入，跨组的样本标签必须一致。`approved` 只能在对应实际评估与正式义务完成后记录；`pending` 永不放行。
 
+人工表及补充记录中的 `retained` 保留真实违反及理由，经本组当前绑定和有效批准参与项目验收。Required 保留项的批准材料须完成主文 §5.4／§6.2.2 正式义务；Advisory 使用 §6.2.3 的记录安排。`not_assessed` 和缺失记录持续阻塞，Mandatory 的 `retained` 在记录入口拒绝。
+
 输入摘要排除上下文块自身，避免 hash 自引用；该篇其他正文仍逐字节绑定。原人工汇总的全文字节身份保持原义，更新人工篇后仍须正常重扫，不能改旧摘要追认。
 
 ## 检查器缺口的补充人工记录

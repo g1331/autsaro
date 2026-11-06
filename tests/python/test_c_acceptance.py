@@ -193,7 +193,8 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual((result["caseId"], result["status"]), (CASE, "blocked"))
         self.assertIn("formal_deviation_pending", [row["reason"] for row in result["objects"]])
         self.assertEqual(sum(row["reason"] == "checker-limitation_not_assessed" for row in result["objects"]), 11)
-        self.assertTrue(any(row["reason"] == "manual_retained" for row in result["objects"]))
+        self.assertTrue(any(row["kind"] == "manual" and row["id"] == "D4.10"
+                            and row["reason"] == "input_context_unbound_or_stale" for row in result["objects"]))
         self.assertEqual(len(self.summary["coverage"]["rules"]), 221)
         self.assertEqual(self.summary["coverage"]["manualAssessment"]["checkerUncovered"]["total"], 66)
 
@@ -488,6 +489,11 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_every_group_requires_its_own_current_approved_scope(self):
         self.synthetic_complete_inputs()
+        for path, identifier in ((self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[0], "D4.10"),
+                                 (self.supplementary_path, "R5.1")):
+            text = path.read_text(encoding="utf-8")
+            row = next(line for line in text.splitlines() if line.startswith("| " + identifier + " |"))
+            path.write_text(text.replace(row, row.replace("| satisfied |", "| retained |")), encoding="utf-8")
         for group in c_acceptance.GROUPS:
             for change in ("missing", "stale", "pending"):
                 with self.subTest(group=group, change=change):
@@ -511,19 +517,24 @@ class AcceptanceTests(unittest.TestCase):
         self.synthetic_complete_inputs()
         manual_path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[0]
         for path, identifier, kind in ((manual_path, "D1.1", "manual"),
+                                       (manual_path, "D4.2", "manual"),
                                        (self.supplementary_path, "R5.1", "checker-limitation")):
             text = path.read_text(encoding="utf-8")
             row = next(line for line in text.splitlines() if line.startswith("| " + identifier + " |"))
             cells = row.split("|")
             for status in ("satisfied", "not_applicable", "retained", "not_assessed", "missing"):
-                with self.subTest(kind=kind, status=status):
+                with self.subTest(identifier=identifier, kind=kind, status=status):
                     changed = list(cells)
                     changed[4] = " " + status + " "
                     path.write_text(text.replace(row, "" if status == "missing" else "|".join(changed)), encoding="utf-8")
                     self.bind_groups()
                     result = self.evaluate()
-                    self.assertEqual(result["status"], "accepted" if status in {"satisfied", "not_applicable"} else "blocked")
-                    if status not in {"satisfied", "not_applicable"}:
+                    self.assertEqual(result["status"], "accepted" if status in {"satisfied", "not_applicable", "retained"} else "blocked")
+                    if result["status"] == "accepted":
+                        before = copy.deepcopy(self.summary)
+                        self.require({**self.summary, "projectAcceptance": result})
+                        self.assertEqual(self.summary, before)
+                    else:
                         self.assertTrue(any(record["id"] == identifier and record["kind"] == kind for record in result["objects"]))
             path.write_text(text, encoding="utf-8")
         self.bind_groups()
