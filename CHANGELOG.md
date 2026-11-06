@@ -48,6 +48,8 @@
 
 ### Added
 
+- C-analysis results include independent project acceptance with frozen source, configuration, program and assessment identities; `c-acceptance --analysis` revalidates complete artifacts and rejects stale, unknown or incomplete evidence without rewriting raw analyzer results (#428)
+
 - ECU C-analysis summaries link diagnostics to exact generated-interface retention records while explicitly retaining incomplete evidence and raw analysis failures; these references do not authorize acceptance or establish MISRA conformance (#426)
 
 - C deviation association checks recognize header-wide Directive 4.10 records at the first `@file` comment, retaining exact file/rule matching and rejection of unapproved, duplicate or stale records (#371)
