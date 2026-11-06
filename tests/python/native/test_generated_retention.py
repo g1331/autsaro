@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import collections
-import hashlib
 import json
 import os
 import re
@@ -12,179 +10,18 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling.c_standard import code_words, is_comment, lex
+from autosar_tooling.c_retention import (
+    PROFILES,
+    TARGETS,
+    check_cohort,
+    check_project,
+    records,
+)
+from autosar_tooling.c_standard import lex
 from ecu_tools import build as ecu_build
 from ecu_tools.process import OwnedProcess, ProcessSpec
 
 ROOT = Path(__file__).resolve().parents[3]
-PROFILES = {
-    "S": "standard-ecu",
-    "U": "user-application",
-    "C": "component-pipeline",
-    "N": "no-diagnostic",
-}
-# Entity/body/profile identity of the specific decision; not a diagnostic baseline.
-COHORT_SHA256 = "10bcb694c9a0a2424b33513927e1e9f99251a0ab60e09b4af15329497cc843a5"
-TARGETS = {"linux-x64-controlled-v1", "windows-x64-controlled-v1"}
-
-
-def records() -> list[dict]:
-    rows = []
-    for path in sorted((ROOT / "docs/standards/rte/generated-retention").glob("*.md")):
-        for line in path.read_text(encoding="utf-8").splitlines():
-            cells = line.split("|")
-            if len(cells) < 6 or not (
-                rule := re.search(r"MISRA C:2012 Rule (\d+\.\d+)", cells[1])
-            ):
-                continue
-            source, name = re.findall(r"`([^`]+)`", cells[2])
-            details = cells[3]
-            rows.append(
-                {
-                    "rule": rule[1],
-                    "name": name,
-                    "source": source,
-                    "delivered": re.search(r"delivered=`([^`]+)`", details)[1],
-                    "shape": re.search(r"shape=`([^`]+)`", details)[1].replace(
-                        "&#124;", "|"
-                    ),
-                    "profiles": re.search(r"profiles=([SUCN,]+)", details)[1],
-                    "producer": details.split("producer=", 1)[1].strip(),
-                }
-            )
-    return rows
-
-
-def check_cohort(rows: list[dict]) -> None:
-    ordered = sorted(rows, key=lambda row: (row["rule"], row["delivered"], row["name"]))
-    digest = hashlib.sha256(
-        json.dumps(
-            ordered, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        ).encode()
-    ).hexdigest()
-    if digest != COHORT_SHA256:
-        raise ValueError("retention cohort identity differs from the specific decision")
-    assert len(rows) == 159
-    assert collections.Counter(row["rule"] for row in rows) == {
-        "2.5": 146,
-        "2.3": 4,
-        "8.7": 8,
-        "11.4": 1,
-    }
-    assert [sum(p in row["profiles"].split(",") for row in rows) for p in PROFILES] == [
-        153,
-        153,
-        156,
-        156,
-    ]
-
-
-def declaration(source: str, name: str, macro: bool, tokens=None) -> tuple[str, str]:
-    """Return a complete replacement list or declarator, plus adjacent comments."""
-    all_tokens = lex(source) if tokens is None else tokens
-    if macro:
-        found = [
-            t
-            for t in all_tokens
-            if re.match(r"\s*#\s*define\s+" + re.escape(name) + r"(?!\w)", t.text)
-        ]
-        if len(found) != 1:
-            raise ValueError(name + ": declaration count")
-        token = found[0]
-        start, text = token.start, token.text
-    else:
-        ts = [t for t in all_tokens if not is_comment(t)]
-        found = []
-        for i, token in enumerate(ts):
-            if token.text != name:
-                continue
-            a = i
-            while (
-                a
-                and ts[a - 1].text not in {";", "{", "}"}
-                and not ts[a - 1].text.lstrip().startswith("#")
-            ):
-                a -= 1
-            b = i
-            while b < len(ts) and ts[b].text not in {";", "{"}:
-                b += 1
-            if b == len(ts) or "=" in [t.text for t in ts[a:i]]:
-                continue
-            candidate = ts[a : b + 1]
-            # A use in a call/expression is not the owning declaration.
-            if candidate[0].text in {"const", "typedef", "RTE_CODE"}:
-                found.append((candidate[0].start, " ".join(t.text for t in candidate)))
-        if len(found) != 1:
-            raise ValueError(name + ": declaration count")
-        start, text = found[0]
-    preceding = [t for t in all_tokens if t.end <= start]
-    comments = []
-    for token in reversed(preceding):
-        if not is_comment(token):
-            break
-        comments.append(token.text)
-    return text, "\n".join(comments)
-
-
-def check_project(
-    project: Path, rows: list[dict], overrides: dict[str, str] | None = None
-) -> list[tuple]:
-    sources = {
-        p.relative_to(project).as_posix(): p.read_text(encoding="utf-8")
-        for p in (project / "generated").rglob("*")
-        if p.suffix in {".c", ".h"}
-    }
-    sources.update(overrides or {})
-    tokenized = {}
-    failures = []
-    for row in rows:
-        name = row["delivered"]
-        if name not in sources:
-            failures.append((name, row["name"], "declaration"))
-            continue
-        source = sources[name]
-        if name not in tokenized:
-            tokenized[name] = lex(source)
-        try:
-            actual, comments = declaration(
-                source, row["name"], row["rule"] == "2.5", tokenized[name]
-            )
-            if code_words(actual) != code_words(row["shape"]):
-                failures.append((name, row["name"], "shape"))
-            if f"MR12 RULE {row['rule']} VIOLATION:" not in comments:
-                failures.append((name, row["name"], "marker"))
-        except ValueError:
-            failures.append((name, row["name"], "declaration"))
-    allowed = {
-        (r["rule"], r["delivered"], tuple(code_words(r["shape"]))) for r in records()
-    }
-    pattern = r"MR12 RULE (2\.3|2\.5|8\.7|11\.4) VIOLATION:\s*(?:retain|observe)\b"
-    for name, source in sources.items():
-        if re.search(pattern, source) is None:
-            continue
-        if name not in tokenized:
-            tokenized[name] = lex(source)
-        tokens = tokenized[name]
-        for index, token in enumerate(tokens):
-            retained = re.search(pattern, token.text) if is_comment(token) else None
-            if retained is None:
-                continue
-            owner = []
-            for following in tokens[index + 1 :]:
-                if is_comment(following):
-                    continue
-                owner.append(following.text)
-                if following.text in {";", "{"} or following.text.lstrip().startswith(
-                    "#"
-                ):
-                    break
-            shape = " ".join(owner)
-            if (retained[1], name, tuple(code_words(shape))) not in allowed:
-                macro = re.match(r"\s*#\s*define\s+(\w+)", shape)
-                failures.append((name, macro[1] if macro else "declaration", "cohort"))
-    return failures
-
-
 def execute(argv: list[str], directory: Path, label: str, timeout: int = 60):
     (directory / "logs").mkdir(mode=0o700, exist_ok=True)
     result = OwnedProcess(

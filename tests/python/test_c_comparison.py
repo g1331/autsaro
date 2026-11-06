@@ -50,7 +50,7 @@ class CComparisonTests(unittest.TestCase):
             "addonRuntime": {"runaddon.py": "d" * 64, "cppcheck.py": "d" * 64,
                              "cppcheckdata.py": "d" * 64},
             "analysisCode": {name: "b" * 64 for name in
-                             ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
+                             ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "c_retention.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
         }
         self.write(baseline, summary)
         return summary, project, output, baseline
@@ -180,6 +180,44 @@ class CComparisonTests(unittest.TestCase):
                 "new": [{"rule": "rule", "file": "main.c", "source": "same();", "count": 1}],
                 "removed": [{"rule": "rule", "file": "main.c", "source": "old();", "count": 1}],
             })
+
+    def test_diagnostics_cannot_cancel_across_programs(self):
+        for old_programs, new_programs in ((["host-batch"], ["probe"]),
+                                          (["host-batch", "probe"], ["probe", "host-batch"])):
+            with self.subTest(old=old_programs, new=new_programs), tempfile.TemporaryDirectory() as temporary:
+                current, project, output, baseline = self.fixture(Path(temporary))
+                current["programs"] = [
+                    {"name": name, "entry": "main.c", "translationUnits": ["main.c"], "exitCode": 1}
+                    for name in ("host-batch", "probe")
+                ]
+                current["diagnostics"] = [{**self.diagnostic("rule", 1), "programs": old_programs}]
+                self.write(baseline, current)
+                current["diagnostics"][0]["programs"] = new_programs
+                result = compare(current, project, output, baseline)
+                if set(old_programs) == set(new_programs):
+                    self.assertEqual(result, {"new": [], "removed": []})
+                else:
+                    self.assertEqual(result, {
+                        "new": [{"rule": "rule", "file": "main.c", "source": "same();", "count": 1}],
+                        "removed": [{"rule": "rule", "file": "main.c", "source": "same();", "count": 1}],
+                    })
+
+    def test_program_changes_at_identical_source_lines_do_not_offset(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.fixture(Path(temporary))
+            current["programs"] = [
+                {"name": name, "entry": "main.c", "translationUnits": ["main.c"], "exitCode": 1}
+                for name in ("host-batch", "probe")
+            ]
+            current["diagnostics"] = [
+                {**self.diagnostic("rule", 1), "programs": ["host-batch", "probe"]},
+                {**self.diagnostic("rule", 3), "programs": ["host-batch"]},
+            ]
+            self.write(baseline, current)
+            current["diagnostics"][1]["programs"] = ["probe"]
+            result = compare(current, project, output, baseline)
+            self.assertEqual(result["new"], [{"rule": "rule", "file": "main.c", "source": "same();", "count": 1}])
+            self.assertEqual(result["removed"], result["new"])
 
     def test_line_moves_do_not_change_counts_but_rule_file_text_and_program_occurrences_do(self):
         with tempfile.TemporaryDirectory() as temporary:
