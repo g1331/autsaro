@@ -25,3 +25,63 @@
 R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真实有效对象地址经此转换进入Arti_CaptureAddress，再复制到事件event_address/address_valid；trace只取其低32位。两个受控x64 ABI下指针和uint64为64位，真实高位对象观察及高位截断反例约束完整位保留。没有整数到指针恢复、解引用、伪造所有权或延长pointee存储期，也不扩大现有事件观察生命周期。单处转换仍是实现相关的真实违反；新handle协议是可行替代。源码标记绑定局部native_address，不新增通用地址类别。
 
 源码只补精确说明，不更改非注释C/预处理token或宏种类。模板静态实体由现有双向关联检查核对，emitter输出由正常native套件对本表完整shape、闭合集合及来源核对。集合摘要只冻结这次决定的实体/body/profile证据，不是诊断baseline或suppression；当前raw逐项核对及零未分类结论归实施PR，不能只改文档状态即宣称完成。
+
+## 当前输入绑定
+
+正常源码检查按[项目源码验收格式](../../../development/testing/source-acceptance.md)消费本组冻结上下文。输入覆盖应用字节、实际配置、producer、交付与包含／程序闭包及评估材料，不以目录名认定 S/U/C/N。上下文只关联本组原表，不授权其他人工记录；缺失、变化或 `formalStatus=pending` 均保持阻塞。本组正式记录义务尚未因 #426 的形态关联而完成，不能将采集到的当前输入摘要自动升级为批准。
+<!-- source-assessment-context-begin -->
+{
+  "id": "generated-retention-428-inputs",
+  "evidence": {
+    "head": "56c9f127f21b94f9fa2e95c2d716a3816c6a5ff7",
+    "receipt": "https://github.com/g1331/autsaro/pull/428#issuecomment-6683709187"
+  },
+  "cases": [
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "91de604d6ca0dc76b3a681cbf7f236a43ce803188a739daa90c3853853390e3a"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "c9f478f61f6f2c098f2f997921f0cb6c81c778c9a8a6603a994bc383e8218736"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "7782cb30417d5abec9115f2e7b7ffafca21b7d2373e0bf872d349886c93bc9a0"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "28dbe2d0a1602f39cfd08a30d669ee368907e63b453b5a73de026fb5363fd9c1"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "7b269634d50f58f89b0c1fb5fdff7c07b48adc7228c451756f208d6584e8dec1"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "76c45e8cbcb214c9050984aee80c593e384bafc7dafbec94213c4bed8c4170fb"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "80e5a4b5011dceba478f44caf04eb8a42cc2ebd910ef41dd9db54a1e22592ee5"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "368dfd4fd1bda8269b07c2429408d45a801334d5f8a5ffdb6b19967aa72e0d21"
+    }
+  ],
+  "records": {
+    "kind": "generated-retention",
+    "cohortSha256": "10bcb694c9a0a2424b33513927e1e9f99251a0ab60e09b4af15329497cc843a5"
+  },
+  "formalStatus": "pending"
+}
+<!-- source-assessment-context-end -->

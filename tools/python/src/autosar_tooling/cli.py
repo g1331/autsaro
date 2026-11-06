@@ -48,6 +48,11 @@ def main() -> int:
     c_check.add_argument("--project", type=Path, required=True)
     c_check.add_argument("--output-directory", type=Path, required=True)
     c_check.add_argument("--baseline", type=Path, help="Full matching c-analysis artifact sample directory")
+    acceptance = commands.add_parser("c-acceptance", help="Require accepted project-source results for an exact matrix")
+    acceptance.add_argument("--analysis", type=Path, action="append", required=True,
+                            help="Complete analysis directory containing summary.json and patched project/")
+    acceptance.add_argument("--expected", action="append", required=True, metavar="TARGET=CASE")
+    acceptance.add_argument("--upstream", action="append", required=True, metavar="JOB=RESULT")
     asset = commands.add_parser("assets", help="Check assets or update the seal-guard digest")
     asset.add_argument("action", choices=("check", "update"))
     commands.add_parser(
@@ -84,6 +89,31 @@ def main() -> int:
     if args.command == "c-check":
         from autosar_tooling.c_check import check
         return check(args.project, args.target, args.output_directory, args.baseline)
+    if args.command == "c-acceptance":
+        import json
+        import sys
+
+        from autosar_tooling.c_acceptance import require_accepted
+
+        try:
+            def pairs(values):
+                result = []
+                for value in values:
+                    key, separator, item = value.partition("=")
+                    if not key or not separator or not item:
+                        raise ValueError(f"Expected NAME=VALUE, got {value!r}")
+                    result.append((key, item))
+                return result
+
+            upstream = pairs(args.upstream)
+            if len(dict(upstream)) != len(upstream):
+                raise ValueError("Duplicate upstream job result")
+            require_accepted([(json.loads((path / "summary.json").read_text(encoding="utf-8")), path / "project") for path in args.analysis],
+                             pairs(args.expected), dict(upstream))
+        except (OSError, ValueError, RuntimeError) as error:
+            print(f"Project acceptance failed: {error}", file=sys.stderr)
+            return 1
+        return 0
     if args.command == "assets":
         from autosar_tooling.assets import maintain
         return maintain(update=args.action == "update")

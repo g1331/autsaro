@@ -48,6 +48,8 @@
 
 ### Added
 
+- C-analysis results include independent project acceptance with frozen source, configuration, program and assessment identities; `c-acceptance --analysis` revalidates complete artifacts and rejects stale, unknown or incomplete evidence without rewriting raw analyzer results (#428)
+
 - ECU C-analysis summaries link diagnostics to exact generated-interface retention records while explicitly retaining incomplete evidence and raw analysis failures; these references do not authorize acceptance or establish MISRA conformance (#426)
 
 - C deviation association checks recognize header-wide Directive 4.10 records at the first `@file` comment, retaining exact file/rule matching and rejection of unapproved, duplicate or stale records (#371)
@@ -61,6 +63,8 @@
 ### Fixed
 
 - C-analysis comparisons preserve program identity before counting changes, so a finding removed from HostBatch cannot conceal the same finding newly reported in probe; malformed retention records report their field and source location as analysis errors (#426)
+- Project source acceptance pins the fixed guideline categories independently of summary and catalog metadata, rejecting coordinated category redefinition (#428)
+- Standards records and the fixed guideline index trigger code, native and C-analysis checks instead of being treated as reader documentation (#428)
 
 - Derived LSduR deliveries now publish `LSDUR_VERSION_INFO_API=STD_OFF` and document the selected disabled API profile; standalone LSduR ECUC modules remain unsupported. Conflicting runnable/type names are rejected at their source objects; rename them and regenerate deliveries (#411)
 

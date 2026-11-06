@@ -2,6 +2,7 @@
 
 import collections
 import copy
+import hashlib
 import json
 import shutil
 import tempfile
@@ -895,6 +896,10 @@ class ManualAssessmentTests(unittest.TestCase):
         self.assertEqual(result["conformanceAssessment"], "not_established")
         self.assertEqual(self.rules, original)
 
+    def test_acceptance_mapping_matches_the_independently_pinned_checker_partition(self):
+        self.assertEqual(len(c_standard.CHECKER_UNCOVERED), 66)
+        self.assertEqual(c_standard.CHECKER_UNCOVERED, self.UNCOVERED)
+
     def test_normal_coverage_entry_connects_records_without_assessing_raw_catalog(self):
         from autosar_tooling.c_check import coverage
 
@@ -968,6 +973,103 @@ class ManualAssessmentTests(unittest.TestCase):
                 after = self.summary()
                 self.assertEqual(before["checkerUncovered"], after["checkerUncovered"])
                 self.assertNotEqual(before["inputIdentity"]["documents"], after["inputIdentity"]["documents"])
+
+
+class SupplementaryAssessmentTests(unittest.TestCase):
+    UNCOVERED = ManualAssessmentTests.UNCOVERED
+
+    def setUp(self):
+        ManualAssessmentTests.setUp(self)
+        self.limitations = [{"guideline": key} for key in sorted(c_standard.CHECKER_LIMITATION_GUIDELINES)]
+        self.categories = {row["id"]: row["category"] for row in self.rules}
+        self.path = self.root / "docs/standards/supplementary.md"
+
+    def block(self, rows=None):
+        if rows is None:
+            rows = [f"| {row['guideline']} | {self.categories[row['guideline']]} | Synthetic frozen scope | satisfied | Synthetic evaluation |"
+                    for row in self.limitations]
+        return "<!-- misra-checker-assessment-begin -->\n" + "\n".join(rows) + "\n<!-- misra-checker-assessment-end -->\n"
+
+    def assess(self):
+        return c_standard.supplementary_assessment(self.rules, self.limitations, self.root)
+
+    def test_missing_eleven_are_explicitly_unassessed(self):
+        result = self.assess()
+        self.assertEqual(len(self.rules), 221)
+        self.assertEqual({row["id"] for row in result["records"]}, c_standard.CHECKER_LIMITATION_GUIDELINES)
+        self.assertEqual({row["status"] for row in result["records"]}, {"not_assessed"})
+        self.assertEqual(result["inputIdentity"]["documents"], {})
+
+    def test_all_records_retain_the_actual_source_file_and_line(self):
+        self.path.write_text(self.block(), encoding="utf-8")
+        result = self.assess()
+        self.assertEqual(len(result["records"]), 11)
+        for row in result["records"]:
+            self.assertEqual(row["status"], "satisfied")
+            self.assertEqual(row["category"], self.categories[row["id"]])
+            self.assertEqual(row["source"]["file"], "docs/standards/supplementary.md")
+            line = self.path.read_text(encoding="utf-8").splitlines()[row["source"]["line"] - 1]
+            self.assertTrue(line.startswith("| " + row["id"] + " |"))
+        self.assertEqual(result["inputIdentity"]["documents"], {"docs/standards/supplementary.md": hashlib.sha256(self.path.read_bytes()).hexdigest()})
+
+    def test_optional_block_in_original_standard_preserves_manual_semantics(self):
+        before = c_standard.manual_assessment(self.rules, self.root)
+        path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[0]
+        path.write_text(path.read_text(encoding="utf-8") + self.block(), encoding="utf-8")
+        after = c_standard.manual_assessment(self.rules, self.root)
+        for key in ("format", "checkerUncovered", "checkerCovered", "conformanceAssessment"):
+            self.assertEqual(before[key], after[key])
+        self.assertEqual(after["checkerUncovered"]["total"], 66)
+        self.assertEqual(after["checkerCovered"]["total"], 155)
+        self.assertEqual(after["checkerCovered"]["assessment"], "not_assessed")
+        self.assertEqual({row["status"] for row in self.assess()["records"]}, {"satisfied"})
+
+    def test_selection_tracks_added_removed_blocks_and_document_bytes(self):
+        empty = self.assess()["inputIdentity"]
+        self.path.write_text("No assessment block.\n", encoding="utf-8")
+        self.assertEqual(empty, self.assess()["inputIdentity"])
+        self.path.write_text(self.block(), encoding="utf-8")
+        selected = self.assess()["inputIdentity"]
+        self.assertNotEqual(empty["selectionSha256"], selected["selectionSha256"])
+        self.path.write_text(self.block() + "Changed scope evidence.\n", encoding="utf-8")
+        self.assertNotEqual(selected["documents"], self.assess()["inputIdentity"]["documents"])
+        self.path.write_text("Block removed.\n", encoding="utf-8")
+        self.assertEqual(empty, self.assess()["inputIdentity"])
+        self.path.unlink()
+        self.assertEqual(empty, self.assess()["inputIdentity"])
+
+    def test_unknown_other_covered_duplicate_category_and_invalid_status_are_rejected(self):
+        valid = self.block()
+        first = next(line for line in valid.splitlines() if line.startswith("| R"))
+        identifier = first.split("|")[1].strip()
+        variants = (
+            valid.replace(first, first.replace(identifier, "R99.1")),
+            valid.replace(first, first.replace(identifier, "Unknown")),
+            valid.replace(first, first.replace(identifier, "R2.1")),
+            valid.replace(first, first + "\n" + first),
+            valid.replace(first, first.replace(self.categories[identifier], "Mandatory")),
+            valid.replace(first, first.replace("satisfied", "approved")),
+            valid.replace(first, first.replace(self.categories[identifier], "Mandatory").replace("satisfied", "retained")),
+            valid.replace("<!-- misra-checker-assessment-end -->", ""),
+            "<!-- misra-checker-assessment-end -->\n",
+            "<!-- misra-checker-assessment-begin -->\n" + valid,
+        )
+        for text in variants:
+            with self.subTest(text=text[:100]):
+                self.path.write_text(text, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    self.assess()
+        self.path.write_text(valid, encoding="utf-8")
+        other = self.root / "docs/standards/duplicate.md"
+        other.write_text(self.block([first]), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "duplicate checker-assessment"):
+            self.assess()
+
+    def test_caller_cannot_expand_shrink_or_duplicate_the_limitation_selection(self):
+        valid = copy.deepcopy(self.limitations)
+        for limitations in (valid[:-1], [*valid, {"guideline": "R2.1"}], [valid[0], *valid[:-1]]):
+            with self.subTest(limitations=limitations), self.assertRaisesRegex(ValueError, "eleven fixed"):
+                c_standard.supplementary_assessment(self.rules, limitations, self.root)
 
 
 if __name__ == "__main__":

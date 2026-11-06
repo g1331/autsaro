@@ -50,7 +50,7 @@ class CComparisonTests(unittest.TestCase):
             "addonRuntime": {"runaddon.py": "d" * 64, "cppcheck.py": "d" * 64,
                              "cppcheckdata.py": "d" * 64},
             "analysisCode": {name: "b" * 64 for name in
-                             ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "c_retention.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
+                             ("c_check.py", "c_addon.py", "c_comparison.py", "c_sdk.py", "c_standard.py", "c_retention.py", "c_acceptance.py", "build.py", "process.py", "owner.py", "launch.py", "windows_job.py")},
         }
         self.write(baseline, summary)
         return summary, project, output, baseline

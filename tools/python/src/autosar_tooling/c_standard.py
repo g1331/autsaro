@@ -24,6 +24,20 @@ MANUAL_ASSESSMENT_SOURCES = (
     "docs/standards/types/storage.md",
     "docs/standards/types/declarations.md",
 )
+CHECKER_LIMITATION_GUIDELINES = frozenset({
+    "R5.1", "R5.5", "R5.7", "R8.8", "R10.1", "R10.3", "R10.6", "R13.5", "R14.4", "R20.1", "R21.8",
+})
+# Extracted from the hash-verified 2.21.0 getAddonRules/getCppcheckRules mapping.
+# This is checker availability, not an assessment or approval of these guidelines.
+CHECKER_UNCOVERED = frozenset({
+    "D1.1", "D2.1", "D3.1", "D4.1", "D4.2", "D4.3", "D4.4", "D4.5", "D4.6", "D4.7", "D4.8", "D4.9",
+    "D4.10", "D4.11", "D4.12", "D4.13", "D4.14", "D4.15", "D5.1", "D5.2", "D5.3",
+    "R1.1", "R1.5", "R2.8", "R3.2", "R6.3", "R7.5", "R7.6", "R8.15", "R8.16", "R8.17", "R9.6", "R9.7",
+    "R11.10", "R12.5", "R12.6", "R17.9", "R17.10", "R17.11", "R17.12", "R17.13", "R18.9", "R18.10",
+    "R21.22", "R21.23", "R21.24", "R21.25", "R21.26", "R22.11", "R22.12", "R22.13", "R22.14",
+    "R22.15", "R22.16", "R22.17", "R22.18", "R22.19", "R22.20",
+    "R23.1", "R23.2", "R23.3", "R23.4", "R23.5", "R23.6", "R23.7", "R23.8",
+})
 Key = tuple[str, str, str]
 TOKEN = re.compile(
     r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|'
@@ -52,36 +66,70 @@ def is_comment(token: Token) -> bool:
     return token.text.startswith(("/*", "//"))
 
 
-def _manual_records(root: Path) -> tuple[dict, dict]:
+def _assessment_records(root: Path, names: tuple[str, ...] | list[str], kind: str) -> tuple[dict, dict]:
     records = {}
     identities = {}
-    for name in MANUAL_ASSESSMENT_SOURCES:
+    for name in names:
         data = (root / name).read_bytes()
         identities[name] = hashlib.sha256(data).hexdigest()
         active = False
         for line, text in enumerate(data.decode("utf-8").splitlines(), 1):
-            if text == "<!-- misra-manual-begin -->":
+            if text == f"<!-- misra-{kind}-begin -->":
                 if active:
-                    raise ValueError(f"Nested manual assessment block: {name}:{line}")
+                    raise ValueError(f"Nested {kind} assessment block: {name}:{line}")
                 active = True
-            elif text == "<!-- misra-manual-end -->":
+            elif text == f"<!-- misra-{kind}-end -->":
                 if not active:
-                    raise ValueError(f"Unopened manual assessment block: {name}:{line}")
+                    raise ValueError(f"Unopened {kind} assessment block: {name}:{line}")
                 active = False
-            elif active and re.match(r"\| [DR]\d+\.", text):
+            elif active and (re.match(r"\| [DR]\d+\.", text) or (kind == "checker-assessment" and text.startswith("|"))):
                 cells = [cell.strip() for cell in text.split("|")[1:-1]]
+                if kind == "checker-assessment" and cells and (
+                        cells[0].casefold() in {"id", "guideline", "rule", "条款", "规则", "规则／指令"}
+                        or all(re.fullmatch(r":?-+:?", cell) for cell in cells)):
+                    continue
                 if len(cells) != 5 or not re.fullmatch(r"[DR]\d+\.\d+", cells[0]):
-                    raise ValueError(f"Malformed manual assessment: {name}:{line}")
+                    raise ValueError(f"Malformed {kind} assessment: {name}:{line}")
                 guideline, category, scope, status, conclusion = cells
                 if (guideline in records or not scope or not conclusion or (category == "Mandatory" and status == "retained")
                         or status not in {"satisfied", "not_applicable", "retained", "not_assessed"}):
-                    raise ValueError(f"Invalid or duplicate manual assessment: {name}:{line}")
+                    raise ValueError(f"Invalid or duplicate {kind} assessment: {name}:{line}")
                 records[guideline] = {"id": guideline, "category": category, "analysisScope": scope,
                                       "status": status, "conclusion": conclusion,
                                       "source": {"file": name, "line": line}}
         if active:
-            raise ValueError(f"Unclosed manual assessment block: {name}")
+            raise ValueError(f"Unclosed {kind} assessment block: {name}")
     return records, identities
+
+
+def _manual_records(root: Path) -> tuple[dict, dict]:
+    return _assessment_records(root, MANUAL_ASSESSMENT_SOURCES, "manual")
+
+
+def supplementary_assessment(rules: list[dict], limitations: list[dict], root: Path = ROOT) -> dict:
+    """Read optional evaluations of the eleven fixed checker omissions only."""
+    categories = {row["id"]: row["category"] for row in rules}
+    wanted = [row["guideline"] for row in limitations]
+    if (len(categories) != len(rules) or len(wanted) != 11 or set(wanted) != CHECKER_LIMITATION_GUIDELINES
+            or not set(wanted) <= categories.keys()
+            or any(not row["automaticChecker"] for row in rules if row["id"] in wanted)):
+        raise ValueError("Supplementary assessment requires the eleven fixed checker limitations")
+    names = []
+    for path in sorted((root / "docs/standards").rglob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if "<!-- misra-checker-assessment-begin -->" in text or "<!-- misra-checker-assessment-end -->" in text:
+            names.append(path.relative_to(root).as_posix())
+    records, identities = _assessment_records(root, names, "checker-assessment")
+    if set(records) - set(wanted):
+        raise ValueError("Supplementary assessment contains an unknown or non-limitation guideline")
+    if any(row["category"] != categories[key] for key, row in records.items()):
+        raise ValueError("Supplementary assessment category differs from the fixed catalog")
+    rows = [records.get(key, {"id": key, "category": categories[key], "status": "not_assessed",
+                              "conclusion": "Supplementary record missing"}) for key in wanted]
+    return {"format": "misra-checker-assessment-v1", "records": rows,
+            "inputIdentity": {"parserSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                              "selectionSha256": hashlib.sha256("\n".join(names).encode()).hexdigest(),
+                              "documents": identities}}
 
 
 def manual_assessment(rules: list[dict], root: Path = ROOT) -> dict:
