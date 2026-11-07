@@ -732,6 +732,33 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertEqual(result["status"], "blocked")
                 self.assertTrue(any(row["id"] == identifier and row["reason"] == "checker-limitation_not_assessed" for row in result["objects"]))
 
+    def test_current_checker_records_preserve_their_specific_outstanding_obligations(self):
+        self.synthetic_complete_inputs()
+        self.supplementary_path.unlink()
+        path = self.root / "docs/standards/types.md"
+        path.write_bytes((ROOT / "docs/standards/types.md").read_bytes())
+        self.bind_groups(status="pending")
+        before = copy.deepcopy(self.summary)
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(self.summary, before)
+        rows = c_standard.supplementary_assessment(
+            self.rules, self.summary["coverage"]["knownCheckerLimitations"], self.root,
+        )["records"]
+        self.assertEqual({row["id"] for row in rows}, c_standard.CHECKER_LIMITATION_GUIDELINES)
+        outstanding = {"R5.5", "R5.7"}
+        self.assertEqual({row["id"] for row in rows if row["status"] == "not_assessed"}, outstanding)
+        self.assertEqual({row["id"] for row in rows if row["status"] == "retained"}, {"R20.1"})
+        for row in rows:
+            reason = ("checker-limitation_not_assessed" if row["id"] in outstanding
+                      else "formal_assessment_pending")
+            self.assertTrue(any(obj["kind"] == "checker-limitation" and obj["id"] == row["id"]
+                                and obj["reason"] == reason and obj["source"] == row["source"]
+                                for obj in result["objects"]), row)
+            self.assertEqual(row["source"]["file"], "docs/standards/types.md")
+            line = path.read_text(encoding="utf-8").splitlines()[row["source"]["line"] - 1]
+            self.assertTrue(line.startswith("| " + row["id"] + " |"))
+
     def test_supplementary_source_selection_and_bytes_are_in_the_frozen_identity(self):
         self.synthetic_complete_inputs()
         before = self.identity()
