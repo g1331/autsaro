@@ -510,13 +510,29 @@ fn public_headers_publish_their_owner_release_in_ecu_and_contract_deliveries() {
             let source = format!(
                 "{source}#if !defined({prefix}_SW_MAJOR_VERSION) || !defined({prefix}_SW_MINOR_VERSION) || !defined({prefix}_SW_PATCH_VERSION)\n#error Missing owner software version\n#endif\n#if ({prefix}_SW_MAJOR_VERSION != {major}U) || ({prefix}_SW_MINOR_VERSION != {minor}U) || ({prefix}_SW_PATCH_VERSION != 0U)\n#error Wrong owner software version\n#endif\n"
             );
-            let source = if name == "Arti.h" {
-                format!(
-                    "{source}#if ARTI_MODULE_ID != 5U\n#error Wrong ARTI module ID\n#endif\nint release_consumer;\n"
-                )
-            } else {
-                format!("{source}int release_consumer;\n")
+            // R24-11 BSWGeneral Appendix A.2; independent of delivered definitions.
+            let module_id = match prefix {
+                "CAN" => Some(80),
+                "CANIF" => Some(60),
+                "CANTP" => Some(35),
+                "COM" => Some(50),
+                "COMM" => Some(12),
+                "BSWM" => Some(42),
+                "DCM" => Some(53),
+                "PDUR" => Some(51),
+                "LSDUR" => Some(132),
+                "DET" => Some(15),
+                "ARTI" => Some(5),
+                _ => None,
             };
+            let identity = module_id.map_or_else(String::new, |id| {
+                format!(
+                    "#if !defined({prefix}_MODULE_ID)\n#error {name} lacks {prefix}_MODULE_ID\n\
+                     #elif {prefix}_MODULE_ID != {id}U\n#error {name} has wrong {prefix}_MODULE_ID\n\
+                     #endif\n"
+                )
+            });
+            let source = format!("{source}{identity}int release_consumer;\n");
             compile(
                 &scratch.0,
                 &scratch.0.join(path),
