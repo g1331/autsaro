@@ -275,6 +275,7 @@ test(
       .trim()
       .split('\n')
       .map(JSON.parse);
+    assert(!boundaries.some((record) => record.stage === 'probe-error'));
     const marker = `/*autosar-evaluation:${failed.evaluation}*/`;
     const marked = (record) =>
       record.prefixHex &&

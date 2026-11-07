@@ -1,6 +1,11 @@
 // WebKitGTK 2.52.6 x86_64. evidence.mjs verifies both ELF identities and
 // instruction bytes before substituting paths/PIDs and loading these uprobes.
 // Only session-owned processes are observed. No target function is called.
+// Source/ELF boundary validation and the original live identity proof:
+// https://github.com/g1331/autsaro/issues/311#issuecomment-6258214138
+// https://github.com/g1331/autsaro/issues/311#issuecomment-6258495196
+// The explicit & 127 keeps bpftrace 0.20's byte-sized dynamic buf length
+// within its allocated buffer; an unrestricted byte bound reaches 255.
 BEGIN
 {
   OWNERS
@@ -17,6 +22,8 @@ tracepoint:sched:sched_process_exit /@owned[tid]/
   delete(@owned[tid]);
 }
 
+// SessionHost outgoing message, selected response handler, then the script
+// result callback's parseJSON and reconstruction call sites, respectively.
 uprobe:DRIVER:0x4537b /@owned[pid]/
 {
   $bp = reg("bp");
@@ -26,6 +33,9 @@ uprobe:DRIVER:0x4537b /@owned[pid]/
   $data = *(uint64 *)uptr($impl + 8);
   $eight = (*(uint32 *)uptr($impl + 16) & 4) != 0;
   $bytes = $length * (2 - $eight);
+  if (!$sequence || !$impl || !$data || !$length) {
+    printf("{\"stage\":\"probe-error\",\"boundary\":\"driver-send\",\"pid\":%d,\"monoNs\":%llu}\n", pid, nsecs);
+  }
   printf("{\"stage\":\"driver-send\",\"pid\":%d,\"tid\":%d,\"monoNs\":%llu,\"sequence\":%llu,\"codeUnits\":%u,\"is8Bit\":%u,\"prefixHex\":\"%rh\"}\n",
     pid, tid, nsecs, $sequence, $length, $eight, buf(uptr($data), ($bytes < 127 ? $bytes : 127) & 127));
   if ($bytes > 127) {
@@ -47,6 +57,9 @@ uprobe:DRIVER:0x4597f /@owned[pid]/
   $handler = *(uint64 *)uptr(reg("bp") - 0x50);
   $sequence = reg("r12") & 0xffffffff;
   @sequence[pid, $handler] = $sequence;
+  if (!$handler || !$sequence) {
+    printf("{\"stage\":\"probe-error\",\"boundary\":\"driver-dispatch\",\"pid\":%d,\"monoNs\":%llu}\n", pid, nsecs);
+  }
   printf("{\"stage\":\"driver-dispatch\",\"pid\":%d,\"tid\":%d,\"monoNs\":%llu,\"sequence\":%llu,\"handler\":%llu}\n",
     pid, tid, nsecs, $sequence, $handler);
 }
@@ -65,11 +78,15 @@ uprobe:DRIVER:0x3bfce /@owned[pid]/
 {
   $handler = reg("bx");
   $root = *(uint64 *)uptr(reg("dx"));
+  if (!$root) {
+    printf("{\"stage\":\"probe-error\",\"boundary\":\"driver-reconstruct\",\"pid\":%d,\"monoNs\":%llu}\n", pid, nsecs);
+  }
   printf("{\"stage\":\"driver-reconstruct\",\"pid\":%d,\"tid\":%d,\"monoNs\":%llu,\"sequence\":%llu,\"handler\":%llu,\"rootKind\":%u}\n",
     pid, tid, nsecs, @sequence[pid, $handler], $handler, *(uint8 *)uptr($root + 16));
   delete(@sequence[pid, $handler]);
 }
 
+// Generated Automation dispatch and its UIProcess response callback.
 uprobe:WEBKIT:0x71e1f0 /@owned[pid]/
 {
   printf("{\"stage\":\"ui-command\",\"pid\":%d,\"tid\":%d,\"monoNs\":%llu,\"sequence\":%llu}\n",
@@ -82,6 +99,7 @@ uprobe:WEBKIT:0x7272a0 /@owned[pid]/
     pid, tid, nsecs, *(uint64 *)uptr(reg("di") + 0x10));
 }
 
+// WebProcess proxy entry, JavaScript call site and frame/callback response.
 uprobe:WEBKIT:0x1004940 /@owned[pid]/
 {
   @entry[pid, tid] = nsecs;

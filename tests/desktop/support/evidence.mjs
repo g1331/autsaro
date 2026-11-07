@@ -293,7 +293,7 @@ export async function startEvidence(directory, ports, processTree) {
         await writeFile(script, source);
         await start(
           'bpftrace',
-          ['--unsafe', '-kk', '-q', script],
+          ['--unsafe', '-q', script],
           'webkit-boundaries',
           '"stage":"ready"',
           {
