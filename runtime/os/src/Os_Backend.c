@@ -989,7 +989,7 @@ OS_MEMMAP static boolean operation_fails(uint32 operation)
 {
     if (failed_operation == operation) {
         failed_operation = 0u;
-        Os_TargetTrace('F');
+        Os_TargetTrace((uint8)'F');
         return TRUE;
     }
     return FALSE;
@@ -1694,7 +1694,7 @@ OS_MEMMAP static void bootstrap(void *argument)
     Os_ScheduleAutostart(startup_mode);
     (void)InterlockedExchange(&ready, 1);
     arti_observe_tasks();
-    Os_TargetTrace('R');
+    Os_TargetTrace((uint8)'R');
     observe_transition();
     taskEXIT_CRITICAL();
     vTaskSuspend(NULL);
@@ -1802,7 +1802,7 @@ OS_MEMMAP static void start_controllers(void)
 OS_MEMMAP void Os_BackendStart(AppModeType mode)
 {
     uint32 i;
-    Os_TargetTrace('I');
+    Os_TargetTrace((uint8)'I');
     read_resource_failure();
     if (InterlockedCompareExchange(&started, 1, 0) != 0) {
         Os_BackendShutdown(E_OS_STATE);
