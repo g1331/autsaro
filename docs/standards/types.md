@@ -44,47 +44,17 @@ R23.1（Advisory）的泛型宏展开位置与 R23.2（Required）的非宏控�
 
 ## 整数常量、初始化与浮点构造
 
-R7.5（Mandatory、C99，AMD3.16，印刷9–10／PDF17–18）约束整数常量宏的原始实参；AMD4.55只增加R7.6交叉引用。已核`ab2ea459`双平台八份补丁后工程及`eea9f25d`四份Linux工程：项目实际调用为`UINT32_C`／`UINT64_C`，实参均为单个无后缀十进制或十六进制literal，分别在32／64位无符号范围内；最大者为restart标识`0x4155544f53525431`。实际宏展开追加U／UL／ULL不等于原始实参带后缀。Counter转换宏的输入配置与生成十进制常量另沿生成器范围检查，不能用这十二份样本覆盖所有合法配置。
-
-R7.6（Required、C99，AMD4.4，印刷7–8／PDF14–15）按目标`int`宽度限定small integer宏；AMD4.65属性表的Advisory与正文／AMD4.64不一致，保留正文Required。两目标`int`为32位、`int_least16_t`为16位。默认样本未启用RES_SCHEDULER，不能证明启用路径满足：`ecu.rs::os_configuration`原来的`UINT16_C(1)`已改为`1u`，保留`uint16 task_access`的bit0、资源优先级和指针／计数。实际四输入原生消费者与恢复小整数宏的源码观察分别验证行为和编码约束，不借用ADR例外。
-
-R9.6（Required、C99，AMD4.5，印刷8–9／PDF15–16）由同一initializer中的chained designator触发。上述工程的项目／采用／补丁后初始化器未发现该构造；`.priorities = {[OS_INPUT_INTERRUPT] = 1u}`是两层独立花括号列表，ErrorHook快照也是单个外层designator加内部位置初始化。`sa_sigaction`的SDK宏展开虽有两级成员，实际用途是初始化后的赋值，`handler = {0}`没有chained designator。此结论不是C99语言不适用，也不由checker缺席推导。
-
-D4.15（Required、C99，AMD3.10，印刷5–6／PDF13–14）针对可能生成NaN／Inf的浮点算术或数学函数结果。上述十二份交付C／头文件、宏及补丁后内核中，浮点类型仅见`Platform_Types.h`的float32／float64定义、两个portmacro的portFLOAT／portDOUBLE定义，以及Linux备用栈的`long double`存储／sizeof；没有浮点值运算、浮点literal或数学函数入口。诊断字符串、注释和`#error`文本不是浮点表达式，FP上下文的字节复制也不求浮点值。因此这些具体源码没有待检测的NaN／Inf结果；R14.1（Required，主文印刷117／PDF125，AMD2增加C11）也没有essentially floating循环计数器。两项都仍适用C99，不能把构造缺席写成语言豁免；系统头展开和provider内部不由本段证明。
-
-R8.15／R8.16／R8.17仅适用C11，类别分别为Required／Advisory／Advisory（AMD3.17，印刷10–13／PDF18–21）；本项目C99源码未使用`_Alignas`／`alignas`／`stdalign.h`，三项分别不适用。GNU aligned属性仍按平台扩展和实际布局约束核查。R1.4仅适用C11（AMD2.30，印刷11–12／PDF18–19）；合成AMD3.11–13与AMD4.53–54后不能再沿旧清单批量禁止已另设指导的泛型／noreturn／对齐／线程／原子设施。当前C99不适用本条，Annex K及平台扩展仍按实际接口检查，不能据此升级语言或免除R1.1／R1.3。
+冻结原文与实例见[语言构造](types/language-constructs.md#整数常量初始化与浮点构造)。
 
 ## R7.3 的标识符误报
 
-PR #371 的四份 `direct-render-mapping-final-results` 各20个位置为标识符：call四处、cell十四处、all两处，分别属于资源宏、原子／futex及多对象等待；两个程序共40次报告。固定addon未先要求数字token，误认名字末尾的l；仅裁决这些位置。后续[参数名修正](bsw-general/language-tokens.md#原始-token-分类的具体误报)及 #420 的声明修正保留既有语义；历史误报裁决仍成立。固定R12.3还漏报过return中的真实逗号运算符，不能从报告减少推定通过。
-
 ### R7.3／R12.3：四 profile 的有界人工证据
 
-冻结基线为 #420 合并的 `8bdb1c7f4190764fa27f49a54c5779ccbfe371fb`，范围为 standard-ecu、user-application、component-pipeline、no-diagnostic 的 C99 HostBatch／probe。PDU ID／长度依次为16／16、16／16、8／32、8／8位；末项无应用DID／诊断路由，仍纳入Dcm TU。
-
-持久原件的七份SHA256SUMS均已核：2013主文R7.3为Required（印刷61–62／PDF69–70），对象为数值literal后缀的小写l；R12.3为Advisory（印刷106／PDF114），对象为逗号运算符，包含for初值／增量及嵌套实参中的表达式。AMD2.27仅追加C11适用性，AMD1／3／4与TC1／2未改变这两条的对象、类别或例外；当前仍为C99。
-
-证据复用 Linux decl58 四份完整扫描及 [#420 精确head运行](https://github.com/g1331/autsaro/actions/runs/41549133111) 的 Windows 四份完整分析与输入工件。逐份核对seal、非内核副本、target／程序及当前originalBswSources的C／头／补丁字节，顺序重建内核并逐字节比较。Linux的92项runtimeSources摘要与基线一致；精确身份及核查收据归 #58 本阶段PR。
-
-责任沿[ADR 0025](../adr/0025-misra-layered-scope.md)区分：originalBswSources映射自有runtime；其余生成／应用C由实际producer负责；FreeRTOS V11.3.1的`054e14f3397023aa83813a65aa065fc4597d481b`原件与生产patch分开，以scope.patchedLines判断改动行，不把整个kernel算作采用原件。SDK依[原头来源](os/sdk.md#sdk-原头来源类别)绑定实际包、头摘要、TU及活动宏；路径或来源分类本身不是满足。
-
-R7.3：两平台四份交付C／头（含未激活分支、补丁后内核）逐token核对，没有小写l数值后缀或追加小写l的token拼接；call／cell／all、注释和字符串不算literal。Linux四份实际GCC展开也无此后缀。Windows每份展开有八处：Backend三处CONTEXT_CONTROL、Time一处WAIT_TIMEOUT、项目patch后的MSVC-MingW port各一处WAIT_TIMEOUT／CONTEXT_CONTROL、HostBatch一处ERROR_BROKEN_PIPE，以及采用queue.c的一处SIZE_MAX。前七处由`__MSABI_LONG(x)=x ## l`产生0x1l／258l／109l；末处沿SIZE_MAX→_UI64_MAX产生0xffffffffffffffffull。源码未手写后缀不代表展开满足。
-
-Windows头包为mingw-w64-x86_64-headers `14.0.0.r569.g34eeafb7d-1`，编译器GCC `16.1.0-5`；活动定义分别见winnt.h:1795、winerror.h:356／248、limits.h:76及_mingw_mac.h。主文§6.7（印刷15–16／PDF23–24）区分ISO标准库实现与调用方义务。SIZE_MAX是ISO C99标准接口，其内部后缀按此边界处理；不扩及非ISO Windows接口。上述七处非ISO展开的R7.3责任仍由 #58 承接，尚未完成满足／合法处置，不新增偏离。
-
-R12.3：Linux四份实际GCC展开的56／56／58／58个TU由Clang18.1.3完整解析，无逗号运算符。Windows的55／55／57／57个TU另按行标记保留项目／采用／patch源码及使用点宏展开，C语法解析无错误；GNU属性另核为段、对齐、调用约定及noreturn／used标记，无逗号运算符。每份仅六处真实逗号表达式，均是生成Os_Arti.c的assert在标准assert.h:46展开的`(_assert(...),0)`，按§6.7归标准库内部语法；条件仍为计数非零或0。未发现该活动语法中的其他逗号运算符。声明成员、函数调用、数组初始化和宏参数均按实际语法区分，不从checker零报告推定。
-
-消费者为资源宏、原子／等待、栈／故障、资源计数及native_starts；采用tasks／list／queue、所选port与生成配置／RTE／ARTI进入两个程序。对照识别小写后缀、return／for逗号运算符，排除大写后缀与分隔符。
-
-Windows完整SDK内部、未展开宏的其他实例及供应方实现仍未评估。Clang的GCC16头错误不作阴性证据。新增源码／宏用途、配置、补丁、provider或target时重评。#381／#382的诊断分类及#385的66项记录不重做；155项checker-covered与raw221项仍not_assessed，passed=false／error、completeCompliance=false、retention键／形状及strict refusal不由本文改写，不声称总体符合性。
+历史误报、双目标语法闭包与供应方遗留见[语言构造](types/language-constructs.md#r73-的标识符误报)。
 
 ## 函数指针的显式丢弃
 
-R11.1为Required、当前C99适用（2013主文印刷93–94／PDF101–102）。Exception 2明确允许函数指针转换成void，不能把void与void指针混同。AMD2追加C11，AMD2.58修改Exception 3的隐式转换说明，没有撤销Exception 2；其余相关修订未增加这里的限制。
-
-四份 `direct-render-mapping-final-results` 各有一处R11.1，均为 `generated/src/Ecu_Execution.c:7:5` 的 `(void)sink`，归属host-batch／probe。实际 `Can_TxSinkType` 为返回EcuStatus、接受id／dlc／八字节const数据指针的函数指针；目标类型确为void，没有星号或转成另一函数原型。因此该具体报告适用Exception 2，是误报。这里不调用sink、不保存变换后的地址，实际ECU发送继续进入Ecu_TargetEnqueueTransmit；不由这项判断证明其他callback、参数用途或地址表示符合。
-
-ECU producer从 `runtime/ecu/src/Ecu_Execution.c/.h` 的保留模板交付这些文件，四份分析副本及Can_CfgTypes.h均与实际模板／头字节相等；不假称Emitter输出具有直接原件映射。固定addon的misra_11_1在目标不再是函数指针时报告，该分支未先排除void，解释了这条报告。未改检查器、源码、suppression或baseline；原raw、strict refusal及221项not_assessed保留，不扩为整条R11.1或任意指针转换通过。
+原文例外与实际消费者见[函数指针丢弃](types/language-constructs.md#函数指针的显式丢弃)。
 
 ## 未使用声明与真实消费者
 
@@ -108,14 +78,87 @@ callback-parameter旧7处R2.4均为匿名类型误报；新增xSTATIC_TIMER为�
 
 ## 原生ABI类型与编译约束
 
-Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes.h集中原有PC与向量回调别名；类型头不承载对象／函数映射。LONG在Windows仍为32位long、Linux仍为int32_t；64位存储、HANDLE／DWORD／LPTHREAD_START_ROUTINE、Windows void*／Linux uintptr_t PC以及uint32(void)向量回调均保留。Schedule的私有别名直接使用原有Os_ArtiScheduleStateType，不改tables布局或工具view。
+原始类型、编译拒绝及反例见[ABI 类型证据](types/language-constructs.md#原生abi类型与编译约束)。
 
-原四个Os_Atomic guard及ArtiAtomic32IsFourBytes／Os_HostLongMustBe32BitsType的char-array typedef名字没有消费者，约束作用却必须保留。现在匿名枚举的显式值使用sizeof(char[原谓词?1:-1])：受支持目标的界为常量1，失败目标因负数组界在编译期拒绝；不生成状态对象、VLA或运行时分支，Linux always-lock-free拒绝仍独立存在。六个宽度／对齐谓词未放宽，旧实现guard类型名的源码移除已记CHANGELOG。基础存储／回调别名及服务二进制ABI不变。
+## 固定 11 项 checker 限制的补充评估
 
-正常编译控制分别改变32／64位宽度与对齐，拒绝须定位到对应guard表达式；将同一guard的检查表达式替为常量1的私有副本必须编译成功，避免把其他检查的失败算作目标证据。sizeof中的Os_Atomic64Type仍是真实类型用途，不能因旧addon遗漏而一同删除。上述只处置类型归属和编译约束，GNU扩展、SDK、provider及实际Windows执行继续单列。
+本组评估 C99 的 standard-ecu、user-application、component-pipeline、no-diagnostic，分别连接 Linux／Windows 受控 x64 的 HostBatch 与 probe；包括两个程序的全部 TU、补充单元、实际宏展开及补丁后内核。八份输入的 seal、producer、工具／SDK 与逐项核查收据归本次 PR。上下文独立绑定本组，整体状态为 pending：R5.5／R5.7／R10.1 的 SDK 接缝仍由 #444 承接，R20.1 保留项的正式义务仍开放。
 
-`48907b3b`的type-owner标准ECU完成结果另有三条新增R17.3，位于交付Os_HostTypes.h:23的两次及:30的一次`__alignof__`。同一批原R2.3由60减至56、R5.9由17减至0；R17.3则由71增至74，raw合计2862，不把净减少当作没有新报告。原比较工件为os-aliased-service，具体位置仍按各自字节身份保留。
+责任沿 ADR 0025 分开：自有 runtime、生成／应用输出及项目 patch 逐构造判断；固定 FreeRTOS 原件引用其采用记录，实际集成和项目修改另查；SDK 实现沿供应方责任，其进入自有表达式的宏及接口用途仍在本组范围。内部实现缺口与调用方义务分别记录，#441／#444 接续相应责任。
 
-主文R17.3（Mandatory，印刷138／PDF146）仅适用C90，当前实际TU为C99；三处是编译器对类型的对齐查询，不是遗漏函数原型。这三个GNU运算在旧guard中已经存在，改换常量表达式上下文没有新增一次运行时调用。固定addon的misra_17_3按未关联function／valueType的名字加左括号报告，没有完整建模该扩展。实际C99编译及对应约束拒绝另作证据；不手写内建声明、不新增baseline／suppression，原报告、语言适用性、GNU扩展责任和严格比较拒绝分别保留。
+原文为 March 2013 Third Edition 与 AMD1–4／TC1–2，七份原件逐一通过原 SHA256SUMS。下表定位用“印刷页／PDF 页”，全部 Required，R20.1 为 Advisory。AMD2.27 的适用性表追加 C11，本组仍按 C99；其余实质修订逐项列出。旧证据引用其冻结范围，当前差异及可证伪控制集中在 PR。
 
-维护者接受的平台／OS宏形式见[精确预处理记录](types/retained-platform.md)，不扩大所选配置的运行能力。
+<!-- misra-checker-assessment-begin -->
+| 规则 | 类别 | 评估范围 | 状态 | 结论 |
+| --- | --- | --- | --- | --- |
+| R5.1 | Required | 双目标四样本；外部对象及函数，按每个程序分别判断 | satisfied | 主文 48–49／56–57，AMD2.33–34：按实际实现的有效字符区分。包含 StartScheduleTable 的长函数名；Windows 固定 ld 的完整 COFF／hash 名字链与当前准备日志相接，Linux 采用完整 ELF／hash 名字链；无新增截短、搜索路径或名字变换。既有实现证据见[名称有效长度](#c99过时形式与名称有效长度)。 |
+| R5.5 | Required | 自有、项目 patch 与实际 SDK 宏／标识符接缝 | not_assessed | 主文 53／61，AMD2.39 与 §6.7：追溯实际 define 历史，含其后 undef，排除从未定义的 MPU／多核分支。自有及 patch 的配置结论复用[OS 声明](os/declarations.md#sdk宏名与实际标识符)。Linux 的 sa_sigaction／si_addr 头外展开与非标准头引入的同名对象仍有真实义务；#444 核定当前精确实例及处置后恢复，本组未批准新例外。 |
+| R5.7 | Required | 跨 TU 的真实 tag、其他 namespace 与关联 typedef | not_assessed | 主文 55／63，AMD2.40：同头重复定义与关联 typedef 例外分别判断。自有 Os_NativeStackType、Os_HostHandleType 及各 Rte_CDS tag 沿真实声明 owner 核对；项目 patch 不再保留无用途 xSTATIC_TIMER tag。SDK 的 sigaction 等 tag／函数同名候选须按 §6.7 和实际头外使用由 #444 完成裁决，保留该具体义务。 |
+| R8.8 | Required | 自有及所选 patch 的内部链接函数全部声明／定义 | satisfied | 主文 70–71／78–79；AMD3.64 追加交叉引用。按 TU 先确定内部链接实体，再逐声明检查 static，包括头内 inline 与后续定义；现有声明的 static 属性保持。Linux 当前完整预处理函数声明复核与[原函数闭包](os/declarations.md#条件接口与声明owner)相接；Windows 平台定义从对应源码及所选 patch 核对。 |
+| R10.1 | Required | 自有与 patch 的 signed 位运算、~、逻辑操作数及实际宏用途 | not_assessed | 主文 82–84／90–92；TC1 补逻辑指针限制，TC2.17–18，AMD3.20–26，AMD4.51。自有原生 mask 先进入 unsigned 域，~ 操作数为 uint32，逻辑参数为 Boolean 或显式比较，见[原生位掩码](types/essential-types/expressions.md#原生位掩码)。Windows 的 CONTEXT_CONTROL 实际展开为 0x100000 与 0x1l 的按位 OR，两个 signed 操作数违反本条；每 profile 的 Backend 三处及项目 port patch 一处转 #444，尚无合法处置。 |
+| R10.3 | Required | 自有与 patch 的参数、返回及 case-label 隐式转换 | satisfied | 主文 86–87／94–95；TC1 常量 rank 与 case 例外，TC2.20 要求按控制表达式 essential 类型；AMD3.27–30 的 real→complex 例外无实际用途。返回／实参按目标类型追溯，Boolean 常量按 D.6；本次补正 Os_TargetTrace 的六个生产字符标记实参，显式转为接口的 uint8，字符值、调用次数及接口保持。实际 case 常量按各控制类型和值域核对。Windows CONTEXT_CONTROL 的常量结果1048577按 D.7 取 STLR 为 signed int，可由 DWORD 表示，适用 TC1 常量例外；内部 OR 的 R10.1 义务另列。 |
+| R10.6 | Required | 自有与 patch 的参数／返回等赋值语义中的复合表达式 | satisfied | 主文 90–91／98–99、§8.10.3 与 TC1：~ 为复合运算符，常量表达式除外；cast 结果和单值扩展分别处理。HostBatch number、monotonic_ms、COM 打包与 Target 长度均在计算前选宽；Dcm 长度按各 profile 的 PduLengthType 和 Dcm_MsgLenType 区分。实际表达式接[既有宽度闭包](types/essential-types/expressions.md#复合表达式与赋值结果)，CONTEXT_CONTROL 为常量表达式，依 §8.10.3 按常量边界处理；运算宽度按实际操作数判断。 |
+| R13.5 | Required | 自有及 patch 逻辑 RHS 的调用／volatile 访问闭包 | satisfied | 主文 113–114／121–122 与 Glossary 224／232；TC1 Appendix J 14／20：按函数可能的持久副作用判断。当前 RHS 的 CanTp、Dcm、Det、OS 配置／TLS 查询闭包接[BSW General](bsw-general/README.md#逻辑右侧的持续副作用)，strncmp 按标准库只读契约；有锁、输出、原子状态变化及事件消费的调用保持独立求值。真实 errno 宏另沿普通 TLS 对象读取判断；SDK 内部实现由 #444 承接。 |
+| R14.4 | Required | 自有及 patch 的 if、while、do、for 控制表达式 | satisfied | 主文 121–122／129–130：for 存在条件时须为 essentially Boolean；省略条件合法。当前控制为 Boolean、比较／逻辑结果，单次宏循环的 FALSE／false 按 D.6 识别；CanTp 的 const boolean elapsed 保持 Boolean。实际内核宏展开接[断言／循环整改](os/kernel.md)，未把数值 0／1 当作通用 Boolean 常量。 |
+| R20.1 | Advisory | 原文件预处理前的全部 include，含排除分支与 typedef 前缀 | retained | 主文 155／163、AMD2.27：从物理文件顺序判断。实体后的 MemMap STOP、类型后的 START 及条件 C++ 包装分别接[声明布局](types/declarations.md#类型前缀与首次映射请求)和[MemMap 类别](memmap/README.md#memmap-类别偏离)。保留实际违反与正式待完成状态，已有必要性与布局检查各自保留；#439 的逐位置消费另接续。 |
+| R21.8 | Required | 自有源码、生成／应用输出、所选 patch 与终止入口宏用途 | satisfied | AMD1 移除 getenv；AMD2.81 整项替换为 abort／exit／_Exit／quick_exit（16／23），包括这些标识符和同名宏展开。当前交付源码没有这些项目用途；ExitProcess 沿 Os_HostExitProcess 进入 Win32 ExitProcess 或 POSIX _exit。assert 的标准库内部实现与项目直接调用分别处理，见[原生设施](os/native-facilities/README.md)；检测器／测试源码不冒充本组生产输入。 |
+<!-- misra-checker-assessment-end -->
+
+当前完整 Linux TU 可由 Clang 18.1.3 解析；Windows 的 GCC 16 intrinsic 实现与 Clang 18 有不兼容错误，这部分只保留候选，Windows 源码／项目 patch 及真实 GCC CI 各自核对。错误输出未用作缺席证明。SDK tag／宏的当前精确处置交 #444；其恢复条件是逐实例原文裁决、实际接口闭包与所需正式义务齐备，再重新评估并绑定。
+
+补充记录只描述上述 checker 缺口；原 66／155 分区、221 项 assessment 和原始分析结果由正常入口保留。正文、源码、producer、配置、程序／TU、目标、工具或 provider 变化时重评本组，pending 持续阻止验收。
+<!-- source-assessment-context-begin -->
+{
+  "id": "checker-limitations-current-inputs",
+  "evidence": {
+    "head": "02f7c484417cdcd4afcef60e70eafef116755c1d",
+    "receipt": "https://github.com/g1331/autsaro/pull/448#issuecomment-6709295029"
+  },
+  "cases": [
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "bb79386abdc9e1fadf27da83b428252359206814dd802ec8b953dcb8b3ce51dc"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "2c95ec891c173c4b5bac0b831ad5029f04bdf6242dcfd8ee3a548376cc2109da"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "13199bd7862734d93dbe224f8e2d448485e375a1ce9052c5f8ebbce700c768cb"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "2de10ca454f87d49c868fa6290947fb3235479e14b2e5f321e5609d5bc8e8589"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "2f356f8ecb2649a84e371d1dc7909568c282246136f1b3fe8ae3e82bf91a6fb1"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "099c3955d4004f4d055c0e5f070a7fdb30f15fa871e2c746fd1a28a4004bdcb3"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "e374256f6854e6247359dc43e5ec97c96c839127192bcbf995ea8251f665f854"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "95d9a093d533ea2562be91358fe4809246ac73c824da2f9e99bd19d5829869a1"
+    }
+  ],
+  "records": {
+    "kind": "checker-limitations"
+  },
+  "formalStatus": "pending"
+}
+<!-- source-assessment-context-end -->

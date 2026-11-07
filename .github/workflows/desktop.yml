@@ -124,7 +124,7 @@ jobs:
       - name: Linux desktop runtime dependencies
         if: runner.os == 'Linux'
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-0 libxml2 webkit2gtk-driver xvfb xdotool xclip xsettingsd
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-0 libxml2 webkit2gtk-driver xvfb xdotool xclip xsettingsd tcpdump bpftrace binutils gdb
       - uses: ./.github/actions/native-analysis-compiler
       - name: Edge WebDriver
         if: runner.os == 'Windows'

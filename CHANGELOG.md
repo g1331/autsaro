@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Synchronous RTE C/S now supports typed scalar parameters, ordered P-port constants, shared compatible server runnables and general application errors (including E_OK-only); regenerate contracts and rebuild consumers for the expanded plan schema (#435)
+
 - `Com_ConfigType` now requires a typed lower-refusal observer for Tx configurations. Regenerate and rebuild all consumers; both native entries and delivered tools expose bounded COM refusal records on stderr, with explicit incomplete/end receipts and truthful output failure exits (#399)
 
 - Single-core SC1 deliveries no longer publish the multicore-only `DONOTCARE` and `TotalNumberOfCores` macros. Remove these uses and regenerate consumers; the supported application modes and core identity services are unchanged (#389)

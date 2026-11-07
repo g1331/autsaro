@@ -21,7 +21,7 @@ async function session() {
     refresh: vi.fn(async () => {}),
     evaluate: vi.fn(async (expression) => {
       if (expression === 'performance.timeOrigin') return 1;
-      if (expression.includes("invoke('workbench_capabilities')")) return { fingerprint: 'fp' };
+      if (expression.includes("invoke('workbench_capabilities'")) return { fingerprint: 'fp' };
       if (expression.includes('configure_language'))
         return { ok: true, reply: { inputFingerprint: 'fp', value: null } };
       return true;

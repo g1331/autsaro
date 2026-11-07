@@ -4,6 +4,108 @@ use std::path::Path;
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
+fn standalone_contract_memmap_consumes_requests_and_reenters() {
+    // Verifies: SWS_MemMap_00003, SWS_MemMap_00007, SWS_MemMap_00011
+    let plan = build(&inputs()).unwrap();
+    let files = plan.component_contract_files().unwrap();
+    let scratch = Scratch::new();
+    let directory = scratch.0.join("contract");
+    let preview = files.preview(&directory).unwrap();
+    files
+        .generate_previewed(&directory, &preview.revision)
+        .unwrap();
+    let check = |label: &str, source: &str, diagnostic: Option<&str>| {
+        let path = directory.join(format!("{label}.c"));
+        std::fs::write(&path, source).unwrap();
+        let output = tooling::run_public_command(
+            tooling::c_compiler()
+                .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-c"])
+                .arg("-I")
+                .arg(directory.join("include"))
+                .arg(&path)
+                .arg("-o")
+                .arg(directory.join(format!("{label}.o"))),
+            &directory,
+            label,
+            std::time::Duration::from_secs(60),
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(
+            output.status.success(),
+            diagnostic.is_none(),
+            "{label}: {stderr}"
+        );
+        if let Some(diagnostic) = diagnostic {
+            assert!(stderr.contains(diagnostic), "{label}: {stderr}");
+        }
+    };
+    // Real application headers request CONST and CODE from the standalone RTE map.
+    // Each TU repeats a CODE pair after its header, exposing guards that swallow STOP.
+    for scope in ["Ingress", "Process", "Observe", "DcmService"] {
+        let source = format!(
+            "#include \"Rte_{scope}.h\"\n\
+             #define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+             RTE_{scope}_CODE void contract_code(void);\n\
+             RTE_{scope}_CODE void contract_code(void) {{}}\n\
+             #if defined(RTE_{scope}_START_SEC_CODE)\n#error START not consumed\n#endif\n\
+             #define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+             #if defined(RTE_{scope}_STOP_SEC_CODE) || defined(RTE_{scope}_CODE)\n\
+             #error STOP not consumed\n#endif\n\
+             #if defined(RTE_MEMMAP_ACTIVE) || defined(RTE_{scope}_CODE_ACTIVE)\n\
+             #error STOP not consumed\n#endif\n"
+        );
+        check(scope, &source, None);
+        let sections = tooling::symbol_sections(
+            &tooling::execution_settings().objdump,
+            &directory.join(format!("{scope}.o")),
+        );
+        assert!(
+            sections
+                .iter()
+                .any(|(symbol, section)| { symbol == "contract_code" && section == ".rte_code" }),
+            "{scope}: {sections:?}"
+        );
+        check(
+            &format!("{scope}-repeated-stop"),
+            &format!(
+                "#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+                 #define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+                 #define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+            ),
+            Some("Unmatched RTE memory section"),
+        );
+    }
+    for (label, source, diagnostic) in [
+        (
+            "missing",
+            "#include \"Rte_MemMap.h\"\n",
+            "Unknown RTE memory section",
+        ),
+        (
+            "nested",
+            "#define RTE_Ingress_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+             #define RTE_Process_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n",
+            "Nested RTE memory section",
+        ),
+        (
+            "mismatched",
+            "#define RTE_Ingress_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+             #define RTE_Process_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n",
+            "Unmatched RTE memory section",
+        ),
+        (
+            "multiple",
+            "#define RTE_Ingress_START_SEC_CODE\n#define RTE_Ingress_STOP_SEC_CODE\n\
+             #include \"Rte_MemMap.h\"\n",
+            "Rte_MemMap requires exactly one supported marker",
+        ),
+    ] {
+        check(label, source, Some(diagnostic));
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
 fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatures() {
     for renamed in [false, true] {
         let mut inputs = pipeline_operation_inputs();
@@ -1576,5 +1678,126 @@ fn component_application_definitions_preserve_configured_sections() {
         println!(
             "{component}: missing STOP include compiled successfully; exact structure rejection"
         );
+    }
+}
+
+#[test]
+fn typed_port_arguments_and_errors_reach_real_servers_and_kill_behavior_mutations() {
+    for unconnected in [false, true] {
+        let mut sources = typed_operation_inputs();
+        if unconnected {
+            xml_edit(
+                &mut sources,
+                "composition.arxml",
+                |node| named(node, "ASSEMBLY-SW-CONNECTOR", "OtherScalar"),
+                |_| String::new(),
+            );
+        }
+        let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+        let scratch = Scratch::new();
+        for (path, bytes) in prepared_typed_pipeline(&plan, tooling::native_target()).into_files() {
+            let path = scratch.0.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let path = scratch.0.join("generated/src/Rte.c");
+        let original = std::fs::read_to_string(&path).unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let mut variants = vec![("normal", original.clone(), true)];
+        if !unconnected {
+            for (name, before, after) in [
+                (
+                    "omitted-implicit-value",
+                    "(uint8)1U, (uint8)29U",
+                    "(uint8)0U, (uint8)29U",
+                ),
+                (
+                    "reordered-implicit-values",
+                    "(uint8)0U, (uint8)13U",
+                    "(uint8)13U, (uint8)0U",
+                ),
+                (
+                    "fixed-implicit-values",
+                    "(uint8)1U, (uint8)29U",
+                    "(uint8)0U, (uint8)13U",
+                ),
+                (
+                    "discarded-return",
+                    "return Process_Transform((uint8)0U, (uint8)13U, Input, Output, State);",
+                    "(void)Process_Transform((uint8)0U, (uint8)13U, Input, Output, State);\n\
+                        \x20   return E_OK;",
+                ),
+                (
+                    "stopped-output-write",
+                    "return RTE_E_COM_STOPPED;",
+                    "*Output = 0U;\n        return RTE_E_COM_STOPPED;",
+                ),
+            ] {
+                let start = original
+                    .find("Rte_Call_Observe_ResultService_Transform(")
+                    .unwrap();
+                let body = original[start..].find("\n}").unwrap() + start + 2;
+                let other_start = original
+                    .find("Rte_Call_Observe_OtherService_Transform(")
+                    .unwrap();
+                let other_body = original[other_start..].find("\n}").unwrap() + other_start + 2;
+                let range = if matches!(name, "fixed-implicit-values" | "omitted-implicit-value") {
+                    other_start..other_body
+                } else {
+                    start..body
+                };
+                let selected = &original[range.clone()];
+                assert_eq!(selected.matches(before).count(), 1, "{name}");
+                let mut mutated = original.clone();
+                mutated.replace_range(range, &selected.replace(before, after));
+                variants.push((name, mutated, false));
+            }
+        }
+        if unconnected {
+            let start = original
+                .find("Rte_Call_Observe_OtherService_Transform(")
+                .unwrap();
+            let end = original[start..].find("\n}").unwrap() + start + 2;
+            let selected = &original[start..end];
+            assert_eq!(selected.matches("return RTE_E_UNCONNECTED;").count(), 1);
+            let mut mutated = original.clone();
+            mutated.replace_range(
+                start..end,
+                &selected.replace(
+                    "return RTE_E_UNCONNECTED;",
+                    "*Output = 0U;\n    return RTE_E_UNCONNECTED;",
+                ),
+            );
+            variants.push(("unconnected-output-write", mutated, false));
+        }
+        for (name, source, success) in variants {
+            std::fs::write(&path, source).unwrap();
+            let executable = tooling::native_binary(&scratch.0, name);
+            let mut compiler = tooling::c_compiler();
+            tooling::project_includes(&mut compiler, &scratch.0);
+            compiler
+                .current_dir(&scratch.0)
+                .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+                .arg("generated/src/Rte.c")
+                .arg(root.join("core/tests/fixtures/bsw-contracts/rte_typed_contract.c"));
+            if unconnected {
+                compiler.arg("-DUNCONNECTED_PORTS");
+            }
+            compiler.arg("-o").arg(&executable);
+            let output = tooling::run_public_command(
+                &mut compiler,
+                &scratch.0,
+                &format!("{name}-compile"),
+                std::time::Duration::from_secs(60),
+            );
+            assert!(output.status.success(), "{name}: {output:?}");
+            let output = tooling::run_public_command(
+                &mut std::process::Command::new(executable),
+                &scratch.0,
+                &format!("{name}-run"),
+                std::time::Duration::from_secs(30),
+            );
+            assert_eq!(output.status.success(), success, "{name}: {output:?}");
+        }
     }
 }

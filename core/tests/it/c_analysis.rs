@@ -86,3 +86,24 @@ fn generated_c_analysis_samples() {
         );
     }
 }
+
+/// The new mechanism has a sealed, real-application input beside the four regression profiles.
+#[test]
+fn typed_synchronous_application_analysis_sample() {
+    use autosar_config_core::target::BuildTarget;
+    let sources = mainline::typed_operation_inputs();
+    let plan = mainline::build(&sources).unwrap();
+    let scratch = Scratch::new();
+    let output = std::env::var_os("AUTOSAR_TYPED_C_ANALYSIS_SAMPLE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| scratch.0.join("typed-services"));
+    let target = if cfg!(windows) {
+        BuildTarget::WindowsX64ControlledV1
+    } else {
+        BuildTarget::LinuxX64ControlledV1
+    };
+    mainline::prepared_typed_pipeline(&plan, target)
+        .generate(&output)
+        .unwrap();
+    assert!(output.join("generated/src/Rte.c").is_file());
+}

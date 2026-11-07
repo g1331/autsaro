@@ -16,20 +16,51 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[cfg(feature = "native-webdriver")]
 use tauri::State;
 
+// Transport metadata only: this argument consumes no command payload field.
+pub(crate) struct NativeEvaluation {
+    #[cfg(feature = "native-webdriver")]
+    evaluation: Option<String>,
+}
+
+impl<'a, R: tauri::Runtime> tauri::ipc::CommandArg<'a, R> for NativeEvaluation {
+    fn from_command(
+        _command: tauri::ipc::CommandItem<'a, R>,
+    ) -> Result<Self, tauri::ipc::InvokeError> {
+        Ok(Self {
+            #[cfg(feature = "native-webdriver")]
+            evaluation: _command
+                .message
+                .headers()
+                .get("x-autosar-evaluation")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned),
+        })
+    }
+}
+
+#[cfg(test)]
+impl specta::function::FunctionArg for NativeEvaluation {
+    fn to_datatype(_: &mut specta::Types) -> Option<specta::datatype::DataType> {
+        None
+    }
+}
+
 #[cfg(feature = "native-webdriver")]
 pub(crate) struct NativeRequest {
     id: u64,
     command: &'static str,
+    evaluation: Option<String>,
 }
 
 #[cfg(feature = "native-webdriver")]
 impl NativeRequest {
-    pub(crate) fn begin(command: &'static str) -> Self {
+    pub(crate) fn begin(command: &'static str, evaluation: NativeEvaluation) -> Self {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(1);
         let request = Self {
             id: NEXT.fetch_add(1, Ordering::Relaxed),
             command,
+            evaluation: evaluation.evaluation,
         };
         request.record("entered", None);
         request
@@ -48,6 +79,7 @@ impl NativeRequest {
             serde_json::json!({
                 "id": self.id,
                 "command": self.command,
+                "evaluation": self.evaluation,
                 "stage": stage,
                 "ok": ok,
                 "at": SystemTime::now().duration_since(UNIX_EPOCH).map(|at| at.as_millis()).ok(),

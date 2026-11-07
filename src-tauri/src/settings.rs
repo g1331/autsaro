@@ -8,9 +8,10 @@ use tauri::State;
 #[cfg_attr(test, specta::specta)]
 pub(super) fn workbench_capabilities(
     state: State<'_, Arc<AppState>>,
+    _evaluation: crate::verification::NativeEvaluation,
 ) -> Result<Capabilities, autosar_config_core::LocalizedText> {
     #[cfg(feature = "native-webdriver")]
-    let request = crate::verification::NativeRequest::begin("workbench_capabilities");
+    let request = crate::verification::NativeRequest::begin("workbench_capabilities", _evaluation);
     let result = state.capabilities();
     #[cfg(feature = "native-webdriver")]
     request.finish(result.is_ok());

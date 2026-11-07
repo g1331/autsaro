@@ -68,7 +68,7 @@ pub(crate) use outputs::template_of;
 pub use plan::{HandleAssignment, PlanDescription, ValidatedIntegrationPlan, build_plan_native};
 pub use routing::PduRoute;
 pub use rte_configuration::RteGenerationContract;
-pub use rte_types::RteDataType;
+pub use rte_types::{PortDefinedArgument, RteDataType};
 pub use schedule::{ScheduleContract, ScheduledEntity};
 pub use signals::SignalChannel;
 

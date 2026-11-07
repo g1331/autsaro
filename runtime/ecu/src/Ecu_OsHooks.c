@@ -8,9 +8,9 @@
 void ErrorHook(StatusType Error)
 {
     (void)Error;
-    Os_TargetTrace('e');
+    Os_TargetTrace((uint8)'e');
 }
-void PreTaskHook(void) { Os_TargetTrace('p'); }
-void PostTaskHook(void) { Os_TargetTrace('q'); }
+void PreTaskHook(void) { Os_TargetTrace((uint8)'p'); }
+void PostTaskHook(void) { Os_TargetTrace((uint8)'q'); }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"

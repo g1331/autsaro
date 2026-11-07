@@ -318,6 +318,7 @@ export type Component = {
   dataPorts: DataPort[];
   dataAccesses: DataAccess[];
   operations: Operation[];
+  portArguments: { [key in string]: PortDefinedArgument[] };
   runnables: Runnable[];
 };
 
@@ -774,7 +775,7 @@ export type Operation = {
   port: string;
   interface: string;
   operation: string;
-  applicationError: string | null;
+  applicationErrors: { [key in string]: number };
   read: boolean;
   apiSymbol: string;
   implementationSymbol: string;
@@ -880,6 +881,12 @@ export type PlanDiagnostic = {
   object: string | null;
   message: LocalizedText;
   remedy: LocalizedText;
+};
+
+export type PortDefinedArgument = {
+  nativeType: string;
+  typeIdentity: string;
+  value: string;
 };
 
 export type PreflightReport = {

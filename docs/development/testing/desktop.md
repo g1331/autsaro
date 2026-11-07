@@ -29,6 +29,18 @@ node --test --test-concurrency=1 "tests/desktop/*.test.mjs"
 
 transport 请求中止或响应体解析失败后，会话保留首个错误并拒绝后续请求，避免在仍执行旧命令的 driver 上排队诊断和关闭操作；WebDriver 返回的正常协议错误仍可继续诊断。关闭会话时先清理所属进程，再断言应用进程树已全部退出并保存证据，最后传播关闭错误，残留时列出 pid、名称和命令行；按 Ctrl-C 或取消 CI 也会结束私有 display 与 driver 进程组。
 
+Linux 的 responsiveness 与 standard-delivery 场景自动启用请求取证，沿用会话目录与 `desktop-ubuntu-24.04-*` 工件：
+
+- `transport-headers.pcap` 保存两个已登记 loopback 端口的 512 字节包快照；`tcpdump.stderr.log` 保存最终捕获／丢包计数。它用于定位两跳请求与响应头，完整响应内容仍由原有断言验证。
+- `page-lifecycle.jsonl` 通过独立 loopback beacon 保存 evaluation 的 entered／resolved／callback 阶段；原生 projection／capabilities 日志中的 `evaluation` 来自该次调用的取证 header，进入与返回仍按原生 `id` 配对。测试保留原生 invoke 函数与 payload。
+- `webkit-boundaries.stdout.log` 保存 Automation sequence、UIProcess 命令／响应、WebProcess 命令 token／frame／callback，以及 driver handler 的解析长度、编码与根类型。`prefixHex` 是有界 Latin1／UTF16 存储前缀，含 `autosar-evaluation` 标记；根类型 0–6 依次为 null、boolean、double、integer、string、object、array。存储长度与 Node 收到的 UTF-8 字节数分别记录。
+- `interval-threads.jsonl` 每秒保存所属进程与 Node 的线程身份、读取起止时间、状态、wchan、CPU ticks 和 minor／major faults，并给出同一线程 start time 下相邻读取的增量；`request-intervals.jsonl` 记录请求区间与 Node body 收到的长度。采样跨越请求边界时，按实际读取区间解释增量。
+- `probe-status.jsonl`、`probe-owners.jsonl`、`probe-maps.jsonl` 与 `probe-capture.json` 保存探针启动／退出、ELF 身份、进程归属、映射和采集错误。权限不足、内核限制或未知 WebKit build 会显式留下 unavailable；保留其余取证并在分析中指出缺少的阶段。
+
+边界探针复用已验证的 WebKitGTK 2.52.6 x86_64 指令位置，挂载前核对 driver／library 的完整 ELF build ID 和每个指令守卫；升级 WebKit 后须按匹配源码重新核对位置并运行控制用例。uprobe 只读取已登记会话的进程，随会话清理；它避免 GDB 在每次成功请求上停止所有线程。需要 `tcpdump`、`bpftrace`、`readelf`，普通用户通过无交互 sudo 启动采集，CI 在既有桌面作业安装这些工具。
+
+下一次超时先从 `webdriver.jsonl` 的 failed evaluation 找到两个标记前缀，再按 Automation sequence／WebProcess token／frame／callback／driver handler 串联该次请求，结合原生命令和页面阶段确定最后已观察到的边界；随后只解释该请求等待区间内的线程增量及已有失败栈。缺少某阶段时先检查探针状态、stderr 与丢包，保留未观察到的事实。`process-tree.test.mjs` 的 controlled native response timeout 用例仅在自己的 fetch 包装中扣留已完成的真实原生响应，等待该请求的线程采样后抛出 TimeoutError，验证失败前落盘和正常所属进程退出；正常场景没有这项注入。控制用例先读取明确的采集可用状态：ready 时验证完整边界、两跳及丢包；unavailable 时验证原因、其余请求／页面／线程证据与清理。缺少可用状态记录仍报错，避免把工件丢失误认作预期降级。
+
 同一台 Linux 机器可以在不同工作树中并行运行多个场景。手动中止或清理时只结束自己启动并记下的进程或进程组（如用 `setsid` 启动后 `kill -- -<pgid>`），不要按名称或命令行匹配（`pkill -f`、`killall`），否则会连带结束其他工作树正在运行的场景。
 
 在沙箱或容器外执行的会话，须在执行会话的同一宿主 PID 命名空间核对进程退出；另一命名空间的 `/proc` 看不到目标 PID，不能证明它已退出。归因时记录每次进程／线程读取的实际时间，集合入口时间不能代表所有后续读取；缺页次数和 CPU 时间是生命周期累计量，只有同一请求区间的增量及对应栈才能说明该次等待中的活动。

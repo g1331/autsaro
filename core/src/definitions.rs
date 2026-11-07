@@ -7,6 +7,8 @@ mod extension;
 pub(crate) mod standard;
 mod validation;
 
+pub(crate) use validation::integer;
+
 use crate::project_model::{
     ConfigurationDiagnostic, DefinitionDescriptor, ExtensionDefinitionIdentity, RuleSetIdentity,
     ScopeValidation, TypedValue, ValueKind,
