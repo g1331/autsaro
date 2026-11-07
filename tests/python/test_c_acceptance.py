@@ -254,8 +254,8 @@ class AcceptanceTests(unittest.TestCase):
         self.bind(self.context(group="owned-source", status="approved"))
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
 
-    def select_owned(self, source, rule, expression, *, programs=None):
-        delivered = source.removeprefix("runtime/")
+    def select_owned(self, source, rule, expression, *, programs=None, delivered=None):
+        delivered = delivered or source.removeprefix("runtime/")
         data = (self.root / source).read_bytes()
         self.files[delivered] = data
         self.origins[source] = delivered
@@ -301,6 +301,17 @@ class AcceptanceTests(unittest.TestCase):
         occurrence = self.evaluate()["occurrences"][0]
         self.assertEqual(occurrence["status"], "owned_record_matched")
         self.assertEqual(occurrence["entity"], "Os_ErrorContextSave")
+        self.assertEqual(occurrence["reason"], "formal_deviation_pending")
+
+    def test_owned_group_cannot_approve_a_generated_retention_record(self):
+        self.owned_inputs()
+        self.select_owned("runtime/os/src/Os_Arti.c", "11.4", "const uint64 native_address",
+                          delivered="generated/src/Os_Arti.c")
+        self.bind_groups(statuses={"generated-retention": "pending"})
+        self.bind(self.context(group="owned-source", status="approved"))
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "blocked")
+        self.assertEqual(occurrence["status"], "record_matched")
         self.assertEqual(occurrence["reason"], "formal_deviation_pending")
 
     def test_owned_position_cannot_overflow_into_a_record_on_the_next_line(self):
