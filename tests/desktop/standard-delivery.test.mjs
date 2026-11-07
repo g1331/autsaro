@@ -41,7 +41,7 @@ const {
   exportSource,
   packageBytes,
   resealPrivateVariant,
-} = await openWorkbench('standard-delivery');
+} = await openWorkbench('standard-delivery', { requestEvidence: true });
 
 let gatewayDelivery;
 check('seven-source-standard-variant', async () => {

@@ -26,9 +26,10 @@ fn check_batch_token(
 pub(crate) async fn project_projection(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,
+    _evaluation: crate::verification::NativeEvaluation,
 ) -> Result<Reply<ProjectProjection>, autosar_config_core::LocalizedText> {
     #[cfg(feature = "native-webdriver")]
-    let request = crate::verification::NativeRequest::begin("project_projection");
+    let request = crate::verification::NativeRequest::begin("project_projection", _evaluation);
     let result = background(state, move |state| {
         state.read_workspace(&fingerprint, |workspace| {
             workspace.project_projection(&fingerprint)

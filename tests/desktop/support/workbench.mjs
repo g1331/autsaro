@@ -106,7 +106,13 @@ export async function openWorkbench(name, options) {
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
       const startedAt = Date.now();
-      lastQuery = { expression, description, deadline, startedAt, pending: true };
+      lastQuery = {
+        expression,
+        description,
+        deadline,
+        startedAt,
+        pending: true,
+      };
       const sample = await probe(`(${sampleDomQuery.toString()})(${json(expression)})`);
       lastQuery = {
         expression,
@@ -157,13 +163,17 @@ export async function openWorkbench(name, options) {
     })());
   }
   async function capabilities() {
-    return evaluate("window.__TAURI_INTERNALS__.invoke('workbench_capabilities')");
+    return evaluate(`window.__TAURI_INTERNALS__.invoke('workbench_capabilities', {}, {
+      headers: {'x-autosar-evaluation': String(window.__AUTOSAR_DESKTOP_EVALUATION__.id)}
+    })`);
   }
   async function invoke(command, payload = {}, fingerprint) {
     const current = fingerprint ?? (await capabilities()).fingerprint;
     const started = performance.now();
     const result = await evaluate(`(async () => {
-      try { return { ok: true, reply: await window.__TAURI_INTERNALS__.invoke(${json(command)}, ${json({ ...payload, fingerprint: current })}) }; }
+      try { return { ok: true, reply: await window.__TAURI_INTERNALS__.invoke(${json(command)}, ${json({ ...payload, fingerprint: current })}, {
+        headers: {'x-autosar-evaluation': String(window.__AUTOSAR_DESKTOP_EVALUATION__.id)}
+      }) }; }
       catch (error) { return { ok: false, error }; }
     })()`);
     await ipcLog.writeFile(
