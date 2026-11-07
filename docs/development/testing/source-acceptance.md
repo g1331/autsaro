@@ -53,6 +53,18 @@ uv run --locked python -m autosar_tooling c-acceptance \
 
 三个记录组分别为 `generated-retention`、`manual-assessment`、`checker-limitations`。后两组的 `records` 只包含 `kind`。每组必须有自己的适用上下文；一个组的批准不授权其他组。同组不能重复绑定同一输入，跨组的样本标签必须一致。`approved` 只能在对应实际评估与正式义务完成后记录；`pending` 永不放行。
 
+自有源码的局部消费者另接受 `records={"kind":"owned-source"}`。它复用原标准篇与
+`c_standard` 的 MR12 双向关联，核对原实体、已登记 shape、当前原件及 ownership 字节，
+并保留表中的目标、程序和 ND 样本限制。主机地址使用原有八个表达式实例；MemMap
+逐包含验证既有 START／STOP 协议，撤销仅匹配本头实际请求及其属性／active 名称。
+C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_record_matched`，
+缺少本组当前绑定时返回 `owned_source_context_unbound_or_stale`。
+
+该组当前只消费上述已实现的精确关联。Required 风险记录继续返回
+`formal_deviation_pending`，即使上下文为 `approved` 也保留该义务；Mandatory 保留项
+返回 `mandatory_deviation_forbidden`。其余模块误报、采用内核与 SDK 位置沿原有阻塞。
+实际双平台输入绑定及剩余模块消费由自有源码消费任务继续完成，当前没有新增真实批准上下文。
+
 人工表及补充记录中的 `retained` 保留真实违反及理由，经本组当前绑定和有效批准参与项目验收。Required 保留项的批准材料须完成 AMD2.5 修订后 §6.2.2 引用的 MISRA Compliance:2020 第 4 节正式义务；AMD2.4 已撤换主文旧第 5 节。Advisory 使用 §6.2.3 的记录安排。`not_assessed` 和缺失记录持续阻塞，Mandatory 的 `retained` 在记录入口拒绝。
 
 输入摘要排除上下文块自身，避免 hash 自引用；该篇其他正文仍逐字节绑定。原人工汇总的全文字节身份保持原义，更新人工篇后仍须正常重扫，不能改旧摘要追认。
