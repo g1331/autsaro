@@ -165,3 +165,58 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 本项目继续保留全部原始报告、规则未评估状态和未完成正式义务。上游原件的接纳表示
 当前采用责任与集成证据已建立，整体 MISRA 结论继续按 221 项的独立评估出口处理。
 本篇及表、原件、补丁顺序／字节、配置、程序、工具或实际交互改变时，旧绑定失效。
+<!-- source-assessment-context-begin -->
+{
+ "id": "freertos-current-inputs",
+ "evidence": {
+  "head": "e94ca0e83424024c261807456cba63a36c3cf1da",
+  "receipt": "https://github.com/g1331/autsaro/pull/455#issuecomment-6712850295"
+ },
+ "cases": [
+  {
+   "caseId": "standard-ecu",
+   "target": "linux-x64-controlled-v1",
+   "inputIdentity": "082aba90480012400950df9fc2f6d14bb145e9c298f4464f38bf0d0367e7f579"
+  },
+  {
+   "caseId": "user-application",
+   "target": "linux-x64-controlled-v1",
+   "inputIdentity": "fd38cfb27377cf6843087632d11bd8db300b576824daf408be9c37b463485a0e"
+  },
+  {
+   "caseId": "component-pipeline",
+   "target": "linux-x64-controlled-v1",
+   "inputIdentity": "b9df457f788a02ca19453d3943c6ec5500b9a00207708780fe99fa4d334437a5"
+  },
+  {
+   "caseId": "no-diagnostic",
+   "target": "linux-x64-controlled-v1",
+   "inputIdentity": "7ee1246e3e6552d7f23444a98e4e2099bb5f0e2878d712955c7eaf76eb0b35f5"
+  },
+  {
+   "caseId": "standard-ecu",
+   "target": "windows-x64-controlled-v1",
+   "inputIdentity": "887b1edd3e0a2814e4f277c5eeaeef7ed50f0bb0434e0716d672e37d8231db69"
+  },
+  {
+   "caseId": "user-application",
+   "target": "windows-x64-controlled-v1",
+   "inputIdentity": "bf058b76901bfd835a31bee65fdd43f2dab47b4f83e1f6646143b65f64c4817e"
+  },
+  {
+   "caseId": "component-pipeline",
+   "target": "windows-x64-controlled-v1",
+   "inputIdentity": "7dd42a882f86dcca96d1147cb4364d24f92bc7c894c21b08e807d62a6e56166a"
+  },
+  {
+   "caseId": "no-diagnostic",
+   "target": "windows-x64-controlled-v1",
+   "inputIdentity": "04b5dbfc3e7c7e05ffe63490392e8c48fe7c28ee2f5fb7a5f2bbd25d17135f20"
+  }
+ ],
+ "records": {
+  "kind": "freertos-integration"
+ },
+ "formalStatus": "approved"
+}
+<!-- source-assessment-context-end -->
