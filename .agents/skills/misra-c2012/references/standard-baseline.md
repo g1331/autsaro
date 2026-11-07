@@ -32,6 +32,8 @@ AMD 是 amendment（修订），TC 是 technical corrigendum（勘误）；ADD �
 
 逐项从主文或首次新增条目出发，合成全部相关修订，包含后续修订对既有构造的改变；旧文本中的替换／删除指令不能脱离后续整项替换单独使用。精确引用写文件名、节／修订项和印刷页，同时注明 PDF 页（从1计数）。当前七份文件中主文正文印刷页加8为PDF页，AMD1加8、TC1/TC2加6、AMD2/AMD4加7、AMD3加8；换文件必须重新确认。图、类型／运算符表或版面影响判断时渲染并查看原页。提取文本和图片只放临时目录，原件和全文不入产品仓库。
 
+偏离程序须合成通用章节修订，不能只搜索规则号：AMD2.4 撤换主文旧第 5 节，AMD2.5 将 §6.2.2 的程序引用改为 MISRA Compliance:2020 第 4 节（AMD2 印刷 4／PDF 11），当前 C99 同样适用。Required 的正式记录按该文件 §4.1–4.4 核对；旧 §5.4 仅作历史定位，Advisory 的 §6.2.3 记录安排保持。
+
 ## 辅助来源
 
 - [MISRA 官方 C:2023 编号与分类目录](https://gitlab.com/MISRA/MISRA-C/MISRA-C-2012/tools/-/raw/main/misra_c_2023__headlines_for_cppcheck.txt)：交叉检查 200 Rules、21 Directives 的身份和有效分类，原文优先；许可说明与全文核对边界见 [修订与例外核对](revisions-and-exceptions.md)。

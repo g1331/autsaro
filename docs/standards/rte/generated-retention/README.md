@@ -14,7 +14,7 @@
 
 七份合法MISRA原件SHA256SUMS已重新匹配。基线仍为C:2012 Third Edition + AMD1–4/TC1–2，C99。R2.3/R2.5为Advisory、Decidable/System（主文印刷43/44，PDF51/52）；R8.7为Advisory、Decidable/System（印刷70/PDF78，TC2.15印刷6/PDF12）；R11.4为Advisory、Decidable/Single Translation Unit（印刷97/PDF105）。修订未为本组提供“公共接口即可忽略”的规则例外，未采用新的规则重分类。R11.4的整数null-pointer-constant到对象指针例外不适用于此处对象指针到整数；uintptr_t也不自动满足本规则。没有Mandatory偏离。
 
-本组保留真实 unused、单 TU 引用和指针整数转换，不将其判为误报或 AUTOSAR 不可替代。主文 §6.2.3（印刷 13／PDF 21）允许对 Advisory 使用非符合项记录安排，无须正式偏离；[ADR 0025](../../../adr/0025-misra-layered-scope.md#grp指南重分类计划) 未提高这四条规则的类别。下列实体表、理由、替代与风险控制构成本组的记录，不改变规则类别或声明原构造符合规则。Required 的 §5.4／§6.2.2 正式义务和 Mandatory 的禁止偏离要求仍分别适用，不由本组处置代替。
+本组保留真实 unused、单 TU 引用和指针整数转换，不将其判为误报或 AUTOSAR 不可替代。主文 §6.2.3（印刷 13／PDF 21）允许对 Advisory 使用非符合项记录安排，无须正式偏离；[ADR 0025](../../../adr/0025-misra-layered-scope.md#grp指南重分类计划) 未提高这四条规则的类别。下列实体表、理由、替代与风险控制构成本组的记录，不改变规则类别或声明原构造符合规则。Required 的正式义务沿 AMD2.5 修订后 §6.2.2 所引的 MISRA Compliance:2020 第 4 节，Mandatory 的禁止偏离要求保持；本组处置仅限上述 Advisory 记录。
 
 ## 理由、替代与控制
 
@@ -33,49 +33,49 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 {
   "id": "generated-retention-428-inputs",
   "evidence": {
-    "head": "28c41e2c9f11bdb43170a7ffc29c6262a1c32795",
-    "receipt": "https://github.com/g1331/autsaro/pull/430#issuecomment-6687805826"
+    "head": "1770e3e1988673fbe790eeec77d88e40af5b74dd",
+    "receipt": "https://github.com/g1331/autsaro/pull/431#issuecomment-6702495393"
   },
   "cases": [
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "ff8fa0ec73b71c61d6e19d67b982e9ed6e4398e01ed09824e38a2ba12ac39f77"
+      "inputIdentity": "f1cc7271039db867012634e384738399baaca590240e0288416c1b2c779ae02f"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "759483a832b5de2b7da1176c9140929164611cb838bb6317ee1511ee00845ba2"
+      "inputIdentity": "48164f94eff3a263f2c0409db7aa5c1dddb2b5249e4431d35909b077d8ce5c71"
     },
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "4c42d7de462e53be755de1a15f2816f02b9f2fe11a0f5decfb063c89e3ebbf97"
+      "inputIdentity": "1a86133bfaf4d6a8b7646d50bbae68edf59584e39039edcef90807d52e22239b"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "84a02e1f88bce88d60835d9dc7087b5c0031daee9d83f30af19fd0c75813bcfd"
+      "inputIdentity": "d3ac8e4ab30ae73e8e18e3290b135e0b153535a70df6eeeeae73940a64d17a94"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "57fa583045fbc61745816ed321248ac8ec3e7edfcfee300fa973aec3ecea27a5"
+      "inputIdentity": "9fdf974f195af1118c3565c2d30498a1d9b1b3ccd7eeeb599430b215fb76a8d1"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "947d833e8734472d88baf21da08683fb3ab7e3c59316f8048d8c6d6dd4792ae8"
+      "inputIdentity": "a066e8f79eb17d38bb49def3993dbd4169cdf3935b8d5cfb994090e889bddcf0"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "036f0ed267f2f7f730c0331035ad6fe08f2da43b4950a2c9955adf00716bc467"
+      "inputIdentity": "f4b09587aabd9450918a936ef671bf4e844379ec70b1f5188201cd32fb63ec86"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "74122a0a8154d9650ecc3638fc13a723ab5b843167706e212891004d70f8ff2c"
+      "inputIdentity": "13ce186e5b9af2387ef0643fa4a7e310fdd2d7af24031a9f0c2352d5cef10013"
     }
   ],
   "records": {

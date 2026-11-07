@@ -36,6 +36,28 @@
 
 映射协议、producer、段类别、目标工具链／链接布局或来源责任变化时重评；新增位置必须通过模式检查，模式外错误照常修复。既有原始诊断照常可见，实际源码注释由后续自有／生成代码整改沿 C 编码规范添加。本记录不覆盖 D4.10 或其他规则。
 
+## D4.10 可重入头的正式记录
+
+本记录按 AMD2.4／AMD2.5 修订后的 §6.2.2 及 MISRA Compliance:2020 第 4 节接续既有逐处技术评估。基线为 `c3bff230`，语言 C99，目标为 `linux-x64-controlled-v1`／`windows-x64-controlled-v1`，配置为正常四 profile 的 HostBatch／probe。指定技术权威的同意沿 [2026-10-17 的决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)及 ADR 0023 的条件授权；项目实现者于 2026-11-07 逐项评估。原文及修改后源码闭包的独立复核、实际平台验收共同确定本次已闭合实例，精确 head、完成状态、发现与处置集中在实施 PR。
+
+**规则与允许条件。** D4.10 为 Required，主文印刷 32–33／PDF 40–41 要求防止头内容重复纳入。TC2.2（印刷 2／PDF 8）放宽的是保护形式的示例范围；AMD2 增加 C11 适用性，其余 AMD1–4／TC1–2 未改变此 C99 义务。首个文件注释中的 MR12 DIR 4.10 只说明可重入机制及控制。本项保持真实违反，采用可逐实例识别的偏离记录。
+
+AMD2.4 撤换主文旧第 5 节，AMD2.5 将 Required 偏离程序引用改为 MISRA Compliance:2020 第 4 节（均为 AMD2 印刷 4／PDF 11，当前 C99 同样适用）。现行 §4.1–4.4（印刷 12–14／PDF 20–22）要求明确的程序、可识别实例、理由、语言背景、风险与预防要求，并取得指定技术权威同意；通用 permit 与具体 record 分开。本项按 §4.4 Reason 1 论证功能正确性及所选映射合同的兼容性，以原文必要性、替代比较、协议和实际段检查维持安全约束；对比吞掉 STOP 的整体 guard 保持更好的总体质量。旧 §5.4 仅作历史定位。
+
+**位置与来源。** 十二个固定头为 BSW 的 Can、CanIf、CanTp、Com、ComM、Dcm、Det、LSduR、PduR、BswM，以及 Os、Ecu_HostBusSM 的映射头；其原 `runtime/` 路径、`@file` 记录、包含者和 MR12 已在各 [BSW 通用模块篇](../bsw-general/README.md)逐项登记。本项复用这些位置与注释。固定头经 `outputs::template_of` 登记到 MEMMAP producer 后以原字节进入 `generated/include/`。
+
+生成位置另限 `generated/include/Rte_MemMap.h`、`EchoApplication_MemMap.h`、`DcmService_MemMap.h`、`Ingress_MemMap.h`、`Process_MemMap.h`、`Observe_MemMap.h` 的首个 `@file`。RTE 头由 `core/src/integration/memmap.rs::rte` 生成，其余由 `component` 生成；独立 contract 包复用同一 `rte`，输出为 `include/Rte_MemMap.h`，其具体输入另行取证。standard-ecu／user-application 使用 Rte、EchoApplication、DcmService；component-pipeline 使用 Rte、Ingress、Process、Observe、DcmService；no-diagnostic 使用 Rte、Ingress、Process、Observe，加上固定头分别为 15／15／17／16 个。`Rte_DcmService.h` 也以 DcmService 头包装 CODE 声明。实际文件、字节、TU 包含及每次请求以对应正常封存样本及 PR 工件为准，新增配置须重新评估。
+
+**必需性与替代。** 固定 R24-11 SpecificationsARXML 的 `SWS_MemMap_00003` 要求 START／include／实体／STOP／include，`00011` 要求撤销请求，`00007` 要求预处理阶段拒绝非法、嵌套与错配。`00029` 要求为输入中的每个 SWC type 提供专用头，`00027` 要求支持其 MemorySection 的开闭；因此 DcmService 头的发布义务与当前有没有应用 TU 分开判断。BSWGeneral `00006` 要求模块映射头，`00249` 对普通头的整体 guard 要求显式排除映射头。条目正文已从固定 ARXML 核对；MemoryMapping PDF 36–41 的机制与对应示例一致。
+
+整头一次性 guard 或 pragma once 会吞掉 STOP 及后续 START；删除第二次包含、把包含集中到文件首部，均失去上述请求处理。仅保护固定属性定义而让分派重入，正是当前保留的 D4.10 违反。拆成不同 START／STOP 文件会改变所选模块／SWC 的单一映射头及 implementedIn 合同；把分派移到另一个被包含文件仍需在原头逐次执行。普通声明头、版本头及可合并的多余请求保持各自整改责任。
+
+**风险、控制与验证。** 重复处理可能遗留属性、重复开启或错配，进而放错段或影响后续实体。头内仅处理预处理请求／属性，固定定义按现有 guard 保护；每次消费请求，校验 active／class，STOP 清除本次属性及状态。生成 RTE 以共享 active 防跨 scope 嵌套，SWC 以各自 active 保护。实际声明／定义映射仍由原 Code／Var 消费者约束；平台段布局、关键词／类别、producer、模块实体或包含闭包变化即重评。
+
+现有 `application_headers_enforce_runnable_visibility_memmap_and_imported_releases` 用真实 C／C++ 编译 CODE→STOP→VAR 重入、请求消费、STOP 清理及非法／多请求；`bsw_function_declarations_preserve_configured_code_placement` 和 `component_application_definitions_preserve_configured_sections` 观察实际目标文件段。`check_memory_mapping` 核对 OS 对象及段，已有成功编译后的属性删除反例；`test_memory_mapping_protocol_and_mutations` 拒绝缺 STOP、错 header／class 及嵌套。生成注释须由实际交付头检查及删除反例核对，测试结果和实际双平台范围在 PR 记录。
+
+原始分析保留。本项仅接续 D4.10；人工组的 D4.12、其他规则及未完成的来源责任继续按各自记录处理。
+
 ## 条件指令与宏实参的源码边界
 
 R20.4／20.6／20.13／20.14均为Required，当前C99适用（主文印刷157、158、163、164／PDF165、166、171、172；AMD2追加C11，TC2.35只更正20.14示例文件名）。最新四份Linux交付语料的自有／生成C/H与所选补丁后内核分别为219／219／229／226份。按实际指令词法及括号／条件嵌套核对，没有发现使用C99关键字或项目使用的GNU关键字别名定义宏，也没有跨文件配对的条件指令。所有实际包含源中的指令种类均为C99允许形式；这不把pragma的实现内容自动判为可移植。

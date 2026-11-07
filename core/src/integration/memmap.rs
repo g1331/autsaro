@@ -91,7 +91,7 @@ pub(super) fn rte(
     mode_scope: &str,
 ) -> String {
     let mut mapping = String::from(
-        "/** @file Source-derived RTE scopes; controlled x64 section placement. */\n#include \"MemMap_Version.h\"\n",
+        "/** @file Source-derived RTE scopes; controlled x64 section placement.\n * MR12 DIR 4.10 VIOLATION: Re-enter for each required START/STOP request;\n * consume the request, reject nested or mismatched RTE scopes, and clear\n * section attributes at STOP.\n */\n#include \"MemMap_Version.h\"\n",
     );
     for (index, (scope, segment)) in scopes.iter().enumerate() {
         let class = if *segment == "VAR_CLEARED_UNSPECIFIED" {
@@ -163,7 +163,7 @@ pub(super) fn rte(
 /// The controlled target places runnable code beside RTE code; ownership stays with the SWC.
 pub(super) fn component(scope: &str) -> String {
     let mut output = String::from(
-        "/** @file Default SWC sections for the controlled x64 target. */\n#include \"MemMap_Version.h\"\n",
+        "/** @file Default SWC sections for the controlled x64 target.\n * MR12 DIR 4.10 VIOLATION: Re-enter for each required START/STOP request;\n * consume the request, reject nested or mismatched component sections, and\n * clear section attributes at STOP.\n */\n#include \"MemMap_Version.h\"\n",
     );
     for (index, (segment, placement)) in
         [("CODE", ".rte_code"), ("VAR_CLEARED_UNSPECIFIED", ".bss")]

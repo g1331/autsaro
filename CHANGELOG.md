@@ -62,6 +62,8 @@
 
 ### Fixed
 
+- Generated RTE/SWC memory-mapping headers include their per-file Directive 4.10 rationale for the recorded AUTOSAR mapping conflict; preprocessing and public ABI are unchanged (#58)
+
 - C-analysis comparisons preserve program identity before counting changes, so a finding removed from HostBatch cannot conceal the same finding newly reported in probe; malformed retention records report their field and source location as analysis errors (#426)
 - Project source acceptance pins the fixed guideline categories independently of summary and catalog metadata, rejecting coordinated category redefinition (#428)
 - Project source acceptance recognizes documented Advisory retention for generated interfaces while preserving raw analysis and outstanding blockers (#429)
