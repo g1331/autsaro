@@ -47,3 +47,58 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
 [源码验收格式](../../development/testing/source-acceptance.md)，绑定块自身排除于摘要；
 其他正文及解析器保持逐字节绑定。剩余完整消费与 Required 正式材料由
 [#439](https://github.com/g1331/autsaro/issues/439) 接续。
+<!-- source-assessment-context-begin -->
+{
+  "id": "owned-source-449-inputs",
+  "evidence": {
+    "head": "5bfab91c06c3d4d9ae08fc1fa51d9b5563cebefb",
+    "receipt": "https://github.com/g1331/autsaro/pull/449#issuecomment-6710885804"
+  },
+  "cases": [
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "c52c6c7c53f862e5e187578f407d4e9c1da3a1125c8a365825cd3bf8838f7044"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "7b6792af290737cca41a2a9986e0622eecf19ad001ea068f51665392cb6d731a"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "e3f7018c286fdd05d6a9e6e67bd2c51c75d32178ec6a1ff16e8095ae2b44d305"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "b59381fd2370eb7079c14d088f01fe677e35028aa4111997403c1504a57c2660"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "e5a91a998122966c4119b1ec4588f8ef410a1ce60476be13547593fc7144f1b9"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "1336b609125c347ac0cad3103cc50564c3cf3596f776f08860d8f4293cc06a2f"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "4689fdfbf311889e5558cd00bdafd0ba67b09593d9ab28590d191e684ca53e4c"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "a04b13596e8d08980c83193de7973b6397579e07d1f4345e1c16e836d4920ef9"
+    }
+  ],
+  "records": {
+    "kind": "owned-source"
+  },
+  "formalStatus": "approved"
+}
+<!-- source-assessment-context-end -->

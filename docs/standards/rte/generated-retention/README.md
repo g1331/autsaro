@@ -31,51 +31,51 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 正常源码检查按[项目源码验收格式](../../../development/testing/source-acceptance.md)消费本组冻结上下文。当前生成物、C/C++ 消费者、原实体与 body、诊断位置和程序归属核对后，本组按 §6.2.3 记录安排参与局部项目验收；不将旧批准自动移植到新输入。`formalStatus=approved` 在本组表示该 Advisory 记录安排已完成，不是 Required 正式偏离。应用、配置、producer、交付、包含或程序闭包及评估正文变化均使旧绑定失效，`pending` 不放行。其他人工记录、Required 义务、SDK 和采用代码不获授权，原始分析结果与整体未完成状态不变。
 <!-- source-assessment-context-begin -->
 {
-  "id": "generated-retention-438-inputs",
+  "id": "generated-retention-449-inputs",
   "evidence": {
-    "head": "9dcb8f1e13855b8cf9f726f98ee1c9eae5ece5b1",
-    "receipt": "https://github.com/g1331/autsaro/pull/438#issuecomment-6708260795"
+    "head": "5bfab91c06c3d4d9ae08fc1fa51d9b5563cebefb",
+    "receipt": "https://github.com/g1331/autsaro/pull/449#issuecomment-6710885804"
   },
   "cases": [
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "d993ef21b71413d00e213e882d16c3d5cf7f8943e39777dfb7fe6644f136071a"
+      "inputIdentity": "c52c6c7c53f862e5e187578f407d4e9c1da3a1125c8a365825cd3bf8838f7044"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "27541229b13fcdaaf0cf64bf6ec3033d802dd3ca89476ea161a75a4491dbd6ab"
+      "inputIdentity": "7b6792af290737cca41a2a9986e0622eecf19ad001ea068f51665392cb6d731a"
     },
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "791b4dc19d30e53691891a1e813afff498bcc7f4953495a12fd04d1a4b0b3fce"
+      "inputIdentity": "e3f7018c286fdd05d6a9e6e67bd2c51c75d32178ec6a1ff16e8095ae2b44d305"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "2959f7a3b52b1a8cb1c3935a3f857b3a165d91d813dd1dc195ee061133022493"
+      "inputIdentity": "b59381fd2370eb7079c14d088f01fe677e35028aa4111997403c1504a57c2660"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c37a0fc93ef48a4a557bf25152fb4799e6965e71edb19fc164ea3b664b12a253"
+      "inputIdentity": "e5a91a998122966c4119b1ec4588f8ef410a1ce60476be13547593fc7144f1b9"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c69db9bba9661c2d25818cc4e98fce38fab38582ea84976b26d06382cf20cdf2"
+      "inputIdentity": "1336b609125c347ac0cad3103cc50564c3cf3596f776f08860d8f4293cc06a2f"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "3f0768c1f93d9ac3f01920a2ccba99dd70a5c654f3b3928880f25d0ebf8e623e"
+      "inputIdentity": "4689fdfbf311889e5558cd00bdafd0ba67b09593d9ab28590d191e684ca53e4c"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "abfbc347ec66e0ed2031d17a7541de3f584ea0d6867ecc33412d33eb1cd6aaa1"
+      "inputIdentity": "a04b13596e8d08980c83193de7973b6397579e07d1f4345e1c16e836d4920ef9"
     }
   ],
   "records": {
