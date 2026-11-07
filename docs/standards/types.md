@@ -107,3 +107,58 @@ callback-parameter旧7处R2.4均为匿名类型误报；新增xSTATIC_TIMER为�
 当前完整 Linux TU 可由 Clang 18.1.3 解析；Windows 的 GCC 16 intrinsic 实现与 Clang 18 有不兼容错误，这部分只保留候选，Windows 源码／项目 patch 及真实 GCC CI 各自核对。错误输出未用作缺席证明。SDK tag／宏的当前精确处置交 #444；其恢复条件是逐实例原文裁决、实际接口闭包与所需正式义务齐备，再重新评估并绑定。
 
 补充记录只描述上述 checker 缺口；原 66／155 分区、221 项 assessment 和原始分析结果由正常入口保留。正文、源码、producer、配置、程序／TU、目标、工具或 provider 变化时重评本组，pending 持续阻止验收。
+<!-- source-assessment-context-begin -->
+{
+  "id": "checker-limitations-current-inputs",
+  "evidence": {
+    "head": "02f7c484417cdcd4afcef60e70eafef116755c1d",
+    "receipt": "https://github.com/g1331/autsaro/pull/448#issuecomment-6709295029"
+  },
+  "cases": [
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "bb79386abdc9e1fadf27da83b428252359206814dd802ec8b953dcb8b3ce51dc"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "2c95ec891c173c4b5bac0b831ad5029f04bdf6242dcfd8ee3a548376cc2109da"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "13199bd7862734d93dbe224f8e2d448485e375a1ce9052c5f8ebbce700c768cb"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "2de10ca454f87d49c868fa6290947fb3235479e14b2e5f321e5609d5bc8e8589"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "2f356f8ecb2649a84e371d1dc7909568c282246136f1b3fe8ae3e82bf91a6fb1"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "099c3955d4004f4d055c0e5f070a7fdb30f15fa871e2c746fd1a28a4004bdcb3"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "e374256f6854e6247359dc43e5ec97c96c839127192bcbf995ea8251f665f854"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "95d9a093d533ea2562be91358fe4809246ac73c824da2f9e99bd19d5829869a1"
+    }
+  ],
+  "records": {
+    "kind": "checker-limitations"
+  },
+  "formalStatus": "pending"
+}
+<!-- source-assessment-context-end -->
