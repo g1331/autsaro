@@ -472,7 +472,7 @@ pub(super) fn configure_os(
     );
     outputs.emit_all(
         "os-service",
-        super::os_service::files(&counter_name, &counter_symbol),
+        super::os_service::files(&counter_name, &counter_symbol, &plan.counter_service)?,
     )?;
     outputs.emit(super::outputs::OS, "include/Os_Counter.h", counter_header)?;
     let os_value = |parameter: &str| {

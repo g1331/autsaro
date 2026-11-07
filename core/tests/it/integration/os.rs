@@ -332,13 +332,19 @@ fn counter_service_description() {
         assert_eq!(text("BASE-TYPE-SIZE"), ["32", "64"]);
         assert_eq!(text("ERROR-CODE"), ["1", "3", "7", "8"]);
         assert_eq!(text("VALUE"), ["0"]);
+        assert_eq!(text("SYMBOL"), ["GetCounterValue", "GetElapsedValue"]);
         assert_eq!(
-            text("SYMBOL"),
+            text("BSW-ENTITY-REF"),
             [
-                format!("OsService_{counter}_GetCounterValue"),
-                format!("OsService_{counter}_GetElapsedValue")
+                "/AUTOSAR_Os/Os/HostBehavior/GetCounterValueEntity",
+                "/AUTOSAR_Os/Os/HostBehavior/GetElapsedValueEntity",
             ]
         );
+        let host = roxmltree::Document::parse(file(
+            &files,
+            "generated/descriptions/Host_Implementation.arxml",
+        ))
+        .unwrap();
         for reference in doc
             .descendants()
             .filter(|node| node.is_element() && node.attribute("DEST").is_some())
@@ -346,6 +352,7 @@ fn counter_service_description() {
             let path = reference.text().unwrap();
             let matches = doc
                 .descendants()
+                .chain(host.descendants())
                 .filter(|node| node.has_tag_name(reference.attribute("DEST").unwrap()))
                 .filter(|target| {
                     let names = target

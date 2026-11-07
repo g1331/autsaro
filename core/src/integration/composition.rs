@@ -106,7 +106,15 @@ pub struct Operation {
 }
 
 impl Operation {
-    fn server_arguments(&self, component: &Component) -> Vec<ContractArgument> {
+    pub(super) fn invocation(&self, symbol: &str, values: &[String], returns: bool) -> String {
+        super::c_layout::call(
+            "    ",
+            &format!("{}{symbol}", if returns { "return " } else { "" }),
+            values,
+            ";",
+        )
+    }
+    pub(super) fn server_arguments(&self, component: &Component) -> Vec<ContractArgument> {
         component
             .port_arguments
             .get(&self.port)
@@ -131,6 +139,23 @@ pub struct Runnable {
     pub symbol: String,
     pub event: Option<String>,
     pub period_ms: Option<u32>,
+    pub bsw_target: Option<BswTarget>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
+pub struct BswTarget {
+    pub mapping: String,
+    pub behavior: String,
+    pub entity: String,
+    pub entity_kind: String,
+    pub entry: String,
+    pub reentrant: bool,
+    pub synchronous: bool,
+    pub execution_context: String,
+    pub minimum_start_interval: String,
+    pub contract: SymbolContract,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -175,6 +200,34 @@ pub struct Component {
     pub runnables: Vec<Runnable>,
 }
 
+impl Component {
+    pub(super) fn bsw_mapping_xml(&self) -> Result<String, Vec<PlanDiagnostic>> {
+        let mut mappings: BTreeMap<(&str, String), String> = BTreeMap::new();
+        for runnable in &self.runnables {
+            if let Some(target) = &runnable.bsw_target {
+                // catalog::inspect fixes this entry namespace. artifacts owns the delivered
+                // HostBehavior/entity names; the source BSWMD remains provenance only.
+                let module = target
+                    .entry
+                    .split_once("/BswModuleEntrys/")
+                    .and_then(|(package, _)| package.strip_prefix("/AUTOSAR_"))
+                    .ok_or_else(|| PlanDiagnostic::plan_premise(&target.entry))?;
+                let behavior = format!("/AUTOSAR_{module}/{module}/HostBehavior");
+                let entity = format!("{behavior}/{}Entity", target.contract.symbol);
+                mappings.entry((&target.mapping, behavior)).or_default().push_str(&format!(
+                    "<SWC-BSW-RUNNABLE-MAPPING><BSW-ENTITY-REF DEST=\"{}\">{}</BSW-ENTITY-REF><SWC-RUNNABLE-REF DEST=\"RUNNABLE-ENTITY\">{}</SWC-RUNNABLE-REF></SWC-BSW-RUNNABLE-MAPPING>",
+                    target.entity_kind, super::xml_text(&entity), super::xml_text(&runnable.path)));
+            }
+        }
+        Ok(mappings.into_iter().enumerate().map(|(index, ((_mapping, behavior), rows))| {
+            let name = format!("ServiceMapping_{}_{index}", c_name(super::short_name(&self.component)));
+            format!(
+                "<SWC-BSW-MAPPING><SHORT-NAME>{name}</SHORT-NAME><BSW-BEHAVIOR-REF DEST=\"BSW-INTERNAL-BEHAVIOR\">{}</BSW-BEHAVIOR-REF><RUNNABLE-MAPPINGS>{rows}</RUNNABLE-MAPPINGS><SWC-BEHAVIOR-REF DEST=\"SWC-INTERNAL-BEHAVIOR\">{}</SWC-BEHAVIOR-REF></SWC-BSW-MAPPING>",
+                super::xml_text(&behavior), super::xml_text(&self.behavior))
+        }).collect())
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
@@ -210,7 +263,205 @@ pub(super) fn dcm_data_type_names(data: &str) -> [String; 3] {
     ]
 }
 
+fn type_tokens(native: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    for (index, part) in native.split('*').enumerate() {
+        if index != 0 {
+            tokens.push("*".into());
+        }
+        tokens.extend(part.split_whitespace().map(str::to_owned));
+    }
+    tokens
+}
+
+fn canonical_type(native: &str, aliases: &BTreeMap<String, String>) -> String {
+    let mut current = type_tokens(native);
+    for _ in 0..=aliases.len() {
+        let next = current
+            .iter()
+            .flat_map(|token| type_tokens(aliases.get(token).unwrap_or(token)))
+            .collect::<Vec<_>>();
+        if next == current {
+            break;
+        }
+        current = next;
+    }
+    current.join(" ")
+}
+
 impl CompositionContract {
+    pub(super) fn bind_bsw(
+        &mut self,
+        graph: &Graph,
+        symbols: &[SymbolContract],
+        catalog: &super::catalog::RuntimeCatalog,
+    ) -> Result<(), Vec<PlanDiagnostic>> {
+        let inventory = crate::resources::AssetInventory::embedded();
+        let headers = inventory
+            .entries()
+            .iter()
+            .filter(|asset| asset.relative_path.ends_with(".h"))
+            .map(|asset| (asset.relative_path, asset.bytes))
+            .collect();
+        let mut aliases = super::module_contracts::native_aliases(&headers)
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&self.composition))?;
+        for kind in &self.types {
+            if kind.symbol != kind.native_type {
+                aliases.insert(
+                    kind.symbol.clone(),
+                    format!(
+                        "{}{}",
+                        kind.native_type,
+                        if kind.array_length.is_some() {
+                            " *"
+                        } else {
+                            ""
+                        }
+                    ),
+                );
+            }
+        }
+        for component in &mut self.components {
+            for runnable in &component.runnables {
+                let Some(target) = &runnable.bsw_target else {
+                    continue;
+                };
+                let entry = graph.index(&target.entry)?;
+                let selected = symbols
+                    .iter()
+                    .find(|symbol| {
+                        symbol.symbol == target.contract.symbol
+                            && symbol.consumers.contains(&target.entry)
+                    })
+                    .ok_or_else(|| fail(graph, entry, "BSW_ENTRY_MISSING"))?;
+                let mapping = graph.index(&target.mapping)?;
+                let behavior = graph.index(&target.behavior)?;
+                let owner = graph
+                    .ancestor(behavior, "BSW-MODULE-DESCRIPTION")
+                    .ok_or_else(|| fail(graph, mapping, "BSW_MAPPING_INVALID"))?;
+                // TPS_SWCT_01408: the mapping selects the behavior implemented by
+                // the unique C producer already checked by catalog::inspect.
+                let implementation = graph
+                    .of_kind("BSW-IMPLEMENTATION")
+                    .into_iter()
+                    .find(|implementation| {
+                        graph
+                            .target(*implementation, "BEHAVIOR-REF")
+                            .is_some_and(|candidate| graph.within(candidate, owner))
+                    })
+                    .ok_or_else(|| fail(graph, mapping, "BSW_MAPPING_INVALID"))?;
+                if graph.target(implementation, "BEHAVIOR-REF") != Some(behavior) {
+                    return Err(fail(graph, mapping, "BSW_MAPPING_INVALID"));
+                }
+                // TPS_BSWMDT_04138 / constr_4071: the fixed producer's module
+                // identity determines the entry prefix, alongside the source
+                // entry/runnable symbol checks in bsw_targets.
+                if graph.text(owner, "SHORT-NAME") != catalog.module(&selected.symbol) {
+                    return Err(fail(graph, mapping, "BSW_EXECUTION_CONFLICT"));
+                }
+                let servers = component
+                    .operations
+                    .iter()
+                    .filter(|operation| !operation.read && operation.runnable == runnable.path)
+                    .collect::<Vec<_>>();
+                if servers.is_empty() || runnable.period_ms.is_some() {
+                    return Err(fail(
+                        graph,
+                        graph.index(&runnable.path)?,
+                        "BSW_MAPPING_INVALID",
+                    ));
+                }
+                for server in servers {
+                    let arguments = server.server_arguments(component);
+                    if arguments.len() != selected.arguments.len()
+                        || arguments
+                            .iter()
+                            .zip(&selected.arguments)
+                            .any(|(actual, expected)| {
+                                canonical_type(&actual.native_type, &aliases)
+                                    != canonical_type(&expected.native_type, &aliases)
+                                    || actual.direction != expected.direction
+                            })
+                        || if server.application_errors.is_empty() {
+                            selected.return_type != "void"
+                        } else {
+                            canonical_type(&selected.return_type, &aliases)
+                                != canonical_type("Std_ReturnType", &aliases)
+                        }
+                    {
+                        return Err(fail(
+                            graph,
+                            graph.index(server.event.as_deref().unwrap_or(&server.port))?,
+                            "BSW_SIGNATURE_CONFLICT",
+                        ));
+                    }
+                }
+            }
+            for runnable in &mut component.runnables {
+                if let Some(target) = &mut runnable.bsw_target {
+                    let entry = graph.index(&target.entry)?;
+                    let selected = symbols
+                        .iter()
+                        .find(|symbol| symbol.symbol == target.contract.symbol)
+                        .ok_or_else(|| fail(graph, entry, "BSW_ENTRY_MISSING"))?;
+                    target.contract = selected.clone();
+                }
+            }
+        }
+        let mut roles = BTreeMap::new();
+        for component in &self.components {
+            for operation in component
+                .operations
+                .iter()
+                .filter(|operation| !operation.read)
+            {
+                if let Some(target) = component
+                    .runnables
+                    .iter()
+                    .find(|runnable| runnable.path == operation.runnable)
+                    .and_then(|runnable| runnable.bsw_target.as_ref())
+                {
+                    let constants = component
+                        .port_arguments
+                        .get(&operation.port)
+                        .map_or(0, Vec::len);
+                    roles.insert(
+                        (
+                            component.instance.clone(),
+                            operation.port.clone(),
+                            operation.operation.clone(),
+                        ),
+                        target.contract.arguments[constants..]
+                            .iter()
+                            .map(|argument| argument.name.clone())
+                            .collect::<Vec<_>>(),
+                    );
+                }
+            }
+        }
+        for component in &mut self.components {
+            for operation in component
+                .operations
+                .iter_mut()
+                .filter(|operation| operation.read)
+            {
+                if let Some(connection) = self.connections.iter().find(|connection| {
+                    connection.requester.instance == component.instance
+                        && connection.requester.port == operation.port
+                        && connection.requester.member == operation.operation
+                }) && let Some(names) = roles.get(&(
+                    connection.provider.instance.clone(),
+                    connection.provider.port.clone(),
+                    connection.provider.member.clone(),
+                )) {
+                    for (argument, name) in operation.arguments.iter_mut().zip(names) {
+                        argument.name.clone_from(name);
+                    }
+                }
+            }
+        }
+        check_names(graph, self)
+    }
     pub(super) fn data_connected(&self, endpoint: &Endpoint) -> bool {
         self.network_endpoints
             .iter()
@@ -273,6 +524,148 @@ fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
 
 fn path(graph: &Graph, index: usize) -> String {
     graph.elements[index].object.clone()
+}
+
+fn bsw_targets(graph: &Graph) -> Result<BTreeMap<String, BswTarget>, Vec<PlanDiagnostic>> {
+    let mut targets = BTreeMap::new();
+    for mapping in graph.of_kind("SWC-BSW-MAPPING") {
+        let rows = graph.descendants(mapping, "SWC-BSW-RUNNABLE-MAPPING");
+        if rows.is_empty() {
+            continue;
+        }
+        let swc = referenced(graph, mapping, "SWC-BEHAVIOR-REF", "BSW_MAPPING_INVALID")?;
+        let bsw = referenced(graph, mapping, "BSW-BEHAVIOR-REF", "BSW_MAPPING_INVALID")?;
+        if graph.ancestor(swc, "SERVICE-SW-COMPONENT-TYPE").is_none() {
+            return Err(fail(graph, mapping, "BSW_MAPPING_INVALID"));
+        }
+        let implementations = graph
+            .of_kind("SWC-IMPLEMENTATION")
+            .into_iter()
+            .filter(|implementation| {
+                graph.target(*implementation, "BEHAVIOR-REF") == Some(swc)
+                    && graph.text(*implementation, "PROGRAMMING-LANGUAGE") == Some("C")
+            })
+            .count();
+        if implementations != 1 {
+            return Err(fail(graph, mapping, "BSW_MAPPING_INVALID"));
+        }
+        for row in rows {
+            let runnable = referenced(graph, row, "SWC-RUNNABLE-REF", "BSW_MAPPING_INVALID")?;
+            let entity = referenced(graph, row, "BSW-ENTITY-REF", "BSW_MAPPING_INVALID")?;
+            let entry = referenced(
+                graph,
+                entity,
+                "IMPLEMENTED-ENTRY-REF",
+                "BSW_MAPPING_INVALID",
+            )?;
+            if !graph.within(runnable, swc)
+                || !graph.within(entity, bsw)
+                || !matches!(
+                    graph.elements[entity].tag.as_str(),
+                    "BSW-CALLED-ENTITY" | "BSW-SCHEDULABLE-ENTITY"
+                )
+            {
+                return Err(fail(graph, row, "BSW_MAPPING_INVALID"));
+            }
+            if (graph.elements[entity].tag == "BSW-SCHEDULABLE-ENTITY")
+                != (graph.text(entry, "CALL-TYPE") == Some("SCHEDULED"))
+            {
+                return Err(fail(graph, row, "BSW_EXECUTION_CONFLICT"));
+            }
+            let owner = graph
+                .ancestor(bsw, "BSW-MODULE-DESCRIPTION")
+                .ok_or_else(|| fail(graph, row, "BSW_MAPPING_INVALID"))?;
+            if !graph
+                .descendants(owner, "BSW-MODULE-ENTRY-REF")
+                .into_iter()
+                .any(|reference| graph.elements[reference].text == path(graph, entry))
+            {
+                return Err(fail(graph, row, "BSW_MAPPING_INVALID"));
+            }
+            if let Some(prefix) = graph.target(entity, "SCHEDULER-NAME-PREFIX-REF")
+                && graph.text(prefix, "SYMBOL") != graph.text(owner, "SHORT-NAME")
+            {
+                return Err(fail(graph, row, "BSW_EXECUTION_CONFLICT"));
+            }
+            let reentrant = matches!(graph.text(entry, "IS-REENTRANT"), Some("true" | "1"));
+            let synchronous = matches!(graph.text(entry, "IS-SYNCHRONOUS"), Some("true" | "1"));
+            let minimum = graph.text(entity, "MINIMUM-START-INTERVAL").unwrap_or("0");
+            let swc_minimum = graph
+                .text(runnable, "MINIMUM-START-INTERVAL")
+                .unwrap_or("0");
+            let memory_matches = match (
+                graph.target(runnable, "SW-ADDR-METHOD-REF"),
+                graph.target(entity, "SW-ADDR-METHOD-REF"),
+            ) {
+                (None, _) => true,
+                (Some(swc), Some(bsw)) => ["CATEGORY", "SECTION-TYPE"]
+                    .iter()
+                    .all(|field| graph.text(swc, field) == graph.text(bsw, field)),
+                _ => false,
+            };
+            if graph.text(runnable, "SYMBOL") != graph.text(entry, "SHORT-NAME")
+                || reentrant
+                    != matches!(
+                        graph.text(runnable, "CAN-BE-INVOKED-CONCURRENTLY"),
+                        Some("true" | "1")
+                    )
+                || !synchronous
+                || !zero_seconds(minimum)
+                || !zero_seconds(swc_minimum)
+                || !memory_matches
+                || !graph
+                    .descendants(runnable, "EXECUTABLE-ENTITY-ACTIVATION-REASON")
+                    .is_empty()
+                || !graph
+                    .descendants(entity, "EXECUTABLE-ENTITY-ACTIVATION-REASON")
+                    .is_empty()
+            {
+                return Err(fail(graph, row, "BSW_EXECUTION_CONFLICT"));
+            }
+            let arguments = graph
+                .descendants(entry, "SW-SERVICE-ARG")
+                .into_iter()
+                .map(|argument| {
+                    Ok(ContractArgument {
+                        name: name(graph, argument),
+                        native_type: super::catalog::native_type(graph, argument)
+                            .ok_or_else(|| fail(graph, argument, "BSW_SIGNATURE_CONFLICT"))?,
+                        direction: graph.text(argument, "DIRECTION").unwrap_or("").into(),
+                    })
+                })
+                .collect::<Result<Vec<_>, Vec<PlanDiagnostic>>>()?;
+            let returns = graph.children(entry, "RETURN-TYPE");
+            let return_type = match returns.as_slice() {
+                [] => "void".into(),
+                [returns] => super::catalog::native_type(graph, *returns)
+                    .ok_or_else(|| fail(graph, entry, "BSW_SIGNATURE_CONFLICT"))?,
+                _ => return Err(fail(graph, entry, "BSW_SIGNATURE_CONFLICT")),
+            };
+            let target = BswTarget {
+                mapping: path(graph, mapping),
+                behavior: path(graph, bsw),
+                entity: path(graph, entity),
+                entity_kind: graph.elements[entity].tag.clone(),
+                entry: path(graph, entry),
+                reentrant,
+                synchronous,
+                execution_context: graph.text(entry, "EXECUTION-CONTEXT").unwrap_or("").into(),
+                minimum_start_interval: minimum.into(),
+                contract: SymbolContract {
+                    symbol: name(graph, entry),
+                    return_type,
+                    arguments,
+                    declaration_owner: String::new(),
+                    definition_owner: String::new(),
+                    consumers: vec![path(graph, runnable)],
+                },
+            };
+            if targets.insert(path(graph, runnable), target).is_some() {
+                return Err(fail(graph, row, "BSW_MAPPING_INVALID"));
+            }
+        }
+    }
+    Ok(targets)
 }
 
 fn reference_descendant(
@@ -522,6 +915,7 @@ fn inspect_with_transport(
     include_transport: bool,
 ) -> Result<CompositionContract, Vec<PlanDiagnostic>> {
     let generation = super::rte_configuration::inspect(graph)?;
+    let targets = bsw_targets(graph)?;
     let context = *graph
         .objects
         .values()
@@ -663,16 +1057,23 @@ fn inspect_with_transport(
         }
         let mut runnables = Vec::new();
         for runnable in graph.descendants(behavior, "RUNNABLE-ENTITY") {
+            if !targets.contains_key(&path(graph, runnable))
+                && graph.text(runnable, "SW-ADDR-METHOD-REF").is_some()
+            {
+                return Err(fail(graph, runnable, "UNSUPPORTED_COMPONENT_FEATURE"));
+            }
             if graph
                 .text(runnable, "MINIMUM-START-INTERVAL")
                 .is_some_and(|value| !zero_seconds(value))
             {
                 return Err(fail(graph, runnable, "MINIMUM_START_INTERVAL_UNSUPPORTED"));
             }
-            if !matches!(
-                graph.text(runnable, "CAN-BE-INVOKED-CONCURRENTLY"),
-                Some("false" | "0")
-            ) {
+            if !targets.contains_key(&path(graph, runnable))
+                && !matches!(
+                    graph.text(runnable, "CAN-BE-INVOKED-CONCURRENTLY"),
+                    Some("false" | "0")
+                )
+            {
                 return Err(fail(graph, runnable, "REENTRANCY_UNSUPPORTED"));
             }
             let events = graph
@@ -692,6 +1093,7 @@ fn inspect_with_transport(
                     symbol,
                     event: None,
                     period_ms: None,
+                    bsw_target: targets.get(&path(graph, runnable)).cloned(),
                 });
                 continue;
             }
@@ -731,6 +1133,7 @@ fn inspect_with_transport(
                 symbol,
                 event: Some(path(graph, event)),
                 period_ms: period,
+                bsw_target: targets.get(&path(graph, runnable)).cloned(),
             });
         }
         // Every event must target a runnable owned by this behavior.
@@ -1411,6 +1814,17 @@ fn inspect_with_transport(
                 service: false,
             });
         } else {
+            let interface = graph
+                .target(p_port, "PROVIDED-INTERFACE-TREF")
+                .ok_or_else(|| fail(graph, connector, "SERVICE_TYPE_CONFLICT"))?;
+            if matches!(graph.text(interface, "IS-SERVICE"), Some("true" | "1"))
+                && graph.elements[graph.index(&p_component.component)?].tag
+                    != "SERVICE-SW-COMPONENT-TYPE"
+                && graph.elements[graph.index(&r_component.component)?].tag
+                    != "SERVICE-SW-COMPONENT-TYPE"
+            {
+                return Err(fail(graph, connector, "SERVICE_CONNECTION_IDENTITY"));
+            }
             for r in r_component
                 .operations
                 .iter()
@@ -2066,6 +2480,9 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             }
         }
         for runnable in &component.runnables {
+            if runnable.bsw_target.is_some() {
+                continue;
+            }
             if super::contracts::reserved_identifier(&runnable.symbol)
                 || runtime_namespace(&runnable.symbol)
                 || !names.insert(runnable.symbol.clone())
@@ -2162,6 +2579,9 @@ pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
             });
         }
         for runnable in &component.runnables {
+            if runnable.bsw_target.is_some() {
+                continue;
+            }
             let operation = component.operations.iter().find(|operation| {
                 operation.runnable == runnable.path && (!operation.read || runnable.event.is_none())
             });
