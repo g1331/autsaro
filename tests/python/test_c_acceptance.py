@@ -167,6 +167,61 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(self.plan, plan)
         self.assertNotEqual(self.identity(), before)
 
+    def owned_inputs(self):
+        self.synthetic_complete_inputs()
+        shutil.copytree(ROOT / "runtime", self.root / "runtime", dirs_exist_ok=True)
+        shutil.copytree(ROOT / "docs/standards", self.root / "docs/standards", dirs_exist_ok=True)
+        name = "runtime/os/src/host/linux/Os_HostLinux.c"
+        delivered = "os/src/host/linux/Os_HostLinux.c"
+        self.files[delivered] = (self.root / name).read_bytes()
+        self.origins[name] = delivered
+        self.plan["runtimeSources"][name] = c_acceptance.digest(self.root / name)
+        self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+            "path": delivered, "sha256": self.plan["runtimeSources"][name],
+            "owner": "runtime", "producerId": "runtime",
+        }]}).encode()
+        source = self.files[delivered].decode()
+        offset = source.index("*low = (uintptr_t)thread->mapping;")
+        self.summary["diagnostics"] = [{"id": "misra-c2012-11.4", "programs": ["host-batch", "probe"],
+            "locations": [{"file": delivered, "line": source.count("\n", 0, offset) + 1,
+                           "column": offset - source.rfind("\n", 0, offset)}]}]
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.bind_groups()
+
+    def test_owned_address_consumes_original_category_with_current_context(self):
+        self.owned_inputs()
+        context = self.context(group="owned-source", status="approved")
+        self.bind(context)
+        raw = copy.deepcopy(self.summary)
+        result = self.evaluate()
+        self.assertNotEqual(result["status"], "error", result["objects"])
+        occurrence = result["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "accepted")
+        self.assertEqual(occurrence["reason"], "owned_source_approved")
+        self.assertEqual(occurrence["record"]["file"],
+                         "docs/standards/os/native-facilities/addresses.md")
+        self.assertEqual(occurrence["programs"], ["host-batch", "probe"])
+        self.assertEqual(raw, self.summary)
+
+    def test_owned_record_retains_formal_and_stale_context_blockers(self):
+        self.owned_inputs()
+        self.bind(self.context(group="owned-source", status="pending"))
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["reason"], "formal_deviation_pending")
+        self.assertEqual(occurrence["status"], "owned_record_matched")
+        self.assertEqual(occurrence["assessment"], "blocked")
+
+    def test_owned_source_and_exact_position_are_required(self):
+        self.owned_inputs()
+        self.bind(self.context(group="owned-source", status="approved"))
+        self.summary["diagnostics"][0]["locations"][0]["line"] += 1
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+        self.summary["diagnostics"][0]["locations"][0]["line"] -= 1
+        name = "runtime/os/src/host/linux/Os_HostLinux.c"
+        (self.root / name).write_bytes((self.root / name).read_bytes() + b"/* changed producer */\n")
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
     def test_identity_binds_configuration_producer_sdk_and_program_closure(self):
         before = self.identity()
         for key in ("semanticIdentity", "programs", "scope"):
