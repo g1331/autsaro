@@ -127,3 +127,23 @@ fn mapped_bsw_service_analysis_sample() {
     );
     assert!(output.join("generated/src/Rte.c").is_file());
 }
+
+#[test]
+fn synchronized_mode_analysis_sample() {
+    let plan = mainline::build(&mainline::mode_binding_inputs()).unwrap();
+    let scratch = Scratch::new();
+    let output = std::env::var_os("AUTOSAR_MODE_C_ANALYSIS_SAMPLE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| scratch.0.join("synchronized-modes"));
+    assert!(!output.exists());
+    let target = if cfg!(windows) {
+        autosar_config_core::target::BuildTarget::WindowsX64ControlledV1
+    } else {
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1
+    };
+    mainline::write_files(
+        &output,
+        &mainline::prepared_pipeline_files_for_target(&plan, target),
+    );
+    assert!(output.join("generated/src/SchM_Main.c").is_file());
+}

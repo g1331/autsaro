@@ -330,6 +330,7 @@ export type Component = {
   interfaces: { [key in string]: string };
   diagnosticSessionPort: DiagnosticSessionPort | null;
   diagnosticModePorts: DiagnosticSessionPort[];
+  modePorts: ModePort[];
   dataPorts: DataPort[];
   dataAccesses: DataAccess[];
   operations: Operation[];
@@ -348,6 +349,8 @@ export type CompositionContract = {
   arrayTypes: { [key in string]: string };
   types: RteDataType[];
   dcmModes: DcmModeDefinition[];
+  modeMachines: ModeMachine[];
+  modeConnections: Connection[];
 };
 
 export type ConfigurationChange =
@@ -736,6 +739,42 @@ export type Metrics = {
   definitionReads: string;
   schemaChecks: string;
   sourceScans: string;
+};
+
+export type ModeApi = {
+  point: string;
+  runnable: string;
+  port: string;
+  symbol: string;
+  alias: string;
+  switch: boolean;
+};
+
+export type ModeMachine = {
+  publisher: Endpoint;
+  mapping: string | null;
+  bswBehavior: string;
+  bswGroup: string;
+  module: string;
+  group: string;
+  initial: number;
+  values: [string, number][];
+  readers: Endpoint[];
+  apis: ModeApi[];
+  bswManaged: boolean;
+  diagnostic: boolean;
+  managers: string[];
+  managerSymbols: string[];
+  switchSymbol: string;
+  modeSymbol: string;
+  variable: string;
+};
+
+export type ModePort = {
+  port: string;
+  prototype: string;
+  group: string;
+  read: boolean;
 };
 
 export type ModeRule = {

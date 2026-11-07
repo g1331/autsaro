@@ -31,6 +31,7 @@ mod graph;
 pub(crate) mod handoff;
 mod memmap;
 mod mode;
+mod mode_binding;
 mod module_contracts;
 mod module_documentation;
 mod native_configuration;

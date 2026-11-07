@@ -95,6 +95,18 @@ pub(super) fn description(
     for name in ["diagnostic_session_mode", "authentication_mode"] {
         variables.push_str(&object("VARIABLE-DATA-PROTOTYPE", name, "RteMemory_uint8"));
     }
+    for machine in composition
+        .mode_machines
+        .iter()
+        .filter(|machine| !super::mode_binding::fixed_dcm(machine))
+    {
+        scalars.insert(machine.base_type().to_owned());
+        variables.push_str(&object(
+            "VARIABLE-DATA-PROTOTYPE",
+            &machine.variable,
+            &format!("RteMemory_{}", machine.base_type()),
+        ));
+    }
     let props = |body: &str| {
         format!(
             "<SW-DATA-DEF-PROPS><SW-DATA-DEF-PROPS-VARIANTS><SW-DATA-DEF-PROPS-CONDITIONAL>{body}</SW-DATA-DEF-PROPS-CONDITIONAL></SW-DATA-DEF-PROPS-VARIANTS></SW-DATA-DEF-PROPS>"

@@ -474,3 +474,285 @@ fn mode_structures_outside_the_selection_are_refused_at_their_source() {
         );
     }
 }
+
+#[test]
+fn synchronized_mode_plan_shares_fanout_and_separates_publishers() {
+    // Verifies: SWS_Rte_07535, SWS_Rte_02628, SWS_Rte_02629
+    let sources = mode_binding_inputs();
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:#?}"));
+    let composition = plan.description().composition.as_ref().unwrap();
+    let machines = &composition.mode_machines;
+    let primary = machines
+        .iter()
+        .find(|machine| machine.switch_symbol == "SchM_Switch_ComM_Primary")
+        .unwrap();
+    let secondary = machines
+        .iter()
+        .find(|machine| machine.switch_symbol == "SchM_Switch_ComM_Secondary")
+        .unwrap();
+    assert_eq!(primary.initial, 3);
+    assert_eq!(primary.values, [("Idle".into(), 3), ("Active".into(), 7)]);
+    assert_eq!(primary.readers.len(), 2);
+    assert_eq!(secondary.readers.len(), 1);
+    assert_ne!(primary.variable, secondary.variable);
+    assert!(normal_validation(&sources).diagnostics.is_empty());
+    let files = prepared_pipeline_files(&plan);
+    for (name, bytes) in &files {
+        if name == "generated/src/SchM_Main.c" {
+            let source = std::str::from_utf8(bytes).unwrap();
+            assert!(source.contains("SchM_Switch_ComM_Primary(3u)"));
+            assert!(source.contains("SchM_Switch_ComM_Secondary(3u)"));
+        }
+    }
+}
+
+#[test]
+fn synchronized_modes_reject_invalid_group_context_and_competing_publishers_at_source() {
+    // Verifies: SWS_Rte_07564, SWS_Rte_CONSTR_09014
+    let mut wrong_type = mode_binding_inputs();
+    change(
+        &mut wrong_type,
+        "bsw.arxml",
+        "/Types/PowerState</TYPE-TREF>",
+        "/AUTOSAR_Dcm/DcmDiagnosticSessionControl</TYPE-TREF>",
+    );
+    rejected_at(
+        &wrong_type,
+        "MODE_MAPPING_INVALID",
+        "process.arxml",
+        "/Application/PowerMapping",
+    );
+
+    let mut wrong_context = mode_binding_inputs();
+    change(
+        &mut wrong_context,
+        "process.arxml",
+        "/Application/Process/Behavior</SWC-BEHAVIOR-REF>",
+        "/Application/Ingress/Behavior</SWC-BEHAVIOR-REF>",
+    );
+    rejected_at(
+        &wrong_context,
+        "MODE_MAPPING_INVALID",
+        "process.arxml",
+        "/Application/PowerMapping",
+    );
+
+    let mut unselected = mode_binding_inputs();
+    change(
+        &mut unselected,
+        "bsw.arxml",
+        "<BEHAVIOR-REF DEST=\"BSW-INTERNAL-BEHAVIOR\">/AUTOSAR_ComM/ComM/Behavior</BEHAVIOR-REF>",
+        "<BEHAVIOR-REF DEST=\"BSW-INTERNAL-BEHAVIOR\">/AUTOSAR_ComM/ComM/Unselected</BEHAVIOR-REF>",
+    );
+    // Add another behavior in the same module, retaining the selected producer's entries.
+    let source = unselected
+        .iter_mut()
+        .find(|source| source.logical_path() == "bsw.arxml")
+        .unwrap();
+    let original = std::str::from_utf8(source.bytes()).unwrap();
+    let module = original.find("<SHORT-NAME>ComM</SHORT-NAME>").unwrap();
+    let at = module + original[module..].find("</INTERNAL-BEHAVIORS>").unwrap();
+    let changed = format!(
+        "{}<BSW-INTERNAL-BEHAVIOR><SHORT-NAME>Unselected</SHORT-NAME></BSW-INTERNAL-BEHAVIOR>{}",
+        &original[..at],
+        &original[at..]
+    );
+    *source = InputSource::new("bsw.arxml", changed.into_bytes()).unwrap();
+    rejected_at(
+        &unselected,
+        "BSW_MAPPING_INVALID",
+        "process.arxml",
+        "/Application/PowerMapping",
+    );
+
+    let mut renamed = mode_binding_inputs();
+    replace_all(
+        &mut renamed,
+        "/AUTOSAR_ComM/ComM/",
+        "/AUTOSAR_ComM/AlternateComM/",
+    );
+    change(
+        &mut renamed,
+        "bsw.arxml",
+        "<SHORT-NAME>ComM</SHORT-NAME>",
+        "<SHORT-NAME>AlternateComM</SHORT-NAME>",
+    );
+    rejected_at(
+        &renamed,
+        "BSW_EXECUTION_CONFLICT",
+        "process.arxml",
+        "/Application/PowerMapping",
+    );
+
+    let mut aliased = mode_binding_inputs();
+    change(
+        &mut aliased,
+        "process.arxml",
+        "/AUTOSAR_ComM/ComM/Secondary</BSW-MODE-GROUP-REF>",
+        "/AUTOSAR_ComM/ComM/Primary</BSW-MODE-GROUP-REF>",
+    );
+    rejected_at(
+        &aliased,
+        "MODE_MULTIPLE_PUBLISHERS",
+        "process.arxml",
+        "/Application/Process/Secondary",
+    );
+
+    let mut dual = mode_binding_inputs();
+    change(
+        &mut dual,
+        "process.arxml",
+        "<SYMBOL>Process_Periodic</SYMBOL>",
+        r#"<MODE-SWITCH-POINTS><MODE-SWITCH-POINT><SHORT-NAME>SwitchPrimary</SHORT-NAME><MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Application/Process/Primary</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Types/PowerInterface/Mode</TARGET-MODE-GROUP-REF></MODE-GROUP-IREF></MODE-SWITCH-POINT></MODE-SWITCH-POINTS><SYMBOL>Process_Periodic</SYMBOL>"#,
+    );
+    rejected_at(
+        &dual,
+        "MODE_MULTIPLE_PUBLISHERS",
+        "process.arxml",
+        "/Application/Process/Behavior/Periodic/SwitchPrimary",
+    );
+
+    let mut collision = mode_binding_inputs();
+    change(
+        &mut collision,
+        "types.arxml",
+        "<SHORT-NAME>Input</SHORT-NAME>",
+        "<SHORT-NAME>Rte_Mode_First_Mode</SHORT-NAME>",
+    );
+    rejected_at(
+        &collision,
+        "CONTRACT_NAME_COLLISION",
+        "types.arxml",
+        "/Types/ScalarService/Transform",
+    );
+
+    let mut malformed = swc_managed_mode_inputs();
+    change(
+        &mut malformed,
+        "process.arxml",
+        "<MODE-GROUP-IREF>",
+        "<MODE-GROUP-IREF><P-MODE-GROUP-IN-ATOMIC-SWC-INSTANCE-REF>",
+    );
+    change(
+        &mut malformed,
+        "process.arxml",
+        "</MODE-GROUP-IREF>",
+        "</P-MODE-GROUP-IN-ATOMIC-SWC-INSTANCE-REF></MODE-GROUP-IREF>",
+    );
+    rejected_at(
+        &malformed,
+        "MODE_MAPPING_INVALID",
+        "process.arxml",
+        "/Application/Process/Behavior/Periodic/SwitchPrimary",
+    );
+
+    let mut enhanced = mode_binding_inputs();
+    change(
+        &mut enhanced,
+        "ingress.arxml",
+        "<ENHANCED-MODE-API>false</ENHANCED-MODE-API>",
+        "<ENHANCED-MODE-API>true</ENHANCED-MODE-API>",
+    );
+    rejected_at(
+        &enhanced,
+        "MODE_API_UNSUPPORTED",
+        "ingress.arxml",
+        "/Application/Ingress/First",
+    );
+}
+
+#[test]
+fn rebinding_a_mode_reader_invalidates_the_previous_contract_preview() {
+    let sources = mode_binding_inputs();
+    let plan = build(&sources).unwrap();
+    let files = plan.component_contract_files().unwrap();
+    let scratch = Scratch::new();
+    let output = scratch.0.join("contracts");
+    let initial = files.preview(&output).unwrap();
+    files
+        .generate_previewed(&output, &initial.revision)
+        .unwrap();
+    let previous = std::fs::read(output.join("contract.json")).unwrap();
+    let preview = files.preview(&output).unwrap();
+    let mut rebound = sources;
+    change(
+        &mut rebound,
+        "composition.arxml",
+        "/Application/Process/Primary</TARGET-P-PORT-REF>",
+        "/Application/Process/Secondary</TARGET-P-PORT-REF>",
+    );
+    let plan = build(&rebound).unwrap();
+    let files = plan.component_contract_files().unwrap();
+    assert_ne!(files.preview(&output).unwrap().revision, preview.revision);
+    assert!(
+        files
+            .generate_previewed(&output, &preview.revision)
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read(output.join("contract.json")).unwrap(),
+        previous
+    );
+}
+
+#[test]
+fn alphabetical_modes_use_declaration_values_without_native_comm_translation() {
+    let mut sources = mode_binding_inputs();
+    change(
+        &mut sources,
+        "types.arxml",
+        "<CATEGORY>EXPLICIT_ORDER</CATEGORY>",
+        "<CATEGORY>ALPHABETIC_ORDER</CATEGORY>",
+    );
+    let plan = build(&sources).unwrap();
+    let machine = plan
+        .description()
+        .composition
+        .as_ref()
+        .unwrap()
+        .mode_machines
+        .iter()
+        .find(|machine| machine.switch_symbol == "SchM_Switch_ComM_Primary")
+        .unwrap();
+    assert_eq!(machine.values, [("Active".into(), 0), ("Idle".into(), 1)]);
+    assert_eq!(machine.initial, 1);
+}
+
+#[test]
+fn explicit_dcm_synchronization_reuses_the_existing_backend_machine() {
+    let mut sources = inputs();
+    change(
+        &mut sources,
+        "services.arxml",
+        "</ELEMENTS>",
+        r#"
+<SWC-IMPLEMENTATION><SHORT-NAME>DcmServiceImplementation</SHORT-NAME><PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE><SW-VERSION>1.0.0</SW-VERSION><BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Services/DcmService/Behavior</BEHAVIOR-REF></SWC-IMPLEMENTATION>
+<SWC-BSW-MAPPING><SHORT-NAME>SessionMapping</SHORT-NAME><BSW-BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/AUTOSAR_Dcm/Dcm/Behavior</BSW-BEHAVIOR-REF><SWC-BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Services/DcmService/Behavior</SWC-BEHAVIOR-REF><SYNCHRONIZED-MODE-GROUPS><SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE><BSW-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/AUTOSAR_Dcm/Dcm/DcmDiagnosticSessionControl</BSW-MODE-GROUP-REF><SWC-MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Services/DcmService/DiagnosticSessionControlModeSwitchInterface</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/Dcm_DiagnosticSessionControlModeSwitchInterface/diagnosticSession</TARGET-MODE-GROUP-REF></SWC-MODE-GROUP-IREF></SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE></SYNCHRONIZED-MODE-GROUPS></SWC-BSW-MAPPING>
+</ELEMENTS>"#,
+    );
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let composition = plan.description().composition.as_ref().unwrap();
+    let session = composition
+        .mode_machines
+        .iter()
+        .find(|machine| machine.switch_symbol == "SchM_Switch_Dcm_DcmDiagnosticSessionControl")
+        .unwrap();
+    assert!(session.bsw_managed);
+    assert_eq!(session.variable, "diagnostic_session_mode");
+    assert_eq!(session.mapping.as_deref(), Some("/Services/SessionMapping"));
+    let files = prepared_pipeline_files(&plan);
+    let description = &files
+        .iter()
+        .find(|(name, _)| name == "generated/descriptions/Host_Implementation.arxml")
+        .unwrap()
+        .1;
+    let document = roxmltree::Document::parse(std::str::from_utf8(description).unwrap()).unwrap();
+    assert_eq!(
+        document
+            .descendants()
+            .filter(|node| node.has_tag_name("BSW-MODE-GROUP-REF")
+                && node.text() == Some("/AUTOSAR_Dcm/Dcm/DcmDiagnosticSessionControl"))
+            .count(),
+        1
+    );
+}

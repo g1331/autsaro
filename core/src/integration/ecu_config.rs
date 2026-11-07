@@ -322,6 +322,18 @@ pub(super) fn files(
         ],
     )?;
     outputs.emit_rendered(super::outputs::RTE, "include/Rte_Com.h", callbacks)?;
+    for module in ["Can", "BswM"] {
+        let addition = super::mode_binding::declarations_for(composition, module);
+        if !addition.is_empty() {
+            let path = format!("include/SchM_{module}.h");
+            let text = super::outputs::render(
+                outputs.template(super::outputs::RTE, &path)?,
+                &path,
+                &[super::outputs::Edit::BeforeGuardEnd(&addition)],
+            )?;
+            outputs.emit_rendered(super::outputs::RTE, &path, text)?;
+        }
+    }
     outputs.emit_verbatim(super::outputs::RTE)?;
     outputs.emit_verbatim(super::outputs::MEMMAP)?;
     // The selected authentication group's mode type and SchM declarations
@@ -366,7 +378,8 @@ pub(super) fn files(
         ),
     );
     let addition = format!(
-        r#"{linkage_begin}{start_code}{addition}{stop_code}{linkage_end}"#,
+        r#"{linkage_begin}{start_code}{addition}{stop_code}{linkage_end}{generic}"#,
+        generic = super::mode_binding::declarations_for(composition, "Dcm"),
         linkage_begin = c_layout::linkage(true),
         linkage_end = c_layout::linkage(false),
         start_code = c_layout::section(
@@ -462,7 +475,14 @@ pub(super) fn files(
         outputs.emit(
             ECU,
             format!("include/SchM_{module}.h"),
-            schm_header(module, &format!("{}{main}", area_prototypes(module, area))),
+            schm_header(
+                module,
+                &format!(
+                    "{}{main}{}",
+                    area_prototypes(module, area),
+                    super::mode_binding::declarations_for(composition, module)
+                ),
+            ),
         )?;
     }
     outputs.emit(
@@ -471,7 +491,8 @@ pub(super) fn files(
         schm_header(
             "Com",
             &format!(
-                "{}{}",
+                "{}{}{}",
+                super::mode_binding::declarations_for(composition, "Com"),
                 area_prototypes("Com", "COM"),
                 code_prototypes(
                     "Com",
@@ -1437,7 +1458,35 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
         path,
         &[
             super::outputs::Edit::Every("@PARTITION@", &communication.partition.id.to_string()),
-            super::outputs::Edit::Once("@MODES@", &mode_switches(mode_scope, authentication_group)),
+            super::outputs::Edit::Once(
+                "@MODES@",
+                &super::mode_binding::storage(composition, mode_scope, authentication_group),
+            ),
+            super::outputs::Edit::Once(
+                "@MODE_INCLUDES@",
+                &composition
+                    .mode_machines
+                    .iter()
+                    .map(|machine| &machine.module)
+                    .filter(|module| module.as_str() != "Dcm")
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .into_iter()
+                    .map(|module| format!("#include \"SchM_{module}.h\"\n"))
+                    .collect::<String>(),
+            ),
+            super::outputs::Edit::Once(
+                "@INIT_MODES@",
+                &composition
+                    .mode_machines
+                    .iter()
+                    .map(|machine| {
+                        format!(
+                            "    (void){}({}u);\n",
+                            machine.switch_symbol, machine.initial
+                        )
+                    })
+                    .collect::<String>(),
+            ),
         ],
     )?;
     outputs.emit_rendered(ECU, path, lifecycle)?;
@@ -1494,103 +1543,6 @@ This configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit si
             }),
     )?;
     Ok((outputs.finish()?, readme))
-}
-
-/// SchM lifecycle and the Dcm mode switches over the selected mode scope.
-fn mode_switches(mode_scope: &str, authentication_group: &str) -> String {
-    let mut modes = format!(
-        r#"
-{start_var_cleared_unspecified}"#,
-        start_var_cleared_unspecified = c_layout::section(
-            &format!("RTE_{mode_scope}"),
-            "Rte",
-            "VAR_CLEARED_UNSPECIFIED",
-            true
-        )
-    );
-    for (group, variable) in [
-        ("DcmDiagnosticSessionControl", "diagnostic_session_mode"),
-        (authentication_group, "authentication_mode"),
-    ] {
-        let declaration = format!("static Rte_ModeType_{group} {variable}");
-        let attribute = format!("RTE_{mode_scope}_VAR_CLEARED_UNSPECIFIED;");
-        if declaration.len() + attribute.len() < 100 {
-            modes.push_str(&format!("{declaration} {attribute}\n"));
-        } else {
-            modes.push_str(&format!(
-                r#"{declaration}
-    {attribute}
-"#
-            ));
-        }
-    }
-    modes.push_str(&format!(
-        r#"{stop_var_cleared_unspecified}{start_code}"#,
-        stop_var_cleared_unspecified = c_layout::section(
-            &format!("RTE_{mode_scope}"),
-            "Rte",
-            "VAR_CLEARED_UNSPECIFIED",
-            false
-        ),
-        start_code = c_layout::section(&format!("RTE_{mode_scope}"), "Rte", "CODE", true)
-    ));
-    for (group, variable) in [
-        (authentication_group, "authentication_mode"),
-        ("DcmDiagnosticSessionControl", "diagnostic_session_mode"),
-    ] {
-        let switch = c_layout::signature(
-            "RTE_CODE Std_ReturnType",
-            &format!("SchM_Switch_Dcm_{group}"),
-            &[format!("Rte_ModeType_{group} mode")],
-            "",
-            true,
-        );
-        let mode = c_layout::signature(
-            &format!("RTE_CODE Rte_ModeType_{group}"),
-            &format!("SchM_Mode_Dcm_{group}"),
-            &["void".to_owned()],
-            "",
-            true,
-        );
-        let retained_switch = if group == "DcmAuthenticationState_Physical" {
-            "/* MR12 RULE 8.7 VIOLATION: retain this public mode publisher's C linkage. */\n"
-        } else {
-            ""
-        };
-        let retained_mode = if matches!(
-            group,
-            "DcmAuthenticationState_Physical" | "DcmDiagnosticSessionControl"
-        ) {
-            "/* MR12 RULE 8.7 VIOLATION: retain this public mode observer's C linkage. */\n"
-        } else {
-            ""
-        };
-        modes.push_str(&format!(
-            r#"{retained_switch}{switch}
-{{
-    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);
-    {variable} = mode;
-    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);
-    return SCHM_E_OK;
-}}
-{retained_mode}{mode}
-{{
-    Rte_ModeType_{group} mode;
-    Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);
-    mode = {variable};
-    Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);
-    return mode;
-}}
-"#
-        ));
-    }
-    modes.push_str(&c_layout::section(
-        &format!("RTE_{mode_scope}"),
-        "Rte",
-        "CODE",
-        false,
-    ));
-    modes
 }
 
 #[cfg(test)]

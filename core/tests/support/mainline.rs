@@ -304,6 +304,17 @@ pub(crate) fn prepared_pipeline_files_for_target(
                     text = text.replace("Rte_Read_Value_Value", "Rte_Read_InputValue_Value");
                 }
             }
+            // The mode fixture's real application gates its data work on the
+            // declared modes, so the analysis program consumes the new APIs.
+            if plan.description().composition.as_ref().is_some_and(|composition| {
+                composition.mode_machines.iter().any(|machine| machine.group == "/Types/PowerState")
+            }) {
+                if file == "Ingress.c" {
+                    text = text.replace("Ingress_Periodic(void)\n{", "Ingress_Periodic(void)\n{\n    if ((Rte_Mode_First_Mode() != RTE_MODE_PowerState_Active) ||\n        (Rte_Mode_Session_diagnosticSession() != RTE_MODE_DcmDiagnosticSessionControl_DCM_DEFAULT_SESSION)) {\n        return;\n    }");
+                } else if file == "Observe.c" {
+                    text = text.replace("Observe_Periodic(void)\n{", "Observe_Periodic(void)\n{\n    if ((Rte_Mode_First_Mode() == RTE_MODE_PowerState_Idle) &&\n        (Rte_Mode_Second_Mode() == RTE_MODE_PowerState_Idle)) {\n        return;\n    }");
+                }
+            }
             let path = scratch.0.join(file);
             std::fs::write(&path, text).unwrap();
             autosar_config_core::ApplicationSource {
@@ -1605,4 +1616,169 @@ pub(crate) fn prepared_typed_pipeline(
         })
         .collect();
     autosar_config_core::prepare_ecu_project_with_applications(plan, target, &applications).unwrap()
+}
+
+/// Two synchronized publisher instances, with two readers on the first publisher.
+pub(crate) fn mode_binding_inputs() -> Vec<InputSource> {
+    let mut sources = inputs();
+    for (before, after) in [
+        (
+            "<APPLICATION-SW-COMPONENT-TYPE>",
+            "<SERVICE-SW-COMPONENT-TYPE>",
+        ),
+        (
+            "</APPLICATION-SW-COMPONENT-TYPE>",
+            "</SERVICE-SW-COMPONENT-TYPE>",
+        ),
+    ] {
+        change(&mut sources, "process.arxml", before, after);
+    }
+    change(
+        &mut sources,
+        "composition.arxml",
+        "DEST=\"APPLICATION-SW-COMPONENT-TYPE\">/Application/Process",
+        "DEST=\"SERVICE-SW-COMPONENT-TYPE\">/Application/Process",
+    );
+    change(
+        &mut sources,
+        "process.arxml",
+        "</ELEMENTS>",
+        r#"<SWC-IMPLEMENTATION><SHORT-NAME>PowerImplementation</SHORT-NAME><PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE><SW-VERSION>1.0.0</SW-VERSION><BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Application/Process/Behavior</BEHAVIOR-REF></SWC-IMPLEMENTATION></ELEMENTS>"#,
+    );
+    change(
+        &mut sources,
+        "types.arxml",
+        "</ELEMENTS>",
+        r#"
+<MODE-DECLARATION-GROUP><SHORT-NAME>PowerState</SHORT-NAME><CATEGORY>EXPLICIT_ORDER</CATEGORY><INITIAL-MODE-REF DEST="MODE-DECLARATION">/Types/PowerState/Idle</INITIAL-MODE-REF><MODE-DECLARATIONS><MODE-DECLARATION><SHORT-NAME>Idle</SHORT-NAME><VALUE>3</VALUE></MODE-DECLARATION><MODE-DECLARATION><SHORT-NAME>Active</SHORT-NAME><VALUE>7</VALUE></MODE-DECLARATION></MODE-DECLARATIONS><ON-TRANSITION-VALUE>255</ON-TRANSITION-VALUE></MODE-DECLARATION-GROUP>
+<MODE-SWITCH-INTERFACE><SHORT-NAME>PowerInterface</SHORT-NAME><IS-SERVICE>true</IS-SERVICE><MODE-GROUP><SHORT-NAME>Mode</SHORT-NAME><TYPE-TREF DEST="MODE-DECLARATION-GROUP">/Types/PowerState</TYPE-TREF></MODE-GROUP></MODE-SWITCH-INTERFACE>
+</ELEMENTS>"#,
+    );
+    let ports = ["Primary", "Secondary"].map(|name| format!(r#"<P-PORT-PROTOTYPE><SHORT-NAME>{name}</SHORT-NAME><PROVIDED-COM-SPECS><MODE-SWITCH-SENDER-COM-SPEC><ENHANCED-MODE-API>false</ENHANCED-MODE-API><MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Types/PowerInterface/Mode</MODE-GROUP-REF></MODE-SWITCH-SENDER-COM-SPEC></PROVIDED-COM-SPECS><PROVIDED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Types/PowerInterface</PROVIDED-INTERFACE-TREF></P-PORT-PROTOTYPE>"#)).join("");
+    change(
+        &mut sources,
+        "process.arxml",
+        "</PORTS>",
+        &format!("{ports}</PORTS>"),
+    );
+    let groups = ["Primary", "Secondary"].map(|name| format!(r#"<MODE-DECLARATION-GROUP-PROTOTYPE><SHORT-NAME>{name}</SHORT-NAME><TYPE-TREF DEST="MODE-DECLARATION-GROUP">/Types/PowerState</TYPE-TREF></MODE-DECLARATION-GROUP-PROTOTYPE>"#)).join("");
+    change(
+        &mut sources,
+        "bsw.arxml",
+        "<MODULE-ID>12</MODULE-ID>",
+        &format!("<MODULE-ID>12</MODULE-ID><PROVIDED-MODE-GROUPS>{groups}</PROVIDED-MODE-GROUPS>"),
+    );
+    let refs = ["Primary", "Secondary"].map(|name| format!(r#"<MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL><MODE-DECLARATION-GROUP-PROTOTYPE-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/AUTOSAR_ComM/ComM/{name}</MODE-DECLARATION-GROUP-PROTOTYPE-REF></MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL>"#)).join("");
+    change(
+        &mut sources,
+        "bsw.arxml",
+        "<IMPLEMENTED-ENTRY-REF DEST=\"BSW-MODULE-ENTRY\">/AUTOSAR_ComM/BswModuleEntrys/ComM_MainFunction_Host</IMPLEMENTED-ENTRY-REF>",
+        &format!(
+            r#"<IMPLEMENTED-ENTRY-REF DEST="BSW-MODULE-ENTRY">/AUTOSAR_ComM/BswModuleEntrys/ComM_MainFunction_Host</IMPLEMENTED-ENTRY-REF><MANAGED-MODE-GROUPS>{refs}</MANAGED-MODE-GROUPS>"#
+        ),
+    );
+    let rows = ["Primary", "Secondary"].map(|name| format!(r#"<SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE><BSW-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/AUTOSAR_ComM/ComM/{name}</BSW-MODE-GROUP-REF><SWC-MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Application/Process/{name}</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Types/PowerInterface/Mode</TARGET-MODE-GROUP-REF></SWC-MODE-GROUP-IREF></SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE>"#)).join("");
+    change(
+        &mut sources,
+        "process.arxml",
+        "</ELEMENTS>",
+        &format!(
+            r#"<SWC-BSW-MAPPING><SHORT-NAME>PowerMapping</SHORT-NAME><BSW-BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/AUTOSAR_ComM/ComM/Behavior</BSW-BEHAVIOR-REF><SWC-BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Application/Process/Behavior</SWC-BEHAVIOR-REF><SYNCHRONIZED-MODE-GROUPS>{rows}</SYNCHRONIZED-MODE-GROUPS></SWC-BSW-MAPPING></ELEMENTS>"#
+        ),
+    );
+    for (component, file, runnable, names) in [
+        (
+            "Ingress",
+            "ingress.arxml",
+            "Ingress_Periodic",
+            vec!["First"],
+        ),
+        (
+            "Observe",
+            "observe.arxml",
+            "Observe_Periodic",
+            vec!["First", "Second"],
+        ),
+    ] {
+        let mut points = String::new();
+        let mut ports = String::new();
+        for name in names {
+            ports.push_str(&format!(r#"<R-PORT-PROTOTYPE><SHORT-NAME>{name}</SHORT-NAME><REQUIRED-COM-SPECS><MODE-SWITCH-RECEIVER-COM-SPEC><ENHANCED-MODE-API>false</ENHANCED-MODE-API><MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Types/PowerInterface/Mode</MODE-GROUP-REF></MODE-SWITCH-RECEIVER-COM-SPEC></REQUIRED-COM-SPECS><REQUIRED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Types/PowerInterface</REQUIRED-INTERFACE-TREF></R-PORT-PROTOTYPE>"#));
+            points.push_str(&format!(r#"<MODE-ACCESS-POINT><IDENT><SHORT-NAME>Read{name}</SHORT-NAME></IDENT><MODE-GROUP-IREF><R-MODE-GROUP-IN-ATOMIC-SWC-INSTANCE-REF><CONTEXT-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Application/{component}/{name}</CONTEXT-R-PORT-REF><TARGET-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Types/PowerInterface/Mode</TARGET-MODE-GROUP-REF></R-MODE-GROUP-IN-ATOMIC-SWC-INSTANCE-REF></MODE-GROUP-IREF></MODE-ACCESS-POINT>"#));
+            let publisher = if name == "Second" {
+                "Secondary"
+            } else {
+                "Primary"
+            };
+            let connector = format!(
+                r#"<ASSEMBLY-SW-CONNECTOR><SHORT-NAME>{component}{name}Mode</SHORT-NAME><PROVIDER-IREF><CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/ProcessInstance</CONTEXT-COMPONENT-REF><TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Application/Process/{publisher}</TARGET-P-PORT-REF></PROVIDER-IREF><REQUESTER-IREF><CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/{component}Instance</CONTEXT-COMPONENT-REF><TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Application/{component}/{name}</TARGET-R-PORT-REF></REQUESTER-IREF></ASSEMBLY-SW-CONNECTOR>"#
+            );
+            change(
+                &mut sources,
+                "composition.arxml",
+                "</CONNECTORS>",
+                &format!("{connector}</CONNECTORS>"),
+            );
+        }
+        change(&mut sources, file, "</PORTS>", &format!("{ports}</PORTS>"));
+        let anchor = if component == "Observe" {
+            "<SERVER-CALL-POINTS>".to_owned()
+        } else {
+            format!("<SYMBOL>{runnable}</SYMBOL>")
+        };
+        change(
+            &mut sources,
+            file,
+            &anchor,
+            &format!("<MODE-ACCESS-POINTS>{points}</MODE-ACCESS-POINTS>{anchor}"),
+        );
+    }
+    change(
+        &mut sources,
+        "ingress.arxml",
+        "</PORTS>",
+        r#"<R-PORT-PROTOTYPE><SHORT-NAME>Session</SHORT-NAME><REQUIRED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Services/Dcm_DiagnosticSessionControlModeSwitchInterface</REQUIRED-INTERFACE-TREF></R-PORT-PROTOTYPE></PORTS>"#,
+    );
+    change(
+        &mut sources,
+        "ingress.arxml",
+        "</MODE-ACCESS-POINTS>",
+        r#"<MODE-ACCESS-POINT><IDENT><SHORT-NAME>ReadSession</SHORT-NAME></IDENT><MODE-GROUP-IREF><R-MODE-GROUP-IN-ATOMIC-SWC-INSTANCE-REF><CONTEXT-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Application/Ingress/Session</CONTEXT-R-PORT-REF><TARGET-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/Dcm_DiagnosticSessionControlModeSwitchInterface/diagnosticSession</TARGET-MODE-GROUP-REF></R-MODE-GROUP-IN-ATOMIC-SWC-INSTANCE-REF></MODE-GROUP-IREF></MODE-ACCESS-POINT></MODE-ACCESS-POINTS>"#,
+    );
+    change(
+        &mut sources,
+        "composition.arxml",
+        "</CONNECTORS>",
+        r#"<ASSEMBLY-SW-CONNECTOR><SHORT-NAME>SessionMode</SHORT-NAME><PROVIDER-IREF><CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/DcmService</CONTEXT-COMPONENT-REF><TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Services/DcmService/DiagnosticSessionControlModeSwitchInterface</TARGET-P-PORT-REF></PROVIDER-IREF><REQUESTER-IREF><CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/IngressInstance</CONTEXT-COMPONENT-REF><TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Application/Ingress/Session</TARGET-R-PORT-REF></REQUESTER-IREF></ASSEMBLY-SW-CONNECTOR></CONNECTORS>"#,
+    );
+    sources
+}
+
+/// The synchronized pair selects the SWC side as its sole mode manager.
+pub(crate) fn swc_managed_mode_inputs() -> Vec<InputSource> {
+    let mut sources = mode_binding_inputs();
+    let source = sources
+        .iter_mut()
+        .find(|source| source.logical_path() == "bsw.arxml")
+        .unwrap();
+    let text = std::str::from_utf8(source.bytes()).unwrap();
+    let start = text.find("<MANAGED-MODE-GROUPS>").unwrap();
+    let end = start
+        + text[start..].find("</MANAGED-MODE-GROUPS>").unwrap()
+        + "</MANAGED-MODE-GROUPS>".len();
+    *source = InputSource::new(
+        "bsw.arxml",
+        format!("{}{}", &text[..start], &text[end..]).into_bytes(),
+    )
+    .unwrap();
+    let points = ["Primary", "Secondary"].map(|name| format!(r#"<MODE-SWITCH-POINT><SHORT-NAME>Switch{name}</SHORT-NAME><MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Application/Process/{name}</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Types/PowerInterface/Mode</TARGET-MODE-GROUP-REF></MODE-GROUP-IREF></MODE-SWITCH-POINT>"#)).join("");
+    change(
+        &mut sources,
+        "process.arxml",
+        "<SYMBOL>Process_Periodic</SYMBOL>",
+        &format!(
+            "<MODE-SWITCH-POINTS>{points}</MODE-SWITCH-POINTS><SYMBOL>Process_Periodic</SYMBOL>"
+        ),
+    );
+    sources
 }
