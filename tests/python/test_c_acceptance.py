@@ -33,6 +33,7 @@ class AcceptanceTests(unittest.TestCase):
         self.directory = Path(self.temporary.name)
         self.root = self.directory / "repository"
         for name in (*c_standard.MANUAL_ASSESSMENT_SOURCES,
+                     "docs/adr/0025-misra-layered-scope.md",
                      ".agents/skills/misra-c2012/references/baseline-index.json",
                      *(path.relative_to(ROOT).as_posix() for path in (ROOT / c_retention.RECORD_DIRECTORY).glob("*.md"))):
             destination = self.root / name
@@ -61,6 +62,7 @@ class AcceptanceTests(unittest.TestCase):
         producer.write_bytes(b"producer\n")
         self.plan = {"sources": [{"logicalPath": "application.arxml", "rawSha256": "1" * 64}],
                      "runtimeSources": {"runtime/producer.c": c_acceptance.digest(producer)}}
+        self.origins = {}
         self.seal()
         self.summary = {"error": None, "passed": False,
                         "tool": {"version": "2.21.0", "expectedSourceRevision": c_check.CPPCHECK_REVISION,
@@ -92,7 +94,7 @@ class AcceptanceTests(unittest.TestCase):
 
     def seal(self):
         self.files["target.json"] = json.dumps(self.target).encode()
-        self.files["meta/integration.json"] = json.dumps({"plan": self.plan, "originalBswSources": {}}).encode()
+        self.files["meta/integration.json"] = json.dumps({"plan": self.plan, "originalBswSources": self.origins}).encode()
         for name, data in self.files.items():
             destination = self.project / name
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -298,6 +300,108 @@ class AcceptanceTests(unittest.TestCase):
         self.require(summary)
         self.assertFalse(summary["passed"])
         self.assertEqual(summary["programs"][0]["exitCode"], 1)
+
+    def grp_inputs(self):
+        self.synthetic_complete_inputs()
+        own = b"int owned(int x) {\n    if (x) { return 1; }\n    return 0;\n}\n"
+        upstream = own.replace(b"owned", b"upstream")
+        patched = upstream.replace(b"    return 0;", b"    if (x == 2) { return 2; }\n    return 0;")
+        original = self.root / "third_party/freertos/kernel.h"
+        original.parent.mkdir(parents=True)
+        original.write_bytes(upstream)
+        producer = self.root / "runtime/producer.c"
+        producer.write_bytes(own)
+        self.plan["runtimeSources"]["runtime/producer.c"] = c_acceptance.digest(producer)
+        self.origins = {"runtime/producer.c": "bsw/Owned.c",
+                        "third_party/freertos/kernel.h": "kernel/kernel.h"}
+        self.files.update({"generated/Owned.c": own, "bsw/Owned.c": own,
+                           "kernel/kernel.h": patched, "unknown.c": own})
+        self.target["kernelSha256"]["kernel.h"] = hashlib.sha256(patched).hexdigest()
+        owners = [("generated/Owned.c", "generated", "autosar-generator", own),
+                  ("bsw/Owned.c", "product", "autosar-product", own),
+                  ("kernel/kernel.h", "product", "autosar-product", upstream)]
+        self.files["meta/workbench-ownership.json"] = json.dumps({"files": [
+            {"path": name, "owner": owner, "producerId": producer,
+             "sha256": hashlib.sha256(data).hexdigest()}
+            for name, owner, producer, data in owners]}).encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.summary["scope"].update(sdkHeaders=[], sdkMacroInputs={}, patchedLines={})
+
+    def grp_diagnostic(self, name, line=2, *, rule="15.5", **details):
+        text = self.files[name].decode().splitlines()[line - 1]
+        return {"id": "misra-c2012-" + rule, "programs": ["host-batch", "probe"],
+                "locations": [{"file": name, "line": str(line),
+                               "column": str(text.index("return") + 1)}],
+                "patched": False, "adopted": False, "sourceCategory": "project",
+                "sourceOrigins": [], **details}
+
+    def test_grp_consumes_owned_returns_and_patch_without_changing_raw_results(self):
+        self.grp_inputs()
+        self.summary["diagnostics"].extend([
+            self.grp_diagnostic("generated/Owned.c"), self.grp_diagnostic("bsw/Owned.c"),
+            self.grp_diagnostic("kernel/kernel.h", 3, adopted=True,
+                                sourceCategory="adopted-freertos")])
+        self.bind_groups()
+        before = copy.deepcopy(self.summary)
+        result = self.evaluate()
+        self.assertEqual(result["status"], "accepted", result["objects"])
+        for row in result["occurrences"][1:]:
+            self.assertEqual(row["reason"], "grp_disapplied")
+            self.assertEqual(row["record"], "docs/adr/0025-misra-layered-scope.md#grp指南重分类计划")
+            self.assertEqual(row["programs"], ["host-batch", "probe"])
+        self.assertEqual(self.summary, before)
+        self.summary["projectAcceptance"] = result
+        self.require(self.summary)
+
+    def test_grp_rejects_forged_source_labels_unknown_sources_and_other_rules(self):
+        self.grp_inputs()
+        self.summary["diagnostics"] = [
+            self.grp_diagnostic("kernel/kernel.h"), self.grp_diagnostic("unknown.c"),
+            self.grp_diagnostic("generated/Owned.c", rule="15.4")]
+        self.summary["scope"]["patchedLines"] = {"kernel/kernel.h": [2]}
+        self.bind_groups()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(len(result["occurrences"]), 3)
+        self.assertTrue(all(row["assessment"] == "blocked" for row in result["occurrences"]))
+
+    def test_grp_keeps_sdk_macro_and_untraceable_return_blocked(self):
+        self.grp_inputs()
+        diagnostic = self.grp_diagnostic("generated/Owned.c")
+        header = "/provider/foreign.h"
+        self.summary["scope"].update(
+            sdkHeaders=[{"path": header, "category": "sdk", "key": "s" * 64}],
+            sdkMacroInputs={"main.c": {"generated/Owned.c:2": {
+                "FOREIGN": {"file": header, "line": 1, "value": "1"}}}})
+        for change in ("sdk", "column", "line-directive"):
+            with self.subTest(change=change):
+                self.summary["diagnostics"] = [copy.deepcopy(diagnostic)]
+                if change == "column":
+                    self.summary["scope"]["sdkMacroInputs"] = {}
+                    self.summary["diagnostics"][0]["locations"][0]["column"] = "1"
+                elif change == "line-directive":
+                    self.summary["scope"]["sdkLineDirectives"] = True
+                self.bind_groups()
+                result = self.evaluate()
+                self.assertEqual(result["status"], "blocked")
+                self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
+
+    def test_grp_preserves_other_assessment_gates_and_binds_policy_bytes(self):
+        self.grp_inputs()
+        self.summary["diagnostics"] = [self.grp_diagnostic("generated/Owned.c")]
+        self.bind_groups()
+        before = self.identity()
+        policy = self.root / "docs/adr/0025-misra-layered-scope.md"
+        policy.write_bytes(policy.read_bytes() + b"\nPolicy changed.\n")
+        self.assertNotEqual(self.identity(), before)
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("input_context_unbound_or_stale", [row["reason"] for row in result["objects"]])
+        self.bind_groups(status="pending")
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("formal_assessment_pending", [row["reason"] for row in result["objects"]])
 
     def test_strict_replay_recomputes_actual_identity_instead_of_trusting_the_verdict(self):
         accepted = self.receipt()
