@@ -58,6 +58,38 @@ fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity
         [("uint32", "IN"), ("uint32 *", "OUT"), ("uint32 *", "INOUT")]
     );
     let files = plan.component_contract_files().unwrap();
+    // The standalone kit has its own mapping-header instance, outside ECU samples.
+    let mappings = files
+        .files()
+        .iter()
+        .filter(|(path, _)| path.ends_with("_MemMap.h"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        mappings
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "include/DcmService_MemMap.h",
+            "include/Ingress_MemMap.h",
+            "include/Observe_MemMap.h",
+            "include/Process_MemMap.h",
+            "include/Rte_MemMap.h",
+        ]
+    );
+    for (path, bytes) in mappings {
+        let header = std::str::from_utf8(bytes).unwrap();
+        let file_comment = header.split_once("*/").unwrap().0;
+        assert!(
+            file_comment.starts_with("/** @file")
+                && file_comment.contains(
+                    "MR12 DIR 4.10 VIOLATION: Re-enter for each required START/STOP request;"
+                )
+                && file_comment.contains("consume the request, reject nested or mismatched")
+                && file_comment.contains("section attributes at STOP."),
+            "{path}: standalone mapping requires its D4.10 file record"
+        );
+    }
     // Verifies: SWS_Rte_01150, SWS_Rte_02311
     for component in ["Ingress", "Process", "Observe", "DcmService"] {
         let name = format!("include/Rte_{component}.h");
