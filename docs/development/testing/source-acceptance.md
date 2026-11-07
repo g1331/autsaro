@@ -72,6 +72,14 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 只接纳所列输入下已实现的 Advisory 记录与语言不适用位置；剩余模块消费与
 Required 正式材料继续由自有源码消费任务接续。
 
+固定 FreeRTOS 使用 `records={"kind":"freertos-integration"}`，原件集成义务和精确
+补丁表见 [采用篇](../../standards/os/adoption.md#当前集成义务与消费)。本组沿用同一
+上下文格式；其 case 的 `inputIdentity` 使用
+`c_acceptance.freertos_identity(summary, c_acceptance.input_identity(summary, project))`，
+额外绑定两份 manifest 和含 kernel 位置的完整诊断集合。重放有序补丁验证当前来源后，
+原件按本组集成证据消费；补丁复用共同 MR12 匹配器及原有精确裁决，SDK 仍独立阻塞。
+缺少当前绑定或 pending 时，返回本组明确的阻塞原因。R15.5 继续由 GRP 消费。
+
 人工表及补充记录中的 `retained` 保留真实违反及理由，经本组当前绑定和有效批准参与项目验收。Required 保留项的批准材料须完成 AMD2.5 修订后 §6.2.2 引用的 MISRA Compliance:2020 第 4 节正式义务；AMD2.4 已撤换主文旧第 5 节。Advisory 使用 §6.2.3 的记录安排。`not_assessed` 和缺失记录持续阻塞，Mandatory 的 `retained` 在记录入口拒绝。
 
 输入摘要排除上下文块自身，避免 hash 自引用；该篇其他正文仍逐字节绑定。原人工汇总的全文字节身份保持原义，更新人工篇后仍须正常重扫，不能改旧摘要追认。
