@@ -93,6 +93,16 @@ pub(super) fn files(
 "#
         ));
     }
+    let headers = composition
+        .components
+        .iter()
+        .flat_map(|component| &component.runnables)
+        .filter_map(|runnable| runnable.bsw_target.as_ref())
+        .map(|target| super::short_name(&target.contract.declaration_owner))
+        .collect::<BTreeSet<_>>();
+    for header in headers {
+        source.push_str(&format!("#include \"{header}\"\n"));
+    }
     source.push_str(&c_layout::release_check("Rte.c", "Com_Cfg.h", "COM"));
     let diagnostic_types = description
         .diagnostic
@@ -439,11 +449,6 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
                     ));
                 }
             }
-            let callee = if !server.application_errors.is_empty() {
-                format!("return {}", runnable.symbol)
-            } else {
-                runnable.symbol.clone()
-            };
             let arguments: Vec<_> = provider
                 .port_arguments
                 .get(&server.port)
@@ -452,7 +457,11 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
                 .map(|argument| format!("({}){}", argument.native_type, argument.value))
                 .chain(names(&operation.arguments))
                 .collect();
-            let call = c_layout::call("    ", &callee, &arguments, ";");
+            let call = server.invocation(
+                &runnable.symbol,
+                &arguments,
+                !server.application_errors.is_empty(),
+            );
             source.push_str(&format!("{call}\n"));
             if server.application_errors.is_empty() {
                 source.push_str("    return E_OK;\n");

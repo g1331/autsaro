@@ -1392,6 +1392,137 @@ pub(crate) fn typed_operation_inputs() -> Vec<InputSource> {
     sources
 }
 
+/// Ordinary, differently named C/S operation explicitly mapped to a selected BSW producer.
+pub(crate) fn mapped_operation_inputs() -> Vec<InputSource> {
+    let mut sources = pipeline_operation_inputs();
+    replace_all(
+        &mut sources,
+        "DEST=\"APPLICATION-SW-COMPONENT-TYPE\">/Application/Process",
+        "DEST=\"SERVICE-SW-COMPONENT-TYPE\">/Application/Process",
+    );
+    xml_edit(
+        &mut sources,
+        "process.arxml",
+        |node| named(node, "APPLICATION-SW-COMPONENT-TYPE", "Process"),
+        |text| {
+            text.replace("APPLICATION-SW-COMPONENT-TYPE", "SERVICE-SW-COMPONENT-TYPE")
+                .replace(
+                    "<SYMBOL>Process_Ping</SYMBOL>",
+                    "<SYMBOL>Can_MainFunction_Wakeup</SYMBOL>",
+                )
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "CLIENT-SERVER-INTERFACE", "ScalarService"),
+        |text| {
+            text.replace(
+                "<IS-SERVICE>false</IS-SERVICE>",
+                "<IS-SERVICE>true</IS-SERVICE>",
+            )
+        },
+    );
+    change(
+        &mut sources,
+        "process.arxml",
+        "</ELEMENTS>",
+        r#"
+<SWC-BSW-MAPPING><SHORT-NAME>DevicePollingMapping</SHORT-NAME>
+<BSW-BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/AUTOSAR_Can/Can/Behavior</BSW-BEHAVIOR-REF>
+<RUNNABLE-MAPPINGS><SWC-BSW-RUNNABLE-MAPPING>
+<BSW-ENTITY-REF DEST="BSW-SCHEDULABLE-ENTITY">/AUTOSAR_Can/Can/Behavior/Can_MainFunction_Wakeup_Entity</BSW-ENTITY-REF>
+<SWC-RUNNABLE-REF DEST="RUNNABLE-ENTITY">/Application/Process/Behavior/ServerPing</SWC-RUNNABLE-REF>
+</SWC-BSW-RUNNABLE-MAPPING></RUNNABLE-MAPPINGS>
+<SWC-BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Application/Process/Behavior</SWC-BEHAVIOR-REF>
+</SWC-BSW-MAPPING>
+<SWC-IMPLEMENTATION><SHORT-NAME>DevicePollingImplementation</SHORT-NAME><PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>
+<BEHAVIOR-REF DEST="SWC-INTERNAL-BEHAVIOR">/Application/Process/Behavior</BEHAVIOR-REF></SWC-IMPLEMENTATION>
+</ELEMENTS>"#,
+    );
+    sources
+}
+
+pub(crate) fn mapped_counter_operation_inputs() -> Vec<InputSource> {
+    let mut sources = mapped_operation_inputs();
+    for (before, after) in [
+        (
+            "/AUTOSAR_Can/Can/Behavior</BSW-BEHAVIOR-REF>",
+            "/AUTOSAR_Os/Os/Behavior</BSW-BEHAVIOR-REF>",
+        ),
+        (
+            "DEST=\"BSW-SCHEDULABLE-ENTITY\">/AUTOSAR_Can/Can/Behavior/Can_MainFunction_Wakeup_Entity",
+            "DEST=\"BSW-CALLED-ENTITY\">/AUTOSAR_Os/Os/Behavior/ReadTicks",
+        ),
+        (
+            "<SYMBOL>Can_MainFunction_Wakeup</SYMBOL>",
+            "<SYMBOL>GetCounterValue</SYMBOL>",
+        ),
+    ] {
+        change(&mut sources, "process.arxml", before, after);
+    }
+    xml_edit(
+        &mut sources,
+        "process.arxml",
+        |node| named(node, "RUNNABLE-ENTITY", "ServerPing"),
+        |text| {
+            text.replace(
+                "<CAN-BE-INVOKED-CONCURRENTLY>false",
+                "<CAN-BE-INVOKED-CONCURRENTLY>true",
+            )
+        },
+    );
+    for (tag, name) in [
+        ("SW-BASE-TYPE", "Base_uint32"),
+        ("IMPLEMENTATION-DATA-TYPE", "uint32"),
+    ] {
+        xml_edit(
+            &mut sources,
+            "types.arxml",
+            |node| named(node, tag, name),
+            |text| {
+                format!(
+                    "{text}{}",
+                    text.replace("uint32", "uint64").replace(">32<", ">64<")
+                )
+            },
+        );
+    }
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "CLIENT-SERVER-OPERATION", "Ping"),
+        |_| {
+            r#"<CLIENT-SERVER-OPERATION><SHORT-NAME>Ping</SHORT-NAME><ARGUMENTS>
+<ARGUMENT-DATA-PROTOTYPE><SHORT-NAME>Handle</SHORT-NAME><TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/Types/uint32</TYPE-TREF><DIRECTION>IN</DIRECTION></ARGUMENT-DATA-PROTOTYPE>
+<ARGUMENT-DATA-PROTOTYPE><SHORT-NAME>Reading</SHORT-NAME><TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/Types/uint64</TYPE-TREF><DIRECTION>OUT</DIRECTION></ARGUMENT-DATA-PROTOTYPE>
+</ARGUMENTS><POSSIBLE-ERROR-REFS><POSSIBLE-ERROR-REF DEST="APPLICATION-ERROR">/Types/ScalarService/E_OK</POSSIBLE-ERROR-REF></POSSIBLE-ERROR-REFS></CLIENT-SERVER-OPERATION>"#.into()
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "CLIENT-SERVER-INTERFACE", "ScalarService"),
+        |text| {
+            text.replace("</CLIENT-SERVER-INTERFACE>", "<POSSIBLE-ERRORS><APPLICATION-ERROR><SHORT-NAME>E_OK</SHORT-NAME><ERROR-CODE>0</ERROR-CODE></APPLICATION-ERROR></POSSIBLE-ERRORS></CLIENT-SERVER-INTERFACE>")
+        },
+    );
+    let native = r#"<AR-PACKAGE><SHORT-NAME>AUTOSAR_Os</SHORT-NAME><ELEMENTS>
+<SW-BASE-TYPE><SHORT-NAME>NativeStatus</SHORT-NAME><CATEGORY>FIXED_LENGTH</CATEGORY><BASE-TYPE-SIZE>8</BASE-TYPE-SIZE><BASE-TYPE-ENCODING>NONE</BASE-TYPE-ENCODING><NATIVE-DECLARATION>StatusType</NATIVE-DECLARATION></SW-BASE-TYPE>
+<SW-BASE-TYPE><SHORT-NAME>NativeCounter</SHORT-NAME><CATEGORY>FIXED_LENGTH</CATEGORY><BASE-TYPE-SIZE>32</BASE-TYPE-SIZE><BASE-TYPE-ENCODING>NONE</BASE-TYPE-ENCODING><NATIVE-DECLARATION>CounterType</NATIVE-DECLARATION></SW-BASE-TYPE>
+<SW-BASE-TYPE><SHORT-NAME>NativeTicks</SHORT-NAME><CATEGORY>FIXED_LENGTH</CATEGORY><BASE-TYPE-SIZE>64</BASE-TYPE-SIZE><BASE-TYPE-ENCODING>NONE</BASE-TYPE-ENCODING><NATIVE-DECLARATION>TickRefType</NATIVE-DECLARATION></SW-BASE-TYPE>
+<BSW-MODULE-DESCRIPTION><SHORT-NAME>Os</SHORT-NAME><CATEGORY>BSW_MODULE</CATEGORY><IMPLEMENTED-ENTRYS><BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST="BSW-MODULE-ENTRY">/AUTOSAR_Os/BswModuleEntrys/GetCounterValue</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL></IMPLEMENTED-ENTRYS><MODULE-ID>1</MODULE-ID><INTERNAL-BEHAVIORS><BSW-INTERNAL-BEHAVIOR><SHORT-NAME>Behavior</SHORT-NAME><ENTITYS><BSW-CALLED-ENTITY><SHORT-NAME>ReadTicks</SHORT-NAME><IMPLEMENTED-ENTRY-REF DEST="BSW-MODULE-ENTRY">/AUTOSAR_Os/BswModuleEntrys/GetCounterValue</IMPLEMENTED-ENTRY-REF></BSW-CALLED-ENTITY></ENTITYS></BSW-INTERNAL-BEHAVIOR></INTERNAL-BEHAVIORS></BSW-MODULE-DESCRIPTION>
+<BSW-IMPLEMENTATION><SHORT-NAME>CounterImplementation</SHORT-NAME><PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE><BEHAVIOR-REF DEST="BSW-INTERNAL-BEHAVIOR">/AUTOSAR_Os/Os/Behavior</BEHAVIOR-REF></BSW-IMPLEMENTATION>
+</ELEMENTS><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>BswModuleEntrys</SHORT-NAME><ELEMENTS>
+<BSW-MODULE-ENTRY><SHORT-NAME>GetCounterValue</SHORT-NAME><IS-REENTRANT>true</IS-REENTRANT><IS-SYNCHRONOUS>true</IS-SYNCHRONOUS><CALL-TYPE>REGULAR</CALL-TYPE><EXECUTION-CONTEXT>UNSPECIFIED</EXECUTION-CONTEXT><SW-SERVICE-IMPL-POLICY>STANDARD</SW-SERVICE-IMPL-POLICY><BSW-ENTRY-KIND>CONCRETE</BSW-ENTRY-KIND>
+<RETURN-TYPE><SHORT-NAME>Result</SHORT-NAME><SW-DATA-DEF-PROPS><SW-DATA-DEF-PROPS-VARIANTS><SW-DATA-DEF-PROPS-CONDITIONAL><BASE-TYPE-REF DEST="SW-BASE-TYPE">/AUTOSAR_Os/NativeStatus</BASE-TYPE-REF></SW-DATA-DEF-PROPS-CONDITIONAL></SW-DATA-DEF-PROPS-VARIANTS></SW-DATA-DEF-PROPS></RETURN-TYPE><ARGUMENTS>
+<SW-SERVICE-ARG><SHORT-NAME>CounterID</SHORT-NAME><DIRECTION>IN</DIRECTION><SW-DATA-DEF-PROPS><SW-DATA-DEF-PROPS-VARIANTS><SW-DATA-DEF-PROPS-CONDITIONAL><BASE-TYPE-REF DEST="SW-BASE-TYPE">/AUTOSAR_Os/NativeCounter</BASE-TYPE-REF></SW-DATA-DEF-PROPS-CONDITIONAL></SW-DATA-DEF-PROPS-VARIANTS></SW-DATA-DEF-PROPS></SW-SERVICE-ARG>
+<SW-SERVICE-ARG><SHORT-NAME>Value</SHORT-NAME><DIRECTION>OUT</DIRECTION><SW-DATA-DEF-PROPS><SW-DATA-DEF-PROPS-VARIANTS><SW-DATA-DEF-PROPS-CONDITIONAL><BASE-TYPE-REF DEST="SW-BASE-TYPE">/AUTOSAR_Os/NativeTicks</BASE-TYPE-REF></SW-DATA-DEF-PROPS-CONDITIONAL></SW-DATA-DEF-PROPS-VARIANTS></SW-DATA-DEF-PROPS></SW-SERVICE-ARG></ARGUMENTS></BSW-MODULE-ENTRY>
+</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AR-PACKAGE>"#;
+    sources.push(InputSource::new("counter-binding.arxml", format!("<AUTOSAR xmlns=\"http://autosar.org/schema/r4.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd\"><AR-PACKAGES>{native}</AR-PACKAGES></AUTOSAR>").into_bytes()).unwrap());
+    sources
+}
+
 pub(crate) fn prepared_typed_pipeline(
     plan: &ValidatedIntegrationPlan,
     target: autosar_config_core::target::BuildTarget,

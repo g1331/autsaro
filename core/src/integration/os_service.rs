@@ -1,11 +1,103 @@
+use super::ContractArgument;
 use super::c_layout;
+use super::composition::{BswTarget, Component, Operation, Runnable};
 use std::collections::BTreeMap;
 
 pub(super) const HEADER: &str = "Rte_Os.h";
 
+pub(super) fn contract(counter: &str) -> Component {
+    let interface = format!("/OsServices/OsService_{counter}");
+    let behavior = "/OsServices/Os/Behavior";
+    let port = "/OsServices/Os/OsService";
+    let mut operations = Vec::new();
+    let mut runnables = Vec::new();
+    for native in super::catalog::counter_entries() {
+        let operation = native.symbol.as_str();
+        let errors = if operation == "GetElapsedValue" {
+            vec![("E_OS_ID", 3), ("E_OS_VALUE", 8)]
+        } else {
+            vec![("E_OS_ID", 3)]
+        };
+        let arguments = native
+            .arguments
+            .iter()
+            .skip(1)
+            .map(|argument| ContractArgument {
+                name: argument.name.clone(),
+                native_type: "TimeInMicrosecondsType *".into(),
+                direction: argument.direction.clone(),
+            })
+            .collect::<Vec<_>>();
+        runnables.push(Runnable {
+            path: format!("{behavior}/{operation}"),
+            symbol: operation.into(),
+            event: Some(format!("{behavior}/On{operation}")),
+            period_ms: None,
+            bsw_target: Some(BswTarget {
+                mapping: "/OsServices/ServiceMapping_Os_0".into(),
+                behavior: "/AUTOSAR_Os/Os/HostBehavior".into(),
+                entity: format!("/AUTOSAR_Os/Os/HostBehavior/{operation}Entity"),
+                entry: format!("/AUTOSAR_Os/BswModuleEntrys/{operation}"),
+                entity_kind: "BSW-CALLED-ENTITY".into(),
+                reentrant: true,
+                synchronous: true,
+                minimum_start_interval: "0".into(),
+                execution_context: "UNSPECIFIED".into(),
+                contract: native.clone(),
+            }),
+        });
+        operations.push(Operation {
+            port: port.into(),
+            interface: interface.clone(),
+            operation: format!("{interface}/{operation}"),
+            application_errors: errors
+                .into_iter()
+                .map(|(name, code)| (name.into(), code))
+                .collect(),
+            read: false,
+            api_symbol: format!("Rte_Call_OsService_{operation}"),
+            implementation_symbol: format!("OsService_{counter}_{operation}"),
+            argument_types: vec!["/OsServices/TimeInMicrosecondsType".into(); arguments.len()],
+            arguments,
+            runnable: format!("{behavior}/{operation}"),
+            callers: Vec::new(),
+            call_points: Vec::new(),
+            event: Some(format!("{behavior}/On{operation}")),
+        });
+    }
+    Component {
+        component: "/OsServices/Os".into(),
+        instance: "/OsServices/OsInstance".into(),
+        ecu: String::new(),
+        ecu_mapping: String::new(),
+        rte_instance: String::new(),
+        behavior: behavior.into(),
+        header: format!("include/{HEADER}"),
+        interfaces: BTreeMap::from([(port.into(), interface)]),
+        diagnostic_session_port: None,
+        diagnostic_mode_ports: Vec::new(),
+        data_ports: Vec::new(),
+        data_accesses: Vec::new(),
+        operations,
+        runnables,
+        port_arguments: BTreeMap::from([(
+            port.into(),
+            vec![super::rte_types::PortDefinedArgument {
+                native_type: "CounterType".into(),
+                type_identity: "/OsServices/CounterType".into(),
+                value: "0".into(),
+            }],
+        )]),
+    }
+}
+
 /// The selected Counter's service description and actual synchronous binding.
 /// Counter state and service error handling remain exclusively in the OS.
-pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec<u8>> {
+pub(super) fn files(
+    counter: &str,
+    counter_symbol: &str,
+    contract: &Component,
+) -> Result<BTreeMap<String, Vec<u8>>, Vec<super::PlanDiagnostic>> {
     let interface = format!("OsService_{counter}");
     let mut elements = String::new();
     for (name, bits, native) in [
@@ -38,32 +130,26 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
 {start_code}"#,
         start_code = c_layout::section("RTE_Rte", "Rte", "CODE", true),
     );
-    for (operation, arguments, parameters, forwarded, errors) in [
-        (
-            "GetCounterValue",
-            vec![("Value", "OUT")],
-            "TimeInMicrosecondsType *Value",
-            "Value",
-            vec!["E_OS_ID"],
-        ),
-        (
-            "GetElapsedValue",
-            vec![("Value", "INOUT"), ("ElapsedValue", "OUT")],
-            "TimeInMicrosecondsType *Value, TimeInMicrosecondsType *ElapsedValue",
-            "Value, ElapsedValue",
-            vec!["E_OS_ID", "E_OS_VALUE"],
-        ),
-    ] {
-        let symbol = format!("{interface}_{operation}");
+    for binding in &contract.operations {
+        let operation = super::short_name(&binding.operation);
+        let target = contract
+            .runnables
+            .iter()
+            .find(|runnable| runnable.path == binding.runnable)
+            .and_then(|runnable| runnable.bsw_target.as_ref())
+            .ok_or_else(|| super::PlanDiagnostic::plan_premise(&binding.runnable))?;
+        let symbol = &binding.implementation_symbol;
         operations.push_str(&format!(
             "<CLIENT-SERVER-OPERATION><SHORT-NAME>{operation}</SHORT-NAME><ARGUMENTS>"
         ));
-        for (name, direction) in arguments {
+        for argument in &binding.arguments {
+            let name = &argument.name;
+            let direction = &argument.direction;
             operations.push_str(&format!(
  r#"<ARGUMENT-DATA-PROTOTYPE><SHORT-NAME>{name}</SHORT-NAME><TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/OsServices/TimeInMicrosecondsType</TYPE-TREF><DIRECTION>{direction}</DIRECTION><SERVER-ARGUMENT-IMPL-POLICY>USE-ARGUMENT-TYPE</SERVER-ARGUMENT-IMPL-POLICY></ARGUMENT-DATA-PROTOTYPE>"#));
         }
         operations.push_str("</ARGUMENTS><POSSIBLE-ERROR-REFS>");
-        for error in errors {
+        for error in binding.application_errors.keys() {
             operations.push_str(&format!(
  r#"<POSSIBLE-ERROR-REF DEST="APPLICATION-ERROR">/OsServices/{interface}/{error}</POSSIBLE-ERROR-REF>"#));
         }
@@ -72,20 +158,34 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
  r#"<SERVER-COM-SPEC><OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/OsServices/{interface}/{operation}</OPERATION-REF><QUEUE-LENGTH>1</QUEUE-LENGTH></SERVER-COM-SPEC>"#));
         events.push_str(&format!(
  r#"<OPERATION-INVOKED-EVENT><SHORT-NAME>On{operation}</SHORT-NAME><START-ON-EVENT-REF DEST="RUNNABLE-ENTITY">/OsServices/Os/Behavior/{operation}</START-ON-EVENT-REF><OPERATION-IREF><CONTEXT-P-PORT-REF DEST="P-PORT-PROTOTYPE">/OsServices/Os/OsService</CONTEXT-P-PORT-REF><TARGET-PROVIDED-OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/OsServices/{interface}/{operation}</TARGET-PROVIDED-OPERATION-REF></OPERATION-IREF></OPERATION-INVOKED-EVENT>"#));
-        runnables.push_str(&format!("<RUNNABLE-ENTITY><SHORT-NAME>{operation}</SHORT-NAME><CAN-BE-INVOKED-CONCURRENTLY>true</CAN-BE-INVOKED-CONCURRENTLY><SYMBOL>{symbol}</SYMBOL></RUNNABLE-ENTITY>"));
+        runnables.push_str(&format!("<RUNNABLE-ENTITY><SHORT-NAME>{operation}</SHORT-NAME><CAN-BE-INVOKED-CONCURRENTLY>{}</CAN-BE-INVOKED-CONCURRENTLY><SYMBOL>{}</SYMBOL></RUNNABLE-ENTITY>", target.reentrant, target.contract.symbol));
         let elapsed_doc = if operation == "GetElapsedValue" {
             " * @param[out] ElapsedValue Tick difference; unchanged on a rejected call.\n"
         } else {
             ""
         };
-        let port = format!("Rte_Call_OsService_{operation}");
-        let parameters: Vec<String> = parameters.split(", ").map(str::to_owned).collect();
-        let served: Vec<String> = std::iter::once("CounterType CounterID".to_owned())
-            .chain(parameters.iter().cloned())
+        let port = &binding.api_symbol;
+        let parameters: Vec<String> = binding
+            .arguments
+            .iter()
+            .map(|argument| c_layout::parameter(&argument.native_type, &argument.name))
             .collect();
-        let forwarded: Vec<String> = forwarded.split(", ").map(str::to_owned).collect();
+        let implicit = target
+            .contract
+            .arguments
+            .first()
+            .ok_or_else(|| super::PlanDiagnostic::plan_premise(&target.entry))?;
+        let served: Vec<String> =
+            std::iter::once(c_layout::parameter(&implicit.native_type, &implicit.name))
+                .chain(parameters.iter().cloned())
+                .collect();
+        let forwarded: Vec<String> = binding
+            .arguments
+            .iter()
+            .map(|argument| argument.name.clone())
+            .collect();
         let declaration =
-            c_layout::signature("RTE_Rte_CODE StatusType", &symbol, &served, ";", false);
+            c_layout::signature("RTE_Rte_CODE StatusType", symbol, &served, ";", false);
         let direction = if operation == "GetElapsedValue" {
             "in,out"
         } else {
@@ -106,7 +206,7 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
 "#));
         let head = c_layout::signature(
             "static inline RTE_Rte_CODE StatusType",
-            &port,
+            port,
             &parameters,
             "",
             true,
@@ -114,7 +214,7 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
         let arguments: Vec<String> = std::iter::once(counter_symbol.to_owned())
             .chain(forwarded.iter().cloned())
             .collect();
-        let call = c_layout::call("    ", &format!("return {symbol}"), &arguments, ";");
+        let call = binding.invocation(symbol, &arguments, true);
         clients.push_str(&format!(
             r#"/** Counter-bound {operation}; native tick and error semantics.
  * @param[{direction}] Value Counter ticks; updated only on success.
@@ -126,11 +226,11 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
 }}
 "#
         ));
-        let head = c_layout::signature("RTE_Rte_CODE StatusType", &symbol, &served, "", true);
-        let arguments: Vec<String> = std::iter::once("CounterID".to_owned())
+        let head = c_layout::signature("RTE_Rte_CODE StatusType", symbol, &served, "", true);
+        let arguments: Vec<String> = std::iter::once(implicit.name.clone())
             .chain(forwarded.iter().cloned())
             .collect();
-        let call = c_layout::call("    ", &format!("return {operation}"), &arguments, ";");
+        let call = binding.invocation(&target.contract.symbol, &arguments, true);
         source.push_str(&format!(
             r#"{head}
 {{
@@ -151,6 +251,8 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
     }
     elements.push_str(&format!(
  r#"<CLIENT-SERVER-INTERFACE><SHORT-NAME>{interface}</SHORT-NAME><IS-SERVICE>true</IS-SERVICE><SERVICE-KIND>OPERATING-SYSTEM</SERVICE-KIND><OPERATIONS>{operations}</OPERATIONS><POSSIBLE-ERRORS>{errors}</POSSIBLE-ERRORS></CLIENT-SERVER-INTERFACE><SERVICE-SW-COMPONENT-TYPE><SHORT-NAME>Os</SHORT-NAME><PORTS><P-PORT-PROTOTYPE><SHORT-NAME>OsService</SHORT-NAME><PROVIDED-COM-SPECS>{com_specs}</PROVIDED-COM-SPECS><PROVIDED-INTERFACE-TREF DEST="CLIENT-SERVER-INTERFACE">/OsServices/{interface}</PROVIDED-INTERFACE-TREF></P-PORT-PROTOTYPE></PORTS><INTERNAL-BEHAVIORS><SWC-INTERNAL-BEHAVIOR><SHORT-NAME>Behavior</SHORT-NAME><EVENTS>{events}</EVENTS><PORT-API-OPTIONS><PORT-API-OPTION><ENABLE-TAKE-ADDRESS>false</ENABLE-TAKE-ADDRESS><INDIRECT-API>false</INDIRECT-API><PORT-ARG-VALUES><PORT-DEFINED-ARGUMENT-VALUE><VALUE><NUMERICAL-VALUE-SPECIFICATION><VALUE>0</VALUE></NUMERICAL-VALUE-SPECIFICATION></VALUE><VALUE-TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/OsServices/CounterType</VALUE-TYPE-TREF></PORT-DEFINED-ARGUMENT-VALUE></PORT-ARG-VALUES><PORT-REF DEST="P-PORT-PROTOTYPE">/OsServices/Os/OsService</PORT-REF></PORT-API-OPTION></PORT-API-OPTIONS><RUNNABLES>{runnables}</RUNNABLES><SUPPORTS-MULTIPLE-INSTANTIATION>false</SUPPORTS-MULTIPLE-INSTANTIATION></SWC-INTERNAL-BEHAVIOR></INTERNAL-BEHAVIORS></SERVICE-SW-COMPONENT-TYPE>"#));
+    elements.push_str(&contract.bsw_mapping_xml()?);
+    elements.push_str("<SWC-IMPLEMENTATION><SHORT-NAME>OsImplementation</SHORT-NAME><PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE><BEHAVIOR-REF DEST=\"SWC-INTERNAL-BEHAVIOR\">/OsServices/Os/Behavior</BEHAVIOR-REF></SWC-IMPLEMENTATION>");
     let xml = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>OsServices</SHORT-NAME><ELEMENTS>{elements}</ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>
@@ -168,12 +270,12 @@ pub(super) fn files(counter: &str, counter_symbol: &str) -> BTreeMap<String, Vec
         "Rte_MemMap.h",
         "MEMMAP",
     ));
-    BTreeMap::from([
+    Ok(BTreeMap::from([
         (
             "generated/descriptions/Os_Service.arxml".into(),
             xml.into_bytes(),
         ),
         (format!("include/{HEADER}"), header.into_bytes()),
         ("src/Rte_OsService.c".into(), source.into_bytes()),
-    ])
+    ]))
 }

@@ -4,6 +4,393 @@ use autosar_config_core::integration::InputSource;
 use std::path::Path;
 
 #[test]
+fn explicit_bsw_mapping_keeps_one_runtime_producer_and_application_servers() {
+    let sources = mapped_operation_inputs();
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let composition = plan.description().composition.as_ref().unwrap();
+    let process = composition
+        .components
+        .iter()
+        .find(|component| component.component == "/Application/Process")
+        .unwrap();
+    let runnable = process
+        .runnables
+        .iter()
+        .find(|runnable| runnable.path.ends_with("/ServerPing"))
+        .unwrap();
+    let target = runnable.bsw_target.as_ref().unwrap();
+    assert_eq!(target.contract.symbol, "Can_MainFunction_Wakeup");
+    assert_eq!(target.contract.definition_owner, "runtime/bsw/src/Can.c");
+    assert_eq!(
+        plan.description()
+            .symbols
+            .iter()
+            .filter(|symbol| symbol.symbol == "Can_MainFunction_Wakeup")
+            .count(),
+        1
+    );
+    assert!(
+        plan.description()
+            .symbols
+            .iter()
+            .any(|symbol| symbol.symbol == "Process_Transform"
+                && symbol.definition_owner == "application/Process.c")
+    );
+    let files = prepared_pipeline_files(&plan);
+    let text = |name: &str| {
+        String::from_utf8(
+            files
+                .iter()
+                .find(|(path, _)| path == name)
+                .unwrap()
+                .1
+                .clone(),
+        )
+        .unwrap()
+    };
+    let rte = text("generated/src/Rte.c");
+    assert!(rte.contains("Can_MainFunction_Wakeup();"));
+    let implementation = text("generated/descriptions/Host_Implementation.arxml");
+    let document = roxmltree::Document::parse(&implementation).unwrap();
+    let mapping = document
+        .descendants()
+        .find(|node| named(*node, "SWC-BSW-MAPPING", "ServiceMapping_Process_0"))
+        .unwrap();
+    for reference in mapping.descendants().filter(|node| {
+        node.is_element()
+            && matches!(
+                node.tag_name().name(),
+                "BSW-BEHAVIOR-REF" | "BSW-ENTITY-REF"
+            )
+    }) {
+        let target = reference.text().unwrap();
+        let matches = document
+            .descendants()
+            .filter(|node| node.has_tag_name(reference.attribute("DEST").unwrap()))
+            .filter(|node| {
+                let names = node
+                    .ancestors()
+                    .filter_map(|parent| {
+                        parent
+                            .children()
+                            .find(|child| child.has_tag_name("SHORT-NAME"))
+                            .and_then(|child| child.text())
+                    })
+                    .collect::<Vec<_>>();
+                format!("/{}", names.into_iter().rev().collect::<Vec<_>>().join("/")) == target
+            })
+            .count();
+        assert_eq!(matches, 1, "{target}");
+    }
+    assert!(!text("generated/include/Rte_Process.h").contains("Can_MainFunction_Wakeup("));
+    assert!(!text("generated/include/Rte_Process.h").contains("RTE_RUNNABLE_ServerPing"));
+    assert!(!text("generated/templates/Process.c").contains("Can_MainFunction_Wakeup("));
+    assert!(
+        normal_validation(&sources).diagnostics.is_empty(),
+        "{:?}",
+        normal_validation(&sources).diagnostics
+    );
+}
+
+#[test]
+fn mapped_bsw_memory_methods_compare_attributes_and_owners_are_unique() {
+    let mut sources = mapped_operation_inputs();
+    change(
+        &mut sources,
+        "types.arxml",
+        "</ELEMENTS>",
+        "<SW-ADDR-METHOD><SHORT-NAME>AppCode</SHORT-NAME><CATEGORY>CODE</CATEGORY><SECTION-TYPE>CODE</SECTION-TYPE></SW-ADDR-METHOD><SW-ADDR-METHOD><SHORT-NAME>BswCode</SHORT-NAME><CATEGORY>CODE</CATEGORY><SECTION-TYPE>CODE</SECTION-TYPE></SW-ADDR-METHOD></ELEMENTS>",
+    );
+    xml_edit(
+        &mut sources,
+        "process.arxml",
+        |node| named(node, "RUNNABLE-ENTITY", "ServerPing"),
+        |text| {
+            text.replace("<CAN-BE-INVOKED-CONCURRENTLY>", "<SW-ADDR-METHOD-REF DEST=\"SW-ADDR-METHOD\">/Types/AppCode</SW-ADDR-METHOD-REF><CAN-BE-INVOKED-CONCURRENTLY>")
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| {
+            named(
+                node,
+                "BSW-SCHEDULABLE-ENTITY",
+                "Can_MainFunction_Wakeup_Entity",
+            )
+        },
+        |text| {
+            text.replace("<IMPLEMENTED-ENTRY-REF", "<SW-ADDR-METHOD-REF DEST=\"SW-ADDR-METHOD\">/Types/BswCode</SW-ADDR-METHOD-REF><IMPLEMENTED-ENTRY-REF")
+        },
+    );
+    build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "SW-ADDR-METHOD", "BswCode"),
+        |text| text.replace("<CATEGORY>CODE", "<CATEGORY>OTHER"),
+    );
+    let issues = build(&sources).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "BSW_EXECUTION_CONFLICT"
+                && issue.object.as_deref() == Some("/Application/DevicePollingMapping")),
+        "{issues:?}"
+    );
+
+    let mut sources = mapped_operation_inputs();
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| named(node, "BSW-IMPLEMENTATION", "Can_Implementation"),
+        |text| {
+            format!(
+                "{text}{}",
+                text.replace(
+                    "<SHORT-NAME>Can_Implementation",
+                    "<SHORT-NAME>OtherCanImplementation"
+                )
+            )
+        },
+    );
+    let issues = build(&sources).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "SYMBOL_PRODUCER_DUPLICATE"
+                && issue.object.as_deref() == Some("/AUTOSAR_Can/Can")),
+        "{issues:?}"
+    );
+    let mut sources = mapped_operation_inputs();
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| named(node, "BSW-MODULE-DESCRIPTION", "Can"),
+        |text| {
+            text.replace("</ENTITYS>", "<BSW-CALLED-ENTITY><SHORT-NAME>WrongKind</SHORT-NAME><IMPLEMENTED-ENTRY-REF DEST=\"BSW-MODULE-ENTRY\">/AUTOSAR_Can/BswModuleEntrys/Can_MainFunction_Wakeup</IMPLEMENTED-ENTRY-REF></BSW-CALLED-ENTITY></ENTITYS>")
+        },
+    );
+    change(
+        &mut sources,
+        "process.arxml",
+        "<BSW-ENTITY-REF DEST=\"BSW-SCHEDULABLE-ENTITY\">/AUTOSAR_Can/Can/Behavior/Can_MainFunction_Wakeup_Entity",
+        "<BSW-ENTITY-REF DEST=\"BSW-CALLED-ENTITY\">/AUTOSAR_Can/Can/Behavior/WrongKind",
+    );
+    let issues = build(&sources).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "BSW_EXECUTION_CONFLICT"
+                && issue.object.as_deref() == Some("/Application/DevicePollingMapping")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn bsw_role_parameters_use_the_selected_entry_names_and_native_aliases() {
+    let plan =
+        build(&mapped_counter_operation_inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let client = plan
+        .description()
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol == "Rte_Call_Observe_ResultService_Ping")
+        .unwrap();
+    assert_eq!(
+        client
+            .arguments
+            .iter()
+            .map(|argument| argument.name.as_str())
+            .collect::<Vec<_>>(),
+        ["CounterID", "Value"]
+    );
+    assert_eq!(
+        client
+            .arguments
+            .iter()
+            .map(|argument| argument.native_type.as_str())
+            .collect::<Vec<_>>(),
+        ["uint32", "uint64 *"]
+    );
+    let files = prepared_pipeline_files(&plan);
+    let rte = String::from_utf8(
+        files
+            .iter()
+            .find(|(path, _)| path == "generated/src/Rte.c")
+            .unwrap()
+            .1
+            .clone(),
+    )
+    .unwrap();
+    assert!(rte.contains("return GetCounterValue(CounterID, Value);"));
+    assert!(
+        !plan
+            .description()
+            .symbols
+            .iter()
+            .any(|symbol| symbol.symbol == "GetCounterValue"
+                && symbol.definition_owner.starts_with("application/"))
+    );
+    let mut sources = mapped_counter_operation_inputs();
+    change(
+        &mut sources,
+        "counter-binding.arxml",
+        "<SHORT-NAME>Value</SHORT-NAME>",
+        "<SHORT-NAME>E_OK</SHORT-NAME>",
+    );
+    let issues = build(&sources).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "CONTRACT_NAME_COLLISION"
+                && issue.object.as_deref() == Some("/Types/ScalarService/Ping")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn bsw_mapping_rejections_locate_mapping_signature_and_service_identity() {
+    for (file, before, after, code, object) in [
+        (
+            "process.arxml",
+            "/AUTOSAR_Can/Can/Behavior</BSW-BEHAVIOR-REF>",
+            "/AUTOSAR_CanIf/CanIf/Behavior</BSW-BEHAVIOR-REF>",
+            "BSW_MAPPING_INVALID",
+            "/Application/DevicePollingMapping",
+        ),
+        (
+            "process.arxml",
+            "<SYMBOL>Can_MainFunction_Wakeup</SYMBOL>",
+            "<SYMBOL>Process_Ping</SYMBOL>",
+            "BSW_EXECUTION_CONFLICT",
+            "/Application/DevicePollingMapping",
+        ),
+        (
+            "process.arxml",
+            "<SWC-BEHAVIOR-REF DEST=\"SWC-INTERNAL-BEHAVIOR\">/Application/Process/Behavior",
+            "<SWC-BEHAVIOR-REF DEST=\"SWC-INTERNAL-BEHAVIOR\">/Application/Observe/Behavior",
+            "BSW_MAPPING_INVALID",
+            "/Application/DevicePollingMapping",
+        ),
+        (
+            "process.arxml",
+            "<PROGRAMMING-LANGUAGE>C</PROGRAMMING-LANGUAGE>",
+            "<PROGRAMMING-LANGUAGE>JAVA</PROGRAMMING-LANGUAGE>",
+            "BSW_MAPPING_INVALID",
+            "/Application/DevicePollingMapping",
+        ),
+    ] {
+        let mut sources = mapped_operation_inputs();
+        change(&mut sources, file, before, after);
+        let issues = build(&sources).err().unwrap();
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == code && issue.object.as_deref() == Some(object)),
+            "{issues:?}"
+        );
+        assert!(!normal_validation(&sources).diagnostics.is_empty());
+    }
+    let mut sources = mapped_operation_inputs();
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "CLIENT-SERVER-OPERATION", "Ping"),
+        |_| {
+            r#"<CLIENT-SERVER-OPERATION><SHORT-NAME>Ping</SHORT-NAME><ARGUMENTS><ARGUMENT-DATA-PROTOTYPE><SHORT-NAME>Input</SHORT-NAME><TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">/Types/uint32</TYPE-TREF><DIRECTION>IN</DIRECTION></ARGUMENT-DATA-PROTOTYPE></ARGUMENTS></CLIENT-SERVER-OPERATION>"#.into()
+        },
+    );
+    let issues = build(&sources).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "BSW_SIGNATURE_CONFLICT"
+                && issue.object.as_deref() == Some("/Application/Process/Behavior/InvokePing")),
+        "{issues:?}"
+    );
+    for addition in [
+        "<MINIMUM-START-INTERVAL>0.001</MINIMUM-START-INTERVAL>",
+        "<SW-ADDR-METHOD-REF DEST=\"SW-ADDR-METHOD\">/Types/ApplicationCode</SW-ADDR-METHOD-REF>",
+    ] {
+        let mut sources = mapped_operation_inputs();
+        change(
+            &mut sources,
+            "types.arxml",
+            "</ELEMENTS>",
+            "<SW-ADDR-METHOD><SHORT-NAME>ApplicationCode</SHORT-NAME><SECTION-TYPE>CODE</SECTION-TYPE></SW-ADDR-METHOD></ELEMENTS>",
+        );
+        xml_edit(
+            &mut sources,
+            "process.arxml",
+            |node| named(node, "RUNNABLE-ENTITY", "ServerPing"),
+            |text| {
+                text.replace(
+                    "<CAN-BE-INVOKED-CONCURRENTLY>false",
+                    &format!("{addition}<CAN-BE-INVOKED-CONCURRENTLY>false"),
+                )
+            },
+        );
+        let issues = build(&sources).err().unwrap();
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == "BSW_EXECUTION_CONFLICT"
+                    && issue.object.as_deref() == Some("/Application/DevicePollingMapping")),
+            "{issues:?}"
+        );
+    }
+    let mut sources = pipeline_operation_inputs();
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "CLIENT-SERVER-INTERFACE", "ScalarService"),
+        |text| text.replace("<IS-SERVICE>false", "<IS-SERVICE>true"),
+    );
+    let issues = build(&sources).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "SERVICE_CONNECTION_IDENTITY"
+                && issue.object.as_deref() == Some("/Application/Pipeline/Scalar")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn changing_a_bsw_binding_refuses_old_preview_and_preserves_output() {
+    let mut sources = mapped_operation_inputs();
+    let original = build(&sources).unwrap().component_contract_files().unwrap();
+    let scratch = Scratch::new();
+    let output = scratch.0.join("contracts");
+    let preview = original.preview(&output).unwrap();
+    original
+        .generate_previewed(&output, &preview.revision)
+        .unwrap();
+    for (before, after) in [
+        (
+            "Can_MainFunction_Wakeup_Entity</BSW-ENTITY-REF>",
+            "Can_MainFunction_Read_Entity</BSW-ENTITY-REF>",
+        ),
+        (
+            "<SYMBOL>Can_MainFunction_Wakeup</SYMBOL>",
+            "<SYMBOL>Can_MainFunction_Read</SYMBOL>",
+        ),
+    ] {
+        change(&mut sources, "process.arxml", before, after);
+    }
+    let changed = build(&sources).unwrap().component_contract_files().unwrap();
+    assert!(
+        changed
+            .generate_previewed(&output, &preview.revision)
+            .is_err()
+    );
+    for (path, bytes) in original.files() {
+        assert_eq!(&std::fs::read(output.join(path)).unwrap(), bytes);
+    }
+}
+
+#[test]
 fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity() {
     let sources = inputs();
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));

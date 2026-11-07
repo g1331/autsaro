@@ -471,6 +471,10 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
         "START-ON-EVENT-REF" => dest == "RUNNABLE-ENTITY",
         "STARTS-ON-EVENT-REF" => dest == "BSW-SCHEDULABLE-ENTITY",
         "IMPLEMENTED-ENTRY-REF" => dest == "BSW-MODULE-ENTRY",
+        "BSW-BEHAVIOR-REF" => dest == "BSW-INTERNAL-BEHAVIOR",
+        "SWC-BEHAVIOR-REF" => dest == "SWC-INTERNAL-BEHAVIOR",
+        "SWC-RUNNABLE-REF" => dest == "RUNNABLE-ENTITY",
+        "BSW-ENTITY-REF" => matches!(dest, "BSW-CALLED-ENTITY" | "BSW-SCHEDULABLE-ENTITY"),
         "APPLICATION-DATA-TYPE-REF" => dest == "APPLICATION-PRIMITIVE-DATA-TYPE",
         "BASE-TYPE-REF" => dest == "SW-BASE-TYPE",
         "DATA-TYPE-MAPPING-REF" => dest == "DATA-TYPE-MAPPING-SET",
@@ -480,7 +484,7 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
         "COMM-CONTROLLER-REF" => dest == "CAN-COMMUNICATION-CONTROLLER",
         "FRAME-REF" => dest == "CAN-FRAME",
         "I-PDU-REF" | "PDU-REF" => matches!(dest, "I-SIGNAL-I-PDU" | "N-PDU" | "DCM-I-PDU"),
-        "BEHAVIOR-REF" => dest == "BSW-INTERNAL-BEHAVIOR",
+        "BEHAVIOR-REF" => matches!(dest, "BSW-INTERNAL-BEHAVIOR" | "SWC-INTERNAL-BEHAVIOR"),
         _ => name
             .strip_suffix("-REF")
             .is_some_and(|target| dest == target),
