@@ -2,15 +2,13 @@
 
 ## 动态存储及回收责任
 
-D4.12为Required、适用C99（主文34–35／PDF42–43），明确覆盖第三方动态分配；AMD2仅扩展C11。`Os_HostCreateActor`的匿名mmap执行栈及guard是真实动态存储，静态handles／TCB／FreeRTOS缓冲／altstack不改变其来源。pthread仅获得bootstrap栈大小而非调用方栈；对应glibc的allocate_stack在缓存不足时mmap，并经_dl_allocate_tls／allocate_dtv分配TLS。Win32创建线程也保留／提交native栈；精确Windows DLL／CRT身份及配套实现证据仍需实际目标材料，不由符号或头声明补写。
+D4.12为Required、适用C99（主文34–35／PDF42–43），明确覆盖第三方动态分配；AMD2仅扩展C11。`Os_HostCreateActor`的匿名mmap执行栈及guard是真实动态存储，静态handles／TCB／FreeRTOS缓冲／altstack不改变其来源。pthread仅获得bootstrap栈大小而非调用方栈；对应glibc的allocate_stack在缓存不足时mmap，并经_dl_allocate_tls／allocate_dtv分配TLS。Win32创建线程也保留／提交native栈。依[已接受的分层决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6437338057)，Windows provider内部实现和DLL／CRT身份沿采用代码责任，集成证据取必需CI真实编译／运行；自有调用、创建失败和生命周期仍按下文评估。
 
 D4.13按获取、初始化、使用、释放的实际顺序判断。Linux joinable observer在未结束或未成功join时close返回失败，调用方仍持有所有权；join／detach的0→2→1状态只在真实操作成功后发布完成，失败恢复0，并发wait不把进行中当成完成。HostBatch保留signal→wait→close observer→close event，文件内static host_watch具有进程期存储；sole producer且同一target不可重入，上次observer完成wait／close后才重写其字段；创建或执行失败进入既有进程停止，不返回后继续使用失效上下文。H注册失败及请求ID不可得均原生停止，不能隐藏失败后继续StartOS。
 
-有限H actor在注册前保存线程原备用信号栈，在callback完成后、pthread退休前恢复；查询或恢复失败原生停止，observer不替换备用栈。回调全程保留项目guard／altstack；原生适配器以typed syscall同时支持查询和设置，不通过关闭检测器回避栈所有权。D4.13约束这项临时借用后的归还，实际provider异步语义仍须单独取证。
+有限H actor在注册前保存线程原备用信号栈，在callback完成后、pthread退休前恢复；查询或恢复失败原生停止，observer不替换备用栈。回调全程保留项目guard／altstack；原生适配器以typed syscall同时支持查询和设置，不通过关闭检测器回避栈所有权。D4.13约束这项临时借用后的归还，provider内部异步实现沿ADR0025的采用边界；实际调用顺序及跨线程状态由原生消费者验证。
 
 注册H／Task／dispatcher／controller按当前进程期拥有。detach不终止actor，terminal park不使pthread返回，关闭观察句柄不能写成所有native栈资源均已归还。对应glibc的join／detach回收进入__nptl_deallocate_stack；默认bootstrap栈缓存可保留映射／TLS，缓存再用不同于重新分配，也不同于直接归还系统。项目执行栈的munmap、provider缓存和静态槽位分别核算。同进程重启／返回宿主或不同provider需重新完整证明，不借本项解除#200。
-
-动态设施按下列已接受类别记录处置；固定上界、只在启动分配或主机角色不是原文例外。
 
 ## 嵌套中断与递归的实际支持范围
 
@@ -27,13 +25,31 @@ OSEK OS2.2.3 §6（25–26页）及§14.2.3.1／Figure14-1（73–74页）描述
 
 规则为 D4.12、R21.3／R22.1（Required）。授权为 [ADR 0025](../../../adr/0025-misra-layered-scope.md)及其项目决定，依据只引用 [D4.12 方案1](https://github.com/g1331/autsaro/pull/371#issuecomment-6393803857)和 [TLS 补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6401003340)。
 
-范围：`runtime/os/src/host/{linux,windows}/` 的 actor／线程创建与原生栈设施、`runtime/os/patches/linux/0001-controlled-posix-port.patch` 及 Windows 受控 port／线程补丁的实际创建路径，由 `runtime/ecu/src/Ecu_HostBridge.c` 的 HostBatch observer 生命周期消费。限 linux-x64-controlled-v1（C99／glibc-pthread x86-64）及 windows-x64-controlled-v1（C99／Win32）、现有四 profile 的 HostBatch／probe 与同实现 native 验证。D4.12 覆盖执行栈／guard 映射、bootstrap、线程描述符／TLS 和平台线程栈。R21.3／R22.1 仅覆盖 Linux 已核 provider 的 pthread_create→allocate_stack→_dl_allocate_tls→allocate_dtv/calloc，以及 NPTL 缓存和进程期 actor 的 DTV 释放边界，不扩至 Windows 未核实现或自有业务分配。
+范围：`runtime/os/src/host/linux/Os_HostLinux.c::Os_HostCreateActor`、`runtime/os/src/Os_HostServices.c` 的两个 Spawn 入口及 `runtime/os/src/Os_Backend.c::Os_PortThread`；实际port补丁转调及HostBatch observer为消费者。限 linux-x64-controlled-v1（C99／glibc-pthread x86-64）、windows-x64-controlled-v1（C99／Win32）、四 profile 的 HostBatch／probe 与同实现 native。D4.12 覆盖执行栈／guard、bootstrap、线程描述符／TLS和平台栈。R21.3／R22.1仅限已核Linux provider的pthread_create→allocate_stack→_dl_allocate_tls→allocate_dtv/calloc、NPTL缓存及进程期DTV释放边界；Windows内部和自有业务分配另评。
 
 理由：当前原生抢占、物理栈／ARTI、guard 和同步监督合同依赖这些宿主设施；静态汽车缓冲或仅启动分配不能消除 provider 分配，直接改后端需要重新证明上述合同。保留真实违反，不把 join／进程退出说成已显式 free 全部 TLS。
 
 风险与控制：内存／句柄不足、缓存及分配耗时、初始化和回收失败；保持现有 96 句柄槽、21 注册栈及配置上界，检查创建／回滚结果，保持所有权、guard、每批 observer signal→wait→close 和既定监督路径。D4.13 初始化／join／close 错误仍正常修复；既有 native 生命周期、失败回滚和 HostBatch 检查承担行为证据。provider 内部与任意阻塞输出不承诺默认完成期限。
 
 重评：provider／TLS 缓存、ABI、flags、handler、容量、分配入口、actor 生命周期、同进程重启／退出或 restart 合同变化。项目补丁按自有代码评估，未核 Windows provider 内部不写成已核；Windows 以必需 CI 的实际编译／运行为集成证据。
+
+### 当前创建闭包与正式记录
+
+本类别按 AMD2.4／AMD2.5 所引 MISRA Compliance:2020 §4.1–4.4 执行。技术权威的条件同意为2026-10-27决定；实现者评估及独立复核、平台收据归实施PR。基线`ae8d57e65f4cf147e13cffdaa07572ce1a8ece72`，目标／配置沿上述限定，具体位置按以下闭包识别。
+
+以下函数级标注复用精确关联；Linux共同入口覆盖映射及pthread，Windows仅标实际创建边界。
+
+| 规则 | 类别内源码位置 | 共用机制 | 原条件同意 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Directive 4.12 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `Os_HostCreateActor`；`runtime/os/src/Os_HostServices.c` 中 `Os_HostSpawnThread`、`Os_HostSpawnObserverThread`（Windows定义）；`runtime/os/src/Os_Backend.c` 中 `Os_PortThread`（Windows定义） | 上述执行栈及provider分配，失败检查／回滚保持 | 维护者 2026-10-27类别决定；独立复核与实例收据沿本节 |
+| MISRA C:2012 Rule 21.3 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `Os_HostCreateActor` | 仅已核Linux provider的DTV calloc用途 | 维护者 2026-10-27 TLS补充；同一类别记录 |
+| MISRA C:2012 Rule 22.1 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `Os_HostCreateActor` | 仅上述NPTL缓存及进程期DTV | 维护者 2026-10-27 TLS补充；同一类别记录 |
+
+实际补丁后Task走`Os_PortTaskThread`；POSIX dispatcher直接走`Os_HostCreateActor`。Windows创建入口承接Task、bootstrap、controller和probe／HostBatch actor，消费者使用句柄前检查结果。HostBatch每批经`Ecu_HostBatchExecute`检查创建并维持signal→wait→close observer→close event，随后复用`host_watch`。源实例取最终补丁后代码，已替换的上游线程创建不列入当前调用。
+
+理由采用§4.4 Reason 1：原生抢占、执行栈／guard／ARTI及每批监督依赖现有设施；静态缓冲或提前分配仍留下provider分配，更换后端须重新证明信号、展开及检测器合同。保留真实Required违反，以上述失败控制、所有权和时序范围维持总体质量。
+
+验证沿`os_native_thread_lifecycle`、`os_native_altstack`、OS资源回滚及HostBatch。实例以修改后行为、变异及双平台收据识别。
 
 ## 同步嵌套 ISR 类别偏离
 
