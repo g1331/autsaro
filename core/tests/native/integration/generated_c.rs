@@ -2,6 +2,80 @@
 use super::*;
 use std::path::Path;
 
+#[test]
+fn differently_named_service_calls_the_real_selected_bsw_entry() {
+    let plan = build(&mapped_operation_inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let scratch = Scratch::new();
+    for (path, bytes) in prepared_pipeline_files_for_target(&plan, tooling::native_target()) {
+        let path = scratch.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    let rte = scratch.0.join("generated/src/Rte.c");
+    let original = std::fs::read_to_string(&rte).unwrap();
+    let start = original
+        .find("Rte_Call_Observe_ResultService_Ping(")
+        .unwrap();
+    let end = start + original[start..].find("\n}").unwrap() + 2;
+    assert!(original[start..end].contains("Can_MainFunction_Wakeup();"));
+    for (name, source, success) in [
+        ("normal", original.clone(), true),
+        (
+            "missing-bsw-call",
+            format!(
+                "{}{}{}",
+                &original[..start],
+                original[start..end].replace("Can_MainFunction_Wakeup();", ""),
+                &original[end..]
+            ),
+            false,
+        ),
+    ] {
+        std::fs::write(&rte, source).unwrap();
+        let executable = tooling::native_binary(&scratch.0, name);
+        let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
+        compiler
+            .current_dir(&scratch.0)
+            .args([
+                "-std=c99",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                "-ffunction-sections",
+                "-fdata-sections",
+            ])
+            .arg("generated/src/Rte.c")
+            .arg("bsw/src/Can.c")
+            .arg(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/bsw-contracts/rte_bsw_contract.c"),
+            )
+            .arg(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/bsw-contracts/execution_sink.c"),
+            )
+            .arg("-Wl,--gc-sections")
+            .arg("-o")
+            .arg(&executable);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            &format!("{name}-compile"),
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{name}: {output:?}");
+        let output = tooling::run_public_command(
+            &mut std::process::Command::new(executable),
+            &scratch.0,
+            &format!("{name}-run"),
+            std::time::Duration::from_secs(30),
+        );
+        assert_eq!(output.status.success(), success, "{name}: {output:?}");
+    }
+}
+
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
 fn standalone_contract_memmap_consumes_requests_and_reenters() {

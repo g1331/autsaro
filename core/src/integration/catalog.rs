@@ -29,10 +29,17 @@ pub(super) struct RuntimeCatalog {
     entries: BTreeMap<String, Entry>,
 }
 
+impl RuntimeCatalog {
+    pub(super) fn module(&self, symbol: &str) -> Option<&str> {
+        self.entries.get(symbol).map(|entry| entry.module.as_str())
+    }
+}
+
 /// The composition producer selects its actual R24-11 interfaces independently of
 /// the historical host ABI. Generated instance wrappers retain their real
 /// declaration/definition owners; immutable BSW bytes come from AssetInventory.
 pub(super) fn bsw_catalog(
+    graph: &Graph,
     com: &super::com::ComRuntimeContract,
     mode: &super::mode::ModeRuntimeContract,
 ) -> RuntimeCatalog {
@@ -167,7 +174,60 @@ pub(super) fn bsw_catalog(
             "src/Ecu_RuntimeConfig.c",
         );
     }
+    for contract in counter_entries() {
+        if graph
+            .objects
+            .contains_key(&format!("/AUTOSAR_Os/BswModuleEntrys/{}", contract.symbol))
+        {
+            entries.insert(
+                contract.symbol.clone(),
+                Entry {
+                    module: "Os".into(),
+                    return_type: contract.return_type,
+                    arguments: contract.arguments,
+                    header: contract.declaration_owner,
+                    source: contract.definition_owner,
+                    reentrant: true,
+                    synchronous: true,
+                },
+            );
+        }
+    }
     RuntimeCatalog { entries }
+}
+
+pub(super) fn counter_entries() -> Vec<SymbolContract> {
+    [
+        ("GetCounterValue", vec![("Value", "OUT")]),
+        (
+            "GetElapsedValue",
+            vec![("Value", "INOUT"), ("ElapsedValue", "OUT")],
+        ),
+    ]
+    .into_iter()
+    .map(|(symbol, outputs)| SymbolContract {
+        symbol: symbol.into(),
+        return_type: "StatusType".into(),
+        arguments: std::iter::once(ContractArgument {
+            name: "CounterID".into(),
+            native_type: "CounterType".into(),
+            direction: "IN".into(),
+        })
+        .chain(
+            outputs
+                .into_iter()
+                .map(|(name, direction)| ContractArgument {
+                    name: name.into(),
+                    native_type: "TickRefType".into(),
+                    direction: direction.into(),
+                }),
+        )
+        .collect(),
+        declaration_owner: "runtime/os/include/Os.h".into(),
+        definition_owner: "runtime/os/include/Os.h".into(),
+        consumers: vec![format!("/AUTOSAR_Os/BswModuleEntrys/{symbol}")],
+    })
+    .collect()
 }
 
 // Reentrancy is qualified by different PduIds/signals in the standard API
@@ -408,7 +468,7 @@ pub(super) fn c_identifier(value: &str) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
-fn native_type(graph: &Graph, context: usize) -> Option<String> {
+pub(super) fn native_type(graph: &Graph, context: usize) -> Option<String> {
     let references = graph.descendants(context, "BASE-TYPE-REF");
     if references.len() != 1 {
         return None;

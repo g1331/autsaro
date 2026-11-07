@@ -34,6 +34,32 @@ fn native_pipeline_inputs_also_pass_the_official_schema() {
 
 #[cfg(feature = "official-oracles")]
 #[test]
+fn mapped_service_inputs_pass_the_official_schema() {
+    for sources in [mapped_operation_inputs(), mapped_counter_operation_inputs()] {
+        assert_official_schema_accepts(&sources);
+        build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    }
+}
+
+#[cfg(feature = "official-oracles")]
+#[test]
+fn bsw_binding_identity_rejections_use_officially_valid_arxml() {
+    for (sources, code) in [
+        (unselected_bsw_behavior_inputs(), "BSW_MAPPING_INVALID"),
+        (renamed_bsw_module_inputs(), "BSW_EXECUTION_CONFLICT"),
+    ] {
+        assert_official_schema_accepts(&sources);
+        let issues = build(&sources).err().expect("binding identity rejected");
+        assert!(
+            issues.iter().any(|issue| issue.code == code
+                && issue.object.as_deref() == Some("/Application/DevicePollingMapping")),
+            "{issues:?}"
+        );
+    }
+}
+
+#[cfg(feature = "official-oracles")]
+#[test]
 fn execution_constraint_rejections_use_officially_valid_arxml() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for exclusive_area in [false, true] {

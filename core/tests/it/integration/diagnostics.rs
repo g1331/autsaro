@@ -176,7 +176,7 @@ fn network_routing_is_checked_without_optional_did() {
 }
 
 #[test]
-fn ordinary_application_client_sharing_did_server_is_not_the_dcm_bridge() {
+fn application_clients_require_a_service_component_for_service_interfaces() {
     let mut sources = inputs();
     let port = subtree(
         &sources,
@@ -224,24 +224,15 @@ fn ordinary_application_client_sharing_did_server_is_not_the_dcm_bridge() {
         "</CONNECTORS>",
         &format!("{connector}</CONNECTORS>"),
     );
-    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
-    assert_eq!(
-        plan.description().diagnostic.as_ref().unwrap().client_port,
-        "/Services/DcmService/DataServices_ApplicationValue"
-    );
-    assert_eq!(
-        plan.description()
-            .composition
-            .as_ref()
-            .unwrap()
-            .connections
+    let issues = build(&sources).err().unwrap();
+    assert!(
+        issues
             .iter()
-            .filter(|connection| connection.service
-                && connection.provider.port == "/Application/Ingress/ApplicationValue")
-            .count(),
-        2
+            .any(|issue| issue.code == "SERVICE_CONNECTION_IDENTITY"
+                && issue.object.as_deref() == Some("/Application/Pipeline/ApplicationDiagnostic")),
+        "{issues:?}"
     );
-    assert!(normal_validation(&sources).diagnostics.is_empty());
+    assert!(!normal_validation(&sources).diagnostics.is_empty());
 }
 
 #[test]

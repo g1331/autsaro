@@ -41,6 +41,7 @@ pub struct PlanDescription {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_runtime: Option<super::mode::ModeRuntimeContract>,
     pub schedule: ScheduleContract,
+    pub counter_service: super::composition::Component,
     pub signals: Vec<SignalChannel>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diagnostic: Option<DiagnosticContract>,
@@ -139,7 +140,7 @@ pub(super) fn inspect_composition(
     graph: &super::graph::Graph,
     definition_catalog: Option<&crate::definitions::DefinitionCatalog>,
 ) -> Result<CompositionInputs, Vec<PlanDiagnostic>> {
-    let composition = super::composition::inspect(graph)?;
+    let mut composition = super::composition::inspect(graph)?;
     let bindings: Vec<_> = composition
         .components
         .iter()
@@ -336,8 +337,22 @@ pub(super) fn inspect_composition(
             })?,
         )?,
     };
-    let selected_runtime = catalog::bsw_catalog(&com_runtime, &mode_runtime);
+    let selected_runtime = catalog::bsw_catalog(graph, &com_runtime, &mode_runtime);
     let mut symbols = catalog::inspect(graph, &selected_runtime)?;
+    composition.bind_bsw(graph, &symbols, &selected_runtime)?;
+    for runnable in composition
+        .components
+        .iter()
+        .flat_map(|component| &component.runnables)
+    {
+        if let Some(target) = &runnable.bsw_target
+            && let Some(symbol) = symbols
+                .iter_mut()
+                .find(|symbol| symbol.symbol == target.contract.symbol)
+        {
+            symbol.consumers.push(runnable.path.clone());
+        }
+    }
     symbols.extend(super::composition::symbols(&composition));
     for symbol in ["Rte_COMCbk", "Rte_COMCbkRxTOut"] {
         symbols.push(SymbolContract {
@@ -602,6 +617,7 @@ fn assemble_composition(
             com_runtime: Some(com_runtime),
             communication_runtime: Some(communication_runtime),
             mode_runtime: Some(mode_runtime),
+            counter_service: super::os_service::contract(super::short_name(&schedule.counter)),
             schedule,
             signals,
             diagnostic,

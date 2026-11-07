@@ -182,6 +182,19 @@ export type ApplicationSlotDescriptor = {
   entrySymbols: string[];
 };
 
+export type BswTarget = {
+  mapping: string;
+  behavior: string;
+  entity: string;
+  entityKind: string;
+  entry: string;
+  reentrant: boolean;
+  synchronous: boolean;
+  executionContext: string;
+  minimumStartInterval: string;
+  contract: SymbolContract;
+};
+
 export type BuildReport = {
   binaryPath: string;
   log: string;
@@ -832,6 +845,7 @@ export type PlanDescription_Deserialize = {
   communicationRuntime: CommunicationRuntimeContract | null;
   modeRuntime: ModeRuntimeContract | null;
   schedule: ScheduleContract_Deserialize;
+  counterService: Component;
   signals: SignalChannel[];
   diagnostic: DiagnosticContract | null;
   diagnosticTransport: DiagnosticTransportContract | null;
@@ -860,6 +874,7 @@ export type PlanDescription_Serialize = {
   communicationRuntime?: CommunicationRuntimeContract | null;
   modeRuntime?: ModeRuntimeContract | null;
   schedule: ScheduleContract_Serialize;
+  counterService: Component;
   signals: SignalChannel[];
   diagnostic?: DiagnosticContract | null;
   diagnosticTransport?: DiagnosticTransportContract | null;
@@ -1015,6 +1030,7 @@ export type Runnable = {
   symbol: string;
   event: string | null;
   periodMs: number | null;
+  bswTarget: BswTarget | null;
 };
 
 export type SaveOutcome = SaveOutcome_Serialize | SaveOutcome_Deserialize;

@@ -374,6 +374,7 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
             let runnables: Vec<_> = component
                 .runnables
                 .iter()
+                .filter(|runnable| runnable.bsw_target.is_none())
                 .map(|runnable| {
                     (
                         format!("RTE_RUNNABLE_{}", super::short_name(&runnable.path)),

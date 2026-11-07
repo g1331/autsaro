@@ -277,27 +277,10 @@ pub(super) fn files(
         entries.entry(module.into()).or_default().push(symbol);
     }
     let os = entries.entry("Os".into()).or_default();
-    for (name, args) in [
-        (
-            "GetCounterValue",
-            vec![
-                ("CounterID", "CounterType", "IN"),
-                ("Value", "TickType *", "OUT"),
-            ],
-        ),
-        (
-            "GetElapsedValue",
-            vec![
-                ("CounterID", "CounterType", "IN"),
-                ("Value", "TickType *", "INOUT"),
-                ("ElapsedValue", "TickType *", "OUT"),
-            ],
-        ),
-    ] {
-        let mut symbol = rte_symbol(name, "StatusType", &args);
-        symbol.declaration_owner = "runtime/os/include/Os.h".into();
-        symbol.definition_owner = "runtime/os/src/Os_ArtiServices.c".into();
-        os.push(symbol);
+    for symbol in super::catalog::counter_entries() {
+        if !os.iter().any(|existing| existing.symbol == symbol.symbol) {
+            os.push(symbol);
+        }
     }
     // Actual imported standard interfaces of the selected runtime chain.
     // These contracts are explicit R24-11 signatures, not inferred from C bodies.
@@ -741,24 +724,21 @@ pub(super) fn files(
         rte.push(symbol);
     }
 
-    let counter = c_name(super::short_name(&plan.schedule.counter));
-    rte.push(rte_symbol(
-        &format!("OsService_{counter}_GetCounterValue"),
-        "StatusType",
-        &[
-            ("CounterID", "CounterType", "IN"),
-            ("Value", "TimeInMicrosecondsType *", "OUT"),
-        ],
-    ));
-    rte.push(rte_symbol(
-        &format!("OsService_{counter}_GetElapsedValue"),
-        "StatusType",
-        &[
-            ("CounterID", "CounterType", "IN"),
-            ("Value", "TimeInMicrosecondsType *", "INOUT"),
-            ("ElapsedValue", "TimeInMicrosecondsType *", "OUT"),
-        ],
-    ));
+    for operation in &plan.counter_service.operations {
+        let runnable = plan
+            .counter_service
+            .runnables
+            .iter()
+            .find(|runnable| runnable.path == operation.runnable)
+            .and_then(|runnable| runnable.bsw_target.as_ref())
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&operation.runnable))?;
+        let mut symbol = runnable.contract.clone();
+        symbol.symbol.clone_from(&operation.implementation_symbol);
+        symbol.arguments = std::iter::once(runnable.contract.arguments[0].clone())
+            .chain(operation.arguments.iter().cloned())
+            .collect();
+        rte.push(symbol);
+    }
     // Counter-bound client conveniences are header-local inline functions;
     // only the actual external service servers are linkable BSW module entries.
     for symbol in rte.iter_mut() {
@@ -1632,6 +1612,7 @@ pub(super) fn files(
     }
     if let Some(composition) = &plan.composition {
         for component in &composition.components {
+            elements.push_str(&component.bsw_mapping_xml()?);
             for mode in &component.diagnostic_mode_ports {
                 let group = super::short_name(&mode.mode_group);
                 elements.push_str(&format!("<SWC-BSW-MAPPING><SHORT-NAME>ModeMapping{}{group}</SHORT-NAME><BSW-BEHAVIOR-REF DEST=\"BSW-INTERNAL-BEHAVIOR\">/AUTOSAR_Dcm/Dcm/HostBehavior</BSW-BEHAVIOR-REF><SWC-BEHAVIOR-REF DEST=\"SWC-INTERNAL-BEHAVIOR\">{}</SWC-BEHAVIOR-REF><SYNCHRONIZED-MODE-GROUPS><SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE><BSW-MODE-GROUP-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">/AUTOSAR_Dcm/Dcm/{group}</BSW-MODE-GROUP-REF><SWC-MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST=\"P-PORT-PROTOTYPE\">{}</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">{}</TARGET-MODE-GROUP-REF></SWC-MODE-GROUP-IREF></SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE></SYNCHRONIZED-MODE-GROUPS></SWC-BSW-MAPPING>", c_name(&component.component), component.behavior, mode.port, mode.prototype));
