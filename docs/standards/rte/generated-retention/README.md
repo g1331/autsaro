@@ -14,7 +14,7 @@
 
 七份合法MISRA原件SHA256SUMS已重新匹配。基线仍为C:2012 Third Edition + AMD1–4/TC1–2，C99。R2.3/R2.5为Advisory、Decidable/System（主文印刷43/44，PDF51/52）；R8.7为Advisory、Decidable/System（印刷70/PDF78，TC2.15印刷6/PDF12）；R11.4为Advisory、Decidable/Single Translation Unit（印刷97/PDF105）。修订未为本组提供“公共接口即可忽略”的规则例外，未采用新的规则重分类。R11.4的整数null-pointer-constant到对象指针例外不适用于此处对象指针到整数；uintptr_t也不自动满足本规则。没有Mandatory偏离。
 
-本组保留真实 unused、单 TU 引用和指针整数转换，不将其判为误报或 AUTOSAR 不可替代。主文 §6.2.3（印刷 13／PDF 21）允许对 Advisory 使用非符合项记录安排，无须正式偏离；[ADR 0025](../../../adr/0025-misra-layered-scope.md#grp指南重分类计划) 未提高这四条规则的类别。下列实体表、理由、替代与风险控制构成本组的记录，不改变规则类别或声明原构造符合规则。Required 的 §5.4／§6.2.2 正式义务和 Mandatory 的禁止偏离要求仍分别适用，不由本组处置代替。
+本组保留真实 unused、单 TU 引用和指针整数转换，不将其判为误报或 AUTOSAR 不可替代。主文 §6.2.3（印刷 13／PDF 21）允许对 Advisory 使用非符合项记录安排，无须正式偏离；[ADR 0025](../../../adr/0025-misra-layered-scope.md#grp指南重分类计划) 未提高这四条规则的类别。下列实体表、理由、替代与风险控制构成本组的记录，不改变规则类别或声明原构造符合规则。Required 的正式义务沿 AMD2.5 修订后 §6.2.2 所引的 MISRA Compliance:2020 第 4 节，Mandatory 的禁止偏离要求保持；本组处置仅限上述 Advisory 记录。
 
 ## 理由、替代与控制
 

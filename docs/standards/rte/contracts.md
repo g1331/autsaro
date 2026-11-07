@@ -60,7 +60,7 @@ Rte_Init/StartTiming 只在配置 InitializationRunnableBatch 时生成；当前
 
 MISRA 2013主文R8.2（Required，页64–66／PDF72–74）仍要求声明参数命名；TC2.10只增加8.3交叉引用，TC2.12对8.3的无名参数例外不豁免8.2，AMD2只扩充语言适用性，AMD3.63只增加交叉引用。这里是真实冲突，不能标成误报；增加声明参数名会违反06705，删除声明会失去公开契约，改变为无参数则破坏C/S签名。风险是省略名字降低接口可读性；按顺序记录方向／存储义务、固定参数类型并由真实应用TU编译／链接验证约束它。`source_derived_composition_contract_is_deterministic_and_keeps_local_identity`同时断言单一数组参数与IN／OUT／INOUT三参数原型，补名反例应失败。
 
-原用户决定为[2026-10-17的有界授权](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)，按ADR0023执行，未产生新的批准人或扩大例外范围。MISRA主文§6.2.2允许Required按§5.4记录正式偏离；本记录区分项目授权及技术处置与完整MISRA符合声明。评估日期为2026-10-24；独立技术复核冻结于`996fb19a9775bec84708f60d1b3d9d694a7c62ea`，未发现可操作问题。该复核支持上述必要性、替代方案及风险判断；最终源码注释和新增改动的专项复核head、发现与处置留在实施PR最终收据。
+原用户决定为[2026-10-17的有界授权](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)，按ADR0023执行，未产生新的批准人或扩大例外范围。MISRA主文§6.2.2经AMD2.5修订后，Required正式偏离程序引用MISRA Compliance:2020第4节；AMD2.4已撤换旧第5节。本记录区分项目授权及技术处置与完整MISRA符合声明。评估日期为2026-10-24；独立技术复核冻结于`996fb19a9775bec84708f60d1b3d9d694a7c62ea`，未发现可操作问题。该复核支持上述必要性、替代方案及风险判断；最终源码注释和新增改动的专项复核head、发现与处置留在实施PR最终收据。
 
 以下位置来自`1556d1ef`生成的实际样本，producer为`cb05e3cf`的`contracts::contract_headers`；每处声明的契约注释内都有`MR12 RULE 8.2 VIOLATION`说明，保留同一Doxygen契约与原型的关联。两个controlled-x64目标、host-batch／probe分别沿自己的交付身份核实；Windows执行结果仍以实际CI为准，不用Linux运行代替。
 

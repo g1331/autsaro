@@ -38,13 +38,15 @@
 
 ## D4.10 可重入头的正式记录
 
-本记录按主文 §5.4／§6.2.2 接续既有逐处技术评估。当前处于独立原文与闭包复核，正式记录及生成源码注释尚未完成。基线为 `c3bff230`，语言 C99，目标为 `linux-x64-controlled-v1`／`windows-x64-controlled-v1`，配置为正常四 profile 的 HostBatch／probe。授权沿 [2026-10-17 的决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)及 ADR 0023；逐项评估日期为 2026-11-07，独立复核的 head、发现与处置归实施 PR。
+本记录按 AMD2.4／AMD2.5 修订后的 §6.2.2 及 MISRA Compliance:2020 第 4 节接续既有逐处技术评估。当前处于独立原文与闭包复核，正式记录及生成源码注释尚未完成。基线为 `c3bff230`，语言 C99，目标为 `linux-x64-controlled-v1`／`windows-x64-controlled-v1`，配置为正常四 profile 的 HostBatch／probe。指定技术权威的同意沿 [2026-10-17 的决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)及 ADR 0023 的条件授权；项目实现者于 2026-11-07 逐项评估，独立复核的 head、发现与处置归实施 PR。
 
-**规则与允许条件。** D4.10 为 Required，主文印刷 32–33／PDF 40–41 要求防止头内容重复纳入。TC2.2（印刷 2／PDF 8）放宽的是保护形式的示例范围；AMD2 增加 C11 适用性，其余 AMD1–4／TC1–2 未改变此 C99 义务。首个文件注释中的 MR12 DIR 4.10 只说明可重入机制及控制。主文 §5.4（印刷 11–12／PDF 19–20）要求正式记录、授权、理由、风险、控制与验证，§6.2.2 要求 Required 违反有正式偏离。本项保持真实违反，采用具体位置的偏离记录。
+**规则与允许条件。** D4.10 为 Required，主文印刷 32–33／PDF 40–41 要求防止头内容重复纳入。TC2.2（印刷 2／PDF 8）放宽的是保护形式的示例范围；AMD2 增加 C11 适用性，其余 AMD1–4／TC1–2 未改变此 C99 义务。首个文件注释中的 MR12 DIR 4.10 只说明可重入机制及控制。本项保持真实违反，采用可逐实例识别的偏离记录。
+
+AMD2.4 撤换主文旧第 5 节，AMD2.5 将 Required 偏离程序引用改为 MISRA Compliance:2020 第 4 节（均为 AMD2 印刷 4／PDF 11，当前 C99 同样适用）。现行 §4.1–4.4（印刷 12–14／PDF 20–22）要求明确的程序、可识别实例、理由、语言背景、风险与预防要求，并取得指定技术权威同意；通用 permit 与具体 record 分开。本项按 §4.4 Reason 1 论证功能正确性及所选映射合同的兼容性，以原文必要性、替代比较、协议和实际段检查维持安全约束；对比吞掉 STOP 的整体 guard 保持更好的总体质量。旧 §5.4 仅作历史定位。
 
 **位置与来源。** 十二个固定头为 BSW 的 Can、CanIf、CanTp、Com、ComM、Dcm、Det、LSduR、PduR、BswM，以及 Os、Ecu_HostBusSM 的映射头；其原 `runtime/` 路径、`@file` 记录、包含者和 MR12 已在各 [BSW 通用模块篇](../bsw-general/README.md)逐项登记。本项复用这些位置与注释。固定头经 `outputs::template_of` 登记到 MEMMAP producer 后以原字节进入 `generated/include/`。
 
-生成位置另限 `generated/include/Rte_MemMap.h`、`EchoApplication_MemMap.h`、`DcmService_MemMap.h`、`Ingress_MemMap.h`、`Process_MemMap.h`、`Observe_MemMap.h` 的首个 `@file`。RTE 头由 `core/src/integration/memmap.rs::rte` 生成，其余由 `component` 生成；独立 contract 包复用同一 `rte`。standard-ecu／user-application 使用 Rte、EchoApplication、DcmService；component-pipeline 使用 Rte、Ingress、Process、Observe、DcmService；no-diagnostic 使用 Rte、Ingress、Process、Observe，加上固定头分别为 15／15／17／16 个。实际文件、字节、TU 包含及每次请求以对应正常封存样本及 PR 工件为准，新增配置须重新评估。
+生成位置另限 `generated/include/Rte_MemMap.h`、`EchoApplication_MemMap.h`、`DcmService_MemMap.h`、`Ingress_MemMap.h`、`Process_MemMap.h`、`Observe_MemMap.h` 的首个 `@file`。RTE 头由 `core/src/integration/memmap.rs::rte` 生成，其余由 `component` 生成；独立 contract 包复用同一 `rte`，输出为 `include/Rte_MemMap.h`，其具体输入另行取证。standard-ecu／user-application 使用 Rte、EchoApplication、DcmService；component-pipeline 使用 Rte、Ingress、Process、Observe、DcmService；no-diagnostic 使用 Rte、Ingress、Process、Observe，加上固定头分别为 15／15／17／16 个。`Rte_DcmService.h` 也以 DcmService 头包装 CODE 声明。实际文件、字节、TU 包含及每次请求以对应正常封存样本及 PR 工件为准，新增配置须重新评估。
 
 **必需性与替代。** 固定 R24-11 SpecificationsARXML 的 `SWS_MemMap_00003` 要求 START／include／实体／STOP／include，`00011` 要求撤销请求，`00007` 要求预处理阶段拒绝非法、嵌套与错配。`00029` 要求为输入中的每个 SWC type 提供专用头，`00027` 要求支持其 MemorySection 的开闭；因此 DcmService 头的发布义务与当前有没有应用 TU 分开判断。BSWGeneral `00006` 要求模块映射头，`00249` 对普通头的整体 guard 要求显式排除映射头。条目正文已从固定 ARXML 核对；MemoryMapping PDF 36–41 的机制与对应示例一致。
 
