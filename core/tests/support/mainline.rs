@@ -1606,3 +1606,48 @@ pub(crate) fn prepared_typed_pipeline(
         .collect();
     autosar_config_core::prepare_ecu_project_with_applications(plan, target, &applications).unwrap()
 }
+
+/// Application client of the standard Dcm service, using the production service description.
+pub(crate) fn dcm_service_inputs() -> Vec<InputSource> {
+    let mut sources = inputs();
+    let mut specs = String::new();
+    let mut calls = String::new();
+    for operation in [
+        "GetSecurityLevel",
+        "GetSesCtrlType",
+        "ResetToDefaultSession",
+        "SetActiveDiagnostic",
+    ] {
+        specs.push_str(&format!(
+            "<CLIENT-COM-SPEC><OPERATION-REF DEST=\"CLIENT-SERVER-OPERATION\">/Services/DCMServices/{operation}</OPERATION-REF></CLIENT-COM-SPEC>"
+        ));
+        calls.push_str(&format!(
+            "<SYNCHRONOUS-SERVER-CALL-POINT><SHORT-NAME>Call{operation}</SHORT-NAME><OPERATION-IREF><CONTEXT-R-PORT-REF DEST=\"R-PORT-PROTOTYPE\">/Application/Observe/Diagnostics</CONTEXT-R-PORT-REF><TARGET-REQUIRED-OPERATION-REF DEST=\"CLIENT-SERVER-OPERATION\">/Services/DCMServices/{operation}</TARGET-REQUIRED-OPERATION-REF></OPERATION-IREF></SYNCHRONOUS-SERVER-CALL-POINT>"
+        ));
+    }
+    change(
+        &mut sources,
+        "observe.arxml",
+        "</PORTS>",
+        &format!(
+            "<R-PORT-PROTOTYPE><SHORT-NAME>Diagnostics</SHORT-NAME><REQUIRED-COM-SPECS>{specs}</REQUIRED-COM-SPECS><REQUIRED-INTERFACE-TREF DEST=\"CLIENT-SERVER-INTERFACE\">/Services/DCMServices</REQUIRED-INTERFACE-TREF></R-PORT-PROTOTYPE></PORTS>"
+        ),
+    );
+    change(
+        &mut sources,
+        "observe.arxml",
+        "</SERVER-CALL-POINTS>",
+        &format!("{calls}</SERVER-CALL-POINTS>"),
+    );
+    change(
+        &mut sources,
+        "composition.arxml",
+        "</CONNECTORS>",
+        r#"
+<ASSEMBLY-SW-CONNECTOR><SHORT-NAME>DcmServicesConnection</SHORT-NAME>
+<PROVIDER-IREF><CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/DcmService</CONTEXT-COMPONENT-REF><TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Services/DcmService/DCMServices</TARGET-P-PORT-REF></PROVIDER-IREF>
+<REQUESTER-IREF><CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/ObserveInstance</CONTEXT-COMPONENT-REF><TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Application/Observe/Diagnostics</TARGET-R-PORT-REF></REQUESTER-IREF>
+</ASSEMBLY-SW-CONNECTOR></CONNECTORS>"#,
+    );
+    sources
+}

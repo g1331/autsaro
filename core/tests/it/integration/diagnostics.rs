@@ -251,6 +251,20 @@ fn two_real_dcm_requesters_are_rejected_without_dangling_references() {
         "</ELEMENTS>",
         &format!("{component}</ELEMENTS>"),
     );
+    for (tag, name) in [
+        ("SWC-BSW-MAPPING", "DcmServicesMapping"),
+        ("SWC-IMPLEMENTATION", "DcmServicesImplementation"),
+    ] {
+        let declaration = subtree(&sources, "services.arxml", tag, name)
+            .replace(name, &format!("{name}Second"))
+            .replace("/DcmService/", "/DcmSecond/");
+        change(
+            &mut sources,
+            "services.arxml",
+            "</ELEMENTS>",
+            &format!("{declaration}</ELEMENTS>"),
+        );
+    }
     let prototype = subtree(
         &sources,
         "composition.arxml",
@@ -939,4 +953,271 @@ fn dcm_read_data_declares_the_standard_error_and_status_return() {
         .unwrap();
     assert_eq!(symbol.return_type, "Std_ReturnType");
     assert!(normal_validation(&ordinary).diagnostics.is_empty());
+}
+
+#[test]
+fn dcm_services_contract_and_real_producer_are_selected() {
+    // Verifies: SWS_Dcm_00698, SWS_Dcm_01030
+    let plan = build(&dcm_service_inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let component = plan
+        .description()
+        .composition
+        .as_ref()
+        .unwrap()
+        .components
+        .iter()
+        .find(|component| component.component == "/Services/DcmService")
+        .unwrap();
+    let operations: Vec<_> = component.operations.iter().filter(|op| !op.read).collect();
+    assert_eq!(operations.len(), 4);
+    for operation in operations {
+        assert_eq!(operation.port, "/Services/DcmService/DCMServices");
+        let symbol = format!("Dcm_{}", operation.operation.rsplit('/').next().unwrap());
+        let target = component
+            .runnables
+            .iter()
+            .find(|runnable| runnable.path == operation.runnable)
+            .unwrap()
+            .bsw_target
+            .as_ref()
+            .unwrap();
+        assert_eq!(target.contract.symbol, symbol);
+        assert_eq!(target.contract.definition_owner, "runtime/bsw/src/Dcm.c");
+        assert_eq!(
+            plan.description()
+                .symbols
+                .iter()
+                .filter(|entry| entry.symbol == symbol)
+                .count(),
+            1
+        );
+    }
+    assert!(
+        normal_validation(&dcm_service_inputs())
+            .diagnostics
+            .is_empty()
+    );
+}
+
+#[test]
+fn dcm_services_reject_nonstandard_operations_at_the_source() {
+    for (operation, before, after) in [
+        (
+            "GetSecurityLevel",
+            "<DIRECTION>OUT</DIRECTION>",
+            "<DIRECTION>INOUT</DIRECTION>",
+        ),
+        (
+            "GetSesCtrlType",
+            "/Services/Dcm_SesCtrlType</TYPE-TREF>",
+            "/Services/Dcm_SecLevelType</TYPE-TREF>",
+        ),
+        (
+            "SetActiveDiagnostic",
+            "<DIRECTION>IN</DIRECTION>",
+            "<DIRECTION>OUT</DIRECTION>",
+        ),
+        (
+            "SetActiveDiagnostic",
+            "/Services/DCMServices/E_OK</POSSIBLE-ERROR-REF>",
+            "/Services/DCMServices/E_NOT_OK</POSSIBLE-ERROR-REF>",
+        ),
+        (
+            "ResetToDefaultSession",
+            "<POSSIBLE-ERROR-REF DEST=\"APPLICATION-ERROR\">/Services/DCMServices/E_NOT_OK</POSSIBLE-ERROR-REF>",
+            "",
+        ),
+    ] {
+        let mut sources = dcm_service_inputs();
+        xml_edit(
+            &mut sources,
+            "services.arxml",
+            |node| named(node, "CLIENT-SERVER-OPERATION", operation),
+            |text| {
+                assert!(text.contains(before));
+                text.replace(before, after)
+            },
+        );
+        let issues = build(&sources).err().expect("standard contract rejected");
+        let object = format!("/Services/DCMServices/{operation}");
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == "SERVICE_TYPE_CONFLICT"
+                    && issue.file.as_deref() == Some("services.arxml")
+                    && issue.object.as_deref() == Some(object.as_str())),
+            "{operation}: {issues:?}"
+        );
+    }
+}
+
+#[test]
+fn dcm_services_reject_missing_port_and_wrong_error_definitions() {
+    for (tag, short, before, after, object) in [
+        (
+            "P-PORT-PROTOTYPE",
+            "DCMServices",
+            "<SHORT-NAME>DCMServices</SHORT-NAME>",
+            "<SHORT-NAME>Other</SHORT-NAME>",
+            "/Services/DcmService",
+        ),
+        (
+            "APPLICATION-ERROR",
+            "E_NOT_OK",
+            "<ERROR-CODE>1</ERROR-CODE>",
+            "<ERROR-CODE>2</ERROR-CODE>",
+            "/Services/DCMServices",
+        ),
+        (
+            "CLIENT-SERVER-INTERFACE",
+            "DCMServices",
+            "<IS-SERVICE>true</IS-SERVICE>",
+            "<IS-SERVICE>false</IS-SERVICE>",
+            "/Services/DcmService/DCMServices",
+        ),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "services.arxml",
+            |node| named(node, tag, short),
+            |text| text.replace(before, after),
+        );
+        if tag == "P-PORT-PROTOTYPE" {
+            replace_all(
+                &mut sources,
+                "/DcmService/DCMServices</",
+                "/DcmService/Other</",
+            );
+        }
+        let issues = build(&sources).err().expect("standard contract rejected");
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == "SERVICE_TYPE_CONFLICT"
+                    && issue.file.as_deref() == Some("services.arxml")
+                    && issue.object.as_deref() == Some(object)),
+            "{short}: {issues:?}"
+        );
+    }
+}
+
+#[test]
+fn dcm_binding_keeps_selected_behavior_and_backend_identity() {
+    for renamed in [false, true] {
+        let mut sources = dcm_service_inputs();
+        let code = if renamed {
+            xml_edit(
+                &mut sources,
+                "bsw.arxml",
+                |node| named(node, "BSW-MODULE-DESCRIPTION", "Dcm"),
+                |text| {
+                    text.replacen(
+                        "<SHORT-NAME>Dcm</SHORT-NAME>",
+                        "<SHORT-NAME>OtherDcm</SHORT-NAME>",
+                        1,
+                    )
+                },
+            );
+            replace_all(&mut sources, "/AUTOSAR_Dcm/Dcm/", "/AUTOSAR_Dcm/OtherDcm/");
+            "BSW_EXECUTION_CONFLICT"
+        } else {
+            xml_edit(
+                &mut sources,
+                "bsw.arxml",
+                |node| {
+                    named(node, "BSW-INTERNAL-BEHAVIOR", "Behavior")
+                        && node
+                            .ancestors()
+                            .any(|node| named(node, "BSW-MODULE-DESCRIPTION", "Dcm"))
+                },
+                |text| {
+                    let document = roxmltree::Document::parse(text).unwrap();
+                    let entities: String = document
+                        .descendants()
+                        .filter(|node| node.has_tag_name("BSW-CALLED-ENTITY"))
+                        .map(|node| &text[node.range()])
+                        .collect();
+                    format!(
+                        "{text}<BSW-INTERNAL-BEHAVIOR><SHORT-NAME>Unselected</SHORT-NAME><ENTITYS>{entities}</ENTITYS></BSW-INTERNAL-BEHAVIOR>"
+                    )
+                },
+            );
+            xml_edit(
+                &mut sources,
+                "services.arxml",
+                |node| named(node, "SWC-BSW-MAPPING", "DcmServicesMapping"),
+                |text| text.replace("/Dcm/Behavior", "/Dcm/Unselected"),
+            );
+            "BSW_MAPPING_INVALID"
+        };
+        let issues = build(&sources).err().expect("wrong producer rejected");
+        assert!(
+            issues.iter().any(|issue| issue.code == code
+                && issue.file.as_deref() == Some("services.arxml")
+                && issue.object.as_deref() == Some("/Services/DcmServicesMapping")),
+            "{issues:?}"
+        );
+    }
+}
+
+#[test]
+fn dcm_services_reject_wrong_api_and_type_producer() {
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "services.arxml",
+        |node| named(node, "RUNNABLE-ENTITY", "GetSecurityLevel"),
+        |text| {
+            text.replace(
+                "Dcm_GetSecurityLevel</SYMBOL>",
+                "Dcm_GetSesCtrlType</SYMBOL>",
+            )
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "services.arxml",
+        |node| named(node, "SWC-BSW-MAPPING", "DcmServicesMapping"),
+        |text| {
+            text.replace(
+                "Dcm_GetSecurityLevel_Entity</BSW-ENTITY-REF>",
+                "Dcm_GetSesCtrlType_Entity</BSW-ENTITY-REF>",
+            )
+        },
+    );
+    let issues = build(&sources).err().expect("wrong API rejected");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "BSW_MAPPING_INVALID"
+                && issue.file.as_deref() == Some("services.arxml")
+                && issue.object.as_deref() == Some("/Services/DCMServices/GetSecurityLevel")),
+        "{issues:?}"
+    );
+    for typ in ["Dcm_SecLevelType", "Dcm_SesCtrlType"] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "services.arxml",
+            |node| named(node, "IMPLEMENTATION-DATA-TYPE", typ),
+            |text| {
+                text.replace(
+                    "<TYPE-EMITTER>Rte_Dcm_Type.h</TYPE-EMITTER>",
+                    "<TYPE-EMITTER>RTE</TYPE-EMITTER>",
+                )
+            },
+        );
+        let issues = build(&sources)
+            .err()
+            .expect("duplicate type producer rejected");
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == "RTE_TYPE_UNSUPPORTED"
+                    && issue.file.as_deref() == Some("services.arxml")
+                    && issue.object.as_deref() == Some(format!("/Services/{typ}").as_str())),
+            "{issues:?}"
+        );
+    }
 }

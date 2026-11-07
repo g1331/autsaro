@@ -643,7 +643,6 @@ pub(super) fn files(
     }
     let dcm = entries.entry("Dcm".into()).or_default();
     for (name, result, args) in [
-        ("Dcm_ResetToDefaultSession", "Std_ReturnType", vec![]),
         (
             "Dcm_TpTxConfirmation",
             "void",

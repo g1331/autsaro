@@ -695,6 +695,7 @@ fn api_visibility(
     let selectors: Vec<_> = component
         .runnables
         .iter()
+        .filter(|runnable| runnable.bsw_target.is_none())
         .map(|runnable| {
             format!(
                 "defined(RTE_RUNNABLEAPI_{})",

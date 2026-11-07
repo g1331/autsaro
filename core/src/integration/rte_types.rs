@@ -138,7 +138,7 @@ pub(super) fn inspect(
             return Err(invalid(datatype));
         }
         if emitter != "RTE" {
-            // This profile imports only its trusted Dcm mode type producer.
+            // Import the trusted Dcm type producer; definitions stay in its header.
             let modes = super::composition::dcm_mode_definitions(graph, datatype)?;
             let bases = graph.descendants(datatype, "BASE-TYPE-REF");
             let valid_base = if let [base] = bases.as_slice() {
@@ -152,15 +152,22 @@ pub(super) fn inspect(
             if emitter != "Rte_Dcm_Type.h"
                 || graph.text(datatype, "CATEGORY") != Some("VALUE")
                 || !valid_base
-                || !modes
-                    .iter()
-                    .any(|mode| symbol == format!("Rte_ModeType_{}", mode.group))
+                || !(matches!(symbol, "Dcm_SecLevelType" | "Dcm_SesCtrlType")
+                    || modes
+                        .iter()
+                        .any(|mode| symbol == format!("Rte_ModeType_{}", mode.group)))
             {
                 return Err(invalid(datatype));
             }
+            if matches!(symbol, "Dcm_SecLevelType" | "Dcm_SesCtrlType") {
+                insert(&mut primitives, datatype, symbol.into(), None)?;
+            }
             continue;
         }
-        if symbol.starts_with("Rte_") || symbol.starts_with("SchM_") {
+        if symbol.starts_with("Rte_")
+            || symbol.starts_with("SchM_")
+            || matches!(symbol, "Dcm_SecLevelType" | "Dcm_SesCtrlType")
+        {
             return Err(invalid(datatype));
         }
         if graph.text(datatype, "CATEGORY") == Some("VALUE") {
