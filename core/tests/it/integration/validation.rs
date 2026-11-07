@@ -44,7 +44,12 @@ fn normal_definition_validation_closes_schedule_routes_types_and_handles() {
         "<BASE-TYPE-ENCODING>NONE</BASE-TYPE-ENCODING>",
         "<BASE-TYPE-ENCODING>2C</BASE-TYPE-ENCODING>",
     );
-    rejects_in_both(&sources, "TYPE_CONFLICT");
+    single_component::rejected_at(
+        &sources,
+        "RTE_TYPE_UNSUPPORTED",
+        "types.arxml",
+        "/Types/uint8",
+    );
     // SWS_Comtype_00007: handles are consecutive from 0 per direction, in any
     // order, and the same value is legal in both directions (Verifies: ECUC_CanIf_00597／00591).
     let mut sources = inputs();

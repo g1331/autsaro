@@ -497,7 +497,12 @@ fn unsupported_completion_modes_and_foreign_application_type_owners_are_refused(
             )
         },
     );
-    rejected_at(&sources, "TYPE_CONFLICT", "types.arxml", "/Types/uint32");
+    rejected_at(
+        &sources,
+        "RTE_TYPE_UNSUPPORTED",
+        "types.arxml",
+        "/Types/uint32",
+    );
     let mut conflict = inputs();
     xml_edit(
         &mut conflict,
