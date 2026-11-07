@@ -23,3 +23,25 @@ R8.7为Advisory/System。宏／header inline或按程序裁剪是可行替代，
 TerminateTask还读取原生栈角色和当前Task trace状态；引入完整栈布局会把FreeRTOS配置类型带入公开头，因此本批保留原外部实现。isOsStarted、NextScheduleTable也保留原名字、参数和命名基线；三项现按上述2026-10-30精确决定保留外部形式，不将头内迁移当作批准依据。错误、资源／上下文、嵌套、退出和trace控制沿现有实现，ErrorHook R18.6状态不变。
 
 正常MemoryMap消费者通过真正头内SetEvent及函数指针观察 enter、entry、implementation、capture、return、leave 顺序；六种删除反例须先编译成功，再由专用退出4拒绝。段属性删除反例及全START／STOP结构继续保留；局部函数使用既有local_names机制核对真实ELF／PE段绑定，不再用同名公开桩定义代替服务。
+
+## 自有源码记录的当前输入消费
+
+本节的 `owned-source` 上下文只绑定原标准篇已有的精确记录与类别实例，沿用
+[ADR 0023](../../adr/0023-autosar-required-conflict-disposition.md)、
+[ADR 0025](../../adr/0025-misra-layered-scope.md) 的原决定范围。机器关联复用
+`c_standard` 的实体、shape、MR12 双向检查和主机地址八个表达式；MemMap 位置仍须
+通过[原协议检查](../memmap/README.md#memmap-类别偏离)。C99 下 R17.3 的适用性沿
+[OS 原裁决](../os/implementation.md#c90隐式声明规则与当前编译)。
+
+当前有界消费只接纳上述匹配中的 Advisory 记录及已说明的语言不适用位置。
+Advisory 的记录安排沿各原篇既有理由、替代、风险及控制，适用主文 §6.2.3；
+上下文的 `approved` 表示这些已有记录在所列输入交集内有效。Required 的精确关联
+仍逐位置保留 `formal_deviation_pending`，Mandatory 保留项仍拒绝，其他模块裁决、
+SDK、采用内核与人工组保持各自未完成状态。新增实体或 body、目标、程序、producer、
+工具、来源和评估正文变化时重评；本节没有增加偏离、类别或诊断基线。
+
+完整双平台四样本的来源、原始结果、逐位置消费和拒绝证据归
+[实施 PR](https://github.com/g1331/autsaro/pull/449)。输入绑定采用
+[源码验收格式](../../development/testing/source-acceptance.md)，绑定块自身排除于摘要；
+其他正文及解析器保持逐字节绑定。剩余完整消费与 Required 正式材料由
+[#439](https://github.com/g1331/autsaro/issues/439) 接续。

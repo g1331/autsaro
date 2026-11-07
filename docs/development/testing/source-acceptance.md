@@ -63,7 +63,9 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 该组当前只消费上述已实现的精确关联。Required 风险记录继续返回
 `formal_deviation_pending`，即使上下文为 `approved` 也保留该义务；Mandatory 保留项
 返回 `mandatory_deviation_forbidden`。其余模块误报、采用内核与 SDK 位置沿原有阻塞。
-实际双平台输入绑定及剩余模块消费由自有源码消费任务继续完成，当前没有新增真实批准上下文。
+实际输入交集绑定在[原自有源码标准篇](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)，
+只接纳所列输入下已实现的 Advisory 记录与语言不适用位置；剩余模块消费与
+Required 正式材料继续由自有源码消费任务接续。
 
 人工表及补充记录中的 `retained` 保留真实违反及理由，经本组当前绑定和有效批准参与项目验收。Required 保留项的批准材料须完成 AMD2.5 修订后 §6.2.2 引用的 MISRA Compliance:2020 第 4 节正式义务；AMD2.4 已撤换主文旧第 5 节。Advisory 使用 §6.2.3 的记录安排。`not_assessed` 和缺失记录持续阻塞，Mandatory 的 `retained` 在记录入口拒绝。
 
