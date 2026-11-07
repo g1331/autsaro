@@ -434,6 +434,7 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
                     .bytes()
                     .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'-')
         }
+        "VALUE-TYPE-TREF" => dest == "IMPLEMENTATION-DATA-TYPE",
         "TYPE-TREF" => matches!(
             dest,
             "APPLICATION-PRIMITIVE-DATA-TYPE"
@@ -452,7 +453,7 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
             dest,
             "ROOT-SW-COMPOSITION-PROTOTYPE" | "SW-COMPONENT-PROTOTYPE"
         ),
-        "CONTEXT-PORT-REF" | "PORT-PROTOTYPE-REF" => {
+        "CONTEXT-PORT-REF" | "PORT-PROTOTYPE-REF" | "PORT-REF" => {
             matches!(dest, "P-PORT-PROTOTYPE" | "R-PORT-PROTOTYPE")
         }
         "TARGET-DATA-PROTOTYPE-REF" | "DATA-ELEMENT-REF" => dest == "VARIABLE-DATA-PROTOTYPE",
@@ -632,7 +633,16 @@ pub fn validate_native(files: &[(&Path, &str)]) -> Result<ScopeValidation, crate
                 continue;
             }
             let name = node.tag_name().name();
-            let structure = grammar.structures.get(name);
+            // VALUE is a scalar elsewhere; port constants aggregate a value specification.
+            let structure = if name == "VALUE"
+                && node
+                    .parent_element()
+                    .is_some_and(|parent| parent.has_tag_name("PORT-DEFINED-ARGUMENT-VALUE"))
+            {
+                grammar.structures.get("INIT-VALUE")
+            } else {
+                grammar.structures.get(name)
+            };
             let scalar = grammar.scalars.get(name);
             let reference = grammar::REFERENCES.contains(&name);
             if node.tag_name().namespace() != Some(NS)

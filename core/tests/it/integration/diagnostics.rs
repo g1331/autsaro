@@ -928,7 +928,7 @@ fn dcm_read_data_declares_the_standard_error_and_status_return() {
             validation.diagnostics
         );
     }
-    // An ordinary C/S operation keeps its void server and cannot declare application errors.
+    // Ordinary C/S errors use the same status return without the Dcm-specific constraints.
     let mut ordinary = sources.clone();
     change(
         &mut ordinary,
@@ -939,14 +939,13 @@ fn dcm_read_data_declares_the_standard_error_and_status_return() {
             reference.replace("DataServices_ApplicationValue", "ScalarService")
         ),
     );
-    let issues = build(&ordinary)
-        .err()
-        .expect("ordinary application error refused");
-    assert!(
-        issues
-            .iter()
-            .any(|issue| issue.code == "APPLICATION_ERROR_UNSUPPORTED"
-                && issue.object.as_deref() == Some("/Types/ScalarService/Transform")),
-        "{issues:?}"
-    );
+    let plan = build(&ordinary).unwrap();
+    let symbol = plan
+        .description()
+        .symbols
+        .iter()
+        .find(|symbol| symbol.symbol == "Process_Transform")
+        .unwrap();
+    assert_eq!(symbol.return_type, "Std_ReturnType");
+    assert!(normal_validation(&ordinary).diagnostics.is_empty());
 }

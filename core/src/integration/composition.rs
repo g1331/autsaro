@@ -93,7 +93,7 @@ pub struct Operation {
     pub port: String,
     pub interface: String,
     pub operation: String,
-    pub application_error: Option<String>,
+    pub application_errors: BTreeMap<String, u8>,
     pub read: bool,
     pub api_symbol: String,
     pub implementation_symbol: String,
@@ -103,6 +103,24 @@ pub struct Operation {
     pub callers: Vec<String>,
     pub call_points: Vec<String>,
     pub event: Option<String>,
+}
+
+impl Operation {
+    fn server_arguments(&self, component: &Component) -> Vec<ContractArgument> {
+        component
+            .port_arguments
+            .get(&self.port)
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .map(|(index, argument)| ContractArgument {
+                name: format!("portArg{index}"),
+                native_type: argument.native_type.clone(),
+                direction: "IN".into(),
+            })
+            .chain(self.arguments.iter().cloned())
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -153,6 +171,7 @@ pub struct Component {
     pub data_ports: Vec<DataPort>,
     pub data_accesses: Vec<DataAccess>,
     pub operations: Vec<Operation>,
+    pub port_arguments: BTreeMap<String, Vec<super::rte_types::PortDefinedArgument>>,
     pub runnables: Vec<Runnable>,
 }
 
@@ -313,72 +332,61 @@ fn native_type(
     argument: usize,
     behavior: usize,
     arrays: &mut BTreeMap<String, String>,
+    types: &[super::rte_types::RteDataType],
 ) -> Result<(String, String), Vec<PlanDiagnostic>> {
     let datatype = referenced(graph, argument, "TYPE-TREF", "TYPE_MAP_MISSING")?;
-    if graph.elements[datatype].tag == "APPLICATION-PRIMITIVE-DATA-TYPE" {
+    let mapped = if graph.elements[datatype].tag == "APPLICATION-PRIMITIVE-DATA-TYPE" {
         if graph.text(datatype, "CATEGORY") != Some("VALUE") {
             return Err(fail(graph, datatype, "TYPE_CONFLICT"));
         }
-        let mapped = implementation(graph, argument, behavior, datatype)?;
-        unsigned_encoding(graph, mapped)?;
-        return Ok((
-            c_name(&name(graph, mapped)),
-            format!("{}:{}", path(graph, datatype), path(graph, mapped)),
-        ));
-    }
-    if graph.elements[datatype].tag == "IMPLEMENTATION-DATA-TYPE"
-        && graph.text(datatype, "CATEGORY") == Some("VALUE")
-    {
-        let base = reference_descendant(graph, datatype, "BASE-TYPE-REF")?;
-        unsigned_encoding(graph, datatype)?;
-        if graph.text(base, "NATIVE-DECLARATION") == Some("uint32")
-            && graph.text(base, "BASE-TYPE-SIZE") == Some("32")
+        let mappings = graph
+            .descendants(behavior, "DATA-TYPE-MAPPING-REF")
+            .into_iter()
+            .filter_map(|reference| graph.objects.get(&graph.elements[reference].text).copied())
+            .flat_map(|set| graph.descendants(set, "DATA-TYPE-MAP"))
+            .filter(|map| graph.target(*map, "APPLICATION-DATA-TYPE-REF") == Some(datatype))
+            .collect();
+        let mapping = one(graph, argument, mappings, "TYPE_MAP_MISSING")?;
+        referenced(
+            graph,
+            mapping,
+            "IMPLEMENTATION-DATA-TYPE-REF",
+            "TYPE_MAP_MISSING",
+        )?
+    } else {
+        datatype
+    };
+    // rte_types coalesces identical C producers across packages; retain the referenced path.
+    let checked = types
+        .iter()
+        .find(|item| item.symbol == name(graph, mapped))
+        .ok_or_else(|| fail(graph, argument, "SERVICE_TYPE_CONFLICT"))?;
+    if checked.array_length.is_some() {
+        // Preserve the selected fixed array C/S contract; scalar types share rte_types.
+        if !types.iter().any(|leaf| {
+            leaf.symbol == checked.native_type
+                && leaf.native_type == "uint8"
+                && leaf.array_length.is_none()
+        }) || graph.text(argument, "DIRECTION") != Some("OUT")
         {
-            return Ok((c_name(&name(graph, datatype)), path(graph, datatype)));
+            return Err(fail(graph, argument, "SERVICE_TYPE_CONFLICT"));
         }
+        arrays.insert(path(graph, mapped), checked.symbol.clone());
     }
-    if graph
-        .text(datatype, "TYPE-EMITTER")
-        .is_some_and(|emitter| emitter != "RTE")
-    {
-        return Err(fail(graph, datatype, "TYPE_CONFLICT"));
-    }
-    if graph.elements[datatype].tag != "IMPLEMENTATION-DATA-TYPE"
-        || graph.text(datatype, "CATEGORY") != Some("ARRAY")
-    {
-        return Err(fail(graph, argument, "SERVICE_TYPE_CONFLICT"));
-    }
-    let element = one(
-        graph,
-        datatype,
-        graph.descendants(datatype, "IMPLEMENTATION-DATA-TYPE-ELEMENT"),
-        "SERVICE_TYPE_CONFLICT",
-    )?;
-    let element_type = reference_descendant(graph, element, "IMPLEMENTATION-DATA-TYPE-REF")?;
-    let base = reference_descendant(graph, element_type, "BASE-TYPE-REF")?;
-    unsigned_encoding(graph, element_type)?;
-    if graph.text(element, "CATEGORY") != Some("TYPE_REFERENCE")
-        || graph.text(element, "ARRAY-SIZE") != Some("4")
-        || graph.text(element, "ARRAY-SIZE-SEMANTICS") != Some("FIXED-SIZE")
-        || graph.text(element_type, "CATEGORY") != Some("VALUE")
-        || graph.text(base, "BASE-TYPE-SIZE") != Some("8")
-        || graph.text(base, "NATIVE-DECLARATION") != Some("uint8")
-        || graph.text(argument, "DIRECTION") != Some("OUT")
-    {
-        return Err(fail(graph, argument, "SERVICE_TYPE_CONFLICT"));
-    }
-    let native = c_name(&name(graph, datatype));
-    arrays.insert(path(graph, datatype), native.clone());
-    Ok((native, path(graph, datatype)))
+    let identity = if datatype == mapped {
+        path(graph, mapped)
+    } else {
+        format!("{}:{}", path(graph, datatype), path(graph, mapped))
+    };
+    Ok((checked.symbol.clone(), identity))
 }
 
-// The selected Dcm ReadData C/S operation includes E_NOT_OK even though its
-// application server must always supply valid data (SWS_Dcm_00686).
-fn application_error(
+fn application_errors(
     graph: &Graph,
     interface: usize,
     operation: usize,
-) -> Result<Option<String>, Vec<PlanDiagnostic>> {
+) -> Result<BTreeMap<String, u8>, Vec<PlanDiagnostic>> {
+    // Preserve the selected Dcm DataServices contract while ordinary interfaces use general errors.
     let interface_name = name(graph, interface);
     let dcm_read = name(graph, operation) == "ReadData"
         && interface_name.starts_with("DataServices_")
@@ -391,36 +399,38 @@ fn application_error(
                         == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsp/DcmDspData")
                         && interface_name == format!("DataServices_{}", name(graph, index))
                 }));
-    let errors = graph.descendants(operation, "POSSIBLE-ERROR-REF");
-    if !dcm_read && errors.is_empty() {
-        return Ok(None);
-    }
-    if dcm_read && errors.len() == 1 {
-        let error = graph.objects.get(&graph.elements[errors[0]].text).copied();
-        if error.is_some_and(|error| {
-            graph.within(error, interface)
-                && graph.elements[error].tag == "APPLICATION-ERROR"
-                && name(graph, error) == "E_NOT_OK"
-                && graph.text(error, "ERROR-CODE").is_some_and(|code| {
-                    let code = code.trim();
-                    let (digits, radix) = if let Some(hex) =
-                        code.strip_prefix("0x").or_else(|| code.strip_prefix("0X"))
-                    {
-                        (hex, 16)
-                    } else if let Some(binary) =
-                        code.strip_prefix("0b").or_else(|| code.strip_prefix("0B"))
-                    {
-                        (binary, 2)
-                    } else {
-                        (code, 10)
-                    };
-                    u8::from_str_radix(digits, radix) == Ok(1)
-                })
-        }) {
-            return Ok(Some(format!("RTE_E_{}_E_NOT_OK", c_name(&interface_name))));
+    let mut errors = BTreeMap::new();
+    let mut references = BTreeSet::new();
+    for reference in graph.descendants(operation, "POSSIBLE-ERROR-REF") {
+        let error = graph.index(&graph.elements[reference].text)?;
+        let code = graph
+            .text(error, "ERROR-CODE")
+            .and_then(super::rte_types::integer_constant)
+            .filter(|code| (0..=63).contains(code))
+            .ok_or_else(|| fail(graph, error, "APPLICATION_ERROR_UNSUPPORTED"))?;
+        if !graph.within(error, interface)
+            || graph.elements[error].tag != "APPLICATION-ERROR"
+            || ((code == 0) != (name(graph, error) == "E_OK"))
+            || !references.insert(error)
+        {
+            return Err(fail(graph, reference, "APPLICATION_ERROR_UNSUPPORTED"));
         }
+        errors.insert(
+            format!(
+                "RTE_E_{}_{}",
+                c_name(&name(graph, interface)),
+                c_name(&name(graph, error))
+            ),
+            code as u8,
+        );
     }
-    Err(fail(graph, operation, "APPLICATION_ERROR_UNSUPPORTED"))
+    if dcm_read
+        && (errors.len() != 1
+            || errors.get(&format!("RTE_E_{}_E_NOT_OK", c_name(&interface_name))) != Some(&1))
+    {
+        return Err(fail(graph, operation, "APPLICATION_ERROR_UNSUPPORTED"));
+    }
+    Ok(errors)
 }
 
 pub(super) fn dcm_mode_definitions(
@@ -563,6 +573,7 @@ fn inspect_with_transport(
     }
     let mut components = Vec::new();
     let mut types = BTreeSet::new();
+    let rte_types = super::rte_types::inspect(graph)?;
     let mut arrays = BTreeMap::new();
     let mut common_period = None;
     for instance in graph.descendants(composition, "SW-COMPONENT-PROTOTYPE") {
@@ -684,7 +695,16 @@ fn inspect_with_transport(
                 });
                 continue;
             }
-            let event = one(graph, runnable, events, "SCHEDULE_NOT_UNIQUE")?;
+            if events.len() > 1
+                && events
+                    .iter()
+                    .any(|event| graph.elements[*event].tag != "OPERATION-INVOKED-EVENT")
+            {
+                return Err(fail(graph, runnable, "SCHEDULE_NOT_UNIQUE"));
+            }
+            let event = *events
+                .first()
+                .ok_or_else(|| fail(graph, runnable, "SCHEDULE_NOT_UNIQUE"))?;
             let period = if graph.elements[event].tag == "TIMING-EVENT" {
                 let period = graph
                     .text(event, "PERIOD")
@@ -720,11 +740,15 @@ fn inspect_with_transport(
             .chain(graph.descendants(behavior, "OPERATION-INVOKED-EVENT"))
         {
             if !runnables.iter().any(|runnable| {
-                runnable.event.as_deref() == Some(graph.elements[event].object.as_str())
+                graph
+                    .target(event, "START-ON-EVENT-REF")
+                    .is_some_and(|target| runnable.path == path(graph, target))
             }) {
                 return Err(fail(graph, event, "EVENT_OWNERSHIP"));
             }
         }
+        let port_options =
+            super::rte_types::port_arguments(graph, behavior, component, &rte_types)?;
         let mut data_ports = Vec::new();
         let mut interfaces = BTreeMap::new();
         let mut data_accesses = Vec::new();
@@ -907,7 +931,7 @@ fn inspect_with_transport(
                     }
                 }
                 for operation in interface_operations {
-                    let application_error = application_error(graph, interface, operation)?;
+                    let application_errors = application_errors(graph, interface, operation)?;
                     if graph
                         .text(operation, "NO-RETURN-VALUE-PROVIDED")
                         .is_some_and(|value| !matches!(value, "false" | "0"))
@@ -944,7 +968,7 @@ fn inspect_with_transport(
                             return Err(fail(graph, argument, "ARGUMENT_DIRECTION"));
                         }
                         let (native, identity) =
-                            native_type(graph, argument, behavior, &mut arrays)?;
+                            native_type(graph, argument, behavior, &mut arrays, &rte_types)?;
                         arguments.push(ContractArgument {
                             name: c_name(&name(graph, argument)),
                             native_type: if !arrays.values().any(|array| array == &native)
@@ -1028,7 +1052,7 @@ fn inspect_with_transport(
                         port: path(graph, port),
                         interface: path(graph, interface),
                         operation: path(graph, operation),
-                        application_error,
+                        application_errors,
                         read,
                         api_symbol: api.clone(),
                         implementation_symbol: format!(
@@ -1169,6 +1193,44 @@ fn inspect_with_transport(
                 return Err(fail(graph, port, "TYPE_CONFLICT"));
             }
         }
+        for runnable in &runnables {
+            let servers: Vec<_> = operations
+                .iter()
+                .filter(|operation| !operation.read && operation.runnable == runnable.path)
+                .collect();
+            if let Some(first) = servers.first() {
+                for server in servers.iter().skip(1) {
+                    if server.argument_types != first.argument_types
+                        || server
+                            .arguments
+                            .iter()
+                            .map(|arg| (&arg.native_type, &arg.direction))
+                            .ne(first
+                                .arguments
+                                .iter()
+                                .map(|arg| (&arg.native_type, &arg.direction)))
+                        || port_options
+                            .get(&server.port)
+                            .into_iter()
+                            .flatten()
+                            .map(|arg| &arg.type_identity)
+                            .ne(port_options
+                                .get(&first.port)
+                                .into_iter()
+                                .flatten()
+                                .map(|arg| &arg.type_identity))
+                        || server.application_errors.is_empty()
+                            != first.application_errors.is_empty()
+                    {
+                        return Err(fail(
+                            graph,
+                            graph.index(server.event.as_deref().unwrap_or(&server.port))?,
+                            "SERVICE_TYPE_CONFLICT",
+                        ));
+                    }
+                }
+            }
+        }
         for event in graph.descendants(behavior, "OPERATION-INVOKED-EVENT") {
             if operations
                 .iter()
@@ -1228,6 +1290,7 @@ fn inspect_with_transport(
             data_ports,
             data_accesses,
             operations,
+            port_arguments: port_options,
             runnables,
         });
     }
@@ -1628,7 +1691,7 @@ fn inspect_with_transport(
         connections,
         network_endpoints,
         array_types: arrays,
-        types: super::rte_types::inspect(graph)?,
+        types: rte_types,
         dcm_modes,
     };
     check_names(graph, &plan)?;
@@ -1925,13 +1988,26 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             ));
         }
     }
-    let errors: BTreeSet<_> = plan
+    let mut errors = BTreeMap::new();
+    for operation in plan
         .components
         .iter()
         .flat_map(|component| &component.operations)
-        .filter_map(|operation| operation.application_error.as_ref())
-        .collect();
-    for error in errors {
+    {
+        for (symbol, code) in &operation.application_errors {
+            if errors
+                .insert(symbol, *code)
+                .is_some_and(|previous| previous != *code)
+            {
+                return Err(fail(
+                    graph,
+                    graph.index(&operation.operation)?,
+                    "CONTRACT_NAME_COLLISION",
+                ));
+            }
+        }
+    }
+    for error in errors.into_keys() {
         if !names.insert(error.clone()) {
             return Err(fail(
                 graph,
@@ -2025,11 +2101,15 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
         local_names.extend(aliases);
         for operation in &component.operations {
             let mut arguments = BTreeSet::new();
-            if operation.arguments.iter().any(|argument| {
-                super::contracts::reserved_identifier(&argument.name)
-                    || local_names.contains(&argument.name)
-                    || !arguments.insert(argument.name.clone())
-            }) {
+            if operation
+                .server_arguments(component)
+                .iter()
+                .any(|argument| {
+                    super::contracts::reserved_identifier(&argument.name)
+                        || local_names.contains(&argument.name)
+                        || !arguments.insert(argument.name.clone())
+                })
+            {
                 return Err(fail(
                     graph,
                     graph.index(&operation.operation)?,
@@ -2088,7 +2168,7 @@ pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
             symbols.push(SymbolContract {
                 symbol: runnable.symbol.clone(),
                 return_type: if runnable.event.is_none()
-                    || operation.is_some_and(|operation| operation.application_error.is_some())
+                    || operation.is_some_and(|operation| !operation.application_errors.is_empty())
                 {
                     "Std_ReturnType"
                 } else {
@@ -2096,7 +2176,7 @@ pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
                 }
                 .into(),
                 arguments: operation
-                    .map(|operation| operation.arguments.clone())
+                    .map(|operation| operation.server_arguments(component))
                     .unwrap_or_default(),
                 declaration_owner: component.header.clone(),
                 definition_owner: if runnable.event.is_none() {
@@ -2114,8 +2194,12 @@ pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
                         .iter()
                         .filter(|connection| {
                             connection.provider.instance == component.instance
-                                && connection.provider.port == operation.port
-                                && connection.provider.member == operation.operation
+                                && component.operations.iter().any(|server| {
+                                    !server.read
+                                        && server.runnable == operation.runnable
+                                        && connection.provider.port == server.port
+                                        && connection.provider.member == server.operation
+                                })
                         })
                         .map(|connection| connection.requester.port.clone())
                         .collect()

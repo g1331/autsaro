@@ -740,7 +740,17 @@ pub(super) fn inspect_events(
             application,
         });
     }
-    if synchronous.len() != server_runnables.len()
+    let server_events: BTreeSet<_> = graph
+        .of_kind("OPERATION-INVOKED-EVENT")
+        .into_iter()
+        .filter(|event| {
+            graph
+                .target(*event, "START-ON-EVENT-REF")
+                .is_some_and(|runnable| server_runnables.contains(&graph.elements[runnable].object))
+        })
+        .map(|event| graph.elements[event].object.clone())
+        .collect();
+    if synchronous.iter().cloned().collect::<BTreeSet<_>>() != server_events
         || entities.iter().filter(|entity| entity.application).count() != periodic_events.len()
     {
         return Err(reject(
