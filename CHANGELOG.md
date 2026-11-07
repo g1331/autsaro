@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Dcm service inputs now require the standard DCMServices P-port and explicit bindings for its four operations. Update existing service inputs and regenerate contracts; the existing Dcm C ABI is unchanged (#187)
+
 - RTE service C/S now binds explicit SWC/BSW mappings to selected implementation owners and shares the typed binding plan with Counter services; regenerate plans and contracts. Service-interface connectors require a service component endpoint (#454)
 
 - Synchronous RTE C/S now supports typed scalar parameters, ordered P-port constants, shared compatible server runnables and general application errors (including E_OK-only); regenerate contracts and rebuild consumers for the expanded plan schema (#435)

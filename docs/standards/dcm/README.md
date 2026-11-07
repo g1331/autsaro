@@ -38,4 +38,4 @@ OBD mirror 为 false，且参考 ECU 的 DemOBDSupport 为 DEM_OBD_NO_OBD_SUPPOR
 
 `Dcm_MemMap.h`模板第7／14／21／28行撤销模块START／STOP关键词；18／19／32／33行的内部active／属性撤销另属实现清理，不借00011批量授权。MEMMAP producer交付的可重入主体连接D4.10与这些真实请求；一次性guard吞掉STOP，顶部include、默认段或函数体内include不能保留同一00003／00023合同。头部段继承、请求拒绝、版本边及真实诊断／取消／模式交错消费者提供风险控制，不补齐ISO原件或provider证明。最终逐处复核与BSW00115对应仍须完成，本节不新增Approved／MR12，不改变原始false／refusal／not_assessed。
 
-ISO 14229／15765 的所选物理服务、计时、消息和NRC核对见 [behaviour.md](behaviour.md#跨标准原文与适用闭包)，原件收据由 #57 记录。MISRA固定七份正文已取得，221项人工评估仍由 #58 跟踪；静态分析的执行完整性、原始源码诊断与人工评估分别报告。版本检查由 #59、`DCMServices` 服务端口由 #187 跟踪。
+ISO 14229／15765 的所选物理服务、计时、消息和NRC核对见 [behaviour.md](behaviour.md#跨标准原文与适用闭包)，原件收据由 #57 记录。MISRA固定七份正文已取得，221项人工评估仍由 #58 跟踪；静态分析的执行完整性、原始源码诊断与人工评估分别报告。版本检查由 #59 跟踪。`DCMServices` 通过类型化 C/S 与显式 SWC-BSW mapping 连接四个 Dcm API，接口与端口证据见 [interfaces.md](interfaces.md)。
