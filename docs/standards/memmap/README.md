@@ -46,7 +46,7 @@ AMD2.4 撤换主文旧第 5 节，AMD2.5 将 Required 偏离程序引用改为 M
 
 **位置与来源。** 十二个固定头为 BSW 的 Can、CanIf、CanTp、Com、ComM、Dcm、Det、LSduR、PduR、BswM，以及 Os、Ecu_HostBusSM 的映射头；其原 `runtime/` 路径、`@file` 记录、包含者和 MR12 已在各 [BSW 通用模块篇](../bsw-general/README.md)逐项登记。本项复用这些位置与注释。固定头经 `outputs::template_of` 登记到 MEMMAP producer 后以原字节进入 `generated/include/`。
 
-生成位置另限 `generated/include/Rte_MemMap.h`、`EchoApplication_MemMap.h`、`DcmService_MemMap.h`、`Ingress_MemMap.h`、`Process_MemMap.h`、`Observe_MemMap.h` 的首个 `@file`。RTE 头由 `core/src/integration/memmap.rs::rte` 生成，其余由 `component` 生成；独立 contract 包复用同一 `rte`，输出为 `include/Rte_MemMap.h`，其具体输入另行取证。standard-ecu／user-application 使用 Rte、EchoApplication、DcmService；component-pipeline 使用 Rte、Ingress、Process、Observe、DcmService；no-diagnostic 使用 Rte、Ingress、Process、Observe，加上固定头分别为 15／15／17／16 个。`Rte_DcmService.h` 也以 DcmService 头包装 CODE 声明。实际文件、字节、TU 包含及每次请求以对应正常封存样本及 PR 工件为准，新增配置须重新评估。
+生成位置另限 `generated/include/Rte_MemMap.h`、`EchoApplication_MemMap.h`、`DcmService_MemMap.h`、`Ingress_MemMap.h`、`Process_MemMap.h`、`Observe_MemMap.h` 的首个 `@file`。RTE 头由 `core/src/integration/memmap.rs::rte` 生成，其余由 `component` 生成；独立 contract 包的具体实例见下节。standard-ecu／user-application 使用 Rte、EchoApplication、DcmService；component-pipeline 使用 Rte、Ingress、Process、Observe、DcmService；no-diagnostic 使用 Rte、Ingress、Process、Observe，加上固定头分别为 15／15／17／16 个。`Rte_DcmService.h` 也以 DcmService 头包装 CODE 声明。实际文件、字节、TU 包含及每次请求以对应正常封存样本及 PR 工件为准，新增配置须重新评估。
 
 **必需性与替代。** 固定 R24-11 SpecificationsARXML 的 `SWS_MemMap_00003` 要求 START／include／实体／STOP／include，`00011` 要求撤销请求，`00007` 要求预处理阶段拒绝非法、嵌套与错配。`00029` 要求为输入中的每个 SWC type 提供专用头，`00027` 要求支持其 MemorySection 的开闭；因此 DcmService 头的发布义务与当前有没有应用 TU 分开判断。BSWGeneral `00006` 要求模块映射头，`00249` 对普通头的整体 guard 要求显式排除映射头。条目正文已从固定 ARXML 核对；MemoryMapping PDF 36–41 的机制与对应示例一致。
 
@@ -57,6 +57,53 @@ AMD2.4 撤换主文旧第 5 节，AMD2.5 将 Required 偏离程序引用改为 M
 现有 `application_headers_enforce_runnable_visibility_memmap_and_imported_releases` 用真实 C／C++ 编译 CODE→STOP→VAR 重入、请求消费、STOP 清理及非法／多请求；`bsw_function_declarations_preserve_configured_code_placement` 和 `component_application_definitions_preserve_configured_sections` 观察实际目标文件段。`check_memory_mapping` 核对 OS 对象及段，已有成功编译后的属性删除反例；`test_memory_mapping_protocol_and_mutations` 拒绝缺 STOP、错 header／class 及嵌套。生成注释须由实际交付头检查及删除反例核对，测试结果和实际双平台范围在 PR 记录。
 
 原始分析保留。本项仅接续 D4.10；人工组的 D4.12、其他规则及未完成的来源责任继续按各自记录处理。
+
+### 独立 contract 的具体实例
+
+本实例以 `678fae273e5d39e22f74fc9cc1b6d7041e84295b` 的
+`core/tests/fixtures/component-pipeline/arxml/` 九份输入为范围，语言 C99。
+2026-11-08 由项目实现者重新核对上述 D4.10、TC2.2、AMD2.4／2.5、
+Compliance:2020 §4.1–4.4 及固定 SpecificationsARXML 的 MemMap
+00003／00007／00011／00027／00029 正文；规则、原授权、Reason 1、
+替代方案和风险控制沿本节共用记录。当前实例的独立复核收据仍由
+[#440](https://github.com/g1331/autsaro/issues/440)承接；复核须指明实际 head、
+原文、包含闭包、发现与处置，完成状态以实施 PR 收据为准。
+
+**输入与输出身份。** 正常 Cargo `it` 的
+`source_derived_composition_contract_is_deterministic_and_keeps_local_identity`
+从上述目录读取输入，以 builtin 定义建立已校验 plan，经
+`component_contract_files` → `composition_contract_files` → `memmap::rte`
+生成 `include/Rte_MemMap.h`。设置 `AUTOSAR_CONTRACT_OUTPUT` 为不存在的新目录，
+由 `preview`／`generate_previewed` 安装真实交付包；`contract.json` 保留源摘要及组件身份。
+此次 RTE 头 SHA-256 为
+`b067502e2a3e1798ec5437d38019ee0560be3f2d463e3ef82c473dde72996c42`，
+首个 `@file` 的 MR12 DIR 4.10 记录在第 1–5 行，分派从第 7 行开始。
+四个 SWC 头由 `memmap::component` 生成，各自首个 `@file` 同样受交付测试约束。
+输入摘要、五个头摘要和实际消费者位置集中在实施 PR。
+
+**请求与包含闭包。** 本输入的 RTE 表恰有十组 START／STOP：
+Rte 的 CODE、CONFIG_DATA_PREBUILD_UNSPECIFIED，以及
+DcmService／Ingress／Observe／Process 各自的 CODE、CONST_UNSPECIFIED。
+四个 `Rte_<组件>.h` 均经 Rte_MemMap 包围 `Rte_Inst_<组件>` 常量指针声明，
+并用对应 CODE 请求包围 RTE API 声明；runnable 声明另由同组件 SWC 头包围。
+Ingress／Process／Observe／DcmService 的 RTE 实际包含次数分别为 8／6／8／4，
+即合计 13 对；Rte scope 的两组属于包提供的能力，本输入的应用头未请求它们。
+这里逐次执行的包含、请求消费与 STOP 清理沿 00003／00011；
+版本头自身保留普通 guard。独立包只有声明，真实 API 定义与 ECU 内存对象由后续阶段提供。
+
+**观察与证伪。** 正常 `native` 的
+`standalone_contract_memmap_consumes_requests_and_reenters` 在新目录安装该包，
+分别编译四个应用头，再次执行各自 CODE 开闭，断言请求、属性和共享 active 已撤销；
+目标 `objdump` 观察独立消费者 `contract_code` 落在 `.rte_code`。
+缺请求、跨 scope 嵌套、错配 STOP、同次多请求分别匹配本头的预处理错误。
+整头 guard／pragma once 会使合法应用头及再次请求失败；删除 STOP 清理同样被消费断言拒绝。
+`it` 检查五个实际映射头集合及首段规则号、必需请求、嵌套／错配与清理理由，
+删除或改错说明由同一正常入口定位到具体交付文件。
+
+独立 contract 按自己的输入和消费者取证；四 ECU 的目标／程序、人工表与批准上下文
+沿原记录保留。当前本地证据为 Linux GCC 编译／目标文件观察，Windows 的执行结果由
+实施 PR 必需 CI 收据记录。producer、输入、请求集合、声明所有者、工具链／布局或
+文件说明改变时重评；未完成独立复核前保持本实例的正式义务待完成。
 
 ## 条件指令与宏实参的源码边界
 
