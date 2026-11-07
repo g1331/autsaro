@@ -51,7 +51,7 @@ fn standalone_contract_memmap_consumes_requests_and_reenters() {
              #define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
              #if defined(RTE_{scope}_STOP_SEC_CODE) || defined(RTE_{scope}_CODE)\n\
              #error STOP not consumed\n#endif\n\
-             #if defined(RTE_MEMMAP_ACTIVE)\n\
+             #if defined(RTE_MEMMAP_ACTIVE) || defined(RTE_{scope}_CODE_ACTIVE)\n\
              #error STOP not consumed\n#endif\n"
         );
         check(scope, &source, None);
@@ -64,6 +64,15 @@ fn standalone_contract_memmap_consumes_requests_and_reenters() {
                 .iter()
                 .any(|(symbol, section)| { symbol == "contract_code" && section == ".rte_code" }),
             "{scope}: {sections:?}"
+        );
+        check(
+            &format!("{scope}-repeated-stop"),
+            &format!(
+                "#define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+                 #define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+                 #define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n"
+            ),
+            Some("Unmatched RTE memory section"),
         );
     }
     for (label, source, diagnostic) in [

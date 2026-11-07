@@ -93,9 +93,10 @@ Ingress／Process／Observe／DcmService 的 RTE 实际包含次数分别为 8�
 
 **观察与证伪。** 正常 `native` 的
 `standalone_contract_memmap_consumes_requests_and_reenters` 在新目录安装该包，
-分别编译四个应用头，再次执行各自 CODE 开闭，断言请求、属性和共享 active 已撤销；
+分别编译四个应用头，再次执行各自 CODE 开闭，断言请求、属性及 scope／共享 active 已撤销；
 目标 `objdump` 观察独立消费者 `contract_code` 落在 `.rte_code`。
-缺请求、跨 scope 嵌套、错配 STOP、同次多请求分别匹配本头的预处理错误。
+缺请求、跨 scope 嵌套、错配 STOP、同次多请求分别匹配本头的预处理错误；
+四个 scope 均检查完整开闭后再次 STOP 报 `Unmatched RTE memory section`。
 整头 guard／pragma once 会使合法应用头及再次请求失败；删除 STOP 清理同样被消费断言拒绝。
 `it` 检查五个实际映射头集合及首段规则号、必需请求、嵌套／错配与清理理由，
 删除或改错说明由同一正常入口定位到具体交付文件。
