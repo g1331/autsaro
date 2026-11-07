@@ -23,6 +23,10 @@ uv run --locked python -m autosar_tooling c-acceptance \
 
 跨平台离线核对封存输入时，从同一 head 按目标 Git 换行规则导出独立副本，例如 Windows 使用 `git -c core.autocrlf=true checkout-index --all --prefix=<新目录>/`，同时从该副本的 `tools/python/src` 加载解析器。逐项核对 producer、解析器与评估正文摘要后重算身份；Windows 的 SDK 和实际运行证据仍由目标主机正常验收入口提供。
 
+PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并提交。消费工件前先从
+checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
+分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
+
 手动 workflow 的严格步骤直接调用同一 CLI；自动 PR 仍只验证完整执行，直到 #55 的剩余义务及真实保护验证完成。测试里的完整合成正例验证可执行契约，不是实际工程的合法绿色出口。
 
 `docs/standards/` 与固定指南索引是实际分析输入，单独修改也选择代码／原生／C 分析检查，不按普通文档跳过；它们不单独选择桌面场景。普通读者指南与界面说明仍沿原有文档选择规则。
