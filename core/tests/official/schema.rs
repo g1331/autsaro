@@ -34,6 +34,15 @@ fn native_pipeline_inputs_also_pass_the_official_schema() {
 
 #[cfg(feature = "official-oracles")]
 #[test]
+fn mapped_service_inputs_pass_the_official_schema() {
+    for sources in [mapped_operation_inputs(), mapped_counter_operation_inputs()] {
+        assert_official_schema_accepts(&sources);
+        build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    }
+}
+
+#[cfg(feature = "official-oracles")]
+#[test]
 fn execution_constraint_rejections_use_officially_valid_arxml() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for exclusive_area in [false, true] {
