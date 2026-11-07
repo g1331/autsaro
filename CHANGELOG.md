@@ -62,6 +62,8 @@
 
 ### Fixed
 
+- Native actor allocation boundaries carry scoped D4.12 and Linux TLS rationale linked to the existing category record; allocation, rollback and retirement behavior are unchanged (#58)
+
 - Generated RTE/SWC memory-mapping headers include their per-file Directive 4.10 rationale for the recorded AUTOSAR mapping conflict; preprocessing and public ABI are unchanged (#58)
 
 - C-analysis comparisons preserve program identity before counting changes, so a finding removed from HostBatch cannot conceal the same finding newly reported in probe; malformed retention records report their field and source location as analysis errors (#426)

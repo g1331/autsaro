@@ -1484,6 +1484,8 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
     ExitProcess(E_OS_STACKFAULT);
 }
 
+/* MR12 DIR 4.12 VIOLATION: Win32 reserves the physical actor stack used by preemption and ARTI;
+ * failed creation enters shutdown before the handle can be used. */
 OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
                                       SIZE_T stack,
                                       LPTHREAD_START_ROUTINE start,

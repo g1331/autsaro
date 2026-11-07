@@ -284,6 +284,10 @@ OS_MEMMAP static void *actor_start(void *argument)
     return NULL;
 }
 
+/* MR12 DIR 4.12 VIOLATION: the guarded execution stack preserves preemption and ARTI identity;
+ * native bootstrap/TLS remain provider-allocated, and creation failure rolls back the mapping.
+ * MR12 RULE 21.3 VIOLATION: the selected Linux TLS provider allocates its DTV with calloc.
+ * MR12 RULE 22.1 VIOLATION: provider caches and process-owned live actors retain their DTV. */
 OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
                                     LPTHREAD_START_ROUTINE start,
                                     LPVOID argument,
