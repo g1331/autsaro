@@ -39,6 +39,14 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 
 `standard-ecu` 与 `user-application` 的 ARXML 可以相同，应用字节仍分别绑定。重命名目录不改变身份；应用、配置、producer、程序／TU、SDK 或评估正文变化都会使旧上下文失效。原分析副本中的 kernel 已应用补丁，因此复用现有最终 kernel 身份检查，不以补丁前 seal 再验证补丁后字节。
 
+修改 C 分析准备或身份拒绝路径时，除 `tests/python` 开发测试外，还须设置固定版本
+`CPPCHECK` 并运行以下命令。根目录发现测试不包含这组 `ActualCAnalysisTests`；单独
+记录其实际执行数量、跳过项与原因。
+
+```bash
+uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+```
+
 这些身份是证据适用范围，不是诊断 baseline 或缓存。不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
 
 动态构造带摘要的原件、补丁或封存夹具时，用同一份编码后的字节写文件并计算身份，
@@ -92,7 +100,8 @@ Required 正式材料继续由自有源码消费任务接续。
 内核行归属按实际应用的有序补丁 hunk 传递：新增和替换行归项目，保留行携带原身份
 随插删移动。hunk 的 offset 取 Git 实际应用回执，并核对重建文本与最终文件一致；
 重复文本、删除后在别处加入以及恢复原文，均按这些位置身份判断。分析来源、集成验收
-与内核 GRP 共用该结果。
+与内核 GRP 共用该结果。整条补丁链完成后先核验最终字节身份，再报告暂存的行归属
+错误；追加空行或 LF／CRLF 变化仍按 `Kernel identity mismatch` 拒绝。
 
 人工表及补充记录中的 `retained` 保留真实违反及理由，经本组当前绑定和有效批准参与项目验收。Required 保留项的批准材料须完成 AMD2.5 修订后 §6.2.2 引用的 MISRA Compliance:2020 第 4 节正式义务；AMD2.4 已撤换主文旧第 5 节。Advisory 使用 §6.2.3 的记录安排。`not_assessed` 和缺失记录持续阻塞，Mandatory 的 `retained` 在记录入口拒绝。
 
