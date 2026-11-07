@@ -303,6 +303,17 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(occurrence["entity"], "Os_ErrorContextSave")
         self.assertEqual(occurrence["reason"], "formal_deviation_pending")
 
+    def test_owned_position_cannot_overflow_into_a_record_on_the_next_line(self):
+        self.owned_inputs()
+        source = "runtime/os/include/Os.h"
+        self.select_owned(source, "20.10", "#define OS_TASK_ENTRY(identifier)")
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+        location = self.summary["diagnostics"][0]["locations"][0]
+        lines = (self.root / source).read_text(encoding="utf-8").splitlines(keepends=True)
+        location["line"] -= 1
+        location["column"] += len(lines[location["line"] - 1])
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
     def test_owned_memmap_consumption_rejects_unrelated_undef(self):
         self.owned_inputs()
         source = "runtime/bsw/include/Can_MemMap.h"
