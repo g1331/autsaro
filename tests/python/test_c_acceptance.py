@@ -167,6 +167,233 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(self.plan, plan)
         self.assertNotEqual(self.identity(), before)
 
+    def owned_inputs(self):
+        self.synthetic_complete_inputs()
+        shutil.copytree(ROOT / "runtime", self.root / "runtime", dirs_exist_ok=True)
+        shutil.copytree(ROOT / "docs/standards", self.root / "docs/standards", dirs_exist_ok=True)
+        # Real standards supply the checker records; keep their outstanding
+        # obligations instead of combining them with synthetic satisfied rows.
+        self.supplementary_path.unlink()
+        application = self.root / c_standard.RETAINED_APPLICATION
+        application.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / c_standard.RETAINED_APPLICATION, application)
+        for name in c_standard.MANUAL_ASSESSMENT_SOURCES:
+            path = self.root / name
+            text = path.read_text(encoding="utf-8").replace("| retained |", "| satisfied |")
+            path.write_text(text, encoding="utf-8")
+        name = "runtime/os/src/host/linux/Os_HostLinux.c"
+        delivered = "os/src/host/linux/Os_HostLinux.c"
+        self.files[delivered] = (self.root / name).read_bytes()
+        self.origins[name] = delivered
+        self.plan["runtimeSources"][name] = c_acceptance.digest(self.root / name)
+        self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+            "path": delivered, "sha256": self.plan["runtimeSources"][name],
+            "owner": "runtime", "producerId": "runtime",
+        }]}).encode()
+        source = self.files[delivered].decode()
+        offset = source.index("*low = (uintptr_t)thread->mapping;")
+        self.summary["diagnostics"] = [{"id": "misra-c2012-11.4",
+            "programs": ["host-batch", "probe"],
+            "locations": [{"file": delivered, "line": source.count("\n", 0, offset) + 1,
+                           "column": offset - source.rfind("\n", 0, offset)}]}]
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.bind_groups(statuses={"checker-limitations": "pending"})
+
+    def test_owned_address_consumes_original_category_with_current_context(self):
+        self.owned_inputs()
+        context = self.context(group="owned-source", status="approved")
+        self.bind(context)
+        raw = copy.deepcopy(self.summary)
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked", result["objects"])
+        occurrence = result["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "accepted")
+        self.assertEqual(occurrence["reason"], "owned_source_approved")
+        self.assertEqual(occurrence["record"]["file"],
+                         "docs/standards/os/native-facilities/addresses.md")
+        self.assertEqual(occurrence["programs"], ["host-batch", "probe"])
+        checker_rows = c_standard.supplementary_assessment(
+            self.rules, self.summary["coverage"]["knownCheckerLimitations"], self.root,
+        )["records"]
+        self.assertEqual(len(checker_rows), 11)
+        self.assertEqual({row["source"]["file"] for row in checker_rows},
+                         {"docs/standards/types.md"})
+        self.assertEqual({row["id"] for row in checker_rows if row["status"] == "not_assessed"},
+                         {"R5.5", "R5.7", "R10.1"})
+        self.assertEqual({row["id"] for row in checker_rows if row["status"] == "retained"},
+                         {"R20.1"})
+        self.assertEqual(raw, self.summary)
+        self.summary["projectAcceptance"] = result
+        with self.assertRaisesRegex(ValueError, "formal_assessment_pending"):
+            c_acceptance.require_accepted([(self.summary, self.project)], [(TARGET, CASE)],
+                                         {"prepare": "success", "analysis": "success"},
+                                         root=self.root)
+
+    def test_owned_record_retains_formal_and_stale_context_blockers(self):
+        self.owned_inputs()
+        self.bind(self.context(group="owned-source", status="pending"))
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["reason"], "formal_deviation_pending")
+        self.assertEqual(occurrence["status"], "owned_record_matched")
+        self.assertEqual(occurrence["assessment"], "blocked")
+
+    def test_owned_source_and_exact_position_are_required(self):
+        self.owned_inputs()
+        self.bind(self.context(group="owned-source", status="approved"))
+        self.summary["diagnostics"][0]["locations"][0]["line"] += 1
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+        self.summary["diagnostics"][0]["locations"][0]["line"] -= 1
+        name = "runtime/os/src/host/linux/Os_HostLinux.c"
+        path = self.root / name
+        path.write_bytes(path.read_bytes() + b"/* changed producer */\n")
+        self.bind_groups()
+        self.bind(self.context(group="owned-source", status="approved"))
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_owned_record_document_is_part_of_current_evidence(self):
+        self.owned_inputs()
+        self.bind(self.context(group="owned-source", status="approved"))
+        path = self.root / "docs/standards/os/native-facilities/addresses.md"
+        path.write_text(path.read_text(encoding="utf-8") + "\nChanged category evidence.\n",
+                        encoding="utf-8")
+        self.assertEqual(self.evaluate()["occurrences"][0]["reason"],
+                         "owned_source_context_unbound_or_stale")
+
+    def test_owned_record_does_not_override_sdk_source(self):
+        self.owned_inputs()
+        self.summary["scope"]["sdkHeaders"] = [{
+            "path": self.summary["diagnostics"][0]["locations"][0]["file"],
+            "category": "sdk", "key": "synthetic-header-identity",
+        }]
+        self.bind(self.context(group="owned-source", status="approved"))
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def select_owned(self, source, rule, expression, *, programs=None, delivered=None):
+        delivered = delivered or source.removeprefix("runtime/")
+        data = (self.root / source).read_bytes()
+        self.files[delivered] = data
+        self.origins[source] = delivered
+        self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+            "path": delivered, "sha256": hashlib.sha256(data).hexdigest(),
+            "owner": "runtime", "producerId": "runtime",
+        }]}).encode()
+        text = data.decode()
+        offset = text.index(expression)
+        self.summary["diagnostics"] = [{"id": "misra-c2012-" + rule,
+            "programs": programs or ["host-batch", "probe"], "locations": [{
+                "file": delivered, "line": text.count("\n", 0, offset) + 1,
+                "column": offset - text.rfind("\n", 0, offset),
+            }]}]
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.bind_groups()
+        self.bind(self.context(group="owned-source", status="approved"))
+
+    def test_owned_exact_cohort_shape_and_program_scope(self):
+        self.owned_inputs()
+        source = "runtime/os/include/Os.h"
+        self.select_owned(source, "20.10", "#define OS_TASK_ENTRY(identifier)")
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "accepted")
+        self.assertEqual(occurrence["entity"], "OS_TASK_ENTRY")
+        original = (self.root / source).read_bytes()
+        (self.root / source).write_bytes(
+            original.replace(b"Os_TaskEntry_##identifier", b"Other_##identifier"))
+        self.select_owned(source, "20.10", "#define OS_TASK_ENTRY(identifier)")
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+        (self.root / source).write_bytes(original)
+        self.select_owned("runtime/ecu/src/Ecu_HostBatch.c", "8.7", "StatusType Ecu_HostBatchParse",
+                          programs=["probe"])
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+        self.select_owned("runtime/ecu/src/Ecu_HostBatch.c", "8.7", "StatusType Ecu_HostBatchParse",
+                          programs=["host-batch"])
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_owned_required_risk_record_keeps_formal_obligation(self):
+        self.owned_inputs()
+        self.select_owned("runtime/os/src/Os_Error.c", "18.6", "context->parameters = parameters;")
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["status"], "owned_record_matched")
+        self.assertEqual(occurrence["entity"], "Os_ErrorContextSave")
+        self.assertEqual(occurrence["reason"], "formal_deviation_pending")
+
+    def test_owned_group_cannot_approve_a_generated_retention_record(self):
+        self.owned_inputs()
+        self.select_owned("runtime/os/src/Os_Arti.c", "11.4", "const uint64 native_address",
+                          delivered="generated/src/Os_Arti.c")
+        self.bind_groups(statuses={"generated-retention": "pending"})
+        self.bind(self.context(group="owned-source", status="approved"))
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "blocked")
+        self.assertEqual(occurrence["status"], "record_matched")
+        self.assertEqual(occurrence["reason"], "formal_deviation_pending")
+
+    def test_owned_position_cannot_overflow_into_a_record_on_the_next_line(self):
+        self.owned_inputs()
+        source = "runtime/os/include/Os.h"
+        self.select_owned(source, "20.10", "#define OS_TASK_ENTRY(identifier)")
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+        location = self.summary["diagnostics"][0]["locations"][0]
+        lines = (self.root / source).read_text(encoding="utf-8").splitlines(keepends=True)
+        location["line"] -= 1
+        location["column"] += len(lines[location["line"] - 1])
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_owned_both_scope_does_not_authorize_a_new_program(self):
+        self.owned_inputs()
+        self.summary["scope"]["entries"]["other"] = self.summary["scope"]["entries"].pop("probe")
+        self.summary["programs"][1]["name"] = "other"
+        self.target["entries"] = self.summary["scope"]["entries"]
+        self.select_owned("runtime/os/include/Os.h", "20.10", "#define OS_TASK_ENTRY(identifier)",
+                          programs=["other"])
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_owned_all_scope_does_not_authorize_a_new_profile(self):
+        self.owned_inputs()
+        self.bind_groups(cases={group: "unreviewed-profile" for group in c_acceptance.GROUPS})
+        self.bind(self.context(group="owned-source", status="approved", case="unreviewed-profile"))
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "blocked")
+        self.assertEqual(occurrence["reason"], "owned_source_case_outside_record")
+
+    def test_owned_memmap_consumption_rejects_unrelated_undef(self):
+        self.owned_inputs()
+        source = "runtime/bsw/include/Can_MemMap.h"
+        self.select_owned(source, "20.5", "#undef CAN_STOP_SEC_CODE")
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+        path = self.root / source
+        path.write_bytes(path.read_bytes().replace(
+            b"#undef CAN_STOP_SEC_CODE", b"#undef UNRELATED"))
+        self.select_owned(source, "20.5", "#undef UNRELATED")
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_owned_unrecorded_memmap_undef_waits_for_category_instance_consumer(self):
+        self.owned_inputs()
+        self.select_owned("runtime/os/include/Os_MemMap.h", "20.5", "#undef OS_MEMMAP\n")
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "blocked")
+        self.assertEqual(occurrence["reason"], "no_record")
+
+    def test_owned_memmap_requires_the_complete_protocol(self):
+        self.owned_inputs()
+        source = "runtime/bsw/src/Can.c"
+        self.select_owned(source, "20.1", '#include "Can_MemMap.h"')
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+        path = self.root / source
+        path.write_bytes(path.read_bytes().replace(b"CAN_STOP_SEC_CODE", b"CAN_STOP_SEC_OTHER"))
+        self.select_owned(source, "20.1", '#include "Can_MemMap.h"')
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_owned_c90_ruling_uses_the_effective_language(self):
+        self.owned_inputs()
+        source = "runtime/bsw/src/Can.c"
+        self.select_owned(source, "17.3", "Can_InternalRxIndication(")
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+        self.summary["scope"]["compilerFlags"].append("-std=c90")
+        self.select_owned(source, "17.3", "Can_InternalRxIndication(")
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
     def test_identity_binds_configuration_producer_sdk_and_program_closure(self):
         before = self.identity()
         for key in ("semanticIdentity", "programs", "scope"):

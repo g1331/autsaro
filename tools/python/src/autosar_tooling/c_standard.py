@@ -695,7 +695,9 @@ def code_words(source: str) -> list[str]:
 RETAINED_APPLICATION = "core/tests/fixtures/component-pipeline/applications/Ingress.c"
 
 
-def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
+def deviation_findings(
+    root: Path = ROOT, *, matched: list[dict] | None = None
+) -> collections.Counter[Key]:
     """Match approved table scopes to adjacent source locations, without approving them."""
     records: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
     locations: dict[tuple[str, str, str, str], tuple[str, str]] = {}
@@ -825,6 +827,24 @@ def deviation_findings(root: Path = ROOT) -> collections.Counter[Key]:
                     if actual != shapes[key]:
                         line = source.splitlines()[source.count("\n", 0, token.start)].strip()
                         result[("deviation-shape", name, line)] += 1
+                if matched is not None and key in records and declaration:
+                    document, record_text = locations[key]
+                    end = declaration[-1].end
+                    if direct and declaration[-1].text == "{" and match[2] == "18.6":
+                        body_depth = 1
+                        for item in tokens:
+                            if (item.start < end or is_comment(item)
+                                    or item.text.lstrip().startswith("#")):
+                                continue
+                            body_depth += (item.text == "{") - (item.text == "}")
+                            if body_depth == 0:
+                                end = item.end
+                                break
+                    matched.append({"kind": match[1], "rule": match[2], "source": name,
+                                    "entity": symbol, "start": declaration[0].start,
+                                    "end": end,
+                                    "record": {"file": document, "text": record_text},
+                                    "shape": code_words(" ".join(t.text for t in declaration))})
                 comments[key] += 1
                 source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())
     for entries, positions in ((records, locations), (comments, source_locations)):

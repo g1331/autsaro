@@ -78,3 +78,10 @@ foreign／one-past／wrong-slot 反例保持身份拒绝。实际平台行为与
 `test_host_address_category_requires_exact_owner_expression_and_annotation` 检查既有 Linux
 正反例；`test_windows_address_category_keeps_each_expression_bounded` 验证 Windows 的全部五实例、同函数双实例、缺注释、错规则、越界表达式、
 错误函数及重复表达式。项目检查识别来源模式，不替代类型／行为分析、调用合同或规范判断。
+
+## 项目验收的逐位置关联
+
+`c_acceptance` 复用上述实例及 MR12 双向关联，将实际诊断位置回接本篇。
+当前原件、交付 ownership、源码字节、程序和目标一同核对；本组证据正文与解析器进入
+输入身份。Advisory 实例须有 `owned-source` 当前有效上下文，Required 实例继续保留
+正式义务阻塞。记录关联与上下文格式见[源码验收](../../../development/testing/source-acceptance.md)。

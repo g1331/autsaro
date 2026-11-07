@@ -23,3 +23,82 @@ R8.7为Advisory/System。宏／header inline或按程序裁剪是可行替代，
 TerminateTask还读取原生栈角色和当前Task trace状态；引入完整栈布局会把FreeRTOS配置类型带入公开头，因此本批保留原外部实现。isOsStarted、NextScheduleTable也保留原名字、参数和命名基线；三项现按上述2026-10-30精确决定保留外部形式，不将头内迁移当作批准依据。错误、资源／上下文、嵌套、退出和trace控制沿现有实现，ErrorHook R18.6状态不变。
 
 正常MemoryMap消费者通过真正头内SetEvent及函数指针观察 enter、entry、implementation、capture、return、leave 顺序；六种删除反例须先编译成功，再由专用退出4拒绝。段属性删除反例及全START／STOP结构继续保留；局部函数使用既有local_names机制核对真实ELF／PE段绑定，不再用同名公开桩定义代替服务。
+
+## 自有源码记录的当前输入消费
+
+本节的 `owned-source` 上下文只绑定原标准篇已有的精确记录与类别实例，沿用
+[ADR 0023](../../adr/0023-autosar-required-conflict-disposition.md)、
+[ADR 0025](../../adr/0025-misra-layered-scope.md) 的原决定范围。机器关联复用
+`c_standard` 的实体、shape、MR12 双向检查和主机地址八个表达式；MemMap R20.1 位置须
+通过[原协议检查](../memmap/README.md#memmap-类别偏离)，R20.5 仅取原表精确登记位置，
+未登记的内部属性／状态撤销继续由原任务接续。C99 下 R17.3 的适用性沿
+[OS 原裁决](../os/implementation.md#c90隐式声明规则与当前编译)。
+
+当前有界消费只接纳上述匹配中的 Advisory 记录及已说明的语言不适用位置。
+原生成 159 键继续使用独立的 `generated-retention` 上下文和消费者。
+Advisory 的记录安排沿各原篇既有理由、替代、风险及控制，适用主文 §6.2.3；
+上下文的 `approved` 表示这些已有记录在所列输入交集内有效。Required 的精确关联
+仍逐位置保留 `formal_deviation_pending`，Mandatory 保留项仍拒绝，其他模块裁决、
+SDK、采用内核与人工组保持各自未完成状态。新增实体或 body、目标、程序、producer、
+工具、来源和评估正文变化时重评；本节没有增加偏离、类别或诊断基线。
+
+完整双平台四样本的来源、原始结果、逐位置消费和拒绝证据归
+[实施 PR](https://github.com/g1331/autsaro/pull/449)。输入绑定采用
+[源码验收格式](../../development/testing/source-acceptance.md)，绑定块自身排除于摘要；
+其他正文及解析器保持逐字节绑定。剩余完整消费与 Required 正式材料由
+[#439](https://github.com/g1331/autsaro/issues/439) 接续。
+<!-- source-assessment-context-begin -->
+{
+  "id": "owned-source-449-inputs",
+  "evidence": {
+    "head": "0ca5ed41e06e7dd538b1a5905702b5b8c2319499",
+    "receipt": "https://github.com/g1331/autsaro/pull/449#issuecomment-6711437449"
+  },
+  "cases": [
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "f3bdc1354fde0e0caba67c76e7172bff57c63c67c83c457fed92332acbf21f45"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "400ed6357ea8c7fbb1d6f81dc222ad49ee41b31ce4c744ce2957c92887a19d8d"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "3281869ee44e1ba9844b7bea881a52d5ecfa66310996bf80f05365cad587b852"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "a3c50f2fae3d476667a4fd3fa8d772cc1fda30cf2d10f0e383513b54eae661d8"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "d35811dfd745b92bc4f1524b6d7713253c0bfbd9dea6b96f5a8a1b4c0d301df9"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "9aa419a166d5c587623ccd809ce1686e1f023d70cee3bc0e3ad67cc83a5581a2"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "b9ef14c72f432b8085ee15d1bb7dd35774114f640148aef62497ac6caf668fb3"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "0ebece36032403a61b32d00bb93357f65e74a40cb76b0c329be87ae5ed3aba0c"
+    }
+  ],
+  "records": {
+    "kind": "owned-source"
+  },
+  "formalStatus": "approved"
+}
+<!-- source-assessment-context-end -->
