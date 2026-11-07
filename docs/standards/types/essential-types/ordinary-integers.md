@@ -47,3 +47,28 @@ Linux GCC 13.3.0 与 Clang 18.1.3 对 443 个 token／控制形式的类型断�
 类型断言使用 GCC／Clang 的 `__typeof__` 与 `__builtin_types_compatible_p` 在独立 C99 fixture 中观察标准 literal 类型；不加入产品或修改正常宏配置。所编译的实际 token、后缀去 U 变体和边界集与独立候选表一致；去 U 后超出 C99 有符号候选范围的十进制明确拒绝，不作为正常 signed 值。正反控制包括 `0xffffffff` 的 unsigned int、`2147483648` 的 signed decimal、LP64／LLP64 不同的 `0xffffffffL`／等值八进制、LL 与 U／UL／ULL，以及 `0xffffffffffffffffLL` 缺 U。故能发现普通表达式中缺 U 的 unsigned literal，也不会把 unsigned 变量的 signed 初始化常量误报。独立 fixture 的错误预期必须编译失败。
 
 本项只闭合所列正常 TU 的普通整数取证缺口；上述 SDK 违反、其他配置／TU、未实例化宏的其他使用点和 SDK 内部继续未完成。未宣布整条 R7.2 或总体 MISRA 符合。原始 passed=false／error=null、程序 exit1、221 not_assessed、completeCompliance=false、66／155、retention 与 strict refusal 不变；本目录不在五篇人工机制输入选集中。实际本地验证及独立审查、精确 head CI 见交付 PR，不把文档 CI 未选择的运行时矩阵记作执行通过。
+
+## 当前普通表达式的复核
+
+#443 从 [#448 最终 head 的完整工件](https://github.com/g1331/autsaro/actions/runs/42391343618)
+接续上述方法，逐份检查实际 `compiler-origins-N` 输出，Linux 228 个 TU、Windows 224 个 TU。
+仍按 LP64／LLP64 的 C99 候选类型表选择 literal 类型，保留原行标记、实际后缀及项目 patch 归属。
+只统计自有 runtime、生成／应用及项目修改行的使用点；采用内核原行继续沿其集成责任核对。
+
+| profile | Linux 整数 token 次数 | Windows 整数 token 次数 | Windows 缺 U 使用位置 |
+| --- | --- | --- | --- |
+| standard-ecu | 14015 | 13011 | 11 |
+| user-application | 14016 | 13012 | 11 |
+| component-pipeline | 14087 | 13083 | 11 |
+| no-diagnostic | 14032 | 13028 | 11 |
+
+次数保留重复 TU 和重复包含；浮点、指令、字符串及字符常量另行区分。
+Linux 所选使用点没有缺 U 候选；Windows 仍为上表三种 SDK 数字，四 profile 共 44 次。
+MR12 注释插入后 Backend 最后两处等待位置移动到 1523／1539，其余具体位置沿前表。
+这次复核确认当前暴露仍存在，项目侧集成处置由 #444 承接；原头和宏定义保持。
+当前生成输出、完整 seal 与 producer 差异的适用范围见[语言构造](../language-constructs.md#当前输入与三项人工证据的接续)。
+
+正常 `c-check` 的控制输入进一步区分两个入口：普通表达式 `0xffffffff` 能触发固定 R7.2，
+相同 64 位目标下的 `#if 0xffffffffffffffff > 0` 则没有该报告且 raw `passed=true`。
+后者的 unsigned 常量仍由人工条件证据承担，见[条件控制](conditional-integers.md)。
+本篇正文的验收消费继续归 #443，完整扫描和具体诊断消费分别保留其证据范围。

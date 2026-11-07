@@ -33,3 +33,17 @@ Windows自有展开比Linux少15／19，其余及patch数字相同，均未发�
 本项闭合所列两目标、四profile实际自有runtime／generated／application及项目patch的条件证据缺口。其他配置／TU、未求值宏的其他实例、SDK内部及本次条件证据以外的普通表达式未由该交付评估；重评须取得相应输入、求值闭包及控制。#58承接剩余范围；raw passed=false／error、221 not_assessed、completeCompliance=false、66/155、retention及strict refusal保持，不宣布整条R7.2或总体符合。
 
 相同正常 TU 的普通表达式现另见[普通整数评估](ordinary-integers.md)，其中 Windows SDK 宏的真实 Required 缺口继续保留。
+
+## 接续时的证据选择
+
+#443 接续上述两目标条件证据，保留原 228／224 个 TU 的控制捕获、展开一致性和类型反例。
+新完整分析的 `compiler-origins-N` 输出用于普通表达式核对；其中已经求值并消去的条件，
+继续引用本篇的实际条件捕获。固定 `misra_7_2` 只遍历语义 token，
+正常分析目录中存在该 checker 时，仍须单独完成条件表达式的人工义务。
+
+接续时按原始条件及其活动宏闭包复用，而非仅比较 `.c` 文件名：
+检查实际选择的 `#if/#elif`、由 include 引入的定义、命令行定义、
+实际 provider、整数模型和 TU 选择；变化部分重新捕获，保持选中输出一致的独立控制。
+新版本头拆分会改变 include／条件位置，RTE producer 变化也要按实际输出判断；
+这些变化的当前输入关系和普通 token 结果见[语言构造](../language-constructs.md#当前输入与三项人工证据的接续)。
+本阶段保留历史条件捕获的冻结身份；当前全部条件闭包重评及其验收消费仍由 #443 承担。
