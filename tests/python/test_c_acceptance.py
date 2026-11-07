@@ -118,7 +118,9 @@ class AcceptanceTests(unittest.TestCase):
                 "formalStatus": status}
 
     def bind(self, context):
-        path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[0]
+        name = (c_acceptance.ADOPTION if context["records"]["kind"] == "freertos-integration"
+                else c_standard.MANUAL_ASSESSMENT_SOURCES[0])
+        path = self.root / name
         with path.open("a", encoding="utf-8", newline="\n") as destination:
             destination.write(c_acceptance.BEGIN + "\n" + json.dumps(context) + "\n" + c_acceptance.END + "\n")
         self.summary["coverage"]["manualAssessment"] = c_standard.manual_assessment(self.rules, self.root)
@@ -166,6 +168,185 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         self.assertEqual(self.plan, plan)
         self.assertNotEqual(self.identity(), before)
+
+    def freertos_inputs(self, *, patched=False, status="approved"):
+        self.owned_inputs()
+        original = "void upstream(void) {}\n"
+        addition = ("/* MR12 RULE 2.5 VIOLATION: retain this fixed selection interface. */\n"
+                    "#define KEEP 1u\n")
+        final = original + addition
+        name = "third_party/freertos/kernel.h"
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(original, encoding="utf-8")
+        manifest = {"files": {"kernel.h": hashlib.sha256(original.encode()).hexdigest()}}
+        for filename in ("source-manifest.json", "posix-source-manifest.json"):
+            (path.parent / filename).write_text(json.dumps(manifest), encoding="utf-8")
+        patch_name = "runtime/os/patches/0001-selection.patch"
+        added_lines = "".join("+" + line + "\n" for line in addition.splitlines())
+        change = ("diff --git a/kernel.h b/kernel.h\n--- a/kernel.h\n+++ b/kernel.h\n"
+                  "@@ -1 +1,3 @@\n " + original + added_lines)
+        patch_path = self.root / patch_name
+        patch_path.parent.mkdir(parents=True, exist_ok=True)
+        patch_path.write_text(change, encoding="utf-8")
+        self.files[patch_name.removeprefix("runtime/")] = change.encode()
+        self.files["kernel/kernel.h"] = final.encode()
+        self.origins[name] = "kernel/kernel.h"
+        self.target["kernelPatches"] = [{"path": patch_name, "includes": ["kernel.h"]}]
+        self.target["kernelSha256"]["kernel.h"] = hashlib.sha256(final.encode()).hexdigest()
+        self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+            "path": "kernel/kernel.h", "owner": "adopted", "producerId": "freertos",
+            "sha256": hashlib.sha256(original.encode()).hexdigest(),
+        }]}).encode()
+        adoption = self.root / c_acceptance.ADOPTION
+        adoption.write_text(
+            "## 当前集成义务与消费\nSynthetic integration evidence.\n"
+            "| MISRA C:2012 Rule 2.5 | `kernel/kernel.h` `KEEP` | shape=`#define KEEP 1u` "
+            "| 维护者 Synthetic contract choice |\n", encoding="utf-8")
+        self.summary["diagnostics"] = [{"id": "misra-c2012-2.5",
+            "programs": ["host-batch", "probe"],
+            "adopted": not patched, "patched": patched,
+            "locations": [{"file": "kernel/kernel.h", "line": 3 if patched else 1, "column": 0}]}]
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.bind_freertos(status=status)
+
+    def bind_freertos(self, *, status="approved"):
+        self.bind_groups()
+        self.bind(self.context(group="freertos-integration", status=status,
+            identity=c_acceptance.freertos_identity(self.summary, self.identity(), self.root)))
+
+    def test_freertos_original_and_patch_use_current_evidence_and_preserve_raw(self):
+        self.freertos_inputs()
+        for patched in (False, True):
+            with self.subTest(patched=patched):
+                diagnostic = self.summary["diagnostics"][0]
+                diagnostic.update(adopted=not patched, patched=patched)
+                diagnostic["locations"][0]["line"] = 3 if patched else 1
+                self.bind_freertos()
+                before = copy.deepcopy(self.summary)
+                occurrence = self.evaluate()["occurrences"][0]
+                self.assertEqual(occurrence["assessment"], "accepted", occurrence)
+                self.assertEqual(occurrence["reason"], "freertos_integration_verified")
+                self.assertEqual(occurrence["contextId"], "frozen-freertos-integration")
+                self.assertEqual(self.summary, before)
+
+    def test_freertos_pending_or_changed_reports_remain_blocked(self):
+        self.freertos_inputs(status="pending")
+        self.assertEqual(self.evaluate()["occurrences"][0]["reason"],
+                         "freertos_integration_assessment_pending")
+        self.bind_freertos()
+        self.summary["diagnostics"][0]["id"] = "misra-c2012-1.3"
+        self.assertEqual(self.evaluate()["occurrences"][0]["reason"],
+                         "freertos_integration_context_unbound_or_stale")
+
+    def test_freertos_patch_identity_and_missing_manifest_are_rejected(self):
+        self.freertos_inputs()
+        manifest = self.root / "third_party/freertos/source-manifest.json"
+        saved = manifest.read_bytes()
+        manifest.unlink()
+        self.assertEqual(self.evaluate()["status"], "error")
+        manifest.write_bytes(saved)
+        path = self.root / "runtime/os/patches/0001-selection.patch"
+        path.write_bytes(path.read_bytes() + b"\n")
+        result = self.evaluate()
+        self.assertEqual(result["status"], "error")
+        self.assertIn("FreeRTOS patch identity differs", result["objects"][-1]["reason"])
+
+    def test_freertos_patch_shape_and_unrecorded_location_are_rejected(self):
+        self.freertos_inputs(patched=True)
+        adoption = self.root / c_acceptance.ADOPTION
+        adoption.write_text(adoption.read_text().replace("#define KEEP 1u", "#define KEEP 2u"))
+        self.bind_freertos()
+        self.assertEqual(self.evaluate()["occurrences"][0]["reason"], "freertos_record_invalid")
+        self.summary["diagnostics"][0]["locations"][0]["line"] = 2
+        self.bind_freertos()
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_freertos_mixed_report_does_not_accept_project_location(self):
+        self.freertos_inputs()
+        self.summary["diagnostics"][0]["locations"].append(
+            {"file": "main.c", "line": 1, "column": 0})
+        self.bind_freertos()
+        rows = self.evaluate()["occurrences"]
+        self.assertEqual(rows[0]["assessment"], "accepted")
+        self.assertEqual(rows[1]["assessment"], "blocked")
+
+    def test_freertos_replay_preserves_patch_responsibility_after_reversion(self):
+        self.freertos_inputs()
+        original = "void upstream(void) {}\n"
+        changed = "void upstream(void) { (void)0; }\n"
+        patches = []
+        for index, (before, after) in enumerate(((original, changed), (changed, original))):
+            name = f"runtime/os/patches/000{index + 2}-reversion.patch"
+            change = ("diff --git a/kernel.h b/kernel.h\n--- a/kernel.h\n+++ b/kernel.h\n"
+                      "@@ -1 +1 @@\n-" + before + "+" + after)
+            (self.root / name).write_text(change, encoding="utf-8")
+            self.files[name.removeprefix("runtime/")] = change.encode()
+            patches.append({"path": name, "includes": ["kernel.h"]})
+        self.target["kernelPatches"] = patches
+        self.target["kernelSha256"]["kernel.h"] = hashlib.sha256(original.encode()).hexdigest()
+        self.files["kernel/kernel.h"] = original.encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.bind_freertos()
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "blocked", occurrence)
+        self.assertNotEqual(occurrence["status"], "freertos_record_matched")
+
+    def test_freertos_patch_cannot_consume_a_new_required_retention(self):
+        self.freertos_inputs(patched=True)
+        adoption = self.root / c_acceptance.ADOPTION
+        adoption.write_text(adoption.read_text().replace("Rule 2.5", "Rule 10.3"))
+        for name in ("kernel/kernel.h", "os/patches/0001-selection.patch"):
+            self.files[name] = self.files[name].replace(b"RULE 2.5", b"RULE 10.3")
+        (self.root / "runtime/os/patches/0001-selection.patch").write_bytes(
+            self.files["os/patches/0001-selection.patch"])
+        self.target["kernelSha256"]["kernel.h"] = hashlib.sha256(
+            self.files["kernel/kernel.h"]).hexdigest()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.summary["diagnostics"][0]["id"] = "misra-c2012-10.3"
+        self.bind_freertos()
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_freertos_zero_reports_still_requires_integration_evidence(self):
+        self.freertos_inputs()
+        self.summary["scope"].pop("adoptedSources", None)
+        self.summary["diagnostics"] = []
+        self.bind_groups()
+        result = self.evaluate()
+        self.assertIn({"kind": "context", "id": "freertos-integration",
+                       "reason": "freertos_integration_context_unbound_or_stale"},
+                      result["objects"])
+
+    def test_freertos_zero_reports_rejects_missing_interaction_record(self):
+        self.freertos_inputs()
+        self.summary["diagnostics"] = []
+        adoption = self.root / c_acceptance.ADOPTION
+        adoption.write_text(adoption.read_text().replace("## 当前集成义务与消费", ""))
+        self.bind_freertos()
+        result = self.evaluate()
+        self.assertIn({"kind": "context", "id": "freertos-integration",
+                       "reason": "freertos_integration_evidence_missing"}, result["objects"])
+
+    def test_freertos_configuration_change_invalidates_integration_evidence(self):
+        self.freertos_inputs()
+        self.target["compilerFlags"] = ["-DCHANGED_CONFIGURATION=1"]
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["reason"], "freertos_integration_context_unbound_or_stale")
+
+    def test_freertos_report_order_does_not_change_integration_identity(self):
+        self.freertos_inputs()
+        diagnostic = copy.deepcopy(self.summary["diagnostics"][0])
+        diagnostic["id"] = "misra-c2012-8.7"
+        self.summary["diagnostics"].append(diagnostic)
+        before = c_acceptance.freertos_identity(self.summary, self.identity(), self.root)
+        self.summary["diagnostics"].reverse()
+        self.assertEqual(c_acceptance.freertos_identity(self.summary, self.identity(), self.root),
+                         before)
 
     def owned_inputs(self):
         self.synthetic_complete_inputs()

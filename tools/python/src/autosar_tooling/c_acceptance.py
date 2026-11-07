@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -29,6 +30,7 @@ INCOMPLETE = {"misra-config", "syntaxError", "preprocessorErrorDirective", "inte
 GROUPS = ("generated-retention", "manual-assessment", "checker-limitations")
 GUIDELINE_CATEGORIES_SHA256 = "ef484316b09af067e673521476fd7a70f5757646e9c7e3918cdacef75a34bf66"
 GRP = "docs/adr/0025-misra-layered-scope.md"
+ADOPTION = "docs/standards/os/adoption.md"
 
 
 def _hash(value: object) -> str:
@@ -86,7 +88,8 @@ def contexts(root: Path = ROOT) -> list[dict]:
                     or row["records"] not in ({"kind": "generated-retention", "cohortSha256": c_retention.COHORT_SHA256},
                                               {"kind": "manual-assessment"},
                                               {"kind": "checker-limitations"},
-                                              {"kind": "owned-source"})
+                                              {"kind": "owned-source"},
+                                              {"kind": "freertos-integration"})
                     or not isinstance(row["cases"], list) or not row["cases"]):
                 raise ValueError(f"Invalid source assessment context: {path}")
             identifiers.add(row["id"])
@@ -132,7 +135,7 @@ def _owned_documents(root: Path) -> list[str]:
                          path.read_text(encoding="utf-8"))
             or path.relative_to(root).as_posix() in {
                 "docs/standards/memmap/README.md", "docs/standards/os/implementation.md",
-                "docs/standards/os/native-facilities/addresses.md"}]
+                "docs/standards/os/native-facilities/addresses.md", ADOPTION}]
 
 
 def _assessment_inputs(summary: dict, root: Path) -> dict:
@@ -458,6 +461,162 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
             and row["record"]["text"] in (root / row["record"]["file"]).read_text(encoding="utf-8")}
 
 
+def freertos_identity(summary: dict, identity: str, root: Path = ROOT) -> str:
+    """Bind integration evidence to the exact reports as well as the analyzed input.
+
+    Supplier responsibility does not authorize new diagnostics. Include every
+    mixed diagnostic in full so adding a non-kernel location also invalidates it.
+    """
+    return _hash({"inputIdentity": identity,
+                  "manifests": {name: digest(root / "third_party/freertos" / name)
+                                for name in ("source-manifest.json", "posix-source-manifest.json")},
+                  "diagnostics": sorted(_hash(row) for row in summary["diagnostics"]
+                                        if any(location["file"].startswith("kernel/")
+                                               for location in row["locations"]))})
+
+
+def _freertos_sources(project: Path, metadata: dict, root: Path) -> tuple[dict, dict]:
+    """Replay the ordered project patches against verified supplier originals."""
+    from ecu_tools.build import (
+        kernel_patch_environment,
+        kernel_patch_targets,
+        require_kernel_patch_applied,
+    )
+
+    from autosar_tooling import c_check
+
+    target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+    manifests = [json.loads((root / "third_party/freertos" / name).read_text(encoding="utf-8"))
+                 for name in ("source-manifest.json", "posix-source-manifest.json")]
+    original_hashes = {name: value for manifest in manifests
+                       for name, value in manifest["files"].items()}
+    owners = {row["path"]: row for row in json.loads(
+        (project / "meta/workbench-ownership.json").read_text(encoding="utf-8"))["files"]}
+    sources = {}
+    with tempfile.TemporaryDirectory(prefix="freertos-acceptance-") as temporary:
+        replay = Path(temporary)
+        for original, delivered in metadata["originalBswSources"].items():
+            if not delivered.startswith("kernel/"):
+                continue
+            if not (safe_relative(original) and safe_relative(delivered)
+                    and original.startswith("third_party/freertos/")):
+                raise ValueError("FreeRTOS original provenance invalid")
+            relative = original.removeprefix("third_party/freertos/")
+            expected = original_hashes.get(relative)
+            if relative in {"source-manifest.json", "posix-source-manifest.json"}:
+                expected = digest(root / original)
+            if (expected is None or digest(root / original) != expected
+                    or owners.get(delivered, {}).get("sha256") != expected):
+                raise ValueError(f"FreeRTOS original identity differs: {original}")
+            destination = replay / delivered
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(root / original, destination)
+        if not target.get("kernelPatches"):
+            raise ValueError("FreeRTOS ordered patch selection missing")
+        patched = {}
+        for index, patch in enumerate(target["kernelPatches"]):
+            original = patch["path"]
+            if not safe_relative(original) or not original.startswith("runtime/os/patches/"):
+                raise ValueError("FreeRTOS patch provenance invalid")
+            delivered = original.removeprefix("runtime/")
+            if digest(root / original) != digest(project / delivered):
+                raise ValueError(f"FreeRTOS patch identity differs: {original}")
+            before = kernel_patch_targets(replay / "kernel", project / delivered, patch["includes"])
+            git = shutil.which("git")
+            if git is None:
+                raise ValueError("Git is required to verify FreeRTOS integration")
+            c_check.run([str(Path(git).resolve()), "-c", "core.autocrlf=false",
+                         "apply", "--ignore-space-change",
+                         *("--include=" + name for name in patch["includes"]),
+                         str(project / delivered)], replay, f"patch-{index}", 30,
+                        cwd=replay / "kernel", env=kernel_patch_environment(replay / "kernel"))
+            require_kernel_patch_applied(project / delivered, before)
+            patched = c_check.kernel_patched_lines(before, replay, patched)
+        require_kernel_identity(replay / "kernel", target["kernelSha256"])
+        require_kernel_identity(project / "kernel", target["kernelSha256"])
+        for name in target["kernelSha256"]:
+            if name.endswith((".c", ".h")):
+                delivered = "kernel/" + name
+                sources[delivered] = (replay / delivered).read_text(encoding="utf-8")
+    return sources, patched
+
+
+def _freertos_positions(summary: dict, project: Path, metadata: dict, root: Path) -> dict:
+    """Consume supplier integration and project MR12 records by actual position."""
+    target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+    if not target.get("kernelPatches") and not any(
+            location and location["file"].startswith("kernel/")
+            for _, _, _, location in _positions(summary["diagnostics"])):
+        return {}
+    if (not (root / ADOPTION).is_file()
+            or "## 当前集成义务与消费" not in (root / ADOPTION).read_text(encoding="utf-8")):
+        return {}
+    if not all((root / "third_party/freertos" / name).is_file()
+               for name in ("source-manifest.json", "posix-source-manifest.json")):
+        return {}
+    sources, patched = _freertos_sources(project, metadata, root)
+    records = []
+    errors = c_standard.deviation_findings(root, matched=records, kernel_sources=sources)
+    records = [row for row in records if row["source"].startswith("kernel/")]
+    result = {}
+    for index, position, diagnostic, location in _positions(summary["diagnostics"]):
+        if location is None or location["file"] not in sources:
+            continue
+        name = location["file"]
+        source = sources[name]
+        lines = source.splitlines(keepends=True)
+        line, column = int(location["line"]), int(location.get("column", 0))
+        if (not 1 <= line <= len(lines) or column < 0
+                or column > len(lines[line - 1].rstrip("\r\n"))
+                or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
+            continue
+        candidate = {**diagnostic, "locations": [location],
+                     "patched": line in patched.get(name, ()), "adopted": False}
+        c_sdk.classify([candidate], summary["scope"], [], project)
+        if candidate["sourceCategory"] == "sdk":
+            continue
+        start = sum(map(len, lines[:line - 1]))
+        offset = start + max(0, column - 1)
+        if line not in patched.get(name, ()):
+            # Only the exact frozen report set can consume this responsibility
+            # classification. Project and SDK positions take their own paths.
+            result[index, position] = {"entity": None, "reason": None,
+                "record": {"file": ADOPTION, "text": "## 当前集成义务与消费"}}
+            continue
+        matches = [row for row in records if row["source"] == name and row["kind"] == "RULE"
+                   and diagnostic["id"] == "misra-c2012-" + row["rule"]
+                   and (row["start"] <= offset < row["end"]
+                        or column == 0 and start <= row["start"] < start + len(lines[line - 1]))]
+        if len(matches) == 1:
+            row = matches[0]
+            # Only the already bounded Advisory table belongs to this consumer.
+            # Required and Mandatory records need their own formal disposition.
+            if (row["record"]["file"] != ADOPTION or row["rule"] not in {"2.5", "8.7"}):
+                continue
+            result[index, position] = {"entity": row["entity"], "record": row["record"],
+                "reason": "freertos_record_invalid" if errors else None}
+        elif (diagnostic["id"] == "misra-c2012-17.3"
+              and [flag for flag in summary["scope"]["compilerFlags"]
+                   if flag.startswith("-std=")][-1:] == ["-std=c99"]):
+            result[index, position] = {"entity": c_retention.containing_function(
+                c_standard.lex(source), offset), "reason": None,
+                "record": {"file": ADOPTION, "text": "## 补丁诊断的具体处置"}}
+        elif (diagnostic["id"] == "misra-c2012-20.7"
+              and name == "kernel/portable/ThirdParty/GCC/Posix/portmacro.h"
+              and lines[line - 1].strip() in {
+                  ("#define portTASK_FUNCTION_PROTO(function, parameters) "
+                   "void function(void *parameters)"),
+                  ("#define portTASK_FUNCTION(function, parameters) "
+                   "void function(void *parameters)")}):
+            result[index, position] = {"entity": lines[line - 1].split("(")[0].split()[-1],
+                "reason": None, "record": {"file": ADOPTION, "text": "## 补丁诊断的具体处置"}}
+        elif (diagnostic["id"] == "misra-c2012-5.5" and name == "kernel/include/task.h"
+              and lines[line - 1].strip() == "extern TaskHandle_t volatile pxCurrentTCB;"):
+            result[index, position] = {"entity": "pxCurrentTCB", "reason": None,
+                "record": {"file": ADOPTION, "text": "## 补丁诊断的具体处置"}}
+    return result
+
+
 def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
     """Assess three independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
@@ -474,7 +633,11 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         result["assessmentInputs"] = _assessment_inputs(summary, root)
         selected = {context["records"]["kind"]: (context, case)
                     for context in contexts(root) for case in context["cases"]
-                    if case["target"] == result["target"] and case["inputIdentity"] == identity}
+                    if (context["records"]["kind"] != "freertos-integration"
+                        or context["source"] == ADOPTION)
+                    if case["target"] == result["target"] and case["inputIdentity"] == (
+                        freertos_identity(summary, identity, root)
+                        if context["records"]["kind"] == "freertos-integration" else identity)}
         case_ids = {case["caseId"] for _, case in selected.values()}
         if len(case_ids) == 1:
             result["caseId"] = next(iter(case_ids))
@@ -513,6 +676,23 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         retention = c_retention.analyze(summary["diagnostics"], project, result["target"])
         grp_positions = _grp_positions(summary, project, metadata, root)
         owned_positions = _owned_positions(summary, project, metadata, root)
+        freertos_positions = _freertos_positions(summary, project, metadata, root)
+        if "freertos-integration" in selected:
+            result["contexts"].append(_reference(selected["freertos-integration"][0]))
+        target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+        if target.get("kernelPatches"):
+            context = selected.get("freertos-integration")
+            result["freertosInputIdentity"] = freertos_identity(summary, identity, root)
+            if context is None:
+                add("context", "freertos-integration",
+                    "freertos_integration_context_unbound_or_stale")
+            elif context[1]["caseId"] not in c_retention.PROFILES.values():
+                add("context", "freertos-integration", "freertos_case_outside_record")
+            elif context[0]["formalStatus"] != "approved":
+                add("context", "freertos-integration", "freertos_integration_assessment_pending")
+            elif (not (root / ADOPTION).is_file()
+                  or "## 当前集成义务与消费" not in (root / ADOPTION).read_text(encoding="utf-8")):
+                add("context", "freertos-integration", "freertos_integration_evidence_missing")
         occurrences = [row for row in retention["occurrences"] if row["rule"] != "checkersReport"]
         positions = list(_positions(summary["diagnostics"]))
         if len(occurrences) != len(positions):
@@ -525,6 +705,17 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
             if grp:
                 reason = None
                 occurrence.update(status="grp_disapplied", record=GRP + "#grp指南重分类计划")
+            elif (index, position) in freertos_positions:
+                ruling = freertos_positions[index, position]
+                occurrence.update(status="freertos_record_matched", entity=ruling["entity"],
+                                  record=ruling["record"])
+                context = selected.get("freertos-integration")
+                reason = ("freertos_integration_context_unbound_or_stale" if context is None
+                          else "assessment_case_mismatch" if len(case_ids) != 1
+                          else "freertos_case_outside_record"
+                          if context[1]["caseId"] not in c_retention.PROFILES.values()
+                          else "freertos_integration_assessment_pending"
+                          if context[0]["formalStatus"] != "approved" else ruling["reason"])
             elif (index, position) in owned_positions:
                 ruling = owned_positions[index, position]
                 occurrence.update(status="owned_record_matched", entity=ruling["entity"],
@@ -551,14 +742,20 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
             else:
                 reason = None
             occurrence.update(locationIndex=position, diagnosticIdentity=_hash(diagnostic), profile=profile,
-                              contextId=(selected["owned-source"][0]["id"]
+                              contextId=(selected["freertos-integration"][0]["id"]
+                                         if (index, position) in freertos_positions
+                                         and "freertos-integration" in selected
+                                         else selected["owned-source"][0]["id"]
                                          if (index, position) in owned_positions
                                          and "owned-source" in selected
                                          else selected["generated-retention"][0]["id"]
                                          if "generated-retention" in selected else None),
                               evidenceClosure="not_established" if reason else "frozen_context",
                               assessment="blocked" if reason else "accepted",
-                              reason=reason or ("grp_disapplied" if grp else "owned_source_approved"
+                              reason=reason or ("grp_disapplied" if grp
+                                                else "freertos_integration_verified"
+                                                if (index, position) in freertos_positions
+                                                else "owned_source_approved"
                                                 if (index, position) in owned_positions
                                                 else "retention_approved"))
             result["occurrences"].append(occurrence)
@@ -566,7 +763,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
                 add("diagnostic", index, reason, rule=occurrence["rule"], location=location,
                     entity=occurrence["entity"], programs=occurrence["programs"], record=occurrence["record"])
         result["status"] = "blocked" if result["objects"] else "accepted"
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError) as error:
         result["status"] = "error"
         add("execution", "assessment", str(error))
     return result
