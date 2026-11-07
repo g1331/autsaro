@@ -353,6 +353,13 @@ class AcceptanceTests(unittest.TestCase):
         self.select_owned(source, "20.5", "#undef UNRELATED")
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
 
+    def test_owned_unrecorded_memmap_undef_waits_for_category_instance_consumer(self):
+        self.owned_inputs()
+        self.select_owned("runtime/os/include/Os_MemMap.h", "20.5", "#undef OS_MEMMAP\n")
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "blocked")
+        self.assertEqual(occurrence["reason"], "no_record")
+
     def test_owned_memmap_requires_the_complete_protocol(self):
         self.owned_inputs()
         source = "runtime/bsw/src/Can.c"
