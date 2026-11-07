@@ -12,23 +12,23 @@ SWS_BSW_00059 要求所有模块头提供受多重定义保护的发布信息 #d
 
 | 规则 | 精确范围 | 原文及控制 | 原授权 |
 | --- | --- | --- | --- |
-| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/BswM.h` 中 `BSWM_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/BswM_Version.h` 中 `BSWM_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/BswM_Version.h` 中 `BSWM_AR_RELEASE_REVISION_VERSION`、`BSWM_SW_MAJOR_VERSION`、`BSWM_SW_MINOR_VERSION`、`BSWM_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/CanIf_Version.h` 中 `CANIF_AR_RELEASE_REVISION_VERSION`、`CANIF_SW_MAJOR_VERSION`、`CANIF_SW_MINOR_VERSION`、`CANIF_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/CanTp_Version.h` 中 `CANTP_AR_RELEASE_REVISION_VERSION`、`CANTP_SW_MAJOR_VERSION`、`CANTP_SW_MINOR_VERSION`、`CANTP_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Can_Version.h` 中 `CAN_AR_RELEASE_REVISION_VERSION`、`CAN_SW_MAJOR_VERSION`、`CAN_SW_MINOR_VERSION`、`CAN_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
-| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Com.h` 中 `COM_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
-| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/ComM.h` 中 `COMM_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Com_Version.h` 中 `COM_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/ComM_Version.h` 中 `COMM_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/ComStack_Version.h` 中 `COMSTACKTYPE_AR_RELEASE_REVISION_VERSION`、`COMSTACKTYPE_SW_MAJOR_VERSION`、`COMSTACKTYPE_SW_MINOR_VERSION`、`COMSTACKTYPE_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Com_Version.h` 中 `COM_AR_RELEASE_REVISION_VERSION`、`COM_SW_MAJOR_VERSION`、`COM_SW_MINOR_VERSION`、`COM_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
-| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Dcm.h` 中 `DCM_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Dcm_Version.h` 中 `DCM_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Dcm_Version.h` 中 `DCM_AR_RELEASE_REVISION_VERSION`、`DCM_SW_MAJOR_VERSION`、`DCM_SW_MINOR_VERSION`、`DCM_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
-| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Det.h` 中 `DET_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Det_Version.h` 中 `DET_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Det_Version.h` 中 `DET_AR_RELEASE_REVISION_VERSION`、`DET_SW_MAJOR_VERSION`、`DET_SW_MINOR_VERSION`、`DET_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
-| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/LSduR.h` 中 `LSDUR_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/LSduR_Version.h` 中 `LSDUR_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/LSduR_Version.h` 中 `LSDUR_AR_RELEASE_REVISION_VERSION`、`LSDUR_SW_MAJOR_VERSION`、`LSDUR_SW_MINOR_VERSION`、`LSDUR_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/MemMap_Version.h` 中 `MEMMAP_AR_RELEASE_REVISION_VERSION`、`MEMMAP_SW_MAJOR_VERSION`、`MEMMAP_SW_MINOR_VERSION`、`MEMMAP_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
-| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/PduR.h` 中 `PDUR_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
+| MISRA C:2012 Rule 2.5 | `runtime/bsw/include/PduR_Version.h` 中 `PDUR_MODULE_ID` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/PduR_Version.h` 中 `PDUR_AR_RELEASE_REVISION_VERSION`、`PDUR_SW_MAJOR_VERSION`、`PDUR_SW_MINOR_VERSION`、`PDUR_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Platform_Types.h` 中 `PLATFORM_AR_RELEASE_REVISION_VERSION`、`PLATFORM_SW_MAJOR_VERSION`、`PLATFORM_SW_MINOR_VERSION`、`PLATFORM_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |
 | MISRA C:2012 Rule 2.5 | `runtime/bsw/include/Rte_Version.h` 中 `RTE_AR_RELEASE_REVISION_VERSION`、`RTE_SW_MAJOR_VERSION`、`RTE_SW_MINOR_VERSION`、`RTE_SW_PATCH_VERSION` | SWS_BSW_00059／00256；保留固定4.10.0及本模块软件／身份字段，首包含消费者观察。 | 维护者 原用户决定，ADR 0023；独立复核支持 |

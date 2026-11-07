@@ -12,8 +12,6 @@
 #error "Can.h -> Std_Types.h: incompatible AUTOSAR release"
 #endif
 
-/* SWS_BSW_00059: software/release fields come from Can_Version.h; vendor is unassigned. */
-#define CAN_MODULE_ID              80u   /**< SWS_BSW_00256, Appendix A.2: CAN Driver. */
 #define CAN_SID_MAIN_FUNCTION_READ 0x08u /**< SWS_Can_00226: service ID. */
 
 #define CAN_START_SEC_CODE
