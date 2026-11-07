@@ -17,7 +17,7 @@ from ecu_tools.build import (
     safe_relative,
 )
 
-from autosar_tooling import c_retention, c_standard
+from autosar_tooling import c_retention, c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 BEGIN = "<!-- source-assessment-context-begin -->"
@@ -28,6 +28,7 @@ INCOMPLETE = {"misra-config", "syntaxError", "preprocessorErrorDirective", "inte
               "cppcheckError", "addonError", "missingInclude", "missingIncludeSystem", "toomanyconfigs"}
 GROUPS = ("generated-retention", "manual-assessment", "checker-limitations")
 GUIDELINE_CATEGORIES_SHA256 = "ef484316b09af067e673521476fd7a70f5757646e9c7e3918cdacef75a34bf66"
+GRP = "docs/adr/0025-misra-layered-scope.md"
 
 
 def _hash(value: object) -> str:
@@ -129,6 +130,7 @@ def _assessment_inputs(summary: dict, root: Path) -> dict:
                            for path in sorted((root / c_retention.RECORD_DIRECTORY).glob("*.md"))]
     if not retention_documents:
         raise ValueError("Assessment retention records missing")
+    retention_documents.append(GRP)
     return {"manual": _manual_identity(root),
             "retention": {"parserSha256": digest(Path(c_retention.__file__)),
                           "documents": _document_identity(root, retention_documents)},
@@ -262,6 +264,70 @@ def _positions(diagnostics: list[dict]):
             yield index, position, diagnostic, location
 
 
+def _grp_positions(
+    summary: dict, project: Path, metadata: dict, root: Path
+) -> set[tuple[int, int]]:
+    """Locate owned return tokens covered by ADR 0025, independently of report labels."""
+    positions = [(index, position, diagnostic, location)
+                 for index, position, diagnostic, location in _positions(summary["diagnostics"])
+                 if diagnostic["id"] == "misra-c2012-15.5" and location is not None]
+    ledger = project / "meta/workbench-ownership.json"
+    if not positions or not ledger.is_file() or summary["scope"].get("sdkLineDirectives"):
+        return set()
+    owners = {row["path"]: row for row in json.loads(ledger.read_text(encoding="utf-8"))["files"]}
+    origins = {
+        delivered: original for original, delivered in metadata["originalBswSources"].items()
+    }
+    owned = {}
+    upstream = {}
+    for name in {location["file"] for _, _, _, location in positions}:
+        row = owners.get(name)
+        if row is None or not safe_relative(name) or not (project / name).is_file():
+            continue
+        original = origins.get(name, "")
+        if name.startswith("kernel/"):
+            if (original.startswith("third_party/freertos/") and safe_relative(original)
+                    and (root / original).is_file() and digest(root / original) == row["sha256"]):
+                upstream[project / name] = (root / original).read_bytes()
+            continue
+        if row["sha256"] != digest(project / name):
+            continue
+        if ((row["owner"], row["producerId"]) in {
+                ("generated", "autosar-generator"),
+                ("configuration", "autosar-workbench-config"),
+                ("build", "autosar-workbench-build")}
+                or (original.startswith("runtime/") and safe_relative(original)
+                    and (root / original).is_file()
+                    and digest(root / original) == row["sha256"])):
+            owned[name] = None
+    # Reuse the normal ownership calculation against verified original bytes.
+    # A report's patched/adopted flags and patchedLines are not authority for GRP.
+    from autosar_tooling.c_check import kernel_patched_lines
+
+    owned.update(kernel_patched_lines(upstream, project, {}))
+    returns = {}
+    for name, lines in owned.items():
+        source = (project / name).read_text(encoding="utf-8")
+        returns[name] = set()
+        for token in c_standard.lex(source):
+            if token.text == "return":
+                line = source.count("\n", 0, token.start) + 1
+                column = token.start - source.rfind("\n", 0, token.start)
+                if lines is None or line in lines:
+                    returns[name].add((str(line), str(column)))
+    accepted = set()
+    for index, position, diagnostic, location in positions:
+        point = str(location.get("line")), str(location.get("column"))
+        if point not in returns.get(location["file"], ()):
+            continue
+        candidate = {**diagnostic, "locations": [location], "adopted": False,
+                     "patched": location["file"].startswith("kernel/")}
+        c_sdk.classify([candidate], summary["scope"], [], project)
+        if candidate["sourceCategory"] in {"project", "project-patch"}:
+            accepted.add((index, position))
+    return accepted
+
+
 def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
     """Assess three independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
@@ -313,6 +379,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         if summary.get("sourceClassification", {}).get("complete") is not True:
             add("source-classification", "sdk", "sdk_source_or_macro_provenance_incomplete")
         retention = c_retention.analyze(summary["diagnostics"], project, result["target"])
+        grp_positions = _grp_positions(summary, project, metadata, root)
         occurrences = [row for row in retention["occurrences"] if row["rule"] != "checkersReport"]
         positions = list(_positions(summary["diagnostics"]))
         if len(occurrences) != len(positions):
@@ -321,7 +388,11 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         for occurrence, (index, position, diagnostic, location) in zip(occurrences, positions):
             if occurrence["diagnostic"] != index or occurrence["location"] != location:
                 raise ValueError("Retention occurrence position differs")
-            if occurrence["status"] != "record_matched":
+            grp = (index, position) in grp_positions
+            if grp:
+                reason = None
+                occurrence.update(status="grp_disapplied", record=GRP + "#grp指南重分类计划")
+            elif occurrence["status"] != "record_matched":
                 reason = occurrence["reason"]
                 if diagnostic.get("sourceCategory") == "sdk":
                     reason = "sdk_integration_assessment_missing"
@@ -336,7 +407,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
             occurrence.update(locationIndex=position, diagnosticIdentity=_hash(diagnostic), profile=profile,
                               contextId=selected["generated-retention"][0]["id"] if "generated-retention" in selected else None,
                               evidenceClosure="not_established" if reason else "frozen_context",
-                              assessment="blocked" if reason else "accepted", reason=reason or "retention_approved")
+                              assessment="blocked" if reason else "accepted",
+                              reason=reason or ("grp_disapplied" if grp else "retention_approved"))
             result["occurrences"].append(occurrence)
             if reason:
                 add("diagnostic", index, reason, rule=occurrence["rule"], location=location,
