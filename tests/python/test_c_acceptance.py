@@ -178,7 +178,7 @@ class AcceptanceTests(unittest.TestCase):
         name = "third_party/freertos/kernel.h"
         path = self.root / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(original, encoding="utf-8")
+        path.write_bytes(original.encode())
         manifest = {"files": {"kernel.h": hashlib.sha256(original.encode()).hexdigest()}}
         for filename in ("source-manifest.json", "posix-source-manifest.json"):
             (path.parent / filename).write_text(json.dumps(manifest), encoding="utf-8")
@@ -188,7 +188,7 @@ class AcceptanceTests(unittest.TestCase):
                   "@@ -1 +1,3 @@\n " + original + added_lines)
         patch_path = self.root / patch_name
         patch_path.parent.mkdir(parents=True, exist_ok=True)
-        patch_path.write_text(change, encoding="utf-8")
+        patch_path.write_bytes(change.encode())
         self.files[patch_name.removeprefix("runtime/")] = change.encode()
         self.files["kernel/kernel.h"] = final.encode()
         self.origins[name] = "kernel/kernel.h"
@@ -230,6 +230,27 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertEqual(occurrence["reason"], "freertos_integration_verified")
                 self.assertEqual(occurrence["contextId"], "frozen-freertos-integration")
                 self.assertEqual(self.summary, before)
+
+    def test_freertos_fixture_bytes_survive_windows_text_newlines(self):
+        write_text = Path.write_text
+
+        def windows_write_text(path, data, encoding=None, errors=None, newline=None):
+            return write_text(path, data, encoding=encoding, errors=errors,
+                              newline="\r\n" if newline is None else newline)
+
+        # Emulate Windows text-mode writes even when this test runs on Linux.
+        text_probe = self.directory / "default-text.txt"
+        with patch.object(Path, "write_text", windows_write_text):
+            text_probe.write_text("default newline\n", encoding="utf-8")
+            self.freertos_inputs(patched=True)
+        self.assertEqual(text_probe.read_bytes(), b"default newline\r\n")
+        original = self.root / "third_party/freertos/kernel.h"
+        self.assertEqual(original.read_bytes(), b"void upstream(void) {}\n")
+        patch_name = "os/patches/0001-selection.patch"
+        self.assertEqual((self.root / "runtime" / patch_name).read_bytes(), self.files[patch_name])
+        result = self.evaluate()
+        self.assertNotEqual(result["status"], "error", result["objects"])
+        self.assertEqual(result["occurrences"][0]["assessment"], "accepted")
 
     def test_freertos_pending_or_changed_reports_remain_blocked(self):
         self.freertos_inputs(status="pending")
@@ -281,7 +302,7 @@ class AcceptanceTests(unittest.TestCase):
             name = f"runtime/os/patches/000{index + 2}-reversion.patch"
             change = ("diff --git a/kernel.h b/kernel.h\n--- a/kernel.h\n+++ b/kernel.h\n"
                       "@@ -1 +1 @@\n-" + before + "+" + after)
-            (self.root / name).write_text(change, encoding="utf-8")
+            (self.root / name).write_bytes(change.encode())
             self.files[name.removeprefix("runtime/")] = change.encode()
             patches.append({"path": name, "includes": ["kernel.h"]})
         self.target["kernelPatches"] = patches
