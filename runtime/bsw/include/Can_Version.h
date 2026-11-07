@@ -2,6 +2,8 @@
 #ifndef CAN_VERSION_H
 #define CAN_VERSION_H
 #include "Autsaro_Version.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2). */
+#define CAN_MODULE_ID 80u
 /* R24-11 MOD DOC-REVISION; SWS_BSW_00059/00256 release identity.
  * Formal vendor identity remains unassigned. */
 #define CAN_AR_RELEASE_MAJOR_VERSION 4U

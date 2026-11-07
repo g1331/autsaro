@@ -2,6 +2,8 @@
 #ifndef CANIF_VERSION_H
 #define CANIF_VERSION_H
 #include "Autsaro_Version.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2). */
+#define CANIF_MODULE_ID 60u
 /* R24-11 MOD DOC-REVISION; SWS_BSW_00059/00256 release identity.
  * Formal vendor identity remains unassigned. */
 #define CANIF_AR_RELEASE_MAJOR_VERSION 4U

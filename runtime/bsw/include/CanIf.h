@@ -25,8 +25,6 @@
 #elif (CAN_AR_RELEASE_MAJOR_VERSION != 4U) || (CAN_AR_RELEASE_MINOR_VERSION != 10U)
 #error "CanIf.h -> Can_GeneralTypes.h: incompatible AUTOSAR release"
 #endif
-/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
-#define CANIF_MODULE_ID         60u
 #define CANIF_SID_TRANSMIT      0x49u /**< SWS_CANIF_00005: service ID. */
 #define CANIF_SID_RX_INDICATION 0x14u /**< SWS_CANIF_00006: service ID. */
 /* Runtime errors reported to Det (SWS_CANIF_91007). */

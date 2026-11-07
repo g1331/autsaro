@@ -22,8 +22,6 @@
     (COMSTACKTYPE_AR_RELEASE_MINOR_VERSION != 10U)
 #error "CanTp.h -> ComStack_Types.h: incompatible AUTOSAR release"
 #endif
-/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate. */
-#define CANTP_MODULE_ID           35u
 #define CANTP_SID_MAIN_FUNCTION   0x06u /**< SWS_CanTp_00213: service ID. */
 #define CANTP_SID_RX_INDICATION   0x42u /**< SWS_CanTp_00214: service ID. */
 #define CANTP_SID_CANCEL_TRANSMIT 0x4au /**< SWS_CanTp_00246: service ID. */

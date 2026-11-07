@@ -4,10 +4,6 @@
 #include "LSduR_Version.h"
 #include "Std_Types.h"
 #include "ComStack_Types.h"
-/* Module identity (SWS_BSW_00059/00256, Appendix A.2); vendor/release identity is separate.
- * MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
- */
-#define LSDUR_MODULE_ID 132u
 #define LSDUR_START_SEC_CODE
 #include "LSduR_MemMap.h"
 /** Configuration identity (CP_SWS_LSduR_91004). */
