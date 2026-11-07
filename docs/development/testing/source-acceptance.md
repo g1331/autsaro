@@ -37,6 +37,11 @@ uv run --locked python -m autosar_tooling c-acceptance \
 
 这些身份是证据适用范围，不是诊断 baseline 或缓存。不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
 
+动态构造带摘要的原件、补丁或封存夹具时，用同一份编码后的字节写文件并计算身份，
+采用 `write_bytes` 或显式指定换行；默认文本写入在 Windows 会转换 LF 为 CRLF。
+仓库的 `.gitattributes` 只约束检出文件，临时夹具须自行固定字节，并在 Linux 上模拟
+Windows 默认 CRLF 写入验证身份及正常消费路径。
+
 ## 原标准篇中的上下文
 
 上下文写在其原标准篇的 JSON 注释块中，起止行分别为 `<!-- source-assessment-context-begin -->` 和 `<!-- source-assessment-context-end -->`。不另建批准文件，也不复制原 159 键或人工表。格式示意：
