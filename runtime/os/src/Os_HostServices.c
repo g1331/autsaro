@@ -29,6 +29,8 @@ OS_MEMMAP void Os_HostSleepMs(uint32_t milliseconds) { Sleep(milliseconds); }
 
 OS_MEMMAP Os_HostHandleType Os_HostOpenManualEvent(void) { return CreateEventA(NULL, 1, 0, NULL); }
 
+/* MR12 DIR 4.12 VIOLATION: Win32 allocates the supervised actor's native stack;
+ * callers reject creation failure before using its handle. */
 OS_MEMMAP Os_HostHandleType Os_HostSpawnThread(Os_HostThreadEntryType entry, void *argument)
 {
     return CreateThread(NULL, 262144u, entry, argument, 0u, NULL);
@@ -53,6 +55,8 @@ OS_MEMMAP Os_HostHandleType Os_HostSpawnObserverThread(Os_HostThreadEntryType en
 #else
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+/* MR12 DIR 4.12 VIOLATION: Win32 supplies the per-batch observer's native stack;
+ * its owner checks creation, then signals, waits and closes before reuse. */
 OS_MEMMAP Os_HostHandleType Os_HostSpawnObserverThread(Os_HostThreadEntryType entry, void *argument)
 {
     return CreateThread(NULL, 262144u, entry, argument, 0u, NULL);
