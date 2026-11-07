@@ -34,6 +34,7 @@ TerminateTask还读取原生栈角色和当前Task trace状态；引入完整栈
 [OS 原裁决](../os/implementation.md#c90隐式声明规则与当前编译)。
 
 当前有界消费只接纳上述匹配中的 Advisory 记录及已说明的语言不适用位置。
+原生成 159 键继续使用独立的 `generated-retention` 上下文和消费者。
 Advisory 的记录安排沿各原篇既有理由、替代、风险及控制，适用主文 §6.2.3；
 上下文的 `approved` 表示这些已有记录在所列输入交集内有效。Required 的精确关联
 仍逐位置保留 `formal_deviation_pending`，Mandatory 保留项仍拒绝，其他模块裁决、

@@ -59,6 +59,10 @@ uv run --locked python -m autosar_tooling c-acceptance \
 逐包含验证既有 START／STOP 协议，撤销仅匹配本头实际请求及其属性／active 名称。
 C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_record_matched`，
 缺少本组当前绑定时返回 `owned_source_context_unbound_or_stale`。
+共用 MR12 解析器返回的原 159 键目录记录始终交给 `generated-retention` 消费；
+`owned-source` 的批准也保持该组的 pending、过期、shape 或 owner 拒绝。
+消费来源取当前可追溯的 runtime 原件及明确归属的生成／配置产物；应用快照与内核实例
+由原任务继续核定。允许的程序为 host-batch／probe，样本为现有四个 profile。
 
 该组当前只消费上述已实现的精确关联。Required 风险记录继续返回
 `formal_deviation_pending`，即使上下文为 `approved` 也保留该义务；Mandatory 保留项
