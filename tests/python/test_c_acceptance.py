@@ -189,7 +189,8 @@ class AcceptanceTests(unittest.TestCase):
         }]}).encode()
         source = self.files[delivered].decode()
         offset = source.index("*low = (uintptr_t)thread->mapping;")
-        self.summary["diagnostics"] = [{"id": "misra-c2012-11.4", "programs": ["host-batch", "probe"],
+        self.summary["diagnostics"] = [{"id": "misra-c2012-11.4",
+            "programs": ["host-batch", "probe"],
             "locations": [{"file": delivered, "line": source.count("\n", 0, offset) + 1,
                            "column": offset - source.rfind("\n", 0, offset)}]}]
         self.seal()
@@ -229,7 +230,8 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
         self.summary["diagnostics"][0]["locations"][0]["line"] -= 1
         name = "runtime/os/src/host/linux/Os_HostLinux.c"
-        (self.root / name).write_bytes((self.root / name).read_bytes() + b"/* changed producer */\n")
+        path = self.root / name
+        path.write_bytes(path.read_bytes() + b"/* changed producer */\n")
         self.bind_groups()
         self.bind(self.context(group="owned-source", status="approved"))
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
