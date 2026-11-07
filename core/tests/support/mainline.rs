@@ -866,8 +866,18 @@ pub(crate) fn template_execution_variants() -> Vec<Vec<InputSource>> {
                 .bytes(),
         )
         .unwrap();
-        let names: Vec<_> = roxmltree::Document::parse(text)
-            .unwrap()
+        let document = roxmltree::Document::parse(text).unwrap();
+        // This helper exercises the application execution contract. Mapped BSW
+        // entities have their own execution-property refusal vectors.
+        let mapped: std::collections::BTreeSet<_> = document
+            .descendants()
+            .filter(|node| node.has_tag_name("SWC-RUNNABLE-REF"))
+            .filter_map(|node| {
+                node.text()
+                    .and_then(|reference| reference.rsplit('/').next())
+            })
+            .collect();
+        let names: Vec<_> = document
             .descendants()
             .filter(|node| node.tag_name().name() == "RUNNABLE-ENTITY")
             .map(|node| {
@@ -878,6 +888,7 @@ pub(crate) fn template_execution_variants() -> Vec<Vec<InputSource>> {
                     .unwrap()
                     .to_owned()
             })
+            .filter(|name| !mapped.contains(name.as_str()))
             .collect();
         for name in names {
             let mut sources = template_inputs();
