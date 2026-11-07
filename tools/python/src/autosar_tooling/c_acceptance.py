@@ -433,37 +433,22 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
             result[index, position] = {"entity": c_retention.containing_function(tokens, offset),
                 "record": {"file": "docs/standards/os/implementation.md",
                            "text": "## C90隐式声明规则与当前编译"}, "reason": None}
-        elif diagnostic["id"] in {"misra-c2012-20.1", "misra-c2012-20.5"}:
+        elif diagnostic["id"] == "misra-c2012-20.1":
             directive = next((t for t in tokens
                               if t.start <= offset < t.end), None)
             if directive is None:
                 continue
-            if diagnostic["id"] == "misra-c2012-20.1":
-                valid = c_standard.include_scope(directive.text)
-                if not valid or not re.search(r'_MemMap\.h[">]$', valid):
-                    continue
-                if name not in mapping_validity:
-                    try:
-                        c_standard.verify_memory_mapping_pattern(source)
-                        mapping_validity[name] = True
-                    except AssertionError:
-                        mapping_validity[name] = False
-                if not mapping_validity[name]:
-                    continue
-            else:
-                prefix = Path(name).name.removesuffix("_MemMap.h")
-                requests = {(m[1], m[2]) for token in tokens
-                            if re.match(r"\s*#\s*(?:if|ifdef|ifndef|elif)\b", token.text)
-                            for m in re.finditer(r"\b(\w+)_(?:START|STOP)_SEC_(\w+)",
-                                                 " ".join(c_standard.code_words(token.text)))}
-                allowed = {prefix.upper() + suffix for suffix in
-                           ("_MEMMAP", "_MEMMAP_ACTIVE", "_MEMMAP_CODE_ACTIVE", "_THREAD_LOCAL")}
-                for owner, section in requests:
-                    allowed.update({owner + "_START_SEC_" + section, owner + "_STOP_SEC_" + section,
-                                    owner + "_" + section, owner + "_" + section + "_ACTIVE"})
-                undef = re.fullmatch(r"\s*#\s*undef\s+(\w+)\s*", directive.text)
-                if not name.endswith("_MemMap.h") or undef is None or undef[1] not in allowed:
-                    continue
+            valid = c_standard.include_scope(directive.text)
+            if not valid or not re.search(r'_MemMap\.h[">]$', valid):
+                continue
+            if name not in mapping_validity:
+                try:
+                    c_standard.verify_memory_mapping_pattern(source)
+                    mapping_validity[name] = True
+                except AssertionError:
+                    mapping_validity[name] = False
+            if not mapping_validity[name]:
+                continue
             result[index, position] = {"entity": directive.text.strip(),
                 "record": {"file": "docs/standards/memmap/README.md", "text": "## MemMap 类别偏离"},
                 "reason": None}
