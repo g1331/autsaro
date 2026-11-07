@@ -171,6 +171,9 @@ class AcceptanceTests(unittest.TestCase):
         self.synthetic_complete_inputs()
         shutil.copytree(ROOT / "runtime", self.root / "runtime", dirs_exist_ok=True)
         shutil.copytree(ROOT / "docs/standards", self.root / "docs/standards", dirs_exist_ok=True)
+        # Real standards supply the checker records; keep their outstanding
+        # obligations instead of combining them with synthetic satisfied rows.
+        self.supplementary_path.unlink()
         application = self.root / c_standard.RETAINED_APPLICATION
         application.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / c_standard.RETAINED_APPLICATION, application)
@@ -195,7 +198,7 @@ class AcceptanceTests(unittest.TestCase):
                            "column": offset - source.rfind("\n", 0, offset)}]}]
         self.seal()
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
-        self.bind_groups()
+        self.bind_groups(statuses={"checker-limitations": "pending"})
 
     def test_owned_address_consumes_original_category_with_current_context(self):
         self.owned_inputs()
@@ -203,17 +206,29 @@ class AcceptanceTests(unittest.TestCase):
         self.bind(context)
         raw = copy.deepcopy(self.summary)
         result = self.evaluate()
-        self.assertEqual(result["status"], "accepted", result["objects"])
+        self.assertEqual(result["status"], "blocked", result["objects"])
         occurrence = result["occurrences"][0]
         self.assertEqual(occurrence["assessment"], "accepted")
         self.assertEqual(occurrence["reason"], "owned_source_approved")
         self.assertEqual(occurrence["record"]["file"],
                          "docs/standards/os/native-facilities/addresses.md")
         self.assertEqual(occurrence["programs"], ["host-batch", "probe"])
+        checker_rows = c_standard.supplementary_assessment(
+            self.rules, self.summary["coverage"]["knownCheckerLimitations"], self.root,
+        )["records"]
+        self.assertEqual(len(checker_rows), 11)
+        self.assertEqual({row["source"]["file"] for row in checker_rows},
+                         {"docs/standards/types.md"})
+        self.assertEqual({row["id"] for row in checker_rows if row["status"] == "not_assessed"},
+                         {"R5.5", "R5.7", "R10.1"})
+        self.assertEqual({row["id"] for row in checker_rows if row["status"] == "retained"},
+                         {"R20.1"})
         self.assertEqual(raw, self.summary)
         self.summary["projectAcceptance"] = result
-        c_acceptance.require_accepted([(self.summary, self.project)], [(TARGET, CASE)],
-                                      {"prepare": "success", "analysis": "success"}, root=self.root)
+        with self.assertRaisesRegex(ValueError, "formal_assessment_pending"):
+            c_acceptance.require_accepted([(self.summary, self.project)], [(TARGET, CASE)],
+                                         {"prepare": "success", "analysis": "success"},
+                                         root=self.root)
 
     def test_owned_record_retains_formal_and_stale_context_blockers(self):
         self.owned_inputs()
