@@ -392,8 +392,36 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
             let errors: std::collections::BTreeSet<_> = component
                 .operations
                 .iter()
+                .filter(|operation| {
+                    operation.read
+                        || component
+                            .runnables
+                            .iter()
+                            .find(|runnable| runnable.path == operation.runnable)
+                            .is_none_or(|runnable| runnable.bsw_target.is_none())
+                })
                 .flat_map(|operation| &operation.application_errors)
                 .collect();
+            // Mapped BSW servers have no application implementation in Rte.c.
+            // Publish their errors to application consumers (SWS_Rte_02575),
+            // alongside the other public aliases hidden from RTE_CORE.
+            let provided_errors: Vec<_> = component
+                .operations
+                .iter()
+                .flat_map(|operation| &operation.application_errors)
+                .filter(|error| !errors.contains(error))
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .map(|(name, code)| (name.as_str(), format!("{code}U")))
+                .collect();
+            if !provided_errors.is_empty() {
+                body.push_str("#ifndef RTE_CORE\n");
+                body.push_str(&c_layout::commented_defines(
+                    &provided_errors,
+                    "Selected application error.",
+                ));
+                body.push_str("#endif\n");
+            }
             let values: Vec<_> = errors
                 .iter()
                 .map(|(name, code)| (name.as_str(), format!("{code}U")))

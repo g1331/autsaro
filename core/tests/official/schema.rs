@@ -159,3 +159,29 @@ fn typed_synchronous_port_arguments_use_official_r24_schema() {
     assert_official_schema_accepts(&sources);
     build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
 }
+
+#[cfg(feature = "official-oracles")]
+#[test]
+fn dcm_services_and_connected_application_pass_the_official_schema() {
+    assert_official_schema_accepts(&dcm_service_inputs());
+    build(&dcm_service_inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let plan = build(&dcm_service_inputs()).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    let descriptions: Vec<_> = files
+        .iter()
+        .filter(|(path, _)| path.ends_with(".arxml"))
+        .map(|(path, bytes)| {
+            (
+                std::path::PathBuf::from(path),
+                String::from_utf8(bytes.clone()).unwrap(),
+            )
+        })
+        .collect();
+    let borrowed: Vec<_> = descriptions
+        .iter()
+        .map(|(path, text)| (path.as_path(), text.as_str()))
+        .collect();
+    let issues =
+        autosar_config_core::schema::validate_files(&workspace::archive(), &borrowed).unwrap();
+    assert!(issues.is_empty(), "{issues:?}");
+}

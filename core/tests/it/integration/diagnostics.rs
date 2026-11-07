@@ -1112,14 +1112,64 @@ fn dcm_binding_keeps_selected_behavior_and_backend_identity() {
                 "bsw.arxml",
                 |node| named(node, "BSW-MODULE-DESCRIPTION", "Dcm"),
                 |text| {
-                    text.replacen(
-                        "<SHORT-NAME>Dcm</SHORT-NAME>",
-                        "<SHORT-NAME>OtherDcm</SHORT-NAME>",
-                        1,
+                    let document = roxmltree::Document::parse(text).unwrap();
+                    let entities: String = document
+                        .descendants()
+                        .filter(|node| node.has_tag_name("BSW-CALLED-ENTITY"))
+                        .map(|node| &text[node.range()])
+                        .collect();
+                    let references: Vec<_> = document
+                        .descendants()
+                        .filter(|node| {
+                            node.has_tag_name("BSW-MODULE-ENTRY-REF-CONDITIONAL")
+                                && node.descendants().any(|child| {
+                                    child.text().is_some_and(|value| {
+                                        [
+                                            "GetSecurityLevel",
+                                            "GetSesCtrlType",
+                                            "ResetToDefaultSession",
+                                            "SetActiveDiagnostic",
+                                        ]
+                                        .iter()
+                                        .any(|operation| {
+                                            value.ends_with(&format!("Dcm_{operation}"))
+                                        })
+                                    })
+                                })
+                        })
+                        .map(|node| node.range())
+                        .collect();
+                    let entries: String = references
+                        .iter()
+                        .map(|range| &text[range.clone()])
+                        .collect();
+                    let mut original = text.to_owned();
+                    for range in references.into_iter().rev() {
+                        original.replace_range(range, "");
+                    }
+                    format!(
+                        "{original}<BSW-MODULE-DESCRIPTION><SHORT-NAME>OtherDcm</SHORT-NAME><CATEGORY>BSW_MODULE</CATEGORY><IMPLEMENTED-ENTRYS>{entries}</IMPLEMENTED-ENTRYS><MODULE-ID>53</MODULE-ID><INTERNAL-BEHAVIORS><BSW-INTERNAL-BEHAVIOR><SHORT-NAME>Behavior</SHORT-NAME><ENTITYS>{entities}</ENTITYS></BSW-INTERNAL-BEHAVIOR></INTERNAL-BEHAVIORS></BSW-MODULE-DESCRIPTION>"
                     )
                 },
             );
-            replace_all(&mut sources, "/AUTOSAR_Dcm/Dcm/", "/AUTOSAR_Dcm/OtherDcm/");
+            xml_edit(
+                &mut sources,
+                "bsw.arxml",
+                |node| named(node, "BSW-IMPLEMENTATION", "Dcm_Implementation"),
+                |text| {
+                    format!(
+                        "{text}{}",
+                        text.replace("Dcm_Implementation", "OtherDcmImplementation")
+                            .replace("/Dcm/Behavior", "/OtherDcm/Behavior")
+                    )
+                },
+            );
+            xml_edit(
+                &mut sources,
+                "services.arxml",
+                |node| named(node, "SWC-BSW-MAPPING", "DcmServicesMapping"),
+                |text| text.replace("/Dcm/Behavior", "/OtherDcm/Behavior"),
+            );
             "BSW_EXECUTION_CONFLICT"
         } else {
             xml_edit(

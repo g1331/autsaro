@@ -127,3 +127,64 @@ fn mapped_bsw_service_analysis_sample() {
     );
     assert!(output.join("generated/src/Rte.c").is_file());
 }
+
+#[test]
+fn dcm_services_analysis_sample() {
+    let plan = mainline::build(&mainline::dcm_service_inputs()).unwrap();
+    let scratch = Scratch::new();
+    let output = std::env::var_os("AUTOSAR_DCM_C_ANALYSIS_SAMPLE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| scratch.0.join("dcm-services"));
+    assert!(!output.exists());
+    let target = if cfg!(windows) {
+        autosar_config_core::target::BuildTarget::WindowsX64ControlledV1
+    } else {
+        autosar_config_core::target::BuildTarget::LinuxX64ControlledV1
+    };
+    let applications: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| {
+            let file = slot.source_paths[0].rsplit('/').next().unwrap();
+            let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/component-pipeline/applications")
+                .join(file);
+            let mut text = std::fs::read_to_string(fixture).unwrap();
+            if file == "Observe.c" {
+                text = text.replace(
+                    "    (void)Observe_CallContext(TRUE);",
+                    r#"
+    Dcm_SecLevelType security = 0u;
+    Dcm_SesCtrlType session = 0u;
+    Std_ReturnType status = Rte_Call_Diagnostics_GetSecurityLevel(&security);
+    if (status == RTE_E_DCMServices_E_OK) {
+        status = Rte_Call_Diagnostics_GetSesCtrlType(&session);
+    }
+    if (status == RTE_E_DCMServices_E_OK) {
+        status = Rte_Call_Diagnostics_ResetToDefaultSession();
+    }
+    if (status == RTE_E_DCMServices_E_OK) {
+        status = Rte_Call_Diagnostics_SetActiveDiagnostic(TRUE);
+    }
+    (void)Observe_Result(security, session, 0u, status);
+    (void)Observe_CallContext(TRUE);"#,
+                );
+            }
+            let path = scratch.0.join(file);
+            std::fs::write(&path, text).unwrap();
+            autosar_config_core::ApplicationSource {
+                component_instance: slot
+                    .producer_slot
+                    .strip_prefix("singlecore-ecu-v1:")
+                    .unwrap()
+                    .into(),
+                path,
+            }
+        })
+        .collect();
+    autosar_config_core::prepare_ecu_project_with_applications(&plan, target, &applications)
+        .unwrap()
+        .generate(&output)
+        .unwrap();
+}
