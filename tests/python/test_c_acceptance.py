@@ -746,8 +746,10 @@ class AcceptanceTests(unittest.TestCase):
             self.rules, self.summary["coverage"]["knownCheckerLimitations"], self.root,
         )["records"]
         self.assertEqual({row["id"] for row in rows}, c_standard.CHECKER_LIMITATION_GUIDELINES)
-        outstanding = {"R5.5", "R5.7"}
-        self.assertEqual({row["id"] for row in rows if row["status"] == "not_assessed"}, outstanding)
+        outstanding = {"R5.5", "R5.7", "R10.1"}
+        self.assertEqual(
+            {row["id"] for row in rows if row["status"] == "not_assessed"}, outstanding,
+        )
         self.assertEqual({row["id"] for row in rows if row["status"] == "retained"}, {"R20.1"})
         for row in rows:
             reason = ("checker-limitation_not_assessed" if row["id"] in outstanding
