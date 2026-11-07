@@ -371,7 +371,8 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
             continue
         candidate = next(classified)
         name = location["file"]
-        if name.startswith("kernel/"):
+        if (name.startswith("kernel/")
+                or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
             continue
         if name not in sources:
             original = origins.get(name, "")
@@ -543,7 +544,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
                 reason = ("owned_source_context_unbound_or_stale" if context is None
                           else "assessment_case_mismatch" if len(case_ids) != 1
                           else "owned_source_case_outside_record"
-                          if ruling.get("case") and ruling["case"] != context[1]["caseId"]
+                          if context[1]["caseId"] not in c_retention.PROFILES.values()
+                          or (ruling.get("case") and ruling["case"] != context[1]["caseId"])
                           else "formal_deviation_pending"
                           if context[0]["formalStatus"] != "approved"
                           else ruling.get("reason"))
