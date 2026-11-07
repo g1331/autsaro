@@ -62,6 +62,8 @@
 
 ### Fixed
 
+- BSW callback, type, configuration and version headers now expose their existing module IDs through shared version headers on first inclusion; main-header macro values and public service ABI are unchanged (#433)
+
 - Native actor allocation boundaries carry scoped D4.12 and Linux TLS rationale linked to the existing category record; allocation, rollback and retirement behavior are unchanged (#58)
 
 - Generated RTE/SWC memory-mapping headers include their per-file Directive 4.10 rationale for the recorded AUTOSAR mapping conflict; preprocessing and public ABI are unchanged (#58)
