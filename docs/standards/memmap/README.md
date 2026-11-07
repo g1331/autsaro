@@ -38,7 +38,7 @@
 
 ## D4.10 可重入头的正式记录
 
-本记录按 AMD2.4／AMD2.5 修订后的 §6.2.2 及 MISRA Compliance:2020 第 4 节接续既有逐处技术评估。当前处于独立原文与闭包复核，正式记录及生成源码注释尚未完成。基线为 `c3bff230`，语言 C99，目标为 `linux-x64-controlled-v1`／`windows-x64-controlled-v1`，配置为正常四 profile 的 HostBatch／probe。指定技术权威的同意沿 [2026-10-17 的决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)及 ADR 0023 的条件授权；项目实现者于 2026-11-07 逐项评估，独立复核的 head、发现与处置归实施 PR。
+本记录按 AMD2.4／AMD2.5 修订后的 §6.2.2 及 MISRA Compliance:2020 第 4 节接续既有逐处技术评估。基线为 `c3bff230`，语言 C99，目标为 `linux-x64-controlled-v1`／`windows-x64-controlled-v1`，配置为正常四 profile 的 HostBatch／probe。指定技术权威的同意沿 [2026-10-17 的决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)及 ADR 0023 的条件授权；项目实现者于 2026-11-07 逐项评估。原文及修改后源码闭包的独立复核、实际平台验收共同确定本次已闭合实例，精确 head、完成状态、发现与处置集中在实施 PR。
 
 **规则与允许条件。** D4.10 为 Required，主文印刷 32–33／PDF 40–41 要求防止头内容重复纳入。TC2.2（印刷 2／PDF 8）放宽的是保护形式的示例范围；AMD2 增加 C11 适用性，其余 AMD1–4／TC1–2 未改变此 C99 义务。首个文件注释中的 MR12 DIR 4.10 只说明可重入机制及控制。本项保持真实违反，采用可逐实例识别的偏离记录。
 
