@@ -29,8 +29,9 @@ TerminateTask还读取原生栈角色和当前Task trace状态；引入完整栈
 本节的 `owned-source` 上下文只绑定原标准篇已有的精确记录与类别实例，沿用
 [ADR 0023](../../adr/0023-autosar-required-conflict-disposition.md)、
 [ADR 0025](../../adr/0025-misra-layered-scope.md) 的原决定范围。机器关联复用
-`c_standard` 的实体、shape、MR12 双向检查和主机地址八个表达式；MemMap 位置仍须
-通过[原协议检查](../memmap/README.md#memmap-类别偏离)。C99 下 R17.3 的适用性沿
+`c_standard` 的实体、shape、MR12 双向检查和主机地址八个表达式；MemMap R20.1 位置须
+通过[原协议检查](../memmap/README.md#memmap-类别偏离)，R20.5 仅取原表精确登记位置，
+未登记的内部属性／状态撤销继续由原任务接续。C99 下 R17.3 的适用性沿
 [OS 原裁决](../os/implementation.md#c90隐式声明规则与当前编译)。
 
 当前有界消费只接纳上述匹配中的 Advisory 记录及已说明的语言不适用位置。

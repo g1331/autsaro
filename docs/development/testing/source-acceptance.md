@@ -56,7 +56,8 @@ uv run --locked python -m autosar_tooling c-acceptance \
 自有源码的局部消费者另接受 `records={"kind":"owned-source"}`。它复用原标准篇与
 `c_standard` 的 MR12 双向关联，核对原实体、已登记 shape、当前原件及 ownership 字节，
 并保留表中的目标、程序和 ND 样本限制。主机地址使用原有八个表达式实例；MemMap
-逐包含验证既有 START／STOP 协议，撤销仅匹配本头实际请求及其属性／active 名称。
+R20.1 逐包含验证既有 START／STOP 协议，R20.5 只消费原表精确登记的 MR12 位置。
+未登记的内部属性／状态撤销保留阻塞，完整类别实例解析由自有源码消费任务接续。
 C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_record_matched`，
 缺少本组当前绑定时返回 `owned_source_context_unbound_or_stale`。
 共用 MR12 解析器返回的原 159 键目录记录始终交给 `generated-retention` 消费；
