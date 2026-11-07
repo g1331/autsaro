@@ -52,6 +52,8 @@ R23.1（Advisory）的泛型宏展开位置与 R23.2（Required）的非宏控�
 
 历史误报、双目标语法闭包与供应方遗留见[语言构造](types/language-constructs.md#r73-的标识符误报)。
 
+当前输入的 token 复核、正常工具反例及剩余消费责任见[三项证据接续](types/language-constructs.md#当前输入与三项人工证据的接续)。
+
 ## 函数指针的显式丢弃
 
 原文例外与实际消费者见[函数指针丢弃](types/language-constructs.md#函数指针的显式丢弃)。

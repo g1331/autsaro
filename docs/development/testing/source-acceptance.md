@@ -62,3 +62,9 @@ uv run --locked python -m autosar_tooling c-acceptance \
 原 66 项人工表及 155 项 checker-covered `not_assessed` 输出不变。现有标准篇可另用 `misra-checker-assessment-begin`／`misra-checker-assessment-end` 注释块记录固定 11 项已知检查器缺口，列与原人工表相同：编号、类别、评估范围、状态、结论。只接受已列缺口的准确编号和类别，缺项为 `not_assessed`，未知、重复或 Mandatory 的保留状态拒绝解析。
 
 此输入格式不意味着 11 项已完成，原有论据仍须核对当前上下文。不得把有 checker、零告警、历史分类或风险接受写成当前人工义务满足。整体 MISRA 符合性继续独立评估。
+
+固定 11 项以外的 checker-covered 必要人工义务由 #443 接续。
+当前解析／验收只独立消费原 66 项和固定 11 项；具体诊断消费另按其记录范围执行。
+R7.2／R7.3／R12.3 的[有界证据](../../standards/types/language-constructs.md#当前输入与三项人工证据的接续)
+尚待独立的当前输入绑定和人工义务消费；严格门的完整出口须补齐该部分，
+并用零告警但缺少／过期人工证据的输入验证拒绝。

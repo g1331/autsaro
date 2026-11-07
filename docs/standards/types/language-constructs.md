@@ -39,6 +39,73 @@ R12.3：Linux四份实际GCC展开的56／56／58／58个TU由Clang18.1.3完整�
 Windows完整SDK内部、未展开宏的其他实例及供应方实现仍未评估。Clang的GCC16头错误不作阴性证据。新增源码／宏用途、配置、补丁、provider或target时重评。#381／#382的诊断分类及#385的66项记录不重做；155项checker-covered与raw221项仍not_assessed，passed=false／error、completeCompliance=false、retention键／形状及strict refusal不由本文改写，不声称总体符合性。
 
 
+### 当前输入与三项人工证据的接续
+
+#443 从 master `8eee27f7` 接续上述证据。完整分析复用
+[#448 最终 head d46b89db 的正常运行](https://github.com/g1331/autsaro/actions/runs/42391343618)：
+双目标、四 profile、HostBatch／probe，Linux 228 个 TU，Windows 224 个 TU。
+八份分析均核对非内核 seal、最终补丁内核身份、完整程序和 TU 目录；
+raw `passed=false`、`error=null`、两个程序退出码均为 1。
+四 profile 的独立应用、PDU 宽度及无诊断配置继续按各自输入识别。
+
+当前 92 项 producer 中，runtime 和 patch 字节与这批输入一致；
+`composition.rs`、`contracts.rs`、`rte.rs` 三项已变化。
+这些变化涉及类型化 C/S、provide-port 常量及对应契约；
+旧分析的语义身份仍属于原 head。当前生成测试另核四个正常样本及类型化 C/S 样本，
+四个当前 Linux 样本与冻结输入分别具有相同的 226／226／236／233 份 C／头文件；
+变化仅为各 `Rte_<SWC>.h` 的契约注释，移除注释后的 token 序列逐文件相同。
+完整字节与 token 比较证据集中在实施 PR。
+本段的字节／语法结论仅应用于实际比较成立的实体，生成器后续支持的其他配置仍须独立评估。
+
+原文重新核对 R7.2、R7.3、R12.3 及 AMD1–4／TC1–2：
+R7.2 的主文类型表原页与 AMD2.46 合成后，仍分别判断预处理条件的
+`intmax_t`／`uintmax_t` 模型和普通 C99 表达式类型；
+R7.3 判断数值后缀；R12.3 判断真实逗号运算符。
+类别及页码沿上文和[普通整数证据](essential-types/ordinary-integers.md)。
+
+对本批 452 个正常 `compiler-origins-N` 输出重新按行标记追溯，
+保留自有、生成／应用及项目 patch 使用点；采用内核的原行另循采用责任。
+词法判断排除指令、字符串和字符常量，整数采用完整进制／后缀，浮点单列。
+Windows 每 profile 仍有七处非 ISO 宏小写后缀：
+Backend 的三处 CONTEXT_CONTROL、Time 的 WAIT_TIMEOUT、
+项目 port 的 WAIT_TIMEOUT／CONTEXT_CONTROL、HostBatch 的 ERROR_BROKEN_PIPE。
+四 profile 共 28 次，均继续交 #444；当前 Backend 位置为 1158／1583／1597，
+其他使用点的数字／来源沿既有闭包。采用 queue 的 SIZE_MAX 原行继续保留 §6.7 的判断范围。
+自有／patch 物理源码未新增手写小写后缀或拼接小写后缀的宏。
+R7.2 的 44 次缺 U 与条件证据另见[普通整数](essential-types/ordinary-integers.md)
+及[条件控制](essential-types/conditional-integers.md)。
+
+固定工具的真实最小反例从正常 `c-check` 入口执行：
+`#if 0xffffffffffffffff > 0` 中的常量在所选 64 位预处理模型下缺 U，
+该程序仍得到 raw `passed=true`；普通表达式中的 `0xffffffff` 会报告 R7.2。
+`return (f(), (int)1l);` 会报告 R7.3，而其中真实逗号运算符没有 R12.3 报告；
+改成大写后缀和无逗号的控制输入，两条目标报告消失。
+这些输入均编译成功、分析 `error=null`；其他规则的报告各自保留。
+反例证明这三项仍需独立证据，完整 fixture 和原始结果归实施 PR。
+
+本批 Linux 228 个实际预处理 TU 另由 Clang 18.1.3 完整解析，逗号运算符为零。
+解析前只移除 `c_check` 在原 TU 后追加的 `AUTSAR_VALUE_` 宏值探针行，
+原 TU 的展开保持；遇到解析错误即终止该份核查。
+Windows 当前完整 SDK 的 Clang 解析限制继续保留，R12.3 的已有有界语法证据沿上文原输入。
+
+### 正常分析与其余人工义务
+
+固定 `misra.py` 的 `getAddonRules` 与 `getCppcheckRules` 合并得到 155 项：
+128 项仅 addon、25 项仅核心映射、2 项同时具有两种入口。
+逐项目录核对连接各 `misra_N_M` 的执行调用或核心诊断映射；
+addon 的实际输入分为 raw token、预处理指令、语义 token／类型／值流和 CTU 摘要。
+R2.3／R2.4、R5.6–R5.9、R8.5–R8.7 涉及 CTU 数据，
+其证据须按 HostBatch／probe 分别保留完整 TU 集合。
+这项核对说明正常工具证据的入口；其余逐项原文、当前适用性及必要人工完成状态由 #443 继续承担。
+
+固定 11 项继续使用 types.md 原补充块；66 项沿原人工篇和 #445。
+R7.2／R7.3／R12.3 的正文证据目前尚无独立的 checker-covered 验收消费入口：
+原人工解析只接 66 项，补充解析只接固定 11 项；具体诊断记录处理实际告警。
+因此本阶段保留三项的人工消费缺口，恢复条件为独立记录选择、精确输入绑定和缺失／过期证据拒绝
+均接入正常验收，并验证零告警时仍检查必要人工义务。
+该集成继续归 #443，待 #449 合并后处理；SDK 宏的项目集成处置归 #444。
+
+
 ## 函数指针的显式丢弃
 
 R11.1为Required、当前C99适用（2013主文印刷93–94／PDF101–102）。Exception 2明确允许函数指针转换成void，不能把void与void指针混同。AMD2追加C11，AMD2.58修改Exception 3的隐式转换说明，没有撤销Exception 2；其余相关修订未增加这里的限制。
