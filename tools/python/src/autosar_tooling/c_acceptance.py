@@ -84,7 +84,9 @@ def contexts(root: Path = ROOT) -> list[dict]:
                     or not isinstance(row["evidence"]["receipt"], str) or not row["evidence"]["receipt"]
                     or row["formalStatus"] not in ("pending", "approved")
                     or row["records"] not in ({"kind": "generated-retention", "cohortSha256": c_retention.COHORT_SHA256},
-                                              {"kind": "manual-assessment"}, {"kind": "checker-limitations"})
+                                              {"kind": "manual-assessment"},
+                                              {"kind": "checker-limitations"},
+                                              {"kind": "owned-source"})
                     or not isinstance(row["cases"], list) or not row["cases"]):
                 raise ValueError(f"Invalid source assessment context: {path}")
             identifiers.add(row["id"])
@@ -123,6 +125,16 @@ def _manual_identity(root: Path) -> dict:
             "documents": _document_identity(root, c_standard.MANUAL_ASSESSMENT_SOURCES)}
 
 
+def _owned_documents(root: Path) -> list[str]:
+    return [path.relative_to(root).as_posix()
+            for path in sorted((root / "docs/standards").rglob("*.md"))
+            if re.search(r"MISRA C:2012 (?:Rule|Directive) \d+\.\d+",
+                         path.read_text(encoding="utf-8"))
+            or path.relative_to(root).as_posix() in {
+                "docs/standards/memmap/README.md", "docs/standards/os/implementation.md",
+                "docs/standards/os/native-facilities/addresses.md"}]
+
+
 def _assessment_inputs(summary: dict, root: Path) -> dict:
     rules = _catalog(summary, root)
     supplementary = c_standard.supplementary_assessment(rules, summary["coverage"]["knownCheckerLimitations"], root)
@@ -132,6 +144,8 @@ def _assessment_inputs(summary: dict, root: Path) -> dict:
         raise ValueError("Assessment retention records missing")
     retention_documents.append(GRP)
     return {"manual": _manual_identity(root),
+            "ownedSource": {"parserSha256": digest(Path(c_standard.__file__)),
+                            "documents": _document_identity(root, _owned_documents(root))},
             "retention": {"parserSha256": digest(Path(c_retention.__file__)),
                           "documents": _document_identity(root, retention_documents)},
             "checkerLimitations": {"parserSha256": digest(Path(c_standard.__file__)),
@@ -328,6 +342,129 @@ def _grp_positions(
     return accepted
 
 
+def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -> dict:
+    """Join current source positions to the existing bidirectional MR12 records.
+
+    Record association and formal acceptance remain separate. In particular a
+    Required risk choice does not complete the formal deviation obligations.
+    """
+    ledger = project / "meta/workbench-ownership.json"
+    if not ledger.is_file() or summary["scope"].get("sdkLineDirectives"):
+        return {}
+    owners = {row["path"]: row for row in json.loads(ledger.read_text(encoding="utf-8"))["files"]}
+    origins = {delivered: original
+               for original, delivered in metadata["originalBswSources"].items()}
+    records = []
+    errors = c_standard.deviation_findings(root, matched=records)
+    categories = {"misra-c2012-" + row["id"][1:]: row["category"]
+                  for row in _catalog(summary, root) if row["id"].startswith("R")}
+    positions = list(_positions(summary["diagnostics"]))
+    candidates = [{**diagnostic, "locations": [location], "adopted": False, "patched": False}
+                  for _, _, diagnostic, location in positions if location is not None]
+    c_sdk.classify(candidates, summary["scope"], [], project)
+    classified = iter(candidates)
+    sources = {}
+    mapping_validity = {}
+    result = {}
+    for index, position, diagnostic, location in positions:
+        if location is None:
+            continue
+        candidate = next(classified)
+        name = location["file"]
+        if name.startswith("kernel/"):
+            continue
+        if name not in sources:
+            original = origins.get(name, "")
+            row = owners.get(name)
+            path = project / name
+            generated = row is not None and (row["owner"], row["producerId"]) in {
+                ("generated", "autosar-generator"), ("configuration", "autosar-workbench-config")}
+            runtime = (original.startswith("runtime/") and safe_relative(original)
+                       and (root / original).is_file() and row is not None
+                       and row["sha256"] == digest(root / original))
+            if (not safe_relative(name) or row is None or not path.is_file()
+                    or row["sha256"] != digest(path) or not (runtime or generated)):
+                sources[name] = None
+            else:
+                text = path.read_text(encoding="utf-8")
+                sources[name] = (original, text, c_standard.lex(text))
+        if sources[name] is None:
+            continue
+        original, source, tokens = sources[name]
+        lines = source.splitlines(keepends=True)
+        line = int(location["line"])
+        if not 1 <= line <= len(lines):
+            continue
+        start = sum(map(len, lines[:line - 1]))
+        offset = start + max(0, int(location.get("column", 0)) - 1)
+        if candidate["sourceCategory"] != "project":
+            continue
+        matches = [row for row in records if row["source"] == original and row["kind"] == "RULE"
+                   and diagnostic["id"] == "misra-c2012-" + row["rule"]
+                   and (row["start"] <= offset < row["end"]
+                        or (int(location.get("column", 0)) == 0
+                            and start <= row["start"] < start + len(lines[line - 1])))]
+        if len(matches) == 1:
+            record = matches[0]
+            category = categories[diagnostic["id"]]
+            scope = re.search(r"范围 `([^/]+)/([^/]+)/([^`]+)`", record["record"]["text"])
+            target = "Linux" if summary["scope"]["target"].startswith("linux-") else "Windows"
+            if scope and (scope[2] not in {"Both", target}
+                          or (scope[3] != "Both" and set(diagnostic["programs"]) != {scope[3]})):
+                continue
+            result[index, position] = {"entity": record["entity"], "record": record["record"],
+                                       "case": ("no-diagnostic"
+                                                if scope and scope[1] == "ND" else None),
+                                       "reason": None if category == "Advisory"
+                                       else "mandatory_deviation_forbidden"
+                                       if category == "Mandatory"
+                                       else "formal_deviation_pending"}
+        elif (diagnostic["id"] == "misra-c2012-17.3"
+              and [flag for flag in summary["scope"]["compilerFlags"]
+                   if flag.startswith("-std=")][-1:] == ["-std=c99"]):
+            result[index, position] = {"entity": c_retention.containing_function(tokens, offset),
+                "record": {"file": "docs/standards/os/implementation.md",
+                           "text": "## C90隐式声明规则与当前编译"}, "reason": None}
+        elif diagnostic["id"] in {"misra-c2012-20.1", "misra-c2012-20.5"}:
+            directive = next((t for t in tokens
+                              if t.start <= offset < t.end), None)
+            if directive is None:
+                continue
+            if diagnostic["id"] == "misra-c2012-20.1":
+                valid = c_standard.include_scope(directive.text)
+                if not valid or not re.search(r'_MemMap\.h[">]$', valid):
+                    continue
+                if name not in mapping_validity:
+                    try:
+                        c_standard.verify_memory_mapping_pattern(source)
+                        mapping_validity[name] = True
+                    except AssertionError:
+                        mapping_validity[name] = False
+                if not mapping_validity[name]:
+                    continue
+            else:
+                prefix = Path(name).name.removesuffix("_MemMap.h")
+                requests = {(m[1], m[2]) for token in tokens
+                            if re.match(r"\s*#\s*(?:if|ifdef|ifndef|elif)\b", token.text)
+                            for m in re.finditer(r"\b(\w+)_(?:START|STOP)_SEC_(\w+)",
+                                                 " ".join(c_standard.code_words(token.text)))}
+                allowed = {prefix.upper() + suffix for suffix in
+                           ("_MEMMAP", "_MEMMAP_ACTIVE", "_MEMMAP_CODE_ACTIVE", "_THREAD_LOCAL")}
+                for owner, section in requests:
+                    allowed.update({owner + "_START_SEC_" + section, owner + "_STOP_SEC_" + section,
+                                    owner + "_" + section, owner + "_" + section + "_ACTIVE"})
+                undef = re.fullmatch(r"\s*#\s*undef\s+(\w+)\s*", directive.text)
+                if not name.endswith("_MemMap.h") or undef is None or undef[1] not in allowed:
+                    continue
+            result[index, position] = {"entity": directive.text.strip(),
+                "record": {"file": "docs/standards/memmap/README.md", "text": "## MemMap 类别偏离"},
+                "reason": None}
+    return {key: {**row, "reason": "owned_source_record_invalid" if errors else row["reason"]}
+            for key, row in result.items()
+            if (root / row["record"]["file"]).is_file()
+            and row["record"]["text"] in (root / row["record"]["file"]).read_text(encoding="utf-8")}
+
+
 def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
     """Assess three independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
@@ -349,6 +486,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         if len(case_ids) == 1:
             result["caseId"] = next(iter(case_ids))
         group_reasons = {}
+        if "owned-source" in selected:
+            result["contexts"].append(_reference(selected["owned-source"][0]))
         for group in GROUPS:
             if group not in selected:
                 group_reasons[group] = "input_context_unbound_or_stale"
@@ -380,6 +519,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
             add("source-classification", "sdk", "sdk_source_or_macro_provenance_incomplete")
         retention = c_retention.analyze(summary["diagnostics"], project, result["target"])
         grp_positions = _grp_positions(summary, project, metadata, root)
+        owned_positions = _owned_positions(summary, project, metadata, root)
         occurrences = [row for row in retention["occurrences"] if row["rule"] != "checkersReport"]
         positions = list(_positions(summary["diagnostics"]))
         if len(occurrences) != len(positions):
@@ -392,6 +532,18 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
             if grp:
                 reason = None
                 occurrence.update(status="grp_disapplied", record=GRP + "#grp指南重分类计划")
+            elif (index, position) in owned_positions:
+                ruling = owned_positions[index, position]
+                occurrence.update(status="owned_record_matched", entity=ruling["entity"],
+                                  record=ruling["record"])
+                context = selected.get("owned-source")
+                reason = ("owned_source_context_unbound_or_stale" if context is None
+                          else "assessment_case_mismatch" if len(case_ids) != 1
+                          else "owned_source_case_outside_record"
+                          if ruling.get("case") and ruling["case"] != context[1]["caseId"]
+                          else "formal_deviation_pending"
+                          if context[0]["formalStatus"] != "approved"
+                          else ruling.get("reason"))
             elif occurrence["status"] != "record_matched":
                 reason = occurrence["reason"]
                 if diagnostic.get("sourceCategory") == "sdk":
@@ -405,10 +557,16 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
             else:
                 reason = None
             occurrence.update(locationIndex=position, diagnosticIdentity=_hash(diagnostic), profile=profile,
-                              contextId=selected["generated-retention"][0]["id"] if "generated-retention" in selected else None,
+                              contextId=(selected["owned-source"][0]["id"]
+                                         if (index, position) in owned_positions
+                                         and "owned-source" in selected
+                                         else selected["generated-retention"][0]["id"]
+                                         if "generated-retention" in selected else None),
                               evidenceClosure="not_established" if reason else "frozen_context",
                               assessment="blocked" if reason else "accepted",
-                              reason=reason or ("grp_disapplied" if grp else "retention_approved"))
+                              reason=reason or ("grp_disapplied" if grp else "owned_source_approved"
+                                                if (index, position) in owned_positions
+                                                else "retention_approved"))
             result["occurrences"].append(occurrence)
             if reason:
                 add("diagnostic", index, reason, rule=occurrence["rule"], location=location,
