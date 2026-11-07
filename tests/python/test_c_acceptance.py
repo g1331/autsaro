@@ -94,7 +94,9 @@ class AcceptanceTests(unittest.TestCase):
 
     def seal(self):
         self.files["target.json"] = json.dumps(self.target).encode()
-        self.files["meta/integration.json"] = json.dumps({"plan": self.plan, "originalBswSources": self.origins}).encode()
+        self.files["meta/integration.json"] = json.dumps({
+            "plan": self.plan, "originalBswSources": self.origins,
+        }).encode()
         for name, data in self.files.items():
             destination = self.project / name
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -305,7 +307,8 @@ class AcceptanceTests(unittest.TestCase):
         self.synthetic_complete_inputs()
         own = b"int owned(int x) {\n    if (x) { return 1; }\n    return 0;\n}\n"
         upstream = own.replace(b"owned", b"upstream")
-        patched = upstream.replace(b"    return 0;", b"    if (x == 2) { return 2; }\n    return 0;")
+        patched = upstream.replace(
+            b"    return 0;", b"    if (x == 2) { return 2; }\n    return 0;")
         original = self.root / "third_party/freertos/kernel.h"
         original.parent.mkdir(parents=True)
         original.write_bytes(upstream)
@@ -360,25 +363,21 @@ class AcceptanceTests(unittest.TestCase):
             self.grp_diagnostic("kernel/kernel.h"), self.grp_diagnostic("unknown.c"),
             self.grp_diagnostic("generated/Owned.c", rule="15.4")]
         self.summary["scope"]["patchedLines"] = {"kernel/kernel.h": [2]}
+        self.summary["scope"]["sdkMacroInputs"] = {"main.c": {"kernel/kernel.h:2": {
+            "PROJECT_CONFIG": {"file": "generated/Owned.c", "line": 1, "value": "1"}}}}
         self.bind_groups()
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(len(result["occurrences"]), 3)
         self.assertTrue(all(row["assessment"] == "blocked" for row in result["occurrences"]))
 
-    def test_grp_keeps_sdk_macro_and_untraceable_return_blocked(self):
+    def test_grp_keeps_untraceable_return_blocked(self):
         self.grp_inputs()
         diagnostic = self.grp_diagnostic("generated/Owned.c")
-        header = "/provider/foreign.h"
-        self.summary["scope"].update(
-            sdkHeaders=[{"path": header, "category": "sdk", "key": "s" * 64}],
-            sdkMacroInputs={"main.c": {"generated/Owned.c:2": {
-                "FOREIGN": {"file": header, "line": 1, "value": "1"}}}})
-        for change in ("sdk", "column", "line-directive"):
+        for change in ("column", "line-directive"):
             with self.subTest(change=change):
                 self.summary["diagnostics"] = [copy.deepcopy(diagnostic)]
                 if change == "column":
-                    self.summary["scope"]["sdkMacroInputs"] = {}
                     self.summary["diagnostics"][0]["locations"][0]["column"] = "1"
                 elif change == "line-directive":
                     self.summary["scope"]["sdkLineDirectives"] = True
@@ -386,6 +385,82 @@ class AcceptanceTests(unittest.TestCase):
                 result = self.evaluate()
                 self.assertEqual(result["status"], "blocked")
                 self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
+
+    def test_grp_decides_each_location_without_hiding_the_remaining_diagnostic(self):
+        self.grp_inputs()
+        diagnostic = self.grp_diagnostic("generated/Owned.c")
+        diagnostic["locations"].extend(self.grp_diagnostic("unknown.c")["locations"])
+        self.summary["diagnostics"] = [diagnostic]
+        self.bind_groups()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual([row["assessment"] for row in result["occurrences"]],
+                         ["accepted", "blocked"])
+        self.assertEqual([row["locationIndex"] for row in result["occurrences"]], [0, 1])
+        self.assertEqual(result["objects"][0]["location"]["file"], "unknown.c")
+
+    def test_grp_rejects_sdk_return_macro_and_sdk_header(self):
+        self.grp_inputs()
+        diagnostic = self.grp_diagnostic("generated/Owned.c")
+        self.files["generated/Owned.c"] = self.files["generated/Owned.c"].replace(
+            b"return 1", b"FOREIGN_RETURN")
+        ledger = json.loads(self.files["meta/workbench-ownership.json"])
+        ledger["files"][0]["sha256"] = hashlib.sha256(self.files["generated/Owned.c"]).hexdigest()
+        self.files["meta/workbench-ownership.json"] = json.dumps(ledger).encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        header = "/provider/foreign.h"
+        self.summary["scope"].update(
+            sdkHeaders=[{"path": header, "category": "sdk", "key": "s" * 64}],
+            sdkMacroInputs={"main.c": {"generated/Owned.c:2": {
+                "FOREIGN_RETURN": {"file": header, "line": 1, "value": "return 1"}}}})
+        foreign = copy.deepcopy(diagnostic)
+        foreign["locations"][0]["file"] = header
+        self.summary["diagnostics"] = [diagnostic, foreign]
+        self.bind_groups()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        self.assertTrue(all(row["assessment"] == "blocked" for row in result["occurrences"]))
+
+    def test_grp_owned_return_with_sdk_value_keeps_macro_provenance(self):
+        self.grp_inputs()
+        diagnostic = self.grp_diagnostic("generated/Owned.c")
+        self.files["generated/Owned.c"] = self.files["generated/Owned.c"].replace(
+            b"return 1", b"return FOREIGN_VALUE")
+        ledger = json.loads(self.files["meta/workbench-ownership.json"])
+        ledger["files"][0]["sha256"] = hashlib.sha256(self.files["generated/Owned.c"]).hexdigest()
+        self.files["meta/workbench-ownership.json"] = json.dumps(ledger).encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        header = "/provider/foreign.h"
+        self.summary["scope"].update(
+            sdkHeaders=[{"path": header, "category": "sdk", "key": "s" * 64}],
+            sdkMacroInputs={"main.c": {"generated/Owned.c:2": {
+                "FOREIGN_VALUE": {"file": header, "line": 1, "value": "1"}}}})
+        c_sdk.classify([diagnostic], self.summary["scope"], [], self.project)
+        self.assertTrue(diagnostic["sourceOrigins"])
+        self.summary["diagnostics"] = [diagnostic]
+        self.bind_groups()
+        before = copy.deepcopy(self.summary)
+        result = self.evaluate()
+        self.assertEqual(result["status"], "accepted", result["objects"])
+        self.assertEqual(result["occurrences"][0]["reason"], "grp_disapplied")
+        self.assertEqual(self.summary, before)
+
+    def test_grp_requires_ownership_and_current_original_source_bytes(self):
+        self.grp_inputs()
+        self.summary["diagnostics"] = [self.grp_diagnostic("bsw/Owned.c")]
+        producer = self.root / "runtime/producer.c"
+        producer.write_bytes(producer.read_bytes() + b"/* changed original */\n")
+        self.bind_groups()
+        result = self.evaluate()
+        self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
+        self.assertIn("producer_provenance_unverified",
+                      [row["reason"] for row in result["objects"]])
+        self.summary["diagnostics"] = [self.grp_diagnostic("generated/Owned.c")]
+        (self.project / "meta/workbench-ownership.json").unlink()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "error")
 
     def test_grp_preserves_other_assessment_gates_and_binds_policy_bytes(self):
         self.grp_inputs()
@@ -397,7 +472,8 @@ class AcceptanceTests(unittest.TestCase):
         self.assertNotEqual(self.identity(), before)
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
-        self.assertIn("input_context_unbound_or_stale", [row["reason"] for row in result["objects"]])
+        self.assertIn("input_context_unbound_or_stale",
+                      [row["reason"] for row in result["objects"]])
         self.bind_groups(status="pending")
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
