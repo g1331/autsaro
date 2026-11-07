@@ -9,6 +9,8 @@
 #include "Dcm.h"
 #include "Com.h"
 #include <assert.h>
+#include <signal.h>
+#include <stdlib.h>
 
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 static int owner = 1;
@@ -52,10 +54,18 @@ Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType Data)
 #include "dcm_contract.c"
 #undef main
 
+/* Expected mutation assertions keep a normal failure exit for the process owner. */
+static void failed_assertion(int signum)
+{
+    (void)signum;
+    _Exit(EXIT_FAILURE);
+}
+
 int main(void)
 {
     Dcm_SecLevelType security = 99u;
     Dcm_SesCtrlType session_value = 99u;
+    assert(signal(SIGABRT, &failed_assertion) != SIG_ERR);
     assert(Dcm_GetSecurityLevel(&security) == RTE_E_COM_STOPPED && security == 99u);
     assert(Dcm_GetSesCtrlType(&session_value) == RTE_E_COM_STOPPED && session_value == 99u);
     assert(Dcm_ResetToDefaultSession() == RTE_E_COM_STOPPED);
