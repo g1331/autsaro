@@ -511,6 +511,7 @@ def _freertos_sources(project: Path, metadata: dict, root: Path) -> tuple[dict, 
         if not target.get("kernelPatches"):
             raise ValueError("FreeRTOS ordered patch selection missing")
         patched = {}
+        provenance_error = None
         for index, patch in enumerate(target["kernelPatches"]):
             original = patch["path"]
             if not safe_relative(original) or not original.startswith("runtime/os/patches/"):
@@ -529,10 +530,16 @@ def _freertos_sources(project: Path, metadata: dict, root: Path) -> tuple[dict, 
                 argv, replay, f"patch-{index}", 30, cwd=replay / "kernel",
                 env={**kernel_patch_environment(replay / "kernel"), "LC_ALL": "C"})
             require_kernel_patch_applied(project / delivered, before)
-            patched = c_check.kernel_patched_lines(
-                before, replay, patched, project / delivered, report)
+            if provenance_error is None:
+                try:
+                    patched = c_check.kernel_patched_lines(
+                        before, replay, patched, project / delivered, report)
+                except ValueError as error:
+                    provenance_error = error
         require_kernel_identity(replay / "kernel", target["kernelSha256"])
         require_kernel_identity(project / "kernel", target["kernelSha256"])
+        if provenance_error is not None:
+            raise provenance_error
         for name in target["kernelSha256"]:
             if name.endswith((".c", ".h")):
                 delivered = "kernel/" + name

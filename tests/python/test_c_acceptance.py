@@ -291,6 +291,28 @@ class AcceptanceTests(unittest.TestCase):
         self.bind_freertos()
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
 
+    def test_freertos_kernel_bytes_take_precedence_over_hunk_provenance(self):
+        from ecu_tools import build
+
+        self.freertos_inputs()
+        original = build.require_kernel_patch_applied
+
+        for corrupt in (False, True):
+            def after_patch(path, before, *, corrupt=corrupt):
+                original(path, before)
+                if corrupt:
+                    kernel = next(iter(before))
+                    kernel.write_bytes(kernel.read_bytes() + b"\n")
+
+            reason = "Kernel patch hunk provenance differs: kernel/kernel.h"
+            with self.subTest(corrupt=corrupt), \
+                    patch.object(build, "require_kernel_patch_applied", side_effect=after_patch), \
+                    patch.object(c_check, "kernel_patched_lines", side_effect=ValueError(reason)):
+                result = self.evaluate()
+            self.assertEqual(result["status"], "error")
+            self.assertEqual(result["objects"][-1]["reason"],
+                             "Kernel identity mismatch: kernel/kernel.h" if corrupt else reason)
+
     def test_freertos_mixed_report_does_not_accept_project_location(self):
         self.freertos_inputs()
         self.summary["diagnostics"][0]["locations"].append(

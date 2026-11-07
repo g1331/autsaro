@@ -231,6 +231,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     sealed_sources(root)
     sources = list(sources)
     patched_lines = {}
+    provenance_error = None
     if target.get("profile") == "ecu":
         kernel_sources = target.get("kernelSources")
         if (not isinstance(kernel_sources, list) or not kernel_sources
@@ -253,9 +254,16 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                 cwd=root / "kernel",
                 env={**kernel_patch_environment(root / "kernel"), "LC_ALL": "C"})
             require_kernel_patch_applied(root / patch_path, before)
-            patched_lines = kernel_patched_lines(
-                before, root, patched_lines, root / patch_path, report)
+            if provenance_error is None:
+                try:
+                    patched_lines = kernel_patched_lines(
+                        before, root, patched_lines, root / patch_path, report)
+                except ValueError as error:
+                    # Final pinned bytes take precedence over derived line provenance.
+                    provenance_error = error
         require_kernel_identity(root / "kernel", target.get("kernelSha256"))
+        if provenance_error is not None:
+            raise provenance_error
         sources.extend("kernel/" + name for name in kernel_sources)
         sources.extend(target_entry(names, target, mode) for mode in ("host-batch", "probe"))
     elif target.get("profile") != "host":  # plain sealed C project, used by analyzer fixtures; deliveries are always "ecu"

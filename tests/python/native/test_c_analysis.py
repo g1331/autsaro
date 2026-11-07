@@ -107,23 +107,30 @@ class ActualCAnalysisTests(unittest.TestCase):
             names = (project / "meta/files.list").read_text().splitlines() + ["meta/files.list"]
             seal.write_text("".join(f"{hashlib.sha256((project / name).read_bytes()).hexdigest()}  {name}\n"
                                     for name in names))
-            for corrupt in (False, True):
-                output = root / ("corrupt" if corrupt else "control")
+            for corrupt in (None, "newline", "crlf", "provenance"):
+                output = root / (corrupt or "control")
                 original = c_check.require_kernel_patch_applied
 
                 def after_patch(path, before, *, corrupt=corrupt, original=original):
                     original(path, before)
-                    if corrupt:
+                    if corrupt in ("newline", "crlf"):
                         kernel = next(iter(before))
-                        kernel.write_bytes(kernel.read_bytes() + b"\n")  # Valid C, different pinned bytes.
+                        data = kernel.read_bytes()
+                        kernel.write_bytes(data + b"\n" if corrupt == "newline"
+                                           else data.replace(b"\n", b"\r\n"))
 
-                with patch.object(c_check, "require_kernel_patch_applied", side_effect=after_patch):
+                provenance = ValueError("Kernel patch hunk provenance differs: kernel/unit.c")
+                with self.subTest(corrupt=corrupt), \
+                        patch.object(c_check, "require_kernel_patch_applied", side_effect=after_patch), \
+                        patch.object(c_check, "kernel_patched_lines", wraps=c_check.kernel_patched_lines,
+                                     side_effect=provenance if corrupt == "provenance" else None):
                     code = c_check.check(project, target["target"], output)
                 summary = json.loads((output / "summary.json").read_text())
                 if corrupt:
                     self.assertEqual(code, 1)
                     self.assertFalse(summary["passed"])
-                    self.assertEqual(summary["error"], "Kernel identity mismatch: kernel/unit.c")
+                    self.assertEqual(summary["error"], str(provenance) if corrupt == "provenance"
+                                     else "Kernel identity mismatch: kernel/unit.c")
                     self.assertEqual(list(output.glob("compiler-unit-*.log")), [])
                 else:
                     self.assertIn(code, (0, 1))
