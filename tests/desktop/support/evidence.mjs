@@ -60,6 +60,27 @@ export function threadCounters(stat) {
   };
 }
 
+export async function readBoundaryEvidence(directory) {
+  const records = (await readFile(path.join(directory, 'probe-status.jsonl'), 'utf8'))
+    .trim()
+    .split('\n')
+    .map(JSON.parse);
+  const status = records.findLast(
+    (record) =>
+      record.name === 'webkit-boundaries' && ['ready', 'unavailable'].includes(record.stage),
+  );
+  if (!status) throw new Error('WebKit boundary probe availability was not recorded');
+  if (status.stage === 'unavailable') {
+    if (!status.error && !status.text) throw new Error('Unavailable WebKit probe has no reason');
+    return { status, events: [] };
+  }
+  const events = (await readFile(path.join(directory, 'webkit-boundaries.stdout.log'), 'utf8'))
+    .trim()
+    .split('\n')
+    .map(JSON.parse);
+  return { status, events };
+}
+
 export async function startEvidence(directory, ports, processTree) {
   let writes = Promise.resolve();
   const errors = [];
@@ -113,7 +134,11 @@ export async function startEvidence(directory, ports, processTree) {
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
-    const closed = once(child, 'close').catch((error) => [null, String(error)]);
+    let startupError;
+    const closed = once(child, 'close').catch((error) => {
+      startupError = String(error);
+      return [null, startupError];
+    });
     children.push({ child, closed, name });
     await save('probe-status.jsonl', {
       stage: 'spawned',
@@ -142,10 +167,18 @@ export async function startEvidence(directory, ports, processTree) {
       }),
     ]);
     clearTimeout(timer);
+    let error;
+    if (!available && !text)
+      error =
+        startupError ??
+        (child.exitCode !== null || child.signalCode !== null
+          ? `Collector exited before readiness: ${child.exitCode}, ${child.signalCode}`
+          : 'Collector readiness deadline expired');
     await save('probe-status.jsonl', {
       name,
       stage: available ? 'ready' : 'unavailable',
       text,
+      error,
     });
     if (!available) child.kill('SIGTERM');
     return available;

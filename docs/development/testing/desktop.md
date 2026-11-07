@@ -39,7 +39,7 @@ Linux 的 responsiveness 与 standard-delivery 场景自动启用请求取证，
 
 边界探针复用已验证的 WebKitGTK 2.52.6 x86_64 指令位置，挂载前核对 driver／library 的完整 ELF build ID 和每个指令守卫；升级 WebKit 后须按匹配源码重新核对位置并运行控制用例。uprobe 只读取已登记会话的进程，随会话清理；它避免 GDB 在每次成功请求上停止所有线程。需要 `tcpdump`、`bpftrace`、`readelf`，普通用户通过无交互 sudo 启动采集，CI 在既有桌面作业安装这些工具。
 
-下一次超时先从 `webdriver.jsonl` 的 failed evaluation 找到两个标记前缀，再按 Automation sequence／WebProcess token／frame／callback／driver handler 串联该次请求，结合原生命令和页面阶段确定最后已观察到的边界；随后只解释该请求等待区间内的线程增量及已有失败栈。缺少某阶段时先检查探针状态、stderr 与丢包，保留未观察到的事实。`process-tree.test.mjs` 的 controlled native response timeout 用例仅在自己的 fetch 包装中扣留已完成的真实原生响应，等待该请求的线程采样后抛出 TimeoutError，验证失败前落盘和正常所属进程退出；正常场景没有这项注入。
+下一次超时先从 `webdriver.jsonl` 的 failed evaluation 找到两个标记前缀，再按 Automation sequence／WebProcess token／frame／callback／driver handler 串联该次请求，结合原生命令和页面阶段确定最后已观察到的边界；随后只解释该请求等待区间内的线程增量及已有失败栈。缺少某阶段时先检查探针状态、stderr 与丢包，保留未观察到的事实。`process-tree.test.mjs` 的 controlled native response timeout 用例仅在自己的 fetch 包装中扣留已完成的真实原生响应，等待该请求的线程采样后抛出 TimeoutError，验证失败前落盘和正常所属进程退出；正常场景没有这项注入。控制用例先读取明确的采集可用状态：ready 时验证完整边界、两跳及丢包；unavailable 时验证原因、其余请求／页面／线程证据与清理。缺少可用状态记录仍报错，避免把工件丢失误认作预期降级。
 
 同一台 Linux 机器可以在不同工作树中并行运行多个场景。手动中止或清理时只结束自己启动并记下的进程或进程组（如用 `setsid` 启动后 `kill -- -<pgid>`），不要按名称或命令行匹配（`pkill -f`、`killall`），否则会连带结束其他工作树正在运行的场景。
 

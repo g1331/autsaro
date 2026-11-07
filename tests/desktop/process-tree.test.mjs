@@ -5,6 +5,7 @@ import test from 'node:test';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { descendants, processTree, launch, until as waitFor } from './support/driver.mjs';
+import { readBoundaryEvidence } from './support/evidence.mjs';
 
 test('reused parent PID does not adopt older session processes', () => {
   // Session processes whose short-lived smss.exe (8040) exited before the
@@ -271,53 +272,56 @@ test(
         .map((record) => record.sample.stage),
       ['entered', 'resolved', 'callback'],
     );
-    const boundaries = (await read('webkit-boundaries.stdout.log'))
-      .trim()
-      .split('\n')
-      .map(JSON.parse);
-    assert(!boundaries.some((record) => record.stage === 'probe-error'));
+    const { status, events: boundaries } = await readBoundaryEvidence(session.scratch);
     const marker = `/*autosar-evaluation:${failed.evaluation}*/`;
-    const marked = (record) =>
-      record.prefixHex &&
-      Buffer.from(record.prefixHex.replaceAll(' ', ''), 'hex')
-        .toString(record.is8Bit === 0 ? 'utf16le' : 'latin1')
-        .includes(marker);
-    const send = boundaries.find(
-      (record) => record.stage.startsWith('driver-send') && marked(record),
-    );
-    assert(send, 'the failed evaluation must bind an outgoing Automation sequence');
-    for (const stage of [
-      'driver-send',
-      'ui-command',
-      'ui-response',
-      'driver-dispatch',
-      'driver-parse',
-      'driver-reconstruct',
-    ])
-      assert(
-        boundaries.some((record) => record.stage === stage && record.sequence === send.sequence),
-        `missing boundary for Automation sequence ${send.sequence}: ${stage}`,
+    if (status.stage === 'ready') {
+      assert(!boundaries.some((record) => record.stage === 'probe-error'));
+      const marked = (record) =>
+        record.prefixHex &&
+        Buffer.from(record.prefixHex.replaceAll(' ', ''), 'hex')
+          .toString(record.is8Bit === 0 ? 'utf16le' : 'latin1')
+          .includes(marker);
+      const send = boundaries.find(
+        (record) => record.stage.startsWith('driver-send') && marked(record),
       );
-    const parsed = boundaries.find(
-      (record) => record.stage === 'driver-parse' && record.sequence === send.sequence,
-    );
-    const rebuilt = boundaries.find(
-      (record) => record.stage === 'driver-reconstruct' && record.sequence === send.sequence,
-    );
-    assert.equal(parsed.handler, rebuilt.handler);
-    assert(parsed.bufferByteLength > 0);
-    assert.equal(rebuilt.rootKind, 4, 'the complete result remains an opaque JSON string');
-    const web = boundaries.find((record) => record.stage === 'web-command' && marked(record));
-    assert(web, 'the same evaluation must reach the WebProcess');
-    const javascript = boundaries.find(
-      (record) => record.stage === 'web-javascript' && record.commandToken === web.commandToken,
-    );
-    const callback = boundaries.find(
-      (record) => record.stage === 'web-response' && record.commandToken === web.commandToken,
-    );
-    assert(javascript && callback);
-    assert.equal(javascript.frame, callback.frame);
-    assert.equal(javascript.callback, callback.callback);
+      assert(send, 'the failed evaluation must bind an outgoing Automation sequence');
+      for (const stage of [
+        'driver-send',
+        'ui-command',
+        'ui-response',
+        'driver-dispatch',
+        'driver-parse',
+        'driver-reconstruct',
+      ])
+        assert(
+          boundaries.some((record) => record.stage === stage && record.sequence === send.sequence),
+          `missing boundary for Automation sequence ${send.sequence}: ${stage}`,
+        );
+      const parsed = boundaries.find(
+        (record) => record.stage === 'driver-parse' && record.sequence === send.sequence,
+      );
+      const rebuilt = boundaries.find(
+        (record) => record.stage === 'driver-reconstruct' && record.sequence === send.sequence,
+      );
+      assert.equal(parsed.handler, rebuilt.handler);
+      assert(parsed.bufferByteLength > 0);
+      assert.equal(rebuilt.rootKind, 4, 'the complete result remains an opaque JSON string');
+      const web = boundaries.find((record) => record.stage === 'web-command' && marked(record));
+      assert(web, 'the same evaluation must reach the WebProcess');
+      const javascript = boundaries.find(
+        (record) => record.stage === 'web-javascript' && record.commandToken === web.commandToken,
+      );
+      const callback = boundaries.find(
+        (record) => record.stage === 'web-response' && record.commandToken === web.commandToken,
+      );
+      assert(javascript && callback);
+      assert.equal(javascript.frame, callback.frame);
+      assert.equal(javascript.callback, callback.callback);
+    } else {
+      assert.equal(status.stage, 'unavailable');
+      assert(status.error || status.text, 'unavailable probes must retain their reason');
+      assert.deepEqual(boundaries, []);
+    }
     const native = (await read('driver.stderr.log'))
       .split('\n')
       .filter((line) => line.startsWith('AUTOSAR_NATIVE_REQUEST '))
@@ -329,23 +333,40 @@ test(
     );
     assert.equal(native[0].id, native[1].id);
     assert.equal(JSON.parse(await read('probe-capture.json')).errors.length, 0);
-    assert((await read('tcpdump.stderr.log')).includes('0 packets dropped by kernel'));
-    const owner = JSON.parse(await read('session.json'));
-    const packetBytes = await readFile(path.join(session.scratch, 'transport-headers.pcap'));
-    assert.equal(packetBytes.readUInt32LE(20), 1, 'loopback capture uses Ethernet framing');
-    const requestHops = new Set();
-    for (let offset = 24; offset + 16 <= packetBytes.length;) {
-      const length = packetBytes.readUInt32LE(offset + 8);
-      const packet = packetBytes.subarray(offset + 16, offset + 16 + length);
-      offset += 16 + length;
-      if (packet.length < 54 || packet.readUInt16BE(12) !== 0x0800) continue;
-      const ip = packet.subarray(14);
-      if (ip[9] !== 6) continue;
-      const tcp = ip.subarray((ip[0] & 15) * 4);
-      const payload = tcp.subarray((tcp[12] >> 4) * 4);
-      if (payload.includes(Buffer.from(marker))) requestHops.add(tcp.readUInt16BE(2));
+    const intervals = (await read('interval-threads.jsonl')).trim().split('\n').map(JSON.parse);
+    assert(
+      intervals.some(
+        (record) =>
+          record.request?.evaluation === failed.evaluation && record.withinRequest && record.delta,
+      ),
+    );
+    const statuses = (await read('probe-status.jsonl')).trim().split('\n').map(JSON.parse);
+    const started = statuses.filter((record) => record.stage === 'spawned');
+    for (const collector of started)
+      assert(
+        statuses.some((record) => record.name === collector.name && record.stage === 'closed'),
+        `${collector.name} cleanup must be recorded`,
+      );
+    assert(JSON.parse(await read('process-tree.json')).length > 0);
+    if (status.stage === 'ready') {
+      assert((await read('tcpdump.stderr.log')).includes('0 packets dropped by kernel'));
+      const owner = JSON.parse(await read('session.json'));
+      const packetBytes = await readFile(path.join(session.scratch, 'transport-headers.pcap'));
+      assert.equal(packetBytes.readUInt32LE(20), 1, 'loopback capture uses Ethernet framing');
+      const requestHops = new Set();
+      for (let offset = 24; offset + 16 <= packetBytes.length;) {
+        const length = packetBytes.readUInt32LE(offset + 8);
+        const packet = packetBytes.subarray(offset + 16, offset + 16 + length);
+        offset += 16 + length;
+        if (packet.length < 54 || packet.readUInt16BE(12) !== 0x0800) continue;
+        const ip = packet.subarray(14);
+        if (ip[9] !== 6) continue;
+        const tcp = ip.subarray((ip[0] & 15) * 4);
+        const payload = tcp.subarray((tcp[12] >> 4) * 4);
+        if (payload.includes(Buffer.from(marker))) requestHops.add(tcp.readUInt16BE(2));
+      }
+      assert(requestHops.has(owner.port), 'failed evaluation must reach tauri-driver HTTP hop');
+      assert(requestHops.has(owner.nativePort), 'failed evaluation must reach native HTTP hop');
     }
-    assert(requestHops.has(owner.port), 'failed evaluation must reach tauri-driver HTTP hop');
-    assert(requestHops.has(owner.nativePort), 'failed evaluation must reach native HTTP hop');
   },
 );
