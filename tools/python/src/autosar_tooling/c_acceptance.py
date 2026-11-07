@@ -395,8 +395,11 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
         line = int(location["line"])
         if not 1 <= line <= len(lines):
             continue
+        column = int(location.get("column", 0))
+        if column < 0 or column > len(lines[line - 1].rstrip("\r\n")):
+            continue
         start = sum(map(len, lines[:line - 1]))
-        offset = start + max(0, int(location.get("column", 0)) - 1)
+        offset = start + max(0, column - 1)
         if candidate["sourceCategory"] != "project":
             continue
         matches = [row for row in records if row["source"] == original and row["kind"] == "RULE"
