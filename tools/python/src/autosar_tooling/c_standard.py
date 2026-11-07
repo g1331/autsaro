@@ -696,7 +696,8 @@ RETAINED_APPLICATION = "core/tests/fixtures/component-pipeline/applications/Ingr
 
 
 def deviation_findings(
-    root: Path = ROOT, *, matched: list[dict] | None = None
+    root: Path = ROOT, *, matched: list[dict] | None = None,
+    kernel_sources: dict[str, str] | None = None,
 ) -> collections.Counter[Key]:
     """Match approved table scopes to adjacent source locations, without approving them."""
     records: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
@@ -715,9 +716,14 @@ def deviation_findings(
                 record_errors[("deviation-shape-record", path.relative_to(root).as_posix(), line.strip())] += 1
             kind = "RULE" if rule[1] == "Rule" else "DIR"
             scope = cells[2]
-            pieces = re.split(r"(`(?:runtime/[^`]+|" + re.escape(RETAINED_APPLICATION) + r")`)", scope)
+            source_pattern = r"runtime/[^`]+|" + re.escape(RETAINED_APPLICATION)
+            if kernel_sources is not None:
+                source_pattern += r"|kernel/[^`]+"
+            pieces = re.split(r"(`(?:" + source_pattern + r")`)", scope)
             for index in range(1, len(pieces), 2):
                 name = pieces[index].strip("`")
+                if name.startswith("kernel/") and name not in kernel_sources:
+                    continue
                 for item in re.findall(r"`([^`]+)`", pieces[index + 1]):
                     symbol = record_scope(item)
                     if symbol is None:
@@ -737,11 +743,15 @@ def deviation_findings(
     comments: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
     source_locations = {}
     paths = set((root / "runtime").rglob("*")) | {root / RETAINED_APPLICATION}
-    for path in sorted(path for path in paths if path.is_file()):
+    paths.update(root / name for name in (kernel_sources or {}))
+    for path in sorted(
+            path for path in paths
+            if path.is_file() or path.relative_to(root).as_posix() in (kernel_sources or {})):
         if path.suffix not in {".c", ".h"}:
             continue
         name = path.relative_to(root).as_posix()
-        source = path.read_text(encoding="utf-8")
+        source = ((kernel_sources or {})[name] if name in (kernel_sources or {})
+                  else path.read_text(encoding="utf-8"))
         tokens = lex(source)
         directive_counts: collections.Counter[str] = collections.Counter()
         directive_numbers = {}

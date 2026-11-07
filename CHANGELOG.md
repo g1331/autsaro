@@ -68,6 +68,8 @@
 
 ### Fixed
 
+- Source acceptance can consume separately bound FreeRTOS integration evidence and existing exact patch records after replaying the ordered patches against verified originals; changed inputs, reports and missing evidence remain blocked (#441)
+
 - Project source acceptance can associate owned MR12 records, native address instances and MemMap protocol positions through a separate frozen context; physical source positions, reviewed program/profile sets and original record-group authority are enforced, while formal Required blockers and raw analysis results are preserved (#449)
 
 - BSW callback, type, configuration and version headers now expose their existing module IDs through shared version headers on first inclusion; main-header macro values and public service ABI are unchanged (#433)

@@ -79,31 +79,32 @@ head→tail-item保护保持。R18.1的同数组边界义务保持。
 批准、ErrorHook R18.6或SDK来源责任。R2.5为Advisory/System（主文44／PDF52；
 TC2.5／TC2.39修订术语），R8.7为Advisory/System（主文70／PDF78，TC2.15区分调用TU）。
 下面保留原始报告与就近MR12理由，不声明MISRA符合或正式法律意义上的偏离完成。
+表内 R2.5 保持既有接口与原值，控制见下文；记录来源均为 #383／PR #395 的既有项目选择。
 
-| 规则 | 补丁后kernel路径 | 精确实体 | 选择及控制 |
+| 规则 | 补丁后 kernel 路径与实体 | 选择及形状 | 记录来源 |
 | --- | --- | --- | --- |
-| 2.5 | `portable/ThirdParty/GCC/Posix/portmacro.h` | `portTICK_PERIOD_MS` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `portable/ThirdParty/GCC/Posix/portmacro.h` | `portEND_SWITCHING_ISR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `portable/ThirdParty/GCC/Posix/portmacro.h` | `portYIELD_FROM_ISR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `portable/ThirdParty/GCC/Posix/portmacro.h` | `portENABLE_INTERRUPTS` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `tskSTATICALLY_ALLOCATED_STACK_ONLY` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `tskSTATICALLY_ALLOCATED_STACK_AND_TCB` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `tskRUNNING_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `tskBLOCKED_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `tskREADY_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `tskDELETED_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `tskSUSPENDED_CHAR` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `taskTASK_NOT_RUNNING` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `taskTASK_SCHEDULED_TO_YIELD` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `taskATTRIBUTE_IS_IDLE` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `tasks.c` | `taskBITS_PER_BYTE` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `queue.c` | `queueSEMAPHORE_QUEUE_ITEM_LENGTH` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 2.5 | `queue.c` | `queueMUTEX_GIVE_BLOCK_TIME` | 保持下述固定内核选择接口与原值；不制造使用点。 |
-| 8.7 | `portable/ThirdParty/GCC/Posix/port.c` | `vPortCloseRunningThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 |
-| 8.7 | `portable/ThirdParty/GCC/Posix/port.c` | `vPortDeleteThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 |
-| 2.5 | `portable/MSVC-MingW/port.c` | `portSIMULATED_TIMER_THREAD_PRIORITY` | 保持下述固定内核选择接口与原值；不制造使用点。 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portTICK_PERIOD_MS` | shape=`#define portTICK_PERIOD_MS ((TickType_t)1000u / configTICK_RATE_HZ)` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portEND_SWITCHING_ISR` | shape=`#define portEND_SWITCHING_ISR(requested) return (requested)` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portYIELD_FROM_ISR` | shape=`#define portYIELD_FROM_ISR(requested) portEND_SWITCHING_ISR(requested)` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portENABLE_INTERRUPTS` | shape=`#define portENABLE_INTERRUPTS() vPortExitCritical()` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB` | shape=`#define tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB ( ( uint8_t ) 0 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSTATICALLY_ALLOCATED_STACK_ONLY` | shape=`#define tskSTATICALLY_ALLOCATED_STACK_ONLY ( ( uint8_t ) 1 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSTATICALLY_ALLOCATED_STACK_AND_TCB` | shape=`#define tskSTATICALLY_ALLOCATED_STACK_AND_TCB ( ( uint8_t ) 2 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskRUNNING_CHAR` | shape=`#define tskRUNNING_CHAR ( 'X' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskBLOCKED_CHAR` | shape=`#define tskBLOCKED_CHAR ( 'B' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskREADY_CHAR` | shape=`#define tskREADY_CHAR ( 'R' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskDELETED_CHAR` | shape=`#define tskDELETED_CHAR ( 'D' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSUSPENDED_CHAR` | shape=`#define tskSUSPENDED_CHAR ( 'S' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_NOT_RUNNING` | shape=`#define taskTASK_NOT_RUNNING ( ( BaseType_t ) ( -1 ) )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_SCHEDULED_TO_YIELD` | shape=`#define taskTASK_SCHEDULED_TO_YIELD ( ( BaseType_t ) ( -2 ) )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD` | shape=`#define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB ) ( ( ( pxTCB )->xTaskRunState != taskTASK_NOT_RUNNING ) ? ( pdTRUE ) : ( pdFALSE ) )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskATTRIBUTE_IS_IDLE` | shape=`#define taskATTRIBUTE_IS_IDLE ( UBaseType_t ) ( 1U << 0U )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskBITS_PER_BYTE` | shape=`#define taskBITS_PER_BYTE ( ( size_t ) 8 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/queue.c` `queueSEMAPHORE_QUEUE_ITEM_LENGTH` | shape=`#define queueSEMAPHORE_QUEUE_ITEM_LENGTH ( ( UBaseType_t ) 0 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/queue.c` `queueMUTEX_GIVE_BLOCK_TIME` | shape=`#define queueMUTEX_GIVE_BLOCK_TIME ( ( TickType_t ) 0U )` | 维护者 #383 |
+| MISRA C:2012 Rule 8.7 | `kernel/portable/ThirdParty/GCC/Posix/port.c` `vPortCloseRunningThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 shape=`void vPortCloseRunningThread(void *task, volatile BaseType_t *pending_yield) {` | 维护者 #383 |
+| MISRA C:2012 Rule 8.7 | `kernel/portable/ThirdParty/GCC/Posix/port.c` `vPortDeleteThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 shape=`void vPortDeleteThread(void *task) {` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/MSVC-MingW/port.c` `portSIMULATED_TIMER_THREAD_PRIORITY` | shape=`#define portSIMULATED_TIMER_THREAD_PRIORITY THREAD_PRIORITY_NORMAL` | 维护者 #383 |
 
 R2.5表内tasks.c／queue.c常量支撑静态／动态分配标记、统计字符、单核／多核状态及队列
 接口的既有条件分支。分配组合、统计格式化、多核／delete、计数／递归信号量分支由当前
@@ -128,3 +129,94 @@ task身份／关闭回归用于确认整体协议未变，不据此证明可选�
 表外任何新键均不由本节分类；同名不同表达式／位置也须重新核查。完整诊断位置、
 源码行与程序出现次数及独立审查head／发现／处置归实施PR，不在这里复制每轮报告。
 来源分类不覆盖自有系统交互，66项无checker评估继续沿独立责任范围进行。
+
+## 当前集成义务与消费
+
+本篇的原件分类由 `freertos-integration` 上下文消费，格式沿用源码验收的
+`source-assessment-context`；补丁 R2.5／R8.7 表复用 `c_standard.deviation_findings`
+的 MR12、实体、shape 和双向关联，表中“记录来源”引用原 #383 的有限项目选择。
+当前消费者只接纳该表的两项 Advisory 规则，Required／Mandatory 不经保留表接纳。
+R5.5／R20.7 只接纳上节所列精确声明与声明宏，R17.3 取实际最后一个语言选项为 C99；
+R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
+
+每轮从两份 manifest 核对原件与 ownership 摘要，再从这些原件重放实际 target 的有序
+补丁，沿每次修改传递行归属，并核对 replay 和已分析副本的最终 kernelSha256。
+因此补丁后来恢复成原件文本仍保留项目责任。混合诊断逐位置核查；采用上下文额外绑定
+含 kernel 位置的完整诊断集合（包括程序、非 kernel 位置与来源字段），新增或改变报告
+需要重新评估。上下文的 inputIdentity 由 `freertos_identity(summary, input_identity(...))`
+计算，包含两份原件 manifest 的当前字节；普通三组和 owned-source 保留原算法。
+
+集成证据的适用范围为当前两个 x64 C99 controlled 目标和四个 profile 的两个程序。
+复核以下接缝后才可把本组上下文标记为 approved，并附实际 head 与验证收据。
+没有对应当前输入的记录，或记录仍为 pending 时，原件及补丁的本组位置持续阻塞。
+
+| 固定上游说明中的义务 | 项目侧实际接缝与核查依据 | 实际消费者 |
+| --- | --- | --- |
+| D4.7 的返回信息及端口补全 R8.6 | `Os_Backend.c` 检查 `xTaskCreateStatic` 的 NULL、`xTaskResumeFromISR` 的切换请求；`FreeRTOSConfig.h` 的 configASSERT 进入 Os_BackendAssert；target 选择实际 port，与 Hook／内存回调一起链接 | 正常 HostBatch／probe 编译链接；OS public-types、nonstatus-errors、error-hooks、calling-context |
+| R8.4 的外部对象及 R11.1 的可选回调 | 单核 pxCurrentTCB 由补丁后的 task.h 声明；queue registry 默认大小为 0；stream_buffer.c／event_groups.c／timers.c 均未进入 kernelSources，可选回调与 EventGroup handle 无实际调用 | 实际头声明、TU 与宏收据；正常双程序链接 |
+| R2.2 的 scheduler end | 两端口的 vPortEndScheduler 与 Os_Backend 的关闭顺序连接；启动失败及正常关闭沿真实宿主线程终止和回收路径 | OS lifecycle、returned-task、idle-state、port-restart；native HostBatch |
+| D4.12／R21.3 的 heap 选择 | 静态 Task／Idle 对象，configSUPPORT_STATIC_ALLOCATION=1、DYNAMIC_ALLOCATION=0；kernelSources 没有 heap；宿主线程、栈和 gate 的动态资源沿 OS 主机设施既有类别单独负责 | OS stack、lifecycle、capacity；正常目标构建与来源检查 |
+| R11.3 的静态对象别名 | StaticTask_t 的项目存储通过 xTaskCreateStatic 进入内核，核对大小、对齐、生命周期及 configASSERT；配置关闭 mutex／timers／co-routines，已交付队列由独立原生消费者验证 | OS public-types、stack；真实内核队列 front／wrap／overwrite／reset 反例 |
+| R11.5 的 list owner／handle／缓冲区 | TaskHandle 来自静态创建，list owner 在同一个任务对象身份下存取；list sentinel 使用完整 ListItem_t；栈扫描及队列容量边界由实际对象和配置限定 | OS activation、finish、events、public-types；实际 patched tasks.c 的逐字节栈扫描变异 |
+| R14.3／R18.1 的配置与 IDLE 字符串 | 固定 configMAX_TASK_NAME_LEN=16u、IDLE="IDLE"；遇 NUL 终止后停止复制；固定配置的单核声明与实际宏集合支撑上节 R5.5 判断 | 实际 TU 编译和宏收据；OS idle-state、task-hooks |
+| R21.6 的演示／统计工具 | examples 未交付；configUSE_STATS_FORMATTING_FUNCTIONS 的默认关闭使统计格式化实现退出本配置；本项目调用方和主机 I/O 仍按自己的规则消费 | 最终 kernelSources／程序 TU、实际预处理与符号／链接证据 |
+
+以上列的是集成方核查对象。固定上游说明及其 Coverity 配置只说明供应方所述范围；
+本项目继续保留全部原始报告、规则未评估状态和未完成正式义务。上游原件的接纳表示
+当前采用责任与集成证据已建立，整体 MISRA 结论继续按 221 项的独立评估出口处理。
+本篇及表、原件、补丁顺序／字节、配置、程序、工具或实际交互改变时，旧绑定失效。
+<!-- source-assessment-context-begin -->
+{
+ "id": "freertos-current-inputs",
+ "evidence": {
+  "head": "4ae3fe56823490c2f114e90bc6bb4b02940ff90c",
+  "receipt": "https://github.com/g1331/autsaro/pull/455#issuecomment-6714031019"
+ },
+ "cases": [
+  {
+   "caseId": "standard-ecu",
+   "target": "linux-x64-controlled-v1",
+   "inputIdentity": "04f84e2905cc6eacd0a97dd8c75eade558b5911626fa8f28a2c088f4c974f410"
+  },
+  {
+   "caseId": "user-application",
+   "target": "linux-x64-controlled-v1",
+   "inputIdentity": "bd97145b509edddfb2a3ab891a191646f104cc354f80f859ae7bde3e9d511d9c"
+  },
+  {
+   "caseId": "component-pipeline",
+   "target": "linux-x64-controlled-v1",
+   "inputIdentity": "872425bbfc994d75a94cbf21447db7207de427cb7051c5c922b7e57f5d9d1f4e"
+  },
+  {
+   "caseId": "no-diagnostic",
+   "target": "linux-x64-controlled-v1",
+   "inputIdentity": "96d7e5df5130cb563ece186e667af1fff7df2cc7cc39af52275ceb90715f1789"
+  },
+  {
+   "caseId": "standard-ecu",
+   "target": "windows-x64-controlled-v1",
+   "inputIdentity": "8cb5fcbb7c3143fbc3015bc3282ea41b3423d8236384116ff665b3dda1ce3844"
+  },
+  {
+   "caseId": "user-application",
+   "target": "windows-x64-controlled-v1",
+   "inputIdentity": "0d42bdff4b3540b745ec662510412bb1fd59631a923ec6e2ab382858f980181f"
+  },
+  {
+   "caseId": "component-pipeline",
+   "target": "windows-x64-controlled-v1",
+   "inputIdentity": "a1c9258412f412255c836393a71d7f3d2a03a948550a45276aea70e323fc9d24"
+  },
+  {
+   "caseId": "no-diagnostic",
+   "target": "windows-x64-controlled-v1",
+   "inputIdentity": "32d7d958a183a4be4ec662c06ba17d30293ff66166b2a20d0178cb7436cd4adb"
+  }
+ ],
+ "records": {
+  "kind": "freertos-integration"
+ },
+ "formalStatus": "approved"
+}
+<!-- source-assessment-context-end -->

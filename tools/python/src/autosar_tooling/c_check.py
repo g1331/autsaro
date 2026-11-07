@@ -1,7 +1,6 @@
 """Analyze a sealed generated C project without modifying its source package."""
 from __future__ import annotations
 
-import difflib
 import hashlib
 import importlib.util
 import json
@@ -232,6 +231,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     sealed_sources(root)
     sources = list(sources)
     patched_lines = {}
+    provenance_error = None
     if target.get("profile") == "ecu":
         kernel_sources = target.get("kernelSources")
         if (not isinstance(kernel_sources, list) or not kernel_sources
@@ -245,14 +245,25 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
             if patch_path not in names:
                 raise ValueError("Pinned kernel patch is outside the sealed inventory")
             before = kernel_patch_targets(root / "kernel", root / patch_path, patch["includes"])
-            argv = [str(Path(git).resolve()), "-c", "core.autocrlf=false", "apply", "--ignore-space-change",
+            argv = [str(Path(git).resolve()), "-c", "core.autocrlf=false",
+                    "-c", "core.quotePath=false", "apply", "--verbose", "--ignore-space-change",
                     *("--include=" + name for name in patch["includes"]), str(root / patch_path)]
             # Apply only inside the copied kernel, never the authoritative source.
-            run(argv, output, f"patch-{index}", 30, context=f"Kernel patch {index} failed",
-                cwd=root / "kernel", env=kernel_patch_environment(root / "kernel"))
+            _, _, report = run(
+                argv, output, f"patch-{index}", 30, context=f"Kernel patch {index} failed",
+                cwd=root / "kernel",
+                env={**kernel_patch_environment(root / "kernel"), "LC_ALL": "C"})
             require_kernel_patch_applied(root / patch_path, before)
-            patched_lines = kernel_patched_lines(before, root, patched_lines)
+            if provenance_error is None:
+                try:
+                    patched_lines = kernel_patched_lines(
+                        before, root, patched_lines, root / patch_path, report)
+                except ValueError as error:
+                    # Final pinned bytes take precedence over derived line provenance.
+                    provenance_error = error
         require_kernel_identity(root / "kernel", target.get("kernelSha256"))
+        if provenance_error is not None:
+            raise provenance_error
         sources.extend("kernel/" + name for name in kernel_sources)
         sources.extend(target_entry(names, target, mode) for mode in ("host-batch", "probe"))
     elif target.get("profile") != "host":  # plain sealed C project, used by analyzer fixtures; deliveries are always "ecu"
@@ -399,19 +410,104 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     return root, sources, database, scope
 
 
-def kernel_patched_lines(before: dict[Path, bytes], root: Path,
-                         previous: dict[str, list[int]]) -> dict[str, list[int]]:
-    """Carry project ownership through the ordered patches, including reversions."""
+def _kernel_patch_hunks(patch: Path) -> dict[str, list[tuple]]:
+    """Read the ordered unified hunks that Git has successfully applied."""
+    files = {}
+    name = None
+    operations = None
+    old_left = new_left = 0
+    for line in patch.read_text(encoding="utf-8").split("\n"):
+        if operations is not None:
+            if line.startswith("\\ No newline at end of file"):
+                continue
+            if not line or line[0] not in " +-":
+                raise ValueError("Incomplete kernel patch hunk")
+            operations.append((line[0], line[1:]))
+            old_left -= line[0] != "+"
+            new_left -= line[0] != "-"
+            if old_left < 0 or new_left < 0:
+                raise ValueError("Kernel patch hunk counts differ")
+            if old_left == new_left == 0:
+                operations = None
+            continue
+        if line.startswith("+++ b/"):
+            name = line[6:].split("\t", 1)[0]
+            if name in files:
+                raise ValueError("Duplicate kernel patch source")
+            files[name] = []
+        match = re.match(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
+        if match:
+            if name is None:
+                raise ValueError("Kernel patch hunk has no source")
+            old_left = int(match[2] or 1)
+            new_left = int(match[4] or 1)
+            operations = []
+            files[name].append((int(match[3]), old_left, new_left, operations))
+    if operations is not None:
+        raise ValueError("Incomplete kernel patch hunk")
+    return files
+
+
+def _kernel_patch_offsets(report: str, hunks: dict) -> dict[tuple[str, int], int]:
+    """Read actual hunk positions from Git's C-locale verbose output."""
+    offsets = {}
+    name = None
+    for line in report.splitlines():
+        checked = re.fullmatch(r"Checking patch (.+)\.\.\.", line)
+        if checked:
+            name = checked[1]
+            if name.startswith('"'):
+                name = json.loads(name)
+        applied = re.fullmatch(r"Hunk #(\d+) succeeded at (\d+)(?: .*)?\.", line)
+        if applied:
+            if name not in hunks:
+                raise ValueError("Kernel patch application report has no source")
+            offsets[name, int(applied[1])] = int(applied[2])
+    return offsets
+
+
+def kernel_patched_lines(
+    before: dict[Path, bytes], root: Path, previous: dict[str, list[int]], patch: Path, report: str
+) -> dict[str, list[int]]:
+    """Carry line identities through actual hunks, never rematching duplicate text."""
+    hunks = _kernel_patch_hunks(patch)
+    offsets = _kernel_patch_offsets(report, hunks)
     lines = dict(previous)
     for path, data in sorted(before.items()):
         name = path.relative_to(root).as_posix()
-        upstream = data.decode("utf-8").replace("\r\n", "\n").split("\n")  # as Cppcheck counts lines
-        patched = path.read_text(encoding="utf-8").split("\n")
-        matcher = difflib.SequenceMatcher(None, upstream, patched, autojunk=False)
+        relative = path.relative_to(root / "kernel").as_posix()
+        if not hunks.get(relative):
+            raise ValueError(f"Kernel patch source has no hunks: {name}")
+        text = data.decode("utf-8").replace("\r\n", "\n").split("\n")
+        if text[-1] == "":
+            text.pop()
         owned = set(previous.get(name, ()))
-        lines[name] = [line + 1 for tag, old, _, start, end in matcher.get_opcodes()
-                       for line in range(start, end)
-                       if tag != "equal" or old + line - start + 1 in owned]
+        identities = [index + 1 in owned for index in range(len(text))]
+        for number, (declared, old_count, new_count, operations) in enumerate(hunks[relative], 1):
+            applied = offsets.get((relative, number), declared)
+            start = applied - 1 if new_count else applied
+            if start < 0 or start + old_count > len(text):
+                raise ValueError(f"Kernel patch hunk position differs: {name}")
+            replacement = []
+            flags = []
+            cursor = start
+            for kind, content in operations:
+                if kind == "+":
+                    replacement.append(content)
+                    flags.append(True)
+                else:
+                    if kind == " ":
+                        replacement.append(text[cursor])
+                        flags.append(identities[cursor])
+                    cursor += 1
+            text[start:start + old_count] = replacement
+            identities[start:start + old_count] = flags
+        actual = path.read_text(encoding="utf-8").split("\n")
+        if actual[-1] == "":
+            actual.pop()
+        if text != actual:
+            raise ValueError(f"Kernel patch hunk provenance differs: {name}")
+        lines[name] = [index + 1 for index, flag in enumerate(identities) if flag]
     return lines
 
 

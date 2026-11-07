@@ -23,6 +23,10 @@ uv run --locked python -m autosar_tooling c-acceptance \
 
 跨平台离线核对封存输入时，从同一 head 按目标 Git 换行规则导出独立副本，例如 Windows 使用 `git -c core.autocrlf=true checkout-index --all --prefix=<新目录>/`，同时从该副本的 `tools/python/src` 加载解析器。逐项核对 producer、解析器与评估正文摘要后重算身份；Windows 的 SDK 和实际运行证据仍由目标主机正常验收入口提供。
 
+PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并提交。消费工件前先从
+checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
+分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
+
 手动 workflow 的严格步骤直接调用同一 CLI；自动 PR 仍只验证完整执行，直到 #55 的剩余义务及真实保护验证完成。测试里的完整合成正例验证可执行契约，不是实际工程的合法绿色出口。
 
 `docs/standards/` 与固定指南索引是实际分析输入，单独修改也选择代码／原生／C 分析检查，不按普通文档跳过；它们不单独选择桌面场景。普通读者指南与界面说明仍沿原有文档选择规则。
@@ -35,7 +39,20 @@ uv run --locked python -m autosar_tooling c-acceptance \
 
 `standard-ecu` 与 `user-application` 的 ARXML 可以相同，应用字节仍分别绑定。重命名目录不改变身份；应用、配置、producer、程序／TU、SDK 或评估正文变化都会使旧上下文失效。原分析副本中的 kernel 已应用补丁，因此复用现有最终 kernel 身份检查，不以补丁前 seal 再验证补丁后字节。
 
+修改 C 分析准备或身份拒绝路径时，除 `tests/python` 开发测试外，还须设置固定版本
+`CPPCHECK` 并运行以下命令。根目录发现测试不包含这组 `ActualCAnalysisTests`；单独
+记录其实际执行数量、跳过项与原因。
+
+```bash
+uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+```
+
 这些身份是证据适用范围，不是诊断 baseline 或缓存。不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
+
+动态构造带摘要的原件、补丁或封存夹具时，用同一份编码后的字节写文件并计算身份，
+采用 `write_bytes` 或显式指定换行；默认文本写入在 Windows 会转换 LF 为 CRLF。
+仓库的 `.gitattributes` 只约束检出文件，临时夹具须自行固定字节，并在 Linux 上模拟
+Windows 默认 CRLF 写入验证身份及正常消费路径。
 
 ## 原标准篇中的上下文
 
@@ -71,6 +88,20 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 实际输入交集绑定在[原自有源码标准篇](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)，
 只接纳所列输入下已实现的 Advisory 记录与语言不适用位置；剩余模块消费与
 Required 正式材料继续由自有源码消费任务接续。
+
+固定 FreeRTOS 使用 `records={"kind":"freertos-integration"}`，原件集成义务和精确
+补丁表见 [采用篇](../../standards/os/adoption.md#当前集成义务与消费)。本组沿用同一
+上下文格式；其 case 的 `inputIdentity` 使用
+`c_acceptance.freertos_identity(summary, c_acceptance.input_identity(summary, project))`，
+额外绑定两份 manifest 和含 kernel 位置的完整诊断集合。重放有序补丁验证当前来源后，
+原件按本组集成证据消费；补丁复用共同 MR12 匹配器及原有精确裁决，SDK 仍独立阻塞。
+缺少当前绑定或 pending 时，返回本组明确的阻塞原因。R15.5 继续由 GRP 消费。
+
+内核行归属按实际应用的有序补丁 hunk 传递：新增和替换行归项目，保留行携带原身份
+随插删移动。hunk 的 offset 取 Git 实际应用回执，并核对重建文本与最终文件一致；
+重复文本、删除后在别处加入以及恢复原文，均按这些位置身份判断。分析来源、集成验收
+与内核 GRP 共用该结果。整条补丁链完成后先核验最终字节身份，再报告暂存的行归属
+错误；追加空行或 LF／CRLF 变化仍按 `Kernel identity mismatch` 拒绝。
 
 人工表及补充记录中的 `retained` 保留真实违反及理由，经本组当前绑定和有效批准参与项目验收。Required 保留项的批准材料须完成 AMD2.5 修订后 §6.2.2 引用的 MISRA Compliance:2020 第 4 节正式义务；AMD2.4 已撤换主文旧第 5 节。Advisory 使用 §6.2.3 的记录安排。`not_assessed` 和缺失记录持续阻塞，Mandatory 的 `retained` 在记录入口拒绝。
 
