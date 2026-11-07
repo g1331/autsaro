@@ -113,6 +113,14 @@ pub(super) fn files(
         source.push_str("#include \"Rte_Dcm_Type.h\"\n");
         source.push_str(&c_layout::release_check("Rte.c", "Rte_Dcm_Type.h", "DCM"));
     }
+    for module in composition
+        .mode_machines
+        .iter()
+        .map(|machine| &machine.module)
+        .collect::<BTreeSet<_>>()
+    {
+        source.push_str(&format!("#include \"SchM_{module}.h\"\n"));
+    }
     for component in &composition.components {
         source.push_str(&format!(
             "#include \"{}\"\n",
@@ -243,6 +251,7 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
 "#,
     );
     section(&mut source, "Rte", "CODE", false);
+    source.push_str(&super::mode_binding::rte_functions(composition));
     for component in &composition.components {
         let scope = super::short_name(&component.component);
         if !scopes.contains(&(scope.to_owned(), "CODE")) {

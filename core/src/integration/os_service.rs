@@ -76,6 +76,7 @@ pub(super) fn contract(counter: &str) -> Component {
         interfaces: BTreeMap::from([(port.into(), interface)]),
         diagnostic_session_port: None,
         diagnostic_mode_ports: Vec::new(),
+        mode_ports: Vec::new(),
         data_ports: Vec::new(),
         data_accesses: Vec::new(),
         operations,
