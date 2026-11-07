@@ -2,6 +2,8 @@
 #ifndef CANTP_VERSION_H
 #define CANTP_VERSION_H
 #include "Autsaro_Version.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2). */
+#define CANTP_MODULE_ID 35u
 /* R24-11 MOD DOC-REVISION; SWS_BSW_00059/00256 release identity.
  * Formal vendor identity remains unassigned. */
 #define CANTP_AR_RELEASE_MAJOR_VERSION 4U

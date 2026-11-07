@@ -2,6 +2,10 @@
 #ifndef DCM_VERSION_H
 #define DCM_VERSION_H
 #include "Autsaro_Version.h"
+/* Module identity (SWS_BSW_00059/00256, Appendix A.2).
+ * MR12 RULE 2.5 VIOLATION: SWS_BSW_00059/00256 requires these immutable published identity fields.
+ */
+#define DCM_MODULE_ID 53u
 /* R24-11 MOD DOC-REVISION; SWS_BSW_00059/00256 release identity.
  * Formal vendor identity remains unassigned. */
 #define DCM_AR_RELEASE_MAJOR_VERSION 4U

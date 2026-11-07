@@ -527,8 +527,10 @@ fn public_headers_publish_their_owner_release_in_ecu_and_contract_deliveries() {
             };
             let identity = module_id.map_or_else(String::new, |id| {
                 format!(
-                    "#if !defined({prefix}_MODULE_ID)\n#error {name} lacks {prefix}_MODULE_ID\n\
-                     #elif {prefix}_MODULE_ID != {id}U\n#error {name} has wrong {prefix}_MODULE_ID\n\
+                    "#if !defined({prefix}_MODULE_ID)\n\
+                     #error {name} lacks {prefix}_MODULE_ID\n\
+                     #elif {prefix}_MODULE_ID != {id}U\n\
+                     #error {name} has wrong {prefix}_MODULE_ID\n\
                      #endif\n"
                 )
             });
