@@ -2,7 +2,7 @@ import { appendFile } from 'node:fs/promises';
 
 // Serialized into the page. The optional observer is diagnostic only; the
 // expression and native IPC still execute through the original transport.
-export function evaluateInPage(expression, id, done) {
+export function evaluateInPage(expression, id, done, endpoint) {
   function observe(stage) {
     const sample = {
       id,
@@ -16,6 +16,8 @@ export function evaluateInPage(expression, id, done) {
     };
     window.__AUTOSAR_DESKTOP_EVALUATION__ = sample;
     try {
+      if (endpoint && !navigator.sendBeacon(endpoint, JSON.stringify(sample)))
+        sample.observerError = 'beacon not queued';
       window.__AUTOSAR_DESKTOP_OBSERVER__?.(sample);
     } catch (error) {
       sample.observerError = String(error);
@@ -41,10 +43,11 @@ export function evaluateInPage(expression, id, done) {
 }
 
 export class WebDriver {
-  constructor(base, log) {
+  constructor(base, log, evidence) {
     this.base = base;
     this.log = log;
     this.sequence = 0;
+    this.evidence = evidence;
   }
   async refresh(sessionRoute) {
     return this.request('POST', `${sessionRoute}/refresh`, {});
@@ -59,8 +62,11 @@ export class WebDriver {
       script: body?.args?.[0],
       evaluation: route.endsWith('/execute/async') ? body?.args?.[1] : undefined,
     };
-    const record = (fields) =>
-      appendFile(this.log, JSON.stringify({ ...request, at: Date.now(), ...fields }) + '\n');
+    const record = async (fields) => {
+      const value = { ...request, at: Date.now(), ...fields };
+      await appendFile(this.log, JSON.stringify(value) + '\n');
+      await this.evidence?.record(value);
+    };
     await record({ phase: 'started' });
     let response;
     let result;
@@ -71,7 +77,17 @@ export class WebDriver {
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(300000),
       });
-      result = await response.json();
+      if (this.evidence) {
+        const text = await response.text();
+        await this.evidence.record({
+          ...request,
+          phase: 'node-body',
+          status: response.status,
+          utf8ByteLength: Buffer.byteLength(text),
+          codeUnits: text.length,
+        });
+        result = JSON.parse(text);
+      } else result = await response.json();
     } catch (error) {
       // An aborted transport cannot cancel the command already running in WebKit.
       this.failure = error;

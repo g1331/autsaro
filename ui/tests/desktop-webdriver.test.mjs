@@ -4,8 +4,22 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { WebDriver } from '../../tests/desktop/support/webdriver.mjs';
+import { threadCounters } from '../../tests/desktop/support/evidence.mjs';
 
 const cleanups = [];
+
+test('thread interval counters use kernel fields after the complete parenthesized name', () => {
+  const fields = Array.from({ length: 22 }, (_, index) => String(index + 100));
+  fields[0] = 'S';
+  expect(threadCounters(`417 (worker (native) request) ${fields.join(' ')}\n`)).toEqual({
+    state: 'S',
+    identity: '119',
+    minorFaults: 107,
+    majorFaults: 109,
+    userTicks: 111,
+    systemTicks: 112,
+  });
+});
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
   vi.restoreAllMocks();

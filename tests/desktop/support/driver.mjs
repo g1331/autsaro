@@ -3,6 +3,7 @@
 // private Xvfb display and D-Bus; Windows relies on a dedicated runner or VM.
 import assert from 'node:assert/strict';
 import { WebDriver, evaluateInPage } from './webdriver.mjs';
+import { startEvidence } from './evidence.mjs';
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import {
   access,
@@ -36,7 +37,9 @@ export function captureDriverOutput(driver, directory, onStderr = () => {}) {
         // Descriptor write errors can omit path, notably on Windows. The
         // collector owns this destination; retain the OS error as the cause.
         failure ??= Object.assign(
-          new Error(`Driver ${channel} output capture failed: ${output}`, { cause: error }),
+          new Error(`Driver ${channel} output capture failed: ${output}`, {
+            cause: error,
+          }),
           { path: output, code: error?.code },
         );
       };
@@ -516,7 +519,7 @@ throw "Native chooser stayed open after accepting the selection: $(Shown)"
  * Results (screenshots, IPC log) go to AUTOSAR_DESKTOP_RESULTS or the system
  * temporary directory.
  */
-export async function launch(name, { delayOperations = false } = {}) {
+export async function launch(name, { delayOperations = false, requestEvidence = false } = {}) {
   if (!platform)
     throw new Error(`tauri-driver supports Linux and Windows desktops, not ${process.platform}`);
   if (platform === 'windows') windowsGuard();
@@ -599,6 +602,7 @@ export async function launch(name, { delayOperations = false } = {}) {
   let abandon;
   let session;
   let client;
+  let evidence;
   let outputCapture = Promise.resolve([]);
   try {
     let nativeDriver;
@@ -625,6 +629,10 @@ export async function launch(name, { delayOperations = false } = {}) {
       );
     }
     const [port, nativePort] = await driverPorts();
+    if (platform === 'linux' && requestEvidence)
+      evidence = await startEvidence(scratch, { port, nativePort }, () =>
+        processTree(driverProcess.pid),
+      );
     driverProcess = spawn(
       await tool('tauri-driver'),
       [
@@ -676,7 +684,11 @@ export async function launch(name, { delayOperations = false } = {}) {
     outputCapture = captureDriverOutput(driverProcess, scratch, (chunk) => {
       driverLog += chunk;
     });
-    client = new WebDriver(`http://127.0.0.1:${port}`, path.join(scratch, 'webdriver.jsonl'));
+    client = new WebDriver(
+      `http://127.0.0.1:${port}`,
+      path.join(scratch, 'webdriver.jsonl'),
+      evidence,
+    );
     await until(async () => {
       try {
         return (await fetch(`${client.base}/status`)).ok;
@@ -694,14 +706,19 @@ export async function launch(name, { delayOperations = false } = {}) {
       script: 300000,
       pageLoad: 300000,
     });
+    await evidence?.attach();
   } catch (error) {
+    const evidenceError = await evidence?.close().then(
+      () => undefined,
+      (error) => error,
+    );
     if (abandon) {
       process.off('exit', abandon);
       abandon();
     }
     await Promise.all([driverProcess].filter(Boolean).map(stopped));
     await display?.cleanup();
-    const outputErrors = (await outputCapture).filter(Boolean);
+    const outputErrors = [...(await outputCapture), evidenceError].filter(Boolean);
     if (outputErrors.length)
       throw new AggregateError(
         [error, ...outputErrors],
@@ -745,9 +762,14 @@ export async function launch(name, { delayOperations = false } = {}) {
       return client.refresh(route(''));
     },
     async evaluate(expression) {
+      const id = ++nextEvaluation;
       const encoded = await client.request('POST', route('/execute/async'), {
-        script: `return (${evaluateInPage.toString()}).apply(null, arguments);`,
-        args: [expression, ++nextEvaluation],
+        script: `/*autosar-evaluation:${id}*/return (${evaluateInPage.toString()})(arguments[0], arguments[1], arguments[arguments.length - 1], arguments[2]);`,
+        args: [
+          evidence ? `/*autosar-evaluation:${id}*/\n${expression}` : expression,
+          id,
+          evidence?.endpoint,
+        ],
       });
       const result = JSON.parse(encoded);
       if (result.error) throw new Error(result.error);
@@ -952,7 +974,11 @@ export async function launch(name, { delayOperations = false } = {}) {
             '-ex',
             'detach',
           ],
-          { timeout: 20000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024 },
+          {
+            timeout: 20000,
+            killSignal: 'SIGKILL',
+            maxBuffer: 16 * 1024 * 1024,
+          },
         )
           .then((result) => ({ ...result, outcome: 'completed' }))
           .catch((error) => ({
@@ -988,6 +1014,10 @@ export async function launch(name, { delayOperations = false } = {}) {
     },
     // Close the session, end the driver tree and prove nothing survived.
     async close() {
+      const evidenceError = await evidence?.close().then(
+        () => undefined,
+        (error) => error,
+      );
       const tree = await processTree(driverProcess.pid);
       let closeError;
       try {
@@ -1036,7 +1066,7 @@ export async function launch(name, { delayOperations = false } = {}) {
       });
       process.off('exit', abandon);
       await writeFile(path.join(scratch, 'process-tree.json'), JSON.stringify(tree, null, 2));
-      const outputErrors = (await outputCapture).filter(Boolean);
+      const outputErrors = [...(await outputCapture), evidenceError].filter(Boolean);
       if (outputErrors.length)
         throw new AggregateError(
           [...(closeError ? [closeError] : []), ...outputErrors],
