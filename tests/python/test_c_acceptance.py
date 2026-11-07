@@ -169,12 +169,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(self.plan, plan)
         self.assertNotEqual(self.identity(), before)
 
-    def freertos_inputs(self, *, patched=False, status="approved"):
-        self.owned_inputs()
-        original = "void upstream(void) {}\n"
-        addition = ("/* MR12 RULE 2.5 VIOLATION: retain this fixed selection interface. */\n"
-                    "#define KEEP 1u\n")
-        final = original + addition
+    def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
         path = self.root / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -182,22 +177,34 @@ class AcceptanceTests(unittest.TestCase):
         manifest = {"files": {"kernel.h": hashlib.sha256(original.encode()).hexdigest()}}
         for filename in ("source-manifest.json", "posix-source-manifest.json"):
             (path.parent / filename).write_text(json.dumps(manifest), encoding="utf-8")
-        patch_name = "runtime/os/patches/0001-selection.patch"
-        added_lines = "".join("+" + line + "\n" for line in addition.splitlines())
-        change = ("diff --git a/kernel.h b/kernel.h\n--- a/kernel.h\n+++ b/kernel.h\n"
-                  "@@ -1 +1,3 @@\n " + original + added_lines)
-        patch_path = self.root / patch_name
-        patch_path.parent.mkdir(parents=True, exist_ok=True)
-        patch_path.write_bytes(change.encode())
-        self.files[patch_name.removeprefix("runtime/")] = change.encode()
+        self.target["kernelPatches"] = []
+        for index, change in enumerate(changes, 1):
+            patch_name = f"runtime/os/patches/{index:04d}-selection.patch"
+            patch_path = self.root / patch_name
+            patch_path.parent.mkdir(parents=True, exist_ok=True)
+            patch_path.write_bytes(change.encode())
+            self.files[patch_name.removeprefix("runtime/")] = change.encode()
+            self.target["kernelPatches"].append({"path": patch_name, "includes": ["kernel.h"]})
         self.files["kernel/kernel.h"] = final.encode()
         self.origins[name] = "kernel/kernel.h"
-        self.target["kernelPatches"] = [{"path": patch_name, "includes": ["kernel.h"]}]
         self.target["kernelSha256"]["kernel.h"] = hashlib.sha256(final.encode()).hexdigest()
-        self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+        owners = json.loads(self.files["meta/workbench-ownership.json"])["files"]
+        owners = [row for row in owners if row["path"] != "kernel/kernel.h"]
+        owners.append({
             "path": "kernel/kernel.h", "owner": "adopted", "producerId": "freertos",
             "sha256": hashlib.sha256(original.encode()).hexdigest(),
-        }]}).encode()
+        })
+        self.files["meta/workbench-ownership.json"] = json.dumps({"files": owners}).encode()
+
+    def freertos_inputs(self, *, patched=False, status="approved"):
+        self.owned_inputs()
+        original = "void upstream(void) {}\n"
+        addition = ("/* MR12 RULE 2.5 VIOLATION: retain this fixed selection interface. */\n"
+                    "#define KEEP 1u\n")
+        change = ("diff --git a/kernel.h b/kernel.h\n--- a/kernel.h\n+++ b/kernel.h\n"
+                  "@@ -1 +1,3 @@\n " + original
+                  + "".join("+" + line + "\n" for line in addition.splitlines()))
+        self.freertos_kernel(original, original + addition, [change])
         adoption = self.root / c_acceptance.ADOPTION
         adoption.write_text(
             "## 当前集成义务与消费\nSynthetic integration evidence.\n"
@@ -314,6 +321,46 @@ class AcceptanceTests(unittest.TestCase):
         occurrence = self.evaluate()["occurrences"][0]
         self.assertEqual(occurrence["assessment"], "blocked", occurrence)
         self.assertNotEqual(occurrence["status"], "freertos_record_matched")
+
+    def assert_required_patch_lines_blocked(self, original, final, changes, lines):
+        self.freertos_inputs()
+        self.freertos_kernel(original, final, changes)
+        locations = [{"file": "kernel/kernel.h", "line": line, "column": 0} for line in lines]
+        self.summary["diagnostics"] = [{"id": "misra-c2012-20.7",
+            "programs": ["host-batch", "probe"], "patched": True, "adopted": False,
+            "sourceCategory": "project-patch", "locations": locations}]
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.bind_freertos()
+        result = self.evaluate()
+        self.assertNotEqual(result["status"], "error", result["objects"])
+        self.assertEqual([row["location"] for row in result["occurrences"]], locations)
+        self.assertEqual([row["assessment"] for row in result["occurrences"]],
+                         ["blocked"] * len(locations))
+        metadata = json.loads((self.project / "meta/integration.json").read_text())
+        _, patched = c_acceptance._freertos_sources(self.project, metadata, self.root)
+        self.assertEqual(patched["kernel/kernel.h"], lines)
+
+    def test_freertos_duplicate_added_after_original_stays_project_owned(self):
+        macro = "#define SCALE(x) x * 2u\n"
+        change = "--- a/kernel.h\n+++ b/kernel.h\n@@ -1 +1,2 @@\n " + macro + "+" + macro
+        self.assert_required_patch_lines_blocked(macro, macro * 2, [change], [2])
+
+    def test_freertos_deleted_line_readded_elsewhere_stays_project_owned(self):
+        macro = "#define SCALE(x) x * 2u\n"
+        other = "#define OTHER 0u\n"
+        change = ("--- a/kernel.h\n+++ b/kernel.h\n@@ -1,2 +1,2 @@\n-" + macro
+                  + " " + other + "+" + macro)
+        self.assert_required_patch_lines_blocked(macro + other, other + macro, [change], [2])
+
+    def test_freertos_duplicate_restored_text_keeps_both_project_identities(self):
+        macro = "#define SCALE(x) x * 2u\n"
+        corrected = "#define SCALE(x) ((x) * 2u)\n"
+        first = ("--- a/kernel.h\n+++ b/kernel.h\n@@ -1 +1,2 @@\n-" + macro
+                 + "+" + corrected + "+" + macro)
+        second = ("--- a/kernel.h\n+++ b/kernel.h\n@@ -1,2 +1,2 @@\n-" + corrected
+                  + "+" + macro + " " + macro)
+        self.assert_required_patch_lines_blocked(macro, macro * 2, [first, second], [1, 2])
 
     def test_freertos_patch_cannot_consume_a_new_required_retention(self):
         self.freertos_inputs(patched=True)
@@ -756,6 +803,11 @@ class AcceptanceTests(unittest.TestCase):
             {"path": name, "owner": owner, "producerId": producer,
              "sha256": hashlib.sha256(data).hexdigest()}
             for name, owner, producer, data in owners]}).encode()
+        change = ("--- a/kernel.h\n+++ b/kernel.h\n@@ -1,4 +1,5 @@\n"
+                  " int upstream(int x) {\n     if (x) { return 1; }\n"
+                  "+    if (x == 2) { return 2; }\n     return 0;\n }\n")
+        self.freertos_kernel(upstream.decode(), patched.decode(), [change])
+        (self.root / c_acceptance.ADOPTION).write_text("## 当前集成义务与消费\n", encoding="utf-8")
         self.seal()
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         self.summary["scope"].update(sdkHeaders=[], sdkMacroInputs={}, patchedLines={})
@@ -775,6 +827,8 @@ class AcceptanceTests(unittest.TestCase):
             self.grp_diagnostic("kernel/kernel.h", 3, adopted=True,
                                 sourceCategory="adopted-freertos")])
         self.bind_groups()
+        self.bind(self.context(group="freertos-integration", status="approved",
+            identity=c_acceptance.freertos_identity(self.summary, self.identity(), self.root)))
         before = copy.deepcopy(self.summary)
         result = self.evaluate()
         self.assertEqual(result["status"], "accepted", result["objects"])
@@ -800,6 +854,26 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(len(result["occurrences"]), 3)
         self.assertTrue(all(row["assessment"] == "blocked" for row in result["occurrences"]))
 
+    def test_grp_uses_hunk_identity_for_duplicate_kernel_returns(self):
+        self.grp_inputs()
+        original = (self.root / "third_party/freertos/kernel.h").read_text()
+        statement = "    if (x) { return 1; }\n"
+        final = original.replace(statement, statement * 2)
+        change = ("--- a/kernel.h\n+++ b/kernel.h\n@@ -1,4 +1,5 @@\n"
+                  " int upstream(int x) {\n " + statement + "+" + statement
+                  + "     return 0;\n }\n")
+        self.freertos_kernel(original, final, [change])
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.summary["diagnostics"] = [self.grp_diagnostic("kernel/kernel.h", line)
+                                        for line in (2, 3)]
+        self.bind_freertos()
+        rows = self.evaluate()["occurrences"]
+        self.assertEqual([row["location"]["line"] for row in rows], ["2", "3"])
+        self.assertEqual([row["status"] for row in rows],
+                         ["freertos_record_matched", "grp_disapplied"])
+        self.assertEqual([row["assessment"] for row in rows], ["accepted", "accepted"])
+
     def test_grp_keeps_untraceable_return_blocked(self):
         self.grp_inputs()
         diagnostic = self.grp_diagnostic("generated/Owned.c")
@@ -820,7 +894,7 @@ class AcceptanceTests(unittest.TestCase):
         diagnostic = self.grp_diagnostic("generated/Owned.c")
         diagnostic["locations"].extend(self.grp_diagnostic("unknown.c")["locations"])
         self.summary["diagnostics"] = [diagnostic]
-        self.bind_groups()
+        self.bind_freertos()
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         self.assertEqual([row["assessment"] for row in result["occurrences"]],
@@ -869,7 +943,7 @@ class AcceptanceTests(unittest.TestCase):
         c_sdk.classify([diagnostic], self.summary["scope"], [], self.project)
         self.assertTrue(diagnostic["sourceOrigins"])
         self.summary["diagnostics"] = [diagnostic]
-        self.bind_groups()
+        self.bind_freertos()
         before = copy.deepcopy(self.summary)
         result = self.evaluate()
         self.assertEqual(result["status"], "accepted", result["objects"])

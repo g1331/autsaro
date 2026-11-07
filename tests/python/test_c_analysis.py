@@ -106,19 +106,26 @@ class CAnalysisTests(unittest.TestCase):
                 (base / side / "kernel").mkdir(parents=True)
                 (base / side / "kernel/tasks.c").write_text(text)
             path = base / "root/kernel/tasks.c"
+            change = base / "change.patch"
+            change.write_bytes(b"--- a/tasks.c\n+++ b/tasks.c\n"
+                               b"@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+d\n")
             lines = c_check.kernel_patched_lines({path: (base / "project/kernel/tasks.c").read_bytes()},
-                                                base / "root", {})
+                                                base / "root", {}, change, "")
             self.assertEqual(lines, {"kernel/tasks.c": [2, 4]})
             # A later patch restores upstream text and inserts a line above it.
             # Final upstream-vs-delivery diff alone would lose ownership of b.
             before = {path: path.read_bytes()}
             path.write_bytes(b"a\r\ninserted\r\nb\r\nc\r\n")
-            lines = c_check.kernel_patched_lines(before, base / "root", lines)
+            change.write_bytes(b"--- a/tasks.c\n+++ b/tasks.c\n"
+                               b"@@ -1,4 +1,4 @@\n a\n-B\n+inserted\n+b\n c\n-d\n")
+            lines = c_check.kernel_patched_lines(before, base / "root", lines, change, "")
             self.assertEqual(lines, {"kernel/tasks.c": [2, 3]})
             # Delete only the insertion: the untouched restored line stays owned.
             before = {path: path.read_bytes()}
             path.write_text("a\nb\nc\n")
-            lines = c_check.kernel_patched_lines(before, base / "root", lines)
+            change.write_bytes(b"--- a/tasks.c\n+++ b/tasks.c\n"
+                               b"@@ -1,4 +1,3 @@\n a\n-inserted\n b\n c\n")
+            lines = c_check.kernel_patched_lines(before, base / "root", lines, change, "")
             self.assertEqual(lines, {"kernel/tasks.c": [2]})
             xml = '<results><errors><error id="style"><location file="kernel/tasks.c" line="2"/></error></errors></results>'
             diagnostic = c_check.parse_diagnostics(xml, base / "root", lines)[0]
@@ -127,6 +134,21 @@ class CAnalysisTests(unittest.TestCase):
         for xml in ("", "<results/>", "<wrong><errors/></wrong>"):
             with self.subTest(xml=xml), self.assertRaises((ValueError, c_check.ET.ParseError)):
                 c_check.parse_diagnostics(xml, Path.cwd())
+
+    def test_patch_hunk_offsets_come_from_git_application(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / "kernel/tasks.c"
+            path.parent.mkdir()
+            before = {path: b"z\nx\na\nb\nc\ny\n"}
+            path.write_bytes(b"z\nx\na\nb\nb\nc\ny\n")
+            change = root / "change.patch"
+            change.write_bytes(b"--- a/tasks.c\n+++ b/tasks.c\n@@ -2,3 +2,4 @@\n a\n+b\n b\n c\n")
+            report = "Checking patch tasks.c...\nHunk #1 succeeded at 3 (offset 1 line).\n"
+            self.assertEqual(c_check.kernel_patched_lines(before, root, {}, change, report),
+                             {"kernel/tasks.c": [4]})
+            with self.assertRaisesRegex(ValueError, "hunk provenance differs"):
+                c_check.kernel_patched_lines(before, root, {}, change, "")
 
     def test_wrong_cppcheck_version_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:

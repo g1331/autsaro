@@ -282,7 +282,7 @@ def _positions(diagnostics: list[dict]):
 
 
 def _grp_positions(
-    summary: dict, project: Path, metadata: dict, root: Path
+    summary: dict, project: Path, metadata: dict, root: Path, kernel_lines: dict
 ) -> set[tuple[int, int]]:
     """Locate owned return tokens covered by ADR 0025, independently of report labels."""
     positions = [(index, position, diagnostic, location)
@@ -296,7 +296,6 @@ def _grp_positions(
         delivered: original for original, delivered in metadata["originalBswSources"].items()
     }
     owned = {}
-    upstream = {}
     for name in {location["file"] for _, _, _, location in positions}:
         row = owners.get(name)
         if row is None or not safe_relative(name) or not (project / name).is_file():
@@ -304,8 +303,9 @@ def _grp_positions(
         original = origins.get(name, "")
         if name.startswith("kernel/"):
             if (original.startswith("third_party/freertos/") and safe_relative(original)
-                    and (root / original).is_file() and digest(root / original) == row["sha256"]):
-                upstream[project / name] = (root / original).read_bytes()
+                    and (root / original).is_file() and digest(root / original) == row["sha256"]
+                    and name in kernel_lines):
+                owned[name] = kernel_lines[name]
             continue
         if row["sha256"] != digest(project / name):
             continue
@@ -317,11 +317,8 @@ def _grp_positions(
                     and (root / original).is_file()
                     and digest(root / original) == row["sha256"])):
             owned[name] = None
-    # Reuse the normal ownership calculation against verified original bytes.
-    # A report's patched/adopted flags and patchedLines are not authority for GRP.
-    from autosar_tooling.c_check import kernel_patched_lines
-
-    owned.update(kernel_patched_lines(upstream, project, {}))
+    # Kernel ownership comes from the same verified ordered replay as integration
+    # acceptance, rather than report labels or an original-vs-final text diff.
     returns = {}
     for name, lines in owned.items():
         source = (project / name).read_text(encoding="utf-8")
@@ -525,13 +522,15 @@ def _freertos_sources(project: Path, metadata: dict, root: Path) -> tuple[dict, 
             git = shutil.which("git")
             if git is None:
                 raise ValueError("Git is required to verify FreeRTOS integration")
-            c_check.run([str(Path(git).resolve()), "-c", "core.autocrlf=false",
-                         "apply", "--ignore-space-change",
-                         *("--include=" + name for name in patch["includes"]),
-                         str(project / delivered)], replay, f"patch-{index}", 30,
-                        cwd=replay / "kernel", env=kernel_patch_environment(replay / "kernel"))
+            argv = [str(Path(git).resolve()), "-c", "core.autocrlf=false",
+                    "-c", "core.quotePath=false", "apply", "--verbose", "--ignore-space-change",
+                    *("--include=" + name for name in patch["includes"]), str(project / delivered)]
+            _, _, report = c_check.run(
+                argv, replay, f"patch-{index}", 30, cwd=replay / "kernel",
+                env={**kernel_patch_environment(replay / "kernel"), "LC_ALL": "C"})
             require_kernel_patch_applied(project / delivered, before)
-            patched = c_check.kernel_patched_lines(before, replay, patched)
+            patched = c_check.kernel_patched_lines(
+                before, replay, patched, project / delivered, report)
         require_kernel_identity(replay / "kernel", target["kernelSha256"])
         require_kernel_identity(project / "kernel", target["kernelSha256"])
         for name in target["kernelSha256"]:
@@ -541,7 +540,9 @@ def _freertos_sources(project: Path, metadata: dict, root: Path) -> tuple[dict, 
     return sources, patched
 
 
-def _freertos_positions(summary: dict, project: Path, metadata: dict, root: Path) -> dict:
+def _freertos_positions(
+    summary: dict, project: Path, metadata: dict, root: Path, kernel: tuple | None = None
+) -> dict:
     """Consume supplier integration and project MR12 records by actual position."""
     target = json.loads((project / "target.json").read_text(encoding="utf-8"))
     if not target.get("kernelPatches") and not any(
@@ -554,7 +555,7 @@ def _freertos_positions(summary: dict, project: Path, metadata: dict, root: Path
     if not all((root / "third_party/freertos" / name).is_file()
                for name in ("source-manifest.json", "posix-source-manifest.json")):
         return {}
-    sources, patched = _freertos_sources(project, metadata, root)
+    sources, patched = kernel if kernel is not None else _freertos_sources(project, metadata, root)
     records = []
     errors = c_standard.deviation_findings(root, matched=records, kernel_sources=sources)
     records = [row for row in records if row["source"].startswith("kernel/")]
@@ -674,9 +675,16 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         if summary.get("sourceClassification", {}).get("complete") is not True:
             add("source-classification", "sdk", "sdk_source_or_macro_provenance_incomplete")
         retention = c_retention.analyze(summary["diagnostics"], project, result["target"])
-        grp_positions = _grp_positions(summary, project, metadata, root)
+        target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+        kernel = None
+        if target.get("kernelPatches") and all(
+                (root / "third_party/freertos" / name).is_file()
+                for name in ("source-manifest.json", "posix-source-manifest.json")):
+            kernel = _freertos_sources(project, metadata, root)
+        grp_positions = _grp_positions(
+            summary, project, metadata, root, kernel[1] if kernel is not None else {})
         owned_positions = _owned_positions(summary, project, metadata, root)
-        freertos_positions = _freertos_positions(summary, project, metadata, root)
+        freertos_positions = _freertos_positions(summary, project, metadata, root, kernel)
         if "freertos-integration" in selected:
             result["contexts"].append(_reference(selected["freertos-integration"][0]))
         target = json.loads((project / "target.json").read_text(encoding="utf-8"))
