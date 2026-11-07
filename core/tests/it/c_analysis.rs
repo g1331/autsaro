@@ -15,12 +15,33 @@ fn generated_c_analysis_samples() {
         output.display()
     );
     analysis_samples::generate(&output, &scratch);
-    for (sample, id, length) in [
-        ("standard-ecu", "UINT16", "UINT16"),
-        ("user-application", "UINT16", "UINT16"),
-        ("component-pipeline", "UINT8", "UINT32"),
-        ("no-diagnostic", "UINT8", "UINT8"),
+    for (sample, id, length, mapping_count) in [
+        ("standard-ecu", "UINT16", "UINT16", 15),
+        ("user-application", "UINT16", "UINT16", 15),
+        ("component-pipeline", "UINT8", "UINT32", 17),
+        ("no-diagnostic", "UINT8", "UINT8", 16),
     ] {
+        let mappings = std::fs::read_dir(output.join(sample).join("generated/include"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .ends_with("_MemMap.h")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(mappings.len(), mapping_count, "{sample}: mapping headers");
+        for path in mappings {
+            let contents = std::fs::read_to_string(&path).unwrap();
+            let file_comment = contents.split_once("*/").unwrap().0;
+            assert!(
+                file_comment.starts_with("/** @file")
+                    && file_comment.contains("MR12 DIR 4.10 VIOLATION:"),
+                "{sample}: {} requires its D4.10 file record",
+                path.display()
+            );
+        }
         let metadata: serde_json::Value = serde_json::from_slice(
             &std::fs::read(output.join(sample).join("meta/integration.json")).unwrap(),
         )
