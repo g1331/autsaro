@@ -4,7 +4,7 @@
 
 ### Breaking
 
-- RTE service C/S now binds explicit SWC/BSW mappings to selected implementation owners and shares the typed binding plan with Counter services; regenerate plans and contracts. Service-interface connectors require a service component endpoint (#436)
+- RTE service C/S now binds explicit SWC/BSW mappings to selected implementation owners and shares the typed binding plan with Counter services; regenerate plans and contracts. Service-interface connectors require a service component endpoint (#454)
 
 - Synchronous RTE C/S now supports typed scalar parameters, ordered P-port constants, shared compatible server runnables and general application errors (including E_OK-only); regenerate contracts and rebuild consumers for the expanded plan schema (#435)
 
