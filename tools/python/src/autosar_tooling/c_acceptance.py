@@ -356,6 +356,10 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
                for original, delivered in metadata["originalBswSources"].items()}
     records = []
     errors = c_standard.deviation_findings(root, matched=records)
+    # The shared MR12 parser also sees templates belonging to the fixed 159-key
+    # group. Their own context and consumer remain the authority for those rows.
+    records = [row for row in records
+               if not row["record"]["file"].startswith(c_retention.RECORD_DIRECTORY + "/")]
     categories = {"misra-c2012-" + row["id"][1:]: row["category"]
                   for row in _catalog(summary, root) if row["id"].startswith("R")}
     positions = list(_positions(summary["diagnostics"]))
