@@ -125,3 +125,11 @@ fn template_official_legal_inputs_reject_nonzero_execution_constraints() {
         );
     }
 }
+
+#[cfg(feature = "official-oracles")]
+#[test]
+fn typed_synchronous_port_arguments_use_official_r24_schema() {
+    let sources = typed_operation_inputs();
+    assert_official_schema_accepts(&sources);
+    build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+}

@@ -372,8 +372,15 @@ pub const STRUCTURES: &[(&str, &str)] = &[
     ),
     (
         "SWC-INTERNAL-BEHAVIOR",
-        "SHORT-NAME LONG-NAME? DESC? CATEGORY? ADMIN-DATA? DATA-TYPE-MAPPING-REFS? EVENTS? RUNNABLES? SUPPORTS-MULTIPLE-INSTANTIATION?",
+        "SHORT-NAME LONG-NAME? DESC? CATEGORY? ADMIN-DATA? DATA-TYPE-MAPPING-REFS? EVENTS? PORT-API-OPTIONS? RUNNABLES? SUPPORTS-MULTIPLE-INSTANTIATION?",
     ),
+    ("PORT-API-OPTIONS", "PORT-API-OPTION+"),
+    (
+        "PORT-API-OPTION",
+        "ENABLE-TAKE-ADDRESS? INDIRECT-API? PORT-ARG-VALUES? PORT-REF?",
+    ),
+    ("PORT-ARG-VALUES", "PORT-DEFINED-ARGUMENT-VALUE+"),
+    ("PORT-DEFINED-ARGUMENT-VALUE", "VALUE? VALUE-TYPE-TREF?"),
     ("DATA-TYPE-MAPPING-REFS", "DATA-TYPE-MAPPING-REF+"),
     (
         "EVENTS",
@@ -459,6 +466,8 @@ pub const OPEN_CHOICES: &[&str] = &[
     "PROVIDED-COM-SPECS",
     "REQUIRED-COM-SPECS",
     "INTERNAL-BEHAVIORS",
+    "PORT-API-OPTIONS",
+    "PORT-ARG-VALUES",
     "EVENTS",
     "SERVER-CALL-POINTS",
     "SUB-ELEMENTS",
@@ -468,6 +477,8 @@ pub const OPEN_CHOICES: &[&str] = &[
 // XML lexical types, separate from ECUC definition constraints/ranges.
 pub const SCALARS: &[(&str, &str)] = &[
     ("ERROR-CODE", "integer"),
+    ("ENABLE-TAKE-ADDRESS", "boolean"),
+    ("INDIRECT-API", "boolean"),
     ("SHORT-NAME", "identifier"),
     ("SYMBOL", "symbol"),
     ("SHORT-LABEL", "identifier"),
@@ -564,6 +575,8 @@ pub const REFERENCES: &[&str] = &[
     "POSSIBLE-ERROR-REF",
     "DEFINITION-REF",
     "VALUE-REF",
+    "PORT-REF",
+    "VALUE-TYPE-TREF",
     "CONTEXT-ELEMENT-REF",
     "TARGET-REF",
     "MODULE-DESCRIPTION-REF",

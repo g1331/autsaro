@@ -740,7 +740,9 @@ fn unsigned_contract_rejects_conflicting_base_encodings_with_valid_references() 
                 .err()
                 .expect("conflicting encoding rejected");
             assert!(
-                issues.iter().any(|issue| issue.code == "TYPE_CONFLICT"),
+                issues
+                    .iter()
+                    .any(|issue| issue.code == "RTE_TYPE_UNSUPPORTED"),
                 "{issues:?}"
             );
             assert!(
@@ -1004,7 +1006,7 @@ fn type_categories_are_required_with_valid_references_in_both_entrances() {
                 )
             },
         );
-        rejects_in_both(&sources, "SERVICE_TYPE_CONFLICT");
+        rejects_in_both(&sources, "RTE_TYPE_UNSUPPORTED");
     }
     for base in ["Base_uint8", "Base_uint32"] {
         for category in [None, Some("VARIABLE_LENGTH")] {
@@ -1022,7 +1024,7 @@ fn type_categories_are_required_with_valid_references_in_both_entrances() {
                     )
                 },
             );
-            rejects_in_both(&sources, "TYPE_CONFLICT");
+            rejects_in_both(&sources, "RTE_TYPE_UNSUPPORTED");
         }
     }
 }
@@ -1931,4 +1933,370 @@ fn argument_symbols_are_rejected_before_nameless_runnable_disposition() {
             && issue.object.as_deref() == Some("/Application/Process/Behavior/ServerTransform")),
         "{issues:#?}"
     );
+}
+
+#[test]
+fn typed_servers_keep_port_constants_private_and_share_one_implementation() {
+    let sources = typed_operation_inputs();
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let symbols = &plan.description().symbols;
+    let server = symbols
+        .iter()
+        .find(|symbol| symbol.symbol == "Process_Transform")
+        .unwrap();
+    assert_eq!(server.return_type, "Std_ReturnType");
+    assert_eq!(
+        server
+            .arguments
+            .iter()
+            .map(|arg| arg.native_type.as_str())
+            .collect::<Vec<_>>(),
+        ["uint8", "uint8", "uint8", "uint32 *", "boolean *"]
+    );
+    assert_eq!(
+        symbols
+            .iter()
+            .filter(|symbol| symbol.symbol == "Process_Transform")
+            .count(),
+        1
+    );
+    let ping = symbols
+        .iter()
+        .find(|symbol| symbol.symbol == "Process_Ping")
+        .unwrap();
+    assert_eq!(ping.return_type, "Std_ReturnType");
+    let client = symbols
+        .iter()
+        .find(|symbol| symbol.symbol == "Rte_Call_Observe_ResultService_Transform")
+        .unwrap();
+    assert_eq!(client.arguments.len(), 3);
+    let files = plan.component_contract_files().unwrap();
+    let header = &files
+        .files()
+        .iter()
+        .find(|(path, _)| path == "include/Rte_Process.h")
+        .unwrap()
+        .1;
+    let header = std::str::from_utf8(header).unwrap();
+    // Verifies: SWS_Rte_02575, SWS_Rte_02576, SWS_Rte_07143
+    for error in ["Busy", "Denied", "E_OK"] {
+        assert_eq!(
+            header
+                .matches(&format!("#define RTE_E_ScalarService_{error}"))
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
+fn invalid_port_arguments_and_shared_server_signatures_locate_the_source() {
+    for (file, before, after, object) in [
+        (
+            "process.arxml",
+            "<VALUE>13</VALUE>",
+            "<VALUE>256</VALUE>",
+            "/Application/Process/Behavior",
+        ),
+        (
+            "process.arxml",
+            "<VALUE>13</VALUE>",
+            "<VALUE>-1</VALUE>",
+            "/Application/Process/Behavior",
+        ),
+        (
+            "process.arxml",
+            "<VALUE>13</VALUE>",
+            "<VALUE>1.5</VALUE>",
+            "/Application/Process/Behavior",
+        ),
+        (
+            "process.arxml",
+            "<VALUE>13</VALUE>",
+            "",
+            "/Application/Process/Behavior",
+        ),
+        (
+            "process.arxml",
+            "<PORT-REF DEST=\"P-PORT-PROTOTYPE\">/Application/Process/ResultService",
+            "<PORT-REF DEST=\"R-PORT-PROTOTYPE\">/Application/Process/Value",
+            "/Application/Process/Behavior",
+        ),
+        (
+            "process.arxml",
+            "/Types/uint8</VALUE-TYPE-TREF>",
+            "/Types/Dcm_DataElement_ApplicationValueType</VALUE-TYPE-TREF>",
+            "/Application/Process/Behavior",
+        ),
+        (
+            "types.arxml",
+            "<ERROR-CODE>63</ERROR-CODE>",
+            "<ERROR-CODE>64</ERROR-CODE>",
+            "/Types/ScalarService/Denied",
+        ),
+        (
+            "process.arxml",
+            "<VALUE-TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">/Types/uint8</VALUE-TYPE-TREF>",
+            "",
+            "/Application/Process/Behavior",
+        ),
+        (
+            "types.arxml",
+            "<ERROR-CODE>0</ERROR-CODE>",
+            "<ERROR-CODE>3</ERROR-CODE>",
+            "/Types/ScalarService/Transform",
+        ),
+        (
+            "types.arxml",
+            "/Types/ScalarService/Busy</POSSIBLE-ERROR-REF>",
+            "/Types/DataServices_ApplicationValue/E_NOT_OK</POSSIBLE-ERROR-REF>",
+            "/Types/ScalarService/Transform",
+        ),
+    ] {
+        let mut sources = typed_operation_inputs();
+        change(&mut sources, file, before, after);
+        let issues = build(&sources)
+            .err()
+            .expect("invalid typed contract accepted");
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.file.as_deref() == Some(file)
+                    && issue
+                        .object
+                        .as_deref()
+                        .is_some_and(|path| path.starts_with(object))),
+            "{before}: {issues:?}"
+        );
+    }
+    let mut sources = typed_operation_inputs();
+    xml_edit(
+        &mut sources,
+        "process.arxml",
+        |node| named(node, "OPERATION-INVOKED-EVENT", "OtherPing"),
+        |original| original.replace("/ServerPing", "/ServerTransform"),
+    );
+    let issues = build(&sources)
+        .err()
+        .expect("invalid typed contract accepted");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "SERVICE_TYPE_CONFLICT"
+                && issue.object.as_deref() == Some("/Application/Process/Behavior/OtherPing")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn changing_a_port_constant_rejects_an_old_preview_and_preserves_delivery() {
+    let mut sources = typed_operation_inputs();
+    let first_plan = build(&sources).unwrap();
+    let first = first_plan.component_contract_files().unwrap();
+    let scratch = Scratch::new();
+    let output = scratch.0.join("contracts");
+    let preview = first.preview(&output).unwrap();
+    first
+        .generate_previewed(&output, &preview.revision)
+        .unwrap();
+    let old: Vec<_> = first
+        .files()
+        .iter()
+        .map(|(path, _)| (path.clone(), std::fs::read(output.join(path)).unwrap()))
+        .collect();
+    change(
+        &mut sources,
+        "process.arxml",
+        "<VALUE>13</VALUE>",
+        "<VALUE>17</VALUE>",
+    );
+    let changed_plan = build(&sources).unwrap();
+    let changed = changed_plan.component_contract_files().unwrap();
+    assert!(
+        changed
+            .generate_previewed(&output, &preview.revision)
+            .is_err()
+    );
+    for (path, bytes) in old {
+        assert_eq!(std::fs::read(output.join(&path)).unwrap(), bytes, "{path}");
+    }
+    use autosar_config_core::target::BuildTarget;
+    for target in [
+        BuildTarget::LinuxX64ControlledV1,
+        BuildTarget::WindowsX64ControlledV1,
+    ] {
+        let output = scratch.0.join(target.spec().id);
+        let preview = prepared_typed_pipeline(&first_plan, target)
+            .preview(&output)
+            .unwrap();
+        prepared_typed_pipeline(&first_plan, target)
+            .generate_previewed(&output, &preview.revision)
+            .unwrap();
+        let before: Vec<_> = preview
+            .files
+            .iter()
+            .map(|file| {
+                (
+                    file.path.clone(),
+                    std::fs::read(output.join(&file.path)).unwrap(),
+                )
+            })
+            .collect();
+        assert!(
+            prepared_typed_pipeline(&changed_plan, target)
+                .generate_previewed(&output, &preview.revision)
+                .is_err()
+        );
+        for (path, bytes) in before {
+            assert_eq!(std::fs::read(output.join(&path)).unwrap(), bytes, "{path}");
+        }
+    }
+}
+
+#[test]
+fn typed_service_references_keep_identity_when_c_type_producers_are_coalesced() {
+    let mut sources = typed_operation_inputs();
+    let datatype = subtree(&sources, "types.arxml", "IMPLEMENTATION-DATA-TYPE", "uint8");
+    let document = std::str::from_utf8(
+        sources
+            .iter()
+            .find(|source| source.logical_path() == "types.arxml")
+            .unwrap()
+            .bytes(),
+    )
+    .unwrap();
+    let prefix = document.split_once("<AR-PACKAGES>").unwrap().0;
+    let alias = format!(
+        "{prefix}<AR-PACKAGES>\
+        <AR-PACKAGE><SHORT-NAME>ZTypes</SHORT-NAME><ELEMENTS>{datatype}</ELEMENTS>\
+        </AR-PACKAGE></AR-PACKAGES></AUTOSAR>"
+    );
+    sources.push(InputSource::new("zz-types.arxml", alias.into_bytes()).unwrap());
+    replace_all(
+        &mut sources,
+        "/Types/uint8</TYPE-TREF>",
+        "/ZTypes/uint8</TYPE-TREF>",
+    );
+    replace_all(
+        &mut sources,
+        "/Types/uint8</VALUE-TYPE-TREF>",
+        "/ZTypes/uint8</VALUE-TYPE-TREF>",
+    );
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let component = plan
+        .description()
+        .composition
+        .as_ref()
+        .unwrap()
+        .components
+        .iter()
+        .find(|component| component.component == "/Application/Process")
+        .unwrap();
+    assert_eq!(
+        component.port_arguments["/Application/Process/ResultService"][0].type_identity,
+        "/ZTypes/uint8"
+    );
+    assert!(
+        component
+            .operations
+            .iter()
+            .filter(|operation| !operation.read)
+            .any(|operation| operation
+                .argument_types
+                .iter()
+                .any(|path| path == "/ZTypes/uint8"))
+    );
+}
+
+#[test]
+fn distinct_error_producers_cannot_assign_different_values_to_the_same_public_macro() {
+    let mut sources = typed_operation_inputs();
+    let interface = subtree(
+        &sources,
+        "types.arxml",
+        "CLIENT-SERVER-INTERFACE",
+        "ScalarService",
+    )
+    .replace("/Types/ScalarService", "/ZTypes/ScalarService")
+    .replace("<ERROR-CODE>7</ERROR-CODE>", "<ERROR-CODE>8</ERROR-CODE>");
+    let document = std::str::from_utf8(
+        sources
+            .iter()
+            .find(|source| source.logical_path() == "types.arxml")
+            .unwrap()
+            .bytes(),
+    )
+    .unwrap();
+    let prefix = document.split_once("<AR-PACKAGES>").unwrap().0;
+    let extra = format!(
+        "{prefix}<AR-PACKAGES>\
+        <AR-PACKAGE><SHORT-NAME>ZTypes</SHORT-NAME><ELEMENTS>{interface}</ELEMENTS>\
+        </AR-PACKAGE></AR-PACKAGES></AUTOSAR>"
+    );
+    sources.push(InputSource::new("other-service.arxml", extra.into_bytes()).unwrap());
+    for (file, tag, name) in [
+        ("process.arxml", "P-PORT-PROTOTYPE", "OtherService"),
+        ("observe.arxml", "R-PORT-PROTOTYPE", "OtherService"),
+        ("process.arxml", "OPERATION-INVOKED-EVENT", "OtherTransform"),
+        ("process.arxml", "OPERATION-INVOKED-EVENT", "OtherPing"),
+        (
+            "observe.arxml",
+            "SYNCHRONOUS-SERVER-CALL-POINT",
+            "OtherTransform",
+        ),
+        (
+            "observe.arxml",
+            "SYNCHRONOUS-SERVER-CALL-POINT",
+            "OtherPing",
+        ),
+    ] {
+        xml_edit(
+            &mut sources,
+            file,
+            |node| named(node, tag, name),
+            |original| original.replace("/Types/ScalarService", "/ZTypes/ScalarService"),
+        );
+    }
+    let issues = build(&sources)
+        .err()
+        .expect("conflicting error macro accepted");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "CONTRACT_NAME_COLLISION"
+                && issue.object.as_deref() == Some("/ZTypes/ScalarService/Transform")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn application_error_aliases_can_share_a_numeric_code() {
+    let mut sources = typed_operation_inputs();
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "APPLICATION-ERROR", "Busy"),
+        |original| {
+            format!(
+                "{original}{}",
+                original.replace(
+                    "<SHORT-NAME>Busy</SHORT-NAME>",
+                    "<SHORT-NAME>BusyAlias</SHORT-NAME>"
+                )
+            )
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "CLIENT-SERVER-OPERATION", "Transform"),
+        |original| {
+            original.replace(
+                "</POSSIBLE-ERROR-REFS>",
+                "<POSSIBLE-ERROR-REF DEST=\"APPLICATION-ERROR\">\
+            /Types/ScalarService/BusyAlias</POSSIBLE-ERROR-REF></POSSIBLE-ERROR-REFS>",
+            )
+        },
+    );
+    build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
 }

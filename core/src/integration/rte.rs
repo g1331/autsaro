@@ -430,18 +430,31 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
     }}
 "#,
                         argument.name,
-                        operation.application_error.as_deref().unwrap_or("E_NOT_OK")
+                        operation
+                            .application_errors
+                            .iter()
+                            .find(|(_, code)| **code == 1)
+                            .map(|(symbol, _)| symbol.as_str())
+                            .unwrap_or("E_NOT_OK")
                     ));
                 }
             }
-            let callee = if server.application_error.is_some() {
+            let callee = if !server.application_errors.is_empty() {
                 format!("return {}", runnable.symbol)
             } else {
                 runnable.symbol.clone()
             };
-            let call = c_layout::call("    ", &callee, &names(&operation.arguments), ";");
+            let arguments: Vec<_> = provider
+                .port_arguments
+                .get(&server.port)
+                .into_iter()
+                .flatten()
+                .map(|argument| format!("({}){}", argument.native_type, argument.value))
+                .chain(names(&operation.arguments))
+                .collect();
+            let call = c_layout::call("    ", &callee, &arguments, ";");
             source.push_str(&format!("{call}\n"));
-            if server.application_error.is_none() {
+            if server.application_errors.is_empty() {
                 source.push_str("    return E_OK;\n");
             }
             source.push_str("}\n");

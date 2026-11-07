@@ -1147,3 +1147,276 @@ pub(crate) fn forged_handoff(
     }
     package
 }
+
+/// Ordinary application C/S: two providers share runnables and differ only in port constants.
+pub(crate) fn typed_operation_inputs() -> Vec<InputSource> {
+    let mut sources = pipeline_operation_inputs();
+    for kind in ["SW-BASE-TYPE", "IMPLEMENTATION-DATA-TYPE"] {
+        xml_edit(
+            &mut sources,
+            "types.arxml",
+            |node| {
+                named(
+                    node,
+                    kind,
+                    if kind == "SW-BASE-TYPE" {
+                        "Base_uint8"
+                    } else {
+                        "uint8"
+                    },
+                )
+            },
+            |original| {
+                format!(
+                    "{original}{}",
+                    original
+                        .replace("uint8", "boolean")
+                        .replace("<BASE-TYPE-ENCODING>NONE", "<BASE-TYPE-ENCODING>BOOLEAN")
+                )
+            },
+        );
+    }
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "CLIENT-SERVER-INTERFACE", "ScalarService"),
+        |original| {
+            let mut text = original.to_owned();
+            for (operation, errors) in [
+                ("Transform", &["E_OK", "Busy", "Denied"][..]),
+                ("Ping", &["E_OK"][..]),
+            ] {
+                let document = roxmltree::Document::parse(&text).unwrap();
+                let node = document
+                    .descendants()
+                    .find(|node| named(*node, "CLIENT-SERVER-OPERATION", operation))
+                    .unwrap();
+                let range = node.range();
+                let body = &text[range.clone()];
+                let refs = errors
+                    .iter()
+                    .map(|error| {
+                        format!(
+                            "<POSSIBLE-ERROR-REF DEST=\"APPLICATION-ERROR\">\
+                        /Types/ScalarService/{error}</POSSIBLE-ERROR-REF>"
+                        )
+                    })
+                    .collect::<String>();
+                let replacement = body.replace(
+                    "</CLIENT-SERVER-OPERATION>",
+                    &format!(
+                        "<POSSIBLE-ERROR-REFS>{refs}</POSSIBLE-ERROR-REFS>\
+                    </CLIENT-SERVER-OPERATION>"
+                    ),
+                );
+                text.replace_range(range, &replacement);
+            }
+            let errors = [("E_OK", 0), ("Busy", 7), ("Denied", 63)]
+                .iter()
+                .map(|(name, code)| {
+                    format!(
+                        "<APPLICATION-ERROR>\
+                    <SHORT-NAME>{name}</SHORT-NAME>\
+                    <ERROR-CODE>{code}</ERROR-CODE>\
+                    </APPLICATION-ERROR>"
+                    )
+                })
+                .collect::<String>();
+            text.replace(
+                "</CLIENT-SERVER-INTERFACE>",
+                &format!("<POSSIBLE-ERRORS>{errors}</POSSIBLE-ERRORS></CLIENT-SERVER-INTERFACE>"),
+            )
+        },
+    );
+    for (name, datatype) in [("Input", "uint8"), ("State", "boolean")] {
+        xml_edit(
+            &mut sources,
+            "types.arxml",
+            |node| named(node, "ARGUMENT-DATA-PROTOTYPE", name),
+            |original| {
+                original
+                    .replace("/Types/ApplicationUint32", &format!("/Types/{datatype}"))
+                    .replace(
+                        r#"DEST="APPLICATION-PRIMITIVE-DATA-TYPE""#,
+                        r#"DEST="IMPLEMENTATION-DATA-TYPE""#,
+                    )
+            },
+        );
+    }
+    for (file, tag) in [
+        ("process.arxml", "P-PORT-PROTOTYPE"),
+        ("observe.arxml", "R-PORT-PROTOTYPE"),
+    ] {
+        xml_edit(
+            &mut sources,
+            file,
+            |node| named(node, tag, "ResultService"),
+            |original| {
+                format!(
+                    "{original}{}",
+                    original.replace("ResultService", "OtherService")
+                )
+            },
+        );
+    }
+    for operation in ["Transform", "Ping"] {
+        xml_edit(
+            &mut sources,
+            "process.arxml",
+            |node| {
+                named(
+                    node,
+                    "OPERATION-INVOKED-EVENT",
+                    &format!("Invoke{operation}"),
+                )
+            },
+            |original| {
+                format!(
+                    "{original}{}",
+                    original
+                        .replace(
+                            &format!("<SHORT-NAME>Invoke{operation}"),
+                            &format!("<SHORT-NAME>Other{operation}")
+                        )
+                        .replace("/Process/ResultService", "/Process/OtherService")
+                )
+            },
+        );
+        xml_edit(
+            &mut sources,
+            "observe.arxml",
+            |node| {
+                named(
+                    node,
+                    "SYNCHRONOUS-SERVER-CALL-POINT",
+                    &format!("Call{operation}"),
+                )
+            },
+            |original| {
+                format!(
+                    "{original}{}",
+                    original
+                        .replace(
+                            &format!("<SHORT-NAME>Call{operation}"),
+                            &format!("<SHORT-NAME>Other{operation}")
+                        )
+                        .replace("/Observe/ResultService", "/Observe/OtherService")
+                )
+            },
+        );
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(
+                    node,
+                    "ECUC-CONTAINER-VALUE",
+                    if operation == "Transform" {
+                        "ReadApplicationValue"
+                    } else {
+                        "InvokePing"
+                    },
+                ) && node
+                    .ancestors()
+                    .any(|node| named(node, "ECUC-CONTAINER-VALUE", "Process"))
+            },
+            |original| {
+                format!(
+                    "{original}{}",
+                    original
+                        .replace(
+                            if operation == "Transform" {
+                                "ReadApplicationValue"
+                            } else {
+                                "InvokePing"
+                            },
+                            &format!("Other{operation}")
+                        )
+                        .replace(
+                            &format!("/Invoke{operation}"),
+                            &format!("/Other{operation}")
+                        )
+                )
+            },
+        );
+    }
+    xml_edit(
+        &mut sources,
+        "composition.arxml",
+        |node| named(node, "ASSEMBLY-SW-CONNECTOR", "Scalar"),
+        |original| {
+            format!(
+                "{original}{}",
+                original
+                    .replace("<SHORT-NAME>Scalar", "<SHORT-NAME>OtherScalar")
+                    .replace("ResultService", "OtherService")
+            )
+        },
+    );
+    let bindings = [("ResultService", 0, 13), ("OtherService", 1, 29)];
+    let options = bindings
+        .iter()
+        .map(|(port, slot, bias)| {
+            let args = [slot, bias]
+                .iter()
+                .map(|value| {
+                    format!(
+                        "<PORT-DEFINED-ARGUMENT-VALUE>\
+                    <VALUE>\
+                    <NUMERICAL-VALUE-SPECIFICATION>\
+                    <VALUE>{value}</VALUE>\
+                    </NUMERICAL-VALUE-SPECIFICATION>\
+                    </VALUE>\
+                    <VALUE-TYPE-TREF DEST=\"IMPLEMENTATION-DATA-TYPE\">\
+                    /Types/uint8</VALUE-TYPE-TREF>\
+                    </PORT-DEFINED-ARGUMENT-VALUE>"
+                    )
+                })
+                .collect::<String>();
+            format!(
+                "<PORT-API-OPTION>\
+                    <ENABLE-TAKE-ADDRESS>false</ENABLE-TAKE-ADDRESS>\
+                    <INDIRECT-API>false</INDIRECT-API>\
+                    <PORT-ARG-VALUES>{args}</PORT-ARG-VALUES>\
+                    <PORT-REF DEST=\"P-PORT-PROTOTYPE\">/Application/Process/{port}</PORT-REF>\
+                    </PORT-API-OPTION>"
+            )
+        })
+        .collect::<String>();
+    change(
+        &mut sources,
+        "process.arxml",
+        "<RUNNABLES>",
+        &format!("<PORT-API-OPTIONS>{options}</PORT-API-OPTIONS><RUNNABLES>"),
+    );
+    sources
+}
+
+pub(crate) fn prepared_typed_pipeline(
+    plan: &ValidatedIntegrationPlan,
+    target: autosar_config_core::target::BuildTarget,
+) -> autosar_config_core::PreparedProject<'static> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let applications: Vec<_> = plan
+        .application_slot_descriptors()
+        .unwrap()
+        .iter()
+        .map(|slot| {
+            let name = slot.source_paths[0].rsplit('/').next().unwrap();
+            let directory = if matches!(name, "Process.c" | "Observe.c") {
+                "tests/fixtures/component-pipeline/typed-applications"
+            } else {
+                "tests/fixtures/component-pipeline/applications"
+            };
+            autosar_config_core::ApplicationSource {
+                component_instance: slot
+                    .producer_slot
+                    .strip_prefix("singlecore-ecu-v1:")
+                    .unwrap()
+                    .into(),
+                path: root.join(directory).join(name),
+            }
+        })
+        .collect();
+    autosar_config_core::prepare_ecu_project_with_applications(plan, target, &applications).unwrap()
+}

@@ -391,9 +391,16 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
             let errors: std::collections::BTreeSet<_> = component
                 .operations
                 .iter()
-                .filter_map(|operation| operation.application_error.as_ref())
+                .flat_map(|operation| &operation.application_errors)
                 .collect();
-            let errors: Vec<_> = errors.iter().map(|error| (error.as_str(), "1U")).collect();
+            let values: Vec<_> = errors
+                .iter()
+                .map(|(name, code)| (name.as_str(), format!("{code}U")))
+                .collect();
+            let errors: Vec<_> = values
+                .iter()
+                .map(|(name, value)| (*name, value.as_str()))
+                .collect();
             body.push_str(&c_layout::retained_defines(
                 &errors,
                 "Selected application error.",
@@ -481,7 +488,7 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                                 .to_owned()
                         }
                     } else {
-                        "Connected calls propagate the server status, or E_OK for a void server. RTE_E_UNCONNECTED preserves OUT/INOUT without a server call. RTE_E_COM_STOPPED before start; E_NOT_OK outside the owner, or the configured application error for NULL storage.".to_owned()
+                        "Connected calls propagate the server status, or E_OK for a void server. RTE_E_UNCONNECTED preserves OUT/INOUT without a server call. RTE_E_COM_STOPPED before start; E_NOT_OK outside the owner or for NULL storage.".to_owned()
                     };
                     docs.push_str(&c_layout::comment(" * ", &format!("@return {status}")));
                 }
@@ -495,7 +502,7 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                 if unnamed {
                     docs.push_str(" * Preconditions: called by the configured RTE activation or synchronous server dispatch with valid argument storage; the application implements this role.\n");
                 } else {
-                    docs.push_str(" * Preconditions: ECU initialized; RTE data APIs and connected calls require a started RTE and the owner task. Guard rejection preserves outputs; stopped RTE returns RTE_E_COM_STOPPED, invalid context/storage returns E_NOT_OK or the configured application error.\n");
+                    docs.push_str(" * Preconditions: ECU initialized; RTE data APIs and connected calls require a started RTE and the owner task. Guard rejection preserves outputs; stopped RTE returns RTE_E_COM_STOPPED, invalid context/storage returns E_NOT_OK.\n");
                 }
                 docs.push_str(
                     r#" * Context: configured component task, outside exclusive areas.

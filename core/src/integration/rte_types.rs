@@ -1,5 +1,6 @@
 //! Shared standard RTE status declarations, independent of contract/generation phase.
-use super::c_layout;
+use super::{PlanDiagnostic, c_layout};
+use std::collections::BTreeMap;
 
 pub(super) const STATUSES: &[(&str, &str)] = &[
     ("RTE_E_OK", "0U"),
@@ -100,7 +101,6 @@ pub struct RteDataType {
 pub(super) fn inspect(
     graph: &super::graph::Graph,
 ) -> Result<Vec<RteDataType>, Vec<super::PlanDiagnostic>> {
-    use std::collections::BTreeMap;
     let mut primitives = BTreeMap::new();
     let mut arrays = BTreeMap::new();
     let invalid = |index| {
@@ -184,7 +184,8 @@ pub(super) fn inspect(
                 "float64" => ("64", "IEEE754"),
                 _ => return Err(invalid(datatype)),
             };
-            if graph.text(base, "BASE-TYPE-SIZE") != Some(bits)
+            if graph.text(base, "CATEGORY") != Some("FIXED_LENGTH")
+                || graph.text(base, "BASE-TYPE-SIZE") != Some(bits)
                 || graph.text(base, "BASE-TYPE-ENCODING") != Some(encoding)
             {
                 return Err(invalid(datatype));
@@ -230,4 +231,146 @@ pub(super) fn inspect(
         .into_values()
         .chain(arrays.into_values())
         .collect())
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
+pub struct PortDefinedArgument {
+    pub native_type: String,
+    pub type_identity: String,
+    pub value: String,
+}
+
+/// P-port constants retain source order and checked type identity; clients never own them.
+pub(super) fn port_arguments(
+    graph: &super::graph::Graph,
+    behavior: usize,
+    component: usize,
+    types: &[RteDataType],
+) -> Result<BTreeMap<String, Vec<PortDefinedArgument>>, Vec<PlanDiagnostic>> {
+    use super::component::{one, referenced};
+    let mut ports = BTreeMap::new();
+    let invalid = |index| {
+        let code = "SERVICE_TYPE_CONFLICT";
+        vec![graph.diagnostic(
+            index,
+            super::DiagnosticCategory::Input,
+            code,
+            crate::product_message!("backend.integration.composition.contract_invalid", "code" => code),
+            crate::product_message!("backend.integration.composition.repair_contract"),
+        )]
+    };
+    for option in graph.descendants(behavior, "PORT-API-OPTION") {
+        let port = referenced(graph, option, "PORT-REF", "SERVICE_TYPE_CONFLICT")?;
+        if !graph.within(port, component)
+            || graph.elements[port].tag != "P-PORT-PROTOTYPE"
+            || graph
+                .target(port, "PROVIDED-INTERFACE-TREF")
+                .is_none_or(|interface| graph.elements[interface].tag != "CLIENT-SERVER-INTERFACE")
+            || ["ENABLE-TAKE-ADDRESS", "INDIRECT-API"].iter().any(|field| {
+                graph
+                    .text(option, field)
+                    .is_some_and(|value| !matches!(value, "false" | "0"))
+            })
+        {
+            return Err(invalid(option));
+        }
+        let mut values = Vec::new();
+        for argument in graph.descendants(option, "PORT-DEFINED-ARGUMENT-VALUE") {
+            let datatype = referenced(graph, argument, "VALUE-TYPE-TREF", "SERVICE_TYPE_CONFLICT")?;
+            let checked = types
+                .iter()
+                .find(|item| {
+                    Some(item.symbol.as_str()) == graph.text(datatype, "SHORT-NAME")
+                        && item.array_length.is_none()
+                })
+                .ok_or_else(|| invalid(argument))?;
+            let value = one(
+                graph,
+                argument,
+                graph.descendants(argument, "NUMERICAL-VALUE-SPECIFICATION"),
+                "SERVICE_TYPE_CONFLICT",
+            )?;
+            let raw = graph
+                .text(value, "VALUE")
+                .ok_or_else(|| invalid(argument))?;
+            let literal =
+                numeric_constant(&checked.native_type, raw).ok_or_else(|| invalid(argument))?;
+            values.push(PortDefinedArgument {
+                native_type: checked.symbol.clone(),
+                type_identity: graph.elements[datatype].object.clone(),
+                value: literal,
+            });
+        }
+        if ports
+            .insert(graph.elements[port].object.clone(), values)
+            .is_some()
+        {
+            return Err(invalid(option));
+        }
+    }
+    Ok(ports)
+}
+
+fn numeric_constant(native: &str, raw: &str) -> Option<String> {
+    if native == "boolean" {
+        return match raw {
+            "0" | "false" => Some("FALSE".into()),
+            "1" | "true" => Some("TRUE".into()),
+            _ => None,
+        };
+    }
+    if matches!(native, "float32" | "float64") {
+        let value = raw.parse::<f64>().ok()?;
+        if !value.is_finite() || (native == "float32" && !(value as f32).is_finite()) {
+            return None;
+        }
+        return Some(if native == "float32" {
+            format!("{value:e}F")
+        } else {
+            format!("{value:e}")
+        });
+    }
+    let value = integer_constant(raw)?;
+    let (signed, bits) = if let Some(bits) = native.strip_prefix("uint") {
+        (false, bits.parse::<u32>().ok()?)
+    } else {
+        (true, native.strip_prefix("sint")?.parse::<u32>().ok()?)
+    };
+    let (min, max) = if signed {
+        (-(1i128 << (bits - 1)), (1i128 << (bits - 1)) - 1)
+    } else {
+        (0, (1i128 << bits) - 1)
+    };
+    if !(min..=max).contains(&value) {
+        return None;
+    }
+    let suffix = match (signed, bits) {
+        (false, 64) => "ULL",
+        (false, _) => "U",
+        (true, 64) => "LL",
+        _ => "",
+    };
+    // Spell the minimum as two representable signed constants, avoiding an unsigned literal.
+    if signed && value == min {
+        Some(format!("(-{}{suffix} - 1{suffix})", max))
+    } else {
+        Some(format!("{value}{suffix}"))
+    }
+}
+
+/// The radix forms already admitted by the native XML integer grammar.
+pub(super) fn integer_constant(raw: &str) -> Option<i128> {
+    if let Some(digits) = raw.strip_prefix("0b").or_else(|| raw.strip_prefix("0B")) {
+        i128::from_str_radix(digits, 2).ok()
+    } else if raw.starts_with('0')
+        && raw.len() > 1
+        && !raw.starts_with("0x")
+        && !raw.starts_with("0X")
+    {
+        i128::from_str_radix(raw, 8).ok()
+    } else {
+        crate::definitions::integer(raw).ok()
+    }
 }
