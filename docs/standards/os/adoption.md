@@ -79,31 +79,32 @@ head→tail-item保护保持。R18.1的同数组边界义务保持。
 批准、ErrorHook R18.6或SDK来源责任。R2.5为Advisory/System（主文44／PDF52；
 TC2.5／TC2.39修订术语），R8.7为Advisory/System（主文70／PDF78，TC2.15区分调用TU）。
 下面保留原始报告与就近MR12理由，不声明MISRA符合或正式法律意义上的偏离完成。
+表内 R2.5 保持既有接口与原值，控制见下文；记录来源均为 #383／PR #395 的既有项目选择。
 
 | 规则 | 补丁后 kernel 路径与实体 | 选择及形状 | 记录来源 |
 | --- | --- | --- | --- |
-| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portTICK_PERIOD_MS` | 保持既有接口与原值，控制见下文。 shape=`#define portTICK_PERIOD_MS ((TickType_t)1000u / configTICK_RATE_HZ)` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portEND_SWITCHING_ISR` | 保持既有接口与原值，控制见下文。 shape=`#define portEND_SWITCHING_ISR(requested) return (requested)` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portYIELD_FROM_ISR` | 保持既有接口与原值，控制见下文。 shape=`#define portYIELD_FROM_ISR(requested) portEND_SWITCHING_ISR(requested)` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portENABLE_INTERRUPTS` | 保持既有接口与原值，控制见下文。 shape=`#define portENABLE_INTERRUPTS() vPortExitCritical()` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB` | 保持既有接口与原值，控制见下文。 shape=`#define tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB ( ( uint8_t ) 0 )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSTATICALLY_ALLOCATED_STACK_ONLY` | 保持既有接口与原值，控制见下文。 shape=`#define tskSTATICALLY_ALLOCATED_STACK_ONLY ( ( uint8_t ) 1 )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSTATICALLY_ALLOCATED_STACK_AND_TCB` | 保持既有接口与原值，控制见下文。 shape=`#define tskSTATICALLY_ALLOCATED_STACK_AND_TCB ( ( uint8_t ) 2 )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskRUNNING_CHAR` | 保持既有接口与原值，控制见下文。 shape=`#define tskRUNNING_CHAR ( 'X' )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskBLOCKED_CHAR` | 保持既有接口与原值，控制见下文。 shape=`#define tskBLOCKED_CHAR ( 'B' )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskREADY_CHAR` | 保持既有接口与原值，控制见下文。 shape=`#define tskREADY_CHAR ( 'R' )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskDELETED_CHAR` | 保持既有接口与原值，控制见下文。 shape=`#define tskDELETED_CHAR ( 'D' )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSUSPENDED_CHAR` | 保持既有接口与原值，控制见下文。 shape=`#define tskSUSPENDED_CHAR ( 'S' )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_NOT_RUNNING` | 保持既有接口与原值，控制见下文。 shape=`#define taskTASK_NOT_RUNNING ( ( BaseType_t ) ( -1 ) )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_SCHEDULED_TO_YIELD` | 保持既有接口与原值，控制见下文。 shape=`#define taskTASK_SCHEDULED_TO_YIELD ( ( BaseType_t ) ( -2 ) )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD` | 保持既有接口与原值，控制见下文。 shape=`#define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB ) ( ( ( pxTCB )->xTaskRunState != taskTASK_NOT_RUNNING ) ? ( pdTRUE ) : ( pdFALSE ) )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskATTRIBUTE_IS_IDLE` | 保持既有接口与原值，控制见下文。 shape=`#define taskATTRIBUTE_IS_IDLE ( UBaseType_t ) ( 1U << 0U )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskBITS_PER_BYTE` | 保持既有接口与原值，控制见下文。 shape=`#define taskBITS_PER_BYTE ( ( size_t ) 8 )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/queue.c` `queueSEMAPHORE_QUEUE_ITEM_LENGTH` | 保持既有接口与原值，控制见下文。 shape=`#define queueSEMAPHORE_QUEUE_ITEM_LENGTH ( ( UBaseType_t ) 0 )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/queue.c` `queueMUTEX_GIVE_BLOCK_TIME` | 保持既有接口与原值，控制见下文。 shape=`#define queueMUTEX_GIVE_BLOCK_TIME ( ( TickType_t ) 0U )` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 8.7 | `kernel/portable/ThirdParty/GCC/Posix/port.c` `vPortCloseRunningThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 shape=`void vPortCloseRunningThread(void *task, volatile BaseType_t *pending_yield) {` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 8.7 | `kernel/portable/ThirdParty/GCC/Posix/port.c` `vPortDeleteThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 shape=`void vPortDeleteThread(void *task) {` | 维护者 既有项目选择（#383／PR #395） |
-| MISRA C:2012 Rule 2.5 | `kernel/portable/MSVC-MingW/port.c` `portSIMULATED_TIMER_THREAD_PRIORITY` | 保持既有接口与原值，控制见下文。 shape=`#define portSIMULATED_TIMER_THREAD_PRIORITY THREAD_PRIORITY_NORMAL` | 维护者 既有项目选择（#383／PR #395） |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portTICK_PERIOD_MS` | shape=`#define portTICK_PERIOD_MS ((TickType_t)1000u / configTICK_RATE_HZ)` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portEND_SWITCHING_ISR` | shape=`#define portEND_SWITCHING_ISR(requested) return (requested)` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portYIELD_FROM_ISR` | shape=`#define portYIELD_FROM_ISR(requested) portEND_SWITCHING_ISR(requested)` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portENABLE_INTERRUPTS` | shape=`#define portENABLE_INTERRUPTS() vPortExitCritical()` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB` | shape=`#define tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB ( ( uint8_t ) 0 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSTATICALLY_ALLOCATED_STACK_ONLY` | shape=`#define tskSTATICALLY_ALLOCATED_STACK_ONLY ( ( uint8_t ) 1 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSTATICALLY_ALLOCATED_STACK_AND_TCB` | shape=`#define tskSTATICALLY_ALLOCATED_STACK_AND_TCB ( ( uint8_t ) 2 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskRUNNING_CHAR` | shape=`#define tskRUNNING_CHAR ( 'X' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskBLOCKED_CHAR` | shape=`#define tskBLOCKED_CHAR ( 'B' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskREADY_CHAR` | shape=`#define tskREADY_CHAR ( 'R' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskDELETED_CHAR` | shape=`#define tskDELETED_CHAR ( 'D' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSUSPENDED_CHAR` | shape=`#define tskSUSPENDED_CHAR ( 'S' )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_NOT_RUNNING` | shape=`#define taskTASK_NOT_RUNNING ( ( BaseType_t ) ( -1 ) )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_SCHEDULED_TO_YIELD` | shape=`#define taskTASK_SCHEDULED_TO_YIELD ( ( BaseType_t ) ( -2 ) )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD` | shape=`#define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB ) ( ( ( pxTCB )->xTaskRunState != taskTASK_NOT_RUNNING ) ? ( pdTRUE ) : ( pdFALSE ) )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskATTRIBUTE_IS_IDLE` | shape=`#define taskATTRIBUTE_IS_IDLE ( UBaseType_t ) ( 1U << 0U )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskBITS_PER_BYTE` | shape=`#define taskBITS_PER_BYTE ( ( size_t ) 8 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/queue.c` `queueSEMAPHORE_QUEUE_ITEM_LENGTH` | shape=`#define queueSEMAPHORE_QUEUE_ITEM_LENGTH ( ( UBaseType_t ) 0 )` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/queue.c` `queueMUTEX_GIVE_BLOCK_TIME` | shape=`#define queueMUTEX_GIVE_BLOCK_TIME ( ( TickType_t ) 0U )` | 维护者 #383 |
+| MISRA C:2012 Rule 8.7 | `kernel/portable/ThirdParty/GCC/Posix/port.c` `vPortCloseRunningThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 shape=`void vPortCloseRunningThread(void *task, volatile BaseType_t *pending_yield) {` | 维护者 #383 |
+| MISRA C:2012 Rule 8.7 | `kernel/portable/ThirdParty/GCC/Posix/port.c` `vPortDeleteThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 shape=`void vPortDeleteThread(void *task) {` | 维护者 #383 |
+| MISRA C:2012 Rule 2.5 | `kernel/portable/MSVC-MingW/port.c` `portSIMULATED_TIMER_THREAD_PRIORITY` | shape=`#define portSIMULATED_TIMER_THREAD_PRIORITY THREAD_PRIORITY_NORMAL` | 维护者 #383 |
 
 R2.5表内tasks.c／queue.c常量支撑静态／动态分配标记、统计字符、单核／多核状态及队列
 接口的既有条件分支。分配组合、统计格式化、多核／delete、计数／递归信号量分支由当前
