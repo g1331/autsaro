@@ -4,6 +4,99 @@ use std::path::Path;
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 #[test]
+fn standalone_contract_memmap_consumes_requests_and_reenters() {
+    // Verifies: SWS_MemMap_00003, SWS_MemMap_00007, SWS_MemMap_00011
+    let plan = build(&inputs()).unwrap();
+    let files = plan.component_contract_files().unwrap();
+    let scratch = Scratch::new();
+    let directory = scratch.0.join("contract");
+    let preview = files.preview(&directory).unwrap();
+    files
+        .generate_previewed(&directory, &preview.revision)
+        .unwrap();
+    let check = |label: &str, source: &str, diagnostic: Option<&str>| {
+        let path = directory.join(format!("{label}.c"));
+        std::fs::write(&path, source).unwrap();
+        let output = tooling::run_public_command(
+            tooling::c_compiler()
+                .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-c"])
+                .arg("-I")
+                .arg(directory.join("include"))
+                .arg(&path)
+                .arg("-o")
+                .arg(directory.join(format!("{label}.o"))),
+            &directory,
+            label,
+            std::time::Duration::from_secs(60),
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(
+            output.status.success(),
+            diagnostic.is_none(),
+            "{label}: {stderr}"
+        );
+        if let Some(diagnostic) = diagnostic {
+            assert!(stderr.contains(diagnostic), "{label}: {stderr}");
+        }
+    };
+    // Real application headers request CONST and CODE from the standalone RTE map.
+    // Each TU repeats a CODE pair after its header, exposing guards that swallow STOP.
+    for scope in ["Ingress", "Process", "Observe", "DcmService"] {
+        let source = format!(
+            "#include \"Rte_{scope}.h\"\n\
+             #define RTE_{scope}_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+             RTE_{scope}_CODE void contract_code(void);\n\
+             RTE_{scope}_CODE void contract_code(void) {{}}\n\
+             #if defined(RTE_{scope}_START_SEC_CODE)\n#error START not consumed\n#endif\n\
+             #define RTE_{scope}_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+             #if defined(RTE_{scope}_STOP_SEC_CODE) || defined(RTE_{scope}_CODE)\n\
+             #error STOP not consumed\n#endif\n\
+             #if defined(RTE_MEMMAP_ACTIVE)\n\
+             #error STOP not consumed\n#endif\n"
+        );
+        check(scope, &source, None);
+        let sections = tooling::symbol_sections(
+            &tooling::execution_settings().objdump,
+            &directory.join(format!("{scope}.o")),
+        );
+        assert!(
+            sections
+                .iter()
+                .any(|(symbol, section)| { symbol == "contract_code" && section == ".rte_code" }),
+            "{scope}: {sections:?}"
+        );
+    }
+    for (label, source, diagnostic) in [
+        (
+            "missing",
+            "#include \"Rte_MemMap.h\"\n",
+            "Unknown RTE memory section",
+        ),
+        (
+            "nested",
+            "#define RTE_Ingress_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+             #define RTE_Process_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n",
+            "Nested RTE memory section",
+        ),
+        (
+            "mismatched",
+            "#define RTE_Ingress_START_SEC_CODE\n#include \"Rte_MemMap.h\"\n\
+             #define RTE_Process_STOP_SEC_CODE\n#include \"Rte_MemMap.h\"\n",
+            "Unmatched RTE memory section",
+        ),
+        (
+            "multiple",
+            "#define RTE_Ingress_START_SEC_CODE\n#define RTE_Ingress_STOP_SEC_CODE\n\
+             #include \"Rte_MemMap.h\"\n",
+            "Rte_MemMap requires exactly one supported marker",
+        ),
+    ] {
+        check(label, source, Some(diagnostic));
+    }
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+#[test]
 fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatures() {
     for renamed in [false, true] {
         let mut inputs = pipeline_operation_inputs();
