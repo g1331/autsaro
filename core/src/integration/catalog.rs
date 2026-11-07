@@ -29,6 +29,12 @@ pub(super) struct RuntimeCatalog {
     entries: BTreeMap<String, Entry>,
 }
 
+impl RuntimeCatalog {
+    pub(super) fn module(&self, symbol: &str) -> Option<&str> {
+        self.entries.get(symbol).map(|entry| entry.module.as_str())
+    }
+}
+
 /// The composition producer selects its actual R24-11 interfaces independently of
 /// the historical host ABI. Generated instance wrappers retain their real
 /// declaration/definition owners; immutable BSW bytes come from AssetInventory.

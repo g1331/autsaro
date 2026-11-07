@@ -294,6 +294,7 @@ impl CompositionContract {
         &mut self,
         graph: &Graph,
         symbols: &[SymbolContract],
+        catalog: &super::catalog::RuntimeCatalog,
     ) -> Result<(), Vec<PlanDiagnostic>> {
         let inventory = crate::resources::AssetInventory::embedded();
         let headers = inventory
@@ -333,6 +334,31 @@ impl CompositionContract {
                             && symbol.consumers.contains(&target.entry)
                     })
                     .ok_or_else(|| fail(graph, entry, "BSW_ENTRY_MISSING"))?;
+                let mapping = graph.index(&target.mapping)?;
+                let behavior = graph.index(&target.behavior)?;
+                let owner = graph
+                    .ancestor(behavior, "BSW-MODULE-DESCRIPTION")
+                    .ok_or_else(|| fail(graph, mapping, "BSW_MAPPING_INVALID"))?;
+                // TPS_SWCT_01408: the mapping selects the behavior implemented by
+                // the unique C producer already checked by catalog::inspect.
+                let implementation = graph
+                    .of_kind("BSW-IMPLEMENTATION")
+                    .into_iter()
+                    .find(|implementation| {
+                        graph
+                            .target(*implementation, "BEHAVIOR-REF")
+                            .is_some_and(|candidate| graph.within(candidate, owner))
+                    })
+                    .ok_or_else(|| fail(graph, mapping, "BSW_MAPPING_INVALID"))?;
+                if graph.target(implementation, "BEHAVIOR-REF") != Some(behavior) {
+                    return Err(fail(graph, mapping, "BSW_MAPPING_INVALID"));
+                }
+                // TPS_BSWMDT_04138 / constr_4071: the fixed producer's module
+                // identity determines the entry prefix, alongside the source
+                // entry/runnable symbol checks in bsw_targets.
+                if graph.text(owner, "SHORT-NAME") != catalog.module(&selected.symbol) {
+                    return Err(fail(graph, mapping, "BSW_EXECUTION_CONFLICT"));
+                }
                 let servers = component
                     .operations
                     .iter()

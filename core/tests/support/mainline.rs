@@ -1443,6 +1443,61 @@ pub(crate) fn mapped_operation_inputs() -> Vec<InputSource> {
     sources
 }
 
+/// The same module exposes a second behavior that its C implementation does not select.
+pub(crate) fn unselected_bsw_behavior_inputs() -> Vec<InputSource> {
+    let mut sources = mapped_operation_inputs();
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| named(node, "BSW-MODULE-DESCRIPTION", "Can"),
+        |text| {
+            text.replace(
+                "</INTERNAL-BEHAVIORS>",
+                r#"<BSW-INTERNAL-BEHAVIOR><SHORT-NAME>Unselected</SHORT-NAME>
+<ENTITYS><BSW-SCHEDULABLE-ENTITY><SHORT-NAME>Alternate</SHORT-NAME>
+<IMPLEMENTED-ENTRY-REF DEST="BSW-MODULE-ENTRY">/AUTOSAR_Can/BswModuleEntrys/Can_MainFunction_Wakeup</IMPLEMENTED-ENTRY-REF>
+</BSW-SCHEDULABLE-ENTITY></ENTITYS></BSW-INTERNAL-BEHAVIOR></INTERNAL-BEHAVIORS>"#,
+            )
+        },
+    );
+    change(
+        &mut sources,
+        "process.arxml",
+        "/AUTOSAR_Can/Can/Behavior</BSW-BEHAVIOR-REF>",
+        "/AUTOSAR_Can/Can/Unselected</BSW-BEHAVIOR-REF>",
+    );
+    change(
+        &mut sources,
+        "process.arxml",
+        "/AUTOSAR_Can/Can/Behavior/Can_MainFunction_Wakeup_Entity",
+        "/AUTOSAR_Can/Can/Unselected/Alternate",
+    );
+    sources
+}
+
+/// The source module identity changes while the fixed producer and symbols stay Can.
+pub(crate) fn renamed_bsw_module_inputs() -> Vec<InputSource> {
+    let mut sources = mapped_operation_inputs();
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| named(node, "BSW-MODULE-DESCRIPTION", "Can"),
+        |text| {
+            text.replacen(
+                "<SHORT-NAME>Can</SHORT-NAME>",
+                "<SHORT-NAME>AlternateCan</SHORT-NAME>",
+                1,
+            )
+        },
+    );
+    replace_all(
+        &mut sources,
+        "/AUTOSAR_Can/Can/",
+        "/AUTOSAR_Can/AlternateCan/",
+    );
+    sources
+}
+
 pub(crate) fn mapped_counter_operation_inputs() -> Vec<InputSource> {
     let mut sources = mapped_operation_inputs();
     for (before, after) in [

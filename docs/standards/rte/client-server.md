@@ -14,6 +14,13 @@ behavior，服务 behavior 有一个选中的 C `SwcImplementation`；所选同�
 的 symbol、重入性和零 minimumStartInterval 保持一致。显式内存方法沿输入引用核对。
 服务连接至少有一个 ServiceSwComponentType 端点。
 
+已核对（`bsw_mapping_rejects_unselected_behavior_in_the_same_module` 拒绝同一 module 内
+未被唯一 C `BswImplementation` 选中的 behavior，并定位源 mapping）：TPS_SWCT_01408。
+已核对（`bsw_mapping_rejects_module_identity_inconsistent_with_the_producer` 拒绝与 catalog
+固定 producer 不符的源 module 身份；结合已有 scheduler prefix、entry 与 runnable symbol
+校验，保留所选 backend 的实际 `SymbolContract`）：TPS_BSWMDT_04138、constr_4071。
+两个反例均通过官方 R24-11 XSD，正常校验与计划构建同时断言诊断码和源 mapping 位置。
+
 已核对（`bsw_role_parameters_use_the_selected_entry_names_and_native_aliases` 将输入
 `Handle`／`Reading` 命名为所选 entry 的 `CounterID`／`Value`，并核对实际调用表达式）：
 SWS_Rte_06704。

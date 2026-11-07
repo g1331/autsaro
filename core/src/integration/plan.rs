@@ -339,7 +339,7 @@ pub(super) fn inspect_composition(
     };
     let selected_runtime = catalog::bsw_catalog(graph, &com_runtime, &mode_runtime);
     let mut symbols = catalog::inspect(graph, &selected_runtime)?;
-    composition.bind_bsw(graph, &symbols)?;
+    composition.bind_bsw(graph, &symbols, &selected_runtime)?;
     for runnable in composition
         .components
         .iter()

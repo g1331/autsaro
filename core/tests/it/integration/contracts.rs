@@ -250,6 +250,50 @@ fn bsw_role_parameters_use_the_selected_entry_names_and_native_aliases() {
 }
 
 #[test]
+fn bsw_mapping_rejects_unselected_behavior_in_the_same_module() {
+    // Verifies: TPS_SWCT_01408
+    let sources = unselected_bsw_behavior_inputs();
+    let issues = build(&sources).err().expect("unselected behavior rejected");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "BSW_MAPPING_INVALID"
+                && issue.object.as_deref() == Some("/Application/DevicePollingMapping")),
+        "{issues:?}"
+    );
+    let diagnostics = normal_validation(&sources).diagnostics;
+    assert!(
+        diagnostics
+            .iter()
+            .any(|issue| issue.code == "BSW_MAPPING_INVALID"
+                && issue.path.as_deref() == Some("/Application/DevicePollingMapping")),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
+fn bsw_mapping_rejects_module_identity_inconsistent_with_the_producer() {
+    // Verifies: TPS_BSWMDT_04138, constr_4071
+    let sources = renamed_bsw_module_inputs();
+    let issues = build(&sources).err().expect("module identity rejected");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "BSW_EXECUTION_CONFLICT"
+                && issue.object.as_deref() == Some("/Application/DevicePollingMapping")),
+        "{issues:?}"
+    );
+    let diagnostics = normal_validation(&sources).diagnostics;
+    assert!(
+        diagnostics
+            .iter()
+            .any(|issue| issue.code == "BSW_EXECUTION_CONFLICT"
+                && issue.path.as_deref() == Some("/Application/DevicePollingMapping")),
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
 fn bsw_mapping_rejections_locate_mapping_signature_and_service_identity() {
     for (file, before, after, code, object) in [
         (
