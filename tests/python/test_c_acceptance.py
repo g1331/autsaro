@@ -314,6 +314,23 @@ class AcceptanceTests(unittest.TestCase):
         location["column"] += len(lines[location["line"] - 1])
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
 
+    def test_owned_both_scope_does_not_authorize_a_new_program(self):
+        self.owned_inputs()
+        self.summary["scope"]["entries"]["other"] = self.summary["scope"]["entries"].pop("probe")
+        self.summary["programs"][1]["name"] = "other"
+        self.target["entries"] = self.summary["scope"]["entries"]
+        self.select_owned("runtime/os/include/Os.h", "20.10", "#define OS_TASK_ENTRY(identifier)",
+                          programs=["other"])
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_owned_all_scope_does_not_authorize_a_new_profile(self):
+        self.owned_inputs()
+        self.bind_groups(cases={group: "unreviewed-profile" for group in c_acceptance.GROUPS})
+        self.bind(self.context(group="owned-source", status="approved", case="unreviewed-profile"))
+        occurrence = self.evaluate()["occurrences"][0]
+        self.assertEqual(occurrence["assessment"], "blocked")
+        self.assertEqual(occurrence["reason"], "owned_source_case_outside_record")
+
     def test_owned_memmap_consumption_rejects_unrelated_undef(self):
         self.owned_inputs()
         source = "runtime/bsw/include/Can_MemMap.h"
