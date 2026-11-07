@@ -98,6 +98,7 @@ Cppcheck 展示层尝试下载比较基准提交上成功的 master 检查工件
 
 ## 本地复核与变异确认
 
+- 修改 core 生成器或其模板时，交付前运行无测试目标过滤的 `cargo test --locked -p autosar-config-core`，同时执行 lib 单测与默认集成测试；`--test it` 和定向 native 结果只覆盖各自目标，Clippy 只编译检查。新增模板锚点时同步直接渲染该模板的单测，保留无残留锚点及缺失／重复锚点拒绝断言。
 - 本地复核 Clippy 时按 CI 与 `verify` 的每条命令及其 feature 组合分别运行；`--workspace --all-features` 会打开 `native-webdriver` 等 feature，使 `cfg(not(feature = ..))` 分支不受检查，不能代替默认 feature 的检查。
 - 按 feature 汇总多个测试二进制的结果时加 `--no-fail-fast`，否则 Cargo 在第一个失败的二进制后停止，后续套件既未运行也不报失败。
 - 变异确认改动一方运行时源码时，无需更新资产摘要；每次构建从实际字节计算身份。以测试结果行和被测断言判断变异，不把编译失败当作杀死。第三方 source manifest 仍固定内核／端口身份，不能为变异自动更新。同一工作区先后构建两个变体时，旧二进制仍绑定旧来源身份；`runtime_contracts::` 检查当前资源目录会报告 `identity_differs`，变体应在各自检出中构建和运行。原生套件缺少 `AUTOSAR_CC` 等工具变量时以 `executable_environment` 失败，这不算杀死。
