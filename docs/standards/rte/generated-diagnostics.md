@@ -54,10 +54,15 @@ R8.9 是 Advisory、System（2013主文印刷71／PDF79）。它按标识符出�
 | R2.5：`Os_Counter.h` 的`OS_TICKS2NS/US/MS/SEC_SystemCounter(ticks)` | `ecu::configure_os`；00393明确要求四个转换宏的格式，当前参数单次求值，分辨率及uint64结果范围不变。 |
 | R2.5：`Rte.h` 的`Rte_IsInfrastructureError`、`Rte_HasOverlayedError`、`Rte_ApplicationError` | `rte_types::standard`渲染模板；07404／07405／07406明确规定三个宏及位语义，不替换为另一接口形状。 |
 | R2.5：`Rte_DcmService.h` 的 `RTE_E_DCMServices_E_NOT_OK`／`RTE_E_DCMServices_E_OK` | `composition::application_errors` 核定接口错误，`contracts::contract_headers` 的 `provided_errors` 经 `c_layout::commented_defines` 发布；SWS_Dcm_00698 规定 DCMServices 的 E_NOT_OK=1、E_OK=0，SWS_Rte_02575 要求应用头定义错误标识（除 RTE_E_INVALID），SWS_Rte_02576 固定 `#define RTE_E_<interface>_<error> <error value>U` 形式。参考 ECU 未连接该服务的客户端，保留真实未使用的 Advisory 诊断，沿本节既有标准规定生成符号类别处置。 |
+| R2.5：`Rte_ComMService.h` 的 `RTE_E_ComM_UserRequest_` 五项错误宏 | `comm_service::inspect` 核对 SWS_ComM_01000 的 E_OK=0、E_NOT_OK=1、COMM_E_MODE_LIMITATION=2、COMM_E_MULTIPLE_PNC_ASSIGNED=3、COMM_E_NO_PNC_ASSIGNED=4；`composition::application_errors` 与 `contracts::contract_headers` 复用上述 SWS_Rte_02575／02576 的标准命名及 define 形式。普通 profile 未连接请求客户端，保留真实未使用诊断，双用户原生消费者实际使用标准服务和错误语义。 |
 
 原四 profile 冻结语料中，这些构造共 46 个源码文本键：7 个 R2.3、39 个 R2.5（同名宏在不同 profile 的值不同则分别计键）。本次补入 DCMServices 的两个固定值宏，本节记录累计 48 键：7 个 R2.3、41 个 R2.5；原 159 个实体/body 键的冻结集合与身份保持。新增宏在 standard-ecu、user-application、component-pipeline 中的源码行相同，跨 profile 合并为两键，按 profile 分别计新增键为 2／2／2／0；no-diagnostic 不生成 Rte_DcmService.h。每个实际位置、目标和程序保留在 PR 的完整工件比较中，不把未报告的配置成员计为违反。已有源码 MR12 随对应 producer 输出；本次仅补充类别记录，不改静态样本，不添加虚假读取或 suppression，原始诊断及分析状态保持。
 
 风险为头文件发布面与宏的潜在误用。完整接口的真实C/C++消费者、输入名字／类型／配置拒绝、预处理常量值与宽度、宏单次求值及真实交付链接／运行分别约束它。形式／名字／配置条件、底层类型、数组大小或受支持接口集合变化时重评。授权沿ADR0023原决定；实施者完成必要性与替代核对，独立审查head／发现／处置在PR记载。项目授权与正式MISRA偏离／符合声明仍分别保留。
+
+ComM_UserRequest 新增五个固定值源码键后，本节标准符号记录累计 53 键（7 个 R2.3、46 个 R2.5）；上述 48 键为 DCMServices 交付时的累计。原 159 键批准集合保持。#195 的本地 component-pipeline 完整分析确认五个宏各进入 HostBatch／probe；最终双目标八份工件比较仍须完成。
+
+同次分析新增的 `Rte_Inst_ComMService` 与 `SchM_Mode_ComM_UM_HostUser` 两项 R8.7 未纳入原 159 键批准，也未登记为标准强制符号。共同生成器对服务实例和模式 observer 的无条件导出需要按真实消费者处理；当前 #195 保留此源码验收阻塞，不以已有库式接口的批准扩展到新符号。
 
 ## 其余诊断的裁决边界
 
