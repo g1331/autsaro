@@ -138,12 +138,12 @@ Os_ActivationQueueType/Os_NativeTaskStartType、Os_CounterWorkType、Os_Interrup
 Std_VersionInfoType定义在Std_Types.h；Arti.h已有inline GetVersionInfo在A∪{Arti}确实通过指针写字段，
 这属于该TU源代码事实，不宣称每个程序轨迹都调用它，也不扩大供应商身份结论。
 
-五个Rte_CDS类型完整定义在各组件头，Rte.c定义私有const实例和Rte_Inst_*；Rte_Instance按组件解析，不合并同名别名。
+原五个组件头定义 Rte_CDS 并声明共享 const `Rte_Instance_<组件>`；Rte.c 定义该 CDS，`Rte_Inst_<组件>` 宏取址。Rte_Instance typedef 按组件解析。
 Echo的声明TU为{EchoApplication,R,Rte}；DcmService为{R,Rte}；C/N的Ingress/Process/Observe分别为{同名应用,R,Rte}，N没有DcmService。
-这些TU均无CDS指针解引用；Rte.c有实际完整对象/初始化需要，其余仅声明/传递。五实体/11处定义与[R2.8](../types/declarations.md#单实例对象与函数地址的人工评估)分别处置。
+这些TU均无CDS指针解引用；Rte.c有实际完整对象/初始化需要，其余仅声明/传递。当前使用与[R2.8](../types/declarations.md#单实例对象与函数地址的人工评估)分别处置。
 SWS_Rte_02311/03711/03712/03715/03793/03724没有强制应用头暴露完整struct，ABI probe不是生产用途或D4.8满足。
 
-本轮按主文§6.2.3作**精确Advisory保留**：保留表内共享完整配置/协议表示、上述仅转交端点和五CDS头布局；不声称AUTOSAR唯一要求此表示。
+本轮按主文§6.2.3作**精确Advisory保留**：保留表内共享完整配置/协议表示、上述仅转交端点和五 CDS 头布局；不声称AUTOSAR唯一要求此表示。
 替代为分离完整定义/不完整接口头、为调用方对象另设构造与存储接口、或改变CDS/静态配置交付；它们会改变这些实际header依赖、初始化/借用或生成合同，不能只删一个字段/加一个假读取。
 当前选择保持已受验的静态const配置、类型化回调/输出、原有布局及局部对象生命周期。风险是转发TU可见不需要的布局并可能误改字段；
 控制为const配置/const CDS、既有配置拒绝、单owner与借用期、正常公开消费者/字节seal及原始诊断。可隐藏的Linux句柄/私有实现不扩展此保留。
