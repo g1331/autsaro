@@ -523,8 +523,33 @@ def parse_diagnostics(xml: str, root: Path, patched_lines: dict[str, list[int]] 
     return diagnostics
 
 
+def analyzer_inputs(data: dict, root: Path, scope: dict) -> tuple[str, dict]:
+    """Account for every dump file, including raw/directive-only conditional heads."""
+    source = Path(data["source"]).resolve()
+    if not source.is_relative_to(root):
+        raise ValueError("Cppcheck receipt source is outside the project")
+    files = data.get("files")
+    if (not isinstance(files, list) or not files or files != sorted(set(files))
+            or any(not isinstance(name, str) or not name for name in files)
+            or str(source) not in files):
+        raise ValueError("Cppcheck actual input inventory missing or invalid")
+    sdk = {row["path"] for row in scope.get("sdkHeaders", [])}
+    models = {str(Path(scope[name]["path"]).resolve())
+              for name in ("platformModel",) if scope.get(name)}
+    inputs = {"project": [], "sdk": [], "unbound": []}
+    for name in files:
+        path = Path(name).resolve()
+        if path.is_relative_to(root):
+            inputs["project"].append(path.relative_to(root).as_posix())
+        elif path.as_posix() in sdk:
+            inputs["sdk"].append(path.as_posix())
+        elif str(path) not in models:
+            inputs["unbound"].append(path.as_posix())
+    return source.relative_to(root).as_posix(), inputs
+
+
 def analyze_program(executable: Path, addons: Path, root: Path, sources: list[str], database: list[dict],
-                    scope: dict, target_id: str, output: Path) -> tuple[int, bool, list[dict], list[str]]:
+                    scope: dict, target_id: str, output: Path) -> tuple[int, bool, list[dict], list[str], dict]:
     (output / "compile_commands.json").write_text(json.dumps(database, indent=2) + "\n", encoding="utf-8")
     for name, config in {
         "misra": {"script": str(addons / "misra.py"), "ctu": True},
@@ -558,6 +583,7 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
         raise ValueError("Cppcheck translation-unit inventory differs from requested sources")
     receipts = list((output / "addon-receipts").glob("*.json"))
     addon_units = set()
+    inputs = {}
     unsigned = []
     for receipt in receipts:
         data = json.loads(receipt.read_text(encoding="utf-8"))
@@ -565,16 +591,20 @@ def analyze_program(executable: Path, addons: Path, root: Path, sources: list[st
                 or not data["units"] or any(not isinstance(unit, str) or not unit for unit in data["units"])
                 or type(data.get("configurations")) is not int or data["configurations"] < 1):
             raise ValueError("Invalid project addon receipt structure")
+        unit, actual = analyzer_inputs(data, root, scope)
+        if unit in inputs:
+            raise ValueError("Cppcheck actual input TU is duplicated")
+        inputs[unit] = actual
         addon_units.update(Path(unit).resolve() for unit in data["units"])
         unsigned.extend(data.get("unsignedLiterals", []))
-    if addon_units != parsed or len(receipts) != len(sources):
+    if addon_units != parsed or set(inputs) != set(sources) or len(receipts) != len(sources):
         raise ValueError("Project addon did not analyze every translation unit")
     c_sdk.classify(diagnostics, scope, unsigned, root)
     incomplete = {"misra-config", "syntaxError", "preprocessorErrorDirective", "internalError",
                   "cppcheckError", "addonError", "missingInclude", "missingIncludeSystem", "toomanyconfigs"}
     if any(row["id"] in incomplete for row in diagnostics):
         raise ValueError("Analyzer configuration or parsing is incomplete; raw diagnostics retained")
-    return code, passed, diagnostics, command
+    return code, passed, diagnostics, command, inputs
 
 
 def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ...] = ()) -> dict:
@@ -700,8 +730,13 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         with ThreadPoolExecutor(max_workers=min(len(jobs), int(os.environ.get("CARGO_BUILD_JOBS", str(len(jobs)))))) as executor:
             results = [executor.submit(analyze_program, executable, addons, root, units, commands, scope, target_id, directory)
                        for _, _, units, commands, directory in jobs]
+        combined_inputs = {}
         for (program, entry, units, _, _), result in zip(jobs, results):
-            code, passed, diagnostics, command = result.result()
+            code, passed, diagnostics, command, inputs = result.result()
+            for unit, actual in inputs.items():
+                combined = combined_inputs.setdefault(unit, {"project": set(), "sdk": set(), "unbound": set()})
+                for kind, names in actual.items():
+                    combined[kind].update(names)
             summary["programs"].append({"name": program, "entry": entry, "translationUnits": units,
                                         "exitCode": code, "passed": passed, "command": command})
             all_passed = all_passed and passed
@@ -712,6 +747,8 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
                     seen[key] = row
                     summary["diagnostics"].append(row)
                 seen[key]["programs"].append(program)
+        scope["cppcheckInputs"] = {unit: {kind: sorted(names) for kind, names in actual.items()}
+                                  for unit, actual in combined_inputs.items()}
         diagnostics = summary["diagnostics"]
         if scope.get("profile") == "ecu":
             summary["generatedRetention"] = c_retention.analyze(diagnostics, root, target_id)

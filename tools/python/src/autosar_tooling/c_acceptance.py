@@ -220,6 +220,7 @@ def input_identity(summary: dict, project: Path, *, root: Path = ROOT) -> str:
                   "producerInputs": producers,
                   "files": actual, "semanticIdentity": semantic,
                   "projectTranslationUnits": summary["scope"].get("projectTranslationUnits"),
+                  "cppcheckInputs": summary["scope"].get("cppcheckInputs"),
                   "tool": {key: summary["tool"][key] for key in ("version", "expectedSourceRevision", "addons")},
                   "assessmentInputs": _assessment_inputs(summary, root),
                   "programs": [{key: program[key] for key in ("name", "entry", "translationUnits")}
@@ -487,6 +488,19 @@ def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROO
                    or unit not in paths or any(not safe_relative(name) for name in paths)
                    for unit, paths in dependencies.items())):
         raise ValueError("Assessment project TU dependency closure missing or invalid")
+    analyzed = scope.get("cppcheckInputs")
+    if (not isinstance(analyzed, dict) or set(analyzed) != set(units)
+            or any(set(actual) != {"project", "sdk", "unbound"}
+                   or any(not isinstance(names, list) or names != sorted(set(names))
+                          for names in actual.values())
+                   or unit not in actual["project"]
+                   or any(not safe_relative(name) for name in actual["project"])
+                   for unit, actual in analyzed.items())):
+        raise ValueError("Assessment Cppcheck input closure missing or invalid")
+    if any(actual["unbound"] for actual in analyzed.values()):
+        raise ValueError("Assessment Cppcheck input provenance unbound")
+    dependencies = {unit: sorted(set(dependencies[unit]) | set(analyzed[unit]["project"]))
+                    for unit in units}
     metadata = json.loads((project / "meta/integration.json").read_text(encoding="utf-8"))
     origins = metadata["originalBswSources"]
     owners_path = project / "meta/workbench-ownership.json"
@@ -511,12 +525,13 @@ def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROO
                  if (project / row["delivered"]).is_file()}
         selected = {unit for unit, paths in dependencies.items() if seeds.intersection(paths)}
     elif group == "sdk-integration":
-        selected = {unit for unit in units if scope["sdkTranslationUnits"][unit]}
+        selected = {unit for unit in units if scope["sdkTranslationUnits"][unit] or analyzed[unit]["sdk"]}
         seeds = set(selected)
     else:
         raise ValueError(f"Unknown local assessment group: {group}")
     files = seeds | {name for unit in selected for name in dependencies[unit]}
-    sdk_paths = {name for unit in selected for name in scope.get("sdkTranslationUnits", {}).get(unit, [])}
+    sdk_paths = {name for unit in selected
+                 for name in (*scope.get("sdkTranslationUnits", {}).get(unit, []), *analyzed[unit]["sdk"])}
     semantic = summary["semanticIdentity"]
     assessments = _assessment_inputs(summary, root)
     documents = ({ADOPTION: _document_identity(root, [ADOPTION])[ADOPTION]}
@@ -540,7 +555,8 @@ def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROO
              "semantic": {key: value for key, value in semantic.items() if key not in {"sdk", "defines"}},
              "defines": {unit: semantic["defines"].get(unit) for unit in sorted(selected)},
              "sdkHeaders": [row for row in scope.get("sdkHeaders", []) if row["path"] in sdk_paths],
-             "sdkDependencies": {unit: scope.get("sdkTranslationUnits", {}).get(unit) for unit in sorted(selected)},
+             "sdkDependencies": {unit: sorted(set(scope.get("sdkTranslationUnits", {}).get(unit, []))
+                                              | set(analyzed[unit]["sdk"])) for unit in sorted(selected)},
              "sdkMacros": {unit: scope.get("sdkMacroInputs", {}).get(unit) for unit in sorted(selected)},
              "tool": {key: summary["tool"][key] for key in ("version", "expectedSourceRevision", "addons")},
              "assessment": documents, "grp": _document_identity(root, [GRP]),

@@ -206,7 +206,7 @@ class CAnalysisTests(unittest.TestCase):
             def analyze(executable, addons, root, sources, database, scope, target, output):
                 calls.append(sources)
                 failed = output.name == "probe"
-                return (1 if failed else 0), not failed, [], []
+                return (1 if failed else 0), not failed, [], [], {name: {"project": [name], "sdk": [], "unbound": []} for name in sources}
 
             with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "semantic_identity", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES, "cppcheckLibraries": {}})), patch.object(c_check, "analyze_program", side_effect=analyze), patch.object(c_check, "sealed_sources"):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
@@ -234,7 +234,7 @@ class CAnalysisTests(unittest.TestCase):
                 receipts = directory / "addon-receipts"
                 receipts.mkdir()
                 for index, row in enumerate(commands):
-                    data = [] if directory.name == "probe" else {"units": [row["file"]], "configurations": 1}
+                    data = [] if directory.name == "probe" else {"units": [row["file"]], "configurations": 1, "source": row["file"], "files": [row["file"]]}
                     (receipts / f"{index}.json").write_text(json.dumps(data))
                 return 0, "", "<results><errors/></results>"
 
@@ -257,7 +257,7 @@ class CAnalysisTests(unittest.TestCase):
                     patch.object(c_check, "coverage", return_value={}), \
                     patch.object(c_check, "prepare", return_value=(output / "project", ["main.c"], [], {})), \
                     patch.object(c_check, "semantic_identity", side_effect=[{"version": 1}, {"version": 2}]), \
-                    patch.object(c_check, "analyze_program", return_value=(0, True, [], [])), \
+                    patch.object(c_check, "analyze_program", return_value=(0, True, [], [], {})), \
                     patch.object(c_check, "sealed_sources"):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
             summary = json.loads((output / "summary.json").read_text())
@@ -289,7 +289,7 @@ class CAnalysisTests(unittest.TestCase):
                     patch.object(c_check, "coverage", return_value={"completeCompliance": False}), \
                     patch.object(c_check, "prepare", return_value=(output / "project", ["main.c"], [], {})), \
                     patch.object(c_check, "semantic_identity", side_effect=semantic), \
-                    patch.object(c_check, "analyze_program", return_value=(0, True, [], [])), \
+                    patch.object(c_check, "analyze_program", return_value=(0, True, [], [], {})), \
                     patch.object(c_check, "sealed_sources", side_effect=lambda *args: events.append("seal")), \
                     patch.object(c_check.c_acceptance, "evaluate", side_effect=acceptance):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 0)

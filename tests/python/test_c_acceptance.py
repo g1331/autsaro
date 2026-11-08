@@ -113,6 +113,9 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["scope"]["projectTranslationUnits"] = {
             unit: sorted(set(self.files) | {unit})
             for unit in self.summary["scope"]["translationUnits"]}
+        self.summary["scope"]["cppcheckInputs"] = {
+            unit: {"project": [unit], "sdk": [], "unbound": []}
+            for unit in self.summary["scope"]["translationUnits"]}
         return c_acceptance.input_identity(self.summary, self.project, root=self.root)
 
     def context(self, *, identity=None, status="pending", group="generated-retention", case=CASE):
@@ -176,6 +179,51 @@ class AcceptanceTests(unittest.TestCase):
                                         "programs": ["host-batch", "probe"],
                                         "locations": [{"file": self.retained["delivered"], "line": 2, "column": 0}]}]
         self.bind_groups()
+
+    def test_cppcheck_only_header_bytes_and_new_diagnostics_expire_freertos_evidence(self):
+        self.freertos_inputs()
+        name = "os/HiddenReview.h"
+        self.files[name] = b"#define HIDDEN_VALUE 1\n"
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.identity()
+        scope = self.summary["scope"]
+        for paths in scope["projectTranslationUnits"].values():
+            paths.remove(name)
+        scope["cppcheckInputs"]["main.c"]["project"].append(name)
+        scope["cppcheckInputs"]["main.c"]["project"].sort()
+        identity = c_acceptance.freertos_identity(self.summary, self.project, self.root)
+        context = {"id": "conditional-header-control", "source": c_acceptance.ADOPTION,
+                   "evidence": {"head": "a" * 40, "receipt": "Synthetic conditional header control"},
+                   "cases": [{"caseId": CASE, "target": TARGET, "inputIdentity": identity}],
+                   "records": {"kind": "freertos-integration"}, "formalStatus": "approved"}
+        with patch.object(c_acceptance, "contexts", return_value=[context]):
+            self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+            with self.subTest(change="header bytes"):
+                raw_diagnostics = copy.deepcopy(self.summary["diagnostics"])
+                self.files[name] = b"#define HIDDEN_VALUE 2\n"
+                self.seal()
+                self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+                self.assertEqual(self.summary["diagnostics"], raw_diagnostics)
+                self.assertNotEqual(c_acceptance.freertos_identity(self.summary, self.project, self.root), identity)
+                self.assertEqual(self.evaluate()["occurrences"][0]["reason"],
+                                 "freertos_integration_context_unbound_or_stale")
+            self.files[name] = b"#define HIDDEN_VALUE 1\n"
+            self.seal()
+            self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+            self.assertEqual(c_acceptance.freertos_identity(self.summary, self.project, self.root), identity)
+            with self.subTest(change="new diagnostic"):
+                self.summary["diagnostics"].append({"id": "misra-c2012-20.4", "programs": ["probe"],
+                    "locations": [{"file": name, "line": 1, "column": 1}]})
+                self.assertNotEqual(c_acceptance.freertos_identity(self.summary, self.project, self.root), identity)
+                self.assertEqual(self.evaluate()["occurrences"][0]["reason"],
+                                 "freertos_integration_context_unbound_or_stale")
+        scope["cppcheckInputs"]["main.c"]["unbound"] = ["/unknown/conditional.h"]
+        with self.assertRaisesRegex(ValueError, "Cppcheck input provenance unbound"):
+            c_acceptance.freertos_identity(self.summary, self.project, self.root)
+        del scope["cppcheckInputs"]
+        with self.assertRaisesRegex(ValueError, "Cppcheck input closure"):
+            c_acceptance.freertos_identity(self.summary, self.project, self.root)
 
     def test_local_evidence_closures_reject_each_input_and_ignore_rte_producer(self):
         self.sdk_inputs()
