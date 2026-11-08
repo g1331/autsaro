@@ -68,6 +68,8 @@ FreeRTOS 选择包含 kernel 文件的 TU；owned-source 选择包含自有交�
 generated-retention 选择包含活动记录交付文件的 TU；SDK 选择实际包含 SDK 头的 TU。
 GCC 的 `-MD` 回执保存为 `scope.projectTranslationUnits`；项目 addon 从实际 Cppcheck
 dump 的文件表、raw tokens、directives 和配置 tokens 保存逐 TU 的 `scope.cppcheckInputs`。
+文件归属比较对 root、TU、回执文件及 SDK／模型路径同时按宿主规范化，避免把
+Windows 短路径、分隔符或大小写别名误判为越界。
 文件表也包含空头和 GCC 未打开的条件头。局部选择、文件字节和诊断筛选取两者并集；
 SDK 文件回接已有头身份，模型沿语义身份绑定。存在工程／已验证 SDK／已绑定模型之外
 的来源时，明确拒绝局部证据复用；缺失或不完整的分析器回执须重新扫描。
