@@ -71,7 +71,7 @@ uv run --locked --group workflows zizmor .github
 
 CI 分两层：
 
-- **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。真实桌面 GUI／IPC 场景由 `desktop-scenarios` 复用共享构建和五分片，PR／master 按应用、运行时、工具和构建输入路径选择；只有明确未选择时汇总接受跳过，失败与取消阻塞合并。原生、OS、检测器、交付与生成 C 分析在 Windows 和 Linux 上完整运行；离线接收端在两平台用 Python 3.11 运行全部四个样本（含多组件独立 HostBatch 期望）。新版解释器的必需层覆盖由 Python 开发测试承担（含 ecu_tools 单元测试与 `test_sealed_sources`），运行 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改根目录指南、`docs/`、代理说明或配置（含 `.codex/` hooks）或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。除这些文档外只改 `ui/` 的 PR（如前端依赖更新）只运行 `ui`、`python`（含受管进程测试）、`desktop` 与 `quality`，跳过 core、原生、OS、检测器、交付与生成 C 分析任务：这些任务的输入都不在 `ui/` 下，`tests/python/test_ci_selection.py` 检查它们的源码不引用 `ui/`，并核对跳过的任务与 `CI required` 接受跳过的名单一致。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
+- **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。真实桌面 GUI／IPC 场景由 `desktop-scenarios` 复用共享构建和五分片，PR／master 按应用、运行时、工具和构建输入路径选择；只有明确未选择时汇总接受跳过，失败与取消阻塞合并。原生、OS、检测器、交付与生成 C 分析在 Windows 和 Linux 上完整运行；离线接收端在两平台用 Python 3.11 运行全部四个样本（含多组件独立 HostBatch 期望）。新版解释器的必需层覆盖由 Python 开发测试承担（含 ecu_tools 单元测试与 `test_sealed_sources`），运行 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改根目录指南、`docs/`、代理说明或配置（含 `.codex/` hooks）或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。除这些文档外只改 `ui/` 的 PR（如前端依赖更新）只运行 `ui`、`python`（含受管进程测试）、`desktop`、按路径选择的 `desktop-scenarios` 与 `quality`，跳过 core、原生、OS、检测器、交付与生成 C 分析任务：这些任务的输入都不在 `ui/` 下，`tests/python/test_ci_selection.py` 检查它们的源码不引用 `ui/`，并核对跳过的任务与 `CI required` 接受跳过的名单一致。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
 - **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：离线接收端 Python 3.11–3.14 × 四样本的 Linux／Windows 完整矩阵、其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[官方对照](official.md)和[模糊测试](fuzzing.md)（官方对照在 PR 与 master 均按路径运行；模糊测试在 PR 上只随目标直接消费的源码运行，master 按完整输入路径运行）。master 每次推送都运行它，接收端矩阵按 core／runtime／工具／测试与构建配置路径选择；桌面场景已由必需层负责，扩展层不重复自动执行；手动 Extended 仍运行桌面全量。PR 改动官方对照相关路径时运行官方对照。PR 加 `full-ci` 标签后运行其余扩展检查；手动运行全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
 
 自动合并在检查通过后仍为 `BLOCKED` 时，应处理保护或讨论阻塞，不等 watcher 提醒。存量诊断先回复依据再解决，保留告警。
@@ -86,7 +86,11 @@ CI 分两层：
 
 Cppcheck 展示层尝试下载比较基准提交上成功的 master 检查工件，并使用现有严格比较器；身份不符、工件过期或缺失时明确显示基线不可用／拒绝与“新增未知”，不把全部原始诊断称为新增。clang-tidy 消费 `AUTOSAR_CLANG_TIDY_REPORT` 指定的原始 JSON 工件，用同一源码基线比较逻辑展示新增位置。报告与上传不改写原始 `passed`、退出码、基线或源码门禁；部分分析仍注明未完成。报告只包含测试名称、核算结果和源码诊断，不上传官方档案。
 
-固定 Cppcheck 的行为测试在 `c-analysis-samples` 的 `standard-ecu` 分片中每平台运行一次，与其他样本分析并行；`c-analysis-prepare` 只准备和核验下游共用的工具与样本，保留生成格式、clang 和 clang-tidy 检查。行为测试失败仍使样本矩阵、`c-analysis` 和 `CI required` 失败。
+固定 Cppcheck 的行为测试在 `c-analysis-samples` 的 `standard-ecu` 分片中每平台运行一次，与其他样本分析并行。Linux 与 Windows 的 prepare、样本分析和交付各自依赖本平台的准备结果，步骤用 YAML alias 共享；Windows 作业 ID 带 `-windows`。`c-analysis-prepare` 保留生成格式、clang 和 clang-tidy 检查，`c-analysis` 要求两个平台的准备／分析成功并核对八份结果，`CI required` 同时要求两个平台的交付成功。失败与取消仍阻塞。
+
+UI、Python 和 desktop 编译这些短作业在 prepare 之后运行，为长原生任务保留首批 runner。其显式状态条件允许 UI-only PR 在 prepare 被明确跳过时继续执行，原有路径选择与检查命令保持。普通文档 PR 仍只运行选择、quality 与汇总任务。
+
+Cargo 缓存键保留 runner 镜像、工具链和锁文件身份，并追加实际编译源码／交付输入的摘要；输入改变后写回较新的增量状态，恢复前缀继续接纳旧缓存。只缓存编译产物，测试和分析结果每次重新运行。
 
 公开仓库不注册自托管 runner，workflow 只用 GitHub 托管 runner。托管 runner 由并行开发共享，公开仓库的并发上限为 20 个作业。推送前确认会触发哪些运行，只保留需要的；中间提交和探测推送的检查在后续推送前取消，实验矩阵保持小规模（同时约四个作业），临时探测分支和一次性 workflow 用完即删。CI 因耗时超限时先依据实际阶段耗时消除重复构建、复用依赖缓存并并行独立样本，不能只延长总超时；完整检查范围与失败条件保持，优化效果以实际运行核对。按作业拆分或分片前，核对首批并发作业数：超出上限的部分排队，会抵消拆分收益；分片名单从同一列表筛选与排除，保证每个测试恰好运行一次。
 

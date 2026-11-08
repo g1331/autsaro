@@ -12,7 +12,7 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，unittest 按 suite 保存到该目录。已有目录不会被覆盖；未指定时仍只保留失败现场。
 
-`native` 在两平台以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件。Windows 分为 protocol、sealed／single-component、其余 integration 与其余测试四片，同一有序名单负责选择与排除，每项恰好运行一次；Linux 全量。工具取已安装的受控 GCC、binutils、Git 与 uv 环境。失败现场输出 `scratch retained at …`，消息附子进程输出末尾；临时根以 `native-scratch-*` 上传并保留 14 天。
+`native` 在两平台以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件。Windows 分为 protocol、sealed／single-component、其余 integration 与其余测试四片，按枚举的完整测试名分类，长尾单项归 rest；每项恰好一次，Linux 全量。工具取已安装的受控 GCC、binutils、Git 与 uv 环境。失败现场输出 `scratch retained at …`，消息附子进程输出末尾；临时根以 `native-scratch-*` 上传并保留 14 天。
 
 `native-os` 在两平台运行 27 个 OS suites 和主机锁／I/O 错误边界。Windows 用 `AUTOSAR_OS_SHARD=k/n` 按序号分两片，每个 suite 串行运行，边界测试放在较轻的 `1/2`；Linux 用 `0/1`。失败现场以 `os-suites-*` 上传并保留 14 天。
 
