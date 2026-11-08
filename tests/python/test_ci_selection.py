@@ -42,7 +42,67 @@ def run_script(script):
         return runpy.run_path(str(path))
 
 
+def expression_value(expression, event):
+    expression = expression.removeprefix("${{").removesuffix("}}").strip()
+    for name in sorted(event, key=len, reverse=True):
+        expression = expression.replace(name, repr(event[name]))
+    expression = expression.replace("||", " or ").replace("&&", " and ")
+    return eval(expression, {"__builtins__": {}})
+
+
+def concurrency_group(expression, event):
+    return re.sub(r"\$\{\{(.*?)\}\}",
+                  lambda match: str(expression_value(match[1], event)), expression)
+
+
 class CiSelectionTests(unittest.TestCase):
+    def test_master_required_starts_while_previous_extended_runs_and_pr_replaces_old_run(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text())
+        extended = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text())
+        running, pending, states = {}, {}, {}
+
+        def arrive(name, event):
+            group = concurrency_group(workflow["concurrency"]["group"], event).casefold()
+            cancel = expression_value(workflow["concurrency"]["cancel-in-progress"], event)
+            if group in running and not cancel:
+                if group in pending:
+                    states[pending[group]] = "cancelled"
+                pending[group] = name
+                states[name] = "pending"
+            else:
+                if group in running:
+                    states[running[group]] = "cancelled"
+                running[group] = name
+                states[name] = "required-running"
+
+        def event(sha, *, pull_request=0):
+            return {"github.workflow": workflow["name"], "github.event.action": "synchronize",
+                    "github.event.label.name": "", "github.run_id": sha,
+                    "github.event.pull_request.number": pull_request, "github.sha": sha,
+                    "github.ref": "refs/pull/99/merge" if pull_request else "refs/heads/master",
+                    "github.event_name": "pull_request" if pull_request else "push"}
+
+        # A still owns its caller lock after CI required, throughout its Extended tail.
+        arrive("A", event("a" * 40))
+        states["A"] = "extended-running"
+        arrive("B", event("b" * 40))
+        arrive("C", event("c" * 40))
+        self.assertEqual(states, {"A": "extended-running", "B": "required-running",
+                                  "C": "required-running"})
+        self.assertEqual(pending, {})
+        extended_groups = {concurrency_group(extended["concurrency"]["group"], event(sha * 40))
+                           for sha in ("a", "b", "c")}
+        self.assertEqual(len(extended_groups), 3)
+        self.assertTrue(extended_groups.isdisjoint(running))
+
+        arrive("PR-A", event("d" * 40, pull_request=99))
+        states["PR-A"] = "extended-running"
+        arrive("PR-B", event("e" * 40, pull_request=99))
+        arrive("PR-C", event("f" * 40, pull_request=99))
+        self.assertEqual([states[name] for name in ("PR-A", "PR-B", "PR-C")],
+                         ["cancelled", "cancelled", "required-running"])
+        self.assertEqual(states["A"], "extended-running")
+
     def test_analysis_and_documentation_selection_follows_consumers(self):
         script = yaml.safe_load(WORKFLOW.read_text())["jobs"]["changes"]["steps"][1]["run"]
         analysis = ["tools/python/src/autosar_tooling/" + name + ".py"
@@ -173,24 +233,18 @@ class CiSelectionTests(unittest.TestCase):
 
     def test_label_events_do_not_cancel_or_replace_required_for_unrelated_labels(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())
-        def evaluate(expression, event):
-            expression = expression.removeprefix("${{").removesuffix("}}").strip()
-            for name in sorted(event, key=len, reverse=True):
-                expression = expression.replace(name, repr(event[name]))
-            expression = expression.replace("||", " or ").replace("&&", " and ")
-            return eval(expression, {"__builtins__": {}})
         for action, label in (("synchronize", ""), ("labeled", "full-ci"), ("labeled", "area:ci")):
             event = {"github.workflow": "Development checks", "github.event.action": action,
                      "github.event.label.name": label, "github.event_name": "pull_request",
                      "github.run_id": 123, "github.event.pull_request.number": 99,
-                     "github.ref": "refs/pull/99/merge"}
+                     "github.ref": "refs/pull/99/merge", "github.sha": "a" * 40}
             selected = action != "labeled" or label == "full-ci"
-            cancelled = evaluate(workflow["concurrency"]["cancel-in-progress"], event)
+            cancelled = expression_value(workflow["concurrency"]["cancel-in-progress"], event)
             self.assertEqual(bool(cancelled), selected)
-            name = evaluate(workflow["jobs"]["required"]["name"], event)
+            name = expression_value(workflow["jobs"]["required"]["name"], event)
             self.assertEqual(name == "CI required", selected)
             for job in ("changes", "quality"):
-                self.assertEqual(bool(evaluate(workflow["jobs"][job]["if"], event)), selected)
+                self.assertEqual(bool(expression_value(workflow["jobs"][job]["if"], event)), selected)
 
     def test_combined_application_job_keeps_every_check_inside_twenty_minutes(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]

@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 concurrency:
   # A reusable workflow inherits github.workflow; use a distinct group from its caller.
-  group: extended-${{ github.event.pull_request.number || github.ref }}
+  group: extended-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read

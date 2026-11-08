@@ -9,8 +9,9 @@ on:
       base:
         description: Incremental check baseline commit
         required: true
+# Keep the non-required tail from locking another master revision.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && github.run_id || github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && github.run_id || github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
 permissions:
   contents: read
