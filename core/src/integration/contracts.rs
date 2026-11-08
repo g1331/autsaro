@@ -127,6 +127,7 @@ impl ValidatedIntegrationPlan {
             "ComStack_Types.h",
             "ComStack_Version.h",
             "Rte_Version.h",
+            "Rte_ComM_Type.h",
             "Dcm_Version.h",
             "MemMap_Version.h",
         ] {
@@ -287,7 +288,7 @@ typedef {} {}{suffix};
                     &[
                         super::outputs::Edit::Once(
                             "#include \"Std_Types.h\"",
-                            "#include \"Std_Types.h\"\n#include \"Rte.h\"",
+                            "#include \"Std_Types.h\"\n#include \"Rte.h\"\n#include \"Rte_ComM_Type.h\"",
                         ),
                         super::outputs::Edit::BeforeGuardEnd(&types),
                     ],

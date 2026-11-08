@@ -1674,6 +1674,233 @@ pub(crate) fn dcm_service_inputs() -> Vec<InputSource> {
     sources
 }
 
+/// Two ComM users with distinct handles and application request/mode clients.
+pub(crate) fn comm_service_inputs() -> Vec<InputSource> {
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "HostUser"),
+        |text| {
+            format!(
+                "{text}{}",
+                text.replace("HostUser", "SecondUser")
+                    .replace("<VALUE>0</VALUE>", "<VALUE>43</VALUE>")
+            )
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "User")
+                && node
+                    .descendants()
+                    .any(|n| n.text() == Some("/Configuration/ComM/Config/HostUser"))
+        },
+        |text| {
+            format!(
+                "{text}{}",
+                text.replace("HostUser", "SecondUser").replace(
+                    "<SHORT-NAME>User</SHORT-NAME>",
+                    "<SHORT-NAME>Second</SHORT-NAME>"
+                )
+            )
+        },
+    );
+    for (tag, name) in [
+        ("P-PORT-PROTOTYPE", "UR_HostUser"),
+        ("P-PORT-PROTOTYPE", "UM_HostUser"),
+    ] {
+        xml_edit(
+            &mut sources,
+            "services.arxml",
+            |node| named(node, tag, name),
+            |text| format!("{text}{}", text.replace("HostUser", "SecondUser")),
+        );
+    }
+    xml_edit(
+        &mut sources,
+        "services.arxml",
+        |node| {
+            node.has_tag_name("PORT-API-OPTION")
+                && node
+                    .descendants()
+                    .any(|n| n.text() == Some("/Services/ComMService/UR_HostUser"))
+        },
+        |text| {
+            format!(
+                "{text}{}",
+                text.replace("HostUser", "SecondUser")
+                    .replace("<VALUE>0</VALUE>", "<VALUE>43</VALUE>")
+            )
+        },
+    );
+    for operation in [
+        "GetCurrentComMode",
+        "GetCurrentPNCComMode",
+        "GetMaxComMode",
+        "GetRequestedComMode",
+        "RequestComMode",
+    ] {
+        xml_edit(
+            &mut sources,
+            "services.arxml",
+            |node| {
+                named(
+                    node,
+                    "OPERATION-INVOKED-EVENT",
+                    &format!("Invoke{operation}"),
+                ) && node
+                    .descendants()
+                    .any(|n| n.text() == Some("/Services/ComMService/UR_HostUser"))
+            },
+            |text| {
+                format!(
+                    "{text}{}",
+                    text.replace("HostUser", "SecondUser")
+                        .replace(&format!("Invoke{operation}"), &format!("Second{operation}"))
+                )
+            },
+        );
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                node.has_tag_name("ECUC-CONTAINER-VALUE")
+                    && node.children().any(|child| {
+                        child.has_tag_name("DEFINITION-REF")
+                            && child
+                                .text()
+                                .is_some_and(|value| value.ends_with("/RteEventToTaskMapping"))
+                    })
+                    && node.descendants().any(|child| {
+                        child.text()
+                            == Some(
+                                format!("/Services/ComMService/Behavior/Invoke{operation}")
+                                    .as_str(),
+                            )
+                    })
+            },
+            |text| {
+                format!(
+                    "{text}{}",
+                    text.replace(&format!("Invoke{operation}"), &format!("Second{operation}"))
+                        .replacen("<SHORT-NAME>", "<SHORT-NAME>Second", 1)
+                )
+            },
+        );
+    }
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| named(node, "MODE-DECLARATION-GROUP-PROTOTYPE", "UM_HostUser"),
+        |text| format!("{text}{}", text.replace("HostUser", "SecondUser")),
+    );
+    xml_edit(
+        &mut sources,
+        "bsw.arxml",
+        |node| {
+            node.has_tag_name("MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL")
+                && node
+                    .descendants()
+                    .any(|n| n.text() == Some("/AUTOSAR_ComM/ComM/UM_HostUser"))
+        },
+        |text| format!("{text}{}", text.replace("HostUser", "SecondUser")),
+    );
+    xml_edit(
+        &mut sources,
+        "services.arxml",
+        |node| {
+            node.has_tag_name("SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE")
+                && node
+                    .descendants()
+                    .any(|n| n.text() == Some("/AUTOSAR_ComM/ComM/UM_HostUser"))
+        },
+        |text| format!("{text}{}", text.replace("HostUser", "SecondUser")),
+    );
+    for user in ["HostUser", "SecondUser"] {
+        let mut calls = String::new();
+        let mut specs = String::new();
+        for operation in [
+            "GetCurrentComMode",
+            "GetCurrentPNCComMode",
+            "GetMaxComMode",
+            "GetRequestedComMode",
+            "RequestComMode",
+        ] {
+            specs.push_str(&format!(r#"<CLIENT-COM-SPEC><OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/Services/ComM_UserRequest/{operation}</OPERATION-REF></CLIENT-COM-SPEC>"#));
+            calls.push_str(&format!(r#"<SYNCHRONOUS-SERVER-CALL-POINT>
+<SHORT-NAME>{user}{operation}</SHORT-NAME><OPERATION-IREF>
+<CONTEXT-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Application/Observe/{user}</CONTEXT-R-PORT-REF>
+<TARGET-REQUIRED-OPERATION-REF DEST="CLIENT-SERVER-OPERATION">/Services/ComM_UserRequest/{operation}</TARGET-REQUIRED-OPERATION-REF>
+</OPERATION-IREF></SYNCHRONOUS-SERVER-CALL-POINT>"#));
+        }
+        change(
+            &mut sources,
+            "observe.arxml",
+            "</SERVER-CALL-POINTS>",
+            &format!("{calls}</SERVER-CALL-POINTS>"),
+        );
+        let ports = format!(
+            r#"<R-PORT-PROTOTYPE><SHORT-NAME>{user}</SHORT-NAME>
+<REQUIRED-COM-SPECS>{specs}</REQUIRED-COM-SPECS>
+<REQUIRED-INTERFACE-TREF DEST="CLIENT-SERVER-INTERFACE">/Services/ComM_UserRequest</REQUIRED-INTERFACE-TREF>
+</R-PORT-PROTOTYPE><R-PORT-PROTOTYPE><SHORT-NAME>Mode{user}</SHORT-NAME>
+<REQUIRED-INTERFACE-TREF DEST="MODE-SWITCH-INTERFACE">/Services/ComM_CurrentMode</REQUIRED-INTERFACE-TREF>
+</R-PORT-PROTOTYPE>"#
+        );
+        change(
+            &mut sources,
+            "observe.arxml",
+            "</PORTS>",
+            &format!("{ports}</PORTS>"),
+        );
+        let point = format!(
+            r#"<MODE-ACCESS-POINT><IDENT><SHORT-NAME>Read{user}</SHORT-NAME></IDENT>
+<MODE-GROUP-IREF><R-MODE-GROUP-IN-ATOMIC-SWC-INSTANCE-REF>
+<CONTEXT-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Application/Observe/Mode{user}</CONTEXT-R-PORT-REF>
+<TARGET-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Services/ComM_CurrentMode/currentMode</TARGET-MODE-GROUP-REF>
+</R-MODE-GROUP-IN-ATOMIC-SWC-INSTANCE-REF></MODE-GROUP-IREF></MODE-ACCESS-POINT>"#
+        );
+        if user == "HostUser" {
+            change(
+                &mut sources,
+                "observe.arxml",
+                "<SERVER-CALL-POINTS>",
+                &format!("<MODE-ACCESS-POINTS>{point}</MODE-ACCESS-POINTS><SERVER-CALL-POINTS>"),
+            );
+        } else {
+            change(
+                &mut sources,
+                "observe.arxml",
+                "</MODE-ACCESS-POINTS>",
+                &format!("{point}</MODE-ACCESS-POINTS>"),
+            );
+        }
+        for (provider, requester) in [
+            (format!("UR_{user}"), user.to_owned()),
+            (format!("UM_{user}"), format!("Mode{user}")),
+        ] {
+            let connector = format!(
+                r#"<ASSEMBLY-SW-CONNECTOR><SHORT-NAME>{provider}</SHORT-NAME>
+<PROVIDER-IREF><CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/ComMService</CONTEXT-COMPONENT-REF>
+<TARGET-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Services/ComMService/{provider}</TARGET-P-PORT-REF></PROVIDER-IREF>
+<REQUESTER-IREF><CONTEXT-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/ObserveInstance</CONTEXT-COMPONENT-REF>
+<TARGET-R-PORT-REF DEST="R-PORT-PROTOTYPE">/Application/Observe/{requester}</TARGET-R-PORT-REF></REQUESTER-IREF>
+</ASSEMBLY-SW-CONNECTOR>"#
+            );
+            change(
+                &mut sources,
+                "composition.arxml",
+                "</CONNECTORS>",
+                &format!("{connector}</CONNECTORS>"),
+            );
+        }
+    }
+    sources
+}
+
 /// Two synchronized publisher instances, with two readers on the first publisher.
 pub(crate) fn mode_binding_inputs() -> Vec<InputSource> {
     let mut sources = inputs();
@@ -1718,11 +1945,16 @@ pub(crate) fn mode_binding_inputs() -> Vec<InputSource> {
         &format!("{ports}</PORTS>"),
     );
     let groups = ["Primary", "Secondary"].map(|name| format!(r#"<MODE-DECLARATION-GROUP-PROTOTYPE><SHORT-NAME>{name}</SHORT-NAME><TYPE-TREF DEST="MODE-DECLARATION-GROUP">/Types/PowerState</TYPE-TREF></MODE-DECLARATION-GROUP-PROTOTYPE>"#)).join("");
-    change(
+    xml_edit(
         &mut sources,
         "bsw.arxml",
-        "<MODULE-ID>12</MODULE-ID>",
-        &format!("<MODULE-ID>12</MODULE-ID><PROVIDED-MODE-GROUPS>{groups}</PROVIDED-MODE-GROUPS>"),
+        |node| named(node, "BSW-MODULE-DESCRIPTION", "ComM"),
+        |text| {
+            text.replace(
+                "</PROVIDED-MODE-GROUPS>",
+                &format!("{groups}</PROVIDED-MODE-GROUPS>"),
+            )
+        },
     );
     let refs = ["Primary", "Secondary"].map(|name| format!(r#"<MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL><MODE-DECLARATION-GROUP-PROTOTYPE-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/AUTOSAR_ComM/ComM/{name}</MODE-DECLARATION-GROUP-PROTOTYPE-REF></MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL>"#)).join("");
     change(
@@ -1813,20 +2045,17 @@ pub(crate) fn mode_binding_inputs() -> Vec<InputSource> {
 /// The synchronized pair selects the SWC side as its sole mode manager.
 pub(crate) fn swc_managed_mode_inputs() -> Vec<InputSource> {
     let mut sources = mode_binding_inputs();
-    let source = sources
-        .iter_mut()
-        .find(|source| source.logical_path() == "bsw.arxml")
-        .unwrap();
-    let text = std::str::from_utf8(source.bytes()).unwrap();
-    let start = text.find("<MANAGED-MODE-GROUPS>").unwrap();
-    let end = start
-        + text[start..].find("</MANAGED-MODE-GROUPS>").unwrap()
-        + "</MANAGED-MODE-GROUPS>".len();
-    *source = InputSource::new(
+    xml_edit(
+        &mut sources,
         "bsw.arxml",
-        format!("{}{}", &text[..start], &text[end..]).into_bytes(),
-    )
-    .unwrap();
+        |node| {
+            node.has_tag_name("MANAGED-MODE-GROUPS")
+                && node
+                    .descendants()
+                    .any(|child| child.text() == Some("/AUTOSAR_ComM/ComM/Primary"))
+        },
+        |_| String::new(),
+    );
     let points = ["Primary", "Secondary"].map(|name| format!(r#"<MODE-SWITCH-POINT><SHORT-NAME>Switch{name}</SHORT-NAME><MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST="P-PORT-PROTOTYPE">/Application/Process/{name}</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST="MODE-DECLARATION-GROUP-PROTOTYPE">/Types/PowerInterface/Mode</TARGET-MODE-GROUP-REF></MODE-GROUP-IREF></MODE-SWITCH-POINT>"#)).join("");
     change(
         &mut sources,

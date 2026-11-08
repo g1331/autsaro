@@ -16,10 +16,10 @@ fn generated_c_analysis_samples() {
     );
     analysis_samples::generate(&output, &scratch);
     for (sample, id, length, mapping_count) in [
-        ("standard-ecu", "UINT16", "UINT16", 15),
-        ("user-application", "UINT16", "UINT16", 15),
-        ("component-pipeline", "UINT8", "UINT32", 17),
-        ("no-diagnostic", "UINT8", "UINT8", 16),
+        ("standard-ecu", "UINT16", "UINT16", 16),
+        ("user-application", "UINT16", "UINT16", 16),
+        ("component-pipeline", "UINT8", "UINT32", 18),
+        ("no-diagnostic", "UINT8", "UINT8", 17),
     ] {
         let mappings = std::fs::read_dir(output.join(sample).join("generated/include"))
             .unwrap()

@@ -300,6 +300,7 @@ impl CompositionContract {
         catalog: &super::catalog::RuntimeCatalog,
     ) -> Result<(), Vec<PlanDiagnostic>> {
         super::mode_binding::validate_owners(graph, self, symbols, catalog)?;
+        super::comm_service::inspect_bindings(graph, self)?;
         let inventory = crate::resources::AssetInventory::embedded();
         let headers = inventory
             .entries()
@@ -2279,6 +2280,7 @@ fn inspect_with_transport(
         mode_machines: Vec::new(),
         mode_connections,
     };
+    super::comm_service::inspect(graph, &plan)?;
     plan.mode_machines = super::mode_binding::inspect(graph, &plan)?;
     check_names(graph, &plan)?;
     Ok(plan)
@@ -2557,6 +2559,29 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
         }
         for port in &component.data_ports {
             names.insert(format!("Rte_InitValue_{}_{}", port.name, port.element_name));
+        }
+    }
+    names.extend(
+        [
+            "ComM_UserModeType",
+            "ComM_UserModeConfigType",
+            "comm_user_modes",
+        ]
+        .into_iter()
+        .map(str::to_owned),
+    );
+    for user in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| super::schedule::definition_is(graph, *index, "ComMUser"))
+    {
+        names.insert(super::comm_service::callback_name(
+            &graph.elements[user].object,
+        ));
+        if let Some(handle) = super::schedule::value(graph, user, "ComMUserIdentifier", false)
+            .and_then(|value| value.parse().ok())
+        {
+            names.insert(super::comm_service::channels_name(handle));
         }
     }
     for datatype in plan.types.iter().filter(|datatype| {

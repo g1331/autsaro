@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd">
   <AR-PACKAGES>
     <AR-PACKAGE>
@@ -14,6 +14,10 @@
             <SW-COMPONENT-PROTOTYPE>
               <SHORT-NAME>DcmService</SHORT-NAME>
               <TYPE-TREF DEST="SERVICE-SW-COMPONENT-TYPE">/Services/DcmService</TYPE-TREF>
+            </SW-COMPONENT-PROTOTYPE>
+            <SW-COMPONENT-PROTOTYPE>
+              <SHORT-NAME>ComMService</SHORT-NAME>
+              <TYPE-TREF DEST="SERVICE-SW-COMPONENT-TYPE">/Services/ComMService</TYPE-TREF>
             </SW-COMPONENT-PROTOTYPE>
           </COMPONENTS>
           <CONNECTORS>

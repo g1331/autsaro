@@ -18,6 +18,17 @@ use std::time::Duration;
 #[test]
 fn symbolic_handles_compile_link_and_run_renamed_nondefault_mapping() {
     let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "services.arxml",
+        |node| {
+            node.has_tag_name("PORT-API-OPTION")
+                && node
+                    .descendants()
+                    .any(|child| child.text() == Some("/Services/ComMService/UR_HostUser"))
+        },
+        |text| text.replace("<VALUE>0</VALUE>", "<VALUE>7</VALUE>"),
+    );
     for (owner, parameter_name, value) in [
         ("Receive", "CanObjectId", "1"),
         ("Transmit", "CanObjectId", "0"),

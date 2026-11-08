@@ -307,7 +307,10 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
                 .any(|node| node.has_tag_name("EXCLUSIVE-AREA-REF"));
             assert_eq!(
                 enters,
-                name.starts_with("SchM_Mode_Dcm_") || name.starts_with("SchM_Switch_Dcm_"),
+                name.starts_with("SchM_Mode_Dcm_")
+                    || name.starts_with("SchM_Switch_Dcm_")
+                    || name.starts_with("SchM_Mode_ComM_")
+                    || name.starts_with("SchM_Switch_ComM_"),
                 "{name}"
             );
         }
@@ -427,7 +430,8 @@ fn all_rte_owned_input_types_have_one_declaration_and_external_emitters_stay_ext
     );
     assert_eq!(types.matches("typedef uint32 ValueType;").count(), 1);
     assert!(types.contains("typedef uint8 UnusedByte;"));
-    assert!(!types.contains("Rte_ModeType_"));
+    assert!(types.contains("Rte_ModeType_ComMMode"));
+    assert!(!types.contains("Rte_ModeType_Dcm"));
     assert!(!types.contains("#include \"Rte_Dcm_Type.h\""));
     assert!(header("include/Rte_Process_Type.h").contains("#include \"Rte_Dcm_Type.h\""));
     assert!(header("include/Rte_Process.h").contains("ValueType *data"));

@@ -92,6 +92,45 @@ pub(super) fn bsw_catalog(
         );
     }
     add(
+        "ComM_BusSM_ModeIndication",
+        "ComM",
+        "void",
+        &[
+            ("Channel", "NetworkHandleType", "IN"),
+            ("ComMode", "ComM_ModeType", "IN"),
+        ],
+        "runtime/bsw/include/ComM.h",
+        "runtime/bsw/src/ComM.c",
+    );
+    for operation in [
+        "RequestComMode",
+        "GetRequestedComMode",
+        "GetCurrentComMode",
+        "GetCurrentPNCComMode",
+        "GetMaxComMode",
+    ] {
+        let request = operation == "RequestComMode";
+        add(
+            &format!("ComM_{operation}"),
+            "ComM",
+            "Std_ReturnType",
+            &[
+                ("User", "ComM_UserHandleType", "IN"),
+                (
+                    "ComMode",
+                    if request {
+                        "ComM_ModeType"
+                    } else {
+                        "ComM_ModeType *"
+                    },
+                    if request { "IN" } else { "OUT" },
+                ),
+            ],
+            "runtime/bsw/include/ComM.h",
+            "runtime/bsw/src/ComM.c",
+        );
+    }
+    add(
         "Can_Init",
         "Can",
         "void",
