@@ -5,6 +5,7 @@
  */
 #include "Rte_Main.h"
 #include "Ecu_Target.h"
+#include <SchM_ComM.h>
 #include <assert.h>
 
 /* 0: neither hook; 1: StartupHook; 2: ShutdownHook. */
@@ -41,6 +42,11 @@ int main(void)
     SchM_Init(&Ecu_SchMConfig);
     SchM_StartTiming();
     assert(Ecu_SchMTimingActive() == FALSE);
+    /* Verifies: SWS_Rte_07258. A publisher without readers completes each switch. */
+    if ((SchM_Switch_ComM_UM_HostUser(RTE_MODE_ComMMode_COMM_FULL_COMMUNICATION) != SCHM_E_OK) ||
+        (SchM_Switch_ComM_UM_HostUser(RTE_MODE_ComMMode_COMM_NO_COMMUNICATION) != SCHM_E_OK)) {
+        return 1;
+    }
     SchM_Start();
     assert((Ecu_SchMReady() == TRUE) && (Ecu_SchMTimingActive() == FALSE));
     SchM_StartTiming();

@@ -1,6 +1,7 @@
 /** @file ComM service clients and mode readers linked to real ComM/RTE producers. */
 #define RTE_CORE
 #include "Rte_Observe.h"
+#include "Rte_ComMService.h"
 #include "Rte_Main.h"
 #include "SchM_ComM.h"
 #include "ComM.h"
@@ -85,6 +86,9 @@ Std_ReturnType __wrap_SchM_Switch_ComM_UM_SecondUser(Rte_ModeType_ComMMode mode)
 }
 int main(void)
 {
+    /* Verifies: SWS_Rte_03793, SWS_Rte_03711, SWS_Rte_03724. */
+    CHECK(Rte_Inst_ComMService != NULL_PTR);
+    CHECK(sizeof(Rte_Inst_ComMService->Rte_Dummy) == sizeof(uint8));
     /* Verifies: SWS_ComM_00110, SWS_ComM_00079, SWS_ComM_00083, SWS_ComM_00085 */
     /* Verifies: SWS_ComM_01000, SWS_ComM_01011, SWS_ComM_00091, SWS_ComM_00778 */
     /* Verifies: SWS_ComM_00472, SWS_ComM_00675, SWS_ComM_00313, SWS_ComM_01012 */

@@ -722,6 +722,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             if renamed { "Compute" } else { "Process" },
             "Observe",
             "DcmService",
+            "ComMService",
         ] {
             assert!(symbols.contains(&format!("Rte_Inst_{component}").as_str()));
             assert!(!symbols.contains(&format!("Rte_Instance_{component}").as_str()));
@@ -833,12 +834,35 @@ fn generated_schm_lifecycle_refuses_misordered_repeated_and_foreign_calls() {
     );
     assert!(output.status.success(), "{output:?}");
     let output = tooling::run_public_command(
-        &mut std::process::Command::new(executable),
+        &mut std::process::Command::new(&executable),
         &scratch.0,
         "schm-lifecycle-run",
         std::time::Duration::from_secs(30),
     );
     assert!(output.status.success(), "{output:?}");
+    let source_path = scratch.0.join("generated/src/SchM_Main.c");
+    let source = std::fs::read_to_string(&source_path).unwrap();
+    let immediate = "(void)mode;\n    return SCHM_E_OK;";
+    assert_eq!(source.matches(immediate).count(), 1);
+    std::fs::write(
+        source_path,
+        source.replace(immediate, "(void)mode;\n    return E_NOT_OK;"),
+    )
+    .unwrap();
+    let output = tooling::run_public_command(
+        &mut compiler,
+        &scratch.0,
+        "schm-lifecycle-refusal-compile",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(output.status.success(), "{output:?}");
+    let output = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        &scratch.0,
+        "schm-lifecycle-refusal-run",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(!output.status.success(), "{output:?}");
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]

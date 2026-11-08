@@ -63,7 +63,7 @@ R8.9 是 Advisory、System（2013主文印刷71／PDF79）。它按标识符出�
 
 ComM_UserRequest 新增五个固定值源码键后，类型／预处理接口累计 53 键（7 个 R2.3、46 个 R2.5）；上述 48 键为 DCMServices 交付时的累计。另登记上表单个 ComM 实例句柄 R8.7 键，标准接口共 54 键；原 159 键批准集合保持。每个实际位置、目标和程序由 PR 的完整工件比较记录。
 
-普通模式 observer 的生成由实际读取 API 决定：`mode_binding::has_observer` 同时控制 `declarations_for`、`storage_functions` 和 `artifacts` 的 C 声明、定义与 BSWMD。SWS_Rte_07261／07702 把 SchM_Mode 的生成关联到 BSW accessedModeGroup；07535 要求共享 SchM 状态，未要求为仅发布的端口额外导出读取函数。所选普通模式只有生成的 Rte_Mode 桥读取状态，因此有 reader 时保留跨 TU observer，未连接 reader 时不生成；既有固定 Dcm 桥保留真实运行时消费者。`ordinary_mode_observers_follow_generated_readers_in_all_artifacts` 核对无 reader、两个 ComM reader 与普通映射组的三类产物；真实 RTE 消费者核对两用户读回。
+普通模式 observer 的生成由实际读取 API 决定：`mode_binding::has_observer` 同时控制 `declarations_for`、`storage_functions`、`rte_memory::description` 和 `artifacts` 的 C 声明、定义与 BSWMD。SWS_Rte_07261／07702 把 SchM_Mode 的生成关联到 BSW accessedModeGroup；07535 要求共享模式机，未要求为仅发布的端口额外导出读取函数。所选普通模式只有生成的 Rte_Mode 桥读取状态，因此有 reader 时保留唯一共享状态及跨 TU observer；未连接 reader 时消除无可观察效果的状态分配、写入及 observer，Switch 仍返回 SCHM_E_OK，初始化仍调用同一 Switch。既有固定 Dcm 桥保留真实运行时消费者。`ordinary_mode_observers_follow_generated_readers_in_all_artifacts` 核对无 reader、两个 ComM reader 与普通映射组的三类产物及内存描述；真实 RTE 消费者核对两用户读回。
 
 ## 其余诊断的裁决边界
 

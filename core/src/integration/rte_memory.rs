@@ -95,11 +95,9 @@ pub(super) fn description(
     for name in ["diagnostic_session_mode", "authentication_mode"] {
         variables.push_str(&object("VARIABLE-DATA-PROTOTYPE", name, "RteMemory_uint8"));
     }
-    for machine in composition
-        .mode_machines
-        .iter()
-        .filter(|machine| !super::mode_binding::fixed_dcm(machine))
-    {
+    for machine in composition.mode_machines.iter().filter(|machine| {
+        !super::mode_binding::fixed_dcm(machine) && super::mode_binding::has_observer(machine)
+    }) {
         scalars.insert(machine.base_type().to_owned());
         variables.push_str(&object(
             "VARIABLE-DATA-PROTOTYPE",

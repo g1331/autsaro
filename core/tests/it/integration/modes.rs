@@ -64,8 +64,19 @@ fn ordinary_mode_observers_follow_generated_readers_in_all_artifacts() {
         (inputs(), "SchM_Mode_ComM_UM_HostUser", false),
         (comm_service_inputs(), "SchM_Mode_ComM_UM_HostUser", true),
         (mode_binding_inputs(), "SchM_Mode_ComM_Primary", true),
+        (mode_binding_inputs(), "SchM_Mode_ComM_UM_HostUser", false),
     ] {
         let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:#?}"));
+        let variable = &plan
+            .description()
+            .composition
+            .as_ref()
+            .unwrap()
+            .mode_machines
+            .iter()
+            .find(|machine| machine.mode_symbol == observer)
+            .unwrap()
+            .variable;
         let files = prepared_pipeline_files(&plan);
         for path in [
             "generated/src/SchM_Main.c",
@@ -75,6 +86,9 @@ fn ordinary_mode_observers_follow_generated_readers_in_all_artifacts() {
             let bytes = &files.iter().find(|(name, _)| name == path).unwrap().1;
             let text = std::str::from_utf8(bytes).unwrap();
             assert_eq!(text.contains(observer), present, "{path}: {observer}");
+            if !path.ends_with(".h") {
+                assert_eq!(text.contains(variable), present, "{path}: {variable}");
+            }
         }
     }
 }

@@ -863,32 +863,34 @@ fn render_storage(machines: &[Storage], scope: &str, diagnostic: bool) -> String
     if diagnostic {
         text.push('\n');
     }
-    text.push_str(&c_layout::section(
-        &prefix,
-        "Rte",
-        "VAR_CLEARED_UNSPECIFIED",
-        true,
-    ));
-    for machine in machines {
-        let declaration = format!("static {} {}", machine.native, machine.variable);
-        let note = if diagnostic {
-            ""
-        } else {
-            " /**< SCHM_MODE; Init resets. */"
-        };
-        let attribute = format!("{prefix}_VAR_CLEARED_UNSPECIFIED;{note}");
-        if declaration.len() + attribute.len() < 100 {
-            text.push_str(&format!("{declaration} {attribute}\n"));
-        } else {
-            text.push_str(&format!("{declaration}\n    {attribute}\n"));
+    if machines.iter().any(|machine| machine.read) {
+        text.push_str(&c_layout::section(
+            &prefix,
+            "Rte",
+            "VAR_CLEARED_UNSPECIFIED",
+            true,
+        ));
+        for machine in machines.iter().filter(|machine| machine.read) {
+            let declaration = format!("static {} {}", machine.native, machine.variable);
+            let note = if diagnostic {
+                ""
+            } else {
+                " /**< SCHM_MODE; Init resets. */"
+            };
+            let attribute = format!("{prefix}_VAR_CLEARED_UNSPECIFIED;{note}");
+            if declaration.len() + attribute.len() < 100 {
+                text.push_str(&format!("{declaration} {attribute}\n"));
+            } else {
+                text.push_str(&format!("{declaration}\n    {attribute}\n"));
+            }
         }
+        text.push_str(&c_layout::section(
+            &prefix,
+            "Rte",
+            "VAR_CLEARED_UNSPECIFIED",
+            false,
+        ));
     }
-    text.push_str(&c_layout::section(
-        &prefix,
-        "Rte",
-        "VAR_CLEARED_UNSPECIFIED",
-        false,
-    ));
     text.push_str(&c_layout::section(&prefix, "Rte", "CODE", true));
     let methods: Vec<_> = if diagnostic {
         machines.iter().rev().collect()
@@ -918,6 +920,10 @@ fn storage_functions(machine: &Storage, placement: &str, diagnostic: bool) -> St
         "",
         true,
     );
+    if !machine.read {
+        // No generated consumer can observe this immediate machine's state.
+        return format!("{switch}\n{{\n    (void)mode;\n    return SCHM_E_OK;\n}}\n");
+    }
     let mode = c_layout::signature(
         &format!("{placement} {}", machine.native),
         &machine.observer,
