@@ -1,4 +1,4 @@
-"""Keep required CI's documentation-only and ui/-only selection safe."""
+"""Keep required CI input selection, coverage and failure propagation safe."""
 
 import ast
 import json
@@ -10,6 +10,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from importlib.util import resolve_name
 from pathlib import Path
 from unittest import mock
 
@@ -28,19 +29,6 @@ EXEMPT = {
     "tools/python/src/autosar_tooling/cli.py",
 }
 UI_PATH = re.compile(r"""["'/\\]ui[/\\"']""")
-
-
-def jobs() -> dict[str, dict[str, object]]:
-    found: dict[str, dict[str, object]] = {}
-    current = None
-    for line in WORKFLOW.read_text(encoding="utf-8").splitlines():
-        if header := re.fullmatch(r"  ([a-z-]+):", line):
-            current = found.setdefault(header.group(1), {"needs": set(), "if": ""})
-        elif current is not None and (needs := re.fullmatch(r"    needs: \[?([^\]]+)\]?", line)):
-            current["needs"] = {name.strip() for name in needs.group(1).split(",")}
-        elif current is not None and (condition := re.fullmatch(r"    if: (.+)", line)):
-            current["if"] = condition.group(1)
-    return found
 
 
 def file_listing(paths):
@@ -102,10 +90,10 @@ class CiSelectionTests(unittest.TestCase):
     def test_analysis_drivers_are_outside_skipped_python_consumers(self):
         drivers = {"autosar_tooling." + name for name in
                    ("c_check", "c_acceptance", "c_sdk", "c_comparison", "c_addon")}
-        modules = {
-            path.relative_to(ROOT / "tools/python/src").with_suffix("").as_posix().replace("/", "."): path
-            for path in (ROOT / "tools/python/src").rglob("*.py")
-        }
+        modules = {}
+        for path in (ROOT / "tools/python/src").rglob("*.py"):
+            name = path.relative_to(ROOT / "tools/python/src").with_suffix("").as_posix()
+            modules[name.replace("/", ".").removesuffix(".__init__")] = path
         modules.update({path.stem: path for path in (ROOT / "tests/python/native").glob("*.py")})
         roots = list((ROOT / "tools/python/src/ecu_tools").glob("*.py"))
         roots += [path for path in (ROOT / "tests/python/native").glob("*.py")
@@ -121,14 +109,23 @@ class CiSelectionTests(unittest.TestCase):
                 names = []
                 if isinstance(node, ast.Import):
                     names = [alias.name for alias in node.names]
-                elif isinstance(node, ast.ImportFrom) and node.module:
-                    names = [node.module] + [node.module + "." + alias.name for alias in node.names]
-                    if node.module == "autosar_tooling.c_standard":
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if node.level:
+                        package = next(name for name, entry in modules.items() if entry == path)
+                        if path.name != "__init__.py":
+                            package = package.rpartition(".")[0]
+                        module = resolve_name("." * node.level + module, package)
+                    names = [module] + [module + "." + alias.name for alias in node.names]
+                    if module == "autosar_tooling.c_standard":
                         self.assertLessEqual({alias.name for alias in node.names},
                                              {"lex", "is_comment", "function", "code_words",
                                               "verify_memory_mapping_pattern"})
                 self.assertFalse(drivers.intersection(names), (path, names))
-                pending.extend(modules[name] for name in names if name in modules)
+                # Importing a submodule also executes each containing package initializer.
+                packages = [".".join(name.split(".")[:index]) for name in names
+                            for index in range(1, len(name.split(".")))]
+                pending.extend(modules[name] for name in names + packages if name in modules)
         compiler = (ROOT / ".github/actions/native-analysis-compiler/action.yml").read_text()
         self.assertIn("from ecu_tools.build import compiler_include_paths", compiler)
         self.assertNotIn("autosar_tooling", compiler)
@@ -685,8 +682,8 @@ class CiSelectionTests(unittest.TestCase):
                 values = dict(line.split("=", 1) for line in output.read_text().splitlines())
                 self.assertEqual(values["code"], str(code).lower())
                 self.assertEqual(values["native"], str(native).lower())
-                self.assertEqual(values["desktop"], str(any(
-                    path.startswith(("ui/", "runtime/", ".codex-extra/")) for path in paths)).lower())
+                desktop = any(path.startswith(("ui/", "runtime/", ".codex-extra/")) for path in paths)
+                self.assertEqual(values["desktop"], str(desktop).lower())
 
     def test_selected_jobs_and_required_gate_agree(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
@@ -700,7 +697,8 @@ class CiSelectionTests(unittest.TestCase):
                           "analysis": True, "application": False}),
             ("ui", {"code": True, "native": False, "desktop": True,
                     "analysis": False, "application": True}),
-            ("docs", dict.fromkeys(("code", "native", "desktop", "analysis", "application"), False)),
+            ("docs", dict.fromkeys(
+                ("code", "native", "desktop", "analysis", "application"), False)),
         ):
             for name in workflow["required"]["needs"]:
                 selection = ("desktop" if name == "desktop-scenarios" else
@@ -719,7 +717,8 @@ class CiSelectionTests(unittest.TestCase):
                             run_script(script)
                         except SystemExit as error:
                             expected = (status == "success" or status == "skipped"
-                                        and name not in {"changes", "quality"} and not selected[selection])
+                                        and name not in {"changes", "quality"}
+                                        and not selected[selection])
                             self.assertEqual(error.code == 0, expected)
         for name in native_jobs:
             self.assertIn("outputs.native", workflow[name]["if"])
