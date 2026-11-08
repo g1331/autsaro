@@ -171,49 +171,49 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 {
  "id": "freertos-current-inputs",
  "evidence": {
-  "head": "182f8df819760e0ea027766f19a362436c64df3e",
-  "receipt": "https://github.com/g1331/autsaro/actions/runs/42479363863"
+  "head": "2a30b5e36caa1f04cbe1cc2c95e4de23fca307ca",
+  "receipt": "https://github.com/g1331/autsaro/actions/runs/42486878696"
  },
  "cases": [
   {
    "caseId": "standard-ecu",
    "target": "linux-x64-controlled-v1",
-   "inputIdentity": "9b4830177be5bffc0af00d549d97b7bbb6dbd75c8753e3c67f4dc9795008a2eb"
+   "inputIdentity": "1c62d6d1772f1f667a1eac82542673581f892f4924e5385376c72089cf6ca7d6"
   },
   {
    "caseId": "user-application",
    "target": "linux-x64-controlled-v1",
-   "inputIdentity": "9b4830177be5bffc0af00d549d97b7bbb6dbd75c8753e3c67f4dc9795008a2eb"
+   "inputIdentity": "1c62d6d1772f1f667a1eac82542673581f892f4924e5385376c72089cf6ca7d6"
   },
   {
    "caseId": "component-pipeline",
    "target": "linux-x64-controlled-v1",
-   "inputIdentity": "4210f603f3a22c2cd7237381f6ecabf3bd19607494d98b7d568bc6cc8990e03a"
+   "inputIdentity": "28b1248ef0c1640734259b6ce6f7369ec82f1d9971b7b349c8f189d81298c2ca"
   },
   {
    "caseId": "no-diagnostic",
    "target": "linux-x64-controlled-v1",
-   "inputIdentity": "086d447411fa96c31adc95d3bdcbacb20a78ac93cc9df01b50282e22176ba57e"
+   "inputIdentity": "853da4e077ca63070f9084e90181b3594285a16e8731ad218bd5b1f5ef729662"
   },
   {
    "caseId": "standard-ecu",
    "target": "windows-x64-controlled-v1",
-   "inputIdentity": "024976debf8fdce26f5951fefb867c811ea323340075c2a54ef45ae5cd965957"
+   "inputIdentity": "7866e19e9bdcf38f4d72c541578ee465644bad0a3688407b8266daa0636c17a4"
   },
   {
    "caseId": "user-application",
    "target": "windows-x64-controlled-v1",
-   "inputIdentity": "024976debf8fdce26f5951fefb867c811ea323340075c2a54ef45ae5cd965957"
+   "inputIdentity": "7866e19e9bdcf38f4d72c541578ee465644bad0a3688407b8266daa0636c17a4"
   },
   {
    "caseId": "component-pipeline",
    "target": "windows-x64-controlled-v1",
-   "inputIdentity": "09af42ca4534b7f87cec63285ca637826529b7ca06b587ed2d83f4ba2af57ae6"
+   "inputIdentity": "3f46c6a954a6ceccdc00e70c2b375a8b8ba615185fa0d7ea735723810f1ced4c"
   },
   {
    "caseId": "no-diagnostic",
    "target": "windows-x64-controlled-v1",
-   "inputIdentity": "70a7d66915f6e0b94e7f5dec9eb46640521ea1b93b7b73d9590952bd23eaafa8"
+   "inputIdentity": "0718b5dcf23c6b9d695e65b355e99ded76205fb36ed4fcd8e8f061cd41bf1645"
   }
  ],
  "records": {
