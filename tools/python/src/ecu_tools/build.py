@@ -100,6 +100,25 @@ def tool_argument(path: Path) -> str:
     return value
 
 
+def compiler_include_paths(header_log: str, directory: Path) -> list[str]:
+    """Resolve GCC search entries in its cwd, including Windows rooted paths."""
+    collecting = False
+    includes = []
+    for line in header_log.splitlines():
+        if line.strip() == "#include <...> search starts here:":
+            collecting = True
+        elif line.strip() == "End of search list.":
+            collecting = False
+        elif collecting:
+            path = (directory / line.strip()).resolve(strict=True)
+            if not path.is_dir():
+                raise ValueError("Compiler reported a non-directory include path")
+            includes.append(tool_argument(path))
+    if not includes:
+        raise ValueError("Compiler reported no system include paths")
+    return includes
+
+
 def target_entry(names: list[str], target: dict, mode: str) -> str:
     """The sealed native main of a build mode; test mode builds the probe main."""
     entries = target.get("entries")
