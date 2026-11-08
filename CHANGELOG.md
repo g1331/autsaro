@@ -55,6 +55,8 @@
 
 ### Added
 
+- Project source acceptance independently checks the 144 checker-covered guidelines outside the fixed eleven limitations; missing manual evidence and stale assessment contexts remain explicit blockers (#459)
+
 - C-analysis results include independent project acceptance with frozen source, configuration, program and assessment identities; `c-acceptance --analysis` revalidates complete artifacts and rejects stale, unknown or incomplete evidence without rewriting raw analyzer results (#428)
 
 - ECU C-analysis summaries link diagnostics to exact generated-interface retention records while explicitly retaining incomplete evidence and raw analysis failures; these references do not authorize acceptance or establish MISRA conformance (#426)
