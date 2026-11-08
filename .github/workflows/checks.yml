@@ -81,8 +81,9 @@ jobs:
     if: needs.changes.outputs.desktop == 'true'
     uses: ./.github/workflows/desktop.yml
   ui:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Short checks follow preparation so long native jobs can claim the first runners.
+    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows]
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,8 +105,9 @@ jobs:
       - run: python -m autosar_tooling.ci_reporting run -- npm run test --prefix ui
       - run: npm run build --prefix ui
   python:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Short checks follow preparation so long native jobs can claim the first runners.
+    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows]
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -169,8 +171,9 @@ jobs:
       - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked --manifest-path fuzz/Cargo.toml
       - run: cargo clippy --locked --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
   desktop:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Short checks follow preparation so long native jobs can claim the first runners.
+    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows]
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -205,12 +208,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows runs the slowest suites on a second runner; Linux keeps one job.
+        # Windows separates measured long modules; Linux keeps one job.
         include:
           - os: ubuntu-24.04
             shard: all
           - os: windows-latest
-            shard: slow
+            shard: protocol
+          - os: windows-latest
+            shard: projects
+          - os: windows-latest
+            shard: integration
           - os: windows-latest
             shard: rest
     name: native (${{ matrix.os }}, ${{ matrix.shard }})
@@ -226,17 +233,33 @@ jobs:
       - uses: ./.github/actions/native-analysis-compiler
       - name: Identify native build cache inputs
         shell: python
-        run: |
-          import os
+        run: &cargo-source-digest |
+          import hashlib, os, subprocess
+          from pathlib import Path
+          # Only tracked inputs participate, even after imports/builds create new files.
+          paths = subprocess.check_output(['git', 'ls-files', '-z', '--',
+              'core', 'runtime', 'third_party/freertos', 'tools/python/src/ecu_tools', 'LICENSE', 'NOTICE'])
+          digest = hashlib.sha256()
+          tracked = sorted(path for path in paths.split(b'\0') if path)
+          for path in tracked:
+              digest.update(path + b'\0')
+              digest.update(hashlib.sha256(Path(os.fsdecode(path)).read_bytes()).digest())
+          source = digest.hexdigest()
+          print(f'Cargo source digest: {source} ({len(tracked)} tracked inputs)', flush=True)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+              output.write('CACHE_SOURCE=' + source + '\n')
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
+          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-${{ env.CACHE_SOURCE }}
+          # Prefer refreshed source snapshots before the legacy exact key.
+          restore-keys: |
+            native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-
+            native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Select native contract tools
         shell: python
         run: |
@@ -250,8 +273,7 @@ jobs:
               for variable, name in tools.items():
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
-      # One name list selects the slow shard and is skipped by the rest, so every test runs
-      # exactly once; a renamed module only moves its tests to "rest".
+      # One classifier partitions exact test names; the complement includes new modules.
       - name: Native library and contract suites
         shell: python
         env:
@@ -259,14 +281,41 @@ jobs:
         run: |
           import os, subprocess, sys
           from pathlib import Path
-          slow = ['integration::sealed_projects', 'integration::single_component', 'integration::protocol']
-          filters = {'all': [], 'slow': slow, 'rest': [arg for name in slow for arg in ('--skip', name)]}[os.environ['SHARD']]
+          groups = {
+              'protocol': ['integration::protocol::'],
+              'projects': ['integration::sealed_projects::', 'integration::single_component::'],
+              'integration': ['integration::'],
+              'rest': [],
+          }
+          shard = os.environ['SHARD']
+          command = ['cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests',
+              '--lib', '--test', 'native', '--no-fail-fast', '--']
+          filters = []
+          if shard != 'all':
+              # A measured long tail belongs with the smaller complement, independently of its module.
+              outlier = ('integration::single_component::'
+                  'short_application_period_saves_builds_and_passes_reference_verifier')
+              def assigned(name):
+                  if name == outlier:
+                      return 'rest'
+                  return next((group for group, prefixes in groups.items()
+                      if any(name.startswith(prefix) for prefix in prefixes)), 'rest')
+              listing = subprocess.run([*command, '--list'], capture_output=True, text=True)
+              print(listing.stdout, end='', flush=True)
+              print(listing.stderr, end='', file=sys.stderr, flush=True)
+              if listing.returncode:
+                  sys.exit(listing.returncode)
+              names = {line.removesuffix(': test') for line in listing.stdout.splitlines()
+                  if line.endswith(': test')}
+              selected = sorted(name for name in names if assigned(name) == shard)
+              if not selected:
+                  raise RuntimeError('Native shard selected no tests: ' + shard)
+              filters = ['--exact', *selected]
           # Failing tests and the ECU verifier retain their scenes under the temporary root.
           scratch = Path(os.environ['RUNNER_TEMP']) / 'native-scratch'
           scratch.mkdir()
           env = dict(os.environ, TMP=str(scratch), TEMP=str(scratch), TMPDIR=str(scratch))
-          sys.exit(subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', 'cargo', 'test', '--locked', '-p', 'autosar-config-core', '--features', 'native-tests',
-              '--lib', '--test', 'native', '--no-fail-fast', '--', *filters], env=env).returncode)
+          sys.exit(subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', *command, *filters], env=env).returncode)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -311,7 +360,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
       - name: Host I/O and lock failure boundaries
-        if: startsWith(matrix.shard, '0/')
+        if: matrix.shard == '0/1' || matrix.shard == '1/2'
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
   native-sanitizers:
     # GCC sanitizers over native programs, OS suites and sealed ECU closures.
@@ -347,10 +396,7 @@ jobs:
       - name: Identify native build cache inputs
         if: matrix.part != 'os'
         shell: python
-        run: |
-          import os
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
-              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+        run: *cargo-source-digest
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: matrix.part != 'os'
         with:
@@ -358,7 +404,11 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
+          key: native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-${{ env.CACHE_SOURCE }}
+          # Prefer refreshed source snapshots before the legacy exact key.
+          restore-keys: |
+            native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-
+            native-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Select native contract tools
         shell: python
         run: |
@@ -472,22 +522,17 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
-          - os: windows-latest
-            target: windows-x64-controlled-v1
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
-    steps:
+    steps: &analysis-prepare-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Identify native build cache inputs
         shell: python
-        run: |
-          import os
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
-              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+        run: *cargo-source-digest
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
       - uses: ./.github/actions/core-build-dependencies
@@ -552,9 +597,11 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
-      - name: Analyzer behavior tests
-        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-${{ env.CACHE_SOURCE }}
+          # Prefer refreshed source snapshots before the legacy exact key.
+          restore-keys: |
+            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-
+            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Generate complete analysis samples
         run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - name: Validate generated sample inventory
@@ -597,6 +644,25 @@ jobs:
           sarif_file: build/clang-tidy.sarif
           category: clang-tidy-linux
 
+
+  c-analysis-prepare-windows:
+    permissions:
+      contents: read
+      security-events: write
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: *analysis-prepare-steps
+
   native-delivery:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.
     needs: c-analysis-prepare
@@ -608,18 +674,12 @@ jobs:
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
             part: all
-          - os: windows-latest
-            target: windows-x64-controlled-v1
-            part: builds
-          - os: windows-latest
-            target: windows-x64-controlled-v1
-            part: receiver
     name: native-delivery (${{ matrix.os }}, ${{ matrix.part }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
-    steps:
+    steps: &native-delivery-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -667,6 +727,28 @@ jobs:
               print(f'::error title=Receiver Python 3.11::The moved packages did not build and run with {receiver}', flush=True)
           sys.exit(result.returncode)
 
+
+  native-delivery-windows:
+    # Builds and receives the prepared samples; runs beside their analysis rather than before it.
+    needs: c-analysis-prepare-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows builds take about three times longer, so its receiver runs on a second runner.
+        include:
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            part: builds
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            part: receiver
+    name: native-delivery (${{ matrix.os }}, ${{ matrix.part }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: *native-delivery-steps
+
   c-analysis-samples:
     permissions:
       contents: read
@@ -693,27 +775,11 @@ jobs:
             target: linux-x64-controlled-v1
             group: no-diagnostic
             samples: no-diagnostic
-          - os: windows-latest
-            target: windows-x64-controlled-v1
-            group: standard-ecu
-            samples: standard-ecu
-          - os: windows-latest
-            target: windows-x64-controlled-v1
-            group: user-application
-            samples: user-application
-          - os: windows-latest
-            target: windows-x64-controlled-v1
-            group: component-pipeline
-            samples: component-pipeline
-          - os: windows-latest
-            target: windows-x64-controlled-v1
-            group: no-diagnostic
-            samples: no-diagnostic
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
-    steps:
+    steps: &analysis-sample-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -763,6 +829,10 @@ jobs:
                   print(name, error)
                   failed = True
           sys.exit(1 if failed else 0)
+      # Independent tool tests run once per platform, alongside the other sample shards.
+      - name: Analyzer behavior tests
+        if: matrix.group == 'standard-ecu'
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Retrieve matching master baseline for presentation
         if: always()
         shell: python
@@ -801,7 +871,7 @@ jobs:
         env:
           ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLES: ${{ matrix.samples }}
-          PREPARE_RESULT: ${{ needs.c-analysis-prepare.result }}
+          PREPARE_RESULT: ${{ join(needs.*.result, '') }}
           ANALYSIS_RESULT: ${{ steps.analyze.outcome }}
         run: |
           import os, subprocess, sys
@@ -832,9 +902,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+
+  c-analysis-samples-windows:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    needs: c-analysis-prepare-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: standard-ecu
+            samples: standard-ecu
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: user-application
+            samples: user-application
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: component-pipeline
+            samples: component-pipeline
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: no-diagnostic
+            samples: no-diagnostic
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: *analysis-sample-steps
+
   c-analysis:
     # A skipped/cancelled producer or shard must never make the gate green.
-    needs: [changes, c-analysis-prepare, c-analysis-samples]
+    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows, c-analysis-samples, c-analysis-samples-windows]
     if: ${{ !cancelled() && needs.changes.outputs.native == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -847,10 +950,14 @@ jobs:
           pattern: c-analysis-summaries-*
           path: build/c-analysis-summaries
       - name: Require every platform and sample group
+        shell: python
         env:
-          PREPARE_RESULT: ${{ needs.c-analysis-prepare.result }}
-          ANALYSIS_RESULT: ${{ needs.c-analysis-samples.result }}
-        run: test "$PREPARE_RESULT" = success && test "$ANALYSIS_RESULT" = success
+          UPSTREAM_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          import json, os
+          results = {name: need['result'] for name, need in json.loads(os.environ['UPSTREAM_RESULTS']).items()}
+          if any(result != 'success' for result in results.values()):
+              raise RuntimeError('Incomplete platform/sample upstream: ' + str(results))
       - name: Require eight complete sample results
         env:
           PYTHONPATH: tools/python/src
@@ -876,7 +983,7 @@ jobs:
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
     name: CI required
-    needs: [changes, desktop-scenarios, ui, python, core, desktop, native, native-os, native-sanitizers, native-delivery, quality, c-analysis]
+    needs: [changes, desktop-scenarios, ui, python, core, desktop, native, native-os, native-sanitizers, native-delivery, native-delivery-windows, quality, c-analysis]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -891,7 +998,7 @@ jobs:
           outputs = needs['changes']['outputs'] if needs['changes']['result'] == 'success' else {}
           code, native = outputs.get('code') != 'false', outputs.get('native') != 'false'
           # The jobs gated on the native output; tests/python/test_ci_selection.py keeps both lists equal.
-          UI_INDEPENDENT = {'core', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'c-analysis'}
+          UI_INDEPENDENT = {'core', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'native-delivery-windows', 'c-analysis'}
           # Skips are accepted only where the change detection selected them.
           def accepted(name):
               if name == 'desktop-scenarios':

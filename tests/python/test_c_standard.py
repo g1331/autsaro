@@ -1072,5 +1072,80 @@ class SupplementaryAssessmentTests(unittest.TestCase):
                 c_standard.supplementary_assessment(self.rules, limitations, self.root)
 
 
+class CheckerObligationTests(unittest.TestCase):
+    UNCOVERED = ManualAssessmentTests.UNCOVERED
+
+    def setUp(self):
+        ManualAssessmentTests.setUp(self)
+        self.path = self.root / "docs/standards/obligations.md"
+        self.categories = {row["id"]: row["category"] for row in self.rules}
+
+    def block(self, identifier="R7.2", status="satisfied"):
+        return ("<!-- misra-checker-obligations-begin -->\n"
+                f"| {identifier} | {self.categories.get(identifier, 'Required')} | "
+                "Synthetic scope | "
+                f"{status} | Synthetic evidence |\n"
+                "<!-- misra-checker-obligations-end -->\n")
+
+    def assess(self):
+        return c_standard.checker_obligations(self.rules, self.root)
+
+    def test_missing_records_preserve_the_fixed_partition_and_responsibility(self):
+        rows = self.assess()["records"]
+        expected = {row["id"] for row in self.rules if row["automaticChecker"]}
+        self.assertEqual({row["id"] for row in rows},
+                         expected - c_standard.CHECKER_LIMITATION_GUIDELINES)
+        self.assertEqual(len(rows), 144)
+        self.assertEqual({row["status"] for row in rows}, {"not_assessed"})
+        self.assertTrue(all("#443" in row["conclusion"] for row in rows))
+
+    def test_record_location_selection_and_full_document_identity(self):
+        empty = self.assess()["inputIdentity"]
+        self.path.write_text(self.block(), encoding="utf-8")
+        result = self.assess()
+        row = next(row for row in result["records"] if row["id"] == "R7.2")
+        self.assertEqual(row["status"], "satisfied")
+        self.assertEqual(row["source"], {"file": "docs/standards/obligations.md", "line": 2})
+        self.assertEqual(row["analysisScope"], "Synthetic scope")
+        self.assertEqual(row["conclusion"], "Synthetic evidence")
+        selected = result["inputIdentity"]
+        self.assertNotEqual(empty["selectionSha256"], selected["selectionSha256"])
+        self.assertEqual(selected["documents"], {
+            "docs/standards/obligations.md": hashlib.sha256(self.path.read_bytes()).hexdigest()})
+        self.path.write_text(self.block() + "Changed evidence.\n", encoding="utf-8")
+        self.assertNotEqual(selected["documents"], self.assess()["inputIdentity"]["documents"])
+        self.path.unlink()
+        self.assertEqual(empty, self.assess()["inputIdentity"])
+
+    def test_other_groups_unknown_duplicate_category_and_retained_are_rejected(self):
+        valid = self.block()
+        variants = [self.block(identifier) for identifier in ("D1.1", "R5.1", "R99.1")]
+        variants.extend((valid.replace("Required", "Advisory"), self.block(status="retained"),
+                         self.block(status="approved"), valid + valid,
+                         valid.replace("<!-- misra-checker-obligations-end -->", ""),
+                         valid.replace("R7.2", "Invalid"),
+                         "<!-- misra-checker-obligations-end -->\n"))
+        for text in variants:
+            with self.subTest(text=text):
+                self.path.write_text(text, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    self.assess()
+        self.path.write_text(self.block("R17.3", "retained"), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Invalid or duplicate"):
+            self.assess()
+
+    def test_mapping_cannot_expand_shrink_or_duplicate(self):
+        for change in ("missing", "duplicate", "checker"):
+            rules = copy.deepcopy(self.rules)
+            if change == "missing":
+                rules.pop()
+            elif change == "duplicate":
+                rules[-1] = rules[0]
+            else:
+                next(row for row in rules if row["id"] == "R7.2")["automaticChecker"] = False
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, "fixed 155/66"):
+                c_standard.checker_obligations(rules, self.root)
+
+
 if __name__ == "__main__":
     unittest.main()

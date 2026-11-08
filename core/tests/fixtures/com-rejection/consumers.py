@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -81,19 +82,12 @@ def run_case(name, mode, mutation=None, *, killed=False, output_failure=False, i
         print(f"consumer={mode} PASS exact id/result/count, no output, next periodic, normal tool", flush=True)
 
 
-run_case("host", "host-batch")
-run_case("probe", "probe")
-
-
 def record_from_tick_isr(project):
     path = project / "os/src/Os_Time.c"
     text = '#include "Ecu_ComRejection.h"\n' + path.read_text()
     needle = "OS_MEMMAP void vApplicationTickHook(void) { Os_TimeTick(); }"
     assert text.count(needle) == 1
     path.write_text(text.replace(needle, "OS_MEMMAP void vApplicationTickHook(void) { Ecu_ComRecordRejection(7u, 3u); Os_TimeTick(); }"))
-
-
-run_case("task-and-isr", "probe", record_from_tick_isr, isr_records=True)
 
 
 def fill_capacity(project):
@@ -103,18 +97,25 @@ def fill_capacity(project):
     app.write_text(text.replace(needle, needle + "\n    for (unsigned i = 0u; i < 4097u; ++i) { Ecu_ComRecordRejection(7u, 3u); }"))
 
 
-for mode in ("host-batch", "probe"):
-    run_case(mode + "-capacity", mode, fill_capacity, capacity=True)
+def normal_consumers():
+    run_case("host", "host-batch")
+    run_case("probe", "probe")
+    run_case("task-and-isr", "probe", record_from_tick_isr, isr_records=True)
+    for mode in ("host-batch", "probe"):
+        run_case(mode + "-capacity", mode, fill_capacity, capacity=True)
 
 
-for name, before, after, count in [
-    ("trigger-notify", "observer(PduId, result);", "(void)observer;", 1),
-    ("periodic-notify", "observer(id, result);", "(void)observer;", 1),
-    ("condition", "if (result != E_OK)", "if (result == E_OK)", 2),
-    ("pdu", "observer(PduId, result);", "observer((PduIdType)(PduId + 1u), result);", 1),
-    ("result", "observer(id, result);", "observer(id, E_OK);", 1),
-]:
-    run_case(name, "probe", lambda p, b=before, a=after, c=count: edit(p, "bsw/src/Com.c", b, a, c), killed=True)
+def notification_mutations():
+    for name, before, after, count in [
+        ("trigger-notify", "observer(PduId, result);", "(void)observer;", 1),
+        ("periodic-notify", "observer(id, result);", "(void)observer;", 1),
+        ("condition", "if (result != E_OK)", "if (result == E_OK)", 2),
+        ("pdu", "observer(PduId, result);", "observer((PduIdType)(PduId + 1u), result);", 1),
+        ("result", "observer(id, result);", "observer(id, E_OK);", 1),
+    ]:
+        run_case(name, "probe",
+                 lambda p, b=before, a=after, c=count: edit(p, "bsw/src/Com.c", b, a, c),
+                 killed=True)
 
 
 def remove_drain(project, mode):
@@ -125,9 +126,19 @@ def remove_drain(project, mode):
         target.write_text(text.replace("Ecu_ComDrainRejections(FALSE)", "1").replace("Ecu_ComDrainRejections(TRUE)", "1"))
 
 
-for mode in ("host-batch", "probe"):
-    run_case(mode + "-drain", mode, lambda p, m=mode: remove_drain(p, m), killed=True)
-    run_case(mode + "-output", mode,
-             lambda p: edit(p, "integration/src/Ecu_ComRejection.c",
-                            "return (text.failed == 0) ? Os_HostWriteBytes(1, text.data, text.length) : 0;",
-                            "(void)text; return 0;", 2), killed=True, output_failure=True)
+def drain_mutations():
+    for mode in ("host-batch", "probe"):
+        run_case(mode + "-drain", mode, lambda p, m=mode: remove_drain(p, m), killed=True)
+        run_case(mode + "-output", mode,
+                 lambda p: edit(p, "integration/src/Ecu_ComRejection.c",
+                                "return (text.failed == 0) ? "
+                                "Os_HostWriteBytes(1, text.data, text.length) : 0;",
+                                "(void)text; return 0;", 2), killed=True, output_failure=True)
+
+
+# Private projects and outputs let two independent groups share the original 900 s watchdog.
+with ThreadPoolExecutor(max_workers=2) as pool:
+    groups = (normal_consumers, notification_mutations, drain_mutations)
+    futures = [pool.submit(group) for group in groups]
+    for future in futures:
+        future.result()

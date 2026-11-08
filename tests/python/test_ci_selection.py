@@ -1,10 +1,12 @@
 """Keep required CI's documentation-only and ui/-only selection safe."""
 
+import ast
 import json
 import os
 import re
 import runpy
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -42,6 +44,211 @@ def jobs() -> dict[str, dict[str, object]]:
 
 
 class CiSelectionTests(unittest.TestCase):
+    def test_cargo_source_digest_uses_tracked_bytes_despite_generated_files_and_timestamps(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        scripts = [next(step["run"] for step in workflow[name]["steps"]
+                        if step.get("name") == "Identify native build cache inputs")
+                   for name in ("native", "native-sanitizers", "c-analysis-prepare",
+                                "c-analysis-prepare-windows")]
+        self.assertTrue(all(script == scripts[0] for script in scripts))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+            source = root / "tools/python/src/ecu_tools/module.py"
+            source.parent.mkdir(parents=True)
+            source.write_text("value = 1\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            output = root / "github-env"
+            env = dict(os.environ, GITHUB_ENV=str(output), ImageOS="test", ImageVersion="1")
+
+            def digest():
+                output.write_text("", encoding="utf-8")
+                subprocess.run([sys.executable, "-c", scripts[0]], cwd=root, env=env,
+                               check=True, capture_output=True, text=True)
+                return next(line for line in output.read_text(encoding="utf-8").splitlines()
+                            if line.startswith("CACHE_SOURCE="))
+
+            before = digest()
+            for timestamp in (1700000000, 1700000300):
+                os.utime(source, (timestamp, timestamp))
+                subprocess.run([sys.executable, "-m", "py_compile", str(source)], check=True)
+                # Future generated formats are excluded by tracking, too.
+                (source.parent / "generated.bin").write_bytes(str(timestamp).encode("ascii"))
+                self.assertEqual(digest(), before)
+            source.write_text("value = 2\n", encoding="utf-8")
+            self.assertNotEqual(digest(), before)
+
+    def test_native_filters_partition_existing_and_future_modules(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        native = workflow["jobs"]["native"]
+        step = next(step for step in native["steps"]
+                    if step.get("name") == "Native library and contract suites")
+        outlier = ("integration::single_component::"
+                   "short_application_period_saves_builds_and_passes_reference_verifier")
+        names = [outlier, "library_unit", "runtime_contracts::can", "host::read", "future::test",
+                 "integration::protocol::refusal", "integration::sealed_projects::build",
+                 "integration::single_component::build", "integration::os::time",
+                 "integration::release_contracts::headers", "integration::future::test"]
+        for platform in ("ubuntu-24.04", "windows-latest"):
+            observed = []
+            for entry in native["strategy"]["matrix"]["include"]:
+                if entry["os"] != platform:
+                    continue
+                with tempfile.TemporaryDirectory() as directory:
+                    source = Path(directory) / "native.py"
+                    source.write_text(step["run"], encoding="utf-8")
+                    with (mock.patch.dict(os.environ, {"SHARD": entry["shard"],
+                                                       "RUNNER_TEMP": directory}),
+                          mock.patch.object(subprocess, "run") as run,
+                          self.assertRaises(SystemExit)):
+                        run.return_value = subprocess.CompletedProcess(
+                            [], 0, "\n".join(name + ": test" for name in names), ""
+                        )
+                        runpy.run_path(str(source))
+                    argv = run.call_args.args[0]
+                    self.assertIn("--lib", argv)
+                    self.assertIn("--test", argv)
+                    self.assertIn("--no-fail-fast", argv)
+                    filters = argv[argv.index("native", argv.index("--test")) + 3:]
+                    # libtest combines positive filters with OR and applies every --skip.
+                    skipped = [filters[i + 1] for i, value in enumerate(filters)
+                               if value == "--skip"]
+                    positive = [value for i, value in enumerate(filters)
+                                if value not in {"--skip", "--exact"}
+                                and (i == 0 or filters[i - 1] != "--skip")]
+                    if entry["shard"] != "all":
+                        self.assertIn("--exact", filters)
+                        self.assertEqual(outlier in positive, entry["shard"] == "rest")
+                    observed.extend(
+                        name for name in names
+                        if (not positive or any(
+                            value == name if "--exact" in filters else value in name
+                            for value in positive
+                        )) and not any(value in name for value in skipped)
+                    )
+            self.assertCountEqual(observed, names, platform)
+
+    def test_native_listing_failure_and_empty_output_fail_before_running_tests(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        script = next(step["run"] for step in workflow["jobs"]["native"]["steps"]
+                      if step.get("name") == "Native library and contract suites")
+        for code in (0, 2):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory) / "native.py"
+                source.write_text(script, encoding="utf-8")
+                result = subprocess.CompletedProcess([], code, "", "listing failed" if code else "")
+                with (mock.patch.dict(os.environ, {"SHARD": "protocol", "RUNNER_TEMP": directory}),
+                      mock.patch.object(subprocess, "run", return_value=result) as run):
+                    if code:
+                        with self.assertRaises(SystemExit) as error:
+                            runpy.run_path(str(source))
+                        self.assertEqual(error.exception.code, code)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "selected no tests"):
+                            runpy.run_path(str(source))
+                    self.assertEqual(run.call_count, 1)
+
+    def test_independent_native_steps_run_once_per_platform(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        for job, name, key, allowed in (
+            ("native-os", "Host I/O and lock failure boundaries", "shard", {"0/1", "1/2"}),
+            ("c-analysis-samples", "Analyzer behavior tests", "group", {"standard-ecu"}),
+        ):
+            steps = workflow["jobs"][job]["steps"]
+            step = next(step for step in steps if step.get("name") == name)
+            selected = set(re.findall(r"== '([^']+)'", step["if"]))
+            self.assertEqual(selected, allowed)
+            entries = list(workflow["jobs"][job]["strategy"]["matrix"]["include"])
+            if job == "c-analysis-samples":
+                windows = workflow["jobs"]["c-analysis-samples-windows"]
+                entries += windows["strategy"]["matrix"]["include"]
+            for platform in ("ubuntu-24.04", "windows-latest"):
+                self.assertEqual(sum(entry[key] in selected for entry in entries
+                                     if entry["os"] == platform), 1)
+        self.assertFalse(any(step.get("name") == "Analyzer behavior tests"
+                             for step in workflow["jobs"]["c-analysis-prepare"]["steps"]))
+
+    def test_parallel_com_refusals_keep_all_fourteen_cases_and_propagate_failure(self):
+        path = ROOT / "core/tests/fixtures/com-rejection/consumers.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        # Replace only the expensive case executor; run the actual grouping and worker joins.
+        for index, node in enumerate(tree.body):
+            if isinstance(node, ast.ImportFrom) and node.module == "ecu_tools.build":
+                tree.body[index] = ast.Pass()
+            if isinstance(node, ast.FunctionDef) and node.name == "run_case":
+                node.body = ast.parse("record(name, mode, **kwargs)").body
+                node.args.kwonlyargs = []
+                node.args.kw_defaults = []
+                node.args.kwarg = ast.arg(arg="kwargs")
+        ast.fix_missing_locations(tree)
+        expected = {"host", "probe", "task-and-isr", "host-batch-capacity", "probe-capacity",
+                    "trigger-notify", "periodic-notify", "condition", "pdu", "result",
+                    "host-batch-drain", "host-batch-output", "probe-drain", "probe-output"}
+        with tempfile.TemporaryDirectory() as temporary:
+            script = Path(temporary) / "consumers.py"
+            script.write_text(ast.unparse(tree), encoding="utf-8")
+            for failure in (None, "condition"):
+                observed = []
+                def record(name, mode, observed=observed, failure=failure, **kwargs):
+                    observed.append((name, mode, kwargs))
+                    if name == failure:
+                        raise RuntimeError("mutation worker failed")
+                with mock.patch.object(sys, "argv", [str(path), "/source", "/output"]):
+                    if failure:
+                        with self.assertRaisesRegex(RuntimeError, "mutation worker failed"):
+                            runpy.run_path(str(script), init_globals={"record": record})
+                    else:
+                        runpy.run_path(str(script), init_globals={"record": record})
+                        self.assertCountEqual([row[0] for row in observed], expected)
+                        for name, mode, options in observed:
+                            if name.endswith(("-drain", "-output")) or name in {
+                                "trigger-notify", "periodic-notify", "condition", "pdu", "result"
+                            }:
+                                self.assertTrue(options["killed"], name)
+                            if name.endswith("-output"):
+                                self.assertTrue(options["output_failure"], name)
+
+    def test_platform_pipelines_share_steps_and_require_every_result(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        for name in ("c-analysis-prepare", "c-analysis-samples", "native-delivery"):
+            linux, windows = workflow[name], workflow[name + "-windows"]
+            self.assertEqual(linux["steps"], windows["steps"])
+            for job, platform in ((linux, "ubuntu-24.04"), (windows, "windows-latest")):
+                self.assertEqual({row["os"] for row in job["strategy"]["matrix"]["include"]},
+                                 {platform})
+            if name != "c-analysis-prepare":
+                self.assertEqual(linux["needs"], "c-analysis-prepare")
+                self.assertEqual(windows["needs"], "c-analysis-prepare-windows")
+        upstream = workflow["c-analysis"]["needs"]
+        self.assertEqual(set(upstream), {
+            "changes", "c-analysis-prepare", "c-analysis-prepare-windows",
+            "c-analysis-samples", "c-analysis-samples-windows",
+        })
+        self.assertIn("native-delivery-windows", workflow["required"]["needs"])
+        gate = next(step for step in workflow["c-analysis"]["steps"]
+                    if step.get("name") == "Require every platform and sample group")["run"]
+        for name in upstream:
+            for status in ("success", "failure", "cancelled", "skipped"):
+                results = {key: {"result": status if key == name else "success"}
+                           for key in upstream}
+                with (self.subTest(name=name, status=status),
+                      tempfile.TemporaryDirectory() as directory):
+                    script = Path(directory) / "gate.py"
+                    script.write_text(gate, encoding="utf-8")
+                    with mock.patch.dict(os.environ, {"UPSTREAM_RESULTS": json.dumps(results)}):
+                        if status == "success":
+                            runpy.run_path(str(script))
+                        else:
+                            with self.assertRaisesRegex(RuntimeError, "Incomplete platform/sample"):
+                                runpy.run_path(str(script))
+        for name in ("ui", "python", "desktop"):
+            job = workflow[name]
+            self.assertEqual(set(job["needs"]),
+                             {"changes", "c-analysis-prepare", "c-analysis-prepare-windows"})
+            # The status function explicitly permits a skipped producer on UI-only PRs.
+            condition = "${{ !cancelled() && needs.changes.outputs.code == 'true' }}"
+            self.assertEqual(job["if"], condition)
+
     def test_analysis_readiness_rejects_acceptance_errors_but_not_known_blockers(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         step = next(row for row in workflow["jobs"]["c-analysis-samples"]["steps"]
@@ -202,7 +409,10 @@ class CiSelectionTests(unittest.TestCase):
             ("native-sanitizers", "sanitize", ("Instrumented native programs", "Instrumented sealed ECU protocols",
                                                "Instrumented OS suites", "Check concurrent native constructor rollback")),
         ):
-            entries = workflow["jobs"][job]["strategy"]["matrix"]["include"]
+            entries = list(workflow["jobs"][job]["strategy"]["matrix"]["include"])
+            if job == "native-delivery":
+                windows = workflow["jobs"]["native-delivery-windows"]
+                entries += windows["strategy"]["matrix"]["include"]
             steps = {step["name"]: step for step in workflow["jobs"][job]["steps"] if "name" in step}
             for value in {entry[key] for entry in entries}:
                 parts = [entry["part"] for entry in entries if entry[key] == value]
@@ -236,8 +446,10 @@ class CiSelectionTests(unittest.TestCase):
                 end = next(i for i in range(start, len(lines)) if "sys.exit('Receiver Python failed:" in lines[i])
                 script = "import os, subprocess, sys\nfailed = []\n" + textwrap.dedent("\n".join(lines[start:end + 1]))
             else:
-                block = text.split("      - name: All moved samples build and run with receiver Python 3.11\n", 1)[1]
-                script = textwrap.dedent(block.split("        run: |\n", 1)[1].split("\n  c-analysis-samples:", 1)[0])
+                workflow = yaml.safe_load(text)
+                receiver = "All moved samples build and run with receiver Python 3.11"
+                script = next(step["run"] for step in workflow["jobs"]["native-delivery"]["steps"]
+                              if step.get("name") == receiver)
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "receiver.py"
                 path.write_text(script, encoding="utf-8")
@@ -305,7 +517,8 @@ class CiSelectionTests(unittest.TestCase):
         workflow = jobs()
         skipped = {name for name, job in workflow.items() if "outputs.native" in job["if"]}
         # A job that needs a skipped job is skipped with it.
-        while extra := {name for name, job in workflow.items() if job["needs"] & skipped} - skipped:
+        while extra := {name for name, job in workflow.items()
+                        if job["needs"] & skipped and "!cancelled()" not in job["if"]} - skipped:
             skipped |= extra
         gate = re.search(r"UI_INDEPENDENT = \{([^}]+)\}", WORKFLOW.read_text(encoding="utf-8"))
         self.assertIsNotNone(gate)
