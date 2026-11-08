@@ -91,13 +91,13 @@ PR #465 将单实例句柄改为共享 const CDS 的取址宏，原五个独立�
 | component-pipeline | Ingress:71、Process:90、Observe:101、DcmService:114、ComMService:119 | 三应用头:34；DcmService／ComMService 头:32 |
 | no-diagnostic | Ingress:61、Process:80、Observe:91、ComMService:104 | 三应用头:34；ComMService 头:32 |
 
-每个对象在 Rte.c 中定义一次，在应用头声明；`Rte_Inst_<组件>` 宏取得同一对象地址。EchoApplication 的宏在头第 38 行，Ingress／Process／Observe 在第 39 行，DcmService／ComMService 在第 37 行。CONST_UNSPECIFIED 段只包围实际 CDS 声明／定义，宏位于段外。
+每个对象在 Rte.c 中定义一次，在应用头声明；`Rte_Inst_<组件>` 宏取得同一对象地址。EchoApplication 的宏在头第 40 行，Ingress／Process／Observe 在第 41 行，DcmService／ComMService 在第 39 行。CONST_UNSPECIFIED 段只包围实际 CDS 声明／定义，宏位于段外。
 
 定义由 `rte::files` 生成，声明与宏由 `contracts::contract_headers` 生成；[单实例句柄的实际用途](../rte/README.md#单实例句柄的实际用途)连接实际消费者与存储合同。原五个指针对象的未使用结论保留在历史提交和[#393 冻结收据](https://github.com/g1331/autsaro/pull/393#issuecomment-6518916990)中；当前 CDS 与宏按真实程序引用分别评估，旧对象记录不转用于新的 CDS。
 
 <!-- misra-manual-begin -->
 | 指南 | 有效类别 | 分析范围／语言 | 状态 | 义务、限定结论与证据 |
 | --- | --- | --- | --- | --- |
-| R2.8 | Advisory | System／C99 | not_assessed | 原五个独立指针对象已删除，原 5 实体／11 定义的 retained 结论失效。当前共享 CDS 的实际使用按[producer／程序／回归边界](../rte/README.md#单实例句柄的实际用途)重新评估；取址宏按 R2.5 分别记录。 |
+| R2.8 | Advisory | 冻结 1306e32a／System／C99 | retained | 冻结评估的 5 个独立指针实体／11 处定义按主文 §6.2.3 保留，证据见 [#393 冻结收据](https://github.com/g1331/autsaro/pull/393#issuecomment-6518916990)。PR #465 已删除这些对象；本行保留原输入的历史分类，当前共享 CDS 与取址宏按[实际使用](../rte/README.md#单实例句柄的实际用途)分别重评，当前输入保持未绑定。 |
 | R17.12 | Advisory | TU／C99 | satisfied | 函数标识符只用于调用或前置&（AMD3.37，19–20）。[入口/跟踪宏闭包](../os/platform.md#入口及跟踪宏的实际展开)连接实际中断绑定/比较、线程/信号入口、once初始化、HostBatch回调及生成通信/诊断/Task配置；0022和平台补丁覆盖采用接缝。函数指针对象、声明符和汇编字符串内符号不是函数designator值，不机械加&。 |
 <!-- misra-manual-end -->

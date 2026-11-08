@@ -68,7 +68,7 @@ def compile_run(
 def macro_value(
     row: dict, lookup: dict[str, dict], seen: tuple = ()
 ) -> tuple[int, int] | None:
-    if row["name"].startswith("Rte_Call_"):
+    if row["name"].startswith(("Rte_Call_", "Rte_Inst_")):
         return None
     body = row["shape"].split(row["name"], 1)[1].strip()
     if match := re.fullmatch(r"UINT64_C\s*\(\s*(\d+)\s*\)", body):
@@ -122,6 +122,7 @@ def export_interfaces(project: Path, directory: Path, profile: str) -> None:
             *(["DcmService"] if profile == "component-pipeline" else []),
         ]
     )
+    scopes.append("ComMService")
     headers = "#define RTE_CORE\n" + "".join(
         f'#include "Rte_{scope}.h"\n' for scope in scopes
     )
@@ -186,6 +187,10 @@ int retained_alias(void) {
 """,
                 encoding="utf-8",
             )
+        for scope in scopes:
+            source += (
+                f"static const Rte_CDS_{scope} *const initial_{scope} = Rte_Inst_{scope};\n"
+            )
         source += """int main(void) {
     if (Rte_Start() != E_OK) { return 1; }
     SchM_Init(&Ecu_SchMConfig); SchM_Start(); SchM_StartTiming();
@@ -193,7 +198,8 @@ int retained_alias(void) {
         for scope in scopes:
             source += (
                 f"    const Rte_CDS_{scope} *volatile instance_{scope} = Rte_Inst_{scope};\n"
-                f"    if (instance_{scope} != &Rte_Instance_{scope}) {{ return 2; }}\n"
+                f"    if (instance_{scope} != &Rte_Instance_{scope} || "
+                f"initial_{scope} != instance_{scope}) {{ return 2; }}\n"
             )
         source += """    Std_ReturnType (*volatile publish)(Rte_ModeType_DcmAuthenticationState_Physical) = SchM_Switch_Dcm_DcmAuthenticationState_Physical;
     Rte_ModeType_DcmAuthenticationState_Physical (*volatile authentication)(void) = SchM_Mode_Dcm_DcmAuthenticationState_Physical;

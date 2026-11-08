@@ -339,7 +339,9 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
 #endif
 {start_const}{instance}
 {stop_const}
-/** SWS_Rte_03793: borrowed pointer to the unique, immutable component data structure. */
+/** SWS_Rte_03793: pointer to the unique const CDS.
+ * MR12 RULE 2.5 VIOLATION: retain an address-constant handle without pointer storage.
+ */
 #define Rte_Inst_{scope} (&Rte_Instance_{scope})
 "#,
                 linkage_begin = c_layout::linkage(true),

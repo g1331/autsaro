@@ -143,11 +143,7 @@ class AcceptanceTests(unittest.TestCase):
         """Complete contract inputs in a temporary repository, never real approvals."""
         for name in c_standard.MANUAL_ASSESSMENT_SOURCES:
             path = self.root / name
-            # Complete synthetic inputs include newly unassessed manual entries too.
-            text = path.read_text(encoding="utf-8")
-            for status in ("retained", "not_assessed"):
-                text = text.replace(f"| {status} |", "| satisfied |")
-            path.write_text(text, encoding="utf-8")
+            path.write_text(path.read_text(encoding="utf-8").replace("| retained |", "| satisfied |"), encoding="utf-8")
         self.supplementary_path = self.root / "docs/standards/bsw-general/synthetic-checkers.md"
         categories = {row["id"]: row["category"] for row in self.rules}
         lines = [f"| {row['guideline']} | {categories[row['guideline']]} | Synthetic frozen scope | satisfied | Synthetic assessment |"
@@ -839,9 +835,7 @@ class AcceptanceTests(unittest.TestCase):
         shutil.copyfile(ROOT / c_standard.RETAINED_APPLICATION, application)
         for name in c_standard.MANUAL_ASSESSMENT_SOURCES:
             path = self.root / name
-            text = path.read_text(encoding="utf-8")
-            for status in ("retained", "not_assessed"):
-                text = text.replace(f"| {status} |", "| satisfied |")
+            text = path.read_text(encoding="utf-8").replace("| retained |", "| satisfied |")
             path.write_text(text, encoding="utf-8")
         name = "runtime/os/src/host/linux/Os_HostLinux.c"
         delivered = "os/src/host/linux/Os_HostLinux.c"

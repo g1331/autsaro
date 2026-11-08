@@ -80,12 +80,12 @@ R5.6为Required／System（2013主文印刷54／PDF62，AMD2追加C11）。主�
 
 | `generated/include/` 下的头及profile | include序号与行；实体／class |
 | --- | --- |
-| `Rte_EchoApplication.h`，标准／用户 | [1]/[2] 31/35：`Rte_Instance_EchoApplication` CDS extern 的 RTE_EchoApplication_CONST_UNSPECIFIED；[3]/[4] 53/88：Periodic、ReadData两个SWC原型的EchoApplication_CODE；[5]/[6] 94/113：RxValue Read；[7]/[8] 122/141：TxValue Write，后两对为RTE_EchoApplication_CODE。 |
-| `Rte_DcmService.h`，三个诊断profile | [1]/[2] 31/34：`Rte_Instance_DcmService` CDS extern 的 RTE_DcmService_CONST_UNSPECIFIED；[3]/[4] 50/70：DcmService_ReadData的DcmService_CODE；[5]/[6] 75/96：Rte_Call_DcmService_DataServices_ApplicationValue_ReadData的RTE_DcmService_CODE。无诊断没有该头。 |
-| `Rte_Ingress.h`，组件／无诊断 | [1]/[2] 33/36：`Rte_Instance_Ingress` CDS extern 的 RTE_Ingress_CONST_UNSPECIFIED；[3]/[4] 57/92：Periodic、ReadData两个Ingress_CODE原型；[5]/[6] 98/117：RxValue Read；[7]/[8] 126/145：TxValue Write；[9]/[10] 154/172：Value Write，后三对为RTE_Ingress_CODE。 |
-| `Rte_Process.h`，组件／无诊断 | [1]/[2] 33/36：`Rte_Instance_Process` CDS extern 的 RTE_Process_CONST_UNSPECIFIED；[3]/[4] 53/91：Periodic、Transform两个Process_CODE原型；[5]/[6] 97/117：Value Read；[7]/[8] 126/144：Result Write，后两对为RTE_Process_CODE。 |
-| `Rte_Observe.h`，组件／无诊断 | [1]/[2] 33/36：`Rte_Instance_Observe` CDS extern 的 RTE_Observe_CONST_UNSPECIFIED；[3]/[4] 51/68：Observe_Periodic的Observe_CODE；[5]/[6] 72/96：ResultService Transform client；[7]/[8] 106/126：Result Read；[9]/[10] 133/153：Value Read，后三对为RTE_Observe_CODE。 |
-| `Rte_ComMService.h`，四个 profile | [1]/[2] 31/34：`Rte_Instance_ComMService` CDS extern 的 RTE_ComMService_CONST_UNSPECIFIED；句柄宏在第 37 行。 |
+| `Rte_EchoApplication.h`，标准／用户 | [1]/[2] 31/35：`Rte_Instance_EchoApplication` CDS extern 的 RTE_EchoApplication_CONST_UNSPECIFIED；[3]/[4] 55/90：Periodic、ReadData两个SWC原型的EchoApplication_CODE；[5]/[6] 96/115：RxValue Read；[7]/[8] 124/143：TxValue Write，后两对为RTE_EchoApplication_CODE。 |
+| `Rte_DcmService.h`，三个诊断profile | [1]/[2] 31/34：`Rte_Instance_DcmService` CDS extern 的 RTE_DcmService_CONST_UNSPECIFIED；[3]/[4] 52/72：DcmService_ReadData的DcmService_CODE；[5]/[6] 77/98：Rte_Call_DcmService_DataServices_ApplicationValue_ReadData的RTE_DcmService_CODE。无诊断没有该头。 |
+| `Rte_Ingress.h`，组件／无诊断 | [1]/[2] 33/36：`Rte_Instance_Ingress` CDS extern 的 RTE_Ingress_CONST_UNSPECIFIED；[3]/[4] 59/94：Periodic、ReadData两个Ingress_CODE原型；[5]/[6] 100/119：RxValue Read；[7]/[8] 128/147：TxValue Write；[9]/[10] 156/174：Value Write，后三对为RTE_Ingress_CODE。 |
+| `Rte_Process.h`，组件／无诊断 | [1]/[2] 33/36：`Rte_Instance_Process` CDS extern 的 RTE_Process_CONST_UNSPECIFIED；[3]/[4] 55/93：Periodic、Transform两个Process_CODE原型；[5]/[6] 99/119：Value Read；[7]/[8] 128/146：Result Write，后两对为RTE_Process_CODE。 |
+| `Rte_Observe.h`，组件／无诊断 | [1]/[2] 33/36：`Rte_Instance_Observe` CDS extern 的 RTE_Observe_CONST_UNSPECIFIED；[3]/[4] 53/70：Observe_Periodic的Observe_CODE；[5]/[6] 74/98：ResultService Transform client；[7]/[8] 108/128：Result Read；[9]/[10] 135/155：Value Read，后三对为RTE_Observe_CODE。 |
+| `Rte_ComMService.h`，四个 profile | [1]/[2] 31/34：`Rte_Instance_ComMService` CDS extern 的 RTE_ComMService_CONST_UNSPECIFIED；句柄宏在第 39 行。 |
 
 这里分别是 16／16／36／30 个物理 include，不按程序或TU重复计数。`contract_headers`生成CDS与接口，同一生成器通过`api_visibility`按实际runnable选择生成原型；Rte.c 提供同 scope 的共享 CDS 及 RTE 函数定义，应用实现提供SWC runnable定义。同步client沿生成连接进入Process_Transform或应用ReadData；COM通知／周期任务分别消费对应Read／Write与runnable，不把外部应用原型误归RTE实现CODE。固定RTE的03711／03712要求CDS实例及其内部名字，03793要求单实例公开句柄名；这些对象与R5.6的typedef是不同实体，不能因类型重名处置而免除其段责任。
 
