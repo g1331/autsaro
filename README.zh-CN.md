@@ -150,3 +150,5 @@ npm run tauri --prefix ui -- build
 ## 许可证
 
 项目原创代码与文档采用 [Apache-2.0](LICENSE)，版权声明见 [NOTICE](NOTICE)。第三方组件保留各自许可证；用户配置与应用代码的许可由其权利人决定。生成工程附带项目许可证和声明，具体范围及分发要求见 [许可说明](docs/maintainers/licensing.md)。
+
+<!-- 验证普通文档的 CI 路径选择。 -->
