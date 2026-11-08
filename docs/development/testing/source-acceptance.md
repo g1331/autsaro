@@ -70,7 +70,10 @@ Windows 默认 CRLF 写入验证身份及正常消费路径。
 }
 ```
 
-三个记录组分别为 `generated-retention`、`manual-assessment`、`checker-limitations`。后两组的 `records` 只包含 `kind`。每组必须有自己的适用上下文；一个组的批准不授权其他组。同组不能重复绑定同一输入，跨组的样本标签必须一致。`approved` 只能在对应实际评估与正式义务完成后记录；`pending` 永不放行。
+基本记录组为 `generated-retention`、`manual-assessment`、`checker-limitations` 和
+`checker-obligations`。后三组的 `records` 只包含 `kind`。每组必须有自己的适用上下文；
+一个组的批准不授权其他组。同组不能重复绑定同一输入，跨组的样本标签必须一致。
+`approved` 只能在对应实际评估与正式义务完成后记录；`pending` 永不放行。
 
 自有源码的局部消费者另接受 `records={"kind":"owned-source"}`。它复用原标准篇与
 `c_standard` 的 MR12 双向关联，核对原实体、已登记 shape、当前原件及 ownership 字节，
@@ -125,8 +128,20 @@ SDK 集成使用同一上下文格式的 `records={"kind":"sdk-integration"}`，
 
 此输入格式不意味着 11 项已完成，原有论据仍须核对当前上下文。不得把有 checker、零告警、历史分类或风险接受写成当前人工义务满足。整体 MISRA 符合性继续独立评估。
 
-固定 11 项以外的 checker-covered 必要人工义务由 #443 接续。
-当前解析／验收只独立消费原 66 项和固定 11 项；具体诊断消费另按其记录范围执行。
-R7.2／R7.3／R12.3 的[有界证据](../../standards/types/language-constructs.md#当前输入与三项人工证据的接续)
-尚待独立的当前输入绑定和人工义务消费；严格门的完整出口须补齐该部分，
-并用零告警但缺少／过期人工证据的输入验证拒绝。
+固定 11 项以外的 144 项由 `checker-obligations` 独立消费。
+记录仍放在原标准主题篇，用 `misra-checker-obligations-begin`／
+`misra-checker-obligations-end` 注释块及相同五列（编号、类别、评估范围、状态、结论）。
+只接受固定 155 项中扣除原 11 项后的准确编号、原类别，以及
+`satisfied`／`not_applicable`／`not_assessed`；此组没有批准保留违反的入口。
+未知编号、原 66 项或固定 11 项、重复、错误类别与非法状态在解析时拒绝。
+
+缺少记录按编号返回 `checker-obligation_not_assessed`，责任为 #443；
+已有记录的阻塞对象还包含实际文件、行号和结论。
+满足或不适用记录须经本组当前输入绑定及 approved，pending、缺少／过期上下文继续阻塞。
+选择的全部主题篇正文与解析器参加 `assessmentInputs.checkerObligations` 和普通输入身份；
+上下文块自身仍按原算法排除。零告警输入同样逐项检查，其他三组的批准保持各自范围。
+
+R7.2／R7.3／R12.3 的[局部证据和当前缺口](../../standards/types/language-constructs.md#三项局部证据的当前消费)
+已进入本组，保留未评估状态；R1.4／R17.3 的 C99 语言适用性也独立记录，
+其余项缺少能力／适用性和人工结算时逐项阻塞。
+实际当前证据结算仍由 #443 承担，SDK 实例沿 #444、66 项沿 #445。

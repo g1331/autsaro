@@ -27,7 +27,7 @@ FORMAT = "project-source-acceptance-v1"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 INCOMPLETE = {"misra-config", "syntaxError", "preprocessorErrorDirective", "internalError",
               "cppcheckError", "addonError", "missingInclude", "missingIncludeSystem", "toomanyconfigs"}
-GROUPS = ("generated-retention", "manual-assessment", "checker-limitations")
+GROUPS = ("generated-retention", "manual-assessment", "checker-limitations", "checker-obligations")
 GUIDELINE_CATEGORIES_SHA256 = "ef484316b09af067e673521476fd7a70f5757646e9c7e3918cdacef75a34bf66"
 GRP = "docs/adr/0025-misra-layered-scope.md"
 ADOPTION = "docs/standards/os/adoption.md"
@@ -89,6 +89,7 @@ def contexts(root: Path = ROOT) -> list[dict]:
                     or row["records"] not in ({"kind": "generated-retention", "cohortSha256": c_retention.COHORT_SHA256},
                                               {"kind": "manual-assessment"},
                                               {"kind": "checker-limitations"},
+                                              {"kind": "checker-obligations"},
                                               {"kind": "owned-source"},
                                               {"kind": "freertos-integration"},
                                               {"kind": "sdk-integration"})
@@ -143,6 +144,7 @@ def _owned_documents(root: Path) -> list[str]:
 def _assessment_inputs(summary: dict, root: Path) -> dict:
     rules = _catalog(summary, root)
     supplementary = c_standard.supplementary_assessment(rules, summary["coverage"]["knownCheckerLimitations"], root)
+    obligations = c_standard.checker_obligations(rules, root)
     retention_documents = [path.relative_to(root).as_posix()
                            for path in sorted((root / c_retention.RECORD_DIRECTORY).glob("*.md"))]
     if not retention_documents:
@@ -156,7 +158,11 @@ def _assessment_inputs(summary: dict, root: Path) -> dict:
             "sdkIntegration": {"documents": _document_identity(root, [SDK])
                                if (root / SDK).is_file() else {}},
             "checkerLimitations": {"parserSha256": digest(Path(c_standard.__file__)),
-                                   "documents": _document_identity(root, list(supplementary["inputIdentity"]["documents"]))}}
+                                   "documents": _document_identity(
+                                       root, list(supplementary["inputIdentity"]["documents"]))},
+            "checkerObligations": {"parserSha256": digest(Path(c_standard.__file__)),
+                                   "documents": _document_identity(
+                                       root, list(obligations["inputIdentity"]["documents"]))}}
 
 
 def input_identity(summary: dict, project: Path, *, root: Path = ROOT) -> str:
@@ -766,7 +772,7 @@ def _freertos_positions(
 
 
 def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
-    """Assess three independent frozen record groups, preserving raw analysis."""
+    """Assess independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
               "caseId": None, "inputIdentity": None, "contexts": [], "assessmentInputs": None,
               "objects": [], "occurrences": []}
@@ -818,12 +824,19 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         if summary["coverage"]["manualAssessment"] != manual:
             add("manual", "inputIdentity", "manual_records_changed_since_analysis")
         supplementary = c_standard.supplementary_assessment(rules, summary["coverage"]["knownCheckerLimitations"], root)
-        for group, kind, rows in (("manual-assessment", "manual", manual["checkerUncovered"]["records"]),
-                                  ("checker-limitations", "checker-limitation", supplementary["records"])):
+        obligations = c_standard.checker_obligations(rules, root)
+        assessments = (
+            ("manual-assessment", "manual", manual["checkerUncovered"]["records"]),
+            ("checker-limitations", "checker-limitation", supplementary["records"]),
+            ("checker-obligations", "checker-obligation", obligations["records"]),
+        )
+        for group, kind, rows in assessments:
             for row in rows:
                 reason = kind + "_" + row["status"] if row["status"] not in {"satisfied", "not_applicable", "retained"} else group_reasons.get(group)
                 if reason:
-                    add(kind, row["id"], reason, source=row.get("source"))
+                    add(kind, row["id"], reason, source=row.get("source"),
+                        **({"owner": "#443", "conclusion": row["conclusion"]}
+                           if group == "checker-obligations" else {}))
         if summary.get("sourceClassification", {}).get("complete") is not True:
             add("source-classification", "sdk", "sdk_source_or_macro_provenance_incomplete")
         retention = c_retention.analyze(summary["diagnostics"], project, result["target"])

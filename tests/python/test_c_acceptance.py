@@ -150,6 +150,14 @@ class AcceptanceTests(unittest.TestCase):
                  for row in self.summary["coverage"]["knownCheckerLimitations"]]
         self.supplementary_path.write_text("<!-- misra-checker-assessment-begin -->\n" + "\n".join(lines)
                                            + "\n<!-- misra-checker-assessment-end -->\n", encoding="utf-8")
+        self.obligation_path = self.root / "docs/standards/bsw-general/synthetic-obligations.md"
+        obligations = c_standard.checker_obligations(self.rules, self.root)
+        lines = [f"| {row['id']} | {row['category']} | Synthetic scope | "
+                 "satisfied | Synthetic evidence |"
+                 for row in obligations["records"]]
+        self.obligation_path.write_text(
+            "<!-- misra-checker-obligations-begin -->\n" + "\n".join(lines)
+            + "\n<!-- misra-checker-obligations-end -->\n", encoding="utf-8")
         self.retained = next(row for row in c_retention.records() if row["rule"] == "2.5" and "S" in row["profiles"].split(","))
         self.files[self.retained["delivered"]] = ("/* MR12 RULE 2.5 VIOLATION: retain synthetic contract fixture. */\n"
                                                  + self.retained["shape"] + "\n").encode()
@@ -448,6 +456,100 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual([row["assessment"] for row in rows], ["accepted", "blocked"])
         self.assertEqual(rows[1]["location"], other)
 
+    def test_zero_diagnostics_still_requires_each_checker_obligation_and_its_own_group(self):
+        self.synthetic_complete_inputs()
+        self.summary["diagnostics"] = []
+        self.summary["passed"] = True
+        for program in self.summary["programs"]:
+            program.update(passed=True, exitCode=0)
+        self.bind_groups()
+        self.assertEqual(self.evaluate()["status"], "accepted")
+        text = self.obligation_path.read_text(encoding="utf-8")
+        for identifier in ("R7.2", "R7.3", "R12.3", "R1.3"):
+            row = next(line for line in text.splitlines()
+                       if line.startswith("| " + identifier + " |"))
+            line = text.splitlines().index(row) + 1
+            for status in ("not_assessed", "missing", "satisfied", "not_applicable"):
+                changed = ("" if status == "missing"
+                           else row.replace("| satisfied |", f"| {status} |"))
+                self.obligation_path.write_text(text.replace(row, changed), encoding="utf-8")
+                self.bind_groups()
+                before = copy.deepcopy(self.summary)
+                result = self.evaluate()
+                self.assertEqual(self.summary, before)
+                with self.subTest(identifier=identifier, status=status):
+                    objects = [item for item in result["objects"]
+                               if item["kind"] == "checker-obligation" and item["id"] == identifier]
+                    if status in {"satisfied", "not_applicable"}:
+                        self.assertEqual(result["status"], "accepted")
+                        self.assertEqual(objects, [])
+                    else:
+                        self.assertEqual(result["status"], "blocked")
+                        self.assertEqual(len(objects), 1)
+                        self.assertEqual(objects[0]["reason"], "checker-obligation_not_assessed")
+                        self.assertEqual(objects[0]["owner"], "#443")
+                        self.assertEqual(objects[0]["source"], None if status == "missing" else {
+                            "file": self.obligation_path.relative_to(self.root).as_posix(),
+                            "line": line})
+        self.obligation_path.write_text(text, encoding="utf-8")
+        self.bind_groups(groups=tuple(group for group in c_acceptance.GROUPS
+                                     if group != "checker-obligations"))
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        self.assertTrue(any(row["kind"] == "checker-obligation" and row["id"] == "R7.2"
+                            and row["reason"] == "input_context_unbound_or_stale"
+                            for row in result["objects"]))
+
+    def test_checker_obligation_selection_body_and_binding_are_independent_inputs(self):
+        self.synthetic_complete_inputs()
+        self.summary["diagnostics"] = []
+        self.bind_groups()
+        identity = self.identity()
+        inputs = self.evaluate()["assessmentInputs"]["checkerObligations"]
+        name = self.obligation_path.relative_to(self.root).as_posix()
+        self.assertEqual(inputs["documents"], {name: c_acceptance.digest(self.obligation_path)})
+        self.bind(self.context(group="owned-source", status="approved"))
+        self.assertEqual(self.identity(), identity)
+        text = self.obligation_path.read_text(encoding="utf-8")
+        # bind_groups writes LF; edits and restoration must retain those bytes on Windows.
+        for changed in (text + "Changed evidence.\n", text.replace("obligations-", "removed-")):
+            with self.subTest(changed=changed[-40:]):
+                self.obligation_path.write_text(changed, encoding="utf-8", newline="\n")
+                self.assertNotEqual(self.identity(), identity)
+                result = self.evaluate()
+                self.assertTrue(any(row["kind"] == "context" and row["id"] == "checker-obligations"
+                                    and row["reason"] == "input_context_unbound_or_stale"
+                                    for row in result["objects"]))
+        self.obligation_path.write_text(text, encoding="utf-8", newline="\n")
+        self.assertEqual(self.identity(), identity)
+
+    def test_real_checker_records_keep_gaps_and_c99_applicability_separate(self):
+        self.owned_inputs()
+        self.summary["diagnostics"] = []
+        self.summary["passed"] = True
+        for program in self.summary["programs"]:
+            program.update(passed=True, exitCode=0)
+        self.bind_groups()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
+        self.assertEqual(len(objects), 142)
+        self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
+        self.assertEqual({row["owner"] for row in objects}, {"#443"})
+        located = [row for row in objects if row["source"] is not None]
+        self.assertEqual({row["id"] for row in located}, {"R7.2", "R7.3", "R12.3"})
+        for row in located:
+            self.assertEqual(row["source"]["file"], "docs/standards/types/language-constructs.md")
+            text = (self.root / row["source"]["file"]).read_text(encoding="utf-8")
+            actual = text.splitlines()[row["source"]["line"] - 1]
+            self.assertTrue(actual.startswith("| " + row["id"] + " |"))
+            self.assertIn("#443", row["conclusion"])
+        records = c_standard.checker_obligations(self.rules, self.root)["records"]
+        applicable = [row for row in records if row["status"] == "not_applicable"]
+        self.assertEqual({row["id"] for row in applicable}, {"R1.4", "R17.3"})
+        for row in applicable:
+            self.assertEqual(row["source"]["file"], "docs/standards/types/language-constructs.md")
+
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
         path = self.root / name
@@ -727,6 +829,7 @@ class AcceptanceTests(unittest.TestCase):
         # Real standards supply the checker records; keep their outstanding
         # obligations instead of combining them with synthetic satisfied rows.
         self.supplementary_path.unlink()
+        self.obligation_path.unlink()
         application = self.root / c_standard.RETAINED_APPLICATION
         application.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / c_standard.RETAINED_APPLICATION, application)
@@ -1073,7 +1176,10 @@ class AcceptanceTests(unittest.TestCase):
     def test_strict_consumer_is_independent_of_raw_failed_and_exit_one(self):
         summary = self.receipt()
         self.assertEqual(summary["projectAcceptance"]["status"], "accepted", summary["projectAcceptance"]["objects"])
-        self.assertEqual(len(summary["projectAcceptance"]["contexts"]), 3)
+        groups = {row["records"]["kind"] for row in summary["projectAcceptance"]["contexts"]}
+        self.assertEqual(groups,
+                         {"generated-retention", "manual-assessment", "checker-limitations",
+                          "checker-obligations"})
         self.assertEqual(len(summary["coverage"]["rules"]), 221)
         self.assertEqual(summary["coverage"]["manualAssessment"]["checkerUncovered"]["total"], 66)
         supplementary = c_standard.supplementary_assessment(self.rules, summary["coverage"]["knownCheckerLimitations"], self.root)
@@ -1359,9 +1465,17 @@ class AcceptanceTests(unittest.TestCase):
             validate_catalog(checked, root)
             return summary["coverage"]["rules"]
 
-        # Reproduce the old attack with three freshly bound contexts and a real
-        # evaluated accepted result, then restore the independent mapping guard.
-        with patch.object(c_acceptance, "_catalog", side_effect=old_mapping):
+        checker_obligations = c_standard.checker_obligations
+
+        def old_obligations(rules, root):
+            checked = copy.deepcopy(rules)
+            next(row for row in checked if row["id"] == "D1.1")["automaticChecker"] = False
+            return checker_obligations(checked, root)
+
+        # Reproduce the legacy attack with both independent mapping guards
+        # bypassed, then restore them for the real strict-consumer rejection.
+        with patch.object(c_acceptance, "_catalog", side_effect=old_mapping), \
+                patch.object(c_standard, "checker_obligations", side_effect=old_obligations):
             self.bind_groups()
             forged = copy.deepcopy(self.summary)
             forged["projectAcceptance"] = self.evaluate()
