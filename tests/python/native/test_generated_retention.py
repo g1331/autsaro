@@ -191,7 +191,10 @@ int retained_alias(void) {
     SchM_Init(&Ecu_SchMConfig); SchM_Start(); SchM_StartTiming();
 """
         for scope in scopes:
-            source += f"    const Rte_CDS_{scope} *const *volatile instance_{scope} = &Rte_Inst_{scope};\n    if (*instance_{scope} == NULL_PTR) {{ return 2; }}\n"
+            source += (
+                f"    const Rte_CDS_{scope} *volatile instance_{scope} = Rte_Inst_{scope};\n"
+                f"    if (instance_{scope} != &Rte_Instance_{scope}) {{ return 2; }}\n"
+            )
         source += """    Std_ReturnType (*volatile publish)(Rte_ModeType_DcmAuthenticationState_Physical) = SchM_Switch_Dcm_DcmAuthenticationState_Physical;
     Rte_ModeType_DcmAuthenticationState_Physical (*volatile authentication)(void) = SchM_Mode_Dcm_DcmAuthenticationState_Physical;
     Rte_ModeType_DcmDiagnosticSessionControl (*volatile session)(void) = SchM_Mode_Dcm_DcmDiagnosticSessionControl;

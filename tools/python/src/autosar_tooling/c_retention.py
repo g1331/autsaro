@@ -13,7 +13,7 @@ from autosar_tooling.config import ROOT
 
 PROFILES = {"S": "standard-ecu", "U": "user-application",
             "C": "component-pipeline", "N": "no-diagnostic"}
-COHORT_SHA256 = "10bcb694c9a0a2424b33513927e1e9f99251a0ab60e09b4af15329497cc843a5"
+COHORT_SHA256 = "15310ae7373623a333fde25f1e5b3e0fdd0b168d0b56bd64820f0cf32ba65ef8"
 TARGETS = {"linux-x64-controlled-v1", "windows-x64-controlled-v1"}
 RECORD_DIRECTORY = "docs/standards/rte/generated-retention"
 COHORT_FIELDS = ("rule", "name", "source", "delivered", "shape", "profiles", "producer")
@@ -56,9 +56,9 @@ def check_cohort(rows: list[dict]) -> None:
                      key=lambda row: (row["rule"], row["delivered"], row["name"]))
     digest = hashlib.sha256(json.dumps(ordered, ensure_ascii=False, sort_keys=True,
                                       separators=(",", ":")).encode()).hexdigest()
-    if (digest != COHORT_SHA256 or len(rows) != 159
-            or collections.Counter(row["rule"] for row in rows) != {"2.5": 146, "2.3": 4, "8.7": 8, "11.4": 1}
-            or [sum(p in row["profiles"].split(",") for row in rows) for p in PROFILES] != [153, 153, 156, 156]):
+    if (digest != COHORT_SHA256 or len(rows) != 154
+            or collections.Counter(row["rule"] for row in rows) != {"2.5": 146, "2.3": 4, "8.7": 3, "11.4": 1}
+            or [sum(p in row["profiles"].split(",") for row in rows) for p in PROFILES] != [151, 151, 152, 153]):
         raise ValueError("retention cohort identity differs from the specific decision")
 
 
