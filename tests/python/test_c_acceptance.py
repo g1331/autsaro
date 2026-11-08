@@ -1263,6 +1263,7 @@ class AcceptanceTests(unittest.TestCase):
     def test_unknown_stale_and_pending_contexts_preserve_raw_summary(self):
         for identity in (None, "f" * 64):
             with self.subTest(identity=identity):
+                self.identity()  # A real c-check summary always carries the TU closure.
                 if identity:
                     self.bind(self.context(identity=identity))
                 before = copy.deepcopy(self.summary)
