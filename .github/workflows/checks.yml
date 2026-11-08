@@ -233,15 +233,22 @@ jobs:
       - uses: ./.github/actions/native-analysis-compiler
       - name: Identify native build cache inputs
         shell: python
-        env: &cargo-source-env
-          CARGO_SOURCE: >-
-            ${{ hashFiles('core/**', 'runtime/**', 'third_party/freertos/**',
-              'tools/python/src/ecu_tools/**', 'LICENSE', 'NOTICE') }}
-        run: |
-          import os
+        run: &cargo-source-digest |
+          import hashlib, os, subprocess
+          from pathlib import Path
+          # Only tracked inputs participate, even after imports/builds create new files.
+          paths = subprocess.check_output(['git', 'ls-files', '-z', '--',
+              'core', 'runtime', 'third_party/freertos', 'tools/python/src/ecu_tools', 'LICENSE', 'NOTICE'])
+          digest = hashlib.sha256()
+          tracked = sorted(path for path in paths.split(b'\0') if path)
+          for path in tracked:
+              digest.update(path + b'\0')
+              digest.update(hashlib.sha256(Path(os.fsdecode(path)).read_bytes()).digest())
+          source = digest.hexdigest()
+          print(f'Cargo source digest: {source} ({len(tracked)} tracked inputs)', flush=True)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
-              output.write('CACHE_SOURCE=' + os.environ['CARGO_SOURCE'] + '\n')
+              output.write('CACHE_SOURCE=' + source + '\n')
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -389,12 +396,7 @@ jobs:
       - name: Identify native build cache inputs
         if: matrix.part != 'os'
         shell: python
-        env: *cargo-source-env
-        run: |
-          import os
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
-              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
-              output.write('CACHE_SOURCE=' + os.environ['CARGO_SOURCE'] + '\n')
+        run: *cargo-source-digest
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: matrix.part != 'os'
         with:
@@ -530,12 +532,7 @@ jobs:
           persist-credentials: false
       - name: Identify native build cache inputs
         shell: python
-        env: *cargo-source-env
-        run: |
-          import os
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
-              output.write('CACHE_IMAGE=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
-              output.write('CACHE_SOURCE=' + os.environ['CARGO_SOURCE'] + '\n')
+        run: *cargo-source-digest
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
       - uses: ./.github/actions/core-build-dependencies

@@ -44,6 +44,40 @@ def jobs() -> dict[str, dict[str, object]]:
 
 
 class CiSelectionTests(unittest.TestCase):
+    def test_cargo_source_digest_uses_tracked_bytes_despite_generated_files_and_timestamps(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        scripts = [next(step["run"] for step in workflow[name]["steps"]
+                        if step.get("name") == "Identify native build cache inputs")
+                   for name in ("native", "native-sanitizers", "c-analysis-prepare",
+                                "c-analysis-prepare-windows")]
+        self.assertTrue(all(script == scripts[0] for script in scripts))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+            source = root / "tools/python/src/ecu_tools/module.py"
+            source.parent.mkdir(parents=True)
+            source.write_text("value = 1\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            output = root / "github-env"
+            env = dict(os.environ, GITHUB_ENV=str(output), ImageOS="test", ImageVersion="1")
+
+            def digest():
+                output.write_text("", encoding="utf-8")
+                subprocess.run([sys.executable, "-c", scripts[0]], cwd=root, env=env,
+                               check=True, capture_output=True, text=True)
+                return next(line for line in output.read_text(encoding="utf-8").splitlines()
+                            if line.startswith("CACHE_SOURCE="))
+
+            before = digest()
+            for timestamp in (1700000000, 1700000300):
+                os.utime(source, (timestamp, timestamp))
+                subprocess.run([sys.executable, "-m", "py_compile", str(source)], check=True)
+                # Future generated formats are excluded by tracking, too.
+                (source.parent / "generated.bin").write_bytes(str(timestamp).encode("ascii"))
+                self.assertEqual(digest(), before)
+            source.write_text("value = 2\n", encoding="utf-8")
+            self.assertNotEqual(digest(), before)
+
     def test_native_filters_partition_existing_and_future_modules(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         native = workflow["jobs"]["native"]
