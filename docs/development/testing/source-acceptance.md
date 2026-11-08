@@ -42,6 +42,8 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 修改 C 分析准备或身份拒绝路径时，除 `tests/python` 开发测试外，还须设置固定版本
 `CPPCHECK` 并运行以下命令。根目录发现测试不包含这组 `ActualCAnalysisTests`；单独
 记录其实际执行数量、跳过项与原因。
+运行期间保持分析驱动及其身份输入不变；同时编辑这些文件会触发真实的
+`Semantic inputs changed during analysis` 拒绝。完成修改后从原入口重跑受影响检查。
 
 ```bash
 uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
@@ -99,6 +101,16 @@ Required 正式材料继续由自有源码消费任务接续。
 额外绑定两份 manifest 和含 kernel 位置的完整诊断集合。重放有序补丁验证当前来源后，
 原件按本组集成证据消费；补丁复用共同 MR12 匹配器及原有精确裁决，SDK 仍独立阻塞。
 缺少当前绑定或 pending 时，返回本组明确的阻塞原因。R15.5 继续由 GRP 消费。
+
+SDK 集成使用同一上下文格式的 `records={"kind":"sdk-integration"}`，记录放在
+[SDK 原篇](../../standards/os/sdk.md#当前集成义务与类别处置)。case 的 `inputIdentity`
+取 `c_acceptance.sdk_identity(summary, c_acceptance.input_identity(summary, project))`，
+额外绑定完整诊断集、头依赖和活动定义。按规则、交付文件、物理行、源码与传递宏定义
+逐位置核对，R7.2 另核对 unsigned-literal 来源；同一行的其他诊断沿原路径阻塞。
+未报告的精确实例也核查，零告警缺证据、额外宏使用、原件或定义变化均拒绝。
+本组只接受原篇的目标／四样本与 host-batch／probe，缺失／pending／过期绑定保持阻塞。
+原 checker-limitations 中三项 SDK Required 记录回接本组技术处置，该独立组仍保持其余
+未完成正式义务及 pending 状态。
 
 内核行归属按实际应用的有序补丁 hunk 传递：新增和替换行归项目，保留行携带原身份
 随插删移动。hunk 的 offset 取 Git 实际应用回执，并核对重建文本与最终文件一致；
