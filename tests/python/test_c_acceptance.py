@@ -177,6 +177,285 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(self.plan, plan)
         self.assertNotEqual(self.identity(), before)
 
+    def sdk_inputs(self):
+        self.sdk_name = "os/src/host/linux/Os_HostLinux.c"
+        self.sdk_text = "handler.sa_sigaction = &park_signal;"
+        original = "runtime/os/src/host/linux/Os_HostLinux.c"
+        source = (self.sdk_text + "\nstruct sigaction handler = {0};\n").encode()
+        path = self.root / original
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(source)
+        self.files[self.sdk_name] = source
+        self.origins[original] = self.sdk_name
+        self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+            "path": self.sdk_name, "owner": "runtime", "producerId": "autosar-generator",
+            "sha256": hashlib.sha256(source).hexdigest(),
+        }]}).encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(
+            self.project / "meta/files.sha256")
+        header = {"path": "/usr/include/bits/sigaction.h", "category": "sdk",
+                  "target": TARGET, "provider": "libc6-dev", "version": "2.39-0ubuntu8.9",
+                  "header": "usr/include/x86_64-linux-gnu/bits/sigaction.h",
+                  "sha256": "1" * 64, "algorithm": "md5", "expected": "2" * 32}
+        header["key"] = hashlib.sha256(json.dumps(
+            {key: value for key, value in header.items() if key not in {"path", "reason", "key"}},
+            sort_keys=True).encode()).hexdigest()
+        self.sdk_header = header
+        definition = {"file": header["path"], "line": 40,
+                      "value": "__sigaction_handler.sa_sigaction", "function": False,
+                      "use": self.sdk_text, "unresolved": True}
+        self.summary["scope"]["translationUnits"].append(self.sdk_name)
+        for program in self.summary["programs"]:
+            program["translationUnits"].append(self.sdk_name)
+        self.summary["scope"].update(
+            sdkHeaders=[header],
+            sdkTranslationUnits={unit: [header["path"]]
+                                 for unit in self.summary["scope"]["translationUnits"]},
+            sdkMacroInputs={unit: ({self.sdk_name + ":1": {"sa_sigaction": definition}}
+                                  if unit == self.sdk_name else {})
+                            for unit in self.summary["scope"]["translationUnits"]})
+        self.summary["sourceClassification"] = {
+            "complete": True, "unclassifiedDiagnosticKeys": 0}
+        self.sdk_record = {"definitions": {
+            "sa_sigaction": {"sa_sigaction": {**{key: definition[key] for key in
+                                                  ("line", "value", "function")},
+                                                **{key: header[key] for key in
+                                                   ("header", "provider", "version", "sha256")}}},
+            "sigaction": {key: header[key] for key in
+                          ("header", "provider", "version", "sha256")}},
+            "sites": [{"target": TARGET, "rule": "5.5", "file": self.sdk_name,
+                       "line": 1, "symbol": "sa_sigaction", "text": self.sdk_text},
+                      {"target": TARGET, "rule": "5.7", "file": self.sdk_name,
+                       "line": 2, "symbol": "sigaction",
+                       "text": "struct sigaction handler = {0};"}]}
+        self.write_sdk_record()
+        self.summary["diagnostics"] = [{"id": "misra-c2012-5.5",
+            "programs": ["host-batch", "probe"], "adopted": False, "patched": False,
+            "locations": [{"file": self.sdk_name, "line": "1", "column": "9"}]}]
+        self.bind_sdk()
+
+    def write_sdk_record(self):
+        (self.root / c_acceptance.SDK).write_text(
+            "## 当前集成义务与类别处置\n<!-- sdk-integration-records-begin -->\n"
+            + json.dumps(self.sdk_record) + "\n<!-- sdk-integration-records-end -->\n",
+            encoding="utf-8", newline="\n")
+
+    def bind_sdk(self, status="approved"):
+        self.bind_groups()
+        context = self.context(group="sdk-integration", status=status,
+                               identity=c_acceptance.sdk_identity(self.summary, self.identity()))
+        path = self.root / c_acceptance.SDK
+        with path.open("a", encoding="utf-8", newline="\n") as destination:
+            destination.write(c_acceptance.BEGIN + "\n" + json.dumps(context)
+                              + "\n" + c_acceptance.END + "\n")
+
+    def test_sdk_exact_position_consumption_preserves_raw_and_other_groups(self):
+        self.sdk_inputs()
+        before = copy.deepcopy(self.summary)
+        result = self.evaluate()
+        self.assertEqual(result.get("sdkInputIdentity"),
+                         c_acceptance.sdk_identity(self.summary, self.identity()))
+        occurrence = result["occurrences"][0]
+        self.assertEqual(occurrence["location"],
+                         {"file": self.sdk_name, "line": "1", "column": "9"})
+        self.assertEqual(occurrence["assessment"], "accepted", result["objects"])
+        self.assertEqual(occurrence["reason"], "sdk_integration_verified")
+        self.assertEqual(len(result["sdkObligations"]), 2)
+        self.assertTrue(any(row["kind"] == "checker-limitation" for row in result["objects"]))
+        self.assertEqual(self.summary, before)
+
+    def test_sdk_pending_stale_and_unbound_contexts_block_exact_position(self):
+        self.sdk_inputs()
+        self.bind_sdk(status="pending")
+        result = self.evaluate()
+        sdk_identity = c_acceptance.sdk_identity(self.summary, self.identity())
+        self.assertEqual(result.get("sdkInputIdentity"), sdk_identity)
+        self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
+        self.assertEqual(result["occurrences"][0]["reason"],
+                         "sdk_integration_assessment_pending")
+        self.bind_sdk()
+        self.summary["diagnostics"][0]["message"] = "changed report"
+        result = self.evaluate()
+        self.assertEqual(result.get("sdkInputIdentity"),
+                         c_acceptance.sdk_identity(self.summary, self.identity()))
+        self.assertNotEqual(result.get("sdkInputIdentity"), sdk_identity)
+        self.assertEqual(result["occurrences"][0]["location"]["file"], self.sdk_name)
+        self.assertEqual(result["occurrences"][0]["reason"],
+                         "sdk_integration_context_unbound_or_stale")
+        self.bind_groups()
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+
+    def test_sdk_other_rule_file_line_and_column_remain_blocked_after_rebinding(self):
+        self.sdk_inputs()
+        original = copy.deepcopy(self.summary["diagnostics"][0])
+        for field, value in (("rule", "7.3"), ("id", "5.5"), ("file", "unknown.c"),
+                             ("line", "2"), ("column", "1000")):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(original)
+                if field == "rule":
+                    changed["id"] = "misra-c2012-" + value
+                elif field == "id":
+                    changed["id"] = value
+                else:
+                    changed["locations"][0][field] = value
+                self.summary["diagnostics"] = [changed]
+                self.bind_sdk()
+                result = self.evaluate()
+                self.assertEqual(result["occurrences"][0]["location"], changed["locations"][0])
+                self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
+
+    def test_sdk_macro_name_and_definition_are_checked_beyond_context_hash(self):
+        self.sdk_inputs()
+        values = self.summary["scope"]["sdkMacroInputs"][self.sdk_name][self.sdk_name + ":1"]
+        definition = values.pop("sa_sigaction")
+        values["OTHER_MACRO"] = definition
+        self.bind_sdk()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "error")
+        self.assertIn(self.sdk_name + ":1:sa_sigaction", result["objects"][-1]["reason"])
+        values["sa_sigaction"] = values.pop("OTHER_MACRO")
+        values["sa_sigaction"]["value"] = "project_defined_member"
+        self.bind_sdk()
+        self.assertIn("definition differs", self.evaluate()["objects"][-1]["reason"])
+
+    def test_sdk_zero_diagnostics_still_checks_records_and_new_macro_uses(self):
+        self.sdk_inputs()
+        self.summary["diagnostics"] = []
+        self.bind_sdk()
+        result = self.evaluate()
+        self.assertEqual(len(result["sdkObligations"]), 2)
+        self.assertFalse(any(row["id"] == "sdk-integration" for row in result["objects"]))
+        values = self.summary["scope"]["sdkMacroInputs"][self.sdk_name]
+        values[self.sdk_name + ":3"] = copy.deepcopy(values[self.sdk_name + ":1"])
+        self.bind_sdk()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "error")
+        self.assertIn("unrecorded use: " + self.sdk_name + ":3", result["objects"][-1]["reason"])
+
+    def test_sdk_unknown_provider_changed_original_or_missing_dependency_is_rejected(self):
+        self.sdk_inputs()
+        for field, value in (("provider", "unknown-sdk"), ("sha256", "modified")):
+            with self.subTest(field=field):
+                old = self.sdk_header[field]
+                self.sdk_header[field] = value
+                self.bind_sdk()
+                self.assertEqual(self.evaluate()["status"], "error")
+                self.sdk_header[field] = old
+        self.summary["scope"]["sdkTranslationUnits"][self.sdk_name] = []
+        self.bind_sdk()
+        self.assertIn("definition differs", self.evaluate()["objects"][-1]["reason"])
+
+    def test_sdk_missing_records_or_document_and_mandatory_record_is_rejected(self):
+        self.sdk_inputs()
+        self.sdk_record["sites"][0]["rule"] = "17.3"
+        self.write_sdk_record()
+        self.bind_sdk()
+        self.assertIn("Invalid SDK integration site", self.evaluate()["objects"][-1]["reason"])
+        path = self.root / c_acceptance.SDK
+        path.write_text("missing records\n", encoding="utf-8")
+        self.assertIn("records missing", self.evaluate()["objects"][-1]["reason"])
+        path.unlink()
+        self.assertIn("evidence missing", self.evaluate()["objects"][-1]["reason"])
+
+    def test_sdk_windows_unsigned_operand_requires_exact_macro_and_position(self):
+        self.sdk_inputs()
+        name = "kernel/portable/MSVC-MingW/port.c"
+        target = "windows-x64-controlled-v1"
+        source = "configASSERT( WaitForSingleObject( xObject, INFINITE ) == 0U );"
+        header = {"path": "D:/sdk/include/winbase.h", "category": "sdk", "target": target,
+                  "provider": "mingw-w64-x86_64-headers", "version": "fixture",
+                  "header": "mingw64/include/winbase.h", "algorithm": "sha256",
+                  "sha256": "1" * 64, "expected": "1" * 64}
+        header["key"] = hashlib.sha256(json.dumps(
+            {key: value for key, value in header.items() if key != "path"},
+            sort_keys=True).encode()).hexdigest()
+        definition = {"file": header["path"], "line": 518, "value": "0xffffffff",
+                      "function": False, "use": source, "unresolved": False,
+                      "headerKey": header["key"], "original": "#define INFINITE 0xffffffff"}
+        self.summary["scope"].update(
+            target=target, translationUnits=[name], sdkHeaders=[header],
+            compilerSemanticInputs={"machine": "x86_64-w64-mingw32"},
+            sdkTranslationUnits={name: [header["path"]]},
+            sdkMacroInputs={name: {name + ":54": {"INFINITE": definition}}})
+        self.sdk_record = {"definitions": {"INFINITE": {"INFINITE": {
+            **{key: definition[key] for key in ("line", "value", "function")},
+            **{key: header[key] for key in ("header", "provider", "version", "sha256")}}}},
+            "sites": [{"target": target, "rule": "7.2", "file": name, "line": 54,
+                       "symbol": "INFINITE", "text": source}]}
+        self.write_sdk_record()
+        diagnostic = {"id": "misra-c2012-7.2", "programs": ["host-batch", "probe"],
+                      "locations": [{"file": name, "line": "54", "column": "5"}],
+                      "sourceOrigins": [{"kind": "unsigned-literal", "macro": "INFINITE",
+                                         "category": "sdk", "headerKey": header["key"],
+                                         "definitionLine": 518, "value": "0xffffffff"}]}
+        metadata = {"originalBswSources": {}}
+        kernel = ({name: "\n" * 53 + source + "\n"}, {})
+        self.summary["diagnostics"] = [diagnostic]
+        positions, obligations = c_acceptance._sdk_positions(
+            self.summary, self.project, metadata, self.root, kernel)
+        self.assertEqual(set(positions), {(0, 0)})
+        self.assertEqual(obligations[0]["location"], {"file": name, "line": 54})
+        for change in ("macro", "file", "line", "category", "value", "definitionLine"):
+            changed = copy.deepcopy(diagnostic)
+            if change in {"macro", "category", "value", "definitionLine"}:
+                changed["sourceOrigins"][0][change] = "project"
+            else:
+                changed["locations"][0][change] = "other.c" if change == "file" else "53"
+            self.summary["diagnostics"] = [changed]
+            with self.subTest(change=change):
+                positions, _ = c_acceptance._sdk_positions(
+                    self.summary, self.project, metadata, self.root, kernel)
+                self.assertEqual(positions, {})
+        definition["file"] = "project.h"
+        self.assertRaises(ValueError, c_acceptance._sdk_positions,
+                          self.summary, self.project, metadata, self.root, kernel)
+
+    def test_sdk_changed_source_and_owner_are_rejected_after_rebinding(self):
+        self.sdk_inputs()
+        original = next(key for key, value in self.origins.items() if value == self.sdk_name)
+        changed = self.files[self.sdk_name].replace(b"park_signal", b"other_signal")
+        (self.root / original).write_bytes(changed)
+        self.files[self.sdk_name] = changed
+        owners = json.loads(self.files["meta/workbench-ownership.json"])
+        owners["files"][0]["sha256"] = hashlib.sha256(changed).hexdigest()
+        self.files["meta/workbench-ownership.json"] = json.dumps(owners).encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.bind_sdk()
+        self.assertIn("site changed: " + self.sdk_name + ":1",
+                      self.evaluate()["objects"][-1]["reason"])
+        owners["files"][0]["sha256"] = "0" * 64
+        self.files["meta/workbench-ownership.json"] = json.dumps(owners).encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.bind_sdk()
+        self.assertIn("source provenance differs", self.evaluate()["objects"][-1]["reason"])
+
+    def test_sdk_changed_package_version_and_record_body_invalidate_evidence(self):
+        self.sdk_inputs()
+        before = self.identity()
+        path = self.root / c_acceptance.SDK
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write("Changed integration assessment.\n")
+        self.assertNotEqual(before, self.identity())
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
+        self.sdk_header["version"] = "new-package"
+        self.sdk_header["key"] = hashlib.sha256(json.dumps(
+            {key: value for key, value in self.sdk_header.items() if key not in {"path", "key"}},
+            sort_keys=True).encode()).hexdigest()
+        self.bind_sdk()
+        self.assertIn("definition differs", self.evaluate()["objects"][-1]["reason"])
+
+    def test_sdk_mixed_diagnostic_checks_each_physical_location(self):
+        self.sdk_inputs()
+        other = {"file": "unknown.c", "line": "1", "column": "9"}
+        self.summary["diagnostics"][0]["locations"].append(other)
+        self.bind_sdk()
+        rows = self.evaluate()["occurrences"]
+        self.assertEqual([row["assessment"] for row in rows], ["accepted", "blocked"])
+        self.assertEqual(rows[1]["location"], other)
+
     def test_zero_diagnostics_still_requires_each_checker_obligation_and_its_own_group(self):
         self.synthetic_complete_inputs()
         self.summary["diagnostics"] = []
@@ -544,6 +823,9 @@ class AcceptanceTests(unittest.TestCase):
         self.synthetic_complete_inputs()
         shutil.copytree(ROOT / "runtime", self.root / "runtime", dirs_exist_ok=True)
         shutil.copytree(ROOT / "docs/standards", self.root / "docs/standards", dirs_exist_ok=True)
+        # This owned-source fixture has no SDK dependency/macro inventory.
+        # SDK integration has its own complete contract fixture above.
+        (self.root / c_acceptance.SDK).unlink()
         # Real standards supply the checker records; keep their outstanding
         # obligations instead of combining them with synthetic satisfied rows.
         self.supplementary_path.unlink()
@@ -594,9 +876,9 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual({row["source"]["file"] for row in checker_rows},
                          {"docs/standards/types.md"})
         self.assertEqual({row["id"] for row in checker_rows if row["status"] == "not_assessed"},
-                         {"R5.5", "R5.7", "R10.1"})
+                         set())
         self.assertEqual({row["id"] for row in checker_rows if row["status"] == "retained"},
-                         {"R20.1"})
+                         {"R5.5", "R5.7", "R10.1", "R20.1"})
         self.assertEqual(raw, self.summary)
         self.summary["projectAcceptance"] = result
         with self.assertRaisesRegex(ValueError, "formal_assessment_pending"):
@@ -1218,6 +1500,7 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_strict_replay_uses_real_semantic_sdk_provider_and_driver_byte_checks(self):
         self.synthetic_complete_inputs()
+        self.sdk_inputs()
         tool_directory = self.directory / "semantic-tool"
         (tool_directory / "cfg").mkdir(parents=True)
         executable = tool_directory / "cppcheck"
@@ -1232,16 +1515,24 @@ class AcceptanceTests(unittest.TestCase):
             (drivers / name).write_bytes(b"fixture analysis driver\n")
         header = (self.directory / "provider/sdk.h").resolve()
         header.parent.mkdir()
-        header.write_bytes(b"#define SDK_VALUE 1U\n")
-        package = {"provider": "libc6-dev", "version": "fixture", "header": "usr/include/sdk.h",
-                   "algorithm": "sha256", "expected": c_acceptance.digest(header)}
+        header.write_bytes(b"\n" * 39 + b"#define sa_sigaction __sigaction_handler.sa_sigaction\n")
+        package = {"provider": "libc6-dev", "version": "fixture",
+                   "header": self.sdk_header["header"], "algorithm": "md5",
+                   "expected": hashlib.md5(header.read_bytes(), usedforsecurity=False).hexdigest()}
         packages = {str(header): package}
         record = c_sdk.header_identity(header, self.project, TARGET, "x86_64-linux-gnu", packages)
         self.assertEqual(record["category"], "sdk")
         scope = self.summary["scope"]
         scope.update(compilerSemanticInputs={"machine": "x86_64-linux-gnu", "release": "12"},
                      compilerDiscoveredDefines={"main.c": []}, platformModel=None, platformLibrary=None,
-                      sdkHeaders=[record], sdkTranslationUnits={"main.c": [record["path"]]}, sdkMacroInputs={})
+                     sdkHeaders=[record], sdkTranslationUnits={
+                         unit: [record["path"]] for unit in scope["translationUnits"]})
+        definition = scope["sdkMacroInputs"][self.sdk_name][self.sdk_name + ":1"]["sa_sigaction"]
+        definition["file"] = record["path"]
+        for values in (self.sdk_record["definitions"]["sa_sigaction"]["sa_sigaction"],
+                       self.sdk_record["definitions"]["sigaction"]):
+            values.update({key: record[key] for key in ("header", "provider", "version", "sha256")})
+        self.write_sdk_record()
         self.assertEqual({path for paths in scope["sdkTranslationUnits"].values() for path in paths},
                          {row["path"] for row in scope["sdkHeaders"]})
         self.tool_probe.return_value = (executable, tool_directory, self.actual_tool)
@@ -1252,7 +1543,7 @@ class AcceptanceTests(unittest.TestCase):
                 patch.object(c_check, "__file__", str(drivers / "c_check.py")), \
                 patch.object(c_sdk, "debian_headers", return_value=packages):
             self.summary["semanticIdentity"] = c_check.semantic_identity(executable, copy.deepcopy(scope), directories)
-            self.bind_groups()
+            self.bind_sdk()
             accepted = copy.deepcopy(self.summary)
             accepted["projectAcceptance"] = self.evaluate()
             self.assertEqual(accepted["projectAcceptance"]["status"], "accepted")
@@ -1385,11 +1676,12 @@ class AcceptanceTests(unittest.TestCase):
             self.rules, self.summary["coverage"]["knownCheckerLimitations"], self.root,
         )["records"]
         self.assertEqual({row["id"] for row in rows}, c_standard.CHECKER_LIMITATION_GUIDELINES)
-        outstanding = {"R5.5", "R5.7", "R10.1"}
+        outstanding = set()
         self.assertEqual(
             {row["id"] for row in rows if row["status"] == "not_assessed"}, outstanding,
         )
-        self.assertEqual({row["id"] for row in rows if row["status"] == "retained"}, {"R20.1"})
+        self.assertEqual({row["id"] for row in rows if row["status"] == "retained"},
+                         {"R5.5", "R5.7", "R10.1", "R20.1"})
         for row in rows:
             reason = ("checker-limitation_not_assessed" if row["id"] in outstanding
                       else "formal_assessment_pending")
