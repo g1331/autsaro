@@ -180,6 +180,9 @@ class AcceptanceTests(unittest.TestCase):
     def test_zero_diagnostics_still_requires_each_checker_obligation_and_its_own_group(self):
         self.synthetic_complete_inputs()
         self.summary["diagnostics"] = []
+        self.summary["passed"] = True
+        for program in self.summary["programs"]:
+            program.update(passed=True, exitCode=0)
         self.bind_groups()
         self.assertEqual(self.evaluate()["status"], "accepted")
         text = self.obligation_path.read_text(encoding="utf-8")
@@ -244,6 +247,9 @@ class AcceptanceTests(unittest.TestCase):
     def test_real_checker_obligations_keep_three_local_gaps_and_141_missing_reviews(self):
         self.owned_inputs()
         self.summary["diagnostics"] = []
+        self.summary["passed"] = True
+        for program in self.summary["programs"]:
+            program.update(passed=True, exitCode=0)
         self.bind_groups()
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
