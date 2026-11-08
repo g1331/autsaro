@@ -12,7 +12,11 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，unittest 按 suite 保存到该目录。已有目录不会被覆盖；未指定时仍只保留失败现场。
 
-`native` 任务在 Windows 与 Linux 上以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件（Windows 按测试名把最慢的几个模块分到第二个 runner，同一名单在另一半用 `--skip` 排除，每个测试只运行一次），工具路径取自已安装的受控 GCC、binutils、Git 及项目 uv 环境。失败的测试保留自己的 scratch 目录（输出 `scratch retained at …`），独立 ECU 校验器保留其诊断目录，失败消息附带子进程输出末尾；该任务把临时根目录作为 `native-scratch-*` artifact 在失败时上传（保留 14 天），与 OS suites 的 `os-suites-*` 相同；`native-os` 任务在两个平台运行 27 个 OS suites 和主机锁错误边界测试，Windows 用 `AUTOSAR_OS_SHARD=k/n` 把 suite 按序号分到两个 runner，每个 suite 仍单独串行运行。`native-delivery` 任务下载准备任务发布的样本，与样本分析并行运行封存工程构建模式和 CMake 构建，再把样本移到新目录：Python 3.11 运行全部四个样本，Extended 在两平台运行完整版本与样本矩阵；Windows 把接收端步骤放到第二个 runner，与构建模式和 CMake 并行。用 uv 管理的接收者解释器（`AUTOSAR_RECEIVER_PYTHON`）逐个直接运行包内工具完成构建与验证，不向接收者解释器安装开发工具；这只证明解释器兼容性，不代表网络隔离下的安装验收。`official` 二进制（`acceptance.yml`，见[官方对照](official.md)）与桌面场景（`desktop.yml`，见[桌面场景](desktop.md)）由不属于必需检查的 `Extended checks` 按改动路径调用（见 [CI](README.md#ci)）；PR 检查通过不代表这些检查通过。
+`native` 在两平台以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件。Windows 分为 protocol、sealed／single-component、其余 integration 与其余测试四片，同一有序名单负责选择与排除，每项恰好运行一次；Linux 全量。工具取已安装的受控 GCC、binutils、Git 与 uv 环境。失败现场输出 `scratch retained at …`，消息附子进程输出末尾；临时根以 `native-scratch-*` 上传并保留 14 天。
+
+`native-os` 在两平台运行 27 个 OS suites 和主机锁／I/O 错误边界。Windows 用 `AUTOSAR_OS_SHARD=k/n` 按序号分两片，每个 suite 串行运行，边界测试放在较轻的 `1/2`；Linux 用 `0/1`。失败现场以 `os-suites-*` 上传并保留 14 天。
+
+`native-delivery` 下载准备任务的样本，与分析并行运行封存构建模式、CMake 构建及搬迁后的接收端验证；Windows 将接收端放在第二个 runner。两平台用 uv 管理的 `AUTOSAR_RECEIVER_PYTHON` 3.11 直接运行四个样本的包内工具，不安装开发工具；Extended 覆盖完整解释器／样本矩阵。这证明解释器兼容性，网络隔离安装另行验收。`official` 由 Extended 按路径调用（见[官方对照](official.md)），桌面 GUI／IPC 由必需层按路径调用（见[桌面场景](desktop.md)）。
 
 新增原生测试须核对并实跑CI入口。
 
@@ -85,3 +89,5 @@ supervisor 启动须收到期限内的认证就绪响应。Windows Job 归零与
 ## 封存构建复用
 
 原生集成测试的生产 HostBatch 可在同一测试进程中复用：辅助按完整工程目录字节（含 seal、应用、目标与工具）及当前工具路径精确匹配，每份输入只构建一次。缓存只保留可执行文件的字节和权限，各消费者写入自己的普通文件，运行输出与日志保持独立；测试进程结束即失效。自定义 control、preflight、Build／Verify、离线搬迁及重封存拒绝测试仍独立构建。`shared_host_batch_builds_isolate_mutating_consumers` 实际改写消费者程序与工程，检查其他副本的协议结果，并确认修改过的封存输入不能复用成功构建。
+
+COM 拒绝消费者夹具的 14 个正常／变异工程使用各自输入、构建目录和日志，以两个 worker 调度三组独立场景；Rust 测试的 900 秒总期限和全部构建／运行断言保持。线程结果逐一取回，任一组失败使原测试失败；不复用变异的编译或运行结果。
