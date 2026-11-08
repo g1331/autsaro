@@ -365,13 +365,6 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                     )
                 })
                 .collect();
-            body.push_str("#ifndef RTE_CORE\n");
-            body.push_str(&c_layout::required_defines(
-                &init_values,
-                "Initial data element value.",
-                "SWS_Rte_05078",
-            ));
-            body.push('\n');
             let runnables: Vec<_> = component
                 .runnables
                 .iter()
@@ -383,13 +376,22 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                     )
                 })
                 .collect();
-            body.push_str(&c_layout::required_defines(
-                &runnables,
-                "Runnable symbol alias.",
-                "SWS_Rte_06713",
-            ));
-            body.push('\n');
-            body.push_str("#endif\n");
+            if !init_values.is_empty() || !runnables.is_empty() {
+                body.push_str("#ifndef RTE_CORE\n");
+                body.push_str(&c_layout::required_defines(
+                    &init_values,
+                    "Initial data element value.",
+                    "SWS_Rte_05078",
+                ));
+                body.push('\n');
+                body.push_str(&c_layout::required_defines(
+                    &runnables,
+                    "Runnable symbol alias.",
+                    "SWS_Rte_06713",
+                ));
+                body.push('\n');
+                body.push_str("#endif\n");
+            }
             let errors: std::collections::BTreeSet<_> = component
                 .operations
                 .iter()
