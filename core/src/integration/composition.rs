@@ -910,6 +910,111 @@ pub(super) fn inspect(graph: &Graph) -> Result<CompositionContract, Vec<PlanDiag
     inspect_with_transport(graph, true)
 }
 
+/// SWS_Dcm_00698 / 01030: the standard service is stricter than a C signature.
+fn inspect_dcm_services(
+    graph: &Graph,
+    component: usize,
+    operations: &[Operation],
+    runnables: &[Runnable],
+    port_arguments: &BTreeMap<String, Vec<super::rte_types::PortDefinedArgument>>,
+) -> Result<(), Vec<PlanDiagnostic>> {
+    let port = one(
+        graph,
+        component,
+        graph
+            .descendants(component, "P-PORT-PROTOTYPE")
+            .into_iter()
+            .filter(|port| name(graph, *port) == "DCMServices")
+            .collect(),
+        "SERVICE_TYPE_CONFLICT",
+    )?;
+    let interface = referenced(
+        graph,
+        port,
+        "PROVIDED-INTERFACE-TREF",
+        "SERVICE_TYPE_CONFLICT",
+    )?;
+    if name(graph, interface) != "DCMServices"
+        || graph.text(interface, "IS-SERVICE") != Some("true")
+        || port_arguments
+            .get(&path(graph, port))
+            .is_some_and(|args| !args.is_empty())
+    {
+        return Err(fail(graph, port, "SERVICE_TYPE_CONFLICT"));
+    }
+    let errors: BTreeMap<_, _> = graph
+        .descendants(interface, "APPLICATION-ERROR")
+        .into_iter()
+        .map(|error| {
+            (
+                name(graph, error),
+                graph
+                    .text(error, "ERROR-CODE")
+                    .and_then(super::rte_types::integer_constant),
+            )
+        })
+        .collect();
+    if errors != BTreeMap::from([("E_OK".into(), Some(0)), ("E_NOT_OK".into(), Some(1))]) {
+        return Err(fail(graph, interface, "SERVICE_TYPE_CONFLICT"));
+    }
+    let servers: Vec<_> = operations
+        .iter()
+        .filter(|op| op.port == path(graph, port))
+        .collect();
+    if servers.len() != 4 {
+        return Err(fail(graph, interface, "SERVICE_TYPE_CONFLICT"));
+    }
+    for (operation, arguments) in [
+        (
+            "GetSecurityLevel",
+            vec![("SecLevel", "Dcm_SecLevelType *", "OUT")],
+        ),
+        (
+            "GetSesCtrlType",
+            vec![("SesCtrlType", "Dcm_SesCtrlType *", "OUT")],
+        ),
+        ("ResetToDefaultSession", vec![]),
+        ("SetActiveDiagnostic", vec![("active", "boolean", "IN")]),
+    ] {
+        let server = servers
+            .iter()
+            .find(|server| server.operation == format!("{}/{operation}", path(graph, interface)))
+            .ok_or_else(|| fail(graph, interface, "SERVICE_TYPE_CONFLICT"))?;
+        let source = graph.index(&format!("{}/{operation}", path(graph, interface)))?;
+        let expected_errors = if operation == "SetActiveDiagnostic" {
+            BTreeMap::from([("RTE_E_DCMServices_E_OK".into(), 0)])
+        } else {
+            BTreeMap::from([
+                ("RTE_E_DCMServices_E_OK".into(), 0),
+                ("RTE_E_DCMServices_E_NOT_OK".into(), 1),
+            ])
+        };
+        if server
+            .arguments
+            .iter()
+            .map(|arg| {
+                (
+                    arg.name.as_str(),
+                    arg.native_type.as_str(),
+                    arg.direction.as_str(),
+                )
+            })
+            .ne(arguments)
+            || server.application_errors != expected_errors
+        {
+            return Err(fail(graph, source, "SERVICE_TYPE_CONFLICT"));
+        }
+        let target = runnables
+            .iter()
+            .find(|runnable| runnable.path == server.runnable)
+            .and_then(|runnable| runnable.bsw_target.as_ref());
+        if target.is_none_or(|target| target.contract.symbol != format!("Dcm_{operation}")) {
+            return Err(fail(graph, source, "BSW_MAPPING_INVALID"));
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn inspect_ownership(graph: &Graph) -> Result<CompositionContract, Vec<PlanDiagnostic>> {
     inspect_with_transport(graph, false)
 }
@@ -1617,6 +1722,15 @@ fn inspect_with_transport(
             } else {
                 return Err(fail(graph, port, "TYPE_CONFLICT"));
             }
+        }
+        if !diagnostic_mode_ports.is_empty()
+            || operations.iter().any(|operation| {
+                !operation.read
+                    && (super::short_name(&operation.interface) == "DCMServices"
+                        || super::short_name(&operation.port) == "DCMServices")
+            })
+        {
+            inspect_dcm_services(graph, component, &operations, &runnables, &port_options)?;
         }
         for runnable in &runnables {
             let servers: Vec<_> = operations
