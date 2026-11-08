@@ -119,4 +119,4 @@ ISO14229-1 §7.5图5/6（印刷页20/21）、§9.2图7（37页）、§10.2图15�
 - **计时与消息边界。** ISO14229-2 §7/8及§9表3/4/6将StartOfReception映射到T_DataSOM.ind、TpRxIndication映射到T_Data.ind、PduR_DcmTransmit映射到T_Data.req、TpTxConfirmation映射到T_Data.conf。S3仅在空闲非默认会话递减，接收开始后暂停，最终响应确认（含失败）或抑制响应本地完成后重新装载；接收错误也重启而不执行请求。未知服务仍续期，外来PDU不能续期。§9.7表10要求发送错误后不重传，实际拒绝／确认失败均释放且不重试。
 - **P2与P2*。** §9.1.1 REQ5.4/5.6、§9.2及图13区分最终响应与扩展pending等待。本配置同步处理，不接纳OpStatus／DCM_E_PENDING；P2*按0x10广告，不启动异步pending计时器。P2从完整接收后起算，FullCom在最后允许主函数周期到达仍可发送，过期则丢弃未发答案并释放。函数周期和同步应用执行预算属于所选受控调度条件；逻辑周期验收不外推宿主硬实时或实机时延保证。
 
-`dcm_contract.c`覆盖容量不足与应用失败同时发生时的NRC优先级、零应用调用、精确容量、长度／最大DID数优先级、S3接收与确认等待暂停、两类传输失败后重启、未知服务／抑制TesterPresent续期、外来PDU、会话确认及P2门控边界。`diagnostics.rs`／`diagnostic_configuration.rs`保留相应配置拒绝，`integration::protocol`以封存ECU核对S3边界和物理帧。测试／变异及分析原始结果记录在PR；条款处置仅限上述选择，#58的221项评估、#59身份和#187服务端口保持各自出口。
+`dcm_contract.c`覆盖容量不足与应用失败同时发生时的NRC优先级、零应用调用、精确容量、长度／最大DID数优先级、S3接收与确认等待暂停、两类传输失败后重启、未知服务／抑制TesterPresent续期、外来PDU、会话确认及P2门控边界。`diagnostics.rs`／`diagnostic_configuration.rs`保留相应配置拒绝，`integration::protocol`以封存ECU核对S3边界和物理帧。测试／变异及分析原始结果记录在PR；条款处置仅限上述选择，#58 的 221 项评估和 #59 身份检查保持各自出口。DCMServices 的接口与端口证据见 [interfaces.md](interfaces.md)。

@@ -55,7 +55,8 @@ C/S 表内的写入、条件检查、缩放及异步操作逐项受配置约束�
 | Optional interfaces | 已核对（源码：Dcm.c 不调用任何可选接口，它们只服务于未选功能）：SWS_Dcm_91002 |
 | Dcm_SecLevelType | 已核对（Rte_Dcm_Type.h：uint8，DCM_SEC_LEV_LOCKED 为 0）：SWS_Dcm_00977 |
 | Dcm_SesCtrlType | 已核对（Rte_Dcm_Type.h：uint8，DCM_*_SESSION 取值 1–4）：SWS_Dcm_00978 |
-| DCMServices | 差距 #187：SWS_Dcm_00698、01030 |
+| DCMServices 接口 | 已核对（services.arxml 的 DCMServices；composition::inspect_dcm_services 逐操作校验类型、方向与错误；rte_dcm_contract.c 经应用 R-port 运行四个真实 Dcm API）：SWS_Dcm_00698 |
+| DCMServices ProvidedPort | 已核对（services.arxml 的 DcmService/DCMServices P-port 与 DcmServicesMapping；dcm_services_contract_and_real_producer_are_selected 核对唯一 Dcm.c producer）：SWS_Dcm_01030 |
 | Dcm_DiagnosticSessionControlModeSwitchInterface | 已核对（composition.rs 校验接口与 P-port；diagnostics.rs dcm_service_mode_source_requires_the_fixed_standard_contract 变异拒绝）：SWS_Dcm_91020、91033 |
 | Dcm_EcuResetModeSwitchInterface | 已核对（源码：composition.rs 按 DCM_MODES 逐项校验接口与 P-port，计划要求六个端口齐全）：SWS_Dcm_91022、91034 |
 | Dcm_ModeRapidPowerShutDownModeSwitchInterface | 已核对（源码：composition.rs 按 DCM_MODES 逐项校验接口与 P-port）：SWS_Dcm_91024、91035 |
