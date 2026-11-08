@@ -154,5 +154,3 @@ The installed application does not require Rust, Node, npm, or uv. Windows requi
 ## License
 
 Original source and documentation are licensed under [Apache-2.0](LICENSE); copyright notices are in [NOTICE](NOTICE). Third-party components retain their respective licenses. Rights holders determine the licenses of user configuration and application code. Generated projects include the project license and notices. See the [licensing guide](docs/maintainers/licensing.md) for distribution requirements and scope.
-
-<!-- Validate the documentation-only CI selection. -->

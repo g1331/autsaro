@@ -220,3 +220,5 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
  "formalStatus": "approved"
 }
 <!-- source-assessment-context-end -->
+
+<!-- Validate CI selection without changing adoption context records. -->

@@ -174,3 +174,5 @@ def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
             f"C baseline refused: {error}. Download the full c-analysis artifact with its project sources, "
             "or compute the matching baseline locally with c-check; local analysis is still required."
         ) from error
+
+# Validate the analysis-only CI selection.
