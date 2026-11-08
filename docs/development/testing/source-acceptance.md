@@ -39,7 +39,8 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 
 `standard-ecu` 与 `user-application` 的 ARXML 可以相同，应用字节仍分别绑定。重命名目录不改变身份；应用、配置、producer、程序／TU、SDK 或评估正文变化都会使旧上下文失效。原分析副本中的 kernel 已应用补丁，因此复用现有最终 kernel 身份检查，不以补丁前 seal 再验证补丁后字节。
 
-修改 C 分析准备或身份拒绝路径时，除 `tests/python` 开发测试外，还须设置固定版本
+修改 C 分析准备、身份拒绝路径、保留集合或人工评估记录时，须按 CONTRIBUTING
+运行完整 `tests/python` 开发测试，并设置固定版本
 `CPPCHECK` 并运行以下命令。根目录发现测试不包含这组 `ActualCAnalysisTests`；单独
 记录其实际执行数量、跳过项与原因。
 运行期间保持分析驱动及其身份输入不变；同时编辑这些文件会触发真实的
@@ -48,6 +49,9 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 ```bash
 uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
 ```
+
+人工目录记录其所载冻结输入的分类；当前输入变化时保留准确的历史范围，并使旧绑定失效。
+不要将历史已分类记录改为当前未评估状态，也不要在合成测试中自动完成未评估条目。
 
 这些身份是证据适用范围，不是诊断 baseline 或缓存。不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
 
