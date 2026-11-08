@@ -113,17 +113,19 @@ R12.3（106／114），合成 AMD2.27／46；七份原件摘要核验及原页�
 <!-- misra-checker-obligations-begin -->
 | 规则 | 类别 | 评估范围 | 状态 | 结论 |
 | --- | --- | --- | --- | --- |
+| R1.4 | Required | 双目标四 profile 的 C99 HostBatch／probe | not_applicable | AMD2.30（印刷 11／PDF 18）仅适用 C11；AMD3.11–13、AMD4.53–54 修改禁用设施，语言范围保持。当前 TU 均以 -std=c99 编译；扩展与 Annex K 义务沿各自规则核查。 |
 | R7.2 | Required | 双目标四 profile 的 HostBatch／probe；自有、生成／应用及项目补丁的条件与普通整数 | not_assessed | [普通整数](essential-types/ordinary-integers.md)和[条件控制](essential-types/conditional-integers.md)保留各自冻结输入；#443 补当前条件、活动宏、provider 与整数模型的闭包及独立控制，#444 承接 Windows 44 次 SDK 缺 U 暴露。 |
 | R7.3 | Required | 同一范围的物理 token、真实宏展开及直接消费者 | not_assessed | 本篇已保留 452 个历史 TU 的有界后缀证据；#443 复核 RTE／SchM 变更后的当前输入与宏展开，#444 承接四 profile 共 28 次非 ISO Windows 小写后缀暴露。 |
 | R12.3 | Advisory | 同一范围的真实逗号语法，含 return、for 和嵌套实参 | not_assessed | 本篇已保留 Linux 228 个历史 TU 的完整语法解析及 Windows 历史有界证据；#443 补当前双目标语法与直接消费者关系，Windows SDK 解析限制须有实际替代证据。 |
+| R17.3 | Mandatory | 同一 C99 范围，含 GNU 对齐查询与项目补丁 | not_applicable | 主文印刷 138／PDF 146 仅适用 C90，AMD2 Appendix H 继续明确此限制；当前 C99 编译、声明与扩展检查仍保留，具体诊断沿原 OS 裁决。 |
 <!-- misra-checker-obligations-end -->
 
 从 #453 到 master `a5f1dd35`，#457 改变 SchM 模式绑定生成物，#455 改变分析驱动。
 最新 master 完整扫描为 [42424904238](https://github.com/g1331/autsaro/actions/runs/42424904238)。
 旧局部证据的全文和正常工具证据可定位，但上述变化仍须按实际实体与展开建立当前关系。
-当前组保持未绑定；本表三项均为未完成，源码验收逐项阻塞。
+当前组保持未绑定；两项语言适用性也须经本组当前绑定消费，三项局部证据继续逐项阻塞。
 
-其余 141 项的原文能力、适用性和必要人工结算继续归 #443。
+其余 139 项的原文能力、适用性和必要人工结算继续归 #443。
 恢复条件为按同号固定 checker 或核心诊断映射与原文核对，
 把正常分析足以证明的性质、语言／配置适用性或额外人工证据写回对应原主题篇，
 再以独立本组上下文绑定当前输入；缺少结算的行保持未评估。

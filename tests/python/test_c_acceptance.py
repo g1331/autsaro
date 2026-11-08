@@ -244,7 +244,7 @@ class AcceptanceTests(unittest.TestCase):
         self.obligation_path.write_text(text, encoding="utf-8", newline="\n")
         self.assertEqual(self.identity(), identity)
 
-    def test_real_checker_obligations_keep_three_local_gaps_and_141_missing_reviews(self):
+    def test_real_checker_records_keep_gaps_and_c99_applicability_separate(self):
         self.owned_inputs()
         self.summary["diagnostics"] = []
         self.summary["passed"] = True
@@ -254,7 +254,7 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
-        self.assertEqual(len(objects), 144)
+        self.assertEqual(len(objects), 142)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
@@ -265,6 +265,11 @@ class AcceptanceTests(unittest.TestCase):
             actual = text.splitlines()[row["source"]["line"] - 1]
             self.assertTrue(actual.startswith("| " + row["id"] + " |"))
             self.assertIn("#443", row["conclusion"])
+        records = c_standard.checker_obligations(self.rules, self.root)["records"]
+        applicable = [row for row in records if row["status"] == "not_applicable"]
+        self.assertEqual({row["id"] for row in applicable}, {"R1.4", "R17.3"})
+        for row in applicable:
+            self.assertEqual(row["source"]["file"], "docs/standards/types/language-constructs.md")
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
