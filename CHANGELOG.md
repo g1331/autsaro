@@ -68,7 +68,7 @@
 
 ### Fixed
 
-- Source acceptance can consume separately bound SDK integration records at exact source positions, including unreported macro obligations; changed definitions, unrecorded uses and stale evidence remain blocked (#444)
+- Source acceptance can consume separately bound SDK integration records at exact source positions, including unreported macro obligations; changed definitions, unrecorded uses and stale evidence remain blocked (#460)
 
 - Source acceptance can consume separately bound FreeRTOS integration evidence and existing exact patch records after replaying the ordered patches against verified originals; changed inputs, reports and missing evidence remain blocked (#441)
 
