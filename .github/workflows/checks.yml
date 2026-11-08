@@ -1,6 +1,7 @@
 name: Development checks
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main, master]
   workflow_dispatch:
@@ -8,9 +9,10 @@ on:
       base:
         description: Incremental check baseline commit
         required: true
+# Keep the non-required tail from locking another master revision.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && github.run_id || github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
 permissions:
   contents: read
   pull-requests: read
@@ -20,12 +22,15 @@ env:
 jobs:
   changes:
     name: Detect changed areas
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       code: ${{ steps.detect.outputs.code }}
       native: ${{ steps.detect.outputs.native }}
       desktop: ${{ steps.detect.outputs.desktop }}
+      analysis: ${{ steps.detect.outputs.analysis }}
+      application: ${{ steps.detect.outputs.application }}
     steps:
       # Standards records and the fixed guideline index are consumed analysis inputs.
       # Pull requests touching only reader documentation and design records
@@ -43,24 +48,38 @@ jobs:
           PULL_REQUEST: ${{ github.event.pull_request.number }}
           BASE: ${{ github.event.before }}
         run: |
-          import os, subprocess
+          import json, os, subprocess
           documentation = ('docs/', '.agents/', '.claude/', '.codex/', '.impeccable/', '.github/ISSUE_TEMPLATE/')
+          drivers = {'tools/python/src/autosar_tooling/' + name + '.py'
+              for name in ('c_check', 'c_acceptance', 'c_sdk', 'c_comparison', 'c_addon')}
+          def is_analysis(path):
+              return (path in drivers or path == '.agents/skills/misra-c2012/references/baseline-index.json'
+                  or path.startswith('docs/standards/') and path.endswith('.md')
+                  and not path.startswith('docs/standards/rte/generated-retention/'))
           def is_documentation(path):
-              if path.startswith('docs/standards/') or path == '.agents/skills/misra-c2012/references/baseline-index.json':
+              if path.startswith(('docs/standards/', 'docs/official/')) or path in drivers or path == '.agents/skills/misra-c2012/references/baseline-index.json':
                   return False
-              if path.startswith(documentation) or path in {'LICENSE', 'NOTICE', '.github/PULL_REQUEST_TEMPLATE.md'}:
+              if path.startswith(documentation) or path == '.github/PULL_REQUEST_TEMPLATE.md':
                   return True
-              # Root guides only; nested Markdown such as runtime/README.md ships with generated projects.
+              # Nested runtime Markdown, LICENSE and NOTICE are delivered assets.
               return '/' not in path and path.endswith('.md')
-          code = native = True
+          code = native = analysis = application = True
           listing = None
           if os.environ['PULL_REQUEST']:
-              listing = subprocess.run(['gh', 'api', '--paginate', '--jq', '.[] | .filename, (.previous_filename // empty)',
+              pages = json.loads(subprocess.run(['gh', 'api', '--paginate', '--slurp',
                   f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PULL_REQUEST']}/files"],
-                  check=True, capture_output=True, text=True).stdout.split()
-              # The files API stops at 3000 entries; treat a truncated listing as code.
-              code = not listing or len(listing) >= 3000 or not all(map(is_documentation, listing))
-              native = code and not all(is_documentation(path) or path.startswith('ui/') for path in listing)
+                  check=True, capture_output=True, text=True).stdout)
+              rows = [row for page in pages for row in page]
+              listing = [path for row in rows for path in (row['filename'], row.get('previous_filename')) if path]
+              reliable = bool(rows) and len(rows) < 3000 and all(
+                  row['status'] in {'modified', 'added', 'removed'} and not row.get('previous_filename') for row in rows)
+              if reliable:
+                  code = not all(map(is_documentation, listing))
+                  analysis_only = all(row['status'] == 'modified' and is_analysis(row['filename']) for row in rows)
+                  native = code and not analysis_only and not all(
+                      is_documentation(path) or path.startswith('ui/') for path in listing)
+                  analysis = code and (native or analysis_only)
+                  application = code and not analysis_only
               print('\n'.join(listing))
           if not os.environ['PULL_REQUEST'] and os.environ.get('BASE') and set(os.environ['BASE']) != {'0'}:
               diff = subprocess.run(['git', 'diff', '--no-renames', '--name-only', os.environ['BASE'], os.environ['GITHUB_SHA']],
@@ -68,42 +87,24 @@ jobs:
               listing = diff.stdout.split() if diff.returncode == 0 else None
           desktop_paths = ('ui/', 'src-tauri/', 'core/', 'runtime/', 'tests/desktop/', 'tools/python/',
               'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.node-version', '.python-version',
-              'pyproject.toml', 'uv.lock', '.github/actions/', '.github/workflows/checks.yml',
+              'pyproject.toml', 'uv.lock', 'LICENSE', 'NOTICE', '.github/actions/', '.github/workflows/checks.yml',
               '.github/workflows/desktop.yml', 'tests/python/test_ci_selection.py', 'tests/python/test_desktop_workflow.py')
-          desktop = listing is None or not listing or len(listing) >= 3000 or any(path.startswith(desktop_paths) for path in listing)
-          print('code=' + str(code).lower(), 'native=' + str(native).lower())
+          non_desktop = ('docs/', 'tests/python/', 'scripts/', 'fuzz/', '.github/', '.agents/')
+          unknown = listing is not None and any(not (is_documentation(path) or is_analysis(path)
+              or path.startswith(desktop_paths + non_desktop)) for path in listing)
+          desktop = application and (unknown or listing is None or not listing or len(listing) >= 3000
+              or any(path.startswith(desktop_paths) for path in listing))
+          if os.environ['PULL_REQUEST'] and not reliable:
+              desktop = True
+          values = dict(code=code, native=native, desktop=desktop, analysis=analysis, application=application)
+          print(values)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-              output.write('code=' + str(code).lower() + '\n')
-              output.write('native=' + str(native).lower() + '\n')
-              output.write('desktop=' + str(desktop).lower() + '\n')
+              for name, value in values.items():
+                  output.write(name + '=' + str(value).lower() + '\n')
   desktop-scenarios:
     needs: changes
     if: needs.changes.outputs.desktop == 'true'
     uses: ./.github/workflows/desktop.yml
-  ui:
-    # Short checks follow preparation so long native jobs can claim the first runners.
-    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows]
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # macOS runs in extended.yml after merging.
-        os: [ubuntu-24.04, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: ui/package-lock.json
-      - run: npm ci --prefix ui
-      - run: npm run lint --prefix ui
-      - run: python -m autosar_tooling.ci_reporting run -- npm run test --prefix ui
-      - run: npm run build --prefix ui
   python:
     # Short checks follow preparation so long native jobs can claim the first runners.
     needs: [changes, c-analysis-prepare, c-analysis-prepare-windows]
@@ -173,13 +174,13 @@ jobs:
   desktop:
     # Short checks follow preparation so long native jobs can claim the first runners.
     needs: [changes, c-analysis-prepare, c-analysis-prepare-windows]
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.application == 'true' }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -192,14 +193,23 @@ jobs:
       - uses: ./.github/actions/core-build-dependencies
         with:
           linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
-      - run: npm ci --prefix ui
-      - run: npm run build --prefix ui
+      - if: ${{ !cancelled() }}
+        run: npm ci --prefix ui
+      - if: ${{ !cancelled() }}
+        run: npm run lint --prefix ui
+      - if: ${{ !cancelled() }}
+        run: python -m autosar_tooling.ci_reporting run -- npm run test --prefix ui
+      - if: ${{ !cancelled() }}
+        run: npm run build --prefix ui
       # Desktop tests are compile-bound: the dev profile keeps the GUI dependencies unoptimized
       # and shared with the build below.
-      - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked --profile dev -p autosar-config-desktop
-      - run: npm run ipc:check --prefix ui
-      - run: cargo build --locked -p autosar-config-desktop
-      - if: runner.os == 'Linux'
+      - if: ${{ !cancelled() }}
+        run: python -m autosar_tooling.ci_reporting run -- cargo test --locked --profile dev -p autosar-config-desktop
+      - if: ${{ !cancelled() }}
+        run: npm run ipc:check --prefix ui
+      - if: ${{ !cancelled() }}
+        run: cargo build --locked -p autosar-config-desktop
+      - if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
   native:
     # Native suites that need GCC but no licensed archive; the rest stay in acceptance.yml.
@@ -465,6 +475,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   quality:
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -515,7 +526,7 @@ jobs:
       contents: read
       security-events: write
     needs: changes
-    if: needs.changes.outputs.native == 'true'
+    if: needs.changes.outputs.analysis == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -650,7 +661,7 @@ jobs:
       contents: read
       security-events: write
     needs: changes
-    if: needs.changes.outputs.native == 'true'
+    if: needs.changes.outputs.analysis == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -665,7 +676,8 @@ jobs:
 
   native-delivery:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.
-    needs: c-analysis-prepare
+    needs: [changes, c-analysis-prepare]
+    if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -730,7 +742,8 @@ jobs:
 
   native-delivery-windows:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.
-    needs: c-analysis-prepare-windows
+    needs: [changes, c-analysis-prepare-windows]
+    if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -831,7 +844,7 @@ jobs:
           sys.exit(1 if failed else 0)
       # Independent tool tests run once per platform, alongside the other sample shards.
       - name: Analyzer behavior tests
-        if: matrix.group == 'standard-ecu'
+        if: matrix.group == 'no-diagnostic'
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Retrieve matching master baseline for presentation
         if: always()
@@ -938,7 +951,7 @@ jobs:
   c-analysis:
     # A skipped/cancelled producer or shard must never make the gate green.
     needs: [changes, c-analysis-prepare, c-analysis-prepare-windows, c-analysis-samples, c-analysis-samples-windows]
-    if: ${{ !cancelled() && needs.changes.outputs.native == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.analysis == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -982,9 +995,9 @@ jobs:
 
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
-    name: CI required
-    needs: [changes, desktop-scenarios, ui, python, core, desktop, native, native-os, native-sanitizers, native-delivery, native-delivery-windows, quality, c-analysis]
-    if: ${{ always() }}
+    name: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && 'Unselected PR label' || 'CI required' }}
+    needs: [changes, desktop-scenarios, python, core, desktop, native, native-os, native-sanitizers, native-delivery, native-delivery-windows, quality, c-analysis]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -996,16 +1009,21 @@ jobs:
           import json, os, sys
           needs = json.loads(os.environ['RESULTS'])
           outputs = needs['changes']['outputs'] if needs['changes']['result'] == 'success' else {}
-          code, native = outputs.get('code') != 'false', outputs.get('native') != 'false'
-          # The jobs gated on the native output; tests/python/test_ci_selection.py keeps both lists equal.
-          UI_INDEPENDENT = {'core', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'native-delivery-windows', 'c-analysis'}
-          # Skips are accepted only where the change detection selected them.
+          code = outputs.get('code') != 'false'
+          NATIVE_JOBS = {'core', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'native-delivery-windows'}
           def accepted(name):
-              if name == 'desktop-scenarios':
-                  return {'success', 'skipped'} if outputs.get('desktop') == 'false' else {'success'}
-              if name == 'changes':
+              if name in {'changes', 'quality'}:
                   return {'success'}
-              return {'success', 'skipped'} if not code or not native and name in UI_INDEPENDENT else {'success'}
+              selection = ('desktop' if name == 'desktop-scenarios' else
+                  'application' if name == 'desktop' else
+                  'analysis' if name == 'c-analysis' else 'native' if name in NATIVE_JOBS else 'code')
+              return {'success', 'skipped'} if outputs.get(selection) == 'false' else {'success'}
           failed = {name: need['result'] for name, need in needs.items() if need['result'] not in accepted(name)}
-          print('code=' + str(code).lower(), 'native=' + str(native).lower(), {name: need['result'] for name, need in needs.items()})
+          print('code=' + str(code).lower(), 'selection=' + str(outputs), {name: need['result'] for name, need in needs.items()})
           sys.exit('Blocking jobs did not pass: ' + str(failed) if failed else 0)
+
+  extended:
+    # Same run, revision and fork token; never feeds back into CI required.
+    needs: required
+    if: ${{ !cancelled() && needs.required.result == 'success' && (github.event_name == 'pull_request' || github.event_name == 'push' && github.ref == 'refs/heads/master') }}
+    uses: ./.github/workflows/extended.yml

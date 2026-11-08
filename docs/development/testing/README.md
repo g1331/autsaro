@@ -71,8 +71,8 @@ uv run --locked --group workflows zizmor .github
 
 CI 分两层：
 
-- **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。真实桌面 GUI／IPC 场景由 `desktop-scenarios` 复用共享构建和五分片，PR／master 按应用、运行时、工具和构建输入路径选择；只有明确未选择时汇总接受跳过，失败与取消阻塞合并。原生、OS、检测器、交付与生成 C 分析在 Windows 和 Linux 上完整运行；离线接收端在两平台用 Python 3.11 运行全部四个样本（含多组件独立 HostBatch 期望）。新版解释器的必需层覆盖由 Python 开发测试承担（含 ecu_tools 单元测试与 `test_sealed_sources`），运行 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改根目录指南、`docs/`、代理说明或配置（含 `.codex/` hooks）或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。除这些文档外只改 `ui/` 的 PR（如前端依赖更新）只运行 `ui`、`python`（含受管进程测试）、`desktop`、按路径选择的 `desktop-scenarios` 与 `quality`，跳过 core、原生、OS、检测器、交付与生成 C 分析任务：这些任务的输入都不在 `ui/` 下，`tests/python/test_ci_selection.py` 检查它们的源码不引用 `ui/`，并核对跳过的任务与 `CI required` 接受跳过的名单一致。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
-- **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：离线接收端 Python 3.11–3.14 × 四样本的 Linux／Windows 完整矩阵、其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[官方对照](official.md)和[模糊测试](fuzzing.md)（官方对照在 PR 与 master 均按路径运行；模糊测试在 PR 上只随目标直接消费的源码运行，master 按完整输入路径运行）。master 每次推送都运行它，接收端矩阵按 core／runtime／工具／测试与构建配置路径选择；桌面场景已由必需层负责，扩展层不重复自动执行；手动 Extended 仍运行桌面全量。PR 改动官方对照相关路径时运行官方对照。PR 加 `full-ci` 标签后运行其余扩展检查；手动运行全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
+- **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。真实桌面 GUI／IPC 场景由 `desktop-scenarios` 复用共享构建和五分片，PR／master 按应用、运行时、工具和构建输入路径选择；只有明确未选择时汇总接受跳过，失败与取消阻塞合并。core／runtime 改动在 Windows 和 Linux 完整运行原生、OS、检测器、交付与生成 C 分析；离线接收端在两平台用 Python 3.11 运行全部四个样本（含多组件独立 HostBatch 期望）。新版解释器的必需层覆盖由 Python 开发测试承担（含 ecu_tools 单元测试与 `test_sealed_sources`），运行 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改未被消费的根目录指南、`docs/`、代理说明或配置（含 `.codex/` hooks）或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。除这些文档外只改 `ui/` 的 PR（如前端依赖更新）只运行合并的 UI／desktop、`python`（含受管进程测试）、按路径选择的 `desktop-scenarios` 与 `quality`，跳过 core、原生、OS、检测器、交付与生成 C 分析任务：`test_ci_selection.py` 核对消费路径、选择与汇总。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
+- **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：离线接收端 Python 3.11–3.14 × 四样本的 Linux／Windows 完整矩阵、其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[官方对照](official.md)和[模糊测试](fuzzing.md)（官方对照在 PR 与 master 均按路径运行；模糊测试在 PR 上只随目标直接消费的源码运行，master 按完整输入路径运行）。自动 PR／master 由同一 `Development checks` 在 `CI required` 成功后调用它，检出同一 SHA；接收端矩阵按 core／runtime／工具／测试与构建配置路径选择；桌面场景已由必需层负责，扩展层不重复自动执行；手动 Extended 仍运行桌面全量。PR 改动官方对照相关路径时运行官方对照。明确添加 `full-ci` 标签会先重新验证必需检查，再运行其余扩展检查；无关标签不取消 PR 检查或产生同名必需结果。手动运行全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
 
 自动合并在检查通过后仍为 `BLOCKED` 时，应处理保护或讨论阻塞，不等 watcher 提醒。存量诊断先回复依据再解决，保留告警。
 
@@ -86,9 +86,11 @@ CI 分两层：
 
 Cppcheck 展示层尝试下载比较基准提交上成功的 master 检查工件，并使用现有严格比较器；身份不符、工件过期或缺失时明确显示基线不可用／拒绝与“新增未知”，不把全部原始诊断称为新增。clang-tidy 消费 `AUTOSAR_CLANG_TIDY_REPORT` 指定的原始 JSON 工件，用同一源码基线比较逻辑展示新增位置。报告与上传不改写原始 `passed`、退出码、基线或源码门禁；部分分析仍注明未完成。报告只包含测试名称、核算结果和源码诊断，不上传官方档案。
 
-固定 Cppcheck 的行为测试在 `c-analysis-samples` 的 `standard-ecu` 分片中每平台运行一次，与其他样本分析并行。Linux 与 Windows 的 prepare、样本分析和交付各自依赖本平台的准备结果，步骤用 YAML alias 共享；Windows 作业 ID 带 `-windows`。`c-analysis-prepare` 保留生成格式、clang 和 clang-tidy 检查，`c-analysis` 要求两个平台的准备／分析成功并核对八份结果，`CI required` 同时要求两个平台的交付成功。失败与取消仍阻塞。
+固定 Cppcheck 的行为测试在 `c-analysis-samples` 的 `no-diagnostic` 分片中每平台运行一次，与其他样本分析并行。Linux 与 Windows 的 prepare、样本分析和交付各自依赖本平台的准备结果，步骤用 YAML alias 共享；Windows 作业 ID 带 `-windows`。`c-analysis-prepare` 保留生成格式、clang 和 clang-tidy 检查，`c-analysis` 要求两个平台的准备／分析成功并核对八份结果，`CI required` 同时要求两个平台的交付成功。失败与取消仍阻塞。
 
-UI、Python 和 desktop 编译这些短作业在 prepare 之后运行，为长原生任务保留首批 runner。其显式状态条件允许 UI-only PR 在 prepare 被明确跳过时继续执行，原有路径选择与检查命令保持。普通文档 PR 仍只运行选择、quality 与汇总任务。
+UI 与 desktop 合并为每平台一个 20 分钟作业，共享 checkout、Node、npm ci 和 UI build，独立检查失败后继续报告。Python 保留三解释器矩阵。它们在 prepare 后运行；显式状态条件允许 UI-only PR 在 prepare 跳过时继续执行。普通文档 PR 只运行选择、quality、汇总及轻量 Extended 选择。
+
+只修改五个独立分析驱动（`c_check`、`c_acceptance`、`c_sdk`、`c_comparison`、`c_addon`）、标准评估 Markdown 或固定 MISRA 索引时，PR 选择 Python、两平台 prepare／分析及汇总。generated-retention、共享 lexer／retention、LICENSE／NOTICE 属于完整检查输入；混合改动、改名、未知或截断清单完整选择。
 
 Cargo 缓存键保留 runner 镜像、工具链和锁文件身份，并用 `git ls-files` 只对受版本控制的编译源码／交付输入字节计算摘要；导入或构建生成物及时间戳不参与，源码改变后写回增量状态，恢复前缀继续接纳旧缓存。只缓存编译产物，测试和分析结果每次重新运行。
 

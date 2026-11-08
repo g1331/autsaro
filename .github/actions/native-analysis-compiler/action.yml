@@ -38,7 +38,7 @@ runs:
         @'
         import hashlib, os, subprocess, tempfile
         from pathlib import Path
-        from autosar_tooling.c_check import compiler_include_paths
+        from ecu_tools.build import compiler_include_paths
         compiler = (Path(os.environ['MSYS2_LOCATION']) / 'mingw64/bin/gcc.exe').resolve(strict=True)
         source = Path('build/native-gcc/headers.c')
         source.write_text('#include <stdio.h>\nint main(void) { return 0; }\n', encoding='utf-8')

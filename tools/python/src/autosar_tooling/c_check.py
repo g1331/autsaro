@@ -17,6 +17,7 @@ from pathlib import Path
 from ecu_tools.build import (
     FILE_HASHES,
     TARGETS,
+    compiler_include_paths,
     digest,
     kernel_patch_environment,
     kernel_patch_targets,
@@ -173,25 +174,6 @@ def coverage(addons: Path) -> dict:
 
     result["manualAssessment"] = c_standard.manual_assessment(result["rules"])
     return result
-
-
-def compiler_include_paths(header_log: str, directory: Path) -> list[str]:
-    """Resolve GCC search entries in its cwd, including Windows rooted paths."""
-    collecting = False
-    includes = []
-    for line in header_log.splitlines():
-        if line.strip() == "#include <...> search starts here:":
-            collecting = True
-        elif line.strip() == "End of search list.":
-            collecting = False
-        elif collecting:
-            path = (directory / line.strip()).resolve(strict=True)
-            if not path.is_dir():
-                raise ValueError("Compiler reported a non-directory include path")
-            includes.append(tool_argument(path))
-    if not includes:
-        raise ValueError("Compiler reported no system include paths")
-    return includes
 
 
 def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str], list[dict], dict]:
