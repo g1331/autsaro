@@ -467,9 +467,9 @@ fn rejections_locate_application_objects() {
     );
     rejected_with(
         &mode,
-        unsupported,
+        ("MODE_ACCESS_UNCONNECTED", "MODE_ACCESS_UNCONNECTED"),
         "ingress.arxml",
-        "/Application/Ingress/Behavior/Periodic",
+        "/Application/Ingress/Behavior/Periodic/ReadMode",
     );
 
     let mut variant = single_component_sources();

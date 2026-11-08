@@ -1877,6 +1877,124 @@ fn typed_port_arguments_and_errors_reach_real_servers_and_kill_behavior_mutation
 }
 
 #[test]
+fn synchronized_modes_execute_shared_state_and_reject_storage_mutations() {
+    // Verifies: SWS_Rte_07532, SWS_Rte_07535, SWS_Rte_02628, SWS_Rte_02629
+    run_synchronized_mode_consumer(false);
+    run_synchronized_mode_consumer(true);
+}
+
+fn run_synchronized_mode_consumer(swc_managed: bool) {
+    let sources = if swc_managed {
+        swc_managed_mode_inputs()
+    } else {
+        mode_binding_inputs()
+    };
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:#?}"));
+    let scratch = Scratch::new();
+    for (path, bytes) in prepared_pipeline_files_for_target(&plan, tooling::native_target()) {
+        let path = scratch.0.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+    let composition = plan.description().composition.as_ref().unwrap();
+    let primary = composition
+        .mode_machines
+        .iter()
+        .find(|machine| machine.switch_symbol == "SchM_Switch_ComM_Primary")
+        .unwrap();
+    let secondary = composition
+        .mode_machines
+        .iter()
+        .find(|machine| machine.switch_symbol == "SchM_Switch_ComM_Secondary")
+        .unwrap();
+    let schm = scratch.0.join("generated/src/SchM_Main.c");
+    let rte = scratch.0.join("generated/src/Rte.c");
+    let original = std::fs::read_to_string(&schm).unwrap();
+    let original_rte = std::fs::read_to_string(&rte).unwrap();
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/bsw-contracts/rte_mode_contract.c"),
+        scratch.0.join("rte_mode_contract.c"),
+    )
+    .unwrap();
+    let assignment = format!("{} = mode;", primary.variable);
+    assert_eq!(original.matches(&assignment).count(), 1);
+    let receiver = "return SchM_Mode_ComM_Primary();";
+    assert_eq!(original_rte.matches(receiver).count(), 2);
+    for (name, source, rte_source, success) in [
+        ("normal", original.clone(), original_rte.clone(), true),
+        (
+            "missing-shared-write",
+            original.replace(&assignment, "(void)mode;"),
+            original_rte.clone(),
+            false,
+        ),
+        (
+            "private-receiver-copy",
+            original.clone(),
+            original_rte.replacen(
+                receiver,
+                "static Rte_ModeType_PowerState private_mode = 3u;\n    return private_mode;",
+                1,
+            ),
+            false,
+        ),
+        (
+            "mixed-publishers",
+            original.clone(),
+            original_rte.replacen("return SchM_Mode_ComM_Secondary();", receiver, 1),
+            false,
+        ),
+    ] {
+        std::fs::write(&schm, source).unwrap();
+        std::fs::write(&rte, rte_source).unwrap();
+        let executable = tooling::native_binary(&scratch.0, name);
+        let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
+        compiler
+            .current_dir(&scratch.0)
+            .args([
+                "-std=c99",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                "-ffunction-sections",
+                "-fdata-sections",
+                "generated/src/Rte.c",
+                "generated/src/SchM_Main.c",
+                "integration/src/Can_HostLock.c",
+                "app/Ingress/Ingress.c",
+                "app/Process/Process.c",
+            ])
+            .arg("rte_mode_contract.c")
+            .arg("-Wl,--gc-sections");
+        if swc_managed {
+            compiler.arg("-DSWC_MODE_PUBLISHER");
+        }
+        if cfg!(target_os = "linux") {
+            compiler.arg("-pthread");
+        }
+        compiler.arg("-o").arg(&executable);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            &format!("{name}-compile"),
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{name}: {output:?}");
+        let output = tooling::run_public_command(
+            &mut std::process::Command::new(executable),
+            &scratch.0,
+            &format!("{name}-run"),
+            std::time::Duration::from_secs(30),
+        );
+        assert_eq!(output.status.success(), success, "{name}: {output:?}");
+    }
+    assert_ne!(primary.variable, secondary.variable);
+}
+
+#[test]
 fn dcm_services_call_real_apis_and_preserve_outputs() {
     let plan = build(&dcm_service_inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));
     let scratch = Scratch::new();

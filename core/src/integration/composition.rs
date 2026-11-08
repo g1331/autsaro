@@ -193,6 +193,7 @@ pub struct Component {
     pub interfaces: BTreeMap<String, String>,
     pub diagnostic_session_port: Option<DiagnosticSessionPort>,
     pub diagnostic_mode_ports: Vec<DiagnosticSessionPort>,
+    pub mode_ports: Vec<super::mode_binding::ModePort>,
     pub data_ports: Vec<DataPort>,
     pub data_accesses: Vec<DataAccess>,
     pub operations: Vec<Operation>,
@@ -252,6 +253,8 @@ pub struct CompositionContract {
     pub array_types: BTreeMap<String, String>,
     pub types: Vec<super::rte_types::RteDataType>,
     pub dcm_modes: Vec<DcmModeDefinition>,
+    pub mode_machines: Vec<super::mode_binding::ModeMachine>,
+    pub mode_connections: Vec<Connection>,
 }
 
 pub(super) fn dcm_data_type_names(data: &str) -> [String; 3] {
@@ -296,6 +299,7 @@ impl CompositionContract {
         symbols: &[SymbolContract],
         catalog: &super::catalog::RuntimeCatalog,
     ) -> Result<(), Vec<PlanDiagnostic>> {
+        super::mode_binding::validate_owners(graph, self, symbols, catalog)?;
         let inventory = crate::resources::AssetInventory::embedded();
         let headers = inventory
             .entries()
@@ -1100,7 +1104,6 @@ fn inspect_with_transport(
             "QUEUED-RECEIVER-COM-SPEC",
             "QUEUED-SENDER-COM-SPEC",
             "ASYNCHRONOUS-SERVER-CALL-POINT",
-            "MODE-ACCESS-POINTS",
             "DATA-READ-ACCESSS",
             "DATA-WRITE-ACCESSS",
             "VARIATION-POINT",
@@ -1263,6 +1266,7 @@ fn inspect_with_transport(
         let mut operations = Vec::new();
         let mut diagnostic_session_port = None;
         let mut diagnostic_mode_ports = Vec::new();
+        let mut mode_ports = Vec::new();
         for port in graph
             .descendants(component, "P-PORT-PROTOTYPE")
             .into_iter()
@@ -1577,8 +1581,26 @@ fn inspect_with_transport(
                     });
                 }
             } else if graph.elements[interface].tag == "MODE-SWITCH-INTERFACE" {
-                // Only the fixed Dcm BSW service publisher is in scope; this
-                // does not enable mode communication for application SWCs.
+                let dcm_interface = !read
+                    && dcm_modes.iter().any(|definition| {
+                        name(graph, interface) == format!("Dcm_{}", definition.port)
+                    });
+                let mode = super::mode_binding::port(graph, port, interface).map_err(|issues| {
+                    if dcm_interface {
+                        fail(graph, port, "TYPE_CONFLICT")
+                    } else {
+                        issues
+                    }
+                })?;
+                let fixed = dcm_interface
+                    || (!read
+                        && dcm_modes.iter().any(|definition| {
+                            mode.group == format!("/AUTOSAR_Dcm/{}", definition.group)
+                        }));
+                mode_ports.push(mode);
+                if !fixed {
+                    continue;
+                }
                 if read
                     || graph.elements[component].tag != "SERVICE-SW-COMPONENT-TYPE"
                     || diagnostic_mode_ports
@@ -1804,6 +1826,7 @@ fn inspect_with_transport(
             interfaces,
             diagnostic_session_port,
             diagnostic_mode_ports,
+            mode_ports,
             data_ports,
             data_accesses,
             operations,
@@ -1848,6 +1871,7 @@ fn inspect_with_transport(
         }
     }
     let mut connections = Vec::new();
+    let mut mode_connections = Vec::new();
     let mut receivers = BTreeSet::new();
     for connector in graph.descendants(composition, "ASSEMBLY-SW-CONNECTOR") {
         let provider = one(
@@ -1923,6 +1947,37 @@ fn inspect_with_transport(
                     instance: p_component.instance.clone(),
                     port: p.path.clone(),
                     member: p.element.clone(),
+                },
+                requester: endpoint,
+                service: false,
+            });
+        } else if let Some(p) = p_component
+            .mode_ports
+            .iter()
+            .find(|port| port.port == path(graph, p_port))
+        {
+            let r = r_component
+                .mode_ports
+                .iter()
+                .find(|port| port.port == path(graph, r_port))
+                .ok_or_else(|| fail(graph, connector, "MODE_TYPE_CONFLICT"))?;
+            if p.group != r.group {
+                return Err(fail(graph, connector, "MODE_TYPE_CONFLICT"));
+            }
+            let endpoint = Endpoint {
+                instance: r_component.instance.clone(),
+                port: r.port.clone(),
+                member: r.prototype.clone(),
+            };
+            if !receivers.insert(endpoint.clone()) {
+                return Err(fail(graph, connector, "MODE_MULTIPLE_PUBLISHERS"));
+            }
+            mode_connections.push(Connection {
+                path: path(graph, connector),
+                provider: Endpoint {
+                    instance: p_component.instance.clone(),
+                    port: p.port.clone(),
+                    member: p.prototype.clone(),
                 },
                 requester: endpoint,
                 service: false,
@@ -2210,7 +2265,7 @@ fn inspect_with_transport(
             }
         }
     }
-    let plan = CompositionContract {
+    let mut plan = CompositionContract {
         system: path(graph, system),
         composition: path(graph, composition),
         ecu: path(graph, ecu),
@@ -2221,7 +2276,10 @@ fn inspect_with_transport(
         array_types: arrays,
         types: rte_types,
         dcm_modes,
+        mode_machines: Vec::new(),
+        mode_connections,
     };
+    plan.mode_machines = super::mode_binding::inspect(graph, &plan)?;
     check_names(graph, &plan)?;
     Ok(plan)
 }
@@ -2516,6 +2574,37 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             ));
         }
     }
+    let mut mode_groups = BTreeSet::new();
+    for machine in &plan.mode_machines {
+        if !super::mode_binding::fixed_dcm(machine) {
+            for name in [
+                &machine.switch_symbol,
+                &machine.mode_symbol,
+                &machine.variable,
+            ] {
+                if !names.insert(name.clone()) {
+                    return Err(fail(
+                        graph,
+                        graph.index(&machine.publisher.port)?,
+                        "CONTRACT_NAME_COLLISION",
+                    ));
+                }
+            }
+            if mode_groups.insert(&machine.group) {
+                for name in std::iter::once(machine.native_type()).chain(machine.values.iter().map(
+                    |(mode, _)| format!("RTE_MODE_{}_{mode}", super::short_name(&machine.group)),
+                )) {
+                    if !names.insert(name) {
+                        return Err(fail(
+                            graph,
+                            graph.index(&machine.group)?,
+                            "CONTRACT_NAME_COLLISION",
+                        ));
+                    }
+                }
+            }
+        }
+    }
     let mut errors = BTreeMap::new();
     for operation in plan
         .components
@@ -2593,6 +2682,28 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
                 return Err(fail(graph, index, "SYMBOL_NORMALIZATION_COLLISION"));
             }
         }
+        let mut mode_symbols = BTreeSet::new();
+        for api in plan
+            .mode_machines
+            .iter()
+            .flat_map(|machine| &machine.apis)
+            .filter(|api| {
+                component
+                    .mode_ports
+                    .iter()
+                    .any(|port| port.port == api.port)
+            })
+        {
+            if mode_symbols.insert(&api.symbol)
+                && (!aliases.insert(api.alias.clone()) || !names.insert(api.symbol.clone()))
+            {
+                return Err(fail(
+                    graph,
+                    graph.index(&api.port)?,
+                    "SYMBOL_NORMALIZATION_COLLISION",
+                ));
+            }
+        }
         for runnable in &component.runnables {
             if runnable.bsw_target.is_some() {
                 continue;
@@ -2624,6 +2735,18 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
                     .filter(|operation| operation.read)
                     .map(|operation| operation.api_symbol.clone()),
             )
+            .chain(
+                plan.mode_machines
+                    .iter()
+                    .flat_map(|machine| &machine.apis)
+                    .filter(|api| {
+                        component
+                            .mode_ports
+                            .iter()
+                            .any(|port| port.port == api.port)
+                    })
+                    .map(|api| api.alias.clone()),
+            )
             .collect::<BTreeSet<_>>();
         if aliases.iter().any(|alias| names.contains(alias)) {
             return Err(fail(graph, index, "CONTRACT_NAME_COLLISION"));
@@ -2653,7 +2776,7 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
 }
 
 pub(super) fn symbols(plan: &CompositionContract) -> Vec<SymbolContract> {
-    let mut symbols = Vec::new();
+    let mut symbols = super::mode_binding::symbols(plan);
     for component in &plan.components {
         for port in &component.data_ports {
             symbols.push(SymbolContract {

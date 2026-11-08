@@ -463,6 +463,9 @@ fn destination_allowed(node: Node<'_, '_>, dest: &str) -> bool {
         "OPERATION-REF" | "TARGET-PROVIDED-OPERATION-REF" | "TARGET-REQUIRED-OPERATION-REF" => {
             dest == "CLIENT-SERVER-OPERATION"
         }
+        "BSW-MODE-GROUP-REF" | "TARGET-MODE-GROUP-REF" | "MODE-DECLARATION-GROUP-PROTOTYPE-REF" => {
+            dest == "MODE-DECLARATION-GROUP-PROTOTYPE"
+        }
         "MODE-GROUP-REF" => matches!(
             dest,
             "MODE-DECLARATION-GROUP-PROTOTYPE" | "MODE-DECLARATION-GROUP"

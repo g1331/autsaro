@@ -723,6 +723,28 @@ pub(super) fn files(
         rte.push(symbol);
     }
 
+    for machine in plan
+        .ecu_composition()?
+        .mode_machines
+        .iter()
+        .filter(|machine| !super::mode_binding::fixed_dcm(machine))
+    {
+        let native = machine.native_type();
+        for (name, result, args) in [
+            (
+                &machine.switch_symbol,
+                "Std_ReturnType",
+                vec![("mode", native.as_str(), "IN")],
+            ),
+            (&machine.mode_symbol, native.as_str(), vec![]),
+        ] {
+            let mut symbol = rte_symbol(name, result, &args);
+            symbol.declaration_owner = format!("include/SchM_{}.h", machine.module);
+            symbol.definition_owner = "src/SchM_Main.c".into();
+            rte.push(symbol);
+        }
+    }
+
     for operation in &plan.counter_service.operations {
         let runnable = plan
             .counter_service
@@ -1171,7 +1193,7 @@ pub(super) fn files(
             refs.push_str(&format!(r#"<BSW-MODULE-ENTRY-REF-CONDITIONAL><BSW-MODULE-ENTRY-REF DEST="BSW-MODULE-ENTRY">{entry_path}</BSW-MODULE-ENTRY-REF></BSW-MODULE-ENTRY-REF-CONDITIONAL>"#));
             let area = exclusive_area(module).filter(|_| {
                 if module == "Rte" {
-                    name.starts_with("SchM_Switch_Dcm_") || name.starts_with("SchM_Mode_Dcm_")
+                    name.starts_with("SchM_Switch_") || name.starts_with("SchM_Mode_")
                 } else {
                     !non_entering.contains(name)
                 }
@@ -1182,7 +1204,7 @@ pub(super) fn files(
                     "<MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL><MODE-DECLARATION-GROUP-PROTOTYPE-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">/AUTOSAR_Dcm/Dcm/{group}</MODE-DECLARATION-GROUP-PROTOTYPE-REF></MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL>"
                 )
             };
-            let managed = match name.as_str() {
+            let mut managed = match name.as_str() {
                 "Dcm_Init"
                 | "Dcm_ResetToDefaultSession"
                 | "Dcm_MainFunction"
@@ -1194,6 +1216,10 @@ pub(super) fn files(
                 ),
                 _ => String::new(),
             };
+            let generic_groups = plan.ecu_composition()?.mode_machines.iter().filter(|machine| machine.module == *module && !super::mode_binding::fixed_dcm(machine) && machine.manager_symbols.contains(name)).map(|machine| format!("<MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL><MODE-DECLARATION-GROUP-PROTOTYPE-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">{}</MODE-DECLARATION-GROUP-PROTOTYPE-REF></MODE-DECLARATION-GROUP-PROTOTYPE-REF-CONDITIONAL>", machine.delivered_group())).collect::<String>();
+            if !generic_groups.is_empty() {
+                managed = format!("<MANAGED-MODE-GROUPS>{generic_groups}</MANAGED-MODE-GROUPS>");
+            }
             let scheduler_prefix = if module == "Dcm" {
                 "<SCHEDULER-NAME-PREFIX-REF DEST=\"BSW-SCHEDULER-NAME-PREFIX\">/AUTOSAR_Dcm/Dcm/HostBehavior/Dcm</SCHEDULER-NAME-PREFIX-REF>"
             } else if module == "Rte" && name.starts_with("SchM_") {
@@ -1399,7 +1425,13 @@ pub(super) fn files(
             xml.push_str("</PROVIDED-MODE-GROUPS>");
             xml
         } else {
-            String::new()
+            let groups = plan.ecu_composition()?.mode_machines.iter().filter(|machine| machine.module == *module)
+                .map(|machine| format!("<MODE-DECLARATION-GROUP-PROTOTYPE><SHORT-NAME>{}</SHORT-NAME><TYPE-TREF DEST=\"MODE-DECLARATION-GROUP\">{}</TYPE-TREF></MODE-DECLARATION-GROUP-PROTOTYPE>", super::short_name(&machine.bsw_group), super::xml_text(&machine.group))).collect::<String>();
+            if groups.is_empty() {
+                groups
+            } else {
+                format!("<PROVIDED-MODE-GROUPS>{groups}</PROVIDED-MODE-GROUPS>")
+            }
         };
         let mode_types = if module == "Dcm" {
             "<DATA-TYPE-MAPPING-REFS><DATA-TYPE-MAPPING-REF DEST=\"DATA-TYPE-MAPPING-SET\">/AUTOSAR_Dcm/DcmModeTypes</DATA-TYPE-MAPPING-REF></DATA-TYPE-MAPPING-REFS>"
@@ -1612,7 +1644,20 @@ pub(super) fn files(
     if let Some(composition) = &plan.composition {
         for component in &composition.components {
             elements.push_str(&component.bsw_mapping_xml()?);
+            for machine in composition.mode_machines.iter().filter(|machine| {
+                machine.mapping.is_some() && machine.publisher.instance == component.instance
+            }) {
+                let prototype = &machine.publisher.member;
+                elements.push_str(&format!("<SWC-BSW-MAPPING><SHORT-NAME>ModeMapping{}{}</SHORT-NAME><BSW-BEHAVIOR-REF DEST=\"BSW-INTERNAL-BEHAVIOR\">/AUTOSAR_{module}/{module}/HostBehavior</BSW-BEHAVIOR-REF><SWC-BEHAVIOR-REF DEST=\"SWC-INTERNAL-BEHAVIOR\">{behavior}</SWC-BEHAVIOR-REF><SYNCHRONIZED-MODE-GROUPS><SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE><BSW-MODE-GROUP-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">{bsw}</BSW-MODE-GROUP-REF><SWC-MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST=\"P-PORT-PROTOTYPE\">{port}</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">{prototype}</TARGET-MODE-GROUP-REF></SWC-MODE-GROUP-IREF></SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE></SYNCHRONIZED-MODE-GROUPS></SWC-BSW-MAPPING>", c_name(&component.component), c_name(super::short_name(&machine.publisher.port)), module=machine.module, behavior=component.behavior, bsw=machine.delivered_group(), port=machine.publisher.port));
+            }
             for mode in &component.diagnostic_mode_ports {
+                if composition
+                    .mode_machines
+                    .iter()
+                    .any(|machine| machine.mapping.is_some() && machine.publisher.port == mode.port)
+                {
+                    continue;
+                }
                 let group = super::short_name(&mode.mode_group);
                 elements.push_str(&format!("<SWC-BSW-MAPPING><SHORT-NAME>ModeMapping{}{group}</SHORT-NAME><BSW-BEHAVIOR-REF DEST=\"BSW-INTERNAL-BEHAVIOR\">/AUTOSAR_Dcm/Dcm/HostBehavior</BSW-BEHAVIOR-REF><SWC-BEHAVIOR-REF DEST=\"SWC-INTERNAL-BEHAVIOR\">{}</SWC-BEHAVIOR-REF><SYNCHRONIZED-MODE-GROUPS><SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE><BSW-MODE-GROUP-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">/AUTOSAR_Dcm/Dcm/{group}</BSW-MODE-GROUP-REF><SWC-MODE-GROUP-IREF><CONTEXT-P-PORT-REF DEST=\"P-PORT-PROTOTYPE\">{}</CONTEXT-P-PORT-REF><TARGET-MODE-GROUP-REF DEST=\"MODE-DECLARATION-GROUP-PROTOTYPE\">{}</TARGET-MODE-GROUP-REF></SWC-MODE-GROUP-IREF></SWC-BSW-SYNCHRONIZED-MODE-GROUP-PROTOTYPE></SYNCHRONIZED-MODE-GROUPS></SWC-BSW-MAPPING>", c_name(&component.component), component.behavior, mode.port, mode.prototype));
             }

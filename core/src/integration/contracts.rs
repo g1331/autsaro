@@ -246,7 +246,7 @@ typedef uint8 Rte_ModeType_{group};
     ) -> Result<Vec<(String, Vec<u8>)>, Vec<PlanDiagnostic>> {
         let description = self.description();
         let application_slots = super::ecu::application_slots(composition, &description.symbols);
-        let mut types = String::new();
+        let mut types = super::mode_binding::type_declarations(composition);
         for datatype in &composition.types {
             if datatype.symbol == datatype.native_type && datatype.array_length.is_none() {
                 continue;
@@ -489,7 +489,19 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                     ));
                 }
                 if symbol.return_type != "void" {
-                    let status = if let Some(port) = port {
+                    let mode_api = composition
+                        .mode_machines
+                        .iter()
+                        .flat_map(|machine| &machine.apis)
+                        .find(|api| api.symbol == symbol.symbol);
+                    let status = if let Some(api) = mode_api {
+                        if api.switch {
+                            "SCHM_E_OK after immediate publication.".to_owned()
+                        } else {
+                            "Current mode declaration value from the shared SchM machine."
+                                .to_owned()
+                        }
+                    } else if let Some(port) = port {
                         let network = composition.network_endpoints.iter().any(|endpoint| {
                             endpoint.endpoint.instance == component.instance
                                 && endpoint.endpoint.port == port.path
@@ -530,6 +542,12 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                 }
                 if unnamed {
                     docs.push_str(" * Preconditions: called by the configured RTE activation or synchronous server dispatch with valid argument storage; the application implements this role.\n");
+                } else if composition
+                    .mode_machines
+                    .iter()
+                    .any(|machine| machine.apis.iter().any(|api| api.symbol == symbol.symbol))
+                {
+                    docs.push_str(" * Preconditions: SchM initialized; publishing requires a declared mode value.\n");
                 } else {
                     docs.push_str(" * Preconditions: ECU initialized; RTE data APIs and connected calls require a started RTE and the owner task. Guard rejection preserves outputs; stopped RTE returns RTE_E_COM_STOPPED, invalid context/storage returns E_NOT_OK.\n");
                 }
@@ -624,6 +642,14 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                                         && operation.implementation_symbol == symbol.symbol
                                 })
                                 .map(|operation| operation.api_symbol.as_str())
+                        })
+                        .or_else(|| {
+                            composition
+                                .mode_machines
+                                .iter()
+                                .flat_map(|machine| &machine.apis)
+                                .find(|api| api.symbol == symbol.symbol)
+                                .map(|api| api.alias.as_str())
                         });
                     if let Some(alias) = alias {
                         body.push_str(&format!(

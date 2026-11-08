@@ -5,6 +5,7 @@
 ### Breaking
 
 - Dcm service inputs now require the standard DCMServices P-port and explicit bindings for its four operations. Update existing service inputs and regenerate contracts; the existing Dcm C ABI is unchanged (#456)
+- RTE mode bindings now connect synchronized BSW publishers to SWC mode access points with one SchM-owned state per publisher instance; regenerate plans and contracts and rebuild consumers (#437)
 
 - RTE service C/S now binds explicit SWC/BSW mappings to selected implementation owners and shares the typed binding plan with Counter services; regenerate plans and contracts. Service-interface connectors require a service component endpoint (#454)
 
@@ -67,6 +68,8 @@
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
 ### Fixed
+
+- Source acceptance can consume separately bound FreeRTOS integration evidence and existing exact patch records after replaying the ordered patches against verified originals; changed inputs, reports and missing evidence remain blocked (#441)
 
 - Project source acceptance can associate owned MR12 records, native address instances and MemMap protocol positions through a separate frozen context; physical source positions, reviewed program/profile sets and original record-group authority are enforced, while formal Required blockers and raw analysis results are preserved (#449)
 

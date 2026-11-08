@@ -162,6 +162,15 @@ fn typed_synchronous_port_arguments_use_official_r24_schema() {
 
 #[cfg(feature = "official-oracles")]
 #[test]
+fn synchronized_mode_inputs_pass_official_schema() {
+    for sources in [mode_binding_inputs(), swc_managed_mode_inputs()] {
+        assert_official_schema_accepts(&sources);
+        build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    }
+}
+
+#[cfg(feature = "official-oracles")]
+#[test]
 fn dcm_services_and_connected_application_pass_the_official_schema() {
     assert_official_schema_accepts(&dcm_service_inputs());
     build(&dcm_service_inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));

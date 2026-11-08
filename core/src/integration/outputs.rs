@@ -415,6 +415,8 @@ mod tests {
             path,
             &[
                 Edit::Every("@PARTITION@", "65535"),
+                Edit::Once("@MODE_INCLUDES@", ""),
+                Edit::Once("@INIT_MODES@", ""),
                 Edit::Once("@MODES@", "/* modes */\n"),
             ],
         )

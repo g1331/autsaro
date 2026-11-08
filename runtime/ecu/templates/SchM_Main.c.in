@@ -2,6 +2,7 @@
 #include "Ecu_Target.h"
 #include "SchM_Dcm.h"
 #include "Can_HostLock.h"
+@MODE_INCLUDES@
 #define SCHM_LIFECYCLE_UNALLOCATED 0U
 #define SCHM_LIFECYCLE_INITIALIZED 1U
 #define SCHM_LIFECYCLE_STARTED     2U
@@ -26,7 +27,7 @@ RTE_Rte_CODE void SchM_Init(const SchM_ConfigType *ConfigPtr)
         (ConfigPtr->partition != @PARTITION@u)) {
         return;
     }
-    schm_lifecycle = SCHM_LIFECYCLE_INITIALIZED;
+@INIT_MODES@    schm_lifecycle = SCHM_LIFECYCLE_INITIALIZED;
 }
 RTE_Rte_CODE void SchM_Start(void)
 {

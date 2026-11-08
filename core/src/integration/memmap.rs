@@ -26,6 +26,16 @@ pub(super) fn rte_sections(
     for component in &composition.components {
         let scope = super::short_name(&component.component);
         if !component.data_ports.is_empty()
+            || composition
+                .mode_machines
+                .iter()
+                .flat_map(|machine| &machine.apis)
+                .any(|api| {
+                    component
+                        .mode_ports
+                        .iter()
+                        .any(|port| port.port == api.port)
+                })
             || component.operations.iter().any(|operation| operation.read)
             || component
                 .runnables
