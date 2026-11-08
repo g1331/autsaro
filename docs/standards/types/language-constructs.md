@@ -18,10 +18,6 @@
 
 见[对应证据](language-constructs/README.md#当前输入与三项人工证据的接续)。
 
-#443 从 master `8eee27f7` 接续上述证据。完整分析复用
-
-本篇的原文、实例与 checker 义务按主题见[目录](language-constructs/README.md)。
-
 ### 正常分析与其余人工义务
 
 见[对应证据](language-constructs/README.md#正常分析与其余人工义务)。

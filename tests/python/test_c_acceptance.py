@@ -744,22 +744,28 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
-        self.assertEqual(len(objects), 142)
+        self.assertEqual(len(objects), 140)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual({row["id"] for row in located}, {"R7.2", "R7.3", "R12.3"})
+        self.assertEqual(len(located), 140)
         for row in located:
-            self.assertEqual(row["source"]["file"], "docs/standards/types/language-constructs.md")
+            self.assertTrue(row["source"]["file"].startswith(
+                "docs/standards/types/language-constructs/"))
             text = (self.root / row["source"]["file"]).read_text(encoding="utf-8")
             actual = text.splitlines()[row["source"]["line"] - 1]
             self.assertTrue(actual.startswith("| " + row["id"] + " |"))
             self.assertIn("#443", row["conclusion"])
         records = c_standard.checker_obligations(self.rules, self.root)["records"]
         applicable = [row for row in records if row["status"] == "not_applicable"]
-        self.assertEqual({row["id"] for row in applicable}, {"R1.4", "R17.3"})
+        self.assertEqual({row["id"] for row in applicable}, {"R1.4", "R8.1", "R17.3"})
         for row in applicable:
-            self.assertEqual(row["source"]["file"], "docs/standards/types/language-constructs.md")
+            filename = "declarations.md" if row["id"] == "R8.1" else "README.md"
+            self.assertEqual(row["source"]["file"],
+                             "docs/standards/types/language-constructs/" + filename)
+        satisfied = [row for row in records if row["status"] == "satisfied"]
+        self.assertEqual([row["id"] for row in satisfied], ["R15.5"])
+        self.assertIn("Disapplied", satisfied[0]["conclusion"])
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
