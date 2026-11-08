@@ -160,6 +160,9 @@ class CiSelectionTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["needs"], "required")
         self.assertIn("needs.required.result == 'success'", calls[0]["if"])
+        # Required can succeed after deliberately skipped ancestors (docs/UI/analysis).
+        # A status function overrides Actions' implicit success() for that graph.
+        self.assertIn("!cancelled()", calls[0]["if"])
         self.assertNotIn("extended", required["jobs"]["required"]["needs"])
         self.assertEqual(extended["permissions"], {"contents": "read"})
         self.assertTrue(extended["concurrency"]["group"].startswith("extended-"))

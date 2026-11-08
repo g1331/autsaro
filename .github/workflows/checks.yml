@@ -1024,5 +1024,5 @@ jobs:
   extended:
     # Same run, revision and fork token; never feeds back into CI required.
     needs: required
-    if: ${{ needs.required.result == 'success' && (github.event_name == 'pull_request' || github.event_name == 'push' && github.ref == 'refs/heads/master') }}
+    if: ${{ !cancelled() && needs.required.result == 'success' && (github.event_name == 'pull_request' || github.event_name == 'push' && github.ref == 'refs/heads/master') }}
     uses: ./.github/workflows/extended.yml
