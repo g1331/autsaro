@@ -329,7 +329,7 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
             ),
             (
                 "CONSTANT-MEMORYS",
-                &["Ecu_SchMConfig", "Rte_Instance_Ingress", "Rte_Inst_Ingress"][..],
+                &["Ecu_SchMConfig", "Rte_Instance_Ingress"][..],
             ),
         ] {
             let objects = rte
@@ -345,6 +345,12 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
                 );
             }
         }
+        assert!(!document.descendants().any(|node| {
+            node.has_tag_name("SHORT-NAME")
+                && node.text().is_some_and(|name| {
+                    name.starts_with("Rte_Inst_") || name.starts_with("RteMemoryPointer_")
+                })
+        }));
         for (role, module, name) in [
             ("REQUIRED-ENTRYS", "Com", "Com_ReceiveSignal"),
             ("REQUIRED-ENTRYS", "Com", "Com_SendSignal"),

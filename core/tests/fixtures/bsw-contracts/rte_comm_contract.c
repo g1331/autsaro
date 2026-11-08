@@ -22,6 +22,9 @@
         }                                                                                          \
     } while (0)
 
+const Rte_CDS_ComMService *comm_instance_peer(void);
+static const Rte_CDS_ComMService *const instance = Rte_Inst_ComMService;
+
 static int owner = 1;
 static ComM_ModeType actual;
 static uint32 host_notifications;
@@ -88,6 +91,7 @@ int main(void)
 {
     /* Verifies: SWS_Rte_03793, SWS_Rte_03711, SWS_Rte_03724. */
     CHECK(Rte_Inst_ComMService != NULL_PTR);
+    CHECK(instance == comm_instance_peer());
     CHECK(sizeof(Rte_Inst_ComMService->Rte_Dummy) == sizeof(uint8));
     /* Verifies: SWS_ComM_00110, SWS_ComM_00079, SWS_ComM_00083, SWS_ComM_00085 */
     /* Verifies: SWS_ComM_01000, SWS_ComM_01011, SWS_ComM_00091, SWS_ComM_00778 */

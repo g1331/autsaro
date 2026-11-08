@@ -16,6 +16,7 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
         scratch.0.join("consumer.c"),
     )
     .unwrap();
+    let peer = "#include \"Rte_ComMService.h\"\nconst Rte_CDS_ComMService *comm_instance_peer(void);\nconst Rte_CDS_ComMService *comm_instance_peer(void) { return Rte_Inst_ComMService; }\n";
     let paths = [
         "generated/src/Rte.c",
         "generated/src/Ecu_RuntimeConfig.c",
@@ -107,7 +108,17 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
         "comm_published = COMM_SILENT_COMMUNICATION;",
     );
     mutations.push(("default-no-notification".into(), changed, false));
+    mutations.push(("split-instance-identity".into(), original.clone(), false));
     for (label, sources, success) in mutations {
+        let peer = if label == "split-instance-identity" {
+            peer.replace(
+                "return Rte_Inst_ComMService;",
+                "static const Rte_CDS_ComMService other = {0u}; return &other;",
+            )
+        } else {
+            peer.to_owned()
+        };
+        std::fs::write(scratch.0.join("instance-peer.c"), peer).unwrap();
         for (path, source) in paths.iter().zip(sources) {
             std::fs::write(scratch.0.join(path), source).unwrap();
         }
@@ -155,6 +166,7 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
             "app/Ingress/Ingress.c",
             "app/Process/Process.c",
             "consumer.c",
+            "instance-peer.c",
             "-Wl,--gc-sections",
             "-Wl,--wrap=SchM_Switch_ComM_UM_HostUser",
             "-Wl,--wrap=SchM_Switch_ComM_UM_SecondUser",
@@ -419,7 +431,7 @@ fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatu
             (
                 "process.c",
                 r#"#include "Rte_Process.h"
-const Rte_CDS_Process *const Rte_Inst_Process = NULL_PTR;
+const Rte_CDS_Process Rte_Instance_Process = {0u};
 static uint32 written;
 static uint32 pinged;
 void Process_Ping(void) { pinged++; }
@@ -579,7 +591,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         let scope = if renamed { "Compute" } else { "Process" };
         for (symbol, section) in [
             (
-                format!("Rte_Inst_{scope}"),
+                format!("Rte_Instance_{scope}"),
                 format!(".data.rel.ro.rte.{scope}.CONST_UNSPECIFIED"),
             ),
             (
@@ -724,8 +736,8 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             "DcmService",
             "ComMService",
         ] {
-            assert!(symbols.contains(&format!("Rte_Inst_{component}").as_str()));
-            assert!(!symbols.contains(&format!("Rte_Instance_{component}").as_str()));
+            assert!(!symbols.contains(&format!("Rte_Inst_{component}").as_str()));
+            assert!(symbols.contains(&format!("Rte_Instance_{component}").as_str()));
         }
         std::fs::remove_dir_all(directory).unwrap();
     }
@@ -1381,11 +1393,11 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
         "Multiple application header",
     );
     check(
-        "private-cds-object",
+        "shared-cds-object",
         "#include \"Rte_Ingress.h\"\nconst Rte_CDS_Ingress *storage = &Rte_Instance_Ingress;\n",
         false,
-        false,
-        "Rte_Instance_Ingress",
+        true,
+        "",
     );
     check(
         "unselected-runnable-api",

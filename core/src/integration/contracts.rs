@@ -314,7 +314,7 @@ typedef {} {}{suffix};
         ];
         for component in &composition.components {
             let scope = super::short_name(&component.component);
-            let instance = format!("extern const Rte_CDS_{scope} *const Rte_Inst_{scope}");
+            let instance = format!("extern const Rte_CDS_{scope} Rte_Instance_{scope}");
             let attribute = format!("RTE_{scope}_CONST_UNSPECIFIED;");
             let instance = if instance.len() + attribute.len() < 100 {
                 format!("{instance} {attribute}")
@@ -339,6 +339,8 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
 #endif
 {start_const}{instance}
 {stop_const}
+/** Borrowed pointer to the unique, immutable component data structure. */
+#define Rte_Inst_{scope} (&Rte_Instance_{scope})
 "#,
                 linkage_begin = c_layout::linkage(true),
                 instance_disposition = if application_slots.len() > 1

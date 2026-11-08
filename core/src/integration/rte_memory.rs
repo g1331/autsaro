@@ -149,24 +149,11 @@ pub(super) fn description(
     for component in &composition.components {
         let scope = super::short_name(&component.component);
         let cds = format!("Rte_CDS_{scope}");
-        let pointer = format!("RteMemoryPointer_{scope}");
         types.push_str(&format!("<IMPLEMENTATION-DATA-TYPE><SHORT-NAME>{cds}</SHORT-NAME><CATEGORY>STRUCTURE</CATEGORY><SUB-ELEMENTS>{}</SUB-ELEMENTS></IMPLEMENTATION-DATA-TYPE>", element("Rte_Dummy", "RteMemory_uint8")));
-        let target = props(&format!(
-            "<IMPLEMENTATION-DATA-TYPE-REF DEST=\"IMPLEMENTATION-DATA-TYPE\">/AUTOSAR_Rte/{cds}</IMPLEMENTATION-DATA-TYPE-REF><SW-IMPL-POLICY>CONST</SW-IMPL-POLICY>"
-        ));
-        let pointer_props = props(&format!(
-            "<SW-POINTER-TARGET-PROPS><TARGET-CATEGORY>STRUCTURE</TARGET-CATEGORY>{target}</SW-POINTER-TARGET-PROPS>"
-        ));
-        types.push_str(&format!("<IMPLEMENTATION-DATA-TYPE><SHORT-NAME>{pointer}</SHORT-NAME><CATEGORY>DATA_REFERENCE</CATEGORY>{pointer_props}</IMPLEMENTATION-DATA-TYPE>"));
         constants.push_str(&object(
             "PARAMETER-DATA-PROTOTYPE",
             &format!("Rte_Instance_{scope}"),
             &cds,
-        ));
-        constants.push_str(&object(
-            "PARAMETER-DATA-PROTOTYPE",
-            &format!("Rte_Inst_{scope}"),
-            &pointer,
         ));
     }
     Ok(Description {

@@ -15,9 +15,9 @@
 
 ## 单实例句柄的实际用途
 
-R2.8为Advisory、System（AMD4.3，印刷7／PDF14）：对象定义及其声明可删除而程序仍能编译时，属于未使用对象。当前四份实际ECU源码中，standard-ecu／user-application各两个、component-pipeline四个、no-diagnostic三个Rte_Inst_*指针对象只出现于生成头的extern声明和Rte.c定义，没有C消费者；保留其真实未使用状态。被这些指针初始化引用的私有Rte_Instance_* CDS不是同一个对象，不能仅因句柄无人读取便说CDS也无引用。
+R2.8 为 Advisory、System（AMD4.3，印刷 7／PDF 14）：对象定义及其声明可删除而程序仍能编译时，属于未使用对象。当前生成器保留逐组件唯一 const CDS，句柄以取址宏访问它；没有独立 Rte_Inst_* 指针对象。普通 ECU 尚无句柄消费者的配置，按 CDS 及宏的实际使用记录分析结果，不借公开合同推定每个对象均被使用。
 
-固定SWS_RTE的SWS_Rte_03711要求每个SWC实例的CDS，03712规定私有Rte_Instance_*前缀，03715要求const，03793规定单实例句柄的Rte_Inst_<cts>名字；它们支持保留公开句柄合同，但不能据此声称当前独立const指针对象是唯一合法表示。当前交付ABI保留这些对象，理由是组件头的一致句柄入口及既有集成合同；不为制造用途增加函数、宏或无效读取，也不把保留理由写成R2.8不适用、偏离批准或全部对象评估完成。其他对象及未选配置仍按实际引用、存储期和工具消费者分别判断。
+固定 SWS_RTE 的 SWS_Rte_03711 要求每个 SWC 实例的 CDS，03712 规定 Rte_Instance_* 名字，03715 要求 const，03793 规定单实例句柄的 Rte_Inst_<cts> 名字。生成器为全部组件定义唯一只读 CDS，在应用头声明该共享对象，以同名取址宏提供 const CDS 指针句柄；不再分配独立外部指针对象。跨 TU 消费者与符号表验证同一地址及实际对象，BSWMD 仅描述 CDS 存储。其他对象及未选配置仍按实际引用、存储期和工具消费者分别判断。
 
 ## 组件实例类型的同名冲突
 
@@ -84,7 +84,7 @@ R5.6为Required／System（2013主文印刷54／PDF62，AMD2追加C11）。主�
 
 ## 应用头的实体与请求
 
-以下绑定 `ac356523` 的四份 `mapped-os-service-final-samples`；后续OS同类段合并不改变这些头。序号按每个文件中所有映射头include合计，行号包括R5.6的就近说明。各对前一行分别为相应START／STOP；这些位置均在CDS类型声明之后，是真实R20.1，不因RTE_CORE或runnable选择而按布局销项。此处是技术依据，尚非批准表。
+以下绑定 `ac356523` 的四份 `mapped-os-service-final-samples`；后续OS同类段合并不改变这些头。序号按每个文件中所有映射头include合计，行号包括R5.6的就近说明。各对前一行分别为相应START／STOP；这些位置均在CDS类型声明之后，是真实R20.1，不因RTE_CORE或runnable选择而按布局销项。此处保留该固定样本的历史位置；当前共享 CDS 与取址句柄表示见上文。此处是技术依据，尚非批准表。
 
 | `generated/include/` 下的头及profile | include序号与行；实体／class |
 | --- | --- |
