@@ -246,6 +246,8 @@ class AcceptanceTests(unittest.TestCase):
         self.sdk_inputs()
         before = copy.deepcopy(self.summary)
         result = self.evaluate()
+        self.assertEqual(result.get("sdkInputIdentity"),
+                         c_acceptance.sdk_identity(self.summary, self.identity()))
         occurrence = result["occurrences"][0]
         self.assertEqual(occurrence["location"],
                          {"file": self.sdk_name, "line": "1", "column": "9"})
@@ -259,12 +261,17 @@ class AcceptanceTests(unittest.TestCase):
         self.sdk_inputs()
         self.bind_sdk(status="pending")
         result = self.evaluate()
+        sdk_identity = c_acceptance.sdk_identity(self.summary, self.identity())
+        self.assertEqual(result.get("sdkInputIdentity"), sdk_identity)
         self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
         self.assertEqual(result["occurrences"][0]["reason"],
                          "sdk_integration_assessment_pending")
         self.bind_sdk()
         self.summary["diagnostics"][0]["message"] = "changed report"
         result = self.evaluate()
+        self.assertEqual(result.get("sdkInputIdentity"),
+                         c_acceptance.sdk_identity(self.summary, self.identity()))
+        self.assertNotEqual(result.get("sdkInputIdentity"), sdk_identity)
         self.assertEqual(result["occurrences"][0]["location"]["file"], self.sdk_name)
         self.assertEqual(result["occurrences"][0]["reason"],
                          "sdk_integration_context_unbound_or_stale")
