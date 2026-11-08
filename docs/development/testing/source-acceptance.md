@@ -43,6 +43,9 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 运行完整 `tests/python` 开发测试，并设置固定版本
 `CPPCHECK` 并运行以下命令。根目录发现测试不包含这组 `ActualCAnalysisTests`；单独
 记录其实际执行数量、跳过项与原因。
+上下文新增、修改或重绑后，在最终已绑定的文档状态完整重跑全部 `tests/python` 和
+下述 ActualCAnalysisTests；重绑前的通过记录只覆盖当时状态。工件身份和局部批准的
+复核保持，测试结果须注明重绑前／后。
 运行期间保持分析驱动及其身份输入不变；同时编辑这些文件会触发真实的
 `Semantic inputs changed during analysis` 拒绝。完成修改后从原入口重跑受影响检查。
 
@@ -63,8 +66,12 @@ Windows 默认 CRLF 写入验证身份及正常消费路径。
 四类局部证据在完整副本验证后使用 `evidence_identity(summary, project, group)`：
 FreeRTOS 选择包含 kernel 文件的 TU；owned-source 选择包含自有交付 C／头文件的 TU；
 generated-retention 选择包含活动记录交付文件的 TU；SDK 选择实际包含 SDK 头的 TU。
-GCC 的 `-MD` 回执保存为 `scope.projectTranslationUnits`，包含实际打开的工程内文件；
-摘要读取这些文件的当前字节，连同相关 ownership／runtime 原件、程序成员关系、
+GCC 的 `-MD` 回执保存为 `scope.projectTranslationUnits`；项目 addon 从实际 Cppcheck
+dump 的文件表、raw tokens、directives 和配置 tokens 保存逐 TU 的 `scope.cppcheckInputs`。
+文件表也包含空头和 GCC 未打开的条件头。局部选择、文件字节和诊断筛选取两者并集；
+SDK 文件回接已有头身份，模型沿语义身份绑定。存在工程／已验证 SDK／已绑定模型之外
+的来源时，明确拒绝局部证据复用；缺失或不完整的分析器回执须重新扫描。
+摘要读取并集文件的当前字节，连同相关 ownership／runtime 原件、程序成员关系、
 编译参数／宏、SDK 头、分析器／库和本组评估正文。混合诊断保留其全部位置与来源。
 FreeRTOS 另绑定完整原件 manifest、有序补丁及最终 kernel。SDK 保留全部活动定义和报告。
 旧工件缺少 TU 依赖时明确拒绝，须从正常入口重扫。完整 `inputIdentity` 和原始结果继续
