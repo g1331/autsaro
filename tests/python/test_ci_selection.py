@@ -1,10 +1,12 @@
 """Keep required CI's documentation-only and ui/-only selection safe."""
 
+import ast
 import json
 import os
 import re
 import runpy
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -42,6 +44,101 @@ def jobs() -> dict[str, dict[str, object]]:
 
 
 class CiSelectionTests(unittest.TestCase):
+    def test_native_filters_partition_existing_and_future_modules(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        native = workflow["jobs"]["native"]
+        step = next(step for step in native["steps"]
+                    if step.get("name") == "Native library and contract suites")
+        names = ["library_unit", "runtime_contracts::can", "host::read", "future::test",
+                 "integration::protocol::refusal", "integration::sealed_projects::build",
+                 "integration::single_component::build", "integration::os::time",
+                 "integration::release_contracts::headers", "integration::future::test"]
+        for platform in ("ubuntu-24.04", "windows-latest"):
+            observed = []
+            for entry in native["strategy"]["matrix"]["include"]:
+                if entry["os"] != platform:
+                    continue
+                with tempfile.TemporaryDirectory() as directory:
+                    source = Path(directory) / "native.py"
+                    source.write_text(step["run"], encoding="utf-8")
+                    with (mock.patch.dict(os.environ, {"SHARD": entry["shard"],
+                                                       "RUNNER_TEMP": directory}),
+                          mock.patch.object(subprocess, "run") as run,
+                          self.assertRaises(SystemExit)):
+                        run.return_value.returncode = 0
+                        runpy.run_path(str(source))
+                    argv = run.call_args.args[0]
+                    self.assertIn("--lib", argv)
+                    self.assertIn("--test", argv)
+                    self.assertIn("--no-fail-fast", argv)
+                    filters = argv[argv.index("native", argv.index("--test")) + 3:]
+                    # libtest combines positive filters with OR and applies every --skip.
+                    skipped = [filters[i + 1] for i, value in enumerate(filters)
+                               if value == "--skip"]
+                    positive = [value for i, value in enumerate(filters)
+                                if value != "--skip" and (i == 0 or filters[i - 1] != "--skip")]
+                    observed.extend(name for name in names
+                                    if (not positive or any(value in name for value in positive))
+                                    and not any(value in name for value in skipped))
+            self.assertCountEqual(observed, names, platform)
+
+    def test_independent_native_steps_run_once_per_platform(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        for job, name, key, allowed in (
+            ("native-os", "Host I/O and lock failure boundaries", "shard", {"0/1", "1/2"}),
+            ("c-analysis-samples", "Analyzer behavior tests", "group", {"standard-ecu"}),
+        ):
+            steps = workflow["jobs"][job]["steps"]
+            step = next(step for step in steps if step.get("name") == name)
+            selected = set(re.findall(r"== '([^']+)'", step["if"]))
+            self.assertEqual(selected, allowed)
+            entries = workflow["jobs"][job]["strategy"]["matrix"]["include"]
+            for platform in ("ubuntu-24.04", "windows-latest"):
+                self.assertEqual(sum(entry[key] in selected for entry in entries
+                                     if entry["os"] == platform), 1)
+        self.assertFalse(any(step.get("name") == "Analyzer behavior tests"
+                             for step in workflow["jobs"]["c-analysis-prepare"]["steps"]))
+
+    def test_parallel_com_refusals_keep_all_fourteen_cases_and_propagate_failure(self):
+        path = ROOT / "core/tests/fixtures/com-rejection/consumers.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        # Replace only the expensive case executor; run the actual grouping and worker joins.
+        for index, node in enumerate(tree.body):
+            if isinstance(node, ast.ImportFrom) and node.module == "ecu_tools.build":
+                tree.body[index] = ast.Pass()
+            if isinstance(node, ast.FunctionDef) and node.name == "run_case":
+                node.body = ast.parse("record(name, mode, **kwargs)").body
+                node.args.kwonlyargs = []
+                node.args.kw_defaults = []
+                node.args.kwarg = ast.arg(arg="kwargs")
+        ast.fix_missing_locations(tree)
+        expected = {"host", "probe", "task-and-isr", "host-batch-capacity", "probe-capacity",
+                    "trigger-notify", "periodic-notify", "condition", "pdu", "result",
+                    "host-batch-drain", "host-batch-output", "probe-drain", "probe-output"}
+        with tempfile.TemporaryDirectory() as temporary:
+            script = Path(temporary) / "consumers.py"
+            script.write_text(ast.unparse(tree), encoding="utf-8")
+            for failure in (None, "condition"):
+                observed = []
+                def record(name, mode, observed=observed, failure=failure, **kwargs):
+                    observed.append((name, mode, kwargs))
+                    if name == failure:
+                        raise RuntimeError("mutation worker failed")
+                with mock.patch.object(sys, "argv", [str(path), "/source", "/output"]):
+                    if failure:
+                        with self.assertRaisesRegex(RuntimeError, "mutation worker failed"):
+                            runpy.run_path(str(script), init_globals={"record": record})
+                    else:
+                        runpy.run_path(str(script), init_globals={"record": record})
+                        self.assertCountEqual([row[0] for row in observed], expected)
+                        for name, mode, options in observed:
+                            if name.endswith(("-drain", "-output")) or name in {
+                                "trigger-notify", "periodic-notify", "condition", "pdu", "result"
+                            }:
+                                self.assertTrue(options["killed"], name)
+                            if name.endswith("-output"):
+                                self.assertTrue(options["output_failure"], name)
+
     def test_analysis_readiness_rejects_acceptance_errors_but_not_known_blockers(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         step = next(row for row in workflow["jobs"]["c-analysis-samples"]["steps"]

@@ -205,12 +205,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows runs the slowest suites on a second runner; Linux keeps one job.
+        # Windows separates measured long modules; Linux keeps one job.
         include:
           - os: ubuntu-24.04
             shard: all
           - os: windows-latest
-            shard: slow
+            shard: protocol
+          - os: windows-latest
+            shard: projects
+          - os: windows-latest
+            shard: integration
           - os: windows-latest
             shard: rest
     name: native (${{ matrix.os }}, ${{ matrix.shard }})
@@ -250,8 +254,7 @@ jobs:
               for variable, name in tools.items():
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
-      # One name list selects the slow shard and is skipped by the rest, so every test runs
-      # exactly once; a renamed module only moves its tests to "rest".
+      # Ordered filter groups partition the suite; the complement includes new modules.
       - name: Native library and contract suites
         shell: python
         env:
@@ -259,8 +262,20 @@ jobs:
         run: |
           import os, subprocess, sys
           from pathlib import Path
-          slow = ['integration::sealed_projects', 'integration::single_component', 'integration::protocol']
-          filters = {'all': [], 'slow': slow, 'rest': [arg for name in slow for arg in ('--skip', name)]}[os.environ['SHARD']]
+          groups = {
+              'protocol': ['integration::protocol::'],
+              'projects': ['integration::sealed_projects::', 'integration::single_component::'],
+              'integration': ['integration::'],
+              'rest': [],
+          }
+          shard = os.environ['SHARD']
+          filters = []
+          if shard != 'all':
+              filters.extend(groups[shard])
+              for name, patterns in groups.items():
+                  if name == shard:
+                      break
+                  filters.extend(arg for pattern in patterns for arg in ('--skip', pattern))
           # Failing tests and the ECU verifier retain their scenes under the temporary root.
           scratch = Path(os.environ['RUNNER_TEMP']) / 'native-scratch'
           scratch.mkdir()
@@ -311,7 +326,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
       - name: Host I/O and lock failure boundaries
-        if: startsWith(matrix.shard, '0/')
+        if: matrix.shard == '0/1' || matrix.shard == '1/2'
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py
   native-sanitizers:
     # GCC sanitizers over native programs, OS suites and sealed ECU closures.
@@ -553,8 +568,6 @@ jobs:
             ~/.cargo/git
             target
           key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
-      - name: Analyzer behavior tests
-        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Generate complete analysis samples
         run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
       - name: Validate generated sample inventory
@@ -763,6 +776,10 @@ jobs:
                   print(name, error)
                   failed = True
           sys.exit(1 if failed else 0)
+      # Independent tool tests run once per platform, alongside the other sample shards.
+      - name: Analyzer behavior tests
+        if: matrix.group == 'standard-ecu'
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Retrieve matching master baseline for presentation
         if: always()
         shell: python
