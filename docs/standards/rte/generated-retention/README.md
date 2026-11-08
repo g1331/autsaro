@@ -42,3 +42,59 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 原身份验证。集合、表示、相关字节及评估正文变化时重新评估；闭包外的模板 carrier
 变化可复用证据。当前输入从本 PR 的双平台工件重算，原输入与收据保留在 Git 历史中。
 原始分析结果与整体未完成状态保持。
+<!-- source-assessment-context-begin -->
+{
+  "id": "generated-retention-458-inputs",
+  "evidence": {
+    "head": "182f8df819760e0ea027766f19a362436c64df3e",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/42479363863"
+  },
+  "cases": [
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "65c9f66f3025a31685eb5641a954953abfc83167ea2e1549cc34a1866f53cbbb"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "6eb304bd97868f0e92ff50ca79b7eca19427e8acb88c75ea6b1cfa8558dd1a60"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "f27a7e6ac891a05da55a45aae9b8031f0ceaad0a5a9510832aeaf6a60345a236"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "4ce69c047e22a97616ca87dd66ff1de9f433465a1c2fce1c07839b2958221291"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "465a024ca36b7e3833f237ea5fe344822ddece841567adcbda438caf133eded8"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "934850164a933835ecbe150564a5e43e8f76568ce6d42f778bfb62208d74fe10"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "f74fb588d71beddd4b42aa9d157949d9f3a4e9027fce595e12bc2d7d2e0cdcf5"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "2f5aeaceb24078349ae7140c673482adce50348f9e0fc9b9cc0dd7dea6db46f0"
+    }
+  ],
+  "records": {
+    "kind": "generated-retention",
+    "cohortSha256": "f300270c060c15fe7c9d449e1e38a6a7994c02b12280578acc8cd8956e500224"
+  },
+  "formalStatus": "approved"
+}
+<!-- source-assessment-context-end -->
