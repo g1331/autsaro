@@ -152,7 +152,7 @@ static uint8 rte_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;
     for component in &composition.components {
         let scope = super::short_name(&component.component);
         section(&mut source, scope, "CONST_UNSPECIFIED", true);
-        // SWS_Rte_03712 keeps the CDS object private; 03793 exposes its handle.
+        // SWS_Rte_03712 names the CDS object; 03793 exposes its handle.
         source.push_str(&c_layout::initializer(
             &format!("static const Rte_CDS_{scope} Rte_Instance_{scope}"),
             &format!("RTE_{scope}_CONST_UNSPECIFIED"),
@@ -160,14 +160,9 @@ static uint8 rte_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;
         ));
         source.push('\n');
         let declaration = format!("const Rte_CDS_{scope} *const Rte_Inst_{scope}");
-        if matches!(
-            scope,
-            "EchoApplication" | "DcmService" | "Ingress" | "Process" | "Observe"
-        ) {
-            source.push_str(
-                "/* MR12 RULE 8.7 VIOLATION: retain this immutable public instance handle. */\n",
-            );
-        }
+        source.push_str(
+            "/* MR12 RULE 8.7 VIOLATION: SWS_Rte_03793 exposes this single-instance handle. */\n",
+        );
         let attribute = format!("RTE_{scope}_CONST_UNSPECIFIED");
         let value = format!("&Rte_Instance_{scope};");
         let assignment = format!("{declaration} {attribute} = {value}");

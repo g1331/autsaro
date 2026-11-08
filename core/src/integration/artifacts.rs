@@ -738,6 +738,9 @@ pub(super) fn files(
             ),
             (&machine.mode_symbol, native.as_str(), vec![]),
         ] {
+            if name == &machine.mode_symbol && !super::mode_binding::has_observer(machine) {
+                continue;
+            }
             let mut symbol = rte_symbol(name, result, &args);
             symbol.declaration_owner = format!("include/SchM_{}.h", machine.module);
             symbol.definition_owner = "src/SchM_Main.c".into();

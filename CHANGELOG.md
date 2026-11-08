@@ -5,6 +5,7 @@
 ### Breaking
 
 - ComM service inputs now require per-user UR_/UM_ ports, the standard user-request interface and alphabetic ComMMode declarations. ComM_ConfigType appends immutable user/channel notification mappings; regenerate plans and contracts, update positional initializers and rebuild consumers (#195)
+- Ordinary synchronized mode groups now export SchM mode observers only when generated RTE readers consume them. Regenerate headers, BSW descriptions and sources; fixed Dcm runtime bridges and connected readers retain their APIs (#195)
 - Dcm service inputs now require the standard DCMServices P-port and explicit bindings for its four operations. Update existing service inputs and regenerate contracts; the existing Dcm C ABI is unchanged (#456)
 - RTE mode bindings now connect synchronized BSW publishers to SWC mode access points with one SchM-owned state per publisher instance; regenerate plans and contracts and rebuild consumers (#437)
 

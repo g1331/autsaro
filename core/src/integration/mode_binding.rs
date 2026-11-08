@@ -740,6 +740,9 @@ pub(super) fn declarations_for(plan: &CompositionContract, module: &str) -> Stri
                 "Read the current mode; returns the last published declaration value.",
             ),
         ] {
+            if symbol == &machine.mode_symbol && !has_observer(machine) {
+                continue;
+            }
             let mut contract = Vec::new();
             if parameters[0] != "void" {
                 contract.push(c_layout::ContractLine::Detail(
@@ -799,6 +802,7 @@ struct Storage {
     switch: String,
     observer: String,
     group: String,
+    read: bool,
 }
 
 impl From<&ModeMachine> for Storage {
@@ -809,6 +813,7 @@ impl From<&ModeMachine> for Storage {
             switch: machine.switch_symbol.clone(),
             observer: machine.mode_symbol.clone(),
             group: super::short_name(&machine.group).into(),
+            read: has_observer(machine),
         }
     }
 }
@@ -832,6 +837,7 @@ pub(super) fn storage(plan: &CompositionContract, scope: &str, authentication: &
                 switch: format!("SchM_Switch_Dcm_{group}"),
                 observer: format!("SchM_Mode_Dcm_{group}"),
                 group: group.into(),
+                read: true,
             })
     })
     .collect();
@@ -933,7 +939,7 @@ fn storage_functions(machine: &Storage, placement: &str, diagnostic: bool) -> St
     } else {
         ""
     };
-    format!(
+    let mut text = format!(
         r#"{retained_switch}{switch}
 {{
     Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);
@@ -941,7 +947,12 @@ fn storage_functions(machine: &Storage, placement: &str, diagnostic: bool) -> St
     Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);
     return SCHM_E_OK;
 }}
-{retained_mode}{mode}
+"#,
+        variable = machine.variable,
+    );
+    if machine.read {
+        text.push_str(&format!(
+            r#"{retained_mode}{mode}
 {{
     {native} mode;
     Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);
@@ -950,9 +961,16 @@ fn storage_functions(machine: &Storage, placement: &str, diagnostic: bool) -> St
     return mode;
 }}
 "#,
-        variable = machine.variable,
-        native = machine.native
-    )
+            variable = machine.variable,
+            native = machine.native
+        ));
+    }
+    text
+}
+
+/// Fixed Dcm bridges have runtime consumers; ordinary readers enter through Rte.c.
+pub(super) fn has_observer(machine: &ModeMachine) -> bool {
+    fixed_dcm(machine) || machine.apis.iter().any(|api| !api.switch)
 }
 
 pub(super) fn rte_functions(plan: &CompositionContract) -> String {

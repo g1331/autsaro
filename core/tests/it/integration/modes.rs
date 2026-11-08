@@ -58,6 +58,28 @@ fn comm_service_has_standard_operations_and_alphabetic_mode_values() {
 }
 
 #[test]
+fn ordinary_mode_observers_follow_generated_readers_in_all_artifacts() {
+    // Verifies: SWS_Rte_07261, SWS_Rte_07535
+    for (sources, observer, present) in [
+        (inputs(), "SchM_Mode_ComM_UM_HostUser", false),
+        (comm_service_inputs(), "SchM_Mode_ComM_UM_HostUser", true),
+        (mode_binding_inputs(), "SchM_Mode_ComM_Primary", true),
+    ] {
+        let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:#?}"));
+        let files = prepared_pipeline_files(&plan);
+        for path in [
+            "generated/src/SchM_Main.c",
+            "generated/include/SchM_ComM.h",
+            "generated/descriptions/Host_Implementation.arxml",
+        ] {
+            let bytes = &files.iter().find(|(name, _)| name == path).unwrap().1;
+            let text = std::str::from_utf8(bytes).unwrap();
+            assert_eq!(text.contains(observer), present, "{path}: {observer}");
+        }
+    }
+}
+
+#[test]
 fn comm_two_users_keep_distinct_handles_publishers_and_mapping_relations() {
     let sources = comm_service_inputs();
     let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:#?}"));
