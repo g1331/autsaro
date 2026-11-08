@@ -805,6 +805,7 @@ export type ModeRuntimeContract = {
 export type ModeUser = {
   path: string;
   handle: number;
+  channels: string[];
 };
 
 export type NetworkEndpoint = {

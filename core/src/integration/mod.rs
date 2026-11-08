@@ -19,6 +19,7 @@ mod c_layout;
 mod can_runtime;
 mod catalog;
 mod com;
+mod comm_service;
 mod component;
 mod composition;
 mod configuration;

@@ -102,7 +102,9 @@ static const ComM_ConfigType comm = {0u,
                                      Ecu_HostBusSM_GetCurrentComMode,
                                      entered_no,
                                      entered_silent,
-                                     entered_full};
+                                     entered_full,
+                                     NULL_PTR,
+                                     0u};
 
 Std_ReturnType __real_CanIf_SetControllerMode(uint8 ControllerId,
                                               Can_ControllerStateType ControllerMode);

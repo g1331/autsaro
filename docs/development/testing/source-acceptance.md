@@ -39,7 +39,8 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 
 `standard-ecu` 与 `user-application` 的 ARXML 可以相同，应用字节仍分别绑定。重命名目录不改变身份；应用、配置、producer、程序／TU、SDK 或评估正文变化都会使旧上下文失效。原分析副本中的 kernel 已应用补丁，因此复用现有最终 kernel 身份检查，不以补丁前 seal 再验证补丁后字节。
 
-修改 C 分析准备或身份拒绝路径时，除 `tests/python` 开发测试外，还须设置固定版本
+修改 C 分析准备、身份拒绝路径、保留集合或人工评估记录时，须按 CONTRIBUTING
+运行完整 `tests/python` 开发测试，并设置固定版本
 `CPPCHECK` 并运行以下命令。根目录发现测试不包含这组 `ActualCAnalysisTests`；单独
 记录其实际执行数量、跳过项与原因。
 运行期间保持分析驱动及其身份输入不变；同时编辑这些文件会触发真实的
@@ -48,6 +49,9 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 ```bash
 uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
 ```
+
+人工目录记录其所载冻结输入的分类；当前输入变化时保留准确的历史范围，并使旧绑定失效。
+不要将历史已分类记录改为当前未评估状态，也不要在合成测试中自动完成未评估条目。
 
 这些身份是证据适用范围，不是诊断 baseline 或缓存。不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
 
@@ -58,7 +62,7 @@ Windows 默认 CRLF 写入验证身份及正常消费路径。
 
 ## 原标准篇中的上下文
 
-上下文写在其原标准篇的 JSON 注释块中，起止行分别为 `<!-- source-assessment-context-begin -->` 和 `<!-- source-assessment-context-end -->`。不另建批准文件，也不复制原 159 键或人工表。格式示意：
+上下文写在其原标准篇的 JSON 注释块中，起止行分别为 `<!-- source-assessment-context-begin -->` 和 `<!-- source-assessment-context-end -->`。不另建批准文件，也不复制生成保留活动集合或人工表。格式示意：
 
 ```json
 {
@@ -82,7 +86,7 @@ R20.1 逐包含验证既有 START／STOP 协议，R20.5 只消费原表精确登
 未登记的内部属性／状态撤销保留阻塞，完整类别实例解析由自有源码消费任务接续。
 C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_record_matched`，
 缺少本组当前绑定时返回 `owned_source_context_unbound_or_stale`。
-共用 MR12 解析器返回的原 159 键目录记录始终交给 `generated-retention` 消费；
+共用 MR12 解析器返回的生成保留活动目录记录始终交给 `generated-retention` 消费；
 `owned-source` 的批准也保持该组的 pending、过期、shape 或 owner 拒绝。
 消费来源取当前可追溯的 runtime 原件及明确归属的生成／配置产物；应用快照与内核实例
 由原任务继续核定。允许的程序为 host-batch／probe，样本为现有四个 profile。

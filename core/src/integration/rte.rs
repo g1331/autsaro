@@ -152,32 +152,12 @@ static uint8 rte_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;
     for component in &composition.components {
         let scope = super::short_name(&component.component);
         section(&mut source, scope, "CONST_UNSPECIFIED", true);
-        // SWS_Rte_03712 keeps the CDS object private; 03793 exposes its handle.
+        // SWS_Rte_03712 names the CDS object; 03793 exposes its handle.
         source.push_str(&c_layout::initializer(
-            &format!("static const Rte_CDS_{scope} Rte_Instance_{scope}"),
+            &format!("const Rte_CDS_{scope} Rte_Instance_{scope}"),
             &format!("RTE_{scope}_CONST_UNSPECIFIED"),
             &[c_layout::Item::Value("0u".into())],
         ));
-        source.push('\n');
-        let declaration = format!("const Rte_CDS_{scope} *const Rte_Inst_{scope}");
-        if matches!(
-            scope,
-            "EchoApplication" | "DcmService" | "Ingress" | "Process" | "Observe"
-        ) {
-            source.push_str(
-                "/* MR12 RULE 8.7 VIOLATION: retain this immutable public instance handle. */\n",
-            );
-        }
-        let attribute = format!("RTE_{scope}_CONST_UNSPECIFIED");
-        let value = format!("&Rte_Instance_{scope};");
-        let assignment = format!("{declaration} {attribute} = {value}");
-        if assignment.len() <= 100 {
-            source.push_str(&assignment);
-        } else if declaration.len() + attribute.len() + 4 <= 100 {
-            source.push_str(&format!("{declaration} {attribute} =\n    {value}"));
-        } else {
-            source.push_str(&format!("{declaration}\n    {attribute} = {value}"));
-        }
         source.push('\n');
         section(&mut source, scope, "CONST_UNSPECIFIED", false);
         // Default SWC mode storage belongs to the RTE, not to the SWC application.

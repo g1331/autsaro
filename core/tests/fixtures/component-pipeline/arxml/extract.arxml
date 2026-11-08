@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<AUTOSAR xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd" xmlns="http://autosar.org/schema/r4.0">
+<?xml version='1.0' encoding='utf-8'?>
+<AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd">
   <AR-PACKAGES>
     <AR-PACKAGE>
       <SHORT-NAME>Extract</SHORT-NAME>
@@ -378,6 +378,10 @@
                     <COMPONENT-IREF>
                       <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Extract/ReferenceExtract/RootComposition</CONTEXT-COMPOSITION-REF>
                       <TARGET-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/ObserveInstance</TARGET-COMPONENT-REF>
+                    </COMPONENT-IREF>
+                    <COMPONENT-IREF>
+                      <CONTEXT-COMPOSITION-REF DEST="ROOT-SW-COMPOSITION-PROTOTYPE">/Extract/ReferenceExtract/RootComposition</CONTEXT-COMPOSITION-REF>
+                      <TARGET-COMPONENT-REF DEST="SW-COMPONENT-PROTOTYPE">/Application/Pipeline/ComMService</TARGET-COMPONENT-REF>
                     </COMPONENT-IREF>
                   </COMPONENT-IREFS>
                   <ECU-INSTANCE-REF DEST="ECU-INSTANCE">/Extract/ReferenceEcu</ECU-INSTANCE-REF>

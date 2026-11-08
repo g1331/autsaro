@@ -60,7 +60,7 @@ AMD2.4 撤换主文旧第 5 节，AMD2.5 将 Required 偏离程序引用改为 M
 
 ### 独立 contract 的具体实例
 
-本实例以 `678fae273e5d39e22f74fc9cc1b6d7041e84295b` 的
+原评估以 `678fae273e5d39e22f74fc9cc1b6d7041e84295b` 的
 `core/tests/fixtures/component-pipeline/arxml/` 九份输入为范围，语言 C99。
 2026-11-08 由项目实现者重新核对上述 D4.10、TC2.2、AMD2.4／2.5、
 Compliance:2020 §4.1–4.4 及固定 SpecificationsARXML 的 MemMap
@@ -76,27 +76,28 @@ Compliance:2020 §4.1–4.4 及固定 SpecificationsARXML 的 MemMap
 生成 `include/Rte_MemMap.h`。设置 `AUTOSAR_CONTRACT_OUTPUT` 为不存在的新目录，
 由 `preview`／`generate_previewed` 安装真实交付包；`contract.json` 保留源摘要及组件身份。
 此次 RTE 头 SHA-256 为
-`b067502e2a3e1798ec5437d38019ee0560be3f2d463e3ef82c473dde72996c42`，
+`cb3c7b3fa01b11a41c4ef5863798332443ae7689d71edd299d95adfef88d5cc1`，
 首个 `@file` 的 MR12 DIR 4.10 记录在第 1–5 行，分派从第 7 行开始。
-四个 SWC 头由 `memmap::component` 生成，各自首个 `@file` 同样受交付测试约束。
-输入摘要、五个头摘要和实际消费者位置集中在实施 PR。
+五个 SWC 头由 `memmap::component` 生成，各自首个 `@file` 同样受交付测试约束。
+以下生成身份和包含闭包更新为 PR #465 当前生成器对同组输入的实际输出；原文评估沿上述历史记录，当前字节的验证归本次 PR。
 
-**请求与包含闭包。** 本输入的 RTE 表恰有十组 START／STOP：
+**请求与包含闭包。** 本输入的 RTE 表恰有十二组 START／STOP：
 Rte 的 CODE、CONFIG_DATA_PREBUILD_UNSPECIFIED，以及
-DcmService／Ingress／Observe／Process 各自的 CODE、CONST_UNSPECIFIED。
-四个 `Rte_<组件>.h` 均经 Rte_MemMap 包围 `Rte_Inst_<组件>` 常量指针声明，
+ComMService／DcmService／Ingress／Observe／Process 各自的 CODE、CONST_UNSPECIFIED。
+五个 `Rte_<组件>.h` 均经 Rte_MemMap 包围共享 const CDS `Rte_Instance_<组件>` 的 extern 声明，
+`Rte_Inst_<组件>` 取址宏置于该映射对之外，
 并用对应 CODE 请求包围 RTE API 声明；runnable 声明另由同组件 SWC 头包围。
-Ingress／Process／Observe／DcmService 的 RTE 实际包含次数分别为 8／6／8／4，
-即合计 13 对；Rte scope 的两组属于包提供的能力，本输入的应用头未请求它们。
+Ingress／Process／Observe／DcmService／ComMService 的 RTE 实际包含次数分别为 8／6／8／4／2，
+即合计 14 对；Rte scope 的两组属于包提供的能力，本输入的应用头未请求它们。
 这里逐次执行的包含、请求消费与 STOP 清理沿 00003／00011；
 版本头自身保留普通 guard。独立包只有声明，真实 API 定义与 ECU 内存对象由后续阶段提供。
 
 **观察与证伪。** 正常 `native` 的
 `standalone_contract_memmap_consumes_requests_and_reenters` 在新目录安装该包，
-分别编译四个应用头，再次执行各自 CODE 开闭，断言请求、属性及 scope／共享 active 已撤销；
+分别编译 Ingress／Process／Observe／DcmService 四个应用头，再次执行各自 CODE 开闭，断言请求、属性及 scope／共享 active 已撤销；
 目标 `objdump` 观察独立消费者 `contract_code` 落在 `.rte_code`。
 缺请求、跨 scope 嵌套、错配 STOP、同次多请求分别匹配本头的预处理错误；
-四个 scope 均检查完整开闭后再次 STOP 报 `Unmatched RTE memory section`。
+这四个 scope 均检查完整开闭后再次 STOP 报 `Unmatched RTE memory section`。
 整头 guard／pragma once 会使合法应用头及再次请求失败；删除 STOP 清理同样被消费断言拒绝。
 `it` 检查五个实际映射头集合及首段规则号、必需请求、嵌套／错配与清理理由，
 删除或改错说明由同一正常入口定位到具体交付文件。

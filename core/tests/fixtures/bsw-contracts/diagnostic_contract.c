@@ -116,7 +116,9 @@ static const ComM_ConfigType comm = {7u,
                                      Ecu_HostBusSM_GetCurrentComMode,
                                      Dcm_ComM_NoComModeEntered,
                                      Dcm_ComM_SilentComModeEntered,
-                                     Dcm_ComM_FullComModeEntered};
+                                     Dcm_ComM_FullComModeEntered,
+                                     NULL_PTR,
+                                     0u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
 static const BswM_ConfigType bswm = {7u, Ecu_HostBusSM_ApplyMode};
 static uint8 authentication_mode = 255u;

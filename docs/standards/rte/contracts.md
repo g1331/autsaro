@@ -136,4 +136,4 @@ R5.6的真实TU、六处定义、02311固定CDS类型、替代排除及风险控
 
 已核对（源码：RTE-owned Rte.c/Rte_*.h 的文件名；Ecu_* 配置与目标胶水是集成依赖而非 RTE 模块文件）：SWS_Rte_07139。
 
-CDS 本体按 SWS_Rte_03711/03712/03715 保留私有 const 存储，不在应用头导出存储对象；应用通过 SWS_Rte_03793 的公开 Rte_Inst_<component> 访问。原生符号表与拒绝编译消费者核对该链接边界，避免把非必需的外部对象归为 8.7 标准冲突。
+CDS 本体按 SWS_Rte_03711／03712／03715 保留唯一 const 存储，应用头声明共享的 Rte_Instance_<component>，以 SWS_Rte_03793 的 Rte_Inst_<component> 取址宏提供句柄。真实消费者核对两个 TU 的句柄身份；符号表检查共享 CDS 和独立指针对象的移除，BSWMD 仅描述 CDS 存储。独立外部指针对象的原 R8.7 必需性登记已撤回。

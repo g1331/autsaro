@@ -127,6 +127,7 @@ impl ValidatedIntegrationPlan {
             "ComStack_Types.h",
             "ComStack_Version.h",
             "Rte_Version.h",
+            "Rte_ComM_Type.h",
             "Dcm_Version.h",
             "MemMap_Version.h",
         ] {
@@ -287,7 +288,7 @@ typedef {} {}{suffix};
                     &[
                         super::outputs::Edit::Once(
                             "#include \"Std_Types.h\"",
-                            "#include \"Std_Types.h\"\n#include \"Rte.h\"",
+                            "#include \"Std_Types.h\"\n#include \"Rte.h\"\n#include \"Rte_ComM_Type.h\"",
                         ),
                         super::outputs::Edit::BeforeGuardEnd(&types),
                     ],
@@ -313,7 +314,7 @@ typedef {} {}{suffix};
         ];
         for component in &composition.components {
             let scope = super::short_name(&component.component);
-            let instance = format!("extern const Rte_CDS_{scope} *const Rte_Inst_{scope}");
+            let instance = format!("extern const Rte_CDS_{scope} Rte_Instance_{scope}");
             let attribute = format!("RTE_{scope}_CONST_UNSPECIFIED;");
             let instance = if instance.len() + attribute.len() < 100 {
                 format!("{instance} {attribute}")
@@ -338,6 +339,10 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
 #endif
 {start_const}{instance}
 {stop_const}
+/** SWS_Rte_03793: pointer to the unique const CDS.
+ * MR12 RULE 2.5 VIOLATION: retain an address-constant handle without pointer storage.
+ */
+#define Rte_Inst_{scope} (&Rte_Instance_{scope})
 "#,
                 linkage_begin = c_layout::linkage(true),
                 instance_disposition = if application_slots.len() > 1
@@ -364,13 +369,6 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                     )
                 })
                 .collect();
-            body.push_str("#ifndef RTE_CORE\n");
-            body.push_str(&c_layout::required_defines(
-                &init_values,
-                "Initial data element value.",
-                "SWS_Rte_05078",
-            ));
-            body.push('\n');
             let runnables: Vec<_> = component
                 .runnables
                 .iter()
@@ -382,13 +380,22 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                     )
                 })
                 .collect();
-            body.push_str(&c_layout::required_defines(
-                &runnables,
-                "Runnable symbol alias.",
-                "SWS_Rte_06713",
-            ));
-            body.push('\n');
-            body.push_str("#endif\n");
+            if !init_values.is_empty() || !runnables.is_empty() {
+                body.push_str("#ifndef RTE_CORE\n");
+                body.push_str(&c_layout::required_defines(
+                    &init_values,
+                    "Initial data element value.",
+                    "SWS_Rte_05078",
+                ));
+                body.push('\n');
+                body.push_str(&c_layout::required_defines(
+                    &runnables,
+                    "Runnable symbol alias.",
+                    "SWS_Rte_06713",
+                ));
+                body.push('\n');
+                body.push_str("#endif\n");
+            }
             let errors: std::collections::BTreeSet<_> = component
                 .operations
                 .iter()

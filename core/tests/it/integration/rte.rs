@@ -307,7 +307,10 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
                 .any(|node| node.has_tag_name("EXCLUSIVE-AREA-REF"));
             assert_eq!(
                 enters,
-                name.starts_with("SchM_Mode_Dcm_") || name.starts_with("SchM_Switch_Dcm_"),
+                name.starts_with("SchM_Mode_Dcm_")
+                    || name.starts_with("SchM_Switch_Dcm_")
+                    || name.starts_with("SchM_Mode_ComM_")
+                    || name.starts_with("SchM_Switch_ComM_"),
                 "{name}"
             );
         }
@@ -326,7 +329,7 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
             ),
             (
                 "CONSTANT-MEMORYS",
-                &["Ecu_SchMConfig", "Rte_Instance_Ingress", "Rte_Inst_Ingress"][..],
+                &["Ecu_SchMConfig", "Rte_Instance_Ingress"][..],
             ),
         ] {
             let objects = rte
@@ -342,6 +345,12 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
                 );
             }
         }
+        assert!(!document.descendants().any(|node| {
+            node.has_tag_name("SHORT-NAME")
+                && node.text().is_some_and(|name| {
+                    name.starts_with("Rte_Inst_") || name.starts_with("RteMemoryPointer_")
+                })
+        }));
         for (role, module, name) in [
             ("REQUIRED-ENTRYS", "Com", "Com_ReceiveSignal"),
             ("REQUIRED-ENTRYS", "Com", "Com_SendSignal"),
@@ -427,7 +436,8 @@ fn all_rte_owned_input_types_have_one_declaration_and_external_emitters_stay_ext
     );
     assert_eq!(types.matches("typedef uint32 ValueType;").count(), 1);
     assert!(types.contains("typedef uint8 UnusedByte;"));
-    assert!(!types.contains("Rte_ModeType_"));
+    assert!(types.contains("Rte_ModeType_ComMMode"));
+    assert!(!types.contains("Rte_ModeType_Dcm"));
     assert!(!types.contains("#include \"Rte_Dcm_Type.h\""));
     assert!(header("include/Rte_Process_Type.h").contains("#include \"Rte_Dcm_Type.h\""));
     assert!(header("include/Rte_Process.h").contains("ValueType *data"));

@@ -441,7 +441,7 @@ fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity
     let description = plan.description();
     let composition = description.composition.as_ref().unwrap();
     assert_eq!(description.profile, "singlecore-ecu-v1");
-    assert_eq!(composition.components.len(), 4);
+    assert_eq!(composition.components.len(), 5);
     assert_eq!(composition.connections.len(), 5);
     assert_eq!(composition.network_endpoints.len(), 2);
     assert_eq!(
@@ -501,6 +501,7 @@ fn source_derived_composition_contract_is_deterministic_and_keeps_local_identity
             .map(|(path, _)| path.as_str())
             .collect::<Vec<_>>(),
         [
+            "include/ComMService_MemMap.h",
             "include/DcmService_MemMap.h",
             "include/Ingress_MemMap.h",
             "include/Observe_MemMap.h",

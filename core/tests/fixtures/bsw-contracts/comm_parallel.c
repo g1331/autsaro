@@ -108,7 +108,7 @@ void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType RequestedMod
 }
 static const ComM_UserHandleType users[] = {17u};
 static const ComM_ConfigType configuration = {
-    7u, users, 1u, 2u, bus_request, bus_current, dcm_no, dcm_silent, dcm_full};
+    7u, users, 1u, 2u, bus_request, bus_current, dcm_no, dcm_silent, dcm_full, NULL_PTR, 0u};
 
 void __real_SchM_Exit_ComM_COMM_STATE(void);
 void __wrap_SchM_Exit_ComM_COMM_STATE(void)

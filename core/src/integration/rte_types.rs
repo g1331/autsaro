@@ -138,6 +138,27 @@ pub(super) fn inspect(
             return Err(invalid(datatype));
         }
         if emitter != "RTE" {
+            if emitter == "Rte_ComM_Type.h" {
+                let bases = graph.descendants(datatype, "BASE-TYPE-REF");
+                let expected = match symbol {
+                    "ComM_ModeType" => ("uint8", "8"),
+                    "ComM_UserHandleType" => ("uint16", "16"),
+                    _ => return Err(invalid(datatype)),
+                };
+                let valid = if let [reference] = bases.as_slice() {
+                    let base = graph.index(&graph.elements[*reference].text)?;
+                    graph.text(base, "NATIVE-DECLARATION") == Some(expected.0)
+                        && graph.text(base, "BASE-TYPE-SIZE") == Some(expected.1)
+                        && graph.text(base, "BASE-TYPE-ENCODING") == Some("NONE")
+                } else {
+                    false
+                };
+                if graph.text(datatype, "CATEGORY") != Some("VALUE") || !valid {
+                    return Err(invalid(datatype));
+                }
+                insert(&mut primitives, datatype, symbol.into(), None)?;
+                continue;
+            }
             // Import the trusted Dcm type producer; definitions stay in its header.
             let modes = super::composition::dcm_mode_definitions(graph, datatype)?;
             let bases = graph.descendants(datatype, "BASE-TYPE-REF");
@@ -166,7 +187,10 @@ pub(super) fn inspect(
         }
         if symbol.starts_with("Rte_")
             || symbol.starts_with("SchM_")
-            || matches!(symbol, "Dcm_SecLevelType" | "Dcm_SesCtrlType")
+            || matches!(
+                symbol,
+                "Dcm_SecLevelType" | "Dcm_SesCtrlType" | "ComM_ModeType" | "ComM_UserHandleType"
+            )
         {
             return Err(invalid(datatype));
         }
@@ -321,6 +345,11 @@ pub(super) fn port_arguments(
 }
 
 fn numeric_constant(native: &str, raw: &str) -> Option<String> {
+    let native = match native {
+        "ComM_UserHandleType" => "uint16",
+        "ComM_ModeType" => "uint8",
+        other => other,
+    };
     if native == "boolean" {
         return match raw {
             "0" | "false" => Some("FALSE".into()),

@@ -4,6 +4,283 @@ use super::*;
 use autosar_config_core::integration::InputSource;
 
 #[test]
+fn comm_service_has_standard_operations_and_alphabetic_mode_values() {
+    // Verifies: SWS_ComM_00744, SWS_ComM_00745, SWS_ComM_01000, SWS_ComM_01001
+    // Verifies: SWS_ComM_00847, SWS_ComM_00848, SWS_ComM_01010, SWS_ComM_01011
+    // Verifies: SWS_ComM_01012
+    let sources = inputs();
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let composition = plan.description().composition.as_ref().unwrap();
+    let service = composition
+        .components
+        .iter()
+        .find(|component| component.component == "/Services/ComMService")
+        .unwrap();
+    assert_eq!(service.operations.len(), 5);
+    for operation in &service.operations {
+        let target = service
+            .runnables
+            .iter()
+            .find(|run| run.path == operation.runnable)
+            .unwrap()
+            .bsw_target
+            .as_ref()
+            .unwrap();
+        assert_eq!(
+            target.contract.symbol,
+            format!("ComM_{}", operation.operation.rsplit('/').next().unwrap())
+        );
+        assert_eq!(target.contract.definition_owner, "runtime/bsw/src/ComM.c");
+    }
+    assert_eq!(
+        service.port_arguments["/Services/ComMService/UR_HostUser"][0].value,
+        "0U"
+    );
+    let mode = composition
+        .mode_machines
+        .iter()
+        .find(|machine| machine.module == "ComM")
+        .unwrap();
+    assert_eq!(mode.initial, 1);
+    assert_eq!(
+        mode.values,
+        [
+            ("COMM_FULL_COMMUNICATION".into(), 0),
+            ("COMM_NO_COMMUNICATION".into(), 1),
+            ("COMM_SILENT_COMMUNICATION".into(), 2)
+        ]
+    );
+    assert_eq!(
+        plan.description().mode_runtime.as_ref().unwrap().users[0].channels,
+        ["/Configuration/ComM/Config/Host"]
+    );
+    assert!(normal_validation(&sources).diagnostics.is_empty());
+}
+
+#[test]
+fn ordinary_mode_observers_follow_generated_readers_in_all_artifacts() {
+    // Verifies: SWS_Rte_07261, SWS_Rte_07535
+    for (sources, observer, present) in [
+        (inputs(), "SchM_Mode_ComM_UM_HostUser", false),
+        (comm_service_inputs(), "SchM_Mode_ComM_UM_HostUser", true),
+        (mode_binding_inputs(), "SchM_Mode_ComM_Primary", true),
+        (mode_binding_inputs(), "SchM_Mode_ComM_UM_HostUser", false),
+    ] {
+        let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:#?}"));
+        let variable = &plan
+            .description()
+            .composition
+            .as_ref()
+            .unwrap()
+            .mode_machines
+            .iter()
+            .find(|machine| machine.mode_symbol == observer)
+            .unwrap()
+            .variable;
+        let files = prepared_pipeline_files(&plan);
+        for path in [
+            "generated/src/SchM_Main.c",
+            "generated/include/SchM_ComM.h",
+            "generated/descriptions/Host_Implementation.arxml",
+        ] {
+            let bytes = &files.iter().find(|(name, _)| name == path).unwrap().1;
+            let text = std::str::from_utf8(bytes).unwrap();
+            assert_eq!(text.contains(observer), present, "{path}: {observer}");
+            if !path.ends_with(".h") {
+                assert_eq!(text.contains(variable), present, "{path}: {variable}");
+            }
+        }
+    }
+}
+
+#[test]
+fn comm_two_users_keep_distinct_handles_publishers_and_mapping_relations() {
+    let sources = comm_service_inputs();
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:#?}"));
+    let mode = plan.description().mode_runtime.as_ref().unwrap();
+    assert_eq!(
+        mode.users
+            .iter()
+            .map(|user| user.handle)
+            .collect::<Vec<_>>(),
+        [0, 43]
+    );
+    assert!(
+        mode.users
+            .iter()
+            .all(|user| user.channels == [mode.channel.clone()])
+    );
+    let machines: Vec<_> = plan
+        .description()
+        .composition
+        .as_ref()
+        .unwrap()
+        .mode_machines
+        .iter()
+        .filter(|machine| machine.module == "ComM")
+        .collect();
+    assert_eq!(machines.len(), 2);
+    assert_ne!(machines[0].variable, machines[1].variable);
+    assert!(machines.iter().all(|machine| machine.readers.len() == 1));
+    assert!(normal_validation(&sources).diagnostics.is_empty());
+}
+
+#[test]
+fn comm_service_rejects_nonstandard_input_at_its_source() {
+    for (tag, name, before, after, code, object) in [
+        (
+            "CLIENT-SERVER-OPERATION",
+            "RequestComMode",
+            "<DIRECTION>IN</DIRECTION>",
+            "<DIRECTION>OUT</DIRECTION>",
+            "SERVICE_TYPE_CONFLICT",
+            "/Services/ComM_UserRequest/RequestComMode",
+        ),
+        (
+            "PORT-API-OPTION",
+            "",
+            "<VALUE>0</VALUE>",
+            "<VALUE>17</VALUE>",
+            "SERVICE_TYPE_CONFLICT",
+            "/Services/ComMService/UR_HostUser",
+        ),
+        (
+            "MODE-DECLARATION-GROUP",
+            "ComMMode",
+            "<CATEGORY>ALPHABETIC_ORDER</CATEGORY>",
+            "<CATEGORY>EXPLICIT_ORDER</CATEGORY>",
+            "MODE_TYPE_CONFLICT",
+            "/Services/ComMMode",
+        ),
+        (
+            "MODE-DECLARATION-GROUP",
+            "ComMMode",
+            "<SHORT-NAME>COMM_FULL_COMMUNICATION</SHORT-NAME>",
+            "<SHORT-NAME>COMM_FULL_COMMUNICATION</SHORT-NAME><VALUE>0</VALUE>",
+            "MODE_TYPE_CONFLICT",
+            "/Services/ComMMode",
+        ),
+        (
+            "IMPLEMENTATION-DATA-TYPE",
+            "ComM_UserHandleType",
+            "<TYPE-EMITTER>Rte_ComM_Type.h</TYPE-EMITTER>",
+            "<TYPE-EMITTER>RTE</TYPE-EMITTER>",
+            "RTE_TYPE_UNSUPPORTED",
+            "/Services/ComM_UserHandleType",
+        ),
+        (
+            "CLIENT-SERVER-INTERFACE",
+            "ComM_UserRequest",
+            "<ERROR-CODE>2</ERROR-CODE>",
+            "<ERROR-CODE>6</ERROR-CODE>",
+            "SERVICE_TYPE_CONFLICT",
+            "/Services/ComM_UserRequest",
+        ),
+        (
+            "MODE-DECLARATION-GROUP",
+            "ComMMode",
+            "ComMMode/COMM_NO_COMMUNICATION</INITIAL-MODE-REF>",
+            "ComMMode/COMM_FULL_COMMUNICATION</INITIAL-MODE-REF>",
+            "MODE_TYPE_CONFLICT",
+            "/Services/ComMMode",
+        ),
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "services.arxml",
+            |node| {
+                if tag == "PORT-API-OPTION" {
+                    node.has_tag_name(tag)
+                        && node
+                            .descendants()
+                            .any(|child| child.text() == Some("/Services/ComMService/UR_HostUser"))
+                } else {
+                    named(node, tag, name)
+                }
+            },
+            |text| {
+                assert!(text.contains(before));
+                text.replace(before, after)
+            },
+        );
+        let issues = build(&sources).err().unwrap();
+        assert!(
+            issues.iter().any(|issue| issue.code == code
+                && issue.file.as_deref() == Some("services.arxml")
+                && issue.object.as_deref() == Some(object)),
+            "{issues:?}"
+        );
+    }
+}
+
+#[test]
+fn comm_generated_mapping_names_cannot_be_shadowed_by_application_types() {
+    for reserved in [
+        "comm_user_modes",
+        "comm_channels_0",
+        "ComM_UserModeConfigType",
+    ] {
+        let mut sources = inputs();
+        xml_edit(
+            &mut sources,
+            "types.arxml",
+            |node| named(node, "IMPLEMENTATION-DATA-TYPE", "uint32"),
+            |text| {
+                text.replace(
+                    "<SHORT-NAME>uint32</SHORT-NAME>",
+                    &format!("<SHORT-NAME>{reserved}</SHORT-NAME>"),
+                )
+            },
+        );
+        replace_all(&mut sources, "/Types/uint32", &format!("/Types/{reserved}"));
+        let issues = build(&sources).err().unwrap();
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == "CONTRACT_NAME_COLLISION"
+                    && issue.file.as_deref() == Some("types.arxml")
+                    && issue.object.as_deref() == Some(format!("/Types/{reserved}").as_str())),
+            "{issues:?}"
+        );
+    }
+}
+
+#[test]
+fn comm_multichannel_configuration_is_rejected_at_the_added_channel() {
+    let mut sources = inputs();
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "Host")
+                && node.children().any(|child| {
+                    child.has_tag_name("DEFINITION-REF")
+                        && child
+                            .text()
+                            .is_some_and(|text| text.ends_with("/ComMChannel"))
+                })
+        },
+        |text| {
+            format!(
+                "{text}{}",
+                text.replace(
+                    "<SHORT-NAME>Host</SHORT-NAME>",
+                    "<SHORT-NAME>Second</SHORT-NAME>"
+                )
+            )
+        },
+    );
+    let issues = build(&sources).err().unwrap();
+    assert!(
+        issues.iter().any(|issue| issue.code == "MODE_CONFIGURATION"
+            && issue.file.as_deref() == Some("ecuc.arxml")
+            && issue.object.as_deref() == Some("/Configuration/ComM/Config/Second")),
+        "{issues:?}"
+    );
+}
+
+#[test]
 fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     let plan = build(&inputs()).unwrap();
     let mode = plan.description().mode_runtime.as_ref().unwrap();
@@ -39,6 +316,17 @@ fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     );
     parameter(&mut sources, "Vehicle", "ComMChannelId", "7");
     parameter(&mut sources, "HostUser", "ComMUserIdentifier", "19");
+    xml_edit(
+        &mut sources,
+        "services.arxml",
+        |node| {
+            node.has_tag_name("PORT-API-OPTION")
+                && node
+                    .descendants()
+                    .any(|child| child.text() == Some("/Services/ComMService/UR_HostUser"))
+        },
+        |text| text.replace("<VALUE>0</VALUE>", "<VALUE>19</VALUE>"),
+    );
     parameter(&mut sources, "General", "ComMEcuGroupClassification", "1");
     replace_all(
         &mut sources,

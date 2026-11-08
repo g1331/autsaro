@@ -39,7 +39,7 @@ class RetentionTests(unittest.TestCase):
         return c_retention.analyze([diagnostic or self.diagnostic()], self.project, target)["occurrences"][0]
 
     def test_fixed_cohort_and_every_rule_match_without_formal_acceptance(self):
-        self.assertEqual(len(self.rows), 159)
+        self.assertEqual(len(self.rows), 160)
         for rule in ("2.5", "2.3", "8.7", "11.4"):
             row = next(row for row in self.rows if row["rule"] == rule)
             self.write(row)
@@ -61,6 +61,20 @@ class RetentionTests(unittest.TestCase):
         altered[0]["shape"] += " 1"
         with self.assertRaisesRegex(ValueError, "cohort identity"):
             c_retention.check_cohort(altered)
+
+    def test_instance_handle_requires_its_own_retention_record(self):
+        row = next(row for row in self.rows if row["name"] == "Rte_Inst_EchoApplication")
+        self.write(row)
+        raw = self.diagnostic(row)
+        self.assertEqual(self.occurrence(raw)["status"], "record_matched")
+        remaining = [item for item in self.rows if item is not row]
+        with self.assertRaisesRegex(ValueError, "cohort identity"):
+            c_retention.check_cohort(remaining)
+        with patch.object(c_retention, "records", return_value=remaining):
+            occurrence = self.occurrence(raw)
+        self.assertEqual(occurrence["status"], "unmatched")
+        self.assertEqual(occurrence["reason"], "no_record")
+        self.assertIsNone(occurrence["entity"])
 
     def test_shared_project_check_preserves_complete_cohort_and_extra_marker_rejection(self):
         sources = {}

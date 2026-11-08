@@ -663,7 +663,7 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
         .partition;
     assert_eq!(partition.name, "OwnerPartition");
     assert_eq!(partition.id, 0);
-    assert_eq!(partition.instances.len(), 4);
+    assert_eq!(partition.instances.len(), 5);
     assert!(
         partition
             .instances

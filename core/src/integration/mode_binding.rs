@@ -740,6 +740,9 @@ pub(super) fn declarations_for(plan: &CompositionContract, module: &str) -> Stri
                 "Read the current mode; returns the last published declaration value.",
             ),
         ] {
+            if symbol == &machine.mode_symbol && !has_observer(machine) {
+                continue;
+            }
             let mut contract = Vec::new();
             if parameters[0] != "void" {
                 contract.push(c_layout::ContractLine::Detail(
@@ -799,6 +802,7 @@ struct Storage {
     switch: String,
     observer: String,
     group: String,
+    read: bool,
 }
 
 impl From<&ModeMachine> for Storage {
@@ -809,6 +813,7 @@ impl From<&ModeMachine> for Storage {
             switch: machine.switch_symbol.clone(),
             observer: machine.mode_symbol.clone(),
             group: super::short_name(&machine.group).into(),
+            read: has_observer(machine),
         }
     }
 }
@@ -832,6 +837,7 @@ pub(super) fn storage(plan: &CompositionContract, scope: &str, authentication: &
                 switch: format!("SchM_Switch_Dcm_{group}"),
                 observer: format!("SchM_Mode_Dcm_{group}"),
                 group: group.into(),
+                read: true,
             })
     })
     .collect();
@@ -857,32 +863,34 @@ fn render_storage(machines: &[Storage], scope: &str, diagnostic: bool) -> String
     if diagnostic {
         text.push('\n');
     }
-    text.push_str(&c_layout::section(
-        &prefix,
-        "Rte",
-        "VAR_CLEARED_UNSPECIFIED",
-        true,
-    ));
-    for machine in machines {
-        let declaration = format!("static {} {}", machine.native, machine.variable);
-        let note = if diagnostic {
-            ""
-        } else {
-            " /**< SCHM_MODE; Init resets. */"
-        };
-        let attribute = format!("{prefix}_VAR_CLEARED_UNSPECIFIED;{note}");
-        if declaration.len() + attribute.len() < 100 {
-            text.push_str(&format!("{declaration} {attribute}\n"));
-        } else {
-            text.push_str(&format!("{declaration}\n    {attribute}\n"));
+    if machines.iter().any(|machine| machine.read) {
+        text.push_str(&c_layout::section(
+            &prefix,
+            "Rte",
+            "VAR_CLEARED_UNSPECIFIED",
+            true,
+        ));
+        for machine in machines.iter().filter(|machine| machine.read) {
+            let declaration = format!("static {} {}", machine.native, machine.variable);
+            let note = if diagnostic {
+                ""
+            } else {
+                " /**< SCHM_MODE; Init resets. */"
+            };
+            let attribute = format!("{prefix}_VAR_CLEARED_UNSPECIFIED;{note}");
+            if declaration.len() + attribute.len() < 100 {
+                text.push_str(&format!("{declaration} {attribute}\n"));
+            } else {
+                text.push_str(&format!("{declaration}\n    {attribute}\n"));
+            }
         }
+        text.push_str(&c_layout::section(
+            &prefix,
+            "Rte",
+            "VAR_CLEARED_UNSPECIFIED",
+            false,
+        ));
     }
-    text.push_str(&c_layout::section(
-        &prefix,
-        "Rte",
-        "VAR_CLEARED_UNSPECIFIED",
-        false,
-    ));
     text.push_str(&c_layout::section(&prefix, "Rte", "CODE", true));
     let methods: Vec<_> = if diagnostic {
         machines.iter().rev().collect()
@@ -912,6 +920,10 @@ fn storage_functions(machine: &Storage, placement: &str, diagnostic: bool) -> St
         "",
         true,
     );
+    if !machine.read {
+        // No generated consumer can observe this immediate machine's state.
+        return format!("{switch}\n{{\n    (void)mode;\n    return SCHM_E_OK;\n}}\n");
+    }
     let mode = c_layout::signature(
         &format!("{placement} {}", machine.native),
         &machine.observer,
@@ -933,7 +945,7 @@ fn storage_functions(machine: &Storage, placement: &str, diagnostic: bool) -> St
     } else {
         ""
     };
-    format!(
+    let mut text = format!(
         r#"{retained_switch}{switch}
 {{
     Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);
@@ -941,7 +953,12 @@ fn storage_functions(machine: &Storage, placement: &str, diagnostic: bool) -> St
     Can_HostAreaExit(CAN_HOST_AREA_SCHM_MODE);
     return SCHM_E_OK;
 }}
-{retained_mode}{mode}
+"#,
+        variable = machine.variable,
+    );
+    if machine.read {
+        text.push_str(&format!(
+            r#"{retained_mode}{mode}
 {{
     {native} mode;
     Can_HostAreaEnter(CAN_HOST_AREA_SCHM_MODE);
@@ -950,9 +967,16 @@ fn storage_functions(machine: &Storage, placement: &str, diagnostic: bool) -> St
     return mode;
 }}
 "#,
-        variable = machine.variable,
-        native = machine.native
-    )
+            variable = machine.variable,
+            native = machine.native
+        ));
+    }
+    text
+}
+
+/// Fixed Dcm bridges have runtime consumers; ordinary readers enter through Rte.c.
+pub(super) fn has_observer(machine: &ModeMachine) -> bool {
+    fixed_dcm(machine) || machine.apis.iter().any(|api| !api.switch)
 }
 
 pub(super) fn rte_functions(plan: &CompositionContract) -> String {

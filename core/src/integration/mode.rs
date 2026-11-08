@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 pub struct ModeUser {
     pub path: String,
     pub handle: u16,
+    pub channels: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,7 +66,7 @@ fn one(graph: &Graph, kind: &str) -> Result<usize, Vec<PlanDiagnostic>> {
     } else {
         Err(fail(
             graph,
-            found.first().copied().unwrap_or(0),
+            found.get(1).or_else(|| found.first()).copied().unwrap_or(0),
             "MODE_CONFIGURATION",
         ))
     }
@@ -181,6 +182,15 @@ pub(super) fn inspect(
         users.push(ModeUser {
             path: graph.elements[user].object.clone(),
             handle,
+            channels: containers(graph, "ComMUserPerChannel")
+                .into_iter()
+                .filter(|mapping| {
+                    value(graph, *mapping, "ComMUserChannel", true)
+                        == Some(graph.elements[user].object.as_str())
+                })
+                .filter_map(|mapping| graph.ancestor(mapping, "ECUC-CONTAINER-VALUE"))
+                .map(|channel| graph.elements[channel].object.clone())
+                .collect(),
         });
     }
     users.sort_by(|left, right| left.path.cmp(&right.path));

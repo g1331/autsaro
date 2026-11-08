@@ -95,11 +95,9 @@ pub(super) fn description(
     for name in ["diagnostic_session_mode", "authentication_mode"] {
         variables.push_str(&object("VARIABLE-DATA-PROTOTYPE", name, "RteMemory_uint8"));
     }
-    for machine in composition
-        .mode_machines
-        .iter()
-        .filter(|machine| !super::mode_binding::fixed_dcm(machine))
-    {
+    for machine in composition.mode_machines.iter().filter(|machine| {
+        !super::mode_binding::fixed_dcm(machine) && super::mode_binding::has_observer(machine)
+    }) {
         scalars.insert(machine.base_type().to_owned());
         variables.push_str(&object(
             "VARIABLE-DATA-PROTOTYPE",
@@ -151,24 +149,11 @@ pub(super) fn description(
     for component in &composition.components {
         let scope = super::short_name(&component.component);
         let cds = format!("Rte_CDS_{scope}");
-        let pointer = format!("RteMemoryPointer_{scope}");
         types.push_str(&format!("<IMPLEMENTATION-DATA-TYPE><SHORT-NAME>{cds}</SHORT-NAME><CATEGORY>STRUCTURE</CATEGORY><SUB-ELEMENTS>{}</SUB-ELEMENTS></IMPLEMENTATION-DATA-TYPE>", element("Rte_Dummy", "RteMemory_uint8")));
-        let target = props(&format!(
-            "<IMPLEMENTATION-DATA-TYPE-REF DEST=\"IMPLEMENTATION-DATA-TYPE\">/AUTOSAR_Rte/{cds}</IMPLEMENTATION-DATA-TYPE-REF><SW-IMPL-POLICY>CONST</SW-IMPL-POLICY>"
-        ));
-        let pointer_props = props(&format!(
-            "<SW-POINTER-TARGET-PROPS><TARGET-CATEGORY>STRUCTURE</TARGET-CATEGORY>{target}</SW-POINTER-TARGET-PROPS>"
-        ));
-        types.push_str(&format!("<IMPLEMENTATION-DATA-TYPE><SHORT-NAME>{pointer}</SHORT-NAME><CATEGORY>DATA_REFERENCE</CATEGORY>{pointer_props}</IMPLEMENTATION-DATA-TYPE>"));
         constants.push_str(&object(
             "PARAMETER-DATA-PROTOTYPE",
             &format!("Rte_Instance_{scope}"),
             &cds,
-        ));
-        constants.push_str(&object(
-            "PARAMETER-DATA-PROTOTYPE",
-            &format!("Rte_Inst_{scope}"),
-            &pointer,
         ));
     }
     Ok(Description {

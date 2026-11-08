@@ -83,34 +83,21 @@ UAPI还有独立的R8.2义务：signal-defs.h:82的__signalfn_t(int)缺参数名
 
 ## 单实例对象与函数地址的人工评估
 
-沿用[共同配置及冻结证据](../os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)。
-本轮按主文§6.2.3的Advisory替代记录方式，对以下R2.8实体选择保留现有表示：
-保持逐组件独立const指针对象，避免在本项文档/评估入口工作中改变公开符号、对象地址/存储及组件头合同。
-这是本轮有界风险委托下的新选择；不是 #382 的159键、#381的124键或R8.7记录所批准的内容。
-R2.8仍真实未满足，未重分类、未disapply，也不称MISRA总体符合。
+PR #465 将单实例句柄改为共享 const CDS 的取址宏，原五个独立指针对象及其 R2.8 保留依据已失效。以下为该 PR 当前生成器正常生成的四份样本；行号对应 `Rte_Instance_<组件>` 定义与应用头中的 extern 声明。
 
-冻结 `1306e32a` 的五个唯一名字、11个物理定义如下（两目标交付字节相同）：
-
-| profile | Rte.c中的独立指针定义 | extern位置 |
+| profile | Rte.c 中的共享 CDS 定义 | extern 位置 |
 | --- | --- | --- |
-| standard-ecu、user-application | Rte_Inst_EchoApplication:67、Rte_Inst_DcmService:89 | 各自Rte_EchoApplication.h、Rte_DcmService.h:32 |
-| component-pipeline | Rte_Inst_Ingress:68、Rte_Inst_Process:89、Rte_Inst_Observe:102、Rte_Inst_DcmService:117 | 三应用头:34；DcmService头:32 |
-| no-diagnostic | Rte_Inst_Ingress:60、Rte_Inst_Process:81、Rte_Inst_Observe:94 | 三应用头:34 |
+| standard-ecu、user-application | EchoApplication:69、DcmService:90、ComMService:95 | Rte_EchoApplication.h:32、Rte_DcmService.h:32、Rte_ComMService.h:32 |
+| component-pipeline | Ingress:71、Process:90、Observe:101、DcmService:114、ComMService:119 | 三应用头:34；DcmService／ComMService 头:32 |
+| no-diagnostic | Ingress:61、Process:80、Observe:91、ComMService:104 | 三应用头:34；ComMService 头:32 |
 
-去注释后每对象仅extern/定义两处引用；host-batch/probe无读取，ABI测试不改变此事实。
-私有CDS初始化不构成公开指针用途。定义由`core/src/integration/rte.rs`生成，
-头声明由`core/src/integration/contracts.rs`生成；交付证据见
-[#393冻结收据](https://github.com/g1331/autsaro/pull/393#issuecomment-6518916990)。
+每个对象在 Rte.c 中定义一次，在应用头声明；`Rte_Inst_<组件>` 宏取得同一对象地址。EchoApplication 的宏在头第 40 行，Ingress／Process／Observe 在第 41 行，DcmService／ComMService 在第 39 行。CONST_UNSPECIFIED 段只包围实际 CDS 声明／定义，宏位于段外。
 
-SWS_Rte_03711/03712/03715/03793只分别规定CDS、私有前缀、const及单实例handle名；
-[既有RTE原文说明](../rte/README.md#单实例句柄的实际用途)没有把独立指针对象说成唯一合法表示。
-宏/别名或删除会改变当前对象合同，编译成功不足以证明等价。风险为多余只读存储/符号及未来误用；
-既有C99/C++11消费者约束类型/值/链接，不证明生产必要性。配置、表示、CDS、目标、消费者或合同变化即重评。
-Required正式偏离及SWS_BSW_00115等独立义务不由本条Advisory取舍代替；缺失证据仍须显式保留。
+定义由 `rte::files` 生成，声明与宏由 `contracts::contract_headers` 生成；[单实例句柄的实际用途](../rte/README.md#单实例句柄的实际用途)连接实际消费者与存储合同。原五个指针对象的未使用结论保留在历史提交和[#393 冻结收据](https://github.com/g1331/autsaro/pull/393#issuecomment-6518916990)中；当前 CDS 与宏按真实程序引用分别评估，旧对象记录不转用于新的 CDS。
 
 <!-- misra-manual-begin -->
 | 指南 | 有效类别 | 分析范围／语言 | 状态 | 义务、限定结论与证据 |
 | --- | --- | --- | --- | --- |
-| R2.8 | Advisory | System／C99 | retained | 对象定义/声明可删除而程序仍编译即为未使用（AMD4.3，7／PDF14）。仅上列5实体/11定义保持真实违反，按本节理由和§6.2.3替代记录保留现有ABI；[producer/实际程序/回归边界](../rte/README.md#单实例句柄的实际用途)分开。其它静态配置通过初始化借用、读写状态或明确工具消费者实际使用，不因R8.7保留便获得R2.8豁免。 |
+| R2.8 | Advisory | 冻结 1306e32a／System／C99 | retained | 冻结评估的 5 个独立指针实体／11 处定义按主文 §6.2.3 保留，证据见 [#393 冻结收据](https://github.com/g1331/autsaro/pull/393#issuecomment-6518916990)。PR #465 已删除这些对象；本行保留原输入的历史分类，当前共享 CDS 与取址宏按[实际使用](../rte/README.md#单实例句柄的实际用途)分别重评，当前输入保持未绑定。 |
 | R17.12 | Advisory | TU／C99 | satisfied | 函数标识符只用于调用或前置&（AMD3.37，19–20）。[入口/跟踪宏闭包](../os/platform.md#入口及跟踪宏的实际展开)连接实际中断绑定/比较、线程/信号入口、once初始化、HostBatch回调及生成通信/诊断/Task配置；0022和平台补丁覆盖采用接缝。函数指针对象、声明符和汇编字符串内符号不是函数designator值，不机械加&。 |
 <!-- misra-manual-end -->

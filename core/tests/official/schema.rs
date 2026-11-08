@@ -34,6 +34,14 @@ fn native_pipeline_inputs_also_pass_the_official_schema() {
 
 #[cfg(feature = "official-oracles")]
 #[test]
+fn comm_services_and_two_connected_users_pass_the_official_schema() {
+    let sources = comm_service_inputs();
+    assert_official_schema_accepts(&sources);
+    build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+}
+
+#[cfg(feature = "official-oracles")]
+#[test]
 fn mapped_service_inputs_pass_the_official_schema() {
     for sources in [mapped_operation_inputs(), mapped_counter_operation_inputs()] {
         assert_official_schema_accepts(&sources);

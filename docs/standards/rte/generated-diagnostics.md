@@ -2,7 +2,7 @@
 
 本篇属于 [RTE 与生成契约](README.md)，承接 #382。
 
-当前：[PM具体决定](https://github.com/g1331/autsaro/pull/393#issuecomment-6516977768)已接受冻结159键的有界项目保留，见[完整形态与范围记录](generated-retention/README.md)。这解除项目选择前置；源码/MR12、反例、影响范围独立复核与真实集合核对的实施证据归PR。下文历史未决段描述7ee决定前状态，不代表当前仍缺项目选择。只覆盖四个正常分析 profile 的 emitter／模板输出，目标为 controlled Linux／Windows x64、C99、HostBatch 与 probe。直接拷贝的 runtime、内核／补丁、SDK 和无 checker 人工项分别由 #381／#383／#384／#385 承接；模板原行仍属本项，已有精确裁决可以引用；原始分析、程序归属、`passed=false`、`not_assessed` 和比较拒绝保持。
+当前：[PM具体决定](https://github.com/g1331/autsaro/pull/393#issuecomment-6516977768)接受的原 159 键决定保留为历史依据；2026-11-08 编排者决定删除五个旧指针对象记录，并新增六个取址宏的 Advisory 项目保留记录，活动集合为 160 键，见[完整形态与范围记录](generated-retention/README.md)。这解除项目选择前置；源码/MR12、反例、影响范围独立复核与真实集合核对的实施证据归PR。下文历史未决段描述7ee决定前状态，不代表当前仍缺项目选择。只覆盖四个正常分析 profile 的 emitter／模板输出，目标为 controlled Linux／Windows x64、C99、HostBatch 与 probe。直接拷贝的 runtime、内核／补丁、SDK 和无 checker 人工项分别由 #381／#383／#384／#385 承接；模板原行仍属本项，已有精确裁决可以引用；原始分析、程序归属、`passed=false`、`not_assessed` 和比较拒绝保持。
 
 ## 来源与字节身份
 
@@ -39,7 +39,7 @@ R8.9 是 Advisory、System（2013主文印刷71／PDF79）。它按标识符出�
 
 本项按 [ADR0023](../../adr/0023-autosar-required-conflict-disposition.md) 的既有 AUTOSAR 必需冲突授权逐对象评估，来源为 [2026-10-17决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)，不引入“所有 static 对象”类别。源码 MR12 只说明上述机制；独立审查 head、发现和处置记录于实施 PR。项目技术处置不等于正式 MISRA 符合声明。
 
-## 原文明确要求的类型和预处理接口
+## 原文明确要求的生成接口
 
 本轮在固定 SpecificationsARXML 正文及 ECUC MOD 原件核对以下构造；R2.3／R2.5 都是 Advisory、System（2013主文印刷43–44／PDF51–52），这里仍承认实际未使用，而非误报。替换为 enum、局部 typedef、私有函数或仅生成当前调用使用的名字，会分别改变明确要求的类型位置、typedef／define 形式或完整发布集合。
 
@@ -54,10 +54,16 @@ R8.9 是 Advisory、System（2013主文印刷71／PDF79）。它按标识符出�
 | R2.5：`Os_Counter.h` 的`OS_TICKS2NS/US/MS/SEC_SystemCounter(ticks)` | `ecu::configure_os`；00393明确要求四个转换宏的格式，当前参数单次求值，分辨率及uint64结果范围不变。 |
 | R2.5：`Rte.h` 的`Rte_IsInfrastructureError`、`Rte_HasOverlayedError`、`Rte_ApplicationError` | `rte_types::standard`渲染模板；07404／07405／07406明确规定三个宏及位语义，不替换为另一接口形状。 |
 | R2.5：`Rte_DcmService.h` 的 `RTE_E_DCMServices_E_NOT_OK`／`RTE_E_DCMServices_E_OK` | `composition::application_errors` 核定接口错误，`contracts::contract_headers` 的 `provided_errors` 经 `c_layout::commented_defines` 发布；SWS_Dcm_00698 规定 DCMServices 的 E_NOT_OK=1、E_OK=0，SWS_Rte_02575 要求应用头定义错误标识（除 RTE_E_INVALID），SWS_Rte_02576 固定 `#define RTE_E_<interface>_<error> <error value>U` 形式。参考 ECU 未连接该服务的客户端，保留真实未使用的 Advisory 诊断，沿本节既有标准规定生成符号类别处置。 |
+| R2.5：`Rte_ComMService.h` 的 `RTE_E_ComM_UserRequest_` 五项错误宏 | `comm_service::inspect` 核对 SWS_ComM_01000 的 E_OK=0、E_NOT_OK=1、COMM_E_MODE_LIMITATION=2、COMM_E_MULTIPLE_PNC_ASSIGNED=3、COMM_E_NO_PNC_ASSIGNED=4；`composition::application_errors` 与 `contracts::contract_headers` 复用上述 SWS_Rte_02575／02576 的标准命名及 define 形式。普通 profile 未连接请求客户端，保留真实未使用诊断，双用户原生消费者实际使用标准服务和错误语义。 |
 
-原四 profile 冻结语料中，这些构造共 46 个源码文本键：7 个 R2.3、39 个 R2.5（同名宏在不同 profile 的值不同则分别计键）。本次补入 DCMServices 的两个固定值宏，本节记录累计 48 键：7 个 R2.3、41 个 R2.5；原 159 个实体/body 键的冻结集合与身份保持。新增宏在 standard-ecu、user-application、component-pipeline 中的源码行相同，跨 profile 合并为两键，按 profile 分别计新增键为 2／2／2／0；no-diagnostic 不生成 Rte_DcmService.h。每个实际位置、目标和程序保留在 PR 的完整工件比较中，不把未报告的配置成员计为违反。已有源码 MR12 随对应 producer 输出；本次仅补充类别记录，不改静态样本，不添加虚假读取或 suppression，原始诊断及分析状态保持。
+
+原四 profile 冻结语料中，这些构造共 46 个源码文本键：7 个 R2.3、39 个 R2.5（同名宏在不同 profile 的值不同则分别计键）。本次补入 DCMServices 的两个固定值宏，本节记录累计 48 键：7 个 R2.3、41 个 R2.5；该历史阶段沿用原 159 个实体/body 键；当前活动集合见生成保留记录。新增宏在 standard-ecu、user-application、component-pipeline 中的源码行相同，跨 profile 合并为两键，按 profile 分别计新增键为 2／2／2／0；no-diagnostic 不生成 Rte_DcmService.h。每个实际位置、目标和程序保留在 PR 的完整工件比较中，不把未报告的配置成员计为违反。已有源码 MR12 随对应 producer 输出；本次仅补充类别记录，不改静态样本，不添加虚假读取或 suppression，原始诊断及分析状态保持。
 
 风险为头文件发布面与宏的潜在误用。完整接口的真实C/C++消费者、输入名字／类型／配置拒绝、预处理常量值与宽度、宏单次求值及真实交付链接／运行分别约束它。形式／名字／配置条件、底层类型、数组大小或受支持接口集合变化时重评。授权沿ADR0023原决定；实施者完成必要性与替代核对，独立审查head／发现／处置在PR记载。项目授权与正式MISRA偏离／符合声明仍分别保留。
+
+ComM_UserRequest 新增五个固定值源码键后，原类型／预处理接口累计 53 键（7 个 R2.3、46 个 R2.5）；上述 48 键为 DCMServices 交付时的累计。实例句柄由 `contracts::contract_headers` 发布取唯一 const CDS 地址的同名宏；`rte::files` 仅定义 CDS，`rte_memory::description` 仅描述该实际对象，不分配独立外部指针对象。03793 规定句柄名称，01012／01148／06810／03711／03712／03715 约束身份、指针类型及只读 CDS；这些条目未要求独立指针存储。跨 TU 消费者验证地址身份和类型，符号表验证共享 CDS 及无独立指针对象。句柄宏的 R2.5 属于编排者 2026-11-08 选择的 Advisory 保留，六个宏的具体形态、理由及替代取舍见[活动集合](generated-retention/README.md)。五个旧指针对象的 R8.7 记录已删除，活动集合为 160 键；原输入绑定已移除，等待 CI 工件后另行安排绑定。每个实际位置、目标和程序由 PR 的完整工件比较记录。
+
+普通模式 observer 的生成由实际读取 API 决定：`mode_binding::has_observer` 同时控制 `declarations_for`、`storage_functions`、`rte_memory::description` 和 `artifacts` 的 C 声明、定义与 BSWMD。SWS_Rte_07261／07702 把 SchM_Mode 的生成关联到 BSW accessedModeGroup；07535 要求共享模式机，未要求为仅发布的端口额外导出读取函数。所选普通模式只有生成的 Rte_Mode 桥读取状态，因此有 reader 时保留唯一共享状态及跨 TU observer；未连接 reader 时消除无可观察效果的状态分配、写入及 observer，Switch 仍返回 SCHM_E_OK，初始化仍调用同一 Switch。既有固定 Dcm 桥保留真实运行时消费者。`ordinary_mode_observers_follow_generated_readers_in_all_artifacts` 核对无 reader、两个 ComM reader 与普通映射组的三类产物及内存描述；真实 RTE 消费者核对两用户读回。
 
 ## 其余诊断的裁决边界
 

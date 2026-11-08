@@ -3,6 +3,196 @@ use super::*;
 use std::path::Path;
 
 #[test]
+fn comm_services_execute_real_user_calls_and_mode_publications() {
+    let plan = build(&comm_service_inputs()).unwrap_or_else(|issues| panic!("{issues:#?}"));
+    let scratch = Scratch::new();
+    write_files(
+        &scratch.0,
+        &prepared_pipeline_files_for_target(&plan, tooling::native_target()),
+    );
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/bsw-contracts/rte_comm_contract.c"),
+        scratch.0.join("consumer.c"),
+    )
+    .unwrap();
+    let peer = "#include \"Rte_ComMService.h\"\nconst Rte_CDS_ComMService *comm_instance_peer(void);\nconst Rte_CDS_ComMService *comm_instance_peer(void) { return Rte_Inst_ComMService; }\n";
+    let paths = [
+        "generated/src/Rte.c",
+        "generated/src/Ecu_RuntimeConfig.c",
+        "bsw/src/ComM.c",
+    ];
+    let original: Vec<_> = paths
+        .iter()
+        .map(|path| std::fs::read_to_string(scratch.0.join(path)).unwrap())
+        .collect();
+    let mut mutations = vec![("normal".to_owned(), original.clone(), true)];
+    for operation in [
+        "RequestComMode",
+        "GetRequestedComMode",
+        "GetCurrentComMode",
+        "GetCurrentPNCComMode",
+        "GetMaxComMode",
+    ] {
+        let mut changed = original.clone();
+        let prefix = format!("return ComM_{operation}(");
+        let start = changed[0].find(&prefix).unwrap();
+        let end = start + changed[0][start..].find(';').unwrap() + 1;
+        changed[0].replace_range(start..end, "(void)ComMode; return E_OK;");
+        mutations.push((format!("missing-{operation}"), changed, false));
+    }
+    let mut changed = original.clone();
+    assert!(changed[0].contains("ComM_RequestComMode((ComM_UserHandleType)0U, ComMode)"));
+    changed[0] = changed[0].replacen(
+        "ComM_RequestComMode((ComM_UserHandleType)0U, ComMode)",
+        "ComM_RequestComMode((ComM_UserHandleType)43U, ComMode)",
+        1,
+    );
+    mutations.push(("wrong-user".into(), changed, false));
+    let mut changed = original.clone();
+    assert_eq!(
+        changed[0]
+            .matches("ComM_RequestComMode((ComM_UserHandleType)43U, ComMode)")
+            .count(),
+        1
+    );
+    changed[0] = changed[0].replace(
+        "ComM_RequestComMode((ComM_UserHandleType)43U, ComMode)",
+        "ComM_RequestComMode((ComM_UserHandleType)0U, ComMode)",
+    );
+    mutations.push(("wrong-second-user".into(), changed, false));
+    let mut changed = original.clone();
+    assert_eq!(
+        changed[2]
+            .matches("ComM_NotifyUsers(config, mode);")
+            .count(),
+        1
+    );
+    changed[2] = changed[2].replace(
+        "ComM_NotifyUsers(config, mode);",
+        "if (mode > COMM_FULL_COMMUNICATION) { ComM_NotifyUsers(config, mode); }",
+    );
+    mutations.push(("missing-user-notifications".into(), changed, false));
+    let mut changed = original.clone();
+    changed[1] = changed[1].replace(
+        "RTE_MODE_ComMMode_COMM_FULL_COMMUNICATION",
+        "RTE_MODE_ComMMode_COMM_NO_COMMUNICATION",
+    );
+    mutations.push(("wrong-mode-conversion".into(), changed, false));
+    let mut changed = original.clone();
+    assert_eq!(
+        changed[2]
+            .matches("valid = ComM_ValidUserModes(config);")
+            .count(),
+        1
+    );
+    changed[2] = changed[2].replace(
+        "valid = ComM_ValidUserModes(config);",
+        "valid = ComM_ValidUserModes(config) || TRUE;",
+    );
+    mutations.push(("ignored-user-mapping-validation".into(), changed, false));
+    let mut changed = original.clone();
+    let callback = "SchM_Switch_ComM_UM_SecondUser(";
+    assert_eq!(changed[1].matches(callback).count(), 3);
+    changed[1] = changed[1].replace(callback, "SchM_Switch_ComM_UM_HostUser(");
+    mutations.push(("wrong-user-publisher".into(), changed, false));
+    let mut changed = original.clone();
+    assert_eq!(
+        changed[2]
+            .matches("comm_published = COMM_NO_COMMUNICATION;")
+            .count(),
+        1
+    );
+    changed[2] = changed[2].replace(
+        "comm_published = COMM_NO_COMMUNICATION;",
+        "comm_published = COMM_SILENT_COMMUNICATION;",
+    );
+    mutations.push(("default-no-notification".into(), changed, false));
+    mutations.push(("split-instance-identity".into(), original.clone(), false));
+    for (label, sources, success) in mutations {
+        let peer = if label == "split-instance-identity" {
+            peer.replace(
+                "return Rte_Inst_ComMService;",
+                "static const Rte_CDS_ComMService other = {0u}; return &other;",
+            )
+        } else {
+            peer.to_owned()
+        };
+        std::fs::write(scratch.0.join("instance-peer.c"), peer).unwrap();
+        for (path, source) in paths.iter().zip(sources) {
+            std::fs::write(scratch.0.join(path), source).unwrap();
+        }
+        // Consume the exact emitted ComM sections without retaining unrelated module
+        // bootstrap functions that share the production RTE linker section.
+        let config = std::fs::read_to_string(scratch.0.join(paths[1])).unwrap();
+        let mut sections = String::new();
+        let mut copying = false;
+        let mut stopping = false;
+        for line in config.lines() {
+            if line.starts_with("#define RTE_ComM_START_SEC_") {
+                copying = true;
+            }
+            if copying {
+                sections.push_str(line);
+                sections.push('\n');
+            }
+            if stopping && line == "#include \"Rte_MemMap.h\"" {
+                copying = false;
+                stopping = false;
+            }
+            if line.starts_with("#define RTE_ComM_STOP_SEC_") {
+                stopping = true;
+            }
+        }
+        assert!(sections.contains("static const ComM_ConfigType comm_config"));
+        std::fs::write(scratch.0.join("comm-user-config.c"), sections).unwrap();
+        let executable = tooling::native_binary(&scratch.0, &label);
+        let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
+        compiler.current_dir(&scratch.0).args([
+            "-std=c99",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-pedantic",
+            "-ffunction-sections",
+            "-fdata-sections",
+            "-Igenerated/src",
+            "generated/src/Rte.c",
+            "generated/src/SchM_Main.c",
+            "bsw/src/ComM.c",
+            "integration/src/SchM_Mode_Host.c",
+            "integration/src/Can_HostLock.c",
+            "app/Ingress/Ingress.c",
+            "app/Process/Process.c",
+            "consumer.c",
+            "instance-peer.c",
+            "-Wl,--gc-sections",
+            "-Wl,--wrap=SchM_Switch_ComM_UM_HostUser",
+            "-Wl,--wrap=SchM_Switch_ComM_UM_SecondUser",
+        ]);
+        if cfg!(target_os = "linux") {
+            compiler.arg("-pthread");
+        }
+        compiler.arg("-o").arg(&executable);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            &format!("{label}-compile"),
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{label}: {output:?}");
+        let output = tooling::run_public_command(
+            &mut std::process::Command::new(executable),
+            &scratch.0,
+            &format!("{label}-run"),
+            std::time::Duration::from_secs(30),
+        );
+        assert_eq!(output.status.success(), success, "{label}: {output:?}");
+    }
+}
+
+#[test]
 fn differently_named_service_calls_the_real_selected_bsw_entry() {
     let plan = build(&mapped_operation_inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));
     let scratch = Scratch::new();
@@ -241,7 +431,7 @@ fn generated_headers_compile_and_link_independent_scalar_and_void_server_signatu
             (
                 "process.c",
                 r#"#include "Rte_Process.h"
-const Rte_CDS_Process *const Rte_Inst_Process = NULL_PTR;
+const Rte_CDS_Process Rte_Instance_Process = {0u};
 static uint32 written;
 static uint32 pinged;
 void Process_Ping(void) { pinged++; }
@@ -401,7 +591,7 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
         let scope = if renamed { "Compute" } else { "Process" };
         for (symbol, section) in [
             (
-                format!("Rte_Inst_{scope}"),
+                format!("Rte_Instance_{scope}"),
                 format!(".data.rel.ro.rte.{scope}.CONST_UNSPECIFIED"),
             ),
             (
@@ -544,9 +734,10 @@ int main(void) { return test_process() || test_ingress() || test_observe() || te
             if renamed { "Compute" } else { "Process" },
             "Observe",
             "DcmService",
+            "ComMService",
         ] {
-            assert!(symbols.contains(&format!("Rte_Inst_{component}").as_str()));
-            assert!(!symbols.contains(&format!("Rte_Instance_{component}").as_str()));
+            assert!(!symbols.contains(&format!("Rte_Inst_{component}").as_str()));
+            assert!(symbols.contains(&format!("Rte_Instance_{component}").as_str()));
         }
         std::fs::remove_dir_all(directory).unwrap();
     }
@@ -655,12 +846,35 @@ fn generated_schm_lifecycle_refuses_misordered_repeated_and_foreign_calls() {
     );
     assert!(output.status.success(), "{output:?}");
     let output = tooling::run_public_command(
-        &mut std::process::Command::new(executable),
+        &mut std::process::Command::new(&executable),
         &scratch.0,
         "schm-lifecycle-run",
         std::time::Duration::from_secs(30),
     );
     assert!(output.status.success(), "{output:?}");
+    let source_path = scratch.0.join("generated/src/SchM_Main.c");
+    let source = std::fs::read_to_string(&source_path).unwrap();
+    let immediate = "(void)mode;\n    return SCHM_E_OK;";
+    assert_eq!(source.matches(immediate).count(), 1);
+    std::fs::write(
+        source_path,
+        source.replace(immediate, "(void)mode;\n    return E_NOT_OK;"),
+    )
+    .unwrap();
+    let output = tooling::run_public_command(
+        &mut compiler,
+        &scratch.0,
+        "schm-lifecycle-refusal-compile",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(output.status.success(), "{output:?}");
+    let output = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        &scratch.0,
+        "schm-lifecycle-refusal-run",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(!output.status.success(), "{output:?}");
 }
 
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
@@ -1179,11 +1393,11 @@ fn application_headers_enforce_runnable_visibility_memmap_and_imported_releases(
         "Multiple application header",
     );
     check(
-        "private-cds-object",
+        "shared-cds-object",
         "#include \"Rte_Ingress.h\"\nconst Rte_CDS_Ingress *storage = &Rte_Instance_Ingress;\n",
         false,
-        false,
-        "Rte_Instance_Ingress",
+        true,
+        "",
     );
     check(
         "unselected-runnable-api",

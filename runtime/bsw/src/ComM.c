@@ -82,6 +82,38 @@ static boolean comm_publishing COMM_VAR_CLEARED;      /**< Publisher; Init prese
 #endif
 #define COMM_START_SEC_CODE
 #include "ComM_MemMap.h"
+static COMM_CODE boolean ComM_ValidUserModes(const ComM_ConfigType *config)
+{
+    boolean valid = TRUE;
+    if ((config->user_mode_count > config->user_count) ||
+        ((config->user_mode_count != 0u) && (config->user_modes == NULL_PTR))) {
+        valid = FALSE;
+    } else {
+        for (uint16 i = 0u; i < config->user_mode_count; ++i) {
+            const ComM_UserModeConfigType *user = &config->user_modes[i];
+            boolean found = FALSE;
+            for (uint16 j = 0u; j < config->user_count; ++j) {
+                if (config->users[j] == user->user) {
+                    found = TRUE;
+                }
+            }
+            if ((found == FALSE) || (user->notify == NULL_PTR) || (user->channels == NULL_PTR) ||
+                (user->channel_count != 1u)) {
+                valid = FALSE;
+            } else if (user->channels[0] != config->channel) {
+                valid = FALSE;
+            } else {
+                /* The immutable mapping selects this profile's single channel. */
+            }
+            for (uint16 j = 0u; j < i; ++j) {
+                if (config->user_modes[j].user == user->user) {
+                    valid = FALSE;
+                }
+            }
+        }
+    }
+    return valid;
+}
 static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config)
 {
     boolean valid = FALSE;
@@ -90,7 +122,7 @@ static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config)
         (config->current != NULL_PTR) &&
         ((config->dcm_no == NULL_PTR) == (config->dcm_silent == NULL_PTR)) &&
         ((config->dcm_no == NULL_PTR) == (config->dcm_full == NULL_PTR))) {
-        valid = TRUE;
+        valid = ComM_ValidUserModes(config);
         for (uint16 i = 0u; i < config->user_count; ++i) {
             uint16 j;
             if (config->users[i] == COMM_NOT_USED_USER_ID) {
@@ -210,6 +242,23 @@ static COMM_CODE void ComM_NotifyDcm(const ComM_ConfigType *config, ComM_ModeTyp
         }
     }
 }
+/* Select the lowest actual mode through the user's immutable channel relation.
+ * Configuration validation restricts the relation to the selected CDD channel. */
+static COMM_CODE void ComM_NotifyUsers(const ComM_ConfigType *config, ComM_ModeType mode)
+{
+    uint16 i;
+    for (i = 0u; i < config->user_mode_count; ++i) {
+        const ComM_UserModeConfigType *user = &config->user_modes[i];
+        ComM_ModeType lowest = COMM_FULL_COMMUNICATION;
+        uint16 channel;
+        for (channel = 0u; channel < user->channel_count; ++channel) {
+            if ((user->channels[channel] == config->channel) && (mode < lowest)) {
+                lowest = mode;
+            }
+        }
+        user->notify(lowest);
+    }
+}
 /* Called by the claimed publisher only; publishes until the latest indication is out. */
 static COMM_CODE void ComM_Publish(void)
 {
@@ -228,7 +277,7 @@ static COMM_CODE void ComM_Publish(void)
         }
         SchM_Exit_ComM_COMM_STATE();
         if (owner) {
-            /* RTE user ports are not generated (see the ComM standards page). */
+            ComM_NotifyUsers(config, mode);
             BswM_ComM_CurrentMode(config->channel, mode);
             ComM_NotifyDcm(config, mode);
         }
