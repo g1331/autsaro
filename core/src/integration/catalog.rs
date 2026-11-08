@@ -70,6 +70,27 @@ pub(super) fn bsw_catalog(
             },
         );
     };
+    for (operation, arguments) in [
+        (
+            "GetSecurityLevel",
+            vec![("SecLevel", "Dcm_SecLevelType *", "OUT")],
+        ),
+        (
+            "GetSesCtrlType",
+            vec![("SesCtrlType", "Dcm_SesCtrlType *", "OUT")],
+        ),
+        ("ResetToDefaultSession", vec![]),
+        ("SetActiveDiagnostic", vec![("active", "boolean", "IN")]),
+    ] {
+        add(
+            &format!("Dcm_{operation}"),
+            "Dcm",
+            "Std_ReturnType",
+            &arguments,
+            "runtime/bsw/include/Dcm.h",
+            "runtime/bsw/src/Dcm.c",
+        );
+    }
     add(
         "Can_Init",
         "Can",

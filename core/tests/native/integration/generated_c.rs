@@ -1993,3 +1993,119 @@ fn run_synchronized_mode_consumer(swc_managed: bool) {
     }
     assert_ne!(primary.variable, secondary.variable);
 }
+
+#[test]
+fn dcm_services_call_real_apis_and_preserve_outputs() {
+    let plan = build(&dcm_service_inputs()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let scratch = Scratch::new();
+    write_files(
+        &scratch.0,
+        &prepared_pipeline_files_for_target(&plan, tooling::native_target()),
+    );
+    let constants = scratch.0.join("service-errors.c");
+    std::fs::write(
+        &constants,
+        r#"#include "Rte_DcmService.h"
+#ifndef RTE_E_DCMServices_E_OK
+#error "DCMServices E_OK is required"
+#endif
+#if RTE_E_DCMServices_E_OK != 0U || RTE_E_DCMServices_E_NOT_OK != 1U
+#error "DCMServices application error contract"
+#endif
+int service_errors(void);
+int service_errors(void) { return RTE_E_DCMServices_E_NOT_OK; }
+"#,
+    )
+    .unwrap();
+    let mut compiler = tooling::c_compiler();
+    tooling::project_includes(&mut compiler, &scratch.0);
+    compiler
+        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-c"])
+        .arg(&constants)
+        .arg("-o")
+        .arg(scratch.0.join("service-errors.o"));
+    let output = tooling::run_public_command(
+        &mut compiler,
+        &scratch.0,
+        "service-errors-compile",
+        std::time::Duration::from_secs(60),
+    );
+    assert!(output.status.success(), "{output:?}");
+    let rte = scratch.0.join("generated/src/Rte.c");
+    let original = std::fs::read_to_string(&rte).unwrap();
+    for mutation in [
+        None,
+        Some("GetSecurityLevel"),
+        Some("GetSesCtrlType"),
+        Some("ResetToDefaultSession"),
+        Some("SetActiveDiagnostic"),
+    ] {
+        let label = mutation.unwrap_or("normal");
+        let source = if let Some(operation) = mutation {
+            let prefix = format!("return Dcm_{operation}(");
+            let start = original.find(&prefix).unwrap();
+            let end = start + original[start..].find(';').unwrap() + 1;
+            let ignored = match operation {
+                "GetSecurityLevel" => "(void)SecLevel; ",
+                "GetSesCtrlType" => "(void)SesCtrlType; ",
+                "SetActiveDiagnostic" => "(void)active; ",
+                _ => "",
+            };
+            format!(
+                "{}{ignored}return E_OK;{}",
+                &original[..start],
+                &original[end..]
+            )
+        } else {
+            original.clone()
+        };
+        std::fs::write(&rte, source).unwrap();
+        let executable = tooling::native_binary(&scratch.0, label);
+        let mut compiler = tooling::c_compiler();
+        tooling::project_includes(&mut compiler, &scratch.0);
+        compiler
+            .current_dir(&scratch.0)
+            .args([
+                "-std=c99",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-pedantic",
+                "-ffunction-sections",
+                "-fdata-sections",
+            ])
+            .args([
+                "generated/src/Rte.c",
+                "bsw/src/Dcm.c",
+                "integration/src/SchM_Diagnostic_Host.c",
+                "integration/src/Can_HostLock.c",
+            ])
+            .arg(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/bsw-contracts/rte_dcm_contract.c"),
+            )
+            .arg("-Wl,--gc-sections");
+        if cfg!(target_os = "linux") {
+            compiler.arg("-pthread");
+        }
+        compiler.arg("-o").arg(&executable);
+        let output = tooling::run_public_command(
+            &mut compiler,
+            &scratch.0,
+            &format!("{label}-compile"),
+            std::time::Duration::from_secs(60),
+        );
+        assert!(output.status.success(), "{label}: {output:?}");
+        let output = tooling::run_public_command(
+            &mut std::process::Command::new(executable),
+            &scratch.0,
+            &format!("{label}-run"),
+            std::time::Duration::from_secs(30),
+        );
+        assert_eq!(
+            output.status.success(),
+            mutation.is_none(),
+            "{label}: {output:?}"
+        );
+    }
+}

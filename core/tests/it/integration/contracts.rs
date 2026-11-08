@@ -760,15 +760,28 @@ fn collisions_are_rejected_with_all_references_still_valid() {
         let issues = build(&sources)
             .err()
             .unwrap_or_else(|| panic!("{after} accepted"));
-        assert!(
-            issues.iter().any(|issue| matches!(
-                issue.code.as_str(),
-                "CONTRACT_NAME_COLLISION"
-                    | "SYMBOL_NORMALIZATION_COLLISION"
-                    | "SYMBOL_PRODUCER_DUPLICATE"
-            )),
-            "{after}: {issues:?}"
-        );
+        if after == "boolean" {
+            // DCMServices now imports the canonical scalar boolean. The renamed
+            // array conflicts with that producer before the C namespace check.
+            assert!(
+                issues
+                    .iter()
+                    .any(|issue| issue.code == "RTE_TYPE_UNSUPPORTED"
+                        && issue.file.as_deref() == Some("types.arxml")
+                        && issue.object.as_deref() == Some("/Types/boolean")),
+                "{issues:?}"
+            );
+        } else {
+            assert!(
+                issues.iter().any(|issue| matches!(
+                    issue.code.as_str(),
+                    "CONTRACT_NAME_COLLISION"
+                        | "SYMBOL_NORMALIZATION_COLLISION"
+                        | "SYMBOL_PRODUCER_DUPLICATE"
+                )),
+                "{after}: {issues:?}"
+            );
+        }
         assert!(
             !issues
                 .iter()
