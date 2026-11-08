@@ -2,17 +2,14 @@ name: Extended checks
 # Checks outside the required pull request layer (checks.yml), selected by the
 # changed paths: the rest of the Python and UI matrices, manual Desktop acceptance and
 # the official archive comparison, the full offline receiver matrix and bounded fuzzing. Runs after every push to
-# master; a pull request runs the official comparison and fuzzing for their paths,
+# master via checks.yml after CI required; a pull request selects official comparison and fuzzing,
 # and the remaining extended checks once it carries full-ci. Desktop is manual here.
 on:
-  push:
-    branches: [master]
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
+  workflow_call:
   workflow_dispatch:
 concurrency:
-  # Adding an unrelated label must not cancel a run in progress.
-  group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && github.run_id || github.event.pull_request.number || github.sha }}
+  # A reusable workflow inherits github.workflow; use a distinct group from its caller.
+  group: extended-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
@@ -36,6 +33,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - id: select
         shell: python
@@ -112,6 +110,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
@@ -136,6 +135,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
       - uses: ./.github/actions/core-build-dependencies
@@ -191,6 +191,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
@@ -228,6 +229,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: ./.github/actions/core-build-dependencies
       - name: Pinned nightly toolchain
         working-directory: fuzz

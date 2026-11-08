@@ -43,7 +43,174 @@ def jobs() -> dict[str, dict[str, object]]:
     return found
 
 
+def file_listing(paths):
+    return json.dumps([[{"filename": path, "status": "modified"} for path in paths]])
+
+
+def run_script(script):
+    with tempfile.TemporaryDirectory() as temporary:
+        path = Path(temporary) / "workflow.py"
+        path.write_text(script, encoding="utf-8")
+        return runpy.run_path(str(path))
+
+
 class CiSelectionTests(unittest.TestCase):
+    def test_analysis_and_documentation_selection_follows_consumers(self):
+        script = yaml.safe_load(WORKFLOW.read_text())["jobs"]["changes"]["steps"][1]["run"]
+        analysis = ["tools/python/src/autosar_tooling/" + name + ".py"
+                    for name in ("c_check", "c_acceptance", "c_sdk", "c_comparison", "c_addon")]
+        analysis += ["docs/standards/os/adoption.md", "docs/standards/types/declarations.md",
+                     ".agents/skills/misra-c2012/references/baseline-index.json"]
+        full = ["tools/python/src/autosar_tooling/c_standard.py",
+                "tools/python/src/autosar_tooling/c_retention.py",
+                "docs/standards/rte/generated-retention/README.md", "LICENSE", "NOTICE",
+                "docs/official/example.zip", "core/src/generator.rs", "unknown/input.txt",
+                ".github/workflows/checks.yml", ".github/workflows/extended.yml"]
+        cases = [([{"filename": path, "status": "modified"}], "analysis") for path in analysis]
+        cases += [([{"filename": path, "status": "modified"}], "full") for path in full]
+        cases += [([{"filename": path, "status": "modified"} for path in paths], "docs")
+                  for paths in (["README.md", "CHANGELOG.md", "docs/development/testing/README.md"],
+                                ["docs/architecture/runtime.md"], ["README.zh-CN.md"])]
+        for path in ("core/src/generator.rs", "README.md", "ui/src/App.tsx"):
+            cases.append(([{"filename": analysis[0], "status": "modified"},
+                           {"filename": path, "status": "modified"}], "full"))
+        cases += [([{"filename": analysis[0], "status": status}], "full")
+                  for status in ("added", "removed", "renamed")]
+        cases += [([{"filename": analysis[0], "status": "modified",
+                     "previous_filename": "old.py"}], "full"),
+                  ([], "full"), ([{"filename": analysis[0], "status": "modified"}] * 3000, "full")]
+        for rows, mode in cases:
+            with self.subTest(rows=rows[:2], mode=mode), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "output"
+                env = {"PULL_REQUEST": "1", "GITHUB_REPOSITORY": "example/repo",
+                       "GITHUB_OUTPUT": str(output)}
+                result = subprocess.CompletedProcess([], 0, json.dumps([rows]))
+                with mock.patch.dict(os.environ, env), \
+                        mock.patch.object(subprocess, "run", return_value=result), \
+                        mock.patch("builtins.print"):
+                    run_script(script)
+                values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+                self.assertEqual(values["code"], str(mode != "docs").lower())
+                self.assertEqual(values["analysis"], str(mode != "docs").lower())
+                self.assertEqual(values["native"], str(mode == "full").lower())
+                self.assertEqual(values["application"], str(mode == "full").lower())
+                if mode != "full":
+                    self.assertEqual(values["desktop"], "false")
+                if rows and rows[0]["filename"] == "unknown/input.txt":
+                    self.assertEqual(values["desktop"], "true")
+
+    def test_analysis_drivers_are_outside_skipped_python_consumers(self):
+        drivers = {"autosar_tooling." + name for name in
+                   ("c_check", "c_acceptance", "c_sdk", "c_comparison", "c_addon")}
+        modules = {
+            path.relative_to(ROOT / "tools/python/src").with_suffix("").as_posix().replace("/", "."): path
+            for path in (ROOT / "tools/python/src").rglob("*.py")
+        }
+        modules.update({path.stem: path for path in (ROOT / "tests/python/native").glob("*.py")})
+        roots = list((ROOT / "tools/python/src/ecu_tools").glob("*.py"))
+        roots += [path for path in (ROOT / "tests/python/native").glob("*.py")
+                  if path.name not in {"test_c_analysis.py", "test_clang_build.py"}]
+        roots += list((ROOT / "core/tests/fixtures").rglob("*.py"))
+        seen, pending = set(), list(roots)
+        while pending:
+            path = pending.pop()
+            if path in seen:
+                continue
+            seen.add(path)
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module] + [node.module + "." + alias.name for alias in node.names]
+                    if node.module == "autosar_tooling.c_standard":
+                        self.assertLessEqual({alias.name for alias in node.names},
+                                             {"lex", "is_comment", "function", "code_words",
+                                              "verify_memory_mapping_pattern"})
+                self.assertFalse(drivers.intersection(names), (path, names))
+                pending.extend(modules[name] for name in names if name in modules)
+        compiler = (ROOT / ".github/actions/native-analysis-compiler/action.yml").read_text()
+        self.assertIn("from ecu_tools.build import compiler_include_paths", compiler)
+        self.assertNotIn("autosar_tooling", compiler)
+        from autosar_tooling import c_check
+        from ecu_tools.build import compiler_include_paths
+        self.assertIs(c_check.compiler_include_paths, compiler_include_paths)
+        from autosar_tooling.c_retention import RECORD_DIRECTORY
+        self.assertEqual(RECORD_DIRECTORY, "docs/standards/rte/generated-retention")
+        standard = ast.parse((ROOT / "tools/python/src/autosar_tooling/c_standard.py").read_text())
+        functions = {node.name: node for node in standard.body if isinstance(node, ast.FunctionDef)}
+        pending = ["lex", "is_comment", "function", "code_words", "verify_memory_mapping_pattern"]
+        checked = set()
+        while pending:
+            name = pending.pop()
+            if name in checked:
+                continue
+            checked.add(name)
+            names = {node.id for node in ast.walk(functions[name]) if isinstance(node, ast.Name)}
+            self.assertFalse(names & {"ROOT", "BASELINE", "MANUAL_ASSESSMENT_SOURCES"}, name)
+            pending.extend(names & functions.keys() - checked)
+
+    def test_extended_is_called_once_after_required_at_the_same_revision(self):
+        required = yaml.safe_load(WORKFLOW.read_text())
+        extended = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text())
+        events = extended.get("on", extended.get(True))
+        self.assertEqual(set(events), {"workflow_call", "workflow_dispatch"})
+        calls = [job for job in required["jobs"].values()
+                 if job.get("uses") == "./.github/workflows/extended.yml"]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["needs"], "required")
+        self.assertIn("needs.required.result == 'success'", calls[0]["if"])
+        self.assertNotIn("extended", required["jobs"]["required"]["needs"])
+        self.assertEqual(extended["permissions"], {"contents": "read"})
+        self.assertTrue(extended["concurrency"]["group"].startswith("extended-"))
+        for job in extended["jobs"].values():
+            for step in job.get("steps", []):
+                if step.get("uses", "").startswith("actions/checkout@"):
+                    self.assertEqual(step["with"]["ref"], "${{ github.sha }}")
+                    self.assertFalse(step["with"]["persist-credentials"])
+        self.assertNotIn("workflow_run", events)
+        self.assertNotIn("pull_request_target", events)
+
+    def test_label_events_do_not_cancel_or_replace_required_for_unrelated_labels(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text())
+        def evaluate(expression, event):
+            expression = expression.removeprefix("${{").removesuffix("}}").strip()
+            for name in sorted(event, key=len, reverse=True):
+                expression = expression.replace(name, repr(event[name]))
+            expression = expression.replace("||", " or ").replace("&&", " and ")
+            return eval(expression, {"__builtins__": {}})
+        for action, label in (("synchronize", ""), ("labeled", "full-ci"), ("labeled", "area:ci")):
+            event = {"github.workflow": "Development checks", "github.event.action": action,
+                     "github.event.label.name": label, "github.event_name": "pull_request",
+                     "github.run_id": 123, "github.event.pull_request.number": 99,
+                     "github.ref": "refs/pull/99/merge"}
+            selected = action != "labeled" or label == "full-ci"
+            cancelled = evaluate(workflow["concurrency"]["cancel-in-progress"], event)
+            self.assertEqual(bool(cancelled), selected)
+            name = evaluate(workflow["jobs"]["required"]["name"], event)
+            self.assertEqual(name == "CI required", selected)
+            for job in ("changes", "quality"):
+                self.assertEqual(bool(evaluate(workflow["jobs"][job]["if"], event)), selected)
+
+    def test_combined_application_job_keeps_every_check_inside_twenty_minutes(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        self.assertNotIn("ui", workflow)
+        job = workflow["desktop"]
+        self.assertEqual(job["timeout-minutes"], 20)
+        commands = [step["run"] for step in job["steps"] if "run" in step]
+        for command in (
+            "npm ci --prefix ui", "npm run build --prefix ui", "npm run lint --prefix ui",
+            "npm run ipc:check --prefix ui", "cargo build --locked -p autosar-config-desktop",
+        ):
+            self.assertEqual(commands.count(command), 1)
+        self.assertTrue(any("npm run test --prefix ui" in command for command in commands))
+        self.assertTrue(any("cargo test --locked --profile dev" in command for command in commands))
+        self.assertTrue(any("cargo clippy --locked -p autosar-config-desktop" in command
+                            for command in commands))
+        for step in job["steps"]:
+            if "run" in step:
+                self.assertIn("!cancelled()", step["if"])
+
     def test_cargo_source_digest_uses_tracked_bytes_despite_generated_files_and_timestamps(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
         scripts = [next(step["run"] for step in workflow[name]["steps"]
@@ -152,7 +319,7 @@ class CiSelectionTests(unittest.TestCase):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         for job, name, key, allowed in (
             ("native-os", "Host I/O and lock failure boundaries", "shard", {"0/1", "1/2"}),
-            ("c-analysis-samples", "Analyzer behavior tests", "group", {"standard-ecu"}),
+            ("c-analysis-samples", "Analyzer behavior tests", "group", {"no-diagnostic"}),
         ):
             steps = workflow["jobs"][job]["steps"]
             step = next(step for step in steps if step.get("name") == name)
@@ -217,8 +384,10 @@ class CiSelectionTests(unittest.TestCase):
                 self.assertEqual({row["os"] for row in job["strategy"]["matrix"]["include"]},
                                  {platform})
             if name != "c-analysis-prepare":
-                self.assertEqual(linux["needs"], "c-analysis-prepare")
-                self.assertEqual(windows["needs"], "c-analysis-prepare-windows")
+                self.assertEqual(linux["needs"], ["changes", "c-analysis-prepare"]
+                                 if name == "native-delivery" else "c-analysis-prepare")
+                self.assertEqual(windows["needs"], ["changes", "c-analysis-prepare-windows"]
+                                 if name == "native-delivery" else "c-analysis-prepare-windows")
         upstream = workflow["c-analysis"]["needs"]
         self.assertEqual(set(upstream), {
             "changes", "c-analysis-prepare", "c-analysis-prepare-windows",
@@ -241,13 +410,14 @@ class CiSelectionTests(unittest.TestCase):
                         else:
                             with self.assertRaisesRegex(RuntimeError, "Incomplete platform/sample"):
                                 runpy.run_path(str(script))
-        for name in ("ui", "python", "desktop"):
+        for name in ("python", "desktop"):
             job = workflow[name]
             self.assertEqual(set(job["needs"]),
                              {"changes", "c-analysis-prepare", "c-analysis-prepare-windows"})
             # The status function explicitly permits a skipped producer on UI-only PRs.
             condition = "${{ !cancelled() && needs.changes.outputs.code == 'true' }}"
-            self.assertEqual(job["if"], condition)
+            self.assertEqual(job["if"], condition.replace("outputs.code", "outputs.application")
+                             if name == "desktop" else condition)
 
     def test_analysis_readiness_rejects_acceptance_errors_but_not_known_blockers(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -296,7 +466,8 @@ class CiSelectionTests(unittest.TestCase):
                            "GITHUB_REPOSITORY": "g1331/autsaro", "BASE": "base",
                            "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
                     with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
-                        run.return_value = subprocess.CompletedProcess([], 0, path + "\n")
+                        listing = file_listing([path]) if event == "pull_request" else path + "\n"
+                        run.return_value = subprocess.CompletedProcess([], 0, listing)
                         runpy.run_path(str(source))
                     self.assertIn("desktop=" + str(expected).lower() + "\n", output.read_text())
         for listing, status, base in (("", 0, "base"), ("docs/a.md\n" * 3000, 0, "base"),
@@ -489,8 +660,8 @@ class CiSelectionTests(unittest.TestCase):
             ([".codex/hooks.json", "runtime/bsw/src/Can.c"], True, True),
             ([".codex-extra/hooks.json"], True, True),
             (["docs/standards/rte/generated-retention/README.md"], True, True),
-            (["docs/standards/types/declarations.md"], True, True),
-            ([".agents/skills/misra-c2012/references/baseline-index.json"], True, True),
+            (["docs/standards/types/declarations.md"], True, False),
+            ([".agents/skills/misra-c2012/references/baseline-index.json"], True, False),
         )
         for paths, code, native in cases:
             with self.subTest(paths=paths), tempfile.TemporaryDirectory() as directory:
@@ -502,29 +673,56 @@ class CiSelectionTests(unittest.TestCase):
                     "GITHUB_REPOSITORY": "example/repo",
                     "GITHUB_OUTPUT": str(output),
                 }
-                listing = subprocess.CompletedProcess([], 0, stdout="\n".join(paths))
+                listing = subprocess.CompletedProcess([], 0, stdout=file_listing(paths))
                 with (
                     mock.patch.dict(os.environ, environment),
                     mock.patch.object(subprocess, "run", return_value=listing),
                 ):
                     runpy.run_path(str(script_path))
-                self.assertEqual(
-                    output.read_text(encoding="utf-8"),
-                    f"code={str(code).lower()}\nnative={str(native).lower()}\ndesktop={str(any(path.startswith(('ui/', 'runtime/')) for path in paths)).lower()}\n",
-                )
+                values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+                self.assertEqual(values["code"], str(code).lower())
+                self.assertEqual(values["native"], str(native).lower())
+                self.assertEqual(values["desktop"], str(any(
+                    path.startswith(("ui/", "runtime/", ".codex-extra/")) for path in paths)).lower())
 
-    def test_skipped_jobs_match_the_required_gate(self):
-        workflow = jobs()
-        skipped = {name for name, job in workflow.items() if "outputs.native" in job["if"]}
-        # A job that needs a skipped job is skipped with it.
-        while extra := {name for name, job in workflow.items()
-                        if job["needs"] & skipped and "!cancelled()" not in job["if"]} - skipped:
-            skipped |= extra
-        gate = re.search(r"UI_INDEPENDENT = \{([^}]+)\}", WORKFLOW.read_text(encoding="utf-8"))
-        self.assertIsNotNone(gate)
-        listed = set(re.findall(r"'([a-z-]+)'", gate.group(1)))
-        self.assertEqual(listed, skipped & workflow["required"]["needs"])
-        self.assertIn("core", skipped)
+    def test_selected_jobs_and_required_gate_agree(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        script = workflow["required"]["steps"][0]["run"]
+        native_jobs = {"core", "native", "native-os", "native-sanitizers",
+                       "native-delivery", "native-delivery-windows"}
+        for mode, selected in (
+            ("full", {"code": True, "native": True, "desktop": True,
+                      "analysis": True, "application": True}),
+            ("analysis", {"code": True, "native": False, "desktop": False,
+                          "analysis": True, "application": False}),
+            ("ui", {"code": True, "native": False, "desktop": True,
+                    "analysis": False, "application": True}),
+            ("docs", dict.fromkeys(("code", "native", "desktop", "analysis", "application"), False)),
+        ):
+            for name in workflow["required"]["needs"]:
+                selection = ("desktop" if name == "desktop-scenarios" else
+                             "application" if name == "desktop" else
+                             "analysis" if name == "c-analysis" else
+                             "native" if name in native_jobs else "code")
+                for status in ("success", "failure", "cancelled", "skipped"):
+                    outputs = {key: str(value).lower() for key, value in selected.items()}
+                    needs = {job: {"result": "success"} for job in workflow["required"]["needs"]}
+                    needs["changes"]["outputs"] = outputs
+                    needs[name]["result"] = status
+                    with self.subTest(mode=mode, name=name, status=status), \
+                            mock.patch.dict(os.environ, {"RESULTS": json.dumps(needs)}), \
+                            mock.patch("builtins.print"):
+                        try:
+                            run_script(script)
+                        except SystemExit as error:
+                            expected = (status == "success" or status == "skipped"
+                                        and name not in {"changes", "quality"} and not selected[selection])
+                            self.assertEqual(error.code == 0, expected)
+        for name in native_jobs:
+            self.assertIn("outputs.native", workflow[name]["if"])
+        for name in ("c-analysis-prepare", "c-analysis-prepare-windows", "c-analysis"):
+            self.assertIn("outputs.analysis", workflow[name]["if"])
+        self.assertIn("outputs.application", workflow["desktop"]["if"])
 
     def test_skipped_job_inputs_do_not_read_ui(self):
         tracked = subprocess.run(
