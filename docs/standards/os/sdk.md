@@ -75,8 +75,9 @@ C99 编译／展开、确定常量值、公开结构类型、原返回检查及�
 成员访问在通用追踪器中标记复杂展开，本组只核对以下精确已审定义，不放宽通用解析。
 R10.1／R7.3／R5.5／R5.7 即使 checker 未报告也检查实例，未登记的新使用点继续拒绝。
 
-SDK 使用既有 source-assessment context 的 sdk-integration 组；sdk_identity 额外绑定
-完整诊断、头依赖和活动宏集。缺失、pending、过期、表外规则／文件／行、同名项目宏、
+SDK 使用既有 source-assessment context 的 sdk-integration 组；`sdk_identity(summary, project)`
+绑定实际使用 SDK 的 TU 文件闭包、编译参数／宏、完整诊断、头依赖和活动宏集。
+完整封存身份仍先验证，生成模板 carrier 的无关字节变化通过实际 TU 输出反映。缺失、pending、过期、表外规则／文件／行、同名项目宏、
 未知或改过原头均阻塞。项目偏离与现行正式程序沿 AMD2.5／Compliance:2020 §4 记录，
 本篇提供技术理由、批准来源、控制和重评条件；完整审查证据留 PR。221 项原始评估与
 整体符合性仍按 ADR 0026 各自保留。

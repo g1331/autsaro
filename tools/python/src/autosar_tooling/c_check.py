@@ -285,6 +285,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                 context="Linux library analysis model differs from the actual compiler headers")
     per_unit_macros = {}
     sdk_units = {}
+    project_units = {}
     sdk_inputs = {}
     stdio_modes = {}
     mode_names = {"_IOFBF", "_IOLBF", "_IONBF"} if "setvbuf" in identifiers else set()
@@ -309,7 +310,11 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                     "-MT", "autsaro-tu", str(root / name)], output, f"compiler-origins-{index}", 60,
                                     context=f"Compiler source tracing failed for {name}")
         inputs = c_sdk.preprocessing(provenance, root, identifiers)
-        headers = c_sdk.dependency_headers((output / f"compiler-origins-{index}.d").read_text(encoding="utf-8"), root)
+        dependency_text = (output / f"compiler-origins-{index}.d").read_text(encoding="utf-8")
+        headers = c_sdk.dependency_headers(dependency_text, root)
+        project_headers = sorted({path.relative_to(root).as_posix()
+                                  for item in c_sdk.dependency_paths(dependency_text)
+                                  if (path := Path(item).resolve()).is_relative_to(root)})
         function_macros = ["-D" + line[8:].replace(" ", "=", 1)
                            for line in definitions.splitlines() if line.startswith("#define ")
                            and line[8:].split("(", 1)[0] in function_macro_names]
@@ -340,15 +345,16 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                         raise ValueError(f"Unsupported stdio mode expansion: {macro}") from error
             elif model is not None and macro in {"SIGRTMIN", "PTHREAD_STACK_MIN"}:
                 raise ValueError(f"Unsupported Linux system macro expansion: {macro}")
-        return name, unit_macros, unit_modes, headers, inputs
+        return name, unit_macros, unit_modes, headers, inputs, project_headers
 
     # Each TU owns distinct probe/log paths; collect in declared source order.
     # Use available CPUs while bounding native compiler memory/process fan-out.
     compiler_workers = min(4, os.cpu_count() or 1, int(os.environ.get("CARGO_BUILD_JOBS", "4")))
     with ThreadPoolExecutor(max_workers=compiler_workers) as executor:
         try:
-            for name, macros, modes, headers, inputs in executor.map(compiler_unit, enumerate(sources)):
+            for name, macros, modes, headers, inputs, project_headers in executor.map(compiler_unit, enumerate(sources)):
                 per_unit_macros[name] = macros
+                project_units[name] = project_headers
                 sdk_units[name] = sorted(path.as_posix() for path in headers)
                 sdk_inputs[name] = inputs
                 for mode, value in modes.items():
@@ -376,6 +382,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                    "compilerFlags": flags, "compilerWorkers": compiler_workers, "includePaths": target["includePaths"],
                                    "systemIncludePaths": system_includes, "diagnosticCompiler": {"path": compiler, "version": compiler_version, "sha256": digest(Path(compiler))},
                                    "compilerDiscoveredDefines": per_unit_macros,
+                                   "projectTranslationUnits": project_units,
                                    "sdkHeaders": sdk_headers, "sdkTranslationUnits": sdk_units,
                                    "sdkMacroInputs": sdk_inputs,
                                    "sdkLineDirectives": bool(re.search(r"(?m)^\s*#\s*(?:line\b|[0-9])", owned_text)),

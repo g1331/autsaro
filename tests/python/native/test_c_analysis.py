@@ -362,6 +362,10 @@ class ActualCAnalysisTests(unittest.TestCase):
                     self.assertIsNone(summary["error"])
                     self.assertEqual(summary["scope"]["compilerWorkers"], min(4, int(c_check.os.environ.get("CARGO_BUILD_JOBS", "4"))))
                     self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"bsw/src/main.c", "bsw/src/helper.c", "bsw/src/second.c", "bsw/src/third.c"})
+                    self.assertEqual(summary["scope"]["projectTranslationUnits"], {
+                        unit: sorted([unit, "helper.h"])
+                        for unit in ("bsw/src/main.c", "bsw/src/helper.c",
+                                     "bsw/src/second.c", "bsw/src/third.c")})
                     for definitions in summary["scope"]["compilerDiscoveredDefines"].values():
                         self.assertTrue(any(value.startswith("-DUINT32_C(") for value in definitions))
 

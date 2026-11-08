@@ -45,7 +45,10 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
 完整双平台四样本的来源、原始结果、逐位置消费和拒绝证据归
 [实施 PR](https://github.com/g1331/autsaro/pull/449)。输入绑定采用
 [源码验收格式](../../development/testing/source-acceptance.md)，绑定块自身排除于摘要；
-其他正文及解析器保持逐字节绑定。剩余完整消费与 Required 正式材料由
+其他正文及解析器保持逐字节绑定。局部身份由
+`evidence_identity(summary, project, "owned-source")` 计算，绑定自有交付文件及相关 TU
+实际打开的文件、ownership／原件、编译参数／宏和诊断；完整副本先经原身份验证。
+剩余完整消费与 Required 正式材料由
 [#439](https://github.com/g1331/autsaro/issues/439) 接续。
 <!-- source-assessment-context-begin -->
 {

@@ -109,9 +109,16 @@ class AcceptanceTests(unittest.TestCase):
                                                        encoding="utf-8", newline="\n")
 
     def identity(self):
+        # These synthetic tests model every file as opened by each fixture TU.
+        self.summary["scope"]["projectTranslationUnits"] = {
+            unit: sorted(set(self.files) | {unit})
+            for unit in self.summary["scope"]["translationUnits"]}
         return c_acceptance.input_identity(self.summary, self.project, root=self.root)
 
     def context(self, *, identity=None, status="pending", group="generated-retention", case=CASE):
+        self.identity()
+        if identity is None and group in {"owned-source", "generated-retention"}:
+            identity = c_acceptance.evidence_identity(self.summary, self.project, group, self.root)
         return {"id": "frozen-" + group, "evidence": {"head": "a" * 40, "receipt": "Synthetic contract receipt"},
                 "cases": [{"caseId": case, "target": TARGET, "inputIdentity": identity or self.identity()}],
                 "records": {"kind": group, **({"cohortSha256": c_retention.COHORT_SHA256} if group == "generated-retention" else {})},
@@ -136,7 +143,9 @@ class AcceptanceTests(unittest.TestCase):
                             encoding="utf-8", newline="\n")
         identity = identity or self.identity()
         for group in groups:
-            self.bind(self.context(identity=(identities or {}).get(group, identity), group=group,
+            self.bind(self.context(identity=(identities or {}).get(group,
+                c_acceptance.evidence_identity(self.summary, self.project, group, self.root)
+                if group in {"owned-source", "generated-retention"} else identity), group=group,
                                    status=(statuses or {}).get(group, status), case=(cases or {}).get(group, CASE)))
 
     def synthetic_complete_inputs(self):
@@ -167,6 +176,153 @@ class AcceptanceTests(unittest.TestCase):
                                         "programs": ["host-batch", "probe"],
                                         "locations": [{"file": self.retained["delivered"], "line": 2, "column": 0}]}]
         self.bind_groups()
+
+    def test_local_evidence_closures_reject_each_input_and_ignore_rte_producer(self):
+        self.sdk_inputs()
+        (self.root / c_acceptance.ADOPTION).write_bytes(b"Synthetic kernel assessment\n")
+        third_party = self.root / "third_party/freertos"
+        third_party.mkdir(parents=True)
+        for name in ("source-manifest.json", "posix-source-manifest.json"):
+            (third_party / name).write_bytes(b'{"files":{}}\n')
+        retained = next(row["delivered"] for row in c_retention.records() if "S" in row["profiles"])
+        self.files[retained] = b"synthetic retention source\n"
+        self.files.update({"kernel/tasks.c": b'#include "FreeRTOSConfig.h"\n',
+                           "config/FreeRTOSConfig.h": b"#define configUSE_PREEMPTION 1\n",
+                           "config/transitive.h": b"#define VALUE 1\n",
+                           "os/patches/change.patch": b"patch bytes\n",
+                           "generated/Rte_Unrelated.c": b"unrelated output\n"})
+        self.target["kernelSha256"]["tasks.c"] = hashlib.sha256(self.files["kernel/tasks.c"]).hexdigest()
+        self.target["kernelPatches"] = [{"path": "runtime/os/patches/change.patch", "includes": ["tasks.c"]}]
+        self.summary["scope"]["translationUnits"].append("kernel/tasks.c")
+        for row in self.summary["programs"]:
+            row["translationUnits"].append("kernel/tasks.c")
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.identity()
+        scope = self.summary["scope"]
+        kernel_files = ["config/FreeRTOSConfig.h", "config/transitive.h", "kernel/tasks.c", retained]
+        scope["projectTranslationUnits"] = {unit: sorted({unit, *kernel_files})
+                                            for unit in scope["translationUnits"]}
+        scope["sdkTranslationUnits"]["kernel/tasks.c"] = [self.sdk_header["path"]]
+        scope["sdkMacroInputs"]["kernel/tasks.c"] = {}
+        self.summary["semanticIdentity"]["defines"]["kernel/tasks.c"] = ["-DVALUE=1"]
+        groups = ("freertos-integration", "owned-source", "generated-retention", "sdk-integration")
+
+        def identities():
+            return {group: c_acceptance.evidence_identity(self.summary, self.project, group, self.root)
+                    for group in groups}
+
+        # Real generated deliveries call runtime ownership "product"; provenance
+        # mapping, rather than the human label, selects their source evidence.
+        ledger_path = self.project / "meta/workbench-ownership.json"
+        ledger = json.loads(ledger_path.read_bytes())
+        ledger["files"][0]["owner"] = "product"
+        ledger_path.write_bytes(json.dumps(ledger).encode())
+        before = identities()
+        # Producer carrier bytes and output outside every selected TU are independent.
+        producer = self.root / "core/src/rte_template.rs"
+        producer.parent.mkdir(parents=True)
+        producer.write_bytes(b"RTE template changed\n")
+        self.plan["runtimeSources"]["core/src/rte_template.rs"] = c_acceptance.digest(producer)
+        (self.project / "generated/Rte_Unrelated.c").write_bytes(b"new unrelated output\n")
+        self.assertEqual(identities(), before)
+        for name in kernel_files:
+            with self.subTest(file=name):
+                path = self.project / name
+                data = path.read_bytes()
+                path.write_bytes(data + b"changed\n")
+                for group, value in identities().items():
+                    self.assertNotEqual(value, before[group], group)
+                path.write_bytes(data)
+        path = self.project / "os/patches/change.patch"
+        data = path.read_bytes()
+        path.write_bytes(data + b"changed patch\n")
+        self.assertNotEqual(identities()["freertos-integration"], before["freertos-integration"])
+        path.write_bytes(data)
+        for collection, key, changed in (
+                (scope, "compilerFlags", ["-std=c99", "-DCHANGED=1"]),
+                (self.summary["semanticIdentity"], "defines",
+                 {unit: ["-DVALUE=2"] for unit in scope["translationUnits"]}),
+                (scope, "includePaths", ["config", "."]),
+                (scope, "sdkHeaders", [{**self.sdk_header, "sha256": "f" * 64}])):
+            with self.subTest(input=key):
+                saved = collection[key]
+                collection[key] = changed
+                for group, value in identities().items():
+                    self.assertNotEqual(value, before[group], group)
+                collection[key] = saved
+        for field in ("dependencies", "dependency-assignment", "programs", "compiler", "owners", "origin", "assessment", "manifest"):
+            with self.subTest(component=field):
+                saved_summary = copy.deepcopy(self.summary)
+                path = None
+                if field == "dependencies":
+                    for paths in scope["projectTranslationUnits"].values():
+                        paths.remove("config/transitive.h")
+                elif field == "dependency-assignment":
+                    scope["projectTranslationUnits"]["kernel/tasks.c"].remove("config/transitive.h")
+                elif field == "programs":
+                    self.summary["programs"][0]["translationUnits"].remove(self.sdk_name)
+                elif field == "compiler":
+                    self.summary["semanticIdentity"]["compiler"]["release"] = "different"
+                elif field == "owners":
+                    path = self.project / "meta/workbench-ownership.json"
+                elif field == "origin":
+                    path = self.root / "runtime/os/src/host/linux/Os_HostLinux.c"
+                elif field == "assessment":
+                    path = self.root / c_acceptance.GRP
+                else:
+                    path = third_party / "source-manifest.json"
+                if path is not None:
+                    saved_bytes = path.read_bytes()
+                    if field == "owners":
+                        ledger = json.loads(saved_bytes)
+                        ledger["files"][0]["sha256"] = "e" * 64
+                        path.write_bytes(json.dumps(ledger).encode())
+                    else:
+                        path.write_bytes(saved_bytes + b"changed\n")
+                changed = identities()
+                expected = (("freertos-integration",)
+                            if field in {"manifest", "dependency-assignment"} else groups)
+                for group in expected:
+                    self.assertNotEqual(changed[group], before[group], group)
+                if path is not None:
+                    path.write_bytes(saved_bytes)
+                self.summary = saved_summary
+                scope = self.summary["scope"]
+        self.summary["diagnostics"].append({"id": "misra-c2012-2.5", "programs": ["probe"],
+            "locations": [{"file": "kernel/tasks.c", "line": 1},
+                          {"file": self.sdk_name, "line": 1}]})
+        diagnostic_bound = identities()
+        for group in groups:
+            self.assertNotEqual(diagnostic_bound[group], before[group], group)
+        self.summary["diagnostics"][-1]["locations"].append({"file": "other.c", "line": 4})
+        for group, value in identities().items():
+            self.assertNotEqual(value, diagnostic_bound[group], group)
+        del scope["projectTranslationUnits"]
+        with self.assertRaisesRegex(ValueError, "TU dependency closure"):
+            identities()
+
+    def test_shared_local_identity_joins_case_labels_without_last_case_winning(self):
+        self.synthetic_complete_inputs()
+        context = self.context(group="generated-retention", status="approved")
+        context["cases"].append({**context["cases"][0], "caseId": "user-application"})
+        self.bind_groups(groups=tuple(group for group in c_acceptance.GROUPS
+                                     if group != "generated-retention"))
+        self.bind(context)
+        result = self.evaluate()
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["caseId"], CASE)
+        # The extra label may occur first or last without changing consumption.
+        path = self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[0]
+        data = path.read_text(encoding="utf-8")
+        context["cases"].reverse()
+        blocks = list(c_acceptance._blocks(data))
+        block = next(block for block in blocks
+                     if json.loads(block)["records"]["kind"] == "generated-retention")
+        path.write_text(data.replace(block, json.dumps(context) + "\n"),
+                        encoding="utf-8", newline="\n")
+        self.summary["coverage"]["manualAssessment"] = c_standard.manual_assessment(self.rules, self.root)
+        self.assertEqual(self.evaluate(), result)
 
     def test_identity_binds_application_independently_of_arxml_and_plan(self):
         before = self.identity()
@@ -244,7 +400,7 @@ class AcceptanceTests(unittest.TestCase):
     def bind_sdk(self, status="approved"):
         self.bind_groups()
         context = self.context(group="sdk-integration", status=status,
-                               identity=c_acceptance.sdk_identity(self.summary, self.identity()))
+                               identity=c_acceptance.sdk_identity(self.summary, self.project, self.root))
         path = self.root / c_acceptance.SDK
         with path.open("a", encoding="utf-8", newline="\n") as destination:
             destination.write(c_acceptance.BEGIN + "\n" + json.dumps(context)
@@ -255,7 +411,7 @@ class AcceptanceTests(unittest.TestCase):
         before = copy.deepcopy(self.summary)
         result = self.evaluate()
         self.assertEqual(result.get("sdkInputIdentity"),
-                         c_acceptance.sdk_identity(self.summary, self.identity()))
+                         c_acceptance.sdk_identity(self.summary, self.project, self.root))
         occurrence = result["occurrences"][0]
         self.assertEqual(occurrence["location"],
                          {"file": self.sdk_name, "line": "1", "column": "9"})
@@ -269,7 +425,7 @@ class AcceptanceTests(unittest.TestCase):
         self.sdk_inputs()
         self.bind_sdk(status="pending")
         result = self.evaluate()
-        sdk_identity = c_acceptance.sdk_identity(self.summary, self.identity())
+        sdk_identity = c_acceptance.sdk_identity(self.summary, self.project, self.root)
         self.assertEqual(result.get("sdkInputIdentity"), sdk_identity)
         self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
         self.assertEqual(result["occurrences"][0]["reason"],
@@ -278,7 +434,7 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["diagnostics"][0]["message"] = "changed report"
         result = self.evaluate()
         self.assertEqual(result.get("sdkInputIdentity"),
-                         c_acceptance.sdk_identity(self.summary, self.identity()))
+                         c_acceptance.sdk_identity(self.summary, self.project, self.root))
         self.assertNotEqual(result.get("sdkInputIdentity"), sdk_identity)
         self.assertEqual(result["occurrences"][0]["location"]["file"], self.sdk_name)
         self.assertEqual(result["occurrences"][0]["reason"],
@@ -602,7 +758,7 @@ class AcceptanceTests(unittest.TestCase):
     def bind_freertos(self, *, status="approved"):
         self.bind_groups()
         self.bind(self.context(group="freertos-integration", status=status,
-            identity=c_acceptance.freertos_identity(self.summary, self.identity(), self.root)))
+            identity=c_acceptance.freertos_identity(self.summary, self.project, self.root)))
 
     def test_freertos_original_and_patch_use_current_evidence_and_preserve_raw(self):
         self.freertos_inputs()
@@ -814,9 +970,9 @@ class AcceptanceTests(unittest.TestCase):
         diagnostic = copy.deepcopy(self.summary["diagnostics"][0])
         diagnostic["id"] = "misra-c2012-8.7"
         self.summary["diagnostics"].append(diagnostic)
-        before = c_acceptance.freertos_identity(self.summary, self.identity(), self.root)
+        before = c_acceptance.freertos_identity(self.summary, self.project, self.root)
         self.summary["diagnostics"].reverse()
-        self.assertEqual(c_acceptance.freertos_identity(self.summary, self.identity(), self.root),
+        self.assertEqual(c_acceptance.freertos_identity(self.summary, self.project, self.root),
                          before)
 
     def owned_inputs(self):
@@ -1238,7 +1394,7 @@ class AcceptanceTests(unittest.TestCase):
                                 sourceCategory="adopted-freertos")])
         self.bind_groups()
         self.bind(self.context(group="freertos-integration", status="approved",
-            identity=c_acceptance.freertos_identity(self.summary, self.identity(), self.root)))
+            identity=c_acceptance.freertos_identity(self.summary, self.project, self.root)))
         before = copy.deepcopy(self.summary)
         result = self.evaluate()
         self.assertEqual(result["status"], "accepted", result["objects"])
@@ -1756,6 +1912,7 @@ class AcceptanceTests(unittest.TestCase):
         self.synthetic_complete_inputs()
         self.summary["diagnostics"][0]["locations"] *= 2
         self.summary["diagnostics"].insert(0, {"id": "checkersReport", "locations": [], "programs": ["host-batch", "probe"]})
+        self.bind_groups()
         summary = copy.deepcopy(self.summary)
         summary["projectAcceptance"] = self.evaluate()
         self.assertEqual(summary["projectAcceptance"]["status"], "accepted")
@@ -1830,7 +1987,10 @@ class AcceptanceTests(unittest.TestCase):
                 identity = self.identity()
                 identities.append(identity)
                 for group in c_acceptance.GROUPS:
-                    self.bind(self.context(identity=identity, status="approved", group=group))
+                    self.bind(self.context(
+                        identity=(c_acceptance.evidence_identity(self.summary, self.project, group, self.root)
+                                  if group == "generated-retention" else identity),
+                        status="approved", group=group))
                 accepted = copy.deepcopy(self.summary)
                 accepted["projectAcceptance"] = self.evaluate()
                 self.assertEqual(accepted["projectAcceptance"]["status"], "accepted")

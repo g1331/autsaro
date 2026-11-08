@@ -104,6 +104,9 @@ def contexts(root: Path = ROOT) -> list[dict]:
                         or not SHA256.fullmatch(case["inputIdentity"])):
                     raise ValueError(f"Invalid assessment case: {path}")
                 key = row["records"]["kind"], case["target"], case["inputIdentity"]
+                if row["records"]["kind"] in {
+                        "freertos-integration", "sdk-integration", "owned-source", "generated-retention"}:
+                    key += (case["caseId"],)
                 if key in cases:
                     raise ValueError(f"Duplicate assessment input binding: {path}")
                 cases.add(key)
@@ -216,6 +219,7 @@ def input_identity(summary: dict, project: Path, *, root: Path = ROOT) -> str:
                   "originalBswSources": metadata["originalBswSources"],
                   "producerInputs": producers,
                   "files": actual, "semanticIdentity": semantic,
+                  "projectTranslationUnits": summary["scope"].get("projectTranslationUnits"),
                   "tool": {key: summary["tool"][key] for key in ("version", "expectedSourceRevision", "addons")},
                   "assessmentInputs": _assessment_inputs(summary, root),
                   "programs": [{key: program[key] for key in ("name", "entry", "translationUnits")}
@@ -468,28 +472,102 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
             and row["record"]["text"] in (root / row["record"]["file"]).read_text(encoding="utf-8")}
 
 
-def freertos_identity(summary: dict, identity: str, root: Path = ROOT) -> str:
-    """Bind integration evidence to the exact reports as well as the analyzed input.
+def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROOT) -> str:
+    """Bind a local assessment to actual TU inputs, never generator carrier files.
 
-    Supplier responsibility does not authorize new diagnostics. Include every
-    mixed diagnostic in full so adding a non-kernel location also invalidates it.
+    Call input_identity first to verify the complete analyzed copy and provenance.
+    Reports retain every location of a mixed diagnostic touching the selected files.
     """
-    return _hash({"inputIdentity": identity,
-                  "manifests": {name: digest(root / "third_party/freertos" / name)
-                                for name in ("source-manifest.json", "posix-source-manifest.json")},
-                  "diagnostics": sorted(_hash(row) for row in summary["diagnostics"]
-                                        if any(location["file"].startswith("kernel/")
-                                               for location in row["locations"]))})
-
-
-def sdk_identity(summary: dict, identity: str) -> str:
-    """Freeze every report and active definition, including unreported obligations."""
     scope = summary["scope"]
-    return _hash({"inputIdentity": identity,
-                  "headers": scope.get("sdkHeaders"),
-                  "dependencies": scope.get("sdkTranslationUnits"),
-                  "macros": scope.get("sdkMacroInputs"),
-                  "diagnostics": sorted(_hash(row) for row in summary["diagnostics"])})
+    target = json.loads((project / "target.json").read_text(encoding="utf-8"))
+    dependencies = scope.get("projectTranslationUnits")
+    units = scope["translationUnits"]
+    if (not isinstance(dependencies, dict) or set(dependencies) != set(units)
+            or any(not isinstance(paths, list) or paths != sorted(set(paths))
+                   or unit not in paths or any(not safe_relative(name) for name in paths)
+                   for unit, paths in dependencies.items())):
+        raise ValueError("Assessment project TU dependency closure missing or invalid")
+    metadata = json.loads((project / "meta/integration.json").read_text(encoding="utf-8"))
+    origins = metadata["originalBswSources"]
+    owners_path = project / "meta/workbench-ownership.json"
+    owners = (json.loads(owners_path.read_text(encoding="utf-8"))["files"]
+              if owners_path.is_file() else [])
+    if group == "freertos-integration":
+        seeds = {name for paths in dependencies.values() for name in paths
+                 if name.startswith("kernel/")}
+        seeds.update("kernel/" + name for name in target["kernelSha256"])
+        selected = {unit for unit, paths in dependencies.items() if seeds.intersection(paths)}
+    elif group == "owned-source":
+        # This consumer includes generic MemMap and C99 applicability, in addition
+        # to explicit MR12 records, across all owned delivered C and headers.
+        seeds = {delivered for original, delivered in origins.items()
+                 if original.startswith("runtime/") and delivered.endswith((".c", ".h"))}
+        seeds.update(row["path"] for row in owners
+                     if row["owner"] in {"generated", "configuration"}
+                     and row["path"].endswith((".c", ".h")))
+        selected = {unit for unit, paths in dependencies.items() if seeds.intersection(paths)}
+    elif group == "generated-retention":
+        seeds = {row["delivered"] for row in c_retention.records()
+                 if (project / row["delivered"]).is_file()}
+        selected = {unit for unit, paths in dependencies.items() if seeds.intersection(paths)}
+    elif group == "sdk-integration":
+        selected = {unit for unit in units if scope["sdkTranslationUnits"][unit]}
+        seeds = set(selected)
+    else:
+        raise ValueError(f"Unknown local assessment group: {group}")
+    files = seeds | {name for unit in selected for name in dependencies[unit]}
+    sdk_paths = {name for unit in selected for name in scope.get("sdkTranslationUnits", {}).get(unit, [])}
+    semantic = summary["semanticIdentity"]
+    assessments = _assessment_inputs(summary, root)
+    documents = ({ADOPTION: _document_identity(root, [ADOPTION])[ADOPTION]}
+                 if group == "freertos-integration" else
+                 assessments[{"owned-source": "ownedSource", "generated-retention": "retention",
+                              "sdk-integration": "sdkIntegration"}[group]])
+    value = {"version": 1, "group": group, "target": scope["target"],
+             "targetConfiguration": {key: target.get(key) for key in
+                                     ("abi", "profile", "compilerFlags", "includePaths")},
+             "files": {name: digest(project / name) for name in sorted(files)},
+             "dependencies": {unit: dependencies[unit] for unit in sorted(selected)},
+             "programs": [{"name": row["name"],
+                           "translationUnits": sorted(selected.intersection(row["translationUnits"]))}
+                          for row in summary["programs"]],
+             "origins": {name: {"delivered": delivered, "sha256": digest(root / name)}
+                         for name, delivered in origins.items()
+                         if delivered in files and name.startswith("runtime/")},
+             "owners": sorted((row for row in owners if row["path"] in files), key=lambda row: row["path"]),
+             "compilerFlags": scope["compilerFlags"], "includePaths": scope["includePaths"],
+             "lineDirectives": scope.get("sdkLineDirectives"),
+             "semantic": {key: value for key, value in semantic.items() if key not in {"sdk", "defines"}},
+             "defines": {unit: semantic["defines"].get(unit) for unit in sorted(selected)},
+             "sdkHeaders": [row for row in scope.get("sdkHeaders", []) if row["path"] in sdk_paths],
+             "sdkDependencies": {unit: scope.get("sdkTranslationUnits", {}).get(unit) for unit in sorted(selected)},
+             "sdkMacros": {unit: scope.get("sdkMacroInputs", {}).get(unit) for unit in sorted(selected)},
+             "tool": {key: summary["tool"][key] for key in ("version", "expectedSourceRevision", "addons")},
+             "assessment": documents, "grp": _document_identity(root, [GRP]),
+             "diagnostics": sorted(_hash(row) for row in summary["diagnostics"]
+                                   if any(location["file"] in files or location["file"] in sdk_paths
+                                          for location in row["locations"]))}
+    if group == "freertos-integration":
+        value["kernel"] = target["kernelSha256"]
+        value["patches"] = [{**row, "sha256": digest(project / row["path"].removeprefix("runtime/"))}
+                            for row in target.get("kernelPatches", [])]
+        value["manifests"] = {name: digest(root / "third_party/freertos" / name)
+                              for name in ("source-manifest.json", "posix-source-manifest.json")}
+    if group == "sdk-integration":
+        # The SDK assessment inventories every use, including zero-warning sites.
+        value["sdkMacros"] = scope.get("sdkMacroInputs")
+        value["diagnostics"] = sorted(_hash(row) for row in summary["diagnostics"])
+    return _hash(value)
+
+
+def freertos_identity(summary: dict, project: Path, root: Path = ROOT) -> str:
+    """Freeze kernel TU inputs and full mixed reports containing kernel locations."""
+    return evidence_identity(summary, project, "freertos-integration", root)
+
+
+def sdk_identity(summary: dict, project: Path, root: Path = ROOT) -> str:
+    """Freeze SDK TU inputs, every report and active unreported definition."""
+    return evidence_identity(summary, project, "sdk-integration", root)
 
 
 def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
@@ -785,18 +863,29 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         identity = input_identity(summary, project, root=root)
         result["inputIdentity"] = identity
         result["assessmentInputs"] = _assessment_inputs(summary, root)
-        selected = {context["records"]["kind"]: (context, case)
-                    for context in contexts(root) for case in context["cases"]
-                    if (context["records"]["kind"] not in {
-                            "freertos-integration", "sdk-integration"}
-                        or context["source"] == {
-                            "freertos-integration": ADOPTION,
-                            "sdk-integration": SDK}[context["records"]["kind"]])
-                    if case["target"] == result["target"] and case["inputIdentity"] == (
-                        freertos_identity(summary, identity, root)
-                        if context["records"]["kind"] == "freertos-integration"
-                        else sdk_identity(summary, identity)
-                        if context["records"]["kind"] == "sdk-integration" else identity)}
+        candidates = {}
+        local_identities = {}
+        for context in contexts(root):
+            group = context["records"]["kind"]
+            if group in {"freertos-integration", "sdk-integration"} and context["source"] != {
+                    "freertos-integration": ADOPTION, "sdk-integration": SDK}[group]:
+                continue
+            cases = [case for case in context["cases"] if case["target"] == result["target"]]
+            if not cases:
+                continue
+            if group not in local_identities:
+                local_identities[group] = (evidence_identity(summary, project, group, root)
+                    if group in {"freertos-integration", "sdk-integration", "owned-source", "generated-retention"}
+                    else identity)
+            for case in cases:
+                if case["inputIdentity"] == local_identities[group]:
+                    candidates.setdefault(group, {})[case["caseId"]] = context, case
+        # Several profiles may share an identical local closure. Join labels across
+        # groups before selecting a context, instead of letting the last row win.
+        common = set.intersection(*(set(rows) for rows in candidates.values())) if candidates else set()
+        label = min(common) if common else None
+        selected = {group: rows[label] if label is not None else next(iter(rows.values()))
+                    for group, rows in candidates.items()}
         case_ids = {case["caseId"] for _, case in selected.values()}
         if len(case_ids) == 1:
             result["caseId"] = next(iter(case_ids))
@@ -855,7 +944,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         target = json.loads((project / "target.json").read_text(encoding="utf-8"))
         if target.get("kernelPatches"):
             context = selected.get("freertos-integration")
-            result["freertosInputIdentity"] = freertos_identity(summary, identity, root)
+            result["freertosInputIdentity"] = freertos_identity(summary, project, root)
             if context is None:
                 add("context", "freertos-integration",
                     "freertos_integration_context_unbound_or_stale")
@@ -871,7 +960,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         if (root / SDK).is_file() or summary["scope"].get("sdkTranslationUnits"):
             sdk_positions, obligations = _sdk_positions(summary, project, metadata, root, kernel)
             result["sdkObligations"] = obligations
-            result["sdkInputIdentity"] = sdk_identity(summary, identity)
+            result["sdkInputIdentity"] = sdk_identity(summary, project, root)
             context = selected.get("sdk-integration")
             if context is not None:
                 result["contexts"].append(_reference(context[0]))

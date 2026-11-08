@@ -143,8 +143,10 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 补丁，沿每次修改传递行归属，并核对 replay 和已分析副本的最终 kernelSha256。
 因此补丁后来恢复成原件文本仍保留项目责任。混合诊断逐位置核查；采用上下文额外绑定
 含 kernel 位置的完整诊断集合（包括程序、非 kernel 位置与来源字段），新增或改变报告
-需要重新评估。上下文的 inputIdentity 由 `freertos_identity(summary, input_identity(...))`
-计算，包含两份原件 manifest 的当前字节；普通三组和 owned-source 保留原算法。
+需要重新评估。上下文的 inputIdentity 由 `freertos_identity(summary, project)` 计算，
+绑定两份 manifest、有序补丁、最终 kernel 和所有包含 kernel 文件的实际 TU 闭包，
+包括传递头、配置、编译参数、宏及 SDK；闭包外的生成模板变化可复用此证据。
+完整副本身份验证及各独立组的正式义务继续保留，算法见源码验收说明。
 
 集成证据的适用范围为当前两个 x64 C99 controlled 目标和四个 profile 的两个程序。
 复核以下接缝后才可把本组上下文标记为 approved，并附实际 head 与验证收据。
