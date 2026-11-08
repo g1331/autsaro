@@ -240,6 +240,25 @@ class AcceptanceTests(unittest.TestCase):
         self.obligation_path.write_text(text, encoding="utf-8")
         self.assertEqual(self.identity(), identity)
 
+    def test_real_checker_obligations_keep_three_local_gaps_and_141_missing_reviews(self):
+        self.owned_inputs()
+        self.summary["diagnostics"] = []
+        self.bind_groups()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "blocked")
+        objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
+        self.assertEqual(len(objects), 144)
+        self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
+        self.assertEqual({row["owner"] for row in objects}, {"#443"})
+        located = [row for row in objects if row["source"] is not None]
+        self.assertEqual({row["id"] for row in located}, {"R7.2", "R7.3", "R12.3"})
+        for row in located:
+            self.assertEqual(row["source"]["file"], "docs/standards/types/language-constructs.md")
+            text = (self.root / row["source"]["file"]).read_text(encoding="utf-8")
+            actual = text.splitlines()[row["source"]["line"] - 1]
+            self.assertTrue(actual.startswith("| " + row["id"] + " |"))
+            self.assertIn("#443", row["conclusion"])
+
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
         path = self.root / name
