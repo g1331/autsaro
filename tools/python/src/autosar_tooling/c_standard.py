@@ -82,9 +82,10 @@ def _assessment_records(root: Path, names: tuple[str, ...] | list[str], kind: st
                 if not active:
                     raise ValueError(f"Unopened {kind} assessment block: {name}:{line}")
                 active = False
-            elif active and (re.match(r"\| [DR]\d+\.", text) or (kind == "checker-assessment" and text.startswith("|"))):
+            elif active and (re.match(r"\| [DR]\d+\.", text)
+                             or (kind.startswith("checker-") and text.startswith("|"))):
                 cells = [cell.strip() for cell in text.split("|")[1:-1]]
-                if kind == "checker-assessment" and cells and (
+                if kind.startswith("checker-") and cells and (
                         cells[0].casefold() in {"id", "guideline", "rule", "条款", "规则", "规则／指令"}
                         or all(re.fullmatch(r":?-+:?", cell) for cell in cells)):
                     continue
@@ -130,6 +131,44 @@ def supplementary_assessment(rules: list[dict], limitations: list[dict], root: P
             "inputIdentity": {"parserSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                               "selectionSha256": hashlib.sha256("\n".join(names).encode()).hexdigest(),
                               "documents": identities}}
+
+
+def checker_obligations(rules: list[dict], root: Path = ROOT) -> dict:
+    """Account for covered guidelines independently of the fixed eleven omissions.
+
+    Missing records leave the capability/applicability review open; availability
+    alone cannot determine that a guideline has no additional manual obligations.
+    """
+    covered = {row["id"]: row["category"] for row in rules if row["automaticChecker"]}
+    if (len(rules) != 221 or len({row["id"] for row in rules}) != 221
+            or len(covered) != 155
+            or {row["id"] for row in rules if not row["automaticChecker"]} != CHECKER_UNCOVERED
+            or not CHECKER_LIMITATION_GUIDELINES <= covered.keys()):
+        raise ValueError("Checker obligations require the fixed 155/66 mapping")
+    wanted = covered.keys() - CHECKER_LIMITATION_GUIDELINES
+    names = []
+    for path in sorted((root / "docs/standards").rglob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if ("<!-- misra-checker-obligations-begin -->" in text
+                or "<!-- misra-checker-obligations-end -->" in text):
+            names.append(path.relative_to(root).as_posix())
+    records, identities = _assessment_records(root, names, "checker-obligations")
+    if set(records) - wanted:
+        raise ValueError("Checker obligations contain an unknown or separately owned guideline")
+    if any(row["category"] != covered[key] for key, row in records.items()):
+        raise ValueError("Checker obligation category differs from the fixed catalog")
+    if any(row["status"] == "retained" for row in records.values()):
+        raise ValueError("Checker obligations do not authorize retained violations")
+    rows = [records.get(row["id"], {
+        "id": row["id"], "category": row["category"], "status": "not_assessed",
+        "conclusion": ("Current capability/applicability and necessary manual evidence missing; "
+                       "owner #443"),
+    }) for row in rules if row["id"] in wanted]
+    return {"format": "misra-checker-obligations-v1", "records": rows,
+            "inputIdentity": {
+                "parserSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                "selectionSha256": hashlib.sha256("\n".join(names).encode()).hexdigest(),
+                "documents": identities}}
 
 
 def manual_assessment(rules: list[dict], root: Path = ROOT) -> dict:
