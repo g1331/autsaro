@@ -217,14 +217,21 @@ class AcceptanceTests(unittest.TestCase):
         ledger_path = self.project / "meta/workbench-ownership.json"
         ledger = json.loads(ledger_path.read_bytes())
         ledger["files"][0]["owner"] = "product"
-        ledger_path.write_bytes(json.dumps(ledger).encode())
+        self.files["meta/workbench-ownership.json"] = json.dumps(ledger).encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         before = identities()
+        ordinary_before = c_acceptance.input_identity(self.summary, self.project, root=self.root)
         # Producer carrier bytes and output outside every selected TU are independent.
         producer = self.root / "core/src/rte_template.rs"
         producer.parent.mkdir(parents=True)
         producer.write_bytes(b"RTE template changed\n")
         self.plan["runtimeSources"]["core/src/rte_template.rs"] = c_acceptance.digest(producer)
-        (self.project / "generated/Rte_Unrelated.c").write_bytes(b"new unrelated output\n")
+        self.files["generated/Rte_Unrelated.c"] = b"new unrelated output\n"
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.assertNotEqual(c_acceptance.input_identity(self.summary, self.project, root=self.root),
+                            ordinary_before)
         self.assertEqual(identities(), before)
         for name in kernel_files:
             with self.subTest(file=name):
