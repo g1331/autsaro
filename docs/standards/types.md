@@ -84,7 +84,7 @@ callback-parameter旧7处R2.4均为匿名类型误报；新增xSTATIC_TIMER为�
 
 ## 固定 11 项 checker 限制的补充评估
 
-本组评估 C99 的 standard-ecu、user-application、component-pipeline、no-diagnostic，分别连接 Linux／Windows 受控 x64 的 HostBatch 与 probe；包括两个程序的全部 TU、补充单元、实际宏展开及补丁后内核。八份输入的 seal、producer、工具／SDK 与逐项核查收据归本次 PR。上下文独立绑定本组，整体状态为 pending：R5.5／R5.7／R10.1 的 SDK 接缝仍由 #444 承接，R20.1 保留项的正式义务仍开放。
+本组评估 C99 的 standard-ecu、user-application、component-pipeline、no-diagnostic，分别连接 Linux／Windows 受控 x64 的 HostBatch 与 probe；包括两个程序的全部 TU、补充单元、实际宏展开及补丁后内核。八份输入的 seal、producer、工具／SDK 与逐项核查收据归本次 PR。上下文独立绑定本组，整体状态为 pending：R5.5／R5.7／R10.1 的 SDK 接缝按[SDK 集成类别](os/sdk.md#当前集成义务与类别处置)完成项目侧处置，R20.1 保留项的正式义务仍开放。
 
 责任沿 ADR 0025 分开：自有 runtime、生成／应用输出及项目 patch 逐构造判断；固定 FreeRTOS 原件引用其采用记录，实际集成和项目修改另查；SDK 实现沿供应方责任，其进入自有表达式的宏及接口用途仍在本组范围。内部实现缺口与调用方义务分别记录，#441／#444 接续相应责任。
 
@@ -94,10 +94,10 @@ callback-parameter旧7处R2.4均为匿名类型误报；新增xSTATIC_TIMER为�
 | 规则 | 类别 | 评估范围 | 状态 | 结论 |
 | --- | --- | --- | --- | --- |
 | R5.1 | Required | 双目标四样本；外部对象及函数，按每个程序分别判断 | satisfied | 主文 48–49／56–57，AMD2.33–34：按实际实现的有效字符区分。包含 StartScheduleTable 的长函数名；Windows 固定 ld 的完整 COFF／hash 名字链与当前准备日志相接，Linux 采用完整 ELF／hash 名字链；无新增截短、搜索路径或名字变换。既有实现证据见[名称有效长度](#c99过时形式与名称有效长度)。 |
-| R5.5 | Required | 自有、项目 patch 与实际 SDK 宏／标识符接缝 | not_assessed | 主文 53／61，AMD2.39 与 §6.7：追溯实际 define 历史，含其后 undef，排除从未定义的 MPU／多核分支。自有及 patch 的配置结论复用[OS 声明](os/declarations.md#sdk宏名与实际标识符)。Linux 的 sa_sigaction／si_addr 头外展开与非标准头引入的同名对象仍有真实义务；#444 核定当前精确实例及处置后恢复，本组未批准新例外。 |
-| R5.7 | Required | 跨 TU 的真实 tag、其他 namespace 与关联 typedef | not_assessed | 主文 55／63，AMD2.40：同头重复定义与关联 typedef 例外分别判断。自有 Os_NativeStackType、Os_HostHandleType 及各 Rte_CDS tag 沿真实声明 owner 核对；项目 patch 不再保留无用途 xSTATIC_TIMER tag。SDK 的 sigaction 等 tag／函数同名候选须按 §6.7 和实际头外使用由 #444 完成裁决，保留该具体义务。 |
+| R5.5 | Required | 自有、项目 patch 与实际 SDK 宏／标识符接缝 | retained | 主文 53／61，AMD2.39 与 §6.7：追溯实际 define 历史，含其后 undef，排除从未定义的 MPU／多核分支。自有及 patch 的配置结论复用[OS 声明](os/declarations.md#sdk宏名与实际标识符)。Linux 的 sa_sigaction／si_addr 四个头外展开按[SDK 类别与精确实例](os/sdk.md#当前集成义务与类别处置)处置；非标准原头对象按可追溯采用责任处理，原始违反保持。 |
+| R5.7 | Required | 跨 TU 的真实 tag、其他 namespace 与关联 typedef | retained | 主文 55／63，AMD2.40：同头重复定义与关联 typedef 例外分别判断。自有 Os_NativeStackType、Os_HostHandleType 及各 Rte_CDS tag 沿真实声明 owner 核对；项目 patch 不再保留无用途 xSTATIC_TIMER tag。SDK 的 sigaction tag／函数六个头外使用按 §6.7 和[SDK 有界类别](os/sdk.md#当前集成义务与类别处置)处置；实际来源、风险控制与重评条件归该篇。 |
 | R8.8 | Required | 自有及所选 patch 的内部链接函数全部声明／定义 | satisfied | 主文 70–71／78–79；AMD3.64 追加交叉引用。按 TU 先确定内部链接实体，再逐声明检查 static，包括头内 inline 与后续定义；现有声明的 static 属性保持。Linux 当前完整预处理函数声明复核与[原函数闭包](os/declarations.md#条件接口与声明owner)相接；Windows 平台定义从对应源码及所选 patch 核对。 |
-| R10.1 | Required | 自有与 patch 的 signed 位运算、~、逻辑操作数及实际宏用途 | not_assessed | 主文 82–84／90–92；TC1 补逻辑指针限制，TC2.17–18，AMD3.20–26，AMD4.51。自有原生 mask 先进入 unsigned 域，~ 操作数为 uint32，逻辑参数为 Boolean 或显式比较，见[原生位掩码](types/essential-types/expressions.md#原生位掩码)。Windows 的 CONTEXT_CONTROL 实际展开为 0x100000 与 0x1l 的按位 OR，两个 signed 操作数违反本条；每 profile 的 Backend 三处及项目 port patch 一处转 #444，尚无合法处置。 |
+| R10.1 | Required | 自有与 patch 的 signed 位运算、~、逻辑操作数及实际宏用途 | retained | 主文 82–84／90–92；TC1 补逻辑指针限制，TC2.17–18，AMD3.20–26，AMD4.51。自有原生 mask 先进入 unsigned 域，~ 操作数为 uint32，逻辑参数为 Boolean 或显式比较，见[原生位掩码](types/essential-types/expressions.md#原生位掩码)。Windows 的 CONTEXT_CONTROL 实际展开为 0x100000 与 0x1l 的按位 OR，两个 signed 操作数违反本条；每 profile 的 Backend 三处及项目 port patch 一处按[SDK 项目决定与精确记录](os/sdk.md#当前集成义务与类别处置)消费；原始违反及整体符合性分别保留。 |
 | R10.3 | Required | 自有与 patch 的参数、返回及 case-label 隐式转换 | satisfied | 主文 86–87／94–95；TC1 常量 rank 与 case 例外，TC2.20 要求按控制表达式 essential 类型；AMD3.27–30 的 real→complex 例外无实际用途。返回／实参按目标类型追溯，Boolean 常量按 D.6；本次补正 Os_TargetTrace 的六个生产字符标记实参，显式转为接口的 uint8，字符值、调用次数及接口保持。实际 case 常量按各控制类型和值域核对。Windows CONTEXT_CONTROL 的常量结果1048577按 D.7 取 STLR 为 signed int，可由 DWORD 表示，适用 TC1 常量例外；内部 OR 的 R10.1 义务另列。 |
 | R10.6 | Required | 自有与 patch 的参数／返回等赋值语义中的复合表达式 | satisfied | 主文 90–91／98–99、§8.10.3 与 TC1：~ 为复合运算符，常量表达式除外；cast 结果和单值扩展分别处理。HostBatch number、monotonic_ms、COM 打包与 Target 长度均在计算前选宽；Dcm 长度按各 profile 的 PduLengthType 和 Dcm_MsgLenType 区分。实际表达式接[既有宽度闭包](types/essential-types/expressions.md#复合表达式与赋值结果)，CONTEXT_CONTROL 为常量表达式，依 §8.10.3 按常量边界处理；运算宽度按实际操作数判断。 |
 | R13.5 | Required | 自有及 patch 逻辑 RHS 的调用／volatile 访问闭包 | satisfied | 主文 113–114／121–122 与 Glossary 224／232；TC1 Appendix J 14／20：按函数可能的持久副作用判断。当前 RHS 的 CanTp、Dcm、Det、OS 配置／TLS 查询闭包接[BSW General](bsw-general/README.md#逻辑右侧的持续副作用)，strncmp 按标准库只读契约；有锁、输出、原子状态变化及事件消费的调用保持独立求值。真实 errno 宏另沿普通 TLS 对象读取判断；SDK 内部实现由 #444 承接。 |
