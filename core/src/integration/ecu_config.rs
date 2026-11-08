@@ -1106,12 +1106,69 @@ pub(super) fn files(
             .map(|user| Item::Value(name("ComM", "ComMUser", &user.path)))
             .collect::<Vec<_>>(),
     );
+    let mut user_modes = Vec::new();
+    for user in &mode.users {
+        let port = format!("UM_{}", super::short_name(&user.path));
+        let machine = composition
+            .mode_machines
+            .iter()
+            .find(|machine| {
+                machine.module == "ComM" && super::short_name(&machine.publisher.port) == port
+            })
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&user.path))?;
+        let callback = super::comm_service::callback_name(&user.path);
+        config.push_str(&c_layout::section("RTE_ComM", "Rte", "CODE", true));
+        config.push_str(&format!(
+            "static RTE_ComM_CODE void {callback}(ComM_ModeType mode)\n{{\n"
+        ));
+        // ComMMode is ALPHABETIC_ORDER; ComM_ModeType uses the C API's numeric order.
+        for (index, declaration) in [
+            "COMM_NO_COMMUNICATION",
+            "COMM_SILENT_COMMUNICATION",
+            "COMM_FULL_COMMUNICATION",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let prefix = if index == 0 { "    if" } else { "else if" };
+            config.push_str(&format!(
+                "{prefix} (mode == {declaration}) {{\n        (void){}(RTE_MODE_ComMMode_{declaration});\n    }} ",
+                machine.switch_symbol
+            ));
+        }
+        config.push_str(
+            "else {\n        /* ComM publishes only declared actual bus modes. */\n    }\n}\n",
+        );
+        config.push_str(&c_layout::section("RTE_ComM", "Rte", "CODE", false));
+        let channels = super::comm_service::channels_name(user.handle);
+        config_data(
+            &mut config,
+            "ComM",
+            &format!("static const NetworkHandleType {channels}[]"),
+            &user
+                .channels
+                .iter()
+                .map(|channel| Item::Value(name("ComM", "ComMChannel", channel)))
+                .collect::<Vec<_>>(),
+        );
+        user_modes.push(row(&format!(
+            "{}, {channels}, {}u, &{callback}",
+            name("ComM", "ComMUser", &user.path),
+            user.channels.len()
+        )));
+    }
+    config_data(
+        &mut config,
+        "ComM",
+        "static const ComM_UserModeConfigType comm_user_modes[]",
+        &user_modes,
+    );
     init_data(
         &mut config,
         "ComM",
         "static const ComM_ConfigType comm_config",
         &values(&format!(
-            "{}, users, {}u, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode, {}",
+            "{}, users, {}u, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode, {}, comm_user_modes, {}u",
             name("ComM", "ComMChannel", &mode.channel),
             mode.users.len(),
             periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
@@ -1119,7 +1176,8 @@ pub(super) fn files(
                 "&Dcm_ComM_NoComModeEntered, &Dcm_ComM_SilentComModeEntered, &Dcm_ComM_FullComModeEntered"
             } else {
                 "NULL_PTR, NULL_PTR, NULL_PTR"
-            }
+            },
+            mode.users.len()
         )),
     );
     init_data(

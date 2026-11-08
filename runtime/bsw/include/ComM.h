@@ -1,6 +1,6 @@
 /** @file Single CDD channel ComM for NM variant NONE, without PNC, inhibition or NvM.
  * Configuration remains immutable for the initialized lifetime. All users map to
- * this channel; users belong to host BSW, without SW-C mode ports.
+ * this channel; connected SW-C users receive their own RTE mode notification.
  */
 #ifndef COMM_H
 #define COMM_H
@@ -54,20 +54,33 @@ typedef Std_ReturnType (*ComM_BusRequestType)(NetworkHandleType Channel, ComM_Mo
 typedef Std_ReturnType (*ComM_BusGetType)(NetworkHandleType Channel, ComM_ModeType *ComMode);
 /** One Dcm_ComM_<Mode>ComModeEntered notification (SWS_ComM_00828). */
 typedef void (*ComM_DcmModeType)(uint8 NetworkId);
+/** RTE adapter for one user's currentMode; called outside COMM_STATE. */
+typedef void (*ComM_UserModeType)(ComM_ModeType ComMode);
+/** Static user-to-channel relation and its RTE publisher (SWS_ComM_00091/00778).
+ * The selected profile accepts one mapped CDD channel per user.
+ */
+typedef struct {
+    ComM_UserHandleType user;          /**< Configured ComMUserIdentifier. */
+    const NetworkHandleType *channels; /**< Borrowed immutable mapped channel handles. */
+    uint16 channel_count;              /**< One channel in the selected profile. */
+    ComM_UserModeType notify;          /**< RTE publisher for this user's UM port. */
+} ComM_UserModeConfigType;
 /** Implementation-defined configuration (SWS_ComM_00162), emitted as immutable comm_config.
  * One channel with ComMNmVariant NONE and bus type CDD. The Dcm notifications are
  * all NULL when no Dcm connection references the channel, otherwise all set.
  */
 typedef struct {
-    NetworkHandleType channel;        /**< Channel handle (ComMChannelId). */
-    const ComM_UserHandleType *users; /**< Distinct user handles (ComMUserIdentifier). */
-    uint16 user_count;                /**< 1..32 users, all mapped to the channel. */
-    uint32 minimum_full_ticks;        /**< ComMTMinFullComModeDuration, in main periods. */
-    ComM_BusRequestType request;      /**< CDD bus mode request (ComMCDDBusPrefix). */
-    ComM_BusGetType current;          /**< CDD actual bus mode query (ComMCDDBusPrefix). */
-    ComM_DcmModeType dcm_no;          /**< Dcm_ComM_NoComModeEntered or NULL. */
-    ComM_DcmModeType dcm_silent;      /**< Dcm_ComM_SilentComModeEntered or NULL. */
-    ComM_DcmModeType dcm_full;        /**< Dcm_ComM_FullComModeEntered or NULL. */
+    NetworkHandleType channel;                 /**< Channel handle (ComMChannelId). */
+    const ComM_UserHandleType *users;          /**< Distinct user handles (ComMUserIdentifier). */
+    uint16 user_count;                         /**< 1..32 users, all mapped to the channel. */
+    uint32 minimum_full_ticks;                 /**< ComMTMinFullComModeDuration, in main periods. */
+    ComM_BusRequestType request;               /**< CDD bus mode request (ComMCDDBusPrefix). */
+    ComM_BusGetType current;                   /**< CDD actual bus mode query (ComMCDDBusPrefix). */
+    ComM_DcmModeType dcm_no;                   /**< Dcm_ComM_NoComModeEntered or NULL. */
+    ComM_DcmModeType dcm_silent;               /**< Dcm_ComM_SilentComModeEntered or NULL. */
+    ComM_DcmModeType dcm_full;                 /**< Dcm_ComM_FullComModeEntered or NULL. */
+    const ComM_UserModeConfigType *user_modes; /**< Connected users' immutable RTE mappings. */
+    uint16 user_mode_count;                    /**< 0..user_count; zero permits NULL mappings. */
 } ComM_ConfigType;
 /** Start or restart the channel in COMM_NO_COM_NO_PENDING_REQUEST (SWS_ComM_00146).
  * Clears requests, Allowed and diagnostic demand, then requests NO from the bus

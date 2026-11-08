@@ -489,6 +489,8 @@ fn mainline_generated_headers(scratch: &Path) -> Vec<(String, Vec<u8>)> {
         "generated/include/SchM_BswM_Type.h",
         "generated/include/SchM_Dcm_Type.h",
         "generated/include/SchM_Dcm.h",
+        "generated/include/SchM_ComM.h",
+        "generated/include/SchM_ComM_Type.h",
         "generated/src/Ecu_Execution.h",
         "generated/include/Rte_Main.h",
         "generated/include/Rte_MemMap.h",

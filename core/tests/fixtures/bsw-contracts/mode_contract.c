@@ -120,7 +120,9 @@ static const ComM_ConfigType comm = {7u,
                                      Ecu_HostBusSM_GetCurrentComMode,
                                      no_entered,
                                      silent_entered,
-                                     full_entered};
+                                     full_entered,
+                                     NULL_PTR,
+                                     0u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 9u};
 static const BswM_ConfigType bswm = {7u, action};
 static void current(ComM_ModeType expected) {
