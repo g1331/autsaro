@@ -339,7 +339,7 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
 #endif
 {start_const}{instance}
 {stop_const}
-/** Borrowed pointer to the unique, immutable component data structure. */
+/** SWS_Rte_03793: borrowed pointer to the unique, immutable component data structure. */
 #define Rte_Inst_{scope} (&Rte_Instance_{scope})
 "#,
                 linkage_begin = c_layout::linkage(true),
