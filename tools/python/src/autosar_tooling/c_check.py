@@ -525,27 +525,29 @@ def parse_diagnostics(xml: str, root: Path, patched_lines: dict[str, list[int]] 
 
 def analyzer_inputs(data: dict, root: Path, scope: dict) -> tuple[str, dict]:
     """Account for every dump file, including raw/directive-only conditional heads."""
+    root = root.resolve()
     source = Path(data["source"]).resolve()
     if not source.is_relative_to(root):
         raise ValueError("Cppcheck receipt source is outside the project")
     files = data.get("files")
     if (not isinstance(files, list) or not files or files != sorted(set(files))
-            or any(not isinstance(name, str) or not name for name in files)
-            or str(source) not in files):
+            or any(not isinstance(name, str) or not name for name in files)):
         raise ValueError("Cppcheck actual input inventory missing or invalid")
-    sdk = {row["path"] for row in scope.get("sdkHeaders", [])}
-    models = {str(Path(scope[name]["path"]).resolve())
+    files = {Path(name).resolve() for name in files}
+    if source not in files:
+        raise ValueError("Cppcheck actual input inventory missing or invalid")
+    sdk = {Path(row["path"]).resolve(): row["path"] for row in scope.get("sdkHeaders", [])}
+    models = {Path(scope[name]["path"]).resolve()
               for name in ("platformModel",) if scope.get(name)}
     inputs = {"project": [], "sdk": [], "unbound": []}
-    for name in files:
-        path = Path(name).resolve()
+    for path in files:
         if path.is_relative_to(root):
             inputs["project"].append(path.relative_to(root).as_posix())
-        elif path.as_posix() in sdk:
-            inputs["sdk"].append(path.as_posix())
-        elif str(path) not in models:
+        elif path in sdk:
+            inputs["sdk"].append(sdk[path])
+        elif path not in models:
             inputs["unbound"].append(path.as_posix())
-    return source.relative_to(root).as_posix(), inputs
+    return source.relative_to(root).as_posix(), {kind: sorted(names) for kind, names in inputs.items()}
 
 
 def analyze_program(executable: Path, addons: Path, root: Path, sources: list[str], database: list[dict],

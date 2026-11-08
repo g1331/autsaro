@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 
 from autosar_tooling import c_check
@@ -14,6 +14,51 @@ ENTRIES = {"host-batch": "integration/src/ecu_host_batch.c", "probe": "integrati
 
 
 class CAnalysisTests(unittest.TestCase):
+    def test_analyzer_inputs_normalizes_root_and_file_aliases(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary).resolve()
+            root = directory / "project"
+            (root / "child").mkdir(parents=True)
+            (directory / "sdk").mkdir()
+            source = root / "main.c"
+            sdk = directory / "sdk/types.h"
+            model = directory / "model.h"
+            unknown = directory / "unknown.h"
+            for path in (source, sdk, model, unknown):
+                path.write_bytes(b"fixture\n")
+            data = {"source": str(source), "files": sorted([
+                str(root / "child/../main.c"), str(source), str(root / "../sdk/types.h"),
+                str(root / "../model.h"), str(unknown)])}
+            scope = {"sdkHeaders": [{"path": sdk.as_posix()}],
+                     "platformModel": {"path": str(model)}}
+            unit, inputs = c_check.analyzer_inputs(data, root / "child/..", scope)
+            self.assertEqual(unit, "main.c")
+            self.assertEqual(inputs, {"project": ["main.c"], "sdk": [sdk.as_posix()],
+                                      "unbound": [unknown.as_posix()]})
+
+    def test_analyzer_inputs_windows_drives_separators_case_and_short_aliases(self):
+        class WindowsPath(PureWindowsPath):
+            def resolve(self):
+                # Windows realpath expands 8.3 aliases; emulate that mapping on Linux.
+                return type(self)(*("RunnerAdmin" if part.casefold() == "runner~1" else part
+                                    for part in self.parts))
+
+        root = WindowsPath(r"C:\Users\RUNNER~1\Temp\PROJECT")
+        data = {"source": "c:/users/RunnerAdmin/temp/project/main.c", "files": sorted([
+            r"C:\Users\RUNNER~1\TEMP\Project\main.c",
+            "c:/USERS/RunnerAdmin/temp/project/config.h", r"d:\SDK\Include\Types.h",
+            "d:/ANALYSIS/model.h", "E:/external/unknown.h"])}
+        scope = {"sdkHeaders": [{"path": "D:/sdk/include/Types.h"}],
+                 "platformModel": {"path": r"D:\analysis\MODEL.h"}}
+        with patch.object(c_check, "Path", WindowsPath):
+            unit, inputs = c_check.analyzer_inputs(data, root, scope)
+            self.assertEqual(unit, "main.c")
+            self.assertEqual(inputs, {"project": ["config.h", "main.c"],
+                "sdk": ["D:/sdk/include/Types.h"], "unbound": ["E:/external/unknown.h"]})
+            data["source"] = "D:/other/main.c"
+            with self.assertRaisesRegex(ValueError, "outside the project"):
+                c_check.analyzer_inputs(data, root, scope)
+
     def test_compiler_header_paths_use_the_compiler_working_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary).resolve(strict=True)
