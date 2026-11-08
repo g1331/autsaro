@@ -143,8 +143,10 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 补丁，沿每次修改传递行归属，并核对 replay 和已分析副本的最终 kernelSha256。
 因此补丁后来恢复成原件文本仍保留项目责任。混合诊断逐位置核查；采用上下文额外绑定
 含 kernel 位置的完整诊断集合（包括程序、非 kernel 位置与来源字段），新增或改变报告
-需要重新评估。上下文的 inputIdentity 由 `freertos_identity(summary, input_identity(...))`
-计算，包含两份原件 manifest 的当前字节；普通三组和 owned-source 保留原算法。
+需要重新评估。上下文的 inputIdentity 由 `freertos_identity(summary, project)` 计算，
+绑定两份 manifest、有序补丁、最终 kernel 和所有包含 kernel 文件的实际 TU 闭包，
+包括传递头、配置、编译参数、宏及 SDK；闭包外的生成模板变化可复用此证据。
+完整副本身份验证及各独立组的正式义务继续保留，算法见源码验收说明。
 
 集成证据的适用范围为当前两个 x64 C99 controlled 目标和四个 profile 的两个程序。
 复核以下接缝后才可把本组上下文标记为 approved，并附实际 head 与验证收据。
@@ -169,49 +171,49 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 {
  "id": "freertos-current-inputs",
  "evidence": {
-  "head": "b1e52bb772d935335f6c91842d806561c68e3813",
-  "receipt": "https://github.com/g1331/autsaro/actions/runs/42458911508"
+  "head": "2a30b5e36caa1f04cbe1cc2c95e4de23fca307ca",
+  "receipt": "https://github.com/g1331/autsaro/actions/runs/42486878696"
  },
  "cases": [
   {
    "caseId": "standard-ecu",
    "target": "linux-x64-controlled-v1",
-   "inputIdentity": "8c97c1331ba21bbe19dac78f27995dd58b4d2b71388f239f19d210edab498678"
+   "inputIdentity": "1c62d6d1772f1f667a1eac82542673581f892f4924e5385376c72089cf6ca7d6"
   },
   {
    "caseId": "user-application",
    "target": "linux-x64-controlled-v1",
-   "inputIdentity": "3eb4576ea536a66e02319a2b6de6191b29cb21b9410dfad750a9117ada4431ee"
+   "inputIdentity": "1c62d6d1772f1f667a1eac82542673581f892f4924e5385376c72089cf6ca7d6"
   },
   {
    "caseId": "component-pipeline",
    "target": "linux-x64-controlled-v1",
-   "inputIdentity": "f5e8dabdaf04c27e659164ea83a2b2986ce4e1878335882a5c3adca57fce7abb"
+   "inputIdentity": "28b1248ef0c1640734259b6ce6f7369ec82f1d9971b7b349c8f189d81298c2ca"
   },
   {
    "caseId": "no-diagnostic",
    "target": "linux-x64-controlled-v1",
-   "inputIdentity": "0bf2d229da7c2766a4c1d578fca33689265603ef56b6c796c802fefd1febc522"
+   "inputIdentity": "853da4e077ca63070f9084e90181b3594285a16e8731ad218bd5b1f5ef729662"
   },
   {
    "caseId": "standard-ecu",
    "target": "windows-x64-controlled-v1",
-   "inputIdentity": "cb5cb24eb8f7da2646613388aa6379401f9b47e4fb7165807b814a1e8010963b"
+   "inputIdentity": "7866e19e9bdcf38f4d72c541578ee465644bad0a3688407b8266daa0636c17a4"
   },
   {
    "caseId": "user-application",
    "target": "windows-x64-controlled-v1",
-   "inputIdentity": "9ed83efd731e130e7f0cd50984d612f562b638b65f28d555a4e17591248e790c"
+   "inputIdentity": "7866e19e9bdcf38f4d72c541578ee465644bad0a3688407b8266daa0636c17a4"
   },
   {
    "caseId": "component-pipeline",
    "target": "windows-x64-controlled-v1",
-   "inputIdentity": "435fbe8f52fd2bf972ff7b8fbe3e866b8b40f372ee240f417c1208cdf7cf5a4a"
+   "inputIdentity": "3f46c6a954a6ceccdc00e70c2b375a8b8ba615185fa0d7ea735723810f1ced4c"
   },
   {
    "caseId": "no-diagnostic",
    "target": "windows-x64-controlled-v1",
-   "inputIdentity": "259bc38548dc4b52d14590ad69022a0d2339465c9982651c13f811e8510a743f"
+   "inputIdentity": "0718b5dcf23c6b9d695e65b355e99ded76205fb36ed4fcd8e8f061cd41bf1645"
   }
  ],
  "records": {

@@ -43,6 +43,9 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 运行完整 `tests/python` 开发测试，并设置固定版本
 `CPPCHECK` 并运行以下命令。根目录发现测试不包含这组 `ActualCAnalysisTests`；单独
 记录其实际执行数量、跳过项与原因。
+上下文新增、修改或重绑后，在最终已绑定的文档状态完整重跑全部 `tests/python` 和
+下述 ActualCAnalysisTests；重绑前的通过记录只覆盖当时状态。工件身份和局部批准的
+复核保持，测试结果须注明重绑前／后。
 运行期间保持分析驱动及其身份输入不变；同时编辑这些文件会触发真实的
 `Semantic inputs changed during analysis` 拒绝。完成修改后从原入口重跑受影响检查。
 
@@ -60,6 +63,22 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_
 仓库的 `.gitattributes` 只约束检出文件，临时夹具须自行固定字节，并在 Linux 上模拟
 Windows 默认 CRLF 写入验证身份及正常消费路径。
 
+四类局部证据在完整副本验证后使用 `evidence_identity(summary, project, group)`：
+FreeRTOS 选择包含 kernel 文件的 TU；owned-source 选择包含自有交付 C／头文件的 TU；
+generated-retention 选择包含活动记录交付文件的 TU；SDK 选择实际包含 SDK 头的 TU。
+GCC 的 `-MD` 回执保存为 `scope.projectTranslationUnits`；项目 addon 从实际 Cppcheck
+dump 的文件表、raw tokens、directives 和配置 tokens 保存逐 TU 的 `scope.cppcheckInputs`。
+文件归属比较对 root、TU、回执文件及 SDK／模型路径同时按宿主规范化，避免把
+Windows 短路径、分隔符或大小写别名误判为越界。
+文件表也包含空头和 GCC 未打开的条件头。局部选择、文件字节和诊断筛选取两者并集；
+SDK 文件回接已有头身份，模型沿语义身份绑定。存在工程／已验证 SDK／已绑定模型之外
+的来源时，明确拒绝局部证据复用；缺失或不完整的分析器回执须重新扫描。
+摘要读取并集文件的当前字节，连同相关 ownership／runtime 原件、程序成员关系、
+编译参数／宏、SDK 头、分析器／库和本组评估正文。混合诊断保留其全部位置与来源。
+FreeRTOS 另绑定完整原件 manifest、有序补丁及最终 kernel。SDK 保留全部活动定义和报告。
+旧工件缺少 TU 依赖时明确拒绝，须从正常入口重扫。完整 `inputIdentity` 和原始结果继续
+保留；生成模板 carrier 的字节变化通过实际输出闭包反映，闭包外变化可复用局部证据。
+
 ## 原标准篇中的上下文
 
 上下文写在其原标准篇的 JSON 注释块中，起止行分别为 `<!-- source-assessment-context-begin -->` 和 `<!-- source-assessment-context-end -->`。不另建批准文件，也不复制生成保留活动集合或人工表。格式示意：
@@ -76,7 +95,9 @@ Windows 默认 CRLF 写入验证身份及正常消费路径。
 
 基本记录组为 `generated-retention`、`manual-assessment`、`checker-limitations` 和
 `checker-obligations`。后三组的 `records` 只包含 `kind`。每组必须有自己的适用上下文；
-一个组的批准不授权其他组。同组不能重复绑定同一输入，跨组的样本标签必须一致。
+一个组的批准不授权其他组。四类局部证据允许不同样本标签共享同一输入摘要；
+同组、同目标、同摘要和同样本标签的重复登记拒绝，消费时先求各组的共同样本标签。
+其余组保留同输入唯一绑定，跨组的样本标签必须一致。
 `approved` 只能在对应实际评估与正式义务完成后记录；`pending` 永不放行。
 
 自有源码的局部消费者另接受 `records={"kind":"owned-source"}`。它复用原标准篇与
@@ -101,15 +122,16 @@ Required 正式材料继续由自有源码消费任务接续。
 固定 FreeRTOS 使用 `records={"kind":"freertos-integration"}`，原件集成义务和精确
 补丁表见 [采用篇](../../standards/os/adoption.md#当前集成义务与消费)。本组沿用同一
 上下文格式；其 case 的 `inputIdentity` 使用
-`c_acceptance.freertos_identity(summary, c_acceptance.input_identity(summary, project))`，
-额外绑定两份 manifest 和含 kernel 位置的完整诊断集合。重放有序补丁验证当前来源后，
+`c_acceptance.freertos_identity(summary, project)`，
+绑定两份 manifest、有序补丁、最终 kernel 及所有包含 kernel 文件的 TU 输入闭包和
+含 kernel 位置的完整混合诊断集合。重放有序补丁验证当前来源后，
 原件按本组集成证据消费；补丁复用共同 MR12 匹配器及原有精确裁决，SDK 仍独立阻塞。
 缺少当前绑定或 pending 时，返回本组明确的阻塞原因。R15.5 继续由 GRP 消费。
 
 SDK 集成使用同一上下文格式的 `records={"kind":"sdk-integration"}`，记录放在
 [SDK 原篇](../../standards/os/sdk.md#当前集成义务与类别处置)。case 的 `inputIdentity`
-取 `c_acceptance.sdk_identity(summary, c_acceptance.input_identity(summary, project))`，
-额外绑定完整诊断集、头依赖和活动定义。按规则、交付文件、物理行、源码与传递宏定义
+取 `c_acceptance.sdk_identity(summary, project)`，
+绑定实际使用 SDK 的 TU 输入闭包、完整诊断集、头依赖和活动定义。按规则、交付文件、物理行、源码与传递宏定义
 逐位置核对，R7.2 另核对 unsigned-literal 来源；同一行的其他诊断沿原路径阻塞。
 未报告的精确实例也核查，零告警缺证据、额外宏使用、原件或定义变化均拒绝。
 本组只接受原篇的目标／四样本与 host-batch／probe，缺失／pending／过期绑定保持阻塞。

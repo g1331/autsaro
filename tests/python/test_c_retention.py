@@ -185,7 +185,7 @@ class RetentionTests(unittest.TestCase):
             receipts = directory / "addon-receipts"
             receipts.mkdir()
             for index, row in enumerate(commands):
-                (receipts / f"{index}.json").write_text(json.dumps({"units": [row["file"]], "configurations": 1}))
+                (receipts / f"{index}.json").write_text(json.dumps({"units": [row["file"]], "configurations": 1, "source": row["file"], "files": [row["file"]]}))
             return 1, "", (f'<results><errors><error id="misra-c2012-2.5" severity="style" msg="raw finding">'
                            f'<location file="{self.row["delivered"]}" line="2" column="1"/>'
                            '</error><error id="unknown" severity="warning" msg="unknown finding"/></errors></results>')

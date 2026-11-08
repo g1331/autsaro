@@ -26,7 +26,7 @@
 
 实例句柄由应用头中的 `Rte_Inst_<cts>` 宏取得唯一共享 const CDS 的地址；实际存储和消费者见[单实例句柄的实际用途](../README.md#单实例句柄的实际用途)。SWS_Rte_03793／01012／01148／06810／03711／03712／03715 约束名称、实例身份、指针类型及 const CDS；宏形式是本项目的表示选择。R2.5 为 Advisory，按 §6.2.3 记录真实未使用的六个宏，授权为编排者 2026-11-08 的上述决定，不归入标准强制宏类别。
 
-选择宏的收益是不分配独立指针存储、提供地址常量表达式并支持 C99 静态初始化；宏本身不增加独立对象的 R8.7／R2.8 负担，共享 CDS 的对象义务分别评估。可行替代是在单个 TU 定义同名 const 指针并在头中声明，但会增加每实例一个指针宽度的存储及其 R8.7／R2.8 评估，并失去地址常量表达式能力；头内 static const 指针还会产生每 TU 存储和 R5.9 评估。风险是公开宏未被当前程序展开、名字或替换体遭误改；既有 C99／C++11 消费者验证类型、静态初始化和跨 TU 地址身份，精确集合／shape／标记检查及删除记录变异控制保留范围。名字、替换体、表示、profile、target、程序或包含闭包变化时重评；原始 R2.5 诊断保留，当前输入仍未绑定。
+选择宏的收益是不分配独立指针存储、提供地址常量表达式并支持 C99 静态初始化；宏本身不增加独立对象的 R8.7／R2.8 负担，共享 CDS 的对象义务分别评估。可行替代是在单个 TU 定义同名 const 指针并在头中声明，但会增加每实例一个指针宽度的存储及其 R8.7／R2.8 评估，并失去地址常量表达式能力；头内 static const 指针还会产生每 TU 存储和 R5.9 评估。风险是公开宏未被当前程序展开、名字或替换体遭误改；既有 C99／C++11 消费者验证类型、静态初始化和跨 TU 地址身份，精确集合／shape／标记检查及删除记录变异控制保留范围。名字、替换体、表示、profile、target、程序或包含闭包变化时重评；原始 R2.5 诊断保留，当前适用输入见下节绑定。
 
 原五个独立指针对象的 R8.7 活动记录已移除。三个 SchM 模式函数保留既有 C 链接、模式存储／严格独占区及其对应消费者和生命周期控制。内部化、inline 或新 handle 接口均可行，本次选择保留这些现有公开合同。R8.7 的本组记录仅适用于表中剩余三个函数。
 
@@ -36,4 +36,65 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 
 ## 当前输入绑定
 
-正常源码检查按[项目源码验收格式](../../../development/testing/source-acceptance.md)消费本组上下文。本次集合、表示和评估正文变化使原输入绑定失效，原绑定已移除，当前活动集合保持未绑定。后续由编排者根据 CI 工件安排重新评估和绑定；原输入与收据保留在 Git 历史中。原始分析结果与整体未完成状态保持。
+正常源码检查按[项目源码验收格式](../../../development/testing/source-acceptance.md)消费本组上下文。
+`evidence_identity(summary, project, "generated-retention")` 绑定当前活动集合的交付文件、
+相关实际 TU／传递头、ownership／原件、编译参数／宏及完整混合诊断；完整副本先经
+原身份验证。集合、表示、相关字节及评估正文变化时重新评估；闭包外的模板 carrier
+变化可复用证据。当前输入从本 PR 的双平台工件重算，原输入与收据保留在 Git 历史中。
+原始分析结果与整体未完成状态保持。
+<!-- source-assessment-context-begin -->
+{
+  "id": "generated-retention-458-inputs",
+  "evidence": {
+    "head": "2a30b5e36caa1f04cbe1cc2c95e4de23fca307ca",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/42486878696"
+  },
+  "cases": [
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "59ed3655693d7e9aaa7f8bec2a4228ce5944dca53472f9f65f0d6c936e640640"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "711a1b3ff9a99955d06048b01992e352ad9efe322e5e7dd374e082dbad5abd9b"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "efeccc75a362d85aa30e35286fe504fcb5a9d4d8ca2d5f6006ff944efa187e14"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "daa1c05c538c30cf41943cec5a2094b0a8cefa731e94f11f295fd102a36d542e"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "f6f75a40cac13c22d3c13f867ef6637ed8c61bfde23297a35b7ca9bbd35f0006"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "637a9135182dcafd5b1fc9ec1452886e7b9d71dd6cf3ee5553b2a28a2f07d209"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "ef78ae784a118c5b7e000609299ff05af6efaecbbf0646996106fe279728be44"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "a655698d21d57be4491a145509eb3ccc4142a74361e1d871614342445ff7be15"
+    }
+  ],
+  "records": {
+    "kind": "generated-retention",
+    "cohortSha256": "f300270c060c15fe7c9d449e1e38a6a7994c02b12280578acc8cd8956e500224"
+  },
+  "formalStatus": "approved"
+}
+<!-- source-assessment-context-end -->

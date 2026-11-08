@@ -45,55 +45,58 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
 完整双平台四样本的来源、原始结果、逐位置消费和拒绝证据归
 [实施 PR](https://github.com/g1331/autsaro/pull/449)。输入绑定采用
 [源码验收格式](../../development/testing/source-acceptance.md)，绑定块自身排除于摘要；
-其他正文及解析器保持逐字节绑定。剩余完整消费与 Required 正式材料由
+其他正文及解析器保持逐字节绑定。局部身份由
+`evidence_identity(summary, project, "owned-source")` 计算，绑定自有交付文件及相关 TU
+实际打开的文件、ownership／原件、编译参数／宏和诊断；完整副本先经原身份验证。
+剩余完整消费与 Required 正式材料由
 [#439](https://github.com/g1331/autsaro/issues/439) 接续。
 <!-- source-assessment-context-begin -->
 {
   "id": "owned-source-449-inputs",
   "evidence": {
-    "head": "b1e52bb772d935335f6c91842d806561c68e3813",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/42458911508"
+    "head": "2a30b5e36caa1f04cbe1cc2c95e4de23fca307ca",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/42486878696"
   },
   "cases": [
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "7d872665e88041f60678510a08713d71da54cb8e1732fa6d3adecf07caa967d2"
+      "inputIdentity": "43631398b1de7260e95a6ba59b7589041b63c9a84a8e7ec17e6b421d342e5264"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "21a95e9c4a3eba7b21382a0695f584f2cbac1c8082d111035b0d01118e0893f4"
+      "inputIdentity": "e4fc5af41943e4861735638e8bb880cdbf7e7068b748508eaf2b3bafe506d29d"
     },
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "46c6b9c7d59443364698a1b6f73290aa6851fc7afbae0a9b8789ef628a95745d"
+      "inputIdentity": "715b0847696ab489d3912ac1d3029f01940bd88cf6176f9f5000d5c6bd6d2700"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "594b430a3ffb0c2d1d44ac6b660a73e146a67af27a824a376ff4ac042ff6d6b4"
+      "inputIdentity": "68a6fe32ee31f2345c3071b322e50d7609946c6781762164feca6103d90152e0"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c403a0d3439f842721af03facfec49129f7ae638de812db355fda052fe478a97"
+      "inputIdentity": "4ee141f54af512583ba698ba46217b59930265d82d95ccaf2dcfa99e9cbbb583"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "ecbe810bb3eec9b1256b38b83a3dce636873265dda37690ce8c9e1eb8c85a909"
+      "inputIdentity": "c0f3bc6bf9014ddb091c139804c6a4065fa2689943826ecd48307eaa1f993186"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "dd1bc5f9d3c7a0806219da5d90856ea5d5b992c12de2c631aabdc32d380954be"
+      "inputIdentity": "20afa16fd59230f08ede55d77e72b80603ade7bed320f5d7e4b3c25ccdd9f14e"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "25d1df15481be0a8b5a1d62dffdd741fd1aac07de8c520b65eca004b6e71154a"
+      "inputIdentity": "7ab8a97897ecc9733a35d8217ea20de75360902977a1400e62d8eb25d262f6cf"
     }
   ],
   "records": {

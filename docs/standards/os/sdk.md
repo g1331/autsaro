@@ -75,8 +75,9 @@ C99 编译／展开、确定常量值、公开结构类型、原返回检查及�
 成员访问在通用追踪器中标记复杂展开，本组只核对以下精确已审定义，不放宽通用解析。
 R10.1／R7.3／R5.5／R5.7 即使 checker 未报告也检查实例，未登记的新使用点继续拒绝。
 
-SDK 使用既有 source-assessment context 的 sdk-integration 组；sdk_identity 额外绑定
-完整诊断、头依赖和活动宏集。缺失、pending、过期、表外规则／文件／行、同名项目宏、
+SDK 使用既有 source-assessment context 的 sdk-integration 组；`sdk_identity(summary, project)`
+绑定实际使用 SDK 的 TU 文件闭包、编译参数／宏、完整诊断、头依赖和活动宏集。
+完整封存身份仍先验证，生成模板 carrier 的无关字节变化通过实际 TU 输出反映。缺失、pending、过期、表外规则／文件／行、同名项目宏、
 未知或改过原头均阻塞。项目偏离与现行正式程序沿 AMD2.5／Compliance:2020 §4 记录，
 本篇提供技术理由、批准来源、控制和重评条件；完整审查证据留 PR。221 项原始评估与
 整体符合性仍按 ADR 0026 各自保留。
@@ -122,49 +123,49 @@ SDK 使用既有 source-assessment context 的 sdk-integration 组；sdk_identit
 {
   "id": "sdk-controlled-x64-2026-11-08",
   "evidence": {
-    "head": "b1e52bb772d935335f6c91842d806561c68e3813",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/42458911508"
+    "head": "2a30b5e36caa1f04cbe1cc2c95e4de23fca307ca",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/42486878696"
   },
   "cases": [
     {
-      "caseId": "component-pipeline",
-      "target": "linux-x64-controlled-v1",
-      "inputIdentity": "9e410f10b276b6307ae79851ac9d6d35f39afcfbdca6f39bca7940af4bf0a298"
-    },
-    {
-      "caseId": "no-diagnostic",
-      "target": "linux-x64-controlled-v1",
-      "inputIdentity": "704a34aaedfaabf55a835ca0c5ae398f86c54afaa7fa30059b7e1b498c29f61f"
-    },
-    {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "c33ec1938c7c955002ea2d35e06f4b7c2720eb3edec62176a8add3644cbcc22b"
+      "inputIdentity": "ea22f32d0102852a35b8b50ed76bf7899b1834b1051cb0dc5277376e65b808eb"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "321582cd4dbea34f1564802d177f872ce165f1b1c9389e11d2dace45eaf17c44"
+      "inputIdentity": "bb1dd41f6bee55085746ddbc8cb414ce3c429b61f22d8203b593d86ece7b67ed"
     },
     {
       "caseId": "component-pipeline",
-      "target": "windows-x64-controlled-v1",
-      "inputIdentity": "87a51a063c5380d173dad2bee8eb10ed0218961e067a034177ace0fd37c5b2cc"
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "9c5ab1b5a3a4cb971dc0cea17b10ef10ad3536ef3c2922827a680af4147a550d"
     },
     {
       "caseId": "no-diagnostic",
-      "target": "windows-x64-controlled-v1",
-      "inputIdentity": "7665ec46fb4fa558744409d8fa43b54788078db2200941c7113811b4f16b7c50"
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "89c3529a98d9ee2caeb9edda54dd6968343b13f60698181822011ae76f847594"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "2d3964477532902b74537ec14f88c93a4774e156f28f03b23958a0f2b5ef3e5d"
+      "inputIdentity": "125fd4e0b057e6c3a13f180c2bb64d20e4b51915e02cd71060ddeda3656d671d"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "76ea245047bf1165669ee62c3064bfb002eedf949fc5c7c685fef4a08e0481a7"
+      "inputIdentity": "6664f58a4e8ee14980cbd11388b77e1275cc28953d6f58021b3bed090d23540d"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "9083021040f1d42b1d9660e8d9b144f02f3db7e10361c5dac75ec0986156d459"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "829c54f80f7196400ea7b5aa4ec2aa960f3bb110417d6bed6f20c6b6e4ad983b"
     }
   ],
   "records": {

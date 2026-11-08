@@ -57,6 +57,28 @@ class ActualCAnalysisTests(unittest.TestCase):
             self.assertEqual(before, after)
             return summary
 
+    def test_cppcheck_conditional_and_empty_headers_are_actual_inputs(self):
+        diagnostics = []
+        for body in ("#define HIDDEN_VALUE 1\n", "#define HIDDEN_VALUE 2\n", "#define goto 1\n"):
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project = self.project(root,
+                    '#ifdef __CPPCHECK__\n#include "hidden.h"\n#endif\n'
+                    '#include "empty.h"\nint main(void) { return 0; }\n',
+                    source_name="kernel/tasks.c", extra_files={"hidden.h": body, "empty.h": ""})
+                target = json.loads((project / "target.json").read_text())["target"]
+                c_check.check(project, target, root / "analysis")
+                summary = json.loads((root / "analysis/summary.json").read_text())
+                self.assertIsNone(summary["error"], summary["error"])
+                scope = summary["scope"]
+                diagnostics.append(summary["diagnostics"])
+                self.assertNotIn("hidden.h", scope["projectTranslationUnits"]["kernel/tasks.c"])
+                self.assertEqual(scope["cppcheckInputs"]["kernel/tasks.c"], {
+                    "project": ["empty.h", "hidden.h", "kernel/tasks.c"], "sdk": [], "unbound": []})
+        self.assertEqual(diagnostics[0], diagnostics[1])
+        self.assertTrue(any(row["id"] == "misra-c2012-20.4"
+                            and row["locations"][0]["file"] == "hidden.h" for row in diagnostics[2]))
+
     def test_baseline_comparison_runs_the_local_analyzer_and_preserves_source_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -362,6 +384,10 @@ class ActualCAnalysisTests(unittest.TestCase):
                     self.assertIsNone(summary["error"])
                     self.assertEqual(summary["scope"]["compilerWorkers"], min(4, int(c_check.os.environ.get("CARGO_BUILD_JOBS", "4"))))
                     self.assertEqual(set(summary["scope"]["compilerDiscoveredDefines"]), {"bsw/src/main.c", "bsw/src/helper.c", "bsw/src/second.c", "bsw/src/third.c"})
+                    self.assertEqual(summary["scope"]["projectTranslationUnits"], {
+                        unit: sorted([unit, "helper.h"])
+                        for unit in ("bsw/src/main.c", "bsw/src/helper.c",
+                                     "bsw/src/second.c", "bsw/src/third.c")})
                     for definitions in summary["scope"]["compilerDiscoveredDefines"].values():
                         self.assertTrue(any(value.startswith("-DUINT32_C(") for value in definitions))
 
