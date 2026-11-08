@@ -229,15 +229,16 @@ class AcceptanceTests(unittest.TestCase):
         self.bind(self.context(group="owned-source", status="approved"))
         self.assertEqual(self.identity(), identity)
         text = self.obligation_path.read_text(encoding="utf-8")
+        # bind_groups writes LF; edits and restoration must retain those bytes on Windows.
         for changed in (text + "Changed evidence.\n", text.replace("obligations-", "removed-")):
             with self.subTest(changed=changed[-40:]):
-                self.obligation_path.write_text(changed, encoding="utf-8")
+                self.obligation_path.write_text(changed, encoding="utf-8", newline="\n")
                 self.assertNotEqual(self.identity(), identity)
                 result = self.evaluate()
                 self.assertTrue(any(row["kind"] == "context" and row["id"] == "checker-obligations"
                                     and row["reason"] == "input_context_unbound_or_stale"
                                     for row in result["objects"]))
-        self.obligation_path.write_text(text, encoding="utf-8")
+        self.obligation_path.write_text(text, encoding="utf-8", newline="\n")
         self.assertEqual(self.identity(), identity)
 
     def test_real_checker_obligations_keep_three_local_gaps_and_141_missing_reviews(self):
