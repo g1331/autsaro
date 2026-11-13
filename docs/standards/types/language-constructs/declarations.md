@@ -34,3 +34,13 @@ AMD2.27 的语言扩展表没有为 R8.1 追加 C11；其余 AMD1／AMD3／AMD4�
 | R9.4 | Required | 每个子对象的重复初始化 | not_assessed | 同号入口调用 misra_9 的 904 模型及 numInits 计数。AMD4.47–50 要求追踪指定后续的位置式覆盖；#443 尚缺真实展开下索引、成员和回退后覆盖的逐对象复核及模型反例，名称去重不足以完成。 |
 | R9.5 | Required | 有 designated initializer 数组的显式大小 | not_assessed | 同号入口调用 misra_9 的 905 模型，另传 raw token；#443 须按 AMD2 对显式大小义务的修改核对数组声明、typedef、链式指定及最大索引，回接实际配置长度和直接消费者。 |
 <!-- misra-checker-obligations-end -->
+
+## 当前输入重评
+
+同步 #465／#469 后，本阶段以 master `1a7fec01` 的正常
+[run 42491292082](https://github.com/g1331/autsaro/actions/runs/42491292082) 八份完整工件重评。
+`checker-obligations` 沿完整 `input_identity`，包含 GCC `-MD` 依赖和 Cppcheck dump
+实际读取文件的回执；#469 的四组局部摘要仍各用原入口。当前 144 项均有准确记录位置，
+R1.4／R8.1／R17.3 的语言适用性与 R15.5 的既有 GRP 经本组当前绑定消费，
+其余 140 项保持 `not_assessed` 和 #443 责任。此处重评核对输入身份、工具能力边界
+与已结算四项的条件；每行列明的完整修订合成、当前源码和消费者义务继续按恢复条件推进。
