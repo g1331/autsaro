@@ -24,7 +24,7 @@ class ChangedVerificationTests(unittest.TestCase):
     def repository(self, root):
         self.git(root, "init", "--quiet")
         for name in ("README.md", "docs/guide.md", "ui/src/App.tsx", "core/src/lib.rs",
-                     "tools/python/src/autosar_tooling/c_check.py"):
+                     "tools/python/src/autosar_tooling/c_check.py", "runtime/test.c"):
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("original\n")
@@ -57,6 +57,49 @@ class ChangedVerificationTests(unittest.TestCase):
                 "core/src/lib.rs": "removed", "docs/new guide.md": "unverified",
             })
             self.assertTrue(all(select_changes(rows).values()))
+
+    def test_opposing_git_layers_keep_runtime_checks(self):
+        for layers in ("committed-staged", "committed-unstaged", "staged-unstaged"):
+            with self.subTest(layers=layers), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                base = self.repository(root)
+                source = root / "runtime/test.c"
+                source.write_text("changed\n")
+                self.git(root, "add", "runtime/test.c")
+                if layers.startswith("committed"):
+                    self.git(root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                             "commit", "--quiet", "-m", "runtime change")
+                source.write_text("original\n")
+                if layers == "committed-staged":
+                    self.git(root, "add", "runtime/test.c")
+                (root / "README.md").write_text("documentation change\n")
+                self.assertEqual(self.git(root, "diff", base, "--name-only"), "README.md")
+                with mock.patch.object(verify, "ROOT", root):
+                    actual_base, rows = verify.changed_rows(base)
+                self.assertEqual(actual_base, base)
+                self.assertEqual({row["filename"] for row in rows}, {"runtime/test.c", "README.md"})
+                self.assertTrue(all(select_changes(rows).values()))
+                plan = verify.changed_commands(rows, base, root / "samples")
+                names = {name for name, _, _ in plan}
+                self.assertTrue({"python:unit", "core:test", "analysis:quality"} <= names)
+
+    def test_each_git_layer_keeps_rename_source_and_destination(self):
+        for layer in ("committed", "staged", "unstaged"):
+            with self.subTest(layer=layer), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                base = self.repository(root)
+                self.git(root, "mv", "runtime/test.c", "docs/moved.md")
+                if layer == "committed":
+                    self.git(root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                             "commit", "--quiet", "-m", "move runtime")
+                elif layer == "unstaged":
+                    self.git(root, "reset", "--quiet", "HEAD")
+                    self.git(root, "add", "--intent-to-add", "docs/moved.md")
+                with mock.patch.object(verify, "ROOT", root):
+                    _, rows = verify.changed_rows(base)
+                self.assertIn({"filename": "docs/moved.md", "status": "renamed",
+                               "previous_filename": "runtime/test.c"}, rows)
+                self.assertTrue(all(select_changes(rows).values()))
 
     def test_document_analysis_ui_and_renames_agree_with_the_actual_ci_selector(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
