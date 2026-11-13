@@ -52,51 +52,51 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
 [#439](https://github.com/g1331/autsaro/issues/439) 接续。
 <!-- source-assessment-context-begin -->
 {
-  "id": "owned-source-449-inputs",
+  "id": "owned-source-443-declarations",
   "evidence": {
-    "head": "2a30b5e36caa1f04cbe1cc2c95e4de23fca307ca",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/42486878696"
+    "head": "d1871342f49fcdd366877bddca6584e51e6d6552",
+    "receipt": "https://github.com/g1331/autsaro/issues/443#issuecomment-6851733488"
   },
   "cases": [
     {
-      "caseId": "standard-ecu",
-      "target": "linux-x64-controlled-v1",
-      "inputIdentity": "43631398b1de7260e95a6ba59b7589041b63c9a84a8e7ec17e6b421d342e5264"
-    },
-    {
-      "caseId": "user-application",
-      "target": "linux-x64-controlled-v1",
-      "inputIdentity": "e4fc5af41943e4861735638e8bb880cdbf7e7068b748508eaf2b3bafe506d29d"
-    },
-    {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "715b0847696ab489d3912ac1d3029f01940bd88cf6176f9f5000d5c6bd6d2700"
+      "inputIdentity": "448bba6a5a6e43715bf5a5c41eab3feae22d44758b51e8b27c9b4c8e00a08f40"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "68a6fe32ee31f2345c3071b322e50d7609946c6781762164feca6103d90152e0"
+      "inputIdentity": "29193dacea8c8adf09de3325713f8a4e6065cace2386fe5ee6a6fa0d12746afd"
     },
     {
       "caseId": "standard-ecu",
-      "target": "windows-x64-controlled-v1",
-      "inputIdentity": "4ee141f54af512583ba698ba46217b59930265d82d95ccaf2dcfa99e9cbbb583"
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "1dee08cd37abd006a382f504500e6a869a13b9cea5fb187a9c1f0f9ad92177c8"
     },
     {
       "caseId": "user-application",
-      "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c0f3bc6bf9014ddb091c139804c6a4065fa2689943826ecd48307eaa1f993186"
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "19d559375b68e2f486b2550447f56743877ead511304337e2ae354652fdb0a1a"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "20afa16fd59230f08ede55d77e72b80603ade7bed320f5d7e4b3c25ccdd9f14e"
+      "inputIdentity": "33cb27834262cb2cee4f996bf1d24b4b1cdc97337ce1c0c5f4a25d53f441e8de"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "7ab8a97897ecc9733a35d8217ea20de75360902977a1400e62d8eb25d262f6cf"
+      "inputIdentity": "c3aec1677928ec3d757bf936dc7c42d6337dbe6e18b54f8cc95746e9ada762db"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "17188e51733004110c06f2f9e9a25409d5631a3a2fba1440eed15539af8e4eea"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "2df9a192907f35b0781a4a5470e09d77fa69f9cf614398ee90edbfb7cea884a4"
     }
   ],
   "records": {

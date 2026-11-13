@@ -169,56 +169,19 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 本篇及表、原件、补丁顺序／字节、配置、程序、工具或实际交互改变时，旧绑定失效。
 <!-- source-assessment-context-begin -->
 {
- "id": "freertos-current-inputs",
- "evidence": {
-  "head": "2a30b5e36caa1f04cbe1cc2c95e4de23fca307ca",
-  "receipt": "https://github.com/g1331/autsaro/actions/runs/42486878696"
- },
- "cases": [
-  {
-   "caseId": "standard-ecu",
-   "target": "linux-x64-controlled-v1",
-   "inputIdentity": "1c62d6d1772f1f667a1eac82542673581f892f4924e5385376c72089cf6ca7d6"
-  },
-  {
-   "caseId": "user-application",
-   "target": "linux-x64-controlled-v1",
-   "inputIdentity": "1c62d6d1772f1f667a1eac82542673581f892f4924e5385376c72089cf6ca7d6"
-  },
-  {
-   "caseId": "component-pipeline",
-   "target": "linux-x64-controlled-v1",
-   "inputIdentity": "28b1248ef0c1640734259b6ce6f7369ec82f1d9971b7b349c8f189d81298c2ca"
-  },
-  {
-   "caseId": "no-diagnostic",
-   "target": "linux-x64-controlled-v1",
-   "inputIdentity": "853da4e077ca63070f9084e90181b3594285a16e8731ad218bd5b1f5ef729662"
-  },
-  {
-   "caseId": "standard-ecu",
-   "target": "windows-x64-controlled-v1",
-   "inputIdentity": "7866e19e9bdcf38f4d72c541578ee465644bad0a3688407b8266daa0636c17a4"
-  },
-  {
-   "caseId": "user-application",
-   "target": "windows-x64-controlled-v1",
-   "inputIdentity": "7866e19e9bdcf38f4d72c541578ee465644bad0a3688407b8266daa0636c17a4"
-  },
-  {
-   "caseId": "component-pipeline",
-   "target": "windows-x64-controlled-v1",
-   "inputIdentity": "3f46c6a954a6ceccdc00e70c2b375a8b8ba615185fa0d7ea735723810f1ced4c"
-  },
-  {
-   "caseId": "no-diagnostic",
-   "target": "windows-x64-controlled-v1",
-   "inputIdentity": "0718b5dcf23c6b9d695e65b355e99ded76205fb36ed4fcd8e8f061cd41bf1645"
-  }
- ],
- "records": {
-  "kind": "freertos-integration"
- },
- "formalStatus": "approved"
+"id":"freertos-integration-443-declarations",
+"evidence":{"head":"d1871342f49fcdd366877bddca6584e51e6d6552","receipt":"https://github.com/g1331/autsaro/issues/443#issuecomment-6851733488"},
+"cases":[
+{"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"a3253943ff3ff264690e44375d7e63ff2bdd9fd1b3f65926c5c9da0030773756"},
+{"caseId":"no-diagnostic","target":"linux-x64-controlled-v1","inputIdentity":"229d5d27b113626d216299d1bfda4e84a82d04ece6806aee6c57c88c6408683b"},
+{"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"43a033e3c41cc226f3aef45442bb509d1567361a7e1ec6a61e8cbe880bc19c8d"},
+{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"d0a05442e7b5101279b2aeb271f407fb8d7f142d47e6651733659b7f904e6a5b"},
+{"caseId":"component-pipeline","target":"windows-x64-controlled-v1","inputIdentity":"5c40abbbdb9b0978971171b315195a62987808439f4ad45772f1e78d50939a22"},
+{"caseId":"no-diagnostic","target":"windows-x64-controlled-v1","inputIdentity":"f06be7e11f1bb1bb943c5bc92b268fe80c0dc29f883c3cea1035886bd08f62eb"},
+{"caseId":"standard-ecu","target":"windows-x64-controlled-v1","inputIdentity":"e1cc1dfb0dcc90452baf0c402c2201e6f2697798eca20e20dfab2748639cec2e"},
+{"caseId":"user-application","target":"windows-x64-controlled-v1","inputIdentity":"e1cc1dfb0dcc90452baf0c402c2201e6f2697798eca20e20dfab2748639cec2e"}
+],
+"records":{"kind":"freertos-integration"},
+"formalStatus":"approved"
 }
 <!-- source-assessment-context-end -->
