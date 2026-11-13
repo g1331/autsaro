@@ -121,6 +121,23 @@ class ChangedVerificationTests(unittest.TestCase):
         self.assertEqual(commands["analysis:quality"][-2:], ["--c-samples", "samples"])
         self.assertIn("--all-features", commands["core:clippy"])
 
+    def test_renaming_workflow_or_lock_inputs_keeps_their_extra_checks(self):
+        for previous, expected in (("Cargo.lock", "dependencies:cargo-deny"),
+                                   (".github/workflows/desktop.yml", "workflows:actionlint")):
+            rows = [{"filename": "docs/moved.txt", "previous_filename": previous,
+                     "status": "renamed"}]
+            plan = verify.changed_commands(rows, "base", Path("samples"))
+            self.assertIn(expected, {name for name, _, _ in plan})
+
+    def test_analysis_execution_requires_a_supported_native_host(self):
+        rows = [{"filename": "docs/standards/os/adoption.md", "status": "modified"}]
+        with (mock.patch.object(verify, "changed_rows", return_value=("base", rows)),
+              mock.patch.object(verify.sys, "platform", "darwin"),
+              mock.patch.object(verify, "run_commands", side_effect=AssertionError("tool started")),
+              contextlib.redirect_stdout(io.StringIO()),
+              contextlib.redirect_stderr(io.StringIO())):
+            self.assertEqual(verify.verify("changed"), 1)
+
     def test_fresh_inputs_are_shared_and_success_is_cleaned_but_failures_are_retained(self):
         rows = [{"filename": "docs/standards/os/adoption.md", "status": "modified"}]
         seen = []
@@ -139,6 +156,7 @@ class ChangedVerificationTests(unittest.TestCase):
                 return 0 if len(seen) == 1 else 7
 
             with (mock.patch.object(verify, "ROOT", root),
+                  mock.patch.object(verify.sys, "platform", "linux"),
                   mock.patch.object(verify, "changed_rows", return_value=("base", rows)),
                   mock.patch.object(verify, "environment", return_value={}),
                   mock.patch.object(verify, "run_commands", side_effect=run),

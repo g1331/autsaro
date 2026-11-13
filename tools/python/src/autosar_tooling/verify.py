@@ -195,7 +195,8 @@ def changed_commands(
     from autosar_tooling.ci_selection import select_changes
 
     selected = select_changes(rows)
-    paths = {row["filename"] for row in rows}
+    paths = {path for row in rows
+             for path in (row["filename"], row.get("previous_filename")) if path}
     workflow = any(path.startswith(".github/") for path in paths)
     dependencies = bool(paths & {"Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock",
                                  "ui/package.json", "ui/package-lock.json"})
@@ -241,7 +242,7 @@ def verify_changed(base: str, *, list_checks: bool = False) -> int:
         for name, command, _ in changed_commands(rows, baseline, Path("<new-run>/samples")):
             print(f"> {name}: {subprocess.list2cmdline(command)}", flush=True)
         return 0
-    if selected["native"] and sys.platform not in ("win32", "linux"):
+    if selected["analysis"] and sys.platform not in ("win32", "linux"):
         print("Native verification requires Windows or Linux.", file=sys.stderr)
         return 1
     if not selected["analysis"]:
