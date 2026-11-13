@@ -34,4 +34,4 @@
 
 已接受的项目决定：用户于 **2026-10-17** 在 [#58 原记录](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641)作出；本篇于 2026-10-23 由 [#360](https://github.com/g1331/autsaro/issues/360)补记并同步规则，不声称本日发生新的批准。前任为 ADR 0008（仅批准限制部分被取代）；具体诊断处置仍按上述前提逐项执行。
 
-后继：[ADR 0025](0025-misra-layered-scope.md)（2026-10-27）部分取代批准／逐处记录限制：增加适用分层、三项类别记录与 R15.5 GRP；其余限制保持。
+后继：[ADR 0025](0025-misra-layered-scope.md)（2026-10-27）部分取代批准／逐处记录限制：增加适用分层、三项类别记录与 R15.5 GRP；其余限制保持。[ADR 0027](0027-misra-compliance-track.md)（2026-11-13）把完整人工评估移出 Epic 9 出口，归 MISRA 合规线。
