@@ -1258,9 +1258,13 @@ void Os_TestAfterFaultReader(void)
                     if variant == selected:
                         pattern = (r"if \(\(result != 0\)\s*&&\s*\(result != -EAGAIN\)\s*&&\s*"
                                    r"\(result != -EINTR\)\s*&&\s*\(result != -ETIMEDOUT\)\) \{")
-                        matches = list(re.finditer(pattern, text, re.DOTALL))
+                        start = text.index(after)
+                        end = text.index("\n}", start) + 2
+                        body = text[start:end]
+                        matches = list(re.finditer(pattern, body, re.DOTALL))
                         self.assertEqual(len(matches), 1)
-                        text = text.replace(matches[0].group(), "(void)result;\n        if (0) {")
+                        changed = body.replace(matches[0].group(), "(void)result;\n        if (0) {")
+                        text = text[:start] + changed + text[end:]
                     source.write_text(text, encoding="utf-8")
                 cases = controls if variant == "control" else {
                     "wake-unchecked": (("wake-error", 51, "", injected.format(mode="wake-error", call=1, result=-22) +
@@ -1486,6 +1490,55 @@ void Os_TestAfterFaultReader(void)
                     }.get(scenario, "suspend=acknowledged resume=progress context=preserved "
                           "terminal=irreversible running=stopped closed=detached\n")
                     self.assertEqual(result.stdout, expected, result)
+
+    def test_mutex_unlock_wakes_before_and_during_native_wait(self):
+        import os_suites
+
+        snapshot = (
+            "        const int32_t generation = "
+            "InterlockedCompareExchange(&handle->mutex_generation, 0, 0);\n"
+            "        outcome = try_wait_mutex(handle);"
+        )
+        variants = (
+            ("control", None, None, ("before-wait", "during-wait", "wait-error")),
+            ("missing-generation", "(void)InterlockedIncrement(&mutex->mutex_generation);",
+             "(void)mutex;", ("before-wait",)),
+            ("missing-wake", "Os_LinuxFutexWake(&mutex->mutex_generation);",
+             "(void)mutex;", ("during-wait",)),
+            ("late-snapshot", snapshot,
+             ("        outcome = try_wait_mutex(handle);\n"
+              "        const int32_t generation = "
+              "InterlockedCompareExchange(&handle->mutex_generation, 0, 0);"),
+             ("before-wait",)),
+        )
+        for name, before, after, scenarios in variants:
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, \
+                    os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                if before is not None:
+                    source = target / "src/host/linux/Os_HostLinux.c"
+                    text = source.read_text(encoding="utf-8")
+                    self.assertEqual(text.count(before), 1)
+                    source.write_text(text.replace(before, after), encoding="utf-8")
+                with os_suites.native_session(directory, "mutex-wakeup"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_mutex_wakeup.c"), target=target,
+                        link_flags=tuple(f"-Wl,--wrap={symbol}" for symbol in (
+                            "pthread_mutex_trylock", "Os_LinuxFutexWait", "Os_LinuxFutexWake",
+                        )),
+                    )
+                    for scenario in scenarios:
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0 if name == "control" else 52, result)
+                        self.assertEqual(result.stdout, (
+                            f"mutex_wakeup scenario={scenario} acquisition=observed masks=restored\n"
+                            if name == "control" else ""
+                        ), result)
+                        self.assertEqual(result.stderr, (
+                            "" if name == "control" else "mutex_wakeup_rejected stage=52\n"
+                        ), result)
 
     def test_native_handle_errors_and_resource_reuse(self):
         import os_suites

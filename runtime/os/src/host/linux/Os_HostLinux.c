@@ -69,6 +69,7 @@ struct Os_HostHandleType {
     const void *bootstrap_bottom;
     size_t bootstrap_size;
 #endif
+    volatile int32_t mutex_generation; /**< Atomic unlock publication; reset before creation. */
 };
 
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
@@ -507,6 +508,7 @@ OS_MEMMAP HANDLE CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCS
     if ((attributes == NULL) && (name == NULL)) {
         mutex = reserve_handle(OS_HOST_MUTEX);
         if (mutex != NULL) {
+            (void)InterlockedExchange(&mutex->mutex_generation, 0);
             if (pthread_mutex_init(&mutex->mutex, NULL) != 0) {
                 (void)InterlockedExchange(&mutex->reserved, 0);
                 mutex = NULL;
@@ -564,6 +566,48 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
     return outcome;
 }
 
+/* Take the generation before trying: an unlock between EBUSY and futex must
+ * make the expected value stale. Wait with suspend unmasked, as in try_wait_mutex. */
+OS_MEMMAP static DWORD wait_mutex(HANDLE handle, DWORD milliseconds, uint64_t end)
+{
+    DWORD outcome = WAIT_TIMEOUT;
+    int pending = 1;
+    while (pending != 0) {
+        const int32_t generation = InterlockedCompareExchange(&handle->mutex_generation, 0, 0);
+        outcome = try_wait_mutex(handle);
+        if (outcome != WAIT_TIMEOUT) {
+            pending = 0;
+        } else {
+            const uint64_t now = monotonic_ms();
+            if (now == UINT64_MAX) {
+                outcome = WAIT_FAILED;
+                pending = 0;
+            } else if ((milliseconds != INFINITE) && (now >= end)) {
+                pending = 0;
+            } else {
+                struct timespec interval;
+                const struct timespec *duration = NULL;
+                if (milliseconds != INFINITE) {
+                    const uint64_t remaining = end - now;
+                    const uint64_t seconds = remaining / UINT64_C(1000);
+                    const uint64_t nanoseconds = (remaining % UINT64_C(1000)) * UINT64_C(1000000);
+                    interval.tv_sec = (time_t)seconds;
+                    interval.tv_nsec = (long)nanoseconds;
+                    duration = &interval;
+                }
+                const int result =
+                    Os_LinuxFutexWait(&handle->mutex_generation, generation, duration);
+                if ((result != 0) && (result != -EAGAIN) && (result != -EINTR) &&
+                    (result != -ETIMEDOUT)) {
+                    outcome = WAIT_FAILED;
+                    pending = 0;
+                }
+            }
+        }
+    }
+    return outcome;
+}
+
 OS_MEMMAP static DWORD event_result(HANDLE event, short events)
 {
     DWORD result = WAIT_TIMEOUT;
@@ -589,12 +633,14 @@ OS_MEMMAP static DWORD poll_events(DWORD count, const HANDLE *observed, int time
         descriptors[index].revents = 0;
     }
     int ready;
+    int error;
     do {
         errno = 0;
         ready = poll(descriptors, count, timeout);
-    } while ((ready < 0) && (errno == EINTR) && (timeout == 0));
+        error = errno;
+    } while ((ready < 0) && (error == EINTR) && (timeout == 0));
     if (ready < 0) {
-        result = (errno == EINTR) ? WAIT_IO_COMPLETION : WAIT_FAILED;
+        result = (error == EINTR) ? WAIT_IO_COMPLETION : WAIT_FAILED;
     } else if (ready > 0) {
         index = 0u;
         while ((index < count) && (result == WAIT_TIMEOUT)) {
@@ -649,28 +695,6 @@ OS_MEMMAP static DWORD wait_events(DWORD count,
     return result;
 }
 
-OS_MEMMAP static DWORD try_wait_thread(HANDLE handle)
-{
-    DWORD result = WAIT_TIMEOUT;
-    if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
-        const int32_t previous = InterlockedCompareExchange(&handle->joined, 2, 0);
-        if (previous == 1) {
-            result = WAIT_OBJECT_0;
-        } else if (previous == 0) {
-            result = WAIT_FAILED;
-            if (pthread_join(handle->thread, NULL) == 0) {
-                (void)InterlockedExchange(&handle->joined, 1);
-                result = WAIT_OBJECT_0;
-            } else {
-                (void)InterlockedExchange(&handle->joined, 0);
-            }
-        } else {
-            /* Another waiter owns the join; completion is not yet published. */
-        }
-    }
-    return result;
-}
-
 OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
 {
     uint64_t end = monotonic_ms();
@@ -685,11 +709,26 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
                 outcome = wait_events(1u, &handle, milliseconds, end);
                 pending = 0;
             } else if (handle->kind == OS_HOST_MUTEX) {
-                outcome = try_wait_mutex(handle);
-                pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
+                outcome = wait_mutex(handle, milliseconds, end);
+                pending = 0;
             } else if (handle->kind == OS_HOST_THREAD) {
-                outcome = try_wait_thread(handle);
-                pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
+                if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
+                    const int32_t previous = InterlockedCompareExchange(&handle->joined, 2, 0);
+                    if (previous == 1) {
+                        outcome = WAIT_OBJECT_0;
+                        pending = 0;
+                    } else if (previous == 0) {
+                        if (pthread_join(handle->thread, NULL) == 0) {
+                            (void)InterlockedExchange(&handle->joined, 1);
+                            outcome = WAIT_OBJECT_0;
+                        } else {
+                            (void)InterlockedExchange(&handle->joined, 0);
+                        }
+                        pending = 0;
+                    } else {
+                        /* Another waiter owns the join; completion is not yet published. */
+                    }
+                }
             } else {
                 pending = 0;
             }
@@ -740,37 +779,38 @@ OS_MEMMAP static DWORD wait_any(DWORD count,
                                 DWORD milliseconds,
                                 uint64_t end)
 {
-    if (all_event_handles(count, observed) != 0) {
-        return wait_events(count, observed, milliseconds, end);
-    }
     DWORD result = WAIT_TIMEOUT;
-    int waiting = 1;
-    while (waiting != 0) {
-        DWORD index;
-        index = 0u;
-        while ((index < count) && (waiting != 0)) {
-            const DWORD waited = WaitForSingleObject(observed[index], 0u);
-            if (waited != WAIT_TIMEOUT) {
-                result = (waited == WAIT_OBJECT_0) ? (WAIT_OBJECT_0 + index) : WAIT_FAILED;
-                waiting = 0;
+    if (all_event_handles(count, observed) != 0) {
+        result = wait_events(count, observed, milliseconds, end);
+    } else {
+        int waiting = 1;
+        while (waiting != 0) {
+            DWORD index;
+            index = 0u;
+            while ((index < count) && (waiting != 0)) {
+                const DWORD waited = WaitForSingleObject(observed[index], 0u);
+                if (waited != WAIT_TIMEOUT) {
+                    result = (waited == WAIT_OBJECT_0) ? (WAIT_OBJECT_0 + index) : WAIT_FAILED;
+                    waiting = 0;
+                }
+                ++index;
             }
-            ++index;
-        }
-        if ((waiting != 0) && (milliseconds != INFINITE)) {
-            const uint64_t now = monotonic_ms();
-            if (now == UINT64_MAX) {
-                result = WAIT_FAILED;
-                waiting = 0;
-            } else if (now >= end) {
-                waiting = 0;
-            } else {
-                /* The finite deadline has not expired. */
+            if ((waiting != 0) && (milliseconds != INFINITE)) {
+                const uint64_t now = monotonic_ms();
+                if (now == UINT64_MAX) {
+                    result = WAIT_FAILED;
+                    waiting = 0;
+                } else if (now >= end) {
+                    waiting = 0;
+                } else {
+                    /* The finite deadline has not expired. */
+                }
             }
-        }
-        if (waiting != 0) {
-            const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
-            errno = 0;
-            (void)nanosleep(&interval, NULL);
+            if (waiting != 0) {
+                const struct timespec interval = {.tv_sec = 0, .tv_nsec = 1000000L};
+                errno = 0;
+                (void)nanosleep(&interval, NULL);
+            }
         }
     }
     return result;
@@ -827,6 +867,10 @@ OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex)
             } else {
                 __atomic_store_n(&mutex->mutex_owner, 0u, __ATOMIC_RELEASE);
                 released = pthread_mutex_unlock(&mutex->mutex);
+                if (released == 0) {
+                    (void)InterlockedIncrement(&mutex->mutex_generation);
+                    Os_LinuxFutexWake(&mutex->mutex_generation);
+                }
             }
             if (released == 0) {
                 --held_depth;

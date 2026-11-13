@@ -75,7 +75,7 @@
 
 ### Fixed
 
-- Linux native event waits now block on eventfd readiness and preserve the original deadline across interruptions and competing consumers, allowing long HostBatch S3 vectors to retain the 5000 ms watchdog without per-tick timer polling. Regenerate and rebuild sealed consumers; public APIs and FreeRTOS identities are unchanged (#473)
+- Linux native waits now use eventfd readiness and mutex unlock generations, preserving the original deadline across interruptions and competing consumers so long HostBatch S3 vectors retain the 5000 ms watchdog without per-tick timer polling. Regenerate and rebuild sealed consumers; public APIs and FreeRTOS identities are unchanged (#473)
 
 - Linux native actors defer suspend and stop signals until their TLS and execution stack are initialized, preserving the closed lifecycle receipt when startup gate publication fails (#466)
 
