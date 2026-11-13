@@ -837,11 +837,11 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
-        self.assertEqual(len(objects), 124)
+        self.assertEqual(len(objects), 121)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 124)
+        self.assertEqual(len(located), 121)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -859,7 +859,9 @@ class AcceptanceTests(unittest.TestCase):
         satisfied = {row["id"]: row for row in records if row["status"] == "satisfied"}
         lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.4", "R6.1", "R6.2"}
         declarations = {"R8.10", "R8.11", "R8.12", "R8.14", "R9.4", "R9.5"}
-        self.assertEqual(set(satisfied), lexical | declarations | {"R7.1", "R7.3", "R15.5"})
+        expressions = {"R13.1", "R13.3", "R13.6"}
+        self.assertEqual(set(satisfied),
+                         lexical | declarations | expressions | {"R7.1", "R7.3", "R15.5"})
         self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
         for guideline in lexical:
             self.assertEqual(satisfied[guideline]["source"]["file"],
@@ -890,6 +892,31 @@ class AcceptanceTests(unittest.TestCase):
         self.assertIn("Os_InterruptVectorTable[32]", by_id["R8.11"]["conclusion"])
         self.assertIn("AMD4.47–50", by_id["R9.4"]["conclusion"])
         self.assertIn("[30u]", by_id["R9.5"]["conclusion"])
+        expression_evidence = {
+            "R10.2": "TC2.19", "R10.4": "complete_activation", "R10.5": "AMD3.33",
+            "R10.7": "HostBatch::number", "R10.8": "(LONG)~(uint32)1u",
+            "R11.1": "(void)sink", "R11.2": "完整化", "R11.3": "AMD4.7–9",
+            "R11.4": "Os_HostStackRange", "R11.5": "mmap", "R11.6": "TC2.22",
+            "R11.7": "Boolean、character、enum", "R11.8": "AMD4.10–14",
+            "R11.9": "((void *)0)", "R12.1": "#if／#elif", "R12.2": "UTLR",
+            "R12.4": "宽度≥64", "R13.1": "Os_ArtiCallerSave", "R13.2": "AMD4.17–23",
+            "R13.3": "++transitions", "R13.4": "复合赋值", "R13.6": "TC2.26",
+        }
+        self.assertEqual(len(expression_evidence), 22)
+        for guideline, evidence in expression_evidence.items():
+            with self.subTest(expression=guideline):
+                record = by_id[guideline]
+                self.assertEqual(record["status"],
+                                 "satisfied" if guideline in expressions else "not_assessed")
+                self.assertEqual(record["source"]["file"],
+                                 "docs/standards/types/language-constructs/expressions.md")
+                self.assertIn(evidence, record["conclusion"])
+                if guideline not in expressions:
+                    self.assertIn("#443", record["conclusion"])
+        self.assertEqual(by_id["R13.6"]["category"], "Required")
+        self.assertIn("Os_CounterWorkType", by_id["R13.1"]["conclusion"])
+        self.assertIn("define／undef", by_id["R7.2"]["conclusion"])
+        self.assertIn("0xffffffffffffffff", by_id["R7.2"]["conclusion"])
         sdk_text = (ROOT / c_acceptance.SDK).read_text(encoding="utf-8")
         sdk_record = json.loads(re.search(
             r"<!-- sdk-integration-records-begin -->\s*(.*?)"

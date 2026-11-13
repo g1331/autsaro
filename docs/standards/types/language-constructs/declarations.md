@@ -56,7 +56,8 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 编译数据库／files.txt／addon 回执及 GCC／Cppcheck 实际输入闭包；888 个程序 TU
 实例均为 C99，基线身份及 evaluate 与 CI 保存值相同。原始摘要保持只读。
 
-当前完整 144 项为 17 项 satisfied、3 项 not_applicable、124 项 not_assessed。
+第二批完成时，完整 144 项为 17 项 satisfied、3 项 not_applicable、124 项 not_assessed。
+第三批[表达式核查](expressions.md)结算三项后为 20／3／121；本篇原条目状态保持。
 本篇为 6 项满足、1 项既有 C99 不适用、11 项阻塞；R7.1 另在 lexical.md 完成
 当前条件控制证据并连接 SDK 已批准类别。逐项恢复条件继续归 #443。
 
