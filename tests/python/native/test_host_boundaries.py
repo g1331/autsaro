@@ -800,9 +800,11 @@ class NativeFacilityTests(unittest.TestCase):
                     "        _exit(1);\n    }",
                 )
                 replace_once(
-                    "                if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {\n"
+                    "                if (pthread_sigmask(SIG_SETMASK, "
+                    "&thread->startup_mask, NULL) != 0) {\n"
                     "                    ExitProcess(1u);\n                }\n",
-                    "                if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {\n"
+                    "                if (pthread_sigmask(SIG_SETMASK, "
+                    "&thread->startup_mask, NULL) != 0) {\n"
                     "                    ExitProcess(1u);\n                }\n"
                     "            sigset_t actual;\n"
                     "            if (pthread_sigmask(SIG_SETMASK, NULL, &actual) != 0 ||\n"
@@ -841,7 +843,9 @@ class NativeFacilityTests(unittest.TestCase):
                     self.assertEqual(observation["stdout"], "", observation)
                 else:
                     self.assertIn(
-                        "lifecycle=Closed state=Failed reason=7", observation["stdout"], observation,
+                        "lifecycle=Closed state=Failed reason=7",
+                        observation["stdout"],
+                        observation,
                     )
                     self.assertIn(" threads=3 ", observation["stdout"], observation)
                 print(f"startup-stop unchecked={unchecked} {observation}", flush=True)
