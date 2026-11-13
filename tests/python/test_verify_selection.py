@@ -75,6 +75,7 @@ class ChangedVerificationTests(unittest.TestCase):
                 with mock.patch.object(verify, "ROOT", root):
                     _, rows = verify.changed_rows(base)
                 if mode == "rename":
+                    self.assertIn("previous_filename", rows[0])
                     self.assertEqual(rows[0]["previous_filename"], name)
                 output = root / "output"
                 source = root / "selector.py"
@@ -127,6 +128,7 @@ class ChangedVerificationTests(unittest.TestCase):
             root = Path(temporary)
 
             def run(plan, env):
+                self.assertIn("AUTOSAR_C_ANALYSIS_SAMPLES", env)
                 samples = Path(env["AUTOSAR_C_ANALYSIS_SAMPLES"])
                 self.assertFalse(samples.exists())
                 samples.mkdir()
@@ -145,6 +147,7 @@ class ChangedVerificationTests(unittest.TestCase):
                 self.assertEqual(verify.verify("changed"), 7)
             self.assertNotEqual(seen[0], seen[1])
             self.assertFalse(seen[0].parent.exists())
+            self.assertTrue((seen[1] / "actual-source").is_file())
             self.assertEqual((seen[1] / "actual-source").read_text(), "generated input")
 
     def test_listing_creates_no_outputs_and_starts_no_tools(self):
