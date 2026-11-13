@@ -744,11 +744,11 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
-        self.assertEqual(len(objects), 140)
+        self.assertEqual(len(objects), 131)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 140)
+        self.assertEqual(len(located), 131)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -763,9 +763,28 @@ class AcceptanceTests(unittest.TestCase):
             filename = "declarations.md" if row["id"] == "R8.1" else "README.md"
             self.assertEqual(row["source"]["file"],
                              "docs/standards/types/language-constructs/" + filename)
-        satisfied = [row for row in records if row["status"] == "satisfied"]
-        self.assertEqual([row["id"] for row in satisfied], ["R15.5"])
-        self.assertIn("Disapplied", satisfied[0]["conclusion"])
+        satisfied = {row["id"]: row for row in records if row["status"] == "satisfied"}
+        lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.4", "R6.1", "R6.2"}
+        self.assertEqual(set(satisfied), lexical | {"R7.3", "R15.5"})
+        self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
+        for guideline in lexical:
+            self.assertEqual(satisfied[guideline]["source"]["file"],
+                             "docs/standards/types/language-constructs/lexical.md")
+        by_id = {row["id"]: row for row in records}
+        self.assertEqual(by_id["R7.2"]["status"], "not_assessed")
+        self.assertIn("#if／#elif", by_id["R7.2"]["conclusion"])
+        self.assertEqual(by_id["R7.1"]["status"], "not_assessed")
+        self.assertIn("O_RDONLY→00", by_id["R7.1"]["conclusion"])
+        self.assertIn("sdk-integration", satisfied["R7.3"]["conclusion"])
+        self.assertIn("Dcm_MsgAddInfoType", satisfied["R6.1"]["conclusion"])
+        self.assertIn("unsigned char", satisfied["R6.2"]["conclusion"])
+        # The real record partition is checked even with zero checker diagnostics.
+        batch = lexical | {"R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5",
+                           "R2.7", "R5.3", "R5.6", "R5.8", "R5.9", "R7.1", "R7.2",
+                           "R7.3", "R7.4"}
+        self.assertEqual(len(batch), 24)
+        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 9)
+        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 15)
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
