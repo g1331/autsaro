@@ -35,7 +35,7 @@ Autsaro 交付自有 AUTOSAR Classic 基础软件栈，以及配置、校验和�
 
 ## 近期顺序
 
-**Epic 9 出口 → R11 → R7／R18 → R8 → R9／R14 → Epic 10 主机累计验收。**
+**Epic 9 出口 → R11 → R7／R18 → R8 → R9／R14 → Epic 10 主机累计验收。** MISRA 人工评估作为合规线与 R11 起各阶段并行（[ADR 0027](../adr/0027-misra-compliance-track.md)）。
 
 R30 的[主机运行、仿真与可视化](host-simulation.md)随上述阶段发展，基础闭环进入主机累计验收，深入能力继续演进。**R10 是主机出口后可独立启动的真实目标接入，可以晚于更多功能和仿真增量；没有预设上板截止日期。** 板卡／工具链调查可提前，不阻塞主机功能扩展。
 
@@ -59,11 +59,11 @@ MCU 前最低范围见[参考工程要求](reference-ecu.md)，包括已调查�
 
 **新基线达成条件：** `quality` 强制 Epic／Story 编号检查为零；旧链路代码已删，打开旧工程明确拒绝；必需 CI 覆盖主线全部不依赖官方档案的原生行为；交付包按所有权分目录且 CMake 与 `ecu-tool` 同清单构建通过；Linux、Windows 各至少一次 acceptance；ABI、第三方身份和资源摘要变化经审阅。
 
-**之后：** 主线上逐模块标准整改（ECU 批次执行、CanIf、LSduR／PduR、COM、CanTp、Dcm、ComM／BswM、Det、OS／SchM、RTE／共享类型；Dem、NvM、Security 已随旧链路删除，不在本 Epic 整改，由 R7 重新实现）→ 主线交付与离线工具验证 → 开发反馈、CI 效率 → 严格生成 C 源码检查成为必需门禁 → 非实现者独立出口复验。已知遗留：Windows 并行 `E_OS_STATE`（若根因在共用 `runtime/os`，迁移时复现并归入 ECU 执行或 OS 整改）；CAN 整改遗留的 MISRA 人工评估与 c-check 清零由各模块承担。
+**之后：** 主线上逐模块标准整改（ECU 批次执行、CanIf、LSduR／PduR、COM、CanTp、Dcm、ComM／BswM、Det、OS／SchM、RTE／共享类型；Dem、NvM、Security 已随旧链路删除，不在本 Epic 整改，由 R7 重新实现）→ 主线交付与离线工具验证 → 开发反馈、CI 效率 → 生成 C 源码不回退门成为必需门禁 → 非实现者独立出口复验。已知遗留：Windows 并行 `E_OS_STATE`（若根因在共用 `runtime/os`，迁移时复现并归入 ECU 执行或 OS 整改）；CAN 整改遗留的 MISRA 人工评估与 c-check 清零归合规线。
 
 Epic 9 出口前，R11 只允许需求与规范研究，消费者实施须等待出口。
 
-严格源码门按 [ADR 0026](../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 区分原始分析与项目验收；局部记录匹配、绿色链路及历史分类不能替代完整证据和真实保护出口。
+严格源码门按 [ADR 0026](../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 区分原始分析与项目验收；Epic 9 出口启用不回退门，完整验收随合规线出口切换（ADR 0027）。
 
 ### 2. R11：扩大 CAN 工程范围
 
