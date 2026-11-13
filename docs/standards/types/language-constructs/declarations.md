@@ -44,3 +44,58 @@ AMD2.27 的语言扩展表没有为 R8.1 追加 C11；其余 AMD1／AMD3／AMD4�
 R1.4／R8.1／R17.3 的语言适用性与 R15.5 的既有 GRP 经本组当前绑定消费，
 其余 140 项保持 `not_assessed` 和 #443 责任。此处重评核对输入身份、工具能力边界
 与已结算四项的条件；每行列明的完整修订合成、当前源码和消费者义务继续按恢复条件推进。
+<!-- source-assessment-context-begin -->
+{
+  "id": "checker-obligations-443-c99-grp",
+  "evidence": {
+    "head": "cb8c9c193cc4626a30e2a923d5917a714b5e7507",
+    "receipt": "https://github.com/g1331/autsaro/commit/cb8c9c193cc4626a30e2a923d5917a714b5e7507"
+  },
+  "cases": [
+    {
+      "caseId": "component-pipeline",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "d82b8477c02fdd59596169a6b379432c2e35c6fa66761299ce898df044f343e2"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "ce0159589ccc0a96a54d55160b148fa380b1ad77cddbe62441edaadf96318dca"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "4ffe82dd37fcb62e1cfb791c5459b24b372f834cb150ebe16c45fde9d610b16a"
+    },
+    {
+      "caseId": "user-application",
+      "target": "linux-x64-controlled-v1",
+      "inputIdentity": "7851b2a5c0a028f6199551a9122d25ff7db1b07d2a6ef99035ffccb8c3a2a440"
+    },
+    {
+      "caseId": "component-pipeline",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "3eb6851c3df6f663e2f4ab67563c1a91528b930996c9b3fe80e2aace05bc9211"
+    },
+    {
+      "caseId": "no-diagnostic",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "e30376d91312fdef082203506c7f5bf20cfae22f3c531641ea035140c1d82ea9"
+    },
+    {
+      "caseId": "standard-ecu",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "1bce304aed32310f53f3db78f42be314bea23888f426754fa306a79fd6892161"
+    },
+    {
+      "caseId": "user-application",
+      "target": "windows-x64-controlled-v1",
+      "inputIdentity": "4199a7fb1828f12ba04429294947ce850d3adea53f766cb17aaf803433a90e76"
+    }
+  ],
+  "records": {
+    "kind": "checker-obligations"
+  },
+  "formalStatus": "approved"
+}
+<!-- source-assessment-context-end -->
