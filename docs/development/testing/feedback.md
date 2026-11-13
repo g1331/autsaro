@@ -2,6 +2,29 @@
 
 先准备锁定依赖与[原生工具](../environment.md)，核对 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT`、`AUTOSAR_PYTHON`；检查共享类型／段符号还需 `AUTOSAR_NM`。缺工具先运行 `uv run --locked python -m autosar_tooling doctor --role native --target linux-x64-controlled-v1`，再检查所选测试的额外工具。下表是 Linux、GCC 13、已准备依赖的同机墙钟实测；首次／重复指该命令第一次及紧接着运行，未清操作系统页缓存。测试 profile 优化依赖与 core（见[基础检查](README.md#基础检查)），首次编译比不优化时慢：`CARGO_BUILD_JOBS=2` 下无 Cargo 构建产物时 `it` 编译约 252 秒，随后首次启用 native feature 另需约 135 秒，不能把准备成本算成行为检查耗时。
 
+## 按改动选择常规检查
+
+```sh
+uv run --locked python -m autosar_tooling verify --scope changed --base origin/master
+```
+
+加 `--list` 只查看命令，不创建产物。入口比较给定分支与 HEAD 的 merge-base，并读取当前工作区的提交、暂存、未暂存及未跟踪文件。已识别改名保留原路径；未暂存删除加未跟踪文件可能是改名，按未知输入处理。空清单、未知路径和改名选择完整检查。PR 与本地入口调用同一 `ci_selection.select_changes`，CI 的 push 仍保留完整非 GUI 矩阵。
+
+| 改动 | 常规本地检查 |
+| --- | --- |
+| 普通读者文档 | diff、全范围 quality、条款清单 |
+| 仅 UI 与普通文档 | 上述检查、Python 测试与 lint、UI lint／test／build、桌面 IPC／test／build／Clippy |
+| 仅独立分析驱动或标准评估记录 | 上述源码检查、Python 测试与 lint、生成四样本、样本 C 语法和 clang-tidy |
+| core／runtime／共享工具／混合／未知输入 | 完整常规组，含全部 core 与 native 测试、Clippy、应用检查和四样本质量检查 |
+
+workflow 改动追加 actionlint／zizmor；依赖清单改动追加原依赖检查。安全检查的完整矩阵继续在 CI 的 quality job 中运行。本地只运行当前主机的命令，双平台、解释器和 GUI 矩阵由必需 CI 验证。
+
+changed 模式使用一个 `native-tests` feature 组合，正常 Cargo 入口枚举全部库、it、native 与 doctests，保留 `--no-fail-fast`。现有 feature 仅增加测试辅助及额外用例；原手选 scope 保持。每次调用新建 `build/local-verification-*`，it 先生成四样本，native 与 clang-tidy 消费同一批字节；跨调用重新生成。成功或空失败时清理目录，有实际失败输入时打印并保留目录，查阅完成后删除。未缓存测试或分析通过结果。
+
+这些是常规检查。C 源码／生成器仍按[生成 C 检查](generated-c.md)执行受影响 profile 的 c-check；OS／进程／独占区按[原生测试](native.md)追加相关 OS、边界与检测器入口；GUI／IPC 按[桌面场景](desktop.md)验收。保持各专题的工具身份、期限、断言及原始失败。
+
+## 模块内的第一轮反馈
+
 以下命令均以 `cargo test --locked -p autosar-config-core` 开头，再接表中参数；测试输出须确认实际运行目标用例，不能把零匹配当作通过。
 
 | 真实修改与落点 | 最快有意义的参数 | 首次／重复 | 升级条件 |
