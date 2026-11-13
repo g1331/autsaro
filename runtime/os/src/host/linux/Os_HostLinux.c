@@ -247,12 +247,13 @@ OS_MEMMAP static DWORD actor_body(void *argument)
     }
     if (registered == 0) {
         ExitProcess(1u);
+    } else {
+        /* Pending requests require initialized TLS and execution-stack state. */
+        if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {
+            ExitProcess(1u);
+        }
+        result = thread->entry(thread->argument);
     }
-    /* Pending stop/suspend requests require initialized TLS and execution-stack state. */
-    if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {
-        ExitProcess(1u);
-    }
-    result = thread->entry(thread->argument);
     /* Hand the original thread stack back to its owner before pthread retirement. */
     if (register_host != 0) {
         if (Os_LinuxAltStack(&previous, NULL) != 0) {
@@ -288,30 +289,24 @@ OS_MEMMAP static void *actor_start(void *argument)
     return NULL;
 }
 
-OS_MEMMAP static int create_actor_thread(HANDLE thread, const pthread_attr_t *attributes)
+OS_MEMMAP static int block_actor_signals(HANDLE thread)
 {
     sigset_t blocked;
     const int suspend_signal = SIGRTMIN;
     int status;
     errno = 0;
-    if (sigemptyset(&blocked) != 0) {
-        return EINVAL;
-    }
-    errno = 0;
-    if (sigaddset(&blocked, suspend_signal) != 0) {
-        return EINVAL;
-    }
-    errno = 0;
-    if (sigaddset(&blocked, suspend_signal + 1) != 0) {
-        return EINVAL;
-    }
-    /* The child inherits this mask before it can receive a shutdown request. */
-    status = pthread_sigmask(SIG_BLOCK, &blocked, &thread->startup_mask);
+    status = sigemptyset(&blocked);
     if (status == 0) {
-        status = pthread_create(&thread->thread, attributes, &actor_start, thread);
-        if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {
-            ExitProcess(1u);
-        }
+        errno = 0;
+        status = sigaddset(&blocked, suspend_signal);
+    }
+    if (status == 0) {
+        errno = 0;
+        status = sigaddset(&blocked, suspend_signal + 1);
+    }
+    if (status == 0) {
+        /* The child inherits this mask before it can receive a shutdown request. */
+        status = pthread_sigmask(SIG_BLOCK, &blocked, &thread->startup_mask);
     }
     return status;
 }
@@ -391,7 +386,13 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         status = pthread_attr_setstacksize(
             &attributes, (reserve > OS_HOST_DEFAULT_STACK) ? reserve : OS_HOST_DEFAULT_STACK);
         if (status == 0) {
-            status = create_actor_thread(thread, &attributes);
+            status = block_actor_signals(thread);
+            if (status == 0) {
+                status = pthread_create(&thread->thread, &attributes, &actor_start, thread);
+                if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {
+                    ExitProcess(1u);
+                }
+            }
         }
         (void)pthread_attr_destroy(&attributes);
     }

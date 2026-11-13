@@ -800,8 +800,10 @@ class NativeFacilityTests(unittest.TestCase):
                     "        _exit(1);\n    }",
                 )
                 replace_once(
-                    "            status = create_actor_thread(thread, &attributes);",
-                    "            status = create_actor_thread(thread, &attributes);\n"
+                    "                if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {\n"
+                    "                    ExitProcess(1u);\n                }\n",
+                    "                if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {\n"
+                    "                    ExitProcess(1u);\n                }\n"
                     "            sigset_t actual;\n"
                     "            if (pthread_sigmask(SIG_SETMASK, NULL, &actual) != 0 ||\n"
                     "                sigismember(&actual, SIGRTMIN) !=\n"
