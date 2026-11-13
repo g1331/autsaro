@@ -75,6 +75,8 @@
 
 ### Fixed
 
+- Linux native actors defer suspend and stop signals until their TLS and execution stack are initialized, preserving the closed lifecycle receipt when startup gate publication fails (#466)
+
 - Source acceptance now binds FreeRTOS, owned-source, generated-retention and SDK evidence to actual translation-unit inputs, preserving evidence across unrelated generator changes; re-run analysis and bind contexts once for the new dependency receipts (#469)
 
 - Source acceptance can consume separately bound SDK integration records at exact source positions, including unreported macro obligations; changed definitions, unrecorded uses and stale evidence remain blocked (#460)

@@ -728,6 +728,128 @@ class NativeFacilityTests(unittest.TestCase):
                             self.assertIn(" threads=3 ", observation["stdout"], observation)
                         print(observation, flush=True)
 
+    @unittest.skipUnless(platform.system() == "Linux", "Linux actor signal protocol")
+    def test_startup_stop_waits_for_actor_initialization(self):
+        import os_suites
+
+        retained = os.environ.get("AUTOSAR_OS_OUTPUT_DIRECTORY")
+        for unchecked in (False, True):
+            output = Path(retained) / f"startup-stop-{unchecked}" if retained else None
+            with (
+                self.subTest(unchecked=unchecked),
+                os_suites.host_target(),
+                os_suites.retained_workspace(output) as directory,
+            ):
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_HostLinux.c"
+                text = source.read_text(encoding="utf-8")
+
+                def replace_once(before, after):
+                    nonlocal text
+                    self.assertEqual(text.count(before), 1)
+                    text = text.replace(before, after)
+
+                replace_once(
+                    "OS_MEMMAP static void *actor_start(void *argument)",
+                    "static HANDLE startup_actor;\n"
+                    "static unsigned startup_created;\n"
+                    "static int32_t startup_paused;\n"
+                    "static int32_t startup_released;\n"
+                    "OS_MEMMAP static void *actor_start(void *argument)",
+                )
+                # C and D are created first; hold the first Task before TLS publication.
+                replace_once(
+                    "    thread->exit_code = 0u;\n    status = pthread_attr_init(&attributes);",
+                    "    thread->exit_code = 0u;\n"
+                    "    if (++startup_created == 3u) {\n"
+                    "        startup_actor = thread;\n    }\n"
+                    "    status = pthread_attr_init(&attributes);",
+                )
+                replace_once(
+                    "    current_thread = thread;\n    OS_LINUX_STACK_START",
+                    "    if (thread == startup_actor) {\n"
+                    "        (void)InterlockedExchange(&startup_paused, 1);\n"
+                    "        futex_wake(&startup_paused);\n"
+                    "        while (InterlockedCompareExchange(&startup_released, 0, 0) == 0) {\n"
+                    "            futex_wait(&startup_released, 0);\n        }\n    }\n"
+                    "    current_thread = thread;\n    OS_LINUX_STACK_START",
+                )
+                replace_once(
+                    "        (void)InterlockedExchange(&thread->requested, INT32_MAX);\n",
+                    "        if (thread == startup_actor) {\n"
+                    "            while (InterlockedCompareExchange(&startup_paused, 0, 0) == 0) {\n"
+                    "                futex_wait(&startup_paused, 0);\n            }\n        }\n"
+                    "        (void)InterlockedExchange(&thread->requested, INT32_MAX);\n",
+                )
+                replace_once(
+                    "        if (pthread_kill(thread->thread, SIGRTMIN + 1) == 0) {\n",
+                    "        if (thread == startup_actor) {\n"
+                    '            (void)Os_HostWriteBytes(1, "startup_stop=before_tls\\n", 24u);\n'
+                    "        }\n"
+                    "        if (pthread_kill(thread->thread, SIGRTMIN + 1) == 0) {\n"
+                    "            if (thread == startup_actor) {\n"
+                    "                (void)InterlockedExchange(&startup_released, 1);\n"
+                    "                futex_wake(&startup_released);\n            }\n",
+                )
+                replace_once(
+                    "    if (thread == NULL) {\n        _exit(1);\n    }",
+                    "    if (thread == NULL) {\n"
+                    '        (void)Os_HostWriteBytes(1, '
+                    '"startup_stop=tls_uninitialized\\n", 31u);\n'
+                    "        _exit(1);\n    }",
+                )
+                replace_once(
+                    "            if (pthread_sigmask(SIG_SETMASK, "
+                    "&thread->startup_mask, NULL) != 0) {\n"
+                    "                ExitProcess(1u);\n            }\n",
+                    "            if (pthread_sigmask(SIG_SETMASK, "
+                    "&thread->startup_mask, NULL) != 0) {\n"
+                    "                ExitProcess(1u);\n            }\n"
+                    "            sigset_t actual;\n"
+                    "            if (pthread_sigmask(SIG_SETMASK, NULL, &actual) != 0 ||\n"
+                    "                sigismember(&actual, SIGRTMIN) !=\n"
+                    "                    sigismember(&thread->startup_mask, SIGRTMIN) ||\n"
+                    "                sigismember(&actual, SIGRTMIN + 1) !=\n"
+                    "                    sigismember(&thread->startup_mask, SIGRTMIN + 1)) {\n"
+                    "                ExitProcess(92u);\n            }",
+                )
+                if unchecked:
+                    replace_once(
+                        "pthread_sigmask(SIG_BLOCK, &blocked, &thread->startup_mask)",
+                        "pthread_sigmask(SIG_BLOCK, NULL, &thread->startup_mask)",
+                    )
+                source.write_text(text, encoding="utf-8")
+                backend = target / "src/Os_Backend.c"
+                text = backend.read_text(encoding="utf-8")
+                replace_once(
+                    "    ++task_thread_count;\n    if (Os_HostSetEvent(start->gate) == 0) {\n",
+                    "    ++task_thread_count;\n    if (0 == 0) {\n",
+                )
+                backend.write_text(text, encoding="utf-8")
+                build = directory / "build"
+                build.mkdir()
+                with os_suites.native_session(directory, "startup-stop"):
+                    binary, _ = os_suites.build(build, "native_stack.c", target=target)
+                    observation = os_suites.execute(binary, "normal")
+                self.assertEqual(observation["exit"], 1 if unchecked else 7, observation)
+                self.assertEqual(
+                    observation["stderr"],
+                    "startup_stop=before_tls"
+                    + ("\nstartup_stop=tls_uninitialized" if unchecked else ""),
+                    observation,
+                )
+                if unchecked:
+                    self.assertEqual(observation["stdout"], "", observation)
+                else:
+                    self.assertIn(
+                        "lifecycle=Closed state=Failed reason=7",
+                        observation["stdout"],
+                        observation,
+                    )
+                    self.assertIn(" threads=3 ", observation["stdout"], observation)
+                print(f"startup-stop unchecked={unchecked} {observation}", flush=True)
+
     def test_stack_fault_and_ordinary_close_publish_reason_atomically(self):
         import os_suites
 

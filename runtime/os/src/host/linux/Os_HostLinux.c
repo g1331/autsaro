@@ -56,6 +56,7 @@ struct Os_HostHandleType {
     size_t mapping_size;
     size_t guard_size;
     int register_host;
+    sigset_t startup_mask; /**< Creator mask restored after actor initialization. */
     volatile int32_t requested;
     volatile int32_t acknowledged;
     volatile int32_t resumed;
@@ -247,6 +248,10 @@ OS_MEMMAP static DWORD actor_body(void *argument)
     if (registered == 0) {
         ExitProcess(1u);
     } else {
+        /* Pending requests require initialized TLS and execution-stack state. */
+        if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {
+            ExitProcess(1u);
+        }
         result = thread->entry(thread->argument);
     }
     /* Hand the original thread stack back to its owner before pthread retirement. */
@@ -282,6 +287,28 @@ OS_MEMMAP static void *actor_start(void *argument)
     __atomic_store_n(&thread->ended, 1, __ATOMIC_RELEASE);
     futex_wake(&thread->ended);
     return NULL;
+}
+
+OS_MEMMAP static int block_actor_signals(HANDLE thread)
+{
+    sigset_t blocked;
+    const int suspend_signal = SIGRTMIN;
+    int status;
+    errno = 0;
+    status = sigemptyset(&blocked);
+    if (status == 0) {
+        errno = 0;
+        status = sigaddset(&blocked, suspend_signal);
+    }
+    if (status == 0) {
+        errno = 0;
+        status = sigaddset(&blocked, suspend_signal + 1);
+    }
+    if (status == 0) {
+        /* The child inherits this mask before it can receive a shutdown request. */
+        status = pthread_sigmask(SIG_BLOCK, &blocked, &thread->startup_mask);
+    }
+    return status;
 }
 
 /* MR12 DIR 4.12 VIOLATION: the guarded execution stack preserves preemption and ARTI identity;
@@ -359,7 +386,13 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
         status = pthread_attr_setstacksize(
             &attributes, (reserve > OS_HOST_DEFAULT_STACK) ? reserve : OS_HOST_DEFAULT_STACK);
         if (status == 0) {
+            status = block_actor_signals(thread);
+        }
+        if (status == 0) {
             status = pthread_create(&thread->thread, &attributes, &actor_start, thread);
+            if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {
+                ExitProcess(1u);
+            }
         }
         (void)pthread_attr_destroy(&attributes);
     }
