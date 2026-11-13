@@ -387,11 +387,11 @@ OS_MEMMAP HANDLE Os_HostCreateActor(SIZE_T stack,
             &attributes, (reserve > OS_HOST_DEFAULT_STACK) ? reserve : OS_HOST_DEFAULT_STACK);
         if (status == 0) {
             status = block_actor_signals(thread);
-            if (status == 0) {
-                status = pthread_create(&thread->thread, &attributes, &actor_start, thread);
-                if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {
-                    ExitProcess(1u);
-                }
+        }
+        if (status == 0) {
+            status = pthread_create(&thread->thread, &attributes, &actor_start, thread);
+            if (pthread_sigmask(SIG_SETMASK, &thread->startup_mask, NULL) != 0) {
+                ExitProcess(1u);
             }
         }
         (void)pthread_attr_destroy(&attributes);
