@@ -293,7 +293,8 @@ jobs:
           from pathlib import Path
           groups = {
               'protocol': ['integration::protocol::'],
-              'projects': ['integration::sealed_projects::', 'integration::single_component::'],
+              'projects': ['integration::sealed_projects::', 'integration::single_component::',
+                  'integration::release_contracts::'],
               'integration': ['integration::'],
               'rest': [],
           }

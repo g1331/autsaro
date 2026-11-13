@@ -7,6 +7,8 @@ runs:
       id: msys2
       if: runner.os == 'Windows'
       with:
+        # Reuse the hosted image; GCC/binutils are still installed and verified below.
+        release: false
         msystem: MINGW64
         path-type: inherit
     - name: Install locked native GCC
