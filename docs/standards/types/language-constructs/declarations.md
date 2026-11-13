@@ -50,51 +50,51 @@ AMD2.27 的语言扩展表没有为 R8.1 追加 C11；其余 AMD1／AMD3／AMD4�
 实际局部证据摘要在正文修改前后保持，已有具体诊断消费及其他组状态保持。
 <!-- source-assessment-context-begin -->
 {
-  "id": "checker-obligations-443-c99-grp",
+  "id": "checker-obligations-443-lexical",
   "evidence": {
-    "head": "cb8c9c193cc4626a30e2a923d5917a714b5e7507",
-    "receipt": "https://github.com/g1331/autsaro/commit/cb8c9c193cc4626a30e2a923d5917a714b5e7507"
+    "head": "fd217a143785cf634807cb66761751fcabe23704",
+    "receipt": "https://github.com/g1331/autsaro/issues/443#issuecomment-6850947544"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "d82b8477c02fdd59596169a6b379432c2e35c6fa66761299ce898df044f343e2"
+      "inputIdentity": "af3e6de0bd5b16a11a5bc623aca399ab8b0d92805cf48d3d57d126a7dd1124a9"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "ce0159589ccc0a96a54d55160b148fa380b1ad77cddbe62441edaadf96318dca"
+      "inputIdentity": "cb413519a0a4abefade39e0612a44ff05e793048eefec480882add7cd8fa204e"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "4ffe82dd37fcb62e1cfb791c5459b24b372f834cb150ebe16c45fde9d610b16a"
+      "inputIdentity": "dbc87fdfbfcc708dbf3a648e0d45e8fa46057e2c088c3060b5fa1f6b9bc77299"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "7851b2a5c0a028f6199551a9122d25ff7db1b07d2a6ef99035ffccb8c3a2a440"
+      "inputIdentity": "4627f7bf043ac79fd7d73f04427f3e1f007fee5824dbc9f36c87bfd12707a468"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "3eb6851c3df6f663e2f4ab67563c1a91528b930996c9b3fe80e2aace05bc9211"
+      "inputIdentity": "bfa6acf7665c560a7e3700b2c63ed1a3b1ae9ecaedf6423a023849453fd94d37"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "e30376d91312fdef082203506c7f5bf20cfae22f3c531641ea035140c1d82ea9"
+      "inputIdentity": "4df4f5792630a509bb00da7c6ca11d6cfbb9b8bcf80efac870f6fb468ddc63c2"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "1bce304aed32310f53f3db78f42be314bea23888f426754fa306a79fd6892161"
+      "inputIdentity": "3d46e621d6a2a051ff5e1957517787f0f240a35f24c02dc02ca5c7f11723be8a"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "4199a7fb1828f12ba04429294947ce850d3adea53f766cb17aaf803433a90e76"
+      "inputIdentity": "54284a4d068f83d9cd723e783148721ecb0c2932b27705c80a4b6c26bee4ae66"
     }
   ],
   "records": {
