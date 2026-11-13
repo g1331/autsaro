@@ -70,7 +70,7 @@ Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元�
 
 ## 主机时序与间歇失败
 
-- 主机逐 tick 握手须由事件直接唤醒。Windows 的 1 ms 等待可舍入为约 15.6 ms；Linux eventfd 用阻塞 poll，避免零超时检查后休眠。用线程握手固定发布／等待顺序，以原单批预算、EINTR 剩余期限、重置与索引顺序及撤去修复后的失败验证。
+- 主机逐 tick 握手须由事件直接唤醒。Windows 的 1 ms 等待可舍入为约 15.6 ms；Linux eventfd 用阻塞 poll，mutex 竞争按解锁代次等待；避免零超时检查后休眠。用线程握手固定发布／等待顺序，以原单批预算、EINTR 剩余期限、重置与索引顺序及撤去修复后的失败验证。
 - 宿主线程不得忙等：FreeRTOS 空闲 hook 每轮让出主机 CPU（`idle_state` 的 `host-yield` 场景），否则每个 ECU 进程占满一个 CPU，并在部分机型上拖慢跨线程交接。
 - Windows 托管 runner 混用 AMD EPYC 9V45／9V74／7763 与 Intel Xeon 8370C／8573C，只在一种机型出现的时序失败（#61：9V45 上另一 vCPU 忙等时，跨线程唤醒有约 2 ms 停顿）要按 CPU 型号记录，在同一 runner 上配对比较变体；筛选机型用读取型号后立即结束的小矩阵，不用大矩阵随机抽样占用共享 runner。
 - 子进程失败消息须带 stdout／stderr 的内容，不能只给随 scratch 目录删除的日志路径：共用执行入口（`ProcessOwner::run`、`ecu_tools.process.run_bounded`）与测试的 `tooling::wait_success` 已默认附带输出末尾，新的失败路径沿用它们，不另写只报路径的错误。 调整共用执行入口时，保留各调用方的相对源对象与失败解释，并覆盖同一原因涉及的其他调用点；阶段名或宿主绝对路径不能替代这层上下文。排查 CI 失败先下载 `native-scratch-*`／`os-suites-*` 现场，不靠猜测重跑。
