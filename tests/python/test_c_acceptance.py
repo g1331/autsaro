@@ -461,6 +461,99 @@ class AcceptanceTests(unittest.TestCase):
             destination.write(c_acceptance.BEGIN + "\n" + json.dumps(context)
                               + "\n" + c_acceptance.END + "\n")
 
+    def sdk_octal_inputs(self):
+        self.sdk_inputs()
+        self.sdk_text = 'descriptor = open("/proc/self/maps", O_RDONLY);'
+        source = (self.sdk_text + "\nint other = 01;\n").encode()
+        original = next(key for key, value in self.origins.items() if value == self.sdk_name)
+        (self.root / original).write_bytes(source)
+        self.files[self.sdk_name] = source
+        self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+            "path": self.sdk_name, "owner": "runtime", "producerId": "autosar-generator",
+            "sha256": hashlib.sha256(source).hexdigest(),
+        }]}).encode()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        use = c_sdk.source_code(self.sdk_text)
+        definition = {"file": self.sdk_header["path"], "line": 43, "value": "00",
+                      "function": False, "use": use, "unresolved": False}
+        self.summary["scope"]["sdkMacroInputs"][self.sdk_name] = {
+            self.sdk_name + ":1": {"O_RDONLY": definition}}
+        self.sdk_record = {"definitions": {"O_RDONLY": {"O_RDONLY": {
+            **{key: definition[key] for key in ("line", "value", "function")},
+            **{key: self.sdk_header[key] for key in ("header", "provider", "version", "sha256")}
+        }}}, "sites": [{"target": TARGET, "rule": "7.1", "file": self.sdk_name,
+                       "line": 1, "symbol": "O_RDONLY", "text": use}]}
+        self.write_sdk_record()
+        self.summary["diagnostics"] = [{"id": "misra-c2012-7.1",
+            "programs": ["host-batch", "probe"], "adopted": False, "patched": False,
+            "locations": [{"file": self.sdk_name, "line": "1",
+                           "column": str(self.sdk_text.index("O_RDONLY") + 1)}]}]
+        self.bind_sdk()
+
+    def test_sdk_octal_macro_consumes_exact_use_and_zero_diagnostic_obligation(self):
+        self.sdk_octal_inputs()
+        before = copy.deepcopy(self.summary)
+        result = self.evaluate()
+        self.assertEqual(result["occurrences"][0]["reason"], "sdk_integration_verified")
+        self.assertEqual(result["occurrences"][0]["assessment"], "accepted")
+        self.assertEqual(result["sdkObligations"], [{
+            "rule": "7.1", "location": {"file": self.sdk_name, "line": 1},
+            "entity": "O_RDONLY", "record": c_acceptance.SDK}])
+        self.assertEqual(self.summary, before)
+        self.summary["diagnostics"] = []
+        self.write_sdk_record()
+        self.bind_sdk()
+        result = self.evaluate()
+        self.assertEqual(result["occurrences"], [])
+        self.assertEqual(result["sdkObligations"][0]["entity"], "O_RDONLY")
+        self.assertFalse(any(row["id"] == "sdk-integration" for row in result["objects"]))
+
+    def test_sdk_octal_outside_macro_position_or_program_remains_blocked(self):
+        self.sdk_octal_inputs()
+        baseline = copy.deepcopy(self.summary["diagnostics"])
+        for change in ({"line": "2", "column": "13"}, {"column": "1"},
+                       {"column": str(len('descriptor = open("/proc/self/maps", O_RDONLY);'))},
+                       {"file": "other.c"}, {"programs": ["other-program"]}):
+            with self.subTest(change=change):
+                self.summary["diagnostics"] = copy.deepcopy(baseline)
+                diagnostic = self.summary["diagnostics"][0]
+                if "programs" in change:
+                    diagnostic["programs"] = change["programs"]
+                else:
+                    diagnostic["locations"][0].update(change)
+                self.write_sdk_record()
+                self.bind_sdk()
+                result = self.evaluate()
+                if "programs" in change:
+                    self.assertEqual(result["status"], "error")
+                    self.assertEqual(result["objects"][-1]["reason"],
+                                     "Diagnostic program membership incomplete")
+                    metadata = json.loads((self.project / "meta/integration.json").read_text())
+                    positions, _ = c_acceptance._sdk_positions(
+                        self.summary, self.project, metadata, self.root, None)
+                    self.assertEqual(positions, {})
+                else:
+                    occurrence = result["occurrences"][0]
+                    self.assertEqual(occurrence["assessment"], "blocked")
+                    self.assertEqual(occurrence["location"], diagnostic["locations"][0])
+
+    def test_sdk_octal_new_use_or_definition_requires_reassessment(self):
+        self.sdk_octal_inputs()
+        values = self.summary["scope"]["sdkMacroInputs"][self.sdk_name]
+        values[self.sdk_name + ":2"] = copy.deepcopy(values[self.sdk_name + ":1"])
+        self.write_sdk_record()
+        self.bind_sdk()
+        result = self.evaluate()
+        self.assertIn("unrecorded use: " + self.sdk_name + ":2", result["objects"][-1]["reason"])
+        del values[self.sdk_name + ":2"]
+        values[self.sdk_name + ":1"]["O_RDONLY"]["value"] = "01"
+        self.write_sdk_record()
+        self.bind_sdk()
+        result = self.evaluate()
+        self.assertIn("definition differs: " + self.sdk_name + ":1:O_RDONLY",
+                      result["objects"][-1]["reason"])
+
     def test_sdk_exact_position_consumption_preserves_raw_and_other_groups(self):
         self.sdk_inputs()
         before = copy.deepcopy(self.summary)
@@ -744,11 +837,11 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
-        self.assertEqual(len(objects), 131)
+        self.assertEqual(len(objects), 124)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 131)
+        self.assertEqual(len(located), 124)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -765,7 +858,8 @@ class AcceptanceTests(unittest.TestCase):
                              "docs/standards/types/language-constructs/" + filename)
         satisfied = {row["id"]: row for row in records if row["status"] == "satisfied"}
         lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.4", "R6.1", "R6.2"}
-        self.assertEqual(set(satisfied), lexical | {"R7.3", "R15.5"})
+        declarations = {"R8.10", "R8.11", "R8.12", "R8.14", "R9.4", "R9.5"}
+        self.assertEqual(set(satisfied), lexical | declarations | {"R7.1", "R7.3", "R15.5"})
         self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
         for guideline in lexical:
             self.assertEqual(satisfied[guideline]["source"]["file"],
@@ -773,7 +867,7 @@ class AcceptanceTests(unittest.TestCase):
         by_id = {row["id"]: row for row in records}
         self.assertEqual(by_id["R7.2"]["status"], "not_assessed")
         self.assertIn("#if／#elif", by_id["R7.2"]["conclusion"])
-        self.assertEqual(by_id["R7.1"]["status"], "not_assessed")
+        self.assertEqual(by_id["R7.1"]["status"], "satisfied")
         self.assertIn("O_RDONLY→00", by_id["R7.1"]["conclusion"])
         self.assertIn("sdk-integration", satisfied["R7.3"]["conclusion"])
         self.assertIn("Dcm_MsgAddInfoType", satisfied["R6.1"]["conclusion"])
@@ -783,8 +877,32 @@ class AcceptanceTests(unittest.TestCase):
                            "R2.7", "R5.3", "R5.6", "R5.8", "R5.9", "R7.1", "R7.2",
                            "R7.3", "R7.4"}
         self.assertEqual(len(batch), 24)
-        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 9)
-        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 15)
+        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 10)
+        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 14)
+        blocked = {"R8.2", "R8.3", "R8.4", "R8.5", "R8.6", "R8.7", "R8.9", "R8.13",
+                   "R9.1", "R9.2", "R9.3"}
+        for guideline in declarations | blocked:
+            self.assertEqual(by_id[guideline]["status"],
+                             "not_assessed" if guideline in blocked else "satisfied")
+            self.assertEqual(by_id[guideline]["source"]["file"],
+                             "docs/standards/types/language-constructs/declarations.md")
+        self.assertIn("#if／#elif", by_id["R7.1"]["conclusion"])
+        self.assertIn("Os_InterruptVectorTable[32]", by_id["R8.11"]["conclusion"])
+        self.assertIn("AMD4.47–50", by_id["R9.4"]["conclusion"])
+        self.assertIn("[30u]", by_id["R9.5"]["conclusion"])
+        sdk_text = (ROOT / c_acceptance.SDK).read_text(encoding="utf-8")
+        sdk_record = json.loads(re.search(
+            r"<!-- sdk-integration-records-begin -->\s*(.*?)"
+            r"\s*<!-- sdk-integration-records-end -->", sdk_text, re.DOTALL)[1])
+        self.assertEqual([row for row in sdk_record["sites"] if row["rule"] == "7.1"], [{
+            "target": TARGET, "rule": "7.1", "file": "os/src/host/linux/Os_LinuxNative.c",
+            "line": 180, "symbol": "O_RDONLY",
+            "text": "descriptor = open(                 , O_RDONLY);"}])
+        self.assertEqual(sdk_record["definitions"]["O_RDONLY"], {"O_RDONLY": {
+            "line": 43, "value": "00", "function": False,
+            "header": "usr/include/x86_64-linux-gnu/bits/fcntl-linux.h",
+            "provider": "libc6-dev", "version": "2.39-0ubuntu8.9",
+            "sha256": "8d50bc7737bcc76f42b1f406244acb287bcf0463d180b6b0566d27d1f23b3e98"}})
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
