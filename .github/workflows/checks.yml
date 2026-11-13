@@ -49,58 +49,27 @@ jobs:
           BASE: ${{ github.event.before }}
         run: |
           import json, os, subprocess
-          documentation = ('docs/', '.agents/', '.claude/', '.codex/', '.impeccable/', '.github/ISSUE_TEMPLATE/')
-          drivers = {'tools/python/src/autosar_tooling/' + name + '.py'
-              for name in ('c_check', 'c_acceptance', 'c_sdk', 'c_comparison', 'c_addon')}
-          def is_analysis(path):
-              return (path in drivers or path == '.agents/skills/misra-c2012/references/baseline-index.json'
-                  or path.startswith('docs/standards/') and path.endswith('.md')
-                  and not path.startswith('docs/standards/rte/generated-retention/'))
-          def is_documentation(path):
-              if path.startswith(('docs/standards/', 'docs/official/')) or path in drivers or path == '.agents/skills/misra-c2012/references/baseline-index.json':
-                  return False
-              if path.startswith(documentation) or path == '.github/PULL_REQUEST_TEMPLATE.md':
-                  return True
-              # Nested runtime Markdown, LICENSE and NOTICE are delivered assets.
-              return '/' not in path and path.endswith('.md')
-          code = native = analysis = application = True
-          listing = None
+          from autosar_tooling.ci_selection import select_changes
+          rows = None
           if os.environ['PULL_REQUEST']:
               pages = json.loads(subprocess.run(['gh', 'api', '--paginate', '--slurp',
                   f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PULL_REQUEST']}/files"],
                   check=True, capture_output=True, text=True).stdout)
               rows = [row for page in pages for row in page]
-              listing = [path for row in rows for path in (row['filename'], row.get('previous_filename')) if path]
-              reliable = bool(rows) and len(rows) < 3000 and all(
-                  row['status'] in {'modified', 'added', 'removed'} and not row.get('previous_filename') for row in rows)
-              if reliable:
-                  code = not all(map(is_documentation, listing))
-                  analysis_only = all(row['status'] == 'modified' and is_analysis(row['filename']) for row in rows)
-                  native = code and not analysis_only and not all(
-                      is_documentation(path) or path.startswith('ui/') for path in listing)
-                  analysis = code and (native or analysis_only)
-                  application = code and not analysis_only
-              print('\n'.join(listing))
-          if not os.environ['PULL_REQUEST'] and os.environ.get('BASE') and set(os.environ['BASE']) != {'0'}:
-              diff = subprocess.run(['git', 'diff', '--no-renames', '--name-only', os.environ['BASE'], os.environ['GITHUB_SHA']],
-                  capture_output=True, text=True)
-              listing = diff.stdout.split() if diff.returncode == 0 else None
-          desktop_paths = ('ui/', 'src-tauri/', 'core/', 'runtime/', 'tests/desktop/', 'tools/python/',
-              'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.node-version', '.python-version',
-              'pyproject.toml', 'uv.lock', 'LICENSE', 'NOTICE', '.github/actions/', '.github/workflows/checks.yml',
-              '.github/workflows/desktop.yml', 'tests/python/test_ci_selection.py', 'tests/python/test_desktop_workflow.py')
-          non_desktop = ('docs/', 'tests/python/', 'scripts/', 'fuzz/', '.github/', '.agents/')
-          unknown = listing is not None and any(not (is_documentation(path) or is_analysis(path)
-              or path.startswith(desktop_paths + non_desktop)) for path in listing)
-          desktop = application and (unknown or listing is None or not listing or len(listing) >= 3000
-              or any(path.startswith(desktop_paths) for path in listing))
-          if os.environ['PULL_REQUEST'] and not reliable:
-              desktop = True
-          values = dict(code=code, native=native, desktop=desktop, analysis=analysis, application=application)
+          elif os.environ.get('BASE') and set(os.environ['BASE']) != {'0'}:
+              diff = subprocess.run(['git', 'diff', '--no-renames', '--name-only',
+                  os.environ['BASE'], os.environ['GITHUB_SHA']], capture_output=True, text=True)
+              if diff.returncode == 0:
+                  rows = [dict(filename=path, status='modified') for path in diff.stdout.split()]
+          if rows is not None:
+              print('\n'.join(path for row in rows
+                  for path in (row['filename'], row.get('previous_filename')) if path))
+          values = select_changes(rows, pull_request=bool(os.environ['PULL_REQUEST']))
           print(values)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-              for name, value in values.items():
-                  output.write(name + '=' + str(value).lower() + '\n')
+              for key, value in values.items():
+                  output.write(key + '=' + str(value).lower() + '\n')
+
   desktop-scenarios:
     needs: changes
     if: needs.changes.outputs.desktop == 'true'

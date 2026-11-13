@@ -25,10 +25,14 @@ def main() -> int:
     )
     aggregate = commands.add_parser("verify", help="Run project checks sequentially")
     aggregate.add_argument(
-        "--scope", choices=("core", "ui", "desktop", "all"), required=True
+        "--scope", choices=("core", "ui", "desktop", "all", "changed"), required=True
     )
     aggregate.add_argument(
-        "--base", help="Incremental quality baseline for the all gate"
+        "--base", help="Quality baseline; changed scope uses its merge-base (default: origin/master)"
+    )
+    aggregate.add_argument(
+        "--list", action="store_true", dest="list_checks",
+        help="List changed-scope checks without running tools or creating output",
     )
     quality = commands.add_parser(
         "quality", help="Check source hygiene and incremental formatting"
@@ -139,7 +143,9 @@ def main() -> int:
     if args.command == "verify":
         from autosar_tooling.verify import verify
 
-        return verify(args.scope, args.base)
+        if args.list_checks and args.scope != "changed":
+            parser.error("verify --list requires --scope changed")
+        return verify(args.scope, args.base, list_checks=args.list_checks)
     if args.command == "quality":
         from autosar_tooling.quality import main as check_quality
 

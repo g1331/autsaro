@@ -27,6 +27,7 @@ EXEMPT = {
     "tools/python/src/autosar_tooling/verify.py",
     "tools/python/src/autosar_tooling/diagnostics.py",
     "tools/python/src/autosar_tooling/cli.py",
+    "tools/python/src/autosar_tooling/ci_selection.py",
 }
 UI_PATH = re.compile(r"""["'/\\]ui[/\\"']""")
 
