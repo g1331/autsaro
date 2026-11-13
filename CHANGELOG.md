@@ -59,6 +59,8 @@
 
 ### Added
 
+- Local verification can select checks from working-tree changes with `verify --scope changed`, sharing CI classification and fresh analysis samples (#475)
+
 - Project source acceptance independently checks the 144 checker-covered guidelines outside the fixed eleven limitations; missing manual evidence and stale assessment contexts remain explicit blockers (#459)
 
 - C-analysis results include independent project acceptance with frozen source, configuration, program and assessment identities; `c-acceptance --analysis` revalidates complete artifacts and rejects stale, unknown or incomplete evidence without rewriting raw analyzer results (#428)

@@ -32,6 +32,17 @@ uv run --locked ruff check tools tests/python scripts
 uv run --locked python -m autosar_tooling quality --merge-base origin/master
 ```
 
+按实际改动选择常规本地检查：
+
+```sh
+uv run --locked python -m autosar_tooling verify --scope changed --base origin/master
+uv run --locked python -m autosar_tooling verify --scope changed --base origin/master --list
+```
+
+第二条只列出检查，不运行工具或创建输出。分类与 CI 共用规则，包含提交、暂存、未暂存和未跟踪改动；改名与未知输入选择完整检查。changed 模式用同一 `native-tests` feature 运行 core 测试，同次调用共享新生成的样本。原有手选 scope 保持原行为。[本地反馈指南](docs/development/testing/feedback.md) 列出所选检查，以及各任务还需执行的 C、OS、检测器和桌面专项验收。
+
+共享编译缓存作为可选配置。开发者安装 `sccache` 后，可在 Cargo 或验证命令的环境中试用 `RUSTC_WRAPPER=sccache CARGO_INCREMENTAL=0`，用 `sccache --show-stats` 核对实际命中。[Rust 缓存约束](https://github.com/mozilla/sccache/blob/main/docs/Rust.md) 涉及增量编译、链接产物和工作目录身份，按所用工作树实测。默认命令无需缓存服务；并发构建保留各工作树独立的 Cargo target，uv 沿用正常共享缓存。
+
 执行一次 `uv run --locked pre-commit install --allow-missing-config`，之后每次推送前自动运行上面最后一条 `quality`，未通过时阻止推送；它不替代 CI 的同一检查。`--allow-missing-config` 让尚无该配置的旧分支（共用同一 `.git/hooks` 的工作树也在内）照常推送。
 
 `quality` 按索引及未被忽略的未跟踪路径读取工作区内容，包括未暂存修改。卫生检查先于改动行过滤；`--base` 和 `--merge-base` 只选比较基准，不选择源码快照。已安装的 pre-push 钩子通过 pre-commit 临时收起已跟踪文件的未暂存修改，完成后恢复；未跟踪文件仍参与检查。直接运行时，合法工作区内容可能遮蔽索引违规；暂存修复也可能遮蔽待推送提交中的违规。验证推送前先提交需要交付的修复。

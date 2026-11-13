@@ -58,6 +58,27 @@ AMD2.47–49 和 TC2.7–8 的可变实参例外。其余修订未改变本表�
 | R5.9 | Advisory | 内部链接名称与全部其他实体 | not_assessed | 主文 57–58 及 TC1 的主体更正约束内部链接定义名字；同头 static inline 有明确例外。Os_Service／Ecu_Status 的 inline 与各 C 私有函数、局部对象须按实际声明头身份比较；同号入口只保存 identifier CTU 摘要。#443 仍须逐程序完成内部实体及其余 namespace 比较，逐个识别同头 inline 例外，保留采用原件与项目补丁归属。 |
 | R6.1 | Required | 项目位域及实际声明类型／消费者 | satisfied | 主文 58–59、AMD2.41–43 允许 C99 实现支持的显式有符号／无符号类型及 bool，可经 typedef。当前物理与实际展开的项目位域仅 Dcm_MsgAddInfoType 的 reqType／suppressPosResponse；两目标 uint8→uint8_t→unsigned char，实际 GCC C99 编译接受。Dcm 接收初始化／子功能提取写入，响应抑制读取后者；无项目 union 位域或其他 typedef 位域候选。 |
 | R6.2 | Required | 有名的一位位域 | satisfied | 主文 59、AMD2.44–45 区分有名与无名位域。Dcm_MsgAddInfoType 的 reqType／suppressPosResponse 均有名、宽度 1，实际 typedef 展开为 unsigned char；Dcm 的 0／1 写入和抑制判断沿 R6.1 的直接消费者。全部物理及实际展开已核对，项目补丁无新增位域，未发现有符号一位对象。 |
-| R7.1 | Required | 原 token、条件和实际展开整数 | not_assessed | 主文 59–60 仅允许单数字 0；固定正则漏带后缀八进制。原文件自有／patch 常量无八进制，实际 Linux 每 profile 的 Os_LinuxMappedStack→open 使用点仍展开 O_RDONLY→00；Windows 项目使用点无八进制候选。该非 ISO SDK 暴露沿 [既有缺口](../essential-types/expressions.md#sdk-整数字面量的实际展开)，#443 仍须取得项目侧类别处置及当前条件控制证据，按 ADR 0025 核对来源／风险和复核；本批未批准新偏离。 |
+| R7.1 | Required | 原 token、条件和实际展开整数 | satisfied | 主文 59–60／PDF 67–68、AMD2.27；固定 raw token 入口遗漏宏后八进制。当前实际展开仅 Linux Os_LinuxMappedStack 的 open 实参 O_RDONLY→00，按 #476 批准接入 sdk-integration 精确类别、glibc 原头及 HostBatch／probe；保持只读、descriptor／read／close 检查。物理项目／patch 的 #if／#elif 与全部实际 -dD 定义作保守传递闭包，无八进制 token 或 ## 生产者；普通展开／未选分支另核，无类别外自有八进制。头身份、使用点、程序或输入改变即重评。 |
 | R7.4 | Required | 字符串到对象、返回及函数实参 | not_assessed | AMD2.47–49 更新宽／UTF 字面量的地址与 const 对象义务，TC2.7–8 只豁免可变参数部分。固定入口仅识别简单目标／实参／返回声明。当前 open 的路径字符串、HostBatch 输出和 assert 展开可定位；#443 仍须对普通及带前缀字面量逐个追踪 typedef、地址运算、条件表达式、间接调用和跨 TU 别名到直接消费者，分别判断固定参数与可变实参例外。 |
 <!-- misra-checker-obligations-end -->
+
+## R7.1 当前条件控制证据
+
+本批初次沿 master 正常 run 43410036518 复核。同步 #470 后，最终复核使用成功
+run 43411175434、实际测试树 73caf622 的完整输入；新增启动信号掩码使用
+SIG_BLOCK／SIG_SETMASK，实际值为单个零／十进制 2，O_RDONLY 的使用点及原头保持。对每个 profile 的当前
+自有／生成／应用和项目 patch，先处理 C 行拼接、注释和字符／字符串，再列出物理
+`#if`／`#elif` 的数值 token 与标识符；包含未选的项目分支。实际 GCC `-E -dD`
+的 define／undef 提供本次所有定义，取其保守并集并递归追踪条件可达替换列表。
+该并集覆盖使用时刻的活动定义；所有候选均无八进制 token，传递链无 `##`，
+因此该条词法性质无需推测被 `-E` 消去的分支结果。单个数字零及八进制转义按主文
+例外分别识别。编译器特征查询由实际 GCC 内建提供，项目没有替代定义。
+
+Linux 的 standard／user、component、no-diagnostic 分别有 813、853、827 个物理
+条件，条件及传递定义涉及 289、310、297 个标识符；Windows 分别为 812、852、826
+和 287、308、295。计数包含重复头条件的物理文件，作为核查范围，结论来自完整 token
+及替换链检查。普通实际展开和项目 patch 另核，唯一八进制使用为
+`Os_LinuxNative.c:180` 的 `O_RDONLY→00`，来自固定 glibc 原头。
+[SDK 原篇](../../os/sdk.md#当前集成义务与类别处置)保留批准来源、单点／程序范围、
+只读与返回检查及重评条件；正常消费者即使无告警也核查该实例。类别外八进制报告、
+同一行宏 token 外的位置、新程序、新使用点或改变定义均由拒绝测试确认阻塞。

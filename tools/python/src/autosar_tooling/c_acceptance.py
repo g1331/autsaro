@@ -612,7 +612,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
     obligations = []
     for row in record["sites"]:
         if (set(row) != {"target", "rule", "file", "line", "symbol", "text"}
-                or row["rule"] not in {"5.5", "5.7", "7.2", "7.3", "10.1"}
+                or row["rule"] not in {"5.5", "5.7", "7.1", "7.2", "7.3", "10.1"}
                 or row["target"] not in c_retention.TARGETS
                 or not safe_relative(row["file"]) or type(row["line"]) is not int
                 or row["line"] < 1):
@@ -694,6 +694,12 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
         column = int(location.get("column", 0))
         source_line = c_sdk.source_code(sources[row["file"]]).splitlines()[row["line"] - 1]
         if not 0 <= column <= len(source_line):
+            continue
+        # R7.1's approved expansion is the macro token itself, not any literal
+        # elsewhere on the same source line (including an open argument).
+        if rule == "7.1" and not any(
+                match.start() + 1 <= column <= match.end()
+                for match in re.finditer(r"\b" + re.escape(row["symbol"]) + r"\b", source_line)):
             continue
         # R7.2 has actual unsigned operand evidence; a macro on the same line is insufficient.
         definition = record["definitions"][row["symbol"]].get(row["symbol"], {})

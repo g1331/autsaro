@@ -2,7 +2,7 @@
 
 ## 状态与背景
 
-已接受（2026-11-06）。项目负责人明确委托按严格门验收调整建议推进，[授权落实与范围](https://github.com/g1331/autsaro/issues/55#issuecomment-6679583380)归 #55。本决定调整其原始 `summary.passed=true` 正例，不改变 [ADR 0023](0023-autosar-required-conflict-disposition.md) 和 [ADR 0025](0025-misra-layered-scope.md) 的处置边界。
+已接受（2026-11-06）；最终严格门的启用阶段由 [ADR 0027](0027-misra-compliance-track.md) 调整。项目负责人明确委托按严格门验收调整建议推进，[授权落实与范围](https://github.com/g1331/autsaro/issues/55#issuecomment-6679583380)归 #55。本决定调整其原始 `summary.passed=true` 正例，不改变 [ADR 0023](0023-autosar-required-conflict-disposition.md) 和 [ADR 0025](0025-misra-layered-scope.md) 的处置边界。
 
 所选 AUTOSAR MemMap 协议必须在声明后关闭段映射并撤销模块关键词。固定检查器仍报告对应构造，已有类别处置也要求保留原始诊断。因此，保留这些构造与诊断时，原始分析器通过不能作为项目验收的唯一正例。
 
