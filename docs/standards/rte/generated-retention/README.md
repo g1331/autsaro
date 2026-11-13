@@ -46,8 +46,8 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 {
   "id": "generated-retention-443-declarations",
   "evidence": {
-    "head": "d1871342f49fcdd366877bddca6584e51e6d6552",
-    "receipt": "https://github.com/g1331/autsaro/issues/443#issuecomment-6851733488"
+    "head": "c7a047590cd3abef395f1fb8e28de5e8d140e2c3",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/43411175434"
   },
   "cases": [
     {
@@ -63,12 +63,12 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "300c2cdbb5c4f04588766f6664113a0eff4a79ccfac7ac6e4a42056da5e7e6a6"
+      "inputIdentity": "2adc9495668340ab93e9de3e0bcf3618e47109a1f992ecc41982c4122551e3da"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "39006302eab89404de4700ba4990b445a12dd52b3754c49ab6aa58d8afda1735"
+      "inputIdentity": "b32851b6c235eaad0f3eeb09f2c962d278de23566d1c86f87b76498d0affd863"
     },
     {
       "caseId": "component-pipeline",

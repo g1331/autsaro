@@ -54,29 +54,29 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
 {
   "id": "owned-source-443-declarations",
   "evidence": {
-    "head": "d1871342f49fcdd366877bddca6584e51e6d6552",
-    "receipt": "https://github.com/g1331/autsaro/issues/443#issuecomment-6851733488"
+    "head": "c7a047590cd3abef395f1fb8e28de5e8d140e2c3",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/43411175434"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "448bba6a5a6e43715bf5a5c41eab3feae22d44758b51e8b27c9b4c8e00a08f40"
+      "inputIdentity": "cc3a1f69463a73061c325c7f7a486c60fb74376a5b7b7f9c66001ff6a6d18aef"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "29193dacea8c8adf09de3325713f8a4e6065cace2386fe5ee6a6fa0d12746afd"
+      "inputIdentity": "a98d10b61b9b2b0fd1da8e992cafc3f95402b59f6ccfe8e5596d5380d27fc082"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "1dee08cd37abd006a382f504500e6a869a13b9cea5fb187a9c1f0f9ad92177c8"
+      "inputIdentity": "c60f3c4ab00ca3b1891243524dfdc5986c5941a81ace5fa898f467c601c1b9d2"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "19d559375b68e2f486b2550447f56743877ead511304337e2ae354652fdb0a1a"
+      "inputIdentity": "a1847e58c9f5a46e93c714e1bcc20070cd2ff5773e19bcc3c7cff0aa6ca52319"
     },
     {
       "caseId": "component-pipeline",
