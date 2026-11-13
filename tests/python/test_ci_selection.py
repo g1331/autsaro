@@ -265,6 +265,41 @@ class CiSelectionTests(unittest.TestCase):
             if "run" in step:
                 self.assertIn("!cancelled()", step["if"])
 
+    def test_context_artifact_keeps_exact_sources_and_raw_summary_without_analyzer_intermediates(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        for job in ("c-analysis-samples", "c-analysis-samples-windows"):
+            step = next(step for step in workflow[job]["steps"]
+                        if step.get("name") == "Retain source assessment inputs")
+            options = step["with"]
+            self.assertTrue(options["include-hidden-files"])
+            self.assertEqual(options["name"],
+                             "c-analysis-context-inputs-${{ matrix.target }}-${{ matrix.group }}")
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                result = root / "build/c-analysis-results/standard-ecu"
+                files = {"summary.json": b'{"passed":false,"error":null}',
+                         "project/meta/files.sha256": b"sealed receipt\n",
+                         "project/.source-input": b"byte-bound hidden input\r\n",
+                         "project/kernel/tasks.c": b"patched kernel\n",
+                         "target/file.dump": b"large intermediate"}
+                for name, data in files.items():
+                    path = result / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+                selected = {}
+                for pattern in options["path"].splitlines():
+                    for path in root.glob(pattern):
+                        for item in path.rglob("*") if path.is_dir() else (path,):
+                            if item.is_file():
+                                selected[item.relative_to(result).as_posix()] = item.read_bytes()
+                expected = {name: data for name, data in files.items()
+                            if name == "summary.json" or name.startswith("project/")}
+                self.assertEqual(selected, expected)
+            full = [step for step in workflow[job]["steps"] if step.get("with", {}).get("name")
+                    == "c-analysis-${{ matrix.target }}-${{ matrix.group }}"]
+            self.assertEqual(len(full), 1)
+            self.assertEqual(full[0]["with"]["path"], "build/c-analysis-results")
+
     def test_cargo_source_digest_uses_tracked_bytes_despite_generated_files_and_timestamps(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
         scripts = [next(step["run"] for step in workflow[name]["steps"]
