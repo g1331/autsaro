@@ -38,7 +38,7 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 | R8.12 | Required | 枚举列表的隐式值唯一性 | satisfied | 主文 73，AMD2.27 追加 C11；同号入口依赖 values／valueType，另按实际全部枚举体独立求值。CanTp 状态、ComM、Dcm 发布、PduR、Ecu_Status 和 OS hook／host 枚举均全显式或初始零后单调递增，隐式项无重复；ARTI／OS 宽度及对齐 sizeof 断言枚举全显式，允许相同值。消费者为相应状态比较／switch，生成 Ecu_Config 值与配置消费一致；无项目 patch 新增隐式冲突。 |
 | R8.13 | Advisory | 指针所指对象的可修改性 | not_assessed | 主文 73–74 同时约束指针和数组元素，可因写入或复制到非 const 指针保留可修改类型；核心 constPointer 只给局部候选。当前 Det_Invoke、Dcm_MsgContextType 数据、Can_TxSinkType 数组形参及 OS SDK 输出可定位；#443 恢复须从每个当前实参／数组经别名、赋值与内存复制追到最终写方／可修改接口，结合回调及失败输出合同逐个结算。 |
 | R8.14 | Required | 原声明及实际宏展开的 restrict | satisfied | 主文 75，AMD2.27 追加 C11；同号入口只查 raw restrict。物理自有文件及实际全部展开另查 restrict／__restrict／__restrict__、宏及 typedef，无项目或 patch 限定用途；Os_LinuxNative.c 的 memcpy 和 pthread／SDK 声明接缝保持原头，ISO 库内部按 §6.7，非 ISO 原头沿采用责任。未以别名安全或包装创造规则例外。 |
-| R9.1 | Mandatory | 自动对象读取之前的赋值路径 | not_assessed | 主文 75–76＋AMD4.56／57 将 _Atomic 交 R9.7；核心 uninitvar 依赖值流和库输出模型。当前 Os_LinuxMappedStack 的 data 仅在 read>0 后访问，previous_low／high 和 used 初始化；count 先赋 read 结果，sp 由实际 asm 输出；其他自动对象含 Windows GetThreadContext／VirtualQuery、Dcm 缓冲与回调输出仍需逐元素／成员核查。#443 恢复须按每条成功／失败／部分输出路径证明首次读取前赋值；Mandatory 保留整改责任。 |
+| R9.1 | Mandatory | 自动对象读取之前的赋值路径 | not_assessed | 主文 75–76＋AMD4.56／57 将 _Atomic 交 R9.7；核心 uninitvar 依赖值流和库输出模型。当前 Os_LinuxMappedStack 的 data 仅在 read>0 后访问，previous_low／high 和 used 初始化；count 先赋 read 结果，sp 由实际 asm 输出；新增 block_actor_signals 的 blocked／startup_mask 只在相应初始化成功后消费；其他自动对象含 Windows GetThreadContext／VirtualQuery、Dcm 缓冲与回调输出仍需逐元素／成员核查。#443 恢复须按每条成功／失败／部分输出路径证明首次读取前赋值；Mandatory 保留整改责任。 |
 | R9.2 | Required | aggregate／union 初始值的层级 | not_assessed | 主文 77–78 的 {0}／字符串／兼容结构表达式／指定子对象例外有效，AMD4.58 仅追加 R9.6 引用。固定 misra_9 的 902 模型另核真实 Os_ErrorParametersType union、Ecu_OsConfig、Linux timespec／pollfd 与 Can payload；当前指定体保持层级。#443 仍缺全部普通 aggregate、compound literal 及 typedef 数组的类型化子对象映射，须逐对象连接初始值与直接消费者后结算。 |
 | R9.3 | Required | 数组的显式元素初始化与例外 | not_assessed | 主文 78–79；{0}、全指定及字符串三类例外保持。固定 misra_9 的 903 模型另核 Can payload[8] 的八项、CanIf errors[2]、Os_Time increments 的 {0}、observed[2] 的两个句柄及 priorities 的单项稀疏指定；索引消费者回接实际 CAN、计数和等待逻辑。#443 恢复须补全部数组／数组子对象及 typedef 数组的容量—元素映射，包含当前应用／配置与 patch 宏容量，逐个应用例外。 |
 | R9.4 | Required | 每个子对象的重复初始化 | satisfied | 主文 79–80＋AMD2.49／AMD4.47–50；固定 misra_9 的 904／numInits 模型之外，逐个检查当前展开指定体及子列表。Os_Config 的 tasks／counters 各结构、hooks／time_config／Ecu_OsConfig、Os_ErrorParametersType 的单个 union 成员、Linux timespec／pollfd／process_handle 均无同一子对象重复指定，也无指定回退后的位置覆盖；priorities 仅 [30u]=1u。其余全位置／零初值各消费一次，无 patch 新增重复目标。 |
@@ -47,8 +47,11 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 
 ## 当前输入重评
 
-第三阶段第二批复用 master `40665cd7` 的正常
-[run 43410036518](https://github.com/g1331/autsaro/actions/runs/43410036518) 八份完整工件。
+第三阶段第二批先核对 master `40665cd7` 的正常 run 43410036518。
+同步 #470／#472 后基于 master `2ae6778d`，最终使用 #470 成功
+[run 43411175434](https://github.com/g1331/autsaro/actions/runs/43411175434) 的八份完整工件；
+准备日志确认实际检出 `73caf622`（40665cd7 与 8b644773 的测试合并树）。
+该树与当前交付源码及 producer 相同，后续词法正文与 CI 分片增量分别重评。
 按两目标 Git 换行核验 seal、最终 kernel、92 项 producer、12 个驱动、两个程序的
 编译数据库／files.txt／addon 回执及 GCC／Cppcheck 实际输入闭包；888 个程序 TU
 实例均为 C99，基线身份及 evaluate 与 CI 保存值相同。原始摘要保持只读。
@@ -60,7 +63,7 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 当前消费者仅扩充既有 SDK 精确规则选择及 R7.1 token 位置核对；扫描来源与当前
 评估代码身份分别核验，重评副本只更新这一个驱动摘要，诊断／程序结果及其余语义
 输入保持。本组和 SDK 组分别按当前正文及驱动重绑；其余三组也复核当前驱动变化
-后的局部身份与既有具体消费，原批准实体、正式义务和阻塞保持。
+后的局部身份与既有具体消费，原批准实体、正式义务及未评估／表外阻塞保持；历史过期的精确记录按当前绑定恢复。
 <!-- source-assessment-context-begin -->
 {
   "id": "checker-obligations-443-declarations",
