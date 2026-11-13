@@ -21,7 +21,7 @@ AMD2.27 的语言扩展表没有为 R8.1 追加 C11；其余 AMD1／AMD3／AMD4�
 | R8.4 | Required | 外部链接定义处可见的兼容声明 | not_assessed | 同号入口按函数 token／tokenDef 和全局变量初始化形态判断，跳过 main。#443 须逐定义核对实际 include 顺序、兼容声明及 TC1 的 main 例外；生成桥和补丁的可见性证据须回接当前 producer。 |
 | R8.5 | Required | 外部对象／函数声明的头文件 owner | not_assessed | 同号入口保存 identifier CTU 摘要；#443 尚缺头内声明唯一来源、同头重复包含与实际 include 闭包的核对，须合成适用修订，保留显式标准接口声明与实现的关联。 |
 | R8.6 | Required | 每个程序的外部定义唯一性 | not_assessed | 同号入口保存 identifier CTU 摘要。实际编译／链接可发现部分重复定义，tentative、inline、条件编译和独立程序的合法重复须分别核定；#443 尚缺当前全部定义集合及 AMD4 对 R8.15 的交叉关系核查。 |
-| R8.7 | Advisory | 外部链接实体的跨 TU 真实引用 | not_assessed | 同号入口保存使用摘要，固定 CTU 去重可能漏掉单 TU 已声明的实体。#443 须核对公开句柄、生成桥与直接消费者，连接[链接可见性](../declarations.md#链接可见性与实际引用)；#195 的新增 ComM 导出由其实现者提供实际用途，本组结算仍归 #443。 |
+| R8.7 | Advisory | 外部链接实体的跨 TU 真实引用 | not_assessed | 同号入口保存使用摘要，固定 CTU 去重可能漏掉单 TU 已声明的实体。#443 须核对公开句柄、生成桥与直接消费者，连接[链接可见性](../declarations.md#链接可见性与实际引用)；#465 已交付 #195 的 ComM 用户服务端口；本组仍须核对当前生成导出与跨 TU 直接消费者，结算归 #443。 |
 | R8.9 | Advisory | 只在单个函数出现的对象标识符 | not_assessed | 同号入口统计各函数体使用的全局 static 对象，范围小于 AMD4 修改后的声明义务。#443 须按声明而非定义核对 TLS、跨回调状态和段归属，接续[单函数对象](../declarations.md#单函数对象与存储期)，并检查全部当前对象。 |
 | R8.10 | Required | inline 函数的存储类 | not_assessed | 同号入口检查 isInlineKeyword 且非 static 的函数，足以定位已正确建模的声明。#443 尚缺宏形式 inline、GNU 拼写及函数全部声明在当前 TU 中的模型对应核查和适用修订合成；语言标签本身不完成该核查。 |
 | R8.11 | Advisory | 外部链接数组声明的显式大小 | not_assessed | 同号入口只检查 isExtern 且全局 name 后为 [] 的变量。#443 须核对 typedef 数组、不同声明拼写与全部公开配置数组，确认大小契约和直接索引消费者，并合成适用修订。 |
