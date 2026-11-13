@@ -15,6 +15,7 @@ static unsigned calls;
 static int bad_errno;
 static int replacement = -1;
 static unsigned clock_calls;
+static unsigned deadline_ms = 100u;
 
 void StartupHook(void) {}
 void ShutdownHook(StatusType reason) { (void)reason; }
@@ -30,6 +31,11 @@ ssize_t __real___read_chk(int fd, void *data, size_t length, size_t bytes);
 
 int __wrap_clock_gettime(clockid_t clock, struct timespec *value)
 {
+    if ((scenario != NULL) && (strcmp(scenario, "poll-deadline") == 0)) {
+        value->tv_sec = 0;
+        value->tv_nsec = (long)deadline_ms * 1000000L;
+        return 0;
+    }
     if ((scenario != NULL) && (strncmp(scenario, "clock-", 6u) == 0)) {
         ++clock_calls;
         unsigned failed_call = 0u;
@@ -40,7 +46,8 @@ int __wrap_clock_gettime(clockid_t clock, struct timespec *value)
                    (strcmp(scenario, "clock-all-later") == 0)) {
             failed_call = 2u;
         } else if (strcmp(scenario, "clock-any-later") == 0) {
-            failed_call = 4u;
+            /* One shared event wait checks its clock before and after poll. */
+            failed_call = 3u;
         } else {
             /* The clean controls use the real clock on every call. */
         }
@@ -98,6 +105,16 @@ int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout)
     if ((scenario != NULL) && (strncmp(scenario, "poll-", 5u) == 0)) {
         ++calls;
         bad_errno |= errno != 0;
+        if (strcmp(scenario, "poll-deadline") == 0) {
+            bad_errno |= timeout != ((calls == 1u) ? 10 : 6);
+            if (calls == 1u) {
+                deadline_ms += 4u;
+                errno = EINTR;
+                return -1;
+            }
+            deadline_ms += 6u;
+            return 0;
+        }
         if (strncmp(scenario, "poll-error", 10u) == 0) {
             errno = EBADF;
             return -1;
@@ -202,6 +219,10 @@ int main(int argc, char **argv)
         return 2;
     }
     scenario = argv[1];
+    const int multiple = strncmp(scenario, "any-", 4u) == 0;
+    if (multiple != 0) {
+        scenario += 4;
+    }
     if (strcmp(scenario, "fortify-read") == 0) {
         char byte = 0;
         (void)__wrap___read_chk(-1, &byte, 2u, sizeof(byte));
@@ -213,7 +234,18 @@ int main(int argc, char **argv)
         return 16;
     }
     errno = EAGAIN;
-    if (strncmp(scenario, "clock-", 6u) == 0) {
+    if (strcmp(scenario, "event-order") == 0) {
+        HANDLE observed[2] = {manual, event};
+        if ((Os_HostSetEvent(manual) == FALSE) ||
+            (WaitForMultipleObjects(2u, observed, FALSE, 0u) != WAIT_OBJECT_0) ||
+            (WaitForMultipleObjects(2u, observed, FALSE, 0u) != WAIT_OBJECT_0) ||
+            (ResetEvent(manual) == FALSE) ||
+            (WaitForMultipleObjects(2u, observed, FALSE, 0u) != 1u) ||
+            (WaitForMultipleObjects(2u, observed, FALSE, 0u) != WAIT_TIMEOUT)) {
+            return 17;
+        }
+        calls = 1u;
+    } else if (strncmp(scenario, "clock-", 6u) == 0) {
         const BOOL all = strstr(scenario, "-all-") != NULL ? 1 : 0;
         HANDLE observed =
             ((strstr(scenario, "-initial") != NULL) || (strcmp(scenario, "clock-all-later") == 0))
@@ -279,13 +311,20 @@ int main(int argc, char **argv)
             return 4;
         }
     } else {
-        const DWORD result = WaitForSingleObject(
-            event, (strcmp(scenario, "poll-error-infinite") == 0) ? INFINITE : 0u);
-        const DWORD expected = (strcmp(scenario, "wait-read-empty") == 0) ? WAIT_TIMEOUT
-                               : ((strcmp(scenario, "poll-interrupted") == 0) ||
-                                  (strcmp(scenario, "wait-read-interrupted") == 0))
-                                   ? WAIT_OBJECT_0
-                                   : WAIT_FAILED;
+        const DWORD milliseconds = (strcmp(scenario, "poll-error-infinite") == 0) ? INFINITE
+                                   : (strcmp(scenario, "poll-deadline") == 0)     ? 10u
+                                                                                  : 0u;
+        HANDLE observed[2] = {event, manual};
+        const DWORD result = (multiple != 0)
+                                 ? WaitForMultipleObjects(2u, observed, FALSE, milliseconds)
+                                 : WaitForSingleObject(event, milliseconds);
+        const DWORD expected =
+            ((strcmp(scenario, "wait-read-empty") == 0) || (strcmp(scenario, "poll-deadline") == 0))
+                ? WAIT_TIMEOUT
+            : ((strcmp(scenario, "poll-interrupted") == 0) ||
+               (strcmp(scenario, "wait-read-interrupted") == 0))
+                ? WAIT_OBJECT_0
+                : WAIT_FAILED;
         if (result != expected) {
             return 5;
         }

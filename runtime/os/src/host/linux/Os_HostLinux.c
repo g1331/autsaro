@@ -564,24 +564,111 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
     return outcome;
 }
 
-OS_MEMMAP static DWORD wait_event(HANDLE event)
+OS_MEMMAP static DWORD event_result(HANDLE event, short events)
 {
-    struct pollfd observed = {.fd = event->fd, .events = POLLIN, .revents = 0};
+    DWORD result = WAIT_TIMEOUT;
+    if (((unsigned)events & ((unsigned)POLLERR | (unsigned)POLLHUP | (unsigned)POLLNVAL)) != 0u) {
+        result = WAIT_FAILED;
+    } else if (((unsigned)events & (unsigned)POLLIN) != 0u) {
+        const int received = (event->manual != 0) ? 1 : read_event(event);
+        result = (received > 0) ? WAIT_OBJECT_0 : (received == 0) ? WAIT_TIMEOUT : WAIT_FAILED;
+    } else {
+        /* No event is ready. Another auto-reset waiter may also consume it first. */
+    }
+    return result;
+}
+
+OS_MEMMAP static DWORD poll_events(DWORD count, const HANDLE *observed, int timeout)
+{
+    struct pollfd descriptors[OS_HOST_HANDLES];
+    DWORD index;
+    DWORD result = WAIT_TIMEOUT;
+    for (index = 0u; index < count; ++index) {
+        descriptors[index].fd = observed[index]->fd;
+        descriptors[index].events = POLLIN;
+        descriptors[index].revents = 0;
+    }
     int ready;
     do {
         errno = 0;
-        ready = poll(&observed, 1u, 0);
-    } while ((ready < 0) && (errno == EINTR));
-    DWORD outcome = WAIT_FAILED;
-    if ((ready >= 0) && (((unsigned)observed.revents &
-                          ((unsigned)POLLERR | (unsigned)POLLHUP | (unsigned)POLLNVAL)) == 0u)) {
-        outcome = WAIT_TIMEOUT;
-        if ((ready > 0) && (((unsigned)observed.revents & (unsigned)POLLIN) != 0u)) {
-            const int received = (event->manual != 0) ? 1 : read_event(event);
-            outcome = (received > 0) ? WAIT_OBJECT_0 : (received == 0) ? WAIT_TIMEOUT : WAIT_FAILED;
+        ready = poll(descriptors, count, timeout);
+    } while ((ready < 0) && (errno == EINTR) && (timeout == 0));
+    if (ready < 0) {
+        result = (errno == EINTR) ? WAIT_IO_COMPLETION : WAIT_FAILED;
+    } else if (ready > 0) {
+        index = 0u;
+        while ((index < count) && (result == WAIT_TIMEOUT)) {
+            const DWORD signalled = event_result(observed[index], descriptors[index].revents);
+            if (signalled != WAIT_TIMEOUT) {
+                result = (signalled == WAIT_OBJECT_0) ? (WAIT_OBJECT_0 + index) : WAIT_FAILED;
+            }
+            ++index;
+        }
+    } else {
+        /* A finite native wait expired. */
+    }
+    return result;
+}
+
+/* eventfd readiness wakes the waiter directly, including publication before poll.
+ * EINTR and competing auto-reset consumers retain the original absolute deadline. */
+OS_MEMMAP static DWORD wait_events(DWORD count,
+                                   const HANDLE *observed,
+                                   DWORD milliseconds,
+                                   uint64_t end)
+{
+    DWORD result = WAIT_TIMEOUT;
+    int waiting = 1;
+    while (waiting != 0) {
+        const uint64_t now = monotonic_ms();
+        if (now == UINT64_MAX) {
+            result = WAIT_FAILED;
+            waiting = 0;
+        } else {
+            const uint64_t remaining = (end > now) ? (end - now) : UINT64_C(0);
+            const int timeout = (milliseconds == INFINITE)          ? -1
+                                : (remaining > (uint64_t)INT32_MAX) ? INT32_MAX
+                                                                    : (int)remaining;
+            result = poll_events(count, observed, timeout);
+            if ((result == WAIT_TIMEOUT) || (result == WAIT_IO_COMPLETION)) {
+                const uint64_t after = monotonic_ms();
+                if (after == UINT64_MAX) {
+                    result = WAIT_FAILED;
+                    waiting = 0;
+                } else if ((milliseconds != INFINITE) && (after >= end)) {
+                    result = WAIT_TIMEOUT;
+                    waiting = 0;
+                } else {
+                    /* Recompute the remaining budget after interruption or consumption. */
+                }
+            } else {
+                waiting = 0;
+            }
         }
     }
-    return outcome;
+    return result;
+}
+
+OS_MEMMAP static DWORD try_wait_thread(HANDLE handle)
+{
+    DWORD result = WAIT_TIMEOUT;
+    if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
+        const int32_t previous = InterlockedCompareExchange(&handle->joined, 2, 0);
+        if (previous == 1) {
+            result = WAIT_OBJECT_0;
+        } else if (previous == 0) {
+            result = WAIT_FAILED;
+            if (pthread_join(handle->thread, NULL) == 0) {
+                (void)InterlockedExchange(&handle->joined, 1);
+                result = WAIT_OBJECT_0;
+            } else {
+                (void)InterlockedExchange(&handle->joined, 0);
+            }
+        } else {
+            /* Another waiter owns the join; completion is not yet published. */
+        }
+    }
+    return result;
 }
 
 OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
@@ -595,29 +682,14 @@ OS_MEMMAP DWORD WaitForSingleObject(HANDLE handle, DWORD milliseconds)
         }
         while (pending != 0) {
             if ((handle->kind == OS_HOST_EVENT) && (handle->fd >= 0)) {
-                outcome = wait_event(handle);
-                pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
+                outcome = wait_events(1u, &handle, milliseconds, end);
+                pending = 0;
             } else if (handle->kind == OS_HOST_MUTEX) {
                 outcome = try_wait_mutex(handle);
                 pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
             } else if (handle->kind == OS_HOST_THREAD) {
-                if (__atomic_load_n(&handle->ended, __ATOMIC_ACQUIRE) != 0) {
-                    const int32_t previous = InterlockedCompareExchange(&handle->joined, 2, 0);
-                    if (previous == 1) {
-                        outcome = WAIT_OBJECT_0;
-                        pending = 0;
-                    } else if (previous == 0) {
-                        if (pthread_join(handle->thread, NULL) == 0) {
-                            (void)InterlockedExchange(&handle->joined, 1);
-                            outcome = WAIT_OBJECT_0;
-                        } else {
-                            (void)InterlockedExchange(&handle->joined, 0);
-                        }
-                        pending = 0;
-                    } else {
-                        /* Another waiter owns the join; completion is not yet published. */
-                    }
-                }
+                outcome = try_wait_thread(handle);
+                pending = (outcome == WAIT_TIMEOUT) ? 1 : 0;
             } else {
                 pending = 0;
             }
@@ -649,12 +721,28 @@ OS_MEMMAP DWORD WaitForSingleObjectEx(HANDLE handle, DWORD milliseconds, BOOL al
     return WaitForSingleObject(handle, milliseconds);
 }
 
-/* Same 1 ms poll as WaitForSingleObject; the first signalled handle wins. */
+OS_MEMMAP static int all_event_handles(DWORD count, const HANDLE *observed)
+{
+    DWORD index;
+    int events = 1;
+    for (index = 0u; index < count; ++index) {
+        const HANDLE handle = observed[index];
+        if ((handle == NULL) || (handle->kind != OS_HOST_EVENT) || (handle->fd < 0)) {
+            events = 0;
+        }
+    }
+    return events;
+}
+
+/* Mixed mutex/thread waits retain their existing acquisition and join semantics. */
 OS_MEMMAP static DWORD wait_any(DWORD count,
                                 const HANDLE *observed,
                                 DWORD milliseconds,
                                 uint64_t end)
 {
+    if (all_event_handles(count, observed) != 0) {
+        return wait_events(count, observed, milliseconds, end);
+    }
     DWORD result = WAIT_TIMEOUT;
     int waiting = 1;
     while (waiting != 0) {

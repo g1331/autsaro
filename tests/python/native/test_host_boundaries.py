@@ -1505,7 +1505,13 @@ void Os_TestAfterFaultReader(void)
                         self.assertEqual(result.returncode, -6, result)
                         self.assertEqual(result.stdout, "", result)
                         self.assertIn("buffer overflow detected", result.stderr, result)
-                for scenario in ("poll-error", "poll-error-infinite", "poll-invalid", "poll-hangup", "poll-revents-error",
+                for scenario in ("event-order", "poll-deadline", "any-poll-deadline",
+                                 "any-poll-error", "any-poll-error-infinite", "any-poll-invalid",
+                                 "any-poll-hangup", "any-poll-revents-error", "any-poll-interrupted",
+                                 "any-wait-read-error", "any-wait-read-interrupted", "any-wait-read-empty",
+                                 "any-wait-read-zero", "any-wait-read-short",
+                                 "poll-error", "poll-error-infinite", "poll-invalid",
+                                 "poll-hangup", "poll-revents-error",
                                  "poll-interrupted", "read-error", "read-zero", "read-short",
                                  "read-interrupted", "wait-read-error", "wait-read-interrupted",
                                  "wait-read-empty", "wait-read-zero", "wait-read-short",
