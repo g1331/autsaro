@@ -50,7 +50,7 @@ clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m
 
 真实诊断、工具缺失、版本错误、超时、编译／解析失败和扫描不完整均返回非零。无诊断只说明这些自动检查通过；221 项规则／指令中的人工评估仍需根据需求、设计、授权规范和偏离审批完成，不会声明“完整符合 MISRA”。
 
-CI 每个平台准备四类完整样本，再分别并行分析；汇总要求准备与分析全部成功，跳过或取消不能通过（文档 PR 的整体跳过见 [CI](README.md#ci)）。固定 Cppcheck、vcpkg 与 Cargo 构建可以缓存，样本和全源码每轮重生成、重扫描，不缓存扫描结果。新提交取消同 PR 的旧任务。自动入口拒绝工具、配置、解析及项目验收执行错误，合法的源码阻塞仍保留原始非零退出和 `passed=false`。手动 `workflow_dispatch` 的严格步骤消费[独立项目验收](source-acceptance.md)，不再要求原始结果同时为绿；剩余处置、必要评估和真实保护证明闭合前不自动启用严格门。日志与样本保留 14 天。
+CI 每个平台准备四类完整样本，再分别并行分析；汇总要求准备与分析全部成功，跳过或取消不能通过（文档 PR 的整体跳过见 [CI](README.md#ci)）。固定 Cppcheck、vcpkg 与 Cargo 构建可以缓存，样本和全源码每轮重生成、重扫描，不缓存扫描结果。新提交取消同 PR 的旧任务。自动入口拒绝工具、配置、解析及项目验收执行错误，合法的源码阻塞仍保留原始非零退出和 `passed=false`。手动 `workflow_dispatch` 的严格步骤消费[独立项目验收](source-acceptance.md)，不再要求原始结果同时为绿；自动 PR 按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 先启用不回退门，完整验收随合规线出口切换。日志与样本保留 14 天。
 
 正常摘要的`coverage.manualAssessment`仅汇总[既有66项人工记录](../../standards/os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，按实际`automaticChecker`与155项分开；`retained`不是满足，未评估项继续计入unclassified。它不评估当前source seal，也不改写221项`assessment=not_assessed`或`completeCompliance=false`。`misra-manual-assessment-v1`绑定解析器原始字节、五篇记录全文原始字节和固定路径选集摘要；analysisCode另含解析器的规范化文本摘要。两层换行身份分别保留，coverage或任一分析身份变化仍明确拒绝旧基线。跨平台换行反例须用原始字节显式建立LF和CRLF两个输入，再断言结论相同、摘要不同；不能假定checkout为LF，或把已为CRLF的输入再写成CRLF当作变化。
 
@@ -79,4 +79,4 @@ uv run --locked python -m autosar_tooling c-check --target linux-x64-controlled-
 
 生成计划的 `runtimeSources` 同时保存交付源码与生成器／模板摘要。由 `originalBswSources` 定位到直接交付的 runtime C／头文件条目，分别核对实际字节、原始封存记录和元数据身份后，允许源码摘要随整改变化；原始到交付路径绑定、成员集合及其他生成计划字段仍须相等。没有直接交付来源的生成器／模板摘要不放宽。当前输入与分析副本、基线各自的 seal 必须匹配各自 summary，不能修改旧摘要或来源映射来追认比较；比较器自身代码身份的变化也照常要求匹配的实际分析。
 
-比较按每个诊断位置的“规则＋相对文件＋源码行文本＋程序名称”计数，先逐程序分别计算新增与移除，再汇总为位置计数。源码移动和程序列表顺序变化不算新增；HostBatch 的移除不能抵消 probe 的新增。完整条目保存在现有 `summary.json` 的 `comparison.new`／`removed`。本地扫描与基线比较各自保留事实：零新增不改变 `passed=false`，现存违规仍返回非零；身份拒绝也返回非零。它不是扫描通过缓存，不减少样本、规则或比较粒度。严格源码门按 [ADR 0026](../../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 分离原始分析与项目验收，启用与实际阻断证据由 [#55](https://github.com/g1331/autsaro/issues/55) 承接。
+比较按每个诊断位置的“规则＋相对文件＋源码行文本＋程序名称”计数，先逐程序分别计算新增与移除，再汇总为位置计数。源码移动和程序列表顺序变化不算新增；HostBatch 的移除不能抵消 probe 的新增。完整条目保存在现有 `summary.json` 的 `comparison.new`／`removed`。本地扫描与基线比较各自保留事实：零新增不改变 `passed=false`，现存违规仍返回非零；身份拒绝也返回非零。它不是扫描通过缓存，不减少样本、规则或比较粒度。严格源码门按 [ADR 0026](../../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 分离原始分析与项目验收，分阶段启用见 ADR 0027，不回退门与实际阻断证据由 [#55](https://github.com/g1331/autsaro/issues/55) 承接。
