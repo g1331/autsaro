@@ -48,14 +48,10 @@ Windows完整SDK内部、未展开宏的其他实例及供应方实现仍未评�
 raw `passed=false`、`error=null`、两个程序退出码均为 1。
 四 profile 的独立应用、PDU 宽度及无诊断配置继续按各自输入识别。
 
-当前 92 项 producer 中，runtime 和 patch 字节与这批输入一致；
-`composition.rs`、`contracts.rs`、`rte.rs` 三项已变化。
-这些变化涉及类型化 C/S、provide-port 常量及对应契约；
-旧分析的语义身份仍属于原 head。当前生成测试另核四个正常样本及类型化 C/S 样本，
-四个当前 Linux 样本与冻结输入分别具有相同的 226／226／236／233 份 C／头文件；
-变化仅为各 `Rte_<SWC>.h` 的契约注释，移除注释后的 token 序列逐文件相同。
-完整字节与 token 比较证据集中在实施 PR。
-本段的字节／语法结论仅应用于实际比较成立的实体，生成器后续支持的其他配置仍须独立评估。
+#453 阶段的 92 项 producer 中，runtime／patch 与扫描一致；composition.rs、
+contracts.rs、rte.rs 已变化，涉及类型化 C/S 与 provide-port 常量。四个当前 Linux
+样本各有 226／226／236／233 份 C／头，差异仅为 Rte_<SWC>.h 契约注释，移除注释
+后 token 逐文件相同。具体比较见 #453；旧整体语义身份及其他生成配置各保留原范围。
 
 原文重新核对 R7.2、R7.3、R12.3 及 AMD1–4／TC1–2：
 R7.2 的主文类型表原页与 AMD2.46 合成后，仍分别判断预处理条件的
@@ -63,15 +59,11 @@ R7.2 的主文类型表原页与 AMD2.46 合成后，仍分别判断预处理条
 R7.3 判断数值后缀；R12.3 判断真实逗号运算符。
 类别及页码沿上文和[普通整数证据](../essential-types/ordinary-integers.md)。
 
-对本批 452 个正常 `compiler-origins-N` 输出重新按行标记追溯，
-保留自有、生成／应用及项目 patch 使用点；采用内核的原行另循采用责任。
-词法判断排除指令、字符串和字符常量，整数采用完整进制／后缀，浮点单列。
-Windows 每 profile 仍有七处非 ISO 宏小写后缀：
-Backend 的三处 CONTEXT_CONTROL、Time 的 WAIT_TIMEOUT、
-项目 port 的 WAIT_TIMEOUT／CONTEXT_CONTROL、HostBatch 的 ERROR_BROKEN_PIPE。
-四 profile 共 28 次，均继续交 #444；当前 Backend 位置为 1158／1583／1597，
-其他使用点的数字／来源沿既有闭包。采用 queue 的 SIZE_MAX 原行继续保留 §6.7 的判断范围。
-自有／patch 物理源码未新增手写小写后缀或拼接小写后缀的宏。
+#453 对 452 个 `compiler-origins-N` 输出按行标记核对自有、生成／应用及项目 patch，
+排除指令、字符串与字符，完整识别整数和浮点。Windows 四 profile 共 28 次非 ISO
+小写后缀来自 CONTEXT_CONTROL、WAIT_TIMEOUT、ERROR_BROKEN_PIPE；Backend
+位置为 1158／1583／1597，采用 queue 的 SIZE_MAX 沿 §6.7。物理源码无新增手写
+小写后缀或拼接生产者。该阶段 SDK 实例归 #444，当前决定见 [SDK 类别](../../os/sdk.md)。
 R7.2 的 44 次缺 U 与条件证据另见[普通整数](../essential-types/ordinary-integers.md)
 及[条件控制](../essential-types/conditional-integers.md)。
 
@@ -90,15 +82,9 @@ Windows 当前完整 SDK 的 Clang 解析限制继续保留，R12.3 的已有有
 
 ### 正常分析与其余人工义务
 
-固定 `misra.py` 的 `getAddonRules` 与 `getCppcheckRules` 合并得到 155 项：
-128 项仅 addon、25 项仅核心映射、2 项同时具有两种入口。
-逐项目录核对连接各 `misra_N_M` 的执行调用或核心诊断映射；
-addon 的实际输入分为 raw token、预处理指令、语义 token／类型／值流和 CTU 摘要。
-R2.3／R2.4、R5.6–R5.9、R8.5–R8.7 涉及 CTU 数据，
-其证据须按 HostBatch／probe 分别保留完整 TU 集合。
-每项的正常工具入口定位见 [PR #453 的完整分区](https://github.com/g1331/autsaro/pull/453)。
-分区包含全部 155 个准确编号；该入口证据继续保留工具可用性的含义。
-其中固定 11 项使用 types.md 原补充块；66 项沿原人工篇和 #445。
+固定工具的 155 项入口分为 128 项 addon、25 项核心及 2 项共有，编号见 [PR #453 分区](https://github.com/g1331/autsaro/pull/453)。raw token、指令、
+语义／值流与 CTU 分别证明相应性质；CTU 按两个程序各自保留完整 TU。
+固定 11 项沿 types.md 原组，66 项沿原人工篇和 #445。
 其余 144 项由 `c_standard.checker_obligations` 独立选择，
 沿 `c_acceptance.evaluate` 的 `checker-obligations` 组消费。
 缺行逐项返回 `checker-obligation_not_assessed`，责任为 #443；
@@ -114,8 +100,8 @@ R12.3（106／114），合成 AMD2.27／46；七份原件摘要核验及原页�
 | 规则 | 类别 | 评估范围 | 状态 | 结论 |
 | --- | --- | --- | --- | --- |
 | R1.4 | Required | 双目标四 profile 的 C99 HostBatch／probe | not_applicable | AMD2.30（印刷 11／PDF 18）仅适用 C11；AMD3.11–13、AMD4.53–54 修改禁用设施，语言范围保持。当前 TU 均以 -std=c99 编译；扩展与 Annex K 义务沿各自规则核查。 |
-| R7.2 | Required | 双目标四 profile 的 HostBatch／probe；自有、生成／应用及项目补丁的条件与普通整数 | not_assessed | [普通整数](../essential-types/ordinary-integers.md)和[条件控制](../essential-types/conditional-integers.md)保留各自冻结输入；#443 补当前条件、活动宏、provider 与整数模型的闭包及独立控制，#444 承接 Windows 44 次 SDK 缺 U 暴露。 |
-| R7.3 | Required | 同一范围的物理 token、真实宏展开及直接消费者 | not_assessed | 本篇已保留 452 个历史 TU 的有界后缀证据；#443 复核 RTE／SchM 变更后的当前输入与宏展开，#444 承接四 profile 共 28 次非 ISO Windows 小写后缀暴露。 |
+| R7.2 | Required | 双目标四 profile 的 HostBatch／probe；自有、生成／应用及项目补丁的条件与普通整数 | not_assessed | 当前 master 40665cd7 的 452 份 GCC 展开按 LP64／LLP64 候选类型复核，普通表达式只见原 SDK 的 Windows 每 profile 11 处缺 U，沿 [既有 SDK 类别](../../os/sdk.md#当前集成义务与类别处置)。#443 仍须补当前 #if／#elif 的实际求值分支、活动宏时刻和 intmax_t／uintmax_t 独立控制；-E -dD 已消去这些条件，历史条件证据保留冻结范围。 |
+| R7.3 | Required | 同一范围的物理 token、真实宏展开及直接消费者 | satisfied | 主文 61–62、AMD2.27 的对象为数值后缀，包含整数与浮点。当前所有交付 C／头及最终 kernel 项目行无手写小写 l 后缀或拼接生产者；452 份实际展开无额外实例。Windows 每 profile 七处 __MSABI_LONG 展开的 0x1l／258l／109l 均回接 [已批准 SDK 类别](../../os/sdk.md#当前集成义务与类别处置)及其精确实例：Backend／port 上下文、Time／port 等待及 HostBatch 断管消费者；沿原 sdk-integration 组消费。采用 queue 的 SIZE_MAX 沿原 ISO 接口责任，原违反与正式义务由各自组保持。 |
 | R12.3 | Advisory | 同一范围的真实逗号语法，含 return、for 和嵌套实参 | not_assessed | 本篇已保留 Linux 228 个历史 TU 的完整语法解析及 Windows 历史有界证据；#443 补当前双目标语法与直接消费者关系，Windows SDK 解析限制须有实际替代证据。 |
 | R17.3 | Mandatory | 同一 C99 范围，含 GNU 对齐查询与项目补丁 | not_applicable | 主文印刷 138／PDF 146 仅适用 C90，AMD2 Appendix H 继续明确此限制；当前 C99 编译、声明与扩展检查仍保留，具体诊断沿原 OS 裁决。 |
 <!-- misra-checker-obligations-end -->
@@ -128,7 +114,7 @@ R12.3（106／114），合成 AMD2.27／46；七份原件摘要核验及原页�
 其余 139 项已按规则族登记能力边界与恢复条件：
 [词法与名称](lexical.md)、[声明初始化](declarations.md)、[类型表达式](expressions.md)、
 [控制流与生命周期](control-flow.md)、[预处理与库](preprocessing-library.md)。
-其中 R8.1 的 C99 适用性和 R15.5 的既有 GRP 已结算，其余 137 项的实际人工结算继续归 #443。
+该阶段结算 R8.1 的 C99 适用性和 R15.5 的既有 GRP，留下 137 项新增记录及三项局部记录。
 恢复条件为将已登记的同号固定 checker 或核心诊断映射与全部适用修订及当前源码核对，
 把正常分析足以证明的性质、语言／配置适用性或额外人工证据写回对应原主题篇，
 再以独立本组上下文绑定当前输入；缺少结算的行保持未评估。
@@ -160,3 +146,12 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 
 维护者接受的平台／OS宏形式见[精确预处理记录](../retained-platform.md)，不扩大所选配置的运行能力。
 
+
+
+### 第三阶段第一批
+
+当前输入与方法见 [lexical.md](lexical.md#当前输入与核查方法)。本批 24 项为
+9 项 satisfied、15 项 not_assessed、0 项新增 not_applicable；全组 144 项为
+10 项 satisfied、3 项 not_applicable、131 项 not_assessed。R7.3 沿既有 SDK 类别
+完成当前必要人工，R7.2 保留条件控制缺口，R7.1 保留 O_RDONLY→00 的实际暴露。
+R12.3 及本批外状态保持；本组当前身份见[声明篇](declarations.md#当前输入重评)。

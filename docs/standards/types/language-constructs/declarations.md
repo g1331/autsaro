@@ -37,13 +37,17 @@ AMD2.27 的语言扩展表没有为 R8.1 追加 C11；其余 AMD1／AMD3／AMD4�
 
 ## 当前输入重评
 
-同步 #465／#469 后，本阶段以 master `1a7fec01` 的正常
-[run 42491292082](https://github.com/g1331/autsaro/actions/runs/42491292082) 八份完整工件重评。
-`checker-obligations` 沿完整 `input_identity`，包含 GCC `-MD` 依赖和 Cppcheck dump
-实际读取文件的回执；#469 的四组局部摘要仍各用原入口。当前 144 项均有准确记录位置，
-R1.4／R8.1／R17.3 的语言适用性与 R15.5 的既有 GRP 经本组当前绑定消费，
-其余 140 项保持 `not_assessed` 和 #443 责任。此处重评核对输入身份、工具能力边界
-与已结算四项的条件；每行列明的完整修订合成、当前源码和消费者义务继续按恢复条件推进。
+第三阶段第一批沿 master `40665cd7` 的正常
+[run 43410036518](https://github.com/g1331/autsaro/actions/runs/43410036518) 八份完整工件重评。
+按两目标 Git 换行分别核验 seal、最终 kernel、92 项 producer、12 个驱动以及
+两个程序的编译数据库／addon 回执和 GCC／Cppcheck 实际输入闭包；888 个程序 TU
+实例均为 C99。`checker-obligations` 沿完整 `input_identity` 绑定全部当前评估正文。
+本批的具体方法、有效修订与逐项结论见 [lexical.md](lexical.md)；当前 144 项为
+10 项 satisfied、3 项 not_applicable、131 项 not_assessed。仍阻塞项逐项保留 #443
+责任；R7.1 的 O_RDONLY→00 未新增偏离，R7.3 连接已有 SDK 类别及原正式义务。
+
+本次只更新本组原上下文。FreeRTOS、owned-source、generated-retention、SDK 四组的
+实际局部证据摘要在正文修改前后保持，已有具体诊断消费及其他组状态保持。
 <!-- source-assessment-context-begin -->
 {
   "id": "checker-obligations-443-c99-grp",
