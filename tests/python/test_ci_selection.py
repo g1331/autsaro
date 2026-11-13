@@ -340,6 +340,8 @@ class CiSelectionTests(unittest.TestCase):
                     if entry["shard"] != "all":
                         self.assertIn("--exact", filters)
                         self.assertEqual(outlier in positive, entry["shard"] == "rest")
+                        self.assertEqual("integration::release_contracts::headers" in positive,
+                                         entry["shard"] == "projects")
                     observed.extend(
                         name for name in names
                         if (not positive or any(
