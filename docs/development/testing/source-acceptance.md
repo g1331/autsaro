@@ -21,6 +21,14 @@ uv run --locked python -m autosar_tooling c-acceptance \
 
 完整矩阵在各自目标主机分别给出四个 `--expected` 与完整结果；Windows 工件不能交给 Linux 验证其实际 SDK 路径。上游值取实际任务结果，不能在失败时写死为 success。消费者重新读取当前 SDK、runner、分析驱动和完整源码，重算输入身份与验收，并精确核对存储回执；修改旧摘要的 SDK、seal、参数或当前 producer，不能重放旧 `accepted`。原始 `passed=false` 与诊断退出码 1 可以和有效项目验收并存。
 
+本地离线上下文重绑可下载较小的输入工件：
+
+```sh
+gh run download <run> --pattern 'c-analysis-context-inputs-*' --dir <新目录>
+```
+
+每份包含原始 `summary.json` 和完整已分析的 `project/`（含实际补丁后 kernel、seal、应用及工具字节）。按下文的当前 producer、解析器、评估正文和实际源码重算身份；摘要中的原始 `passed`、诊断和项目验收状态保持。Cppcheck 中间文件留在原 `c-analysis-<target>-<group>` 完整工件中，目标主机的严格 `c-acceptance` 继续使用完整结果及实际 SDK／分析工具。实际八份输入的精简前后身份核对与源码／编译参数反例保存在 #471 对应 PR。
+
 跨平台离线核对封存输入时，从同一 head 按目标 Git 换行规则导出独立副本，例如 Windows 使用 `git -c core.autocrlf=true checkout-index --all --prefix=<新目录>/`，同时从该副本的 `tools/python/src` 加载解析器。逐项核对 producer、解析器与评估正文摘要后重算身份；Windows 的 SDK 和实际运行证据仍由目标主机正常验收入口提供。
 
 PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并提交。消费工件前先从

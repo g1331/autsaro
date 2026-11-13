@@ -32,6 +32,27 @@ uv run --locked ruff check tools tests/python scripts
 uv run --locked python -m autosar_tooling quality --merge-base origin/master
 ```
 
+To select regular local checks from the actual changes, use:
+
+```sh
+uv run --locked python -m autosar_tooling verify --scope changed --base origin/master
+uv run --locked python -m autosar_tooling verify --scope changed --base origin/master --list
+```
+
+The second command lists the checks without running tools or creating output. Selection shares
+CI's rules and includes committed, staged, unstaged and untracked changes; renames and unknown
+inputs select the full set. The changed scope uses one `native-tests` feature set for core tests
+and fresh samples shared within that invocation. Existing explicit scopes keep their behavior.
+See the [local feedback guide](docs/development/testing/feedback.md) for the selected checks and
+the additional C, OS, sanitizer and desktop acceptance required by each task.
+
+A shared compiler cache is optional. After installing `sccache`, a developer can try
+`RUSTC_WRAPPER=sccache CARGO_INCREMENTAL=0` in the environment of a Cargo or verification command,
+then inspect `sccache --show-stats`. The [Rust cache constraints](https://github.com/mozilla/sccache/blob/main/docs/Rust.md)
+include incremental compilation, linker outputs and working-directory identity; measure actual
+hits for the chosen worktrees. The default commands require no cache service. Keep each
+worktree's Cargo target separate for concurrent builds, and reuse the normal uv cache.
+
 Run `uv run --locked pre-commit install --allow-missing-config` once; the last `quality` command above then runs before every push and stops a push that fails it. CI still runs the same check. `--allow-missing-config` lets older branches without the configuration, including worktrees that share the same `.git/hooks`, push as before.
 
 `quality` reads working-tree content at indexed and non-ignored untracked paths, including unstaged edits. Hygiene checks run before changed-line filtering; `--base` and `--merge-base` select the comparison baseline, not a source snapshot. The installed pre-push hook uses pre-commit to temporarily set aside tracked unstaged edits and restore them afterwards; untracked files still participate. A clean worktree can mask invalid staged content in a direct run, and a staged fix can mask invalid content in the commit being pushed. Commit intended fixes before validating the push.
