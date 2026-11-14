@@ -1,6 +1,6 @@
 # Agent 开发指南
 
-本文件是所有代理与贡献者共用的入口，规则不依赖特定代理工具或会话记忆。先读本文件、[CONTRIBUTING.md](CONTRIBUTING.md)、README 和相关模块说明，再核对目标版本、分支及工作区。保留用户修改，使用项目正常开发入口。本文件只写跨任务的规则；专题做法写在“按任务先读”列出的文档中，开始对应工作前阅读，它们与本文件同样必须遵守。
+本文件是所有代理与贡献者共用的入口，规则不依赖特定代理工具或会话记忆。先读本文件、[CONTRIBUTING.md](CONTRIBUTING.md)、README 和相关模块说明，再核对目标版本、分支及工作区。保留用户修改，使用项目正常开发入口。本文件写跨任务规则；专题规则见“按任务先读”，开工前阅读并遵守。
 
 ## 结构与开发
 
@@ -17,7 +17,7 @@
 | 修改 C、头文件、生成 C 的模板或 emitter | [C 编码规范](docs/development/c-coding-standard.md)、[misra-c2012](.agents/skills/misra-c2012/SKILL.md)、[生成 C 的静态检查](docs/development/testing/generated-c.md)（含样本比较）、[Emitter 规则](docs/architecture/mainline.md#emitter-规则) |
 | 实现或核对 BSW／RTE／OS 规范，写条款处置 | [标准基线](docs/standards/README.md)（§5 处置标记与核算）及对应模块篇 |
 | 修改独占区、跨模块回调或并发 | [运行时架构 · 独占区协议](docs/architecture/runtime.md#独占区协议) |
-| 原生、OS、进程测试；迁移 runtime 文件或改运行时配置结构；排查时序与间歇失败 | [进程与原生行为](docs/development/testing/native.md) |
+| 原生、OS、进程测试；迁移 runtime 文件或改运行时配置结构；排查时序与间歇失败 | [进程与原生行为](docs/development/testing/native.md)、[Windows 进程](docs/development/testing/windows-processes.md) |
 | CI／workflow、独立审查、变异、Clippy、源码验收 | [测试说明](docs/development/testing/README.md)、[源码验收](docs/development/testing/source-acceptance.md) |
 | 桌面场景与界面交互验收 | [桌面场景](docs/development/testing/desktop.md) |
 | 官方档案、官方对照或登记了字节摘要的夹具 | [官方对照](docs/development/testing/official.md) |
