@@ -197,6 +197,25 @@ class SourceGateTests(unittest.TestCase):
                     "--target", "linux-x64-controlled-v1", "--sample", "standard-ecu",
                 ])
 
+    def test_duplicate_matrix_identity_retains_two_receipts_for_aggregate(self):
+        import yaml
+        from autosar_tooling.config import ROOT
+
+        workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
+        job = workflow["jobs"]["c-analysis-samples"]
+        template = next(step["with"]["name"] for step in job["steps"]
+                        if step.get("with", {}).get("name", "").startswith(
+                            "c-analysis-summaries-"))
+        rows = job["strategy"]["matrix"]["include"]
+        duplicated = [*rows, rows[0]]
+        names = [template.replace("${{ matrix.target }}", row["target"])
+                 .replace("${{ matrix.group }}", row["group"])
+                 .replace("${{ strategy.job-index }}", str(index))
+                 for index, row in enumerate(duplicated)]
+        self.assertEqual(len(set(names)), len(duplicated))
+        # The duplicate sample identities are then rejected by the real aggregate.
+        self.assertEqual(duplicated[0], duplicated[-1])
+
     def test_aggregate_refuses_missing_duplicate_changed_or_wrong_run_receipts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
