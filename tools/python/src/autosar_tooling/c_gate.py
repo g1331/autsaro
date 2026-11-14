@@ -7,6 +7,7 @@ import difflib
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from collections import Counter
@@ -28,11 +29,22 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def baseline_source(source: dict, parent: str) -> dict:
+    if source["tree"] != parent or source["kind"] not in {"same-run", "master-artifact"}:
+        raise ValueError("Baseline analysis source identity differs")
+    if source["kind"] == "master-artifact" and (
+            any(type(source.get(key)) is not int or source[key] <= 0
+                for key in ("run", "attempt", "job", "artifact"))
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", source.get("digest", ""))):
+        raise ValueError("Baseline artifact provenance missing or invalid")
+    return source
+
+
 def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT).decode("utf-8").strip()
 
 
-def prepare(baseline: Path) -> None:
+def stage(baseline: Path) -> None:
     """Use current sample inputs with the first parent's generator and runtime."""
     parent = git("rev-parse", "HEAD^1")
     actual = subprocess.check_output(
@@ -54,15 +66,19 @@ def prepare(baseline: Path) -> None:
         elif source.exists():
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+
+
+def prepare(baseline: Path, output: Path | None = None) -> None:
+    stage(baseline)
+    output = output or ROOT / "build/c-analysis-base-samples"
     environment = {**os.environ,
-                   "AUTOSAR_C_ANALYSIS_SAMPLES": str(ROOT / "build/c-analysis-base-samples"),
-                   "CARGO_TARGET_DIR": str(ROOT / "target")}
+                   "AUTOSAR_C_ANALYSIS_SAMPLES": str(output.resolve()),
+                   "CARGO_TARGET_DIR": str(baseline.resolve() / "target")}
     subprocess.run(["cargo", "test", "--locked", "-p", "autosar-config-core", "--test", "it",
                     "--", "c_analysis::"], cwd=baseline, env=environment, check=True)
-    for name in ("c-analysis-samples", "c-analysis-base-samples"):
-        found = {path.name for path in (ROOT / "build" / name).iterdir()}
-        if found != set(SAMPLES):
-            raise ValueError(f"Generated sample inventory differs: {name}: {found}")
+    found = {path.name for path in output.iterdir()}
+    if found != set(SAMPLES):
+        raise ValueError(f"Generated baseline sample inventory differs: {found}")
 
 
 def rename_paths(previous: Path, current: Path) -> dict[str, str]:
@@ -155,6 +171,7 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
 
 def scan(target: str, sample: str) -> None:
     outputs = {}
+    parent = git("rev-parse", "HEAD^1")
     # Same-run c-check producers already validate actual target semantics before
     # and after scanning. Rebind transferred source bytes to those fresh inputs.
     for side, results in (("baseline", "c-analysis-baseline"),
@@ -165,15 +182,18 @@ def scan(target: str, sample: str) -> None:
         if (summary["scope"]["target"] != target
                 or summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}):
             raise ValueError(f"Incomplete {side} analysis: {sample}")
-        identity = c_acceptance.input_identity(summary, output / "project")
+        identity = c_acceptance.input_identity(
+            summary, output / "project", producer_revision=parent if side == "baseline" else None)
         if identity != summary["projectAcceptance"]["inputIdentity"]:
             raise ValueError(f"Transferred {side} analysis inputs changed: {sample}")
         outputs[side] = output
     current, baseline = outputs["current"], outputs["baseline"]
+    source = baseline_source(read(baseline / "baseline-source.json"), parent)
     shutil.copy2(baseline / "summary.json", current / "baseline-summary.json")
     result = verdict(read(current / "summary.json"), current, baseline,
                      rename_paths(baseline / "project", current / "project"))
     result.update(format=FORMAT, target=target, sample=sample,
+                  baselineSource=source,
                   commit=git("rev-parse", "HEAD"), baseline=git("rev-parse", "HEAD^1"),
                   summarySha256={side: sha(path / "summary.json")
                                  for side, path in outputs.items()},
@@ -196,6 +216,7 @@ def aggregate(directory: Path) -> None:
                 or gate["commit"] != git("rev-parse", "HEAD")
                 or gate["baseline"] != git("rev-parse", "HEAD^1")):
             raise ValueError(f"Source gate identity missing, duplicated or refused: {path}")
+        baseline_source(gate["baselineSource"], gate["baseline"])
         for side, summary_path in (("current", path.with_name("summary.json")),
                                    ("baseline", path.with_name("baseline-summary.json"))):
             summary = read(summary_path)
@@ -218,6 +239,9 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     preparation = commands.add_parser("prepare")
     preparation.add_argument("baseline", type=Path)
+    preparation.add_argument("--output-directory", type=Path)
+    staging = commands.add_parser("stage")
+    staging.add_argument("baseline", type=Path)
     scanning = commands.add_parser("scan")
     scanning.add_argument("--target", choices=TARGETS, required=True)
     scanning.add_argument("--sample", choices=SAMPLES, required=True)
@@ -225,7 +249,9 @@ def main() -> None:
     aggregation.add_argument("directory", type=Path)
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.baseline)
+        prepare(args.baseline, args.output_directory)
+    elif args.command == "stage":
+        stage(args.baseline)
     elif args.command == "scan":
         scan(args.target, args.sample)
     else:

@@ -109,7 +109,7 @@ class CiSelectionTests(unittest.TestCase):
         script = yaml.safe_load(WORKFLOW.read_text())["jobs"]["changes"]["steps"][1]["run"]
         analysis = ["tools/python/src/autosar_tooling/" + name + ".py"
                     for name in ("c_check", "c_acceptance", "c_sdk",
-                                 "c_comparison", "c_addon", "c_gate")]
+                                 "c_comparison", "c_addon", "c_gate", "c_baseline")]
         analysis += ["docs/standards/os/adoption.md", "docs/standards/types/declarations.md",
                      ".agents/skills/misra-c2012/references/baseline-index.json"]
         full = ["tools/python/src/autosar_tooling/c_standard.py",
@@ -152,7 +152,7 @@ class CiSelectionTests(unittest.TestCase):
 
     def test_analysis_drivers_are_outside_skipped_python_consumers(self):
         drivers = {"autosar_tooling." + name for name in
-                   ("c_check", "c_acceptance", "c_sdk", "c_comparison", "c_addon", "c_gate")}
+                   ("c_check", "c_acceptance", "c_sdk", "c_comparison", "c_addon", "c_gate", "c_baseline")}
         modules = {}
         for path in (ROOT / "tools/python/src").rglob("*.py"):
             name = path.relative_to(ROOT / "tools/python/src").with_suffix("").as_posix()
@@ -300,7 +300,8 @@ class CiSelectionTests(unittest.TestCase):
                 self.assertEqual(selected, expected)
             producer = workflow[job.replace("gates", "samples")]
             full = [step for step in producer["steps"]
-                    if step.get("with", {}).get("name", "").startswith(
+                    if step.get("uses", "").startswith("actions/upload-artifact@")
+                    and step.get("with", {}).get("name", "").startswith(
                         "c-analysis-${{ env.ANALYSIS_SIDE == 'baseline'")]
             self.assertEqual(len(full), 1)
             self.assertEqual(full[0]["with"]["path"],
@@ -417,7 +418,6 @@ class CiSelectionTests(unittest.TestCase):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         for job, name, key, allowed in (
             ("native-os", "Host I/O and lock failure boundaries", "shard", {"0/1", "1/2"}),
-            ("c-analysis-samples", "Analyzer behavior tests", "group", {"no-diagnostic"}),
         ):
             steps = workflow["jobs"][job]["steps"]
             step = next(step for step in steps if step.get("name") == name)
@@ -430,8 +430,18 @@ class CiSelectionTests(unittest.TestCase):
             for platform in ("ubuntu-24.04", "windows-latest"):
                 self.assertEqual(sum(entry[key] in selected for entry in entries
                                      if entry["os"] == platform), 1)
-        self.assertFalse(any(step.get("name") == "Analyzer behavior tests"
-                             for step in workflow["jobs"]["c-analysis-prepare"]["steps"]))
+        for suffix, platform in (("", "ubuntu-24.04"), ("-windows", "windows-latest")):
+            job = workflow["jobs"]["c-analysis-behavior" + suffix]
+            self.assertEqual(job["needs"], "c-analysis-prepare" + suffix)
+            self.assertEqual([row["os"] for row in job["strategy"]["matrix"]["include"]],
+                             [platform])
+            steps = [step for step in job["steps"]
+                     if step.get("name") == "Analyzer behavior tests"]
+            self.assertEqual(len(steps), 1)
+            self.assertNotIn("if", steps[0])
+            for producer in ("c-analysis-prepare", "c-analysis-samples", "c-analysis-baseline"):
+                self.assertFalse(any(step.get("name") == "Analyzer behavior tests"
+                                     for step in workflow["jobs"][producer + suffix]["steps"]))
 
     def test_parallel_com_refusals_keep_all_fourteen_cases_and_propagate_failure(self):
         path = ROOT / "core/tests/fixtures/com-rejection/consumers.py"
@@ -475,20 +485,32 @@ class CiSelectionTests(unittest.TestCase):
 
     def test_platform_pipelines_share_steps_and_require_every_result(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
-        for name in ("c-analysis-prepare", "c-analysis-samples", "native-delivery"):
+        for name in ("c-analysis-prepare", "c-analysis-generate", "c-analysis-baseline-generate",
+                     "c-analysis-behavior", "c-analysis-samples", "native-delivery"):
             linux, windows = workflow[name], workflow[name + "-windows"]
             self.assertEqual(linux["steps"], windows["steps"])
             for job, platform in ((linux, "ubuntu-24.04"), (windows, "windows-latest")):
                 self.assertEqual({row["os"] for row in job["strategy"]["matrix"]["include"]},
                                  {platform})
-            if name != "c-analysis-prepare":
-                self.assertEqual(linux["needs"], ["changes", "c-analysis-prepare"]
-                                 if name == "native-delivery" else "c-analysis-prepare")
-                self.assertEqual(windows["needs"], ["changes", "c-analysis-prepare-windows"]
-                                 if name == "native-delivery" else "c-analysis-prepare-windows")
+            if name == "native-delivery":
+                self.assertEqual(linux["needs"], ["changes", "c-analysis-generate"])
+                self.assertEqual(windows["needs"], ["changes", "c-analysis-generate-windows"])
+            elif name == "c-analysis-samples":
+                self.assertEqual(linux["needs"], ["c-analysis-prepare", "c-analysis-generate"])
+                self.assertEqual(windows["needs"],
+                                 ["c-analysis-prepare-windows", "c-analysis-generate-windows"])
+            elif name == "c-analysis-behavior":
+                self.assertEqual(linux["needs"], "c-analysis-prepare")
+                self.assertEqual(windows["needs"], "c-analysis-prepare-windows")
+            else:
+                self.assertEqual(linux["needs"], "changes")
+                self.assertEqual(windows["needs"], "changes")
         upstream = workflow["c-analysis"]["needs"]
         self.assertEqual(set(upstream), {
             "changes", "c-analysis-prepare", "c-analysis-prepare-windows",
+            "c-analysis-generate", "c-analysis-generate-windows",
+            "c-analysis-baseline-generate", "c-analysis-baseline-generate-windows",
+            "c-analysis-behavior", "c-analysis-behavior-windows",
             "c-analysis-samples", "c-analysis-samples-windows",
             "c-analysis-baseline", "c-analysis-baseline-windows",
             "c-analysis-gates", "c-analysis-gates-windows",
@@ -513,19 +535,85 @@ class CiSelectionTests(unittest.TestCase):
         for name in ("python", "desktop"):
             job = workflow[name]
             self.assertEqual(set(job["needs"]),
-                             {"changes", "c-analysis-prepare", "c-analysis-prepare-windows"})
+                             {"changes", "c-analysis-generate", "c-analysis-generate-windows"})
             # The status function explicitly permits a skipped producer on UI-only PRs.
             condition = "${{ !cancelled() && needs.changes.outputs.code == 'true' }}"
             self.assertEqual(job["if"], condition.replace("outputs.code", "outputs.application")
                              if name == "desktop" else condition)
 
+    def test_analysis_rejects_duplicate_sample_inputs_before_running_tools(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        script = next(step["run"] for step in jobs["c-analysis-samples"]["steps"]
+                      if step.get("name") == "Verify complete generated-project analysis")
+        for side in ("current", "baseline"):
+            with self.subTest(side=side), mock.patch.dict(os.environ, {
+                    "ANALYSIS_SIDE": side, "ANALYSIS_TARGET": "linux-x64-controlled-v1",
+                    "ANALYSIS_SAMPLES": "standard-ecu,standard-ecu",
+            }), mock.patch.object(subprocess, "run") as tool:
+                with self.assertRaisesRegex(RuntimeError, "Duplicated analysis sample"):
+                    run_script(script)
+                tool.assert_not_called()
+
+    def test_each_scan_requires_the_exact_generated_tree_side_and_target(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        script = next(step["run"] for step in jobs["c-analysis-samples"]["steps"]
+                      if step.get("name") == "Require generated tree identity")
+        original_read = Path.read_text
+        for side, changed in product(("current", "baseline"),
+                                     (None, "tree", "side", "target", "missing")):
+            with self.subTest(side=side, changed=changed), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                path = root / "build/c-analysis-generation.json"
+                path.parent.mkdir()
+                value = {"tree": "parent" if side == "baseline" else "head", "side": side,
+                         "target": "linux-x64-controlled-v1"}
+                if changed == "missing":
+                    value.pop("tree")
+                elif changed is not None:
+                    value[changed] = "wrong"
+                path.write_text(json.dumps(value))
+                def read(path, *args, root=root, **kwargs):
+                    return original_read(path if path.is_absolute() else root / path, *args, **kwargs)
+                with mock.patch.dict(os.environ, {
+                        "ANALYSIS_SIDE": side, "ANALYSIS_TARGET": "linux-x64-controlled-v1",
+                }), mock.patch("pathlib.Path.read_text", autospec=True, side_effect=read), \
+                        mock.patch.object(subprocess, "check_output", return_value=
+                                          "parent\n" if side == "baseline" else "head\n") as git:
+                    if changed is None:
+                        run_script(script)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "tree identity differs"):
+                            run_script(script)
+                    git.assert_called_once_with(
+                        ["git", "rev-parse", "HEAD^1" if side == "baseline" else "HEAD"], text=True)
+
+    def test_generation_uses_the_tree_manifest_with_current_python_inputs(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        script = next(step["run"] for step in jobs["c-analysis-generate"]["steps"]
+                      if step.get("name") == "Generate complete analysis samples")
+        for inputs in (".", "build/c-analysis-current-inputs"):
+            with self.subTest(inputs=inputs), tempfile.TemporaryDirectory() as temporary, \
+                    mock.patch.dict(os.environ, {
+                        "CURRENT_INPUTS": inputs, "GITHUB_WORKSPACE": temporary,
+                    }), mock.patch.object(subprocess, "run") as cargo:
+                run_script(script)
+                cargo.assert_called_once()
+                arguments = cargo.call_args.args[0]
+                self.assertEqual(arguments[arguments.index("--project") + 1], inputs)
+                self.assertEqual(arguments[arguments.index("--manifest-path") + 1],
+                                 str(Path(temporary) / "Cargo.toml"))
+                self.assertEqual(arguments[-2:], ["--", "c_analysis::"])
+                self.assertEqual(cargo.call_args.kwargs, {"cwd": temporary, "check": True})
+
     def test_analysis_readiness_rejects_acceptance_errors_but_not_known_blockers(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         step = next(row for row in workflow["jobs"]["c-analysis-samples"]["steps"]
                     if row.get("name") == "Verify complete generated-project analysis")
-        for side, status in product(("current", "baseline"),
-                                    ("accepted", "blocked", "error", "unknown", None)):
-            with self.subTest(side=side, status=status), tempfile.TemporaryDirectory() as temporary:
+        self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
+        for side, status, code in product(("current", "baseline"),
+                                          ("accepted", "blocked", "error", "unknown", None), (0, 1)):
+            with self.subTest(side=side, status=status, code=code), \
+                    tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 results = "c-analysis-baseline" if side == "baseline" else "c-analysis-results"
                 inputs = "c-analysis-base-samples" if side == "baseline" else "c-analysis-samples"
@@ -545,13 +633,14 @@ class CiSelectionTests(unittest.TestCase):
                     with (
                         mock.patch.dict(os.environ, env),
                         mock.patch.object(subprocess, "run",
-                                          return_value=subprocess.CompletedProcess([], 1)) as run,
+                                          return_value=subprocess.CompletedProcess([], code)) as run,
                         self.assertRaises(SystemExit) as exit_,
                     ):
                         runpy.run_path(str(script))
                 finally:
                     os.chdir(previous)
-                self.assertEqual(exit_.exception.code == 0, status in {"accepted", "blocked"})
+                self.assertEqual(exit_.exception.code == 0,
+                                 code == 0 and status in {"accepted", "blocked"})
                 command = run.call_args.args[0]
                 self.assertEqual(command[command.index("--project") + 1],
                                  str(Path("build") / inputs / "standard-ecu"))

@@ -2255,3 +2255,74 @@ class AcceptanceTests(unittest.TestCase):
         shutil.copyfile(path, analysis / "summary.json")
         with patch.object(c_acceptance, "require_accepted", consumer), patch("sys.argv", argv):
             self.assertEqual(cli.main(), 1)
+
+
+class ProducerViewTests(unittest.TestCase):
+    def test_parent_producer_identity_matches_restored_renames_and_native_bytes(self):
+        import os
+        import subprocess
+        import sys
+
+        import yaml
+
+        jobs = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())["jobs"]
+        restore = next(step for step in jobs["c-analysis-baseline"]["steps"]
+                       if step.get("name") == "Use first-parent production for baseline assessment")
+        self.assertEqual(restore["if"], "env.ANALYSIS_SIDE == 'baseline'")
+        contents = {
+            "core/src/generator.rs": b"old generator\n",
+            "core/build.rs": b"old build\n",
+            "core/build_support/helper.rs": b"old helper\n",
+            "runtime/owned.c": b"old source\n",
+            "third_party/provider.txt": b"old provider\n",
+            "LICENSE": b"old license\n", "NOTICE": b"old notice\n",
+            "tools/python/src/driver.py": b"old driver\n",
+            "docs/standards/record.md": b"old record\n",
+        }
+        for windows in (False, True):
+            with self.subTest(windows=windows), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+                subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=root, check=True)
+                (root / ".gitattributes").write_bytes(b"* text=auto\n*.c text eol=lf\n")
+                for name, data in contents.items():
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+                def commit(root=root):
+                    subprocess.run(["git", "add", "."], cwd=root, check=True,
+                                   capture_output=True)
+                    subprocess.run(["git", "-c", "user.name=CI test", "-c",
+                                    "user.email=ci@example.invalid", "commit", "--quiet", "-m",
+                                    "fixture"], cwd=root, check=True)
+                commit()
+                subprocess.run(["git", "mv", "runtime/owned.c", "runtime/renamed.c"],
+                               cwd=root, check=True)
+                for name in contents:
+                    if name != "runtime/owned.c":
+                        (root / name).write_bytes(b"current input\r\n" if windows
+                                                 else b"current input\n")
+                commit()
+                parent = subprocess.check_output(["git", "rev-parse", "HEAD^1"], cwd=root,
+                                                 text=True).strip()
+                current = c_acceptance._producer_inputs(contents, root, None, windows)
+                self.assertIsNone(current["runtime/owned.c"])
+                expected = c_acceptance._producer_inputs(contents, root, parent, windows)
+                self.assertEqual(expected["runtime/owned.c"], hashlib.sha256(
+                    contents["runtime/owned.c"]).hexdigest())
+                native = (contents["core/src/generator.rs"].replace(b"\n", b"\r\n") if windows
+                          else contents["core/src/generator.rs"])
+                self.assertEqual(expected["core/src/generator.rs"], hashlib.sha256(native).hexdigest())
+                self.assertEqual(expected["tools/python/src/driver.py"],
+                                 current["tools/python/src/driver.py"])
+                script = root / "restore.py"
+                script.write_text(restore["run"], encoding="utf-8")
+                subprocess.run([sys.executable, str(script)], cwd=root, check=True, env={
+                    **os.environ, "PYTHONPATH": str(ROOT / "tools/python/src"),
+                    "ANALYSIS_TARGET": "windows-x64-controlled-v1" if windows else TARGET,
+                })
+                self.assertEqual(c_acceptance._producer_inputs(contents, root, None, windows),
+                                 expected)
+                self.assertFalse((root / "runtime/renamed.c").exists())
+                self.assertEqual((root / "docs/standards/record.md").read_bytes(),
+                                 b"current input\r\n" if windows else b"current input\n")

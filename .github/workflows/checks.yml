@@ -31,6 +31,7 @@ jobs:
       desktop: ${{ steps.detect.outputs.desktop }}
       analysis: ${{ steps.detect.outputs.analysis }}
       application: ${{ steps.detect.outputs.application }}
+      source-parent: ${{ steps.detect.outputs.source-parent }}
     steps:
       # Standards records and the fixed guideline index are consumed analysis inputs.
       # Pull requests touching only reader documentation and design records
@@ -67,6 +68,9 @@ jobs:
           values = select_changes(rows, pull_request=bool(os.environ['PULL_REQUEST']))
           print(values)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              if values['analysis']:
+                  parent = subprocess.check_output(['git', 'rev-parse', 'HEAD^1'], text=True).strip()
+                  output.write('source-parent=' + parent + '\n')
               for key, value in values.items():
                   output.write(key + '=' + str(value).lower() + '\n')
 
@@ -76,7 +80,7 @@ jobs:
     uses: ./.github/workflows/desktop.yml
   python:
     # Short checks follow preparation so long native jobs can claim the first runners.
-    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows]
+    needs: [changes, c-analysis-generate, c-analysis-generate-windows]
     if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     strategy:
       fail-fast: false
@@ -119,7 +123,8 @@ jobs:
           path: build/python
           if-no-files-found: ignore
   core:
-    needs: changes
+    # The shared tools finish early; keep the first batch within 20 hosted jobs.
+    needs: [changes, c-analysis-prepare]
     if: needs.changes.outputs.native == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -142,7 +147,7 @@ jobs:
       - run: cargo clippy --locked --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
   desktop:
     # Short checks follow preparation so long native jobs can claim the first runners.
-    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows]
+    needs: [changes, c-analysis-generate, c-analysis-generate-windows]
     if: ${{ !cancelled() && needs.changes.outputs.application == 'true' }}
     strategy:
       fail-fast: false
@@ -494,7 +499,6 @@ jobs:
   c-analysis-prepare:
     permissions:
       contents: read
-      security-events: write
     needs: changes
     if: needs.changes.outputs.analysis == 'true'
     strategy:
@@ -517,10 +521,6 @@ jobs:
         run: *cargo-source-digest
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
-      - uses: ./.github/actions/core-build-dependencies
-        with:
-          linux-packages: build-essential cmake
-      - uses: ./.github/actions/native-analysis-compiler
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -573,81 +573,17 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CPPCHECK=' + str(executable) + '\n')
               output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v2-${{ env.CACHE_SOURCE }}
-          # v2 can save both tree builds; an immutable v1 hit could never add the baseline.
-          restore-keys: |
-            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v2-
-            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-
-            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
-      - name: Generate complete analysis samples
-        run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
-      - name: Select source comparison parent
-        id: source-parent
-        shell: python
-        run: |
-          import os, subprocess
-          parent = subprocess.check_output(['git', 'rev-parse', 'HEAD^1'], text=True).strip()
-          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-              output.write('sha=' + parent + '\n')
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ steps.source-parent.outputs.sha }}
-          path: build/c-analysis-base-tree
-      - name: Generate first-parent samples with current sample inputs
-        run: python -m autosar_tooling.c_gate prepare build/c-analysis-base-tree
-      - name: Validate generated sample inventory
-        shell: python
-        run: |
-          import os
-          from pathlib import Path
-          expected = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
-          if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
-              raise RuntimeError('Generated sample inventory is incomplete')
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: c-analysis-inputs-${{ matrix.target }}
+          name: c-analysis-tools-${{ matrix.target }}
           overwrite: true
-          path: |
-            build/c-analysis-tools
-            build/c-analysis-samples
-            build/c-analysis-base-samples
+          path: build/c-analysis-tools
           if-no-files-found: error
           retention-days: 14
-      # After publishing, so a format failure still leaves the samples for diagnosis.
-      - name: Generated C follows .clang-format
-        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_generated_format.py
-      - name: Generated C compiles with clang warnings
-        if: runner.os == 'Linux'
-        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py
-      - name: Generated C adds no clang-tidy findings to the baseline
-        id: tidy
-        if: runner.os == 'Linux'
-        env:
-          AUTOSAR_CLANG_TIDY_REPORT: build/clang-tidy.json
-        run: uv run --locked python -m autosar_tooling quality --scope runtime --c-samples "$AUTOSAR_C_ANALYSIS_SAMPLES"
-      - name: Convert clang-tidy diagnostics
-        if: ${{ always() && runner.os == 'Linux' && hashFiles('build/clang-tidy.json') != '' }}
-        env:
-          TIDY_OUTCOME: ${{ steps.tidy.outcome }}
-        run: python -m autosar_tooling.ci_reporting sarif --clang-tidy build/clang-tidy.json --analysis-outcome "$TIDY_OUTCOME" --output build/clang-tidy.sarif
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-        if: ${{ always() && runner.os == 'Linux' && hashFiles('build/clang-tidy.sarif') != '' }}
-        with:
-          sarif_file: build/clang-tidy.sarif
-          category: clang-tidy-linux
-
 
   c-analysis-prepare-windows:
     permissions:
       contents: read
-      security-events: write
     needs: changes
     if: needs.changes.outputs.analysis == 'true'
     strategy:
@@ -662,9 +598,202 @@ jobs:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps: *analysis-prepare-steps
 
+
+  c-analysis-generate:
+    permissions:
+      contents: read
+      security-events: write
+    needs: changes
+    if: needs.changes.outputs.analysis == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ANALYSIS_SIDE: current
+      ANALYSIS_TARGET: ${{ matrix.target }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      CURRENT_INPUTS: .
+      PYTHONPATH: ${{ github.workspace }}/./tools/python/src
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: &analysis-generate-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ env.ANALYSIS_SIDE == 'baseline' && needs.changes.outputs.source-parent || github.sha }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.ANALYSIS_SIDE == 'baseline'
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ github.sha }}
+          path: build/c-analysis-current-inputs
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          working-directory: ${{ github.workspace }}/${{ env.CURRENT_INPUTS }}
+      - name: Install current Python inputs
+        shell: python
+        run: |
+          import os, subprocess
+          subprocess.run(['uv', 'sync', '--locked', '--project', os.environ['CURRENT_INPUTS']], check=True)
+      - uses: ./.github/actions/core-build-dependencies
+        if: env.ANALYSIS_SIDE == 'current'
+      - uses: ./build/c-analysis-current-inputs/.github/actions/core-build-dependencies
+        if: env.ANALYSIS_SIDE == 'baseline'
+      - name: Stage current sample inputs onto the first parent
+        if: env.ANALYSIS_SIDE == 'baseline'
+        shell: python
+        run: |
+          import os, subprocess
+          subprocess.run(['uv', 'run', '--locked', '--project', os.environ['CURRENT_INPUTS'],
+              'python', '-m', 'autosar_tooling.c_gate', 'stage', os.environ['GITHUB_WORKSPACE']], check=True)
+      - name: Identify native build cache inputs
+        shell: python
+        run: *cargo-source-digest
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v3-${{ env.CACHE_SOURCE }}
+          # Each generator uses its normal root path and an independent Cargo target.
+          restore-keys: |
+            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v3-
+            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-
+            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
+      - name: Generate complete analysis samples
+        shell: python
+        run: |
+          import os, subprocess
+          from pathlib import Path
+          subprocess.run(['uv', 'run', '--locked', '--project', os.environ['CURRENT_INPUTS'],
+              'python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', 'cargo', 'test',
+              '--manifest-path', str(Path(os.environ['GITHUB_WORKSPACE']) / 'Cargo.toml'),
+              '--locked', '-p', 'autosar-config-core', '--test', 'it', '--', 'c_analysis::'],
+              cwd=os.environ['GITHUB_WORKSPACE'], check=True)
+      - name: Validate generated sample inventory and tree
+        shell: python
+        run: |
+          import json, os, subprocess
+          from pathlib import Path
+          expected = {'standard-ecu', 'user-application', 'component-pipeline', 'no-diagnostic'}
+          if {p.name for p in Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES']).iterdir()} != expected:
+              raise RuntimeError('Generated sample inventory is incomplete')
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          Path('build/c-analysis-generation.json').write_text(json.dumps({
+              'tree': tree, 'side': os.environ['ANALYSIS_SIDE'], 'target': os.environ['ANALYSIS_TARGET']
+          }), encoding='utf-8')
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: c-analysis-${{ env.ANALYSIS_SIDE == 'baseline' && 'base-inputs' || 'inputs' }}-${{ matrix.target }}
+          overwrite: true
+          path: |
+            ${{ env.AUTOSAR_C_ANALYSIS_SAMPLES }}
+            build/c-analysis-generation.json
+          if-no-files-found: error
+          retention-days: 14
+      # After publishing, so a format failure still leaves the samples for diagnosis.
+      - name: Generated C follows .clang-format
+        if: env.ANALYSIS_SIDE == 'current'
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_generated_format.py
+      - name: Generated C compiles with clang warnings
+        if: env.ANALYSIS_SIDE == 'current' && runner.os == 'Linux'
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py
+      - name: Generated C adds no clang-tidy findings to the baseline
+        id: tidy
+        if: env.ANALYSIS_SIDE == 'current' && runner.os == 'Linux'
+        env:
+          AUTOSAR_CLANG_TIDY_REPORT: build/clang-tidy.json
+        run: uv run --locked python -m autosar_tooling quality --scope runtime --c-samples "$AUTOSAR_C_ANALYSIS_SAMPLES"
+      - name: Convert clang-tidy diagnostics
+        if: ${{ always() && env.ANALYSIS_SIDE == 'current' && runner.os == 'Linux' && hashFiles('build/clang-tidy.json') != '' }}
+        env:
+          TIDY_OUTCOME: ${{ steps.tidy.outcome }}
+        run: python -m autosar_tooling.ci_reporting sarif --clang-tidy build/clang-tidy.json --analysis-outcome "$TIDY_OUTCOME" --output build/clang-tidy.sarif
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: ${{ always() && env.ANALYSIS_SIDE == 'current' && runner.os == 'Linux' && hashFiles('build/clang-tidy.sarif') != '' }}
+        with:
+          sarif_file: build/clang-tidy.sarif
+          category: clang-tidy-linux
+
+
+  c-analysis-generate-windows:
+    permissions:
+      contents: read
+    needs: changes
+    if: needs.changes.outputs.analysis == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ANALYSIS_SIDE: current
+      ANALYSIS_TARGET: ${{ matrix.target }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      CURRENT_INPUTS: .
+      PYTHONPATH: ${{ github.workspace }}/./tools/python/src
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: *analysis-generate-steps
+
+
+  c-analysis-baseline-generate:
+    permissions:
+      contents: read
+    needs: changes
+    if: needs.changes.outputs.analysis == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ANALYSIS_SIDE: baseline
+      ANALYSIS_TARGET: ${{ matrix.target }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      CURRENT_INPUTS: build/c-analysis-current-inputs
+      PYTHONPATH: ${{ github.workspace }}/build/c-analysis-current-inputs/tools/python/src
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-base-samples
+    steps: *analysis-generate-steps
+
+
+  c-analysis-baseline-generate-windows:
+    permissions:
+      contents: read
+    needs: changes
+    if: needs.changes.outputs.analysis == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ANALYSIS_SIDE: baseline
+      ANALYSIS_TARGET: ${{ matrix.target }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+      CURRENT_INPUTS: build/c-analysis-current-inputs
+      PYTHONPATH: ${{ github.workspace }}/build/c-analysis-current-inputs/tools/python/src
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-base-samples
+    steps: *analysis-generate-steps
+
   native-delivery:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.
-    needs: [changes, c-analysis-prepare]
+    needs: [changes, c-analysis-generate]
     if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
@@ -730,7 +859,7 @@ jobs:
 
   native-delivery-windows:
     # Builds and receives the prepared samples; runs beside their analysis rather than before it.
-    needs: [changes, c-analysis-prepare-windows]
+    needs: [changes, c-analysis-generate-windows]
     if: needs.changes.outputs.native == 'true'
     strategy:
       fail-fast: false
@@ -754,8 +883,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-      security-events: write
-    needs: c-analysis-prepare
+    needs: [c-analysis-prepare, c-analysis-generate]
     strategy:
       fail-fast: false
       matrix:
@@ -791,8 +919,36 @@ jobs:
       - uses: ./.github/actions/native-analysis-compiler
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: c-analysis-inputs-${{ matrix.target }}
+          name: c-analysis-tools-${{ matrix.target }}
+          path: build/c-analysis-tools
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: c-analysis-${{ env.ANALYSIS_SIDE == 'baseline' && 'base-inputs' || 'inputs' }}-${{ matrix.target }}
           path: build
+      - name: Require generated tree identity
+        env:
+          ANALYSIS_TARGET: ${{ matrix.target }}
+        shell: python
+        run: |
+          import json, os, subprocess
+          from pathlib import Path
+          receipt = json.loads(Path('build/c-analysis-generation.json').read_text())
+          side = os.environ['ANALYSIS_SIDE']
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^1' if side == 'baseline' else 'HEAD'], text=True).strip()
+          if receipt != {'tree': tree, 'side': side, 'target': os.environ['ANALYSIS_TARGET']}:
+              raise RuntimeError('Generated analysis tree identity differs')
+      - name: Use first-parent production for baseline assessment
+        if: env.ANALYSIS_SIDE == 'baseline'
+        env:
+          ANALYSIS_TARGET: ${{ matrix.target }}
+        # This is a disposable raw-job checkout; PR tools, inputs and records stay current.
+        shell: python
+        run: |
+          import os, subprocess
+          from autosar_tooling.c_acceptance import BASELINE_PRODUCTION
+          native = 'true' if os.environ['ANALYSIS_TARGET'].startswith('windows') else 'false'
+          subprocess.run(['git', '-c', 'core.autocrlf=' + native, 'restore', '--source',
+              'HEAD^1', '--worktree', '--', *BASELINE_PRODUCTION], check=True)
       - name: Select analyzer
         shell: python
         run: |
@@ -809,6 +965,7 @@ jobs:
         id: analyze
         shell: python
         env:
+          GH_TOKEN: ${{ github.token }}
           ANALYSIS_SIDE: ${{ env.ANALYSIS_SIDE }}
           ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLES: ${{ matrix.samples }}
@@ -819,15 +976,18 @@ jobs:
           baseline = os.environ['ANALYSIS_SIDE'] == 'baseline'
           samples = Path('build/c-analysis-base-samples' if baseline else 'build/c-analysis-samples')
           results = Path('build/c-analysis-baseline' if baseline else 'build/c-analysis-results')
-          expected = set(os.environ['ANALYSIS_SAMPLES'].split(','))
+          expected = os.environ['ANALYSIS_SAMPLES'].split(',')
+          if len(expected) != len(set(expected)):
+              raise RuntimeError('Duplicated analysis sample configuration')
           for name in sorted(expected):
               output = results / name
-              result = subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling',
-                  'c-check', '--target', os.environ['ANALYSIS_TARGET'], '--project', str(samples / name),
+              result = subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling.c_baseline',
+                  '--side', os.environ['ANALYSIS_SIDE'], '--sample', name,
+                  '--target', os.environ['ANALYSIS_TARGET'], '--project', str(samples / name),
                   '--output-directory', str(output)])
               try:
                   summary = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
-                  complete = (summary['error'] is None and result.returncode == (0 if summary['passed'] else 1)
+                  complete = (summary['error'] is None and result.returncode == 0
                       and summary['projectAcceptance']['status'] in ('accepted', 'blocked'))
                   print(name, 'analysis_complete=' + str(complete), 'source_passed=' + str(summary['passed']))
                   failed = not complete or failed
@@ -835,10 +995,6 @@ jobs:
                   print(name, error)
                   failed = True
           sys.exit(1 if failed else 0)
-      # Independent tool tests run once per platform, alongside the other sample shards.
-      - name: Analyzer behavior tests
-        if: env.ANALYSIS_SIDE == 'current' && matrix.group == 'no-diagnostic'
-        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -847,6 +1003,10 @@ jobs:
           path: |
             build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/summary.json
             build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/project
+            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/analysis-identity.json
+            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/baseline-source.json
+            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/platform-model.h
+            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/platform-library.cfg
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -866,8 +1026,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-      security-events: write
-    needs: c-analysis-prepare-windows
+    needs: [c-analysis-prepare-windows, c-analysis-generate-windows]
     strategy:
       fail-fast: false
       matrix:
@@ -899,8 +1058,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-      security-events: write
-    needs: c-analysis-prepare
+    needs: [c-analysis-prepare, c-analysis-baseline-generate]
     strategy:
       fail-fast: false
       matrix:
@@ -932,8 +1090,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-      security-events: write
-    needs: c-analysis-prepare-windows
+    needs: [c-analysis-prepare-windows, c-analysis-baseline-generate-windows]
     strategy:
       fail-fast: false
       matrix:
@@ -961,12 +1118,61 @@ jobs:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps: *analysis-sample-steps
 
+  c-analysis-behavior:
+    needs: c-analysis-prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps: &analysis-behavior-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - run: uv sync --locked
+      - uses: ./.github/actions/native-analysis-compiler
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: c-analysis-tools-${{ matrix.target }}
+          path: build/c-analysis-tools
+      - name: Select analyzer
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          bundle = Path('build/c-analysis-tools').resolve(strict=True)
+          executable = bundle / ('cppcheck.exe' if os.name == 'nt' else 'cppcheck')
+          if os.name != 'nt':
+              executable.chmod(0o755)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CPPCHECK=' + str(executable) + '\n')
+              output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
+      - name: Analyzer behavior tests
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+
+  c-analysis-behavior-windows:
+    needs: c-analysis-prepare-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps: *analysis-behavior-steps
+
   c-analysis-gates:
     permissions:
       contents: read
       actions: read
       security-events: write
-    needs: [c-analysis-prepare, c-analysis-samples, c-analysis-baseline]
+    needs: [c-analysis-samples, c-analysis-baseline]
     strategy:
       fail-fast: false
       matrix:
@@ -1074,7 +1280,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    needs: [c-analysis-prepare-windows, c-analysis-samples-windows, c-analysis-baseline-windows]
+    needs: [c-analysis-samples-windows, c-analysis-baseline-windows]
     strategy:
       fail-fast: false
       matrix:
@@ -1103,7 +1309,7 @@ jobs:
 
   c-analysis:
     # A skipped/cancelled producer or shard must never make the gate green.
-    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows, c-analysis-samples, c-analysis-samples-windows, c-analysis-baseline, c-analysis-baseline-windows, c-analysis-gates, c-analysis-gates-windows]
+    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows, c-analysis-generate, c-analysis-generate-windows, c-analysis-baseline-generate, c-analysis-baseline-generate-windows, c-analysis-samples, c-analysis-samples-windows, c-analysis-baseline, c-analysis-baseline-windows, c-analysis-behavior, c-analysis-behavior-windows, c-analysis-gates, c-analysis-gates-windows]
     if: ${{ !cancelled() && needs.changes.outputs.analysis == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2

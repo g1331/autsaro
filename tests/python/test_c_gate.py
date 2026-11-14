@@ -228,10 +228,13 @@ class SourceGateTests(unittest.TestCase):
                     directory = root / "build" / name / "standard-ecu"
                     shutil.copytree(output if name.endswith("results") else baseline, directory)
                     (directory / "summary.json").write_text(json.dumps(current))
+                    (directory / "baseline-source.json").write_text(json.dumps({
+                        "kind": "same-run", "tree": "commit",
+                    }))
                 with patch.object(c_gate, "ROOT", root), \
                         patch.object(c_gate.c_acceptance, "_complete"), \
                         patch.object(c_gate.c_acceptance, "input_identity",
-                                     return_value=("b" if changed else "a") * 64), \
+                                     return_value=("b" if changed else "a") * 64) as identity, \
                         patch.object(c_gate, "rename_paths", return_value={}), \
                         patch.object(c_gate, "git", return_value="commit"), \
                         patch.object(c_gate, "verdict", return_value={"status": "passed"}) as gate:
@@ -242,6 +245,8 @@ class SourceGateTests(unittest.TestCase):
                     else:
                         c_gate.scan("windows-x64-controlled-v1", "standard-ecu")
                         gate.assert_called_once()
+                        self.assertEqual([call.kwargs["producer_revision"]
+                                          for call in identity.call_args_list], ["commit", None])
 
     def test_workflow_runs_same_run_consumer_and_propagates_its_exit(self):
         import yaml
@@ -277,8 +282,23 @@ class SourceGateTests(unittest.TestCase):
             current = jobs["c-analysis-samples" + suffix]
             baseline = jobs["c-analysis-baseline" + suffix]
             prepare = "c-analysis-prepare" + suffix
-            self.assertEqual(current["needs"], prepare)
-            self.assertEqual(baseline["needs"], prepare)
+            self.assertEqual(set(current["needs"]), {prepare, "c-analysis-generate" + suffix})
+            self.assertEqual(set(baseline["needs"]),
+                             {prepare, "c-analysis-baseline-generate" + suffix})
+            self.assertEqual(jobs["c-analysis-generate" + suffix]["needs"], "changes")
+            self.assertEqual(jobs["c-analysis-baseline-generate" + suffix]["needs"], "changes")
+            self.assertEqual(jobs[prepare]["needs"], "changes")
+            platform = "windows-latest" if suffix else "ubuntu-24.04"
+            target = "windows-x64-controlled-v1" if suffix else "linux-x64-controlled-v1"
+            for name in (prepare, "c-analysis-generate" + suffix,
+                         "c-analysis-baseline-generate" + suffix):
+                self.assertEqual(jobs[name]["strategy"]["matrix"]["include"],
+                                 [{"os": platform, "target": target}])
+            for name in ("c-analysis-generate" + suffix, "c-analysis-baseline-generate" + suffix):
+                self.assertEqual(jobs[name]["env"]["CARGO_TARGET_DIR"],
+                                 "${{ github.workspace }}/target")
+            self.assertNotIn("Generate complete analysis samples",
+                             [step.get("name") for step in jobs[prepare]["steps"]])
             self.assertEqual(current["steps"], baseline["steps"])
             artifact = next(step["with"] for step in current["steps"]
                             if step.get("with", {}).get("name", "").startswith(
@@ -286,7 +306,8 @@ class SourceGateTests(unittest.TestCase):
             self.assertIn("${{ strategy.job-index }}", artifact["name"])
             self.assertIn("${{ env.ANALYSIS_SIDE }}", artifact["name"])
             self.assertEqual([path.rsplit("/", 1)[1] for path in artifact["path"].splitlines()],
-                             ["summary.json", "project"])
+                             ["summary.json", "project", "analysis-identity.json",
+                              "baseline-source.json", "platform-model.h", "platform-library.cfg"])
             self.assertEqual(current["env"]["ANALYSIS_SIDE"], "current")
             self.assertEqual(baseline["env"]["ANALYSIS_SIDE"], "baseline")
             gate = jobs["c-analysis-gates" + suffix]
@@ -300,7 +321,7 @@ class SourceGateTests(unittest.TestCase):
                              "git read-tree --empty\n"
                              "git -c core.autocrlf=true reset --hard HEAD\n")
             self.assertEqual(set(gate["needs"]), {
-                prepare, "c-analysis-samples" + suffix, "c-analysis-baseline" + suffix,
+                "c-analysis-samples" + suffix, "c-analysis-baseline" + suffix,
             })
             self.assertFalse(any("'c-check'" in step.get("run", "")
                                  for step in gate["steps"]))
@@ -383,6 +404,65 @@ class SourceGateTests(unittest.TestCase):
         # The duplicate sample identities are then rejected by the real aggregate.
         self.assertEqual(duplicated[0], duplicated[-1])
 
+    def test_baseline_source_requires_exact_parent_and_complete_artifact_provenance(self):
+        current = {"kind": "same-run", "tree": "parent"}
+        cached = {"kind": "master-artifact", "tree": "parent", "run": 1,
+                  "attempt": 1, "job": 3, "artifact": 2, "digest": "sha256:" + "a" * 64}
+        for source in (current, cached):
+            self.assertEqual(c_gate.baseline_source(source, "parent"), source)
+        for field in ("tree", "kind", "run", "attempt", "job", "artifact", "digest"):
+            with self.subTest(field=field):
+                source = {**cached, field: "invalid"}
+                with self.assertRaises(ValueError):
+                    c_gate.baseline_source(source, "parent")
+                source.pop(field)
+                with self.assertRaises((KeyError, ValueError)):
+                    c_gate.baseline_source(source, "parent")
+
+    def test_baseline_staging_keeps_parent_production_and_current_sample_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            current, baseline = root / "current", root / "baseline"
+            subprocess.run(["git", "init", "--quiet", str(current)], check=True)
+            contents = {"core/src/generator.rs": b"old generator\n",
+                        "runtime/owned.c": b"old runtime\n",
+                        "core/tests/c_analysis.rs": b"old harness\n",
+                        "core/resources/templates/input.arxml": b"old config\n",
+                        "Cargo.lock": b"old dependencies\n"}
+            for name, data in contents.items():
+                path = current / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            def commit(directory):
+                subprocess.run(["git", "add", "."], cwd=directory, check=True,
+                               capture_output=True)
+                subprocess.run(["git", "-c", "user.name=CI test", "-c",
+                                "user.email=ci@example.invalid", "commit", "--quiet",
+                                "-m", "input"],
+                               cwd=directory, check=True)
+            commit(current)
+            subprocess.run(["git", "clone", "--quiet", str(current), str(baseline)], check=True)
+            for name in contents:
+                (current / name).write_bytes(b"current input\n")
+            commit(current)
+            with patch.object(c_gate, "ROOT", current):
+                c_gate.stage(baseline)
+                for name, previous in contents.items():
+                    expected = (previous if name.startswith(("core/src/", "runtime/"))
+                                else b"current input\n")
+                    self.assertEqual((baseline / name).read_bytes(), expected, name)
+                output = root / "samples"
+                for sample in c_gate.SAMPLES:
+                    (output / sample).mkdir(parents=True)
+                with patch.object(c_gate, "stage") as stage, \
+                        patch.object(c_gate.subprocess, "run") as cargo:
+                    c_gate.prepare(baseline, output)
+                    stage.assert_called_once_with(baseline)
+                    self.assertEqual(cargo.call_args.kwargs["cwd"], baseline)
+                    environment = cargo.call_args.kwargs["env"]
+                    self.assertEqual(environment["CARGO_TARGET_DIR"], str(baseline / "target"))
+                    self.assertEqual(environment["AUTOSAR_C_ANALYSIS_SAMPLES"], str(output))
+
     def test_aggregate_refuses_missing_duplicate_changed_or_wrong_run_receipts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -404,6 +484,7 @@ class SourceGateTests(unittest.TestCase):
                         (directory / name).write_text(json.dumps(current))
                     gate = {"format": c_gate.FORMAT, "status": "passed", "target": target,
                             "sample": sample, "commit": "head", "baseline": "parent",
+                            "baselineSource": {"kind": "same-run", "tree": "parent"},
                             "inputIdentity": dict.fromkeys(("current", "baseline"), identity),
                             "summarySha256": {side: c_gate.sha(directory / name) for side, name in
                                               (("current", "summary.json"),
@@ -416,7 +497,8 @@ class SourceGateTests(unittest.TestCase):
                 c_gate.aggregate(root)
                 path = next(root.glob("*/*/gate.json"))
                 original = path.read_bytes()
-                for change in ("missing", "duplicate", "run", "status", "identity", "summary"):
+                for change in ("missing", "duplicate", "run", "status", "identity",
+                               "summary", "source"):
                     with self.subTest(change=change):
                         data = json.loads(original)
                         if change == "missing":
@@ -426,6 +508,9 @@ class SourceGateTests(unittest.TestCase):
                             shutil.copytree(path.parent, extra)
                         elif change == "summary":
                             path.with_name("summary.json").write_text("{}")
+                        elif change == "source":
+                            data.pop("baselineSource")
+                            path.write_text(json.dumps(data))
                         else:
                             fields = {"run": "commit", "status": "status",
                                       "identity": "inputIdentity"}
