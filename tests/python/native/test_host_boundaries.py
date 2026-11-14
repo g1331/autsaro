@@ -1258,9 +1258,13 @@ void Os_TestAfterFaultReader(void)
                     if variant == selected:
                         pattern = (r"if \(\(result != 0\)\s*&&\s*\(result != -EAGAIN\)\s*&&\s*"
                                    r"\(result != -EINTR\)\s*&&\s*\(result != -ETIMEDOUT\)\) \{")
-                        matches = list(re.finditer(pattern, text, re.DOTALL))
+                        start = text.index(after)
+                        end = text.index("\n}", start) + 2
+                        body = text[start:end]
+                        matches = list(re.finditer(pattern, body, re.DOTALL))
                         self.assertEqual(len(matches), 1)
-                        text = text.replace(matches[0].group(), "(void)result;\n        if (0) {")
+                        changed = body.replace(matches[0].group(), "(void)result;\n        if (0) {")
+                        text = text[:start] + changed + text[end:]
                     source.write_text(text, encoding="utf-8")
                 cases = controls if variant == "control" else {
                     "wake-unchecked": (("wake-error", 51, "", injected.format(mode="wake-error", call=1, result=-22) +
@@ -1445,7 +1449,7 @@ void Os_TestAfterFaultReader(void)
                     # Deterministically publish stop immediately before the competing request CAS.
                     matches = list(re.finditer(
                         r"(?m)^\s*if \(__atomic_compare_exchange_n\(&thread->requested,\s*"
-                        r"&previous,\s*generation,\s*false,\s*__ATOMIC_ACQ_REL,\s*__ATOMIC_ACQUIRE\)\) \{",
+                        r"&previous,\s*generation,\s*false,\s*__ATOMIC_SEQ_CST,\s*__ATOMIC_SEQ_CST\)\) \{",
                         text,
                     ))
                     self.assertEqual(len(matches), 1)
@@ -1487,6 +1491,230 @@ void Os_TestAfterFaultReader(void)
                           "terminal=irreversible running=stopped closed=detached\n")
                     self.assertEqual(result.stdout, expected, result)
 
+    def test_event_wait_delivers_suspend_queued_before_poll(self):
+        import os_suites
+
+        bounded = "const DWORD length = (count <= OS_HOST_HANDLES) ? count : OS_HOST_HANDLES;"
+        for mutant in (False, True):
+            with self.subTest(mutant=mutant), tempfile.TemporaryDirectory() as temporary, \
+                    patch.dict(os.environ, {"AUTOSAR_SANITIZE": "thread"}), \
+                    os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                if mutant:
+                    source = target / "src/host/linux/Os_HostLinux.c"
+                    text = source.read_text(encoding="utf-8")
+                    self.assertEqual(text.count(bounded), 1)
+                    source.write_text(text.replace(bounded, "const DWORD length = count;"),
+                                      encoding="utf-8")
+                with os_suites.native_session(directory, "event-suspend"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_event_suspend.c"), target=target,
+                        link_flags=tuple(f"-Wl,--wrap={symbol}" for symbol in (
+                            "poll", "__poll_chk", "pthread_kill",
+                        )),
+                    )
+                    result = os_suites.run_native(
+                        ["setarch", "x86_64", "-R", str(binary)], timeout=10,
+                    )
+                    self.assertEqual(result.returncode, 52 if mutant else 0, result)
+                    self.assertEqual(result.stdout, "" if mutant else (
+                        "event_suspend signal=delivered-before-poll acknowledgement=observed\n"
+                    ), result)
+                    self.assertEqual(result.stderr, (
+                        "event_suspend_rejected stage=52\n" if mutant else ""
+                    ), result)
+
+    def test_mutex_wait_observes_suspend_before_and_during_registration(self):
+        import os_suites
+
+        publication = (
+            "        __atomic_store_n(&thread->mutex_wait_address, "
+            "&mutex->mutex_generation, __ATOMIC_SEQ_CST);"
+        )
+        signal = "result = (pthread_kill(pthread_self(), signal_number) == 0) ? -EINTR : -EINVAL;"
+        budget = "if ((result == 0) && (acknowledged != acknowledged_before))"
+        variants = (
+            ("control", None, None, (
+                "before-register", "before-wait", "during-wait", "elapsed", "signal-error",
+                "stop", "stop-before-wait", "stop-held",
+            ), 0),
+            ("missing-publication", publication, "        (void)mutex;", ("before-wait",), 52),
+            ("missing-invalidation", "(void)InterlockedIncrement(address);", "(void)address;",
+             ("before-wait",), 52),
+            ("missing-request-check", signal, "(void)signal_number;", ("before-register",), 52),
+            ("missing-stop-invalidation", "        invalidate_mutex_wait(thread);",
+             "        (void)thread;", ("stop-before-wait",), 52),
+            ("missing-held-stop", "((held_depth == 0u) || (requested == INT32_MAX))",
+             "(held_depth == 0u)", ("stop-held",), 23),
+            ("masked-stop", "(requested == INT32_MAX) ? (SIGRTMIN + 1) : SIGRTMIN",
+             "SIGRTMIN", ("stop-held",), 68),
+            ("stale-budget", budget, "(void)acknowledged_before; if (false)", ("elapsed",), 64),
+            ("ignored-signal-error", signal,
+             "(void)pthread_kill(pthread_self(), signal_number); result = -EINTR;",
+             ("signal-error",), 62),
+        )
+        for name, before, after, scenarios, expected in variants:
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, \
+                    patch.dict(os.environ, {"AUTOSAR_SANITIZE": "thread"}), \
+                    os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                source = target / "src/host/linux/Os_HostLinux.c"
+                text = source.read_text(encoding="utf-8")
+                if name == "missing-stop-invalidation":
+                    start = text.index("OS_MEMMAP int Os_HostStopActor(")
+                    prefix, text = text[:start], text[start:]
+                else:
+                    prefix = ""
+                if before is not None:
+                    self.assertEqual(text.count(before), 1)
+                    text = text.replace(before, after)
+                text = prefix + text
+                marker = "OS_MEMMAP static int interruptible_mutex_wait("
+                self.assertEqual(text.count(marker), 1)
+                text = text.replace(marker, (
+                    "void fixture_before_mutex_registration(volatile int32_t *address);\n" + marker
+                ))
+                self.assertEqual(text.count(publication), 0 if name == "missing-publication" else 1)
+                hook = "        fixture_before_mutex_registration(&mutex->mutex_generation);\n"
+                # The test hook fixes the scheduling window without changing the production ABI.
+                anchor = "    if (thread != NULL) {\n"
+                start = text.index(marker)
+                end = text.index("/* Take the generation", start)
+                prefix, tail, suffix = text[:start], text[start:end], text[end:]
+                self.assertEqual(tail.count(anchor), 1)
+                source.write_text(prefix + tail.replace(anchor, anchor + hook) + suffix,
+                                  encoding="utf-8")
+                with os_suites.native_session(directory, "mutex-suspend"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_mutex_suspend.c"), target=target,
+                        link_flags=tuple(f"-Wl,--wrap={symbol}" for symbol in (
+                            "Os_LinuxFutexWait", "Os_LinuxFutexWake", "pthread_kill",
+                            "clock_gettime", "poll", "__poll_chk",
+                        )),
+                    )
+                    for scenario in scenarios:
+                        result = os_suites.run_native(
+                            ["setarch", "x86_64", "-R", str(binary), scenario], timeout=10,
+                        )
+                        self.assertEqual(result.returncode, expected, result)
+                        self.assertEqual(result.stdout, (
+                            f"mutex_suspend scenario={scenario} requests=observed cache=reused\n"
+                            if expected == 0 else ""
+                        ), result)
+                        self.assertEqual(result.stderr, (
+                            f"mutex_suspend_rejected stage={expected}\n" if expected else ""
+                        ), result)
+
+    def test_finite_wait_deadline_survives_pause_before_native_wait(self):
+        import os_suites
+
+        native_poll = "poll(descriptors, total, (deadline >= 0) ? -1 : timeout)"
+        variants = (
+            ("control", ("single", "any", "mutex"), 0),
+            ("relative-events", ("single", "any"), 54),
+            ("missing-mutex-invalidation", ("mutex",), 54),
+            ("relative-kernel-timer", ("single",), 31),
+        )
+        for sanitizer in ("", "thread"):
+            for name, modes, expected in variants:
+                with self.subTest(sanitizer=sanitizer, variant=name), \
+                        tempfile.TemporaryDirectory() as temporary, \
+                        patch.dict(os.environ, {"AUTOSAR_SANITIZE": sanitizer}), \
+                        os_suites.host_target():
+                    directory = Path(temporary)
+                    target = directory / "target"
+                    shutil.copytree(os_suites.TARGET, target)
+                    source = target / "src/host/linux/Os_HostLinux.c"
+                    text = source.read_text(encoding="utf-8")
+                    if name == "relative-events":
+                        self.assertEqual(text.count(native_poll), 1)
+                        text = text.replace(native_poll, "poll(descriptors, length, timeout)")
+                    elif name == "relative-kernel-timer":
+                        old = "timerfd_settime(descriptor, TFD_TIMER_ABSTIME, &expiry, NULL)"
+                        self.assertEqual(text.count(old), 1)
+                        text = text.replace(old, old.replace("TFD_TIMER_ABSTIME", "0"))
+                    elif name == "missing-mutex-invalidation":
+                        begin = text.index("OS_MEMMAP DWORD SuspendThread(")
+                        end = text.index("OS_MEMMAP DWORD ResumeThread(", begin)
+                        body = text[begin:end]
+                        old = "invalidate_mutex_wait(thread);"
+                        self.assertEqual(body.count(old), 1)
+                        text = text[:begin] + body.replace(old, "(void)thread;") + text[end:]
+                    source.write_text(text, encoding="utf-8")
+                    with os_suites.native_session(directory, "finite-deadline"):
+                        binary, _ = os_suites.build(
+                            directory, str(ROOT / "tests/fixtures/os_event_deadline.c"),
+                            target=target,
+                            link_flags=("-Wl,--wrap=poll", "-Wl,--wrap=Os_LinuxFutexWait"),
+                        )
+                        for mode in modes:
+                            command = (["setarch", "x86_64", "-R"] if sanitizer else [])
+                            result = os_suites.run_native([*command, str(binary), mode], timeout=10)
+                            self.assertEqual(result.returncode, expected, result)
+                            if expected == 31:
+                                self.assertEqual(result.stdout, "", result)
+                            else:
+                                self.assertRegex(result.stdout, (
+                                    rf"deadline mode={mode} result=258 after_resume_ms=\d+ "
+                                    r"paused_ms=\d+ budget_ms=200\n"
+                                ), result)
+                            self.assertEqual(result.stderr, (
+                                "" if expected == 0 else f"deadline_rejected stage={expected}\n"
+                            ), result)
+
+    def test_mutex_unlock_wakes_before_and_during_native_wait(self):
+        import os_suites
+
+        snapshot = (
+            "        const int32_t generation = "
+            "InterlockedCompareExchange(&handle->mutex_generation, 0, 0);\n"
+            "        outcome = try_wait_mutex(handle);"
+        )
+        variants = (
+            ("control", None, None, ("before-wait", "during-wait", "wait-error")),
+            ("missing-generation", "(void)InterlockedIncrement(&mutex->mutex_generation);",
+             "(void)mutex;", ("before-wait",)),
+            ("missing-wake", "Os_LinuxFutexWake(&mutex->mutex_generation);",
+             "(void)mutex;", ("during-wait",)),
+            ("late-snapshot", snapshot,
+             ("        outcome = try_wait_mutex(handle);\n"
+              "        const int32_t generation = "
+              "InterlockedCompareExchange(&handle->mutex_generation, 0, 0);"),
+             ("before-wait",)),
+        )
+        for name, before, after, scenarios in variants:
+            with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, \
+                    os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                if before is not None:
+                    source = target / "src/host/linux/Os_HostLinux.c"
+                    text = source.read_text(encoding="utf-8")
+                    self.assertEqual(text.count(before), 1)
+                    source.write_text(text.replace(before, after), encoding="utf-8")
+                with os_suites.native_session(directory, "mutex-wakeup"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_mutex_wakeup.c"), target=target,
+                        link_flags=tuple(f"-Wl,--wrap={symbol}" for symbol in (
+                            "pthread_mutex_trylock", "Os_LinuxFutexWait", "Os_LinuxFutexWake",
+                        )),
+                    )
+                    for scenario in scenarios:
+                        result = os_suites.run_native([str(binary), scenario], timeout=10)
+                        self.assertEqual(result.returncode, 0 if name == "control" else 52, result)
+                        self.assertEqual(result.stdout, (
+                            f"mutex_wakeup scenario={scenario} acquisition=observed masks=restored\n"
+                            if name == "control" else ""
+                        ), result)
+                        self.assertEqual(result.stderr, (
+                            "" if name == "control" else "mutex_wakeup_rejected stage=52\n"
+                        ), result)
+
     def test_native_handle_errors_and_resource_reuse(self):
         import os_suites
 
@@ -1496,7 +1724,8 @@ void Os_TestAfterFaultReader(void)
                 binary, _ = os_suites.build(
                     directory, str(ROOT / "tests/fixtures/os_event_errors.c"),
                     link_flags=tuple(f"-Wl,--wrap={name}" for name in (
-                        "poll", "read", "__poll_chk", "__read_chk", "write", "close", "pthread_mutex_destroy", "clock_gettime",
+                        "poll", "read", "__poll_chk", "__read_chk", "write", "close",
+                        "pthread_mutex_destroy", "clock_gettime", "timerfd_create", "timerfd_settime",
                     )),
                 )
                 for scenario in ("fortify-read", "fortify-poll"):
@@ -1505,7 +1734,16 @@ void Os_TestAfterFaultReader(void)
                         self.assertEqual(result.returncode, -6, result)
                         self.assertEqual(result.stdout, "", result)
                         self.assertIn("buffer overflow detected", result.stderr, result)
-                for scenario in ("poll-error", "poll-error-infinite", "poll-invalid", "poll-hangup", "poll-revents-error",
+                for scenario in ("deadline-create-error", "deadline-arm-error", "deadline-close-error",
+                                 "deadline-close-interrupted", "deadline-poll-invalid",
+                                 "deadline-poll-hangup", "deadline-poll-error",
+                                 "event-order", "poll-deadline", "any-poll-deadline",
+                                 "any-poll-error", "any-poll-error-infinite", "any-poll-invalid",
+                                 "any-poll-hangup", "any-poll-revents-error", "any-poll-interrupted",
+                                 "any-wait-read-error", "any-wait-read-interrupted", "any-wait-read-empty",
+                                 "any-wait-read-zero", "any-wait-read-short",
+                                 "poll-error", "poll-error-infinite", "poll-invalid",
+                                 "poll-hangup", "poll-revents-error",
                                  "poll-interrupted", "read-error", "read-zero", "read-short",
                                  "read-interrupted", "wait-read-error", "wait-read-interrupted",
                                  "wait-read-empty", "wait-read-zero", "wait-read-short",

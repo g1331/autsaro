@@ -41,7 +41,7 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 - `integration::protocol::` 与 `integration::sealed_projects::` 在该路径运行现有协议向量和封存工程 owner 用例；`integration::sealed_sanitizers::` 验证 probe 实际完成 20 ticks、test 模式故障退出、完整编译 argv 只差检测器选项／输出路径、封存输入不变及共享副本隔离。外部 probe control 复用既有故意越界／超宽移位夹具，要求实际运行报告与非零退出，并让合法边界输入成功。
 - `integration::sealed_sanitizers::` 在两种检测器下持续选择真实线程注册／中断身份回归，以及暂停／恢复进展、终止前后上下文、拒绝终止后恢复、运行 actor 停止和关闭句柄后 pthread 状态的成对回归。`HostBatch`、probe 与 test 使用相同封存源码，生产／插桩 argv 只允许检测器选项与输出路径不同。故意越界／超宽移位 control 仅在 ASan／UBSan 下运行；直接线程 TSan 测试继续运行。`generated_c` scaffold 的生产 ECU 编译前置步骤保持不插桩，其独立 C consumer 仍用 TSan。
 - 观察 pthread 生命周期时遵守被调用 API 的前置条件，不用 join 已 detach 线程来推断状态：普通 libc 的错误返回不保证检测器接受该探针。需要观察平台调用时，沿现有测试链接观察器保留真实调用、返回值与检测器拦截，并核对目标线程身份；生产／插桩记录须显式包含相同观察选项，移除实际调用的变异须失败。
-- libc 强化或检测器改变调用入口时，故障注入须覆盖实际编译出的符号（如 glibc 的 checked 入口），保留真实边界检查；不能通过关闭强化选项或放宽断言修补观察盲点。
+- 强化／检测器改变入口时，核对符号和信号语义：checked 入口及原始 syscall 可绕过 TSan 阻塞拦截。固定请求发布前后、信号已投递但尚未阻塞的交错，以可运行变异验证确认与期限；保留强化、边界和断言。
 - 在测试副本中替换源码以注入边界或变异时，锚点须断言唯一命中并锁定目标操作、参数和顺序；允许无语义影响的空白变化。源码调整后同步核对注入位置，不能因锚点未命中而跳过场景或变异。通过前置补丁改变符号的变异须同步后续补丁的上下文，先证明完整补丁序列可应用且变异可编译；补丁准备失败不计为行为拒绝。
 - 编译期拒绝先以相同参数编译正常消费者 TU，再断言反例的文件、行及诊断，不重复构建无关内核。运行期反例仍完整构建、链接、执行。独立构建场景分别由受管命令计时，保留期限和断言；多阶段消费者刷新进度，保留超时前最后完成位置。
 - Hook／ISR 等受限上下文中的测试断言，失败出口须独立于被测服务的调用权限，并以实际假条件验证终止；例如从 Pre/PostTaskHook 调用 ShutdownOS 会被 OS 合法拒绝，不能用它保证测试失败。
@@ -70,7 +70,7 @@ Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元�
 
 ## 主机时序与间歇失败
 
-- 主机侧逐 tick 握手（如 HostBatch 等待 tick 完成与输出确认）不能依赖短超时轮询推进：FreeRTOS Windows 端口补丁移除了 `timeBeginPeriod`，Windows 上 1 ms 定时等待约 15.6 ms 才返回，Linux 宿主层则按 1 ms 轮询，问题只在 Windows 负载下表现为 watchdog 超时。对端有待处理工作时显式唤醒，并按单批墙钟预算核对。
+- 主机逐 tick 握手用事件直接唤醒：Linux eventfd 与 mutex 代次避免零超时轮询，Windows 1 ms 可舍入为 15.6 ms。有限等待须覆盖最后预算计算到阻塞之间的暂停窗口；只在 EINTR 后重算不足。用真实暂停超过预算、恢复及时超时及旧相对预算变异核对绝对期限，保留重置／索引与单批预算。
 - 宿主线程不得忙等：FreeRTOS 空闲 hook 每轮让出主机 CPU（`idle_state` 的 `host-yield` 场景），否则每个 ECU 进程占满一个 CPU，并在部分机型上拖慢跨线程交接。
 - Windows 托管 runner 混用 AMD EPYC 9V45／9V74／7763 与 Intel Xeon 8370C／8573C，只在一种机型出现的时序失败（#61：9V45 上另一 vCPU 忙等时，跨线程唤醒有约 2 ms 停顿）要按 CPU 型号记录，在同一 runner 上配对比较变体；筛选机型用读取型号后立即结束的小矩阵，不用大矩阵随机抽样占用共享 runner。
 - 子进程失败消息须带 stdout／stderr 的内容，不能只给随 scratch 目录删除的日志路径：共用执行入口（`ProcessOwner::run`、`ecu_tools.process.run_bounded`）与测试的 `tooling::wait_success` 已默认附带输出末尾，新的失败路径沿用它们，不另写只报路径的错误。 调整共用执行入口时，保留各调用方的相对源对象与失败解释，并覆盖同一原因涉及的其他调用点；阶段名或宿主绝对路径不能替代这层上下文。排查 CI 失败先下载 `native-scratch-*`／`os-suites-*` 现场，不靠猜测重跑。

@@ -275,6 +275,98 @@ fn script(batches: &[(u64, &[(u64, &str)])]) -> String {
     text
 }
 
+fn check_s3(binary: &Path, directory: &Path, oracle: &Value, case: &Value) {
+    // Session confirmation at tick 1 shifts the immutable S3 timeline by one tick.
+    let s3 = oracle["settings"]["s3_ms"].as_u64().unwrap();
+    let mut text = script(&[(1, &[(REQUEST, "0210030000000000")])]);
+    let mut last = 1;
+    for at in case["input_epochs"].as_array().unwrap() {
+        last = at.as_u64().unwrap() + 1;
+        text.push_str(&format!("BEGIN {last}\nCOMMIT\n"));
+    }
+    let query = (1 + s3).max(last + 1);
+    text.push_str(&script(&[(query, &[(REQUEST, "0322F18600000000")])]));
+    let output = run(binary, directory, text.as_bytes());
+    assert_eq!(
+        frames(&output, RESPONSE),
+        vec![
+            (1, "065003003201F400".to_owned()),
+            (query, case["expected_can"].as_str().unwrap().to_owned())
+        ],
+        "{}: {output}",
+        case["id"]
+    );
+    assert!(
+        !output.contains("REJECT ") && !output.contains("COMMIT_ERROR "),
+        "{}: {output}",
+        case["id"]
+    );
+    assert_eq!(frames(&output, TRANSMIT), periodic(&[], query));
+}
+
+/// Output publication after an empty check must wake the producer without a timer poll.
+#[cfg(target_os = "linux")]
+#[test]
+fn s3_output_publication_wakes_armed_native_event_wait() {
+    let scratch = super::Scratch::new();
+    let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
+    let control = scratch.0.join("event-wakeup.c");
+    fs::write(
+        &control,
+        format!(
+            "{}\n{}",
+            fs::read_to_string(project.join("integration/src/ecu_host_batch.c")).unwrap(),
+            fs::read_to_string(root().join("core/tests/fixtures/host-batch/linux_event_wakeup.c"))
+                .unwrap()
+        ),
+    )
+    .unwrap();
+    let output = scratch.0.join("event-build");
+    let kinds = std::env::var_os("AUTOSAR_SANITIZE").unwrap_or_default();
+    let mut command = super::tooling::ecu_sanitizer_build_command(
+        &project,
+        &output,
+        "probe",
+        Some(&control),
+        &kinds,
+    );
+    command.args([
+        "-Wl,--wrap=Os_TargetWaitTick",
+        "-Wl,--wrap=Os_TargetNotifyNative",
+        "-Wl,--wrap=poll",
+        "-Wl,--wrap=__poll_chk",
+    ]);
+    require_success(&super::tooling::run_public_command(
+        &mut command,
+        &scratch.0,
+        "event-build",
+        Duration::from_secs(180),
+    ));
+    let directory = if kinds.is_empty() {
+        output.join("production")
+    } else {
+        output
+    };
+    let binary = super::tooling::native_binary(&directory, "ecu_probe");
+    let oracle: Value = serde_json::from_slice(
+        &fs::read(root().join("core/tests/fixtures/oracles/protocol.json")).unwrap(),
+    )
+    .unwrap();
+    bind_oracle_settings();
+    for case in oracle["timing_cases"].as_array().unwrap() {
+        let name = case["id"].as_str().unwrap();
+        if matches!(name, "s3-expired" | "s3-input-at-boundary") {
+            let scene = scratch.0.join(name);
+            check_s3(&binary, &scene, &oracle, case);
+            assert!(
+                fs::read_to_string(scene.join("stderr"))
+                    .unwrap()
+                    .contains("EVENT_WAKE waiter=armed publication=released\n")
+            );
+        }
+    }
+}
+
 fn bind_oracle_settings() {
     // The oracle settings must equal the ECUC actually built here.
     let ecuc = single_component_sources()
@@ -432,31 +524,7 @@ fn single_component_meets_independent_protocol_and_timing_vectors() {
                 false,
             ),
             "s3-expired" | "s3-input-at-boundary" => {
-                // The session response is confirmed at tick 1, so S3 ends at
-                // 5001; the oracle timeline shifts by that one tick.
-                let s3 = oracle["settings"]["s3_ms"].as_u64().unwrap();
-                let mut text = script(&[(1, &[(REQUEST, "0210030000000000")])]);
-                let mut last = 1;
-                for at in case["input_epochs"].as_array().unwrap() {
-                    last = at.as_u64().unwrap() + 1;
-                    text.push_str(&format!("BEGIN {last}\nCOMMIT\n"));
-                }
-                let query = (1 + s3).max(last + 1);
-                text.push_str(&script(&[(query, &[(REQUEST, "0322F18600000000")])]));
-                let output = run(binary, &directory(name), text.as_bytes());
-                assert_eq!(
-                    frames(&output, RESPONSE),
-                    vec![
-                        (1, "065003003201F400".to_owned()),
-                        (query, case["expected_can"].as_str().unwrap().to_owned())
-                    ],
-                    "{name}: {output}"
-                );
-                assert!(
-                    !output.contains("REJECT ") && !output.contains("COMMIT_ERROR "),
-                    "{name}: {output}"
-                );
-                assert_eq!(frames(&output, TRANSMIT), periodic(&[], query));
+                check_s3(binary, &directory(name), &oracle, case);
                 continue;
             }
             _ => panic!("unimplemented immutable timing case: {name}"),

@@ -16,7 +16,9 @@ def main() -> None:
     link_flags = sys.argv[5:]
     if link_flags not in ([], ["-Wl,--wrap=pthread_detach"],
                           ["-Wl,--wrap=Os_TargetTakeInput", "-Wl,--wrap=Os_TargetPostInput",
-                           "-Wl,--wrap=vApplicationTickHook"]):
+                           "-Wl,--wrap=vApplicationTickHook"],
+                          ["-Wl,--wrap=Os_TargetWaitTick", "-Wl,--wrap=Os_TargetNotifyNative",
+                           "-Wl,--wrap=poll", "-Wl,--wrap=__poll_chk"]):
         raise ValueError("Unsupported test linker observer")
     kinds = os.environ.get("AUTOSAR_SANITIZE", "")
     if kinds and (sys.platform != "linux" or kinds not in ("thread", "address,undefined")):
