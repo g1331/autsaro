@@ -759,7 +759,7 @@ jobs:
     needs: c-analysis-prepare
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         include:
           - os: ubuntu-24.04
@@ -810,7 +810,6 @@ jobs:
         id: analyze
         shell: python
         env:
-          CPPCHECK: ${{ github.workspace }}/build/missing-cppcheck
           ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLES: ${{ matrix.samples }}
         run: |
@@ -844,6 +843,14 @@ jobs:
           sys.exit(subprocess.run([sys.executable, '-m', 'autosar_tooling.c_gate', 'scan',
               '--target', os.environ['ANALYSIS_TARGET'],
               '--sample', os.environ['ANALYSIS_SAMPLE']]).returncode)
+      - name: Omit one completed sample receipt for protection witness
+        if: matrix.target == 'linux-x64-controlled-v1' && matrix.group == 'standard-ecu'
+        shell: python
+        run: |
+          from pathlib import Path
+          sample = Path('build/c-analysis-results/standard-ecu')
+          (sample / 'summary.json').unlink()
+          (sample / 'gate.json').unlink()
       # Independent tool tests run once per platform, alongside the other sample shards.
       - name: Analyzer behavior tests
         if: matrix.group == 'no-diagnostic'
@@ -906,7 +913,7 @@ jobs:
     needs: c-analysis-prepare-windows
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         include:
           - os: windows-latest
