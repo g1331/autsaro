@@ -209,6 +209,11 @@ class SourceGateTests(unittest.TestCase):
             self.assertEqual(current["needs"], prepare)
             self.assertEqual(baseline["needs"], prepare)
             self.assertEqual(current["steps"], baseline["steps"])
+            artifact = next(step["with"]["name"] for step in current["steps"]
+                            if step.get("with", {}).get("name", "").startswith(
+                                "c-analysis-raw-"))
+            self.assertIn("${{ strategy.job-index }}", artifact)
+            self.assertIn("${{ env.ANALYSIS_SIDE }}", artifact)
             self.assertEqual(current["env"]["ANALYSIS_SIDE"], "current")
             self.assertEqual(baseline["env"]["ANALYSIS_SIDE"], "baseline")
             gate = jobs["c-analysis-gates" + suffix]
@@ -235,7 +240,8 @@ class SourceGateTests(unittest.TestCase):
                     for name in ("current", "baseline"):
                         for index in range(count if name == side else 1):
                             path = root / "build/c-analysis-raw" / (
-                                f"c-analysis-raw-{name}-linux-x64-controlled-v1-standard-ecu-{index}")
+                                f"c-analysis-raw-{name}-linux-x64-controlled-v1-"
+                                f"standard-ecu-{index}")
                             path.mkdir(parents=True)
                     with patch.dict(os.environ, {
                         "ANALYSIS_TARGET": "linux-x64-controlled-v1",
