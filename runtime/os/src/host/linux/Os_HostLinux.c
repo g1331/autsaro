@@ -69,7 +69,9 @@ struct Os_HostHandleType {
     const void *bootstrap_bottom;
     size_t bootstrap_size;
 #endif
-    volatile int32_t mutex_generation; /**< Atomic unlock publication; reset before creation. */
+    volatile int32_t
+        mutex_generation; /**< Atomic unlock/wait publication; reset before creation. */
+    volatile int32_t *mutex_wait_address; /**< Atomic cached static wait cell; no Init reset. */
 };
 
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
@@ -566,6 +568,34 @@ OS_MEMMAP static DWORD try_wait_mutex(HANDLE handle)
     return outcome;
 }
 
+/* Publish before checking requests; request publishers inspect the subscription
+ * after their SC request update. Either they interrupt this wait or it observes
+ * the request before blocking, including a signal deferred by an interceptor. */
+OS_MEMMAP static int interruptible_mutex_wait(HANDLE mutex,
+                                              int32_t generation,
+                                              const struct timespec *duration,
+                                              int32_t acknowledged_before)
+{
+    HANDLE thread = current_thread;
+    int result = 0;
+    if (thread != NULL) {
+        __atomic_store_n(&thread->mutex_wait_address, &mutex->mutex_generation, __ATOMIC_SEQ_CST);
+        const int32_t requested = __atomic_load_n(&thread->requested, __ATOMIC_SEQ_CST);
+        const int32_t acknowledged = __atomic_load_n(&thread->acknowledged, __ATOMIC_SEQ_CST);
+        if ((requested != acknowledged) && (held_depth == 0u)) {
+            result = (pthread_kill(pthread_self(), SIGRTMIN) == 0) ? -EINTR : -EINVAL;
+        }
+        if ((result == 0) && (acknowledged != acknowledged_before)) {
+            /* A parked interval must not extend the caller's remaining budget. */
+            result = -EINTR;
+        }
+    }
+    if (result == 0) {
+        result = Os_LinuxFutexWait(&mutex->mutex_generation, generation, duration);
+    }
+    return result;
+}
+
 /* Take the generation before trying: an unlock between EBUSY and futex must
  * make the expected value stale. Wait with suspend unmasked, as in try_wait_mutex. */
 OS_MEMMAP static DWORD wait_mutex(HANDLE handle, DWORD milliseconds, uint64_t end)
@@ -573,6 +603,10 @@ OS_MEMMAP static DWORD wait_mutex(HANDLE handle, DWORD milliseconds, uint64_t en
     DWORD outcome = WAIT_TIMEOUT;
     int pending = 1;
     while (pending != 0) {
+        const int32_t acknowledged =
+            (current_thread != NULL)
+                ? __atomic_load_n(&current_thread->acknowledged, __ATOMIC_SEQ_CST)
+                : 0;
         const int32_t generation = InterlockedCompareExchange(&handle->mutex_generation, 0, 0);
         outcome = try_wait_mutex(handle);
         if (outcome != WAIT_TIMEOUT) {
@@ -596,7 +630,7 @@ OS_MEMMAP static DWORD wait_mutex(HANDLE handle, DWORD milliseconds, uint64_t en
                     duration = &interval;
                 }
                 const int result =
-                    Os_LinuxFutexWait(&handle->mutex_generation, generation, duration);
+                    interruptible_mutex_wait(handle, generation, duration, acknowledged);
                 if ((result != 0) && (result != -EAGAIN) && (result != -EINTR) &&
                     (result != -ETIMEDOUT)) {
                     outcome = WAIT_FAILED;
@@ -946,6 +980,17 @@ OS_MEMMAP BOOL CloseHandle(HANDLE handle)
     return closed;
 }
 
+/* Generation cells have static pool lifetime. Idle actors may retain the last
+ * cell even after reuse; invalidating it is only a spurious mutex retry. */
+OS_MEMMAP static void invalidate_mutex_wait(HANDLE thread)
+{
+    volatile int32_t *address = __atomic_load_n(&thread->mutex_wait_address, __ATOMIC_SEQ_CST);
+    if (address != NULL) {
+        /* The signal interrupts an entered futex; a not-yet-entered wait sees EAGAIN. */
+        (void)InterlockedIncrement(address);
+    }
+}
+
 OS_MEMMAP DWORD SuspendThread(HANDLE thread)
 {
     DWORD result = UINT32_MAX;
@@ -965,8 +1010,9 @@ OS_MEMMAP DWORD SuspendThread(HANDLE thread)
                                                 &previous,
                                                 generation,
                                                 false,
-                                                __ATOMIC_ACQ_REL,
-                                                __ATOMIC_ACQUIRE)) {
+                                                __ATOMIC_SEQ_CST,
+                                                __ATOMIC_SEQ_CST)) {
+                    invalidate_mutex_wait(thread);
                     if (pthread_kill(thread->thread, SIGRTMIN) == 0) {
                         const uint64_t end = monotonic_ms() + 2000u;
                         int32_t acknowledged =
@@ -1139,6 +1185,7 @@ OS_MEMMAP int Os_HostStopActor(HANDLE thread, DWORD timeout_ms)
     int stopped = 0;
     if ((thread != NULL) && (thread->kind == OS_HOST_THREAD)) {
         (void)InterlockedExchange(&thread->requested, INT32_MAX);
+        invalidate_mutex_wait(thread);
         futex_wake(&thread->resumed);
         if (pthread_kill(thread->thread, SIGRTMIN + 1) == 0) {
             while (InterlockedCompareExchange(&thread->acknowledged, 0, 0) != INT32_MAX) {
