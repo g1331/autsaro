@@ -79,6 +79,7 @@ Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元�
 - 排查 Linux `/proc` 观察竞态时，复现 UID 与权限也须匹配现场：root 可能掩盖普通用户在进程退出期间遇到的 `EACCES`。先记录清理的分项原因、PID 与 errno；根据已注册的进程／组归属或确定的退出状态判断，不能把权限错误一律当作已退出，也不能抢收其他 launcher 的退出码。 测试存活观察器也要处理 stat 打开后 read 的 `ESRCH`，以注入反例保证 `EACCES` 等错误仍显式失败。
 - 间歇超时在首次关闭前同时记录线程、握手和墙钟时间线；Linux HostBatch 的入口、负对照及负载判别见[watchdog 取证](native-watchdog.md)。保留原期限、断言和完整向量。
 - 长时间原生验收启动前，核对后续消费者阶段所需的全部外层工具路径，保持应用配置阶段的工具隔离；不能把缺失前置条件留到末尾才发现。含大响应时，将完整事件逐条写入既有证据文件，避免在内存保留全部历史 snapshot；保留原有 payload、场景与断言，并分别核查驱动和产品进程的内存，不能用证据写入优化掩盖产品内存问题。
+- 间歇失败不再复现时不跳过、不重试、不放宽期限：测试留在必需 CI，由自动取证等待复发；Issue 离开阶段出口清单的条件见 [ADR 0031](../../adr/0031-intermittent-failure-exit-policy.md)。
 
 开发工具的 Git 文件／属性查询与 clang-tidy 的内核补丁应用使用同一个 `ecu_tools.process.run_bounded`，期限为 30 秒；失败包含阶段／样本、命令、原始 exit 与 stdout／stderr 末尾。c-check 的工具探测／补丁为 30 秒、单 TU 编译为 60 秒、分析为 600 秒；只有 Cppcheck 的正常诊断退出码 1 被作为分析结果保留，挂起和其他异常退出仍失败。对应挂起回归可用 `uv run --locked python -B -m unittest discover -s tests/python/process -p test_feedback.py` 单独运行。
 

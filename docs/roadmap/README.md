@@ -61,7 +61,7 @@ MCU 前最低范围见[参考工程要求](reference-ecu.md)，包括已调查�
 
 **之后：** 主线上逐模块标准整改（ECU 批次执行、CanIf、LSduR／PduR、COM、CanTp、Dcm、ComM／BswM、Det、OS／SchM、RTE／共享类型；Dem、NvM、Security 已随旧链路删除，不在本 Epic 整改，由 R7 重新实现）→ 主线交付与离线工具验证 → 开发反馈、CI 效率 → 生成 C 源码不回退门成为必需门禁 → 非实现者独立出口复验。已知遗留：Windows 并行 `E_OS_STATE`（若根因在共用 `runtime/os`，迁移时复现并归入 ECU 执行或 OS 整改）；CAN 整改遗留的 MISRA 人工评估与 c-check 清零归合规线。
 
-Epic 9 出口前，R11 只允许需求与规范研究，消费者实施须等待出口。
+Epic 9 出口前，R11 只允许需求与规范研究，消费者实施须等待出口。无法复现的间歇失败满足自动取证已就位且连续 30 次完成运行无复发时转为 `known-gap`，不再阻塞出口（[ADR 0031](../adr/0031-intermittent-failure-exit-policy.md)）。
 
 严格源码门按 [ADR 0026](../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 区分原始分析与项目验收；Epic 9 出口启用不回退门，完整验收随合规线出口切换（ADR 0027）。
 

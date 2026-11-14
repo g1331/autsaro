@@ -115,3 +115,4 @@ R11 通信目标契约见 [ADR 0028](../adr/0028-r11-communication-contract.md)�
 | [0028](../adr/0028-r11-communication-contract.md) | R11 通信身份、FD 剖面与主机记录契约 | 已接受 |
 | [0029](../adr/0029-project-variant-contract.md) | 工程基座、项目覆盖、功能变体与语义差异契约 | 已接受 |
 | [0030](../adr/0030-host-simulation-layer-outside-misra-scope.md) | 主机仿真层移出 MISRA 合规范围 | 已接受 |
+| [0031](../adr/0031-intermittent-failure-exit-policy.md) | 无法复现的间歇失败离开阶段出口清单的条件 | 已接受 |
