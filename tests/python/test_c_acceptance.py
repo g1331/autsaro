@@ -968,7 +968,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(by_id["R17.6"]["category"], "Mandatory")
         self.assertEqual(by_id["R17.5"]["category"], "Required")
         control_text = (self.root / by_id["R16.1"]["source"]["file"]).read_text(encoding="utf-8")
-        self.assertIn("184 个 switch 实例、20 种拼写", control_text)
+        self.assertIn("184 个 switch 实例、18 种语法体", control_text)
         self.assertIn("| Ecu_BswMAction | ComM_ModeType→uint8 | 4 |", control_text)
         self.assertIn("| Os_ArtiService | OSServiceIdType→uint8 | 42 |", control_text)
         sdk_text = (ROOT / c_acceptance.SDK).read_text(encoding="utf-8")
