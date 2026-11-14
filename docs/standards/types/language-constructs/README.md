@@ -152,5 +152,6 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 
 词法批次的冻结结果与逐项证据见 [PR #476](https://github.com/g1331/autsaro/pull/476)
 及 [lexical.md](lexical.md#当前输入与核查方法)。声明批次随后完成 R7.1 的精确类别。
-本批表达式结算 R13.1／R13.3／R13.6；完整 144 项为 20 satisfied、
-3 not_applicable、121 not_assessed。当前输入绑定见[声明篇](declarations.md#当前输入重评)。
+表达式批次结算 R13.1／R13.3／R13.6；[控制流批次](control-flow.md)随后结算 8 项。
+完整 144 项现为 28 satisfied、3 not_applicable、113 not_assessed。
+当前输入绑定见[声明篇](declarations.md#当前输入重评)。
