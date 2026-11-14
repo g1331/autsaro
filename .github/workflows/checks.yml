@@ -65,6 +65,8 @@ jobs:
               print('\n'.join(path for row in rows
                   for path in (row['filename'], row.get('previous_filename')) if path))
           values = select_changes(rows, pull_request=bool(os.environ['PULL_REQUEST']))
+          # Temporary protection experiment: retain the full C matrix and its gate.
+          values.update(code=False, native=False, desktop=False, application=False, analysis=True)
           print(values)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               for key, value in values.items():
@@ -757,6 +759,7 @@ jobs:
     needs: c-analysis-prepare
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - os: ubuntu-24.04
@@ -902,6 +905,7 @@ jobs:
     needs: c-analysis-prepare-windows
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - os: windows-latest
