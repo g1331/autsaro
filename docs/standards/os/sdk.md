@@ -128,7 +128,7 @@ SDK 使用既有 source-assessment context 的 sdk-integration 组；`sdk_identi
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "95912048af221849e1ddb15cb8491493a3d1afb0a30e2e1e961100df6248a25b"
+      "inputIdentity": "afd1ee8ed539d6dc84a8edd7aa81a87a099bc88fd02960f39a9530ebf8c1fc10"
     },
     {
       "caseId": "no-diagnostic",
@@ -138,7 +138,7 @@ SDK 使用既有 source-assessment context 的 sdk-integration 组；`sdk_identi
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "b3484f8f3679d7d89c4d8e5951098afba23db133b3bb4173251c3b5da8b59bb8"
+      "inputIdentity": "174c70bd1aaaaff12becf4acadcee00ad4fb7bbc0fd2de682b451488b118c16d"
     },
     {
       "caseId": "user-application",

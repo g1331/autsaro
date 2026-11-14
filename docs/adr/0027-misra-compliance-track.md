@@ -2,7 +2,7 @@
 
 ## 状态与背景
 
-已接受（2026-11-13），执行项目负责人在 [#480](https://github.com/g1331/autsaro/issues/480) 的决定。本决定部分取代 [ADR 0026](0026-project-source-acceptance-preserves-raw-analysis.md) 的启用阶段与“前置齐备前不关闭 #55 或 Epic 9”，以及 [ADR 0023](0023-autosar-required-conflict-disposition.md) 所述 Epic 9 出口对完整人工评估的依赖；两者其余决定不变。
+已接受（2026-11-13），执行项目负责人在 [#480](https://github.com/g1331/autsaro/issues/480) 的决定。本决定部分取代 [ADR 0026](0026-project-source-acceptance-preserves-raw-analysis.md) 的启用阶段与“前置齐备前不关闭 #55 或 Epic 9”，以及 [ADR 0023](0023-autosar-required-conflict-disposition.md) 所述 Epic 9 出口对完整人工评估的依赖；两者其余决定不变。[ADR 0030](0030-host-simulation-layer-outside-misra-scope.md)（2026-11-14）补充：主机仿真层移出合规范围后，不回退门和完整验收只要求范围内位置，范围外位置只报告。
 
 2026-11-13 核算时，MISRA C:2012 的 221 项中只有 31 项对当前输入有有效结论：固定 11 项 checker 限制已完成，144 项 checker 覆盖义务结清 20 项，66 项人工记录仍停在历史冻结输入。按已观察的批次速度，剩余部分还需数周。路线图把 R11 及之后的全部功能实施放在 Epic 9 出口之后，人工评估因此挡住了所有功能开发。
 

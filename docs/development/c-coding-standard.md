@@ -125,11 +125,11 @@ void Server_Run(uint8, uint32 *);
 
 ## MISRA 适用分层与契约冲突
 
-[ADR 0025](../adr/0025-misra-layered-scope.md)规定四层责任、类别记录及 GRP：自有平台无关代码和生成 C 完整评估；主机层正常整改并可引用已授权类别；SDK／FreeRTOS 原件按采用代码来源处理，项目补丁仍是自有代码。R15.5 为 Disapplied，其余类别保持。
+[ADR 0030](../adr/0030-host-simulation-layer-outside-misra-scope.md)划定范围：主机仿真层在范围外，也编译进目标的文件仍在范围内，不为消除诊断修改 FreeRTOS 原件。[ADR 0025](../adr/0025-misra-layered-scope.md)规定范围内的类别记录及 GRP：自有目标代码和生成 C 完整评估，采用代码按来源处理，内核补丁是自有代码；R15.5 为 Disapplied。
 
-固定版次的 AUTOSAR 必需契约优先；核实无法同时满足 MISRA 时保留正确契约和原始结果。PR 记录规则、位置、必需条款和理由；对不上必需条款的诊断不属于 AUTOSAR 冲突，按 ADR 0025 的层次与已授权类别处理，类别外应整改或有据裁决。实现者依证据决定，Issue 只记结论与链接。不能靠删除标准段标记、停止 include、缩小扫描范围或增加无依据 suppression 来消除诊断。
+固定版次的 AUTOSAR 必需契约优先；核实无法同时满足 MISRA 时保留正确契约和原始结果。PR 记录规则、位置、必需条款和理由；对不上必需条款的诊断不属于 AUTOSAR 冲突，按 ADR 0025 的层次与已授权类别处理，类别外应整改或有据裁决。实现者依证据决定。不能靠删除标准段标记、停止 include、缩小扫描范围或增加无依据 suppression 来消除诊断。
 
-按 [ADR 0023](../adr/0023-autosar-required-conflict-disposition.md) 执行既有 AUTOSAR 冲突授权，按 [ADR 0025](../adr/0025-misra-layered-scope.md)执行类别处置，均无需再次索批。项目授权与 MISRA 规范效力分别记录：核对合法版次／amendment／TC、有效类别和允许条件、实际闭包、风险控制及独立复核；Mandatory 不允许偏离，缺依据保持未核查。原始 `passed=false`、`error` 和人工 `not_assessed` 保持。
+[ADR 0023](../adr/0023-autosar-required-conflict-disposition.md) 的冲突授权与 ADR 0025 的类别处置无需再次索批。项目授权与 MISRA 规范效力分别记录：核对合法版次／amendment／TC、有效类别和允许条件、实际闭包、风险控制及独立复核；Mandatory 不允许偏离，缺依据保持未核查，原始诊断与状态保持。
 
 ## MISRA 偏离注释
 
@@ -142,15 +142,13 @@ void Server_Run(uint8, uint32 *);
 
 MR12 就近说明理由与风险控制；已有 API 文档时放在文档前，保持文档紧邻声明／宏并验证关联。逐项记录与注释对应；ADR 0025 类别共用依据，不重复必要性。注释不构成批准。
 
-类别引用：[MemMap R20.1／R20.5](../standards/memmap/README.md#memmap-类别偏离)、[主机动态设施 D4.12＋R21.3／R22.1](../standards/os/native-facilities/storage-interrupts.md#主机动态设施类别偏离)、[同步嵌套 ISR R17.2](../standards/os/native-facilities/storage-interrupts.md#同步嵌套-isr-类别偏离)。后续源码整改就近 MR12 只写该位置的机制与约束，记录用来源模式识别实例；既有精确 include／undef 记录仍执行下述双向关联。
+类别引用：[MemMap R20.1／R20.5](../standards/memmap/README.md#memmap-类别偏离)、[主机动态设施](../standards/os/native-facilities/storage-interrupts.md#主机动态设施类别偏离)、[同步嵌套 ISR](../standards/os/native-facilities/storage-interrupts.md#同步嵌套-isr-类别偏离)、[主机地址表示](../standards/os/native-facilities/addresses.md#主机地址表示类别处置)；后三类和 ADR 0024 的三处 Linux include 的范围外实例已转历史，待定文件内的实例见 ADR 0030。后续源码整改就近 MR12 只写该位置的机制与约束，记录用来源模式识别实例；既有精确 include／undef 记录仍执行下述双向关联。
 
 直接 include 的记录范围使用文件路径加完整字面指令，例如 `` `runtime/os/src/host/linux/Os_HostLinux.c` 中 `#include <signal.h>` ``；引号形式同样保留为 `#include "private/header.h"`。现有对应检查只归一化指令周围的空白、注释和续行，保留文件、规则、头名及尖括号／引号身份；宏 include 不会冒充字面头。未批准、重复、错文件／规则／头或过期记录仍须拒绝，不能用函数名、新宏或基线代替 include 位置。
 
 同一文件重复的字面指令须定位到具体出现位置：例如 `` `runtime/os/src/Os.c` 中 `#include "Os_MemMap.h" [2]` ``。方括号序号只用于记录，不写进 C 指令；从1起按同文件、同一规范化指令的物理出现顺序计数，包含条件排除分支。重复指令不接受无序号的模糊对应；单次指令仍可省略序号。撤销关键词同样直接写为 `#undef OS_START_SEC_CODE`，重复时附 `[2]` 等正整数。序号不能取0、负数或带前导零；错位、插删导致过期、重复记录／注释及未批准条目均须拒绝。该关联检查不判断规范必要性或授予批准，原文、风险控制和独立复核前提不变。
 
 Dir4.10仅限`.h`：范围写`@file`，MR12并入首个`/** @file ... */`。
-
-[ADR 0024](../adr/0024-bounded-linux-platform-retention.md) 三处 Linux include 保留原范围和记录；ADR 0025 的类别授权不追认其他规则。
 
 - 记录放在对应 `docs/standards/` 模块篇。类别内使用 [ADR 0025 格式](../adr/0025-misra-layered-scope.md#类别记录格式与引用)，其他使用 [ADR 0023 逐项格式](../adr/0023-autosar-required-conflict-disposition.md#逐项记录与复核)。授权、评估、复核分别写明；新例外由用户决定。
 - 只有具体记录满足原授权范围、规范允许条件与上述全部评估／复核前提后才在源码中加注释，注释中的规则编号与记录一致；Cppcheck 的原始诊断照常保留，注释不是 suppression。类别覆盖条件按 ADR 0025 核查，模式外位置照常整改；已有记录和原始诊断保持。

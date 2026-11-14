@@ -53,7 +53,7 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "7c90a39b784c556451110d7f6fae74f089d1293ec22d60d577b8bc062172a028"
+      "inputIdentity": "1f79a17a25a51afb304f6c9c5172be32cbae44b467ceb70866012391cd035491"
     },
     {
       "caseId": "no-diagnostic",
@@ -63,7 +63,7 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "2adc9495668340ab93e9de3e0bcf3618e47109a1f992ecc41982c4122551e3da"
+      "inputIdentity": "c476d3a05a43c5a37b01f73066463a0ea4ce8f9760697d28d4d9e1a1c3774f89"
     },
     {
       "caseId": "user-application",

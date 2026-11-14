@@ -77,42 +77,42 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "6569c104d309ce7b09affd85046ad8f1c9a8c778f1e4312809161fabe40aa19c"
+      "inputIdentity": "fa6bed3f6917b82559480908d8e6d182901398d261f2c1eb3b5c3a4048557dfe"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "8a38187956a32cdf5e6b20dbfd9bd27001a1a1dcee83c0490b2f34bc1ddcf62a"
+      "inputIdentity": "52aeca356bced7cf6ba897fd9fe0cd9c2fee87e42740ed17954f3c011e6bb931"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "913f0d70c8b54b7e9eb065a92bd6a3e9fc5940be53cbf99a6a18efbffa16c8bc"
+      "inputIdentity": "3a042bc97275dd891f01f31b8395e0f3313362b49af4c4362a07c6ea832768d8"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "947203b506b9c2d6f3305ea4bf7bf33c258d5fe53a0d5d986651e2363355fc53"
+      "inputIdentity": "90306568c5809098a0b467640af567edef2c35dec358c009255a7cfba6a37cd8"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "963abda2d241f0a791c29a0c29b6636a489803a7ef7f332743e7bac7d7c88f0d"
+      "inputIdentity": "d9f8f3413af7497f41acec765b9eaab54544837e647947b8a29f57db66f988e2"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "4df154221a6eefe81dc87dc3e71501c3d0e9c18852d8ad5cf0fb9094d324caf4"
+      "inputIdentity": "6abaf3d6a4d695d3a2631d95f7144bb0e7072847ab179e335241d8d1549c104c"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "29c448e9bd1bdfa9c0d8832f69bcf5bd80666239dfca89f0fbbcbf2ce18eedee"
+      "inputIdentity": "4791240ecf49c1e3be54d3f46526be04bedee08b0f8817d16c3076f26c813ea7"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "9e8a368e5f0edf72b6df010d7d69d67f29b3c3d0c8ec65a0e14745e1508027b6"
+      "inputIdentity": "dcf6bc7b382177e05e5e7fe9a3467c1d20fc03d1d3fec5da590b22cfec283c8e"
     }
   ],
   "records": {

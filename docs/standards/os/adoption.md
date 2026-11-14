@@ -71,7 +71,7 @@ head→tail-item保护保持。R18.1的同数组边界义务保持。
 | R5.5，task.h的pxCurrentTCB声明 | configNUMBER_OF_CORES=1；tasks.c同名宏仅位于多核else分支。实际预处理保留单核对象，不定义该宏。主文53／PDF61、AMD2.39要求按实际宏集合和预处理后标识符判断。 | 此精确报告为误报；不外推多核。 |
 | R20.7，POSIX portTASK_FUNCTION_PROTO／portTASK_FUNCTION | 参数形成函数名／形参声明符，没有形成缺括号表达式；主文159–160／PDF167–168。 | 两处误报，复用[声明宏核查](implementation.md#声明宏与表达式参数)。 |
 | R17.3，POSIX四个__atomic_*及Windows平台调用 | 主文137–138／PDF145–146及AMD2附录H仅适用C90；实际编译C99且使用真实声明／GCC builtin。 | 语言不适用，复用[C99声明核查](implementation.md#c90隐式声明规则与当前编译)；不免除R1.1／R8.2／R8.4。 |
-| R15.5，两个自有端口的早返回 | ADR0025的自有主机层GRP；仍审阅退出、状态和资源。 | Disapplied；不是逐条偏离或删除报告。 |
+| R15.5，两个自有端口的早返回 | 两个端口在范围外（[ADR0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md)），原GRP记录保留为历史。 | Disapplied；不是逐条偏离或删除报告。 |
 
 ## 精确补丁接口的 Advisory 保留
 
@@ -172,10 +172,10 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 "id":"freertos-integration-443-declarations",
 "evidence":{"head":"c7a047590cd3abef395f1fb8e28de5e8d140e2c3","receipt":"https://github.com/g1331/autsaro/actions/runs/43411175434"},
 "cases":[
-{"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"a04643793713351d3a54b7714aadb7ee19109cecf85020bf92fcaa694f50cb85"},
+{"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"5d1cb805c5d5a1239b27c40a89c14391499374e273ca7b02e99f76c000f8fdab"},
 {"caseId":"no-diagnostic","target":"linux-x64-controlled-v1","inputIdentity":"8e38a082568f108ec68b010ccd26d32fd3dee31878c426172dcece6762deba30"},
-{"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"1365cb369a155ee841f369d4fc456a2c5b7a427411bf5e169c0ae6ce584ba7b4"},
-{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"1365cb369a155ee841f369d4fc456a2c5b7a427411bf5e169c0ae6ce584ba7b4"},
+{"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"97b38fa83d04d7e197eaa0bfc62331e68a838853f5cdb33d3febcf68306d9fd8"},
+{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"97b38fa83d04d7e197eaa0bfc62331e68a838853f5cdb33d3febcf68306d9fd8"},
 {"caseId":"component-pipeline","target":"windows-x64-controlled-v1","inputIdentity":"5c40abbbdb9b0978971171b315195a62987808439f4ad45772f1e78d50939a22"},
 {"caseId":"no-diagnostic","target":"windows-x64-controlled-v1","inputIdentity":"f06be7e11f1bb1bb943c5bc92b268fe80c0dc29f883c3cea1035886bd08f62eb"},
 {"caseId":"standard-ecu","target":"windows-x64-controlled-v1","inputIdentity":"e1cc1dfb0dcc90452baf0c402c2201e6f2697798eca20e20dfab2748639cec2e"},
