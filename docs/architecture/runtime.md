@@ -1,6 +1,6 @@
 # 运行时架构
 
-本篇属于[架构](README.md)：标注“目标（实施中）”的内容尚未在 `master` 落地，其余描述当前代码；决定的背景与取舍见 [ADR](../adr/)。
+本篇描述[当前架构](README.md)；标注“目标”的内容待实施，取舍见 [ADR](../adr/)。
 
 ## 分层与接口分离
 
@@ -133,3 +133,6 @@ FreeRTOS 原件固定；补丁身份随交付记录。私有 native 源码、编
 主线剖面的首批支持范围（平坦组合、每类型一个实例、共同周期且 offset=0、`IMMEDIATE` 信号处理、唯一 EcucPartition ID0／CoreId0、11 位 Classical CAN 单通道、诊断路由全选或全不选）与拒绝边界见 [多组件剖面的已核定义务](../standards/multi-component-profile.md)。未支持的生成语义在生成前拒绝，无关有效内容原样保留。
 
 **网络管理边界：**多组件剖面选定 NM NONE，经 host CDD BusSM（`COMM_BUS_TYPE_CDD`／`Ecu_HostBusSM`）连接真实 Can／CanIf 模式；当前没有完整 Nm、CanNm、CanSM，有界 mode 路径不能替代 NM PDU、睡眠状态机或 CanSM 协调。未来选择 `COMM_BUS_TYPE_CAN` 时须实现真正 CanSM。
+
+R11 通信目标契约见
+[ADR 0028](../adr/0028-r11-communication-contract.md)。
