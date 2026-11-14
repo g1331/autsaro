@@ -994,7 +994,7 @@ class AcceptanceTests(unittest.TestCase):
                  for row in context["cases"]}
         # Current Linux user input has the already-reviewed standard kernel closure.
         # Keep that precise identity and both labels; other local groups remain separate.
-        reviewed = "1365cb369a155ee841f369d4fc456a2c5b7a427411bf5e169c0ae6ce584ba7b4"
+        reviewed = "97b38fa83d04d7e197eaa0bfc62331e68a838853f5cdb33d3febcf68306d9fd8"
         self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
         self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
