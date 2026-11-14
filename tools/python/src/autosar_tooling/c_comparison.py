@@ -17,7 +17,7 @@ def _read(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _counts(summary: dict, root: Path) -> Counter:
+def diagnostic_counts(summary: dict, root: Path) -> Counter:
     counts = Counter()
     for diagnostic in summary["diagnostics"]:
         if diagnostic["id"] == "checkersReport":
@@ -86,7 +86,7 @@ def _semantic(summary: dict) -> dict:
     return identity
 
 
-def _configuration(root: Path) -> dict:
+def _configuration(root: Path, *, source_tree: bool = False) -> dict:
     refuse_links(root / "meta/integration.json", root)
     metadata = _read(root / "meta/integration.json")
     plan = dict(metadata["plan"])
@@ -118,13 +118,54 @@ def _configuration(root: Path) -> dict:
             require_source(copied, identity)
             # Delivered bytes may change; their selected source/path binding may not.
             selected[original] = copied
+    if source_tree:
+        # Producer bytes may differ in a freshly scanned source tree.
+        # Keep selected origins and delivered paths as configuration identity.
+        selected = {name: value for name, value in selected.items() if name in origins}
+        # The native rule inventory includes the Rust generator itself, and
+        # the definition fingerprint includes that inventory identity.
+        if "ruleSetIdentity" in plan:
+            plan["ruleSetIdentity"] = {key: value for key, value in
+                                       plan["ruleSetIdentity"].items() if key != "sha256"}
+        if "validationDependencies" in plan:
+            plan["validationDependencies"] = {key: value for key, value in
+                                              plan["validationDependencies"].items()
+                                              if key not in {"rules.sha256", "definitions.sha256"}}
     plan["runtimeSources"] = selected
     return plan
 
 
-def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
+def compare(
+    current: dict, project: Path, output: Path, baseline: Path, *,
+    source_tree: bool = False, renames: dict[str, str] | None = None,
+) -> dict:
     """A baseline is evidence for comparison, never permission to skip analysis."""
     try:
+        renames = renames or {}
+
+        def mapped(value):
+            if isinstance(value, str):
+                return renames.get(value, value)
+            if isinstance(value, list):
+                return [mapped(item) for item in value]
+            if isinstance(value, dict):
+                return {renames.get(key, key): mapped(item) for key, item in value.items()}
+            return value
+
+        def normalized(value, field=""):
+            if isinstance(value, dict):
+                return {key: normalized(item, key) for key, item in value.items()}
+            if isinstance(value, list):
+                items = [normalized(item) for item in value]
+                # These are source sets, emitted in filename order. Renaming a
+                # source can reorder them without changing the analysis closure.
+                if (source_tree and field in {"sources", "kernelSources", "translationUnits",
+                                              "supplemental"}
+                        and all(isinstance(item, str) for item in items)):
+                    return sorted(items)
+                return items
+            return value
+
         previous = _read(baseline / "summary.json")
         old_root = baseline / "project"
         _complete(current)
@@ -140,29 +181,48 @@ def compare(current: dict, project: Path, output: Path, baseline: Path) -> dict:
                for root in (project, output / "project")):
             raise ValueError("Current source seal identity differs")
         # Source bytes may change; the selected target/configuration/link closure may not.
-        if _read(project / "target.json") != _read(old_root / "target.json"):
+        if normalized(_read(project / "target.json")) != normalized(
+                mapped(_read(old_root / "target.json"))):
             raise ValueError("Target/sample configuration differs")
         for field in ("target", "profile", "entries", "compilerFlags", "includePaths",
                       "translationUnits", "supplemental", "patchedKernel"):
-            if current["scope"][field] != previous["scope"][field]:
+            if normalized(current["scope"][field], field) != normalized(
+                    mapped(previous["scope"][field]), field):
                 raise ValueError(f"Target/sample scope differs: {field}")
         for root in (project, old_root):
             if not (root / "meta/integration.json").is_file():
                 raise ValueError("Sample generation identity unavailable")
-        plan = _configuration(project)
-        if plan != _configuration(old_root) or plan != _configuration(output / "project"):
+        plan = _configuration(project, source_tree=source_tree)
+        previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
+        output_plan = _configuration(output / "project", source_tree=source_tree)
+        if (normalized(plan) != normalized(previous_plan)
+                or normalized(plan) != normalized(output_plan)):
             raise ValueError("Sample generation configuration differs")
-        def programs(summary):
-            return [(row["name"], row["entry"], row["translationUnits"]) for row in summary["programs"]]
-        if programs(current) != programs(previous):
+        def programs(summary, rename=False):
+            rows = [(row["name"], renames.get(row["entry"], row["entry"])
+                     if rename else row["entry"],
+                     normalized(mapped(row["translationUnits"]) if rename
+                                else row["translationUnits"], "translationUnits"))
+                    for row in summary["programs"]]
+            return sorted(rows) if source_tree else rows
+        if programs(current) != programs(previous, rename=True):
             raise ValueError("Program identity differs")
         current_identity, previous_identity = _semantic(current), _semantic(previous)
         for field in ("compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime", "sdk"):
-            if current_identity[field] != previous_identity[field]:
+            previous_value = previous_identity[field]
+            if field == "defines":
+                previous_value = mapped(previous_value)
+            if current_identity[field] != previous_value:
                 raise ValueError(f"Semantic identity differs: {field}")
-        now = _counts(current, output / "project")
-        before = _counts(previous, old_root)
+        now = diagnostic_counts(current, output / "project")
+        before = Counter()
+        for (rule, name, source, program), count in diagnostic_counts(previous, old_root).items():
+            before[rule, renames.get(name, name), source, program] += count
         def rows(counts):
+            if source_tree:
+                return [{"rule": rule, "file": name, "source": source,
+                         "program": program, "count": count}
+                        for (rule, name, source, program), count in sorted(counts.items())]
             locations = Counter()
             for (rule, name, source, _program), count in counts.items():
                 locations[rule, name, source] += count

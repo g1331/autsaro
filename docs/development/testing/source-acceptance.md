@@ -37,11 +37,21 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-手动 workflow 的严格步骤直接调用同一 CLI；自动 PR 仍只验证完整执行，直到 #55 按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 启用不回退门并完成真实保护验证；完整验收正例随 MISRA 合规线出口切换。测试里的完整合成正例验证可执行契约，不是实际工程的合法绿色出口。
+PR、master push 和手动 workflow 均按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 运行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 在两侧独立作业并行扫描后，在 Linux 消费同轮完整结果并重新绑定双方源码身份，沿 `c_comparison` 计算逐程序差集，再重新执行 `evaluate` 并核对当前回执。新增位置仅消费对应诊断、物理位置及程序的 accepted 处置；未处置新增使分片失败。消费处置时按整文件相同行的对应关系识别旧诊断位置，旧位置的批准留在旧位置，避免同规则／文本的新增借用旧批准；差集仍沿原计数语义。项目整体 blocked 继续报告，执行 error 直接阻断。
 
-`docs/standards/` 的评估 Markdown 与固定指南索引是实际分析输入，单独修改时选择 Python、两平台准备和全部 C 分析，保持原始状态及严格汇总。`rte/generated-retention/` 还由 Rust native 消费，继续选择完整原生检查；adoption 上下文块由分析消费，沿分析入口验证。五个独立分析驱动使用相同选择；共享 lexer／retention、混合改动、改名或未知输入仍完整运行。标准记录不单独选择桌面场景，普通读者指南沿文档快路径。
+基准使用当前样本 harness、夹具、资源与锁文件，保留第一父提交的生成器及 runtime。配置、目标、程序、分析工具或语义身份不可比时直接拒绝。git 改名回接原件／交付路径，行文本变化保留为新增。门回执绑定本次 checkout、第一父提交、双侧输入及摘要字节；聚合要求双目标四样本八份完整回执和全部所需上游 success。原始扫描工件按侧别、目标、样本及分片序号命名，配对时要求每侧恰好一份，重复分片无法覆盖。核验后的完整工件为 `c-analysis-<target>-<group>` 和 `c-analysis-baseline-<target>-<group>`，来自同一次运行。Windows 两侧共用 prepare 产物。`c-check` 生产端在目标主机扫描前后验证实际 SDK／工具／驱动，并生成项目验收；门消费同轮成功作业的完整结果，复核 `_complete` 与双方 `input_identity`，再重算当前精确处置，无须再申请 Windows runner。历史工件的严格目标主机重放入口保持原有语义。Windows 消费作业用 Git 的 `core.autocrlf=true` 重建检出字节，仍遵循 `.gitattributes`，使 parser、处置文档及 producer 的原始字节摘要与生产端一致。已有检出的索引可能让强制 checkout 跳过文件；临时 CI 消费作业先 `read-tree --empty`，再按目标换行 `reset --hard HEAD`，真实 Git 回归验证字节与 `.gitattributes`。摘要和身份均原样验证。配对工件只传 summary 与封存 project，完整 Cppcheck dump／日志由生产作业单独保留。
+
+完整项目验收仍可用上文 `c-acceptance` CLI 单独执行；合规线出口由 [#482](https://github.com/g1331/autsaro/issues/482) 切换必需门到完整验收。测试里的完整合成正例验证可执行契约，真实处置及分支保护证据由 #55 的 PR 保存。
+
+`docs/standards/` 的评估 Markdown 与固定指南索引是实际分析输入，单独修改时选择 Python、两平台准备和全部 C 分析，保持原始状态及严格汇总。`rte/generated-retention/` 还由 Rust native 消费，继续选择完整原生检查；adoption 上下文块由分析消费，沿分析入口验证。六个独立分析驱动（含 `c_gate`）使用相同选择；共享 lexer／retention、混合改动、改名或未知输入仍完整运行。标准记录不单独选择桌面场景，普通读者指南沿文档快路径。
 
 固定 221 项的类别独立锁定，不能靠同步修改索引和摘要重新定义；已有处置不授权改变规范类别。
+
+## CI 成本对照
+
+共享 runner 下，用 GitHub API 的作业 `started_at` 与 `completed_at` 计算执行时长，再按该次检出版本的 `needs` 求到 `CI required` 的最长路径。矩阵展开为实际分片，可复用 workflow 展开内部依赖；并行前驱取最大值。每个节点的路径长度为本节点执行时长加前驱最长路径，跳过节点执行时长为零。排队及分片并发限制产生的等待不计入执行路径。
+
+选择检查范围、目标与样本矩阵一致的代码类 PR，对照组与改动组各至少三次必需检查成功的运行，逐次列出路径、关键作业及组中位数。重跑按对应 attempt 的 jobs API 单独取数；故障演示与不同选择范围的运行单列证据。超出任务阈值时继续定位关键作业及具体步骤。workflow／attempt 开始至 `CI required` 完成的实际墙钟另列参考。
 
 ## 当前输入身份
 

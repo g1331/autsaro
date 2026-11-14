@@ -5,7 +5,7 @@ DOCUMENTATION = (
 )
 DRIVERS = {
     "tools/python/src/autosar_tooling/" + name + ".py"
-    for name in ("c_check", "c_acceptance", "c_sdk", "c_comparison", "c_addon")
+    for name in ("c_check", "c_acceptance", "c_sdk", "c_comparison", "c_addon", "c_gate")
 }
 GUIDELINE_INDEX = ".agents/skills/misra-c2012/references/baseline-index.json"
 DESKTOP_PATHS = (
