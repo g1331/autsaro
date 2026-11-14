@@ -77,6 +77,8 @@
 
 ### Fixed
 
+- Windows native CI retains WER full crash dumps for failed jobs; host OS initialization keeps WER enabled without UI, including exceptions during process exit. Regenerate and rebuild Windows deliveries to enable crash collection (#463)
+
 - Linux native waits now use eventfd readiness and mutex unlock generations, preserving the original deadline across interruptions and competing consumers so long HostBatch S3 vectors retain the 5000 ms watchdog without per-tick timer polling. Explicit descriptor bounds preserve the fortified blocking poll entry. Published mutex wait generations and pending-request checks preserve TSan suspend and stop acknowledgements without extending deadlines. Finite event waits use absolute monotonic kernel deadlines so a suspension immediately before polling consumes the original timeout budget. Regenerate and rebuild sealed consumers; public APIs and FreeRTOS identities are unchanged (#473)
 
 - Linux native actors defer suspend and stop signals until their TLS and execution stack are initialized, preserving the closed lifecycle receipt when startup gate publication fails (#466)

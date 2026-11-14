@@ -3,6 +3,9 @@
 #include "Os_Backend.h"
 #include <string.h>
 #include <limits.h>
+#ifdef _WIN32
+#include <werapi.h>
+#endif
 #ifdef __linux__
 #include <unistd.h>
 #endif
@@ -73,6 +76,14 @@ void Os_StackTestBeforeClose(void)
 void StartupHook(void)
 {
     Os_TargetTrace('S');
+#ifdef _WIN32
+    DWORD flags = 0u;
+    if (((GetErrorMode() & SEM_NOGPFAULTERRORBOX) != 0u) ||
+        (WerGetFlags(GetCurrentProcess(), &flags) != S_OK) ||
+        ((flags & WER_FAULT_REPORTING_NO_UI) == 0u)) {
+        Os_TargetTrace('X');
+    }
+#endif
     if (strcmp(scenario, "startup") == 0) {
         consume_stack(0u);
         Os_TargetTrace('X');

@@ -2,6 +2,7 @@
 #include "Os_Backend.h"
 #include "Os_Stack.h"
 #include "Os_HostIo.h"
+#include <werapi.h>
 
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
@@ -204,7 +205,11 @@ OS_MEMMAP static void read_invalid_guarantee(void) {}
 OS_MEMMAP void Os_StackInit(void)
 {
 
-    SetErrorMode((UINT)SEM_FAILCRITICALERRORS | (UINT)SEM_NOGPFAULTERRORBOX);
+    SetErrorMode((UINT)SEM_FAILCRITICALERRORS);
+    /* Keep crash collection available without displaying an interactive WER dialog. */
+    if (WerSetFlags(WER_FAULT_REPORTING_NO_UI) != S_OK) {
+        Os_BackendShutdown(E_OS_STATE);
+    }
     fault_output = GetStdHandle(STD_OUTPUT_HANDLE);
     fault_error = GetStdHandle(STD_ERROR_HANDLE);
     read_invalid_guarantee();

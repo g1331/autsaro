@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <werapi.h>
+#endif
 #ifndef _WIN32
 #include <unistd.h>
 #include <pthread.h>
@@ -141,7 +144,10 @@ __attribute__((noinline)) static void entry(void *argument)
 int main(int argc, char **argv)
 {
 #ifdef _WIN32
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    SetErrorMode(SEM_FAILCRITICALERRORS);
+    if (WerSetFlags(WER_FAULT_REPORTING_NO_UI) != S_OK) {
+        return 85;
+    }
 #endif
     if (argc > 1 && argv[1][0] == 'u') {
         Os_PortRestart();
