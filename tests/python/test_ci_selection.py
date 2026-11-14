@@ -120,11 +120,37 @@ class CiSelectionTests(unittest.TestCase):
         cases += [([{"filename": path, "status": "modified"} for path in paths], "docs")
                   for paths in (["README.md", "CHANGELOG.md", "docs/development/testing/README.md"],
                                 ["docs/architecture/runtime.md"], ["README.zh-CN.md"])]
-        for path in ("core/src/generator.rs", "README.md", "ui/src/App.tsx"):
-            cases.append(([{"filename": analysis[0], "status": "modified"},
-                           {"filename": path, "status": "modified"}], "full"))
-        cases += [([{"filename": analysis[0], "status": status}], "full")
+        page = "docs/standards/os/adoption.md"
+        # Documentation is neutral next to analysis inputs: nothing else consumes it.
+        for path in ("README.md", "AGENTS.md", "docs/adr/0025-x.md", "docs/development/x.md",
+                     "docs/architecture/runtime.md", ".agents/skills/x/SKILL.md"):
+            for first in (analysis[0], page):
+                cases.append(([{"filename": first, "status": "modified"},
+                               {"filename": path, "status": "modified"}], "analysis"))
+        cases.append(([{"filename": page, "status": "modified"},
+                       {"filename": "docs/adr/0030-x.md", "status": "added"},
+                       {"filename": "AGENTS.md", "status": "removed"}], "analysis"))
+        # Standard pages are read only by the analysis, so adding or removing one stays narrow.
+        cases += [([{"filename": "docs/standards/os/new.md", "status": status}], "analysis")
+                  for status in ("added", "removed")]
+        cases.append(([{"filename": "docs/standards/os/new.md", "status": "added"},
+                       {"filename": "docs/adr/0030-x.md", "status": "added"}], "analysis"))
+        # Any code or unknown path in the mix selects everything again.
+        for path in ("core/src/generator.rs", "ui/src/App.tsx", "unknown/input.txt", "LICENSE",
+                     "docs/official/example.zip", "tools/python/src/autosar_tooling/c_retention.py",
+                     "docs/standards/rte/generated-retention/README.md"):
+            for first in (analysis[0], page):
+                cases.append(([{"filename": first, "status": "modified"},
+                               {"filename": path, "status": "modified"},
+                               {"filename": "README.md", "status": "modified"}], "full"))
+        # Drivers and the guideline index may be imported by native tests: only edits are narrow.
+        cases += [([{"filename": analysis[0], "status": status},
+                    {"filename": "README.md", "status": "modified"}], "full")
                   for status in ("added", "removed", "renamed")]
+        cases += [([{"filename": analysis[-1], "status": status}], "full")
+                  for status in ("added", "removed", "renamed")]
+        cases.append(([{"filename": page, "status": "renamed", "previous_filename": "docs/a.md"},
+                       {"filename": "README.md", "status": "modified"}], "full"))
         cases += [([{"filename": analysis[0], "status": "modified",
                      "previous_filename": "old.py"}], "full"),
                   ([], "full"), ([{"filename": analysis[0], "status": "modified"}] * 3000, "full")]
