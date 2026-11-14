@@ -758,8 +758,8 @@ jobs:
       security-events: write
     needs: c-analysis-prepare
     strategy:
-      fail-fast: true
-      max-parallel: 1
+      fail-fast: false
+      max-parallel: 2
       matrix:
         include:
           - os: ubuntu-24.04
@@ -903,10 +903,10 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    needs: c-analysis-prepare-windows
+    needs: [c-analysis-prepare-windows, c-analysis-samples]
     strategy:
-      fail-fast: true
-      max-parallel: 1
+      fail-fast: false
+      max-parallel: 2
       matrix:
         include:
           - os: windows-latest
