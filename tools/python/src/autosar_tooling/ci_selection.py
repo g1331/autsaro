@@ -18,12 +18,29 @@ DESKTOP_PATHS = (
 NON_DESKTOP = ("docs/", "tests/python/", "scripts/", "fuzz/", ".github/", ".agents/")
 
 
-def is_analysis(path: str) -> bool:
+def is_standard_page(path: str) -> bool:
     return (
-        path in DRIVERS or path == GUIDELINE_INDEX
-        or path.startswith("docs/standards/") and path.endswith(".md")
+        path.startswith("docs/standards/") and path.endswith(".md")
         and not path.startswith("docs/standards/rte/generated-retention/")
     )
+
+
+def is_analysis(path: str) -> bool:
+    return path in DRIVERS or path == GUIDELINE_INDEX or is_standard_page(path)
+
+
+def is_analysis_only_row(row: dict) -> bool:
+    """Whether a row needs no job beyond C analysis.
+
+    Standard pages are read only by the analysis (c_standard walks docs/standards) and by
+    the quality job's requirement accounting, so adding or removing one is still analysis-only.
+    Drivers and the guideline index may be imported by native tests: only edits stay narrow.
+    Ordinary documentation has no consumer in native, application or desktop jobs.
+    """
+    path = row["filename"]
+    if is_standard_page(path) or is_documentation(path):
+        return True
+    return row["status"] == "modified" and is_analysis(path)
 
 
 def is_documentation(path: str) -> bool:
@@ -54,9 +71,7 @@ def select_changes(rows: list[dict] | None, *, pull_request: bool = True) -> dic
     code = native = analysis = application = True
     if pull_request and reliable:
         code = not all(map(is_documentation, listing))
-        analysis_only = all(
-            row["status"] == "modified" and is_analysis(row["filename"]) for row in rows
-        )
+        analysis_only = all(map(is_analysis_only_row, rows))
         native = code and not analysis_only and not all(
             is_documentation(path) or path.startswith("ui/") for path in listing
         )
