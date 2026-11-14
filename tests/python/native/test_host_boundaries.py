@@ -1449,7 +1449,7 @@ void Os_TestAfterFaultReader(void)
                     # Deterministically publish stop immediately before the competing request CAS.
                     matches = list(re.finditer(
                         r"(?m)^\s*if \(__atomic_compare_exchange_n\(&thread->requested,\s*"
-                        r"&previous,\s*generation,\s*false,\s*__ATOMIC_ACQ_REL,\s*__ATOMIC_ACQUIRE\)\) \{",
+                        r"&previous,\s*generation,\s*false,\s*__ATOMIC_SEQ_CST,\s*__ATOMIC_SEQ_CST\)\) \{",
                         text,
                     ))
                     self.assertEqual(len(matches), 1)
