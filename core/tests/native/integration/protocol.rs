@@ -25,6 +25,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+#[cfg(target_os = "linux")]
+mod scheduling;
+
 const REQUEST: u64 = 1792;
 
 const RESPONSE: u64 = 1800;
@@ -78,12 +81,15 @@ fn host_batch_project() -> Built {
 
 fn run(binary: &Path, directory: &Path, script: &[u8]) -> String {
     fs::create_dir_all(directory).unwrap();
+    fs::write(directory.join("stdin"), script).unwrap();
     let mut child = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(fs::File::create(directory.join("stdout")).unwrap())
         .stderr(fs::File::create(directory.join("stderr")).unwrap())
         .spawn()
         .unwrap();
+    #[cfg(target_os = "linux")]
+    let _scheduling = scheduling::Scheduling::start(child.id(), directory);
     child.stdin.take().unwrap().write_all(script).unwrap();
     let started = std::time::Instant::now();
     while child.try_wait().unwrap().is_none() {
