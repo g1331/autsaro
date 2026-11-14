@@ -9,7 +9,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 from collections import Counter
 from pathlib import Path
@@ -159,19 +158,14 @@ def scan(target: str, sample: str) -> None:
     outputs = {}
     with tempfile.TemporaryDirectory(prefix="c-gate-tool-") as temporary:
         tool = c_check.tool_identity(Path(temporary))
-        for side, inputs, results in (
-            ("baseline", "c-analysis-base-samples", "c-analysis-baseline"),
-            ("current", "c-analysis-samples", "c-analysis-results"),
+        for side, results in (
+            ("baseline", "c-analysis-baseline"),
+            ("current", "c-analysis-results"),
         ):
             output = ROOT / "build" / results / sample
-            command = [sys.executable, "-m", "autosar_tooling", "c-check", "--target", target,
-                       "--project", str(ROOT / "build" / inputs / sample),
-                       "--output-directory", str(output)]
-            result = subprocess.run(command, cwd=ROOT, check=False) if side == "baseline" else None
             summary = read(output / "summary.json")
             c_acceptance._complete(summary)
-            if (result is not None and result.returncode != (0 if summary["passed"] else 1)
-                    or summary["scope"]["target"] != target
+            if (summary["scope"]["target"] != target
                     or summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}):
                 raise ValueError(f"Incomplete {side} analysis: {sample}")
             c_check.recheck_semantic_inputs(summary, output / "project", tool)

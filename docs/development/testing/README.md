@@ -86,7 +86,7 @@ CI 分两层：
 
 Cppcheck SARIF 消费本轮基准扫描；clang-tidy 消费 `AUTOSAR_CLANG_TIDY_REPORT` 原始 JSON。报告保留原始状态，不上传官方档案。
 
-Linux／Windows prepare、分析与交付各依赖本平台结果，YAML alias 共享步骤。Cppcheck 行为测试每平台只在 `no-diagnostic` 分片执行。prepare 保留格式、clang、clang-tidy，并用当前样本输入生成第一父提交基准；八分片各用同一 PR 工具／addon／驱动扫描双侧，不增加并发，不缓存扫描或门判定。基准取 checkout 第一父提交，PR checkout 为测试合并提交。基准失败或不可比均阻断。
+Linux／Windows prepare、分析与交付按平台依赖，YAML alias 共享步骤。Cppcheck 行为测试每平台只在 `no-diagnostic` 分片执行。prepare 保留格式、clang、clang-tidy，并用当前样本输入生成第一父提交基准；双侧用独立并行作业及同一 PR 工具／addon／驱动扫描，共用本平台 prepare 工件；目标主机核验配对结果，不缓存扫描或门判定。基准取 checkout 第一父提交，PR 为测试合并提交。基准失败或不可比均阻断。
 
 `Strict generated source gate` 复用比较器及本次精确处置判定新增，项目整体 blocked 继续报告。`c-analysis` 核对八份摘要／门回执、双侧输入及本轮提交，拒绝工具／解析失败、缺重样本／身份及所需上游 skip／cancel；`CI required` 还要求两平台交付成功。文档选择保持，见[源码验收](source-acceptance.md)。PR 记录改动前后墙钟及阶段耗时。
 
