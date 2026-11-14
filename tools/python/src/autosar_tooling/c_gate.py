@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -88,6 +89,48 @@ def rename_paths(previous: Path, current: Path) -> dict[str, str]:
     return mappings
 
 
+def new_dispositions(current: dict, acceptance: dict, project: Path,
+                     baseline: Path, renames: dict[str, str]) -> Counter:
+    """An existing position's approval cannot authorize an identical added position."""
+    previous = read(baseline / "summary.json")
+    old_positions = Counter()
+    for diagnostic in previous["diagnostics"]:
+        if diagnostic["id"] == "checkersReport":
+            continue
+        for location in diagnostic["locations"]:
+            name = renames.get(location["file"], location["file"])
+            for program in diagnostic["programs"]:
+                old_positions[diagnostic["id"], name, int(location["line"]), program] += 1
+    old_names = {new: old for old, new in renames.items()}
+    line_maps = {}
+    accepted = Counter()
+    for occurrence in acceptance["occurrences"]:
+        if occurrence["assessment"] != "accepted":
+            continue
+        diagnostic = current["diagnostics"][occurrence["diagnostic"]]
+        location = diagnostic["locations"][occurrence["locationIndex"]]
+        name, line = location["file"], int(location["line"])
+        if name not in line_maps:
+            old_path = baseline / "project" / old_names.get(name, name)
+            old_lines = (old_path.read_text(encoding="utf-8").split("\n")
+                         if old_path.is_file() else [])
+            new_lines = (project / name).read_text(encoding="utf-8").split("\n")
+            matcher = difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False)
+            line_maps[name] = {new + offset + 1: old + offset + 1
+                               for old, new, size in matcher.get_matching_blocks()
+                               for offset in range(size)}
+        programs = []
+        for program in diagnostic["programs"]:
+            position = diagnostic["id"], name, line_maps[name].get(line), program
+            if old_positions[position]:
+                old_positions[position] -= 1
+            else:
+                programs.append(program)
+        row = {"diagnostics": [{**diagnostic, "locations": [location], "programs": programs}]}
+        accepted.update(c_comparison.diagnostic_counts(row, project))
+    return accepted
+
+
 def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]) -> dict:
     """Reuse comparison counts and the current, independently recomputed disposition."""
     binary = current["tool"].get("binarySha256")
@@ -101,14 +144,7 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
         raise ValueError("Project acceptance execution failed")
     if acceptance != current["projectAcceptance"]:
         raise ValueError("Project acceptance receipt differs from current inputs")
-    accepted = Counter()
-    for occurrence in acceptance["occurrences"]:
-        if occurrence["assessment"] == "accepted":
-            diagnostic = current["diagnostics"][occurrence["diagnostic"]]
-            location = diagnostic["locations"][occurrence["locationIndex"]]
-            # The shared counter supplies exactly the same text and program semantics.
-            row = {"diagnostics": [{**diagnostic, "locations": [location]}]}
-            accepted.update(c_comparison.diagnostic_counts(row, output / "project"))
+    accepted = new_dispositions(current, acceptance, output / "project", baseline, renames)
     blocked = []
     for row in comparison["new"]:
         key = row["rule"], row["file"], row["source"], row["program"]
