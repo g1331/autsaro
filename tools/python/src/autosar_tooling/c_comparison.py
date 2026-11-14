@@ -168,7 +168,9 @@ def compare(
             if not (root / "meta/integration.json").is_file():
                 raise ValueError("Sample generation identity unavailable")
         plan = _configuration(project, source_tree=source_tree)
-        if plan != mapped(_configuration(old_root, source_tree=source_tree)) or plan != _configuration(output / "project", source_tree=source_tree):
+        previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
+        output_plan = _configuration(output / "project", source_tree=source_tree)
+        if plan != previous_plan or plan != output_plan:
             raise ValueError("Sample generation configuration differs")
         def programs(summary):
             return [(row["name"], row["entry"], row["translationUnits"]) for row in summary["programs"]]
@@ -177,7 +179,10 @@ def compare(
             raise ValueError("Program identity differs")
         current_identity, previous_identity = _semantic(current), _semantic(previous)
         for field in ("compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime", "sdk"):
-            if current_identity[field] != (mapped(previous_identity[field]) if field == "defines" else previous_identity[field]):
+            previous_value = previous_identity[field]
+            if field == "defines":
+                previous_value = mapped(previous_value)
+            if current_identity[field] != previous_value:
                 raise ValueError(f"Semantic identity differs: {field}")
         now = diagnostic_counts(current, output / "project")
         before = Counter()
