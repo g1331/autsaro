@@ -778,6 +778,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
+      ANALYSIS_SIDE: current
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps: &analysis-sample-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -807,16 +808,19 @@ jobs:
         id: analyze
         shell: python
         env:
+          ANALYSIS_SIDE: ${{ env.ANALYSIS_SIDE }}
           ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLES: ${{ matrix.samples }}
         run: |
           import json, os, subprocess, sys
           from pathlib import Path
           failed = False
-          samples = Path(os.environ['AUTOSAR_C_ANALYSIS_SAMPLES'])
+          baseline = os.environ['ANALYSIS_SIDE'] == 'baseline'
+          samples = Path('build/c-analysis-base-samples' if baseline else 'build/c-analysis-samples')
+          results = Path('build/c-analysis-baseline' if baseline else 'build/c-analysis-results')
           expected = set(os.environ['ANALYSIS_SAMPLES'].split(','))
           for name in sorted(expected):
-              output = Path('build/c-analysis-results') / name
+              output = results / name
               result = subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling',
                   'c-check', '--target', os.environ['ANALYSIS_TARGET'], '--project', str(samples / name),
                   '--output-directory', str(output)])
@@ -830,6 +834,192 @@ jobs:
                   print(name, error)
                   failed = True
           sys.exit(1 if failed else 0)
+      # Independent tool tests run once per platform, alongside the other sample shards.
+      - name: Analyzer behavior tests
+        if: env.ANALYSIS_SIDE == 'current' && matrix.group == 'no-diagnostic'
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: c-analysis-raw-${{ env.ANALYSIS_SIDE }}-${{ matrix.target }}-${{ matrix.group }}-${{ strategy.job-index }}
+          overwrite: true
+          path: build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  c-analysis-samples-windows:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    needs: c-analysis-prepare-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: standard-ecu
+            samples: standard-ecu
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: user-application
+            samples: user-application
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: component-pipeline
+            samples: component-pipeline
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: no-diagnostic
+            samples: no-diagnostic
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ANALYSIS_SIDE: current
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: *analysis-sample-steps
+
+  c-analysis-baseline:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    needs: c-analysis-prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: standard-ecu
+            samples: standard-ecu
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: user-application
+            samples: user-application
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: component-pipeline
+            samples: component-pipeline
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: no-diagnostic
+            samples: no-diagnostic
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ANALYSIS_SIDE: baseline
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: *analysis-sample-steps
+
+  c-analysis-baseline-windows:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    needs: c-analysis-prepare-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: standard-ecu
+            samples: standard-ecu
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: user-application
+            samples: user-application
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: component-pipeline
+            samples: component-pipeline
+          - os: windows-latest
+            target: windows-x64-controlled-v1
+            group: no-diagnostic
+            samples: no-diagnostic
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ANALYSIS_SIDE: baseline
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: *analysis-sample-steps
+
+  c-analysis-gates:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    needs: [c-analysis-prepare, c-analysis-samples, c-analysis-baseline]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: standard-ecu
+            samples: standard-ecu
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: user-application
+            samples: user-application
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: component-pipeline
+            samples: component-pipeline
+          - os: ubuntu-24.04
+            target: linux-x64-controlled-v1
+            group: no-diagnostic
+            samples: no-diagnostic
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
+    steps: &analysis-gate-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - run: uv sync --locked
+      - uses: ./.github/actions/native-analysis-compiler
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: c-analysis-inputs-${{ matrix.target }}
+          path: build
+      - name: Select analyzer
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          bundle = Path('build/c-analysis-tools').resolve(strict=True)
+          executable = bundle / ('cppcheck.exe' if os.name == 'nt' else 'cppcheck')
+          if os.name != 'nt':
+              executable.chmod(0o755)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CPPCHECK=' + str(executable) + '\n')
+              output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: c-analysis-raw-*-${{ matrix.target }}-${{ matrix.group }}-*
+          path: build/c-analysis-raw
+      - name: Require exactly one scan per side
+        env:
+          ANALYSIS_TARGET: ${{ matrix.target }}
+          ANALYSIS_SAMPLE: ${{ matrix.group }}
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          root = Path('build/c-analysis-raw')
+          for side, result in [('current', 'c-analysis-results'), ('baseline', 'c-analysis-baseline')]:
+              prefix = 'c-analysis-raw-' + side + '-' + os.environ['ANALYSIS_TARGET'] + '-' + os.environ['ANALYSIS_SAMPLE'] + '-'
+              scans = list(root.glob(prefix + '*'))
+              if len(scans) != 1:
+                  raise RuntimeError('Missing or duplicated scan: ' + prefix + str(scans))
+              shutil.copytree(scans[0], Path('build') / result)
       - name: Strict generated source gate
         env:
           ANALYSIS_TARGET: ${{ matrix.target }}
@@ -840,10 +1030,6 @@ jobs:
           sys.exit(subprocess.run([sys.executable, '-m', 'autosar_tooling.c_gate', 'scan',
               '--target', os.environ['ANALYSIS_TARGET'],
               '--sample', os.environ['ANALYSIS_SAMPLE']]).returncode)
-      # Independent tool tests run once per platform, alongside the other sample shards.
-      - name: Analyzer behavior tests
-        if: matrix.group == 'no-diagnostic'
-        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
       - name: Summarize and convert Cppcheck diagnostics
         if: always()
         run: python -m autosar_tooling.ci_reporting sarif --cppcheck-directory build/c-analysis-results --baseline-directory build/c-analysis-baseline --output build/cppcheck.sarif
@@ -894,13 +1080,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-
-  c-analysis-samples-windows:
+  c-analysis-gates-windows:
     permissions:
       contents: read
       actions: read
       security-events: write
-    needs: c-analysis-prepare-windows
+    needs: [c-analysis-prepare-windows, c-analysis-samples-windows, c-analysis-baseline-windows]
     strategy:
       fail-fast: false
       matrix:
@@ -925,11 +1110,11 @@ jobs:
     timeout-minutes: 20
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
-    steps: *analysis-sample-steps
+    steps: *analysis-gate-steps
 
   c-analysis:
     # A skipped/cancelled producer or shard must never make the gate green.
-    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows, c-analysis-samples, c-analysis-samples-windows]
+    needs: [changes, c-analysis-prepare, c-analysis-prepare-windows, c-analysis-samples, c-analysis-samples-windows, c-analysis-baseline, c-analysis-baseline-windows, c-analysis-gates, c-analysis-gates-windows]
     if: ${{ !cancelled() && needs.changes.outputs.analysis == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
