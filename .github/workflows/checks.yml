@@ -65,6 +65,8 @@ jobs:
               print('\n'.join(path for row in rows
                   for path in (row['filename'], row.get('previous_filename')) if path))
           values = select_changes(rows, pull_request=bool(os.environ['PULL_REQUEST']))
+          # Temporary witness: select the complete C matrix and required aggregation.
+          values.update(code=False, native=False, desktop=False, application=False, analysis=True)
           print(values)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               for key, value in values.items():
@@ -756,6 +758,7 @@ jobs:
       security-events: write
     needs: c-analysis-prepare
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:
@@ -853,8 +856,9 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    needs: c-analysis-prepare-windows
+    needs: [c-analysis-prepare-windows, c-analysis-gates]
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:
@@ -888,6 +892,7 @@ jobs:
       security-events: write
     needs: c-analysis-prepare
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:
@@ -919,8 +924,9 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    needs: c-analysis-prepare-windows
+    needs: [c-analysis-prepare-windows, c-analysis-gates]
     strategy:
+      max-parallel: 2
       fail-fast: false
       matrix:
         include:

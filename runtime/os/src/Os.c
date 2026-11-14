@@ -72,7 +72,7 @@ OS_MEMMAP static StatusType group_access(const Os_TargetConfigType *config,
             const uint8 priority = (config->interrupts == NULL) ? OS_MAX_ISR_PRIORITY
                                                                 : config->interrupts->priorities[i];
             if (priority == 0u) {
-                return E_OS_VALUE;
+                return E_OS_VALUE; /* Reject before publishing the configuration. */
             }
             if (priority > *highest) {
                 *highest = priority;
