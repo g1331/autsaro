@@ -172,10 +172,10 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 "id":"freertos-integration-443-declarations",
 "evidence":{"head":"c7a047590cd3abef395f1fb8e28de5e8d140e2c3","receipt":"https://github.com/g1331/autsaro/actions/runs/43411175434"},
 "cases":[
-{"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"a04643793713351d3a54b7714aadb7ee19109cecf85020bf92fcaa694f50cb85"},
+{"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"5d1cb805c5d5a1239b27c40a89c14391499374e273ca7b02e99f76c000f8fdab"},
 {"caseId":"no-diagnostic","target":"linux-x64-controlled-v1","inputIdentity":"8e38a082568f108ec68b010ccd26d32fd3dee31878c426172dcece6762deba30"},
-{"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"1365cb369a155ee841f369d4fc456a2c5b7a427411bf5e169c0ae6ce584ba7b4"},
-{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"1365cb369a155ee841f369d4fc456a2c5b7a427411bf5e169c0ae6ce584ba7b4"},
+{"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"97b38fa83d04d7e197eaa0bfc62331e68a838853f5cdb33d3febcf68306d9fd8"},
+{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"97b38fa83d04d7e197eaa0bfc62331e68a838853f5cdb33d3febcf68306d9fd8"},
 {"caseId":"component-pipeline","target":"windows-x64-controlled-v1","inputIdentity":"5c40abbbdb9b0978971171b315195a62987808439f4ad45772f1e78d50939a22"},
 {"caseId":"no-diagnostic","target":"windows-x64-controlled-v1","inputIdentity":"f06be7e11f1bb1bb943c5bc92b268fe80c0dc29f883c3cea1035886bd08f62eb"},
 {"caseId":"standard-ecu","target":"windows-x64-controlled-v1","inputIdentity":"e1cc1dfb0dcc90452baf0c402c2201e6f2697798eca20e20dfab2748639cec2e"},

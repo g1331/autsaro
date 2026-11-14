@@ -61,7 +61,7 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "cc3a1f69463a73061c325c7f7a486c60fb74376a5b7b7f9c66001ff6a6d18aef"
+      "inputIdentity": "954c5198dcc92647293a5219b1cd32c70a8c0b259fae3b8158866b321f33c560"
     },
     {
       "caseId": "no-diagnostic",
@@ -71,7 +71,7 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "c60f3c4ab00ca3b1891243524dfdc5986c5941a81ace5fa898f467c601c1b9d2"
+      "inputIdentity": "a9f285d42d2e41fcee76a1f247656e17e7bf64da430a100725d406094aabea7f"
     },
     {
       "caseId": "user-application",
