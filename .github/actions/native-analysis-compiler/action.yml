@@ -19,6 +19,8 @@ runs:
         printf '%s\n' 'Server = https://repo.msys2.org/mingw/$repo' > /etc/pacman.d/mirrorlist.mingw
         printf '%s\n' 'Server = https://repo.msys2.org/msys/$arch' > /etc/pacman.d/mirrorlist.msys
         cat /etc/pacman.d/mirrorlist.mingw /etc/pacman.d/mirrorlist.msys
+        # Require the downloaded sidecar signatures for local packages as well.
+        sed -i 's/^LocalFileSigLevel[[:space:]]*=.*/LocalFileSigLevel = Required/' /etc/pacman.conf
         pacman --noconfirm -Sy
         mkdir -p build/native-gcc
         cd build/native-gcc
@@ -27,9 +29,6 @@ runs:
           curl --fail --location --retry 3 --output "$package.sig" "https://repo.msys2.org/mingw/mingw64/$package.sig"
         done
         printf '%s\n' '10f7c55275f7fbe7924209d61c368a1a6fcf775cffbdeac2eef1f5ccacdd35cd  mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst' 'aa560f5438c35b71c3e7b24fd5becbca028f70c5b4d1f1697a86ff80fec947da  mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst' 'e36c52a7fe1d104c2efd97dc74162386eabf8323f6aeb9b83aeb574b291a7da0  mingw-w64-x86_64-binutils-2.47-4-any.pkg.tar.zst' | sha256sum --check --strict
-        for package in *.pkg.tar.zst; do
-          pacman-key --verify "$package.sig" "$package"
-        done
         pacman --noconfirm -U mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-binutils-2.47-4-any.pkg.tar.zst
         pacman -Q mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-libs mingw-w64-x86_64-binutils
     - name: Select native GCC
