@@ -937,10 +937,6 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: c-analysis-summaries-*
-          path: build/c-analysis-summaries
       - name: Require every platform and sample group
         shell: python
         env:
@@ -950,6 +946,10 @@ jobs:
           results = {name: need['result'] for name, need in json.loads(os.environ['UPSTREAM_RESULTS']).items()}
           if any(result != 'success' for result in results.values()):
               raise RuntimeError('Incomplete platform/sample upstream: ' + str(results))
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: c-analysis-summaries-*
+          path: build/c-analysis-summaries
       - name: Require eight complete sample results
         env:
           PYTHONPATH: tools/python/src
