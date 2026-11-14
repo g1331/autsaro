@@ -110,6 +110,8 @@ R11 通信目标契约见 [ADR 0028](../adr/0028-r11-communication-contract.md)�
 | [0021](../adr/0021-incomplete-configuration-editing.md) | 自动补齐必需结构，允许不完整配置应用与保存 | 已接受 |
 | [0022](../adr/0022-reference-ecu-before-mcu.md) | 先扩大主机工程能力，再接入真实 MCU | 已接受，能力扩展待实施 |
 | [0023](../adr/0023-autosar-required-conflict-disposition.md) | AUTOSAR 必需契约冲突的有界处置 | 已有决定补记，具体裁决待逐项执行 |
-| [0024](../adr/0024-bounded-linux-platform-retention.md) | 受控 Linux 三处标准头违反的有界平台保留 | 项目取舍已接受，三处技术复核完成 |
+| [0024](../adr/0024-bounded-linux-platform-retention.md) | 受控 Linux 三处标准头违反的有界平台保留 | 项目取舍已接受，三处技术复核完成；已由 0030 转为历史记录 |
+| [0025](../adr/0025-misra-layered-scope.md) | MISRA 适用分层与类别偏离 | 已接受，主机层处置由 0030 部分取代 |
 | [0028](../adr/0028-r11-communication-contract.md) | R11 通信身份、FD 剖面与主机记录契约 | 已接受 |
 | [0029](../adr/0029-project-variant-contract.md) | 工程基座、项目覆盖、功能变体与语义差异契约 | 已接受 |
+| [0030](../adr/0030-host-simulation-layer-outside-misra-scope.md) | 主机仿真层移出 MISRA 合规范围 | 已接受 |
