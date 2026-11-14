@@ -1,6 +1,7 @@
 /** @file Nested Category 1 and 2 ISRs: priority order, resource ceilings, masks and limits. */
 #include "Os_Target.h"
 #include "Os_Backend.h"
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,6 +19,10 @@ static StatusType error_codes[8]; /**< Error codes observations; fixture-owned, 
 static OSServiceIdType
     error_services[8];   /**< Error services observations; fixture-owned, no Init reset. */
 static DWORD isr_thread; /**< Observed native ISR thread identity; fixture-owned, no Init reset. */
+static DWORD
+    entry_thread; /**< Latest ISR entry thread; retained for post-stop failure reporting. */
+static uintptr_t entry_address; /**< Latest ISR entry SP, captured in its original callback. */
+static unsigned entry_depth;    /**< Nesting depth before the latest entry assertion. */
 static uintptr_t
     stack_marks[32]; /**< Observed ISR stack addresses; fixture-owned, no Init reset. */
 static TaskStateType parent_state =
@@ -45,6 +50,10 @@ static void record(char marker)
 static void enter(unsigned expected, uintptr_t address)
 {
     const Os_NativeStackType *stack = Os_StackCurrent();
+    /* ShutdownHook runs on a controller; retain the actor's actual operands here. */
+    entry_thread = GetCurrentThreadId();
+    entry_address = address;
+    entry_depth = depth;
     check(stack != NULL && stack->role == 'S');
     check(Os_BackendCurrentInterrupt() == expected);
     if (depth == 0u) {
@@ -264,6 +273,16 @@ void ShutdownHook(StatusType error)
                 failure_line,
                 failure_invariant,
                 (unsigned)error);
+        const uintptr_t outer_address =
+            (entry_depth > 0u && entry_depth <= 32u) ? stack_marks[entry_depth - 1u] : 0u;
+        fprintf(stderr,
+                "nested_entry thread=%lu owner_thread=%lu depth=%u native_sp=0x%" PRIxPTR
+                " outer_sp=0x%" PRIxPTR "\n",
+                (unsigned long)entry_thread,
+                (unsigned long)isr_thread,
+                entry_depth,
+                entry_address,
+                outer_address);
     }
     printf("nested scenario=%s children=%u grandchildren=%u helpers=%u errors=%u depth=%u "
            "maximum=%u trace=%s reason=%u\n",

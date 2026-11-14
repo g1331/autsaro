@@ -1552,6 +1552,7 @@ def check_arti_native(directory: Path) -> None:
     for result in nested_observations:
         if not result["scenario"].startswith("reject-"):
             require(f"arti_nested scenario={result['scenario']} balanced=" in result["stdout"], result)
+            require("nested_entry " not in result["stderr"], result)
     for name, source, old, new, compile_failure in [
         ("missing-start", "Os_Arti.c", "0u, OsTask_Start,", "0u, OsTask_Activate,", False),
         ("wrong-signature", "Arti.c", "uint32_t event_parameter)\n", "uint16_t event_parameter)\n", True),
@@ -1636,6 +1637,18 @@ def check_arti_native(directory: Path) -> None:
         invariant = "isr_thread !=" if defect == "thread" else "isr_thread =="
         require(re.search(r"nested_interrupts\.c:\d+ invariant=" + invariant, result["stderr"]) is not None, result)
         require("address < stack_marks[depth - 1u]" in result["stderr"], result)
+        entry = re.search(
+            r"nested_entry thread=(\d+) owner_thread=(\d+) depth=(\d+) "
+            r"native_sp=0x([0-9a-f]+) outer_sp=0x([0-9a-f]+)\n",
+            result["stderr"],
+        )
+        require(entry is not None, result)
+        require(int(entry[1]) != 0 and entry[1] == entry[2] and entry[3] == "1", result)
+        native_sp, outer_sp = (int(entry[index], 16) for index in (4, 5))
+        if defect == "thread":
+            require(0 < native_sp < outer_sp, result)
+        else:
+            require(native_sp == outer_sp == 1, result)
         for expected in ("reason=7", "used=2 starts=2 returns=0 queries=0 hook_errors=0",
                          "nested_snapshot children=0 grandchildren=0 helpers=0 errors=0 depth=1",
                          "maximum=1 trace=AP", "arti_stack index=1 isr=6"):

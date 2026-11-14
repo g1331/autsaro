@@ -574,6 +574,17 @@ class NativeKernelObjectTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
+    def assert_nested_failure(self, result, expected):
+        lines = result["stderr"].splitlines()
+        self.assertEqual(len(lines), 2, result)
+        self.assertEqual(lines[0], expected, result)
+        self.assertRegex(
+            lines[1],
+            r"^nested_entry thread=(?P<thread>[1-9]\d*) owner_thread=(?P=thread) "
+            r"depth=\d+ native_sp=0x[1-9a-f][0-9a-f]* outer_sp=0x[0-9a-f]+$",
+            result,
+        )
+
     def test_watchdog_capture_stops_before_delegation(self):
         fixtures = ROOT / "core/tests/fixtures/host-batch"
         observer = (fixtures / "linux_watchdog_capture.c").read_text(encoding="utf-8")
@@ -1091,9 +1102,14 @@ void Os_TestAfterFaultReader(void)
                     binary, _ = os_suites.build(directory, "nested_interrupts.c", target=target)
                     result = os_suites.execute(binary, "hook")
                 self.assertEqual(result["exit"], 7 if retained else 0, result)
-                self.assertEqual(result["stderr"], (
-                    f"nested assertion failed: {fixture}:{line} invariant=Os_TestRetiredErrorPointer() == NULL reason=7"
-                    if retained else ""), result)
+                if retained:
+                    self.assert_nested_failure(
+                        result,
+                        f"nested assertion failed: {fixture}:{line} "
+                        "invariant=Os_TestRetiredErrorPointer() == NULL reason=7",
+                    )
+                else:
+                    self.assertEqual(result["stderr"], "", result)
                 expected = ("children=0 grandchildren=1 helpers=0 errors=1 depth=1 maximum=2 trace=APEG reason=7"
                             if retained else "children=1 grandchildren=1 helpers=1 errors=1 depth=0 maximum=2 trace=APEGeCcpHB reason=0")
                 self.assertIn("nested scenario=hook " + expected, result["stdout"])
@@ -1222,7 +1238,10 @@ void Os_TestAfterFaultReader(void)
                 expected_error = ("" if variant == "control" else "nested_error recursion"
                     if variant == "recursion" else
                     f"nested assertion failed: {fixture}:{lines[1]} invariant={invariant} reason=7")
-                self.assertEqual(result["stderr"], expected_error, result)
+                if variant in {"save", "restore"}:
+                    self.assert_nested_failure(result, expected_error)
+                else:
+                    self.assertEqual(result["stderr"], expected_error, result)
                 if variant == "control":
                     self.assertIn("trace=APEGeCcpHB reason=0", result["stdout"], result)
 
