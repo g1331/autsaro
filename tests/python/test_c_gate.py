@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import runpy
+import shlex
 import shutil
 import subprocess
 import sys
@@ -252,12 +253,38 @@ class SourceGateTests(unittest.TestCase):
                             if step.get("name") == "Match target checkout bytes")
             self.assertEqual(checkout["if"], "matrix.target == 'windows-x64-controlled-v1'")
             self.assertEqual(checkout["run"],
-                             "git -c core.autocrlf=true checkout-index --all --force")
+                             "git read-tree --empty\n"
+                             "git -c core.autocrlf=true reset --hard HEAD\n")
             self.assertEqual(set(gate["needs"]), {
                 prepare, "c-analysis-samples" + suffix, "c-analysis-baseline" + suffix,
             })
             self.assertFalse(any("'c-check'" in step.get("run", "")
                                  for step in gate["steps"]))
+
+    def test_target_checkout_step_rewrites_existing_files_and_honors_attributes(self):
+        import yaml
+        from autosar_tooling.config import ROOT
+
+        jobs = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())["jobs"]
+        command = next(step["run"] for step in jobs["c-analysis-gates"]["steps"]
+                       if step.get("name") == "Match target checkout bytes")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+            subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=root, check=True)
+            (root / ".gitattributes").write_bytes(b"fixed.c text eol=lf\nnative.h text eol=crlf\n")
+            for name in ("parser.py", "record.md", "producer.rs", "fixed.c", "native.h"):
+                (root / name).write_bytes(b"content\n")
+            subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.name=CI test", "-c",
+                            "user.email=ci@example.invalid", "commit", "--quiet", "-m", "fixture"],
+                           cwd=root, check=True)
+            for line in command.splitlines():
+                subprocess.run(shlex.split(line), cwd=root, check=True,
+                               capture_output=True, text=True)
+            for name in ("parser.py", "record.md", "producer.rs", "native.h"):
+                self.assertEqual((root / name).read_bytes(), b"content\r\n", name)
+            self.assertEqual((root / "fixed.c").read_bytes(), b"content\n")
 
     def test_pairing_refuses_missing_or_duplicate_raw_scans(self):
         import yaml

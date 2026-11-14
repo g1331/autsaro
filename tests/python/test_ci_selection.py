@@ -11,6 +11,7 @@ import tempfile
 import textwrap
 import unittest
 from importlib.util import resolve_name
+from itertools import product
 from pathlib import Path
 from unittest import mock
 
@@ -522,10 +523,13 @@ class CiSelectionTests(unittest.TestCase):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         step = next(row for row in workflow["jobs"]["c-analysis-samples"]["steps"]
                     if row.get("name") == "Verify complete generated-project analysis")
-        for status in ("accepted", "blocked", "error", "unknown", None):
-            with self.subTest(status=status), tempfile.TemporaryDirectory() as temporary:
+        for side, status in product(("current", "baseline"),
+                                    ("accepted", "blocked", "error", "unknown", None)):
+            with self.subTest(side=side, status=status), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                output = root / "build/c-analysis-results/standard-ecu/summary.json"
+                results = "c-analysis-baseline" if side == "baseline" else "c-analysis-results"
+                inputs = "c-analysis-base-samples" if side == "baseline" else "c-analysis-samples"
+                output = root / "build" / results / "standard-ecu/summary.json"
                 output.parent.mkdir(parents=True)
                 data = {"error": None, "passed": False}
                 if status is not None:
@@ -533,17 +537,26 @@ class CiSelectionTests(unittest.TestCase):
                 output.write_text(json.dumps(data), encoding="utf-8")
                 script = root / "readiness.py"
                 script.write_text(step["run"], encoding="utf-8")
-                env = {"ANALYSIS_SIDE": "current", "ANALYSIS_TARGET": "linux-x64-controlled-v1",
+                env = {"ANALYSIS_SIDE": side, "ANALYSIS_TARGET": "linux-x64-controlled-v1",
                        "ANALYSIS_SAMPLES": "standard-ecu"}
                 previous = Path.cwd()
                 try:
                     os.chdir(root)
-                    with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 1)), \
-                            self.assertRaises(SystemExit) as exit_:
+                    with (
+                        mock.patch.dict(os.environ, env),
+                        mock.patch.object(subprocess, "run",
+                                          return_value=subprocess.CompletedProcess([], 1)) as run,
+                        self.assertRaises(SystemExit) as exit_,
+                    ):
                         runpy.run_path(str(script))
                 finally:
                     os.chdir(previous)
                 self.assertEqual(exit_.exception.code == 0, status in {"accepted", "blocked"})
+                command = run.call_args.args[0]
+                self.assertEqual(command[command.index("--project") + 1],
+                                 str(Path("build") / inputs / "standard-ecu"))
+                self.assertEqual(command[command.index("--output-directory") + 1],
+                                 str(Path("build") / results / "standard-ecu"))
 
     def test_desktop_gate_selection_and_failure_propagation(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
