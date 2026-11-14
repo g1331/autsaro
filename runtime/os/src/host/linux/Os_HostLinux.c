@@ -582,8 +582,9 @@ OS_MEMMAP static int interruptible_mutex_wait(HANDLE mutex,
         __atomic_store_n(&thread->mutex_wait_address, &mutex->mutex_generation, __ATOMIC_SEQ_CST);
         const int32_t requested = __atomic_load_n(&thread->requested, __ATOMIC_SEQ_CST);
         const int32_t acknowledged = __atomic_load_n(&thread->acknowledged, __ATOMIC_SEQ_CST);
-        if ((requested != acknowledged) && (held_depth == 0u)) {
-            result = (pthread_kill(pthread_self(), SIGRTMIN) == 0) ? -EINTR : -EINVAL;
+        if ((requested != acknowledged) && ((held_depth == 0u) || (requested == INT32_MAX))) {
+            const int signal_number = (requested == INT32_MAX) ? (SIGRTMIN + 1) : SIGRTMIN;
+            result = (pthread_kill(pthread_self(), signal_number) == 0) ? -EINTR : -EINVAL;
         }
         if ((result == 0) && (acknowledged != acknowledged_before)) {
             /* A parked interval must not extend the caller's remaining budget. */

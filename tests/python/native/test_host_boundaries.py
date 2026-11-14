@@ -1533,22 +1533,26 @@ void Os_TestAfterFaultReader(void)
             "        __atomic_store_n(&thread->mutex_wait_address, "
             "&mutex->mutex_generation, __ATOMIC_SEQ_CST);"
         )
-        signal = "result = (pthread_kill(pthread_self(), SIGRTMIN) == 0) ? -EINTR : -EINVAL;"
+        signal = "result = (pthread_kill(pthread_self(), signal_number) == 0) ? -EINTR : -EINVAL;"
         budget = "if ((result == 0) && (acknowledged != acknowledged_before))"
         variants = (
             ("control", None, None, (
                 "before-register", "before-wait", "during-wait", "elapsed", "signal-error",
-                "stop", "stop-before-wait",
+                "stop", "stop-before-wait", "stop-held",
             ), 0),
             ("missing-publication", publication, "        (void)mutex;", ("before-wait",), 52),
             ("missing-invalidation", "(void)InterlockedIncrement(address);", "(void)address;",
              ("before-wait",), 52),
-            ("missing-request-check", signal, "(void)requested;", ("before-register",), 52),
+            ("missing-request-check", signal, "(void)signal_number;", ("before-register",), 52),
             ("missing-stop-invalidation", "        invalidate_mutex_wait(thread);",
              "        (void)thread;", ("stop-before-wait",), 52),
+            ("missing-held-stop", "((held_depth == 0u) || (requested == INT32_MAX))",
+             "(held_depth == 0u)", ("stop-held",), 23),
+            ("masked-stop", "(requested == INT32_MAX) ? (SIGRTMIN + 1) : SIGRTMIN",
+             "SIGRTMIN", ("stop-held",), 68),
             ("stale-budget", budget, "(void)acknowledged_before; if (false)", ("elapsed",), 64),
             ("ignored-signal-error", signal,
-             "(void)pthread_kill(pthread_self(), SIGRTMIN); result = -EINTR;",
+             "(void)pthread_kill(pthread_self(), signal_number); result = -EINTR;",
              ("signal-error",), 62),
         )
         for name, before, after, scenarios, expected in variants:
@@ -1588,7 +1592,8 @@ void Os_TestAfterFaultReader(void)
                     binary, _ = os_suites.build(
                         directory, str(ROOT / "tests/fixtures/os_mutex_suspend.c"), target=target,
                         link_flags=tuple(f"-Wl,--wrap={symbol}" for symbol in (
-                            "Os_LinuxFutexWait", "pthread_kill", "clock_gettime", "poll", "__poll_chk",
+                            "Os_LinuxFutexWait", "Os_LinuxFutexWake", "pthread_kill",
+                            "clock_gettime", "poll", "__poll_chk",
                         )),
                     )
                     for scenario in scenarios:

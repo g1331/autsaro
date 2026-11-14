@@ -13,9 +13,10 @@
 #include <string.h>
 #include <unistd.h>
 
-enum { BEFORE, AFTER, DURING, ELAPSED, SIGNAL_ERROR, STOP, STOP_AFTER };
+enum { BEFORE, AFTER, DURING, ELAPSED, SIGNAL_ERROR, STOP, STOP_AFTER, STOP_HELD };
 static int mode;
 static HANDLE mutex;
+static HANDLE held_mutex;
 static HANDLE start_event;
 static HANDLE finish_event;
 static unsigned registered_entry;
@@ -25,6 +26,7 @@ static unsigned enter_native;
 static unsigned self_signal;
 static unsigned completed;
 static unsigned event_waiting;
+static unsigned stop_ack;
 static unsigned offset_seconds;
 static DWORD actor_id;
 static const volatile int32_t *wait_address;
@@ -37,6 +39,7 @@ void ShutdownHook(StatusType reason) { (void)reason; }
 int __real_Os_LinuxFutexWait(const volatile int32_t *address,
                              int32_t expected,
                              const struct timespec *duration);
+void __real_Os_LinuxFutexWake(const volatile int32_t *address);
 int __real_pthread_kill(pthread_t thread, int signal_number);
 int __real_clock_gettime(clockid_t clock, struct timespec *value);
 int __real_poll(struct pollfd *fds, nfds_t count, int timeout);
@@ -56,7 +59,8 @@ __attribute__((no_sanitize_thread)) void fixture_before_mutex_registration(
 {
     if (waiting == 1) {
         __atomic_store_n(&wait_address, address, __ATOMIC_RELEASE);
-        if ((mode == BEFORE) || (mode == ELAPSED) || (mode == SIGNAL_ERROR) || (mode == STOP)) {
+        if ((mode == BEFORE) || (mode == ELAPSED) || (mode == SIGNAL_ERROR) || (mode == STOP) ||
+            (mode == STOP_HELD)) {
             __atomic_store_n(&registered_entry, 1u, __ATOMIC_RELEASE);
             while (__atomic_load_n(&request_started, __ATOMIC_ACQUIRE) == 0u) {
                 /* The sender publishes the request before this subscription. */
@@ -91,6 +95,15 @@ __attribute__((no_sanitize_thread)) int __wrap_Os_LinuxFutexWait(const volatile 
         __atomic_store_n(&first_result, result, __ATOMIC_RELEASE);
     }
     return result;
+}
+
+__attribute__((no_sanitize_thread)) void __wrap_Os_LinuxFutexWake(const volatile int32_t *address)
+{
+    __real_Os_LinuxFutexWake(address);
+    if (mode == STOP_HELD && waiting == 1 &&
+        __atomic_load_n(address, __ATOMIC_ACQUIRE) == INT32_MAX) {
+        __atomic_store_n(&stop_ack, 1u, __ATOMIC_RELEASE);
+    }
 }
 
 __attribute__((no_sanitize_thread)) int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout)
@@ -136,16 +149,26 @@ static int signal_pending(int signal_number)
 int __wrap_pthread_kill(pthread_t thread, int signal_number)
 {
     if (pthread_equal(thread, pthread_self()) != 0) {
+        if (mode == STOP_HELD) {
+            require(signal_number == SIGRTMIN + 1, 68);
+        }
         __atomic_store_n(&self_signal, 1u, __ATOMIC_RELEASE);
         return mode == SIGNAL_ERROR ? EAGAIN : __real_pthread_kill(thread, signal_number);
     }
     static unsigned calls;
     if (++calls == 1u) {
-        if (mode == BEFORE || mode == SIGNAL_ERROR || mode == STOP) {
+        if (mode == BEFORE || mode == SIGNAL_ERROR || mode == STOP || mode == STOP_HELD) {
             __atomic_store_n(&request_started, 1u, __ATOMIC_RELEASE);
             const uint64_t started = GetTickCount64();
             while (__atomic_load_n(&self_signal, __ATOMIC_ACQUIRE) == 0u &&
                    __atomic_load_n(&armed, __ATOMIC_ACQUIRE) == 0u) {
+                require(GetTickCount64() - started < 2000u, 23);
+                (void)sched_yield();
+            }
+        }
+        if (mode == STOP_HELD) {
+            const uint64_t started = GetTickCount64();
+            while (__atomic_load_n(&stop_ack, __ATOMIC_ACQUIRE) == 0u) {
                 require(GetTickCount64() - started < 2000u, 23);
                 (void)sched_yield();
             }
@@ -206,6 +229,9 @@ static DWORD actor(void *argument)
     (void)argument;
     __atomic_store_n(&actor_id, GetCurrentThreadId(), __ATOMIC_RELEASE);
     require(WaitForSingleObject(start_event, INFINITE) == WAIT_OBJECT_0, 30);
+    if (mode == STOP_HELD) {
+        require(WaitForSingleObject(held_mutex, 0u) == WAIT_OBJECT_0, 66);
+    }
     waiting = 1;
     const DWORD result =
         WaitForSingleObject(mutex, mode == ELAPSED || mode == SIGNAL_ERROR ? 2000u : INFINITE);
@@ -268,7 +294,8 @@ static void exercise_suspend(HANDLE thread)
 
 static void exercise(HANDLE thread)
 {
-    if (mode == BEFORE || mode == ELAPSED || mode == SIGNAL_ERROR || mode == STOP) {
+    if (mode == BEFORE || mode == ELAPSED || mode == SIGNAL_ERROR || mode == STOP ||
+        mode == STOP_HELD) {
         await_flag(&registered_entry);
     } else {
         await_flag(&armed);
@@ -280,7 +307,7 @@ static void exercise(HANDLE thread)
             (void)sched_yield();
         }
     }
-    if (mode == STOP || mode == STOP_AFTER) {
+    if (mode == STOP || mode == STOP_AFTER || mode == STOP_HELD) {
         exercise_stop(thread);
     } else {
         exercise_suspend(thread);
@@ -300,13 +327,15 @@ int main(int argc, char **argv)
            : strcmp(argv[1], "signal-error") == 0     ? SIGNAL_ERROR
            : strcmp(argv[1], "stop") == 0             ? STOP
            : strcmp(argv[1], "stop-before-wait") == 0 ? STOP_AFTER
+           : strcmp(argv[1], "stop-held") == 0        ? STOP_HELD
                                                       : -1;
-    require(mode >= BEFORE && mode <= STOP_AFTER, 46);
+    require(mode >= BEFORE && mode <= STOP_HELD, 46);
     Os_StackPrepare();
     mutex = CreateMutexA(NULL, 0, NULL);
+    held_mutex = CreateMutexA(NULL, 0, NULL);
     start_event = CreateEventA(NULL, 1, 0, NULL);
     finish_event = CreateEventA(NULL, 1, 0, NULL);
-    require(mutex != NULL && start_event != NULL && finish_event != NULL, 41);
+    require(mutex != NULL && held_mutex != NULL && start_event != NULL && finish_event != NULL, 41);
     HANDLE thread = Os_HostCreateActor(262144u, actor, NULL, 0u, NULL, 1);
     require(thread != NULL, 42);
     require(WaitForSingleObject(mutex, 0u) == WAIT_OBJECT_0, 43);
@@ -315,6 +344,9 @@ int main(int argc, char **argv)
     require(CloseHandle(thread) != 0 && CloseHandle(mutex) != 0 && CloseHandle(start_event) != 0 &&
                 CloseHandle(finish_event) != 0,
             45);
+    if (mode != STOP_HELD) {
+        require(CloseHandle(held_mutex) != 0, 67);
+    }
     printf("mutex_suspend scenario=%s requests=observed cache=reused\n", argv[1]);
     return 0;
 }
