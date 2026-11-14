@@ -35,7 +35,7 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR、master push 和手动 workflow 均按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 运行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 在目标主机完整扫描第一父提交的基准，复用本分片刚完成的当前树扫描，复核双方实际语义输入，沿 `c_comparison` 计算逐程序差集，再重新执行 `evaluate` 并核对当前回执。新增位置仅消费对应诊断、物理位置及程序的 accepted 处置；未处置新增使分片失败。项目整体 blocked 继续报告，执行 error 直接阻断。
+PR、master push 和手动 workflow 均按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 运行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 在目标主机完整扫描第一父提交的基准，复用本分片刚完成的当前树扫描，复核双方实际语义输入，沿 `c_comparison` 计算逐程序差集，再重新执行 `evaluate` 并核对当前回执。新增位置仅消费对应诊断、物理位置及程序的 accepted 处置；未处置新增使分片失败。消费处置时按整文件相同行的对应关系识别旧诊断位置，旧位置的批准留在旧位置，避免同规则／文本的新增借用旧批准；差集仍沿原计数语义。项目整体 blocked 继续报告，执行 error 直接阻断。
 
 基准使用当前样本 harness、夹具、资源与锁文件，保留第一父提交的生成器及 runtime。配置、目标、程序、分析工具或语义身份不可比时直接拒绝。git 改名回接原件／交付路径，行文本变化保留为新增。门回执绑定本次 checkout、第一父提交、双侧输入及摘要字节；聚合要求双目标四样本八份完整回执和全部所需上游 success。完整扫描工件分为 `c-analysis-<target>-<group>` 和 `c-analysis-baseline-<target>-<group>`，来自同一次运行。
 
