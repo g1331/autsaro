@@ -72,6 +72,9 @@ R11 通信目标契约见 [ADR 0028](../adr/0028-r11-communication-contract.md)�
 实现接缝分别见[运行时架构](runtime.md#当前支持剖面与边界)和
 [交付架构](targets-and-delivery.md#r11-记录与包身份目标待实施)。
 
+多项目配置语义见 [ADR 0029](../adr/0029-project-variant-contract.md)：基座引用与变体选择、
+覆盖操作、三方升级冲突、有效配置身份、三层差异及用户代码保护；实现由 #490、#491 承接。
+
 ## 已知差距与未验证范围
 
 - 生成 C 的自动分析完整，但源码结果 `passed=false`；221 项 MISRA 人工评估未完成（[ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)）。
@@ -109,3 +112,4 @@ R11 通信目标契约见 [ADR 0028](../adr/0028-r11-communication-contract.md)�
 | [0023](../adr/0023-autosar-required-conflict-disposition.md) | AUTOSAR 必需契约冲突的有界处置 | 已有决定补记，具体裁决待逐项执行 |
 | [0024](../adr/0024-bounded-linux-platform-retention.md) | 受控 Linux 三处标准头违反的有界平台保留 | 项目取舍已接受，三处技术复核完成 |
 | [0028](../adr/0028-r11-communication-contract.md) | R11 通信身份、FD 剖面与主机记录契约 | 已接受 |
+| [0029](../adr/0029-project-variant-contract.md) | 工程基座、项目覆盖、功能变体与语义差异契约 | 已接受（待独立审查确认） |
