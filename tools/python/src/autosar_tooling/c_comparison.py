@@ -186,7 +186,8 @@ def compare(
         plan = _configuration(project, source_tree=source_tree)
         previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
         output_plan = _configuration(output / "project", source_tree=source_tree)
-        if normalized(plan) != normalized(previous_plan) or normalized(plan) != normalized(output_plan):
+        if (normalized(plan) != normalized(previous_plan)
+                or normalized(plan) != normalized(output_plan)):
             raise ValueError("Sample generation configuration differs")
         def programs(summary, rename=False):
             rows = [(row["name"], renames.get(row["entry"], row["entry"])
