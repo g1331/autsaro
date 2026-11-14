@@ -498,7 +498,7 @@ jobs:
       contents: read
       security-events: write
     needs: changes
-    if: github.event_name == 'workflow_dispatch'
+    if: needs.changes.outputs.analysis == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -650,7 +650,7 @@ jobs:
       contents: read
       security-events: write
     needs: changes
-    if: github.event_name == 'workflow_dispatch'
+    if: needs.changes.outputs.analysis == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -810,6 +810,7 @@ jobs:
         id: analyze
         shell: python
         env:
+          CPPCHECK: ${{ github.workspace }}/build/missing-cppcheck
           ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLES: ${{ matrix.samples }}
         run: |
