@@ -35,9 +35,9 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR、master push 和手动 workflow 均按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 运行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 在两侧独立作业并行扫描后，在目标主机消费同轮完整结果并复核双方实际语义输入，沿 `c_comparison` 计算逐程序差集，再重新执行 `evaluate` 并核对当前回执。新增位置仅消费对应诊断、物理位置及程序的 accepted 处置；未处置新增使分片失败。消费处置时按整文件相同行的对应关系识别旧诊断位置，旧位置的批准留在旧位置，避免同规则／文本的新增借用旧批准；差集仍沿原计数语义。项目整体 blocked 继续报告，执行 error 直接阻断。
+PR、master push 和手动 workflow 均按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 运行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 在两侧独立作业并行扫描后，在 Linux 消费同轮完整结果并重新绑定双方源码身份，沿 `c_comparison` 计算逐程序差集，再重新执行 `evaluate` 并核对当前回执。新增位置仅消费对应诊断、物理位置及程序的 accepted 处置；未处置新增使分片失败。消费处置时按整文件相同行的对应关系识别旧诊断位置，旧位置的批准留在旧位置，避免同规则／文本的新增借用旧批准；差集仍沿原计数语义。项目整体 blocked 继续报告，执行 error 直接阻断。
 
-基准使用当前样本 harness、夹具、资源与锁文件，保留第一父提交的生成器及 runtime。配置、目标、程序、分析工具或语义身份不可比时直接拒绝。git 改名回接原件／交付路径，行文本变化保留为新增。门回执绑定本次 checkout、第一父提交、双侧输入及摘要字节；聚合要求双目标四样本八份完整回执和全部所需上游 success。原始扫描工件按侧别、目标、样本及分片序号命名，配对时要求每侧恰好一份，重复分片无法覆盖。核验后的完整工件为 `c-analysis-<target>-<group>` 和 `c-analysis-baseline-<target>-<group>`，来自同一次运行。Windows 两侧共用 prepare 产物；门作业只核验及比较，不重复扫描。
+基准使用当前样本 harness、夹具、资源与锁文件，保留第一父提交的生成器及 runtime。配置、目标、程序、分析工具或语义身份不可比时直接拒绝。git 改名回接原件／交付路径，行文本变化保留为新增。门回执绑定本次 checkout、第一父提交、双侧输入及摘要字节；聚合要求双目标四样本八份完整回执和全部所需上游 success。原始扫描工件按侧别、目标、样本及分片序号命名，配对时要求每侧恰好一份，重复分片无法覆盖。核验后的完整工件为 `c-analysis-<target>-<group>` 和 `c-analysis-baseline-<target>-<group>`，来自同一次运行。Windows 两侧共用 prepare 产物。`c-check` 生产端在目标主机扫描前后验证实际 SDK／工具／驱动，并生成项目验收；门消费同轮成功作业的完整结果，复核 `_complete` 与双方 `input_identity`，再重算当前精确处置，无须再申请 Windows runner。历史工件的严格目标主机重放入口保持原有语义。Windows 消费作业用 Git 的 `core.autocrlf=true` 重建检出字节，仍遵循 `.gitattributes`，使 parser、处置文档及 producer 的原始字节摘要与生产端一致；摘要和身份均原样验证。配对工件只传 summary 与封存 project，完整 Cppcheck dump／日志由生产作业单独保留。
 
 完整项目验收仍可用上文 `c-acceptance` CLI 单独执行；合规线出口由 [#482](https://github.com/g1331/autsaro/issues/482) 切换必需门到完整验收。测试里的完整合成正例验证可执行契约，真实处置及分支保护证据由 #55 的 PR 保存。
 
