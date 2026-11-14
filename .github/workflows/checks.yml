@@ -579,9 +579,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-${{ env.CACHE_SOURCE }}
-          # Prefer refreshed source snapshots before the legacy exact key.
+          key: c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v2-${{ env.CACHE_SOURCE }}
+          # v2 can save both tree builds; an immutable v1 hit could never add the baseline.
           restore-keys: |
+            c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v2-
             c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1-
             c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Generate complete analysis samples
@@ -843,6 +844,19 @@ jobs:
         with:
           name: c-analysis-raw-${{ env.ANALYSIS_SIDE }}-${{ matrix.target }}-${{ matrix.group }}-${{ strategy.job-index }}
           overwrite: true
+          path: |
+            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/summary.json
+            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/project
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      # Full target-host replay inputs are retained once, outside the comparison bundle.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: c-analysis-${{ env.ANALYSIS_SIDE == 'baseline' && 'baseline-' || '' }}${{ matrix.target }}-${{ matrix.group }}
+          overwrite: true
           path: build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}
           include-hidden-files: true
           if-no-files-found: error
@@ -982,25 +996,12 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+      - name: Match target checkout bytes
+        if: matrix.target == 'windows-x64-controlled-v1'
+        # Acceptance binds raw parser/document/producer bytes, including native CRLF.
+        run: git -c core.autocrlf=true checkout-index --all --force
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
-      - uses: ./.github/actions/native-analysis-compiler
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: c-analysis-inputs-${{ matrix.target }}
-          path: build
-      - name: Select analyzer
-        shell: python
-        run: |
-          import os
-          from pathlib import Path
-          bundle = Path('build/c-analysis-tools').resolve(strict=True)
-          executable = bundle / ('cppcheck.exe' if os.name == 'nt' else 'cppcheck')
-          if os.name != 'nt':
-              executable.chmod(0o755)
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
-              output.write('CPPCHECK=' + str(executable) + '\n')
-              output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: c-analysis-raw-*-${{ matrix.target }}-${{ matrix.group }}-*
@@ -1051,7 +1052,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       # Offline context rebinding consumes these exact source bytes and raw receipts.
-      # The full analysis artifact below remains available for strict target-host checks.
+      # Raw producers separately retain full target-host replay inputs.
       - name: Retain source assessment inputs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -1064,21 +1065,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: c-analysis-${{ matrix.target }}-${{ matrix.group }}
-          overwrite: true
-          path: build/c-analysis-results
-          if-no-files-found: ignore
-          retention-days: 14
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: c-analysis-baseline-${{ matrix.target }}-${{ matrix.group }}
-          path: build/c-analysis-baseline
-          if-no-files-found: error
-          retention-days: 14
+
 
   c-analysis-gates-windows:
     permissions:
@@ -1106,7 +1093,7 @@ jobs:
             target: windows-x64-controlled-v1
             group: no-diagnostic
             samples: no-diagnostic
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
