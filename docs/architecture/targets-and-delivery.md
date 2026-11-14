@@ -41,3 +41,17 @@
 | 工程清单 `formatVersion` | 用户工程 `workbench-project.json` | 1 |
 | 扩展目录 `formatVersion` | 外部 `catalog.json` | 1 |
 | profile `singlecore-ecu-v1`；target `windows-x64-controlled-v1`、`linux-x64-controlled-v1`；协议 `HostBatchV1` | 工程、设置、交付包、主机批处理协议 | v1 |
+
+## R11 记录与包身份（目标，待实施）
+
+[ADR 0028](../adr/0028-r11-communication-contract.md) 规定首个改变通信身份取值域的
+实施包同时迁移 HostBatch 输入输出、验证输入和包内 ecu-tool。HostBatchV2 在 BEGIN 前
+要求显式版本握手，帧包含 channel、STANDARD／EXTENDED、FD、裸 ID、字节 length 和 payload；
+OUT 保留 epoch／sequence／ticket／PDU，并记录驱动填充后的完整线帧。
+验证输入保存 typed endpoint 及物理通道路径映射，oracle 按完整输出集合和确认核对。
+
+目标身份为 HostBatchV2、autosar-ecu-test-inputs-v2、autosar-ecu-integration-v3
+（描述 formatVersion 3）、autosar-workbench-handoff-v5、autosar-build-target-v4。
+各实施包共用此语法，按实际能力扩展接纳组合；当前版本见上表。
+旧记录、旧包及只改版本字符串的伪新包由协议、真实结构、可信成员和 seal 检查明确拒绝，
+提示从原 ARXML 重新生成，原件保留。既有工具／资产清单格式维持，成员字节摘要随实际交付更新。
