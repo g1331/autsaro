@@ -65,7 +65,7 @@ jobs:
               print('\n'.join(path for row in rows
                   for path in (row['filename'], row.get('previous_filename')) if path))
           values = select_changes(rows, pull_request=bool(os.environ['PULL_REQUEST']))
-          # Temporary protection experiment: retain the full C matrix and its gate.
+          # Temporary witness: all C samples and required aggregation remain selected.
           values.update(code=False, native=False, desktop=False, application=False, analysis=True)
           print(values)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
@@ -759,7 +759,7 @@ jobs:
     needs: c-analysis-prepare
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         include:
           - os: ubuntu-24.04
@@ -843,14 +843,6 @@ jobs:
           sys.exit(subprocess.run([sys.executable, '-m', 'autosar_tooling.c_gate', 'scan',
               '--target', os.environ['ANALYSIS_TARGET'],
               '--sample', os.environ['ANALYSIS_SAMPLE']]).returncode)
-      - name: Omit one completed sample receipt for protection witness
-        if: matrix.target == 'linux-x64-controlled-v1' && matrix.group == 'standard-ecu'
-        shell: python
-        run: |
-          from pathlib import Path
-          sample = Path('build/c-analysis-results/standard-ecu')
-          (sample / 'summary.json').unlink()
-          (sample / 'gate.json').unlink()
       # Independent tool tests run once per platform, alongside the other sample shards.
       - name: Analyzer behavior tests
         if: matrix.group == 'no-diagnostic'
@@ -911,10 +903,10 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    needs: c-analysis-prepare-windows
+    needs: [c-analysis-prepare-windows, c-analysis-samples]
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         include:
           - os: windows-latest
