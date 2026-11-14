@@ -149,6 +149,29 @@ class SourceGateTests(unittest.TestCase):
                              renames={"main.c": "renamed.c"})
             self.assertEqual(result, {"new": [], "removed": []})
 
+    def test_rename_can_change_sorted_translation_unit_order(self):
+        from autosar_tooling.c_comparison import compare
+
+        helper = comparison_tests.CComparisonTests()
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = helper.fixture(Path(temporary))
+            for root in (project, output / "project", baseline / "project"):
+                (root / "other.c").write_text("other();\n")
+                (root / "target.json").write_text(json.dumps({"sources": ["main.c", "other.c"]}))
+            current["scope"]["translationUnits"] = ["main.c", "other.c"]
+            current["programs"][0]["translationUnits"] = ["main.c", "other.c"]
+            current["semanticIdentity"]["defines"]["other.c"] = []
+            helper.write(baseline, current)
+            for root in (project, output / "project"):
+                (root / "main.c").rename(root / "renamed.c")
+                (root / "target.json").write_text(
+                    json.dumps({"sources": ["other.c", "renamed.c"]}))
+            current = json.loads(json.dumps(current).replace("main.c", "renamed.c"))
+            current["scope"]["translationUnits"].sort()
+            current["programs"][0]["translationUnits"].sort()
+            self.assertEqual(compare(current, project, output, baseline, source_tree=True,
+                                     renames={"main.c": "renamed.c"}), {"new": [], "removed": []})
+
     def test_workflow_runs_target_host_gate_and_propagates_its_exit(self):
         import yaml
         from autosar_tooling.config import ROOT
@@ -173,6 +196,25 @@ class SourceGateTests(unittest.TestCase):
                     sys.executable, "-m", "autosar_tooling.c_gate", "scan",
                     "--target", "linux-x64-controlled-v1", "--sample", "standard-ecu",
                 ])
+
+    def test_duplicate_matrix_identity_retains_two_receipts_for_aggregate(self):
+        import yaml
+        from autosar_tooling.config import ROOT
+
+        workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
+        job = workflow["jobs"]["c-analysis-samples"]
+        template = next(step["with"]["name"] for step in job["steps"]
+                        if step.get("with", {}).get("name", "").startswith(
+                            "c-analysis-summaries-"))
+        rows = job["strategy"]["matrix"]["include"]
+        duplicated = [*rows, rows[0]]
+        names = [template.replace("${{ matrix.target }}", row["target"])
+                 .replace("${{ matrix.group }}", row["group"])
+                 .replace("${{ strategy.job-index }}", str(index))
+                 for index, row in enumerate(duplicated)]
+        self.assertEqual(len(set(names)), len(duplicated))
+        # The duplicate sample identities are then rejected by the real aggregate.
+        self.assertEqual(duplicated[0], duplicated[-1])
 
     def test_aggregate_refuses_missing_duplicate_changed_or_wrong_run_receipts(self):
         with tempfile.TemporaryDirectory() as temporary:
