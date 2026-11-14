@@ -112,4 +112,4 @@ R11 通信目标契约见 [ADR 0028](../adr/0028-r11-communication-contract.md)�
 | [0023](../adr/0023-autosar-required-conflict-disposition.md) | AUTOSAR 必需契约冲突的有界处置 | 已有决定补记，具体裁决待逐项执行 |
 | [0024](../adr/0024-bounded-linux-platform-retention.md) | 受控 Linux 三处标准头违反的有界平台保留 | 项目取舍已接受，三处技术复核完成 |
 | [0028](../adr/0028-r11-communication-contract.md) | R11 通信身份、FD 剖面与主机记录契约 | 已接受 |
-| [0029](../adr/0029-project-variant-contract.md) | 工程基座、项目覆盖、功能变体与语义差异契约 | 已接受（待独立审查确认） |
+| [0029](../adr/0029-project-variant-contract.md) | 工程基座、项目覆盖、功能变体与语义差异契约 | 已接受 |

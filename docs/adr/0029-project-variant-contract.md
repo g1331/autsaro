@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-已接受（待独立审查确认）。
+已接受（2026-11-14，经独立审查）。
 
 本决定落实 [#484](https://github.com/g1331/autsaro/issues/484)，输入为
 [#343 第 5 节](https://github.com/g1331/autsaro/issues/343#issuecomment-6306755113)。
