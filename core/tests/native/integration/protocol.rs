@@ -78,6 +78,7 @@ fn host_batch_project() -> Built {
 
 fn run(binary: &Path, directory: &Path, script: &[u8]) -> String {
     fs::create_dir_all(directory).unwrap();
+    fs::write(directory.join("stdin"), script).unwrap();
     let mut child = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(fs::File::create(directory.join("stdout")).unwrap())
