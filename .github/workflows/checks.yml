@@ -498,7 +498,7 @@ jobs:
       contents: read
       security-events: write
     needs: changes
-    if: ${{ false }}
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -650,7 +650,7 @@ jobs:
       contents: read
       security-events: write
     needs: changes
-    if: ${{ false }}
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
