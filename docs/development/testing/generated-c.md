@@ -50,11 +50,11 @@ clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m
 
 真实诊断、工具缺失、版本错误、超时、编译／解析失败和扫描不完整均返回非零。无诊断只说明这些自动检查通过；221 项规则／指令中的人工评估仍需根据需求、设计、授权规范和偏离审批完成，不会声明“完整符合 MISRA”。
 
-CI 用 PR 的 harness、夹具、配置及锁定依赖，生成当前树和第一父提交的四样本；PR 的第一父提交为测试合并时的目标分支，master push／手动运行也取 checkout 的第一父提交。双侧共用 prepare，在独立作业并行扫描。Cppcheck、addon、驱动与配置相同，源码及生成器可不同；基准失败或不可比均阻断。
+CI 工具 prepare 与两树生成独立并行，每侧扫描仅依赖共享工具与本侧生成，Windows 共用分析器。各入口基准均为实际 checkout 第一父提交，PR 检出测试合并提交。双方共用 PR 样本配置、依赖与驱动，源码及生成器来自各自树；生成／扫描失败或不可比均阻断。
 
-各入口的 `Strict generated source gate` 调用 `autosar_tooling.c_gate scan`，按规则、相对路径、行文本和程序比较，映射 Git 改名。改写诊断行产生新增，仅本次[项目验收](source-acceptance.md)的有效精确处置可通过。八份 `gate.json` 绑定双侧输入／摘要身份，进入唯一 `CI required`；上游跳过／取消／失败、样本缺失／重复均阻断。文档 PR 的选择见 [CI](README.md#ci)。
+`Strict generated source gate` 复用逐程序差集及本次[精确处置](source-acceptance.md)，改写诊断行算新增，Git 改名回接路径。基准可复用同 SHA、完整身份一致的 master 原始结果；缺失／不匹配现场扫描，验收及门每轮重算。`gate.json` 记双侧身份、差集及基线运行／工件来源，八份门回执进入唯一 `CI required`。所需上游跳过／取消／失败、缺重样本均阻断；文档选择见 [CI](README.md#ci)。
 
-项目验收仍报告 accepted／blocked／error；整体 blocked 留作报告，error 阻断。原始退出码、`passed=false` 和 221 项状态保留。只缓存工具及编译产物，生成、扫描与判定每轮执行，工件保留 14 天。完整验收门见 [#482](https://github.com/g1331/autsaro/issues/482)。
+项目验收仍报告 accepted／blocked／error；整体 blocked 留作报告，error 阻断。原始退出码、`passed=false` 和 221 项状态保留。工具与编译产物可缓存，原始基准复用另核完整身份。当前树每轮扫描，工件留存 14 天。完整验收门见 [#482](https://github.com/g1331/autsaro/issues/482)。
 
 正常摘要的`coverage.manualAssessment`仅汇总[既有66项人工记录](../../standards/os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，按实际`automaticChecker`与155项分开；`retained`不是满足，未评估项继续计入unclassified。它不评估当前source seal，也不改写221项`assessment=not_assessed`或`completeCompliance=false`。`misra-manual-assessment-v1`绑定解析器原始字节、五篇记录全文原始字节和固定路径选集摘要；analysisCode另含解析器的规范化文本摘要。两层换行身份分别保留，coverage或任一分析身份变化仍明确拒绝旧基线。跨平台换行反例须用原始字节显式建立LF和CRLF两个输入，再断言结论相同、摘要不同；不能假定checkout为LF，或把已为CRLF的输入再写成CRLF当作变化。
 
