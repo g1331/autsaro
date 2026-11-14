@@ -733,8 +733,15 @@ def semantic(scope: dict) -> str:
             expected if "provider" in header else None
         ):
             raise ValueError("SDK source/provider identity changed during analysis")
+    identity = semantic_inputs(scope)
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+
+def semantic_inputs(scope: dict) -> dict:
+    """The recorded SDK inputs, without requiring the target host's filesystem."""
+    headers = scope.get("sdkHeaders", [])
     keys = {row["path"]: row["key"] for row in headers}
-    identity = {
+    return {
         "lineDirectives": scope.get("sdkLineDirectives", False),
         "headers": sorted(
             (
@@ -769,5 +776,3 @@ def semantic(scope: dict) -> str:
             for unit, locations in scope.get("sdkMacroInputs", {}).items()
         },
     }
-
-    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()

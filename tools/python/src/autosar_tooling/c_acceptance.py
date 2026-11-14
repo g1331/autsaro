@@ -182,6 +182,7 @@ def _producer_inputs(names, root: Path, revision: str | None, windows: bool) -> 
             # Match the target-native checkout in the isolated baseline producer.
             data = subprocess.check_output([
                 "git", "-c", "core.autocrlf=" + ("true" if windows else "false"),
+                "-c", "core.eol=" + ("crlf" if windows else "lf"),
                 "cat-file", "--filters", revision + ":" + name,
             ], cwd=root)
             producers[name] = hashlib.sha256(data).hexdigest()

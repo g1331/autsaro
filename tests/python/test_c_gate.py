@@ -421,7 +421,7 @@ class SourceGateTests(unittest.TestCase):
 
     def test_baseline_staging_keeps_parent_production_and_current_sample_inputs(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             current, baseline = root / "current", root / "baseline"
             subprocess.run(["git", "init", "--quiet", str(current)], check=True)
             contents = {"core/src/generator.rs": b"old generator\n",
@@ -441,14 +441,17 @@ class SourceGateTests(unittest.TestCase):
                                 "-m", "input"],
                                cwd=directory, check=True)
             commit(current)
-            subprocess.run(["git", "clone", "--quiet", str(current), str(baseline)], check=True)
+            subprocess.run(["git", "-c", "core.autocrlf=true", "clone", "--quiet",
+                            str(current), str(baseline)], check=True)
+            original = {name: (baseline / name).read_bytes() for name in contents}
+            self.assertEqual(original["core/src/generator.rs"], b"old generator\r\n")
             for name in contents:
                 (current / name).write_bytes(b"current input\n")
             commit(current)
             with patch.object(c_gate, "ROOT", current):
                 c_gate.stage(baseline)
-                for name, previous in contents.items():
-                    expected = (previous if name.startswith(("core/src/", "runtime/"))
+                for name in contents:
+                    expected = (original[name] if name.startswith(("core/src/", "runtime/"))
                                 else b"current input\n")
                     self.assertEqual((baseline / name).read_bytes(), expected, name)
                 output = root / "samples"

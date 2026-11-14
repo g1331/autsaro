@@ -558,6 +558,8 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["semanticIdentity"] = comparison["semanticIdentity"]
         self.summary["semanticIdentity"]["defines"] = {
             name: [] for name in self.summary["scope"]["translationUnits"]}
+        self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
+            c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
         self.summary["scope"]["profile"] = "ecu"
         self.bind_sdk()
         self.summary["tool"]["binarySha256"] = "synthetic-analyzer-binary"
@@ -2284,6 +2286,8 @@ class ProducerViewTests(unittest.TestCase):
                 root = Path(temporary)
                 subprocess.run(["git", "init", "--quiet", str(root)], check=True)
                 subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=root, check=True)
+                # Reproduce a Windows-native Git default even on the Linux runner.
+                subprocess.run(["git", "config", "core.eol", "crlf"], cwd=root, check=True)
                 (root / ".gitattributes").write_bytes(b"* text=auto\n*.c text eol=lf\n")
                 for name, data in contents.items():
                     path = root / name

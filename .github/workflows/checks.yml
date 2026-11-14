@@ -947,7 +947,9 @@ jobs:
           import os, subprocess
           from autosar_tooling.c_acceptance import BASELINE_PRODUCTION
           native = 'true' if os.environ['ANALYSIS_TARGET'].startswith('windows') else 'false'
-          subprocess.run(['git', '-c', 'core.autocrlf=' + native, 'restore', '--source',
+          eol = 'crlf' if native == 'true' else 'lf'
+          subprocess.run(['git', '-c', 'core.autocrlf=' + native, '-c', 'core.eol=' + eol,
+              'restore', '--source',
               'HEAD^1', '--worktree', '--', *BASELINE_PRODUCTION], check=True)
       - name: Select analyzer
         shell: python

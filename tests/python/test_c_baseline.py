@@ -83,8 +83,9 @@ class BaselineReuseTests(unittest.TestCase):
         return semantic, acceptance
 
     def test_matching_identity_reuses_raw_scan_and_recomputes_acceptance(self):
-        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
-            root = Path(temporary)
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary, \
+                ExitStack() as stack:
+            root = Path(temporary).resolve()
             summary, project, candidate, compiler = self.fixture(root)
             semantic, acceptance = self.patches(stack, root, summary, compiler)
             c_baseline.record(candidate, "parent", "linux", "standard-ecu")
@@ -133,8 +134,9 @@ class BaselineReuseTests(unittest.TestCase):
             self.assertEqual(manifest["summarySha256"], digest(output / "summary.json"))
 
     def test_each_identity_field_mismatch_and_missing_artifact_execute_fresh_scan(self):
-        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
-            root = Path(temporary)
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary, \
+                ExitStack() as stack:
+            root = Path(temporary).resolve()
             summary, project, candidate, compiler = self.fixture(root)
             self.patches(stack, root, summary, compiler)
             c_baseline.record(candidate, "parent", "linux", "standard-ecu")
@@ -201,9 +203,10 @@ class BaselineReuseTests(unittest.TestCase):
     def test_sdk_or_current_checker_changes_refuse_cached_analysis(self):
         for changed in ("sdk", "coverage", "driver", "configuration", "source",
                         "compiler", "analyzer", "receipt", "summary"):
-            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary, \
+            with self.subTest(changed=changed), \
+                    tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary, \
                     ExitStack() as stack:
-                root = Path(temporary)
+                root = Path(temporary).resolve()
                 summary, project, candidate, compiler = self.fixture(root)
                 semantic, _acceptance = self.patches(stack, root, summary, compiler)
                 c_baseline.record(candidate, "parent", "linux", "standard-ecu")
@@ -239,8 +242,9 @@ class BaselineReuseTests(unittest.TestCase):
                 self.assertFalse((root / "output").exists())
 
     def test_current_tree_always_scans_and_never_queries_baseline_artifacts(self):
-        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
-            root = Path(temporary)
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary, \
+                ExitStack() as stack:
+            root = Path(temporary).resolve()
             summary, project, candidate, compiler = self.fixture(root)
             self.patches(stack, root, summary, compiler)
             c_baseline.git.side_effect = lambda *args: (
@@ -272,7 +276,8 @@ class BaselineReuseTests(unittest.TestCase):
         for changed in ("none", "event", "branch", "tree", "status", "duplicate",
                         "expired", "digest", "producer_missing", "producer_duplicate",
                         "producer_skipped"):
-            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
+            with self.subTest(changed=changed), \
+                    tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary:
                 run, artifact = copy.deepcopy(good_run), copy.deepcopy(good_artifact)
                 job = copy.deepcopy(good_job)
                 archive = Path(temporary) / "raw.zip"
@@ -311,8 +316,8 @@ class BaselineReuseTests(unittest.TestCase):
                         download.assert_not_called()
 
     def test_compiler_identity_includes_the_actual_backend_bytes(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary:
+            root = Path(temporary).resolve()
             compiler, backend = root / "gcc", root / "cc1"
             compiler.write_bytes(b"compiler driver")
             backend.write_bytes(b"old backend")
@@ -328,8 +333,9 @@ class BaselineReuseTests(unittest.TestCase):
 
     def test_archive_digest_and_member_identity_are_verified_before_extraction(self):
         for changed in ("none", "digest", "traversal", "symlink", "duplicate", "sample"):
-            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
+            with self.subTest(changed=changed), \
+                    tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary:
+                root = Path(temporary).resolve()
                 archive = root / "raw.zip"
                 with zipfile.ZipFile(archive, "w") as package:
                     name = ("../escape.txt" if changed == "traversal" else

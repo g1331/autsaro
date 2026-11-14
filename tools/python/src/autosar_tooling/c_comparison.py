@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ecu_tools.build import FILE_HASHES, digest, refuse_links, safe_relative
 
+from autosar_tooling import c_sdk
 from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
 
 
@@ -84,6 +85,47 @@ def _semantic(summary: dict) -> dict:
     require(manual["selectionSha256"] == hashlib.sha256("\n".join(MANUAL_ASSESSMENT_SOURCES).encode()).hexdigest())
     require(isinstance(identity["sdk"], str) and bool(re.fullmatch("[0-9a-f]{64}", identity["sdk"])))
     return identity
+
+
+def _source_environment(summary: dict, identity: dict) -> dict:
+    """Separate verified SDK environment from source-dependent usage inventories."""
+    sdk = c_sdk.semantic_inputs(summary["scope"])
+    if hashlib.sha256(json.dumps(sdk, sort_keys=True).encode()).hexdigest() != identity["sdk"]:
+        raise ValueError("Semantic identity differs: sdk receipt")
+    headers = {row["header"]: row for row in sdk["headers"]}
+    header_names = {row["key"]: row["header"] for row in sdk["headers"]}
+    macros = {}
+    for uses in sdk["macroInputs"].values():
+        for use in uses:
+            definition = json.loads(use)
+            key = header_names[definition["headerKey"]], definition["macro"]
+            macros.setdefault(key, set()).add((definition["value"], definition["function"]))
+    defines = {}
+    for unit, values in identity["defines"].items():
+        for value in values:
+            match = re.fullmatch(r"-D([A-Za-z_]\w*)(.*)", value)
+            if match is None:
+                raise ValueError("Semantic identity differs: defines format")
+            defines[unit, match[1]] = match[2]
+    return {"headers": headers, "macros": macros, "defines": defines,
+            "providers": {row["provider"]: row["version"] for row in sdk["headers"]},
+            "lineDirectives": sdk["lineDirectives"]}
+
+
+def _compare_source_environment(current: dict, previous: dict, renames: dict) -> None:
+    now = _source_environment(current, current["semanticIdentity"])
+    before = _source_environment(previous, previous["semanticIdentity"])
+    before["defines"] = {(renames.get(unit, unit), name): value
+                         for (unit, name), value in before["defines"].items()}
+    if now["lineDirectives"] != before["lineDirectives"]:
+        raise ValueError("Semantic identity differs: sdk line directives")
+    for field in ("headers", "providers", "macros", "defines"):
+        # Each producer verifies its own actual use; only shared environment
+        # inputs must remain equal when source starts/stops using SDK facilities.
+        for key in now[field].keys() & before[field].keys():
+            if now[field][key] != before[field][key]:
+                label = "defines" if field == "defines" else "sdk " + field
+                raise ValueError(f"Semantic identity differs: {label}: {key}")
 
 
 def _configuration(root: Path, *, source_tree: bool = False) -> dict:
@@ -208,7 +250,11 @@ def compare(
         if programs(current) != programs(previous, rename=True):
             raise ValueError("Program identity differs")
         current_identity, previous_identity = _semantic(current), _semantic(previous)
+        if source_tree:
+            _compare_source_environment(current, previous, renames)
         for field in ("compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime", "sdk"):
+            if source_tree and field in {"defines", "sdk"}:
+                continue
             previous_value = previous_identity[field]
             if field == "defines":
                 previous_value = mapped(previous_value)

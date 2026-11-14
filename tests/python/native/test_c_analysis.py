@@ -392,6 +392,38 @@ class ActualCAnalysisTests(unittest.TestCase):
                         self.assertTrue(any(value.startswith("-DUINT32_C(") for value in definitions))
 
 
+    def test_source_tree_can_start_using_an_existing_sdk_macro(self):
+        from autosar_tooling.c_comparison import compare
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            analyses = []
+            for name, expression in (("baseline", "0"), ("current", "INT_MAX")):
+                directory = root / name
+                directory.mkdir()
+                project = self.project(directory, "#include <limits.h>\n"
+                                       f"int main(void) {{ return {expression}; }}\n",
+                                       extra_files={"meta/integration.json": '{"plan":{}}'})
+                target = json.loads((project / "target.json").read_text())["target"]
+                output = directory / "analysis"
+                self.assertEqual(c_check.check(project, target, output), 0)
+                summary = json.loads((output / "summary.json").read_text())
+                self.assertIsNone(summary["error"])
+                self.assertEqual([row for row in summary["diagnostics"]
+                                  if row["id"] != "checkersReport"], [])
+                analyses.append((summary, project, output))
+            previous, current = analyses
+            self.assertEqual(
+                previous[0]["scope"]["compilerDiscoveredDefines"]["bsw/src/main.c"], [])
+            self.assertTrue(any(flag.startswith("-DINT_MAX=") for flag in
+                                current[0]["scope"]["compilerDiscoveredDefines"]["bsw/src/main.c"]))
+            self.assertNotEqual(previous[0]["semanticIdentity"]["sdk"],
+                                current[0]["semanticIdentity"]["sdk"])
+            self.assertEqual(compare(*current, previous[2], source_tree=True),
+                             {"new": [], "removed": []})
+            with self.assertRaisesRegex(ValueError, "Semantic identity differs: defines"):
+                compare(*current, previous[2])
+
     def test_semantic_inputs_from_real_producer_refuse_changed_macro_and_allow_relocation(self):
         from autosar_tooling.c_comparison import compare
         with tempfile.TemporaryDirectory() as temporary:
@@ -409,6 +441,11 @@ class ActualCAnalysisTests(unittest.TestCase):
                 return code, stdout, stderr
             with patch.object(c_check, "run", side_effect=changed):
                 self.assertEqual(c_check.check(project, target, root / "changed", baseline), 1)
+                self.assertEqual(c_check.check(project, target, root / "changed-source-tree"), 0)
+            changed_summary = json.loads((root / "changed-source-tree/summary.json").read_text())
+            with self.assertRaisesRegex(ValueError, "Semantic identity differs: defines"):
+                compare(changed_summary, project, root / "changed-source-tree", baseline,
+                        source_tree=True)
             summary = json.loads((root / "changed/summary.json").read_text())
             self.assertIn("Semantic identity differs: defines", summary["error"])
             self.assertEqual(summary["semanticIdentity"]["defines"]["bsw/src/main.c"], ["-DCHAR_BIT=16"])
