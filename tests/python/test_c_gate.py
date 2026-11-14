@@ -149,6 +149,29 @@ class SourceGateTests(unittest.TestCase):
                              renames={"main.c": "renamed.c"})
             self.assertEqual(result, {"new": [], "removed": []})
 
+    def test_rename_can_change_sorted_translation_unit_order(self):
+        from autosar_tooling.c_comparison import compare
+
+        helper = comparison_tests.CComparisonTests()
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = helper.fixture(Path(temporary))
+            for root in (project, output / "project", baseline / "project"):
+                (root / "other.c").write_text("other();\n")
+                (root / "target.json").write_text(json.dumps({"sources": ["main.c", "other.c"]}))
+            current["scope"]["translationUnits"] = ["main.c", "other.c"]
+            current["programs"][0]["translationUnits"] = ["main.c", "other.c"]
+            current["semanticIdentity"]["defines"]["other.c"] = []
+            helper.write(baseline, current)
+            for root in (project, output / "project"):
+                (root / "main.c").rename(root / "renamed.c")
+                (root / "target.json").write_text(
+                    json.dumps({"sources": ["other.c", "renamed.c"]}))
+            current = json.loads(json.dumps(current).replace("main.c", "renamed.c"))
+            current["scope"]["translationUnits"].sort()
+            current["programs"][0]["translationUnits"].sort()
+            self.assertEqual(compare(current, project, output, baseline, source_tree=True,
+                                     renames={"main.c": "renamed.c"}), {"new": [], "removed": []})
+
     def test_workflow_runs_target_host_gate_and_propagates_its_exit(self):
         import yaml
         from autosar_tooling.config import ROOT
