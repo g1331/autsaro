@@ -25,6 +25,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+#[cfg(target_os = "linux")]
+mod scheduling;
+
 const REQUEST: u64 = 1792;
 
 const RESPONSE: u64 = 1800;
@@ -85,6 +88,8 @@ fn run(binary: &Path, directory: &Path, script: &[u8]) -> String {
         .stderr(fs::File::create(directory.join("stderr")).unwrap())
         .spawn()
         .unwrap();
+    #[cfg(target_os = "linux")]
+    let _scheduling = scheduling::Scheduling::start(child.id(), directory);
     child.stdin.take().unwrap().write_all(script).unwrap();
     let started = std::time::Instant::now();
     while child.try_wait().unwrap().is_none() {
