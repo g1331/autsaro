@@ -88,13 +88,13 @@ Cppcheck SARIF 消费本轮基准扫描；clang-tidy 消费 `AUTOSAR_CLANG_TIDY_
 
 Linux／Windows prepare、分析与交付按平台依赖，YAML alias 共享步骤。Cppcheck 行为测试每平台只在 `no-diagnostic` 分片执行。prepare 保留格式、clang、clang-tidy，并用当前样本输入生成第一父提交基准；双侧用独立并行作业及同一 PR 工具／addon／驱动扫描，共用本平台 prepare 工件；Linux 消费同轮配对结果，不缓存扫描或门判定。基准取 checkout 第一父提交，PR 为测试合并提交。基准失败或不可比均阻断。
 
-`Strict generated source gate` 复用比较器及本次精确处置判定新增，项目整体 blocked 继续报告。`c-analysis` 核对八份摘要／门回执、双侧输入及本轮提交，拒绝工具／解析失败、缺重样本／身份及所需上游 skip／cancel；`CI required` 还要求两平台交付成功。文档选择保持，见[源码验收](source-acceptance.md)。PR 记录改动前后墙钟及阶段耗时。
+`Strict generated source gate` 复用比较器及本次精确处置判定新增，项目整体 blocked 继续报告。`c-analysis` 核对八份摘要／门回执、双侧输入及本轮提交，拒绝工具／解析失败、缺重样本／身份及所需上游 skip／cancel；`CI required` 还要求两平台交付成功。文档选择保持，见[源码验收](source-acceptance.md)。性能按作业执行时长及依赖链取前后各至少三次，墙钟另列参考。
 
 UI 与 desktop 合并为每平台一个 20 分钟作业，共享 checkout、Node、npm ci 和 UI build，独立检查失败后继续报告。Python 保留三解释器矩阵。它们在 prepare 后运行；显式状态条件允许 UI-only PR 在 prepare 跳过时继续执行。普通文档 PR 只运行选择、quality、汇总及轻量 Extended 选择。
 
 只修改六个独立分析驱动（`c_check`、`c_acceptance`、`c_sdk`、`c_comparison`、`c_addon`、`c_gate`）、标准评估 Markdown 或固定 MISRA 索引时，PR 选择 Python、两平台 prepare／分析及汇总。generated-retention、共享 lexer／retention、LICENSE／NOTICE 属于完整检查输入；混合改动、改名、未知或截断清单完整选择。
 
-Cargo 缓存键保留 runner 镜像、工具链和锁文件身份，并用 `git ls-files` 只对受版本控制的编译源码／交付输入字节计算摘要；导入或构建生成物及时间戳不参与，源码改变后写回增量状态，恢复前缀继续接纳旧缓存。只缓存编译产物，测试和分析结果每次重新运行。
+Cargo 缓存键绑定 runner 镜像、工具链、锁文件及 `git ls-files` 跟踪的编译源码／交付输入字节；生成物与时间戳不入键。源码变化保存增量状态，恢复前缀接纳旧缓存；只缓存编译产物，测试和分析每轮执行。
 
 公开仓库不注册自托管 runner，workflow 只用 GitHub 托管 runner。托管 runner 由并行开发共享，并发额度按账号计划核实；本轮容量预算采用 20 个作业。推送前确认会触发哪些运行，只保留需要的；中间提交和探测推送的检查在后续推送前取消，实验矩阵保持小规模（同时约四个作业），临时探测分支和一次性 workflow 用完即删。CI 因耗时超限时先依据实际阶段耗时消除重复构建、复用依赖缓存并并行独立样本，不能只延长总超时；完整检查范围与失败条件保持，优化效果以实际运行核对。按作业拆分或分片前，核对首批并发作业数：超出上限的部分排队，会抵消拆分收益；分片名单从同一列表筛选与排除，保证每个测试恰好运行一次。
 
