@@ -61,6 +61,16 @@ def debian_headers(
                         "algorithm": "md5",
                         "expected": checksum,
                     }
+        for listing in (info / (name + ":amd64.list"), info / (name + ".list")):
+            if listing.is_file():
+                for filename in listing.read_text(encoding="utf-8").splitlines():
+                    path = Path(filename)
+                    if path.is_symlink():
+                        records[str(path)] = {
+                            "provider": name, "version": fields["Version"],
+                            "header": path.as_posix().lstrip("/"), "algorithm": "symlink",
+                            "expected": path.readlink().as_posix(),
+                        }
     return records
 
 
@@ -95,6 +105,17 @@ def msys_headers(compiler: Path) -> dict:
                 )
                 checksum = attributes.get("sha256digest", "")
                 filename = values[0][2:]
+                # ALPM archive metadata is stored in pacman's database, not at /.
+                if filename in {".BUILDINFO", ".PKGINFO", ".MTREE", ".INSTALL", ".CHANGELOG"}:
+                    continue
+                if attributes.get("type") == "link":
+                    path = prefix.parent / filename
+                    records[str(path)] = {
+                        "provider": name, "version": fields["%VERSION%"],
+                        "header": filename, "algorithm": "symlink",
+                        "expected": attributes["link"],
+                    }
+                    continue
                 if re.fullmatch("[0-9a-f]{64}", checksum):
                     path = (prefix.parent / filename).resolve()
                     records[str(path)] = {
@@ -121,6 +142,8 @@ def header_identity(
         "reason": "unknown provider or missing package manifest",
     }
     package = packages.get(str(path))
+    if package and package["algorithm"] == "symlink":
+        package = None  # A materialized alias has no independent original-file digest.
     if path.is_relative_to(root):
         record["reason"] = "project source"
     elif package:
@@ -714,6 +737,32 @@ def validate_sources(data: dict) -> None:
         raise ValueError("SDK wait " + port + ": missing active wait call source")
 
 
+def environment_identity(packages: dict) -> dict:
+    """Seal the entire supported provider inventory, independently of source use."""
+    if not packages:
+        raise ValueError("SDK environment provider inventory missing")
+    records = []
+    for name, package in packages.items():
+        if package["algorithm"] == "symlink":
+            path = Path(name)
+            target = path.parent / package["expected"]
+            if path.is_symlink():
+                if path.resolve(strict=True) != target.resolve(strict=True):
+                    raise ValueError(f"SDK environment link changed: {name}")
+            elif not path.is_file() or digest(path) != digest(target):
+                # MSYS2 can materialize a file link as a copy on Windows.
+                raise ValueError(f"SDK environment link content differs: {name}")
+            records.append({**package, "sha256": digest(path) if path.is_file() else None})
+            continue
+        data = Path(name).read_bytes()
+        if hashlib.new(package["algorithm"], data).hexdigest() != package["expected"]:
+            raise ValueError(f"SDK environment differs from provider original: {name}")
+        records.append({**package, "sha256": hashlib.sha256(data).hexdigest()})
+    records.sort(key=lambda row: (row["provider"], row["header"]))
+    return {"format": "sdk-provider-environment-v1", "files": len(records),
+            "sha256": hashlib.sha256(json.dumps(records, sort_keys=True).encode()).hexdigest()}
+
+
 def semantic(scope: dict) -> str:
     """Paths are provenance; provider/header bytes and active definitions are semantic."""
     headers = scope.get("sdkHeaders", [])
@@ -724,15 +773,19 @@ def semantic(scope: dict) -> str:
     )
     for header in headers:
         path = Path(header["path"])
+        package = packages.get(str(path))
+        if package and package["algorithm"] == "symlink":
+            package = None
         expected = {
             key: header[key]
             for key in ("provider", "version", "header", "algorithm", "expected")
             if key in header
         }
-        if digest(path) != header["sha256"] or packages.get(str(path)) != (
+        if digest(path) != header["sha256"] or package != (
             expected if "provider" in header else None
         ):
             raise ValueError("SDK source/provider identity changed during analysis")
+    scope["sdkEnvironment"] = environment_identity(packages)
     identity = semantic_inputs(scope)
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
@@ -742,6 +795,7 @@ def semantic_inputs(scope: dict) -> dict:
     headers = scope.get("sdkHeaders", [])
     keys = {row["path"]: row["key"] for row in headers}
     return {
+        "environment": scope["sdkEnvironment"],
         "lineDirectives": scope.get("sdkLineDirectives", False),
         "headers": sorted(
             (

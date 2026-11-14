@@ -558,6 +558,7 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["semanticIdentity"] = comparison["semanticIdentity"]
         self.summary["semanticIdentity"]["defines"] = {
             name: [] for name in self.summary["scope"]["translationUnits"]}
+        self.summary["scope"]["sdkEnvironment"] = comparison["scope"]["sdkEnvironment"]
         self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
             c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
         self.summary["scope"]["profile"] = "ecu"

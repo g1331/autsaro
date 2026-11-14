@@ -398,10 +398,11 @@ class ActualCAnalysisTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             analyses = []
-            for name, expression in (("baseline", "0"), ("current", "INT_MAX")):
+            for name, expression, include in (("baseline", "0", "#include <limits.h>\n"),
+                    ("current", "INT_MAX", "#include <limits.h>\n"), ("without-header", "0", "")):
                 directory = root / name
                 directory.mkdir()
-                project = self.project(directory, "#include <limits.h>\n"
+                project = self.project(directory, include +
                                        f"int main(void) {{ return {expression}; }}\n",
                                        extra_files={"meta/integration.json": '{"plan":{}}'})
                 target = json.loads((project / "target.json").read_text())["target"]
@@ -412,7 +413,7 @@ class ActualCAnalysisTests(unittest.TestCase):
                 self.assertEqual([row for row in summary["diagnostics"]
                                   if row["id"] != "checkersReport"], [])
                 analyses.append((summary, project, output))
-            previous, current = analyses
+            previous, current, without_header = analyses
             self.assertEqual(
                 previous[0]["scope"]["compilerDiscoveredDefines"]["bsw/src/main.c"], [])
             self.assertTrue(any(flag.startswith("-DINT_MAX=") for flag in
@@ -420,6 +421,12 @@ class ActualCAnalysisTests(unittest.TestCase):
             self.assertNotEqual(previous[0]["semanticIdentity"]["sdk"],
                                 current[0]["semanticIdentity"]["sdk"])
             self.assertEqual(compare(*current, previous[2], source_tree=True),
+                             {"new": [], "removed": []})
+            self.assertEqual(current[0]["scope"]["sdkEnvironment"],
+                             without_header[0]["scope"]["sdkEnvironment"])
+            self.assertNotEqual(current[0]["scope"]["sdkHeaders"],
+                                without_header[0]["scope"]["sdkHeaders"])
+            self.assertEqual(compare(*current, without_header[2], source_tree=True),
                              {"new": [], "removed": []})
             with self.assertRaisesRegex(ValueError, "Semantic identity differs: defines"):
                 compare(*current, previous[2])

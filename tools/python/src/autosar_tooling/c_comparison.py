@@ -92,6 +92,14 @@ def _source_environment(summary: dict, identity: dict) -> dict:
     sdk = c_sdk.semantic_inputs(summary["scope"])
     if hashlib.sha256(json.dumps(sdk, sort_keys=True).encode()).hexdigest() != identity["sdk"]:
         raise ValueError("Semantic identity differs: sdk receipt")
+    environment = sdk["environment"]
+    if (not isinstance(environment, dict)
+            or set(environment) != {"format", "files", "sha256"}
+            or environment["format"] != "sdk-provider-environment-v1"
+            or type(environment["files"]) is not int or environment["files"] <= 0
+            or not isinstance(environment["sha256"], str)
+            or re.fullmatch(r"[0-9a-f]{64}", environment["sha256"]) is None):
+        raise ValueError("SDK environment identity missing or invalid")
     headers = {row["header"]: row for row in sdk["headers"]}
     header_names = {row["key"]: row["header"] for row in sdk["headers"]}
     macros = {}
@@ -107,7 +115,7 @@ def _source_environment(summary: dict, identity: dict) -> dict:
             if match is None:
                 raise ValueError("Semantic identity differs: defines format")
             defines[unit, match[1]] = match[2]
-    return {"headers": headers, "macros": macros, "defines": defines,
+    return {"environment": environment, "headers": headers, "macros": macros, "defines": defines,
             "providers": {row["provider"]: row["version"] for row in sdk["headers"]},
             "lineDirectives": sdk["lineDirectives"]}
 
@@ -117,11 +125,13 @@ def _compare_source_environment(current: dict, previous: dict, renames: dict) ->
     before = _source_environment(previous, previous["semanticIdentity"])
     before["defines"] = {(renames.get(unit, unit), name): value
                          for (unit, name), value in before["defines"].items()}
+    if now["environment"] != before["environment"]:
+        raise ValueError("Semantic identity differs: sdk environment")
     if now["lineDirectives"] != before["lineDirectives"]:
         raise ValueError("Semantic identity differs: sdk line directives")
     for field in ("headers", "providers", "macros", "defines"):
-        # Each producer verifies its own actual use; only shared environment
-        # inputs must remain equal when source starts/stops using SDK facilities.
+        # The complete provider environment was compared above; usage may vary,
+        # while definitions observed in both source trees must still agree.
         for key in now[field].keys() & before[field].keys():
             if now[field][key] != before[field][key]:
                 label = "defines" if field == "defines" else "sdk " + field
