@@ -143,6 +143,20 @@ def compare(
                 return {renames.get(key, key): mapped(item) for key, item in value.items()}
             return value
 
+        def normalized(value, field=""):
+            if isinstance(value, dict):
+                return {key: normalized(item, key) for key, item in value.items()}
+            if isinstance(value, list):
+                items = [normalized(item) for item in value]
+                # These are source sets, emitted in filename order. Renaming a
+                # source can reorder them without changing the analysis closure.
+                if (source_tree and field in {"sources", "kernelSources", "translationUnits",
+                                              "supplemental"}
+                        and all(isinstance(item, str) for item in items)):
+                    return sorted(items)
+                return items
+            return value
+
         previous = _read(baseline / "summary.json")
         old_root = baseline / "project"
         _complete(current)
@@ -158,11 +172,13 @@ def compare(
                for root in (project, output / "project")):
             raise ValueError("Current source seal identity differs")
         # Source bytes may change; the selected target/configuration/link closure may not.
-        if _read(project / "target.json") != mapped(_read(old_root / "target.json")):
+        if normalized(_read(project / "target.json")) != normalized(
+                mapped(_read(old_root / "target.json"))):
             raise ValueError("Target/sample configuration differs")
         for field in ("target", "profile", "entries", "compilerFlags", "includePaths",
                       "translationUnits", "supplemental", "patchedKernel"):
-            if current["scope"][field] != mapped(previous["scope"][field]):
+            if normalized(current["scope"][field], field) != normalized(
+                    mapped(previous["scope"][field]), field):
                 raise ValueError(f"Target/sample scope differs: {field}")
         for root in (project, old_root):
             if not (root / "meta/integration.json").is_file():
@@ -170,12 +186,17 @@ def compare(
         plan = _configuration(project, source_tree=source_tree)
         previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
         output_plan = _configuration(output / "project", source_tree=source_tree)
-        if plan != previous_plan or plan != output_plan:
+        if (normalized(plan) != normalized(previous_plan)
+                or normalized(plan) != normalized(output_plan)):
             raise ValueError("Sample generation configuration differs")
-        def programs(summary):
-            return [(row["name"], row["entry"], row["translationUnits"]) for row in summary["programs"]]
-        if programs(current) != [(name, renames.get(entry, entry), mapped(units))
-                                 for name, entry, units in programs(previous)]:
+        def programs(summary, rename=False):
+            rows = [(row["name"], renames.get(row["entry"], row["entry"])
+                     if rename else row["entry"],
+                     normalized(mapped(row["translationUnits"]) if rename
+                                else row["translationUnits"], "translationUnits"))
+                    for row in summary["programs"]]
+            return sorted(rows) if source_tree else rows
+        if programs(current) != programs(previous, rename=True):
             raise ValueError("Program identity differs")
         current_identity, previous_identity = _semantic(current), _semantic(previous)
         for field in ("compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime", "sdk"):
