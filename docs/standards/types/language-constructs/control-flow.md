@@ -16,7 +16,7 @@ R15.5 单独引用 ADR 0025 的既有 GRP 决定，原始告警仍保留。
 | R15.2 | Required | goto 目标的前向关系 | not_assessed | 同号入口依赖 findGotoLabel；找不到目标即报告。#443 须核对实际目标查找与源序、宏生成标签和条件编译，按当前函数逐跳转确认前向约束并合成修订。 |
 | R15.3 | Required | goto 与 enclosing／switch clause | not_assessed | 同号入口比较 goto／label 的 scope 并检查 switch clause。#443 须核对嵌套语句、宏标签、目标作用域和有效原文例外，补当前所有跳转的实际清理／生命周期消费者证据。 |
 | R15.4 | Advisory | 循环的 break／goto 终止点数量 | not_assessed | 同号入口按 scope 递归累计 break／goto，switch 中 break 另行处理。#443 尚缺实际目标是否退出当前循环、嵌套循环及条件展开的逐语句判断和适用修订合成。 |
-| R15.5 | Advisory | 自有 C 的函数退出路径 | satisfied | [ADR 0025 GRP](../../../adr/0025-misra-layered-scope.md#grp指南重分类计划)已将本条对自有 C（含生成 C、主机层及项目补丁）Disapplied；本行消费既有重分类决定，固定 addon 的非顶层 return 告警照常保留。资源回收、输出和返回语义继续由各自规则与实际消费者核查，采用原件沿供应方责任。 |
+| R15.5 | Advisory | 自有 C 的函数退出路径 | satisfied | [ADR 0025 GRP](../../../adr/0025-misra-layered-scope.md#grp指南重分类计划)已将本条对自有目标 C（含生成 C 及项目补丁；主机层已由 [ADR 0030](../../../adr/0030-host-simulation-layer-outside-misra-scope.md) 移出范围）Disapplied；本行消费既有重分类决定，固定 addon 的非顶层 return 告警照常保留。资源回收、输出和返回语义继续由各自规则与实际消费者核查，采用原件沿供应方责任。 |
 | R15.6 | Required | iteration／selection 的复合语句体 | not_assessed | 同号入口对 raw token 运行状态机，预处理指令和宏语句体可能影响原 token 与实际语法的对应。#443 须复核实际展开后的全部语句体、else-if 形式及适用修订，接续宏消费者。 |
 | R15.7 | Required | if／else-if 链的最终 else | not_assessed | 同号入口沿 token／scope 查找最终 else；最后分支的副作用或说明义务仍须按原文核查。#443 尚缺当前完整链、宏展开和终止分支语义及适用修订合成。 |
 | R16.1 | Required | switch 的规范结构 | not_assessed | 同号入口以 case／default 和 break 维护 scope 状态，依赖规范化 token。#443 须按原文规定的 switch 语法逐结构复核，包含空 clause、嵌套块和宏生成分支，合成适用修订。 |

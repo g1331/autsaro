@@ -2,6 +2,8 @@
 
 ## 主机地址表示类别处置
 
+状态（[ADR 0030](../../../adr/0030-host-simulation-layer-outside-misra-scope.md)，2026-11-14）：Linux 三处实例在 `os/src/host/linux/`，范围外，转为历史记录。Windows 五处实例在 `Os_Stack.c`，仍在范围内，记录继续有效，随 [#502](https://github.com/g1331/autsaro/issues/502) 裁定。
+
 两平台分别记录不可消除的原生地址表示；只覆盖下列固定来源与风险控制。
 
 ## Linux x64

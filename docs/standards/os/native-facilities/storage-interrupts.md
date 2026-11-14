@@ -1,5 +1,7 @@
 # OS：动态设施与同步嵌套 ISR
 
+状态（[ADR 0030](../../../adr/0030-host-simulation-layer-outside-misra-scope.md)）：同步嵌套 ISR 节整体转为历史记录；主机动态设施节只转范围外实例，`Os_HostServices.c`、`Os_Backend.c` 内的实例继续有效，随 #502 裁定。
+
 ## 动态存储及回收责任
 
 D4.12为Required、适用C99（主文34–35／PDF42–43），明确覆盖第三方动态分配；AMD2仅扩展C11。`Os_HostCreateActor`的匿名mmap执行栈及guard是真实动态存储，静态handles／TCB／FreeRTOS缓冲／altstack不改变其来源。pthread仅获得bootstrap栈大小而非调用方栈；对应glibc的allocate_stack在缓存不足时mmap，并经_dl_allocate_tls／allocate_dtv分配TLS。Win32创建线程也保留／提交native栈。依[已接受的分层决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6437338057)，Windows provider内部实现和DLL／CRT身份沿采用代码责任，集成证据取必需CI真实编译／运行；自有调用、创建失败和生命周期仍按下文评估。
@@ -18,7 +20,7 @@ R17.2为Required（主文137／PDF145，AMD2.27增加C11），禁止直接或间
 
 OSEK OS2.2.3 §6（25–26页）及§14.2.3.1／Figure14-1（73–74页）描述中断类别、嵌套与调度风险，没有规定必须使用同一C函数递归。当前端口的严格递增优先级、yield排除、32槽frame容量、原生栈／guard及父上下文恢复是风险控制，不能据其把真实R17.2违反判为满足，也不证明任意用户handler的最坏栈用量。
 
-[既有提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6395097006)已由 ADR 0025 接受方案 A1，类别范围见下文。改为延迟处理会改变既有抢占合同；仅换helper名称不能消除调用环。独立ISR actor／原生上下文切换是可研究的替代架构，需要重新证明身份、容量、mask、资源、故障、Task返回及检测器合同，不能直接声称不可能或已经等价。具体取舍必须连同这些差异评估，不由默认profile或已有绿色CI代替。
+[既有提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6395097006)已由 ADR 0025 接受方案 A1，类别范围见下文。改为延迟处理会改变既有抢占合同；仅换helper名称不能消除调用环。独立ISR actor／原生上下文切换是可研究的替代架构，需要重新证明身份、容量、mask、资源、故障、Task返回及检测器合同，不能直接声称不可能或已经等价。
 
 
 ## 主机动态设施类别偏离
@@ -57,7 +59,6 @@ OSEK OS2.2.3 §6（25–26页）及§14.2.3.1／Figure14-1（73–74页）描述
 
 理由：子 ISR 必须在父 handler 继续前完成；改为父返回后排队会改变已有抢占语义。OSEK 并不强制 C 递归，故属于平台类别取舍。风险为栈耗尽、父身份或 mask／ErrorHook 状态损坏。控制是优先级在 1..31 严格递增、排除 yield、32 槽 frame、同一 S actor／原生栈与 guard、父上下文／ErrorHook 快照恢复及资源 ceiling。`nested_interrupts.c` 的 ISR20→6→4（优先级3→9→15）检查同步顺序；默认样本相同优先级不能代替此证据。任意应用 handler 的最坏栈用量仍须按其配置核定。
 
-provider／ABI、优先级范围、frame 容量、handler、mask、资源或调度合同变化即重评；不覆盖任意递归、用户回调环或新增平台。
 
 ## 人工评估的配置与证据范围
 

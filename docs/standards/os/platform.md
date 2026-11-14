@@ -19,6 +19,8 @@
 
 ## 三处有界 Linux 平台保留
 
+状态（[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md)，2026-11-14）：三处都在 `os/src/host/linux/`，范围外，本节与 ADR 0024 一并转为历史记录。
+
 [ADR 0024](../../adr/0024-bounded-linux-platform-retention.md)记录[人类接受的项目决定](https://github.com/g1331/autsaro/pull/371#issuecomment-6392165780)，仅限当前 Linux C99／glibc-pthread x86-64 三处和其中列明的四 profile／两个程序及相同原生实现。它独立于 ADR 0023，既不是 MISRA 合法偏离或符合性批准，也不解除 `SWS_BSW_00115`。SDK 间接包含链及其他根路径继续可见，provider／ABI／flags／handler／合同变化重评。
 
 三处均为 Required、适用 C99 的真实违反：主文 R21.5／R21.10（印刷168／170，PDF176／178）、AMD2.82及AMD3.68／69／70仍禁止相应包含。独立只读复核固定 `97da3702e605a4cb9b923d10964a60cfff256065`，逐处原文、调用闭包、替代及风险控制均无新增技术发现；没有把项目取舍当作技术结论，也未重跑作者测试。完整进入调查、替代分析及证据见[PR具体提案](https://github.com/g1331/autsaro/pull/371#issuecomment-6391387787)。
