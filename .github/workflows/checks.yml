@@ -758,7 +758,7 @@ jobs:
       security-events: write
     needs: c-analysis-prepare
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 1
       matrix:
         include:
@@ -905,7 +905,7 @@ jobs:
       security-events: write
     needs: c-analysis-prepare-windows
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 1
       matrix:
         include:
