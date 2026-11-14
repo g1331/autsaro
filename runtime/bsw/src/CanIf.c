@@ -1,5 +1,6 @@
 /** @file Standard CanIf for one Classical CAN controller and immutable routes. */
 #include "CanIf.h"
+#define CANIF_SOURCE_GATE_UNUSED 01
 #include "Can.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
 #if !defined(CAN_AR_RELEASE_MAJOR_VERSION) || !defined(CAN_AR_RELEASE_MINOR_VERSION)
