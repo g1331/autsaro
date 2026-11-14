@@ -172,7 +172,33 @@ class SourceGateTests(unittest.TestCase):
             self.assertEqual(compare(current, project, output, baseline, source_tree=True,
                                      renames={"main.c": "renamed.c"}), {"new": [], "removed": []})
 
-    def test_workflow_runs_target_host_gate_and_propagates_its_exit(self):
+    def test_same_run_consumer_rejects_transferred_input_changes(self):
+        for changed in (False, True):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                current, output, baseline = self.fixture(root / "fixture")
+                current["scope"]["target"] = "windows-x64-controlled-v1"
+                current["projectAcceptance"]["inputIdentity"] = "a" * 64
+                for name in ("c-analysis-results", "c-analysis-baseline"):
+                    directory = root / "build" / name / "standard-ecu"
+                    shutil.copytree(output if name.endswith("results") else baseline, directory)
+                    (directory / "summary.json").write_text(json.dumps(current))
+                with patch.object(c_gate, "ROOT", root), \
+                        patch.object(c_gate.c_acceptance, "_complete"), \
+                        patch.object(c_gate.c_acceptance, "input_identity",
+                                     return_value=("b" if changed else "a") * 64), \
+                        patch.object(c_gate, "rename_paths", return_value={}), \
+                        patch.object(c_gate, "git", return_value="commit"), \
+                        patch.object(c_gate, "verdict", return_value={"status": "passed"}) as gate:
+                    if changed:
+                        with self.assertRaisesRegex(ValueError, "Transferred baseline"):
+                            c_gate.scan("windows-x64-controlled-v1", "standard-ecu")
+                        gate.assert_not_called()
+                    else:
+                        c_gate.scan("windows-x64-controlled-v1", "standard-ecu")
+                        gate.assert_called_once()
+
+    def test_workflow_runs_same_run_consumer_and_propagates_its_exit(self):
         import yaml
         from autosar_tooling.config import ROOT
 
@@ -209,9 +235,24 @@ class SourceGateTests(unittest.TestCase):
             self.assertEqual(current["needs"], prepare)
             self.assertEqual(baseline["needs"], prepare)
             self.assertEqual(current["steps"], baseline["steps"])
+            artifact = next(step["with"] for step in current["steps"]
+                            if step.get("with", {}).get("name", "").startswith(
+                                "c-analysis-raw-"))
+            self.assertIn("${{ strategy.job-index }}", artifact["name"])
+            self.assertIn("${{ env.ANALYSIS_SIDE }}", artifact["name"])
+            self.assertEqual([path.rsplit("/", 1)[1] for path in artifact["path"].splitlines()],
+                             ["summary.json", "project"])
             self.assertEqual(current["env"]["ANALYSIS_SIDE"], "current")
             self.assertEqual(baseline["env"]["ANALYSIS_SIDE"], "baseline")
             gate = jobs["c-analysis-gates" + suffix]
+            self.assertEqual(gate["runs-on"], "ubuntu-24.04" if suffix else "${{ matrix.os }}")
+            self.assertFalse(any(step.get("uses") == "./.github/actions/native-analysis-compiler"
+                                 for step in gate["steps"]))
+            checkout = next(step for step in gate["steps"]
+                            if step.get("name") == "Match target checkout bytes")
+            self.assertEqual(checkout["if"], "matrix.target == 'windows-x64-controlled-v1'")
+            self.assertEqual(checkout["run"],
+                             "git -c core.autocrlf=true checkout-index --all --force")
             self.assertEqual(set(gate["needs"]), {
                 prepare, "c-analysis-samples" + suffix, "c-analysis-baseline" + suffix,
             })
@@ -235,7 +276,8 @@ class SourceGateTests(unittest.TestCase):
                     for name in ("current", "baseline"):
                         for index in range(count if name == side else 1):
                             path = root / "build/c-analysis-raw" / (
-                                f"c-analysis-raw-{name}-linux-x64-controlled-v1-standard-ecu-{index}")
+                                f"c-analysis-raw-{name}-linux-x64-controlled-v1-"
+                                f"standard-ecu-{index}")
                             path.mkdir(parents=True)
                     with patch.dict(os.environ, {
                         "ANALYSIS_TARGET": "linux-x64-controlled-v1",
