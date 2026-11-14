@@ -843,7 +843,7 @@ class AcceptanceTests(unittest.TestCase):
             "R8.9", "R8.13", "R9.1", "R9.2", "R9.3", "R10.2", "R10.4", "R10.5", "R10.7", "R10.8",
             "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.6", "R11.7", "R11.8", "R11.9",
             "R12.1", "R12.2", "R12.3", "R12.4", "R13.2", "R13.4", "R14.2", "R14.3", "R15.4",
-            "R15.6", "R15.7", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7",
+            "R15.6", "R15.7",
             "R17.2", "R17.4", "R17.5", "R17.7", "R17.8", "R18.1", "R18.2", "R18.3", "R18.4",
             "R18.5", "R18.6", "R18.8", "R19.1", "R20.2", "R20.3", "R20.4", "R20.5", "R20.6",
             "R20.7", "R20.8", "R20.9", "R20.10", "R20.11", "R20.12", "R20.13", "R20.14", "R21.1",
@@ -852,13 +852,13 @@ class AcceptanceTests(unittest.TestCase):
             "R21.20", "R21.21", "R22.1", "R22.2", "R22.3", "R22.4", "R22.5", "R22.6", "R22.7",
             "R22.8", "R22.9", "R22.10",
         }
-        self.assertEqual(len(expected_gaps), 113)
+        self.assertEqual(len(expected_gaps), 106)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 113)
+        self.assertEqual(len(objects), 106)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 113)
+        self.assertEqual(len(located), 106)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -878,7 +878,7 @@ class AcceptanceTests(unittest.TestCase):
         declarations = {"R8.10", "R8.11", "R8.12", "R8.14", "R9.4", "R9.5"}
         expressions = {"R13.1", "R13.3", "R13.6"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
-                        "R19.2"}
+                        "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7"}
         self.assertEqual(set(satisfied),
                          lexical | declarations | expressions | control_flow
                          | {"R7.1", "R7.3", "R15.5"})
@@ -941,8 +941,8 @@ class AcceptanceTests(unittest.TestCase):
             "R14.1": "altstacks[].storage", "R14.2": "TC1", "R14.3": "TC2.27–28",
             "R15.1": "replacement", "R15.2": "findGotoLabel", "R15.3": "switch-clause",
             "R15.4": "xTaskIncrementTick", "R15.6": "Os_Atomic", "R15.7": "TC2.29",
-            "R16.1": "Dcm_PublicationType", "R16.2": "case.scope",
-            "R16.3": "fallthrough", "R16.4": "break 之前有语句或注释",
+            "R16.1": "Ecu_BswMAction", "R16.2": "case.scope",
+            "R16.3": "fallthrough", "R16.4": "AlarmCallback and NONE",
             "R16.5": "直接标签序列", "R16.6": "共享一条执行路径只算一个",
             "R16.7": "D.6", "R17.1": "AMD3.65–66", "R17.2": "Det_Invoke",
             "R17.4": "TC2.30", "R17.5": "TC2.31–32", "R17.6": "任意位置的 static",
@@ -967,6 +967,10 @@ class AcceptanceTests(unittest.TestCase):
                     self.assertIn("#443", record["conclusion"])
         self.assertEqual(by_id["R17.6"]["category"], "Mandatory")
         self.assertEqual(by_id["R17.5"]["category"], "Required")
+        control_text = (self.root / by_id["R16.1"]["source"]["file"]).read_text(encoding="utf-8")
+        self.assertIn("184 个 switch 实例、20 种拼写", control_text)
+        self.assertIn("| Ecu_BswMAction | ComM_ModeType→uint8 | 4 |", control_text)
+        self.assertIn("| Os_ArtiService | OSServiceIdType→uint8 | 42 |", control_text)
         sdk_text = (ROOT / c_acceptance.SDK).read_text(encoding="utf-8")
         sdk_record = json.loads(re.search(
             r"<!-- sdk-integration-records-begin -->\s*(.*?)"
