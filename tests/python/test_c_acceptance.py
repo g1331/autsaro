@@ -981,6 +981,19 @@ class AcceptanceTests(unittest.TestCase):
             "provider": "libc6-dev", "version": "2.39-0ubuntu8.9",
             "sha256": "8d50bc7737bcc76f42b1f406244acb287bcf0463d180b6b0566d27d1f23b3e98"}})
 
+    def test_real_freertos_user_case_alias_keeps_the_reviewed_local_closure(self):
+        context = next(row for row in c_acceptance.contexts(ROOT)
+                       if row["records"]["kind"] == "freertos-integration")
+        self.assertEqual(context["source"], c_acceptance.ADOPTION)
+        self.assertEqual(context["formalStatus"], "approved")
+        cases = {(row["target"], row["caseId"]): row["inputIdentity"]
+                 for row in context["cases"]}
+        # Current Linux user input has the already-reviewed standard kernel closure.
+        # Keep that precise identity and both labels; other local groups remain separate.
+        reviewed = "1365cb369a155ee841f369d4fc456a2c5b7a427411bf5e169c0ae6ce584ba7b4"
+        self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
+        self.assertEqual(cases[TARGET, "user-application"], reviewed)
+
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
         path = self.root / name
