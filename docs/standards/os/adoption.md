@@ -175,7 +175,7 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 {"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"a04643793713351d3a54b7714aadb7ee19109cecf85020bf92fcaa694f50cb85"},
 {"caseId":"no-diagnostic","target":"linux-x64-controlled-v1","inputIdentity":"8e38a082568f108ec68b010ccd26d32fd3dee31878c426172dcece6762deba30"},
 {"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"1365cb369a155ee841f369d4fc456a2c5b7a427411bf5e169c0ae6ce584ba7b4"},
-{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"0f6a9e18b6d11f7d10cd3671749335c3ea9d7a7a7e580a89f477b01599b80d17"},
+{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"1365cb369a155ee841f369d4fc456a2c5b7a427411bf5e169c0ae6ce584ba7b4"},
 {"caseId":"component-pipeline","target":"windows-x64-controlled-v1","inputIdentity":"5c40abbbdb9b0978971171b315195a62987808439f4ad45772f1e78d50939a22"},
 {"caseId":"no-diagnostic","target":"windows-x64-controlled-v1","inputIdentity":"f06be7e11f1bb1bb943c5bc92b268fe80c0dc29f883c3cea1035886bd08f62eb"},
 {"caseId":"standard-ecu","target":"windows-x64-controlled-v1","inputIdentity":"e1cc1dfb0dcc90452baf0c402c2201e6f2697798eca20e20dfab2748639cec2e"},

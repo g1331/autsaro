@@ -57,7 +57,8 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 实例均为 C99，基线身份及 evaluate 与 CI 保存值相同。原始摘要保持只读。
 
 第二批完成时，完整 144 项为 17 项 satisfied、3 项 not_applicable、124 项 not_assessed。
-第三批[表达式核查](expressions.md)结算三项后为 20／3／121；本篇原条目状态保持。
+第三批[表达式核查](expressions.md)结算三项后为 20／3／121，第四批
+[控制流核查](control-flow.md)结算十五项后为 35／3／106；本篇原条目状态保持。
 本篇为 6 项满足、1 项既有 C99 不适用、11 项阻塞；R7.1 另在 lexical.md 完成
 当前条件控制证据并连接 SDK 已批准类别。逐项恢复条件继续归 #443。
 
@@ -67,51 +68,51 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 后的局部身份与既有具体消费，原批准实体、正式义务及未评估／表外阻塞保持；历史过期的精确记录按当前绑定恢复。
 <!-- source-assessment-context-begin -->
 {
-  "id": "checker-obligations-443-expressions",
+  "id": "checker-obligations-443-control-flow",
   "evidence": {
-    "head": "27790cca466f3d08e6601b7cf63c8dd59bdb5e18",
-    "receipt": "https://github.com/g1331/autsaro/issues/443#issuecomment-6853550883"
+    "head": "0d5f4a74a539c410abc67463e356b87a2283b37f",
+    "receipt": "https://github.com/g1331/autsaro/issues/443#issuecomment-6872195716"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "9bc0cf34f2148f1ad3fae1d0b2e78ff6ed86366fa534caf8923dee7cdb499a41"
+      "inputIdentity": "6569c104d309ce7b09affd85046ad8f1c9a8c778f1e4312809161fabe40aa19c"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "0630d7ac6d4b62171a284307cb27c95b655e2bc9a9ef5f1ac14f5487d2098a1c"
+      "inputIdentity": "8a38187956a32cdf5e6b20dbfd9bd27001a1a1dcee83c0490b2f34bc1ddcf62a"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "b21c1162194079c16cba8e840ac98ff960beeae11c3dff7dcc0ae662808c7995"
+      "inputIdentity": "913f0d70c8b54b7e9eb065a92bd6a3e9fc5940be53cbf99a6a18efbffa16c8bc"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "17545e2b2f20961fdf47d4125fc39eb0d87de186572cb3bf191b0ee5ebfffd37"
+      "inputIdentity": "947203b506b9c2d6f3305ea4bf7bf33c258d5fe53a0d5d986651e2363355fc53"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "7abce84bbfab37483ee651aa27b70a4967a3d1e408778f64507c0f05e4a7675e"
+      "inputIdentity": "963abda2d241f0a791c29a0c29b6636a489803a7ef7f332743e7bac7d7c88f0d"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "5c86178851092348668e2e1faa7e4b76d9f43990502576c1905656d2a2b58f4e"
+      "inputIdentity": "4df154221a6eefe81dc87dc3e71501c3d0e9c18852d8ad5cf0fb9094d324caf4"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "616de7318874f8b25f3690ab30c71c4036a5d1c924d888caa2213f1d16b530d7"
+      "inputIdentity": "29c448e9bd1bdfa9c0d8832f69bcf5bd80666239dfca89f0fbbcbf2ce18eedee"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "0c64a6b657cf073bf34b0f96f8c20713fb6c1747b96bdc2252af3ca6f4920063"
+      "inputIdentity": "9e8a368e5f0edf72b6df010d7d69d67f29b3c3d0c8ec65a0e14745e1508027b6"
     }
   ],
   "records": {
