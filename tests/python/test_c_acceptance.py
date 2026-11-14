@@ -5,20 +5,14 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import os
 import re
-import runpy
 import shutil
-import subprocess
-import sys
 import tempfile
 import unittest
-from contextlib import chdir
 from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
-import yaml
 from autosar_tooling import c_acceptance, c_check, c_retention, c_sdk, c_standard, cli
 from autosar_tooling.config import ROOT
 
@@ -553,6 +547,45 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertIn("definition differs: " + self.sdk_name + ":1:O_RDONLY",
                       result["objects"][-1]["reason"])
+
+    def test_source_gate_consumes_real_exact_position_while_project_remains_blocked(self):
+        import test_c_comparison as comparison_tests
+        from autosar_tooling import c_gate
+
+        self.sdk_inputs()
+        comparison, _, _, _ = comparison_tests.CComparisonTests().fixture(
+            self.directory / "comparison")
+        self.summary["semanticIdentity"] = comparison["semanticIdentity"]
+        self.summary["semanticIdentity"]["defines"] = {
+            name: [] for name in self.summary["scope"]["translationUnits"]}
+        self.summary["scope"]["profile"] = "ecu"
+        self.bind_sdk()
+        self.summary["tool"]["binarySha256"] = "synthetic-analyzer-binary"
+        output = self.directory / "gate-current"
+        baseline = self.directory / "gate-baseline"
+        shutil.copytree(self.project, output / "project")
+        shutil.copytree(self.project, baseline / "project")
+        previous = copy.deepcopy(self.summary)
+        previous["diagnostics"] = []
+        (baseline / "summary.json").write_text(json.dumps(previous), encoding="utf-8")
+        evaluate = c_acceptance.evaluate
+        def actual(summary, project):
+            return evaluate(summary, project, root=self.root)
+        self.summary["projectAcceptance"] = actual(self.summary, output / "project")
+        self.assertEqual(self.summary["projectAcceptance"]["status"], "blocked")
+        self.assertEqual(self.summary["projectAcceptance"]["occurrences"][0]["assessment"],
+                         "accepted")
+        with patch.object(c_acceptance, "evaluate", side_effect=actual):
+            result = c_gate.verdict(self.summary, output, baseline, {})
+            self.assertEqual(result["status"], "passed")
+            self.assertTrue(result["comparison"]["new"])
+            self.assertFalse(self.summary["passed"])
+            self.bind_sdk(status="pending")
+            with self.assertRaisesRegex(ValueError, "receipt differs"):
+                c_gate.verdict(self.summary, output, baseline, {})
+            self.summary["projectAcceptance"] = actual(self.summary, output / "project")
+            self.assertEqual(c_gate.verdict(self.summary, output, baseline, {})["status"],
+                             "blocked")
 
     def test_sdk_exact_position_consumption_preserves_raw_and_other_groups(self):
         self.sdk_inputs()
@@ -1939,45 +1972,6 @@ class AcceptanceTests(unittest.TestCase):
             package["version"] = "changed provider identity"
             with self.assertRaisesRegex(ValueError, "SDK source/provider identity changed"):
                 self.require(accepted)
-
-    def test_workflow_strict_step_runs_the_real_cli_and_consumer(self):
-        summary = self.receipt()
-        workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
-        steps = {row["name"]: row for row in workflow["jobs"]["c-analysis-samples"]["steps"] if "name" in row}
-        script = self.directory / "strict.py"
-        script.write_text(steps["Strict generated source gate"]["run"], encoding="utf-8")
-        output = self.directory / "build/c-analysis-results/renamed-output/summary.json"
-        output.parent.mkdir(parents=True)
-        shutil.copytree(self.project, output.parent / "project")
-        consume = c_acceptance.require_accepted
-
-        def command(argv):
-            self.assertEqual(argv[:7], ["uv", "run", "--locked", "python", "-m", "autosar_tooling", "c-acceptance"])
-            with patch.object(sys, "argv", ["autosar_tooling", *argv[6:]]), \
-                    patch.object(c_acceptance, "require_accepted", partial(consume, root=self.root)):
-                return subprocess.CompletedProcess(argv, cli.main())
-
-        for change in ("valid", "blocked", "unknown", "duplicate", "missing", "cancelled", "skipped"):
-            current = copy.deepcopy(summary)
-            if change == "blocked":
-                current["projectAcceptance"]["status"] = "blocked"
-            elif change == "unknown":
-                current["diagnostics"][0]["id"] = "unknown"
-            output.write_text(json.dumps(current), encoding="utf-8")
-            duplicate = output.parent.parent / "duplicate/summary.json"
-            if change == "duplicate":
-                duplicate.parent.mkdir()
-                duplicate.write_bytes(output.read_bytes())
-            if change == "missing":
-                output.unlink()
-            env = {"ANALYSIS_TARGET": TARGET, "ANALYSIS_SAMPLES": CASE, "PREPARE_RESULT": "success",
-                   "ANALYSIS_RESULT": change if change in {"cancelled", "skipped"} else "success"}
-            with self.subTest(change=change), chdir(self.directory), patch.dict(os.environ, env), \
-                    patch.object(subprocess, "run", side_effect=command), self.assertRaises(SystemExit) as exit_:
-                runpy.run_path(str(script))
-            self.assertEqual(exit_.exception.code == 0, change == "valid")
-            if duplicate.exists():
-                duplicate.unlink()
 
     def test_every_group_requires_its_own_current_approved_scope(self):
         self.synthetic_complete_inputs()

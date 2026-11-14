@@ -511,6 +511,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
       - name: Identify native build cache inputs
         shell: python
         run: *cargo-source-digest
@@ -585,6 +586,21 @@ jobs:
             c-analysis-cargo-${{ runner.os }}-${{ env.CACHE_IMAGE }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml') }}-v1
       - name: Generate complete analysis samples
         run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
+      - name: Select source comparison parent
+        id: source-parent
+        shell: python
+        run: |
+          import os, subprocess
+          parent = subprocess.check_output(['git', 'rev-parse', 'HEAD^1'], text=True).strip()
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('sha=' + parent + '\n')
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ steps.source-parent.outputs.sha }}
+          path: build/c-analysis-base-tree
+      - name: Generate first-parent samples with current sample inputs
+        run: python -m autosar_tooling.c_gate prepare build/c-analysis-base-tree
       - name: Validate generated sample inventory
         shell: python
         run: |
@@ -600,6 +616,7 @@ jobs:
           path: |
             build/c-analysis-tools
             build/c-analysis-samples
+            build/c-analysis-base-samples
           if-no-files-found: error
           retention-days: 14
       # After publishing, so a format failure still leaves the samples for diagnosis.
@@ -766,6 +783,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
@@ -812,32 +830,20 @@ jobs:
                   print(name, error)
                   failed = True
           sys.exit(1 if failed else 0)
+      - name: Strict generated source gate
+        env:
+          ANALYSIS_TARGET: ${{ matrix.target }}
+          ANALYSIS_SAMPLE: ${{ matrix.group }}
+        shell: python
+        run: |
+          import os, subprocess, sys
+          sys.exit(subprocess.run([sys.executable, '-m', 'autosar_tooling.c_gate', 'scan',
+              '--target', os.environ['ANALYSIS_TARGET'],
+              '--sample', os.environ['ANALYSIS_SAMPLE']]).returncode)
       # Independent tool tests run once per platform, alongside the other sample shards.
       - name: Analyzer behavior tests
         if: matrix.group == 'no-diagnostic'
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
-      - name: Retrieve matching master baseline for presentation
-        if: always()
-        shell: python
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BASELINE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base }}
-          BASELINE_ARTIFACT: c-analysis-${{ matrix.target }}-${{ matrix.group }}
-        run: |
-          import json, os, subprocess
-          # Optional display evidence only. Missing/expired artifacts cannot change the source verdict.
-          base = os.environ['BASELINE_SHA']
-          try:
-              if not base or set(base) == {'0'}:
-                  raise ValueError('No baseline commit')
-              runs = subprocess.run(['gh', 'run', 'list', '--workflow', 'checks.yml', '--branch', 'master',
-                  '--commit', base, '--status', 'success', '--limit', '1', '--json', 'databaseId'],
-                  capture_output=True, text=True, check=True)
-              run = json.loads(runs.stdout)[0]['databaseId']
-              subprocess.run(['gh', 'run', 'download', str(run), '--name', os.environ['BASELINE_ARTIFACT'],
-                  '--dir', 'build/c-analysis-baseline'], check=True)
-          except (subprocess.SubprocessError, ValueError, IndexError) as error:
-              print('Baseline unavailable for presentation:', error)
       - name: Summarize and convert Cppcheck diagnostics
         if: always()
         run: python -m autosar_tooling.ci_reporting sarif --cppcheck-directory build/c-analysis-results --baseline-directory build/c-analysis-baseline --output build/cppcheck.sarif
@@ -846,34 +852,15 @@ jobs:
         with:
           sarif_file: build/cppcheck.sarif
           category: cppcheck-${{ matrix.target }}-${{ matrix.group }}
-      # Existing source remediation precedes automatic strict source gating.
-      # Readiness above verifies complete analysis; it does not approve violations.
-      - name: Strict generated source gate
-        if: github.event_name == 'workflow_dispatch'
-        shell: python
-        env:
-          ANALYSIS_TARGET: ${{ matrix.target }}
-          ANALYSIS_SAMPLES: ${{ matrix.samples }}
-          PREPARE_RESULT: ${{ join(needs.*.result, '') }}
-          ANALYSIS_RESULT: ${{ steps.analyze.outcome }}
-        run: |
-          import os, subprocess, sys
-          from pathlib import Path
-          summaries = list(Path('build/c-analysis-results').glob('*/summary.json'))
-          command = ['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling', 'c-acceptance']
-          for path in summaries:
-              command.extend(['--analysis', str(path.parent)])
-          for name in os.environ['ANALYSIS_SAMPLES'].split(','):
-              command.extend(['--expected', os.environ['ANALYSIS_TARGET'] + '=' + name])
-          command.extend(['--upstream', 'prepare=' + os.environ['PREPARE_RESULT'],
-                          '--upstream', 'analysis=' + os.environ['ANALYSIS_RESULT']])
-          sys.exit(subprocess.run(command).returncode)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: c-analysis-summaries-${{ matrix.target }}-${{ matrix.group }}
           overwrite: true
-          path: build/c-analysis-results/*/summary.json
+          path: |
+            build/c-analysis-results/*/summary.json
+            build/c-analysis-results/*/baseline-summary.json
+            build/c-analysis-results/*/gate.json
           if-no-files-found: error
           retention-days: 14
       # Offline context rebinding consumes these exact source bytes and raw receipts.
@@ -897,6 +884,13 @@ jobs:
           overwrite: true
           path: build/c-analysis-results
           if-no-files-found: ignore
+          retention-days: 14
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: c-analysis-baseline-${{ matrix.target }}-${{ matrix.group }}
+          path: build/c-analysis-baseline
+          if-no-files-found: error
           retention-days: 14
 
 
@@ -942,6 +936,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: c-analysis-summaries-*
@@ -976,6 +971,8 @@ jobs:
               found.add(pair)
           if found != expected:
               raise RuntimeError('Expected all eight platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
+      - name: Require eight fresh no-regression gate receipts
+        run: python -m autosar_tooling.c_gate aggregate build/c-analysis-summaries
 
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
