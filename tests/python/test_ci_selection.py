@@ -269,7 +269,7 @@ class CiSelectionTests(unittest.TestCase):
 
     def test_context_artifact_keeps_exact_sources_and_raw_summary_without_analyzer_intermediates(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
-        for job in ("c-analysis-samples", "c-analysis-samples-windows"):
+        for job in ("c-analysis-gates", "c-analysis-gates-windows"):
             step = next(step for step in workflow[job]["steps"]
                         if step.get("name") == "Retain source assessment inputs")
             options = step["with"]
@@ -416,7 +416,7 @@ class CiSelectionTests(unittest.TestCase):
         ):
             steps = workflow["jobs"][job]["steps"]
             step = next(step for step in steps if step.get("name") == name)
-            selected = set(re.findall(r"== '([^']+)'", step["if"]))
+            selected = set(re.findall(r"matrix\." + key + r" == '([^']+)'", step["if"]))
             self.assertEqual(selected, allowed)
             entries = list(workflow["jobs"][job]["strategy"]["matrix"]["include"])
             if job == "c-analysis-samples":
@@ -485,6 +485,8 @@ class CiSelectionTests(unittest.TestCase):
         self.assertEqual(set(upstream), {
             "changes", "c-analysis-prepare", "c-analysis-prepare-windows",
             "c-analysis-samples", "c-analysis-samples-windows",
+            "c-analysis-baseline", "c-analysis-baseline-windows",
+            "c-analysis-gates", "c-analysis-gates-windows",
         })
         self.assertIn("native-delivery-windows", workflow["required"]["needs"])
         gate = next(step for step in workflow["c-analysis"]["steps"]
@@ -527,7 +529,7 @@ class CiSelectionTests(unittest.TestCase):
                 output.write_text(json.dumps(data), encoding="utf-8")
                 script = root / "readiness.py"
                 script.write_text(step["run"], encoding="utf-8")
-                env = {"AUTOSAR_C_ANALYSIS_SAMPLES": str(root / "samples"), "ANALYSIS_TARGET": "linux-x64-controlled-v1",
+                env = {"ANALYSIS_SIDE": "current", "ANALYSIS_TARGET": "linux-x64-controlled-v1",
                        "ANALYSIS_SAMPLES": "standard-ecu"}
                 previous = Path.cwd()
                 try:

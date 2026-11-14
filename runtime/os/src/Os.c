@@ -19,6 +19,8 @@ OS_MEMMAP static volatile Os_Atomic32Type
     start_called; /**< Atomic StartOS-entry latch; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
+#define OS_GATE_UNUSED 01
+
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 OS_MEMMAP uint32 Os_ResourceIndex(const Os_TargetConfigType *config, ResourceType id)
@@ -72,7 +74,7 @@ OS_MEMMAP static StatusType group_access(const Os_TargetConfigType *config,
             const uint8 priority = (config->interrupts == NULL) ? OS_MAX_ISR_PRIORITY
                                                                 : config->interrupts->priorities[i];
             if (priority == 0u) {
-                return E_OS_VALUE; /* Reject before publishing the configuration. */
+                return E_OS_VALUE;
             }
             if (priority > *highest) {
                 *highest = priority;

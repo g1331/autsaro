@@ -177,7 +177,7 @@ class SourceGateTests(unittest.TestCase):
         from autosar_tooling.config import ROOT
 
         workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
-        steps = workflow["jobs"]["c-analysis-samples"]["steps"]
+        steps = workflow["jobs"]["c-analysis-gates"]["steps"]
         step = next(row for row in steps if row.get("name") == "Strict generated source gate")
         self.assertNotIn("if", step)
         with tempfile.TemporaryDirectory() as temporary:
@@ -197,12 +197,66 @@ class SourceGateTests(unittest.TestCase):
                     "--target", "linux-x64-controlled-v1", "--sample", "standard-ecu",
                 ])
 
+    def test_both_scan_sides_share_prepare_and_run_without_cross_dependency(self):
+        import yaml
+        from autosar_tooling.config import ROOT
+
+        jobs = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())["jobs"]
+        for suffix in ("", "-windows"):
+            current = jobs["c-analysis-samples" + suffix]
+            baseline = jobs["c-analysis-baseline" + suffix]
+            prepare = "c-analysis-prepare" + suffix
+            self.assertEqual(current["needs"], prepare)
+            self.assertEqual(baseline["needs"], prepare)
+            self.assertEqual(current["steps"], baseline["steps"])
+            self.assertEqual(current["env"]["ANALYSIS_SIDE"], "current")
+            self.assertEqual(baseline["env"]["ANALYSIS_SIDE"], "baseline")
+            gate = jobs["c-analysis-gates" + suffix]
+            self.assertEqual(set(gate["needs"]), {
+                prepare, "c-analysis-samples" + suffix, "c-analysis-baseline" + suffix,
+            })
+            self.assertFalse(any("'c-check'" in step.get("run", "")
+                                 for step in gate["steps"]))
+
+    def test_pairing_refuses_missing_or_duplicate_raw_scans(self):
+        import yaml
+        from autosar_tooling.config import ROOT
+
+        jobs = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())["jobs"]
+        script = next(step["run"] for step in jobs["c-analysis-gates"]["steps"]
+                      if step.get("name") == "Require exactly one scan per side")
+        original_glob = Path.glob
+        for side in ("current", "baseline"):
+            for count in (0, 1, 2):
+                with self.subTest(side=side, count=count), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    script_path = root / "pair.py"
+                    script_path.write_text(script, encoding="utf-8")
+                    for name in ("current", "baseline"):
+                        for index in range(count if name == side else 1):
+                            path = root / "build/c-analysis-raw" / (
+                                f"c-analysis-raw-{name}-linux-x64-controlled-v1-standard-ecu-{index}")
+                            path.mkdir(parents=True)
+                    with patch.dict(os.environ, {
+                        "ANALYSIS_TARGET": "linux-x64-controlled-v1",
+                        "ANALYSIS_SAMPLE": "standard-ecu",
+                    }), patch("pathlib.Path.glob", autospec=True) as glob, \
+                            patch.object(c_gate.shutil, "copytree") as copy:
+                        glob.side_effect = lambda path, pattern, root=root: original_glob(
+                            root / path, pattern)
+                        if count == 1:
+                            runpy.run_path(str(script_path))
+                            self.assertEqual(copy.call_count, 2)
+                        else:
+                            with self.assertRaisesRegex(RuntimeError, "Missing or duplicated scan"):
+                                runpy.run_path(str(script_path))
+
     def test_duplicate_matrix_identity_retains_two_receipts_for_aggregate(self):
         import yaml
         from autosar_tooling.config import ROOT
 
         workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
-        job = workflow["jobs"]["c-analysis-samples"]
+        job = workflow["jobs"]["c-analysis-gates"]
         template = next(step["with"]["name"] for step in job["steps"]
                         if step.get("with", {}).get("name", "").startswith(
                             "c-analysis-summaries-"))
