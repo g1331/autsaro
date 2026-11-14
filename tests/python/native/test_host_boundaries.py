@@ -6,7 +6,9 @@ import os
 import platform
 import re
 import shutil
+import signal
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -572,6 +574,70 @@ class NativeKernelObjectTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system() == "Linux", "Linux native facilities")
 class NativeFacilityTests(unittest.TestCase):
+    def test_watchdog_capture_stops_before_delegation(self):
+        fixtures = ROOT / "core/tests/fixtures/host-batch"
+        observer = (fixtures / "linux_watchdog_capture.c").read_text(encoding="utf-8")
+        variants = (
+            ("control", observer, True, "P"),
+            ("missing-stop", observer.replace("raise(SIGSTOP)", "0"), False, "PD"),
+            ("missing-ptrace", observer.replace(
+                "prctl(PR_SET_PTRACER, (unsigned long)getppid(), 0UL, 0UL, 0UL)", "0"
+            ), True, ""),
+        )
+        compiler = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")
+        self.assertTrue(compiler)
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            for name, source, expected_stop, expected_output in variants:
+                case = directory / name
+                case.mkdir(mode=0o700)
+                (case / "linux_watchdog_capture.c").write_text(source, encoding="utf-8")
+                harness = case / "control.c"
+                shutil.copyfile(fixtures / "linux_watchdog_capture_control.c", harness)
+                binary = case / "control"
+                built = OwnedProcess(ProcessSpec.seconds([
+                    str(Path(compiler).resolve()), "-std=c99", "-Wall", "-Wextra", "-Werror",
+                    "-pedantic", "-I" + str(ROOT / "runtime/os/include"),
+                    "-I" + str(ROOT / "runtime/os/src"),
+                    "-I" + str(ROOT / "runtime/bsw/include"), str(harness),
+                    "-Wl,--wrap=prctl", "-o", str(binary),
+                ], case, 30, case, name)).wait()
+                self.assertTrue(built.success, built.stderr.read_text())
+                for entry in ("backend", "request", "abort", "abort-zero", "other"):
+                    with self.subTest(variant=name, entry=entry):
+                        process = OwnedProcess(ProcessSpec.seconds(
+                            [str(binary), entry], case, 10, case, entry
+                        ))
+                        try:
+                            pid = int(process.registration["pid"])
+                            stopped = False
+                            deadline = time.monotonic() + 5
+                            while time.monotonic() < deadline:
+                                try:
+                                    status = Path(f"/proc/{pid}/status").read_text()
+                                except FileNotFoundError:
+                                    break
+                                stopped = "\nState:\tT " in status
+                                if stopped or "\nState:\tZ " in status:
+                                    break
+                                os.sched_yield()
+                            output = Path(process.registration["stdout"]).read_text()
+                            wanted_stop = expected_stop and entry != "other"
+                            self.assertEqual(stopped, wanted_stop)
+                            if stopped:
+                                self.assertEqual(output, expected_output)
+                                os.kill(pid, signal.SIGCONT)
+                            result = process.wait()
+                            self.assertEqual(result.exit_code, 77, result)
+                            self.assertEqual(result.stdout.read_text(), "PD" if name != "missing-ptrace"
+                                             and entry != "other" else "D")
+                            # Both mutants violate the control's before-delegation observation.
+                            if name != "control" and entry != "other":
+                                self.assertFalse(stopped and output == "P")
+                        finally:
+                            if not process.finished:
+                                process.cancel()
+
     errno_functions = (
         "clock_gettime", "sysconf", "mmap", "mprotect", "munmap", "eventfd",
         "nanosleep", "sigaddset", "sigaction", "pthread_create", "sigemptyset", "sigfillset",
