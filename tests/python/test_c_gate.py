@@ -136,6 +136,50 @@ class SourceGateTests(unittest.TestCase):
             self.assertEqual(compare(current, project, output, baseline, source_tree=True),
                              {"new": [], "removed": []})
 
+    def test_generator_inventory_hashes_vary_but_rule_version_and_config_stay_bound(self):
+        from autosar_tooling.c_comparison import compare
+        from ecu_tools.build import digest
+
+        helper = comparison_tests.CComparisonTests()
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = helper.runtime_fixture(Path(temporary))
+            for root in (project, output / "project", baseline / "project"):
+                metadata = json.loads((root / "meta/integration.json").read_text())
+                identity = "a" * 64 if root == baseline / "project" else "b" * 64
+                metadata["plan"].update(
+                    ruleSetIdentity={"release": "R24-11", "rulesVersion": "1.1.0",
+                                     "sha256": identity},
+                    validationDependencies={"rules.release": "R24-11", "rules.version": "1.1.0",
+                                            "rules.sha256": identity,
+                                            "definitions.sha256": identity},
+                )
+                helper.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            previous = json.loads((baseline / "summary.json").read_text())
+            previous["sourceSealSha256"] = digest(baseline / "project/meta/files.sha256")
+            helper.write(baseline, previous)
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                compare(current, project, output, baseline)
+            self.assertEqual(compare(current, project, output, baseline, source_tree=True),
+                             {"new": [], "removed": []})
+            for field in ("ruleSetIdentity", "validationDependencies", "configuration"):
+                with self.subTest(field=field):
+                    original = (project / "meta/integration.json").read_text()
+                    metadata = json.loads(original)
+                    if field == "configuration":
+                        metadata["plan"][field] = "different"
+                    elif field == "ruleSetIdentity":
+                        metadata["plan"][field]["rulesVersion"] = "2.0.0"
+                    else:
+                        metadata["plan"][field]["rules.version"] = "2.0.0"
+                    for root in (project, output / "project"):
+                        helper.seal(root, metadata)
+                    current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+                    with self.assertRaisesRegex(ValueError, "configuration differs"):
+                        compare(current, project, output, baseline, source_tree=True)
+                    for root in (project, output / "project"):
+                        helper.seal(root, json.loads(original))
+
     def test_rename_keeps_source_counts_and_config_binding(self):
         helper = comparison_tests.CComparisonTests()
         from autosar_tooling.c_comparison import compare
