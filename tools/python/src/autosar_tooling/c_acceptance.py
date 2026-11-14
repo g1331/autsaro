@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -32,6 +33,8 @@ GUIDELINE_CATEGORIES_SHA256 = "ef484316b09af067e673521476fd7a70f5757646e9c7e3918
 GRP = "docs/adr/0025-misra-layered-scope.md"
 ADOPTION = "docs/standards/os/adoption.md"
 SDK = "docs/standards/os/sdk.md"
+BASELINE_PRODUCTION = ("core/src", "core/build.rs", "core/build_support", "runtime",
+                       "third_party", "LICENSE", "NOTICE")
 
 
 def _hash(value: object) -> str:
@@ -168,7 +171,29 @@ def _assessment_inputs(summary: dict, root: Path) -> dict:
                                        root, list(obligations["inputIdentity"]["documents"]))}}
 
 
-def input_identity(summary: dict, project: Path, *, root: Path = ROOT) -> str:
+def _producer_inputs(names, root: Path, revision: str | None, windows: bool) -> dict:
+    producers = {}
+    for name in names:
+        if not safe_relative(name):
+            raise ValueError("Assessment producer path invalid")
+        production = any(name == prefix or name.startswith(prefix + "/")
+                         for prefix in BASELINE_PRODUCTION)
+        if revision is not None and production:
+            # Match the target-native checkout in the isolated baseline producer.
+            data = subprocess.check_output([
+                "git", "-c", "core.autocrlf=" + ("true" if windows else "false"),
+                "-c", "core.eol=" + ("crlf" if windows else "lf"),
+                "cat-file", "--filters", revision + ":" + name,
+            ], cwd=root)
+            producers[name] = hashlib.sha256(data).hexdigest()
+        else:
+            refuse_links(root / name, root)
+            producers[name] = digest(root / name) if (root / name).is_file() else None
+    return producers
+
+
+def input_identity(summary: dict, project: Path, *, root: Path = ROOT,
+                   producer_revision: str | None = None) -> str:
     """Hash the analyzed copy, including final patched kernel and application bytes.
 
     The caller verifies the original seal and semantic inputs before and after analysis.
@@ -205,12 +230,8 @@ def input_identity(summary: dict, project: Path, *, root: Path = ROOT) -> str:
     plan = metadata["plan"]
     if not plan.get("sources") or not plan.get("runtimeSources"):
         raise ValueError("Assessment plan source/producer provenance missing")
-    producers = {}
-    for name in plan["runtimeSources"]:
-        if not safe_relative(name):
-            raise ValueError("Assessment producer path invalid")
-        refuse_links(root / name, root)
-        producers[name] = digest(root / name) if (root / name).is_file() else None
+    producers = _producer_inputs(plan["runtimeSources"], root, producer_revision,
+                                  summary["scope"]["target"].startswith("windows"))
     semantic = summary["semanticIdentity"]
     if semantic.get("version") != 2 or any(not semantic.get(key) for key in
             ("sdk", "compiler", "defines", "libraries", "analysisCode", "addonRuntime")):

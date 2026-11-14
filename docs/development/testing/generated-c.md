@@ -1,6 +1,6 @@
 # 生成 C 的静态检查
 
-安装 Cppcheck **2.21.0** 和同一版本的 addons。检查入口校验程序版本及三个 MISRA addon 文件的 SHA-256；CI 从官方 `2.21.0` 标签（提交 `e73bf44c3e49686b7495fab352d03a6c6075516b`）构建开放版，不需要商业许可证。本地按同样的官方 CMake 方式构建即可，构建出的程序旁带有 `cfg` 与 `addons`，只需让 `CPPCHECK` 指向它：
+安装 Cppcheck **2.21.0** 和同一版本的 addons。检查入口校验程序版本及三个 MISRA addon 文件的 SHA-256；CI 从官方 `2.21.0` 标签（提交 `e73bf44c3e49686b7495fab352d03a6c6075516b`）构建开放版，不需要商业许可证。本地用同一方式构建，`CPPCHECK` 指向带有 `cfg`、`addons` 的程序：
 
 ```powershell
 git clone -c core.autocrlf=false -c core.eol=lf --depth 1 --branch 2.21.0 https://github.com/cppcheck-opensource/cppcheck.git build/cppcheck-source
@@ -9,7 +9,7 @@ cmake --build build/cppcheck-build --config Release --target cppcheck --parallel
 $env:CPPCHECK = "$PWD/build/cppcheck-build/bin/cppcheck"
 ```
 
-克隆时保留 LF：该仓库按 `text=auto` 检出，Windows 默认会把 addon 转成 CRLF，摘要校验随之失败。Visual Studio 等多配置生成器把程序放在 `bin/Release/`。未安装 CMake 时可用 `uvx --from cmake cmake` 运行 Kitware 发布的 CMake。`CPPCHECK_ADDON_DIR` 可单独指定 addon 目录；`AUTOSAR_CC` 指定目标 GCC。
+克隆时保留 LF：该仓库按 `text=auto` 检出，Windows 默认会把 addon 转成 CRLF，摘要校验随之失败。Visual Studio 等多配置生成器把程序放在 `bin/Release/`。CMake 也可通过 `uvx --from cmake cmake` 运行。`CPPCHECK_ADDON_DIR` 可单独指定 addon 目录；`AUTOSAR_CC` 指定目标 GCC。
 
 ```powershell
 $env:AUTOSAR_C_ANALYSIS_SAMPLES = "$PWD/build/c-analysis-samples"
@@ -50,7 +50,11 @@ clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m
 
 真实诊断、工具缺失、版本错误、超时、编译／解析失败和扫描不完整均返回非零。无诊断只说明这些自动检查通过；221 项规则／指令中的人工评估仍需根据需求、设计、授权规范和偏离审批完成，不会声明“完整符合 MISRA”。
 
-CI 每个平台准备四类完整样本，再分别并行分析；汇总要求准备与分析全部成功，跳过或取消不能通过（文档 PR 的整体跳过见 [CI](README.md#ci)）。固定 Cppcheck、vcpkg 与 Cargo 构建可以缓存，样本和全源码每轮重生成、重扫描，不缓存扫描结果。新提交取消同 PR 的旧任务。自动入口拒绝工具、配置、解析及项目验收执行错误，合法的源码阻塞仍保留原始非零退出和 `passed=false`。手动 `workflow_dispatch` 的严格步骤消费[独立项目验收](source-acceptance.md)，不再要求原始结果同时为绿；自动 PR 按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 先启用不回退门，完整验收随合规线出口切换。日志与样本保留 14 天。
+CI 工具 prepare 与两树生成独立并行，每侧扫描仅依赖共享工具与本侧生成，Windows 共用分析器。各入口基准均为实际 checkout 第一父提交，PR 检出测试合并提交。双方共用 PR 样本配置、依赖与驱动，源码及生成器来自各自树；生成／扫描失败或不可比均阻断。
+
+`Strict generated source gate` 复用逐程序差集及本次[精确处置](source-acceptance.md)，改写诊断行算新增，Git 改名回接路径。基准可复用同 SHA、完整身份一致的 master 原始结果；缺失／不匹配现场扫描，验收及门每轮重算。`gate.json` 记双侧身份、差集及基线运行／工件来源，八份门回执进入唯一 `CI required`。所需上游跳过／取消／失败、缺重样本均阻断；文档选择见 [CI](README.md#ci)。
+
+项目验收仍报告 accepted／blocked／error；整体 blocked 留作报告，error 阻断。原始退出码、`passed=false` 和 221 项状态保留。工具与编译产物可缓存，原始基准复用另核完整身份。当前树每轮扫描，工件留存 14 天。完整验收门见 [#482](https://github.com/g1331/autsaro/issues/482)。
 
 正常摘要的`coverage.manualAssessment`仅汇总[既有66项人工记录](../../standards/os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，按实际`automaticChecker`与155项分开；`retained`不是满足，未评估项继续计入unclassified。它不评估当前source seal，也不改写221项`assessment=not_assessed`或`completeCompliance=false`。`misra-manual-assessment-v1`绑定解析器原始字节、五篇记录全文原始字节和固定路径选集摘要；analysisCode另含解析器的规范化文本摘要。两层换行身份分别保留，coverage或任一分析身份变化仍明确拒绝旧基线。跨平台换行反例须用原始字节显式建立LF和CRLF两个输入，再断言结论相同、摘要不同；不能假定checkout为LF，或把已为CRLF的输入再写成CRLF当作变化。
 

@@ -771,11 +771,17 @@ class SdkSourceTests(unittest.TestCase):
             )
             with gzip.open(package / "mtree", "wt") as stream:
                 stream.write(
+                    "./.BUILDINFO type=file sha256digest=" + "b" * 64 + "\n"
+                    "./.PKGINFO type=file sha256digest=" + "c" * 64 + "\n"
+                    "./mingw64/include/alias.h type=link link=winbase.h\n"
                     "./mingw64/include/winbase.h type=file sha256digest="
                     + "a" * 64
                     + "\n"
                 )
             records = c_sdk.msys_headers(compiler)
+            self.assertEqual(len(records), 2)
+            self.assertEqual(records[str(base / "mingw64/include/alias.h")]["algorithm"],
+                             "symlink")
             self.assertEqual(
                 records[str(base / "mingw64/include/winbase.h")]["expected"], "a" * 64
             )
@@ -805,8 +811,67 @@ class SdkSourceTests(unittest.TestCase):
             self.assertEqual(
                 records[str(Path("/") / "usr/include/pthread.h")]["version"], "2.39-1"
             )
+            (info / "libc6-dev:amd64.list").write_text("/usr/include/sdk-alias.h\n")
+            with patch.object(Path, "is_symlink", autospec=True, side_effect=lambda path:
+                              path.as_posix().endswith("/sdk-alias.h")), \
+                    patch.object(Path, "readlink", return_value=Path("pthread.h")):
+                linked = c_sdk.debian_headers(status, info)
+            self.assertEqual(linked[str(Path("/usr/include/sdk-alias.h"))]["algorithm"], "symlink")
+            self.assertEqual(linked[str(Path("/usr/include/sdk-alias.h"))]["expected"], "pthread.h")
             status.write_text(status.read_text().replace("amd64", "arm64"))
             self.assertEqual(c_sdk.debian_headers(status, info), {})
+
+    def test_environment_includes_unused_provider_files_and_checks_original_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _root, header, packages, record = self.fixture(Path(temporary).resolve())
+            unused = header.with_name("unused.h")
+            unused.write_bytes(b"#define UNUSED_VALUE 1\n")
+            package = {**packages[str(header)], "header": "mingw64/include/unused.h",
+                       "expected": hashlib.sha256(unused.read_bytes()).hexdigest()}
+            packages[str(unused)] = package
+            before = c_sdk.environment_identity(packages)
+            self.assertEqual(before["files"], 2)
+            scope = {"target": TARGET, "diagnosticCompiler": {"path": "/selected/bin/gcc.exe"},
+                     "sdkHeaders": [record], "sdkTranslationUnits": {"main.c": [header.as_posix()]},
+                     "sdkMacroInputs": {}}
+            with patch.object(c_sdk, "msys_headers", return_value=packages):
+                semantic_before = c_sdk.semantic(scope)
+            unused.write_bytes(b"#define UNUSED_VALUE 2\n")
+            with self.assertRaisesRegex(ValueError,
+                                        "SDK environment differs from provider original"):
+                c_sdk.environment_identity(packages)
+            package["expected"] = hashlib.sha256(unused.read_bytes()).hexdigest()
+            after = c_sdk.environment_identity(packages)
+            self.assertNotEqual(before["sha256"], after["sha256"])
+            with patch.object(c_sdk, "msys_headers", return_value=packages):
+                self.assertNotEqual(semantic_before, c_sdk.semantic(scope))
+            self.assertEqual(scope["sdkEnvironment"], after)
+            relocated = {}
+            for index, (name, record) in enumerate(packages.items()):
+                path = Path(temporary) / f"relocated-{index}.h"
+                path.write_bytes(Path(name).read_bytes())
+                relocated[str(path)] = record
+            self.assertEqual(c_sdk.environment_identity(relocated), after)
+            unused.unlink()
+            with self.assertRaises(FileNotFoundError):
+                c_sdk.environment_identity(packages)
+            with self.assertRaisesRegex(ValueError, "SDK environment provider inventory missing"):
+                c_sdk.environment_identity({})
+
+    def test_environment_verifies_windows_materialized_file_links(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _root, header, packages, _record = self.fixture(Path(temporary).resolve())
+            alias = header.with_name("alias.h")
+            alias.write_bytes(header.read_bytes())
+            packages[str(alias)] = {**packages[str(header)], "header": "mingw64/include/alias.h",
+                                    "algorithm": "symlink", "expected": header.name}
+            self.assertEqual(c_sdk.environment_identity(packages)["files"], 2)
+            with patch.object(Path, "is_symlink", return_value=True), \
+                    self.assertRaisesRegex(ValueError, "SDK environment link changed"):
+                c_sdk.environment_identity(packages)
+            alias.write_bytes(b"#define INFINITE 0U\n")
+            with self.assertRaisesRegex(ValueError, "SDK environment link content differs"):
+                c_sdk.environment_identity(packages)
 
     def test_identity_changes_and_missing_provider_remain_strict(self):
         with tempfile.TemporaryDirectory() as temporary:

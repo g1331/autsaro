@@ -126,10 +126,18 @@ class ChangedVerificationTests(unittest.TestCase):
                 with (mock.patch.dict(os.environ, {"PULL_REQUEST": "1",
                        "GITHUB_REPOSITORY": "example/repo", "GITHUB_OUTPUT": str(output)}),
                       mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess(
-                          [], 0, json.dumps([rows]))), contextlib.redirect_stdout(io.StringIO())):
+                          [], 0, json.dumps([rows]))),
+                      mock.patch.object(subprocess, "check_output", return_value="parent\n") as parent,
+                      contextlib.redirect_stdout(io.StringIO())):
                     runpy.run_path(str(source))
                 actual = dict(line.split("=") for line in output.read_text().splitlines())
                 expected = {key: str(value).lower() for key, value in select_changes(rows).items()}
+                self.assertEqual(actual.pop("source-parent", None),
+                                 "parent" if expected["analysis"] == "true" else None)
+                if expected["analysis"] == "true":
+                    parent.assert_called_once_with(["git", "rev-parse", "HEAD^1"], text=True)
+                else:
+                    parent.assert_not_called()
                 self.assertEqual(actual, expected)
                 self.assertEqual(actual["native"], str(mode == "rename").lower())
                 plan = verify.changed_commands(rows, base, root / "samples")

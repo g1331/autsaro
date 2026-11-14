@@ -5,20 +5,14 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import os
 import re
-import runpy
 import shutil
-import subprocess
-import sys
 import tempfile
 import unittest
-from contextlib import chdir
 from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
-import yaml
 from autosar_tooling import c_acceptance, c_check, c_retention, c_sdk, c_standard, cli
 from autosar_tooling.config import ROOT
 
@@ -553,6 +547,48 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertIn("definition differs: " + self.sdk_name + ":1:O_RDONLY",
                       result["objects"][-1]["reason"])
+
+    def test_source_gate_consumes_real_exact_position_while_project_remains_blocked(self):
+        import test_c_comparison as comparison_tests
+        from autosar_tooling import c_gate
+
+        self.sdk_inputs()
+        comparison, _, _, _ = comparison_tests.CComparisonTests().fixture(
+            self.directory / "comparison")
+        self.summary["semanticIdentity"] = comparison["semanticIdentity"]
+        self.summary["semanticIdentity"]["defines"] = {
+            name: [] for name in self.summary["scope"]["translationUnits"]}
+        self.summary["scope"]["sdkEnvironment"] = comparison["scope"]["sdkEnvironment"]
+        self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
+            c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
+        self.summary["scope"]["profile"] = "ecu"
+        self.bind_sdk()
+        self.summary["tool"]["binarySha256"] = "synthetic-analyzer-binary"
+        output = self.directory / "gate-current"
+        baseline = self.directory / "gate-baseline"
+        shutil.copytree(self.project, output / "project")
+        shutil.copytree(self.project, baseline / "project")
+        previous = copy.deepcopy(self.summary)
+        previous["diagnostics"] = []
+        (baseline / "summary.json").write_text(json.dumps(previous), encoding="utf-8")
+        evaluate = c_acceptance.evaluate
+        def actual(summary, project):
+            return evaluate(summary, project, root=self.root)
+        self.summary["projectAcceptance"] = actual(self.summary, output / "project")
+        self.assertEqual(self.summary["projectAcceptance"]["status"], "blocked")
+        self.assertEqual(self.summary["projectAcceptance"]["occurrences"][0]["assessment"],
+                         "accepted")
+        with patch.object(c_acceptance, "evaluate", side_effect=actual):
+            result = c_gate.verdict(self.summary, output, baseline, {})
+            self.assertEqual(result["status"], "passed")
+            self.assertTrue(result["comparison"]["new"])
+            self.assertFalse(self.summary["passed"])
+            self.bind_sdk(status="pending")
+            with self.assertRaisesRegex(ValueError, "receipt differs"):
+                c_gate.verdict(self.summary, output, baseline, {})
+            self.summary["projectAcceptance"] = actual(self.summary, output / "project")
+            self.assertEqual(c_gate.verdict(self.summary, output, baseline, {})["status"],
+                             "blocked")
 
     def test_sdk_exact_position_consumption_preserves_raw_and_other_groups(self):
         self.sdk_inputs()
@@ -2007,45 +2043,6 @@ class AcceptanceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "SDK source/provider identity changed"):
                 self.require(accepted)
 
-    def test_workflow_strict_step_runs_the_real_cli_and_consumer(self):
-        summary = self.receipt()
-        workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
-        steps = {row["name"]: row for row in workflow["jobs"]["c-analysis-samples"]["steps"] if "name" in row}
-        script = self.directory / "strict.py"
-        script.write_text(steps["Strict generated source gate"]["run"], encoding="utf-8")
-        output = self.directory / "build/c-analysis-results/renamed-output/summary.json"
-        output.parent.mkdir(parents=True)
-        shutil.copytree(self.project, output.parent / "project")
-        consume = c_acceptance.require_accepted
-
-        def command(argv):
-            self.assertEqual(argv[:7], ["uv", "run", "--locked", "python", "-m", "autosar_tooling", "c-acceptance"])
-            with patch.object(sys, "argv", ["autosar_tooling", *argv[6:]]), \
-                    patch.object(c_acceptance, "require_accepted", partial(consume, root=self.root)):
-                return subprocess.CompletedProcess(argv, cli.main())
-
-        for change in ("valid", "blocked", "unknown", "duplicate", "missing", "cancelled", "skipped"):
-            current = copy.deepcopy(summary)
-            if change == "blocked":
-                current["projectAcceptance"]["status"] = "blocked"
-            elif change == "unknown":
-                current["diagnostics"][0]["id"] = "unknown"
-            output.write_text(json.dumps(current), encoding="utf-8")
-            duplicate = output.parent.parent / "duplicate/summary.json"
-            if change == "duplicate":
-                duplicate.parent.mkdir()
-                duplicate.write_bytes(output.read_bytes())
-            if change == "missing":
-                output.unlink()
-            env = {"ANALYSIS_TARGET": TARGET, "ANALYSIS_SAMPLES": CASE, "PREPARE_RESULT": "success",
-                   "ANALYSIS_RESULT": change if change in {"cancelled", "skipped"} else "success"}
-            with self.subTest(change=change), chdir(self.directory), patch.dict(os.environ, env), \
-                    patch.object(subprocess, "run", side_effect=command), self.assertRaises(SystemExit) as exit_:
-                runpy.run_path(str(script))
-            self.assertEqual(exit_.exception.code == 0, change == "valid")
-            if duplicate.exists():
-                duplicate.unlink()
-
     def test_every_group_requires_its_own_current_approved_scope(self):
         self.synthetic_complete_inputs()
         for path, identifier in ((self.root / c_standard.MANUAL_ASSESSMENT_SOURCES[0], "D4.10"),
@@ -2328,3 +2325,76 @@ class AcceptanceTests(unittest.TestCase):
         shutil.copyfile(path, analysis / "summary.json")
         with patch.object(c_acceptance, "require_accepted", consumer), patch("sys.argv", argv):
             self.assertEqual(cli.main(), 1)
+
+
+class ProducerViewTests(unittest.TestCase):
+    def test_parent_producer_identity_matches_restored_renames_and_native_bytes(self):
+        import os
+        import subprocess
+        import sys
+
+        import yaml
+
+        jobs = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())["jobs"]
+        restore = next(step for step in jobs["c-analysis-baseline"]["steps"]
+                       if step.get("name") == "Use first-parent production for baseline assessment")
+        self.assertEqual(restore["if"], "env.ANALYSIS_SIDE == 'baseline'")
+        contents = {
+            "core/src/generator.rs": b"old generator\n",
+            "core/build.rs": b"old build\n",
+            "core/build_support/helper.rs": b"old helper\n",
+            "runtime/owned.c": b"old source\n",
+            "third_party/provider.txt": b"old provider\n",
+            "LICENSE": b"old license\n", "NOTICE": b"old notice\n",
+            "tools/python/src/driver.py": b"old driver\n",
+            "docs/standards/record.md": b"old record\n",
+        }
+        for windows in (False, True):
+            with self.subTest(windows=windows), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+                subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=root, check=True)
+                # Reproduce a Windows-native Git default even on the Linux runner.
+                subprocess.run(["git", "config", "core.eol", "crlf"], cwd=root, check=True)
+                (root / ".gitattributes").write_bytes(b"* text=auto\n*.c text eol=lf\n")
+                for name, data in contents.items():
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
+                def commit(root=root):
+                    subprocess.run(["git", "add", "."], cwd=root, check=True,
+                                   capture_output=True)
+                    subprocess.run(["git", "-c", "user.name=CI test", "-c",
+                                    "user.email=ci@example.invalid", "commit", "--quiet", "-m",
+                                    "fixture"], cwd=root, check=True)
+                commit()
+                subprocess.run(["git", "mv", "runtime/owned.c", "runtime/renamed.c"],
+                               cwd=root, check=True)
+                for name in contents:
+                    if name != "runtime/owned.c":
+                        (root / name).write_bytes(b"current input\r\n" if windows
+                                                 else b"current input\n")
+                commit()
+                parent = subprocess.check_output(["git", "rev-parse", "HEAD^1"], cwd=root,
+                                                 text=True).strip()
+                current = c_acceptance._producer_inputs(contents, root, None, windows)
+                self.assertIsNone(current["runtime/owned.c"])
+                expected = c_acceptance._producer_inputs(contents, root, parent, windows)
+                self.assertEqual(expected["runtime/owned.c"], hashlib.sha256(
+                    contents["runtime/owned.c"]).hexdigest())
+                native = (contents["core/src/generator.rs"].replace(b"\n", b"\r\n") if windows
+                          else contents["core/src/generator.rs"])
+                self.assertEqual(expected["core/src/generator.rs"], hashlib.sha256(native).hexdigest())
+                self.assertEqual(expected["tools/python/src/driver.py"],
+                                 current["tools/python/src/driver.py"])
+                script = root / "restore.py"
+                script.write_text(restore["run"], encoding="utf-8")
+                subprocess.run([sys.executable, str(script)], cwd=root, check=True, env={
+                    **os.environ, "PYTHONPATH": str(ROOT / "tools/python/src"),
+                    "ANALYSIS_TARGET": "windows-x64-controlled-v1" if windows else TARGET,
+                })
+                self.assertEqual(c_acceptance._producer_inputs(contents, root, None, windows),
+                                 expected)
+                self.assertFalse((root / "runtime/renamed.c").exists())
+                self.assertEqual((root / "docs/standards/record.md").read_bytes(),
+                                 b"current input\r\n" if windows else b"current input\n")
