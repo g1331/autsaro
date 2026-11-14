@@ -2,7 +2,7 @@
 
 ## 状态与范围
 
-已接受（待独立审查确认）。接受依据及独立审查的发现、处置由本 ADR 的 PR 记录。
+已接受（2026-11-14，经独立审查）。接受依据及独立审查的发现、处置由本 ADR 的 PR 记录。
 
 本决定落实 [#483](https://github.com/g1331/autsaro/issues/483)，输入为
 [#342](https://github.com/g1331/autsaro/issues/342#issuecomment-6306779222) 和
@@ -87,7 +87,7 @@ ComM 同用户多通道的最低模式聚合由 #464 实现。继续使用主机
 
 **原文依据。** `ECUC_Can_00316／00326`（页 105／123）分别规定 driver 内 controller
 连续编号及 HRH／HTH 共同编号；`SWS_CANIF_00653` 与 `ECUC_CanIf_00647／00636`
-（页 37、228／229）定义抽象 controller 域及下层引用。CanIf 图 7.2／7.3 同时展示网络与
+（页 37、224／225）定义抽象 controller 域及下层引用。CanIf 图 7.2／7.3 同时展示网络与
 物理通道的 1:1 和 1:n，支持本项目明确选择首批 1:1 样本。Can 图 7.2 与 CanIf 图 7.8
 区分 controller 状态及 PDU channel mode；单 controller 变化和整个模块初始化分别处理。
 
