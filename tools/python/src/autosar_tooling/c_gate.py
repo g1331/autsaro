@@ -9,11 +9,10 @@ import json
 import os
 import shutil
 import subprocess
-import tempfile
 from collections import Counter
 from pathlib import Path
 
-from autosar_tooling import c_acceptance, c_check, c_comparison
+from autosar_tooling import c_acceptance, c_comparison
 from autosar_tooling.config import ROOT
 
 SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
@@ -156,20 +155,20 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
 
 def scan(target: str, sample: str) -> None:
     outputs = {}
-    with tempfile.TemporaryDirectory(prefix="c-gate-tool-") as temporary:
-        tool = c_check.tool_identity(Path(temporary))
-        for side, results in (
-            ("baseline", "c-analysis-baseline"),
-            ("current", "c-analysis-results"),
-        ):
-            output = ROOT / "build" / results / sample
-            summary = read(output / "summary.json")
-            c_acceptance._complete(summary)
-            if (summary["scope"]["target"] != target
-                    or summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}):
-                raise ValueError(f"Incomplete {side} analysis: {sample}")
-            c_check.recheck_semantic_inputs(summary, output / "project", tool)
-            outputs[side] = output
+    # Same-run c-check producers already validate actual target semantics before
+    # and after scanning. Rebind transferred source bytes to those fresh inputs.
+    for side, results in (("baseline", "c-analysis-baseline"),
+                          ("current", "c-analysis-results")):
+        output = ROOT / "build" / results / sample
+        summary = read(output / "summary.json")
+        c_acceptance._complete(summary)
+        if (summary["scope"]["target"] != target
+                or summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}):
+            raise ValueError(f"Incomplete {side} analysis: {sample}")
+        identity = c_acceptance.input_identity(summary, output / "project")
+        if identity != summary["projectAcceptance"]["inputIdentity"]:
+            raise ValueError(f"Transferred {side} analysis inputs changed: {sample}")
+        outputs[side] = output
     current, baseline = outputs["current"], outputs["baseline"]
     shutil.copy2(baseline / "summary.json", current / "baseline-summary.json")
     result = verdict(read(current / "summary.json"), current, baseline,

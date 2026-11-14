@@ -297,10 +297,14 @@ class CiSelectionTests(unittest.TestCase):
                 expected = {name: data for name, data in files.items()
                             if name == "summary.json" or name.startswith("project/")}
                 self.assertEqual(selected, expected)
-            full = [step for step in workflow[job]["steps"] if step.get("with", {}).get("name")
-                    == "c-analysis-${{ matrix.target }}-${{ matrix.group }}"]
+            producer = workflow[job.replace("gates", "samples")]
+            full = [step for step in producer["steps"]
+                    if step.get("with", {}).get("name", "").startswith(
+                        "c-analysis-${{ env.ANALYSIS_SIDE == 'baseline'")]
             self.assertEqual(len(full), 1)
-            self.assertEqual(full[0]["with"]["path"], "build/c-analysis-results")
+            self.assertEqual(full[0]["with"]["path"],
+                             "build/${{ env.ANALYSIS_SIDE == 'baseline' && "
+                             "'c-analysis-baseline' || 'c-analysis-results' }}")
 
     def test_cargo_source_digest_uses_tracked_bytes_despite_generated_files_and_timestamps(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
