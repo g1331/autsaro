@@ -79,6 +79,37 @@ class SourceGateTests(unittest.TestCase):
                     result = c_gate.verdict(current, output, baseline, {})
                     self.assertEqual(result["status"], "blocked")
 
+    def test_existing_accepted_location_cannot_approve_identical_unaccepted_addition(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, output, baseline = self.fixture(Path(temporary))
+            helper = comparison_tests.CComparisonTests()
+            current["diagnostics"] = [helper.diagnostic("rule", line) for line in (1, 2, 3)]
+            current["projectAcceptance"]["occurrences"] = [
+                {"diagnostic": index, "locationIndex": 0,
+                 "assessment": "accepted" if index == 0 else "blocked"}
+                for index in range(3)]
+            with patch.object(c_gate.c_acceptance, "evaluate",
+                              return_value=current["projectAcceptance"]):
+                self.assertEqual(c_gate.verdict(current, output, baseline, {})["status"],
+                                 "blocked")
+            current["projectAcceptance"]["occurrences"][0]["assessment"] = "blocked"
+            current["projectAcceptance"]["occurrences"][2]["assessment"] = "accepted"
+            with patch.object(c_gate.c_acceptance, "evaluate",
+                              return_value=current["projectAcceptance"]):
+                self.assertEqual(c_gate.verdict(current, output, baseline, {})["status"],
+                                 "passed")
+
+    def test_new_header_exact_disposition_has_no_existing_position(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, output, baseline = self.fixture(Path(temporary))
+            (output / "project/added.h").write_text("new();\n")
+            current["diagnostics"][0]["locations"] = [{"file": "added.h", "line": 1}]
+            current["projectAcceptance"]["occurrences"][0]["assessment"] = "accepted"
+            with patch.object(c_gate.c_acceptance, "evaluate",
+                              return_value=current["projectAcceptance"]):
+                self.assertEqual(c_gate.verdict(current, output, baseline, {})["status"],
+                                 "passed")
+
     def test_two_tree_gate_refuses_different_or_missing_analyzer_binary(self):
         for binary in (None, "other-binary"):
             with self.subTest(binary=binary), tempfile.TemporaryDirectory() as temporary:
