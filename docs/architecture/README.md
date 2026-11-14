@@ -67,6 +67,11 @@ flowchart LR
 
 按 [ADR 0022](../adr/0022-reference-ecu-before-mcu.md)，先完成[主机最低功能范围](../roadmap/reference-ecu.md)，发展 [R30 运行、仿真与可视化](../roadmap/host-simulation.md)，再按条件接入真实 MCU；R10 可后移。已定义的配置、OS／RTE、驱动软件接口、存储／外设模型、故障恢复和工程工具在前序交付，目标阶段只做具体寄存器／向量／地址／引脚绑定与硬件取证。输入适配、基座／覆盖／变体进入同一校验／计划／生成链；仿真接缝不另建生成主线或 OS 调度所有者。详细参数、阶段及验收由路线图维护。
 
+R11 通信目标契约见 [ADR 0028](../adr/0028-r11-communication-contract.md)：类型化总线身份、
+单 driver 的 2／3／4 通道样本、FD／精确过滤剖面、HostBatchV2 及交付版本迁移。
+实现接缝分别见[运行时架构](runtime.md#当前支持剖面与边界)和
+[交付架构](targets-and-delivery.md#r11-记录与包身份目标待实施)。
+
 ## 已知差距与未验证范围
 
 - 生成 C 的自动分析完整，但源码结果 `passed=false`；221 项 MISRA 人工评估未完成（[ADR 0008](../adr/0008-misra-baseline-and-no-deviation.md)）。
@@ -103,3 +108,4 @@ flowchart LR
 | [0022](../adr/0022-reference-ecu-before-mcu.md) | 先扩大主机工程能力，再接入真实 MCU | 已接受，能力扩展待实施 |
 | [0023](../adr/0023-autosar-required-conflict-disposition.md) | AUTOSAR 必需契约冲突的有界处置 | 已有决定补记，具体裁决待逐项执行 |
 | [0024](../adr/0024-bounded-linux-platform-retention.md) | 受控 Linux 三处标准头违反的有界平台保留 | 项目取舍已接受，三处技术复核完成 |
+| [0028](../adr/0028-r11-communication-contract.md) | R11 通信身份、FD 剖面与主机记录契约 | 已接受 |
