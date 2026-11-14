@@ -122,6 +122,15 @@ def _configuration(root: Path, *, source_tree: bool = False) -> dict:
         # Producer bytes may differ in a freshly scanned source tree.
         # Keep selected origins and delivered paths as configuration identity.
         selected = {name: value for name, value in selected.items() if name in origins}
+        # The native rule inventory includes the Rust generator itself, and
+        # the definition fingerprint includes that inventory identity.
+        if "ruleSetIdentity" in plan:
+            plan["ruleSetIdentity"] = {key: value for key, value in
+                                       plan["ruleSetIdentity"].items() if key != "sha256"}
+        if "validationDependencies" in plan:
+            plan["validationDependencies"] = {key: value for key, value in
+                                              plan["validationDependencies"].items()
+                                              if key not in {"rules.sha256", "definitions.sha256"}}
     plan["runtimeSources"] = selected
     return plan
 
