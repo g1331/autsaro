@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/eventfd.h>
+#include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -16,10 +17,17 @@ static int bad_errno;
 static int replacement = -1;
 static unsigned clock_calls;
 static unsigned deadline_ms = 100u;
+static int deadline_fd = -1;
+static unsigned deadline_closed;
 
 void StartupHook(void) {}
 void ShutdownHook(StatusType reason) { (void)reason; }
 
+int __real_timerfd_create(int clock, int flags);
+int __real_timerfd_settime(int fd,
+                           int flags,
+                           const struct itimerspec *value,
+                           struct itimerspec *previous);
 int __real_poll(struct pollfd *fds, nfds_t count, int timeout);
 ssize_t __real_read(int fd, void *data, size_t length);
 ssize_t __real_write(int fd, const void *data, size_t length);
@@ -28,6 +36,41 @@ int __real_pthread_mutex_destroy(pthread_mutex_t *mutex);
 int __real_clock_gettime(clockid_t clock, struct timespec *value);
 int __real___poll_chk(struct pollfd *fds, nfds_t count, int timeout, size_t bytes);
 ssize_t __real___read_chk(int fd, void *data, size_t length, size_t bytes);
+
+int __wrap_timerfd_create(int clock, int flags)
+{
+    if (scenario != NULL && strncmp(scenario, "deadline-", 9u) == 0) {
+        ++calls;
+        bad_errno |=
+            errno != 0 || clock != CLOCK_MONOTONIC || flags != (TFD_CLOEXEC | TFD_NONBLOCK);
+        if (strcmp(scenario, "deadline-create-error") == 0) {
+            errno = EMFILE;
+            return -1;
+        }
+        deadline_fd = __real_timerfd_create(clock, flags);
+        return deadline_fd;
+    }
+    return __real_timerfd_create(clock, flags);
+}
+
+int __wrap_timerfd_settime(int fd,
+                           int flags,
+                           const struct itimerspec *value,
+                           struct itimerspec *previous)
+{
+    if (scenario != NULL && strcmp(scenario, "poll-deadline") == 0) {
+        bad_errno |= flags != TFD_TIMER_ABSTIME || value->it_value.tv_sec != 0 ||
+                     value->it_value.tv_nsec != 110000000L || value->it_interval.tv_sec != 0 ||
+                     value->it_interval.tv_nsec != 0 || previous != NULL;
+    }
+    if (scenario != NULL && strcmp(scenario, "deadline-arm-error") == 0) {
+        ++calls;
+        bad_errno |= errno != 0;
+        errno = EINVAL;
+        return -1;
+    }
+    return __real_timerfd_settime(fd, flags, value, previous);
+}
 
 int __wrap_clock_gettime(clockid_t clock, struct timespec *value)
 {
@@ -73,6 +116,22 @@ int __wrap_pthread_mutex_destroy(pthread_mutex_t *mutex)
 
 int __wrap_close(int fd)
 {
+    if (scenario != NULL && strncmp(scenario, "deadline-", 9u) == 0 && fd == deadline_fd) {
+        ++deadline_closed;
+        bad_errno |= errno != 0;
+        const int result = __real_close(fd);
+        if (result == 0 && strcmp(scenario, "deadline-close-error") == 0) {
+            errno = EIO;
+            return -1;
+        }
+        if (result == 0 && strcmp(scenario, "deadline-close-interrupted") == 0) {
+            replacement = eventfd(0u, EFD_CLOEXEC | EFD_NONBLOCK);
+            bad_errno |= replacement != fd;
+            errno = EINTR;
+            return -1;
+        }
+        return result;
+    }
     if ((scenario != NULL) && (strcmp(scenario, "event-close-error-reuse") == 0)) {
         ++calls;
         bad_errno |= errno != 0;
@@ -102,11 +161,19 @@ int __wrap_close(int fd)
 
 int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout)
 {
+    if (scenario != NULL && strncmp(scenario, "deadline-poll-", 14u) == 0) {
+        ++calls;
+        bad_errno |= count != 2u || timeout != -1 || fds[1].fd != deadline_fd;
+        fds[1].revents = strcmp(scenario, "deadline-poll-invalid") == 0  ? POLLNVAL
+                         : strcmp(scenario, "deadline-poll-hangup") == 0 ? POLLHUP
+                                                                         : POLLERR | POLLIN;
+        return 1;
+    }
     if ((scenario != NULL) && (strncmp(scenario, "poll-", 5u) == 0)) {
         ++calls;
         bad_errno |= errno != 0;
         if (strcmp(scenario, "poll-deadline") == 0) {
-            bad_errno |= timeout != ((calls == 1u) ? 10 : 6);
+            bad_errno |= timeout != -1;
             if (calls == 1u) {
                 deadline_ms += 4u;
                 errno = EINTR;
@@ -299,7 +366,28 @@ int main(int argc, char **argv)
         if (__real_close(replacement) != 0) {
             return 10;
         }
+        replacement = -1;
         event = NULL;
+    } else if (strncmp(scenario, "deadline-", 9u) == 0) {
+        if (ResetEvent(event) == FALSE) {
+            return 23;
+        }
+        const DWORD result = WaitForSingleObject(event, 1u);
+        const DWORD expected =
+            strcmp(scenario, "deadline-close-interrupted") == 0 ? WAIT_TIMEOUT : WAIT_FAILED;
+        if (result != expected) {
+            return 18;
+        }
+        if (deadline_fd >= 0 && deadline_closed != 1u) {
+            return 19;
+        }
+        if (replacement >= 0) {
+            if (fcntl(replacement, F_GETFD) < 0) {
+                return 20;
+            }
+        } else if (deadline_fd >= 0 && (fcntl(deadline_fd, F_GETFD) != -1 || errno != EBADF)) {
+            return 21;
+        }
     } else if (strncmp(scenario, "write-", 6u) == 0) {
         const BOOL result = Os_HostSetEvent(event);
         if (result != ((strcmp(scenario, "write-error") == 0) ? FALSE : TRUE)) {
@@ -330,6 +418,9 @@ int main(int argc, char **argv)
         }
     }
     scenario = NULL;
+    if (replacement >= 0 && __real_close(replacement) != 0) {
+        return 22;
+    }
     if ((bad_errno != 0) || (calls == 0u)) {
         return 6;
     }

@@ -45,7 +45,7 @@ StatusType __wrap_Os_TargetNotifyNative(void)
 
 int __wrap_poll(struct pollfd *fds, nfds_t count, int timeout)
 {
-    if ((tick_waiter != 0) && (count == 2u) && (timeout > 0)) {
+    if ((tick_waiter != 0) && (count == 3u) && (timeout == -1)) {
         if (pthread_mutex_lock(&publication_lock) != 0) {
             _exit(94);
         }

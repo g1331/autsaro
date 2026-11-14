@@ -11,6 +11,7 @@
  * stop with generation ACKs, thread masks and pending-SIGPIPE preservation; see ADR 0024. */
 #include <signal.h>
 #include <sys/eventfd.h>
+#include <sys/timerfd.h>
 #include <sys/mman.h>
 #include <asm/mman.h>
 #ifdef __SANITIZE_ADDRESS__
@@ -657,11 +658,12 @@ OS_MEMMAP static DWORD event_result(HANDLE event, short events)
     return result;
 }
 
-OS_MEMMAP static DWORD poll_events(DWORD count, const HANDLE *observed, int timeout)
+OS_MEMMAP static DWORD poll_events(DWORD count, const HANDLE *observed, int timeout, int deadline)
 {
-    struct pollfd descriptors[OS_HOST_HANDLES];
+    struct pollfd descriptors[OS_HOST_HANDLES + 1u];
     /* Keep the array bound visible to fortified libc at its blocking poll entry. */
     const DWORD length = (count <= OS_HOST_HANDLES) ? count : OS_HOST_HANDLES;
+    const DWORD total = length + ((deadline >= 0) ? 1u : 0u);
     DWORD index;
     DWORD result = WAIT_TIMEOUT;
     for (index = 0u; index < length; ++index) {
@@ -669,11 +671,16 @@ OS_MEMMAP static DWORD poll_events(DWORD count, const HANDLE *observed, int time
         descriptors[index].events = POLLIN;
         descriptors[index].revents = 0;
     }
+    if (total > length) {
+        descriptors[length].fd = deadline;
+        descriptors[length].events = POLLIN;
+        descriptors[length].revents = 0;
+    }
     int ready;
     int error;
     do {
         errno = 0;
-        ready = poll(descriptors, length, timeout);
+        ready = poll(descriptors, total, (deadline >= 0) ? -1 : timeout);
         error = errno;
     } while ((ready < 0) && (error == EINTR) && (timeout == 0));
     if (ready < 0) {
@@ -687,10 +694,29 @@ OS_MEMMAP static DWORD poll_events(DWORD count, const HANDLE *observed, int time
             }
             ++index;
         }
+        if ((result == WAIT_TIMEOUT) && (total > length)) {
+            const short expiry_events = descriptors[length].revents;
+            const unsigned errors = (unsigned)POLLERR | (unsigned)POLLHUP | (unsigned)POLLNVAL;
+            if (((unsigned)expiry_events & errors) != 0u) {
+                result = WAIT_FAILED;
+            }
+        }
     } else {
         /* A finite native wait expired. */
     }
     return result;
+}
+
+/* An absolute kernel timer stays expired across a pause before entering poll. */
+OS_MEMMAP static int arm_deadline(int descriptor, uint64_t end)
+{
+    struct itimerspec expiry = {0};
+    const uint64_t seconds = end / UINT64_C(1000);
+    const uint64_t nanoseconds = (end % UINT64_C(1000)) * UINT64_C(1000000);
+    expiry.it_value.tv_sec = (time_t)seconds;
+    expiry.it_value.tv_nsec = (long)nanoseconds;
+    errno = 0;
+    return (timerfd_settime(descriptor, TFD_TIMER_ABSTIME, &expiry, NULL) == 0) ? 1 : 0;
 }
 
 /* eventfd readiness wakes the waiter directly, including publication before poll.
@@ -702,6 +728,16 @@ OS_MEMMAP static DWORD wait_events(DWORD count,
 {
     DWORD result = WAIT_TIMEOUT;
     int waiting = 1;
+    int deadline = -1;
+    if ((milliseconds != 0u) && (milliseconds != INFINITE)) {
+        const unsigned flags = (unsigned)TFD_CLOEXEC | (unsigned)TFD_NONBLOCK;
+        errno = 0;
+        deadline = timerfd_create(CLOCK_MONOTONIC, (int)flags);
+        if ((deadline < 0) || (arm_deadline(deadline, end) == 0)) {
+            result = WAIT_FAILED;
+            waiting = 0;
+        }
+    }
     while (waiting != 0) {
         const uint64_t now = monotonic_ms();
         if (now == UINT64_MAX) {
@@ -712,7 +748,7 @@ OS_MEMMAP static DWORD wait_events(DWORD count,
             const int timeout = (milliseconds == INFINITE)          ? -1
                                 : (remaining > (uint64_t)INT32_MAX) ? INT32_MAX
                                                                     : (int)remaining;
-            result = poll_events(count, observed, timeout);
+            result = poll_events(count, observed, timeout, deadline);
             if ((result == WAIT_TIMEOUT) || (result == WAIT_IO_COMPLETION)) {
                 const uint64_t after = monotonic_ms();
                 if (after == UINT64_MAX) {
@@ -727,6 +763,14 @@ OS_MEMMAP static DWORD wait_events(DWORD count,
             } else {
                 waiting = 0;
             }
+        }
+    }
+    if (deadline >= 0) {
+        errno = 0;
+        const int closed = close(deadline);
+        const int error = errno;
+        if ((closed != 0) && (error != EINTR)) {
+            result = WAIT_FAILED;
         }
     }
     return result;

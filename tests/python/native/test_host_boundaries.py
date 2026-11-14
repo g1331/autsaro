@@ -1609,6 +1609,63 @@ void Os_TestAfterFaultReader(void)
                             f"mutex_suspend_rejected stage={expected}\n" if expected else ""
                         ), result)
 
+    def test_finite_wait_deadline_survives_pause_before_native_wait(self):
+        import os_suites
+
+        native_poll = "poll(descriptors, total, (deadline >= 0) ? -1 : timeout)"
+        variants = (
+            ("control", ("single", "any", "mutex"), 0),
+            ("relative-events", ("single", "any"), 54),
+            ("missing-mutex-invalidation", ("mutex",), 54),
+            ("relative-kernel-timer", ("single",), 31),
+        )
+        for sanitizer in ("", "thread"):
+            for name, modes, expected in variants:
+                with self.subTest(sanitizer=sanitizer, variant=name), \
+                        tempfile.TemporaryDirectory() as temporary, \
+                        patch.dict(os.environ, {"AUTOSAR_SANITIZE": sanitizer}), \
+                        os_suites.host_target():
+                    directory = Path(temporary)
+                    target = directory / "target"
+                    shutil.copytree(os_suites.TARGET, target)
+                    source = target / "src/host/linux/Os_HostLinux.c"
+                    text = source.read_text(encoding="utf-8")
+                    if name == "relative-events":
+                        self.assertEqual(text.count(native_poll), 1)
+                        text = text.replace(native_poll, "poll(descriptors, length, timeout)")
+                    elif name == "relative-kernel-timer":
+                        old = "timerfd_settime(descriptor, TFD_TIMER_ABSTIME, &expiry, NULL)"
+                        self.assertEqual(text.count(old), 1)
+                        text = text.replace(old, old.replace("TFD_TIMER_ABSTIME", "0"))
+                    elif name == "missing-mutex-invalidation":
+                        begin = text.index("OS_MEMMAP DWORD SuspendThread(")
+                        end = text.index("OS_MEMMAP DWORD ResumeThread(", begin)
+                        body = text[begin:end]
+                        old = "invalidate_mutex_wait(thread);"
+                        self.assertEqual(body.count(old), 1)
+                        text = text[:begin] + body.replace(old, "(void)thread;") + text[end:]
+                    source.write_text(text, encoding="utf-8")
+                    with os_suites.native_session(directory, "finite-deadline"):
+                        binary, _ = os_suites.build(
+                            directory, str(ROOT / "tests/fixtures/os_event_deadline.c"),
+                            target=target,
+                            link_flags=("-Wl,--wrap=poll", "-Wl,--wrap=Os_LinuxFutexWait"),
+                        )
+                        for mode in modes:
+                            command = (["setarch", "x86_64", "-R"] if sanitizer else [])
+                            result = os_suites.run_native([*command, str(binary), mode], timeout=10)
+                            self.assertEqual(result.returncode, expected, result)
+                            if expected == 31:
+                                self.assertEqual(result.stdout, "", result)
+                            else:
+                                self.assertRegex(result.stdout, (
+                                    rf"deadline mode={mode} result=258 after_resume_ms=\d+ "
+                                    r"paused_ms=\d+ budget_ms=200\n"
+                                ), result)
+                            self.assertEqual(result.stderr, (
+                                "" if expected == 0 else f"deadline_rejected stage={expected}\n"
+                            ), result)
+
     def test_mutex_unlock_wakes_before_and_during_native_wait(self):
         import os_suites
 
@@ -1667,7 +1724,8 @@ void Os_TestAfterFaultReader(void)
                 binary, _ = os_suites.build(
                     directory, str(ROOT / "tests/fixtures/os_event_errors.c"),
                     link_flags=tuple(f"-Wl,--wrap={name}" for name in (
-                        "poll", "read", "__poll_chk", "__read_chk", "write", "close", "pthread_mutex_destroy", "clock_gettime",
+                        "poll", "read", "__poll_chk", "__read_chk", "write", "close",
+                        "pthread_mutex_destroy", "clock_gettime", "timerfd_create", "timerfd_settime",
                     )),
                 )
                 for scenario in ("fortify-read", "fortify-poll"):
@@ -1676,7 +1734,10 @@ void Os_TestAfterFaultReader(void)
                         self.assertEqual(result.returncode, -6, result)
                         self.assertEqual(result.stdout, "", result)
                         self.assertIn("buffer overflow detected", result.stderr, result)
-                for scenario in ("event-order", "poll-deadline", "any-poll-deadline",
+                for scenario in ("deadline-create-error", "deadline-arm-error", "deadline-close-error",
+                                 "deadline-close-interrupted", "deadline-poll-invalid",
+                                 "deadline-poll-hangup", "deadline-poll-error",
+                                 "event-order", "poll-deadline", "any-poll-deadline",
                                  "any-poll-error", "any-poll-error-infinite", "any-poll-invalid",
                                  "any-poll-hangup", "any-poll-revents-error", "any-poll-interrupted",
                                  "any-wait-read-error", "any-wait-read-interrupted", "any-wait-read-empty",
