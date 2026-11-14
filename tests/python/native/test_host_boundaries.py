@@ -1491,6 +1491,41 @@ void Os_TestAfterFaultReader(void)
                           "terminal=irreversible running=stopped closed=detached\n")
                     self.assertEqual(result.stdout, expected, result)
 
+    def test_event_wait_delivers_suspend_queued_before_poll(self):
+        import os_suites
+
+        bounded = "const DWORD length = (count <= OS_HOST_HANDLES) ? count : OS_HOST_HANDLES;"
+        for mutant in (False, True):
+            with self.subTest(mutant=mutant), tempfile.TemporaryDirectory() as temporary, \
+                    patch.dict(os.environ, {"AUTOSAR_SANITIZE": "thread"}), \
+                    os_suites.host_target():
+                directory = Path(temporary)
+                target = directory / "target"
+                shutil.copytree(os_suites.TARGET, target)
+                if mutant:
+                    source = target / "src/host/linux/Os_HostLinux.c"
+                    text = source.read_text(encoding="utf-8")
+                    self.assertEqual(text.count(bounded), 1)
+                    source.write_text(text.replace(bounded, "const DWORD length = count;"),
+                                      encoding="utf-8")
+                with os_suites.native_session(directory, "event-suspend"):
+                    binary, _ = os_suites.build(
+                        directory, str(ROOT / "tests/fixtures/os_event_suspend.c"), target=target,
+                        link_flags=tuple(f"-Wl,--wrap={symbol}" for symbol in (
+                            "poll", "__poll_chk", "pthread_kill",
+                        )),
+                    )
+                    result = os_suites.run_native(
+                        ["setarch", "x86_64", "-R", str(binary)], timeout=10,
+                    )
+                    self.assertEqual(result.returncode, 52 if mutant else 0, result)
+                    self.assertEqual(result.stdout, "" if mutant else (
+                        "event_suspend signal=delivered-before-poll acknowledgement=observed\n"
+                    ), result)
+                    self.assertEqual(result.stderr, (
+                        "event_suspend_rejected stage=52\n" if mutant else ""
+                    ), result)
+
     def test_mutex_unlock_wakes_before_and_during_native_wait(self):
         import os_suites
 

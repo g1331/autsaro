@@ -625,9 +625,11 @@ OS_MEMMAP static DWORD event_result(HANDLE event, short events)
 OS_MEMMAP static DWORD poll_events(DWORD count, const HANDLE *observed, int timeout)
 {
     struct pollfd descriptors[OS_HOST_HANDLES];
+    /* Keep the array bound visible to fortified libc at its blocking poll entry. */
+    const DWORD length = (count <= OS_HOST_HANDLES) ? count : OS_HOST_HANDLES;
     DWORD index;
     DWORD result = WAIT_TIMEOUT;
-    for (index = 0u; index < count; ++index) {
+    for (index = 0u; index < length; ++index) {
         descriptors[index].fd = observed[index]->fd;
         descriptors[index].events = POLLIN;
         descriptors[index].revents = 0;
@@ -636,14 +638,14 @@ OS_MEMMAP static DWORD poll_events(DWORD count, const HANDLE *observed, int time
     int error;
     do {
         errno = 0;
-        ready = poll(descriptors, count, timeout);
+        ready = poll(descriptors, length, timeout);
         error = errno;
     } while ((ready < 0) && (error == EINTR) && (timeout == 0));
     if (ready < 0) {
         result = (error == EINTR) ? WAIT_IO_COMPLETION : WAIT_FAILED;
     } else if (ready > 0) {
         index = 0u;
-        while ((index < count) && (result == WAIT_TIMEOUT)) {
+        while ((index < length) && (result == WAIT_TIMEOUT)) {
             const DWORD signalled = event_result(observed[index], descriptors[index].revents);
             if (signalled != WAIT_TIMEOUT) {
                 result = (signalled == WAIT_OBJECT_0) ? (WAIT_OBJECT_0 + index) : WAIT_FAILED;
