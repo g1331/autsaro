@@ -13,7 +13,15 @@ from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_acceptance, c_check, c_retention, c_sdk, c_standard, cli
+from autosar_tooling import (
+    c_acceptance,
+    c_check,
+    c_comparison,
+    c_retention,
+    c_sdk,
+    c_standard,
+    cli,
+)
 from autosar_tooling.config import ROOT
 
 TARGET = "linux-x64-controlled-v1"
@@ -174,6 +182,26 @@ class AcceptanceTests(unittest.TestCase):
                                         "locations": [{"file": self.retained["delivered"], "line": 2, "column": 0}]}]
         self.bind_groups()
 
+    def test_outside_locations_are_counted_without_diagnostic_blockers(self):
+        self.files["os/src/host/linux/host.c"] = b"host();\n"
+        self.files["main.c"] = b"target();\n"
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.summary["diagnostics"] = [{
+            "id": "unknown", "programs": ["host-batch"], "locations": [
+                {"file": "os/src/host/linux/host.c", "line": "1"},
+                {"file": "main.c", "line": "1"}]}]
+        self.identity()
+        result = self.evaluate()
+        self.assertNotEqual(result["status"], "error", result)
+        self.assertEqual(result["complianceScope"]["outOfScope"], 1)
+        self.assertEqual(result["complianceScope"]["inScope"], 1)
+        self.assertEqual([row["assessment"] for row in result["occurrences"]],
+                         ["out_of_scope", "blocked"])
+        diagnostic_objects = [row for row in result["objects"] if row["kind"] == "diagnostic"]
+        self.assertEqual(len(diagnostic_objects), 1)
+        self.assertEqual(diagnostic_objects[0]["location"]["file"], "main.c")
+
     def test_cppcheck_only_header_bytes_and_new_diagnostics_expire_freertos_evidence(self):
         self.freertos_inputs()
         name = "os/HiddenReview.h"
@@ -316,7 +344,7 @@ class AcceptanceTests(unittest.TestCase):
                 elif field == "owners":
                     path = self.project / "meta/workbench-ownership.json"
                 elif field == "origin":
-                    path = self.root / "runtime/os/src/host/linux/Os_HostLinux.c"
+                    path = self.root / ("runtime/" + self.sdk_name)
                 elif field == "assessment":
                     path = self.root / c_acceptance.GRP
                 else:
@@ -382,10 +410,34 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(self.plan, plan)
         self.assertNotEqual(self.identity(), before)
 
+    def test_sdk_host_history_and_extra_host_uses_do_not_require_renewed_dispositions(self):
+        self.sdk_inputs()
+        name = "os/src/host/windows/Os_Stack.c"
+        original = "runtime/" + name
+        source = b"host();\n"
+        destination = self.root / original
+        destination.parent.mkdir(parents=True)
+        destination.write_bytes(source)
+        self.files[name] = source
+        self.origins[original] = name
+        self.sdk_record["sites"].append({
+            "target": TARGET, "rule": "7.2", "file": "os/src/Os_Stack.c",
+            "line": 999, "symbol": "INFINITE", "text": "stale historical source"})
+        values = self.summary["scope"]["sdkMacroInputs"][self.sdk_name]
+        values[name + ":1"] = copy.deepcopy(values[self.sdk_name + ":1"])
+        self.write_sdk_record()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.identity()
+        result = self.evaluate()
+        self.assertNotEqual(result["status"], "error", result["objects"])
+        self.assertTrue(all(row["location"]["file"] != name for row in result["sdkObligations"]))
+
     def sdk_inputs(self):
-        self.sdk_name = "os/src/host/linux/Os_HostLinux.c"
+        # SDK dispositions are tested on a target caller; host providers are now outside scope.
+        self.sdk_name = "os/src/Os_Backend.c"
         self.sdk_text = "handler.sa_sigaction = &park_signal;"
-        original = "runtime/os/src/host/linux/Os_HostLinux.c"
+        original = "runtime/os/src/Os_Backend.c"
         source = (self.sdk_text + "\nstruct sigaction handler = {0};\n").encode()
         path = self.root / original
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -547,6 +599,107 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertIn("definition differs: " + self.sdk_name + ":1:O_RDONLY",
                       result["objects"][-1]["reason"])
+
+    def test_matrix_union_reassesses_existing_and_new_shared_header_diagnostics(self):
+        import test_c_comparison as comparison_tests
+        from autosar_tooling import c_gate
+
+        self.grp_inputs()
+        shared = "integration/include/Shared.h"
+        host = "integration/src/Host.c"
+        self.files[shared] = self.files["generated/Owned.c"].replace(b"owned(", b"shared_value(")
+        self.files[host] = b'#include "../include/Shared.h"\n'
+        owners = json.loads(self.files["meta/workbench-ownership.json"])
+        for name in (shared, host):
+            owners["files"].append({"path": name, "owner": "generated",
+                                    "producerId": "autosar-generator",
+                                    "sha256": hashlib.sha256(self.files[name]).hexdigest()})
+        self.files["meta/workbench-ownership.json"] = json.dumps(owners).encode()
+        self.summary["scope"]["translationUnits"].append(host)
+        for row in self.summary["programs"]:
+            row["translationUnits"].append(host)
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.identity()
+        for unit, paths in self.summary["scope"]["projectTranslationUnits"].items():
+            if not unit.startswith("integration/"):
+                paths.remove(shared)
+        comparison, *_ = comparison_tests.CComparisonTests().fixture(self.directory / "semantic")
+        self.summary["semanticIdentity"] = copy.deepcopy(comparison["semanticIdentity"])
+        self.summary["semanticIdentity"]["defines"] = {
+            unit: [] for unit in self.summary["scope"]["translationUnits"]}
+        self.summary["scope"].update(profile="ecu", sdkEnvironment=comparison["scope"]["sdkEnvironment"])
+        self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
+            c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
+        self.summary["tool"]["binarySha256"] = "synthetic-analyzer-binary"
+
+        def matrix_for(summary):
+            receipts = []
+            for target in c_comparison.MATRIX_TARGETS:
+                for sample in c_comparison.MATRIX_SAMPLES:
+                    other = copy.deepcopy(summary)
+                    other["scope"]["target"] = target
+                    if sample == "user-application":
+                        paths = other["scope"]["projectTranslationUnits"]["main.c"]
+                        paths.append(shared)
+                        paths.sort()
+                    receipts.append(c_comparison.scope_receipt(other, sample))
+            return c_comparison.scope_matrix(receipts)
+
+        original_evaluate = c_acceptance.evaluate
+        def actual(summary, project):
+            return original_evaluate(summary, project, root=self.root)
+
+        for scenario, rule, expected in (("existing", "2.7", "passed"),
+                                         ("new-unknown", "2.7", "blocked"),
+                                         ("new-disposed", "15.5", "passed")):
+            with self.subTest(scenario=scenario):
+                self.summary.pop("projectAcceptance", None)
+                self.summary["diagnostics"] = [self.grp_diagnostic(shared, rule=rule)]
+                self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "out_of_scope")
+                previous = copy.deepcopy(self.summary)
+                if scenario != "existing":
+                    previous["diagnostics"] = []
+                current_matrix, baseline_matrix = matrix_for(self.summary), matrix_for(previous)
+                output, baseline = self.directory / (scenario + "-current"), self.directory / (scenario + "-base")
+                shutil.copytree(self.project, output / "project")
+                shutil.copytree(self.project, baseline / "project")
+                (baseline / "summary.json").write_text(json.dumps(previous))
+                c_comparison.annotate_scope(self.summary, set(current_matrix["targetHeaders"]))
+                result = original_evaluate(self.summary, output / "project", root=self.root,
+                                           matrix_scope=current_matrix)
+                self.assertNotEqual(result["status"], "error", result["objects"])
+                self.assertEqual(result["complianceScope"]["inScope"], 1)
+                occurrence = result["occurrences"][0]
+                self.assertEqual(occurrence["assessment"], "accepted" if rule == "15.5" else "blocked")
+                if rule != "15.5":
+                    self.assertTrue(any(row["kind"] == "diagnostic" and row["location"]["file"] == shared
+                                        for row in result["objects"]))
+                self.assertNotEqual(result["inputIdentity"], c_acceptance.input_identity(self.summary, self.project, root=self.root))
+                changed_members = copy.deepcopy(current_matrix["members"])
+                changed_members[-1]["analysisIdentity"] = "0" * 64
+                other_scope = c_comparison.scope_matrix(changed_members)
+                self.assertEqual(result["inputIdentity"], c_acceptance.input_identity(
+                    self.summary, self.project, root=self.root, matrix_scope=other_scope))
+                self.assertEqual(c_acceptance.evidence_identity(
+                    self.summary, self.project, "owned-source", self.root, matrix_scope=current_matrix),
+                    c_acceptance.evidence_identity(
+                        self.summary, self.project, "owned-source", self.root, matrix_scope=other_scope))
+                changed_members[-1]["projectTranslationUnits"]["main.c"].append("integration/include/Other.h")
+                changed_members[-1]["projectTranslationUnits"]["main.c"].sort()
+                changed_scope = c_comparison.scope_matrix(changed_members)
+                self.assertNotEqual(result["inputIdentity"], c_acceptance.input_identity(
+                    self.summary, self.project, root=self.root, matrix_scope=changed_scope))
+                self.summary["projectAcceptance"] = result
+                with patch.object(c_acceptance, "evaluate", side_effect=actual):
+                    gate = c_gate.verdict(self.summary, output, baseline, {}, baseline_matrix=baseline_matrix)
+                self.assertEqual(gate["status"], expected)
+                self.assertFalse(gate["outOfScopeNew"])
+                self.assertEqual(bool(gate["comparison"]["new"]), scenario != "existing")
+                changed = copy.deepcopy(current_matrix)
+                changed["targetHeaders"].remove(shared)
+                refused = original_evaluate(self.summary, output / "project", root=self.root, matrix_scope=changed)
+                self.assertEqual(refused["status"], "error")
 
     def test_source_gate_consumes_real_exact_position_while_project_remains_blocked(self):
         import test_c_comparison as comparison_tests
@@ -1303,7 +1456,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(c_acceptance.freertos_identity(self.summary, self.project, self.root),
                          before)
 
-    def owned_inputs(self):
+    def owned_inputs(self, *, host_address=False):
         self.synthetic_complete_inputs()
         shutil.copytree(ROOT / "runtime", self.root / "runtime", dirs_exist_ok=True)
         shutil.copytree(ROOT / "docs/standards", self.root / "docs/standards", dirs_exist_ok=True)
@@ -1321,8 +1474,9 @@ class AcceptanceTests(unittest.TestCase):
             path = self.root / name
             text = path.read_text(encoding="utf-8").replace("| retained |", "| satisfied |")
             path.write_text(text, encoding="utf-8")
-        name = "runtime/os/src/host/linux/Os_HostLinux.c"
-        delivered = "os/src/host/linux/Os_HostLinux.c"
+        name = ("runtime/os/src/host/linux/Os_HostLinux.c" if host_address
+                else "runtime/os/include/Os.h")
+        delivered = name.removeprefix("runtime/")
         self.files[delivered] = (self.root / name).read_bytes()
         self.origins[name] = delivered
         self.plan["runtimeSources"][name] = c_acceptance.digest(self.root / name)
@@ -1331,8 +1485,10 @@ class AcceptanceTests(unittest.TestCase):
             "owner": "runtime", "producerId": "runtime",
         }]}).encode()
         source = self.files[delivered].decode()
-        offset = source.index("*low = (uintptr_t)thread->mapping;")
-        self.summary["diagnostics"] = [{"id": "misra-c2012-11.4",
+        expression = ("*low = (uintptr_t)thread->mapping;" if host_address
+                      else "#define OS_TASK_ENTRY(identifier)")
+        offset = source.index(expression)
+        self.summary["diagnostics"] = [{"id": "misra-c2012-" + ("11.4" if host_address else "20.10"),
             "programs": ["host-batch", "probe"],
             "locations": [{"file": delivered, "line": source.count("\n", 0, offset) + 1,
                            "column": offset - source.rfind("\n", 0, offset)}]}]
@@ -1340,18 +1496,17 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         self.bind_groups(statuses={"checker-limitations": "pending"})
 
-    def test_owned_address_consumes_original_category_with_current_context(self):
-        self.owned_inputs()
+    def test_owned_host_address_is_reported_outside_current_acceptance(self):
+        self.owned_inputs(host_address=True)
         context = self.context(group="owned-source", status="approved")
         self.bind(context)
         raw = copy.deepcopy(self.summary)
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked", result["objects"])
         occurrence = result["occurrences"][0]
-        self.assertEqual(occurrence["assessment"], "accepted")
-        self.assertEqual(occurrence["reason"], "owned_source_approved")
-        self.assertEqual(occurrence["record"]["file"],
-                         "docs/standards/os/native-facilities/addresses.md")
+        self.assertEqual(occurrence["assessment"], "out_of_scope")
+        self.assertEqual(occurrence["reason"], "host-platform")
+        self.assertFalse(any(row["kind"] == "diagnostic" for row in result["objects"]))
         self.assertEqual(occurrence["programs"], ["host-batch", "probe"])
         checker_rows = c_standard.supplementary_assessment(
             self.rules, self.summary["coverage"]["knownCheckerLimitations"], self.root,
@@ -1370,6 +1525,18 @@ class AcceptanceTests(unittest.TestCase):
                                          {"prepare": "success", "analysis": "success"},
                                          root=self.root)
 
+    def test_host_record_drift_does_not_block_a_target_disposition(self):
+        self.owned_inputs()
+        self.bind(self.context(group="owned-source", status="approved"))
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+        path = self.root / "runtime/os/src/host/linux/Os_HostLinux.c"
+        text, count = re.subn(r"/\* MR12 RULE 11\.4 VIOLATION:.*?\*/", "", path.read_text(),
+                              count=1, flags=re.DOTALL)
+        self.assertEqual(count, 1)
+        path.write_text(text)
+        self.assertTrue(c_standard.deviation_findings(self.root))
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+
     def test_owned_record_retains_formal_and_stale_context_blockers(self):
         self.owned_inputs()
         self.bind(self.context(group="owned-source", status="pending"))
@@ -1384,7 +1551,7 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["diagnostics"][0]["locations"][0]["line"] += 1
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
         self.summary["diagnostics"][0]["locations"][0]["line"] -= 1
-        name = "runtime/os/src/host/linux/Os_HostLinux.c"
+        name = "runtime/os/include/Os.h"
         path = self.root / name
         path.write_bytes(path.read_bytes() + b"/* changed producer */\n")
         self.bind_groups()
@@ -1394,7 +1561,7 @@ class AcceptanceTests(unittest.TestCase):
     def test_owned_record_document_is_part_of_current_evidence(self):
         self.owned_inputs()
         self.bind(self.context(group="owned-source", status="approved"))
-        path = self.root / "docs/standards/os/native-facilities/addresses.md"
+        path = self.root / "docs/standards/bsw-general/published-information.md"
         path.write_text(path.read_text(encoding="utf-8") + "\nChanged category evidence.\n",
                         encoding="utf-8")
         self.assertEqual(self.evaluate()["occurrences"][0]["reason"],
@@ -1491,6 +1658,7 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_owned_all_scope_does_not_authorize_a_new_profile(self):
         self.owned_inputs()
+        self.select_owned("runtime/os/include/Os.h", "20.10", "#define OS_TASK_ENTRY(identifier)")
         self.bind_groups(cases={group: "unreviewed-profile" for group in c_acceptance.GROUPS})
         self.bind(self.context(group="owned-source", status="approved", case="unreviewed-profile"))
         occurrence = self.evaluate()["occurrences"][0]
@@ -1705,7 +1873,7 @@ class AcceptanceTests(unittest.TestCase):
         (self.root / c_acceptance.ADOPTION).write_text("## 当前集成义务与消费\n", encoding="utf-8")
         self.seal()
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
-        self.summary["scope"].update(sdkHeaders=[], sdkMacroInputs={}, patchedLines={})
+        self.summary["scope"].update(sdkHeaders=[], sdkMacroInputs={}, patchedLines={"kernel/kernel.h": [3]})
 
     def grp_diagnostic(self, name, line=2, *, rule="15.5", **details):
         text = self.files[name].decode().splitlines()[line - 1]
@@ -1740,14 +1908,19 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["diagnostics"] = [
             self.grp_diagnostic("kernel/kernel.h"), self.grp_diagnostic("unknown.c"),
             self.grp_diagnostic("generated/Owned.c", rule="15.4")]
-        self.summary["scope"]["patchedLines"] = {"kernel/kernel.h": [2]}
+        self.summary["scope"]["patchedLines"] = {"kernel/kernel.h": [3]}
         self.summary["scope"]["sdkMacroInputs"] = {"main.c": {"kernel/kernel.h:2": {
             "PROJECT_CONFIG": {"file": "generated/Owned.c", "line": 1, "value": "1"}}}}
         self.bind_groups()
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(len(result["occurrences"]), 3)
-        self.assertTrue(all(row["assessment"] == "blocked" for row in result["occurrences"]))
+        self.assertEqual([row["assessment"] for row in result["occurrences"]],
+                         ["out_of_scope", "blocked", "blocked"])
+        self.summary["scope"]["patchedLines"] = {"kernel/kernel.h": [2]}
+        refused = self.evaluate()
+        self.assertEqual(refused["status"], "error")
+        self.assertIn("patch line receipt differs", refused["objects"][-1]["reason"])
 
     def test_grp_uses_hunk_identity_for_duplicate_kernel_returns(self):
         self.grp_inputs()
@@ -1766,8 +1939,8 @@ class AcceptanceTests(unittest.TestCase):
         rows = self.evaluate()["occurrences"]
         self.assertEqual([row["location"]["line"] for row in rows], ["2", "3"])
         self.assertEqual([row["status"] for row in rows],
-                         ["freertos_record_matched", "grp_disapplied"])
-        self.assertEqual([row["assessment"] for row in rows], ["accepted", "accepted"])
+                         ["out_of_scope", "grp_disapplied"])
+        self.assertEqual([row["assessment"] for row in rows], ["out_of_scope", "accepted"])
 
     def test_grp_keeps_untraceable_return_blocked(self):
         self.grp_inputs()

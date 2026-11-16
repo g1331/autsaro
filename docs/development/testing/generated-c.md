@@ -1,6 +1,6 @@
 # 生成 C 的静态检查
 
-安装 Cppcheck **2.21.0** 和同一版本的 addons。检查入口校验程序版本及三个 MISRA addon 文件的 SHA-256；CI 从官方 `2.21.0` 标签（提交 `e73bf44c3e49686b7495fab352d03a6c6075516b`）构建开放版，不需要商业许可证。本地用同一方式构建，`CPPCHECK` 指向带有 `cfg`、`addons` 的程序：
+安装 Cppcheck **2.21.0** 和同版 addons。检查入口校验程序版本及三个 MISRA addon 文件的 SHA-256；CI 从官方 `2.21.0` 标签（提交 `e73bf44c3e49686b7495fab352d03a6c6075516b`）构建开放版，不需要商业许可证。本地用同一方式构建，`CPPCHECK` 指向带有 `cfg`、`addons` 的程序：
 
 ```powershell
 git clone -c core.autocrlf=false -c core.eol=lf --depth 1 --branch 2.21.0 https://github.com/cppcheck-opensource/cppcheck.git build/cppcheck-source
@@ -18,17 +18,17 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_
 uv run --locked python -m autosar_tooling c-check --target windows-x64-controlled-v1 --project build/c-analysis-samples/standard-ecu --output-directory build/c-analysis-results/standard-ecu
 ```
 
-Linux 使用 `linux-x64-controlled-v1` 和对应主机 GCC。共享主机需要串行窗口时，任务局部设置 `CARGO_BUILD_JOBS=1`，同时限制 c-check 编译器探针与程序分析并发为 1；不改变 TU、程序、规则或期限。WSL 的结果目录应放在 Linux 文件系统中；未启用 Unix 元数据的 Windows 挂载目录无法满足受管进程日志的私有目录权限要求。生成目录必须不存在，结果目录必须新建或为空，并与封存工程分离。分析在副本上应用原有内核补丁，检查构建清单、主机入口和补充 C 文件，原始工程不会被修改。
+Linux 使用 `linux-x64-controlled-v1` 和对应主机 GCC。共享主机需要串行窗口时，任务局部设置 `CARGO_BUILD_JOBS=1`，同时限制 c-check 编译器探针与程序分析并发为 1；不改变 TU、程序、规则或期限。WSL 的结果目录应放在 Linux 文件系统中；未启用 Unix 元数据的 Windows 挂载目录无法满足受管进程日志的私有目录权限要求。生成目录必须不存在，结果目录必须新建或为空，并与封存工程分离。分析在副本上应用原有内核补丁，检查构建清单、主机入口和补充 C 文件，
 
 四样本同时选择实际支持的通信类型分支：`standard-ecu`／`user-application` 使用 EcuC 的 `PduIdTypeEnum=UINT16`、`PduLengthTypeEnum=UINT16`；`component-pipeline` 使用 `UINT8`／`UINT32`，保留移动交付包后的导入往返；`no-diagnostic` 使用 `UINT8`／`UINT8`，保留无应用 DID 和诊断路由的配置。`it` 的 `c_analysis::` 固定每个样本的配置预期，`native` 的同名模块用交付 include 路径编译并运行 `ComStack_Types.h` 消费者，按独立数值核对宽度、无符号值域和 `PduInfoType.SduLength`；设置 `AUTOSAR_C_ANALYSIS_SAMPLES` 时复用已生成样本，未设置时在临时目录重新生成。正常 `c-check` 继续扫描这些头经 CanIf／CanTp／PduR／Com／Dcm 等 TU 进入的真实程序；不向交付程序加入测试定义或模板骨架。这覆盖可构建配置的 ID 8／16 位与长度 8／16／32 位分支，不代表所有合法配置组合均已分析。Dcm 配置容量独立于通信长度类型，初始化检查可表示性；CanTp 先解码完整首帧长度再转换。无诊断样本仍编译交付中的 Dcm TU。样本参数改变会改变 plan／分析身份，旧配置的 CI 工件不能作为严格可比较基线。
 
 Cppcheck 使用目标平台模型及项目头文件。按[官方建议](https://cppcheck.sourceforge.io/manual.html)，不直接解析编译器的标准库头文件；GCC 按可用 CPU 数以最多四个并发任务逐个验证真实头文件与 C99 语法，并提取代码引用的系统宏和标准整数常量宏的实际后缀。Windows 的 `setvbuf` 参数模型使用该编译器头文件中的三个实际模式值，非法模式仍会报告。Linux 的 glibc 动态实时信号值由有限分析模型补齐；GCC 在同一 C99 参数下校验函数原型，动态值保留实际函数调用，模型不匹配即失败。其他 Windows／POSIX 接口仍取决于分析器的库模型，未知符号或解析失败保持失败。
 
-ECU 的 HostBatch 与 probe 是两个独立可执行程序，跨翻译单元检查分别运行，两个程序的 Cppcheck 进程并发执行、互不共享构建目录；共同源码在两个链接范围中均检查。`summary.json` 按程序声明顺序保留各程序清单、命令、退出码和诊断所属程序，原始工件分别位于 `host-batch/` 与 `probe/`。
+ECU 的 HostBatch 与 probe 是两个独立可执行程序，跨翻译单元检查分别运行，两个程序的 Cppcheck 并发执行、互不共享构建目录；共同源码在两个链接范围中均检查。`summary.json` 按程序声明顺序保留各程序清单、命令、退出码和诊断所属程序，原始工件分别位于 `host-batch/` 与 `probe/`。
 
-结果包含 `summary.json`、每个程序的原始 `diagnostics.xml`、进程日志、`compile_commands.json`、工具身份、逐项 checker 可用性和扫描范围。固定内核的诊断标记为 `adopted`，保留原始诊断；落在生产补丁新增或改动行上的诊断标记为 `patched`，属于本项目代码，不计为采用代码。准备阶段核对每个补丁实际改变了它选中的内核文件。项目规则检查直接动态内存调用，以及普通 BSW 中的直接主机线程创建；宏展开与 typedef 可以检测，间接函数指针等路径尚未覆盖。项目规则不会冒充完整 MISRA 指令。主机仿真层在 MISRA 合规范围外（[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md)）：Cppcheck 仍扫描并保留这些位置的原始诊断，不回退门对它们只报告、不阻断；范围标注由 #502 实现，此前按范围内处理。
+结果含 `summary.json`、每个程序的原始 `diagnostics.xml`、进程日志、`compile_commands.json`、工具身份、逐项 checker 可用性和扫描范围。固定内核的诊断标记为 `adopted`，保留原始诊断；落在生产补丁新增或改动行上的诊断标记为 `patched`，属于本项目代码，不计为采用代码。准备阶段核对每个补丁实际改变了它选中的内核文件。项目规则检查直接动态内存调用，以及普通 BSW 中的直接主机线程创建；宏展开与 typedef 可以检测，间接函数指针等路径尚未覆盖。项目规则不会冒充完整 MISRA 指令。主机仿真层范围外（[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md)）：Cppcheck 仍扫描并保留这些位置的原始诊断，不回退门对它们只报告、不阻断；`diagnostics[].complianceScope` 逐位置标注；摘要单列位置数及诊断条数。集成头取目标 TU 的 `-MD` 闭包，矩阵取并集；内核位置复用已验证的 hunk 行归属。
 
-主机锁错误边界测试使用 `uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py`，通过测试构建替换平台调用，验证锁忙／锁错误及必要终止点，不向交付源码增加故障 hook。同一入口的 `HostIoTests` 链接实际 OS 与平台输出实现，检查有界字段、部分写、零进展、断管和终止报告回退；Linux 另检查 EINTR、既有 pending SIGPIPE 的保留，以及正常／终止路径的信号调用前 `errno` 清零；替换调用在成功后留下非零值，下一调用必须自行清零。HostBatch／probe 的确认顺序、字节输入及读错误由 core 原生 `integration::protocol::` 从生成可执行入口验证。OS 资源获取和栈保证故障注入仅编译到显式测试构建（`OS_HOST_FAILURE_TESTS`）；生产 HostBatch／probe 不读取 `AUTOSAR_OS_FAIL_RESOURCE` 或 `AUTOSAR_OS_BAD_GUARANTEE`。
+主机锁边界测试使用 `uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py`，通过测试构建替换平台调用，验证锁忙／锁错误及必要终止点，不向交付源码增加故障 hook。同一入口的 `HostIoTests` 链接实际 OS 与平台输出实现，检查有界字段、部分写、零进展、断管和终止报告回退；Linux 另检查 EINTR、既有 pending SIGPIPE 的保留，以及正常／终止路径的信号调用前 `errno` 清零；替换调用在成功后留下非零值，下一调用必须自行清零。HostBatch／probe 的确认顺序、字节输入及读错误由 core 原生 `integration::protocol::` 从生成可执行入口验证。OS 资源获取和栈保证故障注入仅编译到显式测试构建（`OS_HOST_FAILURE_TESTS`）；生产 HostBatch／probe 不读取 `AUTOSAR_OS_FAIL_RESOURCE` 或 `AUTOSAR_OS_BAD_GUARANTEE`。
 
 生成的 C 与运行时源码使用同一 `.clang-format`：emitter 直接写出该排版（规则在 `core/src/integration/c_layout.rs`），生成时不调用格式化工具（ADR 0014）。生成样本后，`uv run --locked python -B -m unittest discover -s tests/python/native -p test_generated_format.py` 用 uv 固定的 clang-format 检查样本中除 `kernel/`（FreeRTOS）和 `app/`（用户源码）外的 C 与头文件，必需 CI 在两个平台的 `c-analysis-prepare` 中运行。过长函数头的断行由 clang-format 按惩罚值择优，emitter 只复现常见选择，超长的用户名称可能排版不同。
 
@@ -36,7 +36,7 @@ ECU 的 HostBatch 与 probe 是两个独立可执行程序，跨翻译单元检�
 
 同一批样本还用 clang-tidy 按[C 编码规范](../c-coding-standard.md#自动检查)与基线比较：`uv run --locked python -m autosar_tooling quality --scope runtime --c-samples build/c-analysis-samples`，必需 CI 在 Linux 的 `c-analysis-prepare` 中运行。
 
-clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py` 把样本内核按 `target.json` 打上补丁，再用样本自身的编译选项（含 `-Werror`）分别以正式与 test 模式（`-DECU_TARGET_TESTS -DOS_HOST_FAILURE_TESTS`）编译除 `kernel/`、`app/` 外的全部编译单元，另开启 `-Wshadow`、`-Wmissing-prototypes`、`-Wstrict-prototypes`、`-Wcast-qual`、`-Wextra-semi`、`-Wformat=2`、`-Wdocumentation`。与 MISRA 重复的诊断不加入（如 `-Wunused-macros`、`-Wvla`、`-Wsign-conversion`、`-Wcomma`、`-Wswitch-enum`）。`-Wdocumentation` 的存量警告按 C 规范源码基线逐项比较：只对这一组用 `-Wno-error=documentation` 保留警告输出，再拒绝新增或修好未移除的条目；其他编译错误仍直接失败。`void` 函数使用 `@par Return`／`None.`，AUTOSAR 强制无名的 role 参数使用按位置和方向说明的 `@par Parameters`；写法与校验见 C 编码规范。现存文档诊断仍随模块回填从基线删除，新增代码不能增加警告。clang 取自 `AUTOSAR_CLANG` 或 PATH，必需 CI 在 Linux 的 `c-analysis-prepare` 中运行；它只编译不链接，不替代受锁定的 GCC 构建。
+clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m unittest discover -s tests/python/native -p test_clang_build.py` 把样本内核按 `target.json` 打上补丁，再用样本自身的编译选项（含 `-Werror`）分别以正式与 test 模式（`-DECU_TARGET_TESTS -DOS_HOST_FAILURE_TESTS`）编译除 `kernel/`、`app/` 外的全部编译单元，另开启 `-Wshadow`、`-Wmissing-prototypes`、`-Wstrict-prototypes`、`-Wcast-qual`、`-Wextra-semi`、`-Wformat=2`、`-Wdocumentation`。与 MISRA 重复的诊断不加入（如 `-Wunused-macros`、`-Wvla`、`-Wsign-conversion`、`-Wcomma`、`-Wswitch-enum`）。`-Wdocumentation` 的存量警告按 C 规范源码基线逐项比较：只对这一组用 `-Wno-error=documentation` 保留警告输出，再拒绝新增或修好未移除的条目；其他编译错误仍失败。`void` 函数使用 `@par Return`／`None.`，AUTOSAR 强制无名的 role 参数使用按位置和方向说明的 `@par Parameters`；写法与校验见 C 编码规范。现存文档诊断仍随模块回填从基线删除，新增代码不能增加警告。clang 取自 `AUTOSAR_CLANG` 或 PATH，必需 CI 在 Linux 的 `c-analysis-prepare` 中运行；它只编译不链接，不替代受锁定的 GCC 构建。
 
 生成上述样本后，`uv run --locked python -B -m unittest discover -s tests/python/native -p test_ecu_build_modes.py` 通过封存工程的离线 CLI 实际构建 HostBatch、probe 和 test 三种模式，分别运行正常、非法资源参数、首次资源失败及栈保证失败场景。构建输出位于临时 Git 仓库内，覆盖内核选择补丁不能受外层仓库路径影响的回归。正式构建应完成正常协议，test 模式应拒绝故障；运行前将 `AUTOSAR_CC`、`AUTOSAR_OBJDUMP`、`AUTOSAR_GIT` 设置为目标 GCC、objdump、git 的绝对路径；直接调用构建 API 的内核身份反例也读取这组环境，不能只依赖 PATH。
 

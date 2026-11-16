@@ -3,6 +3,17 @@
 #include "Os_HostIo.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
+/* Native allocation stays in the selected host provider; the backend owns admission. */
+OS_MEMMAP HANDLE Os_HostCreateThread(LPSECURITY_ATTRIBUTES attributes,
+                                     SIZE_T stack,
+                                     LPTHREAD_START_ROUTINE start,
+                                     LPVOID argument,
+                                     DWORD flags,
+                                     LPDWORD id)
+{
+    return CreateThread(attributes, stack, start, argument, flags, id);
+}
+
 OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event) { return SetEvent(event); }
 
 OS_MEMMAP int Os_HostWriteBytes(int error_stream, const char *data, size_t length)

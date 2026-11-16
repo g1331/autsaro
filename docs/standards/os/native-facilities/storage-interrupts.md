@@ -1,6 +1,6 @@
 # OS：动态设施与同步嵌套 ISR
 
-状态（[ADR 0030](../../../adr/0030-host-simulation-layer-outside-misra-scope.md)）：同步嵌套 ISR 节整体转为历史记录；主机动态设施节只转范围外实例，`Os_HostServices.c`、`Os_Backend.c` 内的实例继续有效，随 #502 裁定。
+状态（[ADR 0030](../../../adr/0030-host-simulation-layer-outside-misra-scope.md)）：嵌套 ISR、`host/common/Os_HostServices.c` 和两平台 provider 的实例转历史；`Os_Backend.c` 保留激活、资源和关闭状态，范围内继续核查。
 
 ## 动态存储及回收责任
 
@@ -27,7 +27,7 @@ OSEK OS2.2.3 §6（25–26页）及§14.2.3.1／Figure14-1（73–74页）描述
 
 规则为 D4.12、R21.3／R22.1（Required）。授权为 [ADR 0025](../../../adr/0025-misra-layered-scope.md)及其项目决定，依据只引用 [D4.12 方案1](https://github.com/g1331/autsaro/pull/371#issuecomment-6393803857)和 [TLS 补充](https://github.com/g1331/autsaro/pull/371#issuecomment-6401003340)。
 
-范围：`runtime/os/src/host/linux/Os_HostLinux.c::Os_HostCreateActor`、`runtime/os/src/Os_HostServices.c` 的两个 Spawn 入口及 `runtime/os/src/Os_Backend.c::Os_PortThread`；实际port补丁转调及HostBatch observer为消费者。限 linux-x64-controlled-v1（C99／glibc-pthread x86-64）、windows-x64-controlled-v1（C99／Win32）、四 profile 的 HostBatch／probe 与同实现 native。D4.12 覆盖执行栈／guard、bootstrap、线程描述符／TLS和平台栈。R21.3／R22.1仅限已核Linux provider的pthread_create→allocate_stack→_dl_allocate_tls→allocate_dtv/calloc、NPTL缓存及进程期DTV释放边界；Windows内部和自有业务分配另评。
+范围：`runtime/os/src/host/linux/Os_HostLinux.c::Os_HostCreateActor`、`runtime/os/src/host/common/Os_HostServices.c` 的两个 Spawn 入口及 `runtime/os/src/Os_Backend.c::Os_PortThread`；实际port补丁转调及HostBatch observer为消费者。限 linux-x64-controlled-v1（C99／glibc-pthread x86-64）、windows-x64-controlled-v1（C99／Win32）、四 profile 的 HostBatch／probe 与同实现 native。D4.12 覆盖执行栈／guard、bootstrap、线程描述符／TLS和平台栈。R21.3／R22.1仅限已核Linux provider的pthread_create→allocate_stack→_dl_allocate_tls→allocate_dtv/calloc、NPTL缓存及进程期DTV释放边界；Windows内部和自有业务分配另评。
 
 理由：当前原生抢占、物理栈／ARTI、guard 和同步监督合同依赖这些宿主设施；静态汽车缓冲或仅启动分配不能消除 provider 分配，直接改后端需要重新证明上述合同。保留真实违反，不把 join／进程退出说成已显式 free 全部 TLS。
 
@@ -43,7 +43,7 @@ OSEK OS2.2.3 §6（25–26页）及§14.2.3.1／Figure14-1（73–74页）描述
 
 | 规则 | 类别内源码位置 | 共用机制 | 原条件同意 |
 | --- | --- | --- | --- |
-| MISRA C:2012 Directive 4.12 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `Os_HostCreateActor`；`runtime/os/src/Os_HostServices.c` 中 `Os_HostSpawnThread`、`Os_HostSpawnObserverThread`（Windows定义）；`runtime/os/src/Os_Backend.c` 中 `Os_PortThread`（Windows定义） | 上述执行栈及provider分配，失败检查／回滚保持 | 维护者 2026-10-27类别决定；独立复核与实例收据沿本节 |
+| MISRA C:2012 Directive 4.12 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `Os_HostCreateActor`；`runtime/os/src/host/common/Os_HostServices.c` 中 `Os_HostSpawnThread`、`Os_HostSpawnObserverThread`（Windows定义）；`runtime/os/src/Os_Backend.c` 中 `Os_PortThread`（Windows定义） | 上述执行栈及provider分配，失败检查／回滚保持 | 维护者 2026-10-27类别决定；独立复核与实例收据沿本节 |
 | MISRA C:2012 Rule 21.3 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `Os_HostCreateActor` | 仅已核Linux provider的DTV calloc用途 | 维护者 2026-10-27 TLS补充；同一类别记录 |
 | MISRA C:2012 Rule 22.1 | `runtime/os/src/host/linux/Os_HostLinux.c` 中 `Os_HostCreateActor` | 仅上述NPTL缓存及进程期DTV | 维护者 2026-10-27 TLS补充；同一类别记录 |
 

@@ -651,15 +651,15 @@ def host_address_instances(root: Path) -> tuple[dict, collections.Counter[Key]]:
          "*low = (uintptr_t)thread->mapping;"),
         ("runtime/os/src/host/linux/Os_StackLinux.c", "11.4", "Os_StackRecordBuffer",
          "current_stack->kernel_buffer_high = (uintptr_t)&top[1];"),
-        ("runtime/os/src/Os_Stack.c", "11.4", "Os_StackRecordBuffer",
+        ("runtime/os/src/host/windows/Os_Stack.c", "11.4", "Os_StackRecordBuffer",
          "current_stack->kernel_buffer_high = (uintptr_t)&top[1];"),
-        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
+        ("runtime/os/src/host/windows/Os_Stack.c", "11.6", "Os_StackRegister",
          "record->reserve_low = (uintptr_t)region.AllocationBase;"),
-        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackRegister",
+        ("runtime/os/src/host/windows/Os_Stack.c", "11.6", "Os_StackRegister",
          "if ((VirtualQuery((const void *)cursor, &region, sizeof(region)) != sizeof(region)) ||"),
-        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackCheck",
+        ("runtime/os/src/host/windows/Os_Stack.c", "11.6", "Os_StackCheck",
          "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);"),
-        ("runtime/os/src/Os_Stack.c", "11.6", "Os_StackObserve",
+        ("runtime/os/src/host/windows/Os_Stack.c", "11.6", "Os_StackObserve",
          "invalid = VirtualQuery((const void *)sp, &region, sizeof(region)) != sizeof(region);"),
     )
     instances = {}
@@ -737,6 +737,7 @@ RETAINED_APPLICATION = "core/tests/fixtures/component-pipeline/applications/Ingr
 def deviation_findings(
     root: Path = ROOT, *, matched: list[dict] | None = None,
     kernel_sources: dict[str, str] | None = None,
+    source_names: set[str] | None = None,
 ) -> collections.Counter[Key]:
     """Match approved table scopes to adjacent source locations, without approving them."""
     records: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
@@ -751,6 +752,8 @@ def deviation_findings(
             rule = re.search(r"MISRA C:2012 (Rule|Directive) (\d+\.\d+)", cells[1])
             if not rule or not re.match(r"(?:维护者\s+\S|Approved\s+by\s+\S)", cells[4].strip(), re.IGNORECASE):
                 continue
+            if source_names is not None and not any("`" + name + "`" in cells[2] for name in source_names):
+                continue
             if "精确124键决定" in cells[4] and not re.search(r"shape=`([^`]+)`", cells[3]):
                 record_errors[("deviation-shape-record", path.relative_to(root).as_posix(), line.strip())] += 1
             kind = "RULE" if rule[1] == "Rule" else "DIR"
@@ -761,6 +764,8 @@ def deviation_findings(
             pieces = re.split(r"(`(?:" + source_pattern + r")`)", scope)
             for index in range(1, len(pieces), 2):
                 name = pieces[index].strip("`")
+                if source_names is not None and name not in source_names:
+                    continue
                 if name.startswith("kernel/") and name not in kernel_sources:
                     continue
                 for item in re.findall(r"`([^`]+)`", pieces[index + 1]):
@@ -774,6 +779,9 @@ def deviation_findings(
                     if shape:
                         shapes[key] = code_words(shape[1].replace("&#124;", "|"))
     instances, result = host_address_instances(root)
+    if source_names is not None:
+        instances = {key: value for key, value in instances.items() if key[0] in source_names}
+        result = collections.Counter({key: count for key, count in result.items() if key[1] in source_names})
     result.update(record_errors)
     for (name, _), (rule, symbol, document, title) in instances.items():
         key = ("RULE", rule, name, symbol)
@@ -789,6 +797,8 @@ def deviation_findings(
         if path.suffix not in {".c", ".h"}:
             continue
         name = path.relative_to(root).as_posix()
+        if source_names is not None and name not in source_names:
+            continue
         source = ((kernel_sources or {})[name] if name in (kernel_sources or {})
                   else path.read_text(encoding="utf-8"))
         tokens = lex(source)

@@ -1495,7 +1495,7 @@ OS_MEMMAP static HANDLE Os_PortThread(LPSECURITY_ATTRIBUTES attributes,
 {
     HANDLE result;
     ++resource_calls;
-    result = OS_RESOURCE_CREATE(CreateThread(attributes, stack, start, argument, flags, id));
+    result = OS_RESOURCE_CREATE(Os_HostCreateThread(attributes, stack, start, argument, flags, id));
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }

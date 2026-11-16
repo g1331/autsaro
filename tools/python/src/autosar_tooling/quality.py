@@ -312,7 +312,8 @@ def changed_format_errors(
 # compiled with generated projects (c-check, native, clang-tidy below).
 CONFIGURATION = ROOT / "core" / "tests" / "fixtures" / "bsw-contracts"
 PUBLIC_INCLUDES = [ROOT / "runtime" / name / "include" for name in ("bsw", "host", "ecu", "os")]
-OS_PRIVATE = [ROOT / "runtime" / "os" / "src", ROOT / "runtime" / "os" / "src" / "host" / "linux"]
+OS_PRIVATE = [ROOT / "runtime/os/src", ROOT / "runtime/os/src/host/common",
+              ROOT / "runtime/os/src/host" / ("windows" if os.name == "nt" else "linux")]
 
 
 def public_headers() -> list[Path]:

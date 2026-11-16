@@ -750,7 +750,7 @@ Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId, uint8 InstanceId,
     def test_windows_address_category_keeps_each_expression_bounded(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            source = root / "runtime/os/src/Os_Stack.c"
+            source = root / "runtime/os/src/host/windows/Os_Stack.c"
             source.parent.mkdir(parents=True)
             document = root / "docs/standards/os/native-facilities/addresses.md"
             document.parent.mkdir(parents=True)

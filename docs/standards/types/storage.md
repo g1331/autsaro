@@ -54,12 +54,12 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_prefix` | CONST_8；Os_StackFatalExit 的不可变报告前缀字节。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_middle` | CONST_8；Os_StackFatalExit 的不可变报告分隔字节。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/linux/Os_StackLinux.c` 中 `fatal_suffix` | CONST_8；Os_StackFatalExit 的不可变报告后缀字节。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fault_claimed` | VAR_CLEARED_32；publish_fault 的原子 first-fault winner；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_claimed` | VAR_CLEARED_32；Os_StackFatalExit 的原子 terminal-report winner；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_text` | VAR_CLEARED_8；Os_StackFatalExit 的 winner 独占256字节格式缓冲；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_prefix` | CONST_8；Os_StackFatalExit 的不可变报告前缀；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_middle` | CONST_8；Os_StackFatalExit 的不可变异常字段分隔；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Stack.c` 中 `fatal_suffix` | CONST_8；Os_StackFatalExit 的不可变报告尾部；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fault_claimed` | VAR_CLEARED_32；publish_fault 的原子 first-fault winner；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fatal_claimed` | VAR_CLEARED_32；Os_StackFatalExit 的原子 terminal-report winner；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fatal_text` | VAR_CLEARED_8；Os_StackFatalExit 的 winner 独占256字节格式缓冲；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fatal_prefix` | CONST_8；Os_StackFatalExit 的不可变报告前缀；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fatal_middle` | CONST_8；Os_StackFatalExit 的不可变异常字段分隔；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+| MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fatal_suffix` | CONST_8；Os_StackFatalExit 的不可变报告尾部；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
 
 ## 历史源码与收据边界
 
