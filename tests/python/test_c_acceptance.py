@@ -679,8 +679,17 @@ class AcceptanceTests(unittest.TestCase):
                 changed_members = copy.deepcopy(current_matrix["members"])
                 changed_members[-1]["analysisIdentity"] = "0" * 64
                 other_scope = c_comparison.scope_matrix(changed_members)
-                self.assertNotEqual(result["inputIdentity"], c_acceptance.input_identity(
+                self.assertEqual(result["inputIdentity"], c_acceptance.input_identity(
                     self.summary, self.project, root=self.root, matrix_scope=other_scope))
+                self.assertEqual(c_acceptance.evidence_identity(
+                    self.summary, self.project, "owned-source", self.root, matrix_scope=current_matrix),
+                    c_acceptance.evidence_identity(
+                        self.summary, self.project, "owned-source", self.root, matrix_scope=other_scope))
+                changed_members[-1]["projectTranslationUnits"]["main.c"].append("integration/include/Other.h")
+                changed_members[-1]["projectTranslationUnits"]["main.c"].sort()
+                changed_scope = c_comparison.scope_matrix(changed_members)
+                self.assertNotEqual(result["inputIdentity"], c_acceptance.input_identity(
+                    self.summary, self.project, root=self.root, matrix_scope=changed_scope))
                 self.summary["projectAcceptance"] = result
                 with patch.object(c_acceptance, "evaluate", side_effect=actual):
                     gate = c_gate.verdict(self.summary, output, baseline, {}, baseline_matrix=baseline_matrix)

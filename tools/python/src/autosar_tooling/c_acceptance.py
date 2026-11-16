@@ -236,7 +236,7 @@ def input_identity(summary: dict, project: Path, *, root: Path = ROOT,
     if semantic.get("version") != 2 or any(not semantic.get(key) for key in
             ("sdk", "compiler", "defines", "libraries", "analysisCode", "addonRuntime")):
         raise ValueError("Assessment semantic inputs incomplete")
-    return _hash({**({"scopeMatrix": matrix_scope} if matrix_scope is not None else {}),
+    return _hash({**({"scopeTargetHeaders": matrix_scope["targetHeaders"]} if matrix_scope is not None else {}),
                   "version": 2, "plan": plan, "target": target,
                   "originalBswSources": metadata["originalBswSources"],
                   "producerInputs": producers,
@@ -602,7 +602,7 @@ def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROO
         value["sdkMacros"] = scope.get("sdkMacroInputs")
         value["diagnostics"] = sorted(_hash(row) for row in summary["diagnostics"])
     if matrix_scope is not None:
-        value["scopeMatrix"] = matrix_scope
+        value["scopeTargetHeaders"] = matrix_scope["targetHeaders"]
     return _hash(value)
 
 
