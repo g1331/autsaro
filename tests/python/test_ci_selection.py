@@ -58,6 +58,55 @@ def concurrency_group(expression, event):
 
 
 class CiSelectionTests(unittest.TestCase):
+    def test_draft_and_ready_events_select_checks_and_required_result(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text())
+        events = workflow.get("on", workflow.get(True))["pull_request"]["types"]
+        self.assertTrue({"ready_for_review", "converted_to_draft"}.issubset(events))
+        detect = workflow["jobs"]["changes"]["steps"][1]
+        gate = workflow["jobs"]["required"]["steps"][0]
+        for action, draft, event_name in (
+            ("opened", True, "pull_request"), ("synchronize", True, "pull_request"),
+            ("converted_to_draft", True, "pull_request"),
+            ("ready_for_review", False, "pull_request"),
+            ("synchronize", False, "pull_request"), ("", False, "push"),
+        ):
+            event = {"github.event_name": event_name,
+                     "github.event.pull_request.draft": draft,
+                     "github.event.action": action, "github.event.label.name": ""}
+            with self.subTest(action=action, draft=draft, event=event_name), \
+                    tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "output"
+                env = {"PULL_REQUEST": "99" if event_name == "pull_request" else "",
+                       "GITHUB_REPOSITORY": "example/repo", "GITHUB_OUTPUT": str(output),
+                       "BASE": "", "DRAFT": str(bool(expression_value(
+                           detect["env"]["DRAFT"], event))).lower()}
+                result = subprocess.CompletedProcess([], 0, file_listing(["core/src/lib.rs"]))
+                with mock.patch.dict(os.environ, env), \
+                        mock.patch.object(subprocess, "run", return_value=result), \
+                        mock.patch.object(subprocess, "check_output", return_value="parent\n"), \
+                        mock.patch("builtins.print"):
+                    run_script(detect["run"])
+                values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+                for key in ("code", "native", "desktop", "analysis", "application"):
+                    self.assertEqual(values[key], str(not draft).lower())
+                for name in ("changes", "quality", "required"):
+                    condition = workflow["jobs"][name]["if"].replace("always()", "True")
+                    self.assertTrue(expression_value(condition, event))
+                needs = {name: {"result": "success" if name in {"changes", "quality"}
+                               or not draft else "skipped"}
+                         for name in workflow["jobs"]["required"]["needs"]}
+                needs["changes"]["outputs"] = values
+                gate_env = {"RESULTS": json.dumps(needs), "DRAFT": str(bool(
+                    expression_value(gate["env"]["DRAFT"], event))).lower()}
+                with mock.patch.dict(os.environ, gate_env), mock.patch("builtins.print"), \
+                        self.assertRaises(SystemExit) as exit_result:
+                    run_script(gate["run"])
+                if draft:
+                    self.assertIn("Draft PR: full checks await ready_for_review",
+                                  exit_result.exception.code)
+                else:
+                    self.assertEqual(exit_result.exception.code, 0)
+
     def test_master_required_starts_while_previous_extended_runs_and_pr_replaces_old_run(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())
         extended = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text())
@@ -77,8 +126,8 @@ class CiSelectionTests(unittest.TestCase):
                 running[group] = name
                 states[name] = "required-running"
 
-        def event(sha, *, pull_request=0):
-            return {"github.workflow": workflow["name"], "github.event.action": "synchronize",
+        def event(sha, *, pull_request=0, action="synchronize"):
+            return {"github.workflow": workflow["name"], "github.event.action": action,
                     "github.event.label.name": "", "github.run_id": sha,
                     "github.event.pull_request.number": pull_request, "github.sha": sha,
                     "github.ref": "refs/pull/99/merge" if pull_request else "refs/heads/master",
@@ -104,6 +153,11 @@ class CiSelectionTests(unittest.TestCase):
         self.assertEqual([states[name] for name in ("PR-A", "PR-B", "PR-C")],
                          ["cancelled", "cancelled", "required-running"])
         self.assertEqual(states["A"], "extended-running")
+        arrive("PR-ready", event("f" * 40, pull_request=99, action="ready_for_review"))
+        self.assertEqual(states["PR-C"], "cancelled")
+        self.assertEqual(states["PR-ready"], "required-running")
+        arrive("PR-draft", event("f" * 40, pull_request=99, action="converted_to_draft"))
+        self.assertEqual(states["PR-ready"], "cancelled")
 
     def test_analysis_and_documentation_selection_follows_consumers(self):
         script = yaml.safe_load(WORKFLOW.read_text())["jobs"]["changes"]["steps"][1]["run"]
