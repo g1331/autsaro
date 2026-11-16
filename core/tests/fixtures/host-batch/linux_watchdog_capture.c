@@ -9,7 +9,8 @@
 #include <sys/prctl.h>
 #include <unistd.h>
 
-enum { CAPTURE_SETUP_FAILED = 126 };
+enum { CAPTURE_NO_CLOSE = -1, CAPTURE_SETUP_FAILED = 126 };
+static int capture_first_reason = CAPTURE_NO_CLOSE;
 static int capture_reason;
 static volatile uint64_t capture_freeze_ns;
 
@@ -20,8 +21,14 @@ void __real_Ecu_TargetAbortNative(StatusType reason);
 
 static void stop_before_close(StatusType error)
 {
-    if (error == E_OS_STATE) {
-        __atomic_store_n(&capture_reason, (int)error, __ATOMIC_SEQ_CST);
+    int expected = CAPTURE_NO_CLOSE;
+    (void)__atomic_compare_exchange_n(
+        &capture_first_reason, &expected, (int)error, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    const int first = __atomic_load_n(&capture_first_reason, __ATOMIC_SEQ_CST);
+    /* Normal close can elicit secondary STATE requests from exiting actors.
+     * Once a failing close starts, every later caller must stop before delegation. */
+    if (first == E_OS_STATE) {
+        __atomic_store_n(&capture_reason, first, __ATOMIC_SEQ_CST);
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
             _exit(CAPTURE_SETUP_FAILED);
