@@ -492,6 +492,30 @@ class AcceptanceTests(unittest.TestCase):
             "locations": [{"file": self.sdk_name, "line": "1", "column": "9"}]}]
         self.bind_sdk()
 
+    def test_baseline_sdk_sites_follow_source_revision_without_accepting_current_drift(self):
+        self.sdk_inputs()
+        historical = (self.root / c_acceptance.SDK).read_bytes()
+        self.sdk_record["sites"][0]["line"] = 3
+        self.write_sdk_record()
+        current = self.evaluate()
+        self.assertEqual(current["status"], "error")
+        self.assertTrue(any(row["reason"] == "SDK integration site changed: " + self.sdk_name + ":3"
+                            for row in current["objects"]))
+        with patch.object(c_acceptance.subprocess, "check_output", return_value=historical) as git:
+            previous = c_acceptance.evaluate(self.summary, self.project, root=self.root, sdk_revision="parent")
+            self.assertEqual(previous["status"], "blocked", previous["objects"])
+            self.assertEqual(previous["sdkSourceRevision"], "parent")
+            self.assertFalse(any(row["kind"] == "execution" for row in previous["objects"]))
+            git.assert_called_with(["git", "show", "parent:" + c_acceptance.SDK], cwd=self.root)
+            identity = c_acceptance.input_identity(self.summary, self.project, root=self.root, sdk_revision="parent")
+            self.assertEqual(previous["inputIdentity"], identity)
+        changed = historical.replace(b'"line": 1, "symbol"', b'"line": 3, "symbol"')
+        self.assertNotEqual(changed, historical)
+        with patch.object(c_acceptance.subprocess, "check_output", return_value=changed):
+            self.assertNotEqual(identity, c_acceptance.input_identity(
+                self.summary, self.project, root=self.root, sdk_revision="parent"))
+        self.assertEqual(self.evaluate()["status"], "error")
+
     def write_sdk_record(self):
         (self.root / c_acceptance.SDK).write_text(
             "## 当前集成义务与类别处置\n<!-- sdk-integration-records-begin -->\n"

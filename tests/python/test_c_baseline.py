@@ -37,6 +37,19 @@ class BaselineReuseTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "tool failure"):
             c_baseline.main()
 
+    def test_raw_receipt_refuses_acceptance_execution_error_on_both_sides(self):
+        for status in ("error", None, "unknown"):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+                root = Path(temporary)
+                summary, _project, candidate, compiler = self.fixture(root)
+                self.patches(stack, root, summary, compiler)
+                summary["projectAcceptance"]["status"] = status
+                (candidate / "summary.json").write_text(json.dumps(summary))
+                with self.assertRaisesRegex(ValueError, "project acceptance execution failed"):
+                    c_baseline.record(candidate, "head", "windows-x64-controlled-v1", "standard-ecu")
+                self.assertFalse((candidate / "analysis-identity.json").exists())
+                self.assertFalse((candidate / "scope-input.json").exists())
+
     def fixture(self, root):
         helper = comparison_tests.CComparisonTests()
         summary, project, candidate, _baseline = helper.runtime_fixture(root / "fixture")
@@ -181,7 +194,7 @@ class BaselineReuseTests(unittest.TestCase):
 
                     output = root / ("fresh-" + field)
 
-                    def fresh(actual_project, target, result, output=output):
+                    def fresh(actual_project, target, result, output=output, **kwargs):
                         self.assertEqual((actual_project, target, result),
                                          (project, "linux", output))
                         result.mkdir()

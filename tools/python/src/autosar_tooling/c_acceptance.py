@@ -193,7 +193,8 @@ def _producer_inputs(names, root: Path, revision: str | None, windows: bool) -> 
 
 
 def input_identity(summary: dict, project: Path, *, root: Path = ROOT,
-                   producer_revision: str | None = None, matrix_scope: dict | None = None) -> str:
+                   producer_revision: str | None = None, matrix_scope: dict | None = None,
+                   sdk_revision: str | None = None) -> str:
     """Hash the analyzed copy, including final patched kernel and application bytes.
 
     The caller verifies the original seal and semantic inputs before and after analysis.
@@ -237,6 +238,8 @@ def input_identity(summary: dict, project: Path, *, root: Path = ROOT,
             ("sdk", "compiler", "defines", "libraries", "analysisCode", "addonRuntime")):
         raise ValueError("Assessment semantic inputs incomplete")
     return _hash({**({"scopeTargetHeaders": matrix_scope["targetHeaders"]} if matrix_scope is not None else {}),
+                  **({"sdkSourceRecords": _sdk_records(root, sdk_revision)}
+                     if sdk_revision is not None else {}),
                   "version": 2, "plan": plan, "target": target,
                   "originalBswSources": metadata["originalBswSources"],
                   "producerInputs": producers,
@@ -618,14 +621,12 @@ def sdk_identity(summary: dict, project: Path, root: Path = ROOT,
     return evidence_identity(summary, project, "sdk-integration", root, matrix_scope=matrix_scope)
 
 
-def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
-                   kernel: tuple | None, *, in_scope_only: bool = False,
-                   headers: set[str] | None = None) -> tuple[dict, list[dict]]:
-    """Check the exact SDK integration records, independently of diagnostic labels."""
+def _sdk_records(root: Path, revision: str | None = None) -> dict:
     path = root / SDK
     if not path.is_file():
         raise ValueError("SDK integration evidence missing")
-    text = path.read_text(encoding="utf-8")
+    text = (path.read_text(encoding="utf-8") if revision is None else
+            subprocess.check_output(["git", "show", revision + ":" + SDK], cwd=root).decode("utf-8"))
     blocks = re.findall(r"<!-- sdk-integration-records-begin -->\s*(.*?)"
                         r"\s*<!-- sdk-integration-records-end -->", text, re.DOTALL)
     if len(blocks) != 1:
@@ -633,9 +634,19 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
     record = json.loads(blocks[0], object_pairs_hook=_pairs)
     if set(record) != {"definitions", "sites"}:
         raise ValueError("Invalid SDK integration records")
+    return record
+
+
+def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
+                   kernel: tuple | None, *, in_scope_only: bool = False,
+                   headers: set[str] | None = None,
+                   sdk_revision: str | None = None) -> tuple[dict, list[dict]]:
+    """Check the exact SDK integration records, independently of diagnostic labels."""
+    # Baseline source consumes its own records, checked against actual SDK provenance.
+    record = _sdk_records(root, sdk_revision)
     scope = summary["scope"]
     c_sdk.validate_sources(summary)
-    headers = {row["path"]: row for row in scope["sdkHeaders"]}
+    sdk_headers = {row["path"]: row for row in scope["sdkHeaders"]}
     origins = {delivered: original
                for original, delivered in metadata["originalBswSources"].items()}
     owners = {row["path"]: row for row in json.loads(
@@ -691,7 +702,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
             # sigaction is a public tag/function pair rather than a macro.
             if (row["symbol"] != "sigaction" or not re.search(r"\bsigaction\b", row["text"])
                     or name not in scope["sdkTranslationUnits"]
-                    or not any(all(headers[header].get(field) == expected[field]
+                    or not any(all(sdk_headers[header].get(field) == expected[field]
                                    for field in ("header", "provider", "version", "sha256"))
                                for header in scope["sdkTranslationUnits"][name])):
                 raise ValueError("SDK sigaction interface provenance differs")
@@ -701,7 +712,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
             for unit, values in uses:
                 for symbol, definition in expected.items():
                     actual = values.get(symbol, {})
-                    header = headers.get(actual.get("file"), {})
+                    header = sdk_headers.get(actual.get("file"), {})
                     if (actual.get("use", "").strip() != row["text"]
                             or actual.get("reference", False)
                             or actual.get("file") not in scope["sdkTranslationUnits"][unit]
@@ -728,7 +739,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                     continue
             for symbol in symbols & definitions.keys():
                 definition = definitions[symbol]
-                if (definition["file"] in headers and not definition.get("reference", False)
+                if (definition["file"] in sdk_headers and not definition.get("reference", False)
                         and (location, symbol) not in locations):
                     raise ValueError(f"SDK integration unrecorded use: {location}:{symbol}")
     result = {}
@@ -759,7 +770,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                 and origin.get("value") == definition["value"]
                 and origin.get("definitionLine") == definition["line"]
                 and origin.get("headerKey") in {
-                    header["key"] for header in headers.values()
+                    header["key"] for header in sdk_headers.values()
                     if header["header"] == definition["header"]}
                 for origin in diagnostic.get("sourceOrigins", [])):
             continue
@@ -924,7 +935,7 @@ def _freertos_positions(
 
 
 def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
-             matrix_scope: dict | None = None) -> dict:
+             matrix_scope: dict | None = None, sdk_revision: str | None = None) -> dict:
     """Assess independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
               "caseId": None, "inputIdentity": None, "contexts": [], "assessmentInputs": None,
@@ -941,7 +952,9 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         if matrix_scope is not None:
             result["scopeMatrix"] = matrix_scope
         result["complianceScope"] = c_comparison.scope_statistics(summary, headers=headers)
-        identity = input_identity(summary, project, root=root, matrix_scope=matrix_scope)
+        identity = input_identity(summary, project, root=root, matrix_scope=matrix_scope, sdk_revision=sdk_revision)
+        if sdk_revision is not None:
+            result["sdkSourceRevision"] = sdk_revision
         result["inputIdentity"] = identity
         result["assessmentInputs"] = _assessment_inputs(summary, root)
         candidates = {}
@@ -1043,7 +1056,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         sdk_reason = "sdk_integration_context_unbound_or_stale"
         if (root / SDK).is_file() or summary["scope"].get("sdkTranslationUnits"):
             sdk_positions, obligations = _sdk_positions(
-                summary, project, metadata, root, kernel, in_scope_only=True, headers=headers)
+                summary, project, metadata, root, kernel, in_scope_only=True, headers=headers, sdk_revision=sdk_revision)
             result["sdkObligations"] = obligations
             result["sdkInputIdentity"] = sdk_identity(summary, project, root, matrix_scope=matrix_scope)
             context = selected.get("sdk-integration")
