@@ -627,6 +627,7 @@ fn finish<'a>(
         "os",
         "os/include",
         "os/src",
+        "os/src/host/common",
         "kernel/include",
     ];
     let mut compiler_flags = vec![
@@ -644,7 +645,7 @@ fn finish<'a>(
         include_paths.extend(["os/src/host/linux", "kernel/portable/ThirdParty/GCC/Posix"]);
         kernel_sources.push("portable/ThirdParty/GCC/Posix/port.c");
     } else {
-        include_paths.push("kernel/portable/MSVC-MingW");
+        include_paths.extend(["os/src/host/windows", "kernel/portable/MSVC-MingW"]);
         kernel_sources.push("portable/MSVC-MingW/port.c");
     }
     kernel_sources.extend(["tasks.c", "list.c", "queue.c"]);

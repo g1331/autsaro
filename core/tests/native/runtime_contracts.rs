@@ -1088,7 +1088,10 @@ fn com_append_only_publication_is_bounded_and_concurrent() {
     if cfg!(target_os = "linux") {
         compiler.arg("-pthread");
     }
-    compiler.args(["integration/src/Ecu_ComRejection.c", "os/src/Os_HostIo.c"]);
+    compiler.args([
+        "integration/src/Ecu_ComRejection.c",
+        "os/src/host/common/Os_HostIo.c",
+    ]);
     compiler.arg(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
