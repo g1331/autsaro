@@ -51,6 +51,26 @@ class CComparisonTests(unittest.TestCase):
             c_comparison.location_scope(scope, {
                 "file": "integration/include/Private.h", "line": "1"})
 
+    def test_source_tree_layout_keeps_configuration_checks_with_new_producer_digests(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            summary, project, output, baseline = self.fixture(Path(temporary))
+            old_target = baseline / "project/target.json"
+            old_target.write_text(json.dumps({**json.loads(old_target.read_text()),
+                                              "includePaths": ["."]}))
+            for root in (project, output / "project"):
+                target = json.loads((root / "target.json").read_text())
+                target.update(definitionFingerprint="new definitions", inputSha256="new input",
+                              includePaths=[".", "os/src/host/common"])
+                (root / "target.json").write_text(json.dumps(target))
+            summary["scope"]["includePaths"].append("os/src/host/common")
+            self.assertFalse(compare(summary, project, output, baseline, source_tree=True)["new"])
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                compare(summary, project, output, baseline)
+            target["compilerFlags"] = ["-std=c11"]
+            (project / "target.json").write_text(json.dumps(target))
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                compare(summary, project, output, baseline, source_tree=True)
+
     def fixture(self, root):
         baseline = root / "baseline/sample"
         output = root / "current"

@@ -268,7 +268,8 @@ def compare(
 
         def normalized(value, field=""):
             if isinstance(value, dict):
-                return {key: normalized(item, key) for key, item in value.items()}
+                return {key: normalized(item, key) for key, item in value.items()
+                        if not (source_tree and field == "ruleSetIdentity" and key == "sha256")}
             if isinstance(value, list):
                 items = [normalized(item) for item in value]
                 if source_tree and field == "includePaths":
@@ -299,8 +300,16 @@ def compare(
                for root in (project, output / "project")):
             raise ValueError("Current source seal identity differs")
         # Source bytes may change; the selected target/configuration/link closure may not.
-        if normalized(_read(project / "target.json")) != normalized(
-                mapped(_read(old_root / "target.json"))):
+        def target_configuration(path):
+            value = _read(path / "target.json")
+            if source_tree:
+                # These digests include the producer's source bytes. The complete
+                # selected plan and all remaining target configuration are compared below.
+                value = {key: item for key, item in value.items()
+                         if key not in {"definitionFingerprint", "inputSha256"}}
+            return value
+        if normalized(target_configuration(project)) != normalized(
+                mapped(target_configuration(old_root))):
             raise ValueError("Target/sample configuration differs")
         for field in ("target", "profile", "entries", "compilerFlags", "includePaths",
                       "translationUnits", "supplemental", "patchedKernel"):

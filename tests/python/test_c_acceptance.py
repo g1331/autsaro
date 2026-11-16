@@ -403,9 +403,10 @@ class AcceptanceTests(unittest.TestCase):
         self.assertNotEqual(self.identity(), before)
 
     def sdk_inputs(self):
-        self.sdk_name = "os/src/host/linux/Os_HostLinux.c"
+        # SDK dispositions are tested on a target caller; host providers are now outside scope.
+        self.sdk_name = "os/src/Os_Backend.c"
         self.sdk_text = "handler.sa_sigaction = &park_signal;"
-        original = "runtime/os/src/host/linux/Os_HostLinux.c"
+        original = "runtime/os/src/Os_Backend.c"
         source = (self.sdk_text + "\nstruct sigaction handler = {0};\n").encode()
         path = self.root / original
         path.parent.mkdir(parents=True, exist_ok=True)
