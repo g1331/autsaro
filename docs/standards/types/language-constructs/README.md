@@ -154,5 +154,7 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 [lexical.md](lexical.md#当前输入与核查方法)；声明批次结算 R7.1，表达式批次结算
 R13.1／R13.3／R13.6。[控制流批次](control-flow.md)再结算 15 项；完整 144 项为
 35／3／106。[预处理批次](preprocessing-library.md#第五批的当前预处理输入)再结算 8 项，
-完整 144 项为 43 satisfied、3 not_applicable、98 not_assessed；其中 5 项由 #536 接续。
+当时完整 144 项为 43／3／98，其中 5 项由 #536 接续。
+[库与资源批次](library-resources.md)再结算 28 项，完整 144 项为 71 satisfied、
+3 not_applicable、70 not_assessed；R21.1／R21.2 两项由 #539 接续。
 当前绑定见[声明篇](declarations.md#当前输入重评)。
