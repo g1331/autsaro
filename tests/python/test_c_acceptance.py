@@ -1058,20 +1058,20 @@ class AcceptanceTests(unittest.TestCase):
             "R12.1", "R12.2", "R12.3", "R12.4", "R13.2", "R13.4", "R14.2", "R14.3", "R15.4",
             "R15.6", "R15.7",
             "R17.2", "R17.4", "R17.5", "R17.7", "R17.8", "R18.1", "R18.2", "R18.3", "R18.4",
-            "R18.5", "R18.6", "R18.8", "R19.1", "R20.2", "R20.3", "R20.4", "R20.5", "R20.6",
-            "R20.7", "R20.8", "R20.9", "R20.10", "R20.11", "R20.12", "R20.13", "R20.14", "R21.1",
+            "R18.5", "R18.6", "R18.8", "R19.1", "R20.5",
+            "R20.7", "R20.8", "R20.9", "R20.10", "R21.1",
             "R21.2", "R21.3", "R21.4", "R21.5", "R21.6", "R21.7", "R21.9", "R21.10", "R21.11",
             "R21.12", "R21.13", "R21.14", "R21.15", "R21.16", "R21.17", "R21.18", "R21.19",
             "R21.20", "R21.21", "R22.1", "R22.2", "R22.3", "R22.4", "R22.5", "R22.6", "R22.7",
             "R22.8", "R22.9", "R22.10",
         }
-        self.assertEqual(len(expected_gaps), 106)
+        self.assertEqual(len(expected_gaps), 98)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 106)
+        self.assertEqual(len(objects), 98)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 106)
+        self.assertEqual(len(located), 98)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1092,8 +1092,10 @@ class AcceptanceTests(unittest.TestCase):
         expressions = {"R13.1", "R13.3", "R13.6"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
                         "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7"}
+        preprocessing = {"R20.2", "R20.3", "R20.4", "R20.6", "R20.11", "R20.12",
+                         "R20.13", "R20.14"}
         self.assertEqual(set(satisfied),
-                         lexical | declarations | expressions | control_flow
+                         lexical | declarations | expressions | control_flow | preprocessing
                          | {"R7.1", "R7.3", "R15.5"})
         self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
         for guideline in lexical:
@@ -1197,6 +1199,35 @@ class AcceptanceTests(unittest.TestCase):
             "header": "usr/include/x86_64-linux-gnu/bits/fcntl-linux.h",
             "provider": "libc6-dev", "version": "2.39-0ubuntu8.9",
             "sha256": "8d50bc7737bcc76f42b1f406244acb287bcf0463d180b6b0566d27d1f23b3e98"}})
+
+
+        preprocessing_evidence = {
+            "R20.2": ("satisfied", "header-name", "648", "0017"),
+            "R20.3": ("satisfied", "直接单一", "目标 TU", "间接 include"),
+            "R20.4": ("satisfied", "AMD2.77", "GCC", "扩展"),
+            "R20.5": ("not_assessed", "#536", "Advisory", "active"),
+            "R20.6": ("satisfied", "eTaskGetState", "普通 if", "宏实参"),
+            "R20.7": ("not_assessed", "#536", "完全展开", "ErrorHook"),
+            "R20.8": ("not_assessed", "#536", "未求值", "intmax_t"),
+            "R20.9": ("not_assessed", "#536", "defined(B)", "预定义"),
+            "R20.10": ("not_assessed", "#536", "ARTI_TRACE", "未批准新例外"),
+            "R20.11": ("satisfied", "# parameter ##", "四个 OS", "Arti_Record"),
+            "R20.12": ("satisfied", "每次均只作", "两数值参数", "普通替换"),
+            "R20.13": ("satisfied", "未选分支", "warning", "首 token"),
+            "R20.14": ("satisfied", "TC2.35", "endif 弹栈", "MemMap"),
+        }
+        self.assertEqual(len(preprocessing_evidence), 13)
+        for guideline, (status, *evidence) in preprocessing_evidence.items():
+            with self.subTest(preprocessing=guideline):
+                record = by_id[guideline]
+                self.assertEqual(record["status"], status)
+                self.assertEqual(record["source"]["file"],
+                                 "docs/standards/types/language-constructs/preprocessing-library.md")
+                source = (self.root / record["source"]["file"]).read_text(encoding="utf-8")
+                self.assertTrue(source.splitlines()[record["source"]["line"] - 1].startswith(
+                    "| " + guideline + " |"))
+                for phrase in evidence:
+                    self.assertIn(phrase, record["conclusion"])
 
     def test_real_freertos_user_case_alias_keeps_the_reviewed_local_closure(self):
         context = next(row for row in c_acceptance.contexts(ROOT)
