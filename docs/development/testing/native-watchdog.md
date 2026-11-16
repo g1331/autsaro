@@ -25,6 +25,7 @@ ProcessOwner 可能启动该测试进程的兄弟进程，不满足 Yama 的父�
   generation、actor requested／acknowledged／resumed、角色与 TID，以及当批 `host_watch.started`；
 - `schedstat.jsonl`、`batches.jsonl`：同一单调时基的逐线程 CPU／排队、上下文切换、状态、
   wchan 和进展；`utime_ticks`／`stime_ticks` 使用每行的 `clock_ticks_per_second` 换算；
+  快照同时保存 `sched_schedstats`，关闭或不可读时不能把零排队计数解释为无调度等待；
 - `automatic.json` 的 `budget`：H／S 的 wait、suspend、resume、drain、post 边界调用次数、
   完成次数及 CPU／墙钟累计值；约 20 ms 一次的有界环形记录覆盖失败批次，保留正在等待的
   边界和进入时刻。`exclusive_cpu_ns` 与 `outside_cpu_ns` 对 CPU 作非重叠归属；
