@@ -228,6 +228,12 @@ fn timing_failure_automatically_preserves_budget_and_first_close() {
             );
         }
         assert_eq!(snapshot["globals"]["Os_Closing"], "0");
+        assert!(
+            matches!(snapshot["sched_schedstats"].as_str(), Some("0" | "1"))
+                || snapshot["sched_schedstats"]["error"]
+                    .as_str()
+                    .is_some_and(|error| !error.is_empty())
+        );
         for field in ["mutex_owner", "mutex_depth", "mutex_generation"] {
             assert!(
                 snapshot["gate"][field].is_u64(),

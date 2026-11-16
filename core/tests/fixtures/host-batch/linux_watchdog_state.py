@@ -95,6 +95,10 @@ def automatic_budget():
 
 
 def automatic_state(result):
+    try:
+        result["sched_schedstats"] = Path("/proc/sys/kernel/sched_schedstats").read_text().strip()
+    except OSError as error:
+        result["sched_schedstats"] = {"error": str(error)}
     result["freeze_monotonic_ns"] = int(gdb.parse_and_eval("capture_freeze_ns"))
     result["captured_reason"] = int(gdb.parse_and_eval("capture_reason"))
     if result["captured_reason"] != 7:
