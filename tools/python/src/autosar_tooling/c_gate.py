@@ -213,7 +213,8 @@ def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
                 or summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}):
             raise ValueError(f"Incomplete {side} analysis: {sample}")
         identity = c_acceptance.input_identity(
-            summary, output / "project", producer_revision=parent if side == "baseline" else None)
+            summary, output / "project", producer_revision=parent if side == "baseline" else None,
+            **({"sdk_revision": parent} if side == "baseline" else {}))
         if identity != summary["projectAcceptance"]["inputIdentity"]:
             raise ValueError(f"Transferred {side} analysis inputs changed: {sample}")
         outputs[side] = output
