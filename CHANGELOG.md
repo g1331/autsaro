@@ -79,6 +79,8 @@
 
 ### Fixed
 
+- Windows native stack fatal exit now ends the process with `TerminateProcess` (exit status `E_OS_STACKFAULT`) after the fatal report is written, instead of `ExitProcess`, whose DLL detach notifications could overflow the already exhausted stack and turn exit 13 into `0xC0000005`. Rebuild Windows native consumers; the report bytes and exit status are unchanged (#463)
+
 - Windows native CI retains WER full crash dumps for failed or cancelled jobs; stack and restart test fixtures explicitly enable noninteractive crash reporting while delivered host programs retain their existing reporting policy (#463)
 
 - Linux native waits now use eventfd readiness and mutex unlock generations, preserving the original deadline across interruptions and competing consumers so long HostBatch S3 vectors retain the 5000 ms watchdog without per-tick timer polling. Explicit descriptor bounds preserve the fortified blocking poll entry. Published mutex wait generations and pending-request checks preserve TSan suspend and stop acknowledgements without extending deadlines. Finite event waits use absolute monotonic kernel deadlines so a suspension immediately before polling consumes the original timeout budget. Regenerate and rebuild sealed consumers; public APIs and FreeRTOS identities are unchanged (#473)

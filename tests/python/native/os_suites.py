@@ -1536,6 +1536,59 @@ def verify_arti_elf(binary: Path) -> None:
             sizes.get("Os_ArtiTaskContexts") == 16 * 8, sizes)
 
 
+def build_stack_exit(directory: Path, target: Path) -> Path:
+    """Build the overflow harness beside a DLL whose detach needs more than the VEH stack."""
+    fixture = ROOT / "tests/fixtures/windows_stack_exit.c"
+    binary, _ = build(directory, str(fixture), ("OS_STACK_TESTS",), target=target)
+    run_native(
+        [compiler(), "-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-shared",
+         "-DSTACK_EXIT_DLL", str(fixture), "-o", str(directory / "stack-exit.dll")],
+        check=True,
+    )
+    return binary
+
+
+def check_stack_exit(directory: Path) -> None:
+    """Fatal exit after both controllers overflow must skip DLL detach (Issue #463)."""
+    if _TARGET_ID.get() == "linux-x64-controlled-v1":
+        return
+    directory.mkdir(parents=True, exist_ok=True)
+    fixed_dir = directory / "fixed"
+    fixed_dir.mkdir()
+    fixed = build_stack_exit(fixed_dir, TARGET)
+    healthy = execute(fixed, "healthy-detach")
+    require(healthy["exit"] == 13, healthy)
+    require("STACK_EXIT_DETACH_BEGIN" in healthy["stderr"]
+            and "STACK_EXIT_DETACH_END" in healthy["stderr"], healthy)
+    result = execute(fixed, "double-control-output")
+    require(result["exit"] == 13, result)
+    require("FATAL state=Failed reason=13 controllers_exhausted=1" in result["stderr"], result)
+    require("FAULT role=C exception=C00000FD captured=1 record_complete=1" in result["stderr"], result)
+    require("STACK_EXIT_DETACH" not in result["stderr"], result)
+    # Reverting to ExitProcess runs DLL detach on the exhausted stack and must fail the check.
+    old_target = directory / "old-target"
+    shutil.copytree(TARGET, old_target)
+    source = old_target / "src/host/windows/Os_Stack.c"
+    text = source.read_text(encoding="utf-8")
+    terminate = "(void)TerminateProcess(GetCurrentProcess(), E_OS_STACKFAULT);"
+    require(text.count(terminate) == 2, "stack fatal terminate calls")
+    source.write_bytes(text.replace(terminate, "ExitProcess(E_OS_STACKFAULT);").encode("utf-8"))
+    old_dir = directory / "old"
+    old_dir.mkdir()
+    old = build_stack_exit(old_dir, old_target)
+    try:
+        mutant = run_native([str(old), "double-control-output"], timeout=10,
+                            capture_output=True, text=True)
+    except OwnershipError as error:
+        # A hang in the exhausted-stack exit path also shows the old behavior fails.
+        require("status=timeout" in str(error), str(error))
+    else:
+        status = mutant.returncode & 0xFFFFFFFF
+        require(status != 13 and "STACK_EXIT_DETACH_BEGIN" in mutant.stderr
+                and "STACK_EXIT_DETACH_END" not in mutant.stderr,
+                {"scenario": "old-exit-process", "exit": status, "stderr": mutant.stderr})
+
+
 def check_arti_native(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     task_dir = directory / "tasks"
@@ -2483,6 +2536,7 @@ def run_suite(suite: str, output_directory: Path | None = None) -> None:
                     require(refused["exit"] == 7 and refused["stderr"] == "counter_lookup_guard", refused)
         if suite == "stack":
             check_arti_native(Path(temporary) / "arti-consumers")
+            check_stack_exit(Path(temporary) / "stack-exit")
         if suite == "counter-types":
             headers = Path(temporary) / "public-headers"
             headers.mkdir()
