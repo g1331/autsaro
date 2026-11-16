@@ -262,7 +262,7 @@ fn timing_failure_automatically_preserves_budget_and_first_close() {
                 .map(|phase| phase["exclusive_cpu_ns"].as_u64().unwrap())
                 .sum::<u64>()
                 + budget["outside_cpu_ns"].as_u64().unwrap();
-            if budget["revision"].as_u64().unwrap() % 2 == 0 {
+            if budget["revision"].as_u64().unwrap().is_multiple_of(2) {
                 assert_eq!(attributed, budget["accounted_cpu_ns"].as_u64().unwrap());
             }
             for sample in budget["samples"].as_array().unwrap() {
