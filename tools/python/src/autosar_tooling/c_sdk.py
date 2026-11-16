@@ -254,16 +254,25 @@ def preprocessing(text: str, root: Path, candidates: set[str]) -> dict:
     definitions = {}
     inputs = {}
     contents = {}
+    paths = {}
     filename, number = "", 0
     owned = None
+    origin = ""
     for line in text.splitlines():
         marker = re.fullmatch(r'# (\d+) "((?:[^"\\]|\\.)*)"(?: .*)?', line)
         if marker:
             number = int(marker[1])
             filename = marker[2].replace("\\\\", "\\").replace('\\"', '"')
             owned = None
-            if not filename.startswith("<"):
-                path = Path(filename).resolve()
+            origin = filename
+            if filename and not filename.startswith("<"):
+                # GCC changes provenance at line markers, not at each macro definition.
+                # This snapshot belongs only to this preprocessor output and source tree.
+                if filename not in paths:
+                    paths[filename] = Path(filename).resolve()
+                path = paths[filename]
+                if path.is_relative_to(root):
+                    origin = path.relative_to(root).as_posix()
                 if path.is_relative_to(root) and path.is_file():
                     owned = path
                     if path not in contents:
@@ -271,16 +280,6 @@ def preprocessing(text: str, root: Path, candidates: set[str]) -> dict:
             continue
         definition = re.match(r"#define (\w+)(.*)", line)
         if definition:
-            source = (
-                Path(filename).resolve()
-                if filename and not filename.startswith("<")
-                else None
-            )
-            origin = (
-                source.relative_to(root).as_posix()
-                if source and source.is_relative_to(root)
-                else filename
-            )
             definitions[definition[1]] = {
                 "file": origin,
                 "line": number,

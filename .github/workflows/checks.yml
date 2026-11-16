@@ -618,13 +618,20 @@ jobs:
         id: cppcheck-cache
         with:
           path: build/c-analysis-tools
-          key: cppcheck-${{ runner.os }}-${{ runner.arch }}-${{ env.CACHE_IMAGE }}-e73bf44c3e49686b7495fab352d03a6c6075516b-v1
+          key: >-
+            ${{ format('cppcheck-{0}-{1}-{2}-{3}-{4}', runner.os, runner.arch, env.CACHE_IMAGE,
+            'e73bf44c3e49686b7495fab352d03a6c6075516b',
+            hashFiles('.github/workflows/checks.yml', 'pyproject.toml', 'uv.lock')) }}
       - name: Configure pinned open Cppcheck
         if: steps.cppcheck-cache.outputs.cache-hit != 'true'
-        run: cmake -S build/cppcheck-source -B build/cppcheck-build -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF
+        run: >-
+          uv run --locked cmake -S build/cppcheck-source -B build/cppcheck-build
+          -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF
       - name: Build pinned open Cppcheck
         if: steps.cppcheck-cache.outputs.cache-hit != 'true'
-        run: cmake --build build/cppcheck-build --config Release --target cppcheck --parallel 2
+        run: >-
+          uv run --locked cmake --build build/cppcheck-build
+          --config Release --target cppcheck --parallel 2
       - name: Package analyzer
         if: steps.cppcheck-cache.outputs.cache-hit != 'true'
         shell: python

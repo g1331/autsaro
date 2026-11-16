@@ -1,6 +1,7 @@
 """Keep required CI input selection, coverage and failure propagation safe."""
 
 import ast
+import hashlib
 import json
 import os
 import re
@@ -58,6 +59,78 @@ def concurrency_group(expression, event):
 
 
 class CiSelectionTests(unittest.TestCase):
+    def test_native_package_cache_rechecks_bytes_and_installs_on_hits(self):
+        action = ROOT / ".github/actions/native-analysis-compiler/action.yml"
+        steps = yaml.safe_load(action.read_text())["runs"]["steps"]
+        cache = next(step for step in steps if step.get("id") == "gcc-download-cache")
+        self.assertEqual(cache["with"]["path"], "build/native-gcc/packages")
+        self.assertNotIn("restore-keys", cache["with"])
+        key = cache["with"]["key"]
+        for identity in ("runner.os", "runner.arch", "steps.package-image.outputs.image",
+                         "hashFiles('.github/actions/native-analysis-compiler/action.yml')"):
+            self.assertIn(identity, key)
+        install = next(step for step in steps if step.get("name") == "Install locked native GCC")
+        self.assertNotIn("cache-hit", install["if"])
+        self.assertIn("LocalFileSigLevel = Required", install["run"])
+        # Execute the download/check/install portion, without modifying the host pacman setup.
+        script = install["run"][install["run"].index("mkdir -p build/native-gcc/packages"):]
+        packages = re.findall(r"([0-9a-f]{64})  (\S+\.pkg\.tar\.zst)", script)
+        self.assertEqual(len(packages), 3)
+        for expected, _ in packages:
+            script = script.replace(expected, hashlib.sha256(b"package").hexdigest())
+        # Match the portable Bash fixture: Windows' bare bash starts WSL, not Git Bash.
+        bash = (
+            str(Path(os.environ["ProgramFiles"]) / "Git/bin/bash.exe")
+            if os.name == "nt" else "bash"
+        )
+        for hit, corrupt in (("false", False), ("true", False), ("true", True)):
+            with self.subTest(hit=hit, corrupt=corrupt), \
+                    tempfile.TemporaryDirectory(prefix="gcc cache test ") as temporary:
+                root = Path(temporary)
+                directory = root / "build/native-gcc/packages"
+                directory.mkdir(parents=True)
+                for _, name in packages:
+                    (directory / name).write_bytes(b"package")
+                    (directory / (name + ".sig")).write_text("signature")
+                if corrupt:
+                    (directory / packages[0][1]).write_bytes(b"corrupt")
+                prelude = (
+                    'curl() { echo download >> "$TRACE"; }\n'
+                    'pacman() { echo "pacman $*" >> "$TRACE"; }\n'
+                )
+                trace = root / "trace"
+                result = subprocess.run([bash, "--noprofile", "--norc", "-eo", "pipefail",
+                                         "-c", prelude + script],
+                                        check=False, cwd=root,
+                                        env={**os.environ, "PACKAGE_CACHE_HIT": hit,
+                                             "TRACE": trace.as_posix()},
+                                        capture_output=True, text=True)
+                diagnostics = (
+                    f"shell={bash}, returncode={result.returncode}\n"
+                    + result.stdout + result.stderr
+                )
+                calls = trace.read_text() if trace.exists() else ""
+                self.assertEqual(result.returncode == 0, not corrupt, diagnostics)
+                self.assertEqual(calls.count("download"), 6 if hit == "false" else 0, diagnostics)
+                self.assertEqual("pacman --noconfirm -U" in calls, not corrupt, diagnostics)
+                if not corrupt:
+                    self.assertTrue(all(name in calls for _, name in packages))
+
+    def test_cppcheck_cache_binds_build_recipe_and_locked_cmake(self):
+        steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["c-analysis-prepare"]["steps"]
+        cache = next(step for step in steps if step.get("id") == "cppcheck-cache")
+        key = cache["with"]["key"]
+        for identity in ("runner.os", "runner.arch", "env.CACHE_IMAGE",
+                         ".github/workflows/checks.yml", "pyproject.toml", "uv.lock"):
+            self.assertIn(identity, key)
+        source = next(step for step in steps if step.get("with", {}).get("repository") ==
+                      "cppcheck-opensource/cppcheck")
+        self.assertIn(source["with"]["ref"], key)
+        self.assertNotIn("restore-keys", cache["with"])
+        for name in ("Configure pinned open Cppcheck", "Build pinned open Cppcheck"):
+            command = next(step["run"] for step in steps if step.get("name") == name)
+            self.assertTrue(command.startswith("uv run --locked cmake "), command)
+
     def test_draft_and_ready_events_select_checks_and_required_result(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())
         events = workflow.get("on", workflow.get(True))["pull_request"]["types"]
