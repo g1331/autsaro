@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import signal
@@ -131,14 +132,21 @@ class BoundedProcessTests(unittest.TestCase):
                     directory = owner.directory
                     spec = ProcessSpec.seconds(
                         [sys.executable, "-c", "print('authenticated-ready')"],
-                        root, 10, root, "owner-ready",
+                        root,
+                        10,
+                        root,
+                        "owner-ready",
                     )
                     result = OwnedProcess(spec, owner=owner).wait()
                     self.assertTrue(result.success)
-                    self.assertEqual(result.stdout.read_text().strip(), "authenticated-ready")
+                    self.assertEqual(
+                        result.stdout.read_text().strip(), "authenticated-ready"
+                    )
                 self.assertFalse(directory.exists())
 
-    @unittest.skipUnless(sys.platform == "linux", "Linux directory-fd socket addressing")
+    @unittest.skipUnless(
+        sys.platform == "linux", "Linux directory-fd socket addressing"
+    )
     def test_long_temporary_directory_runs_and_releases_the_socket_lease(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -153,11 +161,16 @@ class BoundedProcessTests(unittest.TestCase):
                     self.assertGreater(len(os.fsencode(directory / "owner.sock")), 107)
                     spec = ProcessSpec.seconds(
                         [sys.executable, "-c", "print('long-path-owner')"],
-                        root, 10, root, "long-path-owner",
+                        root,
+                        10,
+                        root,
+                        "long-path-owner",
                     )
                     result = OwnedProcess(spec, owner=owner).wait()
                     self.assertTrue(result.success)
-                    self.assertEqual(result.stdout.read_text().strip(), "long-path-owner")
+                    self.assertEqual(
+                        result.stdout.read_text().strip(), "long-path-owner"
+                    )
                 self.assertFalse(directory.exists())
                 with self.assertRaises(OSError):
                     os.fstat(descriptor)
@@ -291,6 +304,107 @@ class BoundedProcessTests(unittest.TestCase):
                 run_bounded(spec)
             _assert_closed(self, _records(path, 3))
 
+    @unittest.skipUnless(os.name == "nt", "Windows member identity and thread evidence")
+    def test_windows_orphan_identity_survives_image_access_denial(self):
+        from ecu_tools import windows_job
+
+        def require_identity(records, pid):
+            before = next(
+                record for record in records if record["phase"] == "before_stop"
+            )
+            self.assertTrue(before["list_complete"])
+            self.assertIsNone(before["system_snapshot_error"])
+            value = next(value for value in before["members"] if value["pid"] == pid)
+            self.assertEqual(value["wait"], 258)
+            self.assertTrue(value["in_job"])
+            self.assertGreater(value["created_100ns"], 0)
+            extra = value["system_snapshot"]
+            self.assertEqual(extra["created_100ns"], value["created_100ns"])
+            self.assertIn("python", extra["image"].lower())
+            self.assertGreater(extra["parent_pid"], 0)
+            self.assertTrue(
+                any(
+                    thread["state"] == 5 and isinstance(thread["wait_reason"], int)
+                    for thread in extra["threads"]
+                )
+            )
+            return value
+
+        def denied(*args):
+            import ctypes
+
+            ctypes.set_last_error(5)
+            return 0
+
+        # Keep the real process/Job topology. Only the failing image API is substituted.
+        # A second real run deletes the system collector and must fail this same oracle.
+        for collect in (True, False):
+            with self.subTest(collect=collect), tempfile.TemporaryDirectory() as name:
+                spec, path = self._spec(Path(name), "parent-first")
+                actual = windows_job.system_processes
+                with patch.object(
+                    windows_job.kernel, "QueryFullProcessImageNameW", denied
+                ), patch.object(
+                    windows_job,
+                    "system_processes",
+                    actual if collect else dict,
+                ):
+                    process = OwnedProcess(spec)
+                    result = process.wait()
+                self.assertEqual(result.status, "orphaned_members")
+                self.assertEqual(result.exit_code, 0)
+                self.assertTrue(result.descendants_reclaimed)
+                pids = _records(path, 3)
+                records = [
+                    json.loads(line)
+                    for line in result.stderr.with_name("windows-job.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                ]
+                child_pid = pids[1][1]
+                if collect:
+                    value = require_identity(records, child_pid)
+                    self.assertEqual(value["image_error"], 5)
+                    self.assertIsNone(value["image"])
+                    if directory := os.environ.get("AUTOSAR_JOB_EVIDENCE_DIRECTORY"):
+                        proof = (
+                            Path(directory) / f"control-{os.getpid()}-{child_pid}.json"
+                        )
+                        proof.write_text(json.dumps(value), encoding="utf-8")
+                else:
+                    with self.assertRaises(KeyError):
+                        require_identity(records, child_pid)
+                _assert_closed(self, pids)
+
+    @unittest.skipUnless(os.name == "nt", "Windows normal-path evidence overhead")
+    def test_windows_success_keeps_full_evidence_off_disk(self):
+        from ecu_tools import windows_job
+
+        elapsed = {}
+        # Alternate collection on/off in one runner; identical executable and wait contract.
+        for enabled in (False, True, False, True):
+            with tempfile.TemporaryDirectory() as name:
+                spec, _ = self._spec(Path(name), "normal")
+                started = time.perf_counter()
+                if enabled:
+                    result = OwnedProcess(spec).wait()
+                else:
+                    with (
+                        patch.object(windows_job.Evidence, "observe"),
+                        patch.object(windows_job.Evidence, "finish"),
+                    ):
+                        result = OwnedProcess(spec).wait()
+                elapsed.setdefault(str(enabled), []).append(
+                    time.perf_counter() - started
+                )
+                self.assertTrue(result.success)
+                self.assertFalse(result.stderr.with_name("windows-job.jsonl").exists())
+        print("Windows Job normal-path elapsed_s=" + json.dumps(elapsed), flush=True)
+        if directory := os.environ.get("AUTOSAR_JOB_EVIDENCE_DIRECTORY"):
+            (Path(directory) / "overhead.json").write_text(
+                json.dumps(elapsed), encoding="utf-8"
+            )
+
     def test_tool_completion_reclaims_tree_without_changing_root_exit(self) -> None:
         for kind, code in (("parent-first", 0), ("parent-first-fail", 7)):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as name:
@@ -340,22 +454,29 @@ class BoundedProcessTests(unittest.TestCase):
         record = Path("/proc/owner/task/thread/children")
         for stage in ("stat", "environ"):
             with self.subTest(stage=stage):
+
                 def read_child(path, missing=stage):
                     if path.name == missing:
-                        raise FileNotFoundError("sibling exited after the child snapshot")
+                        raise FileNotFoundError(
+                            "sibling exited after the child snapshot"
+                        )
                     return b"123 (sibling) R 1 999"
 
-                with patch.object(Path, "glob", return_value=[record]), patch.object(
-                    Path, "read_text", return_value="123"
-                ), patch("ecu_tools.owner.os.getpgid", return_value=999), patch.object(
-                    Path, "read_bytes", read_child
+                with (
+                    patch.object(Path, "glob", return_value=[record]),
+                    patch.object(Path, "read_text", return_value="123"),
+                    patch("ecu_tools.owner.os.getpgid", return_value=999),
+                    patch.object(Path, "read_bytes", read_child),
                 ):
                     self.assertFalse(_escaped_child("closing", 456, {123}))
 
-        with patch.object(Path, "glob", return_value=[record]), patch.object(
-            Path, "read_text", return_value="123"
-        ), patch("ecu_tools.owner.os.getpgid", return_value=999), patch.object(
-            Path, "read_bytes", side_effect=PermissionError("unobservable child")
+        with (
+            patch.object(Path, "glob", return_value=[record]),
+            patch.object(Path, "read_text", return_value="123"),
+            patch("ecu_tools.owner.os.getpgid", return_value=999),
+            patch.object(
+                Path, "read_bytes", side_effect=PermissionError("unobservable child")
+            ),
         ):
             self.assertTrue(_escaped_child("closing", 456, {123}))
 
@@ -443,7 +564,9 @@ class BoundedProcessTests(unittest.TestCase):
                     )
                     with patch(
                         "ecu_tools.owner._escaped_child",
-                        side_effect=lambda scope, *_, identity=first.identity: scope == identity,
+                        side_effect=lambda scope, *_, identity=first.identity: (
+                            scope == identity
+                        ),
                     ):
                         response = registry.dispatch(
                             {"token": "token", "op": "shutdown"}

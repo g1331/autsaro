@@ -59,6 +59,8 @@
 
 ### Added
 
+- Windows command failures now retain inner Python Job member identities, thread waits and ETW-correlated process lifetimes alongside Rust captures; successful commands keep full Job reports off disk (#534)
+
 - Local verification can select checks from working-tree changes with `verify --scope changed`, sharing CI classification and fresh analysis samples (#475)
 
 - Project source acceptance independently checks the 144 checker-covered guidelines outside the fixed eleven limitations; missing manual evidence and stale assessment contexts remain explicit blockers (#459)

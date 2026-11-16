@@ -224,6 +224,31 @@ fn assert_job_evidence(result: &super::ProcessResult, orphan_pids: &[u32]) {
         assert_eq!(member["in_job"], true);
         assert_eq!(member["wait"], 258);
         assert!(member["created_100ns"].as_u64().unwrap() > 0);
+        assert!(
+            member["image"]
+                .as_str()
+                .unwrap()
+                .to_lowercase()
+                .contains("python")
+        );
+        let extra = &member["system_snapshot"];
+        assert_eq!(extra["created_100ns"], member["created_100ns"]);
+        assert!(extra["parent_pid"].as_u64().unwrap() > 0);
+        assert!(
+            extra["image"]
+                .as_str()
+                .unwrap()
+                .to_lowercase()
+                .contains("python")
+        );
+        assert!(!extra["threads"].as_array().unwrap().is_empty());
+        assert!(
+            extra["threads"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|thread| thread["state"] == 5 && thread["wait_reason"].is_u64())
+        );
     }
     let stopped = records
         .iter()
@@ -274,7 +299,7 @@ fn normal_and_nonzero_preserve_logs_and_exit_code() {
     assert!(!result.descendants_reclaimed);
     assert_descendants_gone(&fixture, 3);
     #[cfg(windows)]
-    assert_job_evidence(&result, &[]);
+    assert!(!result.stderr.with_file_name("windows-job.jsonl").exists());
 
     let result = run_bounded(fixture.spec("fail", Duration::from_secs(8))).unwrap_err();
     assert!(result.to_string().contains("exit_code=Some(7)"), "{result}");
@@ -358,20 +383,22 @@ fn tool_completion_reclaims_members_preserves_exit_and_keeps_sibling_alive() {
         #[cfg(windows)]
         {
             assert_job_evidence(&result, &fixture.descendants());
-            let sibling_records: Vec<serde_json::Value> =
-                std::fs::read_to_string(sibling.stdout_path().with_file_name("windows-job.jsonl"))
-                    .unwrap()
-                    .lines()
-                    .map(|line| serde_json::from_str(line).unwrap())
-                    .collect();
-            assert_ne!(
-                job_evidence(&result)[0]["job_handle"],
-                sibling_records[0]["job_handle"]
+            assert!(
+                !sibling
+                    .stdout_path()
+                    .with_file_name("windows-job.jsonl")
+                    .exists()
             );
         }
         assert_descendants_gone(&fixture, 3);
         assert!(sibling_pids.iter().all(|&pid| alive(pid)));
-        assert_eq!(sibling.cancel().unwrap().status, ProcessStatus::Cancelled);
+        let cancelled = sibling.cancel().unwrap();
+        assert_eq!(cancelled.status, ProcessStatus::Cancelled);
+        #[cfg(windows)]
+        assert_ne!(
+            job_evidence(&result)[0]["job_handle"],
+            job_evidence(&cancelled)[0]["job_handle"]
+        );
         assert_pids_gone(&sibling_pids);
     }
 }
@@ -600,7 +627,6 @@ fn job_evidence_write_failure_preserves_orphan_rejection_and_reaping() {
         .spawn(fixture.spec("parent-first", Duration::from_secs(8)), None)
         .unwrap();
     let evidence = process.stdout_path().with_file_name("windows-job.jsonl");
-    std::fs::remove_file(&evidence).unwrap();
     std::fs::create_dir(&evidence).unwrap();
     let result = process.wait().unwrap();
     assert_eq!(result.status, ProcessStatus::OrphanedMembers);

@@ -7,8 +7,10 @@ only initial thread is resumed. No taskkill process or shell string is used.
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import subprocess
+import sys
 import time
 from ctypes import wintypes as w
 from pathlib import Path
@@ -100,6 +102,272 @@ if os.name == "nt":
     kernel.CloseHandle.restype = w.BOOL
 
 
+class ProcessIds(ctypes.Structure):
+    _fields_ = [
+        ("assigned", w.DWORD),
+        ("listed", w.DWORD),
+        ("ids", ctypes.c_size_t * 128),
+    ]
+
+
+class SystemThread(ctypes.Structure):
+    # SYSTEM_THREAD_INFORMATION, winternl.h. WaitReason is valid in state 5.
+    _fields_ = [
+        ("times", ctypes.c_int64 * 3),
+        ("wait_time", w.DWORD),
+        ("start", w.LPVOID),
+        ("pid", ctypes.c_size_t),
+        ("tid", ctypes.c_size_t),
+        ("priority", w.LONG),
+        ("base_priority", w.LONG),
+        ("switches", w.DWORD),
+        ("state", w.DWORD),
+        ("reason", w.DWORD),
+    ]
+
+
+class SystemProcess(ctypes.Structure):
+    # SYSTEM_PROCESS_INFORMATION through the fixed-size header (winternl.h).
+    _fields_ = [
+        ("next", w.DWORD),
+        ("threads", w.DWORD),
+        ("reserved1", ctypes.c_byte * 24),
+        ("created", ctypes.c_int64),
+        ("times", ctypes.c_int64 * 2),
+        ("name_length", w.USHORT),
+        ("name_maximum", w.USHORT),
+        ("name", w.LPWSTR),
+        ("priority", w.LONG),
+        ("pid", ctypes.c_size_t),
+        ("parent", ctypes.c_size_t),
+        ("handles", w.DWORD),
+        ("session", w.DWORD),
+        ("reserved3", ctypes.c_size_t),
+        ("sizes", ctypes.c_size_t * 12),
+        ("reserved7", ctypes.c_int64 * 6),
+    ]
+
+
+def system_processes() -> dict[int, dict]:
+    """One handle-free process/thread snapshot, only at failed closure."""
+    ntdll = ctypes.WinDLL("ntdll")
+    query = ntdll.NtQuerySystemInformation
+    query.argtypes = [ctypes.c_int, w.LPVOID, w.ULONG, ctypes.POINTER(w.ULONG)]
+    query.restype = w.LONG
+    # One bounded buffer avoids extending cleanup with an unbounded resize loop.
+    buffer = ctypes.create_string_buffer(16 * 1024 * 1024)
+    length = w.ULONG()
+    status = query(5, buffer, len(buffer), ctypes.byref(length))
+    if status < 0:
+        raise OSError(f"NtQuerySystemInformation status=0x{status & 0xFFFFFFFF:08x}")
+    result = {}
+    offset = 0
+    while offset + ctypes.sizeof(SystemProcess) <= length.value:
+        info = SystemProcess.from_buffer(buffer, offset)
+        end = offset + info.next if info.next else length.value
+        thread_offset = offset + ctypes.sizeof(SystemProcess)
+        if (
+            end > length.value
+            or thread_offset + info.threads * ctypes.sizeof(SystemThread) > end
+        ):
+            raise OSError("Truncated SYSTEM_PROCESS_INFORMATION")
+        threads = []
+        for index in range(info.threads):
+            thread = SystemThread.from_buffer(
+                buffer, thread_offset + index * ctypes.sizeof(SystemThread)
+            )
+            threads.append(
+                {
+                    "tid": thread.tid,
+                    "state": thread.state,
+                    "wait_reason": thread.reason if thread.state == 5 else None,
+                    "created_100ns": thread.times[2],
+                }
+            )
+        result[info.pid] = {
+            "created_100ns": info.created,
+            "parent_pid": info.parent,
+            "image": ctypes.wstring_at(info.name, info.name_length // 2)
+            if info.name_length
+            else None,
+            "threads": threads,
+        }
+        if not info.next:
+            break
+        offset = end
+    return result
+
+
+if os.name == "nt":
+    kernel.GetProcessTimes.argtypes = [w.HANDLE] + [ctypes.POINTER(w.FILETIME)] * 4
+    kernel.GetProcessTimes.restype = w.BOOL
+    kernel.WaitForSingleObject.argtypes = [w.HANDLE, w.DWORD]
+    kernel.WaitForSingleObject.restype = w.DWORD
+    kernel.QueryFullProcessImageNameW.argtypes = [
+        w.HANDLE,
+        w.DWORD,
+        w.LPWSTR,
+        ctypes.POINTER(w.DWORD),
+    ]
+    kernel.QueryFullProcessImageNameW.restype = w.BOOL
+    kernel.IsProcessInJob.argtypes = [w.HANDLE, w.HANDLE, ctypes.POINTER(w.BOOL)]
+    kernel.IsProcessInJob.restype = w.BOOL
+    kernel.GetExitCodeProcess.argtypes = [w.HANDLE, ctypes.POINTER(w.DWORD)]
+    kernel.GetExitCodeProcess.restype = w.BOOL
+
+
+def member(pid: int, job: int) -> dict:
+    handle = kernel.OpenProcess(0x101000, False, pid)
+    if not handle:
+        return {"pid": pid, "open_error": ctypes.get_last_error()}
+    try:
+        wait = kernel.WaitForSingleObject(handle, 0)
+        wait_error = ctypes.get_last_error() if wait == 0xFFFFFFFF else None
+        times = [w.FILETIME() for _ in range(4)]
+        times_ok = kernel.GetProcessTimes(handle, *(ctypes.byref(t) for t in times))
+        times_error = None if times_ok else ctypes.get_last_error()
+        values = [(t.dwHighDateTime << 32) | t.dwLowDateTime for t in times]
+        image = ctypes.create_unicode_buffer(32768)
+        size = w.DWORD(len(image))
+        image_ok = kernel.QueryFullProcessImageNameW(
+            handle, 0, image, ctypes.byref(size)
+        )
+        image_error = None if image_ok else ctypes.get_last_error()
+        in_job = w.BOOL()
+        membership_ok = kernel.IsProcessInJob(handle, job, ctypes.byref(in_job))
+        membership_error = None if membership_ok else ctypes.get_last_error()
+        code = w.DWORD()
+        exit_ok = kernel.GetExitCodeProcess(handle, ctypes.byref(code))
+        exit_error = None if exit_ok else ctypes.get_last_error()
+        return {
+            "pid": pid,
+            "created_100ns": values[0] if times_ok else None,
+            "exited_100ns": values[1] if times_ok and wait == 0 else None,
+            "kernel_100ns": values[2] if times_ok else None,
+            "user_100ns": values[3] if times_ok else None,
+            "times_error": times_error,
+            "wait": wait,
+            "wait_error": wait_error,
+            "image": image.value if image_ok else None,
+            "image_error": image_error,
+            "in_job": bool(in_job.value) if membership_ok else None,
+            "membership_error": membership_error,
+            "exit_code": code.value if exit_ok else None,
+            "exit_error": exit_error,
+        }
+    finally:
+        kernel.CloseHandle(handle)
+
+
+class Evidence:
+    def __init__(self, path: Path):
+        self.path = path
+        self.started = time.monotonic_ns()
+        self.records: list[dict] = []
+        self.identities: set[tuple[int, int]] = set()
+
+    def observe(self, phase: str, pid: int, job: int) -> None:
+        # Diagnostic errors must never prevent the owned Job's cleanup.
+        try:
+            accounting = Accounting()
+            accounting_ok = kernel.QueryInformationJobObject(
+                job, 1, ctypes.byref(accounting), ctypes.sizeof(accounting), None
+            )
+            accounting_error = None if accounting_ok else ctypes.get_last_error()
+            ids = ProcessIds()
+            ok = kernel.QueryInformationJobObject(
+                job, 3, ctypes.byref(ids), ctypes.sizeof(ids), None
+            )
+            list_error = None if ok else ctypes.get_last_error()
+            members = (
+                [member(int(value), job) for value in ids.ids[: min(ids.listed, 128)]]
+                if ok
+                else []
+            )
+            snapshot = {}
+            snapshot_error = None
+            if phase == "before_stop" and members:
+                try:
+                    snapshot = system_processes()
+                except OSError as error:
+                    snapshot_error = str(error)
+            for value in members:
+                created = value.get("created_100ns")
+                if created is not None:
+                    self.identities.add((value["pid"], created))
+                extra = snapshot.get(value["pid"])
+                if extra and extra["created_100ns"] == created:
+                    value["system_snapshot"] = extra
+            prior = []
+            if phase == "stopped":
+                for identity, created in sorted(self.identities):
+                    current = member(identity, job)
+                    prior.append(
+                        {
+                            "pid": identity,
+                            "expected_created_100ns": created,
+                            "same_identity": current.get("created_100ns") == created,
+                            "current": current,
+                        }
+                    )
+            self.records.append(
+                {
+                    "schema": "windows-job-v2",
+                    "phase": phase,
+                    "elapsed_us": (time.monotonic_ns() - self.started) // 1000,
+                    "owner_pid": os.getpid(),
+                    "root_pid": pid,
+                    "job_handle": hex(job),
+                    "root": member(pid, job),
+                    "members": members,
+                    "accounting_error": accounting_error,
+                    "accounting": {
+                        "active": accounting.active,
+                        "total": accounting.total,
+                        "terminated_by_limit": accounting.terminated,
+                        "times_100ns": list(accounting.times),
+                    },
+                    "assigned": ids.assigned,
+                    "listed": ids.listed,
+                    "list_error": list_error,
+                    "list_complete": bool(ok)
+                    and ids.assigned == ids.listed
+                    and ids.listed <= 128,
+                    "system_snapshot_error": snapshot_error,
+                    "previously_observed": prior,
+                }
+            )
+        except (OSError, ValueError) as error:
+            self.records.append({"phase": phase, "observation_error": str(error)})
+
+    def finish(self, status: str, code: int | None, reclaimed: bool) -> None:
+        if status == "exited" and code == 0 and not reclaimed:
+            return
+        self.records.append(
+            {
+                "schema": "windows-job-v2",
+                "phase": "result",
+                "status": status,
+                "exit_code": code,
+                "descendants_reclaimed": reclaimed,
+            }
+        )
+        try:
+            data = "".join(json.dumps(record) + "\n" for record in self.records)
+            self.path.write_text(data, encoding="utf-8")
+            if directory := os.environ.get("AUTOSAR_JOB_EVIDENCE_DIRECTORY"):
+                target = Path(directory)
+                target.mkdir(parents=True, exist_ok=True)
+                (target / f"python-{os.getpid()}-{self.started}.jsonl").write_text(
+                    data, encoding="utf-8"
+                )
+        except OSError as error:
+            print(
+                f"Windows Job evidence write failed path={self.path}: {error}",
+                file=sys.stderr,
+            )
+
+
 def _check(value: int, operation: str) -> int:
     if not value or value == ctypes.c_void_p(-1).value:
         raise ctypes.WinError(ctypes.get_last_error(), operation)
@@ -143,6 +411,7 @@ class WindowsJob:
         self.child: subprocess.Popen[bytes] | None = None
         self.closed = False
         self.assigned = False
+        self.evidence = Evidence(stderr.with_name("windows-job.jsonl"))
         try:
             limits = ExtendedLimits()
             limits.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
@@ -179,6 +448,7 @@ class WindowsJob:
                 self.assigned = True
             finally:
                 kernel.CloseHandle(process)
+            self.evidence.observe("assigned", self.pid, job)
             _resume(self.child.pid)
         except BaseException:
             self.close()
@@ -211,25 +481,35 @@ class WindowsJob:
             if code is not None:
                 # The active count can lag a reaped cooperative exit briefly.
                 grace = min(deadline_ns, time.monotonic_ns() + 200_000_000)
+                self.evidence.observe("root_exited", self.pid, self.job)
                 while self._active() and time.monotonic_ns() < grace:
                     time.sleep(0.01)
                 orphaned = bool(self._active())
                 self.close()
-                status = "orphaned_members" if orphaned and not close_tree_on_exit else "exited"
+                status = (
+                    "orphaned_members"
+                    if orphaned and not close_tree_on_exit
+                    else "exited"
+                )
+                self.evidence.finish(status, code, orphaned)
                 return status, code, orphaned
             time.sleep(0.01)
         self.close()
+        self.evidence.finish("timeout", self.poll(), False)
         return "timeout", self.poll(), False
 
     def close(self) -> None:
         if self.closed:
             return
         self.closed = True
+        cleanup_completed = False
         try:
             # A failed assignment leaves a suspended process outside the Job.
             # It is still ours and must be terminated through its own handle.
             if self.child is not None and not self.assigned:
                 self.child.kill()
+            if self.child is not None and self.assigned:
+                self.evidence.observe("before_stop", self.pid, self.job)
             _check(kernel.TerminateJobObject(self.job, 1), "Terminate private job")
             end = time.monotonic() + 5
             while self._active():
@@ -240,5 +520,9 @@ class WindowsJob:
                 time.sleep(0.01)
             if self.child is not None:
                 self.child.wait(timeout=5)
+                self.evidence.observe("stopped", self.pid, self.job)
+            cleanup_completed = True
         finally:
+            if not cleanup_completed:
+                self.evidence.finish("cleanup_unconfirmed", self.poll(), False)
             kernel.CloseHandle(self.job)
