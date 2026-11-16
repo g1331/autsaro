@@ -2,6 +2,56 @@
 
 用于区分批次期限被调度等待耗尽与运行时等待／握手停滞。先保留失败的完整输入、独立协议向量、ELF、编译命令及 stdout／stderr；协议集成场景目录中的 `stdin` 是实际送入进程的字节。关闭后的栈和状态已经受清理影响，判断首次原因须取得关闭前现场。
 
+
+## 必需 CI 的自动入口
+
+Linux 的两项计时协议测试使用专用诊断 ELF：
+`single_component_meets_independent_protocol_and_timing_vectors` 和
+`s3_output_publication_wakes_armed_native_event_wait`。原向量、断言、5000 ms 批次 watchdog
+和 30 s 正常执行期限保持原样。测试构建链接冻结观察器，并以 `OS_HOST_CAPTURE_TESTS` 在
+`Os_BackendRequestShutdown` 的首行接入观察器，覆盖同一编译单元中不经过链接器 `--wrap`
+的调用；普通交付构建不定义该宏。
+
+首次 reason=7 关闭在改变关闭状态前记录冻结请求时间 `freeze_monotonic_ns` 并停止整个线程组。原生执行已经失败后，采集器启动有界
+GDB 事后取证并回收原子进程；GDB 自身最多 15 s，原来的失败断言继续失败。到达正常执行期限时，主线程也检查已冻结的
+失败，避免观察通知尚未送达就销毁现场；预算分析截止于冻结请求，结合首次观测到 T 状态的区间界限，排除事后调试等待。调试器必须是
+持有原生 Child 的测试进程的后代，因此自动入口直接持有并限时回收 GDB；继承的外层
+ProcessOwner 可能启动该测试进程的兄弟进程，不满足 Yama 的父进程授权。无需修改 ptrace
+设置或使用 root。GDB 不可用、附加失败或字段缺失均保留原始错误，并标记快照无效。
+
+失败场景目录随既有 scratch 工件上传，包含：
+
+- `automatic.json`、`all-stacks.txt`：关闭前全部线程栈、信号掩码、结构化 gate owner／depth／
+  generation、actor requested／acknowledged／resumed、角色与 TID，以及当批 `host_watch.started`；
+- `schedstat.jsonl`、`batches.jsonl`：同一单调时基的逐线程 CPU／排队、上下文切换、状态、
+  wchan 和进展；`utime_ticks`／`stime_ticks` 使用每行的 `clock_ticks_per_second` 换算；
+- `automatic.json` 的 `budget`：H／S 的 wait、suspend、resume、drain、post 边界调用次数、
+  完成次数及 CPU／墙钟累计值；约 20 ms 一次的有界环形记录覆盖失败批次，保留正在等待的
+  边界和进入时刻。`exclusive_cpu_ns` 与 `outside_cpu_ns` 对 CPU 作非重叠归属；
+  `cpu_ns`／`wall_ns` 是包含嵌套调用的 API 时长，不能直接相加。`revision` 为奇数表示
+  冻结打断当前记账，改用带提交代次的环形样本，并保留当前栈解释未完成区间；
+- `sampling.json`：无特权软件 perf 探测结果与起止时间；允许时附 `perf.data` 和 `perf.stderr`，
+  使用 19 Hz `task-clock:u`、单调时间及 4096-byte DWARF 用户栈。先按冻结快照中的 H／S TID
+  和批次时间窗筛选实际样本，勿把启动请求时刻当作首个样本。
+
+内核可能拒绝无特权 `perf_event_open`，即使软件事件也会返回 EPERM；工具缺失或附加失败
+同样须保留具体错误。替代证据是始终启用的线程用户／内核 CPU、调用次数、边界 CPU／等待
+时间与冻结全栈，配合逐 tick 进展解释预算。边界记录不冒充在任意指令处采得的热点栈。
+不得为取证去改共享主机的 perf／Yama 设置，或用周期性 GDB 暂停正常执行。
+
+记录器只由固定控制程序的 H／S 各自单写，GDB 只在整组停止后读取。仅这些记录器函数的
+私有访问不做 TSan 插桩，以免把测量器本身的检测成本计入被测工作；真实被调函数保持完整
+插桩，ASan／UBSan 仍检查记录器。该夹具不用于其他多生产者控制程序。
+
+通过路径不启动 GDB、不暂停线程、不输出诊断；计量只写预分配记录，临时采集文件随健康
+场景删除。正常运行开销须在相同输入、编译参数和 CPU 布局下交错测量并记录到 PR，
+不能凭采样频率推定可忽略。
+
+`timing_failure_automatically_preserves_budget_and_first_close` 通过两项真实测试入口触发
+内部关闭，核对所有自动工件；移除接入、冻结、栈、gate、握手、CPU 或预算记录均须被反例
+杀死。独立冻结夹具测试通过不能替代这条消费者链。ADR 0031 的连续运行从完整自动取证
+合入起重新计数；Issue 的历史根因与退出清单处置仍按 ADR 分别判断。
+
 ## 取得关闭前现场
 
 仅在诊断构建链接 `core/tests/fixtures/host-batch/linux_watchdog_capture.c`，加上三个链接选项：
@@ -14,7 +64,7 @@
 
 观察器在 reason=7 的外部调用入口、真实关闭函数开始前，以当前线程的 `raise(SIGSTOP)` 暂停线程组；`Ecu_TargetAbortNative(E_OK)` 的实际失败映射也覆盖。它在失败后仅向自己的父进程及其调试器授予 ptrace 权限，保持系统 Yama 设置。使用进程定向的 `kill(getpid(), SIGSTOP)` 会留下调用方先委派关闭的窗口，须用负对照核对暂停位置。
 
-GNU ld 的 `--wrap` 只重定向外部引用。同一编译单元内部的调用可能绕过观察器；因此每次都检查 `Os_Closing=0` 和真实调用栈。捕获失败、字段缺失、已关闭现场均保留原始错误，另行取证。
+手动仅添加 GNU ld `--wrap` 选项时，它只重定向外部引用。同一编译单元内部的调用可能绕过观察器；因此每次都检查 `Os_Closing=0` 和真实调用栈。捕获失败、字段缺失、已关闭现场均保留原始错误，另行取证。
 
 需要 Linux、GDB、setarch、GCC 及带调试信息的原始构建。取证入口在开始前检查工具；新的输出目录须为空。保留的 `compile-commands.json` 中 `instrumented` 数组来自原生测试构建，源文件路径须仍存在，原来的 TSan 参数保持原样。
 
@@ -39,7 +89,7 @@ uv run --locked python tests/python/native/watchdog_capture.py \
 
 握手故障需要找到持续未满足的请求及其阻塞闭包；短暂 gate 占用与正常 dispatch 的快照应结合前后 generation 和 ack 推进判断。采样没有观测到停滞时，结论限于采样分辨率；记录最大采样空隙，勿把零个采样跨度写成零等待。
 
-共享机的计时 TSan 验收使用 `RUST_TEST_THREADS=1`、`CARGO_BUILD_JOBS=2`，本任务不施加额外压力。其他任务的负载通过调度证据识别，不要求单个任务保证整台主机独占。协议重放从子进程启动开始自动采样每个线程的 `schedstat`，原始时间序列存入场景目录；失败时同时输出首末计数及运行／运行队列等待增量，包括写入 stdin 期间的失败。采集错误明确输出；短寿命线程或不足两个样本的线程须结合原始计数解释。需要冻结线程、gate 和握手时再用上述取证入口。
+共享机的计时 TSan 验收使用 `RUST_TEST_THREADS=1`、`CARGO_BUILD_JOBS=2`，本任务不施加额外压力。其他任务的负载通过调度证据识别，不要求单个任务保证整台主机独占。协议重放从子进程启动开始自动采样每个线程的 `schedstat`，原始时间序列存入场景目录；失败时同时输出首末计数及运行／运行队列等待增量，包括写入 stdin 期间的失败。采集错误明确输出；短寿命线程或不足两个样本的线程须结合原始计数解释。两项计时协议测试自动冻结线程、gate 和握手；其他诊断重放使用手动入口。
 
 共享主机出现编译或 supervisor 启动超时、socket 不可用、`EAGAIN` 时，保留原始输出与资源快照，停止本任务被替代的检查，与并行任务协调有界批次。资源快照自身不证明原因或容量恢复；资源条件改变后仍用原入口、期限、向量及断言验收。
 
