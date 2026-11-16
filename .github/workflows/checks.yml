@@ -1,7 +1,7 @@
 name: Development checks
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, labeled]
   push:
     branches: [main, master]
   workflow_dispatch:
@@ -47,6 +47,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
+          DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
           BASE: ${{ github.event.before }}
         run: |
           import json, os, subprocess
@@ -66,6 +67,9 @@ jobs:
               print('\n'.join(path for row in rows
                   for path in (row['filename'], row.get('previous_filename')) if path))
           values = select_changes(rows, pull_request=bool(os.environ['PULL_REQUEST']))
+          # Keep every heavy consumer unselected until the PR is ready for review.
+          if os.environ.get('DRAFT') == 'true':
+              values = dict.fromkeys(values, False)
           print(values)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               if values['analysis']:
@@ -1427,8 +1431,11 @@ jobs:
         shell: python
         env:
           RESULTS: ${{ toJSON(needs) }}
+          DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
         run: |
           import json, os, sys
+          if os.environ.get('DRAFT') == 'true':
+              sys.exit('Draft PR: full checks await ready_for_review (草稿，完整检查待转就绪).')
           needs = json.loads(os.environ['RESULTS'])
           outputs = needs['changes']['outputs'] if needs['changes']['result'] == 'success' else {}
           code = outputs.get('code') != 'false'
