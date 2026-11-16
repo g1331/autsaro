@@ -69,14 +69,16 @@ uv run --locked --group workflows zizmor .github
 
 ## CI
 
-CI 两层：
+固定 `windows-2025-vs2026`／`macos-26`，宿主升级单独决定；SDK 包版本、头字节或使用点变化按 [ADR 0025](../../adr/0025-misra-layered-scope.md) 重评。升级单独提 PR：核对 [官方标签](https://github.com/actions/runner-images#available-images)，同步工作流与测试，检查缓存／工件及完整矩阵（含 macOS）。系列内更新见作业日志。
+
+CI 分层：
 
 草稿只跑变更检测和 `quality`；`CI required` 失败并报“草稿，完整检查待转就绪”。完整检查请转就绪：`ready_for_review` 无须推送即检查 head，自动合并需显式开启。转回草稿取消旧运行。
 
 - **PR 层**：`Development checks`（`checks.yml`）中的 `CI required` 是分支规则唯一要求的检查，阻塞合并的任务清单写在该任务的 `needs` 中，增删检查只改工作流。真实桌面 GUI／IPC 场景由 `desktop-scenarios` 复用共享构建和五分片，PR／master 按应用、运行时、工具和构建输入路径选择；只有明确未选择时汇总接受跳过，失败与取消阻塞合并。core／runtime 改动在 Windows 和 Linux 完整运行原生、OS、检测器、交付与生成 C 分析；离线接收端在两平台用 Python 3.11 运行全部四个样本（含多组件独立 HostBatch 期望）。新版解释器的必需层覆盖由 Python 开发测试承担（含 ecu_tools 单元测试与 `test_sealed_sources`），运行 Linux 3.12／3.14 与 Windows 3.14，UI 只跑 Linux 与 Windows。PR 只改未被消费的根目录指南、`docs/`、代理说明或配置（含 `.codex/` hooks）或 PR 模板时，构建与测试任务整体跳过，`quality` 照常运行。除这些文档外只改 `ui/` 的 PR（如前端依赖更新）只运行合并的 UI／desktop、`python`（含受管进程测试）、按路径选择的 `desktop-scenarios` 与 `quality`，跳过 core、原生、OS、检测器、交付与生成 C 分析任务：`test_ci_selection.py` 核对消费路径、选择与汇总。分支无须先与主干同步即可合并，合并后主干推送会再运行一次。
 - **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：离线接收端 Python 3.11–3.14 × 四样本的 Linux／Windows 完整矩阵、其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[官方对照](official.md)和[模糊测试](fuzzing.md)（官方对照在 PR 与 master 均按路径运行；模糊测试在 PR 上只随目标直接消费的源码运行，master 按完整输入路径运行）。自动 PR／master 由同一 `Development checks` 在 `CI required` 成功后调用它，检出同一 SHA；接收端矩阵按 core／runtime／工具／测试与构建配置路径选择；桌面场景已由必需层负责，扩展层不重复自动执行；手动 Extended 仍运行桌面全量。PR 改动官方对照相关路径时运行官方对照。明确添加 `full-ci` 标签会先重新验证必需检查，再运行其余扩展检查；无关标签不取消 PR 检查或产生同名必需结果。手动运行全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
 
-自动合并通过检查后仍为 `BLOCKED` 时，及时处理保护或讨论阻塞；存量诊断先回复依据再解决，保留告警。
+自动合并检查后仍为 `BLOCKED` 时，及时处理保护或讨论阻塞；存量诊断先回复依据再解决，保留告警。
 
 同一 Issue 分生态或分阶段交付时，全部出口满足后才由最终 PR 关闭；中间 PR 使用 `Refs #N`。每次合并后核对 Issue 的实际状态：分支／Development 关联仍可能使 GitHub 自动关闭未完成的父 Issue，此时立即重新打开，保留已完成子项，全部出口满足后再关闭并勾选总览。
 
@@ -98,7 +100,8 @@ UI 与 desktop 每平台共用一个 20 分钟作业，复用 checkout、Node、
 
 Cargo 缓存键绑定 runner 镜像、工具链、锁文件及 `git ls-files` 跟踪的编译／交付输入字节，排除生成物与时间戳。源码变化保存增量状态，按前缀恢复旧缓存；测试照常运行，原始基准复用另验完整身份。
 
-公开仓库不注册自托管 runner，workflow 只用 GitHub 托管 runner。托管 runner 由并行开发共享，并发额度按账号计划核实；本轮容量预算采用 20 个作业。推送前确认会触发哪些运行，只保留需要的；中间提交和探测推送的检查在后续推送前取消，实验矩阵保持小规模（同时约四个作业），临时探测分支和一次性 workflow 用完即删。CI 因耗时超限时先依据实际阶段耗时消除重复构建、复用依赖缓存并并行独立样本，不能只延长总超时；完整检查范围与失败条件保持，优化效果以实际运行核对。按作业拆分或分片前，核对首批并发作业数：超出上限的部分排队，会抵消拆分收益；分片名单从同一列表筛选与排除，保证每个测试恰好运行一次。
+公开仓库只用 GitHub 托管 runner，并行 Issue 共享账号额度（预算 20 作业）。推送前核对触发范围，取消本人的过时运行；实验约四并发，用后删除临时分支和 workflow。耗时超限先按实测消除重复、复用缓存、并行样本，保持检查范围和失败条件。拆分前核对首批并发数，避免排队抵消收益；同一列表筛选与排除，确保每个测试恰好一次。
+
 
 ## 代理独立审查
 

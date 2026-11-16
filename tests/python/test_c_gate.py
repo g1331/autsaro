@@ -310,7 +310,7 @@ class SourceGateTests(unittest.TestCase):
             self.assertEqual(jobs["c-analysis-generate" + suffix]["needs"], "changes")
             self.assertEqual(jobs["c-analysis-baseline-generate" + suffix]["needs"], "changes")
             self.assertEqual(jobs[prepare]["needs"], "changes")
-            platform = "windows-latest" if suffix else "ubuntu-24.04"
+            platform = "windows-2025-vs2026" if suffix else "ubuntu-24.04"
             target = "windows-x64-controlled-v1" if suffix else "linux-x64-controlled-v1"
             for name in (prepare, "c-analysis-generate" + suffix,
                          "c-analysis-baseline-generate" + suffix):
