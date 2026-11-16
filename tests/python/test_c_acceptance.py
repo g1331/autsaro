@@ -336,7 +336,7 @@ class AcceptanceTests(unittest.TestCase):
                 elif field == "owners":
                     path = self.project / "meta/workbench-ownership.json"
                 elif field == "origin":
-                    path = self.root / "runtime/os/src/host/linux/Os_HostLinux.c"
+                    path = self.root / ("runtime/" + self.sdk_name)
                 elif field == "assessment":
                     path = self.root / c_acceptance.GRP
                 else:
@@ -1347,7 +1347,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(c_acceptance.freertos_identity(self.summary, self.project, self.root),
                          before)
 
-    def owned_inputs(self):
+    def owned_inputs(self, *, host_address=False):
         self.synthetic_complete_inputs()
         shutil.copytree(ROOT / "runtime", self.root / "runtime", dirs_exist_ok=True)
         shutil.copytree(ROOT / "docs/standards", self.root / "docs/standards", dirs_exist_ok=True)
@@ -1365,8 +1365,9 @@ class AcceptanceTests(unittest.TestCase):
             path = self.root / name
             text = path.read_text(encoding="utf-8").replace("| retained |", "| satisfied |")
             path.write_text(text, encoding="utf-8")
-        name = "runtime/os/src/host/linux/Os_HostLinux.c"
-        delivered = "os/src/host/linux/Os_HostLinux.c"
+        name = ("runtime/os/src/host/linux/Os_HostLinux.c" if host_address
+                else "runtime/os/include/Os.h")
+        delivered = name.removeprefix("runtime/")
         self.files[delivered] = (self.root / name).read_bytes()
         self.origins[name] = delivered
         self.plan["runtimeSources"][name] = c_acceptance.digest(self.root / name)
@@ -1375,8 +1376,10 @@ class AcceptanceTests(unittest.TestCase):
             "owner": "runtime", "producerId": "runtime",
         }]}).encode()
         source = self.files[delivered].decode()
-        offset = source.index("*low = (uintptr_t)thread->mapping;")
-        self.summary["diagnostics"] = [{"id": "misra-c2012-11.4",
+        expression = ("*low = (uintptr_t)thread->mapping;" if host_address
+                      else "#define OS_TASK_ENTRY(identifier)")
+        offset = source.index(expression)
+        self.summary["diagnostics"] = [{"id": "misra-c2012-" + ("11.4" if host_address else "20.10"),
             "programs": ["host-batch", "probe"],
             "locations": [{"file": delivered, "line": source.count("\n", 0, offset) + 1,
                            "column": offset - source.rfind("\n", 0, offset)}]}]
@@ -1384,18 +1387,17 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         self.bind_groups(statuses={"checker-limitations": "pending"})
 
-    def test_owned_address_consumes_original_category_with_current_context(self):
-        self.owned_inputs()
+    def test_owned_host_address_is_reported_outside_current_acceptance(self):
+        self.owned_inputs(host_address=True)
         context = self.context(group="owned-source", status="approved")
         self.bind(context)
         raw = copy.deepcopy(self.summary)
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked", result["objects"])
         occurrence = result["occurrences"][0]
-        self.assertEqual(occurrence["assessment"], "accepted")
-        self.assertEqual(occurrence["reason"], "owned_source_approved")
-        self.assertEqual(occurrence["record"]["file"],
-                         "docs/standards/os/native-facilities/addresses.md")
+        self.assertEqual(occurrence["assessment"], "out_of_scope")
+        self.assertEqual(occurrence["reason"], "host-platform")
+        self.assertFalse(any(row["kind"] == "diagnostic" for row in result["objects"]))
         self.assertEqual(occurrence["programs"], ["host-batch", "probe"])
         checker_rows = c_standard.supplementary_assessment(
             self.rules, self.summary["coverage"]["knownCheckerLimitations"], self.root,
@@ -1428,7 +1430,7 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["diagnostics"][0]["locations"][0]["line"] += 1
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
         self.summary["diagnostics"][0]["locations"][0]["line"] -= 1
-        name = "runtime/os/src/host/linux/Os_HostLinux.c"
+        name = "runtime/os/include/Os.h"
         path = self.root / name
         path.write_bytes(path.read_bytes() + b"/* changed producer */\n")
         self.bind_groups()
@@ -1438,7 +1440,7 @@ class AcceptanceTests(unittest.TestCase):
     def test_owned_record_document_is_part_of_current_evidence(self):
         self.owned_inputs()
         self.bind(self.context(group="owned-source", status="approved"))
-        path = self.root / "docs/standards/os/native-facilities/addresses.md"
+        path = self.root / "docs/standards/bsw-general/published-information.md"
         path.write_text(path.read_text(encoding="utf-8") + "\nChanged category evidence.\n",
                         encoding="utf-8")
         self.assertEqual(self.evaluate()["occurrences"][0]["reason"],
@@ -1535,6 +1537,7 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_owned_all_scope_does_not_authorize_a_new_profile(self):
         self.owned_inputs()
+        self.select_owned("runtime/os/include/Os.h", "20.10", "#define OS_TASK_ENTRY(identifier)")
         self.bind_groups(cases={group: "unreviewed-profile" for group in c_acceptance.GROUPS})
         self.bind(self.context(group="owned-source", status="approved", case="unreviewed-profile"))
         occurrence = self.evaluate()["occurrences"][0]
