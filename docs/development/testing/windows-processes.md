@@ -50,9 +50,14 @@ CI 在作业外使用系统自带 WPR 的最小 profile：`ProcessThread` 保存
 步骤停止会话，以 tracerpt 解码；保留 `process.etl`、`events.xml`、`summary.xml`、
 `collector.jsonl`（命令、退出码、耗时与输出）、`lifecycle.jsonl` 和 `members-etw.jsonl`。
 `job.wprp` 同时定义 File／Memory 两种模式，并用唯一 ID 引用 collector 与 provider；
-该文件是本次实际 profile，`collector.jsonl` 还保存 runner 的 provider 定义。
+内核态 `JobProcessProvider` 必须设置 `NonPagedMemory="true"`，否则 WPR 的 provider
+启用可能返回 `0xc5580612`；调整 profile 时用单个 Windows 作业实际核对 start／stop 和解码，
+XML 引用检查只验证结构。该文件是本次实际 profile，`collector.jsonl` 还保存 runner 的
+provider 定义。
 采集启动、停止或解码失败时，记录原因到 `collector-state.json`，原始文件照常上传，
-测试继续执行；该次 ETW 取证标为不完整。先核对采集状态及 `summary.xml` 的丢事件信息。
+测试继续执行；该次 ETW 取证标为不完整。`trace-health.json` 记录实际解码数量、进程
+生命周期事件数及丢事件／缓冲区计数；只有系统事件或发现丢失时同样标为不完整。
+先核对采集状态及 `summary.xml` 的丢事件信息。
 
 清理前仍有成员时，两种实现各调用一次 `NtQuerySystemInformation(SystemProcessInformation)`，
 按 PID＋创建时间匹配，将父 PID、镜像和线程状态写入成员的 `system_snapshot`。
