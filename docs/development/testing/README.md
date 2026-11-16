@@ -98,9 +98,9 @@ UI 与 desktop 每平台共用一个 20 分钟作业，复用 checkout、Node、
 
 只修改七个独立分析驱动（`c_check`、`c_acceptance`、`c_sdk`、`c_comparison`、`c_addon`、`c_gate`、`c_baseline`）、标准评估 Markdown 或固定 MISRA 索引时，PR 选择 Python、两平台 prepare／分析及汇总。generated-retention、共享 lexer／retention、LICENSE／NOTICE 属于完整检查输入；混合改动、改名、未知或截断清单完整选择。
 
-Cargo 缓存键绑定 runner 镜像、工具链、锁文件及 `git ls-files` 跟踪的编译／交付输入字节，排除生成物与时间戳。源码变化保存增量状态，按前缀恢复旧缓存；测试照常运行，原始基准复用另验完整身份。
+Cargo 按镜像、工具链、锁文件和编译／交付输入字节缓存增量状态，按前缀恢复。Cppcheck 精确键含固定源码、架构、workflow 及 Python 依赖锁，CMake 经 uv 锁定。Windows GCC 下载包精确键含镜像、架构及安装 action；命中仍验 SHA256／签名、安装并核对头。两者无前缀恢复。分析每次执行；宏来源路径只在单次预处理内复用，随 GCC 文件标记切换，源码与 SDK 环境照常重查。
 
-公开仓库只用 GitHub 托管 runner，并行 Issue 共享账号额度（预算 20 作业）。推送前核对触发范围，取消本人的过时运行；实验约四并发，用后删除临时分支和 workflow。耗时超限先按实测消除重复、复用缓存、并行样本，保持检查范围和失败条件。拆分前核对首批并发数，避免排队抵消收益；同一列表筛选与排除，确保每个测试恰好一次。
+只用 GitHub 托管 runner，共享预算 20 作业；实验约四并发，用后删除临时分支和 workflow。推送前核对范围并取消过时运行。优化先实测重复工作和排队，保留覆盖与失败条件。
 
 
 ## 代理独立审查
