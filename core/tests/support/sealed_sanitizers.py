@@ -8,13 +8,28 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+CAPTURE_FLAGS = [
+    "-DOS_HOST_CAPTURE_TESTS=1",
+    "-g",
+    "-Wl,--wrap=Os_BackendShutdown",
+    "-Wl,--wrap=Os_BackendRequestShutdown",
+    "-Wl,--wrap=Ecu_TargetAbortNative",
+    "-Wl,--wrap=WaitForMultipleObjects",
+    "-Wl,--wrap=SuspendThread",
+    "-Wl,--wrap=ResumeThread",
+    "-Wl,--wrap=Ecu_TargetTakeOutput",
+    "-Wl,--wrap=Os_TargetAdvanceOneTick",
+]
+
 
 def main() -> None:
     project, output = (Path(value).resolve() for value in sys.argv[1:3])
     mode = sys.argv[3]
     control = Path(sys.argv[4]).resolve() if len(sys.argv) >= 5 else None
     link_flags = sys.argv[5:]
-    if link_flags not in ([], ["-Wl,--wrap=pthread_detach"],
+    capture = link_flags[-len(CAPTURE_FLAGS):] == CAPTURE_FLAGS
+    checked_flags = link_flags[:-len(CAPTURE_FLAGS)] if capture else link_flags
+    if checked_flags not in ([], ["-Wl,--wrap=pthread_detach"],
                           ["-Wl,--wrap=Os_TargetTakeInput", "-Wl,--wrap=Os_TargetPostInput",
                            "-Wl,--wrap=vApplicationTickHook"],
                           ["-Wl,--wrap=Os_TargetWaitTick", "-Wl,--wrap=Os_TargetNotifyNative",
@@ -40,8 +55,8 @@ def main() -> None:
 
             def observe(argv: list[str], logs: Path, stage: str, **kwargs: object) -> str:
                 if stage == "native-c99-build":
-                    # Only the declared observer changes symbol resolution; the
-                    # sealed sources, includes and compiler flags stay intact.
+                    # Only the declared observer and its test/debug definitions extend
+                    # the command; sealed source and include closure stays intact.
                     argv = [*argv, *link_flags]
                     commands.append(list(argv))
                 return query(argv, logs, stage, **kwargs)
@@ -69,7 +84,10 @@ def main() -> None:
         raise ValueError("Expected exactly one sealed native compilation")
     original = commands[0]
     if not kinds:
-        # Normal observer controls use the same verified production build.
+        # Keep the exact diagnostic command even without a sanitizer rebuild.
+        (output / "compile-commands.json").write_text(
+            json.dumps({"production": original}, indent=2) + "\n", encoding="utf-8",
+        )
         return
     instrumented = list(original)
     binary = output / Path(original[original.index("-o") + 1]).name

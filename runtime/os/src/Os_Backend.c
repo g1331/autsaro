@@ -1356,6 +1356,9 @@ OS_MEMMAP void Os_BackendShutdown(StatusType error)
 
 OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
 {
+#if defined(OS_HOST_CAPTURE_TESTS) && (OS_HOST_CAPTURE_TESTS == STD_ON)
+    Os_HostCaptureBeforeClose(error);
+#endif
     Os_TimeClose();
     Os_MailboxClose();
     if (((uint32)InterlockedOr(&activation_admission, 2) & 2u) == 0u) {
