@@ -207,6 +207,7 @@ class BaselineReuseTests(unittest.TestCase):
                         self.assertEqual(c_baseline.analyze(
                             "baseline", "linux", "standard-ecu", project, output), 1)
                         scan.assert_called_once()
+                        self.assertEqual(scan.call_args.kwargs, {"sdk_revision": "parent"})
                     source = json.loads((output / "baseline-source.json").read_text())
                     self.assertEqual(source["kind"], "same-run")
                     self.assertEqual(source["tree"], "parent")
@@ -274,6 +275,7 @@ class BaselineReuseTests(unittest.TestCase):
                 self.assertEqual(c_baseline.analyze(
                     "current", "linux", "standard-ecu", project, output), 1)
                 scan.assert_called_once()
+                self.assertEqual(scan.call_args.kwargs, {})
                 cached.assert_not_called()
             c_baseline.git.assert_any_call("rev-parse", "HEAD")
             self.assertEqual(json.loads((output / "baseline-source.json").read_text()),
