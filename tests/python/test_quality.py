@@ -61,7 +61,10 @@ class CommitMessageTests(unittest.TestCase):
             "resolve", "resolves", "resolved",
         ):
             for reference in ("#12", "owner/repo#12", "https://github.com/owner/repo/issues/12"):
-                for text in (f"{keyword} {reference}", f"{keyword.upper()}: {reference}"):
+                for text in (
+                    f"{keyword} {reference}", f"{keyword.upper()}: {reference}",
+                    f"{keyword}:{reference}",
+                ):
                     for message in (f"fix: {text}", f"fix: handle timeout\n\n{text}\n"):
                         with self.subTest(message=message):
                             errors = quality.commit_message_errors(message, "abc12345")
@@ -139,7 +142,9 @@ class CommitMessageTests(unittest.TestCase):
 
         workflow = yaml.safe_load((quality.ROOT / '.github/workflows/checks.yml').read_text())
         job = workflow['jobs']['quality']
-        checkout = next(s for s in job['steps'] if s.get('uses', '').startswith('actions/checkout@'))
+        checkout = next(
+            s for s in job['steps'] if s.get('uses', '').startswith('actions/checkout@')
+        )
         self.assertEqual(checkout['with']['fetch-depth'], 0)
         step = next(s for s in job['steps'] if '--commit-head' in s.get('run', ''))
         self.assertIn('--base "$CHECK_BASE"', step['run'])

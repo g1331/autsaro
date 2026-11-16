@@ -49,7 +49,7 @@ COMMIT_TITLE = re.compile(
     r"(?:\([^\s()]+\))?(?P<breaking>!)?: \S[^\r\n]*"
 )
 CLOSING_REFERENCE = re.compile(
-    r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?):?\s+"
+    r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)(?:\s+|:\s*)"
     r"(?:#[0-9]+|[\w.-]+/[\w.-]+#[0-9]+|"
     r"https?://github\.com/[\w.-]+/[\w.-]+/issues/[0-9]+)\b",
     re.IGNORECASE,
