@@ -409,7 +409,8 @@ OS_MEMMAP void Os_StackFatalExit(void)
     const Os_StackFaultType *fault = &Os_Fault;
     if (InterlockedCompareExchange(&fatal_claimed, 1, 0) != 0) {
         Sleep(INFINITE);
-        ExitProcess(E_OS_STACKFAULT);
+        (void)TerminateProcess(GetCurrentProcess(), E_OS_STACKFAULT);
+        __builtin_trap();
     }
     if (InterlockedCompareExchange(&Os_Fault.published, 0, 0) == 0) {
         for (i = 0u; i < OS_NATIVE_STACKS; ++i) {
@@ -445,7 +446,10 @@ OS_MEMMAP void Os_StackFatalExit(void)
     if (written == 0) {
         (void)fatal_write(fault_error, fatal_text, used);
     }
-    ExitProcess(E_OS_STACKFAULT);
+    /* DLL detach can exhaust the remaining VEH stack after both controllers overflow. */
+    (void)TerminateProcess(GetCurrentProcess(), E_OS_STACKFAULT);
+    /* Successful self-termination never returns; refuse to resume on API failure. */
+    __builtin_trap();
 }
 
 OS_MEMMAP static int report_stack(const Os_NativeStackType *record)
