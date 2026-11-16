@@ -1,5 +1,13 @@
 # Windows 进程
 
+## Bash 脚本测试
+
+Python 测试执行 Actions 的 Bash 脚本时，Windows 显式选择
+`Path(os.environ['ProgramFiles']) / 'Git/bin/bash.exe'`；裸 `bash` 会启动系统 WSL 入口。
+沿用 `test_core_build_dependencies.py` 的 `--noprofile --norc -eo pipefail` 调用，
+传给 Bash 的路径使用 `as_posix()` 并正确引用，用含空格的临时目录检查路径传递。
+失败断言附 shell 路径、返回码和 stdout／stderr，便于区分启动失败与脚本行为失败。
+
 ## 崩溃转储
 
 Windows 的 `native`、`native-os` 和 `native-delivery` 作业在测试前配置
