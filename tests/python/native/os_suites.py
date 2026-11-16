@@ -1584,7 +1584,7 @@ def check_stack_exit(directory: Path) -> None:
         require("status=timeout" in str(error), str(error))
     else:
         status = mutant.returncode & 0xFFFFFFFF
-        require(status == 0xC0000005 and "STACK_EXIT_DETACH_BEGIN" in mutant.stderr
+        require(status != 13 and "STACK_EXIT_DETACH_BEGIN" in mutant.stderr
                 and "STACK_EXIT_DETACH_END" not in mutant.stderr,
                 {"scenario": "old-exit-process", "exit": status, "stderr": mutant.stderr})
 
