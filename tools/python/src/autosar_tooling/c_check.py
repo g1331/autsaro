@@ -767,7 +767,8 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
             raise ValueError("Semantic inputs changed during analysis")
         summary["passed"] = all_passed
-        summary["projectAcceptance"] = c_acceptance.evaluate(summary, root, sdk_revision=sdk_revision)
+        summary["projectAcceptance"] = c_acceptance.evaluate(
+            summary, root, **({"sdk_revision": sdk_revision} if sdk_revision is not None else {}))
         if baseline is not None:
             from autosar_tooling.c_comparison import compare
             summary["comparison"] = compare(summary, project, output, baseline)
