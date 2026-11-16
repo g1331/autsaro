@@ -1,7 +1,9 @@
 /** @file Exercise DLL detach stack use after real controller stack overflow. */
+#if defined(STACK_EXIT_DLL)
+/* Lean SDK headers keep COM/RPC boolean away; the DLL does not include AUTOSAR types. */
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#if defined(STACK_EXIT_DLL)
 static void write_marker(const char *text, DWORD length)
 {
     DWORD written;
@@ -29,6 +31,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
     return TRUE;
 }
 #else
+/* Host headers import windows.h with the AUTOSAR boolean aliased; do not include it first. */
 #define main stack_scenario_main
 #include "../../runtime/os/tests/native_stack.c"
 #undef main
