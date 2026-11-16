@@ -71,6 +71,33 @@ class CComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "configuration differs"):
                 compare(summary, project, output, baseline, source_tree=True)
 
+    def test_matrix_receipts_bind_all_raw_inputs_and_ignore_derived_annotations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            summary, *_ = self.fixture(Path(temporary))
+            summary["scope"]["target"] = c_comparison.MATRIX_TARGETS[0]
+            receipts = []
+            for target in c_comparison.MATRIX_TARGETS:
+                for sample in c_comparison.MATRIX_SAMPLES:
+                    other = deepcopy(summary)
+                    other["scope"]["target"] = target
+                    receipts.append(c_comparison.scope_receipt(other, sample))
+            matrix = c_comparison.scope_matrix(receipts)
+            before = c_comparison.raw_identity(summary)
+            c_comparison.annotate_scope(summary, set(matrix["targetHeaders"]))
+            summary["projectAcceptance"] = {"scopeMatrix": matrix}
+            self.assertEqual(c_comparison.raw_identity(summary), before)
+            self.assertEqual(c_comparison.matrix_headers(summary, matrix), {"main.c"})
+            for broken in (receipts[:-1], receipts + [receipts[0]]):
+                with self.assertRaisesRegex(ValueError, "incomplete|duplicated"):
+                    c_comparison.scope_matrix(broken)
+            changed = deepcopy(matrix)
+            changed["targetHeaders"].append("integration/forged.h")
+            with self.assertRaisesRegex(ValueError, "union differs"):
+                c_comparison.matrix_headers(summary, changed)
+            summary["scope"]["projectTranslationUnits"]["main.c"].append("other.h")
+            with self.assertRaisesRegex(ValueError, "bind this raw analysis"):
+                c_comparison.matrix_headers(summary, matrix)
+
     def fixture(self, root):
         baseline = root / "baseline/sample"
         output = root / "current"
@@ -94,6 +121,7 @@ class CComparisonTests(unittest.TestCase):
             "sourceSealSha256": digest(baseline / "project/meta/files.sha256"),
             "scope": {"target": "linux", "profile": "ecu", "entries": {"target": "main.c"}, "compilerFlags": ["-std=c99"],
                       "includePaths": ["."], "translationUnits": ["main.c"],
+                      "projectTranslationUnits": {"main.c": ["main.c"]},
                       "supplemental": [], "patchedKernel": [],
                       "sdkEnvironment": {"format": "sdk-provider-environment-v1", "files": 1,
                                          "sha256": "f" * 64}},

@@ -16,8 +16,8 @@ from pathlib import Path
 from autosar_tooling import c_acceptance, c_comparison
 from autosar_tooling.config import ROOT
 
-SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
-TARGETS = ("linux-x64-controlled-v1", "windows-x64-controlled-v1")
+SAMPLES = c_comparison.MATRIX_SAMPLES
+TARGETS = c_comparison.MATRIX_TARGETS
 FORMAT = "c-source-no-regression-v1"
 
 
@@ -152,7 +152,8 @@ def new_dispositions(current: dict, acceptance: dict, project: Path,
     return accepted
 
 
-def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]) -> dict:
+def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str],
+            *, baseline_matrix: dict | None = None) -> dict:
     """Reuse comparison counts and the current, independently recomputed disposition."""
     binary = current["tool"].get("binarySha256")
     if not binary or binary != read(baseline / "summary.json")["tool"].get("binarySha256"):
@@ -167,10 +168,15 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
         raise ValueError("Project acceptance receipt differs from current inputs")
     accepted = new_dispositions(current, acceptance, output / "project", baseline, renames)
     previous = read(baseline / "summary.json")
-    inside = c_comparison.diagnostic_counts(current, output / "project", in_scope_only=True)
+    current_matrix = acceptance.get("scopeMatrix")
+    headers = c_comparison.matrix_headers(current, current_matrix) if current_matrix is not None else None
+    previous_headers = (c_comparison.matrix_headers(previous, baseline_matrix)
+                        if baseline_matrix is not None else None)
+    inside = c_comparison.diagnostic_counts(
+        current, output / "project", in_scope_only=True, headers=headers)
     before = Counter()
     for (rule, name, source, program), count in c_comparison.diagnostic_counts(
-            previous, baseline / "project", in_scope_only=True).items():
+            previous, baseline / "project", in_scope_only=True, headers=previous_headers).items():
         before[rule, renames.get(name, name), source, program] += count
     additions = inside - before
     blocked, outside = [], []
@@ -184,11 +190,16 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
             blocked.append({**row, "count": remaining})
     return {"status": "blocked" if blocked else "passed", "comparison": comparison,
             "unacceptedNew": blocked, "outOfScopeNew": outside,
-            "complianceScope": c_comparison.scope_statistics(current),
+            "complianceScope": c_comparison.scope_statistics(current, headers=headers),
             "projectAcceptance": acceptance["status"]}
 
 
-def scan(target: str, sample: str) -> None:
+def load_scope_matrix(directory: Path, side: str) -> dict:
+    receipts = [read(path) for path in directory.glob(f"c-analysis-scope-{side}-*/*/scope-input.json")]
+    return c_comparison.scope_matrix(receipts)
+
+
+def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
     outputs = {}
     parent = git("rev-parse", "HEAD^1")
     # Same-run c-check producers already validate actual target semantics before
@@ -208,9 +219,22 @@ def scan(target: str, sample: str) -> None:
         outputs[side] = output
     current, baseline = outputs["current"], outputs["baseline"]
     source = baseline_source(read(baseline / "baseline-source.json"), parent)
+    matrices = {}
+    if scope_directory is not None:
+        matrices = {side: load_scope_matrix(scope_directory, side) for side in ("current", "baseline")}
+        for side, output in outputs.items():
+            c_comparison.matrix_headers(read(output / "summary.json"), matrices[side])
+        summary = read(current / "summary.json")
+        c_comparison.annotate_scope(summary, set(matrices["current"]["targetHeaders"]))
+        summary["projectAcceptance"] = c_acceptance.evaluate(
+            summary, current / "project", matrix_scope=matrices["current"])
+        (current / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(baseline / "summary.json", current / "baseline-summary.json")
     result = verdict(read(current / "summary.json"), current, baseline,
-                     rename_paths(baseline / "project", current / "project"))
+                     rename_paths(baseline / "project", current / "project"),
+                     **({"baseline_matrix": matrices["baseline"]} if matrices else {}))
+    if matrices:
+        result["baselineScopeMatrix"] = matrices["baseline"]
     result.update(format=FORMAT, target=target, sample=sample,
                   baselineSource=source,
                   commit=git("rev-parse", "HEAD"), baseline=git("rev-parse", "HEAD^1"),
@@ -253,19 +277,38 @@ def aggregate(directory: Path) -> None:
         found.add(pair)
     if found != expected or len(list(directory.glob("*/*/summary.json"))) != len(expected):
         raise ValueError(f"Source gate matrix incomplete: {sorted(expected - found)}")
-    headers = c_comparison.target_headers([summary["scope"] for _gate, summary in matrix])
+    current_matrix = c_comparison.scope_matrix([
+        c_comparison.scope_receipt(summary, gate["sample"]) for gate, summary in matrix])
+    baseline_matrix = c_comparison.scope_matrix([
+        c_comparison.scope_receipt(read(path.with_name("baseline-summary.json")), read(path)["sample"])
+        for path in directory.glob("*/*/gate.json")])
     statistics = []
     for gate, summary in matrix:
-        # A header used by any selected target TU is in scope for every shard.
-        promoted = [row for row in gate["outOfScopeNew"]
-                    if row["file"].startswith("integration/")
-                    and not row["file"].endswith(".c") and row["file"] in headers]
-        if promoted:
-            raise ValueError(f"New target-header diagnostics in matrix closure: {promoted}")
-        statistics.append({"target": gate["target"], "sample": gate["sample"],
-                           **c_comparison.scope_statistics(summary, headers=headers)})
+        acceptance = summary["projectAcceptance"]
+        if (acceptance.get("scopeMatrix") != current_matrix
+                or gate.get("baselineScopeMatrix") != baseline_matrix
+                or acceptance.get("complianceScope") != summary.get("complianceScope")):
+            raise ValueError("Project acceptance matrix scope receipt differs")
+        c_comparison.matrix_headers(summary, current_matrix)
+        expected_scope = c_comparison.scope_statistics(summary, headers=set(current_matrix["targetHeaders"]))
+        if summary["complianceScope"] != expected_scope:
+            raise ValueError("Project acceptance scope statistics differ")
+        positions = {(index, position): location for index, position, _diagnostic, location
+                     in c_acceptance._positions(summary["diagnostics"])}
+        occurrences = acceptance["occurrences"]
+        if (len(occurrences) != len(positions)
+                or {(row["diagnostic"], row["locationIndex"]) for row in occurrences} != set(positions)):
+            raise ValueError("Project acceptance matrix occurrence coverage differs")
+        for occurrence in occurrences:
+            location = positions[occurrence["diagnostic"], occurrence["locationIndex"]]
+            outside = location is not None and c_comparison.location_scope(
+                summary["scope"], location, headers=set(current_matrix["targetHeaders"])) != "in-scope"
+            if outside != (occurrence["assessment"] == "out_of_scope"):
+                raise ValueError("Project acceptance occurrence differs from matrix scope")
+
+        statistics.append({"target": gate["target"], "sample": gate["sample"], **expected_scope})
     (directory / "compliance-scope.json").write_text(
-        json.dumps({"targetHeaders": sorted(headers), "analyses": statistics}, indent=2) + "\n",
+        json.dumps({"targetHeaders": current_matrix["targetHeaders"], "analyses": statistics}, indent=2) + "\n",
         encoding="utf-8")
 
 
@@ -281,6 +324,7 @@ def main() -> None:
     scanning = commands.add_parser("scan")
     scanning.add_argument("--target", choices=TARGETS, required=True)
     scanning.add_argument("--sample", choices=SAMPLES, required=True)
+    scanning.add_argument("--scope-directory", type=Path, default=ROOT / "build/c-analysis-scope")
     aggregation = commands.add_parser("aggregate")
     aggregation.add_argument("directory", type=Path)
     args = parser.parse_args()
@@ -289,7 +333,7 @@ def main() -> None:
     elif args.command == "stage":
         stage(args.baseline)
     elif args.command == "scan":
-        scan(args.target, args.sample)
+        scan(args.target, args.sample, args.scope_directory)
     else:
         aggregate(args.directory)
 

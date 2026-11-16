@@ -18,6 +18,71 @@ def _read(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+MATRIX_TARGETS = ("linux-x64-controlled-v1", "windows-x64-controlled-v1")
+MATRIX_SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
+
+
+def raw_identity(summary: dict) -> str:
+    """Bind raw analysis independently of the later matrix acceptance annotations."""
+    raw = {key: value for key, value in summary.items()
+           if key not in {"projectAcceptance", "complianceScope"}}
+    raw["diagnostics"] = [{key: value for key, value in row.items() if key != "complianceScope"}
+                          for row in summary["diagnostics"]]
+    return hashlib.sha256(json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def scope_receipt(summary: dict, sample: str) -> dict:
+    return {"format": "c-misra-scope-input-v1", "sample": sample,
+            "analysisIdentity": raw_identity(summary),
+            **{key: summary["scope"][key] for key in
+               ("target", "translationUnits", "projectTranslationUnits")}}
+
+
+def scope_matrix(receipts: list[dict]) -> dict:
+    """Require exactly eight raw dependency receipts before applying rule 2."""
+    expected = {(target, sample) for target in MATRIX_TARGETS for sample in MATRIX_SAMPLES}
+    found = set()
+    for row in receipts:
+        if (set(row) != {"format", "target", "sample", "analysisIdentity",
+                         "translationUnits", "projectTranslationUnits"}
+                or row["format"] != "c-misra-scope-input-v1"
+                or not re.fullmatch(r"[0-9a-f]{64}", row["analysisIdentity"])):
+            raise ValueError("Invalid matrix scope receipt")
+        pair = row["target"], row["sample"]
+        if pair not in expected or pair in found:
+            raise ValueError("Unexpected or duplicated matrix scope receipt")
+        found.add(pair)
+        units, dependencies = row["translationUnits"], row["projectTranslationUnits"]
+        if (not isinstance(units, list) or not units or len(units) != len(set(units))
+                or any(not safe_relative(unit) for unit in units)
+                or not isinstance(dependencies, dict) or set(dependencies) != set(units)
+                or any(not isinstance(paths, list) or paths != sorted(set(paths))
+                       or unit not in paths or any(not safe_relative(name) for name in paths)
+                       for unit, paths in dependencies.items())):
+            raise ValueError("Matrix GCC dependency receipt incomplete")
+    if found != expected:
+        raise ValueError(f"Matrix scope incomplete: {sorted(expected - found)}")
+    members = sorted(receipts, key=lambda row: (row["target"], row["sample"]))
+    return {"format": "c-misra-scope-matrix-v1", "members": members,
+            "targetHeaders": sorted(target_headers(members))}
+
+
+def matrix_headers(summary: dict, matrix: dict) -> set[str]:
+    if matrix != scope_matrix(matrix["members"]):
+        raise ValueError("Matrix scope union differs from dependency receipts")
+    if not any(row == scope_receipt(summary, row["sample"])
+               for row in matrix["members"] if row["target"] == summary["scope"]["target"]):
+        raise ValueError("Matrix scope does not bind this raw analysis")
+    return set(matrix["targetHeaders"])
+
+
+def annotate_scope(summary: dict, headers: set[str] | None = None) -> None:
+    for diagnostic in summary["diagnostics"]:
+        diagnostic["complianceScope"] = [location_scope(summary["scope"], location, headers=headers)
+                                         for location in diagnostic["locations"]]
+    summary["complianceScope"] = scope_statistics(summary, headers=headers)
+
+
 def platform_location(name: str) -> bool:
     """ADR 0030 rule 1: platform selection owns the complete directory."""
     return name.startswith(("os/src/host/", "kernel/portable/MSVC-MingW/",

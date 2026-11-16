@@ -292,6 +292,7 @@ class SourceGateTests(unittest.TestCase):
                 self.assertEqual(run.call_args.args[0], [
                     sys.executable, "-m", "autosar_tooling.c_gate", "scan",
                     "--target", "linux-x64-controlled-v1", "--sample", "standard-ecu",
+                    "--scope-directory", "build/c-analysis-scope",
                 ])
 
     def test_both_scan_sides_share_prepare_and_run_without_cross_dependency(self):
@@ -342,8 +343,11 @@ class SourceGateTests(unittest.TestCase):
                              "git read-tree --empty\n"
                              "git -c core.autocrlf=true reset --hard HEAD\n")
             self.assertEqual(set(gate["needs"]), {
-                "c-analysis-samples" + suffix, "c-analysis-baseline" + suffix,
+                "c-analysis-samples", "c-analysis-baseline",
+                "c-analysis-samples-windows", "c-analysis-baseline-windows",
             })
+            self.assertTrue(any(step.get("with", {}).get("pattern") == "c-analysis-scope-*"
+                                for step in gate["steps"]))
             self.assertFalse(any("'c-check'" in step.get("run", "")
                                  for step in gate["steps"]))
 
@@ -515,6 +519,25 @@ class SourceGateTests(unittest.TestCase):
                                               (("current", "summary.json"),
                                                ("baseline", "baseline-summary.json"))}}
                     (directory / "gate.json").write_text(json.dumps(gate))
+            paths = list(root.glob("*/*/gate.json"))
+            scope = c_gate.c_comparison.scope_matrix([
+                c_gate.c_comparison.scope_receipt(c_gate.read(path.with_name("summary.json")),
+                                                 c_gate.read(path)["sample"])
+                for path in paths])
+            for path in paths:
+                current = c_gate.read(path.with_name("summary.json"))
+                c_gate.c_comparison.annotate_scope(current, set(scope["targetHeaders"]))
+                current["projectAcceptance"].update(
+                    scopeMatrix=scope, complianceScope=current["complianceScope"],
+                    occurrences=[{"diagnostic": index, "locationIndex": position,
+                                  "assessment": "blocked"}
+                                 for index, position, _row, _location
+                                 in c_gate.c_acceptance._positions(current["diagnostics"])])
+                path.with_name("summary.json").write_text(json.dumps(current))
+                data = c_gate.read(path)
+                data["baselineScopeMatrix"] = scope
+                data["summarySha256"]["current"] = c_gate.sha(path.with_name("summary.json"))
+                path.write_text(json.dumps(data))
             shutil.rmtree(root / "fixture")
             def revision(*args):
                 return "head" if args[-1] == "HEAD" else "parent"
@@ -522,8 +545,9 @@ class SourceGateTests(unittest.TestCase):
                 c_gate.aggregate(root)
                 path = next(root.glob("*/*/gate.json"))
                 original = path.read_bytes()
+                summary_bytes = path.with_name("summary.json").read_bytes()
                 for change in ("missing", "duplicate", "run", "status", "identity",
-                               "summary", "source"):
+                               "summary", "source", "occurrence"):
                     with self.subTest(change=change):
                         data = json.loads(original)
                         if change == "missing":
@@ -531,8 +555,14 @@ class SourceGateTests(unittest.TestCase):
                         elif change == "duplicate":
                             extra = root / "extra" / path.parent.name
                             shutil.copytree(path.parent, extra)
-                        elif change == "summary":
+                        elif change in ("summary", "occurrence"):
                             path.with_name("summary.json").write_text("{}")
+                        elif change == "occurrence":
+                            changed = json.loads(summary_bytes)
+                            changed["projectAcceptance"]["occurrences"][0]["assessment"] = "out_of_scope"
+                            path.with_name("summary.json").write_text(json.dumps(changed))
+                            data["summarySha256"]["current"] = c_gate.sha(path.with_name("summary.json"))
+                            path.write_text(json.dumps(data))
                         elif change == "source":
                             data.pop("baselineSource")
                             path.write_text(json.dumps(data))
@@ -547,6 +577,5 @@ class SourceGateTests(unittest.TestCase):
                         path.write_bytes(original)
                         if change == "duplicate":
                             shutil.rmtree(root / "extra")
-                        if change == "summary":
-                            shutil.copy2(path.with_name("baseline-summary.json"),
-                                         path.with_name("summary.json"))
+                        if change in ("summary", "occurrence"):
+                            path.with_name("summary.json").write_bytes(summary_bytes)

@@ -1058,6 +1058,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: c-analysis-scope-${{ env.ANALYSIS_SIDE }}-${{ matrix.target }}-${{ matrix.group }}-${{ strategy.job-index }}
+          overwrite: true
+          path: build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/scope-input.json
+          if-no-files-found: error
+          retention-days: 14
+
       # Full target-host replay inputs are retained once, outside the comparison bundle.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -1219,7 +1227,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    needs: [c-analysis-samples, c-analysis-baseline]
+    needs: [c-analysis-samples, c-analysis-baseline, c-analysis-samples-windows, c-analysis-baseline-windows]
     strategy:
       fail-fast: false
       matrix:
@@ -1261,6 +1269,10 @@ jobs:
         with:
           pattern: c-analysis-raw-*-${{ matrix.target }}-${{ matrix.group }}-*
           path: build/c-analysis-raw
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: c-analysis-scope-*
+          path: build/c-analysis-scope
       - name: Require exactly one scan per side
         env:
           ANALYSIS_TARGET: ${{ matrix.target }}
@@ -1285,7 +1297,8 @@ jobs:
           import os, subprocess, sys
           sys.exit(subprocess.run([sys.executable, '-m', 'autosar_tooling.c_gate', 'scan',
               '--target', os.environ['ANALYSIS_TARGET'],
-              '--sample', os.environ['ANALYSIS_SAMPLE']]).returncode)
+              '--sample', os.environ['ANALYSIS_SAMPLE'],
+              '--scope-directory', 'build/c-analysis-scope']).returncode)
       - name: Summarize and convert Cppcheck diagnostics
         if: always()
         run: python -m autosar_tooling.ci_reporting sarif --cppcheck-directory build/c-analysis-results --baseline-directory build/c-analysis-baseline --output build/cppcheck.sarif
@@ -1327,7 +1340,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    needs: [c-analysis-samples-windows, c-analysis-baseline-windows]
+    needs: [c-analysis-samples, c-analysis-baseline, c-analysis-samples-windows, c-analysis-baseline-windows]
     strategy:
       fail-fast: false
       matrix:

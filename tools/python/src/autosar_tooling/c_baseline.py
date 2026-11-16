@@ -24,7 +24,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessResult, ProcessSpec, run_bounded
 
-from autosar_tooling import c_acceptance, c_check, c_gate
+from autosar_tooling import c_acceptance, c_check, c_comparison, c_gate
 from autosar_tooling.config import ROOT
 
 FORMAT = "c-analysis-raw-baseline-v1"
@@ -82,6 +82,8 @@ def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
 def record(output: Path, tree: str, target: str, sample: str) -> None:
     summary = read(output / "summary.json")
     c_acceptance._complete(summary)
+    (output / "scope-input.json").write_text(
+        json.dumps(c_comparison.scope_receipt(summary, sample), indent=2) + "\n", encoding="utf-8")
     value = identity(output / "project", tree, target, sample, summary["tool"],
                      compiler_identity(Path(summary["scope"]["diagnosticCompiler"]["path"])),
                      summary["semanticIdentity"]["sdk"])

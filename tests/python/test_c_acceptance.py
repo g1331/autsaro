@@ -13,7 +13,15 @@ from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_acceptance, c_check, c_retention, c_sdk, c_standard, cli
+from autosar_tooling import (
+    c_acceptance,
+    c_check,
+    c_comparison,
+    c_retention,
+    c_sdk,
+    c_standard,
+    cli,
+)
 from autosar_tooling.config import ROOT
 
 TARGET = "linux-x64-controlled-v1"
@@ -591,6 +599,98 @@ class AcceptanceTests(unittest.TestCase):
         result = self.evaluate()
         self.assertIn("definition differs: " + self.sdk_name + ":1:O_RDONLY",
                       result["objects"][-1]["reason"])
+
+    def test_matrix_union_reassesses_existing_and_new_shared_header_diagnostics(self):
+        import test_c_comparison as comparison_tests
+        from autosar_tooling import c_gate
+
+        self.grp_inputs()
+        shared = "integration/include/Shared.h"
+        host = "integration/src/Host.c"
+        self.files[shared] = self.files["generated/Owned.c"].replace(b"owned(", b"shared_value(")
+        self.files[host] = b'#include "../include/Shared.h"\n'
+        owners = json.loads(self.files["meta/workbench-ownership.json"])
+        for name in (shared, host):
+            owners["files"].append({"path": name, "owner": "generated",
+                                    "producerId": "autosar-generator",
+                                    "sha256": hashlib.sha256(self.files[name]).hexdigest()})
+        self.files["meta/workbench-ownership.json"] = json.dumps(owners).encode()
+        self.summary["scope"]["translationUnits"].append(host)
+        for row in self.summary["programs"]:
+            row["translationUnits"].append(host)
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.identity()
+        for unit, paths in self.summary["scope"]["projectTranslationUnits"].items():
+            if not unit.startswith("integration/"):
+                paths.remove(shared)
+        comparison, *_ = comparison_tests.CComparisonTests().fixture(self.directory / "semantic")
+        self.summary["semanticIdentity"] = copy.deepcopy(comparison["semanticIdentity"])
+        self.summary["semanticIdentity"]["defines"] = {
+            unit: [] for unit in self.summary["scope"]["translationUnits"]}
+        self.summary["scope"].update(profile="ecu", sdkEnvironment=comparison["scope"]["sdkEnvironment"])
+        self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
+            c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
+        self.summary["tool"]["binarySha256"] = "synthetic-analyzer-binary"
+
+        def matrix_for(summary):
+            receipts = []
+            for target in c_comparison.MATRIX_TARGETS:
+                for sample in c_comparison.MATRIX_SAMPLES:
+                    other = copy.deepcopy(summary)
+                    other["scope"]["target"] = target
+                    if sample == "user-application":
+                        paths = other["scope"]["projectTranslationUnits"]["main.c"]
+                        paths.append(shared)
+                        paths.sort()
+                    receipts.append(c_comparison.scope_receipt(other, sample))
+            return c_comparison.scope_matrix(receipts)
+
+        original_evaluate = c_acceptance.evaluate
+        def actual(summary, project):
+            return original_evaluate(summary, project, root=self.root)
+
+        for scenario, rule, expected in (("existing", "2.7", "passed"),
+                                         ("new-unknown", "2.7", "blocked"),
+                                         ("new-disposed", "15.5", "passed")):
+            with self.subTest(scenario=scenario):
+                self.summary.pop("projectAcceptance", None)
+                self.summary["diagnostics"] = [self.grp_diagnostic(shared, rule=rule)]
+                self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "out_of_scope")
+                previous = copy.deepcopy(self.summary)
+                if scenario != "existing":
+                    previous["diagnostics"] = []
+                current_matrix, baseline_matrix = matrix_for(self.summary), matrix_for(previous)
+                output, baseline = self.directory / (scenario + "-current"), self.directory / (scenario + "-base")
+                shutil.copytree(self.project, output / "project")
+                shutil.copytree(self.project, baseline / "project")
+                (baseline / "summary.json").write_text(json.dumps(previous))
+                c_comparison.annotate_scope(self.summary, set(current_matrix["targetHeaders"]))
+                result = original_evaluate(self.summary, output / "project", root=self.root,
+                                           matrix_scope=current_matrix)
+                self.assertNotEqual(result["status"], "error", result["objects"])
+                self.assertEqual(result["complianceScope"]["inScope"], 1)
+                occurrence = result["occurrences"][0]
+                self.assertEqual(occurrence["assessment"], "accepted" if rule == "15.5" else "blocked")
+                if rule != "15.5":
+                    self.assertTrue(any(row["kind"] == "diagnostic" and row["location"]["file"] == shared
+                                        for row in result["objects"]))
+                self.assertNotEqual(result["inputIdentity"], c_acceptance.input_identity(self.summary, self.project, root=self.root))
+                changed_members = copy.deepcopy(current_matrix["members"])
+                changed_members[-1]["analysisIdentity"] = "0" * 64
+                other_scope = c_comparison.scope_matrix(changed_members)
+                self.assertNotEqual(result["inputIdentity"], c_acceptance.input_identity(
+                    self.summary, self.project, root=self.root, matrix_scope=other_scope))
+                self.summary["projectAcceptance"] = result
+                with patch.object(c_acceptance, "evaluate", side_effect=actual):
+                    gate = c_gate.verdict(self.summary, output, baseline, {}, baseline_matrix=baseline_matrix)
+                self.assertEqual(gate["status"], expected)
+                self.assertFalse(gate["outOfScopeNew"])
+                self.assertEqual(bool(gate["comparison"]["new"]), scenario != "existing")
+                changed = copy.deepcopy(current_matrix)
+                changed["targetHeaders"].remove(shared)
+                refused = original_evaluate(self.summary, output / "project", root=self.root, matrix_scope=changed)
+                self.assertEqual(refused["status"], "error")
 
     def test_source_gate_consumes_real_exact_position_while_project_remains_blocked(self):
         import test_c_comparison as comparison_tests
