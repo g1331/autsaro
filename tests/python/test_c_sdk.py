@@ -18,6 +18,42 @@ TARGET = "windows-x64-controlled-v1"
 
 
 class SdkSourceTests(unittest.TestCase):
+    def test_preprocessor_provenance_follows_markers_without_per_macro_path_io(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            header = root.parent / "sdk-519.h"
+            source = root / "main.c"
+            source.write_text("use(LIMIT);\nuse(LIMIT);\nuse(BUILTIN);\n")
+            text = (
+                '# 1 "<built-in>"\n#define BUILTIN 7U\n'
+                f'# 10 "{header.as_posix()}"\n#define LIMIT 1U\n'
+                + "".join(f"#define UNUSED_{i} {i}\n" for i in range(1000))
+                + f'# 1 "{source.as_posix()}"\nuse(1U);\n'
+                f'# 20 "{header.as_posix()}"\n#undef LIMIT\n#define LIMIT 2U\n'
+                f'# 2 "{source.as_posix()}"\nuse(2U);\nuse(7U);\n'
+            )
+            resolved = []
+            original = Path.resolve
+
+            def resolve(path, *args, **kwargs):
+                resolved.append(path)
+                return original(path, *args, **kwargs)
+
+            with patch.object(Path, "resolve", resolve):
+                inputs = c_sdk.preprocessing(text, root, {"LIMIT", "BUILTIN"})
+            self.assertCountEqual(resolved, [header, source])
+            self.assertEqual(inputs["main.c:1"]["LIMIT"], {
+                "file": header.as_posix(), "line": 10, "value": "1U",
+                "function": False, "use": "use(LIMIT);", "unresolved": False,
+            })
+            self.assertEqual(inputs["main.c:2"]["LIMIT"]["value"], "2U")
+            self.assertEqual(inputs["main.c:2"]["LIMIT"]["line"], 21)
+            self.assertEqual(inputs["main.c:3"]["BUILTIN"]["file"], "<built-in>")
+            # A new TU invocation must read the current source at the same path.
+            source.write_text("consume(LIMIT);\nuse(LIMIT);\nuse(BUILTIN);\n")
+            refreshed = c_sdk.preprocessing(text, root, {"LIMIT", "BUILTIN"})
+            self.assertEqual(refreshed["main.c:1"]["LIMIT"]["use"], "consume(LIMIT);")
+
     def fixture(self, directory):
         root = directory / "project"
         root.mkdir()
