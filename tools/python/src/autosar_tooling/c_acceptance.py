@@ -19,7 +19,7 @@ from ecu_tools.build import (
     safe_relative,
 )
 
-from autosar_tooling import c_retention, c_sdk, c_standard
+from autosar_tooling import c_comparison, c_retention, c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 BEGIN = "<!-- source-assessment-context-begin -->"
@@ -242,6 +242,7 @@ def input_identity(summary: dict, project: Path, *, root: Path = ROOT,
                   "files": actual, "semanticIdentity": semantic,
                   "projectTranslationUnits": summary["scope"].get("projectTranslationUnits"),
                   "cppcheckInputs": summary["scope"].get("cppcheckInputs"),
+                  "patchedLines": summary["scope"].get("patchedLines"),
                   "tool": {key: summary["tool"][key] for key in ("version", "expectedSourceRevision", "addons")},
                   "assessmentInputs": _assessment_inputs(summary, root),
                   "programs": [{key: program[key] for key in ("name", "entry", "translationUnits")}
@@ -903,6 +904,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
 
     try:
         _complete(summary)
+        result["complianceScope"] = c_comparison.scope_statistics(summary)
         identity = input_identity(summary, project, root=root)
         result["inputIdentity"] = identity
         result["assessmentInputs"] = _assessment_inputs(summary, root)
@@ -978,6 +980,9 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
                 (root / "third_party/freertos" / name).is_file()
                 for name in ("source-manifest.json", "posix-source-manifest.json")):
             kernel = _freertos_sources(project, metadata, root)
+        if (kernel is not None and "patchedLines" in summary["scope"]
+                and summary["scope"]["patchedLines"] != kernel[1]):
+            raise ValueError("MISRA scope patch line receipt differs from verified hunks")
         grp_positions = _grp_positions(
             summary, project, metadata, root, kernel[1] if kernel is not None else {})
         owned_positions = _owned_positions(summary, project, metadata, root)
@@ -1022,6 +1027,15 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         for occurrence, (index, position, diagnostic, location) in zip(occurrences, positions):
             if occurrence["diagnostic"] != index or occurrence["location"] != location:
                 raise ValueError("Retention occurrence position differs")
+            classification = (c_comparison.location_scope(summary["scope"], location)
+                              if location is not None else "in-scope")
+            if classification != "in-scope":
+                result["occurrences"].append({
+                    **occurrence, "locationIndex": position, "assessment": "out_of_scope",
+                    "status": "out_of_scope",
+                    "reason": classification, "diagnosticIdentity": _hash(diagnostic),
+                })
+                continue
             grp = (index, position) in grp_positions
             if grp:
                 reason = None

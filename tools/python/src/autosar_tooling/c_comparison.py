@@ -18,7 +18,67 @@ def _read(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def diagnostic_counts(summary: dict, root: Path) -> Counter:
+def platform_location(name: str) -> bool:
+    """ADR 0030 rule 1: platform selection owns the complete directory."""
+    return name.startswith(("os/src/host/", "kernel/portable/MSVC-MingW/",
+                            "kernel/portable/ThirdParty/GCC/Posix/"))
+
+
+def target_headers(scopes: list[dict]) -> set[str]:
+    """Union GCC -MD receipts from target TUs, across samples and programs."""
+    headers = set()
+    for scope in scopes:
+        dependencies = scope.get("projectTranslationUnits", {})
+        for unit in scope["translationUnits"]:
+            if platform_location(unit) or unit.startswith("integration/"):
+                continue
+            headers.update(dependencies.get(unit, []))
+    return headers
+
+
+def location_scope(scope: dict, location: dict, *, headers: set[str] | None = None) -> str:
+    """Classify a physical position, including mixed adopted/project diagnostics."""
+    name = location["file"]
+    if platform_location(name):
+        return "host-platform"
+    if name.startswith("integration/"):
+        if name.endswith(".c"):
+            return "host-integration"
+        dependencies = scope.get("projectTranslationUnits")
+        units = [unit for unit in scope["translationUnits"]
+                 if not platform_location(unit) and not unit.startswith("integration/")]
+        if not isinstance(dependencies, dict) or any(unit not in dependencies for unit in units):
+            raise ValueError("MISRA scope requires complete GCC project dependency receipts")
+        if name not in (target_headers([scope]) if headers is None else headers):
+            return "host-integration"
+    if (name.startswith("kernel/") and "patchedLines" in scope
+            and int(location["line"]) not in scope["patchedLines"].get(name, [])):
+        return "adopted-kernel"
+    return "in-scope"
+
+
+def scope_statistics(summary: dict, *, headers: set[str] | None = None) -> dict:
+    """Count physical locations once; program multiplicity is kept by comparison."""
+    categories = Counter(location_scope(summary["scope"], location, headers=headers)
+                         for diagnostic in summary["diagnostics"]
+                         if diagnostic["id"] != "checkersReport"
+                         for location in diagnostic["locations"])
+    inside = categories["in-scope"]
+    total = sum(categories.values())
+    raw = [diagnostic for diagnostic in summary["diagnostics"]
+           if diagnostic["id"] != "checkersReport"]
+    raw_outside = sum(bool(row["locations"]) and all(
+        location_scope(summary["scope"], location, headers=headers) != "in-scope"
+        for location in row["locations"]) for row in raw)
+    return {"total": total, "inScope": inside, "outOfScope": total - inside,
+            "categories": dict(sorted(categories.items())),
+            "diagnostics": {"total": len(raw), "inScope": len(raw) - raw_outside,
+                            "outOfScope": raw_outside,
+                            "informational": len(summary["diagnostics"]) - len(raw)}}
+
+
+def diagnostic_counts(summary: dict, root: Path, *, in_scope_only: bool = False,
+                      headers: set[str] | None = None) -> Counter:
     counts = Counter()
     for diagnostic in summary["diagnostics"]:
         if diagnostic["id"] == "checkersReport":
@@ -27,6 +87,8 @@ def diagnostic_counts(summary: dict, root: Path) -> Counter:
         if not locations:
             raise ValueError(f"Diagnostic has no source location: {diagnostic['id']}")
         for location in locations:
+            if in_scope_only and location_scope(summary["scope"], location, headers=headers) != "in-scope":
+                continue
             name = location["file"]
             if not safe_relative(name):
                 raise ValueError(f"Diagnostic outside sample: {name}")
@@ -209,6 +271,10 @@ def compare(
                 return {key: normalized(item, key) for key, item in value.items()}
             if isinstance(value, list):
                 items = [normalized(item) for item in value]
+                if source_tree and field == "includePaths":
+                    # Selected host provider directories may move with source layout.
+                    # Their actual dependencies remain bound by each complete scan.
+                    items = [item for item in items if not item.startswith("os/src/host/")]
                 # These are source sets, emitted in filename order. Renaming a
                 # source can reorder them without changing the analysis closure.
                 if (source_tree and field in {"sources", "kernelSources", "translationUnits",

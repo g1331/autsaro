@@ -32,7 +32,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessSpec, run_bounded
 
-from autosar_tooling import c_acceptance, c_retention, c_sdk, c_standard
+from autosar_tooling import c_acceptance, c_comparison, c_retention, c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 CPPCHECK_VERSION = "2.21.0"
@@ -752,6 +752,11 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         scope["cppcheckInputs"] = {unit: {kind: sorted(names) for kind, names in actual.items()}
                                   for unit, actual in combined_inputs.items()}
         diagnostics = summary["diagnostics"]
+        for diagnostic in diagnostics:
+            diagnostic["complianceScope"] = [
+                c_comparison.location_scope(scope, location)
+                for location in diagnostic["locations"]]
+        summary["complianceScope"] = c_comparison.scope_statistics(summary)
         if scope.get("profile") == "ecu":
             summary["generatedRetention"] = c_retention.analyze(diagnostics, root, target_id)
         summary["sourceClassification"] = c_sdk.summary(diagnostics, scope.get("sdkHeaders", []), not scope.get("sdkLineDirectives", False))

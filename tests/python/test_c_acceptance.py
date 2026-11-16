@@ -174,6 +174,26 @@ class AcceptanceTests(unittest.TestCase):
                                         "locations": [{"file": self.retained["delivered"], "line": 2, "column": 0}]}]
         self.bind_groups()
 
+    def test_outside_locations_are_counted_without_diagnostic_blockers(self):
+        self.files["os/src/host/linux/host.c"] = b"host();\n"
+        self.files["main.c"] = b"target();\n"
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.summary["diagnostics"] = [{
+            "id": "unknown", "programs": ["host-batch"], "locations": [
+                {"file": "os/src/host/linux/host.c", "line": "1"},
+                {"file": "main.c", "line": "1"}]}]
+        self.identity()
+        result = self.evaluate()
+        self.assertNotEqual(result["status"], "error", result)
+        self.assertEqual(result["complianceScope"]["outOfScope"], 1)
+        self.assertEqual(result["complianceScope"]["inScope"], 1)
+        self.assertEqual([row["assessment"] for row in result["occurrences"]],
+                         ["out_of_scope", "blocked"])
+        diagnostic_objects = [row for row in result["objects"] if row["kind"] == "diagnostic"]
+        self.assertEqual(len(diagnostic_objects), 1)
+        self.assertEqual(diagnostic_objects[0]["location"]["file"], "main.c")
+
     def test_cppcheck_only_header_bytes_and_new_diagnostics_expire_freertos_evidence(self):
         self.freertos_inputs()
         name = "os/HiddenReview.h"
@@ -1705,7 +1725,7 @@ class AcceptanceTests(unittest.TestCase):
         (self.root / c_acceptance.ADOPTION).write_text("## 当前集成义务与消费\n", encoding="utf-8")
         self.seal()
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
-        self.summary["scope"].update(sdkHeaders=[], sdkMacroInputs={}, patchedLines={})
+        self.summary["scope"].update(sdkHeaders=[], sdkMacroInputs={}, patchedLines={"kernel/kernel.h": [3]})
 
     def grp_diagnostic(self, name, line=2, *, rule="15.5", **details):
         text = self.files[name].decode().splitlines()[line - 1]
@@ -1740,14 +1760,19 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["diagnostics"] = [
             self.grp_diagnostic("kernel/kernel.h"), self.grp_diagnostic("unknown.c"),
             self.grp_diagnostic("generated/Owned.c", rule="15.4")]
-        self.summary["scope"]["patchedLines"] = {"kernel/kernel.h": [2]}
+        self.summary["scope"]["patchedLines"] = {"kernel/kernel.h": [3]}
         self.summary["scope"]["sdkMacroInputs"] = {"main.c": {"kernel/kernel.h:2": {
             "PROJECT_CONFIG": {"file": "generated/Owned.c", "line": 1, "value": "1"}}}}
         self.bind_groups()
         result = self.evaluate()
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(len(result["occurrences"]), 3)
-        self.assertTrue(all(row["assessment"] == "blocked" for row in result["occurrences"]))
+        self.assertEqual([row["assessment"] for row in result["occurrences"]],
+                         ["out_of_scope", "blocked", "blocked"])
+        self.summary["scope"]["patchedLines"] = {"kernel/kernel.h": [2]}
+        refused = self.evaluate()
+        self.assertEqual(refused["status"], "error")
+        self.assertIn("patch line receipt differs", refused["objects"][-1]["reason"])
 
     def test_grp_uses_hunk_identity_for_duplicate_kernel_returns(self):
         self.grp_inputs()
@@ -1766,8 +1791,8 @@ class AcceptanceTests(unittest.TestCase):
         rows = self.evaluate()["occurrences"]
         self.assertEqual([row["location"]["line"] for row in rows], ["2", "3"])
         self.assertEqual([row["status"] for row in rows],
-                         ["freertos_record_matched", "grp_disapplied"])
-        self.assertEqual([row["assessment"] for row in rows], ["accepted", "accepted"])
+                         ["out_of_scope", "grp_disapplied"])
+        self.assertEqual([row["assessment"] for row in rows], ["out_of_scope", "accepted"])
 
     def test_grp_keeps_untraceable_return_blocked(self):
         self.grp_inputs()

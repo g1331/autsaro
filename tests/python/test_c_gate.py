@@ -30,6 +30,27 @@ class SourceGateTests(unittest.TestCase):
         }
         return current, output, baseline
 
+    def test_injected_outside_diagnostic_is_visible_and_inside_still_blocks(self):
+        for name, expected in (("os/src/host/linux/injected.c", "passed"),
+                               ("bsw/src/injected.c", "blocked")):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                current, output, baseline = self.fixture(Path(temporary))
+                destination = output / "project" / name
+                destination.parent.mkdir(parents=True)
+                destination.write_text("injected();\n")
+                current["diagnostics"].append({
+                    "id": "injected-rule", "locations": [{"file": name, "line": "1"}],
+                    "programs": ["target"]})
+                with patch.object(c_gate.c_acceptance, "evaluate",
+                                  return_value=current["projectAcceptance"]):
+                    result = c_gate.verdict(current, output, baseline, {})
+                self.assertEqual(result["status"], expected)
+                self.assertEqual(result["comparison"]["new"][0]["rule"], "injected-rule")
+                self.assertEqual(len(result["outOfScopeNew"]), int(expected == "passed"))
+                counts = result["complianceScope"]
+                self.assertEqual(counts["total"], counts["inScope"] + counts["outOfScope"])
+                self.assertEqual(len(current["diagnostics"]), 2)
+
     def test_new_changed_text_and_cross_program_are_blocked_but_moves_pass(self):
         for mutation in ("new", "text", "program", "move"):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
@@ -486,6 +507,7 @@ class SourceGateTests(unittest.TestCase):
                     for name in ("summary.json", "baseline-summary.json"):
                         (directory / name).write_text(json.dumps(current))
                     gate = {"format": c_gate.FORMAT, "status": "passed", "target": target,
+                            "outOfScopeNew": [],
                             "sample": sample, "commit": "head", "baseline": "parent",
                             "baselineSource": {"kind": "same-run", "tree": "parent"},
                             "inputIdentity": dict.fromkeys(("current", "baseline"), identity),

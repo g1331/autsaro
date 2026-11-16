@@ -8,13 +8,49 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_sdk
+from autosar_tooling import c_comparison, c_sdk
 from autosar_tooling.c_comparison import compare
 from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
 from ecu_tools.build import digest
 
 
 class CComparisonTests(unittest.TestCase):
+    def test_host_scope_uses_target_dependency_union_and_patch_landing_lines(self):
+        scope = {"translationUnits": ["bsw/src/Can.c", "integration/src/host.c",
+                                      "os/src/host/linux/port.c", "kernel/tasks.c"],
+                 "projectTranslationUnits": {
+                     "bsw/src/Can.c": ["integration/include/Shared.h"],
+                     "integration/src/host.c": ["integration/include/Private.h"],
+                     "os/src/host/linux/port.c": ["integration/include/Port.h"],
+                     "kernel/tasks.c": ["kernel/portable/MSVC-MingW/portmacro.h"]},
+                 "patchedLines": {"kernel/tasks.c": [7],
+                                  "kernel/portable/MSVC-MingW/port.c": [7]}}
+        expected = {
+            "integration/include/Shared.h": "in-scope",
+            "integration/include/Private.h": "host-integration",
+            "integration/include/Port.h": "host-integration",
+            "integration/src/host.c": "host-integration",
+            "os/src/host/windows/Os_Stack.c": "host-platform",
+            "kernel/portable/MSVC-MingW/port.c": "host-platform",
+            "kernel/portable/MSVC-MingW/portmacro.h": "host-platform",
+            "kernel/tasks.c": "in-scope", "bsw/src/Can.c": "in-scope"}
+        for name, category in expected.items():
+            with self.subTest(name=name):
+                self.assertEqual(c_comparison.location_scope(
+                    scope, {"file": name, "line": "7"}), category)
+        self.assertEqual(c_comparison.location_scope(
+            scope, {"file": "kernel/tasks.c", "line": "8"}), "adopted-kernel")
+        other = {**scope, "projectTranslationUnits": {
+            **scope["projectTranslationUnits"],
+            "bsw/src/Can.c": ["integration/include/Private.h"]}}
+        union = c_comparison.target_headers([scope, other])
+        self.assertEqual(c_comparison.location_scope(scope, {
+            "file": "integration/include/Private.h", "line": "1"}, headers=union), "in-scope")
+        del scope["projectTranslationUnits"]["kernel/tasks.c"]
+        with self.assertRaisesRegex(ValueError, "complete GCC"):
+            c_comparison.location_scope(scope, {
+                "file": "integration/include/Private.h", "line": "1"})
+
     def fixture(self, root):
         baseline = root / "baseline/sample"
         output = root / "current"

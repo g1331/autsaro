@@ -98,6 +98,13 @@ def rename_paths(previous: Path, current: Path) -> dict[str, str]:
     new = read(current / "meta/integration.json").get("originalBswSources", {})
     for origin, delivered in old.items():
         renamed = mappings.get(origin, origin)
+        if renamed not in new and origin.startswith("runtime/os/"):
+            # A split source has one selected provider in each delivered target.
+            candidates = [name for name in new if name.startswith("runtime/os/src/host/")
+                          and Path(name).name == Path(origin).name]
+            if len(candidates) == 1:
+                renamed = candidates[0]
+                mappings[origin] = renamed
         if renamed in new and new[renamed] != delivered:
             mappings[delivered] = new[renamed]
     return mappings
@@ -159,14 +166,26 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
     if acceptance != current["projectAcceptance"]:
         raise ValueError("Project acceptance receipt differs from current inputs")
     accepted = new_dispositions(current, acceptance, output / "project", baseline, renames)
-    blocked = []
+    previous = read(baseline / "summary.json")
+    inside = c_comparison.diagnostic_counts(current, output / "project", in_scope_only=True)
+    before = Counter()
+    for (rule, name, source, program), count in c_comparison.diagnostic_counts(
+            previous, baseline / "project", in_scope_only=True).items():
+        before[rule, renames.get(name, name), source, program] += count
+    additions = inside - before
+    blocked, outside = [], []
     for row in comparison["new"]:
         key = row["rule"], row["file"], row["source"], row["program"]
-        remaining = row["count"] - accepted[key]
+        count = min(row["count"], additions[key])
+        if row["count"] > count:
+            outside.append({**row, "count": row["count"] - count})
+        remaining = count - accepted[key]
         if remaining > 0:
             blocked.append({**row, "count": remaining})
     return {"status": "blocked" if blocked else "passed", "comparison": comparison,
-            "unacceptedNew": blocked, "projectAcceptance": acceptance["status"]}
+            "unacceptedNew": blocked, "outOfScopeNew": outside,
+            "complianceScope": c_comparison.scope_statistics(current),
+            "projectAcceptance": acceptance["status"]}
 
 
 def scan(target: str, sample: str) -> None:
@@ -208,6 +227,7 @@ def scan(target: str, sample: str) -> None:
 def aggregate(directory: Path) -> None:
     expected = {(target, sample) for target in TARGETS for sample in SAMPLES}
     found, identities = set(), set()
+    matrix = []
     for path in directory.glob("*/*/gate.json"):
         gate = read(path)
         pair = gate["target"], gate["sample"]
@@ -229,9 +249,25 @@ def aggregate(directory: Path) -> None:
                     or summary["scope"]["target"] != gate["target"]):
                 raise ValueError(f"Source gate analysis identity invalid: {summary_path}")
             identities.add((side, gate["target"], identity))
+        matrix.append((gate, read(path.with_name("summary.json"))))
         found.add(pair)
     if found != expected or len(list(directory.glob("*/*/summary.json"))) != len(expected):
         raise ValueError(f"Source gate matrix incomplete: {sorted(expected - found)}")
+    headers = c_comparison.target_headers([summary["scope"] for _gate, summary in matrix])
+    statistics = []
+    for gate, summary in matrix:
+        # A header used by any selected target TU is in scope for every shard.
+        promoted = [row for row in gate["outOfScopeNew"]
+                    if row["file"].startswith("integration/")
+                    and not row["file"].endswith(".c") and row["file"] in headers]
+        if promoted:
+            raise ValueError(f"New target-header diagnostics in matrix closure: {promoted}")
+        statistics.append({"target": gate["target"], "sample": gate["sample"],
+                           **c_comparison.scope_statistics(summary, headers=headers)})
+    (directory / "compliance-scope.json").write_text(
+        json.dumps({"targetHeaders": sorted(headers), "analyses": statistics}, indent=2) + "\n",
+        encoding="utf-8")
+
 
 
 def main() -> None:
