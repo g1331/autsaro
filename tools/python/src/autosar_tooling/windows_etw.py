@@ -19,26 +19,37 @@ from pathlib import Path
 PROFILE = """<?xml version="1.0" encoding="utf-8"?>
 <WindowsPerformanceRecorder Version="1.0">
   <Profiles>
-    <SystemCollector Id="System" Name="AUTSARO process lifecycle">
+    <SystemCollector Id="JobSystemCollector" Name="AUTSARO process lifecycle">
       <BufferSize Value="64"/><Buffers Value="64"/>
     </SystemCollector>
-    <EventCollector Id="Events" Name="AUTSARO process identities">
+    <EventCollector Id="JobEventCollector" Name="AUTSARO process identities">
       <BufferSize Value="64"/><Buffers Value="64"/>
     </EventCollector>
-    <SystemProvider Id="Kernel">
+    <SystemProvider Id="JobSystemProvider">
       <Keywords><Keyword Value="ProcessThread"/></Keywords>
     </SystemProvider>
-    <EventProvider Id="Process" Name="22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716">
+    <EventProvider Id="JobProcessProvider" Name="Microsoft-Windows-Kernel-Process" Level="5">
       <Keywords><Keyword Value="0x30"/></Keywords>
     </EventProvider>
     <Profile Id="Job.Verbose.File" Name="Job" Description="Job member lifecycle"
              LoggingMode="File" DetailLevel="Verbose">
       <Collectors>
-        <SystemCollectorId Value="System">
-          <SystemProviderId Value="Kernel"/>
+        <SystemCollectorId Value="JobSystemCollector">
+          <SystemProviderId Value="JobSystemProvider"/>
         </SystemCollectorId>
-        <EventCollectorId Value="Events">
-          <EventProviders><EventProviderId Value="Process"/></EventProviders>
+        <EventCollectorId Value="JobEventCollector">
+          <EventProviders><EventProviderId Value="JobProcessProvider"/></EventProviders>
+        </EventCollectorId>
+      </Collectors>
+    </Profile>
+    <Profile Id="Job.Verbose.Memory" Name="Job" Description="Job member lifecycle"
+             LoggingMode="Memory" DetailLevel="Verbose">
+      <Collectors>
+        <SystemCollectorId Value="JobSystemCollector">
+          <SystemProviderId Value="JobSystemProvider"/>
+        </SystemCollectorId>
+        <EventCollectorId Value="JobEventCollector">
+          <EventProviders><EventProviderId Value="JobProcessProvider"/></EventProviders>
         </EventCollectorId>
       </Collectors>
     </Profile>
@@ -80,7 +91,7 @@ def benchmark() -> list[float]:
     return samples
 
 
-def start(folder: Path) -> None:
+def _start(folder: Path) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     profile = folder / "job.wprp"
     profile.write_text(PROFILE, encoding="utf-8")
@@ -127,7 +138,7 @@ def events(path: Path):
         element.clear()
 
 
-def stop(folder: Path) -> None:
+def _stop(folder: Path) -> None:
     if not (folder / "started").exists():
         raise RuntimeError(
             "ETW session never started; collector.jsonl contains setup results"
@@ -159,6 +170,49 @@ def stop(folder: Path) -> None:
     print(
         f"ETW captured {count} events; raw ETL, XML, summary and lifecycle in {folder}"
     )
+
+
+def collector_state(folder: Path, phase: str, error: Exception | None = None) -> bool:
+    state = {
+        "phase": phase,
+        "complete": error is None,
+        "error": str(error) if error else None,
+    }
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "collector-state.json").write_text(
+            json.dumps(state), encoding="utf-8"
+        )
+    except OSError as write_error:
+        print(f"ETW state write failed: {write_error}", file=sys.stderr)
+    if error:
+        print(f"ETW evidence degraded during {phase}: {error}", file=sys.stderr)
+    return error is None
+
+
+def start(folder: Path) -> bool:
+    try:
+        _start(folder)
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        return collector_state(folder, "start", error)
+    return collector_state(folder, "started")
+
+
+def stop(folder: Path) -> bool:
+    # Failure to collect evidence must not suppress the actual contract suites.
+    # Only stop a session for which this job received a successful start receipt.
+    try:
+        _stop(folder)
+    except (
+        OSError,
+        RuntimeError,
+        subprocess.SubprocessError,
+        ValueError,
+        KeyError,
+        AssertionError,
+    ) as error:
+        return collector_state(folder, "stop", error)
+    return collector_state(folder, "complete")
 
 
 def filetime(value: str) -> int:
@@ -195,7 +249,16 @@ def correlate(folder: Path) -> None:
                     identities[pid].append(key[1])
                 elif event["event_id"] == "2":
                     stops[key] = event
-            if fields.get("commandline"):
+            provider = {key.lower(): value for key, value in event["provider"].items()}
+            process_provider = provider.get("guid", "").strip("{}").lower() in {
+                "3d6fa8d0-fe05-11d0-9dda-00c04fd7ba7c",  # Classic kernel Process
+                "22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716",  # Manifest Kernel-Process
+            }
+            if (
+                fields.get("commandline")
+                and event.get("opcode") == "1"
+                and process_provider
+            ):
                 commands[pid].append(event)
     merged = {}
     for key, event in starts.items():
@@ -204,6 +267,13 @@ def correlate(folder: Path) -> None:
             (time for time in identities[pid] if time > created),
             default=2**64,
         )
+        stopped = stops.get(key)
+        if stopped:
+            exit_fields = {
+                key.lower(): value for key, value in stopped["fields"].items()
+            }
+            if exit_fields.get("exittime"):
+                next_created = min(next_created, filetime(exit_fields["exittime"]) + 1)
         command = []
         for candidate in commands[pid]:
             stamp = candidate["timestamp"].get("SystemTime")

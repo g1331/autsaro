@@ -4,8 +4,16 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from autosar_tooling.windows_etw import correlate, events, filetime
+from autosar_tooling.windows_etw import (
+    PROFILE,
+    correlate,
+    events,
+    filetime,
+    start,
+    stop,
+)
 
 
 class WindowsEtwTests(unittest.TestCase):
@@ -32,8 +40,12 @@ class WindowsEtwTests(unittest.TestCase):
 
     def test_join_excludes_a_reused_pid_and_missing_start_fails_control(self):
         def event(identifier, created, **fields):
+            if identifier == 2:
+                fields["ExitTime"] = str(created + 10)
             return {
                 "event_id": str(identifier),
+                "opcode": "1",
+                "provider": {"Guid": "{22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716}"},
                 "timestamp": {"SystemTime": str(created)},
                 "fields": {
                     "ProcessID": "42",
@@ -72,7 +84,76 @@ class WindowsEtwTests(unittest.TestCase):
             self.assertEqual(
                 [value["fields"]["CommandLine"] for value in commands], ["old child"]
             )
+            # Losing the reused PID's manifest start must not attach its later command.
+            path.write_text(
+                "".join(
+                    json.dumps(value) + "\n"
+                    for index, value in enumerate(data)
+                    if index != 2
+                )
+            )
+            correlate(folder)
+            joined = json.loads((folder / "members-etw.jsonl").read_text())
+            self.assertEqual(len(joined["etw"]["command_events"]), 1)
+            rundown = event(0, 102, CommandLine="rundown")
+            rundown["opcode"] = "3"
+            unrelated = event(0, 103, CommandLine="unrelated")
+            unrelated["provider"] = {"Guid": "unrelated"}
+            path.write_text(
+                "".join(
+                    json.dumps(value) + "\n" for value in data + [rundown, unrelated]
+                )
+            )
+            correlate(folder)
+            joined = json.loads((folder / "members-etw.jsonl").read_text())
+            self.assertEqual(len(joined["etw"]["command_events"]), 1)
             # Removing the exact start while leaving a same-PID event cannot satisfy evidence.
             path.write_text("".join(json.dumps(value) + "\n" for value in data[1:]))
             with self.assertRaises(KeyError):
                 correlate(folder)
+
+    def test_wpr_profile_has_both_modes_and_resolvable_provider_references(self):
+        import xml.etree.ElementTree as ET
+
+        root = ET.fromstring(PROFILE)
+        ids = {
+            element.get("Id"): element for element in root.iter() if element.get("Id")
+        }
+        profiles = root.findall("./Profiles/Profile")
+        self.assertEqual(
+            {profile.get("LoggingMode") for profile in profiles}, {"File", "Memory"}
+        )
+        for profile in profiles:
+            self.assertEqual(
+                profile.get("Id"),
+                ".".join(
+                    profile.get(name) for name in ("Name", "DetailLevel", "LoggingMode")
+                ),
+            )
+            for reference in profile.iter():
+                if reference.tag in {
+                    "SystemCollectorId",
+                    "SystemProviderId",
+                    "EventCollectorId",
+                    "EventProviderId",
+                }:
+                    target = ids[reference.get("Value")]
+                    self.assertEqual(target.tag, reference.tag.removesuffix("Id"))
+        self.assertEqual(
+            ids["JobProcessProvider"].get("Name"), "Microsoft-Windows-Kernel-Process"
+        )
+
+    def test_collector_failure_degrades_evidence_without_blocking_tests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            with patch(
+                "autosar_tooling.windows_etw.command",
+                side_effect=RuntimeError("WPR rejected profile"),
+            ):
+                self.assertFalse(start(folder))
+            state = json.loads((folder / "collector-state.json").read_text())
+            self.assertEqual(state["phase"], "start")
+            self.assertIn("WPR rejected profile", state["error"])
+            self.assertFalse(stop(folder))
+            state = json.loads((folder / "collector-state.json").read_text())
+            self.assertFalse(state["complete"])
