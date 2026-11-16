@@ -402,6 +402,29 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(self.plan, plan)
         self.assertNotEqual(self.identity(), before)
 
+    def test_sdk_host_history_and_extra_host_uses_do_not_require_renewed_dispositions(self):
+        self.sdk_inputs()
+        name = "os/src/host/windows/Os_Stack.c"
+        original = "runtime/" + name
+        source = b"host();\n"
+        destination = self.root / original
+        destination.parent.mkdir(parents=True)
+        destination.write_bytes(source)
+        self.files[name] = source
+        self.origins[original] = name
+        self.sdk_record["sites"].append({
+            "target": TARGET, "rule": "7.2", "file": "os/src/Os_Stack.c",
+            "line": 999, "symbol": "INFINITE", "text": "stale historical source"})
+        values = self.summary["scope"]["sdkMacroInputs"][self.sdk_name]
+        values[name + ":1"] = copy.deepcopy(values[self.sdk_name + ":1"])
+        self.write_sdk_record()
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.identity()
+        result = self.evaluate()
+        self.assertNotEqual(result["status"], "error", result["objects"])
+        self.assertTrue(all(row["location"]["file"] != name for row in result["sdkObligations"]))
+
     def sdk_inputs(self):
         # SDK dispositions are tested on a target caller; host providers are now outside scope.
         self.sdk_name = "os/src/Os_Backend.c"

@@ -609,7 +609,7 @@ def sdk_identity(summary: dict, project: Path, root: Path = ROOT) -> str:
 
 
 def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
-                   kernel: tuple | None) -> tuple[dict, list[dict]]:
+                   kernel: tuple | None, *, in_scope_only: bool = False) -> tuple[dict, list[dict]]:
     """Check the exact SDK integration records, independently of diagnostic labels."""
     path = root / SDK
     if not path.is_file():
@@ -641,6 +641,17 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
             raise ValueError("Invalid SDK integration site")
         if row["target"] != scope["target"]:
             continue
+        if in_scope_only:
+            name = row["file"]
+            if not (project / name).is_file():
+                # Frozen SDK records retain their original paths after a host
+                # provider moves. Resolve only an unambiguous selected host file.
+                moved = [path for path in origins if path.startswith("os/src/host/")
+                         and Path(path).name == Path(name).name]
+                if len(moved) == 1:
+                    name = moved[0]
+            if c_comparison.location_scope(scope, {"file": name, "line": row["line"]}) != "in-scope":
+                continue
         key = row["rule"], row["file"], row["line"]
         if key in selected:
             raise ValueError("Duplicate SDK integration site")
@@ -691,6 +702,8 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
         obligations.append({"rule": row["rule"], "location": {"file": name, "line": row["line"]},
                             "entity": row["symbol"], "record": SDK})
     if not selected:
+        if in_scope_only:
+            return {}, []
         raise ValueError("SDK integration target records missing")
     # Extra uses of a reviewed SDK macro require their own record, even with no warning.
     symbols = {row["symbol"] for row in selected.values() if row["rule"] != "5.7"}
@@ -698,6 +711,10 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                  for row in selected.values()}
     for values in scope["sdkMacroInputs"].values():
         for location, definitions in values.items():
+            if in_scope_only:
+                name, line = location.rsplit(":", 1)
+                if c_comparison.location_scope(scope, {"file": name, "line": line}) != "in-scope":
+                    continue
             for symbol in symbols & definitions.keys():
                 definition = definitions[symbol]
                 if (definition["file"] in headers and not definition.get("reference", False)
@@ -1006,7 +1023,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         sdk_positions = {}
         sdk_reason = "sdk_integration_context_unbound_or_stale"
         if (root / SDK).is_file() or summary["scope"].get("sdkTranslationUnits"):
-            sdk_positions, obligations = _sdk_positions(summary, project, metadata, root, kernel)
+            sdk_positions, obligations = _sdk_positions(
+                summary, project, metadata, root, kernel, in_scope_only=True)
             result["sdkObligations"] = obligations
             result["sdkInputIdentity"] = sdk_identity(summary, project, root)
             context = selected.get("sdk-integration")
