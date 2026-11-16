@@ -57,9 +57,7 @@ PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-t
 
 选择检查范围、目标与样本矩阵一致的代码类 PR，对照组与改动组各至少三次必需检查成功的运行，逐次列出路径、关键作业及组中位数。重跑按对应 attempt 的 jobs API 单独取数；故障演示与不同选择范围的运行单列证据。超出任务阈值时继续定位关键作业及具体步骤。workflow／attempt 开始至 `CI required` 完成的实际墙钟另列参考。
 
-按物理行及 `patchedLines` 归属核查预处理指令时，行拼接须保留逻辑行到原物理行的
-映射，去注释须保留注释内换行。用多行注释与续行组合的反例验证映射，并将选中
-指令逐条回查原文件位置后，再形成数量、来源和规则结论；计数测试沿最终核实结果更新。
+按 `patchedLines` 核查指令：保留注释换行及续行物理映射，用组合反例验证，逐条回查原文再计数。
 
 ## 当前输入身份
 
@@ -96,20 +94,19 @@ FreeRTOS 选择包含 kernel 文件的 TU；owned-source 选择包含自有交�
 generated-retention 选择包含活动记录交付文件的 TU；SDK 选择实际包含 SDK 头的 TU。
 GCC 的 `-MD` 回执保存为 `scope.projectTranslationUnits`；项目 addon 从实际 Cppcheck
 dump 的文件表、raw tokens、directives 和配置 tokens 保存逐 TU 的 `scope.cppcheckInputs`。
-文件归属比较对 root、TU、回执文件及 SDK／模型路径同时按宿主规范化，避免把
-Windows 短路径、分隔符或大小写别名误判为越界。
+root、TU、回执及 SDK／模型路径按宿主规范化，识别 Windows 短路径、分隔符和大小写别名。
 文件表也包含空头和 GCC 未打开的条件头。局部选择、文件字节和诊断筛选取两者并集；
 SDK 文件回接已有头身份，模型沿语义身份绑定。存在工程／已验证 SDK／已绑定模型之外
 的来源时，明确拒绝局部证据复用；缺失或不完整的分析器回执须重新扫描。
 摘要读取并集文件的当前字节，连同相关 ownership／runtime 原件、程序成员关系、
 编译参数／宏、SDK 头、分析器／库和本组评估正文。混合诊断保留其全部位置与来源。
 FreeRTOS 另绑定完整原件 manifest、有序补丁及最终 kernel。SDK 保留全部活动定义和报告。
-旧工件缺少 TU 依赖时明确拒绝，须从正常入口重扫。完整 `inputIdentity` 和原始结果继续
-保留；生成模板 carrier 的字节变化通过实际输出闭包反映，闭包外变化可复用局部证据。
+旧工件缺少 TU 依赖须从正常入口重扫，保留完整 `inputIdentity` 和原始结果。
+模板 carrier 字节变化由实际输出闭包反映，闭包外变化可复用局部证据。
 
 ## 原标准篇中的上下文
 
-上下文写在其原标准篇的 JSON 注释块中，起止行分别为 `<!-- source-assessment-context-begin -->` 和 `<!-- source-assessment-context-end -->`。不另建批准文件，也不复制生成保留活动集合或人工表。格式示意：
+上下文写在原标准篇 JSON 注释块中，起止标记为 `<!-- source-assessment-context-begin -->` 和 `<!-- source-assessment-context-end -->`。不另建批准文件或复制活动集合／人工表。示意：
 
 ```json
 {
