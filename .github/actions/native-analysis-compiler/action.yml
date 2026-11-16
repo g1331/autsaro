@@ -11,9 +11,29 @@ runs:
         release: false
         msystem: MINGW64
         path-type: inherit
+    - name: Identify native package cache image
+      id: package-image
+      if: runner.os == 'Windows'
+      shell: python
+      run: |
+        import os
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+            output.write('image=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: gcc-download-cache
+      if: runner.os == 'Windows'
+      with:
+        path: build/native-gcc/packages
+        # The action contains every URL, package hash and installation instruction.
+        key: >-
+          ${{ format('native-gcc-packages-{0}-{1}-{2}-{3}',
+          runner.os, runner.arch, steps.package-image.outputs.image,
+          hashFiles('.github/actions/native-analysis-compiler/action.yml')) }}
     - name: Install locked native GCC
       if: runner.os == 'Windows'
       shell: msys2 {0}
+      env:
+        PACKAGE_CACHE_HIT: ${{ steps.gcc-download-cache.outputs.cache-hit }}
       run: |
         # -U still downloads missing dependencies; use the primary for both sync and install.
         printf '%s\n' 'Server = https://repo.msys2.org/mingw/$repo' > /etc/pacman.d/mirrorlist.mingw
@@ -22,12 +42,19 @@ runs:
         # Require the downloaded sidecar signatures for local packages as well.
         sed -i 's/^LocalFileSigLevel[[:space:]]*=.*/LocalFileSigLevel = Required/' /etc/pacman.conf
         pacman --noconfirm -Sy
-        mkdir -p build/native-gcc
-        cd build/native-gcc
-        for package in mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-binutils-2.47-4-any.pkg.tar.zst; do
-          curl --fail --location --retry 3 --output "$package" "https://repo.msys2.org/mingw/mingw64/$package"
-          curl --fail --location --retry 3 --output "$package.sig" "https://repo.msys2.org/mingw/mingw64/$package.sig"
-        done
+        mkdir -p build/native-gcc/packages
+        cd build/native-gcc/packages
+        if [[ "$PACKAGE_CACHE_HIT" != true ]]; then
+          for package in \
+            mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst \
+            mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst \
+            mingw-w64-x86_64-binutils-2.47-4-any.pkg.tar.zst; do
+            curl --fail --location --retry 3 --output "$package" \
+              "https://repo.msys2.org/mingw/mingw64/$package"
+            curl --fail --location --retry 3 --output "$package.sig" \
+              "https://repo.msys2.org/mingw/mingw64/$package.sig"
+          done
+        fi
         printf '%s\n' '10f7c55275f7fbe7924209d61c368a1a6fcf775cffbdeac2eef1f5ccacdd35cd  mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst' 'aa560f5438c35b71c3e7b24fd5becbca028f70c5b4d1f1697a86ff80fec947da  mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst' 'e36c52a7fe1d104c2efd97dc74162386eabf8323f6aeb9b83aeb574b291a7da0  mingw-w64-x86_64-binutils-2.47-4-any.pkg.tar.zst' | sha256sum --check --strict
         pacman --noconfirm -U mingw-w64-x86_64-gcc-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-gcc-libs-16.1.0-5-any.pkg.tar.zst mingw-w64-x86_64-binutils-2.47-4-any.pkg.tar.zst
         pacman -Q mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-libs mingw-w64-x86_64-binutils
