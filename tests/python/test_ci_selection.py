@@ -78,8 +78,14 @@ class CiSelectionTests(unittest.TestCase):
         self.assertEqual(len(packages), 3)
         for expected, _ in packages:
             script = script.replace(expected, hashlib.sha256(b"package").hexdigest())
+        # Match the portable Bash fixture: Windows' bare bash starts WSL, not Git Bash.
+        bash = (
+            str(Path(os.environ["ProgramFiles"]) / "Git/bin/bash.exe")
+            if os.name == "nt" else "bash"
+        )
         for hit, corrupt in (("false", False), ("true", False), ("true", True)):
-            with self.subTest(hit=hit, corrupt=corrupt), tempfile.TemporaryDirectory() as temporary:
+            with self.subTest(hit=hit, corrupt=corrupt), \
+                    tempfile.TemporaryDirectory(prefix="gcc cache test ") as temporary:
                 root = Path(temporary)
                 directory = root / "build/native-gcc/packages"
                 directory.mkdir(parents=True)
@@ -93,14 +99,20 @@ class CiSelectionTests(unittest.TestCase):
                     'pacman() { echo "pacman $*" >> "$TRACE"; }\n'
                 )
                 trace = root / "trace"
-                result = subprocess.run(["bash", "-e", "-c", prelude + script],
+                result = subprocess.run([bash, "--noprofile", "--norc", "-eo", "pipefail",
+                                         "-c", prelude + script],
                                         check=False, cwd=root,
                                         env={**os.environ, "PACKAGE_CACHE_HIT": hit,
-                                             "TRACE": str(trace)}, capture_output=True, text=True)
+                                             "TRACE": trace.as_posix()},
+                                        capture_output=True, text=True)
+                diagnostics = (
+                    f"shell={bash}, returncode={result.returncode}\n"
+                    + result.stdout + result.stderr
+                )
                 calls = trace.read_text() if trace.exists() else ""
-                self.assertEqual(calls.count("download"), 6 if hit == "false" else 0)
-                self.assertEqual(result.returncode == 0, not corrupt, result.stderr)
-                self.assertEqual("pacman --noconfirm -U" in calls, not corrupt)
+                self.assertEqual(result.returncode == 0, not corrupt, diagnostics)
+                self.assertEqual(calls.count("download"), 6 if hit == "false" else 0, diagnostics)
+                self.assertEqual("pacman --noconfirm -U" in calls, not corrupt, diagnostics)
                 if not corrupt:
                     self.assertTrue(all(name in calls for _, name in packages))
 
