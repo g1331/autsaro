@@ -11,6 +11,9 @@ Linux 的两项计时协议测试使用专用诊断 ELF：
 `Os_BackendRequestShutdown` 的首行接入观察器，覆盖同一编译单元中不经过链接器 `--wrap`
 的调用；普通交付构建不定义该宏。
 
+既有 Linux native 与 sanitizer programs 的依赖安装步骤提供 GDB；本地验证也须预装 GDB。
+工具缺失会使真实消费者的自动捕获回归失败。
+
 观察器锁定首次关闭请求的原因。正常关闭已开始时，退出 actor 的次生 reason=7 继续按原路径
 委派；首次请求为 reason=7 时，随后任何原因的关闭请求都先暂停，避免另一个调用先完成清理。
 
