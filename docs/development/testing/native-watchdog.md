@@ -24,6 +24,10 @@ GDB 事后取证并回收该子进程；GDB 自身最多 15 s，原来的失败�
 ProcessOwner 可能启动该测试进程的兄弟进程，不满足 Yama 的父进程授权。无需修改 ptrace
 设置或使用 root。GDB 不可用、附加失败或字段缺失均保留原始错误，并标记快照无效。
 
+自定义诊断驱动须在创建进程所有权根前导出所选工具与 sanitizer 环境，并将创建根的入口放在
+`setarch x86_64 -R` 内。由根启动的嵌套消费者才能继承同一编译器和 ASLR 配置；不同检测器的
+检查分别创建根。常规验证沿用 [native 测试入口](native.md)。
+
 失败场景目录随既有 scratch 工件上传，包含：
 
 - `automatic.json`、`all-stacks.txt`：关闭前全部线程栈、信号掩码、结构化 gate owner／depth／
