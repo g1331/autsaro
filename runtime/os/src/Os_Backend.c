@@ -1354,11 +1354,26 @@ OS_MEMMAP void Os_BackendShutdown(StatusType error)
     ExitProcess(E_OS_STATE);
 }
 
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#if defined(OS_HOST_CAPTURE_TESTS) && (OS_HOST_CAPTURE_TESTS == STD_ON)
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_before_close(StatusType error) { Os_HostCaptureBeforeClose(error); }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#else
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
+OS_MEMMAP static void observe_before_close(StatusType error) { (void)error; }
+#define OS_STOP_SEC_CODE
+#include "Os_MemMap.h"
+#endif
+#define OS_START_SEC_CODE
+#include "Os_MemMap.h"
 OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
 {
-#if defined(OS_HOST_CAPTURE_TESTS) && (OS_HOST_CAPTURE_TESTS == STD_ON)
-    Os_HostCaptureBeforeClose(error);
-#endif
+    observe_before_close(error);
     Os_TimeClose();
     Os_MailboxClose();
     if (((uint32)InterlockedOr(&activation_admission, 2) & 2u) == 0u) {
