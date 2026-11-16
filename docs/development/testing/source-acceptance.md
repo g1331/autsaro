@@ -4,7 +4,7 @@
 
 ## 结果与严格入口
 
-范围外位置：[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md) 把主机仿真层移出合规范围，范围外诊断照常保留，不要求处置，不进入 `blocked` 判定和 `objects`。`complianceScope` 单列范围内外位置数；其 `diagnostics` 单列诊断条数，混合诊断归范围内，工具信息单列。
+[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md) 把主机仿真层移出合规范围，范围外诊断照常保留，不要求处置，不进入 `blocked` 判定和 `objects`。`complianceScope` 单列范围内外位置数；其 `diagnostics` 单列诊断条数，混合诊断归范围内，工具信息单列。
 
 - `accepted`：当前输入下，所有范围内诊断位置都有有效处置，必要人工与正式义务均已完成。
 - `blocked`：分析可用，但有未知诊断、未绑定或过期上下文、未评估或未完成的义务。
@@ -12,7 +12,7 @@
 
 `objects` 给出具体对象和阻塞理由，`occurrences` 回接原诊断索引、位置序号、规则、程序及处置来源。`checkersReport` 是工具信息，不为它制造偏离。SDK 来源完整只证明责任可识别，不证明其集成义务已完成；采用代码同样不自动放行。
 
-严格消费者使用含摘要、已分析 `project/` 及程序目录的完整结果，不接受仅有摘要或缺失、重复、额外身份：
+严格消费者要求摘要、已分析 `project/` 和程序目录，拒绝缺失、重复或额外身份：
 
 ```bash
 uv run --locked python -m autosar_tooling c-acceptance \
@@ -21,7 +21,7 @@ uv run --locked python -m autosar_tooling c-acceptance \
   --upstream prepare=success --upstream analysis=success
 ```
 
-完整矩阵在各自目标主机分别给出四个 `--expected` 与完整结果；Windows 工件不能交给 Linux 验证其实际 SDK 路径。上游值取实际任务结果，不能在失败时写死为 success。消费者重新读取当前 SDK、runner、分析驱动和完整源码，重算输入身份与验收，并精确核对存储回执；修改旧摘要的 SDK、seal、参数或当前 producer，不能重放旧 `accepted`。原始 `passed=false` 与诊断退出码 1 可以和有效项目验收并存。
+各目标主机给出四个 `--expected` 与完整结果，验证实际 SDK 路径；跨平台只传递矩阵依赖回执。上游值取实际任务结果，不能在失败时写死为 success。消费者重新读取当前 SDK、runner、分析驱动和完整源码，重算输入身份与验收，并精确核对存储回执；修改旧摘要的 SDK、seal、参数或当前 producer，不能重放旧 `accepted`。原始 `passed=false` 与诊断退出码 1 可以和有效项目验收并存。
 
 本地离线上下文重绑可下载较小的输入工件：
 
@@ -37,7 +37,7 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 复用 `c_comparison` 的逐程序差集，重新计算当前项目验收，仅由对应诊断、物理位置及程序的有效 accepted 处置覆盖新增。改写诊断行产生新增，Git 改名回接原件／交付路径；整文件行映射把旧位置批准留在旧位置。整体 blocked 留作报告，执行 error 阻断。`out_of_scope` occurrence 和 `outOfScopeNew` 保留范围外位置及新增。矩阵按八份目标 TU 回执并集复核集成头，统计见 `compliance-scope.json`。内部复用包装器以零退出表示执行完整，原 c-check、raw passed、程序退出码与诊断保持原义。
+PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 复用 `c_comparison` 的逐程序差集，重新计算当前项目验收，仅由对应诊断、物理位置及程序的有效 accepted 处置覆盖新增。改写诊断行产生新增，Git 改名回接原件／交付路径；整文件行映射把旧位置批准留在旧位置。整体 blocked 留作报告，执行 error 阻断。`out_of_scope` occurrence 和 `outOfScopeNew` 保留范围外位置及新增。门先收齐双侧各八份 `scope-input.json`，按原始分析身份绑定并集，再重算 occurrence、MR12／SDK 消费与验收身份。严格集成验收要求完整矩阵；汇总核对每份绑定及逐位置分类，统计见 `compliance-scope.json`。包装器零退出只表示执行完整，原始分析状态保持。
 
 基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。工具 prepare 与双侧生成并行，每侧扫描仅依赖共享工具和本侧生成；Windows 共用分析器，行为夹具每平台一次。基准原件按第一父提交及目标换行核对，改名后仍可追溯。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树严格比较受支持 SDK provider 完整包文件清单及实际字节摘要，允许宏／头使用集合变化；共有宏值仍比较。单侧验证及默认严格比较保持，基准失败或环境不可比均拒绝。
 
