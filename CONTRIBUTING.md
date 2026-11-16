@@ -76,6 +76,16 @@ Default Cargo tests do not require official resources or controlled native tools
 
 Changes to parsing, generation, or runtime behavior should have independently defined expectations and cover key rejection paths. Generation code renders each output once and reports premises the plan cannot guarantee as diagnostics; Clippy rejects panics and text patching there, see the testing guide. Follow the [C coding standard](docs/development/c-coding-standard.md) (Chinese) and the repository's MISRA guidance when modifying C or C-generation templates. Document input, output, and error contracts for public C interfaces.
 
+Install the message hook with `uv run --locked pre-commit install --hook-type commit-msg --allow-missing-config`.
+It checks the current message with the same rules as `quality`: lowercase types from the list
+below, an optional scope naming the affected module or area, and `!` with a `BREAKING CHANGE:` footer.
+Titles and bodies reject all nine GitHub closing keywords followed by `#N`, `owner/repo#N` or an
+Issue URL, including uppercase keywords and optional colons. Use `Refs #N` for references.
+Merge commits and generated `git revert` messages are skipped. `quality --merge-base origin/master`
+checks every new commit after the fork; existing history is left unchanged. CI checks the real PR
+head against its base, while master pushes check the newly introduced `before..HEAD` range.
+A first push checks all reachable commits; a manual CI run uses its required baseline input.
+
 ## Assets and submissions
 
 After modifying delivery assets, run `uv run --locked python -m autosar_tooling assets check`. Runtime digests are computed at build time; `assets update` only updates the independent seal-guard inventory. Review BSW ABI and third-party identities separately. Fixed checkout line endings are checked by the asset tests; see [asset maintenance](docs/maintainers/assets.md).
