@@ -1,5 +1,7 @@
 # 主机地址表示
 
+范围更新（ADR 0030，OS 顶层裁定后）：Windows `Os_Stack.c` 已迁入 `runtime/os/src/host/windows/`；与 Linux 地址实例一样，整组现为范围外的历史技术记录。原始诊断与 MR12 注释保留，项目验收跳过这些位置。R10 的目标栈实现单独评估。
+
 ## 主机地址表示类别处置
 
 状态（[ADR 0030](../../../adr/0030-host-simulation-layer-outside-misra-scope.md)，2026-11-14）：Linux 三处实例在 `os/src/host/linux/`，范围外，转为历史记录。Windows 五处实例在 `Os_Stack.c`，仍在范围内，记录继续有效，随 [#502](https://github.com/g1331/autsaro/issues/502) 裁定。

@@ -10,7 +10,7 @@ R20.5为Advisory/Single Translation Unit。SDK导入前隔离SetEvent、boolean�
 
 | 规则 | 精确范围 | 形态、范围及技术理由 | 原授权 |
 | --- | --- | --- | --- |
-| MISRA C:2012 Rule 20.5 | `runtime/os/src/Os_Windows.h` 中 `#undef SetEvent` | shape=`#undef SetEvent`; 范围 `All/Windows/Both`；临时隔离SDK名字后按进入状态恢复OS名字；既有六包含顺序和Win32实际编译约束保持。 | 维护者 2026-10-30精确124键决定 |
-| MISRA C:2012 Rule 20.5 | `runtime/os/src/Os_Windows.h` 中 `#undef boolean` | shape=`#undef boolean`; 范围 `All/Windows/Both`；临时隔离SDK名字后按进入状态恢复OS名字；既有六包含顺序和Win32实际编译约束保持。 | 维护者 2026-10-30精确124键决定 |
-| MISRA C:2012 Rule 20.5 | `runtime/os/src/Os_Windows.h` 中 `#undef ApplicationType` | shape=`#undef ApplicationType`; 范围 `All/Windows/Both`；临时隔离SDK名字后按进入状态恢复OS名字；既有六包含顺序和Win32实际编译约束保持。 | 维护者 2026-10-30精确124键决定 |
-| MISRA C:2012 Rule 20.5 | `runtime/os/src/Os_Windows.h` 中 `#undef OS_RESTORE_EVENT_SERVICE` | shape=`#undef OS_RESTORE_EVENT_SERVICE`; 范围 `All/Windows/Both`；临时隔离SDK名字后按进入状态恢复OS名字；既有六包含顺序和Win32实际编译约束保持。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.5 | `runtime/os/src/host/windows/Os_Windows.h` 中 `#undef SetEvent` | shape=`#undef SetEvent`; 范围 `All/Windows/Both`；临时隔离SDK名字后按进入状态恢复OS名字；既有六包含顺序和Win32实际编译约束保持。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.5 | `runtime/os/src/host/windows/Os_Windows.h` 中 `#undef boolean` | shape=`#undef boolean`; 范围 `All/Windows/Both`；临时隔离SDK名字后按进入状态恢复OS名字；既有六包含顺序和Win32实际编译约束保持。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.5 | `runtime/os/src/host/windows/Os_Windows.h` 中 `#undef ApplicationType` | shape=`#undef ApplicationType`; 范围 `All/Windows/Both`；临时隔离SDK名字后按进入状态恢复OS名字；既有六包含顺序和Win32实际编译约束保持。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.5 | `runtime/os/src/host/windows/Os_Windows.h` 中 `#undef OS_RESTORE_EVENT_SERVICE` | shape=`#undef OS_RESTORE_EVENT_SERVICE`; 范围 `All/Windows/Both`；临时隔离SDK名字后按进入状态恢复OS名字；既有六包含顺序和Win32实际编译约束保持。 | 维护者 2026-10-30精确124键决定 |

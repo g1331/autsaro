@@ -4,9 +4,9 @@
 
 ## 结果与严格入口
 
-范围外位置：[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md) 把主机仿真层移出合规范围，范围外诊断照常保留，不要求处置，不进入 `blocked` 判定和 `objects`。检查器的范围标注由 [#502](https://github.com/g1331/autsaro/issues/502) 实现，在此之前所有位置按范围内处理。
+范围外位置：[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md) 把主机仿真层移出合规范围，范围外诊断照常保留，不要求处置，不进入 `blocked` 判定和 `objects`。`complianceScope` 单列范围内外位置数；其 `diagnostics` 单列诊断条数，混合诊断归范围内，工具信息单列。
 
-- `accepted`：当前输入下，所有诊断位置都有有效处置，必要人工与正式义务均已完成。
+- `accepted`：当前输入下，所有范围内诊断位置都有有效处置，必要人工与正式义务均已完成。
 - `blocked`：分析可用，但有未知诊断、未绑定或过期上下文、未评估或未完成的义务。
 - `error`：工具、输入、解析或判定不能完整执行。正常 CI 的完整性检查也拒绝此状态。
 
@@ -37,19 +37,19 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 复用 `c_comparison` 的逐程序差集，重新计算当前项目验收，仅由对应诊断、物理位置及程序的有效 accepted 处置覆盖新增。改写诊断行产生新增，Git 改名回接原件／交付路径；整文件行映射把旧位置批准留在旧位置。整体 blocked 留作报告，执行 error 阻断。内部复用包装器以零退出表示执行完整，原 c-check、raw passed、程序退出码与诊断保持原义。
+PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 复用 `c_comparison` 的逐程序差集，重新计算当前项目验收，仅由对应诊断、物理位置及程序的有效 accepted 处置覆盖新增。改写诊断行产生新增，Git 改名回接原件／交付路径；整文件行映射把旧位置批准留在旧位置。整体 blocked 留作报告，执行 error 阻断。`out_of_scope` occurrence 和 `outOfScopeNew` 保留范围外位置及新增。矩阵按八份目标 TU 回执并集复核集成头，统计见 `compliance-scope.json`。内部复用包装器以零退出表示执行完整，原 c-check、raw passed、程序退出码与诊断保持原义。
 
-基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。工具 prepare 与双侧生成并行，每侧扫描仅依赖共享工具和本侧生成；Windows 共用分析器，行为夹具每平台一次。基准原件按第一父提交及目标换行核对，改名后仍可追溯。双树严格比较受支持 SDK provider 完整包文件清单及实际字节摘要，允许宏／头使用集合变化；共有宏值仍比较。单侧验证及默认严格比较保持，基准失败或环境不可比均拒绝。
+基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。工具 prepare 与双侧生成并行，每侧扫描仅依赖共享工具和本侧生成；Windows 共用分析器，行为夹具每平台一次。基准原件按第一父提交及目标换行核对，改名后仍可追溯。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树严格比较受支持 SDK provider 完整包文件清单及实际字节摘要，允许宏／头使用集合变化；共有宏值仍比较。单侧验证及默认严格比较保持，基准失败或环境不可比均拒绝。
 
 基准扫描可复用该 SHA 的 master push 原始产物，要求对应生产作业成功。匹配身份覆盖树、样本、分析器二进制／addon、规则与生成器、完整生成 seal、PR 驱动／配置／评估输入、Python、GCC driver／backend 和 runner 镜像。目标主机重新计算完整 SDK 环境，并重查模型、隐式库及驱动语义；任一不符、产物缺失／重复或 attempt 不符均现场扫描。每轮仍生成基准以核对完整 seal；复用只省去原始扫描，项目验收和输入身份重新计算。`gate.json.baselineSource` 记录 same-run（含回退原因）或 master-artifact（运行、attempt、生产作业、工件与 digest），不缓存门判定。
 
 配对要求每侧恰好一份完整结果；工件名带侧别、目标、样本及分片序号，保留重复证据。Linux 消费本轮成功作业产物，核对双方 `_complete`、`input_identity`，八份门回执绑定 checkout、第一父提交、双侧摘要与输入身份；所需上游 skip／cancel／failure、缺重样本／身份均拒绝。Windows 消费端先 `git read-tree --empty`，再用 `core.autocrlf=true reset --hard HEAD` 重建真实字节并遵循 `.gitattributes`。精简配对产物保留 summary、封存 project、身份、来源及平台模型；完整 dump／日志仍由生产作业另存。历史工件的严格目标主机重放入口保持。
 
-完整项目验收仍可用上文 `c-acceptance` CLI 单独执行；合规线出口由 [#482](https://github.com/g1331/autsaro/issues/482) 切换必需门到完整验收。测试里的完整合成正例验证可执行契约，真实处置及分支保护证据由 #55 的 PR 保存。
+合规线出口由 [#482](https://github.com/g1331/autsaro/issues/482) 切换必需门到完整验收。测试里的完整合成正例验证可执行契约，真实处置及分支保护证据由 #55 的 PR 保存。
 
 `docs/standards/` 的评估 Markdown 与固定指南索引是实际分析输入，单独修改时选择 Python、两平台准备和全部 C 分析，保持原始状态及严格汇总。`rte/generated-retention/` 还由 Rust native 消费，继续选择完整原生检查；adoption 上下文块由分析消费，沿分析入口验证。七个独立分析驱动（含 `c_gate`、`c_baseline`）使用相同选择；共享 lexer／retention、混合改动、改名或未知输入仍完整运行。标准记录不单独选择桌面场景，普通读者指南沿文档快路径。
 
-固定 221 项的类别独立锁定，不能靠同步修改索引和摘要重新定义；已有处置不授权改变规范类别。
+221 项类别独立锁定，已有处置不授权改变类别。
 
 ## CI 成本对照
 
