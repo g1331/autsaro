@@ -392,7 +392,10 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
     origins = {delivered: original
                for original, delivered in metadata["originalBswSources"].items()}
     records = []
-    errors = c_standard.deviation_findings(root, matched=records)
+    selected_sources = {original for delivered, original in origins.items()
+                        if not delivered.startswith("kernel/") and c_comparison.location_scope(
+                            summary["scope"], {"file": delivered, "line": 1}) == "in-scope"}
+    errors = c_standard.deviation_findings(root, matched=records, source_names=selected_sources)
     # The shared MR12 parser also sees templates belonging to the generated-retention
     # group. Their own context and consumer remain the authority for those rows.
     records = [row for row in records
@@ -849,7 +852,9 @@ def _freertos_positions(
         return {}
     sources, patched = kernel if kernel is not None else _freertos_sources(project, metadata, root)
     records = []
-    errors = c_standard.deviation_findings(root, matched=records, kernel_sources=sources)
+    errors = c_standard.deviation_findings(
+        root, matched=records, kernel_sources=sources,
+        source_names={name for name in sources if not c_comparison.platform_location(name)})
     records = [row for row in records if row["source"].startswith("kernel/")]
     result = {}
     for index, position, diagnostic, location in _positions(summary["diagnostics"]):

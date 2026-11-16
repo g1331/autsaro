@@ -1416,6 +1416,18 @@ class AcceptanceTests(unittest.TestCase):
                                          {"prepare": "success", "analysis": "success"},
                                          root=self.root)
 
+    def test_host_record_drift_does_not_block_a_target_disposition(self):
+        self.owned_inputs()
+        self.bind(self.context(group="owned-source", status="approved"))
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+        path = self.root / "runtime/os/src/host/linux/Os_HostLinux.c"
+        text, count = re.subn(r"/\* MR12 RULE 11\.4 VIOLATION:.*?\*/", "", path.read_text(),
+                              count=1, flags=re.DOTALL)
+        self.assertEqual(count, 1)
+        path.write_text(text)
+        self.assertTrue(c_standard.deviation_findings(self.root))
+        self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "accepted")
+
     def test_owned_record_retains_formal_and_stale_context_blockers(self):
         self.owned_inputs()
         self.bind(self.context(group="owned-source", status="pending"))
