@@ -433,7 +433,7 @@ class CiSelectionTests(unittest.TestCase):
                  "integration::protocol::refusal", "integration::sealed_projects::build",
                  "integration::single_component::build", "integration::os::time",
                  "integration::release_contracts::headers", "integration::future::test"]
-        for platform in ("ubuntu-24.04", "windows-latest"):
+        for platform in ("ubuntu-24.04", "windows-2025-vs2026"):
             observed = []
             for entry in native["strategy"]["matrix"]["include"]:
                 if entry["os"] != platform:
@@ -507,10 +507,10 @@ class CiSelectionTests(unittest.TestCase):
             if job == "c-analysis-samples":
                 windows = workflow["jobs"]["c-analysis-samples-windows"]
                 entries += windows["strategy"]["matrix"]["include"]
-            for platform in ("ubuntu-24.04", "windows-latest"):
+            for platform in ("ubuntu-24.04", "windows-2025-vs2026"):
                 self.assertEqual(sum(entry[key] in selected for entry in entries
                                      if entry["os"] == platform), 1)
-        for suffix, platform in (("", "ubuntu-24.04"), ("-windows", "windows-latest")):
+        for suffix, platform in (("", "ubuntu-24.04"), ("-windows", "windows-2025-vs2026")):
             job = workflow["jobs"]["c-analysis-behavior" + suffix]
             self.assertEqual(job["needs"], "c-analysis-prepare" + suffix)
             self.assertEqual([row["os"] for row in job["strategy"]["matrix"]["include"]],
@@ -569,7 +569,7 @@ class CiSelectionTests(unittest.TestCase):
                      "c-analysis-behavior", "c-analysis-samples", "native-delivery"):
             linux, windows = workflow[name], workflow[name + "-windows"]
             self.assertEqual(linux["steps"], windows["steps"])
-            for job, platform in ((linux, "ubuntu-24.04"), (windows, "windows-latest")):
+            for job, platform in ((linux, "ubuntu-24.04"), (windows, "windows-2025-vs2026")):
                 self.assertEqual({row["os"] for row in job["strategy"]["matrix"]["include"]},
                                  {platform})
             if name == "native-delivery":

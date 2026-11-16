@@ -156,7 +156,7 @@ def download(repository: str, tree: str, target: str, sample: str,
             continue
         windows = target.startswith("windows")
         job = "c-analysis-samples" + ("-windows" if windows else "")
-        system = "windows-latest" if windows else "ubuntu-24.04"
+        system = "windows-2025-vs2026" if windows else "ubuntu-24.04"
         expected = f"{job} ({system}, {target}, {sample}, {sample})"
         jobs = pages(repository, f"actions/runs/{run['id']}/jobs", "jobs")
         producers = [row for row in jobs if row["name"] == expected or

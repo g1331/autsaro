@@ -97,7 +97,7 @@ jobs:
             python: '3.12'
           - os: ubuntu-24.04
             python: '3.14'
-          - os: windows-latest
+          - os: windows-2025-vs2026
             python: '3.14'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -156,7 +156,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-24.04, windows-2025-vs2026]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -200,13 +200,13 @@ jobs:
         include:
           - os: ubuntu-24.04
             shard: all
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard: protocol
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard: projects
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard: integration
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard: rest
     name: native (${{ matrix.os }}, ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
@@ -371,9 +371,9 @@ jobs:
         include:
           - os: ubuntu-24.04
             shard: 0/1
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard: 0/2
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard: 1/2
     name: native-os (${{ matrix.os }}, ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
@@ -668,7 +668,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -810,7 +810,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -856,7 +856,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -968,10 +968,10 @@ jobs:
       matrix:
         # Windows builds take about three times longer, so its receiver runs on a second runner.
         include:
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             part: builds
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             part: receiver
     name: native-delivery (${{ matrix.os }}, ${{ matrix.part }})
@@ -1143,19 +1143,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: standard-ecu
             samples: standard-ecu
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: user-application
             samples: user-application
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: component-pipeline
             samples: component-pipeline
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: no-diagnostic
             samples: no-diagnostic
@@ -1207,19 +1207,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: standard-ecu
             samples: standard-ecu
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: user-application
             samples: user-application
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: component-pipeline
             samples: component-pipeline
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: no-diagnostic
             samples: no-diagnostic
@@ -1273,7 +1273,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -1402,19 +1402,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: standard-ecu
             samples: standard-ecu
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: user-application
             samples: user-application
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: component-pipeline
             samples: component-pipeline
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
             group: no-diagnostic
             samples: no-diagnostic

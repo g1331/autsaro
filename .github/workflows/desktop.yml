@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-24.04, windows-2025-vs2026]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -96,15 +96,15 @@ jobs:
             shard:
               id: 2
               files: standard-delivery application value-editing workbench-ui owned-execution projects incomplete-configuration
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard:
               id: 1
               files: responsiveness startup process-tree
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard:
               id: 2
               files: composition-editing editing application incomplete-configuration rejected-change
-          - os: windows-latest
+          - os: windows-2025-vs2026
             shard:
               id: 3
               files: standard-delivery value-editing workbench-ui owned-execution projects
