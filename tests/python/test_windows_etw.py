@@ -19,6 +19,8 @@ from autosar_tooling.windows_etw import (
 class WindowsEtwTests(unittest.TestCase):
     def test_filetime_preserves_the_seventh_fractional_digit(self):
         self.assertEqual(filetime("1601-01-01T00:00:00.0000001Z"), 1)
+        self.assertEqual(filetime("1601-01-01T00:00:00.000000100+00:00"), 1)
+        self.assertEqual(filetime("  134390529764705859"), 134390529764705859)
         self.assertEqual(filetime("0x10"), 16)
         self.assertEqual(filetime("134390529764705859"), 134390529764705859)
 
@@ -26,12 +28,17 @@ class WindowsEtwTests(unittest.TestCase):
         xml = """<Events xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
         <Event><System><Provider Name="Microsoft-Windows-Kernel-Process"/>
         <EventID>1</EventID><TimeCreated SystemTime="2026-11-17T00:00:00.0000001Z"/>
-        </System><EventData><Data Name="ProcessID">42</Data>
+        </System><ExtendedTracingInfo>
+        <EventGuid>{3d6fa8d0-fe05-11d0-9dda-00c04fd7ba7c}</EventGuid>
+        </ExtendedTracingInfo><EventData><Data Name="ProcessID">42</Data>
         <Data Name="ImageName">python.exe</Data></EventData></Event></Events>"""
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.xml"
             path.write_text(xml)
             decoded = list(events(path))
+        self.assertEqual(
+            decoded[0]["event_guid"], "{3d6fa8d0-fe05-11d0-9dda-00c04fd7ba7c}"
+        )
         self.assertEqual(decoded[0]["fields"]["ProcessID"], "42")
         self.assertEqual(decoded[0]["fields"]["ImageName"], "python.exe")
         self.assertEqual(
@@ -75,6 +82,9 @@ class WindowsEtwTests(unittest.TestCase):
                 event(0, 101, CommandLine="old child"),
                 event(0, 201, CommandLine="new child"),
             ]
+            data[4]["provider"] = {"Guid": "{9e814aad-3204-11d2-9a82-006008a86939}"}
+            data[4]["event_guid"] = "{3d6fa8d0-fe05-11d0-9dda-00c04fd7ba7c}"
+            data[4]["timestamp"]["SystemTime"] = "1601-01-01T00:00:00.000010100+00:00"
             path = folder / "lifecycle.jsonl"
             path.write_text("".join(json.dumps(value) + "\n" for value in data))
             correlate(folder)
@@ -142,6 +152,7 @@ class WindowsEtwTests(unittest.TestCase):
         self.assertEqual(
             ids["JobProcessProvider"].get("Name"), "Microsoft-Windows-Kernel-Process"
         )
+        self.assertEqual(ids["JobProcessProvider"].get("NonPagedMemory"), "true")
 
     def test_collector_failure_degrades_evidence_without_blocking_tests(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -157,3 +168,22 @@ class WindowsEtwTests(unittest.TestCase):
             self.assertFalse(stop(folder))
             state = json.loads((folder / "collector-state.json").read_text())
             self.assertFalse(state["complete"])
+
+    def test_successful_system_only_capture_is_marked_incomplete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "started").touch()
+            (folder / "events.xml").write_text(
+                '<Events><Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+                '<System><Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}"/>'
+                "<EventID>0</EventID><Opcode>0</Opcode></System>"
+                '<EventData><Data Name="EventsLost"> 0</Data>'
+                '<Data Name="BuffersLost"> 0</Data></EventData></Event></Events>'
+            )
+            with patch("autosar_tooling.windows_etw.command"):
+                self.assertFalse(stop(folder))
+            state = json.loads((folder / "collector-state.json").read_text())
+            self.assertIn("no Kernel-Process lifecycle events", state["error"])
+            health = json.loads((folder / "trace-health.json").read_text())
+            self.assertEqual(health["decoded_events"], 1)
+            self.assertEqual(health["process_events"], 0)

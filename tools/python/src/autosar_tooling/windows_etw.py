@@ -28,7 +28,8 @@ PROFILE = """<?xml version="1.0" encoding="utf-8"?>
     <SystemProvider Id="JobSystemProvider">
       <Keywords><Keyword Value="ProcessThread"/></Keywords>
     </SystemProvider>
-    <EventProvider Id="JobProcessProvider" Name="Microsoft-Windows-Kernel-Process" Level="5">
+    <EventProvider Id="JobProcessProvider" Name="Microsoft-Windows-Kernel-Process" Level="5"
+                   NonPagedMemory="true">
       <Keywords><Keyword Value="0x30"/></Keywords>
     </EventProvider>
     <Profile Id="Job.Verbose.File" Name="Job" Description="Job member lifecycle"
@@ -132,6 +133,7 @@ def events(path: Path):
                 "provider": dict(provider.attrib) if provider is not None else {},
                 "event_id": system.findtext("{*}EventID"),
                 "opcode": system.findtext("{*}Opcode"),
+                "event_guid": element.findtext(".//{*}EventGuid"),
                 "timestamp": dict(timestamp.attrib) if timestamp is not None else {},
                 "fields": fields,
             }
@@ -160,12 +162,39 @@ def _stop(folder: Path) -> None:
         timeout=120,
     )
     count = 0
+    process_events = 0
+    loss_counters = []
     with (folder / "lifecycle.jsonl").open("w", encoding="utf-8") as output:
         for event in events(folder / "events.xml"):
             output.write(json.dumps(event) + "\n")
             count += 1
-    if not count:
-        raise RuntimeError("ETW produced no decoded events")
+            provider = {key.lower(): value for key, value in event["provider"].items()}
+            provider_guid = provider.get("guid", "").strip("{}").lower()
+            if provider_guid == "22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716" and event[
+                "event_id"
+            ] in {"1", "2"}:
+                process_events += 1
+            fields = event["fields"]
+            if "EventsLost" in fields:
+                loss_counters.append(
+                    {
+                        name: int(fields[name])
+                        for name in ("EventsLost", "BuffersLost")
+                        if name in fields
+                    }
+                )
+    health = {
+        "decoded_events": count,
+        "process_events": process_events,
+        "loss_counters": loss_counters,
+    }
+    (folder / "trace-health.json").write_text(json.dumps(health), encoding="utf-8")
+    if not process_events:
+        raise RuntimeError("ETW has no Kernel-Process lifecycle events")
+    if any(value for counters in loss_counters for value in counters.values()):
+        raise RuntimeError(
+            "ETW lost events or buffers; trace-health.json contains the counters"
+        )
     correlate(folder)
     print(
         f"ETW captured {count} events; raw ETL, XML, summary and lifecycle in {folder}"
@@ -216,9 +245,12 @@ def stop(folder: Path) -> bool:
 
 
 def filetime(value: str) -> int:
+    value = value.strip()
     if value.startswith("0x") or value.isdecimal():
         return int(value, 0) if value.startswith("0x") else int(value)
-    match = re.fullmatch(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?Z", value)
+    match = re.fullmatch(
+        r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(?:Z|\+00:00)", value
+    )
     if match is None:
         raise ValueError(f"Unknown ETW timestamp: {value}")
     seconds = datetime.datetime.fromisoformat(match[1]).replace(tzinfo=datetime.UTC)
@@ -250,7 +282,9 @@ def correlate(folder: Path) -> None:
                 elif event["event_id"] == "2":
                     stops[key] = event
             provider = {key.lower(): value for key, value in event["provider"].items()}
-            process_provider = provider.get("guid", "").strip("{}").lower() in {
+            process_provider = (
+                event.get("event_guid") or provider.get("guid", "")
+            ).strip("{}").lower() in {
                 "3d6fa8d0-fe05-11d0-9dda-00c04fd7ba7c",  # Classic kernel Process
                 "22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716",  # Manifest Kernel-Process
             }
