@@ -80,7 +80,7 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_
 人工目录记录其所载冻结输入的分类；当前输入变化时保留准确的历史范围，并使旧绑定失效。
 不要将历史已分类记录改为当前未评估状态，也不要在合成测试中自动完成未评估条目。
 
-这些身份是证据适用范围，不是诊断 baseline 或缓存。不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
+不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
 
 动态构造带摘要的原件、补丁或封存夹具时，用同一份编码后的字节写文件并计算身份，
 采用 `write_bytes` 或显式指定换行；默认文本写入在 Windows 会转换 LF 为 CRLF。
@@ -126,7 +126,7 @@ FreeRTOS 另绑定完整原件 manifest、有序补丁及最终 kernel。SDK 保
 
 自有源码的局部消费者另接受 `records={"kind":"owned-source"}`。它复用原标准篇与
 `c_standard` 的 MR12 双向关联，核对原实体、已登记 shape、当前原件及 ownership 字节，
-并保留表中的目标、程序和 ND 样本限制。主机地址使用原有八个表达式实例；MemMap
+并保留表中的目标、程序和 ND 样本限制。验收先筛范围内原件，范围外记录过期不影响目标处置；quality 仍全量检查。MemMap
 R20.1 逐包含验证既有 START／STOP 协议，R20.5 只消费原表精确登记的 MR12 位置。
 未登记的内部属性／状态撤销保留阻塞，完整类别实例解析由自有源码消费任务接续。
 C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_record_matched`，
@@ -136,7 +136,7 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 消费来源取当前可追溯的 runtime 原件及明确归属的生成／配置产物；应用快照与内核实例
 由原任务继续核定。允许的程序为 host-batch／probe，样本为现有四个 profile。
 
-该组当前只消费上述已实现的精确关联。Required 风险记录继续返回
+Required 风险记录继续返回
 `formal_deviation_pending`，即使上下文为 `approved` 也保留该义务；Mandatory 保留项
 返回 `mandatory_deviation_forbidden`。其余模块误报、采用内核与 SDK 位置沿原有阻塞。
 实际输入交集绑定在[原自有源码标准篇](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)，
