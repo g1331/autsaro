@@ -32,7 +32,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessSpec, run_bounded
 
-from autosar_tooling import c_acceptance, c_retention, c_sdk, c_standard
+from autosar_tooling import c_acceptance, c_comparison, c_retention, c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 CPPCHECK_VERSION = "2.21.0"
@@ -691,7 +691,8 @@ def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path
         raise ValueError("Actual semantic inputs changed since analysis")
 
 
-def check(project: Path, target_id: str, output: Path, baseline: Path | None = None) -> int:
+def check(project: Path, target_id: str, output: Path, baseline: Path | None = None,
+          *, sdk_revision: str | None = None) -> int:
     refuse_links(project)
     project = project.resolve(strict=True)
     refuse_links(output)
@@ -752,6 +753,11 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         scope["cppcheckInputs"] = {unit: {kind: sorted(names) for kind, names in actual.items()}
                                   for unit, actual in combined_inputs.items()}
         diagnostics = summary["diagnostics"]
+        for diagnostic in diagnostics:
+            diagnostic["complianceScope"] = [
+                c_comparison.location_scope(scope, location)
+                for location in diagnostic["locations"]]
+        summary["complianceScope"] = c_comparison.scope_statistics(summary)
         if scope.get("profile") == "ecu":
             summary["generatedRetention"] = c_retention.analyze(diagnostics, root, target_id)
         summary["sourceClassification"] = c_sdk.summary(diagnostics, scope.get("sdkHeaders", []), not scope.get("sdkLineDirectives", False))
@@ -761,7 +767,8 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
             raise ValueError("Semantic inputs changed during analysis")
         summary["passed"] = all_passed
-        summary["projectAcceptance"] = c_acceptance.evaluate(summary, root)
+        summary["projectAcceptance"] = c_acceptance.evaluate(
+            summary, root, **({"sdk_revision": sdk_revision} if sdk_revision is not None else {}))
         if baseline is not None:
             from autosar_tooling.c_comparison import compare
             summary["comparison"] = compare(summary, project, output, baseline)

@@ -43,14 +43,30 @@
 
 **项目 FreeRTOS port 补丁：`linux/0001` 与 `0003`。** `0001-controlled-posix-port.patch` 只改 `portable/ThirdParty/GCC/Posix/port.c` 和 `portmacro.h`。内核的 `tasks.c` 通过 include 路径包含 `portmacro.h`，但它位于平台选择目录，整体范围外（规则 1）。`0003-activation-ready-policy.patch` 同时改 `tasks.c`（请求 FIFO 就绪策略，进入目标）和 Windows `port.c`（主机）：前者留在范围内，后者范围外（规则 3）。
 
-### 已知边界：仍在范围内的主机相关文件
+### OS 顶层文件裁定
 
-下列文件按规则留在范围内，尽管内容带有明显的原生实现。本决定不搬动代码，逐个裁定由 [#502](https://github.com/g1331/autsaro/issues/502) 承接：
+[#502](https://github.com/g1331/autsaro/issues/502) 按实际调用与状态所有权完成以下裁定。
+`host/common/` 是两个宿主目标共同选择的仿真实现目录，与平台子目录一同适用规则 1；
+MCU 构建提供自己的类型与原生操作实现。
 
-- `runtime/os/src/` 顶层的 `Os_Backend.c`（含 Windows 的 `Os_PortThread`）、`Os_Stack.c`（Windows 栈记录）、`Os_PortRestart.c`、`Os_HostIo.c`、`Os_HostServices.c`、`Os_Windows.h`，以及 `os/include/Os_Host.h`、`Os_HostIo.h`、`Os_HostTypes.h`。Windows 主机适配大部分在这些顶层文件里，只有 `Os_HostWindows.c` 在 `os/src/host/windows/`；Linux 适配则整体在平台选择目录里。两个平台因此不对称，Windows 留在范围内的部分比 Linux 多。
-- 目标代码里直接引用主机接缝的位置：`Can.c` 对 `Ecu_Execution.h` 的包含，生成的 `Ecu_Config.c` 对 `Ecu_Target.h`、`Ecu_HostBusSM.h`、`Can_Host.h` 的包含。这些引用本身在范围内。
+| 原位置 | 裁定与证据 | 交付位置／范围 |
+| --- | --- | --- |
+| `os/src/Os_Backend.c` | 激活 FIFO、资源所有权、中断嵌套、FreeRTOS 任务与关闭状态仍由同一文件管理，R10 需要这些语义；保留状态与拒绝路径。Windows `Os_PortThread` 的创建调用委托 `Os_HostCreateThread`，实际 `CreateThread` 迁入 Windows provider | backend 留在范围内；provider 在 `os/src/host/windows/`，范围外 |
+| `os/src/Os_Stack.c` | `VirtualQuery`、Win64 `CONTEXT`、线程观察和栈保证只服务 Windows；MCU 需要自身栈检查实现 | `os/src/host/windows/Os_Stack.c`，范围外 |
+| `os/src/Os_PortRestart.c` | Linux `_Unwind_*`／DWARF 与 Windows `RtlUnwindEx`／SEH 都是原生展开；按平台拆分，`Os_PortRestart.h` 的接缝保留 | 两平台各自的 `os/src/host/<平台>/Os_PortRestart.c`，范围外 |
+| `os/src/Os_HostIo.c` | 有界文本构造及 stdout／故障记录发布属于主机协议，MCU 更换输出实现 | `os/src/host/common/Os_HostIo.c`，范围外 |
+| `os/src/Os_HostServices.c` | 原生 atomics、thread、event、sleep、exit 的 provider，MCU 替换底层操作 | `os/src/host/common/Os_HostServices.c`，范围外 |
+| `os/src/Os_Windows.h` | 只导入 Windows SDK 并隔离 `SetEvent`／`ApplicationType` 命名 | `os/src/host/windows/Os_Windows.h`，范围外 |
+| `os/include/Os_HostTypes.h` | Win32／Linux shim 的句柄、线程及原子存储映射都是宿主类型，目标 port 提供自己的类型映射 | `os/src/host/common/Os_HostTypes.h`，范围外 |
+| `os/include/Os_Host.h`、`Os_HostIo.h` | 声明是 backend、OS 及集成消费者的接缝；头里没有原生线程／输出实现。R10 保留调用契约并提供自身实现 | 保留头名、类型与签名，范围内 |
 
-裁定的标准是：R10 的目标构建是否还需要该文件的这一部分。只服务主机的部分迁入 `os/src/host/<平台>/`，迁入后自动按规则 1 移出范围；目标仍需要的部分留在范围内。在裁定完成前，这些文件上的既有类别记录继续有效（见“影响处置”）。
+公共函数、类型名、ARTI 数据符号及状态所有权保持。新增的 `Os_HostCreateThread` 是
+Windows provider 的内部接缝，参数沿 Win32 创建语义；公开 OS ABI 保持。
+生成器、资产清单、实际 includePaths 和直接编译测试同步迁移。
+
+目标代码中的 `Can.c` 对 `Ecu_Execution.h` 的包含、生成 `Ecu_Config.c` 对
+`Ecu_Target.h`／`Ecu_HostBusSM.h`／`Can_Host.h` 的包含继续按规则 2 留在范围内。
+
 
 ## 范围外保留的检查
 
@@ -73,11 +89,11 @@
 
 | 记录 | 处置 |
 | --- | --- |
-| [主机动态设施 D4.12／R21.3／R22.1](../standards/os/native-facilities/storage-interrupts.md#主机动态设施类别偏离) | `Os_HostLinux.c::Os_HostCreateActor` 范围外，转历史。`Os_HostServices.c` 的两个 Spawn 和 `Os_Backend.c::Os_PortThread` 在待定文件内，记录对这些位置继续有效，随 #502 裁定 |
+| [主机动态设施 D4.12／R21.3／R22.1](../standards/os/native-facilities/storage-interrupts.md#主机动态设施类别偏离) | `Os_HostLinux.c::Os_HostCreateActor` 范围外，转历史。`Os_HostServices.c` 的两个 Spawn 和 `Os_Backend.c::Os_PortThread` 迁入 `host/common/` 及 Windows provider 后转历史；backend 内其余状态／控制操作仍在范围内 |
 | [同步嵌套 ISR R17.2](../standards/os/native-facilities/storage-interrupts.md#同步嵌套-isr-类别偏离) | 范围只有两个端口补丁（Linux `0001`、Windows `0012`），全部落在 `kernel/portable/`，整体转历史 |
-| [主机地址表示 R11.4／R11.5／R11.6](../standards/os/native-facilities/addresses.md#主机地址表示类别处置) | Linux 三处实例在 `os/src/host/linux/`，转历史。Windows 五处实例（`Os_Stack.c` 的 `Os_StackRecordBuffer`、`Os_StackRegister`、`Os_StackCheck`、`Os_StackObserve`，R11.4／R11.6）在待定文件内，记录继续有效，随 #502 裁定 |
+| [主机地址表示 R11.4／R11.5／R11.6](../standards/os/native-facilities/addresses.md#主机地址表示类别处置) | Linux 三处实例在 `os/src/host/linux/`，转历史。Windows 五处实例（`Os_Stack.c` 的 `Os_StackRecordBuffer`、`Os_StackRegister`、`Os_StackCheck`、`Os_StackObserve`，R11.4／R11.6）已迁入 `host/windows/`，转历史 |
 | [ADR 0024 三处 Linux 标准头](0024-bounded-linux-platform-retention.md)（R21.5／R21.10） | 三处都在 `os/src/host/linux/`，转历史 |
-| [SDK 类别](../standards/os/sdk.md#当前集成义务与类别处置)（#444，R5.5／R5.7／R7.1／R7.2／R7.3／R10.1） | 按位置：落在 `os/src/host/linux/`、`kernel/portable/`、`ecu_host_batch.c` 的实例转历史；`Os_Backend.c`、`Os_Stack.c`、`Os_Time.c` 里的实例继续有效，随 #502 裁定 |
+| [SDK 类别](../standards/os/sdk.md#当前集成义务与类别处置)（#444，R5.5／R5.7／R7.1／R7.2／R7.3／R10.1） | 按位置：落在 `os/src/host/linux/`、`kernel/portable/`、`ecu_host_batch.c` 的实例转历史；`Os_Backend.c`、`Os_Stack.c`、`Os_Time.c` 中留在顶层的实例继续有效；迁入 host 目录的实例转历史 |
 | R15.5 的 [GRP](0025-misra-layered-scope.md#grp指南重分类计划) | 适用对象改为自有目标代码（含生成 C 和项目内核补丁）；范围外的主机层不再需要它 |
 | MemMap R20.1／R20.5 | 与主机无关，不变 |
 
@@ -87,9 +103,9 @@
 
 | Issue | 只因主机代码而存在的部分 | 处置 |
 | --- | --- | --- |
-| #439（自有源码精确裁决消费） | 同步嵌套 ISR 记录的消费；主机动态设施、主机地址表示记录中范围外实例的消费；`os/src/host/`、`integration/` 位置的精确裁决 | 按位置移除；`Os_HostServices.c`、`Os_Backend.c`、`Os_Stack.c` 内的实例继续消费，随 #502 裁定。其余（既有 124 键里范围内的位置、ErrorHook R18.6、MemMap）不变 |
-| #443（checker 覆盖项人工证据） | 七处 Windows 小写 `l`、44 次 SDK 缺 U 暴露、#470 的 signal 宏对 R7.2 证据的影响、R7.1 `O_RDONLY` 使用点 | `os/src/host/linux/`、`kernel/portable/`、`ecu_host_batch.c` 里的位置移除；`Os_Backend.c`、`Os_Stack.c`、`Os_Time.c` 里的位置保留，随 #502 裁定 |
-| #445（66 项人工记录） | 7 项 retained 中的 D4.12，以及 D4.5／D4.6 里只涉及原生 `HANDLE`、`BOOL`、`CONTEXT`、pthread 错误值的实例 | 范围外实例移除；待定文件里的实例随 #502 裁定。D4.8、D4.9、D4.10、R2.8 与主机无关，不变 |
+| #439（自有源码精确裁决消费） | 同步嵌套 ISR 记录的消费；主机动态设施、主机地址表示记录中范围外实例的消费；`os/src/host/`、`integration/` 位置的精确裁决 | 按位置移除；`Os_HostServices.c`、`Os_Backend.c`、`Os_Stack.c` 中迁入 host 目录的实例退出消费；顶层 backend 的实例继续消费。其余（既有 124 键里范围内的位置、ErrorHook R18.6、MemMap）不变 |
+| #443（checker 覆盖项人工证据） | 七处 Windows 小写 `l`、44 次 SDK 缺 U 暴露、#470 的 signal 宏对 R7.2 证据的影响、R7.1 `O_RDONLY` 使用点 | `os/src/host/linux/`、`kernel/portable/`、`ecu_host_batch.c` 里的位置移除；`Os_Backend.c`、`Os_Stack.c`、`Os_Time.c` 里的顶层位置保留；迁入 host 目录的位置转历史 |
+| #445（66 项人工记录） | 7 项 retained 中的 D4.12，以及 D4.5／D4.6 里只涉及原生 `HANDLE`、`BOOL`、`CONTEXT`、pthread 错误值的实例 | 范围外实例移除；OS 顶层裁定见上表。D4.8、D4.9、D4.10、R2.8 与主机无关，不变 |
 | #482（合规线出口） | 完整验收的“同一 head 全部位置已处置”条件 | 条件限于范围内位置；范围外位置不参与 `accepted` 判定 |
 | #58（父项） | 上述各项对应的主机部分 | 随子项调整；父项出口不变 |
 

@@ -24,7 +24,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessResult, ProcessSpec, run_bounded
 
-from autosar_tooling import c_acceptance, c_check, c_gate
+from autosar_tooling import c_acceptance, c_check, c_comparison, c_gate
 from autosar_tooling.config import ROOT
 
 FORMAT = "c-analysis-raw-baseline-v1"
@@ -82,6 +82,10 @@ def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
 def record(output: Path, tree: str, target: str, sample: str) -> None:
     summary = read(output / "summary.json")
     c_acceptance._complete(summary)
+    if summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}:
+        raise ValueError("Raw analysis project acceptance execution failed")
+    (output / "scope-input.json").write_text(
+        json.dumps(c_comparison.scope_receipt(summary, sample), indent=2) + "\n", encoding="utf-8")
     value = identity(output / "project", tree, target, sample, summary["tool"],
                      compiler_identity(Path(summary["scope"]["diagnosticCompiler"]["path"])),
                      summary["semanticIdentity"]["sdk"])
@@ -203,7 +207,7 @@ def restore(candidate: Path, project: Path, output: Path, tree: str,
         summary["scope"]["diagnosticCompiler"]["path"] = str(Path(compiler).resolve())
         c_check.recheck_semantic_inputs(summary, candidate / "project", tool)
         # The historical producer/assessment context is never today's acceptance receipt.
-        summary["projectAcceptance"] = c_acceptance.evaluate(summary, candidate / "project")
+        summary["projectAcceptance"] = c_acceptance.evaluate(summary, candidate / "project", sdk_revision=tree)
         if summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}:
             raise ValueError("Reused raw analysis could not be assessed with current inputs")
         shutil.copytree(candidate, output, dirs_exist_ok=True)
@@ -251,7 +255,8 @@ def analyze(side: str, target: str, sample: str, project: Path, output: Path) ->
         if source["kind"] == "same-run":
             source["reason"] = reason
     if source["kind"] == "same-run":
-        result = c_check.check(project, target, output)
+        result = c_check.check(project, target, output,
+                               **({"sdk_revision": tree} if side == "baseline" else {}))
     else:
         result = 0 if read(output / "summary.json")["passed"] else 1
     record(output, tree, target, sample)

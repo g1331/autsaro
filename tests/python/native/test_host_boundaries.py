@@ -236,7 +236,7 @@ class HostIoTests(unittest.TestCase):
                 target = directory / "target"
                 shutil.copytree(os_suites.TARGET, target)
                 # Redirect only the selected production TUs after platform declarations.
-                for relative in ("src/host/windows/Os_HostWindows.c", "src/Os_Stack.c"):
+                for relative in ("src/host/windows/Os_HostWindows.c", "src/host/windows/Os_Stack.c"):
                     source = target / relative
                     text = source.read_text(encoding="utf-8")
                     text = text.replace('#include "Os_HostIo.h"', '#include "Os_HostIo.h"\n'
@@ -293,7 +293,8 @@ class NativeKernelObjectTests(unittest.TestCase):
                 directory = Path(temporary)
                 target = directory / "target"
                 shutil.copytree(os_suites.TARGET, target)
-                source = target / "src/Os_PortRestart.c"
+                source = target / ("src/host/windows/Os_PortRestart.c" if os.name == "nt"
+                                   else "src/host/linux/Os_PortRestart.c")
                 text = source.read_text(encoding="utf-8")
                 if mutation == "exported-continuation":
                     before, after = (".scl 3; .type 32", ".scl 2; .type 32") if os.name == "nt" else (
@@ -303,7 +304,7 @@ class NativeKernelObjectTests(unittest.TestCase):
                     text = text.replace(before, after)
                 else:
                     before = "leaq Os_PortRestartLanding(%rip),%rax"
-                    self.assertEqual(text.count(before), 2)
+                    self.assertEqual(text.count(before), 1)
                     text = text.replace(before, "leaq Os_PortRestartRejected(%rip),%rax")
                     if os.name == "nt":
                         before = 'ret\\n.seh_endproc\\n.text\\n'
@@ -670,7 +671,7 @@ class NativeFacilityTests(unittest.TestCase):
     def test_native_atomic_storage_constraints(self):
         import os_suites
 
-        cases = (("include/Os_HostTypes.h", (
+        cases = (("src/host/common/Os_HostTypes.h", (
             ("OS_ATOMIC32_WIDTH", "typedef LONG Os_Atomic32Type;",
              "typedef int64_t Os_Atomic32Type;"),
             ("OS_ATOMIC32_ALIGN", "typedef LONG Os_Atomic32Type;",
@@ -697,7 +698,9 @@ class NativeFacilityTests(unittest.TestCase):
                      *([] if os.name == "nt" else ["-pthread"]),
                      "-I" + str(os_suites.TARGET / "include"),
                      "-I" + str(os_suites.TARGET / "src"),
-                     *([] if os.name == "nt" else ["-I" + str(os_suites.TARGET / "src/host/linux")]),
+                     "-I" + str(os_suites.TARGET / "src/host/common"),
+                     *( ["-I" + str(os_suites.TARGET / ("src/host/windows" if os.name == "nt"
+                                                                    else "src/host/linux"))]),
                      "-I" + str(ROOT / "runtime/bsw/include")]
 
             def compile_header(name, label, text):
@@ -1447,7 +1450,7 @@ void Os_TestAfterFaultReader(void)
             ("failure", None, None, None, "error", 7),
             ("omit", "src/Os_Backend.c", "if (Os_PortRestartPrepare() == 0)",
              "if (0)", "normal", 81),
-            ("skip-provider", "src/Os_PortRestart.c", "_Unwind_Backtrace(&prepare_trace, NULL)",
+            ("skip-provider", "src/host/linux/Os_PortRestart.c", "_Unwind_Backtrace(&prepare_trace, NULL)",
              "((void)&prepare_trace, _URC_END_OF_STACK)", "normal", 81),
             ("ignore-failure", "src/Os_Backend.c", "if (Os_PortRestartPrepare() == 0)",
              "if ((Os_PortRestartPrepare(), 0))", "error", 82),
@@ -1862,7 +1865,7 @@ void Os_TestAfterFaultReader(void)
             with os_suites.native_session(directory, "native-event-release"):
                 binary, _ = os_suites.build(
                     directory, str(ROOT / "tests/fixtures/os_native_event_release.c"),
-                    extra_sources=(ROOT / "runtime/os/src/Os_HostServices.c",),
+                    extra_sources=(ROOT / "runtime/os/src/host/common/Os_HostServices.c",),
                     link_flags=("-Wl,--wrap=eventfd",),
                 )
                 for scenario in ("success", "failure"):

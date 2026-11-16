@@ -308,7 +308,7 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         ]
         if linux else
         [
-            target / "src/Os_Stack.c",
+            target / "src/host/windows/Os_Stack.c",
             target / "src/host/windows/Os_HostWindows.c",
             copied / "portable/MSVC-MingW/port.c",
         ]
@@ -319,10 +319,9 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         *(["-pthread"] if linux else []),
         "-I", str(target),
         "-I", str(target / "include"),
-        "-I", str(target / "src"),
+        "-I", str(target / "src"), "-I", str(target / "src/host/common"),
         *(
-            ["-I", str(target / "src/host/linux")]
-            if linux else []
+            ["-I", str(target / ("src/host/linux" if linux else "src/host/windows"))]
         ),
         "-I", str(ROOT / "runtime/bsw/include"),
         "-I", str(ROOT / "runtime/host/include"),
@@ -335,8 +334,8 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
         str(target / "src/Os_ArtiServices.c"),
         str(target / "src/Os_Interrupt.c"),
         str(target / "src/Os_Backend.c"),
-        str(target / "src/Os_PortRestart.c"),
-        str(target / "src/Os_HostIo.c"),
+        str(target / f"src/host/{'linux' if linux else 'windows'}/Os_PortRestart.c"),
+        str(target / "src/host/common/Os_HostIo.c"),
         str(target / "src/Os_Vector.c"),
         *(str(source) for source in native_sources),
         str(target / "src/Os_Mailbox.c"),
@@ -1797,8 +1796,9 @@ def check_public_types(directory: Path) -> None:
         ("rte-host-before", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_HOST_BEFORE"]),
         ("rte-host-after", ["-DOS_PUBLIC_RTE_BEFORE", "-DOS_PUBLIC_TYPES_HOST_AFTER"]),
     ]:
-        actual_command = command + ["-I" + str(TARGET / "src")] + (
-            ["-I" + str(TARGET / "src/host/linux")] if linux else []
+        actual_command = command + ["-I" + str(TARGET / "src"),
+                              "-I" + str(TARGET / "src/host/common")] + (
+            ["-I" + str(TARGET / ("src/host/linux" if linux else "src/host/windows"))]
         ) + extra
         run_native(actual_command, capture_output=True, text=True, check=True)
         result = run_native([str(binary)], capture_output=True, text=True, timeout=5)
@@ -1816,8 +1816,9 @@ def check_public_types(directory: Path) -> None:
     source = directory / "unsupported-sc1-type.c"
     flags = [argument for argument in command[:-2]
              if argument != str(TARGET / "tests/public_types.c")]
-    flags += ["-I" + str(TARGET / "src")] + (
-        ["-I" + str(TARGET / "src/host/linux")] if linux else []
+    flags += ["-I" + str(TARGET / "src"),
+                              "-I" + str(TARGET / "src/host/common")] + (
+        ["-I" + str(TARGET / ("src/host/linux" if linux else "src/host/windows"))]
     )
     for name, value in (("DONOTCARE", "255u"), ("TotalNumberOfCores", "1u")):
         source.write_text('#include "Os.h"\nuint32 unsupported = ' + name + ';\n', encoding="utf-8")
@@ -1851,8 +1852,8 @@ def check_public_compatibility(directory: Path) -> None:
     nm_target = "--target=" + ("elf64-x86-64" if linux else "pe-x86-64")
     command = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic",
                *(["-pthread"] if linux else []),
-               "-I" + str(TARGET / "include"), "-I" + str(TARGET / "src"),
-               *(["-I" + str(TARGET / "src/host/linux")] if linux else []),
+               "-I" + str(TARGET / "include"), "-I" + str(TARGET / "src"), "-I", str(TARGET / "src/host/common"),
+               *(["-I" + str(TARGET / ("src/host/linux" if linux else "src/host/windows"))]),
                "-I" + str(ROOT / "runtime/bsw/include"), "-I" + str(ROOT / "runtime/host/include"),
                str(TARGET / "tests/public_compatibility.c"), "-o", str(binary)]
     expected = "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
@@ -2013,9 +2014,10 @@ def check_counter_service(directory: Path, project: Path, counter: str) -> None:
     # Normal and both behavioral variants above still build and run the kernel.
     signature_command = [
         compiler(), "-std=c99", "-Wall", "-Wextra", "-Werror", *sanitizer_flags(), "-fsyntax-only",
-        "-I", str(target / "include"), "-I", str(target / "src"),
-        *(["-I", str(target / "src/host/linux")]
-          if _TARGET_ID.get() == "linux-x64-controlled-v1" else []),
+        "-I", str(target / "include"), "-I", str(target / "src"), "-I", str(target / "src/host/common"),
+        *(["-I", str(target / ("src/host/linux"
+                               if _TARGET_ID.get() == "linux-x64-controlled-v1"
+                               else "src/host/windows"))]),
         "-I", str(ROOT / "runtime/bsw/include"),
         "-I", str(ROOT / "runtime/host/include"), str(source),
     ]
@@ -2181,8 +2183,8 @@ def check_memory_mapping(directory: Path) -> None:
     headers = directory / "include"
     shutil.copytree(TARGET / "include", headers)
     flags = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I", str(headers),
-             "-I", str(TARGET / "src"),
-             *(["-I", str(TARGET / "src/host/linux")] if linux else []),
+             "-I", str(TARGET / "src"), "-I", str(TARGET / "src/host/common"),
+             *(["-I", str(TARGET / ("src/host/linux" if linux else "src/host/windows"))]),
              "-I", str(ROOT / "runtime/bsw/include"), "-I", str(ROOT / "runtime/host/include")]
     source = TARGET / "tests/memory_mapping.c"
     object_file = directory / "memory_mapping.o"
@@ -2276,20 +2278,19 @@ def check_port_restart(directory: Path) -> None:
     cc = compiler()
     linux = _TARGET_ID.get() == "linux-x64-controlled-v1"
     binary = directory / ("port-restart" if linux else "port-restart.exe")
-    include_paths = [TARGET, TARGET / "include", TARGET / "src",
+    include_paths = [TARGET, TARGET / "include", TARGET / "src", TARGET / "src/host/common",
                      ROOT / "runtime/bsw/include", ROOT / "runtime/host/include",
                      KERNEL / "include",
                      KERNEL / ("portable/ThirdParty/GCC/Posix" if linux else "portable/MSVC-MingW")]
-    if linux:
-        include_paths.append(TARGET / "src/host/linux")
+    include_paths.append(TARGET / ("src/host/linux" if linux else "src/host/windows"))
     run_native([cc, "-std=c99", "-O2", "-g", "-Wall", "-Wextra", "-Werror", "-fexceptions",
                 *sanitizer_flags(), *(["-pthread"] if linux else []),
                 *(value for path in include_paths for value in ("-I", str(path))),
-                str(TARGET / "src/Os_PortRestart.c"), str(TARGET / "tests/port_restart_probe.c"),
+                str(TARGET / f"src/host/{'linux' if linux else 'windows'}/Os_PortRestart.c"), str(TARGET / "tests/port_restart_probe.c"),
                 "-o", str(binary)], check=True, timeout=60)
     if linux:
         for source in ("src/host/linux/Os_HostLinux.c", "src/host/linux/Os_StackLinux.c",
-                       "src/host/linux/Os_LinuxNative.c", "src/Os_PortRestart.c"):
+                       "src/host/linux/Os_LinuxNative.c", "src/host/linux/Os_PortRestart.c"):
             macros = run_native([cc, "-std=c99", "-pthread", "-E", "-dM",
                                  *(value for path in include_paths for value in ("-I", str(path))),
                                  str(TARGET / source)], check=True)

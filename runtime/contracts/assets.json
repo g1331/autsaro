@@ -266,7 +266,7 @@
       ]
     },
     {
-      "path": "runtime/os/include/Os_HostTypes.h",
+      "path": "runtime/os/src/host/common/Os_HostTypes.h",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -784,11 +784,22 @@
       ]
     },
     {
-      "path": "runtime/os/src/Os_PortRestart.c",
+      "path": "runtime/os/src/host/linux/Os_PortRestart.c",
       "license": "Apache-2.0",
       "targets": [
-        "windows-x64-controlled-v1",
         "linux-x64-controlled-v1"
+      ],
+      "role": "os",
+      "responsibility": "workbench",
+      "profiles": [
+        "ecu"
+      ]
+    },
+    {
+      "path": "runtime/os/src/host/windows/Os_PortRestart.c",
+      "license": "Apache-2.0",
+      "targets": [
+        "windows-x64-controlled-v1"
       ],
       "role": "os",
       "responsibility": "workbench",
@@ -862,7 +873,7 @@
       ]
     },
     {
-      "path": "runtime/os/src/Os_HostServices.c",
+      "path": "runtime/os/src/host/common/Os_HostServices.c",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",
@@ -914,7 +925,7 @@
       ]
     },
     {
-      "path": "runtime/os/src/Os_Stack.c",
+      "path": "runtime/os/src/host/windows/Os_Stack.c",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
@@ -991,7 +1002,7 @@
       ]
     },
     {
-      "path": "runtime/os/src/Os_Windows.h",
+      "path": "runtime/os/src/host/windows/Os_Windows.h",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1"
@@ -2515,7 +2526,7 @@
       "responsibility": "workbench"
     },
     {
-      "path": "runtime/os/src/Os_HostIo.c",
+      "path": "runtime/os/src/host/common/Os_HostIo.c",
       "license": "Apache-2.0",
       "targets": [
         "windows-x64-controlled-v1",

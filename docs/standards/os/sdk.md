@@ -1,5 +1,7 @@
 # SDK 原头来源与接口责任
 
+ADR 0030 裁定后，迁入 host 目录的 SDK 实例转历史，原冻结路径与身份保留。顶层 `Os_Backend.c`、`Os_Time.c` 的 SDK 调用继续按当前输入核查。
+
 本篇承接[声明与 SDK 接口](declarations.md#sdk-声明与常量)，记录采用来源与自有调用责任。
 
 ## SDK 原头来源类别

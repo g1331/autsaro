@@ -4,15 +4,15 @@
 
 ## 结果与严格入口
 
-范围外位置：[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md) 把主机仿真层移出合规范围，范围外诊断照常保留，不要求处置，不进入 `blocked` 判定和 `objects`。检查器的范围标注由 [#502](https://github.com/g1331/autsaro/issues/502) 实现，在此之前所有位置按范围内处理。
+[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md) 把主机仿真层移出合规范围，范围外诊断照常保留，不要求处置，不进入 `blocked` 判定和 `objects`。`complianceScope` 单列范围内外位置数；其 `diagnostics` 单列诊断条数，混合诊断归范围内，工具信息单列。
 
-- `accepted`：当前输入下，所有诊断位置都有有效处置，必要人工与正式义务均已完成。
+- `accepted`：当前输入下，所有范围内诊断位置都有有效处置，必要人工与正式义务均已完成。
 - `blocked`：分析可用，但有未知诊断、未绑定或过期上下文、未评估或未完成的义务。
 - `error`：工具、输入、解析或判定不能完整执行。正常 CI 的完整性检查也拒绝此状态。
 
 `objects` 给出具体对象和阻塞理由，`occurrences` 回接原诊断索引、位置序号、规则、程序及处置来源。`checkersReport` 是工具信息，不为它制造偏离。SDK 来源完整只证明责任可识别，不证明其集成义务已完成；采用代码同样不自动放行。
 
-严格消费者使用含摘要、已分析 `project/` 及程序目录的完整结果，不接受仅有摘要或缺失、重复、额外身份：
+严格消费者要求摘要、已分析 `project/` 和程序目录，拒绝缺失、重复或额外身份：
 
 ```bash
 uv run --locked python -m autosar_tooling c-acceptance \
@@ -21,7 +21,7 @@ uv run --locked python -m autosar_tooling c-acceptance \
   --upstream prepare=success --upstream analysis=success
 ```
 
-完整矩阵在各自目标主机分别给出四个 `--expected` 与完整结果；Windows 工件不能交给 Linux 验证其实际 SDK 路径。上游值取实际任务结果，不能在失败时写死为 success。消费者重新读取当前 SDK、runner、分析驱动和完整源码，重算输入身份与验收，并精确核对存储回执；修改旧摘要的 SDK、seal、参数或当前 producer，不能重放旧 `accepted`。原始 `passed=false` 与诊断退出码 1 可以和有效项目验收并存。
+各目标主机给出四个 `--expected` 与完整结果，验证实际 SDK 路径；跨平台只传递矩阵依赖回执。上游值取实际任务结果，不能在失败时写死为 success。消费者重新读取当前 SDK、runner、分析驱动和完整源码，重算输入身份与验收，并精确核对存储回执；修改旧摘要的 SDK、seal、参数或当前 producer，不能重放旧 `accepted`。原始 `passed=false` 与诊断退出码 1 可以和有效项目验收并存。
 
 本地离线上下文重绑可下载较小的输入工件：
 
@@ -37,19 +37,19 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 复用 `c_comparison` 的逐程序差集，重新计算当前项目验收，仅由对应诊断、物理位置及程序的有效 accepted 处置覆盖新增。改写诊断行产生新增，Git 改名回接原件／交付路径；整文件行映射把旧位置批准留在旧位置。整体 blocked 留作报告，执行 error 阻断。内部复用包装器以零退出表示执行完整，原 c-check、raw passed、程序退出码与诊断保持原义。
+PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 复用 `c_comparison` 的逐程序差集，重新计算当前项目验收，仅由对应诊断、物理位置及程序的有效 accepted 处置覆盖新增。改写诊断行产生新增，Git 改名回接原件／交付路径；整文件行映射把旧位置批准留在旧位置。整体 blocked 留作报告，执行 error 阻断。`out_of_scope` occurrence 和 `outOfScopeNew` 保留范围外位置及新增。门先收齐双侧各八份 `scope-input.json`，按原始分析身份绑定并集，再重算 occurrence、MR12／SDK 消费与验收身份。严格集成验收要求完整矩阵；汇总核对每份绑定及逐位置分类，统计见 `compliance-scope.json`。包装器零退出只表示执行完整，原始分析状态保持。
 
-基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。工具 prepare 与双侧生成并行，每侧扫描仅依赖共享工具和本侧生成；Windows 共用分析器，行为夹具每平台一次。基准原件按第一父提交及目标换行核对，改名后仍可追溯。双树严格比较受支持 SDK provider 完整包文件清单及实际字节摘要，允许宏／头使用集合变化；共有宏值仍比较。单侧验证及默认严格比较保持，基准失败或环境不可比均拒绝。
+基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。prepare 与双侧生成并行；各侧扫描依赖工具和本侧生成。基准原件及 SDK 原件记录取第一父提交并绑定身份，继续核对实际 SDK；current 严格核对当前记录，评估仍用当前输入。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树严格比较受支持 SDK provider 完整包文件清单及实际字节摘要，允许宏／头使用集合变化；共有宏值仍比较。双侧 raw 回执均拒绝验收 error；基准失败或环境不可比均拒绝。
 
 基准扫描可复用该 SHA 的 master push 原始产物，要求对应生产作业成功。匹配身份覆盖树、样本、分析器二进制／addon、规则与生成器、完整生成 seal、PR 驱动／配置／评估输入、Python、GCC driver／backend 和 runner 镜像。目标主机重新计算完整 SDK 环境，并重查模型、隐式库及驱动语义；任一不符、产物缺失／重复或 attempt 不符均现场扫描。每轮仍生成基准以核对完整 seal；复用只省去原始扫描，项目验收和输入身份重新计算。`gate.json.baselineSource` 记录 same-run（含回退原因）或 master-artifact（运行、attempt、生产作业、工件与 digest），不缓存门判定。
 
 配对要求每侧恰好一份完整结果；工件名带侧别、目标、样本及分片序号，保留重复证据。Linux 消费本轮成功作业产物，核对双方 `_complete`、`input_identity`，八份门回执绑定 checkout、第一父提交、双侧摘要与输入身份；所需上游 skip／cancel／failure、缺重样本／身份均拒绝。Windows 消费端先 `git read-tree --empty`，再用 `core.autocrlf=true reset --hard HEAD` 重建真实字节并遵循 `.gitattributes`。精简配对产物保留 summary、封存 project、身份、来源及平台模型；完整 dump／日志仍由生产作业另存。历史工件的严格目标主机重放入口保持。
 
-完整项目验收仍可用上文 `c-acceptance` CLI 单独执行；合规线出口由 [#482](https://github.com/g1331/autsaro/issues/482) 切换必需门到完整验收。测试里的完整合成正例验证可执行契约，真实处置及分支保护证据由 #55 的 PR 保存。
+合规线出口由 [#482](https://github.com/g1331/autsaro/issues/482) 切换必需门到完整验收。测试里的完整合成正例验证可执行契约，真实处置及分支保护证据由 #55 的 PR 保存。
 
 `docs/standards/` 的评估 Markdown 与固定指南索引是实际分析输入，单独修改时选择 Python、两平台准备和全部 C 分析，保持原始状态及严格汇总。`rte/generated-retention/` 还由 Rust native 消费，继续选择完整原生检查；adoption 上下文块由分析消费，沿分析入口验证。七个独立分析驱动（含 `c_gate`、`c_baseline`）使用相同选择；共享 lexer／retention、混合改动、改名或未知输入仍完整运行。标准记录不单独选择桌面场景，普通读者指南沿文档快路径。
 
-固定 221 项的类别独立锁定，不能靠同步修改索引和摘要重新定义；已有处置不授权改变规范类别。
+221 项类别独立锁定，已有处置不授权改变类别。
 
 ## CI 成本对照
 
@@ -80,7 +80,7 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_
 人工目录记录其所载冻结输入的分类；当前输入变化时保留准确的历史范围，并使旧绑定失效。
 不要将历史已分类记录改为当前未评估状态，也不要在合成测试中自动完成未评估条目。
 
-这些身份是证据适用范围，不是诊断 baseline 或缓存。不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
+不得采集当前 hash 后自动追认成旧批准。初次绑定引用原冻结工件与收据；旧材料不完整时保持未绑定，或对当前范围完成明确的重新评估。
 
 动态构造带摘要的原件、补丁或封存夹具时，用同一份编码后的字节写文件并计算身份，
 采用 `write_bytes` 或显式指定换行；默认文本写入在 Windows 会转换 LF 为 CRLF。
@@ -126,7 +126,7 @@ FreeRTOS 另绑定完整原件 manifest、有序补丁及最终 kernel。SDK 保
 
 自有源码的局部消费者另接受 `records={"kind":"owned-source"}`。它复用原标准篇与
 `c_standard` 的 MR12 双向关联，核对原实体、已登记 shape、当前原件及 ownership 字节，
-并保留表中的目标、程序和 ND 样本限制。主机地址使用原有八个表达式实例；MemMap
+并保留表中的目标、程序和 ND 样本限制。验收先筛范围内原件，范围外记录过期不影响目标处置；quality 仍全量检查。MemMap
 R20.1 逐包含验证既有 START／STOP 协议，R20.5 只消费原表精确登记的 MR12 位置。
 未登记的内部属性／状态撤销保留阻塞，完整类别实例解析由自有源码消费任务接续。
 C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_record_matched`，
@@ -136,7 +136,7 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 消费来源取当前可追溯的 runtime 原件及明确归属的生成／配置产物；应用快照与内核实例
 由原任务继续核定。允许的程序为 host-batch／probe，样本为现有四个 profile。
 
-该组当前只消费上述已实现的精确关联。Required 风险记录继续返回
+Required 风险记录继续返回
 `formal_deviation_pending`，即使上下文为 `approved` 也保留该义务；Mandatory 保留项
 返回 `mandatory_deviation_forbidden`。其余模块误报、采用内核与 SDK 位置沿原有阻塞。
 实际输入交集绑定在[原自有源码标准篇](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)，

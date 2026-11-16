@@ -8,13 +8,96 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_sdk
+from autosar_tooling import c_comparison, c_sdk
 from autosar_tooling.c_comparison import compare
 from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
 from ecu_tools.build import digest
 
 
 class CComparisonTests(unittest.TestCase):
+    def test_host_scope_uses_target_dependency_union_and_patch_landing_lines(self):
+        scope = {"translationUnits": ["bsw/src/Can.c", "integration/src/host.c",
+                                      "os/src/host/linux/port.c", "kernel/tasks.c"],
+                 "projectTranslationUnits": {
+                     "bsw/src/Can.c": ["integration/include/Shared.h"],
+                     "integration/src/host.c": ["integration/include/Private.h"],
+                     "os/src/host/linux/port.c": ["integration/include/Port.h"],
+                     "kernel/tasks.c": ["kernel/portable/MSVC-MingW/portmacro.h"]},
+                 "patchedLines": {"kernel/tasks.c": [7],
+                                  "kernel/portable/MSVC-MingW/port.c": [7]}}
+        expected = {
+            "integration/include/Shared.h": "in-scope",
+            "integration/include/Private.h": "host-integration",
+            "integration/include/Port.h": "host-integration",
+            "integration/src/host.c": "host-integration",
+            "os/src/host/windows/Os_Stack.c": "host-platform",
+            "kernel/portable/MSVC-MingW/port.c": "host-platform",
+            "kernel/portable/MSVC-MingW/portmacro.h": "host-platform",
+            "kernel/tasks.c": "in-scope", "bsw/src/Can.c": "in-scope"}
+        for name, category in expected.items():
+            with self.subTest(name=name):
+                self.assertEqual(c_comparison.location_scope(
+                    scope, {"file": name, "line": "7"}), category)
+        self.assertEqual(c_comparison.location_scope(
+            scope, {"file": "kernel/tasks.c", "line": "8"}), "adopted-kernel")
+        other = {**scope, "projectTranslationUnits": {
+            **scope["projectTranslationUnits"],
+            "bsw/src/Can.c": ["integration/include/Private.h"]}}
+        union = c_comparison.target_headers([scope, other])
+        self.assertEqual(c_comparison.location_scope(scope, {
+            "file": "integration/include/Private.h", "line": "1"}, headers=union), "in-scope")
+        del scope["projectTranslationUnits"]["kernel/tasks.c"]
+        with self.assertRaisesRegex(ValueError, "complete GCC"):
+            c_comparison.location_scope(scope, {
+                "file": "integration/include/Private.h", "line": "1"})
+
+    def test_source_tree_layout_keeps_configuration_checks_with_new_producer_digests(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            summary, project, output, baseline = self.fixture(Path(temporary))
+            old_target = baseline / "project/target.json"
+            old_target.write_text(json.dumps({**json.loads(old_target.read_text()),
+                                              "includePaths": ["."]}))
+            for root in (project, output / "project"):
+                target = json.loads((root / "target.json").read_text())
+                target.update(definitionFingerprint="new definitions", inputSha256="new input",
+                              includePaths=[".", "os/src/host/common"])
+                (root / "target.json").write_text(json.dumps(target))
+            summary["scope"]["includePaths"].append("os/src/host/common")
+            self.assertFalse(compare(summary, project, output, baseline, source_tree=True)["new"])
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                compare(summary, project, output, baseline)
+            target["compilerFlags"] = ["-std=c11"]
+            (project / "target.json").write_text(json.dumps(target))
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                compare(summary, project, output, baseline, source_tree=True)
+
+    def test_matrix_receipts_bind_all_raw_inputs_and_ignore_derived_annotations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            summary, *_ = self.fixture(Path(temporary))
+            summary["scope"]["target"] = c_comparison.MATRIX_TARGETS[0]
+            receipts = []
+            for target in c_comparison.MATRIX_TARGETS:
+                for sample in c_comparison.MATRIX_SAMPLES:
+                    other = deepcopy(summary)
+                    other["scope"]["target"] = target
+                    receipts.append(c_comparison.scope_receipt(other, sample))
+            matrix = c_comparison.scope_matrix(receipts)
+            before = c_comparison.raw_identity(summary)
+            c_comparison.annotate_scope(summary, set(matrix["targetHeaders"]))
+            summary["projectAcceptance"] = {"scopeMatrix": matrix}
+            self.assertEqual(c_comparison.raw_identity(summary), before)
+            self.assertEqual(c_comparison.matrix_headers(summary, matrix), {"main.c"})
+            for broken in (receipts[:-1], receipts + [receipts[0]]):
+                with self.assertRaisesRegex(ValueError, "incomplete|duplicated"):
+                    c_comparison.scope_matrix(broken)
+            changed = deepcopy(matrix)
+            changed["targetHeaders"].append("integration/forged.h")
+            with self.assertRaisesRegex(ValueError, "union differs"):
+                c_comparison.matrix_headers(summary, changed)
+            summary["scope"]["projectTranslationUnits"]["main.c"].append("other.h")
+            with self.assertRaisesRegex(ValueError, "bind this raw analysis"):
+                c_comparison.matrix_headers(summary, matrix)
+
     def fixture(self, root):
         baseline = root / "baseline/sample"
         output = root / "current"
@@ -38,6 +121,7 @@ class CComparisonTests(unittest.TestCase):
             "sourceSealSha256": digest(baseline / "project/meta/files.sha256"),
             "scope": {"target": "linux", "profile": "ecu", "entries": {"target": "main.c"}, "compilerFlags": ["-std=c99"],
                       "includePaths": ["."], "translationUnits": ["main.c"],
+                      "projectTranslationUnits": {"main.c": ["main.c"]},
                       "supplemental": [], "patchedKernel": [],
                       "sdkEnvironment": {"format": "sdk-provider-environment-v1", "files": 1,
                                          "sha256": "f" * 64}},

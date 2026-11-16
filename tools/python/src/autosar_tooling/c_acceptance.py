@@ -19,7 +19,7 @@ from ecu_tools.build import (
     safe_relative,
 )
 
-from autosar_tooling import c_retention, c_sdk, c_standard
+from autosar_tooling import c_comparison, c_retention, c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 BEGIN = "<!-- source-assessment-context-begin -->"
@@ -193,7 +193,8 @@ def _producer_inputs(names, root: Path, revision: str | None, windows: bool) -> 
 
 
 def input_identity(summary: dict, project: Path, *, root: Path = ROOT,
-                   producer_revision: str | None = None) -> str:
+                   producer_revision: str | None = None, matrix_scope: dict | None = None,
+                   sdk_revision: str | None = None) -> str:
     """Hash the analyzed copy, including final patched kernel and application bytes.
 
     The caller verifies the original seal and semantic inputs before and after analysis.
@@ -236,12 +237,16 @@ def input_identity(summary: dict, project: Path, *, root: Path = ROOT,
     if semantic.get("version") != 2 or any(not semantic.get(key) for key in
             ("sdk", "compiler", "defines", "libraries", "analysisCode", "addonRuntime")):
         raise ValueError("Assessment semantic inputs incomplete")
-    return _hash({"version": 2, "plan": plan, "target": target,
+    return _hash({**({"scopeTargetHeaders": matrix_scope["targetHeaders"]} if matrix_scope is not None else {}),
+                  **({"sdkSourceRecords": _sdk_records(root, sdk_revision)}
+                     if sdk_revision is not None else {}),
+                  "version": 2, "plan": plan, "target": target,
                   "originalBswSources": metadata["originalBswSources"],
                   "producerInputs": producers,
                   "files": actual, "semanticIdentity": semantic,
                   "projectTranslationUnits": summary["scope"].get("projectTranslationUnits"),
                   "cppcheckInputs": summary["scope"].get("cppcheckInputs"),
+                  "patchedLines": summary["scope"].get("patchedLines"),
                   "tool": {key: summary["tool"][key] for key in ("version", "expectedSourceRevision", "addons")},
                   "assessmentInputs": _assessment_inputs(summary, root),
                   "programs": [{key: program[key] for key in ("name", "entry", "translationUnits")}
@@ -378,7 +383,8 @@ def _grp_positions(
     return accepted
 
 
-def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -> dict:
+def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
+                     headers: set[str] | None = None) -> dict:
     """Join current source positions to the existing bidirectional MR12 records.
 
     Record association and formal acceptance remain separate. In particular a
@@ -391,7 +397,10 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
     origins = {delivered: original
                for original, delivered in metadata["originalBswSources"].items()}
     records = []
-    errors = c_standard.deviation_findings(root, matched=records)
+    selected_sources = {original for delivered, original in origins.items()
+                        if not delivered.startswith("kernel/") and c_comparison.location_scope(
+                            summary["scope"], {"file": delivered, "line": 1}, headers=headers) == "in-scope"}
+    errors = c_standard.deviation_findings(root, matched=records, source_names=selected_sources)
     # The shared MR12 parser also sees templates belonging to the generated-retention
     # group. Their own context and consumer remain the authority for those rows.
     records = [row for row in records
@@ -494,7 +503,8 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path) -
             and row["record"]["text"] in (root / row["record"]["file"]).read_text(encoding="utf-8")}
 
 
-def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROOT) -> str:
+def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROOT,
+                      *, matrix_scope: dict | None = None) -> str:
     """Bind a local assessment to actual TU inputs, never generator carrier files.
 
     Call input_identity first to verify the complete analyzed copy and provenance.
@@ -594,26 +604,29 @@ def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROO
         # The SDK assessment inventories every use, including zero-warning sites.
         value["sdkMacros"] = scope.get("sdkMacroInputs")
         value["diagnostics"] = sorted(_hash(row) for row in summary["diagnostics"])
+    if matrix_scope is not None:
+        value["scopeTargetHeaders"] = matrix_scope["targetHeaders"]
     return _hash(value)
 
 
-def freertos_identity(summary: dict, project: Path, root: Path = ROOT) -> str:
+def freertos_identity(summary: dict, project: Path, root: Path = ROOT,
+                      *, matrix_scope: dict | None = None) -> str:
     """Freeze kernel TU inputs and full mixed reports containing kernel locations."""
-    return evidence_identity(summary, project, "freertos-integration", root)
+    return evidence_identity(summary, project, "freertos-integration", root, matrix_scope=matrix_scope)
 
 
-def sdk_identity(summary: dict, project: Path, root: Path = ROOT) -> str:
+def sdk_identity(summary: dict, project: Path, root: Path = ROOT,
+                 *, matrix_scope: dict | None = None) -> str:
     """Freeze SDK TU inputs, every report and active unreported definition."""
-    return evidence_identity(summary, project, "sdk-integration", root)
+    return evidence_identity(summary, project, "sdk-integration", root, matrix_scope=matrix_scope)
 
 
-def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
-                   kernel: tuple | None) -> tuple[dict, list[dict]]:
-    """Check the exact SDK integration records, independently of diagnostic labels."""
+def _sdk_records(root: Path, revision: str | None = None) -> dict:
     path = root / SDK
     if not path.is_file():
         raise ValueError("SDK integration evidence missing")
-    text = path.read_text(encoding="utf-8")
+    text = (path.read_text(encoding="utf-8") if revision is None else
+            subprocess.check_output(["git", "show", revision + ":" + SDK], cwd=root).decode("utf-8"))
     blocks = re.findall(r"<!-- sdk-integration-records-begin -->\s*(.*?)"
                         r"\s*<!-- sdk-integration-records-end -->", text, re.DOTALL)
     if len(blocks) != 1:
@@ -621,9 +634,19 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
     record = json.loads(blocks[0], object_pairs_hook=_pairs)
     if set(record) != {"definitions", "sites"}:
         raise ValueError("Invalid SDK integration records")
+    return record
+
+
+def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
+                   kernel: tuple | None, *, in_scope_only: bool = False,
+                   headers: set[str] | None = None,
+                   sdk_revision: str | None = None) -> tuple[dict, list[dict]]:
+    """Check the exact SDK integration records, independently of diagnostic labels."""
+    # Baseline source consumes its own records, checked against actual SDK provenance.
+    record = _sdk_records(root, sdk_revision)
     scope = summary["scope"]
     c_sdk.validate_sources(summary)
-    headers = {row["path"]: row for row in scope["sdkHeaders"]}
+    sdk_headers = {row["path"]: row for row in scope["sdkHeaders"]}
     origins = {delivered: original
                for original, delivered in metadata["originalBswSources"].items()}
     owners = {row["path"]: row for row in json.loads(
@@ -640,6 +663,17 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
             raise ValueError("Invalid SDK integration site")
         if row["target"] != scope["target"]:
             continue
+        if in_scope_only:
+            name = row["file"]
+            if not (project / name).is_file():
+                # Frozen SDK records retain their original paths after a host
+                # provider moves. Resolve only an unambiguous selected host file.
+                moved = [path for path in origins if path.startswith("os/src/host/")
+                         and Path(path).name == Path(name).name]
+                if len(moved) == 1:
+                    name = moved[0]
+            if c_comparison.location_scope(scope, {"file": name, "line": row["line"]}, headers=headers) != "in-scope":
+                continue
         key = row["rule"], row["file"], row["line"]
         if key in selected:
             raise ValueError("Duplicate SDK integration site")
@@ -668,7 +702,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
             # sigaction is a public tag/function pair rather than a macro.
             if (row["symbol"] != "sigaction" or not re.search(r"\bsigaction\b", row["text"])
                     or name not in scope["sdkTranslationUnits"]
-                    or not any(all(headers[header].get(field) == expected[field]
+                    or not any(all(sdk_headers[header].get(field) == expected[field]
                                    for field in ("header", "provider", "version", "sha256"))
                                for header in scope["sdkTranslationUnits"][name])):
                 raise ValueError("SDK sigaction interface provenance differs")
@@ -678,7 +712,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
             for unit, values in uses:
                 for symbol, definition in expected.items():
                     actual = values.get(symbol, {})
-                    header = headers.get(actual.get("file"), {})
+                    header = sdk_headers.get(actual.get("file"), {})
                     if (actual.get("use", "").strip() != row["text"]
                             or actual.get("reference", False)
                             or actual.get("file") not in scope["sdkTranslationUnits"][unit]
@@ -690,6 +724,8 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
         obligations.append({"rule": row["rule"], "location": {"file": name, "line": row["line"]},
                             "entity": row["symbol"], "record": SDK})
     if not selected:
+        if in_scope_only:
+            return {}, []
         raise ValueError("SDK integration target records missing")
     # Extra uses of a reviewed SDK macro require their own record, even with no warning.
     symbols = {row["symbol"] for row in selected.values() if row["rule"] != "5.7"}
@@ -697,9 +733,13 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                  for row in selected.values()}
     for values in scope["sdkMacroInputs"].values():
         for location, definitions in values.items():
+            if in_scope_only:
+                name, line = location.rsplit(":", 1)
+                if c_comparison.location_scope(scope, {"file": name, "line": line}, headers=headers) != "in-scope":
+                    continue
             for symbol in symbols & definitions.keys():
                 definition = definitions[symbol]
-                if (definition["file"] in headers and not definition.get("reference", False)
+                if (definition["file"] in sdk_headers and not definition.get("reference", False)
                         and (location, symbol) not in locations):
                     raise ValueError(f"SDK integration unrecorded use: {location}:{symbol}")
     result = {}
@@ -730,7 +770,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                 and origin.get("value") == definition["value"]
                 and origin.get("definitionLine") == definition["line"]
                 and origin.get("headerKey") in {
-                    header["key"] for header in headers.values()
+                    header["key"] for header in sdk_headers.values()
                     if header["header"] == definition["header"]}
                 for origin in diagnostic.get("sourceOrigins", [])):
             continue
@@ -831,7 +871,9 @@ def _freertos_positions(
         return {}
     sources, patched = kernel if kernel is not None else _freertos_sources(project, metadata, root)
     records = []
-    errors = c_standard.deviation_findings(root, matched=records, kernel_sources=sources)
+    errors = c_standard.deviation_findings(
+        root, matched=records, kernel_sources=sources,
+        source_names={name for name in sources if not c_comparison.platform_location(name)})
     records = [row for row in records if row["source"].startswith("kernel/")]
     result = {}
     for index, position, diagnostic, location in _positions(summary["diagnostics"]):
@@ -892,7 +934,8 @@ def _freertos_positions(
     return result
 
 
-def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
+def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
+             matrix_scope: dict | None = None, sdk_revision: str | None = None) -> dict:
     """Assess independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
               "caseId": None, "inputIdentity": None, "contexts": [], "assessmentInputs": None,
@@ -903,7 +946,15 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
 
     try:
         _complete(summary)
-        identity = input_identity(summary, project, root=root)
+        if matrix_scope is None:
+            matrix_scope = summary.get("projectAcceptance", {}).get("scopeMatrix")
+        headers = c_comparison.matrix_headers(summary, matrix_scope) if matrix_scope is not None else None
+        if matrix_scope is not None:
+            result["scopeMatrix"] = matrix_scope
+        result["complianceScope"] = c_comparison.scope_statistics(summary, headers=headers)
+        identity = input_identity(summary, project, root=root, matrix_scope=matrix_scope, sdk_revision=sdk_revision)
+        if sdk_revision is not None:
+            result["sdkSourceRevision"] = sdk_revision
         result["inputIdentity"] = identity
         result["assessmentInputs"] = _assessment_inputs(summary, root)
         candidates = {}
@@ -917,7 +968,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
             if not cases:
                 continue
             if group not in local_identities:
-                local_identities[group] = (evidence_identity(summary, project, group, root)
+                local_identities[group] = (evidence_identity(summary, project, group, root, matrix_scope=matrix_scope)
                     if group in {"freertos-integration", "sdk-integration", "owned-source", "generated-retention"}
                     else identity)
             for case in cases:
@@ -978,16 +1029,19 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
                 (root / "third_party/freertos" / name).is_file()
                 for name in ("source-manifest.json", "posix-source-manifest.json")):
             kernel = _freertos_sources(project, metadata, root)
+        if (kernel is not None and "patchedLines" in summary["scope"]
+                and summary["scope"]["patchedLines"] != kernel[1]):
+            raise ValueError("MISRA scope patch line receipt differs from verified hunks")
         grp_positions = _grp_positions(
             summary, project, metadata, root, kernel[1] if kernel is not None else {})
-        owned_positions = _owned_positions(summary, project, metadata, root)
+        owned_positions = _owned_positions(summary, project, metadata, root, headers=headers)
         freertos_positions = _freertos_positions(summary, project, metadata, root, kernel)
         if "freertos-integration" in selected:
             result["contexts"].append(_reference(selected["freertos-integration"][0]))
         target = json.loads((project / "target.json").read_text(encoding="utf-8"))
         if target.get("kernelPatches"):
             context = selected.get("freertos-integration")
-            result["freertosInputIdentity"] = freertos_identity(summary, project, root)
+            result["freertosInputIdentity"] = freertos_identity(summary, project, root, matrix_scope=matrix_scope)
             if context is None:
                 add("context", "freertos-integration",
                     "freertos_integration_context_unbound_or_stale")
@@ -1001,9 +1055,10 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         sdk_positions = {}
         sdk_reason = "sdk_integration_context_unbound_or_stale"
         if (root / SDK).is_file() or summary["scope"].get("sdkTranslationUnits"):
-            sdk_positions, obligations = _sdk_positions(summary, project, metadata, root, kernel)
+            sdk_positions, obligations = _sdk_positions(
+                summary, project, metadata, root, kernel, in_scope_only=True, headers=headers, sdk_revision=sdk_revision)
             result["sdkObligations"] = obligations
-            result["sdkInputIdentity"] = sdk_identity(summary, project, root)
+            result["sdkInputIdentity"] = sdk_identity(summary, project, root, matrix_scope=matrix_scope)
             context = selected.get("sdk-integration")
             if context is not None:
                 result["contexts"].append(_reference(context[0]))
@@ -1022,6 +1077,15 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT) -> dict:
         for occurrence, (index, position, diagnostic, location) in zip(occurrences, positions):
             if occurrence["diagnostic"] != index or occurrence["location"] != location:
                 raise ValueError("Retention occurrence position differs")
+            classification = (c_comparison.location_scope(summary["scope"], location, headers=headers)
+                              if location is not None else "in-scope")
+            if classification != "in-scope":
+                result["occurrences"].append({
+                    **occurrence, "locationIndex": position, "assessment": "out_of_scope",
+                    "status": "out_of_scope",
+                    "reason": classification, "diagnosticIdentity": _hash(diagnostic),
+                })
+                continue
             grp = (index, position) in grp_positions
             if grp:
                 reason = None
@@ -1127,6 +1191,10 @@ def require_accepted(analyses: list[tuple[dict, Path]], expected: list[tuple[str
                     raise ValueError("Each analysis must contain its summary and complete patched project path")
                 summary, project = analysis
                 c_check.recheck_semantic_inputs(summary, project, tool)
+                if (any(name.startswith("integration/") for name in
+                        (project / FILE_LIST).read_text(encoding="utf-8").splitlines())
+                        and summary.get("projectAcceptance", {}).get("scopeMatrix") is None):
+                    raise ValueError("Strict integration acceptance requires the complete matrix scope")
                 current = evaluate(summary, project, root=root)
                 if current["status"] != "accepted":
                     reasons = "; ".join(dict.fromkeys(row["reason"] for row in current["objects"]))

@@ -18,7 +18,132 @@ def _read(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def diagnostic_counts(summary: dict, root: Path) -> Counter:
+MATRIX_TARGETS = ("linux-x64-controlled-v1", "windows-x64-controlled-v1")
+MATRIX_SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
+
+
+def raw_identity(summary: dict) -> str:
+    """Bind raw analysis independently of the later matrix acceptance annotations."""
+    raw = {key: value for key, value in summary.items()
+           if key not in {"projectAcceptance", "complianceScope"}}
+    raw["diagnostics"] = [{key: value for key, value in row.items() if key != "complianceScope"}
+                          for row in summary["diagnostics"]]
+    return hashlib.sha256(json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def scope_receipt(summary: dict, sample: str) -> dict:
+    return {"format": "c-misra-scope-input-v1", "sample": sample,
+            "analysisIdentity": raw_identity(summary),
+            **{key: summary["scope"][key] for key in
+               ("target", "translationUnits", "projectTranslationUnits")}}
+
+
+def scope_matrix(receipts: list[dict]) -> dict:
+    """Require exactly eight raw dependency receipts before applying rule 2."""
+    expected = {(target, sample) for target in MATRIX_TARGETS for sample in MATRIX_SAMPLES}
+    found = set()
+    for row in receipts:
+        if (set(row) != {"format", "target", "sample", "analysisIdentity",
+                         "translationUnits", "projectTranslationUnits"}
+                or row["format"] != "c-misra-scope-input-v1"
+                or not re.fullmatch(r"[0-9a-f]{64}", row["analysisIdentity"])):
+            raise ValueError("Invalid matrix scope receipt")
+        pair = row["target"], row["sample"]
+        if pair not in expected or pair in found:
+            raise ValueError("Unexpected or duplicated matrix scope receipt")
+        found.add(pair)
+        units, dependencies = row["translationUnits"], row["projectTranslationUnits"]
+        if (not isinstance(units, list) or not units or len(units) != len(set(units))
+                or any(not safe_relative(unit) for unit in units)
+                or not isinstance(dependencies, dict) or set(dependencies) != set(units)
+                or any(not isinstance(paths, list) or paths != sorted(set(paths))
+                       or unit not in paths or any(not safe_relative(name) for name in paths)
+                       for unit, paths in dependencies.items())):
+            raise ValueError("Matrix GCC dependency receipt incomplete")
+    if found != expected:
+        raise ValueError(f"Matrix scope incomplete: {sorted(expected - found)}")
+    members = sorted(receipts, key=lambda row: (row["target"], row["sample"]))
+    return {"format": "c-misra-scope-matrix-v1", "members": members,
+            "targetHeaders": sorted(target_headers(members))}
+
+
+def matrix_headers(summary: dict, matrix: dict) -> set[str]:
+    if matrix != scope_matrix(matrix["members"]):
+        raise ValueError("Matrix scope union differs from dependency receipts")
+    if not any(row == scope_receipt(summary, row["sample"])
+               for row in matrix["members"] if row["target"] == summary["scope"]["target"]):
+        raise ValueError("Matrix scope does not bind this raw analysis")
+    return set(matrix["targetHeaders"])
+
+
+def annotate_scope(summary: dict, headers: set[str] | None = None) -> None:
+    for diagnostic in summary["diagnostics"]:
+        diagnostic["complianceScope"] = [location_scope(summary["scope"], location, headers=headers)
+                                         for location in diagnostic["locations"]]
+    summary["complianceScope"] = scope_statistics(summary, headers=headers)
+
+
+def platform_location(name: str) -> bool:
+    """ADR 0030 rule 1: platform selection owns the complete directory."""
+    return name.startswith(("os/src/host/", "kernel/portable/MSVC-MingW/",
+                            "kernel/portable/ThirdParty/GCC/Posix/"))
+
+
+def target_headers(scopes: list[dict]) -> set[str]:
+    """Union GCC -MD receipts from target TUs, across samples and programs."""
+    headers = set()
+    for scope in scopes:
+        dependencies = scope.get("projectTranslationUnits", {})
+        for unit in scope["translationUnits"]:
+            if platform_location(unit) or unit.startswith("integration/"):
+                continue
+            headers.update(dependencies.get(unit, []))
+    return headers
+
+
+def location_scope(scope: dict, location: dict, *, headers: set[str] | None = None) -> str:
+    """Classify a physical position, including mixed adopted/project diagnostics."""
+    name = location["file"]
+    if platform_location(name):
+        return "host-platform"
+    if name.startswith("integration/"):
+        if name.endswith(".c"):
+            return "host-integration"
+        dependencies = scope.get("projectTranslationUnits")
+        units = [unit for unit in scope["translationUnits"]
+                 if not platform_location(unit) and not unit.startswith("integration/")]
+        if not isinstance(dependencies, dict) or any(unit not in dependencies for unit in units):
+            raise ValueError("MISRA scope requires complete GCC project dependency receipts")
+        if name not in (target_headers([scope]) if headers is None else headers):
+            return "host-integration"
+    if (name.startswith("kernel/") and "patchedLines" in scope
+            and int(location["line"]) not in scope["patchedLines"].get(name, [])):
+        return "adopted-kernel"
+    return "in-scope"
+
+
+def scope_statistics(summary: dict, *, headers: set[str] | None = None) -> dict:
+    """Count physical locations once; program multiplicity is kept by comparison."""
+    categories = Counter(location_scope(summary["scope"], location, headers=headers)
+                         for diagnostic in summary["diagnostics"]
+                         if diagnostic["id"] != "checkersReport"
+                         for location in diagnostic["locations"])
+    inside = categories["in-scope"]
+    total = sum(categories.values())
+    raw = [diagnostic for diagnostic in summary["diagnostics"]
+           if diagnostic["id"] != "checkersReport"]
+    raw_outside = sum(bool(row["locations"]) and all(
+        location_scope(summary["scope"], location, headers=headers) != "in-scope"
+        for location in row["locations"]) for row in raw)
+    return {"total": total, "inScope": inside, "outOfScope": total - inside,
+            "categories": dict(sorted(categories.items())),
+            "diagnostics": {"total": len(raw), "inScope": len(raw) - raw_outside,
+                            "outOfScope": raw_outside,
+                            "informational": len(summary["diagnostics"]) - len(raw)}}
+
+
+def diagnostic_counts(summary: dict, root: Path, *, in_scope_only: bool = False,
+                      headers: set[str] | None = None) -> Counter:
     counts = Counter()
     for diagnostic in summary["diagnostics"]:
         if diagnostic["id"] == "checkersReport":
@@ -27,6 +152,8 @@ def diagnostic_counts(summary: dict, root: Path) -> Counter:
         if not locations:
             raise ValueError(f"Diagnostic has no source location: {diagnostic['id']}")
         for location in locations:
+            if in_scope_only and location_scope(summary["scope"], location, headers=headers) != "in-scope":
+                continue
             name = location["file"]
             if not safe_relative(name):
                 raise ValueError(f"Diagnostic outside sample: {name}")
@@ -206,9 +333,14 @@ def compare(
 
         def normalized(value, field=""):
             if isinstance(value, dict):
-                return {key: normalized(item, key) for key, item in value.items()}
+                return {key: normalized(item, key) for key, item in value.items()
+                        if not (source_tree and field == "ruleSetIdentity" and key == "sha256")}
             if isinstance(value, list):
                 items = [normalized(item) for item in value]
+                if source_tree and field == "includePaths":
+                    # Selected host provider directories may move with source layout.
+                    # Their actual dependencies remain bound by each complete scan.
+                    items = [item for item in items if not item.startswith("os/src/host/")]
                 # These are source sets, emitted in filename order. Renaming a
                 # source can reorder them without changing the analysis closure.
                 if (source_tree and field in {"sources", "kernelSources", "translationUnits",
@@ -233,8 +365,16 @@ def compare(
                for root in (project, output / "project")):
             raise ValueError("Current source seal identity differs")
         # Source bytes may change; the selected target/configuration/link closure may not.
-        if normalized(_read(project / "target.json")) != normalized(
-                mapped(_read(old_root / "target.json"))):
+        def target_configuration(path):
+            value = _read(path / "target.json")
+            if source_tree:
+                # These digests include the producer's source bytes. The complete
+                # selected plan and all remaining target configuration are compared below.
+                value = {key: item for key, item in value.items()
+                         if key not in {"definitionFingerprint", "inputSha256"}}
+            return value
+        if normalized(target_configuration(project)) != normalized(
+                mapped(target_configuration(old_root))):
             raise ValueError("Target/sample configuration differs")
         for field in ("target", "profile", "entries", "compilerFlags", "includePaths",
                       "translationUnits", "supplemental", "patchedKernel"):
