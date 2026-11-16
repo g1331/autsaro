@@ -68,51 +68,51 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 后的局部身份与既有具体消费，原批准实体、正式义务及未评估／表外阻塞保持；历史过期的精确记录按当前绑定恢复。
 <!-- source-assessment-context-begin -->
 {
-  "id": "checker-obligations-443-control-flow",
+  "id": "checker-obligations-511-preprocessing",
   "evidence": {
-    "head": "0d5f4a74a539c410abc67463e356b87a2283b37f",
-    "receipt": "https://github.com/g1331/autsaro/issues/443#issuecomment-6872195716"
+    "head": "6a591dbeb330dd3487983893bea5bae6c2f75571",
+    "receipt": "https://github.com/g1331/autsaro/issues/511#issuecomment-6930381131"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "fa6bed3f6917b82559480908d8e6d182901398d261f2c1eb3b5c3a4048557dfe"
+      "inputIdentity": "fbd4b229f5cf3e8aae697d4f56aac23e8a3b7d8c783f468aad1ac8d1159f2ad8"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "52aeca356bced7cf6ba897fd9fe0cd9c2fee87e42740ed17954f3c011e6bb931"
+      "inputIdentity": "8c1539531abbcc6bd8b782a84cc475871a16b91a1967ae799227b674d989ad22"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "3a042bc97275dd891f01f31b8395e0f3313362b49af4c4362a07c6ea832768d8"
+      "inputIdentity": "6d77f49a8cdb5b914a141c197ad75d943fc92ebcbf9d178f7e6e713a8320ba4c"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "90306568c5809098a0b467640af567edef2c35dec358c009255a7cfba6a37cd8"
+      "inputIdentity": "17cae9c95b0f963103b50b522cace7a2af6835cba506efdd0e9eda7c0ee0f9c8"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "d9f8f3413af7497f41acec765b9eaab54544837e647947b8a29f57db66f988e2"
+      "inputIdentity": "895a1a5eadc50481f81b38f307d477cf67280d1a9928eae42438ff2e5e8e8fa1"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "6abaf3d6a4d695d3a2631d95f7144bb0e7072847ab179e335241d8d1549c104c"
+      "inputIdentity": "c10e60b8839078049d6f45f2121ab5c3c34bd523ada1964e327061bf7ebeabdb"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "4791240ecf49c1e3be54d3f46526be04bedee08b0f8817d16c3076f26c813ea7"
+      "inputIdentity": "792b3ebd2c0574fe58d4d245c0d253bbb13bcaf3b4cf6d4d81e4e495f098d66b"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "dcf6bc7b382177e05e5e7fe9a3467c1d20fc03d1d3fec5da590b22cfec283c8e"
+      "inputIdentity": "defa8d2fa687adf7b9e2e814a7d5baee47e414357c3835f83a5e397a0bd46053"
     }
   ],
   "records": {
