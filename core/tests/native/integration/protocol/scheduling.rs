@@ -10,7 +10,7 @@ use std::time::Duration;
 
 type Result<T> = std::io::Result<T>;
 
-fn monotonic_ns() -> Result<u64> {
+pub(super) fn monotonic_ns() -> Result<u64> {
     autosar_config_core::execution::monotonic_ns()
         .map_err(|error| std::io::Error::other(format!("{error:?}")))
 }
@@ -25,6 +25,7 @@ struct ThreadSample {
     monotonic_ns: u64,
     counters: [u64; 3],
     switches: [u64; 2],
+    cpu_ticks: [u64; 2],
     state: String,
     wchan: String,
 }
@@ -58,7 +59,23 @@ impl ThreadSample {
                 .parse()
                 .map_err(std::io::Error::other)?,
         ];
+        let stat = read(&task.join("stat"))?;
+        let fields: Vec<_> = stat
+            .rsplit_once(") ")
+            .ok_or_else(|| std::io::Error::other("thread stat has no command suffix"))?
+            .1
+            .split_whitespace()
+            .collect();
+        let cpu_ticks = [11, 12].map(|index| {
+            fields
+                .get(index)
+                .ok_or_else(|| std::io::Error::other("incomplete thread stat"))?
+                .parse()
+                .map_err(std::io::Error::other)
+        });
+        let [user, system] = cpu_ticks;
         Ok(Self {
+            cpu_ticks: [user?, system?],
             monotonic_ns: monotonic_ns()?,
             counters,
             switches,
@@ -154,6 +171,8 @@ struct Capture {
     counters: BTreeMap<String, (ThreadSample, ThreadSample)>,
     errors: Vec<String>,
     progress: Progress,
+    stopped: bool,
+    ticks_per_second: i64,
 }
 
 impl Capture {
@@ -164,15 +183,19 @@ impl Capture {
             counters: BTreeMap::new(),
             errors: Vec::new(),
             progress: Progress::new(directory)?,
+            stopped: false,
+            ticks_per_second: unsafe { libc::sysconf(libc::_SC_CLK_TCK) },
         })
     }
 
     fn observe(&mut self) -> Result<()> {
+        self.stopped = false;
         for task in fs::read_dir(format!("/proc/{}/task", self.pid))? {
             let sample = (|| -> Result<()> {
                 let task = task?;
                 let tid = task.file_name().to_string_lossy().into_owned();
                 let value = ThreadSample::read(&task.path())?;
+                self.stopped |= value.state.starts_with('T');
                 writeln!(
                     self.output,
                     "{}",
@@ -180,6 +203,8 @@ impl Capture {
                         "monotonic_ns": value.monotonic_ns, "pid": self.pid, "tid": tid,
                         "run_ns": value.counters[0], "runqueue_wait_ns": value.counters[1],
                         "timeslices": value.counters[2],
+                        "utime_ticks": value.cpu_ticks[0], "stime_ticks": value.cpu_ticks[1],
+                        "clock_ticks_per_second": self.ticks_per_second,
                         "voluntary_ctxt_switches": value.switches[0],
                         "nonvoluntary_ctxt_switches": value.switches[1],
                         "state": value.state, "wchan": value.wchan,
@@ -211,7 +236,7 @@ impl Capture {
             report.push_str(&format!(
                 "tid={tid} first={:?} last={:?} sample_first_ns={} sample_last_ns={} \
                  run_delta_ns={run} runqueue_wait_delta_ns={queue} other_elapsed_ns={} \
-                 voluntary_delta={} nonvoluntary_delta={} state={} wchan={}\n",
+                 voluntary_delta={} nonvoluntary_delta={} utime_delta_ticks={} stime_delta_ticks={} state={} wchan={}\n",
                 first.counters,
                 last.counters,
                 first.monotonic_ns,
@@ -219,6 +244,8 @@ impl Capture {
                 elapsed.saturating_sub(run).saturating_sub(queue),
                 last.switches[0].saturating_sub(first.switches[0]),
                 last.switches[1].saturating_sub(first.switches[1]),
+                last.cpu_ticks[0].saturating_sub(first.cpu_ticks[0]),
+                last.cpu_ticks[1].saturating_sub(first.cpu_ticks[1]),
                 last.state,
                 last.wchan,
             ));
@@ -234,20 +261,32 @@ impl Capture {
 pub(super) struct Scheduling {
     stop: Arc<AtomicBool>,
     worker: Option<JoinHandle<String>>,
+    failure_started: Arc<AtomicBool>,
+    completed_report: Option<String>,
+    capture_enabled: bool,
+    lost_notice: bool,
 }
 
 impl Scheduling {
-    pub(super) fn start(pid: u32, directory: &Path) -> Self {
+    pub(super) fn start(pid: u32, directory: &Path, binary: Option<&Path>) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = Arc::clone(&stop);
+        let failure_started = Arc::new(AtomicBool::new(false));
+        let failing = Arc::clone(&failure_started);
+        let capture_enabled = binary.is_some();
+        let binary = binary.map(Path::to_owned);
+        let directory = directory.to_owned();
         // Take the initial observation before writing stdin, including short-lived consumers.
-        let capture = Capture::new(pid, directory).map(|mut capture| {
+        let capture = Capture::new(pid, &directory).map(|mut capture| {
             if let Err(error) = capture.observe() {
                 capture.errors.push(error.to_string());
             }
             capture
         });
         let worker = thread::spawn(move || {
+            let _sampler = binary
+                .as_ref()
+                .map(|_| super::sampler::Sampler::start(pid, &directory));
             let mut capture = match capture {
                 Ok(capture) => capture,
                 Err(error) => return format!("schedstat capture: {error}"),
@@ -255,6 +294,10 @@ impl Scheduling {
             while !stopping.load(Ordering::Acquire) {
                 if let Err(error) = capture.observe() {
                     capture.errors.push(error.to_string());
+                    break;
+                }
+                if capture.stopped && binary.is_some() {
+                    failing.store(true, Ordering::Release);
                     break;
                 }
                 // Observation cadence only; never gates the ECU or adds a test grace period.
@@ -265,7 +308,28 @@ impl Scheduling {
         Self {
             stop,
             worker: Some(worker),
+            failure_started,
+            completed_report: None,
+            capture_enabled,
+            lost_notice: std::env::var("AUTOSAR_TEST_CAPTURE_LOST_NOTICE").as_deref() == Ok("1"),
         }
+    }
+
+    pub(super) fn failure_started(&self) -> bool {
+        self.failure_started.load(Ordering::Acquire) && !self.lost_notice
+    }
+
+    pub(super) fn stopped_failure(&self, pid: u32) -> bool {
+        self.capture_enabled
+            && fs::read_to_string(format!("/proc/{pid}/status"))
+                .is_ok_and(|status| status.lines().any(|line| line.starts_with("State:\tT ")))
+    }
+
+    pub(super) fn complete_failure(&mut self, pid: u32, binary: &Path, directory: &Path) {
+        self.completed_report = self.finish();
+        self.completed_report
+            .get_or_insert_with(String::new)
+            .push_str(&super::capture::freeze(pid, binary, directory));
     }
 
     fn finish(&mut self) -> Option<String> {
@@ -281,7 +345,7 @@ impl Scheduling {
 
 impl Drop for Scheduling {
     fn drop(&mut self) {
-        if let Some(report) = self.finish()
+        if let Some(report) = self.finish().or_else(|| self.completed_report.take())
             && thread::panicking()
         {
             eprintln!("{report}");
@@ -294,7 +358,7 @@ fn records_live_thread_counters() {
     let scratch = super::super::Scratch::new();
     fs::write(scratch.0.join("stdout"), "").unwrap();
     let pid = std::process::id();
-    let mut capture = Scheduling::start(pid, &scratch.0);
+    let mut capture = Scheduling::start(pid, &scratch.0, None);
     let report = capture.finish().unwrap();
     assert!(report.contains(&format!("tid={pid} ")), "{report}");
     assert!(report.contains("runqueue_wait_delta_ns="), "{report}");

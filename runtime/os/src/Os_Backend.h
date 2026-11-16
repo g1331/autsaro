@@ -130,6 +130,16 @@ OS_MEMMAP void Os_BackendShutdown(StatusType error) __attribute__((noreturn));
 OS_MEMMAP void Os_BackendRequestShutdown(StatusType error);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
+#if defined(OS_HOST_CAPTURE_TESTS) && (OS_HOST_CAPTURE_TESTS == STD_ON)
+/* Timing-test observer; invoked before any shutdown state is changed. */
+void Os_HostCaptureBeforeClose(StatusType error);
+#else
+/* No emitted function or sanitizer entry in ordinary builds. */
+static inline void __attribute__((always_inline)) Os_HostCaptureBeforeClose(StatusType error)
+{
+    (void)error;
+}
+#endif
 #ifdef __linux__
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"

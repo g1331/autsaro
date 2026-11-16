@@ -72,6 +72,17 @@ int main(int argc, char **argv)
     if (strcmp(argv[1], "abort-zero") == 0) {
         __wrap_Ecu_TargetAbortNative(E_OK);
     }
+    if (strcmp(argv[1], "secondary") == 0) {
+        Os_HostCaptureBeforeClose(E_OK);
+        __wrap_Os_BackendShutdown(E_OS_STATE);
+    }
+    if (strcmp(argv[1], "first-failure") == 0) {
+        Os_HostCaptureBeforeClose(E_OS_STATE);
+        if (write(STDOUT_FILENO, "R", 1U) != 1) {
+            return INVALID_ARGUMENT;
+        }
+        __wrap_Os_BackendShutdown(E_OK);
+    }
     if (strcmp(argv[1], "other") == 0) {
         __wrap_Os_BackendShutdown(E_OS_ID);
     }

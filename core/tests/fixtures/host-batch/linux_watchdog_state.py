@@ -64,6 +64,61 @@ def thread_state(thread, pid):
     return result
 
 
+def automatic_budget():
+    records = gdb.parse_and_eval("capture_budget")
+    result = {}
+    for index, role in enumerate(("H", "S")):
+        thread = records[index]
+        sequence = int(thread["sequence"])
+        samples = []
+        size = thread["samples"].type.strip_typedefs().range()[1] + 1
+        for number in range(max(0, sequence - size), sequence):
+            sample = thread["samples"][number % size]
+            if int(sample["sequence"]) != number + 1:
+                continue  # A freeze may interrupt the oldest slot's replacement.
+            samples.append({
+                name: int(sample[name]) for name in
+                ("sequence", "wall_ns", "cpu_ns", "outside_cpu_ns", "phase", "entering")
+            } | {
+                name: [int(sample[name][phase]) for phase in range(5)]
+                for name in ("calls", "phase_exclusive_cpu_ns", "phase_cpu_ns", "phase_wall_ns")
+            })
+        result[role] = {
+            name: int(thread[name]) for name in
+            ("tid", "active", "revision", "entered_wall_ns", "entered_cpu_ns", "accounted_cpu_ns", "outside_cpu_ns", "sequence", "clock_errors")
+        } | {
+            "phases": [{name: int(thread["phases"][phase][name]) for name in
+                        ("calls", "completed", "exclusive_cpu_ns", "cpu_ns", "wall_ns")} for phase in range(5)],
+            "samples": samples,
+        }
+    return result
+
+
+def automatic_state(result):
+    try:
+        result["sched_schedstats"] = Path("/proc/sys/kernel/sched_schedstats").read_text().strip()
+    except OSError as error:
+        result["sched_schedstats"] = {"error": str(error)}
+    result["freeze_monotonic_ns"] = int(gdb.parse_and_eval("capture_freeze_ns"))
+    result["captured_reason"] = int(gdb.parse_and_eval("capture_reason"))
+    if result["captured_reason"] != 7:
+        ERRORS.append({"error": "stop was not a captured reason=7"})
+    stacks = gdb.parse_and_eval("'Os_StackLinux.c'::stacks")
+    result["roles"] = {
+        chr(int(cell["role"])): int(cell["thread_id"])
+        for cell in (stacks[index] for index in range(stacks.type.range()[1] + 1))
+        if int(cell["role"]) != 0
+    }
+    gate = gdb.parse_and_eval("interrupt_gate").dereference()
+    result["gate"] = {name: int(gate[name]) for name in
+                      ("mutex_owner", "mutex_depth", "mutex_generation")}
+    result["budget"] = automatic_budget()
+    result["phase_names"] = ["wait", "suspend", "resume", "drain", "post"]
+    for role in ("H", "S"):
+        if result["budget"][role]["clock_errors"]:
+            ERRORS.append({"role": role, "error": "budget clock failed"})
+
+
 def snapshot():
     inferior = gdb.selected_inferior()
     result = {
@@ -94,6 +149,8 @@ def snapshot():
                     record["fdinfo_error"] = str(error)
                     ERRORS.append({"fdinfo": str(path), "error": str(error)})
             result["handles"].append(record)
+    if os.environ["AUTOSAR_WATCHDOG_MODE"] == "automatic":
+        automatic_state(result)
     result["capture_errors"] = ERRORS
     result["before_close"] = result["globals"]["Os_Closing"] == "0" and not ERRORS
     (OUTPUT / "all-stacks.txt").write_text(
@@ -105,7 +162,7 @@ def snapshot():
 mode = os.environ["AUTOSAR_WATCHDOG_MODE"]
 if mode == "layout":
     data = layout()
-elif mode == "snapshot":
+elif mode in ("snapshot", "automatic"):
     data = snapshot()
 else:
     raise ValueError(f"Unknown watchdog observation mode: {mode}")

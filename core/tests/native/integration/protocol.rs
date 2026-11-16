@@ -26,6 +26,10 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 #[cfg(target_os = "linux")]
+mod capture;
+#[cfg(target_os = "linux")]
+mod sampler;
+#[cfg(target_os = "linux")]
 mod scheduling;
 
 const REQUEST: u64 = 1792;
@@ -89,11 +93,25 @@ fn run(binary: &Path, directory: &Path, script: &[u8]) -> String {
         .spawn()
         .unwrap();
     #[cfg(target_os = "linux")]
-    let _scheduling = scheduling::Scheduling::start(child.id(), directory);
+    let mut _scheduling = scheduling::Scheduling::start(
+        child.id(),
+        directory,
+        binary.with_extension("capture").is_file().then_some(binary),
+    );
     child.stdin.take().unwrap().write_all(script).unwrap();
     let started = std::time::Instant::now();
     while child.try_wait().unwrap().is_none() {
-        if started.elapsed() > Duration::from_secs(30) {
+        let exceeded = started.elapsed() > Duration::from_secs(30);
+        #[cfg(target_os = "linux")]
+        if _scheduling.failure_started() || (exceeded && _scheduling.stopped_failure(child.id())) {
+            // Execution has already failed; the bounded postmortem owns the stopped child.
+            _scheduling.complete_failure(child.id(), binary, directory);
+            if child.try_wait().unwrap().is_none() {
+                child.kill().unwrap();
+            }
+            break;
+        }
+        if exceeded {
             child.kill().unwrap();
             child.wait().unwrap();
             panic!("HostBatch exceeded its watchdog: {}", directory.display());
@@ -316,17 +334,10 @@ fn check_s3(binary: &Path, directory: &Path, oracle: &Value, case: &Value) {
 fn s3_output_publication_wakes_armed_native_event_wait() {
     let scratch = super::Scratch::new();
     let (project, _) = super::single_component_project(&scratch.0, super::tooling::native_target());
-    let control = scratch.0.join("event-wakeup.c");
-    fs::write(
-        &control,
-        format!(
-            "{}\n{}",
-            fs::read_to_string(project.join("integration/src/ecu_host_batch.c")).unwrap(),
-            fs::read_to_string(root().join("core/tests/fixtures/host-batch/linux_event_wakeup.c"))
-                .unwrap()
-        ),
-    )
-    .unwrap();
+    let extra =
+        fs::read_to_string(root().join("core/tests/fixtures/host-batch/linux_event_wakeup.c"))
+            .unwrap();
+    let control = capture::control(&project, &scratch.0, &extra);
     let output = scratch.0.join("event-build");
     let kinds = std::env::var_os("AUTOSAR_SANITIZE").unwrap_or_default();
     let mut command = super::tooling::ecu_sanitizer_build_command(
@@ -342,6 +353,7 @@ fn s3_output_publication_wakes_armed_native_event_wait() {
         "-Wl,--wrap=poll",
         "-Wl,--wrap=__poll_chk",
     ]);
+    capture::configure(&mut command);
     require_success(&super::tooling::run_public_command(
         &mut command,
         &scratch.0,
@@ -354,6 +366,7 @@ fn s3_output_publication_wakes_armed_native_event_wait() {
         output
     };
     let binary = super::tooling::native_binary(&directory, "ecu_probe");
+    capture::mark(&binary);
     let oracle: Value = serde_json::from_slice(
         &fs::read(root().join("core/tests/fixtures/oracles/protocol.json")).unwrap(),
     )
@@ -394,6 +407,9 @@ fn single_component_meets_independent_protocol_and_timing_vectors() {
         &fs::read(root().join("core/tests/fixtures/oracles/protocol.json")).unwrap(),
     )
     .unwrap();
+    #[cfg(target_os = "linux")]
+    let built = capture::project();
+    #[cfg(not(target_os = "linux"))]
     let built = host_batch_project();
     bind_oracle_settings();
     let binary = &built.binary;

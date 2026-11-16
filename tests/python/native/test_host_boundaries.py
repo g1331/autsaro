@@ -615,34 +615,47 @@ class NativeFacilityTests(unittest.TestCase):
                     "-Wl,--wrap=prctl", "-o", str(binary),
                 ], case, 30, case, name)).wait()
                 self.assertTrue(built.success, built.stderr.read_text())
-                for entry in ("backend", "request", "abort", "abort-zero", "other"):
+                for entry in ("backend", "request", "abort", "abort-zero", "secondary",
+                              "first-failure", "other"):
                     with self.subTest(variant=name, entry=entry):
                         process = OwnedProcess(ProcessSpec.seconds(
                             [str(binary), entry], case, 10, case, entry
                         ))
                         try:
                             pid = int(process.registration["pid"])
-                            stopped = False
-                            deadline = time.monotonic() + 5
-                            while time.monotonic() < deadline:
-                                try:
-                                    status = Path(f"/proc/{pid}/status").read_text()
-                                except FileNotFoundError:
-                                    break
-                                stopped = "\nState:\tT " in status
-                                if stopped or "\nState:\tZ " in status:
-                                    break
-                                os.sched_yield()
-                            output = Path(process.registration["stdout"]).read_text()
-                            wanted_stop = expected_stop and entry != "other"
-                            self.assertEqual(stopped, wanted_stop)
-                            if stopped:
-                                self.assertEqual(output, expected_output)
-                                os.kill(pid, signal.SIGCONT)
+                            wanted_stop = expected_stop and entry not in ("other", "secondary")
+                            stops = 2 if wanted_stop and entry == "first-failure" else 1
+                            for index in range(stops):
+                                stopped = False
+                                deadline = time.monotonic() + 5
+                                while time.monotonic() < deadline:
+                                    # Read the phase marker before state, so a stale first
+                                    # stop cannot satisfy the second observation.
+                                    output = Path(process.registration["stdout"]).read_text()
+                                    try:
+                                        status = Path(f"/proc/{pid}/status").read_text()
+                                    except FileNotFoundError:
+                                        break
+                                    stopped = "\nState:\tT " in status
+                                    if (stopped and (index == 0 or "R" in output)
+                                            or "\nState:\tZ " in status):
+                                        break
+                                    os.sched_yield()
+                                output = Path(process.registration["stdout"]).read_text()
+                                self.assertEqual(stopped, wanted_stop)
+                                if stopped:
+                                    prefix = expected_output
+                                    if index != 0:
+                                        prefix += "R" + expected_output
+                                    self.assertEqual(output, prefix)
+                                    os.kill(pid, signal.SIGCONT)
                             result = process.wait()
                             self.assertEqual(result.exit_code, 77, result)
-                            self.assertEqual(result.stdout.read_text(), "PD" if name != "missing-ptrace"
-                                             and entry != "other" else "D")
+                            final_output = ("PD" if name != "missing-ptrace"
+                                            and entry not in ("other", "secondary") else "D")
+                            if entry == "first-failure":
+                                final_output = "PRPD" if name != "missing-ptrace" else "RD"
+                            self.assertEqual(result.stdout.read_text(), final_output)
                             # Both mutants violate the control's before-delegation observation.
                             if name != "control" and entry != "other":
                                 self.assertFalse(stopped and output == "P")
