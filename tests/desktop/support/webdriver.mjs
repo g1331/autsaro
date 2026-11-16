@@ -3,10 +3,13 @@ import { appendFile } from 'node:fs/promises';
 // Serialized into the page. The optional observer is diagnostic only; the
 // expression and native IPC still execute through the original transport.
 export function evaluateInPage(expression, id, done, endpoint) {
+  let sequence = 0;
   function observe(stage) {
     const sample = {
       id,
       stage,
+      // Independent beacons can arrive out of order; assign at the page event.
+      sequence: ++sequence,
       at: Date.now(),
       timeOrigin: performance.timeOrigin,
       url: location.href,
