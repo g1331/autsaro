@@ -123,6 +123,7 @@ pub(super) struct Evidence {
     path: PathBuf,
     started: Instant,
     identities: parking_lot::Mutex<std::collections::BTreeSet<(u32, u64)>>,
+    records: parking_lot::Mutex<Vec<Value>>,
     before_stop: parking_lot::Mutex<Option<Value>>,
 }
 
@@ -132,6 +133,7 @@ impl Evidence {
             path,
             started: Instant::now(),
             identities: parking_lot::Mutex::new(Default::default()),
+            records: parking_lot::Mutex::new(Vec::new()),
             before_stop: parking_lot::Mutex::new(None),
         }
     }
@@ -140,13 +142,42 @@ impl Evidence {
         if record["phase"] == "before_stop" {
             *self.before_stop.lock() = Some(record.clone());
         }
+        let urgent = record["phase"] == "before_stop"
+            && (record["accounting"]["active"]
+                .as_u64()
+                .is_some_and(|n| n > 0)
+                || record["root"]["exit_code"].as_u64().is_some_and(|n| n != 0)
+                || record["root"]["wait"] != 0);
+        self.records.lock().push(record);
+        if urgent {
+            self.persist();
+        }
+    }
+
+    fn persist(&self) {
         let result = (|| -> io::Result<()> {
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&self.path)?;
-            serde_json::to_writer(&mut file, &record)?;
-            file.write_all(b"\n")
+            let records = self.records.lock();
+            let mut data = Vec::new();
+            for record in records.iter() {
+                serde_json::to_writer(&mut data, record)?;
+                data.write_all(b"\n")?;
+            }
+            std::fs::write(&self.path, &data)?;
+            if let Some(directory) = std::env::var_os("AUTOSAR_JOB_EVIDENCE_DIRECTORY") {
+                std::fs::create_dir_all(&directory)?;
+                let name = format!(
+                    "rust-{}-{}.jsonl",
+                    std::process::id(),
+                    self.path
+                        .parent()
+                        .unwrap()
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                );
+                std::fs::write(Path::new(&directory).join(name), data)?;
+            }
+            Ok(())
         })();
         if let Err(error) = result {
             let _ = writeln!(
@@ -185,7 +216,7 @@ impl Evidence {
             )
         });
         // A bounded diagnostic snapshot must label truncation/races, never infer an empty tree.
-        let members: Vec<_> = if list_error.is_none() {
+        let mut members: Vec<_> = if list_error.is_none() {
             ids.ids[..(ids.listed as usize).min(ids.ids.len())]
                 .iter()
                 .map(|&pid| member(pid as u32, job_handle))
@@ -193,6 +224,23 @@ impl Evidence {
         } else {
             Vec::new()
         };
+        let mut system_snapshot_error = None;
+        if phase == "before_stop" && !members.is_empty() {
+            match super::system_snapshot::capture() {
+                Ok(snapshot) => {
+                    for member in &mut members {
+                        if let Some(extra) = member["pid"]
+                            .as_u64()
+                            .and_then(|pid| snapshot.get(&(pid as u32)))
+                            .filter(|extra| extra["created_100ns"] == member["created_100ns"])
+                        {
+                            member["system_snapshot"] = extra.clone();
+                        }
+                    }
+                }
+                Err(error) => system_snapshot_error = Some(error),
+            }
+        }
         let mut identities = self.identities.lock();
         for member in &members {
             if let (Some(pid), Some(created)) =
@@ -214,6 +262,7 @@ impl Evidence {
         let [idle, kernel, user] = &mut cpu;
         let cpu_error = error(unsafe { GetSystemTimes(idle, kernel, user) });
         self.append(json!({
+            "schema": "windows-job-v2", "system_snapshot_error": system_snapshot_error,
             "phase": phase, "elapsed_us": self.started.elapsed().as_micros(),
             "owner_pid": std::process::id(), "root_pid": child.id(),
             "job_handle": format!("{job_handle:p}"),
@@ -232,6 +281,9 @@ impl Evidence {
     }
 
     pub(super) fn result(&self, result: &super::super::ProcessResult) {
+        if result.success() && !result.descendants_reclaimed {
+            return;
+        }
         let before = self.before_stop.lock();
         let summary = before.as_ref().map(|record| {
             let members: Vec<_> = record["members"].as_array().into_iter().flatten().take(4)
@@ -241,12 +293,13 @@ impl Evidence {
                 "listed": record["listed"], "members_first_four": members, "cpu": record["cpu"]})
         });
         self.append(
-            json!({"phase": "result", "elapsed_us": self.started.elapsed().as_micros(),
+            json!({"schema": "windows-job-v2", "phase": "result", "elapsed_us": self.started.elapsed().as_micros(),
             "scope": result.scope, "pid": result.pid, "pgid": result.pgid,
             "status": format!("{:?}", result.status), "exit_code": result.exit_code,
             "descendants_reclaimed": result.descendants_reclaimed,
             "stdout": result.stdout, "stderr": result.stderr, "before_cleanup": summary}),
         );
+        self.persist();
     }
 }
 

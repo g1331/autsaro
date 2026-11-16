@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod evidence;
+mod system_snapshot;
 
 #[cfg(test)]
 pub(super) fn inspect_identity(pid: u32) -> serde_json::Value {
