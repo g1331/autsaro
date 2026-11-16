@@ -32,7 +32,7 @@ transport 请求中止或响应体解析失败后，会话保留首个错误并�
 Linux 的 responsiveness 与 standard-delivery 场景自动启用请求取证，沿用会话目录与 `desktop-ubuntu-24.04-*` 工件：
 
 - `transport-headers.pcap` 保存两个已登记 loopback 端口的 512 字节包快照；`tcpdump.stderr.log` 保存最终捕获／丢包计数。它用于定位两跳请求与响应头，完整响应内容仍由原有断言验证。
-- `page-lifecycle.jsonl` 通过独立 loopback beacon 保存 evaluation 的 entered／resolved／callback 阶段；原生 projection／capabilities 日志中的 `evaluation` 来自该次调用的取证 header，进入与返回仍按原生 `id` 配对。测试保留原生 invoke 函数与 payload。
+- `page-lifecycle.jsonl` 通过独立 loopback beacon 保存 evaluation 的 entered／resolved／callback 阶段；每次 evaluation 内的 `sample.sequence` 在页面事件发生点同步递增，按它核对阶段顺序，文件行序反映 beacon 接收顺序。原生 projection／capabilities 日志中的 `evaluation` 来自该次调用的取证 header，进入与返回仍按原生 `id` 配对。测试保留原生 invoke 函数与 payload。
 - `webkit-boundaries.stdout.log` 保存 Automation sequence、UIProcess 命令／响应、WebProcess 命令 token／frame／callback，以及 driver handler 的解析长度、编码与根类型。`prefixHex` 是有界 Latin1／UTF16 存储前缀，含 `autosar-evaluation` 标记；根类型 0–6 依次为 null、boolean、double、integer、string、object、array。存储长度与 Node 收到的 UTF-8 字节数分别记录。
 - `interval-threads.jsonl` 每秒保存所属进程与 Node 的线程身份、读取起止时间、状态、wchan、CPU ticks 和 minor／major faults，并给出同一线程 start time 下相邻读取的增量；`request-intervals.jsonl` 记录请求区间与 Node body 收到的长度。采样跨越请求边界时，按实际读取区间解释增量。
 - `probe-status.jsonl`、`probe-owners.jsonl`、`probe-maps.jsonl` 与 `probe-capture.json` 保存探针启动／退出、ELF 身份、进程归属、映射和采集错误。权限不足、内核限制或未知 WebKit build 会显式留下 unavailable；保留其余取证并在分析中指出缺少的阶段。
