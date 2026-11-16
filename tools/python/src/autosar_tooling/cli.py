@@ -47,6 +47,8 @@ def main() -> int:
         default="all",
     )
     quality.add_argument("--c-samples", type=Path)
+    quality.add_argument("--commit-msg", type=Path)
+    quality.add_argument("--commit-head", default="HEAD")
     c_check = commands.add_parser("c-check", help="Run pinned free C/MISRA analysis on sealed sources")
     c_check.add_argument("--target", choices=("windows-x64-controlled-v1", "linux-x64-controlled-v1"), required=True)
     c_check.add_argument("--project", type=Path, required=True)
@@ -154,5 +156,8 @@ def main() -> int:
         ) + (["--all-format"] if args.all_format else [])
         if args.c_samples:
             options += ["--c-samples", str(args.c_samples)]
+        if args.commit_msg:
+            options += ["--commit-msg", str(args.commit_msg)]
+        options += ["--commit-head", args.commit_head]
         return check_quality([*options, "--scope", args.scope])
     return 1

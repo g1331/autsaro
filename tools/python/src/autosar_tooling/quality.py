@@ -44,6 +44,64 @@ DOCUMENT_SIZE_EXEMPT = (
 # One LLVM release provides both; PyPI publishes them as separate projects, sometimes days apart.
 PAIRED_TOOLS = ("clang-format", "clang-tidy")
 
+COMMIT_TITLE = re.compile(
+    r"(?:feat|fix|docs|test|refactor|perf|build|ci|chore)"
+    r"(?:\([^\s()]+\))?(?P<breaking>!)?: \S[^\r\n]*"
+)
+CLOSING_REFERENCE = re.compile(
+    r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?):?\s+"
+    r"(?:#[0-9]+|[\w.-]+/[\w.-]+#[0-9]+|"
+    r"https?://github\.com/[\w.-]+/[\w.-]+/issues/[0-9]+)\b",
+    re.IGNORECASE,
+)
+GIT_REVERT = re.compile(
+    r'^Revert "[^\n]+"\n\nThis reverts commit [0-9a-f]{40}'
+    r'(?:\.|, reversing\nchanges made to [0-9a-f]{40}\.)(?:\n|$)'
+)
+
+
+def commit_message_errors(message: str, identity: str, *, merge: bool = False) -> list[str]:
+    """Apply the same CONTRIBUTING rules to a stored commit or a commit-msg file."""
+    if merge or GIT_REVERT.match(message):
+        return []
+    title = message.split("\n", 1)[0]
+    prefix = f"commit {identity} ({title!r})"
+    errors = []
+    match = COMMIT_TITLE.fullmatch(title)
+    if match is None:
+        errors.append(
+            f"{prefix}: expected Conventional Commits title "
+            "<type>[(<scope>)][!]: <description>; "
+            "type must be feat, fix, docs, test, refactor, perf, build, ci or chore"
+        )
+    elif match['breaking'] and not re.search(r"^BREAKING CHANGE: \S", message, re.MULTILINE):
+        errors.append(f"{prefix}: ! requires a BREAKING CHANGE: footer")
+    for closing in CLOSING_REFERENCE.finditer(message):
+        errors.append(
+            f"{prefix}: closing keyword with Issue reference {closing.group()!r}; "
+            "put the closing relationship in the PR body and use Refs in commits"
+        )
+    return errors
+
+
+def commit_range_errors(base: str, head: str = "HEAD") -> list[str]:
+    # The existing first-push source baseline is the empty tree, with no old commits.
+    kind = run(["git", "cat-file", "-t", base])
+    if kind.returncode:
+        raise RuntimeError(kind.stderr.strip())
+    revisions = [head] if kind.stdout.strip() == "tree" else [f"{base}..{head}"]
+    result = run(["git", "log", "--format=%H%x00%P%x00%B%x00", *revisions, "--"])
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip())
+    fields = result.stdout.split("\0")
+    errors = []
+    for index in range(0, len(fields) - 1, 3):
+        sha, parents, message = fields[index:index + 3]
+        errors.extend(commit_message_errors(
+            message, sha.strip()[:8], merge=len(parents.split()) > 1,
+        ))
+    return errors
+
 
 def _capture(
     command: list[str], *, input_text: str | None = None, timeout: int = 60
@@ -553,9 +611,10 @@ def scoped_paths(scope: str) -> list[Path]:
 
 
 def check(
-    base: str, *, all_format: bool = False, scope: str = "all", c_samples: Path | None = None
+    base: str, *, all_format: bool = False, scope: str = "all", c_samples: Path | None = None,
+    commit_head: str = "HEAD",
 ) -> list[str]:
-    errors = []
+    errors = commit_range_errors(base, commit_head)
     untracked = set(source_paths(untracked_only=True))
     renamed = {} if all_format else renamed_sources(base)
     changed_c = False
@@ -647,7 +706,25 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Also run clang-tidy over these generated Linux samples against the committed baseline",
     )
+    parser.add_argument("--commit-head", default="HEAD", help="Commit range end (PR head in CI)")
+    parser.add_argument("--commit-msg", type=Path, help="Check only this commit-msg hook file")
     arguments = parser.parse_args(argv)
+    if arguments.commit_msg:
+        try:
+            message = arguments.commit_msg.read_text(encoding="utf-8")
+            merge_head = run(["git", "rev-parse", "--git-path", "MERGE_HEAD"])
+            if merge_head.returncode:
+                raise RuntimeError(merge_head.stderr.strip())
+            errors = commit_message_errors(
+                message, str(arguments.commit_msg),
+                merge=(ROOT / merge_head.stdout.strip()).is_file(),
+            )
+        except (OSError, RuntimeError) as error:
+            print(f"Commit message check could not run: {error}", file=sys.stderr)
+            return 2
+        for error in errors:
+            print(error, file=sys.stderr)
+        return int(bool(errors))
     base = arguments.base or "HEAD"
     if arguments.merge_base:
         fork = run(["git", "merge-base", "HEAD", arguments.merge_base])
@@ -671,6 +748,7 @@ def main(argv: list[str] | None = None) -> int:
             all_format=arguments.all_format,
             scope=arguments.scope,
             c_samples=arguments.c_samples,
+            commit_head=arguments.commit_head,
         )
     except (OSError, RuntimeError) as error:
         print(f"Quality check could not run: {error}", file=sys.stderr)

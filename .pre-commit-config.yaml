@@ -1,6 +1,6 @@
 # Runs the required changed-line quality check before each push; the uv-pinned
 # formatters stay the only versions, so no hook mirrors are used.
-default_install_hook_types: [pre-push]
+default_install_hook_types: [pre-push, commit-msg]
 repos:
   - repo: local
     hooks:
@@ -11,3 +11,8 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      - id: commit-message
+        name: quality (commit message)
+        entry: uv run --locked python -m autosar_tooling quality --commit-msg
+        language: system
+        stages: [commit-msg]
