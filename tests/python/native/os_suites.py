@@ -1577,11 +1577,16 @@ def check_stack_exit(directory: Path) -> None:
     old_dir.mkdir()
     old = build_stack_exit(old_dir, old_target)
     try:
-        status = run_native([str(old), "double-control-output"], timeout=10,
-                            capture_output=True, text=True).returncode & 0xFFFFFFFF
-    except subprocess.TimeoutExpired:
-        status = None
-    require(status != 13, {"scenario": "old-exit-process", "exit": status})
+        mutant = run_native([str(old), "double-control-output"], timeout=10,
+                            capture_output=True, text=True)
+    except OwnershipError as error:
+        # A hang in the exhausted-stack exit path also shows the old behavior fails.
+        require("status=timeout" in str(error), str(error))
+    else:
+        status = mutant.returncode & 0xFFFFFFFF
+        require(status == 0xC0000005 and "STACK_EXIT_DETACH_BEGIN" in mutant.stderr
+                and "STACK_EXIT_DETACH_END" not in mutant.stderr,
+                {"scenario": "old-exit-process", "exit": status, "stderr": mutant.stderr})
 
 
 def check_arti_native(directory: Path) -> None:
