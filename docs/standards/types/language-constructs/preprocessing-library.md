@@ -20,8 +20,9 @@ ADR 0030／0025。SDK 原头沿已登记来源，自有宏／使用点单独核�
 amplification 逐条核对。AMD2.27 的 C11 范围追加、AMD2.77 和 TC2.35 的例子修正
 已合成；AMD1／3／4、TC1 没有改变本批义务。当前仍为 C99。
 
-物理扫描覆盖 1,442 个范围内自有文件实例，先行拼接再去注释并保留物理行映射；
-项目补丁按最终内核的准确改动行选择，配对另读取完整文件。头名字、最终 include
+物理扫描覆盖 1,442 个范围内自有文件实例；行拼接保留逻辑行到起始物理行的映射，
+去注释保留其中全部换行。每条记录均回查原文件对应指令，再按最终内核的准确
+patchedLines 选择，共 1,264 个范围内内核指令位置；条件配对另读取完整文件。头名字、最终 include
 形式、关键字宏名、宏参数运算符、有效指令和同文件条件栈分别核查。GCC 实际展开
 与依赖回执连接入口函数和 ARTI 记录消费者，生成物另回接 ecu.rs、arti.rs 及模板。
 
@@ -34,7 +35,7 @@ R20.10 的五宏保留尚待用户决定，本批新增批准为零。固定工�
 <!-- misra-checker-obligations-begin -->
 | 规则 | 类别 | 评估范围 | 状态 | 结论 |
 | --- | --- | --- | --- | --- |
-| R20.2 | Required | include 的 header-name 字符 | satisfied | 主文 156／PDF 164；AMD2.27 追加 C11。按当前物理 include 的 header-name 内部核查，八输入共 648 种文件／指令组合均为单一直接引号或尖括号形式，名字无单引号、双引号、反斜杠、斜杠星号或双斜杠；定界引号单独剥离。含 0017 的正斜杠 FreeRTOS 路径、生成 Rte／MemMap 头及其 producer；固定 addon 的逗号检查与本条正文分开。 |
+| R20.2 | Required | include 的 header-name 字符 | satisfied | 主文 156／PDF 164；AMD2.27 追加 C11。按当前物理 include 的 header-name 内部核查，八输入共 663 种文件／指令组合均为单一直接引号或尖括号形式，名字无单引号、双引号、反斜杠、斜杠星号或双斜杠；定界引号单独剥离。含 0017 的正斜杠 FreeRTOS 路径、生成 Rte／MemMap 头及其 producer；固定 addon 的逗号检查与本条正文分开。 |
 | R20.3 | Required | include 的最终参数形式 | satisfied | 主文 156–157／PDF 164–165；AMD2.27 追加 C11。逐条核对当前范围内 include，全部为直接单一 header-name，无宏间接包含或多字符串拼接；预处理后形式保持原引号／尖括号。generated/include 的模块映射头、bsw／os 头、应用及 0017 修改行均已核对，实际 GCC／Cppcheck 文件依赖回接目标 TU；未用 addon 跳过间接 include 的分支推出结论。 |
 | R20.4 | Required | define 的宏名与关键字 | satisfied | 主文 157／PDF 165，包括语言扩展关键字；AMD2.77 仅修正 inline 示例，AMD2.27 增加 C11。按全部物理 define 的完整宏名，独立比较 C99／C11 关键字及实际 GCC asm、typeof、attribute、inline、restrict、volatile、thread 等扩展拼写，无同名定义。OS_TASK_ENTRY／TASK／ISR 和 ARTI_TRACE 是普通名字；采用 SDK／内核原件的宏沿 ADR 0025，项目补丁另查。 |
 | R20.5 | Advisory | 全部物理 undef 与实际撤销用途 | not_assessed | 主文 158／PDF 166；AMD2.27 增加 C11，未给 MemMap 语言例外。当前真实 Advisory 违反集中在模块／Rte MemMap 的 START／STOP、段属性与 active 状态撤销；关键词沿 ADR 0025 的既有类别，内部属性与状态分别沿原 MemMap 机制记录。#536 承接本条全部请求／撤销时序与精确处置覆盖，继续归 #443；Os_Windows.h 已属范围外，采用内核原行另沿 ADR 0030。 |

@@ -1202,7 +1202,7 @@ class AcceptanceTests(unittest.TestCase):
 
 
         preprocessing_evidence = {
-            "R20.2": ("satisfied", "header-name", "648", "0017"),
+            "R20.2": ("satisfied", "header-name", "663", "0017"),
             "R20.3": ("satisfied", "直接单一", "目标 TU", "间接 include"),
             "R20.4": ("satisfied", "AMD2.77", "GCC", "扩展"),
             "R20.5": ("not_assessed", "#536", "Advisory", "active"),
@@ -1217,6 +1217,11 @@ class AcceptanceTests(unittest.TestCase):
             "R20.14": ("satisfied", "TC2.35", "endif 弹栈", "MemMap"),
         }
         self.assertEqual(len(preprocessing_evidence), 13)
+        preprocessing_text = (self.root / by_id["R20.2"]["source"]["file"]).read_text(
+            encoding="utf-8")
+        self.assertIn("去注释保留其中全部换行", preprocessing_text)
+        self.assertIn("每条记录均回查原文件对应指令", preprocessing_text)
+        self.assertIn("1,264 个范围内内核指令位置", preprocessing_text)
         for guideline, (status, *evidence) in preprocessing_evidence.items():
             with self.subTest(preprocessing=guideline):
                 record = by_id[guideline]
