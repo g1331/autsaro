@@ -49,8 +49,10 @@ CI 在作业外使用系统自带 WPR 的最小 profile：`ProcessThread` 保存
 采集不启用 CPU 栈采样或上下文切换，不修改注册表或持久设置。作业结束在 `always()`
 步骤停止会话，以 tracerpt 解码；保留 `process.etl`、`events.xml`、`summary.xml`、
 `collector.jsonl`（命令、退出码、耗时与输出）、`lifecycle.jsonl` 和 `members-etw.jsonl`。
-`job.wprp` 是该次实际 profile，`collector.jsonl` 还保存 runner 的 provider 定义。
-采集或解码失败使步骤失败，原始文件仍上传；先核对 `summary.xml` 的丢事件信息。
+`job.wprp` 同时定义 File／Memory 两种模式，并用唯一 ID 引用 collector 与 provider；
+该文件是本次实际 profile，`collector.jsonl` 还保存 runner 的 provider 定义。
+采集启动、停止或解码失败时，记录原因到 `collector-state.json`，原始文件照常上传，
+测试继续执行；该次 ETW 取证标为不完整。先核对采集状态及 `summary.xml` 的丢事件信息。
 
 清理前仍有成员时，两种实现各调用一次 `NtQuerySystemInformation(SystemProcessInformation)`，
 按 PID＋创建时间匹配，将父 PID、镜像和线程状态写入成员的 `system_snapshot`。
@@ -63,7 +65,9 @@ CI 在作业外使用系统自带 WPR 的最小 profile：`ProcessThread` 保存
 1. 在对应 capture 的 `before_stop` 找到活动成员的 PID＋`created_100ns`、wait 与 membership，
    再读 `system_snapshot` 的镜像、父 PID、线程状态和等待原因。
 2. 在 `members-etw.jsonl` 按同一身份读取创建／退出事件及命令行；PID 复用后创建时间不同的
-   记录分开关联。原始事件字段完整保留，字段随 provider 版本变化时可重查 XML／ETL。
+   记录分开关联。命令行仅从明确的进程创建事件关联，区间以已知退出时间或下一次
+   创建时间截断，rundown 与其他 provider 的事件保持未关联。原始字段完整保留，
+   字段随 provider 版本变化时可重查 XML／ETL。
 3. 结合 `stopped` 与退出事件判断成员进入退出、线程已结束及进程对象 signaled 的先后关系。
    查询错误、缺失事件和顺序采样的窗口都保留在报告中；归属和完成判定仍由原 Job 逻辑执行。
 
