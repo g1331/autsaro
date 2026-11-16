@@ -269,8 +269,13 @@ test(
     assert.deepEqual(
       page
         .filter((record) => record.sample.id === failed.evaluation)
-        .map((record) => record.sample.stage),
-      ['entered', 'resolved', 'callback'],
+        .sort((left, right) => left.sample.sequence - right.sample.sequence)
+        .map((record) => [record.sample.sequence, record.sample.stage]),
+      [
+        [1, 'entered'],
+        [2, 'resolved'],
+        [3, 'callback'],
+      ],
     );
     const { status, events: boundaries } = await readBoundaryEvidence(session.scratch);
     const marker = `/*autosar-evaluation:${failed.evaluation}*/`;

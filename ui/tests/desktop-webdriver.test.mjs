@@ -167,6 +167,7 @@ test('a truncated response records its parsing failure against the started reque
 test('page evaluation records entry, pending resolution and callback handoff', async () => {
   const { evaluateInPage } = await import('../../tests/desktop/support/webdriver.mjs');
   const stages = [];
+  const beacons = [];
   const page = {
     __TAURI_INTERNALS__: { callbacks: new Map([[7, () => {}]]) },
     __AUTOSAR_DESKTOP_OBSERVER__: (sample) => stages.push({ ...sample }),
@@ -176,8 +177,16 @@ test('page evaluation records entry, pending resolution and callback handoff', a
   vi.stubGlobal('window', page);
   vi.stubGlobal('location', { href: 'tauri://localhost' });
   vi.stubGlobal('document', { readyState: 'complete' });
+  vi.stubGlobal('navigator', {
+    sendBeacon: (_endpoint, body) => {
+      beacons.push(JSON.parse(body));
+      return true;
+    },
+  });
   try {
-    const result = new Promise((done) => evaluateInPage('window.pending', 41, done));
+    const result = new Promise((done) =>
+      evaluateInPage('window.pending', 41, done, 'http://127.0.0.1/evidence'),
+    );
     await Promise.resolve();
     expect(stages.map(({ stage }) => stage)).toEqual(['entered']);
     expect(page.__AUTOSAR_DESKTOP_EVALUATION__).toEqual(
@@ -190,13 +199,22 @@ test('page evaluation records entry, pending resolution and callback handoff', a
     );
     resolve({ native: 'unchanged' });
     expect(JSON.parse(await result)).toEqual({ value: { native: 'unchanged' } });
-    expect(stages.map(({ stage }) => stage)).toEqual(['entered', 'resolved', 'callback']);
+    expect(stages.map(({ sequence, stage }) => [sequence, stage])).toEqual([
+      [1, 'entered'],
+      [2, 'resolved'],
+      [3, 'callback'],
+    ]);
+    expect(beacons).toEqual(stages);
     stages.length = 0;
     const error = await new Promise((done) =>
       evaluateInPage('Promise.reject(new Error("original"))', 42, done),
     );
     expect(JSON.parse(error)).toEqual({ error: 'Error: original' });
-    expect(stages.map(({ stage }) => stage)).toEqual(['entered', 'rejected', 'callback']);
+    expect(stages.map(({ sequence, stage }) => [sequence, stage])).toEqual([
+      [1, 'entered'],
+      [2, 'rejected'],
+      [3, 'callback'],
+    ]);
   } finally {
     vi.unstubAllGlobals();
   }
