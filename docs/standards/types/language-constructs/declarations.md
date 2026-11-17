@@ -70,55 +70,56 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 [表达式篇](expressions.md#第七批当前输入与类型推导)核查当前 20 条，结算七条、
 十三条转 #544，完整组为 78／3／63。CanTp_DataLength 运算前扩展改变实际交付
 字节和 producer 身份，修复前 master 输入仅作调查与比较基线；当前绑定取修复后
-双目标四 profile 的实际分析工程，按各目标换行和解析器重算本组身份。
+双目标四 profile 的实际分析工程（[run 43996223375](https://github.com/g1331/autsaro/actions/runs/43996223375)，
+扫描 head `330b3fb2`），按各目标换行和解析器重算本组身份。
 原始 summary 保持，其他组沿各自身份与处置消费。
 <!-- source-assessment-context-begin -->
 {
   "id": "checker-obligations-513-essential-types",
   "evidence": {
-    "head": "303f18d78807a475dc2506e04a734d8526339b0b",
+    "head": "330b3fb2abb442063917785ee1b4a43177f22979",
     "receipt": "https://github.com/g1331/autsaro/issues/513#issuecomment-6934757465"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "bbf90b26a0617d40d0138599eb10273fa8e7b55002a216e75bc0ae5a3929e453"
+      "inputIdentity": "dbec7167e4970a6c152839063aa08bcb39e9fc7d4ea4681ab4342233157c66bf"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "f6d2ccdce8e742e5b455a0e7ee09f361f12fa023b6f5a74e6badf1b8c5131e11"
+      "inputIdentity": "5e0cd6f8f9502e9320dc1dc64ee461b2cab90467b191a7cd28bfcb209b224261"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "cbb6be7d43d70ca64881457f3f9c641eef843bea6c8b8d1fdcbf580e6affe85f"
+      "inputIdentity": "54516509263e3071313847fbb0af2519f67fa43cc47285a61c1aab0b9d00e7e8"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "afd26ad2024d85b8e60436efc8844e96bcc1aefaf644236ec687262ef04a9a91"
+      "inputIdentity": "8b4a95fd511127572318a8b46e33ae809183a77cf2406833cc4b665da870b1cc"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "7ce49971bbcf35c00e79e8f5908c0fdf0fccea364c450d60b1a63f4869c036ed"
+      "inputIdentity": "2b48105626fc1d59643d41c85f5efa0f2bef47aec7e44ee9ea30d69fe5453fc9"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "bc505f29720709157800e8dd6aae3f05a822573fd68ff3f9548fafed833b038e"
+      "inputIdentity": "9e49a6a4c565a19a28a845de464c27b131dca3ad20a9c2f579dd9983071b510a"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "dbe161fcd86f11608b1febf2b70726bde332acc6fd67c5b332310e4e60f88add"
+      "inputIdentity": "29a5357fe0bccbc323392006417038189923a658f86eae0f7676ee57d623b81e"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "54368142228c51eef02c41c7f999f297b30509beb7d8f5bde61f8b4cf906cdab"
+      "inputIdentity": "3ef46685948e1f71a61a48a398ad06234e4566688a765c9658b45fdf94a48300"
     }
   ],
   "records": {
