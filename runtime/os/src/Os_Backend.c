@@ -50,8 +50,8 @@ typedef struct {
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 OS_MEMMAP static Os_ActivationQueueType
-    os_backend_activations[OS_MAX_TASKS]; /**< Activation FIFO ledger; OS port lock; no Init reset.
-                                           */
+    activations[OS_MAX_TASKS]; /**< Activation FIFO ledger; OS port lock; no Init reset.
+                                */
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
@@ -679,7 +679,7 @@ OS_MEMMAP static void rebase_orders(void)
     uint64 previous = 0u;
     uint64 rank = 0u;
     for (i = 0u; i < Os_Config->task_count; ++i) {
-        Os_ActivationQueueType *queue = &os_backend_activations[i];
+        Os_ActivationQueueType *queue = &activations[i];
         for (j = 0u; j < queue->count; ++j) {
             uint64 *slot = &queue->requests[(queue->head + j) % OS_MAX_ACTIVATIONS];
             uint32 position = count;
@@ -711,7 +711,7 @@ OS_MEMMAP static void rebase_orders(void)
         *rebase_entries[j].slot = rank;
     }
     for (i = 0u; i < Os_Config->task_count; ++i) {
-        if (os_backend_activations[i].count != 0u) {
+        if (activations[i].count != 0u) {
             vTaskOsSetReadySequence(task_handles[i], ready_sequences[i]);
         }
     }
@@ -720,7 +720,7 @@ OS_MEMMAP static void rebase_orders(void)
 
 OS_MEMMAP static void append_activation(uint32 index)
 {
-    Os_ActivationQueueType *queue = &os_backend_activations[index];
+    Os_ActivationQueueType *queue = &activations[index];
     uint32 tail = (queue->head + queue->count) % OS_MAX_ACTIVATIONS;
     if (queue->count == 0u) {
         task_events[index] = 0u;
@@ -827,7 +827,7 @@ OS_MEMMAP static void arti_observe_tasks(void)
         arti_completed[i] = 0u;
         Os_ArtiTasks[i].state = native_task_state(i);
         Os_ArtiTasks[i].priority = (uint8)uxTaskPriorityGet(task_handles[i]);
-        Os_ArtiTasks[i].activations = os_backend_activations[i].count;
+        Os_ArtiTasks[i].activations = activations[i].count;
         Os_ArtiTasks[i].events = task_events[i];
         Os_ArtiTasks[i].wait_mask = wait_masks[i];
         if (Os_ArtiTasks[i].state == RUNNING) {
@@ -953,7 +953,7 @@ OS_MEMMAP uint32 Os_TargetTestPending(TaskType id)
     uint32 index = task_index(id);
     configASSERT(InterlockedCompareExchange(&Os_Closing, 0, 0) != 0);
     configASSERT(index < Os_Config->task_count);
-    return os_backend_activations[index].count;
+    return activations[index].count;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -1667,7 +1667,7 @@ OS_MEMMAP static void task_entry(void *argument)
     configASSERT(index < Os_Config->task_count);
     const Os_TaskConfigType *task = &Os_Config->tasks[index];
     (void)Os_ArtiCallerSave();
-    configASSERT(os_backend_activations[index].count != 0u);
+    configASSERT(activations[index].count != 0u);
     task->entry();
     /* A returned entry is an erroneous activation, not a whole-OS shutdown. */
     Os_BackendMissingEnd();
@@ -1839,9 +1839,7 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
         configASSERT(task_handles[i] != NULL);
         vTaskOsSetReadySequence(
             task_handles[i],
-            (os_backend_activations[i].count == 0u)
-                ? 0u
-                : os_backend_activations[i].requests[os_backend_activations[i].head]);
+            (activations[i].count == 0u) ? 0u : activations[i].requests[activations[i].head]);
         vTaskSuspend(task_handles[i]);
     }
     configASSERT(xTaskCreateStatic(&bootstrap,
@@ -1961,7 +1959,7 @@ OS_MEMMAP StatusType Os_BackendActivate(TaskType id)
     if (index == OS_MAX_TASKS) {
         return E_OS_ID;
     }
-    queue = &os_backend_activations[index];
+    queue = &activations[index];
     stack = Os_StackCurrent();
     observe_activation_lock();
     taskENTER_CRITICAL();
@@ -2059,7 +2057,7 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
     if (index == Os_Config->task_count) {
         return E_OS_CALLEVEL;
     }
-    queue = &os_backend_activations[index];
+    queue = &activations[index];
     if (chain != 0) {
         target = task_index(id);
         if (target == OS_MAX_TASKS) {
@@ -2077,7 +2075,7 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
         return E_OS_STATE;
     }
     if ((chain != 0) && (target != index) &&
-        (os_backend_activations[target].count >= Os_Config->tasks[target].activation_limit)) {
+        (activations[target].count >= Os_Config->tasks[target].activation_limit)) {
         taskEXIT_CRITICAL();
         return E_OS_LIMIT;
     }
@@ -2102,7 +2100,7 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
     }
     if ((chain != 0) && (target != index)) {
         /* Keep the kernel query inside the assertion's evaluation boundary. */
-        configASSERT((os_backend_activations[target].count != 0u)
+        configASSERT((activations[target].count != 0u)
                          ? TRUE
                          : (eTaskGetState(task_handles[target]) == eSuspended));
     }
@@ -2117,10 +2115,9 @@ OS_MEMMAP static StatusType complete_activation(TaskType id, sint32 chain, sint3
     if (chain != 0) {
         append_activation(target);
         if (target != index) {
-            vTaskOsSetReadySequence(
-                task_handles[target],
-                os_backend_activations[target].requests[os_backend_activations[target].head]);
-            if (os_backend_activations[target].count == 1u) {
+            vTaskOsSetReadySequence(task_handles[target],
+                                    activations[target].requests[activations[target].head]);
+            if (activations[target].count == 1u) {
                 vTaskResume(task_handles[target]);
             }
         }
@@ -2348,7 +2345,7 @@ OS_MEMMAP StatusType Os_BackendEvent(TaskType id, EventMaskType mask, EventMaskR
     Os_BackendGuardService();
     if (Os_Config->tasks[index].kind != OS_EXTENDED_TASK) {
         status = E_OS_ACCESS;
-    } else if (os_backend_activations[index].count == 0u) {
+    } else if (activations[index].count == 0u) {
         status = E_OS_STATE;
     } else if (output != NULL) {
         *output = task_events[index];
@@ -2398,11 +2395,10 @@ OS_MEMMAP StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
         taskEXIT_CRITICAL();
         return E_OS_STATE;
     }
-    snapshot.count = os_backend_activations[index].count;
+    snapshot.count = activations[index].count;
     for (j = 0u; j < snapshot.count; ++j) {
         snapshot.requests[j] =
-            os_backend_activations[index]
-                .requests[(os_backend_activations[index].head + j) % OS_MAX_ACTIVATIONS];
+            activations[index].requests[(activations[index].head + j) % OS_MAX_ACTIVATIONS];
     }
     snapshot.kernel_sequence = ullTaskOsReadySequence(task_handles[index]);
     snapshot.events = task_events[index];

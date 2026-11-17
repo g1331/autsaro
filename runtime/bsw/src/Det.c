@@ -7,8 +7,7 @@
 #define DET_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Det_MemMap.h"
 static const Det_ConfigType *det_configuration DET_VAR_CLEARED; /**< DET_STATE; reset by Init. */
-static boolean det_initialized
-    DET_VAR_CLEARED; /**< DET_STATE; Init publishes configuration first. */
+static boolean initialized DET_VAR_CLEARED; /**< DET_STATE; Init publishes configuration first. */
 #define DET_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Det_MemMap.h"
 
@@ -32,7 +31,7 @@ static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16 co
 DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr)
 {
     SchM_Enter_Det_DET_STATE();
-    det_initialized = FALSE;
+    initialized = FALSE;
     det_configuration = NULL_PTR;
     SchM_Exit_Det_DET_STATE();
     if (ConfigPtr != NULL_PTR) {
@@ -44,7 +43,7 @@ DET_CODE void Det_Init(const Det_ConfigType *ConfigPtr)
     }
     SchM_Enter_Det_DET_STATE();
     det_configuration = ConfigPtr;
-    det_initialized = TRUE;
+    initialized = TRUE;
     SchM_Exit_Det_DET_STATE();
 }
 
@@ -60,7 +59,7 @@ DET_CODE Std_ReturnType Det_ReportRuntimeError(uint16 ModuleId,
 {
     const Det_ConfigType *config = NULL_PTR;
     SchM_Enter_Det_DET_STATE();
-    if (det_initialized == TRUE) {
+    if (initialized == TRUE) {
         config = det_configuration;
     }
     SchM_Exit_Det_DET_STATE();
@@ -83,7 +82,7 @@ DET_CODE Std_ReturnType Det_ReportError(uint16 ModuleId,
 {
     const Det_ConfigType *config = NULL_PTR;
     SchM_Enter_Det_DET_STATE();
-    if (det_initialized == TRUE) {
+    if (initialized == TRUE) {
         config = det_configuration;
     }
     SchM_Exit_Det_DET_STATE();
