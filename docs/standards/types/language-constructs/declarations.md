@@ -96,51 +96,51 @@ kernel、producer、各程序 TU 和实际 GCC／Cppcheck 输入；Windows 按�
 
 <!-- source-assessment-context-begin -->
 {
-  "id": "checker-obligations-513-essential-types",
+  "id": "checker-obligations-514-declarations",
   "evidence": {
-    "head": "330b3fb2abb442063917785ee1b4a43177f22979",
-    "receipt": "https://github.com/g1331/autsaro/issues/513#issuecomment-6934757465"
+    "head": "22aebb40296728e6b97cf438aadde6590e3e00b9",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44029684376"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "dbec7167e4970a6c152839063aa08bcb39e9fc7d4ea4681ab4342233157c66bf"
+      "inputIdentity": "e78ef6e711df7c96985fb438a93513dc22429ee7f39026704720c64e5ca51864"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "5e0cd6f8f9502e9320dc1dc64ee461b2cab90467b191a7cd28bfcb209b224261"
+      "inputIdentity": "1306a90c9f92d713e88d9fc16ed86d7408bf37595cb44b1034779563239f7c14"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "54516509263e3071313847fbb0af2519f67fa43cc47285a61c1aab0b9d00e7e8"
+      "inputIdentity": "d62d0d8827fb5fcbc64ecf132b83f6d1e0039f2bc2b8c2ee79e97595d2093de9"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "8b4a95fd511127572318a8b46e33ae809183a77cf2406833cc4b665da870b1cc"
+      "inputIdentity": "81c6aa21a145e6e9be3a484ce5df4a25854ac51988859c88d2e5f9ac0c6b2ea0"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "2b48105626fc1d59643d41c85f5efa0f2bef47aec7e44ee9ea30d69fe5453fc9"
+      "inputIdentity": "c49e4eb68061bde716c3121f351754d1a899d5787ceabc5d90956f488ed05a75"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "9e49a6a4c565a19a28a845de464c27b131dca3ad20a9c2f579dd9983071b510a"
+      "inputIdentity": "c298fad605d2959a3041217d003d21e10c1304c09fa92121c2f519ff4d2c2818"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "29a5357fe0bccbc323392006417038189923a658f86eae0f7676ee57d623b81e"
+      "inputIdentity": "db6ac74619d2178cc4b685c17da2c5a06b58d50bf6b0bc19a61aa5f5d6f593bb"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "3ef46685948e1f71a61a48a398ad06234e4566688a765c9658b45fdf94a48300"
+      "inputIdentity": "d5fbc6c473592e861f0f251fd463c0b50babfb5ba05c3888c08491331b180fb7"
     }
   ],
   "records": {

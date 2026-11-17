@@ -111,51 +111,51 @@ callback-parameter旧7处R2.4均为匿名类型误报；新增xSTATIC_TIMER为�
 补充记录只描述上述 checker 缺口；原 66／155 分区、221 项 assessment 和原始分析结果由正常入口保留。正文、源码、producer、配置、程序／TU、目标、工具或 provider 变化时重评本组，pending 持续阻止验收。
 <!-- source-assessment-context-begin -->
 {
-  "id": "checker-limitations-current-inputs",
+  "id": "checker-limitations-514-declarations",
   "evidence": {
-    "head": "02f7c484417cdcd4afcef60e70eafef116755c1d",
-    "receipt": "https://github.com/g1331/autsaro/pull/448#issuecomment-6709295029"
+    "head": "22aebb40296728e6b97cf438aadde6590e3e00b9",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44029684376"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "bb79386abdc9e1fadf27da83b428252359206814dd802ec8b953dcb8b3ce51dc"
+      "inputIdentity": "e78ef6e711df7c96985fb438a93513dc22429ee7f39026704720c64e5ca51864"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "2c95ec891c173c4b5bac0b831ad5029f04bdf6242dcfd8ee3a548376cc2109da"
+      "inputIdentity": "1306a90c9f92d713e88d9fc16ed86d7408bf37595cb44b1034779563239f7c14"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "13199bd7862734d93dbe224f8e2d448485e375a1ce9052c5f8ebbce700c768cb"
+      "inputIdentity": "d62d0d8827fb5fcbc64ecf132b83f6d1e0039f2bc2b8c2ee79e97595d2093de9"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "2de10ca454f87d49c868fa6290947fb3235479e14b2e5f321e5609d5bc8e8589"
+      "inputIdentity": "81c6aa21a145e6e9be3a484ce5df4a25854ac51988859c88d2e5f9ac0c6b2ea0"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "2f356f8ecb2649a84e371d1dc7909568c282246136f1b3fe8ae3e82bf91a6fb1"
+      "inputIdentity": "c49e4eb68061bde716c3121f351754d1a899d5787ceabc5d90956f488ed05a75"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "099c3955d4004f4d055c0e5f070a7fdb30f15fa871e2c746fd1a28a4004bdcb3"
+      "inputIdentity": "c298fad605d2959a3041217d003d21e10c1304c09fa92121c2f519ff4d2c2818"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "e374256f6854e6247359dc43e5ec97c96c839127192bcbf995ea8251f665f854"
+      "inputIdentity": "db6ac74619d2178cc4b685c17da2c5a06b58d50bf6b0bc19a61aa5f5d6f593bb"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "95d9a093d533ea2562be91358fe4809246ac73c824da2f9e99bd19d5829869a1"
+      "inputIdentity": "d5fbc6c473592e861f0f251fd463c0b50babfb5ba05c3888c08491331b180fb7"
     }
   ],
   "records": {
