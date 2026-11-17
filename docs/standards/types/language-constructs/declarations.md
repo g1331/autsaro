@@ -47,12 +47,18 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 
 ## 第八批的当前结算
 
-基线为 master `47d14ed0`。调查取最近成功 master
-[run 43978366447](https://github.com/g1331/autsaro/actions/runs/43978366447) 的八份实际
-输入：Linux／Windows 四 profile、两个程序，888 个 C99 TU 实例和452份 GCC origins。
-`cf8ddc4f` 是 #538 的合并提交，已含 Windows 栈修复；其后 #545 改原生探针，
-#546 改 CanTp_DataLength 的运算前类型扩展。本批逐文件对照当前源码，历史输入保留
-调查用途，最终消费者及上下文取本 PR 当前双平台 CI 的完整已分析工程。
+调查基线为 master `47d14ed0`，早期材料取
+[run 43978366447](https://github.com/g1331/autsaro/actions/runs/43978366447)。其 `cf8ddc4f`
+已含 #538 Windows 栈修复；后续 #545 原生探针和 #546 CanTp 运算前类型扩展均回到
+当前源码核对。#550 只改 Python 缓存夹具，已同步。
+
+本批当前重评取 [PR #552 run 44029684376](https://github.com/g1331/autsaro/actions/runs/44029684376)
+的双目标四 profile 完整输入：888 个 C99 TU 实例、452 份实际 GCC origins。实际检出
+`ddd59c52` 的父提交为 `0f8cd603` 和扫描 head `22aebb40`，tree 与该 PR head 相同；
+逐份核对 seal、最终 kernel、92 个 producer、解析器与评估正文后重算身份。
+878 种函数定义的975个命名形参均有引用；235／239种整数拼写及条件传递闭包重核，
+无额外自有缺 U，Windows 24 次 INFINITE 仍沿已批准 SDK 处置。最终 head 的同输入
+gate、物理行对应与独立复核归本批 PR。
 
 物理扫描先拼接续行、逐字符保留原行号，去注释保留换行，并用块注释＋续行的组合
 反例验证；展开按 GCC 行标记回查原文件和原行，范围内无语法 ERROR。声明、定义、

@@ -100,7 +100,7 @@ R12.3（106／114），合成 AMD2.27／46；七份原件摘要核验及原页�
 | 规则 | 类别 | 评估范围 | 状态 | 结论 |
 | --- | --- | --- | --- | --- |
 | R1.4 | Required | 双目标四 profile 的 C99 HostBatch／probe | not_applicable | AMD2.30（印刷 11／PDF 18）仅适用 C11；AMD3.11–13、AMD4.53–54 修改禁用设施，语言范围保持。当前 TU 均以 -std=c99 编译；扩展与 Annex K 义务沿各自规则核查。 |
-| R7.2 | Required | 双目标四 profile 的 HostBatch／probe；自有、生成／应用及项目补丁的条件与普通整数 | satisfied | 主文60–61／PDF68–69、AMD2.46；复用 #424 的 C99 LP64／LLP64 候选表及边界验证，当前普通展开的236／240种整数拼写和6332次物理 #if／#elif 条件另核，未发现自有 literal 缺 U。Windows Backend 每 profile 六处 INFINITE→0xffffffff 保留真实 unsigned 缺 U，沿已关闭 #444 的 sdk-integration 精确类别及当前展开消费；原始24次报告保持，host／port 范围按 ADR 0030，状态只结算当前有界人工义务。 |
+| R7.2 | Required | 双目标四 profile 的 HostBatch／probe；自有、生成／应用及项目补丁的条件与普通整数 | satisfied | 主文60–61／PDF68–69、AMD2.46；复用 #424 的 C99 LP64／LLP64 候选表及边界验证，当前普通展开的235／239种整数拼写和6332次物理 #if／#elif 条件另核，未发现自有 literal 缺 U。Windows Backend 每 profile 六处 INFINITE→0xffffffff 保留真实 unsigned 缺 U，沿已关闭 #444 的 sdk-integration 精确类别及当前展开消费；原始24次报告保持，host／port 范围按 ADR 0030，状态只结算当前有界人工义务。 |
 | R7.3 | Required | 同一范围的物理 token、真实宏展开及直接消费者 | satisfied | 主文 61–62、AMD2.27 的对象为数值后缀，包含整数与浮点。当前所有交付 C／头及最终 kernel 项目行无手写小写 l 后缀或拼接生产者；452 份实际展开无额外实例。Windows 每 profile 七处 __MSABI_LONG 展开的 0x1l／258l／109l 均回接 [已批准 SDK 类别](../../os/sdk.md#当前集成义务与类别处置)及其精确实例：Backend／port 上下文、Time／port 等待及 HostBatch 断管消费者；沿原 sdk-integration 组消费。采用 queue 的 SIZE_MAX 沿原 ISO 接口责任，原违反与正式义务由各自组保持。 |
 | R12.3 | Advisory | 当前双目标四 profile 的真实逗号语法，含 return、for 和嵌套实参 | satisfied | 主文 106／PDF 114、AMD2.27；第七批 452 份真实展开按行标记解析，属性移除保持位置，范围内无语法错误。仅 Windows Os_Arti.c 六处标准 assert 的 (_assert(...),0)，按 §6.7 归标准库内部；未选分支另核。详见表达式篇。 |
 | R17.3 | Mandatory | 同一 C99 范围，含 GNU 对齐查询与项目补丁 | not_applicable | 主文印刷 138／PDF 146 仅适用 C90，AMD2 Appendix H 继续明确此限制；当前 C99 编译、声明与扩展检查仍保留，具体诊断沿原 OS 裁决。 |

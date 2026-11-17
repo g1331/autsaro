@@ -1167,7 +1167,7 @@ class AcceptanceTests(unittest.TestCase):
             "R5.6": ("not_assessed", "#547", "Rte_Instance"),
             "R5.8": ("satisfied", "HostBatch／probe", "物理 owner"),
             "R5.9": ("not_assessed", "#547", "#551", "36个", "8个", "53个", "producer"),
-            "R7.2": ("satisfied", "#424", "236／240", "#444", "24次"),
+            "R7.2": ("satisfied", "#424", "235／239", "#444", "24次"),
             "R7.4": ("satisfied", "TC2.7–8", "Arti_Record", "task_name"),
             "R8.2": ("not_assessed", "#547", "Det_ErrorHookType"),
             "R8.3": ("not_assessed", "#547", "Os_Closing", "TCB_t *"),
