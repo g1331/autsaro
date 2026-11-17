@@ -234,7 +234,7 @@ static CANTP_CODE boolean CanTp_Receiving(void)
 /* Decode the 12-bit wire length before converting to the selected communication type. */
 static CANTP_CODE uint16 CanTp_DataLength(const uint8 *data)
 {
-    const uint16 low = (uint16)(data[0] & 0x0fu);
+    const uint16 low = (uint16)data[0] & 0x0fu;
     return ((data[0] / 16u) == CANTP_PCI_FF) ? (uint16)((low * 256u) + data[1]) : low;
 }
 /* A well-formed SF or FF that starts a reception (SWS_CanTp_00344, ISO 15765-2 DL rules). */
