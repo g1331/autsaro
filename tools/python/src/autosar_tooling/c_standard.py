@@ -737,6 +737,7 @@ RETAINED_APPLICATION = "core/tests/fixtures/component-pipeline/applications/Ingr
 def deviation_findings(
     root: Path = ROOT, *, matched: list[dict] | None = None,
     kernel_sources: dict[str, str] | None = None,
+    generated_sources: dict[str, str] | None = None,
     source_names: set[str] | None = None,
 ) -> collections.Counter[Key]:
     """Match approved table scopes to adjacent source locations, without approving them."""
@@ -761,12 +762,16 @@ def deviation_findings(
             source_pattern = r"runtime/[^`]+|" + re.escape(RETAINED_APPLICATION)
             if kernel_sources is not None:
                 source_pattern += r"|kernel/[^`]+"
+            if generated_sources is not None:
+                source_pattern += r"|generated/[^`]+"
             pieces = re.split(r"(`(?:" + source_pattern + r")`)", scope)
             for index in range(1, len(pieces), 2):
                 name = pieces[index].strip("`")
                 if source_names is not None and name not in source_names:
                     continue
                 if name.startswith("kernel/") and name not in kernel_sources:
+                    continue
+                if name.startswith("generated/") and name not in generated_sources:
                     continue
                 for item in re.findall(r"`([^`]+)`", pieces[index + 1]):
                     symbol = record_scope(item)
@@ -790,16 +795,17 @@ def deviation_findings(
     comments: collections.Counter[tuple[str, str, str, str]] = collections.Counter()
     source_locations = {}
     paths = set((root / "runtime").rglob("*")) | {root / RETAINED_APPLICATION}
-    paths.update(root / name for name in (kernel_sources or {}))
+    overrides = {**(kernel_sources or {}), **(generated_sources or {})}
+    paths.update(root / name for name in overrides)
     for path in sorted(
             path for path in paths
-            if path.is_file() or path.relative_to(root).as_posix() in (kernel_sources or {})):
+            if path.is_file() or path.relative_to(root).as_posix() in overrides):
         if path.suffix not in {".c", ".h"}:
             continue
         name = path.relative_to(root).as_posix()
         if source_names is not None and name not in source_names:
             continue
-        source = ((kernel_sources or {})[name] if name in (kernel_sources or {})
+        source = (overrides[name] if name in overrides
                   else path.read_text(encoding="utf-8"))
         tokens = lex(source)
         directive_counts: collections.Counter[str] = collections.Counter()
@@ -867,7 +873,10 @@ def deviation_findings(
                     if macro
                     else parameter_name([
                         word for word in (words[:words.index("=")] if "=" in words else words[:-1])
-                        if not re.fullmatch(r"[A-Z][A-Z0-9_]*(?:_MEMMAP|_VAR_[A-Z0-9_]+)", word)
+                        if not re.fullmatch(
+                            r"[A-Za-z_]\w*_(?:MEMMAP|(?:VAR|CONST|CONFIG_DATA)_[A-Z0-9_]+)",
+                            word,
+                        )
                     ])
                 )
                 instance = instances.get((name, declaration[0].start)) if declaration else None
@@ -904,8 +913,11 @@ def deviation_findings(
                                     "end": end,
                                     "record": {"file": document, "text": record_text},
                                     "shape": code_words(" ".join(t.text for t in declaration))})
-                comments[key] += 1
-                source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())
+                # Generated snapshots also contain markers belonging to other consumers.
+                # Only explicitly recorded generated entities join this exact matcher.
+                if not name.startswith("generated/") or key in records:
+                    comments[key] += 1
+                    source_locations[key] = (name, source.splitlines()[source.count("\n", 0, token.start)].strip())
     for entries, positions in ((records, locations), (comments, source_locations)):
         for key, count in entries.items():
             if count > 1:
