@@ -3,7 +3,7 @@
 输入、固定工具和责任沿[语言与词法](lexical.md)。同号入口为固定 addon，核心为
 `getCppcheckRules` 的准确映射。预处理规则须核对物理指令、实际 define／undef 历史
 及展开后的消费者；库规则须区分 ISO 接口、平台接口、采用头和项目自身调用。
-R20.2–R20.14 的第五批核查见下；R21–R22 的额外人工范围继续归 #443。
+R20.2–R20.14 的第五批核查见下；R21–R22 见[库与资源](library-resources.md)。
 SDK 实例沿 #444，固定 11 项的 R20.1／R21.8 沿原补充组；本表不批准保留违反。
 
 
@@ -48,34 +48,4 @@ R20.10 的五宏保留尚待用户决定，本批新增批准为零。固定工�
 | R20.12 | Required | 同一参数在 paste 与其他用途间的展开 | satisfied | 主文 163／PDF 171；AMD2.27 追加 C11。不依赖实参是否恰好为宏：ARTI_TRACE 的 context／class_name／instance／event 在替换表中只作 # 操作数，两数值参数只作括号表达式；TASK／ISR 的重复 identifier 每次均只作 ## 操作数，OS_TASK_ENTRY／OS_ISR_ENTRY 同样。无参数混用操作数与普通替换；生成入口／hook 和实际展开保持此分工，项目补丁无其他候选。 |
 | R20.13 | Required | 全部物理预处理指令 | satisfied | 主文 163–164／PDF 171–172；AMD2.27 追加 C11。对范围内物理逻辑行先去注释，再检查首 token #，含未选分支；仅 include／define／undef／if／ifdef／ifndef／elif／else／endif／error，无 warning、未知指令或非标准首 token。所有 include 形式、define 名／参数及条件结构分别核查，正常 C99 编译补活动语法；未借 addon 额外接受 warning 的白名单结算。 |
 | R20.14 | Required | 条件指令配对的物理文件身份 | satisfied | 主文 164–165／PDF 172–173；AMD2.27 追加 C11，TC2.35 只修正示例末尾文件名。逐物理文件重建完整 if／ifdef／ifndef 栈，else／elif 关联当前栈顶，endif 弹栈，全部文件末栈为空，含未选分支及项目补丁上下文。MemMap 多次包含各自完整配对，未跨文件借 endif；独立栈避免固定 addon 正常同文件 endif 未 pop 的实现缺口。 |
-| R21.1 | Required | 保留宏标识符的 define／undef | not_assessed | 同号入口以正则检查部分 _ 名和标准库名字。#443 须核对完整保留名称规则、库头条件和当前活动定义／撤销，区分项目与 SDK 来源，并合成修订及例外。 |
-| R21.2 | Required | 保留标识符的声明 | not_assessed | 同号入口检查 builtin 宏名和标准库函数名字，覆盖小于全部对象／typedef／tag 的保留名称义务。#443 尚缺完整 namespace／scope 及标准头关联核查，接续实际自有／patch 声明与修订。 |
-| R21.3 | Required | 标准动态分配接口与直接调用 | not_assessed | 同号入口按已识别调用名匹配 malloc／calloc／realloc／free。#443 须核对函数指针／宏、其他标准分配接口及适用修订，连接[主机动态设施](../../os/native-facilities/storage-interrupts.md)的原实例和实际释放闭包。 |
-| R21.4 | Required | setjmp.h 的设施使用 | not_assessed | 同号入口只通过 findInclude 查找 <setjmp.h>。#443 须核对传递包含、引号形式、宏和实际 setjmp／longjmp 消费者，区分已采用的展开／平台异常机制，合成有效原文与修订。 |
-| R21.5 | Required | signal.h 的设施使用 | not_assessed | 同号入口只查 <signal.h> include。#443 须核对 signal／raise 等 ISO 设施与 POSIX sigaction／宿主信号机制的实际边界，连接[主机设施](../../os/native-facilities/README.md)的调用者和修订原文。 |
-| R21.6 | Required | 标准 I/O 设施的实际使用 | not_assessed | 同号入口用 stdio.h／wchar.h 名录过滤直接调用，并跳过部分有 function 标记的 token。#443 须核对间接调用、宏、类型／对象及非 ISO 平台 I/O 的责任，连接 HostBatch 读写及有效修订。 |
-| R21.7 | Required | atoi 家族转换 | not_assessed | 同号入口匹配 atof／atoi／atol／atoll 直接调用。#443 须核对别名／函数指针、展开后名字及项目当前转换入口，按原文与修订逐用途核定；错误检查由实际替代接口承担。 |
-| R21.9 | Required | bsearch／qsort 的使用 | not_assessed | 同号入口只查两个名字后紧接左括号的 token。#443 须核对宏、取址后间接调用及实际排序／查询消费者，合成原文和适用修订并确认当前输入。 |
-| R21.10 | Required | 标准日期／时间设施 | not_assessed | 同号入口查 <time.h> 和 wcsftime 直接调用。#443 须核对传递包含、类型、宏、函数指针和 POSIX clock_gettime 等非 ISO 用途边界，连接实际时钟消费者及修订原文。 |
-| R21.11 | Advisory | tgmath.h 泛型设施 | not_assessed | 同号入口只查 <tgmath.h>。#443 须将既有 C99／无泛型源码证据接到当前所有实际包含及宏展开，核对原文和修订；新增 C11 泛型规则仍归原 66 项，不在本组重复。 |
-| R21.12 | Required | 浮点异常状态设施 | not_assessed | 同号入口仅在检测到 <fenv.h> 后检查 fexcept_t 和五个已知函数。#443 须核对传递包含、宏／间接调用、类型及当前浮点消费者，并合成有效原文与适用修订。 |
-| R21.13 | Mandatory | ctype 参数的合法值域 | not_assessed | 核心 invalidFunctionArg 依赖库模型和值流。#443 须逐当前 ctype 调用证明为 EOF 或 unsigned-char 可表示值，包含 char 符号性、宏与间接调用，合成修订；Mandatory 缺口保持阻塞。 |
-| R21.14 | Required | memcmp 与空终止字符串 | not_assessed | 同号入口通过部分 str*／sprintf 等调用推断 string buffer，再检查 memcmp 的 varId／literal。#443 须核对别名、结构成员和真实字符串用途，按原文允许条件逐调用证明，合成修订。 |
-| R21.15 | Required | 内存复制／比较的两端指针类型 | not_assessed | 同号入口对 memcpy／memmove／memcmp 比较 valueType.type，任一 void 即跳过。#443 须按实际指向类型、限定符、结构身份和宏／间接调用核查两端，合成原文例外与修订。 |
-| R21.16 | Required | memcmp 比较对象的 essential 类型 | not_assessed | 同号入口接受 signed／unsigned／bool／enum 类别，跳过多层指针及未知类型。#443 须核对当前实际对象、填充和数组元素类型，按原文及修订逐用途判断，连接最终比较结果消费者。 |
-| R21.17 | Mandatory | 字符串库访问的对象边界 | not_assessed | 核心 bufferAccessOutOfBounds 依赖尺寸和值流。#443 须逐真实字符串参数证明容量、终止符及读取／写入界限，覆盖动态长度、失败返回及别名，核对有效原文和修订。 |
-| R21.18 | Mandatory | size_t 长度参数的适当取值 | not_assessed | 核心同用 bufferAccessOutOfBounds；#443 须按本条独立追踪当前 memcpy／比较／字符串接口的长度来源、对象大小及终止要求，包含零长度和目标类型转换，合成修订。 |
-| R21.19 | Mandatory | 标准库内部存储的修改 | not_assessed | 同号入口主要检查若干返回指针赋值到非 const 指针及 lconv 成员赋值。#443 须追踪别名、返回链和实际写入者，逐内部对象证明未修改，合成原文及修订；Mandatory 保持逐用途责任。 |
-| R21.20 | Mandatory | 标准库内部存储被后续调用失效 | not_assessed | 同号入口用局部 assigned／invalid 表，遇到花括号、return 等即清空。#443 须跨分支／函数及别名核对当前返回存储的最后使用和下一失效调用，按原文及修订证明生命周期。 |
-| R21.21 | Required | system 命令执行 | not_assessed | 同号入口只检查名字为 system 且单参数的直接调用。#443 须核对宏、函数指针及当前宿主 API 用途与原文范围，合成适用修订；工具测试中的进程启动与交付 C 各按真实输入判断。 |
-| R22.1 | Required | 动态资源的释放闭包 | not_assessed | 核心 memleak／resourceLeak 等报告可建模路径。#443 须核对当前分配／获取到最终释放、转移所有权、取消与失败路径，连接主机对象和补丁资源，合成有效原文修订。 |
-| R22.2 | Mandatory | 释放对象的分配来源 | not_assessed | 核心 autovarInvalidDeallocation 检查部分非法释放。#443 须逐当前释放证明来源、基址及配对 provider，覆盖别名、栈／静态对象及所有权转移，合成原文和修订。 |
-| R22.3 | Required | 同一文件的同时打开 | not_assessed | 核心 incompatibleFileOpen 依赖文件名／模式模型。#443 须核对当前路径身份、同文件别名及各打开模式和关闭时序，连接直接读写消费者，合成原文与修订。 |
-| R22.4 | Mandatory | 只读流上的写操作 | not_assessed | 核心 writeReadOnlyFile 给出已知模式冲突。#443 须追踪当前 FILE／平台句柄别名、实际打开模式到每个写入接口，核对宏／间接调用及修订；Mandatory 保持原义。 |
-| R22.5 | Mandatory | FILE 指针的解引用 | not_assessed | 同号入口只检查 *／成员访问且变量类型起始为 FILE * 的形式。#443 须核对 typedef、多级别名、宏和所有当前访问路径，合成原文及适用修订，SDK 内部实现沿采用责任。 |
-| R22.6 | Mandatory | 已关闭流指针的使用 | not_assessed | 核心 useClosedFile 依赖流状态和函数模型。#443 须追踪别名、跨调用传递、关闭失败与生命周期终点，核对每个当前消费者及有效修订；平台句柄另按实际契约处理。 |
-| R22.7 | Required | EOF 比较及未修改的 int 返回值 | not_assessed | 同号入口只识别 EOF 比较及 bool／char／short 的兄弟表达式类型，未追踪返回值在比较前被修改的全部路径。#443 须按当前 I/O 返回链、宽度和有符号性独立核对，并合成原文修订。 |
-| R22.8 | Required | errno-setting 调用前的清零 | not_assessed | 同号入口只按 token 顺序识别 errno = 0 和固定函数表。#443 须核对 errno 宏实际展开、分支、间接调用及所选平台哪些函数设置 errno，追踪当前调用前状态并合成修订。 |
-| R22.9 | Required | errno-setting 调用后的检查 | not_assessed | 同号入口在分隔符后寻找 errno 比较，缺少一般控制流和实际成功／失败语义证明。#443 须核对当前每次相关调用的检查时点、中间调用及返回值，合成有效原文与修订。 |
-| R22.10 | Required | errno 比较的有效来源 | not_assessed | 同号入口保存最后一个已识别函数名，遇到右花括号清除。#443 须追踪当前真实调用、条件分支、宏和直接消费者，确认每次 errno 比较受相应契约支持，并合成修订原文。 |
 <!-- misra-checker-obligations-end -->

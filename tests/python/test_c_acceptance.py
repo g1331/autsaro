@@ -1060,18 +1060,15 @@ class AcceptanceTests(unittest.TestCase):
             "R17.2", "R17.4", "R17.5", "R17.7", "R17.8", "R18.1", "R18.2", "R18.3", "R18.4",
             "R18.5", "R18.6", "R18.8", "R19.1", "R20.5",
             "R20.7", "R20.8", "R20.9", "R20.10", "R21.1",
-            "R21.2", "R21.3", "R21.4", "R21.5", "R21.6", "R21.7", "R21.9", "R21.10", "R21.11",
-            "R21.12", "R21.13", "R21.14", "R21.15", "R21.16", "R21.17", "R21.18", "R21.19",
-            "R21.20", "R21.21", "R22.1", "R22.2", "R22.3", "R22.4", "R22.5", "R22.6", "R22.7",
-            "R22.8", "R22.9", "R22.10",
+            "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 98)
+        self.assertEqual(len(expected_gaps), 70)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 98)
+        self.assertEqual(len(objects), 70)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 98)
+        self.assertEqual(len(located), 70)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1094,8 +1091,11 @@ class AcceptanceTests(unittest.TestCase):
                         "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7"}
         preprocessing = {"R20.2", "R20.3", "R20.4", "R20.6", "R20.11", "R20.12",
                          "R20.13", "R20.14"}
+        library = {"R21." + str(n) for n in range(3, 22) if n != 8}
+        library.update("R22." + str(n) for n in range(1, 11))
         self.assertEqual(set(satisfied),
-                         lexical | declarations | expressions | control_flow | preprocessing
+                         lexical | declarations | expressions | control_flow
+                         | preprocessing | library
                          | {"R7.1", "R7.3", "R15.5"})
         self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
         for guideline in lexical:
@@ -1201,6 +1201,54 @@ class AcceptanceTests(unittest.TestCase):
             "sha256": "8d50bc7737bcc76f42b1f406244acb287bcf0463d180b6b0566d27d1f23b3e98"}})
 
 
+        library_evidence = {
+            "R21.1": ("not_assessed", "#539", "Future Library Directions", "NDEBUG"),
+            "R21.2": ("not_assessed", "#539", "namespace／scope", "BUILTIN"),
+            "R21.3": ("satisfied", "AMD2.78", "aligned_alloc", "pvPortMalloc"),
+            "R21.4": ("satisfied", "AMD3.67", "jmp_buf", "Os_Stack"),
+            "R21.5": ("satisfied", "AMD3.68", "sig_atomic_t", "SIG_IGN"),
+            "R21.6": ("satisfied", "AMD2.79", "snprintf", "Ecu_HostBatch.h"),
+            "R21.7": ("satisfied", "AMD2.80", "strtoul", "fail_resource"),
+            "R21.9": ("satisfied", "bsearch／qsort", "ready_sequences", "函数指针"),
+            "R21.10": ("satisfied", "AMD3.69–70", "clock_t", "wcsftime"),
+            "R21.11": ("satisfied", "AMD3.40–43", "Advisory", "tgmath.h"),
+            "R21.12": ("satisfied", "AMD3.44–48", "fesetround", "Required"),
+            "R21.13": ("satisfied", "14 个", "isblank／tolower／toupper", "unsigned char"),
+            "R21.14": ("satisfied", "memcmp", "char 数组含 NUL", "unsigned"),
+            "R21.15": ("satisfied", "三个 memcpy", "qualified 或 unqualified void", "rte_value_0"),
+            "R21.16": ("satisfied", "essential signed", "成员赋值", "memcmp"),
+            "R21.17": ("satisfied", "strtok", "12", "strtoul"),
+            "R21.18": ("satisfied", "正值", "Ecu_MailboxInput", "sizeof(*batch)"),
+            "R21.19": ("satisfied", "TC2.36", "const char *failure", "lconv"),
+            "R21.20": ("satisfied", "TC2.37", "gmtime／localtime", "uint32 fail_resource"),
+            "R21.21": ("satisfied", "AMD2.83", "system", "取址"),
+            "R22.1": ("satisfied", "AMD2.84", "aligned_alloc／fopen", "Mailbox／Com"),
+            "R22.2": ("satisfied", "free／realloc", "vPortFree", "别名"),
+            "R22.3": ("satisfied", "CreateFile", "多流身份", "/proc"),
+            "R22.4": ("satisfied", "文件流", "Ecu_HostBatch.h", "memset"),
+            "R22.5": ("satisfied", "AMD2.85", "三个 memcpy", "typedef"),
+            "R22.6": ("satisfied", "fclose／freopen／FILE", "生命周期", "跨调用"),
+            "R22.7": ("satisfied", "间接转换", "EOF", "feof／ferror"),
+            "R22.8": ("satisfied", "errno=0", "getenv 在清零之前", "strtoul"),
+            "R22.9": ("satisfied", "TC2.38", "if(errno!=0)", "Os_BackendShutdown"),
+            "R22.10": ("satisfied", "前一业务调用", "strtoul", "libc"),
+        }
+        self.assertEqual(len(library_evidence), 30)
+        library_text = (self.root / by_id["R21.3"]["source"]["file"]).read_text(
+            encoding="utf-8")
+        self.assertIn("去注释保留其中全部换行", library_text)
+        self.assertIn("每条记录均回查原文件对应标识符", library_text)
+        self.assertIn("1,442 个自有文件实例", library_text)
+        for guideline, (status, *evidence) in library_evidence.items():
+            with self.subTest(library=guideline):
+                row = by_id[guideline]
+                self.assertEqual(row["status"], status)
+                self.assertEqual(row["source"]["file"],
+                                 "docs/standards/types/language-constructs/library-resources.md")
+                actual = library_text.splitlines()[row["source"]["line"] - 1]
+                self.assertTrue(actual.startswith("| " + guideline + " |"))
+                for detail in evidence:
+                    self.assertIn(detail, row["conclusion"])
         preprocessing_evidence = {
             "R20.2": ("satisfied", "header-name", "663", "0017"),
             "R20.3": ("satisfied", "直接单一", "目标 TU", "间接 include"),

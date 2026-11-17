@@ -66,53 +66,57 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 评估代码身份分别核验，重评副本只更新这一个驱动摘要，诊断／程序结果及其余语义
 输入保持。本组和 SDK 组分别按当前正文及驱动重绑；其余三组也复核当前驱动变化
 后的局部身份与既有具体消费，原批准实体、正式义务及未评估／表外阻塞保持；历史过期的精确记录按当前绑定恢复。
+第六批按[库与资源](library-resources.md)的八份冻结 CI 输入重绑本组，当前计数
+为 71／3／70。原始 summary 与其他组保持；92 项 producer 与当前 root 全部匹配。
+Windows 的范围外 Os_Stack.c 在后续 master 已变化，冻结工程仍绑定原字节；
+八份重评均无 producer 阻塞，本次只批准已核对的本组结论。
 <!-- source-assessment-context-begin -->
 {
-  "id": "checker-obligations-511-preprocessing",
+  "id": "checker-obligations-512-library-resources",
   "evidence": {
-    "head": "0b816e31f125222e6c5e363228713b1d87ecb1ba",
-    "receipt": "https://github.com/g1331/autsaro/issues/511#issuecomment-6930381131"
+    "head": "e7e97a6d5ccedd358c99ce7c6ad4bbf1ee7184db",
+    "receipt": "https://github.com/g1331/autsaro/issues/512#issuecomment-6932653873"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "4181625c8caffdd88c0817a2aa2a8ec30e818e29c62525cb70733000696950fc"
+      "inputIdentity": "bbf90b26a0617d40d0138599eb10273fa8e7b55002a216e75bc0ae5a3929e453"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "af10103a552e309b049d1a6ce7f9446a7c51f71e6fcc4fa30c91f63657d6d2e9"
+      "inputIdentity": "f6d2ccdce8e742e5b455a0e7ee09f361f12fa023b6f5a74e6badf1b8c5131e11"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "ba498f1d3dba02a02bfe67d8c3aef204dd4a95ec2532df091a99cce214136c48"
+      "inputIdentity": "cbb6be7d43d70ca64881457f3f9c641eef843bea6c8b8d1fdcbf580e6affe85f"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "48e7d74f8a591048d91cd54747e97fd4e7befea1a15287c27018338e675875ff"
+      "inputIdentity": "afd26ad2024d85b8e60436efc8844e96bcc1aefaf644236ec687262ef04a9a91"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "e304258188db9c861b9521b73ab5b83ce8d2c5499265d26aff0e97dc2e695451"
+      "inputIdentity": "7ce49971bbcf35c00e79e8f5908c0fdf0fccea364c450d60b1a63f4869c036ed"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "76aa7a1a55d0bb8effb28a0a0b0c829cef6afe9590c364c8193379850290a775"
+      "inputIdentity": "bc505f29720709157800e8dd6aae3f05a822573fd68ff3f9548fafed833b038e"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "828f37f11668b600b43e50f84cfc430e9d565a8853fb34b367eeafe635c69307"
+      "inputIdentity": "dbe161fcd86f11608b1febf2b70726bde332acc6fd67c5b332310e4e60f88add"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c82eb7f149115042e074ad27460bc13a4ffdf30aa392cbcb8d5b5eb4549bc433"
+      "inputIdentity": "54368142228c51eef02c41c7f999f297b30509beb7d8f5bde61f8b4cf906cdab"
     }
   ],
   "records": {
