@@ -66,16 +66,18 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 评估代码身份分别核验，重评副本只更新这一个驱动摘要，诊断／程序结果及其余语义
 输入保持。本组和 SDK 组分别按当前正文及驱动重绑；其余三组也复核当前驱动变化
 后的局部身份与既有具体消费，原批准实体、正式义务及未评估／表外阻塞保持；历史过期的精确记录按当前绑定恢复。
-第六批按[库与资源](library-resources.md)的八份冻结 CI 输入重绑本组，当前计数
-为 71／3／70。原始 summary 与其他组保持；92 项 producer 与当前 root 全部匹配。
-Windows 的范围外 Os_Stack.c 在后续 master 已变化，冻结工程仍绑定原字节；
-八份重评均无 producer 阻塞，本次只批准已核对的本组结论。
+第六批的八份绑定及 71／3／70 为历史交付状态。第七批按
+[表达式篇](expressions.md#第七批当前输入与类型推导)核查当前 20 条，结算七条、
+十三条转 #544，完整组为 78／3／63。CanTp_DataLength 运算前扩展改变实际交付
+字节和 producer 身份，修复前 master 输入仅作调查与比较基线；当前绑定取修复后
+双目标四 profile 的实际分析工程，按各目标换行和解析器重算本组身份。
+原始 summary 保持，其他组沿各自身份与处置消费。
 <!-- source-assessment-context-begin -->
 {
-  "id": "checker-obligations-512-library-resources",
+  "id": "checker-obligations-513-essential-types",
   "evidence": {
-    "head": "e7e97a6d5ccedd358c99ce7c6ad4bbf1ee7184db",
-    "receipt": "https://github.com/g1331/autsaro/issues/512#issuecomment-6932653873"
+    "head": "303f18d78807a475dc2506e04a734d8526339b0b",
+    "receipt": "https://github.com/g1331/autsaro/issues/513#issuecomment-6934757465"
   },
   "cases": [
     {

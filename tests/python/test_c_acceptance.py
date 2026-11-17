@@ -1053,22 +1053,22 @@ class AcceptanceTests(unittest.TestCase):
         expected_gaps = {
             "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R2.7", "R5.3", "R5.6",
             "R5.8", "R5.9", "R7.2", "R7.4", "R8.2", "R8.3", "R8.4", "R8.5", "R8.6", "R8.7",
-            "R8.9", "R8.13", "R9.1", "R9.2", "R9.3", "R10.2", "R10.4", "R10.5", "R10.7", "R10.8",
-            "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.6", "R11.7", "R11.8", "R11.9",
-            "R12.1", "R12.2", "R12.3", "R12.4", "R13.2", "R13.4", "R14.2", "R14.3", "R15.4",
+            "R8.9", "R8.13", "R9.1", "R9.2", "R9.3", "R10.4", "R10.7",
+            "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.8", "R11.9",
+            "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3", "R15.4",
             "R15.6", "R15.7",
             "R17.2", "R17.4", "R17.5", "R17.7", "R17.8", "R18.1", "R18.2", "R18.3", "R18.4",
             "R18.5", "R18.6", "R18.8", "R19.1", "R20.5",
             "R20.7", "R20.8", "R20.9", "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 70)
+        self.assertEqual(len(expected_gaps), 63)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 70)
+        self.assertEqual(len(objects), 63)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 70)
+        self.assertEqual(len(located), 63)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1086,7 +1086,8 @@ class AcceptanceTests(unittest.TestCase):
         satisfied = {row["id"]: row for row in records if row["status"] == "satisfied"}
         lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.4", "R6.1", "R6.2"}
         declarations = {"R8.10", "R8.11", "R8.12", "R8.14", "R9.4", "R9.5"}
-        expressions = {"R13.1", "R13.3", "R13.6"}
+        expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
+                       "R13.3", "R13.4", "R13.6"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
                         "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7"}
         preprocessing = {"R20.2", "R20.3", "R20.4", "R20.6", "R20.11", "R20.12",
@@ -1096,7 +1097,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(set(satisfied),
                          lexical | declarations | expressions | control_flow
                          | preprocessing | library
-                         | {"R7.1", "R7.3", "R15.5"})
+                         | {"R7.1", "R7.3", "R12.3", "R15.5"})
         self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
         for guideline in lexical:
             self.assertEqual(satisfied[guideline]["source"]["file"],
@@ -1249,6 +1250,48 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertTrue(actual.startswith("| " + guideline + " |"))
                 for detail in evidence:
                     self.assertIn(detail, row["conclusion"])
+        essential_evidence = {
+            "R10.2": ("satisfied", "TC2.19", "TC2.46", "failed_role"),
+            "R10.4": ("not_assessed", "#544", "complete_activation"),
+            "R10.5": ("satisfied", "AMD3.33", "result ? 1u : 0u"),
+            "R10.7": ("not_assessed", "#544", "essential 宽度"),
+            "R10.8": ("satisfied", "CanTp_DataLength", "(uint16)data[0] & 0x0fu"),
+            "R11.1": ("not_assessed", "#544", "兼容原型"),
+            "R11.2": ("not_assessed", "#544", "完整化"),
+            "R11.3": ("not_assessed", "#544", "AMD4.7–9"),
+            "R11.4": ("not_assessed", "#544", "真实 Advisory 违反", "未批准新例外"),
+            "R11.5": ("not_assessed", "#544", "生命周期"),
+            "R11.6": ("satisfied", "TC2.22", "(void *)0"),
+            "R11.7": ("satisfied", "Boolean、character、enum", "完整 cast 清单"),
+            "R11.8": ("not_assessed", "#544", "AMD4.10–14"),
+            "R11.9": ("not_assessed", "#544", "((void *)0)"),
+            "R12.1": ("not_assessed", "#544", "#if／#elif"),
+            "R12.2": ("not_assessed", "#544", "UTLR"),
+            "R12.3": ("satisfied", "452", "(_assert(...),0)", "§6.7"),
+            "R12.4": ("not_assessed", "#544", "宽度≥64"),
+            "R13.2": ("not_assessed", "#544", "AMD4.17–23"),
+            "R13.4": ("satisfied", "复合赋值", "listSET_LIST_ITEM_VALUE"),
+        }
+        self.assertEqual(len(essential_evidence), 20)
+        for guideline, (status, *evidence) in essential_evidence.items():
+            with self.subTest(essential=guideline):
+                record = by_id[guideline]
+                self.assertEqual(record["status"], status)
+                filename = "README.md" if guideline == "R12.3" else "expressions.md"
+                self.assertEqual(record["source"]["file"],
+                                 "docs/standards/types/language-constructs/" + filename)
+                source = (self.root / record["source"]["file"]).read_text(encoding="utf-8")
+                self.assertTrue(source.splitlines()[record["source"]["line"] - 1].startswith(
+                    "| " + guideline + " |"))
+                for phrase in evidence:
+                    self.assertIn(phrase, record["conclusion"])
+        expression_text = (self.root / by_id["R10.2"]["source"]["file"]).read_text(
+            encoding="utf-8")
+        for evidence in ("每条记录均回查", "去注释保留其中全部换行", "STLR／UTLR",
+                         "TC2.46", "(type)(expression)"):
+            self.assertIn(evidence, expression_text)
+        cantp = (ROOT / "runtime/bsw/src/CanTp.c").read_text(encoding="utf-8")
+        self.assertIn("const uint16 low = (uint16)data[0] & 0x0fu;", cantp)
         preprocessing_evidence = {
             "R20.2": ("satisfied", "header-name", "663", "0017"),
             "R20.3": ("satisfied", "直接单一", "目标 TU", "间接 include"),

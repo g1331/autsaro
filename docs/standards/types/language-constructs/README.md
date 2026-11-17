@@ -102,7 +102,7 @@ R12.3（106／114），合成 AMD2.27／46；七份原件摘要核验及原页�
 | R1.4 | Required | 双目标四 profile 的 C99 HostBatch／probe | not_applicable | AMD2.30（印刷 11／PDF 18）仅适用 C11；AMD3.11–13、AMD4.53–54 修改禁用设施，语言范围保持。当前 TU 均以 -std=c99 编译；扩展与 Annex K 义务沿各自规则核查。 |
 | R7.2 | Required | 双目标四 profile 的 HostBatch／probe；自有、生成／应用及项目补丁的条件与普通整数 | not_assessed | 当前普通表达式复用 master run 43418599046 的 452 份实际 GCC 展开与原 SDK 精确类别；#470 新增 SIG_BLOCK／SIG_SETMASK 为 signed 0／2，Windows 原有每 profile 11 处缺 U 沿 sdk-integration。主文 60–61／AMD2.46 区分普通 LP64／LLP64 与预处理 intmax_t／uintmax_t；#443 恢复须在当前 include／define／undef 时序捕获 #if／#elif 实际求值式，独立控制 0xffffffff 的 signed 预处理类型和 0xffffffffffffffff 的 unsigned 缺 U，并验证捕获前后选中输出相同。普通 -E -dD 已消去条件；历史捕获及 R7.1 词法闭包各保留原证明范围。 |
 | R7.3 | Required | 同一范围的物理 token、真实宏展开及直接消费者 | satisfied | 主文 61–62、AMD2.27 的对象为数值后缀，包含整数与浮点。当前所有交付 C／头及最终 kernel 项目行无手写小写 l 后缀或拼接生产者；452 份实际展开无额外实例。Windows 每 profile 七处 __MSABI_LONG 展开的 0x1l／258l／109l 均回接 [已批准 SDK 类别](../../os/sdk.md#当前集成义务与类别处置)及其精确实例：Backend／port 上下文、Time／port 等待及 HostBatch 断管消费者；沿原 sdk-integration 组消费。采用 queue 的 SIZE_MAX 沿原 ISO 接口责任，原违反与正式义务由各自组保持。 |
-| R12.3 | Advisory | 同一范围的真实逗号语法，含 return、for 和嵌套实参 | not_assessed | 本篇已保留 Linux 228 个历史 TU 的完整语法解析及 Windows 历史有界证据；#443 补当前双目标语法与直接消费者关系，Windows SDK 解析限制须有实际替代证据。 |
+| R12.3 | Advisory | 当前双目标四 profile 的真实逗号语法，含 return、for 和嵌套实参 | satisfied | 主文 106／PDF 114、AMD2.27；第七批 452 份真实展开按行标记解析，属性移除保持位置，范围内无语法错误。仅 Windows Os_Arti.c 六处标准 assert 的 (_assert(...),0)，按 §6.7 归标准库内部；未选分支另核。详见表达式篇。 |
 | R17.3 | Mandatory | 同一 C99 范围，含 GNU 对齐查询与项目补丁 | not_applicable | 主文印刷 138／PDF 146 仅适用 C90，AMD2 Appendix H 继续明确此限制；当前 C99 编译、声明与扩展检查仍保留，具体诊断沿原 OS 裁决。 |
 <!-- misra-checker-obligations-end -->
 
@@ -154,5 +154,6 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 [控制流篇](control-flow.md)。
 [预处理批次](preprocessing-library.md)结算 8 项，5 项转 #536；
 [库与资源批次](library-resources.md)结算 28 项，R21.1／R21.2 转 #539。
-完整 144 项为 71 satisfied、3 not_applicable、70 not_assessed；
+[第七批](expressions.md#第七批当前输入与类型推导)结算 7 项，13 项转 #544。
+完整 144 项为 78 satisfied、3 not_applicable、63 not_assessed；
 当前绑定见[声明篇](declarations.md#当前输入重评)。
