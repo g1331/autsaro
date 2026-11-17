@@ -144,9 +144,14 @@ __attribute__((noinline)) static void entry(void *argument)
 int main(int argc, char **argv)
 {
 #ifdef _WIN32
-    SetErrorMode(SEM_FAILCRITICALERRORS);
-    if (WerSetFlags(WER_FAULT_REPORTING_NO_UI) != S_OK) {
-        return 85;
+    if (argc > 1 && (argv[1][0] == 'u' || argv[1][0] == 'f')) {
+        /* These modes end in an expected unhandled exception: keep WER, and its CI dump, out. */
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    } else {
+        SetErrorMode(SEM_FAILCRITICALERRORS);
+        if (WerSetFlags(WER_FAULT_REPORTING_NO_UI) != S_OK) {
+            return 85;
+        }
     }
 #endif
     if (argc > 1 && argv[1][0] == 'u') {

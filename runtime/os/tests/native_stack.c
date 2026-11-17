@@ -81,15 +81,18 @@ void StartupHook(void)
     if ((GetErrorMode() & SEM_NOGPFAULTERRORBOX) == 0u) {
         ExitProcess(E_OS_STATE);
     }
-    /* Opt this fixture into CI crash collection after production initialization. */
-    SetErrorMode(GetErrorMode() & ~(UINT)SEM_NOGPFAULTERRORBOX);
-    if (WerSetFlags(WER_FAULT_REPORTING_NO_UI) != S_OK) {
-        ExitProcess(E_OS_STATE);
-    }
-    if (((GetErrorMode() & SEM_NOGPFAULTERRORBOX) != 0u) ||
-        (WerGetFlags(GetCurrentProcess(), &flags) != S_OK) ||
-        ((flags & WER_FAULT_REPORTING_NO_UI) == 0u)) {
-        Os_TargetTrace('X');
+    /* Opt this fixture into CI crash collection after production initialization; the
+       "unrelated" scenario crashes on purpose and stays suppressed. */
+    if (strcmp(scenario, "unrelated") != 0) {
+        SetErrorMode(GetErrorMode() & ~(UINT)SEM_NOGPFAULTERRORBOX);
+        if (WerSetFlags(WER_FAULT_REPORTING_NO_UI) != S_OK) {
+            ExitProcess(E_OS_STATE);
+        }
+        if (((GetErrorMode() & SEM_NOGPFAULTERRORBOX) != 0u) ||
+            (WerGetFlags(GetCurrentProcess(), &flags) != S_OK) ||
+            ((flags & WER_FAULT_REPORTING_NO_UI) == 0u)) {
+            Os_TargetTrace('X');
+        }
     }
 #endif
     if (strcmp(scenario, "startup") == 0) {
