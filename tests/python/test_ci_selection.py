@@ -83,6 +83,12 @@ class CiSelectionTests(unittest.TestCase):
             str(Path(os.environ["ProgramFiles"]) / "Git/bin/bash.exe")
             if os.name == "nt" else "bash"
         )
+        # The step runs under MSYS2 with GNU coreutils; macOS ships a BSD sha256sum
+        # without --strict, so only hosts with the GNU tool can execute the fixture.
+        gnu = subprocess.run([bash, "--noprofile", "--norc", "-c", "sha256sum --version"],
+                             check=False, capture_output=True, text=True)
+        if gnu.returncode != 0 or "GNU coreutils" not in gnu.stdout:
+            self.skipTest("executing the MSYS2 step requires GNU coreutils sha256sum")
         for hit, corrupt in (("false", False), ("true", False), ("true", True)):
             with self.subTest(hit=hit, corrupt=corrupt), \
                     tempfile.TemporaryDirectory(prefix="gcc cache test ") as temporary:
