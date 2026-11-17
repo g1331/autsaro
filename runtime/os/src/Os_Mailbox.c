@@ -21,7 +21,7 @@ OS_MEMMAP static uint64 last_ticket; /**< Single-producer accepted ticket; no In
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
-    published; /**< Atomic complete-record count; no Init reset. */
+    os_mailbox_published; /**< Atomic complete-record count; no Init reset. */
 /* Acceptance bit0 and permanent-close bit1; close never waits for the producer. */
 OS_MEMMAP static volatile Os_Atomic32Type
     admission; /**< Atomic producer/close bits; no Init reset. */
@@ -113,7 +113,7 @@ OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 
     if (context != E_OK) {
         return context;
     }
-    if ((InterlockedCompareExchange(&published, 0, 0) >= (LONG)OS_INPUT_CAPACITY) ||
+    if ((InterlockedCompareExchange(&os_mailbox_published, 0, 0) >= (LONG)OS_INPUT_CAPACITY) ||
         (last_ticket == UINT64_MAX)) {
         return E_OS_LIMIT;
     }
@@ -129,7 +129,7 @@ OS_MEMMAP StatusType Os_TargetPostInput(const uint8 *data, uint8 length, uint64 
     *ticket = last_ticket;
     write_index = (write_index + 1u) % OS_INPUT_CAPACITY;
     /* Interlocked publication orders the complete copy before consumer reads. */
-    (void)InterlockedIncrement(&published);
+    (void)InterlockedIncrement(&os_mailbox_published);
     (void)InterlockedAnd(&admission, (LONG) ~(uint32)1u);
     if (Os_TargetReady() != 0) {
         Os_PortPostInterrupt(OS_INPUT_INTERRUPT);
@@ -186,7 +186,7 @@ OS_MEMMAP sint32 Os_MailboxQuiescent(void)
 {
     sint32 quiescent = 0;
     if (((uint32)InterlockedCompareExchange(&admission, 0, 0) & 1u) == 0u) {
-        quiescent = (InterlockedCompareExchange(&published, 0, 0) == 0) ? 1 : 0;
+        quiescent = (InterlockedCompareExchange(&os_mailbox_published, 0, 0) == 0) ? 1 : 0;
     }
     return quiescent;
 }
@@ -223,12 +223,12 @@ OS_MEMMAP StatusType Os_TargetTakeInput(Os_InputRecordType *record)
     if (status != E_OK) {
         return status;
     }
-    if (InterlockedCompareExchange(&published, 0, 0) == 0) {
+    if (InterlockedCompareExchange(&os_mailbox_published, 0, 0) == 0) {
         return E_OS_NOFUNC;
     }
     *record = records[read_index];
     read_index = (read_index + 1u) % OS_INPUT_CAPACITY;
-    (void)InterlockedDecrement(&published);
+    (void)InterlockedDecrement(&os_mailbox_published);
     return E_OK;
 }
 
@@ -240,7 +240,7 @@ OS_MEMMAP StatusType Os_TargetInputCount(uint32 *count)
     }
     status = input_context();
     if (status == E_OK) {
-        *count = (uint32)InterlockedCompareExchange(&published, 0, 0);
+        *count = (uint32)InterlockedCompareExchange(&os_mailbox_published, 0, 0);
     }
     return status;
 }

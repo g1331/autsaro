@@ -809,7 +809,14 @@ impl From<&ModeMachine> for Storage {
     fn from(machine: &ModeMachine) -> Self {
         Self {
             native: machine.native_type(),
-            variable: machine.variable.clone(),
+            // The logical plan stays stable; this producer owns the C storage namespace.
+            variable: if fixed_dcm(machine)
+                && super::short_name(&machine.group) != "DcmDiagnosticSessionControl"
+            {
+                "schm_authentication_mode".into()
+            } else {
+                machine.variable.clone()
+            },
             switch: machine.switch_symbol.clone(),
             observer: machine.mode_symbol.clone(),
             group: super::short_name(&machine.group).into(),
@@ -822,7 +829,7 @@ impl From<&ModeMachine> for Storage {
 pub(super) fn storage(plan: &CompositionContract, scope: &str, authentication: &str) -> String {
     let fixed: Vec<_> = [
         ("DcmDiagnosticSessionControl", "diagnostic_session_mode"),
-        (authentication, "authentication_mode"),
+        (authentication, "schm_authentication_mode"),
     ]
     .into_iter()
     .map(|(group, variable)| {

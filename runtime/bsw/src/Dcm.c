@@ -83,22 +83,22 @@ typedef struct {
  * preserves in-flight executors and publishers: reentrant callbacks must not start
  * a second non-reentrant ReadData or publish an older mode after a newer one. */
 static const Dcm_ConfigType *dcm_configuration
-    DCM_VAR_CLEARED;                        /**< Selected immutable configuration. */
-static Dcm_StateType state DCM_VAR_CLEARED; /**< Current request phase; Init resets. */
+    DCM_VAR_CLEARED;                            /**< Selected immutable configuration. */
+static Dcm_StateType dcm_state DCM_VAR_CLEARED; /**< Current request phase; Init resets. */
 static uint8
-    request[DCM_BUFFER_CAPACITY] DCM_VAR_CLEARED; /**< Rx bytes; Init retires their length. */
+    dcm_request[DCM_BUFFER_CAPACITY] DCM_VAR_CLEARED; /**< Rx bytes; Init retires their length. */
 static uint8
-    response[DCM_BUFFER_CAPACITY] DCM_VAR_CLEARED;    /**< Tx bytes; owned until confirmation. */
-static PduLengthType request_length DCM_VAR_CLEARED;  /**< Reserved Rx size; Init resets. */
-static PduLengthType received DCM_VAR_CLEARED;        /**< Copied Rx bytes; Init resets. */
-static PduLengthType response_length DCM_VAR_CLEARED; /**< Completed Tx size; Init resets. */
-static PduLengthType copied DCM_VAR_CLEARED;          /**< Tx copy cursor; Init resets. */
-static PduLengthType confirmed DCM_VAR_CLEARED;       /**< Tx retry boundary; Init resets. */
-static boolean active_enabled DCM_VAR_CLEARED;        /**< ActiveDiagnostic switch; Init enables. */
-static boolean dcm_diagnostic DCM_VAR_CLEARED;        /**< Diagnostic demand; Init clears. */
-static uint8 communication DCM_VAR_CLEARED;           /**< Channel gate; Init selects NoCom. */
-static Dcm_SesCtrlType session DCM_VAR_CLEARED;       /**< Active session; Init selects default. */
-static Dcm_SesCtrlType pending_session
+    dcm_response[DCM_BUFFER_CAPACITY] DCM_VAR_CLEARED; /**< Tx bytes; owned until confirmation. */
+static PduLengthType request_length DCM_VAR_CLEARED;   /**< Reserved Rx size; Init resets. */
+static PduLengthType dcm_received DCM_VAR_CLEARED;     /**< Copied Rx bytes; Init resets. */
+static PduLengthType response_length DCM_VAR_CLEARED;  /**< Completed Tx size; Init resets. */
+static PduLengthType dcm_copied DCM_VAR_CLEARED;       /**< Tx copy cursor; Init resets. */
+static PduLengthType confirmed DCM_VAR_CLEARED;        /**< Tx retry boundary; Init resets. */
+static boolean active_enabled DCM_VAR_CLEARED;      /**< ActiveDiagnostic switch; Init enables. */
+static boolean dcm_diagnostic DCM_VAR_CLEARED;      /**< Diagnostic demand; Init clears. */
+static uint8 communication DCM_VAR_CLEARED;         /**< Channel gate; Init selects NoCom. */
+static Dcm_SesCtrlType dcm_session DCM_VAR_CLEARED; /**< Active session; Init selects default. */
+static Dcm_SesCtrlType dcm_pending_session
     DCM_VAR_CLEARED; /**< Session awaiting successful completion. */
 static boolean session_change_cancelled
     DCM_VAR_CLEARED;                          /**< Reset veto for this request; Init clears. */
@@ -116,8 +116,9 @@ typedef enum {
     DCM_LOWER_SETTLED, /**< Confirmed before PduR_DcmTransmit returned. */
     DCM_LOWER_AWAITING /**< Accepted; TpTxConfirmation is still due. */
 } Dcm_LowerType;
-static Dcm_LowerType lower DCM_VAR_CLEARED;      /**< Reserved TP lifetime; see above. */
-static PduIdType lower_transmit DCM_VAR_CLEARED; /**< Reserved confirmation ID; Init preserves. */
+static Dcm_LowerType dcm_lower DCM_VAR_CLEARED; /**< Reserved TP lifetime; see above. */
+static PduIdType dcm_lower_transmit
+    DCM_VAR_CLEARED; /**< Reserved confirmation ID; Init preserves. */
 /* Publication revisions are monotonic. One publisher drains the latest state;
  * a callback may change it, but may not recursively flush it out of order. */
 static boolean dcm_publishing DCM_VAR_CLEARED;  /**< Publication owner; Init preserves. */
@@ -148,18 +149,18 @@ static Dcm_ActorsType dcm_actors DCM_VAR_CLEARED; /**< DCM_STATE; preserved by I
 #include "Dcm_MemMap.h"
 static DCM_CODE void Dcm_SetSession(Dcm_SesCtrlType next)
 {
-    session = next;
+    dcm_session = next;
     ++session_revision;
 }
 static DCM_CODE void Dcm_Release(void)
 {
-    state = DCM_IDLE;
-    copied = 0u;
+    dcm_state = DCM_IDLE;
+    dcm_copied = 0u;
     confirmed = 0u;
-    pending_session = 0u;
+    dcm_pending_session = 0u;
     session_change_cancelled = FALSE;
-    s3_remaining = (session == DCM_DEFAULT_SESSION) ? 0u : dcm_configuration->s3_ticks;
-    if ((dcm_diagnostic == TRUE) && (session == DCM_DEFAULT_SESSION)) {
+    s3_remaining = (dcm_session == DCM_DEFAULT_SESSION) ? 0u : dcm_configuration->s3_ticks;
+    if ((dcm_diagnostic == TRUE) && (dcm_session == DCM_DEFAULT_SESSION)) {
         dcm_diagnostic = FALSE;
         ++diagnostic_revision;
     }
@@ -186,7 +187,7 @@ static DCM_CODE Dcm_PublicationType Dcm_NextPublication(void)
         dcm_actors.published_initialization = initialization;
     } else if (dcm_actors.published_session != session_revision) {
         effect.kind = DCM_PUBLISH_SESSION;
-        effect.mode = (session == DCM_DEFAULT_SESSION)
+        effect.mode = (dcm_session == DCM_DEFAULT_SESSION)
                           ? RTE_MODE_DcmDiagnosticSessionControl_DCM_DEFAULT_SESSION
                           : RTE_MODE_DcmDiagnosticSessionControl_DCM_EXTENDED_DIAGNOSTIC_SESSION;
         dcm_actors.published_session = session_revision;
@@ -256,23 +257,23 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
         ++dcm_generation;
         ++initialization;
         ++diagnostic_revision;
-        state = DCM_IDLE;
+        dcm_state = DCM_IDLE;
         active_enabled = TRUE;
         dcm_diagnostic = FALSE;
         pending_active = 0u;
         communication = DCM_NO_COM;
         Dcm_SetSession(DCM_DEFAULT_SESSION);
-        pending_session = 0u;
+        dcm_pending_session = 0u;
         session_change_cancelled = FALSE;
         s3_remaining = 0u;
         p2_remaining = 0u;
         request_length = 0u;
         response_length = 0u;
-        received = 0u;
-        copied = 0u;
+        dcm_received = 0u;
+        dcm_copied = 0u;
         confirmed = 0u;
-        if (lower == DCM_LOWER_AWAITING) {
-            lower = DCM_LOWER_IDLE;
+        if (dcm_lower == DCM_LOWER_AWAITING) {
+            dcm_lower = DCM_LOWER_IDLE;
         }
     }
     SchM_Exit_Dcm_DCM_STATE();
@@ -295,7 +296,7 @@ DCM_CODE Std_ReturnType Dcm_GetSesCtrlType(Dcm_SesCtrlType *SesCtrlType)
 {
     SchM_Enter_Dcm_DCM_STATE();
     if ((dcm_configuration != NULL_PTR) && (SesCtrlType != NULL_PTR)) {
-        *SesCtrlType = session;
+        *SesCtrlType = dcm_session;
     }
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
@@ -307,10 +308,10 @@ DCM_CODE Std_ReturnType Dcm_ResetToDefaultSession(void)
     SchM_Enter_Dcm_DCM_STATE();
     if (dcm_configuration != NULL_PTR) {
         Dcm_SetSession(DCM_DEFAULT_SESSION);
-        pending_session = 0u;
-        session_change_cancelled = (state != DCM_IDLE);
+        dcm_pending_session = 0u;
+        session_change_cancelled = (dcm_state != DCM_IDLE);
         s3_remaining = 0u;
-        if ((state == DCM_IDLE) && (dcm_diagnostic == TRUE)) {
+        if ((dcm_state == DCM_IDLE) && (dcm_diagnostic == TRUE)) {
             Dcm_Release();
         }
     }
@@ -342,14 +343,14 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
         ((info == NULL_PTR) ||
          ((info->MetaDataPtr == NULL_PTR) && (info->SduLength <= TpSduLength) &&
           ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))))) {
-        if (state == DCM_IDLE) {
+        if (dcm_state == DCM_IDLE) {
             if (TpSduLength > dcm_configuration->buffer_length) {
                 result = BUFREQ_E_OVFL;
             } else {
                 ++dcm_generation;
                 request_length = TpSduLength;
-                received = 0u;
-                state = DCM_RECEIVING;
+                dcm_received = 0u;
+                dcm_state = DCM_RECEIVING;
                 session_change_cancelled = FALSE;
                 *bufferSizePtr = (PduLengthType)dcm_configuration->buffer_length;
                 result = BUFREQ_OK;
@@ -372,13 +373,13 @@ DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
     if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->receive) &&
         (communication != DCM_NO_COM) && (info != NULL_PTR) && (bufferSizePtr != NULL_PTR) &&
         ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))) {
-        if ((state == DCM_RECEIVING) && (info->SduLength <= (request_length - received))) {
+        if ((dcm_state == DCM_RECEIVING) && (info->SduLength <= (request_length - dcm_received))) {
             PduLengthType i;
             for (i = 0u; i < info->SduLength; ++i) {
-                request[received + i] = info->SduDataPtr[i];
+                dcm_request[dcm_received + i] = info->SduDataPtr[i];
             }
-            received += info->SduLength;
-            *bufferSizePtr = (PduLengthType)(dcm_configuration->buffer_length - received);
+            dcm_received += info->SduLength;
+            *bufferSizePtr = (PduLengthType)(dcm_configuration->buffer_length - dcm_received);
             result = BUFREQ_OK;
         } else {
             /* A rejected copy preserves both the destination and the size output. */
@@ -392,9 +393,10 @@ DCM_CODE void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result)
 {
     SchM_Enter_Dcm_DCM_STATE();
     if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->receive)) {
-        if (state == DCM_RECEIVING) {
-            if ((result == E_OK) && (received == request_length) && (communication != DCM_NO_COM)) {
-                state = DCM_REQUEST;
+        if (dcm_state == DCM_RECEIVING) {
+            if ((result == E_OK) && (dcm_received == request_length) &&
+                (communication != DCM_NO_COM)) {
+                dcm_state = DCM_REQUEST;
                 dcm_diagnostic = TRUE;
                 if (active_enabled == TRUE) {
                     ++pending_active;
@@ -571,7 +573,7 @@ static DCM_CODE void Dcm_Process(Dcm_WorkType *work)
 static DCM_CODE void Dcm_PrepareWork(Dcm_WorkType *work)
 {
     PduLengthType i;
-    state = DCM_PROCESSING;
+    dcm_state = DCM_PROCESSING;
     work->configuration = dcm_configuration;
     work->generation = dcm_generation;
     work->message.reqData = &work->request[1];
@@ -584,15 +586,15 @@ static DCM_CODE void Dcm_PrepareWork(Dcm_WorkType *work)
     work->message.idContext = 0u;
     work->message.dcmRxPduId = dcm_configuration->receive;
     work->response[0] = 0u;
-    work->session = session;
+    work->session = dcm_session;
     work->pending_session = 0u;
     work->cancelled = FALSE;
     /* Snapshot the SID and subfunction byte explicitly. The length guards below
      * decide whether that byte belongs to this request. Both source slots are static. */
-    work->request[0] = request[0];
-    work->request[1] = request[1];
+    work->request[0] = dcm_request[0];
+    work->request[1] = dcm_request[1];
     for (i = 2u; i < request_length; ++i) {
-        work->request[i] = request[i];
+        work->request[i] = dcm_request[i];
     }
 }
 static DCM_CODE void Dcm_ProcessRequest(void)
@@ -600,7 +602,7 @@ static DCM_CODE void Dcm_ProcessRequest(void)
     Dcm_WorkType work;
     boolean process = FALSE;
     SchM_Enter_Dcm_DCM_STATE();
-    if (state == DCM_REQUEST) {
+    if (dcm_state == DCM_REQUEST) {
         Dcm_PrepareWork(&work);
         process = TRUE;
     }
@@ -608,25 +610,25 @@ static DCM_CODE void Dcm_ProcessRequest(void)
     if (process == TRUE) {
         Dcm_Process(&work);
         SchM_Enter_Dcm_DCM_STATE();
-        if ((dcm_generation == work.generation) && (state == DCM_PROCESSING)) {
+        if ((dcm_generation == work.generation) && (dcm_state == DCM_PROCESSING)) {
             PduLengthType i;
-            pending_session = (session_change_cancelled == TRUE) ? 0u : work.pending_session;
+            dcm_pending_session = (session_change_cancelled == TRUE) ? 0u : work.pending_session;
             response_length =
                 ((work.response[0] == 0u) || ((work.message.msgAddInfo.suppressPosResponse == 1u) &&
                                               (work.response[0] != DCM_NEGATIVE)))
                     ? 0u
                     : (PduLengthType)(work.message.resDataLen + 1u);
             for (i = 0u; i < response_length; ++i) {
-                response[i] = work.response[i];
+                dcm_response[i] = work.response[i];
             }
             if (response_length == 0u) {
-                if (pending_session != 0u) {
-                    Dcm_SetSession(pending_session);
+                if (dcm_pending_session != 0u) {
+                    Dcm_SetSession(dcm_pending_session);
                 }
                 Dcm_Release();
             } else {
-                state = DCM_RESPONSE;
-                copied = 0u;
+                dcm_state = DCM_RESPONSE;
+                dcm_copied = 0u;
                 confirmed = 0u;
             }
         }
@@ -639,10 +641,11 @@ static DCM_CODE void Dcm_TransmitResponse(void)
     PduIdType id = 0u;
     PduInfoType info = {NULL_PTR, NULL_PTR, 0u};
     SchM_Enter_Dcm_DCM_STATE();
-    if ((state == DCM_RESPONSE) && (communication == DCM_FULL_COM) && (lower == DCM_LOWER_IDLE)) {
-        state = DCM_TRANSMITTING;
-        lower = DCM_LOWER_CALLING;
-        lower_transmit = dcm_configuration->transmit;
+    if ((dcm_state == DCM_RESPONSE) && (communication == DCM_FULL_COM) &&
+        (dcm_lower == DCM_LOWER_IDLE)) {
+        dcm_state = DCM_TRANSMITTING;
+        dcm_lower = DCM_LOWER_CALLING;
+        dcm_lower_transmit = dcm_configuration->transmit;
         id = dcm_configuration->router_transmit;
         info.SduLength = response_length;
         send = TRUE;
@@ -653,13 +656,13 @@ static DCM_CODE void Dcm_TransmitResponse(void)
     if (send == TRUE) {
         const Std_ReturnType result = PduR_DcmTransmit(id, &info);
         SchM_Enter_Dcm_DCM_STATE();
-        if (lower == DCM_LOWER_SETTLED) {
-            lower = DCM_LOWER_IDLE;
+        if (dcm_lower == DCM_LOWER_SETTLED) {
+            dcm_lower = DCM_LOWER_IDLE;
         } else if (result == E_OK) {
-            lower = DCM_LOWER_AWAITING;
+            dcm_lower = DCM_LOWER_AWAITING;
         } else {
-            lower = DCM_LOWER_IDLE;
-            if (state == DCM_TRANSMITTING) {
+            dcm_lower = DCM_LOWER_IDLE;
+            if (dcm_state == DCM_TRANSMITTING) {
                 /* SWS_Dcm_00118: neither a refusal nor an error confirmation is retried. */
                 Dcm_Release();
             }
@@ -676,7 +679,8 @@ DCM_CODE void Dcm_MainFunction(void)
         (dcm_publishing == FALSE)) {
         dcm_actors.executing = TRUE;
         owner = TRUE;
-        if ((session != DCM_DEFAULT_SESSION) && (state == DCM_IDLE) && (s3_remaining > 0u)) {
+        if ((dcm_session != DCM_DEFAULT_SESSION) && (dcm_state == DCM_IDLE) &&
+            (s3_remaining > 0u)) {
             --s3_remaining;
             if (s3_remaining == 0u) {
                 Dcm_SetSession(DCM_DEFAULT_SESSION);
@@ -689,7 +693,7 @@ DCM_CODE void Dcm_MainFunction(void)
         Dcm_ProcessRequest();
         Dcm_TransmitResponse();
         SchM_Enter_Dcm_DCM_STATE();
-        if ((state == DCM_RESPONSE) && (p2_remaining > 0u)) {
+        if ((dcm_state == DCM_RESPONSE) && (p2_remaining > 0u)) {
             --p2_remaining;
             if (p2_remaining == 0u) {
                 Dcm_Release();
@@ -709,27 +713,27 @@ DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
     BufReq_ReturnType result = BUFREQ_E_NOT_OK;
     SchM_Enter_Dcm_DCM_STATE();
     if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->transmit) &&
-        (state == DCM_TRANSMITTING) && (info != NULL_PTR) && (availableDataPtr != NULL_PTR) &&
+        (dcm_state == DCM_TRANSMITTING) && (info != NULL_PTR) && (availableDataPtr != NULL_PTR) &&
         ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))) {
-        PduLengthType position = copied;
+        PduLengthType position = dcm_copied;
         PduLengthType acknowledged = confirmed;
         boolean valid = TRUE;
         if (retry != NULL_PTR) {
             if (retry->TpDataState == TP_DATARETRY) {
-                if (retry->TxTpDataCnt <= (copied - confirmed)) {
+                if (retry->TxTpDataCnt <= (dcm_copied - confirmed)) {
                     position -= retry->TxTpDataCnt;
                 } else {
                     valid = FALSE;
                 }
             } else if (retry->TpDataState == TP_DATACONF) {
-                acknowledged = copied;
+                acknowledged = dcm_copied;
             } else if (retry->TpDataState != TP_CONFPENDING) {
                 valid = FALSE;
             } else {
                 /* Pending data remains available for a bounded retry. */
             }
         } else {
-            acknowledged = copied;
+            acknowledged = dcm_copied;
         }
         if (valid == TRUE) {
             if (info->SduLength > (response_length - position)) {
@@ -737,11 +741,11 @@ DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
             } else {
                 PduLengthType i;
                 for (i = 0u; i < info->SduLength; ++i) {
-                    info->SduDataPtr[i] = response[position + i];
+                    info->SduDataPtr[i] = dcm_response[position + i];
                 }
-                copied = position + info->SduLength;
-                confirmed = (retry == NULL_PTR) ? copied : acknowledged;
-                *availableDataPtr = response_length - copied;
+                dcm_copied = position + info->SduLength;
+                confirmed = (retry == NULL_PTR) ? dcm_copied : acknowledged;
+                *availableDataPtr = response_length - dcm_copied;
                 result = BUFREQ_OK;
             }
         }
@@ -753,11 +757,12 @@ DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
 DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result)
 {
     SchM_Enter_Dcm_DCM_STATE();
-    if (((lower == DCM_LOWER_CALLING) || (lower == DCM_LOWER_AWAITING)) && (id == lower_transmit)) {
-        lower = (lower == DCM_LOWER_CALLING) ? DCM_LOWER_SETTLED : DCM_LOWER_IDLE;
-        if (state == DCM_TRANSMITTING) {
-            if ((result == E_OK) && (pending_session != 0u)) {
-                Dcm_SetSession(pending_session);
+    if (((dcm_lower == DCM_LOWER_CALLING) || (dcm_lower == DCM_LOWER_AWAITING)) &&
+        (id == dcm_lower_transmit)) {
+        dcm_lower = (dcm_lower == DCM_LOWER_CALLING) ? DCM_LOWER_SETTLED : DCM_LOWER_IDLE;
+        if (dcm_state == DCM_TRANSMITTING) {
+            if ((result == E_OK) && (dcm_pending_session != 0u)) {
+                Dcm_SetSession(dcm_pending_session);
             }
             Dcm_Release();
         }

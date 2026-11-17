@@ -92,7 +92,7 @@ pub(super) fn description(
             ));
         }
     }
-    for name in ["diagnostic_session_mode", "authentication_mode"] {
+    for name in ["diagnostic_session_mode", "schm_authentication_mode"] {
         variables.push_str(&object("VARIABLE-DATA-PROTOTYPE", name, "RteMemory_uint8"));
     }
     for machine in composition.mode_machines.iter().filter(|machine| {

@@ -60,18 +60,18 @@ typedef enum {
 } ComM_BusPhaseType;
 /* All COMM_STATE. Init resets the channel and the published mode, but preserves an
  * in-flight bus call and publisher so that no second caller overtakes them. */
-static const ComM_ConfigType *comm_configuration COMM_VAR_CLEARED;  /**< NULL when uninitialized. */
-static ComM_ModeType requests[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Per user. */
-static ComM_StateType channel_state COMM_VAR_CLEARED;               /**< Figure 7.7 state. */
-static boolean communication_allowed COMM_VAR_CLEARED;              /**< CommunicationAllowed. */
-static boolean diagnostic COMM_VAR_CLEARED;                         /**< Dcm active diagnostic. */
-static boolean wakeup_pending COMM_VAR_CLEARED;                     /**< Wake-up until FULL. */
-static uint32 minimum_remaining COMM_VAR_CLEARED;                   /**< Minimum FULL periods. */
-static ComM_ModeType bus_target COMM_VAR_CLEARED;     /**< Mode of the entered state. */
-static ComM_BusPhaseType bus_phase COMM_VAR_CLEARED;  /**< Init preserves a call. */
-static ComM_ModeType indicated COMM_VAR_CLEARED;      /**< Latest actual bus mode. */
-static ComM_ModeType comm_published COMM_VAR_CLEARED; /**< Last mode sent to users. */
-static boolean comm_publishing COMM_VAR_CLEARED;      /**< Publisher; Init preserves. */
+static const ComM_ConfigType *comm_configuration COMM_VAR_CLEARED; /**< NULL when uninitialized. */
+static ComM_ModeType comm_requests[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Per user. */
+static ComM_StateType channel_state COMM_VAR_CLEARED;                    /**< Figure 7.7 state. */
+static boolean communication_allowed COMM_VAR_CLEARED; /**< CommunicationAllowed. */
+static boolean diagnostic COMM_VAR_CLEARED;            /**< Dcm active diagnostic. */
+static boolean wakeup_pending COMM_VAR_CLEARED;        /**< Wake-up until FULL. */
+static uint32 minimum_remaining COMM_VAR_CLEARED;      /**< Minimum FULL periods. */
+static ComM_ModeType bus_target COMM_VAR_CLEARED;      /**< Mode of the entered state. */
+static ComM_BusPhaseType bus_phase COMM_VAR_CLEARED;   /**< Init preserves a call. */
+static ComM_ModeType indicated COMM_VAR_CLEARED;       /**< Latest actual bus mode. */
+static ComM_ModeType comm_published COMM_VAR_CLEARED;  /**< Last mode sent to users. */
+static boolean comm_publishing COMM_VAR_CLEARED;       /**< Publisher; Init preserves. */
 #define COMM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -156,7 +156,7 @@ static COMM_CODE boolean ComM_Demand(void)
     boolean demand = diagnostic || wakeup_pending;
     uint16 i;
     for (i = 0u; i < comm_configuration->user_count; ++i) {
-        if (requests[i] == COMM_FULL_COMMUNICATION) {
+        if (comm_requests[i] == COMM_FULL_COMMUNICATION) {
             demand = TRUE;
         }
     }
@@ -290,7 +290,7 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
         SchM_Enter_ComM_COMM_STATE();
         comm_configuration = ConfigPtr;
         for (i = 0u; i < COMM_USER_CAPACITY; ++i) {
-            requests[i] = COMM_NO_COMMUNICATION;
+            comm_requests[i] = COMM_NO_COMMUNICATION;
         }
         channel_state = COMM_NO_COM_NO_PENDING_REQUEST;
         communication_allowed = FALSE;
@@ -383,7 +383,7 @@ COMM_CODE Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_Mode
     index = ComM_User(User);
     if ((index < COMM_USER_CAPACITY) &&
         ((ComMode == COMM_NO_COMMUNICATION) || (ComMode == COMM_FULL_COMMUNICATION))) {
-        requests[index] = ComMode;
+        comm_requests[index] = ComMode;
         ComM_Evaluate();
         result = E_OK;
     }
@@ -400,7 +400,7 @@ COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM
     SchM_Enter_ComM_COMM_STATE();
     index = ComM_User(User);
     if ((index < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
-        *ComMode = requests[index];
+        *ComMode = comm_requests[index];
         result = E_OK;
     }
     SchM_Exit_ComM_COMM_STATE();

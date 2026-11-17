@@ -165,7 +165,7 @@ OS_MEMMAP void Os_ScheduleAutostart(AppModeType mode)
     }
 }
 
-OS_MEMMAP static void expiry(const Os_ExpiryPointType *point)
+OS_MEMMAP static void os_schedule_expiry(const Os_ExpiryPointType *point)
 {
     Os_ArtiInternalEnter();
     /* All activations precede all event settings; declaration order is not
@@ -184,7 +184,7 @@ OS_MEMMAP static void expiry(const Os_ExpiryPointType *point)
     Os_ArtiInternalLeave();
 }
 
-OS_MEMMAP static void process(uint32 initial)
+OS_MEMMAP static void os_schedule_process(uint32 initial)
 {
     uint32 index = initial;
     uint32 transitions = 0u;
@@ -196,7 +196,7 @@ OS_MEMMAP static void process(uint32 initial)
         }
         if (state->point < table->point_count) {
             TickType offset = table->points[state->point].offset;
-            expiry(&table->points[state->point]);
+            os_schedule_expiry(&table->points[state->point]);
             ++state->point;
             state->remaining =
                 ((state->point < table->point_count) ? table->points[state->point].offset
@@ -232,12 +232,12 @@ OS_MEMMAP void Os_ScheduleIncrement(CounterType counter)
         if (running[i] != 0u) {
             configASSERT(tables[i].remaining != 0u);
             --tables[i].remaining;
-            process(i);
+            os_schedule_process(i);
         }
     }
 }
 
-OS_MEMMAP static StatusType context(void)
+OS_MEMMAP static StatusType os_schedule_context(void)
 {
     Os_StackCheck();
     Os_BackendGuardService();
@@ -249,7 +249,7 @@ OS_MEMMAP static StatusType start_table(ScheduleTableType id, TickType value, si
     uint32 index;
     const Os_ScheduleTableConfigType *table;
     const Os_CounterConfigType *counter;
-    StatusType status = context();
+    StatusType status = os_schedule_context();
     if (status != E_OK) {
         return status;
     }
@@ -291,7 +291,7 @@ OS_MEMMAP static StatusType implementation_StartScheduleTableAbs(ScheduleTableTy
 OS_MEMMAP static StatusType implementation_StopScheduleTable(ScheduleTableType ScheduleTableID)
 {
     uint32 index;
-    StatusType status = context();
+    StatusType status = os_schedule_context();
     if (status != E_OK) {
         return status;
     }
@@ -325,7 +325,7 @@ OS_MEMMAP static StatusType implementation_NextScheduleTable(ScheduleTableType S
 {
     uint32 from;
     uint32 to;
-    StatusType status = context();
+    StatusType status = os_schedule_context();
     if (status != E_OK) {
         return status;
     }
@@ -364,7 +364,7 @@ OS_MEMMAP static StatusType implementation_GetScheduleTableStatus(
     if (ScheduleStatus == NULL) {
         return E_OS_ILLEGAL_ADDRESS;
     }
-    status = context();
+    status = os_schedule_context();
     if (status != E_OK) {
         return status;
     }

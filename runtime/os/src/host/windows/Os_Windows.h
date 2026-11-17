@@ -32,6 +32,8 @@
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
 OS_MEMMAP BOOL Os_HostSetEvent(HANDLE event);
+/* Stop the backend after the selected Win64 guard handler captures a stack fault. */
+OS_MEMMAP void Os_BackendStackFault(char failed_role);
 /** Create the native actor requested by the backend, retaining Win32 ownership semantics. */
 OS_MEMMAP HANDLE Os_HostCreateThread(LPSECURITY_ATTRIBUTES attributes,
                                      SIZE_T stack,

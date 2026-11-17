@@ -15,7 +15,7 @@ OS_MEMMAP static const uint8 task_name[] = @TASK_NAME@;
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONFIG_DATA_PREBUILD_64
 #include "Os_MemMap.h"
-OS_MEMMAP static const Os_TaskConfigType tasks[] = {
+OS_MEMMAP static const Os_TaskConfigType ecu_tasks[] = {
     {
         .id = @TASK_SYMBOL@,
         .name = task_name,
@@ -28,7 +28,7 @@ OS_MEMMAP static const Os_TaskConfigType tasks[] = {
         .internal_resource = 0u,
     },
 };
-OS_MEMMAP static const Os_CounterConfigType counters[] = {
+OS_MEMMAP static const Os_CounterConfigType ecu_counters[] = {
     {
         .id = @COUNTER_SYMBOL@,
         .maximum = @COUNTER_MAX@u,
@@ -38,13 +38,13 @@ OS_MEMMAP static const Os_CounterConfigType counters[] = {
     },
 };
 @OS_OBJECTS@
-OS_MEMMAP static const Os_HookConfigType hooks = {
+OS_MEMMAP static const Os_HookConfigType ecu_hooks = {
     .error = &ErrorHook,
     .pre_task = &PreTaskHook,
     .post_task = &PostTaskHook,
 };
 OS_MEMMAP static const Os_TimeConfigType time_config = {
-    .counters = counters,
+    .counters = ecu_counters,
     .counter_count = 1u,
     .alarms = @ALARM_PTR@,
     .alarm_count = @ALARM_COUNT@u,
@@ -55,11 +55,11 @@ OS_MEMMAP static const Os_TimeConfigType time_config = {
     .schedule_tables = @SCHEDULE_PTR@,
     .schedule_table_count = @SCHEDULE_COUNT@u,
 };
-OS_MEMMAP static const Os_IsrConfigType interrupts = {
+OS_MEMMAP static const Os_IsrConfigType ecu_interrupts = {
     .priorities = {[OS_INPUT_INTERRUPT] = 1u},
 };
 OS_MEMMAP const Os_TargetConfigType Ecu_OsConfig = {
-    .tasks = tasks,
+    .tasks = ecu_tasks,
     .task_count = 1u,
     .host_stack_reserve = 262144u,
     .resources = @RESOURCE_PTR@,
@@ -70,8 +70,8 @@ OS_MEMMAP const Os_TargetConfigType Ecu_OsConfig = {
     .input_task = @TASK_SYMBOL@,
     .input_event = ECU_TARGET_EVENT_IO,
     .timing = &time_config,
-    .hooks = &hooks,
-    .interrupts = &interrupts,
+    .hooks = &ecu_hooks,
+    .interrupts = &ecu_interrupts,
     .use_res_scheduler = @USE_RES_SCHEDULER@u,
 };
 
