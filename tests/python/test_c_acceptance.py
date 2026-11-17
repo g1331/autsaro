@@ -1695,13 +1695,13 @@ class AcceptanceTests(unittest.TestCase):
         self.owned_inputs()
         name = "generated/src/Ecu_RuntimeConfig.c"
         source = (
-            "/* MR12 RULE 8.9 VIOLATION: configuration retains its mapped section. */\n"
-            "static const Can_ConfigType ecu_can_driver "
-            "RTE_Can_CONFIG_DATA_PREBUILD_UNSPECIFIED = {NULL_PTR};\n"
-            "/* MR12 RULE 8.9 VIOLATION: an unreviewed configuration. */\n"
-            "static const Can_ConfigType another_driver "
-            "RTE_Can_CONFIG_DATA_PREBUILD_UNSPECIFIED = {NULL_PTR};\n"
-        ).encode()
+            b"/* MR12 RULE 8.9 VIOLATION: configuration retains its mapped section. */\n"
+            b"static const Can_ConfigType ecu_can_driver "
+            b"RTE_Can_CONFIG_DATA_PREBUILD_UNSPECIFIED = {NULL_PTR};\n"
+            b"/* MR12 RULE 8.9 VIOLATION: an unreviewed configuration. */\n"
+            b"static const Can_ConfigType another_driver "
+            b"RTE_Can_CONFIG_DATA_PREBUILD_UNSPECIFIED = {NULL_PTR};\n"
+        )
         self.files[name] = source
         owners = json.loads(self.files["meta/workbench-ownership.json"])
         owners["files"].append({
