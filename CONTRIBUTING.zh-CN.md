@@ -66,6 +66,14 @@ IPC 声明从 Rust 命令签名及实际序列化 DTO 生成。修改后运行 `
 
 解析、生成和运行行为的修改应有独立预期及关键拒绝路径。生成代码每个输出只渲染一次，计划不能保证的前提报告为诊断；Clippy 在这些模块拒绝 panic 和文本修补，见测试说明。修改 C 或生成 C 模板时遵守 [C 编码规范](docs/development/c-coding-standard.md)，并按仓库 MISRA 指导执行；公开 C 接口说明输入、输出和错误契约。
 
+执行 `uv run --locked pre-commit install --hook-type commit-msg --allow-missing-config` 安装提交说明钩子。
+它只检查当前说明，规则与 `quality` 共用：type 使用下文列出的小写值，可选 scope 写受影响的模块或区域，
+`!` 搭配 `BREAKING CHANGE:` 脚注。标题和正文均拒绝 GitHub 的九种关闭关键字加 `#N`、
+`owner/repo#N` 或 Issue URL，也检查大写关键字和可选冒号；普通引用使用 `Refs #N`。
+合并提交和 `git revert` 生成的说明跳过。`quality --merge-base origin/master` 检查分叉点之后的每条新提交，
+已有历史保持原样。CI 按真实 PR head 与 base 检查提交区间；master push 检查新引入的 `before..HEAD`。
+首次 push 检查全部可达提交；手动 CI 使用必填的基准输入。
+
 ## 资源与提交
 
 修改交付资源后运行 `uv run --locked python -m autosar_tooling assets check`。运行时摘要由构建计算；`assets update` 只更新独立 seal guard 清单。BSW ABI 与第三方身份单独审阅；资产测试核对固定检出换行，见[资源维护](docs/maintainers/assets.md)。

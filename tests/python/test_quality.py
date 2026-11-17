@@ -13,6 +13,191 @@ from unittest.mock import patch
 from autosar_tooling import quality
 
 
+class CommitMessageTests(unittest.TestCase):
+    def test_source_quality_propagates_commit_failures(self):
+        from contextlib import ExitStack
+
+        from autosar_tooling import c_standard, documentation
+
+        with ExitStack() as stack:
+            for name in (
+                'source_paths', 'scoped_paths', 'plan_number_errors',
+                'document_size_errors', 'paired_tool_errors',
+            ):
+                stack.enter_context(patch.object(quality, name, return_value=[]))
+            stack.enter_context(patch.object(quality, 'renamed_sources', return_value={}))
+            for name in ('runtime_findings', 'deviation_findings', 'baseline_errors'):
+                stack.enter_context(patch.object(c_standard, name, return_value=set()))
+            stack.enter_context(patch.object(documentation, 'check', return_value=[]))
+            commits = stack.enter_context(patch.object(
+                quality, 'commit_range_errors', return_value=['commit abc12345: invalid title'],
+            ))
+            self.assertEqual(quality.check('base', commit_head='topic'), [
+                'commit abc12345: invalid title',
+            ])
+            commits.assert_called_once_with('base', 'topic')
+
+    def test_conventional_titles_and_breaking_footer(self):
+        for message in (
+            "feat: add support", "fix(dcm): handle timeout", "ci(workflows): check messages",
+            "feat(rte)!: change contract\n\nBREAKING CHANGE: regenerate clients\n",
+            "docs: describe usage\n\nRefs #12\n", "chore: update tools",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(quality.commit_message_errors(message, "abc12345"), [])
+        for message in (
+            "add support", "Feat: add support", "style: tidy", "fix(): handle timeout",
+            "fix(bad scope): handle timeout", "fix: ", "feat!: change contract",
+        ):
+            with self.subTest(message=message):
+                errors = quality.commit_message_errors(message, "abc12345")
+                self.assertTrue(errors)
+                self.assertIn("abc12345", errors[0])
+                self.assertIn(repr(message), errors[0])
+
+    def test_all_closing_keywords_and_reference_forms_in_title_and_body(self):
+        for keyword in (
+            "close", "closes", "closed", "fix", "fixes", "fixed",
+            "resolve", "resolves", "resolved",
+        ):
+            for reference in ("#12", "owner/repo#12", "https://github.com/owner/repo/issues/12"):
+                for text in (
+                    f"{keyword} {reference}", f"{keyword.upper()}: {reference}",
+                    f"{keyword}:{reference}",
+                ):
+                    for message in (f"fix: {text}", f"fix: handle timeout\n\n{text}\n"):
+                        with self.subTest(message=message):
+                            errors = quality.commit_message_errors(message, "abc12345")
+                            self.assertEqual(len(errors), 1, errors)
+                            self.assertIn("closing keyword", errors[0])
+                            self.assertIn(text, errors[0])
+        for text in ("Refs #12", "prefix #12", "fix timeout", "closes /tmp/issues/12"):
+            self.assertEqual(
+                quality.commit_message_errors(f"fix: handle timeout\n\n{text}", "a"), [],
+            )
+
+    def test_merge_and_generated_revert_exemptions(self):
+        self.assertEqual(quality.commit_message_errors(
+            "Merge branch 'topic'\nCloses #12", "a", merge=True,
+        ), [])
+        revert = 'Revert "fix: handle timeout"\n\nThis reverts commit ' + 'a' * 40 + '.\n'
+        self.assertEqual(quality.commit_message_errors(revert, "a"), [])
+        self.assertEqual(quality.commit_message_errors(
+            revert + '\nSigned-off-by: Test <test@example.com>\n', 'a',
+        ), [])
+        self.assertTrue(quality.commit_message_errors('Revert "arbitrary bypass"', "a"))
+        self.assertTrue(quality.commit_message_errors("Merge branch 'fake'", "a"))
+
+    def test_real_pr_range_excludes_target_commits_and_checks_every_topic_commit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def git(*args):
+                return subprocess.check_output(
+                    ['git', '-c', 'user.name=t', '-c', 'user.email=t@t', *args],
+                    cwd=root, text=True, stderr=subprocess.STDOUT, input='',
+                ).strip()
+
+            git('init', '--quiet', '-b', 'master')
+            git('commit', '--quiet', '--allow-empty', '-m', 'legacy title')
+            base = git('rev-parse', 'HEAD')
+            git('switch', '--quiet', '-c', 'topic')
+            (root / 'topic-file').write_text('topic\n')
+            git('add', 'topic-file')
+            git('commit', '--quiet', '--allow-empty', '-m', 'fix: fix #12')
+            invalid = git('rev-parse', 'HEAD')
+            git('commit', '--quiet', '--allow-empty', '-m', 'test: cover messages')
+            head = git('rev-parse', 'HEAD')
+            git('switch', '--quiet', 'master')
+            (root / 'target-file').write_text('target\n')
+            git('add', 'target-file')
+            git('commit', '--quiet', '--allow-empty', '-m', 'unrelated legacy target')
+            target = git('rev-parse', 'HEAD')
+            git('merge', '--quiet', '--no-ff', 'topic', '-m', 'Merge PR\n\nCloses #12')
+            with patch.object(quality, 'ROOT', root):
+                for start, end in ((base, head), (target, head), (target, 'HEAD')):
+                    errors = quality.commit_range_errors(start, end)
+                    self.assertEqual(len(errors), 1, errors)
+                    self.assertIn(invalid[:8], errors[0])
+                    self.assertIn('fix: fix #12', errors[0])
+                self.assertEqual(quality.commit_range_errors(head, head), [])
+                empty = git('hash-object', '-w', '-t', 'tree', '--stdin')
+                self.assertEqual(len(quality.commit_range_errors(empty, base)), 1)
+                with self.assertRaises(RuntimeError):
+                    quality.commit_range_errors('missing', head)
+            merge = git('rev-parse', 'HEAD')
+            git('revert', '--no-edit', '-m', '1', 'HEAD')
+            with patch.object(quality, 'ROOT', root):
+                self.assertEqual(quality.commit_range_errors(merge), [])
+            (root / 'file').write_text('content\n')
+            git('add', 'file')
+            git('commit', '--quiet', '-m', 'test: add file')
+            before_revert = git('rev-parse', 'HEAD')
+            git('revert', '--no-edit', 'HEAD')
+            with patch.object(quality, 'ROOT', root):
+                self.assertEqual(quality.commit_range_errors(before_revert), [])
+
+    def test_required_ci_passes_the_real_pr_head_with_full_history(self):
+        import yaml
+
+        workflow = yaml.safe_load((quality.ROOT / '.github/workflows/checks.yml').read_text())
+        job = workflow['jobs']['quality']
+        checkout = next(
+            s for s in job['steps'] if s.get('uses', '').startswith('actions/checkout@')
+        )
+        self.assertEqual(checkout['with']['fetch-depth'], 0)
+        step = next(s for s in job['steps'] if '--commit-head' in s.get('run', ''))
+        self.assertIn('--base "$CHECK_BASE"', step['run'])
+        self.assertIn('--commit-head "$COMMIT_HEAD"', step['run'])
+        self.assertEqual(
+            step['env']['COMMIT_HEAD'], '${{ github.event.pull_request.head.sha || github.sha }}',
+        )
+        self.assertIn('quality', workflow['jobs']['required']['needs'])
+
+    def test_installed_commit_msg_hook_uses_quality_cli(self):
+        import yaml
+
+        config = yaml.safe_load((quality.ROOT / '.pre-commit-config.yaml').read_text())
+        hook = next(h for h in config['repos'][0]['hooks'] if h['id'] == 'commit-message')
+        self.assertEqual(
+            hook['entry'], 'uv run --locked python -m autosar_tooling quality --commit-msg',
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(['git', 'init', '--quiet', str(root)], check=True)
+            hook['entry'] = shlex.join([
+                sys.executable, '-m', 'autosar_tooling', 'quality', '--commit-msg',
+            ])
+            config['repos'][0]['hooks'] = [hook]
+            (root / '.pre-commit-config.yaml').write_text(json.dumps(config), encoding='utf-8')
+            environment = {
+                **os.environ, 'PRE_COMMIT_HOME': str(root / 'hook-cache'),
+                'PYTHONPATH': str(quality.ROOT / 'tools/python/src'),
+            }
+            subprocess.run(
+                [sys.executable, '-m', 'pre_commit', 'install', '--hook-type', 'commit-msg'],
+                cwd=root, env=environment, check=True, capture_output=True,
+            )
+            for message, valid in (
+                ('fix: handle timeout\n\nRefs #12', True), ('missing type', False),
+                ('fix: handle timeout\n\nCloses #12', False),
+            ):
+                result = subprocess.run(
+                    ['git', '-c', 'user.name=t', '-c', 'user.email=t@t',
+                     'commit', '--allow-empty', '-m', message],
+                    cwd=root, env=environment, capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode == 0, valid, result.stdout + result.stderr)
+                if not valid:
+                    self.assertIn('COMMIT_EDITMSG', result.stdout + result.stderr)
+            merge_path = root / '.git/MERGE_HEAD'
+            merge_path.write_text('a' * 40 + '\n')
+            message_file = root / '.git/COMMIT_EDITMSG'
+            message_file.write_text("Merge branch 'topic'\n\nCloses #12\n")
+            with patch.object(quality, 'ROOT', root):
+                self.assertEqual(quality.main(['--commit-msg', str(message_file)]), 0)
+
+
 class QualityTests(unittest.TestCase):
     def test_command_failure_keeps_stage_command_raw_exit_and_both_streams(self):
         with patch.object(quality.subprocess, "run", return_value=subprocess.CompletedProcess(

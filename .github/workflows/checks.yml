@@ -555,7 +555,11 @@ jobs:
               subprocess.run(['git', 'rev-parse', '--verify', base + '^{commit}'], check=True)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('CHECK_BASE=' + base + '\n')
-      - run: uv run --locked python -m autosar_tooling quality --scope all --base "$CHECK_BASE"
+      # Check real PR commits, while source checks still inspect the synthetic merge.
+      # Pushes check before..HEAD; a first push uses the empty-tree baseline above.
+      - run: uv run --locked python -m autosar_tooling quality --scope all --base "$CHECK_BASE" --commit-head "$COMMIT_HEAD"
+        env:
+          COMMIT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       # Accounts each committed catalog in core/resources/requirements (ADR 0017) without the archive.
       - name: Requirement dispositions
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -m autosar_tooling requirements
