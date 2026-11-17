@@ -28,8 +28,8 @@ static const Com_ConfigType *com_configuration
 static uint32
     signal_values[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Native UINT32 signal values; Init reloads. */
 static uint32 remaining[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Rx-main periods left; Init resets. */
-static boolean reloaded_before_main[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Reloaded in this Rx
-                                                                      tick; Init resets. */
+static boolean reloaded_before_main[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Reloaded in this Rx tick;
+                                                                      Init resets. */
 /* Notifications owed per Rx PDU: every reception is acknowledged (SWS_Com_00883), repeated
  * timeouts coalesce, and the event recorded last is also delivered last, so a stale timeout
  * never follows a fresh reception. */
