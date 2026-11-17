@@ -23,6 +23,11 @@ stack 测试夹具在 OS 初始化后的 `StartupHook` 中清除抑制位，并�
 会抑制 WER，因此由这些测试夹具选择性清除。`WerSetFlags`／`WerGetFlags` 由现有 Kernel32 提供，
 无需额外导入库；固定 MinGW 的实际退出程序已核对导入表。
 
+故意崩溃的探针在进程内保持 `SEM_NOGPFAULTERRORBOX`：`port-restart.exe` 的 `unhandled`、`foreign`
+模式与 stack 夹具的 `unrelated` 场景以预期的未处理异常结束，若进入 WER 会写约 10 MB 完整转储，
+转储耗时还会超过测试的 10 秒期限（#543）。LocalDumps 的全局配置保持不变，新增故意崩溃的
+探针沿用同一做法。
+
 自然复发后先保存同一作业的 dump 与现有失败现场，使用 Windows SDK 的 x64 `cdb`：
 
 ```text
