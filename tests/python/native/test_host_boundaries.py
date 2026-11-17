@@ -1142,18 +1142,18 @@ void Os_TestAfterFaultReader(void)
                 source = target / "src/Os_Error.c"
                 text = source.read_text(encoding="utf-8")
                 if variant == "clear":
-                    anchor = "        parameters = empty_parameters;"
+                    anchor = "        os_error_parameters = empty_parameters;"
                     self.assertEqual(text.count(anchor), 1)
                     text = text.replace(anchor, "")
                 elif variant == "phase":
-                    anchor = "return (phase == OS_HOOK_ERROR) ? &parameters : &empty_parameters;"
+                    anchor = "return (os_error_phase == OS_HOOK_ERROR) ? &os_error_parameters : &empty_parameters;"
                     self.assertEqual(text.count(anchor), 1)
-                    text = text.replace(anchor, "return &parameters;")
+                    text = text.replace(anchor, "return &os_error_parameters;")
                 anchor = "#define OS_STOP_SEC_CODE"
                 self.assertEqual(text.count(anchor), 1)
                 text = text.replace(anchor,
                     "OS_MEMMAP const void *Os_TestStoredErrorPointer(void) {\n"
-                    "    return parameters.service_GetTaskState.State;\n}\n" + anchor)
+                    "    return os_error_parameters.service_GetTaskState.State;\n}\n" + anchor)
                 source.write_text(text, encoding="utf-8")
                 fixture = target / "tests/error_hooks.c"
                 text = fixture.read_text(encoding="utf-8")
@@ -1216,10 +1216,10 @@ void Os_TestAfterFaultReader(void)
                 if variant in {"save", "restore", "recursion"}:
                     source = target / "src/Os_Error.c"
                     text = source.read_text(encoding="utf-8")
-                    anchor = ("context->parameters = parameters;" if variant == "save" else
-                              "parameters = context->parameters;")
+                    anchor = ("context->parameters = os_error_parameters;" if variant == "save" else
+                              "os_error_parameters = context->parameters;")
                     replacement = anchor + ("\n    context->parameters.service_GetTaskState.State = NULL;"
-                        if variant == "save" else "\n    parameters.service_GetTaskState.State = NULL;")
+                        if variant == "save" else "\n    os_error_parameters.service_GetTaskState.State = NULL;")
                     if variant == "recursion":
                         anchor, replacement = "(error_active == 0) && ", ""
                     self.assertEqual(text.count(anchor), 1)
@@ -1291,9 +1291,9 @@ void Os_TestAfterFaultReader(void)
                     source = target / "src/Os_Error.c"
                     text = source.read_text(encoding="utf-8")
                     selection = ("const Os_ErrorParametersType *const sources[2] = {&empty_parameters, arguments};\n"
-                                 "        parameters = *sources[OS_USE_PARAMETER_ACCESS];")
+                                 "        os_error_parameters = *sources[OS_USE_PARAMETER_ACCESS];")
                     self.assertEqual(text.count(selection), 1)
-                    source.write_text(text.replace(selection, "parameters = *arguments;"), encoding="utf-8")
+                    source.write_text(text.replace(selection, "os_error_parameters = *arguments;"), encoding="utf-8")
                 with os_suites.native_session(directory, "disabled-error-parameters"):
                     binary, _ = os_suites.build(directory, "error_hooks.c", target=target,
                         defines=(f"OS_USE_GET_SERVICE_ID={service_access}", f"OS_USE_PARAMETER_ACCESS={parameter_access}"))
