@@ -150,9 +150,9 @@ jobs:
       - run: python -m autosar_tooling.ci_reporting run -- cargo test --locked --manifest-path fuzz/Cargo.toml
       - run: cargo clippy --locked --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
   desktop:
-    # Short checks follow preparation so long native jobs can claim the first runners.
-    needs: [changes, c-analysis-generate, c-analysis-generate-windows]
-    if: ${{ !cancelled() && needs.changes.outputs.application == 'true' }}
+    # Desktop checks build from checkout and have no generated-sample inputs.
+    needs: changes
+    if: needs.changes.outputs.application == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -171,6 +171,28 @@ jobs:
       - uses: ./.github/actions/core-build-dependencies
         with:
           linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
+      - name: Identify desktop dependency cache image
+        if: ${{ !cancelled() }}
+        id: desktop-cache-image
+        shell: python
+        run: |
+          import os
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('image=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: desktop-dependencies
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/debug/.fingerprint
+            target/debug/build
+            target/debug/deps
+          key: >-
+            ${{ format('desktop-dev-deps-v1-{0}-{1}-{2}-{3}', runner.os, runner.arch,
+            steps.desktop-cache-image.outputs.image,
+            hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'core/Cargo.toml',
+            'src-tauri/Cargo.toml', '.github/actions/core-build-dependencies/action.yml')) }}
       - if: ${{ !cancelled() }}
         run: npm ci --prefix ui
       - if: ${{ !cancelled() }}
@@ -189,6 +211,10 @@ jobs:
         run: cargo build --locked -p autosar-config-desktop
       - if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
+      # Store dependency objects only. Each run builds and checks both workspace crates.
+      - name: Remove workspace objects before saving desktop dependencies
+        if: ${{ !cancelled() && success() && steps.desktop-dependencies.outputs.cache-hit != 'true' }}
+        run: cargo clean --locked --workspace --profile dev
   native:
     # Native suites that need GCC but no licensed archive; the rest stay in acceptance.yml.
     needs: changes

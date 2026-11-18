@@ -427,6 +427,21 @@ class CiSelectionTests(unittest.TestCase):
             if "run" in step:
                 self.assertIn("!cancelled()", step["if"])
 
+    def test_desktop_reuses_dependencies_without_reusing_workspace_outputs(self):
+        steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]["steps"]
+        cache_index, cache = next((i, step) for i, step in enumerate(steps)
+                                  if step.get("id") == "desktop-dependencies")
+        clean = steps[-1]
+        self.assertEqual(clean["run"], "cargo clean --locked --workspace --profile dev")
+        self.assertIn("success()", clean["if"])
+        self.assertIn("steps.desktop-dependencies.outputs.cache-hit != 'true'", clean["if"])
+        self.assertIn("runner.arch", cache["with"]["key"])
+        self.assertIn("steps.desktop-cache-image.outputs.image", cache["with"]["key"])
+        self.assertIn("'Cargo.lock'", cache["with"]["key"])
+        for step in steps[cache_index + 1:-1]:
+            if "run" in step:
+                self.assertNotIn("cache-hit", step["if"])
+
     def test_context_artifact_keeps_exact_sources_and_raw_summary_without_analyzer_intermediates(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
         for job in ("c-analysis-gates", "c-analysis-gates-windows"):
@@ -691,14 +706,14 @@ class CiSelectionTests(unittest.TestCase):
                         else:
                             with self.assertRaisesRegex(RuntimeError, "Incomplete platform/sample"):
                                 runpy.run_path(str(script))
-        for name in ("python", "desktop"):
-            job = workflow[name]
-            self.assertEqual(set(job["needs"]),
-                             {"changes", "c-analysis-generate", "c-analysis-generate-windows"})
-            # The status function explicitly permits a skipped producer on UI-only PRs.
-            condition = "${{ !cancelled() && needs.changes.outputs.code == 'true' }}"
-            self.assertEqual(job["if"], condition.replace("outputs.code", "outputs.application")
-                             if name == "desktop" else condition)
+        python = workflow["python"]
+        self.assertEqual(set(python["needs"]),
+                         {"changes", "c-analysis-generate", "c-analysis-generate-windows"})
+        # The status function explicitly permits skipped producers on UI-only PRs.
+        self.assertEqual(python["if"], "${{ !cancelled() && needs.changes.outputs.code == 'true' }}")
+        desktop = workflow["desktop"]
+        self.assertEqual(desktop["needs"], "changes")
+        self.assertEqual(desktop["if"], "needs.changes.outputs.application == 'true'")
 
     def test_analysis_rejects_duplicate_sample_inputs_before_running_tools(self):
         jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
