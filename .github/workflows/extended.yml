@@ -128,7 +128,9 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2025-vs2026]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # Windows runs the four receiver interpreters in 25-30 minutes (about six each plus setup)
+    # against about eight on Linux, so it gets its own limit with headroom.
+    timeout-minutes: ${{ startsWith(matrix.os, 'windows') && 45 || 30 }}
     env:
       AUTOSAR_C_ANALYSIS_SAMPLES: ${{ github.workspace }}/build/c-analysis-samples
     steps:
