@@ -21,7 +21,8 @@ def make_link(test: unittest.TestCase, link: Path, target: str | Path, *, direct
             test.skipTest("junctions are Windows directory links")
         import _winapi
 
-        _winapi.CreateJunction(str(Path(link.parent, target)), str(link))
+        # A junction needs a plain absolute target.
+        _winapi.CreateJunction(os.path.normpath(os.path.join(link.parent, target)), str(link))
         return
     try:
         os.symlink(os.path.normpath(target), link, target_is_directory=directory)
