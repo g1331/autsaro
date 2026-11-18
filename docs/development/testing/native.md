@@ -10,6 +10,8 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 进程测试需 `AUTOSAR_PYTHON` 指向支持的绝对解释器路径；受管进程的探针是测试辅助脚本 `tests/python/process/probe.py`。官方对照的档案准备见[官方对照](official.md)；native 测试需对应平台的受控 GCC/binutils。OS suites 由 unittest 按 suite 生成测试，可用 `-k stack` 等筛选，只在与当前宿主一致的目标上运行；测试名对应 suite，进程失败信息包含阶段、命令和原始退出状态。
 
+复用已编译的原生测试前，核对交付资产字节；资产仅改注释或换行，也须先经 Cargo 重建测试二进制及其嵌入的摘要，再运行检测器。
+
 需要保留 OS 的编译产物和进程日志时，设置 `AUTOSAR_OS_OUTPUT_DIRECTORY` 为新的结果目录，unittest 按 suite 保存到该目录。已有目录不会被覆盖；未指定时仍只保留失败现场。
 
 `native` 在两平台以 `--features native-tests --lib --test native --no-fail-fast` 运行全部原生 Rust 套件。Windows 分为 protocol、sealed／single-component／release-contracts、其余 integration 与其余测试四片，按枚举的完整测试名分类，长尾单项归 rest；每项恰好一次，Linux 全量。工具取已安装的受控 GCC、binutils、Git 与 uv 环境。失败现场输出 `scratch retained at …`，消息附子进程输出末尾；临时根以 `native-scratch-*` 上传并保留 14 天。

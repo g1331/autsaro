@@ -324,7 +324,7 @@ fn rte_bswmd_uses_source_revision_and_describes_allocations_and_each_api_depende
                     "rte_value_0_expired",
                     "schm_lifecycle",
                     "diagnostic_session_mode",
-                    "authentication_mode",
+                    "schm_authentication_mode",
                 ][..],
             ),
             (

@@ -1051,8 +1051,8 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
         expected_gaps = {
-            "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R2.7", "R5.3", "R5.6",
-            "R5.8", "R5.9", "R7.2", "R7.4", "R8.2", "R8.3", "R8.4", "R8.5", "R8.6", "R8.7",
+            "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R5.3", "R5.6",
+            "R5.9", "R8.2", "R8.3", "R8.7",
             "R8.9", "R8.13", "R9.1", "R9.2", "R9.3", "R10.4", "R10.7",
             "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.8", "R11.9",
             "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3", "R15.4",
@@ -1062,13 +1062,13 @@ class AcceptanceTests(unittest.TestCase):
             "R20.7", "R20.8", "R20.9", "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 63)
+        self.assertEqual(len(expected_gaps), 56)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 63)
+        self.assertEqual(len(objects), 56)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 63)
+        self.assertEqual(len(located), 56)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1085,7 +1085,7 @@ class AcceptanceTests(unittest.TestCase):
                              "docs/standards/types/language-constructs/" + filename)
         satisfied = {row["id"]: row for row in records if row["status"] == "satisfied"}
         lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.4", "R6.1", "R6.2"}
-        declarations = {"R8.10", "R8.11", "R8.12", "R8.14", "R9.4", "R9.5"}
+        declarations = {"R8.4", "R8.5", "R8.6", "R8.10", "R8.11", "R8.12", "R8.14", "R9.4", "R9.5"}
         expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
                        "R13.3", "R13.4", "R13.6"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
@@ -1097,13 +1097,14 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(set(satisfied),
                          lexical | declarations | expressions | control_flow
                          | preprocessing | library
-                         | {"R7.1", "R7.3", "R12.3", "R15.5"})
+                         | {"R2.7", "R5.8", "R7.1", "R7.2", "R7.3",
+                            "R7.4", "R12.3", "R15.5"})
         self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
         for guideline in lexical:
             self.assertEqual(satisfied[guideline]["source"]["file"],
                              "docs/standards/types/language-constructs/lexical.md")
         by_id = {row["id"]: row for row in records}
-        self.assertEqual(by_id["R7.2"]["status"], "not_assessed")
+        self.assertEqual(by_id["R7.2"]["status"], "satisfied")
         self.assertIn("#if／#elif", by_id["R7.2"]["conclusion"])
         self.assertEqual(by_id["R7.1"]["status"], "satisfied")
         self.assertIn("O_RDONLY→00", by_id["R7.1"]["conclusion"])
@@ -1115,9 +1116,9 @@ class AcceptanceTests(unittest.TestCase):
                            "R2.7", "R5.3", "R5.6", "R5.8", "R5.9", "R7.1", "R7.2",
                            "R7.3", "R7.4"}
         self.assertEqual(len(batch), 24)
-        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 10)
-        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 14)
-        blocked = {"R8.2", "R8.3", "R8.4", "R8.5", "R8.6", "R8.7", "R8.9", "R8.13",
+        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 14)
+        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 10)
+        blocked = {"R8.2", "R8.3", "R8.7", "R8.9", "R8.13",
                    "R9.1", "R9.2", "R9.3"}
         for guideline in declarations | blocked:
             self.assertEqual(by_id[guideline]["status"],
@@ -1151,8 +1152,51 @@ class AcceptanceTests(unittest.TestCase):
                     self.assertIn("#443", record["conclusion"])
         self.assertEqual(by_id["R13.6"]["category"], "Required")
         self.assertIn("Os_CounterWorkType", by_id["R13.1"]["conclusion"])
-        self.assertIn("define／undef", by_id["R7.2"]["conclusion"])
-        self.assertIn("0xffffffffffffffff", by_id["R7.2"]["conclusion"])
+        self.assertIn("LP64／LLP64", by_id["R7.2"]["conclusion"])
+        self.assertIn("INFINITE→0xffffffff", by_id["R7.2"]["conclusion"])
+        declaration_evidence = {
+            "R1.2": ("not_assessed", "#547", "受控编译器"),
+            "R1.3": ("not_assessed", "#547", "Appendix H"),
+            "R2.1": ("not_assessed", "#547", "defensive"),
+            "R2.2": ("not_assessed", "#547", "TC2.3–4"),
+            "R2.3": ("not_assessed", "#547", "28个物理位置"),
+            "R2.4": ("not_assessed", "#547", "QueuePointers／SemaphoreData"),
+            "R2.5": ("not_assessed", "#547", "define／undef"),
+            "R2.7": ("satisfied", "878", "975", "void"),
+            "R5.3": ("not_assessed", "#547", "嵌套 scope"),
+            "R5.6": ("not_assessed", "#547", "Rte_Instance"),
+            "R5.8": ("satisfied", "HostBatch／probe", "物理 owner"),
+            "R5.9": ("not_assessed", "#547", "#551", "36个", "8个", "53个", "producer"),
+            "R7.2": ("satisfied", "#424", "235／239", "#444", "24次"),
+            "R7.4": ("satisfied", "TC2.7–8", "Arti_Record", "task_name"),
+            "R8.2": ("not_assessed", "#547", "Det_ErrorHookType"),
+            "R8.3": ("not_assessed", "#547", "Os_Closing", "TCB_t *"),
+            "R8.4": ("satisfied", "TASK", "task.h", "定义前声明"),
+            "R8.5": ("satisfied", "vApplicationTickHook", "物理 owner"),
+            "R8.6": ("satisfied", "Os_PortTaskLoop", ".global", "tentative"),
+            "R8.7": ("not_assessed", "#547", "68个物理报告"),
+            "R8.9": ("not_assessed", "#547", "ecu_can_driver", "ecu_comm_users"),
+            "R8.13": ("not_assessed", "#547", "callback", "constPointer"),
+            "R9.1": ("not_assessed", "#547", "Mandatory", "部分输出"),
+            "R9.2": ("not_assessed", "#547", "208", "compound literal"),
+            "R9.3": ("not_assessed", "#547", "容量—元素"),
+        }
+        self.assertEqual(len(declaration_evidence), 25)
+        for guideline, (status, *evidence) in declaration_evidence.items():
+            with self.subTest(declaration=guideline):
+                row = by_id[guideline]
+                self.assertEqual(row["status"], status)
+                filename = ("declarations.md" if guideline.startswith(("R8.", "R9."))
+                            else "lexical.md")
+                if guideline == "R7.2":
+                    filename = "README.md"
+                self.assertEqual(row["source"]["file"],
+                                 "docs/standards/types/language-constructs/" + filename)
+                text = (self.root / row["source"]["file"]).read_text(encoding="utf-8")
+                physical = text.splitlines()[row["source"]["line"] - 1]
+                self.assertTrue(physical.startswith("| " + guideline + " |"))
+                for phrase in evidence:
+                    self.assertIn(phrase, row["conclusion"])
         control_evidence = {
             "R14.1": "altstacks[].storage", "R14.2": "TC1", "R14.3": "TC2.27–28",
             "R15.1": "replacement", "R15.2": "findGotoLabel", "R15.3": "switch-clause",
@@ -1332,9 +1376,9 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # Current Linux user input has the already-reviewed standard kernel closure.
-        # Keep that precise identity and both labels; other local groups remain separate.
-        reviewed = "97b38fa83d04d7e197eaa0bfc62331e68a838853f5cdb33d3febcf68306d9fd8"
+        # Actual CI standard/user inputs share the selected kernel closure.
+        # Lock its recomputed identity and both labels; other local groups stay separate.
+        reviewed = "a6bec2db29dcf7a4d3ed1a8e8758900b8c7faa39ac89f763ed604ed9ff0f0be3"
         self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
         self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
@@ -1647,6 +1691,62 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         self.bind_groups(statuses={"checker-limitations": "pending"})
 
+    def test_generated_mapped_configuration_requires_exact_record_and_provenance(self):
+        self.owned_inputs()
+        name = "generated/src/Ecu_RuntimeConfig.c"
+        source = (
+            b"/* MR12 RULE 8.9 VIOLATION: configuration retains its mapped section. */\n"
+            b"static const Can_ConfigType ecu_can_driver "
+            b"RTE_Can_CONFIG_DATA_PREBUILD_UNSPECIFIED = {NULL_PTR};\n"
+            b"/* MR12 RULE 8.9 VIOLATION: an unreviewed configuration. */\n"
+            b"static const Can_ConfigType another_driver "
+            b"RTE_Can_CONFIG_DATA_PREBUILD_UNSPECIFIED = {NULL_PTR};\n"
+        )
+        self.files[name] = source
+        owners = json.loads(self.files["meta/workbench-ownership.json"])
+        owners["files"].append({
+            "path": name, "sha256": hashlib.sha256(source).hexdigest(),
+            "owner": "configuration", "producerId": "autosar-workbench-config",
+        })
+        self.summary["diagnostics"] = [{
+            "id": "misra-c2012-8.9", "programs": ["host-batch", "probe"],
+            "locations": [{"file": name, "line": line, "column": 1}],
+        } for line in (2, 4)]
+
+        def evaluate_source(data, producer="autosar-workbench-config", valid_digest=True):
+            self.files[name] = data
+            row = owners["files"][-1]
+            row["producerId"] = producer
+            row["sha256"] = hashlib.sha256(data).hexdigest() if valid_digest else "0" * 64
+            self.files["meta/workbench-ownership.json"] = json.dumps(owners).encode()
+            self.seal()
+            self.summary["sourceSealSha256"] = c_acceptance.digest(
+                self.project / "meta/files.sha256")
+            self.bind_groups()
+            self.bind(self.context(group="owned-source", status="approved"))
+            return self.evaluate()
+
+        result = evaluate_source(source)
+        self.assertEqual(result["occurrences"][0]["assessment"], "accepted")
+        self.assertEqual(result["occurrences"][0]["reason"], "owned_source_approved")
+        self.assertEqual(result["occurrences"][1]["assessment"], "blocked")
+        self.assertEqual(result["occurrences"][0]["location"]["file"], name)
+        self.assertEqual(result["occurrences"][0]["location"]["line"], 2)
+        for label, data, producer, valid_digest in (
+            ("marker", source.replace(b"MR12 RULE 8.9 VIOLATION", b"mapping", 1),
+             "autosar-workbench-config", True),
+            ("shape", source.replace(b"const Can_ConfigType", b"Can_ConfigType", 1),
+             "autosar-workbench-config", True),
+            ("entity", source.replace(b"ecu_can_driver", b"unreviewed_driver", 1),
+             "autosar-workbench-config", True),
+            ("producer", source, "unknown-producer", True),
+            ("digest", source, "autosar-workbench-config", False),
+        ):
+            with self.subTest(generated=label):
+                result = evaluate_source(data, producer, valid_digest)
+                self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
+        self.assertEqual(evaluate_source(source)["occurrences"][0]["assessment"], "accepted")
+
     def test_owned_host_address_is_reported_outside_current_acceptance(self):
         self.owned_inputs(host_address=True)
         context = self.context(group="owned-source", status="approved")
@@ -1770,7 +1870,7 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_owned_required_risk_record_keeps_formal_obligation(self):
         self.owned_inputs()
-        self.select_owned("runtime/os/src/Os_Error.c", "18.6", "context->parameters = parameters;")
+        self.select_owned("runtime/os/src/Os_Error.c", "18.6", "context->parameters = os_error_parameters;")
         occurrence = self.evaluate()["occurrences"][0]
         self.assertEqual(occurrence["status"], "owned_record_matched")
         self.assertEqual(occurrence["entity"], "Os_ErrorContextSave")

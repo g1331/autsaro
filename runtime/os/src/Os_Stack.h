@@ -64,8 +64,6 @@ OS_MEMMAP const void *Os_StackSavedContext(const Os_NativeStackType *stack);
 
 OS_MEMMAP void Os_StackRecordBuffer(const StackType_t *top);
 
-OS_MEMMAP void Os_BackendStackFault(char failed_role);
-
 OS_MEMMAP void Os_StackFatalExit(void);
 
 OS_MEMMAP int Os_StackHasFault(void);

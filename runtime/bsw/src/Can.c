@@ -71,7 +71,7 @@ static uint8 can_initialized CAN_VAR_CLEARED;             /**< 1 between Init an
 static uint64 driver_lifetime CAN_VAR_CLEARED;            /**< Successful Init count. */
 static Can_TxSinkType tx_sink CAN_VAR_CLEARED;            /**< Host output; set by Init. */
 static CanMode can_controller_mode CAN_VAR_CLEARED;       /**< Controller state; Init: STOPPED. */
-static uint8 bus_off CAN_VAR_CLEARED;                     /**< In bus-off; Init resets. */
+static uint8 can_bus_off CAN_VAR_CLEARED;                 /**< In bus-off; Init resets. */
 static uint8 busoff_notification_pending CAN_VAR_CLEARED; /**< Bus-off for CanIf; Init resets. */
 
 /* Transmit slot, one L-PDU at a time. Can_Write sets tx_pending; the flush clears it and sets
@@ -171,7 +171,7 @@ CAN_CODE void Can_Init(const Can_ConfigType *Config)
         tx_sink = Config->sink;
         can_initialized = 1u;
         can_controller_mode = CAN_STOPPED;
-        bus_off = 0u;
+        can_bus_off = 0u;
         busoff_notification_pending = 0u;
         tx_pending = 0u;
         tx_confirmation_pending = 0u;
@@ -192,7 +192,7 @@ CAN_CODE void Can_DeInit(void)
         tx_cancelled = 1u;
         tx_sink = NULL_PTR;
         can_controller_mode = CAN_STOPPED;
-        bus_off = 0u;
+        can_bus_off = 0u;
         busoff_notification_pending = 0u;
         tx_pending = 0u;
         tx_confirmation_pending = 0u;
@@ -212,7 +212,7 @@ CAN_CODE Std_ReturnType Can_SetControllerMode(uint8 Controller, Can_ControllerSt
         (mode_notification_pending == 0u) && (busoff_notification_pending == 0u)) {
         if ((Transition == CAN_CS_STARTED) && (can_controller_mode == CAN_STOPPED)) {
             can_controller_mode = CAN_STARTED;
-            bus_off = 0u;
+            can_bus_off = 0u;
             pending_controller_mode = CAN_CS_STARTED;
             mode_notification_pending = 1u;
             result = E_OK;
@@ -270,7 +270,7 @@ CAN_CODE Std_ReturnType Can_GetControllerErrorState(uint8 ControllerId,
     SchM_Enter_Can_CAN_STATE();
     if ((can_initialized != 0u) && (ControllerId == CAN_CONTROLLER_ID) &&
         (ErrorStatePtr != NULL_PTR)) {
-        *ErrorStatePtr = (bus_off != 0u) ? CAN_ERRORSTATE_BUSOFF : CAN_ERRORSTATE_ACTIVE;
+        *ErrorStatePtr = (can_bus_off != 0u) ? CAN_ERRORSTATE_BUSOFF : CAN_ERRORSTATE_ACTIVE;
         result = E_OK;
     }
     SchM_Exit_Can_CAN_STATE();
@@ -483,7 +483,7 @@ CAN_CODE void Can_InternalSetMode(CanMode mode)
         (void)Can_CancelHostTransmit();
         can_controller_mode = CAN_STOPPED;
         (void)Can_ClearPolledRx();
-        bus_off = 1u;
+        can_bus_off = 1u;
         tx_pending = 0u;
         tx_cancelled = 1u;
         tx_confirmation_pending = 0u;
@@ -491,7 +491,7 @@ CAN_CODE void Can_InternalSetMode(CanMode mode)
     } else {
         mode_notification_pending = 0u;
         can_controller_mode = mode;
-        bus_off = 0u;
+        can_bus_off = 0u;
         if (mode != CAN_STARTED) {
             (void)Can_ClearPolledRx();
             (void)Can_CancelHostTransmit();
@@ -534,7 +534,7 @@ CAN_CODE CanMode Can_InternalGetMode(void)
     CanMode mode;
     SchM_Enter_Can_CAN_STATE();
     mode = can_controller_mode;
-    if (bus_off != 0u) {
+    if (can_bus_off != 0u) {
         mode = CAN_BUS_OFF;
     }
     SchM_Exit_Can_CAN_STATE();
@@ -799,7 +799,7 @@ static CAN_CODE void Can_ConfirmImmediateTx(void) { Can_ConfirmTx(); }
 #include "Can_MemMap.h"
 static CAN_CODE void Can_RecordBusOff(void)
 {
-    if (bus_off == 0u) {
+    if (can_bus_off == 0u) {
         busoff_notification_pending = 1u;
     }
 }

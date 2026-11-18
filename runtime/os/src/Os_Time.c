@@ -51,13 +51,14 @@ OS_MEMMAP static uint64
 OS_MEMMAP static uint64
     confirmed_epoch; /**< Owner-Task epoch, tick_state ordered; no Init reset. */
 
-OS_MEMMAP static uint64 action_count; /**< Port-locked action total; TimeInit does not reset. */
+OS_MEMMAP static uint64
+    os_time_action_count; /**< Port-locked action total; TimeInit does not reset. */
 
 OS_MEMMAP static uint64
     error_count; /**< Port-locked action-error total; TimeInit does not reset. */
 
 OS_MEMMAP static Os_TickCompletionType
-    completion; /**< Owner-Task snapshot, tick_state published; no Init reset. */
+    os_time_completion; /**< Owner-Task snapshot, tick_state published; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_PTR
@@ -306,10 +307,10 @@ OS_MEMMAP sint32 Os_TimeSignalFailed(void)
 
 OS_MEMMAP void Os_TimeReportAction(StatusType status)
 {
-    if (action_count == UINT64_MAX) {
+    if (os_time_action_count == UINT64_MAX) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    ++action_count;
+    ++os_time_action_count;
     if (status != E_OK) {
         if (error_count == UINT64_MAX) {
             Os_BackendShutdown(E_OS_STATE);
@@ -321,7 +322,7 @@ OS_MEMMAP void Os_TimeReportAction(StatusType status)
     }
 }
 
-OS_MEMMAP static void action(uint32 index)
+OS_MEMMAP static void os_time_action(uint32 index)
 {
     const Os_AlarmConfigType *alarm = &Os_Config->timing->alarms[index];
     StatusType status = E_OK;
@@ -393,7 +394,7 @@ OS_MEMMAP static void advance_counter(uint32 counter)
                                             ? 0u
                                             : (values[child] + UINT64_C(1));
                     } else {
-                        action(i);
+                        os_time_action(i);
                     }
                 }
             }
@@ -632,7 +633,7 @@ OS_MEMMAP static void Os_TimeTick(void)
         if (InterlockedCompareExchange(&tick_state, 0, 0) != TIME_PROCESSING) {
             Os_BackendShutdown(E_OS_STATE);
         }
-        action_count = 0u;
+        os_time_action_count = 0u;
         error_count = 0u;
         /* Host timer counters are registers driven by the actual controlled
          * kernel tick ISR. Standard IncrementCounter cannot write them. */
@@ -698,7 +699,7 @@ OS_MEMMAP StatusType Os_TargetAdvanceOneTick(uint64 epoch, uint64 *ticket)
         return E_OS_STATE;
     }
     if (epoch == confirmed_epoch) {
-        *ticket = completion.ticket;
+        *ticket = os_time_completion.ticket;
         return E_OK;
     }
     if (confirmed_epoch == UINT64_MAX) {
@@ -743,10 +744,10 @@ OS_MEMMAP StatusType Os_TargetTickCompletion(uint64 ticket, Os_TickCompletionTyp
     if ((state != 0) && (state != TIME_COMPLETE)) {
         return E_OS_NOFUNC;
     }
-    if (ticket != completion.ticket) {
+    if (ticket != os_time_completion.ticket) {
         return E_OS_ID;
     }
-    *record = completion;
+    *record = os_time_completion;
     return E_OK;
 }
 
@@ -906,12 +907,12 @@ OS_MEMMAP void Os_TimeOnWaiting(TaskType id, EventMaskType pending, EventMaskTyp
         }
     }
     if (publish) {
-        completion.epoch = requested_epoch;
-        completion.ticket = requested_epoch;
-        completion.kernel_tick = (uint32)xTaskGetTickCount();
-        completion.counter = Os_TimeCounterValue(config->system_counter);
-        completion.alarm_actions = action_count;
-        completion.action_errors = error_count;
+        os_time_completion.epoch = requested_epoch;
+        os_time_completion.ticket = requested_epoch;
+        os_time_completion.kernel_tick = (uint32)xTaskGetTickCount();
+        os_time_completion.counter = Os_TimeCounterValue(config->system_counter);
+        os_time_completion.alarm_actions = os_time_action_count;
+        os_time_completion.action_errors = error_count;
         if (Os_HostSetEvent(completion_event) == 0) {
             (void)InterlockedExchange(&signal_failed, 1);
             Os_BackendRequestShutdown(E_OS_STATE);
@@ -947,10 +948,10 @@ OS_MEMMAP void Os_TimeTestSeed(uint64 epoch, uint32 kernel_tick, TickType value)
     vTaskOsTestTick((TickType_t)kernel_tick);
     values[configured_counter_index(Os_Config->timing->system_counter)] = value;
     confirmed_epoch = epoch;
-    completion.epoch = epoch;
-    completion.ticket = epoch;
-    completion.kernel_tick = kernel_tick;
-    completion.counter = value;
+    os_time_completion.epoch = epoch;
+    os_time_completion.ticket = epoch;
+    os_time_completion.kernel_tick = kernel_tick;
+    os_time_completion.counter = value;
 }
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"

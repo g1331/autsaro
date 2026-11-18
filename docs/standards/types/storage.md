@@ -104,3 +104,27 @@ R8.9为Advisory、System（主文印刷71／PDF79；AMD2.27追加C11，AMD4.43�
 | R22.19 | Required | System／C11 | not_applicable | 一个C11 condition variable至多关联一个mutex（AMD4.34，29）。同一源码没有cnd_*；pthread条件变量按原生对象身份和锁协议核查，不作C11对象满足声明。 |
 | R22.20 | Mandatory | System／C11 | not_applicable | TSS指针先经tss_create创建才访问（AMD4.34，29–30）。同一源码没有tss_t/tss_*；glibc TLS分配及Windows线程存储仍按采用责任、D4.12和R22.1处理。 |
 <!-- misra-manual-end -->
+
+## 生成 CAN 配置的有界处置
+
+第八批对照固定 R24-11 MemoryMapping PDF 第 36–37 页全文及第 37 页的
+Example 7.2／7.3。00003 要求声明／定义以 START、include、实体、STOP、include
+包装；00018 要求所有 BSW／SWC C 对象支持可配置分配；00023 禁止函数体内包含
+映射头，并说明需特殊映射的函数静态变量必须移到文件静态作用域。
+
+`ecu_can_driver` 由 `core/src/integration/ecu_config.rs::init_data` 生成，位于独立
+`RTE_Can_CONFIG_DATA_PREBUILD_UNSPECIFIED` 段，由 `Ecu_StackBootstrap` 交 `Can_Init` 检查并复制 sink；后者仅在调用中读取配置。
+保留理由是 00003／00018 要求的可配置数据段：自动对象转入函数栈会失去该段归属，
+块内 static 复用 CODE 属性也会丢失数据段，块内重新包含映射头违反 00023。因此保留真实 R8.9
+Advisory，类型、内容、地址存活期、唯一初始化及原始诊断保持。风险限同 TU 的意外
+访问，文件 static、const、单一初始化消费者、MemMap 配对与实际封存启动约束它。
+对象类型、段、owner、消费者或配置变化时重评。
+
+| 规则 | 精确范围 | 映射及消费／控制 | 原授权 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Rule 8.9 | `generated/src/Ecu_RuntimeConfig.c` 中 `ecu_can_driver` | 标准／用户行 279、组件行 281、无诊断行 266；SWS_MemMap_00003／00018／00023，PDF36–37。CONFIG_DATA_PREBUILD_UNSPECIFIED；Ecu_StackBootstrap → Can_Init。shape=`static const Can_ConfigType ecu_can_driver RTE_Can_CONFIG_DATA_PREBUILD_UNSPECIFIED = {NULL_PTR};`；源行与相邻 MR12 由当前已封存生成字节核查。 | 维护者 编排者 2026-11-17 的[本批有界决定](https://github.com/g1331/autsaro/issues/514#issuecomment-6937675403)，ADR 0023；独立复核归本批 PR |
+
+同次改名的 `ecu_comm_users` 由 `comm_config` 的文件作用域初始化直接引用，继而经
+ComM_Init 保存到模式配置。标识符的实际引用包含函数外初始化，R8.9 的单函数条件
+未成立；原始扫描没有 users 的 R8.9 报告。本对象保持 static const 及完整用户数组，
+按实际结果结算，不为它新增违反记录。改名严格比较逐项保存原行和新行，诊断保持。
