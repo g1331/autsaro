@@ -220,11 +220,12 @@ jobs:
                         for path in value.split(os.pathsep) if path]
               # Search order decides which metadata wins when a module is present twice.
               native.update(os.fsencode(os.pathsep.join(search)) + b'\0')
-              root = Path.cwd().anchor
+              root = None
               files = {path for entry in search for path in optional_entries(Path(entry).absolute())
                        if path.suffix == '.pc'}
           for path in sorted(files):
-              native.update(os.fsencode(path.relative_to(root).as_posix()) + b'\0')
+              name = path.relative_to(root) if root is not None else path
+              native.update(os.fsencode(name.as_posix()) + b'\0')
               with path.open('rb') as content:
                   native.update(hashlib.file_digest(content, 'sha256').digest())
           print(f'Hashed {len(files)} native dependency files in {perf_counter() - started:.3f}s')
