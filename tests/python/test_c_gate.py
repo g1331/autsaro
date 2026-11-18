@@ -328,7 +328,7 @@ class SourceGateTests(unittest.TestCase):
             self.assertIn("${{ strategy.job-index }}", artifact["name"])
             self.assertIn("${{ env.ANALYSIS_SIDE }}", artifact["name"])
             self.assertEqual([path.rsplit("/", 1)[1] for path in artifact["path"].splitlines()],
-                             ["summary.json", "project", "analysis-identity.json",
+                             ["summary.json", "project", "analysis-identity.json", "identifier-evidence",
                               "baseline-source.json", "platform-model.h", "platform-library.cfg"])
             self.assertEqual(current["env"]["ANALYSIS_SIDE"], "current")
             self.assertEqual(baseline["env"]["ANALYSIS_SIDE"], "baseline")

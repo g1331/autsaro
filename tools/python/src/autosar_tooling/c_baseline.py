@@ -24,7 +24,7 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessResult, ProcessSpec, run_bounded
 
-from autosar_tooling import c_acceptance, c_check, c_comparison, c_gate
+from autosar_tooling import c_acceptance, c_check, c_comparison, c_gate, c_rename
 from autosar_tooling.config import ROOT
 
 FORMAT = "c-analysis-raw-baseline-v1"
@@ -92,6 +92,7 @@ def record(output: Path, tree: str, target: str, sample: str) -> None:
     (output / "analysis-identity.json").write_text(json.dumps({
         "format": FORMAT, "identity": value,
         "summarySha256": digest(output / "summary.json"),
+        "identifierEvidence": c_rename.record(output, summary),
         "run": int(os.environ["GITHUB_RUN_ID"]) if os.environ.get("GITHUB_RUN_ID") else None,
         "attempt": int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")),
     }, indent=2) + "\n", encoding="utf-8")
@@ -180,6 +181,7 @@ def restore(candidate: Path, project: Path, output: Path, tree: str,
     if (manifest["format"] != FORMAT
             or manifest["summarySha256"] != digest(candidate / "summary.json")):
         raise ValueError("Cached raw analysis receipt identity differs")
+    c_rename.verify(candidate, manifest.get("identifierEvidence", {}))
     c_acceptance._complete(summary)
     sealed_sources(project)
     compiler = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")

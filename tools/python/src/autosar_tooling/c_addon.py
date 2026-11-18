@@ -32,6 +32,27 @@ def findings(configuration, root: Path):
             yield token, "hostThreadInBsw", "Host thread creation belongs in the OS/host adapter."
 
 
+def private_bindings(configuration, source: str) -> dict:
+    """Record physical uses of translation-unit-private objects for the source gate."""
+    declarations = {
+        variable.nameToken.Id: variable.nameToken for variable in configuration.variables
+        if variable.isGlobal and variable.isStatic and not variable.isExtern
+        and variable.nameToken and variable.nameToken.file == source
+    }
+    bindings = []
+    for token in configuration.tokenlist:
+        if token.file != source or not token.variable or not token.variable.nameToken:
+            continue
+        definition = declarations.get(token.variable.nameToken.Id)
+        if definition is not None and token.str == definition.str:
+            bindings.append((token.linenr, token.column, token.str, definition.linenr, definition.column))
+    # Cppcheck gives a block-scope extern a separate variable ID even when C
+    # gives it the linkage of a visible file-scope static declaration.
+    externs = sorted({variable.nameToken.str for variable in configuration.variables
+                      if variable.isExtern and variable.nameToken})
+    return {"uses": bindings, "externs": externs}
+
+
 def main() -> int:
     # Cppcheck's addon runtime supplies this module; never vendor its implementation.
     directory = next((arg.split("=", 1)[1] for arg in sys.argv if arg.startswith("--data-directory=")), None)
@@ -53,10 +74,12 @@ def main() -> int:
         configurations = 0
         units = set()
         unsigned = []
+        bindings = []
         inputs = set(data.files)
         inputs.update(token.file for token in data.rawTokens)
         for configuration in data.iterconfigurations():
             configurations += 1
+            bindings.append(private_bindings(configuration, data.files[0]))
             inputs.update(directive.file for directive in configuration.directives)
             inputs.update(token.file for token in configuration.tokenlist)
             units.update(str(Path(token.file).resolve()) for token in configuration.tokenlist
@@ -76,7 +99,7 @@ def main() -> int:
         receipt.write_text(json.dumps({"units": sorted(units), "configurations": configurations,
                                       "source": str(Path(data.files[0]).resolve()),
                                       "files": sorted({str(Path(name).resolve()) for name in inputs if name}),
-                                      "unsignedLiterals": unsigned}), encoding="utf-8")
+                                      "unsignedLiterals": unsigned, "privateBindings": bindings}), encoding="utf-8")
     return cppcheckdata.EXIT_CODE
 
 
