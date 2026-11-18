@@ -37,22 +37,36 @@ class DesktopWorkflowTests(unittest.TestCase):
             directory = Path(temporary).resolve()
             tests = directory / 'tests/desktop'
             tests.mkdir(parents=True)
-            (tests / 'pass.test.mjs').write_text("import test from 'node:test'; test('selected pass', () => {});", encoding='utf-8')
-            (tests / 'fail.test.mjs').write_text("import test from 'node:test'; test('selected fail', () => { throw new Error('shard failure'); });", encoding='utf-8')
-            (directory / 'outside.test.mjs').write_text("throw new Error('must not run');", encoding='utf-8')
-            for assigned, selected, status in (
-                ('pass', 'tests/desktop/*.test.mjs', 0),
-                ('fail', 'tests/desktop/*.test.mjs', 1),
-                ('fail', 'tests/desktop/pass.test.mjs', 0),
-                ('pass', 'tests/desktop/missing.test.mjs', 1),
-                ('windows-paths', 'tests/desktop/*.test.mjs', 0),
-                ('pass', str(tests / 'pass.test.mjs'), 0),
-                ('fail', str(tests / 'fail.test.mjs'), 1),
-                ('fail', str(tests / 'pass.test.mjs'), 0),
-                ('pass', './tests/desktop/pass.test.mjs', 0),
-                ('pass', str(directory / 'outside.test.mjs'), 1),
+            # Record callback execution even when Node only reports the file result.
+            for file, marker, failure in (
+                (tests / 'pass.test.mjs', 'pass', ''),
+                (tests / 'fail.test.mjs', 'fail', "throw new Error('shard failure');"),
+                (directory / 'outside.test.mjs', 'outside', "throw new Error('must not run');"),
+            ):
+                file.write_text(
+                    "import { appendFileSync } from 'node:fs';\n"
+                    "import test from 'node:test';\n"
+                    f"test('selected {marker}', () => {{\n"
+                    f"  appendFileSync(process.env.EXECUTION_LOG, '{marker}\\n');\n"
+                    f"  {failure}\n"
+                    "});\n",
+                    encoding='utf-8',
+                )
+            execution_log = directory / 'executions.log'
+            for assigned, selected, status, executions in (
+                ('pass', 'tests/desktop/*.test.mjs', 0, ['pass']),
+                ('fail', 'tests/desktop/*.test.mjs', 1, ['fail']),
+                ('fail', 'tests/desktop/pass.test.mjs', 0, []),
+                ('pass', 'tests/desktop/missing.test.mjs', 1, []),
+                ('windows-paths', 'tests/desktop/*.test.mjs', 0, ['pass']),
+                ('pass', str(tests / 'pass.test.mjs'), 0, ['pass']),
+                ('fail', str(tests / 'fail.test.mjs'), 1, ['fail']),
+                ('fail', str(tests / 'pass.test.mjs'), 0, []),
+                ('pass', './tests/desktop/pass.test.mjs', 0, ['pass']),
+                ('pass', str(directory / 'outside.test.mjs'), 1, []),
             ):
                 with self.subTest(assigned=assigned, selected=selected):
+                    execution_log.write_text('', encoding='utf-8')
                     windows = assigned == 'windows-paths'
                     invocation = script.replace(
                         "import { globSync } from 'node:fs';",
@@ -60,10 +74,18 @@ class DesktopWorkflowTests(unittest.TestCase):
                     ) if windows else script
                     result = subprocess.run(
                         ['node', '--input-type=module', '-e', invocation], cwd=directory,
-                        env={**os.environ, 'SHARD_FILES': 'pass' if windows else assigned, 'SCENARIOS': selected, 'TEST_CONCURRENCY': '1'},
+                        env={
+                            **os.environ,
+                            'SHARD_FILES': 'pass' if windows else assigned,
+                            'SCENARIOS': selected,
+                            'TEST_CONCURRENCY': '1',
+                            'EXECUTION_LOG': str(execution_log),
+                        },
                         capture_output=True, text=True, check=False,
                     )
                     self.assertEqual(result.returncode, status, result.stdout + result.stderr)
-                    if (assigned == 'pass' or windows) and status == 0:
-                        self.assertIn('selected pass', result.stdout)
-                        self.assertNotIn('selected fail', result.stdout)
+                    self.assertEqual(
+                        execution_log.read_text(encoding='utf-8').splitlines(),
+                        executions,
+                        result.stdout + result.stderr,
+                    )
