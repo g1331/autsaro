@@ -427,6 +427,125 @@ class CiSelectionTests(unittest.TestCase):
             if "run" in step:
                 self.assertIn("!cancelled()", step["if"])
 
+    def test_desktop_reuses_dependencies_without_reusing_workspace_outputs(self):
+        job = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]
+        steps = job["steps"]
+        cache_index, cache = next((i, step) for i, step in enumerate(steps)
+                                  if step.get("id") == "desktop-dependencies")
+        install_index = next(i for i, step in enumerate(steps)
+                             if step.get("uses") == "./.github/actions/core-build-dependencies")
+        identity_index = next(i for i, step in enumerate(steps)
+                              if step.get("id") == "desktop-cache-inputs")
+        self.assertLess(install_index, identity_index)
+        self.assertLess(identity_index, cache_index)
+        self.assertNotIn("continue-on-error", steps[identity_index])
+        self.assertNotIn("continue-on-error", job)
+        self.assertEqual(steps[identity_index]["if"], "${{ !cancelled() && success() && runner.os == 'Windows' }}")
+        self.assertEqual(cache["if"],
+                         "runner.os == 'Windows' && steps.desktop-cache-inputs.outputs.image != '' && "
+                         "steps.desktop-cache-inputs.outputs.native != ''")
+        clean = steps[-1]
+        self.assertEqual(clean["run"], "cargo clean --locked --workspace --profile dev")
+        self.assertIn("success()", clean["if"])
+        self.assertIn("runner.os == 'Windows'", clean["if"])
+        self.assertIn("steps.desktop-dependencies.outputs.cache-hit != 'true'", clean["if"])
+        options = cache["with"]
+        self.assertNotIn("restore-keys", options)
+        for value in ("runner.os", "runner.arch", "steps.desktop-cache-inputs.outputs.image",
+                      "steps.desktop-cache-inputs.outputs.native", "'rust-toolchain.toml'", "'Cargo.lock'"):
+            self.assertIn(value, options["key"])
+        for step in steps[cache_index + 1:-1]:
+            if "run" in step:
+                self.assertNotIn("cache-hit", step["if"])
+
+    def test_desktop_cleans_native_probe_packages_before_cargo_builds(self):
+        steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]["steps"]
+        indices = {step.get("id"): i for i, step in enumerate(steps)}
+        self.assertIn("refresh-native-probes", indices)
+        index = indices["refresh-native-probes"]
+        self.assertLess(indices["desktop-dependencies"], index)
+        clean = steps[index]
+        self.assertEqual(clean["if"], "${{ !cancelled() && success() && runner.os == 'Windows' }}")
+        self.assertNotIn("continue-on-error", clean)
+        for i, step in enumerate(steps):
+            command = step.get("run", "")
+            if any(text in command for text in ("cargo test ", "ipc:check", "cargo build ")):
+                self.assertLess(index, i)
+                self.assertIn("runner.os != 'Windows' || steps.refresh-native-probes.outcome == 'success'",
+                              step["if"])
+            if "cargo clippy " in command:
+                self.assertEqual(step["if"], "${{ !cancelled() && runner.os == 'Linux' }}")
+
+        def package(name, kind, dependency):
+            return {"name": name, "dependencies": [{"kind": kind, "name": dependency}]}
+
+        packages = [package("web", "build", "system-deps"), package("xml", "build", "vcpkg"),
+                    package("vswhom-sys", "build", "cc"),
+                    package("native", "build", "pkg-config"), package("regular", None, "pkg-config"),
+                    package("other", "build", "anyhow")]
+        with mock.patch.object(subprocess, "check_output") as query, mock.patch.object(subprocess, "run") as run:
+            metadata_command = ["cargo", "metadata", "--locked", "--format-version", "1",
+                                "--filter-platform", "host-triple"]
+            query.side_effect = ["host-triple\n", json.dumps({"packages": packages}).encode()]
+            run_script(clean["run"])
+            self.assertEqual(query.call_args_list, [
+                mock.call(["rustc", "--print", "host-tuple"], text=True), mock.call(metadata_command),
+            ])
+            run.assert_called_once_with(
+                ["cargo", "clean", "--locked", "--profile", "dev",
+                 "-p", "native", "-p", "vswhom-sys", "-p", "web", "-p", "xml"],
+                check=True,
+            )
+            run.reset_mock()
+            query.side_effect = ["host-triple\n", json.dumps({"packages": packages[-2:]}).encode()]
+            with self.assertRaisesRegex(RuntimeError, "No Cargo packages"):
+                run_script(clean["run"])
+            run.assert_not_called()
+
+    def test_desktop_identity_binds_installed_native_dependencies(self):
+        steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]["steps"]
+        script = next(step["run"] for step in steps if step.get("id") == "desktop-cache-inputs")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "output"
+            vcpkg = root / "installed"
+            installed_files = (
+                vcpkg / "x64-windows-static-md/share/libxml2/metadata",
+                vcpkg / "vcpkg/status",
+                vcpkg / "vcpkg/info/libxml2_2.13.5_x64-windows-static-md.list",
+                vcpkg / "vcpkg/updates/0001",
+                root / "packages/libxml2_x64-windows-static-md/lib/pkgconfig/libxml-2.0.pc",
+            )
+            for path in installed_files:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"original")
+            env = {"ImageOS": "image", "ImageVersion": "1", "GITHUB_OUTPUT": str(output),
+                   "VCPKG_ROOT": str(root), "VCPKGRS_TRIPLET": "x64-windows-static-md"}
+
+            def identity():
+                output.write_text("", encoding="utf-8")
+                with mock.patch.dict(os.environ, env):
+                    run_script(script)
+                return dict(line.split("=", 1) for line in output.read_text().splitlines())
+
+            original = identity()
+            self.assertEqual(original["image"], "image-1")
+            for path in installed_files:
+                with self.subTest(metadata=path.name):
+                    path.write_bytes(b"changed")
+                    self.assertNotEqual(original["native"], identity()["native"])
+                    path.write_bytes(b"original")
+            manifest = installed_files[2]
+            installed_files[1].unlink()
+            self.assertNotEqual(original["native"], identity()["native"])
+            installed_files[1].write_bytes(b"original")
+            manifest.unlink()
+            self.assertNotEqual(original["native"], identity()["native"])
+            manifest.parent.rmdir()
+            with self.assertRaises(FileNotFoundError):
+                identity()
+            self.assertEqual(output.read_bytes(), b"")
+
     def test_context_artifact_keeps_exact_sources_and_raw_summary_without_analyzer_intermediates(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
         for job in ("c-analysis-gates", "c-analysis-gates-windows"):
@@ -691,14 +810,14 @@ class CiSelectionTests(unittest.TestCase):
                         else:
                             with self.assertRaisesRegex(RuntimeError, "Incomplete platform/sample"):
                                 runpy.run_path(str(script))
-        for name in ("python", "desktop"):
-            job = workflow[name]
-            self.assertEqual(set(job["needs"]),
-                             {"changes", "c-analysis-generate", "c-analysis-generate-windows"})
-            # The status function explicitly permits a skipped producer on UI-only PRs.
-            condition = "${{ !cancelled() && needs.changes.outputs.code == 'true' }}"
-            self.assertEqual(job["if"], condition.replace("outputs.code", "outputs.application")
-                             if name == "desktop" else condition)
+        python = workflow["python"]
+        self.assertEqual(set(python["needs"]),
+                         {"changes", "c-analysis-generate", "c-analysis-generate-windows"})
+        # The status function explicitly permits skipped producers on UI-only PRs.
+        self.assertEqual(python["if"], "${{ !cancelled() && needs.changes.outputs.code == 'true' }}")
+        desktop = workflow["desktop"]
+        self.assertEqual(desktop["needs"], "changes")
+        self.assertEqual(desktop["if"], "needs.changes.outputs.application == 'true'")
 
     def test_analysis_rejects_duplicate_sample_inputs_before_running_tools(self):
         jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
@@ -1050,6 +1169,9 @@ class CiSelectionTests(unittest.TestCase):
         script = workflow["required"]["steps"][0]["run"]
         native_jobs = {"core", "native", "native-os", "native-sanitizers",
                        "native-delivery", "native-delivery-windows"}
+        self.assertEqual(set(workflow["required"]["needs"]), native_jobs | {
+            "changes", "desktop-scenarios", "python", "desktop", "quality", "c-analysis",
+        })
         for mode, selected in (
             ("full", {"code": True, "native": True, "desktop": True,
                       "analysis": True, "application": True}),
