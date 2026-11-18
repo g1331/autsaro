@@ -242,7 +242,7 @@ class CiSelectionTests(unittest.TestCase):
         script = yaml.safe_load(WORKFLOW.read_text())["jobs"]["changes"]["steps"][1]["run"]
         analysis = ["tools/python/src/autosar_tooling/" + name + ".py"
                     for name in ("c_check", "c_acceptance", "c_sdk",
-                                 "c_comparison", "c_addon", "c_gate", "c_baseline")]
+                                 "c_comparison", "c_addon", "c_gate", "c_baseline", "c_rename")]
         analysis += ["docs/standards/os/adoption.md", "docs/standards/types/declarations.md",
                      ".agents/skills/misra-c2012/references/baseline-index.json"]
         full = ["tools/python/src/autosar_tooling/c_standard.py",
@@ -311,7 +311,8 @@ class CiSelectionTests(unittest.TestCase):
 
     def test_analysis_drivers_are_outside_skipped_python_consumers(self):
         drivers = {"autosar_tooling." + name for name in
-                   ("c_check", "c_acceptance", "c_sdk", "c_comparison", "c_addon", "c_gate", "c_baseline")}
+                   ("c_check", "c_acceptance", "c_sdk", "c_comparison",
+                    "c_addon", "c_gate", "c_baseline", "c_rename")}
         modules = {}
         for path in (ROOT / "tools/python/src").rglob("*.py"):
             name = path.relative_to(ROOT / "tools/python/src").with_suffix("").as_posix()
