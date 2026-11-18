@@ -13,6 +13,7 @@ from autosar_tooling import c_comparison, c_sdk
 from autosar_tooling.c_comparison import compare
 from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
 from ecu_tools.build import digest
+from link_fixtures import make_link
 
 
 def inventory(files):
@@ -480,13 +481,9 @@ class CComparisonTests(unittest.TestCase):
             (provider / file).write_bytes(text.encode())
         for name, target in (links or {}).items():
             link = provider / name
-            link.parent.mkdir(parents=True, exist_ok=True)
-            destination = (Path(os.path.relpath(provider / target, link.parent))
+            destination = (os.path.relpath(provider / target, link.parent)
                            if relative_links else provider / target)
-            try:
-                link.symlink_to(destination, target_is_directory=(provider / target).is_dir())
-            except OSError as error:
-                self.skipTest(f"links are unavailable here: {error}")
+            make_link(self, link, destination, directory=(provider / target).is_dir())
         summary = deepcopy(template)
         paths = [provider / file for file in opened]
         compiler = summary["semanticIdentity"]["compiler"]

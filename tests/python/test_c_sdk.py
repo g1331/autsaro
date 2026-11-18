@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from unittest.mock import patch
 
 from autosar_tooling import c_sdk
+from link_fixtures import make_link
 
 TARGET = "windows-x64-controlled-v1"
 
@@ -1077,6 +1078,58 @@ class SdkSourceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "inventory missing, empty or incomplete"):
             c_sdk.validate_inventory({"sdkHeaders": []})
 
+    def test_a_directory_link_is_followed_and_recorded_as_symlink_and_as_junction(self):
+        for style in ("symlink", "junction"):
+            with self.subTest(style=style), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                path = root / "elsewhere/d.h"
+                path.parent.mkdir()
+                path.write_bytes(b"d\n")
+                records = [(str(path), {
+                    "provider": "libc6-dev", "version": "9", "header": "p/d.h",
+                    "algorithm": "md5", "expected": "e" * 32,
+                    "sha256": hashlib.sha256(b"d\n").hexdigest()})]
+                (root / "include").mkdir()
+                make_link(self, root / "include/linked", "../elsewhere", directory=True,
+                          junction=style == "junction")
+                inventory = c_sdk.search_inventory(records, [root / "include"], root)
+                self.assertEqual(list(inventory["files"]), ["include/linked/d.h"])
+                self.assertEqual(inventory["links"], {
+                    "include/linked": {"kind": "dir", "target": "elsewhere"}})
+
+    def test_an_unusable_link_is_dangling_and_a_real_failure_is_not_hidden(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "include").mkdir()
+            make_link(self, root / "include/gone.h", "missing/target.h", directory=False)
+            inventory = c_sdk.search_inventory(
+                [(str(root / "include/x"), {"provider": "libc6-dev", "version": "9",
+                                            "header": "p/x", "algorithm": "md5",
+                                            "expected": "e" * 32, "sha256": "f" * 64})],
+                [root / "include"], root)
+            self.assertEqual(inventory["links"], {"include/gone.h": {
+                "kind": "dangling", "target": "include/missing/target.h"}})
+        # An error on a plain entry is not a dangling link.
+        class Broken:
+            path = "x"
+
+            def is_dir(self):
+                raise OSError("unreadable")
+
+        with self.assertRaises(OSError):
+            c_sdk.entry_kind(Broken(), False)
+        self.assertIsNone(c_sdk.entry_kind(Broken(), True))
+
+    def test_extended_length_prefixes_do_not_reach_the_names(self):
+        windows = PureWindowsPath("C:/msys64")
+        self.assertEqual(c_sdk.plain_path("\\\\?\\C:\\msys64\\mingw64"), "C:\\msys64\\mingw64")
+        self.assertEqual(c_sdk.plain_path("\\\\?\\UNC\\host\\share\\x"), "\\\\host\\share\\x")
+        self.assertEqual(c_sdk.plain_path("/usr/include"), "/usr/include")
+        self.assertEqual(c_sdk.relative_name("\\\\?\\C:\\msys64\\mingw64\\include", windows),
+                         "mingw64/include")
+        self.assertEqual(c_sdk.link_target("\\\\?\\D:\\x\\include", windows),
+                         "outside:D:/x/include")
+
     def test_search_inventory_records_every_link_and_enters_each_real_directory_once(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -1102,11 +1155,8 @@ class SdkSourceTests(unittest.TestCase):
                      "include/alias.h": ("../lib/libc.a", False),  # provider file, other place
                      "include/foreignlink.h": ("../foreign-out.h", False),
                      "include/dangling.h": ("missing", False)}
-            try:
-                for name, (target, directory) in links.items():
-                    (root / name).symlink_to(target, target_is_directory=directory)
-            except OSError as error:
-                self.skipTest(f"links are unavailable here: {error}")
+            for name, (target, directory) in links.items():
+                make_link(self, root / name, target, directory=directory)
             inventory = c_sdk.search_inventory(records, [root / "include"], root)
             self.assertEqual(inventory["format"], "sdk-search-inventory-v1")
             # Foreign files, libraries not reached by a path and other directories stay out;

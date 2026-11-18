@@ -749,8 +749,16 @@ def relative_name(path: str | Path, root: PurePath) -> str:
 
     The target's path syntax decides containment, not the syntax of the running host.
     """
-    pure = type(root)(path)
+    pure = type(root)(plain_path(path))
     return pure.relative_to(root).as_posix() if pure.is_relative_to(root) else pure.as_posix()
+
+
+def plain_path(path: str | Path) -> str:
+    """A Windows extended-length prefix names the same file; names do not carry it."""
+    text = os.fspath(path)
+    if text.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + text[8:]
+    return text.removeprefix("\\\\?\\")
 
 
 def include_search(header_log: str, directory: Path, root: PurePath, environ: dict) -> dict:
@@ -829,10 +837,25 @@ def environment_identity(packages: dict) -> dict:
 
 def link_target(path: str, root: PurePath) -> str:
     """A link's resolved target, relative to the provider root or explicitly outside it."""
-    pure = type(root)(path)
+    pure = type(root)(plain_path(path))
     if pure.is_relative_to(root):
         return pure.relative_to(root).as_posix()
     return "outside:" + pure.as_posix()
+
+
+def entry_kind(entry: os.DirEntry, link: bool) -> str | None:
+    """"dir" or "file" for what an entry leads to, None when a link leads nowhere usable.
+
+    Windows reports a symlink whose target syntax is invalid (a relative target written
+    with forward slashes, say) as an error instead of a missing file; such a link is as
+    dangling as one whose target is absent.
+    """
+    try:
+        return "dir" if entry.is_dir() else "file" if entry.is_file() else None
+    except OSError:
+        if not link:
+            raise
+        return None
 
 
 def walk_search_directory(directory: Path, visited: set):
@@ -854,7 +877,8 @@ def walk_search_directory(directory: Path, visited: set):
         for entry in children:
             real = os.path.realpath(entry.path)
             link = entry.is_symlink() or entry.is_junction()
-            if entry.is_dir():
+            kind = entry_kind(entry, link)
+            if kind == "dir":
                 seen = os.path.normcase(real) in visited
                 if link:
                     yield "link", entry.path, real, "dir"
@@ -866,8 +890,8 @@ def walk_search_directory(directory: Path, visited: set):
                     yield from walk(entry.path)
             else:
                 if link:
-                    yield "link", entry.path, real, "file" if entry.is_file() else "dangling"
-                if entry.is_file():
+                    yield "link", entry.path, real, kind or "dangling"
+                if kind == "file":
                     yield "file", entry.path
 
     yield from walk(directory)
