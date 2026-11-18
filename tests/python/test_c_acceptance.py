@@ -1058,16 +1058,16 @@ class AcceptanceTests(unittest.TestCase):
             "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3",
             "R17.2", "R17.7", "R18.1", "R18.2", "R18.3", "R18.4",
             "R18.5", "R18.6", "R19.1", "R20.5",
-            "R20.7", "R20.8", "R20.9", "R20.10", "R21.1",
+            "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 49)
+        self.assertEqual(len(expected_gaps), 46)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 49)
+        self.assertEqual(len(objects), 46)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 49)
+        self.assertEqual(len(located), 46)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1091,7 +1091,7 @@ class AcceptanceTests(unittest.TestCase):
                         "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7",
                         "R15.4", "R15.6", "R15.7", "R17.4", "R17.5", "R17.8", "R18.8"}
         preprocessing = {"R20.2", "R20.3", "R20.4", "R20.6", "R20.11", "R20.12",
-                         "R20.13", "R20.14"}
+                         "R20.7", "R20.8", "R20.9", "R20.13", "R20.14"}
         library = {"R21." + str(n) for n in range(3, 22) if n != 8}
         library.update("R22." + str(n) for n in range(1, 11))
         self.assertEqual(set(satisfied),
@@ -1370,10 +1370,10 @@ class AcceptanceTests(unittest.TestCase):
             "R20.4": ("satisfied", "AMD2.77", "GCC", "扩展"),
             "R20.5": ("not_assessed", "#536", "Advisory", "active"),
             "R20.6": ("satisfied", "eTaskGetState", "普通 if", "宏实参"),
-            "R20.7": ("not_assessed", "#536", "完全展开", "ErrorHook"),
-            "R20.8": ("not_assessed", "#536", "未求值", "intmax_t"),
-            "R20.9": ("not_assessed", "#536", "defined(B)", "预定义"),
-            "R20.10": ("not_assessed", "#536", "ARTI_TRACE", "未批准新例外"),
+            "R20.7": ("satisfied", "ALARMCALLBACK", "完全展开", "ErrorHook"),
+            "R20.8": ("satisfied", "未求值", "intmax_t", "0 或 1"),
+            "R20.9": ("satisfied", "defined(B)", "预定义", "-Wundef"),
+            "R20.10": ("not_assessed", "#536", "ARTI_TRACE", "owned-source"),
             "R20.11": ("satisfied", "# parameter ##", "四个 OS", "Arti_Record"),
             "R20.12": ("satisfied", "每次均只作", "两数值参数", "普通替换"),
             "R20.13": ("satisfied", "未选分支", "warning", "首 token"),
@@ -1406,7 +1406,7 @@ class AcceptanceTests(unittest.TestCase):
                  for row in context["cases"]}
         # Actual CI standard/user inputs share the selected kernel closure.
         # Lock its recomputed identity and both labels; other local groups stay separate.
-        reviewed = "975b6aaf803671113d502f554447a4d6fd4493384d913a828665d223916dc2a0"
+        reviewed = "ff8bcd1b44deb45816621a91157266b4a1bd56972ef8d32d5d102f6ad621e3a2"
         self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
         self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
@@ -1955,12 +1955,52 @@ class AcceptanceTests(unittest.TestCase):
         self.select_owned(source, "20.5", "#undef UNRELATED")
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
 
-    def test_owned_unrecorded_memmap_undef_waits_for_category_instance_consumer(self):
+    def test_generated_memmap_cleanup_requires_its_paired_start_definition(self):
         self.owned_inputs()
-        self.select_owned("runtime/os/include/Os_MemMap.h", "20.5", "#undef OS_MEMMAP\n")
-        occurrence = self.evaluate()["occurrences"][0]
-        self.assertEqual(occurrence["assessment"], "blocked")
-        self.assertEqual(occurrence["reason"], "no_record")
+        name = "generated/include/Test_MemMap.h"
+        source = (
+            "#if defined(TEST_START_SEC_CODE)\n"
+            "#define TEST_CODE __attribute__((section(\".test\")))\n"
+            "#undef TEST_START_SEC_CODE\n"
+            "#elif defined(TEST_STOP_SEC_CODE)\n"
+            "#undef TEST_CODE\n"
+            "#undef TEST_STOP_SEC_CODE\n"
+            "#endif\n"
+        )
+        def evaluate(text, line=5):
+            data = text.encode("utf-8")
+            self.files[name] = data
+            self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+                "path": name, "sha256": hashlib.sha256(data).hexdigest(),
+                "owner": "generated", "producerId": "autosar-generator",
+            }]}).encode()
+            self.summary["diagnostics"] = [{
+                "id": "misra-c2012-20.5", "programs": ["host-batch", "probe"],
+                "locations": [{"file": name, "line": line, "column": 0}],
+            }]
+            self.seal()
+            self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+            self.bind_groups()
+            self.bind(self.context(group="owned-source", status="approved"))
+            return self.evaluate()["occurrences"][0]
+
+        occurrence = evaluate(source)
+        self.assertEqual(occurrence["assessment"], "accepted")
+        self.assertEqual(occurrence["entity"], "#undef TEST_CODE")
+        for old, replacement in (
+            ("#define TEST_CODE", "#define UNRELATED"),
+            ("#undef TEST_START_SEC_CODE", "#undef OTHER_START_SEC_CODE"),
+            ("#undef TEST_STOP_SEC_CODE", "#undef OTHER_STOP_SEC_CODE"),
+            ("#undef TEST_CODE", "#undef UNRELATED"),
+        ):
+            with self.subTest(replacement=replacement):
+                self.assertEqual(evaluate(source.replace(old, replacement))["reason"], "no_record")
+        with self.subTest(cleanup_branch="START"):
+            early_cleanup = source.replace(
+                "#elif defined(TEST_STOP_SEC_CODE)\n#undef TEST_CODE\n",
+                "#undef TEST_CODE\n#elif defined(TEST_STOP_SEC_CODE)\n",
+            )
+            self.assertEqual(evaluate(early_cleanup, line=4)["reason"], "no_record")
 
     def test_owned_memmap_requires_the_complete_protocol(self):
         self.owned_inputs()

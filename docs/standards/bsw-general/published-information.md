@@ -75,7 +75,7 @@ R20.10为Advisory/Single Translation Unit（主文印刷162/PDF170）。本节�
 
 TASK／ISR构造、OS_TASK_ENTRY／OS_ISR_ENTRY设计符继续提供同一跨TU入口；ARTI_TRACE保持class／event命名。既有entry-bodies、public-compatibility、真实ARTI及完整映射消费者约束多入口、单次定义、身份与代码段；配置命名、ID表示、包装ABI、宏内容、目标或程序改变时重评。
 
-授权来自[2026-10-30维护者决定](https://github.com/g1331/autsaro/pull/389#issuecomment-6513137017)，仅覆盖提案6481577012在879f3962的精确实体及原展开／声明；不是ADR0023的规范不可替代性结论。保留真实违反、raw、not_assessed及refusal，不改变规则类别、不增加baseline或suppression。
+本轮由 [#536](https://github.com/g1331/autsaro/issues/536) 的用户决定继续保留五个精确宏定义。早期授权来自[2026-10-30维护者决定](https://github.com/g1331/autsaro/pull/389#issuecomment-6513137017)，仅覆盖提案6481577012在879f3962的精确实体及原展开／声明；不是ADR0023的规范不可替代性结论。OSEK OS 2.2.3 §13.2.5／§13.3.3 规定应用的 TASK／ISR 定义形式。SWS_Arti_00017／00018 保留文本令牌接口；当前 provider 用静态字符串向现有记录消费者交付该身份。旧工件的 raw、not_assessed 和拒绝记录保留。
 
 表中 `All` 为 standard-ecu／user-application／component-pipeline／no-diagnostic，`ND` 仅 no-diagnostic；目标 `Both` 为 linux-x64-controlled-v1／windows-x64-controlled-v1，Linux／Windows 只选对应受控目标；程序 `Both` 仅 host-batch／probe。范围顺序为 profile／目标／程序，各表行分别限定。两份879f3962平台工件的实际程序集合已核对，不按程序数量推定集合相同；该范围是人工源与raw核对结果，c_standard 不替代程序使用分析或严格比较。
 
@@ -83,8 +83,8 @@ TASK／ISR构造、OS_TASK_ENTRY／OS_ISR_ENTRY设计符继续提供同一跨TU�
 
 | 规则 | 精确范围 | 形态、范围及技术理由 | 原授权 |
 | --- | --- | --- | --- |
-| MISRA C:2012 Rule 20.10 | `runtime/os/include/Arti.h` 中 `ARTI_TRACE` | shape=`#define ARTI_TRACE(context, class_name, instance, instance_parameter, event, event_parameter) Arti_Record(#context, #class_name, #instance, #event, (instance_parameter), (event_parameter))`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
-| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `TASK` | shape=`#define TASK(identifier) OS_CODE void Os_TaskEntry_##identifier(void); OS_CODE void Os_TaskEntry_##identifier(void)`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
-| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `OS_TASK_ENTRY` | shape=`#define OS_TASK_ENTRY(identifier) Os_TaskEntry_##identifier`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
-| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `ISR` | shape=`#define ISR(identifier) OS_CODE void Os_IsrEntry_##identifier(void); OS_CODE void Os_IsrEntry_##identifier(void)`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
-| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `OS_ISR_ENTRY` | shape=`#define OS_ISR_ENTRY(identifier) Os_IsrEntry_##identifier`; 范围 `All/Both/Both`；保持现有跨TU入口绑定或trace名字构造；不宣称这是标准唯一实现。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Arti.h` 中 `ARTI_TRACE` | shape=`#define ARTI_TRACE(context, class_name, instance, instance_parameter, event, event_parameter) Arti_Record(#context, #class_name, #instance, #event, (instance_parameter), (event_parameter))`; 范围 `All/Both/Both`；将四个令牌展开为传给 `Arti_Record` 的静态字符串，两个数值载荷各求值一次。`Os_Arti.c` 和 `arti.rs` 的 hook 绑定使用原名，原生 ARTI 消费者核对事件身份和求值次数。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `TASK` | shape=`#define TASK(identifier) OS_CODE void Os_TaskEntry_##identifier(void); OS_CODE void Os_TaskEntry_##identifier(void)`; 范围 `All/Both/Both`；`ecu.rs` 生成 `TASK(OS_TASK_ID_Task_Ecu)`，展开为 OS_CODE 上的 `void Os_TaskEntry_OS_TASK_ID_Task_Ecu(void)` 声明及定义头，保留公共数字 ID 的原字面名。entry-bodies 和 memory-mapping 验证多入口和段。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `OS_TASK_ENTRY` | shape=`#define OS_TASK_ENTRY(identifier) Os_TaskEntry_##identifier`; 范围 `All/Both/Both`；以配置原字面名展开为 `Os_TaskEntry_OS_TASK_ID_Task_Ecu` 函数设计符。 `Ecu_Config.c.in` 的 Task 配置直接取址，调度器通过配置项调用，与 TASK 定义共用链接名。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `ISR` | shape=`#define ISR(identifier) OS_CODE void Os_IsrEntry_##identifier(void); OS_CODE void Os_IsrEntry_##identifier(void)`; 范围 `All/Both/Both`；应用的 `ISR(ParentISR)` 展开为 OS_CODE 上的 `void Os_IsrEntry_ParentISR(void)` 声明及定义头。entry-bodies 编译多入口并触发嵌套 ISR；memory-mapping 核对段。 | 维护者 2026-10-30精确124键决定 |
+| MISRA C:2012 Rule 20.10 | `runtime/os/include/Os.h` 中 `OS_ISR_ENTRY` | shape=`#define OS_ISR_ENTRY(identifier) Os_IsrEntry_##identifier`; 范围 `All/Both/Both`；`OS_ISR_ENTRY(ParentISR)` 展开为 `Os_IsrEntry_ParentISR`；`Os_Target.h` 的 ISR 表使用设计符，entry-bodies 的槽位和分派验证绑定到指定 ISR。 | 维护者 2026-10-30精确124键决定 |
