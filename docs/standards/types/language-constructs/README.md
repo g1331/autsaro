@@ -146,14 +146,10 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 
 维护者接受的平台／OS宏形式见[精确预处理记录](../retained-platform.md)，不扩大所选配置的运行能力。
 
-
-
 ### 分批结算
 
 前四批见[声明](declarations.md)、[表达式](expressions.md)和[控制流](control-flow.md)。
-[预处理](preprocessing-library.md)：8项结算、5项转 #536；
-[库与资源](library-resources.md)：28项结算、2项转 #539；
-[第七批](expressions.md#第七批当前输入与类型推导)：7项结算、13项转 #544；
-[第八批](declarations.md#第八批的当前结算)：7项结算、18项转 #547；
-[第九批](control-flow.md#第九批的当前结算)：7项结算、11项转 #556。
-144项为92 satisfied、3 not_applicable、49 not_assessed；
+后续见[预处理与 #536](preprocessing-library.md)、[库与资源](library-resources.md)、
+[第七批](expressions.md#第七批当前输入与类型推导)、[第八批](declarations.md#第八批的当前结算)及
+[第九批](control-flow.md#第九批的当前结算)。
+144 项为 95 satisfied、3 not_applicable、46 not_assessed。
