@@ -105,7 +105,7 @@ class DependencyTests(unittest.TestCase):
             ("runtime/os/src/Os_Backend.c", "Os_BackendState"),
             ("runtime/os/src/Os_Arti.c", "Os_ArtiTask"),
             ("runtime/os/src/Os_Arti.c", "Os_ArtiService"),
-            ("runtime/os/src/Os_Time.c", "action"),
+            ("runtime/os/src/Os_Time.c", "os_time_action"),
         ]:
             with self.subTest(function=name):
                 source = (os_suites.ROOT / relative).read_text(encoding="utf-8")

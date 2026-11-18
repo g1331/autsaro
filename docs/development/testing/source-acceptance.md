@@ -23,7 +23,7 @@ uv run --locked python -m autosar_tooling c-acceptance \
 
 各目标主机给出四个 `--expected` 与完整结果，验证实际 SDK 路径；跨平台只传递矩阵依赖回执。上游值取实际任务结果，不能在失败时写死为 success。消费者重新读取当前 SDK、runner、分析驱动和完整源码，重算输入身份与验收，并精确核对存储回执；修改旧摘要的 SDK、seal、参数或当前 producer，不能重放旧 `accepted`。原始 `passed=false` 与诊断退出码 1 可以和有效项目验收并存。
 
-本地离线上下文重绑可下载较小的输入工件：
+离线重绑可下载精简输入工件：
 
 ```sh
 gh run download <run> --pattern 'c-analysis-context-inputs-*' --dir <新目录>
@@ -134,8 +134,9 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 缺少本组当前绑定时返回 `owned_source_context_unbound_or_stale`。
 共用 MR12 解析器返回的生成保留活动目录记录始终交给 `generated-retention` 消费；
 `owned-source` 的批准也保持该组的 pending、过期、shape 或 owner 拒绝。
-消费来源取当前可追溯的 runtime 原件及明确归属的生成／配置产物；应用快照与内核实例
-由原任务继续核定。允许的程序为 host-batch／probe，样本为现有四个 profile。
+来源取 runtime 原件及 seal／ownership 核定的生成 C；生成实体须逐符号登记、
+匹配 MR12／shape，未知 producer／摘要拒绝。应用与内核沿原任务。程序限
+host-batch／probe，样本限现有四 profile。
 
 Required 风险记录继续返回
 `formal_deviation_pending`，即使上下文为 `approved` 也保留该义务；Mandatory 保留项

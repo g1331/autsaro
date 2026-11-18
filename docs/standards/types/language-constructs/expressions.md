@@ -69,7 +69,7 @@ C 的整数提升与这些本质类型分别推导；指针表达式按 TC2.16 �
 - 其他复合 cast：Echo／Ingress 的 uint32 移位及 committed+1u→uint8，Com 的
   uint32 右移／&→uint8；CanTp 的 uint8 序号／队列取模→uint8、uint16 长度
   /256u 或 %256u→uint8；Dcm 的 DID／p2_ms 为 uint16，p2_star_ms 为 uint32，/／% 的最高 rank
-  分别保持 16／32 位后缩为 uint8；buffer_length 为 uint16、received 为
+  分别保持 16／32 位后缩为 uint8；buffer_length 为 uint16、dcm_received（第七批原名 received）为
   PduLengthType，差值本质宽度为 max(16, PduLengthType 的宽度)，再转回
   PduLengthType；resDataLen+1u 为 uint32，再转 PduLengthType（8／16／32 位）。均保持
   unsigned 类别且目标同宽或更窄。Dcm 的 0x80u 依 D.6 为 unsigned char，动态

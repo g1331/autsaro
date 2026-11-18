@@ -50,7 +50,8 @@ typedef struct {
 #define OS_START_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 OS_MEMMAP static Os_ActivationQueueType
-    activations[OS_MAX_TASKS]; /**< Activation FIFO ledger; OS port lock; no Init reset. */
+    activations[OS_MAX_TASKS]; /**< Activation FIFO ledger; OS port lock; no Init reset.
+                                */
 #define OS_STOP_SEC_VAR_CLEARED_64
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
@@ -67,8 +68,8 @@ OS_MEMMAP static EventMaskType
 OS_MEMMAP static uint8
     task_waiting[OS_MAX_TASKS]; /**< Task waiting flags; OS port lock; no Init reset. */
 
-OS_MEMMAP static uint8
-    internal_held[OS_MAX_TASKS]; /**< Internal-resource ownership; OS port lock; no Init reset. */
+OS_MEMMAP static uint8 os_backend_internal_held[OS_MAX_TASKS]; /**< Internal-resource ownership; OS
+                                                                  port lock; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_8
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_INIT_32
@@ -259,13 +260,14 @@ OS_MEMMAP HANDLE Os_StackTestTaskThread(uint32 index) { return task_threads[inde
 #endif
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-OS_MEMMAP static volatile Os_Atomic32Type ready; /**< Atomic admission readiness; no Init reset. */
+OS_MEMMAP static volatile Os_Atomic32Type
+    os_backend_ready; /**< Atomic admission readiness; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 #define OS_START_SEC_CONST_PTR
 #include "Os_MemMap.h"
 OS_MEMMAP const volatile Os_Atomic32Type *const Os_ArtiOsReady =
-    &ready; /**< Fixed readiness tool view; C init only, never reset. */
+    &os_backend_ready; /**< Fixed readiness tool view; C init only, never reset. */
 #define OS_STOP_SEC_CONST_PTR
 #include "Os_MemMap.h"
 
@@ -326,7 +328,7 @@ OS_MEMMAP TaskType Os_ArtiRunningTask =
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_PTR
 #include "Os_MemMap.h"
-OS_MEMMAP const Os_NativeStackType
+OS_MEMMAP const struct Os_NativeStackType
     *Os_ArtiTaskStacks[OS_MAX_TASKS]; /**< Observed stack pointers; port lock; no Init reset. */
 
 /* MR12 RULE 8.7 VIOLATION: the ARTI observation symbol retains its existing state owner and
@@ -348,7 +350,8 @@ OS_MEMMAP static void arti_observe_tasks(void);
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_8
 #include "Os_MemMap.h"
-OS_MEMMAP static uint8 trace[128]; /**< Caller-serialized trace prefix bytes; no Init reset. */
+OS_MEMMAP static uint8
+    os_backend_trace[128]; /**< Caller-serialized trace prefix bytes; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_8
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
@@ -366,10 +369,10 @@ OS_MEMMAP static uint64
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-OS_MEMMAP static uint32 resource_calls; /**< Bootstrap-owned acquisition count; no Init reset. */
-OS_MEMMAP static uint32 threads;        /**< Bootstrap-owned thread count; no Init reset. */
-OS_MEMMAP static uint32 events;         /**< Bootstrap-owned event count; no Init reset. */
-OS_MEMMAP static uint32 mutexes;        /**< Bootstrap-owned mutex count; no Init reset. */
+OS_MEMMAP static uint32 resource_calls;    /**< Bootstrap-owned acquisition count; no Init reset. */
+OS_MEMMAP static uint32 threads;           /**< Bootstrap-owned thread count; no Init reset. */
+OS_MEMMAP static uint32 os_backend_events; /**< Bootstrap-owned event count; no Init reset. */
+OS_MEMMAP static uint32 mutexes;           /**< Bootstrap-owned mutex count; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 #if defined(OS_HOST_FAILURE_TESTS) && (OS_HOST_FAILURE_TESTS == STD_ON)
@@ -383,7 +386,7 @@ OS_MEMMAP static uint32
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 OS_MEMMAP static volatile Os_Atomic32Type
-    started; /**< Atomic one-shot backend-start latch; no Init reset. */
+    os_backend_started; /**< Atomic one-shot backend-start latch; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
@@ -397,7 +400,7 @@ OS_MEMMAP static void acquire_internal(uint32 index);
 
 OS_MEMMAP static void release_internal(uint32 index);
 
-OS_MEMMAP static uint8 internal_ceiling(uint32 index);
+OS_MEMMAP static uint8 os_backend_internal_ceiling(uint32 index);
 
 OS_MEMMAP static void observe_transition(void);
 
@@ -437,7 +440,7 @@ OS_MEMMAP uint32 Os_BackendCurrentInterrupt(void)
 
 OS_MEMMAP sint32 Os_BackendStarted(void)
 {
-    return (InterlockedCompareExchange(&started, 0, 0) != 0) ? 1 : 0;
+    return (InterlockedCompareExchange(&os_backend_started, 0, 0) != 0) ? 1 : 0;
 }
 
 OS_MEMMAP void Os_BackendInterruptEnter(uint32 interrupt)
@@ -888,7 +891,7 @@ OS_MEMMAP static void observe_transition(void) {}
 #endif
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP static uint8 internal_ceiling(uint32 index)
+OS_MEMMAP static uint8 os_backend_internal_ceiling(uint32 index)
 {
     uint32 i;
     uint8 ceiling = 0u;
@@ -914,10 +917,10 @@ OS_MEMMAP static uint8 internal_ceiling(uint32 index)
 
 OS_MEMMAP static void acquire_internal(uint32 index)
 {
-    uint8 ceiling = internal_ceiling(index);
-    if ((ceiling != 0u) && (internal_held[index] == 0u)) {
+    uint8 ceiling = os_backend_internal_ceiling(index);
+    if ((ceiling != 0u) && (os_backend_internal_held[index] == 0u)) {
         configASSERT(resource_depth[index] == 0u);
-        internal_held[index] = 1u;
+        os_backend_internal_held[index] = 1u;
         if (uxTaskPriorityGet(task_handles[index]) < ceiling) {
             vTaskPrioritySet(task_handles[index], ceiling);
         }
@@ -926,9 +929,9 @@ OS_MEMMAP static void acquire_internal(uint32 index)
 
 OS_MEMMAP static void release_internal(uint32 index)
 {
-    if (internal_held[index] != 0u) {
+    if (os_backend_internal_held[index] != 0u) {
         configASSERT(resource_depth[index] == 0u);
-        internal_held[index] = 0u;
+        os_backend_internal_held[index] = 0u;
         vTaskPrioritySet(task_handles[index], Os_Config->tasks[index].priority);
     }
 }
@@ -1055,20 +1058,20 @@ OS_MEMMAP void Os_TargetTrace(uint8 marker)
     /* This bounded diagnostic prefix is not an automotive output queue.
      * Continued operation must not depend on room for optional trace text;
      * report omitted markers explicitly without replacing the saved prefix. */
-    if ((trace_length + 1u) >= sizeof(trace)) {
+    if ((trace_length + 1u) >= sizeof(os_backend_trace)) {
         if (trace_dropped != UINT64_MAX) {
             ++trace_dropped;
         }
         return;
     }
-    trace[trace_length] = marker;
+    os_backend_trace[trace_length] = marker;
     ++trace_length;
 }
 
 OS_MEMMAP sint32 Os_TargetReady(void)
 {
     sint32 serving = 0;
-    if (InterlockedCompareExchange(&ready, 0, 0) != 0) {
+    if (InterlockedCompareExchange(&os_backend_ready, 0, 0) != 0) {
         serving = (InterlockedCompareExchange(&Os_Closing, 0, 0) == 0) ? 1 : 0;
     }
     return serving;
@@ -1109,9 +1112,9 @@ OS_MEMMAP static void __attribute__((noreturn)) report_and_exit(void)
     Os_HostTextAppend(&text, (reason == E_OK) ? "Ready" : "Failed");
     Os_HostTextField(&text, " reason=", reason);
     Os_HostTextAppend(&text, " trace=");
-    Os_HostTextAppend(&text, (const char *)trace);
+    Os_HostTextAppend(&text, (const char *)os_backend_trace);
     Os_HostTextField(&text, " threads=", threads);
-    Os_HostTextField(&text, " events=", events);
+    Os_HostTextField(&text, " events=", os_backend_events);
     Os_HostTextField(&text, " mutexes=", mutexes);
     Os_HostTextField(&text, " resource_calls=", resource_calls);
     Os_HostTextAppend(&text, " " OS_NATIVE_HEAP "input_closed=1 tick_closed=1");
@@ -1308,7 +1311,7 @@ OS_MEMMAP static DWORD WINAPI control_actor(void *argument)
 OS_MEMMAP void Os_BackendSignalStackFault(char failed_role)
 {
     (void)InterlockedOr(&activation_admission, 2);
-    (void)InterlockedExchange(&ready, 0);
+    (void)InterlockedExchange(&os_backend_ready, 0);
     __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
     if (failed_role == 'C') {
         (void)InterlockedExchange(&controller_healthy[0], 0);
@@ -1361,7 +1364,7 @@ OS_MEMMAP void Os_BackendRequestShutdown(StatusType error)
     Os_MailboxClose();
     if (((uint32)InterlockedOr(&activation_admission, 2) & 2u) == 0u) {
         __atomic_store_n(&shutdown_reason, error, __ATOMIC_SEQ_CST);
-        (void)InterlockedExchange(&ready, 0);
+        (void)InterlockedExchange(&os_backend_ready, 0);
         if (InterlockedCompareExchange(&controller_healthy[0], 0, 0) == 0) {
             if (InterlockedCompareExchange(&controller_healthy[1], 0, 0) == 0) {
                 report_and_exit();
@@ -1413,7 +1416,7 @@ OS_MEMMAP HANDLE Os_PortEvent(LPSECURITY_ATTRIBUTES attributes,
     if (result == NULL) {
         Os_BackendShutdown(E_OS_STATE);
     }
-    ++events;
+    ++os_backend_events;
     return result;
 }
 
@@ -1461,7 +1464,7 @@ OS_MEMMAP void Os_BackendStackFault(char failed_role)
     Os_TimeClose();
     Os_MailboxClose();
     (void)InterlockedOr(&activation_admission, 2);
-    (void)InterlockedExchange(&ready, 0);
+    (void)InterlockedExchange(&os_backend_ready, 0);
     __atomic_store_n(&shutdown_reason, E_OS_STACKFAULT, __ATOMIC_SEQ_CST);
     if (failed_role == 'C') {
         (void)InterlockedExchange(&controller_healthy[0], 0);
@@ -1693,7 +1696,7 @@ OS_MEMMAP static void bootstrap(void *argument)
     }
     Os_TimeAutostart(startup_mode);
     Os_ScheduleAutostart(startup_mode);
-    (void)InterlockedExchange(&ready, 1);
+    (void)InterlockedExchange(&os_backend_ready, 1);
     arti_observe_tasks();
     Os_TargetTrace((uint8)'R');
     observe_transition();
@@ -1805,7 +1808,7 @@ OS_MEMMAP void Os_BackendStart(AppModeType mode)
     uint32 i;
     Os_TargetTrace((uint8)'I');
     read_resource_failure();
-    if (InterlockedCompareExchange(&started, 1, 0) != 0) {
+    if (InterlockedCompareExchange(&os_backend_started, 1, 0) != 0) {
         Os_BackendShutdown(E_OS_STATE);
     }
     if ((Os_Config == NULL) || ((mode != 1u) && (mode != 2u))) {
@@ -2261,7 +2264,7 @@ OS_MEMMAP StatusType Os_BackendSchedule(void)
         taskEXIT_CRITICAL();
         return E_OS_RESOURCE;
     }
-    if (internal_held[index] != 0u) {
+    if (os_backend_internal_held[index] != 0u) {
         release_internal(index);
         taskYIELD();
     }
@@ -2401,8 +2404,8 @@ OS_MEMMAP StatusType Os_BackendInspect(TaskType id, Os_ActivationInfoType *info)
     snapshot.events = task_events[index];
     snapshot.effective_priority = (uint8)uxTaskPriorityGet(task_handles[index]);
     snapshot.resource_count = resource_depth[index];
-    snapshot.internal_held = internal_held[index];
-    snapshot.internal_ceiling = internal_ceiling(index);
+    snapshot.internal_held = os_backend_internal_held[index];
+    snapshot.internal_ceiling = os_backend_internal_ceiling(index);
     snapshot.waiting = task_waiting[index];
     snapshot.wait_mask = wait_masks[index];
     for (j = 0u; j < snapshot.resource_count; ++j) {

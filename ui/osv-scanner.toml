@@ -1,0 +1,11 @@
+# Each ignore names one advisory, expires on its own, and is tracked by an open Issue.
+# When the date passes the scan fails again, so the entry must be fixed or renewed with a new
+# assessment.
+
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+ignoreUntil = 2026-12-18T00:00:00Z
+reason = """picomatch <= 4.0.7 ReDoS through crafted extglob patterns; no patched release \
+exists. It is a development-only dependency (vite, vitest, tinyglobby, fdir) that runs during \
+UI build and tests and only matches globs written in this repository; it is not bundled into the \
+UI or the installers. Upgrade and remove this entry once a fix is published (#555)."""

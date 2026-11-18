@@ -16,7 +16,7 @@ typedef struct Os_NativeStackType {
     uintptr_t kernel_buffer_low;
     uintptr_t kernel_buffer_high;
     SIZE_T reserve;
-    SIZE_T committed;
+    SIZE_T committed_bytes;
     SIZE_T guard;
 #ifdef _WIN32
     ULONG guarantee;
