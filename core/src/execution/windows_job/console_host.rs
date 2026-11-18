@@ -96,18 +96,20 @@ fn inspect(pid: u32) -> Result<Member, i32> {
     })
 }
 
+/// The console host inside a system directory; the API returns a trailing
+/// backslash only for a root directory such as `C:\`.
+fn host_path(directory: &str) -> String {
+    format!("{}\\conhost.exe", directory.trim_end_matches('\\'))
+}
+
 /// Path of the system console host, `None` when the system directory cannot be read.
 fn system_host() -> Option<String> {
     let mut directory = [0u16; 260];
     // SAFETY: the buffer is writable for the stated number of UTF-16 units.
     let length = unsafe { GetSystemDirectoryW(directory.as_mut_ptr(), directory.len() as u32) };
     let length = length as usize;
-    (0 < length && length < directory.len()).then(|| {
-        format!(
-            "{}\\conhost.exe",
-            String::from_utf16_lossy(&directory[..length])
-        )
-    })
+    (0 < length && length < directory.len())
+        .then(|| host_path(&String::from_utf16_lossy(&directory[..length])))
 }
 
 /// An unreadable system directory (`None`) matches no image.
@@ -155,6 +157,23 @@ pub(super) fn only_exited_hosts(job: &OwnedHandle, hosts: &BTreeSet<Identity>) -
         pids.into_iter()
             .all(|pid| is_exited_host(pid, &inspect(pid), hosts))
     })
+}
+
+/// Poll the active count until it reaches zero or `end_ns` passes. The decision
+/// rests on the observation of an empty Job, so a late observation still counts;
+/// the window does not read the command deadline.
+pub(super) fn wait_accounting_grace(
+    mut active: impl FnMut() -> Result<u32, LocalizedText>,
+    mut each_poll: impl FnMut(),
+    mut now_ns: impl FnMut() -> u64,
+    mut pause: impl FnMut(Duration),
+    end_ns: u64,
+) -> Result<(), LocalizedText> {
+    while active()? != 0 && now_ns() < end_ns {
+        each_poll();
+        pause(Duration::from_millis(10));
+    }
+    Ok(())
 }
 
 /// Wait until the active count reaches zero while only exited console hosts
@@ -272,6 +291,44 @@ mod tests {
     }
 
     const MS: u64 = 1_000_000;
+
+    /// Whether the Job is still active when the accounting grace returns.
+    fn active_after_grace(gone_at_ns: u64, stall_ns: u64) -> bool {
+        let clock = Clock(0.into());
+        wait_accounting_grace(
+            || Ok(u32::from(clock.0.get() < gone_at_ns)),
+            || {},
+            || clock.0.get(),
+            |pause| {
+                clock
+                    .0
+                    .set(clock.0.get() + pause.as_nanos() as u64 + stall_ns)
+            },
+            ACCOUNTING_GRACE.as_nanos() as u64,
+        )
+        .unwrap();
+        clock.0.get() < gone_at_ns
+    }
+
+    #[test]
+    fn the_accounting_grace_is_a_fixed_window_after_the_root_exit() {
+        // Emptying inside the 200 ms window passes whatever the command deadline is.
+        assert!(!active_after_grace(150 * MS, 0));
+        // Still active when the window ends: the caller goes on to judge the members.
+        assert!(active_after_grace(250 * MS, 0));
+        // The decision rests on the observation: a late look that finds the Job
+        // empty, here 1 s after the window, still passes.
+        assert!(!active_after_grace(404 * MS, 1_000 * MS));
+    }
+
+    #[test]
+    fn the_host_path_has_one_separator_for_a_root_or_a_subdirectory() {
+        assert_eq!(
+            host_path("C:\\Windows\\System32"),
+            "C:\\Windows\\System32\\conhost.exe"
+        );
+        assert_eq!(host_path("C:\\"), "C:\\conhost.exe");
+    }
 
     #[test]
     fn teardown_lag_inside_the_bound_succeeds_and_outside_it_fails() {

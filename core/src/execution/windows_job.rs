@@ -9,6 +9,9 @@ use std::process::{Child, Command, ExitStatus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// Window after the root exit in which the Job's active count may still lag.
+pub(crate) const ACCOUNTING_GRACE: Duration = Duration::from_millis(200);
+
 mod console_host;
 mod evidence;
 mod system_snapshot;
@@ -339,6 +342,25 @@ impl ProcessTree {
     /// Identities of the console hosts currently in the Job.
     pub(crate) fn console_hosts(&self) -> BTreeSet<console_host::Identity> {
         console_host::hosts(&self.job)
+    }
+    /// Poll the active count for the accounting grace ending at `end_ns` (monotonic),
+    /// remembering the console hosts seen meanwhile.
+    pub(crate) fn wait_grace(
+        &self,
+        hosts: &mut BTreeSet<console_host::Identity>,
+        end_ns: u64,
+    ) -> Result<(), LocalizedText> {
+        console_host::wait_accounting_grace(
+            || self.active(),
+            || {
+                self.observe("grace");
+                hosts.extend(self.console_hosts());
+            },
+            // A failing clock reads as expired, which keeps the strict rule.
+            || super::monotonic_ns().unwrap_or(u64::MAX),
+            std::thread::sleep,
+            end_ns,
+        )
     }
     /// After the root exit and the accounting grace: whether the Job emptied while
     /// only exited console hosts, finishing their teardown, remained. A live

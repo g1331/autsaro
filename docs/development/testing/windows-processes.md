@@ -100,10 +100,17 @@ Rust 原有三层反例同步断言相同成员字段。普通成功路径验证
 `CREATE_NO_WINDOW` 创建的命令会得到一个隐藏 console，由根进程的后代 `conhost.exe` 承载，该
 进程也属于命令的 Job。最后一个客户端退出后 console host 立即退出（实测约 3 ms），但进程对象的
 收尾与 Job 活动计数的下降可能滞后：一次 CI 工件（`windows-job-evidence`，ETW 共 1619 个 console
-host）中 p50 为 2.6 ms，p99 为 6.5 ms，同一段 ProcessStop 事件间隔内的四个 console host 滞后
-398–404 ms，超出 200 ms 记账宽限，被判为 `orphaned_members`（#412、#414）。
+host）中 p50 为 2.6 ms，p99 为 6.5 ms，滞后超过 100 ms 的只有同一段 ProcessStop 事件间隔内的
+四个样本（398–404 ms），其中两个导致 Job 在 200 ms 记账宽限届满时仍有成员，被判为
+`orphaned_members`（#412、#414）。
 
-根进程退出且宽限届满后，Rust `ProcessTree::hosts_finished` 与 Python
+200 ms 宽限是根进程退出后的轮询窗口，判定依据是“观察到 Job 为空”：观察时刻受调度影响，可能
+晚于宽限和命令期限，这条原有路径不做绝对期限检查，本次修复保持不变。
+`tests/python/process/test_windows_console_host.py` 与 Rust 的
+`the_accounting_grace_is_a_fixed_window_after_the_root_exit` 固定了这一现状。下面新增的 host
+额外等待则受命令绝对期限与 5 s 上限约束。
+
+宽限届满后，Rust `ProcessTree::hosts_finished` 与 Python
 `WindowsJob._hosts_finished` 只在以下条件同时成立时继续等待：
 
 - 剩余成员全部是此前记录的 `GetSystemDirectoryW` 所返回目录下的 `conhost.exe`；读不到系统目录时

@@ -307,6 +307,7 @@ class ConsoleHostWaitTests(unittest.TestCase):
 
         cases = (
             (r"C:\Windows\System32", 19, r"c:\windows\system32\conhost.exe"),
+            ("C:\\", 3, r"c:\conhost.exe"),  # a root directory keeps its backslash
             (r"C:\Windows\System32", 0, None),  # the call failed
             (r"C:\Windows\System32", 400, None),  # does not fit the buffer
         )
@@ -315,6 +316,30 @@ class ConsoleHostWaitTests(unittest.TestCase):
                 kernel = reading(text, length)
                 with patch.object(windows_job, "kernel", kernel, create=True):
                     self.assertEqual(windows_job.system_console_host(), expected)
+
+    def test_accounting_grace_is_a_polling_window_judged_by_what_is_observed(self):
+        # Pins the pre-existing rule: after a root exit inside its deadline, an
+        # empty Job seen at the end of the grace polling passes, even a little
+        # after the deadline; no absolute-deadline check applies to that path.
+        job = SimulatedJob()
+        job.add(700, r"C:\Python\python.exe", exit_code=259, leaves_ms=104)
+        self.assertEqual(job.run(deadline_ms=103), ("exited", 0, False))
+        self.assertGreater(job.now, 103 * MS)
+        # A stalled pause lets the first look come late; it still finds an empty Job.
+        job = SimulatedJob()
+        job.add(700, r"C:\Python\python.exe", exit_code=259, leaves_ms=404)
+        job.stall_after_ns = 0
+        job.stall_ns = 1000 * MS
+        self.assertEqual(job.run(deadline_ms=103), ("exited", 0, False))
+        self.assertGreaterEqual(job.now, 1000 * MS)
+
+    def test_a_member_still_present_when_the_grace_ends_is_an_orphan(self) -> None:
+        job = SimulatedJob()
+        job.add(700, r"C:\Python\python.exe", exit_code=259, leaves_ms=150)
+        self.assertEqual(job.run(), ("exited", 0, False))
+        job = SimulatedJob()
+        job.add(700, r"C:\Python\python.exe", exit_code=259, leaves_ms=250)
+        self.assertEqual(job.run(), ("orphaned_members", 0, True))
 
     def test_command_deadline_is_not_extended(self) -> None:
         job = SimulatedJob()

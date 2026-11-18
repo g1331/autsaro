@@ -393,14 +393,12 @@ impl OwnedProcess {
             let status = loop {
                 if let Some(status) = tree.try_wait().map_err(|error| error.to_string())? {
                     // The Job's active count may lag a just-reaped cooperative exit.
-                    let grace = std::time::Instant::now() + Duration::from_millis(200);
+                    let grace_end = monotonic_ns()?.saturating_add(
+                        u64::try_from(windows_job::ACCOUNTING_GRACE.as_nanos()).unwrap_or(u64::MAX),
+                    );
                     let mut hosts = tree.console_hosts();
                     tree.observe("root_exited");
-                    while tree.active()? != 0 && std::time::Instant::now() < grace {
-                        tree.observe("grace");
-                        hosts.extend(tree.console_hosts());
-                        std::thread::sleep(Duration::from_millis(10));
-                    }
+                    tree.wait_grace(&mut hosts, grace_end)?;
                     // Console hosts finish their own teardown after their clients;
                     // that gets a bounded wait, a live descendant gets none.
                     let orphaned = tree.active()? != 0
