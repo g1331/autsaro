@@ -98,8 +98,8 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
 {
   "id": "checker-obligations-515-control-flow",
   "evidence": {
-    "head": "942b65ee2eb36cf61813f6d20caece4e52fac5e5",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44269147114"
+    "head": "7947763dddc24770f5bba1629056a214aa14d3b2",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44285205267"
   },
   "cases": [
     {
