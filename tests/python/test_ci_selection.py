@@ -428,7 +428,8 @@ class CiSelectionTests(unittest.TestCase):
                 self.assertIn("!cancelled()", step["if"])
 
     def test_desktop_reuses_dependencies_without_reusing_workspace_outputs(self):
-        steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]["steps"]
+        job = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]
+        steps = job["steps"]
         cache_index, cache = next((i, step) for i, step in enumerate(steps)
                                   if step.get("id") == "desktop-dependencies")
         install_index = next(i for i, step in enumerate(steps)
@@ -437,6 +438,9 @@ class CiSelectionTests(unittest.TestCase):
                               if step.get("id") == "desktop-cache-inputs")
         self.assertLess(install_index, identity_index)
         self.assertLess(identity_index, cache_index)
+        self.assertNotIn("continue-on-error", steps[identity_index])
+        self.assertNotIn("continue-on-error", job)
+        self.assertNotIn("if", cache)
         clean = steps[-1]
         self.assertEqual(clean["run"], "cargo clean --locked --workspace --profile dev")
         self.assertIn("success()", clean["if"])
@@ -457,33 +461,65 @@ class CiSelectionTests(unittest.TestCase):
             root = Path(directory)
             output = root / "output"
             vcpkg = root / "installed"
-            library = vcpkg / "x64-windows-static-md/lib/libxml2.lib"
-            library.parent.mkdir(parents=True)
-            (vcpkg / "vcpkg").mkdir()
-            (vcpkg / "vcpkg/status").write_text("Package: libxml2\n", encoding="utf-8")
+            installed_files = (
+                vcpkg / "x64-windows-static-md/share/libxml2/metadata",
+                vcpkg / "vcpkg/status",
+                vcpkg / "vcpkg/info/libxml2_2.13.5_x64-windows-static-md.list",
+                vcpkg / "vcpkg/updates/0001",
+                root / "packages/libxml2_x64-windows-static-md/lib/pkgconfig/libxml-2.0.pc",
+            )
+            for path in installed_files:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"original")
+            defaults, overlay = root / "default-pc", root / "overlay-pc"
+            defaults.mkdir()
+            overlay.mkdir()
+            webkit = defaults / "webkit2gtk-4.1.pc"
+            libsoup = overlay / "libsoup-3.0.pc"
+            webkit.write_bytes(b"Version: 2.52")
+            libsoup.write_bytes(b"Version: 3.4.4")
             env = {"ImageOS": "image", "ImageVersion": "1", "GITHUB_OUTPUT": str(output),
-                   "VCPKG_ROOT": str(root), "VCPKGRS_TRIPLET": "x64-windows-static-md"}
+                   "VCPKG_ROOT": str(root), "VCPKGRS_TRIPLET": "x64-windows-static-md",
+                   "PKG_CONFIG_PATH": str(overlay)}
 
             def identity(platform):
                 output.write_text("", encoding="utf-8")
                 with mock.patch.dict(os.environ, env), mock.patch.object(sys, "platform", platform):
+                    os.environ.pop("PKG_CONFIG_LIBDIR", None)
                     run_script(script)
                 return dict(line.split("=", 1) for line in output.read_text().splitlines())
 
             packages = "webkit=2.52\tinstalled\nclang=18\tinstalled\n"
-            with mock.patch.object(subprocess, "check_output", side_effect=[
-                    packages, b"2.52\n",
-                    packages.replace("clang=18", "clang=19"), b"2.52\n",
-                    packages, b"1.0\n"]):
+            with mock.patch.object(subprocess, "check_output") as query:
+                query.side_effect = lambda args, **_: packages if args[0] == "dpkg-query" else str(defaults)
                 original = identity("linux")
-                self.assertNotEqual(original["native"], identity("linux")["native"])
+                for path in (libsoup, webkit):
+                    with self.subTest(metadata=path.name):
+                        contents = path.read_bytes()
+                        path.write_bytes(b"Version: 1.0")
+                        self.assertNotEqual(original["native"], identity("linux")["native"])
+                        path.write_bytes(contents)
+                packages = packages.replace("clang=18", "clang=19")
                 self.assertNotEqual(original["native"], identity("linux")["native"])
                 self.assertEqual(original["image"], "image-1")
+                query.side_effect = subprocess.CalledProcessError(1, "pkg-config")
+                with self.assertRaises(subprocess.CalledProcessError):
+                    identity("linux")
+                self.assertEqual(output.read_bytes(), b"")
 
-            library.write_bytes(b"old ABI")
             original = identity("win32")
-            library.write_bytes(b"new ABI")
+            for path in installed_files:
+                with self.subTest(metadata=path.name):
+                    path.write_bytes(b"changed")
+                    self.assertNotEqual(original["native"], identity("win32")["native"])
+                    path.write_bytes(b"original")
+            manifest = installed_files[2]
+            manifest.unlink()
             self.assertNotEqual(original["native"], identity("win32")["native"])
+            manifest.parent.rmdir()
+            with self.assertRaises(FileNotFoundError):
+                identity("win32")
+            self.assertEqual(output.read_bytes(), b"")
 
     def test_context_artifact_keeps_exact_sources_and_raw_summary_without_analyzer_intermediates(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]

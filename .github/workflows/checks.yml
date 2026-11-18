@@ -178,26 +178,56 @@ jobs:
         run: |
           import hashlib, os, subprocess, sys
           from pathlib import Path
+          from time import perf_counter
+
+          def files_under(directory):
+              def fail(error):
+                  raise error
+              return [Path(parent) / name for parent, _, names in os.walk(directory, onerror=fail)
+                      for name in names]
+
+          def optional_entries(directory):
+              try:
+                  return list(directory.iterdir())
+              except FileNotFoundError:
+                  return []
+
+          started = perf_counter()
           native = hashlib.sha256()
           if sys.platform == 'win32':
-              # vcpkg runs on this job, after the image was built.
-              installed = Path(os.environ['VCPKG_ROOT']) / 'installed'
-              triplet = installed / os.environ['VCPKGRS_TRIPLET']
-              native.update((installed / 'vcpkg/status').read_bytes())
-              for directory in ('include', 'lib', 'debug/lib'):
-                  for path in sorted((triplet / directory).rglob('*')):
-                      if path.is_file():
-                          native.update(path.relative_to(triplet).as_posix().encode() + b'\0')
-                          native.update(hashlib.sha256(path.read_bytes()).digest())
+              root = Path(os.environ['VCPKG_ROOT'])
+              installed = root / 'installed'
+              triplet = os.environ['VCPKGRS_TRIPLET']
+              metadata = installed / 'vcpkg'
+              files = [metadata / 'status', *files_under(installed / triplet),
+                       *files_under(metadata / 'info'), *files_under(metadata / 'updates')]
+              # vcpkg-rs can read staged pkg-config metadata to order libraries within a port.
+              for port in optional_entries(root / 'packages'):
+                  if port.name.endswith('_' + triplet):
+                      files.extend(path for path in optional_entries(port / 'lib/pkgconfig')
+                                   if path.suffix == '.pc')
           else:
               # Include transitive packages resolved by apt as well as direct build dependencies.
               packages = subprocess.check_output(['dpkg-query', '-W', '-f',
                   '${binary:Package}=${Version}\t${db:Status-Status}\n'], text=True)
               installed = sorted(line.split('\t')[0] for line in packages.splitlines()
                                  if line.endswith('\tinstalled'))
-              native.update('\n'.join(installed).encode())
-              # Cargo can reuse a successful system-deps probe even if the active .pc changed.
-              native.update(b'\0' + subprocess.check_output(['pkg-config', '--modversion', 'webkit2gtk-4.1']))
+              native.update('\n'.join(installed).encode() + b'\0')
+              defaults = subprocess.check_output(['pkg-config', '--variable', 'pc_path', 'pkg-config'],
+                                                 text=True).strip()
+              search = [path for value in (os.environ.get('PKG_CONFIG_PATH', ''),
+                                           os.environ.get('PKG_CONFIG_LIBDIR', defaults))
+                        for path in value.split(os.pathsep) if path]
+              # Search order decides which metadata wins when a module is present twice.
+              native.update(os.fsencode(os.pathsep.join(search)) + b'\0')
+              root = Path.cwd().anchor
+              files = {path for entry in search for path in optional_entries(Path(entry).absolute())
+                       if path.suffix == '.pc'}
+          for path in sorted(files):
+              native.update(os.fsencode(path.relative_to(root).as_posix()) + b'\0')
+              with path.open('rb') as content:
+                  native.update(hashlib.file_digest(content, 'sha256').digest())
+          print(f'Hashed {len(files)} native dependency files in {perf_counter() - started:.3f}s')
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write('image=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
               output.write('native=' + native.hexdigest() + '\n')
@@ -211,7 +241,7 @@ jobs:
             target/debug/build
             target/debug/deps
           key: >-
-            ${{ format('desktop-dev-deps-v2-{0}-{1}-{2}-{3}-{4}', runner.os, runner.arch,
+            ${{ format('desktop-dev-deps-v3-{0}-{1}-{2}-{3}-{4}', runner.os, runner.arch,
             steps.desktop-cache-inputs.outputs.image, steps.desktop-cache-inputs.outputs.native,
             hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'core/Cargo.toml',
             'src-tauri/Cargo.toml', '.github/actions/core-build-dependencies/action.yml')) }}
