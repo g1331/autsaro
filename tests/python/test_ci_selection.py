@@ -431,16 +431,59 @@ class CiSelectionTests(unittest.TestCase):
         steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]["steps"]
         cache_index, cache = next((i, step) for i, step in enumerate(steps)
                                   if step.get("id") == "desktop-dependencies")
+        install_index = next(i for i, step in enumerate(steps)
+                             if step.get("uses") == "./.github/actions/core-build-dependencies")
+        identity_index = next(i for i, step in enumerate(steps)
+                              if step.get("id") == "desktop-cache-inputs")
+        self.assertLess(install_index, identity_index)
+        self.assertLess(identity_index, cache_index)
         clean = steps[-1]
         self.assertEqual(clean["run"], "cargo clean --locked --workspace --profile dev")
         self.assertIn("success()", clean["if"])
         self.assertIn("steps.desktop-dependencies.outputs.cache-hit != 'true'", clean["if"])
-        self.assertIn("runner.arch", cache["with"]["key"])
-        self.assertIn("steps.desktop-cache-image.outputs.image", cache["with"]["key"])
-        self.assertIn("'Cargo.lock'", cache["with"]["key"])
+        options = cache["with"]
+        self.assertNotIn("restore-keys", options)
+        for value in ("runner.os", "runner.arch", "steps.desktop-cache-inputs.outputs.image",
+                      "steps.desktop-cache-inputs.outputs.native", "'rust-toolchain.toml'", "'Cargo.lock'"):
+            self.assertIn(value, options["key"])
         for step in steps[cache_index + 1:-1]:
             if "run" in step:
                 self.assertNotIn("cache-hit", step["if"])
+
+    def test_desktop_identity_binds_installed_native_dependencies(self):
+        steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]["steps"]
+        script = next(step["run"] for step in steps if step.get("id") == "desktop-cache-inputs")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "output"
+            vcpkg = root / "installed"
+            library = vcpkg / "x64-windows-static-md/lib/libxml2.lib"
+            library.parent.mkdir(parents=True)
+            (vcpkg / "vcpkg").mkdir()
+            (vcpkg / "vcpkg/status").write_text("Package: libxml2\n", encoding="utf-8")
+            env = {"ImageOS": "image", "ImageVersion": "1", "GITHUB_OUTPUT": str(output),
+                   "VCPKG_ROOT": str(root), "VCPKGRS_TRIPLET": "x64-windows-static-md"}
+
+            def identity(platform):
+                output.write_text("", encoding="utf-8")
+                with mock.patch.dict(os.environ, env), mock.patch.object(sys, "platform", platform):
+                    run_script(script)
+                return dict(line.split("=", 1) for line in output.read_text().splitlines())
+
+            packages = "webkit=2.52\tinstalled\nclang=18\tinstalled\n"
+            with mock.patch.object(subprocess, "check_output", side_effect=[
+                    packages, b"2.52\n",
+                    packages.replace("clang=18", "clang=19"), b"2.52\n",
+                    packages, b"1.0\n"]):
+                original = identity("linux")
+                self.assertNotEqual(original["native"], identity("linux")["native"])
+                self.assertNotEqual(original["native"], identity("linux")["native"])
+                self.assertEqual(original["image"], "image-1")
+
+            library.write_bytes(b"old ABI")
+            original = identity("win32")
+            library.write_bytes(b"new ABI")
+            self.assertNotEqual(original["native"], identity("win32")["native"])
 
     def test_context_artifact_keeps_exact_sources_and_raw_summary_without_analyzer_intermediates(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
@@ -1065,6 +1108,9 @@ class CiSelectionTests(unittest.TestCase):
         script = workflow["required"]["steps"][0]["run"]
         native_jobs = {"core", "native", "native-os", "native-sanitizers",
                        "native-delivery", "native-delivery-windows"}
+        self.assertEqual(set(workflow["required"]["needs"]), native_jobs | {
+            "changes", "desktop-scenarios", "python", "desktop", "quality", "c-analysis",
+        })
         for mode, selected in (
             ("full", {"code": True, "native": True, "desktop": True,
                       "analysis": True, "application": True}),

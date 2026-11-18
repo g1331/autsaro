@@ -171,14 +171,36 @@ jobs:
       - uses: ./.github/actions/core-build-dependencies
         with:
           linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
-      - name: Identify desktop dependency cache image
-        if: ${{ !cancelled() }}
-        id: desktop-cache-image
+      - name: Identify installed desktop build dependencies
+        if: ${{ !cancelled() && success() }}
+        id: desktop-cache-inputs
         shell: python
         run: |
-          import os
+          import hashlib, os, subprocess, sys
+          from pathlib import Path
+          native = hashlib.sha256()
+          if sys.platform == 'win32':
+              # vcpkg runs on this job, after the image was built.
+              installed = Path(os.environ['VCPKG_ROOT']) / 'installed'
+              triplet = installed / os.environ['VCPKGRS_TRIPLET']
+              native.update((installed / 'vcpkg/status').read_bytes())
+              for directory in ('include', 'lib', 'debug/lib'):
+                  for path in sorted((triplet / directory).rglob('*')):
+                      if path.is_file():
+                          native.update(path.relative_to(triplet).as_posix().encode() + b'\0')
+                          native.update(hashlib.sha256(path.read_bytes()).digest())
+          else:
+              # Include transitive packages resolved by apt as well as direct build dependencies.
+              packages = subprocess.check_output(['dpkg-query', '-W', '-f',
+                  '${binary:Package}=${Version}\t${db:Status-Status}\n'], text=True)
+              installed = sorted(line.split('\t')[0] for line in packages.splitlines()
+                                 if line.endswith('\tinstalled'))
+              native.update('\n'.join(installed).encode())
+              # Cargo can reuse a successful system-deps probe even if the active .pc changed.
+              native.update(b'\0' + subprocess.check_output(['pkg-config', '--modversion', 'webkit2gtk-4.1']))
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write('image=' + os.environ['ImageOS'] + '-' + os.environ['ImageVersion'] + '\n')
+              output.write('native=' + native.hexdigest() + '\n')
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: desktop-dependencies
         with:
@@ -189,8 +211,8 @@ jobs:
             target/debug/build
             target/debug/deps
           key: >-
-            ${{ format('desktop-dev-deps-v1-{0}-{1}-{2}-{3}', runner.os, runner.arch,
-            steps.desktop-cache-image.outputs.image,
+            ${{ format('desktop-dev-deps-v2-{0}-{1}-{2}-{3}-{4}', runner.os, runner.arch,
+            steps.desktop-cache-inputs.outputs.image, steps.desktop-cache-inputs.outputs.native,
             hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'core/Cargo.toml',
             'src-tauri/Cargo.toml', '.github/actions/core-build-dependencies/action.yml')) }}
       - if: ${{ !cancelled() }}
