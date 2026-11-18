@@ -252,16 +252,7 @@ class SdkSourceTests(unittest.TestCase):
                             algorithm="md5",
                             expected="0" * 32,
                         )
-                        row["key"] = hashlib.sha256(
-                            json.dumps(
-                                {
-                                    k: v
-                                    for k, v in row.items()
-                                    if k not in {"path", "reason", "key"}
-                                },
-                                sort_keys=True,
-                            ).encode()
-                        ).hexdigest()
+                        row["key"] = c_sdk.header_key(row)
                     receipt["scope"]["target"] = target
                     path = directory / target / sample / "summary.json"
                     path.parent.mkdir(parents=True)
@@ -879,8 +870,9 @@ class SdkSourceTests(unittest.TestCase):
             package["expected"] = hashlib.sha256(unused.read_bytes()).hexdigest()
             after = c_sdk.environment_identity(packages)
             self.assertNotEqual(before["sha256"], after["sha256"])
+            # An installed file the compiler never opened is recorded, not part of the identity.
             with patch.object(c_sdk, "msys_headers", return_value=packages):
-                self.assertNotEqual(semantic_before, c_sdk.semantic(scope))
+                self.assertEqual(semantic_before, c_sdk.semantic(scope))
             self.assertEqual(scope["sdkEnvironment"], after)
             relocated = {}
             for index, (name, record) in enumerate(packages.items()):
@@ -893,6 +885,41 @@ class SdkSourceTests(unittest.TestCase):
                 c_sdk.environment_identity(packages)
             with self.assertRaisesRegex(ValueError, "SDK environment provider inventory missing"):
                 c_sdk.environment_identity({})
+
+    def test_identity_ignores_package_revision_but_not_header_bytes_path_or_provider(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, header, packages, record = self.fixture(Path(temporary).resolve())
+
+            def identity(**changes):
+                package = {**packages[str(header)], **changes}
+                row = c_sdk.header_identity(
+                    header, root, TARGET, "x86_64-w64-mingw32", {str(header): package}
+                )
+                scope = {"sdkHeaders": [row], "sdkTranslationUnits": {"main.c": [row["path"]]},
+                         "sdkMacroInputs": {}}
+                return row, c_sdk.semantic_inputs(scope)
+
+            _, base = identity()
+            self.assertNotIn("environment", base)
+            self.assertNotIn("version", base["headers"][0])
+            revised, revised_inputs = identity(version="15.0.1-1")
+            self.assertEqual(revised["version"], "15.0.1-1")
+            self.assertEqual(revised["key"], record["key"])
+            self.assertEqual(revised_inputs, base)
+            self.assertEqual(c_sdk.header_key(record), record["key"])
+            for changes in ({"provider": "mingw-w64-x86_64-crt"},
+                            {"header": "mingw64/include/other.h"}):
+                with self.subTest(changes=changes):
+                    row, inputs = identity(**changes)
+                    self.assertNotEqual(row["key"], record["key"])
+                    self.assertNotEqual(inputs, base)
+            # Same provider path and package digest, different installed bytes.
+            header.write_bytes(b"#define INFINITE 0x7fffffff\n")
+            changed = c_sdk.header_identity(
+                header, root, TARGET, "x86_64-w64-mingw32", packages
+            )
+            self.assertNotEqual(changed["sha256"], record["sha256"])
+            self.assertNotEqual(changed["key"], record["key"])
 
     def test_environment_verifies_windows_materialized_file_links(self):
         with tempfile.TemporaryDirectory() as temporary:

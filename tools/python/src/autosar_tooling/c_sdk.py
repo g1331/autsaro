@@ -128,6 +128,16 @@ def msys_headers(compiler: Path) -> dict:
     return records
 
 
+def header_key(record: dict) -> str:
+    """Identify a consumed header by relative path, provider and bytes, not package revision."""
+    return hashlib.sha256(
+        json.dumps(
+            {k: v for k, v in record.items() if k not in {"path", "reason", "key", "version"}},
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+
+
 def header_identity(
     path: Path, root: Path, target: str, machine: str, packages: dict
 ) -> dict:
@@ -165,12 +175,7 @@ def header_identity(
                 category="sdk",
                 reason="installed provider original matches package manifest",
             )
-    record["key"] = hashlib.sha256(
-        json.dumps(
-            {k: v for k, v in record.items() if k not in {"path", "reason"}},
-            sort_keys=True,
-        ).encode()
-    ).hexdigest()
+    record["key"] = header_key(record)
     return record
 
 
@@ -651,13 +656,7 @@ def validate_sources(data: dict) -> None:
             and row["sha256"] != row["expected"]
         ):
             raise ValueError(label + ": original/package digest mismatch")
-        key = hashlib.sha256(
-            json.dumps(
-                {k: v for k, v in row.items() if k not in {"path", "reason", "key"}},
-                sort_keys=True,
-            ).encode()
-        ).hexdigest()
-        if row.get("key") != key:
+        if row.get("key") != header_key(row):
             raise ValueError(label + ": identity key mismatch")
         headers[row["path"]] = row
     units = scope["translationUnits"]
@@ -737,7 +736,12 @@ def validate_sources(data: dict) -> None:
 
 
 def environment_identity(packages: dict) -> dict:
-    """Seal the entire supported provider inventory, independently of source use."""
+    """Record the entire supported provider inventory for traceability.
+
+    The record is verified against the package manifests but does not decide whether
+    two analyses are comparable: package revisions and files the compiler never opened
+    cannot change the result, and image rollouts make them differ between jobs.
+    """
     if not packages:
         raise ValueError("SDK environment provider inventory missing")
     records = []
@@ -763,7 +767,7 @@ def environment_identity(packages: dict) -> dict:
 
 
 def semantic(scope: dict) -> str:
-    """Paths are provenance; provider/header bytes and active definitions are semantic."""
+    """Paths and package revisions are provenance; opened header bytes and macros are semantic."""
     headers = scope.get("sdkHeaders", [])
     packages = (
         msys_headers(Path(scope["diagnosticCompiler"]["path"]))
@@ -790,15 +794,14 @@ def semantic(scope: dict) -> str:
 
 
 def semantic_inputs(scope: dict) -> dict:
-    """The recorded SDK inputs, without requiring the target host's filesystem."""
+    """The SDK inputs the compiler opened, without requiring the target host's filesystem."""
     headers = scope.get("sdkHeaders", [])
     keys = {row["path"]: row["key"] for row in headers}
     return {
-        "environment": scope["sdkEnvironment"],
         "lineDirectives": scope.get("sdkLineDirectives", False),
         "headers": sorted(
             (
-                {k: v for k, v in row.items() if k not in {"path", "reason"}}
+                {k: v for k, v in row.items() if k not in {"path", "reason", "version"}}
                 for row in headers
             ),
             key=lambda row: row["key"],

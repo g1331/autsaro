@@ -74,7 +74,7 @@ class AcceptanceTests(unittest.TestCase):
                         "sourceClassification": {"complete": True},
                         "programs": [{"name": name, "entry": entry, "translationUnits": ["main.c", entry],
                                       "passed": False, "exitCode": 1} for name, entry in entries.items()],
-                        "semanticIdentity": {"version": 2, "sdk": "1" * 64, "compiler": {"release": "12"},
+                        "semanticIdentity": {"version": 3, "sdk": "1" * 64, "compiler": {"release": "12"},
                                              "defines": {"main.c": []}, "libraries": {"std": "2" * 64},
                                              "analysisCode": {"c_check.py": "3" * 64}, "addonRuntime": {"runaddon.py": "4" * 64}},
                         "scope": {"target": TARGET, "entries": entries, "compilerFlags": ["-std=c99"],
@@ -455,9 +455,7 @@ class AcceptanceTests(unittest.TestCase):
                   "target": TARGET, "provider": "libc6-dev", "version": "2.39-0ubuntu8.9",
                   "header": "usr/include/x86_64-linux-gnu/bits/sigaction.h",
                   "sha256": "1" * 64, "algorithm": "md5", "expected": "2" * 32}
-        header["key"] = hashlib.sha256(json.dumps(
-            {key: value for key, value in header.items() if key not in {"path", "reason", "key"}},
-            sort_keys=True).encode()).hexdigest()
+        header["key"] = c_sdk.header_key(header)
         self.sdk_header = header
         definition = {"file": header["path"], "line": 40,
                       "value": "__sigaction_handler.sa_sigaction", "function": False,
@@ -652,7 +650,7 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["semanticIdentity"] = copy.deepcopy(comparison["semanticIdentity"])
         self.summary["semanticIdentity"]["defines"] = {
             unit: [] for unit in self.summary["scope"]["translationUnits"]}
-        self.summary["scope"].update(profile="ecu", sdkEnvironment=comparison["scope"]["sdkEnvironment"])
+        self.summary["scope"].update(profile="ecu")
         self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
             c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
         self.summary["tool"]["binarySha256"] = "synthetic-analyzer-binary"
@@ -735,7 +733,6 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["semanticIdentity"] = comparison["semanticIdentity"]
         self.summary["semanticIdentity"]["defines"] = {
             name: [] for name in self.summary["scope"]["translationUnits"]}
-        self.summary["scope"]["sdkEnvironment"] = comparison["scope"]["sdkEnvironment"]
         self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
             c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
         self.summary["scope"]["profile"] = "ecu"
@@ -884,9 +881,7 @@ class AcceptanceTests(unittest.TestCase):
                   "provider": "mingw-w64-x86_64-headers", "version": "fixture",
                   "header": "mingw64/include/winbase.h", "algorithm": "sha256",
                   "sha256": "1" * 64, "expected": "1" * 64}
-        header["key"] = hashlib.sha256(json.dumps(
-            {key: value for key, value in header.items() if key != "path"},
-            sort_keys=True).encode()).hexdigest()
+        header["key"] = c_sdk.header_key(header)
         definition = {"file": header["path"], "line": 518, "value": "0xffffffff",
                       "function": False, "use": source, "unresolved": False,
                       "headerKey": header["key"], "original": "#define INFINITE 0xffffffff"}
@@ -958,9 +953,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertNotEqual(before, self.identity())
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
         self.sdk_header["version"] = "new-package"
-        self.sdk_header["key"] = hashlib.sha256(json.dumps(
-            {key: value for key, value in self.sdk_header.items() if key not in {"path", "key"}},
-            sort_keys=True).encode()).hexdigest()
+        self.sdk_header["key"] = c_sdk.header_key(self.sdk_header)
         self.bind_sdk()
         self.assertIn("definition differs", self.evaluate()["objects"][-1]["reason"])
 

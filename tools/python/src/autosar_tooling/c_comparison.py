@@ -188,9 +188,13 @@ def _semantic(summary: dict) -> dict:
                     for item in value.values()))
     def strings(value, nonempty=False):
         return isinstance(value, list) and (not nonempty or bool(value)) and all(isinstance(x, str) and x for x in value)
+    if isinstance(identity, dict) and identity.get("version") == 2:
+        raise ValueError(
+            "Semantic identity version 2 sealed the complete SDK provider environment "
+            "and is superseded by version 3; regenerate the analysis with the current tool")
     require(isinstance(identity, dict) and set(identity) ==
             {"version", "compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime", "sdk"})
-    require(type(identity["version"]) is int and identity["version"] == 2)
+    require(type(identity["version"]) is int and identity["version"] == 3)
     compiler = identity["compiler"]
     require(isinstance(compiler, dict) and set(compiler) == {"machine", "release", "predefines", "builtins"})
     require(isinstance(compiler["machine"], str) and bool(compiler["machine"]))
@@ -214,19 +218,11 @@ def _semantic(summary: dict) -> dict:
     return identity
 
 
-def _source_environment(summary: dict, identity: dict) -> dict:
-    """Separate verified SDK environment from source-dependent usage inventories."""
+def _source_sdk(summary: dict, identity: dict) -> dict:
+    """Separate verified SDK header evidence from source-dependent usage inventories."""
     sdk = c_sdk.semantic_inputs(summary["scope"])
     if hashlib.sha256(json.dumps(sdk, sort_keys=True).encode()).hexdigest() != identity["sdk"]:
         raise ValueError("Semantic identity differs: sdk receipt")
-    environment = sdk["environment"]
-    if (not isinstance(environment, dict)
-            or set(environment) != {"format", "files", "sha256"}
-            or environment["format"] != "sdk-provider-environment-v1"
-            or type(environment["files"]) is not int or environment["files"] <= 0
-            or not isinstance(environment["sha256"], str)
-            or re.fullmatch(r"[0-9a-f]{64}", environment["sha256"]) is None):
-        raise ValueError("SDK environment identity missing or invalid")
     headers = {row["header"]: row for row in sdk["headers"]}
     header_names = {row["key"]: row["header"] for row in sdk["headers"]}
     macros = {}
@@ -242,23 +238,21 @@ def _source_environment(summary: dict, identity: dict) -> dict:
             if match is None:
                 raise ValueError("Semantic identity differs: defines format")
             defines[unit, match[1]] = match[2]
-    return {"environment": environment, "headers": headers, "macros": macros, "defines": defines,
-            "providers": {row["provider"]: row["version"] for row in sdk["headers"]},
+    return {"headers": headers, "macros": macros, "defines": defines,
             "lineDirectives": sdk["lineDirectives"]}
 
 
-def _compare_source_environment(current: dict, previous: dict, renames: dict) -> None:
-    now = _source_environment(current, current["semanticIdentity"])
-    before = _source_environment(previous, previous["semanticIdentity"])
+def _compare_source_sdk(current: dict, previous: dict, renames: dict) -> None:
+    now = _source_sdk(current, current["semanticIdentity"])
+    before = _source_sdk(previous, previous["semanticIdentity"])
     before["defines"] = {(renames.get(unit, unit), name): value
                          for (unit, name), value in before["defines"].items()}
-    if now["environment"] != before["environment"]:
-        raise ValueError("Semantic identity differs: sdk environment")
     if now["lineDirectives"] != before["lineDirectives"]:
         raise ValueError("Semantic identity differs: sdk line directives")
-    for field in ("headers", "providers", "macros", "defines"):
-        # The complete provider environment was compared above; usage may vary,
-        # while definitions observed in both source trees must still agree.
+    for field in ("headers", "macros", "defines"):
+        # Source changes may open more or fewer headers and use other macros. What both
+        # trees consumed must agree byte for byte; package revisions and files neither
+        # tree opened cannot change the analysis and are not compared.
         for key in now[field].keys() & before[field].keys():
             if now[field][key] != before[field][key]:
                 label = "defines" if field == "defines" else "sdk " + field
@@ -401,7 +395,7 @@ def compare(
             raise ValueError("Program identity differs")
         current_identity, previous_identity = _semantic(current), _semantic(previous)
         if source_tree:
-            _compare_source_environment(current, previous, renames)
+            _compare_source_sdk(current, previous, renames)
         for field in ("compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime", "sdk"):
             if source_tree and field in {"defines", "sdk"}:
                 continue

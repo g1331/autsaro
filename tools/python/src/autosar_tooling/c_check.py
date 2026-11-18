@@ -658,7 +658,7 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     scope["implicitStdLibrary"] = str(implicit[0])
     scope["addonRuntime"] = runtimes[0]
     return {
-        "version": 2,
+        "version": 3,
         "sdk": c_sdk.semantic(scope),
         "compiler": scope["compilerSemanticInputs"],
         "defines": {name: sorted(values) for name, values in scope["compilerDiscoveredDefines"].items()},

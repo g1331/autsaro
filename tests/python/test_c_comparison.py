@@ -122,14 +122,12 @@ class CComparisonTests(unittest.TestCase):
             "scope": {"target": "linux", "profile": "ecu", "entries": {"target": "main.c"}, "compilerFlags": ["-std=c99"],
                       "includePaths": ["."], "translationUnits": ["main.c"],
                       "projectTranslationUnits": {"main.c": ["main.c"]},
-                      "supplemental": [], "patchedKernel": [],
-                      "sdkEnvironment": {"format": "sdk-provider-environment-v1", "files": 1,
-                                         "sha256": "f" * 64}},
+                      "supplemental": [], "patchedKernel": []},
             "programs": [{"name": "target", "entry": "main.c", "translationUnits": ["main.c"], "exitCode": 1}],
             "diagnostics": [self.diagnostic("rule", 1), self.diagnostic("rule", 2)],
         }
         summary["semanticIdentity"] = {
-            "version": 2,
+            "version": 3,
             "sdk": hashlib.sha256(json.dumps(c_sdk.semantic_inputs(
                 summary["scope"]), sort_keys=True).encode()).hexdigest(),
             "compiler": {"machine": "x86_64-linux-gnu", "release": "13.3.0",
@@ -393,8 +391,8 @@ class CComparisonTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Semantic identity differs: " + field):
                     compare(current, project, output, baseline)
 
-    def test_source_tree_sdk_usage_changes_preserve_shared_environment_checks(self):
-        for changed in ("usage", "header", "provider", "version", "define", "macro", "receipt"):
+    def test_source_tree_sdk_usage_changes_preserve_shared_header_checks(self):
+        for changed in ("usage", "header", "provider", "define", "macro", "receipt"):
             with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
                 current, project, output, baseline = self.fixture(Path(temporary))
                 header = {"path": "/sdk/limits.h", "header": "include/limits.h",
@@ -407,10 +405,7 @@ class CComparisonTests(unittest.TestCase):
 
                 def bind(summary):
                     for row in summary["scope"]["sdkHeaders"]:
-                        row["key"] = hashlib.sha256(json.dumps({
-                            key: value for key, value in row.items()
-                            if key not in {"path", "reason", "key"}
-                        }, sort_keys=True).encode()).hexdigest()
+                        row["key"] = c_sdk.header_key(row)
                     sdk = c_sdk.semantic_inputs(summary["scope"])
                     summary["semanticIdentity"]["sdk"] = hashlib.sha256(
                         json.dumps(sdk, sort_keys=True).encode()).hexdigest()
@@ -420,9 +415,8 @@ class CComparisonTests(unittest.TestCase):
                 self.write(baseline, previous)
                 if changed == "usage":
                     current["semanticIdentity"]["defines"]["main.c"].append("-DINT_MAX=2147483647")
-                elif changed in {"header", "provider", "version"}:
-                    header[{"header": "sha256", "provider": "provider",
-                            "version": "version"}[changed]] = "b" * 64
+                elif changed in {"header", "provider"}:
+                    header[{"header": "sha256", "provider": "provider"}[changed]] = "b" * 64
                 elif changed == "define":
                     current["semanticIdentity"]["defines"]["main.c"] = ["-DCHAR_BIT=16"]
                 elif changed == "macro":
@@ -445,76 +439,119 @@ class CComparisonTests(unittest.TestCase):
                                                "Semantic identity differs: defines"):
                         compare(current, project, output, baseline, source_tree=True)
 
-    def test_source_tree_seals_headers_unused_in_the_other_environment(self):
-        for changed in (False, True):
-            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary).resolve()
-                template, project, output, baseline = self.fixture(root)
-                template["diagnostics"] = []
-                template["passed"] = True
-                for program in template["programs"]:
-                    program["exitCode"] = 0
-                summaries = {}
-                for side in ("baseline", "current"):
-                    sdk = root / (side + "-sdk")
-                    sdk.mkdir()
-                    packages = {}
-                    for name, value in (("common.h", "1"), ("added.h", "2" if
-                                            changed and side == "current" else "1")):
-                        path = sdk / name
-                        macro = "COMMON_VALUE" if name == "common.h" else "NEW_VALUE"
-                        path.write_bytes(f"#define {macro} {value}\n".encode())
-                        packages[str(path)] = {
-                            "provider": "libc6-dev", "version": "1",
-                            "header": "usr/include/" + name, "algorithm": "md5",
-                            "expected": hashlib.md5(path.read_bytes(),
-                                                    usedforsecurity=False).hexdigest()}
-                    used = [sdk / "common.h"]
-                    if side == "current":
-                        used.append(sdk / "added.h")
-                    summary = deepcopy(template)
-                    summary["scope"].update(
-                        sdkHeaders=[c_sdk.header_identity(path, project, "linux",
-                                    "x86_64-linux-gnu", packages) for path in used],
-                        sdkTranslationUnits={"main.c": [path.as_posix() for path in used]},
-                        sdkMacroInputs={"main.c": {}})
-                    summary["sourceClassification"] = {
-                        "complete": True, "unclassifiedDiagnosticKeys": 0}
-                    with patch.object(c_sdk, "debian_headers", return_value=packages):
-                        summary["semanticIdentity"]["sdk"] = c_sdk.semantic(summary["scope"])
-                    c_sdk.validate_sources(summary)
-                    self.assertEqual(summary["scope"]["sdkEnvironment"]["files"], 2)
-                    summaries[side] = summary
-                self.write(baseline, summaries["baseline"])
-                if changed:
-                    with self.assertRaisesRegex(ValueError,
-                                                "Semantic identity differs: sdk environment"):
-                        compare(summaries["current"], project, output, baseline, source_tree=True)
-                else:
-                    self.assertEqual(compare(summaries["current"], project, output, baseline,
-                                             source_tree=True), {"new": [], "removed": []})
+    def sdk_summary(self, template, project, root, name, *, opened, version="1", unused=None):
+        """A real producer record: `opened` headers are consumed, `unused` only installed."""
+        sdk = root / (name + "-sdk")
+        sdk.mkdir()
+        packages = {}
+        for file, text in {**opened, **(unused or {})}.items():
+            path = sdk / file
+            path.write_bytes(text.encode())
+            packages[str(path)] = {
+                "provider": "libc6-dev", "version": version, "header": "usr/include/" + file,
+                "algorithm": "md5",
+                "expected": hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()}
+        summary = deepcopy(template)
+        paths = [sdk / file for file in opened]
+        summary["scope"].update(
+            sdkHeaders=[c_sdk.header_identity(path, project, "linux", "x86_64-linux-gnu", packages)
+                        for path in paths],
+            sdkTranslationUnits={"main.c": [path.as_posix() for path in paths]},
+            sdkMacroInputs={"main.c": {}})
+        with patch.object(c_sdk, "debian_headers", return_value=packages):
+            summary["semanticIdentity"]["sdk"] = c_sdk.semantic(summary["scope"])
+        return summary
 
-    def test_source_tree_requires_a_complete_sdk_environment_receipt(self):
-        for side in ("current", "baseline", "both"):
-            for changed in ("missing", "format", "files", "boolean", "digest"):
-                with self.subTest(side=side, changed=changed), tempfile.TemporaryDirectory() as tmp:
-                    current, project, output, baseline = self.fixture(Path(tmp))
-                    summary = current if side in {"current", "both"} else deepcopy(current)
-                    environment = summary["scope"]["sdkEnvironment"]
-                    if changed == "missing":
-                        del summary["scope"]["sdkEnvironment"]
+    def sdk_pair(self, root, baseline_side, current_side):
+        template, project, output, baseline = self.fixture(root)
+        template.update(diagnostics=[], passed=True)
+        for program in template["programs"]:
+            program["exitCode"] = 0
+        before = self.sdk_summary(template, project, root, "baseline", **baseline_side)
+        now = self.sdk_summary(template, project, root, "current", **current_side)
+        self.write(baseline, before)
+        return before, now, project, output, baseline
+
+    def test_sdk_identity_binds_consumed_headers_and_ignores_package_revisions(self):
+        common = {"common.h": "#define COMMON_VALUE 1\n"}
+        added = {**common, "added.h": "#define ADDED_VALUE 1\n"}
+        # (name, baseline side, current side, source-tree result, exact-source result)
+        cases = [
+            ("package revision", {"opened": common},
+             {"opened": common, "version": "2"}, None, None),
+            ("unused file content", {"opened": common, "unused": {"u.h": "1\n"}},
+             {"opened": common, "unused": {"u.h": "2\n"}}, None, None),
+            ("unused file added", {"opened": common},
+             {"opened": common, "unused": {"u.h": "1\n"}}, None, None),
+            ("consumed content", {"opened": common},
+             {"opened": {"common.h": "#define COMMON_VALUE 2\n"}},
+             "sdk headers: usr/include/common.h", "sdk"),
+            ("one more header opened", {"opened": common}, {"opened": added}, None, "sdk"),
+            ("one less header opened", {"opened": added}, {"opened": common}, None, "sdk"),
+            ("opened header content, revision unchanged", {"opened": added, "version": "2"},
+             {"opened": {**added, "added.h": "#define ADDED_VALUE 2\n"}, "version": "2"},
+             "sdk headers: usr/include/added.h", "sdk"),
+        ]
+        for name, previous, now, tree_error, exact_error in cases:
+            for source_tree, error in ((True, tree_error), (False, exact_error)):
+                with self.subTest(case=name, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), previous, now)
+                    if error is None:
+                        self.assertEqual(compare(current, project, output, baseline,
+                                                 source_tree=source_tree),
+                                         {"new": [], "removed": []})
                     else:
-                        key, value = {"format": ("format", "unknown"), "files": ("files", 0),
-                                      "boolean": ("files", True),
-                                      "digest": ("sha256", "bad")}[changed]
-                        environment[key] = value
-                        summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
-                            c_sdk.semantic_inputs(summary["scope"]),
-                            sort_keys=True).encode()).hexdigest()
-                    if side in {"baseline", "both"}:
-                        self.write(baseline, summary)
-                    with self.assertRaisesRegex(ValueError, "C baseline refused:"):
-                        compare(current, project, output, baseline, source_tree=True)
+                        with self.assertRaisesRegex(ValueError,
+                                                    "Semantic identity differs: " + error):
+                            compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_sdk_environment_is_recorded_but_not_compared(self):
+        common = {"common.h": "#define COMMON_VALUE 1\n"}
+        with tempfile.TemporaryDirectory() as temporary:
+            before, current, project, output, baseline = self.sdk_pair(
+                Path(temporary).resolve(), {"opened": common},
+                {"opened": common, "version": "2", "unused": {"u.h": "1\n"}})
+            self.assertEqual(before["scope"]["sdkEnvironment"]["files"], 1)
+            self.assertEqual(current["scope"]["sdkEnvironment"]["files"], 2)
+            self.assertNotEqual(before["scope"]["sdkEnvironment"]["sha256"],
+                                current["scope"]["sdkEnvironment"]["sha256"])
+            self.assertEqual(before["semanticIdentity"]["sdk"], current["semanticIdentity"]["sdk"])
+            self.assertEqual(compare(current, project, output, baseline),
+                             {"new": [], "removed": []})
+
+    def test_compiler_identity_still_refuses_with_matching_sdk_headers(self):
+        common = {"opened": {"common.h": "#define COMMON_VALUE 1\n"}}
+        changes = {"release": lambda x: x.update(release="13.3.1"),
+                   "machine": lambda x: x.update(machine="x86_64-pc-linux-gnu"),
+                   "predefines": lambda x: x["predefines"].append("#define __SSE2__ 1"),
+                   "builtins": lambda x: x["builtins"].append("-D__SSE2__=1")}
+        for field, change in changes.items():
+            for source_tree in (True, False):
+                with self.subTest(field=field, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), common, common)
+                    change(current["semanticIdentity"]["compiler"])
+                    with self.assertRaisesRegex(ValueError, "Semantic identity differs: compiler"):
+                        compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_semantic_identity_version_2_refuses_on_either_side_with_a_clear_reason(self):
+        for previous in (False, True):
+            for source_tree in (True, False):
+                with self.subTest(previous=previous, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    current, project, output, baseline = self.fixture(Path(temporary))
+                    old = deepcopy(current)
+                    old["semanticIdentity"]["version"] = 2
+                    if previous:
+                        self.write(baseline, old)
+                    else:
+                        current = old
+                    with self.assertRaisesRegex(
+                            ValueError, "version 2 sealed the complete SDK provider environment"):
+                        compare(current, project, output, baseline, source_tree=source_tree)
 
     def test_missing_old_and_incomplete_identity_refuse_on_either_side(self):
         changes = [lambda x: x.pop("semanticIdentity"),
