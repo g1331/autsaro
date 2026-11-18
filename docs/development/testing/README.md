@@ -94,7 +94,7 @@ Linux／Windows 工具 prepare 与双侧生成独立并行；每侧扫描仅依�
 
 基准仅复用目标 SHA 的成功 master 原始生产结果，身份不符或缺失则现场扫描；验收及输入身份重算，gate 记来源，门判定不缓存，见[源码验收](source-acceptance.md)。新增由本次精确处置覆盖，整体 blocked 报告保留。`c-analysis` 要求必要上游成功和八套摘要／门回执，工具／解析失败、缺重样本／身份、skip／cancel 均拒绝；`CI required` 还要求双平台交付成功。文档选择保持。性能前后各至少三次，按执行时长和依赖链比较，墙钟另列参考。
 
-UI 与 desktop 共用 20 分钟作业，在路径选择后运行。dev 缓存绑定镜像、Cargo 和已装原生依赖，保存前清理工作区产物。Python 等待当前树生成，允许 UI-only PR 跳过生成。
+UI 与 desktop 在路径选择后运行。dev 缓存按镜像、Cargo 和原生输入分隔，每轮重建系统库探测包。Python 等待当前树生成，允许 UI-only 跳过生成。
 
 只修改七个独立分析驱动（`c_check`、`c_acceptance`、`c_sdk`、`c_comparison`、`c_addon`、`c_gate`、`c_baseline`）、标准评估 Markdown 或固定 MISRA 索引时，PR 选择 Python、两平台 prepare／分析及汇总。generated-retention、共享 lexer／retention、LICENSE／NOTICE 属于完整检查输入；混合改动、改名、未知或截断清单完整选择。
 

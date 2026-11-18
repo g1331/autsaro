@@ -440,7 +440,9 @@ class CiSelectionTests(unittest.TestCase):
         self.assertLess(identity_index, cache_index)
         self.assertNotIn("continue-on-error", steps[identity_index])
         self.assertNotIn("continue-on-error", job)
-        self.assertNotIn("if", cache)
+        self.assertEqual(cache["if"],
+                         "steps.desktop-cache-inputs.outputs.image != '' && "
+                         "steps.desktop-cache-inputs.outputs.native != ''")
         clean = steps[-1]
         self.assertEqual(clean["run"], "cargo clean --locked --workspace --profile dev")
         self.assertIn("success()", clean["if"])
@@ -453,6 +455,45 @@ class CiSelectionTests(unittest.TestCase):
         for step in steps[cache_index + 1:-1]:
             if "run" in step:
                 self.assertNotIn("cache-hit", step["if"])
+
+    def test_desktop_cleans_native_probe_packages_before_cargo_builds(self):
+        steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]["steps"]
+        indices = {step.get("id"): i for i, step in enumerate(steps)}
+        self.assertIn("refresh-native-probes", indices)
+        index = indices["refresh-native-probes"]
+        self.assertLess(indices["desktop-dependencies"], index)
+        clean = steps[index]
+        self.assertEqual(clean["if"], "${{ !cancelled() && success() }}")
+        self.assertNotIn("continue-on-error", clean)
+        for i, step in enumerate(steps):
+            command = step.get("run", "")
+            if any(text in command for text in ("cargo test ", "ipc:check", "cargo build ", "cargo clippy ")):
+                self.assertLess(index, i)
+                self.assertIn("steps.refresh-native-probes.outcome == 'success'", step["if"])
+
+        def package(name, kind, dependency):
+            return {"name": name, "dependencies": [{"kind": kind, "name": dependency}]}
+
+        packages = [package("web", "build", "system-deps"), package("xml", "build", "vcpkg"),
+                    package("native", "build", "pkg-config"), package("regular", None, "pkg-config"),
+                    package("other", "build", "anyhow")]
+        with mock.patch.object(subprocess, "check_output") as query, mock.patch.object(subprocess, "run") as run:
+            metadata_command = ["cargo", "metadata", "--locked", "--format-version", "1",
+                                "--filter-platform", "host-triple"]
+            query.side_effect = ["host-triple\n", json.dumps({"packages": packages}).encode()]
+            run_script(clean["run"])
+            self.assertEqual(query.call_args_list, [
+                mock.call(["rustc", "--print", "host-tuple"], text=True), mock.call(metadata_command),
+            ])
+            run.assert_called_once_with(
+                ["cargo", "clean", "--locked", "--profile", "dev", "-p", "native", "-p", "web", "-p", "xml"],
+                check=True,
+            )
+            run.reset_mock()
+            query.side_effect = ["host-triple\n", json.dumps({"packages": packages[3:]}).encode()]
+            with self.assertRaisesRegex(RuntimeError, "No Cargo packages"):
+                run_script(clean["run"])
+            run.assert_not_called()
 
     def test_desktop_identity_binds_installed_native_dependencies(self):
         steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["desktop"]["steps"]
@@ -514,6 +555,9 @@ class CiSelectionTests(unittest.TestCase):
                     self.assertNotEqual(original["native"], identity("win32")["native"])
                     path.write_bytes(b"original")
             manifest = installed_files[2]
+            installed_files[1].unlink()
+            self.assertNotEqual(original["native"], identity("win32")["native"])
+            installed_files[1].write_bytes(b"original")
             manifest.unlink()
             self.assertNotEqual(original["native"], identity("win32")["native"])
             manifest.parent.rmdir()
