@@ -17,7 +17,8 @@ from ecu_tools.build import digest, tool_argument
 
 WARNINGS = (
     "-Wundef", "-Wexpansion-to-defined", "-Wno-error=undef",
-    "-Wno-error=expansion-to-defined", "-fdiagnostics-format=json",
+    "-Wno-error=expansion-to-defined", "-fdiagnostics-format=text",
+    "-fdiagnostics-show-option", "-fdiagnostics-color=never",
 )
 MARK = "AUTSARO_CONDITIONAL_TRACE_"
 LITERAL = r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\''
@@ -206,7 +207,7 @@ def collect(scope: dict, root: Path, output: Path, run) -> dict:
             if plain != baseline:
                 raise ValueError(f"Preprocessing probes changed emitted tokens or include order: {unit}")
             return unit, {"expandedSha256": c_acceptance._hash(baseline), "events": events,
-                          "compilerDiagnostics": json.loads(diagnostics or "[]")}
+                          "compilerDiagnostics": diagnostics}
 
         with ThreadPoolExecutor(max_workers=scope["compilerWorkers"]) as executor:
             report = output / "preprocessing.json.gz"

@@ -81,9 +81,13 @@ class PreprocessingEvidenceTests(unittest.TestCase):
             self.assertEqual(conditions[5]["unexpandedIdentifiers"], ["UNDEFINED"])
             self.assertEqual(conditions[5]["definitions"]["CLI"]["file"], "<command-line>")
             self.assertEqual(conditions[6]["definitions"]["__STDC_VERSION__"]["file"], "<built-in>")
-            warnings = [row for row in unit["compilerDiagnostics"] if row.get("option") == "-Wundef"]
+            diagnostics = unit["compilerDiagnostics"]
+            self.assertEqual(diagnostics, (scratch / "compiler-origins-0.stderr.log").read_text(
+                encoding="utf-8"))
+            warnings = [line for line in diagnostics.splitlines() if line.endswith("[-Wundef]")]
             self.assertEqual(len(warnings), 1)
-            self.assertIn("UNDEFINED", warnings[0]["message"])
+            self.assertIn("main.c:10:", warnings[0])
+            self.assertIn("UNDEFINED", warnings[0])
             self.assertEqual(
                 [(row["kind"], row["line"]) for row in events if row.get("name") == "FLAG"],
                 [("define", 1), ("undef", 3), ("define", 4)],

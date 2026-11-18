@@ -34,7 +34,8 @@ assessment 和 completeCompliance 保持原义。
 ## 第六批的逐事件取证
 
 `c-check` 在当前封存 ECU 分析中保留 `preprocessing.json.gz`。采集复用 CPPcheck
-输入准备时取得的 GCC 带行标记输出与 `-Wundef` 诊断。它在临时副本中让同一目标 GCC
+输入准备时取得的 GCC 带行标记输出与 `-Wundef` 诊断。两平台使用 GCC 文本诊断，
+逐 TU 保留原警告及位置。它在临时副本中让同一目标 GCC
 报告受评估的每次 `#if`、`#elif`，并核对探针前后输出与实际文件进入、返回顺序。
 原分析副本和编译产物照常使用。CI 的完整分析工件包含逐 TU 的展开摘要、物理文件及行、
 条件展开、当时的定义来源和条件值。宏状态取自按顺序出现的 define／undef，重复
