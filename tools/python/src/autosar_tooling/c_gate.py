@@ -153,7 +153,8 @@ def new_dispositions(current: dict, acceptance: dict, project: Path,
 
 
 def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str],
-            *, baseline_matrix: dict | None = None, identifier_evidence: dict | None = None) -> dict:
+            *, baseline_matrix: dict | None = None, identifier_evidence: dict | None = None,
+            identifier_evidence_error: str | None = None) -> dict:
     """Reuse comparison counts and the current, independently recomputed disposition."""
     binary = current["tool"].get("binarySha256")
     if not binary or binary != read(baseline / "summary.json")["tool"].get("binarySha256"):
@@ -179,8 +180,13 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
             previous, baseline / "project", in_scope_only=True, headers=previous_headers).items():
         before[rule, renames.get(name, name), source, program] += count
     additions = inside - before
-    equivalent = c_rename.equivalent(previous, current, baseline, output, comparison,
-                                     identifier_evidence, previous_headers, headers)
+    equivalent = Counter()
+    if identifier_evidence_error is None:
+        try:
+            equivalent = c_rename.equivalent(previous, current, baseline, output, comparison,
+                                             identifier_evidence, previous_headers, headers)
+        except c_rename.EvidenceError as error:
+            identifier_evidence_error = str(error)
     blocked, outside = [], []
     for row in comparison["new"]:
         key = row["rule"], row["file"], row["source"], row["program"]
@@ -195,7 +201,8 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
     return {"status": "blocked" if blocked else "passed", "comparison": comparison,
             "unacceptedNew": blocked, "outOfScopeNew": outside,
             "complianceScope": c_comparison.scope_statistics(current, headers=headers),
-            "projectAcceptance": acceptance["status"]}
+            "projectAcceptance": acceptance["status"],
+            **({"identifierEvidenceError": identifier_evidence_error} if identifier_evidence_error else {})}
 
 
 def load_scope_matrix(directory: Path, side: str) -> dict:
@@ -206,6 +213,7 @@ def load_scope_matrix(directory: Path, side: str) -> dict:
 def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
     outputs = {}
     evidence = {}
+    evidence_errors = []
     parent = git("rev-parse", "HEAD^1")
     # Same-run c-check producers already validate actual target semantics before
     # and after scanning. Rebind transferred source bytes to those fresh inputs.
@@ -223,7 +231,10 @@ def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
         if identity != summary["projectAcceptance"]["inputIdentity"]:
             raise ValueError(f"Transferred {side} analysis inputs changed: {sample}")
         outputs[side] = output
-        evidence[side] = c_rename.evidence(output, sha(output / "summary.json"))
+        try:
+            evidence[side] = c_rename.evidence(output, sha(output / "summary.json"))
+        except c_rename.EvidenceError as error:
+            evidence_errors.append(f"{side}: {error}")
     current, baseline = outputs["current"], outputs["baseline"]
     source = baseline_source(read(baseline / "baseline-source.json"), parent)
     matrices = {}
@@ -240,6 +251,7 @@ def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
     result = verdict(read(current / "summary.json"), current, baseline,
                      rename_paths(baseline / "project", current / "project"),
                      identifier_evidence=evidence,
+                     identifier_evidence_error=" / ".join(evidence_errors) or None,
                      **({"baseline_matrix": matrices["baseline"]} if matrices else {}))
     if matrices:
         result["baselineScopeMatrix"] = matrices["baseline"]

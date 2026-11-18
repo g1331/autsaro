@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -89,10 +90,15 @@ def record(output: Path, tree: str, target: str, sample: str) -> None:
     value = identity(output / "project", tree, target, sample, summary["tool"],
                      compiler_identity(Path(summary["scope"]["diagnosticCompiler"]["path"])),
                      summary["semanticIdentity"]["sdk"])
+    started = time.perf_counter()
+    identifier_evidence = c_rename.record(output, summary)
+    evidence_bytes = sum(path.stat().st_size for path in (output / c_rename.EVIDENCE).rglob("*.json.gz"))
+    print(f"Identifier evidence: {len(identifier_evidence)} TUs, {evidence_bytes} bytes, "
+          f"{time.perf_counter() - started:.3f} seconds to package and hash", flush=True)
     (output / "analysis-identity.json").write_text(json.dumps({
         "format": FORMAT, "identity": value,
         "summarySha256": digest(output / "summary.json"),
-        "identifierEvidence": c_rename.record(output, summary),
+        "identifierEvidence": identifier_evidence,
         "run": int(os.environ["GITHUB_RUN_ID"]) if os.environ.get("GITHUB_RUN_ID") else None,
         "attempt": int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")),
     }, indent=2) + "\n", encoding="utf-8")

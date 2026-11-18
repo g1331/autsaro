@@ -37,13 +37,13 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 复用 `c_comparison` 的逐程序差集，重新计算当前项目验收，仅由对应诊断、物理位置及程序的有效 accepted 处置覆盖新增。改写诊断行产生新增，Git 改名回接原件／交付路径；整文件行映射把旧位置批准留在旧位置。整体 blocked 留作报告，执行 error 阻断。`out_of_scope` occurrence 和 `outOfScopeNew` 保留范围外位置及新增。门先收齐双侧各八份 `scope-input.json`，按原始分析身份绑定并集，再重算 occurrence、MR12／SDK 消费与验收身份。严格集成验收要求完整矩阵；汇总核对每份绑定及逐位置分类，统计见 `compliance-scope.json`。包装器零退出只表示执行完整，原始分析状态保持。
+PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`c_gate scan` 保留逐程序严格差集，按诊断、位置及程序重算 accepted 处置。Git 改名回接原件／交付路径，整文件行映射限定批准的原位置。R10.3／R10.4 可用文件静态对象改名证明配对，条件为每个变化行均经 GCC 发射并验证，Cppcheck 绑定、映射后的列位置、程序和次数全部对应。证明缺损时执行严格判定，`gate.json.identifierEvidenceError` 记录原因。门先绑定双侧各八份 `scope-input.json` 的原始身份，再重算范围并集、occurrence、MR12／SDK 和验收身份；范围外位置及新增保留，矩阵汇总见 `compliance-scope.json`。整体 blocked 留作报告，执行 error 阻断，原始分析状态保持。
 
 基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。prepare 与双侧生成并行；各侧扫描依赖工具和本侧生成。基准原件及 SDK 原件记录取第一父提交并绑定身份，继续核对实际 SDK；current 严格核对当前记录，评估仍用当前输入。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树严格比较受支持 SDK provider 完整包文件清单及实际字节摘要，允许宏／头使用集合变化；共有宏值仍比较。双侧 raw 回执均拒绝验收 error；基准失败或环境不可比均拒绝。
 
 基准扫描可复用该 SHA 的 master push 原始产物，要求对应生产作业成功。匹配身份覆盖树、样本、分析器二进制／addon、规则与生成器、完整生成 seal、PR 驱动／配置／评估输入、Python、GCC driver／backend 和 runner 镜像。目标主机重新计算完整 SDK 环境，并重查模型、隐式库及驱动语义；任一不符、产物缺失／重复或 attempt 不符均现场扫描。每轮仍生成基准以核对完整 seal；复用只省去原始扫描，项目验收和输入身份重新计算。`gate.json.baselineSource` 记录 same-run（含回退原因）或 master-artifact（运行、attempt、生产作业、工件与 digest），不缓存门判定。
 
-配对要求每侧恰好一份完整结果；工件名带侧别、目标、样本及分片序号，保留重复证据。Linux 消费本轮成功作业产物，核对双方 `_complete`、`input_identity`，八份门回执绑定 checkout、第一父提交、双侧摘要与输入身份；所需上游 skip／cancel／failure、缺重样本／身份均拒绝。Windows 消费端先 `git read-tree --empty`，再用 `core.autocrlf=true reset --hard HEAD` 重建真实字节并遵循 `.gitattributes`。精简配对产物保留 summary、封存 project、身份、来源及平台模型；完整 dump／日志仍由生产作业另存。历史工件的严格目标主机重放入口保持。
+配对要求每侧恰好一份完整结果；工件名含侧别、目标、样本及分片序号。Linux 核对双方 `_complete`、`input_identity`，八份门回执绑定 checkout、第一父提交和双侧摘要；上游 skip／cancel／failure、缺重样本／身份均拒绝。Windows 消费端用 `git read-tree --empty` 和 `core.autocrlf=true reset --hard HEAD` 按 `.gitattributes` 重建字节。raw 配对工件含 summary、封存 project、身份、来源、平台模型和可选 `identifier-evidence/`，后者存 GCC 展开和 Cppcheck 绑定并由身份清单校验摘要。完整 dump／日志另存，目标主机重放入口保持。
 
 合规线出口由 [#482](https://github.com/g1331/autsaro/issues/482) 切换必需门到完整验收。测试里的完整合成正例验证可执行契约，真实处置及分支保护证据由 #55 的 PR 保存。
 

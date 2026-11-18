@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import json
 import re
+import zlib
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -18,6 +19,27 @@ TYPE_RULES = {"misra-c2012-10.3", "misra-c2012-10.4"}
 MARKER = re.compile(r'# (\d+) "((?:[^"\\]|\\.)*)"(?: .*)?')
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
 HORIZONTAL_SPACE = re.compile(r"[ \t]+")
+
+
+class EvidenceError(ValueError):
+    """The optional rename proof cannot be used."""
+
+
+def _normalize_expansion(expansion: str, output: Path) -> str:
+    # -g adds a working-directory marker after GCC's first source marker.
+    # Only the known cwd at that position is irrelevant to source provenance.
+    lines = expansion.split("\n")
+    paths = {tool_argument(output), str(output).replace("\\", "\\\\")}
+    if len(lines) > 1 and lines[0].startswith('# 0 "') and MARKER.fullmatch(lines[0]) and lines[1] in {
+            f'# 1 "{path}//"' for path in paths}:
+        lines[1] = '# 1 "@cwd@//"'
+    expansion = "\n".join(lines)
+    root = output / "project"
+    # Preserve relative source locations and the suffix of __FILE__ strings.
+    for prefix in {tool_argument(root), str(root).replace("\\", "\\\\")}:
+        expansion = expansion.replace(prefix + "/", "@project@/")
+        expansion = expansion.replace(prefix + "\\\\", "@project@/")
+    return expansion
 
 
 def _units(summary: dict) -> set[str]:
@@ -53,34 +75,39 @@ def record(output: Path, summary: dict) -> dict[str, str]:
         path = _proof_path(output, unit)
         if not path.is_file():
             expansion = (output / f"compiler-origins-{index}.stdout.log").read_text(encoding="utf-8")
-            # GCC prints the staging root in markers and __FILE__ strings. Preserve
-            # the relative spelling and the rest of the expansion across transfers.
-            for prefix in {tool_argument(root), str(root).replace("\\", "\\\\")}:
-                expansion = expansion.replace(prefix + "/", "@project@/")
-                expansion = expansion.replace(prefix + "\\\\", "@project@/")
             path.parent.mkdir(parents=True, exist_ok=True)
             with gzip.open(path, "wt", compresslevel=4, encoding="utf-8", newline="\n") as stream:
-                json.dump({"gcc": expansion, "bindings": bindings[unit]}, stream)
+                json.dump({"gcc": _normalize_expansion(expansion, output), "bindings": bindings[unit]}, stream)
         hashes[unit] = digest(path)
     return hashes
 
 
 def evidence(output: Path, summary_digest: str) -> dict[str, str]:
     manifest = output / "analysis-identity.json"
-    if not manifest.is_file():
+    try:
+        record = json.loads(manifest.read_text(encoding="utf-8"))
+    except FileNotFoundError:
         return {}
-    record = json.loads(manifest.read_text(encoding="utf-8"))
-    if record["summarySha256"] != summary_digest:
-        raise ValueError("Identifier evidence belongs to a different analysis summary")
-    return record.get("identifierEvidence", {})
+    except (OSError, ValueError) as error:
+        raise EvidenceError("Identifier evidence manifest unreadable") from error
+    if not isinstance(record, dict) or record.get("summarySha256") != summary_digest:
+        raise EvidenceError("Identifier evidence belongs to a different analysis summary")
+    hashes = record.get("identifierEvidence", {})
+    if not isinstance(hashes, dict):
+        raise EvidenceError("Identifier evidence manifest has an invalid inventory")
+    return hashes
 
 
 def _verified_path(output: Path, name: str, identity: str) -> Path:
     if not safe_relative(name):
-        raise ValueError("Invalid identifier evidence source")
+        raise EvidenceError("Invalid identifier evidence source")
     path = _proof_path(output, name)
-    if digest(path) != identity:
-        raise ValueError(f"Identifier evidence bytes differ: {name}")
+    try:
+        actual = digest(path)
+    except OSError as error:
+        raise EvidenceError(f"Identifier evidence file missing or unreadable: {name}") from error
+    if actual != identity:
+        raise EvidenceError(f"Identifier evidence bytes differ: {name}")
     return path
 
 
@@ -90,8 +117,28 @@ def verify(output: Path, hashes: dict) -> None:
 
 
 def _proof(output: Path, name: str, hashes: dict) -> dict:
-    with gzip.open(_verified_path(output, name, hashes[name]), "rt", encoding="utf-8") as stream:
-        return json.load(stream)
+    if name not in hashes:
+        raise EvidenceError(f"Identifier evidence entry missing: {name}")
+    path = _verified_path(output, name, hashes[name])
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as stream:
+            proof = json.load(stream)
+    except (OSError, EOFError, ValueError, zlib.error) as error:
+        raise EvidenceError(f"Identifier evidence payload unreadable: {name}") from error
+    if not isinstance(proof, dict) or not isinstance(proof.get("gcc"), str) or not proof["gcc"] or not isinstance(
+            proof.get("bindings"), dict) or any(
+                not isinstance(configs, list) or not all(_valid_bindings(config) for config in configs)
+                for configs in proof["bindings"].values()):
+        raise EvidenceError(f"Identifier evidence payload has an invalid structure: {name}")
+    return proof
+
+
+def _valid_bindings(config: dict) -> bool:
+    return (isinstance(config, dict) and isinstance(config.get("externs"), list)
+            and all(isinstance(name, str) for name in config["externs"])
+            and isinstance(config.get("uses"), list)
+            and all(isinstance(row, list) and len(row) == 5 and isinstance(row[2], str)
+                    and all(type(row[index]) is int for index in (0, 1, 3, 4)) for row in config["uses"]))
 
 
 def _identifier_changes(old: str, new: str) -> list[tuple[c_standard.Token, c_standard.Token]] | None:
@@ -132,7 +179,11 @@ def _physical_changes(old: str, new: str) -> dict | None:
         old_column = left.start - old.rfind("\n", 0, left.start)
         new_column = right.start - new.rfind("\n", 0, right.start)
         changes[line].append(((line, old_column, left.text), (line, new_column, right.text)))
-    return changes
+    # Horizontal padding can shift columns on a rename line. Other edited
+    # lines have no identifier substitution to verify against GCC.
+    lines = {line for line, (left, right) in enumerate(zip(old.split("\n"), new.split("\n")), 1)
+             if left != right}
+    return changes if lines == changes.keys() else None
 
 
 def _name_positions(source: str, names: set[str]) -> dict:
@@ -145,7 +196,7 @@ def _name_positions(source: str, names: set[str]) -> dict:
     return positions
 
 
-def _binding_pairs(before: dict, after: dict, changes: dict, active: set[int],
+def _binding_pairs(before: dict, after: dict, changes: dict,
                    old_positions: dict, new_positions: dict) -> bool:
     if (any(name in before["externs"] for _, name in old_positions)
             or any(name in after["externs"] for _, name in new_positions)):
@@ -176,7 +227,7 @@ def _binding_pairs(before: dict, after: dict, changes: dict, active: set[int],
     for left, right in old_to_new.items():
         old_decl = old_bindings[left]
         new_decl = new_bindings[right]
-        if not old_decl and left[0] in active:
+        if not old_decl:
             return False
         if len(old_decl) > 1 or {old_to_new[token] for token in old_decl} != new_decl:
             return False
@@ -220,7 +271,7 @@ def _expansions(before: str, after: str, unit: str, changes: dict) -> set[int] |
                 return None
             emitted[line].update((a.text, b.text) for a, b in actual)
         line += 1
-    if any(pairs != Counter((a[2], b[2]) for a, b in changes[line])
+    if emitted.keys() != changes.keys() or any(pairs != Counter((a[2], b[2]) for a, b in changes[line])
            for line, pairs in emitted.items()):
         return None
     return set(emitted)
@@ -266,21 +317,27 @@ def equivalent(previous: dict, current: dict, baseline: Path, output: Path, comp
         return result
     sources = _source_changes(previous, current, baseline / "project", output / "project")
     for name, (old, new, changes) in sources.items():
-        if any(name not in hashes[side] for side in ("baseline", "current")):
-            return Counter()
-        before = _proof(baseline, name, hashes["baseline"])
-        after = _proof(output, name, hashes["current"])
+        proofs = []
+        for side, directory in (("baseline", baseline), ("current", output)):
+            try:
+                proofs.append(_proof(directory, name, hashes[side]))
+            except EvidenceError as error:
+                raise EvidenceError(f"{side}: {error}") from error
+        before, after = proofs
         active = _expansions(before["gcc"], after["gcc"], name, changes)
         programs = {row["name"] for row in current["programs"] if name in row["translationUnits"]}
-        if (not active or not programs or before["bindings"].keys() != programs
-                or after["bindings"].keys() != programs):
+        if not active:
             return Counter()
+        if not programs or before["bindings"].keys() != programs or after["bindings"].keys() != programs:
+            raise EvidenceError(f"Identifier evidence program inventory differs: {name}")
         old_positions = _name_positions(old, {left[2] for rows in changes.values() for left, _ in rows})
         new_positions = _name_positions(new, {right[2] for rows in changes.values() for _, right in rows})
         for program in programs:
             left, right = before["bindings"][program], after["bindings"][program]
-            if not left or len(left) != len(right) or not all(
-                    _binding_pairs(a, b, changes, active, old_positions, new_positions)
+            if not left or not right:
+                raise EvidenceError(f"Identifier evidence has no configurations: {name} ({program})")
+            if len(left) != len(right) or not all(
+                    _binding_pairs(a, b, changes, old_positions, new_positions)
                     for a, b in zip(left, right)):
                 return Counter()
         result.update(_pairs(previous, current, name, old, new, active, comparison, previous_headers, headers))
@@ -288,7 +345,15 @@ def equivalent(previous: dict, current: dict, baseline: Path, output: Path, comp
 
 
 def _pairs(previous, current, name, old, new, active, comparison, previous_headers, headers):
-    def positions(summary, scope_headers):
+    old_lines, new_lines = old.split("\n"), new.split("\n")
+    # Match the same raw token after rename and horizontal padding shift, not
+    # another operand/operator on the same line. Unlocated reports get no credit.
+    anchors = {
+        line: [{token.start + 1: index for index, token in enumerate(c_standard.lex(source[line - 1]))}
+               for source in (old_lines, new_lines)]
+        for line in active
+    }
+    def positions(summary, scope_headers, side):
         found = defaultdict(Counter)
         for diagnostic in summary["diagnostics"]:
             if diagnostic["id"] not in TYPE_RULES:
@@ -298,15 +363,17 @@ def _pairs(previous, current, name, old, new, active, comparison, previous_heade
                 if (location["file"] == name and line in active
                         and c_comparison.location_scope(summary["scope"], location,
                                                         headers=scope_headers) == "in-scope"):
-                    found[diagnostic["id"], line].update(diagnostic["programs"])
+                    column = location.get("column")
+                    if not str(column).isdecimal() or (anchor := anchors[line][side].get(int(column))) is None:
+                        return None
+                    found[diagnostic["id"], line, anchor].update(diagnostic["programs"])
         return found
 
-    before, after = positions(previous, previous_headers), positions(current, headers)
-    old_lines, new_lines = old.split("\n"), new.split("\n")
+    before, after = positions(previous, previous_headers, 0), positions(current, headers, 1)
+    if before is None or before != after:
+        return Counter()
     removed, added = Counter(), Counter()
-    for (rule, line), programs in before.items():
-        if programs != after.get((rule, line)):
-            continue
+    for (rule, line, _anchor), programs in before.items():
         for program, count in programs.items():
             removed[rule, name, old_lines[line - 1], program] += count
             added[rule, name, new_lines[line - 1], program] += count

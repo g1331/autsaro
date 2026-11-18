@@ -1,6 +1,7 @@
 """Source gate proof and mutations for the private names deferred from PR #552."""
 
 import copy
+import gzip
 import json
 import tempfile
 import unittest
@@ -66,6 +67,14 @@ class IdentifierRenameTests(unittest.TestCase):
                 ("baseline", baseline, old, "reloaded_before_main", previous),
                 ("current", output, new, "com_reloaded_before_main", current)):
             root = output_dir / "project"
+            for diagnostic in summary["diagnostics"]:
+                location = diagnostic["locations"][0]
+                line = source.splitlines()[location["line"] - 1]
+                column = line.find("=") + 1
+                if mutation == "column moved" and side == "current" and location["line"] == 8:
+                    column = line.index("FALSE") + 1
+                if mutation != "column missing":
+                    location["column"] = str(column)
             path = root / UNIT
             path.parent.mkdir(parents=True)
             path.write_bytes((source.replace("\n", "\r\n") if crlf else source).encode())
@@ -93,6 +102,19 @@ class IdentifierRenameTests(unittest.TestCase):
             (output_dir / "compiler-origins-0.stdout.log").write_text(
                 f'# 1 "{path.as_posix()}"\n' + expansion, encoding="utf-8")
             evidence[side] = c_rename.record(output_dir, summary)
+        proof = c_rename._proof_path(output, UNIT)
+        if mutation == "evidence missing":
+            proof.unlink()
+        elif mutation == "evidence mismatched":
+            proof.write_bytes(b"unbound")
+        elif mutation in ("evidence invalid gzip", "evidence invalid JSON", "evidence invalid structure"):
+            broken = {
+                "evidence invalid gzip": b"not gzip",
+                "evidence invalid JSON": gzip.compress(b"{"),
+                "evidence invalid structure": gzip.compress(b'{"gcc":"", "bindings":{"target":[0]}}'),
+            }
+            proof.write_bytes(broken[mutation])
+            evidence["current"][UNIT] = digest(proof)
         if mutation == "consumer":
             for summary in (current, previous):
                 summary["scope"]["projectTranslationUnits"]["other.c"] = ["other.c", UNIT]
@@ -166,11 +188,42 @@ class IdentifierRenameTests(unittest.TestCase):
 
     def test_binding_expansion_program_and_occurrence_mutations(self):
         for mutation in ("consumer", "shadowed use", "macro expansion", "stringification",
-                         "token paste", "multiplicity", "fewer occurrences", "program"):
+                         "token paste", "multiplicity", "fewer occurrences", "program",
+                         "column moved", "column missing"):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
                 gate = self.check(Path(directory), OLD, NEW, mutation)
                 self.assertEqual(gate["status"], "blocked")
                 self.assertEqual(len(gate["unacceptedNew"]), 2)
+
+    def test_every_changed_line_requires_gcc_emission(self):
+        old = '# 1 "@project@/fixture.c"\nstatic int storage;\n'
+        new = old.replace("storage", "counters")
+        changes = {1: [((1, 12, "storage"), (1, 12, "counters"))],
+                   2: [((2, 1, "ViaSigned"), (2, 1, "ViaUnsigned"))]}
+        self.assertEqual(c_rename._expansions(old, new, "fixture.c", {1: changes[1]}), {1})
+        self.assertIsNone(c_rename._expansions(old, new, "fixture.c", changes))
+
+    def test_bad_optional_evidence_keeps_strict_gate_output(self):
+        for mutation, reason in (
+                ("evidence missing", "file missing"),
+                ("evidence mismatched", "bytes differ"),
+                ("evidence invalid gzip", "payload unreadable"),
+                ("evidence invalid JSON", "payload unreadable"),
+                ("evidence invalid structure", "invalid structure")):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                gate = self.check(Path(directory), OLD, NEW, mutation)
+                self.assertEqual(gate["status"], "blocked")
+                self.assertEqual(gate["unacceptedNew"], gate["comparison"]["new"])
+                self.assertIn(reason, gate["identifierEvidenceError"])
+
+    def test_only_the_known_initial_gcc_cwd_marker_is_normalized(self):
+        output = Path("/analysis/current")
+        flag = '# 1 "/analysis/current//"'
+        other = '# 1 "/analysis/another//"'
+        first = '# 0 "/analysis/current/project/main.c"'
+        raw = f"{first}\n{flag}\n{other}\n{flag}"
+        expected = f'# 0 "@project@/main.c"\n# 1 "@cwd@//"\n{other}\n{flag}'
+        self.assertEqual(c_rename._normalize_expansion(raw, output), expected)
 
     def test_evidence_must_match_the_transferred_summary_and_proof_bytes(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import os
 import platform
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_check
+from autosar_tooling import c_baseline, c_check, c_comparison, c_gate, c_rename
 from ecu_tools.owner import OwnershipError
 
 
@@ -36,6 +39,126 @@ class ActualCAnalysisTests(unittest.TestCase):
         (project / "meta/files.list").write_text("\n".join(sorted(files)) + "\n", encoding="utf-8")
         (project / "meta/files.sha256").write_text("".join(f"{hashlib.sha256((project / name).read_bytes()).hexdigest()}  {name}\n" for name in [*sorted(files), "meta/files.list"]), encoding="utf-8")
         return project
+
+    def gate_project(self, root: Path, source: str, debug: bool) -> Path:
+        root.mkdir()
+        kernel = "/* Include-only kernel fixture. */\n"
+        producer = "core/src/prepared.rs"
+        project = self.project(root, source, extra_files={
+            "kernel/kernel.h": kernel,
+            "meta/workbench-ownership.json": '{"files":[]}',
+            "meta/integration.json": json.dumps({
+                "originalBswSources": {},
+                "plan": {"sources": [{"logicalPath": "fixture"}],
+                         "runtimeSources": {producer: c_gate.sha(c_baseline.ROOT / producer)},
+                         "ruleSetIdentity": {"release": "R24-11", "rulesVersion": "1"}},
+            }),
+        })
+        target = c_gate.read(project / "target.json")
+        target.update(entries={"target": None}, kernelSha256={"kernel.h": c_gate.sha(project / "kernel/kernel.h")})
+        if debug:
+            target["compilerFlags"].append("-g")
+        (project / "target.json").write_text(json.dumps(target), encoding="utf-8")
+        inventory = (project / "meta/files.list").read_text(encoding="utf-8").splitlines()
+        (project / "meta/files.sha256").write_text("".join(
+            f"{c_gate.sha(project / name)}  {name}\n" for name in [*inventory, "meta/files.list"]),
+            encoding="utf-8")
+        return project
+
+    def gate_scope(self, directory: Path, side: str, summary: dict, sample: str) -> None:
+        for target in c_gate.TARGETS:
+            for other_sample in c_gate.SAMPLES:
+                path = directory / f"c-analysis-scope-{side}-{target}-{other_sample}" / other_sample
+                path.mkdir(parents=True, exist_ok=True)
+                if target == summary["scope"]["target"] and other_sample == sample:
+                    receipt = c_comparison.scope_receipt(summary, sample)
+                else:
+                    unit = "stub.c"
+                    receipt = {
+                        "format": "c-misra-scope-input-v1", "sample": other_sample, "target": target,
+                        "analysisIdentity": hashlib.sha256(f"{target}/{other_sample}".encode()).hexdigest(),
+                        "translationUnits": [unit], "projectTranslationUnits": {unit: [unit]},
+                    }
+                (path / "scope-input.json").write_text(json.dumps(receipt), encoding="utf-8")
+
+    @unittest.skipUnless(platform.system() == "Linux", "Uses the reviewed Linux GCC built-in configuration")
+    def test_gate_rename_rejects_inactive_type_changes_with_and_without_debug(self):
+        source = """static unsigned int storage;
+static void Probe(unsigned int seed)
+{
+#if 0
+#define __SIZEOF_INT__ 4
+#endif
+#if __SIZEOF_INT__ == 4
+    unsigned int alpha = seed;
+    unsigned int beta = seed;
+#else
+    typedef signed int ViaSigned;
+    typedef unsigned int ViaUnsigned;
+    ViaSigned alpha = seed;
+    ViaUnsigned beta = seed;
+#endif
+    storage += (alpha == 1u) ? 1u : 0u; storage += (beta == 1u) ? 1u : 0u;
+}
+int main(int argc, char **argv)
+{
+    (void)argv;
+    Probe((unsigned int)argc);
+    return (int)storage;
+}
+"""
+        renamed = source.replace("storage", "counters")
+        changed = renamed.replace("ViaSigned alpha", "ViaUnsigned alpha").replace(
+            "ViaUnsigned beta", "ViaSigned beta")
+        target, sample = c_gate.TARGETS[0], "no-diagnostic"
+        for debug in (False, True):
+            with self.subTest(debug=debug), tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()):
+                root = Path(temporary).resolve()
+                scopes = root / "scopes"
+                baseline = root / "build/c-analysis-baseline" / sample
+                current = root / "build/c-analysis-results" / sample
+                with patch.dict(os.environ):
+                    os.environ.pop("GITHUB_REPOSITORY", None)
+                    project = self.gate_project(root / "original", source, debug)
+                    self.assertEqual(c_baseline.analyze("baseline", target, sample, project, baseline), 1)
+                    self.gate_scope(scopes, "baseline", c_gate.read(baseline / "summary.json"), sample)
+                    for variant, code, want_column in (("changed", changed, 60), ("rename", renamed, 24)):
+                        with self.subTest(variant=variant):
+                            project = self.gate_project(root / variant, code, debug)
+                            self.assertEqual(c_baseline.analyze("current", target, sample, project, current), 1)
+                            summary_bytes = (current / "summary.json").read_bytes()
+                            raw = c_gate.read(current / "summary.json")
+                            previous = c_gate.read(baseline / "summary.json")
+                            for summary, column in ((previous, 23), (raw, want_column)):
+                                locations = [loc for row in summary["diagnostics"]
+                                             if row["id"] == "misra-c2012-10.4" for loc in row["locations"]]
+                                self.assertEqual([(int(loc["line"]), int(loc["column"])) for loc in locations],
+                                                 [(16, column)])
+                            self.gate_scope(scopes, "current", raw, sample)
+                            with patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git):
+                                if variant == "changed":
+                                    with self.assertRaisesRegex(ValueError, "New source diagnostics"):
+                                        c_gate.scan(target, sample, scopes)
+                                else:
+                                    c_gate.scan(target, sample, scopes)
+                            result = c_gate.read(current / "gate.json")
+                            self.assertEqual(result["status"], "blocked" if variant == "changed" else "passed")
+                            self.assertEqual(len(result["unacceptedNew"]), int(variant == "changed"))
+                            self.assertEqual([len(result["comparison"][side]) for side in ("new", "removed")], [1, 1])
+                            if variant == "changed":
+                                current.rename(root / "changed-analysis")
+                            else:
+                                # Simulate the transferred artifact losing an inventoried proof.
+                                c_rename._proof_path(current, "bsw/src/main.c").unlink()
+                                (current / "summary.json").write_bytes(summary_bytes)
+                                (current / "gate.json").unlink()
+                                with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git),
+                                      self.assertRaisesRegex(ValueError, "New source diagnostics")):
+                                    c_gate.scan(target, sample, scopes)
+                                result = c_gate.read(current / "gate.json")
+                                self.assertEqual(result["status"], "blocked")
+                                self.assertEqual(len(result["unacceptedNew"]), 1)
+                                self.assertIn("file missing", result["identifierEvidenceError"])
 
     def analyze(self, source: str, name: str = "bsw/src/main.c", *, cli: bool = False) -> dict:
         with tempfile.TemporaryDirectory() as temporary:
