@@ -12,8 +12,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from autosar_tooling import c_acceptance, c_comparison
 from ecu_tools.build import digest, tool_argument
+
+from autosar_tooling import c_acceptance, c_comparison
 
 WARNINGS = (
     "-Wundef", "-Wexpansion-to-defined", "-Wno-error=undef",

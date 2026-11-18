@@ -32,7 +32,14 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessSpec, run_bounded
 
-from autosar_tooling import c_acceptance, c_comparison, c_preprocessor, c_retention, c_sdk, c_standard
+from autosar_tooling import (
+    c_acceptance,
+    c_comparison,
+    c_preprocessor,
+    c_retention,
+    c_sdk,
+    c_standard,
+)
 from autosar_tooling.config import ROOT
 
 CPPCHECK_VERSION = "2.21.0"
