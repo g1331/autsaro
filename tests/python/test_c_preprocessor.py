@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 from autosar_tooling import c_check, c_preprocessor
-from ecu_tools.build import digest
+from ecu_tools.build import digest, tool_argument
 
 
 @unittest.skipUnless(shutil.which("gcc"), "GCC is needed for preprocessing evidence")
@@ -42,6 +42,7 @@ class PreprocessingEvidenceTests(unittest.TestCase):
                 "#elif UNDEFINED == CLI\n"
                 "#elif (__STDC_VERSION__ == 199901L) && (0xffffffffffffffffU > 0)\n"
                 "int last = __LINE__;\n"
+                "const char *where = __FILE__;\n"
                 "#endif\n"
                 "#if 2U \\\n"
                 "    + 0U\n"
@@ -52,7 +53,7 @@ class PreprocessingEvidenceTests(unittest.TestCase):
             scope = self.scope()
             c_check.run(
                 [scope["diagnosticCompiler"]["path"], *scope["compilerFlags"],
-                 "-E", "-dD", *c_preprocessor.WARNINGS, str(root / "main.c")],
+                 "-E", "-dD", *c_preprocessor.WARNINGS, tool_argument(root / "main.c")],
                 scratch, "compiler-origins-0", 60,
             )
             receipt = c_preprocessor.collect(scope, root, scratch, c_check.run)
@@ -72,7 +73,7 @@ class PreprocessingEvidenceTests(unittest.TestCase):
                     ("main.c", 9, "elif", 0),
                     ("main.c", 10, "elif", 0),
                     ("main.c", 11, "elif", 1),
-                    ("main.c", 14, "if", "other"),
+                    ("main.c", 15, "if", "other"),
                 ],
             )
             self.assertEqual(conditions[0]["definitions"]["FLAG"]["body"], "1")

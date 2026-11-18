@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_check
+from autosar_tooling import c_check, c_preprocessor
 from ecu_tools.owner import OwnershipError
 
 
@@ -56,6 +56,35 @@ class ActualCAnalysisTests(unittest.TestCase):
             after = {path.relative_to(project).as_posix(): path.read_bytes() for path in project.rglob("*") if path.is_file()}
             self.assertEqual(before, after)
             return summary
+
+    def test_compiler_origins_and_preprocessing_replay_preserve_assert_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            project = self.project(
+                root, '#include <assert.h>\n#if 1\n'
+                'int main(int argc, char **argv) { assert(argc > 0); return argv == 0; }\n'
+                '#endif\n',
+            )
+            output = root / "analysis"
+            output.mkdir(mode=0o700)
+            target = json.loads((project / "target.json").read_text())["target"]
+            tool_argument = c_check.tool_argument
+
+            def source_spelling(path):
+                value = tool_argument(path)
+                # POSIX can expose the same lexical distinction with a redundant separator.
+                if platform.system() != "Windows" and path.name == "main.c":
+                    directory, _, filename = value.rpartition("/")
+                    return f"{directory}//{filename}"
+                return value
+
+            with (
+                patch.object(c_check, "tool_argument", side_effect=source_spelling),
+                patch.object(c_preprocessor, "tool_argument", side_effect=source_spelling),
+            ):
+                copied, _, _, scope = c_check.prepare(project, target, output)
+                receipt = c_preprocessor.collect(scope, copied, output, c_check.run)
+            self.assertTrue((output / receipt["file"]).is_file())
 
     def test_cppcheck_conditional_and_empty_headers_are_actual_inputs(self):
         diagnostics = []
