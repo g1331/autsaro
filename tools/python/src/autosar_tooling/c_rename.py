@@ -5,8 +5,8 @@ from __future__ import annotations
 import gzip
 import json
 import re
-import zlib
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 
 from ecu_tools.build import FILE_LIST, digest, safe_relative, tool_argument
@@ -23,6 +23,17 @@ HORIZONTAL_SPACE = re.compile(r"[ \t]+")
 
 class EvidenceError(ValueError):
     """The optional rename proof cannot be used."""
+
+
+@contextmanager
+def _read_evidence(reason: str):
+    """Translate failures from optional artifact I/O and decoding."""
+    try:
+        yield
+    except MemoryError:
+        raise
+    except Exception as error:
+        raise EvidenceError(f"{reason} ({type(error).__name__})") from error
 
 
 def _normalize_expansion(expansion: str, output: Path) -> str:
@@ -90,12 +101,8 @@ def record(output: Path, summary: dict, candidates: set[str]) -> dict[str, str]:
 
 def evidence(output: Path, summary_digest: str) -> dict[str, str]:
     manifest = output / "analysis-identity.json"
-    try:
+    with _read_evidence("Identifier evidence manifest missing or unreadable"):
         record = json.loads(manifest.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}
-    except (OSError, ValueError) as error:
-        raise EvidenceError("Identifier evidence manifest unreadable") from error
     if not isinstance(record, dict) or record.get("summarySha256") != summary_digest:
         raise EvidenceError("Identifier evidence belongs to a different analysis summary")
     hashes = record.get("identifierEvidence", {})
@@ -108,10 +115,8 @@ def _verified_path(output: Path, name: str, identity: str) -> Path:
     if not safe_relative(name):
         raise EvidenceError("Invalid identifier evidence source")
     path = _proof_path(output, name)
-    try:
+    with _read_evidence(f"Identifier evidence file missing or unreadable: {name}"):
         actual = digest(path)
-    except OSError as error:
-        raise EvidenceError(f"Identifier evidence file missing or unreadable: {name}") from error
     if actual != identity:
         raise EvidenceError(f"Identifier evidence bytes differ: {name}")
     return path
@@ -126,11 +131,9 @@ def _proof(output: Path, name: str, hashes: dict) -> dict:
     if name not in hashes:
         raise EvidenceError(f"Identifier evidence entry missing: {name}")
     path = _verified_path(output, name, hashes[name])
-    try:
-        with gzip.open(path, "rt", encoding="utf-8") as stream:
-            proof = json.load(stream)
-    except (OSError, EOFError, ValueError, zlib.error) as error:
-        raise EvidenceError(f"Identifier evidence payload unreadable: {name}") from error
+    with (_read_evidence(f"Identifier evidence payload unreadable: {name}"),
+          gzip.open(path, "rt", encoding="utf-8") as stream):
+        proof = json.load(stream)
     if not isinstance(proof, dict) or not isinstance(proof.get("gcc"), str) or not proof["gcc"] or not isinstance(
             proof.get("bindings"), dict) or any(
                 not isinstance(configs, list) or not all(_valid_bindings(config) for config in configs)

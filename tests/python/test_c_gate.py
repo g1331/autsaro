@@ -1,6 +1,7 @@
 """The required source gate preserves raw results and consumes exact dispositions."""
 
 import copy
+import gzip
 import hashlib
 import json
 import os
@@ -15,7 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import test_c_comparison as comparison_tests
-from autosar_tooling import c_gate
+from autosar_tooling import c_gate, c_rename
 
 
 class SourceGateTests(unittest.TestCase):
@@ -268,6 +269,83 @@ class SourceGateTests(unittest.TestCase):
                         gate.assert_called_once()
                         self.assertEqual([call.kwargs["producer_revision"]
                                           for call in identity.call_args_list], ["commit", None])
+
+    def scan_with_unavailable_evidence(self, root, damage):
+        helper = comparison_tests.CComparisonTests()
+        current, _, output, baseline = helper.fixture(root / "fixture")
+        current["scope"]["cppcheckInputs"] = {"main.c": {"project": ["main.c"], "sdk": [], "unbound": []}}
+        current["projectAcceptance"] = {"status": "blocked", "occurrences": [], "inputIdentity": "a" * 64}
+        current["diagnostics"] = [helper.diagnostic("misra-c2012-10.3", 1)]
+        current["diagnostics"][0]["locations"][0]["column"] = "12"
+        directories = {}
+        for side, source, job, name in (
+                ("baseline", baseline, "c-analysis-baseline", "storage"),
+                ("current", output, "c-analysis-results", "counters")):
+            directory = root / "build" / job / "standard-ecu"
+            directories[side] = directory
+            shutil.copytree(source, directory)
+            project = directory / "project"
+            code = f"static int {name};\n"
+            (project / "main.c").write_text(code, encoding="utf-8")
+            helper.seal(project, {"plan": {"configuration": "same"}})
+            helper.write(directory, {**current, "sourceSealSha256": c_gate.sha(project / "meta/files.sha256")})
+            proof = c_rename._proof_path(directory, "main.c")
+            proof.parent.mkdir()
+            proof.write_bytes(gzip.compress(json.dumps({
+                "gcc": '# 1 "@project@/main.c"\n' + code,
+                "bindings": {"target": [{"externs": [], "uses": [[1, 12, name, 1, 12]]}]},
+            }).encode()))
+            (directory / "analysis-identity.json").write_text(json.dumps({
+                "summarySha256": c_gate.sha(directory / "summary.json"),
+                "identifierEvidence": {"main.c": c_gate.sha(proof)},
+            }), encoding="utf-8")
+        (directories["baseline"] / "baseline-source.json").write_text(
+            '{"kind":"same-run","tree":"commit"}', encoding="utf-8")
+        damage(directories)
+        with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", return_value="commit"),
+              patch.object(c_gate.c_acceptance, "_complete"),
+              patch.object(c_gate.c_acceptance, "input_identity", return_value="a" * 64),
+              patch.object(c_gate.c_acceptance, "evaluate", return_value=current["projectAcceptance"]),
+              self.assertRaisesRegex(ValueError, "New source diagnostics")):
+            c_gate.scan("linux", "standard-ecu")
+        gate = c_gate.read(directories["current"] / "gate.json")
+        self.assertEqual(gate["status"], "blocked")
+        self.assertEqual(gate["unacceptedNew"], gate["comparison"]["new"])
+        self.assertEqual(len(gate["unacceptedNew"]), 1)
+        return gate
+
+    def test_scan_records_both_missing_evidence_manifests(self):
+        def damage(directories):
+            for directory in directories.values():
+                (directory / "analysis-identity.json").unlink()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            gate = self.scan_with_unavailable_evidence(Path(temporary), damage)
+        reason = gate["identifierEvidenceError"]
+        for side in ("baseline", "current"):
+            self.assertIn(f"{side}: Identifier evidence manifest missing or unreadable (FileNotFoundError)",
+                          reason)
+
+    def test_scan_records_evidence_json_nesting_failures(self):
+        nested = b"[" * 20_000 + b"0" + b"]" * 20_000
+        for location, reason in (("manifest", "manifest missing or unreadable"), ("gzip", "payload unreadable")):
+            def damage(directories, location=location):
+                directory = directories["current"]
+                manifest = directory / "analysis-identity.json"
+                if location == "manifest":
+                    manifest.write_bytes(nested)
+                else:
+                    proof = c_rename._proof_path(directory, "main.c")
+                    proof.write_bytes(gzip.compress(nested))
+                    updated = c_gate.read(manifest)
+                    updated["identifierEvidence"]["main.c"] = c_gate.sha(proof)
+                    manifest.write_text(json.dumps(updated), encoding="utf-8")
+
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as temporary:
+                gate = self.scan_with_unavailable_evidence(Path(temporary), damage)
+                error = gate["identifierEvidenceError"]
+                self.assertIn(f"current: Identifier evidence {reason}", error)
+                self.assertIn("RecursionError", error)
 
     def test_workflow_runs_same_run_consumer_and_propagates_its_exit(self):
         import yaml
