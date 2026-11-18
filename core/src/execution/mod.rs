@@ -394,12 +394,19 @@ impl OwnedProcess {
                 if let Some(status) = tree.try_wait().map_err(|error| error.to_string())? {
                     // The Job's active count may lag a just-reaped cooperative exit.
                     let grace = std::time::Instant::now() + Duration::from_millis(200);
+                    let mut hosts = tree.console_hosts();
                     tree.observe("root_exited");
                     while tree.active()? != 0 && std::time::Instant::now() < grace {
                         tree.observe("grace");
+                        hosts.extend(tree.console_hosts());
                         std::thread::sleep(Duration::from_millis(10));
                     }
-                    let orphaned = tree.active()? != 0;
+                    // Console hosts finish their own teardown after their clients;
+                    // that gets a bounded wait, a live descendant gets none.
+                    let remaining =
+                        Duration::from_nanos(self.spec.deadline_ns.saturating_sub(monotonic_ns()?));
+                    let orphaned =
+                        tree.active()? != 0 && !tree.hosts_finished(&hosts, remaining)?;
                     tree.stop()?;
                     break (
                         if cancelled.load(std::sync::atomic::Ordering::Acquire) {

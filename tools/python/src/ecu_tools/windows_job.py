@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import ntpath
 import os
 import subprocess
 import sys
@@ -259,6 +260,67 @@ def member(pid: int, job: int) -> dict:
         kernel.CloseHandle(handle)
 
 
+STILL_ACTIVE = 259
+ERROR_INVALID_PARAMETER = 87
+GRACE_NS = 200_000_000
+# A console host can finish its process teardown well after its last client has
+# exited: one CI run held four such hosts for 404 ms. The bound equals the
+# five-second budget close() already allows for Job members to leave after a
+# TerminateJobObject, and the command's own deadline still applies.
+CONSOLE_HOST_TEARDOWN_NS = 5_000_000_000
+
+
+def job_pids(job: int) -> list[int] | None:
+    """Job member PIDs, or None when the list is unavailable or truncated."""
+    ids = ProcessIds()
+    ok = kernel.QueryInformationJobObject(
+        job, 3, ctypes.byref(ids), ctypes.sizeof(ids), None
+    )
+    if not ok or ids.assigned != ids.listed or ids.listed > len(ids.ids):
+        return None
+    return [int(pid) for pid in ids.ids[: ids.listed]]
+
+
+def console_hosts(job: int) -> set[tuple[int, int]]:
+    """PID and creation time of the Job members that are the system console host.
+
+    Reading the image of a process in teardown soon fails with access denied, so
+    callers record identities early and decide with them later.
+    """
+    system_host = ntpath.normcase(
+        ntpath.join(os.environ["SystemRoot"], "System32", "conhost.exe")
+    )
+    hosts = set()
+    for pid in job_pids(job) or []:
+        value = member(pid, job)
+        image = value.get("image")
+        created = value.get("created_100ns")
+        if image and created is not None and ntpath.normcase(image) == system_host:
+            hosts.add((pid, created))
+    return hosts
+
+
+def exited_console_hosts_only(job: int, hosts: set[tuple[int, int]]) -> bool:
+    """True when every remaining Job member is a known console host that exited.
+
+    A console host exits when its last client disconnects, so an exited host
+    means every client in the Job is gone; any other member, a host that is
+    still running, or an unreadable list is a real leftover.
+    """
+    pids = job_pids(job)
+    if pids is None:
+        return False
+    for pid in pids:
+        value = member(pid, job)
+        if value.get("open_error") == ERROR_INVALID_PARAMETER:
+            continue  # left the Job between listing and opening
+        if (pid, value.get("created_100ns")) not in hosts:
+            return False
+        if value.get("exit_code") in (None, STILL_ACTIVE):
+            return False
+    return True
+
+
 class Evidence:
     def __init__(self, path: Path):
         self.path = path
@@ -480,11 +542,15 @@ class WindowsJob:
             code = self.poll()
             if code is not None:
                 # The active count can lag a reaped cooperative exit briefly.
-                grace = min(deadline_ns, time.monotonic_ns() + 200_000_000)
+                grace = min(deadline_ns, time.monotonic_ns() + GRACE_NS)
+                hosts = console_hosts(self.job)
                 self.evidence.observe("root_exited", self.pid, self.job)
                 while self._active() and time.monotonic_ns() < grace:
+                    hosts |= console_hosts(self.job)
                     time.sleep(0.01)
-                orphaned = bool(self._active())
+                orphaned = bool(self._active()) and not self._hosts_finished(
+                    hosts, deadline_ns
+                )
                 self.close()
                 status = (
                     "orphaned_members"
@@ -497,6 +563,17 @@ class WindowsJob:
         self.close()
         self.evidence.finish("timeout", self.poll(), False)
         return "timeout", self.poll(), False
+
+    def _hosts_finished(self, hosts: set[tuple[int, int]], deadline_ns: int) -> bool:
+        """Wait for exited console hosts to leave the Job; False on any leftover."""
+        limit = min(deadline_ns, time.monotonic_ns() + CONSOLE_HOST_TEARDOWN_NS)
+        while self._active():
+            if time.monotonic_ns() >= limit or not exited_console_hosts_only(
+                self.job, hosts
+            ):
+                return False
+            time.sleep(0.01)
+        return True
 
     def close(self) -> None:
         if self.closed:

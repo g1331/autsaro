@@ -1,5 +1,6 @@
 //! Own a hidden command and all descendants before its first instruction runs.
 //! The job handle is private and non-inheritable; closing it also kills the tree.
+use std::collections::BTreeSet;
 use std::ffi::c_void;
 use std::io;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
@@ -8,6 +9,7 @@ use std::process::{Child, Command, ExitStatus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod console_host;
 mod evidence;
 mod system_snapshot;
 
@@ -64,6 +66,13 @@ struct ThreadEntry {
 struct FileTime {
     low: u32,
     high: u32,
+}
+/// JobObjectBasicProcessIdList with room for 128 members.
+#[repr(C)]
+struct ProcessIds {
+    assigned: u32,
+    listed: u32,
+    ids: [usize; 128],
 }
 
 #[link(name = "kernel32")]
@@ -326,6 +335,24 @@ impl ProcessTree {
     }
     pub(crate) fn active(&self) -> Result<u32, LocalizedText> {
         job_active(&self.job)
+    }
+    /// Identities of the console hosts currently in the Job.
+    pub(crate) fn console_hosts(&self) -> BTreeSet<console_host::Identity> {
+        console_host::hosts(&self.job)
+    }
+    /// After the root exit and the accounting grace: whether the Job emptied while
+    /// only exited console hosts, finishing their teardown, remained. A live
+    /// member or an unfinished host after `within` is a real leftover.
+    pub(crate) fn hosts_finished(
+        &self,
+        hosts: &BTreeSet<console_host::Identity>,
+        within: Duration,
+    ) -> Result<bool, LocalizedText> {
+        console_host::wait_until_finished(
+            || self.active(),
+            || console_host::only_exited_hosts(&self.job, hosts),
+            within.min(console_host::TEARDOWN_LIMIT),
+        )
     }
     pub(crate) fn stop(&mut self) -> Result<(), LocalizedText> {
         self.observe("before_stop");

@@ -4,13 +4,6 @@ use serde_json::{Value, json};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-#[repr(C)]
-struct ProcessIds {
-    assigned: u32,
-    listed: u32,
-    ids: [usize; 128],
-}
-
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
