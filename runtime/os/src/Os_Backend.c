@@ -811,7 +811,7 @@ OS_MEMMAP static TaskStateType native_task_state(uint32 index)
             break;
     }
     if (valid == FALSE) {
-        configASSERT(FALSE);
+        Os_BackendAssert(__FILE__, __LINE__);
     }
     return state;
 }
