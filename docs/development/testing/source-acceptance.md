@@ -43,7 +43,7 @@ PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-t
 
 基准扫描可复用该 SHA 的 master push 原始产物，要求对应生产作业成功。匹配身份覆盖树、样本、分析器二进制／addon、规则与生成器、完整生成 seal、PR 驱动／配置／评估输入、Python、GCC driver／backend 和 runner 镜像。目标主机重新计算完整 SDK 环境，并重查模型、隐式库及驱动语义；任一不符、产物缺失／重复或 attempt 不符均现场扫描。每轮仍生成基准以核对完整 seal；复用只省去原始扫描，项目验收和输入身份重新计算。`gate.json.baselineSource` 记录 same-run（含回退原因）或 master-artifact（运行、attempt、生产作业、工件与 digest），不缓存门判定。
 
-配对要求每侧恰好一份完整结果；工件名含侧别、目标、样本及分片序号。Linux 核对双方 `_complete`、`input_identity`，八份门回执绑定 checkout、第一父提交和双侧摘要；上游 skip／cancel／failure、缺重样本／身份均拒绝。Windows 消费端用 `git read-tree --empty` 和 `core.autocrlf=true reset --hard HEAD` 按 `.gitattributes` 重建字节。raw 配对工件含 summary、封存 project、身份、来源、平台模型和可选 `identifier-evidence/`，后者存 GCC 展开和 Cppcheck 绑定并由身份清单校验摘要。完整 dump／日志另存，目标主机重放入口保持。
+配对要求每侧恰好一份完整结果；工件名含侧别、目标、样本及分片序号。Linux 核对双方 `_complete`、`input_identity`，八份门回执绑定 checkout、第一父提交和双侧摘要；上游 skip／cancel／failure、缺重样本／身份均拒绝。Windows 消费端用 `git read-tree --empty` 和 `core.autocrlf=true reset --hard HEAD` 按 `.gitattributes` 重建字节。raw 配对工件含 summary、封存 project、身份、来源、平台模型和可选 `identifier-evidence/`，仅为 Git 两树中可核对的已复制 runtime C 改名候选保存 GCC 展开和 Cppcheck 绑定，由身份清单校验。无候选不收集、不打包。完整 dump／日志另存。
 
 合规线出口由 [#482](https://github.com/g1331/autsaro/issues/482) 切换必需门到完整验收。测试里的完整合成正例验证可执行契约，真实处置及分支保护证据由 #55 的 PR 保存。
 

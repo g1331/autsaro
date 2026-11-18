@@ -65,12 +65,16 @@ def main() -> int:
     parser.add_argument("--data-directory", required=True)
     parser.add_argument("--source-root", required=True, type=Path)
     parser.add_argument("--receipt-directory", required=True, type=Path)
+    parser.add_argument("--rename-unit", action="append", default=[])
     args = parser.parse_args()
     root = args.source_root.resolve(strict=True)
+    rename_sources = {root / name for name in args.rename_unit}
     if not args.dumpfile:
         raise ValueError("Project addon received no dump files")
     for dump in args.dumpfile:
         data = cppcheckdata.CppcheckData(dump)
+        source = Path(data.files[0]).resolve()
+        collect_bindings = source in rename_sources
         configurations = 0
         units = set()
         unsigned = []
@@ -79,7 +83,8 @@ def main() -> int:
         inputs.update(token.file for token in data.rawTokens)
         for configuration in data.iterconfigurations():
             configurations += 1
-            bindings.append(private_bindings(configuration, data.files[0]))
+            if collect_bindings:
+                bindings.append(private_bindings(configuration, data.files[0]))
             inputs.update(directive.file for directive in configuration.directives)
             inputs.update(token.file for token in configuration.tokenlist)
             units.update(str(Path(token.file).resolve()) for token in configuration.tokenlist
@@ -97,9 +102,10 @@ def main() -> int:
         args.receipt_directory.mkdir(exist_ok=True)
         receipt = args.receipt_directory / (hashlib.sha256(str(dump).encode()).hexdigest() + ".json")
         receipt.write_text(json.dumps({"units": sorted(units), "configurations": configurations,
-                                      "source": str(Path(data.files[0]).resolve()),
+                                      "source": str(source),
                                       "files": sorted({str(Path(name).resolve()) for name in inputs if name}),
-                                      "unsignedLiterals": unsigned, "privateBindings": bindings}), encoding="utf-8")
+                                      "unsignedLiterals": unsigned,
+                                      **({"privateBindings": bindings} if collect_bindings else {})}), encoding="utf-8")
     return cppcheckdata.EXIT_CODE
 
 

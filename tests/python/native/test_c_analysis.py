@@ -117,7 +117,8 @@ int main(int argc, char **argv)
                 scopes = root / "scopes"
                 baseline = root / "build/c-analysis-baseline" / sample
                 current = root / "build/c-analysis-results" / sample
-                with patch.dict(os.environ):
+                with (patch.dict(os.environ),
+                      patch.object(c_baseline, "rename_candidates", return_value={"bsw/src/main.c"})):
                     os.environ.pop("GITHUB_REPOSITORY", None)
                     project = self.gate_project(root / "original", source, debug)
                     self.assertEqual(c_baseline.analyze("baseline", target, sample, project, baseline), 1)
@@ -193,6 +194,8 @@ int main(int argc, char **argv)
                 c_check.check(project, target, root / "analysis")
                 summary = json.loads((root / "analysis/summary.json").read_text())
                 self.assertIsNone(summary["error"], summary["error"])
+                for receipt in (root / "analysis/addon-receipts").glob("*.json"):
+                    self.assertNotIn("privateBindings", c_gate.read(receipt))
                 scope = summary["scope"]
                 diagnostics.append(summary["diagnostics"])
                 self.assertNotIn("hidden.h", scope["projectTranslationUnits"]["kernel/tasks.c"])

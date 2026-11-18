@@ -42,7 +42,29 @@ def read(path: Path) -> dict:
 
 
 def git(*arguments: str) -> str:
-    return subprocess.check_output(["git", *arguments], cwd=ROOT, text=True).strip()
+    return subprocess.check_output(["git", *arguments], cwd=ROOT, encoding="utf-8").strip()
+
+
+def rename_candidates(project: Path, side: str) -> set[str]:
+    """Select copied runtime C units before either producer starts its scan."""
+    try:
+        changed = git("diff", "--name-only", "--diff-filter=M", "--no-renames", "-z",
+                      "HEAD^1", "HEAD", "--", ":(glob)runtime/**/*.c").split("\0")
+        if changed == [""]:
+            return set()
+        origins = read(project / "meta/integration.json").get("originalBswSources", {})
+        candidates = set()
+        for origin in changed:
+            name = origins.get(origin)
+            if not safe_relative(origin) or not isinstance(name, str) or not safe_relative(name):
+                continue
+            old, new = (git("show", revision + ":" + origin) for revision in ("HEAD^1", "HEAD"))
+            delivered = (project / name).read_text(encoding="utf-8").strip()
+            if delivered == (old if side == "baseline" else new) and c_rename._physical_changes(old, new):
+                candidates.add(name)
+        return candidates
+    except (OSError, subprocess.CalledProcessError, UnicodeError):
+        return set()
 
 
 def compiler_identity(compiler: Path) -> dict:
@@ -80,7 +102,7 @@ def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
     }
 
 
-def record(output: Path, tree: str, target: str, sample: str) -> None:
+def record(output: Path, tree: str, target: str, sample: str, candidates: set[str] | None = None) -> None:
     summary = read(output / "summary.json")
     c_acceptance._complete(summary)
     if summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}:
@@ -91,14 +113,14 @@ def record(output: Path, tree: str, target: str, sample: str) -> None:
                      compiler_identity(Path(summary["scope"]["diagnosticCompiler"]["path"])),
                      summary["semanticIdentity"]["sdk"])
     started = time.perf_counter()
-    identifier_evidence = c_rename.record(output, summary)
-    evidence_bytes = sum(path.stat().st_size for path in (output / c_rename.EVIDENCE).rglob("*.json.gz"))
+    identifier_evidence = c_rename.record(output, summary, candidates or set())
+    evidence_bytes = sum(c_rename._proof_path(output, name).stat().st_size for name in identifier_evidence)
     print(f"Identifier evidence: {len(identifier_evidence)} TUs, {evidence_bytes} bytes, "
           f"{time.perf_counter() - started:.3f} seconds to package and hash", flush=True)
     (output / "analysis-identity.json").write_text(json.dumps({
         "format": FORMAT, "identity": value,
         "summarySha256": digest(output / "summary.json"),
-        "identifierEvidence": identifier_evidence,
+        **({"identifierEvidence": identifier_evidence} if identifier_evidence else {}),
         "run": int(os.environ["GITHUB_RUN_ID"]) if os.environ.get("GITHUB_RUN_ID") else None,
         "attempt": int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")),
     }, indent=2) + "\n", encoding="utf-8")
@@ -218,7 +240,10 @@ def restore(candidate: Path, project: Path, output: Path, tree: str,
         summary["projectAcceptance"] = c_acceptance.evaluate(summary, candidate / "project", sdk_revision=tree)
         if summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}:
             raise ValueError("Reused raw analysis could not be assessed with current inputs")
-        shutil.copytree(candidate, output, dirs_exist_ok=True)
+        # Restore is used only when this comparison has no rename candidates.
+        # The historical proof was verified above, but belongs to its own pair.
+        shutil.copytree(candidate, output, dirs_exist_ok=True, ignore=lambda directory, _names:
+                        {c_rename.EVIDENCE} if Path(directory) == candidate else set())
         for field, name in (("platformModel", "platform-model.h"),
                             ("platformLibrary", "platform-library.cfg")):
             if summary["scope"].get(field):
@@ -234,11 +259,19 @@ def analyze(side: str, target: str, sample: str, project: Path, output: Path) ->
             or output.exists() and (not output.is_dir() or any(output.iterdir()))):
         raise ValueError("C analysis output must be new or empty and separate from its project")
     tree = git("rev-parse", "HEAD^1" if side == "baseline" else "HEAD")
+    started = time.perf_counter()
+    candidates = rename_candidates(project, side)
+    print(f"Identifier candidates: {len(candidates)} TUs in {time.perf_counter() - started:.3f} seconds",
+          flush=True)
     source = {"kind": "same-run", "tree": tree}
     if side == "baseline":
         repository = os.environ.get("GITHUB_REPOSITORY")
         reason = "repository_unavailable"
-        if repository:
+        if candidates:
+            # A master artifact collected for a different pair need not contain
+            # these bindings. Collect them during the normal baseline scan.
+            reason = "identifier_candidates_require_evidence"
+        elif repository:
             with tempfile.TemporaryDirectory(prefix="c-baseline-raw-") as temporary:
                 directory = Path(temporary)
                 try:
@@ -264,10 +297,11 @@ def analyze(side: str, target: str, sample: str, project: Path, output: Path) ->
             source["reason"] = reason
     if source["kind"] == "same-run":
         result = c_check.check(project, target, output,
+                               **({"rename_units": candidates} if candidates else {}),
                                **({"sdk_revision": tree} if side == "baseline" else {}))
     else:
         result = 0 if read(output / "summary.json")["passed"] else 1
-    record(output, tree, target, sample)
+    record(output, tree, target, sample, candidates)
     (output / "baseline-source.json").write_text(json.dumps(source, indent=2) + "\n",
                                                 encoding="utf-8")
     print("Raw analysis source:", json.dumps(source), flush=True)

@@ -102,6 +102,12 @@ class BaselineReuseTests(unittest.TestCase):
             summary, project, candidate, compiler = self.fixture(root)
             semantic, acceptance = self.patches(stack, root, summary, compiler)
             c_baseline.record(candidate, "parent", "linux", "standard-ecu")
+            proof = candidate / "identifier-evidence/main.c.json.gz"
+            proof.parent.mkdir()
+            proof.write_bytes(b"historical proof")
+            receipt = c_baseline.read(candidate / "analysis-identity.json")
+            receipt["identifierEvidence"] = {"main.c": digest(proof)}
+            (candidate / "analysis-identity.json").write_text(json.dumps(receipt))
             archive = root / "artifact.zip"
             with zipfile.ZipFile(archive, "w") as package:
                 for path in candidate.rglob("*"):
@@ -145,6 +151,8 @@ class BaselineReuseTests(unittest.TestCase):
             manifest = json.loads((output / "analysis-identity.json").read_text())
             self.assertEqual((manifest["run"], manifest["attempt"]), (9, 3))
             self.assertEqual(manifest["summarySha256"], digest(output / "summary.json"))
+            self.assertNotIn("identifierEvidence", manifest)
+            self.assertFalse((output / "identifier-evidence").exists())
 
     def test_each_identity_field_mismatch_and_missing_artifact_execute_fresh_scan(self):
         with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary, \
@@ -280,6 +288,53 @@ class BaselineReuseTests(unittest.TestCase):
             c_baseline.git.assert_any_call("rev-parse", "HEAD")
             self.assertEqual(json.loads((output / "baseline-source.json").read_text()),
                              {"kind": "same-run", "tree": "head"})
+            self.assertNotIn("identifierEvidence", c_baseline.read(output / "analysis-identity.json"))
+            self.assertFalse((output / "identifier-evidence").exists())
+
+    def test_copied_runtime_rename_candidates_match_both_trees(self):
+        origin, unrelated = "runtime/bsw/src/private.c", "runtime/bsw/src/other.c"
+        delivered = "bsw/src/Private.c"
+        old, new = "static int storage;\n", "static int private_storage;\n"
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            (project / "meta").mkdir()
+            (project / "meta/integration.json").write_text(json.dumps({
+                "originalBswSources": {origin: delivered, unrelated: "bsw/src/Other.c"},
+            }))
+            (project / delivered).parent.mkdir(parents=True)
+            for side, source in (("baseline", old), ("current", new)):
+                with self.subTest(side=side):
+                    (project / delivered).write_bytes(source.replace("\n", "\r\n").encode())
+                    (project / "bsw/src/Other.c").write_text("static int other = 1;\n")
+                    with patch.object(c_baseline, "git", side_effect=[
+                            f"{origin}\0{unrelated}\0", old.strip(), new.strip(),
+                            "static int other = 0;", "static int other = 1;"]):
+                        self.assertEqual(c_baseline.rename_candidates(project, side), {delivered})
+            with patch.object(c_baseline, "git", return_value="") as git:
+                self.assertEqual(c_baseline.rename_candidates(project / "absent", "current"), set())
+                git.assert_called_once()
+
+    def test_candidate_baseline_collects_proof_during_one_fresh_scan(self):
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+            root = Path(temporary).resolve()
+            summary, project, candidate, compiler = self.fixture(root)
+            self.patches(stack, root, summary, compiler)
+            stack.enter_context(patch.object(c_baseline, "rename_candidates", return_value={"main.c"}))
+            cached = stack.enter_context(patch.object(c_baseline, "download"))
+            output = root / "baseline-analysis"
+
+            def fresh(actual_project, target, result, **kwargs):
+                self.assertEqual((actual_project, target, result), (project, "linux", output))
+                self.assertEqual(kwargs, {"sdk_revision": "parent", "rename_units": {"main.c"}})
+                shutil.copytree(candidate, result)
+                return 1
+
+            with patch.object(c_baseline.c_check, "check", side_effect=fresh) as scan:
+                self.assertEqual(c_baseline.analyze("baseline", "linux", "standard-ecu", project, output), 1)
+            scan.assert_called_once()
+            cached.assert_not_called()
+            self.assertEqual(c_baseline.read(output / "baseline-source.json")["reason"],
+                             "identifier_candidates_require_evidence")
 
     def test_download_only_uses_unique_unexpired_successful_master_push_artifacts(self):
         good_run = {"id": 1, "event": "push", "head_branch": "master", "head_sha": "parent",

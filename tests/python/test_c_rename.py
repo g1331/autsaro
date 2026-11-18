@@ -37,7 +37,7 @@ def positions(source, spelling):
 
 
 class IdentifierRenameTests(unittest.TestCase):
-    def check(self, directory, old, new, mutation="", *, crlf=False):
+    def check(self, directory, old, new, mutation="", *, crlf=False, candidates=True):
         fixture = comparison_tests.CComparisonTests()
         current, _, output, baseline = fixture.fixture(directory)
         current["scope"].update(
@@ -81,6 +81,11 @@ class IdentifierRenameTests(unittest.TestCase):
             fixture.seal(root, {"plan": {"configuration": "same"}})
             summary["sourceSealSha256"] = digest(root / "meta/files.sha256")
             fixture.write(output_dir, summary)
+            if not candidates:
+                evidence[side] = c_rename.record(output_dir, summary, set())
+                self.assertEqual(evidence[side], {})
+                self.assertFalse((output_dir / c_rename.EVIDENCE).exists())
+                continue
             declaration, *uses = [p for p in positions(source, spelling) if p[0] in (3, 7, 8)]
             if mutation == "shadowed use" and side == "current":
                 uses.pop()
@@ -101,7 +106,7 @@ class IdentifierRenameTests(unittest.TestCase):
                 expansion = expansion.replace(spelling + "[0u]", spelling + "_suffix[0u]")
             (output_dir / "compiler-origins-0.stdout.log").write_text(
                 f'# 1 "{path.as_posix()}"\n' + expansion, encoding="utf-8")
-            evidence[side] = c_rename.record(output_dir, summary)
+            evidence[side] = c_rename.record(output_dir, summary, {UNIT})
         proof = c_rename._proof_path(output, UNIT)
         if mutation == "evidence missing":
             proof.unlink()
@@ -123,6 +128,9 @@ class IdentifierRenameTests(unittest.TestCase):
         strict = c_comparison.compare(current, output / "project", output, baseline, source_tree=True)
         with patch.object(c_gate.c_acceptance, "evaluate", return_value=current["projectAcceptance"]):
             result = c_gate.verdict(current, output, baseline, {}, identifier_evidence=evidence)
+            if not candidates:
+                strict_gate = c_gate.verdict(current, output, baseline, {})
+                self.assertEqual(json.dumps(result), json.dumps(strict_gate))
         self.assertEqual(strict, result["comparison"])
         self.assertEqual(raw, current)
         self.assertEqual(result["projectAcceptance"], "blocked")
@@ -202,6 +210,11 @@ class IdentifierRenameTests(unittest.TestCase):
                    2: [((2, 1, "ViaSigned"), (2, 1, "ViaUnsigned"))]}
         self.assertEqual(c_rename._expansions(old, new, "fixture.c", {1: changes[1]}), {1})
         self.assertIsNone(c_rename._expansions(old, new, "fixture.c", changes))
+
+    def test_no_candidate_packs_nothing_and_preserves_strict_gate_bytes(self):
+        for source, status in ((OLD, "passed"), (OLD.replace("== FALSE", "!= FALSE"), "blocked")):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                self.assertEqual(self.check(Path(directory), OLD, source, candidates=False)["status"], status)
 
     def test_bad_optional_evidence_keeps_strict_gate_output(self):
         for mutation, reason in (

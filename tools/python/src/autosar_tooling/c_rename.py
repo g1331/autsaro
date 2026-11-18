@@ -55,9 +55,11 @@ def _proof_path(output: Path, name: str) -> Path:
     return output / EVIDENCE / (name + ".json.gz")
 
 
-def record(output: Path, summary: dict) -> dict[str, str]:
+def record(output: Path, summary: dict, candidates: set[str]) -> dict[str, str]:
     """Pack existing GCC expansions and Cppcheck bindings for the transferred gate."""
-    units = _units(summary)
+    if not candidates:
+        return {}
+    units = _units(summary) & candidates
     root = output / "project"
     bindings = defaultdict(dict)
     for program in summary["programs"]:
@@ -66,7 +68,8 @@ def record(output: Path, summary: dict) -> dict[str, str]:
         for path in (directory / "addon-receipts").glob("*.json"):
             receipt = json.loads(path.read_text(encoding="utf-8"))
             source = Path(receipt["source"])
-            if source.is_relative_to(root) and source.relative_to(root).as_posix() in units:
+            if ("privateBindings" in receipt and source.is_relative_to(root)
+                    and source.relative_to(root).as_posix() in units):
                 bindings[source.relative_to(root).as_posix()][name] = receipt["privateBindings"]
     hashes = {}
     for index, unit in enumerate(summary["scope"]["translationUnits"]):
@@ -74,7 +77,10 @@ def record(output: Path, summary: dict) -> dict[str, str]:
             continue
         path = _proof_path(output, unit)
         if not path.is_file():
-            expansion = (output / f"compiler-origins-{index}.stdout.log").read_text(encoding="utf-8")
+            trace = output / f"compiler-origins-{index}.stdout.log"
+            if unit not in bindings or not trace.is_file():
+                continue
+            expansion = trace.read_text(encoding="utf-8")
             path.parent.mkdir(parents=True, exist_ok=True)
             with gzip.open(path, "wt", compresslevel=4, encoding="utf-8", newline="\n") as stream:
                 json.dump({"gcc": _normalize_expansion(expansion, output), "bindings": bindings[unit]}, stream)
@@ -313,7 +319,7 @@ def equivalent(previous: dict, current: dict, baseline: Path, output: Path, comp
                hashes: dict, previous_headers: set | None, headers: set | None) -> Counter:
     """Count only complete, same-position, same-program replacements in the strict delta."""
     result = Counter()
-    if not hashes or not any(row["rule"] in TYPE_RULES for row in comparison["new"]):
+    if not hashes or not any(hashes.values()) or not any(row["rule"] in TYPE_RULES for row in comparison["new"]):
         return result
     sources = _source_changes(previous, current, baseline / "project", output / "project")
     for name, (old, new, changes) in sources.items():

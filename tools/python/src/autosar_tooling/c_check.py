@@ -551,13 +551,15 @@ def analyzer_inputs(data: dict, root: Path, scope: dict) -> tuple[str, dict]:
 
 
 def analyze_program(executable: Path, addons: Path, root: Path, sources: list[str], database: list[dict],
-                    scope: dict, target_id: str, output: Path) -> tuple[int, bool, list[dict], list[str], dict]:
+                    scope: dict, target_id: str, output: Path, *,
+                    rename_units: set[str] | None = None) -> tuple[int, bool, list[dict], list[str], dict]:
     (output / "compile_commands.json").write_text(json.dumps(database, indent=2) + "\n", encoding="utf-8")
     for name, config in {
         "misra": {"script": str(addons / "misra.py"), "ctu": True},
         "project": {"script": str(Path(__file__).with_name("c_addon.py")),
                     "args": [f"--data-directory={addons}", f"--source-root={root}",
-                             f"--receipt-directory={output / 'addon-receipts'}"]},
+                             f"--receipt-directory={output / 'addon-receipts'}",
+                             *(f"--rename-unit={name}" for name in sorted((rename_units or set()).intersection(sources)))]},
     }.items():
         (output / f"{name}.json").write_text(json.dumps(config) + "\n", encoding="utf-8")
     (output / "cache").mkdir()
@@ -692,7 +694,7 @@ def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path
 
 
 def check(project: Path, target_id: str, output: Path, baseline: Path | None = None,
-          *, sdk_revision: str | None = None) -> int:
+          *, sdk_revision: str | None = None, rename_units: set[str] | None = None) -> int:
     refuse_links(project)
     project = project.resolve(strict=True)
     refuse_links(output)
@@ -731,7 +733,8 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         # Each program keeps its own CTU, build directory and receipts, so the
         # single-threaded analyzer runs concurrently; results merge in declared order.
         with ThreadPoolExecutor(max_workers=min(len(jobs), int(os.environ.get("CARGO_BUILD_JOBS", str(len(jobs)))))) as executor:
-            results = [executor.submit(analyze_program, executable, addons, root, units, commands, scope, target_id, directory)
+            results = [executor.submit(analyze_program, executable, addons, root, units, commands, scope, target_id,
+                                       directory, **({"rename_units": rename_units} if rename_units else {}))
                        for _, _, units, commands, directory in jobs]
         combined_inputs = {}
         for (program, entry, units, _, _), result in zip(jobs, results):
