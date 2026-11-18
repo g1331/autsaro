@@ -1168,7 +1168,7 @@ jobs:
           ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLES: ${{ matrix.samples }}
         run: |
-          import json, os, subprocess, sys
+          import hashlib, json, os, subprocess, sys
           from pathlib import Path
           failed = False
           baseline = os.environ['ANALYSIS_SIDE'] == 'baseline'
@@ -1186,9 +1186,12 @@ jobs:
               try:
                   summary = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
                   evidence = summary.get('preprocessingEvidence', {})
+                  trace = output / 'preprocessing.json.gz'
+                  trace_matches = (baseline or (evidence.get('file') == trace.name and trace.is_file()
+                      and hashlib.sha256(trace.read_bytes()).hexdigest() == evidence.get('sha256')))
                   complete = (summary['error'] is None and result.returncode == 0
                       and summary['projectAcceptance']['status'] in ('accepted', 'blocked')
-                      and (baseline or 'sha256' in evidence))
+                      and trace_matches)
                   if not baseline:
                       print(name, 'preprocessingEvidence=' + json.dumps(evidence, ensure_ascii=False))
                   print(name, 'analysis_complete=' + str(complete), 'source_passed=' + str(summary['passed']))
