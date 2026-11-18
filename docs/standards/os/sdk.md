@@ -121,51 +121,51 @@ SDK 使用既有 source-assessment context 的 sdk-integration 组；`sdk_identi
 <!-- sdk-integration-records-end -->
 <!-- source-assessment-context-begin -->
 {
-  "id": "sdk-integration-514-declarations",
+  "id": "sdk-integration-515-control-flow",
   "evidence": {
-    "head": "22aebb40296728e6b97cf438aadde6590e3e00b9",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44029684376"
+    "head": "942b65ee2eb36cf61813f6d20caece4e52fac5e5",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44269147114"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "188d91ea175d8c7cf58cc44222eff1f6e24ca60ab781469daab4e65ddf762bc6"
+      "inputIdentity": "bd9dd0d5f4b8da2b39c77f886ab98f13c1598dc50b4316ad05e721c8cce679f4"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "6e4d530cda01e75beee76cd06f4b515c11342fc150f915b87a8e98cd6875ec74"
+      "inputIdentity": "cf3bffb8199b02e375eedd346d77e3c18af279f20604ad81b9695f0ac59e0780"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "37d058f3cb74bc12157ba1e6838d9031c5d9b9036eb038d5d1096a92501ba1ea"
+      "inputIdentity": "6b4b4ed4591f0d64ac6211b9c3dcc7919de92308817b198e160c0f78db27983f"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "94f67c89cf5fb3e85d06025ffe8eb7dd68ddd2f962aff3f1fbeb56f078461096"
+      "inputIdentity": "04ae23db0088429a7ed1756542f3f119c292f87f112752ced20216e94ac212f1"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "fe86c250e3a88ec0d1377e2f8a52b0e6282d254ba29ac7d26b21472938b63d90"
+      "inputIdentity": "fa2afecc80003851b8240b146a6871fa26d022b95f70cea060b20f59655f635d"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "98abd4ec0baa438bf61766908d4597fc55f6aa3ea1b2006bb4128fa11b386b34"
+      "inputIdentity": "69fb0555915e7b5348b54275644f8a29af5e8748660fda490da98d55dffd15fa"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c928c2b3cde59324afd661b4f85b00a92e69f067f42cde5ddd217deb9d65cbea"
+      "inputIdentity": "c750b5613867654f307de8591ac4af42d1fe5a3650d82f3d3b561260dbc2985e"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "47ef647bedeb909fbc810362b95d8b9afe7685526db4450c6df219d3cae1c35a"
+      "inputIdentity": "ff4262949186d8e3c652cc70983c99201768dad2fb93cab964064a3fef070025"
     }
   ],
   "records": {

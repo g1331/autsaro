@@ -1404,7 +1404,7 @@ class AcceptanceTests(unittest.TestCase):
                  for row in context["cases"]}
         # Actual CI standard/user inputs share the selected kernel closure.
         # Lock its recomputed identity and both labels; other local groups stay separate.
-        reviewed = "a6bec2db29dcf7a4d3ed1a8e8758900b8c7faa39ac89f763ed604ed9ff0f0be3"
+        reviewed = "975b6aaf803671113d502f554447a4d6fd4493384d913a828665d223916dc2a0"
         self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
         self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
