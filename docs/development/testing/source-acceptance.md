@@ -39,7 +39,7 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 
 PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`python -m autosar_tooling.c_gate scan --target <目标> --sample <样本>` 复用 `c_comparison` 的逐程序差集，重新计算当前项目验收，仅由对应诊断、物理位置及程序的有效 accepted 处置覆盖新增。改写诊断行产生新增，Git 改名回接原件／交付路径；整文件行映射把旧位置批准留在旧位置。整体 blocked 留作报告，执行 error 阻断。`out_of_scope` occurrence 和 `outOfScopeNew` 保留范围外位置及新增。门先收齐双侧各八份 `scope-input.json`，按原始分析身份绑定并集，再重算 occurrence、MR12／SDK 消费与验收身份。严格集成验收要求完整矩阵；汇总核对每份绑定及逐位置分类，统计见 `compliance-scope.json`。包装器零退出只表示执行完整，原始分析状态保持。
 
-基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。prepare 与双侧生成并行。基准原件与 SDK 原件记录取第一父提交并绑定身份，继续核对实际 SDK；评估仍用当前输入。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树的 SDK 比较身份绑定 include 搜索序列、搜索目录内全部 provider 文件及实际打开的头／宏，见 [SDK 比较身份](sdk-comparison-identity.md)。头／宏使用集合可变，共有头字节与宏值仍比较；旧版（语义身份 2）工件拒绝，须重扫。双侧 raw 回执均拒绝验收 error；基准失败或不可比均拒绝。
+基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。prepare 与双侧生成并行。基准原件与 SDK 原件记录取第一父提交并绑定身份，继续核对实际 SDK；评估仍用当前输入。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树的 SDK 比较身份绑定 include 搜索序列、搜索目录可达的全部 provider 文件及实际打开的头／宏，见 [SDK 比较身份](sdk-comparison-identity.md)。头／宏使用集合可变，共有头字节与宏值仍比较；旧版（语义身份 2）工件拒绝，须重扫。双侧 raw 回执均拒绝验收 error；基准失败或不可比均拒绝。
 
 基准扫描可复用该 SHA 的 master push 原始产物，要求对应生产作业成功。匹配身份覆盖树、样本、分析器二进制／addon、规则与生成器、生成 seal、PR 驱动／配置／评估输入、Python、GCC driver／backend 和 runner 镜像。目标主机重查 SDK 搜索空间及打开的头、模型、隐式库及驱动语义；任一不符、产物缺失／重复或 attempt 不符均现场扫描。每轮仍生成基准以核对 seal；复用只省去原始扫描，项目验收和输入身份重新计算。`gate.json.baselineSource` 记录 same-run（含回退原因）或 master-artifact（运行、attempt、生产作业、工件与 digest），不缓存门判定。
 
