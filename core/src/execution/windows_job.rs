@@ -1,5 +1,6 @@
 //! Own a hidden command and all descendants before its first instruction runs.
 //! The job handle is private and non-inheritable; closing it also kills the tree.
+use std::collections::BTreeSet;
 use std::ffi::c_void;
 use std::io;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
@@ -8,6 +9,10 @@ use std::process::{Child, Command, ExitStatus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// Window after the root exit in which the Job's active count may still lag.
+pub(crate) const ACCOUNTING_GRACE: Duration = Duration::from_millis(200);
+
+mod console_host;
 mod evidence;
 mod system_snapshot;
 
@@ -64,6 +69,13 @@ struct ThreadEntry {
 struct FileTime {
     low: u32,
     high: u32,
+}
+/// JobObjectBasicProcessIdList with room for 128 members.
+#[repr(C)]
+struct ProcessIds {
+    assigned: u32,
+    listed: u32,
+    ids: [usize; 128],
 }
 
 #[link(name = "kernel32")]
@@ -326,6 +338,49 @@ impl ProcessTree {
     }
     pub(crate) fn active(&self) -> Result<u32, LocalizedText> {
         job_active(&self.job)
+    }
+    /// Identities of the console hosts currently in the Job.
+    pub(crate) fn console_hosts(&self) -> BTreeSet<console_host::Identity> {
+        console_host::hosts(&self.job)
+    }
+    /// Poll the active count for the accounting grace ending at `end_ns` (monotonic),
+    /// remembering the console hosts seen meanwhile.
+    pub(crate) fn wait_grace(
+        &self,
+        hosts: &mut BTreeSet<console_host::Identity>,
+        end_ns: u64,
+    ) -> Result<(), LocalizedText> {
+        console_host::wait_accounting_grace(
+            || self.active(),
+            || {
+                self.observe("grace");
+                hosts.extend(self.console_hosts());
+            },
+            // A failing clock reads as expired, which keeps the strict rule.
+            || super::monotonic_ns().unwrap_or(u64::MAX),
+            std::thread::sleep,
+            end_ns,
+        )
+    }
+    /// After the root exit and the accounting grace: whether the Job emptied while
+    /// only exited console hosts, finishing their teardown, remained. A live
+    /// member, an unfinished host or an observation after `TEARDOWN_LIMIT` or the
+    /// absolute `deadline_ns` is a real leftover.
+    pub(crate) fn hosts_finished(
+        &self,
+        hosts: &BTreeSet<console_host::Identity>,
+        deadline_ns: u64,
+    ) -> Result<bool, LocalizedText> {
+        // A failing clock reads as expired, which keeps the strict rule.
+        let now = || super::monotonic_ns().unwrap_or(u64::MAX);
+        let budget = u64::try_from(console_host::TEARDOWN_LIMIT.as_nanos()).unwrap_or(u64::MAX);
+        console_host::wait_until_finished(
+            || self.active(),
+            || console_host::only_exited_hosts(&self.job, hosts),
+            now,
+            std::thread::sleep,
+            deadline_ns.min(now().saturating_add(budget)),
+        )
     }
     pub(crate) fn stop(&mut self) -> Result<(), LocalizedText> {
         self.observe("before_stop");

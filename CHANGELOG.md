@@ -79,6 +79,8 @@
 
 ### Fixed
 
+- Windows owned commands (Rust `ProcessTree` and the delivered Python `WindowsJob`) no longer report `orphaned_members` when only console hosts (`conhost.exe`) that have already exited are still finishing their process teardown after the root exit; such hosts get a bounded wait (5 s, capped by the command deadline), while a live descendant, a running host or any other member still fails immediately after the existing 200 ms grace. Rebuild Windows consumers; the delivered tools change but statuses, deadlines and ABI do not (#412)
+
 - Windows native stack fatal exit now ends the process with `TerminateProcess` (exit status `E_OS_STACKFAULT`) after the fatal report is written, instead of `ExitProcess`, whose DLL detach notifications could overflow the already exhausted stack and turn exit 13 into `0xC0000005`. Rebuild Windows native consumers; the report bytes and exit status are unchanged (#463)
 
 - Windows native CI retains WER full crash dumps for failed or cancelled jobs; stack and restart test fixtures explicitly enable noninteractive crash reporting while delivered host programs retain their existing reporting policy (#463)
