@@ -50,12 +50,7 @@ class PreprocessingEvidenceTests(unittest.TestCase):
                 "#endif\n",
                 encoding="utf-8",
             )
-            scope = self.scope()
-            c_check.run(
-                [scope["diagnosticCompiler"]["path"], *scope["compilerFlags"],
-                 "-E", "-dD", *c_preprocessor.WARNINGS, tool_argument(root / "main.c")],
-                scratch, "compiler-origins-0", 60,
-            )
+            scope = self.reference(scratch, root, "check.h")
             receipt = c_preprocessor.collect(scope, root, scratch, c_check.run)
             report = scratch / receipt["file"]
             self.assertEqual(receipt["sha256"], digest(report))
@@ -94,6 +89,67 @@ class PreprocessingEvidenceTests(unittest.TestCase):
                 [("define", 1), ("undef", 3), ("define", 4)],
             )
 
+    def test_collect_rejects_changed_preprocessor_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            scratch = Path(directory)
+            root = scratch / "project"
+            root.mkdir()
+            (root / "main.c").write_text(
+                "#if 0 /* multi\n"
+                "*/ || 1\n"
+                "int emitted;\n"
+                "#endif\n",
+                encoding="utf-8",
+            )
+            scope = self.reference(scratch, root)
+            with self.assertRaisesRegex(
+                ValueError, r"^Preprocessing probes changed emitted tokens or include order: main\.c$",
+            ):
+                c_preprocessor.collect(scope, root, scratch, c_check.run)
+
+    def test_undef_removes_active_definition_at_next_evaluation(self):
+        condition = self.condition_after_definition("#undef FLAG\n")
+        self.assertEqual(condition["value"], 0)
+        self.assertEqual(condition["expanded"], "0")
+        self.assertEqual(condition["definitions"], {})
+        self.assertEqual(condition["definedTests"], {"FLAG": None})
+
+    def test_defined_test_records_the_active_definition(self):
+        condition = self.condition_after_definition("")
+        self.assertEqual(condition["value"], 1)
+        self.assertEqual(condition["definedTests"], {
+            "FLAG": {"file": "main.c", "line": 1, "body": "7", "function": False},
+        })
+
+    def condition_after_definition(self, intervening_directives):
+        with tempfile.TemporaryDirectory() as directory:
+            scratch = Path(directory)
+            root = scratch / "project"
+            root.mkdir()
+            (root / "main.c").write_text(
+                f"#define FLAG 7\n{intervening_directives}"
+                "#if defined(FLAG)\n"
+                "int emitted;\n"
+                "#endif\n",
+                encoding="utf-8",
+            )
+            scope = self.reference(scratch, root)
+            receipt = c_preprocessor.collect(scope, root, scratch, c_check.run)
+            with gzip.open(scratch / receipt["file"], "rt", encoding="utf-8") as stream:
+                events = json.load(stream)["translationUnits"]["main.c"]["events"]
+            condition, = [event for event in events if event["kind"] == "if"]
+            return condition
+
+    def reference(self, scratch, root, *headers):
+        scope = self.scope()
+        scope["projectTranslationUnits"] = {"main.c": [*headers, "main.c"]}
+        c_check.run(
+            [scope["diagnosticCompiler"]["path"], *scope["compilerFlags"],
+             "-E", "-dD", *c_preprocessor.WARNINGS, tool_argument(root / "main.c")],
+            scratch, "compiler-origins-0", 60,
+        )
+        return scope
+
     @staticmethod
     def scope():
         compiler = Path(shutil.which("gcc")).resolve()
@@ -102,6 +158,5 @@ class PreprocessingEvidenceTests(unittest.TestCase):
             "compilerFlags": ["-std=c99", "-Werror", "-DCLI=1"],
             "compilerWorkers": 1,
             "includePaths": [],
-            "projectTranslationUnits": {"main.c": ["check.h", "main.c"]},
             "target": "fixture",
         }

@@ -1967,17 +1967,17 @@ class AcceptanceTests(unittest.TestCase):
             "#undef TEST_STOP_SEC_CODE\n"
             "#endif\n"
         )
-        diagnostic = {"id": "misra-c2012-20.5", "programs": ["host-batch", "probe"],
-                      "locations": [{"file": name, "line": 5, "column": 0}]}
-
-        def evaluate(text):
+        def evaluate(text, line=5):
             data = text.encode("utf-8")
             self.files[name] = data
             self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
                 "path": name, "sha256": hashlib.sha256(data).hexdigest(),
                 "owner": "generated", "producerId": "autosar-generator",
             }]}).encode()
-            self.summary["diagnostics"] = [diagnostic]
+            self.summary["diagnostics"] = [{
+                "id": "misra-c2012-20.5", "programs": ["host-batch", "probe"],
+                "locations": [{"file": name, "line": line, "column": 0}],
+            }]
             self.seal()
             self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
             self.bind_groups()
@@ -1990,10 +1990,17 @@ class AcceptanceTests(unittest.TestCase):
         for old, replacement in (
             ("#define TEST_CODE", "#define UNRELATED"),
             ("#undef TEST_START_SEC_CODE", "#undef OTHER_START_SEC_CODE"),
+            ("#undef TEST_STOP_SEC_CODE", "#undef OTHER_STOP_SEC_CODE"),
             ("#undef TEST_CODE", "#undef UNRELATED"),
         ):
             with self.subTest(replacement=replacement):
                 self.assertEqual(evaluate(source.replace(old, replacement))["reason"], "no_record")
+        with self.subTest(cleanup_branch="START"):
+            early_cleanup = source.replace(
+                "#elif defined(TEST_STOP_SEC_CODE)\n#undef TEST_CODE\n",
+                "#undef TEST_CODE\n#elif defined(TEST_STOP_SEC_CODE)\n",
+            )
+            self.assertEqual(evaluate(early_cleanup, line=4)["reason"], "no_record")
 
     def test_owned_memmap_requires_the_complete_protocol(self):
         self.owned_inputs()
