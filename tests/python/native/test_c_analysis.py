@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_check
+from autosar_tooling import c_check, c_sdk
 from ecu_tools.owner import OwnershipError
 
 
@@ -454,16 +454,23 @@ class ActualCAnalysisTests(unittest.TestCase):
                 self.assertIsNone(summary["error"])
                 analyses.append((summary, project, output))
             previous, current = analyses
-            search = previous[0]["scope"]["compilerSemanticInputs"]["includeSearch"]
-            self.assertIn("usr/include", search["system"])
+            scope = previous[0]["scope"]
+            search = scope["compilerSemanticInputs"]["includeSearch"]
+            root = c_sdk.provider_root(Path(scope["diagnosticCompiler"]["path"]),
+                                       scope["target"].startswith("windows"))
+            # The compiler's own order, named relative to the provider root where possible.
+            self.assertEqual(search["system"], [
+                Path(name).relative_to(root).as_posix() if Path(name).is_relative_to(root) else name
+                for name in scope["systemIncludePaths"]])
             self.assertEqual(search["environment"], {"CPATH": None, "C_INCLUDE_PATH": None})
-            inventory = previous[0]["scope"]["sdkInventory"]["files"]
-            self.assertIn("usr/include/limits.h", inventory)
+            inventory = scope["sdkInventory"]["files"]
+            self.assertIn(scope["sdkHeaders"][0]["header"], inventory)
             self.assertTrue(all("version" not in row for row in inventory.values()))
             self.assertEqual(current[0]["scope"]["sdkInventory"],
                              previous[0]["scope"]["sdkInventory"])
             changed = current[0]["scope"]["compilerSemanticInputs"]["includeSearch"]
-            self.assertEqual(changed["system"][0], extra.relative_to("/").as_posix())
+            self.assertEqual(changed["system"][0], extra.relative_to(root).as_posix()
+                             if extra.is_relative_to(root) else extra.as_posix())
             self.assertEqual(changed["environment"]["CPATH"], str(extra))
             for source_tree in (True, False):
                 with self.subTest(source_tree=source_tree), \

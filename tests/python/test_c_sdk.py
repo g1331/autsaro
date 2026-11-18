@@ -75,13 +75,15 @@ class SdkSourceTests(unittest.TestCase):
 
     def search_inputs(self, header):
         """The compiler record that makes the header's directory the include search space."""
-        relative = header.parent.relative_to("/").as_posix()
+        # An absolute name is valid on every host; the provider-relative form is covered
+        # by the include_search tests.
+        directory = header.parent.as_posix()
         return {
             "diagnosticCompiler": {"path": "/selected/bin/gcc.exe"},
             "compilerSemanticInputs": {
                 "includeSearch": {
                     "quote": [],
-                    "system": [relative],
+                    "system": [directory],
                     "environment": {"CPATH": None, "C_INCLUDE_PATH": None},
                 }
             },
@@ -974,6 +976,37 @@ class SdkSourceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no system include paths"):
                 c_sdk.include_search("#include <...> search starts here:\nEnd of search list.\n",
                                      root, root, {})
+
+    def test_include_search_reads_the_real_mingw_output_shape(self):
+        # compiler-headers.stderr.log of the Windows c-analysis job (run 44343351546):
+        # CRLF line ends, empty quote section, and unnormalized "bin/../lib" segments.
+        # Only the install prefix is replaced by a directory that exists on this host.
+        real = (
+            '#include "..." search starts here:\r\n'
+            "#include <...> search starts here:\r\n"
+            " PREFIX/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/include\r\n"
+            " PREFIX/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/../../../../include\r\n"
+            " PREFIX/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/include-fixed\r\n"
+            "End of search list.\r\n"
+            "COMPILER_PATH=PREFIX/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/;PREFIX/x\r\n"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary).resolve() / "msys64"
+            for name in ("bin", "lib/gcc/x86_64-w64-mingw32/16.1.0/include",
+                         "lib/gcc/x86_64-w64-mingw32/16.1.0/include-fixed", "include"):
+                (prefix / "mingw64" / name).mkdir(parents=True)
+            compiler = prefix / "mingw64/bin/gcc.exe"
+            root = c_sdk.provider_root(compiler, True)
+            self.assertEqual(root, prefix)
+            search = c_sdk.include_search(
+                real.replace("PREFIX", prefix.as_posix()), prefix.parent, root, {})
+            self.assertEqual(search, {
+                "quote": [],
+                "system": ["mingw64/lib/gcc/x86_64-w64-mingw32/16.1.0/include",
+                           "mingw64/include",
+                           "mingw64/lib/gcc/x86_64-w64-mingw32/16.1.0/include-fixed"],
+                "environment": {"CPATH": None, "C_INCLUDE_PATH": None}})
+            self.assertEqual(c_sdk.provider_root(Path("/usr/bin/gcc"), False), Path("/"))
 
     def test_search_inventory_covers_every_provider_file_below_a_search_directory(self):
         records = []

@@ -2458,7 +2458,7 @@ class AcceptanceTests(unittest.TestCase):
         scope.update(compilerSemanticInputs={
                          "machine": "x86_64-linux-gnu", "release": "12",
                          "includeSearch": {
-                             "quote": [], "system": [header.parent.relative_to("/").as_posix()],
+                             "quote": [], "system": [header.parent.as_posix()],
                              "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}},
                      diagnosticCompiler={"path": "/usr/bin/gcc"},
                      compilerDiscoveredDefines={"main.c": []}, platformModel=None, platformLibrary=None,
