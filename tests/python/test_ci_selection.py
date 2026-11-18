@@ -440,12 +440,14 @@ class CiSelectionTests(unittest.TestCase):
         self.assertLess(identity_index, cache_index)
         self.assertNotIn("continue-on-error", steps[identity_index])
         self.assertNotIn("continue-on-error", job)
+        self.assertEqual(steps[identity_index]["if"], "${{ !cancelled() && success() && runner.os == 'Windows' }}")
         self.assertEqual(cache["if"],
-                         "steps.desktop-cache-inputs.outputs.image != '' && "
+                         "runner.os == 'Windows' && steps.desktop-cache-inputs.outputs.image != '' && "
                          "steps.desktop-cache-inputs.outputs.native != ''")
         clean = steps[-1]
         self.assertEqual(clean["run"], "cargo clean --locked --workspace --profile dev")
         self.assertIn("success()", clean["if"])
+        self.assertIn("runner.os == 'Windows'", clean["if"])
         self.assertIn("steps.desktop-dependencies.outputs.cache-hit != 'true'", clean["if"])
         options = cache["with"]
         self.assertNotIn("restore-keys", options)
@@ -463,18 +465,22 @@ class CiSelectionTests(unittest.TestCase):
         index = indices["refresh-native-probes"]
         self.assertLess(indices["desktop-dependencies"], index)
         clean = steps[index]
-        self.assertEqual(clean["if"], "${{ !cancelled() && success() }}")
+        self.assertEqual(clean["if"], "${{ !cancelled() && success() && runner.os == 'Windows' }}")
         self.assertNotIn("continue-on-error", clean)
         for i, step in enumerate(steps):
             command = step.get("run", "")
-            if any(text in command for text in ("cargo test ", "ipc:check", "cargo build ", "cargo clippy ")):
+            if any(text in command for text in ("cargo test ", "ipc:check", "cargo build ")):
                 self.assertLess(index, i)
-                self.assertIn("steps.refresh-native-probes.outcome == 'success'", step["if"])
+                self.assertIn("runner.os != 'Windows' || steps.refresh-native-probes.outcome == 'success'",
+                              step["if"])
+            if "cargo clippy " in command:
+                self.assertEqual(step["if"], "${{ !cancelled() && runner.os == 'Linux' }}")
 
         def package(name, kind, dependency):
             return {"name": name, "dependencies": [{"kind": kind, "name": dependency}]}
 
         packages = [package("web", "build", "system-deps"), package("xml", "build", "vcpkg"),
+                    package("vswhom-sys", "build", "cc"),
                     package("native", "build", "pkg-config"), package("regular", None, "pkg-config"),
                     package("other", "build", "anyhow")]
         with mock.patch.object(subprocess, "check_output") as query, mock.patch.object(subprocess, "run") as run:
@@ -486,11 +492,12 @@ class CiSelectionTests(unittest.TestCase):
                 mock.call(["rustc", "--print", "host-tuple"], text=True), mock.call(metadata_command),
             ])
             run.assert_called_once_with(
-                ["cargo", "clean", "--locked", "--profile", "dev", "-p", "native", "-p", "web", "-p", "xml"],
+                ["cargo", "clean", "--locked", "--profile", "dev",
+                 "-p", "native", "-p", "vswhom-sys", "-p", "web", "-p", "xml"],
                 check=True,
             )
             run.reset_mock()
-            query.side_effect = ["host-triple\n", json.dumps({"packages": packages[3:]}).encode()]
+            query.side_effect = ["host-triple\n", json.dumps({"packages": packages[-2:]}).encode()]
             with self.assertRaisesRegex(RuntimeError, "No Cargo packages"):
                 run_script(clean["run"])
             run.assert_not_called()
@@ -512,57 +519,31 @@ class CiSelectionTests(unittest.TestCase):
             for path in installed_files:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b"original")
-            defaults, overlay = root / "default-pc", root / "overlay-pc"
-            defaults.mkdir()
-            overlay.mkdir()
-            webkit = defaults / "webkit2gtk-4.1.pc"
-            libsoup = overlay / "libsoup-3.0.pc"
-            webkit.write_bytes(b"Version: 2.52")
-            libsoup.write_bytes(b"Version: 3.4.4")
             env = {"ImageOS": "image", "ImageVersion": "1", "GITHUB_OUTPUT": str(output),
-                   "VCPKG_ROOT": str(root), "VCPKGRS_TRIPLET": "x64-windows-static-md",
-                   "PKG_CONFIG_PATH": str(overlay)}
+                   "VCPKG_ROOT": str(root), "VCPKGRS_TRIPLET": "x64-windows-static-md"}
 
-            def identity(platform):
+            def identity():
                 output.write_text("", encoding="utf-8")
-                with mock.patch.dict(os.environ, env), mock.patch.object(sys, "platform", platform):
-                    os.environ.pop("PKG_CONFIG_LIBDIR", None)
+                with mock.patch.dict(os.environ, env):
                     run_script(script)
                 return dict(line.split("=", 1) for line in output.read_text().splitlines())
 
-            packages = "webkit=2.52\tinstalled\nclang=18\tinstalled\n"
-            with mock.patch.object(subprocess, "check_output") as query:
-                query.side_effect = lambda args, **_: packages if args[0] == "dpkg-query" else str(defaults)
-                original = identity("linux")
-                for path in (libsoup, webkit):
-                    with self.subTest(metadata=path.name):
-                        contents = path.read_bytes()
-                        path.write_bytes(b"Version: 1.0")
-                        self.assertNotEqual(original["native"], identity("linux")["native"])
-                        path.write_bytes(contents)
-                packages = packages.replace("clang=18", "clang=19")
-                self.assertNotEqual(original["native"], identity("linux")["native"])
-                self.assertEqual(original["image"], "image-1")
-                query.side_effect = subprocess.CalledProcessError(1, "pkg-config")
-                with self.assertRaises(subprocess.CalledProcessError):
-                    identity("linux")
-                self.assertEqual(output.read_bytes(), b"")
-
-            original = identity("win32")
+            original = identity()
+            self.assertEqual(original["image"], "image-1")
             for path in installed_files:
                 with self.subTest(metadata=path.name):
                     path.write_bytes(b"changed")
-                    self.assertNotEqual(original["native"], identity("win32")["native"])
+                    self.assertNotEqual(original["native"], identity()["native"])
                     path.write_bytes(b"original")
             manifest = installed_files[2]
             installed_files[1].unlink()
-            self.assertNotEqual(original["native"], identity("win32")["native"])
+            self.assertNotEqual(original["native"], identity()["native"])
             installed_files[1].write_bytes(b"original")
             manifest.unlink()
-            self.assertNotEqual(original["native"], identity("win32")["native"])
+            self.assertNotEqual(original["native"], identity()["native"])
             manifest.parent.rmdir()
             with self.assertRaises(FileNotFoundError):
-                identity("win32")
+                identity()
             self.assertEqual(output.read_bytes(), b"")
 
     def test_context_artifact_keeps_exact_sources_and_raw_summary_without_analyzer_intermediates(self):

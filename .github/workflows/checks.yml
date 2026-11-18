@@ -172,11 +172,11 @@ jobs:
         with:
           linux-packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
       - name: Identify installed desktop build dependencies
-        if: ${{ !cancelled() && success() }}
+        if: ${{ !cancelled() && success() && runner.os == 'Windows' }}
         id: desktop-cache-inputs
         shell: python
         run: |
-          import hashlib, os, subprocess, sys
+          import hashlib, os
           from pathlib import Path
           from time import perf_counter
 
@@ -194,39 +194,20 @@ jobs:
 
           started = perf_counter()
           native = hashlib.sha256()
-          if sys.platform == 'win32':
-              root = Path(os.environ['VCPKG_ROOT'])
-              installed = root / 'installed'
-              triplet = os.environ['VCPKGRS_TRIPLET']
-              metadata = installed / 'vcpkg'
-              files = [*files_under(installed / triplet), *files_under(metadata / 'info'),
-                       *files_under(metadata / 'updates')]
-              files.extend(path for path in metadata.iterdir() if path.name == 'status')
-              # vcpkg-rs can read staged pkg-config metadata to order libraries within a port.
-              for port in optional_entries(root / 'packages'):
-                  if port.name.endswith('_' + triplet):
-                      files.extend(path for path in optional_entries(port / 'lib/pkgconfig')
-                                   if path.suffix == '.pc')
-          else:
-              # Include transitive packages resolved by apt as well as direct build dependencies.
-              packages = subprocess.check_output(['dpkg-query', '-W', '-f',
-                  '${binary:Package}=${Version}\t${db:Status-Status}\n'], text=True)
-              installed = sorted(line.split('\t')[0] for line in packages.splitlines()
-                                 if line.endswith('\tinstalled'))
-              native.update('\n'.join(installed).encode() + b'\0')
-              defaults = subprocess.check_output(['pkg-config', '--variable', 'pc_path', 'pkg-config'],
-                                                 text=True).strip()
-              search = [path for value in (os.environ.get('PKG_CONFIG_PATH', ''),
-                                           os.environ.get('PKG_CONFIG_LIBDIR', defaults))
-                        for path in value.split(os.pathsep) if path]
-              # Search order decides which metadata wins when a module is present twice.
-              native.update(os.fsencode(os.pathsep.join(search)) + b'\0')
-              root = None
-              files = {path for entry in search for path in optional_entries(Path(entry).absolute())
-                       if path.suffix == '.pc'}
+          root = Path(os.environ['VCPKG_ROOT'])
+          installed = root / 'installed'
+          triplet = os.environ['VCPKGRS_TRIPLET']
+          metadata = installed / 'vcpkg'
+          files = [*files_under(installed / triplet), *files_under(metadata / 'info'),
+                   *files_under(metadata / 'updates')]
+          files.extend(path for path in metadata.iterdir() if path.name == 'status')
+          # vcpkg-rs can read staged pkg-config metadata to order libraries within a port.
+          for port in optional_entries(root / 'packages'):
+              if port.name.endswith('_' + triplet):
+                  files.extend(path for path in optional_entries(port / 'lib/pkgconfig')
+                               if path.suffix == '.pc')
           for path in sorted(files):
-              name = path.relative_to(root) if root is not None else path
-              native.update(os.fsencode(name.as_posix()) + b'\0')
+              native.update(os.fsencode(path.relative_to(root).as_posix()) + b'\0')
               with path.open('rb') as content:
                   native.update(hashlib.file_digest(content, 'sha256').digest())
           print(f'Hashed {len(files)} native dependency files in {perf_counter() - started:.3f}s')
@@ -235,7 +216,7 @@ jobs:
               output.write('native=' + native.hexdigest() + '\n')
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: desktop-dependencies
-        if: steps.desktop-cache-inputs.outputs.image != '' && steps.desktop-cache-inputs.outputs.native != ''
+        if: runner.os == 'Windows' && steps.desktop-cache-inputs.outputs.image != '' && steps.desktop-cache-inputs.outputs.native != ''
         with:
           path: |
             ~/.cargo/registry
@@ -248,9 +229,9 @@ jobs:
             steps.desktop-cache-inputs.outputs.image, steps.desktop-cache-inputs.outputs.native,
             hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'core/Cargo.toml',
             'src-tauri/Cargo.toml', '.github/actions/core-build-dependencies/action.yml')) }}
-      - name: Invalidate cached native library probes
+      - name: Invalidate cached native probes and objects
         id: refresh-native-probes
-        if: ${{ !cancelled() && success() }}
+        if: ${{ !cancelled() && success() && runner.os == 'Windows' }}
         shell: python
         run: |
           import json, subprocess
@@ -258,13 +239,13 @@ jobs:
           host = subprocess.check_output(['rustc', '--print', 'host-tuple'], text=True).strip()
           metadata = json.loads(subprocess.check_output([
               'cargo', 'metadata', '--locked', '--format-version', '1', '--filter-platform', host]))
-          probes = {'pkg-config', 'system-deps', 'vcpkg'}
+          native_build_dependencies = {'pkg-config', 'system-deps', 'vcpkg', 'cc'}
           packages = sorted({package['name'] for package in metadata['packages']
-                            if any(dep['kind'] == 'build' and dep['name'] in probes
+                            if any(dep['kind'] == 'build' and dep['name'] in native_build_dependencies
                                    for dep in package['dependencies'])})
           if not packages:
               raise RuntimeError('No Cargo packages using native library probes')
-          print(f'Rebuilding {len(packages)} packages with native library probes: ' + ', '.join(packages), flush=True)
+          print(f'Rebuilding {len(packages)} packages with native build dependencies: ' + ', '.join(packages), flush=True)
           command = ['cargo', 'clean', '--locked', '--profile', 'dev']
           for package in packages:
               command.extend(('-p', package))
@@ -279,17 +260,17 @@ jobs:
         run: npm run build --prefix ui
       # Desktop tests are compile-bound: the dev profile keeps the GUI dependencies unoptimized
       # and shared with the build below.
-      - if: ${{ !cancelled() && steps.refresh-native-probes.outcome == 'success' }}
+      - if: ${{ !cancelled() && (runner.os != 'Windows' || steps.refresh-native-probes.outcome == 'success') }}
         run: python -m autosar_tooling.ci_reporting run -- cargo test --locked --profile dev -p autosar-config-desktop
-      - if: ${{ !cancelled() && steps.refresh-native-probes.outcome == 'success' }}
+      - if: ${{ !cancelled() && (runner.os != 'Windows' || steps.refresh-native-probes.outcome == 'success') }}
         run: npm run ipc:check --prefix ui
-      - if: ${{ !cancelled() && steps.refresh-native-probes.outcome == 'success' }}
+      - if: ${{ !cancelled() && (runner.os != 'Windows' || steps.refresh-native-probes.outcome == 'success') }}
         run: cargo build --locked -p autosar-config-desktop
-      - if: ${{ !cancelled() && steps.refresh-native-probes.outcome == 'success' && runner.os == 'Linux' }}
+      - if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: cargo clippy --locked -p autosar-config-desktop --all-targets -- -D warnings
       # Store dependency objects only. Each run builds and checks both workspace crates.
       - name: Remove workspace objects before saving desktop dependencies
-        if: ${{ !cancelled() && success() && steps.desktop-dependencies.outcome == 'success' && steps.desktop-dependencies.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && success() && runner.os == 'Windows' && steps.desktop-dependencies.outcome == 'success' && steps.desktop-dependencies.outputs.cache-hit != 'true' }}
         run: cargo clean --locked --workspace --profile dev
   native:
     # Native suites that need GCC but no licensed archive; the rest stay in acceptance.yml.
