@@ -220,6 +220,10 @@ class HostIoTests(unittest.TestCase):
                     )
                     if old is None:
                         self.assertGreater(len(os_suites.check_lifecycle(binary)), 3)
+                        result = os_suites.execute(binary, "invalid-arti-state")
+                        self.assertIn("ARTI_STATE_QUERY eDeleted", result["stderr"].splitlines(), result)
+                        self.assertEqual(result["exit"], 7, result)
+                        self.assertRegex(result["stdout"], r"(?m)^lifecycle=Closed state=Failed reason=7\b")
                     else:
                         result = os_suites.execute(binary, "normal")
                         self.assertEqual(result["exit"], 63, result)
