@@ -1,16 +1,20 @@
-/** @file Observe the real backend's rejected kernel-state query and critical cleanup. */
+/** @file Observe rejected kernel-state queries in the service and ARTI collector. */
 #include "Os_Backend.h"
 #include <stdio.h>
+#include <string.h>
 
 static OS_THREAD_LOCAL unsigned observing;
 static OS_THREAD_LOCAL unsigned queries;
 static OS_THREAD_LOCAL unsigned guards;
 static OS_THREAD_LOCAL unsigned entries;
 static OS_THREAD_LOCAL unsigned exits;
+static unsigned inject_arti_state;
+static OS_THREAD_LOCAL unsigned injected_arti_state;
 
 eTaskState __real_eTaskGetState(TaskHandle_t task);
 void __real_vPortEnterCritical(void);
 void __real_vPortExitCritical(void);
+int Os_StateLifecycleMain(int argc, char **argv);
 
 void Os_StateGuardObserved(void)
 {
@@ -24,6 +28,15 @@ eTaskState __wrap_eTaskGetState(TaskHandle_t task)
     if (observing != 0u) {
         ++queries;
         return eDeleted;
+    }
+    if ((inject_arti_state != 0u) && (injected_arti_state == 0u)) {
+        const Os_NativeStackType *stack = Os_StackCurrent();
+        /* The bootstrap's first state query is the ARTI observation after autostart. */
+        if ((stack != NULL) && (stack->role == 'B')) {
+            injected_arti_state = 1u;
+            (void)fprintf(stderr, "ARTI_STATE_QUERY eDeleted\n");
+            return eDeleted;
+        }
     }
     return __real_eTaskGetState(task);
 }
@@ -74,4 +87,18 @@ static StatusType observed_state(TaskType id, TaskStateRefType state)
 }
 
 #define GetTaskState observed_state
+#define main         Os_StateLifecycleMain
 #include "lifecycle.c"
+#undef main
+#undef GetTaskState
+
+int main(int argc, char **argv)
+{
+    if ((argc == 2) && (strcmp(argv[1], "invalid-arti-state") == 0)) {
+        char normal[] = "normal";
+        char *arguments[] = {argv[0], normal, NULL};
+        inject_arti_state = 1u;
+        return Os_StateLifecycleMain(2, arguments);
+    }
+    return Os_StateLifecycleMain(argc, argv);
+}
