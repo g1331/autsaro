@@ -94,3 +94,22 @@ Windows `rest` 作业实际运行 Python 三层 orphan 反例：令镜像 API �
 同一断言拒绝。作业结束再断言 ETW 有该 PID＋创建时间的镜像、父 PID、命令行和退出事件。
 Rust 原有三层反例同步断言相同成员字段。普通成功路径验证不落完整报告；
 `etw/overhead.json` 和 `job-evidence/overhead.json` 保存同 runner 的配对耗时原始样本。
+
+### Console host 收尾窗口
+
+`CREATE_NO_WINDOW` 创建的命令会得到一个隐藏 console，由根进程的后代 `conhost.exe` 承载，该
+进程也属于命令的 Job。最后一个客户端退出后 console host 立即退出（实测约 3 ms），但进程对象的
+收尾与 Job 活动计数的下降可能滞后：一次 CI 工件（`windows-job-evidence`，ETW 共 1619 个 console
+host）中 p50 为 2.6 ms，p99 为 6.5 ms，同一时刻的四个 console host 滞后 398–404 ms，超出 200 ms
+记账宽限，被判为 `orphaned_members`（#412、#414）。
+
+根进程退出且宽限届满后，Rust `ProcessTree::hosts_finished` 与 Python
+`WindowsJob._hosts_finished` 只在以下条件同时成立时继续等待：剩余成员全部是此前记录的
+`%SystemRoot%\System32\conhost.exe`（按 PID＋创建时间识别，镜像在收尾阶段会因拒绝访问读不出，
+所以在宽限内每 10 ms 记录一次，并在根退出时先记录）且 `GetExitCodeProcess` 已不是
+`STILL_ACTIVE`。等待上限取 5 s，与 `stop` 在 `TerminateJobObject` 后等待成员离开的既有预算一致，
+并受命令的绝对期限约束。其他成员、仍在运行的 host、不可读的成员列表或超过上限，仍按
+`orphaned_members` 处理。
+
+Python 的 `tests/python/process/test_windows_console_host.py` 用模拟 Job 与时钟在各平台覆盖等待
+规则；Windows 作业另验证真实 console host 被识别。真实泄漏的后代由既有 parent-first 反例保持失败。
