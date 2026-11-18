@@ -889,9 +889,9 @@ class CiSelectionTests(unittest.TestCase):
         step = next(row for row in workflow["jobs"]["c-analysis-samples"]["steps"]
                     if row.get("name") == "Verify complete generated-project analysis")
         self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
-        for side, status, code in product(("current", "baseline"),
-                                          ("accepted", "blocked", "error", "unknown", None), (0, 1)):
-            with self.subTest(side=side, status=status, code=code), \
+        for side, status, code, trace in product(("current", "baseline"),
+                                          ("accepted", "blocked", "error", "unknown", None), (0, 1), (True, False)):
+            with self.subTest(side=side, status=status, code=code, trace=trace), \
                     tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 results = "c-analysis-baseline" if side == "baseline" else "c-analysis-results"
@@ -899,6 +899,12 @@ class CiSelectionTests(unittest.TestCase):
                 output = root / "build" / results / "standard-ecu/summary.json"
                 output.parent.mkdir(parents=True)
                 data = {"error": None, "passed": False}
+                if side == "current" and trace:
+                    raw = b"frozen preprocessing evidence"
+                    (output.parent / "preprocessing.json.gz").write_bytes(raw)
+                    data["preprocessingEvidence"] = {
+                        "file": "preprocessing.json.gz", "sha256": hashlib.sha256(raw).hexdigest(),
+                    }
                 if status is not None:
                     data["projectAcceptance"] = {"status": status}
                 output.write_text(json.dumps(data), encoding="utf-8")
@@ -919,7 +925,8 @@ class CiSelectionTests(unittest.TestCase):
                 finally:
                     os.chdir(previous)
                 self.assertEqual(exit_.exception.code == 0,
-                                 code == 0 and status in {"accepted", "blocked"})
+                                 code == 0 and status in {"accepted", "blocked"}
+                                 and (side == "baseline" or trace))
                 command = run.call_args.args[0]
                 self.assertEqual(command[command.index("--project") + 1],
                                  str(Path("build") / inputs / "standard-ecu"))
