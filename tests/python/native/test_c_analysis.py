@@ -638,10 +638,10 @@ int main(int argc, char **argv)
                         self.assertRaisesRegex(ValueError, "Semantic identity differs: compiler"):
                     compare(*current, previous[2], source_tree=source_tree)
             # Reusing the first analysis while CPATH now points elsewhere must not pass.
-            c_check.recheck_include_search(scope)
+            c_check.recheck_include_search(scope, output)
             with patch.dict(os.environ, {"CPATH": str(extra)}), \
                     self.assertRaisesRegex(ValueError, "include search order or variables"):
-                c_check.recheck_include_search(scope)
+                c_check.recheck_include_search(scope, output)
 
     @unittest.skipUnless(platform.system() == "Linux", "uses the Debian provider layout")
     def test_real_provider_header_reached_only_through_a_link_is_in_the_inventory(self):

@@ -878,6 +878,10 @@ def walk_search_directory(directory: Path, visited: set):
             real = os.path.realpath(entry.path)
             link = entry.is_symlink() or entry.is_junction()
             kind = entry_kind(entry, link)
+            if link and kind is None:
+                # Nothing to resolve to: the link's own target, as written, names it.
+                real = os.path.normpath(
+                    os.path.join(os.path.dirname(entry.path), os.readlink(entry.path)))
             if kind == "dir":
                 seen = os.path.normcase(real) in visited
                 if link:
@@ -897,6 +901,16 @@ def walk_search_directory(directory: Path, visited: set):
     yield from walk(directory)
 
 
+def provider_links(links: dict, files: dict, root: PurePath) -> dict:
+    """The links whose target is a provider file or has provider files somewhere below it."""
+    fold = str.casefold if isinstance(root, PureWindowsPath) else str
+    related = set()
+    for row in files.values():
+        header = PurePosixPath(row["header"])
+        related.update(fold(name.as_posix()) for name in (header, *header.parents))
+    return {name: row for name, row in links.items() if fold(row["target"]) in related}
+
+
 def search_inventory(records: list[tuple[str, dict]], directories: list[Path],
                      root: PurePath, opened: list[dict] = ()) -> dict:
     """Provider files and links the compiler meets through the search directories.
@@ -910,7 +924,10 @@ def search_inventory(records: list[tuple[str, dict]], directories: list[Path],
     A header present on one side only, a link that leads elsewhere, or other bytes can
     decide which definition an include resolves to even with identical sources.
     Files that belong to no supported provider are not part of the identity: opening one
-    is refused by the source provenance validation instead.
+    is refused by the source provenance validation instead. For the same reason a link
+    counts only when its target is a provider file or a directory holding provider files
+    below it; links to a runner's other packages (clang, ncurses) come and go with image
+    revisions and must not make two analyses incomparable.
     """
     provider = {}
     for name, row in sorted(records, key=lambda item: item[1]["algorithm"] != "symlink"):
@@ -932,7 +949,7 @@ def search_inventory(records: list[tuple[str, dict]], directories: list[Path],
     for row in opened:
         files[relative_name(row["path"], root)] = {key: row[key] for key in fields}
     return {"format": "sdk-search-inventory-v1", "files": dict(sorted(files.items())),
-            "links": dict(sorted(links.items()))}
+            "links": dict(sorted(provider_links(links, files, root).items()))}
 
 
 def validate_inventory(scope: dict) -> None:

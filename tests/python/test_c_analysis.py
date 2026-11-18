@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import platform
 import tempfile
 import unittest
 from pathlib import Path, PureWindowsPath
@@ -74,16 +75,51 @@ class CAnalysisTests(unittest.TestCase):
             "order changed": {**recorded, "system": recorded["system"][::-1]},
             "directory added": {**recorded, "system": ["extra", *recorded["system"]]},
         }
-        for name, now in changes.items():
-            with self.subTest(change=name), patch.object(
-                    c_check, "probe_include_search", return_value=([], now)) as probe:
-                if name == "unchanged":
-                    c_check.recheck_include_search(scope)
-                else:
-                    with self.assertRaisesRegex(ValueError, "include search order or variables"):
-                        c_check.recheck_include_search(scope)
-                self.assertEqual(probe.call_args.args[:2], ("/usr/bin/gcc", ["-std=c99"]))
-                self.assertFalse(probe.call_args.args[3])
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            for name, now in changes.items():
+                with self.subTest(change=name), patch.object(
+                        c_check, "probe_include_search", return_value=([], now)) as probe:
+                    if name == "unchanged":
+                        c_check.recheck_include_search(scope, directory)
+                    else:
+                        with self.assertRaisesRegex(ValueError,
+                                                    "include search order or variables"):
+                            c_check.recheck_include_search(scope, directory)
+                    self.assertEqual(probe.call_args.args[:2], ("/usr/bin/gcc", ["-std=c99"]))
+                    # The probe runs beside the analysis, on its drive.
+                    self.assertEqual(probe.call_args.args[2].parent, directory)
+                    self.assertFalse(probe.call_args.args[3])
+
+    def test_the_reuse_check_is_wired_to_the_search_recheck_without_patching_it(self):
+        recorded = {"quote": [], "system": ["usr/include"],
+                    "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}
+        target = next(name for name, system in c_check.TARGETS.items()
+                      if system == platform.system())
+        tool = {"version": "2.21.0", "expectedSourceRevision": "revision", "addons": {"a": "b"}}
+        summary = {"scope": {"target": target, "compilerFlags": ["-std=c99"],
+                             "diagnosticCompiler": {"path": "gcc"},
+                             "compilerSemanticInputs": {"includeSearch": recorded}},
+                   "tool": tool, "programs": [{"name": "target"}],
+                   "semanticIdentity": {"marker": 1}}
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary).resolve() / "analysis/project"
+            project.mkdir(parents=True)
+            for name, now, expected in (
+                    ("same", recorded, None),
+                    ("CPATH now set", {**recorded, "environment": {"CPATH": "/x",
+                                                                    "C_INCLUDE_PATH": None}},
+                     "include search order or variables")):
+                with self.subTest(name=name), \
+                        patch.object(c_check, "probe_include_search", return_value=([], now)), \
+                        patch.object(c_check, "semantic_identity",
+                                     return_value=summary["semanticIdentity"]):
+                    arguments = (summary, project, (Path("cppcheck"), Path("addons"), tool))
+                    if expected is None:
+                        c_check.recheck_semantic_inputs(*arguments)
+                    else:
+                        with self.assertRaisesRegex(ValueError, expected):
+                            c_check.recheck_semantic_inputs(*arguments)
 
     def test_compiler_header_paths_use_the_compiler_working_directory(self):
         with tempfile.TemporaryDirectory() as temporary:

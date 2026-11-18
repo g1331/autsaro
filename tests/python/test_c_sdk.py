@@ -1086,7 +1086,7 @@ class SdkSourceTests(unittest.TestCase):
                 path.parent.mkdir()
                 path.write_bytes(b"d\n")
                 records = [(str(path), {
-                    "provider": "libc6-dev", "version": "9", "header": "p/d.h",
+                    "provider": "libc6-dev", "version": "9", "header": "elsewhere/d.h",
                     "algorithm": "md5", "expected": "e" * 32,
                     "sha256": hashlib.sha256(b"d\n").hexdigest()})]
                 (root / "include").mkdir()
@@ -1102,13 +1102,23 @@ class SdkSourceTests(unittest.TestCase):
             root = Path(temporary).resolve()
             (root / "include").mkdir()
             make_link(self, root / "include/gone.h", "missing/target.h", directory=False)
-            inventory = c_sdk.search_inventory(
-                [(str(root / "include/x"), {"provider": "libc6-dev", "version": "9",
-                                            "header": "p/x", "algorithm": "md5",
-                                            "expected": "e" * 32, "sha256": "f" * 64})],
-                [root / "include"], root)
-            self.assertEqual(inventory["links"], {"include/gone.h": {
-                "kind": "dangling", "target": "include/missing/target.h"}})
+            # A link that loops back on itself cannot be resolved at all.
+            make_link(self, root / "include/loop1", "loop2", directory=False)
+            make_link(self, root / "include/loop2", "loop1", directory=False)
+            make_link(self, root / "include/self", "self", directory=False)
+            events = list(c_sdk.walk_search_directory(root / "include", set()))
+            self.assertEqual(
+                [(kind, Path(path).name, rest[1]) for kind, path, *rest in events],
+                [("link", "gone.h", "dangling"), ("link", "loop1", "dangling"),
+                 ("link", "loop2", "dangling"), ("link", "self", "dangling")])
+            # The target is the link's own, as written, so that an unresolvable link is named.
+            self.assertEqual(
+                [Path(rest[0]).name for _kind, _path, *rest in events],
+                ["target.h", "loop2", "loop1", "self"])
+            inventory = c_sdk.search_inventory([], [root / "include"], root)
+            # Collection completes; links to nothing are no provider's concern.
+            self.assertEqual(inventory["links"], {})
+            self.assertEqual(inventory["files"], {})
         # An error on a plain entry is not a dangling link.
         class Broken:
             path = "x"
@@ -1119,6 +1129,35 @@ class SdkSourceTests(unittest.TestCase):
         with self.assertRaises(OSError):
             c_sdk.entry_kind(Broken(), False)
         self.assertIsNone(c_sdk.entry_kind(Broken(), True))
+
+    def test_only_links_that_lead_to_provider_files_count(self):
+        files = {"usr/include/stdio.h": {"header": "usr/include/stdio.h"},
+                 "usr/include/x86_64-linux-gnu/bits/a.h": {
+                     "header": "usr/include/x86_64-linux-gnu/bits/a.h"}}
+        links = {
+            "to the file": {"kind": "file", "target": "usr/include/stdio.h"},
+            "to a directory above provider files": {"kind": "dir", "target": "usr/include"},
+            "to a directory far above them": {"kind": "dir", "target": "usr"},
+            "to the root": {"kind": "dir", "target": "."},
+            "to an alias of such a directory": {"kind": "alias",
+                                                "target": "usr/include/x86_64-linux-gnu"},
+            "clang": {"kind": "dir", "target": "usr/lib/llvm-16/lib/clang/16/include"},
+            "ncurses": {"kind": "file", "target": "usr/include/curses.h"},
+            "sibling by prefix": {"kind": "dir", "target": "usr/include-extra"},
+            "outside": {"kind": "dir", "target": "outside:/opt/x"},
+        }
+        kept = set(c_sdk.provider_links(links, files, PurePosixPath("/")))
+        self.assertEqual(kept, {"to the file", "to a directory above provider files",
+                                "to a directory far above them", "to the root",
+                                "to an alias of such a directory"})
+        # Windows compares names without regard to case.
+        windows = c_sdk.provider_links(
+            {"x": {"kind": "dir", "target": "mingw64/Include"}},
+            {"k": {"header": "mingw64/include/stdio.h"}}, PureWindowsPath("C:/msys64"))
+        self.assertEqual(list(windows), ["x"])
+        self.assertEqual(c_sdk.provider_links(
+            {"x": {"kind": "dir", "target": "mingw64/Include"}},
+            {"k": {"header": "mingw64/include/stdio.h"}}, PurePosixPath("/")), {})
 
     def test_extended_length_prefixes_do_not_reach_the_names(self):
         windows = PureWindowsPath("C:/msys64")
@@ -1133,9 +1172,9 @@ class SdkSourceTests(unittest.TestCase):
     def test_search_inventory_records_every_link_and_enters_each_real_directory_once(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            files = {"include/a.h": "p/a.h", "include/sub/b.h": "p/b.h",
-                     "elsewhere/d.h": "p/d.h", "lib/libc.a": "p/libc.a",
-                     "include-extra/c.h": "p/c.h"}
+            files = {"include/a.h": "include/a.h", "include/sub/b.h": "include/sub/b.h",
+                     "elsewhere/d.h": "elsewhere/d.h", "lib/libc.a": "lib/libc.a",
+                     "include-extra/c.h": "include-extra/c.h"}
             records = []
             for name, header in files.items():
                 path = root / name
@@ -1162,17 +1201,16 @@ class SdkSourceTests(unittest.TestCase):
             # Foreign files, libraries not reached by a path and other directories stay out;
             # a directory below a link is listed under the path the compiler walks.
             self.assertEqual({name: row["header"] for name, row in inventory["files"].items()}, {
-                "include/a.h": "p/a.h",
-                "include/alias.h": "p/libc.a",
-                "include/linked/d.h": "p/d.h",
-                "include/parent/include-extra/c.h": "p/c.h",
-                "include/parent/lib/libc.a": "p/libc.a",
-                "include/sub/b.h": "p/b.h",
+                "include/a.h": "include/a.h",
+                "include/alias.h": "lib/libc.a",
+                "include/linked/d.h": "elsewhere/d.h",
+                "include/parent/include-extra/c.h": "include-extra/c.h",
+                "include/parent/lib/libc.a": "lib/libc.a",
+                "include/sub/b.h": "include/sub/b.h",
             })
+            # Links to a file that is no provider's, or to nothing, are left out.
             self.assertEqual(inventory["links"], {
                 "include/alias.h": {"kind": "file", "target": "lib/libc.a"},
-                "include/dangling.h": {"kind": "dangling", "target": "include/missing"},
-                "include/foreignlink.h": {"kind": "file", "target": "foreign-out.h"},
                 "include/linked": {"kind": "dir", "target": "elsewhere"},
                 "include/linked/back": {"kind": "dir", "target": "include"},
                 # Not entered a second time, still recorded: where the link leads decides.
@@ -1186,11 +1224,11 @@ class SdkSourceTests(unittest.TestCase):
                              {"header", "provider", "algorithm", "expected", "sha256"})
             self.assertEqual(c_sdk.search_inventory(records, [], root)["files"], {})
             # Opened headers outside every search directory are covered under their own path.
-            opened = {"path": str(root / "include-extra/c.h"), "header": "p/c.h",
+            opened = {"path": str(root / "include-extra/c.h"), "header": "include-extra/c.h",
                       "provider": "libc6-dev", "algorithm": "md5", "expected": "e" * 32,
                       "sha256": hashlib.sha256(b"include-extra/c.h").hexdigest()}
             covered = c_sdk.search_inventory(records, [root / "include"], root, [opened])
-            self.assertEqual(covered["files"]["include-extra/c.h"]["header"], "p/c.h")
+            self.assertEqual(covered["files"]["include-extra/c.h"]["header"], "include-extra/c.h")
 
     def test_environment_verifies_windows_materialized_file_links(self):
         with tempfile.TemporaryDirectory() as temporary:

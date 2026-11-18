@@ -474,7 +474,7 @@ class CComparisonTests(unittest.TestCase):
             packages[str(path)] = {
                 "provider": next((name for prefix, name in (providers or {}).items()
                                   if file.startswith(prefix)), "libc6-dev"),
-                "version": version, "header": "usr/" + file, "algorithm": "md5",
+                "version": version, "header": file, "algorithm": "md5",
                 "expected": hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()}
         for file, text in (foreign or {}).items():
             (provider / file).parent.mkdir(parents=True, exist_ok=True)
@@ -650,7 +650,8 @@ class CComparisonTests(unittest.TestCase):
               "providers": {"d3": "linux-libc-dev"}, "links": {"inc/branch": "d3"}},
              "sdk inventory: inc/branch/h.h", "sdk"),
             # Files that belong to no provider are not part of the identity (opening one is
-            # refused by the source provenance validation); where the link leads still is.
+            # refused by the source provenance validation), and neither are the links that
+            # lead to them: a runner's clang or ncurses links come and go with the image.
             ("link to a foreign file, bytes differ",
              {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/f.h": "out/x.h"}},
              {**base, "foreign": {"out/x.h": "two\n"}, "links": {"inc/f.h": "out/x.h"}},
@@ -659,17 +660,27 @@ class CComparisonTests(unittest.TestCase):
              {**base, "foreign": {"out/x.h": "one\n", "out/y.h": "one\n"},
               "links": {"inc/f.h": "out/x.h"}},
              {**base, "foreign": {"out/x.h": "one\n", "out/y.h": "one\n"},
-              "links": {"inc/f.h": "out/y.h"}}, link + "inc/f.h", "sdk"),
-            ("dangling link, same target",
-             {**base, "links": {"inc/d.h": "out/gone.h"}},
-             {**base, "links": {"inc/d.h": "out/gone.h"}}, None, None),
+              "links": {"inc/f.h": "out/y.h"}}, None, None),
+            ("package-external links added on one side",
+             {**base, "foreign": {"llvm/c.h": "one\n"}},
+             {**base, "foreign": {"llvm/c.h": "one\n"},
+              "links": {"inc/clang": "llvm", "inc/curses.h": "llvm/c.h"}}, None, None),
+            ("package-external link retargeted between foreign directories",
+             {**base, "foreign": {"llvm16/c.h": "one\n", "llvm17/c.h": "one\n"},
+              "links": {"inc/clang": "llvm16"}},
+             {**base, "foreign": {"llvm16/c.h": "one\n", "llvm17/c.h": "one\n"},
+              "links": {"inc/clang": "llvm17"}}, None, None),
             ("dangling link, other target",
              {**base, "links": {"inc/d.h": "out/gone.h"}},
-             {**base, "links": {"inc/d.h": "out/other.h"}}, link + "inc/d.h", "sdk"),
-            ("dangling link that now has a target",
-             {**base, "links": {"inc/d.h": "out/x.h"}},
-             {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/d.h": "out/x.h"}},
-             link + "inc/d.h", "sdk"),
+             {**base, "links": {"inc/d.h": "out/other.h"}}, None, None),
+            # Where the filter must not hide anything: one side reaches provider files.
+            ("provider directory link retargeted to a foreign directory",
+             {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/branch": "d1"}},
+             {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/branch": "out"}},
+             link + "inc/branch", "sdk"),
+            ("dangling link that now leads to a provider directory",
+             {**base, "links": {"inc/d": "out/gone"}}, {**base, "links": {"inc/d": "d1"}},
+             link + "inc/d", "sdk"),
         ]
         # A header reached by an escaping relative include (#include "../lib/esc.h" from a
         # header in inc/) is opened outside every search directory: it is compared as opened.

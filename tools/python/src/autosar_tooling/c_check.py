@@ -697,9 +697,13 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     }
 
 
-def recheck_include_search(scope: dict) -> None:
-    """The recorded search order and CPATH describe the analysis; reuse needs those in force now."""
-    with tempfile.TemporaryDirectory(prefix="c-search-") as temporary:
+def recheck_include_search(scope: dict, directory: Path) -> None:
+    """The recorded search order and CPATH describe the analysis; reuse needs those in force now.
+
+    The probe runs beside the analysis, on the same drive: a rooted entry without a drive
+    (MinGW's "/mingw64/include") resolves against the working directory's drive.
+    """
+    with tempfile.TemporaryDirectory(prefix="c-search-", dir=directory) as temporary:
         _, search = probe_include_search(
             scope["diagnosticCompiler"]["path"], scope["compilerFlags"], Path(temporary),
             scope["target"].startswith("windows"))
@@ -723,7 +727,7 @@ def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path
         raise ValueError("Unsupported analysis program directory")
     directories = (project.parent,) if len(names) == 1 else tuple(project.parent / name for name in names)
     scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
-    recheck_include_search(scope)
+    recheck_include_search(scope, project.parent)
     if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
         raise ValueError("Actual semantic inputs changed since analysis")
 
