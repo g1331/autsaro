@@ -1055,20 +1055,19 @@ class AcceptanceTests(unittest.TestCase):
             "R5.9", "R8.2", "R8.3", "R8.7",
             "R8.9", "R8.13", "R9.1", "R9.2", "R9.3", "R10.4", "R10.7",
             "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.8", "R11.9",
-            "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3", "R15.4",
-            "R15.6", "R15.7",
-            "R17.2", "R17.4", "R17.5", "R17.7", "R17.8", "R18.1", "R18.2", "R18.3", "R18.4",
-            "R18.5", "R18.6", "R18.8", "R19.1", "R20.5",
+            "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3",
+            "R17.2", "R17.7", "R18.1", "R18.2", "R18.3", "R18.4",
+            "R18.5", "R18.6", "R19.1", "R20.5",
             "R20.7", "R20.8", "R20.9", "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 56)
+        self.assertEqual(len(expected_gaps), 49)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 56)
+        self.assertEqual(len(objects), 49)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 56)
+        self.assertEqual(len(located), 49)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1089,7 +1088,8 @@ class AcceptanceTests(unittest.TestCase):
         expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
                        "R13.3", "R13.4", "R13.6"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
-                        "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7"}
+                        "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7",
+                        "R15.4", "R15.6", "R15.7", "R17.4", "R17.5", "R17.8", "R18.8"}
         preprocessing = {"R20.2", "R20.3", "R20.4", "R20.6", "R20.11", "R20.12",
                          "R20.13", "R20.14"}
         library = {"R21." + str(n) for n in range(3, 22) if n != 8}
@@ -1198,19 +1198,34 @@ class AcceptanceTests(unittest.TestCase):
                 for phrase in evidence:
                     self.assertIn(phrase, row["conclusion"])
         control_evidence = {
-            "R14.1": "altstacks[].storage", "R14.2": "TC1", "R14.3": "TC2.27–28",
-            "R15.1": "replacement", "R15.2": "findGotoLabel", "R15.3": "switch-clause",
-            "R15.4": "xTaskIncrementTick", "R15.6": "Os_Atomic", "R15.7": "TC2.29",
-            "R16.1": "Ecu_BswMAction", "R16.2": "case.scope",
-            "R16.3": "fallthrough", "R16.4": "AlarmCallback and NONE",
-            "R16.5": "直接标签序列", "R16.6": "共享一条执行路径只算一个",
-            "R16.7": "D.6", "R17.1": "AMD3.65–66", "R17.2": "Det_Invoke",
-            "R17.4": "TC2.30", "R17.5": "TC2.31–32", "R17.6": "任意位置的 static",
-            "R17.7": "Can_TxSinkType", "R17.8": "0023-preserve-parameter-values.patch",
-            "R18.1": "0020-bounded-queue-front.patch", "R18.2": "record-stacks",
-            "R18.3": "AMD4.52", "R18.4": "R18.2", "R18.5": "连续 pointer declarator",
-            "R18.6": "AMD4.24", "R18.7": "configured_alarms", "R18.8": "AMD4.25–30",
-            "R19.1": "memmove", "R19.2": "0015-typed-port-state.patch",
+            "R14.1": ("altstacks[].storage",),
+            "R14.2": ("TC1", "146 种体形", "传递写集合", "#556"),
+            "R14.3": ("TC2.27–28", "configASSERT(FALSE)", "Os_BackendAssert", "#556"),
+            "R15.1": ("replacement",), "R15.2": ("findGotoLabel",),
+            "R15.3": ("switch-clause",),
+            "R15.4": ("xTaskIncrementTick", "337 个", "4864–4952", "patchedLines"),
+            "R15.6": ("FreeRTOSConfig.h", "configASSERT", "实际 if／else"),
+            "R15.7": ("TC2.29", "74 个", "物理源注释", "Ecu_ComMMode_UM_HostUser"),
+            "R16.1": ("Ecu_BswMAction",), "R16.2": ("case.scope",),
+            "R16.3": ("fallthrough",), "R16.4": ("AlarmCallback and NONE",),
+            "R16.5": ("直接标签序列",), "R16.6": ("共享一条执行路径只算一个",),
+            "R16.7": ("D.6",), "R17.1": ("AMD3.65–66",),
+            "R17.2": ("Ecu_DetRuntimeCallout", "转历史", "Os_PortDispatchNested", "#556"),
+            "R17.4": ("TC2.30", "-Werror=return-type", "Det_ReportError", "noreturn"),
+            "R17.5": ("TC2.31–32", "payload[8]", "Ecu_BatchFrame.data[8]", "Can_ReceiveHost"),
+            "R17.6": ("任意位置的 static",),
+            "R17.7": ("Can_TxSinkType", "表达式父节点", "D4.7", "#556"),
+            "R17.8": ("0023-preserve-parameter-values.patch", "Com_SendSignal", "signal_values"),
+            "R18.1": ("0020-bounded-queue-front.patch", "one-past", "#556"),
+            "R18.2": ("record-stacks", "ptrdiff_t", "#556"),
+            "R18.3": ("AMD4.52", "同结构成员关系", "#556"),
+            "R18.4": ("R18.2", "五个位置", "环形存储", "#556"),
+            "R18.5": ("连续 pointer declarator", "typedef", "#556"),
+            "R18.6": ("AMD4.24", "Os_ErrorContextSave", "静态 ISR frame", "#556"),
+            "R18.7": ("configured_alarms",),
+            "R18.8": ("AMD4.25–30", "Arti_Types.h", "-Werror=vla"),
+            "R19.1": ("memmove", "Os_TargetPostInput", "Mandatory", "#556"),
+            "R19.2": ("0015-typed-port-state.patch",),
         }
         self.assertEqual(len(control_evidence), 33)
         self.assertEqual({key for key in by_id if 14 <= int(key[1:].split(".")[0]) <= 19},
@@ -1222,11 +1237,22 @@ class AcceptanceTests(unittest.TestCase):
                                  "satisfied" if guideline in control_flow else "not_assessed")
                 self.assertEqual(record["source"]["file"],
                                  "docs/standards/types/language-constructs/control-flow.md")
-                self.assertIn(evidence, record["conclusion"])
+                text = (self.root / record["source"]["file"]).read_text(encoding="utf-8")
+                physical = text.splitlines()[record["source"]["line"] - 1]
+                self.assertTrue(physical.startswith("| " + guideline + " |"))
+                for phrase in evidence:
+                    self.assertIn(phrase, record["conclusion"])
                 if guideline not in control_flow:
                     self.assertIn("#443", record["conclusion"])
         self.assertEqual(by_id["R17.6"]["category"], "Mandatory")
         self.assertEqual(by_id["R17.5"]["category"], "Required")
+        backend = (ROOT / "runtime/os/src/Os_Backend.c").read_text(encoding="utf-8")
+        native_state = backend.split("static TaskStateType native_task_state", 1)[1]
+        native_state = native_state.split("\n}\n", 1)[0]
+        self.assertRegex(
+            native_state,
+            r"if \(valid == FALSE\) \{\s+Os_BackendAssert\(__FILE__, __LINE__\);\s+\}",
+        )
         control_text = (self.root / by_id["R16.1"]["source"]["file"]).read_text(encoding="utf-8")
         self.assertIn("184 个 switch 实例、18 种语法体", control_text)
         self.assertIn("| Ecu_BswMAction | ComM_ModeType→uint8 | 4 |", control_text)

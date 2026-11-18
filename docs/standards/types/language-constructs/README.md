@@ -154,5 +154,6 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 [预处理](preprocessing-library.md)：8项结算、5项转 #536；
 [库与资源](library-resources.md)：28项结算、2项转 #539；
 [第七批](expressions.md#第七批当前输入与类型推导)：7项结算、13项转 #544；
-[第八批](declarations.md#第八批的当前结算)：7项结算、18项转 #547。
-144项为85 satisfied、3 not_applicable、56 not_assessed；
+[第八批](declarations.md#第八批的当前结算)：7项结算、18项转 #547；
+[第九批](control-flow.md#第九批的当前结算)：7项结算、11项转 #556。
+144项为92 satisfied、3 not_applicable、49 not_assessed；
