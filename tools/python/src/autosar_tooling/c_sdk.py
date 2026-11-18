@@ -782,6 +782,11 @@ def include_search(header_log: str, directory: Path, root: PurePath, environ: di
     }
 
 
+def search_directories(search: dict, root: PurePath) -> list[Path]:
+    """The recorded search directories, rebuilt in the target's path syntax."""
+    return [Path((root / name).as_posix()) for name in (*search["quote"], *search["system"])]
+
+
 def installed_records(packages: dict) -> list[tuple[str, dict]]:
     """Check every supported provider file against its package manifest, with actual digests."""
     if not packages:
@@ -822,72 +827,114 @@ def environment_identity(packages: dict) -> dict:
     return environment_digest(installed_records(packages))
 
 
-def reachable_files(directory: Path):
-    """Files below a search directory as the compiler reaches them, through links too.
+def link_target(path: str, root: PurePath) -> str:
+    """A link's resolved target, relative to the provider root or explicitly outside it."""
+    pure = type(root)(path)
+    if pure.is_relative_to(root):
+        return pure.relative_to(root).as_posix()
+    return "outside:" + pure.as_posix()
 
-    Directory symlinks and junctions are followed; a directory that leads back to one
-    of its own ancestors is not entered again.
+
+def walk_search_directory(directory: Path, visited: set):
+    """What the compiler meets below a search directory, as events.
+
+    ("file", path) is a regular file, also one reached through a link. ("link", path, real,
+    kind) is every symlink or junction met on the way, whether or not it is followed;
+    kind is "dir", "file" or "dangling". ("alias", path, real) is a directory that was
+    entered before and is reached again under another path, through a link higher up.
+    Each real directory is entered once, under the first path that reaches it, which also
+    ends cycles; every other path that reaches it is reported as a link or alias, so no
+    arrival path goes unrecorded.
     """
-    ancestors = [os.path.normcase(os.path.realpath(directory))]
+    visited.add(os.path.normcase(os.path.realpath(directory)))
 
     def walk(path):
         with os.scandir(path) as entries:
             children = sorted(entries, key=lambda entry: entry.name)
         for entry in children:
+            real = os.path.realpath(entry.path)
+            link = entry.is_symlink() or entry.is_junction()
             if entry.is_dir():
-                real = os.path.normcase(os.path.realpath(entry.path))
-                if real not in ancestors:
-                    ancestors.append(real)
+                seen = os.path.normcase(real) in visited
+                if link:
+                    yield "link", entry.path, real, "dir"
+                elif seen and os.path.normcase(os.path.abspath(entry.path)) != (
+                        os.path.normcase(real)):
+                    yield "alias", entry.path, real
+                if not seen:
+                    visited.add(os.path.normcase(real))
                     yield from walk(entry.path)
-                    ancestors.pop()
-            elif entry.is_file():
-                yield entry.path
+            else:
+                if link:
+                    yield "link", entry.path, real, "file" if entry.is_file() else "dangling"
+                if entry.is_file():
+                    yield "file", entry.path
 
     yield from walk(directory)
 
 
 def search_inventory(records: list[tuple[str, dict]], directories: list[Path],
-                     root: PurePath) -> dict:
-    """Provider files the compiler can reach through the search directories, opened or not.
+                     root: PurePath, opened: list[dict] = ()) -> dict:
+    """Provider files and links the compiler meets through the search directories.
 
-    Each entry maps the path the compiler walks to the provider file behind it, so a link
-    that leads somewhere else, or to other bytes, shows up. A header present on one side
-    only can decide which definition an include resolves to even with identical sources.
+    `files` maps each path the compiler walks to the provider file behind it, opened or
+    not; `opened` SDK headers are added under their own resolved path, so a header reached
+    by an escaping relative include is covered too. `links` records every symlink,
+    junction and re-reached directory with its resolved target. Equal link targets mean the
+    content below them is the content at the target, which `files` lists under its first
+    arrival path (or which lies outside the search space, where only provider files count).
+    A header present on one side only, a link that leads elsewhere, or other bytes can
+    decide which definition an include resolves to even with identical sources.
     Files that belong to no supported provider are not part of the identity: opening one
     is refused by the source provenance validation instead.
     """
     provider = {}
     for name, row in sorted(records, key=lambda item: item[1]["algorithm"] != "symlink"):
         provider[os.path.normcase(os.path.realpath(name))] = row
-    files = {}
+    fields = ("header", "provider", "algorithm", "expected", "sha256")
+    files, links, visited = {}, {}, set()
     for directory in directories:
-        for path in reachable_files(directory):
-            row = provider.get(os.path.normcase(os.path.realpath(path)))
-            if row is not None:
-                files[relative_name(path, root)] = {
-                    key: row[key]
-                    for key in ("header", "provider", "algorithm", "expected", "sha256")
-                }
-    return {"format": "sdk-search-inventory-v1", "files": dict(sorted(files.items()))}
+        if os.path.normcase(os.path.realpath(directory)) in visited:
+            continue
+        for kind, path, *rest in walk_search_directory(directory, visited):
+            if kind == "file":
+                row = provider.get(os.path.normcase(os.path.realpath(path)))
+                if row is not None:
+                    files[relative_name(path, root)] = {key: row[key] for key in fields}
+            else:
+                links[relative_name(path, root)] = {
+                    "kind": rest[1] if kind == "link" else "alias",
+                    "target": link_target(rest[0], root)}
+    for row in opened:
+        files[relative_name(row["path"], root)] = {key: row[key] for key in fields}
+    return {"format": "sdk-search-inventory-v1", "files": dict(sorted(files.items())),
+            "links": dict(sorted(links.items()))}
 
 
 def validate_inventory(scope: dict) -> None:
     """The recorded inventory must be present, well formed and cover the opened SDK headers."""
     inventory = scope.get("sdkInventory")
-    files = inventory.get("files") if isinstance(inventory, dict) else None
     reason = "SDK search inventory missing, empty or incomplete"
     if (not isinstance(inventory, dict) or inventory.get("format") != "sdk-search-inventory-v1"
-            or set(inventory) != {"format", "files"} or not isinstance(files, dict) or not files):
+            or set(inventory) != {"format", "files", "links"}
+            or not isinstance(inventory["files"], dict) or not inventory["files"]
+            or not isinstance(inventory["links"], dict)):
         raise ValueError(reason)
     keys = {"header", "provider", "algorithm", "expected", "sha256"}
-    for name, row in files.items():
+    for name, row in inventory["files"].items():
         if (not isinstance(name, str) or not isinstance(row, dict) or set(row) != keys
                 or any(not isinstance(row[key], str) or not row[key]
                        for key in ("header", "provider", "algorithm", "expected"))
                 or not (row["sha256"] is None and row["algorithm"] == "symlink"
                         or isinstance(row["sha256"], str))):
             raise ValueError(reason)
-    covered = {(row["header"], row["sha256"]) for row in files.values()}
+    for name, row in inventory["links"].items():
+        if (not isinstance(name, str) or not isinstance(row, dict)
+                or set(row) != {"kind", "target"}
+                or row["kind"] not in {"dir", "file", "dangling", "alias"}
+                or not isinstance(row["target"], str) or not row["target"]):
+            raise ValueError(reason)
+    covered = {(row["header"], row["sha256"]) for row in inventory["files"].values()}
     if any((row["header"], row["sha256"]) not in covered
            for row in scope.get("sdkHeaders", []) if row.get("category") == "sdk"):
         raise ValueError(reason)
@@ -920,8 +967,9 @@ def semantic(scope: dict) -> str:
     search = scope["compilerSemanticInputs"]["includeSearch"]
     windows = scope["target"].startswith("windows")
     root = provider_root(scope["diagnosticCompiler"]["path"] if windows else "", windows)
-    directories = [Path((root / name).as_posix()) for name in (*search["quote"], *search["system"])]
-    scope["sdkInventory"] = search_inventory(records, directories, root)
+    directories = search_directories(search, root)
+    opened = [row for row in headers if row.get("category") == "sdk"]
+    scope["sdkInventory"] = search_inventory(records, directories, root, opened)
     identity = semantic_inputs(scope)
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
@@ -932,6 +980,7 @@ def semantic_inputs(scope: dict) -> dict:
     keys = {row["path"]: row["key"] for row in headers}
     return {
         "inventory": scope["sdkInventory"]["files"],
+        "links": scope["sdkInventory"]["links"],
         "lineDirectives": scope.get("sdkLineDirectives", False),
         "headers": sorted(
             (

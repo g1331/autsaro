@@ -250,7 +250,8 @@ def _source_sdk(summary: dict, identity: dict) -> dict:
                 raise ValueError("Semantic identity differs: defines format")
             defines[unit, match[1]] = match[2]
     return {"headers": headers, "macros": macros, "defines": defines,
-            "inventory": sdk["inventory"], "lineDirectives": sdk["lineDirectives"]}
+            "inventory": sdk["inventory"], "links": sdk["links"],
+            "lineDirectives": sdk["lineDirectives"]}
 
 
 def _compare_source_sdk(current: dict, previous: dict, renames: dict) -> None:
@@ -267,6 +268,10 @@ def _compare_source_sdk(current: dict, previous: dict, renames: dict) -> None:
                      if now["inventory"].get(name) != before["inventory"].get(name))
     if changed:
         raise ValueError(f"Semantic identity differs: sdk inventory: {changed[0]}")
+    names = now["links"].keys() | before["links"].keys()
+    changed = sorted(name for name in names if now["links"].get(name) != before["links"].get(name))
+    if changed:
+        raise ValueError(f"Semantic identity differs: sdk inventory: link {changed[0]}")
     for field in ("headers", "macros", "defines"):
         # Source changes may open more or fewer headers and use other macros. What both
         # trees consumed must agree byte for byte, as a second check on the inventory.

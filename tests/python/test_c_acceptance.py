@@ -36,7 +36,7 @@ def sdk_inventory(scope):
     files.update({row["header"]: {key: row[key] for key in
                                   ("header", "provider", "algorithm", "expected", "sha256")}
                   for row in scope.get("sdkHeaders", []) if row["category"] == "sdk"})
-    return {"format": "sdk-search-inventory-v1", "files": files}
+    return {"format": "sdk-search-inventory-v1", "files": files, "links": {}}
 
 
 class AcceptanceTests(unittest.TestCase):
@@ -2527,7 +2527,7 @@ class AcceptanceTests(unittest.TestCase):
         scope.update(compilerSemanticInputs={
                          "machine": "x86_64-linux-gnu", "release": "12",
                          "includeSearch": {
-                             "quote": [], "system": [header.parent.as_posix()],
+                             "quote": [], "system": [header.parent.name],
                              "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}},
                      diagnosticCompiler={"path": "/usr/bin/gcc"},
                      compilerDiscoveredDefines={"main.c": []}, platformModel=None, platformLibrary=None,
@@ -2547,7 +2547,9 @@ class AcceptanceTests(unittest.TestCase):
         # execute their real byte/provider checks, without claiming an actual SDK.
         with patch.object(c_check, "semantic_identity", self.real_semantic), \
                 patch.object(c_check, "__file__", str(drivers / "c_check.py")), \
-                patch.object(c_sdk, "debian_headers", return_value=packages):
+                patch.object(c_sdk, "debian_headers", return_value=packages), \
+                patch.object(c_sdk, "provider_root", return_value=self.directory.resolve()):
+            # The fixture's provider tree is a temporary directory of the running host.
             self.summary["semanticIdentity"] = c_check.semantic_identity(executable, copy.deepcopy(scope), directories)
             self.bind_sdk()
             accepted = copy.deepcopy(self.summary)

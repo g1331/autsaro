@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from copy import deepcopy
@@ -16,7 +17,7 @@ from ecu_tools.build import digest
 
 def inventory(files):
     """A search-space inventory of provider files, given as {path: sha256}."""
-    return {"format": "sdk-search-inventory-v1", "files": {
+    return {"format": "sdk-search-inventory-v1", "links": {}, "files": {
         name: {"header": name, "provider": "libc6-dev", "algorithm": "md5",
                "expected": "e" * 32, "sha256": sha} for name, sha in files.items()}}
 
@@ -455,7 +456,8 @@ class CComparisonTests(unittest.TestCase):
                         compare(current, project, output, baseline, source_tree=True)
 
     def sdk_summary(self, template, project, root, side, *, opened, version="1", installed=None,
-                    search=("inc",), cpath=None, links=None):
+                    search=("inc",), cpath=None, links=None, relative_links=False,
+                    foreign=None, providers=None):
         """A real producer record on a miniature provider tree.
 
         `opened` files are consumed, `installed` ones only present. Files reachable through
@@ -469,16 +471,22 @@ class CComparisonTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(text.encode())
             packages[str(path)] = {
-                "provider": "libc6-dev", "version": version, "header": "usr/" + file,
-                "algorithm": "md5",
+                "provider": next((name for prefix, name in (providers or {}).items()
+                                  if file.startswith(prefix)), "libc6-dev"),
+                "version": version, "header": "usr/" + file, "algorithm": "md5",
                 "expected": hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()}
+        for file, text in (foreign or {}).items():
+            (provider / file).parent.mkdir(parents=True, exist_ok=True)
+            (provider / file).write_bytes(text.encode())
         for name, target in (links or {}).items():
             link = provider / name
             link.parent.mkdir(parents=True, exist_ok=True)
+            destination = (Path(os.path.relpath(provider / target, link.parent))
+                           if relative_links else provider / target)
             try:
-                link.symlink_to(provider / target, target_is_directory=True)
+                link.symlink_to(destination, target_is_directory=(provider / target).is_dir())
             except OSError as error:
-                self.skipTest(f"directory links are unavailable here: {error}")
+                self.skipTest(f"links are unavailable here: {error}")
         summary = deepcopy(template)
         paths = [provider / file for file in opened]
         compiler = summary["semanticIdentity"]["compiler"]
@@ -586,6 +594,94 @@ class CComparisonTests(unittest.TestCase):
             ("link that leads back to its own directory",
              {"opened": common, "links": {"inc/loop": "inc"}},
              {"opened": common, "links": {"inc/loop": "inc"}}, None, None),
+        ]
+        for name, previous, now, tree_error, exact_error in cases:
+            for source_tree, error in ((True, tree_error), (False, exact_error)):
+                with self.subTest(case=name, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), previous, now)
+                    if error is None:
+                        self.assertEqual(compare(current, project, output, baseline,
+                                                 source_tree=source_tree),
+                                         {"new": [], "removed": []})
+                    else:
+                        with self.assertRaisesRegex(ValueError,
+                                                    "Semantic identity differs: " + error):
+                            compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_every_link_met_below_a_search_directory_decides_the_identity(self):
+        common = {"inc/common.h": "#define COMMON_VALUE 1\n"}
+        d1 = {"d1/h.h": "#define FEATURE_TOKEN 0\n"}
+        d2 = {"d2/h.h": "#define FEATURE_TOKEN 1\n"}
+        both = {**d1, **d2}
+        base = {"opened": common, "installed": both, "search": ("d1", "d2", "inc")}
+        ancestor = {"opened": {"a/x.h": "#define X 1\n"},
+                    "installed": {"a/inc/y.h": "#define Y 1\n"}, "search": ("a",)}
+        outside = {"lib/real.h": "#define REAL 1\n", "lib/real2.h": "#define REAL 1\n"}
+        link = "sdk inventory: link "
+        # (name, baseline side, current side, double-tree error, same-source error)
+        cases = [
+            # Both targets are search directories entered before the link is met: the
+            # file entries are identical and only the link target says which one the
+            # compiler reaches through branch/h.h.
+            ("link retargeted between visited directories",
+             {**base, "links": {"inc/branch": "d1"}}, {**base, "links": {"inc/branch": "d2"}},
+             link + "inc/branch", "sdk"),
+            # The reviewed escape: an ancestor link retargeted to a different ancestor.
+            ("ancestor link retargeted to another ancestor",
+             {**ancestor, "links": {"a/inc/branch": "a"}},
+             {**ancestor, "links": {"a/inc/branch": "."}}, link + "a/inc/branch", "sdk"),
+            ("same links on both sides", {**base, "links": {"inc/branch": "d1"}},
+             {**base, "links": {"inc/branch": "d1"}}, None, None),
+            ("relative and equivalent absolute link", {**base, "links": {"inc/branch": "d1"}},
+             {**base, "links": {"inc/branch": "d1"}, "relative_links": True}, None, None),
+            ("middle of a link chain retargeted",
+             {**base, "links": {"mid/b": "d1", "inc/a": "mid/b"}},
+             {**base, "links": {"mid/b": "d2", "inc/a": "mid/b"}}, link + "inc/a", "sdk"),
+            ("file link retargeted to another provider file with the same bytes",
+             {"opened": common, "installed": outside, "links": {"inc/alias.h": "lib/real.h"}},
+             {"opened": common, "installed": outside, "links": {"inc/alias.h": "lib/real2.h"}},
+             "sdk inventory: inc/alias.h", "sdk"),
+            ("file link to a provider file outside the search space, unchanged",
+             {"opened": common, "installed": outside, "links": {"inc/alias.h": "lib/real.h"}},
+             {"opened": common, "installed": outside, "links": {"inc/alias.h": "lib/real.h"}},
+             None, None),
+            ("link to a directory of another provider",
+             {**base, "links": {"inc/branch": "d1"}},
+             {**base, "installed": {**d1, **d2, "d3/h.h": d1["d1/h.h"]},
+              "providers": {"d3": "linux-libc-dev"}, "links": {"inc/branch": "d3"}},
+             "sdk inventory: inc/branch/h.h", "sdk"),
+            # Files that belong to no provider are not part of the identity (opening one is
+            # refused by the source provenance validation); where the link leads still is.
+            ("link to a foreign file, bytes differ",
+             {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/f.h": "out/x.h"}},
+             {**base, "foreign": {"out/x.h": "two\n"}, "links": {"inc/f.h": "out/x.h"}},
+             None, None),
+            ("link to a foreign file, target differs",
+             {**base, "foreign": {"out/x.h": "one\n", "out/y.h": "one\n"},
+              "links": {"inc/f.h": "out/x.h"}},
+             {**base, "foreign": {"out/x.h": "one\n", "out/y.h": "one\n"},
+              "links": {"inc/f.h": "out/y.h"}}, link + "inc/f.h", "sdk"),
+            ("dangling link, same target",
+             {**base, "links": {"inc/d.h": "out/gone.h"}},
+             {**base, "links": {"inc/d.h": "out/gone.h"}}, None, None),
+            ("dangling link, other target",
+             {**base, "links": {"inc/d.h": "out/gone.h"}},
+             {**base, "links": {"inc/d.h": "out/other.h"}}, link + "inc/d.h", "sdk"),
+            ("dangling link that now has a target",
+             {**base, "links": {"inc/d.h": "out/x.h"}},
+             {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/d.h": "out/x.h"}},
+             link + "inc/d.h", "sdk"),
+        ]
+        # A header reached by an escaping relative include (#include "../lib/esc.h" from a
+        # header in inc/) is opened outside every search directory: it is compared as opened.
+        escaped = {"opened": {**common, "lib/esc.h": "#define ESC 1\n"}}
+        cases += [
+            ("escaping include, same bytes", escaped, escaped, None, None),
+            ("escaping include, other bytes", escaped,
+             {"opened": {**common, "lib/esc.h": "#define ESC 2\n"}},
+             "sdk inventory: lib/esc.h", "sdk"),
         ]
         for name, previous, now, tree_error, exact_error in cases:
             for source_tree, error in ((True, tree_error), (False, exact_error)):

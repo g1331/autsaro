@@ -665,6 +665,10 @@ int main(int argc, char **argv)
             self.assertEqual(files[walked]["provider"], "libc6-dev")
             # The same provider file under its own path is in the inventory as well.
             self.assertIn("usr/include/x86_64-linux-gnu/sys/types.h", files)
+            # The link itself is recorded with its resolved target.
+            link = (include / "branch").as_posix().lstrip("/")
+            self.assertEqual(scope["sdkInventory"]["links"][link],
+                             {"kind": "dir", "target": "usr/include/x86_64-linux-gnu/sys"})
 
     def test_semantic_inputs_from_real_producer_refuse_changed_macro_and_allow_relocation(self):
         from autosar_tooling.c_comparison import compare
