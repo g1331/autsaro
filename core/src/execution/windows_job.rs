@@ -342,16 +342,22 @@ impl ProcessTree {
     }
     /// After the root exit and the accounting grace: whether the Job emptied while
     /// only exited console hosts, finishing their teardown, remained. A live
-    /// member or an unfinished host after `within` is a real leftover.
+    /// member, an unfinished host or an observation after `TEARDOWN_LIMIT` or the
+    /// absolute `deadline_ns` is a real leftover.
     pub(crate) fn hosts_finished(
         &self,
         hosts: &BTreeSet<console_host::Identity>,
-        within: Duration,
+        deadline_ns: u64,
     ) -> Result<bool, LocalizedText> {
+        // A failing clock reads as expired, which keeps the strict rule.
+        let now = || super::monotonic_ns().unwrap_or(u64::MAX);
+        let budget = u64::try_from(console_host::TEARDOWN_LIMIT.as_nanos()).unwrap_or(u64::MAX);
         console_host::wait_until_finished(
             || self.active(),
             || console_host::only_exited_hosts(&self.job, hosts),
-            within.min(console_host::TEARDOWN_LIMIT),
+            now,
+            std::thread::sleep,
+            deadline_ns.min(now().saturating_add(budget)),
         )
     }
     pub(crate) fn stop(&mut self) -> Result<(), LocalizedText> {

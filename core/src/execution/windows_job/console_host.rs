@@ -34,6 +34,7 @@ unsafe extern "system" {
         size: *mut u32,
     ) -> i32;
     fn GetExitCodeProcess(process: *mut c_void, code: *mut u32) -> i32;
+    fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
 }
 
 /// What one member currently reports; `None` fields could not be read.
@@ -95,13 +96,23 @@ fn inspect(pid: u32) -> Result<Member, i32> {
     })
 }
 
-fn is_system_host(image: &str) -> bool {
-    std::env::var_os("SystemRoot").is_some_and(|root| {
-        let host = std::path::Path::new(&root)
-            .join("System32")
-            .join("conhost.exe");
-        host.to_string_lossy().eq_ignore_ascii_case(image)
+/// Path of the system console host, `None` when the system directory cannot be read.
+fn system_host() -> Option<String> {
+    let mut directory = [0u16; 260];
+    // SAFETY: the buffer is writable for the stated number of UTF-16 units.
+    let length = unsafe { GetSystemDirectoryW(directory.as_mut_ptr(), directory.len() as u32) };
+    let length = length as usize;
+    (0 < length && length < directory.len()).then(|| {
+        format!(
+            "{}\\conhost.exe",
+            String::from_utf16_lossy(&directory[..length])
+        )
     })
+}
+
+/// An unreadable system directory (`None`) matches no image.
+fn is_system_host(image: &str, system_host: Option<&str>) -> bool {
+    system_host.is_some_and(|host| host.eq_ignore_ascii_case(image))
 }
 
 /// Identities of the Job members whose image is the system console host.
@@ -109,13 +120,14 @@ fn is_system_host(image: &str) -> bool {
 /// Reading the image of a process in teardown soon fails with access denied, so
 /// callers record identities early and decide with them later.
 pub(super) fn hosts(job: &OwnedHandle) -> BTreeSet<Identity> {
+    let system_host = system_host();
     job_pids(job)
         .into_iter()
         .flatten()
         .filter_map(|pid| {
             let member = inspect(pid).ok()?;
             let image = member.image?;
-            is_system_host(&image).then_some((pid, member.created?))
+            is_system_host(&image, system_host.as_deref()).then_some((pid, member.created?))
         })
         .collect()
 }
@@ -145,21 +157,33 @@ pub(super) fn only_exited_hosts(job: &OwnedHandle, hosts: &BTreeSet<Identity>) -
     })
 }
 
-/// Wait up to `within` for the active count to reach zero while only exited
-/// console hosts remain. `Ok(false)` reports a real leftover or the expired bound.
+/// Wait until the active count reaches zero while only exited console hosts
+/// remain. Every observation is judged against `limit_ns`, so a Job first seen
+/// empty after it still fails; `Ok(false)` reports a real leftover or the limit.
 pub(super) fn wait_until_finished(
     mut active: impl FnMut() -> Result<u32, LocalizedText>,
     mut only_exited_hosts: impl FnMut() -> bool,
-    within: Duration,
+    mut now_ns: impl FnMut() -> u64,
+    mut pause: impl FnMut(Duration),
+    limit_ns: u64,
 ) -> Result<bool, LocalizedText> {
-    let limit = Instant::now() + within;
-    while active()? != 0 {
-        if Instant::now() >= limit || !only_exited_hosts() {
+    loop {
+        let active = active()?;
+        if now_ns() >= limit_ns {
             return Ok(false);
         }
-        std::thread::sleep(Duration::from_millis(10));
+        if active == 0 {
+            return Ok(true);
+        }
+        if !only_exited_hosts() {
+            return Ok(false);
+        }
+        let remaining = limit_ns.saturating_sub(now_ns());
+        if remaining == 0 {
+            return Ok(false);
+        }
+        pause(Duration::from_nanos(remaining).min(Duration::from_millis(10)));
     }
-    Ok(true)
 }
 
 #[cfg(test)]
@@ -195,34 +219,89 @@ mod tests {
     }
 
     #[test]
-    fn the_system_console_host_path_is_the_only_host_image() {
-        let root = std::env::var("SystemRoot").unwrap();
-        assert!(is_system_host(&format!("{root}\\System32\\conhost.exe")));
-        assert!(is_system_host(&format!(
-            "{}\\SYSTEM32\\CONHOST.EXE",
-            root.to_lowercase()
-        )));
-        assert!(!is_system_host("C:\\Temp\\conhost.exe"));
-        assert!(!is_system_host(&format!("{root}\\System32\\git.exe")));
+    fn only_the_system_console_host_path_is_a_host_image() {
+        let system = Some("C:\\Windows\\System32\\conhost.exe");
+        assert!(is_system_host("C:\\Windows\\System32\\conhost.exe", system));
+        assert!(is_system_host("c:\\WINDOWS\\system32\\CONHOST.EXE", system));
+        assert!(!is_system_host("C:\\Temp\\conhost.exe", system));
+        assert!(!is_system_host("C:\\Windows\\System32\\git.exe", system));
+        // An unreadable system directory matches nothing.
+        assert!(!is_system_host("C:\\Windows\\System32\\conhost.exe", None));
     }
+
+    #[test]
+    fn the_system_directory_comes_from_the_api_not_the_environment() {
+        let root = std::env::var("SystemRoot").unwrap();
+        let host = system_host().expect("system directory");
+        assert!(host.eq_ignore_ascii_case(&format!("{root}\\System32\\conhost.exe")));
+    }
+
+    /// A simulated clock that only moves when the waiter pauses or a probe costs time.
+    struct Clock(std::cell::Cell<u64>);
+
+    thread_local!(static PAUSES: std::cell::Cell<u32> = const { std::cell::Cell::new(0) });
+
+    fn run(
+        clock: &Clock,
+        gone_at_ns: u64,
+        only_exited_hosts: bool,
+        probe_cost_ns: u64,
+        stall_ns: u64,
+        limit_ns: u64,
+    ) -> bool {
+        wait_until_finished(
+            || Ok(u32::from(clock.0.get() < gone_at_ns)),
+            || {
+                clock.0.set(clock.0.get() + probe_cost_ns);
+                only_exited_hosts
+            },
+            || clock.0.get(),
+            |pause| {
+                PAUSES.with(|pauses| pauses.set(pauses.get() + 1));
+                assert!(
+                    PAUSES.with(|pauses| pauses.get()) < 5_000,
+                    "wait did not terminate"
+                );
+                clock
+                    .0
+                    .set(clock.0.get() + pause.as_nanos() as u64 + stall_ns)
+            },
+            limit_ns,
+        )
+        .unwrap()
+    }
+
+    const MS: u64 = 1_000_000;
 
     #[test]
     fn teardown_lag_inside_the_bound_succeeds_and_outside_it_fails() {
-        let started = Instant::now();
-        let lagging = |lag: Duration| move || Ok(u32::from(started.elapsed() < lag));
-        let lag = Duration::from_millis(100);
-        assert!(wait_until_finished(lagging(lag), || true, Duration::from_secs(2)).unwrap());
-        assert!(
-            !wait_until_finished(lagging(Duration::from_secs(60)), || true, lag).unwrap(),
-            "a host that never leaves must still fail at the bound"
-        );
+        assert!(run(&Clock(0.into()), 404 * MS, true, 0, 0, 5_000 * MS));
+        assert!(!run(&Clock(0.into()), 6_000 * MS, true, 0, 0, 5_000 * MS));
     }
 
     #[test]
-    fn a_real_leftover_fails_without_waiting_for_the_bound() {
-        let started = Instant::now();
-        assert!(!wait_until_finished(|| Ok(1), || false, Duration::from_secs(30)).unwrap());
-        assert!(started.elapsed() < Duration::from_secs(5));
+    fn a_real_leftover_fails_at_once() {
+        let clock = Clock(0.into());
+        assert!(!run(&clock, u64::MAX, false, 0, 0, 5_000 * MS));
+        assert_eq!(clock.0.get(), 0);
+    }
+
+    #[test]
+    fn a_job_first_seen_empty_after_the_limit_still_fails() {
+        // Limit 30 ms, the Job empties at 31 ms.
+        assert!(!run(&Clock(0.into()), 31 * MS, true, 0, 0, 30 * MS));
+        // A probe that takes 40 ms and a pause that overshoots by 1 s.
+        assert!(!run(&Clock(0.into()), 30 * MS, true, 40 * MS, 0, 20 * MS));
+        assert!(!run(
+            &Clock(0.into()),
+            404 * MS,
+            true,
+            0,
+            1_000 * MS,
+            300 * MS
+        ));
+        // The same lag inside the limit succeeds.
+        assert!(run(&Clock(0.into()), 30 * MS, true, 0, 0, 300 * MS));
     }
 
     #[test]

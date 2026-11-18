@@ -403,10 +403,8 @@ impl OwnedProcess {
                     }
                     // Console hosts finish their own teardown after their clients;
                     // that gets a bounded wait, a live descendant gets none.
-                    let remaining =
-                        Duration::from_nanos(self.spec.deadline_ns.saturating_sub(monotonic_ns()?));
-                    let orphaned =
-                        tree.active()? != 0 && !tree.hosts_finished(&hosts, remaining)?;
+                    let orphaned = tree.active()? != 0
+                        && !tree.hosts_finished(&hosts, self.spec.deadline_ns)?;
                     tree.stop()?;
                     break (
                         if cancelled.load(std::sync::atomic::Ordering::Acquire) {

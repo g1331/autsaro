@@ -28,6 +28,14 @@ class SimulatedJob:
     def __init__(self) -> None:
         self.now = 0
         self.members: dict[int, dict] = {}
+        self.closed = 0
+        self.sleeps = 0
+        # Each member query after this time costs `slow_query_ms` of clock.
+        self.slow_after_ns = 10**18
+        self.slow_query_ns = 0
+        # Each sleep after this time overshoots by `stall_ns`.
+        self.stall_after_ns = 10**18
+        self.stall_ns = 0
 
     def add(
         self,
@@ -58,14 +66,21 @@ class SimulatedJob:
         return self.now
 
     def sleep(self, seconds: float) -> None:
+        assert seconds >= 0, "time.sleep rejects negative durations"
+        self.sleeps += 1
+        assert self.sleeps < 5_000, "wait did not terminate"
+        if self.now >= self.stall_after_ns:
+            self.now += self.stall_ns
         self.now += int(seconds * 1_000_000_000)
         # A mutated wait that never ends must fail instead of hanging.
-        assert self.now < 120_000 * MS, "wait did not terminate"
+        assert self.now < 30_000 * MS, "wait did not terminate"
 
     def pids(self, job: int) -> list[int]:
         return list(self.present())
 
     def member(self, pid: int, job: int) -> dict:
+        if self.now >= self.slow_after_ns:
+            self.now += self.slow_query_ns
         value = self.present().get(pid)
         if value is None:
             return {"pid": pid, "open_error": windows_job.ERROR_INVALID_PARAMETER}
@@ -84,6 +99,7 @@ class SimulatedJob:
         deadline_ms: float = 60_000,
         observe_ms: float = 0,
         close_tree_on_exit: bool = False,
+        system_host: str | None = SYSTEM_HOST.lower(),
     ):
         root = windows_job.WindowsJob.__new__(windows_job.WindowsJob)
         root.job = 1
@@ -96,14 +112,18 @@ class SimulatedJob:
             monotonic_ns=self.monotonic_ns, sleep=self.sleep, monotonic=lambda: 0
         )
         with (
-            patch.dict(os.environ, {"SystemRoot": r"C:\Windows"}),
+            patch.object(windows_job, "system_console_host", lambda: system_host),
             patch.object(windows_job, "time", clock),
             patch.object(windows_job, "job_pids", self.pids),
             patch.object(windows_job, "member", self.member),
             patch.object(
                 windows_job.WindowsJob, "_active", lambda _: len(self.present())
             ),
-            patch.object(windows_job.WindowsJob, "close", lambda _: None),
+            patch.object(
+                windows_job.WindowsJob,
+                "close",
+                lambda _: setattr(self, "closed", self.closed + 1),
+            ),
         ):
             return root.wait(
                 int(deadline_ms * MS), close_tree_on_exit=close_tree_on_exit
@@ -125,6 +145,58 @@ class ConsoleHostWaitTests(unittest.TestCase):
         job = SimulatedJob()
         job.add(632, SYSTEM_HOST, exit_code=0, leaves_ms=404, image_readable_ms=250)
         self.assertEqual(job.run(observe_ms=300), ("exited", 0, False))
+
+    def test_unreadable_system_directory_keeps_the_strict_rule_and_reclaims(self):
+        job = SimulatedJob()
+        job.add(632, SYSTEM_HOST, exit_code=0, leaves_ms=404)
+        job.add(700, r"C:\Python\python.exe", exit_code=259, leaves_ms=None)
+        self.assertEqual(job.run(system_host=None), ("orphaned_members", 0, True))
+        self.assertLess(job.now, 300 * MS)
+        self.assertEqual(job.closed, 1)
+
+    def test_failure_while_classifying_still_closes_the_job(self) -> None:
+        job = SimulatedJob()
+        job.add(700, r"C:\Python\python.exe", exit_code=259, leaves_ms=None)
+
+        def broken(pid: int, handle: int) -> dict:
+            raise OSError("query failed")
+
+        job.member = broken
+        with self.assertRaises(OSError):
+            job.run()
+        self.assertEqual(job.closed, 1)
+
+    def test_job_first_seen_empty_after_the_deadline_still_fails(self) -> None:
+        # Deadline 303 ms, the exited host leaves at 304 ms: not a success.
+        job = SimulatedJob()
+        job.add(632, SYSTEM_HOST, exit_code=0, leaves_ms=304)
+        self.assertEqual(job.run(deadline_ms=303), ("orphaned_members", 0, True))
+        self.assertLessEqual(job.now, 303 * MS)
+
+    def test_slow_observation_cannot_turn_an_overdue_job_into_success(self) -> None:
+        # A member query stalls for 1 s past the 300 ms deadline; the host is gone
+        # when the Job is read again, which is too late.
+        job = SimulatedJob()
+        job.add(632, SYSTEM_HOST, exit_code=0, leaves_ms=400)
+        job.slow_after_ns = 200 * MS
+        job.slow_query_ns = 1000 * MS
+        self.assertEqual(job.run(deadline_ms=300), ("orphaned_members", 0, True))
+
+    def test_stalled_sleep_cannot_turn_an_overdue_job_into_success(self) -> None:
+        # The first pause after the grace overshoots the deadline by 1 s and the
+        # host is gone when the Job is read next.
+        job = SimulatedJob()
+        job.add(632, SYSTEM_HOST, exit_code=0, leaves_ms=404)
+        job.stall_after_ns = 200 * MS
+        job.stall_ns = 1000 * MS
+        self.assertEqual(job.run(deadline_ms=300), ("orphaned_members", 0, True))
+
+    def test_empty_job_first_seen_after_the_bound_fails(self) -> None:
+        job = SimulatedJob()
+        job.add(632, SYSTEM_HOST, exit_code=0, leaves_ms=5_300)
+        job.slow_after_ns = 4_000 * MS
+        job.slow_query_ns = 2_000 * MS
+        self.assertEqual(job.run(), ("orphaned_members", 0, True))
 
     def test_host_that_never_finishes_fails_at_the_bound(self) -> None:
         job = SimulatedJob()
@@ -199,6 +271,50 @@ class ConsoleHostWaitTests(unittest.TestCase):
     def test_unreadable_member_list_is_a_leftover(self) -> None:
         with patch.object(windows_job, "job_pids", lambda _: None):
             self.assertFalse(windows_job.exited_console_hosts_only(1, {(632, 3)}))
+
+    def test_member_list_is_refused_unless_the_kernel_listing_is_complete(self):
+        def listing(assigned: int, listed: int, ok: int = 1):
+            def query(job, information, reference, size, returned):
+                ids = reference._obj
+                ids.assigned, ids.listed = assigned, listed
+                for index in range(min(listed, len(ids.ids))):
+                    ids.ids[index] = 500 + index
+                return ok
+
+            return SimpleNamespace(QueryInformationJobObject=query)
+
+        cases = (
+            (listing(2, 2), [500, 501]),
+            (listing(0, 0), []),
+            (listing(2, 1), None),  # more members than the list holds
+            (listing(129, 129), None),  # more than the fixed buffer
+            (listing(1, 1, ok=0), None),  # the query itself failed
+        )
+        for kernel, expected in cases:
+            with (
+                self.subTest(expected=expected),
+                patch.object(windows_job, "kernel", kernel, create=True),
+            ):
+                self.assertEqual(windows_job.job_pids(1), expected)
+
+    def test_system_directory_decides_the_host_path(self) -> None:
+        def reading(text: str, length: int):
+            def read(buffer, size):
+                buffer.value = text
+                return length
+
+            return SimpleNamespace(GetSystemDirectoryW=read)
+
+        cases = (
+            (r"C:\Windows\System32", 19, r"c:\windows\system32\conhost.exe"),
+            (r"C:\Windows\System32", 0, None),  # the call failed
+            (r"C:\Windows\System32", 400, None),  # does not fit the buffer
+        )
+        for text, length, expected in cases:
+            with self.subTest(length=length):
+                kernel = reading(text, length)
+                with patch.object(windows_job, "kernel", kernel, create=True):
+                    self.assertEqual(windows_job.system_console_host(), expected)
 
     def test_command_deadline_is_not_extended(self) -> None:
         job = SimulatedJob()
