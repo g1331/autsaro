@@ -122,7 +122,8 @@ class CComparisonTests(unittest.TestCase):
             "scope": {"target": "linux", "profile": "ecu", "entries": {"target": "main.c"}, "compilerFlags": ["-std=c99"],
                       "includePaths": ["."], "translationUnits": ["main.c"],
                       "projectTranslationUnits": {"main.c": ["main.c"]},
-                      "supplemental": [], "patchedKernel": []},
+                      "supplemental": [], "patchedKernel": [],
+                      "sdkInventory": {"format": "sdk-search-inventory-v1", "files": {}}},
             "programs": [{"name": "target", "entry": "main.c", "translationUnits": ["main.c"], "exitCode": 1}],
             "diagnostics": [self.diagnostic("rule", 1), self.diagnostic("rule", 2)],
         }
@@ -131,7 +132,9 @@ class CComparisonTests(unittest.TestCase):
             "sdk": hashlib.sha256(json.dumps(c_sdk.semantic_inputs(
                 summary["scope"]), sort_keys=True).encode()).hexdigest(),
             "compiler": {"machine": "x86_64-linux-gnu", "release": "13.3.0",
-                         "predefines": ["#define __GNUC__ 13"], "builtins": ["-D__GNUC__=13"]},
+                         "predefines": ["#define __GNUC__ 13"], "builtins": ["-D__GNUC__=13"],
+                         "includeSearch": {"quote": [], "system": ["usr/include"],
+                                           "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}},
             "defines": {"main.c": []},
             "models": {"platformModel": None, "platformLibrary": None},
             "libraries": {name: "a" * 64 for name in ("std", "posix", "implicitStd")},
@@ -439,26 +442,37 @@ class CComparisonTests(unittest.TestCase):
                                                "Semantic identity differs: defines"):
                         compare(current, project, output, baseline, source_tree=True)
 
-    def sdk_summary(self, template, project, root, name, *, opened, version="1", unused=None):
-        """A real producer record: `opened` headers are consumed, `unused` only installed."""
-        sdk = root / (name + "-sdk")
-        sdk.mkdir()
+    def sdk_summary(self, template, project, root, side, *, opened, version="1", installed=None,
+                    search=("inc",), cpath=None):
+        """A real producer record on a miniature provider tree.
+
+        `opened` files are consumed, `installed` ones only present. Files under the `search`
+        directories are in the include search space; others (such as lib/) are not.
+        """
+        provider = root / side
         packages = {}
-        for file, text in {**opened, **(unused or {})}.items():
-            path = sdk / file
+        for file, text in {**opened, **(installed or {})}.items():
+            path = provider / file
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(text.encode())
             packages[str(path)] = {
-                "provider": "libc6-dev", "version": version, "header": "usr/include/" + file,
+                "provider": "libc6-dev", "version": version, "header": "usr/" + file,
                 "algorithm": "md5",
                 "expected": hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()}
         summary = deepcopy(template)
-        paths = [sdk / file for file in opened]
+        paths = [provider / file for file in opened]
+        compiler = summary["semanticIdentity"]["compiler"]
+        compiler["includeSearch"] = {
+            "quote": [], "system": list(search),
+            "environment": {"CPATH": cpath, "C_INCLUDE_PATH": None}}
         summary["scope"].update(
             sdkHeaders=[c_sdk.header_identity(path, project, "linux", "x86_64-linux-gnu", packages)
                         for path in paths],
             sdkTranslationUnits={"main.c": [path.as_posix() for path in paths]},
-            sdkMacroInputs={"main.c": {}})
-        with patch.object(c_sdk, "debian_headers", return_value=packages):
+            sdkMacroInputs={"main.c": {}}, compilerSemanticInputs=deepcopy(compiler),
+            diagnosticCompiler={"path": "/selected/bin/gcc"})
+        with patch.object(c_sdk, "debian_headers", return_value=packages), \
+                patch.object(c_sdk, "provider_root", return_value=provider):
             summary["semanticIdentity"]["sdk"] = c_sdk.semantic(summary["scope"])
         return summary
 
@@ -472,25 +486,36 @@ class CComparisonTests(unittest.TestCase):
         self.write(baseline, before)
         return before, now, project, output, baseline
 
-    def test_sdk_identity_binds_consumed_headers_and_ignores_package_revisions(self):
-        common = {"common.h": "#define COMMON_VALUE 1\n"}
-        added = {**common, "added.h": "#define ADDED_VALUE 1\n"}
-        # (name, baseline side, current side, source-tree result, exact-source result)
+    def test_sdk_identity_binds_the_search_space_and_ignores_package_revisions(self):
+        common = {"inc/common.h": "#define COMMON_VALUE 1\n"}
+        added = {**common, "inc/added.h": "#define ADDED_VALUE 1\n"}
+        library = {"lib/libc.a": "archive 1\n"}
+        installed_added = {"inc/added.h": "#define ADDED_VALUE 1\n"}
+        other = {"inc/added.h": "#define ADDED_VALUE 2\n"}
+        # (name, baseline side, current side, source-tree error, exact-source error)
         cases = [
-            ("package revision", {"opened": common},
-             {"opened": common, "version": "2"}, None, None),
-            ("unused file content", {"opened": common, "unused": {"u.h": "1\n"}},
-             {"opened": common, "unused": {"u.h": "2\n"}}, None, None),
-            ("unused file added", {"opened": common},
-             {"opened": common, "unused": {"u.h": "1\n"}}, None, None),
-            ("consumed content", {"opened": common},
-             {"opened": {"common.h": "#define COMMON_VALUE 2\n"}},
-             "sdk headers: usr/include/common.h", "sdk"),
-            ("one more header opened", {"opened": common}, {"opened": added}, None, "sdk"),
-            ("one less header opened", {"opened": added}, {"opened": common}, None, "sdk"),
-            ("opened header content, revision unchanged", {"opened": added, "version": "2"},
-             {"opened": {**added, "added.h": "#define ADDED_VALUE 2\n"}, "version": "2"},
-             "sdk headers: usr/include/added.h", "sdk"),
+            ("package revision", {"opened": common}, {"opened": common, "version": "2"},
+             None, None),
+            ("file outside the search space differs", {"opened": common, "installed": library},
+             {"opened": common, "installed": {"lib/libc.a": "archive 2\n"}}, None, None),
+            ("file outside the search space added", {"opened": common},
+             {"opened": common, "installed": library}, None, None),
+            ("unopened header in the search space differs",
+             {"opened": common, "installed": installed_added},
+             {"opened": common, "installed": other}, "sdk inventory: usr/inc/added.h", "sdk"),
+            ("unopened header in the search space added", {"opened": common},
+             {"opened": common, "installed": installed_added},
+             "sdk inventory: usr/inc/added.h", "sdk"),
+            ("header opened by one side only, other bytes on the other",
+             {"opened": added}, {"opened": common, "installed": other},
+             "sdk inventory: usr/inc/added.h", "sdk"),
+            ("opened header differs", {"opened": common},
+             {"opened": {"inc/common.h": "#define COMMON_VALUE 2\n"}},
+             "sdk inventory: usr/inc/common.h", "sdk"),
+            ("one more header opened", {"opened": common, "installed": installed_added},
+             {"opened": added}, None, "sdk"),
+            ("one less header opened", {"opened": added},
+             {"opened": common, "installed": installed_added}, None, "sdk"),
         ]
         for name, previous, now, tree_error, exact_error in cases:
             for source_tree, error in ((True, tree_error), (False, exact_error)):
@@ -507,12 +532,33 @@ class CComparisonTests(unittest.TestCase):
                                                     "Semantic identity differs: " + error):
                             compare(current, project, output, baseline, source_tree=source_tree)
 
+    def test_include_search_sequence_and_variables_are_compiler_identity(self):
+        shadow = {"inc/limits.h": "#define FEATURE 0\n", "alt/limits.h": "#define FEATURE 1\n"}
+        both = {"opened": {"inc/limits.h": shadow["inc/limits.h"]},
+                "installed": {"alt/limits.h": shadow["alt/limits.h"]}, "search": ("inc", "alt")}
+        swapped = {"opened": {"alt/limits.h": shadow["alt/limits.h"]},
+                   "installed": {"inc/limits.h": shadow["inc/limits.h"]}, "search": ("alt", "inc")}
+        dropped = {**both, "search": ("inc",)}
+        variable = {**both, "cpath": "/extra"}
+        # A dropped directory also shrinks the inventory; the double tree reports that first.
+        cases = [("order swapped, so another file is found first", both, swapped, "compiler"),
+                 ("search directory dropped", both, dropped, "(?:compiler|sdk inventory)"),
+                 ("CPATH set", both, variable, "compiler")]
+        for name, previous, now, error in cases:
+            for source_tree in (True, False):
+                with self.subTest(case=name, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), previous, now)
+                    with self.assertRaisesRegex(ValueError, "Semantic identity differs: " + error):
+                        compare(current, project, output, baseline, source_tree=source_tree)
+
     def test_sdk_environment_is_recorded_but_not_compared(self):
-        common = {"common.h": "#define COMMON_VALUE 1\n"}
+        common = {"inc/common.h": "#define COMMON_VALUE 1\n"}
         with tempfile.TemporaryDirectory() as temporary:
             before, current, project, output, baseline = self.sdk_pair(
                 Path(temporary).resolve(), {"opened": common},
-                {"opened": common, "version": "2", "unused": {"u.h": "1\n"}})
+                {"opened": common, "version": "2", "installed": {"lib/libc.a": "archive\n"}})
             self.assertEqual(before["scope"]["sdkEnvironment"]["files"], 1)
             self.assertEqual(current["scope"]["sdkEnvironment"]["files"], 2)
             self.assertNotEqual(before["scope"]["sdkEnvironment"]["sha256"],
@@ -522,7 +568,7 @@ class CComparisonTests(unittest.TestCase):
                              {"new": [], "removed": []})
 
     def test_compiler_identity_still_refuses_with_matching_sdk_headers(self):
-        common = {"opened": {"common.h": "#define COMMON_VALUE 1\n"}}
+        common = {"opened": {"inc/common.h": "#define COMMON_VALUE 1\n"}}
         changes = {"release": lambda x: x.update(release="13.3.1"),
                    "machine": lambda x: x.update(machine="x86_64-pc-linux-gnu"),
                    "predefines": lambda x: x["predefines"].append("#define __SSE2__ 1"),

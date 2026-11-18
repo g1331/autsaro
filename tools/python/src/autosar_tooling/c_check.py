@@ -202,6 +202,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     _, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], output, "compiler-headers", 30,
                 context="Cannot discover compiler include search paths")
     system_includes = compiler_include_paths(header_log, output)
+    search = c_sdk.include_search(header_log, output, c_sdk.provider_root(
+        Path(compiler), target_id.startswith("windows")), os.environ)
     _, macros, _ = run([compiler, *flags, "-dM", "-E", "-x", "c", str(empty)], output, "compiler-macros", 30,
                 context="Cannot discover compiler predefined macros")
     if "#define __GNUC__ " not in macros:
@@ -388,7 +390,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                    "sdkLineDirectives": bool(re.search(r"(?m)^\s*#\s*(?:line\b|[0-9])", owned_text)),
                                    "compilerSemanticInputs": {"machine": machine.strip(), "release": compiler_release.strip(),
                                                               "predefines": sorted(predefines.read_text(encoding="utf-8").splitlines()),
-                                                              "builtins": sorted(builtins)},
+                                                              "builtins": sorted(builtins),
+                                                              "includeSearch": search},
                                    "platformModel": {"path": str(model), "sha256": digest(model)} if model else None,
                                    "platformLibrary": {"path": str(library_model), "sha256": digest(library_model), "stdioModes": stdio_modes} if library_model else None,
                                    "translationUnits": sources, "supplemental": supplemental,

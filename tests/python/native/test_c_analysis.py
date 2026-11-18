@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -430,6 +431,44 @@ class ActualCAnalysisTests(unittest.TestCase):
                              {"new": [], "removed": []})
             with self.assertRaisesRegex(ValueError, "Semantic identity differs: defines"):
                 compare(*current, previous[2])
+
+    def test_real_producer_records_the_search_space_and_refuses_a_changed_search_order(self):
+        from autosar_tooling.c_comparison import compare
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            extra = root / "extra-include"
+            extra.mkdir()
+            analyses = []
+            for name, variables in (("baseline", {}), ("current", {"CPATH": str(extra)})):
+                directory = root / name
+                directory.mkdir()
+                source = "#include <limits.h>\nint main(void) { return CHAR_BIT; }\n"
+                project = self.project(directory, source,
+                                       extra_files={"meta/integration.json": '{"plan":{}}'})
+                target = json.loads((project / "target.json").read_text())["target"]
+                output = directory / "analysis"
+                with patch.dict(os.environ, variables):
+                    self.assertEqual(c_check.check(project, target, output), 0)
+                summary = json.loads((output / "summary.json").read_text())
+                self.assertIsNone(summary["error"])
+                analyses.append((summary, project, output))
+            previous, current = analyses
+            search = previous[0]["scope"]["compilerSemanticInputs"]["includeSearch"]
+            self.assertIn("usr/include", search["system"])
+            self.assertEqual(search["environment"], {"CPATH": None, "C_INCLUDE_PATH": None})
+            inventory = previous[0]["scope"]["sdkInventory"]["files"]
+            self.assertIn("usr/include/limits.h", inventory)
+            self.assertTrue(all("version" not in row for row in inventory.values()))
+            self.assertEqual(current[0]["scope"]["sdkInventory"],
+                             previous[0]["scope"]["sdkInventory"])
+            changed = current[0]["scope"]["compilerSemanticInputs"]["includeSearch"]
+            self.assertEqual(changed["system"][0], extra.relative_to("/").as_posix())
+            self.assertEqual(changed["environment"]["CPATH"], str(extra))
+            for source_tree in (True, False):
+                with self.subTest(source_tree=source_tree), \
+                        self.assertRaisesRegex(ValueError, "Semantic identity differs: compiler"):
+                    compare(*current, previous[2], source_tree=source_tree)
 
     def test_semantic_inputs_from_real_producer_refuse_changed_macro_and_allow_relocation(self):
         from autosar_tooling.c_comparison import compare

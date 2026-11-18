@@ -650,7 +650,8 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["semanticIdentity"] = copy.deepcopy(comparison["semanticIdentity"])
         self.summary["semanticIdentity"]["defines"] = {
             unit: [] for unit in self.summary["scope"]["translationUnits"]}
-        self.summary["scope"].update(profile="ecu")
+        self.summary["scope"].update(
+            profile="ecu", sdkInventory={"format": "sdk-search-inventory-v1", "files": {}})
         self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
             c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
         self.summary["tool"]["binarySha256"] = "synthetic-analyzer-binary"
@@ -733,6 +734,7 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["semanticIdentity"] = comparison["semanticIdentity"]
         self.summary["semanticIdentity"]["defines"] = {
             name: [] for name in self.summary["scope"]["translationUnits"]}
+        self.summary["scope"]["sdkInventory"] = {"format": "sdk-search-inventory-v1", "files": {}}
         self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
             c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
         self.summary["scope"]["profile"] = "ecu"
@@ -2453,7 +2455,12 @@ class AcceptanceTests(unittest.TestCase):
         record = c_sdk.header_identity(header, self.project, TARGET, "x86_64-linux-gnu", packages)
         self.assertEqual(record["category"], "sdk")
         scope = self.summary["scope"]
-        scope.update(compilerSemanticInputs={"machine": "x86_64-linux-gnu", "release": "12"},
+        scope.update(compilerSemanticInputs={
+                         "machine": "x86_64-linux-gnu", "release": "12",
+                         "includeSearch": {
+                             "quote": [], "system": [header.parent.relative_to("/").as_posix()],
+                             "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}},
+                     diagnosticCompiler={"path": "/usr/bin/gcc"},
                      compilerDiscoveredDefines={"main.c": []}, platformModel=None, platformLibrary=None,
                      sdkHeaders=[record], sdkTranslationUnits={
                          unit: [record["path"]] for unit in scope["translationUnits"]})

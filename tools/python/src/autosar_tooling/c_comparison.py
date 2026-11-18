@@ -196,10 +196,18 @@ def _semantic(summary: dict) -> dict:
             {"version", "compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime", "sdk"})
     require(type(identity["version"]) is int and identity["version"] == 3)
     compiler = identity["compiler"]
-    require(isinstance(compiler, dict) and set(compiler) == {"machine", "release", "predefines", "builtins"})
+    require(isinstance(compiler, dict) and set(compiler) ==
+            {"machine", "release", "predefines", "builtins", "includeSearch"})
     require(isinstance(compiler["machine"], str) and bool(compiler["machine"]))
     require(isinstance(compiler["release"], str) and bool(re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", compiler["release"])))
     require(strings(compiler["predefines"], True) and strings(compiler["builtins"], True))
+    search = compiler["includeSearch"]
+    require(isinstance(search, dict) and set(search) == {"quote", "system", "environment"}
+            and strings(search["quote"]) and strings(search["system"], True)
+            and isinstance(search["environment"], dict)
+            and set(search["environment"]) == set(c_sdk.SEARCH_ENVIRONMENT)
+            and all(value is None or isinstance(value, str)
+                    for value in search["environment"].values()))
     defines = identity["defines"]
     require(isinstance(defines, dict) and set(defines) == set(summary["scope"]["translationUnits"]))
     require(all(strings(value) for value in defines.values()))
@@ -239,7 +247,7 @@ def _source_sdk(summary: dict, identity: dict) -> dict:
                 raise ValueError("Semantic identity differs: defines format")
             defines[unit, match[1]] = match[2]
     return {"headers": headers, "macros": macros, "defines": defines,
-            "lineDirectives": sdk["lineDirectives"]}
+            "inventory": sdk["inventory"], "lineDirectives": sdk["lineDirectives"]}
 
 
 def _compare_source_sdk(current: dict, previous: dict, renames: dict) -> None:
@@ -249,10 +257,16 @@ def _compare_source_sdk(current: dict, previous: dict, renames: dict) -> None:
                          for (unit, name), value in before["defines"].items()}
     if now["lineDirectives"] != before["lineDirectives"]:
         raise ValueError("Semantic identity differs: sdk line directives")
+    # Every provider file the compiler can find must match, opened or not: a header that
+    # only one tree opens, or a different file behind the same include, changes the result.
+    files = now["inventory"].keys() | before["inventory"].keys()
+    changed = sorted(name for name in files
+                     if now["inventory"].get(name) != before["inventory"].get(name))
+    if changed:
+        raise ValueError(f"Semantic identity differs: sdk inventory: {changed[0]}")
     for field in ("headers", "macros", "defines"):
         # Source changes may open more or fewer headers and use other macros. What both
-        # trees consumed must agree byte for byte; package revisions and files neither
-        # tree opened cannot change the analysis and are not compared.
+        # trees consumed must agree byte for byte, as a second check on the inventory.
         for key in now[field].keys() & before[field].keys():
             if now[field][key] != before[field][key]:
                 label = "defines" if field == "defines" else "sdk " + field

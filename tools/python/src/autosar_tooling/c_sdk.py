@@ -735,13 +735,44 @@ def validate_sources(data: dict) -> None:
         raise ValueError("SDK wait " + port + ": missing active wait call source")
 
 
-def environment_identity(packages: dict) -> dict:
-    """Record the entire supported provider inventory for traceability.
+SEARCH_ENVIRONMENT = ("CPATH", "C_INCLUDE_PATH")
 
-    The record is verified against the package manifests but does not decide whether
-    two analyses are comparable: package revisions and files the compiler never opened
-    cannot change the result, and image rollouts make them differ between jobs.
+
+def provider_root(compiler: Path, windows: bool) -> Path:
+    """The directory that provider-relative header names and search directories hang from."""
+    return compiler.parent.parent.parent if windows else Path("/")
+
+
+def include_search(header_log: str, directory: Path, root: Path, environ: dict) -> dict:
+    """The compiler's effective include search order, with the variables that feed it.
+
+    Provider-relative names keep the sequence comparable between hosts and installations.
     """
+    sections = {'#include "..." search starts here:': [], "#include <...> search starts here:": []}
+    collecting = None
+    for line in header_log.splitlines():
+        text = line.strip()
+        if text in sections:
+            collecting = sections[text]
+        elif text == "End of search list.":
+            collecting = None
+        elif collecting is not None:
+            path = (directory / text).resolve(strict=True)
+            collecting.append(
+                path.relative_to(root).as_posix() if path.is_relative_to(root) else path.as_posix()
+            )
+    quote, system = sections.values()
+    if not system:
+        raise ValueError("Compiler reported no system include paths")
+    return {
+        "quote": quote,
+        "system": system,
+        "environment": {name: environ.get(name) for name in SEARCH_ENVIRONMENT},
+    }
+
+
+def installed_records(packages: dict) -> list[tuple[str, dict]]:
+    """Check every supported provider file against its package manifest, with actual digests."""
     if not packages:
         raise ValueError("SDK environment provider inventory missing")
     records = []
@@ -755,19 +786,47 @@ def environment_identity(packages: dict) -> dict:
             elif not path.is_file() or digest(path) != digest(target):
                 # MSYS2 can materialize a file link as a copy on Windows.
                 raise ValueError(f"SDK environment link content differs: {name}")
-            records.append({**package, "sha256": digest(path) if path.is_file() else None})
+            records.append((name, {**package, "sha256": digest(path) if path.is_file() else None}))
             continue
         data = Path(name).read_bytes()
         if hashlib.new(package["algorithm"], data).hexdigest() != package["expected"]:
             raise ValueError(f"SDK environment differs from provider original: {name}")
-        records.append({**package, "sha256": hashlib.sha256(data).hexdigest()})
-    records.sort(key=lambda row: (row["provider"], row["header"]))
-    return {"format": "sdk-provider-environment-v1", "files": len(records),
-            "sha256": hashlib.sha256(json.dumps(records, sort_keys=True).encode()).hexdigest()}
+        records.append((name, {**package, "sha256": hashlib.sha256(data).hexdigest()}))
+    return records
+
+
+def environment_digest(records: list[tuple[str, dict]]) -> dict:
+    """Record the entire supported provider inventory for traceability.
+
+    The record does not decide whether two analyses are comparable: package revisions
+    and files outside the include search space (libraries, documentation) cannot
+    reach the preprocessor, and image rollouts make them differ between jobs.
+    """
+    rows = sorted((row for _, row in records), key=lambda row: (row["provider"], row["header"]))
+    return {"format": "sdk-provider-environment-v1", "files": len(rows),
+            "sha256": hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()}
+
+
+def environment_identity(packages: dict) -> dict:
+    return environment_digest(installed_records(packages))
+
+
+def search_inventory(records: list[tuple[str, dict]], directories: list[Path]) -> dict:
+    """Provider files the compiler can find, opened or not, without package revisions.
+
+    A header present on one side only, or different between the sides, can decide which
+    definition an include resolves to even when the sources are identical.
+    """
+    files = {}
+    for name, row in records:
+        if any(Path(name).is_relative_to(directory) for directory in directories):
+            files[row["header"]] = {key: row[key] for key in
+                                    ("provider", "algorithm", "expected", "sha256")}
+    return {"format": "sdk-search-inventory-v1", "files": dict(sorted(files.items()))}
 
 
 def semantic(scope: dict) -> str:
-    """Paths and package revisions are provenance; opened header bytes and macros are semantic."""
+    """Paths and package revisions are provenance; searchable and opened bytes are semantic."""
     headers = scope.get("sdkHeaders", [])
     packages = (
         msys_headers(Path(scope["diagnosticCompiler"]["path"]))
@@ -788,16 +847,25 @@ def semantic(scope: dict) -> str:
             expected if "provider" in header else None
         ):
             raise ValueError("SDK source/provider identity changed during analysis")
-    scope["sdkEnvironment"] = environment_identity(packages)
+    records = installed_records(packages)
+    scope["sdkEnvironment"] = environment_digest(records)
+    search = scope["compilerSemanticInputs"]["includeSearch"]
+    root = provider_root(
+        Path(scope["diagnosticCompiler"]["path"]), scope["target"].startswith("windows")
+    )
+    scope["sdkInventory"] = search_inventory(
+        records, [root / name for name in (*search["quote"], *search["system"])]
+    )
     identity = semantic_inputs(scope)
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
 def semantic_inputs(scope: dict) -> dict:
-    """The SDK inputs the compiler opened, without requiring the target host's filesystem."""
+    """The SDK inputs the compiler can find and opened, without the target host's filesystem."""
     headers = scope.get("sdkHeaders", [])
     keys = {row["path"]: row["key"] for row in headers}
     return {
+        "inventory": scope["sdkInventory"]["files"],
         "lineDirectives": scope.get("sdkLineDirectives", False),
         "headers": sorted(
             (

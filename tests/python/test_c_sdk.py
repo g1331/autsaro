@@ -73,6 +73,20 @@ class SdkSourceTests(unittest.TestCase):
         )
         return root, header, packages, record
 
+    def search_inputs(self, header):
+        """The compiler record that makes the header's directory the include search space."""
+        relative = header.parent.relative_to("/").as_posix()
+        return {
+            "diagnosticCompiler": {"path": "/selected/bin/gcc.exe"},
+            "compilerSemanticInputs": {
+                "includeSearch": {
+                    "quote": [],
+                    "system": [relative],
+                    "environment": {"CPATH": None, "C_INCLUDE_PATH": None},
+                }
+            },
+        }
+
     def diagnostic(self):
         return {
             "id": "misra-c2012-7.2",
@@ -848,7 +862,7 @@ class SdkSourceTests(unittest.TestCase):
             status.write_text(status.read_text().replace("amd64", "arm64"))
             self.assertEqual(c_sdk.debian_headers(status, info), {})
 
-    def test_environment_includes_unused_provider_files_and_checks_original_bytes(self):
+    def test_environment_records_every_file_and_the_search_space_decides_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
             _root, header, packages, record = self.fixture(Path(temporary).resolve())
             unused = header.with_name("unused.h")
@@ -856,13 +870,27 @@ class SdkSourceTests(unittest.TestCase):
             package = {**packages[str(header)], "header": "mingw64/include/unused.h",
                        "expected": hashlib.sha256(unused.read_bytes()).hexdigest()}
             packages[str(unused)] = package
+            library = header.parents[1] / "lib/libwinpthread.a"
+            library.parent.mkdir()
+            library.write_bytes(b"archive 1\n")
+            packages[str(library)] = {**package, "header": "mingw64/lib/libwinpthread.a",
+                                      "expected": hashlib.sha256(library.read_bytes()).hexdigest()}
             before = c_sdk.environment_identity(packages)
-            self.assertEqual(before["files"], 2)
-            scope = {"target": TARGET, "diagnosticCompiler": {"path": "/selected/bin/gcc.exe"},
+            self.assertEqual(before["files"], 3)
+            scope = {"target": TARGET, **self.search_inputs(header),
                      "sdkHeaders": [record], "sdkTranslationUnits": {"main.c": [header.as_posix()]},
                      "sdkMacroInputs": {}}
             with patch.object(c_sdk, "msys_headers", return_value=packages):
                 semantic_before = c_sdk.semantic(scope)
+            self.assertEqual(list(scope["sdkInventory"]["files"]),
+                             ["mingw64/include/unused.h", "mingw64/include/winbase.h"])
+            library.write_bytes(b"archive 2\n")
+            packages[str(library)]["expected"] = hashlib.sha256(library.read_bytes()).hexdigest()
+            # A library outside the include search space is recorded, not part of the identity.
+            with patch.object(c_sdk, "msys_headers", return_value=packages):
+                self.assertEqual(semantic_before, c_sdk.semantic(scope))
+            self.assertNotEqual(c_sdk.environment_identity(packages)["sha256"], before["sha256"])
+            # An unopened header the compiler can find decides the identity.
             unused.write_bytes(b"#define UNUSED_VALUE 2\n")
             with self.assertRaisesRegex(ValueError,
                                         "SDK environment differs from provider original"):
@@ -870,9 +898,8 @@ class SdkSourceTests(unittest.TestCase):
             package["expected"] = hashlib.sha256(unused.read_bytes()).hexdigest()
             after = c_sdk.environment_identity(packages)
             self.assertNotEqual(before["sha256"], after["sha256"])
-            # An installed file the compiler never opened is recorded, not part of the identity.
             with patch.object(c_sdk, "msys_headers", return_value=packages):
-                self.assertEqual(semantic_before, c_sdk.semantic(scope))
+                self.assertNotEqual(semantic_before, c_sdk.semantic(scope))
             self.assertEqual(scope["sdkEnvironment"], after)
             relocated = {}
             for index, (name, record) in enumerate(packages.items()):
@@ -896,7 +923,7 @@ class SdkSourceTests(unittest.TestCase):
                     header, root, TARGET, "x86_64-w64-mingw32", {str(header): package}
                 )
                 scope = {"sdkHeaders": [row], "sdkTranslationUnits": {"main.c": [row["path"]]},
-                         "sdkMacroInputs": {}}
+                         "sdkMacroInputs": {}, "sdkInventory": {"files": {}}}
                 return row, c_sdk.semantic_inputs(scope)
 
             _, base = identity()
@@ -921,6 +948,48 @@ class SdkSourceTests(unittest.TestCase):
             self.assertNotEqual(changed["sha256"], record["sha256"])
             self.assertNotEqual(changed["key"], record["key"])
 
+    def test_include_search_keeps_the_effective_order_relative_to_the_provider_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            for name in ("user", "extra", "lib/include", "include"):
+                (root / name).mkdir(parents=True)
+            log = (
+                "ignoring nonexistent directory \"absent\"\n"
+                '#include "..." search starts here:\n user\n'
+                "#include <...> search starts here:\n"
+                f" {(root / 'extra').as_posix()}\n lib/include\n include\n"
+                "End of search list.\n"
+            )
+            search = c_sdk.include_search(log, root, root, {"CPATH": "/extra", "OTHER": "x"})
+            self.assertEqual(search, {
+                "quote": ["user"],
+                "system": ["extra", "lib/include", "include"],
+                "environment": {"CPATH": "/extra", "C_INCLUDE_PATH": None},
+            })
+            # Directories outside the provider root keep their absolute name.
+            inner = root / "include"
+            outside = c_sdk.include_search(log, root, inner, {})
+            self.assertEqual(outside["system"][2], ".")
+            self.assertEqual(outside["system"][0], (root / "extra").as_posix())
+            with self.assertRaisesRegex(ValueError, "no system include paths"):
+                c_sdk.include_search("#include <...> search starts here:\nEnd of search list.\n",
+                                     root, root, {})
+
+    def test_search_inventory_covers_every_provider_file_below_a_search_directory(self):
+        records = []
+        for name, header in (("/p/include/a.h", "p/include/a.h"),
+                             ("/p/include/sub/b.h", "p/include/sub/b.h"),
+                             ("/p/lib/libc.a", "p/lib/libc.a"),
+                             ("/p/include-extra/c.h", "p/include-extra/c.h")):
+            records.append((name, {"provider": "libc6-dev", "version": "9", "header": header,
+                                   "algorithm": "md5", "expected": "e" * 32, "sha256": "f" * 64}))
+        inventory = c_sdk.search_inventory(records, [Path("/p/include")])
+        self.assertEqual(list(inventory["files"]), ["p/include/a.h", "p/include/sub/b.h"])
+        self.assertEqual(inventory["files"]["p/include/a.h"], {
+            "provider": "libc6-dev", "algorithm": "md5", "expected": "e" * 32, "sha256": "f" * 64})
+        self.assertEqual(c_sdk.search_inventory(records, []), {
+            "format": "sdk-search-inventory-v1", "files": {}})
+
     def test_environment_verifies_windows_materialized_file_links(self):
         with tempfile.TemporaryDirectory() as temporary:
             _root, header, packages, _record = self.fixture(Path(temporary).resolve())
@@ -941,7 +1010,7 @@ class SdkSourceTests(unittest.TestCase):
             _root, header, packages, record = self.fixture(Path(temporary).resolve())
             scope = {
                 "target": TARGET,
-                "diagnosticCompiler": {"path": "/selected/bin/gcc.exe"},
+                **self.search_inputs(header),
                 "sdkHeaders": [record],
                 "sdkTranslationUnits": {"port.c": [header.as_posix()]},
                 "sdkMacroInputs": {},
