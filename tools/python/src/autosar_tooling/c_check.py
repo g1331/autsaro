@@ -9,6 +9,7 @@ import platform
 import re
 import shutil
 import sys
+import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -32,7 +33,14 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessSpec, run_bounded
 
-from autosar_tooling import c_acceptance, c_comparison, c_retention, c_sdk, c_standard
+from autosar_tooling import (
+    c_acceptance,
+    c_comparison,
+    c_preprocessor,
+    c_retention,
+    c_sdk,
+    c_standard,
+)
 from autosar_tooling.config import ROOT
 
 CPPCHECK_VERSION = "2.21.0"
@@ -307,9 +315,12 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         _, definitions, _ = run([compiler, *flags, *("-I" + path for path in includes),
                                     "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60,
                                     context=f"Compiler preprocessing failed for {name}")
+        # Use the replay's path spelling so that __FILE__ expands to the same C token.
         _, provenance, _ = run([compiler, *flags, *("-I" + path for path in includes),
-                                    "-E", "-dD", "-MD", "-MF", str(output / f"compiler-origins-{index}.d"),
-                                    "-MT", "autsaro-tu", str(root / name)], output, f"compiler-origins-{index}", 60,
+                                    "-E", "-dD", *c_preprocessor.WARNINGS,
+                                    "-MD", "-MF", str(output / f"compiler-origins-{index}.d"),
+                                    "-MT", "autsaro-tu", tool_argument(root / name)],
+                                    output, f"compiler-origins-{index}", 60,
                                     context=f"Compiler source tracing failed for {name}")
         inputs = c_sdk.preprocessing(provenance, root, identifiers)
         dependency_text = (output / f"compiler-origins-{index}.d").read_text(encoding="utf-8")
@@ -621,7 +632,7 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     if cfg is None:
         raise ValueError("Cppcheck analysis library contents unavailable")
     scope["cppcheckLibraries"] = {name: str((cfg / (name + ".cfg")).resolve()) for name in libraries}
-    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__), Path(c_standard.__file__), Path(c_retention.__file__), Path(c_acceptance.__file__)]
+    drivers = [Path(__file__), Path(__file__).with_name("c_addon.py"), Path(__file__).with_name("c_comparison.py"), Path(c_sdk.__file__), Path(c_standard.__file__), Path(c_retention.__file__), Path(c_acceptance.__file__), Path(c_preprocessor.__file__)]
     # Build/owner helpers determine selected inputs, patching and executed processes.
     import ecu_tools.build
     import ecu_tools.owner
@@ -770,6 +781,14 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
             raise ValueError("Semantic inputs changed during analysis")
         summary["passed"] = all_passed
+        if scope.get("profile") == "ecu" and sdk_revision is None and "projectTranslationUnits" in scope:
+            started = time.monotonic()
+            try:
+                summary["preprocessingEvidence"] = c_preprocessor.collect(scope, root, output, run)
+            except (OSError, ValueError, RuntimeError) as error:
+                elapsed = round(time.monotonic() - started, 2)
+                summary["preprocessingEvidence"] = {"error": str(error), "elapsedSeconds": elapsed}
+                print(f"Conditional evaluation evidence failed after {elapsed:.2f}s: {error}", file=sys.stderr)
         summary["projectAcceptance"] = c_acceptance.evaluate(
             summary, root, **({"sdk_revision": sdk_revision} if sdk_revision is not None else {}))
         if baseline is not None:

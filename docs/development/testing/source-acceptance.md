@@ -128,8 +128,8 @@ FreeRTOS 另绑定完整原件 manifest、有序补丁及最终 kernel。SDK 保
 自有源码的局部消费者另接受 `records={"kind":"owned-source"}`。它复用原标准篇与
 `c_standard` 的 MR12 双向关联，核对原实体、已登记 shape、当前原件及 ownership 字节，
 并保留表中的目标、程序和 ND 样本限制。验收先筛范围内原件，范围外记录过期不影响目标处置；quality 仍全量检查。MemMap
-R20.1 逐包含验证既有 START／STOP 协议，R20.5 只消费原表精确登记的 MR12 位置。
-未登记的内部属性／状态撤销保留阻塞，完整类别实例解析由自有源码消费任务接续。
+R20.1 验证 START／STOP 包含协议。R20.5 消费精确 MR12 位置，以及实际 TU 纳入的生成映射头
+中成对请求的撤销和同类 START 定义、STOP 清理的属性／状态。
 C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_record_matched`，
 缺少本组当前绑定时返回 `owned_source_context_unbound_or_stale`。
 共用 MR12 解析器返回的生成保留活动目录记录始终交给 `generated-retention` 消费；

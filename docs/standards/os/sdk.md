@@ -120,57 +120,5 @@ SDK 使用既有 source-assessment context 的 sdk-integration 组；`sdk_identi
 ]}
 <!-- sdk-integration-records-end -->
 <!-- source-assessment-context-begin -->
-{
-  "id": "sdk-integration-515-control-flow",
-  "evidence": {
-    "head": "942b65ee2eb36cf61813f6d20caece4e52fac5e5",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44269147114"
-  },
-  "cases": [
-    {
-      "caseId": "component-pipeline",
-      "target": "linux-x64-controlled-v1",
-      "inputIdentity": "bd9dd0d5f4b8da2b39c77f886ab98f13c1598dc50b4316ad05e721c8cce679f4"
-    },
-    {
-      "caseId": "no-diagnostic",
-      "target": "linux-x64-controlled-v1",
-      "inputIdentity": "cf3bffb8199b02e375eedd346d77e3c18af279f20604ad81b9695f0ac59e0780"
-    },
-    {
-      "caseId": "standard-ecu",
-      "target": "linux-x64-controlled-v1",
-      "inputIdentity": "6b4b4ed4591f0d64ac6211b9c3dcc7919de92308817b198e160c0f78db27983f"
-    },
-    {
-      "caseId": "user-application",
-      "target": "linux-x64-controlled-v1",
-      "inputIdentity": "04ae23db0088429a7ed1756542f3f119c292f87f112752ced20216e94ac212f1"
-    },
-    {
-      "caseId": "component-pipeline",
-      "target": "windows-x64-controlled-v1",
-      "inputIdentity": "fa2afecc80003851b8240b146a6871fa26d022b95f70cea060b20f59655f635d"
-    },
-    {
-      "caseId": "no-diagnostic",
-      "target": "windows-x64-controlled-v1",
-      "inputIdentity": "69fb0555915e7b5348b54275644f8a29af5e8748660fda490da98d55dffd15fa"
-    },
-    {
-      "caseId": "standard-ecu",
-      "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c750b5613867654f307de8591ac4af42d1fe5a3650d82f3d3b561260dbc2985e"
-    },
-    {
-      "caseId": "user-application",
-      "target": "windows-x64-controlled-v1",
-      "inputIdentity": "ff4262949186d8e3c652cc70983c99201768dad2fb93cab964064a3fef070025"
-    }
-  ],
-  "records": {
-    "kind": "sdk-integration"
-  },
-  "formalStatus": "approved"
-}
+{"id":"sdk-integration-536-r20","evidence":{"head":"f935994f337c30c4cac89e9376a3a735fa9b8152","receipt":"https://github.com/g1331/autsaro/actions/runs/44329958103/attempts/2"},"cases":[{"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"d6850f972fb28fec3d29e71ca1c781e62dc5ae9b0b26d56776107802e76f0e8e"},{"caseId":"no-diagnostic","target":"linux-x64-controlled-v1","inputIdentity":"22c72c596abbeaa0df8df8fc3257a86a41de0b4ba367c0482b699949e07d1707"},{"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"e21705d7881d2716987e2b60731d0429697c103b82b498930207e1766d5e9197"},{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"cee098a94ef3e8d6001de87fcf6707f84340f56f9cec589cd1dee7c49e89ea43"},{"caseId":"component-pipeline","target":"windows-x64-controlled-v1","inputIdentity":"24132814097a728ce038831d0fb7e7227cbe12955891b7a4dd0de315d756b625"},{"caseId":"no-diagnostic","target":"windows-x64-controlled-v1","inputIdentity":"c76b41870f81379e9beb869d095950a7dbe7e061efaeccbb5bdb6b19eb1d7824"},{"caseId":"standard-ecu","target":"windows-x64-controlled-v1","inputIdentity":"5f141ef25b814a2cb78346d42d8c4a7b6c04885a0602c836fd7fafebf0737bcc"},{"caseId":"user-application","target":"windows-x64-controlled-v1","inputIdentity":"54c59a8b9bb72d2e23ac7b6ea2bf4a57c9dd75a34bcf91e7a7e4b3cf31eddb43"}],"records":{"kind":"sdk-integration"},"formalStatus":"approved"}
 <!-- source-assessment-context-end -->
