@@ -427,6 +427,8 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
     classified = iter(candidates)
     sources = {}
     mapping_validity = {}
+    mapping_undefs = {}
+    compiler_dependencies = set().union(*summary["scope"].get("projectTranslationUnits", {}).values())
     result = {}
     for index, position, diagnostic, location in positions:
         if location is None:
@@ -491,6 +493,17 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
             result[index, position] = {"entity": c_retention.containing_function(tokens, offset),
                 "record": {"file": "docs/standards/os/implementation.md",
                            "text": "## C90隐式声明规则与当前编译"}, "reason": None}
+        elif (diagnostic["id"] == "misra-c2012-20.5"
+              and name.startswith("generated/include/") and name.endswith("_MemMap.h")
+              and name in compiler_dependencies):
+            if name not in mapping_undefs:
+                mapping_undefs[name] = c_standard.memory_mapping_undefs(source)
+            entity = mapping_undefs[name].get(offset)
+            if entity is None:
+                continue
+            result[index, position] = {"entity": entity,
+                "record": {"file": "docs/standards/memmap/README.md", "text": "## MemMap 类别偏离"},
+                "reason": None}
         elif diagnostic["id"] == "misra-c2012-20.1":
             directive = next((t for t in tokens
                               if t.start <= offset < t.end), None)

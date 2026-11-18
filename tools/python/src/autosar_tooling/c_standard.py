@@ -339,6 +339,47 @@ def void_function(tokens: list[Token], name: str) -> bool:
     return "void" in prefix and "*" not in prefix
 
 
+def memory_mapping_undefs(source: str) -> dict[int, str]:
+    """Recognize request consumption and cleanup belonging to the paired START."""
+    branch = re.compile(r"#\s*(if|elif|ifdef|ifndef|else|endif)\b\s*(.*)", re.DOTALL)
+    request = re.compile(r"defined\s*\(\s*(\w+_(?:START|STOP)_SEC_\w+)\s*\)")
+    define = re.compile(r"#\s*define\s+(\w+)\b")
+    stack = []
+    definitions = collections.defaultdict(set)
+    undefs = []
+    for token in lex(source):
+        text = re.sub(r"\\\n", "", token.text.strip())
+        condition = branch.fullmatch(text)
+        if condition:
+            kind, expression = condition.groups()
+            if kind in {"elif", "else", "endif"}:
+                stack.pop()
+            if kind != "endif":
+                selected = request.fullmatch(expression)
+                stack.append(selected[1] if selected else None)
+            continue
+        selected = next((name for name in reversed(stack) if name is not None), None)
+        if selected is None:
+            continue
+        definition = define.match(text)
+        if definition:
+            definitions[selected].add(definition[1])
+        directive = directive_scope(text)
+        if directive and directive.startswith("#undef "):
+            undefs.append((token.start, directive, selected))
+    requests = {selected for _, directive, selected in undefs if directive[7:] == selected}
+    result = {}
+    for offset, directive, selected in undefs:
+        name = directive[7:]
+        start = selected.replace("_STOP_SEC_", "_START_SEC_", 1)
+        stop = selected.replace("_START_SEC_", "_STOP_SEC_", 1)
+        if start not in requests or stop not in requests:
+            continue
+        if name == selected or (selected == stop and name in definitions[start]):
+            result[offset] = directive
+    return result
+
+
 def verify_memory_mapping_pattern(source: str) -> int:
     """Check the shared START/include/body/STOP/include protocol before class checks."""
     active = None

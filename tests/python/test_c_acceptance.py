@@ -1373,7 +1373,7 @@ class AcceptanceTests(unittest.TestCase):
             "R20.7": ("not_assessed", "#536", "完全展开", "ErrorHook"),
             "R20.8": ("not_assessed", "#536", "未求值", "intmax_t"),
             "R20.9": ("not_assessed", "#536", "defined(B)", "预定义"),
-            "R20.10": ("not_assessed", "#536", "ARTI_TRACE", "未批准新例外"),
+            "R20.10": ("not_assessed", "#536", "ARTI_TRACE", "冻结绑定待两平台收据"),
             "R20.11": ("satisfied", "# parameter ##", "四个 OS", "Arti_Record"),
             "R20.12": ("satisfied", "每次均只作", "两数值参数", "普通替换"),
             "R20.13": ("satisfied", "未选分支", "warning", "首 token"),
@@ -1955,12 +1955,45 @@ class AcceptanceTests(unittest.TestCase):
         self.select_owned(source, "20.5", "#undef UNRELATED")
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
 
-    def test_owned_unrecorded_memmap_undef_waits_for_category_instance_consumer(self):
+    def test_generated_memmap_cleanup_requires_its_paired_start_definition(self):
         self.owned_inputs()
-        self.select_owned("runtime/os/include/Os_MemMap.h", "20.5", "#undef OS_MEMMAP\n")
-        occurrence = self.evaluate()["occurrences"][0]
-        self.assertEqual(occurrence["assessment"], "blocked")
-        self.assertEqual(occurrence["reason"], "no_record")
+        name = "generated/include/Test_MemMap.h"
+        source = (
+            "#if defined(TEST_START_SEC_CODE)\n"
+            "#define TEST_CODE __attribute__((section(\".test\")))\n"
+            "#undef TEST_START_SEC_CODE\n"
+            "#elif defined(TEST_STOP_SEC_CODE)\n"
+            "#undef TEST_CODE\n"
+            "#undef TEST_STOP_SEC_CODE\n"
+            "#endif\n"
+        )
+        diagnostic = {"id": "misra-c2012-20.5", "programs": ["host-batch", "probe"],
+                      "locations": [{"file": name, "line": 5, "column": 0}]}
+
+        def evaluate(text):
+            data = text.encode("utf-8")
+            self.files[name] = data
+            self.files["meta/workbench-ownership.json"] = json.dumps({"files": [{
+                "path": name, "sha256": hashlib.sha256(data).hexdigest(),
+                "owner": "generated", "producerId": "autosar-generator",
+            }]}).encode()
+            self.summary["diagnostics"] = [diagnostic]
+            self.seal()
+            self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+            self.bind_groups()
+            self.bind(self.context(group="owned-source", status="approved"))
+            return self.evaluate()["occurrences"][0]
+
+        occurrence = evaluate(source)
+        self.assertEqual(occurrence["assessment"], "accepted")
+        self.assertEqual(occurrence["entity"], "#undef TEST_CODE")
+        for old, replacement in (
+            ("#define TEST_CODE", "#define UNRELATED"),
+            ("#undef TEST_START_SEC_CODE", "#undef OTHER_START_SEC_CODE"),
+            ("#undef TEST_CODE", "#undef UNRELATED"),
+        ):
+            with self.subTest(replacement=replacement):
+                self.assertEqual(evaluate(source.replace(old, replacement))["reason"], "no_record")
 
     def test_owned_memmap_requires_the_complete_protocol(self):
         self.owned_inputs()
