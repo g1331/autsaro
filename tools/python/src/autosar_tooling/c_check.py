@@ -9,6 +9,7 @@ import platform
 import re
 import shutil
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -184,6 +185,19 @@ def coverage(addons: Path) -> dict:
     return result
 
 
+def probe_include_search(compiler: str, flags: list[str], directory: Path,
+                         windows: bool) -> tuple[list[str], dict]:
+    """The include directories the compiler uses now, and its search order and variables."""
+    empty = directory / "headers.c"
+    empty.write_text("", encoding="utf-8")
+    _, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], directory,
+                           "compiler-headers", 30,
+                           context="Cannot discover compiler include search paths")
+    return (compiler_include_paths(header_log, directory),
+            c_sdk.include_search(header_log, directory, c_sdk.provider_root(compiler, windows),
+                                 os.environ))
+
+
 def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str], list[dict], dict]:
     names, target = sealed_sources(project)
     if target["target"] != target_id:
@@ -205,13 +219,9 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         raise ValueError("Invalid diagnostic compiler release")
     _, compiler_version, _ = run([compiler, "--version"], output, "compiler-version", 30,
                 context="Cannot identify diagnostic compiler")
+    system_includes, search = probe_include_search(
+        compiler, flags, output, target_id.startswith("windows"))
     empty = output / "headers.c"
-    empty.write_text("", encoding="utf-8")
-    _, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], output, "compiler-headers", 30,
-                context="Cannot discover compiler include search paths")
-    system_includes = compiler_include_paths(header_log, output)
-    search = c_sdk.include_search(header_log, output, c_sdk.provider_root(
-        Path(compiler), target_id.startswith("windows")), os.environ)
     _, macros, _ = run([compiler, *flags, "-dM", "-E", "-x", "c", str(empty)], output, "compiler-macros", 30,
                 context="Cannot discover compiler predefined macros")
     if "#define __GNUC__ " not in macros:
@@ -685,6 +695,16 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     }
 
 
+def recheck_include_search(scope: dict) -> None:
+    """The recorded search order and CPATH describe the analysis; reuse needs those in force now."""
+    with tempfile.TemporaryDirectory(prefix="c-search-") as temporary:
+        _, search = probe_include_search(
+            scope["diagnosticCompiler"]["path"], scope["compilerFlags"], Path(temporary),
+            scope["target"].startswith("windows"))
+    if search != scope["compilerSemanticInputs"]["includeSearch"]:
+        raise ValueError("Actual include search order or variables changed since analysis")
+
+
 def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path, dict]) -> None:
     """Reuse actual SDK/provider, implicit-runner and driver checks on this host."""
     executable, _addons, identity = tool
@@ -701,6 +721,7 @@ def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path
         raise ValueError("Unsupported analysis program directory")
     directories = (project.parent,) if len(names) == 1 else tuple(project.parent / name for name in names)
     scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
+    recheck_include_search(scope)
     if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
         raise ValueError("Actual semantic inputs changed since analysis")
 

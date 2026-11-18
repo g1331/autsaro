@@ -223,14 +223,17 @@ def _semantic(summary: dict) -> dict:
     require(isinstance(manual["parserSha256"], str) and bool(re.fullmatch("[0-9a-f]{64}", manual["parserSha256"])))
     require(manual["selectionSha256"] == hashlib.sha256("\n".join(MANUAL_ASSESSMENT_SOURCES).encode()).hexdigest())
     require(isinstance(identity["sdk"], str) and bool(re.fullmatch("[0-9a-f]{64}", identity["sdk"])))
+    # Both comparison modes rest on the recorded inventory and opened headers.
+    c_sdk.validate_inventory(summary["scope"])
+    sdk = c_sdk.semantic_inputs(summary["scope"])
+    if hashlib.sha256(json.dumps(sdk, sort_keys=True).encode()).hexdigest() != identity["sdk"]:
+        raise ValueError("Semantic identity differs: sdk receipt")
     return identity
 
 
 def _source_sdk(summary: dict, identity: dict) -> dict:
     """Separate verified SDK header evidence from source-dependent usage inventories."""
     sdk = c_sdk.semantic_inputs(summary["scope"])
-    if hashlib.sha256(json.dumps(sdk, sort_keys=True).encode()).hexdigest() != identity["sdk"]:
-        raise ValueError("Semantic identity differs: sdk receipt")
     headers = {row["header"]: row for row in sdk["headers"]}
     header_names = {row["key"]: row["header"] for row in sdk["headers"]}
     macros = {}

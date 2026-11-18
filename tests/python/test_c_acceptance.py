@@ -28,6 +28,17 @@ TARGET = "linux-x64-controlled-v1"
 CASE = "standard-ecu"
 
 
+def sdk_inventory(scope):
+    """The search-space inventory that matches the SDK headers a synthetic scope opened."""
+    files = {"usr/include/limits.h": {
+        "header": "usr/include/limits.h", "provider": "libc6-dev", "algorithm": "md5",
+        "expected": "e" * 32, "sha256": "a" * 64}}
+    files.update({row["header"]: {key: row[key] for key in
+                                  ("header", "provider", "algorithm", "expected", "sha256")}
+                  for row in scope.get("sdkHeaders", []) if row["category"] == "sdk"})
+    return {"format": "sdk-search-inventory-v1", "files": files}
+
+
 class AcceptanceTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -86,6 +97,10 @@ class AcceptanceTests(unittest.TestCase):
         tool_probe = patch.object(c_check, "tool_identity", return_value=(self.directory / "cppcheck", addons, self.actual_tool))
         self.tool_probe = tool_probe.start()
         self.addCleanup(tool_probe.stop)
+        # Compiler probes are environment probes too.
+        search_probe = patch.object(c_check, "recheck_include_search")
+        self.search_probe = search_probe.start()
+        self.addCleanup(search_probe.stop)
         self.real_semantic = c_check.semantic_identity
         semantic_probe = patch.object(c_check, "semantic_identity", side_effect=lambda *args: copy.deepcopy(self.actual_semantic))
         self.semantic_probe = semantic_probe.start()
@@ -651,7 +666,7 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["semanticIdentity"]["defines"] = {
             unit: [] for unit in self.summary["scope"]["translationUnits"]}
         self.summary["scope"].update(
-            profile="ecu", sdkInventory={"format": "sdk-search-inventory-v1", "files": {}})
+            profile="ecu", sdkInventory=sdk_inventory(self.summary["scope"]))
         self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
             c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
         self.summary["tool"]["binarySha256"] = "synthetic-analyzer-binary"
@@ -734,7 +749,7 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["semanticIdentity"] = comparison["semanticIdentity"]
         self.summary["semanticIdentity"]["defines"] = {
             name: [] for name in self.summary["scope"]["translationUnits"]}
-        self.summary["scope"]["sdkInventory"] = {"format": "sdk-search-inventory-v1", "files": {}}
+        self.summary["scope"]["sdkInventory"] = sdk_inventory(self.summary["scope"])
         self.summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
             c_sdk.semantic_inputs(self.summary["scope"]), sort_keys=True).encode()).hexdigest()
         self.summary["scope"]["profile"] = "ecu"
@@ -945,6 +960,20 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         self.bind_sdk()
         self.assertIn("source provenance differs", self.evaluate()["objects"][-1]["reason"])
+
+    def test_an_opened_header_outside_every_provider_fails_the_acceptance(self):
+        # The comparison does not inspect files that belong to no supported provider
+        # (a runner's /usr/local/include, say). Opening one is stopped here instead.
+        self.sdk_inputs()
+        self.bind_sdk()
+        self.assertNotEqual(self.evaluate()["status"], "error")
+        self.sdk_header.update(category="unclassified",
+                               reason="unknown provider or missing package manifest")
+        self.summary["sourceClassification"] = {"complete": False, "unclassifiedDiagnosticKeys": 0}
+        self.bind_sdk()
+        result = self.evaluate()
+        self.assertEqual(result["status"], "error")
+        self.assertIn("Incomplete SDK source provenance", result["objects"][-1]["reason"])
 
     def test_sdk_changed_package_version_and_record_body_invalidate_evidence(self):
         self.sdk_inputs()

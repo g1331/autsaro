@@ -59,6 +59,32 @@ class CAnalysisTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "outside the project"):
                 c_check.analyzer_inputs(data, root, scope)
 
+    def test_reuse_rechecks_the_include_search_order_and_variables_now_in_force(self):
+        recorded = {"quote": [], "system": ["usr/lib/gcc/x86_64-linux-gnu/13/include",
+                                            "usr/include"],
+                    "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}
+        scope = {"target": "linux-x64-controlled-v1", "compilerFlags": ["-std=c99"],
+                 "diagnosticCompiler": {"path": "/usr/bin/gcc"},
+                 "compilerSemanticInputs": {"includeSearch": recorded}}
+        changes = {
+            "unchanged": recorded,
+            "CPATH set": {**recorded, "environment": {"CPATH": "/extra", "C_INCLUDE_PATH": None}},
+            "C_INCLUDE_PATH set": {**recorded, "environment": {"CPATH": None,
+                                                               "C_INCLUDE_PATH": "/extra"}},
+            "order changed": {**recorded, "system": recorded["system"][::-1]},
+            "directory added": {**recorded, "system": ["extra", *recorded["system"]]},
+        }
+        for name, now in changes.items():
+            with self.subTest(change=name), patch.object(
+                    c_check, "probe_include_search", return_value=([], now)) as probe:
+                if name == "unchanged":
+                    c_check.recheck_include_search(scope)
+                else:
+                    with self.assertRaisesRegex(ValueError, "include search order or variables"):
+                        c_check.recheck_include_search(scope)
+                self.assertEqual(probe.call_args.args[:2], ("/usr/bin/gcc", ["-std=c99"]))
+                self.assertFalse(probe.call_args.args[3])
+
     def test_compiler_header_paths_use_the_compiler_working_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary).resolve(strict=True)

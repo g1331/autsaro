@@ -5,9 +5,10 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import os
 import re
 import shlex
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
 from ecu_tools.build import digest
 
@@ -738,15 +739,28 @@ def validate_sources(data: dict) -> None:
 SEARCH_ENVIRONMENT = ("CPATH", "C_INCLUDE_PATH")
 
 
-def provider_root(compiler: Path, windows: bool) -> Path:
-    """The directory that provider-relative header names and search directories hang from."""
-    return compiler.parent.parent.parent if windows else Path("/")
+def provider_root(compiler: str, windows: bool) -> PurePath:
+    """The directory that provider-relative names hang from, in the target's path syntax."""
+    return PureWindowsPath(compiler).parent.parent.parent if windows else PurePosixPath("/")
 
 
-def include_search(header_log: str, directory: Path, root: Path, environ: dict) -> dict:
+def relative_name(path: str | Path, root: PurePath) -> str:
+    """Name a path relative to the provider root, or keep it absolute outside the root.
+
+    The target's path syntax decides containment, not the syntax of the running host.
+    """
+    pure = type(root)(path)
+    return pure.relative_to(root).as_posix() if pure.is_relative_to(root) else pure.as_posix()
+
+
+def include_search(header_log: str, directory: Path, root: PurePath, environ: dict) -> dict:
     """The compiler's effective include search order, with the variables that feed it.
 
-    Provider-relative names keep the sequence comparable between hosts and installations.
+    Compilers print only directories that exist; a missing one is reported on an
+    "ignoring nonexistent directory" line and so is absent here, which makes a
+    directory that appears on one side only change the sequence. A rooted entry
+    without a drive, such as MinGW's "/mingw64/include", resolves against the drive
+    of the compiler's working directory.
     """
     sections = {'#include "..." search starts here:': [], "#include <...> search starts here:": []}
     collecting = None
@@ -757,10 +771,7 @@ def include_search(header_log: str, directory: Path, root: Path, environ: dict) 
         elif text == "End of search list.":
             collecting = None
         elif collecting is not None:
-            path = (directory / text).resolve(strict=True)
-            collecting.append(
-                path.relative_to(root).as_posix() if path.is_relative_to(root) else path.as_posix()
-            )
+            collecting.append(relative_name((directory / text).resolve(strict=True), root))
     quote, system = sections.values()
     if not system:
         raise ValueError("Compiler reported no system include paths")
@@ -811,18 +822,75 @@ def environment_identity(packages: dict) -> dict:
     return environment_digest(installed_records(packages))
 
 
-def search_inventory(records: list[tuple[str, dict]], directories: list[Path]) -> dict:
-    """Provider files the compiler can find, opened or not, without package revisions.
+def reachable_files(directory: Path):
+    """Files below a search directory as the compiler reaches them, through links too.
 
-    A header present on one side only, or different between the sides, can decide which
-    definition an include resolves to even when the sources are identical.
+    Directory symlinks and junctions are followed; a directory that leads back to one
+    of its own ancestors is not entered again.
     """
+    ancestors = [os.path.normcase(os.path.realpath(directory))]
+
+    def walk(path):
+        with os.scandir(path) as entries:
+            children = sorted(entries, key=lambda entry: entry.name)
+        for entry in children:
+            if entry.is_dir():
+                real = os.path.normcase(os.path.realpath(entry.path))
+                if real not in ancestors:
+                    ancestors.append(real)
+                    yield from walk(entry.path)
+                    ancestors.pop()
+            elif entry.is_file():
+                yield entry.path
+
+    yield from walk(directory)
+
+
+def search_inventory(records: list[tuple[str, dict]], directories: list[Path],
+                     root: PurePath) -> dict:
+    """Provider files the compiler can reach through the search directories, opened or not.
+
+    Each entry maps the path the compiler walks to the provider file behind it, so a link
+    that leads somewhere else, or to other bytes, shows up. A header present on one side
+    only can decide which definition an include resolves to even with identical sources.
+    Files that belong to no supported provider are not part of the identity: opening one
+    is refused by the source provenance validation instead.
+    """
+    provider = {}
+    for name, row in sorted(records, key=lambda item: item[1]["algorithm"] != "symlink"):
+        provider[os.path.normcase(os.path.realpath(name))] = row
     files = {}
-    for name, row in records:
-        if any(Path(name).is_relative_to(directory) for directory in directories):
-            files[row["header"]] = {key: row[key] for key in
-                                    ("provider", "algorithm", "expected", "sha256")}
+    for directory in directories:
+        for path in reachable_files(directory):
+            row = provider.get(os.path.normcase(os.path.realpath(path)))
+            if row is not None:
+                files[relative_name(path, root)] = {
+                    key: row[key]
+                    for key in ("header", "provider", "algorithm", "expected", "sha256")
+                }
     return {"format": "sdk-search-inventory-v1", "files": dict(sorted(files.items()))}
+
+
+def validate_inventory(scope: dict) -> None:
+    """The recorded inventory must be present, well formed and cover the opened SDK headers."""
+    inventory = scope.get("sdkInventory")
+    files = inventory.get("files") if isinstance(inventory, dict) else None
+    reason = "SDK search inventory missing, empty or incomplete"
+    if (not isinstance(inventory, dict) or inventory.get("format") != "sdk-search-inventory-v1"
+            or set(inventory) != {"format", "files"} or not isinstance(files, dict) or not files):
+        raise ValueError(reason)
+    keys = {"header", "provider", "algorithm", "expected", "sha256"}
+    for name, row in files.items():
+        if (not isinstance(name, str) or not isinstance(row, dict) or set(row) != keys
+                or any(not isinstance(row[key], str) or not row[key]
+                       for key in ("header", "provider", "algorithm", "expected"))
+                or not (row["sha256"] is None and row["algorithm"] == "symlink"
+                        or isinstance(row["sha256"], str))):
+            raise ValueError(reason)
+    covered = {(row["header"], row["sha256"]) for row in files.values()}
+    if any((row["header"], row["sha256"]) not in covered
+           for row in scope.get("sdkHeaders", []) if row.get("category") == "sdk"):
+        raise ValueError(reason)
 
 
 def semantic(scope: dict) -> str:
@@ -850,12 +918,10 @@ def semantic(scope: dict) -> str:
     records = installed_records(packages)
     scope["sdkEnvironment"] = environment_digest(records)
     search = scope["compilerSemanticInputs"]["includeSearch"]
-    root = provider_root(
-        Path(scope["diagnosticCompiler"]["path"]), scope["target"].startswith("windows")
-    )
-    scope["sdkInventory"] = search_inventory(
-        records, [root / name for name in (*search["quote"], *search["system"])]
-    )
+    windows = scope["target"].startswith("windows")
+    root = provider_root(scope["diagnosticCompiler"]["path"] if windows else "", windows)
+    directories = [Path((root / name).as_posix()) for name in (*search["quote"], *search["system"])]
+    scope["sdkInventory"] = search_inventory(records, directories, root)
     identity = semantic_inputs(scope)
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
