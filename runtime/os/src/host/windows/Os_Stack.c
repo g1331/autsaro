@@ -277,7 +277,7 @@ OS_MEMMAP int Os_StackRegister(char role)
             break;
         }
         if (region.State == MEM_COMMIT) {
-            record->committed += region.RegionSize;
+            record->committed_bytes += region.RegionSize;
             if (cursor < record->committed_low) {
                 record->committed_low = cursor;
             }
@@ -462,7 +462,7 @@ OS_MEMMAP static int report_stack(const Os_NativeStackType *record)
     Os_HostTextField(&text, " low=", record->reserve_low);
     Os_HostTextField(&text, " high=", record->high);
     Os_HostTextField(&text, " reserve=", record->reserve);
-    Os_HostTextField(&text, " commit=", record->committed);
+    Os_HostTextField(&text, " commit=", record->committed_bytes);
     Os_HostTextField(&text, " guard=", record->guard);
     Os_HostTextField(&text, " guarantee=", record->guarantee);
     Os_HostTextField(&text, " sp=", record->sp);

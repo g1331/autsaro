@@ -400,7 +400,20 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
     selected_sources = {original for delivered, original in origins.items()
                         if not delivered.startswith("kernel/") and c_comparison.location_scope(
                             summary["scope"], {"file": delivered, "line": 1}, headers=headers) == "in-scope"}
-    errors = c_standard.deviation_findings(root, matched=records, source_names=selected_sources)
+    generated_sources = {}
+    for name, row in owners.items():
+        if (name not in origins and name.startswith("generated/") and safe_relative(name)
+                and name.endswith((".c", ".h"))
+                and (row["owner"], row["producerId"]) in {
+                    ("generated", "autosar-generator"),
+                    ("configuration", "autosar-workbench-config")}
+                and (project / name).is_file() and row["sha256"] == digest(project / name)):
+            generated_sources[name] = (project / name).read_text(encoding="utf-8")
+    selected_sources.update(generated_sources)
+    errors = c_standard.deviation_findings(
+        root, matched=records, source_names=selected_sources,
+        generated_sources=generated_sources,
+    )
     # The shared MR12 parser also sees templates belonging to the generated-retention
     # group. Their own context and consumer remain the authority for those rows.
     records = [row for row in records
@@ -424,7 +437,7 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
                 or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
             continue
         if name not in sources:
-            original = origins.get(name, "")
+            original = origins.get(name, name if name in generated_sources else "")
             row = owners.get(name)
             path = project / name
             generated = row is not None and (row["owner"], row["producerId"]) in {

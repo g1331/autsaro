@@ -5,10 +5,10 @@
 #define OS_START_SEC_VAR_CLEARED_TLS_32
 #include "Os_MemMap.h"
 OS_MEMMAP static OS_THREAD_LOCAL uint32
-    internal_depth; /**< Actor TLS origin depth; CallerSave resets, not Init. */
+    os_arti_internal_depth; /**< Actor TLS origin depth; CallerSave resets, not Init. */
 
 OS_MEMMAP static OS_THREAD_LOCAL uint32
-    service_depth; /**< Actor TLS service depth; CallerSave resets, not Init. */
+    os_arti_service_depth; /**< Actor TLS service depth; CallerSave resets, not Init. */
 #define OS_STOP_SEC_VAR_CLEARED_TLS_32
 #include "Os_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -20,55 +20,57 @@ OS_MEMMAP static OS_THREAD_LOCAL uint32
 #define OS_START_SEC_VAR_CLEARED_TLS_8
 #include "Os_MemMap.h"
 OS_MEMMAP static OS_THREAD_LOCAL StatusType
-    access_status; /**< Actor TLS access result; CallerSave resets, not Init. */
+    os_arti_access_status; /**< Actor TLS access result; CallerSave resets, not Init. */
 #define OS_STOP_SEC_VAR_CLEARED_TLS_8
 #include "Os_MemMap.h"
 #define OS_START_SEC_CODE
 #include "Os_MemMap.h"
-OS_MEMMAP void Os_ArtiAccessResult(StatusType status) { access_status = status; }
+OS_MEMMAP void Os_ArtiAccessResult(StatusType status) { os_arti_access_status = status; }
 
-OS_MEMMAP sint32 Os_ArtiAccessValid(void) { return (access_status == E_OK) ? 1 : 0; }
+OS_MEMMAP sint32 Os_ArtiAccessValid(void) { return (os_arti_access_status == E_OK) ? 1 : 0; }
 
-OS_MEMMAP StatusType Os_ArtiAccessStatus(void) { return access_status; }
+OS_MEMMAP StatusType Os_ArtiAccessStatus(void) { return os_arti_access_status; }
 
 OS_MEMMAP Os_ArtiCallerType Os_ArtiCallerSave(void)
 {
     const Arti_AddressCapture address = Arti_SaveAddressCapture();
-    const Os_ArtiCallerType previous = {internal_depth, service_depth, access_status, address};
-    internal_depth = 0u;
-    service_depth = 0u;
-    access_status = E_OK;
+    const Os_ArtiCallerType previous = {
+        os_arti_internal_depth, os_arti_service_depth, os_arti_access_status, address};
+    os_arti_internal_depth = 0u;
+    os_arti_service_depth = 0u;
+    os_arti_access_status = E_OK;
     return previous;
 }
 
 OS_MEMMAP void Os_ArtiCallerRestore(Os_ArtiCallerType caller)
 {
-    internal_depth = caller.internal_depth;
-    service_depth = caller.service_depth;
-    access_status = caller.access_status;
+    os_arti_internal_depth = caller.internal_depth;
+    os_arti_service_depth = caller.service_depth;
+    os_arti_access_status = caller.access_status;
     Arti_RestoreAddressCapture(caller.address);
 }
 
-OS_MEMMAP void Os_ArtiInternalEnter(void) { ++internal_depth; }
+OS_MEMMAP void Os_ArtiInternalEnter(void) { ++os_arti_internal_depth; }
 
 OS_MEMMAP void Os_ArtiInternalLeave(void)
 {
-    assert(internal_depth != 0u);
-    --internal_depth;
+    assert(os_arti_internal_depth != 0u);
+    --os_arti_internal_depth;
 }
 
 OS_MEMMAP sint32 Os_ArtiServiceEnter(void)
 {
-    const sint32 application = ((internal_depth == 0u) && (service_depth == 0u)) ? 1 : 0;
-    ++service_depth;
-    access_status = E_OK;
+    const sint32 application =
+        ((os_arti_internal_depth == 0u) && (os_arti_service_depth == 0u)) ? 1 : 0;
+    ++os_arti_service_depth;
+    os_arti_access_status = E_OK;
     return application;
 }
 
 OS_MEMMAP void Os_ArtiServiceLeave(void)
 {
-    assert(service_depth != 0u);
-    --service_depth;
+    assert(os_arti_service_depth != 0u);
+    --os_arti_service_depth;
 }
 
 OS_MEMMAP void Os_ArtiTask(Os_ArtiTaskEventType event, TaskType task)

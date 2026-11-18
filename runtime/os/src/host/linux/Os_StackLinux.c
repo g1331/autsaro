@@ -300,7 +300,7 @@ OS_MEMMAP int Os_StackRegister(char role)
                     record->reserve = high - low;
                     record->guard = guard;
                     record->committed_low = low + guard;
-                    record->committed = high - record->committed_low;
+                    record->committed_bytes = high - record->committed_low;
                     record->altstack_low = (uintptr_t)alternate.ss_sp;
                     record->altstack_size = alternate.ss_size;
                     current_stack = record;
@@ -490,7 +490,7 @@ OS_MEMMAP static int report_stack(const Os_NativeStackType *record)
     Os_HostTextField(&text, " low=", record->reserve_low);
     Os_HostTextField(&text, " high=", record->high);
     Os_HostTextField(&text, " reserve=", record->reserve);
-    Os_HostTextField(&text, " commit=", record->committed);
+    Os_HostTextField(&text, " commit=", record->committed_bytes);
     Os_HostTextField(&text, " guard=", record->guard);
     Os_HostTextField(&text, " altstack=", record->altstack_size);
     Os_HostTextField(&text, " sp=", record->sp);

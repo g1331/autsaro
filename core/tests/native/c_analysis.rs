@@ -150,7 +150,8 @@ EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, PduIdType handle, uint32_t 
 }}
 int main(void) {{
     uint8 i;
-    assert(can_controller_mode == 0 && bus_off == 0u && can_initialized == 0u && tx_sink == NULL_PTR);
+    assert(can_controller_mode == 0 && can_bus_off == 0u &&
+           can_initialized == 0u && tx_sink == NULL_PTR);
     assert(driver_lifetime == 0u && tx_pending == 0u && tx_in_flight == 0u && tx_cancelled == 0u);
     assert(tx_id == 0u && tx_length == 0u && tx_handle == 0u);
     assert(tx_confirmation_pending == 0u && tx_confirmation_handle == 0u && tx_confirming == 0u);

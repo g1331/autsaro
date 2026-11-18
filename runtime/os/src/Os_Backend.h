@@ -76,8 +76,6 @@ OS_MEMMAP void Os_TimeClose(void);
 
 OS_MEMMAP sint32 Os_TimeSignalFailed(void);
 
-OS_MEMMAP void vApplicationTickHook(void);
-
 OS_MEMMAP sint32 Os_TimeBeginTick(void);
 #define OS_STOP_SEC_CODE
 #include "Os_MemMap.h"
@@ -280,7 +278,7 @@ OS_MEMMAP extern const Os_TargetConfigType *Os_Config;
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-OS_MEMMAP extern volatile LONG Os_Closing;
+OS_MEMMAP extern volatile Os_Atomic32Type Os_Closing;
 #define OS_STOP_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
 #endif

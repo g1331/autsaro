@@ -725,7 +725,7 @@ pub(super) fn files(
     init_data(
         &mut config,
         "Can",
-        "static const Can_ConfigType driver",
+        "static const Can_ConfigType ecu_can_driver",
         &values("NULL_PTR"),
     );
     let routing_headers = r#"#include "Com_Cfg.h"
@@ -1099,7 +1099,7 @@ pub(super) fn files(
     config_data(
         &mut config,
         "ComM",
-        "static const ComM_UserHandleType users[]",
+        "static const ComM_UserHandleType ecu_comm_users[]",
         &mode
             .users
             .iter()
@@ -1168,7 +1168,7 @@ pub(super) fn files(
         "ComM",
         "static const ComM_ConfigType comm_config",
         &values(&format!(
-            "{}, users, {}u, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode, {}, comm_user_modes, {}u",
+            "{}, ecu_comm_users, {}u, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode, {}, comm_user_modes, {}u",
             name("ComM", "ComMChannel", &mode.channel),
             mode.users.len(),
             periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
@@ -1302,7 +1302,7 @@ pub(super) fn files(
 "#,
         );
         config.push_str(&stage(3));
-        config.push_str("    Can_Init(&driver);\n");
+        config.push_str("    Can_Init(&ecu_can_driver);\n");
         config.push_str(&stage(4));
         config.push_str(
             r#"    CanIf_Init(&CanIf_Config);

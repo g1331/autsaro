@@ -44,15 +44,16 @@ static CanIf_PduModeType pdu_mode
  * Can_Write has not returned, `early` the confirmations that already answered one of
  * them, `accepted` settled requests awaiting their result, and `owed` E_NOT_OK results of
  * cancelled requests still to be delivered. A request gets exactly one result. */
-static uint32 accepted[32] CANIF_VAR_CLEARED; /**< Accepted requests per L-PDU; Init resets. */
-static uint32 owed[32] CANIF_VAR_CLEARED;     /**< Cancelled results owed; Init resets. */
-static uint8 writing[32] CANIF_VAR_CLEARED;   /**< Unsettled driver calls; Init resets. */
-static uint8 early[32] CANIF_VAR_CLEARED; /**< Confirmations before driver return; Init resets. */
+static uint32
+    canif_accepted[32] CANIF_VAR_CLEARED;   /**< Accepted requests per L-PDU; Init resets. */
+static uint32 owed[32] CANIF_VAR_CLEARED;   /**< Cancelled results owed; Init resets. */
+static uint8 writing[32] CANIF_VAR_CLEARED; /**< Unsettled driver calls; Init resets. */
+static uint8 early[32] CANIF_VAR_CLEARED;   /**< Confirmations before driver return; Init resets. */
 /* Init/DeInit end every request silently; a stop cancels what was accepted before it;
  * every PDU mode write lets a check-then-set request detect a newer decision. */
-static uint32 generation CANIF_VAR_CLEARED;  /**< Configuration lifetime; Init increments. */
-static uint32 stops CANIF_VAR_CLEARED;       /**< Stop generation; Init preserves. */
-static uint32 mode_writes CANIF_VAR_CLEARED; /**< PDU-mode generation; Init increments. */
+static uint32 canif_generation CANIF_VAR_CLEARED; /**< Configuration lifetime; Init increments. */
+static uint32 stops CANIF_VAR_CLEARED;            /**< Stop generation; Init preserves. */
+static uint32 mode_writes CANIF_VAR_CLEARED;      /**< PDU-mode generation; Init increments. */
 #define CANIF_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanIf_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -105,11 +106,11 @@ static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)
 static CANIF_CODE void CanIf_Reset(void)
 {
     uint16 i;
-    ++generation;
+    ++canif_generation;
     ++mode_writes;
     pdu_mode = CANIF_OFFLINE;
     for (i = 0u; i < 32u; ++i) {
-        accepted[i] = 0u;
+        canif_accepted[i] = 0u;
         owed[i] = 0u;
         writing[i] = 0u;
         early[i] = 0u;
@@ -122,8 +123,8 @@ static CANIF_CODE void CanIf_CancelAccepted(void)
     uint16 i;
     ++stops;
     for (i = 0u; i < canif_configuration->transmit_count; ++i) {
-        owed[i] += accepted[i];
-        accepted[i] = 0u;
+        owed[i] += canif_accepted[i];
+        canif_accepted[i] = 0u;
     }
 }
 /* Deliver owed E_NOT_OK results one claim at a time, outside the area. */
@@ -290,7 +291,7 @@ CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType
         SchM_Enter_CanIf_CANIF_STATE();
         valid = CanIf_Driver(ControllerId, &driver);
         decision = mode_writes;
-        lifetime = generation;
+        lifetime = canif_generation;
         SchM_Exit_CanIf_CANIF_STATE();
         if (valid != 0u) {
             if ((Can_GetControllerMode(driver, &actual_mode) == E_OK) &&
@@ -298,7 +299,7 @@ CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType
                 ((PduModeRequest == CANIF_OFFLINE) || (PduModeRequest == CANIF_TX_OFFLINE) ||
                  (PduModeRequest == CANIF_ONLINE))) {
                 SchM_Enter_CanIf_CANIF_STATE();
-                if (lifetime != generation) {
+                if (lifetime != canif_generation) {
                     /* Reinitialized meanwhile: the request belonged to the old lifetime. */
                 } else if (decision != mode_writes) {
                     /* A mode change interleaved: decide again against the actual controller. */
@@ -353,7 +354,7 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
                 } else if (PduInfoPtr->SduLength > route->maximum_length) {
                     errors[0] = CANIF_E_TXPDU_LENGTH_EXCEEDED;
                 } else if ((canif_controller_state == CAN_CS_STARTED) && (owed[i] == 0u) &&
-                           (accepted[i] < (UINT32_MAX - 255u)) && (writing[i] < 255u)) {
+                           (canif_accepted[i] < (UINT32_MAX - 255u)) && (writing[i] < 255u)) {
                     /* Earlier results of this PDU are delivered before a new request. */
                     ++writing[i];
                     reserved = 1u;
@@ -362,7 +363,7 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
                     pdu.length = (uint8)PduInfoPtr->SduLength;
                     pdu.id = route->can_id;
                     pdu.sdu = PduInfoPtr->SduDataPtr;
-                    lifetime = generation;
+                    lifetime = canif_generation;
                     stop = stops;
                 } else {
                     /* Not started, or results of earlier requests are still owed. */
@@ -381,7 +382,7 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
     if (reserved != 0u) {
         const Std_ReturnType written = Can_Write(hoh, &pdu);
         SchM_Enter_CanIf_CANIF_STATE();
-        if (lifetime == generation) {
+        if (lifetime == canif_generation) {
             --writing[index];
             if (written != E_OK) {
                 /* Refused: no result follows, and no confirmation can answer it. */
@@ -393,7 +394,7 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
             } else if (stop != stops) {
                 ++owed[index]; /* Accepted by the driver, then cancelled by a stop. */
             } else {
-                ++accepted[index];
+                ++canif_accepted[index];
             }
         }
         SchM_Exit_CanIf_CANIF_STATE();
@@ -411,8 +412,8 @@ CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId)
         for (i = 0u; i < canif_configuration->transmit_count; ++i) {
             if (canif_configuration->transmit[i].pdu == CanTxPduId) {
                 uint8 answered = 1u;
-                if (accepted[i] != 0u) {
-                    --accepted[i];
+                if (canif_accepted[i] != 0u) {
+                    --canif_accepted[i];
                 } else if (early[i] < writing[i]) {
                     ++early[i]; /* Confirmed before its Can_Write returned. */
                 } else {
@@ -467,7 +468,7 @@ CANIF_CODE void CanIf_ControllerBusOff(uint8 ControllerId)
     uint32 lifetime;
     SchM_Enter_CanIf_CANIF_STATE();
     valid = CanIf_Driver(ControllerId, &driver);
-    lifetime = generation;
+    lifetime = canif_generation;
     SchM_Exit_CanIf_CANIF_STATE();
     if (valid != 0u) {
         /* The host driver enters STOPPED on bus-off without a separate mode
@@ -478,7 +479,7 @@ CANIF_CODE void CanIf_ControllerBusOff(uint8 ControllerId)
                                   ? 1u
                                   : 0u;
         SchM_Enter_CanIf_CANIF_STATE();
-        if (lifetime == generation) {
+        if (lifetime == canif_generation) {
             pdu_mode = CANIF_TX_OFFLINE;
             ++mode_writes;
             if ((stopped != 0u) && (canif_controller_state != CAN_CS_STOPPED)) {

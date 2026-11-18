@@ -129,7 +129,7 @@ def snapshot():
     }
     expressions = (
         "interrupt_gate", "*interrupt_gate", "port_running", "'port.c'::pending",
-        "Os_Closing", "'Os_Backend.c'::shutdown_reason", "'Os_Backend.c'::ready",
+        "Os_Closing", "'Os_Backend.c'::shutdown_reason", "'Os_Backend.c'::os_backend_ready",
         "'Ecu_Target.c'::lifecycle", "host_watch.started",
     )
     result["globals"] = {name: value(name) for name in expressions}

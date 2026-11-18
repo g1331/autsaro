@@ -168,20 +168,5 @@ R15.5 继续走既有 GRP。SDK 来源及表外补丁位置保留各自阻塞。
 当前采用责任与集成证据已建立，整体 MISRA 结论继续按 221 项的独立评估出口处理。
 本篇及表、原件、补丁顺序／字节、配置、程序、工具或实际交互改变时，旧绑定失效。
 <!-- source-assessment-context-begin -->
-{
-"id":"freertos-integration-443-declarations",
-"evidence":{"head":"c7a047590cd3abef395f1fb8e28de5e8d140e2c3","receipt":"https://github.com/g1331/autsaro/actions/runs/43411175434"},
-"cases":[
-{"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"5d1cb805c5d5a1239b27c40a89c14391499374e273ca7b02e99f76c000f8fdab"},
-{"caseId":"no-diagnostic","target":"linux-x64-controlled-v1","inputIdentity":"8e38a082568f108ec68b010ccd26d32fd3dee31878c426172dcece6762deba30"},
-{"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"97b38fa83d04d7e197eaa0bfc62331e68a838853f5cdb33d3febcf68306d9fd8"},
-{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"97b38fa83d04d7e197eaa0bfc62331e68a838853f5cdb33d3febcf68306d9fd8"},
-{"caseId":"component-pipeline","target":"windows-x64-controlled-v1","inputIdentity":"5c40abbbdb9b0978971171b315195a62987808439f4ad45772f1e78d50939a22"},
-{"caseId":"no-diagnostic","target":"windows-x64-controlled-v1","inputIdentity":"f06be7e11f1bb1bb943c5bc92b268fe80c0dc29f883c3cea1035886bd08f62eb"},
-{"caseId":"standard-ecu","target":"windows-x64-controlled-v1","inputIdentity":"e1cc1dfb0dcc90452baf0c402c2201e6f2697798eca20e20dfab2748639cec2e"},
-{"caseId":"user-application","target":"windows-x64-controlled-v1","inputIdentity":"e1cc1dfb0dcc90452baf0c402c2201e6f2697798eca20e20dfab2748639cec2e"}
-],
-"records":{"kind":"freertos-integration"},
-"formalStatus":"approved"
-}
+{"id":"freertos-integration-514-declarations","evidence":{"head":"22aebb40296728e6b97cf438aadde6590e3e00b9","receipt":"https://github.com/g1331/autsaro/actions/runs/44029684376"},"cases":[{"caseId":"component-pipeline","target":"linux-x64-controlled-v1","inputIdentity":"ead878d8f2565ae6131a00d9f87cf8d3b6d50e6227905c11da345881d4b4723a"},{"caseId":"no-diagnostic","target":"linux-x64-controlled-v1","inputIdentity":"ef9c0ec4f45459ce51c286d34351642514e7e1edb8a4ec1640b6c77bf145db14"},{"caseId":"standard-ecu","target":"linux-x64-controlled-v1","inputIdentity":"a6bec2db29dcf7a4d3ed1a8e8758900b8c7faa39ac89f763ed604ed9ff0f0be3"},{"caseId":"user-application","target":"linux-x64-controlled-v1","inputIdentity":"a6bec2db29dcf7a4d3ed1a8e8758900b8c7faa39ac89f763ed604ed9ff0f0be3"},{"caseId":"component-pipeline","target":"windows-x64-controlled-v1","inputIdentity":"ea2d3eb7f6dad49df2a6fd5316671f2ee9aa224dbeb54c8448b633921ed2a0a1"},{"caseId":"no-diagnostic","target":"windows-x64-controlled-v1","inputIdentity":"5a799bf0735140884c1bc8e03129dfbf8b652b6feb17f41bbdb51b786d71cfb3"},{"caseId":"standard-ecu","target":"windows-x64-controlled-v1","inputIdentity":"bcf025869da82bdc1cbe492637afc6cc847e8fcdae0c73599cb4b29784c641aa"},{"caseId":"user-application","target":"windows-x64-controlled-v1","inputIdentity":"bcf025869da82bdc1cbe492637afc6cc847e8fcdae0c73599cb4b29784c641aa"}],"records":{"kind":"freertos-integration"},"formalStatus":"approved"}
 <!-- source-assessment-context-end -->
