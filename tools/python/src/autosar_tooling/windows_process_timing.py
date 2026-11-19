@@ -88,6 +88,7 @@ def image_statistics(
             "wall_median_ms": statistics.median(values) * 1000,
             "wall_p95_ms": percentile(ordered, 0.95) * 1000,
             "wall_max_s": ordered[-1],
+            "cpu_total_s": sum(cpu[image]) if mhz else None,
             "cpu_median_ms": statistics.median(cpu[image]) * 1000 if mhz else None,
         }
     return result
@@ -195,9 +196,9 @@ def render(
         "",
         (
             "| image | count | wall median ms | wall p95 ms | wall max s | cpu median ms "
-            "| baseline wall ms | ratio |"
+            "| cpu total s | baseline wall ms | ratio |"
         ),
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     # One-off system processes (svchost, installers) say nothing about the job's load.
     common = [image for image in stats if stats[image]["count"] >= MIN_SAMPLES]
@@ -208,7 +209,7 @@ def render(
         lines.append(
             f"| {image} | {value['count']} | {number(value['wall_median_ms'])} "
             f"| {number(value['wall_p95_ms'])} | {number(value['wall_max_s'], 1)} "
-            f"| {number(value['cpu_median_ms'])} | {number(base)} "
+            f"| {number(value['cpu_median_ms'])} | {number(value['cpu_total_s'], 1)} | {number(base)} "
             f"| {ratio_text(comparison['image_ratios'].get(image))} |"
         )
     return "\n".join(lines) + "\n"
