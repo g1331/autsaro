@@ -64,7 +64,7 @@ fn require_success(output: &std::process::Output) {
 fn build(mode: &str, control: Option<&Path>, built: &super::Scratch, project: &Path) -> PathBuf {
     let output = built.0.join(format!("{mode}-build"));
     require_success(&super::tooling::run_public_command(
-        &mut super::tooling::ecu_build_command(project, &output, mode, control),
+        &mut super::tooling::ecu_fixture_build_command(project, &output, mode, control),
         &built.0,
         &format!("{mode}-build"),
         Duration::from_secs(180),

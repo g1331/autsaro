@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -15,7 +16,10 @@ sys.path.insert(0, str(project / "tools"))
 from ecu_tools.build import query
 
 built = directory / "build"
-stdout = query([sys.executable, "-I", "-S", str(project / "tools/ecu-tool.py"),
+launcher = []
+if os.environ.get("AUTOSAR_TEST_OBJECTS"):
+    launcher.append(str(Path(__file__).resolve().parents[2] / "support/cached_compile.py"))
+stdout = query([sys.executable, "-I", "-S", *launcher, str(project / "tools/ecu-tool.py"),
                 "verify", "--project", str(project), "--build-directory", str(built)],
                directory, "public-verify", timeout=300)
 assert "ECU_HANDOFF_VERIFY PASS:" in stdout and "probe=normal PASS ticks=20" in stdout, stdout

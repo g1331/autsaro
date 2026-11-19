@@ -73,7 +73,8 @@ def write_trace(folder, processes, start_probe=0.015, end_probe=None):
 
 def workload(slowdown=1.0):
     """The tool mix of a build, `slowdown` times slower, plus one root that outlives tests."""
-    mix = [("GIT.EXE", 0.04, 0.015)] * 30 + [("cc1.exe", 0.5, 0.45)] * 25
+    mix = [("GIT.EXE", 0.04, 0.015)] * 29 + [("GIT.EXE", 0.04, 0.035)]
+    mix += [("cc1.exe", 0.5, 0.45)] * 25
     mix += [("python.exe", 300.0, 0.05)] + [("ld.exe", 0.1, 0.07)] * 20
     return [(image, life * slowdown, cpu * slowdown) for image, life, cpu in mix]
 
@@ -109,6 +110,7 @@ class ProcessTimingTests(unittest.TestCase):
         self.assertEqual(git["count"], 30)
         self.assertAlmostEqual(git["wall_median_ms"], 40, places=3)
         self.assertAlmostEqual(git["cpu_median_ms"], 15, places=3)
+        self.assertAlmostEqual(git["cpu_total_s"], 0.47)
         self.assertEqual(data["cpu_mhz"], MHZ)
         # The root outlives the tests: it is counted, with its own lifetime and maximum.
         python = data["images"]["python.exe"]
@@ -129,7 +131,7 @@ class ProcessTimingTests(unittest.TestCase):
         self.assertEqual(data["comparison"]["verdict"], "runner-slow")
         self.assertAlmostEqual(data["comparison"]["probe_ratio"], 3.0)
         self.assertIn("runner slow: the reference probe is 3.0x the baseline", text)
-        self.assertIn("| cc1.exe | 25 | 1500 | 1500 | 1.5 | 1350 | 500 | 3.0x |", text)
+        self.assertIn("| cc1.exe | 25 | 1500 | 1500 | 1.5 | 1350 | 33.8 | 500 | 3.0x |", text)
 
     def test_the_slower_of_start_and_end_probe_counts(self):
         _, data = self.summary(probe=0.015, end=0.04)

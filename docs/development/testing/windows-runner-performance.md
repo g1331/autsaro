@@ -69,6 +69,15 @@ uv run --locked python -m autosar_tooling.windows_process_timing baseline native
 - `run_queue_length` 长期高于 vCPU 数（4）而 `cpu_busy_pct` 接近 100，说明作业自己的并行度超过 CPU。
 - `disk_queue_length` 持续大于 2 且 `disk_latency_ms` 升高，说明磁盘排队，慢在文件读写（补丁、对象文件、杀毒扫描）。
 
+## 编译对象复用
+
+native 的 protocol、projects、integration 及 Linux 全量作业为本次运行分配临时对象目录。
+本地可将 `AUTOSAR_TEST_OBJECTS` 设为本次测试专用空目录的绝对路径，使用同一固定 SDK。
+行为夹具保留原 guard、工具检查、内核补丁与摘要校验。GCC 在实际工程目录编译并通过 `-MMD` 记录每个对象读取的源码与非系统头文件。
+复用时核对编译器路径和摘要、编译参数、源码和 include 搜索目录下的文件名、补丁后内核文件名，以及该对象所有依赖的实际字节。新增候选头会使对象失效。读取含上级目录引用或文件存在性探查的源码或头文件时，还核对完整封存文件名清单。
+对象和依赖记录在编译成功后一起发布；每个用例仍在自己的目录编译入口或外部 control，链接并运行程序。
+COM 用例还逐次编译涉及变异的应用、COM、ISR、诊断输出和排空路径源码。交付接收、封存拒绝及检测器有独立的构建入口。
+
 ## protocol 分片的期限余量（#591）
 
 分片在 4 vCPU 上运行 14 个用例（Cargo 默认 4 个并行线程）。下表数据来自 ETW 的进程树，通过运行是 44558822646，
@@ -81,7 +90,19 @@ uv run --locked python -m autosar_tooling.windows_process_timing baseline native
 | 外层 360 s | `protocol.rs` `normal_verify_…` | 同上 | 4.5 倍 | 内层先到期 |
 | 构建 180 s | `protocol.rs` 各用例的 `build` | 39–53 s（1 个构建，运行中争用） | 3.4–4.6 倍 | 未到期 |
 
-整个分片通过时 CPU 总量约 911 core·s，占 4 vCPU 307 s 的 74%；失败时约 3006 core·s，占 901 s 的 83%。
+调整 14 个构建的排队顺序后，通过运行 [44585924169](https://github.com/g1331/autsaro/actions/runs/44585924169)
+仍有 1512 个 `cc1.exe`。用该作业的 ETW 工件重算 `process-timing.md`，`cc1.exe` 合计 1162.5 CPU 秒。
+比较时读同一分片表中 `count` 和 `cpu total s` 两列，CPU 总量按每个退出事件的周期数求和。
+
+| 通过运行 | `com-refusal-consumers`（900 s） | 余量 | `normal_verify` 内层（300 s） | 余量 |
+| --- | ---: | ---: | ---: | ---: |
+| 44585924169，共享对象前 | 462 s | 1.95 倍 | 约 166 s | 约 1.81 倍 |
+| 44594837691，共享对象前 | 449.65 s | 2.00 倍 | 145.15 s | 2.07 倍 |
+| 44621218308，共享对象后 | 119.38 s | 7.54 倍 | 17.28 s | 17.36 倍 |
+
+后两行以 ETW 起止事件配对受期限约束的 Python 进程：外层取 `consumers.py`，内层取 `normal_verify.py` 启动的 `ecu-tool.py verify`。余量按期限除以未取整的墙钟计算。
+
+在最初的 #591 对照中，整个分片通过时 CPU 总量约 911 core·s，占 4 vCPU 307 s 的 74%；失败时约 3006 core·s，占 901 s 的 83%。
 
 结论与处理：
 
@@ -92,8 +113,20 @@ uv run --locked python -m autosar_tooling.windows_process_timing baseline native
    7 个构建（约 22%），并发度与期限都保持不变。
 3. `normal_verify` 的内层 300 s 是余量最小的一项：通过时 80 s，CPU 约 63.5 s，需要整机慢约 3.7 倍才会到期；
    失败运行的 CPU 慢了约 3.1 倍，再加上排队就超时。不放宽这个期限。根本的缓解是减少重复编译：这个分片在 307 s 内
-   完成了 28 次完整构建（1512 个 `cc1.exe`，每次 54 个），由 #595 跟踪。
+   完成了 28 次完整构建（1512 个 `cc1.exe`，每次 54 个），后续对象复用的实测结果见下节。
 4. 其他期限（180 s 的构建、外层 360 s）在 3 倍慢的运行里没有到期，当前余量保持。
 
 下一次复发时，按“失败时先看什么”读结论；结论为 `runner slow` 时，这些期限在更慢的机器上给不出更大的余量，
 要做的是减少工作量，期限与重试保持原样。
+
+## Windows native 分片的编译工作量（#595）
+
+[改前运行 44594837691](https://github.com/g1331/autsaro/actions/runs/44594837691) 与 [PR 运行 44621218308](https://github.com/g1331/autsaro/actions/runs/44621218308) 的三个 Windows native 分片均通过。下表取自各分片的 `process-timing.md`。改前用相同汇总代码回放原始 ETW 工件，CPU 秒取配对退出事件的周期数除以追踪频率。
+
+| 分片 | `cc1.exe` 次数（前 → 后） | CPU 秒（前 → 后） | CPU 变化 | 启动探针中位数，ms（开始／结束，前 → 后） |
+| --- | ---: | ---: | ---: | ---: |
+| protocol | 1512 → 560 | 1168.1 → 290.2 | −75.2% | 22.2／22.8 → 15.4／17.4 |
+| projects | 2722 → 2712 | 1447.1 → 1626.8 | +12.4% | 25.2／20.3 → 20.1／19.7 |
+| integration | 1580 → 1162 | 822.4 → 748.2 | −9.0% | 16.0／15.6 → 19.9／18.5 |
+
+调用次数直接反映编译工作量。protocol 改后 runner 的固定启动探针更快，实测余量同时受复用和机器速度影响。integration 改后探针更慢，仍少编译 418 次，且 CPU 总量下降。projects 只少编译 10 次，CPU 总量和作业墙钟均上升；两次运行不足以确定上升的原因。

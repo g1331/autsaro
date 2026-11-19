@@ -222,7 +222,7 @@ fn sealed_owner_preserves_network_init_and_deadline_phase() {
         std::fs::write(path, bytes).unwrap();
     }
     let output = scratch.0.join("build");
-    let built = tooling::ecu_build_command(
+    let built = tooling::ecu_fixture_build_command(
         &project,
         &output,
         "test",
@@ -404,7 +404,7 @@ fn sealed_optional_did_and_network_only_routes_use_real_producers() {
             std::fs::write(path, bytes).unwrap();
         }
         let output = scratch.0.join("build");
-        let built = tooling::ecu_build_command(&project, &output, "host-batch", None)
+        let built = tooling::ecu_fixture_build_command(&project, &output, "host-batch", None)
             .output()
             .unwrap();
         assert!(

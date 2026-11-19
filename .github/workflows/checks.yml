@@ -410,7 +410,11 @@ jobs:
           scratch = Path(os.environ['RUNNER_TEMP']) / 'native-scratch'
           scratch.mkdir()
           env = dict(os.environ, TMP=str(scratch), TEMP=str(scratch), TMPDIR=str(scratch))
-          sys.exit(subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', *command, *filters], env=env).returncode)
+          import tempfile
+          with tempfile.TemporaryDirectory(dir=os.environ['RUNNER_TEMP']) as objects:
+              if shard in ('all', 'protocol', 'projects', 'integration'):
+                  env['AUTOSAR_TEST_OBJECTS'] = objects
+              sys.exit(subprocess.run(['python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', *command, *filters], env=env).returncode)
       - name: Stop Windows process lifecycle trace
         if: always() && runner.os == 'Windows'
         timeout-minutes: 5
