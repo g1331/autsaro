@@ -171,7 +171,8 @@ if ($LASTEXITCODE -ne 0) { throw "Could not record the sender seals" }
 
 接收端使用空目录所在的独立主机环境，只带四个样本、脚本、可信清单、已安装的 Python、受控 GCC／binutils 与 Git。
 断开网卡，移除共享 checkout／挂载，保留隔离记录。解析四个固定相对路径并逐个比较发送端摘要，缺项或不符即停止。
-运行后再比较同样的四条摘要并保留前后结果。正常 `test_offline_delivery.py` 的矩阵补充 Python 兼容性和发送端路径检查。
+预检通过后，即使构建或运行失败也再比较同样的四条摘要。保留前后摘要、比较错误和各阶段退出码。
+正常 `test_offline_delivery.py` 的矩阵补充 Python 兼容性和发送端路径检查。
 
 Linux 在独立 Bash 会话中进入接收目录。把 `RECEIVER_PYTHON` 改成预装 CPython 的绝对路径：
 
@@ -184,13 +185,22 @@ mkdir receipts
   > receipts/python.txt
 "$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py seals . --expected sender-seals.json \
   > receipts/seal-before.json
-"$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run standard-ecu receipts/standard-ecu --verify
-"$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run component-pipeline receipts/component-pipeline --pipeline
-for sample in user-application no-diagnostic; do
-  "$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run "$sample" "receipts/$sample"
-done
+run_profiles() {
+  local sample
+  "$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run standard-ecu receipts/standard-ecu --verify || return $?
+  "$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run component-pipeline receipts/component-pipeline --pipeline || return $?
+  for sample in user-application no-diagnostic; do
+    "$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run "$sample" "receipts/$sample" || return $?
+  done
+}
+run_code=0
+run_profiles || run_code=$?
+seal_code=0
 "$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py seals . --expected receipts/seal-before.json \
-  > receipts/seal-after.json
+  > receipts/seal-after.json 2> receipts/seal-after.stderr.log || seal_code=$?
+printf 'run %s\nseal-after %s\n' "$run_code" "$seal_code" > receipts/exit-codes.txt
+if [ "$run_code" -ne 0 ]; then exit "$run_code"; fi
+exit "$seal_code"
 ```
 
 Windows 在断网、无宿主共享 checkout 的专用 Windows 主机／VM 中，由接收者从移交的说明独立完成并签录（历史 D-24）。
@@ -201,6 +211,7 @@ $env:AUTOSAR_CC = (Get-Command gcc.exe).Source
 $env:AUTOSAR_OBJDUMP = (Get-Command objdump.exe).Source
 $env:AUTOSAR_GIT = (Get-Command git.exe).Source
 $Python = 'C:/absolute/path/to/receiver/python.exe'
+$PSNativeCommandUseErrorActionPreference = $false
 New-Item -ItemType Directory receipts | Out-Null
 & $Python -I -S -c 'import pathlib, sys; print(pathlib.Path(sys.executable).resolve()); print(sys.version)' |
     Set-Content -Encoding utf8 receipts/python.txt
@@ -208,17 +219,23 @@ if ($LASTEXITCODE -ne 0) { throw "Receiver Python is unavailable" }
 & $Python -I -S rehearse_ecu_handoff.py seals . --expected sender-seals.json |
     Set-Content -Encoding utf8 receipts/seal-before.json
 if ($LASTEXITCODE -ne 0) { throw "Received seals differ from the trusted sender inventory" }
-& $Python -I -S rehearse_ecu_handoff.py run standard-ecu receipts/standard-ecu --verify
-if ($LASTEXITCODE -ne 0) { throw "standard-ecu handoff failed" }
-& $Python -I -S rehearse_ecu_handoff.py run component-pipeline receipts/component-pipeline --pipeline
-if ($LASTEXITCODE -ne 0) { throw "component-pipeline handoff failed" }
-foreach ($Sample in 'user-application', 'no-diagnostic') {
-    & $Python -I -S rehearse_ecu_handoff.py run $Sample "receipts/$Sample"
-    if ($LASTEXITCODE -ne 0) { throw "$Sample handoff failed" }
+$RunCode = 1
+try {
+    foreach ($Sample in 'standard-ecu', 'component-pipeline', 'user-application', 'no-diagnostic') {
+        $Options = @()
+        if ($Sample -eq 'standard-ecu') { $Options += '--verify' }
+        if ($Sample -eq 'component-pipeline') { $Options += '--pipeline' }
+        & $Python -I -S rehearse_ecu_handoff.py run $Sample "receipts/$Sample" @Options
+        $RunCode = $LASTEXITCODE
+        if ($RunCode -ne 0) { throw "$Sample handoff failed with exit $RunCode" }
+    }
+} finally {
+    & $Python -I -S rehearse_ecu_handoff.py seals . --expected receipts/seal-before.json `
+        2> receipts/seal-after.stderr.log | Set-Content -Encoding utf8 receipts/seal-after.json
+    $SealCode = $LASTEXITCODE
+    @("run $RunCode", "seal-after $SealCode") | Set-Content -Encoding utf8 receipts/exit-codes.txt
 }
-& $Python -I -S rehearse_ecu_handoff.py seals . --expected receipts/seal-before.json |
-    Set-Content -Encoding utf8 receipts/seal-after.json
-if ($LASTEXITCODE -ne 0) { throw "Received seals changed during execution" }
+if ($SealCode -ne 0) { throw "End-of-run seal check failed with exit $SealCode" }
 ```
 
 保留发送端清单、解释器身份和前后匹配的摘要。每个样本须有 PASS、`identity.json`（含实际解释器、版本、包摘要和受控 PATH）、

@@ -142,8 +142,10 @@ gh api repos/g1331/autsaro/branches/master/protection/required_status_checks
 gh api repos/g1331/autsaro/rules/branches/master
 ```
 
-1. 核对 PR run 的 `event=pull_request`、`headSha=PR_HEAD_SHA` 和所选 attempt。当前侧 `c-analysis-inputs-*`
-   的 `c-analysis-generation.json` 中 `tree` 与 checkout 作业日志给出实际测试合并提交。读取该提交的两个父节点：
+1. 核对 PR run 的 `event=pull_request`、`headSha=PR_HEAD_SHA` 和所选 attempt。checkout 日志里的
+   `refs/pull/PR_NUMBER/merge` 必须对应选定的 PR 编号，避免同一 head 用于多个 PR 时认错运行。
+   当前侧 `c-analysis-inputs-*` 的 `c-analysis-generation.json` 中 `tree` 与 checkout 日志给出实际测试合并提交。
+   读取该提交的两个父节点：
 
    ```text
    git fetch origin TESTED_MERGE_SHA

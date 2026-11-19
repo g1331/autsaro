@@ -15,12 +15,12 @@ PIPELINE_TRACE = (
     b"BEGIN 1\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\n"
     b"BEGIN 10\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\n"
 )
-PIPELINE_FRAMES = [
-    ("1", "1800", "8", "0762123400000000"),
-    ("10", "801", "4", "78563412"),
-    ("10", "1800", "8", "0762123412345678"),
-    ("20", "801", "4", "78563412"),
-    ("20", "1800", "8", "0762123412345678"),
+PIPELINE_BATCHES = [
+    (0, 2, []),
+    (1, 0, [("1", "1800", "8", "0762123400000000")]),
+    (10, 1, [("10", "801", "4", "78563412"), ("10", "1800", "8", "0762123412345678")]),
+    (10, 0, []),
+    (20, 1, [("20", "801", "4", "78563412"), ("20", "1800", "8", "0762123412345678")]),
 ]
 
 
@@ -29,6 +29,9 @@ SEAL = Path("meta/files.sha256")
 COMMIT = re.compile(
     r"COMMIT_OK batch=(\d+) epoch=(\d+) sequence=(\d+) input_first=(\d+) inputs=(\d+)"
     r" status=0 input_status=0 transport_status=0 transport_epoch=0 transport_count=0"
+)
+FRAME = re.compile(
+    r"OUT epoch=(\d+) sequence=\d+ ticket=\d+ pdu=\d+ id=(\d+) dlc=(\d+) data=([0-9a-f]+)"
 )
 
 
@@ -79,35 +82,50 @@ def check_batch(output: str, *, pipeline: bool) -> None:
     lines = output.splitlines()
     if not lines or lines[0] != "READY HostBatchV1":
         raise ValueError("HostBatch did not become ready")
-    if any(re.match(r"^(REJECT|COMMIT_ERROR)\b", line) for line in lines):
-        raise ValueError("HostBatch rejected a legal batch")
-    expected = [(0, 2), (1, 0), (10, 1), (10, 0), (20, 1)] if pipeline else [(1, 0)]
-    receipts = [line for line in lines if re.match(r"^COMMIT_OK\b", line)]
-    if len(receipts) != len(expected):
-        raise ValueError(f"unexpected HostBatch receipt count: {len(receipts)}")
+    expected = PIPELINE_BATCHES if pipeline else [(1, 0, [])]
+    frames = []
+    index = 0
     previous = 0
-    for index, (line, (epoch, inputs)) in enumerate(zip(receipts, expected, strict=True), 1):
+    closed = False
+    for line in lines[1:]:
+        kind = line.split(" ", 1)[0]
+        if kind in {"REJECT", "COMMIT_ERROR"}:
+            raise ValueError("HostBatch rejected a legal batch")
+        if kind == "lifecycle=Closed":
+            if index != len(expected) or closed:
+                raise ValueError("HostBatch closed outside the end of the final batch")
+            if not line.startswith("lifecycle=Closed state=Ready reason=0 "):
+                raise ValueError("HostBatch did not close in the ready state")
+            closed = True
+        if kind == "OUT":
+            if index == len(expected):
+                raise ValueError(f"HostBatch frame after the final receipt: {line}")
+            frame = FRAME.fullmatch(line)
+            if not frame:
+                raise ValueError(f"malformed HostBatch frame: {line}")
+            frames.append(frame.groups())
+        if kind != "COMMIT_OK":
+            continue
+        if index == len(expected):
+            raise ValueError(f"unexpected HostBatch receipt: {line}")
+        epoch, inputs, wanted_frames = expected[index]
         match = COMMIT.fullmatch(line)
         if not match:
             raise ValueError(f"malformed or unsuccessful HostBatch receipt: {line}")
         batch, received_epoch, sequence, first_input, received_inputs = map(int, match.groups())
         input_order = previous < first_input <= sequence - inputs if inputs else first_input == 0
-        if ((batch, received_epoch, received_inputs) != (index, epoch, inputs)
+        if ((batch, received_epoch, received_inputs) != (index + 1, epoch, inputs)
                 or sequence <= previous or not input_order):
             raise ValueError(f"unexpected HostBatch receipt: {line}")
+        if pipeline and frames != wanted_frames:
+            raise ValueError(f"unexpected component-pipeline frames for batch {batch}: {frames}")
+        frames.clear()
+        index += 1
         previous = sequence
-    closed = [line for line in lines if line.startswith("lifecycle=Closed ")]
-    if len(closed) != 1 or not closed[0].startswith("lifecycle=Closed state=Ready reason=0 "):
+    if index != len(expected):
+        raise ValueError(f"unexpected HostBatch receipt count: {index}")
+    if not closed:
         raise ValueError("HostBatch did not close in the ready state")
-    if pipeline:
-        records = [
-            dict(field.split("=", 1) for field in line.split()[1:])
-            for line in lines
-            if line.startswith("OUT ")
-        ]
-        frames = [tuple(record[key] for key in ("epoch", "id", "dlc", "data")) for record in records]
-        if frames != PIPELINE_FRAMES:
-            raise ValueError(f"unexpected component-pipeline frames: {frames}")
 
 
 def run(command: list[str], log: Path, env: dict[str, str], *, stdin: bytes = b"") -> str:
