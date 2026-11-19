@@ -85,7 +85,7 @@ class AcceptanceTests(unittest.TestCase):
                         "sourceClassification": {"complete": True},
                         "programs": [{"name": name, "entry": entry, "translationUnits": ["main.c", entry],
                                       "passed": False, "exitCode": 1} for name, entry in entries.items()],
-                        "semanticIdentity": {"version": 3, "sdk": "1" * 64, "compiler": {"release": "12"},
+                        "semanticIdentity": {"version": 4, "sdk": "1" * 64, "compiler": {"release": "12"},
                                              "defines": {"main.c": []}, "libraries": {"std": "2" * 64},
                                              "analysisCode": {"c_check.py": "3" * 64}, "addonRuntime": {"runaddon.py": "4" * 64}},
                         "scope": {"target": TARGET, "entries": entries, "compilerFlags": ["-std=c99"],
@@ -98,7 +98,7 @@ class AcceptanceTests(unittest.TestCase):
         self.tool_probe = tool_probe.start()
         self.addCleanup(tool_probe.stop)
         # Compiler probes are environment probes too.
-        search_probe = patch.object(c_check, "recheck_include_search")
+        search_probe = patch.object(c_check, "recheck_compiler_inputs")
         self.search_probe = search_probe.start()
         self.addCleanup(search_probe.stop)
         self.real_semantic = c_check.semantic_identity

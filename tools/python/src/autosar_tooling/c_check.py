@@ -52,6 +52,8 @@ ADDON_HASHES = {
     "misra_9.py": "2116c59e403c49c662590d4d83a9d220256c0e396fa13c20a475e43d87970c70",
 }
 TIMEOUT = 600
+HEADER_PROBE_TRAPS = tuple(f"{name}(header)=AUTSARO_UNTRACKED_HEADER_PROBE("
+                           for name in ("__has_include", "__has_include_next"))
 
 
 def run(argv: list[str], directory: Path, stage: str, timeout: int = TIMEOUT, *,
@@ -186,16 +188,27 @@ def coverage(addons: Path) -> dict:
 
 
 def probe_include_search(compiler: str, flags: list[str], directory: Path,
-                         windows: bool) -> tuple[list[str], dict]:
+                         windows: bool, *, cwd: Path | None = None) -> tuple[list[str], dict]:
     """The include directories the compiler uses now, and its search order and variables."""
     empty = directory / "headers.c"
     empty.write_text("", encoding="utf-8")
     _, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], directory,
                            "compiler-headers", 30,
-                           context="Cannot discover compiler include search paths")
-    return (compiler_include_paths(header_log, directory),
-            c_sdk.include_search(header_log, directory, c_sdk.provider_root(compiler, windows),
-                                 os.environ))
+                           context="Cannot discover compiler include search paths", cwd=cwd)
+    work = cwd or directory
+    return (compiler_include_paths(header_log, work),
+            c_sdk.include_search(header_log, work, c_sdk.provider_root(compiler, windows), os.environ))
+
+
+def probe_predefines(compiler: str, flags: list[str], project: Path, includes: list[str],
+                     directory: Path, *, cwd: Path | None = None) -> str:
+    empty = directory / "headers.c"
+    _, macros, _ = run([compiler, *flags, *("-I" + tool_argument(project / name) for name in includes),
+                        "-dM", "-E", "-x", "c", str(empty)], directory, "compiler-macros", 30,
+                       context="Cannot discover compiler predefined macros", cwd=cwd)
+    if "#define __GNUC__ " not in macros:
+        raise ValueError("Cannot discover compiler predefined macros")
+    return macros
 
 
 def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str], list[dict], dict]:
@@ -221,13 +234,6 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                 context="Cannot identify diagnostic compiler")
     system_includes, search = probe_include_search(
         compiler, flags, output, target_id.startswith("windows"))
-    empty = output / "headers.c"
-    _, macros, _ = run([compiler, *flags, "-dM", "-E", "-x", "c", str(empty)], output, "compiler-macros", 30,
-                context="Cannot discover compiler predefined macros")
-    if "#define __GNUC__ " not in macros:
-        raise ValueError("Cannot discover compiler predefined macros")
-    predefines = output / "compiler-predefines.h"
-    predefines.write_text(macros, encoding="utf-8")
     root = output / "project"
     shutil.copytree(project, root)
     sealed_sources(root)
@@ -280,6 +286,9 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     sources.extend(supplemental)
     if any(not (root / name).is_dir() for name in includes):
         raise ValueError("Declared project include directory is missing")
+    macros = probe_predefines(compiler, flags, root, includes, output)
+    predefines = sorted(macros.splitlines())
+    (output / "compiler-predefines.h").write_text(macros, encoding="utf-8")
     includes = [tool_argument(root / name) for name in includes]
     builtins = ["-D" + line[8:].replace(" ", "=", 1) for line in macros.splitlines()
                 if line.startswith("#define ") and line[8:].split(" ", 1)[0] in {
@@ -316,15 +325,29 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                           for width in ("8", "16", "32", "64", "MAX")}
     function_macro_names = standard_constants & external_names
     candidate_names = external_names | mode_names
+    unit_flags = [*flags, *("-I" + path for path in includes)]
+    trap_definitions = {"#define " + trap.replace("=", " ", 1) for trap in HEADER_PROBE_TRAPS}
+
     def compiler_unit(item):
         index, name = item
         unit_modes = {}
-        run([compiler, *flags, *("-I" + path for path in includes),
+        run([compiler, *unit_flags,
             "-fsyntax-only", str(root / name)], output, f"compiler-unit-{index}", 60,
             context=f"Compiler validation failed for {name}")
-        _, definitions, _ = run([compiler, *flags, *("-I" + path for path in includes),
-                                    "-dM", "-E", str(root / name)], output, f"compiler-defines-{index}", 60,
-                                    context=f"Compiler preprocessing failed for {name}")
+        _, definitions, _ = run([compiler, *unit_flags, "-dM", "-E", str(root / name)],
+                                output, f"compiler-defines-{index}", 60,
+                                context=f"Compiler preprocessing failed for {name}")
+        # GCC's dependency list omits files tested for existence without an include.
+        # Keep defined(__has_include) true but make evaluating the operator fail.
+        # GCC warns when replacing these built-ins, even with -Wno-builtin-macro-redefined.
+        _, trapped, _ = run([compiler, *unit_flags, "-Wno-error",
+                            *("-D" + trap for trap in HEADER_PROBE_TRAPS), "-dM", "-E", str(root / name)],
+                            output, f"compiler-header-probes-{index}", 60,
+                            context=f"Cannot verify absence of untracked header existence probes in {name}")
+        trapped_definitions = set(trapped.splitlines())
+        if (not trap_definitions <= trapped_definitions
+                or trapped_definitions - trap_definitions != set(definitions.splitlines())):
+            raise ValueError(f"Header existence probe check changed compiler macro discovery in {name}")
         # Use the replay's path spelling so that __FILE__ expands to the same C token.
         _, provenance, _ = run([compiler, *flags, *("-I" + path for path in includes),
                                     "-E", "-dD", *c_preprocessor.WARNINGS,
@@ -410,7 +433,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                                    "sdkMacroInputs": sdk_inputs,
                                    "sdkLineDirectives": bool(re.search(r"(?m)^\s*#\s*(?:line\b|[0-9])", owned_text)),
                                    "compilerSemanticInputs": {"machine": machine.strip(), "release": compiler_release.strip(),
-                                                              "predefines": sorted(predefines.read_text(encoding="utf-8").splitlines()),
+                                                              "predefines": predefines,
                                                               "builtins": sorted(builtins),
                                                               "includeSearch": search},
                                    "platformModel": {"path": str(model), "sha256": digest(model)} if model else None,
@@ -684,7 +707,7 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     scope["implicitStdLibrary"] = str(implicit[0])
     scope["addonRuntime"] = runtimes[0]
     return {
-        "version": 3,
+        "version": c_comparison.SEMANTIC_VERSION,
         "sdk": c_sdk.semantic(scope),
         "compiler": scope["compilerSemanticInputs"],
         "defines": {name: sorted(values) for name, values in scope["compilerDiscoveredDefines"].items()},
@@ -697,18 +720,23 @@ def semantic_identity(executable: Path, scope: dict, directories: tuple[Path, ..
     }
 
 
-def recheck_include_search(scope: dict, directory: Path) -> None:
-    """The recorded search order and CPATH describe the analysis; reuse needs those in force now.
+def recheck_compiler_inputs(scope: dict, project: Path) -> None:
+    """Check the current search order, environment variables and predefined macros.
 
-    The probe runs beside the analysis, on the same drive: a rooted entry without a drive
-    (MinGW's "/mingw64/include") resolves against the working directory's drive.
+    Run in the analysis directory for relative CPATH entries and MinGW rooted paths.
     """
+    directory = project.parent
     with tempfile.TemporaryDirectory(prefix="c-search-", dir=directory) as temporary:
+        compiler = scope["diagnosticCompiler"]["path"]
+        flags = scope["compilerFlags"]
         _, search = probe_include_search(
-            scope["diagnosticCompiler"]["path"], scope["compilerFlags"], Path(temporary),
-            scope["target"].startswith("windows"))
-    if search != scope["compilerSemanticInputs"]["includeSearch"]:
-        raise ValueError("Actual include search order or variables changed since analysis")
+            compiler, flags, Path(temporary), scope["target"].startswith("windows"), cwd=directory)
+        if search != scope["compilerSemanticInputs"]["includeSearch"]:
+            raise ValueError("Actual include search order or variables changed since analysis")
+        macros = probe_predefines(compiler, flags, project, scope["includePaths"],
+                                 Path(temporary), cwd=directory)
+        if sorted(macros.splitlines()) != scope["compilerSemanticInputs"]["predefines"]:
+            raise ValueError("Actual compiler predefined macros changed since analysis")
 
 
 def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path, dict]) -> None:
@@ -727,7 +755,7 @@ def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path
         raise ValueError("Unsupported analysis program directory")
     directories = (project.parent,) if len(names) == 1 else tuple(project.parent / name for name in names)
     scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
-    recheck_include_search(scope, project.parent)
+    recheck_compiler_inputs(scope, project)
     if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
         raise ValueError("Actual semantic inputs changed since analysis")
 
