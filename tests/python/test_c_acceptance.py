@@ -85,7 +85,7 @@ class AcceptanceTests(unittest.TestCase):
                         "sourceClassification": {"complete": True},
                         "programs": [{"name": name, "entry": entry, "translationUnits": ["main.c", entry],
                                       "passed": False, "exitCode": 1} for name, entry in entries.items()],
-                        "semanticIdentity": {"version": 3, "sdk": "1" * 64, "compiler": {"release": "12"},
+                        "semanticIdentity": {"version": 4, "sdk": "1" * 64, "compiler": {"release": "12"},
                                              "defines": {"main.c": []}, "libraries": {"std": "2" * 64},
                                              "analysisCode": {"c_check.py": "3" * 64}, "addonRuntime": {"runaddon.py": "4" * 64}},
                         "scope": {"target": TARGET, "entries": entries, "compilerFlags": ["-std=c99"],
@@ -98,7 +98,7 @@ class AcceptanceTests(unittest.TestCase):
         self.tool_probe = tool_probe.start()
         self.addCleanup(tool_probe.stop)
         # Compiler probes are environment probes too.
-        search_probe = patch.object(c_check, "recheck_include_search")
+        search_probe = patch.object(c_check, "recheck_compiler_inputs")
         self.search_probe = search_probe.start()
         self.addCleanup(search_probe.stop)
         self.real_semantic = c_check.semantic_identity
@@ -1455,11 +1455,10 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # The freeze records two libc6-dev package versions for these cases.
-        self.assertEqual(cases[TARGET, "standard-ecu"],
-                         "a27c0feb0581b8a3c1e46c8214a24a80b36677adff7ef846a29c5974b32549d0")
-        self.assertEqual(cases[TARGET, "user-application"],
-                         "0d3a7b4169fb817475048bb13f1e18f1a6b2e87721133bac45c3ad8b64915792")
+        # Both Linux artifacts used the same libc6-dev version and kernel closure.
+        reviewed = "034e8b3edb5e5b96f0b9715332848095978eb5835de3957c3d58cffd4440933b"
+        self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
+        self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"

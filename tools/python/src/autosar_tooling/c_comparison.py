@@ -20,6 +20,7 @@ def _read(path: Path) -> dict:
 
 MATRIX_TARGETS = ("linux-x64-controlled-v1", "windows-x64-controlled-v1")
 MATRIX_SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
+SEMANTIC_VERSION = 4
 
 
 def raw_identity(summary: dict) -> str:
@@ -188,13 +189,12 @@ def _semantic(summary: dict) -> dict:
                     for item in value.values()))
     def strings(value, nonempty=False):
         return isinstance(value, list) and (not nonempty or bool(value)) and all(isinstance(x, str) and x for x in value)
-    if isinstance(identity, dict) and identity.get("version") == 2:
-        raise ValueError(
-            "Semantic identity version 2 sealed the complete SDK provider environment "
-            "and is superseded by version 3; regenerate the analysis with the current tool")
+    if isinstance(identity, dict) and identity.get("version") in (2, 3):
+        raise ValueError(f"Semantic identity version {identity['version']} is superseded by "
+                         f"version {SEMANTIC_VERSION}; regenerate the analysis with the current tool")
     require(isinstance(identity, dict) and set(identity) ==
             {"version", "compiler", "defines", "models", "libraries", "analysisCode", "addonRuntime", "sdk"})
-    require(type(identity["version"]) is int and identity["version"] == 3)
+    require(type(identity["version"]) is int and identity["version"] == SEMANTIC_VERSION)
     compiler = identity["compiler"]
     require(isinstance(compiler, dict) and set(compiler) ==
             {"machine", "release", "predefines", "builtins", "includeSearch"})

@@ -137,7 +137,7 @@ class CComparisonTests(unittest.TestCase):
             "diagnostics": [self.diagnostic("rule", 1), self.diagnostic("rule", 2)],
         }
         summary["semanticIdentity"] = {
-            "version": 3,
+            "version": 4,
             "sdk": hashlib.sha256(json.dumps(c_sdk.semantic_inputs(
                 summary["scope"]), sort_keys=True).encode()).hexdigest(),
             "compiler": {"machine": "x86_64-linux-gnu", "release": "13.3.0",
@@ -804,21 +804,21 @@ class CComparisonTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "Semantic identity differs: compiler"):
                         compare(current, project, output, baseline, source_tree=source_tree)
 
-    def test_semantic_identity_version_2_refuses_on_either_side_with_a_clear_reason(self):
-        for previous in (False, True):
-            for source_tree in (True, False):
-                with self.subTest(previous=previous, source_tree=source_tree), \
-                        tempfile.TemporaryDirectory() as temporary:
-                    current, project, output, baseline = self.fixture(Path(temporary))
-                    old = deepcopy(current)
-                    old["semanticIdentity"]["version"] = 2
-                    if previous:
-                        self.write(baseline, old)
-                    else:
-                        current = old
-                    with self.assertRaisesRegex(
-                            ValueError, "version 2 sealed the complete SDK provider environment"):
-                        compare(current, project, output, baseline, source_tree=source_tree)
+    def test_superseded_semantic_identity_refuses_on_either_side_with_a_clear_reason(self):
+        for version in (2, 3):
+            for previous in (False, True):
+                for source_tree in (True, False):
+                    with self.subTest(version=version, previous=previous, source_tree=source_tree), \
+                            tempfile.TemporaryDirectory() as temporary:
+                        current, project, output, baseline = self.fixture(Path(temporary))
+                        old = deepcopy(current)
+                        old["semanticIdentity"]["version"] = version
+                        if previous:
+                            self.write(baseline, old)
+                        else:
+                            current = old
+                        with self.assertRaisesRegex(ValueError, f"version {version} is superseded by version 4"):
+                            compare(current, project, output, baseline, source_tree=source_tree)
 
     def test_missing_old_and_incomplete_identity_refuse_on_either_side(self):
         changes = [lambda x: x.pop("semanticIdentity"),

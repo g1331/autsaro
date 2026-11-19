@@ -9,12 +9,24 @@ from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 
 from autosar_tooling import c_check
-from ecu_tools.build import target_configuration
+from ecu_tools.build import target_configuration, tool_argument
 
 ENTRIES = {"host-batch": "integration/src/ecu_host_batch.c", "probe": "integration/src/ecu_probe.c"}
 
 
 class CAnalysisTests(unittest.TestCase):
+    def test_predefine_probe_uses_the_translation_unit_preprocessor_options(self):
+        directory = Path.cwd() / "analysis"
+        project = directory / "project"
+        predefined = "#define __GNUC__ 13\n"
+        with patch.object(c_check, "run", return_value=(0, predefined, "")) as run:
+            self.assertEqual(c_check.probe_predefines("gcc", ["-std=c99"], project, ["include"], directory),
+                             predefined)
+        self.assertEqual(run.call_args.args[0], [
+            "gcc", "-std=c99", "-I" + tool_argument(project / "include"),
+            "-dM", "-E", str(directory / "headers.c"),
+        ])
+
     def test_analyzer_inputs_normalizes_root_and_file_aliases(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary).resolve()
@@ -64,9 +76,10 @@ class CAnalysisTests(unittest.TestCase):
         recorded = {"quote": [], "system": ["usr/lib/gcc/x86_64-linux-gnu/13/include",
                                             "usr/include"],
                     "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}
-        scope = {"target": "linux-x64-controlled-v1", "compilerFlags": ["-std=c99"],
+        predefines = "#define __GNUC__ 13"
+        scope = {"target": "linux-x64-controlled-v1", "compilerFlags": ["-std=c99"], "includePaths": ["."],
                  "diagnosticCompiler": {"path": "/usr/bin/gcc"},
-                 "compilerSemanticInputs": {"includeSearch": recorded}}
+                 "compilerSemanticInputs": {"includeSearch": recorded, "predefines": [predefines]}}
         changes = {
             "unchanged": recorded,
             "CPATH set": {**recorded, "environment": {"CPATH": "/extra", "C_INCLUDE_PATH": None}},
@@ -77,18 +90,20 @@ class CAnalysisTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
+            project = directory / "project"
             for name, now in changes.items():
                 with self.subTest(change=name), patch.object(
-                        c_check, "probe_include_search", return_value=([], now)) as probe:
+                        c_check, "probe_include_search", return_value=([], now)) as probe, patch.object(
+                        c_check, "probe_predefines", return_value=predefines):
                     if name == "unchanged":
-                        c_check.recheck_include_search(scope, directory)
+                        c_check.recheck_compiler_inputs(scope, project)
                     else:
                         with self.assertRaisesRegex(ValueError,
                                                     "include search order or variables"):
-                            c_check.recheck_include_search(scope, directory)
+                            c_check.recheck_compiler_inputs(scope, project)
                     self.assertEqual(probe.call_args.args[:2], ("/usr/bin/gcc", ["-std=c99"]))
-                    # The probe runs beside the analysis, on its drive.
                     self.assertEqual(probe.call_args.args[2].parent, directory)
+                    self.assertEqual(probe.call_args.kwargs["cwd"], directory)
                     self.assertFalse(probe.call_args.args[3])
 
     @unittest.skipUnless(platform.system() in c_check.TARGETS.values(),
@@ -99,21 +114,25 @@ class CAnalysisTests(unittest.TestCase):
         target = next(name for name, system in c_check.TARGETS.items()
                       if system == platform.system())
         tool = {"version": "2.21.0", "expectedSourceRevision": "revision", "addons": {"a": "b"}}
-        summary = {"scope": {"target": target, "compilerFlags": ["-std=c99"],
+        predefines = "#define __GNUC__ 13"
+        summary = {"scope": {"target": target, "compilerFlags": ["-std=c99"], "includePaths": ["."],
                              "diagnosticCompiler": {"path": "gcc"},
-                             "compilerSemanticInputs": {"includeSearch": recorded}},
+                             "compilerSemanticInputs": {"includeSearch": recorded, "predefines": [predefines]}},
                    "tool": tool, "programs": [{"name": "target"}],
                    "semanticIdentity": {"marker": 1}}
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary).resolve() / "analysis/project"
             project.mkdir(parents=True)
-            for name, now, expected in (
-                    ("same", recorded, None),
+            for name, now, macros, expected in (
+                    ("same", recorded, predefines, None),
                     ("CPATH now set", {**recorded, "environment": {"CPATH": "/x",
                                                                     "C_INCLUDE_PATH": None}},
-                     "include search order or variables")):
+                     predefines, "include search order or variables"),
+                    ("new macro", recorded, predefines + "\n#define FEATURE_TOKEN 0",
+                     "compiler predefined macros changed")):
                 with self.subTest(name=name), \
                         patch.object(c_check, "probe_include_search", return_value=([], now)), \
+                        patch.object(c_check, "probe_predefines", return_value=macros), \
                         patch.object(c_check, "semantic_identity",
                                      return_value=summary["semanticIdentity"]):
                     arguments = (summary, project, (Path("cppcheck"), Path("addons"), tool))

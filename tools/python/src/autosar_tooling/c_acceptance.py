@@ -234,7 +234,7 @@ def input_identity(summary: dict, project: Path, *, root: Path = ROOT,
     producers = _producer_inputs(plan["runtimeSources"], root, producer_revision,
                                   summary["scope"]["target"].startswith("windows"))
     semantic = summary["semanticIdentity"]
-    if semantic.get("version") != 3 or any(not semantic.get(key) for key in
+    if semantic.get("version") != c_comparison.SEMANTIC_VERSION or any(not semantic.get(key) for key in
             ("sdk", "compiler", "defines", "libraries", "analysisCode", "addonRuntime")):
         raise ValueError("Assessment semantic inputs incomplete")
     return _hash({**({"scopeTargetHeaders": matrix_scope["targetHeaders"]} if matrix_scope is not None else {}),

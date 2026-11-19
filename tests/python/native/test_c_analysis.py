@@ -6,11 +6,13 @@ import io
 import json
 import os
 import platform
+import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,6 +26,15 @@ from autosar_tooling import (
     c_sdk,
 )
 from ecu_tools.owner import OwnershipError
+
+FEATURE_SOURCE = """#include <float.h>
+#ifndef FEATURE_TOKEN
+#define FALLBACK_TOKEN 1
+#else
+#define FALLBACK_TOKEN FEATURE_TOKEN
+#endif
+int main(void) { int divisor = FALLBACK_TOKEN; return 1 / divisor; }
+"""
 
 
 class ActualCAnalysisTests(unittest.TestCase):
@@ -611,6 +622,91 @@ int main(int argc, char **argv)
             with self.assertRaisesRegex(ValueError, "Semantic identity differs: defines"):
                 compare(*current, previous[2])
 
+    @unittest.skipUnless(platform.system() == "Linux", "Uses GCC specs and Debian provider paths")
+    def test_header_existence_without_include_refuses_analysis_in_both_comparisons(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            include = root / "include"
+            include.mkdir()
+            (root / "branch").mkdir()
+            optional = root / "optional_sdk_review.h"
+            optional.write_text("#define FEATURE_TOKEN 0\n", encoding="utf-8")
+            available = root / "branch/optional_sdk_review.h"
+            available.symlink_to(optional)
+            header = include / "float.h"
+            header.write_text("#pragma GCC system_header\n#include_next <float.h>\n"
+                              "#if __has_include(<../branch/optional_sdk_review.h>)\n"
+                              "#define FEATURE_TOKEN 0\n#endif\n", encoding="utf-8")
+            packages = c_sdk.debian_headers()
+            for path in (optional, header):
+                packages[str(path)] = {"provider": "libc6-dev", "version": "fixture-1",
+                                       "header": path.as_posix().lstrip("/"), "algorithm": "md5",
+                                       "expected": hashlib.md5(path.read_bytes()).hexdigest()}
+            project = self.gate_project(root / "fixture", FEATURE_SOURCE, debug=False)
+            target = json.loads((project / "target.json").read_text())["target"]
+            previous, current = root / "with-header", root / "without-header"
+            with redirect_stderr(io.StringIO()), patch.dict(os.environ, {"CPATH": str(include)}), \
+                    patch.object(c_sdk, "debian_headers", return_value=packages):
+                self.assertEqual(c_check.check(project, target, previous), 1)
+                available.unlink()
+                self.assertEqual(c_check.check(project, target, current, previous), 1)
+            summary = json.loads((current / "summary.json").read_text())
+            for output, present in ((previous, True), (current, False)):
+                failed = json.loads((output / "summary.json").read_text())
+                self.assertIn("Cannot verify absence of untracked header existence probes", failed["error"])
+                self.assertIn("__has_include", failed["error"])
+                defines = (output / "compiler-defines-0.stdout.log").read_text()
+                self.assertEqual("#define FEATURE_TOKEN 0" in defines, present)
+                self.assertNotIn("comparison", failed)
+            for source_tree in (False, True):
+                with self.subTest(source_tree=source_tree), \
+                        self.assertRaisesRegex(ValueError, "Analysis is incomplete"):
+                    c_comparison.compare(summary, project, current, previous, source_tree=source_tree)
+
+    @unittest.skipUnless(platform.system() == "Linux", "Uses GCC specs")
+    def test_project_include_flags_bind_specs_macros_in_both_comparisons(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            gcc = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")
+            specs = root / "compiler.specs"
+            compiler = root / "gcc"
+            compiler.write_text(f'#!/bin/sh\nexec {shlex.quote(gcc)} -specs={shlex.quote(str(specs))} "$@"\n',
+                                encoding="utf-8")
+            compiler.chmod(0o700)
+            # Use the same wrapper and specs path on both sides, changing only the conditional rule.
+            project = self.gate_project(root / "fixture", FEATURE_SOURCE, debug=False)
+            target = json.loads((project / "target.json").read_text())["target"]
+            previous, current, same = root / "with-macro", root / "without-macro", root / "same"
+            feature = "#define FEATURE_TOKEN 0"
+            with patch.dict(os.environ, {"AUTOSAR_CC": str(compiler)}):
+                specs.write_text("*cpp:\n%{I*:-DFEATURE_TOKEN=0}\n\n", encoding="utf-8")
+                c_check.check(project, target, previous)
+                baseline = json.loads((previous / "summary.json").read_text())
+                self.assertIsNone(baseline["error"])
+                self.assertIn(feature, baseline["semanticIdentity"]["compiler"]["predefines"])
+                self.assertIn("zerodiv", [row["id"] for row in baseline["diagnostics"]])
+                self.assertEqual(c_check.check(project, target, same, previous), 1)
+                unchanged = json.loads((same / "summary.json").read_text())
+                self.assertIsNone(unchanged["error"])
+                self.assertEqual(unchanged["comparison"], {"new": [], "removed": []})
+                self.assertEqual(c_comparison.compare(unchanged, project, same, previous, source_tree=True),
+                                 {"new": [], "removed": []})
+
+                specs.write_text("*cpp:\n%{I*:}\n\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "Actual compiler predefined macros changed"):
+                    c_check.recheck_semantic_inputs(baseline, previous / "project", c_check.tool_identity(previous))
+                self.assertEqual(c_check.check(project, target, current), 0)
+                summary = json.loads((current / "summary.json").read_text())
+                self.assertIsNone(summary["error"])
+                self.assertNotIn("zerodiv", [row["id"] for row in summary["diagnostics"]])
+                self.assertNotIn(feature, summary["semanticIdentity"]["compiler"]["predefines"])
+                self.assertEqual(baseline["sourceSealSha256"], summary["sourceSealSha256"])
+                self.assertEqual(baseline["semanticIdentity"]["sdk"], summary["semanticIdentity"]["sdk"])
+                for source_tree in (False, True):
+                    with self.subTest(source_tree=source_tree), \
+                            self.assertRaisesRegex(ValueError, "Semantic identity differs: compiler"):
+                        c_comparison.compare(summary, project, current, previous, source_tree=source_tree)
+
     def test_real_producer_records_the_search_space_and_refuses_a_changed_search_order(self):
         from autosar_tooling.c_comparison import compare
 
@@ -655,10 +751,10 @@ int main(int argc, char **argv)
                         self.assertRaisesRegex(ValueError, "Semantic identity differs: compiler"):
                     compare(*current, previous[2], source_tree=source_tree)
             # Reusing the first analysis while CPATH now points elsewhere must not pass.
-            c_check.recheck_include_search(scope, output)
+            c_check.recheck_compiler_inputs(scope, output / "project")
             with patch.dict(os.environ, {"CPATH": str(extra)}), \
                     self.assertRaisesRegex(ValueError, "include search order or variables"):
-                c_check.recheck_include_search(scope, output)
+                c_check.recheck_compiler_inputs(scope, output / "project")
 
     @unittest.skipUnless(platform.system() == "Linux", "uses the Debian provider layout")
     def test_real_provider_header_reached_only_through_a_link_is_in_the_inventory(self):
