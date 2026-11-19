@@ -83,15 +83,20 @@ provider 定义。
 1. 在对应 capture 的 `before_stop` 找到活动成员的 PID＋`created_100ns`、wait 与 membership，
    再读 `system_snapshot` 的镜像、父 PID、线程状态和等待原因。
 2. 在 `members-etw.jsonl` 按同一身份读取创建／退出事件及命令行；PID 复用后创建时间不同的
-   记录分开关联。命令行仅从明确的进程创建事件关联，区间以已知退出时间或下一次
-   创建时间截断，rundown 与其他 provider 的事件保持未关联。原始字段完整保留，
+   记录分开关联。命令行仅从明确的进程创建事件关联，区间以该进程创建事件头的时间开始，
+   到同 PID 下一次创建或该进程退出事件头的时间为止，rundown 与其他 provider 的事件保持
+   未关联。区间只用事件头时间：payload 的 `CreateTime`／`ExitTime` 是内核系统时间，与跟踪
+   时钟的偏移每次运行不同（#577 中一次运行为 −3.6 到 +3.4 ms，另一次为 +0.05 到
+   +2.8 ms），混用会让早于 `CreateTime` 的命令行事件落到区间外。原始字段完整保留，
    字段随 provider 版本变化时可重查 XML／ETL。
 3. 结合 `stopped` 与退出事件判断成员进入退出、线程已结束及进程对象 signaled 的先后关系。
    查询错误、缺失事件和顺序采样的窗口都保留在报告中；归属和完成判定仍由原 Job 逻辑执行。
 
 Windows `rest` 作业实际运行 Python 三层 orphan 反例：令镜像 API 返回拒绝访问，要求
 清理前报告仍有子进程身份、镜像、父 PID 和线程等待原因；删除系统快照采集的变异须被
-同一断言拒绝。作业结束再断言 ETW 有该 PID＋创建时间的镜像、父 PID、命令行和退出事件。
+同一断言拒绝。作业结束再断言 ETW 有该 PID＋创建时间的镜像、父 PID、命令行和退出事件；
+`rest` 作业设置 `AUTOSAR_ETW_REQUIRE_CONTROLS=true`，缺少对照记录或其中任一项不成立时
+停止步骤以非零退出，其他作业和其他采集失败仍只标为不完整。
 Rust 原有三层反例同步断言相同成员字段。普通成功路径验证不落完整报告；
 `etw/overhead.json` 和 `job-evidence/overhead.json` 保存同 runner 的配对耗时原始样本。
 

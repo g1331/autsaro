@@ -59,6 +59,14 @@ PROFILE = """<?xml version="1.0" encoding="utf-8"?>
 """
 
 
+class ControlProofError(RuntimeError):
+    """The trace cannot prove the control processes' identity, command line and exit."""
+
+
+def controls_required() -> bool:
+    return os.environ.get("AUTOSAR_ETW_REQUIRE_CONTROLS") == "true"
+
+
 def command(folder: Path, argv: list[str], timeout: int = 60) -> None:
     started = time.perf_counter()
     result = subprocess.run(argv, capture_output=True, timeout=timeout, check=False)
@@ -232,13 +240,18 @@ def stop(folder: Path) -> bool:
     # Only stop a session for which this job received a successful start receipt.
     try:
         _stop(folder)
+    except ControlProofError as error:
+        collector_state(folder, "stop", error)
+        # A job that must prove its controls fails the step; other jobs only degrade.
+        if controls_required():
+            raise
+        return False
     except (
         OSError,
         RuntimeError,
         subprocess.SubprocessError,
         ValueError,
         KeyError,
-        AssertionError,
     ) as error:
         return collector_state(folder, "stop", error)
     return collector_state(folder, "complete")
@@ -261,11 +274,15 @@ def filetime(value: str) -> int:
     )
 
 
+def stamp(event: dict) -> int:
+    return filetime(event["timestamp"]["SystemTime"])
+
+
 def correlate(folder: Path) -> None:
     starts = {}
     stops = {}
     commands = defaultdict(list)
-    identities = defaultdict(list)
+    opened = defaultdict(list)
     with (folder / "lifecycle.jsonl").open(encoding="utf-8") as source:
         for line in source:
             event = json.loads(line)
@@ -278,7 +295,7 @@ def correlate(folder: Path) -> None:
                 key = (pid, filetime(fields["createtime"]))
                 if event["event_id"] == "1":
                     starts[key] = event
-                    identities[pid].append(key[1])
+                    opened[pid].append(stamp(event))
                 elif event["event_id"] == "2":
                     stops[key] = event
             provider = {key.lower(): value for key, value in event["provider"].items()}
@@ -297,28 +314,24 @@ def correlate(folder: Path) -> None:
     merged = {}
     for key, event in starts.items():
         pid, created = key
-        next_created = min(
-            (time for time in identities[pid] if time > created),
-            default=2**64,
-        )
+        # CreateTime and ExitTime are kernel FILETIME payload; the trace clock stamps
+        # event headers and sits several milliseconds away from it, by a different amount
+        # in every run. A command line belongs to the process whose creation event sits
+        # just before it on the trace clock, so every bound here is a header time.
+        began = stamp(event)
+        next_began = min((time for time in opened[pid] if time > began), default=2**64)
         stopped = stops.get(key)
-        if stopped:
-            exit_fields = {
-                key.lower(): value for key, value in stopped["fields"].items()
-            }
-            if exit_fields.get("exittime"):
-                next_created = min(next_created, filetime(exit_fields["exittime"]) + 1)
-        command = []
-        for candidate in commands[pid]:
-            stamp = candidate["timestamp"].get("SystemTime")
-            if stamp and created <= filetime(stamp) < next_created:
-                command.append(candidate)
+        ended = stamp(stopped) if stopped else 2**64
         merged[key] = {
             "pid": pid,
             "created_100ns": created,
             "start": event,
-            "stop": stops.get(key),
-            "command_events": command,
+            "stop": stopped,
+            "command_events": [
+                candidate
+                for candidate in commands[pid]
+                if began <= stamp(candidate) < next_began and stamp(candidate) <= ended
+            ],
         }
     with (folder / "members-etw.jsonl").open("w", encoding="utf-8") as output:
         # Both implementations archive failed captures into this same directory.
@@ -339,23 +352,37 @@ def correlate(folder: Path) -> None:
                         + "\n"
                     )
     proofs = list(folder.parent.glob("job-evidence/control-*.json"))
-    if os.environ.get("AUTOSAR_ETW_REQUIRE_CONTROLS") == "true" and not proofs:
-        raise RuntimeError("Windows orphan control produced no identity proof")
+    if controls_required() and not proofs:
+        raise ControlProofError("Windows orphan control produced no identity proof")
     if proofs:
         for path in proofs:
-            proof = json.loads(path.read_text(encoding="utf-8"))
-            event = merged[(proof["pid"], proof["created_100ns"])]
-            fields = {
-                key.lower(): value for key, value in event["start"]["fields"].items()
-            }
-            assert "python" in fields["imagename"].lower(), event
-            assert int(fields["parentprocessid"]) > 0, event
-            assert event["stop"] is not None, event
-            assert event["command_events"], event
+            verify_control(path, merged)
         print(
             "ETW exact PID+creation, image, parent, command line and exit verified: "
             f"{len(proofs)} controls"
         )
+
+
+def verify_control(path: Path, merged: dict) -> None:
+    proof = json.loads(path.read_text(encoding="utf-8"))
+    event = merged.get((proof["pid"], proof["created_100ns"]))
+    if event is None:
+        raise ControlProofError(
+            f"{path.name}: no process start for the control: {proof}"
+        )
+    fields = {key.lower(): value for key, value in event["start"]["fields"].items()}
+    failed = [
+        reason
+        for reason, ok in (
+            ("image is not python", "python" in fields["imagename"].lower()),
+            ("no parent", int(fields["parentprocessid"]) > 0),
+            ("no exit event", event["stop"] is not None),
+            ("no command line event", bool(event["command_events"])),
+        )
+        if not ok
+    ]
+    if failed:
+        raise ControlProofError(f"{path.name}: {', '.join(failed)}: {event}")
 
 
 def main() -> None:
