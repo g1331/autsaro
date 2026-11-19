@@ -43,15 +43,6 @@ def _hash(value: object) -> str:
                                      separators=(",", ":")).encode()).hexdigest()
 
 
-def _pairs(pairs: list[tuple]) -> dict:
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"Duplicate assessment JSON member: {key}")
-        result[key] = value
-    return result
-
-
 def _blocks(text: str) -> list[str]:
     blocks = []
     active = None
@@ -92,7 +83,7 @@ def contexts(root: Path = ROOT) -> list[dict]:
     for path in sorted((root / "docs/standards").rglob("*.md")):
         refuse_links(path, root)
         for block in _blocks(path.read_text(encoding="utf-8")):
-            row = json.loads(block, object_pairs_hook=_pairs)
+            row = json.loads(block, object_pairs_hook=c_standard.unique_assessment_members)
             if (not isinstance(row, dict)
                     or set(row) != {"id", "evidence", "cases", "records", "formalStatus"}
                     or not isinstance(row["id"], str) or not row["id"] or row["id"] in identifiers
@@ -351,10 +342,16 @@ def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str
         if occurrence["rule"] != "misra-c2012-" + rule[1:] or occurrence["status"] == "out_of_scope":
             continue
         diagnostic = summary["diagnostics"][occurrence["diagnostic"]]
-        if diagnostic.get("sourceCategory") in {"sdk", "adopted-freertos"}:
+        if occurrence["status"] == "freertos_record_matched":
+            # The kernel consumer names project hunks after replaying the patches.
+            # Adopted original lines carry no entity, even in mixed reports.
+            if occurrence["entity"] is None:
+                continue
+        elif diagnostic.get("sourceCategory") in {"sdk", "adopted-freertos"}:
             continue
         location = occurrence["location"]
-        if location is None or occurrence["status"] not in {"record_matched", "owned_record_matched"}:
+        if location is None or occurrence["status"] not in {
+                "record_matched", "owned_record_matched", "freertos_record_matched"}:
             return False
         for program in occurrence["programs"]:
             key = (location["file"], int(location["line"]), int(location.get("column") or 0),
@@ -378,7 +375,7 @@ def _checker_obligation_result(summary: dict, occurrences: list[dict], obligatio
         reason = group_reason if status != "not_assessed" else "checker-obligation_not_assessed"
         if status == "retained" and reason is None:
             record = retained[rule]
-            entities = record["cases"].get(case["caseId"])
+            entities = record["cases"].get(f"{case['target']}/{case['caseId']}")
             if record["approval"] != context["id"]:
                 reason = "checker_retained_approval_mismatch"
             elif entities is None or not _retained_checker_entities(summary, occurrences, rule, entities):
@@ -731,7 +728,7 @@ def _sdk_records(root: Path, revision: str | None = None) -> dict:
                         r"\s*<!-- sdk-integration-records-end -->", text, re.DOTALL)
     if len(blocks) != 1:
         raise ValueError("SDK integration records missing")
-    record = json.loads(blocks[0], object_pairs_hook=_pairs)
+    record = json.loads(blocks[0], object_pairs_hook=c_standard.unique_assessment_members)
     if set(record) != {"definitions", "sites"}:
         raise ValueError("Invalid SDK integration records")
     return record

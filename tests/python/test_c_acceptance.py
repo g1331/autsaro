@@ -140,7 +140,8 @@ class AcceptanceTests(unittest.TestCase):
         if identity is None and group in {"owned-source", "generated-retention"}:
             identity = c_acceptance.evidence_identity(self.summary, self.project, group, self.root)
         return {"id": "frozen-" + group, "evidence": {"head": "a" * 40, "receipt": "Synthetic contract receipt"},
-                "cases": [{"caseId": case, "target": TARGET, "inputIdentity": identity or self.identity()}],
+                "cases": [{"caseId": case, "target": self.summary["scope"]["target"],
+                           "inputIdentity": identity or self.identity()}],
                 "records": {"kind": group, **({"cohortSha256": c_retention.COHORT_SHA256} if group == "generated-retention" else {})},
                 "formalStatus": status}
 
@@ -1103,10 +1104,16 @@ class AcceptanceTests(unittest.TestCase):
         rule_line = next(line for line in table.splitlines() if line.startswith("| R2.5 |"))
         retained_line = rule_line.replace("| satisfied |", "| retained |")
         table = table.replace(rule_line, retained_line)
-        record = {"approval": "frozen-checker-obligations", "cases": {CASE: [{
+        linux_case = f"{TARGET}/{CASE}"
+        windows = "windows-x64-controlled-v1"
+        windows_case = f"{windows}/{CASE}"
+        empty_case = f"{TARGET}/no-diagnostic"
+        record = {"approval": "frozen-checker-obligations", "cases": {linux_case: [{
             "file": self.retained["delivered"], "line": 2, "name": self.retained["name"],
             "diagnostics": {"host-batch": [0], "probe": [0]},
-        }], "no-diagnostic": []}}
+        }], empty_case: []}}
+        record["cases"][windows_case] = copy.deepcopy(record["cases"][linux_case])
+        record["cases"][windows_case][0]["diagnostics"] = {"host-batch": [3], "probe": [3]}
 
         def assess(*, evidence=record, approval=True, status="approved", case=CASE,
                    diagnostic_status="approved"):
@@ -1131,7 +1138,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(result["status"], "accepted")
         self.assertEqual(result["checkerObligations"], {
             "statusCounts": {"retained": 1, "satisfied": 143},
-            "retainedRules": {"R2.5": {"approval": record["approval"], "entities": record["cases"][CASE]}},
+            "retainedRules": {"R2.5": {"approval": record["approval"], "entities": record["cases"][linux_case]}},
             "conformanceAssessment": "compliant_with_deviations",
         })
         blocked = assess(diagnostic_status="pending")
@@ -1140,13 +1147,11 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(blocked["occurrences"][0]["reason"], "formal_deviation_pending")
 
         missing = copy.deepcopy(record)
-        missing["cases"][CASE] = []
-        # Keep another profile populated so the mutated manifest is still valid.
-        missing["cases"]["no-diagnostic"] = record["cases"][CASE]
+        missing["cases"][linux_case] = []
         wrong_name = copy.deepcopy(record)
-        wrong_name["cases"][CASE][0]["name"] = "OtherDeclaration"
+        wrong_name["cases"][linux_case][0]["name"] = "OtherDeclaration"
         wrong_program = copy.deepcopy(record)
-        del wrong_program["cases"][CASE][0]["diagnostics"]["probe"]
+        del wrong_program["cases"][linux_case][0]["diagnostics"]["probe"]
         for options, reason in (
             ({"evidence": missing}, "checker_retained_entities_mismatch"),
             ({"evidence": wrong_name}, "checker_retained_entities_mismatch"),
@@ -1173,10 +1178,37 @@ class AcceptanceTests(unittest.TestCase):
             self.assertEqual(result["status"], "error")
             self.assertIn(error, result["objects"][0]["reason"])
 
+        self.target["target"] = windows
+        self.summary["scope"]["target"] = windows
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+        self.summary["diagnostics"][0]["locations"][0]["column"] = 3
+        result = assess()
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["checkerObligations"]["retainedRules"]["R2.5"]["entities"],
+                         record["cases"][windows_case])
+        self.summary["diagnostics"][0]["locations"][0]["column"] = 0
+        result = assess()
+        self.assertTrue(any(row["id"] == "R2.5" and row["reason"] == "checker_retained_entities_mismatch"
+                            for row in result["objects"]))
+
+        self.target["target"] = TARGET
+        self.summary["scope"]["target"] = TARGET
+        self.seal()
+        self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         self.summary["diagnostics"] = []
         result = assess(case="no-diagnostic")
         self.assertEqual(result["status"], "accepted")
         self.assertEqual(result["checkerObligations"]["statusCounts"], {"satisfied": 144})
+
+        text = self.obligation_path.read_text(encoding="utf-8")
+        mutated = text.replace('"approval":', '"approval": "overwritten", "approval":', 1)
+        self.obligation_path.write_text(mutated, encoding="utf-8")
+        line = next(n for n, row in enumerate(mutated.splitlines(), 1) if '"overwritten"' in row)
+        result = self.evaluate()
+        self.assertEqual(result["status"], "error")
+        self.assertIn(f"{self.obligation_path.relative_to(self.root).as_posix()}:{line}: "
+                      "Duplicate assessment JSON member: approval", result["objects"][0]["reason"])
 
     def test_real_checker_records_keep_gaps_and_c99_applicability_separate(self):
         self.owned_inputs()
@@ -1666,6 +1698,37 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertEqual(occurrence["reason"], "freertos_integration_verified")
                 self.assertEqual(occurrence["contextId"], "frozen-freertos-integration")
                 self.assertEqual(self.summary, before)
+
+    def test_checker_retained_counts_named_freertos_patch_in_mixed_report(self):
+        self.freertos_inputs(patched=True)
+        table = self.root / "docs/standards/types/language-constructs/lexical.md"
+        text = table.read_text(encoding="utf-8")
+        row = next(line for line in text.splitlines() if line.startswith("| R2.5 |"))
+        entities = [{"file": "kernel/kernel.h", "line": 3, "name": "KEEP",
+                     "diagnostics": {"host-batch": [0], "probe": [0]}}]
+        evidence = {"approval": "frozen-checker-obligations", "cases": {f"{TARGET}/{CASE}": entities}}
+        table.write_text(text.replace(row, row.replace("| not_assessed |", "| retained |"))
+                         + "\n" + c_standard.CHECKER_RETAINED_BEGIN + "\n"
+                         + json.dumps({"rule": "R2.5", **evidence}) + "\n"
+                         + c_standard.CHECKER_RETAINED_END + "\n", encoding="utf-8", newline="\n")
+        diagnostic = self.summary["diagnostics"][0]
+        diagnostic["sourceCategory"] = "mixed"
+        diagnostic["locations"].insert(0, {"file": "kernel/kernel.h", "line": 1, "column": 0})
+
+        for status in ("approved", "pending"):
+            with self.subTest(status=status):
+                self.bind_groups(groups=tuple(group for group in c_acceptance.GROUPS
+                                              if group != "checker-obligations"))
+                context = self.context(group="checker-obligations", status="approved")
+                context["records"]["retainedSha256"] = c_acceptance._hash({"R2.5": evidence})
+                self.bind(context)
+                self.bind(self.context(group="freertos-integration", status=status,
+                    identity=c_acceptance.freertos_identity(self.summary, self.project, self.root)))
+                result = self.evaluate()
+                self.assertEqual([entry["entity"] for entry in result["occurrences"]], [None, "KEEP"])
+                self.assertEqual(result["checkerObligations"]["retainedRules"]["R2.5"]["entities"], entities)
+                self.assertEqual(result["occurrences"][1]["assessment"],
+                                 "accepted" if status == "approved" else "blocked")
 
     def test_freertos_fixture_bytes_survive_windows_text_newlines(self):
         write_text = Path.write_text

@@ -135,6 +135,15 @@ def supplementary_assessment(rules: list[dict], limitations: list[dict], root: P
                               "documents": identities}}
 
 
+def unique_assessment_members(pairs: list[tuple]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate assessment JSON member: {key}")
+        result[key] = value
+    return result
+
+
 def _checker_retained(names: list[str], root: Path) -> dict:
     records = {}
     for name in names:
@@ -147,14 +156,17 @@ def _checker_retained(names: list[str], root: Path) -> dict:
             elif text in {CHECKER_RETAINED_BEGIN, CHECKER_RETAINED_END}:
                 raise ValueError(f"Invalid checker retained block: {name}:{line}")
             elif active and text.strip():
-                row = json.loads(text)
+                try:
+                    row = json.loads(text, object_pairs_hook=unique_assessment_members)
+                except ValueError as error:
+                    raise ValueError(f"Invalid checker retained JSON: {name}:{line}: {error}") from error
                 if (not isinstance(row, dict) or set(row) != {"rule", "approval", "cases"}
                         or not isinstance(row["rule"], str) or row["rule"] in records
                         or not isinstance(row["approval"], str) or not row["approval"]
                         or not isinstance(row["cases"], dict) or not any(row["cases"].values())):
                     raise ValueError(f"Invalid checker retained evidence: {name}:{line}")
                 for case, entities in row["cases"].items():
-                    if not case or not isinstance(entities, list):
+                    if not re.fullmatch(r"[^/]+/[^/]+", case) or not isinstance(entities, list):
                         raise ValueError(f"Invalid checker retained case: {name}:{line}")
                     positions = set()
                     for entity in entities:
