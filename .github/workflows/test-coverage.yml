@@ -7,11 +7,10 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ${{ github.ref == 'refs/heads/master' && 'pages' || github.ref }}
+  group: ${{ github.ref == 'refs/heads/master' && 'pages' || format('{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: false
 jobs:
   rust:
-    if: github.ref == 'refs/heads/master'
     name: Rust default-test coverage (Linux)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -51,10 +50,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: cargo llvm-cov report --json --output-path build/coverage/rust/coverage.json
       - name: Render the generator core report
+        if: github.ref == 'refs/heads/master'
         run: >-
           cargo llvm-cov report --ignore-filename-regex '(^|/)src-tauri/'
           --html --output-dir build/coverage/rust/core
       - name: Export generator core data
+        if: github.ref == 'refs/heads/master'
         run: >-
           cargo llvm-cov report --ignore-filename-regex '(^|/)src-tauri/'
           --json --output-path build/coverage/rust/core/coverage.json
@@ -66,7 +67,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   ui:
-    if: github.ref == 'refs/heads/master'
     name: Vitest V8 coverage (Linux)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -89,7 +89,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   python:
-    if: github.ref == 'refs/heads/master'
     name: Python branch coverage (Linux)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -166,8 +165,9 @@ jobs:
           name: architecture-diagrams
           path: diagrams
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 14
   assemble-pages:
+    if: github.ref == 'refs/heads/master'
     needs: [c, rust, ui, python, diagrams]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -189,6 +189,7 @@ jobs:
         with:
           path: site
   publish:
+    if: github.ref == 'refs/heads/master'
     needs: assemble-pages
     runs-on: ubuntu-24.04
     timeout-minutes: 10

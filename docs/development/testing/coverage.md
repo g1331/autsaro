@@ -40,7 +40,7 @@ uv run --locked --group coverage python -m autosar_tooling.c_coverage
 
 GCC 13 偶尔输出负计数。gcovr 会逐处告警并继续生成报告，在日志和工件中的 `gcov-warnings.txt` 保留源码位置与原始数值。分诊拒绝或错误分支前，先核对对应位置是否有计数告警。
 
-独立的 `Coverage reports`（`test-coverage.yml`）在 master 推送及手动运行时生成四份 Linux 工件，保留 14 天。该工作流的作业仅在 master 运行，也不接入 `CI required`。测试失败仍使报告作业失败，可渲染的数据会随工件上传。查看失败运行时，先核对运行结果、提交和测试范围，再结合源码解释 JSON 中的未执行路径。
+独立的 `Coverage reports`（`test-coverage.yml`）在 master 推送及手动运行时生成四份 Linux 工件，保留 14 天。其他分支手动运行时可生成 Rust、UI 和 Python 工件。该工作流独立于 PR 和 `CI required`。测试失败仍使报告作业失败，可渲染的数据会随工件上传。查看失败运行时，先核对运行结果、提交和测试范围，再结合源码解释 JSON 中的未执行路径。
 
 
-四份报告和架构图均生成成功后，工作流将同次运行的 HTML 与徽章一起部署到 GitHub Pages。Rust 徽章引用从工作区测量中筛出的 `core/` 行覆盖报告，工作区完整报告仍保存在 Rust 工件中。UI 徽章取 Vitest 汇总 JSON 的行覆盖率，Python 徽章取 coverage.py 合计语句和分支后显示的百分比，C 的两枚徽章取 gcovr 汇总 JSON 的行、分支覆盖率。任一报告或架构图未生成成功时，Pages 保留上次成功发布的内容。
+master 上的四份报告和架构图均生成成功后，工作流将同次运行的 HTML 与徽章一起部署到 GitHub Pages。Rust 徽章引用从工作区测量中筛出的 `core/` 行覆盖报告，工作区完整报告仍保存在 Rust 工件中。UI 徽章取 Vitest 汇总 JSON 的行覆盖率，Python 徽章取 coverage.py 合计语句和分支后显示的百分比，C 的两枚徽章取 gcovr 汇总 JSON 的行、分支覆盖率。任一报告或架构图未生成成功时，Pages 保留上次成功发布的内容。
