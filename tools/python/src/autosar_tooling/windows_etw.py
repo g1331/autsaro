@@ -240,12 +240,6 @@ def stop(folder: Path) -> bool:
     # Only stop a session for which this job received a successful start receipt.
     try:
         _stop(folder)
-    except ControlProofError as error:
-        collector_state(folder, "stop", error)
-        # A job that must prove its controls fails the step; other jobs only degrade.
-        if controls_required():
-            raise
-        return False
     except (
         OSError,
         RuntimeError,
@@ -253,7 +247,12 @@ def stop(folder: Path) -> bool:
         ValueError,
         KeyError,
     ) as error:
-        return collector_state(folder, "stop", error)
+        degraded = collector_state(folder, "stop", error)
+        # A job that must prove its controls cannot count as a clean run without the
+        # evidence (ADR 0031): fail the step. Other jobs keep running on degraded evidence.
+        if controls_required():
+            raise
+        return degraded
     return collector_state(folder, "complete")
 
 

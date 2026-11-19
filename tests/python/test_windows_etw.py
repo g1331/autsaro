@@ -377,3 +377,50 @@ class WindowsEtwTests(unittest.TestCase):
             with self.assertRaisesRegex(ControlProofError, "no identity proof"):
                 run([start, classic, stop_event], "true")
             self.assertTrue(run([start, classic, stop_event], "false"))
+
+    def test_required_controls_fail_the_stop_step_on_any_collection_failure(self):
+        created = 134395479825996909
+        data = process_events(3732, created)
+
+        def prepare(directory, started=True):
+            folder = Path(directory) / "etw"
+            folder.mkdir()
+            if started:
+                (folder / "started").touch()
+            evidence = Path(directory) / "job-evidence"
+            evidence.mkdir()
+            (evidence / "control-3732.json").write_text(
+                json.dumps({"pid": 3732, "created_100ns": created})
+            )
+            return folder
+
+        def run(folder, events_, required):
+            environment = {"AUTOSAR_ETW_REQUIRE_CONTROLS": required}
+            with (
+                patch.dict(os.environ, environment),
+                patch("autosar_tooling.windows_etw.command"),
+                patch("autosar_tooling.windows_etw.events", return_value=events_),
+            ):
+                return stop(folder)
+
+        loss = {
+            "provider": {"Guid": "{9e814aad-3204-11d2-9a82-006008a86939}"},
+            "event_id": "0",
+            "opcode": "0",
+            "event_guid": None,
+            "timestamp": {},
+            "fields": {"EventsLost": "3", "BuffersLost": "0"},
+        }
+        cases = {
+            "never started": (False, data, "never started"),
+            "no process events": (True, [loss], "no Kernel-Process lifecycle"),
+            "lost events": (True, [*data, loss], "lost events"),
+        }
+        for name, (started, events_, message) in cases.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as directory:
+                folder = prepare(directory, started)
+                with self.assertRaisesRegex(RuntimeError, message):
+                    run(folder, events_, "true")
+                state = json.loads((folder / "collector-state.json").read_text())
+                self.assertFalse(state["complete"])
+                self.assertFalse(run(folder, events_, "false"))
