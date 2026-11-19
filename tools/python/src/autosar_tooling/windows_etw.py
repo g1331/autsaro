@@ -14,6 +14,8 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 
+from autosar_tooling import windows_host_load, windows_process_timing
+
 # ProcessThread supplies classic process command lines; the manifest provider adds
 # FILETIME creation/exit identities. No CPU sampling, context switches or registry changes.
 PROFILE = """<?xml version="1.0" encoding="utf-8"?>
@@ -153,6 +155,10 @@ def _stop(folder: Path) -> None:
         raise RuntimeError(
             "ETW session never started; collector.jsonl contains setup results"
         )
+    # Tests have finished: the same quiet-time probe as at start, before the trace stops.
+    (folder / "reference-end.json").write_text(
+        json.dumps({"samples_s": benchmark()}), encoding="utf-8"
+    )
     command(folder, ["wpr", "-stop", str(folder / "process.etl")], timeout=120)
     command(
         folder,
@@ -199,6 +205,7 @@ def _stop(folder: Path) -> None:
     (folder / "trace-health.json").write_text(json.dumps(health), encoding="utf-8")
     if not process_events:
         raise RuntimeError("ETW has no Kernel-Process lifecycle events")
+    publish_process_timing(folder)
     if any(value for counters in loss_counters for value in counters.values()):
         raise RuntimeError(
             "ETW lost events or buffers; trace-health.json contains the counters"
@@ -227,7 +234,41 @@ def collector_state(folder: Path, phase: str, error: Exception | None = None) ->
     return error is None
 
 
+def publish_process_timing(folder: Path) -> None:
+    """The timing summary is extra evidence: it never changes the control proof's verdict."""
+    try:
+        windows_process_timing.publish(
+            windows_process_timing.write_summary(
+                folder, os.environ.get("AUTOSAR_ETW_LABEL")
+            )
+        )
+    except (OSError, ValueError, KeyError) as error:
+        print(f"Process timing summary unavailable: {error!r}", file=sys.stderr)
+
+
+def start_host_load(folder: Path) -> None:
+    """Host counters are extra evidence: a failure is reported and never stops a job."""
+    try:
+        windows_host_load.start(folder / "host-load")
+    except (OSError, subprocess.SubprocessError) as error:
+        print(f"Host load sampler did not start: {error}", file=sys.stderr)
+
+
+def stop_host_load(folder: Path) -> None:
+    try:
+        windows_process_timing.publish(windows_host_load.stop(folder / "host-load"))
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        KeyError,
+        subprocess.SubprocessError,
+    ) as error:
+        print(f"Host load evidence unavailable: {error}", file=sys.stderr)
+
+
 def start(folder: Path) -> bool:
+    start_host_load(folder)
     try:
         _start(folder)
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
@@ -238,6 +279,7 @@ def start(folder: Path) -> bool:
 def stop(folder: Path) -> bool:
     # Failure to collect evidence must not suppress the actual contract suites.
     # Only stop a session for which this job received a successful start receipt.
+    stop_host_load(folder)
     try:
         _stop(folder)
     except (

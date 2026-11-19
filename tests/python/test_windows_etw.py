@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from autosar_tooling import windows_etw
 from autosar_tooling.windows_etw import (
     PROFILE,
     ControlProofError,
@@ -78,6 +79,7 @@ def process_events(pid, created, lifetime=10_000, skew=0, command="python probe.
             "fields": {
                 **identity,
                 "ExitTime": iso(created + lifetime, "Z"),
+                "CPUCycleCount": "244754516",
                 "ImageName": "python.exe",
             },
         },
@@ -337,6 +339,50 @@ class WindowsEtwTests(unittest.TestCase):
             health = json.loads((folder / "trace-health.json").read_text())
             self.assertEqual(health["decoded_events"], 1)
             self.assertEqual(health["process_events"], 0)
+
+    def test_stop_times_the_quiet_probe_and_publishes_the_labelled_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "started").touch()
+            (folder / "events.xml").write_text(
+                '<Events><Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+                '<System><Provider Name="Microsoft-Windows-Kernel-Process" '
+                'Guid="{22fb2cd6-0e7b-422b-a0c7-2fad1fd0e716}"/>'
+                "<EventID>1</EventID><Opcode>1</Opcode>"
+                '<TimeCreated SystemTime="2026-11-19T15:53:06.688326100+00:00"/></System>'
+                '<EventData><Data Name="ProcessID"> 5</Data></EventData></Event></Events>'
+            )
+            timing = "autosar_tooling.windows_etw.windows_process_timing"
+            with (
+                patch("autosar_tooling.windows_etw.command"),
+                patch("autosar_tooling.windows_etw.stop_host_load"),
+                patch(
+                    "autosar_tooling.windows_etw.benchmark", return_value=[0.02] * 12
+                ),
+                patch(f"{timing}.write_summary", return_value="TEXT") as summary,
+                patch(f"{timing}.publish") as publish,
+                patch.dict(os.environ, {"AUTOSAR_ETW_LABEL": "native-protocol"}),
+            ):
+                self.assertTrue(stop(folder))
+            summary.assert_called_once_with(folder, "native-protocol")
+            publish.assert_called_once_with("TEXT")
+            end = json.loads((folder / "reference-end.json").read_text())
+            self.assertEqual(end, {"samples_s": [0.02] * 12})
+
+    def test_a_timing_summary_failure_is_reported_without_raising(self):
+        data = process_events(3732, 134395479825996909)
+        del data[2]["fields"]["CPUCycleCount"]
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "lifecycle.jsonl").write_text(
+                "".join(json.dumps(value) + "\n" for value in data)
+            )
+            with patch("sys.stderr") as stderr:
+                windows_etw.publish_process_timing(folder)
+            self.assertFalse((folder / "process-timing.md").exists())
+        written = "".join(call.args[0] for call in stderr.write.call_args_list)
+        self.assertIn("Process timing summary unavailable", written)
+        self.assertIn("CPUCycleCount", written)
 
     def test_required_controls_fail_the_stop_step_when_the_proof_fails(self):
         created = 134395479825996909
