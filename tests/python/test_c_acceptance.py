@@ -1448,18 +1448,18 @@ class AcceptanceTests(unittest.TestCase):
                 for phrase in evidence:
                     self.assertIn(phrase, record["conclusion"])
 
-    def test_real_freertos_user_case_alias_keeps_the_reviewed_local_closure(self):
+    def test_real_freertos_cases_keep_their_reviewed_local_closures(self):
         context = next(row for row in c_acceptance.contexts(ROOT)
                        if row["records"]["kind"] == "freertos-integration")
         self.assertEqual(context["source"], c_acceptance.ADOPTION)
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # Actual CI standard/user inputs share the selected kernel closure.
-        # Lock its recomputed identity and both labels; other local groups stay separate.
-        reviewed = "5a4b7bca3fb4bd721ed1c338f56759a8da564a57b38e71462867401cfd51842c"
-        self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
-        self.assertEqual(cases[TARGET, "user-application"], reviewed)
+        # The freeze records two libc6-dev package versions for these cases.
+        self.assertEqual(cases[TARGET, "standard-ecu"],
+                         "a27c0feb0581b8a3c1e46c8214a24a80b36677adff7ef846a29c5974b32549d0")
+        self.assertEqual(cases[TARGET, "user-application"],
+                         "0d3a7b4169fb817475048bb13f1e18f1a6b2e87721133bac45c3ad8b64915792")
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
