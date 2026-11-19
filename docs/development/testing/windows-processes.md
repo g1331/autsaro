@@ -78,6 +78,8 @@ provider 定义。
 该查询不打开成员句柄，缓冲区固定为 16 MiB，查询失败保存 `system_snapshot_error`。
 原 `image_error` 保留；系统快照提供的镜像与进程句柄查询各自标明来源。
 
+托管 runner 整体变慢时，先读 `process-timing.md` 与 `host-load/summary.md`，见[性能取证](windows-runner-performance.md)。
+
 读取下一次失败时：
 
 1. 在对应 capture 的 `before_stop` 找到活动成员的 PID＋`created_100ns`、wait 与 membership，

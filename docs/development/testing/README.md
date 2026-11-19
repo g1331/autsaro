@@ -9,6 +9,7 @@
 | [生成 C 的静态检查](generated-c.md) | Cppcheck／MISRA 分析、格式检查、clang 编译、封存构建模式与 CMake 构建 |
 | [日常修改的最小有效反馈](feedback.md) | 按修改落点选择的最快有意义测试命令、同机实测耗时与升级条件 |
 | [进程与原生行为](native.md) | 受管进程、原生 Rust 套件、OS suites、检测器构建、原生 CI 任务，以及平台路径、运行时文件迁移、主机时序与 Windows 进程的注意事项 |
+| [Windows runner 性能取证](windows-runner-performance.md) | 失败工件里的进程耗时汇总、参照探针、宿主负载记录，以及 protocol 分片的期限余量 |
 | [官方对照](official.md) | 官方档案下载与对照、条款处置核算 |
 | [桌面场景](desktop.md) | Tauri WebDriver 驱动的真实应用与 IPC 场景 |
 | [模糊测试](fuzzing.md) | ARXML／工程导入与 CanTp／Dcm 接收路径的 cargo-fuzz 目标、崩溃转回归与限时 CI |
