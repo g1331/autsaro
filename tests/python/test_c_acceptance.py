@@ -925,6 +925,9 @@ class AcceptanceTests(unittest.TestCase):
             self.summary, self.project, metadata, self.root, kernel)
         self.assertEqual(set(positions), {(0, 0)})
         self.assertEqual(obligations[0]["location"], {"file": name, "line": 54})
+        header["version"] += "-new"
+        self.assertEqual(c_acceptance._sdk_positions(
+            self.summary, self.project, metadata, self.root, kernel), (positions, obligations))
         for change in ("macro", "file", "line", "category", "value", "definitionLine"):
             changed = copy.deepcopy(diagnostic)
             if change in {"macro", "category", "value", "definitionLine"}:
@@ -939,6 +942,34 @@ class AcceptanceTests(unittest.TestCase):
         definition["file"] = "project.h"
         self.assertRaises(ValueError, c_acceptance._sdk_positions,
                           self.summary, self.project, metadata, self.root, kernel)
+
+    def test_sdk_header_content_is_checked_independently_of_package_version(self):
+        self.sdk_inputs()
+        self.bind_sdk(status="pending")
+        original = self.evaluate()
+        self.assertEqual(original["status"], "blocked")
+        self.assertEqual(len(original["sdkObligations"]), 2)
+        identity = c_acceptance.sdk_identity(self.summary, self.project, self.root)
+
+        self.sdk_header["version"] += "-new"
+        updated = self.evaluate()
+        self.assertEqual(updated["status"], "blocked", updated["objects"])
+        self.assertEqual(updated["sdkObligations"], original["sdkObligations"])
+        self.assertEqual(c_acceptance.sdk_identity(self.summary, self.project, self.root), identity)
+
+        location = self.sdk_name + ":1"
+        definition = self.summary["scope"]["sdkMacroInputs"][self.sdk_name][location]["sa_sigaction"]
+        for row, field, value in ((self.sdk_header, "sha256", "f" * 64),
+                                  (definition, "value", "changed_member")):
+            with self.subTest(field=field):
+                old = row[field]
+                row[field] = value
+                self.sdk_header["key"] = c_sdk.header_key(self.sdk_header)
+                result = self.evaluate()
+                self.assertEqual(result["status"], "error")
+                self.assertEqual(result["objects"][-1]["reason"],
+                                 f"SDK integration definition differs: {location}:sa_sigaction")
+                row[field] = old
 
     def test_sdk_changed_source_and_owner_are_rejected_after_rebinding(self):
         self.sdk_inputs()
@@ -975,7 +1006,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("Incomplete SDK source provenance", result["objects"][-1]["reason"])
 
-    def test_sdk_changed_package_version_and_record_body_invalidate_evidence(self):
+    def test_sdk_changed_record_body_invalidates_evidence(self):
         self.sdk_inputs()
         before = self.identity()
         path = self.root / c_acceptance.SDK
@@ -983,10 +1014,6 @@ class AcceptanceTests(unittest.TestCase):
             stream.write("Changed integration assessment.\n")
         self.assertNotEqual(before, self.identity())
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
-        self.sdk_header["version"] = "new-package"
-        self.sdk_header["key"] = c_sdk.header_key(self.sdk_header)
-        self.bind_sdk()
-        self.assertIn("definition differs", self.evaluate()["objects"][-1]["reason"])
 
     def test_sdk_mixed_diagnostic_checks_each_physical_location(self):
         self.sdk_inputs()
@@ -1421,18 +1448,18 @@ class AcceptanceTests(unittest.TestCase):
                 for phrase in evidence:
                     self.assertIn(phrase, record["conclusion"])
 
-    def test_real_freertos_user_case_alias_keeps_the_reviewed_local_closure(self):
+    def test_real_freertos_cases_keep_their_reviewed_local_closures(self):
         context = next(row for row in c_acceptance.contexts(ROOT)
                        if row["records"]["kind"] == "freertos-integration")
         self.assertEqual(context["source"], c_acceptance.ADOPTION)
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # Actual CI standard/user inputs share the selected kernel closure.
-        # Lock its recomputed identity and both labels; other local groups stay separate.
-        reviewed = "5a4b7bca3fb4bd721ed1c338f56759a8da564a57b38e71462867401cfd51842c"
-        self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
-        self.assertEqual(cases[TARGET, "user-application"], reviewed)
+        # The freeze records two libc6-dev package versions for these cases.
+        self.assertEqual(cases[TARGET, "standard-ecu"],
+                         "a27c0feb0581b8a3c1e46c8214a24a80b36677adff7ef846a29c5974b32549d0")
+        self.assertEqual(cases[TARGET, "user-application"],
+                         "0d3a7b4169fb817475048bb13f1e18f1a6b2e87721133bac45c3ad8b64915792")
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
