@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import platform
 import shutil
 import tempfile
 import unittest
@@ -13,7 +14,9 @@ from autosar_tooling import c_check, c_preprocessor
 from ecu_tools.build import digest, tool_argument
 
 
-@unittest.skipUnless(shutil.which("gcc"), "GCC is needed for preprocessing evidence")
+# Apple clang answers to "gcc" on macOS; evidence is only collected on controlled targets.
+@unittest.skipUnless(shutil.which("gcc") and platform.system() in c_check.TARGETS.values(),
+                     "GCC on a controlled analysis host is needed for preprocessing evidence")
 class PreprocessingEvidenceTests(unittest.TestCase):
     def test_repeated_include_observes_the_current_definition_and_only_evaluated_branches(self):
         with tempfile.TemporaryDirectory() as directory:
