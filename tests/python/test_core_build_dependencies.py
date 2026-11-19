@@ -31,7 +31,7 @@ class CoreBuildDependenciesTests(unittest.TestCase):
         bash = str(Path(os.environ['ProgramFiles']) / 'Git/bin/bash.exe') if os.name == 'nt' else 'bash'
         for mirror in ('mirror+file:/etc/apt/apt-mirrors.txt', 'http://azure.archive.ubuntu.com/ubuntu/'):
             for packages, failure in (('', ''), (consumer['with']['linux-packages'], ''), (None, 'warn-once'),
-                                      ('build-essential cmake', 'warn-once'), ('clang', 'warn-always'),
+                                      ('build-essential\ncmake', 'warn-once'), ('clang', 'warn-always'),
                                       ('clang', 'update'), ('pkg-config', 'install')):
                 with self.subTest(mirror=mirror, packages=packages, failure=failure), tempfile.TemporaryDirectory(prefix='apt test ') as temporary:
                     directory = Path(temporary)

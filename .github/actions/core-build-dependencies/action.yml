@@ -15,7 +15,7 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         LINUX_PACKAGES: ${{ inputs.linux-packages }}
       run: |
-        read -r -a packages <<< "$LINUX_PACKAGES"
+        read -r -a packages <<< "${LINUX_PACKAGES//$'\n'/ }"
         bash "$ACTION_PATH/install-ubuntu-packages.sh" libxml2-dev libclang-dev clang pkg-config "${packages[@]}"
     - name: Identify vcpkg cache image
       id: vcpkg-image
