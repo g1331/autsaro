@@ -46,7 +46,7 @@ R15.5 的 disapply 是 Compliance §5.1 允许的 Advisory 重分类，不是 Re
 
 `checker-obligations` 的 `retained` 对应 [MISRA Compliance:2020](https://misra.org.uk/app/uploads/2021/06/MISRA-Compliance-2020.pdf) §4、§7.3 的带偏离合规（Deviations）。Required 须完成正式偏离，Advisory 仍按既有规则说明并批准具体保留，Mandatory 一律拒绝。按 ADR 0030 确认范围后，正文先核定完整规则、每个实体、必要性及风险控制，再在原标准篇记录实体范围。保留、满足、不适用和未评估在规则级验收分别计数。
 
-原 `checker-obligations` 表中的 `retained` 行须有同一组标准篇中的精确清单。清单写在 `<!-- misra-checker-retained-begin -->` 与 `<!-- misra-checker-retained-end -->` 之间，每行一个 JSON 对象，含 `rule`、批准上下文 `approval`、按样本名索引的 `cases`。每个样本列出实际交付 `file`、物理 `line`、实体 `name` 和 `diagnostics`（按程序列出该实体的原始诊断列号）。样本经评估无保留实体时登记空数组。验收逐程序核对 GCC 依赖、原始项目诊断位置与诊断级精确记录解析出的实体名。实体缺失、额外或不匹配均阻塞。
+原 `checker-obligations` 表中的 `retained` 行须有同一组标准篇中的精确清单。清单写在 `<!-- misra-checker-retained-begin -->` 与 `<!-- misra-checker-retained-end -->` 之间，每行一个 JSON 对象，含 `rule`、批准上下文 `approval`、按 `目标/样本名` 索引的 `cases`。每个样本列出实际交付 `file`、物理 `line`、实体 `name` 和 `diagnostics`（按程序列出该实体的原始诊断列号）。样本经评估无保留实体时登记空数组。验收逐程序核对 GCC 依赖、原始项目诊断位置与诊断级精确记录解析出的实体名。FreeRTOS 项目补丁沿 hunk 归属匹配，采用原行继续由集成记录负责。实体缺失、额外或不匹配均阻塞，清单中的重复 JSON 键直接拒绝。
 
 继续沿用[原标准篇的批准上下文](../development/testing/source-acceptance.md#原标准篇中的上下文)。`records` 的 `kind` 为 `checker-obligations`，`retainedSha256` 为该组完整保留清单的规范 JSON 摘要（按规则号索引，键排序、UTF-8、紧凑编码）。验收同时要求清单引用当前输入对应的上下文 ID，且 `formalStatus` 为 `approved`。普通 checker-obligations 上下文仍可仅登记 `kind`。输入变化须重核，现有诊断级精确处置及其批准上下文继续分别消费，原始诊断保留。
 
