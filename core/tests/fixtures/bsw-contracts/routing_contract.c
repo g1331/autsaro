@@ -417,9 +417,15 @@ int main(void)
     lower_result = E_OK;
     /* The CanTp route has no trigger; IF callbacks for IDs of no IF route do nothing. */
     assert(LSduR_CanIfTriggerTransmit(6u, &pdu) == E_NOT_OK);
+    none();
+    /* Confirmation proves the same lower handle has an installed IF route. */
+    PduR_CanIfTxConfirmation(36u, E_OK);
+    once(COM_CONF, 7u);
+    assert(last_result == E_OK);
     /* A matching PduR IF route with no trigger also leaves the output untouched. */
     assert(PduR_CanIfTriggerTransmit(36u, &pdu) == E_NOT_OK);
     assert(pdu.SduDataPtr == bytes && pdu.MetaDataPtr == NULL_PTR && pdu.SduLength == 64u);
+    none();
     PduR_CanIfTxConfirmation(5u, E_OK);
     assert(PduR_CanIfTriggerTransmit(5u, &pdu) == E_NOT_OK);
     none();

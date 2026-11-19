@@ -28,18 +28,25 @@ static void reject_invalid_arguments(void)
     assert(Ecu_HostBatchComplete(&batch) == E_OK);
 }
 
+static void reject_line(const char *text, StatusType expected)
+{
+    Ecu_BatchCommand command = ECU_BATCH_BEGIN;
+    assert(Ecu_HostBatchParse(&batch, text, strlen(text), &command) == expected);
+    assert(command == ECU_BATCH_BEGIN);
+}
+
 static void reject_whitespace_in_open_batch(void)
 {
-    assert(line("COMMIT") == E_OS_STATE);
-    assert(line("   ") == E_OS_VALUE);
+    reject_line("COMMIT", E_OS_STATE);
+    reject_line("   ", E_OS_VALUE);
     assert(batch.open == 0u && batch.rejected == 0u);
     assert(line("BEGIN 4") == E_OK);
     assert(line("RX 800 4 78563412") == E_OK);
-    assert(line("   ") == E_OS_VALUE);
+    reject_line("   ", E_OS_VALUE);
     assert(batch.open == 1u && batch.rejected == 1u && batch.count == 1u);
-    assert(line("RX 801 4 12345678") == E_OS_VALUE);
+    reject_line("RX 801 4 12345678", E_OS_VALUE);
     assert(batch.count == 1u && batch.frames[0].id == 800u);
-    assert(line("COMMIT") == E_OS_VALUE);
+    reject_line("COMMIT", E_OS_VALUE);
     assert(batch.open == 0u && batch.rejected == 0u && batch.executing == 0u);
     assert(batch.count == 0u && batch.sequence == UINT64_C(1));
     assert(batch.completed_epoch == UINT64_C(3) && batch.batch_id == UINT64_C(1));
