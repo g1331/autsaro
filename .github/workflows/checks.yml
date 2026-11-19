@@ -50,7 +50,7 @@ jobs:
           rows = None
           if os.environ['PULL_REQUEST']:
               diff = subprocess.run(['git', 'diff', '--find-renames', '--name-status', '-z',
-                  'HEAD^1...HEAD^2', '--'], stdout=subprocess.PIPE)
+                  'HEAD^1', 'HEAD', '--'], stdout=subprocess.PIPE)
               if diff.returncode == 0:
                   rows = git_diff_rows(diff.stdout)
           elif os.environ.get('BASE') and set(os.environ['BASE']) != {'0'}:

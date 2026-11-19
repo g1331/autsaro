@@ -119,6 +119,47 @@ class ReceiverTests(unittest.TestCase):
                 self.assertNotEqual(observed[name], trusted[name])
                 self.assertIn(f"{name}: expected {trusted[name]}, found {observed[name]}", result.stderr)
 
+    def test_run_binds_export_receipt_builds_both_modes_and_propagates_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            package = root / "received package"
+            seal = package / "meta/files.sha256"
+            seal.parent.mkdir(parents=True)
+            seal.write_bytes(b"exported seal")
+            entry = package / "tools/ecu-tool.py"
+            entry.parent.mkdir()
+            entry.write_text(
+                "import json, sys\n"
+                "print(json.dumps(sys.argv[1:]))\n"
+                "sys.exit(23 if sys.argv[-1] == 'probe' else 0)\n",
+                encoding="utf-8",
+            )
+            results = root / "results"
+            receipt = root / "receipt.json"
+            command = [sys.executable, "-I", "-S", str(SCRIPT), "run", str(package),
+                       str(results), "--edit-receipt", str(receipt)]
+            env = dict(os.environ, AUTOSAR_CC=sys.executable, AUTOSAR_OBJDUMP=sys.executable,
+                       AUTOSAR_GIT=sys.executable)
+            edit = {"package": str(package), "sealSha256": "different export"}
+            receipt.write_text(json.dumps(edit))
+            rejected = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
+            self.assertEqual(rejected.returncode, 1)
+            self.assertIn("differs from the recorded desktop export", rejected.stderr)
+            self.assertFalse(results.exists())
+
+            edit["sealSha256"] = RECEIVER["digest"](seal)
+            receipt.write_text(json.dumps(edit))
+            failed = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
+            self.assertEqual(failed.returncode, 1)
+            self.assertIn("23", failed.stderr)
+            self.assertIn("build-probe.log", failed.stderr)
+            self.assertEqual(json.loads((results / "identity.json").read_text())["edit"], edit)
+            for mode in ("host-batch", "probe"):
+                self.assertEqual(json.loads((results / f"build-{mode}.log").read_text()), [
+                    "build", "--project", str(package), "--output", str(results / mode),
+                    "--mode", mode,
+                ])
+
     def test_environment_excludes_ambient_path_and_build_overrides(self):
         python = Path(sys.executable).absolute()
         variables = {
