@@ -144,14 +144,14 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 
 主文R17.3（Mandatory，印刷138／PDF146）仅适用C90，当前实际TU为C99；三处是编译器对类型的对齐查询，不是遗漏函数原型。这三个GNU运算在旧guard中已经存在，改换常量表达式上下文没有新增一次运行时调用。固定addon的misra_17_3按未关联function／valueType的名字加左括号报告，没有完整建模该扩展。实际C99编译及对应约束拒绝另作证据；不手写内建声明、不新增baseline／suppression，原报告、语言适用性、GNU扩展责任和严格比较拒绝分别保留。
 
-维护者接受的平台／OS宏形式见[精确预处理记录](../retained-platform.md)，不扩大所选配置的运行能力。
+平台／OS 宏的批准范围见[精确预处理记录](../retained-platform.md)。
 
 ### 分批结算
 
-前四批见[声明](declarations.md)、[表达式](expressions.md)和[控制流](control-flow.md)。
-后续见[预处理与 #536](preprocessing-library.md)、[库与资源](library-resources.md)、
-[第七批](expressions.md#第七批当前输入与类型推导)、[第八批](declarations.md#第八批的当前结算)及
+见[声明](declarations.md)、[表达式](expressions.md)、[控制流](control-flow.md)、
+[预处理](preprocessing-library.md)、[库与资源](library-resources.md)、
+[第七批](expressions.md#第七批当前输入与类型推导)、[第八批](declarations.md#第八批的当前结算)、
 [第九批](control-flow.md#第九批的当前结算)。
-144 项为 96 satisfied、3 not_applicable、45 not_assessed。
-[#547 的 R5.3](lexical.md#r53-实际声明与作用域)已核对。
-[#547 的 R5.9](lexical.md#r59-私有对象改名)仍有 1 个重用名。
+144 项为 97 satisfied、3 not_applicable、44 not_assessed。
+已核对 [R5.3](lexical.md#r53-实际声明与作用域)。
+[R5.9](lexical.md#r59-私有对象改名)仍有 1 个重用名。

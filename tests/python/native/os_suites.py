@@ -1606,6 +1606,22 @@ def check_arti_native(directory: Path) -> None:
     binary, _ = build(task_dir, "arti.c", ("OS_ARTI_TESTS",))
     if _TARGET_ID.get() == "linux-x64-controlled-v1":
         verify_arti_elf(binary)
+    else:
+        control_context = execute(binary, "control-context")
+        require(control_context["exit"] == 0 and not control_context["stderr"], control_context)
+        old_target = directory / "whole-context-target"
+        shutil.copytree(TARGET, old_target)
+        source = old_target / "src/host/windows/Os_Stack.c"
+        text = source.read_text(encoding="utf-8")
+        start = text.index("saved_contexts[i] = (CONTEXT){")
+        end = text.index("};", start) + len("};")
+        source.write_bytes((text[:start] + "saved_contexts[i] = *context;" + text[end:]).encode("utf-8"))
+        old_build = directory / "whole-context-build"
+        old_build.mkdir()
+        old_binary, _ = build(old_build, "arti.c", ("OS_ARTI_TESTS",), target=old_target)
+        whole_context = execute(old_binary, "control-context")
+        require(whole_context["exit"] == 7 and
+                "arti context published unrequested fields" in whole_context["stderr"], whole_context)
     observations = check_arti(binary)
     nested_dir = directory / "nested"
     nested_dir.mkdir()

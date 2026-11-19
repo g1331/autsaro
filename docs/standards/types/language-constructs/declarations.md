@@ -38,7 +38,7 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 | R8.12 | Required | 枚举列表的隐式值唯一性 | satisfied | 主文 73，AMD2.27 追加 C11；同号入口依赖 values／valueType，另按实际全部枚举体独立求值。CanTp 状态、ComM、Dcm 发布、PduR、Ecu_Status 和 OS hook／host 枚举均全显式或初始零后单调递增，隐式项无重复；ARTI／OS 宽度及对齐 sizeof 断言枚举全显式，允许相同值。消费者为相应状态比较／switch，生成 Ecu_Config 值与配置消费一致；无项目 patch 新增隐式冲突。 |
 | R8.13 | Advisory | 指针所指对象的可修改性 | not_assessed | 主文73–74 同时约束指针和数组元素；写入或复制到可写指针的允许条件按实际值流核定。#443 的 #547 从 Det／Dcm／Can 和 OS 接缝的全部指针、数组，经别名、赋值、内存复制、callback 和成功／失败输出追到最终写方或可修改接口；标准 ABI 和 SDK 输出保持，局部 constPointer 零报告未替代系统证明。 |
 | R8.14 | Required | 原声明及实际宏展开的 restrict | satisfied | 主文 75，AMD2.27 追加 C11；同号入口只查 raw restrict。物理自有文件及实际全部展开另查 restrict／__restrict／__restrict__、宏及 typedef，无项目或 patch 限定用途；Os_LinuxNative.c 的 memcpy 和 pthread／SDK 声明接缝保持原头，ISO 库内部按 §6.7，非 ISO 原头沿采用责任。未以别名安全或包装创造规则例外。 |
-| R9.1 | Mandatory | 自动对象读取之前的赋值路径 | not_assessed | 主文75–76、AMD4.56–57 将 _Atomic 交 R9.7；Mandatory。当前 Dcm 缓冲、Backend 的 GetThreadContext／API 输出、callback 取消与重入仍缺逐成员／元素的首次读取前赋值路径。#443 的 #547 补齐成功、失败和部分输出的定义—使用证明，真实缺口直接整改；已初始化的局部例子和零报告只作各自证据。 |
+| R9.1 | Mandatory | 双目标四 profile 的 C99 自动对象及逐成员／元素 | satisfied | [首次读取核查](#r91-首次读取核查)覆盖 Dcm 取消与重入、OS 部分输出、BSW 传输和实际生成消费者。Windows 整体复制已修；主文75–76 与 AMD4.56–57 适用边界见下。 |
 | R9.2 | Required | aggregate／union 初始值的层级 | not_assessed | 主文77–78 的 {0}、字符串、兼容结构表达式及指定子对象例外，AMD4.58 的 R9.6 交叉引用已合成。已定位208种去重 initializer-list 及3种 compound literal，含 Os_ErrorParametersType union、Ecu_OsConfig 与 Can payload；完整 typedef 数组／aggregate 的类型化子对象映射未齐。#443 的 #547 逐对象连接类型、层级与直接消费者后结算。 |
 | R9.3 | Required | 数组的显式元素初始化与例外 | not_assessed | 主文78–79；{0}、全指定及字符串例外分别核查。Can payload[8] 八项、CanIf errors[2] 两项、increments 的 {0} 和 priorities[30u] 已有局部映射；全部数组／数组子对象的容量—元素集合尚未齐。#443 的 #547 补齐当前生成、应用和 patch 的类型化容量及消费者，普通尾部隐式填零未作为通用例外。 |
 | R9.4 | Required | 每个子对象的重复初始化 | satisfied | 主文 79–80＋AMD2.49／AMD4.47–50；固定 misra_9 的 904／numInits 模型之外，逐个检查当前展开指定体及子列表。Os_Config 的 tasks／counters 各结构、hooks／time_config／Ecu_OsConfig、Os_ErrorParametersType 的单个 union 成员、Linux timespec／pollfd／process_handle 均无同一子对象重复指定，也无指定回退后的位置覆盖；priorities 仅 [30u]=1u。其余全位置／零初值各消费一次，无 patch 新增重复目标。 |
@@ -83,6 +83,43 @@ owner 合并重复包含，R8.6 按两个独立程序核算。SDK／采用声明
 责任继续阻塞。原始 passed／error、退出码、诊断、221项 assessment 和 completeCompliance
 保持原义；完整验证、严格比较的逐行对应及独立复核归本批 PR。
 
+## R9.1 首次读取核查
+
+主文印刷 75–76／PDF 83–84 把数组元素和结构成员当作独立对象。AMD2.27 扩至 C11，
+AMD4.56–57 将 `_Atomic` 交 R9.7；其余修订未改变这里的 C99 义务。
+[双平台实际输入](https://github.com/g1331/autsaro/actions/runs/44518089096/attempts/2)
+包含 888 个 HostBatch／probe 实例和 452 份 GCC 展开。按行标记合并同一行的宏展开，
+按物理声明和展开形态去重，得到 1347 条自动声明记录，其中 358 条有延后赋值的声明项。
+按类型检查初始化覆盖，并跟踪循环已写前缀、分支状态和返回值。Linux
+`Os_LinuxNative.c` 的 `__builtin_offsetof` 位于未求值的 ABI 检查，另核原表达式及复制长度。
+固定 Cppcheck 将 R9.1 映射到 `uninitvar`，八份结果均无本条诊断，路径证据如下。
+
+- **Dcm 请求**。完整成功接收才进入 `DCM_REQUEST`。`Dcm_PrepareWork` 设置消息的两个指针、
+  长度、容量、标志和 ID，以及配置、会话、generation 和取消标记。SID 和子功能从静态槽
+  复制，DID 对只读已接收且通过偶数长度检查的两个元素。正响应在增加长度前写全相应的
+  session／TesterPresent／可用性数据。应用路径经生成 RTE 到 `Ingress_ReadData` 或
+  `EchoApplication_ReadData`，成功写四字节；拒绝只发送 `Dcm_Negative` 写好的三字节。
+- **Dcm 取消与重入**。`dcm_actors.executing` 序列化回调，Init 更新 generation，旧执行者
+  无法提交。未领取请求时不读 work；响应只复制已发布长度。`Dcm_NextPublication` 每次
+  初始化全部成员，再按标签读取已选字段。测试覆盖部分写入后失败、回调内 Init 和重入。
+- **OS 部分输出**。Windows 三个观察入口在成功捕获后才读取，失败走退出或
+  `configASSERT`；`VirtualQuery` 返回完整大小后才读取成员。`Os_StackObserve` 只复制
+  flags、CS、SS、EFlags、RSP、RIP，其余成员初始化为零。Windows 原生夹具用哨兵证伪
+  整体复制。Linux `Os_LinuxCaptureContext` 先写内核前缀，再读 RSP／FP 指针，glibc 快照
+  的其余成员预先置零。两端 port 先写线程和事件字段，再按完整大小保存或取回。
+- **OS 服务与重入**。`Os_BackendInspect` 先清零整个快照，失败提前返回；先写
+  `previous[i]`、`completed[i]` 再遍历同一任务范围。`advance_counter` 每次入栈写全
+  三个成员。计数器、告警、事件和表状态的成功出口写输出，ARTI 失败出口只使用哨兵，
+  ErrorHook 保存参数指针，嵌套中断先完整保存再恢复。`GetElapsedValue` 先读已提供的
+  INOUT 样本，拒绝不读 OUT。`Os_TargetTakeInput` 的生产者先置零整个 data 再复制有效前缀。
+- **其他运行时与生成代码**。`CanTp_WorkType` 按 kind 选取各分支已写的字段；
+  下层和接收分支写全八个 frame 元素。`Com_Pack` 写四字节后才允许发送，
+  `Can_InternalTransmitPdu` 写齐 PDU 成员，payload 尾部保留零。路由拒绝分支不读
+  未交付输出。`Ecu_StackBootstrap` 仅成功取回控制器模式才读 actual；SchM 在区内
+  取值后返回。协议解析按已写 token 数读取，HostBatch／probe 只消费成功交付的
+  记录、票据和长度；文本及平台读取缓冲只消费写入的前缀。SDK 内部与采用原行
+  沿 ADR 0025，主机路径核查沿 ADR 0030 记录。
+
 ## 当前输入重评
 
 第二批的 run 43411175434／实际测试合并树73caf622，以及第七批的
@@ -99,49 +136,49 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
 {
   "id": "checker-obligations-547-r59",
   "evidence": {
-    "head": "d581984fb7ca5f5ed0da873b95a1abd84bafb4fa",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44540908795/attempts/1"
+    "head": "877563f50970b13e4aca50ea6e0789dbd7c3d855",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44567323884/attempts/1"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "1cacb1b531f16ff37f7fd223ba932a90576c7b6f88b87b96a640fbd66b7c5d2b"
+      "inputIdentity": "1e8b8f8dff07f449988c00569597591c6e51950db3a522d10eefe37f5fa9404b"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "aab06ea0f2eb8bc33fcbd34ab0ad7b9bf6e05a1ff9ad4417ad19555aae9ee78f"
+      "inputIdentity": "e1976a0212020aaca50da19291afc95aff21701643b15a3d43880308ce178399"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "1d49d0056a0253d0e7b90ad4b40eedba8d969a536dbbf9ab9e33452d933443cd"
+      "inputIdentity": "185e6775483a888c3cd8c31d03c1708d1c79b52813c6c69e7219557a61eaa2b9"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "3b255e9beab6bb4464e5ee6ffb2ecf4b0c50d77e43ed6f85e92a2c769b9b3266"
+      "inputIdentity": "5d639167b6a9636f86f92954f98bb44fa3e8f79f59f689c8e04c113336febe44"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "86223b7f6069633f516f2c27259abf26e2b21e44ec0ca8105fd534a71301aa39"
+      "inputIdentity": "5c321ad36c9779ed86373ee5ed7713950c7e2fecd553d5f62cf92616bc95750c"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "2f150d897ebf0a596eaac9a2f556458dde5490935872f92f4f503654a8a272e6"
+      "inputIdentity": "e7189b6fd950bb0edbd54cfb2e42fec99d8be842ccff32b86e402bf791f06ef2"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "140020e1a3741deed6ec7ebee446e5bbd7326186093b84875d5e5bf9fa99dbe9"
+      "inputIdentity": "dfc450e6f9de605b64b80e881ee976b074dd51a2a55c2a41751c6a0da402f377"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c79311af6a4a414e55f5564625f48e70577436285634464d449b8f392d2c6141"
+      "inputIdentity": "6c71d039ac1416a6e5c3157cbde3bf735b002f413e5c1f3add658ca7d3601a6a"
     }
   ],
   "records": {

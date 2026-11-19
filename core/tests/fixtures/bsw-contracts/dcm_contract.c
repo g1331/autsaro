@@ -51,6 +51,10 @@ static Std_ReturnType read_did(uint8 *data)
 {
     ++reads;
     data[0] = 0x12u;
+    if (read_mode == READ_FAIL) {
+        /* A failed infrastructure call may have written only part of the output. */
+        return E_NOT_OK;
+    }
     data[1] = 0x34u;
     data[2] = 0x56u;
     data[3] = 0x78u;
@@ -63,7 +67,7 @@ static Std_ReturnType read_did(uint8 *data)
     } else if (read_mode == READ_REENTER) {
         Dcm_MainFunction();
     }
-    return (read_mode == READ_FAIL) ? E_NOT_OK : E_OK;
+    return E_OK;
 }
 static void authentication(uint8 value)
 {

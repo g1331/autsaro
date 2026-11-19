@@ -46,8 +46,8 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 {
   "id": "generated-retention-547-r59",
   "evidence": {
-    "head": "d581984fb7ca5f5ed0da873b95a1abd84bafb4fa",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44540908795/attempts/1"
+    "head": "877563f50970b13e4aca50ea6e0789dbd7c3d855",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44567323884/attempts/1"
   },
   "cases": [
     {
@@ -73,22 +73,22 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "9831d4ab69de8c66293f0ce9a33dc6652409e23c3567f415e31e39e00d89921e"
+      "inputIdentity": "2bd7ee4e82593b5d0501a898bd2c860b9f146ea4659947bde57ef671a69481cc"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "6d2fbb5b6ed5570a91f1e20f6ea8673e2c1340c128941ccf01d8ba69f786090d"
+      "inputIdentity": "e6193864e1c084530b0a29b27f845365e28f8abd9c953adc077729208c6adad5"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "109d6f71eb5ba5a628963c0af4674a33a4c6f60867d5b0cb8b1e2887337692a8"
+      "inputIdentity": "8d036018e7f416cd041e2ce96834a977c612641ee7886cd08e3921405c5a659c"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "3b98c9f307aae85c0e76a3a9a85b7a086831459a680f448256d8b7cbe6a4093c"
+      "inputIdentity": "5abf218b1092a6c986cc7b8af7f283acb9d49173138bd6e9e698cf418b792062"
     }
   ],
   "records": {
