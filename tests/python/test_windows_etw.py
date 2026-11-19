@@ -195,6 +195,17 @@ class WindowsEtwTests(unittest.TestCase):
                 commands(folder), {first: ["old child"], second: ["new child"]}
             )
         with tempfile.TemporaryDirectory() as directory:
+            # Losing the first exit event leaves the next creation as the only bound.
+            lost_exit = [*old[:2], *new]
+            folder = write_run(
+                Path(directory),
+                lost_exit,
+                members=[(42, first), (42, second)],
+            )
+            self.assertEqual(
+                commands(folder), {first: ["old child"], second: ["new child"]}
+            )
+        with tempfile.TemporaryDirectory() as directory:
             # Losing the reused PID's manifest start must not attach its later command.
             folder = write_run(
                 Path(directory),
@@ -209,6 +220,36 @@ class WindowsEtwTests(unittest.TestCase):
             self.assertRaisesRegex(ControlProofError, "no process start"),
         ):
             write_run(Path(directory), old[1:], controls=[(42, first)])
+
+    def test_unreadable_control_proofs_fail_instead_of_escaping(self):
+        created = 134395479825996909
+        start, classic, stop = process_events(3732, created)
+        nameless = {**start, "fields": {**start["fields"]}}
+        del nameless["fields"]["ImageName"]
+        for name, data, proof in (
+            (
+                "image field",
+                [nameless, classic, stop],
+                '{"pid": 3732, "created_100ns": %d}',
+            ),
+            ("truncated proof", [start, classic, stop], "{"),
+            ("missing pid", [start, classic, stop], '{"created_100ns": %d}'),
+        ):
+            with (
+                self.subTest(name),
+                tempfile.TemporaryDirectory() as directory,
+                self.assertRaisesRegex(ControlProofError, "unreadable proof"),
+            ):
+                root = Path(directory)
+                (root / "job-evidence").mkdir()
+                (root / "job-evidence" / "control-1.json").write_text(
+                    proof.replace("%d", str(created))
+                )
+                (root / "etw").mkdir()
+                (root / "etw" / "lifecycle.jsonl").write_text(
+                    "".join(json.dumps(value) + "\n" for value in data)
+                )
+                correlate(root / "etw")
 
     def test_each_missing_control_fact_fails_the_proof(self):
         created = 134395479825996909

@@ -364,23 +364,26 @@ def correlate(folder: Path) -> None:
 
 
 def verify_control(path: Path, merged: dict) -> None:
-    proof = json.loads(path.read_text(encoding="utf-8"))
-    event = merged.get((proof["pid"], proof["created_100ns"]))
-    if event is None:
-        raise ControlProofError(
-            f"{path.name}: no process start for the control: {proof}"
-        )
-    fields = {key.lower(): value for key, value in event["start"]["fields"].items()}
-    failed = [
-        reason
-        for reason, ok in (
-            ("image is not python", "python" in fields["imagename"].lower()),
-            ("no parent", int(fields["parentprocessid"]) > 0),
-            ("no exit event", event["stop"] is not None),
-            ("no command line event", bool(event["command_events"])),
-        )
-        if not ok
-    ]
+    try:
+        proof = json.loads(path.read_text(encoding="utf-8"))
+        event = merged.get((proof["pid"], proof["created_100ns"]))
+        if event is None:
+            raise ControlProofError(
+                f"{path.name}: no process start for the control: {proof}"
+            )
+        fields = {key.lower(): value for key, value in event["start"]["fields"].items()}
+        failed = [
+            reason
+            for reason, ok in (
+                ("image is not python", "python" in fields["imagename"].lower()),
+                ("no parent", int(fields["parentprocessid"]) > 0),
+                ("no exit event", event["stop"] is not None),
+                ("no command line event", bool(event["command_events"])),
+            )
+            if not ok
+        ]
+    except (KeyError, ValueError) as error:
+        raise ControlProofError(f"{path.name}: unreadable proof: {error!r}") from error
     if failed:
         raise ControlProofError(f"{path.name}: {', '.join(failed)}: {event}")
 
