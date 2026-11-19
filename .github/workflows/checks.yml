@@ -33,11 +33,7 @@ jobs:
       application: ${{ steps.detect.outputs.application }}
       source-parent: ${{ steps.detect.outputs.source-parent }}
     steps:
-      # Standards records and the fixed guideline index are consumed analysis inputs.
-      # Pull requests touching only reader documentation and design records
-      # skip build and test jobs; pushes keep the full non-GUI checks.
-      # Pull requests that otherwise change only ui/ also skip the core, native and C analysis
-      # jobs: none of their inputs is under ui/ (tests/python/test_ci_selection.py).
+      # Select against the checked-out merge revision even if the PR receives another push.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -45,27 +41,26 @@ jobs:
       - id: detect
         shell: python
         env:
-          GH_TOKEN: ${{ github.token }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
           DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
           BASE: ${{ github.event.before }}
         run: |
-          import json, os, subprocess
-          from autosar_tooling.ci_selection import select_changes
+          import os, subprocess
+          from autosar_tooling.ci_selection import git_diff_rows, select_changes
           rows = None
           if os.environ['PULL_REQUEST']:
-              pages = json.loads(subprocess.run(['gh', 'api', '--paginate', '--slurp',
-                  f"repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PULL_REQUEST']}/files"],
-                  check=True, capture_output=True, text=True).stdout)
-              rows = [row for page in pages for row in page]
+              diff = subprocess.run(['git', 'diff', '--find-renames', '--name-status', '-z',
+                  'HEAD^1...HEAD^2', '--'], stdout=subprocess.PIPE)
+              if diff.returncode == 0:
+                  rows = git_diff_rows(diff.stdout)
           elif os.environ.get('BASE') and set(os.environ['BASE']) != {'0'}:
               diff = subprocess.run(['git', 'diff', '--no-renames', '--name-only',
                   os.environ['BASE'], os.environ['GITHUB_SHA']], capture_output=True, text=True)
               if diff.returncode == 0:
                   rows = [dict(filename=path, status='modified') for path in diff.stdout.split()]
           if rows is not None:
-              print('\n'.join(path for row in rows
-                  for path in (row['filename'], row.get('previous_filename')) if path))
+              for row in rows:
+                  print(row)
           values = select_changes(rows, pull_request=bool(os.environ['PULL_REQUEST']))
           # Keep every heavy consumer unselected until the PR is ready for review.
           if os.environ.get('DRAFT') == 'true':
