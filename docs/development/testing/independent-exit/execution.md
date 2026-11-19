@@ -5,7 +5,7 @@
 并按[必需 CI 的编译器安装定义](../../../../.github/actions/native-analysis-compiler/action.yml)安装同版 MinGW GCC／binutils。
 Linux 使用受控版本 GCC／binutils。目标清单要求的身份由包内 build 自行核对。接收者 Python 使用交付支持的 3.11–3.14。
 
-以下以空临时目录为起点。把 `FULL_MASTER_SHA` 替换为已冻结的提交。保留每个命令的退出码，失败时先保存现场再继续独立步骤。
+以下以空临时目录为起点。把 `FULL_MASTER_SHA` 替换为已冻结的提交。保留每个命令的退出码，失败时先保存现场再继续独立步骤。发送端的签名和链接验收还需要受控 binutils 的 `nm`。
 
 ## Linux 发送端
 
@@ -20,6 +20,7 @@ git -c core.autocrlf=false checkout --detach "$REV"
 export TMPDIR="$ROOT/tmp" UV_CACHE_DIR="$ROOT/uv-cache"
 export AUTOSAR_CC=$(command -v gcc-13)
 export AUTOSAR_OBJDUMP=$(command -v objdump)
+export AUTOSAR_NM=$(command -v nm)
 export AUTOSAR_GIT=$(command -v git)
 uv sync --locked
 export AUTOSAR_PYTHON=$(uv run --locked python -c 'import sys; print(sys.executable)')
@@ -29,9 +30,10 @@ export AUTOSAR_C_ANALYSIS_SAMPLES="$ROOT/samples"
   uname -a
   "$AUTOSAR_CC" --version
   "$AUTOSAR_OBJDUMP" --version
+  "$AUTOSAR_NM" --version
   "$AUTOSAR_PYTHON" --version
   "$AUTOSAR_GIT" --version
-  sha256sum "$AUTOSAR_CC" "$AUTOSAR_OBJDUMP"
+  sha256sum "$AUTOSAR_CC" "$AUTOSAR_OBJDUMP" "$AUTOSAR_NM"
 } > "$ROOT/results/identity.txt"
 cargo test --locked -p autosar-config-core --test it -- c_analysis:: \
   2>&1 | tee "$ROOT/results/A1-generate.log"
@@ -77,6 +79,7 @@ $env:TMP = "$Root/tmp"
 $env:UV_CACHE_DIR = "$Root/uv-cache"
 $env:AUTOSAR_CC = (Get-Command gcc.exe).Source
 $env:AUTOSAR_OBJDUMP = (Get-Command objdump.exe).Source
+$env:AUTOSAR_NM = (Get-Command nm.exe).Source
 $env:AUTOSAR_GIT = (Get-Command git.exe).Source
 uv sync --locked
 $env:AUTOSAR_PYTHON = (uv run --locked python -c 'import sys; print(sys.executable)')
@@ -86,9 +89,10 @@ $env:AUTOSAR_C_ANALYSIS_SAMPLES = "$Root/samples"
     Get-ComputerInfo -Property WindowsProductName,WindowsVersion,OsBuildNumber
     & $env:AUTOSAR_CC --version
     & $env:AUTOSAR_OBJDUMP --version
+    & $env:AUTOSAR_NM --version
     & $env:AUTOSAR_PYTHON --version
     & $env:AUTOSAR_GIT --version
-    Get-FileHash $env:AUTOSAR_CC, $env:AUTOSAR_OBJDUMP
+    Get-FileHash $env:AUTOSAR_CC, $env:AUTOSAR_OBJDUMP, $env:AUTOSAR_NM
 } > "$Root/results/identity.txt"
 cargo test --locked -p autosar-config-core --test it -- c_analysis:: 2>&1 |
     Tee-Object "$Root/results/A1-generate.log"
