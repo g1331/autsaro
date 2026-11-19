@@ -29,7 +29,7 @@ Autsaro 交付自有 AUTOSAR Classic 基础软件栈，以及配置、校验和�
 
 [![R24-11 CP 全部 SWS 的模块图](https://g1331.github.io/autsaro/architecture-full.svg)](https://g1331.github.io/autsaro/architecture-full.svg)
 
-图中列出 R24-11 CP 的全部 130 份 SWS：已交付的模块用环显示条款核对比例，尚未提供的模块标出承接它的阶段（见[长期候选目录](candidates.md)），“—”表示不在路线图上。master 上处置来源改动后，`Architecture diagrams` 工作流用 `python -m autosar_tooling coverage` 重新生成并发布；模块与阶段的对应表在 `tools/python/src/autosar_tooling/coverage.py`，改变路线阶段或交付新模块时同步修改。
+图中列出 R24-11 CP 的全部 130 份 SWS：已交付的模块用环显示条款核对比例，尚未提供的模块标出承接它的阶段（见[长期候选目录](candidates.md)），“—”表示不在路线图上。master 上的 `Coverage reports` 工作流用 `python -m autosar_tooling coverage` 生成架构图，与测试覆盖率报告一起发布；模块与阶段的对应表在 `tools/python/src/autosar_tooling/coverage.py`，改变路线阶段或交付新模块时同步修改。
 
 `R7/R18`、`R9/R14` 等备注表示已定义功能在 MCU 前由这些阶段承接；驱动的配置、软件接口和主机模型也在前序实现。R10 只绑定具体芯片／板卡并取得硬件证据，备注不表示整个标准的全部变体已交付。
 
