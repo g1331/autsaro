@@ -207,6 +207,7 @@ def render(scratch: Path, output: Path) -> None:
         "--root", str(sources), "--merge-mode-functions", "separate",
         "--json-add-tracefile", str(merged),
         "--html-nested", str(output / "index.html"), "--json", str(output / "coverage.json"),
+        "--json-summary", str(output / "coverage-summary.json"),
     )
     if negative_counts:
         (output / "gcov-warnings.txt").write_text(

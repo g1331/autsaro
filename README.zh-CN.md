@@ -3,6 +3,14 @@
   <h1>Autsaro</h1>
   <p>面向 AUTOSAR Classic 的配置与代码生成工作台</p>
   <p><sub>当前处于原型阶段，不具备生产可用性。</sub></p>
+  <p>
+    <a href="https://github.com/g1331/autsaro/actions/workflows/checks.yml?query=branch%3Amaster"><img src="https://github.com/g1331/autsaro/actions/workflows/checks.yml/badge.svg?branch=master" alt="master 分支的开发检查"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/c/"><img src="https://g1331.github.io/autsaro/coverage/c-lines.svg" alt="C 行覆盖率"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/c/"><img src="https://g1331.github.io/autsaro/coverage/c-branches.svg" alt="C 分支覆盖率"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/rust/"><img src="https://g1331.github.io/autsaro/coverage/rust-core.svg" alt="Rust core 行覆盖率"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/ui/"><img src="https://g1331.github.io/autsaro/coverage/ui-lines.svg" alt="UI 行覆盖率"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/python/"><img src="https://g1331.github.io/autsaro/coverage/python.svg" alt="Python 语句与分支覆盖率"></a>
+  </p>
 </div>
 
 **简体中文** · [English](README.md)
@@ -106,6 +114,8 @@ cargo test --locked -p autosar-config-core
 这些命令直接运行对应工具，失败会保留其诊断与退出状态。Python 工具先执行 `uv sync --locked`。增量格式检查使用 `autosar_tooling quality --base <基准提交>`，本地未指定基准时检查相对 HEAD 的待提交改动。`quality` 同时拒绝仓库路径和文本中的开发计划编号，决定记录、路线图和上游原样内容除外。
 
 基础测试、官方对照、原生运行及 GUI/安装包验收分别执行，见 [测试指南](docs/development/testing/README.md)。完整资源与原生检查使用 `uv run --locked python -m autosar_tooling verify --scope all --base <基准提交>`；缺失或未运行的层不显示为通过。
+
+覆盖率徽章链接到 master 最新发布的 Linux 报告。C 行与分支覆盖率统计 `runtime/{bsw,ecu,host,os}/{src,include}` 中实际插桩的项目自有代码和生成 C，排除 FreeRTOS 原件、应用源码和测试夹具。Rust 和 UI 分别显示 `core/` 和 `ui/src/` 的行覆盖率。Python 合计 `tools/python/src/` 的语句与分支覆盖率。测试集和测量细节见[覆盖率报告](docs/development/testing/coverage.md)。
 
 ## 构建与分发
 

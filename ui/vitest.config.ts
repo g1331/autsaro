@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      reporter: ['text', 'html', 'json', 'lcov'],
+      reporter: ['text', 'html', 'json', 'json-summary', 'lcov'],
       reportsDirectory: '../build/coverage/ui',
       reportOnFailure: true,
     },

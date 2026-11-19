@@ -3,6 +3,14 @@
   <h1>Autsaro</h1>
   <p>A configuration and code-generation workbench for AUTOSAR Classic</p>
   <p><sub>Prototype stage — not production-ready.</sub></p>
+  <p>
+    <a href="https://github.com/g1331/autsaro/actions/workflows/checks.yml?query=branch%3Amaster"><img src="https://github.com/g1331/autsaro/actions/workflows/checks.yml/badge.svg?branch=master" alt="Development checks on master"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/c/"><img src="https://g1331.github.io/autsaro/coverage/c-lines.svg" alt="C line coverage"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/c/"><img src="https://g1331.github.io/autsaro/coverage/c-branches.svg" alt="C branch coverage"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/rust/"><img src="https://g1331.github.io/autsaro/coverage/rust-core.svg" alt="Rust core line coverage"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/ui/"><img src="https://g1331.github.io/autsaro/coverage/ui-lines.svg" alt="UI line coverage"></a>
+    <a href="https://g1331.github.io/autsaro/coverage/python/"><img src="https://g1331.github.io/autsaro/coverage/python.svg" alt="Python statement and branch coverage"></a>
+  </p>
 </div>
 
 [简体中文](README.zh-CN.md) · **English**
@@ -110,6 +118,8 @@ cargo test --locked -p autosar-config-core
 These commands run the underlying tools directly and preserve their diagnostics and exit statuses on failure. Run `uv sync --locked` before using the Python tooling. Incremental formatting checks use `autosar_tooling quality --base <baseline-commit>`; without an explicit baseline, local checks inspect pending changes relative to HEAD. `quality` also rejects development plan numbers in repository paths and text; decision records, the roadmap and vendored upstream content are exempt.
 
 Basic tests, official comparisons, native execution, and GUI/package acceptance are separate layers; see the [testing guide](docs/development/testing/README.md). Complete resource and native checks use `uv run --locked python -m autosar_tooling verify --scope all --base <baseline-commit>`. Missing or unexecuted layers are not reported as passed.
+
+The coverage badges link to the latest published Linux reports from master. C line and branch coverage counts instrumented project code in `runtime/{bsw,ecu,host,os}/{src,include}` and generated C, excluding upstream FreeRTOS, application sources, and test fixtures. The Rust and UI badges show line coverage for `core/` and `ui/src/` respectively. The Python badge combines statement and branch coverage for `tools/python/src/`. See the [coverage guide](docs/development/testing/coverage.md) for the test suites and measurement details.
 
 ## Build and distribution
 
