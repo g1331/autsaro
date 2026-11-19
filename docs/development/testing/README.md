@@ -5,7 +5,7 @@
 | 主题 | 内容 |
 | --- | --- |
 | [独立交接](independent-exit/) | 双平台验收 |
-| [覆盖率报告](coverage.md) | Rust、Vitest V8 与 Python 的本地测量、CI 工件与范围 |
+| [覆盖率报告](coverage.md) | Rust、Vitest V8、Python、运行时与生成 C 的本地测量、CI 工件与范围 |
 | [生成 C 的静态检查](generated-c.md) | Cppcheck／MISRA 分析、格式检查、clang 编译、封存构建模式与 CMake 构建 |
 | [日常修改的最小有效反馈](feedback.md) | 按修改落点选择的最快有意义测试命令、同机实测耗时与升级条件 |
 | [进程与原生行为](native.md) | 受管进程、原生 Rust 套件、OS suites、检测器构建、原生 CI 任务，以及平台路径、运行时文件迁移、主机时序与 Windows 进程的注意事项 |

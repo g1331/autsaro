@@ -71,6 +71,11 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     autosar_config_core::resources::AssetInventory::from_directory(root).unwrap();
     let executable = tooling::native_binary(scratch, "det-consumer");
     let mut command = tooling::c_compiler();
+    if tooling::c_coverage() && fixture == "det_contract.c" {
+        command
+            .args(["-DAUTOSAR_GCOV_DET_HALT", "-Wl,--wrap=_exit"])
+            .arg(root.join("core/tests/fixtures/os/gcov_exit.c"));
+    }
     if cfg!(target_os = "linux") {
         command.arg("-pthread");
     }
@@ -979,7 +984,14 @@ fn dcm_generated_mode_switch_publishes_from_a_non_owner_context() {
     let scratch = Scratch::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for (path, bytes) in mainline_generated_headers(&scratch.0) {
-        std::fs::write(scratch.0.join(Path::new(&path).file_name().unwrap()), bytes).unwrap();
+        let destination = if path.ends_with(".c") {
+            let source = scratch.0.join(&path);
+            std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+            source
+        } else {
+            scratch.0.join(Path::new(&path).file_name().unwrap())
+        };
+        std::fs::write(destination, bytes).unwrap();
     }
     // Keep Dcm's quoted type import beside the selected generated mode definitions.
     std::fs::copy(
@@ -1045,7 +1057,7 @@ int main(void) {
             "runtime/host/src/Can_HostLock.c",
             "runtime/host/src/SchM_Diagnostic_Host.c",
         ])
-        .arg(scratch.0.join("SchM_Main.c"))
+        .arg(scratch.0.join("generated/src/SchM_Main.c"))
         .arg(harness)
         .arg("-o")
         .arg(&binary)

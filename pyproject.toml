@@ -23,6 +23,7 @@ ecu_tools = ["*.json"]
 build = ["cmake==4.4.4", "ninja==1.13.2"]
 coverage = [
     "coverage[toml]==7.17.0",
+    "gcovr==8.8",
 ]
 quality = [
     "clang-format==22.1.8",

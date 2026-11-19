@@ -59,8 +59,18 @@ pub(crate) fn c_compiler() -> Command {
         command
             .arg(sanitize)
             .args(["-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g"]);
+    } else if c_coverage() {
+        command.args([
+            "--coverage",
+            "-fprofile-update=atomic",
+            "-fprofile-abs-path",
+        ]);
     }
     command
+}
+
+pub(crate) fn c_coverage() -> bool {
+    cfg!(target_os = "linux") && std::env::var("AUTOSAR_C_COVERAGE").as_deref() == Ok("1")
 }
 
 /// Use the generated delivery's complete include closure, including native providers.
@@ -143,6 +153,19 @@ pub(crate) fn ecu_sanitizer_build_command(
     if let Some(source) = control {
         command.arg(source);
     }
+    command
+}
+
+/// Rebuild a verified HostBatch command for coverage in the test build tree.
+pub(crate) fn ecu_coverage_build_command(project: &Path, output: &Path) -> Command {
+    let mut command = ecu_sanitizer_build_command(
+        project,
+        output,
+        "host-batch",
+        None,
+        std::ffi::OsStr::new(""),
+    );
+    command.env("AUTOSAR_C_COVERAGE", "1");
     command
 }
 
