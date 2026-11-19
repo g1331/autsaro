@@ -46,49 +46,49 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 {
   "id": "generated-retention-536-r20",
   "evidence": {
-    "head": "e0df92e8026b756c9f03a0f65214c4e46d40574a",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44465255622/attempts/1"
+    "head": "d80cc611553921c61c5a5a77187450a60f17da2e",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44474096166/attempts/1"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "149642ede5de2165e3234d7fa9d8db21ed2ed8fc6b1581aef5eeef2ccf01256d"
+      "inputIdentity": "dff838d033ef37293013a561746152b75fa7d661c175216f811e3c80fe59a908"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "76f3b0aa3d03451b0867eeded01cc68e862d97d3d66b534acbb8aca69a5b7e42"
+      "inputIdentity": "2b1acecc3b0e70055e91af6bea90ca4e0f36da99d4f32e8d7def9f25d50ef27b"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "42eaec95ab02b8903dd77789c80b72a9eefb31e4a169ecc12d6b0cd71f4ca4c9"
+      "inputIdentity": "1ddfafc25bcce8e8ba2f5c076e20c2c3679ebb60b2309f3a698af8d6285e0c4a"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "2e5db9d94ed1dc6a3c1b8f1f1d078c014339982bf6a75e000ffd463357be1a0d"
+      "inputIdentity": "27b2fcae0e0d0f1bf368c3735377b0a8def56a770ef05554c66ebb2fb57fb701"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "afc75277349a899665ba9d405e7750b3b69ba55e10bbaf2e01e72c3e082b55aa"
+      "inputIdentity": "f9625d5e4772d0d25d099d18b54fa759f95c536eba1b4d110cd1764fb96c9571"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c820a6a42a3676fa7f17bc8794347cda5728bf97f73b790eca72f0777ec720d9"
+      "inputIdentity": "94df1939bf288818057be02092f61b8d2e93a5fe3cf32abcf64ff9c2868b389a"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "df6432aa60dd31346a4b5ec271fa3ba2a27ddae18950474207e0c3a7e2573c98"
+      "inputIdentity": "bff0bf912ee021b33664da935cf3b83bf1ff3c95f49468d2138ec12174832013"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "278aaf793a72aa3db3992454510d4e8d11b477ec349df1f786d0cdb0ff52776f"
+      "inputIdentity": "cba8be634e651511b05acc6ed6cd0c68a25cc8c12cd440bf5b40656f8c747f92"
     }
   ],
   "records": {

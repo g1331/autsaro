@@ -1456,7 +1456,7 @@ class AcceptanceTests(unittest.TestCase):
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
         # Both Linux artifacts used the same libc6-dev version and kernel closure.
-        reviewed = "8f7b570f5236fa6f2fc11b2eefd7fe79859cd8bca490cce8d88acd3ffad28d37"
+        reviewed = "034e8b3edb5e5b96f0b9715332848095978eb5835de3957c3d58cffd4440933b"
         self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
         self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
