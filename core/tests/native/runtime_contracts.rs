@@ -73,7 +73,7 @@ fn det_consumer(scratch: &Path, fixture: &str) -> PathBuf {
     let mut command = tooling::c_compiler();
     if tooling::c_coverage() && fixture == "det_contract.c" {
         command
-            .args(["-DAUTOSAR_GCOV_DET_HALT", "-Wl,--wrap=_exit"])
+            .args(["-DAUTOSAR_GCOV_FATAL_EXIT", "-Wl,--wrap=_exit"])
             .arg(root.join("core/tests/fixtures/os/gcov_exit.c"));
     }
     if cfg!(target_os = "linux") {

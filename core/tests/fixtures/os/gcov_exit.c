@@ -6,10 +6,10 @@ void __wrap__exit(int status) __attribute__((noreturn));
 
 void __wrap__exit(int status)
 {
-    /* Successful OS shutdown uses _exit after stopping its workers. The DET
-     * contract fixture also observes synchronous, single-threaded halts. */
+    /* Successful OS shutdown uses _exit after stopping its workers. Selected
+     * DET and host lock fixtures also observe synchronous fatal exits. */
     if ((status == 0)
-#ifdef AUTOSAR_GCOV_DET_HALT
+#ifdef AUTOSAR_GCOV_FATAL_EXIT
         || (status == 134)
 #endif
 #ifdef AUTOSAR_GCOV_DISABLED_FIRST_START

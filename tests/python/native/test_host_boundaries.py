@@ -7,6 +7,7 @@ import platform
 import re
 import shutil
 import signal
+import sys
 import tempfile
 import time
 import unittest
@@ -20,8 +21,12 @@ from ecu_tools.process import OwnedProcess, ProcessSpec
 class HostBoundaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temporary = tempfile.TemporaryDirectory()
-        cls.directory = Path(cls.temporary.name)
+        coverage = sys.platform == "linux" and os.environ.get("AUTOSAR_C_COVERAGE") == "1"
+        # Coverage owns TMPDIR and collects the notes after this test process exits.
+        temporary = tempfile.TemporaryDirectory(prefix="host-lock-", delete=not coverage)
+        if not coverage:
+            cls.addClassCleanup(temporary.cleanup)
+        cls.directory = Path(temporary.name)
         requested = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")
         if not requested or not Path(requested).is_file():
             raise RuntimeError("Host boundary tests require the native GCC")
@@ -61,7 +66,15 @@ class HostBoundaryTests(unittest.TestCase):
         if not result.success:
             raise RuntimeError(result.stderr.read_text(encoding="utf-8", errors="replace"))
 
-        result = cls.execute([cls.compiler, *cls.flags, str(ROOT / "runtime/host/src/Can_HostLock.c"),
+        coverage_flags = []
+        if coverage:
+            coverage_flags = [
+                "--coverage", "-fprofile-update=atomic", "-fprofile-abs-path",
+                "-DAUTOSAR_GCOV_FATAL_EXIT", "-Wl,--wrap=_exit",
+                str(ROOT / "core/tests/fixtures/os/gcov_exit.c"),
+            ]
+        result = cls.execute([cls.compiler, *cls.flags, *coverage_flags,
+                              str(ROOT / "runtime/host/src/Can_HostLock.c"),
                               str(ROOT / "tests/fixtures/host_lock_faults.c"),
                               *(str(path) for path in sources),
                               *([] if os.name == "nt" else ["-pthread"]), "-o", str(cls.production_lock)], "production-lock")
@@ -81,10 +94,6 @@ class HostBoundaryTests(unittest.TestCase):
                 self.assertEqual(result.exit_code, 134, result.stdout.read_text())
                 self.assertEqual(result.stdout.read_bytes(), b"")
                 self.assertEqual(result.stderr.read_bytes(), b"")
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.temporary.cleanup()
 
     @classmethod
     def execute(cls, argv, stage):

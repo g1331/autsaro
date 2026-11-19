@@ -18,6 +18,7 @@ NATIVE_TESTS = (
     "runtime_contracts::",
     "host::",
     "integration::generated_c::generated_rte_com_header_links_independent_handle_callbacks",
+    "integration::generated_c::generated_schm_lifecycle_refuses_misordered_repeated_and_foreign_calls",
     # On Linux these protocol consumers run the shared, sealed HostBatch image.
     "integration::protocol::single_component_host_batch_commits_refuses_and_closes_on_faults",
     "integration::protocol::single_component_receive_timers_use_complete_periods",
@@ -51,7 +52,13 @@ def run_tests(scratch: Path, profiles: Path, errors: Path) -> int:
          "-p", "test_os_suites.py"],
         cwd=ROOT, env=env, check=False,
     )
-    return native_status.returncode or os_status.returncode
+    host_lock_status = subprocess.run(
+        [sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests/python/native",
+         "-p", "test_host_boundaries.py",
+         "-k", "test_production_fatal_stops_without_signal_handler_or_crt_cleanup"],
+        cwd=ROOT, env=env, check=False,
+    )
+    return native_status.returncode or os_status.returncode or host_lock_status.returncode
 
 
 def restore_profiles(scratch: Path, profiles: Path) -> None:
@@ -87,6 +94,16 @@ def original_sources(project: Path) -> dict[str, str]:
     return {delivered: original for original, delivered in metadata["originalBswSources"].items()}
 
 
+def flat_runtime_source(source: Path, relative: Path) -> Path | None:
+    if len(relative.parts) != 2 or relative.parts[0] not in {"src", "include"}:
+        return None
+    # The independent chain consumers copy BSW and host files into flat directories.
+    originals = [Path("runtime", family) / relative for family in ("bsw", "host")]
+    matches = [original for original in originals
+               if (ROOT / original).is_file() and (ROOT / original).read_bytes() == source.read_bytes()]
+    return runtime_path(matches[0]) if len(matches) == 1 else None
+
+
 def report_source(source: Path, scratch: Path) -> Path | None:
     if source.is_relative_to(ROOT / "runtime"):
         return runtime_path(source.relative_to(ROOT))
@@ -98,6 +115,8 @@ def report_source(source: Path, scratch: Path) -> Path | None:
         # Independent consumers put emitted files at their original paths in Scratch.
         _, *relative_parts = source.relative_to(scratch / "native").parts
         relative = Path(*relative_parts)
+        if not relative.is_relative_to("generated"):
+            return flat_runtime_source(source, relative)
     else:
         relative = source.relative_to(project)
         if original := original_sources(project).get(relative.as_posix()):
@@ -170,7 +189,10 @@ def render(scratch: Path, output: Path) -> None:
     for inputs in coverage_builds(scratch):
         roots = [(ROOT, rf"{runtime}/(?:bsw|ecu|host|os)/(?:src|include)/")]
         if Path(inputs[0]).is_relative_to(scratch / "native"):
-            roots.append((scratch, rf"{native}/.*/(?:bsw|generated|integration|os)/(?:src|include)/"))
+            roots.append((
+                scratch,
+                rf"{native}/(?:.*/(?:bsw|generated|integration|os)|[^/]+)/(?:src|include)/",
+            ))
         for root, source_filter in roots:
             trace, warnings = collect(scratch, root, source_filter, inputs)
             negative_counts.update(warnings)
