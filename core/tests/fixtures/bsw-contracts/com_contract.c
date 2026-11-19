@@ -32,6 +32,62 @@ static void timeout(CbkHandleIdType handle) { ++timeouts[handle_index(handle)]; 
 static const Com_PduConfigType pdus[] = {
     {0u, 10u, TRUE, 7u, 30u, 17u}, {1u, 11u, TRUE, 9u, 50u, 43u}, {2u, 12u, TRUE, 1u, 0u, 59u}};
 static const Com_ConfigType configuration = {pdus, 3u, 0u, receive, timeout, NULL_PTR, NULL_PTR};
+
+static Std_ReturnType unexpected_transmit(PduIdType id, const PduInfoType *info)
+{
+    (void)id;
+    (void)info;
+    assert(0);
+    return E_NOT_OK;
+}
+
+static void unexpected_rejection(PduIdType id, Std_ReturnType result)
+{
+    (void)id;
+    (void)result;
+    assert(0);
+}
+
+static void reject_configuration(const Com_ConfigType *config)
+{
+    uint32 value = 99u;
+    Com_Init(config);
+    assert(Com_GetStatus() == COM_UNINIT);
+    assert(Com_ReceiveSignal(10u, &value) == COM_SERVICE_NOT_AVAILABLE && value == 99u);
+}
+
+static void reject_configurations(void)
+{
+    const Com_PduConfigType duplicate_pdu[] = {pdus[0], {0u, 11u, TRUE, 9u, 50u, 43u}};
+    const Com_PduConfigType duplicate_signal[] = {pdus[0], {1u, 10u, TRUE, 9u, 50u, 43u}};
+    const Com_PduConfigType duplicate_handle[] = {pdus[0], {1u, 11u, TRUE, 9u, 50u, 17u}};
+    const Com_PduConfigType tx_pdu[] = {{0u, 10u, FALSE, 7u, 0u, 0u}};
+    const Com_ConfigType invalid[] = {
+        {NULL_PTR, 3u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {pdus, 0u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {pdus, 3u, 0u, NULL_PTR, timeout, NULL_PTR, NULL_PTR},
+        {pdus, 3u, 0u, receive, NULL_PTR, NULL_PTR, NULL_PTR},
+        {duplicate_pdu, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {duplicate_signal, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {duplicate_handle, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {tx_pdu, 1u, 0u, NULL_PTR, NULL_PTR, NULL_PTR, unexpected_rejection},
+        {tx_pdu, 1u, 0u, NULL_PTR, NULL_PTR, unexpected_transmit, NULL_PTR},
+    };
+    Com_PduConfigType too_many[33];
+    Com_ConfigType over_capacity = configuration;
+    for (unsigned index = 0u; index < 33u; ++index) {
+        too_many[index] = (Com_PduConfigType){
+            (PduIdType)index, (Com_SignalIdType)index, TRUE, 7u, 30u, (CbkHandleIdType)index};
+    }
+    over_capacity.pdus = too_many;
+    over_capacity.pdu_count = 33u;
+    reject_configuration(NULL_PTR);
+    reject_configuration(&over_capacity);
+    for (unsigned index = 0u; index < sizeof(invalid) / sizeof(invalid[0]); ++index) {
+        reject_configuration(&invalid[index]);
+    }
+}
+
 static void periods(unsigned count)
 {
     unsigned index;
@@ -70,8 +126,7 @@ int main(void)
     assert(read(10u, &value) == COM_SERVICE_NOT_AVAILABLE && value == 99u);
     assert(write(10u, &value) == COM_SERVICE_NOT_AVAILABLE);
     periods(5u);
-    initialize(NULL_PTR);
-    assert(status() == COM_UNINIT);
+    reject_configurations();
     initialize(&configuration);
     assert(status() == COM_INIT);
     assert(read(10u, &value) == COM_SERVICE_NOT_AVAILABLE && value == 7u);
