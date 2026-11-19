@@ -51,7 +51,7 @@ AMD2.47–49 和 TC2.7–8 的可变实参例外。其余修订未改变本表�
 | R4.1 | Required | 原文件和实际展开的带前缀字符／字符串 | satisfied | 主文 46–47 要求数值转义终止于下一转义或该字面量末尾，AMD2.32 删除 See also。独立识别单个字面量及转义边界，覆盖宏定义、行拼接、L 前缀及实际展开；所有自有／patch 数值转义均正确终止，未发现 SDK 宏在项目使用点引入额外候选。Os_LinuxNative 的行缓冲终止符及 HostBatch 的输入／输出字面量保持原字符值。 |
 | R4.2 | Advisory | 预处理之前的全部自有／patch 物理字节 | satisfied | 主文 47 的九种三字符组适用于任意位置。逐文件检查拼接前原字节，包含注释、字符、字符串、宏定义和未选分支，均无三字符组；当前所有交付 C／头及最终 kernel 项目行已纳入。该证据补齐同号入口只检查双引号字符串的范围。 |
 | R5.2 | Required | 当前同 scope／namespace 的有效名称 | satisfied | 主文 49–50、AMD2.35 的 C99 最低区分长度为 63。对全部物理标识符及实际展开的项目使用点做跨 scope 保守前缀比较，无不同拼写共用 63 字符前缀；同名声明约束由两目标实际 C99 编译检查。包含 ComM 头、所有生成 RTE 头与项目 patch；两者均外部链接及宏的例外仍分别沿 R5.1／R5.4／R5.5。 |
-| R5.3 | Required | 同 namespace 的嵌套 scope 遮蔽 | not_assessed | 主文50–51、AMD2.36 按同 namespace 和 C99 的63字符区分；外部／内部名字的系统比较另见 R5.8／R5.9。完整普通／tag／成员 namespace 与嵌套 scope 的 owner 仍未齐，#443 的 #547 逐 TU 核对 typedef、enum、参数、局部对象及宏产生声明的遮蔽，不能用全局无不同前缀替代作用域证明。 |
+| R5.3 | Required | 双目标四 profile 的 C99 HostBatch／probe 中同 namespace 的嵌套 scope | satisfied | 主文50–51／PDF58–59、AMD2.36；从 452 份 GCC 展开按声明点顺序还原普通标识符与 tag 的嵌套 scope，成员各归所属聚合类型。覆盖 typedef、枚举常量、函数原型／定义形参、局部对象和宏展开声明。范围内无同 namespace 遮蔽；Linux 的 access 和 Windows 的 byte 三个物理位置均落在 ADR 0030 主机专用实现。按下节所列实际输入与归属评估。 |
 | R5.4 | Required | 活动宏名及各自参数名 | satisfied | 主文 51–52、AMD2.37–38 按定义时的活动集合和 C99 63 字符判断。原文件所有宏／参数的保守前缀比较无冲突；实际 -dD 顺序重放 define／undef，逐次核对项目宏与已定义宏／参数及本宏参数，亦无冲突。包含反复撤销的 Os_MemMap、RTE_CORE 下的应用宏及 port 宏；同号入口未清 undef 的限制由该独立核查补齐。 |
 | R5.6 | Required | 跨 namespace／TU 的 typedef 名称 | not_assessed | 主文54 的跨 namespace／TU 唯一性、关联 tag 和同头重复包含例外已核；多应用头分别定义 Rte_Instance，当前保留真实 Required 名称重用。#443 的 #547 按固定 RTE 原文和实际应用包含闭包核定处置，完成其余 typedef 的唯一性及正式义务；相同底层类型或应用头互不同时包含均未作为规则例外。 |
 | R5.8 | Required | 外部链接名称与全部其他实体 | satisfied | 主文56／PDF64；按四 profile 的 HostBatch／probe 分别比较 external-linkage 定义名与全部函数、对象、typedef、tag、enum 及成员／形参声明，完整 GCC 行标记区分物理 owner；当前外部名无其他实体重用。Os_ArtiTasks、Ecu_OsConfig、Rte_Instance_<组件> 和回调绑定均连接唯一定义与实际消费者；普通重复声明归同一实体，SDK 原头和采用原行沿 ADR 0025。 |
@@ -61,6 +61,22 @@ AMD2.47–49 和 TC2.7–8 的可变实参例外。其余修订未改变本表�
 | R7.1 | Required | 原 token、条件和实际展开整数 | satisfied | 主文 59–60／PDF 67–68、AMD2.27；固定 raw token 入口遗漏宏后八进制。当前实际展开仅 Linux Os_LinuxMappedStack 的 open 实参 O_RDONLY→00，按 #476 批准接入 sdk-integration 精确类别、glibc 原头及 HostBatch／probe；保持只读、descriptor／read／close 检查。物理项目／patch 的 #if／#elif 与全部实际 -dD 定义作保守传递闭包，无八进制 token 或 ## 生产者；普通展开／未选分支另核，无类别外自有八进制。头身份、使用点、程序或输入改变即重评。 |
 | R7.4 | Required | 字符串到对象、返回及函数实参 | satisfied | 主文62–63、AMD2.47–48 的字符类型及 TC2.7–8 的可变实参例外。实际字符串全部回接 Arti_Record 的四个 const char*、Os_BackendAssert／Os_HostTextAppend 的 const char*、Ecu_StatusName 的 const char* 或 task_name 数组初始化；宏生成的文件名、断言文本、条件／相邻字面量同样核查。无宽字符串、取字面量地址后交可写指针或直接修改；未用 variadic 例外覆盖固定形参。 |
 <!-- misra-checker-obligations-end -->
+
+### R5.3 实际声明与作用域
+
+基线 `3a57a066` 的[双平台原始工件](https://github.com/g1331/autsaro/actions/runs/44513871093)
+含 16 个程序、888 个 TU 实例，Linux／Windows 分别有 228／224 份不同 TU 的 GCC 展开。
+普通标识符与 tag 按声明点和外层作用域核对，定义的参数与函数体最外层同属一个作用域，
+原型参数限于本原型。成员跟随各自 struct／union，标签在函数范围内，各自使用 C99 的名称空间。
+用 63 字符比较活动名字。用项目的 TU 包含闭包及内核补丁位置区分项目、采用原行和主机专用
+实现，SDK 声明仍参与目标使用点的名字查找。RTE 应用各自包含的 typedef 与 Det 回调形参
+也进入作用域盘点，外部名字的跨 TU 唯一性分别按 R5.6／R5.8 核对。
+
+Linux `os/src/host/linux/Os_HostLinux.c:1175` 的形参 `access` 遮蔽 glibc 的
+`unistd.h:287` 函数。Windows `integration/src/ecu_host_batch.c:13/95` 的形参和局部变量
+`byte` 遮蔽 MinGW 的 `rpcndr.h:93` typedef。三个位置都是主机专用实现。
+这批 R5.3 结论覆盖 ADR 0030 范围内的实际声明，包含生成 C、应用和项目内核补丁；
+范围内没有发现遮蔽。配置、实际头文件、宏展开或声明作用域改变时重核。
 
 ### R5.9 私有对象改名
 
