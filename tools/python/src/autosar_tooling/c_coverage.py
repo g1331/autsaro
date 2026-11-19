@@ -95,15 +95,18 @@ def report_source(source: Path, scratch: Path) -> Path | None:
     project = next((parent for parent in source.parents
                     if (parent / "meta/integration.json").is_file()), None)
     if project is None:
-        return None
-    relative = source.relative_to(project)
-    if original := original_sources(project).get(relative.as_posix()):
-        original = Path(original)
-        # Only exact delivered copies contribute to the repository source totals.
-        if original.parts[0] == "runtime" and source.read_bytes() == (ROOT / original).read_bytes():
-            return runtime_path(original)
-        return None
-    if relative.parts[0] != "generated":
+        # Independent consumers put emitted files at their original paths in Scratch.
+        _, *relative_parts = source.relative_to(scratch / "native").parts
+        relative = Path(*relative_parts)
+    else:
+        relative = source.relative_to(project)
+        if original := original_sources(project).get(relative.as_posix()):
+            original = Path(original)
+            # Only exact delivered copies contribute to the repository source totals.
+            if original.parts[0] == "runtime" and source.read_bytes() == (ROOT / original).read_bytes():
+                return runtime_path(original)
+            return None
+    if not relative.is_relative_to("generated"):
         return None
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     return Path("generated", *relative.parts[1:-1], relative.stem, digest, relative.name)
@@ -122,6 +125,9 @@ def coverage_builds(scratch: Path) -> list[list[str]]:
             note,
         )
         data = note.with_suffix(".gcda")
+        if output == note and note.with_suffix(".o").is_file() and not data.is_file():
+            # Object-only checks inspect layout without running the object.
+            continue
         builds[output].append(str(data if data.is_file() else note))
     return list(builds.values())
 

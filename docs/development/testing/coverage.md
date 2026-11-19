@@ -34,7 +34,7 @@ uv run --locked --group coverage python -m autosar_tooling.c_coverage
 
 打开 `build/coverage/c/index.html` 查看行、分支覆盖率和标注后的源码。相邻的 `coverage.json` 保留逐行计数和分支结果。重复测量时用 `--output` 指定一个新目录。测量使用临时构建目录和独立计数目录，不读取以前的计数。
 
-测量运行 Cargo 的运行时契约、主机、两项 HostBatch 协议测试及生成 RTE 消费者，并运行 Python 的 OS suites。封存工程先通过原有生产构建，再用同一组输入编译单独的插桩 HostBatch。插桩的 OS 与 HostBatch 在成功调用 `_exit` 前保存计数，错误退出或外部强制终止时可能丢失计数。
+测量运行 Cargo 的运行时契约、主机、两项 HostBatch 协议测试及生成 RTE 消费者，并运行 Python 的 OS suites。封存工程先通过原有生产构建，再用同一组输入编译单独的插桩 HostBatch。插桩的 OS 与 HostBatch 在成功调用 `_exit` 前保存计数，单线程 DET 契约夹具还在同步致命退出前保存计数。其他错误退出或外部强制终止时可能丢失计数。
 
 报告按 BSW 模块、OS 核心、主机层及 ECU 支撑代码分组，交付中与仓库字节一致的运行时副本归入对应分组。分母来自实际插桩的自有 C 和含可执行代码的头文件，排除 FreeRTOS、测试夹具和应用源码。生成文件按路径与内容摘要区分。gcovr 先按每个可执行程序读取分支，源码和分支布局一致时才合并计数。一个源文件出现多个布局时，每种布局各有源代码页，并各自计入汇总。
 
