@@ -173,10 +173,11 @@ static const PduR_RxRouteType pdur_rx[] = {{25u, 5u, com_rx}};
 /* The CanTp route comes first: IF callbacks must skip it although its lower ID matches. */
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_DCM, 5u, PDUR_LO_CANTP, 35u, cantp_transmit, NULL_PTR, NULL_PTR},
-    {PDUR_UP_COM, 5u, PDUR_LO_LSDUR, 35u, LSduR_PduRTransmit, com_conf, com_trigger}};
+    {PDUR_UP_COM, 5u, PDUR_LO_LSDUR, 35u, LSduR_PduRTransmit, com_conf, com_trigger},
+    {PDUR_UP_COM, 7u, PDUR_LO_LSDUR, 36u, LSduR_PduRTransmit, com_conf, NULL_PTR}};
 static const PduR_TpRouteType tp_routes[] = {
     {35u, 45u, 35u, 55u, start, copy_rx, tp_rx, copy_tx, tp_conf}};
-static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 2u, tp_routes, 1u};
+static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 3u, tp_routes, 1u};
 /* Valid but different: a later Init must not replace the published configuration. */
 static const PduR_RxRouteType other_rx[] = {{25u, 9u, com_rx}};
 static const PduR_PBConfigType other = {24u, other_rx, 1u, NULL_PTR, 0u, NULL_PTR, 0u};
@@ -416,6 +417,9 @@ int main(void)
     lower_result = E_OK;
     /* The CanTp route has no trigger; IF callbacks for IDs of no IF route do nothing. */
     assert(LSduR_CanIfTriggerTransmit(6u, &pdu) == E_NOT_OK);
+    /* A matching PduR IF route with no trigger also leaves the output untouched. */
+    assert(PduR_CanIfTriggerTransmit(36u, &pdu) == E_NOT_OK);
+    assert(pdu.SduDataPtr == bytes && pdu.MetaDataPtr == NULL_PTR && pdu.SduLength == 64u);
     PduR_CanIfTxConfirmation(5u, E_OK);
     assert(PduR_CanIfTriggerTransmit(5u, &pdu) == E_NOT_OK);
     none();

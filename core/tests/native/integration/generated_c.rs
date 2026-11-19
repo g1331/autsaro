@@ -816,30 +816,32 @@ fn generated_schm_lifecycle_refuses_misordered_repeated_and_foreign_calls() {
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let executable = tooling::native_binary(&scratch.0, "schm-lifecycle");
-    let mut compiler = tooling::c_compiler();
-    tooling::project_includes(&mut compiler, &scratch.0);
-    compiler
-        .current_dir(&scratch.0)
-        .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
-        .args([
-            "-Igenerated/include",
-            "-Ibsw/include",
-            "-Iintegration/include",
-            "-Iintegration/src",
-            "-Ios/include",
-        ])
-        // The Dcm mode switches in SchM_Main.c enter the delivered host area.
-        .args([
-            "generated/src/SchM_Main.c",
-            "integration/src/Can_HostLock.c",
-        ])
-        .arg(root.join("core/tests/fixtures/bsw-contracts/schm_contract.c"));
-    if cfg!(target_os = "linux") {
-        compiler.arg("-pthread");
-    }
-    compiler.arg("-o").arg(&executable);
+    let source_path = scratch.0.join("generated/src/SchM_Main.c");
+    let compiler = |source: &Path, binary: &Path| {
+        let mut command = tooling::c_compiler();
+        tooling::project_includes(&mut command, &scratch.0);
+        command
+            .current_dir(&scratch.0)
+            .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
+            .args([
+                "-Igenerated/include",
+                "-Ibsw/include",
+                "-Iintegration/include",
+                "-Iintegration/src",
+                "-Ios/include",
+            ])
+            .arg(source)
+            // The Dcm mode switches in SchM_Main.c enter the delivered host area.
+            .arg("integration/src/Can_HostLock.c")
+            .arg(root.join("core/tests/fixtures/bsw-contracts/schm_contract.c"));
+        if cfg!(target_os = "linux") {
+            command.arg("-pthread");
+        }
+        command.arg("-o").arg(binary);
+        command
+    };
     let output = tooling::run_public_command(
-        &mut compiler,
+        &mut compiler(&source_path, &executable),
         &scratch.0,
         "schm-lifecycle-compile",
         std::time::Duration::from_secs(60),
@@ -852,24 +854,26 @@ fn generated_schm_lifecycle_refuses_misordered_repeated_and_foreign_calls() {
         std::time::Duration::from_secs(30),
     );
     assert!(output.status.success(), "{output:?}");
-    let source_path = scratch.0.join("generated/src/SchM_Main.c");
     let source = std::fs::read_to_string(&source_path).unwrap();
     let immediate = "(void)mode;\n    return SCHM_E_OK;";
     assert_eq!(source.matches(immediate).count(), 1);
+    // Keep the original source and its coverage files together after the refusal check.
+    let mutant_source = scratch.0.join("schm-refusal.c");
     std::fs::write(
-        source_path,
+        &mutant_source,
         source.replace(immediate, "(void)mode;\n    return E_NOT_OK;"),
     )
     .unwrap();
+    let mutant = tooling::native_binary(&scratch.0, "schm-lifecycle-refusal");
     let output = tooling::run_public_command(
-        &mut compiler,
+        &mut compiler(&mutant_source, &mutant),
         &scratch.0,
         "schm-lifecycle-refusal-compile",
         std::time::Duration::from_secs(60),
     );
     assert!(output.status.success(), "{output:?}");
     let output = tooling::run_public_command(
-        &mut std::process::Command::new(executable),
+        &mut std::process::Command::new(mutant),
         &scratch.0,
         "schm-lifecycle-refusal-run",
         std::time::Duration::from_secs(30),

@@ -355,6 +355,8 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
     if linux and target == TARGET and os.environ.get("AUTOSAR_C_COVERAGE") == "1":
         command[1:1] = ["--coverage", "-fprofile-update=atomic", "-fprofile-abs-path", "-Wl,--wrap=_exit",
                         str(ROOT / "core/tests/fixtures/os/gcov_exit.c")]
+        if harness == "lifecycle.c":
+            command.insert(1, "-DAUTOSAR_GCOV_DISABLED_FIRST_START")
     if host_failure_injection:
         command.insert(1, "-DOS_HOST_FAILURE_TESTS")
     command[1:1] = [str(source) for source in extra_sources]
@@ -940,6 +942,11 @@ def check_lifecycle(binary: Path) -> list[dict]:
         result = execute(binary, "normal", failure)
         require(result["exit"] == 8 and "trace=ID " in result["stdout"], result)
         observations.append(result)
+    first_start = execute(binary, "disabled-first-start")
+    require(first_start["exit"] == 9, first_start)
+    require("lifecycle=Closed state=Failed reason=9 trace=D " in first_start["stdout"], first_start)
+    require("threads=0 events=0 mutexes=0 resource_calls=0 " in first_start["stdout"], first_start)
+    observations.append(first_start)
     failed_output = execute(binary, "output-failure")
     require(failed_output["exit"] == 7, failed_output)
     observations.append(failed_output)

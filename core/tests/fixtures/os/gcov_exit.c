@@ -12,6 +12,10 @@ void __wrap__exit(int status)
 #ifdef AUTOSAR_GCOV_DET_HALT
         || (status == 134)
 #endif
+#ifdef AUTOSAR_GCOV_DISABLED_FIRST_START
+        /* The lifecycle fixture exits with E_OS_DISABLEDINT before starting workers. */
+        || (status == 9)
+#endif
     ) {
         __gcov_dump();
     }
