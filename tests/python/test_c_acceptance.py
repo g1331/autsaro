@@ -1215,7 +1215,7 @@ class AcceptanceTests(unittest.TestCase):
             "R2.5": ("not_assessed", "#547", "define／undef"),
             "R2.7": ("satisfied", "878", "975", "void"),
             "R5.3": ("satisfied", "AMD2.36", "452 份 GCC 展开", "嵌套 scope",
-                     "宏展开声明", "ADR 0030"),
+                     "宏展开声明", "范围内无同 namespace 遮蔽", "ADR 0030"),
             "R5.6": ("not_assessed", "#547", "Rte_Instance"),
             "R5.8": ("satisfied", "HostBatch／probe", "物理 owner"),
             "R5.9": ("not_assessed", "#547", "36 个", "7 个", "53 个", "Os_Backend.c:53"),
