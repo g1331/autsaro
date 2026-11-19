@@ -37,18 +37,44 @@ def positions(source, spelling):
 
 
 class IdentifierRenameTests(unittest.TestCase):
-    def check(self, directory, old, new, mutation="", *, crlf=False, candidates=True):
+    def write_derived_metadata(self, root, mutation):
+        native = {"producerVersion": "0.1.0", "profileId": "singlecore-ecu-v1"}
+        target = root / "target.json"
+        target.write_text(json.dumps({**json.loads(target.read_bytes()), "nativeDelivery": native}),
+                          encoding="utf-8")
+        names = [UNIT, "main.c", "meta/integration.json", "target.json"]
+        fields = {"owner": "generated", "producerId": "autosar-generator"}
+        policy = dict.fromkeys([*names, c_rename.SEAL_POLICY], fields)
+        payload = {name: digest(root / name) for name in names}
+        seal = {"metadata": native, "policy": policy, "payload": payload}
+        if mutation == "policy stale hash":
+            payload[UNIT] = "0" * 64
+        seal_path = root / c_rename.SEAL_POLICY
+        seal_path.write_bytes((json.dumps(seal, indent=2, sort_keys=True) + "\n").encode())
+        if mutation == "policy bytes":
+            seal_path.write_bytes(seal_path.read_bytes() + b"\n")
+        ledger = {"formatVersion": 3, **native, "files": [
+            {"path": name, **fields, "sha256": digest(root / name)} for name in sorted(policy)
+        ]}
+        if mutation == "ownership stale hash":
+            ledger["files"][0]["sha256"] = "0" * 64
+        if mutation == "ownership changed owner":
+            ledger["files"][0]["owner"] = "product"
+        (root / c_rename.OWNERSHIP).write_bytes((json.dumps(ledger, indent=2) + "\n").encode())
+
+    def check(self, directory, old, new, mutation="", *, crlf=False, candidates=True, native=False,
+              units=(UNIT,)):
         fixture = comparison_tests.CComparisonTests()
         current, _, output, baseline = fixture.fixture(directory)
         current["scope"].update(
-            translationUnits=[UNIT], projectTranslationUnits={UNIT: [UNIT]},
-            cppcheckInputs={UNIT: {"project": [UNIT], "sdk": [], "unbound": []}},
+            translationUnits=list(units), projectTranslationUnits={unit: [unit] for unit in units},
+            cppcheckInputs={unit: {"project": [unit], "sdk": [], "unbound": []} for unit in units},
         )
-        current["programs"][0]["translationUnits"] = [UNIT]
-        current["semanticIdentity"]["defines"] = {UNIT: []}
+        current["programs"][0]["translationUnits"] = list(units)
+        current["semanticIdentity"]["defines"] = {unit: [] for unit in units}
         current["diagnostics"] = [
-            {"id": rule, "locations": [{"file": UNIT, "line": line}], "programs": ["target"]}
-            for rule, line in zip(RULES, (7, 8))
+            {"id": rule, "locations": [{"file": unit, "line": line}], "programs": ["target"]}
+            for unit in units for rule, line in zip(RULES, (7, 8))
         ]
         current["projectAcceptance"] = {"status": "blocked", "occurrences": []}
         previous = copy.deepcopy(current)
@@ -71,14 +97,21 @@ class IdentifierRenameTests(unittest.TestCase):
                 location = diagnostic["locations"][0]
                 line = source.splitlines()[location["line"] - 1]
                 column = line.find("=") + 1
-                if mutation == "column moved" and side == "current" and location["line"] == 8:
+                if (mutation == "column moved" and side == "current"
+                        and location["file"] == UNIT and location["line"] == 8):
                     column = line.index("FALSE") + 1
                 if mutation != "column missing":
                     location["column"] = str(column)
-            path = root / UNIT
-            path.parent.mkdir(parents=True)
-            path.write_bytes((source.replace("\n", "\r\n") if crlf else source).encode())
-            fixture.seal(root, {"plan": {"configuration": "same"}})
+            for unit in units:
+                path = root / unit
+                path.parent.mkdir(parents=True, exist_ok=True)
+                unit_source = source.replace("Com_MainFunction", Path(unit).stem + "_MainFunction")
+                path.write_bytes((unit_source.replace("\n", "\r\n") if crlf else unit_source).encode())
+            metadata = {"plan": {"configuration": "same"}}
+            fixture.seal(root, metadata)
+            if native:
+                self.write_derived_metadata(root, mutation if side == "current" else "")
+                fixture.seal(root, metadata)
             summary["sourceSealSha256"] = digest(root / "meta/files.sha256")
             fixture.write(output_dir, summary)
             if not candidates:
@@ -91,22 +124,24 @@ class IdentifierRenameTests(unittest.TestCase):
                 uses.pop()
             addon = output_dir / "addon-receipts"
             addon.mkdir()
-            (addon / "one.json").write_text(json.dumps({
-                "source": str(path), "privateBindings": [{
-                    "uses": [[*position, spelling, *declaration] for position in [declaration, *uses]],
-                    "externs": ["reloaded_before_main"] if mutation == "external linkage" else [],
-                }],
-            }), encoding="utf-8")
-            expansion = source.replace("= FALSE;", "= 0;").replace("== FALSE", "== 0")
-            if mutation == "macro expansion" and side == "current":
-                expansion = expansion.replace("== 0", "== 1")
-            if mutation == "stringification":
-                expansion = expansion.replace("= 0;", f'= "{spelling}";', 1)
-            if mutation == "token paste":
-                expansion = expansion.replace(spelling + "[0u]", spelling + "_suffix[0u]")
-            (output_dir / "compiler-origins-0.stdout.log").write_text(
-                f'# 1 "{path.as_posix()}"\n' + expansion, encoding="utf-8")
-            evidence[side] = c_rename.record(output_dir, summary, {UNIT})
+            for index, unit in enumerate(units):
+                path = root / unit
+                (addon / f"{index}.json").write_text(json.dumps({
+                    "source": str(path), "privateBindings": [{
+                        "uses": [[*position, spelling, *declaration] for position in [declaration, *uses]],
+                        "externs": ["reloaded_before_main"] if mutation == "external linkage" else [],
+                    }],
+                }), encoding="utf-8")
+                expansion = path.read_text(encoding="utf-8").replace("= FALSE;", "= 0;").replace("== FALSE", "== 0")
+                if mutation == "macro expansion" and side == "current":
+                    expansion = expansion.replace("== 0", "== 1")
+                if mutation == "stringification":
+                    expansion = expansion.replace("= 0;", f'= "{spelling}";', 1)
+                if mutation == "token paste":
+                    expansion = expansion.replace(spelling + "[0u]", spelling + "_suffix[0u]")
+                (output_dir / f"compiler-origins-{index}.stdout.log").write_text(
+                    f'# 1 "{path.as_posix()}"\n' + expansion, encoding="utf-8")
+            evidence[side] = c_rename.record(output_dir, summary, set(units))
         proof = c_rename._proof_path(output, UNIT)
         if mutation == "evidence missing":
             proof.unlink()
@@ -145,6 +180,30 @@ class IdentifierRenameTests(unittest.TestCase):
                 self.assertEqual(len(gate["comparison"]["new"]), 2)
                 self.assertEqual(len(gate["comparison"]["removed"]), 2)
                 self.assertEqual(gate["outOfScopeNew"], [])
+
+    def test_derived_metadata_must_match_both_sealed_trees_byte_for_byte(self):
+        for mutation in ("", "policy bytes", "policy stale hash", "ownership stale hash",
+                         "ownership changed owner"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                gate = self.check(Path(directory), OLD, NEW, mutation, native=True)
+                self.assertEqual(len(gate["comparison"]["new"]), 2)
+                self.assertEqual(len(gate["comparison"]["removed"]), 2)
+                self.assertEqual(len(gate["unacceptedNew"]), 2 if mutation else 0)
+                self.assertEqual(gate["status"], "blocked" if mutation else "passed")
+
+    def test_diagnostic_pairing_credits_all_units_or_none(self):
+        units = (UNIT, "bsw/src/Second.c")
+        with tempfile.TemporaryDirectory() as directory:
+            paired = self.check(Path(directory), OLD, NEW, units=units)
+        with tempfile.TemporaryDirectory() as directory:
+            mismatched = self.check(Path(directory), OLD, NEW, "column moved", units=units)
+        self.assertEqual(paired["status"], "passed")
+        self.assertEqual(paired["unacceptedNew"], [])
+        self.assertEqual(len(paired["comparison"]["new"]), 4)
+        self.assertEqual(len(paired["comparison"]["removed"]), 4)
+        self.assertEqual(mismatched["comparison"], paired["comparison"])
+        self.assertEqual(mismatched["status"], "blocked")
+        self.assertEqual(mismatched["unacceptedNew"], paired["comparison"]["new"])
 
     def test_changed_sources_do_not_get_rename_credit(self):
         cases = {

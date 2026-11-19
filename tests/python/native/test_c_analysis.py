@@ -54,7 +54,6 @@ class ActualCAnalysisTests(unittest.TestCase):
         producer = "core/src/prepared.rs"
         project = self.project(root, source, extra_files={
             "kernel/kernel.h": kernel,
-            "meta/workbench-ownership.json": '{"files":[]}',
             "meta/integration.json": json.dumps({
                 "originalBswSources": {},
                 "plan": {"sources": [{"logicalPath": "fixture"}],
@@ -63,11 +62,29 @@ class ActualCAnalysisTests(unittest.TestCase):
             }),
         })
         target = c_gate.read(project / "target.json")
-        target.update(entries={"target": None}, kernelSha256={"kernel.h": c_gate.sha(project / "kernel/kernel.h")})
+        delivery = {"producerVersion": "0.1.0", "profileId": "singlecore-ecu-v1"}
+        target.update(entries={"target": None}, kernelSha256={"kernel.h": c_gate.sha(project / "kernel/kernel.h")},
+                      nativeDelivery=delivery)
         if debug:
             target["compilerFlags"].append("-g")
         (project / "target.json").write_text(json.dumps(target), encoding="utf-8")
-        inventory = (project / "meta/files.list").read_text(encoding="utf-8").splitlines()
+        inventory_path = project / "meta/files.list"
+        payload = {name: c_gate.sha(project / name)
+                   for name in inventory_path.read_text(encoding="utf-8").splitlines()}
+        # The rename proof consumes both canonical carriers from a native package.
+        seal_policy = "meta/seal-policy.json"
+        ownership = "meta/workbench-ownership.json"
+        owner = {"owner": "generated", "producerId": "autosar-generator"}
+        policy = dict.fromkeys([*payload, seal_policy], owner)
+        (project / seal_policy).write_bytes((json.dumps(
+            {"metadata": delivery, "payload": payload, "policy": policy}, indent=2, sort_keys=True) + "\n").encode())
+        ledger = {"formatVersion": 3, **delivery, "files": [
+            {"path": name, **fields, "sha256": c_gate.sha(project / name)}
+            for name, fields in sorted(policy.items())
+        ]}
+        (project / ownership).write_bytes((json.dumps(ledger, indent=2) + "\n").encode())
+        inventory = sorted([*policy, ownership])
+        inventory_path.write_text("\n".join(inventory) + "\n", encoding="utf-8")
         (project / "meta/files.sha256").write_text("".join(
             f"{c_gate.sha(project / name)}  {name}\n" for name in [*inventory, "meta/files.list"]),
             encoding="utf-8")
