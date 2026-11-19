@@ -54,8 +54,8 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
 {
   "id": "owned-source-547-r59",
   "evidence": {
-    "head": "d581984fb7ca5f5ed0da873b95a1abd84bafb4fa",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44540908795/attempts/1"
+    "head": "877563f50970b13e4aca50ea6e0789dbd7c3d855",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44567323884/attempts/1"
   },
   "cases": [
     {
@@ -81,22 +81,22 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "4294ab1fb047dbca03eb2489a6d414ac43f944de4442cdbb62ca8e417ce0c658"
+      "inputIdentity": "9893a125b3c26edb999be6d08bb21d9487df92366eca09447e5e5a3cd671371a"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "0d0b2f2997504b3cde9065b26a670bad0187df143c2ddea168133abff6a0bc0f"
+      "inputIdentity": "ff471dfade3dc25b66f823488bb7af6ac773421778e952b78077df98f9aba478"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "9a0b06d630eae2734cde11ed0e80f26a9c8fd92d15caba69d9617b727a6bd0e6"
+      "inputIdentity": "dbac11ef9d04678c81c1abb730596f57500d48b2441f4548cee391009e663b14"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "44aad3bf90f06b38cbe0f27363a98d71cb2ef7dbccba4155be64413841998be6"
+      "inputIdentity": "8d06c3c8ec17a433e4f7be395c67970f3557dff87c4fd9d9651d2fa783325159"
     }
   ],
   "records": {
