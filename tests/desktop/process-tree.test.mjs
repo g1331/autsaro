@@ -67,19 +67,25 @@ test('reused parent PID does not adopt older session processes', () => {
   );
 });
 
-test('a real child process is attributed to its live parent', async () => {
-  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
-    stdio: 'ignore',
+test('a real child process is attributed to its live parent', async (t) => {
+  // The child stays alive until the test closes its end of the pipe.
+  const child = spawn(process.execPath, ['-e', 'process.stdin.resume()'], {
+    stdio: ['pipe', 'ignore', 'ignore'],
   });
+  const closed = new Promise((resolve) => child.once('close', resolve));
   try {
     await once(child, 'spawn');
-    const tree = await processTree(process.pid);
+    const start = performance.now();
+    const tree = await processTree(process.pid).finally(() => {
+      t.diagnostic(`processTree listing took ${(performance.now() - start).toFixed(1)} ms`);
+    });
     assert(
       tree.some((item) => item.pid === child.pid),
       'a residual child below the root must remain visible to the close() check',
     );
   } finally {
-    child.kill();
+    child.stdin?.end();
+    await closed;
   }
 });
 
